@@ -1,0 +1,1 @@
+docker compose -p prodtxnet  --env-file ../.env --env-file ../.env.prod -f ../compose.yml -f ../compose.prod.yml "$@"

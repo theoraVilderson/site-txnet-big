@@ -1,0 +1,911 @@
+/* تعریف متغیرها برای تم روشن (پیش‌فرض) */
+
+/* تعریف متغیرها برای تم تاریک */
+
+.login-container {
+  --bg-inner: #f4f9f4;
+  --card-bg: rgba(255, 255, 255, 0.9);
+  --card-border: rgba(76, 175, 80, 0.2);
+  --card-shadow: rgba(76, 175, 80, 0.15);
+
+  --text-primary: #2e7d32;
+  --text-secondary: #66bb6a;
+  --text-label: #81c784;
+  --text-input: #2e7d32;
+
+  --accent-primary: #4caf50;
+  --accent-glow: rgba(76, 175, 80, 0.2);
+  --icon-stroke-inverse: white;
+
+  --input-bg: rgba(76, 175, 80, 0.05);
+  --input-border: rgba(76, 175, 80, 0.2);
+  --input-focus-bg: rgba(76, 175, 80, 0.1);
+
+  --leaf-bg: rgba(76, 175, 80, 0.1);
+  --divider-color: rgba(76, 175, 80, 0.4);
+  width: 100%;
+  max-width: 440px;
+  position: relative;
+  z-index: 1;
+  /* ترنزیشن برای تغییر نرم رنگ‌ها */
+  transition: all 0.5s ease;
+}
+[class="dark"] .login-container {
+  --bg-inner: #0f1510;
+  --card-bg: rgba(20, 30, 20, 0.85); /* سبز بسیار تیره و شیشه‌ای */
+  --card-border: rgba(129, 199, 132, 0.15);
+  --card-shadow: rgba(0, 0, 0, 0.5);
+
+  --text-primary: #e8f5e9; /* سفید مایل به نعنایی */
+  --text-secondary: #a5d6a7;
+  --text-label: #81c784;
+  --text-input: #e8f5e9;
+
+  --accent-primary: #66bb6a; /* سبز روشن‌تر برای کنتراست */
+  --accent-glow: rgba(102, 187, 106, 0.3);
+  --icon-stroke-inverse: #1b2e1b;
+
+  --input-bg: rgba(255, 255, 255, 0.03);
+  --input-border: rgba(129, 199, 132, 0.2);
+  --input-focus-bg: rgba(129, 199, 132, 0.1);
+
+  --leaf-bg: rgba(129, 199, 132, 0.1);
+  --divider-color: rgba(129, 199, 132, 0.3);
+}
+.wellness-card {
+  background: var(--card-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--card-border);
+  border-radius: 32px;
+  padding: 48px 40px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 20px 40px var(--card-shadow);
+  transition: background 0.5s ease, border-color 0.5s ease, box-shadow 0.5s ease;
+}
+
+/* دکمه تغییر تم */
+.theme-toggle-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theme-toggle-btn:hover {
+  background: var(--leaf-bg);
+  color: var(--accent-primary);
+  transform: rotate(15deg);
+}
+
+.organic-border {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--accent-primary),
+    #8bc34a,
+    #cddc39,
+    #8bc34a,
+    var(--accent-primary)
+  );
+  background-size: 200% 100%;
+  animation: organicFlow 4s ease-in-out infinite;
+  border-radius: 32px 32px 0 0;
+}
+
+@keyframes organicFlow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.mindful-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.zen-logo {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary);
+  transition: color 0.5s ease;
+}
+
+.zen-logo svg {
+  position: relative;
+  z-index: 2;
+  animation: zenBreath 4s ease-in-out infinite;
+}
+
+@keyframes zenBreath {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.zen-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: zenGlow 3s ease-in-out infinite;
+}
+
+@keyframes zenGlow {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.8;
+  }
+}
+
+.mindful-header h1 {
+  color: var(--text-primary);
+  font-size: 2rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+  letter-spacing: -0.02em;
+  transition: color 0.5s ease;
+}
+
+.mindful-header p {
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 400;
+  transition: color 0.5s ease;
+}
+
+/* Organic Form Fields */
+.organic-field {
+  position: relative;
+  margin-bottom: 32px;
+}
+
+.field-nature {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--input-bg);
+  border: 1.5px solid var(--input-border);
+  border-radius: 20px;
+  transition: all 0.3s ease;
+}
+
+.organic-field input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 18px 60px 18px 20px;
+  color: var(--text-input);
+  font-size: 16px;
+  font-weight: 400;
+  outline: none;
+  position: relative;
+  z-index: 2;
+  font-family: inherit;
+}
+[dir="rtl"] .organic-field input {
+  padding: 18px 20px 18px 60px;
+}
+/* Placeholder fix for dark mode */
+.organic-field input::placeholder {
+  color: transparent;
+}
+
+.organic-field label {
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-label);
+  font-size: 16px;
+  font-weight: 400;
+  pointer-events: none;
+  transition: all 0.3s ease;
+  z-index: 3;
+  /* بک‌گراند لیبل باید با رنگ کارت یکی باشد تا خط روی آن نیفتد */
+  background: transparent;
+  padding: 0 4px;
+}
+[dir="rtl"] .organic-field label {
+  left: initial;
+  right: 20px;
+}
+/* تکنیک برای ایجاد بک‌گراند پشت لیبل که در حالت دارک مود هم کار کند */
+.organic-field label::before {
+  content: "";
+  position: absolute;
+  top: 45%;
+  left: 0;
+  width: 100%;
+  height: 50%;
+  background: var(--card-bg);
+  z-index: -1;
+  transition: background 0.5s ease;
+  opacity: 0;
+}
+
+.organic-field input:focus + label::before,
+.organic-field input:not(:placeholder-shown) + label::before {
+  opacity: 1;
+}
+
+.organic-field input:focus + label,
+.organic-field input:not(:placeholder-shown) + label {
+  top: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent-primary);
+  transform: translateY(-50%);
+  background: var(--bg-inner);
+  padding: 5px 20px;
+}
+
+.organic-field input:focus ~ .field-nature {
+  border-color: var(--accent-primary);
+  background: var(--input-focus-bg);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.growth-indicator {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  z-index: 4;
+}
+[dir="rtl"] .growth-indicator {
+  right: initial;
+  left: 32px;
+}
+
+.leaf-sprout {
+  width: 100%;
+  height: 100%;
+  background: var(--accent-primary);
+  border-radius: 0 100% 0 100%;
+  opacity: 0;
+  transform: scale(0) rotate(45deg);
+  animation: sproutGrow 0.5s ease-out forwards;
+}
+
+.organic-field input:focus ~ .growth-indicator .leaf-sprout,
+.organic-field input:valid ~ .growth-indicator .leaf-sprout {
+  opacity: 1;
+  transform: scale(1) rotate(45deg);
+}
+
+@keyframes sproutGrow {
+  0% {
+    opacity: 0;
+    transform: scale(0) rotate(45deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(45deg);
+  }
+}
+
+/* Nature Toggle (Password Eye) */
+.organic-field:has(.nature-toggle) input {
+  padding-right: 56px;
+}
+
+.nature-toggle {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-label);
+  padding: 8px;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+[dir="rtl"] .nature-toggle {
+  right: initial;
+  left: 20px;
+}
+[dir="rtl"] .organic-field:has(.nature-toggle) input {
+  padding-right: 20px;
+  padding-left: 56px;
+}
+.nature-toggle:hover {
+  color: var(--accent-primary);
+  background: var(--leaf-bg);
+}
+
+.eye-icon {
+  stroke-width: 1.5px;
+}
+
+/* Mindful Options */
+.mindful-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 36px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.zen-checkbox {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--accent-primary);
+  font-weight: 500;
+  transition: color 0.3s ease;
+}
+
+.zen-checkbox input[type="checkbox"] {
+  display: none;
+}
+
+.checkbox-leaf {
+  width: 22px;
+  height: 22px;
+  margin-right: 12px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.leaf-shape {
+  width: 100%;
+  height: 100%;
+  background: var(--leaf-bg);
+  border: 1.5px solid var(--input-border);
+  border-radius: 0 100% 0 100%;
+  transform: rotate(45deg);
+  transition: all 0.3s ease;
+  position: absolute;
+}
+
+.checkbox-leaf svg {
+  color: transparent;
+  transition: color 0.3s ease;
+  position: relative;
+  z-index: 1;
+  transform: rotate(-45deg);
+}
+
+.zen-checkbox input[type="checkbox"]:checked + .checkbox-leaf .leaf-shape {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.zen-checkbox input[type="checkbox"]:checked + .checkbox-leaf svg {
+  color: #ffffff; /* آیکون تیک همیشه سفید باشد */
+}
+
+/* در حالت دارک مود، اگر چک‌باکس فعال باشد، تیک مشکی یا سفید؟ */
+[data-theme="dark"]
+  .zen-checkbox
+  input[type="checkbox"]:checked
+  + .checkbox-leaf
+  svg {
+  color: #0f1510; /* کنتراست بهتر روی سبز روشن در حالت دارک */
+}
+
+.healing-link {
+  color: var(--accent-primary);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.healing-link:hover {
+  color: var(--text-primary);
+}
+
+/* Harmony Button */
+.harmony-button {
+  width: 100%;
+  background: transparent;
+  color: #ffffff;
+  border: none;
+  border-radius: 20px;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  position: relative;
+  margin-bottom: 32px;
+  overflow: hidden;
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.button-earth {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, var(--accent-primary), #66bb6a, #8bc34a);
+  border-radius: 20px;
+  transition: all 0.3s ease;
+}
+
+.harmony-button:hover .button-earth {
+  transform: scale(1.02);
+  filter: brightness(1.1);
+}
+
+.harmony-button:active .button-earth {
+  transform: scale(0.98);
+}
+
+.button-text {
+  position: relative;
+  z-index: 2;
+  transition: opacity 0.3s ease;
+  /* متن دکمه همیشه روشن است چون پس‌زمینه دکمه همیشه سبز است */
+  color: white;
+}
+[data-theme="dark"] .button-text {
+  color: #0f1510; /* در حالت دارک، متن روی دکمه سبز روشن تیره باشد بهتر است */
+}
+
+.button-growth {
+  position: absolute;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  display: flex;
+  gap: 6px;
+}
+
+.growing-circle {
+  width: 8px;
+  height: 8px;
+  background: #ffffff;
+  border-radius: 50%;
+  animation: organicGrow 1.5s ease-in-out infinite;
+}
+[data-theme="dark"] .growing-circle {
+  background: #0f1510;
+}
+
+.circle-2 {
+  animation-delay: 0.2s;
+}
+.circle-3 {
+  animation-delay: 0.4s;
+}
+
+@keyframes organicGrow {
+  0%,
+  80%,
+  100% {
+    transform: scale(0.8);
+    opacity: 0.6;
+  }
+  40% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+.harmony-button.loading .button-text {
+  opacity: 0;
+}
+
+.harmony-button.loading .button-growth {
+  opacity: 1;
+}
+
+.button-aura {
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  right: -3px;
+  bottom: -3px;
+  background: linear-gradient(135deg, var(--accent-primary), #8bc34a);
+  border-radius: 23px;
+  opacity: 0;
+  filter: blur(12px);
+  transition: opacity 0.3s ease;
+  z-index: -1;
+}
+
+.harmony-button:hover .button-aura {
+  opacity: 0.6;
+}
+
+/* Balance Divider */
+.balance-divider {
+  display: flex;
+  align-items: center;
+  margin: 32px 0;
+  gap: 16px;
+}
+
+.divider-branch {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--divider-color),
+    transparent
+  );
+}
+
+.divider-center {
+  color: var(--accent-primary);
+  opacity: 0.7;
+  animation: centerPulse 3s ease-in-out infinite;
+}
+
+@keyframes centerPulse {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+/* Nurture Signup */
+.nurture-signup {
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.growth-link {
+  color: var(--accent-primary);
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.growth-link::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent-primary), #8bc34a);
+  transition: width 0.3s ease;
+}
+
+.growth-link:hover::after {
+  width: 100%;
+}
+.growth-link:hover {
+  color: var(--text-primary);
+}
+
+/* Gentle Error */
+.gentle-error {
+  color: #ff7043;
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: 8px;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 5;
+  display: block;
+  height: 0;
+}
+
+.gentle-error.show {
+  opacity: 1;
+  transform: translateY(0);
+  height: auto;
+  margin-bottom: 8px;
+}
+
+.organic-field.error .field-nature {
+  border-color: #ff7043;
+  background: rgba(255, 112, 67, 0.1);
+}
+
+.organic-field.error label {
+  color: #ff5722;
+}
+
+/* Mobile Responsive */
+@media (max-width: 480px) {
+  .login-wrapper {
+    padding: 16px;
+  }
+  .wellness-card {
+    padding: 36px 28px;
+    border-radius: 24px;
+  }
+  .mindful-header h1 {
+    font-size: 1.75rem;
+  }
+  .zen-logo {
+    width: 60px;
+    height: 60px;
+  }
+  .mindful-options {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+}
+/* --- استایل‌های قبلی سرجای خودشان باشند --- */
+
+/* اضافه شده‌ها برای کپچا و تغییرات جدید */
+
+/* استایل کپچای اسلایدی */
+.nature-captcha {
+  position: relative;
+  width: 100%;
+  height: 54px;
+  background: var(--input-bg);
+  border: 1.5px solid var(--input-border);
+  border-radius: 27px;
+  margin-bottom: 24px;
+  user-select: none;
+  touch-action: none;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.nature-captcha.verified {
+  border-color: var(--accent-primary);
+  background: rgba(76, 175, 80, 0.05);
+}
+
+.captcha-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.captcha-text {
+  position: absolute;
+  font-size: 13px;
+  color: var(--text-secondary);
+  pointer-events: none;
+  z-index: 1;
+  transition: opacity 0.3s;
+}
+
+.nature-captcha.verified .captcha-text {
+  color: var(--accent-primary);
+  font-weight: bold;
+}
+
+.captcha-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(76, 175, 80, 0.1),
+    rgba(76, 175, 80, 0.3)
+  );
+  border-radius: 27px;
+  transition: width 0.1s linear;
+}
+
+.captcha-handle {
+  position: absolute;
+  top: 4px;
+  width: 44px;
+  height: 44px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  color: var(--text-secondary);
+  z-index: 2;
+  transition: background 0.3s ease, transform 0.1s;
+}
+
+.nature-captcha.verified .captcha-handle {
+  cursor: default;
+  background: #f1f8e9;
+  border: 1px solid var(--accent-primary);
+}
+
+[data-theme="dark"] .captcha-handle {
+  background: #2c3e2e;
+  color: #a5d6a7;
+}
+
+.captcha-handle:active {
+  cursor: grabbing;
+  transform: scale(1.05);
+}
+
+/* انیمیشن فید برای جابجایی بین مراحل */
+.fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* تمیزکاری استایل اینپوت‌ها برای کد تایید */
+input[type="tel"] {
+  letter-spacing: 2px;
+  font-family: monospace, sans-serif; /* برای نمایش بهتر اعداد */
+}
+
+/* Harmony Success */
+.harmony-success {
+  display: block;
+  text-align: center;
+  padding: 40px 20px;
+  opacity: 1;
+  transform: translateY(0);
+  /* transform: translateY(20px); */
+  transition: all 0.5s ease;
+  backdrop-filter: blur(10px);
+  /* -webkit-backdrop-filter: blur(10px); */
+}
+
+.success-mandala {
+  position: relative;
+  width: 90px;
+  height: 90px;
+  margin: 0 auto 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mandala-ring {
+  position: absolute;
+  border: 2px solid var(--accent-primary);
+  border-radius: 50%;
+  animation: mandalaGrow 1.2s ease-out forwards;
+  opacity: 0;
+}
+
+.mandala-ring-1 {
+  width: 60px;
+  height: 60px;
+  top: 15px;
+  left: 15px;
+  animation-delay: 0s;
+}
+
+.mandala-ring-2 {
+  width: 75px;
+  height: 75px;
+  top: 7.5px;
+  left: 7.5px;
+  animation-delay: 0.2s;
+}
+
+.mandala-ring-3 {
+  width: 90px;
+  height: 90px;
+  top: 0;
+  left: 0;
+  animation-delay: 0.4s;
+}
+
+@keyframes mandalaGrow {
+  0% {
+    opacity: 0;
+    transform: scale(0) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1) rotate(180deg);
+  }
+  100% {
+    opacity: 0.8;
+    transform: scale(1) rotate(360deg);
+  }
+}
+
+.mandala-center {
+  position: relative;
+  z-index: 2;
+  color: var(--accent-primary);
+  animation: centerBloom 0.8s ease-out 0.6s forwards;
+  opacity: 0;
+}
+
+@keyframes centerBloom {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.harmony-success h3 {
+  color: #2e7d32;
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.harmony-success p {
+  color: #66bb6a;
+  font-size: 14px;
+}

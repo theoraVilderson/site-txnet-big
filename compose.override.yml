@@ -1,0 +1,14 @@
+services:
+  txnetsite:
+    build:
+      target: dev
+    volumes:
+      - ./txnetsite:/app
+      - node_modules_txnetsite:/app/node_modules
+
+volumes:
+  node_modules_txnetsite:
+  dev_txnetweb_db:
+  dev_txnetweb_log:
+  dev_redis_vol_internal:
+  dev_txnetweb_dbconfig:

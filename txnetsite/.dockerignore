@@ -1,0 +1,40 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Next.js build output
+.next
+out
+build
+dist
+
+# Version Control
+.git
+.gitignore
+.github
+.gitlab-ci.yml
+
+# Docker-related (خود فایل‌های داکر نباید داخل ایمیج کپی شوند مگر اینکه لازم باشند)
+docker-compose.yml
+docker-compose.override.yml
+Dockerfile
+.dockerignore
+
+# Environment variables
+.env
+.env.local
+.env.*
+
+# Logs & Testing
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+coverage/
+test/
+
+# IDE files
+.vscode
+.idea
+*.md
+LICENSE

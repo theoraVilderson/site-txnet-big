@@ -1,0 +1,1 @@
+docker compose -p devtxnet --env-file ../.env --env-file ../.env.dev -f ../compose.yml -f ../compose.override.yml "$@"

@@ -1,0 +1,106 @@
+services:
+  txnetsite:
+ 
+    image: ${ENVIRONMENT}_txnetsite_${WEB_APP_VERSION}
+    build:
+      target: ${ENVIRONMENT}
+      context: ./txnetsite
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME}
+      - ENVIRONMENT=${ENVIRONMENT}
+      - PORT=${TXNET_SITE_PORT}
+      - HOSTNAME=${DOMAIN_NAME}
+      - JWT_SECRET=${JWT_SECRET}
+      - REDIS_PORT=${REDIS_PORT}
+      - MONGO_DB_USERNAME=${MONGO_DB_USERNAME}
+      - MONGO_DB_PASSWORD=${MONGO_DB_PASSWORD}
+      - DB_PORT=${DB_PORT}
+      - SMS_USERNAME=${SMS_USERNAME}
+      - SMS_PASS=${SMS_PASS}
+      - SMS_SENDER_PRIVATE=${SMS_SENDER_PRIVATE}
+      - JWT_SECRET_CAPTCHA=${JWT_SECRET_CAPTCHA}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - NEXT_PUBLIC_PAYMENT_URL=${NEXT_PUBLIC_PAYMENT_URL}
+    expose:
+      - "${TXNET_SITE_PORT}"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    dns:
+      - 217.218.155.155
+      - 217.218.127.127
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  mongodb:
+    image: ${DOCKER_REGISTRY}/mongo:latest
+    ports:
+      - "${DB_PORT}:${DB_PORT}"
+    volumes:
+      - ${ENVIRONMENT}_txnetweb_db:/data/db
+      - ${ENVIRONMENT}_txnetweb_log:/var/log/mongodb
+      - ./mongo/${ENVIRONMENT}.mongod.conf:/etc/mongod.conf
+      - ${ENVIRONMENT}_txnetweb_dbconfig:/data/configdb
+      - ./mongo/${ENVIRONMENT}.mongodb.key:/data/configdb/mongodb.key
+    environment:
+      - MONGODB_INITDB_ROOT_USERNAME=${MONGO_DB_USERNAME}
+      - MONGODB_INITDB_ROOT_PASSWORD=${MONGO_DB_PASSWORD}
+    healthcheck:
+      # این اسکریپت در صورت نبود کاربر، دیتابیس را Initialize کرده و کاربر را می‌سازد
+      test: >
+        bash -c "
+        if mongosh --port ${DB_PORT} -u ${MONGO_DB_USERNAME} -p ${MONGO_DB_PASSWORD} --authenticationDatabase admin --eval 'db.runCommand(\"ping\").ok' --quiet | grep -q '1'; then
+          exit 0;
+        else
+          mongosh --port ${DB_PORT} --eval 'rs.initiate({_id: \"rs0\", members: [{ _id: 0, host: \"mongodb:${DB_PORT}\" }]})' --quiet || true;
+          sleep 2;
+          mongosh --port ${DB_PORT} --eval 'db.getSiblingDB(\"admin\").createUser({user: \"${MONGO_DB_USERNAME}\", pwd: \"${MONGO_DB_PASSWORD}\", roles: [ \"root\" ]})' --quiet || true;
+          exit 1;
+        fi"
+      interval: 10s
+      timeout: 15s
+      retries: 10
+    restart: unless-stopped
+    command: mongod --port ${DB_PORT} --config /etc/mongod.conf
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: ${DOCKER_REGISTRY}/redis:alpine
+    container_name: redis
+    command: redis-server --save "" --requirepass ${REDIS_PASSWORD} --appendonly yes --appendfsync everysec --port ${REDIS_PORT}
+    ports:
+      - "${REDIS_PORT}:${REDIS_PORT}"
+    volumes:
+      - ${ENVIRONMENT}_redis_vol_internal:/data
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nginx:
+    image: ${DOCKER_REGISTRY}/nginx:alpine
+    container_name: nginx_proxy
+    environment:
+      - NGINX_SITE_PORT=${NGINX_SITE_PORT}
+      - TXNET_SITE_PORT=${TXNET_SITE_PORT}
+    restart: always
+    ports:
+      - "${NGINX_SITE_PORT}:${NGINX_SITE_PORT}"
+    volumes:
+      - ./nginx/${ENVIRONMENT}.nginx.conf.template:/etc/nginx/templates/default.conf.template
+    depends_on:
+      - txnetsite
+

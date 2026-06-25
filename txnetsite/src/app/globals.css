@@ -1,0 +1,159 @@
+@import "tailwindcss";
+
+:root {
+  --background: linear-gradient(135deg, #a8e6cf 0%, #dcedc8 50%, #f8f8f8 100%);
+  --foreground: #0f2923;
+  /* --- Light Mode --- */
+  --bg-inner: #f4f9f4;
+  --card-bg: rgba(255, 255, 255, 0.95); /* کمی غلیظ‌تر برای خوانایی تست */
+  --card-border: rgba(76, 175, 80, 0.2);
+  --card-shadow: rgba(76, 175, 80, 0.15);
+
+  --text-primary: #2e7d32;
+  --text-secondary: #66bb6a;
+
+  --accent-primary: #4caf50;
+  --accent-glow: rgba(76, 175, 80, 0.2);
+
+  --leaf-bg: rgba(76, 175, 80, 0.1);
+
+  /* رنگ خطا (از کد شما) */
+  --error-color: #ff7043;
+  --error-bg: #fff3e0;
+  --error-border: #ffccbc;
+
+  --skeleton-bg: rgba(76, 175, 80, 0.12); /* سبز خیلی کمرنگ*/
+  --skeleton-wave: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.6),
+    /* موج نور سفید (مثل بازتاب نور روی برگ) */ transparent
+  );
+
+  /* تم طلایی برای بخش مالی */
+  --gold-primary: #ffb300;
+  --gold-glow: rgba(255, 179, 0, 0.4);
+  --gold-bg: rgba(255, 179, 0, 0.1);
+
+  /* گرادینت کارت بانکی */
+  --card-gradient: linear-gradient(
+    135deg,
+    var(--accent-primary) 0%,
+    #2e7d32 100%
+  );
+}
+
+[class="dark"] {
+  --background: linear-gradient(135deg, #164f43 0%, #233329 50%, #0a0a0a 100%);
+  --foreground: #e8f5e9;
+  --bg-inner: #0f1510;
+  --card-bg: rgba(20, 30, 20, 0.9); /* تیره شیشه‌ای */
+  --card-border: rgba(129, 199, 132, 0.15);
+  --card-shadow: rgba(0, 0, 0, 0.5);
+
+  --text-primary: #e8f5e9;
+  --text-secondary: #a5d6a7;
+
+  --accent-primary: #66bb6a;
+  --accent-glow: rgba(102, 187, 106, 0.3);
+
+  --leaf-bg: rgba(129, 199, 132, 0.1);
+
+  /* رنگ خطا در دارک مود */
+  --error-color: #ffab91;
+  --error-bg: rgba(255, 87, 34, 0.1);
+  --error-border: rgba(255, 87, 34, 0.3);
+
+  /* تنظیمات جدید برای اسکلتون (تم تاریک)*/
+  --skeleton-bg: rgba(129, 199, 132, 0.08); /* سبز نعنایی تیره و شفاف*/
+  --skeleton-wave: linear-gradient(
+    90deg,
+    transparent,
+    rgba(129, 199, 132, 0.15),
+    /* موج نور سبز ملایم (شب‌تاب) */ transparent
+  );
+
+  --gold-primary: #ffca28;
+  --gold-glow: rgba(255, 202, 40, 0.3);
+  --gold-bg: rgba(255, 202, 40, 0.08);
+  --card-gradient: linear-gradient(135deg, #1b5e20 0%, #000000 100%);
+}
+
+body {
+  font-family: "Vazir", sans-serif;
+  min-height: 100vh;
+  line-height: 1.6;
+  position: relative;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.glass-toast {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--accent-primary);
+  border-radius: 10px;
+  opacity: 0.5;
+}
+
+/* --- تنظیمات عمومی انتخاب متن (پیش‌فرض لایت مود) --- */
+::selection {
+  /* پس‌زمینه: استفاده از رنگ سبز اصلی اما کمی شفاف‌تر برای حس ارگانیک */
+  background-color: var(--accent-primary);
+
+  /* رنگ متن: سفید خالص برای کنتراست بالا روی سبز */
+  color: #ffffff;
+
+  /* سایه متن: ایجاد عمق ملایم با استفاده از متغیر سایه کارت */
+  text-shadow: 0 1px 2px var(--card-shadow);
+}
+
+/* پشتیبانی از فایرفاکس */
+::-moz-selection {
+  background-color: var(--accent-primary);
+  color: #ffffff;
+  text-shadow: 0 1px 2px var(--card-shadow);
+}
+
+/* --- تنظیمات مخصوص دارک مود --- */
+[class="dark"] ::selection {
+  /* پس‌زمینه: در دارک مود، رنگ اکسنت روشن‌تر است (#66bb6a) */
+  background-color: var(--accent-primary);
+
+  /* رنگ متن: استفاده از رنگ پس‌زمینه تیره برای ایجاد حالت "هک و ترمینال" و خوانایی بالا */
+  color: var(--bg-inner);
+
+  /* درخشش: اضافه کردن یک هاله نورانی دور متن انتخاب شده */
+  text-shadow: 0 0 8px var(--accent-glow);
+}
+
+[class="dark"] ::-moz-selection {
+  background-color: var(--accent-primary);
+  color: var(--bg-inner);
+  text-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* --- تنظیمات مخصوص تصاویر و المان‌های غیر متنی --- */
+/* جلوگیری از اینکه روی عکس‌ها یک لایه سبز غلیظ بیفتد */
+img::selection,
+svg::selection,
+video::selection {
+  background-color: transparent;
+  /* استفاده از افکت فیلتر برای عکس انتخاب شده (مدرن و جذاب) */
+  filter: brightness(1.2) drop-shadow(0 0 5px var(--accent-primary));
+}
+
+button {
+  cursor: pointer;
+}

@@ -1,0 +1,113 @@
+import { NextResponse } from "next/server";
+import connectDB from "@/lib/db";
+import Users from "@models/Users";
+import redis from "@/lib/redis";
+import { signupSchema } from "@/lib/validations";
+import { verifyCaptcha } from "@lib/captcha";
+import { generateOTP, sendOTP, sendSMS } from "@lib/sms";
+import {
+  authIpRateLimiter,
+  authNumberRateLimiter,
+  captchaRateLimiter,
+} from "@lib/rateLimiter";
+import { getIpFromHeader, sendAsRes, zodErrorToString } from "@util/helper";
+// {
+//   verifyCaptcha,
+//   // ,
+//   generateOTP,
+//   sendSMS,
+// }
+
+export async function POST(req: Request) {
+  const header = req.headers;
+  const ip = getIpFromHeader(header);
+  try {
+    const body = await req.json();
+
+    // 1. Validate Zod
+    const validation = signupSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json(
+        sendAsRes(null, zodErrorToString(validation.error)),
+        { status: 400 }
+      );
+    }
+    const {
+      phone,
+      name,
+      captchaTokens: { verifyToken, captchaToken },
+    } = validation.data;
+
+    await captchaRateLimiter.consume(ip);
+    const captchaVerificationResult = await verifyCaptcha(
+      captchaToken,
+      verifyToken,
+      ip
+    );
+    const {
+      ok: isCaptchaValid,
+      data,
+      msg: captchaMsg,
+    } = captchaVerificationResult;
+
+    if (!isCaptchaValid) {
+      return NextResponse.json(sendAsRes(null, captchaMsg), {
+        status: 400,
+      });
+    }
+    await connectDB();
+
+    // 3. Check User Duplication
+    const existingUser = await Users.findOne({ phone }).lean();
+    if (existingUser) {
+      // اگر کاربر وجود دارد ولی وریفای نشده، شاید بخواهید کد را دوباره بفرستید
+      // اما طبق درخواست شما اگر کاربر باشد باید خطا بدهیم:
+      return NextResponse.json(
+        { error: "این شماره قبلاً ثبت شده است" },
+        { status: 409 }
+      );
+    }
+
+    // 4. Rate Limiting (Consume)
+    //by phone and ip
+    try {
+      await authNumberRateLimiter.consume(phone);
+    } catch (error) {
+      return NextResponse.json(
+        sendAsRes(null, "تعداد درخواست‌های شما ثبتنام ورود بیش از حد مجاز است"),
+
+        { status: 429 }
+      );
+    }
+
+    try {
+      await authIpRateLimiter.consume(ip);
+    } catch (error) {
+      return NextResponse.json(
+        sendAsRes(null, "تعداد درخواست‌های شما ثبتنام ورود بیش از حد مجاز است"),
+
+        { status: 429 }
+      );
+    }
+
+    // 5. Create User (طبق درخواست: اگر نبود بسازه)
+    // نکته: معمولاً یوزر را بعد از تایید کد می‌سازند، اما طبق سناریوی شما اینجا می‌سازیم
+    // با فلگ isVerified: false
+    const newUser = await Users.create({
+      fullName: name,
+      phone,
+    });
+
+    const { ok, msg, data: otp } = await sendOTP(phone);
+    if (!ok) return NextResponse.json(sendAsRes(null, msg), { status: 500 });
+    await redis.setex(`otp:${phone}`, 120, otp!);
+
+    return NextResponse.json(
+      { message: "کد تایید ارسال شد و کاربر ایجاد گردید" },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error("Signup Error:", error);
+    return NextResponse.json({ error: "خطای داخلی سرور" }, { status: 500 });
+  }
+}
