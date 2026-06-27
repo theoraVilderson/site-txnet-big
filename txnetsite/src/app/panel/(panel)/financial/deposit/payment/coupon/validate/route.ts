@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import connectDB from "@/lib/db";
 import Users from "@/models/Users";
-import { sendAsRes } from "@util/helper";
+import { sendAsRes, zodErrorToString } from "@util/helper";
 import { getValidatedUser } from "@lib/auth";
 import { AllServiceTypes } from "@/configs/services";
 import { CouponService } from "@lib/payment/coupon/couponService";
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     // 3. اعتبارسنجی داده‌های ورودی
     const validation = couponCheckSchema.safeParse(body);
     if (!validation.success) {
-      return NextResponse.json(sendAsRes(null, validation.error.message), {
+      return NextResponse.json(sendAsRes(null, zodErrorToString(validation.error.message as any)), {
         status: 400,
       });
     }

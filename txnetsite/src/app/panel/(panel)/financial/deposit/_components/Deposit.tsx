@@ -16,7 +16,6 @@ import {
 import {
   ABSOLUTE_MAX_AMOUNT,
   MIN_AMOUNT,
-  MIN_AMOUNT as STATIC_MIN_AMOUNT,
 } from "@/configs/payments";
 import { formatCurrency } from "../../_util/format";
 import { IPaymentSettingClient } from "@/types/paymentSetting";
@@ -27,7 +26,6 @@ import { SendResType } from "@/shared";
 import axios from "axios";
 import { toToman } from "@util/helper";
 import { calculatePaymentAmount } from "@lib/payment/fee/feeAndTaxCalculator";
-
 interface DepositProps {
   paymentSettings: IPaymentSettingClient[];
   paymentBaseURL: string;
@@ -74,9 +72,25 @@ export default function Deposit({
     );
   }, [selectedGateway]);
 
-  const MIN_AMOUNT_GATEWAY = currentProvider?.minAmountAccept ?? MIN_AMOUNT;
-  const MAX_AMOUNT_GATEWAY =
-    currentProvider?.maxAmountAccept ?? ABSOLUTE_MAX_AMOUNT;
+
+
+  // ... داخل کامپوننت Deposit:
+
+  // ۱. ضریب تبدیل: اگر درگاه تومان بود ضربدر ۱۰ می‌شود، در غیر این صورت (ریال) ضربدر ۱
+  const currencyMultiplier = currentProvider?.feeConfig.currency === FeeCurrency.IRT ? 10 : 1;
+
+  // ۲. حالا مطمئنیم که این دو متغیر همیشه و تحت هر شرایطی "ریال" خالص هستند
+  const MIN_AMOUNT_GATEWAY = currentProvider?.minAmountAccept 
+    ? currentProvider.minAmountAccept * currencyMultiplier 
+    : MIN_AMOUNT;
+
+  const MAX_AMOUNT_GATEWAY = currentProvider?.maxAmountAccept 
+    ? currentProvider.maxAmountAccept * currencyMultiplier 
+    : ABSOLUTE_MAX_AMOUNT;
+
+
+  // ۳. اعتبار سنجی دکمه پرداخت (مقایسه ریال با ریال)
+  const isValid = numAmount >= MIN_AMOUNT_GATEWAY && numAmount <= MAX_AMOUNT_GATEWAY;
 
   // --- 1. Logic: Discount & Base Payable Calculation ---
 
@@ -186,7 +200,7 @@ export default function Deposit({
   const userChargeAmount = numAmount + adjustmentGap;
   const projectedBalance = CURRENT_BALANCE + userChargeAmount;
 
-  const isValid = numAmount >= (currentProvider?.minAmountAccept ?? 0);
+
 
   // --- Handlers ---
 
@@ -342,8 +356,8 @@ export default function Deposit({
               amount={amount}
               onAmountChange={setAmount}
               disabled={noPaymentPorviders}
-              min={MIN_AMOUNT_GATEWAY}
-              max={MAX_AMOUNT_GATEWAY}
+              min={toToman(MIN_AMOUNT_GATEWAY)}
+              max={toToman(MAX_AMOUNT_GATEWAY)}
             />
 
             <CouponInput

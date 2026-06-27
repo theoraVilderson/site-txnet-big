@@ -10,7 +10,7 @@ import {
 } from "@lib/rateLimiter";
 import { createToken, UserPayloadWithoutVersion } from "@lib/session";
 import { verifyOTPSchema } from "@lib/validations";
-import { getIpFromHeader, sendAsRes } from "@util/helper";
+import { getIpFromHeader, sendAsRes, zodErrorToString } from "@util/helper";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     // 1. Validate Zod
     const validation = verifyOTPSchema.safeParse(body);
     if (!validation.success) {
-      return NextResponse.json(sendAsRes(null, validation.error.message), {
+      return NextResponse.json(sendAsRes(null, zodErrorToString(validation.error.message as any)), {
         status: 400,
       });
     }

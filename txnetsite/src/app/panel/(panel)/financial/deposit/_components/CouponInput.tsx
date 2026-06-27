@@ -58,7 +58,9 @@ const CouponManager: React.FC<CouponManagerProps> = ({
     setMsg("");
 
     try {
-      const result = await validateCoupon([inputValue]);
+      // به جای لاین ۴۷، این را بنویسید:
+    const allCodesToValidate = [...appliedCoupons.map((c) => c.code), inputValue];
+    const result = await validateCoupon(allCodesToValidate);
 
       if (!result) throw new Error("خطا در خواندن کد تخفیف");
 

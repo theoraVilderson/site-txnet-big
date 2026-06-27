@@ -4,7 +4,7 @@ import Users from "@models/Users";
 import redis from "@/lib/redis";
 import { loginSchema } from "@/lib/validations";
 
-import { getIpFromHeader, sendAsRes } from "@util/helper";
+import { getIpFromHeader, sendAsRes, zodErrorToString } from "@util/helper";
 import { verifyCaptcha } from "@lib/captcha";
 import { sendRes } from "@/shared";
 import {
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     // 1. Validate Zod
     const validation = loginSchema.safeParse(body);
     if (!validation.success) {
-      return NextResponse.json(sendAsRes(null, validation.error.message), {
+      return NextResponse.json(sendAsRes(null, zodErrorToString(validation.error.message as any)), {
         status: 400,
       });
     }
@@ -86,6 +86,7 @@ export async function POST(req: Request) {
 
     const { ok, msg, data: otp } = await sendOTP(phone);
     if (!ok) return NextResponse.json(sendAsRes(null, msg), { status: 500 });
+    await redis.del(`otp:attempts:${phone}`);
     await redis.setex(`otp:${phone}`, 120, otp!);
     return NextResponse.json(
       sendAsRes(null, "کد تایید با موفقیت ارسال شد", true), 

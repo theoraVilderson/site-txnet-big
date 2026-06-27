@@ -4,7 +4,7 @@ import connectDB from "@/lib/db";
 import Transactions from "@/models/Transactions";
 import Users from "@/models/Users";
 import { PaymentFactory } from "@/lib/payment/gateway/paymentFactory";
-import { PaymentProvider } from "@/configs/paymentSettings";
+import { FeeCurrency, PaymentProvider } from "@/configs/paymentSettings";
 import {
   TransactionType,
   TransactionDirection,
@@ -14,25 +14,18 @@ import {
 import { sendAsRes, zodErrorToString } from "@util/helper";
 import { chargeRequestSchema } from "@lib/validations";
 import logger from "@lib/logger";
-import mongoose, { Types } from "mongoose"; // ObjectId در NextResponse استفاده نمی‌شود
+import mongoose from "mongoose"; 
 import { PAYMENT_URL } from "@/env";
 import { getValidatedUser } from "@lib/auth";
 import { PaymentCurrency } from "@/configs/payments";
-// PaymentSettings مدل نیاز نیست ایمپورت شود مگر اینکه بخواهید مستقیماً استفاده کنید
-// app/api/payment/request/route.ts
-
-// ... ایمپورت‌های قبلی ...
 import { AllServiceTypes } from "@/configs/services";
 import { CouponService } from "@lib/payment/coupon/couponService";
-import { IAppliedCoupon, MultipleCouponResult } from "@/types/coupons";
-import { ITransactionSchema } from "@/types/transaction";
+import { IAppliedCoupon } from "@/types/coupons";
 import {
   fulfillWalletChargeTransaction,
-  redirectToError,
   successRedirect,
 } from "@app/payment/verify/route";
 
-// ... (ایمپورت‌ها)
 
 export async function POST(req: NextRequest) {
   try {
@@ -70,22 +63,25 @@ export async function POST(req: NextRequest) {
     // ۲. تنظیمات درگاه
     const providerName = gatewayName as PaymentProvider;
     const paymentStrategy = await PaymentFactory.getProvider(providerName);
-    const { maxAmountAccept = 500_000_000, minAmountAccept = 10000 } =
+    const { maxAmountAccept = 500_000_000, minAmountAccept = 10000,feeConfig  } =
       paymentStrategy.providerSettings;
-
-    if (
-      baseAmountInRial < minAmountAccept ||
-      baseAmountInRial > maxAmountAccept
-    ) {
-      return NextResponse.json(
-        sendAsRes(
-          null,
-          `مبلغ باید بین ${minAmountAccept} و ${maxAmountAccept} ریال باشد`
-        ),
-        { status: 400 }
-      );
-    }
-
+    // ۲. نرمال‌سازی به ریال
+    const currencyMultiplier = feeConfig.currency === FeeCurrency.IRT ? 10 : 1;
+    const normalizedMinAmount = minAmountAccept * currencyMultiplier;
+    const normalizedMaxAmount = maxAmountAccept * currencyMultiplier;
+  // ۳. مقایسه ایمن
+  if (
+    baseAmountInRial < normalizedMinAmount ||
+    baseAmountInRial > normalizedMaxAmount
+  ) {
+    return NextResponse.json(
+      sendAsRes(
+        null,
+        `مبلغ باید بین ${normalizedMinAmount / 10} و ${normalizedMaxAmount / 10} تومان باشد`
+      ),
+      { status: 400 }
+    );
+  }
     // ۳. محاسبه تخفیف و کوپن
     let finalAmount = baseAmountInRial;
     let discountAmount = 0;
@@ -187,7 +183,7 @@ export async function POST(req: NextRequest) {
       callbackUrl: `${PAYMENT_URL}/verify`,
       description: `شارژ کیف پول ${user.phone}`,
       mobile: user.phone,
-      currency: PaymentCurrency.IRR,
+      currency: PaymentCurrency.IRT,
     });
 
     if (failed || !paymentRes) {

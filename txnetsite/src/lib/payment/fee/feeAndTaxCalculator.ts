@@ -1,4 +1,4 @@
-import { FeeType, FeeMode } from "@/configs/paymentSettings";
+import { FeeType, FeeMode, FeeCurrency } from "@/configs/paymentSettings";
 import { PaymentFeeParams } from "@/types/payment";
 import { IPaymentSetting } from "@/types/paymentSetting";
 import { number } from "framer-motion";
@@ -39,20 +39,20 @@ export async function calculatePaymentAmount(
   // اگر حالت محاسبه دستی باشد
   if (feeConfig.mode === FeeMode.MANUAL) {
     if (feeConfig.type === FeeType.FIXED) {
-      // حالت ثابت: مثلاً ۵۰۰۰ تومان
-      calculatedFee = feeConfig.value;
+      // اگر تنظیمات تومان بود، تبدیل به ریال کن
+      const multiplier = feeConfig.currency === FeeCurrency.IRT ? 10 : 1;
+      calculatedFee = feeConfig.value * multiplier;
     } else if (feeConfig.type === FeeType.PERCENT) {
-      // حالت درصدی: مثلاً ۱ درصد از مبلغ کل
       calculatedFee = baseAmount * (feeConfig.value / 100);
     }
 
-    // اعمال محدودیت‌های کف و سقف (Min/Max Limit)
-    if (feeConfig.minLimit && calculatedFee < feeConfig.minLimit) {
-      calculatedFee = feeConfig.minLimit;
-    }
-    if (feeConfig.maxLimit && calculatedFee > feeConfig.maxLimit) {
-      calculatedFee = feeConfig.maxLimit;
-    }
+       // تبدیل محدودیت‌ها (Limit) به ریال در صورت نیاز
+       const multiplier = feeConfig.currency === FeeCurrency.IRT ? 10 : 1;
+       const minLimit = feeConfig.minLimit ? feeConfig.minLimit * multiplier : null;
+       const maxLimit = feeConfig.maxLimit ? feeConfig.maxLimit * multiplier : null;
+   
+       if (minLimit && calculatedFee < minLimit) calculatedFee = minLimit;
+       if (maxLimit && calculatedFee > maxLimit) calculatedFee = maxLimit;
   } else {
     // اگر حالت API باشد، معمولا کارمزد صفر در نظر گرفته می‌شود تا بعداً از درگاه استعلام شود
     // یا می‌توانید منطق دیگری پیاده کنید

@@ -10,7 +10,7 @@ import {
   PaymentProvider,
 } from "@/configs/paymentSettings";
 import { PaymentFactory } from "@lib/payment/gateway/paymentFactory";
-import { sendAsRes } from "@util/helper";
+import { sendAsRes, zodErrorToString } from "@util/helper";
 import logger from "@lib/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { getValidatedUser } from "@lib/auth";
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     // 3. اعتبارسنجی داده‌های ورودی
     const validation = feeCalcSchema.safeParse(body);
     if (!validation.success) {
-      return NextResponse.json(sendAsRes(null, validation.error.message), {
+      return NextResponse.json(sendAsRes(null, zodErrorToString(validation.error.message as any)), {
         status: 400,
       });
     }

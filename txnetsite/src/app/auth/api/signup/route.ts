@@ -95,6 +95,7 @@ export async function POST(req: Request) {
     if (!ok) return NextResponse.json(sendAsRes(null, msg), { status: 500 });
 // ✅ اطلاعات ثبت‌نام را به صورت موقت در ردیس ذخیره کنید
   const signupData = JSON.stringify({ name, isSignup: true });
+  await redis.del(`otp:attempts:${phone}`);
   await redis.setex(`otp:${phone}`, 120, otp!);
   await redis.setex(`signup_data:${phone}`, 120, signupData); // کش کردن دیتای کاربر
 

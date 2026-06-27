@@ -81,12 +81,12 @@ export default function DiscountModal({ isOpen, onClose }: DiscountModalProps) {
           if (status !== DiscountStatus.SUCCESS) setStatus(DiscountStatus.IDLE);
         }, 3000);
       }
-      updateUser({ walletBalance: userValutBalance + data.amount });
+      updateUser({ walletBalance: userValutBalance + data.data.amount });
       setStatus(DiscountStatus.SUCCESS);
       setTimeout(() => onClose(), 2000);
     } catch (e: any) {
       if (axios.isCancel(e) || e.name === "CanceledError") return;
-      setError(handleAxiosError(e, "خطا در ساخت لینک درگاه پرداخت").message);
+      setError(handleAxiosError(e, "خطا در بررسی و اعمال کد هدیه").message);
       setStatus(DiscountStatus.ERROR);
       setTimeout(() => {
         if (status !== DiscountStatus.SUCCESS) setStatus(DiscountStatus.IDLE);

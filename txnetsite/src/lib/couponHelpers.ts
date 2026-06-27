@@ -16,7 +16,7 @@ export const calculateCouponDiscount = (
       discount = coupon.maxDiscount;
     }
   } else if (coupon.type === CouponType.GIFT) {
-    discount = coupon.amount; 
+    return coupon.amount; 
   }
 
   // حالا کوپن گیفت هم نمی‌تواند بیشتر از مبلغ فعلی فاکتور تخفیف ایجاد کند
