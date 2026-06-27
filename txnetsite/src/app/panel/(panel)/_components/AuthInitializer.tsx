@@ -17,16 +17,14 @@ export default function AuthInitializer({ user, children }: Props) {
   const isLoading = useAuthStore((s) => s.isLoading);
   console.log("setting1");
 
-  useEffect(() => {
-    if (!initialized.current) {
-      useAuthStore.setState({
-        user: user,
-        isAuthenticated: !!user,
-        isLoading: false,
-      });
-      initialized.current = true;
-    }
-  }, [user]); 
+  if (!initialized.current) {
+    useAuthStore.setState({
+      user: user,
+      isAuthenticated: !!user,
+      isLoading: false,
+    });
+    initialized.current = true;
+  }
   // تا زمانی که لودینگ تمام نشده، چیزی رندر نکن یا اسکلتون نشان بده
   if (isLoading) return null; 
 

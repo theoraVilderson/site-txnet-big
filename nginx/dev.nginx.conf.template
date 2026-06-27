@@ -3,22 +3,29 @@ server {
     server_name _;
 
     location / {
-        # --- بخش مدیریت CORS ---
-        # اجازه به دامین فرانت‌اِند (به جای * برای امنیت بیشتر و حل مشکل کوکی‌ها)
-        add_header 'Access-Control-Allow-Origin' '*' always;
+        # --- بخش مدیریت CORS اصلاح شده ---
+        # خواندن Origin درخواست‌دهنده
+        set $cors_origin "";
+        if ($http_origin ~* (.*\.(mytxnet\.ir|localhost)$)) {
+            set $cors_origin $http_origin;
+        }
+
+        add_header 'Access-Control-Allow-Origin' "$cors_origin" always;
+        add_header 'Access-Control-Allow-Credentials' 'true' always;
         add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE' always;
         add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization' always;
         add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
 
         # مدیریت درخواست Preflight (OPTIONS)
         if ($request_method = 'OPTIONS') {
-            add_header 'Access-Control-Allow-Origin' '*' always;
+            add_header 'Access-Control-Allow-Origin' "$cors_origin" always;
+            add_header 'Access-Control-Allow-Credentials' 'true' always;
             add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE' always;
             add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization' always;
             add_header 'Access-Control-Max-Age' 1728000;
             add_header 'Content-Type' 'text/plain; charset=utf-8';
             add_header 'Content-Length' 0;
-            return 204; # پاسخ مستقیم بدون رفتن به سمت بک‌اِند
+            return 204;
         }
 
         # --- تنظیمات پراکسی ---

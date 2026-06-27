@@ -3,7 +3,6 @@ import {
   CreditCard,
   Globe,
   Headphones,
-  Link,
   ReceiptText,
   ShoppingCart,
 } from "lucide-react"; // توجه: Link اینجا اشتباه ایمپورت شده، باید از next/link باشه یا اگر آیکون هست اسمش رو عوض کن
@@ -15,11 +14,8 @@ import {
   X,
   Home,
   Wallet,
-  Users,
   Settings,
   ChevronDown,
-  ChevronLeft,
-  ShieldCheck,
   // Link as LinkIcon // اگر آیکون لینک رو میخوای
 } from "lucide-react";
 import { usePathname } from "next/navigation";

@@ -12,6 +12,7 @@ import { createToken, UserPayloadWithoutVersion } from "@lib/session";
 import { verifyOTPSchema } from "@lib/validations";
 import { getIpFromHeader, sendAsRes, zodErrorToString } from "@util/helper";
 import { NextResponse } from "next/server";
+import redis from "@/lib/redis";
 
 export async function POST(req: Request) {
   NextResponse;
@@ -72,12 +73,11 @@ export async function POST(req: Request) {
         await redis.del(`signup_data:${phone}`);
     }
     let obj: UserPayloadWithoutVersion = {
-      userId: user!._id,
+      userId: user!._id.toString(), // این بخش اصلاح شود
       permissions: user!.permissions,
       roles: user!.roles,
     };
 
-    obj = JSON.parse(JSON.stringify(obj));
 
     const newJWTTokenRes = await createToken(obj);
 
