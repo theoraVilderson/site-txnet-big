@@ -82,22 +82,18 @@ export async function POST(req: Request) {
       );
     }
 
-    // 5. Create User (طبق درخواست: اگر نبود بسازه)
-    // نکته: معمولاً یوزر را بعد از تایید کد می‌سازند، اما طبق سناریوی شما اینجا می‌سازیم
-    // با فلگ isVerified: false
-    const newUser = await Users.create({
-      fullName: name,
-      phone,
-    });
+    
 
     const { ok, msg, data: otp } = await sendOTP(phone);
     if (!ok) return NextResponse.json(sendAsRes(null, msg), { status: 500 });
     await redis.setex(`otp:${phone}`, 120, otp!);
+// ✅ اطلاعات ثبت‌نام را به صورت موقت در ردیس ذخیره کنید
+  const signupData = JSON.stringify({ name, isSignup: true });
+  await redis.setex(`otp:${phone}`, 120, otp!);
+  await redis.setex(`signup_data:${phone}`, 120, signupData); // کش کردن دیتای کاربر
 
-    return NextResponse.json(
-      { message: "کد تایید ارسال شد و کاربر ایجاد گردید" },
-      { status: 201 }
-    );
+  return NextResponse.json({ message: "کد تایید ارسال شد" }, { status: 200 });
+   
   } catch (error) {
     console.error("Signup Error:", error);
     return NextResponse.json({ error: "خطای داخلی سرور" }, { status: 500 });

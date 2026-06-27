@@ -30,41 +30,33 @@ export async function POST(req: Request) {
     }
 
     const { otp, phone } = validation.data;
-
     try {
-      await authVerifyNumberRateLimiter.consume(phone);
+      await Promise.all([
+        authVerifyNumberRateLimiter.consume(phone),
+        authVerifyIpRateLimiter.consume(ip)
+      ]);
     } catch (error) {
       return NextResponse.json(
-        sendAsRes(
-          null,
-          "تعداد درخواست‌های شما برای تایید کد بیش از حد مجاز رسیده است لطفا بعدا تلاش کنید"
-        ),
-
+        sendAsRes(null,"تعداد درخواست‌های شما برای تایید کد بیش از حد مجاز رسیده است لطفا بعدا تلاش کنید"     ),
         { status: 429 }
       );
     }
-
-    try {
-      await authVerifyIpRateLimiter.consume(ip);
-    } catch (error) {
-      return NextResponse.json(
-        sendAsRes(
-          null,
-          "تعداد درخواست‌های شما برای تایید کد بیش از حد مجاز رسیده است لطفا بعدا تلاش کنید"
-        ),
-
-        { status: 429 }
-      );
-    }
+ 
 
     await connectDB();
 
-    const user = await Users.findOne({ phone });
+    let user = await Users.findOne({ phone });
+    
+    // اگر کاربر در دیتابیس نبود، چک می‌کنیم آیا دیتای ثبت‌نام در ردیس دارد؟
     if (!user) {
-      return NextResponse.json(
-        sendAsRes(null, "کاربری با این شماره یافت نشد"),
-        { status: 404 }
-      );
+      const pendingSignup = await redis.get(`signup_data:${phone}`);
+      if (pendingSignup) {
+        const { name } = JSON.parse(pendingSignup);
+        user = await Users.create({ fullName: name, phone }); // ✅ ساخت امن کاربر
+        await redis.del(`signup_data:${phone}`);
+      } else {
+        return NextResponse.json(sendAsRes(null, "کاربر یافت نشد و سابقه ثبت‌نامی وجود ندارد"), { status: 404 });
+      }
     }
     const verifyOTPRes = await verifyOTP(otp, phone);
     if (!verifyOTPRes.ok) {
