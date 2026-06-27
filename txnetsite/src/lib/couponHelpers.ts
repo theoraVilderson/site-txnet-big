@@ -16,10 +16,10 @@ export const calculateCouponDiscount = (
       discount = coupon.maxDiscount;
     }
   } else if (coupon.type === CouponType.GIFT) {
-    return coupon.amount;
+    discount = coupon.amount; 
   }
 
-  // تخفیف نمی‌تواند بیشتر از مبلغ فعلی باشد
+  // حالا کوپن گیفت هم نمی‌تواند بیشتر از مبلغ فعلی فاکتور تخفیف ایجاد کند
   return Math.min(discount, currentPrice);
 };
 // --- Helper: قوانین ثابت (بدون نیاز به دیتابیس لاک‌ها) ---

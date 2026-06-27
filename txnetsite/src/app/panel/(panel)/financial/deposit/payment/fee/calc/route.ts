@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getValidatedUser } from "@lib/auth";
 import connectDB from "@lib/db";
 import { feeCalcSchema } from "@lib/validations";
+import { PaymentCurrency } from "@/configs/payments";
 
 export async function POST(req: NextRequest) {
   try {
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
 
     const feeParams: PaymentFeeParams = {
       amount: amount, // مبلغ به تومان
-      currency: "IRT", // فرض بر تومان بودن سیستم
+      currency: PaymentCurrency.IRR, // فرض بر تومان بودن سیستم
     };
 
     // دریافت کارمزد از سرویس‌دهنده

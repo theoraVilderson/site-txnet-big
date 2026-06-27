@@ -167,14 +167,15 @@ export async function getWalletHistory(
       // console.log(tx, "coupen check");
       return {
         ...tx,
-        couponsCode: tx.couponsCode?.length
-          ? JSON.parse(JSON.stringify(tx.couponsCode))
-          : undefined,
+        // تبدیل عمیق آرایه‌ها برای حذف کامل پروتوتایپ‌های مانگوس
+        couponsCode: tx.couponsCode?.length ? JSON.parse(JSON.stringify(tx.couponsCode)) : undefined,
+        usageDetails: tx.usageDetails?.length ? JSON.parse(JSON.stringify(tx.usageDetails)) : undefined,
+        
         _id: tx._id.toString(),
         user: tx.user.toString(),
-        // حالا این تبدیل به استرینگ مجاز است
         createdAt: tx.createdAt.toISOString(),
         updatedAt: tx.updatedAt ? tx.updatedAt.toISOString() : "",
+        expireAt: tx.expireAt ? tx.expireAt.toISOString() : undefined, // 👈 این هم باید استرینگ شود
         balanceAfter: currentLineBalance,
       };
     });

@@ -28,12 +28,19 @@ export async function POST(req: Request) {
         status: 400,
       });
     }
-    await captchaRateLimiter.consume(ip);
 
     const {
       phone,
       captchaTokens: { verifyToken, captchaToken },
     } = validation.data;
+    try{
+      await captchaRateLimiter.consume(ip);
+    } catch (error) {
+      return NextResponse.json(
+        sendAsRes(null, "تعداد درخواست‌های شما برای کپچا بیش از حد مجاز است. لطفا بعدا تلاش کنید."),
+        { status: 429 }
+      );
+    }
     // 2. Verify Captcha
     const captchaVerificationResult = await verifyCaptcha(
       captchaToken,
@@ -80,10 +87,15 @@ export async function POST(req: Request) {
     const { ok, msg, data: otp } = await sendOTP(phone);
     if (!ok) return NextResponse.json(sendAsRes(null, msg), { status: 500 });
     await redis.setex(`otp:${phone}`, 120, otp!);
-
-    return NextResponse.json({ message: "کد تایید ارسال شد" }, { status: 200 });
+    return NextResponse.json(
+      sendAsRes(null, "کد تایید با موفقیت ارسال شد", true), 
+      { status: 200 }
+    );
   } catch (error) {
     console.error("Login Error:", error);
-    return NextResponse.json({ error: "خطای داخلی سرور" }, { status: 500 });
+    return NextResponse.json(
+      sendAsRes(null, "خطای داخلی سرور" ), 
+      { status: 500 }
+    );
   }
 }

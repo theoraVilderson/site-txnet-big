@@ -16,51 +16,64 @@ export async function verifyOTP(otp: string, phone: string) {
   const otpKey = `otp:${phone}`;
   const attemptKey = `otp:attempts:${phone}`;
   const lockKey = `lock:${phone}`;
+  
+  // متغیری برای اینکه بدانیم آیا این درخواست خاص، قفل را گرفته یا نه
+  let lockAcquired = false;
 
   try {
-    // 1️⃣ جلوگیری از پردازش همزمان (Locking)
-    // اگر در حال پردازش یک درخواست هستیم، درخواست دوم را رد کن
+    // 1️⃣ تلاش برای گرفتن قفل
     const lock = await redis.set(lockKey, "1", "EX", 5, "NX");
-    if (!lock) return lastRes(null, "کمی صبر کنید...");
+    if (!lock) {
+      return lastRes(null, "کمی صبر کنید...");
+    }
+    lockAcquired = true; // این درخواست صاحب قفل است
 
-    // 2️⃣ خواندن کد و تعداد تلاش‌ها به صورت همزمان
-    const [realOTP, attempts] = await Promise.all([
-      redis.get(otpKey),
-      redis.get(attemptKey),
-    ]);
-
+    // 2️⃣ خواندن کد اصلی از ردیس
+    const realOTP = await redis.get(otpKey);
     if (!realOTP) {
-      return lastRes(null, "کد منقضی شده ");
+      return lastRes(null, "کد منقضی شده یا نامعتبر است");
     }
 
-    // 3️⃣ چک کردن تعداد تلاش‌های مجاز (مثلا ۵ بار)
-    if (parseInt(attempts || "0") >= 5) {
+    // 3️⃣ افزایش تعداد تلاش‌ها (عملیات اتمیک و امن)
+    // به جای اینکه اول بخوانیم و بعد اضافه کنیم، همین الان اضافه می‌کنیم
+    const currentAttempts = await redis.incr(attemptKey);
+
+    // اگر اولین بار است که اشتباه/تلاش ثبت می‌شود، برایش تاریخ انقضا می‌گذاریم
+    if (currentAttempts === 1) {
+      const ttl = await redis.ttl(otpKey);
+      if (ttl > 0) {
+        await redis.expire(attemptKey, ttl);
+      } else {
+        await redis.expire(attemptKey, 120); // یک مقدار پیش‌فرض اگر TTL مشکلی داشت
+      }
+    }
+
+    // 4️⃣ چک کردن سقف مجاز تلاش‌ها
+    if (currentAttempts > 5) {
       await redis.del(otpKey, attemptKey); // کد را بسوزان
       return lastRes(null, "بیش از حد تلاش کردید. کد جدید دریافت کنید");
     }
 
-    // 4️⃣ بررسی صحت کد
+    // 5️⃣ بررسی صحت کد
     if (realOTP !== otp) {
-      // کد غلط بود -> یکی به تعداد تلاش‌ها اضافه کن
-      await redis.incr(attemptKey);
-      // برای بار اول، زمان انقضای شمارنده را هم‌اندازه با کد اصلی بگذار
-      if (!attempts) await redis.expire(attemptKey, await redis.ttl(otpKey));
-
+      // تعداد تلاش‌ها در مرحله ۳ افزایش یافته، فقط پیام خطا می‌دهیم
       return lastRes(null, "کد وارد شده اشتباه است");
     }
 
-    // ✅ ۵️⃣ موفقیت: پاکسازی و خروج
-    await redis.del(otpKey, attemptKey, lockKey);
+    // ✅ ۶️⃣ موفقیت: پاکسازی و خروج
+    await redis.del(otpKey, attemptKey);
     return lastRes(null, "تایید شد", true);
+
   } catch (e) {
     logger.error(`Error: ${e}`);
     return lastRes(null, "خطای سیستمی");
   } finally {
-    // همیشه قفل را آزاد کن (اگر قبلا توسط موفقیت پاک نشده بود)
-    await redis.del(lockKey);
+    // 🔴 فقط در صورتی قفل را باز کن که همین درخواست آن را ساخته باشد
+    if (lockAcquired) {
+      await redis.del(lockKey);
+    }
   }
 }
-
 export async function getValidatedUser() {
   // 3. اعتبارسنجی توکن
   const validateTokenResult = await validteToken(

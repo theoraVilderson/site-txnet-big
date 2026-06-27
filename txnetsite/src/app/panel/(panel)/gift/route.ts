@@ -73,6 +73,7 @@ export async function POST(req: NextRequest) {
           session
         );
       } catch (error: any) {
+        await session.abortTransaction(); 
         // اگر رزرو شکست خورد (مثلا ظرفیت پر شد)، به کاربر ارور می‌دهیم
         // خود سرویس reserveCoupons به صورت خودکار Rollback کرده است.
         return NextResponse.json(
@@ -108,11 +109,9 @@ export async function POST(req: NextRequest) {
       await CouponService.commitCoupons(userId, [giftCode], session);
 
       await session.commitTransaction();
-      return NextResponse.json({
-        success: true,
-        message: "کد هدیه با موفقیت اعمال شد",
-        amount: couponResult.totalDiscount,
-      });
+      return NextResponse.json(
+        sendAsRes({ amount: couponResult.totalDiscount }, "کد هدیه با موفقیت اعمال شد", true)
+      );
     } catch (e) {
       await session.abortTransaction();
       console.error(e);

@@ -117,9 +117,11 @@ export async function GET(req: NextRequest) {
       await Transactions.updateOne(
         { _id: transaction._id ,status: TransactionStatus.PENDING},
         {
-          status: TransactionStatus.FAILED,
-          title: verifyResult.msg || "پرداخت ناموفق",
-          expireAt: undefined,
+          $set: {
+            status: TransactionStatus.FAILED,
+            title: verifyResult.msg || "پرداخت ناموفق",
+          },
+          $unset: { expireAt: 1 } 
         },
         { session }
       );
