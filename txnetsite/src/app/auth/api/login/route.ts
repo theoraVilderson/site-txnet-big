@@ -56,21 +56,13 @@ export async function POST(req: Request) {
 
     //by phone and ip
     try {
-      await authNumberRateLimiter.consume(phone);
+      await Promise.all([
+        authNumberRateLimiter.consume(phone),
+        authIpRateLimiter.consume(ip)
+      ]);
     } catch (error) {
       return NextResponse.json(
-        sendAsRes(null, "تعداد درخواست‌های شما برای ورود بیش از حد مجاز است"),
-
-        { status: 429 }
-      );
-    }
-
-    try {
-      await authIpRateLimiter.consume(ip);
-    } catch (error) {
-      return NextResponse.json(
-        sendAsRes(null, "تعداد درخواست‌های شما برای ورود بیش از حد مجاز است"),
-
+        sendAsRes(null, "تعداد درخواست‌های شما بیش از حد مجاز است. لطفا بعدا تلاش کنید."),
         { status: 429 }
       );
     }

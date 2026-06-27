@@ -79,12 +79,12 @@ export async function proxy(request: NextRequest) {
           `https://${fullAuthDomain}`
         ).toString();
         response = NextResponse.redirect(redirectUrl);
-        break
+      } else {
+        // ✅ اضافه کردن search برای پنل
+        response = NextResponse.rewrite(
+          new URL(`/panel${path}${search}`, request.url)
+        );
       }
-      // ✅ اضافه کردن search برای پنل
-      response = NextResponse.rewrite(
-        new URL(`/panel${path}${search}`, request.url)
-      );
       break;
     case mainSubName:
       // ✅ اضافه کردن search برای صفحه اصلی
@@ -93,7 +93,6 @@ export async function proxy(request: NextRequest) {
       );
       break;
     case paymentSubName:
-      console.log("here in payment");
       // ✅ اضافه کردن search برای صفحه اصلی
       response = NextResponse.rewrite(
         new URL(`/payment${path}${search}`, request.url)

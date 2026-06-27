@@ -34,8 +34,15 @@ export async function fulfillWalletChargeTransaction(
     { session, new: true }
   );
 
-  if (!finalTx) throw new Error("تراکنش قبلاً پردازش شده یا یافت نشد");
-
+  if (!finalTx) {
+   // چک می‌کنیم آیا به خاطر موفق بودن آپدیت نشده؟
+   const checkTx = await Transactions.findById(transactionId).session(session);
+   if (checkTx && checkTx.status === TransactionStatus.SUCCESS) {
+     // این یعنی ریکوئست همزمان قبلی کار را تمام کرده، پس ارور نده!
+     return checkTx; 
+   }
+    throw new Error("تراکنش یافت نشد یا غیرقابل پردازش است");
+  }
   // ۲. افزایش موجودی کاربر
   const updatedUser = await Users.findByIdAndUpdate(
     finalTx.user,
@@ -110,7 +117,7 @@ export async function GET(req: NextRequest) {
         {
           status: TransactionStatus.FAILED,
           title: verifyResult.msg || "پرداخت ناموفق",
-          exireAt: undefined,
+          expireAt: undefined,
         },
         { session }
       );

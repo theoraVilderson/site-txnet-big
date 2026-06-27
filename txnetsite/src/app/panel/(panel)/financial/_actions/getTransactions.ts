@@ -68,7 +68,7 @@ export async function getTransactions(params: any) {
     };
     const user = await getValidatedUser();
     if (!user || !user.userId) {
-      throw new Error("Unauthorized");
+      return lastRes(null, "دسترسی غیرمجاز، لطفا مجددا وارد شوید", false);
     }
     const {userId} =user;
     
