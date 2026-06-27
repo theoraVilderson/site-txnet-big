@@ -26,10 +26,12 @@ export async function fulfillWalletChargeTransaction(
   const finalTx = await Transactions.findOneAndUpdate(
     { _id: transactionId, status: { $ne: TransactionStatus.SUCCESS } },
     {
-      title: "پرداخت موفق",
-      status: TransactionStatus.SUCCESS,
-      refId: refId,
-      expireAt: undefined,
+      $set: {
+        title: "پرداخت موفق",
+        status: TransactionStatus.SUCCESS,
+        refId: refId,
+      },
+      $unset: { expireAt: 1 } 
     },
     { session, new: true }
   );

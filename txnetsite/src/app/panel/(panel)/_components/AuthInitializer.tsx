@@ -1,7 +1,7 @@
 // components/AuthInitializer.tsx
 "use client";
 
-import { useRef } from "react";
+import { useRef,useEffect } from "react";
 import { useAuthStore } from "../_stores/useAuthStore"; // آدرس استور خودت
 import { IUserDto } from "@/types/user";
 
@@ -17,16 +17,18 @@ export default function AuthInitializer({ user, children }: Props) {
   const isLoading = useAuthStore((s) => s.isLoading);
   console.log("setting1");
 
-  if (!initialized.current) {
-    // تزریق مستقیم داده به استور بدون رندر اضافی
-    useAuthStore.setState({
-      user: user,
-      isAuthenticated: !!user, // اگر یوزر باشد true، نباشد false
-      isLoading: false,
-    });
-    console.log("setting2");
-    initialized.current = true;
-  }
+  useEffect(() => {
+    if (!initialized.current) {
+      useAuthStore.setState({
+        user: user,
+        isAuthenticated: !!user,
+        isLoading: false,
+      });
+      initialized.current = true;
+    }
+  }, [user]); 
+  // تا زمانی که لودینگ تمام نشده، چیزی رندر نکن یا اسکلتون نشان بده
+  if (isLoading) return null; 
 
-  return <>{!isLoading && children}</>; // این کامپوننت هیچ چیزی در UI نمایش نمی‌دهد
+  return <>{children}</>;
 }

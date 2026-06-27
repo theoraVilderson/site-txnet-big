@@ -45,29 +45,36 @@ export async function POST(req: Request) {
 
     await connectDB();
 
+    // اول فقط چک کن دیتای ثبت‌نام هست یا نه، نسازش!
     let user = await Users.findOne({ phone });
-    
-    // اگر کاربر در دیتابیس نبود، چک می‌کنیم آیا دیتای ثبت‌نام در ردیس دارد؟
+    let isNewUser = false;
+    let pendingName = "";
+
     if (!user) {
       const pendingSignup = await redis.get(`signup_data:${phone}`);
       if (pendingSignup) {
-        const { name } = JSON.parse(pendingSignup);
-        user = await Users.create({ fullName: name, phone }); // ✅ ساخت امن کاربر
-        await redis.del(`signup_data:${phone}`);
+        pendingName = JSON.parse(pendingSignup).name;
+        isNewUser = true;
       } else {
-        return NextResponse.json(sendAsRes(null, "کاربر یافت نشد و سابقه ثبت‌نامی وجود ندارد"), { status: 404 });
+        return NextResponse.json(sendAsRes(null, "کاربر یافت نشد"), { status: 404 });
       }
     }
+
+    // دوم: کد OTP را بررسی کن
     const verifyOTPRes = await verifyOTP(otp, phone);
     if (!verifyOTPRes.ok) {
-      return NextResponse.json(sendAsRes(null, verifyOTPRes.msg), {
-        status: 401,
-      });
+      return NextResponse.json(sendAsRes(null, verifyOTPRes.msg), { status: 401 });
+    }
+
+    // سوم: اگر کد درست بود و یوزر جدید بود، حالا بسازش!
+    if (isNewUser) {
+        user = await Users.create({ fullName: pendingName, phone }); 
+        await redis.del(`signup_data:${phone}`);
     }
     let obj: UserPayloadWithoutVersion = {
-      userId: user._id,
-      permissions: user.permissions,
-      roles: user.roles,
+      userId: user!._id,
+      permissions: user!.permissions,
+      roles: user!.roles,
     };
 
     obj = JSON.parse(JSON.stringify(obj));
