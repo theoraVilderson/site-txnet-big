@@ -84,7 +84,6 @@ export async function sendOTP(phone: string, otpCode?: string) {
     return lastRes(otp, "کد با موفقیت ارسال شد حالت ", true);
   }
 
-  logger.info(`otp send for in  ${phone} ${otp}`);
   const OTPMESSAGE = `تکست نت کد تایید پیامکی
 کد ارسالی 
 your passcode is: {otp}

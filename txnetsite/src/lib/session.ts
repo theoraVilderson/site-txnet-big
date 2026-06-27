@@ -7,9 +7,10 @@ import { addTimeFromNow, lastRes } from "@/shared";
 import { generateJIT } from "@util/helper";
 
 // کلید مخفی (حتما در فایل .env قرار دهید)
-const JWT_SECRET_ENCODED = new TextEncoder().encode(
-  JWT_SECRET || "your-super-chan2232ge-key"
-);
+if (!process.env.JWT_SECRET) {
+  throw new Error("FATAL ERROR: JWT_SECRET is not defined.");
+}
+const JWT_SECRET_ENCODED = new TextEncoder().encode(JWT_SECRET);
 const ONE_YEAR_IN_SECONDS = 365 * 24 * 60 * 60;
 
 // تعریف اینترفیس برای پیلود توکن شما

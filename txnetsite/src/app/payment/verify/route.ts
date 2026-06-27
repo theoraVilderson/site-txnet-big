@@ -106,7 +106,7 @@ export async function GET(req: NextRequest) {
     // حالت الف: پرداخت ناموفق در بانک
     if (!verifyResult.ok || !verifyResult.data) {
       await Transactions.updateOne(
-        { _id: transaction._id },
+        { _id: transaction._id ,status: TransactionStatus.PENDING},
         {
           status: TransactionStatus.FAILED,
           title: verifyResult.msg || "پرداخت ناموفق",

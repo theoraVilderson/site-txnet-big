@@ -26,7 +26,7 @@ async function TransactionList({ searchParams }: { searchParams: any }) {
     redirect(redirectUrl);
     return null;
   }
-  const tsRes = await getTransactions(searchParams, userTokenData.userId);
+  const tsRes = await getTransactions(searchParams);
 
   if (tsRes.failed) {
     return (

@@ -14,6 +14,7 @@ import { rateLimiter } from "@lib/rateLimiter";
 import { sendAsRes } from "@util/helper";
 import { getHostFromHeader, getIpFromHeader } from "@util/helper";
 import { validteToken } from "@lib/auth";
+import logger from "@lib/logger";
 
 const domainName = process.env.DOMAIN_NAME!;
 
@@ -54,7 +55,9 @@ export async function proxy(request: NextRequest) {
   // تعریف متغیر response برای ذخیره نتیجه نهایی
   let response: NextResponse;
   const search = url.search; // این حاوی ?type=DEPOSIT&page=1 و غیره است
-
+  logger.info(currentHost)
+  logger.info(path)
+  logger.info(authSubName)
   switch (currentHost) {
     case authSubName:
       if (!failedToken) {
@@ -76,11 +79,7 @@ export async function proxy(request: NextRequest) {
           `https://${fullAuthDomain}`
         ).toString();
         response = NextResponse.redirect(redirectUrl);
-      } else {
-        // ✅ اضافه کردن search برای پنل
-        response = NextResponse.rewrite(
-          new URL(`/panel${path}${search}`, request.url)
-        );
+        break
       }
       // ✅ اضافه کردن search برای پنل
       response = NextResponse.rewrite(
