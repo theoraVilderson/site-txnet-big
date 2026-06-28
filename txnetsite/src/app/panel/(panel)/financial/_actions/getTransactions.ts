@@ -2,20 +2,20 @@
 
 import connectDB from "@lib/db";
 import logger from "@lib/logger";
-import { lastRes } from "@/shared";
 import { ITransactionWithBalance } from "@/types/transaction";
 import DateObject from "react-date-object";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import { getWalletHistory, TransactionFilters } from "./balanceCalc"; // ایمپورت از فایل ۲
 import { getValidatedUser } from "@lib/auth";
+import { err, ok } from "@/shared";
 
 // ----------------------------------------------------------------------
 // Helper: تبدیل تاریخ شمسی رشته‌ای به Timestamp
 // ----------------------------------------------------------------------
 const persianToTimestamp = (
   persianDateString: string | undefined,
-  endOfDay = false
+  endOfDay = false,
 ) => {
   if (!persianDateString) return undefined;
 
@@ -68,16 +68,16 @@ export async function getTransactions(params: any) {
     };
     const user = await getValidatedUser();
     if (!user || !user.userId) {
-      return lastRes(null, "دسترسی غیرمجاز، لطفا مجددا وارد شوید", false);
+      return err("دسترسی غیرمجاز، لطفا مجددا وارد شوید");
     }
-    const {userId} =user;
-    
+    const { userId } = user;
+
     // ۲. فراخوانی تابع منطق اصلی
     const result = await getWalletHistory(userId, page, limit, filters);
 
     // ۳. بررسی خطا
     if (!result.ok || !result.data) {
-      return lastRes(null, result.msg || "خطا در دریافت اطلاعات", false);
+      return err(result.msg || "خطا در دریافت اطلاعات");
     }
 
     const { data, total } = result.data;
@@ -90,9 +90,9 @@ export async function getTransactions(params: any) {
       currentPage: page,
     };
 
-    return lastRes(response, "لیست تراکنش‌ها با موفقیت دریافت شد", true);
+    return ok(response, "لیست تراکنش‌ها با موفقیت دریافت شد");
   } catch (error) {
     logger.error(`Failed to fetch transactions for user `, error);
-    return lastRes(null, "خطای سرور در دریافت تراکنش‌ها", false);
+    return err("خطای سرور در دریافت تراکنش‌ها");
   }
 }

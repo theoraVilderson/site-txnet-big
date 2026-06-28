@@ -1,7 +1,11 @@
 // lib/payment/types.ts
 
 import { PaymentCurrency } from "@/configs/payments";
-import { LastResType } from "@/shared";
+import {
+  type ErrorResponse,
+  type ResponseType,
+  type SuccessResponse,
+} from "@/shared";
 import { IPriceDetail } from "@lib/payment/fee/feeAndTaxCalculator";
 import { IPaymentSetting } from "./paymentSetting";
 
@@ -41,28 +45,11 @@ export interface PaymentFeeParams {
 export interface IPaymentStrategy {
   providerSettings: IPaymentSetting;
 
-  request(params: PaymentRequestParams): Promise<
-    LastResType<{
-      url: string;
-      authority: any;
-      paymentInfo: IPriceDetail;
-    } | null>
-  >;
+  request(
+    params: PaymentRequestParams,
+  ): Promise<ResponseType<PaymentRequestResult>>;
   verify(
-    params: PaymentVerifyParams
-  ): Promise<LastResType<PaymentVerifyResult | null>>;
-  feeCalculation?(data: PaymentFeeParams): Promise<
-    | {
-        failed: boolean;
-        ok: boolean;
-        data: IPriceDetail;
-        msg: string;
-      }
-    | {
-        failed: boolean;
-        ok: boolean;
-        data: null;
-        msg: string;
-      }
-  >;
+    params: PaymentVerifyParams,
+  ): Promise<ResponseType<PaymentVerifyResult>>;
+  feeCalculation?(data: PaymentFeeParams): Promise<ResponseType<IPriceDetail>>;
 }

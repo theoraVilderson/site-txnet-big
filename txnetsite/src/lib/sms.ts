@@ -6,9 +6,9 @@ import {
   SMS_SENDER_PRIVATE,
   SMS_USERNAME,
 } from "@/env";
-import { lastRes } from "@/shared";
 import axios from "axios";
 import logger from "./logger";
+import { err, ok, type ResponseType } from "@/shared";
 export const generateOTP = (): string =>
   Math.floor(10000 + Math.random() * 90000).toString();
 export async function sendSMS(
@@ -21,15 +21,15 @@ export async function sendSMS(
     to: string;
     vars?: { [key: string]: string | number };
   },
-  force = isProd
+  force = isProd,
 ) {
   // if (!force) {
-  //   return lastRes(null, "با موفقت ارسال شد حالت دولپر", true);
+  //   return ok(null, "با موفقت ارسال شد حالت دولپر");
   // }
   const isHaveVariable = Object.keys(vars).length != 0;
   const replaceVar = (
     msg: string,
-    vars: { [key: string]: string | number } = {}
+    vars: { [key: string]: string | number } = {},
   ) => {
     Object.keys(vars).forEach((key) => {
       const value = vars[key].toString();
@@ -63,16 +63,16 @@ export async function sendSMS(
         if (data.data === "SendWasSuccessful") {
           //YOU‌ CAN‌ CHECK‌ THE‌ RESPONSE‌ AND SEE‌ ERROR‌ OR‌ SUCCESS‌ MESSAGE
           msg = "پیامک با موفقت فرستاده شد";
-          return res(lastRes(null, msg, true));
+          return res(ok(null, msg));
         }
-        return res(lastRes(null, msg));
+        return res(err(msg));
       })
       .catch((e) => {
         let msg = "پیامک فرستاده نشد!";
         console.log(e);
-        return res(lastRes(null, msg));
+        return res(err(msg));
       });
-  })) as ReturnType<typeof lastRes<null>>;
+  })) as Awaited<ResponseType<null>>;
   return ans;
 }
 
@@ -81,7 +81,7 @@ export async function sendOTP(phone: string, otpCode?: string) {
 
   if (isDev) {
     logger.info(`otp send for in dev ${phone}, ${otp}`);
-    return lastRes(otp, "کد با موفقیت ارسال شد حالت ", true);
+    return ok(otp, "کد با موفقیت ارسال شد حالت ");
   }
 
   const OTPMESSAGE = `تکست نت کد تایید پیامکی
@@ -90,14 +90,14 @@ your passcode is: {otp}
 @{domain} #{otp}`;
   const vars = { otp, domain: fullAuthDomain };
   try {
-    const { ok, msg, data } = await sendSMS({
+    const smsRes = await sendSMS({
       msg: OTPMESSAGE,
       to: phone,
       vars,
     });
-    if (!ok) throw new Error(msg);
-    return lastRes(otp, "کد با موفقیت ارسال شد حالت ", true);
+    if (!smsRes.ok) throw new Error(smsRes.msg);
+    return ok(otp, "کد با موفقیت ارسال شد حالت ");
   } catch (e) {
-    return lastRes(null, "خطا در ارسال کد otp");
+    return err("خطا در ارسال کد otp");
   }
 }

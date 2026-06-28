@@ -1,4 +1,4 @@
-import { lastRes, LastResType } from "@/shared";
+import { err, ok, type ResponseType } from "@/shared";
 import axios from "axios";
 import { toast } from "react-hot-toast";
 
@@ -16,7 +16,7 @@ export const req = axios.create({
 export function handleAxiosError(
   error: unknown,
   defaultMsg = "خطای ناشناخته‌ای رخ داد",
-  takeAction = true
+  takeAction = true,
 ) {
   let message = defaultMsg;
   let status: number | undefined;
@@ -64,7 +64,7 @@ export function handleAxiosError(
 
 // 1. تعریف یک تایپ برای تابع مفسر خطا
 // این تابع خطا را می‌گیرد و یک پیام متنی برمی‌گرداند (یا null اگر نتواند خطا را بفهمد)
-export type ErrorParser = (error: any) => string | undefined | null;
+export type ErrorParser = (error: unknown) => string;
 
 export async function requestHandler<T>(
   options: {
@@ -72,8 +72,8 @@ export async function requestHandler<T>(
     errorParser?: ErrorParser; // تابع اختصاصی برای تفسیر خطای درگاه
     defaultErrorMessage?: string;
   } = {},
-  action: () => Promise<LastResType<T>>
-): Promise<LastResType<T | null>> {
+  action: () => Promise<T | ResponseType<T>> | (T | ResponseType<T>),
+): Promise<ResponseType<T>> {
   const {
     maxRetries = 3,
     errorParser,
@@ -84,8 +84,14 @@ export async function requestHandler<T>(
 
   while (attempts <= maxRetries) {
     try {
+      const result = typeof action === "function" ? await action() : action;
+
+      if (result && typeof result === "object" && "ok" in result) {
+        return result as ResponseType<T>;
+      }
+
+      return ok(result);
       // اجرای اکشن
-      return await action();
     } catch (error: any) {
       attempts++;
       // لاگ کردن خطا (بهتر است خطا را کامل لاگ کنید)
@@ -115,9 +121,9 @@ export async function requestHandler<T>(
         finalMsg = error.message;
       }
 
-      return lastRes(null, finalMsg, false);
+      return err(finalMsg);
     }
   }
 
-  return lastRes(null, "Unexpected Error", false);
+  return err("Unexpected Error");
 }

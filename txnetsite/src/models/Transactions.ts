@@ -9,6 +9,8 @@ import {
 import { PaymentProvider } from "@/configs/paymentSettings";
 
 const transactionSchema = new mongoose.Schema<ITransactionSchema>({
+  // user here is the user id we named it because after populate it the name be more clear 
+
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",

@@ -11,22 +11,22 @@ export function getIpFromHeader(headers: NextRequest["headers"]) {
 export function getHostFromHeader(headers: NextRequest["headers"]) {
   return headers.get("x-forwarded-host") ?? headers.get("host") ?? "";
 }
-export function sendAsRes<DataType>(
-  data: DataType,
-  msg?: string,
-  ok: boolean = false
-) {
-  msg = !msg ? (ok ? "successful" : "failed") : msg;
-  return {
-    status: ok ? "ok" : "nok",
-    msg,
-    data,
-  };
-}
+// export function sendAsRes<DataType>(
+//   data: DataType,
+//   msg?: string,
+//   ok: boolean = false,
+// ) {
+//   msg = !msg ? (ok ? "successful" : "failed") : msg;
+//   return {
+//     status: ok ? "ok" : "nok",
+//     msg,
+//     data,
+//   };
+// }
 export async function generateJIT<PayloadType>(
   payload: Omit<PayloadType, keyof JWTPayload>,
   key: Uint8Array<ArrayBufferLike> | CryptoKey | KeyObject | JWK,
-  expire: string | number
+  expire: string | number,
 ) {
   const jti = uuidv4(); // تولید شناسه یکتا برای این توکن خاص
 
@@ -67,7 +67,7 @@ export const toEnglishDigits = (str: string) => {
  */
 export function parsePersianDate(
   persianDateStr: string,
-  isEndOfDay: boolean = false
+  isEndOfDay: boolean = false,
 ): Date | undefined {
   console.log(persianDateStr, "geelow");
   if (!persianDateStr) return undefined;
@@ -127,7 +127,7 @@ interface ZodFormatOptions {
  */
 export const zodErrorToString = (
   error: ZodError,
-  options: ZodFormatOptions = {}
+  options: ZodFormatOptions = {},
 ): string => {
   const { withPath = true, separator = "\n" } = options;
 

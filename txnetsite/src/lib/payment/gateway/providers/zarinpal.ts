@@ -1,11 +1,11 @@
 import axios, { AxiosInstance } from "axios";
 // فرض بر این است که مسیرهای ایمپورت شما درست هستند
-import { lastRes } from "@/shared";
 import {
   IPaymentStrategy,
   PaymentFeeParams,
   PaymentRequestParams,
   PaymentVerifyParams,
+  type PaymentRequestResult,
 } from "@/types/payment";
 import { IPaymentSetting } from "@/types/paymentSetting";
 import {
@@ -14,6 +14,7 @@ import {
 } from "@lib/payment/fee/feeAndTaxCalculator";
 import { ErrorParser, requestHandler } from "@lib/request";
 import logger from "@lib/logger";
+import { err, ok, type ResponseType } from "@/shared";
 
 // لیست کدهای خطا
 export const zarinpalErrorStates: Record<string, string> = {
@@ -95,11 +96,7 @@ export class ZarinpalProvider implements IPaymentStrategy {
    * متد درخواست پرداخت
    */
   async request(params: PaymentRequestParams) {
-    return await requestHandler<null | {
-      url: string;
-      authority: any;
-      paymentInfo: IPriceDetail;
-    }>(
+    return await requestHandler(
       {
         maxRetries: 3,
         errorParser: this.zarinpalParser,
@@ -110,11 +107,13 @@ export class ZarinpalProvider implements IPaymentStrategy {
         const paymentInfo = await this.feeCalculation({
           amount: params.amount,
         });
-
+        if (!paymentInfo.ok) return paymentInfo;
         // ارسال درخواست
-        const { data } = await this.paymentReq.post(`/request.json`, {
+        const { data } = await this.paymentReq.post<
+          ResponseType<{ code: number; authority: string }>
+        >(`/request.json`, {
           merchant_id: this.merchantId, // توجه: در داکیومنت جدید merchant_id است نه merchantId
-          amount: paymentInfo.data?.totalAmount,
+          amount: paymentInfo.data.totalAmount,
           currency: params?.currency || "IRT",
           callback_url: params.callbackUrl,
           description: params.description,
@@ -123,21 +122,24 @@ export class ZarinpalProvider implements IPaymentStrategy {
             mobile: params.mobile,
           },
         });
-
+        if (!data.ok) return data;
         // بررسی موفقیت (کد ۱۰۰)
-        if (data.data && data.data.code === 100) {
-          const authority = data.data.authority;
+        if (data.data.code === 100) {
+          const authority = data.data.authority as string;
           const paymentUrl = `${this.baseURL()}/StartPay/${authority}`;
-          return lastRes(
-            { url: paymentUrl, authority, paymentInfo: paymentInfo.data! },
+          return ok(
+            {
+              url: paymentUrl,
+              authority,
+              paymentInfo: paymentInfo.data,
+            } as PaymentRequestResult,
             "پرداخت با موفقیت آغاز شد",
-            true
           );
         }
 
         // اگر کد ۱۰۰ نبود، خطا را پرتاب می‌کنیم تا توسط requestHandler و parser مدیریت شود
         throw { response: { data } };
-      }
+      },
     );
   }
 
@@ -157,7 +159,7 @@ export class ZarinpalProvider implements IPaymentStrategy {
    * متد تایید پرداخت (فقط بار اول)
    */
   async verify(params: PaymentVerifyParams) {
-    return await requestHandler<{ refId: string; cardPan: string } | null>(
+    return await requestHandler(
       {
         maxRetries: 3, // برای وریفای معمولاً Retry خیلی مهم است (مثلاً اگر شبکه قطع شد)
         errorParser: this.zarinpalParser,
@@ -168,19 +170,18 @@ export class ZarinpalProvider implements IPaymentStrategy {
 
         // کد ۱۰۰: عملیات موفقیت آمیز
         if (data.data && data.data.code === 100) {
-          return lastRes(
+          return ok(
             {
               refId: data.data.ref_id,
               cardPan: data.data.card_pan,
             },
             "پرداخت با موفقیت تایید شد",
-            true
           );
         }
 
         // پرتاب خطا برای مدیریت توسط پارسر (مثلاً کد -50 یا -51)
         throw { response: { data } };
-      }
+      },
     );
   }
 
@@ -200,7 +201,7 @@ export class ZarinpalProvider implements IPaymentStrategy {
         // کد ۱۰۰: موفق
         // کد ۱۰۱: قبلاً وریفای شده (موفق)
         if (data.data && (data.data.code === 100 || data.data.code === 101)) {
-          return lastRes(
+          return ok(
             {
               refId: data.data.ref_id,
               cardPan: data.data.card_pan,
@@ -209,13 +210,12 @@ export class ZarinpalProvider implements IPaymentStrategy {
             data.data.code === 101
               ? "تراکنش قبلاً تایید شده است"
               : "تراکنش تایید شد",
-            true
           );
         }
 
         // سایر کدها خطا محسوب می‌شوند
         throw { response: { data } };
-      }
+      },
     );
   }
 
@@ -225,13 +225,13 @@ export class ZarinpalProvider implements IPaymentStrategy {
       const paymentAmount = await calculatePaymentAmount(
         data.amount,
         this.providerSettings,
-        this.feeApiCalculation.bind(this)
+        this.feeApiCalculation.bind(this),
       );
-      return lastRes(paymentAmount, "با موفقیت کارمزد محاسبه شد!", true);
+      return ok(paymentAmount, "با موفقیت کارمزد محاسبه شد!");
     } catch (e: any) {
       // لاگ کردن خطا مهم است
       logger.error(`Fee Calculation Error ${e}`);
-      return lastRes(null, "خطا در محاسبه کارمزد :" + e, false);
+      return err("خطا در محاسبه کارمزد :" + e, null);
     }
   }
 
@@ -243,14 +243,14 @@ export class ZarinpalProvider implements IPaymentStrategy {
       {
         ...data,
         merchant_id: this.merchantId,
-      }
+      },
     );
 
     // هندل کردن خطای زرین پال در محاسبه کارمزد
     if (feeData.errors && feeData.errors.length > 0) {
       throw new Error(
         this.zarinpalParser({ response: { data: feeData } }) ||
-          "Fee calculation failed"
+          "Fee calculation failed",
       );
     }
     const feeAmount = feeData.data.suggested_amount - data.amount;

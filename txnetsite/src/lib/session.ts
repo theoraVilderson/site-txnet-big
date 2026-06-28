@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import redis from "./redis";
 import logger from "./logger";
 import { JWT_SECRET } from "@/env";
-import { addTimeFromNow, lastRes } from "@/shared";
+import { addTimeFromNow, err, ok } from "@/shared";
 import { generateJIT } from "@util/helper";
 
 // کلید مخفی (حتما در فایل .env قرار دهید)
@@ -33,23 +33,23 @@ export async function generateSessionToken(payload: UserPayload) {
   return generateJIT<UserPayload>(
     payload,
     JWT_SECRET_ENCODED,
-    addTimeFromNow(ONE_YEAR_IN_SECONDS)
+    addTimeFromNow(ONE_YEAR_IN_SECONDS),
   );
 }
 export async function createToken(payload: UserPayloadWithoutVersion) {
   try {
     const tokenVersion = await redis.get(
-      `session_update_token:${payload.userId}`
+      `session_update_token:${payload.userId}`,
     );
     const lastTokenVersion = tokenVersion ? Number(tokenVersion) : 1;
     const newPayload: UserPayload = { ...payload, version: lastTokenVersion };
 
     const genereatedSessionToken = await generateSessionToken(newPayload);
 
-    return lastRes(genereatedSessionToken, "توکن سشن با موفقت ساتخته شد", true);
+    return ok(genereatedSessionToken, "توکن سشن با موفقت ساتخته شد");
   } catch (error) {
     logger.error("Error revoking token:", error);
-    return lastRes(null, "خطا در ساخت سشن توکن ");
+    return err("خطا در ساخت سشن توکن ");
   }
 }
 
@@ -72,12 +72,12 @@ export async function verifyToken(token: string) {
 
       if (isBlocked) {
         logger.warn(`Token blocked: ${userPayload.jti}`);
-        return lastRes<null>(null, "توکن نامعبر"); // توکن بلاک شده است
+        return err("توکن نامعبر"); // توکن بلاک شده است
       }
     }
     // check if token version is valid
     const tokenVersion = await redis.get(
-      `session_update_token:${userPayload.userId}`
+      `session_update_token:${userPayload.userId}`,
     );
 
     if (tokenVersion != null) {
@@ -85,14 +85,14 @@ export async function verifyToken(token: string) {
         Number(tokenVersion) == userPayload.version;
       if (!isTokenVersionIsUpdate) {
         logger.warn(`Token version dosn't match: ${userPayload.jti}`);
-        return lastRes<null>(null, "توکن نامعبر"); // توکن بلاک شده است
+        return err("توکن نامعبر"); // توکن بلاک شده است
       }
     }
-    return lastRes<UserPayloadType>(userPayload, "توکن معتبر است", true); // توکن معتبر است
+    return ok(userPayload, "توکن معتبر است"); // توکن معتبر است
   } catch (error) {
     // خطاهایی مثل انقضای توکن یا دستکاری امضا اینجا میفتند
     // logger.error("JWT Verification failed:", error);
-    return lastRes<null>(null, "توکن نامعبر"); // توکن بلاک شده است
+    return err("توکن نامعبر"); // توکن بلاک شده است
   }
 }
 
@@ -114,7 +114,7 @@ export async function revokeToken(token: string): Promise<boolean> {
         `blocked_jti:${payload.jti}`, // نام کلید
         "blocked", // مقدار (مهم نیست)
         "EX", // واحد زمان (ثانیه)
-        ONE_YEAR_IN_SECONDS // مدت زمان (۱ سال)
+        ONE_YEAR_IN_SECONDS, // مدت زمان (۱ سال)
       );
       return true;
     }

@@ -3,11 +3,9 @@ import { apiReq, handleAxiosError } from "@lib/request";
 import { useEffect, useState } from "react";
 import { jwtDecode } from "jwt-decode";
 import { NatureCaptchaAction } from "./NatureCaptchaActions";
-import { SendResType } from "@/shared";
 import { CaptchaSkeleten } from "@/components/Skeleton";
 import axios from "axios";
-
-
+import type { ResponseType } from "@/shared";
 
 export interface CaptchaValidateDataType {
   captchaToken: string;
@@ -33,16 +31,15 @@ export default function NatureCaptcha({
     async function fetchCaptchaToken() {
       setTokenLoading(true);
       try {
-        const captchaToken = await apiReq.get<SendResType<{ token: string }>>(
+        const captchaToken = await apiReq.get<ResponseType<{ token: string }>>(
           "/captcha/getCaptcha",
           {
             signal: abrot.signal,
-          }
+          },
         );
         const result = captchaToken.data;
+        if (!result.ok) return;
         const token = result.data.token;
-        const status = result.status;
-        if (status != "ok") return;
         const tokenExtractedData = jwtDecode<CaptchaTokenType["value"]>(token);
         console.log(tokenExtractedData);
         setToken({

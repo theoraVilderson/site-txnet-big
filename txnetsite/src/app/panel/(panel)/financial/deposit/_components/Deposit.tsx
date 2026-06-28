@@ -13,16 +13,13 @@ import {
   FeeType,
   FeeCurrency,
 } from "@/configs/paymentSettings";
-import {
-  ABSOLUTE_MAX_AMOUNT,
-  MIN_AMOUNT,
-} from "@/configs/payments";
+import { ABSOLUTE_MAX_AMOUNT, MIN_AMOUNT } from "@/configs/payments";
 import { formatCurrency } from "../../_util/format";
 import { IPaymentSettingClient } from "@/types/paymentSetting";
-import "./Deposit.css";
+import "./Deposit.module.css";
 import { IAppliedCoupon, MultipleCouponResult } from "@/types/coupons";
 import { handleAxiosError, req } from "@lib/request";
-import { SendResType } from "@/shared";
+import { type ResponseType } from "@/shared";
 import axios from "axios";
 import { toToman } from "@util/helper";
 import { calculatePaymentAmount } from "@lib/payment/fee/feeAndTaxCalculator";
@@ -42,7 +39,7 @@ export default function Deposit({
   const [amount, setAmount] = useState<number | "">("");
   const [appliedCoupons, setAppliedCoupons] = useState<IAppliedCoupon[]>([]);
   const [selectedGateway, setSelectedGateway] = useState<PaymentProvider | "">(
-    paymentSettings[0]?.gatewayName ?? ""
+    paymentSettings[0]?.gatewayName ?? "",
   );
 
   // Fee & Loading States
@@ -72,25 +69,24 @@ export default function Deposit({
     );
   }, [selectedGateway]);
 
-
-
   // ... داخل کامپوننت Deposit:
 
   // ۱. ضریب تبدیل: اگر درگاه تومان بود ضربدر ۱۰ می‌شود، در غیر این صورت (ریال) ضربدر ۱
-  const currencyMultiplier = currentProvider?.feeConfig.currency === FeeCurrency.IRT ? 10 : 1;
+  const currencyMultiplier =
+    currentProvider?.feeConfig.currency === FeeCurrency.IRT ? 10 : 1;
 
   // ۲. حالا مطمئنیم که این دو متغیر همیشه و تحت هر شرایطی "ریال" خالص هستند
-  const MIN_AMOUNT_GATEWAY = currentProvider?.minAmountAccept 
-    ? currentProvider.minAmountAccept * currencyMultiplier 
+  const MIN_AMOUNT_GATEWAY = currentProvider?.minAmountAccept
+    ? currentProvider.minAmountAccept * currencyMultiplier
     : MIN_AMOUNT;
 
-  const MAX_AMOUNT_GATEWAY = currentProvider?.maxAmountAccept 
-    ? currentProvider.maxAmountAccept * currencyMultiplier 
+  const MAX_AMOUNT_GATEWAY = currentProvider?.maxAmountAccept
+    ? currentProvider.maxAmountAccept * currencyMultiplier
     : ABSOLUTE_MAX_AMOUNT;
 
-
   // ۳. اعتبار سنجی دکمه پرداخت (مقایسه ریال با ریال)
-  const isValid = numAmount >= MIN_AMOUNT_GATEWAY && numAmount <= MAX_AMOUNT_GATEWAY;
+  const isValid =
+    numAmount >= MIN_AMOUNT_GATEWAY && numAmount <= MAX_AMOUNT_GATEWAY;
 
   // --- 1. Logic: Discount & Base Payable Calculation ---
 
@@ -200,23 +196,21 @@ export default function Deposit({
   const userChargeAmount = numAmount + adjustmentGap;
   const projectedBalance = CURRENT_BALANCE + userChargeAmount;
 
-
-
   // --- Handlers ---
 
   const handleApplyCoupon = async (codes: string[]) => {
     setIsCouponLoading(true);
     try {
-      const res = await req.post<SendResType<MultipleCouponResult>>(
+      const res = await req.post<ResponseType<MultipleCouponResult>>(
         "deposit/payment/coupon/validate",
         {
           amount: numAmount, // برای بررسی کوپن معمولا مبلغ اولیه (بدون تعدیل) ارسال می‌شود
           couponsCode: codes,
-        }
+        },
       );
 
       const result = res.data;
-      if (result.status === "ok") {
+      if (result.ok) {
         return result.data;
       }
       throw new Error(result.msg);
@@ -242,7 +236,7 @@ export default function Deposit({
       async function fetchData() {
         try {
           const result = await handleApplyCoupon(
-            appliedCoupons.map((e) => e.code)
+            appliedCoupons.map((e) => e.code),
           );
           if (!result) throw "خطا در خواندن کد تخفیف";
           if (result.isValid && result.totalDiscount) {
@@ -250,7 +244,7 @@ export default function Deposit({
               result.appliedCoupons.map((e) => ({
                 ...e,
                 description: e.description || "تخفیف ویژه",
-              }))
+              })),
             );
           }
         } catch (e) {

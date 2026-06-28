@@ -3,10 +3,10 @@ import connectDB from "@/lib/db";
 import Users from "@models/Users";
 import redis from "@/lib/redis";
 import { loginSchema } from "@/lib/validations";
+import { err, ok } from "@/shared";
 
-import { getIpFromHeader, sendAsRes, zodErrorToString } from "@util/helper";
+import { getIpFromHeader, zodErrorToString } from "@util/helper";
 import { verifyCaptcha } from "@lib/captcha";
-import { sendRes } from "@/shared";
 import {
   authIpRateLimiter,
   authNumberRateLimiter,
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     // 1. Validate Zod
     const validation = loginSchema.safeParse(body);
     if (!validation.success) {
-      return NextResponse.json(sendAsRes(null, zodErrorToString(validation.error.message as any)), {
+      return NextResponse.json(err(zodErrorToString(validation.error)), {
         status: 400,
       });
     }
@@ -33,30 +33,29 @@ export async function POST(req: Request) {
       phone,
       captchaTokens: { verifyToken, captchaToken },
     } = validation.data;
-    try{
+    try {
       await captchaRateLimiter.consume(ip);
     } catch (error) {
       return NextResponse.json(
-        sendAsRes(null, "تعداد درخواست‌های شما برای کپچا بیش از حد مجاز است. لطفا بعدا تلاش کنید."),
-        { status: 429 }
+        err(
+          "تعداد درخواست‌های شما برای کپچا بیش از حد مجاز است. لطفا بعدا تلاش کنید.",
+        ),
+        { status: 429 },
       );
     }
     // 2. Verify Captcha
     const captchaVerificationResult = await verifyCaptcha(
       captchaToken,
       verifyToken,
-      ip
+      ip,
     );
     console.log(captchaVerificationResult);
-    const { ok: isCaptchaValid, data } = captchaVerificationResult;
+    const { ok: isCaptchaValid } = captchaVerificationResult;
 
     if (!isCaptchaValid) {
-      return NextResponse.json(
-        sendRes<typeof data>(captchaVerificationResult),
-        {
-          status: 400,
-        }
-      );
+      return NextResponse.json(err(captchaVerificationResult.msg), {
+        status: 400,
+      });
     }
 
     // // 4. Rate Limiting (Consume)
@@ -65,38 +64,36 @@ export async function POST(req: Request) {
     try {
       await Promise.all([
         authNumberRateLimiter.consume(phone),
-        authIpRateLimiter.consume(ip)
+        authIpRateLimiter.consume(ip),
       ]);
     } catch (error) {
       return NextResponse.json(
-        sendAsRes(null, "تعداد درخواست‌های شما بیش از حد مجاز است. لطفا بعدا تلاش کنید."),
-        { status: 429 }
+        err("تعداد درخواست‌های شما بیش از حد مجاز است. لطفا بعدا تلاش کنید."),
+        { status: 429 },
       );
     }
     await connectDB();
     const user = await Users.findOne({ phone });
     if (!user) {
-      return NextResponse.json(
-        sendAsRes(null, "کاربری با این شماره یافت نشد"),
-        { status: 404 }
-      );
+      return NextResponse.json(err("کاربری با این شماره یافت نشد"), {
+        status: 404,
+      });
     }
 
     // // 6. Send SMS
 
-    const { ok, msg, data: otp } = await sendOTP(phone);
-    if (!ok) return NextResponse.json(sendAsRes(null, msg), { status: 500 });
+    const otpRes = await sendOTP(phone);
+    if (!otpRes.ok) return NextResponse.json(err(otpRes.msg), { status: 500 });
     await redis.del(`otp:attempts:${phone}`);
-    await redis.setex(`otp:${phone}`, 120, otp!);
-    return NextResponse.json(
-      sendAsRes(null, "کد تایید با موفقیت ارسال شد", true), 
-      { status: 200 }
-    );
+    const otp = otpRes.data;
+    await redis.setex(`otp:${phone}`, 120, otp);
+    return NextResponse.json(ok(null, "کد تایید با موفقیت ارسال شد"), {
+      status: 200,
+    });
   } catch (error) {
     console.error("Login Error:", error);
-    return NextResponse.json(
-      sendAsRes(null, "خطای داخلی سرور" ), 
-      { status: 500 }
-    );
+    return NextResponse.json(err("خطای داخلی سرور"), {
+      status: 500,
+    });
   }
 }

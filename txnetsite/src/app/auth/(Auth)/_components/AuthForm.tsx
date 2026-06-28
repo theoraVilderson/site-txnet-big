@@ -3,10 +3,10 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import "./AuthForm.css";
 import NatureCaptcha, { CaptchaValidateData } from "./NatureCaptcha";
 import { apiReq, handleAxiosError } from "@lib/request";
-import { SendResType } from "@/shared";
+import type { ResponseType } from "@/shared";
+import "./AuthForm.module.css";
 
 export interface AuthFormProps {
   type: "login" | "signup";
@@ -46,10 +46,10 @@ export default function AuthForm({ type }: AuthFormProps) {
   const buttonText = isLoading
     ? "در حال پردازش..."
     : stepOne
-    ? "دریافت کد تایید"
-    : isLogin
-    ? "ورود"
-    : "تکمیل ثبت‌نام";
+      ? "دریافت کد تایید"
+      : isLogin
+        ? "ورود"
+        : "تکمیل ثبت‌نام";
 
   // Regex شماره موبایل ایران (09 + 9 رقم)
   const iranMobileRegex = /^09[0-9]{9}$/;
@@ -113,9 +113,9 @@ export default function AuthForm({ type }: AuthFormProps) {
         if (type == "signup") {
           obj.name = formData.name;
         }
-        const data = await apiReq.post<SendResType<unknown>>(`/${type}`, obj);
+        const data = await apiReq.post<ResponseType<unknown>>(`/${type}`, obj);
         const result = data.data;
-        if (result.status == "nok") {
+        if (!result.ok) {
           throw new Error(result.msg);
         }
         // رفتن به مرحله بعد
@@ -124,8 +124,8 @@ export default function AuthForm({ type }: AuthFormProps) {
         setErrors(
           (prev) =>
             Object.fromEntries(
-              Object.keys(prev).map((key) => [key, "1"])
-            ) as typeof prev
+              Object.keys(prev).map((key) => [key, "1"]),
+            ) as typeof prev,
         );
         setFormData((prev) => ({ ...prev, otp: "" }));
       } catch (error) {
@@ -149,12 +149,15 @@ export default function AuthForm({ type }: AuthFormProps) {
       try {
         const obj: any = { otp: formData.otp, phone: formData.phone };
 
-        const data = await apiReq.post<SendResType<unknown>>(`/verifyOTP`, obj);
+        const data = await apiReq.post<ResponseType<{ redirectTo: string }>>(
+          `/verifyOTP`,
+          obj,
+        );
         const result = data.data;
-        if (result.status == "nok") {
+        if (!result.ok) {
           throw new Error(result.msg);
         }
-        const sendData = result.data as any;
+        const sendData = result.data;
         const url = sendData.redirectTo;
         setIsSuccess(true);
         setTimeout(() => {

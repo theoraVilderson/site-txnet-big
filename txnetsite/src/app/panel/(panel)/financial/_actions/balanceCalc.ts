@@ -2,33 +2,46 @@ import mongoose, { Types } from "mongoose";
 import Transactions from "@/models/Transactions";
 import Users from "@/models/Users";
 import { TransactionDirection } from "@/configs/transactions";
-import { lastRes, LastResType } from "@/shared";
 import type {
   ITransactionSchema,
   ITransactionWithBalance,
 } from "@/types/transaction";
 import { QueryFilter } from "mongoose";
-import { parsePersianDate } from "@util/helper";
+import { parsePersianDate, zodErrorToString } from "@util/helper";
+import { getWalletHistorySchema } from "@lib/validations";
+import { err, ok } from "@/shared";
 
 export function createAdvancedSearchQuery(term: string): RegExp {
   if (!term || term.trim().length === 0) return new RegExp("", "i");
+
   let pattern = term.trim();
+
+  // ۱. خنثی‌سازی کاراکترهای خاص
   pattern = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  // ۲. مدیریت یکپارچه فاصله‌ها و نیم‌فاصله‌ها
+  // ابتدا اگر کاربر خودش نیم‌فاصله تایپ کرده بود، آن را به فاصله تبدیل می‌کنیم
+  pattern = pattern.replace(/\u200c/g, " ");
+  // سپس تمام فاصله‌ها را به پترن "فاصله یا نیم‌فاصله" تبدیل می‌کنیم
   pattern = pattern.replace(/\s+/g, "[\\s\\u200c]+");
+
+  // ۳. نگاشت حروف به صورت جامع (دوطرفه و کامل)
   const charMap: Record<string, string> = {
     آ: "(آ|ا)",
     ا: "(آ|ا)",
-    ی: "(ی|ي|ئ)",
-    ي: "(ی|ي|ئ)",
+    ی: "(ی|ي|ئ|ى)",
+    ي: "(ی|ي|ئ|ى)",
+    ئ: "(ی|ي|ئ|ى)", // اضافه شدن حالت معکوس و الف مقصوره (ى)
+    ى: "(ی|ي|ئ|ى)",
     ک: "(ک|ك)",
     ك: "(ک|ك)",
     ه: "(ه|ة)",
     ة: "(ه|ة)",
   };
-  pattern = pattern
-    .split("")
-    .map((char) => charMap[char] || char)
-    .join("");
+
+  // استفاده از متد replace به جای split.map.join (بهینه‌تر و اصولی‌تر)
+  pattern = pattern.replace(/[آااییئىکكهة]/g, (match) => charMap[match]);
+
   return new RegExp(pattern, "i");
 }
 
@@ -43,7 +56,7 @@ export interface TransactionFilters {
 async function calculateSkippedTransactionsChange(
   userId: Types.ObjectId,
   skip: number,
-  matchQuery: QueryFilter<ITransactionSchema>
+  matchQuery: QueryFilter<ITransactionSchema>,
 ): Promise<number> {
   if (skip === 0) return 0;
 
@@ -71,47 +84,52 @@ async function calculateSkippedTransactionsChange(
   return result.length > 0 ? result[0].totalChange : 0;
 }
 
+// get wallet info like incoming outgoing or spending money
 export async function getWalletHistory(
   userId: string,
   page: number = 1,
   limit: number = 10,
-  filters: TransactionFilters = {}
-): Promise<
-  // [FIX 1]: تغییر تایپ خروجی به تایپ سریالایز شده
-  LastResType<{
-    data: ITransactionWithBalance[];
-    total: number;
-  } | null>
-> {
+  filters: TransactionFilters = {},
+) {
   try {
-    if (!Types.ObjectId.isValid(userId)) {
-      return lastRes(null, "شناسه کاربر معتبر نیست");
+    // Validate Zod
+    const validation = getWalletHistorySchema.safeParse({
+      userId,
+      page,
+      limit,
+      filters,
+    });
+    if (!validation.success) {
+      return err(zodErrorToString(validation.error));
     }
-    const userObjectId = new Types.ObjectId(userId);
 
+    const { filters: vfilters, userId: vuserId } = validation.data;
+    const userObjectId = new Types.ObjectId(vuserId);
     const matchQuery: QueryFilter<ITransactionSchema> = {
+      // user here is the user id
       user: userObjectId,
     };
-
-    if (filters.type && filters.type !== "ALL") {
-      matchQuery.type = filters.type;
+    if (vfilters?.type && vfilters?.type !== "ALL") {
+      matchQuery.type = vfilters?.type;
     }
 
-    if (filters.status && filters.status !== "ALL") {
-      matchQuery.status = filters.status;
+    if (vfilters?.status && vfilters?.status !== "ALL") {
+      matchQuery.status = vfilters?.status;
     }
 
-    if (filters.search) {
-      matchQuery.title = { $regex: createAdvancedSearchQuery(filters.search) };
+    if (vfilters?.search) {
+      matchQuery.title = {
+        $regex: createAdvancedSearchQuery(vfilters?.search),
+      };
     }
     const dateQuery: any = {};
 
-    if (filters.startDate || filters.endDate) {
-      if (filters.startDate) {
+    if (vfilters?.startDate || vfilters?.endDate) {
+      if (vfilters?.startDate) {
         // تبدیل تاریخ شمسی ورودی به Date میلادی (شروع روز)
         const gregorianStart = parsePersianDate(
-          String(filters.startDate),
-          false
+          String(vfilters?.startDate),
+          false,
         );
 
         if (gregorianStart) {
@@ -119,9 +137,9 @@ export async function getWalletHistory(
         }
       }
 
-      if (filters.endDate) {
+      if (vfilters?.endDate) {
         // تبدیل تاریخ شمسی ورودی به Date میلادی (پایان روز)
-        const gregorianEnd = parsePersianDate(String(filters.endDate), true);
+        const gregorianEnd = parsePersianDate(String(vfilters?.endDate), true);
 
         if (gregorianEnd) {
           (dateQuery as any).$lte = gregorianEnd;
@@ -145,15 +163,14 @@ export async function getWalletHistory(
       calculateSkippedTransactionsChange(userObjectId, skip, matchQuery),
     ]);
 
-    if (!user) return lastRes(null, "کاربر یافت نشد");
+    if (!user) return err("کاربر یافت نشد");
 
     if (!transactions || transactions.length === 0) {
-      return lastRes({ data: [], total: 0 }, "تراکنشی یافت نشد", true);
+      return ok({ data: [], total: 0 }, "تراکنشی یافت نشد");
     }
 
     let runningBalance = (user.walletBalance || 0) - skippedChange;
 
-    console.log(transactions);
     // اینجا از تایپ جدید استفاده می‌کنیم
     const history: ITransactionWithBalance[] = transactions.map((tx) => {
       const currentLineBalance = runningBalance;
@@ -168,9 +185,13 @@ export async function getWalletHistory(
       return {
         ...tx,
         // تبدیل عمیق آرایه‌ها برای حذف کامل پروتوتایپ‌های مانگوس
-        couponsCode: tx.couponsCode?.length ? JSON.parse(JSON.stringify(tx.couponsCode)) : undefined,
-        usageDetails: tx.usageDetails?.length ? JSON.parse(JSON.stringify(tx.usageDetails)) : undefined,
-        
+        couponsCode: tx.couponsCode?.length
+          ? JSON.parse(JSON.stringify(tx.couponsCode))
+          : undefined,
+        usageDetails: tx.usageDetails?.length
+          ? JSON.parse(JSON.stringify(tx.usageDetails))
+          : undefined,
+
         _id: tx._id.toString(),
         user: tx.user.toString(),
         createdAt: tx.createdAt.toISOString(),
@@ -180,13 +201,12 @@ export async function getWalletHistory(
       };
     });
 
-    return lastRes(
+    return ok(
       { data: history, total: totalCount },
       "اطلاعات با موفقیت دریافت شد",
-      true
     );
   } catch (error: any) {
     console.error("Error in getWalletHistory:", error);
-    return lastRes(null, "خطا در دریافت لیست تراکنش‌ها");
+    return err("خطا در دریافت لیست تراکنش‌ها");
   }
 }

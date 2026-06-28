@@ -1,6 +1,5 @@
 import { DOMAIN_NAME, fullPanelDomain } from "@/env";
 import Users from "@models/Users";
-import { lastRes } from "@/shared";
 import { verifyOTP } from "@lib/auth";
 import connectDB from "@lib/db";
 import logger from "@lib/logger";
@@ -10,9 +9,10 @@ import {
 } from "@lib/rateLimiter";
 import { createToken, UserPayloadWithoutVersion } from "@lib/session";
 import { verifyOTPSchema } from "@lib/validations";
-import { getIpFromHeader, sendAsRes, zodErrorToString } from "@util/helper";
+import { getIpFromHeader, zodErrorToString } from "@util/helper";
 import { NextResponse } from "next/server";
 import redis from "@/lib/redis";
+import { err, ok } from "@/shared";
 
 export async function POST(req: Request) {
   NextResponse;
@@ -25,24 +25,28 @@ export async function POST(req: Request) {
     // 1. Validate Zod
     const validation = verifyOTPSchema.safeParse(body);
     if (!validation.success) {
-      return NextResponse.json(sendAsRes(null, zodErrorToString(validation.error.message as any)), {
-        status: 400,
-      });
+      return NextResponse.json(
+        err(zodErrorToString(validation.error.message as any)),
+        {
+          status: 400,
+        },
+      );
     }
 
     const { otp, phone } = validation.data;
     try {
       await Promise.all([
         authVerifyNumberRateLimiter.consume(phone),
-        authVerifyIpRateLimiter.consume(ip)
+        authVerifyIpRateLimiter.consume(ip),
       ]);
     } catch (error) {
       return NextResponse.json(
-        sendAsRes(null,"تعداد درخواست‌های شما برای تایید کد بیش از حد مجاز رسیده است لطفا بعدا تلاش کنید"     ),
-        { status: 429 }
+        err(
+          "تعداد درخواست‌های شما برای تایید کد بیش از حد مجاز رسیده است لطفا بعدا تلاش کنید",
+        ),
+        { status: 429 },
       );
     }
- 
 
     await connectDB();
 
@@ -57,27 +61,30 @@ export async function POST(req: Request) {
         pendingName = JSON.parse(pendingSignup).name;
         isNewUser = true;
       } else {
-        return NextResponse.json(sendAsRes(null, "کاربر یافت نشد"), { status: 404 });
+        return NextResponse.json(err("کاربر یافت نشد"), {
+          status: 404,
+        });
       }
     }
 
     // دوم: کد OTP را بررسی کن
     const verifyOTPRes = await verifyOTP(otp, phone);
     if (!verifyOTPRes.ok) {
-      return NextResponse.json(sendAsRes(null, verifyOTPRes.msg), { status: 401 });
+      return NextResponse.json(err(verifyOTPRes.msg), {
+        status: 401,
+      });
     }
 
     // سوم: اگر کد درست بود و یوزر جدید بود، حالا بسازش!
     if (isNewUser) {
-        user = await Users.create({ fullName: pendingName, phone }); 
-        await redis.del(`signup_data:${phone}`);
+      user = await Users.create({ fullName: pendingName, phone });
+      await redis.del(`signup_data:${phone}`);
     }
     let obj: UserPayloadWithoutVersion = {
       userId: user!._id.toString(), // این بخش اصلاح شود
       permissions: user!.permissions,
       roles: user!.roles,
     };
-
 
     const newJWTTokenRes = await createToken(obj);
 
@@ -86,7 +93,7 @@ export async function POST(req: Request) {
     }
     const dashboard = `https://${fullPanelDomain}`;
     const response = NextResponse.json(
-      sendAsRes({ redirectTo: dashboard }, "ساخت توکن با موفقیت انجام شد", true)
+      ok({ redirectTo: dashboard }, "ساخت توکن با موفقیت انجام شد"),
     );
     response.cookies.set({
       name: "token",
@@ -102,7 +109,7 @@ export async function POST(req: Request) {
     return response;
   } catch (e) {
     logger.error(`failed to create token For user ${e}`);
-    return NextResponse.json(sendAsRes(null, "خطا در ساخت توکن برای کاربر"), {
+    return NextResponse.json(err("خطا در ساخت توکن برای کاربر"), {
       status: 500,
     });
   }
