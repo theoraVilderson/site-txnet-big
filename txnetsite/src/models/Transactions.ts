@@ -82,9 +82,6 @@ const transactionSchema = new mongoose.Schema<ITransactionSchema>({
   ],
 });
 
-// هر سندی که فیلد expireAt داشته باشد، سر ساعت مقرر پاک می‌شود
-transactionSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
-
 // ---------------------------------------------------------
 // 2. ایندکس‌های پرفورمنس (Performance)
 // ---------------------------------------------------------
