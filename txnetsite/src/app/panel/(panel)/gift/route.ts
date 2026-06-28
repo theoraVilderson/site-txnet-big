@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { giftCheckSchema } from "@lib/validations";
-import { sendAsRes, zodErrorToString } from "@util/helper";
+import { zodErrorToString } from "@util/helper";
 import Users from "@/models/Users";
 import { getValidatedUser } from "@lib/auth";
 import { CouponService } from "@lib/payment/coupon/couponService";
@@ -16,12 +16,13 @@ import {
   TransactionType,
 } from "@/configs/transactions";
 import { ITransactionSchema } from "@/types/transaction";
+import { err, ok } from "@/shared";
 
 export async function POST(req: NextRequest) {
   try {
     const validatedUser = await getValidatedUser();
     if (!validatedUser)
-      return NextResponse.json(sendAsRes(null, "Unauthorized", false), {
+      return NextResponse.json(err("Unauthorized"), {
         status: 401,
       });
 
@@ -29,36 +30,29 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const validation = giftCheckSchema.safeParse(body);
     if (!validation.success) {
-      return NextResponse.json(
-        sendAsRes(null, zodErrorToString(validation.error)),
-        {
-          status: 400,
-        }
-      );
+      return NextResponse.json(err(zodErrorToString(validation.error)), {
+        status: 400,
+      });
     }
     const { giftCode } = validation.data;
     const userId = validatedUser.userId;
     const user = await Users.findById(userId).lean();
     if (!user)
-      return NextResponse.json(sendAsRes(null, "User not found", false), {
+      return NextResponse.json(err("User not found"), {
         status: 404,
       });
     let couponResult = await CouponService.validateCoupons(
       [giftCode],
       1,
       userId,
-      AllServiceTypes.GIFT // چون اینجا شارژ کیف پول است
+      AllServiceTypes.GIFT, // چون اینجا شارژ کیف پول است
     );
     if (
       !(couponResult.appliedCoupons.length && couponResult.totalDiscount > 0)
     ) {
       return NextResponse.json(
-        sendAsRes(
-          null,
-          couponResult.errors.join(" ") || "کد هدیه نامعتبر",
-          false
-        ),
-        { status: 409 } // 409 Conflict
+        err(couponResult.errors.join(" ") || "کد هدیه نامعتبر"),
+        { status: 409 }, // 409 Conflict
       );
     }
     const session = await mongoose.startSession();
@@ -70,15 +64,15 @@ export async function POST(req: NextRequest) {
           couponResult.appliedCoupons.map((e) => e.code),
           1,
           AllServiceTypes.GIFT, // چون اینجا شارژ کیف پول است
-          session
+          session,
         );
       } catch (error: any) {
-        await session.abortTransaction(); 
+        await session.abortTransaction();
         // اگر رزرو شکست خورد (مثلا ظرفیت پر شد)، به کاربر ارور می‌دهیم
         // خود سرویس reserveCoupons به صورت خودکار Rollback کرده است.
         return NextResponse.json(
-          sendAsRes(null, error.message, false),
-          { status: 409 } // 409 Conflict
+          err(error.message),
+          { status: 409 }, // 409 Conflict
         );
       }
       const obj = {
@@ -103,14 +97,17 @@ export async function POST(req: NextRequest) {
       const updatedUser = await Users.findByIdAndUpdate(
         userId,
         { $inc: { walletBalance: couponResult.totalDiscount } },
-        { session }
+        { session },
       );
       if (!updatedUser) throw new Error("User not found");
       await CouponService.commitCoupons(userId, [giftCode], session);
 
       await session.commitTransaction();
       return NextResponse.json(
-        sendAsRes({ amount: couponResult.totalDiscount }, "کد هدیه با موفقیت اعمال شد", true)
+        ok(
+          { amount: couponResult.totalDiscount },
+          "کد هدیه با موفقیت اعمال شد",
+        ),
       );
     } catch (e) {
       await session.abortTransaction();

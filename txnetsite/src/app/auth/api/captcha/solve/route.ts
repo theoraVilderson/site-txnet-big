@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import CryptoJS from "crypto-js";
 import { JWT_SECRET_CAPTCHA_ENCODED } from "@/lib/captcha";
-import { getIpFromHeader, sendAsRes } from "@/util/helper";
+import { getIpFromHeader } from "@/util/helper";
+import { err, ok } from "@/shared";
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,14 +12,17 @@ export async function POST(req: NextRequest) {
 
     // ۱. آنتی‌ربات رفتاری: اسلایدر نباید زیر ۲۰۰ میلی‌ثانیه یا بالای ۱۰ ثانیه کشیده شود
     if (!dragTime || dragTime < 200 || dragTime > 10000) {
-      return NextResponse.json(sendAsRes(null, "رفتار مشکوک به ربات", false), { status: 400 });
+      return NextResponse.json(err("رفتار مشکوک به ربات"), { status: 400 });
     }
 
     // ۲. بررسی اعتبار خود توکن کپچا
-    const { payload } = await jwtVerify(captchaToken, JWT_SECRET_CAPTCHA_ENCODED);
+    const { payload } = await jwtVerify(
+      captchaToken,
+      JWT_SECRET_CAPTCHA_ENCODED,
+    );
 
     if (payload.ip !== ip) {
-        return NextResponse.json(sendAsRes(null, "IP نامعتبر است", false), { status: 400 });
+      return NextResponse.json(err("IP نامعتبر است"), { status: 400 });
     }
 
     // ۳. تولید verifyToken در محیط امن سرور! (دقیقاً مشابه منطق قبلی شما)
@@ -27,12 +31,15 @@ export async function POST(req: NextRequest) {
       jti: payload.jti,
     });
 
-    const verifyToken = CryptoJS.AES.encrypt(verifyPayload, captchaToken).toString();
+    const verifyToken = CryptoJS.AES.encrypt(
+      verifyPayload,
+      captchaToken,
+    ).toString();
 
-    return NextResponse.json(
-      sendAsRes({ verifyToken }, "کپچا حل شد", true)
-    );
+    return NextResponse.json(ok({ verifyToken }, "کپچا حل شد"));
   } catch (error) {
-    return NextResponse.json(sendAsRes(null, "کپچا نامعتبر است", false), { status: 400 });
+    return NextResponse.json(err("کپچا نامعتبر است"), {
+      status: 400,
+    });
   }
 }

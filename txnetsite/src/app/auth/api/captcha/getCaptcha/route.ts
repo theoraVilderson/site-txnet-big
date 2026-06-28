@@ -1,9 +1,10 @@
 import logger from "@lib/logger";
 import { captchaRateLimiter } from "@lib/rateLimiter";
-import { getIpFromHeader, sendAsRes } from "@util/helper";
+import { getIpFromHeader } from "@util/helper";
 import { NextRequest, NextResponse } from "next/server";
 
 import { createCaptchaToken } from "@lib/captcha";
+import { err, ok } from "@/shared";
 
 export async function GET(req: NextRequest) {
   const res = NextResponse;
@@ -15,18 +16,19 @@ export async function GET(req: NextRequest) {
     await captchaRateLimiter.consume(ip);
   } catch (e) {
     logger.error(e);
-    return res.json(
-      sendAsRes(null, "درخواست زیاد کپچا لطفا بعدا امتحان کنید"),
-      { status: 429 }
-    );
+    return res.json(err("درخواست زیاد کپچا لطفا بعدا امتحان کنید"), {
+      status: 429,
+    });
   }
   //
-  const token = await createCaptchaToken({ ip });
-
-  return res.json(
-    sendAsRes({ token: token.data?.token }, "token created", true),
-    {
-      status: 201,
-    }
-  );
+  const tokenCreationRes = await createCaptchaToken({ ip });
+  if (!tokenCreationRes.ok) {
+    logger.error(tokenCreationRes.msg);
+    return res.json(err("حطا در ساخت توکن کاربر"), {
+      status: 500,
+    });
+  }
+  return res.json(ok({ token: tokenCreationRes.data.token }, "token created"), {
+    status: 201,
+  });
 }

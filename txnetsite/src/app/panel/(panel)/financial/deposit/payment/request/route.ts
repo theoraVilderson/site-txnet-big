@@ -11,10 +11,10 @@ import {
   TransactionMethod,
   TransactionStatus,
 } from "@/configs/transactions";
-import { sendAsRes, zodErrorToString } from "@util/helper";
+import { zodErrorToString } from "@util/helper";
 import { chargeRequestSchema } from "@lib/validations";
 import logger from "@lib/logger";
-import mongoose from "mongoose"; 
+import mongoose from "mongoose";
 import { PAYMENT_URL } from "@/env";
 import { getValidatedUser } from "@lib/auth";
 import { PaymentCurrency } from "@/configs/payments";
@@ -25,13 +25,13 @@ import {
   fulfillWalletChargeTransaction,
   successRedirect,
 } from "@app/payment/verify/route";
-
+import { err, ok } from "@/shared";
 
 export async function POST(req: NextRequest) {
   try {
     const validatedUser = await getValidatedUser();
     if (!validatedUser)
-      return NextResponse.json(sendAsRes(null, "Unauthorized", false), {
+      return NextResponse.json(err("Unauthorized"), {
         status: 401,
       });
 
@@ -40,10 +40,9 @@ export async function POST(req: NextRequest) {
     const validation = chargeRequestSchema.safeParse(body);
 
     if (!validation.success) {
-      return NextResponse.json(
-        sendAsRes(null, zodErrorToString(validation.error)),
-        { status: 400 }
-      );
+      return NextResponse.json(err(zodErrorToString(validation.error)), {
+        status: 400,
+      });
     }
 
     let {
@@ -56,32 +55,34 @@ export async function POST(req: NextRequest) {
     // ۱. بررسی وجود کاربر
     const user = await Users.findById(userId).select("phone _id").lean();
     if (!user)
-      return NextResponse.json(sendAsRes(null, "User not found", false), {
+      return NextResponse.json(err("User not found"), {
         status: 404,
       });
 
     // ۲. تنظیمات درگاه
     const providerName = gatewayName as PaymentProvider;
     const paymentStrategy = await PaymentFactory.getProvider(providerName);
-    const { maxAmountAccept = 500_000_000, minAmountAccept = 10000,feeConfig  } =
-      paymentStrategy.providerSettings;
+    const {
+      maxAmountAccept = 500_000_000,
+      minAmountAccept = 10000,
+      feeConfig,
+    } = paymentStrategy.providerSettings;
     // ۲. نرمال‌سازی به ریال
     const currencyMultiplier = feeConfig.currency === FeeCurrency.IRT ? 10 : 1;
     const normalizedMinAmount = minAmountAccept * currencyMultiplier;
     const normalizedMaxAmount = maxAmountAccept * currencyMultiplier;
-  // ۳. مقایسه ایمن
-  if (
-    baseAmountInRial < normalizedMinAmount ||
-    baseAmountInRial > normalizedMaxAmount
-  ) {
-    return NextResponse.json(
-      sendAsRes(
-        null,
-        `مبلغ باید بین ${normalizedMinAmount / 10} و ${normalizedMaxAmount / 10} تومان باشد`
-      ),
-      { status: 400 }
-    );
-  }
+    // ۳. مقایسه ایمن
+    if (
+      baseAmountInRial < normalizedMinAmount ||
+      baseAmountInRial > normalizedMaxAmount
+    ) {
+      return NextResponse.json(
+        err(
+          `مبلغ باید بین ${normalizedMinAmount / 10} و ${normalizedMaxAmount / 10} تومان باشد`,
+        ),
+        { status: 400 },
+      );
+    }
     // ۳. محاسبه تخفیف و کوپن
     let finalAmount = baseAmountInRial;
     let discountAmount = 0;
@@ -92,7 +93,7 @@ export async function POST(req: NextRequest) {
         couponsCode,
         baseAmountInRial,
         userId,
-        AllServiceTypes.WALLET
+        AllServiceTypes.WALLET,
       );
 
       if (couponResult.appliedCoupons.length > 0) {
@@ -100,13 +101,13 @@ export async function POST(req: NextRequest) {
           const reserve = await CouponService.reserveCoupons(
             userId,
             couponResult.appliedCoupons.map((c) => c.code),
-            baseAmountInRial
+            baseAmountInRial,
           );
           finalAmount = reserve.finalAmount;
           discountAmount = reserve.totalDiscount;
           appliedCouponsData = couponResult.appliedCoupons;
         } catch (error: any) {
-          return NextResponse.json(sendAsRes(null, error.message, false), {
+          return NextResponse.json(err(error.message), {
             status: 409,
           });
         }
@@ -163,11 +164,10 @@ export async function POST(req: NextRequest) {
         await fulfillWalletChargeTransaction(tx[0]._id, "FREE_COUPON", session);
         await session.commitTransaction();
         return NextResponse.json(
-          sendAsRes(
+          ok(
             { url: `${successRedirect}?ref=FREE` },
             "تراکنش با موفقیت انجام شد",
-            true
-          )
+          ),
         );
       } catch (err) {
         await session.abortTransaction();
@@ -178,7 +178,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ۶. ارسال به درگاه و ثبت تراکنش (حالت عادی)
-    const { failed, data: paymentRes } = await paymentStrategy.request({
+    const paymentRequestRes = await paymentStrategy.request({
       amount: finalAmount,
       callbackUrl: `${PAYMENT_URL}/verify`,
       description: `شارژ کیف پول ${user.phone}`,
@@ -186,12 +186,10 @@ export async function POST(req: NextRequest) {
       currency: PaymentCurrency.IRT,
     });
 
-    if (failed || !paymentRes) {
-      return NextResponse.json(
-        sendAsRes(null, "خطا در اتصال به درگاه", false),
-        { status: 502 }
-      );
+    if (!paymentRequestRes.ok || !paymentRequestRes.data) {
+      return NextResponse.json(err("خطا در اتصال به درگاه"), { status: 502 });
     }
+    const paymentRes = paymentRequestRes.data;
 
     // ذخیره تراکنش قبل از هدایت کاربر
     await Transactions.create({
@@ -203,11 +201,11 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json(
-      sendAsRes({ url: paymentRes.url }, "لینک پرداخت ساخته شد", true)
+      ok({ url: paymentRes.url }, "لینک پرداخت ساخته شد"),
     );
   } catch (error: any) {
     logger.error("Critical Payment Error:", error);
-    return NextResponse.json(sendAsRes(null, "Internal Server Error", false), {
+    return NextResponse.json(err("Internal Server Error"), {
       status: 500,
     });
   }

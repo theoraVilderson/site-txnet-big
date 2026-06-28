@@ -11,18 +11,7 @@ export function getIpFromHeader(headers: NextRequest["headers"]) {
 export function getHostFromHeader(headers: NextRequest["headers"]) {
   return headers.get("x-forwarded-host") ?? headers.get("host") ?? "";
 }
-// export function sendAsRes<DataType>(
-//   data: DataType,
-//   msg?: string,
-//   ok: boolean = false,
-// ) {
-//   msg = !msg ? (ok ? "successful" : "failed") : msg;
-//   return {
-//     status: ok ? "ok" : "nok",
-//     msg,
-//     data,
-//   };
-// }
+
 export async function generateJIT<PayloadType>(
   payload: Omit<PayloadType, keyof JWTPayload>,
   key: Uint8Array<ArrayBufferLike> | CryptoKey | KeyObject | JWK,

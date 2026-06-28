@@ -10,23 +10,23 @@ import {
   PaymentProvider,
 } from "@/configs/paymentSettings";
 import { PaymentFactory } from "@lib/payment/gateway/paymentFactory";
-import { sendAsRes, zodErrorToString } from "@util/helper";
+import { zodErrorToString } from "@util/helper";
 import logger from "@lib/logger";
 import { NextRequest, NextResponse } from "next/server";
 import { getValidatedUser } from "@lib/auth";
 import connectDB from "@lib/db";
 import { feeCalcSchema } from "@lib/validations";
 import { PaymentCurrency } from "@/configs/payments";
+import { err, ok } from "@/shared";
 
 export async function POST(req: NextRequest) {
   try {
     // 2. احراز هویت کاربر
     const validatedUser = await getValidatedUser();
     if (!validatedUser) {
-      return NextResponse.json(
-        sendAsRes(null, "لطفا ابتدا وارد حساب کاربری شوید", false),
-        { status: 401 }
-      );
+      return NextResponse.json(err("لطفا ابتدا وارد حساب کاربری شوید"), {
+        status: 401,
+      });
     }
 
     await connectDB();
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     // 3. اعتبارسنجی داده‌های ورودی
     const validation = feeCalcSchema.safeParse(body);
     if (!validation.success) {
-      return NextResponse.json(sendAsRes(null, zodErrorToString(validation.error.message as any)), {
+      return NextResponse.json(err(zodErrorToString(validation.error)), {
         status: 400,
       });
     }
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (!settings) {
-      return NextResponse.json(sendAsRes(null, "درگاه یافت نشد"), {
+      return NextResponse.json(err("درگاه یافت نشد"), {
         status: 404,
       });
     }
@@ -67,14 +67,10 @@ export async function POST(req: NextRequest) {
     };
 
     // دریافت کارمزد از سرویس‌دهنده
-    const {
-      ok,
-      data: feeResult,
-      msg,
-    } = await paymentStrategy.feeCalculation!(feeParams);
-    if (!ok) throw msg;
+    const feeCalcResult = await paymentStrategy.feeCalculation!(feeParams);
+    if (!feeCalcResult.ok) throw feeCalcResult.msg;
     // feeResult باید عدد باشد
-    calculatedFee = feeResult!.feeAmount;
+    calculatedFee = feeCalcResult.data.feeAmount;
 
     // اعمال محدودیت‌های minLimit و maxLimit اگر وجود داشت
     if (
@@ -90,14 +86,10 @@ export async function POST(req: NextRequest) {
       calculatedFee = settings.feeConfig.maxLimit;
     }
     return NextResponse.json(
-      sendAsRes(
-        { feeAmount: Math.floor(calculatedFee) },
-        " محاسبه کارمزد",
-        true
-      )
+      ok({ feeAmount: Math.floor(calculatedFee) }, " محاسبه کارمزد"),
     );
   } catch (error) {
     logger.error(`Fee Calculation Error: ${error}`);
-    return NextResponse.json(sendAsRes(null, "خطا در محاسبه کارمزد"));
+    return NextResponse.json(err("خطا در محاسبه کارمزد"));
   }
 }

@@ -11,10 +11,10 @@ import {
   paymentSubName,
 } from "@/env";
 import { rateLimiter } from "@lib/rateLimiter";
-import { sendAsRes } from "@util/helper";
 import { getHostFromHeader, getIpFromHeader } from "@util/helper";
 import { validteToken } from "@lib/auth";
 import logger from "@lib/logger";
+import { err } from "@/shared";
 
 const domainName = process.env.DOMAIN_NAME!;
 
@@ -36,17 +36,14 @@ export async function proxy(request: NextRequest) {
     await rateLimiter.consume(ip);
   } catch (rejRes) {
     return NextResponse.json(
-      sendAsRes(
-        rejRes,
-        " درخواست های مکرر زیاد لطفا چند دقیقه بعد مجدد تلاش کنید"
-      ),
-      { status: 429 }
+      err(" درخواست های مکرر زیاد لطفا چند دقیقه بعد مجدد تلاش کنید"),
+      { status: 429 },
     );
   }
 
   // 3. اعتبارسنجی توکن
   const validateTokenResult = await validteToken(cookies);
-  const { failed: failedToken } = validateTokenResult;
+  const { ok: validToken } = validateTokenResult;
 
   let currentHost = hostname.replace(`.${domainName}`, "");
   const path = url.pathname;
@@ -55,47 +52,47 @@ export async function proxy(request: NextRequest) {
   // تعریف متغیر response برای ذخیره نتیجه نهایی
   let response: NextResponse;
   const search = url.search; // این حاوی ?type=DEPOSIT&page=1 و غیره است
-  logger.info(currentHost)
-  logger.info(path)
-  logger.info(authSubName)
+  logger.info(currentHost);
+  logger.info(path);
+  logger.info(authSubName);
   switch (currentHost) {
     case authSubName:
-      if (!failedToken) {
+      if (!validToken) {
         response = NextResponse.redirect(
-          new URL(`/`, `https://${fullPanelDomain}`)
+          new URL(`/`, `https://${fullPanelDomain}`),
         );
       } else {
         const modifedPath = !path || path == "/" ? "/login" : path;
         // ✅ اضافه کردن search به انتهای مسیر
         response = NextResponse.rewrite(
-          new URL(`/auth${modifedPath}${search}`, request.url)
+          new URL(`/auth${modifedPath}${search}`, request.url),
         );
       }
       break;
     case panelSubName:
-      if (failedToken) {
+      if (validToken) {
         const redirectUrl = new URL(
           `/login`,
-          `https://${fullAuthDomain}`
+          `https://${fullAuthDomain}`,
         ).toString();
         response = NextResponse.redirect(redirectUrl);
       } else {
         // ✅ اضافه کردن search برای پنل
         response = NextResponse.rewrite(
-          new URL(`/panel${path}${search}`, request.url)
+          new URL(`/panel${path}${search}`, request.url),
         );
       }
       break;
     case mainSubName:
       // ✅ اضافه کردن search برای صفحه اصلی
       response = NextResponse.rewrite(
-        new URL(`/main${path}${search}`, request.url)
+        new URL(`/main${path}${search}`, request.url),
       );
       break;
     case paymentSubName:
       // ✅ اضافه کردن search برای صفحه اصلی
       response = NextResponse.rewrite(
-        new URL(`/payment${path}${search}`, request.url)
+        new URL(`/payment${path}${search}`, request.url),
       );
       break;
 
@@ -108,7 +105,7 @@ export async function proxy(request: NextRequest) {
   // ============================================================
   // 4. حذف کوکی (Fix شده)
   // حالا که response ساخته شده، اگر توکن نامعتبر بود، کوکی را از روی آن پاک می‌کنیم
-  if (failedToken && token) {
+  if (validToken && token) {
     response.cookies.set({
       name: "token",
       value: "",

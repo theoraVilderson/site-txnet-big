@@ -2,21 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import connectDB from "@/lib/db";
 import Users from "@/models/Users";
-import { sendAsRes, zodErrorToString } from "@util/helper";
+import { zodErrorToString } from "@util/helper";
 import { getValidatedUser } from "@lib/auth";
 import { AllServiceTypes } from "@/configs/services";
 import { CouponService } from "@lib/payment/coupon/couponService";
 import { couponCheckSchema } from "@lib/validations";
+import { err, ok } from "@/shared";
 
 export async function POST(req: NextRequest) {
   try {
     // 2. احراز هویت کاربر
     const validatedUser = await getValidatedUser();
     if (!validatedUser) {
-      return NextResponse.json(
-        sendAsRes(null, "لطفا ابتدا وارد حساب کاربری شوید", false),
-        { status: 401 }
-      );
+      return NextResponse.json(err("لطفا ابتدا وارد حساب کاربری شوید"), {
+        status: 401,
+      });
     }
 
     await connectDB();
@@ -25,9 +25,12 @@ export async function POST(req: NextRequest) {
     // 3. اعتبارسنجی داده‌های ورودی
     const validation = couponCheckSchema.safeParse(body);
     if (!validation.success) {
-      return NextResponse.json(sendAsRes(null, zodErrorToString(validation.error.message as any)), {
-        status: 400,
-      });
+      return NextResponse.json(
+        err(zodErrorToString(validation.error.message as any)),
+        {
+          status: 400,
+        },
+      );
     }
 
     const { amount, couponsCode } = validation.data;
@@ -42,16 +45,15 @@ export async function POST(req: NextRequest) {
       couponsCode,
       baseAmountInRial,
       userId,
-      AllServiceTypes.WALLET // نوع سرویس (شارژ کیف پول)
+      AllServiceTypes.WALLET, // نوع سرویس (شارژ کیف پول)
     );
 
     // 5. بررسی نتیجه اعتبارسنجی
     if (!couponResult.isValid || couponResult.errors.length > 0) {
       const errorMsg = couponResult.errors.join(" | ");
-      return NextResponse.json(
-        sendAsRes(null, errorMsg || "کد تخفیف نامعتبر است", false),
-        { status: 400 }
-      );
+      return NextResponse.json(err(errorMsg || "کد تخفیف نامعتبر است"), {
+        status: 400,
+      });
     }
 
     // 6. آماده‌سازی خروجی برای فرانت‌اند
@@ -61,14 +63,11 @@ export async function POST(req: NextRequest) {
       originalAmount: amount, // مبلغ اولیه (تومان)
     };
 
-    return NextResponse.json(
-      sendAsRes(responseData, "کد تخفیف با موفقیت اعمال شد", true)
-    );
+    return NextResponse.json(ok(responseData, "کد تخفیف با موفقیت اعمال شد"));
   } catch (error: any) {
     console.error("Coupon Validation Error:", error);
-    return NextResponse.json(
-      sendAsRes(null, "خطای سیستمی در بررسی کد تخفیف", false),
-      { status: 500 }
-    );
+    return NextResponse.json(err("خطای سیستمی در بررسی کد تخفیف"), {
+      status: 500,
+    });
   }
 }
