@@ -97,11 +97,6 @@ export class ZarinpalProvider implements IPaymentStrategy {
    */
   async request(params: PaymentRequestParams) {
     return await requestHandler(
-      {
-        maxRetries: 3,
-        errorParser: this.zarinpalParser,
-        defaultErrorMessage: "خطا در ایجاد شناسه پرداخت زرین‌پال",
-      },
       async () => {
         // محاسبه کارمزد (بهتر است خارج از ترای/کچ اصلی زرین پال باشد یا هندل شود)
         const paymentInfo = await this.feeCalculation({
@@ -140,6 +135,11 @@ export class ZarinpalProvider implements IPaymentStrategy {
         // اگر کد ۱۰۰ نبود، خطا را پرتاب می‌کنیم تا توسط requestHandler و parser مدیریت شود
         throw { response: { data } };
       },
+      {
+        maxRetries: 3,
+        errorParser: this.zarinpalParser,
+        defaultErrorMessage: "خطا در ایجاد شناسه پرداخت زرین‌پال",
+      },
     );
   }
 
@@ -160,11 +160,6 @@ export class ZarinpalProvider implements IPaymentStrategy {
    */
   async verify(params: PaymentVerifyParams) {
     return await requestHandler(
-      {
-        maxRetries: 3, // برای وریفای معمولاً Retry خیلی مهم است (مثلاً اگر شبکه قطع شد)
-        errorParser: this.zarinpalParser,
-        defaultErrorMessage: "خطا در تایید تراکنش زرین‌پال",
-      },
       async () => {
         const data = await this._verifyCall(params);
 
@@ -182,6 +177,11 @@ export class ZarinpalProvider implements IPaymentStrategy {
         // پرتاب خطا برای مدیریت توسط پارسر (مثلاً کد -50 یا -51)
         throw { response: { data } };
       },
+      {
+        maxRetries: 3, // برای وریفای معمولاً Retry خیلی مهم است (مثلاً اگر شبکه قطع شد)
+        errorParser: this.zarinpalParser,
+        defaultErrorMessage: "خطا در تایید تراکنش زرین‌پال",
+      },
     );
   }
 
@@ -190,11 +190,6 @@ export class ZarinpalProvider implements IPaymentStrategy {
    */
   async isVerified(params: PaymentVerifyParams) {
     return await requestHandler<{ refId: string; cardPan: string } | null>(
-      {
-        maxRetries: 3,
-        errorParser: this.zarinpalParser,
-        defaultErrorMessage: "خطا در استعلام وضعیت تراکنش",
-      },
       async () => {
         const data = await this._verifyCall(params);
 
@@ -215,6 +210,11 @@ export class ZarinpalProvider implements IPaymentStrategy {
 
         // سایر کدها خطا محسوب می‌شوند
         throw { response: { data } };
+      },
+      {
+        maxRetries: 3,
+        errorParser: this.zarinpalParser,
+        defaultErrorMessage: "خطا در استعلام وضعیت تراکنش",
       },
     );
   }

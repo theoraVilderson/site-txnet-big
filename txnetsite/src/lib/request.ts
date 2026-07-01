@@ -64,60 +64,62 @@ export function handleAxiosError(
 
 // 1. تعریف یک تایپ برای تابع مفسر خطا
 // این تابع خطا را می‌گیرد و یک پیام متنی برمی‌گرداند (یا null اگر نتواند خطا را بفهمد)
-export type ErrorParser = (error: unknown) => string;
+export type ErrorParser = (error: unknown) => string | undefined;
+
+interface RequestHandlerOptions {
+  maxRetries?: number;
+  retryDelayMs?: number; // امکان شخصی‌سازی زمان تاخیر بین تلاش‌ها
+  errorParser?: ErrorParser;
+  defaultErrorMessage?: string;
+}
 
 export async function requestHandler<T>(
-  options: {
-    maxRetries?: number;
-    errorParser?: ErrorParser; // تابع اختصاصی برای تفسیر خطای درگاه
-    defaultErrorMessage?: string;
-  } = {},
-  action: () => Promise<T | ResponseType<T>> | (T | ResponseType<T>),
+  action: () => Promise<T | ResponseType<T>> | T | ResponseType<T>, // حتماً باید فانکشن باشد
+  options: RequestHandlerOptions = {}, // آپشن‌ها به عنوان پارامتر دوم (اختیاری)
 ): Promise<ResponseType<T>> {
   const {
     maxRetries = 3,
+    retryDelayMs = 1000,
     errorParser,
     defaultErrorMessage = "خطا در برقراری ارتباط با درگاه",
   } = options;
 
-  let attempts = 0;
-
-  while (attempts <= maxRetries) {
+  // استفاده از حلقه for برای کنترل تمیزتر تلاش‌ها
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const result = typeof action === "function" ? await action() : action;
+      // اجرا کردن اکشن
+      const result = await action();
 
+      // بررسی اینکه آیا خروجی از نوع ResponseType است یا خیر
       if (result && typeof result === "object" && "ok" in result) {
         return result as ResponseType<T>;
       }
 
       return ok(result);
-      // اجرای اکشن
-    } catch (error: any) {
-      attempts++;
-      // لاگ کردن خطا (بهتر است خطا را کامل لاگ کنید)
-      console.error(`Attempt ${attempts} failed:`, error?.message || error);
+    } catch (error: unknown) {
+      // لاگ کردن خطا با بررسی نوع
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      console.error(`Attempt ${attempt + 1} failed:`, errorMessage);
 
-      // اگر هنوز فرصت تلاش باقی است
-      if (attempts <= maxRetries) {
-        await new Promise((r) => setTimeout(r, 1000));
+      // اگر هنوز فرصت تلاش باقی است، صبر کن و حلقه را ادامه بده
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, retryDelayMs));
         continue;
       }
 
       // --------------------------------------------------
-      // مدیریت خطا پس از پایان تلاش‌ها (بخش جنریک شده)
+      // مدیریت خطا پس از پایان تمام تلاش‌ها
       // --------------------------------------------------
-
       let finalMsg = defaultErrorMessage;
 
-      // 1. اگر مفسر خطا پاس داده شده باشد، سعی می‌کنیم پیام خطا را از آن بگیریم
       if (errorParser) {
         const parsedMsg = errorParser(error);
         if (parsedMsg) {
           finalMsg = parsedMsg;
         }
-      }
-      // 2. اگر مفسر نبود یا پیامی نداد، پیام پیش‌فرض خودِ ارور را چک می‌کنیم
-      else if (error?.message) {
+      } else if (error instanceof Error && error.message) {
+        // خواندن پیام از آبجکت استاندارد Error
         finalMsg = error.message;
       }
 
@@ -125,5 +127,6 @@ export async function requestHandler<T>(
     }
   }
 
+  // این خط در حالت عادی اجرا نمی‌شود، اما برای جلوگیری از خطای تایپ‌اسکریپت نیاز است
   return err("Unexpected Error");
 }

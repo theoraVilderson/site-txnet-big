@@ -11,6 +11,7 @@ import {
 import { handleAxiosError, req } from "@lib/request";
 import axios from "axios";
 import { useAuthStore } from "../_stores/useAuthStore";
+import type { ResponseType } from "@/shared";
 
 export interface VaultState {
   isValutOpen: boolean;
@@ -69,21 +70,22 @@ export default function DiscountModal({ isOpen, onClose }: DiscountModalProps) {
 
     try {
       const url = `/gift`;
-      const res = await req.post(url, {
+      const res = await req.post<ResponseType<{ amount: number }>>(url, {
         giftCode: code, // مبلغ شارژ کیف پول
       });
 
       const data = res.data;
-      if (data.status === "nok") {
+      if (!data.ok) {
         setError("این کد معتبر نیست یا منقضی شده است.");
         setStatus(DiscountStatus.ERROR);
         setTimeout(() => {
           if (status !== DiscountStatus.SUCCESS) setStatus(DiscountStatus.IDLE);
         }, 3000);
+      } else {
+        updateUser({ walletBalance: userValutBalance + data.data.amount });
+        setStatus(DiscountStatus.SUCCESS);
+        setTimeout(() => onClose(), 2000);
       }
-      updateUser({ walletBalance: userValutBalance + data.data.amount });
-      setStatus(DiscountStatus.SUCCESS);
-      setTimeout(() => onClose(), 2000);
     } catch (e: any) {
       if (axios.isCancel(e) || e.name === "CanceledError") return;
       setError(handleAxiosError(e, "خطا در بررسی و اعمال کد هدیه").message);
@@ -186,8 +188,8 @@ export default function DiscountModal({ isOpen, onClose }: DiscountModalProps) {
                       status === DiscountStatus.ERROR
                         ? "border-[var(--error-color)] text-[var(--error-color)] shadow-inner"
                         : status === DiscountStatus.SUCCESS
-                        ? "border-[var(--accent-primary)] text-[var(--accent-primary)] shadow-inner"
-                        : "border-[var(--card-border)] focus:border-[var(--accent-primary)] text-[var(--text-primary)] focus:shadow-[0_0_30px_rgba(76,175,80,0.15)] focus:bg-white/50"
+                          ? "border-[var(--accent-primary)] text-[var(--accent-primary)] shadow-inner"
+                          : "border-[var(--card-border)] focus:border-[var(--accent-primary)] text-[var(--text-primary)] focus:shadow-[0_0_30px_rgba(76,175,80,0.15)] focus:bg-white/50"
                     }
                   `}
                 />
@@ -264,8 +266,8 @@ export default function DiscountModal({ isOpen, onClose }: DiscountModalProps) {
                   status === DiscountStatus.SUCCESS
                     ? "bg-gradient-to-r from-emerald-500 to-green-600 shadow-emerald-500/40"
                     : status === DiscountStatus.ERROR
-                    ? "bg-gradient-to-r from-orange-500 to-red-600 shadow-orange-500/40"
-                    : "bg-gradient-to-r from-[var(--accent-primary)] to-emerald-700 hover:brightness-110 shadow-[var(--accent-glow)]"
+                      ? "bg-gradient-to-r from-orange-500 to-red-600 shadow-orange-500/40"
+                      : "bg-gradient-to-r from-[var(--accent-primary)] to-emerald-700 hover:brightness-110 shadow-[var(--accent-glow)]"
                 }
                 disabled:opacity-40 disabled:grayscale disabled:cursor-not-allowed
               `}

@@ -151,12 +151,12 @@ export default function Deposit({
     else if (feeConfig.mode === FeeMode.API) {
       const debounceTimer = setTimeout(async () => {
         try {
-          const res = await req.post("deposit/payment/fee/calc", {
+          const res = await req.post<ResponseType<{feeAmount:number}>>("deposit/payment/fee/calc", {
             amount: calculatedBasePayable, // ارسال مبلغ خالص
             gatewayName: selectedGateway,
           });
 
-          if (res.data.status === "ok") {
+          if (res.data.ok) {
             setFeeAmount(res.data.data.feeAmount);
           } else {
             console.error(res.data.msg);
@@ -263,14 +263,14 @@ export default function Deposit({
 
     try {
       const url = `deposit/payment/request`;
-      const res = await req.post(url, {
+      const res = await req.post<ResponseType<{ url: string }>>(url, {
         amount: numAmount, // مبلغی که کاربر قصد شارژ دارد
         gatewayName: selectedGateway,
         couponsCode: appliedCoupons.map((e) => e.code),
       });
 
       const data = res.data;
-      if (data.status === "nok") {
+      if (!data.ok) {
         throw new Error(data.msg || "خطا در ایجاد درخواست پرداخت");
       }
 
