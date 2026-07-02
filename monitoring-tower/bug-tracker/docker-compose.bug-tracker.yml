@@ -1,0 +1,69 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: txnet_glitchtip_${ENV_NAME}_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - glitchtip_postgres_data:/var/lib/postgresql/data
+    networks:
+      - private_backend_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: txnet_glitchtip_${ENV_NAME}_redis
+    restart: unless-stopped
+    volumes:
+      - glitchtip_redis_data:/data
+    networks:
+      - private_backend_network
+
+  web:
+    image: glitchtip/glitchtip:v4.0
+    container_name: txnet_glitchtip_${ENV_NAME}_web
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN}
+      SECRET_KEY: ${SECRET_KEY}
+      PORT: 8000
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.glitchtip_${ENV_NAME}.rule=Host(`${GLITCHTIP_ROUTER_HOST}`)"
+      - "traefik.http.services.glitchtip_${ENV_NAME}.loadbalancer.server.port=8000"
+    networks:
+      - private_backend_network
+
+  worker:
+    image: glitchtip/glitchtip:v4.0
+    container_name: txnet_glitchtip_${ENV_NAME}_worker
+    restart: unless-stopped
+    command: ./bin/run-celery-with-beat.sh
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN}
+      SECRET_KEY: ${SECRET_KEY}
+    networks:
+      - private_backend_network
+
+volumes:
+  glitchtip_postgres_data:
+  glitchtip_redis_data:
+
+networks:
+  private_backend_network:
+    external: true
+    name: private_backend_network

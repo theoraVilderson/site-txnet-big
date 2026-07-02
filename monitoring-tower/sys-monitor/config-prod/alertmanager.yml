@@ -1,0 +1,17 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ["alertname"]
+  group_wait: 10s
+  group_interval: 10m
+  repeat_interval: 1h
+  receiver: "bale_messenger"
+
+receivers:
+  - name: "bale_messenger"
+    telegram_configs:
+      - api_url: "https://tapi.bale.ai"
+        bot_token: "YOUR_BALE_BOT_TOKEN_HERE" # توکن ربات بله
+        chat_id: 123456789 # چت آیدی شما در بله
+        parse_mode: "HTML"

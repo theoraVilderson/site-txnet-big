@@ -1,106 +1,224 @@
 services:
-  txnetsite:
- 
-    image: ${ENVIRONMENT}_txnetsite_${WEB_APP_VERSION}
+  gateway-handler:
+    image: ${DOCKER_REGISTRY}/traefik:v3.7
+    container_name: traefik
+    command:
+      - "--api.dashboard=true" # فعال‌سازی داشبورد (داخلی)
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      # تعریف درگاه‌های ورود
+      - "--entrypoints.web.address=:${TXNET_SITE_HTTP_PORT}"
+      - "--entrypoints.websecure.address=:${TXNET_SITE_HTTPS_PORT}"
+      # تنظیمات Let's Encrypt
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=${EMAIL_SSL}"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "${TXNET_SITE_HTTP_PORT}:${TXNET_SITE_HTTP_PORT}"
+      - "${TXNET_SITE_HTTPS_PORT}:${TXNET_SITE_HTTPS_PORT}"
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./${ENVIRONMENT}_letsencrypt:/letsencrypt
+
+    networks:
+      - public_gateway_network
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+
+      # ==========================================
+      # ۱. تنظیمات داشبورد برای مسیر HTTP (پورت 80)
+      # ==========================================
+      # نکته: داشبورد ترافیک برای کار کردن به دو مسیر /api و /dashboard نیاز دارد
+      - "traefik.http.routers.dashboard-http.rule=Host(`monitor.yourdomain.com`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+      - "traefik.http.routers.dashboard-http.entrypoints=web"
+      - "traefik.http.routers.dashboard-http.service=api@internal"
+      - "traefik.http.routers.dashboard-http.middlewares=auth-dashboard"
+
+      # ==========================================
+      # ۲. تنظیمات داشبورد برای مسیر HTTPS (پورت 443)
+      # ==========================================
+      - "traefik.http.routers.dashboard-https.rule=Host(`monitor.yourdomain.com`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+      - "traefik.http.routers.dashboard-https.entrypoints=websecure"
+      - "traefik.http.routers.dashboard-https.tls.certresolver=myresolver" # درخواست گواهینامه SSL
+      - "traefik.http.routers.dashboard-https.service=api@internal"
+      - "traefik.http.routers.dashboard-https.middlewares=auth-dashboard"
+
+      # ==========================================
+      # ۳. میدل‌ور احراز هویت (Basic Auth مشترک برای هر دو روتر)
+      # ==========================================
+      - "traefik.http.middlewares.auth-dashboard.basicauth.users=${TRAEFIK_PANEL_USERNAME}:${TRAEFIK_PANEL_PASSWORD}"
+  authorization-handler:
     build:
+      context: ./authorization-handler
+      dockerfile: Dockerfile
+      # این خط به داکر می‌گوید: فقط تا مرحله dev در داکر فایل پیش برو
       target: ${ENVIRONMENT}
-      context: ./txnetsite
-      args:
-        DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+    container_name: go-authorization-handler
+      - "traefik.enable=true"
+    labels:
+      # تعریف Middleware احراز هویت
+      - "traefik.http.middlewares.my-auth.forwardauth.address=http://authorization-handler:${INTERAL_BACKEND_PORT}/validate"
+      # هدرهایی که از سرویس Go گرفته شده و به بک‌اند تزریق می‌شوند (حیاتی برای Trust Boundary)
+      - "traefik.http.middlewares.my-auth.forwardauth.authResponseHeaders=X-User-Id,X-Actor-IdوX-User-Permissons"
+
+      # (اختیاری) میدلوری برای پاک کردن هدرهای جعلی که کلاینت فرستاده است قبل از رسیدن به Auth
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-User-Id="
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Actor-Id="
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-User-Permissons="
+    # مپ کردن سورس کد برای Hot-Reload
+    volumes:
+      - authorization-handler:/app
     environment:
-      - DOMAIN_NAME=${DOMAIN_NAME}
-      - ENVIRONMENT=${ENVIRONMENT}
-      - PORT=${TXNET_SITE_PORT}
-      - HOSTNAME=${DOMAIN_NAME}
+      - APP_ENV=${ENVIRONMENT}
+      - REDIS_URL=${REDIS_URL}
       - JWT_SECRET=${JWT_SECRET}
-      - REDIS_PORT=${REDIS_PORT}
-      - MONGO_DB_USERNAME=${MONGO_DB_USERNAME}
-      - MONGO_DB_PASSWORD=${MONGO_DB_PASSWORD}
-      - DB_PORT=${DB_PORT}
-      - SMS_USERNAME=${SMS_USERNAME}
-      - SMS_PASS=${SMS_PASS}
-      - SMS_SENDER_PRIVATE=${SMS_SENDER_PRIVATE}
-      - JWT_SECRET_CAPTCHA=${JWT_SECRET_CAPTCHA}
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - NEXT_PUBLIC_PAYMENT_URL=${NEXT_PUBLIC_PAYMENT_URL}
-    expose:
-      - "${TXNET_SITE_PORT}"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    dns:
-      - 217.218.155.155
-      - 217.218.127.127
-    depends_on:
-      mongodb:
-        condition: service_healthy
-      redis:
-        condition: service_started
+    networks:
+      - private_backend_network
+  site-pwa:
+  #   image: ${ENVIRONMENT}_txnetsite_${WEB_APP_VERSION}
+  #   build:
+  #     target: ${ENVIRONMENT}
+  #     context: ./txnetsite
+  #     args:
+  #       DOCKER_REGISTRY: ${DOCKER_REGISTRY}
 
-  mongodb:
-    image: ${DOCKER_REGISTRY}/mongo:latest
-    ports:
-      - "${DB_PORT}:${DB_PORT}"
-    volumes:
-      - ${ENVIRONMENT}_txnetweb_db:/data/db
-      - ${ENVIRONMENT}_txnetweb_log:/var/log/mongodb
-      - ./mongo/${ENVIRONMENT}.mongod.conf:/etc/mongod.conf
-      - ${ENVIRONMENT}_txnetweb_dbconfig:/data/configdb
-      - ./mongo/${ENVIRONMENT}.mongodb.key:/data/configdb/mongodb.key
-    environment:
-      - MONGODB_INITDB_ROOT_USERNAME=${MONGO_DB_USERNAME}
-      - MONGODB_INITDB_ROOT_PASSWORD=${MONGO_DB_PASSWORD}
-    healthcheck:
-      # این اسکریپت در صورت نبود کاربر، دیتابیس را Initialize کرده و کاربر را می‌سازد
-      test: >
-        bash -c "
-        if mongosh --port ${DB_PORT} -u ${MONGO_DB_USERNAME} -p ${MONGO_DB_PASSWORD} --authenticationDatabase admin --eval 'db.runCommand(\"ping\").ok' --quiet | grep -q '1'; then
-          exit 0;
-        else
-          mongosh --port ${DB_PORT} --eval 'rs.initiate({_id: \"rs0\", members: [{ _id: 0, host: \"mongodb:${DB_PORT}\" }]})' --quiet || true;
-          sleep 2;
-          mongosh --port ${DB_PORT} --eval 'db.getSiblingDB(\"admin\").createUser({user: \"${MONGO_DB_USERNAME}\", pwd: \"${MONGO_DB_PASSWORD}\", roles: [ \"root\" ]})' --quiet || true;
-          exit 1;
-        fi"
-      interval: 10s
-      timeout: 15s
-      retries: 10
-    restart: unless-stopped
-    command: mongod --port ${DB_PORT} --config /etc/mongod.conf
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+  #   environment:
+  #     - DOMAIN_NAME=${DOMAIN_NAME}
+  #     - ENVIRONMENT=${ENVIRONMENT}
+  #     - PORT=${TXNET_SITE_PORT}
+  #     - HOSTNAME=${DOMAIN_NAME}
+  #     - JWT_SECRET=${JWT_SECRET}
+  #     - REDIS_PORT=${REDIS_PORT}
+  #     - MAIN_DB_USERNAME=${MAIN_DB_USERNAME}
+  #     - MAIN_DB_PASSWORD=${MAIN_DB_PASSWORD}
+  #     - DB_PORT=${MAIN_DB_PORT}
+  #     - SMS_USERNAME=${SMS_USERNAME}
+  #     - SMS_PASS=${SMS_PASS}
+  #     - SMS_SENDER_PRIVATE=${SMS_SENDER_PRIVATE}
+  #     - JWT_SECRET_CAPTCHA=${JWT_SECRET_CAPTCHA}
+  #     - REDIS_PASSWORD=${REDIS_PASSWORD}
+  #     - NEXT_PUBLIC_PAYMENT_URL=${NEXT_PUBLIC_PAYMENT_URL}
+  #   networks:
+  #     - private_backend_network
+  #   expose:
+  #     - "${INTERAL_FRONTEND_PORT}"
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "3"
+  #   dns:
+  #     - 217.218.155.155
+  #     - 217.218.127.127
+  #   depends_on:
+  #     mongodb:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_started
+  #     networks:
+  #       - ${ENVIRONMENT}_gateway_network
+  #   # هیچ پورتی به بیرون مپ نمی‌شود
+  #   labels:
+  #     - "traefik.enable=true"
 
-  redis:
-    image: ${DOCKER_REGISTRY}/redis:alpine
+  #     # ۱. تنظیم روتر برای دامنه اصلی (اجبار به استفاده از درگاه امن websecure)
+  #     - "traefik.http.routers.nextjs.rule=Host(`api.yourdomain.com`) || Host(`yourdomain.com`)"
+  #     - "traefik.http.routers.nextjs.entrypoints=websecure"
+  #     - "traefik.http.routers.nextjs.tls.certresolver=myresolver" # فعال‌سازی خودکار SSL Let's Encrypt
+
+  #     # ۲. اتصال زنجیره میدل‌ورها به روتر
+  #     - "traefik.http.routers.nextjs.middlewares=nextjs-compress, pwa-security, sw-cache-control"
+
+  #     # ==========================================
+  #     # میدل‌ور اول: فشرده‌سازی خودکار ترافیک (Gzip/Brotli)
+  #     # ==========================================
+  #     - "traefik.http.middlewares.nextjs-compress.compress=true"
+
+  #     # ==========================================
+  #     # میدل‌ور دوم: هدرهای امنیتی مرورگر برای PWA
+  #     # ==========================================
+  #     - "traefik.http.middlewares.pwa-security.headers.customFrameOptionsValue=SAMEORIGIN"
+  #     - "traefik.http.middlewares.pwa-security.headers.contentTypeNosniff=true"
+  #     - "traefik.http.middlewares.pwa-security.headers.browserXssFilter=true"
+  #     # فعال‌سازی HSTS برای اجبار مرورگر به استفاده از HTTPS تا یک سال آینده
+  #     - "traefik.http.middlewares.pwa-security.headers.forceSTSHeader=true"
+  #     - "traefik.http.middlewares.pwa-security.headers.stsSeconds=31536000"
+  #     - "traefik.http.middlewares.pwa-security.headers.stsIncludeSubdomains=true"
+
+  #     # ==========================================
+  #     # میدل‌ور سوم: مدیریت کش هدرها برای جلوگیری از کش شدن Service Worker
+  #     # ==========================================
+  #     # این هدر به مرورگر می‌گوید فایل‌های حیاتی PWA را کش نکند تا آپدیت‌ها آنی اعمال شوند
+  #     - "traefik.http.middlewares.sw-cache-control.headers.customResponseHeaders.Cache-Control=no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
+
+  #     # ==========================================
+  #     # ارجاع ترافیک به پورت داخلی کانتینر Next.js
+  #     # ==========================================
+  #     - "traefik.http.services.nextjs.loadbalancer.server.port=${INTERAL_FRONTEND_PORT}"
+  authentication-handler:
+    networks:
+      - ${ENVIRONMENT}_private_backend_network
+  memory-data:
+    image: ${DOCKER_REGISTRY}/redis:8.8-alpine
     container_name: redis
-    command: redis-server --save "" --requirepass ${REDIS_PASSWORD} --appendonly yes --appendfsync everysec --port ${REDIS_PORT}
-    ports:
-      - "${REDIS_PORT}:${REDIS_PORT}"
+    command: redis-server --save "" --requirepass ${REDIS_PASSWORD} --appendonly yes --appendfsync everysec
+
     volumes:
-      - ${ENVIRONMENT}_redis_vol_internal:/data
+      - redis_vol_internal:/data
+    networks:
+      - private_backend_network
     restart: unless-stopped
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-
-  nginx:
-    image: ${DOCKER_REGISTRY}/nginx:alpine
-    container_name: nginx_proxy
+  main-db:
+    image: ${DOCKER_REGISTRY}/postgres:18-alpine # استفاده از نسخه سبک و بهینه alpine
+    container_name: postgres-db
+    restart: always # در صورت کرش یا ری‌استارت سرور، دیتابیس خودکار بالا بیاید
     environment:
-      - NGINX_SITE_PORT=${NGINX_SITE_PORT}
-      - TXNET_SITE_PORT=${TXNET_SITE_PORT}
-    restart: always
-    ports:
-      - "${NGINX_SITE_PORT}:${NGINX_SITE_PORT}"
+      - POSTGRES_USER=${MAIN_DB_USERNAME}
+      - POSTGRES_PASSWORD=${MAIN_DB_PASSWORD}
+      - POSTGRES_DB=${MAIN_DB_NAME}
     volumes:
-      - ./nginx/${ENVIRONMENT}.nginx.conf.template:/etc/nginx/templates/default.conf.template
-    depends_on:
-      - txnetsite
-
+      # ۱. حیاتی‌ترین بخش: ذخیره دیتای واقعی روی هارد سرور برای جلوگیری از پاک شدن داده‌ها
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - private_backend_network
+      # ۲. مدیریت پورت طبق استاندارد لوکال (در پروداکشن این دو خط را کامنت یا حذف کنید)
+  rabbitmq:
+    image: rabbitmq:4.2-management-alpine
+    container_name: rabbitmq
+    restart: unless-stopped
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}!
+    ports:
+      - "5672:5672" # پورت اصلی ارتباط سرویس‌ها (AMQP)
+      - "15672:15672" # پورت پنل مدیریت تحت وب
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - private_backend_network
+volumes:
+  txnetweb_db:
+  txnetweb_log:
+  redis_vol_internal:
+  txnetweb_dbconfig:
+  postgres_data:
+  authorization-handler:
+  rabbitmq_data:
+networks:
+  public_gateway_network:
+    driver: bridge
+  private_backend_network:
+    driver: bridge
+    internal: true # این شبکه به اینترنت دسترسی مستقیم

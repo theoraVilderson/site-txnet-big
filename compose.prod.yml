@@ -1,7 +1,3 @@
 name: prod
 
-volumes:
-  prod_txnetweb_db:
-  prod_txnetweb_log:
-  prod_redis_vol_internal:
-  prod_txnetweb_dbconfig:
+services:
