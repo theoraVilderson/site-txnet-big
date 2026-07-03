@@ -30,6 +30,7 @@
   },
   "include": [
     "next-env.d.ts",
+    "global.d.ts", // فایل جدید را اینجا اضافه کنید
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",

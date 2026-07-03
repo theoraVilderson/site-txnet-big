@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
-import "./fonts.css";
 import "./globals.css";
-import { ThemeProvider } from "@/components/ThemeProvider";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import FloatingLeaves from "@/components/FloatingLeaves";
+import "./fonts.css";
 import { Toaster } from "react-hot-toast";
 
 export const metadata: Metadata = {
@@ -21,11 +18,7 @@ export default function RootLayout({
       <body
         className={`bg-eco-50 dark:bg-slate-950 transition-colors duration-300`}
       >
-        <ThemeProvider>
-          <Toaster />
-          <FloatingLeaves />
-          {children}
-        </ThemeProvider>
+        {children}
       </body>
     </html>
   );

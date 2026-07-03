@@ -2,40 +2,57 @@ version: "3.8"
 
 services:
   postgres:
-    image: postgres:15-alpine
-    container_name: txnet_glitchtip_${ENV_NAME}_postgres
+    image: ${DOCKER_REGISTRY}/postgres:15-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    healthcheck:
+      # داینامیک شدن مقادیر یوزر و دیتابیس
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     volumes:
       - glitchtip_postgres_data:/var/lib/postgresql/data
     networks:
       - private_backend_network
 
   redis:
-    image: redis:7-alpine
-    container_name: txnet_glitchtip_${ENV_NAME}_redis
+    image: ${DOCKER_REGISTRY}/redis:7-alpine
     restart: unless-stopped
     volumes:
       - glitchtip_redis_data:/data
     networks:
       - private_backend_network
 
+  # کانتینر جدید برای انجام کارهای راه‌اندازی
+  setup:
+    image: ${DOCKER_REGISTRY}/glitchtip/glitchtip:v4.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      - DJANGO_SUPERUSER_EMAIL=${GLITCHTIP_ADMIN_EMAIL}
+      - DJANGO_SUPERUSER_PASSWORD=${GLITCHTIP_ADMIN_PASS}
+    # اجرای همزمان مایگریشن و ساخت ادمین، سپس خروج موفق
+    command: >
+      bash -c "./manage.py migrate && ./manage.py createsuperuser --noinput || true"
+    networks:
+      - private_backend_network
+
   web:
-    image: glitchtip/glitchtip:v4.0
-    container_name: txnet_glitchtip_${ENV_NAME}_web
+    image: ${DOCKER_REGISTRY}/glitchtip/glitchtip:v4.0
     restart: unless-stopped
     depends_on:
-      - postgres
-      - redis
+      # وب فقط زمانی اجرا می‌شود که کانتینر setup کارش با موفقیت تمام شده باشد
+      setup:
+        condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      CELERY_BROKER_URL: redis://redis:6379/0
-      GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN}
-      SECRET_KEY: ${SECRET_KEY}
-      PORT: 8000
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.glitchtip_${ENV_NAME}.rule=Host(`${GLITCHTIP_ROUTER_HOST}`)"
@@ -44,18 +61,14 @@ services:
       - private_backend_network
 
   worker:
-    image: glitchtip/glitchtip:v4.0
-    container_name: txnet_glitchtip_${ENV_NAME}_worker
+    image: ${DOCKER_REGISTRY}/glitchtip/glitchtip:v4.0
     restart: unless-stopped
     command: ./bin/run-celery-with-beat.sh
     depends_on:
-      - postgres
-      - redis
+      # ورکر هم منتظر پایان کار setup می‌ماند
+      setup:
+        condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      CELERY_BROKER_URL: redis://redis:6379/0
-      GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN}
-      SECRET_KEY: ${SECRET_KEY}
     networks:
       - private_backend_network
 

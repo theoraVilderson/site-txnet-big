@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   prometheus:
-    image: prom/prometheus:v2.53.0
+    image: ${DOCKER_REGISTRY}/prom/prometheus:v2.53.0
     container_name: txnet_${ENV_NAME}_prometheus
     restart: unless-stopped
     ports:
@@ -11,17 +11,40 @@ services:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
       - "--storage.tsdb.retention.time=15d"
+    configs:
+      - source: prometheus_config
+        target: /etc/prometheus/prometheus.yml
     volumes:
-      # مسیر خواندن کانفیگ بر اساس محیط تغییر می‌کند (config-prod یا config-dev)
-      - ./config-${ENV_NAME}/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     networks:
       - private_backend_network
-
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - "node.labels.role==monitoring" # یا همان database اگر سرور جدا ندارید
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: stop-first # حیاتی برای آزاد شدن ولوم tsdb
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G # پرومتئوس به رم بالایی نیاز دارد، اما نباید از ۲ گیگ بیشتر شود
+        reservations:
+          cpus: "0.2"
+          memory: 512M
   grafana:
-    image: grafana/grafana:11.1.0
-    container_name: txnet_${ENV_NAME}_grafana
-    restart: unless-stopped
+    image: ${DOCKER_REGISTRY}/grafana/grafana:11.1.0
+    labels:
+      # جابجایی لیبل‌های ترایفیک به بخش deploy برای سوارم
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana_${ENV_NAME}.rule=Host(`${GRAFANA_ROUTER_HOST}`)"
+      - "traefik.http.services.grafana_${ENV_NAME}.loadbalancer.server.port=3000"
     ports:
       - "${GRAFANA_PORT}:3000"
     environment:
@@ -29,18 +52,31 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASS}
     volumes:
       - grafana_data:/var/lib/grafana
-    labels:
-      - "traefik.enable=true"
-      # آدرس دامنه متفاوت برای هر محیط
-      - "traefik.http.routers.grafana_${ENV_NAME}.rule=Host(`${GRAFANA_ROUTER_HOST}`)"
-      - "traefik.http.services.grafana_${ENV_NAME}.loadbalancer.server.port=3000"
+
     networks:
       - private_backend_network
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - "node.labels.role==monitoring"
+      update_config:
+        parallelism: 1
+        delay: 5s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
 
   loki:
-    image: grafana/loki:3.1.0
-    container_name: txnet_${ENV_NAME}_loki
-    restart: unless-stopped
+    image: ${DOCKER_REGISTRY}/grafana/loki:3.1.0
     ports:
       - "${LOKI_PORT}:3100"
     command: -config.file=/etc/loki/local-config.yaml
@@ -48,33 +84,147 @@ services:
       - loki_data:/loki
     networks:
       - private_backend_network
-
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - "node.labels.role==monitoring"
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: stop-first # حیاتی برای آزاد شدن ولوم
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1.5G # لوکی موقع جستجو رم مصرف می‌کند
+        reservations:
+          cpus: "0.2"
+          memory: 256M
   promtail:
-    image: grafana/promtail:3.1.0
-    container_name: txnet_${ENV_NAME}_promtail
-    restart: unless-stopped
+    image: ${DOCKER_REGISTRY}/grafana/promtail:3.1.0
     volumes:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./config-${ENV_NAME}/promtail.yaml:/etc/promtail/promtail.yaml:ro
     command: -config.file=/etc/promtail/promtail.yaml
+    configs:
+      - source: promtail_config
+        target: /etc/promtail/promtail.yaml
     networks:
       - private_backend_network
-
+    deploy:
+      mode: global # روی هر سروری که به سوارم اضافه شود، خودکار یک نسخه می‌سازد
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: stop-first # چون این سرویس‌ها به فایل‌های سیستمی (مثل docker.sock) متصلند، اول باید متوقف شوند تا فایل آزاد شود
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      resources:
+        limits:
+          cpus: "0.3" # مأمورها حق ندارند بیشتر از ۳۰ درصد یک هسته را اشغال کنند
+          memory: 256M # رم بسیار محدود تا منابع سرور هدر نرود
+        reservations:
+          cpus: "0.05"
+          memory: 64M
+  node-exporter:
+    image: ${DOCKER_REGISTRY}/prom/node-exporter:latest
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.rootfs=/rootfs"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    networks:
+      - private_backend_network
+    deploy:
+      mode: global # روی هر سروری که به سوارم اضافه شود، خودکار یک نسخه می‌سازد
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: stop-first # چون این سرویس‌ها به فایل‌های سیستمی (مثل docker.sock) متصلند، اول باید متوقف شوند تا فایل آزاد شود
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      resources:
+        limits:
+          cpus: "0.3" # مأمورها حق ندارند بیشتر از ۳۰ درصد یک هسته را اشغال کنند
+          memory: 256M # رم بسیار محدود تا منابع سرور هدر نرود
+        reservations:
+          cpus: "0.05"
+          memory: 64M
+  cadvisor:
+    image: ${DOCKER_REGISTRY}/cadvisor/cadvisor:latest
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - private_backend_network
+    deploy:
+      mode: global # روی هر سروری که به سوارم اضافه شود، خودکار یک نسخه می‌سازد
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: stop-first # چون این سرویس‌ها به فایل‌های سیستمی (مثل docker.sock) متصلند، اول باید متوقف شوند تا فایل آزاد شود
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      resources:
+        limits:
+          cpus: "0.3" # مأمورها حق ندارند بیشتر از ۳۰ درصد یک هسته را اشغال کنند
+          memory: 256M # رم بسیار محدود تا منابع سرور هدر نرود
+        reservations:
+          cpus: "0.05"
+          memory: 64M
   alertmanager:
-    image: prom/alertmanager:v0.27.0
-    container_name: txnet_${ENV_NAME}_alertmanager
-    restart: unless-stopped
+    image: ${DOCKER_REGISTRY}/prom/alertmanager:v0.27.0
     ports:
       - "${ALERTMANAGER_PORT}:9093"
-    volumes:
-      - ./config-${ENV_NAME}/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    configs:
+      - source: alertmanager_config
+        target: /etc/alertmanager/alertmanager.yml
     command:
       - "--config.file=/etc/alertmanager/alertmanager.yml"
     networks:
       - private_backend_network
-
+    secrets:
+      - bale_token
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - "node.labels.role==monitoring"
+      update_config:
+        parallelism: 1
+        delay: 5s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
 # نام Volumeها به صورت خودکار توسط داکر و بر اساس Project Name مجزا می‌شوند
+configs:
+  prometheus_config:
+    file: ./config-${ENV_NAME}/prometheus.yml
+  promtail_config:
+    file: ./config-${ENV_NAME}/promtail.yaml
+  alertmanager_config:
+    file: ./config-${ENV_NAME}/alertmanager.yml
 volumes:
   prometheus_data:
   grafana_data:
@@ -84,3 +234,6 @@ networks:
   private_backend_network:
     external: true
     name: private_backend_network
+secrets:
+  bale_token:
+    file: ./config-${ENV_NAME}/bale_token.txt # توکن را داخل این فایل متنی قرار دهید
