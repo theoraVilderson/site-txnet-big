@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ["mytxnet.ir", "*.mytxnet.ir"],
+  allowedDevOrigins: ["txnet.cyou", "*.txnet.cyou"],
   output: "standalone",
 
   serverExternalPackages: ["winston", "winston-mongodb"],

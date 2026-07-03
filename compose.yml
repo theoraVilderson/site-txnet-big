@@ -53,7 +53,6 @@ services:
       restart_policy:
         condition: any
         delay: 5s
-        max_attempts: 5
       resources:
         limits:
           cpus: "0.50"
@@ -65,9 +64,11 @@ services:
   authorization-handler:
     image: ${DOCKER_REGISTRY}/authorization-handler:${ENVIRONMENT}
     build:
-      context: ./authorization-handler
+      context: ./auth-handler
       dockerfile: Dockerfile
       target: ${ENVIRONMENT}
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY}
     labels:
       - "traefik.enable=true"
       - "traefik.http.middlewares.my-auth.forwardauth.address=http://authorization-handler:${INTERAL_BACKEND_PORT}/validate"
@@ -76,10 +77,13 @@ services:
       - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-User-Id="
       - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Actor-Id="
       - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-User-Permissons="
+    expose:
+      - "${INTERAL_BACKEND_PORT}"
     volumes:
-      - ./authorization-handler:/app
+      - ./auth-handler:/app
     environment:
       - APP_ENV=${ENVIRONMENT}
+      - APP_PORT=${INTERAL_BACKEND_PORT}
       - REDIS_URL=${REDIS_URL}
       - JWT_SECRET=${JWT_SECRET}
     networks:
@@ -117,6 +121,7 @@ services:
       target: ${ENVIRONMENT}
       args:
         - APP_NAME=auth-service
+        - DOCKER_REGISTRY=${DOCKER_REGISTRY}
     labels:
       - "traefik.enable=true"
       # مسیر مپ شده به متدها و روت‌های این سرویس
@@ -158,6 +163,7 @@ services:
       target: ${ENVIRONMENT}
       args:
         - APP_NAME=billing-service
+        - DOCKER_REGISTRY=${DOCKER_REGISTRY}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.billing-service.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/billing`)"
@@ -233,7 +239,7 @@ services:
       - "traefik.enable=true"
 
       # ۱. تنظیم روتر برای دامنه اصلی (اجبار به استفاده از درگاه امن websecure)
-      - "traefik.http.routers.nextjs.rule=Host(`api.${DOMAIN_NAME}`) || Host(`${DOMAIN_NAME}`)"
+      - "traefik.http.routers.nextjs.rule=Host(`${DOMAIN_NAME}`) || Host(`www.${DOMAIN_NAME}`)"
       - "traefik.http.routers.nextjs.entrypoints=websecure"
       - "traefik.http.routers.nextjs.tls.certresolver=myresolver" # فعال‌سازی خودکار SSL Let's Encrypt
 
@@ -326,7 +332,7 @@ services:
       - POSTGRES_PASSWORD=${MAIN_DB_PASSWORD}
       - POSTGRES_DB=${MAIN_DB_NAME}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     healthcheck:
       test:
         ["CMD-SHELL", "pg_isready -U $${MAIN_DB_USERNAME} -d $${MAIN_DB_NAME}"]

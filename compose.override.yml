@@ -1,5 +1,16 @@
 services:
-  txnetsite:
+  authorization-handler:
     volumes:
-      - ./txnetsite:/app
-      - node_modules_txnetsite:/app/node_modules
+      - ./auth-handler:/app
+  auth-service:
+    volumes:
+      - ./txnet-backend:/app:delegated
+      - /app/node_modules
+  billing-service:
+    volumes:
+      - ./txnet-backend:/app:delegated
+      - /app/node_modules
+  site-pwa:
+    volumes:
+      - ./site-pwa:/app:delegated
+      - /app/node_modules

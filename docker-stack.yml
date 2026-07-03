@@ -1,0 +1,19 @@
+version: "3.8"
+
+# Stack file for Docker Swarm (production). Use with `docker stack deploy`.
+# Example: `docker stack deploy -c compose.yml -c docker-stack.yml txnet`
+
+services:
+  # For Swarm we assume compose.yml already declares services with `deploy`.
+  # This file is intentionally minimal and can include swarm-specific changes
+  # such as configs, secrets, placement preferences or global-mode services.
+
+  promtail:
+    deploy:
+      mode: global
+
+networks:
+  public_gateway_network:
+    external: true
+  private_backend_network:
+    external: true

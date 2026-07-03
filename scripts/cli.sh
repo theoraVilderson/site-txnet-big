@@ -3,7 +3,7 @@
 
 # پیش‌فرض‌ها
 DEFAULT_PROJECT="devtxnet"
-DEFAULT_SERVICE="txnetsite"
+DEFAULT_SERVICE="site-pwa"
 
 # گرفتن آرگومان‌ها
 PROJECT_NAME="${2:-$DEFAULT_PROJECT}"

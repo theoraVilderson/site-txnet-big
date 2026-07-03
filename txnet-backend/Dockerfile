@@ -1,7 +1,8 @@
 # ==========================================
 # Stage 1: Base (تنظیمات پایه مشترک)
 # ==========================================
-FROM node:20-alpine AS base
+ARG DOCKER_REGISTRY=docker.arvancloud.ir
+FROM ${DOCKER_REGISTRY}/node:20-alpine AS base
 WORKDIR /app
 # تعریف متغیر برای نام اپلیکیشن تا فایل داینامیک باشد
 ARG APP_NAME
@@ -22,8 +23,10 @@ COPY . .
 FROM dependencies AS dev
 ENV NODE_ENV=development
 EXPOSE 3000
-# اجرای سرویس با استفاده از nx
-CMD npx nx serve ${APP_NAME} --host=0.0.0.0
+# build اولیه سپس اجرای node (بدون nx serve برای جلوگیری از recursive loop)
+WORKDIR /app
+RUN npx nx build ${APP_NAME}
+CMD node dist/${APP_NAME}/main.js
 
 # ==========================================
 # Stage 4: Builder (بیلد کردن برای پروداکشن)
