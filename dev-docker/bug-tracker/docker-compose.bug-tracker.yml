@@ -1,0 +1,126 @@
+# =============================================================================
+# TXNet — Bug Tracker Stack (Glitchtip — self-hosted Sentry alternative)
+# =============================================================================
+# Runs INDEPENDENTLY from the main stack.  Uses the shared external network
+# `private_backend_network` so Traefik (in the main stack) can route to it.
+#
+# Usage:
+#   docker compose -p txnet-bugtracker -f docker-compose.bug-tracker.yml up -d
+# =============================================================================
+
+networks:
+  private_backend_network:
+    external: true
+    name: private_backend_network
+
+volumes:
+  glitchtip_postgres_data:
+  glitchtip_redis_data:
+
+services:
+  # ===========================================================================
+  # PostgreSQL — Glitchtip Database
+  # ===========================================================================
+  postgres:
+    image: ${DOCKER_REGISTRY:-docker.arvancloud.ir}/postgres:15-alpine
+    container_name: txnet-glitchtip-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-glitchtip}
+      POSTGRES_USER: ${POSTGRES_USER:-glitchtip}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-glitchtip}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-glitchtip} -d ${POSTGRES_DB:-glitchtip}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    volumes:
+      - glitchtip_postgres_data:/var/lib/postgresql/data
+    networks:
+      - private_backend_network
+
+  # ===========================================================================
+  # Redis — Glitchtip Cache & Queue
+  # ===========================================================================
+  redis:
+    image: ${DOCKER_REGISTRY:-docker.arvancloud.ir}/redis:7-alpine
+    container_name: txnet-glitchtip-redis
+    restart: unless-stopped
+    volumes:
+      - glitchtip_redis_data:/data
+    networks:
+      - private_backend_network
+
+  # ===========================================================================
+  # Setup — Run Migrations & Create Superuser
+  # ===========================================================================
+  setup:
+    image: ${DOCKER_REGISTRY:-docker.arvancloud.ir}/glitchtip/glitchtip:v4.0
+    container_name: txnet-glitchtip-setup
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER:-glitchtip}:${POSTGRES_PASSWORD:-glitchtip}@postgres:5432/${POSTGRES_DB:-glitchtip}
+      - REDIS_URL=redis://redis:6379/0
+      - DJANGO_SUPERUSER_EMAIL=${GLITCHTIP_ADMIN_EMAIL:-admin@txnet.local}
+      - DJANGO_SUPERUSER_PASSWORD=${GLITCHTIP_ADMIN_PASS:-admin}
+    command: >
+      bash -c "./manage.py migrate && ./manage.py createsuperuser --noinput || true"
+    networks:
+      - private_backend_network
+
+  # ===========================================================================
+  # Web — Glitchtip Main Application
+  # ===========================================================================
+  web:
+    image: ${DOCKER_REGISTRY:-docker.arvancloud.ir}/glitchtip/glitchtip:v4.0
+    container_name: txnet-glitchtip-web
+    restart: unless-stopped
+    expose:
+      - "8000"
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER:-glitchtip}:${POSTGRES_PASSWORD:-glitchtip}@postgres:5432/${POSTGRES_DB:-glitchtip}
+      - REDIS_URL=redis://redis:6379/0
+      - GLITCHTIP_DOMAIN=https://${GLITCHTIP_ROUTER_HOST:-sentry-dev.txnet.local}
+      - SECRET_KEY=${GLITCHTIP_SECRET_KEY:-change-me-to-a-random-secret-key}
+      - PORT=8000
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.glitchtip_dev.rule=Host(`${GLITCHTIP_ROUTER_HOST:-sentry-dev.txnet.local}`)"
+      - "traefik.http.routers.glitchtip_dev.entrypoints=websecure"
+      - "traefik.http.routers.glitchtip_dev.tls.certresolver=myresolver"
+      - "traefik.http.services.glitchtip_dev.loadbalancer.server.port=8000"
+      - "txnet.logging=true"
+    networks:
+      - private_backend_network
+
+  # ===========================================================================
+  # Worker — Celery Worker + Beat Scheduler
+  # ===========================================================================
+  worker:
+    image: ${DOCKER_REGISTRY:-docker.arvancloud.ir}/glitchtip/glitchtip:v4.0
+    container_name: txnet-glitchtip-worker
+    restart: unless-stopped
+    command: ./bin/run-celery-with-beat.sh
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER:-glitchtip}:${POSTGRES_PASSWORD:-glitchtip}@postgres:5432/${POSTGRES_DB:-glitchtip}
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${GLITCHTIP_SECRET_KEY:-change-me-to-a-random-secret-key}
+    labels:
+      - "txnet.logging=true"
+    networks:
+      - private_backend_network

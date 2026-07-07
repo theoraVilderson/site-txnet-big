@@ -1,0 +1,171 @@
+# =============================================================================
+# TXNet — System Monitor Stack (Prometheus + Grafana + Loki + Promtail
+#          + Node Exporter + cAdvisor + Alertmanager)
+# =============================================================================
+# Runs INDEPENDENTLY from the main stack.  Uses the shared external network
+# `private_backend_network` so Traefik (in the main stack) can route to Grafana.
+#
+# Usage:
+#   docker compose -p txnet-monitor -f docker-compose.sys-monitor.yml up -d
+# =============================================================================
+
+networks:
+  private_backend_network:
+    external: true
+    name: private_backend_network
+
+configs:
+  prometheus_config:
+    file: ./config-dev/prometheus.yml
+  promtail_config:
+    file: ./config-dev/promtail.yaml
+  alertmanager_config:
+    file: ./config-dev/alertmanager.yml
+
+secrets:
+  bale_token:
+    file: ./config-dev/bale_token.txt
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+
+services:
+  # ===========================================================================
+  # Prometheus — Metrics Collection & Storage
+  # ===========================================================================
+  prometheus:
+    image: ${DOCKER_REGISTRY:-docker.arvancloud.ir}/prom/prometheus:v2.53.0
+    container_name: txnet-prometheus
+    restart: unless-stopped
+    ports:
+      - "${PROMETHEUS_PORT:-9091}:9090"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+    configs:
+      - source: prometheus_config
+        target: /etc/prometheus/prometheus.yml
+    volumes:
+      - prometheus_data:/prometheus
+    networks:
+      - private_backend_network
+
+  # ===========================================================================
+  # Grafana — Dashboards & Visualization
+  # ===========================================================================
+  grafana:
+    image: ${DOCKER_REGISTRY:-docker.arvancloud.ir}/grafana/grafana:11.1.0
+    container_name: txnet-grafana
+    restart: unless-stopped
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASS:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana_dev.rule=Host(`${GRAFANA_ROUTER_HOST:-grafana.${DOMAIN_NAME:-txnet.local}}`)"
+      - "traefik.http.routers.grafana_dev.entrypoints=websecure"
+      - "traefik.http.routers.grafana_dev.tls.certresolver=myresolver"
+      - "traefik.http.services.grafana_dev.loadbalancer.server.port=3000"
+
+  # ===========================================================================
+  # Loki — Log Aggregation
+  # ===========================================================================
+  loki:
+    image: ${DOCKER_REGISTRY:-docker.arvancloud.ir}/grafana/loki:3.1.0
+    container_name: txnet-loki
+    restart: unless-stopped
+    ports:
+      - "${LOKI_PORT:-3101}:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki_data:/loki
+    networks:
+      - private_backend_network
+
+  # ===========================================================================
+  # Promtail — Log Shipper (reads Docker container logs)
+  # ===========================================================================
+  promtail:
+    image: ${DOCKER_REGISTRY:-docker.arvancloud.ir}/grafana/promtail:3.1.0
+    container_name: txnet-promtail
+    restart: unless-stopped
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/promtail.yaml
+    configs:
+      - source: promtail_config
+        target: /etc/promtail/promtail.yaml
+    networks:
+      - private_backend_network
+
+  # ===========================================================================
+  # Node Exporter — Host-Level Metrics (CPU, RAM, Disk, Network)
+  # ===========================================================================
+  node-exporter:
+    image: ${DOCKER_REGISTRY:-docker.arvancloud.ir}/prom/node-exporter:latest
+    container_name: txnet-node-exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.rootfs=/rootfs"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    networks:
+      - private_backend_network
+
+  # ===========================================================================
+  # cAdvisor — Container-Level Metrics
+  # ===========================================================================
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: txnet-cadvisor
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    command:
+      - "--docker_only=true"
+      - "--housekeeping_interval=15s"
+      - "--docker=unix:///var/run/docker.sock"
+      - "--containerd=/run/containerd/containerd.sock"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - /run/containerd/containerd.sock:/run/containerd/containerd.sock:ro
+    networks:
+      - private_backend_network
+
+  # ===========================================================================
+  # Alertmanager — Alert Routing (→ Bale Messenger)
+  # ===========================================================================
+  alertmanager:
+    image: ${DOCKER_REGISTRY:-docker.arvancloud.ir}/prom/alertmanager:v0.27.0
+    container_name: txnet-alertmanager
+    restart: unless-stopped
+    ports:
+      - "${ALERTMANAGER_PORT:-9094}:9093"
+    configs:
+      - source: alertmanager_config
+        target: /etc/alertmanager/alertmanager.yml
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+    networks:
+      - private_backend_network
+    secrets:
+      - bale_token

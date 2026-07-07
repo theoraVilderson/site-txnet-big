@@ -1,0 +1,349 @@
+# =============================================================================
+# TXNet — Main Application Stack (Local Dev)
+# =============================================================================
+# Contains: Traefik, Go Auth Handler, NestJS Backends, Next.js Frontends,
+#           Redis, PostgreSQL, RabbitMQ
+#
+# Usage:
+#   docker compose -p txnet-main -f docker-compose.main.yml up -d --build
+# =============================================================================
+
+networks:
+  public_gateway_network:
+    external: true
+    name: public_gateway_network
+  private_backend_network:
+    external: true
+    name: private_backend_network
+
+volumes:
+  redis_vol_internal:
+  postgres_data:
+  rabbitmq_data:
+
+services:
+  # ===========================================================================
+  # Traefik v3.7 — Reverse Proxy & TLS Termination
+  # ===========================================================================
+  gateway-handler:
+    image: ${DOCKER_REGISTRY:-docker.arvancloud.ir}/traefik:v3.7
+    container_name: txnet-gateway
+    restart: unless-stopped
+    command:
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.watch=true"
+      - "--providers.docker.network=private_backend_network"
+      # Entrypoints
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # Let's Encrypt — HTTP challenge (production)
+      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.myresolver.acme.email=${EMAIL_SSL:-admin@txnet.local}"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ../dev_letsencrypt:/letsencrypt
+    networks:
+      - public_gateway_network
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      # Dashboard (HTTP → HTTPS redirect handled by middleware)
+      - "traefik.http.routers.dashboard-http.rule=Host(`monitor.${DOMAIN_NAME}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+      - "traefik.http.routers.dashboard-http.entrypoints=web"
+      - "traefik.http.routers.dashboard-http.service=api@internal"
+      - "traefik.http.routers.dashboard-http.middlewares=auth-dashboard"
+      - "traefik.http.routers.dashboard-https.rule=Host(`monitor.${DOMAIN_NAME}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+      - "traefik.http.routers.dashboard-https.entrypoints=websecure"
+      - "traefik.http.routers.dashboard-https.tls.certresolver=myresolver"
+      - "traefik.http.routers.dashboard-https.service=api@internal"
+      - "traefik.http.routers.dashboard-https.middlewares=auth-dashboard"
+      - "traefik.http.middlewares.auth-dashboard.basicauth.users=${TRAEFIK_PANEL_USERNAME:-admin}:${TRAEFIK_PANEL_PASSWORD:-admin:$$2y$$10$$P9Z6k8XpK7vQm3WnR5tYuO1aBcDeFgHiJkLmNoPqRsTuVwXyZ0123}"
+      - "txnet.logging=true"
+
+  # ===========================================================================
+  # Go Authorization Handler — Traefik ForwardAuth Middleware
+  # ===========================================================================
+  authorization-handler:
+    image: ${DOCKER_REGISTRY:-docker.arvancloud.ir}/authorization-handler:${ENVIRONMENT:-dev}
+    build:
+      context: ../auth-handler
+      dockerfile: Dockerfile
+      target: ${ENVIRONMENT:-dev}
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY:-docker.arvancloud.ir}
+    container_name: txnet-auth-handler
+    restart: unless-stopped
+    expose:
+      - "${INTERAL_BACKEND_PORT:-8080}"
+    volumes:
+      - ../auth-handler:/app
+    environment:
+      - APP_ENV=${ENVIRONMENT:-dev}
+      - APP_PORT=${INTERAL_BACKEND_PORT:-8080}
+      - REDIS_URL=${REDIS_URL}
+      - JWT_SECRET=${JWT_SECRET}
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      # ForwardAuth middleware — validates every request that uses it
+      - "traefik.http.middlewares.my-auth.forwardauth.address=http://authorization-handler:${INTERAL_BACKEND_PORT:-8080}/validate"
+      - "traefik.http.middlewares.my-auth.forwardauth.authResponseHeaders=X-User-Id,X-Actor-Id,X-User-Permissons"
+      # Strip fake headers from incoming requests (security)
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-User-Id="
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Actor-Id="
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-User-Permissons="
+      - "txnet.logging=true"
+
+  # ===========================================================================
+  # NestJS Auth Service (Nx Monorepo)
+  # ===========================================================================
+  auth-service:
+    image: txnet-auth-service:${ENVIRONMENT:-dev}
+    build:
+      context: ../txnet-backend
+      dockerfile: Dockerfile
+      target: ${ENVIRONMENT:-dev}
+      args:
+        - APP_NAME=auth-service
+        - DOCKER_REGISTRY=${DOCKER_REGISTRY:-docker.arvancloud.ir}
+    container_name: txnet-auth-service
+    restart: unless-stopped
+    command: sh -c "npx nx build auth-service && node dist/auth-service/main.js"
+    volumes:
+      - ../txnet-backend:/app:delegated
+      - /app/node_modules
+    environment:
+      - PORT=3000
+      - NODE_ENV=${ENVIRONMENT:-dev}
+      - DATABASE_URL=postgresql://${MAIN_DB_USERNAME}:${MAIN_DB_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.auth-service.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/auth`)"
+      - "traefik.http.routers.auth-service.entrypoints=websecure"
+      - "traefik.http.routers.auth-service.tls.certresolver=myresolver"
+      - "traefik.http.services.auth-service.loadbalancer.server.port=3000"
+      - "txnet.logging=true"
+    depends_on:
+      main-db:
+        condition: service_healthy
+
+  # ===========================================================================
+  # NestJS Billing Service (Nx Monorepo) — Protected by ForwardAuth
+  # ===========================================================================
+  billing-service:
+    image: txnet-billing-service:${ENVIRONMENT:-dev}
+    build:
+      context: ../txnet-backend
+      dockerfile: Dockerfile
+      target: ${ENVIRONMENT:-dev}
+      args:
+        - APP_NAME=billing-service
+        - DOCKER_REGISTRY=${DOCKER_REGISTRY:-docker.arvancloud.ir}
+    container_name: txnet-billing-service
+    restart: unless-stopped
+    command: sh -c "npx nx build billing-service && node dist/billing-service/main.js"
+    volumes:
+      - ../txnet-backend:/app:delegated
+      - /app/node_modules
+    environment:
+      - PORT=3000
+      - NODE_ENV=${ENVIRONMENT:-dev}
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.billing-service.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/billing`)"
+      - "traefik.http.routers.billing-service.entrypoints=websecure"
+      - "traefik.http.routers.billing-service.tls.certresolver=myresolver"
+      - "traefik.http.routers.billing-service.middlewares=strip-fake-headers,my-auth"
+      - "traefik.http.services.billing-service.loadbalancer.server.port=3000"
+      - "txnet.logging=true"
+
+  # ===========================================================================
+  # Next.js PWA — Main Frontend Application
+  # ===========================================================================
+  site-pwa:
+    image: ${ENVIRONMENT:-dev}_site-pwa_${WEB_APP_VERSION:-latest}
+    build:
+      target: ${ENVIRONMENT:-dev}
+      context: ../site-pwa
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY:-docker.arvancloud.ir}
+    container_name: txnet-site-pwa
+    restart: unless-stopped
+    expose:
+      - "8181"
+    volumes:
+      - ../site-pwa:/app:delegated
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME}
+      - ENVIRONMENT=${ENVIRONMENT:-dev}
+      - PORT=8181
+      - HOSTNAME=${DOMAIN_NAME}
+      - JWT_SECRET=${JWT_SECRET}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - MAIN_DB_USERNAME=${MAIN_DB_USERNAME}
+      - MAIN_DB_PASSWORD=${MAIN_DB_PASSWORD}
+      - DB_PORT=${MAIN_DB_PORT:-5432}
+      - SMS_USERNAME=${SMS_USERNAME}
+      - SMS_PASS=${SMS_PASS}
+      - SMS_SENDER_PRIVATE=${SMS_SENDER_PRIVATE}
+      - JWT_SECRET_CAPTCHA=${JWT_SECRET_CAPTCHA}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - NEXT_PUBLIC_PAYMENT_URL=${NEXT_PUBLIC_PAYMENT_URL}
+    networks:
+      - private_backend_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    dns:
+      - 217.218.155.155
+      - 217.218.127.127
+    labels:
+      - "traefik.enable=true"
+      # Panel subdomain
+      - "traefik.http.routers.nextjs.rule=Host(`panel.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.nextjs.entrypoints=websecure"
+      - "traefik.http.routers.nextjs.tls.certresolver=myresolver"
+      - "traefik.http.routers.nextjs.middlewares=nextjs-compress,pwa-security,sw-cache-control"
+      # Compression
+      - "traefik.http.middlewares.nextjs-compress.compress=true"
+      # Security headers for PWA
+      - "traefik.http.middlewares.pwa-security.headers.customFrameOptionsValue=SAMEORIGIN"
+      - "traefik.http.middlewares.pwa-security.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.pwa-security.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.pwa-security.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.pwa-security.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.pwa-security.headers.stsIncludeSubdomains=true"
+      # Service Worker cache control
+      - "traefik.http.middlewares.sw-cache-control.headers.customResponseHeaders.Cache-Control=no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
+      # Backend port
+      - "traefik.http.services.nextjs.loadbalancer.server.port=8181"
+      - "txnet.logging=true"
+
+  # ===========================================================================
+  # Coinsite — Secondary Next.js Frontend
+  # ===========================================================================
+  coinsite:
+    image: ${ENVIRONMENT:-dev}_coinsite_${WEB_APP_VERSION:-latest}
+    build:
+      target: ${ENVIRONMENT:-dev}
+      context: ../coinsite
+    container_name: txnet-coinsite
+    restart: unless-stopped
+    expose:
+      - "8080"
+    volumes:
+      - ../coinsite:/app:delegated
+      - /app/node_modules
+    environment:
+      - NODE_ENV=${ENVIRONMENT:-dev}
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.coinsite.rule=Host(`${DOMAIN_NAME}`) || Host(`www.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.coinsite.entrypoints=websecure"
+      - "traefik.http.routers.coinsite.tls.certresolver=myresolver"
+      - "traefik.http.services.coinsite.loadbalancer.server.port=8080"
+      - "txnet.logging=true"
+
+  # ===========================================================================
+  # Redis — Session Store & Cache
+  # ===========================================================================
+  memory-data:
+    image: ${DOCKER_REGISTRY:-docker.arvancloud.ir}/redis:8.8-alpine
+    container_name: txnet-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --save ""
+      --requirepass ${REDIS_PASSWORD}
+      --appendonly yes
+      --appendfsync everysec
+    volumes:
+      - redis_vol_internal:/data
+    networks:
+      - private_backend_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "--no-auth-warning",
+          "-a",
+          "${REDIS_PASSWORD}",
+          "ping",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================================================
+  # PostgreSQL — Primary Relational Database
+  # ===========================================================================
+  main-db:
+    image: ${DOCKER_REGISTRY:-docker.arvancloud.ir}/postgres:18-alpine
+    container_name: txnet-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${MAIN_DB_USERNAME}
+      - POSTGRES_PASSWORD=${MAIN_DB_PASSWORD}
+      - POSTGRES_DB=${MAIN_DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    networks:
+      - private_backend_network
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U ${MAIN_DB_USERNAME} -d ${MAIN_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ===========================================================================
+  # RabbitMQ — Message Broker
+  # ===========================================================================
+  rabbitmq:
+    image: rabbitmq:4.2-management-alpine
+    container_name: txnet-rabbitmq
+    restart: unless-stopped
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - private_backend_network
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mq-admin.rule=Host(`mq.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.mq-admin.entrypoints=websecure"
+      - "traefik.http.routers.mq-admin.tls.certresolver=myresolver"
+      - "traefik.http.services.mq-admin.loadbalancer.server.port=15672"
+      - "traefik.http.routers.mq-admin.middlewares=auth-dashboard"
