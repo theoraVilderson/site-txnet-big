@@ -160,28 +160,39 @@ services:
           cpus: "0.05"
           memory: 64M
   cadvisor:
-    image: ${DOCKER_REGISTRY}/cadvisor/cadvisor:latest
+    # برگشت به نسخه‌ای که می‌دانیم رجیستری با موفقیت دانلود می‌کند
+    image: gcr.io/cadvisor/cadvisor:latest
+    ports:
+      - "8080:8080"
+    command:
+      - "--docker_only=true"
+      - "--housekeeping_interval=15s"
+      - "--docker=unix:///var/run/docker.sock"
+      # 👈 دستور حیاتی: معرفی موتور کانتینرد به عنوان مدیر اصلی برای استخراج اسم‌ها
+      - "--containerd=/run/containerd/containerd.sock"
     volumes:
       - /:/rootfs:ro
-      - /var/run:/var/run:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
-      - /dev/disk/:/dev/disk:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      # 👈 مانت کردن سوکت کانتینرد به داخل کانتینر
+      - /run/containerd/containerd.sock:/run/containerd/containerd.sock:ro
     networks:
       - private_backend_network
     deploy:
-      mode: global # روی هر سروری که به سوارم اضافه شود، خودکار یک نسخه می‌سازد
+      mode: global
       update_config:
         parallelism: 1
         delay: 10s
-        order: stop-first # چون این سرویس‌ها به فایل‌های سیستمی (مثل docker.sock) متصلند، اول باید متوقف شوند تا فایل آزاد شود
+        order: stop-first
       restart_policy:
         condition: on-failure
         delay: 10s
       resources:
         limits:
-          cpus: "0.3" # مأمورها حق ندارند بیشتر از ۳۰ درصد یک هسته را اشغال کنند
-          memory: 256M # رم بسیار محدود تا منابع سرور هدر نرود
+          cpus: "0.3"
+          memory: 256M
         reservations:
           cpus: "0.05"
           memory: 64M

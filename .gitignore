@@ -40,7 +40,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
+*token.txt
+bale_token.txt
 #-*/*
 
 # ------------------------------------------------------------------------------

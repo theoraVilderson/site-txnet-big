@@ -1,9 +1,9 @@
 #!/bin/bash
 
 
-ENV_TYPE=dev
-PROJECT_NAME="txnet_monitor_${ENV_TYPE}"
-ENV_FILE=".env.${ENV_TYPE}"
+ENV_NAME=dev
+PROJECT_NAME="txnet_monitor_${ENV_NAME}"
+ENV_FILE=".env.${ENV_NAME}"
 
 echo "🔄 Starting monitoring stack for [$ENV_TYPE] environment..."
 

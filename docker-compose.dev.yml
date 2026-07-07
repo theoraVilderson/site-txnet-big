@@ -1,5 +1,3 @@
-version: "3.8"
-
 # Development overrides for local `docker compose` usage.
 # Use together with the main `compose.yml`:
 #   docker compose -f compose.yml -f docker-compose.dev.yml up --build

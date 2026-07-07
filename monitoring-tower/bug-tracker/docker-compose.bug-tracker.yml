@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   postgres:
     image: ${DOCKER_REGISTRY}/postgres:15-alpine
@@ -9,7 +7,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     healthcheck:
-      # داینامیک شدن مقادیر یوزر و دیتابیس
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
@@ -28,7 +25,6 @@ services:
     networks:
       - private_backend_network
 
-  # کانتینر جدید برای انجام کارهای راه‌اندازی
   setup:
     image: ${DOCKER_REGISTRY}/glitchtip/glitchtip:v4.0
     depends_on:
@@ -37,9 +33,10 @@ services:
       redis:
         condition: service_started
     environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379/0
       - DJANGO_SUPERUSER_EMAIL=${GLITCHTIP_ADMIN_EMAIL}
       - DJANGO_SUPERUSER_PASSWORD=${GLITCHTIP_ADMIN_PASS}
-    # اجرای همزمان مایگریشن و ساخت ادمین، سپس خروج موفق
     command: >
       bash -c "./manage.py migrate && ./manage.py createsuperuser --noinput || true"
     networks:
@@ -48,15 +45,22 @@ services:
   web:
     image: ${DOCKER_REGISTRY}/glitchtip/glitchtip:v4.0
     restart: unless-stopped
+    expose:
+      - "8000"
     depends_on:
-      # وب فقط زمانی اجرا می‌شود که کانتینر setup کارش با موفقیت تمام شده باشد
       setup:
         condition: service_completed_successfully
     environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379/0
+      - GLITCHTIP_DOMAIN=https://${GLITCHTIP_ROUTER_HOST}
+      - SECRET_KEY=${GLITCHTIP_SECRET_KEY}
+      - PORT=8000
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.glitchtip_${ENV_NAME}.rule=Host(`${GLITCHTIP_ROUTER_HOST}`)"
       - "traefik.http.services.glitchtip_${ENV_NAME}.loadbalancer.server.port=8000"
+      - "txnet.logging=true"
     networks:
       - private_backend_network
 
@@ -65,10 +69,14 @@ services:
     restart: unless-stopped
     command: ./bin/run-celery-with-beat.sh
     depends_on:
-      # ورکر هم منتظر پایان کار setup می‌ماند
       setup:
         condition: service_completed_successfully
     environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${GLITCHTIP_SECRET_KEY}
+    labels:
+      - "txnet.logging=true"
     networks:
       - private_backend_network
 
