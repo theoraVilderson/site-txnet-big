@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import "./fonts.css";
 import "./globals.css";
-import { useEffect } from "react";
-import { initTheme } from "@util/theme";
+import { ThemeInit } from "@util/theme";
 
 export const metadata: Metadata = {
   title: "تکسنت - txnet",
@@ -14,12 +13,12 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  useEffect(() => {
-    initTheme();
-  }, []);
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ThemeInit />
+        {children}
+      </body>
     </html>
   );
 }
