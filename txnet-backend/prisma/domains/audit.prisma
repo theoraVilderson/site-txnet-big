@@ -1,0 +1,103 @@
+// بخش سیزده: Schema `audit` — لاگ حسابرسی، Impersonation، سوییچ اکانت
+// =============================================================================
+
+enum AdminAction {
+  wallet_manual_adjust
+  user_ban
+  user_unban
+  config_force_disable
+  role_change
+  gateway_toggle
+  coupon_create_targeted
+  payment_manual_confirm
+  currency_policy_lock
+  restriction_assign
+  bot_toggle
+  user_impersonate_start
+  user_impersonate_end
+  // اکشن‌های اضافه‌شده برای چندمستأجری:
+  tenant_suspend
+  tenant_settlement_approve
+  tenant_feature_grant
+  tenant_gateway_config_change
+  tenant_domain_verify
+
+  @@schema("audit")
+}
+
+enum AuditTargetType {
+  user
+  wallet
+  config
+  gateway
+  coupon
+  payment
+  currency_policy
+  bot_worker
+  restriction
+
+  @@schema("audit")
+}
+
+/// 14.1 — Append-only مطلق؛ حتی Super Admin هم نباید بتواند رکورد حذف کند.
+model AdminAuditLog {
+  id               String          @id @default(uuid()) @db.Uuid
+  tenantId         String?         @db.Uuid
+  adminId          String          @db.Uuid
+  action           AdminAction
+  targetEntityType AuditTargetType
+  targetEntityId   String          @db.Uuid
+  oldValue         Json?
+  newValue         Json?
+  adminIpAddress   String
+  createdAt        DateTime        @default(now())
+
+  @@index([targetEntityId, createdAt(sort: Desc)])
+  @@index([tenantId])
+  @@map("admin_audit_log")
+  @@schema("audit")
+}
+
+/// 14.2 — ورود ادمین به‌جای کاربر بدون رمز؛ اکشن اجباری در AdminAuditLog.
+model ImpersonationSession {
+  id             String    @id @default(uuid()) @db.Uuid
+  adminId        String    @db.Uuid
+  targetUserId   String    @db.Uuid
+  reasonNote     String
+  linkedTicketId String?   @db.Uuid
+  startedAt      DateTime  @default(now())
+  endedAt        DateTime?
+  adminIpAddress String
+
+  linkedTicket Ticket?   @relation(fields: [linkedTicketId], references: [id])
+  sessions     Session[]
+
+  @@map("impersonation_session")
+  @@schema("audit")
+}
+
+/// 14.3 — سوییچ اکانت (خودِ کاربر)؛ هر کاربر فقط عضو یک گروه.
+model LinkedAccountGroup {
+  id        String   @id @default(uuid()) @db.Uuid
+  createdAt DateTime @default(now())
+
+  members LinkedAccountMember[]
+
+  @@map("linked_account_group")
+  @@schema("audit")
+}
+
+model LinkedAccountMember {
+  id             String   @id @default(uuid()) @db.Uuid
+  groupId        String   @db.Uuid
+  userId         String   @unique @db.Uuid
+  addedAt        DateTime @default(now())
+  verifiedViaOtp Boolean  @default(false)
+
+  group LinkedAccountGroup @relation(fields: [groupId], references: [id])
+
+  @@map("linked_account_member")
+  @@schema("audit")
+}
+
+// =============================================================================

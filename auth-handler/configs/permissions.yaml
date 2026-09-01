@@ -1,0 +1,14 @@
+# Role -> allowed permissions. Used as defense-in-depth.
+roles:
+  admin:
+    permissions:
+      - user.read
+      - user.write
+      - user.impersonate
+  support:
+    permissions:
+      - user.read
+  user:
+    permissions:
+      - self.read
+      - self.write

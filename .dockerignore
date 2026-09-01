@@ -1,0 +1,25 @@
+**/node_modules
+**/.next
+**/dist
+**/dist-*
+**/.nx
+**/tmp
+**/coverage
+.git
+**/*.log
+.env
+.env.*
+!.env.example
+**/.vscode
+**/.idea
+3eora-mitm-proxy
+3eora-mitm-proxy-code
+image maker
+pki
+swarm
+site-pwa/repomix-output.xml
+**/repomix-output.xml
+
+# keep the compiled shared client (committed, consumed by every service)
+!i18n-platform/clients/node/dist
+!i18n-platform/clients/node/dist/**

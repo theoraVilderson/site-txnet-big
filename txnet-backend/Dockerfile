@@ -1,54 +1,62 @@
 # ==========================================
-# Stage 1: Base (تنظیمات پایه مشترک)
+# Stage 1: Base
 # ==========================================
-ARG DOCKER_REGISTRY=docker.arvancloud.ir
+ARG DOCKER_REGISTRY
 FROM ${DOCKER_REGISTRY}/node:20-alpine AS base
 WORKDIR /app
-# تعریف متغیر برای نام اپلیکیشن تا فایل داینامیک باشد
 ARG APP_NAME
 ENV APP_NAME=${APP_NAME}
 
 # ==========================================
-# Stage 2: Dependencies (نصب وابستگی‌ها)
+# Stage 2: Dependencies
 # ==========================================
 FROM base AS dependencies
-COPY package*.json ./
-# نصب تمام پکیج‌ها (شامل devDependencies) برای بیلد و توسعه
+COPY package.json package-lock.json ./
+# vendored tarball of the shared @txnet/locale-client (file: dependency)
+COPY vendor ./vendor
 RUN npm ci
 COPY . .
+# Prisma Client must be (re)generated AFTER the schema is in the image.
+RUN npx prisma generate
 
 # ==========================================
-# Stage 3: Development (محیط توسعه)
+# Stage 3: Development
 # ==========================================
 FROM dependencies AS dev
 ENV NODE_ENV=development
+ENV NX_DAEMON=false
 EXPOSE 3000
-# build اولیه سپس اجرای node (بدون nx serve برای جلوگیری از recursive loop)
-WORKDIR /app
 RUN npx nx build ${APP_NAME}
+ENV HTTP_PROXY="" \
+    HTTPS_PROXY="" \
+    NO_PROXY="" \
+    http_proxy="" \
+    https_proxy="" \
+    no_proxy=""
 CMD node dist/${APP_NAME}/main.js
 
 # ==========================================
-# Stage 4: Builder (بیلد کردن برای پروداکشن)
+# Stage 4: Builder
 # ==========================================
 FROM dependencies AS builder
-# بیلد کردن اپلیکیشن مد نظر همراه با تولید package.json اختصاصی
+ENV NX_DAEMON=false
 RUN npx nx build ${APP_NAME} --prod --generatePackageJson
 
 # ==========================================
-# Stage 5: Production (محیط عملیاتی و نهایی)
+# Stage 5: Production
 # ==========================================
 FROM base AS prod
 ENV NODE_ENV=production
 EXPOSE 3000
-
-# کپی کردن خروجی بیلد و package.json مینیمال از استیج builder
 COPY --from=builder /app/dist/apps/${APP_NAME} ./
-
-# نصب پکیج‌ها فقط برای حالت پروداکشن (سبک‌سازی ایمیج)
 RUN npm install --production --ignore-scripts
-
-# اجرای کانتینر با یوزر غیر دسترسی روت برای امنیت بیشتر
 USER node
-
+ENV HTTP_PROXY="" \
+    HTTPS_PROXY="" \
+    NO_PROXY="" \
+    http_proxy="" \
+    https_proxy="" \
+    no_proxy="" \
+    NODE_EXTRA_CA_CERTS="" \
+    npm_config_registry=""
 CMD ["node", "main.js"]

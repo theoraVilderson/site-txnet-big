@@ -1,0 +1,11 @@
+{
+  "otp": {
+    "title": {
+      "login": "Your login code",
+      "register_phone_verify": "Your login code",
+      "password_reset": "Your password reset code"
+    },
+    "chatBody": "{{title}}:\n<code>{{code}}</code>\n\nThis code is valid for 5 minutes and do not share it with anyone.",
+    "smsBody": "{{title}}: {{code}}\nThis code is valid for 5 minutes."
+  }
+}

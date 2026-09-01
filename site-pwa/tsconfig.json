@@ -19,12 +19,12 @@
       }
     ],
     "paths": {
-      "@app/*": ["./src/app/*"],
       "@util/*": ["./src/util/*"],
       "@lib/*": ["./src/lib/*"],
       "@models/*": ["./src/models/*"],
       "@api/*": ["./src/api/*"],
-      "@auth/*": ["./src/app/auth/*"],
+      "@auth/*": ["./src/app/(auth)/*"],
+      "@app/*": ["./src/app/*"],
       "@/*": ["./src/*"]
     }
   },

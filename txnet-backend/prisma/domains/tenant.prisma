@@ -1,0 +1,359 @@
+// بخش دو: Schema `tenant` — هسته چندمستأجری و White-Label فروشندگان (Reseller)
+// =============================================================================
+// تصمیم قطعی مالی: پول مشتریان Tenant هرگز از درگاه پلتفرم عبور نمی‌کند؛ هر
+// Tenant موظف است درگاه پرداخت مستقل خودش را متصل کند (TenantGatewayConfig).
+// بنابراین هیچ کیف‌پول درآمدی/تسویه‌حساب معکوس (Tenant<-Platform) وجود ندارد.
+
+enum TenantType {
+  platform_owner
+  reseller
+
+  @@schema("tenant")
+}
+
+enum TenantStatus {
+  trial
+  active
+  suspended
+  terminated
+
+  @@schema("tenant")
+}
+
+enum TenantBillingModel {
+  subscription_monthly
+  subscription_yearly
+  pay_as_you_go_metered
+
+  @@schema("tenant")
+}
+
+enum TenantDomainType {
+  subdomain
+  custom_domain
+
+  @@schema("tenant")
+}
+
+enum DomainVerificationStatus {
+  pending
+  verified
+  failed
+
+  @@schema("tenant")
+}
+
+enum EntitlementSource {
+  package_included
+  addon_purchased
+  admin_granted
+
+  @@schema("tenant")
+}
+
+enum TenantStaffRole {
+  owner
+  admin
+  support
+  finance_viewer
+
+  @@schema("tenant")
+}
+
+enum TenantLedgerDirection {
+  credit
+  debit
+
+  @@schema("tenant")
+}
+
+enum TenantBillingReasonType {
+  topup_payment
+  subscription_charge
+  metered_usage_charge
+  sms_usage_charge
+  admin_manual_adjust
+
+  @@schema("tenant")
+}
+
+enum TenantMeterKey {
+  active_configs_count
+  sms_sent
+  ai_recommendation_calls
+  custom_bot_messages
+  storage_gb
+
+  @@schema("tenant")
+}
+
+enum TenantGatewayVerificationStatus {
+  pending_test_transaction
+  verified
+  failed
+
+  @@schema("tenant")
+}
+
+enum TenantSmsMode {
+  use_platform_sms
+  own_credentials
+
+  @@schema("tenant")
+}
+
+/// ۱. جدول Tenant — دقیقاً یک رکورد باید tenantType=platform_owner باشد
+/// (اجرا با CHECK/Trigger در بخش ۹۹؛ همان الگوی Currency.isBaseCurrency).
+model Tenant {
+  id              String             @id @default(uuid()) @db.Uuid
+  tenantType      TenantType
+  ownerUserId     String             @db.Uuid
+  slug            String             @unique // برای subdomain پیش‌فرض
+  status          TenantStatus       @default(trial)
+  billingModel    TenantBillingModel
+  suspendedReason String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  users                 User[]                     @relation("TenantUsers")
+  branding              TenantBranding?
+  domains               TenantDomain[]
+  featureEntitlements   TenantFeatureEntitlement[]
+  staffMembers          TenantStaffMember[]
+  billingWallet         TenantBillingWallet?
+  usageMeters           TenantUsageMeter[]
+  gatewayConfig         TenantGatewayConfig?
+  smsConfigs            TenantSmsConfig[]
+  botIntegrations       TenantBotIntegration[]
+  restrictions          TenantRestriction[]
+
+  @@map("tenant")
+  @@schema("tenant")
+}
+
+/// ۲. برندینگ اختصاصی هر Tenant.
+model TenantBranding {
+  id                 String   @id @default(uuid()) @db.Uuid
+  tenantId           String   @unique @db.Uuid
+  brandName          String
+  logoUrl            String? // Object Storage (ArvanCloud)
+  faviconUrl         String?
+  primaryColorHex    String?
+  secondaryColorHex  String?
+  supportEmail       String?
+  supportPhone       String?
+  aboutText          String?
+  termsUrl           String?
+  privacyUrl         String?
+  defaultLanguage    Language @default(fa)
+  updatedAt          DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_branding")
+  @@schema("tenant")
+}
+
+/// ۳. دامنه اختصاصی/زیردامنه هر Tenant (بخش ح سند: مکانیزم CNAME آروان‌کلاد).
+model TenantDomain {
+  id                   String                    @id @default(uuid()) @db.Uuid
+  tenantId             String                    @db.Uuid
+  domainType           TenantDomainType
+  domainValue          String                    @unique // myvpn.txnet.app یا myvpn.com
+  verificationStatus   DomainVerificationStatus  @default(pending) // فقط برای custom_domain معتبر
+  verificationToken    String? // برای رکورد TXT اثبات مالکیت
+  verifiedAt           DateTime?
+  arvanRegisteredAt    DateTime? // فیلد پیشنهادی بخش ح-۱: زمان ثبت در آروان‌کلاد
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("tenant_domain")
+  @@schema("tenant")
+}
+
+/// ۴. پلن‌هایی که شما (پلتفرم) به Reseller می‌فروشید.
+model TenantFeaturePackage {
+  id                  String  @id @default(uuid()) @db.Uuid
+  name                String // «Starter»، «Growth»، «Enterprise»
+  monthlyPrice        Decimal? @db.Decimal(18, 2) // ارز پایه؛ null یعنی خالص Pay-as-you-go
+  includedFeatureKeys Json // Array — مثلاً ["spin_wheel","coupon_engine"]
+  usageIncludedJson   Json // سقف رایگان، مثلاً {"sms_sent": 1000, "active_configs": 500}
+  overageRuleJson     Json // نرخ هر واحد اضافه بعد از سقف رایگان
+  isActive            Boolean @default(true)
+
+  @@map("tenant_feature_package")
+  @@schema("tenant")
+}
+
+/// ۵. کدام قابلیت برای این Tenant فعال است — Guard مرکزی قبل از اجرای هر
+/// قابلیت این جدول را چک می‌کند (حتی اگر فیچر روی کل پلتفرم فعال باشد).
+model TenantFeatureEntitlement {
+  id         String            @id @default(uuid()) @db.Uuid
+  tenantId   String            @db.Uuid
+  featureKey String // ai_recommendation, spin_wheel, affiliate_system, coupon_engine,
+                     // custom_bot_telegram, custom_bot_bale, own_gateway, own_sms,
+                     // multi_currency, dedicated_node_pool
+  isEnabled  Boolean           @default(false)
+  source     EntitlementSource
+  expiresAt  DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, featureKey])
+  @@map("tenant_feature_entitlement")
+  @@schema("tenant")
+}
+
+/// ۶. تیم داخلی خود Reseller — RBAC ساده و جدا از identity.Role.
+model TenantStaffMember {
+  id               String          @id @default(uuid()) @db.Uuid
+  tenantId         String          @db.Uuid
+  userId           String          @db.Uuid
+  roleWithinTenant TenantStaffRole
+  invitedAt        DateTime        @default(now())
+  joinedAt         DateTime?
+  isActive         Boolean         @default(true)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("tenant_staff_member")
+  @@schema("tenant")
+}
+
+// ── بیلینگ Tenant↔پلتفرم — تنها جریان مالی مجاز بین شما و Tenant ───────────
+
+/// ب-۱. TenantBillingWallet — Tenant به شما بدهکار است.
+model TenantBillingWallet {
+  id             String  @id @default(uuid()) @db.Uuid
+  tenantId       String  @unique @db.Uuid
+  cachedBalance  Decimal @default(0) @db.Decimal(18, 2) // فقط Cache؛ منبع حقیقت TenantBillingTransaction است
+  version        Int     @default(0) // Optimistic Locking
+
+  tenant       Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactions TenantBillingTransaction[]
+
+  @@map("tenant_billing_wallet")
+  @@schema("tenant")
+}
+
+/// TenantBillingTransaction — Append-only، همان الگوی Ledger سند اصلی.
+model TenantBillingTransaction {
+  id           String                   @id @default(uuid()) @db.Uuid
+  walletId     String                   @db.Uuid
+  amount       Decimal                  @db.Decimal(18, 2)
+  direction    TenantLedgerDirection
+  reasonType   TenantBillingReasonType
+  referenceId  String?                  @db.Uuid
+  balanceAfter Decimal                  @db.Decimal(18, 2)
+  createdAt    DateTime                 @default(now())
+
+  wallet      TenantBillingWallet @relation(fields: [walletId], references: [id])
+  usageMeters TenantUsageMeter[]
+
+  @@index([walletId, createdAt(sort: Desc)])
+  @@map("tenant_billing_transaction")
+  @@schema("tenant")
+}
+
+/// TenantUsageMeter — برای مدل pay_as_you_go_metered؛ Worker
+/// `tenant_usage_metering` دوره‌ای مصرف را جمع می‌زند و از کیف‌پول کسر می‌کند.
+model TenantUsageMeter {
+  id                  String          @id @default(uuid()) @db.Uuid
+  tenantId            String          @db.Uuid
+  meterKey            TenantMeterKey
+  periodStart         DateTime
+  periodEnd           DateTime
+  quantity            Decimal         @db.Decimal(18, 4)
+  unitPrice           Decimal         @db.Decimal(18, 8) // از TenantFeaturePackage.overageRuleJson
+  isBilled            Boolean         @default(false)
+  billedTransactionId String?         @db.Uuid
+
+  tenant             Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  billedTransaction  TenantBillingTransaction? @relation(fields: [billedTransactionId], references: [id])
+
+  @@index([tenantId, meterKey, periodStart])
+  @@map("tenant_usage_meter")
+  @@schema("tenant")
+}
+
+// ── یکپارچگی‌های اختصاصی هر Tenant (Bring-Your-Own-Integration) ────────────
+
+/// TenantGatewayConfig — همیشه درگاه اختصاصی خودِ Tenant؛ هیچ گزینه‌ی
+/// اشتراکی با billing.PaymentGateway پلتفرم وجود ندارد.
+model TenantGatewayConfig {
+  id                   String                            @id @default(uuid()) @db.Uuid
+  tenantId             String                            @unique @db.Uuid
+  providerName         PaymentProviderName
+  gatewayCategory      GatewayCategory
+  merchantIdEncrypted  String? // SENSITIVE — never default-select
+  apiKeyEncrypted      String? // SENSITIVE — never default-select
+  verificationStatus   TenantGatewayVerificationStatus    @default(pending_test_transaction)
+  verifiedByAdminId    String?                            @db.Uuid
+  isActive             Boolean                            @default(false)
+  createdAt            DateTime                           @default(now())
+  updatedAt            DateTime                           @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_gateway_config")
+  @@schema("tenant")
+}
+
+/// TenantSmsConfig — use_platform_sms یعنی متری‌شدن با TenantUsageMeter،
+/// own_credentials یعنی مستقیم از پنل خودش بدون کسر از پلتفرم.
+model TenantSmsConfig {
+  id                  String        @id @default(uuid()) @db.Uuid
+  tenantId            String        @db.Uuid
+  mode                TenantSmsMode
+  ownProviderName     String?
+  ownApiKeyEncrypted  String? // SENSITIVE — never default-select
+  isActive            Boolean       @default(true)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_sms_config")
+  @@schema("tenant")
+}
+
+/// TenantBotIntegration — Instance مستقل تلگرام/بله برای هر Tenant؛
+/// webhookPath مجزا یعنی مشکل یک بات روی بقیه اثر نمی‌گذارد.
+model TenantBotIntegration {
+  id                 String         @id @default(uuid()) @db.Uuid
+  tenantId           String         @db.Uuid
+  platform           SocialPlatform
+  botTokenEncrypted  String // SENSITIVE — never default-select
+  botUsername        String
+  webhookPath        String         @unique
+  isActive           Boolean        @default(true)
+  connectedAt        DateTime       @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("tenant_bot_integration")
+  @@schema("tenant")
+}
+
+/// TenantRestriction — سقف مصرف در سطح یک برند کامل (همان الگوی
+/// governance.UserRestriction، این‌بار سطح Tenant).
+model TenantRestriction {
+  id              String           @id @default(uuid()) @db.Uuid
+  tenantId        String           @db.Uuid
+  restrictionKey  String // max_end_users, max_active_configs, max_monthly_traffic_gb,
+                          // max_staff_members, max_custom_domains
+  limitValueJson  Json
+  scope           RestrictionScope
+  isActive        Boolean          @default(true)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, restrictionKey])
+  @@map("tenant_restriction")
+  @@schema("tenant")
+}
+
+// =============================================================================

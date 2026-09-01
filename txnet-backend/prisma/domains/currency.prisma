@@ -1,0 +1,91 @@
+// بخش چهار: Schema `currency` — سیستم چندارزی
+// =============================================================================
+// قانون طلایی: هیچ مبلغی در بیش از یک ارز/ستون ذخیره نمی‌شود. ارز انتخابی
+// کاربر/ادمین فقط یک لایه‌ی نمایش است؛ تبدیل فقط لحظه‌ی نمایش انجام می‌شود.
+
+enum RateSource {
+  manual_admin
+  external_api
+
+  @@schema("currency")
+}
+
+enum PolicyScope {
+  global
+  user
+
+  @@schema("currency")
+}
+
+/// 3.1 — دقیقاً یک رکورد باید isBaseCurrency=true باشد (CHECK/Trigger بخش ۹۹).
+model Currency {
+  id                 String  @id @default(uuid()) @db.Uuid
+  code               String  @unique // ISO 4217 (IRR, USD, EUR) یا کد داخلی (IRT)
+  name               String
+  symbol             String
+  decimalPlaces      Int     @default(0)
+  isBaseCurrency     Boolean @default(false)
+  isSelectableByUser Boolean @default(true)
+  isActive           Boolean @default(true)
+
+  exchangeRates       CurrencyExchangeRate[]
+  userPreferences     UserCurrencyPreference[]
+  enforcedByPolicies  CurrencyPolicy[]
+
+  @@map("currency")
+  @@schema("currency")
+}
+
+/// 3.2 — Append-only؛ هر تغییر نرخ رکورد جدید است، نه ویرایش قبلی
+/// (کش می‌شود در Redis با کلید fx:rate:{currencyCode}).
+model CurrencyExchangeRate {
+  id             String     @id @default(uuid()) @db.Uuid
+  currencyId     String     @db.Uuid
+  rate           Decimal    @db.Decimal(18, 8) // نرخ تبدیل از ارز پایه به این ارز
+  source         RateSource
+  setByAdminId   String?    @db.Uuid // فقط اگر source=manual_admin
+  effectiveAt    DateTime   @default(now())
+  isActive       Boolean    @default(true)
+
+  currency Currency @relation(fields: [currencyId], references: [id])
+
+  @@index([currencyId, effectiveAt(sort: Desc)])
+  @@map("currency_exchange_rate")
+  @@schema("currency")
+}
+
+/// 3.3 — ترجیح ارز نمایشی کاربر (هر کاربر یک ترجیح فعال).
+model UserCurrencyPreference {
+  id                   String   @id @default(uuid()) @db.Uuid
+  userId               String   @unique @db.Uuid
+  preferredCurrencyId  String   @db.Uuid
+  updatedAt            DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id])
+  currency Currency @relation(fields: [preferredCurrencyId], references: [id])
+
+  @@map("user_currency_preference")
+  @@schema("currency")
+}
+
+/// 3.4 — قفل سطح ادمین روی ارز نمایشی (global یا یک user خاص).
+/// ترتیب Resolve: user-lock > global-lock > UserCurrencyPreference > ارز پایه.
+model CurrencyPolicy {
+  id                  String      @id @default(uuid()) @db.Uuid
+  scope               PolicyScope
+  userId              String?     @db.Uuid // فقط وقتی scope=user
+  isLocked            Boolean     @default(false)
+  enforcedCurrencyId  String?     @db.Uuid
+  setByAdminId        String      @db.Uuid
+  updatedAt           DateTime    @updatedAt
+
+  enforcedCurrency Currency? @relation(fields: [enforcedCurrencyId], references: [id])
+
+  // یونیک (scope, userId) — برای scope=global مقدار userId باید NULL و یکتا
+  // باشد؛ اجرای دقیق این محدودیت نیازمند Partial Unique Index است (بخش ۹۹).
+  @@unique([scope, userId])
+  @@map("currency_policy")
+  @@schema("currency")
+}
+
+// =============================================================================

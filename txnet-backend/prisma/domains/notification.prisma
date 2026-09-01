@@ -1,0 +1,86 @@
+// بخش دوازده: Schema `notification` — هاب اطلاع‌رسانی
+// =============================================================================
+
+enum NotificationType {
+  system_alert
+  admin_message
+  low_balance
+
+  @@schema("notification")
+}
+
+enum NotificationChannel {
+  push
+  sms
+  telegram_bot
+  bale_bot
+
+  @@schema("notification")
+}
+
+enum CampaignStatus {
+  draft
+  sending
+  completed
+
+  @@schema("notification")
+}
+
+enum DeliveryStatus {
+  queued
+  sent
+  failed
+
+  @@schema("notification")
+}
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  type      NotificationType
+  title     String
+  body      String
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("notification")
+  @@schema("notification")
+}
+
+/// tenantId=null یعنی کمپین سراسری پلتفرم؛ پر یعنی کمپین فقط روی کاربران
+/// همان Tenant اجرا می‌شود.
+model NotificationCampaign {
+  id                    String              @id @default(uuid()) @db.Uuid
+  tenantId              String?             @db.Uuid
+  createdByAdminId      String              @db.Uuid
+  channel               NotificationChannel
+  filterCriteria        Json // {"lastConfigDays": {"gt": 30}, "minBalance": 0}
+  messageBody           String
+  status                CampaignStatus      @default(draft)
+  sentCount             Int                 @default(0)
+  failedCount           Int                 @default(0)
+  executedByBotWorkerId String?             @db.Uuid
+  createdAt             DateTime            @default(now())
+
+  recipients NotificationCampaignRecipient[]
+
+  @@index([tenantId])
+  @@map("notification_campaign")
+  @@schema("notification")
+}
+
+model NotificationCampaignRecipient {
+  id             String         @id @default(uuid()) @db.Uuid
+  campaignId     String         @db.Uuid
+  userId         String         @db.Uuid
+  deliveryStatus DeliveryStatus @default(queued)
+
+  campaign NotificationCampaign @relation(fields: [campaignId], references: [id])
+
+  @@index([campaignId, deliveryStatus])
+  @@map("notification_campaign_recipient")
+  @@schema("notification")
+}
+
+// =============================================================================

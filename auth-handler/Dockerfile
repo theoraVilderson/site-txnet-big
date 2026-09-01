@@ -1,43 +1,43 @@
-# ==========================================
-# Stage 1: Base (پایه - دانلود وابستگی‌ها)
-# ==========================================
-ARG DOCKER_REGISTRY=docker.arvancloud.ir
+# =============================================================================
+# Build context is the REPO ROOT (so the shared Go module
+# i18n-platform/clients/go is reachable). In compose:
+#   build: { context: .., dockerfile: auth-handler/Dockerfile }
+# GOWORK=off → the repo's go.work is ignored inside the image; the
+# `replace` directive in auth-handler/go.mod resolves the shared module
+# from ./i18n-platform/clients/go instead.
+# =============================================================================
+
+# ---------- base: fetch deps ----------
+ARG DOCKER_REGISTRY
 FROM ${DOCKER_REGISTRY}/golang:1.22-alpine AS base
-WORKDIR /app
-# تنظیم پروکسی برای دور زدن تحریم‌ها و سرعت بالا
-ENV GOPROXY=https://goproxy.cn,direct
-ENV GOSUMDB=off
-# فقط فایل‌های mod کپی می‌شوند تا لایه دانلود پکیج‌ها کش شود
-COPY go.mod ./
+ENV GOPROXY="https://goproxy.io,direct" GOSUMDB=off GOWORK=off GOFLAGS=-mod=mod
+WORKDIR /src
+COPY auth-handler/go.mod auth-handler/go.sum ./auth-handler/
+COPY i18n-platform/clients/go/ ./i18n-platform/clients/go/
+WORKDIR /src/auth-handler
 RUN go mod download
 
-# ==========================================
-# Stage 2: Development (محیط توسعه با Hot-Reload)
-# ==========================================
+# ---------- dev: live reload with air (compose bind-mounts the source) ----------
 FROM base AS dev
-# نصب git برای کارکرد صحیح برخی پکیج‌های Go و ابزار Air
-RUN apk add --no-cache git
 RUN go install github.com/air-verse/air@v1.52.3
-# سورس کد کپی می‌شود (هرچند در داکر کامپوز با Volume اورراید می‌شود)
-COPY . .
-CMD ["air"]
+COPY auth-handler/ ./
+ENV LOCALE_SERVICE_ADDR=locale-service:50051 LOCALE_SCOPE=backend
+EXPOSE 8080
+CMD ["air", "-c", ".air.toml"]
 
-# ==========================================
-# Stage 3: Builder (کامپایل کد برای پروداکشن)
-# ==========================================
+# ---------- builder: static binary ----------
 FROM base AS builder
-COPY . .
-# نکته حیاتی: غیرفعال کردن CGO برای ساخت فایل باینری ایزوله و سبک
-RUN CGO_ENABLED=0 GOOS=linux go build -o /app/authorization-handler .
+COPY auth-handler/ ./
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/auth-handler ./cmd/server
 
-# ==========================================
-# Stage 4: Production (ایمیج نهایی و فوق سبک)
-# ==========================================
-FROM ${DOCKER_REGISTRY}/alpine:latest AS prod
-# نصب گواهینامه‌های امنیتی برای ارتباطات HTTPS (اختیاری اما به شدت توصیه شده)
+# ---------- prod: minimal image ----------
+FROM ${DOCKER_REGISTRY}/alpine:3.19 AS prod
 RUN apk --no-cache add ca-certificates
 WORKDIR /root/
-# کپی کردن فایل باینری کامپایل شده از مرحله builder
-COPY --from=builder /app/authorization-handler .
-# در محیط پروداکشن فقط همین فایل اجرایی ران می‌شود
-CMD ["./authorization-handler"]
+COPY --from=builder /out/auth-handler .
+COPY --from=builder /src/auth-handler/configs ./configs
+ENV HTTP_PROXY="" HTTPS_PROXY="" NO_PROXY="" \
+    http_proxy="" https_proxy="" no_proxy=""
+ENV LOCALE_SERVICE_ADDR=locale-service:50051 LOCALE_SCOPE=backend
+EXPOSE 8080
+CMD ["./auth-handler"]

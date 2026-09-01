@@ -1,0 +1,22 @@
+{
+  "name": "@txnet/locale-client",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Shared gRPC client for locale-service — imported (never copied) by every Node service. Ship compiled: `npm run build` after editing client.ts. See i18n-platform/README.md.",
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "files": ["dist", "client.ts", "proto.ts", "index.ts"],
+  "scripts": { "build": "tsc -p ." },
+  "peerDependencies": {
+    "@grpc/grpc-js": ">=1.10",
+    "@grpc/proto-loader": ">=0.7"
+  },
+  "devDependencies": {
+    "@grpc/grpc-js": "^1.12.2",
+    "@grpc/proto-loader": "^0.7.13",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}

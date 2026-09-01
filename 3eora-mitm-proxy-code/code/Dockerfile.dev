@@ -1,0 +1,19 @@
+FROM registry.mytxnet.ir/golang:1.22-alpine
+COPY ./pki/alpine-signing-key.pub /etc/apk/keys/key-35ef9ba0.rsa.pub
+
+RUN ALPINE_VER=$(cut -d'.' -f1,2 /etc/alpine-release) && \
+    echo "Detected Alpine version: v${ALPINE_VER}" && \
+    echo "http://packages.mytxnet.ir/repository/alpine-mirror/v${ALPINE_VER}/main" > /etc/apk/repositories && \
+    echo "http://packages.mytxnet.ir/repository/alpine-mirror/v${ALPINE_VER}/community" >> /etc/apk/repositories && \
+    cat /etc/apk/repositories
+
+# The base image already has HTTP_PROXY set to 3eora-mitm-proxy:8673
+# and the CA cert matches the running proxy — so apk and go will
+# automatically route through the proxy and get cached to S3.
+RUN apk add --no-cache git
+
+# GOSUMDB=off is needed because the proxy may not reach sum.golang.org
+# (or returns 502). The Go module cache itself is still proxied → S3.
+RUN GOSUMDB=off go install github.com/cosmtrek/air@v1.52.1
+
+WORKDIR /app

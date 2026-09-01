@@ -17,6 +17,18 @@
 
 set -euo pipefail
 
+# NOTE ON BUILD ENGINE:
+# Newer Docker Compose defaults to building via `docker buildx bake`, which
+# requires BuildKit. Setting  while Bake is active breaks
+# the build with errors like:
+#   "Can't add file ... to tar: io: read/write on closed pipe"
+#   "invalid reference format"
+# Services that only PULL prebuilt images (registry, monitoring, bug-tracker)
+# still run with  below — that's fine, it only affects builds.
+# The MAIN stack (start_main / stop_all main section) is the only one that
+# builds images locally, so it runs WITHOUT , letting
+# BuildKit/Bake work as intended.
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 ROOT_ENV="${ROOT_DIR}/.env"
@@ -39,8 +51,8 @@ check_prereqs() {
     err "Docker is not installed. Please install Docker first."
     exit 1
   fi
-  if ! docker compose version &>/dev/null; then
-    err "Docker Compose plugin is not available. Please install it."
+  if !  docker compose version &>/dev/null; then
+    err " Docker Compose plugin is not available. Please install it."
     exit 1
   fi
   if [ ! -f "$ROOT_ENV" ]; then
@@ -56,19 +68,19 @@ check_prereqs() {
 create_networks() {
   log "Creating shared Docker networks..."
 
-  if ! docker network ls --filter name="^public_gateway_network$" --format '{{.Name}}' | grep -q "^public_gateway_network$"; then
-    docker network create --driver bridge public_gateway_network
-    log "  ✓ Created 'public_gateway_network' (bridge)"
-  else
-    info "  'public_gateway_network' already exists"
-  fi
+  # if ! docker network ls --filter name="^public_gateway_network$" --format '{{.Name}}' | grep -q "^public_gateway_network$"; then
+  #   docker network create --driver bridge public_gateway_network
+  #   log "  ✓ Created 'public_gateway_network' (bridge)"
+  # else
+  #   info "  'public_gateway_network' already exists"
+  # fi
 
-  if ! docker network ls --filter name="^private_backend_network$" --format '{{.Name}}' | grep -q "^private_backend_network$"; then
-    docker network create --driver bridge private_backend_network
-    log "  ✓ Created 'private_backend_network' (bridge)"
-  else
-    info "  'private_backend_network' already exists"
-  fi
+  # if ! docker network ls --filter name="^private_backend_network$" --format '{{.Name}}' | grep -q "^private_backend_network$"; then
+  #   docker network create --driver bridge private_backend_network
+  #   log "  ✓ Created 'private_backend_network' (bridge)"
+  # else
+  #   info "  'private_backend_network' already exists"
+  # fi
 }
 
 # ---- Start independent services ----
@@ -86,19 +98,19 @@ start_independent() {
   # 1. Docker Registry
   log "▶ Starting Docker Registry..."
   (cd "${SCRIPT_DIR}/registry" && \
-    docker compose --env-file .env -p txnet-registry -f docker-compose.registry.yml "$action" $detach_flag)
+     docker compose --env-file .env -p txnet-registry -f docker-compose.registry.yml "$action" $detach_flag)
   log "  ✓ Registry started"
 
   # 2. System Monitor (Prometheus, Grafana, Loki, etc.)
   log "▶ Starting System Monitor..."
   (cd "${SCRIPT_DIR}/monitoring" && \
-    docker compose --env-file .env.dev -p txnet-monitor -f docker-compose.sys-monitor.yml "$action" $detach_flag)
+     docker compose --env-file .env.dev -p txnet-monitor -f docker-compose.sys-monitor.yml "$action" $detach_flag)
   log "  ✓ System Monitor started"
 
   # 3. Bug Tracker (Glitchtip)
   log "▶ Starting Bug Tracker..."
   (cd "${SCRIPT_DIR}/bug-tracker" && \
-    docker compose --env-file .env.dev -p txnet-bugtracker -f docker-compose.bug-tracker.yml "$action" $detach_flag)
+     docker compose --env-file .env.dev -p txnet-bugtracker -f docker-compose.bug-tracker.yml "$action" $detach_flag)
   log "  ✓ Bug Tracker started"
 }
 
@@ -115,8 +127,9 @@ start_main() {
   log "=============================================="
 
   log "▶ Starting Main Stack (Traefik, Backends, Frontends, DBs)..."
+  # shared .env first, then dev overrides (.env.dev) — later file wins
   (cd "$ROOT_DIR" && \
-    docker compose --env-file .env -p txnet-main -f "${SCRIPT_DIR}/docker-compose.main.yml" "$action" $detach_flag)
+     docker compose --env-file .env --env-file .env.dev -p txnet-main -f "${SCRIPT_DIR}/docker-compose.main.yml" "$action" $detach_flag)
   log "  ✓ Main Stack started"
 }
 
@@ -126,19 +139,19 @@ stop_all() {
 
   log "▶ Stopping Main Stack..."
   (cd "$ROOT_DIR" && \
-    docker compose --env-file .env -p txnet-main -f "${SCRIPT_DIR}/docker-compose.main.yml" down) || true
+     docker compose --env-file .env --env-file .env.dev -p txnet-main -f "${SCRIPT_DIR}/docker-compose.main.yml" down) || true
 
   log "▶ Stopping Bug Tracker..."
   (cd "${SCRIPT_DIR}/bug-tracker" && \
-    docker compose --env-file .env.dev -p txnet-bugtracker -f docker-compose.bug-tracker.yml down) || true
+     docker compose --env-file .env.dev -p txnet-bugtracker -f docker-compose.bug-tracker.yml down) || true
 
   log "▶ Stopping System Monitor..."
   (cd "${SCRIPT_DIR}/monitoring" && \
-    docker compose --env-file .env.dev -p txnet-monitor -f docker-compose.sys-monitor.yml down) || true
+     docker compose --env-file .env.dev -p txnet-monitor -f docker-compose.sys-monitor.yml down) || true
 
   log "▶ Stopping Registry..."
   (cd "${SCRIPT_DIR}/registry" && \
-    docker compose --env-file .env -p txnet-registry -f docker-compose.registry.yml down) || true
+     docker compose --env-file .env -p txnet-registry -f docker-compose.registry.yml down) || true
 
   log "All services stopped."
 }
@@ -169,8 +182,8 @@ main() {
   case "$cmd" in
     up)
       create_networks
-      start_independent up
       start_main up
+      start_independent up
       echo ""
       log "=============================================="
       log "  🚀 TXNet Dev Environment is UP!"
@@ -184,8 +197,8 @@ main() {
     restart)
       stop_all
       create_networks
-      start_independent up
       start_main up
+      start_independent up
       echo ""
       log "🔄 TXNet Dev Environment restarted!"
       show_status

@@ -1,0 +1,57 @@
+{
+  "otp": {
+    "userNotFound": "User not found",
+    "invalidCode": "The entered verification code is incorrect",
+    "expiredOrInvalid": "The verification code has expired or is invalid",
+    "requestInProgress": "Your previous request is still being processed",
+    "cooldownActive": "Please wait a moment before requesting a new code",
+    "attemptsExhausted": "The number of allowed attempts has been exhausted",
+    "channels": {
+      "notAllowed": "This method of sending the code is currently not allowed",
+      "notSupported": "This method of sending the code is not supported",
+      "bale": {
+        "notConfigured": "The Bale messaging service is currently not configured",
+        "notLinked": "Your Bale account is not linked",
+        "sendFailed": "Sending message via Bale encountered an error"
+      },
+      "telegram": {
+        "notConfigured": "The Telegram service is currently not configured",
+        "notLinked": "Your Telegram account is not linked",
+        "sendFailed": "Sending message via Telegram encountered an error"
+      },
+      "sms": {
+        "notConfigured": "The SMS service is currently not configured",
+        "sendFailed": "Sending SMS encountered an error"
+      }
+    }
+  },
+  "auth": {
+    "authorizationRequired": "Authentication is required for this operation",
+    "sessionRevoked": "Your session has expired or been revoked",
+    "invalidToken": "Invalid token",
+    "tokenExpired": "Token has expired"
+  },
+  "impersonation": {
+    "notImpersonated": "This session is not impersonated",
+    "notImpersonationSession": "This session is not an impersonation session",
+    "userNotFound": "User not found",
+    "targetNotActive": "Target user is inactive",
+    "forbidden": "You do not have permission to impersonate this user",
+    "reasonNoteTooShort": "Reason must be at least 10 characters",
+    "notAllowedToEnd": "You are not allowed to end this session",
+    "blockedAction": "This operation is not allowed in user impersonation mode"
+  },
+  "permissions": {
+    "forbidden": "Access denied",
+    "insufficient": "You have insufficient permissions"
+  },
+  "system": {
+    "rateLimit": "Too many requests",
+    "unexpected": "Something went wrong. Please try again.",
+    "unavailable": "The service is temporarily unavailable. Please try again shortly.",
+    "badRequest": "The request could not be processed.",
+    "notFound": "The requested item was not found.",
+    "conflict": "This action conflicts with existing data.",
+    "validationFailed": "Some of the submitted information is invalid."
+  }
+}

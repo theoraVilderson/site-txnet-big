@@ -1,0 +1,81 @@
+// بخش سه: Schema `fraud` — ضدتقلب مرکزی (Cross-cutting، قبل از بقیه دامنه‌ها)
+// =============================================================================
+
+enum FraudSubjectType {
+  user
+  config
+  wallet_transfer
+  coupon_redemption
+  spin_attempt
+  affiliate_referral
+
+  @@schema("fraud")
+}
+
+enum FraudFlagType {
+  multi_account_same_device
+  self_referral
+  rapid_wallet_transfer_loop
+  coupon_abuse_pattern
+  config_ip_sharing
+  torrent_traffic_detected
+  spin_wheel_multi_accounting
+
+  @@schema("fraud")
+}
+
+enum FraudSeverity {
+  low
+  medium
+  high
+  critical
+
+  @@schema("fraud")
+}
+
+enum FraudAutoAction {
+  none
+  freeze_config
+  block_transfer
+  hold_coupon
+  require_manual_review
+
+  @@schema("fraud")
+}
+
+/// 2.1 — اثرانگشت دستگاه؛ برای تشخیص چند userId روی یک دستگاه فیزیکی.
+model DeviceFingerprint {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @db.Uuid
+  fingerprintHash String // هش ترکیبی User-Agent + Canvas Fingerprint + IP Subnet
+  firstSeenAt     DateTime @default(now())
+  lastSeenAt      DateTime @updatedAt
+
+  user             User               @relation(fields: [userId], references: [id])
+  spinWheelAttempts SpinWheelAttempt[]
+
+  @@index([fingerprintHash])
+  @@map("device_fingerprint")
+  @@schema("fraud")
+}
+
+/// 2.2 — جدول مرکزی FraudFlag؛ Workerهای Cron دوره‌ای فقط این را می‌سازند،
+/// تصمیم نهایی (Ban کامل) دست ادمین است مگر برای severity=critical.
+model FraudFlag {
+  id                String           @id @default(uuid()) @db.Uuid
+  subjectType       FraudSubjectType
+  subjectId         String           @db.Uuid
+  flagType          FraudFlagType
+  severity          FraudSeverity
+  autoActionTaken   FraudAutoAction  @default(none)
+  detectedAt        DateTime         @default(now())
+  resolvedAt        DateTime?
+  resolvedByAdminId String?          @db.Uuid
+  notes             String?
+
+  @@index([subjectType, subjectId])
+  @@map("fraud_flag")
+  @@schema("fraud")
+}
+
+// =============================================================================

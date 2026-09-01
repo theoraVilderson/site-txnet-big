@@ -1,0 +1,11 @@
+{
+  "otp": {
+    "title": {
+      "login": "کد ورود شما",
+      "register_phone_verify": "کد ورود شما",
+      "password_reset": "کد بازیابی رمز عبور"
+    },
+    "chatBody": "{{title}}:\n<code>{{code}}</code>\n\nاین کد تا ۵ دقیقه معتبر است و آن را در اختیار کسی قرار ندهید.",
+    "smsBody": "{{title}}: {{code}}\nاین کد تا ۵ دقیقه معتبر است."
+  }
+}

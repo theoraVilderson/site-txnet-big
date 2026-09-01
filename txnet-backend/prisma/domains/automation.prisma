@@ -1,0 +1,94 @@
+// بخش نه: Schema `automation` — مدیریت Workerهای خودکار
+// =============================================================================
+
+enum BotWorkerCategory {
+  campaign
+  fraud_detection
+  data_aggregation
+  ai_task
+  payment_reconciliation
+  other
+
+  @@schema("automation")
+}
+
+enum ScheduleType {
+  always_on
+  time_window
+  cron_expression
+
+  @@schema("automation")
+}
+
+enum TriggerSource {
+  cron
+  admin_manual
+  event
+
+  @@schema("automation")
+}
+
+enum ExecutionStatus {
+  success
+  failed
+  partial
+
+  @@schema("automation")
+}
+
+/// 10.1 — تعریف Worker؛ isActive سریع‌ترین راه خاموش‌کردن کلی.
+/// رکوردهای پیشنهادی چندمستأجری: tenant_usage_metering, tenant_domain_verifier.
+model BotWorker {
+  id          String            @id @default(uuid()) @db.Uuid
+  key         String            @unique // campaign_sender, fraud_scanner, traffic_aggregator, ...
+  name        String
+  description String?
+  category    BotWorkerCategory
+  isActive    Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+
+  schedules       BotSchedule[]
+  executionLogs   BotExecutionLog[]
+
+  @@map("bot_worker")
+  @@schema("automation")
+}
+
+/// 10.2 — فعال/غیرفعال برای بازه‌ی خاص.
+model BotSchedule {
+  id              String       @id @default(uuid()) @db.Uuid
+  botWorkerId     String       @db.Uuid
+  scheduleType    ScheduleType
+  windowStartAt   DateTime? // فقط time_window
+  windowEndAt     DateTime? // فقط time_window
+  cronExpression  String? // فقط cron_expression
+  timezone        String       @default("Asia/Tehran")
+  setByAdminId    String       @db.Uuid
+  isActive        Boolean      @default(true)
+
+  botWorker BotWorker @relation(fields: [botWorkerId], references: [id])
+
+  @@map("bot_schedule")
+  @@schema("automation")
+}
+
+/// 10.3 — رصد عملکرد هر اجرای Worker.
+model BotExecutionLog {
+  id              String          @id @default(uuid()) @db.Uuid
+  botWorkerId     String          @db.Uuid
+  triggeredBy     TriggerSource
+  startedAt       DateTime        @default(now())
+  finishedAt      DateTime?
+  status          ExecutionStatus
+  itemsProcessed  Int             @default(0)
+  errorsCount     Int             @default(0)
+  metricsJson     Json? // مثلاً برای campaign_sender: {"sent": 950, "failed": 12}
+
+  botWorker BotWorker @relation(fields: [botWorkerId], references: [id])
+
+  @@index([botWorkerId, startedAt(sort: Desc)])
+  @@map("bot_execution_log")
+  @@schema("automation")
+}
+
+// =============================================================================

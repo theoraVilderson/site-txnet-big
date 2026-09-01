@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package locale.v1;
+
+// Each consuming service vendors its own generated copy of this contract
+// (see i18n-platform/README.md — "no shared package"). The go_package below is
+// only the canonical path used inside i18n-platform; vendored copies keep the
+// same `localev1` package name and work from whatever directory they sit in.
+option go_package = "github.com/txnet/i18n-platform/services/locale-service/internal/localev1;localev1";
+
+// LocaleService is the source of truth for translations. It is a real gRPC
+// service: unary RPCs for boot/metadata and a server-streaming RPC for live
+// reload. Transport is HTTP/2 + protobuf binary.
+service LocaleService {
+  // Full snapshot of one language (optionally narrowed to a scope) — used for
+  // the blocking boot of every consuming service.
+  rpc GetSnapshot(SnapshotRequest) returns (SnapshotResponse);
+
+  // Available languages + metadata (dir, native name, BCP-47 locale, ...).
+  rpc GetAvailableLocales(Empty) returns (AvailableLocalesResponse);
+
+  // Live stream — the consumer stays connected and every change is pushed as a
+  // full snapshot for the affected (lang, scope).
+  rpc Watch(WatchRequest) returns (stream UpdateEvent);
+}
+
+message SnapshotRequest {
+  string lang = 1;
+  // "backend" | "frontend" | "shareds" | "" (empty = every scope merged, with
+  // namespace keys prefixed by "<scope>/"). A named scope is always returned
+  // together with the "shareds" namespaces.
+  string scope = 2;
+}
+
+message SnapshotResponse {
+  string lang = 1;
+  string scope = 2;
+  // sha1 over the whole (sorted) namespace/entry set for this (lang, scope).
+  string version = 3;
+  // namespace name -> flat entries
+  map<string, NamespaceData> namespaces = 4;
+}
+
+message NamespaceData {
+  // Flat key (dot-notation for nested JSON) -> raw text (may contain {{var}}).
+  map<string, string> entries = 1;
+}
+
+message WatchRequest {
+  // Only notify about these languages; empty = all.
+  repeated string langs = 1;
+  // Same meaning as SnapshotRequest.scope.
+  string scope = 2;
+}
+
+message UpdateEvent {
+  string lang = 1;
+  string scope = 2;
+  string new_version = 3;
+  // Whole new snapshot (simpler and less buggy than deltas).
+  SnapshotResponse full_snapshot = 4;
+}
+
+message AvailableLocalesResponse {
+  repeated LocaleMeta locales = 1;
+}
+
+message LocaleMeta {
+  string code = 1;        // "fa"
+  string name = 2;        // "Persian"
+  string short_name = 3;  // "FA"
+  string native_name = 4; // "فارسی"
+  string dir = 5;         // "rtl" | "ltr"
+  string locale = 6;      // BCP-47, e.g. "fa-IR"
+}
+
+message Empty {}

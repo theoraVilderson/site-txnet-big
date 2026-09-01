@@ -1,0 +1,10 @@
+# vendored client deps / build artifacts (reference module only)
+clients/node/node_modules/
+clients/go/example/example
+codegen/go/go
+services/locale-service/locale-service
+*.log
+.generated/
+
+# ship the compiled shared client (no build step for consumers)
+!clients/node/dist/

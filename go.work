@@ -1,0 +1,8 @@
+go 1.22
+
+use (
+	./auth-handler
+	./i18n-platform/clients/go
+	./i18n-platform/codegen/go
+	./i18n-platform/services/locale-service
+)

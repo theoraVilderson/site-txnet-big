@@ -12,7 +12,7 @@
 networks:
   private_backend_network:
     external: true
-    name: private_backend_network
+    #name: private_backend_network
 
 volumes:
   registry_data:
@@ -23,7 +23,7 @@ services:
   # Docker Registry v2
   # ===========================================================================
   registry:
-    image: ${DOCKER_REGISTRY:-docker.arvancloud.ir}/registry:2
+    image: ${DOCKER_REGISTRY}/registry:2
     container_name: txnet-registry
     restart: always
     volumes:
@@ -32,9 +32,9 @@ services:
       - private_backend_network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.registry.rule=Host(`registry.${DOMAIN_NAME:-txnet.local}`)"
+      - "traefik.http.routers.registry.rule=Host(`registry.${DOMAIN_NAME}`)"
       - "traefik.http.routers.registry.entrypoints=websecure"
       - "traefik.http.routers.registry.tls.certresolver=myresolver"
       - "traefik.http.routers.registry.middlewares=registry-auth"
-      - "traefik.http.middlewares.registry-auth.basicauth.users=${REGISTRY_AUTH_USER:-admin:$$2y$$10$$P9Z6k8XpK7vQm3WnR5tYuO1aBcDeFgHiJkLmNoPqRsTuVwXyZ0123}"
+      - "traefik.http.middlewares.registry-auth.basicauth.users=${REGISTRY_AUTH_USER}:$$2y$$10$$P9Z6k8XpK7vQm3WnR5tYuO1aBcDeFgHiJkLmNoPqRsTuVwXyZ0123"
       - "traefik.http.services.registry.loadbalancer.server.port=5000"

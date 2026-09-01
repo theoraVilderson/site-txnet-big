@@ -1,12 +1,13 @@
+# Air configuration for live reload during development.
 root = "."
 tmp_dir = "tmp"
 
 [build]
 cmd = "go build -o ./tmp/main ./cmd/server"
 bin = "./tmp/main"
-include_dir = ["cmd", "internal", "pkg"]
-include_ext = ["go"]
-exclude_dir = ["tmp", "configs"]
+include_dir = ["cmd", "internal", "configs", "locales"]
+include_ext = ["go", "json"]
+exclude_dir = ["tmp"]
 delay = 1000
 
 [misc]

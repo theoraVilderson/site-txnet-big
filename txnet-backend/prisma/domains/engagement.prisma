@@ -1,0 +1,80 @@
+// بخش ده: Schema `engagement` — گردونه شانس روزانه
+// =============================================================================
+// اصل: همیشه سقف Hard-cap مالی روزانه مستقل از شانس/احتمال + Eligibility
+// سخت‌گیرانه (کاربر باید واقعاً از محصولات استفاده کرده باشد).
+
+enum SpinPrizeType {
+  wallet_credit
+  discount_coupon
+  bonus_traffic_gb
+  empty
+
+  @@schema("engagement")
+}
+
+enum SpinAttemptStatus {
+  awarded
+  voided_fraud
+  rejected_ineligible
+
+  @@schema("engagement")
+}
+
+/// 11.1 — پیکربندی گردونه + شروط Eligibility.
+model SpinWheelConfig {
+  id                                String   @id @default(uuid()) @db.Uuid
+  tenantId                          String?  @db.Uuid
+  isActive                          Boolean  @default(true)
+  dailyBudgetCapAmount              Decimal  @db.Decimal(18, 2)
+  perUserCooldownHours              Int      @default(24)
+  requiresMinAccountAgeHours        Int      @default(24)
+  requiresMinTotalPurchaseAmount    Decimal? @db.Decimal(18, 2)
+  requiresMinCompletedOrdersCount   Int?
+  requiresActiveServiceAtSpinTime   Boolean  @default(true)
+  maxSpinsPerAccountPerDay          Int      @default(1)
+
+  prizes SpinWheelPrize[]
+
+  @@index([tenantId])
+  @@map("spin_wheel_config")
+  @@schema("engagement")
+}
+
+/// 11.2 — جوایز گردونه.
+model SpinWheelPrize {
+  id                     String        @id @default(uuid()) @db.Uuid
+  wheelConfigId          String        @db.Uuid
+  label                  String
+  prizeType              SpinPrizeType
+  prizeValue             Decimal       @db.Decimal(18, 2)
+  probabilityWeight      Int
+  dailyStockLimit        Int?
+  currentDayAwardedCount Int           @default(0) // هر نیمه‌شب توسط Cron صفر می‌شود
+
+  wheelConfig SpinWheelConfig    @relation(fields: [wheelConfigId], references: [id])
+  attempts    SpinWheelAttempt[]
+
+  @@map("spin_wheel_prize")
+  @@schema("engagement")
+}
+
+/// 11.3 — هر تلاش چرخش، همراه Snapshot نتیجه هر ۷ چک Eligibility.
+model SpinWheelAttempt {
+  id                            String            @id @default(uuid()) @db.Uuid
+  userId                        String            @db.Uuid
+  deviceFingerprintId           String            @db.Uuid
+  attemptedAt                   DateTime          @default(now())
+  eligibilityCheckSnapshotJson  Json
+  prizeAwardedId                String?           @db.Uuid
+  resultWalletTransactionId     String?           @unique @db.Uuid
+  status                        SpinAttemptStatus
+
+  deviceFingerprint      DeviceFingerprint   @relation(fields: [deviceFingerprintId], references: [id])
+  prizeAwarded           SpinWheelPrize?     @relation(fields: [prizeAwardedId], references: [id])
+  resultWalletTransaction WalletTransaction? @relation(fields: [resultWalletTransactionId], references: [id])
+
+  @@map("spin_wheel_attempt")
+  @@schema("engagement")
+}
+
+// =============================================================================

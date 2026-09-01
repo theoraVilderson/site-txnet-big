@@ -1,0 +1,76 @@
+// بخش پنج: Schema `catalog` — کاتالوگ محصولات و سرویس‌ها (چندمنظوره، نه فقط VPN)
+// =============================================================================
+
+enum ServicePlanBillingModel {
+  pay_as_you_go
+  fixed_package
+  one_time
+
+  @@schema("catalog")
+}
+
+enum DiscountType {
+  percentage
+  fixed_amount
+
+  @@schema("catalog")
+}
+
+/// 4.1 — دسته‌بندی محصول؛ کلید رشته آزاد (نه Enum بسته) برای افزودن دسته
+/// جدید بدون Deploy. tenantId=null یعنی دسته‌بندی مشترک پلتفرم.
+model ProductCategory {
+  id       String  @id @default(uuid()) @db.Uuid
+  tenantId String? @db.Uuid
+  key      String  @unique // vpn, fake_member, ...
+  name     String
+  isActive Boolean @default(true)
+
+  servicePlans        ServicePlan[]
+  couponServiceScopes CouponServiceScope[]
+
+  @@index([tenantId])
+  @@map("product_category")
+  @@schema("catalog")
+}
+
+/// 4.2 — پلن سرویس؛ همه قیمت‌ها فقط در ارز پایه سیستم.
+/// tenantId=null یعنی پلن مشترک پلتفرم؛ پر یعنی قیمت‌گذاری اختصاصی یک Tenant.
+model ServicePlan {
+  id            String                  @id @default(uuid()) @db.Uuid
+  tenantId      String?                 @db.Uuid
+  categoryId    String                  @db.Uuid
+  name          String
+  billingModel  ServicePlanBillingModel
+  basePrice     Decimal?                @db.Decimal(18, 2)
+  pricePerUnit  Decimal?                @db.Decimal(18, 8) // فقط برای pay_as_you_go
+  unitLabel     String? // "GB" یا "1000 followers"
+  isActive      Boolean                 @default(true)
+  attributesJson Json // فیلدهای اختصاصی هر دسته، مثلاً {"platform": "instagram"}
+
+  category   ProductCategory        @relation(fields: [categoryId], references: [id])
+  promotions ServicePlanPromotion[]
+  configs    Config[]
+  couponServiceScopes CouponServiceScope[]
+
+  @@index([tenantId])
+  @@map("service_plan")
+  @@schema("catalog")
+}
+
+/// 4.3 — تخفیف مستقیم روی پلن، بدون کد تخفیف.
+model ServicePlanPromotion {
+  id             String       @id @default(uuid()) @db.Uuid
+  servicePlanId  String       @db.Uuid
+  discountType   DiscountType
+  discountValue  Decimal      @db.Decimal(18, 2)
+  startsAt       DateTime
+  endsAt         DateTime
+  isActive       Boolean      @default(true)
+
+  servicePlan ServicePlan @relation(fields: [servicePlanId], references: [id])
+
+  @@map("service_plan_promotion")
+  @@schema("catalog")
+}
+
+// =============================================================================

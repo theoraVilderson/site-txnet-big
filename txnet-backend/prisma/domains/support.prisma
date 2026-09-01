@@ -1,0 +1,109 @@
+// بخش یازده: Schema `support` — تیکت، چت زنده
+// =============================================================================
+
+enum TicketStatus {
+  open
+  pending
+  closed
+
+  @@schema("support")
+}
+
+enum TicketPriority {
+  low
+  medium
+  high
+  urgent
+
+  @@schema("support")
+}
+
+enum SenderType {
+  user
+  admin
+
+  @@schema("support")
+}
+
+enum ChatSessionStatus {
+  active
+  closed
+
+  @@schema("support")
+}
+
+model Ticket {
+  id              String         @id @default(uuid()) @db.Uuid
+  userId          String         @db.Uuid
+  subject         String
+  status          TicketStatus   @default(open)
+  priority        TicketPriority @default(medium)
+  assignedAdminId String?        @db.Uuid
+  createdAt       DateTime       @default(now())
+
+  messages              TicketMessage[]
+  impersonationSessions ImpersonationSession[]
+
+  @@map("ticket")
+  @@schema("support")
+}
+
+model TicketMessage {
+  id         String     @id @default(uuid()) @db.Uuid
+  ticketId   String     @db.Uuid
+  senderType SenderType
+  senderId   String     @db.Uuid
+  body       String
+  createdAt  DateTime   @default(now())
+
+  ticket      Ticket             @relation(fields: [ticketId], references: [id])
+  attachments TicketAttachment[]
+
+  @@map("ticket_message")
+  @@schema("support")
+}
+
+model TicketAttachment {
+  id              String @id @default(uuid()) @db.Uuid
+  ticketMessageId String @db.Uuid
+  fileUrl         String // Object Storage
+  mimeType        String
+
+  ticketMessage TicketMessage @relation(fields: [ticketMessageId], references: [id])
+
+  @@map("ticket_attachment")
+  @@schema("support")
+}
+
+/// چت زنده — پارتیشن ماهانه (PARTITION BY RANGE(sentAt)) روی ChatMessage،
+/// آرشیو در Object Storage قبل از DROP PARTITION (بخش ۹۹).
+model ChatSession {
+  id              String            @id @default(uuid()) @db.Uuid
+  userId          String            @db.Uuid
+  assignedAdminId String?           @db.Uuid
+  status          ChatSessionStatus @default(active)
+  startedAt       DateTime          @default(now())
+  closedAt        DateTime?
+
+  messages ChatMessage[]
+
+  @@map("chat_session")
+  @@schema("support")
+}
+
+model ChatMessage {
+  id            String     @id @default(uuid()) @db.Uuid
+  chatSessionId String     @db.Uuid
+  senderType    SenderType
+  senderId      String     @db.Uuid
+  body          String
+  sentAt        DateTime   @default(now())
+
+  chatSession ChatSession @relation(fields: [chatSessionId], references: [id])
+
+  @@index([chatSessionId, sentAt])
+  @@map("chat_message")
+  @@schema("support")
+}
+
+// =============================================================================

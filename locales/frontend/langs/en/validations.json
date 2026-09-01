@@ -1,0 +1,29 @@
+{
+  "failed": "The submitted information is invalid",
+  "fields": {
+    "fullName": {
+      "tooShort": "Name must be at least 2 characters",
+      "tooLong": "Name must not be more than 120 characters"
+    },
+    "username": {
+      "tooShort": "Username must be at least 3 characters",
+      "tooLong": "Username must not be more than 32 characters",
+      "invalidChars": "Username can only contain English letters, numbers, and underscores"
+    },
+    "phone": {
+      "invalidFormat": "Invalid mobile number format"
+    },
+    "password": {
+      "tooShort": "Password must be at least 8 characters",
+      "tooLong": "Password must not be more than 72 characters",
+      "needsLowercase": "Password must contain a lowercase English letter",
+      "needsUppercase": "Password must contain an uppercase English letter",
+      "needsDigit": "Password must contain a number",
+      "needsSpecialChar": "Password must contain a special character"
+    },
+    "otp": {
+      "invalidLength": "Verification code must be 6 digits",
+      "mustBeNumeric": "Verification code must contain only numbers"
+    }
+  }
+}

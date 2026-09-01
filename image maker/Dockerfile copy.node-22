@@ -1,0 +1,36 @@
+# =====================================================================
+# ایمیج پایه‌ی مشترک: node:22-alpine + پروکسی + میرور آلپاین + npm
+# =====================================================================
+FROM registry.mytxnet.ir/node:22
+
+
+# --- ۱. میرور آلپاین رو عوض کن (قبل از هر apk add دیگه‌ای) ---
+# فایل repositories رو کامل بازنویسی می‌کنیم تا هیچ‌وقت سراغ
+
+# --- ۲. اعتماد به گواهی 3eora-mitm-proxy ---
+
+# set signiture for alpine
+COPY ./pki/alpine-signing-key.pub /etc/apk/keys/key-35ef9ba0.rsa.pub
+
+RUN ALPINE_VER=$(cut -d'.' -f1,2 /etc/alpine-release) && \
+    echo "Detected Alpine version: v${ALPINE_VER}" && \
+    echo "http://packages.mytxnet.ir/repository/alpine-mirror/v${ALPINE_VER}/main" > /etc/apk/repositories && \
+    echo "http://packages.mytxnet.ir/repository/alpine-mirror/v${ALPINE_VER}/community" >> /etc/apk/repositories && \
+    cat /etc/apk/repositories
+
+RUN apk update 
+RUN apk add --no-cache ca-certificates
+
+# set cert for proxy request
+COPY ./pki/ca.crt /usr/local/share/ca-certificates/3eora-mitm-proxy-ca.crt
+RUN update-ca-certificates
+
+ENV HTTP_PROXY=http://172.22.100.10:8673 \
+    HTTPS_PROXY=http://172.22.100.10:8673 \
+    NO_PROXY=registry.mytxnet.ir,packages.mytxnet.ir,localhost,127.0.0.1 \
+    http_proxy=http://172.22.100.10:8673 \
+    https_proxy=http://172.22.100.10:8673 \
+    no_proxy=registry.mytxnet.ir,packages.mytxnet.ir,localhost,127.0.0.1 \
+    NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/3eora-mitm-proxy-ca.crt
+
+ENV npm_config_registry=https://packages.mytxnet.ir/repository/npm-packages/

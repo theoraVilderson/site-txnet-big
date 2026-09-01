@@ -1,0 +1,212 @@
+// بخش یک: Schema `identity` — هویت، احراز هویت، دسترسی
+// =============================================================================
+
+enum UserStatus {
+  active
+  banned
+  suspended
+
+  @@schema("identity")
+}
+
+enum ThemePreference {
+  light
+  dark
+  system
+
+  @@schema("identity")
+}
+
+enum Language {
+  fa
+  en
+
+  @@schema("identity")
+}
+
+enum SessionRevokedReason {
+  user_logout
+  password_change
+  admin_ban
+  expired
+  impersonation_ended // پایان نشست ورود ادمین به‌جای کاربر بدون credential
+
+  @@schema("identity")
+}
+
+enum SocialPlatform {
+  telegram
+  bale
+
+  @@schema("identity")
+}
+
+enum OtpPurpose {
+  login
+  register_phone_verify
+  password_reset
+
+  @@schema("identity")
+}
+
+enum OtpChannel {
+  sms
+  bale     // از طریق ربات بله، نیازمند LinkedBotAccount از پیش تایید‌شده
+  telegram // از طریق ربات تلگرام، نیازمند LinkedBotAccount از پیش تایید‌شده
+
+  @@schema("identity")
+}
+
+/// 1.1 — هسته اصلی سیستم.
+model User {
+  id                     String     @id @default(uuid()) @db.Uuid
+  tenantId               String     @db.Uuid // FK -> tenant.Tenant.id | کلید پارتیشن اصلی چندمستأجری؛ پیش‌فرض اپلیکیشنی = رکورد platform_owner
+  fullName               String
+  username               String?    @unique
+  phoneNumber            String?    @unique
+  phoneVerifiedAt        DateTime? // تا زمانی که null است، حساب نیمه‌فعال محسوب می‌شود
+  passwordHash           String // SENSITIVE — never default-select
+  roleId                 String     @db.Uuid
+  status                 UserStatus @default(active)
+  theme                  ThemePreference @default(system)
+  languagePreference     Language   @default(fa)
+  twoFactorEnabled       Boolean    @default(false)
+  twoFactorSecret        String? // SENSITIVE — never default-select
+  // کانال پیش‌فرض دریافت OTP کاربر (قابل override به‌ازای هر درخواست).
+  // null یعنی فالبک به sms در AuthService.resolveOtpChannel.
+  // مقداردهی/تغییرش باید فقط از طریق endpoint تنظیمات پروفایل انجام شود،
+  // و اگر bale/telegram انتخاب شود باید LinkedBotAccount متناظر از قبل موجود باشد
+  // (این اعتبارسنجی در سطح سرویس انجام می‌شود، نه در schema).
+  preferredOtpChannel    OtpChannel? 
+  referredByUserId       String?    @db.Uuid
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // Soft Delete اجباری
+
+  // ── Relations ──────────────────────────────────────────────────────────
+  tenant       Tenant  @relation("TenantUsers", fields: [tenantId], references: [id])
+  role         Role    @relation(fields: [roleId], references: [id])
+  referredBy   User?   @relation("UserReferrals", fields: [referredByUserId], references: [id])
+  referrals    User[]  @relation("UserReferrals")
+
+  sessions             Session[]             @relation("SessionOwner")
+  sessionsSwitchedFrom Session[]             @relation("SessionSwitchedFrom")
+  linkedBotAccounts    LinkedBotAccount[]
+  currencyPreference   UserCurrencyPreference?
+  wallet               Wallet?
+  deviceFingerprints   DeviceFingerprint[]
+  otpCodes             OtpCode[]
+
+  @@index([tenantId])
+  @@map("user")
+  @@schema("identity")
+}
+
+/// 1.2 — مدیریت نشست‌های فعال.
+model Session {
+  id                      String                @id @default(uuid()) @db.Uuid
+  userId                  String                @db.Uuid
+  refreshTokenHash        String                @unique // خود توکن هرگز ذخیره نمی‌شود، فقط هش
+  ipAddress               String
+  userAgent               String
+  deviceLabel             String?
+  issuedAt                DateTime              @default(now())
+  expiresAt               DateTime
+  revokedAt               DateTime?
+  revokedReason           SessionRevokedReason?
+  isImpersonated          Boolean               @default(false)
+  impersonationSessionId  String?               @db.Uuid
+  switchedFromUserId      String?               @db.Uuid
+
+  user                 User                  @relation("SessionOwner", fields: [userId], references: [id])
+  switchedFromUser     User?                 @relation("SessionSwitchedFrom", fields: [switchedFromUserId], references: [id])
+  impersonationSession ImpersonationSession? @relation(fields: [impersonationSessionId], references: [id])
+
+  // منطق حیاتی: با تغییر رمز، همه‌ی Sessionهای این userId باید در همان
+  // Transaction با revokedAt=now() به‌روزرسانی شوند (Force Logout همه دستگاه‌ها).
+  @@index([userId])
+  @@map("session")
+  @@schema("identity")
+}
+
+/// 1.3 — RBAC داینامیک.
+model Role {
+  id           String  @id @default(uuid()) @db.Uuid
+  name         String  @unique
+  isSystemRole Boolean @default(false) // نقش‌های پایه قابل حذف نیستند
+
+  users           User[]
+  rolePermissions RolePermission[]
+
+  @@map("role")
+  @@schema("identity")
+}
+
+model Permission {
+  id   String @id @default(uuid()) @db.Uuid
+  key  String @unique // مثل wallet.manual_adjust, gateway.toggle, user.impersonate
+
+  rolePermissions RolePermission[]
+
+  @@map("permission")
+  @@schema("identity")
+}
+
+model RolePermission {
+  roleId       String @db.Uuid
+  permissionId String @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+  @@map("role_permission")
+  @@schema("identity")
+}
+
+/// 1.3.5 — کدهای یک‌بارمصرف (OTP). این جدول فقط برای تاریخچه/حسابرسی و
+/// fallback است؛ منبع حقیقت برای چک سریع/TTL و Rate Limit همیشه Redis است
+/// (کلید atomic INCR جلوی race condition درخواست هم‌زمان چند OTP را می‌گیرد).
+model OtpCode {
+  id          String     @id @default(uuid()) @db.Uuid
+  userId      String?    @db.Uuid // در register_phone_verify ممکن است هنوز User نهایی نشده باشد
+  phoneNumber String
+  codeHash    String // خود کد هرگز plain ذخیره نمی‌شود، فقط هش (مثل رمز عبور)
+  purpose     OtpPurpose
+  channel     OtpChannel @default(sms)
+  attemptCount Int       @default(0)
+  maxAttempts  Int       @default(5)
+  requestIp    String
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  // برای پیدا کردن سریع "آخرین OTP فعال" یک شماره برای یک هدف خاص
+  @@index([phoneNumber, purpose, consumedAt])
+  @@map("otp_code")
+  @@schema("identity")
+}
+
+/// 1.4 — اتصال حساب کاربری به تلگرام/بله (کانال ارتباطی کاربر با پلتفرم،
+/// نه با یک Tenant — برای اتصال بات یک Tenant به tenant.TenantBotIntegration مراجعه کنید).
+/// همین مدل منبع chatId برای ارسال OTP از طریق bale/telegram است
+/// (به BaleOtpSender / TelegramOtpSender در auth-service مراجعه کنید).
+model LinkedBotAccount {
+  id             String         @id @default(uuid()) @db.Uuid
+  userId         String         @db.Uuid
+  platform       SocialPlatform
+  platformUserId String // Chat ID
+  linkedAt       DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  // برای جستجوی سریع «آیا این شماره به bale/telegram لینک شده؟» توسط OTP senders
+  @@unique([userId, platform])
+  @@map("linked_bot_account")
+  @@schema("identity")
+}
+
+// =============================================================================

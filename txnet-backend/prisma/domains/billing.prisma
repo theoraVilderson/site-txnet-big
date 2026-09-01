@@ -1,0 +1,408 @@
+// بخش هفت: Schema `billing` — بخش الف: کیف پول و ساب‌اکانت
+// =============================================================================
+// اصل طلایی: هیچ‌وقت موجودی رو مستقیم UPDATE نکن — همیشه Ledger بساز.
+
+enum LedgerDirection {
+  credit
+  debit
+
+  @@schema("billing")
+}
+
+enum WalletReasonType {
+  payment_gateway
+  coupon_redemption
+  traffic_consumption
+  admin_manual_adjust
+  affiliate_commission
+  sub_account_charge
+  wallet_transfer_in
+  wallet_transfer_out
+
+  @@schema("billing")
+}
+
+enum TransferStatus {
+  pending_otp
+  confirmed
+  cancelled
+  expired
+
+  @@schema("billing")
+}
+
+enum CouponVisibility {
+  public
+  targeted
+
+  @@schema("billing")
+}
+
+enum RedemptionStatus {
+  pending
+  confirmed
+  expired
+  cancelled
+
+  @@schema("billing")
+}
+
+enum PaymentProviderName {
+  zarinpal
+  idpay
+  nowpayments
+  stripe
+
+  @@schema("billing")
+}
+
+enum GatewayCategory {
+  domestic_rial
+  international_card
+  crypto
+
+  @@schema("billing")
+}
+
+enum FeeCalcMode {
+  manual
+  automatic
+
+  @@schema("billing")
+}
+
+enum FeeType {
+  fixed
+  percentage
+
+  @@schema("billing")
+}
+
+enum ConfirmationMode {
+  automatic
+  manual_admin_required
+
+  @@schema("billing")
+}
+
+enum PaymentStatus {
+  pending
+  success
+  failed
+  expired
+
+  @@schema("billing")
+}
+
+enum ConfirmationSource {
+  webhook_auto
+  reconciliation_auto
+  admin_manual
+
+  @@schema("billing")
+}
+
+enum ReconciliationAction {
+  auto_confirmed
+  no_action_needed
+  flagged_mismatch
+
+  @@schema("billing")
+}
+
+enum CryptoAsset {
+  USDT
+  BTC
+  ETH
+
+  @@schema("billing")
+}
+
+enum CryptoNetwork {
+  TRC20
+  ERC20
+  BEP20
+  Bitcoin
+
+  @@schema("billing")
+}
+
+enum CommissionStatus {
+  pending
+  paid
+
+  @@schema("billing")
+}
+
+/// 6.1 — کیف‌پول کاربر؛ cachedBalance فقط Cache است، منبع حقیقت
+/// WalletTransaction است.
+model Wallet {
+  id            String  @id @default(uuid()) @db.Uuid
+  ownerUserId   String  @unique @db.Uuid
+  cachedBalance Decimal @default(0) @db.Decimal(18, 2)
+  version       Int     @default(0) // Optimistic Locking
+
+  owner        User               @relation(fields: [ownerUserId], references: [id])
+  transactions WalletTransaction[]
+  subAccounts  SubAccount[]
+
+  @@map("wallet")
+  @@schema("billing")
+}
+
+/// 6.2 — Append-only؛ تاریخچه کامل مثل صورت‌حساب بانکی.
+model WalletTransaction {
+  id           String            @id @default(uuid()) @db.Uuid
+  walletId     String            @db.Uuid
+  tenantId     String?           @db.Uuid // denormalized indexed برای گزارش/فیلتر سریع Tenant
+  amount       Decimal           @db.Decimal(18, 2) // همیشه مثبت
+  direction    LedgerDirection
+  reasonType   WalletReasonType
+  referenceId  String?           @db.Uuid
+  balanceAfter Decimal           @db.Decimal(18, 2)
+  createdAt    DateTime          @default(now())
+
+  wallet                Wallet                 @relation(fields: [walletId], references: [id])
+  affiliateCommission   AffiliateCommission?
+  spinWheelAttempt      SpinWheelAttempt?
+
+  @@index([walletId, createdAt(sort: Desc)])
+  @@index([tenantId])
+  @@map("wallet_transaction")
+  @@schema("billing")
+}
+
+/// 6.3 — کیف پول اشتراکی (Sub-account) روی یک Config مشخص.
+model SubAccount {
+  id              String  @id @default(uuid()) @db.Uuid
+  parentWalletId  String  @db.Uuid
+  configId        String  @unique @db.Uuid
+  label           String
+  dataCapBytes    BigInt
+  consumedBytes   BigInt  @default(0)
+  isActive        Boolean @default(true)
+
+  parentWallet Wallet @relation(fields: [parentWalletId], references: [id])
+  config       Config @relation(fields: [configId], references: [id])
+
+  @@map("sub_account")
+  @@schema("billing")
+}
+
+/// 6.4 — انتقال کیف پول بین کاربران با تأیید OTP (اتمیک).
+model WalletTransferRequest {
+  id               String         @id @default(uuid()) @db.Uuid
+  senderUserId     String         @db.Uuid
+  receiverUserId   String         @db.Uuid
+  amount           Decimal        @db.Decimal(18, 2)
+  note             String?
+  status           TransferStatus @default(pending_otp)
+  otpCodeHash      String // SENSITIVE — never default-select
+  otpExpiresAt     DateTime
+  otpAttemptCount  Int            @default(0) // بعد از ۵ تلاش → cancelled
+  createdAt        DateTime       @default(now())
+  confirmedAt      DateTime?
+
+  @@map("wallet_transfer_request")
+  @@schema("billing")
+}
+
+/// موتور کوپن — Coupon
+model Coupon {
+  id                  String            @id @default(uuid()) @db.Uuid
+  tenantId            String?           @db.Uuid // null = کوپن سراسری پلتفرم
+  code                String            @unique
+  discountType        DiscountType
+  discountValue       Decimal           @db.Decimal(18, 2)
+  maxDiscountCap      Decimal?          @db.Decimal(18, 2) // فقط برای درصدی
+  minPurchaseAmount   Decimal?          @db.Decimal(18, 2)
+  totalUsageLimit     Int? // null = نامحدود
+  perUserUsageLimit   Int               @default(1)
+  usedCount           Int               @default(0)
+  reservedCount       Int               @default(0)
+  expiresAt           DateTime?
+  isActive            Boolean           @default(true)
+  visibility          CouponVisibility  @default(public)
+  createdByAdminId    String            @db.Uuid
+
+  serviceScopes CouponServiceScope[]
+  allowedUsers  CouponAllowedUser[]
+  redemptions   CouponRedemption[]
+
+  @@map("coupon")
+  @@schema("billing")
+}
+
+/// اسکوپ کوپن روی یک پلن یا یک دسته؛ نبود رکورد یعنی Open Scope.
+model CouponServiceScope {
+  id            String  @id @default(uuid()) @db.Uuid
+  couponId      String  @db.Uuid
+  servicePlanId String? @db.Uuid
+  categoryId    String? @db.Uuid
+
+  coupon      Coupon           @relation(fields: [couponId], references: [id])
+  servicePlan ServicePlan?     @relation(fields: [servicePlanId], references: [id])
+  category    ProductCategory? @relation(fields: [categoryId], references: [id])
+
+  @@map("coupon_service_scope")
+  @@schema("billing")
+}
+
+/// کوپن هدفمند (visibility=targeted)؛ صدور برای N نفر = N رکورد Bulk Insert.
+model CouponAllowedUser {
+  id       String @id @default(uuid()) @db.Uuid
+  couponId String @db.Uuid
+  userId   String @db.Uuid
+
+  coupon Coupon @relation(fields: [couponId], references: [id])
+
+  @@index([couponId, userId])
+  @@map("coupon_allowed_user")
+  @@schema("billing")
+}
+
+/// State Machine دومرحله‌ای آزادسازی کوپن معلق (pending→confirmed/expired/cancelled).
+model CouponRedemption {
+  id                       String           @id @default(uuid()) @db.Uuid
+  couponId                 String           @db.Uuid
+  userId                   String           @db.Uuid
+  status                   RedemptionStatus @default(pending)
+  paymentTransactionId     String?          @db.Uuid
+  discountAppliedAmount    Decimal          @db.Decimal(18, 2)
+  orderReferenceId         String           @db.Uuid
+  redeemedAt               DateTime         @default(now())
+
+  coupon             Coupon              @relation(fields: [couponId], references: [id])
+  paymentTransaction PaymentTransaction? @relation(fields: [paymentTransactionId], references: [id])
+
+  // یونیک (couponId, userId) وقتی perUserUsageLimit=1 خودِ دیتابیس جلوی
+  // مصرف دوباره را می‌گیرد.
+  @@unique([couponId, userId])
+  @@map("coupon_redemption")
+  @@schema("billing")
+}
+
+/// 8.1 — تعریف درگاه پرداخت پلتفرم (فقط برای برند خودِ شما،
+/// tenantType=platform_owner؛ Resellerها همیشه از tenant.TenantGatewayConfig استفاده می‌کنند).
+model PaymentGateway {
+  id                  String           @id @default(uuid()) @db.Uuid
+  displayName         String
+  description         String?
+  providerName        PaymentProviderName
+  gatewayCategory     GatewayCategory
+  supportedCurrencies Json // Array مثل ["USD","EUR"] یا ["USDT","BTC"]
+  isActive            Boolean          @default(true)
+  merchantId          String // SENSITIVE — never default-select
+  taxRatePercent      Decimal          @default(10) @db.Decimal(5, 2)
+  minAcceptAmount     Decimal          @db.Decimal(18, 2)
+  maxAcceptAmount     Decimal          @db.Decimal(18, 2)
+  feeCalculationMode  FeeCalcMode
+  feeType             FeeType
+  feeValue            Decimal          @db.Decimal(18, 4)
+  feeFloor            Decimal?         @db.Decimal(18, 2)
+  feeCeiling          Decimal?         @db.Decimal(18, 2)
+  confirmationMode    ConfirmationMode @default(automatic)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  transactions PaymentTransaction[]
+
+  @@map("payment_gateway")
+  @@schema("billing")
+}
+
+/// 8.2 — تراکنش پرداخت با دو خط دفاعی تأیید (Webhook + Reconciliation)
+/// به‌علاوه Fallback تأیید دستی ادمین.
+model PaymentTransaction {
+  id                    String              @id @default(uuid()) @db.Uuid
+  tenantId              String?             @db.Uuid // denormalized indexed
+  userId                String              @db.Uuid
+  gatewayId             String              @db.Uuid
+  amountRequested       Decimal             @db.Decimal(18, 2)
+  feeApplied            Decimal             @db.Decimal(18, 2)
+  status                PaymentStatus       @default(pending)
+  gatewayTrackingCode   String?
+  couponId              String?             @db.Uuid
+  confirmationSource    ConfirmationSource?
+  confirmedByAdminId    String?             @db.Uuid
+  manualConfirmReason   String? // اجباری در سطح اپلیکیشن اگر confirmationSource=admin_manual
+  createdAt             DateTime            @default(now())
+  expiresAt             DateTime? // معمولاً now()+15min
+
+  gateway                 PaymentGateway            @relation(fields: [gatewayId], references: [id])
+  couponRedemptions       CouponRedemption[]
+  reconciliationLogs      PaymentReconciliationLog[]
+  cryptoDetail            CryptoPaymentDetail?
+  affiliateCommissions    AffiliateCommission[]
+
+  @@index([tenantId])
+  @@index([status, expiresAt])
+  @@map("payment_transaction")
+  @@schema("billing")
+}
+
+/// 8.3 — خط دوم دفاع: Reconciliation Worker (Inquiry API خودِ درگاه).
+model PaymentReconciliationLog {
+  id                    String               @id @default(uuid()) @db.Uuid
+  paymentTransactionId  String               @db.Uuid
+  checkedAt             DateTime             @default(now())
+  gatewayReportedStatus String // پاسخ خام Inquiry API درگاه
+  actionTaken           ReconciliationAction
+  notes                 String?
+
+  paymentTransaction PaymentTransaction @relation(fields: [paymentTransactionId], references: [id])
+
+  @@map("payment_reconciliation_log")
+  @@schema("billing")
+}
+
+/// 8.4 — جزئیات پرداخت کریپتو؛ exchangeRateSnapshot هرگز بعداً بر اساس
+/// نرخ روز حساب نمی‌شود.
+model CryptoPaymentDetail {
+  id                       String        @id @default(uuid()) @db.Uuid
+  paymentTransactionId     String        @unique @db.Uuid
+  cryptoAsset              CryptoAsset
+  network                  CryptoNetwork
+  depositAddress           String
+  requiredConfirmations    Int
+  receivedConfirmations    Int           @default(0)
+  exchangeRateSnapshot     Decimal       @db.Decimal(18, 8)
+  txHash                   String?
+
+  paymentTransaction PaymentTransaction @relation(fields: [paymentTransactionId], references: [id])
+
+  @@map("crypto_payment_detail")
+  @@schema("billing")
+}
+
+/// 8.5 — سیستم Affiliate؛ جدا از User.referredByUserId چون باید تاریخچه
+/// کامل واریزها را با وضعیت جدا نگه دارد.
+model AffiliateReferral {
+  id               String   @id @default(uuid()) @db.Uuid
+  referrerUserId   String   @db.Uuid
+  referredUserId   String   @db.Uuid
+  signedUpAt       DateTime @default(now())
+
+  commissions AffiliateCommission[]
+
+  @@map("affiliate_referral")
+  @@schema("billing")
+}
+
+model AffiliateCommission {
+  id                       String            @id @default(uuid()) @db.Uuid
+  referralId               String            @db.Uuid
+  triggeringPaymentId      String            @db.Uuid
+  commissionAmount         Decimal           @db.Decimal(18, 2)
+  status                   CommissionStatus  @default(pending)
+  payoutWalletTransactionId String?          @unique @db.Uuid
+
+  referral            AffiliateReferral   @relation(fields: [referralId], references: [id])
+  triggeringPayment   PaymentTransaction  @relation(fields: [triggeringPaymentId], references: [id])
+  payoutTransaction   WalletTransaction?  @relation(fields: [payoutWalletTransactionId], references: [id])
+
+  @@map("affiliate_commission")
+  @@schema("billing")
+}
+
+// =============================================================================

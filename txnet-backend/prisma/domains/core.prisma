@@ -1,0 +1,41 @@
+// =============================================================================
+// TXNet — Prisma Schema (نسخه ادغام‌شده: معماری کامل دیتابیس + لایه چندمستأجری)
+// =============================================================================
+// این فایل مستقیماً از سند «TXNet-Merged-Architecture-and-Multitenant.md»
+// استخراج شده و تمام ۱۴ Schema (identity → ai) را به همان ترتیب وابستگی که
+// در سند مشخص شده پیاده‌سازی می‌کند:
+//
+//   ۱. identity  ۲. tenant  ۳. fraud  ۴. currency  ۵. catalog  ۶. network
+//   ۷. billing   ۸. governance  ۹. automation  ۱۰. engagement  ۱۱. support
+//   ۱۲. notification  ۱۳. audit  ۱۴. ai
+//
+// نکات مهم قبل از استفاده:
+// ─────────────────────────
+// ۱. از ویژگی multiSchema پریزما استفاده شده تا الگوی «Shared Database,
+//    Separate Schemas» که در بخش ۰.۱ سند انتخاب شده دقیقاً پیاده شود.
+// ۲. مواردی که Prisma به‌صورت Native پشتیبانی نمی‌کند (Row-Level Security،
+//    Native Partitioning، CHECK Constraint چندستونه، Partial Index) در
+//    انتهای فایل به‌صورت SQL آماده Migration دستی (بخش «۹۹. یادداشت‌های
+//    زیرساختی») آورده شده‌اند — دقیقاً بر اساس بخش‌های ح و ۱۸ سند اصلی.
+// ۳. فیلدهایی که در سند با `select: false` مشخص شده‌اند (مثل passwordHash،
+//    twoFactorSecret، otpCodeHash، merchantId، پیکربندی‌های رمزنگاری‌شده)
+//    در پریزما معادل مستقیم ندارند؛ باید در لایه Repository/Service با
+//    `select`/`omit` صریح از برگشت پیش‌فرض این فیلدها جلوگیری شود. در کنار
+//    هر فیلد چنین کامنتی گذاشته شده: `// SENSITIVE — never default-select`.
+// ۴. تمام مبالغ مالی طبق «قانون طلایی» بخش ۳ سند، فقط در ارز پایه سیستم و
+//    با Decimal ذخیره ذخیره می‌شوند؛ هیچ فیلد Currency جداگانه‌ای روی جدول‌های
+//    مالی وجود ندارد.
+// ۵. الگوی Ledger (Append-only) برای Wallet/TenantBillingWallet دقیقاً
+//    پیاده شده: هرگز موجودی مستقیم UPDATE نمی‌شود، فقط `cachedBalance` به
+//    عنوان Cache نگه داشته می‌شود و منبع حقیقت جدول Transaction است.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["identity", "tenant", "fraud", "currency", "catalog", "network", "billing", "governance", "automation", "engagement", "support", "notification", "audit", "ai"]
+}

@@ -1,0 +1,115 @@
+// بخش چهارده: Schema `ai` — زیرساخت هوش مصنوعی توصیه‌گر با Guardrail مالی
+// =============================================================================
+
+enum BehaviorEventType {
+  low_balance
+  config_expiring_soon
+  usage_spike
+  ticket_opened
+  payment_failed
+  spin_wheel_played
+  coupon_viewed_not_redeemed
+  long_inactive
+
+  @@schema("ai")
+}
+
+enum RecommendationType {
+  renew_plan
+  buy_addon_gb
+  apply_coupon
+  upgrade_package
+  retention_offer
+
+  @@schema("ai")
+}
+
+enum RecommendationStatus {
+  proposed
+  shown_to_user
+  accepted
+  dismissed
+  expired
+  blocked_by_guardrail
+
+  @@schema("ai")
+}
+
+enum GuardrailRuleType {
+  max_discount_percent_per_recommendation
+  max_daily_discount_budget_total
+  max_recommendations_per_user_per_day
+  min_confidence_threshold
+
+  @@schema("ai")
+}
+
+enum GuardrailAction {
+  recommendation_blocked
+  recommendation_capped
+  escalated_to_admin_review
+
+  @@schema("ai")
+}
+
+/// پارتیشن ماهانه، حجم بالا — رفتار کاربر برای موتور پیشنهادگر.
+model UserBehaviorEvent {
+  id           BigInt            @id @default(autoincrement())
+  userId       String            @db.Uuid
+  eventType    BehaviorEventType
+  eventPayload Json
+  occurredAt   DateTime          @default(now())
+
+  @@index([userId])
+  @@index([occurredAt])
+  @@map("user_behavior_event")
+  @@schema("ai")
+}
+
+model AIRecommendation {
+  id                        String                @id @default(uuid()) @db.Uuid
+  userId                    String                @db.Uuid
+  recommendationType        RecommendationType
+  suggestedPayload          Json
+  confidenceScore           Decimal               @db.Decimal(5, 4)
+  estimatedRevenueImpact    Decimal?              @db.Decimal(18, 2)
+  estimatedCostImpact       Decimal?              @db.Decimal(18, 2)
+  status                    RecommendationStatus  @default(proposed)
+  generatedByBotWorkerId    String?               @db.Uuid
+  generatedAt               DateTime              @default(now())
+
+  guardrailViolations AIGuardrailViolationLog[]
+
+  @@map("ai_recommendation")
+  @@schema("ai")
+}
+
+model AIGuardrailRule {
+  id             String            @id @default(uuid()) @db.Uuid
+  ruleName       String
+  ruleType       GuardrailRuleType
+  thresholdValue Decimal           @db.Decimal(18, 4)
+  isActive       Boolean           @default(true)
+
+  violations AIGuardrailViolationLog[]
+
+  @@map("ai_guardrail_rule")
+  @@schema("ai")
+}
+
+model AIGuardrailViolationLog {
+  id              String          @id @default(uuid()) @db.Uuid
+  recommendationId String         @db.Uuid
+  ruleId          String          @db.Uuid
+  violatedValue   Decimal         @db.Decimal(18, 4)
+  actionTaken     GuardrailAction
+  occurredAt      DateTime        @default(now())
+
+  recommendation AIRecommendation @relation(fields: [recommendationId], references: [id])
+  rule           AIGuardrailRule  @relation(fields: [ruleId], references: [id])
+
+  @@map("ai_guardrail_violation_log")
+  @@schema("ai")
+}
+
+// =============================================================================
