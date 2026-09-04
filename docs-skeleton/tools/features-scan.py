@@ -46,6 +46,14 @@ ENTITY_RE = re.compile(r"^([A-Z][A-Za-z0-9]+)\(")
 errors: list[str] = []
 warnings: list[str] = []
 
+# a cell may legally contain an escaped pipe: `tenant \| platform`. Splitting on
+# every "|" would cut a row mid-sentence and shift every column after it.
+CELL_SPLIT = re.compile(r"(?<!\\)\|")
+
+
+def cells_of(row: str) -> list[str]:
+    return [c.strip() for c in CELL_SPLIT.split(row.strip().strip("|"))]
+
 
 def catalog_files():
     if not FEATURES_DIR.exists():
@@ -89,7 +97,7 @@ def parse(path: Path):
             if not raw.lstrip().startswith("|"):
                 cols = {}          # a non-table line ends the current table
                 continue
-            cells = [c.strip() for c in raw.strip().strip("|").split("|")]
+            cells = cells_of(raw)
             if all(set(c) <= set("-: ") for c in cells if c):
                 continue           # the |---|---| separator
 
@@ -116,13 +124,14 @@ def parse(path: Path):
                 note = cells[4] if len(cells) > 4 else ""
             # status is the FIRST word; "new ⭐", "changed (see C-09)", "new (§24)"
             # all normalise to the bare token. Anything after it is commentary.
-            m_st = re.match(r"[*`\s]*([A-Za-z_-]+)", status)
-            status = m_st.group(1).lower() if m_st else ""
-            features.append({
+            raw_status = status                 # keep the cell verbatim: the
+            m_st = re.match(r"[*`\s]*([A-Za-z_-]+)", status)   # reference is
+            status = m_st.group(1).lower() if m_st else ""     # often in here,
+            features.append({                                  # as "changed (C-10)"
                 "id": fid,
                 "feature": feat.replace("**", "").replace("`", "").strip(),
                 "status": STATUS_ALIASES.get(status, status),
-                "raw_status": status,
+                "raw_status": raw_status,
                 "depends_on": FID_RE.findall(deps),
                 "note": note if note else (deps if not FID_RE.search(deps) else ""),
                 "block": b,
@@ -153,7 +162,7 @@ def backlog_ids() -> set[str]:
     for line in BACKLOG.read_text(encoding="utf-8").splitlines():
         if not line.startswith("|"):
             continue
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        cells = cells_of(line)
         lower = [c.lower() for c in cells]
         if "spec ref" in lower or "spec" in lower:
             col = lower.index("spec ref") if "spec ref" in lower else lower.index("spec")
@@ -240,11 +249,16 @@ def check(blocks, features):
         elif f["status"] not in STATUSES:
             errors.append(f"{f['id']}: invalid status '{f['raw_status']}' "
                           f"(allowed: {', '.join(sorted(STATUSES))})")
-        if f["status"] == "changed" and not re.search(r"\bC-\d{2}\b", f["note"]):
-            warn("status 'changed' with no C-nn cited in note", f["id"])
-        if " and " in f["feature"].lower() and len(f["feature"]) > 90:
-            warn("long feature text containing 'and' — check for a hidden epic",
+        # a reversal must name what it reverses — a resolved conflict (C-nn) or
+        # a foundational decision (D-nn). Look at the whole row: catalogs often
+        # put the reference in the status cell, as "changed (C-11)".
+        if f["status"] == "changed" and not re.search(
+                r"\b[CD]-\d{2}\b", f"{f['raw_status']} {f['note']} {f['feature']}"):
+            warn("status 'changed' but names no C-nn / D-nn — what was reversed?",
                  f["id"])
+        if " and " in f["feature"].lower() and len(f["feature"]) > 90:
+            warn("compound feature — at INGEST, split it into backlog sub-items "
+                 "(§6d.5). Not a catalog defect; do not edit the catalog", f["id"])
 
     for f in features:
         for d in f["depends_on"]:

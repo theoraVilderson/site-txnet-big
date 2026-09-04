@@ -770,7 +770,8 @@ GET https://<sub-domain-of-tenant>/sub/{subscriptionToken}
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
 | F-105 | **Automatic subscription-link domain rotation** — the `/sub` response includes a list of alternate domains and a short `Profile-Update-Interval` | new ⭐ |
 | F-106 | **Emergency broadcast** — when a domain goes unhealthy, the new link is immediately pushed to all of that tenant's users via the bot             | new    |
-| F-115 | "Always-warm standby domain" path — a standby pre-issued and pre-tested, switchover under a minute                                               | new    |
+
+**Also relevant here, defined elsewhere:** F-115 §13.1.
 
 The most important item here is F-105: client apps cache the link; if that domain dies, the user is orphaned. And the only channel that still works when the domain is dead is the **bot** (F-106).
 
@@ -994,7 +995,6 @@ Bale is a subset of Telegram, not a copy of it. Code assuming they're identical 
 | F-304  | Catalog, variant selection, invoicing, and payment inside the bot                   | new       |
 | F-305  | **One-click renewal and top-up on the same Grant**                                  | new ⭐    |
 | F-306  | Wallet: top-up, balance, transaction history, invoices                              | new       |
-| F-307  | Config management: link, QR, per-app deep link, token rotation, reset               | new       |
 | F-308  | Usage chart as a **rendered image** in the bot                                      | new       |
 | F-309  | Two-way support ticket with attachments inside the bot                              | new       |
 | F-310  | **Mini App / WebApp** — the same PWA inside Telegram, sharing a session             | new       |
@@ -1004,8 +1004,9 @@ Bale is a subset of Telegram, not a copy of it. Code assuming they're identical 
 | F-314  | Login deep links: `?start=buy_<sku>` / `?start=ref_<code>` / `?start=trial`         | new       |
 | F-318  | Channel-membership gate for claiming a free trial                                   | new       |
 | F-319  | Per-user notification settings inside the bot                                       | new       |
-| F-405  | "My connection isn't working" button                                                | new       |
 | F-1531 | Daily/weekly business summary for the reseller in the bot                           | new (§24) |
+
+**Also relevant here, defined elsewhere:** F-307 §7.8 · F-405 §7.7.
 
 An Iranian reseller works from a phone. If the management panel only exists on the web, half their work doesn't get done.
 
@@ -1135,10 +1136,10 @@ TenantDomain(host, purpose, state, verificationToken, status, tlsStatus,
 | ----- | -------------------------------------------------------------------------------------------------------- | ------ | --------------------------------------------------------- |
 | F-103 | Domain health probing **from inside Iran** (multiple ISPs: Hamrah-e Avval, Irancell, Shatel, Mokhaberat) | new    | Detect filtering before a user files a ticket             |
 | F-104 | Block-type detection: DNS poisoning, SNI block, IP block, RST injection                                  | new    | Each has a different fix                                  |
-| F-105 | Automatic domain rotation in the subscription response                                                   | new ⭐ | §7.6                                                      |
-| F-106 | Emergency broadcast of a new domain via the bot                                                          | new    | The only channel that still works when the domain is dead |
 | F-110 | An IP pool with per-tenant allocation and rotation; controllable IP neighborhood                         | new    | A shared IP means one blocked tenant blocks everyone      |
 | F-112 | Email, webhooks, and outbound links sent from the tenant's own domain                                    | new    | Brand leakage and correlated risk                         |
+
+**Also relevant here, defined elsewhere:** F-105 §7.6 · F-106 §7.6.
 
 ### 13.4 Anti-Fingerprinting
 
@@ -1378,12 +1379,10 @@ Every `User`, `Grant`, `Conversation`, `Campaign`, and `Panel` has a `resellerPa
 | F-901 | Reseller hierarchy (at least 2 levels, tree model from day one)    | new ⭐ | the #1 ask in the Iranian market and a direct plan upsell                                                 |
 | F-902 | Reseller credit balance, separate from the user wallet             | new    | `reseller_credit` account in the `tenant_billing` tree                                                    |
 | F-903 | Reseller pricing: multiplier or dedicated price list               | new    | The multiplier applies to the **dollar** price, before FX conversion                                      |
-| F-904 | Reseller caps: user count, volume, max allowed discount            | new    | via the same `checkLimit`                                                                                 |
 | F-905 | Reseller profit report and **internal settlement** (no withdrawal) | new    | entirely inside `tenant_billing` — D-05                                                                   |
-| F-906 | RLS and audit down to the reseller level                           | new    | §3.12                                                                                                     |
 | F-907 | Separate brand and bot for a reseller                              | new    | **promotion to a child tenant** — which is then subject to D-01/D-03 and needs its own domain and gateway |
-| F-311 | Reseller management panel inside the bot                           | new    | §10.4                                                                                                     |
-| F-312 | Sub-reseller panel inside the bot                                  | new    | §10.4                                                                                                     |
+
+**Also relevant here, defined elsewhere:** F-904 §3.12 · F-906 §3.12 · F-311 §10.4 · F-312 §10.4.
 
 **Hard rule:** a reseller never has direct access to `Panel.credential` or the vault, even for a panel it added itself. Panel ownership by a reseller is recorded in `Panel.ownerResellerPath`, and its alerts go to them (C-18).
 
@@ -1426,9 +1425,6 @@ The only real reason a reseller says "no" is fear of migration. This section tar
 
 | #      | Feature                                                                                                 | Status  | Notes                                                       |
 | ------ | ------------------------------------------------------------------------------------------------------- | ------- | ----------------------------------------------------------- |
-| F-601  | Multi-threshold usage and time notifications                                                            | partial | §9.5                                                        |
-| F-602  | Volume exhaustion prediction                                                                            | new     | rule-based; AI version in F-1515                            |
-| F-603  | 24-hour post-expiry grace period                                                                        | changed | for all Grant types                                         |
 | F-604  | **Unused-volume rollover**                                                                              | new     | C-09 — via the `QuotaAdjustment` path                       |
 | F-605  | Automatic win-back campaign: expired + N days of silence → dedicated coupon in the bot                  | new     | the cheapest revenue possible                               |
 | F-606  | Loyalty tiers (cumulative volume → bonus volume or an upgrade)                                          | new     | reward is volume only, never cash                           |
@@ -1438,6 +1434,8 @@ The only real reason a reseller says "no" is fear of migration. This section tar
 | F-610  | A one-question survey on non-renewal                                                                    | new     | the only real data on why people churn                      |
 | F-611  | Customer health score for the reseller (churn probability)                                              | new     | a timely-intervention tool                                  |
 | F-1519 | Reason-driven churn path: if the risk is **connection quality**, quality gets fixed, **not a discount** | new     | §24                                                         |
+
+**Also relevant here, defined elsewhere:** F-601 §9.5 · F-602 §9.5 · F-603 §9.5.
 
 ### 17.2 Growth and Acquisition
 
@@ -1449,11 +1447,10 @@ The only real reason a reseller says "no" is fear of migration. This section tar
 | F-704 | Referral anti-fraud: device fingerprint, number, usage pattern | new            | without this, a referral system is just a leak          |
 | F-705 | **Free trial funded from the reseller's own share**            | changed (C-10) | the _platform's_ free trial remains removed             |
 | F-706 | One trial per (tenant × fingerprint × number)                  | new            | —                                                       |
-| F-707 | Lucky wheel and interactive mechanics                          | next-phase     | `engagement` schema ready                               |
 | F-708 | Social sharing link with the tenant's brand preview            | new            | §13.8                                                   |
 | F-709 | UTM and campaign attribution down to purchase                  | new            | resellers can see which channel actually brings money   |
-| F-314 | Bot login deep link                                            | new            | bridges campaign, site, and bot                         |
-| F-318 | Channel-membership gate for a free trial                       | new            | cheap, common growth tactic in this market              |
+
+**Also relevant here, defined elsewhere:** F-707 §25 · F-314 §10.4 · F-318 §10.4.
 
 **Reward accounting rule:** any gifted volume (referral, loyalty, trial, wheel) writes a row into `promotional_liability` and is factored into the **treasury coverage ratio**. A free reward that never touches the ledger is an invisible debt.
 
@@ -1472,8 +1469,8 @@ Resellers today fly blind; this section alone could be reason enough to stay.
 | F-1005 | Usage forecast and capacity planning                                      | new       |
 | F-1006 | Scheduled report to bot or email                                          | new       |
 | F-1007 | CSV/Excel export of every report                                          | new       |
-| F-1527 | Plan-layout suggestions based on actual user consumption distribution     | new (§24) |
-| F-1528 | Margin analysis and loss-making-plan alert                                | new (§24) |
+
+**Also relevant here, defined elsewhere:** F-1527 §24.4 · F-1528 §24.4.
 
 **Rule:** all of these reports read only from the `tenant_billing` tree (§5.2). No reseller report ever sees a number from `platform_billing`.
 
@@ -1525,8 +1522,9 @@ fraud.FraudFlag(tenantId, resellerPath, userId, kind, severity,
 | F-1106 | User risk score and fraud freeze                                       | base      |
 | F-1107 | Rate limiting on account creation, free trials, and OTP                | base      |
 | F-1108 | Per-tenant device-fingerprint blocklist                                | new       |
-| F-704  | Referral anti-fraud                                                    | new       |
 | F-1524 | AI-based fraud risk scoring at signup, trial, and referral             | new (§24) |
+
+**Also relevant here, defined elsewhere:** F-704 §17.2.
 
 **Signals, in order of usefulness:**
 
@@ -1731,58 +1729,57 @@ Load testing (k6) covers exactly three paths: **the subscription endpoint, usage
 
 ### 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature)
 
-| #      | Feature                                                                                          | Why                                                                                                                                              |
-| ------ | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| F-1501 | A per-user **attention budget** — every proactive AI message has a cost and a periodic cap       | The only structural way to guarantee the system can't overdo it. **Lives in the `engagement.AttentionBudget` table, never in the ledger (C-13)** |
-| F-1502 | Answering a user's own question **costs no budget**; only AI-initiated messages cost anything    | Answering isn't nagging; initiating is                                                                                                           |
-| F-1503 | A confidence threshold — below it, the AI **stays silent**                                       | One irrelevant suggestion hurts more than ten good ones not given                                                                                |
-| F-1504 | Cooldown per (user × suggestion type)                                                            | —                                                                                                                                                |
-| F-1505 | "Don't show me this again" with one tap, permanent, per type                                     | —                                                                                                                                                |
-| F-1506 | Quiet-down rules: open ticket, after a failed payment, connection-quality drop, during an outage | Pitching a purchase in the middle of a problem is the worst possible moment                                                                      |
-| F-1507 | At most **one CTA per message**; no artificial urgency, no false scarcity, no guilt-tripping     | enforced at the prompt level **and** at output validation                                                                                        |
-| F-1508 | A permanent control group (holdout) that receives no AI messages at all                          | The only way to actually prove AI drives sales                                                                                                   |
-| F-1509 | Every AI message is labeled and auditable; a reseller can fully disable any type                 | It's their brand                                                                                                                                 |
+| #      | Feature                                                                                          | Status | Why                                                                                                                                              |
+| ------ | ------------------------------------------------------------------------------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| F-1501 | A per-user **attention budget** — every proactive AI message has a cost and a periodic cap       | new | The only structural way to guarantee the system can't overdo it. **Lives in the `engagement.AttentionBudget` table, never in the ledger (C-13)** |
+| F-1502 | Answering a user's own question **costs no budget**; only AI-initiated messages cost anything    | new | Answering isn't nagging; initiating is                                                                                                           |
+| F-1503 | A confidence threshold — below it, the AI **stays silent**                                       | new | One irrelevant suggestion hurts more than ten good ones not given                                                                                |
+| F-1504 | Cooldown per (user × suggestion type)                                                            | new | —                                                                                                                                                |
+| F-1505 | "Don't show me this again" with one tap, permanent, per type                                     | new | —                                                                                                                                                |
+| F-1506 | Quiet-down rules: open ticket, after a failed payment, connection-quality drop, during an outage | new | Pitching a purchase in the middle of a problem is the worst possible moment                                                                      |
+| F-1507 | At most **one CTA per message**; no artificial urgency, no false scarcity, no guilt-tripping     | new | enforced at the prompt level **and** at output validation                                                                                        |
+| F-1508 | A permanent control group (holdout) that receives no AI messages at all                          | new | The only way to actually prove AI drives sales                                                                                                   |
+| F-1509 | Every AI message is labeled and auditable; a reseller can fully disable any type                 | new | It's their brand                                                                                                                                 |
 
 ### 24.2 AI for the End User
 
-| #      | Feature                                                                                                                                           | Why                                                                              |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| F-1510 | **A tool-using support agent** — reads real state before speaking: quota, panel health, ISP, device count, client app, last successful connection | ⭐ 2am, in Persian, no ticket needed                                             |
-| F-1511 | Diagnosing the root cause of "I can't connect" and giving **exactly that fix**                                                                    | Half of this market's tickets are that one sentence                              |
-| F-1512 | Interactive install guide tailored to the user's OS and app                                                                                       | —                                                                                |
-| F-1513 | Smart escalation to a human, with a full diagnostic summary                                                                                       | An AI that doesn't know when to step back is itself the problem                  |
-| F-1514 | **Suggesting a smaller plan when a user has over-bought**                                                                                         | ⭐ the most counterintuitive and effective move                                  |
-| F-1515 | Volume-exhaustion prediction with **one** well-timed message                                                                                      | Information, not begging                                                         |
-| F-1516 | Explaining abnormal usage ("yesterday it tripled; if that wasn't you, your link may be in use elsewhere too")                                     | Both security and sales, with no sales smell                                     |
-| F-1517 | Suggesting a better region/server based on actual ISP and usage-time patterns                                                                     | Immediate, tangible value                                                        |
-| F-1518 | Natural-language queries over the user's own account                                                                                              | —                                                                                |
-| F-1519 | Reason-driven churn path: a quality problem → quality gets fixed, **not a discount**                                                              | Discounting someone whose problem is an outage burns both money and the customer |
+| #      | Feature                                                                                                                                           | Status | Why                                                                              |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------- |
+| F-1510 | **A tool-using support agent** — reads real state before speaking: quota, panel health, ISP, device count, client app, last successful connection | new | ⭐ 2am, in Persian, no ticket needed                                             |
+| F-1511 | Diagnosing the root cause of "I can't connect" and giving **exactly that fix**                                                                    | new | Half of this market's tickets are that one sentence                              |
+| F-1512 | Interactive install guide tailored to the user's OS and app                                                                                       | new | —                                                                                |
+| F-1513 | Smart escalation to a human, with a full diagnostic summary                                                                                       | new | An AI that doesn't know when to step back is itself the problem                  |
+| F-1514 | **Suggesting a smaller plan when a user has over-bought**                                                                                         | new | ⭐ the most counterintuitive and effective move                                  |
+| F-1516 | Explaining abnormal usage ("yesterday it tripled; if that wasn't you, your link may be in use elsewhere too")                                     | new | Both security and sales, with no sales smell                                     |
+| F-1517 | Suggesting a better region/server based on actual ISP and usage-time patterns                                                                     | new | Immediate, tangible value                                                        |
+| F-1518 | Natural-language queries over the user's own account                                                                                              | new | —                                                                                |
+
+**Also relevant here, defined elsewhere:** F-1515 §9.5 · F-1519 §17.1.
 
 ### 24.3 Invisible AI (No User-Facing Text — the Highest-Value Tier)
 
-| #      | Feature                                                                                    | Reference                                          |
-| ------ | ------------------------------------------------------------------------------------------ | -------------------------------------------------- |
-| F-1520 | Learning success rate (ISP × inbound × hour) and automatically selecting the best config   | the engine behind F-402 ⭐                         |
-| F-1521 | Predicting an inbound getting blocked from the drop trend, rotating **before** full outage | §7.7                                               |
-| F-1522 | Link-sharing-detection model                                                               | F-1102, feeds the third rule in §19.4              |
-| F-1523 | Usage-anomaly detection assisting the delta-quarantine decision                            | F-1104 — **assists the decision, doesn't make it** |
-| F-1524 | Fraud risk scoring at signup, trial, and referral                                          | §19.4                                              |
-| F-1525 | Forecasting a tenant's total usage for capacity planning and traffic-wallet top-ups        | F-1005                                             |
+| #      | Feature                                                                                    | Status | Reference                                          |
+| ------ | ------------------------------------------------------------------------------------------ | ------ | -------------------------------------------------- |
+| F-1520 | Learning success rate (ISP × inbound × hour) and automatically selecting the best config   | new | the engine behind F-402 ⭐                         |
+| F-1522 | Link-sharing-detection model                                                               | new | F-1102, feeds the third rule in §19.4              |
+| F-1523 | Usage-anomaly detection assisting the delta-quarantine decision                            | new | F-1104 — **assists the decision, doesn't make it** |
+| F-1525 | Forecasting a tenant's total usage for capacity planning and traffic-wallet top-ups        | new | F-1005                                             |
+
+**Also relevant here, defined elsewhere:** F-1521 §7.7 · F-1524 §19.4.
 
 > **Hard rule:** the invisible layer, too, **never** alters a meter and never moves money automatically. The most it ever does is: routing weights, flags, and suggestions to a human.
 
 ### 24.4 AI for the Reseller (Here It Can Be Chatty — They Want a Staff Member)
 
-| #      | Feature                                                                                              |
-| ------ | ---------------------------------------------------------------------------------------------------- |
-| F-1526 | Natural-language questions over their own data ("how many people didn't renew last month, and why?") |
-| F-1527 | **Plan-layout suggestions** based on actual consumption distribution across their users ⭐           |
-| F-1528 | Margin analysis and loss-making-plan alerts                                                          |
-| F-1529 | Campaign segmentation suggestions + **writing copy in their own brand voice**                        |
-| F-1530 | Ticket triage and reply drafting grounded in that same tenant's knowledge base                       |
-| F-1531 | Daily/weekly business summary in the bot                                                             |
-| F-1532 | Onboarding and migration co-pilot                                                                    |
-| F-1533 | Automatic locale-content translation with human review                                               |
+| #      | Feature                                                                                              | Status |
+| ------ | ---------------------------------------------------------------------------------------------------- | ------ |
+| F-1526 | Natural-language questions over their own data ("how many people didn't renew last month, and why?") | new |
+| F-1527 | **Plan-layout suggestions** based on actual consumption distribution across their users ⭐           | new |
+| F-1528 | Margin analysis and loss-making-plan alerts                                                          | new |
+| F-1529 | Campaign segmentation suggestions + **writing copy in their own brand voice**                        | new |
+| F-1530 | Ticket triage and reply drafting grounded in that same tenant's knowledge base                       | new |
+
+**Also relevant here, defined elsewhere:** F-1531 §10.4 · F-1532 §16 · F-1533 §1.8.
 
 ### 24.5 Where AI Has No Access
 
@@ -1792,25 +1789,33 @@ The payment path · enforcement and suspension decisions · generating or displa
 
 **Rule (D-03):** the platform never pays for inference and never holds a key. Exactly the same `ownershipType` pattern already written for panels.
 
-| #      | Feature                                                                                                                                              | Why                                                                                                                  |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| F-1534 | `AIProvider` with `ownershipType: tenant \| platform` — from the first migration, like `Panel.ownershipType`                                         | a familiar pattern, zero new concepts                                                                                |
-| F-1535 | A generic `openai_compatible` driver + capability discovery (tool-calling, JSON mode, context length, streaming)                                     | one driver covers ninety percent of providers: OpenRouter, Groq, DeepSeek, Ollama and local vLLM, in-house providers |
-| F-1536 | API key in the **vault** with envelope encryption; never logged, never returned by any API, only "configured + fingerprint"                          | the same behavior as bot tokens (§20.4)                                                                              |
-| F-1537 | A per-tenant outbound proxy (SOCKS5/HTTP) to reach the provider                                                                                      | the tenant's own network path is their own problem                                                                   |
-| F-1538 | **Tenant-side relay** — a small worker on the tenant's own server that reads from a job queue and calls the model itself                             | ⭐ the national-network scenario: the platform makes zero outbound requests at all                                   |
-| F-1539 | Model selection **per task**                                                                                                                         | cost control stays in their hands                                                                                    |
-| F-1540 | **Always falls back to a template** — error, timeout, invalid key, quota exhausted → the template renders, the user sees no error                    | D-04                                                                                                                 |
-| F-1541 | A hard time budget (default 3 seconds); after that, the template wins                                                                                | a bot reply must never be held hostage by a third-party API                                                          |
-| F-1542 | Output validation before sending: every number must exist in the input, length capped, no HTML, no injected links, required variables present        | §19.2                                                                                                                |
-| F-1543 | Two modes: **draft-with-approval** (default) and **automatic** (enabled per message type)                                                            | campaign copy, sure; payment confirmations, never                                                                    |
-| F-1544 | "Test connection" + `status` / `lastErrorAt` visible to the tenant                                                                                   | the same pattern as the panel driver's `HealthCheck`                                                                 |
-| F-1545 | Brand-tone prompt as **data** in `locale-service`, versioned                                                                                         | the same place the templates live                                                                                    |
-| F-1546 | Token accounting and usage caps per tenant and per task                                                                                              | even when it's their money being spent, they need visibility and a brake                                             |
-| F-1547 | **PII scrubbing before egress** — phone numbers, emails, subscription tokens, IDs; disabling it requires explicit confirmation                       | the end user never consented to OpenAI; the tenant's consent doesn't stand in for theirs                             |
-| F-1548 | **A safety floor that can't be turned off:** the attention budget, silence during outages, bot rate limits, a ban on accessing another tenant's data | the model is theirs, the guardrails are ours                                                                         |
-| F-1549 | AI provider selection **per message key**, not one global key                                                                                        | —                                                                                                                    |
-| F-1550 | Factory default: AI off, default templates on, product fully functional                                                                              | most tenants never configure anything, and that's exactly right                                                      |
+| #      | Feature                                                                                                                                              | Status | Why                                                                                                                  |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------- |
+| F-1534 | `AIProvider` with `ownershipType: tenant \| platform` — from the first migration, like `Panel.ownershipType`                                         | new | a familiar pattern, zero new concepts                                                                                |
+| F-1535 | A generic `openai_compatible` driver + capability discovery (tool-calling, JSON mode, context length, streaming)                                     | new | one driver covers ninety percent of providers: OpenRouter, Groq, DeepSeek, Ollama and local vLLM, in-house providers |
+| F-1536 | API key in the **vault** with envelope encryption; never logged, never returned by any API, only "configured + fingerprint"                          | new | the same behavior as bot tokens (§20.4)                                                                              |
+| F-1537 | A per-tenant outbound proxy (SOCKS5/HTTP) to reach the provider                                                                                      | new | the tenant's own network path is their own problem                                                                   |
+| F-1538 | **Tenant-side relay** — a small worker on the tenant's own server that reads from a job queue and calls the model itself                             | new | ⭐ the national-network scenario: the platform makes zero outbound requests at all                                   |
+| F-1539 | Model selection **per task**                                                                                                                         | new | cost control stays in their hands                                                                                    |
+| F-1540 | **Always falls back to a template** — error, timeout, invalid key, quota exhausted → the template renders, the user sees no error                    | new | D-04                                                                                                                 |
+| F-1541 | A hard time budget (default 3 seconds); after that, the template wins                                                                                | new | a bot reply must never be held hostage by a third-party API                                                          |
+
+### 24.7 BYO-AI — Safety, Limits and Operations
+
+The rules above make a tenant's own model reachable. These make it safe to point at real customers: nothing the model returns is trusted, and the floor in F-1548 holds even when the tenant turns everything else off.
+
+| #      | Feature                                                                                                                                              | Status | Why                                                                                                                  |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------- |
+| F-1542 | Output validation before sending: every number must exist in the input, length capped, no HTML, no injected links, required variables present        | new | §19.2                                                                                                                |
+| F-1543 | Two modes: **draft-with-approval** (default) and **automatic** (enabled per message type)                                                            | new | campaign copy, sure; payment confirmations, never                                                                    |
+| F-1544 | "Test connection" + `status` / `lastErrorAt` visible to the tenant                                                                                   | new | the same pattern as the panel driver's `HealthCheck`                                                                 |
+| F-1546 | Token accounting and usage caps per tenant and per task                                                                                              | new | even when it's their money being spent, they need visibility and a brake                                             |
+| F-1547 | **PII scrubbing before egress** — phone numbers, emails, subscription tokens, IDs; disabling it requires explicit confirmation                       | new | the end user never consented to OpenAI; the tenant's consent doesn't stand in for theirs                             |
+| F-1548 | **A safety floor that can't be turned off:** the attention budget, silence during outages, bot rate limits, a ban on accessing another tenant's data | new | the model is theirs, the guardrails are ours                                                                         |
+| F-1549 | AI provider selection **per message key**, not one global key                                                                                        | new | —                                                                                                                    |
+| F-1550 | Factory default: AI off, default templates on, product fully functional                                                                              | new | most tenants never configure anything, and that's exactly right                                                      |
+
+**Also relevant here, defined elsewhere:** F-1545 §1.8.
 
 **A legal side benefit:** the key is the tenant's, the model is the tenant's, the text is the tenant's. The platform is purely software — the exact same stance taken on white-labeling and the payment gateway (D-03). An entire layer of liability disappears.
 
@@ -1820,9 +1825,9 @@ The payment path · enforcement and suspension decisions · generating or displa
 
 These features are **designed, with their database schemas built empty from day one**, so adding them later is incremental and schema numbering never shifts.
 
-| #     | Feature                                             | Infrastructure Ready                                                                                                                                                                                             |
-| ----- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F-707 | **Lucky wheel and interactive mechanics**           | `engagement` schema; `Grant.source = affiliate_reward`; `free_grant` coupon; `promotional_liability` account; notification and bot system                                                                        |
+| #     | Feature                                             | Status | Infrastructure Ready                                                                                                                                                                                             |
+| ----- | --------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F-707 | **Lucky wheel and interactive mechanics**           | new | `engagement` schema; `Grant.source = affiliate_reward`; `free_grant` coupon; `promotional_liability` account; notification and bot system                                                                        |
 | —     | **External orders (SMM APIs)**                      | `fulfilmentKind = external_order` + a driver interface mirroring the panel driver: `Submit / Poll / Cancel`, a polling worker with backoff, **partial delivery that reduces quota and enables a partial refund** |
 | —     | **Feature-based access control** (`feature_access`) | `Grant.featureKeys` + quota for `feature_items` and `api_calls`                                                                                                                                                  |
 | —     | **New protocol drivers** — OpenVPN, L2TP, WireGuard | `ProtocolFamily` in the driver interface. Adding a new driver **requires no changes to billing, Grant, or UI**                                                                                                   |

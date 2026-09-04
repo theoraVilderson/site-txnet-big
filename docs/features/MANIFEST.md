@@ -8,7 +8,7 @@ status: generated
 Rebuild: `python3 tools/features-scan.py`
 
 - catalog files: 1
-- addressable blocks: 161
+- addressable blocks: 162
 - features: 169
 
 **Never read the catalog directly.** `python3 tools/spec.py <F-id>` prints exactly the block you need.
@@ -84,100 +84,101 @@ Rebuild: `python3 tools/features-scan.py`
 | `App-Features.md:710-730` · 7.3 Panel Group and Mirroring — Zero Downtime | 21 |  |  | PanelGroup PanelGroupMember |
 | `App-Features.md:731-741` · 7.4 Health Checks | 11 |  |  |  |
 | `App-Features.md:742-766` · 7.5 Subscription Link | 25 |  | C-07 C-08 C-16 C-17 |  |
-| `App-Features.md:767-776` · 7.6 Domain Rotation in the Subscription Response | 10 | F-105 F-106 F-115 |  |  |
-| `App-Features.md:777-788` · 7.7 Connection Intelligence and ISP-Based Routing | 12 | F-1521 F-402 F-403 F-404 F-405 | C-06 |  |
-| `App-Features.md:789-798` · 7.8 Connection Experience | 10 | F-307 F-409 F-410 F-411 F-414 |  |  |
-| `App-Features.md:799-802` · 7.9 Concurrent Device Limits | 4 |  |  |  |
-| `App-Features.md:803-820` · 7.10 Enforcement | 18 |  |  |  |
-| `App-Features.md:821-824` Usage Measurement and Usage Billing | 4 |  |  |  |
-| `App-Features.md:825-830` · 8.1 The Fundamental Problem | 6 |  |  |  |
-| `App-Features.md:831-843` · 8.2 The Fix: Deltas with Explicit Reset Detection | 13 |  |  |  |
-| `App-Features.md:844-847` · 8.3 Quarantining Implausible Deltas | 4 |  |  |  |
-| `App-Features.md:848-866` · 8.4 Collection Pipeline | 19 |  |  |  |
-| `App-Features.md:867-883` · 8.5 Pay-As-You-Go Billing | 17 |  |  |  |
-| `App-Features.md:884-889` · 8.6 Usage Baseline on Migration | 6 |  |  |  |
-| `App-Features.md:890-891` Multichannel Notifications and Campaigns | 2 |  |  |  |
-| `App-Features.md:892-904` · 9.1 Structure | 13 |  |  | Campaign DeliveryLog Preference Template |
-| `App-Features.md:905-908` · 9.2 Notifications as Domain Events | 4 |  |  |  |
-| `App-Features.md:909-912` · 9.3 Event Keys | 4 |  |  |  |
-| `App-Features.md:913-918` · 9.4 Preferences and Quiet Hours | 6 |  |  |  |
-| `App-Features.md:919-927` · 9.5 Retention Notifications | 9 | F-1515 F-601 F-602 F-603 |  |  |
-| `App-Features.md:928-936` · 9.6 Campaigns | 9 |  |  |  |
-| `App-Features.md:937-944` · 9.7 No-Fallback Rule | 8 |  | D-03 |  |
-| `App-Features.md:945-950` · 9.8 A Queue Resilient to Bot Bans | 6 |  |  |  |
-| `App-Features.md:951-954` Bot as a Full Panel | 4 |  | D-02 |  |
-| `App-Features.md:955-969` · 10.1 Multiple Bots per Tenant | 15 |  | C-05 |  |
-| `App-Features.md:970-979` · 10.2 Webhook Architecture | 10 |  |  |  |
-| `App-Features.md:980-988` · 10.3 Telegram/Bale Abstraction Layer | 9 | F-301 F-302 |  |  |
-| `App-Features.md:989-1011` · 10.4 Full Bot Capabilities | 23 | F-1531 F-303 F-304 F-305 F-306 F-307 F-308 F-309 F-310 F-311 F-312 F-313 F-314 F-318 F-319 F-405 |  |  |
-| `App-Features.md:1012-1019` · 10.5 Account Linking | 8 |  | C-05 |  |
-| `App-Features.md:1020-1025` · 10.6 Bot Token Security | 6 |  |  |  |
-| `App-Features.md:1026-1027` Unified Support | 2 |  |  |  |
-| `App-Features.md:1028-1042` · 11.1 One Door, No Choice | 15 |  |  | Conversation Message |
-| `App-Features.md:1043-1052` · 11.2 Behavior | 10 |  |  |  |
-| `App-Features.md:1053-1061` · 11.3 Agent Side | 9 |  |  |  |
-| `App-Features.md:1062-1065` · 11.4 File Attachments | 4 |  |  |  |
-| `App-Features.md:1066-1069` · 11.5 Queue Priority | 4 |  |  |  |
-| `App-Features.md:1070-1075` · 11.6 Tenant and Reseller Isolation | 6 |  |  |  |
-| `App-Features.md:1076-1091` Realtime | 16 |  |  |  |
-| `App-Features.md:1092-1095` White-Label, Domain and Resilience Against Filtering | 4 |  |  |  |
-| `App-Features.md:1096-1116` · 13.1 Domain Model | 21 | F-101 F-102 F-113 F-114 F-115 | C-01 C-07 C-16 D-01 | TenantDomain |
-| `App-Features.md:1117-1131` · 13.2 Domain Verification Lifecycle | 15 |  | C-01 C-03 |  |
-| `App-Features.md:1132-1142` · 13.3 Resilience Against Filtering | 11 | F-103 F-104 F-105 F-106 F-110 F-112 |  |  |
-| `App-Features.md:1143-1154` · 13.4 Anti-Fingerprinting | 12 | F-107 F-108 F-109 | C-04 |  |
-| `App-Features.md:1155-1171` · 13.5 Public Pages | 17 |  |  | TenantPage |
-| `App-Features.md:1172-1182` · 13.6 Trust Badges (eNamad and similar) | 11 |  |  | TrustBadge |
-| `App-Features.md:1183-1195` · 13.7 Theme System | 13 |  |  | TenantTheme |
-| `App-Features.md:1196-1209` · 13.8 Branding and SEO | 14 |  | C-04 | TenantBranding |
-| `App-Features.md:1210-1219` · 13.9 Reseller-Specific (BYO) Integrations | 10 |  | C-19 D-03 |  |
-| `App-Features.md:1220-1227` · 13.10 Browser-Level Isolation | 8 |  | C-16 |  |
-| `App-Features.md:1228-1229` Panel Business: Plans, Subscriptions and Traffic Wallet | 2 |  |  |  |
-| `App-Features.md:1230-1242` · 14.1 Two Products, Sold Separately | 13 |  | D-05 |  |
-| `App-Features.md:1243-1293` · 14.2 Plans as Data | 51 |  | C-01 C-03 C-19 D-01 D-03 | Plan PlanFeature |
-| `App-Features.md:1294-1299` · 14.3 Per-Customer Exceptions | 6 |  |  |  |
-| `App-Features.md:1300-1307` · 14.4 Safe Downgrade | 8 |  |  |  |
-| `App-Features.md:1308-1323` · 14.5 Traffic Wallet | 16 |  |  | TrafficLedgerEntry TrafficWallet |
-| `App-Features.md:1324-1343` · 14.6 Subscription Lifecycle State Machine | 20 |  |  |  |
-| `App-Features.md:1344-1347` · 14.7 Protecting Reseller End Users | 4 |  |  |  |
-| `App-Features.md:1348-1362` · 14.8 Data Export and Deletion | 15 |  |  |  |
-| `App-Features.md:1363-1391` Multi-Tier Reseller | 29 | F-311 F-312 F-901 F-902 F-903 F-904 F-905 F-906 F-907 | C-15 C-18 D-01 D-03 D-05 |  |
-| `App-Features.md:1392-1422` Migration, Import and Onboarding | 31 | F-1532 F-201 F-202 F-203 F-204 F-205 F-206 F-207 F-208 F-209 F-210 F-211 F-212 F-213 F-214 | C-17 D-01 D-03 |  |
-| `App-Features.md:1423-1424` Retention, Anti-Churn and Growth | 2 |  |  |  |
-| `App-Features.md:1425-1441` · 17.1 Retention | 17 | F-1519 F-601 F-602 F-603 F-604 F-605 F-606 F-607 F-608 F-609 F-610 F-611 | C-09 |  |
-| `App-Features.md:1442-1461` · 17.2 Growth and Acquisition | 20 | F-314 F-318 F-701 F-702 F-703 F-704 F-705 F-706 F-707 F-708 F-709 | C-10 C-11 D-05 |  |
-| `App-Features.md:1462-1481` Reseller Profitability Tools | 20 | F-1001 F-1002 F-1003 F-1004 F-1005 F-1006 F-1007 F-1527 F-1528 |  |  |
-| `App-Features.md:1482-1483` Security, Fraud and Abuse | 2 |  |  |  |
-| `App-Features.md:1484-1493` · 19.1 Three Unrecoverable Risks | 10 |  |  |  |
-| `App-Features.md:1494-1501` · 19.2 Input Handling | 8 |  | C-04 |  |
-| `App-Features.md:1502-1509` · 19.3 Transport and Edge | 8 |  |  |  |
-| `App-Features.md:1510-1544` · 19.4 Fraud and Abuse Detection | 35 | F-1101 F-1102 F-1103 F-1104 F-1105 F-1106 F-1107 F-1108 F-1524 F-704 |  |  |
-| `App-Features.md:1545-1550` · 19.5 Reseller Risk | 6 |  |  |  |
-| `App-Features.md:1551-1552` Governance, Isolation, Treasury and Audit | 2 |  |  |  |
-| `App-Features.md:1553-1566` · 20.1 Audit Log | 14 |  |  | AdminAuditLog |
-| `App-Features.md:1567-1575` · 20.2 Multi-Tenant Isolation — Six Layers | 9 |  |  |  |
-| `App-Features.md:1576-1588` · 20.3 Tenant Detection | 13 |  | C-01 |  |
-| `App-Features.md:1589-1609` · 20.4 Credential Vault | 21 |  |  | TenantCredential TenantDek |
-| `App-Features.md:1610-1615` · 20.5 The 360° User View | 6 |  |  |  |
-| `App-Features.md:1616-1625` · 20.6 User Settings | 10 |  |  |  |
-| `App-Features.md:1626-1648` Platform Management Console | 23 |  | D-01 |  |
-| `App-Features.md:1649-1669` Public API and Integration | 21 | F-1301 F-1302 F-1303 F-1304 F-1305 | D-01 |  |
-| `App-Features.md:1670-1671` Monitoring, Reconciliation and Operations | 2 |  |  |  |
-| `App-Features.md:1672-1687` · 23.1 Nightly Reconciliation (03:00 UTC) | 16 |  |  |  |
-| `App-Features.md:1688-1691` · 23.2 End-to-End Money-Leak Test | 4 |  |  |  |
-| `App-Features.md:1692-1707` · 23.3 Business Metrics Alongside System Metrics | 16 |  |  |  |
-| `App-Features.md:1708-1717` · 23.4 Alert Severity Levels | 10 |  |  |  |
-| `App-Features.md:1718-1725` · 23.5 Backup and Recovery | 8 |  |  |  |
-| `App-Features.md:1726-1731` The AI Layer | 6 |  | D-04 |  |
-| `App-Features.md:1732-1745` · 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) | 14 | F-1501 F-1502 F-1503 F-1504 F-1505 F-1506 F-1507 F-1508 F-1509 | C-13 |  |
-| `App-Features.md:1746-1760` · 24.2 AI for the End User | 15 | F-1510 F-1511 F-1512 F-1513 F-1514 F-1515 F-1516 F-1517 F-1518 F-1519 |  |  |
-| `App-Features.md:1761-1773` · 24.3 Invisible AI (No User-Facing Text — the Highest-Value Tier) | 13 | F-1520 F-1521 F-1522 F-1523 F-1524 F-1525 |  |  |
-| `App-Features.md:1774-1786` · 24.4 AI for the Reseller (Here It Can Be Chatty — They Want a Staff Member) | 13 | F-1526 F-1527 F-1528 F-1529 F-1530 F-1531 F-1532 F-1533 |  |  |
-| `App-Features.md:1787-1790` · 24.5 Where AI Has No Access | 4 |  |  |  |
-| `App-Features.md:1791-1818` · 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) | 28 | F-1534 F-1535 F-1536 F-1537 F-1538 F-1539 F-1540 F-1541 F-1542 F-1543 F-1544 F-1545 F-1546 F-1547 F-1548 F-1549 F-1550 | D-03 D-04 |  |
-| `App-Features.md:1819-1836` Next-Phase Features | 18 | F-707 | C-11 C-12 |  |
-| `App-Features.md:1837-1855` Appendix A — Permanent Decisions (Out of Scope) | 19 |  | C-04 C-10 D-01 D-03 D-05 |  |
-| `App-Features.md:1856-1876` Appendix B — Mapping of v2 IDs to Sections of This Document | 21 |  |  |  |
-| `App-Features.md:1877-1894` Appendix C — Checklist for Applying Changes in Other Documents | 18 |  | C-01 C-03 C-04 C-05 C-07 C-09 C-10 C-12 C-13 C-15 C-16 C-17 C-19 |  |
+| `App-Features.md:767-777` · 7.6 Domain Rotation in the Subscription Response | 11 | F-105 F-106 |  |  |
+| `App-Features.md:778-789` · 7.7 Connection Intelligence and ISP-Based Routing | 12 | F-1521 F-402 F-403 F-404 F-405 | C-06 |  |
+| `App-Features.md:790-799` · 7.8 Connection Experience | 10 | F-307 F-409 F-410 F-411 F-414 |  |  |
+| `App-Features.md:800-803` · 7.9 Concurrent Device Limits | 4 |  |  |  |
+| `App-Features.md:804-821` · 7.10 Enforcement | 18 |  |  |  |
+| `App-Features.md:822-825` Usage Measurement and Usage Billing | 4 |  |  |  |
+| `App-Features.md:826-831` · 8.1 The Fundamental Problem | 6 |  |  |  |
+| `App-Features.md:832-844` · 8.2 The Fix: Deltas with Explicit Reset Detection | 13 |  |  |  |
+| `App-Features.md:845-848` · 8.3 Quarantining Implausible Deltas | 4 |  |  |  |
+| `App-Features.md:849-867` · 8.4 Collection Pipeline | 19 |  |  |  |
+| `App-Features.md:868-884` · 8.5 Pay-As-You-Go Billing | 17 |  |  |  |
+| `App-Features.md:885-890` · 8.6 Usage Baseline on Migration | 6 |  |  |  |
+| `App-Features.md:891-892` Multichannel Notifications and Campaigns | 2 |  |  |  |
+| `App-Features.md:893-905` · 9.1 Structure | 13 |  |  | Campaign DeliveryLog Preference Template |
+| `App-Features.md:906-909` · 9.2 Notifications as Domain Events | 4 |  |  |  |
+| `App-Features.md:910-913` · 9.3 Event Keys | 4 |  |  |  |
+| `App-Features.md:914-919` · 9.4 Preferences and Quiet Hours | 6 |  |  |  |
+| `App-Features.md:920-928` · 9.5 Retention Notifications | 9 | F-1515 F-601 F-602 F-603 |  |  |
+| `App-Features.md:929-937` · 9.6 Campaigns | 9 |  |  |  |
+| `App-Features.md:938-945` · 9.7 No-Fallback Rule | 8 |  | D-03 |  |
+| `App-Features.md:946-951` · 9.8 A Queue Resilient to Bot Bans | 6 |  |  |  |
+| `App-Features.md:952-955` Bot as a Full Panel | 4 |  | D-02 |  |
+| `App-Features.md:956-970` · 10.1 Multiple Bots per Tenant | 15 |  | C-05 |  |
+| `App-Features.md:971-980` · 10.2 Webhook Architecture | 10 |  |  |  |
+| `App-Features.md:981-989` · 10.3 Telegram/Bale Abstraction Layer | 9 | F-301 F-302 |  |  |
+| `App-Features.md:990-1012` · 10.4 Full Bot Capabilities | 23 | F-1531 F-303 F-304 F-305 F-306 F-308 F-309 F-310 F-311 F-312 F-313 F-314 F-318 F-319 |  |  |
+| `App-Features.md:1013-1020` · 10.5 Account Linking | 8 |  | C-05 |  |
+| `App-Features.md:1021-1026` · 10.6 Bot Token Security | 6 |  |  |  |
+| `App-Features.md:1027-1028` Unified Support | 2 |  |  |  |
+| `App-Features.md:1029-1043` · 11.1 One Door, No Choice | 15 |  |  | Conversation Message |
+| `App-Features.md:1044-1053` · 11.2 Behavior | 10 |  |  |  |
+| `App-Features.md:1054-1062` · 11.3 Agent Side | 9 |  |  |  |
+| `App-Features.md:1063-1066` · 11.4 File Attachments | 4 |  |  |  |
+| `App-Features.md:1067-1070` · 11.5 Queue Priority | 4 |  |  |  |
+| `App-Features.md:1071-1076` · 11.6 Tenant and Reseller Isolation | 6 |  |  |  |
+| `App-Features.md:1077-1092` Realtime | 16 |  |  |  |
+| `App-Features.md:1093-1096` White-Label, Domain and Resilience Against Filtering | 4 |  |  |  |
+| `App-Features.md:1097-1117` · 13.1 Domain Model | 21 | F-101 F-102 F-113 F-114 F-115 | C-01 C-07 C-16 D-01 | TenantDomain |
+| `App-Features.md:1118-1132` · 13.2 Domain Verification Lifecycle | 15 |  | C-01 C-03 |  |
+| `App-Features.md:1133-1143` · 13.3 Resilience Against Filtering | 11 | F-103 F-104 F-110 F-112 |  |  |
+| `App-Features.md:1144-1155` · 13.4 Anti-Fingerprinting | 12 | F-107 F-108 F-109 | C-04 |  |
+| `App-Features.md:1156-1172` · 13.5 Public Pages | 17 |  |  | TenantPage |
+| `App-Features.md:1173-1183` · 13.6 Trust Badges (eNamad and similar) | 11 |  |  | TrustBadge |
+| `App-Features.md:1184-1196` · 13.7 Theme System | 13 |  |  | TenantTheme |
+| `App-Features.md:1197-1210` · 13.8 Branding and SEO | 14 |  | C-04 | TenantBranding |
+| `App-Features.md:1211-1220` · 13.9 Reseller-Specific (BYO) Integrations | 10 |  | C-19 D-03 |  |
+| `App-Features.md:1221-1228` · 13.10 Browser-Level Isolation | 8 |  | C-16 |  |
+| `App-Features.md:1229-1230` Panel Business: Plans, Subscriptions and Traffic Wallet | 2 |  |  |  |
+| `App-Features.md:1231-1243` · 14.1 Two Products, Sold Separately | 13 |  | D-05 |  |
+| `App-Features.md:1244-1294` · 14.2 Plans as Data | 51 |  | C-01 C-03 C-19 D-01 D-03 | Plan PlanFeature |
+| `App-Features.md:1295-1300` · 14.3 Per-Customer Exceptions | 6 |  |  |  |
+| `App-Features.md:1301-1308` · 14.4 Safe Downgrade | 8 |  |  |  |
+| `App-Features.md:1309-1324` · 14.5 Traffic Wallet | 16 |  |  | TrafficLedgerEntry TrafficWallet |
+| `App-Features.md:1325-1344` · 14.6 Subscription Lifecycle State Machine | 20 |  |  |  |
+| `App-Features.md:1345-1348` · 14.7 Protecting Reseller End Users | 4 |  |  |  |
+| `App-Features.md:1349-1363` · 14.8 Data Export and Deletion | 15 |  |  |  |
+| `App-Features.md:1364-1390` Multi-Tier Reseller | 27 | F-901 F-902 F-903 F-905 F-907 | C-15 C-18 D-01 D-03 D-05 |  |
+| `App-Features.md:1391-1421` Migration, Import and Onboarding | 31 | F-1532 F-201 F-202 F-203 F-204 F-205 F-206 F-207 F-208 F-209 F-210 F-211 F-212 F-213 F-214 | C-17 D-01 D-03 |  |
+| `App-Features.md:1422-1423` Retention, Anti-Churn and Growth | 2 |  |  |  |
+| `App-Features.md:1424-1439` · 17.1 Retention | 16 | F-1519 F-604 F-605 F-606 F-607 F-608 F-609 F-610 F-611 | C-09 |  |
+| `App-Features.md:1440-1458` · 17.2 Growth and Acquisition | 19 | F-701 F-702 F-703 F-704 F-705 F-706 F-708 F-709 | C-10 C-11 D-05 |  |
+| `App-Features.md:1459-1478` Reseller Profitability Tools | 20 | F-1001 F-1002 F-1003 F-1004 F-1005 F-1006 F-1007 |  |  |
+| `App-Features.md:1479-1480` Security, Fraud and Abuse | 2 |  |  |  |
+| `App-Features.md:1481-1490` · 19.1 Three Unrecoverable Risks | 10 |  |  |  |
+| `App-Features.md:1491-1498` · 19.2 Input Handling | 8 |  | C-04 |  |
+| `App-Features.md:1499-1506` · 19.3 Transport and Edge | 8 |  |  |  |
+| `App-Features.md:1507-1542` · 19.4 Fraud and Abuse Detection | 36 | F-1101 F-1102 F-1103 F-1104 F-1105 F-1106 F-1107 F-1108 F-1524 |  |  |
+| `App-Features.md:1543-1548` · 19.5 Reseller Risk | 6 |  |  |  |
+| `App-Features.md:1549-1550` Governance, Isolation, Treasury and Audit | 2 |  |  |  |
+| `App-Features.md:1551-1564` · 20.1 Audit Log | 14 |  |  | AdminAuditLog |
+| `App-Features.md:1565-1573` · 20.2 Multi-Tenant Isolation — Six Layers | 9 |  |  |  |
+| `App-Features.md:1574-1586` · 20.3 Tenant Detection | 13 |  | C-01 |  |
+| `App-Features.md:1587-1607` · 20.4 Credential Vault | 21 |  |  | TenantCredential TenantDek |
+| `App-Features.md:1608-1613` · 20.5 The 360° User View | 6 |  |  |  |
+| `App-Features.md:1614-1623` · 20.6 User Settings | 10 |  |  |  |
+| `App-Features.md:1624-1646` Platform Management Console | 23 |  | D-01 |  |
+| `App-Features.md:1647-1667` Public API and Integration | 21 | F-1301 F-1302 F-1303 F-1304 F-1305 | D-01 |  |
+| `App-Features.md:1668-1669` Monitoring, Reconciliation and Operations | 2 |  |  |  |
+| `App-Features.md:1670-1685` · 23.1 Nightly Reconciliation (03:00 UTC) | 16 |  |  |  |
+| `App-Features.md:1686-1689` · 23.2 End-to-End Money-Leak Test | 4 |  |  |  |
+| `App-Features.md:1690-1705` · 23.3 Business Metrics Alongside System Metrics | 16 |  |  |  |
+| `App-Features.md:1706-1715` · 23.4 Alert Severity Levels | 10 |  |  |  |
+| `App-Features.md:1716-1723` · 23.5 Backup and Recovery | 8 |  |  |  |
+| `App-Features.md:1724-1729` The AI Layer | 6 |  | D-04 |  |
+| `App-Features.md:1730-1743` · 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) | 14 | F-1501 F-1502 F-1503 F-1504 F-1505 F-1506 F-1507 F-1508 F-1509 | C-13 |  |
+| `App-Features.md:1744-1758` · 24.2 AI for the End User | 15 | F-1510 F-1511 F-1512 F-1513 F-1514 F-1516 F-1517 F-1518 |  |  |
+| `App-Features.md:1759-1771` · 24.3 Invisible AI (No User-Facing Text — the Highest-Value Tier) | 13 | F-1520 F-1522 F-1523 F-1525 |  |  |
+| `App-Features.md:1772-1783` · 24.4 AI for the Reseller (Here It Can Be Chatty — They Want a Staff Member) | 12 | F-1526 F-1527 F-1528 F-1529 F-1530 |  |  |
+| `App-Features.md:1784-1787` · 24.5 Where AI Has No Access | 4 |  |  |  |
+| `App-Features.md:1788-1802` · 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) | 15 | F-1534 F-1535 F-1536 F-1537 F-1538 F-1539 F-1540 F-1541 | D-03 D-04 |  |
+| `App-Features.md:1803-1823` · 24.7 BYO-AI — Safety, Limits and Operations | 21 | F-1542 F-1543 F-1544 F-1546 F-1547 F-1548 F-1549 F-1550 | D-03 |  |
+| `App-Features.md:1824-1841` Next-Phase Features | 18 | F-707 | C-11 C-12 |  |
+| `App-Features.md:1842-1860` Appendix A — Permanent Decisions (Out of Scope) | 19 |  | C-04 C-10 D-01 D-03 D-05 |  |
+| `App-Features.md:1861-1881` Appendix B — Mapping of v2 IDs to Sections of This Document | 21 |  |  |  |
+| `App-Features.md:1882-1899` Appendix C — Checklist for Applying Changes in Other Documents | 18 |  | C-01 C-03 C-04 C-05 C-07 C-09 C-10 C-12 C-13 C-15 C-16 C-17 C-19 |  |
 
 ## Feature index
 
@@ -187,8 +188,8 @@ Rebuild: `python3 tools/features-scan.py`
 | F-102 | Multiple domains with primary / standby / retired roles | new | 13.1 Domain Model |
 | F-103 | Domain health probing from inside Iran (multiple ISPs: Hamrah-e Avval, Irancell, Shatel, M | new | 13.3 Resilience Against Filtering |
 | F-104 | Block-type detection: DNS poisoning, SNI block, IP block, RST injection | new | 13.3 Resilience Against Filtering |
-| F-105 | Automatic domain rotation in the subscription response | new | 13.3 Resilience Against Filtering |
-| F-106 | Emergency broadcast of a new domain via the bot | new | 13.3 Resilience Against Filtering |
+| F-105 | Automatic subscription-link domain rotation — the /sub response includes a list of alterna | new | 7.6 Domain Rotation in the Subscription Response |
+| F-106 | Emergency broadcast — when a domain goes unhealthy, the new link is immediately pushed to  | new | 7.6 Domain Rotation in the Subscription Response |
 | F-107 | HTML structure, class names, asset hashes, and paths differ per tenant | new | 13.4 Anti-Fingerprinting |
 | F-108 | Complete removal of platform traces: no "powered by," no shared domain in the JS bundle, s | new | 13.4 Anti-Fingerprinting |
 | F-109 | Independent TLS certificate per domain; never a SAN shared across tenants | new | 13.4 Anti-Fingerprinting |
@@ -217,21 +218,21 @@ Rebuild: `python3 tools/features-scan.py`
 | F-304 | Catalog, variant selection, invoicing, and payment inside the bot | new | 10.4 Full Bot Capabilities |
 | F-305 | One-click renewal and top-up on the same Grant | new | 10.4 Full Bot Capabilities |
 | F-306 | Wallet: top-up, balance, transaction history, invoices | new | 10.4 Full Bot Capabilities |
-| F-307 | Config management: link, QR, per-app deep link, token rotation, reset | new | 10.4 Full Bot Capabilities |
+| F-307 | Link, QR, per-app deep link, token rotation, reset — all in bot and panel | new | 7.8 Connection Experience |
 | F-308 | Usage chart as a rendered image in the bot | new | 10.4 Full Bot Capabilities |
 | F-309 | Two-way support ticket with attachments inside the bot | new | 10.4 Full Bot Capabilities |
 | F-310 | Mini App / WebApp — the same PWA inside Telegram, sharing a session | new | 10.4 Full Bot Capabilities |
-| F-311 | Reseller management panel inside the bot | new | Multi-Tier Reseller |
-| F-312 | Sub-reseller panel inside the bot | new | Multi-Tier Reseller |
+| F-311 | Reseller management panel inside the bot: create user, renew, block, revenue report | new | 10.4 Full Bot Capabilities |
+| F-312 | Sub-reseller panel inside the bot | new | 10.4 Full Bot Capabilities |
 | F-313 | Bulk sending with segmentation + a rate-limited queue | new | 10.4 Full Bot Capabilities |
-| F-314 | Bot login deep link | new | 17.2 Growth and Acquisition |
+| F-314 | Login deep links: ?start=buy_<sku> / ?start=ref_<code> / ?start=trial | new | 10.4 Full Bot Capabilities |
 | F-317 | Bot text, menus, emoji and buttons fully overridable by the tenant (override within its ow | core | 1.8 Full Text Override by Tenant |
-| F-318 | Channel-membership gate for a free trial | new | 17.2 Growth and Acquisition |
+| F-318 | Channel-membership gate for claiming a free trial | new | 10.4 Full Bot Capabilities |
 | F-319 | Per-user notification settings inside the bot | new | 10.4 Full Bot Capabilities |
 | F-402 | Routing based on the user's ISP — tracking success rate per (ISP × inbound × hour) and ser | new | 7.7 Connection Intelligence and ISP-Based Routing |
 | F-403 | Automatic detection of an inbound getting blocked, from a drop in success rate | new | 7.7 Connection Intelligence and ISP-Based Routing |
 | F-404 | Automatic inbound rotation: create new, mirror, retire old, no admin involvement | new | 7.7 Connection Intelligence and ISP-Based Routing |
-| F-405 | "My connection isn't working" button | new | 10.4 Full Bot Capabilities |
+| F-405 | A "my connection isn't working" button in the bot that signals the routing engine | new | 7.7 Connection Intelligence and ISP-Based Routing |
 | F-408 | Node quality tiers: standard / premium with a different price multiplier | new | 4.8 Pricing and Campaign Engine |
 | F-409 | Speed-test and ping page per region before purchase | new | 7.8 Connection Experience |
 | F-410 | User-selected region with a shared quota | partial | 7.8 Connection Experience |
@@ -249,9 +250,9 @@ Rebuild: `python3 tools/features-scan.py`
 | F-510 | Auto-renewal from the wallet with explicit consent | new | 4.8 Pricing and Campaign Engine |
 | F-511 | Invoice/receipt PDF with tenant branding | new | 4.8 Pricing and Campaign Engine |
 | F-512 | Toman price display with live rate + rate lock at invoice time | core | 4.8 Pricing and Campaign Engine |
-| F-601 | Multi-threshold usage and time notifications | partial | 17.1 Retention |
-| F-602 | Volume exhaustion prediction | new | 17.1 Retention |
-| F-603 | 24-hour post-expiry grace period | changed | 17.1 Retention |
+| F-601 | Multi-threshold usage notifications (50% / 80% / 95%) and time (7 / 3 / 1 days) | partial | 9.5 Retention Notifications |
+| F-602 | Exhaustion prediction: "at this rate, your volume runs out in 4 days" | new | 9.5 Retention Notifications |
+| F-603 | 24-hour post-expiry grace period with a notice, instead of an abrupt cutoff | changed | 9.5 Retention Notifications |
 | F-604 | Unused-volume rollover | new | 17.1 Retention |
 | F-605 | Automatic win-back campaign: expired + N days of silence → dedicated coupon in the bot | new | 17.1 Retention |
 | F-606 | Loyalty tiers (cumulative volume → bonus volume or an upgrade) | new | 17.1 Retention |
@@ -263,10 +264,10 @@ Rebuild: `python3 tools/features-scan.py`
 | F-701 | Referral system — reward as volume, not cash | changed | 17.2 Growth and Acquisition |
 | F-702 | Two-sided reward (referrer and referee) | new | 17.2 Growth and Acquisition |
 | F-703 | Referral link and code, live stats, referral tree in the bot | new | 17.2 Growth and Acquisition |
-| F-704 | Referral anti-fraud | new | 19.4 Fraud and Abuse Detection |
+| F-704 | Referral anti-fraud: device fingerprint, number, usage pattern | new | 17.2 Growth and Acquisition |
 | F-705 | Free trial funded from the reseller's own share | changed | 17.2 Growth and Acquisition |
 | F-706 | One trial per (tenant × fingerprint × number) | new | 17.2 Growth and Acquisition |
-| F-707 | Lucky wheel and interactive mechanics |  | Next-Phase Features |
+| F-707 | Lucky wheel and interactive mechanics | new | Next-Phase Features |
 | F-708 | Social sharing link with the tenant's brand preview | new | 17.2 Growth and Acquisition |
 | F-709 | UTM and campaign attribution down to purchase | new | 17.2 Growth and Acquisition |
 | F-803 | Card-to-card as a first-class gateway | new | 5.6 Card-to-Card with Automatic Matching |
@@ -277,9 +278,9 @@ Rebuild: `python3 tools/features-scan.py`
 | F-901 | Reseller hierarchy (at least 2 levels, tree model from day one) | new | Multi-Tier Reseller |
 | F-902 | Reseller credit balance, separate from the user wallet | new | Multi-Tier Reseller |
 | F-903 | Reseller pricing: multiplier or dedicated price list | new | Multi-Tier Reseller |
-| F-904 | Reseller caps: user count, volume, max allowed discount | new | Multi-Tier Reseller |
+| F-904 | Reseller caps: user count, volume, max allowed discount | new | 3.12 RBAC Down to the Reseller Level |
 | F-905 | Reseller profit report and internal settlement (no withdrawal) | new | Multi-Tier Reseller |
-| F-906 | RLS and audit down to the reseller level | new | Multi-Tier Reseller |
+| F-906 | RLS and audit down to the reseller-node level (ltree path prefix) | new | 3.12 RBAC Down to the Reseller Level |
 | F-907 | Separate brand and bot for a reseller | new | Multi-Tier Reseller |
 | F-1001 | Revenue, cost, and margin dashboard per user / panel / product / reseller | new | Reseller Profitability Tools |
 | F-1002 | Bandwidth cost attribution to the panel owner | core | Reseller Profitability Tools |
@@ -302,53 +303,53 @@ Rebuild: `python3 tools/features-scan.py`
 | F-1303 | Embeddable sales widget/iframe for a reseller's site | new | Public API and Integration |
 | F-1304 | Lightweight JS and PHP SDKs | new | Public API and Integration |
 | F-1305 | Per-tenant docs page on its own domain | new | Public API and Integration |
-| F-1501 | A per-user attention budget — every proactive AI message has a cost and a periodic cap |  | 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) |
-| F-1502 | Answering a user's own question costs no budget; only AI-initiated messages cost anything |  | 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) |
-| F-1503 | A confidence threshold — below it, the AI stays silent |  | 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) |
-| F-1504 | Cooldown per (user × suggestion type) |  | 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) |
-| F-1505 | "Don't show me this again" with one tap, permanent, per type |  | 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) |
-| F-1506 | Quiet-down rules: open ticket, after a failed payment, connection-quality drop, during an  |  | 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) |
-| F-1507 | At most one CTA per message; no artificial urgency, no false scarcity, no guilt-tripping |  | 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) |
-| F-1508 | A permanent control group (holdout) that receives no AI messages at all |  | 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) |
-| F-1509 | Every AI message is labeled and auditable; a reseller can fully disable any type |  | 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) |
-| F-1510 | A tool-using support agent — reads real state before speaking: quota, panel health, ISP, d |  | 24.2 AI for the End User |
-| F-1511 | Diagnosing the root cause of "I can't connect" and giving exactly that fix |  | 24.2 AI for the End User |
-| F-1512 | Interactive install guide tailored to the user's OS and app |  | 24.2 AI for the End User |
-| F-1513 | Smart escalation to a human, with a full diagnostic summary |  | 24.2 AI for the End User |
-| F-1514 | Suggesting a smaller plan when a user has over-bought |  | 24.2 AI for the End User |
-| F-1515 | Volume-exhaustion prediction with one well-timed message |  | 24.2 AI for the End User |
-| F-1516 | Explaining abnormal usage ("yesterday it tripled; if that wasn't you, your link may be in  |  | 24.2 AI for the End User |
-| F-1517 | Suggesting a better region/server based on actual ISP and usage-time patterns |  | 24.2 AI for the End User |
-| F-1518 | Natural-language queries over the user's own account |  | 24.2 AI for the End User |
-| F-1519 | Reason-driven churn path: a quality problem → quality gets fixed, not a discount |  | 24.2 AI for the End User |
-| F-1520 | Learning success rate (ISP × inbound × hour) and automatically selecting the best config |  | 24.3 Invisible AI (No User-Facing Text — the Highest-Value Tier) |
-| F-1521 | Predicting an inbound getting blocked from the drop trend, rotating before full outage |  | 24.3 Invisible AI (No User-Facing Text — the Highest-Value Tier) |
-| F-1522 | Link-sharing-detection model |  | 24.3 Invisible AI (No User-Facing Text — the Highest-Value Tier) |
-| F-1523 | Usage-anomaly detection assisting the delta-quarantine decision |  | 24.3 Invisible AI (No User-Facing Text — the Highest-Value Tier) |
-| F-1524 | Fraud risk scoring at signup, trial, and referral |  | 24.3 Invisible AI (No User-Facing Text — the Highest-Value Tier) |
-| F-1525 | Forecasting a tenant's total usage for capacity planning and traffic-wallet top-ups |  | 24.3 Invisible AI (No User-Facing Text — the Highest-Value Tier) |
-| F-1526 | Natural-language questions over their own data ("how many people didn't renew last month,  |  | 24.4 AI for the Reseller (Here It Can Be Chatty — They Want a Staff Member) |
-| F-1527 | Plan-layout suggestions based on actual consumption distribution across their users ⭐ |  | 24.4 AI for the Reseller (Here It Can Be Chatty — They Want a Staff Member) |
-| F-1528 | Margin analysis and loss-making-plan alerts |  | 24.4 AI for the Reseller (Here It Can Be Chatty — They Want a Staff Member) |
-| F-1529 | Campaign segmentation suggestions + writing copy in their own brand voice |  | 24.4 AI for the Reseller (Here It Can Be Chatty — They Want a Staff Member) |
-| F-1530 | Ticket triage and reply drafting grounded in that same tenant's knowledge base |  | 24.4 AI for the Reseller (Here It Can Be Chatty — They Want a Staff Member) |
-| F-1531 | Daily/weekly business summary in the bot |  | 24.4 AI for the Reseller (Here It Can Be Chatty — They Want a Staff Member) |
-| F-1532 | Onboarding and migration co-pilot |  | 24.4 AI for the Reseller (Here It Can Be Chatty — They Want a Staff Member) |
-| F-1533 | Automatic locale-content translation with human review |  | 24.4 AI for the Reseller (Here It Can Be Chatty — They Want a Staff Member) |
-| F-1534 | AIProvider with ownershipType: tenant \ |  | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
-| F-1535 | A generic openai_compatible driver + capability discovery (tool-calling, JSON mode, contex |  | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
-| F-1536 | API key in the vault with envelope encryption; never logged, never returned by any API, on |  | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
-| F-1537 | A per-tenant outbound proxy (SOCKS5/HTTP) to reach the provider |  | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
-| F-1538 | Tenant-side relay — a small worker on the tenant's own server that reads from a job queue  |  | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
-| F-1539 | Model selection per task |  | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
-| F-1540 | Always falls back to a template — error, timeout, invalid key, quota exhausted → the templ |  | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
-| F-1541 | A hard time budget (default 3 seconds); after that, the template wins |  | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
-| F-1542 | Output validation before sending: every number must exist in the input, length capped, no  |  | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
-| F-1543 | Two modes: draft-with-approval (default) and automatic (enabled per message type) |  | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
-| F-1544 | "Test connection" + status / lastErrorAt visible to the tenant |  | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
-| F-1545 | Brand-tone prompt as data in locale-service, versioned |  | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
-| F-1546 | Token accounting and usage caps per tenant and per task |  | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
-| F-1547 | PII scrubbing before egress — phone numbers, emails, subscription tokens, IDs; disabling i |  | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
-| F-1548 | A safety floor that can't be turned off: the attention budget, silence during outages, bot |  | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
-| F-1549 | AI provider selection per message key, not one global key |  | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
-| F-1550 | Factory default: AI off, default templates on, product fully functional |  | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
+| F-1501 | A per-user attention budget — every proactive AI message has a cost and a periodic cap | new | 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) |
+| F-1502 | Answering a user's own question costs no budget; only AI-initiated messages cost anything | new | 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) |
+| F-1503 | A confidence threshold — below it, the AI stays silent | new | 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) |
+| F-1504 | Cooldown per (user × suggestion type) | new | 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) |
+| F-1505 | "Don't show me this again" with one tap, permanent, per type | new | 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) |
+| F-1506 | Quiet-down rules: open ticket, after a failed payment, connection-quality drop, during an  | new | 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) |
+| F-1507 | At most one CTA per message; no artificial urgency, no false scarcity, no guilt-tripping | new | 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) |
+| F-1508 | A permanent control group (holdout) that receives no AI messages at all | new | 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) |
+| F-1509 | Every AI message is labeled and auditable; a reseller can fully disable any type | new | 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) |
+| F-1510 | A tool-using support agent — reads real state before speaking: quota, panel health, ISP, d | new | 24.2 AI for the End User |
+| F-1511 | Diagnosing the root cause of "I can't connect" and giving exactly that fix | new | 24.2 AI for the End User |
+| F-1512 | Interactive install guide tailored to the user's OS and app | new | 24.2 AI for the End User |
+| F-1513 | Smart escalation to a human, with a full diagnostic summary | new | 24.2 AI for the End User |
+| F-1514 | Suggesting a smaller plan when a user has over-bought | new | 24.2 AI for the End User |
+| F-1515 | An AI version of this same prediction, with one well-timed message | new | 9.5 Retention Notifications |
+| F-1516 | Explaining abnormal usage ("yesterday it tripled; if that wasn't you, your link may be in  | new | 24.2 AI for the End User |
+| F-1517 | Suggesting a better region/server based on actual ISP and usage-time patterns | new | 24.2 AI for the End User |
+| F-1518 | Natural-language queries over the user's own account | new | 24.2 AI for the End User |
+| F-1519 | Reason-driven churn path: if the risk is connection quality, quality gets fixed, not a dis | new | 17.1 Retention |
+| F-1520 | Learning success rate (ISP × inbound × hour) and automatically selecting the best config | new | 24.3 Invisible AI (No User-Facing Text — the Highest-Value Tier) |
+| F-1521 | Predicting an inbound getting blocked from the drop trend and rotating before full outage | new | 7.7 Connection Intelligence and ISP-Based Routing |
+| F-1522 | Link-sharing-detection model | new | 24.3 Invisible AI (No User-Facing Text — the Highest-Value Tier) |
+| F-1523 | Usage-anomaly detection assisting the delta-quarantine decision | new | 24.3 Invisible AI (No User-Facing Text — the Highest-Value Tier) |
+| F-1524 | AI-based fraud risk scoring at signup, trial, and referral | new | 19.4 Fraud and Abuse Detection |
+| F-1525 | Forecasting a tenant's total usage for capacity planning and traffic-wallet top-ups | new | 24.3 Invisible AI (No User-Facing Text — the Highest-Value Tier) |
+| F-1526 | Natural-language questions over their own data ("how many people didn't renew last month,  | new | 24.4 AI for the Reseller (Here It Can Be Chatty — They Want a Staff Member) |
+| F-1527 | Plan-layout suggestions based on actual consumption distribution across their users ⭐ | new | 24.4 AI for the Reseller (Here It Can Be Chatty — They Want a Staff Member) |
+| F-1528 | Margin analysis and loss-making-plan alerts | new | 24.4 AI for the Reseller (Here It Can Be Chatty — They Want a Staff Member) |
+| F-1529 | Campaign segmentation suggestions + writing copy in their own brand voice | new | 24.4 AI for the Reseller (Here It Can Be Chatty — They Want a Staff Member) |
+| F-1530 | Ticket triage and reply drafting grounded in that same tenant's knowledge base | new | 24.4 AI for the Reseller (Here It Can Be Chatty — They Want a Staff Member) |
+| F-1531 | Daily/weekly business summary for the reseller in the bot | new | 10.4 Full Bot Capabilities |
+| F-1532 | AI onboarding and migration co-pilot | new | Migration, Import and Onboarding |
+| F-1533 | Automatic translation of locale content for new languages, with mandatory human review | new | 1.8 Full Text Override by Tenant |
+| F-1534 | AIProvider with ownershipType: tenant \| platform — from the first migration, like Panel.o | new | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
+| F-1535 | A generic openai_compatible driver + capability discovery (tool-calling, JSON mode, contex | new | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
+| F-1536 | API key in the vault with envelope encryption; never logged, never returned by any API, on | new | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
+| F-1537 | A per-tenant outbound proxy (SOCKS5/HTTP) to reach the provider | new | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
+| F-1538 | Tenant-side relay — a small worker on the tenant's own server that reads from a job queue  | new | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
+| F-1539 | Model selection per task | new | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
+| F-1540 | Always falls back to a template — error, timeout, invalid key, quota exhausted → the templ | new | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
+| F-1541 | A hard time budget (default 3 seconds); after that, the template wins | new | 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) |
+| F-1542 | Output validation before sending: every number must exist in the input, length capped, no  | new | 24.7 BYO-AI — Safety, Limits and Operations |
+| F-1543 | Two modes: draft-with-approval (default) and automatic (enabled per message type) | new | 24.7 BYO-AI — Safety, Limits and Operations |
+| F-1544 | "Test connection" + status / lastErrorAt visible to the tenant | new | 24.7 BYO-AI — Safety, Limits and Operations |
+| F-1545 | Brand-tone prompt as data in locale-service, versioned | new | 1.8 Full Text Override by Tenant |
+| F-1546 | Token accounting and usage caps per tenant and per task | new | 24.7 BYO-AI — Safety, Limits and Operations |
+| F-1547 | PII scrubbing before egress — phone numbers, emails, subscription tokens, IDs; disabling i | new | 24.7 BYO-AI — Safety, Limits and Operations |
+| F-1548 | A safety floor that can't be turned off: the attention budget, silence during outages, bot | new | 24.7 BYO-AI — Safety, Limits and Operations |
+| F-1549 | AI provider selection per message key, not one global key | new | 24.7 BYO-AI — Safety, Limits and Operations |
+| F-1550 | Factory default: AI off, default templates on, product fully functional | new | 24.7 BYO-AI — Safety, Limits and Operations |
