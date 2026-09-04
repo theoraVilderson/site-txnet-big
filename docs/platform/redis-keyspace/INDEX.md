@@ -3,6 +3,7 @@ id: redis-keyspace
 layer: platform
 status: active
 version: 1
+keywords: [redis, keyspace, session key, otp key]
 source:
   - txnet-backend/auth-service/src/app/redis/**
   - txnet-backend/auth-service/src/app/auth/session/**

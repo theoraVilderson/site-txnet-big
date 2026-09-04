@@ -3,6 +3,7 @@ id: audit
 layer: domain
 status: draft
 version: 1
+keywords: [audit log, impersonation, account switch]
 source: []
 owns_tables: [admin_audit_log, impersonation_session, linked_account_group, linked_account_member]
 depends_on: [identity]

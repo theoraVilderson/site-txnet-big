@@ -3,6 +3,7 @@ id: TEMPLATE
 layer: platform
 status: draft
 version: 1
+keywords: []                 # words a user would say for this unit. feeds tools/where.py
 source: []
 owns_tables: []
 depends_on: []

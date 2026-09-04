@@ -3,6 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 1
+keywords: [panel, site-pwa, user panel]
 source:
   - site-pwa/src/**
 owns_tables: []

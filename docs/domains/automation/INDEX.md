@@ -3,6 +3,7 @@ id: automation
 layer: domain
 status: draft
 version: 1
+keywords: [automation, worker, scheduler, cron, background job]
 source: []
 owns_tables: [bot_worker, bot_schedule, bot_execution_log]
 depends_on: []

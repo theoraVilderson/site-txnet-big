@@ -48,6 +48,7 @@ async function bootstrap() {
   );
 
   const port = configService.get<number>('PORT', 3001);
+  app.setGlobalPrefix('api');
   await app.listen(port);
   logger.log(`auth-service listening on :${port}`);
 }

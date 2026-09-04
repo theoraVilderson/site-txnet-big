@@ -3,6 +3,7 @@ id: auth-api
 layer: interface
 status: active
 version: 1
+keywords: [auth api, login endpoint, register endpoint, auth-service]
 source:
   - txnet-backend/auth-service/src/**
 owns_tables: []

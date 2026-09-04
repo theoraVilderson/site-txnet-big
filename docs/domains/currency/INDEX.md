@@ -3,6 +3,7 @@ id: currency
 layer: domain
 status: draft
 version: 1
+keywords: [currency, exchange rate, fx, display currency]
 source: []
 owns_tables: [currency, currency_exchange_rate, user_currency_preference, currency_policy]
 depends_on: [identity]

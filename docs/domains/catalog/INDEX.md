@@ -3,6 +3,7 @@ id: catalog
 layer: domain
 status: draft
 version: 1
+keywords: [catalog, product, category, plan, promotion]
 source: []
 owns_tables: [product_category, service_plan, service_plan_promotion]
 depends_on: [tenant]

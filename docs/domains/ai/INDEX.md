@@ -3,6 +3,7 @@ id: ai
 layer: domain
 status: draft
 version: 1
+keywords: [ai, recommendation, guardrail]
 source: []
 owns_tables: [user_behavior_event, ai_recommendation, ai_guardrail_rule, ai_guardrail_violation_log]
 depends_on: [identity, billing, automation]

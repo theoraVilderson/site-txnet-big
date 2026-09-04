@@ -3,6 +3,7 @@ id: marketing-web
 layer: interface
 status: draft
 version: 1
+keywords: [landing site, coinsite, marketing site]
 source: []
 owns_tables: []
 depends_on: []

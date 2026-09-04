@@ -1,0 +1,4 @@
+# Set by `python3 tools/drift.py --update-marker`. Commit this file.
+# It records the last point at which docs and code were in agreement.
+ref: ffcdc768f0219577e4eb890bd14e88ecced5d6a1
+date: 2026-09-04

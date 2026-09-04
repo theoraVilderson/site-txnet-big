@@ -3,6 +3,7 @@ id: support
 layer: domain
 status: draft
 version: 1
+keywords: [ticket, support, chat, attachment]
 source: []
 owns_tables: [ticket, ticket_message, ticket_attachment, chat_session, chat_message]
 depends_on: [identity, audit]

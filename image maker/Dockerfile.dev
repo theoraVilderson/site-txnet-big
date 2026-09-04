@@ -1,6 +1,0 @@
-FROM registry.myxnet.ir/base/golang-1.22-alpine-proxy:v1
-
-RUN apk add --no-cache git
-RUN go install github.com/cosmtrek/air@v1.52.1
-
-WORKDIR /app

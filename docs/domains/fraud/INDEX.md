@@ -3,6 +3,7 @@ id: fraud
 layer: domain
 status: draft
 version: 1
+keywords: [fraud, device fingerprint, flag]
 source: []
 owns_tables: [device_fingerprint, fraud_flag]
 depends_on: [identity]

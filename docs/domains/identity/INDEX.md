@@ -3,6 +3,7 @@ id: identity
 layer: domain
 status: active
 version: 1
+keywords: [users, login, auth, rbac, roles, permissions, sessions, otp, telegram, bale, bot account]
 source:
   - txnet-backend/prisma/domains/identity.prisma
   - txnet-backend/auth-service/src/app/auth/**

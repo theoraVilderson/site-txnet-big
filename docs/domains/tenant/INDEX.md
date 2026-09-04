@@ -3,6 +3,7 @@ id: tenant
 layer: domain
 status: draft
 version: 1
+keywords: [tenant, reseller, white-label, branding, domain, entitlements, tenant billing]
 source: []
 owns_tables: [tenant, tenant_branding, tenant_domain, tenant_feature_package, tenant_feature_entitlement, tenant_staff_member, tenant_billing_wallet, tenant_billing_transaction, tenant_usage_meter, tenant_gateway_config, tenant_sms_config, tenant_bot_integration, tenant_restriction]
 depends_on: [identity, billing]

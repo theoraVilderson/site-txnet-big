@@ -3,6 +3,7 @@ id: notification
 layer: domain
 status: draft
 version: 1
+keywords: [notification, campaign, delivery, push, sms, email]
 source: []
 owns_tables: [notification, notification_campaign, notification_campaign_recipient]
 depends_on: [identity, tenant, automation]

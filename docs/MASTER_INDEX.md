@@ -9,7 +9,8 @@ updated: 2026-09-04
 Entry point for every task. One line per unit. **Never add detail here.**
 
 Legend — `status`: `active` = implemented in code; `draft` = schema/intent only,
-no service yet.
+no service yet. A unit that is `active` with an empty `source:` is a lie and
+`tools/docs-check.py` will fail on it.
 
 ## Domains — business logic, owns state
 | id | one-line responsibility | status | doc |
@@ -44,6 +45,11 @@ no service yet.
 | redis-keyspace | shared Redis key prefix/versioning + session & OTP key catalog + TTLs | active | [->](platform/redis-keyspace/INDEX.md) |
 
 ## Cross-cutting docs
+- [Surface map](SURFACES.md) — user-visible thing -> unit -> file. **Start here for any vague request.**
+- [Code layout](CODE-LAYOUT.md) — the mirror rule / the roots of this monorepo; `.sync` marks the last point docs and code agreed
+- [Conventions](CONVENTIONS.md) — house style, `C-nn` ids, and what is actually enforced
+- [Agent setup](AGENT-SETUP.md) — running this on a tool other than Claude Code
+- [Handoff](HANDOFF.md) — mid-item session state. Read it before `/next` if it is `active`.
 - [Backlog](BACKLOG.md) — what is built vs not; read with this file for MODE: NEXT
 - [Feature catalog manifest](features/MANIFEST.md) — the spec index. **Never open `features/App-Features.md`;** use `python3 tools/spec.py <F-id>`.
 - [Feature format](FEATURES-FORMAT.md) — the contract the catalog satisfies

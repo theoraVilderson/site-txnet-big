@@ -3,6 +3,7 @@ id: i18n
 layer: platform
 status: active
 version: 1
+keywords: [i18n, locale, translation, locale-service]
 source:
   - i18n-platform/**
   - locales/**

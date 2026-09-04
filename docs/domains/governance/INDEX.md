@@ -3,6 +3,7 @@ id: governance
 layer: domain
 status: draft
 version: 1
+keywords: [settings, access grant, restriction, cap]
 source: []
 owns_tables: [user_setting, temporal_access_grant, user_restriction]
 depends_on: [identity]

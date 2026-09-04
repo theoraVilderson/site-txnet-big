@@ -3,6 +3,7 @@ id: forward-auth
 layer: platform
 status: active
 version: 1
+keywords: [forward auth, traefik, gateway, jwt]
 source:
   - auth-handler/**
 owns_tables: []

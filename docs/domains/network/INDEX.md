@@ -3,6 +3,7 @@ id: network
 layer: domain
 status: draft
 version: 1
+keywords: [vpn, panel, xray, config, subscription link, traffic, ip access]
 source: []
 owns_tables: [node, config, config_action_log, traffic_raw_log, traffic_daily_aggregate, ip_access_rule]
 depends_on: [identity, catalog, tenant, billing]

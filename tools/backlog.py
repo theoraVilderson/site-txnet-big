@@ -11,6 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BACKLOG = ROOT / "docs" / "BACKLOG.md"
+HANDOFF = ROOT / "docs" / "HANDOFF.md"
 VALID = {"todo", "doing", "done", "blocked", "dropped"}
 COLS = ["id", "feature", "unit", "status", "depends_on", "spec", "proof", "note"]
 
@@ -36,6 +37,25 @@ def rows():
         r["deps"] = [d for d in deps if re.match(r"^[A-Z]+-\d+$", d)]
         out.append(r)
     return out
+
+
+def handoff_state():
+    """-> (status, item). A handoff that outlives its item misleads the next
+    session, so its liveness is checked here rather than trusted."""
+    if not HANDOFF.exists():
+        return None, None
+    status = item = None
+    for ln in HANDOFF.read_text(encoding="utf-8").splitlines()[1:]:
+        if ln.strip() == "---":
+            break
+        m = re.match(r"^(status|item)\s*:\s*(\S+)", ln)
+        if m:
+            v = m.group(2).strip("`\"'")
+            if m.group(1) == "status":
+                status = v.lower()
+            else:
+                item = None if v in {"—", "-", "none"} else v
+    return status, item
 
 
 def main():
@@ -75,11 +95,26 @@ def main():
     print("  " + "  ".join(f"{s}:{counts[s]}" for s in
                            ("todo", "doing", "done", "blocked", "dropped")))
 
+    h_status, h_item = handoff_state()
+    if h_status == "active":
+        if not h_item:
+            errors.append("HANDOFF.md is active but names no item")
+        elif h_item not in by_id:
+            errors.append(f"HANDOFF.md points at {h_item}, which is not a backlog row")
+        elif by_id[h_item]["status"] != "doing":
+            errors.append(
+                f"HANDOFF.md is stale: {h_item} is '{by_id[h_item]['status']}', "
+                f"not 'doing'. Reset it to status: empty.")
+        else:
+            print(f"\nHANDOFF: active on {h_item} — start the next session with /resume")
+
     doing = [r for r in items if r["status"] == "doing"]
     if doing:
         print("\nIN PROGRESS (finish these before starting new work):")
         for r in doing:
             print(f"  {r['id']}  {r['feature'][:50]}  [{r['unit']}]  {r['note'][:40]}")
+        if h_status != "active":
+            print("  (no HANDOFF.md — a fresh session cannot tell how far these got)")
 
     print("\nNEXT ELIGIBLE:")
     for r in eligible[:5]:

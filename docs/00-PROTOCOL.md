@@ -1,14 +1,27 @@
 ---
 id: protocol
 status: fixed
-version: 2.0
+version: 2.4
 updated: 2026-09-04
 ---
 
-# DOCS PROTOCOL v2 — fixed file. Copy verbatim into every project. Never edit without explicit user request.
+# DOCS PROTOCOL v2.4 — fixed file. Copy verbatim into every project. Never edit without explicit user request.
 
 > **v2 adds the feature-catalog layer.** New: `/features` in §1, tier 1b in §3,
 > and `MODE: INGEST` (§6d). Everything from v1 is unchanged.
+>
+> **v2.4 adds `CONVENTIONS.md`** — house style with `C-nn` ids, in §1, tier 4
+> and §11. It changes no existing rule.
+>
+> **v2.3 adds MODE: SYNC (§6f)** — the cheap incremental path back from code
+> written without an agent. It changes no existing rule.
+>
+> **v2.2 adds the session boundary.** New: `HANDOFF.md` in §1 and `MODE:
+> HANDOFF` / `MODE: RESUME` (§6e). It changes no existing rule.
+>
+> **v2.1 adds the addressing layer.** New: `SURFACES.md` and `CODE-LAYOUT.md` in
+> §1, and §3b (LOCATE) — the step that turns a human sentence into a path. It
+> changes no existing rule; it removes the reason an agent would ever grep.
 
 You are operating on a documentation tree that is the shared memory between the
 user, you, and future agents. These rules override your defaults.
@@ -38,7 +51,12 @@ rotten docs.
 /docs
   00-PROTOCOL.md        this file
   MASTER_INDEX.md       one line per unit. entry point for every task.
+  SURFACES.md           user-visible thing -> unit -> file. entry point for a vague request.
+  CODE-LAYOUT.md        the mirror rule: unit id = folder name. paths are derived.
+  CONVENTIONS.md        house style. how code is written, not what it does.
   BACKLOG.md            one row per shippable feature. what is built vs not.
+  HANDOFF.md            mid-item session state. overwritten, never appended.
+  .sync                 last commit at which docs and code agreed. see §6f.
   GLOSSARY.md           canonical names. one term = one meaning, project-wide.
   FEATURES-FORMAT.md    fixed. the authoring contract for the catalog.
   PROMPTS.md            copy-paste prompts for the user
@@ -104,11 +122,41 @@ Read in tiers. Stop at the shallowest tier that answers the question.
 |---|---|---|
 | 0 | `MASTER_INDEX.md` | **always**, first, every task |
 | 1 | target unit `INDEX.md` | always |
+| 0b | `python3 tools/where.py "<request>"` | the request names a thing, not a unit — see §3b |
 | 1b | `python3 tools/spec.py <F-id>` | the backlog row names a `spec ref` |
 | 2 | target `contract.md` + `invariants.md` | changing or using the unit |
 | 3 | `contract.md` of each `depends_on` — **the API section only** | writing code |
-| 4 | `rules.md`, `data-model.md` | writing code *inside* that unit |
+| 4 | `CONVENTIONS.md`, `rules.md`, `data-model.md` | writing code *inside* that unit |
 | 5 | actual source files under `source:` | implementing |
+
+## 3b. LOCATE (run before tier 0, whenever the request has no path in it)
+
+A request normally names a thing, not a location: *"edit the profile button in
+the panel"*. Resolving that by grepping is forbidden — a repo-wide grep is the
+most common way `features/App-Features.md` gets opened by accident.
+
+```bash
+python3 tools/where.py "<the user's words, verbatim>"
+```
+
+It returns one of three things, and the difference is not cosmetic:
+
+- **confident match** — state the unit, the files and the spec id in one line,
+  then continue at tier 1 for that unit only.
+- **candidates** — name them and **ask**. One question is cheaper than one file
+  edited confidently in the wrong place.
+- **nothing matches** — the surface is not in `SURFACES.md`. Ask the user to
+  point at it once, add the row with their exact words as `aliases`, continue.
+
+Whenever a query missed and the user had to rephrase, add the failed phrasing to
+that row's `aliases` **in the same turn as the fix**. That single habit is the
+entire maintenance cost of this layer, and skipping it is how the map rots.
+
+Paths are derived, never memorised: a unit id is a folder name
+(`docs/CODE-LAYOUT.md`). Never invent a path that `where.py`, `source:` or the
+mirror rule did not produce.
+
+---
 
 **Blast radius** = the unit + every unit listing it in `depends_on`
 (consumers). Read consumers' `contract.md` only when changing a public contract.
@@ -166,6 +214,9 @@ Hard limits:
 4. Code must not violate any `invariants.md` entry. If the requested feature
    requires violating one, **stop and say which one**.
 5. After code: update `source:` paths and flip `status: draft → active`.
+6. New user-visible surface, or a moved component file? → update
+   `SURFACES.md` in the same change. A surface with no row is unaddressable, and
+   the next session will grep for it.
 
 ## 6b. MODE: NEXT (the delivery loop — one feature per session)
 
@@ -187,12 +238,96 @@ zero context can resume work correctly and cheaply.
    - backlog row → `status: doing` at start, `done` at end
    - the unit's `source:` paths and `status`
    - the unit's INDEX changelog (one line)
-7. **Stop.** One item per session. Report: what shipped, what is now unblocked,
+7. **Stop.** One item per session. If the session filled up before the item
+   was finished, do not force it to a close — run MODE: HANDOFF (§6e). Report: what shipped, what is now unblocked,
    what needs a decision from the user.
 
 Never mark an item `done` if a blocking open question is open, an invariant is
 violated, or the code was not actually written. `done` means code exists.
 Half-finished work stays `doing` with a note — never silently `done`.
+
+## 6f. MODE: SYNC (code was written without an agent)
+
+MODE: RECONCILE re-derives the whole tree and costs a session. That is the right
+tool once, when adopting the skeleton. It is the wrong tool for "I coded for a
+week." SYNC is the incremental version: `tools/drift.py` diffs the code against
+`docs/.sync` and produces a small, exact work order.
+
+```bash
+python3 tools/drift.py --init          # once, at a point where docs and code agree
+python3 tools/drift.py                 # after coding: what changed and who owns it
+python3 tools/drift.py --update-marker # only after the docs are actually fixed
+```
+
+Work the report in its own order — it is sorted by what invalidates what:
+
+1. **Ambiguous ownership.** A `source:` glob that does not contain its unit id
+   breaks the mirror rule, silently swallows other units' code, and hides every
+   orphan inside itself. Nothing below it can be trusted until it is narrowed.
+2. **Orphans** — code no unit claims. Each is either a new unit or belongs in an
+   existing one. **Ask.** Unit boundaries are the most expensive thing in this
+   repo to get wrong, and a week-old folder is not evidence of intent.
+3. **Broken references** — `source:` and `SURFACES.md` paths that no longer
+   resolve. Mechanical; fix them.
+4. **Likely new surfaces** — propose rows, show them, then write them.
+5. **Spec ids cited in commits** — verify against the code before flipping a
+   backlog row. A commit message is a claim, not proof.
+
+The limit of this mode, stated plainly: `drift.py` sees **what changed**, never
+**why**. It cannot tell a domain unit from a platform one, and it cannot read an
+invariant out of an implementation — what code does is not what it must do.
+Documenting an inference as fact is worse than leaving a gap, because the next
+session will treat it as authority (§0). Where intent is unclear: ask, or write
+it into `open-questions.md`.
+
+Never run `--update-marker` on the user's behalf. The marker asserts that docs
+and code agree; only they can confirm that.
+
+## 6e. MODE: HANDOFF / RESUME (crossing a session boundary mid-item)
+
+`BACKLOG.md` + `MASTER_INDEX.md` are the complete resume state **between**
+items. They are not enough **inside** one: a half-written service, three things
+already tried and failed, and two decisions made out loud all die with the
+session. `HANDOFF.md` carries exactly that and nothing else.
+
+**Stop early, on purpose.** A session degrades before it ends: it starts
+re-reading files it already has, restating what it just said, or proposing
+changes to code it wrote twenty minutes ago. Those are the signals to hand off.
+A handoff written while thinking is still clear is worth more than one squeezed
+out of a session that has already lost the thread.
+
+### MODE: HANDOFF
+
+1. Stop. Write no new code. Finish nothing, start nothing.
+2. Backlog row → `doing` with an honest note. **Never `done`** unless the code
+   exists and is reachable.
+3. Update the unit's `source:` and `status` if files were added.
+4. Overwrite `HANDOFF.md`: `status: active`, `item:` = the backlog id, and every
+   section filled per the instructions in that file.
+5. Run `tools/backlog.py` and `tools/where.py --check`; report the output.
+
+Record **only** what a fresh session cannot recover from the backlog, the unit
+docs, `spec.py` and the code itself. Do not summarise the conversation. The two
+sections that justify the file are *dead ends* (otherwise the next session
+rediscovers your walls) and *decided in conversation* (otherwise project
+knowledge stays in a chat log and is lost).
+
+### MODE: RESUME
+
+1. Read **only** `MASTER_INDEX.md`, `BACKLOG.md`, `HANDOFF.md`.
+2. `status: empty` → there is no mid-flight work; run MODE: NEXT instead.
+3. Confirm the handoff's `item` is still a `doing` row. If not, the handoff is
+   stale: say so and stop. Do not guess.
+4. Verify the *files touched* table against the disk before trusting it — the
+   previous session may have been cut off mid-write.
+5. Announce your reading of the state and the one next step before working. If
+   it disagrees with the handoff, say so and ask.
+6. Never retry anything in the *dead ends* table.
+
+When the item lands `done`: write every *decided in conversation* row into its
+real home (ADR, invariant, catalog row), then reset `HANDOFF.md` to
+`status: empty`. **A handoff that outlives its item is worse than none** — the
+next session will trust it. `tools/backlog.py` fails on a stale one.
 
 ## 6c. MODE: RECONCILE (half-built project — run this once, first)
 
@@ -258,11 +393,13 @@ Then the mechanical half — run all three, report the output verbatim:
 python3 tools/docs-check.py            # front matter, source: paths, reachability
 python3 tools/backlog.py               # progress, dependency sanity, next eligible
 python3 tools/features-scan.py --check # catalog format + backlog coverage
+python3 tools/where.py --check         # every surface resolves to a real file
 ```
 
 A green audit means: no unit lies about being implemented, no backlog row cites
-a catalog id that does not exist, and no catalog feature is silently missing
-from both the backlog and `DROPPED.md`.
+a catalog id that does not exist, no catalog feature is silently missing from
+both the backlog and `DROPPED.md`, and no surface points at a file that has been
+moved or deleted.
 
 ---
 
@@ -313,4 +450,10 @@ invalid. Entries older than 30 days must be raised proactively.
 - Never write a doc fact that duplicates code — link instead.
 - Never mark work complete while an invariant is violated or a blocking question
   is open.
+- Never violate a `docs/CONVENTIONS.md` rule to make something work. If a
+  convention blocks the task, say which id and why, and ask — do not route
+  around it quietly.
+- Never grep the repo to locate a feature. Use `tools/where.py` (§3b).
+- Never write a path that `where.py`, `source:` or the mirror rule did not give
+  you. A plausible-looking filename is not evidence.
 - Prefer deleting a stale doc over keeping a wrong one.

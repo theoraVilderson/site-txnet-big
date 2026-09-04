@@ -36,7 +36,6 @@ services:
       - "--api.dashboard=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.watch=true"
       - "--providers.docker.network=${PRIVATE_NET_NAME:-private_backend_network}"
       # Entrypoints
       - "--entrypoints.web.address=:80"
@@ -57,7 +56,6 @@ services:
       - private_backend_network
     labels:
       - "traefik.enable=true"
-      # Dashboard (HTTP → HTTPS redirect handled by middleware)
       - "traefik.http.routers.dashboard-http.rule=Host(`monitor.${DOMAIN_NAME}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
       - "traefik.http.routers.dashboard-http.entrypoints=web"
       - "traefik.http.routers.dashboard-http.service=api@internal"
@@ -80,12 +78,10 @@ services:
       dockerfile: Dockerfile
     container_name: ${STACK_NAME:-txnet}-locale-service
     restart: unless-stopped
-    ports:
-      - "${LOCALE_SERVICE_HOST_PORT:-50051}:50051"
     volumes:
       - ../locales:/locales:ro
     environment:
-      - GRPC_ADDR=:50051
+      - GRPC_ADDR=:${LOCALE_SERVICE_HOST_PORT:-50051}
       - LOCALES_DIR=/locales
     healthcheck:
       test: ["CMD", "/usr/local/bin/locale-service", "-healthcheck"]
@@ -103,7 +99,7 @@ services:
   # ===========================================================================
   authorization-handler:
     build:
-      context: ..                        # repo root — shared Go module lives here
+      context: .. # repo root — shared Go module lives here
       dockerfile: auth-handler/Dockerfile
       target: ${ENVIRONMENT}
       extra_hosts:
@@ -124,7 +120,7 @@ services:
       - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v1}
       - PERMISSIONS_FILE_PATH=/src/auth-handler/configs/permissions.yaml
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
-      - LOCALE_SERVICE_ADDR=locale-service:50051
+      - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
       - LOCALE_SCOPE=backend
     depends_on:
       locale-service:
@@ -135,13 +131,14 @@ services:
       - "traefik.enable=true"
       # ForwardAuth middleware — validates every request that uses it
       - "traefik.http.middlewares.my-auth.forwardauth.address=http://authorization-handler:${INTERAL_BACKEND_PORT:-8080}/validate"
-      - "traefik.http.middlewares.my-auth.forwardauth.authResponseHeaders=X-User-Id,X-Tenant-Id,X-Role-Id,X-User-Permissions,X-Impersonated,X-Impersonated-By"
       # Strip fake headers from incoming requests (security)
       - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-User-Id="
       - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Actor-Id="
       - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-User-Permissions="
       - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Tenant-Id="
       - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Role-Id="
+      - "traefik.http.middlewares.my-auth.forwardauth.authResponseHeaders=X-User-Id,X-Tenant-Id,X-Role-Id,X-User-Permissions,X-Impersonated,X-Impersonated-By"
+
       - "txnet.logging=true"
 
   # ===========================================================================
@@ -159,7 +156,6 @@ services:
         - DOCKER_REGISTRY=${DOCKER_REGISTRY}
     container_name: ${STACK_NAME:-txnet}-auth-service
     restart: unless-stopped
-    command: node dist/auth-service/main.js
     volumes:
       - ../txnet-backend:/app:delegated
       - /app/node_modules
@@ -180,24 +176,37 @@ services:
       - COOKIE_SECURE=${COOKIE_SECURE:-true}
       - TRUST_PROXY=${TRUST_PROXY}
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
-      - LOCALE_SERVICE_ADDR=locale-service:50051
+      - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
       - LOCALE_SCOPE=backend
     networks:
       - private_backend_network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.auth-service.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/auth`)"
-      - "traefik.http.routers.auth-service.entrypoints=websecure"
-      - "traefik.http.routers.auth-service.tls.certresolver=myresolver"
       - "traefik.http.middlewares.auth-cors.headers.accesscontrolalloworiginlist=https://panel.${DOMAIN_NAME}"
       - "traefik.http.middlewares.auth-cors.headers.accesscontrolallowcredentials=true"
       - "traefik.http.middlewares.auth-cors.headers.accesscontrolallowmethods=GET,OPTIONS,POST"
       - "traefik.http.middlewares.auth-cors.headers.accesscontrolallowheaders=Content-Type,Authorization"
-      - "traefik.http.routers.auth-service.middlewares=auth-rate-limit,auth-cors"
-
       - "traefik.http.middlewares.auth-rate-limit.ratelimit.average=100"
       - "traefik.http.middlewares.auth-rate-limit.ratelimit.period=1m"
-      - "traefik.http.services.auth-service.loadbalancer.server.port=3000"
+      - "traefik.http.middlewares.auth-rate-limit.ratelimit.burst=50"
+      - "traefik.http.services.auth-service.loadbalancer.server.port=${AUTH_PORT}"
+
+        # http router for auth-service (with TLS)
+
+      - "traefik.http.routers.auth-service-http.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/auth`)"
+      # - "traefik.http.routers.auth-service-http.rule=Host(`api.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.auth-service-http.entrypoints=web"
+      - "traefik.http.routers.auth-service-http.middlewares=auth-rate-limit,auth-cors"
+      - "traefik.http.routers.auth-service-http.service=auth-service"
+
+      # https router for auth-service (with TLS)
+      - "traefik.http.routers.auth-service-https.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/auth`)"
+      - "traefik.http.routers.auth-service-https.rule=Host(`api.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.auth-service-https.entrypoints=websecure"
+      - "traefik.http.routers.auth-service-https.tls.certresolver=myresolver"
+      - "traefik.http.routers.auth-service-https.middlewares=auth-rate-limit,auth-cors"
+
+      - "traefik.http.routers.auth-service-https.service=auth-service"
       - "txnet.logging=true"
     depends_on:
       main-db:
@@ -273,7 +282,7 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - NEXT_PUBLIC_PAYMENT_URL=${NEXT_PUBLIC_PAYMENT_URL}
       - AUTH_API_ORIGIN=https://api.${DOMAIN_NAME}
-      - LOCALE_SERVICE_ADDR=locale-service:50051
+      - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
       - LOCALE_SCOPE=frontend
     depends_on:
       locale-service:

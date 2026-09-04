@@ -22,18 +22,22 @@ RUN npx prisma generate
 # ==========================================
 # Stage 3: Development
 # ==========================================
+
 FROM dependencies AS dev
 ENV NODE_ENV=development
-ENV NX_DAEMON=false
+ENV NX_DAEMON=true
 EXPOSE 3000
-RUN npx nx build ${APP_NAME}
+
 ENV HTTP_PROXY="" \
     HTTPS_PROXY="" \
     NO_PROXY="" \
     http_proxy="" \
     https_proxy="" \
     no_proxy=""
-CMD node dist/${APP_NAME}/main.js
+
+# حذف RUN npx nx build
+# جایگزینی CMD برای اجرای حالت توسعه و Watch
+CMD npx nx serve ${APP_NAME}
 
 # ==========================================
 # Stage 4: Builder
