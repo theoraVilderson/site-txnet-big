@@ -7,6 +7,8 @@ import { OrganicField } from "@auth/auth/_components/OrganicField";
 import { PasswordField } from "@auth/auth/_components/PasswordField";
 import { NatureCaptchaUI } from "@auth/auth/_components/NatureCaptchaUI";
 import { OtpStep } from "@auth/auth/_components/OtpStep";
+import { OtpChannelPicker } from "@auth/auth/_components/OtpChannelPicker";
+import { BotLinkStep } from "@auth/auth/_components/BotLinkStep";
 import { SubmitButton } from "@auth/auth/_components/SubmitButton";
 import {
   AuthCardShell,
@@ -17,9 +19,14 @@ import { useAuthUI } from "@auth/auth/_context/AuthUIContext";
 import { useOtpTimer } from "@auth/auth/_hooks/useOtpTimer";
 import { useFirstPaint } from "@auth/auth/_hooks/useFirstPaint";
 import { useCaptcha } from "@auth/auth/_hooks/useCaptcha";
+import { useOtpChannels } from "@auth/auth/_hooks/useOtpChannels";
+import { useBotLink } from "@auth/auth/_hooks/useBotLink";
 import { authApi } from "@/lib/auth-api";
+import { PANEL_HOME } from "@/lib/routes";
+import { OTP_LENGTH } from "@/lib/otp";
 
-type Step = 1 | 2 | 3;
+/** 1 phone + method · "link" connect the messenger · 2 code · 3 new password */
+type Step = 1 | "link" | 2 | 3;
 
 export default function ForgotPasswordPage() {
   const { t, isRtl } = useAuthUI();
@@ -31,6 +38,13 @@ export default function ForgotPasswordPage() {
   const [isSuccess, setIsSuccess] = useState(false);
   const captcha = useCaptcha();
   const otpTimer = useOtpTimer();
+  const channels = useOtpChannels();
+  // The bot delivers the code itself once the user confirms their number
+  // there, so linking lands the flow straight on the code step.
+  const botLink = useBotLink(() => {
+    setStep(2);
+    otpTimer.start(120);
+  });
 
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
@@ -47,12 +61,33 @@ export default function ForgotPasswordPage() {
     try {
       if (step === 1) {
         if (!captcha.token) return;
-        await authApi.forgot(phone, captcha.token);
-        setStep(2);
-        otpTimer.start(120);
+        // The pass is single-use on the server (F-0201): whatever happens
+        // next, step 1 needs a fresh slide before it can be sent again.
+        let result;
+        try {
+          result = await authApi.forgot(phone, captcha.token, channels.selected);
+        } finally {
+          captcha.spend();
+        }
+        if (result.linkRequired) {
+          // Messenger not connected yet: no code was sent, and none will be
+          // until the user proves the number is theirs in the bot.
+          botLink.start(result);
+          setStep("link");
+        } else {
+          setStep(2);
+          otpTimer.start(120);
+        }
       }
       else if (step === 2) { const result = await authApi.verifyForgot(phone, otp); setResetToken(result.resetToken); setStep(3); }
-      else { await authApi.reset(resetToken, newPassword); setIsSuccess(true); router.push("/auth/login"); }
+      else if (step === 3) {
+        // The reset revoked every session this account had and issued a new
+        // one for this device — so land in the panel, not back on the login
+        // form.
+        await authApi.reset(resetToken, newPassword);
+        setIsSuccess(true);
+        router.replace(PANEL_HOME);
+      }
     } catch (error) { console.error(error); }
     finally { setIsLoading(false); }
   };
@@ -61,9 +96,11 @@ export default function ForgotPasswordPage() {
   const subtitle =
     step === 1
       ? t.forgotSubtitle
-      : step === 2
-        ? `${t.codeSentTo} ${phone || t.yourNumber}`
-        : t.resetSubtitle;
+      : step === "link"
+        ? t.botLinkWaiting
+        : step === 2
+          ? `${t.codeSentTo} ${phone || t.yourNumber}`
+          : t.resetSubtitle;
 
   const buttonText = isLoading
     ? t.processing
@@ -103,7 +140,7 @@ export default function ForgotPasswordPage() {
                   label={t.phone}
                   type="tel"
                   value={phone}
-                  onChange={(e: any) => setPhone(e.target.value)}
+                  onChange={(e) => setPhone(e.target.value)}
                   dir="ltr"
                   autoComplete="tel"
                 />
@@ -120,7 +157,26 @@ export default function ForgotPasswordPage() {
                     t={t}
                   />
                 </motion.div>
+
+                {channels.hasChoice && (
+                  <OtpChannelPicker
+                    channels={channels.channels}
+                    selected={channels.selected}
+                    onSelect={channels.select}
+                  />
+                )}
               </motion.div>
+            )}
+
+            {step === "link" && botLink.link && (
+              <BotLinkStep
+                link={botLink.link}
+                status={botLink.status}
+                onBack={() => {
+                  botLink.reset();
+                  setStep(1);
+                }}
+              />
             )}
 
             {step === 2 && (
@@ -168,18 +224,20 @@ export default function ForgotPasswordPage() {
             )}
           </AnimatePresence>
 
-          <SubmitButton
-            isLoading={isLoading}
-            disabled={
-              step === 1
-                ? !canSubmitStep1
-                : step === 2
-                  ? otp.length < 5
-                  : !canSubmitStep3
-            }
-          >
-            {buttonText}
-          </SubmitButton>
+          {step !== "link" && (
+            <SubmitButton
+              isLoading={isLoading}
+              disabled={
+                step === 1
+                  ? !canSubmitStep1
+                  : step === 2
+                    ? otp.length < OTP_LENGTH
+                    : !canSubmitStep3
+              }
+            >
+              {buttonText}
+            </SubmitButton>
+          )}
         </form>
 
         {step === 1 && <AuthFooterLinks variant="forgot-password" />}

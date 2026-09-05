@@ -6,7 +6,8 @@ import {
   type LocaleClient,
 } from "@txnet/locale-client";
 
-type Namespace = Record<string, any>;
+/** درخت خام ترجمه‌ها: هر برگ یک رشته است، هر شاخه یک Namespace تودرتو */
+type Namespace = { [key: string]: string | Namespace };
 type LocaleData = Record<string, Record<string, Namespace>>;
 
 /** ساختار فایل metadata.json داخل هر پوشه زبان */
@@ -79,8 +80,12 @@ function unflatten(flat: Record<string, string>): Namespace {
     const parts = path.split(".");
     let node = out;
     for (let i = 0; i < parts.length - 1; i++) {
-      node[parts[i]] ??= {};
-      node = node[parts[i]];
+      let next = node[parts[i]];
+      if (typeof next !== "object") {
+        next = {};
+        node[parts[i]] = next;
+      }
+      node = next;
     }
     node[parts[parts.length - 1]] = value;
   }

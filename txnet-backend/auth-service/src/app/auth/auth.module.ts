@@ -6,6 +6,12 @@ import { RegisterController } from './register/register.controller';
 import { RegisterService } from './register/register.service';
 import { OTP_SERVICE } from './otp/otp.interface';
 import { OtpService } from './otp/otp.service';
+import { OtpChannelRegistry } from './otp/otp-channels.service';
+import { BotClientRegistry } from './otp/senders/bot-client.registry';
+import { BotLinkController } from './bot-link/bot-link.controller';
+import { BotLinkService } from './bot-link/bot-link.service';
+import { BotLinkStore } from './bot-link/bot-link.store';
+import { BotWebhookRegistrar } from './bot-link/bot-webhook.registrar';
 import { SmsOtpSender } from './otp/senders/sms.sender';
 import { BaleOtpSender } from './otp/senders/bale.sender';
 import { TelegramOtpSender } from './otp/senders/telegram.sender';
@@ -13,6 +19,7 @@ import { TokenService } from './token.service';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AuthGuard } from './auth.guard';
+import { NoActiveSessionGuard } from './guards/no-active-session.guard';
 import { SessionService } from './session/session.service';
 import { SessionStore } from './session/session.store';
 import { OtpStore } from './otp/otp.store';
@@ -26,12 +33,18 @@ import { CaptchaService } from './captcha/captcha.service';
   // BaleOtpSender and TelegramOtpSender now inject LocaleService to build
   // OTP messages in the request's language.
   imports: [LocaleModule],
-  controllers: [RegisterController, AuthController, CaptchaController],
+  controllers: [
+    RegisterController,
+    AuthController,
+    CaptchaController,
+    BotLinkController,
+  ],
   providers: [
     RegisterService,
     TokenService,
     AuthService,
     AuthGuard,
+    NoActiveSessionGuard,
     SessionService,
     SessionStore,
     OtpStore,
@@ -40,6 +53,11 @@ import { CaptchaService } from './captcha/captcha.service';
     SmsOtpSender,
     BaleOtpSender,
     TelegramOtpSender,
+    BotClientRegistry,
+    OtpChannelRegistry,
+    BotLinkService,
+    BotLinkStore,
+    BotWebhookRegistrar,
     {
       provide: OTP_SERVICE,
       useClass: OtpService,

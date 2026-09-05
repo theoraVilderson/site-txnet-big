@@ -55,6 +55,7 @@ This table records precisely where v1 and v2 (or v1 with itself) contradicted ea
 | **C-17** | v1 §7.5's "proxy link native to the panel" only applied to our own registered panels; F-203 (adopting a legacy link) wants the same mechanism for an **external** panel.                                                                                                                                                                            | The same mechanism was generalized: `LegacyUpstream(tenantId, url, credentialRef, status)`. The token is still ours, the upstream URL is never shown to the user, and the upstream is parsed as **adversarial input** (volume cap, config-count cap, timeout, no following redirects into internal networks).       |
 | **C-18** | v1 §7.2 sends a tenant's panel alert to that tenant itself; F-1207 ("route alert to panel owner") is the same idea, but v2 marked it "present" while leaving reseller panels undefined.                                                                                                                                                             | The rule was generalized: the alert goes to the **owner of the panel record**, which can now also be a reseller node. The platform's on-call team is only paged for panels with `ownershipType = platform`.                                                                                                         |
 | **C-19** | The v1 plan table gave Starter "dedicated gateway: —," yet the v1 appendix says "the platform never pays out to end users." That meant Starter had structurally no way to receive money unless the platform acted as intermediary — exactly what is being eliminated.                                                                               | **A dedicated gateway is mandatory on every plan** (D-03). Plans differ in the **number** of gateways and access to advanced methods (multi-account card-to-card, bank SMS parsing), not in whether a gateway exists at all.                                                                                        |
+| **C-20** | §2.3 said an OTP for a messenger the user has not linked "automatically falls back to SMS". That is undefined once SMS itself can be switched off (`OTP_ALLOWED_CHANNELS`), and a silent channel switch contradicts the same paragraph's rule that one channel never reveals another. | **No silent fallback.** An unlinked messenger answers with a bot deep link (F-0203), so the user connects the channel they chose. A channel that is switched off in the environment is never offered and is refused if named. |
 
 ---
 
@@ -158,6 +159,10 @@ In a white-label product, the worst possible bug is the platform's brand name ap
 
 - **Full registration and login inside the bot** is also supported (F-303) — the user never has to open a browser
 
+| id | feature | status | depends_on | note |
+|---|---|---|---|---|
+| F-0101 | Authenticating again while already signed in is rejected with 409 `auth.alreadyAuthenticated` on `register` plus every `login` route, whenever the caller's Bearer token still resolves to a live session | new | — | A missing, malformed, expired or already-revoked token counts as "no session" and passes through — this is not an auth requirement, only a re-auth block. Logging out (or letting the session expire) is what clears it. Keeps a signed-in browser from silently acquiring a second identity, and keeps one device on one account. `panel-web` never lets it fire from its own screens: its Next proxy reads the refresh cookie server-side and, when there is one, asks `/auth/refresh` before the login/signup screen renders — a live session is redirected to the panel home, a dead token is cleared and the form is shown |
+
 ### 2.2 Password Policy
 
 - At least 8 characters, including uppercase, lowercase, digit, and symbol
@@ -171,13 +176,19 @@ Redis is the source of truth; the database table is only for history and audit.
 
 **Five distinct use cases:** `login`, `register_phone_verify`, `password_reset`, `wallet_transfer`, `account_link` — each with its own independent cooldown and counter.
 
-**Three channels:** SMS, Telegram, Bale. If the user has no linked messenger account, it automatically falls back to SMS — and it never reveals through one channel that another channel exists.
+**Three channels:** SMS, Telegram, Bale. Which of them exist at all is an environment decision (`OTP_ALLOWED_CHANNELS`), and the client asks for the list rather than assuming it — a deployment can run messengers-only, with SMS switched off. A channel the user picks but has not connected does **not** silently fall back to another channel (changed, C-20): falling back to SMS is impossible when SMS is off, and switching channels behind the user's back is what "never reveal through one channel that another exists" was protecting against. The user is offered the link flow for the channel they chose instead.
 
 **Issuance flow:** atomic lock `SET NX EX 2` → 60-second cooldown check → generate 6 digits with `crypto.randomInt` → argon2 hash → 5-minute TTL → send.
 
 **Verification flow:** a Lua script atomically checks and counts. After 5 failed attempts, the code burns. A consumed code is **deleted immediately** — replay is impossible.
 
 > OTP is always sent from the tenant's `role = primary` bot (C-05). Sales and support bots never carry OTP, because a campaign bot getting banned should never block the login path.
+
+| id | feature | status | depends_on | note |
+|---|---|---|---|---|
+| F-0202 | Delivery channels are switched on per environment via `OTP_ALLOWED_CHANNELS`, and a client discovers the live set with `GET /auth/otp/channels` instead of hard-coding sms/telegram/bale | new | — | Two gates: the channel is listed in the env var **and** its sender is configured (bot token / SMS credentials). Failing either makes the channel invisible — absent from the discovery response and refused if named explicitly. `OTP_DELIVERY_MODE=console` waives only the second gate. With SMS switched off, the default channel is the first *available* one, not `sms` |
+| F-0203 | A user who picks Telegram or Bale without a connected account gets a `?start=<token>` deep link into the bot; the bot asks for their contact and only links the chat if the shared contact's `user_id` equals the sender's id, and its phone equals the number the code was requested for | new | F-0202 | The sender-id comparison is the whole point: an unofficial client can put any number on a contact card, but not another account's `user_id`. Only a contact-verified link may carry an OTP. One messenger account links to at most one platform account. A user who is already linked skips this entirely and gets the code straight away. The link is offered for any number, registered or not, so the response cannot be used to enumerate accounts | 
+| F-0204 | Forgot-password requires an OTP on a channel the user chooses; a successful reset revokes every session of that account and issues one new session for the device that performed the reset | new | F-0202 F-0203 | "Everything except the one in front of me" without weakening the total revocation: the new session is minted after it, so no pre-reset session survives. The device that reset the password is left signed in rather than bounced to the login form |
 
 ### 2.4 Sessions and Tokens
 

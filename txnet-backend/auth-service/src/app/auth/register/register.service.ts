@@ -11,9 +11,11 @@ import {
 import {
   IOtpService,
   OTP_SERVICE,
-  OtpChannel,
   OtpPurpose,
 } from '../otp/otp.interface';
+import { OtpChannelRegistry } from '../otp/otp-channels.service';
+import { BotLinkService } from '../bot-link/bot-link.service';
+import { BotPlatform } from '../otp/senders/bot-client.registry';
 import { normalizeIranPhone } from '../../common/validation/phone.schema';
 import { ok, err, safeExecute } from '../../common/response/response.util';
 
@@ -39,6 +41,8 @@ export class RegisterService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     @Inject(OTP_SERVICE) private readonly otpService: IOtpService,
+    private readonly channels: OtpChannelRegistry,
+    private readonly botLinks: BotLinkService,
   ) {}
 
   async register(input: RegisterInput, requestIp: string, lang: string) {
@@ -107,11 +111,36 @@ export class RegisterService {
         RedisTtl.registerPending,
       );
 
-      // 7. Send OTP
+      // 7. Send OTP on a channel this environment actually offers. SMS is no
+      // longer assumed: an operator running messengers-only must still be able
+      // to register people.
+      const channel = input.channel ?? this.channels.defaultChannel();
+      if (!channel) return err('otp.noChannelAvailable');
+
+      if (this.channels.requiresLink(channel)) {
+        this.channels.assertUsable(channel);
+        const platform = channel as unknown as BotPlatform;
+        if (!(await this.botLinks.hasVerifiedLink(phoneNumber, platform))) {
+          // No code yet: the bot sends it once this person proves the number
+          // is theirs. `verify-phone` turns that proof into a linked account.
+          const started = await this.botLinks.startLink({
+            platform,
+            phoneNumber,
+            purpose: OtpPurpose.register_phone_verify,
+            lang,
+            ip: requestIp,
+          });
+          return ok(
+            { phoneNumber, requiresPhoneVerification: true, ...started },
+            'auth.botLinkRequired',
+          );
+        }
+      }
+
       await this.otpService.issueOtp(
         phoneNumber,
         OtpPurpose.register_phone_verify,
-        OtpChannel.sms,
+        channel,
         requestIp,
         lang,
       );
@@ -158,6 +187,11 @@ export class RegisterService {
         });
 
         await this.redis.del(RedisKeys.registerPending(phoneNumber));
+
+        // If this registration was verified over a bot, the chat that proved
+        // the number is only a Redis entry until now — there was no user row
+        // to attach it to. There is one now.
+        await this.botLinks.promoteProvenChat(user.id, phoneNumber);
 
         return ok(
           { userId: user.id, phoneVerified: true },

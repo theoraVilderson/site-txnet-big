@@ -1,7 +1,7 @@
 ---
 id: ops-migrations
 status: active
-updated: 2026-09-04
+updated: 2026-09-05
 ---
 
 # Migrations
@@ -36,6 +36,38 @@ hand-written SQL migrations. None are applied yet:
 | Native range partitioning | `network.traffic_raw_log`, `support.chat_message`, `ai.user_behavior_event` | high-volume append + `DROP PARTITION` instead of `DELETE` |
 | BRIN indexes | `traffic_raw_log(recordedAt)` | cheap time-range scans |
 | `REVOKE UPDATE, DELETE` | `audit.admin_audit_log` | enforce append-only in the DB, not just convention |
+
+## Seed data (`txnet-backend/prisma/seed.js`)
+
+Bootstraps the state the app assumes always exists but no migration creates:
+the four RBAC roles (`user`, `Support`, `Admin`, `SuperAdmin`), the
+`platform_owner` Tenant, and one owner User for it. Idempotent — safe on every
+`db push` / `migrate dev` / `migrate reset`; skips tenant+owner creation if
+`platform_owner` already exists but still upserts the roles.
+
+Plain CommonJS on purpose (see the file's own header comment): ts-node 10.9.1
+can't run a `.ts` entry directly on Node 20.
+
+Spans two domains — `identity` (roles, user) and `tenant` (the tenant row) —
+which is why it lives here rather than under either domain's `source:`: it is
+a one-off bootstrap procedure, not application code either domain runs at
+request time.
+
+**Hardcoded couplings a future rename would silently break** (per the file's
+own comments — not verified as a documented invariant on either side, ask
+before changing either):
+- `RegisterService.register` looks up `Role.name = 'user'`
+  (`domains/identity/rules.md` #5).
+- `ImpersonationService.isRoleHigher` ranks `SuperAdmin > Admin > Support > User`
+  (`domains/identity/open-questions.md`).
+- `tenant.billingModel` is hardcoded to `subscription_monthly` for
+  `platform_owner` — the script's own comment flags this as
+  ASSUMED (2026-09-04), not a real decision; see
+  `domains/tenant/open-questions.md`.
+
+Not tracked by `tools/drift.py` (operations docs aren't a `source:`-bearing
+unit) — it will keep reporting this file as an orphan. That's expected; this
+section is its documentation of record.
 
 ## Partition maintenance
 

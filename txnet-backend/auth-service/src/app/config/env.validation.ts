@@ -10,6 +10,15 @@ const otpChannelsSchema = z
       .filter(Boolean),
   );
 
+/**
+ * An optional var that docker compose passes through as `FOO=` when it is
+ * unset arrives as an empty string, not as absent — and `""` fails every
+ * length rule, so the service would refuse to boot over a variable nobody
+ * filled in on purpose. Treat empty as "not set".
+ */
+const optional = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => (v === '' ? undefined : v), schema.optional());
+
 export const envSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'production', 'test'])
@@ -33,18 +42,48 @@ export const envSchema = z.object({
   DOMAIN_NAME: z.string().min(1, 'DOMAIN_NAME is required'),
   COOKIE_SECURE: z.coerce.boolean().default(true),
 
+  // The channels this environment may deliver an OTP through. A channel that
+  // is not listed here is invisible: it is never offered to a client by
+  // `GET /auth/otp/channels` and is rejected if asked for by name. A listed
+  // channel still has to be *configured* (a bot token / SMS credentials) to
+  // count as available — see `OtpChannelRegistry`.
   OTP_ALLOWED_CHANNELS: otpChannelsSchema,
+  // 'console' skips every real sender and prints the code instead (dev).
+  OTP_DELIVERY_MODE: z.enum(['live', 'console']).default('live'),
   OTP_DEV_CONSOLE_LOG: z.coerce.boolean().default(false),
   // Shared timeout for every outgoing HTTP request to the bots (Bale/Telegram)
   OTP_BOT_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  // How long a bot-link deep link stays usable before the user must ask for a
+  // new one. Also the TTL of the pending-link record in Redis.
+  BOT_LINK_TOKEN_TTL_SEC: z.coerce.number().int().positive().default(900),
+  // On boot, point every configured bot at this service's own webhook route.
+  BOT_WEBHOOK_AUTO_REGISTER: z.enum(['true', 'false']).default('true'),
+  // Where a platform reaches this service, when it is not `https://api.<domain>`
+  // — a dev tunnel, or another app fronting this API. A platform that needs its
+  // own way in overrides this with `<PLATFORM>_WEBHOOK_PUBLIC_BASE`.
+  BOT_WEBHOOK_PUBLIC_BASE: optional(z.string().url()),
 
   // --- Telegram Bot ---
-  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_BOT_TOKEN: optional(z.string()),
   TELEGRAM_API_BASE: z.string().url().default('https://api.telegram.org'),
+  // Bot username without '@' — only used to build the ?start=<token> deep link.
+  TELEGRAM_BOT_USERNAME: optional(z.string()),
+  TELEGRAM_DEEP_LINK_BASE: z.string().url().default('https://t.me'),
+  // Shared secret in the webhook path (and, for Telegram, also checked against
+  // the X-Telegram-Bot-Api-Secret-Token header when the platform sends one).
+  // Without it the platform's webhook route refuses every update.
+  TELEGRAM_WEBHOOK_SECRET: optional(z.string().min(16)),
+  // Incoming side: the base Telegram calls back on. Its servers cannot open a
+  // connection to every host, so this is usually a proxy in front of the API.
+  TELEGRAM_WEBHOOK_PUBLIC_BASE: optional(z.string().url()),
 
   // --- Bale Bot (Telegram-compatible API shape) ---
-  BALE_BOT_TOKEN: z.string().optional(),
+  BALE_BOT_TOKEN: optional(z.string()),
   BALE_API_BASE: z.string().url().default('https://tapi.bale.ai'),
+  BALE_BOT_USERNAME: optional(z.string()),
+  BALE_DEEP_LINK_BASE: z.string().url().default('https://ble.ir'),
+  BALE_WEBHOOK_SECRET: optional(z.string().min(16)),
+  BALE_WEBHOOK_PUBLIC_BASE: optional(z.string().url()),
 
   JWT_ACCESS_SECRET: z
     .string()

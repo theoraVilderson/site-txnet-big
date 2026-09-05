@@ -6,6 +6,10 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { TokenService } from '../auth/token.service';
 import { SessionService } from '../auth/session/session.service';
+import { SessionStore } from '../auth/session/session.store';
+
+/** An impersonated session is short-lived by design (invariant #7). */
+const IMPERSONATION_TTL_SEC = 30 * 60;
 
 @Injectable()
 export class ImpersonationService {
@@ -13,6 +17,7 @@ export class ImpersonationService {
     private readonly prisma: PrismaService,
     private readonly tokens: TokenService,
     private readonly sessionService: SessionService,
+    private readonly sessions: SessionStore,
   ) {}
 
   async startImpersonation(
@@ -50,6 +55,11 @@ export class ImpersonationService {
       );
     }
 
+    // The session row is written on `tx` alongside the impersonation and audit
+    // rows: invariant #7 requires impersonated access to always carry an audit
+    // entry, which only holds if a failed audit write takes the session with
+    // it. Committing the session separately would leave an unaudited
+    // impersonated session behind whenever the audit insert failed.
     const result = await this.prisma.$transaction(async (tx) => {
       const impersonation = await tx.impersonationSession.create({
         data: {
@@ -60,7 +70,7 @@ export class ImpersonationService {
         },
       });
 
-      const { session } = await this.sessionService.createSession(
+      const { session, activateCache } = await this.sessionService.createSession(
         targetUserId,
         ip,
         userAgent,
@@ -68,7 +78,8 @@ export class ImpersonationService {
           isImpersonated: true,
           impersonationSessionId: impersonation.id,
           switchedFromUserId: adminId,
-          expiresInSec: 30 * 60, // 30 دقیقه
+          expiresInSec: IMPERSONATION_TTL_SEC,
+          tx,
         },
       );
 
@@ -83,8 +94,11 @@ export class ImpersonationService {
         },
       });
 
-      return { impersonation, session };
+      return { impersonation, session, activateCache };
     });
+
+    // Only now that the rows are committed does the session become live.
+    await result.activateCache();
 
     const accessToken = this.tokens.signImpersonatedToken(
       target,
@@ -94,7 +108,7 @@ export class ImpersonationService {
 
     return {
       accessToken,
-      expiresIn: 1800, // 30 دقیقه
+      expiresIn: IMPERSONATION_TTL_SEC,
     };
   }
 
@@ -131,7 +145,11 @@ export class ImpersonationService {
       }),
     ]);
 
-    await this.sessionService.revokeSession(sessionId, 'impersonation_ended');
+    // The revocation is already committed above, in the same transaction as
+    // the audit row. All that is left is the Redis marker — going back through
+    // `revokeSession` here would re-run the Postgres update a second time,
+    // overwriting `revokedAt` outside that transaction.
+    await this.sessions.drop(sessionId, session.userId);
   }
 
   private isRoleHigher(roleA: any, roleB: any): boolean {

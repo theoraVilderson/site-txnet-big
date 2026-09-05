@@ -2,8 +2,8 @@
 id: redis-keyspace
 layer: platform
 status: active
-version: 1
-updated: 2026-09-04
+version: 2
+updated: 2026-09-05
 ---
 
 # Contract — redis-keyspace
@@ -37,6 +37,9 @@ stay byte-identical — each carries a comment pointing at the other.
 | `otp:cooldown:<purpose>:<phone>` | string | 60s | `OtpStore.startCooldown` | `OtpStore.isCoolingDown` |
 | `ratelimit:<bucket>` | counter | window seconds (per call site) | `RateLimiter.hit` (`INCR` + `EXPIRE` on first hit, Lua) | same |
 | `register:pending:<phone>` | string (JSON profile + password hash) | 600s | auth-service `RegisterService.register` | auth-service `RegisterService.verifyPhone` |
+| `botlink:token:<token>` | string (JSON pending link: platform, phone, purpose, lang, state, otpSent) | `BOT_LINK_TOKEN_TTL_SEC` (900s) | auth-service `BotLinkStore.save/update` | the bot webhook + the client's status poll |
+| `botlink:phone:<platform>:<phone>` | string (the live token) | = above | `BotLinkStore.save` | `BotLinkStore.byPhone` — makes a repeated link request idempotent |
+| `botlink:chat:<platform>:<chatId>` | string (the token this chat is answering) | = above | `BotLinkStore.bindChat` on `/start <token>` | `BotLinkStore.byChat` when the contact arrives — the contact update carries no token of its own |
 | `captcha:challenge:<challengeId>` | string (issue timestamp, ms) | 60s | auth-service `CaptchaService.issueChallenge` | auth-service `CaptchaService.verifyChallenge` (deletes on first check — single-use) |
 | `captcha:verified:<token>` | string (`"1"`) | 120s | auth-service `CaptchaService.verifyChallenge` | auth-service `CaptchaService.consumePass` (deletes on first check — single-use) |
 | `fx:rate:<currencyCode>` | string | (currency unit — planned) | (currency service — not built) | (currency conversion) |
@@ -48,6 +51,10 @@ stay byte-identical — each carries a comment pointing at the other.
 - Add a new key only through `redis.keys.ts` (+ a matching const in the Go
   service if it reads it), and record it in the table above.
 - Never store money or anything that must survive a keyspace-version bump.
+- An *incomplete* bot link lives here and nowhere else; only a link the
+  messenger has actually vouched for becomes a Postgres row
+  (`identity.linked_bot_account`). A keyspace bump therefore cancels pending
+  links — the user re-requests the code and gets a fresh deep link.
 
 ## Guarantees
 

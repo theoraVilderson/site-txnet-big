@@ -22,6 +22,9 @@ import {
   OtpPurpose,
   OTP_SERVICE,
 } from './otp/otp.interface';
+import { OtpChannelRegistry } from './otp/otp-channels.service';
+import { BotPlatform } from './otp/senders/bot-client.registry';
+import { BotLinkService } from './bot-link/bot-link.service';
 import { TokenService } from './token.service';
 import { SessionService } from './session/session.service';
 import { SessionStore } from './session/session.store';
@@ -48,9 +51,16 @@ export class AuthService {
     private readonly tokens: TokenService,
     private readonly config: ConfigService,
     @Inject(OTP_SERVICE) private readonly otp: IOtpService,
+    private readonly channels: OtpChannelRegistry,
+    private readonly botLinks: BotLinkService,
     private readonly sessionService: SessionService,
     private readonly sessions: SessionStore,
   ) {}
+
+  /** The delivery methods this environment offers, for a client to choose from. */
+  otpChannels() {
+    return ok({ channels: this.channels.describe() }, 'auth.otpChannels');
+  }
 
   async loginWithPassword(
     input: PasswordLoginInput,
@@ -60,10 +70,16 @@ export class AuthService {
   ) {
     return safeExecute(async () => {
       const type = detectIdentifierType(input.identifier);
-      const where =
+      // One account is one lock. The lookup normalizes a phone number, so the
+      // failure counter has to be keyed on the same normalized value: keying
+      // it on the raw input would give `09...`, `+989...` and `00989...` a
+      // counter each, and ten attempts would become thirty.
+      const identity =
         type === 'phone'
-          ? { phoneNumber: normalizeIranPhone(input.identifier) }
-          : { username: input.identifier };
+          ? normalizeIranPhone(input.identifier)
+          : input.identifier;
+      const where =
+        type === 'phone' ? { phoneNumber: identity } : { username: identity };
 
       const user = await this.prisma.user.findFirst({
         where,
@@ -77,11 +93,8 @@ export class AuthService {
       if (!user || user.deletedAt || user.status !== 'active') {
         return err('auth.invalidCredentials');
       }
-      if (!user.phoneVerifiedAt) {
-        return err('auth.phoneVerificationRequired');
-      }
 
-      const failureBucket = `login-failures:${input.identifier}`;
+      const failureBucket = `login-failures:${identity}`;
       const attempt = await this.rateLimiter.hit(
         failureBucket,
         LOGIN_FAILURE_LOCK_THRESHOLD,
@@ -96,6 +109,16 @@ export class AuthService {
       }
 
       await this.rateLimiter.reset(failureBucket);
+
+      // Invariant #6 (an unverified phone cannot complete password login) is
+      // enforced here rather than before the password check: answered any
+      // earlier, this key tells an anonymous caller that the account exists,
+      // which is the account-existence oracle the single `invalidCredentials`
+      // answer above exists to avoid. After a proven password it reveals
+      // nothing the caller did not already know.
+      if (!user.phoneVerifiedAt) {
+        return err('auth.phoneVerificationRequired');
+      }
 
       if (user.twoFactorEnabled) {
         const channel = this.resolveOtpChannel(user);
@@ -131,8 +154,18 @@ export class AuthService {
           preferredOtpChannel: true,
         },
       });
+      const resolvedChannel = this.resolveOtpChannel(user ?? {}, channel);
+
+      const link = await this.linkIfNeeded(
+        resolvedChannel,
+        phoneNumber,
+        OtpPurpose.login,
+        ip,
+        lang,
+      );
+      if (link) return link;
+
       if (user?.status === 'active' && user.phoneVerifiedAt) {
-        const resolvedChannel = this.resolveOtpChannel(user, channel);
         await this.otp.issueOtp(
           phoneNumber,
           OtpPurpose.login,
@@ -258,8 +291,18 @@ export class AuthService {
         where: { phoneNumber: input.phoneNumber },
         select: { id: true, status: true, preferredOtpChannel: true },
       });
+      const channel = this.resolveOtpChannel(user ?? {}, input.channel);
+
+      const link = await this.linkIfNeeded(
+        channel,
+        input.phoneNumber,
+        OtpPurpose.password_reset,
+        ip,
+        lang,
+      );
+      if (link) return link;
+
       if (user?.status === 'active') {
-        const channel = this.resolveOtpChannel(user, (input as any).channel);
         await this.otp.issueOtp(
           input.phoneNumber,
           OtpPurpose.password_reset,
@@ -289,7 +332,7 @@ export class AuthService {
     });
   }
 
-  async resetPassword(input: ResetPasswordInput) {
+  async resetPassword(input: ResetPasswordInput, ip: string, userAgent: string) {
     return safeExecute(async () => {
       const claims = this.tokens.verify(input.resetToken);
       if (claims.purpose !== 'password_reset')
@@ -328,7 +371,18 @@ export class AuthService {
       // effect on all devices immediately.
       await this.sessions.dropAllForUser(user.id);
 
-      return ok({ success: true }, 'auth.passwordResetSuccess');
+      // Every session is gone, including any the person resetting was holding
+      // — so this device is signed back in here, on a session minted after the
+      // revocation. The net effect is the requested "everything except the
+      // one in front of me", without weakening identity/invariants.md #3: the
+      // revocation is still total, and no pre-reset session survives it.
+      const full = await this.findUserForSession(user.id);
+      const sessionData = await this.issueSession(full, ip, userAgent);
+
+      return ok(
+        { success: true, ...sessionData },
+        'auth.passwordResetSuccess',
+      );
     });
   }
 
@@ -361,12 +415,52 @@ export class AuthService {
   }
 
   /**
+   * A messenger channel can only deliver to a chat this account has proven it
+   * owns. When that proof is missing, the answer to "send me a code" is a
+   * deep link into the bot instead of a code — see `BotLinkService`.
+   *
+   * This runs before the account is looked at, and for every phone number
+   * alike: branching on whether the account exists would turn the link
+   * response into an account-existence oracle. Whoever holds the link still
+   * cannot complete it without controlling that phone number in the messenger.
+   *
+   * Returns null when nothing is needed and the caller should just send.
+   */
+  private async linkIfNeeded(
+    channel: OtpChannel,
+    phoneNumber: string,
+    purpose: OtpPurpose,
+    ip: string,
+    lang: string,
+  ) {
+    if (!this.channels.requiresLink(channel)) return null;
+    // Rejects a channel switched off in this environment before we hand out a
+    // link the bot could not honour.
+    this.channels.assertUsable(channel);
+
+    const platform = channel as unknown as BotPlatform;
+    if (await this.botLinks.hasVerifiedLink(phoneNumber, platform)) return null;
+
+    const started = await this.botLinks.startLink({
+      platform,
+      phoneNumber,
+      purpose,
+      lang,
+      ip,
+    });
+    return ok({ accepted: true, ...started }, 'auth.botLinkRequired');
+  }
+
+  /**
    * OTP channel selection priority:
    * 1) the channel explicitly passed in this request
    * 2) the user's saved `preferredOtpChannel`
-   * 3) default: sms
-   * Whether the channel is allowed in the current environment (env-based)
-   * is checked inside OtpService.
+   * 3) the first channel this environment offers (`OTP_ALLOWED_CHANNELS`
+   *    order) — which is not necessarily SMS: an operator running
+   *    `OTP_ALLOWED_CHANNELS=telegram,bale` has no SMS to fall back to.
+   * A saved preference for a channel that has since been switched off is
+   * ignored rather than fatal, so turning a channel off never strands the
+   * users who had chosen it.
    *
    * Note: `preferredOtpChannel` here must stay typed as the real
    * `OtpChannel` enum from Prisma (not `string`), because Prisma returns
@@ -377,10 +471,14 @@ export class AuthService {
     user: { preferredOtpChannel?: OtpChannel | null },
     explicitChannel?: OtpChannel,
   ): OtpChannel {
+    // An explicitly named channel is never silently swapped: if it is off,
+    // OtpService/linkIfNeeded rejects the request so the client can say why.
     if (explicitChannel) return explicitChannel;
-    if (user.preferredOtpChannel) {
+    if (user.preferredOtpChannel && this.channels.isAvailable(user.preferredOtpChannel)) {
       return user.preferredOtpChannel;
     }
-    return OtpChannel.sms;
+    const fallback = this.channels.defaultChannel();
+    if (!fallback) throw new BadRequestException('otp.noChannelAvailable');
+    return fallback;
   }
 }

@@ -338,6 +338,10 @@ button {
   left: 20px;
 }
 
+/* The strip behind a floated label masks the field border, so it must be the
+   colour *inside* the field (--bg-inner), not the card's: --card-bg is
+   translucent and paints a visible line across the input. PasswordField
+   already uses bg-inner for the same reason. */
 .organic-field label::before {
   content: "";
   position: absolute;
@@ -345,7 +349,7 @@ button {
   left: 0;
   width: 100%;
   height: 50%;
-  background: var(--card-bg);
+  background: var(--bg-inner);
   z-index: -1;
   opacity: 0;
   transition: opacity 0.5s ease;
@@ -364,7 +368,7 @@ button {
   font-size: 13px;
   font-weight: bold;
   color: var(--accent-primary);
-  background: var(--card-bg);
+  background: var(--bg-inner);
   border-radius: 4px;
 }
 
@@ -453,6 +457,15 @@ input::-webkit-credentials-auto-fill-button {
   animation-name: onAutoFillStart;
 }
 
+.password-field-input:-webkit-autofill,
+.password-field-input:-webkit-autofill:hover,
+.password-field-input:-webkit-autofill:focus {
+  border-radius: 16px;
+  box-shadow: 0 0 0 30px var(--bg-inner) inset !important;
+  -webkit-text-fill-color: var(--text-input) !important;
+  caret-color: var(--text-input);
+}
+
 .password-field-input:not(:-webkit-autofill) {
   animation-name: onAutoFillCancel;
 }
@@ -463,4 +476,15 @@ input::-webkit-credentials-auto-fill-button {
 
 .organic-field input:not(:-webkit-autofill) {
   animation-name: onAutoFillCancel;
+}
+
+/* organic-field input autofill: border-radius مثل PasswordField و
+   override رنگ پس‌زمینه پیش‌فرض مرورگر */
+.organic-field-input:-webkit-autofill,
+.organic-field-input:-webkit-autofill:hover,
+.organic-field-input:-webkit-autofill:focus {
+  border-radius: 16px;
+  box-shadow: 0 0 0 30px var(--bg-inner) inset !important;
+  -webkit-text-fill-color: var(--text-input) !important;
+  caret-color: var(--text-input);
 }

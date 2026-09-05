@@ -1,4 +1,6 @@
 {
   "save": "Save",
-  "cancel": "Cancel"
+  "cancel": "Cancel",
+  "logout": "Log out",
+  "loggingOut": "Logging out…"
 }

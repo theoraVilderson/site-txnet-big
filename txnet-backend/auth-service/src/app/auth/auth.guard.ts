@@ -24,6 +24,14 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('authorization required');
 
     const claims = this.tokens.verify(header.slice(7));
+
+    // OTP and reset tokens are signed with the same secret, so the signature
+    // alone cannot tell them apart from an access token — only `purpose` can.
+    // Same condition as NoActiveSessionGuard, and as the `sessionId != ""`
+    // check auth-handler applies at the gateway.
+    if (claims.purpose || !claims.sessionId)
+      throw new UnauthorizedException('invalid token');
+
     if (!(await this.sessions.isActive(claims.sessionId)))
       throw new UnauthorizedException('session revoked');
 

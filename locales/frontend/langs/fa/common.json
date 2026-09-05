@@ -1,4 +1,6 @@
 {
   "save": "ذخیره",
-  "cancel": "لغو"
+  "cancel": "لغو",
+  "logout": "خروج",
+  "loggingOut": "در حال خروج…"
 }

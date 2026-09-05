@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
+import type { AuthTranslations } from '@auth/auth/_lib/translations';
 
 export const NatureCaptchaUI = ({
   isVerified,
@@ -10,7 +11,7 @@ export const NatureCaptchaUI = ({
   isVerified: boolean;
   onVerify: () => void;
   isRtl: boolean;
-  t: any;
+  t: AuthTranslations;
 }) => {
   const sliderRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
@@ -21,8 +22,12 @@ export const NatureCaptchaUI = ({
   // a pointermove that crosses the threshold and the pointerup right behind it
   // both still see it false. Only a ref updates synchronously enough to gate
   // the two events against each other.
-  const completedRef = useRef(false);
-  const [sliderValue, setSliderValue] = useState(0);
+  const completedRef = useRef(isVerified);
+  // Seeded from `isVerified`, not 0: the pass lives in the parent hook, which
+  // outlives this widget when a multi-step form unmounts step 1 (e.g. going to
+  // the OTP step and back). Starting at 0 would remount the thumb at the start
+  // while the label still says verified.
+  const [sliderValue, setSliderValue] = useState(isVerified ? 100 : 0);
   // `onVerify` now round-trips to the server (F-0201) — the slide is complete
   // before `isVerified` (a prop) has any chance to flip. Without this, the
   // pointer-up handler fires first, sees `isVerified` still false, and snaps
@@ -30,12 +35,22 @@ export const NatureCaptchaUI = ({
   const [pending, setPending] = useState(false);
   const checking = isVerified || pending;
 
-  // The parent flips isVerified back to false when the server-issued pass
-  // expires (every 120s) — snap the thumb back so the widget visibly asks
-  // to be re-verified instead of showing a stale full bar. Skip this while a
+  // Keep the thumb in sync with the pass the parent holds, in both
+  // directions: full while verified (a remount inside a still-valid pass), and
+  // back to the start when the parent flips isVerified to false because the
+  // server-issued pass expired (every 120s), so the widget visibly asks to be
+  // re-verified instead of showing a stale full bar. Skip the reset while a
   // verify call is still in flight (`pending`), or it would reset mid-check.
   useEffect(() => {
-    if (!isVerified && !pending) {
+    if (isVerified) {
+      completedRef.current = true;
+      // deliberate prop→state sync: the thumb position mirrors a pass owned by
+      // the parent hook (see the comment above), not derivable during render.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSliderValue(100);
+      return;
+    }
+    if (!pending) {
       completedRef.current = false;
       setSliderValue(0);
     }

@@ -9,7 +9,7 @@ source:
   - locales/**
 owns_tables: []
 depends_on: []
-updated: 2026-09-04
+updated: 2026-09-05
 ---
 
 # i18n
@@ -30,5 +30,6 @@ shared Node client, and the `locales/` content tree.
 | Date | Change |
 |---|---|
 | 2026-09-04 | Documented from existing i18n-platform during onboarding |
+| 2026-09-05 | `locales/backend/langs/{en,fa}/errors.json`: added `auth.alreadyAuthenticated`, the message `auth-api`'s `NoActiveSessionGuard` returns with 409. Content only — no proto, client or contract change. |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

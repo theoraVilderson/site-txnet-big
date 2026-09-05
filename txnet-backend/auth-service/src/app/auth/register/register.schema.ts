@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { strongPasswordSchema } from '../../common/validation/strong-password.schema';
 import { iranPhoneSchema } from '../../common/validation/phone.schema';
+import { OtpChannel } from '../otp/otp.interface';
 
 export const registerSchema = z.object({
   fullName: z
@@ -16,6 +17,10 @@ export const registerSchema = z.object({
     .regex(/^[a-zA-Z0-9_]+$/, 'username.invalidChars'),
   phoneNumber: iranPhoneSchema,
   password: strongPasswordSchema,
+  // Where the verification code should go. Omitted -> the environment's first
+  // available channel; a deployment with SMS switched off registers over a
+  // messenger instead.
+  channel: z.nativeEnum(OtpChannel).optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;
@@ -24,7 +29,7 @@ export const verifyPhoneSchema = z.object({
   phoneNumber: iranPhoneSchema,
   otpCode: z
     .string()
-    .length(5, 'otp.invalidLength')
+    .length(6, 'otp.invalidLength')
     .regex(/^\d+$/, 'otp.mustBeNumeric'),
 });
 

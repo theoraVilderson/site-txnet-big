@@ -7,6 +7,8 @@ import { OrganicField } from "@auth/auth/_components/OrganicField";
 import { PasswordField } from "@auth/auth/_components/PasswordField";
 import { NatureCaptchaUI } from "@auth/auth/_components/NatureCaptchaUI";
 import { OtpStep } from "@auth/auth/_components/OtpStep";
+import { OtpChannelPicker } from "@auth/auth/_components/OtpChannelPicker";
+import { BotLinkStep } from "@auth/auth/_components/BotLinkStep";
 import { SubmitButton } from "@auth/auth/_components/SubmitButton";
 import {
   AuthCardShell,
@@ -17,18 +19,28 @@ import { useAuthUI } from "@auth/auth/_context/AuthUIContext";
 import { useOtpTimer } from "@auth/auth/_hooks/useOtpTimer";
 import { useFirstPaint } from "@auth/auth/_hooks/useFirstPaint";
 import { useCaptcha } from "@auth/auth/_hooks/useCaptcha";
+import { useOtpChannels } from "@auth/auth/_hooks/useOtpChannels";
+import { useBotLink } from "@auth/auth/_hooks/useBotLink";
 import { authApi } from "@/lib/auth-api";
+import { OTP_LENGTH } from "@/lib/otp";
+import { PANEL_HOME } from "@/lib/routes";
 
 export default function SignupPage() {
   const { t, isRtl } = useAuthUI();
   const router = useRouter();
   const firstPaint = useFirstPaint();
 
-  const [step, setStep] = useState<1 | 2>(1);
+  /** 1 details · "link" connect the messenger · 2 code */
+  const [step, setStep] = useState<1 | "link" | 2>(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const captcha = useCaptcha();
   const otpTimer = useOtpTimer();
+  const channels = useOtpChannels();
+  const botLink = useBotLink(() => {
+    setStep(2);
+    otpTimer.start(120);
+  });
 
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
@@ -55,11 +67,25 @@ export default function SignupPage() {
     try {
       if (step === 1) {
         if (!captcha.token) return;
-        await authApi.register({ fullName, username, phoneNumber: phone, password }, captcha.token);
-        setStep(2); otpTimer.start(120);
-      } else {
+        // The pass is single-use on the server (F-0201): whatever happens
+        // next, step 1 needs a fresh slide before it can be sent again.
+        let result;
+        try {
+          result = await authApi.register({ fullName, username, phoneNumber: phone, password }, captcha.token, channels.selected);
+        } finally {
+          captcha.spend();
+        }
+        if (result.linkRequired) {
+          // Registering over a messenger: the code is sent by the bot once
+          // this person proves the number is theirs there.
+          botLink.start(result);
+          setStep("link");
+        } else {
+          setStep(2); otpTimer.start(120);
+        }
+      } else if (step === 2) {
         await authApi.verifyPhone(phone, otp);
-        setIsSuccess(true); router.push("/dashboard");
+        setIsSuccess(true); router.replace(PANEL_HOME);
       }
     } catch (error) { console.error(error); }
     finally { setIsLoading(false); }
@@ -69,7 +95,9 @@ export default function SignupPage() {
     () =>
       step === 1
         ? t.welcomeSubtitle
-        : `${t.codeSentTo} ${phone || t.yourNumber}`,
+        : step === "link"
+          ? t.botLinkWaiting
+          : `${t.codeSentTo} ${phone || t.yourNumber}`,
     [step, phone, t],
   );
 
@@ -109,14 +137,14 @@ export default function SignupPage() {
                     id="fullName"
                     label={t.fullName}
                     value={fullName}
-                    onChange={(e: any) => setFullName(e.target.value)}
+                    onChange={(e) => setFullName(e.target.value)}
                     autoComplete="name"
                   />
                   <OrganicField
                     id="username"
                     label={t.username}
                     value={username}
-                    onChange={(e: any) => setUsername(e.target.value)}
+                    onChange={(e) => setUsername(e.target.value)}
                     dir="ltr"
                     autoComplete="username"
                   />
@@ -125,7 +153,7 @@ export default function SignupPage() {
                     label={t.phone}
                     type="tel"
                     value={phone}
-                    onChange={(e: any) => setPhone(e.target.value)}
+                    onChange={(e) => setPhone(e.target.value)}
                     dir="ltr"
                     autoComplete="tel"
                   />
@@ -160,7 +188,24 @@ export default function SignupPage() {
                     t={t}
                   />
                 </motion.div>
+
+                {channels.hasChoice && (
+                  <OtpChannelPicker
+                    channels={channels.channels}
+                    selected={channels.selected}
+                    onSelect={channels.select}
+                  />
+                )}
               </motion.div>
+            ) : step === "link" && botLink.link ? (
+              <BotLinkStep
+                link={botLink.link}
+                status={botLink.status}
+                onBack={() => {
+                  botLink.reset();
+                  setStep(1);
+                }}
+              />
             ) : (
               <OtpStep
                 value={otp}
@@ -173,12 +218,14 @@ export default function SignupPage() {
             )}
           </AnimatePresence>
 
-          <SubmitButton
-            isLoading={isLoading}
-            disabled={step === 1 ? !canSubmitStep1 : otp.length < 5}
-          >
-            {buttonText}
-          </SubmitButton>
+          {step !== "link" && (
+            <SubmitButton
+              isLoading={isLoading}
+              disabled={step === 1 ? !canSubmitStep1 : otp.length < OTP_LENGTH}
+            >
+              {buttonText}
+            </SubmitButton>
+          )}
         </form>
 
         {step === 1 && <AuthFooterLinks variant="signup" />}

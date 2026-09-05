@@ -77,6 +77,10 @@ export function PasswordField({
 
   // اگه کاربر همه متن رو پاک کرد، حالت نمایش پسورد رو ریست کن
   useEffect(() => {
+    // resetting the reveal toggle when the parent clears the field is a
+    // prop→state reset; deriving it would also flip the eye icon on an empty
+    // field.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (value.length === 0) setShowText(false);
   }, [value]);
 
@@ -124,7 +128,7 @@ export function PasswordField({
               : { top: "50%", y: "-50%", scale: 1 }
           }
           transition={{ duration: 0.2, ease: "easeOut" }}
-          className={`absolute start-5 rtl:origin-right ltr:origin-left pointer-events-none z-10 px-1.5 rounded bg-bg-inner transition-colors duration-300 ${
+          className={`absolute start-5 rtl:origin-right ltr:origin-left pointer-events-none z-30 px-1.5 rounded bg-bg-inner transition-colors duration-300 ${
             floated ? "text-primary font-bold" : "text-[var(--text-label)]"
           }`}
         >
@@ -165,7 +169,7 @@ export function PasswordField({
           <div
             aria-hidden
             dir="ltr"
-            className="absolute inset-0 pt-5 pb-3 pl-5 pr-12 flex items-center pointer-events-none z-30 font-mono tracking-widest text-base text-left"
+            className="absolute inset-0 pt-5 pb-3 pl-5 pr-12 flex items-center pointer-events-none z-40 font-mono tracking-widest text-base text-left"
           >
             <div
               className="flex h-full items-center"

@@ -3,7 +3,7 @@ id: forward-auth
 layer: platform
 status: active
 version: 1
-keywords: [forward auth, traefik, gateway, jwt]
+keywords: [forward auth, traefik, gateway, jwt, rbac, permissions, permissions file, policy engine, role, engine.go, policy.go]
 source:
   - auth-handler/**
 owns_tables: []
@@ -30,5 +30,6 @@ for upstream services.
 | Date | Change |
 |---|---|
 | 2026-09-04 | Documented from existing auth-handler during onboarding |
+| 2026-09-05 | RBAC keywords added; `forward-auth-rbac-policy` surface row |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

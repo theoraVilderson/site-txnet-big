@@ -8,39 +8,25 @@ import {
 } from '@nestjs/common';
 import * as argon2 from 'argon2';
 import { randomInt } from 'crypto';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisTtl } from '../../redis/redis.keys';
 import { OtpStore } from './otp.store';
 import { IOtpService, OtpChannel, OtpPurpose } from './otp.interface';
-import { IOtpSender } from './senders/otp-sender.interface';
-import { SmsOtpSender } from './senders/sms.sender';
-import { BaleOtpSender } from './senders/bale.sender';
-import { TelegramOtpSender } from './senders/telegram.sender';
+import { OtpChannelRegistry } from './otp-channels.service';
 
 /**
  * OTP service implementation using Redis as the source of truth.
  * The delivery channel (sms/bale/telegram) is chosen by the user or env;
- * it is not fixed.
+ * it is not fixed. Which channels exist at all is `OtpChannelRegistry`'s
+ * call — see `OTP_ALLOWED_CHANNELS`.
  */
 @Injectable()
 export class OtpService implements IOtpService {
-  private readonly senders: Map<OtpChannel, IOtpSender>;
-
   constructor(
     private readonly store: OtpStore,
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
-    smsSender: SmsOtpSender,
-    baleSender: BaleOtpSender,
-    telegramSender: TelegramOtpSender,
-  ) {
-    this.senders = new Map<OtpChannel, IOtpSender>([
-      [OtpChannel.sms, smsSender],
-      [OtpChannel.bale, baleSender],
-      [OtpChannel.telegram, telegramSender],
-    ]);
-  }
+    private readonly channels: OtpChannelRegistry,
+  ) {}
 
   async issueOtp(
     phoneNumber: string,
@@ -49,18 +35,8 @@ export class OtpService implements IOtpService {
     requestIp: string,
     lang: string,
   ): Promise<void> {
-    // This channel must be allowed in the current environment
-    const allowedChannels = this.config.get<string[]>('OTP_ALLOWED_CHANNELS', [
-      'sms',
-    ]);
-    if (!allowedChannels.includes(channel)) {
-      throw new BadRequestException('otp.channelNotAllowed');
-    }
-
-    const sender = this.senders.get(channel);
-    if (!sender) {
-      throw new BadRequestException('otp.channelNotSupported');
-    }
+    // Allowed by env *and* actually configured, or this request stops here.
+    const sender = this.channels.assertUsable(channel);
 
     // Distributed lock for idempotency
     if (!(await this.store.acquireLock(phoneNumber, purpose))) {
@@ -76,8 +52,10 @@ export class OtpService implements IOtpService {
         );
       }
 
-      // Generate a secure 6-digit code
-      const code = randomInt(10000, 99999).toString();
+      // Generate a secure 6-digit code. The range is [100000, 1000000) so
+      // every draw really has six digits — the API's zod schemas reject
+      // anything shorter, so a 5-digit draw could never be verified.
+      const code = randomInt(100000, 1000000).toString();
       const codeHash = await argon2.hash(code, { type: argon2.argon2id });
 
       await this.store.save(phoneNumber, purpose, codeHash);
@@ -97,12 +75,8 @@ export class OtpService implements IOtpService {
 
       // Dev/staging escape hatch: skip the real channel entirely and print
       // the code instead, so registration/login work without a configured
-      // SMS/bale/telegram provider. Either flag turns it on.
-      const consoleOnly =
-        this.config.get<string>('OTP_DELIVERY_MODE', 'live') === 'console' ||
-        this.config.get<boolean>('OTP_DEV_CONSOLE_LOG', false);
-
-      if (consoleOnly) {
+      // SMS/bale/telegram provider (`OTP_DELIVERY_MODE=console`).
+      if (this.channels.isConsoleOnly()) {
         console.info(`[otp:${purpose}:${channel}] ${phoneNumber}: ${code}`);
       } else {
         // Actually deliver it through the channel the user picked, in the

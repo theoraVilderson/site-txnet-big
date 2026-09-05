@@ -7,6 +7,8 @@ import { OrganicField } from "@auth/auth/_components/OrganicField";
 import { PasswordField } from "@auth/auth/_components/PasswordField";
 import { NatureCaptchaUI } from "@auth/auth/_components/NatureCaptchaUI";
 import { OtpStep } from "@auth/auth/_components/OtpStep";
+import { OtpChannelPicker } from "@auth/auth/_components/OtpChannelPicker";
+import { BotLinkStep } from "@auth/auth/_components/BotLinkStep";
 import { SubmitButton } from "@auth/auth/_components/SubmitButton";
 import {
   AuthCardShell,
@@ -17,9 +19,16 @@ import { useAuthUI } from "@auth/auth/_context/AuthUIContext";
 import { useOtpTimer } from "@auth/auth/_hooks/useOtpTimer";
 import { useFirstPaint } from "@auth/auth/_hooks/useFirstPaint";
 import { useCaptcha } from "@auth/auth/_hooks/useCaptcha";
+import { useOtpChannels } from "@auth/auth/_hooks/useOtpChannels";
+import { useBotLink } from "@auth/auth/_hooks/useBotLink";
 import { authApi } from "@/lib/auth-api";
+import { PANEL_HOME } from "@/lib/routes";
+import { OTP_LENGTH } from "@/lib/otp";
 
 type LoginMethod = "username" | "phone";
+
+/** 1 credentials · "link" connect the messenger · 2 code */
+type Step = 1 | "link" | 2;
 
 export default function LoginPage() {
   const { t, isRtl } = useAuthUI();
@@ -27,11 +36,16 @@ export default function LoginPage() {
   const firstPaint = useFirstPaint();
 
   const [loginMethod, setLoginMethod] = useState<LoginMethod>("username");
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<Step>(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const captcha = useCaptcha();
   const otpTimer = useOtpTimer();
+  const channels = useOtpChannels();
+  const botLink = useBotLink(() => {
+    setStep(2);
+    otpTimer.start(120);
+  });
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -46,19 +60,37 @@ export default function LoginPage() {
     try {
       if (step === 1) {
         if (!captcha.token) return;
+        // The pass is single-use on the server (F-0201): whatever happens
+        // next, step 1 needs a fresh slide before it can be sent again.
         if (isPhoneMethod) {
-          await authApi.requestLoginOtp(phone, captcha.token);
-          setStep(2);
-          otpTimer.start(120);
+          let result;
+          try {
+            result = await authApi.requestLoginOtp(phone, captcha.token, channels.selected);
+          } finally {
+            captcha.spend();
+          }
+          if (result.linkRequired) {
+            // The bot sends the code once the user confirms the number there.
+            botLink.start(result);
+            setStep("link");
+          } else {
+            setStep(2);
+            otpTimer.start(120);
+          }
         } else {
-          const result = await authApi.loginPassword(username, password, captcha.token);
+          let result;
+          try {
+            result = await authApi.loginPassword(username, password, captcha.token);
+          } finally {
+            captcha.spend();
+          }
           if ("requiresOtp" in result) { setLoginMethod("phone"); setStep(2); otpTimer.start(120); }
-          else { setIsSuccess(true); router.push("/dashboard"); }
+          else { setIsSuccess(true); router.replace(PANEL_HOME); }
         }
-      } else {
+      } else if (step === 2) {
         await authApi.verifyLoginOtp(phone, otp);
         setIsSuccess(true);
-        router.push("/dashboard");
+        router.replace(PANEL_HOME);
       }
     } catch (error) {
       console.error(error);
@@ -67,7 +99,11 @@ export default function LoginPage() {
 
   const title = t.loginTitle;
   const subtitle =
-    step === 1 ? t.welcomeSubtitle : `${t.codeSentTo} ${phone || t.yourNumber}`;
+    step === 1
+      ? t.welcomeSubtitle
+      : step === "link"
+        ? t.botLinkWaiting
+        : `${t.codeSentTo} ${phone || t.yourNumber}`;
 
   const buttonText = isLoading
     ? t.processing
@@ -170,7 +206,7 @@ export default function LoginPage() {
                           label={t.phone}
                           type="tel"
                           value={phone}
-                          onChange={(e: any) => setPhone(e.target.value)}
+                          onChange={(e) => setPhone(e.target.value)}
                           dir="ltr"
                           autoComplete="tel"
                         />
@@ -180,7 +216,7 @@ export default function LoginPage() {
                             id="username"
                             label={t.username}
                             value={username}
-                            onChange={(e: any) => setUsername(e.target.value)}
+                            onChange={(e) => setUsername(e.target.value)}
                             dir="ltr"
                             autoComplete="username"
                           />
@@ -211,7 +247,24 @@ export default function LoginPage() {
                     t={t}
                   />
                 </motion.div>
+
+                {isPhoneMethod && channels.hasChoice && (
+                  <OtpChannelPicker
+                    channels={channels.channels}
+                    selected={channels.selected}
+                    onSelect={channels.select}
+                  />
+                )}
               </motion.div>
+            ) : step === "link" && botLink.link ? (
+              <BotLinkStep
+                link={botLink.link}
+                status={botLink.status}
+                onBack={() => {
+                  botLink.reset();
+                  setStep(1);
+                }}
+              />
             ) : (
               <OtpStep
                 value={otp}
@@ -224,12 +277,14 @@ export default function LoginPage() {
             )}
           </AnimatePresence>
 
-          <SubmitButton
-            isLoading={isLoading}
-            disabled={step === 1 ? !canSubmitStep1 : otp.length < 5}
-          >
-            {buttonText}
-          </SubmitButton>
+          {step !== "link" && (
+            <SubmitButton
+              isLoading={isLoading}
+              disabled={step === 1 ? !canSubmitStep1 : otp.length < OTP_LENGTH}
+            >
+              {buttonText}
+            </SubmitButton>
+          )}
         </form>
 
         {step === 1 && <AuthFooterLinks variant="login" />}

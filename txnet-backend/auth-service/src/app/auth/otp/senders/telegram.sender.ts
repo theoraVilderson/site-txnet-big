@@ -1,35 +1,27 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { IOtpSender } from './otp-sender.interface';
 import { OtpChannel, OtpPurpose } from '../otp.interface';
-import { TelegramLikeBotClient } from './telegram-like-bot.client';
+import { BotClientRegistry } from './bot-client.registry';
+import { BotLinkStore } from '../../bot-link/bot-link.store';
 import { buildOtpChatMessage } from './otp-message.util';
 import { LocaleService } from '../../../locale/locale.service';
 
 @Injectable()
 export class TelegramOtpSender implements IOtpSender {
   readonly channel = OtpChannel.telegram;
+  readonly requiresLinkedAccount = true;
   private readonly logger = new Logger(TelegramOtpSender.name);
-  private readonly client: TelegramLikeBotClient | null;
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
+    private readonly bots: BotClientRegistry,
+    private readonly links: BotLinkStore,
     private readonly localeService: LocaleService,
-  ) {
-    const token = this.config.get<string>('TELEGRAM_BOT_TOKEN');
-    const apiBase = this.config.get<string>(
-      'TELEGRAM_API_BASE',
-      'https://api.telegram.org',
-    );
-    const timeoutMs = this.config.get<number>('OTP_BOT_HTTP_TIMEOUT_MS', 5000);
+  ) {}
 
-    // If the token isn't set (e.g. dev environment), leave the client as
-    // null so we throw a clear error instead of crashing silently.
-    this.client = token
-      ? new TelegramLikeBotClient('telegram', apiBase, token, timeoutMs)
-      : null;
+  isConfigured(): boolean {
+    return this.bots.client('telegram') !== null;
   }
 
   async send(
@@ -38,25 +30,48 @@ export class TelegramOtpSender implements IOtpSender {
     purpose: OtpPurpose,
     lang: string,
   ): Promise<void> {
-    if (!this.client) {
+    const client = this.bots.client('telegram');
+    if (!client) {
       this.logger.error('TELEGRAM_BOT_TOKEN is not configured');
       throw new BadRequestException('otp.telegramNotConfigured');
     }
 
+    const chatId = await this.resolveChatId(phoneNumber);
+    if (!chatId) throw new BadRequestException('otp.telegramNotLinked');
+
+    const ns = this.localeService.getNamespace(lang, 'notifications');
+    const text = buildOtpChatMessage(ns, code, purpose);
+    await client.sendMessage(chatId, text);
+  }
+
+  /**
+   * Which chat this phone's code goes to.
+   *
+   * Normally the user's `linked_bot_account`, and only one whose
+   * `contactVerifiedAt` is set — an unproven chat id was never shown to belong
+   * to this number (identity/invariants.md #12). During registration there is
+   * deliberately no `user` row yet, so a chat that has already passed the
+   * contact check is held in Redis and used from there until `verify-phone`
+   * promotes it.
+   */
+  private async resolveChatId(phoneNumber: string): Promise<string | null> {
     const user = await this.prisma.user.findUnique({
       where: { phoneNumber },
       select: { id: true },
     });
-    if (!user) throw new BadRequestException('otp.userNotFound');
 
-    const link = await this.prisma.linkedBotAccount.findFirst({
-      where: { userId: user.id, platform: 'telegram' },
-      select: { platformUserId: true },
-    });
-    if (!link) throw new BadRequestException('otp.telegramNotLinked');
+    if (user) {
+      const link = await this.prisma.linkedBotAccount.findFirst({
+        where: {
+          userId: user.id,
+          platform: 'telegram',
+          contactVerifiedAt: { not: null },
+        },
+        select: { platformUserId: true },
+      });
+      if (link) return link.platformUserId;
+    }
 
-    const ns = this.localeService.getNamespace(lang, 'otp');
-    const text = buildOtpChatMessage(ns, code, purpose);
-    await this.client.sendMessage(link.platformUserId, text);
+    return this.links.provenChat('telegram', phoneNumber);
   }
 }

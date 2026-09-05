@@ -1,7 +1,7 @@
 ---
 id: glossary
 status: active
-updated: 2026-09-04
+updated: 2026-09-05
 ---
 
 # Glossary
@@ -31,6 +31,10 @@ introduce a synonym, record why.
 | Session | A server-tracked login. Postgres row is the record; a Redis marker is the fast revocation check. | identity | JWT access token, Impersonation session |
 | Impersonation | An admin operating as a user without their credentials; time-boxed, always audit-logged. | audit / identity | Account switch (user's own linked accounts) |
 | OTP | A one-time code. **Redis is the source of truth**; the `otp_code` table is audit only. | identity | JWT `otp_login` token |
+| OTP channel | *How* a code is delivered: `sms` \| `telegram` \| `bale`. Which ones exist is per-environment (`OTP_ALLOWED_CHANNELS` + a configured sender), not per-user. | identity | OTP purpose (*what* the code is for), BotIntegration (*which* bot sends it) |
+| LinkedBotAccount | The proven binding of one User to one Telegram/Bale chat id. Only counts as proven once `contactVerifiedAt` is set. | identity | BotIntegration (a tenant's bot), bot link (the pending, unproven request) |
+| Bot link | A *pending* request to become a LinkedBotAccount: a `?start=<token>` deep link plus its Redis record. Lives only in Redis and expires; it is not an account until the contact check passes. | identity | LinkedBotAccount, subscription link |
+| Contact verification | The check that makes a shared contact trustworthy: `contact.user_id === message.from.id`, and its phone equals the number the code was requested for. | identity | phone verification (`user.phoneVerifiedAt`, done by OTP at register) |
 | Scope (locale) | `backend` / `frontend` / `shareds` slice of the translation tree. | i18n | Permission scope, RBAC |
 | Namespace (locale) | One JSON file of keys inside a scope (e.g. `auth`, `errors`, `otp`). | i18n | Postgres schema/namespace |
 | Keyspace version | `REDIS_KEYSPACE_VERSION`; bumping it abandons every Redis key at once. | redis-keyspace | Contract `version` front matter |
@@ -48,6 +52,10 @@ introduce a synonym, record why.
 | BotIntegration | `automation.BotIntegration` — one bot per `(tenantId, platform, botUsername)`; `role` = primary \| sales \| support \| secondary. Exactly one `primary` per `(tenantId, platform)` carries OTP + transactional actions (C-05). | automation | LinkedBotAccount, webhook path |
 | ResellerNode | `identity.ResellerNode(tenantId, path ltree, …)` — a node in a Tenant's internal reseller tree. RLS is `tenantId` + `path <@ currentPath`. | identity / tenant | Panel (infra), PanelGroup, Tenant |
 | ownershipType | `platform` \| `tenant` — on a Panel and on an `AIProvider`. Decides whose infra/keys/cost a thing uses. Same pattern both places. | network / ai | Entitlement, tenantType |
+| BotView | One bot screen described as *intent* — i18n keys, a list of choices with stable ids, media, and an optional Mini App `escape` route. Written once; rendered per platform. Never contains a Telegram/Bale payload or a resolved string. | bot-app | Notification (a one-way send with no flow), reply_markup (one possible rendering of its choices) |
+| Capability flag | A verified, dated claim about what one messenger platform supports (keyboard kinds, max file size, WebApp, payments — `F-301`). Derived from that platform's documented API, never assumed. | messenger | Entitlement (what a *tenant* may use), OTP channel (how a code is delivered) |
+| Degradation | The `F-302` policy: a missing capability is *substituted* and the flow continues, observably logged — never an error and never a silently dropped affordance. | messenger | Fallback (banned for notifications — see D-03 / §9.7 No-Fallback Rule) |
+| Mini App | Telegram's WebApp surface running `panel-web` itself with a shared session (`F-310`). It is the same panel, not a bot screen and not a third UI. | bot-app / panel-web | BotView, User panel (the same code, reached from a browser) |
 
 ## Banned words
 Terms that were ambiguous and are now forbidden project-wide.

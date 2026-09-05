@@ -1,7 +1,7 @@
 ---
 id: identity
 layer: domain
-updated: 2026-09-04
+updated: 2026-09-05
 ---
 
 # Business rules — identity
@@ -17,14 +17,18 @@ performs `revoke(old, user_logout)` + `create(new)` atomically (token rotation).
 ## Rules
 | # | Rule | Trigger | Exception |
 |---|---|---|---|
-| 1 | OTP channel resolution: explicit request channel -> user `preferredOtpChannel` -> `sms` | any OTP issue | channel must be in `OTP_ALLOWED_CHANNELS` |
-| 2 | `bale` / `telegram` channel needs a pre-existing `linked_bot_account` for chat id | OTP issue on those channels | falls back / errors per sender |
+| 1 | OTP channel resolution: explicit request channel -> user `preferredOtpChannel` (only if still available) -> the first available channel in `OTP_ALLOWED_CHANNELS` order | any OTP issue | an explicitly named channel is never swapped: if it is off, the request is refused (`otp.channelNotAllowed` / `otp.channelNotConfigured`) rather than silently redirected. No channel available at all -> `otp.noChannelAvailable` |
+| 2 | `bale` / `telegram` need a `linked_bot_account` whose `contactVerifiedAt` is set; without one the answer is a bot deep link (`auth.botLinkRequired`), not a code and not another channel | OTP issue on those channels | the link is offered for any phone number, account or not — branching on existence would make it an enumeration oracle |
+| 9 | A shared contact links the chat only if `contact.user_id === message.from.id` **and** its phone (normalized) equals the number the link was issued for | bot webhook, contact message | mismatch replies in-chat and marks the link `failed`; the token stays usable so the user can retry |
+| 10 | After a successful link the pending record's `purpose` decides what happens next: `login` / `password_reset` send the code immediately from the bot; `account_link` sends nothing | bot webhook, link completed | an OTP cooldown at that moment leaves the link intact and sends no code — the user re-requests from the site |
 | 3 | Identifier type: matches Iran mobile regex -> phone (normalized `09xxxxxxxxx`), else username | password login | — |
 | 4 | Strong password must not contain username / full name / phone fragments | register, reset | `password.containsProfileData` |
 | 5 | Default tenant/role on register: `Tenant.slug = 'platform_owner'`, `Role.name = 'user'` | register | `register.defaultRoleMissing` if seed absent |
-| 8 | Duplicate username/phone at register is checked live against `user` (best-effort, since no row is reserved yet); the Postgres unique constraint is the final guard when verify-phone promotes the pending record | register, verify phone (register) | a same-second race can still surface `register.duplicateUser` at verify time instead of register time |
+| 8 | Duplicate username/phone at register is checked live against `user` (best-effort, since no row is reserved yet) and answered with `register.duplicateUser`; the Postgres unique constraint is the final guard when verify-phone promotes the pending record | register, verify phone (register) | a same-second race can still surface `register.duplicateUser` at verify time instead of register time. Unlike rule 2, this branch **does** reveal whether a phone is registered — an accepted trade-off, see "Register reveals that a phone is already taken" below |
 | 6 | Impersonation session lifetime is 30 min and cannot perform `SensitiveActionGuard` actions | impersonated request | — |
 | 7 | Access-token `permissions[]` is a snapshot from `role_permission` at sign time | token issue | stale until token expires |
+| 11 | Failed password logins are counted 10 per 900s in a bucket keyed on the normalized identifier (`login-failures:<username\|09xxxxxxxxx>`), reset on a correct password | password login | the counter is consumed before the password is checked, so the 11th attempt in a window is locked even if its password is right |
+| 12 | Order of answers on password login: account missing/deleted/inactive -> `auth.invalidCredentials`; lock -> `auth.temporarilyLocked`; wrong password -> `auth.invalidCredentials`; only then unverified phone -> `auth.phoneVerificationRequired` | password login | the unverified-phone key is deliberately last: answered earlier it tells an anonymous caller the account exists (invariant #6) |
 
 ## Edge cases decided
 | Case | Decision | Date |
@@ -32,5 +36,12 @@ performs `revoke(old, user_logout)` + `create(new)` atomically (token rotation).
 | OTP verify with both `phoneNumber` and `otpToken` | reject (schema `.refine`) | 2026-09-04 (observed) |
 | Refresh token missing on logout | return `{success:true}` (idempotent) | 2026-09-04 (observed) |
 | Login OTP request for unknown/inactive phone | still return `{accepted:true}`, send nothing | 2026-09-04 (observed) |
+| Two link requests for the same (platform, phone) inside the TTL | hand back the same token and deep link; a second link would orphan the one already open in the messenger | 2026-09-05 (decided) |
+| Bot webhook called with a wrong/absent secret | 404, identical to an unknown route — a URL that answers differently can be probed | 2026-09-05 (decided) |
+| A verified contact whose phone has no account | reply "no account is registered with this number" and link nothing; the sender has already proven the number is theirs, so this reveals nothing new to them | 2026-09-05 (decided) |
 | Register re-submitted for a phone with a still-pending (unverified) registration | overwrite the pending Redis record + issue a fresh OTP; the previous attempt's data/OTP become invalid | 2026-09-04 (decided) |
+| Register reveals that a phone is already taken (`register.duplicateUser`), while login OTP deliberately does not (rule 2) | keep it. `POST /auth/register` is behind `@RequireCaptcha()` and 10/hour/IP, so this is a one-number-at-a-time lookup, not bulk enumeration, and telling a returning user "you already have an account" is worth more than closing it. Do **not** "fix" this to match rule 2 without the owner's call — the uniform-response version needs a notification to the real owner, equal argon2 timing on both branches, and a per-phone rate limit, or it trades an oracle for an OTP-spam vector | 2026-09-05 (decided, owner) |
 | Pending registration's Redis key expires (600s) before verify-phone | `register.pending.expired`; user must register again from step 1 | 2026-09-04 (decided) |
+| A real but phone-unverified account tries to log in | answer `auth.invalidCredentials` until the password is proven, then `auth.phoneVerificationRequired`. The account still cannot log in (invariant #6); moving the key behind the password check costs a returning user nothing and closes an oracle that needed no credentials at all | 2026-09-05 (decided) |
+| The impersonated session's row vs. its audit row | one transaction, on the caller's `tx` (`SessionService.createSession({ tx })`). The Redis liveness marker is written afterwards via the returned `activateCache`, never before the commit — invariant #8 says Postgres is the record, so a marker for an uncommitted row must not exist | 2026-09-05 (decided) |
+| Ending an impersonation | the Postgres revocation rides in the same transaction as the audit row; afterwards only `SessionStore.drop` runs. Going back through `SessionService.revokeSession` would rewrite `revokedAt` a second time, outside that transaction | 2026-09-05 (decided) |

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useMemo, useRef } from "react";
+import { createContext, useContext, useMemo } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import type { CompiledTranslation } from "@/stores/locale-store";
 import { AUTH_KEY_MAP, type AuthTranslations } from "@auth/auth/_lib/translations";
@@ -36,12 +36,10 @@ export function AuthUIProvider({
 }) {
   const { t: lt, isRtl, lang } = useLocale();
 
-  const ltRef = useRef(lt);
-  ltRef.current = lt;
-  const nsRef = useRef<Record<string, CompiledTranslation> | undefined>(
-    authByLang?.[lang],
-  );
-  nsRef.current = authByLang?.[lang];
+  // The proxy closes over the current language + translator instead of reading
+  // them out of refs during render (react-hooks/refs); it is rebuilt only when
+  // one of them actually changes, so the identity is still stable per language.
+  const ns = authByLang?.[lang];
 
   const t = useMemo(() => {
     return new Proxy({} as AuthTranslations, {
@@ -49,13 +47,13 @@ export function AuthUIProvider({
         // components use short flat names (t.loginTitle) → dot path in the
         // nested auth namespace (login.title)
         const path = (AUTH_KEY_MAP as Record<string, string>)[key] ?? key;
-        const direct = nsRef.current?.[path];
+        const direct = ns?.[path];
         if (direct !== undefined) return renderCompiled(direct);
         // fallback: live store (e.g. a namespace not passed from the server)
-        return ltRef.current("auth", path);
+        return lt("auth", path);
       },
     });
-  }, []);
+  }, [ns, lt]);
 
   return (
     <AuthUIContext.Provider value={{ isRtl, t }}>

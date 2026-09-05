@@ -9,6 +9,7 @@ import { buildOtpSmsTemplate } from './otp-message.util';
 @Injectable()
 export class SmsOtpSender implements IOtpSender {
   readonly channel = OtpChannel.sms;
+  readonly requiresLinkedAccount = false;
   private readonly logger = new Logger(SmsOtpSender.name);
   private readonly provider: SmsProviderService | null;
   private readonly sender: string;
@@ -28,6 +29,10 @@ export class SmsOtpSender implements IOtpSender {
       apiUrl && apiKey ? new SmsProviderService(apiUrl, apiKey) : null;
   }
 
+  isConfigured(): boolean {
+    return this.provider !== null;
+  }
+
   async send(
     phoneNumber: string,
     code: string,
@@ -39,7 +44,7 @@ export class SmsOtpSender implements IOtpSender {
       throw new BadRequestException('otp.smsNotConfigured');
     }
 
-    const ns = this.localeService.getNamespace(lang, 'otp');
+    const ns = this.localeService.getNamespace(lang, 'notifications');
     const msg = buildOtpSmsTemplate(ns, purpose);
 
     const result = await this.provider.sendSMS(

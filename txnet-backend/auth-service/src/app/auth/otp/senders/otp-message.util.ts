@@ -1,21 +1,18 @@
 import { OtpPurpose } from '../otp.interface';
 
 /**
- * ساختار جدید برای مقادیر ترجمه
- */
-export interface TranslationItem {
-  text: string;
-  vars: string[];
-}
-
-/**
- * Shape expected from the "otp" locale namespace
- * (locales/langs/{lang}/otp.json).
+ * Shape of the `notifications` locale namespace this module reads
+ * (`locales/backend/langs/<lang>/notifications.json`). locale-service hands
+ * namespaces back as flat dot-notation keys and `LocaleService.getNamespace`
+ * re-nests them, so `otp.title.login` arrives as `otp.title.login` — a plain
+ * string, not an object.
  */
 export interface OtpNamespace {
-  titles?: Partial<Record<OtpPurpose, TranslationItem>>;
-  chatBody?: TranslationItem;
-  smsBody?: TranslationItem;
+  otp?: {
+    title?: Partial<Record<OtpPurpose, string>>;
+    chatBody?: string;
+    smsBody?: string;
+  };
 }
 
 // English fallbacks used when a locale namespace/key is missing, so OTP
@@ -24,6 +21,7 @@ const FALLBACK_TITLES: Record<OtpPurpose, string> = {
   [OtpPurpose.login]: 'Your login code',
   [OtpPurpose.register_phone_verify]: 'Your phone verification code',
   [OtpPurpose.password_reset]: 'Your password reset code',
+  [OtpPurpose.account_link]: 'Your account linking code',
 };
 
 const FALLBACK_CHAT_BODY =
@@ -42,17 +40,14 @@ function resolveTitle(
   ns: OtpNamespace | undefined,
   purpose: OtpPurpose,
 ): string {
-  // اینجا به جای خود مقدار، فیلد text را می‌خوانیم
   return (
-    ns?.titles?.[purpose]?.text ??
-    FALLBACK_TITLES[purpose] ??
-    'Your one-time code'
+    ns?.otp?.title?.[purpose] ?? FALLBACK_TITLES[purpose] ?? 'Your one-time code'
   );
 }
 
 /**
  * Builds the OTP text sent to chat-based channels (Telegram/Bale).
- * `ns` should be `LocaleService.getNamespace(lang, 'otp')` for the
+ * `ns` should be `LocaleService.getNamespace(lang, 'notifications')` for the
  * request's resolved language; falls back to English if missing.
  */
 export function buildOtpChatMessage(
@@ -61,8 +56,7 @@ export function buildOtpChatMessage(
   purpose: OtpPurpose,
 ): string {
   const title = resolveTitle(ns, purpose);
-  // خواندن فیلد text از chatBody
-  const template = ns?.chatBody?.text ?? FALLBACK_CHAT_BODY;
+  const template = ns?.otp?.chatBody ?? FALLBACK_CHAT_BODY;
   return interpolate(template, { title, code });
 }
 
@@ -76,7 +70,6 @@ export function buildOtpSmsTemplate(
   purpose: OtpPurpose,
 ): string {
   const title = resolveTitle(ns, purpose);
-  // خواندن فیلد text از smsBody
-  const template = ns?.smsBody?.text ?? FALLBACK_SMS_BODY;
+  const template = ns?.otp?.smsBody ?? FALLBACK_SMS_BODY;
   return interpolate(template, { title });
 }

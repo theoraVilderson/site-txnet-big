@@ -1,6 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+
+export interface OrganicFieldProps {
+  id: string;
+  label: ReactNode;
+  value: string;
+  onChange: (e: ChangeEvent<HTMLInputElement>) => void;
+  type?: string;
+  placeholder?: string;
+  dir?: "auto" | "ltr" | "rtl";
+  autoComplete?: string;
+}
 
 export const OrganicField = ({
   id,
@@ -11,7 +22,7 @@ export const OrganicField = ({
   placeholder = " ",
   dir = "auto",
   autoComplete,
-}: any) => {
+}: OrganicFieldProps) => {
   const [autofilled, setAutofilled] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -38,7 +49,7 @@ export const OrganicField = ({
         onChange={onChange}
         placeholder={placeholder}
         autoComplete={autoComplete}
-        className={dir === "ltr" ? "dir-ltr text-left font-mono" : ""}
+        className={`organic-field-input ${dir === "ltr" ? "dir-ltr text-left font-mono" : ""}`}
         onAnimationStart={(e) => {
           if (e.animationName === "onAutoFillStart") setAutofilled(true);
           else if (e.animationName === "onAutoFillCancel") setAutofilled(false);

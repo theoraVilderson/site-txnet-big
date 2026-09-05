@@ -43,21 +43,21 @@ export type LocaleStoreApi = ReturnType<typeof createLocaleStore>;
  * برای زمانی که فایل زبان جدیدی از API فچ می‌شود یا سرور قصد تزریق دارد
  */
 export function flattenAndCompile(
-  obj: Record<string, any>,
+  obj: Record<string, unknown>,
   prefix = "",
 ): Record<string, CompiledTranslation> {
   return Object.keys(obj).reduce(
     (acc: Record<string, CompiledTranslation>, k: string) => {
       const pre = prefix.length ? prefix + "." : "";
+      const value = obj[k];
 
-      if (
-        typeof obj[k] === "object" &&
-        obj[k] !== null &&
-        !Array.isArray(obj[k])
-      ) {
-        Object.assign(acc, flattenAndCompile(obj[k], pre + k));
-      } else if (typeof obj[k] === "string") {
-        const text = obj[k];
+      if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+        Object.assign(
+          acc,
+          flattenAndCompile(value as Record<string, unknown>, pre + k),
+        );
+      } else if (typeof value === "string") {
+        const text = value;
 
         // اگر متن شامل متغیر {{var}} بود، به آرایه توکن‌ها تبدیل می‌شود
         if (text.includes("{{")) {

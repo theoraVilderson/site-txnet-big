@@ -60,6 +60,17 @@ export const AUTH_KEY_MAP = {
   captchaVerified: "captcha.verified",
   captchaSwipe: "captcha.swipe",
   captchaChecking: "captcha.checking",
+
+  otpChannelLabel: "otpChannel.label",
+  otpChannelSms: "otpChannel.sms",
+  otpChannelTelegram: "otpChannel.telegram",
+  otpChannelBale: "otpChannel.bale",
+
+  botLinkSubtitle: "botLink.subtitle",
+  botLinkOpen: "botLink.open",
+  botLinkWaiting: "botLink.waiting",
+  botLinkFailed: "botLink.failed",
+  botLinkChangeMethod: "botLink.changeMethod",
 } as const satisfies Record<string, string>;
 
 export type Lang = string;

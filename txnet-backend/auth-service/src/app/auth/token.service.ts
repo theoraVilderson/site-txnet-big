@@ -134,7 +134,13 @@ export class TokenService {
       throw new UnauthorizedException('invalid token');
     }
 
-    if (payload.exp <= Math.floor(Date.now() / 1000)) {
+    // A payload with no `exp` at all must not read as "never expires":
+    // `undefined <= now` is false. auth-handler already rejects it (Go zero
+    // value 0), so this keeps the two validators in step.
+    if (
+      typeof payload.exp !== 'number' ||
+      payload.exp <= Math.floor(Date.now() / 1000)
+    ) {
       throw new UnauthorizedException('token expired');
     }
     return payload;

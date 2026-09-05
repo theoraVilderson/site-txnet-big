@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { ChevronRight, Loader2 } from "lucide-react";
 import { OTPInput } from "@auth/auth/_components/OTPInput";
 import { useAuthUI } from "@auth/auth/_context/AuthUIContext";
+import { OTP_LENGTH } from "@/lib/otp";
 
 interface OtpStepProps {
   value: string;
@@ -33,7 +34,7 @@ export function OtpStep({
       transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
       className="mb-5"
     >
-      <OTPInput length={5} value={value} onChange={onChange} />
+      <OTPInput length={OTP_LENGTH} value={value} onChange={onChange} />
 
       <div className="text-center mt-8">
         {timerSeconds > 0 ? (

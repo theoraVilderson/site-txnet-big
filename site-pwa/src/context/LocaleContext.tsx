@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { useStore } from "zustand";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -36,18 +36,16 @@ export function LocaleProvider({
 }: LocaleProviderProps) {
   // یک‌بار در طول عمر این mount ساخته می‌شه — روی سرور هم چون هر
   // ریکوئست درخت React جدا داره، هیچ استیتی بین کاربرها لو نمی‌ره.
-  const storeRef = useRef<LocaleStoreApi | null>(null);
-  if (!storeRef.current) {
-    storeRef.current = createLocaleStore({
+  const [store] = useState<LocaleStoreApi>(() =>
+    createLocaleStore({
       lang: initialLang,
       isRtl: initialDir === "rtl",
       availableLocales: initialAvailable,
       // already keyed by language → every language's common/validations are
       // in the store from the first render, so setLang needs no network.
       cache: initialNamespaces,
-    });
-  }
-  const store = storeRef.current;
+    }),
+  );
 
   const lang = useStore(store, (s) => s.lang);
   const isRtl = useStore(store, (s) => s.isRtl);

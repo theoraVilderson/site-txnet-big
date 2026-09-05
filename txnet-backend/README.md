@@ -24,6 +24,33 @@ These targets are either [inferred automatically](https://nx.dev/concepts/inferr
 
 [More about running tasks in the docs &raquo;](https://nx.dev/features/run-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
 
+## Tests
+
+Two suites, deliberately separate:
+
+```sh
+npm test        # unit — pure logic, no I/O, runs anywhere
+npm run test:int   # integration — `*.int.spec.ts`, needs Docker
+```
+
+The Redis-backed stores (`otp.store`, `rate-limiter`, `captcha.service`,
+`session.store`) are almost entirely Redis semantics — Lua atomicity, KEEPTTL,
+MULTI/EXEC, single-use GETDEL — so their specs run against a real Redis started
+per spec file by Testcontainers (`src/test-support/redis-fixture.ts`), not
+against a mock that would only prove it agrees with itself.
+
+Two environment knobs, both with working defaults:
+
+| var | default | why |
+|---|---|---|
+| `TEST_REDIS_IMAGE` | `docker.arvancloud.ir/redis:8.8-alpine` | Docker Hub is not reachable from the dev machines; this mirror is the one the dev stack already pulls from |
+| `TESTCONTAINERS_RYUK_DISABLED` | forced to `true` by the fixture | the reaper sidecar lives on Docker Hub; every container is stopped in `afterAll` instead |
+
+`redis.keys.spec.ts` is a snapshot test on purpose: a changed key does not fail,
+it silently stops finding data that is already there (a changed `session:*` key
+reads as "everyone was signed out"). Any diff there wants a human, and is the
+moment to ask whether `REDIS_KEYSPACE_VERSION` should be bumped too.
+
 ## Add new projects
 
 While you could add new projects to your workspace manually, you might want to leverage [Nx plugins](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) and their [code generation](https://nx.dev/features/generate-code?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) feature.

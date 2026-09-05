@@ -3,9 +3,22 @@
     "title": {
       "login": "Your login code",
       "register_phone_verify": "Your login code",
-      "password_reset": "Your password reset code"
+      "password_reset": "Your password reset code",
+      "account_link": "Your account linking code"
     },
     "chatBody": "{{title}}:\n<code>{{code}}</code>\n\nThis code is valid for 5 minutes and do not share it with anyone.",
-    "smsBody": "{{title}}: {{code}}\nThis code is valid for 5 minutes."
+    "smsBody": "{{title}}: {{code}}\nThis code is valid for 5 minutes.",
+    "botLink": {
+      "askContact": "To receive your code here, confirm this number belongs to you by sharing your contact with the button below.",
+      "askContactButton": "Share my number",
+      "senderMismatch": "That contact belongs to someone else, so it cannot confirm this account. Use the button below to share your own number.",
+      "phoneMismatch": "This number is not the one the code was requested for. Start again on the site with the number you are signing in with.",
+      "expired": "This link has expired. Request the code again on the site to get a new one.",
+      "takenByAnotherAccount": "This messenger account is already linked to a different account.",
+      "noAccount": "No account is registered with this number.",
+      "linked": "Your number is confirmed. Your code is on its way.",
+      "linkedNoCode": "Your number is confirmed. You can request your code now.",
+      "unknownCommand": "Open the link from the site to connect this messenger to your account."
+    }
   }
 }

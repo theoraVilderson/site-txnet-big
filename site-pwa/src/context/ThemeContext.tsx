@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { useStore } from "zustand";
 import {
   createThemeStore,
@@ -23,14 +23,14 @@ export function ThemeProvider({
   initialTheme: ThemeName;
   initialChoice: ThemeChoice;
 }) {
-  const storeRef = useRef<ThemeStoreApi | null>(null);
-  if (!storeRef.current) {
-    storeRef.current = createThemeStore({
+  // useState با initializer: دقیقاً یک‌بار در طول عمر این mount ساخته می‌شود،
+  // بدون خواندن ref در زمان رندر (react-hooks/refs).
+  const [store] = useState<ThemeStoreApi>(() =>
+    createThemeStore({
       theme: initialTheme,
       choice: initialChoice,
-    });
-  }
-  const store = storeRef.current;
+    }),
+  );
 
   const theme = useStore(store, (s) => s.theme);
   const choice = useStore(store, (s) => s.choice);

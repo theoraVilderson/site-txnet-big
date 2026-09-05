@@ -1,7 +1,7 @@
 ---
 id: ops-environments
 status: active
-updated: 2026-09-04
+updated: 2026-09-05
 ---
 
 # Environments
@@ -20,6 +20,18 @@ updated: 2026-09-04
 Different project name + `STACK_NAME` + network names + host ports, so dev and
 prod can run on one host at once. `dev-docker/dev-setup.sh` orchestrates the
 main stack + the three independent stacks.
+
+## Dev build/run loop (`txnet-backend/scripts/dev-serve.js`)
+
+`nx serve` (`@nx/js:node`) respawns a fresh `webpack-cli build` per file save
+even under `--watch`, so every save paid for a cold webpack start.
+`dev-serve.js` instead drives the webpack Node API directly (one persistent
+`compiler.watch()`, module graph kept warm) and restarts the built process
+from webpack's `done` hook. Usage: `APP_NAME=<app> node scripts/dev-serve.js`
+— generic across Nx apps, not specific to any one service. Each app's own
+`webpack.config.js` (e.g. `txnet-backend/auth-service/webpack.config.js`)
+supplies `externals`/`cache`/`devtool` tuning; not tracked as any unit's
+`source:` — see `interfaces/auth-api/open-questions.md`.
 
 ## Stacks
 
@@ -53,6 +65,62 @@ Traefik in the main stack can route to the other stacks).
 - `LOCALE_SERVICE_ADDR` = `locale-service:50051`; `LOCALE_SCOPE` = `backend` for
   services, `frontend` for site-pwa.
 - `DEFAULT_LANGUAGE` = `fa`.
+- `AUTH_SERVICE_ORIGIN` (site-pwa) = `http://auth-service:${AUTH_PORT}` — the
+  in-network address of the same service the browser reaches at
+  `NEXT_PUBLIC_API_ORIGIN`. Server-side only: `src/proxy.ts` uses it for the
+  auth-screen session check, which runs before first byte and so must not take
+  the public DNS + Traefik + TLS path. Unset falls back to the public origin
+  (`next dev` outside compose); a wrong value shows the login form to everyone,
+  it never lets anyone in.
+
+## OTP delivery + bot config (auth-service)
+
+| Var | Effect if unset / wrong |
+|---|---|
+| `OTP_ALLOWED_CHANNELS` | the switch. Comma-separated subset of `sms,telegram,bale`; default `sms`. A channel left out is invisible: absent from `GET /api/auth/otp/channels`, refused if a client names it. **It must reach the container** — an env var that only exists in `.env` and is not passed through in `dev-docker/docker-compose.main.yml` silently leaves the service on its default |
+| `OTP_DELIVERY_MODE` | `console` prints the code and calls no sender, so every allowed channel counts as configured (dev). `live` is the default |
+| `TELEGRAM_BOT_TOKEN` / `BALE_BOT_TOKEN` | without it the channel is not offered at all |
+| `TELEGRAM_BOT_USERNAME` / `BALE_BOT_USERNAME` | delivery still works for users who are already linked, but **no new user can link** — there is no deep link to send them to |
+| `TELEGRAM_WEBHOOK_SECRET` / `BALE_WEBHOOK_SECRET` | same: no webhook route means no link flow. At least 16 chars. Register the webhook as `https://api.<domain>/api/auth/bots/<platform>/webhook/<secret>`; a wrong secret answers 404 |
+| `BOT_LINK_TOKEN_TTL_SEC` | how long a deep link stays usable (900s default) |
+| `TELEGRAM_API_BASE` / `BALE_API_BASE` | **outgoing**: where auth-service calls the Bot API. Per environment — dev and prod may need different proxies |
+| `TELEGRAM_WEBHOOK_PUBLIC_BASE` / `BALE_WEBHOOK_PUBLIC_BASE` | **incoming**: the base that platform calls back on. Empty falls back to `BOT_WEBHOOK_PUBLIC_BASE`, then `https://api.<DOMAIN_NAME>` |
+| `BOT_WEBHOOK_AUTO_REGISTER` | `false` stops auth-service registering webhooks on boot (leave it `true` unless something else owns them) |
+
+A messenger channel therefore has two levels: **token only** = existing linked
+users get codes; **token + username + secret** = new users can link themselves.
+`OtpChannelRegistry` logs the resolved `allowed=[…] available=[…]` line at boot —
+read it first when a channel "does not show up" in the panel.
+
+**Where each one lives.** The four endpoint vars (`*_API_BASE`,
+`*_DEEP_LINK_BASE`) are shared defaults in `.env`. The six credentials
+(`{TELEGRAM,BALE}_BOT_TOKEN` / `_BOT_USERNAME` / `_WEBHOOK_SECRET`) are **per
+environment**, in `.env.dev` and `.env.prod`: a bot token can hold exactly one
+webhook URL, so dev and prod must be two different bots. Registering the same
+token twice silently steals the webhook from the other stack.
+
+The webhook URL itself is not configuration — it is derived:
+`<public base>/api/auth/bots/<platform>/webhook/<that platform's secret>`, where
+the public base is `<PLATFORM>_WEBHOOK_PUBLIC_BASE`, else
+`BOT_WEBHOOK_PUBLIC_BASE`, else `https://api.<DOMAIN_NAME>`.
+
+auth-service registers that URL with every configured bot on boot
+(`BotWebhookRegistrar`, off with `BOT_WEBHOOK_AUTO_REGISTER=false`); it reads
+`getWebhookInfo` first and only writes when the URL differs, so a restart is
+cheap and a webhook it cannot read is left alone.
+`scripts/set-bot-webhook.sh <dev|prod> [platform] [set|show|delete]` builds the
+identical URL by hand; `show` prints `getWebhookInfo`, which is the first thing
+to check when the bot goes quiet.
+
+Reachability is two separate problems, and dev has both:
+
+- **outgoing** (`sendMessage`, `setWebhook`) — `TELEGRAM_API_BASE` /
+  `BALE_API_BASE`, pointed at a proxy where the API host is blocked.
+- **incoming** — Telegram only calls a publicly reachable HTTPS URL, and its
+  attempts against this server time out (`last_error_message: Connection timed
+  out` in `getWebhookInfo`). `TELEGRAM_WEBHOOK_PUBLIC_BASE` sends its updates
+  back in through the same proxy; Bale reaches `api.<DOMAIN_NAME>` directly and
+  needs no override.
 
 ## Secret ownership
 

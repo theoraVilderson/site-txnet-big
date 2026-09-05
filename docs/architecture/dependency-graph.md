@@ -38,12 +38,23 @@ or container names. Add a row the first time a walk needs it.
 | forward-auth | redis-keyspace | Redis reads: session-active check | revocation is a Redis delete the gateway notices on the next request |
 | forward-auth | auth-api | Traefik ForwardAuth `/validate` -> identity headers | the gateway runs *before* the API and rewrites the request it receives |
 | panel-web | auth-api | HTTP proxy `/api/auth/*` (cookies rewritten in the proxy) | a cookie can be correct at the API and lost in the proxy hop |
+| messenger | bot-app | inbound webhook -> normalized update handed to the flow | a bot that "doesn't answer" is usually the transport or the token, not the flow — start at `messenger` (ADR-0009) |
+| bot-app | auth-api | HTTP, same routes `panel-web` calls, with a session proven by a `LinkedBotAccount` | the bot decides nothing; a wrong answer in the bot is a wrong answer in the panel too |
+| identity | messenger | outgoing `sendMessage` for OTP delivery (`F-0202`) | the OTP path and the bot UI share one client registry, so a token or rate-limit problem hits both at once |
+| notification | messenger | rate-limited queue for campaigns and bulk sends (`F-313`, §9.8) | a ban earned by a campaign kills OTP delivery on the same token |
 
 ## Manual notes
 
 - `auth-api` and `forward-auth` share one Redis key prefix by env convention
   (`redis-keyspace`). A prefix or version mismatch is invisible to both: the
   gateway simply never finds the session the API wrote. See ADR-0005.
+- The `messenger` and `bot-app` units are `draft` with `source: []`, but three of
+  their runtime edges above are **already real in code** — the OTP senders
+  (`auth/otp/senders/`) and the `F-0203` webhook (`auth/bot-link/`) live under
+  `identity` / `auth-api` globs today. A walk that lands on "the bot doesn't
+  respond" therefore still ends in `auth-service`, not in a `bot-app` folder.
+  ADR-0009 records when that moves; until it does, do not treat a `messenger`
+  hop as a code location.
 - `locale-service` boot dependency is hard: `auth-api` and `forward-auth` refuse
   to start without a first snapshot. A "service won't boot" symptom starts at
   `i18n`, not at the service that failed.

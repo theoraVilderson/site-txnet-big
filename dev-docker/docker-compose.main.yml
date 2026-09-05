@@ -172,6 +172,36 @@ services:
       - OTP_TOKEN_TTL_SEC=${OTP_TOKEN_TTL_SEC:-300}
       - RESET_TOKEN_TTL_SEC=${RESET_TOKEN_TTL_SEC:-300}
       - OTP_DELIVERY_MODE=${OTP_DELIVERY_MODE:-console}
+      # Which delivery methods this environment offers. Drop one from the list
+      # and it disappears from GET /api/auth/otp/channels as well.
+      - OTP_ALLOWED_CHANNELS=${OTP_ALLOWED_CHANNELS:-sms}
+      - OTP_DEV_CONSOLE_LOG=${OTP_DEV_CONSOLE_LOG:-false}
+      - BOT_LINK_TOKEN_TTL_SEC=${BOT_LINK_TOKEN_TTL_SEC:-900}
+      # Telegram / Bale bots. The username builds the ?start= deep link and the
+      # webhook secret guards /api/auth/bots/<platform>/webhook/<secret>;
+      # without all three a messenger channel can deliver but cannot be linked.
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME:-}
+      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
+      - TELEGRAM_API_BASE=${TELEGRAM_API_BASE:-https://api.telegram.org}
+      - TELEGRAM_DEEP_LINK_BASE=${TELEGRAM_DEEP_LINK_BASE:-https://t.me}
+      - BALE_BOT_TOKEN=${BALE_BOT_TOKEN:-}
+      - BALE_BOT_USERNAME=${BALE_BOT_USERNAME:-}
+      - BALE_WEBHOOK_SECRET=${BALE_WEBHOOK_SECRET:-}
+      - BALE_API_BASE=${BALE_API_BASE:-https://tapi.bale.ai}
+      - BALE_DEEP_LINK_BASE=${BALE_DEEP_LINK_BASE:-https://ble.ir}
+      # On boot auth-service registers its own webhook with each bot, at
+      # <public base>/api/auth/bots/<platform>/webhook/<secret>. The base is
+      # api.${DOMAIN_NAME} unless something else fronts this API.
+      - BOT_WEBHOOK_AUTO_REGISTER=${BOT_WEBHOOK_AUTO_REGISTER:-true}
+      - BOT_WEBHOOK_PUBLIC_BASE=${BOT_WEBHOOK_PUBLIC_BASE:-}
+      # Per-platform override, for a messenger that cannot reach this server
+      # the way the others do (Telegram comes back through a proxy).
+      - TELEGRAM_WEBHOOK_PUBLIC_BASE=${TELEGRAM_WEBHOOK_PUBLIC_BASE:-}
+      - BALE_WEBHOOK_PUBLIC_BASE=${BALE_WEBHOOK_PUBLIC_BASE:-}
+      - SMS_API_URL=${SMS_API_URL:-}
+      - SMS_API_KEY=${SMS_API_KEY:-}
+      - SMS_SENDER=${SMS_SENDER_PRIVATE:-}
       - DOMAIN_NAME=${DOMAIN_NAME}
       - FRONTEND_ORIGIN=https://panel.${DOMAIN_NAME}
       - COOKIE_SECURE=${COOKIE_SECURE:-true}
@@ -291,6 +321,11 @@ services:
       # intermittent 502 on login/register — accepted so cookies land without
       # the proxy rewriting anything.
       - NEXT_PUBLIC_API_ORIGIN=https://api.${DOMAIN_NAME}
+      # Server-to-server only, for the auth-screen session check in src/proxy.ts:
+      # that one stays on private_backend_network, since it runs before the login
+      # page renders and the public hop above would be the whole delay the check
+      # exists to avoid. A failure here just shows the login form.
+      - AUTH_SERVICE_ORIGIN=http://auth-service:${AUTH_PORT}
       - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
       - LOCALE_SCOPE=frontend
     depends_on:

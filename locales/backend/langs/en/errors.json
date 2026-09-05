@@ -23,13 +23,26 @@
         "notConfigured": "The SMS service is currently not configured",
         "sendFailed": "Sending SMS encountered an error"
       }
+    },
+    "channelNotConfigured": "This method of sending the code is not available right now",
+    "noChannelAvailable": "No method of sending the code is available right now",
+    "botLink": {
+      "senderMismatch": "The contact you shared belongs to someone else",
+      "phoneMismatch": "The number you shared does not match the number you entered",
+      "expired": "The link expired. Request the code again.",
+      "takenByAnotherAccount": "That messenger account is already linked to a different account",
+      "noAccount": "No account is registered with this number"
     }
   },
   "auth": {
     "authorizationRequired": "Authentication is required for this operation",
     "sessionRevoked": "Your session has expired or been revoked",
     "invalidToken": "Invalid token",
-    "tokenExpired": "Token has expired"
+    "tokenExpired": "Token has expired",
+    "alreadyAuthenticated": "You are already signed in. Log out before signing in or registering again.",
+    "botLinkRequired": "Connect the messenger to receive your code",
+    "botLinkStatus": "Link status",
+    "otpChannels": "Available delivery methods"
   },
   "impersonation": {
     "notImpersonated": "This session is not impersonated",

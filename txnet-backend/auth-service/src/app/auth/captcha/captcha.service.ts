@@ -33,11 +33,15 @@ export class CaptchaService {
   async verifyChallenge(
     challengeId: string,
   ): Promise<{ token: string; expiresIn: number } | null> {
-    const key = RedisKeys.captchaChallenge(challengeId);
-    const issuedAtRaw = await this.redis.get(key);
+    // GETDEL, not GET-then-DEL: two verifies racing on the same challenge
+    // would both read the timestamp and both mint a pass, turning one solved
+    // slide into two. Reading and burning in one command means exactly one
+    // caller sees a value — and the challenge is burnt whether or not the
+    // timing check below then rejects it.
+    const issuedAtRaw = await this.redis.client.getdel(
+      RedisKeys.captchaChallenge(challengeId),
+    );
     if (!issuedAtRaw) return null;
-
-    await this.redis.del(key); // single-use: burn the challenge either way
 
     const elapsedMs = Date.now() - Number(issuedAtRaw);
     if (elapsedMs < MIN_INTERACTION_MS) return null;
@@ -54,9 +58,12 @@ export class CaptchaService {
   /** Checks and consumes a pass. Succeeds at most once per completed slide. */
   async consumePass(token: string | undefined): Promise<boolean> {
     if (!token) return false;
-    const key = RedisKeys.captchaVerified(token);
-    if (!(await this.redis.exists(key))) return false;
-    await this.redis.del(key);
-    return true;
+    // DEL reports how many keys it removed, so the delete *is* the check:
+    // EXISTS-then-DEL would let two concurrent requests both pass on one
+    // captcha.
+    const deleted = await this.redis.client.del(
+      RedisKeys.captchaVerified(token),
+    );
+    return deleted === 1;
   }
 }

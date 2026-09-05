@@ -7,6 +7,7 @@ import {
   Post,
   Req,
   Res,
+  UseGuards,
   UsePipes,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
@@ -17,6 +18,7 @@ import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { ResponseType } from '../../common/response/response.util';
 import { RateLimit } from '../decorators/rate-limit.decorator';
 import { RequireCaptcha } from '../decorators/require-captcha.decorator';
+import { NoActiveSessionGuard } from '../guards/no-active-session.guard';
 
 @Controller('auth')
 export class RegisterController {
@@ -27,6 +29,7 @@ export class RegisterController {
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(NoActiveSessionGuard)
   @UsePipes(new ZodValidationPipe(registerSchema))
   @RequireCaptcha()
   @RateLimit({

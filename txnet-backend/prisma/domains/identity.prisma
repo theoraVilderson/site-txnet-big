@@ -45,6 +45,7 @@ enum OtpPurpose {
   login
   register_phone_verify
   password_reset
+  account_link // linking a Telegram/Bale account to a User (see LinkedBotAccount)
 
   @@schema("identity")
 }
@@ -199,12 +200,23 @@ model LinkedBotAccount {
   userId         String         @db.Uuid
   platform       SocialPlatform
   platformUserId String // Chat ID
+  /// The phone number the messenger itself reported for this account, taken
+  /// from a shared contact whose `contact.user_id` equalled the sender id.
+  /// Normalized to 09xxxxxxxxx. Null on a link made before contact
+  /// verification existed.
+  phoneNumber    String?
+  /// Set only when that ownership proof succeeded. An account may only carry
+  /// OTP once this is non-null — see identity/invariants.md #12.
+  contactVerifiedAt DateTime?
   linkedAt       DateTime       @default(now())
 
   user User @relation(fields: [userId], references: [id])
 
   // برای جستجوی سریع «آیا این شماره به bale/telegram لینک شده؟» توسط OTP senders
   @@unique([userId, platform])
+  // One messenger account belongs to at most one User: without this, a shared
+  // chat id could deliver another account's OTP.
+  @@unique([platform, platformUserId])
   @@map("linked_bot_account")
   @@schema("identity")
 }

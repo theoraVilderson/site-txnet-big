@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 
 /**
  * روی *اولین* رندرِ کلاینت در طول عمر همین تبِ مرورگر `true` برمی‌گرداند و
@@ -18,9 +18,9 @@ import { useEffect, useRef } from "react";
 let paintedOnce = false;
 
 export function useFirstPaint(): boolean {
-  const first = useRef(!paintedOnce);
+  const [first] = useState(() => !paintedOnce);
   useEffect(() => {
     paintedOnce = true;
   }, []);
-  return first.current;
+  return first;
 }

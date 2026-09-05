@@ -2,13 +2,15 @@
 id: redis-keyspace
 layer: platform
 status: active
-version: 1
-keywords: [redis, keyspace, session key, otp key, captcha key]
+version: 2
+keywords: [redis, keyspace, session key, otp key, captcha key, bot link key, botlink token]
 source:
-  - txnet-backend/auth-service/src/app/redis/**
-  - txnet-backend/auth-service/src/app/auth/session/**
+  - txnet-backend/auth-service/src/app/redis/redis.keys.ts
+  - txnet-backend/auth-service/src/app/redis/redis.service.ts
+  - txnet-backend/auth-service/src/app/auth/session/session.store.ts
   - txnet-backend/auth-service/src/app/auth/otp/otp.store.ts
-  - txnet-backend/auth-service/src/app/auth/captcha/**
+  - txnet-backend/auth-service/src/app/auth/bot-link/bot-link.store.ts
+  - txnet-backend/auth-service/src/test-support/redis-fixture.ts
   - auth-handler/internal/cache/**
   - auth-handler/internal/config/config.go
 owns_tables: []
@@ -17,24 +19,15 @@ updated: 2026-09-05
 ---
 
 # redis-keyspace
-
-**Responsibility (one sentence):** the shared Redis key convention — the
-`<namespace>:<version>:` prefix both auth services must agree on, plus the
-catalogue of keys (sessions, OTP, rate limits) and their TTLs.
-**Explicitly NOT responsible for:** the auth logic that uses the keys
-(`identity` / `forward-auth`).
-
-## Files
-| File | Read it when |
-|---|---|
-| [contract.md](contract.md) | adding a Redis key, changing a TTL, or bumping the keyspace version |
-| [open-questions.md](open-questions.md) | something is undecided |
-
+**Responsibility:** the shared Redis key convention — the `<namespace>:<version>:` prefix both auth services must agree on, plus the catalogue of keys (sessions, OTP, rate limits) and their TTLs. **Not:** the auth logic that uses the keys (`identity` / `forward-auth`).
+See [contract.md](contract.md) (adding a key / TTL / keyspace version) and [open-questions.md](open-questions.md).
 ## Changelog
 | Date | Change |
 |---|---|
-| 2026-09-04 | Documented from existing code during onboarding |
-| 2026-09-04 | Added `register:pending:<phone>` (600s) for identity's register-then-verify flow |
+| 2026-09-05 | v2: added `botlink:token:<token>`, `botlink:phone:<platform>:<phone>` and `botlink:chat:<platform>:<chatId>` (`BOT_LINK_TOKEN_TTL_SEC`, 900s) — a Telegram/Bale link that has not been proven yet lives only here (F-0203) |
 | 2026-09-05 | Added `captcha:challenge:<id>` (60s) and `captcha:verified:<token>` (120s) for auth-api's captcha gate (F-0201) |
+| 2026-09-05 | SYNC: dropped the `app/redis/**`, `app/auth/session/**`, and `app/auth/captcha/**` blankets from `source:`, replaced with the exact files this unit owns (`redis.keys.ts`, `redis.service.ts`, `session.store.ts`, `otp.store.ts`). The captcha glob had no unit-id/alias match (mirror-rule break per `tools/drift.py`) and also claimed `captcha.controller/service/schema.ts` — business logic that belongs to `auth-api` (already documents captcha/bot-check as its own feature), not key-naming. Docs-only; no behavior change. |
+| 2026-09-05 | Tests, no behaviour change: the four Redis-backed stores are now covered against a real Redis (Testcontainers, `*.int.spec.ts`), `redis.keys.ts` by a snapshot — a changed key does not fail, it silently stops finding data that is there. The Node/Go prefix agreement is pinned on both sides (`redis.keys.spec.ts` + `internal/config/config_test.go`); the trailing-colon normalisation lives in `envSchema`, not in `RedisService`. Adopted the shared fixture `src/test-support/redis-fixture.ts` into `source:` |
+| 2026-09-05 | Fix: `SessionStore.drop(sessionId)` now prunes the `user:<id>:sessions` index even when the caller does not pass `userId` — it reads the owner off the marker with GETDEL, so revocation is not contingent on the payload parsing. Previously the one-argument form left a dangling id in the index (every production caller passes `userId`, so nothing was affected). Covered by `session.store.int.spec.ts` |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->
