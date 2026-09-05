@@ -23,6 +23,7 @@ REQUIRED_KEYS = ("id", "layer", "status")
 MAX_INDEX_LINES = 40
 MAX_CONTRACT_LINES = 250
 MAX_AGE_DAYS = 30
+MAX_CHANGELOG_ROWS = 5
 
 errors: list[str] = []
 warnings: list[str] = []
@@ -36,7 +37,9 @@ def parse_front_matter(path: Path) -> dict:
     if end == -1:
         return {}
     fm, key = {}, None
-    for line in text[3:end].splitlines():
+    pending = text[3:end].splitlines()
+    while pending:
+        line = pending.pop(0)
         if not line.strip():
             continue
         if re.match(r"^\s+-\s", line):  # list item
@@ -49,6 +52,21 @@ def parse_front_matter(path: Path) -> dict:
         if not m:
             continue
         key, val = m.group(1), m.group(2).strip()
+        # A `[a, b, c]` list that wraps onto the next line used to fall through
+        # to the plain-string branch and then get iterated character by
+        # character. Wrapping is exactly what you do once a list is long, which
+        # is exactly what happens in a large project — so the failure was
+        # reserved for the units that could least afford it.
+        if val.startswith("[") and not val.endswith("]"):
+            depth, buf = 1, val
+            while depth and pending:
+                nxt = pending.pop(0)
+                buf += " " + nxt.strip()
+                depth += nxt.count("[") - nxt.count("]")
+            val = buf
+            if not val.endswith("]"):
+                fm[key] = []
+                continue
         if val.startswith("[") and val.endswith("]"):
             inner = val[1:-1].strip()
             fm[key] = [v.strip() for v in inner.split(",") if v.strip()]
@@ -57,6 +75,25 @@ def parse_front_matter(path: Path) -> dict:
         else:
             fm[key] = val
     return fm
+
+
+def body_lines(path: Path) -> int:
+    """Lines after the front matter.
+
+    The 40-line cap exists so an INDEX stays a router rather than growing
+    content. Front matter is neither: it is mandatory metadata whose length is
+    set by how many things the unit legitimately depends on, owns and exposes.
+    Counting it against the cap meant a mature unit hit the ceiling with an
+    empty body, and the only remaining lever — the changelog — was already at
+    its own cap. Two mandatory rules then contradicted each other, with no legal
+    move left. Cap the body; let the metadata be as long as the unit is real.
+    """
+    text = path.read_text(encoding="utf-8")
+    if text.startswith("---"):
+        end = text.find("\n---", 3)
+        if end != -1:
+            text = text[end + 4:]
+    return len(text.splitlines())
 
 
 def unit_dirs():
@@ -73,12 +110,27 @@ def unit_dirs():
 def main() -> int:
     units, tmpl = {}, re.compile(r"_TEMPLATE")
 
+    groups = set()
     for d in unit_dirs():
         if tmpl.search(str(d)):
             continue
         idx = d / "INDEX.md"
         fm = parse_front_matter(idx)
         rel = idx.relative_to(ROOT)
+
+        # §10 tells you to group units into bounded contexts past 12 top-level
+        # units, and says the parent "keeps only the INDEX". That parent has no
+        # layer, no contract and no source — so following the protocol's own
+        # scaling advice made this checker fail with no legal way to satisfy it.
+        # `layer: group` marks a router over units rather than a unit.
+        if fm.get("layer") == "group":
+            groups.add(d)
+            if fm.get("source"):
+                errors.append(f"{rel}: a group index owns no code — move `source:` "
+                              f"to the sub-unit that actually holds it")
+            if not any(c.is_dir() and (c / "INDEX.md").exists() for c in d.iterdir()):
+                errors.append(f"{rel}: layer: group but no sub-units beneath it")
+            continue
 
         for k in REQUIRED_KEYS:
             if k not in fm:
@@ -89,9 +141,12 @@ def main() -> int:
                 errors.append(f"{rel}: duplicate unit id '{uid}'")
             units[uid] = fm
 
-        n = len(idx.read_text(encoding="utf-8").splitlines())
+        n = body_lines(idx)
         if n > MAX_INDEX_LINES:
-            errors.append(f"{rel}: INDEX is {n} lines (max {MAX_INDEX_LINES}) — it is a router, not content")
+            errors.append(f"{rel}: INDEX body is {n} lines (max {MAX_INDEX_LINES}) — it is a "
+                          f"router, not content. Front matter is not counted; if the "
+                          f"changelog is what grew, cut it to {MAX_CHANGELOG_ROWS} rows "
+                          f"(§10) — git keeps the rest")
 
         c = d / "contract.md"
         if c.exists():
@@ -100,6 +155,29 @@ def main() -> int:
                 errors.append(f"{c.relative_to(ROOT)}: {n} lines (max {MAX_CONTRACT_LINES}) — split the unit")
         elif fm.get("status") == "active":
             errors.append(f"{rel}: status active but no contract.md")
+
+        # §2 requires front matter on every unit file, but only INDEX.md was
+        # ever parsed — so a broken or absent header on contract.md passed all
+        # five checkers. contract.md is the file §0 ranks as intent; an
+        # unreadable header there is worse than one on the router.
+        for sib in sorted(d.glob("*.md")):
+            if sib.name == "INDEX.md":
+                continue
+            sfm = parse_front_matter(sib)
+            srel = sib.relative_to(ROOT)
+            if not sfm:
+                errors.append(f"{srel}: no readable front matter (§2 requires it on every unit file)")
+                continue
+            if sfm.get("id") and sfm["id"] != uid:
+                errors.append(f"{srel}: id '{sfm['id']}' does not match the unit id '{uid}'")
+
+        # §10: the INDEX changelog is capped at 5 rows, because an unbounded
+        # append cannot coexist with a 40-line router. Git holds the rest.
+        rows = [l for l in idx.read_text(encoding="utf-8").splitlines()
+                if l.strip().startswith("|") and re.search(r"\d{4}-\d{2}-\d{2}", l)]
+        if len(rows) > MAX_CHANGELOG_ROWS:
+            errors.append(f"{rel}: changelog has {len(rows)} rows (max {MAX_CHANGELOG_ROWS}) — "
+                          f"drop the oldest; `git log --follow {d.relative_to(ROOT)}/` has them all")
 
         if fm.get("status") == "active":
             src = fm.get("source") or []
@@ -135,11 +213,27 @@ def main() -> int:
                         errors.append(f"{md.relative_to(ROOT)}: open question without a date: {line.strip()[:60]}")
 
     # reachability
+    #
+    # This used to be `uid not in mtext`, which is a substring test: a unit with
+    # `id: ai` passed while completely absent, because "ai" occurs inside
+    # "domains". Short ids are exactly the ones a real project uses (ai, ui, db,
+    # i18n), so the check silently exempted them. Match the id cell of a table
+    # row or a link target instead.
     master = (DOCS / "MASTER_INDEX.md")
     if master.exists():
         mtext = master.read_text(encoding="utf-8")
+        listed = set()
+        for line in mtext.splitlines():
+            s = line.strip()
+            if s.startswith("|"):
+                cells = [c.strip().strip("_*`") for c in s.strip("|").split("|")]
+                if cells:
+                    m = re.match(r"^\[([^\]]*)\]", cells[0])
+                    listed.add((m.group(1) if m else cells[0]).strip())
+            for m in re.finditer(r"\((?:\./)?(?:domains|interfaces|platform)/([^/)]+)/", s):
+                listed.add(m.group(1))
         for uid in units:
-            if uid not in mtext:
+            if uid not in listed:
                 errors.append(f"unit '{uid}' is not listed in MASTER_INDEX.md")
 
     print(f"units: {len(units)}")

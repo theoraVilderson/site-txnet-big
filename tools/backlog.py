@@ -74,6 +74,18 @@ def main():
         if r["status"] == "blocked" and not r["note"]:
             errors.append(f"{r['id']}: blocked with no blocker named")
 
+    # docs-check.py rejects a duplicate unit id; nothing rejected a duplicate
+    # backlog id. Two rows sharing one id silently double every count and make
+    # the eligible list name the same item twice — found by exactly that
+    # symptom while testing the message above.
+    seen_ids = {}
+    for r in items:
+        seen_ids.setdefault(r["id"], []).append(r)
+    for rid, dupes in seen_ids.items():
+        if len(dupes) > 1:
+            errors.append(f"{rid}: appears {len(dupes)} times — ids are unique, "
+                          f"and a duplicate double-counts progress")
+
     counts = {s: sum(1 for r in items if r["status"] == s) for s in VALID}
     live = [r for r in items if r["status"] != "dropped"]
     done = counts["done"]
@@ -120,7 +132,27 @@ def main():
     for r in eligible[:5]:
         print(f"  {r['id']}  {r['feature'][:50]}  [{r['unit']}]  spec:{r['spec']}")
     if not eligible:
-        print("  none — everything is done, blocked, or waiting on a decision")
+        # This used to assert "done, blocked, or waiting on a decision" while
+        # the blocked count printed above was 0. A summary that contradicts the
+        # number next to it is worse than no summary: it sends you looking for
+        # blockers that do not exist. Say which of the three it actually is.
+        todo = [r for r in items if r["status"] == "todo"]
+        waiting = [r for r in todo
+                   if any(by_id.get(d, {}).get("status") != "done"
+                          for d in r["deps"])]
+        decision = [r for r in todo if "needs-decision" in (r.get("note") or "")]
+        if not todo:
+            print("  none — no todo rows left. Ingest another area (MODE: INGEST, §6d)")
+        elif waiting:
+            print(f"  none — {len(waiting)} todo row(s) waiting on unfinished dependencies:")
+            for r in waiting[:5]:
+                unmet = [d for d in r["deps"]
+                         if by_id.get(d, {}).get("status") != "done"]
+                print(f"      {r['id']} waits on {', '.join(unmet)}")
+        elif decision:
+            print(f"  none — {len(decision)} row(s) flagged needs-decision. Ask the user")
+        else:
+            print("  none — todo rows exist but none qualified. Check their depends_on ids")
 
     blocked = [r for r in items if r["status"] == "blocked"
                or (r["status"] == "todo" and "needs-decision" in r["note"])]

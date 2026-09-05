@@ -25,8 +25,21 @@ ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
 MARKER = DOCS / ".sync"
 UNIT_DIRS = ["domains", "interfaces", "platform"]
+# §0 ranks "schema/IDL (Prisma/SQL/proto/OpenAPI)" as authority #1 — truth about
+# what is. Three of those four were not in this set, so a unit whose source: is
+# all .proto or all .json could never report drift: the tool saw nothing change
+# in the files the protocol trusts most.
 CODE_EXT = {".ts", ".tsx", ".js", ".jsx", ".vue", ".svelte", ".py", ".go",
-            ".rs", ".php", ".rb", ".java", ".kt", ".dart", ".sql", ".prisma"}
+            ".rs", ".php", ".rb", ".java", ".kt", ".dart", ".sql", ".prisma",
+            ".proto", ".graphql", ".gql", ".json", ".yaml", ".yml", ".toml"}
+
+# The contract formats above earn their place; their lockfiles and build output
+# do not. A single lockfile churn would otherwise mark half the tree dirty and
+# make the whole report unreadable — a noisy drift report gets skimmed, which
+# costs more than the checks it adds.
+SKIP_NAMES = {"package-lock.json", "yarn.lock", "pnpm-lock.yaml", "poetry.lock",
+              "Cargo.lock", "composer.lock", "go.sum", "tsconfig.tsbuildinfo"}
+SKIP_NAME_PARTS = (".min.", ".lock.", ".snap.")
 SKIP_PARTS = {"node_modules", ".git", "dist", "build", ".next", "__pycache__",
               "vendor", "target", ".venv", "coverage", "docs", "tools"}
 
@@ -106,7 +119,7 @@ def scan_mtime(since_iso):
         return []
     rows = []
     for p in ROOT.rglob("*"):
-        if not p.is_file() or p.suffix.lower() not in CODE_EXT:
+        if not p.is_file() or not ext_ok(p):
             continue
         if SKIP_PARTS & set(p.parts):
             continue
@@ -196,9 +209,15 @@ def broad_sources(unit_pats):
     return out
 
 
+def ext_ok(p: Path) -> bool:
+    return (p.suffix.lower() in CODE_EXT
+            and p.name not in SKIP_NAMES
+            and not any(s in p.name for s in SKIP_NAME_PARTS))
+
+
 def is_code(path):
     p = Path(path)
-    return p.suffix.lower() in CODE_EXT and not (SKIP_PARTS & set(p.parts))
+    return ext_ok(p) and not (SKIP_PARTS & set(p.parts))
 
 
 # -------------------------------------------------------------------- report

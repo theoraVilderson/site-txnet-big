@@ -1,12 +1,18 @@
 ---
 id: protocol
 status: fixed
-version: 2.5
+version: 2.7
 updated: 2026-09-04
 ---
 
-# DOCS PROTOCOL v2.5 — fixed file. Copy verbatim into every project. Never edit without explicit user request.
+# DOCS PROTOCOL v2.7 — fixed file. Copy verbatim into every project. Never edit without explicit user request.
 
+> **v2.6 is a correctness pass, not a feature.** §10 now caps the INDEX
+> changelog at 5 rows (it was mandatory and unbounded under a hard 40-line cap
+> — the two rules could not both hold); `(removed)` is a state a checker
+> honours; §5 points at §8 and §9 instead of §7 and §8; sections and the tier
+> table are in their stated order.
+>
 > **v2.5 adds the walk.** New: §3c (WALK), tier 4b, `MODE: DIAGNOSE` (§6g),
 > runtime edges in `architecture/dependency-graph.md`, and the `## Flows` cache
 > in `SURFACES.md`. It changes no existing rule; it gives a bug report a mode of
@@ -44,9 +50,16 @@ user, you, and future agents. These rules override your defaults.
 If (1) and (4) disagree: **STOP. Report drift.** Do not silently rewrite either
 one. Ask which side is wrong.
 
+**Write list values on one line.** `depends_on: [a, b, c]` or a `- ` block, never
+a `[...]` that wraps. A wrapped bracket list is the one front-matter shape the
+parsers reject rather than guess at, because guessing wrong loses graph edges
+silently.
+
 **Never duplicate a fact that lives in code.** If a field list exists in a schema
 file, link to it (`source:` front matter + path). Duplication is the #1 cause of
 rotten docs.
+
+---
 
 ---
 
@@ -99,12 +112,15 @@ non-empty**. Never create an empty file.
 
 ---
 
+---
+
 ## 2. FRONT MATTER (required at the top of every unit file)
 
 ```yaml
 ---
 id: billing              # stable, kebab-case, unique, never renamed
 layer: domain            # domain | interface | platform | operations | security
+                         # | group  (a bounded-context router, not a unit — §10)
 status: active           # draft | active | deprecated | superseded
 version: 2               # contract version. bump = breaking change.
 source:                  # real code paths. empty means NOT IMPLEMENTED YET.
@@ -120,15 +136,18 @@ updated: 2026-09-03
 
 ---
 
+---
+
 ## 3. READ PROTOCOL (token discipline — this is not optional)
 
 Read in tiers. Stop at the shallowest tier that answers the question.
 
 | Tier | Read | When |
 |---|---|---|
-| 0 | `MASTER_INDEX.md` | **always**, first, every task |
+| 0a | `python3 tools/where.py "<request>"` | **first**, whenever the request names a thing rather than a unit — see §3b |
+| 0b | `python3 tools/where.py --walk "<request>"` | the request names a *symptom* rather than a place — see §3c |
+| 0 | `MASTER_INDEX.md` | **always**, once a unit is known |
 | 1 | target unit `INDEX.md` | always |
-| 0b | `python3 tools/where.py "<request>"` | the request names a thing, not a unit — see §3b |
 | 1b | `python3 tools/spec.py <F-id>` | the backlog row names a `spec ref` |
 | 2 | target `contract.md` + `invariants.md` | changing or using the unit |
 | 3 | `contract.md` of each `depends_on` — **the API section only** | writing code |
@@ -140,51 +159,9 @@ Tier 5 says *files under `source:`*, and `source:` is usually a `**` glob. Read
 that as "the files tier 4b pointed at", never as "the module". A unit is where
 the funnel narrows to, not where it stops.
 
-## 3c. WALK (the request names a symptom, not a place)
+---
 
-§3b resolves *"edit the profile button"* — a location. It cannot resolve
-*"cookie login doesn't work"*, because that names no location at all: it names a
-symptom, plus a guess about the cause. Scoring the two against each other
-produces a shortlist of rivals, and a shortlist is what an agent reads its way
-out of.
-
-```bash
-python3 tools/where.py --walk "<the user's words, verbatim>"
-```
-
-The tool splits the sentence in two and treats the halves differently:
-
-- **locator** (`login`) — where the user saw it. This, and only this, picks the
-  entry point.
-- **hypothesis** (`cookie`) — what the user guesses is wrong. It orders the
-  frontier and nothing else.
-
-That asymmetry is the point. A user's theory about the cause is worth having and
-is often wrong; letting it reorder the walk costs nothing when it is wrong,
-while letting it choose the entry point starts the session in the wrong unit
-with full confidence.
-
-From the entry unit the walk follows `depends_on` **and** the runtime edges in
-`architecture/dependency-graph.md` — queues, webhooks, cron. Static edges alone
-miss every asynchronous bug, and miss it silently.
-
-**Budget: 3 hops, 8 files.** The ceiling is not the mechanism, though. The
-mechanism is this:
-
-> **Before opening each hop, say in one line what you expect to find there.**
-
-A hop you cannot predict is a hop you are not ready to take — say so and stop.
-This makes the walk sequential instead of accumulative: a wrong hypothesis
-announces itself immediately, whereas bulk reading never does, because there is
-always one more plausible file. It is the same announce-before-work rule as §6.2
-and §6b.3, applied to unit boundaries.
-
-Code the walk meets that **no unit claims** is reported and left alone. Do not
-create a unit for it mid-walk. Unit boundaries are the most expensive thing in
-this repo to get wrong, and the moment you first meet a folder is the worst
-moment to draw one — that is MODE: SYNC's job (§6f), with the user.
-
-## 3b. LOCATE (run before tier 0, whenever the request has no path in it)
+## 3b. LOCATE (tier 0a — run before tier 0, whenever the request has no path in it)
 
 A request normally names a thing, not a location: *"edit the profile button in
 the panel"*. Resolving that by grepping is forbidden — a repo-wide grep is the
@@ -228,6 +205,54 @@ Hard limits:
 
 ---
 
+---
+
+## 3c. WALK (tier 0b — the request names a symptom, not a place)
+
+§3b resolves *"edit the profile button"* — a location. It cannot resolve
+*"cookie login doesn't work"*, because that names no location at all: it names a
+symptom, plus a guess about the cause. Scoring the two against each other
+produces a shortlist of rivals, and a shortlist is what an agent reads its way
+out of.
+
+```bash
+python3 tools/where.py --walk "<the user's words, verbatim>"
+```
+
+The tool splits the sentence in two and treats the halves differently:
+
+- **locator** (`login`) — where the user saw it. This, and only this, picks the
+  entry point.
+- **hypothesis** (`cookie`) — what the user guesses is wrong. It orders the
+  frontier and nothing else.
+
+That asymmetry is the point. A user's theory about the cause is worth having and
+is often wrong; letting it reorder the walk costs nothing when it is wrong,
+while letting it choose the entry point starts the session in the wrong unit
+with full confidence.
+
+From the entry unit the walk follows `depends_on` **and** the runtime edges in
+`architecture/dependency-graph.md` — queues, webhooks, cron. Static edges alone
+miss every asynchronous bug, and miss it silently.
+
+**Budget: 3 hops, 8 files.** The ceiling is not the mechanism, though. The
+mechanism is this:
+
+> **Before opening each hop, say in one line what you expect to find there.**
+
+A hop you cannot predict is a hop you are not ready to take — say so and stop.
+This makes the walk sequential instead of accumulative: a wrong hypothesis
+announces itself immediately, whereas bulk reading never does, because there is
+always one more plausible file. It is the same announce-before-work rule as §6.2
+and §6b.3, applied to unit boundaries.
+
+Code the walk meets that **no unit claims** is reported and left alone. Do not
+create a unit for it mid-walk. Unit boundaries are the most expensive thing in
+this repo to get wrong, and the moment you first meet a folder is the worst
+moment to draw one — that is MODE: SYNC's job (§6f), with the user.
+
+---
+
 ## 4. MODE: BOOTSTRAP (new project from a description)
 
 1. Extract units from the description using the §1 placement test. Business
@@ -246,6 +271,8 @@ Hard limits:
    endpoints.**
 8. Report at the end: units created, ADRs written, open questions count.
 
+---
+
 ## 5. MODE: EXTEND (add/change a feature)
 
 1. Read Tier 0–1. Announce the classification **before** writing anything:
@@ -253,11 +280,13 @@ Hard limits:
    - new independent concern → new unit
    - spans units → name every touched unit and its blast radius
 2. Check `GLOSSARY.md` before introducing any new noun. Reuse or justify.
-3. Public contract change? → §7 first.
+3. Public contract change? → §8 first.
 4. After the change, in the same turn, update: unit `INDEX.md`,
    `dependency-graph.md` (only if a new edge), `MASTER_INDEX.md` (only if a new
    unit), `CHANGELOG` line in the unit's `INDEX.md`.
-5. Uncertainty → §8. Never a silent default.
+5. Uncertainty → §9. Never a silent default.
+
+---
 
 ## 6. MODE: IMPLEMENT (write code)
 
@@ -272,6 +301,8 @@ Hard limits:
 6. New user-visible surface, or a moved component file? → update
    `SURFACES.md` in the same change. A surface with no row is unaddressable, and
    the next session will grep for it.
+
+---
 
 ## 6b. MODE: NEXT (the delivery loop — one feature per session)
 
@@ -301,76 +332,62 @@ Never mark an item `done` if a blocking open question is open, an invariant is
 violated, or the code was not actually written. `done` means code exists.
 Half-finished work stays `doing` with a note — never silently `done`.
 
-## 6g. MODE: DIAGNOSE (something is broken)
+---
 
-Every other mode assumes you know what you are building. A bug report matches
-none of them, and a mode that does not exist is not a gap the agent notices — it
-falls back to its own default, which is to gather everything about the area and
-hope the answer is in there. That is the single most expensive session shape
-available.
+## 6c. MODE: RECONCILE (half-built project — run this once, first)
 
-1. `python3 tools/where.py --walk "<the user's words, verbatim>"`.
-   A cached flow row ends the search here — take its path and go to step 4.
-2. Announce the entry point and the hypothesis in one line. If the walk found no
-   entry at all, do **not** guess a path: walk from the nearest surface that
-   does exist, and say that is what you are doing.
-3. Walk per §3c. One line of prediction per hop, before opening it.
-4. Inside each unit, pick the file with the symptom -> role table in
-   `CODE-LAYOUT.md` (tier 4b). One file per hop. A wrong prediction is
-   information — name it, then choose the next role deliberately. It is never a
-   reason to open the rest of the unit.
-5. State the cause before fixing it. If the fix would violate an invariant, stop
-   and say which one (§6.4).
-6. Fix, per MODE: IMPLEMENT (§6).
-7. **Record the path.** Write a `## Flows` row in `SURFACES.md`: the chain you
-   actually walked, the files you actually changed, and the user's sentence
-   verbatim in `aliases`. Then
-   `python3 tools/where.py --resolve "<their sentence>"` to close the miss.
+For a project where code already exists but the backlog does not reflect it.
 
-Step 7 is what stops this from being a cost you pay repeatedly. The row is
-written at the one moment the answer is known — which is why flow rows are never
-authored in advance (`SURFACES.md`, `## Flows`).
+1. Read `BACKLOG.md` and the code tree structure (not file contents).
+2. For each backlog item, find evidence in code. Mark:
+   - `done` — implemented and reachable. Record the proving path.
+   - `doing` — partially implemented. Note what is missing, concretely.
+   - `todo` — no trace in code.
+3. Report a table. **Change no code.** Ask before writing the results back.
+4. Anything found in code but absent from the backlog → new backlog row,
+   `status: done`, flagged `undocumented`.
 
-Two things DIAGNOSE never does: create a unit (§6f owns that), and mark a
-backlog row `done` (a fix is not a feature). If the walk shows the bug is
-actually a missing feature, say so and stop — that is MODE: NEXT or EXTEND.
+Be conservative: a file existing is not proof a feature works. When unsure,
+mark `doing`, not `done`. Over-reporting progress is the most damaging error
+this mode can make.
 
-## 6f. MODE: SYNC (code was written without an agent)
+---
 
-MODE: RECONCILE re-derives the whole tree and costs a session. That is the right
-tool once, when adopting the skeleton. It is the wrong tool for "I coded for a
-week." SYNC is the incremental version: `tools/drift.py` diffs the code against
-`docs/.sync` and produces a small, exact work order.
+## 6d. MODE: INGEST (feature catalog -> backlog, one area at a time)
 
-```bash
-python3 tools/drift.py --init          # once, at a point where docs and code agree
-python3 tools/drift.py                 # after coding: what changed and who owns it
-python3 tools/drift.py --update-marker # only after the docs are actually fixed
-```
+Turns `features/App-Features.md` rows into `BACKLOG.md` rows. Run it **once per
+area, the day you start building that area** — never for the whole catalog at
+once. Lazy ingest is what makes a 3000-line catalog affordable: an area you are
+not building costs you nothing.
 
-Work the report in its own order — it is sorted by what invalidates what:
+1. `python3 tools/features-scan.py --check` — if it errors, fix the catalog
+   first. Ingesting a malformed catalog propagates the damage into the backlog.
+2. Read `features/MANIFEST.md` **only** — pick the target area's blocks.
+3. `python3 tools/spec.py --area <NN>`. This is the only spec text you read.
+4. One BACKLOG row per catalog feature:
+   - `id` — the catalog id **verbatim**. Never renumber, never invent.
+   - `unit` — from `MASTER_INDEX.md`. A feature with no home unit is a
+     **BLOCKING** question (§9): it means a unit is missing or a boundary is
+     wrong. Stop and ask. Do not invent a unit mid-ingest.
+   - `spec ref` — the catalog id again, **never a line range**. Line numbers
+     shift on the next catalog edit; ids do not.
+   - `status` — always `todo`. A catalog `status: later` still gets a row,
+     noted `later`.
+   - `depends_on` — the catalog's, plus any backlog item that must land first.
+5. A catalog feature too large for one session is split **here**, into
+   `F-xxxx-a` / `F-xxxx-b`, with the split recorded in `note`. Do not edit the
+   catalog to fix sizing — the catalog is the spec, the backlog is the plan.
+6. Deliberately not building something? → `features/DROPPED.md`, with a reason
+   and a date. **Never silently omit a catalog id.**
+7. `python3 tools/features-scan.py --check` again. Coverage must show the area
+   fully accounted for: every id either has a backlog row or is in DROPPED.md.
+8. Report: rows added, units touched, ids with no home unit, ids dropped.
 
-1. **Ambiguous ownership.** A `source:` glob that does not contain its unit id
-   breaks the mirror rule, silently swallows other units' code, and hides every
-   orphan inside itself. Nothing below it can be trusted until it is narrowed.
-2. **Orphans** — code no unit claims. Each is either a new unit or belongs in an
-   existing one. **Ask.** Unit boundaries are the most expensive thing in this
-   repo to get wrong, and a week-old folder is not evidence of intent.
-3. **Broken references** — `source:` and `SURFACES.md` paths that no longer
-   resolve. Mechanical; fix them.
-4. **Likely new surfaces** — propose rows, show them, then write them.
-5. **Spec ids cited in commits** — verify against the code before flipping a
-   backlog row. A commit message is a claim, not proof.
+INGEST writes **only** BACKLOG rows. No code, no unit files, no catalog edits.
+If the ingest reveals that a unit is missing, that is a finding to report — not
+something to fix in the same pass.
 
-The limit of this mode, stated plainly: `drift.py` sees **what changed**, never
-**why**. It cannot tell a domain unit from a platform one, and it cannot read an
-invariant out of an implementation — what code does is not what it must do.
-Documenting an inference as fact is worse than leaving a gap, because the next
-session will treat it as authority (§0). Where intent is unclear: ask, or write
-it into `open-questions.md`.
-
-Never run `--update-marker` on the user's behalf. The marker asserts that docs
-and code agree; only they can confirm that.
+---
 
 ## 6e. MODE: HANDOFF / RESUME (crossing a session boundary mid-item)
 
@@ -418,56 +435,82 @@ real home (ADR, invariant, catalog row), then reset `HANDOFF.md` to
 `status: empty`. **A handoff that outlives its item is worse than none** — the
 next session will trust it. `tools/backlog.py` fails on a stale one.
 
-## 6c. MODE: RECONCILE (half-built project — run this once, first)
+---
 
-For a project where code already exists but the backlog does not reflect it.
+## 6f. MODE: SYNC (code was written without an agent)
 
-1. Read `BACKLOG.md` and the code tree structure (not file contents).
-2. For each backlog item, find evidence in code. Mark:
-   - `done` — implemented and reachable. Record the proving path.
-   - `doing` — partially implemented. Note what is missing, concretely.
-   - `todo` — no trace in code.
-3. Report a table. **Change no code.** Ask before writing the results back.
-4. Anything found in code but absent from the backlog → new backlog row,
-   `status: done`, flagged `undocumented`.
+MODE: RECONCILE re-derives the whole tree and costs a session. That is the right
+tool once, when adopting the skeleton. It is the wrong tool for "I coded for a
+week." SYNC is the incremental version: `tools/drift.py` diffs the code against
+`docs/.sync` and produces a small, exact work order.
 
-Be conservative: a file existing is not proof a feature works. When unsure,
-mark `doing`, not `done`. Over-reporting progress is the most damaging error
-this mode can make.
+```bash
+python3 tools/drift.py --init          # once, at a point where docs and code agree
+python3 tools/drift.py                 # after coding: what changed and who owns it
+python3 tools/drift.py --update-marker # only after the docs are actually fixed
+```
 
-## 6d. MODE: INGEST (feature catalog -> backlog, one area at a time)
+Work the report in its own order — it is sorted by what invalidates what:
 
-Turns `features/App-Features.md` rows into `BACKLOG.md` rows. Run it **once per
-area, the day you start building that area** — never for the whole catalog at
-once. Lazy ingest is what makes a 3000-line catalog affordable: an area you are
-not building costs you nothing.
+1. **Ambiguous ownership.** A `source:` glob that does not contain its unit id
+   breaks the mirror rule, silently swallows other units' code, and hides every
+   orphan inside itself. Nothing below it can be trusted until it is narrowed.
+2. **Orphans** — code no unit claims. Each is either a new unit or belongs in an
+   existing one. **Ask.** Unit boundaries are the most expensive thing in this
+   repo to get wrong, and a week-old folder is not evidence of intent.
+3. **Broken references** — `source:` and `SURFACES.md` paths that no longer
+   resolve. Mechanical; fix them.
+4. **Likely new surfaces** — propose rows, show them, then write them.
+5. **Spec ids cited in commits** — verify against the code before flipping a
+   backlog row. A commit message is a claim, not proof.
 
-1. `python3 tools/features-scan.py --check` — if it errors, fix the catalog
-   first. Ingesting a malformed catalog propagates the damage into the backlog.
-2. Read `features/MANIFEST.md` **only** — pick the target area's blocks.
-3. `python3 tools/spec.py --area <NN>`. This is the only spec text you read.
-4. One BACKLOG row per catalog feature:
-   - `id` — the catalog id **verbatim**. Never renumber, never invent.
-   - `unit` — from `MASTER_INDEX.md`. A feature with no home unit is a
-     **BLOCKING** question (§9): it means a unit is missing or a boundary is
-     wrong. Stop and ask. Do not invent a unit mid-ingest.
-   - `spec ref` — the catalog id again, **never a line range**. Line numbers
-     shift on the next catalog edit; ids do not.
-   - `status` — always `todo`. A catalog `status: later` still gets a row,
-     noted `later`.
-   - `depends_on` — the catalog's, plus any backlog item that must land first.
-5. A catalog feature too large for one session is split **here**, into
-   `F-xxxx-a` / `F-xxxx-b`, with the split recorded in `note`. Do not edit the
-   catalog to fix sizing — the catalog is the spec, the backlog is the plan.
-6. Deliberately not building something? → `features/DROPPED.md`, with a reason
-   and a date. **Never silently omit a catalog id.**
-7. `python3 tools/features-scan.py --check` again. Coverage must show the area
-   fully accounted for: every id either has a backlog row or is in DROPPED.md.
-8. Report: rows added, units touched, ids with no home unit, ids dropped.
+The limit of this mode, stated plainly: `drift.py` sees **what changed**, never
+**why**. It cannot tell a domain unit from a platform one, and it cannot read an
+invariant out of an implementation — what code does is not what it must do.
+Documenting an inference as fact is worse than leaving a gap, because the next
+session will treat it as authority (§0). Where intent is unclear: ask, or write
+it into `open-questions.md`.
 
-INGEST writes **only** BACKLOG rows. No code, no unit files, no catalog edits.
-If the ingest reveals that a unit is missing, that is a finding to report — not
-something to fix in the same pass.
+Never run `--update-marker` on the user's behalf. The marker asserts that docs
+and code agree; only they can confirm that.
+
+---
+
+## 6g. MODE: DIAGNOSE (something is broken)
+
+Every other mode assumes you know what you are building. A bug report matches
+none of them, and a mode that does not exist is not a gap the agent notices — it
+falls back to its own default, which is to gather everything about the area and
+hope the answer is in there. That is the single most expensive session shape
+available.
+
+1. `python3 tools/where.py --walk "<the user's words, verbatim>"`.
+   A cached flow row ends the search here — take its path and go to step 4.
+2. Announce the entry point and the hypothesis in one line. If the walk found no
+   entry at all, do **not** guess a path: walk from the nearest surface that
+   does exist, and say that is what you are doing.
+3. Walk per §3c. One line of prediction per hop, before opening it.
+4. Inside each unit, pick the file with the symptom -> role table in
+   `CODE-LAYOUT.md` (tier 4b). One file per hop. A wrong prediction is
+   information — name it, then choose the next role deliberately. It is never a
+   reason to open the rest of the unit.
+5. State the cause before fixing it. If the fix would violate an invariant, stop
+   and say which one (§6.4).
+6. Fix, per MODE: IMPLEMENT (§6).
+7. **Record the path.** Write a `## Flows` row in `SURFACES.md`: the chain you
+   actually walked, the files you actually changed, and the user's sentence
+   verbatim in `aliases`. Then
+   `python3 tools/where.py --resolve "<their sentence>"` to close the miss.
+
+Step 7 is what stops this from being a cost you pay repeatedly. The row is
+written at the one moment the answer is known — which is why flow rows are never
+authored in advance (`SURFACES.md`, `## Flows`).
+
+Two things DIAGNOSE never does: create a unit (§6f owns that), and mark a
+backlog row `done` (a fix is not a feature). If the walk shows the bug is
+actually a missing feature, say so and stop — that is MODE: NEXT or EXTEND.
+
+---
 
 ## 7. MODE: AUDIT (drift check)
 
@@ -492,6 +535,8 @@ moved or deleted.
 
 ---
 
+---
+
 ## 8. CONTRACT CHANGE POLICY (this is what makes it scale)
 
 - Additive, optional → patch. Just edit `contract.md`.
@@ -504,6 +549,8 @@ moved or deleted.
 - A unit is **never** allowed to reach into another unit's tables or internals.
   Cross-unit access goes through `contract.md` only. Violating this is a bug
   report, not a shortcut.
+
+---
 
 ## 9. UNCERTAINTY POLICY
 
@@ -519,16 +566,49 @@ Two allowed responses to missing information, no third:
 exit path (→ becomes a rule, or → becomes an ADR). An entry with no date is
 invalid. Entries older than 30 days must be raised proactively.
 
+---
+
 ## 10. SPLITTING RULES (how depth grows instead of files)
 
-- `INDEX.md` ≤ 40 lines, always. It is a router, never content.
-- `contract.md` > ~200 lines **or** covering two audiences → split into
+- `INDEX.md` **body** ≤ 40 lines, always. It is a router, never content. Front
+  matter is not counted: it is mandatory metadata whose length is set by how
+  many things the unit legitimately depends on, owns and exposes. Counting it
+  meant a mature unit hit the ceiling with an empty body and no legal move left.
+- **The INDEX changelog keeps the last 5 rows. Older rows are deleted, not
+  archived.** §5.4 and §6b.6 require a changelog line on every change, and an
+  unbounded append cannot coexist with a hard cap — one of the two rules has to
+  give, and it is not the cap: a router that has grown a history is no longer a
+  router. There is nowhere to archive to, deliberately. Git already holds every
+  row that falls off:
+
+  ```bash
+  git log --follow docs/domains/<unit>/          # the full history, always
+  git log --grep 'spec: F-0207'                  # when a feature landed
+  ```
+
+  Keeping a second copy in the INDEX would violate §0: never duplicate a fact
+  that lives in code. What the last 5 rows buy you is a fresh session seeing
+  recent movement without running git — that is the whole job, and it is done by
+  five rows as well as by fifty.
+
+  Rows worth one of the five slots: a `version` bump, a `status` flip, a
+  contract break. Routine edits do not need one — git has them.
+- `contract.md` past ~200 lines **or** covering two audiences → split into
   sub-units (`payments/refunds/`, `payments/subscriptions/`), each a full unit
-  with its own front matter. Parent keeps only the INDEX.
+  with its own front matter. Parent keeps only the INDEX. ~200 is the line at
+  which you should be splitting; `docs-check.py` fails at 250, which is the line
+  past which you no longer get a choice. The gap is deliberate — a hard error at
+  the advisory number would make every contract a fight with the linter.
 - Split on **cohesion**, not line count: if two halves have different consumers
   or different invariants, they are two units.
 - >12 top-level units → group them into bounded contexts
-  (`domains/commerce/{catalog,pricing,checkout}`) and give the group an INDEX.
+  (`domains/commerce/{catalog,pricing,checkout}`) and give the group an INDEX
+  with `layer: group`. A group index is a router over units, not a unit: it has
+  no `contract.md`, no `source:` and no tables. Without that marker every
+  checker treats it as a unit and demands all three, which made the protocol's
+  own scaling advice impossible to follow.
+
+---
 
 ## 11. HARD RULES
 

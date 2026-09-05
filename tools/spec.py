@@ -117,7 +117,12 @@ def main() -> int:
         f = find(features, fid)
         if not f:
             print(f"{fid}: not in the catalog. "
-                  f"Check DROPPED.md, or the id was renumbered (forbidden).",
+                  f"Check docs/features/MANIFEST.md for the right id, or "
+                  f"docs/features/DROPPED.md if it was deliberately not built.\n"
+                  f"  Note: BACKLOG.md ids and catalog ids share the F- prefix. "
+                  f"If this came from a backlog row's `id` column rather than "
+                  f"its `spec ref` column, it is not a catalog id and spec.py "
+                  f"cannot resolve it.",
                   file=sys.stderr)
             return 1
         if "--row" in args:

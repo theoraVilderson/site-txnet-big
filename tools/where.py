@@ -167,7 +167,9 @@ def front_matter(path: Path) -> dict:
     if not lines or lines[0].strip() != "---":
         return {}
     fm, key = {}, None
-    for ln in lines[1:]:
+    pending = list(lines[1:])
+    while pending:
+        ln = pending.pop(0)
         if ln.strip() == "---":
             break
         ln = ln.split("#")[0].rstrip() if not ln.strip().startswith("#") else ""
@@ -182,6 +184,18 @@ def front_matter(path: Path) -> dict:
         if not m:
             continue
         key, val = m.group(1), m.group(2).strip()
+        # See docs-check.py: a wrapped list must not become a string. Here the
+        # damage was quieter and worse — `depends_on` collapsed to one bogus id,
+        # so the walk lost every edge of that unit without saying anything.
+        if val.startswith("[") and not val.endswith("]"):
+            buf, depth = val, 1
+            while depth and pending:
+                nxt = pending.pop(0)
+                if nxt.strip() == "---":
+                    break
+                buf += " " + nxt.strip()
+                depth += nxt.count("[") - nxt.count("]")
+            val = buf
         if val.startswith("[") and val.endswith("]"):
             inner = val[1:-1].strip()
             fm[key] = [x.strip().strip("'\"") for x in inner.split(",") if x.strip()]
@@ -287,7 +301,11 @@ def load_flows() -> list[dict]:
         name = clean(r.get("flow") or "")
         if not name:
             continue
-        path = [p.strip() for p in re.split(r"[->→,]+", clean(r.get("path", "")))
+        # Split on the arrow/comma *separators*, not on their characters: unit
+        # ids are hyphenated (`panel-web -> auth-api`), so a character class
+        # containing "-" shreds every one of them.
+        path = [p.strip()
+                for p in re.split(r"\s*(?:->|→|,)\s*", clean(r.get("path", "")))
                 if p.strip()]
         out.append({
             "kind": "flow",
@@ -334,7 +352,7 @@ def load_units() -> list[dict]:
                 continue
             fm = front_matter(idx)
             uid = fm.get("id")
-            if not uid or uid.endswith("-index"):
+            if not uid or uid.endswith("-index") or fm.get("layer") == "group":
                 continue
             kw = fm.get("keywords") or fm.get("aliases") or []
             if isinstance(kw, str):
@@ -716,6 +734,12 @@ def check() -> int:
         if n in seen:
             errs.append(f"duplicate surface id: {n}")
         seen.add(n)
+        # A row marked `(removed)` keeps its id forever (SURFACES.md rules) but
+        # its component is gone by definition. Warning that it is "not
+        # addressable yet" is unactionable and permanent, and a report with a
+        # permanent warning in it stops being read at all.
+        if "(removed)" in (s.get("note") or "").lower():
+            continue
         if not s["aliases"]:
             warns.append(f"{n}: no aliases — the user's own words will not match it")
         if s["unit"] and units and s["unit"] not in units:
@@ -784,7 +808,14 @@ def main() -> int:
         locator = q
 
     units = load_units()
-    cands = load_flows() + load_surfaces() + units + load_backlog() + load_features()
+    # A flow answers "why is this broken", a surface answers "where is this
+    # thing". Letting flow rows compete on a plain locate query means one
+    # recorded bug path hijacks every request that shares a word with it —
+    # `login form` started resolving to the cookie-login flow. So flows only
+    # enter the pool when the sentence actually reports a symptom.
+    debugging = want_walk or bool(symptom)
+    cands = ((load_flows() if debugging else [])
+             + load_surfaces() + units + load_backlog() + load_features())
     scored = []
     for c in cands:
         s, m = score(c, locator)
