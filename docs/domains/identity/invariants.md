@@ -21,6 +21,7 @@ Statements that must be true at all times. **Outrank every feature request.**
 | 8 | Sessions in Postgres are the record; the Redis marker is only the liveness cache — a missing marker means "revoked", never "unknown, allow" | `AuthGuard`, `auth-handler` | revoked session accepted |
 | 9 | `isSystemRole` roles cannot be deleted | schema intent (`Role.isSystemRole`) — **not yet constraint-enforced** | RBAC lockout |
 | 10 | OTP: at most one active code per (phone, purpose); >5 attempts destroys it | `OtpStore` Lua script + `setNx` lock | brute force, code flooding |
+| 11 | Register creates no `user` row until phone OTP verification succeeds; the submitted profile + password hash live only in Redis (`register:pending:<phone>`) until then | `RegisterService.register` / `.verifyPhone` | unclaimed/abandoned "semi-active" accounts occupying a username or phone number |
 
 ## How to test
 
@@ -30,3 +31,6 @@ Statements that must be true at all times. **Outrank every feature request.**
 4. `TokenService.verify` test: token with `alg:none` header -> `UnauthorizedException`.
 5. `ImpersonationService` test: equal/greater role -> `ForbiddenException`; audit row created.
 6. Login test: 11th bad password within window -> `auth.temporarilyLocked`.
+7. `RegisterService` test: after `register()`, `prisma.user.findFirst` for that
+   phone/username returns nothing; only after a correct `verifyPhone()` does
+   the row exist, with `phoneVerifiedAt` already set.

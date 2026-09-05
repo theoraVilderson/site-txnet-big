@@ -77,7 +77,7 @@ export class OtpService implements IOtpService {
       }
 
       // Generate a secure 6-digit code
-      const code = randomInt(100000, 1000000).toString();
+      const code = randomInt(10000, 99999).toString();
       const codeHash = await argon2.hash(code, { type: argon2.argon2id });
 
       await this.store.save(phoneNumber, purpose, codeHash);
@@ -95,15 +95,19 @@ export class OtpService implements IOtpService {
         },
       });
 
-      // Actually deliver it through the channel the user picked, in the
-      // request's resolved language.
-      await sender.send(phoneNumber, code, purpose, lang);
+      // Dev/staging escape hatch: skip the real channel entirely and print
+      // the code instead, so registration/login work without a configured
+      // SMS/bale/telegram provider. Either flag turns it on.
+      const consoleOnly =
+        this.config.get<string>('OTP_DELIVERY_MODE', 'live') === 'console' ||
+        this.config.get<boolean>('OTP_DEV_CONSOLE_LOG', false);
 
-      // Console log independent of the real channel, only when explicitly
-      // enabled via env (useful for dev, regardless of which real channel
-      // was selected).
-      if (this.config.get<boolean>('OTP_DEV_CONSOLE_LOG', false)) {
+      if (consoleOnly) {
         console.info(`[otp:${purpose}:${channel}] ${phoneNumber}: ${code}`);
+      } else {
+        // Actually deliver it through the channel the user picked, in the
+        // request's resolved language.
+        await sender.send(phoneNumber, code, purpose, lang);
       }
     } finally {
       // Always release the lock

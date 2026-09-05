@@ -37,7 +37,9 @@ ENV HTTP_PROXY="" \
 
 # حذف RUN npx nx build
 # جایگزینی CMD برای اجرای حالت توسعه و Watch
-CMD npx nx serve ${APP_NAME}
+# `nx serve` re-spawns webpack from scratch on every save (see scripts/dev-serve.js);
+# this runner keeps one watching compiler alive and only restarts the app process.
+CMD ["node", "scripts/dev-serve.js"]
 
 # ==========================================
 # Stage 4: Builder

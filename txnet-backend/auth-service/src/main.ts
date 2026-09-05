@@ -35,7 +35,7 @@ async function bootstrap() {
       : /^https?:\/\/localhost(:\d+)?$/, // dev only, localhost only
     credentials: true,
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-captcha-token'],
     optionsSuccessStatus: 204,
   });
 
@@ -49,8 +49,9 @@ async function bootstrap() {
 
   const port = configService.get<number>('PORT', 3001);
   app.setGlobalPrefix('api');
+
   await app.listen(port);
   logger.log(`auth-service listening on :${port}`);
 }
-
 bootstrap();
+// probe-1788552856

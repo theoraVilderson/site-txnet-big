@@ -47,6 +47,29 @@ Copy-paste. Each one is a full session's instruction.
 
 ---
 
+## When something is broken
+
+**Any bug report** — use this instead of describing the symptom and hoping
+> Read `docs/00-PROTOCOL.md`. Run MODE: DIAGNOSE for: <the symptom, in your own
+> words>. Start with `python3 tools/where.py --walk "<that same sentence>"`.
+> Announce what you expect to find before each hop. Do not read a whole unit —
+> narrow with the symptom -> role table in `docs/CODE-LAYOUT.md`. When it is
+> fixed, add the `## Flows` row and close the miss.
+
+**It crossed a queue, a webhook or a gRPC watch**
+> The walk stopped short because the edge is asynchronous. Add the row to
+> `## Runtime edges` in `docs/architecture/dependency-graph.md`, then re-run the
+> walk.
+
+**Walk it yourself**
+> ```
+> python3 tools/where.py --walk "cookie login doesn't work"
+> python3 tools/where.py --misses          # queries that found nothing
+> python3 tools/where.py --resolve "<query>"   # close one after adding the row
+> ```
+
+---
+
 ## Pointing at things
 
 **The normal way to ask for a change** — no paths, ever

@@ -16,6 +16,7 @@ import { AuthFooterLinks } from "@auth/auth/_components/AuthFooterLinks";
 import { useAuthUI } from "@auth/auth/_context/AuthUIContext";
 import { useOtpTimer } from "@auth/auth/_hooks/useOtpTimer";
 import { useFirstPaint } from "@auth/auth/_hooks/useFirstPaint";
+import { useCaptcha } from "@auth/auth/_hooks/useCaptcha";
 import { authApi } from "@/lib/auth-api";
 
 type LoginMethod = "username" | "phone";
@@ -29,7 +30,7 @@ export default function LoginPage() {
   const [step, setStep] = useState<1 | 2>(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [captchaVerified, setCaptchaVerified] = useState(false);
+  const captcha = useCaptcha();
   const otpTimer = useOtpTimer();
 
   const [username, setUsername] = useState("");
@@ -44,12 +45,13 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       if (step === 1) {
+        if (!captcha.token) return;
         if (isPhoneMethod) {
-          await authApi.requestLoginOtp(phone);
+          await authApi.requestLoginOtp(phone, captcha.token);
           setStep(2);
           otpTimer.start(120);
         } else {
-          const result = await authApi.loginPassword(username, password);
+          const result = await authApi.loginPassword(username, password, captcha.token);
           if ("requiresOtp" in result) { setLoginMethod("phone"); setStep(2); otpTimer.start(120); }
           else { setIsSuccess(true); router.push("/dashboard"); }
         }
@@ -76,8 +78,8 @@ export default function LoginPage() {
       : t.verifyAndLogin;
 
   const canSubmitStep1 = isPhoneMethod
-    ? captchaVerified && phone.length > 0
-    : captchaVerified && username.length > 0 && password.length > 0;
+    ? captcha.verified && phone.length > 0
+    : captcha.verified && username.length > 0 && password.length > 0;
 
   if (isSuccess) {
     return <SuccessShell title={t.loginSuccess} subtitle={t.redirecting} />;
@@ -170,6 +172,7 @@ export default function LoginPage() {
                           value={phone}
                           onChange={(e: any) => setPhone(e.target.value)}
                           dir="ltr"
+                          autoComplete="tel"
                         />
                       ) : (
                         <div className="space-y-6">
@@ -179,6 +182,7 @@ export default function LoginPage() {
                             value={username}
                             onChange={(e: any) => setUsername(e.target.value)}
                             dir="ltr"
+                            autoComplete="username"
                           />
                           <PasswordField
                             id="password"
@@ -201,8 +205,8 @@ export default function LoginPage() {
                   className="mb-4 mt-4"
                 >
                   <NatureCaptchaUI
-                    isVerified={captchaVerified}
-                    onVerify={() => setCaptchaVerified(true)}
+                    isVerified={captcha.verified}
+                    onVerify={captcha.complete}
                     isRtl={isRtl}
                     t={t}
                   />

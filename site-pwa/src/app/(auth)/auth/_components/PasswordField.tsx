@@ -52,13 +52,28 @@ export function PasswordField({
   const [showText, setShowText] = useState(false);
   const [focused, setFocused] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  // مرورگر یا پسورد منیجر وقتی پسورد رو خودکار پر می‌کنه، رویداد onChange رو صدا
+  // نمی‌زنه، پس value همچنان خالی می‌مونه. با انیمیشن CSS روی :-webkit-autofill
+  // این حالت رو تشخیص می‌دیم تا لیبل بدون نیاز به کلیک کاربر بالا بره.
+  const [autofilled, setAutofilled] = useState(false);
 
+  const inputRef = useRef<HTMLInputElement>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
-  const floated = focused || value.length > 0;
+  const floated = focused || autofilled || value.length > 0;
 
   useEffect(() => () => clearTimeout(timeoutRef.current), []);
+
+  // اگر مرورگر قبل از mount شدن کامپوننت فیلد رو autofill کرده باشه،
+  // انیمیشن CSS قبل از attach شدن هندلر React اجرا شده و onAnimationStart
+  // هیچوقت صدا زده نمیشه. برای همین روی mount چک می‌کنیم.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (el && el.matches(":-webkit-autofill")) {
+      setAutofilled(true);
+    }
+  }, []);
 
   // اگه کاربر همه متن رو پاک کرد، حالت نمایش پسورد رو ریست کن
   useEffect(() => {
@@ -121,6 +136,7 @@ export function PasswordField({
             تا در هر زبانی تایپ از چپ شروع شود و جای دکمه چشم در راست حفظ شود.
         */}
         <input
+          ref={inputRef}
           id={id}
           name={id}
           type={showText ? "text" : "password"}
@@ -130,8 +146,13 @@ export function PasswordField({
           onChange={onChange}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
+          onAnimationStart={(e) => {
+            if (e.animationName === "onAutoFillStart") setAutofilled(true);
+            else if (e.animationName === "onAutoFillCancel")
+              setAutofilled(false);
+          }}
           aria-invalid={!!error}
-          className={`w-full bg-transparent border-none rounded-2xl outline-none pt-5 pb-3 pl-5 pr-12 font-mono tracking-widest text-base text-[var(--text-input)] text-left z-20 relative ${
+          className={`password-field-input w-full bg-transparent border-none rounded-2xl outline-none pt-5 pb-3 pl-5 pr-12 font-mono tracking-widest text-base text-[var(--text-input)] text-left z-20 relative ${
             isAnimating ? "opacity-0" : "opacity-100"
           }`}
           style={{ transition: "none" }}

@@ -9,7 +9,8 @@ authority order, the tiered read protocol (token budget), and the modes:
 BOOTSTRAP / EXTEND / IMPLEMENT / AUDIT / NEXT (§6b, delivery loop) /
 RECONCILE (§6c, sync the backlog to existing code) / INGEST (§6d, feature
 catalog -> backlog) / HANDOFF & RESUME (§6e, session boundary) /
-SYNC (§6f, catch docs up to code written without an agent).
+SYNC (§6f, catch docs up to code written without an agent) /
+DIAGNOSE (§6g, something is broken).
 
 Start every task with `docs/MASTER_INDEX.md` (+ `docs/BACKLOG.md` for MODE: NEXT).
 Never read the whole `docs/` tree.
@@ -49,7 +50,33 @@ the feature manifest, then falls back to filenames under `code_roots:`.
 |---|---|
 | `confident match` | announce unit + files + spec id in one line, then MODE: IMPLEMENT (§6) |
 | `candidates` | name them to the user and ask which. **Never pick one silently.** |
-| `nothing matches` | the surface has no row. Ask the user to point at it once, add the `SURFACES.md` row using their exact words as aliases, then continue |
+| `nothing matches` | the surface has no row. It is logged to `docs/.where-misses`; ask the user to point at it once, add the `SURFACES.md` row using their exact words as aliases, then continue |
+| `walk plan` | the request named a symptom, not a place — follow §3c and MODE: DIAGNOSE (§6g), below |
+
+## When something is broken
+
+A bug report names a symptom, not a place: *"cookie login doesn't work"*,
+*"لاگین کوکی کار نمیکنه"*. Do not treat it as a search problem:
+
+```bash
+python3 tools/where.py --walk "<the user's words, verbatim>"
+```
+
+The tool separates *where they saw it* from *what they think caused it*, and
+returns an ordered path through units (`panel-web -> auth-api -> redis-keyspace`)
+instead of a shortlist of rivals. Then:
+
+- **Say what you expect to find before opening each hop.** One line. A hop you
+  cannot predict is a hop you are not ready to take.
+- **Budget: 3 hops, 8 files.** Inside a unit, pick the file with the
+  symptom -> role table in `docs/CODE-LAYOUT.md` — this repo is polyglot, so that
+  table, not a guess, says whether the answer is in Go, Nest or Next.
+- **Never create a unit mid-walk.** Report code no unit claims and leave it;
+  that call belongs to MODE: SYNC (§6f), with the user.
+- **When it is fixed, write the path down.** A `## Flows` row in `SURFACES.md`
+  with the user's own sentence as aliases, then
+  `python3 tools/where.py --resolve "<their sentence>"`. The second report of the
+  same bug then costs one command instead of a walk.
 
 Hard rules:
 

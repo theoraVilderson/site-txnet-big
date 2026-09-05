@@ -1,7 +1,7 @@
 ---
 id: backlog
 status: active
-updated: 2026-09-04
+updated: 2026-09-05
 ---
 
 # Backlog
@@ -48,6 +48,7 @@ ingested rows reuse the catalog id verbatim as their row id.
 | F-014 | auth HTTP API surface (/api/auth/*) + response envelope + i18n filter | auth-api | done | F-001 F-002 F-003 F-004 F-005 | — | txnet-backend/auth-service/src/app/auth/auth.controller.ts | zod pipes, sanitizeError, ref ids |
 | F-015 | Panel auth screens (login / signup / OTP / forgot-password) | panel-web | done | F-014 | — | site-pwa/src/app/(auth)/auth/ | Next.js App Router |
 | F-016 | Panel -> API proxy + in-memory access token + refresh cookie | panel-web | done | F-014 | — | site-pwa/src/app/api/auth/[...path]/route.ts | src/lib/auth-api.ts |
+| F-0201 | Server-verified slide challenge gates register/login/forgot (bot check) | auth-api | done | F-014 | F-0201 | txnet-backend/auth-service/src/app/auth/captcha/, common/guards/captcha.guard.ts | also touches panel-web (`_hooks/useCaptcha.ts`, `NatureCaptchaUI.tsx`, `lib/auth-api.ts`) and redis-keyspace (`captcha:challenge:*`, `captcha:verified:*`); 120s pass TTL, single-use |
 | F-017 | Prisma schema for all 14 business domains (Postgres multiSchema) | — | doing | — | — | txnet-backend/prisma/domains/ | schema authored; NO prisma/migrations committed, "section 99" RLS/partitioning NOT applied; PENDING: rename `Node` model -> `Panel` (glossary decision 2026-09-04) |
 | F-018 | Tenant onboarding + white-label (branding, domains, entitlements, staff) | tenant | todo | — | — | | needs-decision: awaiting feature spec; split into sub-items on ingest |
 | F-019 | Tenant<->platform billing (subscription + metered usage) | tenant | todo | F-018 | — | | needs-decision: spec pending |

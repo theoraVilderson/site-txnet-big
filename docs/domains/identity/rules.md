@@ -22,6 +22,7 @@ performs `revoke(old, user_logout)` + `create(new)` atomically (token rotation).
 | 3 | Identifier type: matches Iran mobile regex -> phone (normalized `09xxxxxxxxx`), else username | password login | — |
 | 4 | Strong password must not contain username / full name / phone fragments | register, reset | `password.containsProfileData` |
 | 5 | Default tenant/role on register: `Tenant.slug = 'platform_owner'`, `Role.name = 'user'` | register | `register.defaultRoleMissing` if seed absent |
+| 8 | Duplicate username/phone at register is checked live against `user` (best-effort, since no row is reserved yet); the Postgres unique constraint is the final guard when verify-phone promotes the pending record | register, verify phone (register) | a same-second race can still surface `register.duplicateUser` at verify time instead of register time |
 | 6 | Impersonation session lifetime is 30 min and cannot perform `SensitiveActionGuard` actions | impersonated request | — |
 | 7 | Access-token `permissions[]` is a snapshot from `role_permission` at sign time | token issue | stale until token expires |
 
@@ -31,3 +32,5 @@ performs `revoke(old, user_logout)` + `create(new)` atomically (token rotation).
 | OTP verify with both `phoneNumber` and `otpToken` | reject (schema `.refine`) | 2026-09-04 (observed) |
 | Refresh token missing on logout | return `{success:true}` (idempotent) | 2026-09-04 (observed) |
 | Login OTP request for unknown/inactive phone | still return `{accepted:true}`, send nothing | 2026-09-04 (observed) |
+| Register re-submitted for a phone with a still-pending (unverified) registration | overwrite the pending Redis record + issue a fresh OTP; the previous attempt's data/OTP become invalid | 2026-09-04 (decided) |
+| Pending registration's Redis key expires (600s) before verify-phone | `register.pending.expired`; user must register again from step 1 | 2026-09-04 (decided) |

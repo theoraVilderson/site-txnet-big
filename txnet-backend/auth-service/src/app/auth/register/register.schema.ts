@@ -21,10 +21,10 @@ export const registerSchema = z.object({
 export type RegisterInput = z.infer<typeof registerSchema>;
 
 export const verifyPhoneSchema = z.object({
-  userId: z.string().uuid('userId.invalid'),
+  phoneNumber: iranPhoneSchema,
   otpCode: z
     .string()
-    .length(6, 'otp.invalidLength')
+    .length(5, 'otp.invalidLength')
     .regex(/^\d+$/, 'otp.mustBeNumeric'),
 });
 

@@ -1,7 +1,7 @@
 ---
 id: surfaces
 status: active
-updated: 2026-09-04
+updated: 2026-09-05
 code_roots:
   - site-pwa/src
   - coinsite/src
@@ -50,10 +50,12 @@ Never make the user say a path. If they had to, this file is missing a row.
 
 | surface | aliases | route | unit | component | spec ref | note |
 |---|---|---|---|---|---|---|
-| panel-auth-proxy | auth proxy, login proxy, api auth proxy | /api/auth/[...path] | panel-web | site-pwa/src/app/api/auth | — | |
-| panel-register-proxy | register proxy, signup proxy | /api/auth/register | panel-web | site-pwa/src/app/api/auth/register | — | |
+| panel-auth-proxy | auth proxy, login proxy, api auth proxy, register proxy, signup proxy |  | panel-web |  | — | (removed) 2026-09-05 — replaced by panel-auth-direct; browser calls auth-service cross-origin now instead of via a same-origin Next.js hop |
+| panel-auth-direct | refresh token cookie, refresh_token cookie, کوکی رفرش توکن, کوکی ست نمیشه, مستقیم به api, direct api call, api.txnet.cyou مستقیم | `${NEXT_PUBLIC_API_ORIGIN}/api/auth/*` | panel-web | site-pwa/src/lib/auth-api.ts | — | browser -> auth-service direct, cross-origin, `credentials:"include"`; cookie lands via auth-api's CORS (`FRONTEND_ORIGIN` + `credentials:true`), not a proxy rewrite; see panel-web/contract.md TL;DR for the latency tradeoff this accepts |
 | panel-i18n-route | i18n route, translations endpoint | /api/i18n/[lang]/[ns] | panel-web | site-pwa/src/app/api/i18n | — | |
 | panel-auth-screens | login screen, auth screens, login page | /(auth)/auth | panel-web | site-pwa/src/app/(auth)/auth | — | |
+| panel-captcha-widget | captcha, slide captcha, human verification, bot check, کپچا, تایید ربات, اسلایدر کپچا | (embedded in login/signup/forgot-password) | panel-web | site-pwa/src/app/(auth)/auth/_components/NatureCaptchaUI.tsx | F-0201 | driven by `_hooks/useCaptcha.ts` |
+| panel-password-field | password field, password label, floating label, autocomplete پسورد, پسورد لیبل بالا نمیره, اتوکامپلیت پسورد لیبل بالا نمیره | (embedded in login/signup/forgot-password) | panel-web | site-pwa/src/app/(auth)/auth/_components/PasswordField.tsx | — | label float relied on React `value` state; browser/password-manager autofill doesn't fire onChange, so label stayed down until a manual click — fixed 2026-09-05 via `:-webkit-autofill` CSS-animation detection |
 
 ## Marketing (coinsite)
 
@@ -69,9 +71,39 @@ Never make the user say a path. If they had to, this file is missing a row.
 | auth-api-register | register endpoint | POST /auth/register | auth-api | txnet-backend/auth-service/src/app/auth | — | |
 | auth-api-login | login endpoint, password login | POST /auth/login/password | auth-api | txnet-backend/auth-service/src/app/auth | — | |
 | auth-api-impersonate | impersonation, impersonate user | POST /admin/users/:userId/impersonate | auth-api | txnet-backend/auth-service/src/app/impersonation | — | |
+| auth-api-captcha | captcha endpoint, human verification api, bot check api, کپچا, تایید ربات | POST /auth/captcha/challenge, POST /auth/captcha/verify | auth-api | txnet-backend/auth-service/src/app/auth/captcha | F-0201 | required (`X-Captcha-Token`) on register/login/forgot |
 
 ## Bot / other
 
 | surface | aliases | route | unit | component | spec ref | note |
 |---|---|---|---|---|---|---|
 | | | | | | | |
+
+## Flows
+
+A surface is a thing you point at. A flow is a **behaviour that crosses units**:
+a cookie login touches `panel-web`, `auth-api` and `redis-keyspace`.
+`python3 tools/where.py --walk "<sentence>"` derives that chain from
+`depends_on` plus the runtime edges in
+`architecture/dependency-graph.md` every time it is asked. This table is the
+cache.
+
+**Never write a flow row in advance.** A row written before the walk is a guess
+at which files matter, and it is wrong in the most expensive way — it looks like
+knowledge. Rows are written **after** a fix, from the path actually taken, by
+MODE: DIAGNOSE (`00-PROTOCOL.md` §6g) step 7. The second time the same thing is
+reported, there is no walk at all.
+
+- `flow` — kebab-case, permanent, unique. An id, like a surface.
+- `aliases` — **the user's own sentence, verbatim**, symptom words included,
+  Persian phrasing included. That is the row's whole value.
+- `path` — the unit chain, `->` separated, in the order the walk took it. Every
+  id must exist; `where.py --check` fails otherwise.
+- `files` — only the files the fix actually touched, not the files that were
+  read. A flow row is evidence, not a reading list.
+- Never delete a row. A flow that stops existing keeps its id and gets
+  `(removed)` in the note.
+
+| flow | aliases | path | files | spec ref | note |
+|---|---|---|---|---|---|
+| | | | | | |

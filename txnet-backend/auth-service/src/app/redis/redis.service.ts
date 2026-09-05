@@ -45,6 +45,13 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       lazyConnect: true,
       maxRetriesPerRequest: 3,
     });
+
+    // ioredis emits 'error' on every connection failure/retry; with no
+    // listener, Node treats it as an uncaught exception and kills the whole
+    // process instead of failing just the in-flight request.
+    this.client.on('error', (err) => {
+      this.logger.error(`redis client error: ${err.message}`);
+    });
   }
 
   async onModuleInit() {

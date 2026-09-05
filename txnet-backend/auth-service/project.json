@@ -22,6 +22,22 @@
         }
       }
     },
+    "build-watch": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "cache": false,
+      "options": {
+        "command": "webpack-cli build --watch",
+        "env": {
+          "NODE_ENV": "development"
+        },
+        "cwd": "auth-service",
+        "readyWhen": "compiled"
+      },
+      "outputs": [
+        "{workspaceRoot}/dist/auth-service"
+      ]
+    },
     "prune-lockfile": {
       "dependsOn": [
         "build"
@@ -60,16 +76,13 @@
       "continuous": true,
       "executor": "@nx/js:node",
       "defaultConfiguration": "development",
-      "dependsOn": [
-        "build"
-      ],
       "options": {
         "buildTarget": "auth-service:build",
         "runBuildTargetDependencies": false
       },
       "configurations": {
         "development": {
-          "buildTarget": "auth-service:build:development"
+          "buildTarget": "auth-service:build-watch"
         },
         "production": {
           "buildTarget": "auth-service:build:production"

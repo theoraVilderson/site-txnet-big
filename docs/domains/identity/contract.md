@@ -2,7 +2,7 @@
 id: identity
 layer: domain
 status: active
-version: 1
+version: 2
 updated: 2026-09-04
 ---
 
@@ -25,8 +25,8 @@ Surfaced over HTTP by the `auth-api` interface — see
 
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
-| register | fullName, username, phone, strong password | userId, `requiresPhoneVerification` | sync | duplicate, weak/profile password |
-| verify phone (register) | userId, 6-digit OTP | session tokens | sync | invalid/expired OTP |
+| register | fullName, username, phone, strong password | phoneNumber, `requiresPhoneVerification` | sync | duplicate, weak/profile password |
+| verify phone (register) | phoneNumber, 6-digit OTP | session tokens | sync | invalid/expired OTP, pending registration expired |
 | login (password) | identifier (phone or username), password | session tokens, or `requiresOtp` + `otpToken` | sync | invalid creds, phone-unverified, temporarily locked |
 | request login OTP | phone, optional channel | `{accepted:true}` (never reveals existence) | sync | channel not allowed |
 | verify login OTP | (`otpToken` \| phone) + code | session tokens | sync | invalid OTP/token |
@@ -52,7 +52,7 @@ None. No message bus is wired up. Impersonation start/end write an
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
 | i18n | OTP message text + error strings for the request language | English fallback strings; delivery still attempted |
-| redis-keyspace | session markers, OTP state, rate-limit + login-failure counters | auth fails closed (cannot create/verify sessions or OTP) |
+| redis-keyspace | session markers, OTP state, rate-limit + login-failure counters, pending-registration payloads | auth fails closed (cannot create/verify sessions or OTP); a pending registration lost before verify forces the user to register again |
 | audit | `admin_audit_log`, `impersonation_session` rows on impersonation | impersonation transaction aborts |
 
 ## Guarantees
@@ -63,6 +63,10 @@ None. No message bus is wired up. Impersonation start/end write an
   user, in one Postgres transaction, and drop the Redis markers.
 - OTP: one active code per (phone, purpose); 5 attempts; 60s request cooldown;
   300s code TTL. Redis is the source of truth (ADR-0007).
+- Register creates no `user` row until phone verification succeeds — the
+  submitted profile + hashed password sit in Redis (`register:pending:<phone>`,
+  600s TTL) and are discarded (never promoted) if verification doesn't happen
+  in time. See identity/invariants.md #11.
 - Login lockout: 10 failed attempts per identifier per 900s -> `temporarily
   locked` (Redis counter, cleared on success).
 - Enumeration-safe: OTP request / forgot-password always return `{accepted:true}`.
@@ -71,4 +75,4 @@ None. No message bus is wired up. Impersonation start/end write an
 
 | Item | Deprecated since | Removal after | Replacement |
 |---|---|---|---|
-| — | — | — | — |
+| `verify phone (register)` keyed by `userId` | 2026-09-04 | already removed — no `user` row exists at register time to key by | keyed by `phoneNumber` instead |

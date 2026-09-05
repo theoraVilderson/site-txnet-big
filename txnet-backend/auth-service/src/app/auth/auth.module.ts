@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { RateLimitGuard } from '../common/guards/rate-limit.guard';
+import { CaptchaGuard } from '../common/guards/captcha.guard';
 import { RegisterController } from './register/register.controller';
 import { RegisterService } from './register/register.service';
 import { OTP_SERVICE } from './otp/otp.interface';
@@ -17,13 +18,15 @@ import { SessionStore } from './session/session.store';
 import { OtpStore } from './otp/otp.store';
 import { RateLimiter } from '../common/rate-limit/rate-limiter';
 import { LocaleModule } from '../locale/locale.module';
+import { CaptchaController } from './captcha/captcha.controller';
+import { CaptchaService } from './captcha/captcha.service';
 
 @Module({
   // Required because LocaleModule is not @Global(): SmsOtpSender,
   // BaleOtpSender and TelegramOtpSender now inject LocaleService to build
   // OTP messages in the request's language.
   imports: [LocaleModule],
-  controllers: [RegisterController, AuthController],
+  controllers: [RegisterController, AuthController, CaptchaController],
   providers: [
     RegisterService,
     TokenService,
@@ -33,6 +36,7 @@ import { LocaleModule } from '../locale/locale.module';
     SessionStore,
     OtpStore,
     RateLimiter,
+    CaptchaService,
     SmsOtpSender,
     BaleOtpSender,
     TelegramOtpSender,
@@ -43,6 +47,10 @@ import { LocaleModule } from '../locale/locale.module';
     {
       provide: APP_GUARD,
       useClass: RateLimitGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: CaptchaGuard,
     },
   ],
   exports: [AuthGuard, TokenService, SessionService, SessionStore, AuthService],

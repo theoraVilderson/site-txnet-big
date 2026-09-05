@@ -34,5 +34,7 @@ token check (`forward-auth`), admin audit records (`audit`).
 | Date | Change |
 |---|---|
 | 2026-09-04 | Unit documented from existing auth-service + schema (onboarding) |
-
+| 2026-09-04 | Fix: `RedisService` had no `error` listener on the ioredis client — a connection failure during register's OTP flow crashed the whole auth-service process (Node's uncaught-`error`-event behaviour) instead of failing that one request. Added a listener that logs and lets the call reject normally. |
+| 2026-09-04 | Fix: `OtpService.issueOtp` now honours `OTP_DELIVERY_MODE=console` / `OTP_DEV_CONSOLE_LOG` by logging the code and skipping the real sender, instead of always calling it — `SmsOtpSender` had no configured provider (`SMS_API_URL`/`SMS_API_KEY` unset) so register's OTP step always failed with `otp.smsNotConfigured`. |
+| 2026-09-04 | Breaking (requested): `user` row is now created in verify-phone, not in register — see invariants.md #11, contract.md. `panel-web` updated to match. |
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

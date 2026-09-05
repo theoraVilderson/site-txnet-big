@@ -3,7 +3,12 @@
 @layer base {
   :root,
   [data-theme="light"] {
-    --background: linear-gradient(135deg, #a8e6cf 0%, #dcedc8 50%, #f8f8f8 100%);
+    --background: linear-gradient(
+      135deg,
+      #a8e6cf 0%,
+      #dcedc8 50%,
+      #f8f8f8 100%
+    );
     --foreground: #0f2923;
     --bg-inner: #f4f9f4;
     --card-bg: rgba(255, 255, 255, 0.95);
@@ -20,11 +25,20 @@
     --error-bg: #fff3e0;
     --error-border: #ffccbc;
     --skeleton-bg: rgba(76, 175, 80, 0.12);
-    --skeleton-wave: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+    --skeleton-wave: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.6),
+      transparent
+    );
     --gold-primary: #ffb300;
     --gold-glow: rgba(255, 179, 0, 0.4);
     --gold-bg: rgba(255, 179, 0, 0.1);
-    --card-gradient: linear-gradient(135deg, var(--accent-primary) 0%, #2e7d32 100%);
+    --card-gradient: linear-gradient(
+      135deg,
+      var(--accent-primary) 0%,
+      #2e7d32 100%
+    );
     --tab-bg: rgba(76, 175, 80, 0.08);
     --tab-active: #ffffff;
     --text-on-accent: #ffffff;
@@ -32,7 +46,12 @@
   }
 
   [data-theme="dark"] {
-    --background: linear-gradient(135deg, #164f43 0%, #233329 50%, #0a0a0a 100%);
+    --background: linear-gradient(
+      135deg,
+      #164f43 0%,
+      #233329 50%,
+      #0a0a0a 100%
+    );
     --foreground: #e8f5e9;
     --bg-inner: #0f1510;
     --card-bg: rgba(20, 30, 20, 0.9);
@@ -49,7 +68,12 @@
     --error-bg: rgba(255, 87, 34, 0.1);
     --error-border: rgba(255, 87, 34, 0.3);
     --skeleton-bg: rgba(129, 199, 132, 0.08);
-    --skeleton-wave: linear-gradient(90deg, transparent, rgba(129, 199, 132, 0.15), transparent);
+    --skeleton-wave: linear-gradient(
+      90deg,
+      transparent,
+      rgba(129, 199, 132, 0.15),
+      transparent
+    );
     --gold-primary: #ffca28;
     --gold-glow: rgba(255, 202, 40, 0.3);
     --gold-bg: rgba(255, 202, 40, 0.08);
@@ -61,7 +85,12 @@
   }
 
   [data-theme="ocean"] {
-    --background: linear-gradient(135deg, #0c4a6e 0%, #075985 50%, #0369a1 100%);
+    --background: linear-gradient(
+      135deg,
+      #0c4a6e 0%,
+      #075985 50%,
+      #0369a1 100%
+    );
     --foreground: #e0f2fe;
     --bg-inner: #082f49;
     --card-bg: rgba(8, 47, 73, 0.9);
@@ -78,7 +107,12 @@
     --error-bg: rgba(244, 63, 94, 0.1);
     --error-border: rgba(244, 63, 94, 0.3);
     --skeleton-bg: rgba(56, 189, 248, 0.08);
-    --skeleton-wave: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.15), transparent);
+    --skeleton-wave: linear-gradient(
+      90deg,
+      transparent,
+      rgba(56, 189, 248, 0.15),
+      transparent
+    );
     --gold-primary: #fbbf24;
     --gold-glow: rgba(251, 191, 36, 0.3);
     --gold-bg: rgba(251, 191, 36, 0.08);
@@ -318,12 +352,14 @@ button {
 }
 
 .organic-field input:focus + label::before,
-.organic-field input:not(:placeholder-shown) + label::before {
+.organic-field input:not(:placeholder-shown) + label::before,
+.organic-field label.floated::before {
   opacity: 1;
 }
 
 .organic-field input:focus + label,
-.organic-field input:not(:placeholder-shown) + label {
+.organic-field input:not(:placeholder-shown) + label,
+.organic-field label.floated {
   top: 0;
   font-size: 13px;
   font-weight: bold;
@@ -383,4 +419,48 @@ button {
 
 .dir-ltr {
   direction: ltr;
+}
+
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
+
+input::-webkit-credentials-auto-fill-button {
+  visibility: hidden;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+}
+
+/* پسورد منیجرها و autofill مرورگر رویداد onChange رو صدا نمی‌زنن، پس React
+   متوجه پر شدن فیلد نمی‌شه. با یک انیمیشن CSS خالی روی :-webkit-autofill
+   یک onAnimationStart قابل تشخیص در جاوااسکریپت ایجاد می‌کنیم. */
+@keyframes onAutoFillStart {
+  from {
+  }
+  to {
+  }
+}
+@keyframes onAutoFillCancel {
+  from {
+  }
+  to {
+  }
+}
+
+.password-field-input:-webkit-autofill {
+  animation-name: onAutoFillStart;
+}
+
+.password-field-input:not(:-webkit-autofill) {
+  animation-name: onAutoFillCancel;
+}
+
+.organic-field input:-webkit-autofill {
+  animation-name: onAutoFillStart;
+}
+
+.organic-field input:not(:-webkit-autofill) {
+  animation-name: onAutoFillCancel;
 }

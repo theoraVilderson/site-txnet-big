@@ -20,6 +20,27 @@ export const RedisKeys = {
 
   /** Fixed-window rate-limit counter for an arbitrary bucket. */
   rateLimit: (bucket: string) => `ratelimit:${bucket}`,
+
+  /**
+   * Pending registration payload (hashed password + profile fields) for a
+   * phone number that has not completed OTP verification yet. The `user`
+   * row is only created once this is consumed by verify-phone — see
+   * identity/invariants.md #11.
+   */
+  registerPending: (phone: string) => `register:pending:${phone}`,
+
+  /**
+   * A bot-challenge that has been issued but not yet completed. Value is the
+   * issue timestamp (ms), used to reject a slide completed faster than a
+   * human could plausibly drag it. Deleted on first verify attempt
+   * (single-use) — see auth-api/contract.md.
+   */
+  captchaChallenge: (challengeId: string) => `captcha:challenge:${challengeId}`,
+  /**
+   * A completed, still-usable captcha pass. Single-use: `CaptchaGuard`
+   * deletes it on the first request that spends it.
+   */
+  captchaVerified: (token: string) => `captcha:verified:${token}`,
 } as const;
 
 /** Canonical TTLs (seconds). Kept next to the keys, not scattered in services. */
@@ -28,4 +49,10 @@ export const RedisTtl = {
   otpLock: 2,
   otpCooldown: 60,
   loginFailureWindow: 900,
+  /** >= otpCode so a still-valid OTP never outlives the data it verifies. */
+  registerPending: 600,
+  /** Window the client has to complete the slide after a challenge is issued. */
+  captchaChallenge: 60,
+  /** How long a completed captcha pass stays usable before it must be redone. */
+  captchaVerified: 120,
 } as const;

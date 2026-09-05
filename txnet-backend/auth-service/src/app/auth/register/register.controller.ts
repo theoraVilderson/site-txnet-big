@@ -16,6 +16,7 @@ import { registerSchema, verifyPhoneSchema } from './register.schema';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { ResponseType } from '../../common/response/response.util';
 import { RateLimit } from '../decorators/rate-limit.decorator';
+import { RequireCaptcha } from '../decorators/require-captcha.decorator';
 
 @Controller('auth')
 export class RegisterController {
@@ -27,6 +28,7 @@ export class RegisterController {
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @UsePipes(new ZodValidationPipe(registerSchema))
+  @RequireCaptcha()
   @RateLimit({
     key: (req) => `register:${req.ip}`,
     limit: 10,
@@ -54,20 +56,25 @@ export class RegisterController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.registerService.verifyPhone(body);
+    const result: any = await this.registerService.verifyPhone(body);
     if (result.ok) {
-      const user = await this.authService.findUserForSession(body.userId);
+      const user = await this.authService.findUserForSession(
+        result.data.userId,
+      );
       const tokens = await this.authService.createSessionForUser(
         user,
         req.ip ?? '0.0.0.0',
         req.get('user-agent') ?? 'unknown',
       );
       const { refreshToken, ...safeTokens } = tokens;
+      const DOMAINNAME = process.env.DOMAIN_NAME!;
+
       res.cookie('refresh_token', refreshToken, {
         httpOnly: true,
         secure: process.env.COOKIE_SECURE !== 'false',
         sameSite: 'lax',
-        path: '/api/auth',
+        path: '/', // تغییر اول
+        domain: `.${DOMAINNAME}`, // تغییر دوم
         maxAge: 30 * 24 * 60 * 60 * 1000,
       });
       result.data = { ...result.data, ...safeTokens };

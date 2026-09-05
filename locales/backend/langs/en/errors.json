@@ -45,6 +45,10 @@
     "forbidden": "Access denied",
     "insufficient": "You have insufficient permissions"
   },
+  "captcha": {
+    "required": "Please complete the human-verification challenge",
+    "invalid": "The verification challenge is invalid, expired, or already used"
+  },
   "system": {
     "rateLimit": "Too many requests",
     "unexpected": "Something went wrong. Please try again.",

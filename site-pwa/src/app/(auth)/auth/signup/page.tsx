@@ -16,6 +16,7 @@ import { AuthFooterLinks } from "@auth/auth/_components/AuthFooterLinks";
 import { useAuthUI } from "@auth/auth/_context/AuthUIContext";
 import { useOtpTimer } from "@auth/auth/_hooks/useOtpTimer";
 import { useFirstPaint } from "@auth/auth/_hooks/useFirstPaint";
+import { useCaptcha } from "@auth/auth/_hooks/useCaptcha";
 import { authApi } from "@/lib/auth-api";
 
 export default function SignupPage() {
@@ -26,7 +27,7 @@ export default function SignupPage() {
   const [step, setStep] = useState<1 | 2>(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [captchaVerified, setCaptchaVerified] = useState(false);
+  const captcha = useCaptcha();
   const otpTimer = useOtpTimer();
 
   const [fullName, setFullName] = useState("");
@@ -35,14 +36,13 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [otp, setOtp] = useState("");
-  const [userId, setUserId] = useState("");
 
   // Original page never asked for a password at signup at all - fixed here.
   const passwordsMismatch =
     confirmPassword.length > 0 && password !== confirmPassword;
 
   const canSubmitStep1 =
-    captchaVerified &&
+    captcha.verified &&
     fullName.length > 0 &&
     username.length > 0 &&
     phone.length > 0 &&
@@ -54,10 +54,11 @@ export default function SignupPage() {
     setIsLoading(true);
     try {
       if (step === 1) {
-        const result = await authApi.register({ fullName, username, phoneNumber: phone, password });
-        setUserId(result.userId); setStep(2); otpTimer.start(120);
+        if (!captcha.token) return;
+        await authApi.register({ fullName, username, phoneNumber: phone, password }, captcha.token);
+        setStep(2); otpTimer.start(120);
       } else {
-        await authApi.verifyPhone(userId, otp);
+        await authApi.verifyPhone(phone, otp);
         setIsSuccess(true); router.push("/dashboard");
       }
     } catch (error) { console.error(error); }
@@ -109,6 +110,7 @@ export default function SignupPage() {
                     label={t.fullName}
                     value={fullName}
                     onChange={(e: any) => setFullName(e.target.value)}
+                    autoComplete="name"
                   />
                   <OrganicField
                     id="username"
@@ -116,6 +118,7 @@ export default function SignupPage() {
                     value={username}
                     onChange={(e: any) => setUsername(e.target.value)}
                     dir="ltr"
+                    autoComplete="username"
                   />
                   <OrganicField
                     id="phone"
@@ -124,6 +127,7 @@ export default function SignupPage() {
                     value={phone}
                     onChange={(e: any) => setPhone(e.target.value)}
                     dir="ltr"
+                    autoComplete="tel"
                   />
                   <PasswordField
                     id="password"
@@ -150,8 +154,8 @@ export default function SignupPage() {
                   className="mb-4 mt-6"
                 >
                   <NatureCaptchaUI
-                    isVerified={captchaVerified}
-                    onVerify={() => setCaptchaVerified(true)}
+                    isVerified={captcha.verified}
+                    onVerify={captcha.complete}
                     isRtl={isRtl}
                     t={t}
                   />

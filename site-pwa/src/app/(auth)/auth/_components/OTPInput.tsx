@@ -40,6 +40,19 @@ export const OTPInput = ({
     }
   };
 
+  // SMS autofill (WebOTP on Android, autocomplete="one-time-code" on iOS
+  // Safari) delivers the whole code as one paste into whichever box has
+  // focus — since the code is split across `length` single-char boxes, that
+  // paste has to be redistributed by hand or autofill only ever fills box 0.
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "");
+    if (!pasted) return;
+    e.preventDefault();
+    const combined = pasted.slice(0, length);
+    onChange(combined);
+    inputs.current[Math.min(combined.length, length - 1)]?.focus();
+  };
+
   return (
     <div className="flex flex-col items-center gap-2">
       <div className="flex justify-center gap-2 sm:gap-3 dir-ltr" dir="ltr">
@@ -52,9 +65,11 @@ export const OTPInput = ({
             type="text"
             inputMode="numeric"
             maxLength={1}
+            autoComplete={i === 0 ? "one-time-code" : "off"}
             value={value[i] || ""}
             onChange={(e) => handleChange(e, i)}
             onKeyDown={(e) => handleKeyDown(e, i)}
+            onPaste={handlePaste}
             className={`w-12 h-14 sm:w-14 sm:h-16 text-center text-2xl font-bold bg-bg-inner border border-card-border text-text-primary rounded-xl focus:outline-none focus:border-primary transition-all shadow-sm duration-200 ${
               popIndex === i ? "scale-110 border-primary" : "scale-100"
             }`}

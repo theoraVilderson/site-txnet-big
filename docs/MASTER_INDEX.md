@@ -1,7 +1,7 @@
 ---
 id: master-index
 status: active
-updated: 2026-09-04
+updated: 2026-09-05
 ---
 
 # Master Index
@@ -45,8 +45,8 @@ no service yet. A unit that is `active` with an empty `source:` is a lie and
 | redis-keyspace | shared Redis key prefix/versioning + session & OTP key catalog + TTLs | active | [->](platform/redis-keyspace/INDEX.md) |
 
 ## Cross-cutting docs
-- [Surface map](SURFACES.md) — user-visible thing -> unit -> file. **Start here for any vague request.**
-- [Code layout](CODE-LAYOUT.md) — the mirror rule / the roots of this monorepo; `.sync` marks the last point docs and code agreed
+- [Surface map](SURFACES.md) — user-visible thing -> unit -> file, plus `## Flows` (cached walks). **Start here for any vague request.**
+- [Code layout](CODE-LAYOUT.md) — the mirror rule / the roots of this monorepo / symptom -> role; `.sync` marks the last point docs and code agreed
 - [Conventions](CONVENTIONS.md) — house style, `C-nn` ids, and what is actually enforced
 - [Agent setup](AGENT-SETUP.md) — running this on a tool other than Claude Code
 - [Handoff](HANDOFF.md) — mid-item session state. Read it before `/next` if it is `active`.
@@ -54,7 +54,7 @@ no service yet. A unit that is `active` with an empty `source:` is a lie and
 - [Feature catalog manifest](features/MANIFEST.md) — the spec index. **Never open `features/App-Features.md`;** use `python3 tools/spec.py <F-id>`.
 - [Feature format](FEATURES-FORMAT.md) — the contract the catalog satisfies
 - [Architecture overview](architecture/overview.md)
-- [Dependency graph](architecture/dependency-graph.md) — read before any change
+- [Dependency graph](architecture/dependency-graph.md) — static `depends_on` + runtime edges. Read before any change; walked by `where.py --walk`
 - [Decisions (ADR)](architecture/decisions/)
 - [Glossary](GLOSSARY.md) — check before naming anything
 - [Operations](operations/INDEX.md)

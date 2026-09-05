@@ -215,6 +215,14 @@ Two layers: Traefik at the edge, per IP, and services with identity-precise limi
 
 Bot webhook limiting is per **tenant** — one reseller's bot traffic can never starve another reseller's service. With multiple bots (C-05), the tenant's cap stays fixed and is shared across its bots.
 
+### 2.7 Bot / Human Verification (CAPTCHA)
+
+Before `register` or `login` reaches the `identity` domain, the client must pass an interactive slide-to-verify challenge (the same widget in `site-pwa` and any other web client). `auth-service` issues the challenge and verifies completion server-side; the pass expires on a fixed TTL, forcing re-verification. This is a client-interaction gate against scripted/automated submission, not behavioral/ML bot scoring.
+
+| id | feature | status | depends_on | note |
+|---|---|---|---|---|
+| F-0201 | Server-verified slide challenge gates `register` and `login`: `auth-service` issues a short-lived challenge token, the client completes the drag gesture and returns it, and the server confirms completion before delegating to `identity` | new | — | Challenge pass TTL is 120s — expired or already-consumed tokens are rejected and the client must re-verify; deters scripted/automated submission, not a substitute for real behavioral bot detection |
+
 ---
 
 ## Section 3 — Access Control (RBAC) and Time-Bounded Access

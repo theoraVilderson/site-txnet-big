@@ -16,6 +16,7 @@ import { AuthFooterLinks } from "@auth/auth/_components/AuthFooterLinks";
 import { useAuthUI } from "@auth/auth/_context/AuthUIContext";
 import { useOtpTimer } from "@auth/auth/_hooks/useOtpTimer";
 import { useFirstPaint } from "@auth/auth/_hooks/useFirstPaint";
+import { useCaptcha } from "@auth/auth/_hooks/useCaptcha";
 import { authApi } from "@/lib/auth-api";
 
 type Step = 1 | 2 | 3;
@@ -28,7 +29,7 @@ export default function ForgotPasswordPage() {
   const [step, setStep] = useState<Step>(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [captchaVerified, setCaptchaVerified] = useState(false);
+  const captcha = useCaptcha();
   const otpTimer = useOtpTimer();
 
   const [phone, setPhone] = useState("");
@@ -44,7 +45,12 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      if (step === 1) { await authApi.forgot(phone); setStep(2); otpTimer.start(120); }
+      if (step === 1) {
+        if (!captcha.token) return;
+        await authApi.forgot(phone, captcha.token);
+        setStep(2);
+        otpTimer.start(120);
+      }
       else if (step === 2) { const result = await authApi.verifyForgot(phone, otp); setResetToken(result.resetToken); setStep(3); }
       else { await authApi.reset(resetToken, newPassword); setIsSuccess(true); router.push("/auth/login"); }
     } catch (error) { console.error(error); }
@@ -67,7 +73,7 @@ export default function ForgotPasswordPage() {
         ? t.verifyAndContinue
         : t.saveNewPassword;
 
-  const canSubmitStep1 = captchaVerified && phone.length > 0;
+  const canSubmitStep1 = captcha.verified && phone.length > 0;
   const canSubmitStep3 =
     newPassword.length >= 8 && !passwordsMismatch && confirmPassword.length > 0;
 
@@ -99,6 +105,7 @@ export default function ForgotPasswordPage() {
                   value={phone}
                   onChange={(e: any) => setPhone(e.target.value)}
                   dir="ltr"
+                  autoComplete="tel"
                 />
 
                 <motion.div
@@ -107,8 +114,8 @@ export default function ForgotPasswordPage() {
                   className="mb-4 mt-4"
                 >
                   <NatureCaptchaUI
-                    isVerified={captchaVerified}
-                    onVerify={() => setCaptchaVerified(true)}
+                    isVerified={captcha.verified}
+                    onVerify={captcha.complete}
                     isRtl={isRtl}
                     t={t}
                   />

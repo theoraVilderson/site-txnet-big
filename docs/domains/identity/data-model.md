@@ -33,6 +33,13 @@ Other units never read these tables. Identity facts reach them only as
 `X-User-Id` / `X-Tenant-Id` / `X-Role-Id` / `X-User-Permissions` headers set by
 `forward-auth` after JWT + session validation.
 
+## Register flow — no interim Postgres row
+
+`register` never inserts into `user`. The validated profile + argon2 password
+hash are cached in Redis only (`register:pending:<phone>`, 600s TTL, see
+`redis-keyspace`); `verify-phone` reads that cache and does the single
+`user.create` once the OTP checks out. See invariants.md #11.
+
 ## Migration notes
 
 - The "section 99" manual SQL in the schema (RLS, partial unique indexes,

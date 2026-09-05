@@ -8,8 +8,8 @@ status: generated
 Rebuild: `python3 tools/features-scan.py`
 
 - catalog files: 1
-- addressable blocks: 162
-- features: 169
+- addressable blocks: 163
+- features: 170
 
 **Never read the catalog directly.** `python3 tools/spec.py <F-id>` prints exactly the block you need.
 
@@ -35,150 +35,151 @@ Rebuild: `python3 tools/features-scan.py`
 | `App-Features.md:168-181` · 2.3 OTP System | 14 |  | C-05 |  |
 | `App-Features.md:182-190` · 2.4 Sessions and Tokens | 9 |  |  |  |
 | `App-Features.md:191-194` · 2.5 Attack Protection | 4 |  |  |  |
-| `App-Features.md:195-219` · 2.6 Rate Limiting | 25 |  | C-05 |  |
-| `App-Features.md:220-221` Access Control (RBAC) and Time-Bounded Access | 2 |  |  |  |
-| `App-Features.md:222-225` · 3.1 Roles as Data | 4 |  |  |  |
-| `App-Features.md:226-231` · 3.2 Permission Key Structure | 6 |  |  |  |
-| `App-Features.md:232-237` · 3.3 Separation of Platform Permissions from Tenant Permissions | 6 |  |  |  |
-| `App-Features.md:238-241` · 3.4 Single Source of Truth for Permissions | 4 |  |  |  |
-| `App-Features.md:242-252` · 3.5 Edge Authorization | 11 |  |  |  |
-| `App-Features.md:253-263` · 3.6 Impersonation | 11 |  |  |  |
-| `App-Features.md:264-275` · 3.7 Time-Bound Consent for Support | 12 |  |  |  |
-| `App-Features.md:276-284` · 3.8 Temporal Access Grant (Elevated) | 9 |  |  |  |
-| `App-Features.md:285-293` · 3.9 User-Level Restrictions (UserRestriction) | 9 |  |  |  |
-| `App-Features.md:294-306` · 3.10 Strict Separation of the Four Access Mechanisms | 13 |  | C-02 D-01 |  |
-| `App-Features.md:307-317` · 3.11 Ban on Plan-Name-Based Checks | 11 |  |  |  |
-| `App-Features.md:318-329` · 3.12 RBAC Down to the Reseller Level | 12 | F-1201 F-904 F-906 |  |  |
-| `App-Features.md:330-331` Product Model, Catalog and Sales Engine | 2 |  |  |  |
-| `App-Features.md:332-344` · 4.1 A Product-Agnostic Platform | 13 |  |  |  |
-| `App-Features.md:345-358` · 4.2 Catalog Structure | 14 |  |  |  |
-| `App-Features.md:359-362` · 4.3 Product Names as Translation Keys | 4 |  |  |  |
-| `App-Features.md:363-382` · 4.4 Grant — The Single Concept of Entitlement | 20 |  | C-09 C-15 |  |
-| `App-Features.md:383-395` · 4.5 Quota Types | 13 |  |  |  |
-| `App-Features.md:396-404` · 4.6 One Package, Five Configs, One Shared Quota | 9 |  |  |  |
-| `App-Features.md:405-418` · 4.7 Discount Coupons | 14 |  |  |  |
-| `App-Features.md:419-440` · 4.8 Pricing and Campaign Engine | 22 | F-408 F-501 F-502 F-503 F-504 F-505 F-506 F-507 F-508 F-509 F-510 F-511 F-512 |  |  |
-| `App-Features.md:441-442` Wallet, Ledger and Payment | 2 |  |  |  |
-| `App-Features.md:443-467` · 5.1 Double-Entry Ledger | 25 |  | C-13 | LedgerAccount LedgerTransaction |
-| `App-Features.md:468-475` · 5.2 Two Separate Account Trees | 8 |  |  |  |
-| `App-Features.md:476-481` · 5.3 Representing Money | 6 |  |  |  |
-| `App-Features.md:482-487` · 5.4 One Wallet, No Complexity | 6 |  |  |  |
-| `App-Features.md:488-501` · 5.5 Payment Gateways | 14 |  | C-19 D-03 |  |
-| `App-Features.md:502-521` · 5.6 Card-to-Card with Automatic Matching | 20 | F-803 F-804 F-805 F-806 F-807 | C-14 |  |
-| `App-Features.md:522-530` · 5.7 Payment Path Protections | 9 |  |  |  |
-| `App-Features.md:531-558` · 5.8 Purchase Settlement Flow | 28 |  |  |  |
-| `App-Features.md:559-562` · 5.9 Insufficient Balance | 4 |  |  |  |
-| `App-Features.md:563-571` · 5.10 Refunds | 9 |  |  |  |
-| `App-Features.md:572-575` · 5.11 Manual Balance Adjustment | 4 |  |  |  |
-| `App-Features.md:576-595` · 5.12 Treasury and FX Risk | 20 |  |  | TreasuryConversion TreasurySnapshot |
-| `App-Features.md:596-597` Dollar Pricing and FX Rate Engine | 2 |  |  |  |
-| `App-Features.md:598-605` · 6.1 Why Dollars | 8 |  |  |  |
-| `App-Features.md:606-619` · 6.2 The FX Worker | 14 |  |  |  |
-| `App-Features.md:620-630` · 6.3 Rate Staleness Ladder | 11 |  |  |  |
-| `App-Features.md:631-634` · 6.4 Manual Rate | 4 |  |  |  |
-| `App-Features.md:635-655` · 6.5 Gateway Pricing Engine | 21 |  |  |  |
-| `App-Features.md:656-663` · 6.6 One Calculator for Display and Charging | 8 |  |  |  |
-| `App-Features.md:664-665` Network Service: Supply, Stability and Connection Intelligence | 2 |  |  |  |
-| `App-Features.md:666-693` · 7.1 Panel Abstraction and Drivers | 28 |  |  |  |
-| `App-Features.md:694-709` · 7.2 Bring Your Own Node (Customer's Own Panel) | 16 |  | C-18 |  |
-| `App-Features.md:710-730` · 7.3 Panel Group and Mirroring — Zero Downtime | 21 |  |  | PanelGroup PanelGroupMember |
-| `App-Features.md:731-741` · 7.4 Health Checks | 11 |  |  |  |
-| `App-Features.md:742-766` · 7.5 Subscription Link | 25 |  | C-07 C-08 C-16 C-17 |  |
-| `App-Features.md:767-777` · 7.6 Domain Rotation in the Subscription Response | 11 | F-105 F-106 |  |  |
-| `App-Features.md:778-789` · 7.7 Connection Intelligence and ISP-Based Routing | 12 | F-1521 F-402 F-403 F-404 F-405 | C-06 |  |
-| `App-Features.md:790-799` · 7.8 Connection Experience | 10 | F-307 F-409 F-410 F-411 F-414 |  |  |
-| `App-Features.md:800-803` · 7.9 Concurrent Device Limits | 4 |  |  |  |
-| `App-Features.md:804-821` · 7.10 Enforcement | 18 |  |  |  |
-| `App-Features.md:822-825` Usage Measurement and Usage Billing | 4 |  |  |  |
-| `App-Features.md:826-831` · 8.1 The Fundamental Problem | 6 |  |  |  |
-| `App-Features.md:832-844` · 8.2 The Fix: Deltas with Explicit Reset Detection | 13 |  |  |  |
-| `App-Features.md:845-848` · 8.3 Quarantining Implausible Deltas | 4 |  |  |  |
-| `App-Features.md:849-867` · 8.4 Collection Pipeline | 19 |  |  |  |
-| `App-Features.md:868-884` · 8.5 Pay-As-You-Go Billing | 17 |  |  |  |
-| `App-Features.md:885-890` · 8.6 Usage Baseline on Migration | 6 |  |  |  |
-| `App-Features.md:891-892` Multichannel Notifications and Campaigns | 2 |  |  |  |
-| `App-Features.md:893-905` · 9.1 Structure | 13 |  |  | Campaign DeliveryLog Preference Template |
-| `App-Features.md:906-909` · 9.2 Notifications as Domain Events | 4 |  |  |  |
-| `App-Features.md:910-913` · 9.3 Event Keys | 4 |  |  |  |
-| `App-Features.md:914-919` · 9.4 Preferences and Quiet Hours | 6 |  |  |  |
-| `App-Features.md:920-928` · 9.5 Retention Notifications | 9 | F-1515 F-601 F-602 F-603 |  |  |
-| `App-Features.md:929-937` · 9.6 Campaigns | 9 |  |  |  |
-| `App-Features.md:938-945` · 9.7 No-Fallback Rule | 8 |  | D-03 |  |
-| `App-Features.md:946-951` · 9.8 A Queue Resilient to Bot Bans | 6 |  |  |  |
-| `App-Features.md:952-955` Bot as a Full Panel | 4 |  | D-02 |  |
-| `App-Features.md:956-970` · 10.1 Multiple Bots per Tenant | 15 |  | C-05 |  |
-| `App-Features.md:971-980` · 10.2 Webhook Architecture | 10 |  |  |  |
-| `App-Features.md:981-989` · 10.3 Telegram/Bale Abstraction Layer | 9 | F-301 F-302 |  |  |
-| `App-Features.md:990-1012` · 10.4 Full Bot Capabilities | 23 | F-1531 F-303 F-304 F-305 F-306 F-308 F-309 F-310 F-311 F-312 F-313 F-314 F-318 F-319 |  |  |
-| `App-Features.md:1013-1020` · 10.5 Account Linking | 8 |  | C-05 |  |
-| `App-Features.md:1021-1026` · 10.6 Bot Token Security | 6 |  |  |  |
-| `App-Features.md:1027-1028` Unified Support | 2 |  |  |  |
-| `App-Features.md:1029-1043` · 11.1 One Door, No Choice | 15 |  |  | Conversation Message |
-| `App-Features.md:1044-1053` · 11.2 Behavior | 10 |  |  |  |
-| `App-Features.md:1054-1062` · 11.3 Agent Side | 9 |  |  |  |
-| `App-Features.md:1063-1066` · 11.4 File Attachments | 4 |  |  |  |
-| `App-Features.md:1067-1070` · 11.5 Queue Priority | 4 |  |  |  |
-| `App-Features.md:1071-1076` · 11.6 Tenant and Reseller Isolation | 6 |  |  |  |
-| `App-Features.md:1077-1092` Realtime | 16 |  |  |  |
-| `App-Features.md:1093-1096` White-Label, Domain and Resilience Against Filtering | 4 |  |  |  |
-| `App-Features.md:1097-1117` · 13.1 Domain Model | 21 | F-101 F-102 F-113 F-114 F-115 | C-01 C-07 C-16 D-01 | TenantDomain |
-| `App-Features.md:1118-1132` · 13.2 Domain Verification Lifecycle | 15 |  | C-01 C-03 |  |
-| `App-Features.md:1133-1143` · 13.3 Resilience Against Filtering | 11 | F-103 F-104 F-110 F-112 |  |  |
-| `App-Features.md:1144-1155` · 13.4 Anti-Fingerprinting | 12 | F-107 F-108 F-109 | C-04 |  |
-| `App-Features.md:1156-1172` · 13.5 Public Pages | 17 |  |  | TenantPage |
-| `App-Features.md:1173-1183` · 13.6 Trust Badges (eNamad and similar) | 11 |  |  | TrustBadge |
-| `App-Features.md:1184-1196` · 13.7 Theme System | 13 |  |  | TenantTheme |
-| `App-Features.md:1197-1210` · 13.8 Branding and SEO | 14 |  | C-04 | TenantBranding |
-| `App-Features.md:1211-1220` · 13.9 Reseller-Specific (BYO) Integrations | 10 |  | C-19 D-03 |  |
-| `App-Features.md:1221-1228` · 13.10 Browser-Level Isolation | 8 |  | C-16 |  |
-| `App-Features.md:1229-1230` Panel Business: Plans, Subscriptions and Traffic Wallet | 2 |  |  |  |
-| `App-Features.md:1231-1243` · 14.1 Two Products, Sold Separately | 13 |  | D-05 |  |
-| `App-Features.md:1244-1294` · 14.2 Plans as Data | 51 |  | C-01 C-03 C-19 D-01 D-03 | Plan PlanFeature |
-| `App-Features.md:1295-1300` · 14.3 Per-Customer Exceptions | 6 |  |  |  |
-| `App-Features.md:1301-1308` · 14.4 Safe Downgrade | 8 |  |  |  |
-| `App-Features.md:1309-1324` · 14.5 Traffic Wallet | 16 |  |  | TrafficLedgerEntry TrafficWallet |
-| `App-Features.md:1325-1344` · 14.6 Subscription Lifecycle State Machine | 20 |  |  |  |
-| `App-Features.md:1345-1348` · 14.7 Protecting Reseller End Users | 4 |  |  |  |
-| `App-Features.md:1349-1363` · 14.8 Data Export and Deletion | 15 |  |  |  |
-| `App-Features.md:1364-1390` Multi-Tier Reseller | 27 | F-901 F-902 F-903 F-905 F-907 | C-15 C-18 D-01 D-03 D-05 |  |
-| `App-Features.md:1391-1421` Migration, Import and Onboarding | 31 | F-1532 F-201 F-202 F-203 F-204 F-205 F-206 F-207 F-208 F-209 F-210 F-211 F-212 F-213 F-214 | C-17 D-01 D-03 |  |
-| `App-Features.md:1422-1423` Retention, Anti-Churn and Growth | 2 |  |  |  |
-| `App-Features.md:1424-1439` · 17.1 Retention | 16 | F-1519 F-604 F-605 F-606 F-607 F-608 F-609 F-610 F-611 | C-09 |  |
-| `App-Features.md:1440-1458` · 17.2 Growth and Acquisition | 19 | F-701 F-702 F-703 F-704 F-705 F-706 F-708 F-709 | C-10 C-11 D-05 |  |
-| `App-Features.md:1459-1478` Reseller Profitability Tools | 20 | F-1001 F-1002 F-1003 F-1004 F-1005 F-1006 F-1007 |  |  |
-| `App-Features.md:1479-1480` Security, Fraud and Abuse | 2 |  |  |  |
-| `App-Features.md:1481-1490` · 19.1 Three Unrecoverable Risks | 10 |  |  |  |
-| `App-Features.md:1491-1498` · 19.2 Input Handling | 8 |  | C-04 |  |
-| `App-Features.md:1499-1506` · 19.3 Transport and Edge | 8 |  |  |  |
-| `App-Features.md:1507-1542` · 19.4 Fraud and Abuse Detection | 36 | F-1101 F-1102 F-1103 F-1104 F-1105 F-1106 F-1107 F-1108 F-1524 |  |  |
-| `App-Features.md:1543-1548` · 19.5 Reseller Risk | 6 |  |  |  |
-| `App-Features.md:1549-1550` Governance, Isolation, Treasury and Audit | 2 |  |  |  |
-| `App-Features.md:1551-1564` · 20.1 Audit Log | 14 |  |  | AdminAuditLog |
-| `App-Features.md:1565-1573` · 20.2 Multi-Tenant Isolation — Six Layers | 9 |  |  |  |
-| `App-Features.md:1574-1586` · 20.3 Tenant Detection | 13 |  | C-01 |  |
-| `App-Features.md:1587-1607` · 20.4 Credential Vault | 21 |  |  | TenantCredential TenantDek |
-| `App-Features.md:1608-1613` · 20.5 The 360° User View | 6 |  |  |  |
-| `App-Features.md:1614-1623` · 20.6 User Settings | 10 |  |  |  |
-| `App-Features.md:1624-1646` Platform Management Console | 23 |  | D-01 |  |
-| `App-Features.md:1647-1667` Public API and Integration | 21 | F-1301 F-1302 F-1303 F-1304 F-1305 | D-01 |  |
-| `App-Features.md:1668-1669` Monitoring, Reconciliation and Operations | 2 |  |  |  |
-| `App-Features.md:1670-1685` · 23.1 Nightly Reconciliation (03:00 UTC) | 16 |  |  |  |
-| `App-Features.md:1686-1689` · 23.2 End-to-End Money-Leak Test | 4 |  |  |  |
-| `App-Features.md:1690-1705` · 23.3 Business Metrics Alongside System Metrics | 16 |  |  |  |
-| `App-Features.md:1706-1715` · 23.4 Alert Severity Levels | 10 |  |  |  |
-| `App-Features.md:1716-1723` · 23.5 Backup and Recovery | 8 |  |  |  |
-| `App-Features.md:1724-1729` The AI Layer | 6 |  | D-04 |  |
-| `App-Features.md:1730-1743` · 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) | 14 | F-1501 F-1502 F-1503 F-1504 F-1505 F-1506 F-1507 F-1508 F-1509 | C-13 |  |
-| `App-Features.md:1744-1758` · 24.2 AI for the End User | 15 | F-1510 F-1511 F-1512 F-1513 F-1514 F-1516 F-1517 F-1518 |  |  |
-| `App-Features.md:1759-1771` · 24.3 Invisible AI (No User-Facing Text — the Highest-Value Tier) | 13 | F-1520 F-1522 F-1523 F-1525 |  |  |
-| `App-Features.md:1772-1783` · 24.4 AI for the Reseller (Here It Can Be Chatty — They Want a Staff Member) | 12 | F-1526 F-1527 F-1528 F-1529 F-1530 |  |  |
-| `App-Features.md:1784-1787` · 24.5 Where AI Has No Access | 4 |  |  |  |
-| `App-Features.md:1788-1802` · 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) | 15 | F-1534 F-1535 F-1536 F-1537 F-1538 F-1539 F-1540 F-1541 | D-03 D-04 |  |
-| `App-Features.md:1803-1823` · 24.7 BYO-AI — Safety, Limits and Operations | 21 | F-1542 F-1543 F-1544 F-1546 F-1547 F-1548 F-1549 F-1550 | D-03 |  |
-| `App-Features.md:1824-1841` Next-Phase Features | 18 | F-707 | C-11 C-12 |  |
-| `App-Features.md:1842-1860` Appendix A — Permanent Decisions (Out of Scope) | 19 |  | C-04 C-10 D-01 D-03 D-05 |  |
-| `App-Features.md:1861-1881` Appendix B — Mapping of v2 IDs to Sections of This Document | 21 |  |  |  |
-| `App-Features.md:1882-1899` Appendix C — Checklist for Applying Changes in Other Documents | 18 |  | C-01 C-03 C-04 C-05 C-07 C-09 C-10 C-12 C-13 C-15 C-16 C-17 C-19 |  |
+| `App-Features.md:195-217` · 2.6 Rate Limiting | 23 |  | C-05 |  |
+| `App-Features.md:218-227` · 2.7 Bot / Human Verification (CAPTCHA) | 10 | F-0201 |  |  |
+| `App-Features.md:228-229` Access Control (RBAC) and Time-Bounded Access | 2 |  |  |  |
+| `App-Features.md:230-233` · 3.1 Roles as Data | 4 |  |  |  |
+| `App-Features.md:234-239` · 3.2 Permission Key Structure | 6 |  |  |  |
+| `App-Features.md:240-245` · 3.3 Separation of Platform Permissions from Tenant Permissions | 6 |  |  |  |
+| `App-Features.md:246-249` · 3.4 Single Source of Truth for Permissions | 4 |  |  |  |
+| `App-Features.md:250-260` · 3.5 Edge Authorization | 11 |  |  |  |
+| `App-Features.md:261-271` · 3.6 Impersonation | 11 |  |  |  |
+| `App-Features.md:272-283` · 3.7 Time-Bound Consent for Support | 12 |  |  |  |
+| `App-Features.md:284-292` · 3.8 Temporal Access Grant (Elevated) | 9 |  |  |  |
+| `App-Features.md:293-301` · 3.9 User-Level Restrictions (UserRestriction) | 9 |  |  |  |
+| `App-Features.md:302-314` · 3.10 Strict Separation of the Four Access Mechanisms | 13 |  | C-02 D-01 |  |
+| `App-Features.md:315-325` · 3.11 Ban on Plan-Name-Based Checks | 11 |  |  |  |
+| `App-Features.md:326-337` · 3.12 RBAC Down to the Reseller Level | 12 | F-1201 F-904 F-906 |  |  |
+| `App-Features.md:338-339` Product Model, Catalog and Sales Engine | 2 |  |  |  |
+| `App-Features.md:340-352` · 4.1 A Product-Agnostic Platform | 13 |  |  |  |
+| `App-Features.md:353-366` · 4.2 Catalog Structure | 14 |  |  |  |
+| `App-Features.md:367-370` · 4.3 Product Names as Translation Keys | 4 |  |  |  |
+| `App-Features.md:371-390` · 4.4 Grant — The Single Concept of Entitlement | 20 |  | C-09 C-15 |  |
+| `App-Features.md:391-403` · 4.5 Quota Types | 13 |  |  |  |
+| `App-Features.md:404-412` · 4.6 One Package, Five Configs, One Shared Quota | 9 |  |  |  |
+| `App-Features.md:413-426` · 4.7 Discount Coupons | 14 |  |  |  |
+| `App-Features.md:427-448` · 4.8 Pricing and Campaign Engine | 22 | F-408 F-501 F-502 F-503 F-504 F-505 F-506 F-507 F-508 F-509 F-510 F-511 F-512 |  |  |
+| `App-Features.md:449-450` Wallet, Ledger and Payment | 2 |  |  |  |
+| `App-Features.md:451-475` · 5.1 Double-Entry Ledger | 25 |  | C-13 | LedgerAccount LedgerTransaction |
+| `App-Features.md:476-483` · 5.2 Two Separate Account Trees | 8 |  |  |  |
+| `App-Features.md:484-489` · 5.3 Representing Money | 6 |  |  |  |
+| `App-Features.md:490-495` · 5.4 One Wallet, No Complexity | 6 |  |  |  |
+| `App-Features.md:496-509` · 5.5 Payment Gateways | 14 |  | C-19 D-03 |  |
+| `App-Features.md:510-529` · 5.6 Card-to-Card with Automatic Matching | 20 | F-803 F-804 F-805 F-806 F-807 | C-14 |  |
+| `App-Features.md:530-538` · 5.7 Payment Path Protections | 9 |  |  |  |
+| `App-Features.md:539-566` · 5.8 Purchase Settlement Flow | 28 |  |  |  |
+| `App-Features.md:567-570` · 5.9 Insufficient Balance | 4 |  |  |  |
+| `App-Features.md:571-579` · 5.10 Refunds | 9 |  |  |  |
+| `App-Features.md:580-583` · 5.11 Manual Balance Adjustment | 4 |  |  |  |
+| `App-Features.md:584-603` · 5.12 Treasury and FX Risk | 20 |  |  | TreasuryConversion TreasurySnapshot |
+| `App-Features.md:604-605` Dollar Pricing and FX Rate Engine | 2 |  |  |  |
+| `App-Features.md:606-613` · 6.1 Why Dollars | 8 |  |  |  |
+| `App-Features.md:614-627` · 6.2 The FX Worker | 14 |  |  |  |
+| `App-Features.md:628-638` · 6.3 Rate Staleness Ladder | 11 |  |  |  |
+| `App-Features.md:639-642` · 6.4 Manual Rate | 4 |  |  |  |
+| `App-Features.md:643-663` · 6.5 Gateway Pricing Engine | 21 |  |  |  |
+| `App-Features.md:664-671` · 6.6 One Calculator for Display and Charging | 8 |  |  |  |
+| `App-Features.md:672-673` Network Service: Supply, Stability and Connection Intelligence | 2 |  |  |  |
+| `App-Features.md:674-701` · 7.1 Panel Abstraction and Drivers | 28 |  |  |  |
+| `App-Features.md:702-717` · 7.2 Bring Your Own Node (Customer's Own Panel) | 16 |  | C-18 |  |
+| `App-Features.md:718-738` · 7.3 Panel Group and Mirroring — Zero Downtime | 21 |  |  | PanelGroup PanelGroupMember |
+| `App-Features.md:739-749` · 7.4 Health Checks | 11 |  |  |  |
+| `App-Features.md:750-774` · 7.5 Subscription Link | 25 |  | C-07 C-08 C-16 C-17 |  |
+| `App-Features.md:775-785` · 7.6 Domain Rotation in the Subscription Response | 11 | F-105 F-106 |  |  |
+| `App-Features.md:786-797` · 7.7 Connection Intelligence and ISP-Based Routing | 12 | F-1521 F-402 F-403 F-404 F-405 | C-06 |  |
+| `App-Features.md:798-807` · 7.8 Connection Experience | 10 | F-307 F-409 F-410 F-411 F-414 |  |  |
+| `App-Features.md:808-811` · 7.9 Concurrent Device Limits | 4 |  |  |  |
+| `App-Features.md:812-829` · 7.10 Enforcement | 18 |  |  |  |
+| `App-Features.md:830-833` Usage Measurement and Usage Billing | 4 |  |  |  |
+| `App-Features.md:834-839` · 8.1 The Fundamental Problem | 6 |  |  |  |
+| `App-Features.md:840-852` · 8.2 The Fix: Deltas with Explicit Reset Detection | 13 |  |  |  |
+| `App-Features.md:853-856` · 8.3 Quarantining Implausible Deltas | 4 |  |  |  |
+| `App-Features.md:857-875` · 8.4 Collection Pipeline | 19 |  |  |  |
+| `App-Features.md:876-892` · 8.5 Pay-As-You-Go Billing | 17 |  |  |  |
+| `App-Features.md:893-898` · 8.6 Usage Baseline on Migration | 6 |  |  |  |
+| `App-Features.md:899-900` Multichannel Notifications and Campaigns | 2 |  |  |  |
+| `App-Features.md:901-913` · 9.1 Structure | 13 |  |  | Campaign DeliveryLog Preference Template |
+| `App-Features.md:914-917` · 9.2 Notifications as Domain Events | 4 |  |  |  |
+| `App-Features.md:918-921` · 9.3 Event Keys | 4 |  |  |  |
+| `App-Features.md:922-927` · 9.4 Preferences and Quiet Hours | 6 |  |  |  |
+| `App-Features.md:928-936` · 9.5 Retention Notifications | 9 | F-1515 F-601 F-602 F-603 |  |  |
+| `App-Features.md:937-945` · 9.6 Campaigns | 9 |  |  |  |
+| `App-Features.md:946-953` · 9.7 No-Fallback Rule | 8 |  | D-03 |  |
+| `App-Features.md:954-959` · 9.8 A Queue Resilient to Bot Bans | 6 |  |  |  |
+| `App-Features.md:960-963` Bot as a Full Panel | 4 |  | D-02 |  |
+| `App-Features.md:964-978` · 10.1 Multiple Bots per Tenant | 15 |  | C-05 |  |
+| `App-Features.md:979-988` · 10.2 Webhook Architecture | 10 |  |  |  |
+| `App-Features.md:989-997` · 10.3 Telegram/Bale Abstraction Layer | 9 | F-301 F-302 |  |  |
+| `App-Features.md:998-1020` · 10.4 Full Bot Capabilities | 23 | F-1531 F-303 F-304 F-305 F-306 F-308 F-309 F-310 F-311 F-312 F-313 F-314 F-318 F-319 |  |  |
+| `App-Features.md:1021-1028` · 10.5 Account Linking | 8 |  | C-05 |  |
+| `App-Features.md:1029-1034` · 10.6 Bot Token Security | 6 |  |  |  |
+| `App-Features.md:1035-1036` Unified Support | 2 |  |  |  |
+| `App-Features.md:1037-1051` · 11.1 One Door, No Choice | 15 |  |  | Conversation Message |
+| `App-Features.md:1052-1061` · 11.2 Behavior | 10 |  |  |  |
+| `App-Features.md:1062-1070` · 11.3 Agent Side | 9 |  |  |  |
+| `App-Features.md:1071-1074` · 11.4 File Attachments | 4 |  |  |  |
+| `App-Features.md:1075-1078` · 11.5 Queue Priority | 4 |  |  |  |
+| `App-Features.md:1079-1084` · 11.6 Tenant and Reseller Isolation | 6 |  |  |  |
+| `App-Features.md:1085-1100` Realtime | 16 |  |  |  |
+| `App-Features.md:1101-1104` White-Label, Domain and Resilience Against Filtering | 4 |  |  |  |
+| `App-Features.md:1105-1125` · 13.1 Domain Model | 21 | F-101 F-102 F-113 F-114 F-115 | C-01 C-07 C-16 D-01 | TenantDomain |
+| `App-Features.md:1126-1140` · 13.2 Domain Verification Lifecycle | 15 |  | C-01 C-03 |  |
+| `App-Features.md:1141-1151` · 13.3 Resilience Against Filtering | 11 | F-103 F-104 F-110 F-112 |  |  |
+| `App-Features.md:1152-1163` · 13.4 Anti-Fingerprinting | 12 | F-107 F-108 F-109 | C-04 |  |
+| `App-Features.md:1164-1180` · 13.5 Public Pages | 17 |  |  | TenantPage |
+| `App-Features.md:1181-1191` · 13.6 Trust Badges (eNamad and similar) | 11 |  |  | TrustBadge |
+| `App-Features.md:1192-1204` · 13.7 Theme System | 13 |  |  | TenantTheme |
+| `App-Features.md:1205-1218` · 13.8 Branding and SEO | 14 |  | C-04 | TenantBranding |
+| `App-Features.md:1219-1228` · 13.9 Reseller-Specific (BYO) Integrations | 10 |  | C-19 D-03 |  |
+| `App-Features.md:1229-1236` · 13.10 Browser-Level Isolation | 8 |  | C-16 |  |
+| `App-Features.md:1237-1238` Panel Business: Plans, Subscriptions and Traffic Wallet | 2 |  |  |  |
+| `App-Features.md:1239-1251` · 14.1 Two Products, Sold Separately | 13 |  | D-05 |  |
+| `App-Features.md:1252-1302` · 14.2 Plans as Data | 51 |  | C-01 C-03 C-19 D-01 D-03 | Plan PlanFeature |
+| `App-Features.md:1303-1308` · 14.3 Per-Customer Exceptions | 6 |  |  |  |
+| `App-Features.md:1309-1316` · 14.4 Safe Downgrade | 8 |  |  |  |
+| `App-Features.md:1317-1332` · 14.5 Traffic Wallet | 16 |  |  | TrafficLedgerEntry TrafficWallet |
+| `App-Features.md:1333-1352` · 14.6 Subscription Lifecycle State Machine | 20 |  |  |  |
+| `App-Features.md:1353-1356` · 14.7 Protecting Reseller End Users | 4 |  |  |  |
+| `App-Features.md:1357-1371` · 14.8 Data Export and Deletion | 15 |  |  |  |
+| `App-Features.md:1372-1398` Multi-Tier Reseller | 27 | F-901 F-902 F-903 F-905 F-907 | C-15 C-18 D-01 D-03 D-05 |  |
+| `App-Features.md:1399-1429` Migration, Import and Onboarding | 31 | F-1532 F-201 F-202 F-203 F-204 F-205 F-206 F-207 F-208 F-209 F-210 F-211 F-212 F-213 F-214 | C-17 D-01 D-03 |  |
+| `App-Features.md:1430-1431` Retention, Anti-Churn and Growth | 2 |  |  |  |
+| `App-Features.md:1432-1447` · 17.1 Retention | 16 | F-1519 F-604 F-605 F-606 F-607 F-608 F-609 F-610 F-611 | C-09 |  |
+| `App-Features.md:1448-1466` · 17.2 Growth and Acquisition | 19 | F-701 F-702 F-703 F-704 F-705 F-706 F-708 F-709 | C-10 C-11 D-05 |  |
+| `App-Features.md:1467-1486` Reseller Profitability Tools | 20 | F-1001 F-1002 F-1003 F-1004 F-1005 F-1006 F-1007 |  |  |
+| `App-Features.md:1487-1488` Security, Fraud and Abuse | 2 |  |  |  |
+| `App-Features.md:1489-1498` · 19.1 Three Unrecoverable Risks | 10 |  |  |  |
+| `App-Features.md:1499-1506` · 19.2 Input Handling | 8 |  | C-04 |  |
+| `App-Features.md:1507-1514` · 19.3 Transport and Edge | 8 |  |  |  |
+| `App-Features.md:1515-1550` · 19.4 Fraud and Abuse Detection | 36 | F-1101 F-1102 F-1103 F-1104 F-1105 F-1106 F-1107 F-1108 F-1524 |  |  |
+| `App-Features.md:1551-1556` · 19.5 Reseller Risk | 6 |  |  |  |
+| `App-Features.md:1557-1558` Governance, Isolation, Treasury and Audit | 2 |  |  |  |
+| `App-Features.md:1559-1572` · 20.1 Audit Log | 14 |  |  | AdminAuditLog |
+| `App-Features.md:1573-1581` · 20.2 Multi-Tenant Isolation — Six Layers | 9 |  |  |  |
+| `App-Features.md:1582-1594` · 20.3 Tenant Detection | 13 |  | C-01 |  |
+| `App-Features.md:1595-1615` · 20.4 Credential Vault | 21 |  |  | TenantCredential TenantDek |
+| `App-Features.md:1616-1621` · 20.5 The 360° User View | 6 |  |  |  |
+| `App-Features.md:1622-1631` · 20.6 User Settings | 10 |  |  |  |
+| `App-Features.md:1632-1654` Platform Management Console | 23 |  | D-01 |  |
+| `App-Features.md:1655-1675` Public API and Integration | 21 | F-1301 F-1302 F-1303 F-1304 F-1305 | D-01 |  |
+| `App-Features.md:1676-1677` Monitoring, Reconciliation and Operations | 2 |  |  |  |
+| `App-Features.md:1678-1693` · 23.1 Nightly Reconciliation (03:00 UTC) | 16 |  |  |  |
+| `App-Features.md:1694-1697` · 23.2 End-to-End Money-Leak Test | 4 |  |  |  |
+| `App-Features.md:1698-1713` · 23.3 Business Metrics Alongside System Metrics | 16 |  |  |  |
+| `App-Features.md:1714-1723` · 23.4 Alert Severity Levels | 10 |  |  |  |
+| `App-Features.md:1724-1731` · 23.5 Backup and Recovery | 8 |  |  |  |
+| `App-Features.md:1732-1737` The AI Layer | 6 |  | D-04 |  |
+| `App-Features.md:1738-1751` · 24.1 Anti-Annoyance Mechanisms (These Come First, Before Any Feature) | 14 | F-1501 F-1502 F-1503 F-1504 F-1505 F-1506 F-1507 F-1508 F-1509 | C-13 |  |
+| `App-Features.md:1752-1766` · 24.2 AI for the End User | 15 | F-1510 F-1511 F-1512 F-1513 F-1514 F-1516 F-1517 F-1518 |  |  |
+| `App-Features.md:1767-1779` · 24.3 Invisible AI (No User-Facing Text — the Highest-Value Tier) | 13 | F-1520 F-1522 F-1523 F-1525 |  |  |
+| `App-Features.md:1780-1791` · 24.4 AI for the Reseller (Here It Can Be Chatty — They Want a Staff Member) | 12 | F-1526 F-1527 F-1528 F-1529 F-1530 |  |  |
+| `App-Features.md:1792-1795` · 24.5 Where AI Has No Access | 4 |  |  |  |
+| `App-Features.md:1796-1810` · 24.6 AI Belongs to the Tenant, Not the Platform (BYO-AI) | 15 | F-1534 F-1535 F-1536 F-1537 F-1538 F-1539 F-1540 F-1541 | D-03 D-04 |  |
+| `App-Features.md:1811-1831` · 24.7 BYO-AI — Safety, Limits and Operations | 21 | F-1542 F-1543 F-1544 F-1546 F-1547 F-1548 F-1549 F-1550 | D-03 |  |
+| `App-Features.md:1832-1849` Next-Phase Features | 18 | F-707 | C-11 C-12 |  |
+| `App-Features.md:1850-1868` Appendix A — Permanent Decisions (Out of Scope) | 19 |  | C-04 C-10 D-01 D-03 D-05 |  |
+| `App-Features.md:1869-1889` Appendix B — Mapping of v2 IDs to Sections of This Document | 21 |  |  |  |
+| `App-Features.md:1890-1907` Appendix C — Checklist for Applying Changes in Other Documents | 18 |  | C-01 C-03 C-04 C-05 C-07 C-09 C-10 C-12 C-13 C-15 C-16 C-17 C-19 |  |
 
 ## Feature index
 
@@ -282,6 +283,7 @@ Rebuild: `python3 tools/features-scan.py`
 | F-905 | Reseller profit report and internal settlement (no withdrawal) | new | Multi-Tier Reseller |
 | F-906 | RLS and audit down to the reseller-node level (ltree path prefix) | new | 3.12 RBAC Down to the Reseller Level |
 | F-907 | Separate brand and bot for a reseller | new | Multi-Tier Reseller |
+| F-0201 | Server-verified slide challenge gates register and login: auth-service issues a short-live | new | 2.7 Bot / Human Verification (CAPTCHA) |
 | F-1001 | Revenue, cost, and margin dashboard per user / panel / product / reseller | new | Reseller Profitability Tools |
 | F-1002 | Bandwidth cost attribution to the panel owner | core | Reseller Profitability Tools |
 | F-1003 | "This user costs more than they pay" alert | new | Reseller Profitability Tools |

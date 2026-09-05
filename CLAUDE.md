@@ -7,7 +7,8 @@ every agent. Keep project rules there. Only Claude-specific things go below.
 
 ## Slash commands
 `/sync` docs caught up to code you wrote alone · `/handoff` end a session mid-item · `/resume` pick that work back up ·
-`/where <description>` vague description -> unit + file · `/next` implement the
+`/where <description>` vague description -> unit + file · `/diagnose <symptom>`
+something is broken -> walk the graph · `/next` implement the
 next backlog row · `/ingest NN` catalog area to backlog · `/reconcile` match
 backlog to existing code · `/audit` drift report · `/extend <thing>` add or
 change a capability.

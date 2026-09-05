@@ -24,6 +24,8 @@ import {
 } from './auth.schema';
 import { ResponseType } from '../common/response/response.util';
 import { RateLimit } from './decorators/rate-limit.decorator';
+import { RequireCaptcha } from './decorators/require-captcha.decorator';
+import { ConfigService } from '@nestjs/config';
 
 @Controller('auth')
 export class AuthController {
@@ -41,6 +43,7 @@ export class AuthController {
   @Post('login/password')
   @HttpCode(HttpStatus.OK)
   @UsePipes(new ZodValidationPipe(passwordLoginSchema))
+  @RequireCaptcha()
   @RateLimit({
     key: (req) => `login:pwd:${req.ip}`,
     limit: 20,
@@ -64,6 +67,7 @@ export class AuthController {
   @Post('login/otp/request')
   @HttpCode(HttpStatus.OK)
   @UsePipes(new ZodValidationPipe(otpRequestSchema))
+  @RequireCaptcha()
   @RateLimit({
     key: (req) => `login:otp:req:${req.ip}`,
     limit: 10,
@@ -133,6 +137,7 @@ export class AuthController {
   @Post('password/forgot')
   @HttpCode(HttpStatus.OK)
   @UsePipes(new ZodValidationPipe(forgotPasswordSchema))
+  @RequireCaptcha()
   @RateLimit({
     key: (req) => `pwd:forgot:${req.ip}`,
     limit: 10,
@@ -175,11 +180,14 @@ export class AuthController {
   }
 
   private cookieOptions() {
+    const DOMAINNAME = process.env.DOMAIN_NAME!;
+
     return {
       httpOnly: true,
       secure: process.env.COOKIE_SECURE !== 'false',
       sameSite: 'lax' as const,
-      path: '/api/auth',
+      path: '/', // تغییر اول
+      domain: `.${DOMAINNAME}`, // تغییر دوم
       maxAge: 30 * 24 * 60 * 60 * 1000,
     };
   }

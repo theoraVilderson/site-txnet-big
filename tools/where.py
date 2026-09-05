@@ -1,27 +1,42 @@
 #!/usr/bin/env python3
-"""Resolve a vague, human sentence to the exact unit, doc and code path.
+"""Resolve a human sentence to a unit, a file — or an ordered path through units.
 
-This is the addressing primitive. The user says "edit the profile button in the
-panel" and never a path; this tool turns that into: unit, doc file, code file,
-spec id, and the next commands to run.
+Two questions, two answers:
+
+    "edit the profile button in the panel"   -> one place.        LOCATE
+    "cookie login doesn't work"              -> a path to walk.   WALK
+
+LOCATE is the v3.2 behaviour, fixed: a surface row now *dominates* the unit it
+points at instead of tying with it, so a good row produces `confident match`
+instead of a shortlist nobody trusts.
+
+WALK is new. A bug report names a symptom, not a location, and the answer is a
+chain: panel -> auth -> session. That chain already exists in `depends_on` plus
+the runtime edges in `docs/architecture/dependency-graph.md`; this tool walks it
+instead of scoring its members against each other.
 
 It indexes, in priority order:
-    docs/SURFACES.md        UI surface -> route -> unit -> component path
-    docs/*/*/INDEX.md       unit front matter (id, keywords, source)
-    docs/MASTER_INDEX.md    unit one-liners
-    docs/BACKLOG.md         backlog rows
+    docs/SURFACES.md            ## Flows    cached paths, written after a fix
+    docs/SURFACES.md            surface -> route -> unit -> component
+    docs/*/*/INDEX.md           unit front matter (id, keywords, source, depends_on)
+    docs/architecture/dependency-graph.md   runtime edges (queue/webhook/cron)
+    docs/MASTER_INDEX.md        unit one-liners
+    docs/BACKLOG.md             backlog rows
     docs/features/MANIFEST.md   feature ids + titles
-    <code_roots>            filename fallback, only when the docs miss
+    <code_roots>                filename fallback, only when the docs miss
 
 usage:
     python3 tools/where.py "دکمه پروفایل تو پنل"
     python3 tools/where.py "profile button panel"
-    python3 tools/where.py "refund" --json
-    python3 tools/where.py --check          validate SURFACES.md against reality
+    python3 tools/where.py --walk "cookie login doesn't work"
+    python3 tools/where.py --check                 validate, and fail on an open miss
+    python3 tools/where.py --misses                show the miss queue
+    python3 tools/where.py --resolve "<query>"     close a miss once the row exists
 """
 import json
 import re
 import sys
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -30,10 +45,18 @@ SURFACES = DOCS / "SURFACES.md"
 MASTER = DOCS / "MASTER_INDEX.md"
 BACKLOG = DOCS / "BACKLOG.md"
 MANIFEST = DOCS / "features" / "MANIFEST.md"
+DEPGRAPH = DOCS / "architecture" / "dependency-graph.md"
+MISSES = DOCS / ".where-misses"
 UNIT_DIRS = ["domains", "interfaces", "platform"]
 
 TOP_N = 6
+MAX_HOPS = 3                  # §3c budget. pairs with the protocol's 8-file ceiling.
 DEFAULT_CODE_ROOTS = ["src", "app", "apps", "packages", "services"]
+
+MISS_HEADER = (
+    "# queries that found nothing. close each one by adding a SURFACES.md row,\n"
+    "# then: python3 tools/where.py --resolve \"<query>\"\n"
+    "# date\tstatus\tquery\n")
 
 # words that carry no addressing information in either language
 STOP = {
@@ -44,6 +67,18 @@ STOP = {
     "برای", "یه", "یک", "می", "میخوام", "میخام", "بکن", "کن", "بده", "لطفا",
     "هست", "است", "بود", "شود", "شه", "باید", "الان", "هم", "و", "یا", "ما",
     "من", "بشه", "کنی", "کنم", "چطور", "چطوری",
+}
+
+# A symptom word says nothing about *where* — only about what broke. It must
+# never steer the entry point, only the order the frontier is walked in.
+SYMPTOM = {
+    "broken", "break", "breaks", "fail", "fails", "failing", "error", "errors",
+    "bug", "wrong", "work", "works", "working", "doesn", "dont", "not", "no",
+    "crash", "crashes", "hang", "hangs", "slow", "stuck", "missing", "empty",
+    "null", "undefined", "timeout", "500", "401", "403", "404",
+    "خراب", "کار", "نمیکنه", "نمیکند", "نمی", "کنه", "مشکل", "ارور", "خطا",
+    "باگ", "غلط", "اشتباه", "خالی", "کند", "گیر", "قطع", "نمیاد", "نمیشه",
+    "درست", "نمیشود",
 }
 
 FIELD_WEIGHT = {          # where a token was found -> how much it counts
@@ -78,11 +113,11 @@ _SPLIT = re.compile(r"[^0-9a-z\u0600-\u06ff]+")
 
 
 def norm(s: str) -> str:
-    s = (s or "").lower()
+    s = s or ""
+    # camelCase must split before lowercasing destroys the boundary
+    s = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", s).lower()
     s = "".join(_PERSIAN_FOLD.get(ch, ch) for ch in s)
     s = _HARAKAT.sub("", s)
-    # camelCase / kebab / snake / path separators all become boundaries
-    s = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", s)
     return _SPLIT.sub(" ", s).strip()
 
 
@@ -94,6 +129,27 @@ def toks(s: str) -> list[str]:
         if t not in out:
             out.append(t)
     return out
+
+
+def split_query(q_toks):
+    """Strip the symptom words. What is left is the addressing half."""
+    return [t for t in q_toks if t not in SYMPTOM], [t for t in q_toks if t in SYMPTOM]
+
+
+def hypothesis_of(q_toks, top: dict) -> list[str]:
+    """The tokens the entry point did NOT explain.
+
+    Deciding this from a word list would be guesswork — `cookie` is not a
+    symptom word, and in another project it could well be the name of a unit.
+    So let the data decide: whatever the winning row already accounts for is the
+    locator; every other meaningful token is the user's theory about the cause.
+
+    A theory that reorders the walk is useful even when wrong. A theory that
+    picks the entry point is a wrong turn taken confidently — which is why this
+    runs *after* the entry point is chosen, never before.
+    """
+    explained = set(top.get("matched") or [])
+    return [t for t in q_toks if t not in explained and t not in SYMPTOM]
 
 
 def hay(s: str) -> str:
@@ -136,15 +192,26 @@ def front_matter(path: Path) -> dict:
     return fm
 
 
-def md_rows(path: Path):
-    """Yield dicts of every pipe table row, keyed by lowercased header cell."""
+def md_rows(path: Path, section: str = None):
+    """Yield dicts of every pipe table row, keyed by lowercased header cell.
+
+    `section` limits the scan to rows under a `## <section>` heading.
+    """
     if not path.exists():
         return
     header = None
+    in_section = section is None
     for ln in path.read_text(encoding="utf-8").splitlines():
         s = ln.strip()
+        if s.startswith("#"):
+            if section is not None:
+                in_section = norm(s.lstrip("# ")).startswith(norm(section))
+            header = None
+            continue
         if not s.startswith("|"):
             header = None
+            continue
+        if not in_section:
             continue
         cells = [c.strip() for c in re.split(r"(?<!\\)\|", s.strip("|"))]
         if set("".join(cells).replace(" ", "")) <= {"-", ":"} and cells:
@@ -211,10 +278,34 @@ def code_roots() -> list[str]:
     return roots or [r for r in DEFAULT_CODE_ROOTS if (ROOT / r).is_dir()]
 
 
+def load_flows() -> list[dict]:
+    """Cached paths. A flow row is written *after* a walk, never guessed."""
+    out = []
+    for r in md_rows(SURFACES, section="Flows"):
+        if is_placeholder(r):
+            continue
+        name = clean(r.get("flow") or "")
+        if not name:
+            continue
+        path = [p.strip() for p in re.split(r"[->→,]+", clean(r.get("path", "")))
+                if p.strip()]
+        out.append({
+            "kind": "flow",
+            "name": name,
+            "unit": path[0] if path else clean(r.get("entry", "")),
+            "aliases": clean(r.get("aliases") or ""),
+            "path": path,
+            "code": clean(r.get("files") or r.get("file") or ""),
+            "spec": clean(r.get("spec_ref") or r.get("spec") or ""),
+            "note": clean(r.get("note", "")),
+        })
+    return out
+
+
 def load_surfaces() -> list[dict]:
     out = []
     for r in md_rows(SURFACES):
-        if is_placeholder(r):
+        if is_placeholder(r) or "flow" in r:
             continue
         name = clean(r.get("surface") or r.get("element") or r.get("screen") or "")
         if not name:
@@ -239,6 +330,8 @@ def load_units() -> list[dict]:
         if not base.is_dir():
             continue
         for idx in sorted(base.rglob("INDEX.md")):
+            if "_TEMPLATE" in str(idx):
+                continue
             fm = front_matter(idx)
             uid = fm.get("id")
             if not uid or uid.endswith("-index"):
@@ -249,6 +342,9 @@ def load_units() -> list[dict]:
             src = fm.get("source") or []
             if isinstance(src, str):
                 src = [src]
+            dep = fm.get("depends_on") or []
+            if isinstance(dep, str):
+                dep = [dep]
             out[uid] = {
                 "kind": "unit",
                 "name": uid,
@@ -258,6 +354,7 @@ def load_units() -> list[dict]:
                 "status": fm.get("status", "?"),
                 "doc": str(idx.relative_to(ROOT)),
                 "source": src,
+                "depends_on": dep,
                 "text": "",
             }
     for r in md_rows(MASTER):
@@ -271,13 +368,35 @@ def load_units() -> list[dict]:
         doc = strip_link(r.get("doc", ""))
         u = out.setdefault(uid, {"kind": "unit", "name": uid, "unit": uid,
                                  "aliases": "", "layer": "?", "status": "?",
-                                 "doc": doc, "source": [], "text": ""})
+                                 "doc": doc, "source": [], "depends_on": [],
+                                 "text": ""})
         u["text"] = (u.get("text") or "") + " " + desc
         if doc and not u.get("doc"):
             u["doc"] = doc
         if clean(r.get("status", "")):
             u["status"] = clean(r["status"])
     return list(out.values())
+
+
+def load_runtime_edges() -> list[dict]:
+    """Async edges `depends_on` cannot see: queues, webhooks, cron.
+
+    Kept as a separate edge type on purpose. `depends_on` answers "who do I
+    call" and drives §8 blast radius; a runtime edge answers "what runs after
+    me" and drives the walk. Merging them would inflate every consumer list and
+    make every contract change look breaking.
+    """
+    out = []
+    for r in md_rows(DEPGRAPH, section="Runtime edges"):
+        if is_placeholder(r):
+            continue
+        src, dst = clean(r.get("from", "")), clean(r.get("to", ""))
+        if not src or not dst:
+            continue
+        out.append({"from": src, "to": dst,
+                    "via": clean(r.get("via", "")) or "runtime",
+                    "why": clean(r.get("why", ""))})
+    return out
 
 
 def load_backlog() -> list[dict]:
@@ -326,10 +445,10 @@ def scan_code(query_toks) -> list[dict]:
                 continue
             rel = str(p.relative_to(ROOT))
             h = hay(rel)
-            score = sum(1 for t in query_toks if f" {t}" in h or t in h)
-            if score:
+            sc = sum(1 for t in query_toks if f" {t}" in h or t in h)
+            if sc:
                 hits.append({"kind": "code", "name": rel, "unit": "",
-                             "aliases": "", "text": "", "score": score,
+                             "aliases": "", "text": "", "score": sc,
                              "code": rel})
     hits.sort(key=lambda x: (-x["score"], len(x["name"])))
     return hits[:5]
@@ -359,34 +478,153 @@ def score(cand: dict, query_toks) -> tuple[int, list[str]]:
         if best:
             total += best
             matched.append(t)
-    if cand["kind"] == "surface":
-        total = int(total * 1.15)              # a surface row is the sharpest hit
+    if cand["kind"] == "flow":
+        total = int(total * 1.4)               # a cached path beats deriving one
+    elif cand["kind"] == "surface":
+        total = int(total * 1.15)
     return total, matched
+
+
+def dominate(scored: list[dict]) -> list[dict]:
+    """A surface row outranks the unit it points at — it does not tie with it.
+
+    README step 6 asks you to fill both a surface's `aliases` and its unit's
+    `keywords` with the words you would actually say. That guarantees the two
+    score alike, which is why v3.2 almost never reached `confident match`. The
+    unit is still reachable — through the surface, which is strictly more
+    specific — so drop it from the shortlist rather than let it compete.
+    """
+    owned = {c["unit"] for c in scored
+             if c["kind"] in ("surface", "flow") and c.get("unit")}
+    for c in scored:
+        if c["kind"] == "flow":
+            owned.update(c.get("path", []))
+    return [c for c in scored if not (c["kind"] == "unit" and c["name"] in owned)]
+
+
+# ---------------------------------------------------------------- miss queue
+
+def load_misses() -> list[dict]:
+    if not MISSES.exists():
+        return []
+    out = []
+    for ln in MISSES.read_text(encoding="utf-8").splitlines():
+        ln = ln.strip()
+        if not ln or ln.startswith("#"):
+            continue
+        parts = ln.split("\t")
+        if len(parts) >= 3:
+            out.append({"date": parts[0], "status": parts[1], "query": parts[2]})
+    return out
+
+
+def log_miss(query: str) -> None:
+    """A miss is a work item, not a warning.
+
+    `where.py --check` is already in the pre-flight list and fails while an
+    entry is open, so the row gets added before anything can be called done —
+    without ever interrupting the task that hit the miss.
+    """
+    rows = load_misses()
+    if any(r["query"] == query and r["status"] == "open" for r in rows):
+        return
+    header = "" if MISSES.exists() else MISS_HEADER
+    with MISSES.open("a", encoding="utf-8") as f:
+        f.write(header + f"{date.today().isoformat()}\topen\t{query}\n")
+
+
+def resolve_miss(query: str) -> int:
+    rows = load_misses()
+    if not rows:
+        print("no misses recorded.")
+        return 0
+    hit = False
+    for r in rows:
+        if r["status"] == "open" and (r["query"] == query
+                                      or norm(query) in norm(r["query"])):
+            r["status"] = "closed"
+            hit = True
+    MISSES.write_text(
+        MISS_HEADER + "".join(
+            f"{r['date']}\t{r['status']}\t{r['query']}\n" for r in rows),
+        encoding="utf-8")
+    print(f"{'closed' if hit else 'no open miss matched'}: {query}")
+    return 0 if hit else 1
+
+
+# --------------------------------------------------------------------- walk
+
+def build_graph(units):
+    by_id = {u["name"]: u for u in units}
+    edges = {}
+    for u in units:
+        for d in u.get("depends_on") or []:
+            edges.setdefault(u["name"], []).append((d, "depends_on", ""))
+    for e in load_runtime_edges():
+        edges.setdefault(e["from"], []).append((e["to"], e["via"], e["why"]))
+    return by_id, edges
+
+
+def walk(entry: str, hypothesis, units, max_hops=MAX_HOPS):
+    """BFS from the entry unit, frontier ordered by the user's hypothesis.
+
+    The hypothesis never chooses the entry point — it only decides which
+    neighbour to open first. A wrong guess then costs an ordering, not a
+    session.
+    """
+    by_id, edges = build_graph(units)
+    if entry not in by_id:
+        return []
+    plan, seen, frontier = [], {entry}, [(entry, "entry", "", 0)]
+    while frontier:
+        node, via, why, depth = frontier.pop(0)
+        u = by_id.get(node, {})
+        plan.append({"unit": node, "via": via, "why": why, "depth": depth,
+                     "doc": u.get("doc", ""), "source": u.get("source", []),
+                     "status": u.get("status", "?"), "layer": u.get("layer", "?")})
+        if depth >= max_hops:
+            continue
+        nxt = []
+        for dst, v, w in edges.get(node, []):
+            if dst in seen:
+                continue
+            seen.add(dst)
+            n = by_id.get(dst, {})
+            h = hay(n.get("aliases", "") + " " + dst + " "
+                    + " ".join(n.get("source", [])))
+            rank = sum(1 for t in hypothesis if t in h)
+            nxt.append((rank, dst, v, w))
+        nxt.sort(key=lambda x: -x[0])
+        frontier.extend((d, v, w, depth + 1) for _, d, v, w in nxt)
+    return plan
 
 
 # -------------------------------------------------------------------- output
 
 def fmt(c: dict, q_toks) -> list[str]:
     L = []
-    tag = {"surface": "SURFACE", "unit": "UNIT", "backlog": "BACKLOG",
-           "feature": "FEATURE", "code": "CODE"}[c["kind"]]
+    tag = {"flow": "FLOW", "surface": "SURFACE", "unit": "UNIT",
+           "backlog": "BACKLOG", "feature": "FEATURE", "code": "CODE"}[c["kind"]]
     head = f"[{tag}] {c['name']}"
     if c.get("unit") and c["unit"] != c["name"]:
         head += f"   unit: {c['unit']}"
     if c.get("status"):
         head += f"   status: {c['status']}"
     L.append(head)
+    if c.get("path"):
+        L.append(f"    path    {' -> '.join(c['path'])}")
     if c.get("route"):
         L.append(f"    route   {c['route']}")
     if c.get("doc"):
         L.append(f"    doc     {c['doc']}")
     code = "" if c["kind"] == "code" else (c.get("code") or "")
     if code:
-        found, missing = resolve_paths([code])
-        for f in found:
-            L.append(f"    code    {f}")
-        for m in missing:
-            L.append(f"    code    {m}   (!! path does not exist)")
+        for part in [p.strip() for p in code.split(",") if p.strip()]:
+            found, missing = resolve_paths([part])
+            for f in found:
+                L.append(f"    code    {f}")
+            for m in missing:
+                L.append(f"    code    {m}   (!! path does not exist)")
     if c.get("source"):
         found, missing = resolve_paths(c["source"])
         for f in found[:4]:
@@ -395,8 +633,6 @@ def fmt(c: dict, q_toks) -> list[str]:
             L.append(f"    code    … {len(found) - 4} more under {c['source'][0]}")
         for m in missing:
             L.append(f"    code    {m}   (!! nothing matches)")
-        if not c["source"]:
-            L.append("    code    — not implemented yet (empty source:)")
     if c.get("spec"):
         L.append(f"    spec    {c['spec']}   ->  python3 tools/spec.py {c['spec']}")
     if c.get("text"):
@@ -424,6 +660,46 @@ def next_steps(top: dict) -> list[str]:
     return out
 
 
+def print_walk(query, entry_cand, plan, hypothesis, cached=False):
+    print(f'query: "{query}"')
+    if cached:
+        print("cached flow — this path was recorded by an earlier fix\n")
+    else:
+        print(f"walk plan   entry: {entry_cand['name']}   "
+              f"hypothesis: {' '.join(hypothesis) or '—'}\n")
+    for i, h in enumerate(plan):
+        via = "entry point" if h["via"] == "entry" else f"via {h['via']}"
+        line = f"  hop {i}   {h['unit']}   ({h.get('layer') or '?'}, {via})"
+        if h.get("why"):
+            line += f"   — {h['why']}"
+        print(line)
+        if h.get("doc"):
+            print(f"           doc  {h['doc']}")
+        found, missing = resolve_paths(h.get("source", []))
+        for f in found[:3]:
+            print(f"           code {f}")
+        if len(found) > 3:
+            print(f"           code … {len(found) - 3} more")
+        for m in missing:
+            print(f"           code {m}   (!! nothing matches)")
+    print()
+    if cached:
+        print("This path is already known — do not re-derive it. Confirm the note")
+        print("still describes the symptom, then go straight to the files above.")
+        print("If the symptom is different this time, walk it fresh:")
+        print(f'  python3 tools/where.py --walk "<their words>"  (and add a new flow row)')
+        return
+    print("rules for this walk (00-PROTOCOL.md §3c):")
+    print(f"  - budget: {MAX_HOPS} hops, 8 files. State what you expect to find")
+    print("    BEFORE opening each hop. A hop you cannot predict is a hop you")
+    print("    are not ready to take — say so and stop.")
+    print("  - narrow inside a unit with the symptom -> role table in")
+    print("    docs/CODE-LAYOUT.md. Never read a whole unit.")
+    print("  - code no unit claims: report it, do not adopt it. MODE: SYNC (§6f).")
+    print("  - once fixed, record the path you actually took as a Flows row in")
+    print("    docs/SURFACES.md, with the user's own sentence as aliases.")
+
+
 # --------------------------------------------------------------------- check
 
 def check() -> int:
@@ -434,6 +710,7 @@ def check() -> int:
     units = {u["name"] for u in load_units()}
     seen = set()
     rows = load_surfaces()
+    flows = load_flows()
     for s in rows:
         n = s["name"]
         if n in seen:
@@ -449,7 +726,25 @@ def check() -> int:
                 errs.append(f"{n}: component path does not exist: {missing[0]}")
         else:
             warns.append(f"{n}: no component path — not addressable yet")
-    print(f"surfaces: {len(rows)}   errors: {len(errs)}   warnings: {len(warns)}")
+    for f in flows:
+        if not f["aliases"]:
+            warns.append(f"flow {f['name']}: no aliases — it will never be found again")
+        for u in f["path"]:
+            if units and u not in units:
+                errs.append(f"flow {f['name']}: '{u}' in path is not a known unit")
+        for part in [p.strip() for p in f["code"].split(",") if p.strip()]:
+            _, missing = resolve_paths([part])
+            if missing:
+                errs.append(f"flow {f['name']}: file does not exist: {missing[0]}")
+
+    open_misses = [m for m in load_misses() if m["status"] == "open"]
+    for m in open_misses:
+        errs.append(f'unresolved miss ({m["date"]}): "{m["query"]}" — add the row, '
+                    f'then: python3 tools/where.py --resolve "{m["query"]}"')
+
+    print(f"surfaces: {len(rows)}   flows: {len(flows)}   "
+          f"open misses: {len(open_misses)}   "
+          f"errors: {len(errs)}   warnings: {len(warns)}")
     for e in errs:
         print(f"  ERROR   {e}")
     for w in warns:
@@ -466,45 +761,63 @@ def main() -> int:
         return 1
     if "--check" in args:
         return check()
+    if "--misses" in args:
+        rows = load_misses()
+        if not rows:
+            print("no misses recorded.")
+            return 0
+        for r in rows:
+            print(f"{r['status']:8} {r['date']}  {r['query']}")
+        return 0
+    if "--resolve" in args:
+        return resolve_miss(" ".join(a for a in args if not a.startswith("--")))
 
     as_json = "--json" in args
+    want_walk = "--walk" in args
     query = " ".join(a for a in args if not a.startswith("--"))
     q = toks(query)
     if not q:
         print("nothing to look for in that query.", file=sys.stderr)
         return 1
+    locator, symptom = split_query(q)
+    if not locator:
+        locator = q
 
-    cands = load_surfaces() + load_units() + load_backlog() + load_features()
+    units = load_units()
+    cands = load_flows() + load_surfaces() + units + load_backlog() + load_features()
     scored = []
     for c in cands:
-        s, m = score(c, q)
+        s, m = score(c, locator)
         if s:
-            c = dict(c, score=s, matched=m)
-            scored.append(c)
-    scored.sort(key=lambda c: (-c["score"], c["kind"] != "surface", c["name"]))
+            scored.append(dict(c, score=s, matched=m))
+    scored = dominate(scored)
+    scored.sort(key=lambda c: (-c["score"],
+                               c["kind"] not in ("flow", "surface"), c["name"]))
 
-    ceiling = len(q) * MAX_W
+    ceiling = len(locator) * MAX_W
     strong = [c for c in scored if c["score"] >= max(3, ceiling * 0.4)]
     shown = (strong or scored)[:TOP_N]
 
     weak = not shown or shown[0]["score"] < ceiling * 0.5
     if weak:
-        extra = [c for c in scan_code(q)
+        extra = [c for c in scan_code(locator)
                  if c["name"] not in {s.get("code") for s in shown}]
         for c in extra:                       # filename hits rank below any doc row
             c["score"] = min(c["score"], 2)
         shown = (shown + extra)[:TOP_N]
 
     if not shown:
-        shown = scan_code(q)
+        log_miss(query)
+        shown = scan_code(locator)
         if shown:
             print(f'no doc row matches "{query}". Filename matches only — '
-                  f"add a row to docs/SURFACES.md once you know the answer:\n")
+                  f"logged to docs/.where-misses:\n")
         else:
-            print(f'nothing matches "{query}".')
+            print(f'nothing matches "{query}".  (logged to docs/.where-misses)')
             print("  - if it is a UI thing, it is missing from docs/SURFACES.md")
             print("  - if it is a whole capability, it is missing from docs/MASTER_INDEX.md")
-            print("  - ask the user which unit owns it. Do not guess a path.")
+            print("  - do NOT guess a path. Walk from the closest surface you do")
+            print("    have, or ask the user to point at it once.")
             return 2
 
     if as_json:
@@ -514,7 +827,40 @@ def main() -> int:
     top = shown[0]
     second = shown[1]["score"] if len(shown) > 1 else 0
     confident = top.get("score", 0) >= max(4, second * 1.6)
-    print(f'query: "{query}"   tokens: {" ".join(q)}')
+    hypothesis = hypothesis_of(q, top)
+
+    # ---- walk mode: a symptom was named, or the caller asked for one
+    if want_walk or ((symptom or hypothesis)
+                     and top["kind"] in ("flow", "surface", "unit")):
+        # A cache hit must be a *repeat*, not a keyword overlap. One shared word
+        # ("login") between two unrelated symptoms is not the same bug, and
+        # serving a stale path for a new problem is worse than deriving one:
+        # it hands over an answer that looks confirmed. Demand most of the
+        # sentence, and fall through to a fresh walk otherwise.
+        cached_hit = (top["kind"] == "flow"
+                      and len(top.get("matched") or []) >= 2
+                      and top["score"] >= ceiling * 0.6)
+        if cached_hit:
+            by_id = {u["name"]: u for u in units}
+            print_walk(query, top,
+                       [{"unit": u, "via": "flow", "why": "", "depth": i,
+                         "doc": by_id.get(u, {}).get("doc", ""),
+                         "source": by_id.get(u, {}).get("source", []),
+                         "status": by_id.get(u, {}).get("status", ""),
+                         "layer": by_id.get(u, {}).get("layer", "?")}
+                        for i, u in enumerate(top["path"])],
+                       hypothesis, cached=True)
+            print()
+            for ln in fmt(top, q):
+                print(ln)
+            return 0
+        plan = walk(top.get("unit") or top["name"], hypothesis, units)
+        if plan:
+            print_walk(query, top, plan, hypothesis)
+            return 0
+
+    print(f'query: "{query}"   locator: {" ".join(locator)}'
+          + (f'   hypothesis: {" ".join(hypothesis)}' if hypothesis else ""))
     if confident:
         print("confident match\n")
         for ln in fmt(top, q):

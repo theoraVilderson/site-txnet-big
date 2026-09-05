@@ -1,7 +1,7 @@
 ---
 id: dependency-graph
 status: active
-updated: 2026-09-04
+updated: 2026-09-05
 ---
 
 # Dependency graph
@@ -15,19 +15,38 @@ No static graph generator is wired up. For the Node backend, `npx nx graph`
 `replace` directives in each `go.mod`. This section should be replaced with a
 generated artifact if/when CI produces one.
 
-## Runtime edges (manual — static analysis cannot see these)
+## Runtime edges — what `depends_on` cannot see
 
-| From | To | Transport | Sync/Async | Breaking if removed? |
-|---|---|---|---|---|
-| auth-service | locale-service | gRPC GetSnapshot + Watch | sync boot, async reload | yes — auth-service refuses to boot |
-| auth-handler | locale-service | gRPC GetSnapshot + Watch | sync boot, async reload | yes — auth-handler exits non-zero |
-| site-pwa (server) | locale-service | gRPC | sync boot | yes for SSR i18n |
-| auth-service | Redis | ioredis | sync | yes — sessions/OTP/rate-limit |
-| auth-handler | Redis | redis client | sync | yes — session-active check |
-| auth-service | Postgres | Prisma | sync | yes |
-| Traefik | auth-handler `/validate` | HTTP ForwardAuth | sync | protected routes fail closed |
-| site-pwa | auth-service | HTTP proxy (`/api/auth/*`) | sync | panel auth screens break |
-| auth-service, auth-handler | shared Redis keyspace prefix | convention (env) | — | mismatch = auth-handler can't see sessions |
+A queue, a webhook, a cron job and a domain event move control between units
+without either one importing the other. `depends_on` is blind to them, so a walk
+(§3c) that follows only static edges misses an entire class of bug — confidently.
+
+These are **not** merged into `depends_on`. A runtime edge answers **"what runs
+after me"** (a debugging question); `depends_on` answers **"who do I call"** (a
+contract question, §8 blast radius).
+
+`tools/where.py --walk` reads this table by heading and by the four column
+names, and `from`/`to` must be **unit ids** from `MASTER_INDEX.md` — not service
+or container names. Add a row the first time a walk needs it.
+
+| from | to | via | why |
+|---|---|---|---|
+| auth-api | i18n | gRPC GetSnapshot + Watch (async reload) | translations change under a running auth-service without a redeploy |
+| forward-auth | i18n | gRPC GetSnapshot + Watch (async reload) | same snapshot stream; a stale gateway serves stale error text |
+| panel-web | i18n | gRPC GetSnapshot at SSR boot | panel renders server-side with a snapshot it fetched, not with live calls |
+| auth-api | redis-keyspace | Redis writes: session, OTP, rate-limit keys | the session exists only in Redis; nothing in Postgres records it |
+| forward-auth | redis-keyspace | Redis reads: session-active check | revocation is a Redis delete the gateway notices on the next request |
+| forward-auth | auth-api | Traefik ForwardAuth `/validate` -> identity headers | the gateway runs *before* the API and rewrites the request it receives |
+| panel-web | auth-api | HTTP proxy `/api/auth/*` (cookies rewritten in the proxy) | a cookie can be correct at the API and lost in the proxy hop |
+
+## Manual notes
+
+- `auth-api` and `forward-auth` share one Redis key prefix by env convention
+  (`redis-keyspace`). A prefix or version mismatch is invisible to both: the
+  gateway simply never finds the session the API wrote. See ADR-0005.
+- `locale-service` boot dependency is hard: `auth-api` and `forward-auth` refuse
+  to start without a first snapshot. A "service won't boot" symptom starts at
+  `i18n`, not at the service that failed.
 
 ## Consumer lookup
 

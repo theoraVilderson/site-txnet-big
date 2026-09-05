@@ -59,6 +59,7 @@ export const AUTH_KEY_MAP = {
 
   captchaVerified: "captcha.verified",
   captchaSwipe: "captcha.swipe",
+  captchaChecking: "captcha.checking",
 } as const satisfies Record<string, string>;
 
 export type Lang = string;

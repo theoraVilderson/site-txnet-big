@@ -1,7 +1,7 @@
 ---
 id: code-layout
 status: active
-updated: 2026-09-04
+updated: 2026-09-05
 unit_aliases:
   - identity:auth
   - identity:impersonation
@@ -93,6 +93,36 @@ The component/route filename is what the user is pointing at, so it must
 contain the noun they say. `register/page.tsx` under `app/api/auth/register` is
 already how `site-pwa` names things — keep doing that; it's what makes the
 filename fallback in `tools/where.py` work at all.
+
+## Symptom -> role — how to narrow *inside* a unit
+
+The tiers in `00-PROTOCOL.md` §3 narrow to a unit and stop. For a unit with
+thirty files that is not narrow, and it is exactly where an agent starts reading
+everything. This table is the last step of the funnel: what broke -> which file
+role holds it. **Project-owned** — three stacks here, so three vocabularies.
+
+| symptom | look in | do not start in |
+|---|---|---|
+| 401 / 403 / redirected to login on a protected route | `auth-handler/internal/` (ForwardAuth `/validate`), then the Traefik middleware labels | the NestJS service |
+| session gone / logged out too early / revoke didn't take | the Redis key builder (`auth-service/src/app/redis/redis.keys.ts`) + `docs/platform/redis-keyspace/contract.md` | the login controller |
+| cookie set but not sent back / lands logged out | `site-pwa/src/app/api/auth/[...path]/route.ts` (the proxy rewrites cookies) | `auth.service.ts` |
+| 400 / validation / wrong error shape | `*.schema.ts` (zod), then `*.controller.ts` | the repository or Prisma |
+| endpoint 404 / route not firing | `*.controller.ts` + its module registration in `auth.module.ts`; for the panel, the route-handler file path itself | anything else |
+| right shape, wrong values | `*.service.ts` | the controller |
+| wrong / missing translated text | `locales/**` content first, then the `i18n` client cache — `locale-service` serves a snapshot, so stale text is usually a cache, not a missing key | the component |
+| data written wrong, or not written | the Prisma call site in the service + `prisma/domains/*.prisma` | the controller |
+| works once, then fails / state leaks across requests | Redis TTLs and key versioning (`redis-keyspace`), then the OTP/rate-limit services | the controller |
+| service refuses to boot | the `locale-service` gRPC dependency (`i18n`) — `auth-api` and `forward-auth` both fail closed without a first snapshot | the service's own code |
+| works locally, fails deployed | `.env` / `.env.dev` / `.env.prod` layering, `dev-docker/`, `swarm/` | any unit at all |
+
+Two rules that matter more than the table:
+
+- **Read the role, not the folder.** One file per hop. If the file you predicted
+  does not hold the bug, that is information — say so out loud and pick the next
+  role deliberately. It is not licence to open the other nine.
+- **A symptom that fits no row is a finding.** Either this table is missing a
+  row (add it) or the unit is doing something its file names do not admit to,
+  which is a `CONVENTIONS.md` problem, not a debugging one.
 
 ## Commits
 

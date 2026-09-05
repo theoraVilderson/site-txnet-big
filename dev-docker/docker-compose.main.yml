@@ -172,6 +172,7 @@ services:
       - OTP_TOKEN_TTL_SEC=${OTP_TOKEN_TTL_SEC:-300}
       - RESET_TOKEN_TTL_SEC=${RESET_TOKEN_TTL_SEC:-300}
       - OTP_DELIVERY_MODE=${OTP_DELIVERY_MODE:-console}
+      - DOMAIN_NAME=${DOMAIN_NAME}
       - FRONTEND_ORIGIN=https://panel.${DOMAIN_NAME}
       - COOKIE_SECURE=${COOKIE_SECURE:-true}
       - TRUST_PROXY=${TRUST_PROXY}
@@ -182,10 +183,11 @@ services:
       - private_backend_network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.middlewares.auth-cors.headers.accesscontrolalloworiginlist=https://panel.${DOMAIN_NAME}"
-      - "traefik.http.middlewares.auth-cors.headers.accesscontrolallowcredentials=true"
-      - "traefik.http.middlewares.auth-cors.headers.accesscontrolallowmethods=GET,OPTIONS,POST"
-      - "traefik.http.middlewares.auth-cors.headers.accesscontrolallowheaders=Content-Type,Authorization"
+      # CORS is handled inside the app (app.enableCors, FRONTEND_ORIGIN) —
+      # do not also apply a Traefik-level CORS headers middleware here. A
+      # second layer duplicates Access-Control-Allow-* on the same response,
+      # which browsers reject, so the preflight/POST for login+register
+      # never lands and refresh_token never gets set client-side.
       - "traefik.http.middlewares.auth-rate-limit.ratelimit.average=100"
       - "traefik.http.middlewares.auth-rate-limit.ratelimit.period=1m"
       - "traefik.http.middlewares.auth-rate-limit.ratelimit.burst=50"
@@ -196,7 +198,7 @@ services:
       - "traefik.http.routers.auth-service-http.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/auth`)"
       # - "traefik.http.routers.auth-service-http.rule=Host(`api.${DOMAIN_NAME}`)"
       - "traefik.http.routers.auth-service-http.entrypoints=web"
-      - "traefik.http.routers.auth-service-http.middlewares=auth-rate-limit,auth-cors"
+      - "traefik.http.routers.auth-service-http.middlewares=auth-rate-limit"
       - "traefik.http.routers.auth-service-http.service=auth-service"
 
       # https router for auth-service (with TLS)
@@ -204,7 +206,7 @@ services:
       - "traefik.http.routers.auth-service-https.rule=Host(`api.${DOMAIN_NAME}`)"
       - "traefik.http.routers.auth-service-https.entrypoints=websecure"
       - "traefik.http.routers.auth-service-https.tls.certresolver=myresolver"
-      - "traefik.http.routers.auth-service-https.middlewares=auth-rate-limit,auth-cors"
+      - "traefik.http.routers.auth-service-https.middlewares=auth-rate-limit"
 
       - "traefik.http.routers.auth-service-https.service=auth-service"
       - "txnet.logging=true"
@@ -281,7 +283,14 @@ services:
       - JWT_SECRET_CAPTCHA=${JWT_SECRET_CAPTCHA}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - NEXT_PUBLIC_PAYMENT_URL=${NEXT_PUBLIC_PAYMENT_URL}
-      - AUTH_API_ORIGIN=https://api.${DOMAIN_NAME}
+      # Browser talks to auth-service directly at api.${DOMAIN_NAME}, cross-origin,
+      # cookie-bearing (backend CORS in main.ts allows FRONTEND_ORIGIN with
+      # credentials). Deliberate tradeoff vs. the old same-origin proxy hop:
+      # this leaves private_backend_network for public DNS + Traefik + TLS and
+      # back on every auth call (~0.5-2s), which previously surfaced as an
+      # intermittent 502 on login/register — accepted so cookies land without
+      # the proxy rewriting anything.
+      - NEXT_PUBLIC_API_ORIGIN=https://api.${DOMAIN_NAME}
       - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
       - LOCALE_SCOPE=frontend
     depends_on:

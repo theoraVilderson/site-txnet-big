@@ -1,12 +1,17 @@
 ---
 id: protocol
 status: fixed
-version: 2.4
+version: 2.5
 updated: 2026-09-04
 ---
 
-# DOCS PROTOCOL v2.4 — fixed file. Copy verbatim into every project. Never edit without explicit user request.
+# DOCS PROTOCOL v2.5 — fixed file. Copy verbatim into every project. Never edit without explicit user request.
 
+> **v2.5 adds the walk.** New: §3c (WALK), tier 4b, `MODE: DIAGNOSE` (§6g),
+> runtime edges in `architecture/dependency-graph.md`, and the `## Flows` cache
+> in `SURFACES.md`. It changes no existing rule; it gives a bug report a mode of
+> its own, so it stops falling back to reading an entire area.
+>
 > **v2 adds the feature-catalog layer.** New: `/features` in §1, tier 1b in §3,
 > and `MODE: INGEST` (§6d). Everything from v1 is unchanged.
 >
@@ -57,6 +62,7 @@ rotten docs.
   BACKLOG.md            one row per shippable feature. what is built vs not.
   HANDOFF.md            mid-item session state. overwritten, never appended.
   .sync                 last commit at which docs and code agreed. see §6f.
+  .where-misses         queries that found nothing. a work queue, not a log. §3b.
   GLOSSARY.md           canonical names. one term = one meaning, project-wide.
   FEATURES-FORMAT.md    fixed. the authoring contract for the catalog.
   PROMPTS.md            copy-paste prompts for the user
@@ -127,7 +133,56 @@ Read in tiers. Stop at the shallowest tier that answers the question.
 | 2 | target `contract.md` + `invariants.md` | changing or using the unit |
 | 3 | `contract.md` of each `depends_on` — **the API section only** | writing code |
 | 4 | `CONVENTIONS.md`, `rules.md`, `data-model.md` | writing code *inside* that unit |
+| 4b | `CODE-LAYOUT.md` symptom -> role table | **before opening any source file** — it says which file, not just which unit |
 | 5 | actual source files under `source:` | implementing |
+
+Tier 5 says *files under `source:`*, and `source:` is usually a `**` glob. Read
+that as "the files tier 4b pointed at", never as "the module". A unit is where
+the funnel narrows to, not where it stops.
+
+## 3c. WALK (the request names a symptom, not a place)
+
+§3b resolves *"edit the profile button"* — a location. It cannot resolve
+*"cookie login doesn't work"*, because that names no location at all: it names a
+symptom, plus a guess about the cause. Scoring the two against each other
+produces a shortlist of rivals, and a shortlist is what an agent reads its way
+out of.
+
+```bash
+python3 tools/where.py --walk "<the user's words, verbatim>"
+```
+
+The tool splits the sentence in two and treats the halves differently:
+
+- **locator** (`login`) — where the user saw it. This, and only this, picks the
+  entry point.
+- **hypothesis** (`cookie`) — what the user guesses is wrong. It orders the
+  frontier and nothing else.
+
+That asymmetry is the point. A user's theory about the cause is worth having and
+is often wrong; letting it reorder the walk costs nothing when it is wrong,
+while letting it choose the entry point starts the session in the wrong unit
+with full confidence.
+
+From the entry unit the walk follows `depends_on` **and** the runtime edges in
+`architecture/dependency-graph.md` — queues, webhooks, cron. Static edges alone
+miss every asynchronous bug, and miss it silently.
+
+**Budget: 3 hops, 8 files.** The ceiling is not the mechanism, though. The
+mechanism is this:
+
+> **Before opening each hop, say in one line what you expect to find there.**
+
+A hop you cannot predict is a hop you are not ready to take — say so and stop.
+This makes the walk sequential instead of accumulative: a wrong hypothesis
+announces itself immediately, whereas bulk reading never does, because there is
+always one more plausible file. It is the same announce-before-work rule as §6.2
+and §6b.3, applied to unit boundaries.
+
+Code the walk meets that **no unit claims** is reported and left alone. Do not
+create a unit for it mid-walk. Unit boundaries are the most expensive thing in
+this repo to get wrong, and the moment you first meet a folder is the worst
+moment to draw one — that is MODE: SYNC's job (§6f), with the user.
 
 ## 3b. LOCATE (run before tier 0, whenever the request has no path in it)
 
@@ -245,6 +300,40 @@ zero context can resume work correctly and cheaply.
 Never mark an item `done` if a blocking open question is open, an invariant is
 violated, or the code was not actually written. `done` means code exists.
 Half-finished work stays `doing` with a note — never silently `done`.
+
+## 6g. MODE: DIAGNOSE (something is broken)
+
+Every other mode assumes you know what you are building. A bug report matches
+none of them, and a mode that does not exist is not a gap the agent notices — it
+falls back to its own default, which is to gather everything about the area and
+hope the answer is in there. That is the single most expensive session shape
+available.
+
+1. `python3 tools/where.py --walk "<the user's words, verbatim>"`.
+   A cached flow row ends the search here — take its path and go to step 4.
+2. Announce the entry point and the hypothesis in one line. If the walk found no
+   entry at all, do **not** guess a path: walk from the nearest surface that
+   does exist, and say that is what you are doing.
+3. Walk per §3c. One line of prediction per hop, before opening it.
+4. Inside each unit, pick the file with the symptom -> role table in
+   `CODE-LAYOUT.md` (tier 4b). One file per hop. A wrong prediction is
+   information — name it, then choose the next role deliberately. It is never a
+   reason to open the rest of the unit.
+5. State the cause before fixing it. If the fix would violate an invariant, stop
+   and say which one (§6.4).
+6. Fix, per MODE: IMPLEMENT (§6).
+7. **Record the path.** Write a `## Flows` row in `SURFACES.md`: the chain you
+   actually walked, the files you actually changed, and the user's sentence
+   verbatim in `aliases`. Then
+   `python3 tools/where.py --resolve "<their sentence>"` to close the miss.
+
+Step 7 is what stops this from being a cost you pay repeatedly. The row is
+written at the one moment the answer is known — which is why flow rows are never
+authored in advance (`SURFACES.md`, `## Flows`).
+
+Two things DIAGNOSE never does: create a unit (§6f owns that), and mark a
+backlog row `done` (a fix is not a feature). If the walk shows the bug is
+actually a missing feature, say so and stop — that is MODE: NEXT or EXTEND.
 
 ## 6f. MODE: SYNC (code was written without an agent)
 
@@ -456,4 +545,10 @@ invalid. Entries older than 30 days must be raised proactively.
 - Never grep the repo to locate a feature. Use `tools/where.py` (§3b).
 - Never write a path that `where.py`, `source:` or the mirror rule did not give
   you. A plausible-looking filename is not evidence.
+- Never read a whole unit to find a bug. Narrow with the symptom -> role table
+  (tier 4b), one file per hop (§3c).
+- Never create a unit during a walk. Report unclaimed code and leave it (§6f).
+- Never leave an open entry in `.where-misses` behind. `where.py --check` fails
+  on one, and that is deliberate: the alias is the entire maintenance cost of
+  the addressing layer.
 - Prefer deleting a stale doc over keeping a wrong one.

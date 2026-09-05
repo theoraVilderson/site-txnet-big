@@ -30,6 +30,7 @@ export const envSchema = z.object({
     .transform((v) => v.replace(/:+$/, '')),
   REDIS_KEYSPACE_VERSION: z.string().min(1).default('v1'),
   FRONTEND_ORIGIN: z.string().url().optional(),
+  DOMAIN_NAME: z.string().min(1, 'DOMAIN_NAME is required'),
   COOKIE_SECURE: z.coerce.boolean().default(true),
 
   OTP_ALLOWED_CHANNELS: otpChannelsSchema,

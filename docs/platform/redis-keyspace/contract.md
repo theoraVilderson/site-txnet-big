@@ -36,6 +36,9 @@ stay byte-identical — each carries a comment pointing at the other.
 | `otp:lock:<purpose>:<phone>` | string | 2s | `OtpStore.acquireLock` (`SET NX`) | — |
 | `otp:cooldown:<purpose>:<phone>` | string | 60s | `OtpStore.startCooldown` | `OtpStore.isCoolingDown` |
 | `ratelimit:<bucket>` | counter | window seconds (per call site) | `RateLimiter.hit` (`INCR` + `EXPIRE` on first hit, Lua) | same |
+| `register:pending:<phone>` | string (JSON profile + password hash) | 600s | auth-service `RegisterService.register` | auth-service `RegisterService.verifyPhone` |
+| `captcha:challenge:<challengeId>` | string (issue timestamp, ms) | 60s | auth-service `CaptchaService.issueChallenge` | auth-service `CaptchaService.verifyChallenge` (deletes on first check — single-use) |
+| `captcha:verified:<token>` | string (`"1"`) | 120s | auth-service `CaptchaService.verifyChallenge` | auth-service `CaptchaService.consumePass` (deletes on first check — single-use) |
 | `fx:rate:<currencyCode>` | string | (currency unit — planned) | (currency service — not built) | (currency conversion) |
 
 ## Rules
