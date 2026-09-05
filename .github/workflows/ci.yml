@@ -1,0 +1,143 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '24'
+  GO_VERSION: '1.22'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # The five docs gates from AGENTS.md → "Before declaring any work done".
+  # All five must pass; they need nothing but python3 and the repo itself.
+  # ---------------------------------------------------------------------------
+  gates:
+    name: docs gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: docs-check
+        run: python3 tools/docs-check.py
+      - name: backlog
+        if: ${{ !cancelled() }}
+        run: python3 tools/backlog.py
+      - name: features-scan
+        if: ${{ !cancelled() }}
+        run: python3 tools/features-scan.py --check
+      - name: where
+        if: ${{ !cancelled() }}
+        run: python3 tools/where.py --check
+      - name: conventions
+        if: ${{ !cancelled() }}
+        run: python3 tools/conventions.py
+
+  # ---------------------------------------------------------------------------
+  # NestJS workspace: jest through Nx.
+  # ---------------------------------------------------------------------------
+  backend:
+    name: backend (jest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: txnet-backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: txnet-backend/package-lock.json
+
+      - run: npm ci
+
+      # `prisma generate` only reads the schema, but the datasource block still
+      # requires DATABASE_URL to be set — no database is contacted.
+      - name: prisma generate
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+        run: npx prisma generate
+
+      - name: jest
+        run: npx nx run-many -t test --parallel=2 --skip-nx-cache
+
+  # ---------------------------------------------------------------------------
+  # Go modules of the workspace (auth-handler + i18n-platform).
+  # ---------------------------------------------------------------------------
+  go:
+    name: go (vet + test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.work.sum
+
+      # go.work has no root module, so `go test ./...` must run per member.
+      - name: resolve workspace modules
+        id: modules
+        run: |
+          {
+            echo 'dirs<<EOM'
+            go work edit -json | python3 -c 'import json,sys; [print(u["DiskPath"]) for u in json.load(sys.stdin)["Use"]]'
+            echo 'EOM'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: go vet
+        run: |
+          while read -r dir; do
+            [ -n "$dir" ] || continue
+            echo "::group::go vet $dir"
+            (cd "$dir" && go vet ./...)
+            echo "::endgroup::"
+          done <<< '${{ steps.modules.outputs.dirs }}'
+
+      - name: go test
+        run: |
+          while read -r dir; do
+            [ -n "$dir" ] || continue
+            echo "::group::go test $dir"
+            (cd "$dir" && go test ./...)
+            echo "::endgroup::"
+          done <<< '${{ steps.modules.outputs.dirs }}'
+
+  # ---------------------------------------------------------------------------
+  # The two Next.js apps: eslint + vitest.
+  # ---------------------------------------------------------------------------
+  frontend:
+    name: ${{ matrix.app }} (lint + vitest)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [site-pwa, coinsite]
+    defaults:
+      run:
+        working-directory: ${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ${{ matrix.app }}/package-lock.json
+
+      - run: npm ci
+
+      - name: eslint
+        run: npm run lint
+
+      - name: vitest
+        run: npm test

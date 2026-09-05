@@ -1,0 +1,50 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`RedisKeys — key catalogue builds every key from fixed arguments 1`] = `
+{
+  "botLinkChat": "botlink:chat:telegram:55501",
+  "botLinkPhone": "botlink:phone:telegram:09123456789",
+  "botLinkProvenChat": "botlink:proven:telegram:09123456789",
+  "botLinkToken": "botlink:token:tok-1",
+  "captchaChallenge": "captcha:challenge:chal-1",
+  "captchaVerified": "captcha:verified:pass-1",
+  "otpCode": "otp:code:login:09123456789",
+  "otpCooldown": "otp:cooldown:login:09123456789",
+  "otpLock": "otp:lock:login:09123456789",
+  "rateLimit": "ratelimit:login:1.2.3.4",
+  "registerPending": "register:pending:09123456789",
+  "session": "session:sess-1",
+  "userSessions": "user:user-1:sessions",
+}
+`;
+
+exports[`RedisKeys — key catalogue exposes a builder for every key family, and nothing unbuilt 1`] = `
+[
+  "botLinkChat",
+  "botLinkPhone",
+  "botLinkProvenChat",
+  "botLinkToken",
+  "captchaChallenge",
+  "captchaVerified",
+  "otpCode",
+  "otpCooldown",
+  "otpLock",
+  "rateLimit",
+  "registerPending",
+  "session",
+  "userSessions",
+]
+`;
+
+exports[`RedisKeys — key catalogue keeps the canonical TTLs stable 1`] = `
+{
+  "botLink": 900,
+  "captchaChallenge": 60,
+  "captchaVerified": 120,
+  "loginFailureWindow": 900,
+  "otpCode": 300,
+  "otpCooldown": 60,
+  "otpLock": 2,
+  "registerPending": 600,
+}
+`;
