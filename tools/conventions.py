@@ -27,6 +27,7 @@ usage:
     python3 tools/conventions.py --list     what is declared, and what is not checked
 """
 import importlib.util
+import os
 import re
 import sys
 from pathlib import Path
@@ -81,17 +82,37 @@ def parse():
     return checks, declared
 
 
+_ALL_FILES = None
+
+
+def _all_files():
+    """Every candidate file in the repo, walked once and kept.
+
+    `rglob("*")` descends into `node_modules` and filters afterwards, and it ran
+    once per convention — so the cost was (repo size x conventions), and both of
+    those only grow. `os.walk` prunes SKIP directories before entering them, and
+    the result is cached for the life of the process.
+    """
+    global _ALL_FILES
+    if _ALL_FILES is not None:
+        return _ALL_FILES
+    out = []
+    for dirpath, dirnames, filenames in os.walk(ROOT):
+        dirnames[:] = [d for d in dirnames if d not in SKIP]
+        base = Path(dirpath)
+        for name in filenames:
+            p = base / name
+            out.append((p, str(p.relative_to(ROOT))))
+    _ALL_FILES = sorted(out, key=lambda x: x[1])
+    return _ALL_FILES
+
+
 def files_for(c):
     inc = [glob_re(g) for g in c["in"]]
     exc = [glob_re(g) for g in c["except"]]
-    out = []
-    for p in ROOT.rglob("*"):
-        if not p.is_file() or (SKIP & set(p.parts)):
-            continue
-        rel = str(p.relative_to(ROOT))
-        if any(rx.match(rel) for rx in inc) and not any(rx.match(rel) for rx in exc):
-            out.append((p, rel))
-    return sorted(out, key=lambda x: x[1])
+    return [(p, rel) for p, rel in _all_files()
+            if any(rx.match(rel) for rx in inc)
+            and not any(rx.match(rel) for rx in exc)]
 
 
 def run(c):

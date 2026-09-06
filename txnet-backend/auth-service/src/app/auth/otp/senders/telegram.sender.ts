@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { IOtpSender } from './otp-sender.interface';
 import { OtpChannel, OtpPurpose } from '../otp.interface';
-import { BotClientRegistry } from './bot-client.registry';
+import { BotClientRegistry } from '@txnet-backend/messenger';
 import { BotLinkStore } from '../../bot-link/bot-link.store';
 import { buildOtpChatMessage } from './otp-message.util';
 import { LocaleService } from '../../../locale/locale.service';

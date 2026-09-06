@@ -3,10 +3,13 @@
   "compilerOptions": {
     "outDir": "../dist/out-tsc",
     "module": "commonjs",
+    "moduleResolution": "node10",
+    "esModuleInterop": true,
     "types": ["jest", "node"]
   },
   "include": [
-    "jest.config.ts",
-    "src/**/*.ts"
+    "jest.config.cts",
+    "src/**/*.ts",
+    "../auth-service/src/**/*.ts"
   ]
 }

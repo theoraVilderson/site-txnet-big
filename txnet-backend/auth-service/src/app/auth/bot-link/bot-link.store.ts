@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../../redis/redis.service';
 import { RedisKeys, RedisTtl } from '../../redis/redis.keys';
-import { BotPlatform } from '../otp/senders/bot-client.registry';
+import { BotPlatform } from '@txnet-backend/messenger';
 import { PendingBotLink } from './bot-link.types';
 
 /**

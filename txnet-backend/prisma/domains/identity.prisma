@@ -30,6 +30,14 @@ enum SessionRevokedReason {
   admin_ban
   expired
   impersonation_ended // پایان نشست ورود ادمین به‌جای کاربر بدون credential
+  // F-0207: the outgoing session of an account switch. Revoked in the same
+  // transaction that issues the incoming one (audit invariant #7), so one
+  // browser still holds exactly one live session at every instant.
+  account_switched
+  // F-0208: the account was removed from a switch group. Only the sessions
+  // minted in the *removing* scope are revoked (ADR-0015) — the same account
+  // may still hold a group, and a live session, somewhere else entirely.
+  account_unlinked
 
   @@schema("identity")
 }
@@ -46,6 +54,7 @@ enum OtpPurpose {
   register_phone_verify
   password_reset
   account_link // linking a Telegram/Bale account to a User (see LinkedBotAccount)
+  account_switch_link // proving a second account before it joins an account-switch group (F-0205)
 
   @@schema("identity")
 }
@@ -120,6 +129,16 @@ model Session {
   impersonationSessionId  String?               @db.Uuid
   switchedFromUserId      String?               @db.Uuid
 
+  /// The surface instance this session was minted on — the same key shape as
+  /// `audit.linked_account_member.scopeKey` (ADR-0015). It exists so removing
+  /// an account from one group revokes that account's sessions *there* and
+  /// nowhere else. Nullable: an impersonation session has no scope, and a
+  /// session minted before this column existed has none either.
+  ///
+  /// A refresh rotates the row but must carry this forward — a re-mint that
+  /// drops it silently detaches the session from its scope.
+  scopeKey String?
+
   user                 User                  @relation("SessionOwner", fields: [userId], references: [id])
   switchedFromUser     User?                 @relation("SessionSwitchedFrom", fields: [switchedFromUserId], references: [id])
   impersonationSession ImpersonationSession? @relation(fields: [impersonationSessionId], references: [id])
@@ -127,6 +146,9 @@ model Session {
   // منطق حیاتی: با تغییر رمز، همه‌ی Sessionهای این userId باید در همان
   // Transaction با revokedAt=now() به‌روزرسانی شوند (Force Logout همه دستگاه‌ها).
   @@index([userId])
+  // F-0208 revokes by (user, scope); without this it is a scan of every
+  // session the account has ever held.
+  @@index([userId, scopeKey])
   @@map("session")
   @@schema("identity")
 }

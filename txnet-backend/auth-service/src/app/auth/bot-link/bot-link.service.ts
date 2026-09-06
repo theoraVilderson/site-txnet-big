@@ -12,9 +12,9 @@ import {
   BOT_PLATFORMS,
   BotClientRegistry,
   BotPlatform,
-} from '../otp/senders/bot-client.registry';
+} from '@txnet-backend/messenger';
 import { BotLinkStore } from './bot-link.store';
-import { botLinkMessage } from './bot-link.messages';
+import { BotLinkMessageKey, botLinkMessage } from './bot-link.messages';
 import { BotContact, BotUpdate, PendingBotLink } from './bot-link.types';
 
 /** A messenger channel and the platform behind it are the same thing. */
@@ -35,6 +35,25 @@ export interface BotLinkStatus {
   state: PendingBotLink['state'];
   otpSent: boolean;
   failureKey?: string;
+}
+
+/**
+ * What one step of the link conversation decided, with nothing rendered.
+ *
+ * Two surfaces drive this flow — the deprecated in-service webhook and
+ * `bot-service` over `/auth/bots/link/*` (ADR-0011) — and the rule behind
+ * invariant #12 must be enforced in exactly one place, so the decision is
+ * returned rather than sent. `messageKey` is an `otp.botLink.*` key: the caller
+ * translates it and decides what a keyboard looks like.
+ */
+export interface BotLinkOutcome {
+  state: PendingBotLink['state'];
+  /** The chat must share its contact before anything else can happen. */
+  needsContact: boolean;
+  otpSent: boolean;
+  messageKey: BotLinkMessageKey;
+  failureKey?: string;
+  lang: string;
 }
 
 /**
@@ -182,6 +201,10 @@ export class BotLinkService {
    * Entry point for a webhook update. Never throws and never reports failure
    * to the platform: an error status makes Telegram/Bale redeliver the same
    * update, and a duplicated `/start` is noise at best.
+   *
+   * @deprecated since 2026-09-06 — `bot-service` owns the webhook (ADR-0011)
+   * and calls `resolveStart` / `submitContact` through `/auth/bots/link/*`.
+   * Kept working for one release so a bot pointed at the old URL still links.
    */
   async handleUpdate(platform: BotPlatform, update: BotUpdate): Promise<void> {
     try {
@@ -190,11 +213,26 @@ export class BotLinkService {
       const chatId = String(message.chat.id);
 
       if (message.contact) {
-        await this.handleContact(platform, chatId, message.from?.id, message.contact);
+        const outcome = await this.submitContact(
+          platform,
+          chatId,
+          message.from?.id,
+          message.contact,
+        );
+        await this.render(platform, chatId, outcome);
         return;
       }
       if (typeof message.text === 'string') {
-        await this.handleText(platform, chatId, message.text, message.from?.language_code);
+        const startToken = /^\/start(?:@\S+)?(?:\s+(\S+))?/.exec(
+          message.text.trim(),
+        )?.[1];
+        const outcome = await this.resolveStart(
+          platform,
+          chatId,
+          startToken,
+          message.from?.language_code,
+        );
+        await this.render(platform, chatId, outcome);
       }
     } catch (e: unknown) {
       this.logger.error(
@@ -205,24 +243,26 @@ export class BotLinkService {
     }
   }
 
-  // --- conversation -------------------------------------------------------
+  // --- conversation: decides, renders nothing -----------------------------
 
-  private async handleText(
+  /**
+   * The chat opened the bot with `?start=<token>`. Answers what has to happen
+   * next: ask for the contact, or (for a chat already linked to this number)
+   * go straight to the code.
+   */
+  async resolveStart(
     platform: BotPlatform,
     chatId: string,
-    text: string,
+    startToken: string | undefined,
     languageCode?: string,
-  ): Promise<void> {
-    const startToken = /^\/start(?:@\S+)?(?:\s+(\S+))?/.exec(text.trim())?.[1];
+  ): Promise<BotLinkOutcome> {
     if (!startToken) {
-      await this.reply(platform, chatId, this.fallbackLang(languageCode), 'unknownCommand');
-      return;
+      return this.plain('unknownCommand', this.fallbackLang(languageCode));
     }
 
     const link = await this.store.byToken(startToken);
     if (!link || link.platform !== platform) {
-      await this.reply(platform, chatId, this.fallbackLang(languageCode), 'expired');
-      return;
+      return this.plain('expired', this.fallbackLang(languageCode));
     }
 
     // Already linked from this very chat: the user pressed the link again, or
@@ -238,30 +278,31 @@ export class BotLinkService {
     });
     if (alreadyLinked) {
       await this.store.bindChat(platform, chatId, link.token);
-      await this.completeLink(platform, chatId, link);
-      return;
+      return this.completeLink(platform, chatId, link);
     }
 
     await this.store.bindChat(platform, chatId, link.token);
-    const client = this.bots.client(platform);
-    await client?.requestContact(
-      chatId,
-      botLinkMessage(this.locale, link.lang, 'askContact'),
-      botLinkMessage(this.locale, link.lang, 'askContactButton'),
-    );
+    return {
+      state: link.state,
+      needsContact: true,
+      otpSent: false,
+      messageKey: 'askContact',
+      lang: link.lang,
+    };
   }
 
-  private async handleContact(
+  /**
+   * The chat shared a contact. This is the ownership proof behind invariant
+   * #12 and it lives here alone — no other surface may re-implement it.
+   */
+  async submitContact(
     platform: BotPlatform,
     chatId: string,
     senderId: number | string | undefined,
     contact: BotContact,
-  ): Promise<void> {
+  ): Promise<BotLinkOutcome> {
     const link = await this.store.byChat(platform, chatId);
-    if (!link) {
-      await this.reply(platform, chatId, this.fallbackLang(), 'expired');
-      return;
-    }
+    if (!link) return this.plain('expired', this.fallbackLang());
 
     // ── The ownership proof. A contact card can carry any phone number; it
     // cannot carry a `user_id` other than its real owner's. If the card
@@ -271,14 +312,12 @@ export class BotLinkService {
       this.logger.warn(
         `${platform}: contact sent by ${senderId} describes ${contact.user_id ?? 'nobody'} — rejected`,
       );
-      await this.fail(platform, chatId, link, 'senderMismatch', 'otp.botLink.senderMismatch');
-      return;
+      return this.fail(link, 'senderMismatch', 'otp.botLink.senderMismatch');
     }
 
     const shared = normalizeMessengerPhone(contact.phone_number);
     if (!shared || shared !== link.phoneNumber) {
-      await this.fail(platform, chatId, link, 'phoneMismatch', 'otp.botLink.phoneMismatch');
-      return;
+      return this.fail(link, 'phoneMismatch', 'otp.botLink.phoneMismatch');
     }
 
     // One messenger account, one platform account.
@@ -291,14 +330,11 @@ export class BotLinkService {
       select: { id: true },
     });
     if (takenBySomeoneElse) {
-      await this.fail(
-        platform,
-        chatId,
+      return this.fail(
         link,
         'takenByAnotherAccount',
         'otp.botLink.takenByAnotherAccount',
       );
-      return;
     }
 
     const user = await this.prisma.user.findFirst({
@@ -313,13 +349,11 @@ export class BotLinkService {
       // moment the user is created.
       if (link.purpose === OtpPurpose.register_phone_verify) {
         await this.store.saveProvenChat(platform, link.phoneNumber, chatId);
-        await this.completeLink(platform, chatId, link);
-        return;
+        return this.completeLink(platform, chatId, link);
       }
       // Otherwise the sender has proven this number is theirs, so telling them
       // it has no account reveals nothing they could not already establish.
-      await this.fail(platform, chatId, link, 'noAccount', 'otp.botLink.noAccount');
-      return;
+      return this.fail(link, 'noAccount', 'otp.botLink.noAccount');
     }
 
     await this.prisma.linkedBotAccount.upsert({
@@ -338,15 +372,15 @@ export class BotLinkService {
       },
     });
 
-    await this.completeLink(platform, chatId, link);
+    return this.completeLink(platform, chatId, link);
   }
 
-  /** Link is good: record it, take the keyboard down, send the code. */
+  /** Link is good: record it, send the code. */
   private async completeLink(
     platform: BotPlatform,
     chatId: string,
     link: PendingBotLink,
-  ): Promise<void> {
+  ): Promise<BotLinkOutcome> {
     link.state = 'linked';
     delete link.failureKey;
 
@@ -375,37 +409,68 @@ export class BotLinkService {
     await this.store.update(link);
     await this.store.releaseChat(platform, chatId);
 
-    const client = this.bots.client(platform);
-    await client?.clearKeyboard(
-      chatId,
-      botLinkMessage(this.locale, link.lang, sent ? 'linked' : 'linkedNoCode'),
-    );
+    return {
+      state: 'linked',
+      needsContact: false,
+      otpSent: sent,
+      messageKey: sent ? 'linked' : 'linkedNoCode',
+      lang: link.lang,
+    };
   }
 
   private async fail(
-    platform: BotPlatform,
-    chatId: string,
     link: PendingBotLink,
-    messageKey: Parameters<typeof botLinkMessage>[2],
+    messageKey: BotLinkMessageKey,
     failureKey: string,
-  ): Promise<void> {
+  ): Promise<BotLinkOutcome> {
     link.state = 'failed';
     link.failureKey = failureKey;
     await this.store.update(link);
-    await this.reply(platform, chatId, link.lang, messageKey);
+    return {
+      state: 'failed',
+      needsContact: false,
+      otpSent: false,
+      messageKey,
+      failureKey,
+      lang: link.lang,
+    };
   }
 
-  private async reply(
+  /** An answer that changed no state — an expired token, an unknown command. */
+  private plain(messageKey: BotLinkMessageKey, lang: string): BotLinkOutcome {
+    return {
+      state: 'failed',
+      needsContact: false,
+      otpSent: false,
+      messageKey,
+      failureKey: messageKey === 'expired' ? 'otp.botLink.expired' : undefined,
+      lang,
+    };
+  }
+
+  /** Says the outcome out loud, for the surface that owns the webhook itself. */
+  private async render(
     platform: BotPlatform,
     chatId: string,
-    lang: string,
-    messageKey: Parameters<typeof botLinkMessage>[2],
+    outcome: BotLinkOutcome,
   ): Promise<void> {
     const client = this.bots.client(platform);
-    await client?.sendMessage(
-      chatId,
-      botLinkMessage(this.locale, lang, messageKey),
-    );
+    if (!client) return;
+    const text = botLinkMessage(this.locale, outcome.lang, outcome.messageKey);
+
+    if (outcome.needsContact) {
+      await client.requestContact(
+        chatId,
+        text,
+        botLinkMessage(this.locale, outcome.lang, 'askContactButton'),
+      );
+      return;
+    }
+    if (outcome.state === 'linked') {
+      await client.clearKeyboard(chatId, text);
+      return;
+    }
+    await client.sendMessage(chatId, text);
   }
 
   /** Language for a chat we have no pending record for. */

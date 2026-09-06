@@ -1,7 +1,7 @@
 ---
 id: threat-model
 status: active
-updated: 2026-09-04
+updated: 2026-09-06
 ---
 
 # Threat model
@@ -51,7 +51,7 @@ leak. See ADR-0001 and `operations/migrations.md`.
 | Redis password | env | manual | read all sessions/OTP; DoS |
 | Postgres password | env | manual | full data access |
 | Tenant gateway / bot / SMS credentials | DB columns marked "Encrypted" (cipher + key mechanism **undecided** — open question in `tenant`) | per tenant | that tenant's payment / bot takeover |
-| Node panel API credentials | `network.node` (encrypted, planned) | per node | node takeover |
+| Panel API credentials | `network.panel.panelApiCredentials` (encrypted, planned) | per Panel | Panel takeover |
 | Traefik dashboard / registry htpasswd | `.env.*` | manual | ops-plane access |
 | ACME account / certs | `dev_letsencrypt/acme.json` | automatic (Let's Encrypt) | cert misissue |
 

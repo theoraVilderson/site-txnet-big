@@ -1,10 +1,11 @@
-import { killPort } from '@nx/node/utils';
-/* eslint-disable */
+import { rmSync } from 'node:fs';
+import { INFRA_FILE } from './infra';
 
-module.exports = async function() {
-  // Put clean up logic here (e.g. stopping services, docker-compose, etc.).
-  // Hint: `globalThis` is shared between setup and teardown.
-  const port = process.env.PORT ? Number(process.env.PORT) : 3000;
-  await killPort(port);
-  console.log(globalThis.__TEARDOWN_MESSAGE__);
+module.exports = async function () {
+  const stop = (globalThis as any).__E2E_STOP_INFRA__ as
+    | (() => Promise<void>)
+    | undefined;
+  if (stop) await stop();
+  rmSync(INFRA_FILE, { force: true });
+  console.log('\n[e2e] infrastructure stopped\n');
 };

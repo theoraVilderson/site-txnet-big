@@ -18,6 +18,8 @@ import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { ResponseType } from '../../common/response/response.util';
 import { RateLimit } from '../decorators/rate-limit.decorator';
 import { RequireCaptcha } from '../decorators/require-captcha.decorator';
+import { rateLimitSubject } from '../../common/security/service-caller';
+import { resolveSwitchScope } from '../../common/security/switch-scope';
 import { NoActiveSessionGuard } from '../guards/no-active-session.guard';
 
 @Controller('auth')
@@ -33,7 +35,7 @@ export class RegisterController {
   @UsePipes(new ZodValidationPipe(registerSchema))
   @RequireCaptcha()
   @RateLimit({
-    key: (req) => `register:${req.ip}`,
+    key: (req) => `register:${rateLimitSubject(req)}`,
     limit: 10,
     windowSec: 3600,
   })
@@ -50,7 +52,7 @@ export class RegisterController {
   @HttpCode(HttpStatus.OK)
   @UsePipes(new ZodValidationPipe(verifyPhoneSchema))
   @RateLimit({
-    key: (req) => `register:verify:${req.ip}`,
+    key: (req) => `register:verify:${rateLimitSubject(req)}`,
     limit: 20,
     windowSec: 3600,
   })
@@ -68,6 +70,7 @@ export class RegisterController {
         user,
         req.ip ?? '0.0.0.0',
         req.get('user-agent') ?? 'unknown',
+        resolveSwitchScope(req),
       );
       const { refreshToken, ...safeTokens } = tokens;
       const DOMAINNAME = process.env.DOMAIN_NAME!;

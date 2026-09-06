@@ -22,7 +22,7 @@ source:
   - txnet-backend/auth-service/src/app/impersonation/impersonation.service.ts
 owns_tables: [user, session, role, permission, role_permission, otp_code, linked_bot_account]
 depends_on: [audit, i18n, redis-keyspace]
-updated: 2026-09-05
+updated: 2026-09-06
 ---
 
 # Identity
@@ -31,9 +31,9 @@ See [contract.md](contract.md), [invariants.md](invariants.md), [rules.md](rules
 ## Changelog
 | Date | Change |
 |---|---|
-| 2026-09-05 | OTP channels are now environment-switched (`OtpChannelRegistry`: `OTP_ALLOWED_CHANNELS` + "is the sender configured?"), and an unlinked messenger no longer falls back silently — it answers with a bot deep link. Adds `bot-link/**`, `LinkedBotAccount.phoneNumber`/`contactVerifiedAt`, `OtpPurpose.account_link`. spec: F-0202 F-0203 |
-| 2026-09-05 | Password reset now revokes every session **and** issues one new session for the device that performed it (contract v3). Fix: `issueOtp` drew a 5-digit code while every schema demanded 6, so a code could never verify; fix: OTP/bot copy reads the `notifications` namespace, which is the one locale-service actually serves (it was asking for a non-existent `otp` namespace and silently falling back to English). spec: F-0204 |
-| 2026-09-04 | Breaking (requested): `user` row is now created in verify-phone, not in register — see invariants.md #11, contract.md. `panel-web` updated to match. |
-| 2026-09-05 | SYNC: narrowed `source:` from `app/auth/**` to the explicit service files this unit owns; captcha is `auth-api`'s (bot-check, not an identity rule) |
-| 2026-09-05 | SYNC: `impersonation.controller.ts`/`.module.ts`/`guards/**` moved to `auth-api` (transport) — this unit keeps only `impersonation.service.ts` (the rules) |
+| 2026-09-06 | Contract v5 -> **v6** (additive, ADR-0015): `Session.scopeKey` records the surface a session was minted on, `refresh` carries it forward, and a new scoped revoke (`revokeSessionsForUserInScope`) lets `audit`'s F-0208 sign an account out of one surface without touching the others. Adds `SessionRevokedReason.account_unlinked` |
+| 2026-09-06 | contract v5 (additive): a **session handover** for `audit`'s switch (`AuthService.switchSession`) — one transaction revokes the outgoing session `account_switched` and writes the incoming one, then the Redis markers are updated outgoing-first so `AuthGuard` never sees two. New `SessionRevokedReason.account_switched` (migration). spec: F-0207 |
+| 2026-09-06 | contract v4 (additive): three **prove account** operations for `audit`'s switch group — password, issue-OTP, verify-OTP. They mint nothing and answer `null` for every failure alike. New `OtpPurpose.account_switch_link`. spec: F-0205 |
+| 2026-09-06 | ADR-0012: a contact-verified `linked_bot_account` authenticates its user directly (`bots/session`, `user` role only). Rules #13–#14 |
+| 2026-09-06 | `BotLinkService` now *decides* and returns an outcome instead of also sending the message, so `bot-service` can drive the same flow over `bots/link/{resolve,contact}` — the contact proof (invariant #12) is still enforced here and only here. The `messenger` seed (`bot-client.registry.ts`, `telegram-like-bot.client.ts`) left this unit for `@txnet-backend/messenger` (ADR-0009's migration path). spec: F-303 |
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

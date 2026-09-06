@@ -7,8 +7,8 @@
 #   scripts/set-bot-webhook.sh dev telegram delete
 #
 # The URL is not configuration — it is derived from the public base and the
-# platform's own webhook secret, exactly as auth-service serves it:
-#   <base>/api/auth/bots/<platform>/webhook/<secret>
+# platform's own webhook secret, exactly as bot-service serves it:
+#   <base>/api/bot/<platform>/webhook/<secret>
 # where <base> is <PLATFORM>_WEBHOOK_PUBLIC_BASE, else BOT_WEBHOOK_PUBLIC_BASE,
 # else https://api.<DOMAIN_NAME>.
 # A bot token holds only ONE webhook, so dev and prod need separate bots.
@@ -66,7 +66,7 @@ for platform in $PLATFORMS; do
   # Same order auth-service's BotWebhookRegistrar resolves it in: this
   # platform's own front door, then a shared one, then api.<DOMAIN_NAME>.
   base="${public_base:-${BOT_WEBHOOK_PUBLIC_BASE:-https://api.${DOMAIN_NAME}}}"
-  url="${base%/}/api/auth/bots/${platform}/webhook/${secret}"
+  url="${base%/}/api/bot/${platform}/webhook/${secret}"
 
   case "$ACTION" in
     show)
@@ -78,9 +78,14 @@ for platform in $PLATFORMS; do
       # secret_token is a Telegram-only extra; auth-service checks it when
       # present and always checks the secret in the path, which is what Bale
       # can carry. An unsupported field is ignored by Bale.
+      #
+      # allowed_updates must name callback_query: every bot screen is an inline
+      # keyboard, so a webhook without it delivers typed messages and silently
+      # drops every button tap. Keep this list identical to
+      # WEBHOOK_ALLOWED_UPDATES in messenger/src/lib/telegram-like-bot.client.ts.
       curl -sS -X POST "${api}/bot${token}/setWebhook" \
         -H 'Content-Type: application/json' \
-        -d "{\"url\":\"${url}\",\"secret_token\":\"${secret}\",\"allowed_updates\":[\"message\"]}" \
+        -d "{\"url\":\"${url}\",\"secret_token\":\"${secret}\",\"allowed_updates\":[\"message\",\"callback_query\"]}" \
         && echo ;;
     *) echo "unknown action: $ACTION" >&2; exit 2 ;;
   esac

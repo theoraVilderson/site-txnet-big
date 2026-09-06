@@ -1,7 +1,7 @@
 ---
 id: identity
 layer: domain
-updated: 2026-09-05
+updated: 2026-09-06
 ---
 
 # Business rules — identity
@@ -28,6 +28,8 @@ performs `revoke(old, user_logout)` + `create(new)` atomically (token rotation).
 | 6 | Impersonation session lifetime is 30 min and cannot perform `SensitiveActionGuard` actions | impersonated request | — |
 | 7 | Access-token `permissions[]` is a snapshot from `role_permission` at sign time | token issue | stale until token expires |
 | 11 | Failed password logins are counted 10 per 900s in a bucket keyed on the normalized identifier (`login-failures:<username\|09xxxxxxxxx>`), reset on a correct password | password login | the counter is consumed before the password is checked, so the 11th attempt in a window is locked even if its password is right |
+| 13 | A `linked_bot_account` with `contactVerifiedAt` set authenticates its user directly: `bots/session` issues the ordinary token pair, no OTP (ADR-0012). Allowed for the `user` role only (`BOT_SESSION_ROLES`) | bot sign-in | an **allow-list**: Support/Admin/SuperAdmin and any role added later are refused with `auth.botFactorNotAllowed` until deliberately admitted. Account conditions answer exactly as password login does — deleted/inactive -> `auth.invalidCredentials`, unverified phone -> `auth.phoneVerificationRequired` |
+| 14 | A contact card sent *with* a `bots/session` request links the chat on the spot: same proof as rule 9 (`contact.user_id === message.from.id`), but the account is found **by the card's own phone number** rather than one typed beforehand | bot sign-in, no link yet | this is the only link not anchored to a phone the caller named first — the card carries a number the platform vouches for. No account on that number -> `otp.botLink.noAccount`, which reveals nothing: the sender has just proven the number is theirs |
 | 12 | Order of answers on password login: account missing/deleted/inactive -> `auth.invalidCredentials`; lock -> `auth.temporarilyLocked`; wrong password -> `auth.invalidCredentials`; only then unverified phone -> `auth.phoneVerificationRequired` | password login | the unverified-phone key is deliberately last: answered earlier it tells an anonymous caller the account exists (invariant #6) |
 
 ## Edge cases decided
@@ -38,6 +40,8 @@ performs `revoke(old, user_logout)` + `create(new)` atomically (token rotation).
 | Login OTP request for unknown/inactive phone | still return `{accepted:true}`, send nothing | 2026-09-04 (observed) |
 | Two link requests for the same (platform, phone) inside the TTL | hand back the same token and deep link; a second link would orphan the one already open in the messenger | 2026-09-05 (decided) |
 | Bot webhook called with a wrong/absent secret | 404, identical to an unknown route — a URL that answers differently can be probed | 2026-09-05 (decided) |
+| A chat that asks for its code *in the messenger it is already talking to* | superseded by ADR-0012 — the code was re-delivering a proof already held, and the option's label lied whenever the typed phone belonged to a different chat. `bots/session` signs the chat in instead; the bot no longer offers it. The mechanism (`link/resolve` + `link/contact` in place) stays for the panel-driven flow | 2026-09-06 (decided), revised 2026-09-06 (ADR-0012) |
+| Bot-originated auth calls and the slide captcha | waived for a caller proving `SERVICE_AUTH_TOKEN`, because a chat cannot drag a slider. The per-chat rate-limit bucket and the OTP cooldown carry that load instead (ADR-0011) | 2026-09-06 (decided, owner) |
 | A verified contact whose phone has no account | reply "no account is registered with this number" and link nothing; the sender has already proven the number is theirs, so this reveals nothing new to them | 2026-09-05 (decided) |
 | Register re-submitted for a phone with a still-pending (unverified) registration | overwrite the pending Redis record + issue a fresh OTP; the previous attempt's data/OTP become invalid | 2026-09-04 (decided) |
 | Register reveals that a phone is already taken (`register.duplicateUser`), while login OTP deliberately does not (rule 2) | keep it. `POST /auth/register` is behind `@RequireCaptcha()` and 10/hour/IP, so this is a one-number-at-a-time lookup, not bulk enumeration, and telling a returning user "you already have an account" is worth more than closing it. Do **not** "fix" this to match rule 2 without the owner's call — the uniform-response version needs a notification to the real owner, equal argon2 timing on both branches, and a per-phone rate limit, or it trades an oracle for an OTP-spam vector | 2026-09-05 (decided, owner) |

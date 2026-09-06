@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 2
-updated: 2026-09-05
+version: 4
+updated: 2026-09-06
 ---
 
 # Contract — panel-web
@@ -41,12 +41,19 @@ below).
 | `GET /api/i18n/meta` | available locales + metadata |
 | `GET /api/i18n/version` | current locale snapshot version (for client cache-busting) |
 
+## Screens
+
+`/(auth)/auth/*` — login, signup, forgot-password. `/` — the panel home (which
+account this browser is, plus the group). `/accounts/add` — adding an account
+to the switch group, its two tabs being the two proofs `auth-api` accepts.
+
 ## Client API surface
 
 `lib/auth-api.ts` `authApi.*` — `loginPassword`, `otpChannels`,
 `requestLoginOtp`, `verifyLoginOtp`, `register`, `verifyPhone`, `forgot`,
-`verifyForgot`, `reset`, `botLinkStatus`, `refresh`, `logout`,
-`captchaChallenge`, `captchaVerify`. All call
+`verifyForgot`, `reset`, `botLinkStatus`, `refresh`, `ensureSession`, `logout`,
+`captchaChallenge`, `captchaVerify`, `listAccounts`, `addAccountOtpRequest`,
+`addAccountOtpVerify`, `addAccountPassword`, `switchAccount`. All call
 `${NEXT_PUBLIC_API_ORIGIN}/api/*` (cross-origin) with `credentials: "include"`;
 on success the access token is stored in a module variable.
 
@@ -77,6 +84,52 @@ user waiting for a code that will never arrive.
 One-time codes are `OTP_LENGTH` (6) digits — `lib/otp.ts`. The API validates
 that exact length, so the input must not use another.
 
+## The panel's own session, and the account switcher (F-0206…F-0209)
+
+The access token lives in a module variable, so a page load starts with none —
+but the httpOnly refresh cookie is still there. `PanelSessionProvider`
+(`app/(panel)/_context/PanelSessionContext.tsx`) sits in the `(panel)` layout
+and turns one into the other, then reads `GET /auth/accounts`.
+
+`authApi.ensureSession()` does that **once per page load**, and the "once"
+is load-bearing: `refresh` rotates the token, so two concurrent calls race and
+the loser is handed a token that no longer resolves to a session. React Strict
+Mode alone produces that pair. A single cached promise is the whole mechanism.
+
+No live session sends the visitor to `AUTH_LOGIN`. That is the mirror of the
+auth-screen guard below: one keeps a signed-in visitor off the login screen,
+the other keeps a signed-out one off the panel.
+
+A switch (`authApi.switchAccount`) ends in a **full** `window.location`
+navigation, never `router.push`. Everything this app has already fetched
+belongs to the account being left, and the session it was fetched with is
+revoked server-side by that same call — throwing the page away is the only
+honest way to change who the tab is. `src/proxy.ts` needed no change for any of
+this: a switch never visits an auth screen, so it was never an F-0101
+collision.
+
+Phone numbers arrive already masked from `GET /auth/accounts`; this app never
+receives the full number of a group member and must not try to render one.
+
+### The group belongs to this browser (ADR-0015)
+
+The set the switcher shows is **this browser's**, not the user's everywhere:
+the server partitions it by a `device_id` httpOnly cookie it mints itself. Three
+things follow for this app:
+
+- **It never sees or sends the scope.** The cookie is httpOnly and rides along
+  because every call sets `credentials: "include"` (`lib/auth-api.ts`). Dropping
+  that would send account calls with no scope at all, and every one would be
+  refused — so it is not a detail to tidy away.
+- **A different browser, or a cleared cookie, is a different place** and starts
+  with an empty group. That is the intended reading, not a bug to report: the
+  accounts are untouched and the set is rebuilt one click at a time.
+- **Removing an account (`F-0208`) removes it here only.** The switcher's remove
+  control asks inline before acting; removing the *current* account revokes this
+  browser's own session, so that path does a full `window.location` reload
+  rather than `reload()`ing the group — the token this tab holds is already
+  dead. Removing anyone else leaves the session alone and just re-reads.
+
 ## Auth-screen session guard (F-0101)
 
 A signed-in visitor must never be shown the login or signup screen. The check
@@ -93,12 +146,22 @@ otherwise).
 | cookie present, still live | 307 to `PANEL_HOME` before any HTML is sent | one server-to-server call |
 | cookie present, dead | falls through to the form, cookie cleared | one server-to-server call, once |
 
-`POST /api/auth/refresh` is the question asked, because it is the only route
-that takes a refresh token: `ok: true` means the visitor is signed in, anything
-else means they need to log in. auth-service's `Set-Cookie` headers are
-forwarded to the browser verbatim, so the rotated token lands on success and the
-dead one is cleared on failure — after which the visitor is on the no-cookie row
-and pays nothing again.
+`GET /api/auth/session` is the question asked. It answers
+`{ok:true, data:{active}}` and changes nothing; `active: true` means the visitor
+is signed in, anything else means they need to log in. auth-service's
+`Set-Cookie` headers are still forwarded verbatim, so the clear of a dead token
+reaches the browser — after which the visitor is on the no-cookie row and pays
+nothing again.
+
+**It must not be `/auth/refresh`** (ADR-0013). Refresh *rotates*: it revokes the
+session it is asked about and mints a replacement. This handler runs on far more
+requests than the visitor ever sees a response to — `config.matcher` covers every
+non-static path, so RSC prefetches of `/auth/login`, redirects and in-flight
+duplicates all reach it — and every one of those rotations returned the new token
+in a `Set-Cookie` the browser might discard. The browser was then left holding a
+revoked cookie that still looked present, and the panel's own `ensureSession()`
+bounced the user to the login screen on the next page load. The rows it minted
+are still identifiable in `identity.session` by `userAgent = node`.
 
 **Fails open, always to the auth screen.** auth-service unreachable, a timeout
 (4s), an unparseable body — every one of them shows the form. A signed-in user

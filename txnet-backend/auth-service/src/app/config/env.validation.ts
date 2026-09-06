@@ -85,6 +85,12 @@ export const envSchema = z.object({
   BALE_WEBHOOK_SECRET: optional(z.string().min(16)),
   BALE_WEBHOOK_PUBLIC_BASE: optional(z.string().url()),
 
+  // Shared secret another service of this platform (bot-service) sends as
+  // `X-Service-Token`. It waives the captcha and re-buckets the rate limit —
+  // nothing else. Unset means no service may call: the captcha stands for
+  // everyone. See ADR-0011.
+  SERVICE_AUTH_TOKEN: optional(z.string().min(32)),
+
   JWT_ACCESS_SECRET: z
     .string()
     .min(16, 'JWT_ACCESS_SECRET must be at least 16 characters long'),

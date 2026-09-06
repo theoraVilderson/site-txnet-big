@@ -29,6 +29,13 @@ import { RateLimit } from './decorators/rate-limit.decorator';
 import { RequireCaptcha } from './decorators/require-captcha.decorator';
 import { ConfigService } from '@nestjs/config';
 import { NoActiveSessionGuard } from './guards/no-active-session.guard';
+import { rateLimitSubject } from '../common/security/service-caller';
+import {
+  refreshCookieOptions,
+  withRefreshCookie,
+} from '../common/http/refresh-cookie';
+import { readCookie } from '../common/http/cookies';
+import { resolveSwitchScope } from '../common/security/switch-scope';
 
 @Controller('auth')
 export class AuthController {
@@ -49,7 +56,7 @@ export class AuthController {
   @UsePipes(new ZodValidationPipe(passwordLoginSchema))
   @RequireCaptcha()
   @RateLimit({
-    key: (req) => `login:pwd:${req.ip}`,
+    key: (req) => `login:pwd:${rateLimitSubject(req)}`,
     limit: 20,
     windowSec: 900,
   })
@@ -64,6 +71,7 @@ export class AuthController {
       ip,
       this.ua(req),
       this.lang(req),
+      resolveSwitchScope(req),
     );
     return this.withRefreshCookie(res, result);
   }
@@ -74,7 +82,7 @@ export class AuthController {
   @UsePipes(new ZodValidationPipe(otpRequestSchema))
   @RequireCaptcha()
   @RateLimit({
-    key: (req) => `login:otp:req:${req.ip}`,
+    key: (req) => `login:otp:req:${rateLimitSubject(req)}`,
     limit: 10,
     windowSec: 900,
   })
@@ -92,7 +100,7 @@ export class AuthController {
   @UseGuards(NoActiveSessionGuard)
   @UsePipes(new ZodValidationPipe(otpVerifySchema))
   @RateLimit({
-    key: (req) => `login:otp:verify:${req.ip}`,
+    key: (req) => `login:otp:verify:${rateLimitSubject(req)}`,
     limit: 20,
     windowSec: 900,
   })
@@ -102,8 +110,39 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.auth.verifyLoginOtp(body, ip, this.ua(req));
+    const result = await this.auth.verifyLoginOtp(
+      body,
+      ip,
+      this.ua(req),
+      resolveSwitchScope(req),
+    );
     return this.withRefreshCookie(res, result);
+  }
+
+  /**
+   * Is this visitor signed in? Read-only, and the only route that answers it.
+   *
+   * `refresh` used to double as this question, but refreshing rotates: it
+   * revoked the caller's session and minted a replacement, so a probe that
+   * discarded the rotated `Set-Cookie` left the browser with a dead cookie it
+   * still displayed as present. `panel-web`'s proxy (F-0101) asks this instead.
+   *
+   * A dead token is still cleared here — it can never succeed again, and every
+   * later page load would otherwise pay for the same answer.
+   */
+  @Get('session')
+  @HttpCode(HttpStatus.OK)
+  async session(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const token = readCookie(req.headers.cookie, 'refresh_token');
+    const result = await this.auth.sessionStatus(token);
+    const active = result.ok && result.data.active;
+    if (token && !active) {
+      res.clearCookie('refresh_token', this.cookieOptions());
+    }
+    return result;
   }
 
   @Post('refresh')
@@ -150,7 +189,7 @@ export class AuthController {
   @UsePipes(new ZodValidationPipe(forgotPasswordSchema))
   @RequireCaptcha()
   @RateLimit({
-    key: (req) => `pwd:forgot:${req.ip}`,
+    key: (req) => `pwd:forgot:${rateLimitSubject(req)}`,
     limit: 10,
     windowSec: 900,
   })
@@ -162,7 +201,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UsePipes(new ZodValidationPipe(forgotVerifySchema))
   @RateLimit({
-    key: (req) => `pwd:forgot:verify:${req.ip}`,
+    key: (req) => `pwd:forgot:verify:${rateLimitSubject(req)}`,
     limit: 20,
     windowSec: 900,
   })
@@ -176,7 +215,7 @@ export class AuthController {
   @Get('otp/channels')
   @HttpCode(HttpStatus.OK)
   @RateLimit({
-    key: (req) => `otp:channels:${req.ip}`,
+    key: (req) => `otp:channels:${rateLimitSubject(req)}`,
     limit: 60,
     windowSec: 900,
   })
@@ -196,44 +235,23 @@ export class AuthController {
     // The reset revoked every session this user had; the response carries a
     // new one for the device that performed it, so "all other devices are
     // signed out" is true without also signing this one out.
-    const result = await this.auth.resetPassword(body, ip, this.ua(req));
+    const result = await this.auth.resetPassword(
+      body,
+      ip,
+      this.ua(req),
+      resolveSwitchScope(req),
+    );
     return this.withRefreshCookie(res, result);
   }
 
-  private async withRefreshCookie(res: Response, result: any) {
-    if (result?.ok && result?.data?.refreshToken) {
-      res.cookie(
-        'refresh_token',
-        result.data.refreshToken,
-        this.cookieOptions(),
-      );
-      const { refreshToken, ...restData } = result.data;
-      result.data = restData;
-    }
-    return result;
+  // Both live in common/http/refresh-cookie.ts now: account-switch mints
+  // sessions too (F-0207), and two definitions of this cookie would mean two
+  // cookies in the browser.
+  private withRefreshCookie(res: Response, result: any) {
+    return withRefreshCookie(res, result);
   }
 
   private cookieOptions() {
-    const DOMAINNAME = process.env.DOMAIN_NAME!;
-
-    return {
-      httpOnly: true,
-      secure: process.env.COOKIE_SECURE !== 'false',
-      sameSite: 'lax' as const,
-      path: '/', // تغییر اول
-      domain: `.${DOMAINNAME}`, // تغییر دوم
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    };
+    return refreshCookieOptions();
   }
-}
-
-function readCookie(
-  header: string | undefined,
-  name: string,
-): string | undefined {
-  const value = header
-    ?.split(';')
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${name}=`));
-  return value ? decodeURIComponent(value.slice(name.length + 1)) : undefined;
 }

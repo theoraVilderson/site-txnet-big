@@ -1,13 +1,14 @@
 ---
 id: messenger
 layer: platform
-status: draft
+status: active
 version: 1
 keywords: [telegram, bale, messenger, bot client, capability flag, degradation, inline keyboard, webapp, sendMessage, ربات, تلگرام, بله, قابلیت, افت قابلیت]
-source: []
+source:
+  - txnet-backend/messenger/src/**
 owns_tables: []
 depends_on: [tenant]
-updated: 2026-09-05
+updated: 2026-09-06
 ---
 
 # messenger
@@ -29,10 +30,10 @@ any business rule, translation content (`i18n`), account linking (`identity`,
 
 ## Status
 
-`draft`, `source: []` — no code claims this unit yet. Its seed
-(`otp/senders/bot-client.registry.ts`, `otp/senders/telegram-like-bot.client.ts`)
-still sits under `identity`; ADR-0009 records when it moves. Do not describe
-this unit's behaviour as if it exists.
+`active` — an Nx library, `@txnet-backend/messenger`. Two consumers import it:
+`auth-service` (OTP delivery) and, from `F-303-b`, `bot-service`. The driver,
+the dated capability set, the `BotView` renderer and the deep-link adapter
+exist; media sending, payments and per-tenant branding do not.
 
 ## Changelog
 | Date | Change |
@@ -40,5 +41,6 @@ this unit's behaviour as if it exists.
 | 2026-09-05 | Created by ADR-0009 as the single home for messenger differences |
 | 2026-09-05 | Webhook addressing settled: one unguessable path per bot, not one shared door |
 | 2026-09-05 | Capability table verified against docs.bale.ai. The catalog's "Bale is a subset" premise does not hold: the divergence is **shape** (base URL, deep link, global name, payment rails), not missing capability. See ADR-0009's amendment |
+| 2026-09-06 | `draft -> active`: the unit ships as the Nx library `@txnet-backend/messenger`. The ADR-0009 seed moved out of `identity`, and `capabilities.ts` / `renderer.ts` / `deep-link.ts` are new. spec: F-301 F-302 |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

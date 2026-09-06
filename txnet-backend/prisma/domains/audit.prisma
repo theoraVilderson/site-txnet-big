@@ -76,7 +76,10 @@ model ImpersonationSession {
   @@schema("audit")
 }
 
-/// 14.3 — سوییچ اکانت (خودِ کاربر)؛ هر کاربر فقط عضو یک گروه.
+/// 14.3 — Account switching (the user's own accounts). A group belongs to the
+/// surface instance it was built on — one bot chat, or one browser — never to
+/// the person globally (ADR-0015). The same account therefore holds a different
+/// set in each place it is used, and neither leaks into the other.
 model LinkedAccountGroup {
   id        String   @id @default(uuid()) @db.Uuid
   createdAt DateTime @default(now())
@@ -90,12 +93,27 @@ model LinkedAccountGroup {
 model LinkedAccountMember {
   id             String   @id @default(uuid()) @db.Uuid
   groupId        String   @db.Uuid
-  userId         String   @unique @db.Uuid
+  userId  String @db.Uuid
+
+  /// Which surface instance this membership was proved for (ADR-0015):
+  /// `bot:<platform>:<chatId>` for a chat, `device:<uuid>` for a browser.
+  /// It is a partition key, not a credential — forging one buys nothing,
+  /// because a member row still has to exist under it.
+  ///
+  /// Invariant: every member row of one `groupId` shares one `scopeKey`.
+  /// `AccountSwitchService.join` is the only writer, and it is what holds this.
+  scopeKey String
+
   addedAt        DateTime @default(now())
   verifiedViaOtp Boolean  @default(false)
 
   group LinkedAccountGroup @relation(fields: [groupId], references: [id])
 
+  // Was `userId @unique` before ADR-0015: one group per person, everywhere.
+  // Uniqueness moved onto the pair, so an account may hold one group per
+  // scope and joining is still a move *within* a scope (audit invariant #3).
+  @@unique([scopeKey, userId])
+  @@index([groupId])
   @@map("linked_account_member")
   @@schema("audit")
 }

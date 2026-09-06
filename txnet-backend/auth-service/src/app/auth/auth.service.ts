@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as argon2 from 'argon2';
+import { SessionRevokedReason } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RateLimiter } from '../common/rate-limit/rate-limiter';
 import {
@@ -23,13 +24,18 @@ import {
   OTP_SERVICE,
 } from './otp/otp.interface';
 import { OtpChannelRegistry } from './otp/otp-channels.service';
-import { BotPlatform } from './otp/senders/bot-client.registry';
+import { BotPlatform } from '@txnet-backend/messenger';
 import { BotLinkService } from './bot-link/bot-link.service';
 import { TokenService } from './token.service';
 import { SessionService } from './session/session.service';
 import { SessionStore } from './session/session.store';
 import { Inject } from '@nestjs/common';
-import { ok, err, safeExecute } from '../common/response/response.util';
+import {
+  ok,
+  err,
+  safeExecute,
+  type ResponseType,
+} from '../common/response/response.util';
 import {
   ForgotPasswordInput,
   ForgotVerifyInput,
@@ -67,6 +73,7 @@ export class AuthService {
     ip: string,
     userAgent: string,
     lang: string,
+    scopeKey?: string | null,
   ) {
     return safeExecute(async () => {
       const type = detectIdentifierType(input.identifier);
@@ -133,7 +140,7 @@ export class AuthService {
         return ok({ requiresOtp: true, otpToken }, 'auth.otpSent');
       }
 
-      const sessionData = await this.issueSession(user, ip, userAgent);
+      const sessionData = await this.issueSession(user, ip, userAgent, scopeKey);
       return ok(sessionData, 'auth.loginSuccess');
     });
   }
@@ -178,7 +185,12 @@ export class AuthService {
     });
   }
 
-  async verifyLoginOtp(input: OtpVerifyInput, ip: string, userAgent: string) {
+  async verifyLoginOtp(
+    input: OtpVerifyInput,
+    ip: string,
+    userAgent: string,
+    scopeKey?: string | null,
+  ) {
     return safeExecute(async () => {
       if (input.otpToken) {
         const claims = this.tokens.verify(input.otpToken);
@@ -201,7 +213,7 @@ export class AuthService {
           OtpPurpose.login,
           input.otpCode,
         );
-        const sessionData = await this.issueSession(user, ip, userAgent);
+        const sessionData = await this.issueSession(user, ip, userAgent, scopeKey);
         return ok(sessionData, 'auth.loginSuccess');
       }
 
@@ -222,9 +234,48 @@ export class AuthService {
         OtpPurpose.login,
         input.otpCode,
       );
-      const sessionData = await this.issueSession(user, ip, userAgent);
+      const sessionData = await this.issueSession(user, ip, userAgent, scopeKey);
       return ok(sessionData, 'auth.loginSuccess');
     });
+  }
+
+  /**
+   * Read-only "does this refresh token still mean anything?".
+   *
+   * Deliberately separate from {@link refresh}: refreshing *rotates*, so it
+   * revokes the caller's session and mints a new one. Anything that only wants
+   * to know whether a visitor is signed in — `panel-web`'s proxy does, before
+   * it renders an auth screen (F-0101) — must not pay that price. Asking
+   * `refresh` that question left the browser holding a token the rotation had
+   * already revoked whenever the rotated `Set-Cookie` did not land (an RSC
+   * prefetch of the same route, a discarded redirect response, a second request
+   * already in flight with the old cookie), and the next real refresh then
+   * signed the user out with the cookie still sitting in the browser.
+   *
+   * Postgres is the record (identity/invariants.md #8), so this asks Postgres
+   * and never the Redis liveness cache.
+   */
+  async sessionStatus(
+    refreshToken: string | undefined,
+  ): Promise<ResponseType<{ active: boolean }>> {
+    // `safeExecute` passes an envelope through at runtime but types the result
+    // as `ResponseType<SuccessResponse<…>>`, so the annotation above is what
+    // lets the controller read `data.active` without reaching through a second
+    // `data`. The cast describes what safeExecute actually returns here.
+    return safeExecute(async () => {
+      if (!refreshToken) return ok({ active: false }, 'auth.sessionInactive');
+      const session = await this.prisma.session.findUnique({
+        where: { refreshTokenHash: this.tokens.refreshHash(refreshToken) },
+        select: { revokedAt: true, expiresAt: true },
+      });
+      const active = Boolean(
+        session && !session.revokedAt && session.expiresAt > new Date(),
+      );
+      return ok(
+        { active },
+        active ? 'auth.sessionActive' : 'auth.sessionInactive',
+      );
+    }) as Promise<ResponseType<{ active: boolean }>>;
   }
 
   async refresh(input: RefreshInput, ip: string, userAgent: string) {
@@ -253,6 +304,14 @@ export class AuthService {
         session.userId,
         ip,
         userAgent,
+        // Carried forward, never re-derived from the request (ADR-0015). A
+        // refresh is the *same* session continuing, so it stays in the scope
+        // it was minted in — and the panel refreshes on every page load, so
+        // re-deriving here would silently move a session to a new scope the
+        // moment anything about the request changed. Re-minting it as `null`
+        // would be worse still: the account would quietly fall out of its own
+        // switch group on the first rotation.
+        { scopeKey: session.scopeKey },
       );
       const accessToken = this.tokens.signAccessToken(
         session.user,
@@ -332,7 +391,12 @@ export class AuthService {
     });
   }
 
-  async resetPassword(input: ResetPasswordInput, ip: string, userAgent: string) {
+  async resetPassword(
+    input: ResetPasswordInput,
+    ip: string,
+    userAgent: string,
+    scopeKey?: string | null,
+  ) {
     return safeExecute(async () => {
       const claims = this.tokens.verify(input.resetToken);
       if (claims.purpose !== 'password_reset')
@@ -377,7 +441,7 @@ export class AuthService {
       // one in front of me", without weakening identity/invariants.md #3: the
       // revocation is still total, and no pre-reset session survives it.
       const full = await this.findUserForSession(user.id);
-      const sessionData = await this.issueSession(full, ip, userAgent);
+      const sessionData = await this.issueSession(full, ip, userAgent, scopeKey);
 
       return ok(
         { success: true, ...sessionData },
@@ -397,15 +461,207 @@ export class AuthService {
     });
   }
 
-  async createSessionForUser(user: any, ip: string, userAgent: string) {
-    return this.issueSession(user, ip, userAgent);
+  // --- proof of account ownership, for `audit`'s account-switch group -------
+  //
+  // These three are identity's half of F-0205. The *rule* about who may join a
+  // switch group is `audit`'s and lives there; what identity owes it is the
+  // narrow question "does this credential actually belong to that account?".
+  // They are here rather than duplicated in `audit` because the answer depends
+  // on the same lockout counter, the same normalization and the same
+  // enumeration-safe answer ordering as login does (rules #11, #12), and a
+  // second implementation of that ordering is a second thing to get wrong.
+  //
+  // Unlike login they mint nothing: no session, no token, no cookie. The caller
+  // gets a user row or null, and decides what that is worth.
+
+  /**
+   * Does `identifier` + `password` name a live, phone-verified account?
+   *
+   * Deliberately one answer for every failure — wrong password, no such
+   * account, deleted, inactive, unverified phone all return `null`. A caller
+   * holding one session must not be able to use this route to learn which
+   * numbers are registered (invariant #6's reasoning, applied to a caller who
+   * has proven only *their own* identity).
+   */
+  async proveAccountByPassword(identifier: string, password: string) {
+    const type = detectIdentifierType(identifier);
+    const identity =
+      type === 'phone' ? normalizeIranPhone(identifier) : identifier;
+    const where =
+      type === 'phone' ? { phoneNumber: identity } : { username: identity };
+
+    const user = await this.prisma.user.findFirst({ where });
+    if (!user || user.deletedAt || user.status !== 'active') return null;
+
+    // The same bucket login uses, on purpose: this route is another way to
+    // guess a password, so it has to consume the same 10-per-900s budget or it
+    // becomes the cheaper door (rule #11).
+    const failureBucket = `login-failures:${identity}`;
+    const attempt = await this.rateLimiter.hit(
+      failureBucket,
+      LOGIN_FAILURE_LOCK_THRESHOLD,
+      LOGIN_FAILURE_WINDOW_SEC,
+    );
+    if (!attempt.allowed) throw new BadRequestException('auth.temporarilyLocked');
+
+    if (!(await argon2.verify(user.passwordHash, password))) return null;
+    await this.rateLimiter.reset(failureBucket);
+
+    if (!user.phoneVerifiedAt) return null;
+    return user;
   }
 
-  private async issueSession(user: any, ip: string, userAgent: string) {
+  /**
+   * Send a proof code to `phoneNumber` on a channel that account can receive.
+   *
+   * Returns the `linkRequired` deep-link shape when the chosen messenger is not
+   * connected yet, exactly as login does — the caller has already proven a
+   * session, but the *target* account has proven nothing, so it gets the same
+   * enumeration-safe treatment: an unknown or inactive number is accepted and
+   * nothing is sent.
+   */
+  async issueAccountProofOtp(
+    phoneNumber: string,
+    channel: OtpChannel | undefined,
+    ip: string,
+    lang: string,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { phoneNumber },
+      select: { status: true, phoneVerifiedAt: true, preferredOtpChannel: true },
+    });
+    const resolvedChannel = this.resolveOtpChannel(user ?? {}, channel);
+
+    const link = await this.linkIfNeeded(
+      resolvedChannel,
+      phoneNumber,
+      OtpPurpose.account_switch_link,
+      ip,
+      lang,
+    );
+    if (link) return link;
+
+    if (user?.status === 'active' && user.phoneVerifiedAt) {
+      await this.otp.issueOtp(
+        phoneNumber,
+        OtpPurpose.account_switch_link,
+        resolvedChannel,
+        ip,
+        lang,
+      );
+    }
+    return null;
+  }
+
+  /**
+   * Consume a proof code and return the account it proves, or `null`.
+   *
+   * `account_switch_link` is its own `OtpPurpose` so that a code minted here
+   * can never be spent as a login and vice versa — invariant #10 allows one
+   * active code per (phone, purpose), and sharing a purpose with login would
+   * mean adding an account silently destroys a login code the same person is
+   * mid-way through typing.
+   */
+  async proveAccountByOtp(phoneNumber: string, otpCode: string) {
+    const user = await this.prisma.user.findUnique({ where: { phoneNumber } });
+    if (!user || user.deletedAt || user.status !== 'active') return null;
+    if (!user.phoneVerifiedAt) return null;
+    if (
+      !(await this.otp.verifyOtp(
+        phoneNumber,
+        OtpPurpose.account_switch_link,
+        otpCode,
+      ))
+    ) {
+      return null;
+    }
+    return user;
+  }
+
+  async createSessionForUser(
+    user: any,
+    ip: string,
+    userAgent: string,
+    scopeKey?: string | null,
+  ) {
+    return this.issueSession(user, ip, userAgent, scopeKey);
+  }
+
+  /**
+   * Hand a browser from one session to another (F-0207).
+   *
+   * `audit` decides *whether* the switch is allowed — that is the membership
+   * rule and it lives there. What identity owes it is this: the two session
+   * writes happening as one, because they are the two halves of a single
+   * statement about how many live sessions this browser has (audit invariant
+   * #7, C-21). No credential is checked here; the caller has already proven
+   * the target is theirs, once, when it joined the group.
+   *
+   * Order matters, and it is not the obvious one:
+   *
+   * 1. the transaction revokes the outgoing row and writes the incoming one —
+   *    either both land or neither does;
+   * 2. *then* the outgoing Redis marker is dropped;
+   * 3. *then* the incoming marker is written.
+   *
+   * `AuthGuard` reads only the marker, so between (1) and (3) the browser
+   * briefly has no usable session and never two. Writing the incoming marker
+   * first would open the opposite window — two live sessions — which is the
+   * one state F-0101 says cannot exist.
+   */
+  async switchSession(
+    fromSessionId: string,
+    fromUserId: string,
+    toUser: any,
+    ip: string,
+    userAgent: string,
+    scopeKey?: string | null,
+  ) {
+    const issued = await this.prisma.$transaction(async (tx) => {
+      await tx.session.update({
+        where: { id: fromSessionId },
+        data: {
+          revokedAt: new Date(),
+          revokedReason: SessionRevokedReason.account_switched,
+        },
+      });
+      return this.sessionService.createSession(toUser.id, ip, userAgent, {
+        switchedFromUserId: fromUserId,
+        // A switch happens *within* one scope — `audit` only offered this
+        // member because it is in the caller's group here — so the incoming
+        // session inherits it (ADR-0015).
+        scopeKey,
+        tx,
+      });
+    });
+
+    await this.sessions.drop(fromSessionId, fromUserId);
+    await issued.activateCache();
+
+    return {
+      accessToken: this.tokens.signAccessToken(toUser, issued.session.id),
+      refreshToken: issued.refreshToken,
+      expiresIn: this.config.get<number>('JWT_ACCESS_TTL_SEC', 900),
+    };
+  }
+
+  /**
+   * The one place an ordinary session is minted, and therefore the one place
+   * `scopeKey` has to be stamped (ADR-0015). Every caller passes the scope the
+   * request arrived on; a session that was minted with none simply belongs to
+   * no switch group, which is a legitimate state, not an error.
+   */
+  private async issueSession(
+    user: any,
+    ip: string,
+    userAgent: string,
+    scopeKey?: string | null,
+  ) {
     const result = await this.sessionService.createSession(
       user.id,
       ip,
       userAgent,
+      { scopeKey },
     );
     return {
       accessToken: this.tokens.signAccessToken(user, result.session.id),

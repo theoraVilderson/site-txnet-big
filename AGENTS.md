@@ -12,6 +12,10 @@ catalog -> backlog) / HANDOFF & RESUME (§6e, session boundary) /
 SYNC (§6f, catch docs up to code written without an agent) /
 DIAGNOSE (§6g, something is broken).
 
+**v2.8 note.** The protocol now caps writing as well as reading — doc files per
+item, changelog rows, tests, ADRs — and requires a call-site listing before any
+signature change (§6.2b). See "What v2.8 caps" below before your first session.
+
 Start every task with `docs/MASTER_INDEX.md` (+ `docs/BACKLOG.md` for MODE: NEXT).
 Never read the whole `docs/` tree.
 
@@ -147,6 +151,42 @@ is yours.
   has already been run once.
 - Never ingest the whole catalog at once. An area you are not building costs
   nothing; ingesting it early fills the backlog with rows nobody can start.
+
+## Decide once
+
+§6b.3 asks for an announcement before working and §6.2 for five lines of plan.
+That is the whole planning budget. Do not re-derive the plan mid-task, do not
+re-open a file already in context (§3), and do not re-verify a decision the user
+has already approved. New evidence that contradicts the plan is a different
+thing: say so in one line and change course.
+
+**If the task turns out to need an architectural change that was not in the
+plan, stop and say so before building it.** One line — *"this works as asked,
+but only if X changes; X is a separate decision. Now, or a row of its own?"*
+Discovering the change is good work. Absorbing it silently into the same session
+is what turns a small feature into a long one, and after opening the catalog it
+is the most expensive habit available here. ADR-0015 is the worked example: a
+re-architecture found while implementing one small feature, and built in the
+same session rather than raised.
+
+## What v2.8 caps, and why you will notice
+
+`00-PROTOCOL.md` v2.8 added ceilings on **writing** to match the ones that
+already existed on reading. Four of them change how a normal session ends:
+
+- **At most 3 unit doc files per backlog item** (§11). Further units get
+  `source:`/`status` updated and nothing else. §8 still requires the consumer
+  list out loud, so a lagging contract is visible, not silent.
+- **A changelog row only for a version bump, a status flip or a contract break**
+  (§5.4, §6b.6). Routine work gets none; `git log --follow docs/<layer>/<unit>/`
+  has it.
+- **One decision written once** (§11). An ADR is the home of a *why*; a backlog
+  note cites it in three lines and adds nothing.
+- **A test budget** (`docs/CODE-LAYOUT.md`). One `*.spec.ts` per item; the
+  integration and e2e tiers only when a `contract.md` row changes.
+
+None of these are optional and none are worth routing around. If one blocks a
+task, name it and ask — the same rule as a `CONVENTIONS.md` id.
 
 ## House style
 

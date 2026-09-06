@@ -1,16 +1,31 @@
 ---
 id: messenger
 layer: platform
-status: draft
-version: 1
-updated: 2026-09-05
+status: active
+version: 3
+updated: 2026-09-06
 ---
 
 # messenger — contract
 
-**Nothing here is implemented.** This is intent (§0 authority level 4). The
-authority on what a platform actually supports is that platform's live API, and a
-capability flag is a *claim about it* that must be verified before it is trusted.
+Implemented as the Nx library `@txnet-backend/messenger`
+(`txnet-backend/messenger/src/lib/`). The authority on what a platform actually
+supports is that platform's live API, and a capability flag is a *claim about
+it* that must be verified before it is trusted — never copy a row of the table
+below into code, import `capabilitiesOf(platform)`.
+
+| file | holds |
+|---|---|
+| `bot-client.registry.ts` | env -> one client per platform; token, username, webhook secret, deep-link base |
+| `telegram-like-bot.client.ts` | the driver: `sendMessage`, `requestContact`, `deleteMessage`, `answerCallbackQuery`, webhook get/set |
+| `capabilities.ts` | the table below, in code, each entry carrying `verifiedOn` + `source` |
+| `bot-view.ts` | the `BotView` types (owned by `bot-app`, declared here so both can import them) |
+| `renderer.ts` | `BotView` -> payload, with the degradation policy and its log line |
+| `deep-link.ts` | the per-platform link shape and the `?start=` payload parser |
+
+Not built yet: media sending (`F-308`), payments (`F-304`), per-tenant branding
+(`F-317`), and the tenant Credential Vault lookup below — tokens still come from
+env, one bot per platform.
 
 ## TL;DR
 
@@ -25,14 +40,31 @@ Owned by `bot-app` (see its contract). `messenger` only renders it. The renderin
 contract is the whole point of the split: a `BotView` names *intent* (a choice
 between N options, a document to hand over, a chart to show), never a widget.
 
+**What the renderer assembles.** A screen is more than a sentence and a
+keyboard, so `BotView` carries the parts separately and the renderer joins the
+ones that are present, in this order: `hint` (why you are seeing this again),
+`header` (where you are), `summary` (what you already answered), `body` (the
+question), `footer` (where you can go). Only `body` is required. They are
+separate fields rather than one pre-joined string because each is an i18n key
+a tenant may reword (`F-317`) — a flow that glued them together would be
+authoring copy.
+
+**A contact request keeps the rest of the screen.** Asking for a contact card
+requires a reply keyboard, and the other rows used to be dropped to build one —
+leaving the one screen a user is most likely to refuse ("share my number") with
+nothing to refuse it with. Every remaining non-URL choice now goes on the same
+reply keyboard.
+
 ### `capabilities` — what a platform can do (`F-301`)
 
 A per-platform record consulted before rendering. **Source of truth: each
 platform's official documentation, read and dated** (user decision, 2026-09-05).
 A flag is never assumed and never inferred from Telegram.
 
-Verified against [docs.bale.ai](https://docs.bale.ai/) and
-[docs.bale.ai/miniapp](https://docs.bale.ai/miniapp) on **2026-09-05**:
+Verified against [docs.bale.ai](https://docs.bale.ai/),
+[docs.bale.ai/miniapp](https://docs.bale.ai/miniapp) and
+[core.telegram.org/bots/api](https://core.telegram.org/bots/api) on
+**2026-09-05**, re-read and extended with the delete axis on **2026-09-06**:
 
 | axis | Telegram | Bale | diverges? |
 |---|---|---|---|
@@ -41,6 +73,7 @@ Verified against [docs.bale.ai](https://docs.bale.ai/) and
 | photo upload | 10 MB multipart / 5 MB by URL | 10 MB multipart / 5 MB by URL | no |
 | document / video / audio | 50 MB send | 50 MB send | no |
 | file download | 20 MB | 20 MB | no |
+| delete an **incoming** message in a private chat | yes, within 48 h | yes, within 48 h (same wording, `deleteMessage`) | no — verified 2026-09-06 |
 | Mini App / WebApp | `window.Telegram.WebApp` | `window.Bale.WebApp` | **name only** |
 | Mini App identity proof | HMAC-SHA-256 over the sorted data-check-string, secret = HMAC(bot token, `"WebAppData"`) | **the same scheme** | no |
 | in-chat payment | provider tokens / Stars | own wallet: `sendInvoice`, `answerPreCheckoutQuery`, `inquireTransaction` | **yes — different rails** |
@@ -73,12 +106,19 @@ the date in the same change.
 When a capability is absent, the renderer **substitutes and continues**. It never
 throws, and it never silently drops the user's ability to act:
 
-| missing | substitute |
-|---|---|
-| inline keyboard | reply keyboard, else a numbered list the flow accepts as text |
-| WebApp button | a plain URL to the same `panel-web` route |
-| file over the size ceiling | a link to the file, or a lower-fidelity rendering |
-| in-chat payment | the invoice flow that already works on the web |
+| missing | substitute | built? |
+|---|---|---|
+| inline keyboard | reply keyboard with numbered labels, else a numbered list the flow accepts as text | yes — `renderer.ts` |
+| contact request button | ask the user to type their phone number | yes |
+| WebApp button | a plain URL to the same `panel-web` route | yes |
+| file over the size ceiling | a link to the file, or a lower-fidelity rendering | link only |
+| delete-message unavailable | tell the user to delete the message themselves | in the flow (`F-303-c`), not the renderer |
+| in-chat payment | the invoice flow that already works on the web | no — `F-304` |
+
+`render()` returns the substitutions it made alongside the payload, so a caller
+can assert on them; `matchAction()` reads a tap, a number and a label back to the
+same action id, which is what makes the numbered-list fallback a real path
+rather than a stated one.
 
 Two hard rules, both from ADR-0009:
 
@@ -87,6 +127,14 @@ Two hard rules, both from ADR-0009:
 - **A substitution is observable.** It is logged with the platform, the
   capability and the view, so "it works on Telegram and not on Bale" is a query,
   not an investigation.
+
+## The command menu
+
+`setMyCommands` publishes a bot's command list per language, so `/menu` and
+`/help` appear in the messenger's own command menu. Best-effort, like
+`setWebhook`: every command it names is also a button in the chat, so a stale
+command menu costs discoverability, never a capability. `bot-app` owns the
+list and the translations (`BotWebhookRegistrar`).
 
 ## Bot token resolution
 

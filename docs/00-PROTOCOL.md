@@ -1,12 +1,21 @@
 ---
 id: protocol
 status: fixed
-version: 2.7
-updated: 2026-09-04
+version: 2.8
+updated: 2026-09-06
 ---
 
-# DOCS PROTOCOL v2.7 — fixed file. Copy verbatim into every project. Never edit without explicit user request.
+# DOCS PROTOCOL v2.8 — fixed file. Copy verbatim into every project. Never edit without explicit user request.
 
+> **v2.8 is a scaling pass.** Every change is a ceiling, a narrowing or a
+> deletion — no new mode, no new tool, no new file. A write budget to match §3's
+> read budget (§11); the changelog rule reconciled with §10's cap (§5.4, §6b.6);
+> `contract.<topic>.md` as the legal move at 250 lines (§10); tier 3 bounded by
+> what you actually call rather than by the whole `depends_on` list (§3); an ADR
+> ceiling (§5.6); one decision written once (§11); and a call-site listing before
+> any signature change (§6.2b), which is where this protocol's bugs are actually
+> found.
+>
 > **v2.6 is a correctness pass, not a feature.** §10 now caps the INDEX
 > changelog at 5 rows (it was mandatory and unbounded under a hard 40-line cap
 > — the two rules could not both hold); `(removed)` is a state a checker
@@ -150,7 +159,7 @@ Read in tiers. Stop at the shallowest tier that answers the question.
 | 1 | target unit `INDEX.md` | always |
 | 1b | `python3 tools/spec.py <F-id>` | the backlog row names a `spec ref` |
 | 2 | target `contract.md` + `invariants.md` | changing or using the unit |
-| 3 | `contract.md` of each `depends_on` — **the API section only** | writing code |
+| 3 | `contract.md` of the `depends_on` units **you actually call** — the API section only, and only the rows you call | writing code |
 | 4 | `CONVENTIONS.md`, `rules.md`, `data-model.md` | writing code *inside* that unit |
 | 4b | `CODE-LAYOUT.md` symptom -> role table | **before opening any source file** — it says which file, not just which unit |
 | 5 | actual source files under `source:` | implementing |
@@ -158,6 +167,11 @@ Read in tiers. Stop at the shallowest tier that answers the question.
 Tier 5 says *files under `source:`*, and `source:` is usually a `**` glob. Read
 that as "the files tier 4b pointed at", never as "the module". A unit is where
 the funnel narrows to, not where it stops.
+
+Tier 3 is bounded the same way. `depends_on` is the blast radius for a
+**contract change** (§8), not a reading list for every task. Code that calls two
+of a unit's nine dependencies costs two reads, not nine — and the nine grow with
+the project while the two do not.
 
 ---
 
@@ -283,8 +297,14 @@ moment to draw one — that is MODE: SYNC's job (§6f), with the user.
 3. Public contract change? → §8 first.
 4. After the change, in the same turn, update: unit `INDEX.md`,
    `dependency-graph.md` (only if a new edge), `MASTER_INDEX.md` (only if a new
-   unit), `CHANGELOG` line in the unit's `INDEX.md`.
+   unit). A `CHANGELOG` line **only if the change earns a slot under §10** — a
+   version bump, a status flip, or a contract break. Routine edits get no row.
 5. Uncertainty → §9. Never a silent default.
+6. An ADR is for a decision that is **expensive to reverse** — a datastore, an
+   auth model, a uniqueness constraint, a money shape, a tenancy boundary.
+   Explaining how existing code behaves is a `contract.md` edit; recording why
+   one obvious option beat another obvious one is a `note`. More than one ADR a
+   week means thinking is being filed as decisions.
 
 ---
 
@@ -293,6 +313,11 @@ moment to draw one — that is MODE: SYNC's job (§6f), with the user.
 1. Tiers 0–5 for the target unit only.
 2. Before coding, state in ≤5 lines: files to create/modify, invariants in play,
    consumers at risk.
+2b. **List every call site of anything whose signature or return shape you are
+   about to change, before changing it.** One `grep -rn` per symbol, the list
+   written out in the response. A path you did not list is a path you will break
+   silently, and no test written afterwards catches it — you would not know to
+   write that test. This costs one command and it is where the bugs are.
 3. Follow the tech-stack and existing patterns in `source:` over your own
    preferences. Read one neighbouring file for style before writing a new one.
 4. Code must not violate any `invariants.md` entry. If the requested feature
@@ -323,7 +348,9 @@ zero context can resume work correctly and cheaply.
 6. Update in the same turn:
    - backlog row → `status: doing` at start, `done` at end
    - the unit's `source:` paths and `status`
-   - the unit's INDEX changelog (one line)
+   - the unit's INDEX changelog — one line, and only for a version bump, a
+     status flip or a contract break (§10). Routine work gets no row; `git log
+     --follow docs/<layer>/<unit>/` has it.
 7. **Stop.** One item per session. If the session filled up before the item
    was finished, do not force it to a close — run MODE: HANDOFF (§6e). Report: what shipped, what is now unblocked,
    what needs a decision from the user.
@@ -593,12 +620,20 @@ invalid. Entries older than 30 days must be raised proactively.
 
   Rows worth one of the five slots: a `version` bump, a `status` flip, a
   contract break. Routine edits do not need one — git has them.
-- `contract.md` past ~200 lines **or** covering two audiences → split into
-  sub-units (`payments/refunds/`, `payments/subscriptions/`), each a full unit
-  with its own front matter. Parent keeps only the INDEX. ~200 is the line at
-  which you should be splitting; `docs-check.py` fails at 250, which is the line
-  past which you no longer get a choice. The gap is deliberate — a hard error at
-  the advisory number would make every contract a fight with the linter.
+- `contract.md` past ~200 lines → move a self-contained section into
+  `contract.<topic>.md` beside it, linked from `contract.md`. Past ~200 lines
+  **and covering two audiences** → split into sub-units (`payments/refunds/`,
+  `payments/subscriptions/`), each a full unit with its own front matter; parent
+  keeps only the INDEX. ~200 is the line at which you should be moving or
+  splitting; `docs-check.py` fails at 250 **per file**, which is the line past
+  which you no longer get a choice. The gap is deliberate — a hard error at the
+  advisory number would make every contract a fight with the linter.
+
+  The topic file exists because "split the unit" is not always a legal move: a
+  bot and a panel are each one real surface, and an interface that cannot be
+  divided was previously answered by compressing healthy prose to buy back six
+  lines. Splitting on cohesion is still the better answer whenever the halves
+  have different consumers — see the next bullet.
 - Split on **cohesion**, not line count: if two halves have different consumers
   or different invariants, they are two units.
 - >12 top-level units → group them into bounded contexts
@@ -631,4 +666,22 @@ invalid. Entries older than 30 days must be raised proactively.
 - Never leave an open entry in `.where-misses` behind. `where.py --check` fails
   on one, and that is deliberate: the alias is the entire maintenance cost of
   the addressing layer.
+- **Never write more than 3 unit doc files for one backlog item.** If a change
+  genuinely touches more units, the extra ones get their front-matter `source:`
+  and `status` updated and nothing else — their contract prose waits for the
+  session that changes their *behaviour*. §3's 8-file read ceiling never had a
+  write counterpart; this is it. A consumer's `contract.md` lagging its producer
+  by one session is visible (§8 still requires the consumer list to be said out
+  loud) and cheap; rewriting five contracts per feature is neither.
+  When the cap binds, choose by §0's authority order: invariants.md first,
+  then contract.md / rules.md, then data-model.md last.
+- **One decision is written once.** An ADR is the home of a *why*; every other
+  file cites it by id and adds nothing. A `note` that restates a sentence
+  already in an ADR or a contract is a deletion, not an edit. §0's rule against
+  duplicating a fact that lives in code applies to a fact that lives in an ADR
+  for the same reason: two copies drift, and the reader cannot tell which is
+  stale.
+- **A `BACKLOG.md` note is at most three lines.** It says what shipped and cites
+  the ADR or contract that says why. A note that has to be scrolled is a
+  document filed in the wrong place.
 - Prefer deleting a stale doc over keeping a wrong one.

@@ -1,0 +1,25 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`RedisKeys — bot key catalogue builds every key from fixed arguments 1`] = `
+{
+  "botLang": "bot:lang:bale:77",
+  "botNav": "bot:nav:telegram:5501",
+  "botSession": "bot:session:telegram:5501",
+}
+`;
+
+exports[`RedisKeys — bot key catalogue exposes a builder for every key family, and nothing unbuilt 1`] = `
+[
+  "botLang",
+  "botNav",
+  "botSession",
+]
+`;
+
+exports[`RedisKeys — bot key catalogue keeps the canonical TTLs stable 1`] = `
+{
+  "botLang": 15552000,
+  "botNav": 1800,
+  "botSession": 2592000,
+}
+`;

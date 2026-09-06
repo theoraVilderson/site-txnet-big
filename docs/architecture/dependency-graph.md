@@ -48,13 +48,16 @@ or container names. Add a row the first time a walk needs it.
 - `auth-api` and `forward-auth` share one Redis key prefix by env convention
   (`redis-keyspace`). A prefix or version mismatch is invisible to both: the
   gateway simply never finds the session the API wrote. See ADR-0005.
-- The `messenger` and `bot-app` units are `draft` with `source: []`, but three of
-  their runtime edges above are **already real in code** — the OTP senders
-  (`auth/otp/senders/`) and the `F-0203` webhook (`auth/bot-link/`) live under
-  `identity` / `auth-api` globs today. A walk that lands on "the bot doesn't
-  respond" therefore still ends in `auth-service`, not in a `bot-app` folder.
-  ADR-0009 records when that moves; until it does, do not treat a `messenger`
-  hop as a code location.
+- Both bot units are real code as of 2026-09-06: `messenger`
+  (`txnet-backend/messenger/`) and `bot-app` (`txnet-backend/bot-service/`). The
+  inbound webhook is `bot-service`'s; `auth-service` keeps a deprecated copy of
+  the route for one release but registers nothing. What stayed behind on purpose
+  is the *decision* half of `F-0203` (`auth/bot-link/`) and OTP delivery
+  (`auth/otp/senders/`), both `identity`'s — so "the bot said no" ends in
+  `auth-service`, while "the bot said nothing" ends in `bot-service`.
+- `bot-app -> auth-api` carries `X-Service-Token` (ADR-0011). If *every* auth
+  step in the bot is refused, that seam — one env var, on two services — is the
+  first thing to check, ahead of any flow.
 - `locale-service` boot dependency is hard: `auth-api` and `forward-auth` refuse
   to start without a first snapshot. A "service won't boot" symptom starts at
   `i18n`, not at the service that failed.

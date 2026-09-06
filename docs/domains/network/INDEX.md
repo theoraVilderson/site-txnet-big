@@ -2,19 +2,19 @@
 id: network
 layer: domain
 status: draft
-version: 1
+version: 2
 keywords: [vpn, panel, xray, config, subscription link, traffic, ip access]
 source: []
-owns_tables: [node, config, config_action_log, traffic_raw_log, traffic_daily_aggregate, ip_access_rule]
+owns_tables: [panel, config, config_action_log, traffic_raw_log, traffic_daily_aggregate, ip_access_rule]
 depends_on: [identity, catalog, tenant, billing]
-updated: 2026-09-04
+updated: 2026-09-06
 ---
 
 # Network
 
-**Responsibility (one sentence):** the VPN/proxy plane — Nodes running
-x-ui/Xray panels, per-user Configs on those nodes, raw + daily-aggregated
-traffic accounting, and durable IP access rules.
+**Responsibility (one sentence):** the VPN/proxy plane — Panels (server
+installs running x-ui/Xray), per-user Configs on those Panels, raw +
+daily-aggregated traffic accounting, and durable IP access rules.
 **Explicitly NOT responsible for:** charging for traffic (`billing` sub-account),
 real-time rate limiting (Redis, deliberately no table), plan definitions
 (`catalog`).
@@ -31,5 +31,6 @@ real-time rate limiting (Redis, deliberately no table), plan definitions
 | Date | Change |
 |---|---|
 | 2026-09-04 | Documented from schema during onboarding — no service yet |
+| 2026-09-06 | **Breaking:** model/table `Node` -> `Panel` (contract v2). Zero consumers |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

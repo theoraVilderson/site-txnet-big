@@ -1,5 +1,5 @@
 import { OtpPurpose } from '../otp/otp.interface';
-import { BotPlatform } from '../otp/senders/bot-client.registry';
+import { BotPlatform } from '@txnet-backend/messenger';
 
 /**
  * A link the client has been handed but the user has not completed yet.
@@ -24,28 +24,6 @@ export interface PendingBotLink {
   createdAt: number;
 }
 
-/** The slice of a Telegram/Bale `Update` this service reads. */
-export interface BotUpdate {
-  update_id?: number;
-  message?: BotMessage;
-}
-
-export interface BotMessage {
-  message_id?: number;
-  from?: { id: number | string; language_code?: string; is_bot?: boolean };
-  chat?: { id: number | string };
-  text?: string;
-  contact?: BotContact;
-}
-
-export interface BotContact {
-  phone_number: string;
-  first_name?: string;
-  /**
-   * The messenger account the contact card belongs to. A contact assembled by
-   * hand (possible in unofficial clients) carries someone else's number but
-   * either omits this or carries the *sender's* id — comparing it with
-   * `message.from.id` is what makes the number trustworthy.
-   */
-  user_id?: number | string;
-}
+// The wire shapes (`BotUpdate`, `BotMessage`, `BotContact`) live in
+// `messenger` — one definition, read by both this flow and `bot-service`.
+export type { BotUpdate, BotMessage, BotContact } from '@txnet-backend/messenger';

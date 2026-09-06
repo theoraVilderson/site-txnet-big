@@ -32,6 +32,16 @@ export class SessionService {
       impersonationSessionId?: string;
       switchedFromUserId?: string;
       expiresInSec?: number;
+      /**
+       * The switch scope this session is minted on (ADR-0015) — the browser or
+       * the chat the request arrived from. Left unset only where there is
+       * genuinely no scope: an impersonation session, which an admin holds on
+       * the platform's behalf and which no switch group ever contains.
+       *
+       * Every other caller must pass it, including `refresh`, which re-mints an
+       * existing session and has to carry the old row's value forward.
+       */
+      scopeKey?: string | null;
       tx?: Prisma.TransactionClient;
     },
   ) {
@@ -53,6 +63,7 @@ export class SessionService {
         isImpersonated: options?.isImpersonated ?? false,
         impersonationSessionId: options?.impersonationSessionId,
         switchedFromUserId: options?.switchedFromUserId,
+        scopeKey: options?.scopeKey ?? null,
       },
     });
 
@@ -84,5 +95,43 @@ export class SessionService {
       data: { revokedAt: new Date(), revokedReason: reason },
     });
     await this.sessions.dropAllForUser(userId);
+  }
+
+  /**
+   * Revoke this account's live sessions **on one surface only** (F-0208).
+   *
+   * The narrow version of the call above, and the narrowness is the whole
+   * point. Since ADR-0015 a switch group belongs to a browser or a chat, so
+   * removing an account from one group is not a statement about the account —
+   * it is a statement about that one place. Revoking globally here would let
+   * whoever holds a browser sign the account out of a Telegram chat they have
+   * no authority over, which is a denial of service dressed as a cleanup.
+   *
+   * Sessions with no `scopeKey` (impersonation, and anything minted before the
+   * column existed) match no scope and are therefore never touched here.
+   *
+   * The Redis markers are dropped one by one rather than through
+   * `dropAllForUser`: that helper is keyed on the user, and the account keeps
+   * live sessions in other scopes that must stay usable.
+   */
+  async revokeSessionsForUserInScope(
+    userId: string,
+    scopeKey: string,
+    reason: SessionRevokedReason,
+  ) {
+    const doomed = await this.prisma.session.findMany({
+      where: { userId, scopeKey, revokedAt: null },
+      select: { id: true },
+    });
+    if (doomed.length === 0) return 0;
+
+    await this.prisma.session.updateMany({
+      where: { id: { in: doomed.map((session) => session.id) } },
+      data: { revokedAt: new Date(), revokedReason: reason },
+    });
+    for (const session of doomed) {
+      await this.sessions.drop(session.id, userId);
+    }
+    return doomed.length;
   }
 }

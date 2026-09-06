@@ -3,7 +3,7 @@
 
 Checks:
   1. every unit file has valid front matter with the required keys
-  2. INDEX.md <= 40 lines, contract.md <= 250 lines
+  2. INDEX.md <= 40 lines; contract.md and each contract.<topic>.md <= 250 lines
   3. status: active implies a non-empty `source:` whose paths exist
   4. depends_on points at real unit ids  (and derives the consumer map)
   5. ASSUMED(YYYY-MM-DD) tags older than MAX_AGE_DAYS
@@ -150,9 +150,19 @@ def main() -> int:
 
         c = d / "contract.md"
         if c.exists():
-            n = len(c.read_text(encoding="utf-8").splitlines())
-            if n > MAX_CONTRACT_LINES:
-                errors.append(f"{c.relative_to(ROOT)}: {n} lines (max {MAX_CONTRACT_LINES}) — split the unit")
+            # The cap is per file, not per unit. A unit that is genuinely one
+            # surface (a bot, a panel) cannot be split into two units, and the
+            # old message pushed toward compressing healthy prose to buy back a
+            # few lines. A topic file keeps the ceiling honest while leaving a
+            # legal move (§10).
+            for part in [c] + sorted(d.glob("contract.*.md")):
+                n = len(part.read_text(encoding="utf-8").splitlines())
+                if n > MAX_CONTRACT_LINES:
+                    errors.append(
+                        f"{part.relative_to(ROOT)}: {n} lines (max {MAX_CONTRACT_LINES}) — "
+                        f"move a section into contract.<topic>.md and link it from "
+                        f"contract.md, or split the unit if the halves have different "
+                        f"consumers (§10)")
         elif fm.get("status") == "active":
             errors.append(f"{rel}: status active but no contract.md")
 

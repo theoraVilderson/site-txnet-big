@@ -11,7 +11,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
     "test": "jest -c auth-service/jest.config.cts",
-    "test:int": "jest -c auth-service/jest.int.config.cts"
+    "test:int": "jest -c auth-service/jest.int.config.cts",
+    "test:e2e": "jest -c auth-service-e2e/jest.config.cts"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.12.2",
@@ -52,10 +53,12 @@
     "@swc/helpers": "~0.5.18",
     "@types/jest": "~30.0.0",
     "@types/node": "^22.0.0",
+    "@types/supertest": "^6.0.3",
     "jest": "~30.3.0",
     "jest-environment-node": "~30.3.0",
     "prettier": "~3.6.2",
     "prisma": "^6.19.3",
+    "supertest": "^7.2.2",
     "testcontainers": "^12.1.0",
     "ts-jest": "^29.4.0",
     "ts-node": "10.9.1",

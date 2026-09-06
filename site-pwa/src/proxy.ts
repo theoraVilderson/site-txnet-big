@@ -41,14 +41,23 @@ function isGuarded(pathname: string): boolean {
  *
  * - no cookie -> a first-time visitor. Pass straight through: no request, no
  *   delay, the form exactly as before.
- * - cookie -> ask auth-service whether it still means anything. `/auth/refresh`
- *   is the one route that takes the refresh token, so it is the "does this user
- *   need to log in?" question. `ok` -> redirect; anything else -> the token is
- *   dead, the visitor does need to log in, show the form.
+ * - cookie -> ask auth-service whether it still means anything. `GET
+ *   /auth/session` answers exactly that and changes nothing. `active` ->
+ *   redirect; anything else -> the token is dead, the visitor does need to log
+ *   in, show the form.
  *
- * Whatever auth-service decides about the cookie is handed straight back to the
- * browser: the rotated token on success, the clear on failure. So a dead token
- * is gone after this one request and the next visit takes the no-cookie path.
+ * It must be a *read-only* question, which is why it is not `/auth/refresh`.
+ * Refreshing rotates — it revokes the caller's session and mints a new one —
+ * and this handler runs on far more requests than the visitor ever sees a
+ * response to: `config.matcher` covers every non-static path, so RSC prefetches
+ * of `/auth/login`, redirects, and concurrent requests all reach it. Every one
+ * of those rotated the session and returned the replacement in a `Set-Cookie`
+ * the browser might never apply, leaving it holding a revoked token that still
+ * looks present in devtools. The next real refresh then signed the user out —
+ * which is what the panel's bounce back to the login screen actually was.
+ *
+ * A dead cookie is still cleared, by auth-service, and that clear is handed
+ * back to the browser here — so the next visit takes the no-cookie path.
  *
  * Every failure mode ends at the auth screen: auth-service unreachable, a
  * timeout, an unparseable body. The worst case is that a signed-in user sees
@@ -60,13 +69,9 @@ export async function proxy(request: NextRequest) {
   const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value;
   if (!refreshToken) return null;
 
-  const upstream = await fetch(`${authServiceOrigin()}/api/auth/refresh`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      cookie: `${REFRESH_COOKIE}=${refreshToken}`,
-    },
-    body: "{}",
+  const upstream = await fetch(`${authServiceOrigin()}/api/auth/session`, {
+    method: "GET",
+    headers: { cookie: `${REFRESH_COOKIE}=${refreshToken}` },
     cache: "no-store",
     signal: AbortSignal.timeout(4000),
   }).catch(() => null);
@@ -76,7 +81,8 @@ export async function proxy(request: NextRequest) {
   // auth-service answers business failures inside a 200 envelope
   // (`{ ok: false, msg }`), so the status alone does not settle it.
   const body = await upstream.json().catch(() => null);
-  const isSignedIn = upstream.ok && body?.ok === true;
+  const isSignedIn =
+    upstream.ok && body?.ok === true && body?.data?.active === true;
 
   const response = isSignedIn
     ? NextResponse.redirect(new URL(PANEL_HOME, request.url))

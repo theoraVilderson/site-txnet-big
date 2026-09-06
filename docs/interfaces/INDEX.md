@@ -10,7 +10,7 @@ Every external touchpoint: HTTP API, bot, admin panel, webhook receiver, CLI. Tr
 
 | id | responsibility | status | depends_on |
 |---|---|---|---|
-| auth-api | NestJS auth-service HTTP API (`/api/auth`, `/api/i18n`, `/admin`) | active | identity, i18n, redis-keyspace |
+| auth-api | NestJS auth-service HTTP API (`/api/auth`, `/admin`) | active | identity, i18n, redis-keyspace |
 | panel-web | Next.js user panel (site-pwa) + API proxy | active | auth-api, i18n |
 | marketing-web | Next.js public landing site (coinsite) — skeleton | draft | (none) |
 

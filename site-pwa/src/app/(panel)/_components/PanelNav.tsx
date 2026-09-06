@@ -3,6 +3,7 @@
 import { LangDropdown } from "@auth/auth/_components/LangDropdown";
 import { ThemeDropdown } from "@auth/auth/_components/ThemeDropdown";
 import { LogoutButton } from "./LogoutButton";
+import { AccountSwitcher } from "./AccountSwitcher";
 
 export function PanelNav() {
   return (
@@ -16,6 +17,8 @@ export function PanelNav() {
         </span>
       </div>
       <div className="flex items-center gap-2 sm:gap-4">
+        <AccountSwitcher />
+        <div className="mx-1 h-6 w-px bg-card-border" />
         <LangDropdown />
         <div className="mx-1 h-6 w-px bg-card-border" />
         <ThemeDropdown />

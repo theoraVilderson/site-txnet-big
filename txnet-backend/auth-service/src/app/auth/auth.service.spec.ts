@@ -518,6 +518,80 @@ describe('AuthService.verifyLoginOtp — the token purpose is load-bearing', () 
   });
 });
 
+describe('AuthService.sessionStatus — the read-only half', () => {
+  let h: Harness;
+
+  const liveSession = (over: Record<string, unknown> = {}) => ({
+    revokedAt: null,
+    expiresAt: new Date(Date.now() + 60_000),
+    ...over,
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    h = harness();
+  });
+
+  it('answers "signed in" without touching the session', async () => {
+    // The reason this method exists. `refresh` rotates, so using it to ask
+    // "is this visitor signed in?" revoked the very session being asked about;
+    // any caller that then failed to store the replacement cookie left the
+    // browser holding a dead token. This must never revoke or mint anything.
+    h.prisma.session.findUnique.mockResolvedValue(liveSession());
+
+    const res = await h.service.sessionStatus('refresh-live');
+
+    expect(res).toEqual({
+      ok: true,
+      msg: 'auth.sessionActive',
+      data: { active: true },
+    });
+    expect(h.sessionService.revokeSession).not.toHaveBeenCalled();
+    expect(h.sessionService.createSession).not.toHaveBeenCalled();
+  });
+
+  it('looks the session up by the hash, never by the token itself', async () => {
+    h.prisma.session.findUnique.mockResolvedValue(liveSession());
+
+    await h.service.sessionStatus('refresh-live');
+
+    expect(h.tokens.refreshHash).toHaveBeenCalledWith('refresh-live');
+    expect(h.prisma.session.findUnique.mock.calls[0][0].where).toEqual({
+      refreshTokenHash: 'hash(refresh-live)',
+    });
+  });
+
+  it.each([
+    ['unknown', null],
+    ['already revoked', { revokedAt: new Date() }],
+    ['expired', { expiresAt: new Date(Date.now() - 1000) }],
+  ])('reports an %s session inactive', async (_label, over) => {
+    h.prisma.session.findUnique.mockResolvedValue(
+      over === null ? null : liveSession(over),
+    );
+
+    const res = await h.service.sessionStatus('refresh-dead');
+
+    expect(res).toEqual({
+      ok: true,
+      msg: 'auth.sessionInactive',
+      data: { active: false },
+    });
+    expect(h.sessionService.revokeSession).not.toHaveBeenCalled();
+  });
+
+  it('reports no cookie as inactive without asking the database', async () => {
+    const res = await h.service.sessionStatus(undefined);
+
+    expect(res).toEqual({
+      ok: true,
+      msg: 'auth.sessionInactive',
+      data: { active: false },
+    });
+    expect(h.prisma.session.findUnique).not.toHaveBeenCalled();
+  });
+});
+
 describe('AuthService.refresh — rotation', () => {
   let h: Harness;
 
@@ -575,6 +649,52 @@ describe('AuthService.refresh — rotation', () => {
         expiresIn: 900,
       },
     });
+  });
+
+  /**
+   * The trap in ADR-0015. A refresh is the *same* session continuing, so the
+   * replacement has to inherit the scope of the row it replaces. Re-deriving
+   * it from the request would move a session between scopes whenever anything
+   * about the request changed; dropping it would silently detach the account
+   * from its own switch group on the first rotation — and the panel refreshes
+   * on every page load, so "first rotation" means within seconds.
+   */
+  it('carries the scope forward onto the replacement session', async () => {
+    h.prisma.session.findUnique.mockResolvedValue(
+      liveSession({ scopeKey: 'device:browser-a' }),
+    );
+
+    await h.service.refresh(
+      { refreshToken: 'refresh-old' } as never,
+      '1.2.3.4',
+      'jest-ua',
+    );
+
+    expect(h.sessionService.createSession).toHaveBeenCalledWith(
+      'user-1',
+      '1.2.3.4',
+      'jest-ua',
+      { scopeKey: 'device:browser-a' },
+    );
+  });
+
+  it('carries a null scope forward as null, inventing nothing', async () => {
+    h.prisma.session.findUnique.mockResolvedValue(
+      liveSession({ scopeKey: null }),
+    );
+
+    await h.service.refresh(
+      { refreshToken: 'refresh-old' } as never,
+      '1.2.3.4',
+      'jest-ua',
+    );
+
+    expect(h.sessionService.createSession).toHaveBeenCalledWith(
+      'user-1',
+      '1.2.3.4',
+      'jest-ua',
+      { scopeKey: null },
+    );
   });
 
   it.each([
@@ -685,6 +805,11 @@ describe('AuthService.resetPassword — every session dies', () => {
       'user-1',
       '1.2.3.4',
       'jest-ua',
+      // The reset carries whatever scope the request arrived on (ADR-0015).
+      // This caller passes none, so the replacement session belongs to no
+      // switch group — which is correct, not a gap: a password reset is not
+      // where a group is joined.
+      { scopeKey: undefined },
     );
     expect(
       h.sessions.dropAllForUser.mock.invocationCallOrder[0],

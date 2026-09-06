@@ -33,10 +33,10 @@ no service yet. A unit that is `active` with an empty `source:` is a lie and
 ## Interfaces — outside-world touchpoints
 | id | surface | status | doc |
 |---|---|---|---|
-| auth-api | NestJS auth-service HTTP API: `/api/auth/*`, `/api/i18n/*`, `/admin/*` impersonation | active | [->](interfaces/auth-api/INDEX.md) |
+| auth-api | NestJS auth-service HTTP API: `/api/auth/*`, `/admin/*` impersonation | active | [->](interfaces/auth-api/INDEX.md) |
 | panel-web | Next.js user panel (site-pwa): auth screens, locale/theme, API proxy | active | [->](interfaces/panel-web/INDEX.md) |
 | marketing-web | Next.js public landing site (coinsite) | draft | [->](interfaces/marketing-web/INDEX.md) |
-| bot-app | the bot as a full product surface (D-02, §10.4): platform-agnostic flows + screens for Telegram and Bale | draft | [->](interfaces/bot-app/INDEX.md) |
+| bot-app | the bot as a full product surface (D-02, §10.4): platform-agnostic flows + screens for Telegram and Bale | active | [->](interfaces/bot-app/INDEX.md) |
 
 ## Platform — cross-cutting, no business rules
 | id | capability | status | doc |
@@ -44,7 +44,7 @@ no service yet. A unit that is `active` with an empty `source:` is a lie and
 | i18n | locale-service (gRPC source of truth) + shared Go/Node clients + `locales/` content | active | [->](platform/i18n/INDEX.md) |
 | forward-auth | Go Traefik ForwardAuth gateway: JWT + Redis session + RBAC -> identity headers | active | [->](platform/forward-auth/INDEX.md) |
 | redis-keyspace | shared Redis key prefix/versioning + session & OTP key catalog + TTLs | active | [->](platform/redis-keyspace/INDEX.md) |
-| messenger | the only home for Telegram/Bale differences: drivers, capability flags (F-301), degradation policy (F-302), per-platform renderer | draft | [->](platform/messenger/INDEX.md) |
+| messenger | the only home for Telegram/Bale differences: drivers, capability flags (F-301), degradation policy (F-302), per-platform renderer | active | [->](platform/messenger/INDEX.md) |
 
 ## Cross-cutting docs
 - [Surface map](SURFACES.md) — user-visible thing -> unit -> file, plus `## Flows` (cached walks). **Start here for any vague request.**

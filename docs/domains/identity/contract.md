@@ -2,8 +2,8 @@
 id: identity
 layer: domain
 status: active
-version: 3
-updated: 2026-09-05
+version: 6
+updated: 2026-09-06
 ---
 
 # Contract — identity
@@ -38,6 +38,11 @@ Surfaced over HTTP by the `auth-api` interface — see
 | forgot password | phone, optional channel | `{accepted:true}`, or the same `linkRequired` shape as login OTP | sync | channel not allowed / not configured |
 | verify forgot OTP | phone, code | `resetToken` | sync | invalid OTP |
 | reset password | resetToken, new password | `{success:true}` + **session tokens for this device**; revokes every pre-existing session | sync | invalid token, profile-data password |
+| prove account by password | identifier (phone or username), password | the account, or **null** for every failure alike | sync | `auth.temporarilyLocked` (shares login's 10/900s bucket) |
+| issue account-proof OTP | phone, optional channel | nothing, or the same `linkRequired` deep-link shape as login OTP | sync | channel not allowed / not configured |
+| prove account by OTP | phone, code | the account, or **null** | sync | — |
+| hand over a session | outgoing sessionId + userId, the target user, ip, user-agent, **switch scope** | the target's `{accessToken, refreshToken, expiresIn}`, stamped with that scope; the outgoing session revoked `account_switched` | sync tx | (the caller has already decided the switch is allowed) |
+| revoke a user's sessions **in one scope** | userId, scopeKey, reason | the count revoked; only sessions minted in that scope, markers dropped one by one | sync | — |
 | start impersonation | targetUserId, reasonNote (>=10 chars) | impersonated access token (30 min) | sync | target not lower-ranked, target inactive |
 | end impersonation | (from session) | — | sync | not an impersonation session |
 
@@ -62,6 +67,10 @@ None. No message bus is wired up. Impersonation start/end write an
 
 - Access JWT TTL `JWT_ACCESS_TTL_SEC` (default 900s); impersonation token 1800s.
 - Refresh is single-use: `refresh` revokes the old session and issues a new one.
+  The replacement **inherits the old row's `scopeKey`** — a refresh is the same
+  session continuing (ADR-0015). It is never re-derived from the request, and
+  never dropped: the panel refreshes on every page load, so either mistake
+  would detach a live session from its switch group within seconds.
 - Password reset and (any) password change revoke **every** session for that
   user, in one Postgres transaction, and drop the Redis markers. Reset then
   mints one new session for the device that performed it — issued after the
@@ -82,6 +91,38 @@ None. No message bus is wired up. Impersonation start/end write an
 - Login lockout: 10 failed attempts per identifier per 900s -> `temporarily
   locked` (Redis counter, cleared on success).
 - Enumeration-safe: OTP request / forgot-password always return `{accepted:true}`.
+- The three **prove account** operations exist for `audit`'s account-switch
+  group (F-0205) and mint nothing — no session, no token, no cookie. They
+  answer one thing: does this credential belong to that account. Every failure
+  (wrong credential, no such account, deleted, inactive, unverified phone)
+  returns the same `null`, so a caller holding one session cannot use them to
+  learn which numbers are registered. `account_switch_link` is its own
+  `OtpPurpose`: invariant #10 allows one active code per (phone, purpose), so
+  sharing login's purpose would let adding an account destroy a login code the
+  same person is mid-way through typing.
+- **Hand over a session** (F-0207) checks no credential — `audit` has already
+  decided that the target belongs to the caller's group, and that decision is
+  the credential. What identity guarantees is only that the two session writes
+  are one: the outgoing row is revoked in the same transaction that writes the
+  incoming one, and the Redis markers are then updated outgoing-first, so
+  `AuthGuard` never sees two live sessions for the one browser. The new token
+  carries the **target's** role and permissions; nothing is inherited.
+
+## v6 — sessions carry the scope they were minted on
+
+Additive. `Session.scopeKey` (nullable) records the **switch scope** a session
+was created on — the same key shape `audit.linked_account_member` uses
+(ADR-0015) — and one new operation, **revoke a user's sessions in one scope**,
+reads it. Existing operations keep their meaning; the two that gain an optional
+trailing argument (`hand over a session`, and the session-minting paths behind
+login / register-verify / reset) default to no scope, which is a legitimate
+state meaning "belongs to no switch group".
+
+Why identity carries a key whose meaning lives in `audit`: F-0208 has to revoke
+the removed account's sessions on **one surface only**, and a session is
+identity's. `audit` decides *which* scope; identity records and honours it.
+Null is deliberate for impersonation — an admin's session belongs to no group,
+so it matches no scope and is never caught by a removal.
 
 ## Deprecations
 
@@ -89,6 +130,20 @@ None. No message bus is wired up. Impersonation start/end write an
 |---|---|---|---|
 | `verify phone (register)` keyed by `userId` | 2026-09-04 | already removed — no `user` row exists at register time to key by | keyed by `phoneNumber` instead |
 | silent SMS fallback when a messenger is not linked | 2026-09-05 | already removed (catalog C-20) | `linkRequired` + bot deep link on the channel the user chose |
+
+## v5 — a session handover, for account switching
+
+Additive. One new operation, **hand over a session**, used by `audit` alone
+(`AccountSwitchService.switchTo`, F-0207) and surfaced as
+`POST /auth/accounts/switch`. It takes nothing away: every existing operation
+keeps its meaning, and no caller that ignores it sees a change. Adds
+`SessionRevokedReason.account_switched` to the schema — a Prisma migration, not
+a flag.
+
+The reason it lives here rather than in `audit`: sessions are identity's, and a
+switch is two session writes that must not come apart. `audit` owning the
+membership rule and identity owning the handover is the same split F-0205 made
+for the proofs.
 
 ## Breaking: v3 — reset password returns a session
 

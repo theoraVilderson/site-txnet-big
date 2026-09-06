@@ -15,7 +15,7 @@ import {
 } from '../otp/otp.interface';
 import { OtpChannelRegistry } from '../otp/otp-channels.service';
 import { BotLinkService } from '../bot-link/bot-link.service';
-import { BotPlatform } from '../otp/senders/bot-client.registry';
+import { BotPlatform } from '@txnet-backend/messenger';
 import { normalizeIranPhone } from '../../common/validation/phone.schema';
 import { ok, err, safeExecute } from '../../common/response/response.util';
 

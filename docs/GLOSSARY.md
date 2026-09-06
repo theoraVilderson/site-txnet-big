@@ -1,7 +1,7 @@
 ---
 id: glossary
 status: active
-updated: 2026-09-05
+updated: 2026-09-06
 ---
 
 # Glossary
@@ -30,6 +30,9 @@ introduce a synonym, record why.
 | Permission | An RBAC capability key (e.g. `user.impersonate`) attached to a Role. | identity | Entitlement, Restriction |
 | Session | A server-tracked login. Postgres row is the record; a Redis marker is the fast revocation check. | identity | JWT access token, Impersonation session |
 | Impersonation | An admin operating as a user without their credentials; time-boxed, always audit-logged. | audit / identity | Account switch (user's own linked accounts) |
+| Linked account group | One person's own set of accounts, built by proof, that they may move between without a credential. Scoped to a **switch scope**, never global (ADR-0015). | audit | Impersonation (an admin acting as someone else), Sub-account (a shared pocket, not an identity) |
+| Switch scope | The surface instance a linked account group belongs to: one bot chat (`bot:<platform>:<chatId>`) or one browser (`device:<uuid>`). Stored on `linked_account_member.scopeKey` and on `session.scopeKey`. | audit | Tenant (a brand boundary), Session (one login, which *has* a scope) |
+| Device id | The uuid in a server-minted httpOnly `device_id` cookie that names one browser as a switch scope. A **partition key, not a credential** — forging one grants nothing, since membership must still exist under it. | auth-api | Session / refresh token (credentials), Device fingerprint (`fraud`, a different thing entirely) |
 | OTP | A one-time code. **Redis is the source of truth**; the `otp_code` table is audit only. | identity | JWT `otp_login` token |
 | OTP channel | *How* a code is delivered: `sms` \| `telegram` \| `bale`. Which ones exist is per-environment (`OTP_ALLOWED_CHANNELS` + a configured sender), not per-user. | identity | OTP purpose (*what* the code is for), BotIntegration (*which* bot sends it) |
 | LinkedBotAccount | The proven binding of one User to one Telegram/Bale chat id. Only counts as proven once `contactVerifiedAt` is set. | identity | BotIntegration (a tenant's bot), bot link (the pending, unproven request) |
@@ -65,6 +68,6 @@ Terms that were ambiguous and are now forbidden project-wide.
 | customer / account (for a person) | User | Three names for one identity would become three tables |
 | config (for app settings) | settings / env | `Config` is the network-domain VPN credential model |
 | gateway (unqualified) | ForwardAuth gateway / payment gateway | Two unrelated "gateways" in this system |
-| Node | Panel (infra) or ResellerNode | Bare "Node" is banned. The VPN server install is a `Panel`; the reseller-tree entity is a `ResellerNode`. The old schema `Node` model renames to `Panel` (F-017). |
+| Node | Panel (infra) or ResellerNode | Bare "Node" is banned. The VPN server install is a `Panel`; the reseller-tree entity is a `ResellerNode`. The schema rename landed 2026-09-06 (F-017). |
 | panel (for the web app) | User panel | The infra install is the `Panel`; the site-pwa web app is the `User panel` (`panel-web` unit). |
 | client (for a VPN credential) | Config | `App-Features.md` driver interface returns `RemoteClient`; our model is `Config`. "client" stays driver-internal only. |

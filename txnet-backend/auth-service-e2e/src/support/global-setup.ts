@@ -1,17 +1,18 @@
-import { waitForPortOpen } from '@nx/node/utils';
+/**
+ * Starts Postgres + Redis, builds the schema and seeds the rows the API
+ * assumes always exist. Runs once, before any worker is forked.
+ */
+import { migrateAndSeed, startInfra, writeInfraFile } from './infra';
 
-/* eslint-disable */
-var __TEARDOWN_MESSAGE__: string;
+module.exports = async function () {
+  const started = Date.now();
+  console.log('\n[e2e] starting postgres + redis…');
+  const { urls, stop } = await startInfra();
 
-module.exports = async function() {
-  // Start services that that the app needs to run (e.g. database, docker-compose, etc.).
-  console.log('\nSetting up...\n');
+  console.log('[e2e] prisma db push + seed…');
+  await migrateAndSeed(urls.databaseUrl);
 
-  const host = process.env.HOST ?? 'localhost';
-  const port = process.env.PORT ? Number(process.env.PORT) : 3000;
-  await waitForPortOpen(port, { host });
-
-  // Hint: Use `globalThis` to pass variables to global teardown.
-  globalThis.__TEARDOWN_MESSAGE__ = '\nTearing down...\n';
+  writeInfraFile(urls);
+  (globalThis as any).__E2E_STOP_INFRA__ = stop;
+  console.log(`[e2e] infrastructure ready in ${Date.now() - started}ms\n`);
 };
-

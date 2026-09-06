@@ -56,6 +56,8 @@ This table records precisely where v1 and v2 (or v1 with itself) contradicted ea
 | **C-18** | v1 §7.2 sends a tenant's panel alert to that tenant itself; F-1207 ("route alert to panel owner") is the same idea, but v2 marked it "present" while leaving reseller panels undefined.                                                                                                                                                             | The rule was generalized: the alert goes to the **owner of the panel record**, which can now also be a reseller node. The platform's on-call team is only paged for panels with `ownershipType = platform`.                                                                                                         |
 | **C-19** | The v1 plan table gave Starter "dedicated gateway: —," yet the v1 appendix says "the platform never pays out to end users." That meant Starter had structurally no way to receive money unless the platform acted as intermediary — exactly what is being eliminated.                                                                               | **A dedicated gateway is mandatory on every plan** (D-03). Plans differ in the **number** of gateways and access to advanced methods (multi-account card-to-card, bank SMS parsing), not in whether a gateway exists at all.                                                                                        |
 | **C-20** | §2.3 said an OTP for a messenger the user has not linked "automatically falls back to SMS". That is undefined once SMS itself can be switched off (`OTP_ALLOWED_CHANNELS`), and a silent channel switch contradicts the same paragraph's rule that one channel never reveals another. | **No silent fallback.** An unlinked messenger answers with a bot deep link (F-0203), so the user connects the channel they chose. A channel that is switched off in the environment is never offered and is refused if named. |
+| **C-21** | F-0101 rejects any `login`/`register` while the caller already holds a live session — "one device, one account" — and account switching (F-0207) is by definition a second identity on the same device. | Switching is **not** authentication: it is a separate route whose proof *is* the live session, so it never sits behind the no-active-session guard, and it revokes the outgoing session in the same step that issues the new one. "One device, one account" still holds at every instant; what changes is that ending one and starting another costs one click instead of a password. |
+| **C-22** | C-15 scopes phone uniqueness to the **tenant**, so one person legitimately holds one account per white-label brand — but a switcher that listed them all would hand a session for brand B to a page served on brand A's domain. | Group **membership** may span tenants, because it records a human rather than a login; F-0206 and F-0207 filter to the caller's own `tenantId`. A cross-tenant account stays in the group and is simply not offered on this domain. |
 
 ---
 
@@ -233,6 +235,38 @@ Before `register` or `login` reaches the `identity` domain, the client must pass
 | id | feature | status | depends_on | note |
 |---|---|---|---|---|
 | F-0201 | Server-verified slide challenge gates `register` and `login`: `auth-service` issues a short-lived challenge token, the client completes the drag gesture and returns it, and the server confirms completion before delegating to `identity` | new | — | Challenge pass TTL is 120s — expired or already-consumed tokens are rejected and the client must re-verify; deters scripted/automated submission, not a substitute for real behavioral bot detection |
+
+### 2.8 Account Switching
+
+One person routinely holds more than one account — their own, plus one they run for a
+family member or a small resale. Today that costs a full logout and a full login, and
+F-0203 actively fights it: a Telegram chat belongs to exactly one account.
+
+An **account-switch group** is the user's own set of accounts. Membership is *proved*,
+never asserted — a second account joins only by proving itself from inside the first
+account's live session. After that, moving between them costs no credential.
+
+The group is **not** a shared identity. Each account keeps its own wallet, services,
+role and sessions; nothing is pooled and nothing is inherited. The group states only
+that one human holds these accounts, which is why its records live in `audit` (the
+trail of who acted as whom) rather than in `identity`.
+
+Switching never crosses a tenant (C-22), and it never bypasses F-0101 (C-21).
+
+```
+LinkedAccountGroup(createdAt)
+LinkedAccountMember(groupId, userId, verifiedViaOtp, addedAt)
+    userId: unique — an account belongs to at most one group
+```
+
+| id | feature | status | depends_on | note |
+|---|---|---|---|---|
+| F-0205 | An account joins the caller's switch group only by proving itself — an OTP to that account's phone, **or** that account's password; the caller picks which | changed | F-0204 | C-21. `LinkedAccountMember.verifiedViaOtp` records which proof was used, so the trail says how each member got in. `userId` is unique across all groups: joining a second group is a move, not a copy. Both proofs are rate-limited exactly like a login — an unmetered "prove this account is mine" route is an account-existence oracle wearing a different hat **Changed 2026-09-06 (ADR-0015):** the group belongs to the surface it was built on, so an account joins the set of *this* chat or *this* browser, and a group it holds elsewhere is no obstacle. |
+| F-0206 | Listing the caller's switch group: the members they may switch to, phone masked, display name shown, filtered to the caller's own tenant | changed | F-0205 | C-22. The mask is not decoration — this list renders on a page anyone standing behind the user can read **Changed 2026-09-06 (ADR-0015):** the list is scoped to the calling surface, so an empty group is the ordinary answer on a surface nothing has been built on yet. |
+| F-0207 | Switching to another member issues that member's session and revokes the caller's current one (`account_switched`), with no credential re-entered | changed | F-0205 | C-21. One browser holds exactly one live session at every instant, so F-0101's guarantee survives untouched. Switching back is just another switch, and costs nothing **Changed 2026-09-06 (ADR-0015):** membership is read per surface, and the incoming session is stamped with that scope. |
+| F-0208 | Removing an account from the group — from either side — revoking that member's live sessions on the way out | changed | F-0205 | A group you cannot leave is lock-in; and a lost or recycled phone number must not leave a stranger's account permanently attached to yours **Changed 2026-09-06 (ADR-0015):** built on both surfaces, from either side. The revoke is scoped — only the removed account's sessions *on the removing surface* end, because a browser has no authority over a chat's group. |
+| F-0209 | The panel's account switcher: current account, the rest of the group, "add an account", one click to switch | changed | F-0206 F-0207 | The capability is invisible without it. `panel-web`'s F-0101 pre-check (`site-pwa/src/proxy.ts`, which redirects a live session away from the login screen) must read a switch as a redirect target, not as a live-session collision **Changed 2026-09-06 (ADR-0015):** the switcher's set belongs to the browser (httpOnly `device_id` cookie), and it carries F-0208's remove control. |
+| F-0210 | Switching accounts inside the bot | changed | F-0207 | Deliberately not built yet: it needs an ADR reopening identity invariant #12 (`one (platform, platformUserId) belongs to at most one User`) and the `@@unique([platform, platformUserId])` behind it — a migration, not a flag. Until then a chat stays anchored to one account and `bots/session` (ADR-0012) signs into that one **Changed 2026-09-06:** built — ADR-0014 resolved the block differently than assumed here (the session moves, the link does not), so invariant #12 and its `@@unique` are untouched and no migration was needed. ADR-0015 then scoped the chat's set to the chat. |
 
 ---
 

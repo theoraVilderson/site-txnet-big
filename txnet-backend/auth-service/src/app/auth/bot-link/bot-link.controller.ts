@@ -7,21 +7,30 @@ import {
   Param,
   Post,
   Req,
+  UseGuards,
   UsePipes,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { timingSafeEqual } from 'crypto';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
-import { ok } from '../../common/response/response.util';
+import { ok, err } from '../../common/response/response.util';
 import { RateLimit } from '../decorators/rate-limit.decorator';
+import { rateLimitSubject } from '../../common/security/service-caller';
 import {
   BOT_PLATFORMS,
   BotClientRegistry,
   BotPlatform,
-} from '../otp/senders/bot-client.registry';
+} from '@txnet-backend/messenger';
 import { BotLinkService } from './bot-link.service';
-import { botLinkStatusSchema } from './bot-link.schema';
+import {
+  botLinkContactSchema,
+  botLinkResolveSchema,
+  botLinkStatusSchema,
+  botSessionSchema,
+} from './bot-link.schema';
+import { BotSessionService } from './bot-session.service';
 import { BotUpdate } from './bot-link.types';
+import { ServiceOnlyGuard } from '../../common/guards/service-only.guard';
 
 /**
  * The bot side of account linking.
@@ -36,9 +45,102 @@ import { BotUpdate } from './bot-link.types';
 export class BotLinkController {
   constructor(
     private readonly links: BotLinkService,
+    private readonly sessions: BotSessionService,
     private readonly bots: BotClientRegistry,
   ) {}
 
+  /**
+   * `bot-service` handing over a `/start` it received (ADR-0011). It parsed the
+   * payload and resolved which bot the update belongs to; the decision — ask
+   * for a contact, or send the code — is made here, because the rule is
+   * `identity`'s and exists once.
+   */
+  @Post('link/resolve')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ServiceOnlyGuard)
+  @UsePipes(new ZodValidationPipe(botLinkResolveSchema))
+  @RateLimit({
+    key: (req) => `bot:link:resolve:${req.body?.chatId ?? rateLimitSubject(req)}`,
+    limit: 30,
+    windowSec: 60,
+  })
+  async resolve(@Body() body: any) {
+    return ok(
+      await this.links.resolveStart(
+        body.platform,
+        body.chatId,
+        body.startToken,
+        body.languageCode,
+      ),
+      'auth.botLinkResolved',
+    );
+  }
+
+  /**
+   * The shared contact, forwarded verbatim. The `contact.user_id === senderId`
+   * check that makes it proof (invariant #12) happens in `BotLinkService` and
+   * nowhere else — `bot-service` only renders what comes back.
+   */
+  @Post('link/contact')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ServiceOnlyGuard)
+  @UsePipes(new ZodValidationPipe(botLinkContactSchema))
+  @RateLimit({
+    key: (req) => `bot:link:contact:${req.body?.chatId ?? rateLimitSubject(req)}`,
+    limit: 10,
+    windowSec: 300,
+  })
+  async contact(@Body() body: any) {
+    return ok(
+      await this.links.submitContact(
+        body.platform,
+        body.chatId,
+        body.senderId,
+        body.contact,
+      ),
+      'auth.botLinkContact',
+    );
+  }
+
+  /**
+   * Signing in as the messenger account itself (ADR-0012).
+   *
+   * A contact-verified `LinkedBotAccount` is a credential, not a step towards
+   * one, so a chat holding it gets the ordinary token pair — the same session,
+   * the same rotation, the same revocation as a password login. The one-time
+   * code that used to follow the link re-delivered a proof this service
+   * already held, into the chat that asked for it.
+   *
+   * A chat with no link may send a contact card with the request and be linked
+   * on the spot: unlike `link/contact`, no phone number was typed beforehand,
+   * because the card carries one the platform vouches for. The ownership proof
+   * is unchanged (invariant #12) — only which end is known first.
+   */
+  @Post('session')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(ServiceOnlyGuard)
+  @UsePipes(new ZodValidationPipe(botSessionSchema))
+  @RateLimit({
+    key: (req) => `bot:session:${req.body?.chatId ?? rateLimitSubject(req)}`,
+    limit: 10,
+    windowSec: 300,
+  })
+  async session(@Body() body: any, @Req() req: Request) {
+    const outcome = await this.sessions.authenticate(
+      body,
+      req.ip ?? '',
+      req.get('user-agent') ?? 'bot',
+    );
+    if (outcome.state === 'refused') {
+      return err(outcome.key);
+    }
+    return ok(outcome, 'auth.botSession');
+  }
+
+  /**
+   * @deprecated since 2026-09-06 — `bot-service` owns the webhook (ADR-0011).
+   * Kept for one release so a bot still pointed at this URL keeps working.
+   */
   @Post(':platform/webhook/:secret')
   @HttpCode(HttpStatus.OK)
   @RateLimit({
@@ -81,7 +183,7 @@ export class BotLinkController {
   // Generous on purpose: the screen polls every 2.5s for as long as the user
   // is in the messenger, and each call is one Redis read.
   @RateLimit({
-    key: (req) => `bot:link:status:${req.ip}`,
+    key: (req) => `bot:link:status:${rateLimitSubject(req)}`,
     limit: 300,
     windowSec: 900,
   })

@@ -1,7 +1,7 @@
 ---
 id: network
 layer: domain
-updated: 2026-09-04
+updated: 2026-09-06
 ---
 
 # Data model — network
@@ -12,8 +12,8 @@ Source of truth: `txnet-backend/prisma/domains/network.prisma` (Postgres schema
 ## Tables owned
 | Table | Purpose | Tenant-scoped? | Retention |
 |---|---|---|---|
-| node | server running x-ui/Xray; HA pair; region; status | `tenantId` nullable | permanent |
-| config | user credential on a node (uuid + protocol + status) | `tenantId` NOT NULL (denormalized) | soft state via `status` |
+| panel | server running x-ui/Xray; HA pair; region; status | `tenantId` nullable | permanent |
+| config | user credential on a panel (uuid + protocol + status) | `tenantId` NOT NULL (denormalized) | soft state via `status` |
 | config_action_log | who did what to a config | via config | permanent |
 | traffic_raw_log | per-interval up/down bytes; **monthly partitioned**, BigInt PK | via config | drop old partitions |
 | traffic_daily_aggregate | nightly rollup per (user, config, date) | via config | long |
@@ -24,12 +24,12 @@ Source of truth: `txnet-backend/prisma/domains/network.prisma` (Postgres schema
 |---|---|---|---|
 | config.userId | -> | identity.user.id | a config belongs to a user |
 | config.servicePlanId | -> | catalog.service_plan.id | the plan it was bought under |
-| config.tenantId, node.tenantId | -> | tenant.tenant.id | dedicated pools / reseller panels |
+| config.tenantId, panel.tenantId | -> | tenant.tenant.id | dedicated pools / per-tenant scoping |
 | config (referenced) | <- | billing.sub_account.configId | sub-account funds a config |
 
 ## Access rules
 
-Reseller panels read `config` filtered by `tenantId` (composite index leads with
+A tenant's User panel reads `config` filtered by `tenantId` (composite index leads with
 `tenantId`). Traffic tables are written by an ingestion path, read by reporting.
 
 ## Migration notes

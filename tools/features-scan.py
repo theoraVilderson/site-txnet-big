@@ -196,8 +196,11 @@ def write_manifest(blocks, features):
         for b in blocks:
             fids = " ".join(sorted({f["id"] for f in features if f["block"] is b}))
             ind = "" if b["lvl"] == 2 else "· "
-            loc = f"`{b['file'].name}:{b['start']}-{b['end']}`"
-            fh.write(f"| {loc} {ind}{b['title']} | {b['end'] - b['start'] + 1} | "
+            # No line range. AGENTS.md forbids line numbers in docs, spec.py
+            # re-derives the range on every call, and printing it here made a
+            # 30-line catalog edit rewrite ~160 manifest rows that differed only
+            # in their offsets. The file name stays; the numbers go.
+            fh.write(f"| `{b['file'].name}` {ind}{b['title']} | {b['end'] - b['start'] + 1} | "
                      f"{fids} | {' '.join(b['dci'])} | {' '.join(b['entities'])} |\n")
 
         fh.write("\n## Feature index\n\n")

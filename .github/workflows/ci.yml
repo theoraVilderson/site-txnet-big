@@ -72,6 +72,81 @@ jobs:
       - name: jest
         run: npx nx run-many -t test --parallel=2 --skip-nx-cache
 
+      # A webpack build is the only thing that proves a workspace-library
+      # import (`@txnet-backend/*`) actually resolves: ts-loader runs with
+      # `transpileOnly`, so a wrong alias type-checks, bundles a
+      # "Cannot find module" stub, and only fails when the service boots.
+      - name: webpack build
+        run: npx nx run-many -t build --parallel=2 --skip-nx-cache
+
+  # ---------------------------------------------------------------------------
+  # auth-service end to end: the real app over HTTP, against a real Postgres
+  # and a real Redis in containers (testcontainers). Docker is available on
+  # the runner, so the images come straight from Docker Hub — the defaults in
+  # the code point at the mirror the dev environment has to use instead.
+  # ---------------------------------------------------------------------------
+  backend-e2e:
+    name: auth-service (e2e)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: txnet-backend
+    env:
+      TEST_POSTGRES_IMAGE: postgres:18-alpine
+      TEST_REDIS_IMAGE: redis:8.8-alpine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: txnet-backend/package-lock.json
+
+      - run: npm ci
+
+      # The e2e run builds its own schema with `prisma db push`; the client
+      # still has to exist before anything imports it.
+      - name: prisma generate
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+        run: npx prisma generate
+
+      - name: jest (e2e)
+        run: npm run test:e2e
+
+  # ---------------------------------------------------------------------------
+  # The `*.int.spec.ts` tier: the Redis-backed stores against a real Redis in a
+  # container (testcontainers). These were written but ran nowhere — a store
+  # whose Lua script or KEEPTTL assumption broke would have shipped green.
+  # ---------------------------------------------------------------------------
+  backend-int:
+    name: auth-service (integration)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: txnet-backend
+    env:
+      TEST_REDIS_IMAGE: redis:8.8-alpine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: txnet-backend/package-lock.json
+
+      - run: npm ci
+
+      # No database is contacted; the client just has to exist before the
+      # specs' imports resolve.
+      - name: prisma generate
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+        run: npx prisma generate
+
+      - name: jest (integration)
+        run: npm run test:int
+
   # ---------------------------------------------------------------------------
   # Go modules of the workspace (auth-handler + i18n-platform).
   # ---------------------------------------------------------------------------
@@ -112,6 +187,39 @@ jobs:
             (cd "$dir" && go test ./...)
             echo "::endgroup::"
           done <<< '${{ steps.modules.outputs.dirs }}'
+
+  # ---------------------------------------------------------------------------
+  # The shared Node locale client. Every Node service imports the compiled
+  # `dist/`, so that is what is tested — plus a check that `dist/` is actually
+  # the current build of `client.ts`, since a stale one ships silently.
+  # ---------------------------------------------------------------------------
+  locale-client-node:
+    name: locale-client (node)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: i18n-platform/clients/node
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: i18n-platform/clients/node/package-lock.json
+
+      - run: npm ci
+
+      - name: node --test
+        run: npm test
+
+      - name: dist is the current build of client.ts
+        run: |
+          npm run build
+          if ! git diff --quiet -- dist; then
+            echo "::error::dist/ is stale — run 'npm run build' in i18n-platform/clients/node and commit the result"
+            git --no-pager diff --stat -- dist
+            exit 1
+          fi
 
   # ---------------------------------------------------------------------------
   # The two Next.js apps: eslint + vitest.

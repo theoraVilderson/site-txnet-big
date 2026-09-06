@@ -2,6 +2,9 @@
   "compileOnSave": false,
   "compilerOptions": {
     "rootDir": ".",
+    // Required by tsconfig-paths (and its webpack plugin) to resolve the
+    // `paths` below at build time — TypeScript itself no longer needs it.
+    "baseUrl": ".",
     "sourceMap": true,
     "declaration": false,
     "moduleResolution": "node",
@@ -14,6 +17,7 @@
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
     "paths": {
+      "@txnet-backend/messenger": ["./messenger/src/index.ts"],
       "@txnet-backend/shared-core": ["./shared-core/src/index.ts"]
     }
   },

@@ -22,6 +22,7 @@ const FALLBACK_TITLES: Record<OtpPurpose, string> = {
   [OtpPurpose.register_phone_verify]: 'Your phone verification code',
   [OtpPurpose.password_reset]: 'Your password reset code',
   [OtpPurpose.account_link]: 'Your account linking code',
+  [OtpPurpose.account_switch_link]: 'Your code to add this account',
 };
 
 const FALLBACK_CHAT_BODY =

@@ -2,5 +2,46 @@
   "save": "Save",
   "cancel": "Cancel",
   "logout": "Log out",
-  "loggingOut": "Logging out…"
+  "loggingOut": "Logging out…",
+  "accounts": {
+    "signedInAs": "Signed in as",
+    "groupTitle": "Your other accounts",
+    "groupEmpty": "You have not added another account yet.",
+    "switchTo": "Switch to",
+    "switching": "…",
+    "switchFailed": "Could not switch account",
+    "add": "Add an account",
+    "addTitle": "Add another account",
+    "addSubtitle": "To join, that account has to prove itself: a code sent to its own phone, or its own password.",
+    "addedTitle": "Account added",
+    "addedBody": "From now on you can move between these accounts without entering a credential.",
+    "backToPanel": "Back to the panel",
+    "proof": {
+      "otp": "Verification code",
+      "password": "Password"
+    },
+    "channel": {
+      "sms": "SMS",
+      "telegram": "Telegram",
+      "bale": "Bale"
+    },
+    "phonePlaceholder": "The other account's phone number",
+    "identifierPlaceholder": "Phone number or username",
+    "passwordPlaceholder": "That account's password",
+    "sendCode": "Send the code",
+    "confirm": "Confirm",
+    "failed": "That did not work",
+    "linkRequired": "That account has not connected the bot yet. It needs to share its number in the bot first; the code is sent after that.",
+    "openBot": "Open the bot",
+    "linkDone": "Done — continue",
+    "linkPending": "Not connected yet. Try again in a moment.",
+    "remove": "Remove from this browser",
+    "removeConfirm": "Remove {{name}}?",
+    "removeYes": "Remove",
+    "removeCancel": "Keep it",
+    "removing": "…",
+    "removeFailed": "Could not remove that account",
+    "leave": "Remove this account from the set on this browser",
+    "leaveConfirm": "Remove this account and sign out here?"
+  }
 }

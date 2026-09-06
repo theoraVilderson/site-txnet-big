@@ -35,14 +35,16 @@
     }
   },
   "auth": {
-    "authorizationRequired": "Authentication is required for this operation",
-    "sessionRevoked": "Your session has expired or been revoked",
-    "invalidToken": "Invalid token",
-    "tokenExpired": "Token has expired",
     "alreadyAuthenticated": "You are already signed in. Log out before signing in or registering again.",
+    "authorizationRequired": "Authentication is required for this operation",
+    "botFactorNotAllowed": "Signing in with the messenger is not enough for this account — use your password",
     "botLinkRequired": "Connect the messenger to receive your code",
     "botLinkStatus": "Link status",
-    "otpChannels": "Available delivery methods"
+    "botSession": "Signed in",
+    "invalidToken": "Invalid token",
+    "otpChannels": "Available delivery methods",
+    "sessionRevoked": "Your session has expired or been revoked",
+    "tokenExpired": "Token has expired"
   },
   "impersonation": {
     "notImpersonated": "This session is not impersonated",
@@ -70,5 +72,17 @@
     "notFound": "The requested item was not found.",
     "conflict": "This action conflicts with existing data.",
     "validationFailed": "Some of the submitted information is invalid."
+  },
+  "accountSwitch": {
+    "sameAccount": "That is the account you are already signed in as",
+    "alreadyInAnotherGroup": "That account already belongs to another account group",
+    "proofFailed": "Could not verify that account. Check the credential and try again.",
+    "otpSent": "A verification code was sent to that account",
+    "added": "The account was added to your group",
+    "listed": "Your account group",
+    "switched": "Switched account",
+    "notAMember": "That account is not one you can switch to",
+    "removed": "The account was removed from your group here",
+    "noScope": "This app could not be identified. Enable cookies, or try again from the panel or the bot."
   }
 }

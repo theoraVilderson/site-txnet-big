@@ -37,7 +37,7 @@ supplies `externals`/`cache`/`devtool` tuning; not tracked as any unit's
 
 | Stack | Compose file | Project | Contents |
 |---|---|---|---|
-| main | `dev-docker/docker-compose.main.yml` | `txnet-main` / `devtxnet` / `prodtxnet` | Traefik, locale-service, auth-handler, auth-service, billing-service, site-pwa, coinsite, Postgres, Redis, RabbitMQ |
+| main | `dev-docker/docker-compose.main.yml` | `txnet-main` / `devtxnet` / `prodtxnet` | Traefik, locale-service, auth-handler, auth-service, bot-service, billing-service, site-pwa, coinsite, Postgres, Redis, RabbitMQ |
 | monitoring | `dev-docker/monitoring/docker-compose.sys-monitor.yml` | `txnet-monitor` | Prometheus, Grafana, Loki, Promtail, node-exporter, cAdvisor, Alertmanager |
 | bug-tracker | `dev-docker/bug-tracker/docker-compose.bug-tracker.yml` | `txnet-bugtracker` | Glitchtip (+ own Postgres/Redis/worker) |
 | registry | `dev-docker/registry/docker-compose.registry.yml` | `txnet-registry` | private Docker registry |
@@ -53,6 +53,7 @@ Traefik in the main stack can route to the other stacks).
 | `<domain>` / `www.<domain>` | coinsite (marketing-web) |
 | `panel.<domain>` | site-pwa (panel-web) |
 | `api.<domain>/api/auth` | auth-service |
+| `api.<domain>/api/bot` | bot-service (the Telegram/Bale webhook; router priority 100, because auth-service's https router also matches the bare host) |
 | `api.<domain>/api/billing` | billing-service (behind `strip-fake-headers` + `my-auth` ForwardAuth) |
 | `monitor.<domain>` | Traefik dashboard (basic-auth) |
 | `mq.<domain>` | RabbitMQ management |
@@ -73,7 +74,7 @@ Traefik in the main stack can route to the other stacks).
   (`next dev` outside compose); a wrong value shows the login form to everyone,
   it never lets anyone in.
 
-## OTP delivery + bot config (auth-service)
+## OTP delivery + bot config (auth-service + bot-service)
 
 | Var | Effect if unset / wrong |
 |---|---|
@@ -81,11 +82,14 @@ Traefik in the main stack can route to the other stacks).
 | `OTP_DELIVERY_MODE` | `console` prints the code and calls no sender, so every allowed channel counts as configured (dev). `live` is the default |
 | `TELEGRAM_BOT_TOKEN` / `BALE_BOT_TOKEN` | without it the channel is not offered at all |
 | `TELEGRAM_BOT_USERNAME` / `BALE_BOT_USERNAME` | delivery still works for users who are already linked, but **no new user can link** — there is no deep link to send them to |
-| `TELEGRAM_WEBHOOK_SECRET` / `BALE_WEBHOOK_SECRET` | same: no webhook route means no link flow. At least 16 chars. Register the webhook as `https://api.<domain>/api/auth/bots/<platform>/webhook/<secret>`; a wrong secret answers 404 |
+| `TELEGRAM_WEBHOOK_SECRET` / `BALE_WEBHOOK_SECRET` | same: no webhook route means no link flow. At least 16 chars. The webhook is `https://api.<domain>/api/bot/<platform>/webhook/<secret>` (bot-service); a wrong secret answers 404 |
+| `SERVICE_AUTH_TOKEN` | **must be identical in `auth-service` and `bot-service`** (>= 32 chars). It is how bot-service's calls skip the slide captcha and get a per-chat rate-limit bucket (ADR-0011). Wrong or unset in either place and *every* auth step inside the bot is refused with `captcha.required` — check this before reading any flow |
+| `AUTH_API_BASE_URL` | where bot-service reaches auth-service; in compose it is the in-network `http://auth-service:${AUTH_PORT}`, so bot traffic never leaves the private network |
+| `BOT_SESSION_TTL_SEC` / `BOT_NAV_TTL_SEC` | how long a chat stays signed in (30d idle) and how long a half-finished conversation is remembered (30m) |
 | `BOT_LINK_TOKEN_TTL_SEC` | how long a deep link stays usable (900s default) |
-| `TELEGRAM_API_BASE` / `BALE_API_BASE` | **outgoing**: where auth-service calls the Bot API. Per environment — dev and prod may need different proxies |
+| `TELEGRAM_API_BASE` / `BALE_API_BASE` | **outgoing**: where both services call the Bot API (auth-service to deliver an OTP, bot-service to answer a chat). Per environment — dev and prod may need different proxies |
 | `TELEGRAM_WEBHOOK_PUBLIC_BASE` / `BALE_WEBHOOK_PUBLIC_BASE` | **incoming**: the base that platform calls back on. Empty falls back to `BOT_WEBHOOK_PUBLIC_BASE`, then `https://api.<DOMAIN_NAME>` |
-| `BOT_WEBHOOK_AUTO_REGISTER` | `false` stops auth-service registering webhooks on boot (leave it `true` unless something else owns them) |
+| `BOT_WEBHOOK_AUTO_REGISTER` | `false` stops **bot-service** registering webhooks on boot (leave it `true` unless something else owns them) |
 
 A messenger channel therefore has two levels: **token only** = existing linked
 users get codes; **token + username + secret** = new users can link themselves.
@@ -100,11 +104,11 @@ webhook URL, so dev and prod must be two different bots. Registering the same
 token twice silently steals the webhook from the other stack.
 
 The webhook URL itself is not configuration — it is derived:
-`<public base>/api/auth/bots/<platform>/webhook/<that platform's secret>`, where
+`<public base>/api/bot/<platform>/webhook/<that platform's secret>`, where
 the public base is `<PLATFORM>_WEBHOOK_PUBLIC_BASE`, else
 `BOT_WEBHOOK_PUBLIC_BASE`, else `https://api.<DOMAIN_NAME>`.
 
-auth-service registers that URL with every configured bot on boot
+**bot-service** registers that URL with every configured bot on boot
 (`BotWebhookRegistrar`, off with `BOT_WEBHOOK_AUTO_REGISTER=false`); it reads
 `getWebhookInfo` first and only writes when the URL differs, so a restart is
 cheap and a webhook it cannot read is left alone.

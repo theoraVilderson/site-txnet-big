@@ -45,3 +45,18 @@ Statements that must be true at all times. **Outrank every feature request.**
    with a matching id, but a phone other than the requested one, is also refused.
 9. `TelegramOtpSender` test: a `linked_bot_account` row with
    `contactVerifiedAt = null` -> `otp.telegramNotLinked`, no message sent.
+
+## Session scope (ADR-0015)
+
+A session's `scopeKey` is written once, at mint time, and thereafter only ever
+**copied** — `refresh` carries the old row's value onto the replacement. It is
+never re-derived from a request and never cleared. A session whose scope was
+re-derived would migrate between surfaces as a user's cookies changed; one
+whose scope was dropped would fall out of its own switch group on the first
+rotation, which for the panel is the first page load. Pinned in
+`auth.service.spec.ts` ("carries the scope forward onto the replacement
+session").
+
+Nullable is a real value, not a gap: an impersonation session belongs to no
+switch group and must match no scope, so `F-0208`'s scoped revoke never touches
+one.

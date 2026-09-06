@@ -22,7 +22,21 @@ const SECRET = 'contract-fixture-secret';
 // Fixed, far in the future: the fixture is committed, so it must not rot.
 const EXPIRES_AT = 4102444800; // 2100-01-01T00:00:00Z
 
-const ttl = EXPIRES_AT - Math.floor(Date.now() / 1000);
+/**
+ * The clock is frozen so the fixture is byte-for-byte identical on every run.
+ *
+ * `TokenService.sign` stamps `iat` from the wall clock, so a fixture written
+ * against the real time changed on every run and showed up as a modified file
+ * in `git status` after `npm test` — which trains everyone to `git checkout`
+ * it, including on the run where the wire format really did change. Frozen,
+ * the file only moves when the token format does, and that diff means
+ * something.
+ */
+const FROZEN_NOW_SEC = 1767225600; // 2026-01-01T00:00:00Z
+jest.useFakeTimers({ now: FROZEN_NOW_SEC * 1000 });
+afterAll(() => jest.useRealTimers());
+
+const ttl = EXPIRES_AT - FROZEN_NOW_SEC;
 
 // Every minted token has to outlive the commit, so the per-purpose TTLs are
 // pinned to the same far-future expiry as the access token.
@@ -124,7 +138,18 @@ describe('TokenService — auth-handler wire contract', () => {
     const { exp } = JSON.parse(
       Buffer.from(cases.expired.split('.')[1], 'base64url').toString(),
     );
-    expect(exp).toBeLessThan(Math.floor(Date.now() / 1000));
+    expect(exp).toBeLessThan(FROZEN_NOW_SEC);
+  });
+
+  // The whole point of freezing the clock: two runs must produce the same
+  // bytes, or the committed fixture is noise in every diff.
+  it('stamps a fixed iat, so the committed fixture does not move on its own', () => {
+    for (const token of Object.values(cases)) {
+      const { iat } = JSON.parse(
+        Buffer.from(token.split('.')[1], 'base64url').toString(),
+      );
+      expect(iat).toBe(FROZEN_NOW_SEC);
+    }
   });
 
   // Every field the Go `Claims` struct unmarshals has to be present and named

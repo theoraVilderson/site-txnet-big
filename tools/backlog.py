@@ -27,14 +27,18 @@ def rows():
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
         if len(cells) < 6 or cells[0].startswith("-") or cells[0].lower() == "id":
             continue
-        if not re.match(r"^[A-Z]+-\d+$", cells[0]):
+        # `F-303-a` is a legal id: §6d.5 splits a catalog feature too large for
+        # one session into lettered sub-items, and a row this pattern rejects is
+        # invisible to progress, to `next eligible` and to every dependency
+        # check — which is the one place a split must not disappear.
+        if not re.match(r"^[A-Z]+-\d+(?:-[a-z0-9]+)?$", cells[0]):
             continue
         if cells[1].startswith("_"):  # example row
             continue
         r = dict(zip(COLS, cells + [""] * (len(COLS) - len(cells))))
         r["status"] = r["status"].lower()
         deps = [d.strip() for d in re.split(r"[,\s]+", r["depends_on"]) if d.strip()]
-        r["deps"] = [d for d in deps if re.match(r"^[A-Z]+-\d+$", d)]
+        r["deps"] = [d for d in deps if re.match(r"^[A-Z]+-\d+(?:-[a-z0-9]+)?$", d)]
         out.append(r)
     return out
 

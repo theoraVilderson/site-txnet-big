@@ -1,9 +1,6 @@
 /* eslint-disable */
-import axios from 'axios';
+// Runs in every worker before the test framework is installed — early enough
+// that `AppModule`'s ConfigModule sees the e2e environment.
+import { applyE2eEnv } from './env';
 
-module.exports = async function() {
-  // Configure axios for tests to use.
-  const host = process.env.HOST ?? 'localhost';
-  const port = process.env.PORT ?? '3000';
-  axios.defaults.baseURL = `http://${host}:${port}`;
-};
+applyE2eEnv();

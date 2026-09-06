@@ -8,14 +8,14 @@ enum PanelType {
   @@schema("network")
 }
 
-enum NodeRole {
+enum PanelRole {
   active
   passive
 
   @@schema("network")
 }
 
-enum NodeStatus {
+enum PanelStatus {
   healthy
   degraded
   maintenance
@@ -59,50 +59,50 @@ enum IpRuleType {
 }
 
 /// 5.1 — نود؛ tenantId=null یعنی استخر مشترک، پر یعنی نود اختصاصی Tenant.
-model Node {
-  id                  String     @id @default(uuid()) @db.Uuid
-  tenantId            String?    @db.Uuid
+model Panel {
+  id                  String      @id @default(uuid()) @db.Uuid
+  tenantId            String?     @db.Uuid
   name                String
   ipAddress           String
   panelType           PanelType
   panelApiCredentials String // SENSITIVE, encrypted — never default-select
-  role                NodeRole
-  pairedNodeId        String?    @db.Uuid // برای HA
-  status              NodeStatus @default(healthy)
+  role                PanelRole
+  pairedPanelId       String?     @db.Uuid // برای HA
+  status              PanelStatus @default(healthy)
   region              String
 
-  pairedNode Node?   @relation("NodeHAPair", fields: [pairedNodeId], references: [id])
-  pairedWith Node[]  @relation("NodeHAPair")
-  configs    Config[]
+  pairedPanel Panel?   @relation("PanelHAPair", fields: [pairedPanelId], references: [id])
+  pairedWith  Panel[]  @relation("PanelHAPair")
+  configs     Config[]
 
   @@index([tenantId])
-  @@map("node")
+  @@map("panel")
   @@schema("network")
 }
 
 /// 5.2 — کانفیگ کاربر روی یک نود؛ tenantId denormalized indexed (کلید اول
 /// ایندکس کامپوزیت) برای Query سریع بدون Join در پنل هر Tenant.
 model Config {
-  id                   String         @id @default(uuid()) @db.Uuid
-  tenantId             String         @db.Uuid
-  userId               String         @db.Uuid
-  nodeId               String         @db.Uuid
-  servicePlanId        String         @db.Uuid
-  uuid                 String         @unique // UUID واقعی روی Xray
-  protocol             ConfigProtocol
-  status               ConfigStatus   @default(active)
-  disabledReason       String?
-  maxRegenerateCount   Int            @default(3)
-  regenerateUsedCount  Int            @default(0)
-  createdAt            DateTime       @default(now())
+  id                  String         @id @default(uuid()) @db.Uuid
+  tenantId            String         @db.Uuid
+  userId              String         @db.Uuid
+  panelId             String         @db.Uuid
+  servicePlanId       String         @db.Uuid
+  uuid                String         @unique // UUID واقعی روی Xray
+  protocol            ConfigProtocol
+  status              ConfigStatus   @default(active)
+  disabledReason      String?
+  maxRegenerateCount  Int            @default(3)
+  regenerateUsedCount Int            @default(0)
+  createdAt           DateTime       @default(now())
 
-  node        Node        @relation(fields: [nodeId], references: [id])
+  panel       Panel       @relation(fields: [panelId], references: [id])
   servicePlan ServicePlan @relation(fields: [servicePlanId], references: [id])
 
-  actionLogs        ConfigActionLog[]
-  trafficRawLogs    TrafficRawLog[]
-  trafficDailyAggs  TrafficDailyAggregate[]
-  subAccount        SubAccount?
+  actionLogs       ConfigActionLog[]
+  trafficRawLogs   TrafficRawLog[]
+  trafficDailyAggs TrafficDailyAggregate[]
+  subAccount       SubAccount?
 
   @@index([tenantId, createdAt(sort: Desc)])
   @@index([userId, status])
@@ -128,11 +128,11 @@ model ConfigActionLog {
 /// 5.4 — داده خام ترافیک؛ حجم بسیار بالا. الزامی: Native Partitioning
 /// ماهانه (`PARTITION BY RANGE (recordedAt)`) — پیاده‌سازی در بخش ۹۹.
 model TrafficRawLog {
-  id             BigInt   @id @default(autoincrement())
-  configId       String   @db.Uuid
-  uploadBytes    BigInt
-  downloadBytes  BigInt
-  recordedAt     DateTime @default(now())
+  id            BigInt   @id @default(autoincrement())
+  configId      String   @db.Uuid
+  uploadBytes   BigInt
+  downloadBytes BigInt
+  recordedAt    DateTime @default(now())
 
   config Config @relation(fields: [configId], references: [id])
 
@@ -145,12 +145,12 @@ model TrafficRawLog {
 /// خروجی Cron شبانه Aggregate؛ بعد از این، پارتیشن قدیمی TrafficRawLog
 /// با DROP PARTITION حذف می‌شود (نه DELETE ردیفی).
 model TrafficDailyAggregate {
-  id                    String   @id @default(uuid()) @db.Uuid
-  userId                String   @db.Uuid
-  configId              String   @db.Uuid
-  date                  DateTime @db.Date
-  totalUploadBytes      BigInt
-  totalDownloadBytes    BigInt
+  id                 String   @id @default(uuid()) @db.Uuid
+  userId             String   @db.Uuid
+  configId           String   @db.Uuid
+  date               DateTime @db.Date
+  totalUploadBytes   BigInt
+  totalDownloadBytes BigInt
 
   config Config @relation(fields: [configId], references: [id])
 

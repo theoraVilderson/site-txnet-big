@@ -1,6 +1,7 @@
 const path = require('path');
 const nodeExternals = require('webpack-node-externals');
 const ForkTsCheckerWebpackPlugin = require('fork-ts-checker-webpack-plugin');
+const { TsconfigPathsPlugin } = require('tsconfig-paths-webpack-plugin');
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -21,7 +22,19 @@ module.exports = {
   // does not exist) nothing is externalised and every dependency, express and
   // @nestjs included, gets compiled into the bundle on every build.
   externals: [nodeExternals({ modulesDir: path.resolve(__dirname, '../node_modules') })],
-  resolve: { extensions: ['.ts', '.js'] },
+  resolve: {
+    extensions: ['.ts', '.js'],
+    // Workspace libraries (`@txnet-backend/*`) are tsconfig path aliases, not
+    // packages in node_modules. Without this, ts-loader's `transpileOnly`
+    // compiles the import happily and webpack emits a "Cannot find module"
+    // stub that only fails at runtime — a build that passes and a service
+    // that cannot boot.
+    plugins: [
+      new TsconfigPathsPlugin({
+        configFile: path.resolve(__dirname, 'tsconfig.app.json'),
+      }),
+    ],
+  },
   module: {
     rules: [
       {

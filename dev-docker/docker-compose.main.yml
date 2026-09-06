@@ -190,15 +190,12 @@ services:
       - BALE_WEBHOOK_SECRET=${BALE_WEBHOOK_SECRET:-}
       - BALE_API_BASE=${BALE_API_BASE:-https://tapi.bale.ai}
       - BALE_DEEP_LINK_BASE=${BALE_DEEP_LINK_BASE:-https://ble.ir}
-      # On boot auth-service registers its own webhook with each bot, at
-      # <public base>/api/auth/bots/<platform>/webhook/<secret>. The base is
-      # api.${DOMAIN_NAME} unless something else fronts this API.
-      - BOT_WEBHOOK_AUTO_REGISTER=${BOT_WEBHOOK_AUTO_REGISTER:-true}
-      - BOT_WEBHOOK_PUBLIC_BASE=${BOT_WEBHOOK_PUBLIC_BASE:-}
-      # Per-platform override, for a messenger that cannot reach this server
-      # the way the others do (Telegram comes back through a proxy).
-      - TELEGRAM_WEBHOOK_PUBLIC_BASE=${TELEGRAM_WEBHOOK_PUBLIC_BASE:-}
-      - BALE_WEBHOOK_PUBLIC_BASE=${BALE_WEBHOOK_PUBLIC_BASE:-}
+      # The webhook itself belongs to bot-service now (ADR-0011). This service
+      # keeps the old /api/auth/bots/<platform>/webhook/<secret> route for one
+      # release, but nothing points a bot at it any more.
+      # Shared secret bot-service presents as X-Service-Token: it waives the
+      # captcha and re-buckets the rate limit, and authenticates no user.
+      - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
       - SMS_API_URL=${SMS_API_URL:-}
       - SMS_API_KEY=${SMS_API_KEY:-}
       - SMS_SENDER=${SMS_SENDER_PRIVATE:-}
@@ -243,6 +240,88 @@ services:
     depends_on:
       main-db:
         condition: service_healthy
+      locale-service:
+        condition: service_healthy
+
+  # ===========================================================================
+  # NestJS Bot Service (Nx Monorepo) — the Telegram/Bale surface
+  # ---------------------------------------------------------------------------
+  # It holds no database credentials and no JWT secret on purpose: every
+  # decision comes from auth-service over HTTP, exactly as the panel's does
+  # (ADR-0009). What it owns is the inbound webhook — one unguessable path per
+  # bot — and the conversation state in Redis.
+  # ===========================================================================
+  bot-service:
+    build:
+      context: ../txnet-backend
+      dockerfile: Dockerfile
+      target: ${ENVIRONMENT}
+      extra_hosts:
+        - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
+      args:
+        - APP_NAME=bot-service
+        - DOCKER_REGISTRY=${DOCKER_REGISTRY}
+    container_name: ${STACK_NAME:-txnet}-bot-service
+    restart: unless-stopped
+    volumes:
+      - ../txnet-backend:/app:delegated
+      - /app/node_modules
+    environment:
+      - PORT=${BOT_PORT:-3000}
+      - NODE_ENV=${NODE_ENV:-development}
+      - REDIS_URL=${REDIS_URL}
+      # Same namespace and version as auth-service: one bump abandons every
+      # key this platform holds, bot sessions included (ADR-0005).
+      - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v1}
+      # In-network, so bot traffic never leaves the private network to reach
+      # the API it depends on.
+      - AUTH_API_BASE_URL=http://auth-service:${AUTH_PORT}
+      - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
+      - BOT_SESSION_TTL_SEC=${BOT_SESSION_TTL_SEC:-2592000}
+      - BOT_NAV_TTL_SEC=${BOT_NAV_TTL_SEC:-1800}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME:-}
+      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
+      - TELEGRAM_API_BASE=${TELEGRAM_API_BASE:-https://api.telegram.org}
+      - TELEGRAM_DEEP_LINK_BASE=${TELEGRAM_DEEP_LINK_BASE:-https://t.me}
+      - BALE_BOT_TOKEN=${BALE_BOT_TOKEN:-}
+      - BALE_BOT_USERNAME=${BALE_BOT_USERNAME:-}
+      - BALE_WEBHOOK_SECRET=${BALE_WEBHOOK_SECRET:-}
+      - BALE_API_BASE=${BALE_API_BASE:-https://tapi.bale.ai}
+      - BALE_DEEP_LINK_BASE=${BALE_DEEP_LINK_BASE:-https://ble.ir}
+      # On boot this service points every configured bot at its own route,
+      # <public base>/api/bot/<platform>/webhook/<secret>.
+      - BOT_WEBHOOK_AUTO_REGISTER=${BOT_WEBHOOK_AUTO_REGISTER:-true}
+      - BOT_WEBHOOK_PUBLIC_BASE=${BOT_WEBHOOK_PUBLIC_BASE:-}
+      - TELEGRAM_WEBHOOK_PUBLIC_BASE=${TELEGRAM_WEBHOOK_PUBLIC_BASE:-}
+      - BALE_WEBHOOK_PUBLIC_BASE=${BALE_WEBHOOK_PUBLIC_BASE:-}
+      - DOMAIN_NAME=${DOMAIN_NAME}
+      - PANEL_BASE_URL=https://panel.${DOMAIN_NAME}
+      - TRUST_PROXY=${TRUST_PROXY}
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+      - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
+      - LOCALE_SCOPE=backend
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.bot-service.loadbalancer.server.port=${BOT_PORT:-3000}"
+      # Explicit priority: auth-service's https router also matches the bare
+      # host, so without this the two rules are decided by rule length alone.
+      - "traefik.http.routers.bot-service-http.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/bot`)"
+      - "traefik.http.routers.bot-service-http.entrypoints=web"
+      - "traefik.http.routers.bot-service-http.priority=100"
+      - "traefik.http.routers.bot-service-http.service=bot-service"
+      - "traefik.http.routers.bot-service-https.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/bot`)"
+      - "traefik.http.routers.bot-service-https.entrypoints=websecure"
+      - "traefik.http.routers.bot-service-https.tls.certresolver=myresolver"
+      - "traefik.http.routers.bot-service-https.priority=100"
+      - "traefik.http.routers.bot-service-https.service=bot-service"
+      - "txnet.logging=true"
+    depends_on:
+      auth-service:
+        condition: service_started
       locale-service:
         condition: service_healthy
 
