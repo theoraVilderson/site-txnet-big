@@ -159,3 +159,64 @@ describe('BotLinkService.handleUpdate — shared contact', () => {
     expect(link.failureKey).toBe('otp.botLink.phoneMismatch');
   });
 });
+
+/**
+ * A chat we hold no pending link for still has to be answered in *some*
+ * language. That answer used to be `'en'` for every hint that was not Persian,
+ * which ignored both `DEFAULT_LANGUAGE` and the set of languages
+ * locale-service actually serves — so a Persian-first deployment greeted a
+ * German-speaking Telegram client in English (ADR-0016).
+ */
+describe('BotLinkService — language for a chat with no pending link', () => {
+  const make = (served: string[] = ['fa', 'en']) => {
+    const locale = {
+      getKey: () => undefined,
+      getDefaultLanguage: () => 'fa',
+      getAvailableLanguages: () => served,
+      resolveLanguage: (hint?: string) => {
+        const base = hint?.toLowerCase().split('-')[0];
+        return base && served.includes(base) ? base : 'fa';
+      },
+    };
+    const store = { byToken: jest.fn().mockResolvedValue(null) };
+    return new BotLinkService(
+      {} as never,
+      store as never,
+      { client: () => undefined } as never,
+      locale as never,
+      { issueOtp: jest.fn(), verifyOtp: jest.fn() } as never,
+    );
+  };
+
+  it('answers a bare /start in the deployment language, not English', async () => {
+    const outcome = await make().resolveStart('telegram', '55501', undefined, 'de');
+
+    expect(outcome.lang).toBe('fa');
+  });
+
+  // The phone's language is a hint, and the hint answers last: a served
+  // DEFAULT_LANGUAGE outranks it exactly as it does in bot-service.
+  it("does not let the messenger's hint outrank the deployment language", async () => {
+    const outcome = await make().resolveStart('telegram', '55501', undefined, 'en-US');
+
+    expect(outcome.lang).toBe('fa');
+  });
+
+  it('falls through to the hint when the deployment language is not served', async () => {
+    const outcome = await make(['en', 'ar']).resolveStart(
+      'telegram',
+      '55501',
+      undefined,
+      'en-US',
+    );
+
+    expect(outcome.lang).toBe('en');
+  });
+
+  it('answers an unknown start token in the deployment language too', async () => {
+    const outcome = await make().resolveStart('telegram', '55501', 'gone', 'de');
+
+    expect(outcome.messageKey).toBe('expired');
+    expect(outcome.lang).toBe('fa');
+  });
+});

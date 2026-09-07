@@ -13,25 +13,27 @@ import { LocaleService } from './locale.service';
  * statement about the product: a reseller selling in Iran to a customer whose
  * Telegram is English had no way to be understood, and the customer had no way
  * to ask. So the hint is the last word, not the first (user decision,
- * 2026-09-06):
+ * 2026-09-06; ADR-0016):
  *
  * 1. **what the user chose** in the bot, kept in Redis and re-armed on every
  *    message;
- * 2. **this deployment's default** (`BOT_DEFAULT_LANGUAGE`) — a tenant sells
- *    in a language, and that outranks a phone setting;
- * 3. **the messenger's hint**, resolved against the languages
- *    `locale-service` actually serves;
- * 4. `DEFAULT_LANGUAGE`, which is what `resolveLanguage` already falls back to.
+ * 2. **the bot's own default** (`BOT_DEFAULT_LANGUAGE`), for a deployment
+ *    whose bot speaks a different language from the rest of the platform;
+ * 3. **the deployment's language** (`DEFAULT_LANGUAGE`) — a tenant sells in a
+ *    language, and that outranks a phone setting. It is always set, so in
+ *    practice this is the step that answers a first-time chat;
+ * 4. **the messenger's hint**, which is only reached when neither configured
+ *    default is a language `locale-service` actually serves.
  *
- * `BOT_DEFAULT_LANGUAGE` is left unset when a deployment would rather follow
- * the user's phone — that is the whole reason it is separate from
- * `DEFAULT_LANGUAGE`, which is a last resort and is always set.
+ * A configured default that locale-service does not serve is a misconfiguration
+ * worth a warning, not a dead end: it is skipped and the next step answers.
  */
 @Injectable()
 export class ChatLanguage {
   private readonly logger = new Logger(ChatLanguage.name);
   private readonly ttl: number;
-  private readonly tenantDefault?: string;
+  /** `[env var, value]` for each configured default, in precedence order. */
+  private readonly defaults: [string, string][];
 
   constructor(
     private readonly redis: RedisService,
@@ -39,13 +41,18 @@ export class ChatLanguage {
     config: ConfigService,
   ) {
     this.ttl = config.get<number>('BOT_LANG_TTL_SEC', RedisTtl.botLang);
-    this.tenantDefault = config.get<string>('BOT_DEFAULT_LANGUAGE') || undefined;
+    this.defaults = (
+      [
+        ['BOT_DEFAULT_LANGUAGE', config.get<string>('BOT_DEFAULT_LANGUAGE')],
+        ['DEFAULT_LANGUAGE', config.get<string>('DEFAULT_LANGUAGE')],
+      ] as [string, string | undefined][]
+    ).filter((pair): pair is [string, string] => Boolean(pair[1]));
   }
 
   /**
    * The language for this message. `hint` is what the normalizer resolved out
-   * of the update, so a chat that has never chosen and a deployment with no
-   * default keep exactly the behaviour they had.
+   * of the update — it answers only when this deployment has configured no
+   * language locale-service can serve.
    */
   async resolve(
     platform: BotPlatform,
@@ -54,12 +61,10 @@ export class ChatLanguage {
   ): Promise<string> {
     const chosen = await this.chosen(platform, chatId);
     if (chosen) return chosen;
-    if (this.tenantDefault && this.serves(this.tenantDefault)) {
-      return this.tenantDefault;
-    }
-    if (this.tenantDefault) {
+    for (const [name, lang] of this.defaults) {
+      if (this.serves(lang)) return lang;
       this.logger.warn(
-        `BOT_DEFAULT_LANGUAGE=${this.tenantDefault} is not served by locale-service — falling back to the messenger's own language`,
+        `${name}=${lang} is not served by locale-service — falling through to the next default`,
       );
     }
     return hint;

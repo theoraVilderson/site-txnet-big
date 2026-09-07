@@ -49,16 +49,20 @@ interpolated: a template cannot hold another template.
 `from.language_code` is the language that user's *phone app* is set to — a
 hint, not a statement about the product. A reseller selling in Iran to a
 customer whose Telegram is English had no way to be understood, and the
-customer had no way to ask. The order (user decision, 2026-09-06):
+customer had no way to ask. The order (ADR-0016):
 
 1. **what the user chose** — `bot:lang:<platform>:<chatId>`, 180-day idle TTL,
    outside both the session and the navigation state: a preference that expires
    with the conversation that set it is one the user re-sets every time;
-2. **`BOT_DEFAULT_LANGUAGE`** — a tenant sells in a language, which outranks a
-   phone setting. Left **unset** when a deployment would rather follow the
-   user's app: that is why it is separate from `DEFAULT_LANGUAGE`, the
-   last-resort fallback that is always set;
-3. **the messenger's hint**, resolved against what `locale-service` serves.
+2. **`BOT_DEFAULT_LANGUAGE`** — optional, and set only when the bot speaks
+   something other than the rest of the deployment;
+3. **`DEFAULT_LANGUAGE`** — always set, so in practice this is the step that
+   answers a first-time chat;
+4. **the messenger's hint**, reached only when neither configured default is a
+   language `locale-service` serves.
+
+A configured language locale-service does not serve is skipped with a warning
+and the next step answers — a misconfiguration, never a dead end.
 
 `ChatLanguage.resolve` decides this once per update, in `BotDispatcher.handle`,
 before anything reads `ctx.lang`. The chooser names each language in **its own**
@@ -66,8 +70,13 @@ words — someone who cannot read the current language must still find the way
 out — and a result may carry `lang`, so the confirmation is written in the
 language just chosen, not the one being left.
 
-Not per-tenant yet: `BOT_DEFAULT_LANGUAGE` is deployment-level because `tenant`
-is schema-only. `F-317` moves it to a tenant row; the order does not change.
+`auth-api` answers with the same order minus step 1 — `BotLinkService`'s
+`fallbackLang()`, for a chat it holds no pending link for. The `/lang` choice
+lives in this service's Redis and auth-service cannot read it; when there *is* a
+pending link, `link.lang` outranks all of this anyway.
+
+Not per-tenant yet: both vars are deployment-level because `tenant` is
+schema-only. `F-317` moves them to a tenant row; the order does not change.
 
 ## Commands, and how a user finds them
 

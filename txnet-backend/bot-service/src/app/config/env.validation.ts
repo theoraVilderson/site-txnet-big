@@ -59,13 +59,20 @@ export const envSchema = z.object({
   LOCALE_SCOPE: z.string().default('backend'),
   DEFAULT_LANGUAGE: z.string().default('fa'),
   /**
-   * The language this bot speaks before a user says otherwise. Unset means
-   * "follow the messenger's own language" — which is why it is separate from
-   * `DEFAULT_LANGUAGE`, the last-resort fallback that is always set
-   * (`locale/chat-language.ts`).
+   * The language this bot speaks before a user says otherwise. Optional because
+   * `DEFAULT_LANGUAGE` already answers that question for the whole deployment;
+   * set this only when the bot should differ from the rest of the platform
+   * (ADR-0016, `locale/chat-language.ts`). Unset does *not* mean "follow the
+   * messenger" — the messenger's hint is the last resort, not the first.
    */
-  BOT_DEFAULT_LANGUAGE: z.string().optional(),
-  BOT_LANG_TTL_SEC: z.coerce.number().int().positive().optional(),
+  BOT_DEFAULT_LANGUAGE: optional(z.string()),
+  /** Idle TTL on a chat's `/lang` choice. Defaults to `RedisTtl.botLang`. */
+  BOT_LANG_TTL_SEC: optional(z.coerce.number().int().positive()),
+  /**
+   * Which languages the messenger's own command menu is registered in
+   * (`webhook/bot-webhook.registrar.ts`). Comma-separated; defaults to `fa,en`.
+   */
+  BOT_COMMAND_LANGS: optional(z.string()),
   /** The panel, for the `escape` link a view may offer alongside the chat. */
   PANEL_BASE_URL: optional(z.string().url()),
 });

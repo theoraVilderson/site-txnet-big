@@ -473,9 +473,25 @@ export class BotLinkService {
     await client.sendMessage(chatId, text);
   }
 
-  /** Language for a chat we have no pending record for. */
+  /**
+   * Language for a chat we have no pending record for — the only case where
+   * `link.lang` (what the panel was speaking when the link was made) is not
+   * available.
+   *
+   * `languageCode` is the sender's *phone* setting, so it answers last, not
+   * first (ADR-0016): this deployment's `DEFAULT_LANGUAGE` wins, and the hint is
+   * reached only if locale-service does not serve it. That is the same order
+   * bot-service applies in `locale/chat-language.ts`; the one step missing here
+   * is the chat's own `/lang` choice, which lives in bot-service's Redis and
+   * this service cannot see.
+   */
   private fallbackLang(languageCode?: string): string {
-    return languageCode?.toLowerCase().startsWith('fa') ? 'fa' : 'en';
+    const configured = this.locale.getDefaultLanguage();
+    const served = this.locale.getAvailableLanguages();
+    // An empty list means the first snapshot has not landed; refusing every
+    // language would be worse than trusting the configuration.
+    if (served.length === 0 || served.includes(configured)) return configured;
+    return this.locale.resolveLanguage(languageCode);
   }
 }
 

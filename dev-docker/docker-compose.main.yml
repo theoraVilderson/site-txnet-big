@@ -299,7 +299,14 @@ services:
       - DOMAIN_NAME=${DOMAIN_NAME}
       - PANEL_BASE_URL=https://panel.${DOMAIN_NAME}
       - TRUST_PROXY=${TRUST_PROXY}
+      # The bot answers in DEFAULT_LANGUAGE unless a chat picks otherwise; the
+      # messenger's own language_code is the last resort (ADR-0016). The three
+      # BOT_* vars below are optional overrides — an unset one is simply absent
+      # inside the container, which is what `:-` guarantees here.
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+      - BOT_DEFAULT_LANGUAGE=${BOT_DEFAULT_LANGUAGE:-}
+      - BOT_LANG_TTL_SEC=${BOT_LANG_TTL_SEC:-}
+      - BOT_COMMAND_LANGS=${BOT_COMMAND_LANGS:-}
       - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
       - LOCALE_SCOPE=backend
     networks:
