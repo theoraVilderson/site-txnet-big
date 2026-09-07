@@ -107,7 +107,6 @@ not the rule.
 **Ceiling — a budget, not a target.** One backlog item earns at most **one** new
 `*.spec.ts`, covering the invariant the item turns on: the thing that would
 break silently, not the thing that is obviously correct.
-
 The ceiling governs work you generate yourself while shipping an item. It does
 not govern a coverage backfill the user asks for explicitly — that is its own
 backlog row, sized by what is missing rather than by this budget. Without the
