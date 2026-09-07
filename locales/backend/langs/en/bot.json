@@ -1,7 +1,7 @@
 {
   "menu": {
-    "guest": "Welcome 👋\nSign in to your account, or create a new one — all of it right here in the chat.",
-    "member": "You are signed in ✅"
+    "guest": "Hi 👋\nSign in to your account here, or create a new one.",
+    "member": "Welcome back 👋"
   },
   "action": {
     "login": "Sign in",
@@ -10,63 +10,63 @@
     "logout": "Sign out",
     "cancel": "Cancel",
     "back": "Back",
-    "resend": "Send the code again",
+    "resend": "Send it again",
     "loginWithPassword": "Sign in with a password",
-    "loginWithOtp": "Sign in with a one-time code",
-    "shareContact": "Share my number",
+    "loginWithOtp": "Sign in with a code",
+    "shareContact": "Send my number",
     "menu": "Main menu",
-    "help": "What can you do?",
+    "help": "Help",
     "language": "🌐 Language / زبان",
     "accounts": "My accounts",
     "addAccount": "➕ Add an account",
-    "addWithOtp": "A code to that account's number",
-    "addWithPassword": "That account's password",
+    "addWithOtp": "A code to its number",
+    "addWithPassword": "Its password",
     "removeAccount": "➖ Remove an account",
     "confirmRemove": "Yes, remove it"
   },
   "common": {
-    "cancelled": "Cancelled — nothing was saved. Pick something below whenever you are ready.",
-    "unknown": "I did not understand that. Here is what I can do:",
-    "pickOne": "Please choose one of the options above.",
+    "cancelled": "Cancelled; nothing was saved. Start again below whenever you like.",
+    "unknown": "I did not catch that. Here is what I can do:",
+    "pickOne": "Please pick one of the options above.",
     "tryAgain": "Something went wrong on our side. Please try again.",
     "signedIn": "You are signed in ✅",
     "signedOut": "You are signed out.",
-    "notSignedIn": "You are not signed in.",
-    "expired": "That conversation sat idle too long, so I let it go — nothing was saved. Start again below; it only takes a moment.",
-    "backGone": "There is nothing before this. Here is where you can start from:"
+    "notSignedIn": "You are not signed in yet.",
+    "expired": "This conversation sat idle for a while, so I closed it; nothing was saved. Start again below.",
+    "backGone": "There is nothing before this. You can start from here:"
   },
   "login": {
-    "askPhone": "Share your number with the button below, or type it (09xxxxxxxxx).",
+    "askPhone": "Send your number with the button below, or type it yourself (09xxxxxxxxx).",
     "askIdentifier": "Send your username or phone number.",
-    "askPassword": "Send your password. It is deleted from this chat the moment it arrives.",
+    "askPassword": "Please send your password. Your message is deleted right away.",
     "askCode": "Send the 6-digit code.",
-    "wrongCode": "That code is not right. Try again, or ask for a new one.",
-    "pickChannel": "Where should the code go?",
-    "askChatContact": "Tap below to sign in with this account. No code, no password — sharing your number is the proof."
+    "wrongCode": "That code is not right. Send it again, or ask for a new one.",
+    "pickChannel": "Where should I send the code?",
+    "askChatContact": "Tap below to sign in with this account. No code, no password — sending your number is the proof."
   },
   "channel": {
     "sms": "SMS",
     "telegram": "Telegram",
     "bale": "Bale",
-    "none": "No delivery method is available right now. Please try again later.",
+    "none": "There is no way to send the code right now. Please try again in a moment.",
     "sent": "The code is on its way."
   },
   "link": {
-    "required": "Open {{platform}} with the button below and share your number there. Then come back and send me the code.",
+    "required": "Open {{platform}} with the button below and send your number there. Then come back and send me the code.",
     "open": "Open {{platform}}",
     "check": "I have done that",
-    "waiting": "I cannot see it yet. Finish in {{platform}}, then press the button again."
+    "waiting": "I cannot see it yet. Finish up in {{platform}}, then tap this button again."
   },
   "register": {
-    "askName": "What is your full name?",
-    "askUsername": "Choose a username.",
-    "askPassword": "Choose a password. It is deleted from this chat the moment it arrives.",
+    "askName": "What is your name?",
+    "askUsername": "Pick a username.",
+    "askPassword": "Pick a password and send it. Your message is deleted right away.",
     "passwordKept": "I could not delete your message — please delete it yourself.",
     "done": "Your account is ready and you are signed in ✅"
   },
   "forgot": {
-    "askPassword": "Send your new password. It is deleted from this chat the moment it arrives.",
-    "done": "Your password is changed and every other device has been signed out ✅"
+    "askPassword": "Send your new password. Your message is deleted right away.",
+    "done": "Your password is changed and your other devices are signed out ✅"
   },
   "progress": {
     "login": "Signing in · step {{n}} of {{total}}",
@@ -86,38 +86,38 @@
     }
   },
   "help": {
-    "body": "I am your account, here in this chat: sign in, create an account, reset a password — without going anywhere else.\n\n/menu — the main menu\n/cancel — drop whatever we are in the middle of\n/logout — sign out of this chat\n/help — this message\n\nWhile we are talking you can always go Back one question, or Cancel. Nothing is saved until the last step, and a password you type is deleted from the chat the moment it is used."
+    "body": "I look after your account right here in the chat: sign in, create an account, or change your password — without going anywhere else.\n\n/menu — the main menu\n/logout — sign out of this chat"
   },
   "command": {
-    "start": "Start over at the main menu",
-    "menu": "The main menu",
+    "start": "Start at the main menu",
+    "menu": "Open the main menu",
     "cancel": "Drop what we are in the middle of",
     "logout": "Sign out of this chat",
-    "help": "What this bot can do",
+    "help": "See what I can do",
     "lang": "Change the language"
   },
   "language": {
     "pick": "Which language should I speak?",
     "changed": "🌐 Language changed.",
-    "only": "This bot speaks one language at the moment."
+    "only": "This bot speaks one language for now."
   },
   "accounts": {
-    "pick": "You are signed in as {{name}}. Tap another account to become it — no password, no code.",
-    "none": "You are signed in as {{name}}, and no other account is linked to it yet.\nAdd one below: that account proves itself once — a code to its own number, or its own password — and after that you can move between them here with one tap.",
+    "pick": "You are signed in as {{name}}. Tap any other account to carry on as that one.",
+    "none": "You are signed in as {{name}}, and no other account is linked to it.\nAdd one below and you can move between them here with a single tap.",
     "member": "{{name}} · {{phone}}",
     "memberNoPhone": "{{name}}",
-    "switched": "You are now {{name}} ✅",
-    "addPickProof": "The account you are adding has to prove it is yours. How should it do that?",
-    "addAskPhone": "Send the phone number of the account you are adding (09xxxxxxxxx). The code goes to that number, not to this chat.",
-    "addAskIdentifier": "Send the username or phone number of the account you are adding.",
-    "addAskPassword": "Send that account's password. It is deleted from this chat the moment it arrives.",
-    "added": "✅ The account is added. You are still signed in as before — open “My accounts” whenever you want to switch to it.",
-    "removePick": "Which account should leave this set? It is removed here only — anything you set up on the website stays as it is.",
-    "removeSelf": "{{name}} (this one — sign me out here)",
-    "removeConfirm": "Remove {{name}} from your accounts in this chat?\nIt will be signed out here, and you can add it back any time by proving it again.",
-    "removeConfirmSelf": "Remove {{name}} — the account you are using right now?\nYou will be signed out of this chat, and the others stay where they are.",
-    "removed": "✅ Removed from your accounts in this chat.",
-    "removedSelf": "✅ Removed, and you are signed out here. Tap Sign in whenever you want to come back.",
-    "removeFailed": "That account is no longer one you can remove here."
+    "switched": "You are {{name}} now ✅",
+    "addPickProof": "How should we add that account?",
+    "addAskPhone": "Send that account's number (09xxxxxxxxx). The code goes to that number, not to this chat.",
+    "addAskIdentifier": "Send that account's username or phone number.",
+    "addAskPassword": "Send that account's password. Your message is deleted right away.",
+    "added": "The account is added, but you are still signed in as before. Open “My accounts” to switch to it.",
+    "removePick": "Which account should leave this chat? It is removed here only.",
+    "removeSelf": "{{name}} (the one you are using)",
+    "removeConfirm": "Remove {{name}} from this chat's accounts?\nYou can add it back whenever you like.",
+    "removeConfirmSelf": "Remove {{name}} — the one you are using right now?\nYou will be signed out of this chat, and the others stay where they are.",
+    "removed": "Removed from this chat's accounts ✅",
+    "removedSelf": "Removed, and you are signed out here. Sign in again whenever you like.",
+    "removeFailed": "That account is no longer one of this chat's accounts."
   }
 }
