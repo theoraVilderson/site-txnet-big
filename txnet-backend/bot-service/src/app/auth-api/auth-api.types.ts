@@ -102,10 +102,17 @@ export interface SwitchResult extends TokenPair {
  * The answer to a join (`F-0205`). `added: false` is still a success: the
  * account was already in this group, so the proof bought nothing but the end
  * state is the one that was asked for.
+ *
+ * `userId` is the account that joined — the only name for it the caller has,
+ * since what was typed was a phone number or a username and only the proof
+ * resolved that to an account. Both success branches carry it, which is what
+ * lets the chat land on the account it has just added rather than telling the
+ * user to go and find it.
  */
 export interface AddAccountResult {
   groupId: string;
   added: boolean;
+  userId: string;
 }
 
 /**

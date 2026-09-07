@@ -6,6 +6,7 @@ import { ChatLanguage } from '../locale/chat-language';
 import { LocaleService } from '../locale/locale.service';
 import { AccountAddFlow } from '../flows/account-add.flow';
 import { AccountsFlow } from '../flows/accounts.flow';
+import { AccountSwitcher } from '../session/account-switcher';
 import { ChatAccess } from '../session/chat-access';
 import { ForgotFlow } from '../flows/forgot.flow';
 import { LoginFlow } from '../flows/login.flow';
@@ -65,8 +66,18 @@ function makeRouter(over: {
     new LoginFlow(api, otp, sessions),
     new RegisterFlow(api, otp, sessions),
     new ForgotFlow(api, otp, sessions),
-    new AccountsFlow(api, new ChatAccess(api, sessions), sessions),
-    new AccountAddFlow(api, new ChatAccess(api, sessions), otp),
+    new AccountsFlow(
+      api,
+      new ChatAccess(api, sessions),
+      sessions,
+      new AccountSwitcher(api, sessions),
+    ),
+    new AccountAddFlow(
+      api,
+      new ChatAccess(api, sessions),
+      otp,
+      new AccountSwitcher(api, sessions),
+    ),
   );
   return { router, nav, sessions, api, otp, langs, locale };
 }

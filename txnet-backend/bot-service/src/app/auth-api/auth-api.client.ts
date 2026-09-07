@@ -161,8 +161,11 @@ export class AuthApiClient {
    * so a call without the user's access token is not a weaker version of this
    * one — it is a different, unproved thing that `auth-api` refuses.
    *
-   * None of the three mints a session. The chat stays signed in as whoever it
-   * was; the new account becomes reachable through `switchAccount`.
+   * None of the three mints a session — that has not changed, and it is the
+   * whole reason `AddAccountResult` names the account instead of handing back
+   * a token pair. What follows a successful add is an ordinary
+   * `switchAccount` on that `userId`, made by the caller with the credential
+   * it already holds, so the proof spent here is spent exactly once.
    */
   requestAddOtp(
     body: { phoneNumber: string; channel?: string },

@@ -80,7 +80,7 @@ describe('AccountSwitchService.addByPassword', () => {
     const res: any = await service.addByPassword(BROWSER, CALLER, input);
 
     expect(res.ok).toBe(true);
-    expect(res.data).toEqual({ groupId: 'group-1', added: true });
+    expect(res.data).toEqual({ groupId: 'group-1', added: true, userId: TARGET });
     // The founder row is the part that is easy to forget and impossible to
     // repair later: `(scopeKey, userId)` is unique, so a caller left out of
     // their own group cannot simply be inserted afterwards without a delete.
@@ -105,7 +105,7 @@ describe('AccountSwitchService.addByPassword', () => {
 
     const res: any = await service.addByPassword(BROWSER, CALLER, input);
 
-    expect(res.data).toEqual({ groupId: 'group-existing', added: true });
+    expect(res.data).toEqual({ groupId: 'group-existing', added: true, userId: TARGET });
     expect(createdMany).toHaveLength(0);
     expect(created).toEqual([
       {
@@ -151,7 +151,7 @@ describe('AccountSwitchService.addByPassword', () => {
     const res: any = await service.addByPassword(BROWSER, CALLER, input);
 
     expect(res.ok).toBe(true);
-    expect(res.data).toEqual({ groupId: 'group-1', added: true });
+    expect(res.data).toEqual({ groupId: 'group-1', added: true, userId: TARGET });
     expect(createdMany.every((m) => m.scopeKey === BROWSER)).toBe(true);
   });
 
@@ -170,8 +170,32 @@ describe('AccountSwitchService.addByPassword', () => {
     const res: any = await service.addByPassword(BROWSER, CALLER, input);
 
     expect(res.ok).toBe(true);
-    expect(res.data).toEqual({ groupId: 'group-a', added: false });
+    expect(res.data).toEqual({ groupId: 'group-a', added: false, userId: TARGET });
     expect(created).toHaveLength(0);
+  });
+
+  it('names WHICH account joined, on both success paths', async () => {
+    // The proof identifies the target; the caller never types a user id, so
+    // without this field the surface that just added an account cannot act on
+    // it. Both branches answer it, including `added: false` — a chat asked to
+    // add an account it already has still expects to end up on that account,
+    // and the id is the only thing that gets it there.
+    const fresh: any = await service.addByPassword(BROWSER, CALLER, input);
+    expect(fresh.data.userId).toBe(TARGET);
+
+    members[rowKey(BROWSER, CALLER)] = {
+      userId: CALLER,
+      groupId: 'group-a',
+      scopeKey: BROWSER,
+    };
+    members[rowKey(BROWSER, TARGET)] = {
+      userId: TARGET,
+      groupId: 'group-a',
+      scopeKey: BROWSER,
+    };
+
+    const again: any = await service.addByPassword(BROWSER, CALLER, input);
+    expect(again.data).toMatchObject({ added: false, userId: TARGET });
   });
 
   it('refuses to add the caller to their own group', async () => {

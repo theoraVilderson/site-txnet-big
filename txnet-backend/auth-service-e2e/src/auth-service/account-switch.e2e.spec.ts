@@ -198,6 +198,36 @@ describe('auth-api — the account switch group', () => {
       expect(verified.body).toMatchObject({ ok: true, data: { added: true } });
     });
 
+    it('names the account that joined, over the wire, from BOTH add routes', async () => {
+      // The contract row gained `userId` for one reason: a surface that just
+      // added an account has no other way to name it — the caller typed a
+      // phone number or a username, never an id. A unit spec cannot answer
+      // this; only the wire says whether the field survives serialisation.
+      const joiner = await signUp(api, e2e.otp);
+      api.clearCookies();
+      const caller = await signUp(api, e2e.otp);
+
+      const byPassword = await api.addAccountPassword(
+        { identifier: joiner.account.username, password: joiner.account.password },
+        { bearer: caller.accessToken },
+      );
+      expect(byPassword.body.data).toMatchObject({
+        added: true,
+        userId: joiner.userId,
+      });
+
+      // And again on the account that is already a member: `added: false` is
+      // still a success, and the bot still has to be able to land on it.
+      const again = await api.addAccountPassword(
+        { identifier: joiner.account.username, password: joiner.account.password },
+        { bearer: caller.accessToken },
+      );
+      expect(again.body.data).toMatchObject({
+        added: false,
+        userId: joiner.userId,
+      });
+    });
+
     it('answers one key for a wrong password, whoever the account is', async () => {
       const target = await signUp(api, e2e.otp);
       api.clearCookies();

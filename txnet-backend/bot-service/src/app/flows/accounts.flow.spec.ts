@@ -1,6 +1,7 @@
 import { AuthApiClient } from '../auth-api/auth-api.client';
 import { ChatContext, NavState } from '../conversation/nav.types';
 import { BotSessionStore } from '../session/bot-session.store';
+import { AccountSwitcher } from '../session/account-switcher';
 import { ChatAccess } from '../session/chat-access';
 import { AccountsFlow } from './accounts.flow';
 
@@ -34,7 +35,16 @@ function harness(over: { session?: unknown; api?: Partial<AuthApiClient> } = {})
     save: jest.fn(),
     clear: jest.fn(),
   } as unknown as BotSessionStore;
-  return { api, sessions, flow: new AccountsFlow(api, new ChatAccess(api, sessions), sessions) };
+  return {
+    api,
+    sessions,
+    flow: new AccountsFlow(
+      api,
+      new ChatAccess(api, sessions),
+      sessions,
+      new AccountSwitcher(api, sessions),
+    ),
+  };
 }
 
 describe('AccountsFlow', () => {

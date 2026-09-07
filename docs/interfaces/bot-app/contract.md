@@ -2,8 +2,8 @@
 id: bot-app
 layer: interface
 status: active
-version: 7
-updated: 2026-09-06
+version: 8
+updated: 2026-09-07
 ---
 
 # bot-app — contract
@@ -80,6 +80,7 @@ contract — **not** a rule written in the bot because it is faster there
 | `locale/chat-language.ts` | which language this chat is spoken to in, and the order that decides it |
 | `session/bot-session.store.ts` | the chat's `auth-api` refresh token |
 | `session/chat-access.ts` | that refresh token traded for an access token, for the routes behind `AuthGuard` |
+| `session/account-switcher.ts` | becoming another account and keeping the chat's session on it — the one place that pair happens |
 | `flows/accounts.flow.ts` | the switch group, and becoming another member of it (`F-0210`) |
 | `flows/account-add.flow.ts` | an account joining that group, by one of `F-0205`'s two proofs |
 | `auth-api/auth-api.client.ts` | the only way out |
@@ -123,72 +124,10 @@ number, `link/contact` proves it. The proof itself never moves:
 to in, and the commands — is [conversation.md](conversation.md). It applies to
 every flow, including the §10.4 flows not yet written.
 
-## Switching accounts (`F-0210`, ADR-0014)
+## The switch group (`F-0205`, `F-0207`, `F-0210`)
 
-The member menu offers the group: who this chat is signed in as, and who else
-it may become in one tap. It is `panel-web`'s switcher (`F-0209`) on a chat —
-the same `GET /auth/accounts` and `POST /auth/accounts/switch`, and the same
-absence of any credential, because the group is the proof.
-
-**What moves is the session, never the link.** The Redis entry is overwritten;
-`LinkedBotAccount` is untouched, so a chat stays linked to one account and
-identity invariant #12 stands. ADR-0014's accepted cost follows: after
-`/logout` the one-tap sign-in returns to the **linked** account, and reaching
-the other one is a switch from there.
-
-**These were the first routes here behind `AuthGuard`**, so they need the
-*user's* access token, not only the service credential. `ChatAccess.token`
-mints one from the stored refresh token; refreshing **rotates**, so the new
-refresh token is written back before anything else, and a refusal means the
-session is gone — the entry is dropped and the chat is told so, rather than
-failing on a later screen that cannot explain itself.
-
-## The group belongs to this chat (ADR-0015)
-
-Since ADR-0015 a switch group is not a property of the person but of the
-surface it was built on, and for the bot that surface is **one chat**. The set
-offered above is this chat's alone: the same user may hold a different set in
-their browser, and neither is visible from the other.
-
-Two consequences an edit must not undo:
-
-- **Every account call carries `x-bot-platform` beside `x-bot-chat-id`.**
-  `auth-api` names the scope `bot:<platform>:<chatId>` and refuses outright
-  when the platform is missing — Telegram and Bale number their chats
-  independently, so a chat id alone can name two different chats.
-- **Removing an account (`F-0208`) removes it here only**, and revokes only the
-  sessions minted in this chat. Removing the chat's *own* account is a sign-out
-  here: the stored refresh token is dropped, because `auth-api` has already
-  revoked the session behind it. The remove path re-reads the group before it
-  asks, and again on the confirming tap, so a stale keyboard cannot remove
-  someone who has since moved.
-
-## Adding an account (`F-0205`, `flows/account-add.flow.ts`)
-
-The other half of the screen above: this is how an account becomes one of the
-set — the panel's add-account page (`accounts/add/page.tsx`) as a conversation,
-same routes, same two proofs, same order.
-
-Membership is **proved, never asserted** (`audit` invariant #4), so the whole
-conversation exists to carry exactly one credential and the caller picks which:
-a code to the **joining account's own phone** (`add/otp/request` then
-`add/otp/verify`), or that **account's own password** (`add/password`).
-
-Three properties are not incidental, and an edit should not quietly drop them:
-
-- **It signs nobody in.** All three routes answer with a group id, never a
-  token pair, and the flow saves no session: the chat stays as whoever it was,
-  and the account that joined is reached afterwards through a switch.
-- **The code goes to a phone that is not the person in this chat**, so this is
-  the one caller passing `inPlace: false` to `OtpStep.request`. The in-place
-  link would bind *this* chat to the joining account, which identity refuses
-  (`takenByAnotherAccount`, invariant #12) — so that path could only end in a
-  refusal, reached after the user shared a contact card for nothing.
-- **The phone is typed, never shared.** `askContact` sends *this* user's number,
-  already signed in — its only outcome is `accountSwitch.sameAccount`.
-
-The password message is deleted on every path out of that step, including the
-one where the session turned out to be gone.
+Moving between the accounts a chat holds, whose set it is, and how an account
+joins it — all of it in [contract.accounts.md](contract.accounts.md).
 
 ## Passwords in a chat
 
@@ -239,6 +178,22 @@ the main menu rather than failing — it is untrusted input, not a command.
 Every string is an i18n key resolved through `i18n`. `F-317` makes bot text,
 menus, emoji and buttons overridable **per tenant**, so no copy may be inlined in
 a flow, not even a fallback. RTL/LTR and numerals are `i18n`'s job (§1.5).
+
+**Voice** (user decision, 2026-09-07). Persian is «شما» with spoken verbs —
+«شما می‌تونید…», «لطفاً رمزتون رو بفرستید» — polite, not stiff. English keeps the
+same register: plain, second person. One idea per message, and no mechanism
+unless the user has to act on it: `accounts.addAskPhone` still says the code
+goes to *that* number because the user goes looking for it, while the old
+«باید ثابت کند مال شماست» explained a security model nobody asked about. Emoji
+discipline: one, at the end, on success.
+
+**Three files, one key set.** A key lives in `fa/bot.json`, `en/bot.json` and
+`bot-copy.fallbacks.ts` (the last-resort English, for a key that ships ahead of
+its translation) — never in two of the three. Values may be rewritten freely;
+**a key may never be renamed**, because the flows, `views.ts` and that table
+cite it by name and a miss renders the raw key instead of failing.
+`bot-service/src/app/locale/bot-copy.spec.ts` holds all three to one key set,
+one `{{placeholder}}` set, and to the keys the code actually asks for.
 
 ## Consumers
 

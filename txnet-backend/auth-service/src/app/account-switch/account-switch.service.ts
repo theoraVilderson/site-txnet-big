@@ -404,6 +404,13 @@ export class AccountSwitchService {
    * One transaction, because a group whose founder row is missing is worse
    * than no group at all: the caller would not be in their own switcher, and
    * `userId` being unique means the repair is a delete, not an insert.
+   *
+   * The answer names the account that joined. The caller never typed an id —
+   * it typed a phone number or a username, and only the proof resolved that to
+   * an account — so without this field a surface has just added something it
+   * cannot then act on. `added: false` carries it too: ending up on the
+   * account is the request, and whether the row already existed is not the
+   * caller's business.
    */
   private async join(
     scopeKey: SwitchScope,
@@ -429,7 +436,7 @@ export class AccountSwitchService {
       // but the end state is what was asked for, so this is a success.
       if (targetMembership.groupId === callerMembership?.groupId) {
         return ok(
-          { groupId: targetMembership.groupId, added: false },
+          { groupId: targetMembership.groupId, added: false, userId: targetUserId },
           'accountSwitch.added',
         );
       }
@@ -475,7 +482,7 @@ export class AccountSwitchService {
       return group.id;
     });
 
-    return ok({ groupId, added: true }, 'accountSwitch.added');
+    return ok({ groupId, added: true, userId: targetUserId }, 'accountSwitch.added');
   }
 
   /** The caller's own row, or null if the account is no longer usable. */

@@ -10,6 +10,7 @@ import { ForgotFlow } from './flows/forgot.flow';
 import { LoginFlow } from './flows/login.flow';
 import { OtpStep } from './flows/otp.step';
 import { RegisterFlow } from './flows/register.flow';
+import { AccountSwitcher } from './session/account-switcher';
 import { BotSessionStore } from './session/bot-session.store';
 import { ChatAccess } from './session/chat-access';
 import { BotWebhookRegistrar } from './webhook/bot-webhook.registrar';
@@ -31,6 +32,7 @@ import { WebhookController } from './webhook/webhook.controller';
     ConversationStore,
     BotSessionStore,
     ChatAccess,
+    AccountSwitcher,
     OtpStep,
     LoginFlow,
     RegisterFlow,

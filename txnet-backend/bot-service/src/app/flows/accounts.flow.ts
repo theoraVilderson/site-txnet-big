@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AuthApiClient } from '../auth-api/auth-api.client';
 import { ChatContext, FlowResult, NavState } from '../conversation/nav.types';
+import { AccountSwitcher } from '../session/account-switcher';
 import { BotSessionStore } from '../session/bot-session.store';
 import { ChatAccess } from '../session/chat-access';
 import {
@@ -42,6 +43,7 @@ export class AccountsFlow {
     private readonly api: AuthApiClient,
     private readonly access: ChatAccess,
     private readonly sessions: BotSessionStore,
+    private readonly switcher: AccountSwitcher,
   ) {}
 
   /**
@@ -109,12 +111,10 @@ export class AccountsFlow {
   /**
    * Become that member.
    *
-   * The order matters and is not interchangeable: `auth-api` revokes the
-   * outgoing session inside the same transaction that mints the incoming one
-   * (`audit` invariant #7), so by the time the answer arrives the token this
-   * chat still holds is already dead. Storing the new one is therefore not a
-   * commit step that may be retried later — it is the only copy in existence,
-   * and a chat that dropped it would be signed out of both accounts at once.
+   * The call and the write that keeps it live in `AccountSwitcher`, because
+   * they are one step and not two (`audit` invariant #7 — see that class).
+   * What is left here is the only part that is this screen's: where a refusal
+   * puts the user.
    */
   private async switchTo(
     ctx: ChatContext,
@@ -124,21 +124,17 @@ export class AccountsFlow {
     const accessToken = await this.access.token(ctx);
     if (!accessToken) return this.signedOut();
 
-    const result = await this.api.switchAccount(
-      { userId },
-      this.ctxFor(ctx, accessToken),
-    );
-    if (!result.ok || !result.data?.refreshToken) {
+    const switched = await this.switcher.switchTo(ctx, accessToken, userId);
+    if (!switched.ok) {
       // Not a member, another tenant, a suspended account — one key, on
       // purpose (`F-0207`). Keep the user on the list they were reading.
-      return { view: say('accounts.refused', { raw: result.msg }), nextState: state };
+      return { view: say('accounts.refused', { raw: switched.msg }), nextState: state };
     }
 
-    await this.sessions.save(ctx.platform, ctx.chatId, result.data.refreshToken);
     return {
       view: say('accounts.switched', {
         key: 'bot.accounts.switched',
-        values: { name: result.data.fullName },
+        values: { name: switched.fullName },
       }),
       nextState: null,
     };
