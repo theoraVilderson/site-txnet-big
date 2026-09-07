@@ -25,7 +25,7 @@ import { authApi } from "@/lib/auth-api";
 import { OTP_LENGTH } from "@/lib/otp";
 import { PANEL_HOME } from "@/lib/routes";
 
-export default function SignupPage() {
+export default function RegisterPage() {
   const { t, isRtl } = useAuthUI();
   const router = useRouter();
   const firstPaint = useFirstPaint();
@@ -49,7 +49,7 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [otp, setOtp] = useState("");
 
-  // Original page never asked for a password at signup at all - fixed here.
+  // Original page never asked for a password at registration at all - fixed here.
   const passwordsMismatch =
     confirmPassword.length > 0 && password !== confirmPassword;
 
@@ -108,14 +108,14 @@ export default function SignupPage() {
       : t.verifyAndLogin;
 
   if (isSuccess) {
-    return <SuccessShell title={t.signupSuccess} subtitle={t.redirecting} />;
+    return <SuccessShell title={t.registerSuccess} subtitle={t.redirecting} />;
   }
 
   return (
     <AnimatePresence mode="wait">
       <AuthCardShell
-        animationKey="signup"
-        title={t.signupTitle}
+        animationKey="register"
+        title={t.registerTitle}
         subtitle={subtitle}
       >
         <form onSubmit={handleSubmit} noValidate>
@@ -228,7 +228,7 @@ export default function SignupPage() {
           )}
         </form>
 
-        {step === 1 && <AuthFooterLinks variant="signup" />}
+        {step === 1 && <AuthFooterLinks variant="register" />}
       </AuthCardShell>
     </AnimatePresence>
   );

@@ -43,9 +43,17 @@ below).
 
 ## Screens
 
-`/(auth)/auth/*` — login, signup, forgot-password. `/` — the panel home (which
+`/(auth)/auth/*` — login, register, forgot-password. `/` — the panel home (which
 account this browser is, plus the group). `/accounts/add` — adding an account
 to the switch group, its two tabs being the two proofs `auth-api` accepts.
+
+The account-creation screen is `/auth/register`. It was `/auth/signup` until
+2026-09-07, and it is the only place the platform ever called it that —
+`auth-api` serves `POST /auth/register`, the bot runs `RegisterFlow`, coinsite
+routes `/(Auth)/register`. `src/proxy.ts` answers the old path with a **308** to
+the new one, preserving the path suffix and the query string, because links to
+it exist outside this repo. Both paths are written once, as `AUTH_LOGIN` /
+`AUTH_REGISTER` in `src/lib/routes.ts`.
 
 ## Client API surface
 
@@ -60,7 +68,7 @@ on success the access token is stored in a module variable.
 `loginPassword`, `requestLoginOtp`, `register` and `forgot` each take a
 trailing `captchaToken`, sent as `X-Captcha-Token` — see auth-api's F-0201.
 The `useCaptcha()` hook (`_hooks/useCaptcha.ts`) drives the
-`NatureCaptchaUI` widget on the login/signup/forgot-password screens: it
+`NatureCaptchaUI` widget on the login/register/forgot-password screens: it
 requests a challenge on mount, exchanges a completed slide for a pass via
 `captchaVerify`, and re-requests a challenge when that pass's 120s TTL
 elapses or a gated call is rejected.
@@ -132,7 +140,7 @@ things follow for this app:
 
 ## Auth-screen session guard (F-0101)
 
-A signed-in visitor must never be shown the login or signup screen. The check
+A signed-in visitor must never be shown the login or register screen. The check
 runs in `src/proxy.ts` (the Next 16 proxy, formerly `middleware.ts`), before the
 screen renders — not in the browser. That is the whole trick: the refresh token
 is httpOnly and unreadable by script, but on the server it is just a request

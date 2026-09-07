@@ -1,15 +1,27 @@
 // Next 16 middleware (`proxy.ts`, formerly `middleware.ts`).
 import { NextResponse, type NextRequest } from "next/server";
-import { PANEL_HOME } from "@/lib/routes";
+import { AUTH_REGISTER, PANEL_HOME } from "@/lib/routes";
 
 /**
  * Auth screens a signed-in visitor has no business seeing. `forgot-password` is
  * deliberately absent: resetting a password while signed in elsewhere is
  * legitimate.
  */
-const GUARDED_PATHS = ["/auth/login", "/auth/signup"];
+const GUARDED_PATHS = ["/auth/login", AUTH_REGISTER];
 
 const REFRESH_COOKIE = "refresh_token";
+
+/**
+ * The screen used to live at `/auth/signup`. It is `register` everywhere else
+ * in the platform — auth-api's `POST /auth/register`, the bot's `RegisterFlow`,
+ * coinsite's `/register` — so the panel moved to that name too.
+ *
+ * Links to the old path exist where this repo cannot edit them: bot deep links
+ * already sent, bookmarks, anything printed. `308` and not `307` because the
+ * move is permanent and a browser may cache it; unlike `301` it is also
+ * required to keep the method, which matters the day this path takes a POST.
+ */
+const RENAMED_PATH = "/auth/signup";
 
 /**
  * auth-service, server-to-server. `AUTH_SERVICE_ORIGIN` keeps this hop inside
@@ -64,7 +76,19 @@ function isGuarded(pathname: string): boolean {
  * the login form, never that a signed-out one is redirected into the panel.
  */
 export async function proxy(request: NextRequest) {
-  if (!isGuarded(request.nextUrl.pathname)) return null;
+  const { pathname } = request.nextUrl;
+
+  // Before the session check, not after: this is a rename, not an auth
+  // question. A signed-in visitor is redirected here and then guarded on
+  // `/auth/register`, so asking auth-service first would be a wasted round
+  // trip on every hit of a dead path.
+  if (pathname === RENAMED_PATH || pathname.startsWith(`${RENAMED_PATH}/`)) {
+    const target = request.nextUrl.clone();
+    target.pathname = AUTH_REGISTER + pathname.slice(RENAMED_PATH.length);
+    return NextResponse.redirect(target, 308);
+  }
+
+  if (!isGuarded(pathname)) return null;
 
   const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value;
   if (!refreshToken) return null;

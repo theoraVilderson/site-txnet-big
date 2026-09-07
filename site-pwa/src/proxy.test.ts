@@ -50,6 +50,7 @@ describe('which requests are checked at all', () => {
     // resetting a password while signed in elsewhere is legitimate
     ['forgot-password', '/auth/forgot-password'],
     ['a path that merely starts with a guarded prefix', '/auth/loginhelp'],
+    ['a path that merely starts with the old signup prefix', '/auth/signuphelp'],
   ])('passes %s straight through, cookie or not', async (_label, path) => {
     expect(await proxy(requestFor(path, 'refresh_token=abc'))).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
@@ -57,9 +58,9 @@ describe('which requests are checked at all', () => {
 
   it.each([
     ['/auth/login'],
-    ['/auth/signup'],
+    ['/auth/register'],
     ['/auth/login/'],
-    ['/auth/signup/step-two'],
+    ['/auth/register/step-two'],
   ])('guards %s', async (path) => {
     fetchMock.mockResolvedValue(upstream(200, { ok: true, data: { active: true } }));
     const response = await proxy(requestFor(path, 'refresh_token=abc'));
@@ -77,6 +78,42 @@ describe('which requests are checked at all', () => {
     expect(
       await proxy(requestFor('/auth/login', 'NEXT_LOCALE=fa; NEXT_THEME=dark')),
     ).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('the old /auth/signup path', () => {
+  // The screen was renamed to `register` — the name auth-api, the bot and
+  // coinsite have always used. Links to the old path exist outside this repo
+  // (bot deep links, bookmarks, anything already sent), so it must move rather
+  // than 404. 308 and not 307: the rename is permanent, and 308 is the one
+  // redirect a browser is required to cache *and* to keep the method on.
+  it('redirects to /auth/register, permanently', async () => {
+    const response = await proxy(requestFor('/auth/signup'));
+
+    expect(response?.status).toBe(308);
+    expect(response?.headers.get('location')).toBe(
+      'https://panel.example.com/auth/register',
+    );
+  });
+
+  it('keeps the rest of the path and the query string', async () => {
+    const response = await proxy(
+      requestFor('/auth/signup/step-two?ref=bot&lang=fa'),
+    );
+
+    expect(response?.headers.get('location')).toBe(
+      'https://panel.example.com/auth/register/step-two?ref=bot&lang=fa',
+    );
+  });
+
+  it('redirects before the session check — a rename is not an auth question', async () => {
+    // A signed-in visitor on the old path must still land on the new one. The
+    // guard then runs on `/auth/register` and sends them home from there, so
+    // asking auth-service here would be a wasted round trip on every hit.
+    const response = await proxy(requestFor('/auth/signup', 'refresh_token=abc'));
+
+    expect(response?.status).toBe(308);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

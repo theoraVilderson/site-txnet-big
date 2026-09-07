@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useAuthUI } from "@auth/auth/_context/AuthUIContext";
+import { AUTH_LOGIN, AUTH_REGISTER } from "@/lib/routes";
 
-type FooterVariant = "login" | "signup" | "forgot-password";
+type FooterVariant = "login" | "register" | "forgot-password";
 
 export function AuthFooterLinks({ variant }: { variant: FooterVariant }) {
   const { t } = useAuthUI();
@@ -25,20 +26,20 @@ export function AuthFooterLinks({ variant }: { variant: FooterVariant }) {
           <div className="text-text-secondary">
             {t.noAccount}{" "}
             <Link
-              href="/auth/signup"
+              href={AUTH_REGISTER}
               className="text-primary font-bold hover:underline"
             >
-              {t.signup}
+              {t.register}
             </Link>
           </div>
         </>
       )}
 
-      {variant === "signup" && (
+      {variant === "register" && (
         <div className="text-text-secondary">
           {t.alreadyRegistered}{" "}
           <Link
-            href="/auth/login"
+            href={AUTH_LOGIN}
             className="text-primary font-bold hover:underline"
           >
             {t.login}
@@ -50,7 +51,7 @@ export function AuthFooterLinks({ variant }: { variant: FooterVariant }) {
         <div className="text-text-secondary">
           {t.backTo}{" "}
           <Link
-            href="/auth/login"
+            href={AUTH_LOGIN}
             className="text-primary font-bold hover:underline"
           >
             {t.loginPage}

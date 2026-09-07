@@ -17,9 +17,9 @@ export const AUTH_KEY_MAP = {
   usernameTab: "login.tabs.username",
   phoneTab: "login.tabs.phone",
 
-  signupTitle: "signup.title",
-  alreadyRegistered: "signup.prompt",
-  signup: "signup.action",
+  registerTitle: "register.title",
+  alreadyRegistered: "register.prompt",
+  register: "register.action",
 
   forgotTitle: "forgotPassword.title",
   forgotSubtitle: "forgotPassword.subtitle",
@@ -53,7 +53,7 @@ export const AUTH_KEY_MAP = {
   seconds: "messages.seconds",
   redirecting: "messages.redirecting",
   loginSuccess: "messages.success.login",
-  signupSuccess: "messages.success.signup",
+  registerSuccess: "messages.success.register",
   resetSuccess: "messages.success.reset",
   passwordMismatch: "messages.errors.passwordMismatch",
 
