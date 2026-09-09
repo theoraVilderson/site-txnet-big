@@ -76,11 +76,17 @@ SMS sender line, a second bot) and defaults to the singular `''`.
    Storing a *different* value supersedes the old version in the same
    transaction as it writes the new one.
 4. **A superseded version stays verifiable for `ROTATION_GRACE_SEC` (6h), then
-   must be destroyed.** `verify` honours the window; nothing destroys the rows
-   yet. **The obligation is on whoever schedules workers** — `automation`,
-   F-031 — to call `destroyExpiredVersions`. Until then a rotated secret
-   outlives its window in the database, which is a real gap and is stated here
-   rather than hidden in a TODO.
+   is destroyed.** `verify` honours the window, and since F-031-c something
+   ends it: `automation`'s `vault_credential_retention` job sweeps on its
+   schedule. The obligation was always the scheduler's, and the shape it took
+   is a **seam, not a method call** — the job runs in `worker-service`, which
+   cannot import this code, so it asks over
+   `POST /api/internal/vault/destroy-expired` (`interfaces/auth-api/contract.md`),
+   guarded by `ServiceOnlyGuard`. What crosses is a count and never a
+   credential. The sweep is the only caller of `destroyExpiredVersions`; how
+   long a version actually survives is therefore the grace window plus one
+   tick interval, not the window exactly, and a worker switched off
+   (invariant #1 in `domains/automation`) means it is not swept at all.
 5. **Expiry is checked on read, not swept** (F-1217). A credential that expired
    a second ago fails the next `use`; a sweeper would keep it working until its
    next tick.
