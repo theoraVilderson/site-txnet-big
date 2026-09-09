@@ -8,6 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { normalizeMessengerPhone } from './bot-link.service';
 import { AuthService } from '../auth.service';
 import { botScopeKey, SwitchScope } from '../../common/security/switch-scope';
+import { TenantContext } from '../../tenant-context/tenant-context';
 
 /**
  * Signing in with the messenger account itself (ADR-0012).
@@ -111,10 +112,13 @@ export class BotSessionService {
     observed: ObservedDevice,
     scope: SwitchScope | null,
   ): Promise<BotSessionOutcome> {
-    const verified = this.bots.verifyWebAppInitData(
+    const integration = await this.bots.primaryFor(
+      TenantContext.current('a mini app session').id,
       input.platform,
-      input.initData,
     );
+    const verified = integration
+      ? await this.bots.verifyWebAppInitData(integration, input.initData)
+      : ({ ok: false, reason: 'malformed' } as const);
     if (!verified.ok) {
       // One refusal for every reason: a forged signature, a replayed one and
       // an unconfigured bot are the same answer to whoever is asking, and the
@@ -263,6 +267,7 @@ export class BotSessionService {
     await this.prisma.linkedBotAccount.upsert({
       where: { userId_platform: { userId: user.id, platform } },
       create: {
+        tenantId: TenantContext.current('a bot link').id,
         userId: user.id,
         platform,
         platformUserId: chatId,

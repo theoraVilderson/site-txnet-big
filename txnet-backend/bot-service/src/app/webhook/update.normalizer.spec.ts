@@ -1,4 +1,4 @@
-import { BotUpdate } from '@txnet-backend/messenger';
+import { aBotIntegration, BotUpdate } from '@txnet-backend/messenger';
 import { LocaleService } from '../locale/locale.service';
 import { UpdateNormalizer } from './update.normalizer';
 
@@ -29,7 +29,7 @@ describe('UpdateNormalizer', () => {
   it('turns a text message into a ChatContext', () => {
     const { normalizer: n } = normalizer();
 
-    const ctx = n.normalize('telegram', {
+    const ctx = n.normalize('telegram', aBotIntegration(), {
       message: {
         message_id: 42,
         chat: { id: 5501 },
@@ -39,6 +39,7 @@ describe('UpdateNormalizer', () => {
     } as unknown as BotUpdate);
 
     expect(ctx).toEqual({
+      integration: aBotIntegration(),
       platform: 'telegram',
       chatId: '5501',
       senderId: 991,
@@ -54,7 +55,7 @@ describe('UpdateNormalizer', () => {
     // `bot:nav:telegram:5501` here and `...:5501` there only by luck of
     // coercion, and a mismatch is a chat that silently loses its state.
     const { normalizer: n } = normalizer();
-    const ctx = n.normalize('bale', {
+    const ctx = n.normalize('bale', aBotIntegration(), {
       message: { chat: { id: 5501 }, from: { id: 1 }, text: 'hi' },
     } as unknown as BotUpdate);
 
@@ -65,7 +66,7 @@ describe('UpdateNormalizer', () => {
   it('reads a callback query off the message it was attached to', () => {
     const { normalizer: n } = normalizer();
 
-    const ctx = n.normalize('telegram', {
+    const ctx = n.normalize('telegram', aBotIntegration(), {
       callback_query: {
         id: 'cbq-1',
         data: 'login:otp',
@@ -88,7 +89,7 @@ describe('UpdateNormalizer', () => {
   it('prefers the callback query when an update somehow carries both', () => {
     const { normalizer: n } = normalizer();
 
-    const ctx = n.normalize('telegram', {
+    const ctx = n.normalize('telegram', aBotIntegration(), {
       callback_query: {
         id: 'cbq-1',
         data: 'menu:back',
@@ -112,7 +113,7 @@ describe('UpdateNormalizer', () => {
       user_id: 991,
     };
 
-    const ctx = n.normalize('telegram', {
+    const ctx = n.normalize('telegram', aBotIntegration(), {
       message: { chat: { id: 5501 }, from: { id: 991 }, contact },
     } as unknown as BotUpdate);
 
@@ -122,7 +123,7 @@ describe('UpdateNormalizer', () => {
   it('resolves the messenger language hint instead of trusting it', () => {
     const { normalizer: n, locale: svc } = normalizer();
 
-    const ctx = n.normalize('telegram', {
+    const ctx = n.normalize('telegram', aBotIntegration(), {
       message: { chat: { id: 1 }, from: { id: 2, language_code: 'de-DE' }, text: 'x' },
     } as unknown as BotUpdate);
 
@@ -133,7 +134,7 @@ describe('UpdateNormalizer', () => {
   it('still resolves a language when the update carries no hint', () => {
     const { normalizer: n, locale: svc } = normalizer();
 
-    const ctx = n.normalize('bale', {
+    const ctx = n.normalize('bale', aBotIntegration(), {
       message: { chat: { id: 1 }, from: { id: 2 }, text: 'x' },
     } as unknown as BotUpdate);
 
@@ -158,7 +159,7 @@ describe('UpdateNormalizer', () => {
 
     it.each(cases)('%s', (_name, update) => {
       const { normalizer: n } = normalizer();
-      expect(n.normalize('telegram', update as BotUpdate)).toBeNull();
+      expect(n.normalize('telegram', aBotIntegration(), update as BotUpdate)).toBeNull();
     });
   });
 
@@ -166,7 +167,7 @@ describe('UpdateNormalizer', () => {
     // A malformed callback must not swallow a perfectly good message.
     const { normalizer: n } = normalizer();
 
-    const ctx = n.normalize('telegram', {
+    const ctx = n.normalize('telegram', aBotIntegration(), {
       callback_query: { id: 'c', from: { id: 1 } },
       message: { chat: { id: 5501 }, from: { id: 1 }, text: 'typed' },
     } as unknown as BotUpdate);
@@ -179,7 +180,7 @@ describe('UpdateNormalizer', () => {
     // `.trim is not a function` several layers away from the cause.
     const { normalizer: n } = normalizer();
 
-    const ctx = n.normalize('telegram', {
+    const ctx = n.normalize('telegram', aBotIntegration(), {
       message: { chat: { id: 1 }, from: { id: 2 }, text: 12345 },
     } as unknown as BotUpdate);
 
@@ -189,7 +190,7 @@ describe('UpdateNormalizer', () => {
 
   it('keeps an empty string as an empty string', () => {
     const { normalizer: n } = normalizer();
-    const ctx = n.normalize('telegram', {
+    const ctx = n.normalize('telegram', aBotIntegration(), {
       message: { chat: { id: 1 }, from: { id: 2 }, text: '' },
     } as unknown as BotUpdate);
 
@@ -204,15 +205,15 @@ describe('UpdateNormalizer', () => {
       message: { chat: { id: 5501 }, from: { id: 1 }, text: 'x' },
     } as unknown as BotUpdate;
 
-    expect(n.normalize('telegram', update)?.platform).toBe('telegram');
-    expect(n.normalize('bale', update)?.platform).toBe('bale');
+    expect(n.normalize('telegram', aBotIntegration(), update)?.platform).toBe('telegram');
+    expect(n.normalize('bale', aBotIntegration(), update)?.platform).toBe('bale');
   });
 
   it('accepts a message with no sender rather than dropping it', () => {
     // Channel posts and some Bale updates have no `from`; they are still a
     // chat the bot can answer.
     const { normalizer: n } = normalizer();
-    const ctx = n.normalize('bale', {
+    const ctx = n.normalize('bale', aBotIntegration(), {
       message: { chat: { id: 77 }, text: '/start' },
     } as unknown as BotUpdate);
 

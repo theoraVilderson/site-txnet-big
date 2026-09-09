@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { AuthApiClient } from '../auth-api/auth-api.client';
-import { ChatContext, FlowResult, NavState } from '../conversation/nav.types';
+import {
+  callContextOf,
+  ChatContext,
+  FlowResult,
+  NavState,
+} from '../conversation/nav.types';
 import { BotSessionStore } from '../session/bot-session.store';
 import { OtpStep } from './otp.step';
 import { PhoneNumbers } from './phone-number';
@@ -64,7 +69,7 @@ export class LoginFlow {
   ): Promise<FlowResult | null> {
     const result = await this.api.botSession(
       { platform: ctx.platform, chatId: ctx.chatId, senderId: ctx.senderId },
-      { chatId: ctx.chatId, lang: ctx.lang, platform: ctx.platform },
+      callContextOf(ctx),
     );
     if (!result.ok || !result.data) return null;
 
@@ -98,7 +103,7 @@ export class LoginFlow {
         senderId: ctx.senderId,
         contact: ctx.contact,
       },
-      { chatId: ctx.chatId, lang: ctx.lang, platform: ctx.platform },
+      callContextOf(ctx),
     );
     if (result.ok && result.data?.state === 'authenticated') {
       return this.signIn(ctx, result.data.tokens?.refreshToken);
@@ -220,7 +225,7 @@ export class LoginFlow {
     return this.otp.request(ctx, withChannel, channel, 'login.code', (c) =>
       this.api.requestLoginOtp(
         { phoneNumber: state.data.phoneNumber, channel: c },
-        { chatId: ctx.chatId, lang: ctx.lang, platform: ctx.platform },
+        callContextOf(ctx),
       ),
     );
   }
@@ -228,7 +233,7 @@ export class LoginFlow {
   private async code(ctx: ChatContext, state: NavState): Promise<FlowResult> {
     const result = await this.api.verifyLoginOtp(
       { phoneNumber: state.data.phoneNumber, otpCode: (ctx.text ?? '').trim() },
-      { chatId: ctx.chatId, lang: ctx.lang, platform: ctx.platform },
+      callContextOf(ctx),
     );
     if (!result.ok) {
       return {
@@ -244,7 +249,7 @@ export class LoginFlow {
   private async password(ctx: ChatContext, state: NavState): Promise<FlowResult> {
     const result = await this.api.loginWithPassword(
       { identifier: state.data.identifier, password: (ctx.text ?? '').trim() },
-      { chatId: ctx.chatId, lang: ctx.lang, platform: ctx.platform },
+      callContextOf(ctx),
     );
     if (!result.ok) {
       return {
@@ -274,7 +279,7 @@ export class LoginFlow {
     refreshToken: string | undefined,
   ): Promise<FlowResult> {
     if (refreshToken) {
-      await this.sessions.save(ctx.platform, ctx.chatId, refreshToken);
+      await this.sessions.save(ctx.integration, ctx.chatId, refreshToken);
     }
     // Say it happened. The menu that follows is attached by the router, so a
     // success is a sentence *and* somewhere to go — not a menu the user has to

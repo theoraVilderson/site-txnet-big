@@ -1,4 +1,9 @@
-import { BotContact, BotPlatform, BotView } from '@txnet-backend/messenger';
+import {
+  BotContact,
+  BotIntegration,
+  BotPlatform,
+  BotView,
+} from '@txnet-backend/messenger';
 
 /** Which conversation the chat is in the middle of. */
 export type BotFlow =
@@ -51,6 +56,13 @@ export interface NavState {
 /** One inbound message, normalized out of whichever platform sent it. */
 export interface ChatContext {
   platform: BotPlatform;
+  /**
+   * The bot this update arrived on, resolved from its webhook path before the
+   * body was parsed (F-320). It is what every downstream call names its tenant
+   * with, so a flow never has to know how tenancy was decided — and never gets
+   * to decide it from a message.
+   */
+  integration: BotIntegration;
   chatId: string;
   /** `message.from.id` — what a shared contact is checked against. */
   senderId?: string | number;
@@ -79,4 +91,25 @@ export interface FlowResult {
    * the user just asked to leave is the one message they certainly cannot read.
    */
   lang?: string;
+}
+
+/**
+ * The `auth-api` call context an update implies.
+ *
+ * One helper rather than the same object literal at thirty call sites: the
+ * tenant is on it now (F-320), and a literal that a flow forgot to update
+ * would silently fall back to `BOT_TENANT_ID` and serve the wrong reseller.
+ */
+export function callContextOf(ctx: ChatContext): {
+  chatId: string;
+  lang: string;
+  platform: string;
+  tenantId: string;
+} {
+  return {
+    chatId: ctx.chatId,
+    lang: ctx.lang,
+    platform: ctx.platform,
+    tenantId: ctx.integration.tenantId,
+  };
 }

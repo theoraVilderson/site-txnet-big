@@ -1,3 +1,4 @@
+import { aBotIntegration } from '@txnet-backend/messenger';
 import { ChatLanguage } from './chat-language';
 
 /**
@@ -31,15 +32,17 @@ function make(
   };
 }
 
+const bot = aBotIntegration();
+
 describe('ChatLanguage', () => {
   it('prefers what the chat chose over everything else', async () => {
     const { langs } = make({ stored: 'en', tenant: 'fa', deployment: 'fa' });
-    expect(await langs.resolve('telegram', '1', 'fa')).toBe('en');
+    expect(await langs.resolve(bot, '1', 'fa')).toBe('en');
   });
 
   it("prefers the deployment's language over the messenger's hint", async () => {
     const { langs } = make({ tenant: 'fa' });
-    expect(await langs.resolve('telegram', '1', 'en')).toBe('fa');
+    expect(await langs.resolve(bot, '1', 'en')).toBe('fa');
   });
 
   // The defect this item exists for: `.env` sets DEFAULT_LANGUAGE=fa and
@@ -47,37 +50,37 @@ describe('ChatLanguage', () => {
   // be greeted in English on a Persian-first deployment.
   it('falls back to DEFAULT_LANGUAGE when no bot-specific default is set', async () => {
     const { langs } = make({ deployment: 'fa' });
-    expect(await langs.resolve('telegram', '1', 'en')).toBe('fa');
+    expect(await langs.resolve(bot, '1', 'en')).toBe('fa');
   });
 
   it('lets BOT_DEFAULT_LANGUAGE outrank DEFAULT_LANGUAGE', async () => {
     const { langs } = make({ tenant: 'en', deployment: 'fa' });
-    expect(await langs.resolve('telegram', '1', 'fa')).toBe('en');
+    expect(await langs.resolve(bot, '1', 'fa')).toBe('en');
   });
 
   it('falls through to DEFAULT_LANGUAGE when the tenant default is not served', async () => {
     const { langs } = make({ tenant: 'de', deployment: 'fa' });
-    expect(await langs.resolve('telegram', '1', 'en')).toBe('fa');
+    expect(await langs.resolve(bot, '1', 'en')).toBe('fa');
   });
 
   it("falls through to the messenger's hint when no configured default is served", async () => {
     const { langs } = make({ tenant: 'de', deployment: 'ru' });
-    expect(await langs.resolve('telegram', '1', 'en')).toBe('en');
+    expect(await langs.resolve(bot, '1', 'en')).toBe('en');
   });
 
   it("follows the messenger's hint when neither default is configured", async () => {
     const { langs } = make();
-    expect(await langs.resolve('telegram', '1', 'en')).toBe('en');
+    expect(await langs.resolve(bot, '1', 'en')).toBe('en');
   });
 
   it('ignores a stored language locale-service no longer serves', async () => {
     const { langs } = make({ stored: 'de' });
-    expect(await langs.resolve('telegram', '1', 'fa')).toBe('fa');
+    expect(await langs.resolve(bot, '1', 'fa')).toBe('fa');
   });
 
   it('refuses to store a language that is not served', async () => {
     const { langs, redis } = make();
-    expect(await langs.choose('telegram', '1', 'de')).toBe(false);
+    expect(await langs.choose(bot, '1', 'de')).toBe(false);
     expect(redis.setJson).not.toHaveBeenCalled();
   });
 });

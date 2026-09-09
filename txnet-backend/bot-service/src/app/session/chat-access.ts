@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AuthApiClient } from '../auth-api/auth-api.client';
-import { ChatContext } from '../conversation/nav.types';
+import { callContextOf, ChatContext } from '../conversation/nav.types';
 import { BotSessionStore } from './bot-session.store';
 
 /**
@@ -31,21 +31,21 @@ export class ChatAccess {
 
   /** `null` means this chat has no live session — show it the guest menu. */
   async token(ctx: ChatContext): Promise<string | null> {
-    const session = await this.sessions.get(ctx.platform, ctx.chatId);
+    const session = await this.sessions.get(ctx.integration, ctx.chatId);
     if (!session) return null;
 
     const refreshed = await this.api.refresh(
       { refreshToken: session.refreshToken },
-      { chatId: ctx.chatId, lang: ctx.lang, platform: ctx.platform },
+      callContextOf(ctx),
     );
     if (!refreshed.ok || !refreshed.data?.accessToken) {
-      await this.sessions.clear(ctx.platform, ctx.chatId);
+      await this.sessions.clear(ctx.integration, ctx.chatId);
       return null;
     }
 
     if (refreshed.data.refreshToken) {
       await this.sessions.save(
-        ctx.platform,
+        ctx.integration,
         ctx.chatId,
         refreshed.data.refreshToken,
       );

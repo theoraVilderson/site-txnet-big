@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { BotPlatform } from '@txnet-backend/messenger';
+import { BotIntegration } from '@txnet-backend/messenger';
 import { RedisKeys, RedisTtl } from '../redis/redis.keys';
 import { RedisService } from '../redis/redis.service';
 import { LocaleService } from './locale.service';
@@ -55,11 +55,11 @@ export class ChatLanguage {
    * language locale-service can serve.
    */
   async resolve(
-    platform: BotPlatform,
+    integration: BotIntegration,
     chatId: string,
     hint: string,
   ): Promise<string> {
-    const chosen = await this.chosen(platform, chatId);
+    const chosen = await this.chosen(integration, chatId);
     if (chosen) return chosen;
     for (const [name, lang] of this.defaults) {
       if (this.serves(lang)) return lang;
@@ -71,8 +71,11 @@ export class ChatLanguage {
   }
 
   /** What this chat picked, if it ever did — and only if it is still served. */
-  async chosen(platform: BotPlatform, chatId: string): Promise<string | null> {
-    const key = RedisKeys.botLang(platform, chatId);
+  async chosen(
+    integration: BotIntegration,
+    chatId: string,
+  ): Promise<string | null> {
+    const key = RedisKeys.botLang(integration, chatId);
     const lang = await this.redis.getJson<string>(key);
     if (!lang || !this.serves(lang)) return null;
     // Idle TTL, like the session: a chat that keeps talking keeps its choice.
@@ -81,12 +84,16 @@ export class ChatLanguage {
   }
 
   async choose(
-    platform: BotPlatform,
+    integration: BotIntegration,
     chatId: string,
     lang: string,
   ): Promise<boolean> {
     if (!this.serves(lang)) return false;
-    await this.redis.setJson(RedisKeys.botLang(platform, chatId), lang, this.ttl);
+    await this.redis.setJson(
+      RedisKeys.botLang(integration, chatId),
+      lang,
+      this.ttl,
+    );
     return true;
   }
 

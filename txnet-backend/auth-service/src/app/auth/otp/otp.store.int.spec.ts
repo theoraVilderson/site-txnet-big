@@ -5,6 +5,17 @@ import {
 } from '../../../test-support/redis-fixture';
 import { OtpPurpose } from './otp.interface';
 import { OtpStore } from './otp.store';
+import { runWithTenant } from '../../tenant-context/tenant-context';
+
+/**
+ * Every OTP key carries the tenant it belongs to (ADR-0023), so each case has
+ * to run inside the scope a real request would have opened. `it` is wrapped
+ * once here rather than each body being wrapped, so a case added later cannot
+ * forget and fail with `TenantContextMissing` instead of the thing it meant to
+ * assert.
+ */
+const TENANT = { id: 'tenant-1', slug: 'reseller-a', via: 'domain' } as const;
+const rawIt = it;
 
 /**
  * The whole of OTP brute-force protection is one Lua script. It has to be
@@ -15,6 +26,9 @@ import { OtpStore } from './otp.store';
  * real server.
  */
 describe('OtpStore (real Redis)', () => {
+  const it = (name: string, fn: () => Promise<void>) =>
+    rawIt(name, () => runWithTenant(TENANT as never, fn));
+
   const PHONE = '09123456789';
   const PURPOSE = OtpPurpose.login;
   const HASH = 'argon2id$fake-hash';

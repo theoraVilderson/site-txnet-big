@@ -29,6 +29,25 @@ export const envSchema = z.object({
   AUTH_API_BASE_URL: z.string().url(),
   /** Sent as `X-Service-Token`; waives the captcha, re-buckets rate limits. */
   SERVICE_AUTH_TOKEN: z.string().min(32),
+  /**
+   * The tenant this bot serves, sent as `X-Tenant-Id` on every call out.
+   *
+   * A bot chat has no host, and `auth-api` has no fallback tenant (ADR-0025):
+   * a call arriving from `http://auth-service:3001` matches no `tenant_domain`
+   * row, so without this every bot flow is answered a neutral 404. The header
+   * is honoured only from a verified service caller, which is why it is safe
+   * to state rather than prove (`docs/domains/tenant/contract.md`).
+   *
+   * Optional, and a uuid when set — the id of a real `tenant` row, which
+   * `prisma/seed.js` prints when it creates the platform owner. Leaving it
+   * unset is not a fallback: the bot then names no tenant and auth-api refuses
+   * it, loudly, which is the intended failure while an install is half
+   * configured.
+   *
+   * One process, one tenant. F-066-h/F-066-i replace this with a per-
+   * `BotIntegration` lookup, and the header stays exactly where it is.
+   */
+  BOT_TENANT_ID: optional(z.string().uuid()),
   AUTH_API_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
 
   /** How long a chat stays signed in without touching the bot. */
@@ -41,18 +60,12 @@ export const envSchema = z.object({
   BOT_WEBHOOK_PUBLIC_BASE: optional(z.string().url()),
   DOMAIN_NAME: z.string().min(1, 'DOMAIN_NAME is required'),
 
-  TELEGRAM_BOT_TOKEN: optional(z.string()),
   TELEGRAM_API_BASE: z.string().url().default('https://api.telegram.org'),
-  TELEGRAM_BOT_USERNAME: optional(z.string()),
   TELEGRAM_DEEP_LINK_BASE: z.string().url().default('https://t.me'),
-  TELEGRAM_WEBHOOK_SECRET: optional(z.string().min(16)),
   TELEGRAM_WEBHOOK_PUBLIC_BASE: optional(z.string().url()),
 
-  BALE_BOT_TOKEN: optional(z.string()),
   BALE_API_BASE: z.string().url().default('https://tapi.bale.ai'),
-  BALE_BOT_USERNAME: optional(z.string()),
   BALE_DEEP_LINK_BASE: z.string().url().default('https://ble.ir'),
-  BALE_WEBHOOK_SECRET: optional(z.string().min(16)),
   BALE_WEBHOOK_PUBLIC_BASE: optional(z.string().url()),
 
   LOCALE_SERVICE_ADDR: z.string().default('localhost:50051'),

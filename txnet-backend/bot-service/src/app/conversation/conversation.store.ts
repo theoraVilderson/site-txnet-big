@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { BotPlatform } from '@txnet-backend/messenger';
+import { BotIntegration } from '@txnet-backend/messenger';
 import { RedisService } from '../redis/redis.service';
 import { RedisKeys, RedisTtl } from '../redis/redis.keys';
 import { NavState } from './nav.types';
@@ -17,8 +17,8 @@ export class ConversationStore {
     this.ttl = config.get<number>('BOT_NAV_TTL_SEC', RedisTtl.botNav);
   }
 
-  get(platform: BotPlatform, chatId: string): Promise<NavState | null> {
-    return this.redis.getJson<NavState>(RedisKeys.botNav(platform, chatId));
+  get(integration: BotIntegration, chatId: string): Promise<NavState | null> {
+    return this.redis.getJson<NavState>(RedisKeys.botNav(integration, chatId));
   }
 
   /**
@@ -26,16 +26,20 @@ export class ConversationStore {
    * persisted — not for a step, not for a second. Stripping it here rather
    * than trusting every flow is the difference between a rule and a habit.
    */
-  save(platform: BotPlatform, chatId: string, state: NavState): Promise<void> {
+  save(
+    integration: BotIntegration,
+    chatId: string,
+    state: NavState,
+  ): Promise<void> {
     const { password, newPassword, ...safe } = state.data ?? {};
     return this.redis.setJson(
-      RedisKeys.botNav(platform, chatId),
+      RedisKeys.botNav(integration, chatId),
       { ...state, data: safe },
       this.ttl,
     );
   }
 
-  clear(platform: BotPlatform, chatId: string): Promise<void> {
-    return this.redis.del(RedisKeys.botNav(platform, chatId));
+  clear(integration: BotIntegration, chatId: string): Promise<void> {
+    return this.redis.del(RedisKeys.botNav(integration, chatId));
   }
 }

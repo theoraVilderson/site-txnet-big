@@ -7,10 +7,14 @@ import { AuthModule } from './auth/auth.module';
 import { AccountSwitchModule } from './account-switch/account-switch.module';
 import { LocaleModule } from './locale/locale.module';
 import { TenantModule } from './tenant/tenant.module';
+import { AutomationModule } from './automation/automation.module';
+import { WebhookRotationModule } from './automation/webhook-rotation.module';
+import { VaultModule } from './tenant/vault/vault.module';
 import { LanguageMiddleware } from './common/middlewares/language.middleware';
 import { ServiceCallerMiddleware } from './common/security/service-caller';
 import { SwitchScopeMiddleware } from './common/security/switch-scope.middleware';
 import { TenantMiddleware } from './common/middlewares/tenant.middleware';
+import { TenantContextMiddleware } from './tenant-context/tenant-context.middleware';
 
 @Module({
   imports: [
@@ -21,6 +25,9 @@ import { TenantMiddleware } from './common/middlewares/tenant.middleware';
     AccountSwitchModule,
     LocaleModule,
     TenantModule,
+    VaultModule,
+    AutomationModule,
+    WebhookRotationModule,
   ],
 })
 export class AppModule implements NestModule {
@@ -31,11 +38,15 @@ export class AppModule implements NestModule {
     // chat from a browser, and mints the browser's `device_id` (ADR-0015).
     // TenantMiddleware depends on nothing the others decide; it is in the same
     // chain because every route needs the tenant already resolved (ADR-0020).
+    // TenantContextMiddleware follows it directly and opens the ambient scope
+    // that resolution feeds, so everything downstream — including the guards
+    // and pipes on a route — can read it without being handed it (ADR-0024).
     consumer
       .apply(
         ServiceCallerMiddleware,
         SwitchScopeMiddleware,
         TenantMiddleware,
+        TenantContextMiddleware,
         LanguageMiddleware,
       )
       .forRoutes('*');

@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { AuthApiClient } from '../auth-api/auth-api.client';
-import { ChatContext, FlowResult, NavState } from '../conversation/nav.types';
+import {
+  callContextOf,
+  ChatContext,
+  FlowResult,
+  NavState,
+} from '../conversation/nav.types';
 import { BotSessionStore } from '../session/bot-session.store';
 import { OtpStep } from './otp.step';
 import { PhoneNumbers } from './phone-number';
@@ -68,7 +73,7 @@ export class ForgotFlow {
         return this.otp.request(ctx, state, channel, 'forgot.code', (c) =>
           this.api.forgotPassword(
             { phoneNumber: state.data.phoneNumber, channel: c },
-            { chatId: ctx.chatId, lang: ctx.lang, platform: ctx.platform },
+            callContextOf(ctx),
           ),
         );
       }
@@ -83,7 +88,7 @@ export class ForgotFlow {
       case 'forgot.code': {
         const verified = await this.api.verifyForgotOtp(
           { phoneNumber: state.data.phoneNumber, otpCode: (ctx.text ?? '').trim() },
-          { chatId: ctx.chatId, lang: ctx.lang, platform: ctx.platform },
+          callContextOf(ctx),
         );
         if (!verified.ok || !verified.data?.resetToken) {
           return { view: ask('forgot.retryCode', { raw: verified.msg }), nextState: state };
@@ -104,7 +109,7 @@ export class ForgotFlow {
             resetToken: state.data.resetToken,
             newPassword: (ctx.text ?? '').trim(),
           },
-          { chatId: ctx.chatId, lang: ctx.lang, platform: ctx.platform },
+          callContextOf(ctx),
         );
         if (!result.ok) {
           return {
@@ -114,7 +119,11 @@ export class ForgotFlow {
           };
         }
         if (result.data?.refreshToken) {
-          await this.sessions.save(ctx.platform, ctx.chatId, result.data.refreshToken);
+          await this.sessions.save(
+            ctx.integration,
+            ctx.chatId,
+            result.data.refreshToken,
+          );
         }
         return {
           view: say('forgot.done', { key: 'bot.forgot.done' }),

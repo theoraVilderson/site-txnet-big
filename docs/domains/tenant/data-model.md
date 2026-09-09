@@ -21,7 +21,7 @@ Source of truth: `txnet-backend/prisma/domains/tenant.prisma` (Postgres schema
 | tenant_billing_wallet | what the tenant owes the platform (cache) | yes | with tenant |
 | tenant_billing_transaction | append-only ledger of tenant<->platform charges | yes | permanent |
 | tenant_usage_meter | metered usage rollups for pay-as-you-go | yes | permanent |
-| tenant_gateway_config / tenant_sms_config / tenant_bot_integration | BYO integration credentials (encrypted) | yes | with tenant |
+| tenant_gateway_config / tenant_sms_config | BYO integration credentials (encrypted) | yes | with tenant |
 | tenant_restriction | brand-level usage caps | yes | until inactive |
 
 ## Relationships crossing unit boundaries

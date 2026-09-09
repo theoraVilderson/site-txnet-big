@@ -27,6 +27,7 @@ import { OtpStore } from './otp/otp.store';
 import { RateLimiter } from '../common/rate-limit/rate-limiter';
 import { LocaleModule } from '../locale/locale.module';
 import { MessengerModule } from '@txnet-backend/messenger';
+import { AutomationModule } from '../automation/automation.module';
 import { CaptchaController } from './captcha/captcha.controller';
 import { CaptchaService } from './captcha/captcha.service';
 
@@ -37,7 +38,14 @@ import { CaptchaService } from './captcha/captcha.service';
   // MessengerModule supplies the Telegram/Bale driver (BotClientRegistry) —
   // OTP delivery and the account-link flow are both consumers of it, which is
   // why it is a shared platform library and not part of this service (ADR-0009).
-  imports: [LocaleModule, MessengerModule],
+  // Its integration directory is this process's own: here the schema and the
+  // vault are in reach, so `automation` answers directly rather than over the
+  // service seam `bot-service` has to use (F-320).
+  imports: [
+    LocaleModule,
+    AutomationModule,
+    MessengerModule.forRoot({ imports: [AutomationModule] }),
+  ],
   controllers: [
     RegisterController,
     AuthController,

@@ -2,6 +2,7 @@ import { OtpChannel, OtpPurpose } from '@prisma/client';
 import { RegisterService } from './register.service';
 import { RedisTtl } from '../../redis/redis.keys';
 import { normalizePhone } from '../../common/validation/phone.schema';
+import { runWithTenant } from '../../tenant-context/tenant-context';
 
 jest.mock('argon2', () => ({
   argon2id: 2,
@@ -26,13 +27,21 @@ const argon2 = require('argon2') as { hash: jest.Mock };
 // the normalization*, not about which spelling won.
 const TYPED_PHONE = '09123456789';
 const PHONE = normalizePhone(TYPED_PHONE);
-const PENDING_KEY = `register:pending:${PHONE}`;
+// The tenant the request resolved to (ADR-0020). `register` neither looks one
+// up nor takes one: it reads the ambient scope the edge opened (ADR-0024),
+// which is why the fake prisma below has no `tenant` and why every call here
+// goes through `runWithTenant` the way a real request does.
+const TENANT = { id: 'tenant-1', slug: 'platform_owner', via: 'domain' } as const;
+
+// The tenant segment is the key's, not the payload's: a phone number is unique
+// within a tenant (ADR-0023), so two resellers' pending registrations for the
+// same number must not share this slot.
+const PENDING_KEY = `register:pending:${TENANT.id}:${PHONE}`;
 
 type Harness = ReturnType<typeof harness>;
 
 function harness() {
   const prisma = {
-    tenant: { findFirst: jest.fn().mockResolvedValue({ id: 'tenant-1' }) },
     role: { findFirst: jest.fn().mockResolvedValue({ id: 'role-user' }) },
     user: {
       findFirst: jest.fn().mockResolvedValue(null),
@@ -78,8 +87,14 @@ const input = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const register = (h: Harness, over: Record<string, unknown> = {}) =>
-  h.service.register(input(over) as never, '1.2.3.4', 'fa');
+const register = (
+  h: Harness,
+  over: Record<string, unknown> = {},
+  tenant: unknown = TENANT,
+) =>
+  runWithTenant(tenant as never, () =>
+    h.service.register(input(over) as never, '1.2.3.4', 'fa'),
+  );
 
 describe('RegisterService.register — the pending record', () => {
   let h: Harness;
@@ -194,16 +209,21 @@ describe('RegisterService.register — refusals', () => {
     });
     expect(argon2.hash).not.toHaveBeenCalled();
     expect(h.redis.setJson).not.toHaveBeenCalled();
-    expect(h.prisma.tenant.findFirst).not.toHaveBeenCalled();
+    expect(h.prisma.role.findFirst).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ['tenant', 'tenant'],
-    ['role', 'role'],
-  ])('refuses when the default %s is missing', async (_label, missing) => {
-    (h.prisma as never as Record<string, { findFirst: jest.Mock }>)[
-      missing
-    ].findFirst.mockResolvedValue(null);
+  it('refuses a request that resolved to no tenant, rather than defaulting', async () => {
+    expect(await register(h, {}, null)).toEqual({
+      ok: false,
+      msg: 'register.tenantUnresolved',
+      error: null,
+    });
+    expect(h.redis.setJson).not.toHaveBeenCalled();
+    expect(h.otpService.issueOtp).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the default role is missing', async () => {
+    h.prisma.role.findFirst.mockResolvedValue(null);
 
     expect(await register(h)).toEqual({
       ok: false,
@@ -329,11 +349,13 @@ describe('RegisterService.verifyPhone', () => {
   };
 
   const verify = (over: Record<string, unknown> = {}) =>
-    h.service.verifyPhone({
-      phoneNumber: PHONE,
-      otpCode: '123456',
-      ...over,
-    } as never);
+    runWithTenant(TENANT as never, () =>
+      h.service.verifyPhone({
+        phoneNumber: PHONE,
+        otpCode: '123456',
+        ...over,
+      } as never),
+    );
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -399,10 +421,12 @@ describe('RegisterService.verifyPhone', () => {
   });
 
   it('reads the pending record under the normalized phone key', async () => {
-    await h.service.verifyPhone({
-      phoneNumber: '+989123456789',
-      otpCode: '123456',
-    } as never);
+    await runWithTenant(TENANT as never, () =>
+      h.service.verifyPhone({
+        phoneNumber: '+989123456789',
+        otpCode: '123456',
+      } as never),
+    );
 
     expect(h.redis.getJson).toHaveBeenCalledWith(PENDING_KEY);
   });

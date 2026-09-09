@@ -2,8 +2,8 @@
 id: identity
 layer: domain
 status: active
-version: 6
-updated: 2026-09-06
+version: 10
+updated: 2026-09-09
 ---
 
 # Contract — identity
@@ -25,7 +25,7 @@ Surfaced over HTTP by the `auth-api` interface — see
 
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
-| register | fullName, username, phone, strong password | phoneNumber, `requiresPhoneVerification` | sync | duplicate, weak/profile password |
+| register | fullName, username, phone, strong password. The tenant is **ambient**, not an input (v8) | phoneNumber, `requiresPhoneVerification` | sync | duplicate, weak/profile password, no resolved tenant |
 | verify phone (register) | phoneNumber, 6-digit OTP | session tokens | sync | invalid/expired OTP, pending registration expired |
 | login (password) | identifier (phone or username), password | session tokens, or `requiresOtp` + `otpToken` | sync | invalid creds, phone-unverified, temporarily locked |
 | list OTP channels | — | `{channels:[{channel, requiresLink}]}` — what this environment offers | sync | — |
@@ -80,8 +80,8 @@ None. No message bus is wired up. Impersonation start/end write an
   sender is configured). A channel that is off is never offered and is refused
   if named; it is never silently substituted.
 - A messenger channel delivers only to a `linked_bot_account` with
-  `contactVerifiedAt` set. Otherwise the caller gets a bot deep link, for any
-  phone number alike — see invariants #12.
+  `contactVerifiedAt` set **in the requesting tenant**. Otherwise the caller
+  gets a bot deep link, for any phone number alike — see invariants #12.
 - OTP: one active code per (phone, purpose); 5 attempts; 60s request cooldown;
   300s code TTL. Redis is the source of truth (ADR-0007).
 - Register creates no `user` row until phone verification succeeds — the
@@ -111,21 +111,38 @@ None. No message bus is wired up. Impersonation start/end write an
   `AuthGuard` never sees two live sessions for the one browser. The new token
   carries the **target's** role and permissions; nothing is inherited.
 
-## v6 — sessions carry the scope they were minted on
+## v10 — a bot link is unique within a tenant
 
-Additive. `Session.scopeKey` (nullable) records the **switch scope** a session
-was created on — the same key shape `audit.linked_account_member` uses
-(ADR-0015) — and one new operation, **revoke a user's sessions in one scope**,
-reads it. Existing operations keep their meaning; the two that gain an optional
-trailing argument (`hand over a session`, and the session-minting paths behind
-login / register-verify / reset) default to no scope, which is a legitimate
-state meaning "belongs to no switch group".
+**Breaking, in meaning rather than in shape.** A messenger account
+(`linked_bot_account`) was bound to at most one User across the whole platform;
+it is now bound within a tenant (`@@unique([tenantId, platform, platformUserId])`,
+migration `20260909000400_bot_link_unique_per_tenant`). Catalog 10.5 is why, and
+it scopes linking at the **tenant**, not at the bot: a person who starts in a
+reseller's sales bot is the same person in that reseller's support bot.
 
-Why identity carries a key whose meaning lives in `audit`: F-0208 has to revoke
-the removed account's sessions on **one surface only**, and a session is
-identity's. `audit` decides *which* scope; identity records and honours it.
-Null is deliberate for impersonation — an admin's session belongs to no group,
-so it matches no scope and is never caught by a removal.
+What changes for a caller is what an answer *means*, not what it looks like:
+
+- **link messenger account** refuses `chat already linked elsewhere` about the
+  requesting tenant only. The same chat may hold a link with every reseller on
+  the platform, and none of them is told the others exist. Before this, whoever
+  linked a chat first held it against everyone else — and a chat id is issued by
+  the messenger, so it is the same id in every bot.
+- The OTP senders resolve a chat within the requesting tenant, so a code is
+  never delivered to a chat that proved itself to somebody else's bot.
+
+No operation gained or lost a parameter, and no wire shape moved.
+`linkedBotAccount` joins `user` in `TENANT_SCOPED_MODELS`, so the ten lookup
+sites were not edited (`platform/tenant-context/contract.md`); the three writes
+name the ambient tenant only because Prisma's create input requires the column.
+The pending-link pointer `botlink:chat:*` gains the same tenant segment its two
+neighbours already carry — the last phone-adjacent key F-065-c left tenant-free
+(`platform/redis-keyspace/contract.md`).
+
+**Affected consumers** (every unit listing `identity` in `depends_on`): audit,
+billing, currency, engagement, fraud, governance, network, notification, ai,
+support, tenant, auth-api, forward-auth. None of them queries identity's tables
+and none passes a chat id for another tenant, so no consumer call site changes.
+Nothing is deprecated, because no shape is removed.
 
 ## Deprecations
 
@@ -134,26 +151,8 @@ so it matches no scope and is never caught by a removal.
 | `verify phone (register)` keyed by `userId` | 2026-09-04 | already removed — no `user` row exists at register time to key by | keyed by `phoneNumber` instead |
 | silent SMS fallback when a messenger is not linked | 2026-09-05 | already removed (catalog C-20) | `linkRequired` + bot deep link on the channel the user chose |
 
-## v5 — a session handover, for account switching
+## Version history
 
-Additive. One new operation, **hand over a session**, used by `audit` alone
-(`AccountSwitchService.switchTo`, F-0207) and surfaced as
-`POST /auth/accounts/switch`. It takes nothing away: every existing operation
-keeps its meaning, and no caller that ignores it sees a change. Adds
-`SessionRevokedReason.account_switched` to the schema — a Prisma migration, not
-a flag.
-
-The reason it lives here rather than in `audit`: sessions are identity's, and a
-switch is two session writes that must not come apart. `audit` owning the
-membership rule and identity owning the handover is the same split F-0205 made
-for the proofs.
-
-## Breaking: v3 — reset password returns a session
-
-`reset password` used to answer `{success:true}` and leave the caller signed
-out everywhere, including on the device in front of them. It now also returns
-`{accessToken, expiresIn}` and sets the `refresh_token` cookie.
-**Affected consumer:** `panel-web` — updated in the same change
-(`lib/auth-api.ts` stores the token; the forgot-password screen goes to the
-panel instead of the login form). A client that ignores the extra fields keeps
-working; one that assumed "reset always means signed out" does not.
+v9 and older moved to [contract.versions.md](contract.versions.md) when this
+file reached 250 lines (§10). The shapes above are current; that file answers
+"when did this change, and who did it break".

@@ -1,3 +1,5 @@
+import { aBotIntegration } from '@txnet-backend/messenger';
+import { runWithTenant } from '../../tenant-context/tenant-context';
 import { BotSessionService } from './bot-session.service';
 
 /**
@@ -5,6 +7,13 @@ import { BotSessionService } from './bot-session.service';
  * inferred from the bot's behaviour: who this factor signs in, who it refuses,
  * and that a contact card is checked exactly as invariant #12 checks one.
  */
+/**
+ * A tenant in scope: a Mini App's `initData` is verified against that tenant's
+ * own bot token now, so there is nothing to verify against without one.
+ */
+const inTenant = <T>(fn: () => Promise<T>): Promise<T> =>
+  runWithTenant({ id: 'tenant-1', slug: 'reseller-a', via: 'domain' }, fn);
+
 const linkedUser = {
   id: 'u-1',
   deletedAt: null,
@@ -43,7 +52,8 @@ function harness(over: {
   // token); what this service does with the answer is what is asserted here,
   // so the fake is the answer and nothing else.
   const bots = {
-    verifyWebAppInitData: jest.fn().mockReturnValue({
+    primaryFor: jest.fn().mockResolvedValue(aBotIntegration()),
+    verifyWebAppInitData: jest.fn().mockResolvedValue({
       ok: true,
       data: { platform: 'telegram', user: { id: '5501' }, authDate: 1 },
     }),
@@ -107,12 +117,21 @@ describe('BotSessionService', () => {
   it('links and signs in from the card itself — no phone typed, no code', async () => {
     const { service, prisma } = harness({ byPhone: linkedUser });
 
-    const outcome = await service.authenticate(
-      { ...ctx, contact: { phone_number: '+989121112233', user_id: 42 } },
-      null,
+    // In a tenant, because the link row it writes names one (F-066-l): a chat
+    // id is unique within a tenant, so writing one without a tenant in scope
+    // is the collision this row closed.
+    const outcome = await inTenant(() =>
+      service.authenticate(
+        { ...ctx, contact: { phone_number: '+989121112233', user_id: 42 } },
+        null,
+      ),
     );
 
-    expect(prisma.linkedBotAccount.upsert).toHaveBeenCalled();
+    expect(prisma.linkedBotAccount.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ tenantId: 'tenant-1' }),
+      }),
+    );
     expect(outcome.state).toBe('authenticated');
   });
 
@@ -172,10 +191,12 @@ describe('BotSessionService.authenticateWebApp', () => {
   it('signs in the account the signature names, under the browser scope', async () => {
     const { service, auth } = harness({ link: { userId: 'u-1' } });
 
-    const outcome = await service.authenticateWebApp(
-      webApp,
-      { ip: '1.2.3.4', userAgent: 'Mozilla/5.0' },
-      'device:abc',
+    const outcome = await inTenant(() =>
+      service.authenticateWebApp(
+        webApp,
+        { ip: '1.2.3.4', userAgent: 'Mozilla/5.0' },
+        'device:abc',
+      ),
     );
 
     expect(outcome).toMatchObject({ state: 'authenticated' });
@@ -190,16 +211,18 @@ describe('BotSessionService.authenticateWebApp', () => {
 
   it('refuses an unverifiable signature without touching the database', async () => {
     const { service, prisma, bots } = harness({ link: { userId: 'u-1' } });
-    bots.verifyWebAppInitData.mockReturnValue({
+    bots.verifyWebAppInitData.mockResolvedValue({
       ok: false,
       reason: 'badSignature',
     });
 
     expect(
-      await service.authenticateWebApp(
-        webApp,
-        { ip: '', userAgent: 'Mozilla/5.0' },
-        'device:abc',
+      await inTenant(() =>
+        service.authenticateWebApp(
+          webApp,
+          { ip: '', userAgent: 'Mozilla/5.0' },
+          'device:abc',
+        ),
       ),
     ).toEqual({ state: 'refused', key: 'auth.invalidCredentials' });
     expect(prisma.linkedBotAccount.findFirst).not.toHaveBeenCalled();

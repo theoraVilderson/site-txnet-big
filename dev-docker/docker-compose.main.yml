@@ -117,7 +117,7 @@ services:
       - JWT_SECRET=${JWT_ACCESS_SECRET}
       - REDIS_URL=${REDIS_URL}
       - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
-      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v3}
       - PERMISSIONS_FILE_PATH=/src/auth-handler/configs/permissions.yaml
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
       - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
@@ -159,13 +159,20 @@ services:
     volumes:
       - ../txnet-backend:/app:delegated
       - /app/node_modules
+      # The Credential Vault's KEK (ADR-0026). Mounted as a file, read-only,
+      # because it must never be an environment variable — an env var is
+      # readable from `docker inspect` and from every child process. In Swarm
+      # this is a real `secrets:` entry landing at the same path; here it is a
+      # bind mount so the dev stack needs no swarm mode. `:ro` and the leading
+      # `./secrets/` are both deliberate: nothing in the app writes it.
+      - ./secrets/vault-kek:/run/secrets/vault-kek:ro
     environment:
       - PORT=${AUTH_PORT}
       - NODE_ENV=${NODE_ENV:-development}
       - DATABASE_URL=postgresql://${MAIN_DB_USERNAME}:${MAIN_DB_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
       - REDIS_URL=${REDIS_URL}
       - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
-      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v3}
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
       - JWT_REFRESH_HASH_SECRET=${JWT_REFRESH_HASH_SECRET}
       - JWT_ACCESS_TTL_SEC=${JWT_ACCESS_TTL_SEC:-900}
@@ -182,22 +189,16 @@ services:
       - OTP_ALLOWED_CHANNELS=${OTP_ALLOWED_CHANNELS:-sms}
       - OTP_DEV_CONSOLE_LOG=${OTP_DEV_CONSOLE_LOG:-false}
       - BOT_LINK_TOKEN_TTL_SEC=${BOT_LINK_TOKEN_TTL_SEC:-900}
-      # Telegram / Bale bots. The username builds the ?start= deep link and the
-      # webhook secret guards /api/auth/bots/<platform>/webhook/<secret>;
-      # without all three a messenger channel can deliver but cannot be linked.
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
-      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME:-}
-      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
+      # Telegram / Bale, as platforms: the API host and the deep-link host,
+      # which are the same whoever the bot belongs to. Every bot's token,
+      # username and webhook secret is its tenant's, and lives on that tenant's
+      # BotIntegration row and in the Credential Vault (F-066-i).
       - TELEGRAM_API_BASE=${TELEGRAM_API_BASE:-https://api.telegram.org}
       - TELEGRAM_DEEP_LINK_BASE=${TELEGRAM_DEEP_LINK_BASE:-https://t.me}
-      - BALE_BOT_TOKEN=${BALE_BOT_TOKEN:-}
-      - BALE_BOT_USERNAME=${BALE_BOT_USERNAME:-}
-      - BALE_WEBHOOK_SECRET=${BALE_WEBHOOK_SECRET:-}
       - BALE_API_BASE=${BALE_API_BASE:-https://tapi.bale.ai}
       - BALE_DEEP_LINK_BASE=${BALE_DEEP_LINK_BASE:-https://ble.ir}
-      # The webhook itself belongs to bot-service now (ADR-0011). This service
-      # keeps the old /api/auth/bots/<platform>/webhook/<secret> route for one
-      # release, but nothing points a bot at it any more.
+      # The webhook belongs to bot-service (ADR-0011); the deprecated route
+      # this service kept for one release is gone with F-066-i.
       # Shared secret bot-service presents as X-Service-Token: it waives the
       # captcha and re-buckets the rate limit, and authenticates no user.
       - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
@@ -209,10 +210,10 @@ services:
       - COOKIE_SECURE=${COOKIE_SECURE:-true}
       - TRUST_PROXY=${TRUST_PROXY}
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
-      # The tenant a request falls back to when its Host matches no verified
-      # tenant_domain row (ADR-0020). Set it deliberately on a deployment that
-      # serves resellers — see .env.example.
-      - DEFAULT_TENANT_SLUG=${DEFAULT_TENANT_SLUG:-platform_owner}
+      # No DEFAULT_TENANT_SLUG: there is no fallback tenant (ADR-0025). A Host
+      # that matches no tenant_domain row is answered a neutral 404, so the dev
+      # stack depends on `node prisma/seed.js` having created the row for
+      # api.${DOMAIN_NAME} — see .env.example.
       # Phone numbers are every country by default (ADR-0018). The region a
       # number typed without `+` belongs to follows DEFAULT_LANGUAGE unless
       # DEFAULT_PHONE_COUNTRY overrides it.
@@ -220,6 +221,10 @@ services:
       - SUPPORTED_PHONE_COUNTRIES=${SUPPORTED_PHONE_COUNTRIES:-}
       - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
       - LOCALE_SCOPE=backend
+      # A PATH to the mounted secret above, never the key itself (ADR-0026).
+      # Unset it and the service still boots, refusing every credential
+      # operation — nothing writes a tenant credential until F-066-i.
+      - VAULT_KEK_FILE=${VAULT_KEK_FILE:-/run/secrets/vault-kek}
     networks:
       - private_backend_network
     labels:
@@ -287,25 +292,25 @@ services:
       # Same namespace and version as auth-service: one bump abandons every
       # key this platform holds, bot sessions included (ADR-0005).
       - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
-      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v3}
       # In-network, so bot traffic never leaves the private network to reach
       # the API it depends on.
       - AUTH_API_BASE_URL=http://auth-service:${AUTH_PORT}
+      # A bot chat has no host to resolve a tenant from, and there is no
+      # fallback tenant (ADR-0025). Since F-066-i an update names its own
+      # tenant — the one its webhook path resolved to — so this is only the
+      # fallback for calls that are not answering an update. `prisma/seed.js`
+      # prints the id it created.
+      - BOT_TENANT_ID=${BOT_TENANT_ID:-}
       - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
       - BOT_SESSION_TTL_SEC=${BOT_SESSION_TTL_SEC:-2592000}
       - BOT_NAV_TTL_SEC=${BOT_NAV_TTL_SEC:-1800}
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
-      - TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME:-}
-      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
       - TELEGRAM_API_BASE=${TELEGRAM_API_BASE:-https://api.telegram.org}
       - TELEGRAM_DEEP_LINK_BASE=${TELEGRAM_DEEP_LINK_BASE:-https://t.me}
-      - BALE_BOT_TOKEN=${BALE_BOT_TOKEN:-}
-      - BALE_BOT_USERNAME=${BALE_BOT_USERNAME:-}
-      - BALE_WEBHOOK_SECRET=${BALE_WEBHOOK_SECRET:-}
       - BALE_API_BASE=${BALE_API_BASE:-https://tapi.bale.ai}
       - BALE_DEEP_LINK_BASE=${BALE_DEEP_LINK_BASE:-https://ble.ir}
-      # On boot this service points every configured bot at its own route,
-      # <public base>/api/bot/<platform>/webhook/<secret>.
+      # On boot this service points every tenant's bot at its own path,
+      # <public base>/api/bots/<platform>/<webhookPath> (F-321).
       - BOT_WEBHOOK_AUTO_REGISTER=${BOT_WEBHOOK_AUTO_REGISTER:-true}
       - BOT_WEBHOOK_PUBLIC_BASE=${BOT_WEBHOOK_PUBLIC_BASE:-}
       - TELEGRAM_WEBHOOK_PUBLIC_BASE=${TELEGRAM_WEBHOOK_PUBLIC_BASE:-}

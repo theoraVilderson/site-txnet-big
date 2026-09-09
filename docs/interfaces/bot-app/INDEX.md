@@ -8,7 +8,7 @@ source:
   - txnet-backend/bot-service/src/**
 owns_tables: []
 depends_on: [messenger, auth-api, i18n]
-updated: 2026-09-08
+updated: 2026-09-09
 ---
 
 # bot-app
@@ -22,6 +22,7 @@ differences (`messenger`), linking and OTP (`identity`/`auth-api`), copy (`i18n`
 ## Files
 | File | Read it when |
 |---|---|
+| 2026-09-09 | The webhook is `POST /api/bots/:platform/:webhookPath` and resolves its tenant from the path — one bot per tenant `BotIntegration`, not one per platform from env (F-066-i, spec: F-320 F-321). `ChatContext` carries the integration, and every `auth-api` call names its tenant |
 | [contract.md](contract.md) | adding a bot flow, a menu, or a deep link |
 | [contract.accounts.md](contract.accounts.md) | the switch group: moving between accounts, whose set it is, how one joins |
 | [conversation.md](conversation.md) | the shell every screen gets: orientation, Back, language, commands |
@@ -46,6 +47,5 @@ per chat, register/login/forgot/logout), the switch group (`F-0205`, `F-0208`,
 | 2026-09-08 | Contract v9 -> **v10** (F-053): a transport failure answers with the sentence, not the key. `AuthApiClient` resolves `bot.common.tryAgain` itself, because `msg` is rendered as `raw` and `raw` is never translated again |
 | 2026-09-08 | contract v8 -> **v9**: `F-310` — the Mini App is a row on the member menu (`views.ts` `miniApp()`), opening `panel-web` inside the messenger. The page signs itself in from the platform's signature (ADR-0017); this unit hands over a URL and carries no credential |
 | 2026-09-07 | contract v7 -> **v8**: a successful add now switches the chat onto the account it just added (`auth-api` v8 answers `userId` from both add routes). The switch + persist pair moved out of `flows/accounts.flow.ts` into `session/account-switcher.ts`, which both flows use. A refused switch falls back to the old message — the add still stands |
-| 2026-09-06 | ADR-0015: the chat's switch group is scoped to the chat. Every account call carries `x-bot-platform` beside `x-bot-chat-id`, and `flows/accounts.flow.ts` gains the remove path (F-0208) — pick, confirm, done; removing the chat's own account drops the stored refresh token |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

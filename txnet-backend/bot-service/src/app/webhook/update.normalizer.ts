@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { BotPlatform, BotUpdate } from '@txnet-backend/messenger';
+import {
+  BotIntegration,
+  BotPlatform,
+  BotUpdate,
+} from '@txnet-backend/messenger';
 import { LocaleService } from '../locale/locale.service';
 import { ChatContext } from '../conversation/nav.types';
 
@@ -12,11 +16,22 @@ import { ChatContext } from '../conversation/nav.types';
 export class UpdateNormalizer {
   constructor(private readonly locale: LocaleService) {}
 
-  normalize(platform: BotPlatform, update: BotUpdate): ChatContext | null {
+  /**
+   * `integration` is carried, not derived: it was resolved from the webhook
+   * path before this update was parsed, and every call the flows go on to make
+   * names its tenant (F-320). Nothing here may read a tenant out of `update` —
+   * that is the body, and the body is written by the sender.
+   */
+  normalize(
+    platform: BotPlatform,
+    integration: BotIntegration,
+    update: BotUpdate,
+  ): ChatContext | null {
     const callback = update?.callback_query;
     if (callback?.message?.chat?.id) {
       return {
         platform,
+        integration,
         chatId: String(callback.message.chat.id),
         senderId: callback.from?.id,
         lang: this.lang(callback.from?.language_code),
@@ -32,6 +47,7 @@ export class UpdateNormalizer {
 
     return {
       platform,
+      integration,
       chatId: String(message.chat.id),
       senderId: message.from?.id,
       lang: this.lang(message.from?.language_code),

@@ -30,6 +30,7 @@ export class AuthApiClient {
   private readonly logger = new Logger(AuthApiClient.name);
   private readonly baseUrl: string;
   private readonly serviceToken: string;
+  private readonly tenantId: string;
   private readonly timeoutMs: number;
 
   constructor(
@@ -40,6 +41,7 @@ export class AuthApiClient {
       .get<string>('AUTH_API_BASE_URL', '')
       .replace(/\/+$/, '');
     this.serviceToken = config.get<string>('SERVICE_AUTH_TOKEN', '');
+    this.tenantId = config.get<string>('BOT_TENANT_ID', '');
     this.timeoutMs = config.get<number>('AUTH_API_TIMEOUT_MS', 8000);
   }
 
@@ -275,6 +277,16 @@ export class AuthApiClient {
           'content-type': 'application/json',
           'accept-language': ctx.lang,
           'x-service-token': this.serviceToken,
+          // Which tenant this chat belongs to — the one its bot's webhook
+          // path resolved to (F-320). A bot request has no host to resolve and
+          // auth-api has no fallback tenant (ADR-0025), so a call that names
+          // no tenant is answered a neutral 404. Sent next to the service
+          // token deliberately: auth-api honours it only because that token
+          // verified. `BOT_TENANT_ID` remains as the fallback for the calls
+          // that are not answering an update.
+          ...(ctx.tenantId || this.tenantId
+            ? { 'x-tenant-id': ctx.tenantId || this.tenantId }
+            : {}),
           'x-bot-chat-id': ctx.chatId,
           // The other half of the chat's identity (ADR-0015). Sent on every
           // call rather than only the account ones: it costs a header, and a
@@ -362,6 +374,15 @@ export interface CallContext {
    * behaviour to want: a wrong guess here would merge two people's groups.
    */
   platform?: string;
+  /**
+   * Which tenant this chat belongs to, resolved from the bot's own webhook
+   * path (F-320, F-065-a). It is the integration's `tenantId` and nothing
+   * else: a bot request has no host for `auth-api` to resolve, and reading a
+   * tenant out of the message body would let the sender choose one.
+   *
+   * Falls back to `BOT_TENANT_ID` only where no update is in hand.
+   */
+  tenantId?: string;
   /** Set only for a route behind `AuthGuard` — see `listAccounts`. */
   accessToken?: string;
 }

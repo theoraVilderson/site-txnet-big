@@ -6,5 +6,8 @@ export * from './lib/deep-link';
 export * from './lib/web-app-init-data';
 export * from './lib/renderer';
 export * from './lib/telegram-like-bot.client';
+export * from './lib/bot-integration';
+export * from './lib/webhook-address';
+export * from './lib/bot-integration.fixture';
 export * from './lib/bot-client.registry';
 export * from './lib/messenger.module';

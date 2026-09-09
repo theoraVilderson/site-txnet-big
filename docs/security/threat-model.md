@@ -12,8 +12,9 @@ Scope note: only `identity` + edge auth + i18n are implemented. Rows about
 ## Assets (ranked)
 
 1. User money — `billing.wallet` / ledgers, payment gateway credentials.
-2. Tenant integration secrets — `tenant_gateway_config`, `tenant_bot_integration`
-   (encrypted-at-rest, plaintext in memory).
+2. Tenant integration secrets — the `tenant_credential` rows a
+   `bot_integration.credentialRef` or a `tenant_gateway_config` names
+   (encrypted-at-rest under that tenant's own DEK, plaintext in memory).
 3. Authentication material — password hashes, the shared JWT HMAC secret, refresh
    tokens, OTP codes.
 4. Cross-tenant data confidentiality — one reseller must not see another's users,

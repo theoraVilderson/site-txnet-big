@@ -1,3 +1,4 @@
+import { aBotIntegration } from '@txnet-backend/messenger';
 import { ConfigService } from '@nestjs/config';
 import { AuthApiClient } from '../auth-api/auth-api.client';
 import { ChatContext, NavState } from '../conversation/nav.types';
@@ -8,7 +9,7 @@ import { OtpStep } from './otp.step';
 import { PhoneNumbers } from './phone-number';
 import { RegisterFlow } from './register.flow';
 
-const ctx: ChatContext = { platform: 'telegram', chatId: '5501', senderId: 42, lang: 'fa' };
+const ctx: ChatContext = { integration: aBotIntegration(), platform: 'telegram', chatId: '5501', senderId: 42, lang: 'fa' };
 const ok = <T>(data: T) => ({ ok: true, msg: 'ok', data });
 
 function harness() {
@@ -75,7 +76,7 @@ describe('LoginFlow', () => {
       { phoneNumber: '+989121112233', otpCode: '123456' },
       expect.anything(),
     );
-    expect(sessions.save).toHaveBeenCalledWith('telegram', '5501', 'r-1');
+    expect(sessions.save).toHaveBeenCalledWith(ctx.integration, '5501', 'r-1');
     // A success says so; the menu underneath it is the router's job
     // (`ConversationRouter.decorate`), so a flow never ends on a bare menu the
     // user has to infer a result from.
@@ -163,7 +164,7 @@ describe('RegisterFlow', () => {
 
     const done = await register.handle({ ...ctx, text: '123456' }, step.nextState as NavState, null);
     expect(api.verifyPhone).toHaveBeenCalled();
-    expect(sessions.save).toHaveBeenCalledWith('telegram', '5501', 'r-3');
+    expect(sessions.save).toHaveBeenCalledWith(ctx.integration, '5501', 'r-3');
     expect(done.view.id).toBe('register.done');
     expect(done.view.body.key).toBe('bot.register.done');
     expect(done.nextState).toBeNull();
@@ -206,7 +207,7 @@ describe('ForgotFlow', () => {
       expect.anything(),
     );
     // The reset revoked every session; the one it returned is this chat's.
-    expect(sessions.save).toHaveBeenCalledWith('telegram', '5501', 'r-4');
+    expect(sessions.save).toHaveBeenCalledWith(ctx.integration, '5501', 'r-4');
     expect(done.deleteIncoming).toBe(true);
     expect(done.view.id).toBe('forgot.done');
   });
@@ -225,7 +226,7 @@ describe('LoginFlow — the messenger account as the credential (ADR-0012)', () 
       { platform: 'telegram', chatId: '5501', senderId: 42 },
       expect.anything(),
     );
-    expect(sessions.save).toHaveBeenCalledWith('telegram', '5501', 'r-9');
+    expect(sessions.save).toHaveBeenCalledWith(ctx.integration, '5501', 'r-9');
     expect(result.view.body.key).toBe('bot.common.signedIn');
     expect(result.nextState).toBeNull();
   });
@@ -245,7 +246,7 @@ describe('LoginFlow — the messenger account as the credential (ADR-0012)', () 
       null,
     );
 
-    expect(sessions.save).toHaveBeenCalledWith('telegram', '5501', 'r-10');
+    expect(sessions.save).toHaveBeenCalledWith(ctx.integration, '5501', 'r-10');
     expect(done.nextState).toBeNull();
   });
 

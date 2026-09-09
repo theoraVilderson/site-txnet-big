@@ -1,14 +1,18 @@
 ---
 id: adr-0020
-status: accepted
+status: superseded
 updated: 2026-09-09
 ---
 
 # ADR 0020 — A request resolves its tenant from the Host header
 
-- **Status:** accepted
+- **Status:** superseded by [ADR-0025](0025-tenant-detection-has-no-fallback.md)
 - **Date:** 2026-09-09
 - **Affects units:** identity, tenant, auth-api, panel-web, marketing-web
+
+> **Superseded 2026-09-09 by ADR-0025: catalog 20.3 / correction C-01 forbids a
+fallback tenant and requires a neutral 404 at the edge. The Host-header
+mechanism below survives; the fallback and the TTL-only cache do not.**
 
 ## Context
 

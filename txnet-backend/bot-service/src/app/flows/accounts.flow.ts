@@ -228,7 +228,7 @@ export class AccountsFlow {
     }
 
     if (isSelf) {
-      await this.sessions.clear(ctx.platform, ctx.chatId);
+      await this.sessions.clear(ctx.integration, ctx.chatId);
       return {
         view: say('accounts.removedSelf', { key: 'bot.accounts.removedSelf' }),
         nextState: null,

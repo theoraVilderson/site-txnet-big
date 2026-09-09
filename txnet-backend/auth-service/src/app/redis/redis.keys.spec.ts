@@ -2,6 +2,12 @@ import { ConfigService } from '@nestjs/config';
 import { envSchema } from '../config/env.validation';
 import { RedisKeys, RedisTtl } from './redis.keys';
 import { RedisService } from './redis.service';
+import {
+  TenantContextMissing,
+  runWithTenant,
+} from '../tenant-context/tenant-context';
+
+const TENANT = { id: 'tenant-1', slug: 'reseller-a', via: 'domain' } as const;
 
 /**
  * These strings are not an implementation detail: a live session, a pending
@@ -17,7 +23,7 @@ import { RedisService } from './redis.service';
  */
 describe('RedisKeys — key catalogue', () => {
   it('builds every key from fixed arguments', () => {
-    const built = {
+    const built = runWithTenant(TENANT, () => ({
       session: RedisKeys.session('sess-1'),
       userSessions: RedisKeys.userSessions('user-1'),
       otpCode: RedisKeys.otpCode('login', '09123456789'),
@@ -34,9 +40,42 @@ describe('RedisKeys — key catalogue', () => {
       ),
       captchaChallenge: RedisKeys.captchaChallenge('chal-1'),
       captchaVerified: RedisKeys.captchaVerified('pass-1'),
-    };
+      tenantByHost: RedisKeys.tenantByHost('myvpn.com'),
+      tenantById: RedisKeys.tenantById('tenant-1'),
+    }));
 
     expect(built).toMatchSnapshot();
+  });
+
+  it('refuses to build a tenant-derived key with no tenant in scope', () => {
+    // ADR-0023: a phone number identifies a person within a tenant, so these
+    // keys have no meaning outside one. `botLinkChat` joined them with
+    // F-066-l: a chat id is the messenger's and is the same in every
+    // reseller's bot, so the pointer needs the tenant for the same reason. Returning an unscoped key would
+    // put two resellers' codes for the same number in one slot — the failure
+    // this row exists to remove — so the builder throws instead, the way
+    // `withTenant` does for a query (tenant-context/contract.md rule 3).
+    const phoneDerived = [
+      () => RedisKeys.otpCode('login', '+989123456789'),
+      () => RedisKeys.otpLock('login', '+989123456789'),
+      () => RedisKeys.otpCooldown('login', '+989123456789'),
+      () => RedisKeys.registerPending('+989123456789'),
+      () => RedisKeys.botLinkPhone('telegram', '+989123456789'),
+      () => RedisKeys.botLinkProvenChat('telegram', '+989123456789'),
+      () => RedisKeys.botLinkChat('telegram', '55501'),
+    ];
+
+    for (const build of phoneDerived) {
+      expect(build).toThrow(TenantContextMissing);
+    }
+  });
+
+  it('keeps a session key tenant-free, so auth-handler still finds it', () => {
+    // `auth-handler` builds `session:<id>` in Go from the same prefix and has
+    // no tenant of its own (redis-keyspace/contract.md). A tenant segment here
+    // would make every gateway lookup miss, and a miss is read as "revoked".
+    expect(RedisKeys.session('sess-1')).toBe('session:sess-1');
+    expect(RedisKeys.userSessions('user-1')).toBe('user:user-1:sessions');
   });
 
   it('exposes a builder for every key family, and nothing unbuilt', () => {

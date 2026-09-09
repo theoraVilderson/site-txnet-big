@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotClientRegistry } from '@txnet-backend/messenger';
+import { runWithTenant } from '../../../tenant-context/tenant-context';
 import { LocaleService } from '../../../locale/locale.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { BotLinkStore } from '../../bot-link/bot-link.store';
@@ -36,16 +37,28 @@ function prisma({
   link = null as { platformUserId: string } | null,
 } = {}) {
   return {
-    user: { findUnique: jest.fn(async () => user) },
+    user: { findFirst: jest.fn(async () => user) },
     linkedBotAccount: { findFirst: jest.fn(async () => link) },
   };
 }
 
+/**
+ * The registry as a sender uses it since F-066-i: both questions are per
+ * tenant, and the bot is that tenant's `primary` one (C-05).
+ */
 function registry(client: { sendMessage: jest.Mock } | null) {
   return {
-    client: jest.fn(() => client),
+    primaryClient: jest.fn(async () => client),
+    canSend: jest.fn(async () => client !== null),
   } as unknown as BotClientRegistry;
 }
+
+/**
+ * A tenant in scope, which every messenger send now requires: the token is
+ * that tenant's, so a send with no tenant resolved has no bot to send as.
+ */
+const inTenant = <T>(fn: () => Promise<T> | T): Promise<T> | T =>
+  runWithTenant({ id: 'tenant-1', slug: 'reseller-a', via: 'domain' }, fn);
 
 function links(provenChat: string | null) {
   return {
@@ -108,17 +121,34 @@ describe.each(messengerSenders)('$platform OTP sender', (sender) => {
     expect(s.requiresLinkedAccount).toBe(true);
   });
 
-  it('is unconfigured when the platform has no bot client', () => {
+  it('is unconfigured when the tenant has no bot', async () => {
     // An allowed-but-unconfigured channel must not be offered to a client;
-    // OtpChannelRegistry asks exactly this.
-    expect(
-      sender.build(prisma(), registry(null), links(null), localeService()).isConfigured(),
-    ).toBe(false);
-    expect(
+    // OtpChannelRegistry asks exactly this, and since F-066-i the answer is
+    // the asking tenant's, not the deployment's.
+    await expect(
+      inTenant(() =>
+        sender
+          .build(prisma(), registry(null), links(null), localeService())
+          .isConfigured(),
+      ),
+    ).resolves.toBe(false);
+    await expect(
+      inTenant(() =>
+        sender
+          .build(prisma(), registry(botClient()), links(null), localeService())
+          .isConfigured(),
+      ),
+    ).resolves.toBe(true);
+  });
+
+  it('is unconfigured when no tenant is in scope at all', async () => {
+    // Not a throw: `describe()` asks this while rendering a channel list, and
+    // a channel nobody can be identified for is simply not offered.
+    await expect(
       sender
         .build(prisma(), registry(botClient()), links(null), localeService())
         .isConfigured(),
-    ).toBe(true);
+    ).resolves.toBe(false);
   });
 
   it('sends to a contact-verified link of an existing user', async () => {
@@ -126,7 +156,7 @@ describe.each(messengerSenders)('$platform OTP sender', (sender) => {
     const p = prisma({ user: { id: 'u-1' }, link: { platformUserId: '5501' } });
     const s = sender.build(p, registry(client), links(null), localeService());
 
-    await s.send('09121112233', CODE, OtpPurpose.login, 'en');
+    await inTenant(() => s.send('09121112233', CODE, OtpPurpose.login, 'en'));
 
     expect(client.sendMessage).toHaveBeenCalledTimes(1);
     const [chatId, text] = client.sendMessage.mock.calls[0]!;
@@ -140,7 +170,7 @@ describe.each(messengerSenders)('$platform OTP sender', (sender) => {
     const p = prisma({ user: { id: 'u-1' }, link: { platformUserId: '5501' } });
     const s = sender.build(p, registry(botClient()), links(null), localeService());
 
-    await s.send('09121112233', CODE, OtpPurpose.login, 'en');
+    await inTenant(() => s.send('09121112233', CODE, OtpPurpose.login, 'en'));
 
     expect(p.linkedBotAccount.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -160,7 +190,7 @@ describe.each(messengerSenders)('$platform OTP sender', (sender) => {
     const store = links('9902');
     const s = sender.build(prisma({ user: null }), registry(client), store, localeService());
 
-    await s.send('09121112233', CODE, OtpPurpose.register_phone_verify, 'en');
+    await inTenant(() => s.send('09121112233', CODE, OtpPurpose.register_phone_verify, 'en'));
 
     expect(store.provenChat).toHaveBeenCalledWith(sender.platform, '09121112233');
     expect(client.sendMessage.mock.calls[0]![0]).toBe('9902');
@@ -175,7 +205,7 @@ describe.each(messengerSenders)('$platform OTP sender', (sender) => {
       localeService(),
     );
 
-    await s.send('09121112233', CODE, OtpPurpose.login, 'en');
+    await inTenant(() => s.send('09121112233', CODE, OtpPurpose.login, 'en'));
 
     expect(client.sendMessage.mock.calls[0]![0]).toBe('9902');
   });
@@ -185,7 +215,7 @@ describe.each(messengerSenders)('$platform OTP sender', (sender) => {
     const s = sender.build(prisma(), registry(client), links(null), localeService());
 
     await expect(
-      s.send('09121112233', CODE, OtpPurpose.login, 'en'),
+      inTenant(() => s.send('09121112233', CODE, OtpPurpose.login, 'en')),
     ).rejects.toMatchObject({ message: sender.notLinked });
     expect(client.sendMessage).not.toHaveBeenCalled();
   });
@@ -194,10 +224,10 @@ describe.each(messengerSenders)('$platform OTP sender', (sender) => {
     const p = prisma({ user: { id: 'u-1' }, link: { platformUserId: '5501' } });
     const s = sender.build(p, registry(null), links(null), localeService());
 
-    await expect(s.send('09121112233', CODE, OtpPurpose.login, 'en')).rejects.toMatchObject(
+    await expect(inTenant(() => s.send('09121112233', CODE, OtpPurpose.login, 'en'))).rejects.toMatchObject(
       { message: sender.notConfigured },
     );
-    expect(p.user.findUnique).not.toHaveBeenCalled();
+    expect(p.user.findFirst).not.toHaveBeenCalled();
   });
 
   it('renders the code in the requested language', async () => {
@@ -212,7 +242,7 @@ describe.each(messengerSenders)('$platform OTP sender', (sender) => {
       loc,
     );
 
-    await s.send('09121112233', CODE, OtpPurpose.login, 'fa');
+    await inTenant(() => s.send('09121112233', CODE, OtpPurpose.login, 'fa'));
 
     expect(loc.getNamespace).toHaveBeenCalledWith('fa', 'notifications');
     expect(client.sendMessage.mock.calls[0]![1]).toBe('کد ورود شما: 123456');
@@ -230,7 +260,7 @@ describe.each(messengerSenders)('$platform OTP sender', (sender) => {
       localeService(),
     );
 
-    await expect(s.send('09121112233', CODE, OtpPurpose.login, 'en')).rejects.toThrow(
+    await expect(inTenant(() => s.send('09121112233', CODE, OtpPurpose.login, 'en'))).rejects.toThrow(
       'chat not found',
     );
   });
@@ -277,7 +307,7 @@ describe('SMS OTP sender', () => {
   it('refuses clearly instead of failing silently when unconfigured', async () => {
     const s = new SmsOtpSender(env({ SMS_API_KEY: '' }), localeService());
 
-    await expect(s.send('09121112233', CODE, OtpPurpose.login, 'en')).rejects.toBeInstanceOf(
+    await expect(inTenant(() => s.send('09121112233', CODE, OtpPurpose.login, 'en'))).rejects.toBeInstanceOf(
       BadRequestException,
     );
   });
@@ -289,7 +319,7 @@ describe('SMS OTP sender', () => {
     const sendSMS = smsProvider({ ok: true, msg: 'sent' });
     const s = withProvider(new SmsOtpSender(env(), localeService()), sendSMS);
 
-    await s.send('09121112233', CODE, OtpPurpose.login, 'en');
+    await inTenant(() => s.send('09121112233', CODE, OtpPurpose.login, 'en'));
 
     const [payload, sender] = sendSMS.mock.calls[0]!;
     expect(payload.msg).toContain('{{code}}');
@@ -302,7 +332,7 @@ describe('SMS OTP sender', () => {
     const sendSMS = smsProvider({ ok: false, msg: 'InvalidNumber' });
     const s = withProvider(new SmsOtpSender(env(), localeService()), sendSMS);
 
-    await expect(s.send('09121112233', CODE, OtpPurpose.login, 'en')).rejects.toMatchObject({
+    await expect(inTenant(() => s.send('09121112233', CODE, OtpPurpose.login, 'en'))).rejects.toMatchObject({
       message: 'otp.smsSendFailed',
     });
   });
@@ -312,7 +342,7 @@ describe('SMS OTP sender', () => {
     const loc = localeService({ otp: { title: { [OtpPurpose.login]: 'کد ورود' } } });
     const s = withProvider(new SmsOtpSender(env(), loc), sendSMS);
 
-    await s.send('09121112233', CODE, OtpPurpose.login, 'fa');
+    await inTenant(() => s.send('09121112233', CODE, OtpPurpose.login, 'fa'));
 
     expect(loc.getNamespace).toHaveBeenCalledWith('fa', 'notifications');
     expect(sendSMS.mock.calls[0]![0].msg).toContain('کد ورود');

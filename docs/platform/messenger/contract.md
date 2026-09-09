@@ -2,8 +2,8 @@
 id: messenger
 layer: platform
 status: active
-version: 3
-updated: 2026-09-06
+version: 4
+updated: 2026-09-09
 ---
 
 # messenger — contract
@@ -16,21 +16,26 @@ below into code, import `capabilitiesOf(platform)`.
 
 | file | holds |
 |---|---|
-| `bot-client.registry.ts` | env -> one client per platform; token, username, webhook secret, deep-link base |
+| `bot-integration.ts` | the `BotIntegration` shape and the `BotIntegrationDirectory` port — where integrations and their credentials come from |
+| `bot-client.registry.ts` | one client per `BotIntegration`, tokens from the vault through that port |
 | `telegram-like-bot.client.ts` | the driver: `sendMessage`, `requestContact`, `deleteMessage`, `answerCallbackQuery`, webhook get/set |
 | `capabilities.ts` | the table below, in code, each entry carrying `verifiedOn` + `source` |
 | `bot-view.ts` | the `BotView` types (owned by `bot-app`, declared here so both can import them) |
 | `renderer.ts` | `BotView` -> payload, with the degradation policy and its log line |
 | `deep-link.ts` | the per-platform link shape and the `?start=` payload parser |
 
-Not built yet: media sending (`F-308`), payments (`F-304`), per-tenant branding
-(`F-317`), and the tenant Credential Vault lookup below — tokens still come from
-env, one bot per platform.
+Not built yet: media sending (`F-308`), payments (`F-304`) and per-tenant
+branding (`F-317`).
 
 ## TL;DR
 
-One driver per messenger. Everything above this unit speaks `BotView` and asks
-`capabilities`; nothing above it names Telegram or Bale.
+One driver per **bot**, one renderer per messenger. Everything above this unit
+speaks `BotView` and asks `capabilities`; nothing above it names Telegram or
+Bale, and nothing above it ever holds a token.
+
+See [contract.integrations.md](contract.integrations.md) for how a
+`BotIntegration` becomes a client — the registry's shape since F-066-i, and the
+port the two consuming apps bind differently.
 
 ## The two shapes this unit exposes
 
@@ -138,12 +143,16 @@ list and the translations (`BotWebhookRegistrar`).
 
 ## Bot token resolution
 
-`tenant.TenantBotIntegration` holds `botTokenEncrypted`, `botUsername` and a
-`@@unique webhookPath` per `(tenantId, platform)`. This unit resolves *which
-credential* an inbound update belongs to and asks `tenant` for it through
-`tenant`'s contract — the Credential Vault. It never reads
-`tenant.TenantBotIntegration` directly (§8), and it never logs or returns a
-token.
+`automation.BotIntegration` holds `botUsername`, a `@@unique webhookPath`, a
+`role`, and a `credentialRef` — the vault *label* both the token and the webhook
+secret are stored under, never either value (F-066-h; the old
+`tenant.TenantBotIntegration` and its `botTokenEncrypted` column are gone). This
+unit resolves *which credential* an inbound update belongs to, then asks
+`tenant` for the value through the Credential Vault. It reads neither unit's
+tables directly (§8), and it never logs or returns a token.
+
+The role matters to a caller: C-05 puts OTP and transactional alerts on the
+`primary` bot, and exactly one row per `(tenantId, platform)` may hold it.
 
 ## Consumers
 
@@ -159,24 +168,10 @@ a `platform/` unit rather than part of `bot-app` (§1 placement test).
 
 ## Webhook addressing
 
-**One unguessable path per bot** (user decision, 2026-09-05; ADR-0009). This is
-what `tenant.TenantBotIntegration.webhookPath @unique` already models, and the
-live `F-0203` route `POST /auth/bots/:platform/webhook/:secret` is already
-per-secret — the same shape, so it converges rather than breaking (§8).
-
-Why per bot and not one shared door: a shared endpoint is one failure point for
-every reseller at once, and a token or ban problem on one brand's bot becomes an
-outage on all of them. Per path, the blast radius is one tenant.
-
-Consequences this unit must honour:
-
-- The path **is** the credential lookup. Resolving it yields the tenant and the
-  platform; nothing about the sender is trusted before that.
-- An unknown path answers **404**, never a hint. A path is unguessable or it is
-  not a boundary.
-- Handling is best-effort and answers **200** once the path is known, so the
-  platform never redelivers — the pattern the live `F-0203` webhook already sets.
-- Rotating a bot token rotates the path with it, so a leaked path dies too.
+**One unguessable path per bot** (user decision, 2026-09-05; ADR-0009), minted
+and rebuilt by this unit. See [contract.webhook.md](contract.webhook.md) for the
+addressing rules, the secret-token check (`F-321`) and what a rotation
+guarantees (`F-322`).
 
 ## Open
 

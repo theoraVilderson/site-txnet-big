@@ -175,9 +175,11 @@ export class TelegramLikeBotClient {
   /**
    * Points the bot's updates at `url`. `secretToken` is a Telegram-only extra
    * header check; Bale ignores the field and is guarded by the secret in the
-   * path alone.
+   * path alone. It is optional because a tenant may have none — the 32-byte
+   * path is the credential either way — and omitting the field is not the same
+   * as sending an empty one, which would clear a secret already registered.
    */
-  async setWebhook(url: string, secretToken: string): Promise<boolean> {
+  async setWebhook(url: string, secretToken?: string): Promise<boolean> {
     const result = await this.call<TelegramLikeSendResult>('setWebhook', {
       url,
       secret_token: secretToken,

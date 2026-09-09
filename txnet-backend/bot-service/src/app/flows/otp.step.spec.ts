@@ -1,3 +1,4 @@
+import { aBotIntegration } from '@txnet-backend/messenger';
 import { AuthApiClient } from '../auth-api/auth-api.client';
 import { OtpChannelDescriptor } from '../auth-api/auth-api.types';
 import { ChatContext, NavState } from '../conversation/nav.types';
@@ -10,7 +11,13 @@ const CHANNELS: OtpChannelDescriptor[] = [
 ];
 
 function ctxFor(platform: 'telegram' | 'bale'): ChatContext {
-  return { platform, chatId: '5501', senderId: 42, lang: 'fa' };
+  return {
+    integration: aBotIntegration({ platform }),
+    platform,
+    chatId: '5501',
+    senderId: 42,
+    lang: 'fa',
+  };
 }
 
 const state: NavState = { flow: 'login', step: 'login.channel', data: { phoneNumber: '09121112233' } };

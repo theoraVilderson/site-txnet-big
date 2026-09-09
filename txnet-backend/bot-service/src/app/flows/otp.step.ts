@@ -7,7 +7,12 @@ import {
   OtpChannelName,
   OtpRequestResult,
 } from '../auth-api/auth-api.types';
-import { ChatContext, FlowResult, NavState } from '../conversation/nav.types';
+import {
+  callContextOf,
+  ChatContext,
+  FlowResult,
+  NavState,
+} from '../conversation/nav.types';
 import { ACTIONS, ask, say, view } from './views';
 
 export const CHANNEL_ACTION_PREFIX = 'channel:';
@@ -45,11 +50,7 @@ export class OtpStep {
    * SMS-off, messenger-off deployment must say so rather than hang.
    */
   async channelView(ctx: ChatContext): Promise<BotView | null> {
-    const result = await this.api.otpChannels({
-      chatId: ctx.chatId,
-      lang: ctx.lang,
-      platform: ctx.platform,
-    });
+    const result = await this.api.otpChannels(callContextOf(ctx));
     const channels = result.ok ? (result.data?.channels ?? []) : [];
     if (!channels.length) return null;
 
@@ -126,7 +127,7 @@ export class OtpStep {
           chatId: ctx.chatId,
           startToken: data.linkToken,
         },
-        { chatId: ctx.chatId, lang: ctx.lang, platform: ctx.platform },
+        callContextOf(ctx),
       );
       if (!resolved.ok || !resolved.data) {
         return { view: say('link.failed', { raw: resolved.msg }), nextState: next };
@@ -190,7 +191,7 @@ export class OtpStep {
     }
     const status = await this.api.linkStatus(
       { linkToken: state.linkToken },
-      { chatId: ctx.chatId, lang: ctx.lang, platform: ctx.platform },
+      callContextOf(ctx),
     );
     const linked = status.ok && status.data?.state === 'linked';
     if (!linked) {
@@ -230,7 +231,7 @@ export class OtpStep {
         senderId: ctx.senderId ?? '',
         contact: ctx.contact,
       },
-      { chatId: ctx.chatId, lang: ctx.lang, platform: ctx.platform },
+      callContextOf(ctx),
     );
     if (!outcome.ok || !outcome.data) {
       return { view: say('link.failed', { raw: outcome.msg }), nextState: state };

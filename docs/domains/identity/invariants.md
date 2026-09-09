@@ -2,7 +2,7 @@
 id: identity
 layer: domain
 status: active
-updated: 2026-09-05
+updated: 2026-09-09
 ---
 
 # Invariants — identity
@@ -20,10 +20,10 @@ Statements that must be true at all times. **Outrank every feature request.**
 | 7 | Impersonation requires a target strictly lower in role rank than the admin, an active target, and a reason note >= 10 chars; it is always written to `admin_audit_log`. The impersonation row, the session row and the audit row commit in **one** transaction, and the session's Redis marker is written only after that commit — a failed audit write leaves no session behind | `ImpersonationService` | privilege escalation, unaudited access |
 | 8 | Sessions in Postgres are the record; the Redis marker is only the liveness cache — a missing marker means "revoked", never "unknown, allow" | `AuthGuard`, `auth-handler` | revoked session accepted |
 | 9 | `isSystemRole` roles cannot be deleted | schema intent (`Role.isSystemRole`) — **not yet constraint-enforced** | RBAC lockout |
-| 10 | OTP: at most one active code per (phone, purpose); >5 attempts destroys it | `OtpStore` Lua script + `setNx` lock | brute force, code flooding |
+| 10 | OTP: at most one active code per (tenant, phone, purpose); >5 attempts destroys it | `OtpStore` Lua script + `setNx` lock, over keys carrying `<tenantId>` (ADR-0023, F-065-c) | brute force, code flooding — and, before the tenant segment, one reseller's code evicting another's for the same number |
 | 13 | The failed-login counter is keyed on the **normalized** identifier — the same value the account lookup uses — so one account is one lock regardless of how the phone number was spelled | `AuthService.loginWithPassword` | the 10/900s lock multiplied by every accepted phone format |
-| 12 | A `linked_bot_account` may only carry an OTP once `contactVerifiedAt` is set, and it is only set from a contact whose `contact.user_id` equals the sender's id and whose phone equals the number the code was requested for. One `(platform, platformUserId)` belongs to at most one User | `BotLinkService.handleContact` + `@@unique([platform, platformUserId])`; senders filter on `contactVerifiedAt` | a forged contact card redirects someone else's OTP to the attacker's chat |
-| 11 | Register creates no `user` row until phone OTP verification succeeds; the submitted profile + password hash live only in Redis (`register:pending:<phone>`) until then | `RegisterService.register` / `.verifyPhone` | unclaimed/abandoned "semi-active" accounts occupying a username or phone number |
+| 12 | A `linked_bot_account` may only carry an OTP once `contactVerifiedAt` is set, and it is only set from a contact whose `contact.user_id` equals the sender's id and whose phone equals the number the code was requested for. One `(tenantId, platform, platformUserId)` belongs to at most one User — **within a tenant**, not across the platform (F-066-l): the chat id is the messenger's, so the same person is the same id in every reseller's bot, and a platform-wide rule would let whoever linked first hold the chat against all the others | `BotLinkService.handleContact` + `@@unique([tenantId, platform, platformUserId])`, scoped by `withTenant`; senders filter on `contactVerifiedAt` | a forged contact card redirects someone else's OTP to the attacker's chat — and, unscoped, one reseller's link silently answering another's `/start` |
+| 11 | Register creates no `user` row until phone OTP verification succeeds; the submitted profile + password hash live only in Redis (`register:pending:<tenantId>:<phone>`) until then | `RegisterService.register` / `.verifyPhone` | unclaimed/abandoned "semi-active" accounts occupying a username or phone number |
 
 ## How to test
 
@@ -43,6 +43,8 @@ Statements that must be true at all times. **Outrank every feature request.**
 8. `BotLinkService` test: a contact whose `user_id` differs from `message.from.id`
    leaves `linked_bot_account` untouched and the link `failed`; the same contact
    with a matching id, but a phone other than the requested one, is also refused.
+   A link written with a tenant in scope carries that tenant, and the write
+   fails outright without one (`with-tenant.spec.ts`, `bot-link.service.spec.ts`).
 9. `TelegramOtpSender` test: a `linked_bot_account` row with
    `contactVerifiedAt = null` -> `otp.telegramNotLinked`, no message sent.
 

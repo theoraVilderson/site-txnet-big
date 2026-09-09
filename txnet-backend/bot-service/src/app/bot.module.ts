@@ -14,6 +14,7 @@ import { RegisterFlow } from './flows/register.flow';
 import { AccountSwitcher } from './session/account-switcher';
 import { BotSessionStore } from './session/bot-session.store';
 import { ChatAccess } from './session/chat-access';
+import { BotIntegrationModule } from './webhook/bot-integration.module';
 import { BotWebhookRegistrar } from './webhook/bot-webhook.registrar';
 import { UpdateNormalizer } from './webhook/update.normalizer';
 import { WebhookController } from './webhook/webhook.controller';
@@ -24,7 +25,14 @@ import { WebhookController } from './webhook/webhook.controller';
  * (ADR-0009).
  */
 @Module({
-  imports: [MessengerModule, AuthApiModule],
+  imports: [
+    // This service owns no schema and no vault, so `messenger`'s integration
+    // directory is answered by `auth-service` over the service seam (F-320,
+    // ADR-0011).
+    BotIntegrationModule,
+    MessengerModule.forRoot({ imports: [BotIntegrationModule] }),
+    AuthApiModule,
+  ],
   controllers: [WebhookController],
   providers: [
     UpdateNormalizer,

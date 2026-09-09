@@ -1,12 +1,15 @@
 import { ConfigService } from '@nestjs/config';
 import {
+  aBotIntegration,
   BOT_PLATFORMS,
   BotClientRegistry,
+  BotIntegration,
   BotPlatform,
   TelegramLikeBotClient,
   WebhookInfo,
 } from '@txnet-backend/messenger';
 import { BotCopy } from '../locale/bot-copy';
+import { AuthApiBotIntegrationDirectory } from './bot-integration.directory';
 import { BotWebhookRegistrar } from './bot-webhook.registrar';
 
 /**
@@ -30,6 +33,26 @@ import { BotWebhookRegistrar } from './bot-webhook.registrar';
 const SECRETS: Record<BotPlatform, string | undefined> = {
   telegram: 'tg-secret',
   bale: 'bale-secret',
+};
+
+/** One integration per platform — a path each, so a URL names one bot. */
+const PATHS: Record<BotPlatform, string> = {
+  telegram: 't'.repeat(43),
+  bale: 'b'.repeat(43),
+};
+
+const INTEGRATIONS: Record<BotPlatform, BotIntegration> = {
+  telegram: aBotIntegration({
+    id: 'i-telegram',
+    platform: 'telegram',
+    webhookPath: PATHS.telegram,
+  }),
+  bale: aBotIntegration({
+    id: 'i-bale',
+    platform: 'bale',
+    botUsername: 'txnet_bale_bot',
+    webhookPath: PATHS.bale,
+  }),
 };
 
 type FakeClient = {
@@ -73,9 +96,15 @@ function build({
   ) as Record<BotPlatform, FakeClient | null>;
 
   const bots = {
-    client: jest.fn((p: BotPlatform) => resolved[p]),
-    webhookSecret: jest.fn((p: BotPlatform) => secrets[p]),
+    client: jest.fn(async (i: BotIntegration) => resolved[i.platform]),
   } as unknown as BotClientRegistry;
+
+  const recordRegistration = jest.fn(async () => undefined);
+  const directory = {
+    registrable: jest.fn(async () => BOT_PLATFORMS.map((p) => INTEGRATIONS[p])),
+    webhookSecret: jest.fn(async (i: BotIntegration) => secrets[i.platform] ?? null),
+    recordRegistration,
+  } as unknown as AuthApiBotIntegrationDirectory;
 
   // The language argument is what a wrong command menu turns on, so make it
   // visible in the assertion instead of translating anything.
@@ -84,14 +113,15 @@ function build({
   } as unknown as BotCopy;
 
   return {
-    registrar: new BotWebhookRegistrar(config, bots, copy),
+    registrar: new BotWebhookRegistrar(config, bots, directory, copy),
     clients: resolved,
+    recordRegistration,
   };
 }
 
-/** What the registrar should have pointed `platform` at. */
+/** What the registrar should have pointed `platform`'s bot at. */
 function expectedUrl(base: string, platform: BotPlatform): string {
-  return `${base}/api/bot/${platform}/webhook/${SECRETS[platform]}`;
+  return `${base}/api/bots/${platform}/${PATHS[platform]}`;
 }
 
 describe('BotWebhookRegistrar', () => {
@@ -257,7 +287,11 @@ describe('BotWebhookRegistrar', () => {
       expect(clients.bale?.setWebhook).toHaveBeenCalled();
     });
 
-    it('is skipped when it has a client but no webhook secret', async () => {
+    it('still registers a bot that has no webhook secret', async () => {
+      // The 32-byte path is the credential on its own; a secret token is the
+      // second factor Telegram offers, not the thing that makes a bot
+      // addressable. Refusing to register without one would leave the bot
+      // silent (F-321).
       const { registrar, clients } = build({
         env: { DOMAIN_NAME: 'txnet.io' },
         secrets: { ...SECRETS, telegram: undefined },
@@ -265,8 +299,41 @@ describe('BotWebhookRegistrar', () => {
 
       await registrar.onApplicationBootstrap();
 
-      expect(clients.telegram?.setWebhook).not.toHaveBeenCalled();
-      expect(clients.bale?.setWebhook).toHaveBeenCalled();
+      expect(clients.telegram?.setWebhook).toHaveBeenCalledWith(
+        expectedUrl('https://api.txnet.io', 'telegram'),
+        undefined,
+      );
+    });
+  });
+
+  describe('what the tenant is told (F-321)', () => {
+    it('records a failure when the current webhook could not be read', async () => {
+      const { registrar, recordRegistration } = build({
+        env: { DOMAIN_NAME: 'txnet.io' },
+        clients: { telegram: fakeClient(null) },
+      });
+
+      await registrar.onApplicationBootstrap();
+
+      expect(recordRegistration).toHaveBeenCalledWith(
+        INTEGRATIONS.telegram,
+        false,
+      );
+      expect(recordRegistration).toHaveBeenCalledWith(INTEGRATIONS.bale, true);
+    });
+
+    it('records a failure when the bot has no usable token', async () => {
+      const { registrar, recordRegistration } = build({
+        env: { DOMAIN_NAME: 'txnet.io' },
+        clients: { telegram: null },
+      });
+
+      await registrar.onApplicationBootstrap();
+
+      expect(recordRegistration).toHaveBeenCalledWith(
+        INTEGRATIONS.telegram,
+        false,
+      );
     });
   });
 

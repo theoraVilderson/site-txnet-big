@@ -1013,13 +1013,19 @@ automation.BotIntegration
   tenantId, platform(telegram|bale), botUsername,
   role(primary|sales|support|secondary),
   credentialRef,          -- a vault reference, not a token column
-  webhookSecret, webhookPath,
+  webhookPath,            -- the webhook secret is a vault row under the same
+                          -- credentialRef, not a column (ADR-0026, F-066-h)
   status(pending|active|disabled|error), lastErrorAt, capabilities
     unique (tenantId, platform, botUsername)
     partial unique (tenantId, platform) where role = 'primary'
 ```
 
 **C-05:** the `primary` bot carries OTP and transactional alerts. `sales` / `support` / `secondary` bots exist for campaigns, secondary brands, and spreading ban risk (F-315).
+
+| id | feature | status | depends_on | note |
+| --- | --- | --- | --- | --- |
+| F-315 | Several bots per tenant, with roles: primary, sales, support, secondary | new | — | C-05; sales/support/secondary spread ban risk and serve secondary brands |
+| F-316 | `automation.BotIntegration` carries a `credentialRef` — a vault reference, not a token column | changed | F-315 F-1213 | C-05; replaces `tenant.TenantBotIntegration.botTokenEncrypted` |
 
 ### 10.2 Webhook Architecture
 
@@ -1030,6 +1036,12 @@ automation.BotIntegration
 - Rotating the webhook path re-registers upstream, and the old path **immediately** stops responding
 
 **Webhook, never polling.** Fifty resellers means fifty bots, and fifty polling loops would mean fifty long-lived outbound connections — a scale this network can't keep reliable.
+
+| id | feature | status | depends_on | note |
+| --- | --- | --- | --- | --- |
+| F-320 | The tenant is resolved from a random 32-byte `webhookPath`, never from the message body | new | F-316 | one door per bot, so the blast radius is one tenant |
+| F-321 | The platform performs `setWebhook` / `deleteWebhook` on the tenant's behalf; `status` and `lastErrorAt` are visible to the tenant | new | F-320 | the `X-Telegram-Bot-Api-Secret-Token` header is verified on every request |
+| F-322 | Rotating the webhook path re-registers upstream, and the old path immediately stops responding | new | F-321 | — |
 
 ### 10.3 Telegram/Bale Abstraction Layer
 
@@ -1074,6 +1086,10 @@ With multiple bots (C-05), linking is scoped at the **tenant** level, not the bo
 ### 10.6 Bot Token Security
 
 Bot tokens live in the **vault** and are never logged, never returned by any API, and once stored are **never rendered in the admin UI** — only "set / not set" plus a fingerprint.
+
+| id | feature | status | depends_on | note |
+| --- | --- | --- | --- | --- |
+| F-323 | A bot token lives only in the vault: never logged, never returned by any API, never rendered in the admin UI | new | F-1213 | the UI shows "set / not set" plus a fingerprint |
 
 ---
 
@@ -1624,6 +1640,15 @@ AdminAuditLog(tenantId, resellerPath, adminId, action, targetEntityType,
 5. **Integrations** — a tenant's gateway/SMS/bot/AI credentials are its own; a failure stays confined to that tenant
 6. **Rate limiting** — per-tenant buckets at the edge
 
+| id | feature | status | depends_on | note |
+| --- | --- | --- | --- | --- |
+| F-1202 | Row-Level Security on `(tenantId, resellerPath)`, plus a separate role and connection pool for cross-tenant admin reads | new | — | layer 1; bypassing RLS on the normal pool is not possible |
+| F-1203 | A tenant-scoped Prisma extension — every query passes through `withTenant` | new | — | layer 2 |
+| F-1204 | An automated harness that measures isolation | new | F-1203 | layer 3; the layer that still works after code is written by someone who never read this |
+| F-1205 | A per-tenant queue concurrency cap | later | — | layer 4; there is no queue in use yet |
+| F-1206 | Per-tenant rate-limit buckets at the edge | new | — | layer 6 |
+| F-1207 | A tenant's gateway / SMS / bot / AI credentials are its own; a failure stays confined to that tenant | new | F-1213 | layer 5 |
+
 ### 20.3 Tenant Detection
 
 > **C-01 — the corrected chain:**
@@ -1636,6 +1661,14 @@ AdminAuditLog(tenantId, resellerPath, adminId, action, targetEntityType,
 - An unknown or unverified host returns a **neutral 404 at the edge**. It must not render the platform's own site, must not reveal that a platform exists, and must **never fall back to a platform tenant**
 - The `host → tenantId` cache in Redis is **explicitly** invalidated on creation, verification, standby switchover, and domain deletion — not merely by TTL. A stale mapping after a domain switch is a cross-tenant leak, not just a stale page
 - A `purpose = subscription` domain resolves to the same tenant, but **no panel route is served on it** — a path allowlist at the edge
+
+| id | feature | status | depends_on | note |
+| --- | --- | --- | --- | --- |
+| F-1208 | The corrected detection chain: verified custom domain, then `X-Tenant-Id` on platform-staff tokens only | changed | — | C-01; "platform subdomain" was removed from the chain |
+| F-1209 | No code outside the resolver reads the `Host` header — one reader, one decision, one context object | new | F-1208 | — |
+| F-1210 | An unknown or unverified host returns a neutral 404 at the edge and never falls back to a platform tenant | changed | F-1208 | C-01; it must not reveal that a platform exists |
+| F-1211 | The `host → tenantId` cache is explicitly invalidated on creation, verification, switchover and deletion | new | F-1208 | a stale mapping after a domain switch is a cross-tenant leak, not a stale page |
+| F-1212 | A `purpose = subscription` domain resolves the tenant but serves no panel route | new | F-1208 | a path allowlist at the edge |
 
 ### 20.4 Credential Vault
 
@@ -1657,6 +1690,14 @@ TenantDek(tenantId, wrappedKey, kekId, createdAt, retiredAt)
 
 1. No API response, log line, or audit row ever contains the vault's plaintext. The admin UI only ever returns `{ configured, fingerprint, lastUsedAt, status }` — **including for the highest-ranking role**
 2. No tenant-owned credential is ever read from an environment variable. A service **refuses to boot** if an environment variable matches a tenant credential type — because a leftover `TELEGRAM_BOT_TOKEN` or `OPENAI_API_KEY` in `.env` is exactly how the no-fallback rule accidentally gets violated
+
+| id | feature | status | depends_on | note |
+| --- | --- | --- | --- | --- |
+| F-1213 | Envelope encryption: one DEK per tenant, wrapped by a KEK held outside the database | new | — | AES-256-GCM, a per-record IV, a stored auth tag |
+| F-1214 | A truncated-hash fingerprint per credential, and versioned rotation with a grace window | new | F-1213 | answers "is this the same value?" without revealing it |
+| F-1215 | Every decryption writes an audit row — who, which tenant, which type, which caller | new | F-1213 | never the value itself |
+| F-1216 | No tenant-owned credential is read from an environment variable; a service refuses to boot when one matches a credential type | new | F-1213 | a leftover `TELEGRAM_BOT_TOKEN` is exactly how the no-fallback rule gets violated |
+| F-1217 | An expiry date is supported on every credential | new | F-1213 | — |
 
 ### 20.5 The 360° User View
 

@@ -72,10 +72,10 @@ model User {
   id                     String     @id @default(uuid()) @db.Uuid
   tenantId               String     @db.Uuid // FK -> tenant.Tenant.id | کلید پارتیشن اصلی چندمستأجری؛ پیش‌فرض اپلیکیشنی = رکورد platform_owner
   fullName               String
-  username               String?    @unique
+  username               String?
   /// E.164, always — `+989123456789`. The canonical stored form for every
   /// phone column in this schema; see ADR-0018.
-  phoneNumber            String?    @unique
+  phoneNumber            String?
   phoneVerifiedAt        DateTime? // تا زمانی که null است، حساب نیمه‌فعال محسوب می‌شود
   passwordHash           String // SENSITIVE — never default-select
   roleId                 String     @db.Uuid
@@ -110,6 +110,12 @@ model User {
   deviceFingerprints   DeviceFingerprint[]
   otpCodes             OtpCode[]
 
+  /// ADR-0023: a person is identified *within* a tenant. Two resellers selling
+  /// to the same human are two rows, in two tenants, and neither can see the
+  /// other's. Every lookup by these columns is scoped by the ambient tenant
+  /// (`withTenant`, ADR-0024), so the composite is the shape the query has.
+  @@unique([tenantId, username])
+  @@unique([tenantId, phoneNumber])
   @@index([tenantId])
   @@map("user")
   @@schema("identity")
@@ -238,6 +244,12 @@ model OtpCode {
 /// (به BaleOtpSender / TelegramOtpSender در auth-service مراجعه کنید).
 model LinkedBotAccount {
   id             String         @id @default(uuid()) @db.Uuid
+  /// The tenant this link belongs to, denormalized from `user.tenantId` so the
+  /// uniqueness of a chat id can be expressed per tenant (F-066-l). Held as a
+  /// plain column, like `automation.BotIntegration.tenantId` — the row's tenant
+  /// is the one its user already has, and every write goes through the ambient
+  /// scope (ADR-0024), which is what keeps the two equal.
+  tenantId       String         @db.Uuid
   userId         String         @db.Uuid
   platform       SocialPlatform
   platformUserId String // Chat ID
@@ -256,9 +268,13 @@ model LinkedBotAccount {
 
   // برای جستجوی سریع «آیا این شماره به bale/telegram لینک شده؟» توسط OTP senders
   @@unique([userId, platform])
-  // One messenger account belongs to at most one User: without this, a shared
-  // chat id could deliver another account's OTP.
-  @@unique([platform, platformUserId])
+  // One messenger account belongs to at most one User **within a tenant**:
+  // without this, a shared chat id could deliver another account's OTP. Scoped
+  // by tenant since F-066-l — the chat id is issued by the messenger, so the
+  // same person is the same id in every reseller's bot, and a platform-wide
+  // constraint would let whichever reseller they linked with first block all
+  // the others. Catalog 10.5 scopes linking at the tenant, not at the bot.
+  @@unique([tenantId, platform, platformUserId])
   @@map("linked_bot_account")
   @@schema("identity")
 }

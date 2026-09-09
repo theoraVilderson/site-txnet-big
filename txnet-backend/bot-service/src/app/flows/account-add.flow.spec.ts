@@ -1,3 +1,4 @@
+import { aBotIntegration } from '@txnet-backend/messenger';
 import { ConfigService } from '@nestjs/config';
 import { AuthApiClient } from '../auth-api/auth-api.client';
 import { ChatContext, NavState } from '../conversation/nav.types';
@@ -8,7 +9,7 @@ import { AccountAddFlow } from './account-add.flow';
 import { OtpStep } from './otp.step';
 import { PhoneNumbers } from './phone-number';
 
-const ctx: ChatContext = { platform: 'telegram', chatId: '5501', senderId: 42, lang: 'fa' };
+const ctx: ChatContext = { integration: aBotIntegration(), platform: 'telegram', chatId: '5501', senderId: 42, lang: 'fa' };
 const ok = <T>(data: T) => ({ ok: true, msg: 'ok', data });
 
 const at = (step: string, data: Record<string, string> = {}): NavState => ({
@@ -181,7 +182,7 @@ describe('AccountAddFlow', () => {
       null,
     );
 
-    expect(sessions.save).toHaveBeenLastCalledWith('telegram', '5501', 'r-new');
+    expect(sessions.save).toHaveBeenLastCalledWith(ctx.integration, '5501', 'r-new');
   });
 
   it('falls back to the plain added message when the switch is refused', async () => {
@@ -207,7 +208,7 @@ describe('AccountAddFlow', () => {
     // The chat is still the account it was: nothing overwrote its session
     // beyond the ordinary refresh rotation.
     expect(sessions.save).toHaveBeenCalledTimes(1);
-    expect(sessions.save).toHaveBeenCalledWith('telegram', '5501', 'r-next');
+    expect(sessions.save).toHaveBeenCalledWith(ctx.integration, '5501', 'r-next');
   });
 
   it('keeps the user on the code step when auth-api refuses the proof', async () => {

@@ -39,170 +39,170 @@ function registry(
 }
 
 describe('OtpChannelRegistry — reading OTP_ALLOWED_CHANNELS', () => {
-  it('defaults to SMS only when the variable is unset', () => {
+  it('defaults to SMS only when the variable is unset', async () => {
     const r = registry({});
 
     expect(r.isAllowed(OtpChannel.sms)).toBe(true);
     expect(r.isAllowed(OtpChannel.telegram)).toBe(false);
     expect(r.isAllowed(OtpChannel.bale)).toBe(false);
-    expect(r.available()).toEqual([OtpChannel.sms]);
+    expect(await r.available()).toEqual([OtpChannel.sms]);
   });
 
   it.each([
     ['a comma-separated string', 'sms,telegram'],
     ['an already-parsed array', ['sms', 'telegram']],
     ['a string with padding', ' sms , telegram '],
-  ])('accepts %s', (_label, raw) => {
+  ])('accepts %s', async (_label, raw) => {
     const r = registry({ OTP_ALLOWED_CHANNELS: raw });
 
-    expect(r.available()).toEqual([OtpChannel.sms, OtpChannel.telegram]);
+    expect(await r.available()).toEqual([OtpChannel.sms, OtpChannel.telegram]);
   });
 
-  it('keeps the operator ordering rather than a hardcoded one', () => {
+  it('keeps the operator ordering rather than a hardcoded one', async () => {
     const r = registry({ OTP_ALLOWED_CHANNELS: 'bale,telegram,sms' });
 
-    expect(r.available()).toEqual([
+    expect(await r.available()).toEqual([
       OtpChannel.bale,
       OtpChannel.telegram,
       OtpChannel.sms,
     ]);
-    expect(r.defaultChannel()).toBe(OtpChannel.bale);
+    expect(await r.defaultChannel()).toBe(OtpChannel.bale);
   });
 
-  it('drops a name that is not a channel and keeps the rest', () => {
+  it('drops a name that is not a channel and keeps the rest', async () => {
     const warn = jest
       .spyOn(require('@nestjs/common').Logger.prototype, 'warn')
       .mockImplementation(() => undefined);
 
     const r = registry({ OTP_ALLOWED_CHANNELS: 'sms,whatsapp,telegram' });
 
-    expect(r.available()).toEqual([OtpChannel.sms, OtpChannel.telegram]);
+    expect(await r.available()).toEqual([OtpChannel.sms, OtpChannel.telegram]);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('whatsapp'));
     warn.mockRestore();
   });
 
-  it('is empty, not SMS, when the variable lists nothing usable', () => {
+  it('is empty, not SMS, when the variable lists nothing usable', async () => {
     const r = registry({ OTP_ALLOWED_CHANNELS: 'whatsapp' });
 
-    expect(r.available()).toEqual([]);
-    expect(r.defaultChannel()).toBeNull();
+    expect(await r.available()).toEqual([]);
+    expect(await r.defaultChannel()).toBeNull();
   });
 
-  it('allows a messengers-only deployment with no SMS at all', () => {
+  it('allows a messengers-only deployment with no SMS at all', async () => {
     const r = registry({ OTP_ALLOWED_CHANNELS: 'telegram,bale' });
 
     expect(r.isAllowed(OtpChannel.sms)).toBe(false);
-    expect(r.isAvailable(OtpChannel.sms)).toBe(false);
-    expect(r.defaultChannel()).toBe(OtpChannel.telegram);
+    expect(await r.isAvailable(OtpChannel.sms)).toBe(false);
+    expect(await r.defaultChannel()).toBe(OtpChannel.telegram);
   });
 });
 
 describe('OtpChannelRegistry — the second gate: a configured sender', () => {
-  it('does not offer an allowed channel whose sender is unconfigured', () => {
+  it('does not offer an allowed channel whose sender is unconfigured', async () => {
     const r = registry(
       { OTP_ALLOWED_CHANNELS: 'sms,telegram' },
       { sms: false },
     );
 
     expect(r.isAllowed(OtpChannel.sms)).toBe(true);
-    expect(r.isAvailable(OtpChannel.sms)).toBe(false);
-    expect(r.available()).toEqual([OtpChannel.telegram]);
-    expect(r.describe().map((d) => d.channel)).toEqual([OtpChannel.telegram]);
+    expect(await r.isAvailable(OtpChannel.sms)).toBe(false);
+    expect(await r.available()).toEqual([OtpChannel.telegram]);
+    expect((await r.describe()).map((d) => d.channel)).toEqual([OtpChannel.telegram]);
   });
 
-  it('skips the unconfigured first choice when picking a default', () => {
+  it('skips the unconfigured first choice when picking a default', async () => {
     const r = registry(
       { OTP_ALLOWED_CHANNELS: 'sms,bale' },
       { sms: false },
     );
 
-    expect(r.defaultChannel()).toBe(OtpChannel.bale);
+    expect(await r.defaultChannel()).toBe(OtpChannel.bale);
   });
 
-  it('has no default when every allowed channel is unconfigured', () => {
+  it('has no default when every allowed channel is unconfigured', async () => {
     const r = registry(
       { OTP_ALLOWED_CHANNELS: 'sms,telegram' },
       { sms: false, telegram: false },
     );
 
-    expect(r.defaultChannel()).toBeNull();
-    expect(r.describe()).toEqual([]);
+    expect(await r.defaultChannel()).toBeNull();
+    expect(await r.describe()).toEqual([]);
   });
 
   it.each([
     ['OTP_DELIVERY_MODE=console', { OTP_DELIVERY_MODE: 'console' }],
     ['OTP_DEV_CONSOLE_LOG=true', { OTP_DEV_CONSOLE_LOG: true }],
-  ])('waives the sender gate under %s', (_label, extra) => {
+  ])('waives the sender gate under %s', async (_label, extra) => {
     const r = registry(
       { OTP_ALLOWED_CHANNELS: 'sms,telegram', ...extra },
       { sms: false, telegram: false },
     );
 
     expect(r.isConsoleOnly()).toBe(true);
-    expect(r.available()).toEqual([OtpChannel.sms, OtpChannel.telegram]);
+    expect(await r.available()).toEqual([OtpChannel.sms, OtpChannel.telegram]);
   });
 
-  it('never waives the allowed gate, even in console mode', () => {
+  it('never waives the allowed gate, even in console mode', async () => {
     const r = registry({
       OTP_ALLOWED_CHANNELS: 'sms',
       OTP_DELIVERY_MODE: 'console',
     });
 
-    expect(r.isAvailable(OtpChannel.telegram)).toBe(false);
-    expect(() => r.assertUsable(OtpChannel.telegram)).toThrow(
+    expect(await r.isAvailable(OtpChannel.telegram)).toBe(false);
+    await expect(r.assertUsable(OtpChannel.telegram)).rejects.toThrow(
       'otp.channelNotAllowed',
     );
   });
 
-  it('treats live delivery as the default mode', () => {
+  it('treats live delivery as the default mode', async () => {
     expect(registry({}).isConsoleOnly()).toBe(false);
   });
 });
 
 describe('OtpChannelRegistry — describe() and requiresLink', () => {
-  it('tells the client which channels need a linked messenger', () => {
+  it('tells the client which channels need a linked messenger', async () => {
     const r = registry({ OTP_ALLOWED_CHANNELS: 'sms,telegram,bale' });
 
-    expect(r.describe()).toEqual([
+    expect(await r.describe()).toEqual([
       { channel: OtpChannel.sms, requiresLink: false },
       { channel: OtpChannel.telegram, requiresLink: true },
       { channel: OtpChannel.bale, requiresLink: true },
     ]);
   });
 
-  it('reports no link requirement for a channel it does not know', () => {
+  it('reports no link requirement for a channel it does not know', async () => {
     const r = registry({});
     expect(r.requiresLink('whatsapp' as OtpChannel)).toBe(false);
   });
 });
 
 describe('OtpChannelRegistry.assertUsable — one key per reason', () => {
-  it('says channelNotSupported for a name with no sender behind it', () => {
-    expect(() => registry({}).assertUsable('whatsapp' as OtpChannel)).toThrow(
-      new BadRequestException('otp.channelNotSupported'),
-    );
+  it('says channelNotSupported for a name with no sender behind it', async () => {
+    await expect(
+      registry({}).assertUsable('whatsapp' as OtpChannel),
+    ).rejects.toThrow(new BadRequestException('otp.channelNotSupported'));
   });
 
-  it('says channelNotAllowed for a real channel the operator switched off', () => {
+  it('says channelNotAllowed for a real channel the operator switched off', async () => {
     const r = registry({ OTP_ALLOWED_CHANNELS: 'sms' });
 
-    expect(() => r.assertUsable(OtpChannel.bale)).toThrow(
+    await expect(r.assertUsable(OtpChannel.bale)).rejects.toThrow(
       new BadRequestException('otp.channelNotAllowed'),
     );
   });
 
-  it('says channelNotConfigured for an allowed channel missing its credentials', () => {
+  it('says channelNotConfigured for an allowed channel missing its credentials', async () => {
     const r = registry({ OTP_ALLOWED_CHANNELS: 'sms' }, { sms: false });
 
-    expect(() => r.assertUsable(OtpChannel.sms)).toThrow(
+    await expect(r.assertUsable(OtpChannel.sms)).rejects.toThrow(
       new BadRequestException('otp.channelNotConfigured'),
     );
   });
 
-  it('returns the sender when both gates pass', () => {
+  it('returns the sender when both gates pass', async () => {
     const r = registry({ OTP_ALLOWED_CHANNELS: 'telegram' });
 
-    expect(r.assertUsable(OtpChannel.telegram)).toBe(
+    expect(await r.assertUsable(OtpChannel.telegram)).toBe(
       r.sender(OtpChannel.telegram),
     );
   });

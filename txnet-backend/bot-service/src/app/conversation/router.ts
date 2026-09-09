@@ -30,7 +30,7 @@ import {
 } from '../flows/views';
 import { progressOf, summaryOf } from '../flows/steps';
 import { ConversationStore } from './conversation.store';
-import { ChatContext, FlowResult, NavState } from './nav.types';
+import { callContextOf, ChatContext, FlowResult, NavState } from './nav.types';
 
 /** The one step that belongs to no flow: the panel drives it (`F-0203`). */
 export const PANEL_LINK_STEP = 'panelLink.contact';
@@ -77,7 +77,7 @@ export class ConversationRouter {
    * from here" — centrally, so a flow cannot ship without it.
    */
   async route(ctx: ChatContext): Promise<FlowResult> {
-    const state = await this.nav.get(ctx.platform, ctx.chatId);
+    const state = await this.nav.get(ctx.integration, ctx.chatId);
     const actionId = this.resolveAction(ctx, state);
     const result = await this.dispatch(ctx, state, actionId);
     return this.decorate(ctx, state, actionId, result);
@@ -236,7 +236,7 @@ export class ConversationRouter {
     actionId: string,
   ): Promise<FlowResult> {
     const lang = actionId.slice(LANGUAGE_ACTION_PREFIX.length);
-    const ok = await this.langs.choose(ctx.platform, ctx.chatId, lang);
+    const ok = await this.langs.choose(ctx.integration, ctx.chatId, lang);
     if (!ok) {
       return { view: say('language.unknown', { key: 'bot.common.tryAgain' }), nextState: state };
     }
@@ -335,7 +335,7 @@ export class ConversationRouter {
           startToken: parsed.token,
           languageCode: ctx.lang,
         },
-        { chatId: ctx.chatId, lang: ctx.lang, platform: ctx.platform },
+        callContextOf(ctx),
       );
       if (!resolved.ok || !resolved.data) {
         return { view: say('link.failed', { raw: resolved.msg }), nextState: null };
@@ -376,13 +376,13 @@ export class ConversationRouter {
   }
 
   private async logout(ctx: ChatContext): Promise<FlowResult> {
-    const session = await this.sessions.get(ctx.platform, ctx.chatId);
+    const session = await this.sessions.get(ctx.integration, ctx.chatId);
     if (session) {
       await this.api.logout(
         { refreshToken: session.refreshToken },
-        { chatId: ctx.chatId, lang: ctx.lang, platform: ctx.platform },
+        callContextOf(ctx),
       );
-      await this.sessions.clear(ctx.platform, ctx.chatId);
+      await this.sessions.clear(ctx.integration, ctx.chatId);
     }
     return {
       view: say('signedOut', { key: 'bot.common.signedOut' }),
@@ -392,7 +392,7 @@ export class ConversationRouter {
 
   /** Which menu this chat sees depends on its session, never on its chat id. */
   private async menu(ctx: ChatContext) {
-    const session = await this.sessions.get(ctx.platform, ctx.chatId);
+    const session = await this.sessions.get(ctx.integration, ctx.chatId);
     return session ? memberMenu(this.miniAppUrl()) : guestMenu();
   }
 

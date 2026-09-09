@@ -109,10 +109,6 @@ export function applyE2eEnv(
     // No bot is configured and none may be contacted: registration on boot
     // would be an outbound call to Telegram/Bale from a test run.
     BOT_WEBHOOK_AUTO_REGISTER: 'false',
-    TELEGRAM_BOT_TOKEN: '',
-    BALE_BOT_TOKEN: '',
-    TELEGRAM_WEBHOOK_SECRET: '',
-    BALE_WEBHOOK_SECRET: '',
     LOCALE_SERVICE_ADDR: 'unused.invalid:50051',
     DEFAULT_LANGUAGE: deployment.defaultLanguage,
   };

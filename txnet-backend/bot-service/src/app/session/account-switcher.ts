@@ -62,7 +62,11 @@ export class AccountSwitcher {
       return { ok: false, msg: result.msg };
     }
 
-    await this.sessions.save(ctx.platform, ctx.chatId, result.data.refreshToken);
+    await this.sessions.save(
+      ctx.integration,
+      ctx.chatId,
+      result.data.refreshToken,
+    );
     return {
       ok: true,
       msg: result.msg,

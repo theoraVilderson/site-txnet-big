@@ -22,7 +22,7 @@ no service yet. A unit that is `active` with an empty `source:` is a lie and
 | catalog | product categories, service plans, direct promotions | draft | [->](domains/catalog/INDEX.md) |
 | network | panels (VPN infra) + drivers, user configs (Xray/VPN), panel groups, subscription links, traffic logs + aggregates, IP access rules | draft | [->](domains/network/INDEX.md) |
 | governance | per-user settings, temporal access grants, user restrictions/caps | draft | [->](domains/governance/INDEX.md) |
-| automation | definition + scheduling + run logs of background workers | draft | [->](domains/automation/INDEX.md) |
+| automation | definition + scheduling + run logs of background workers | active | [->](domains/automation/INDEX.md) |
 | engagement | daily spin wheel with hard financial cap + strict eligibility | draft | [->](domains/engagement/INDEX.md) |
 | support | tickets, ticket messages/attachments, live chat | draft | [->](domains/support/INDEX.md) |
 | notification | notification hub + campaigns + per-recipient delivery state | draft | [->](domains/notification/INDEX.md) |
@@ -45,6 +45,7 @@ no service yet. A unit that is `active` with an empty `source:` is a lie and
 | forward-auth | Go Traefik ForwardAuth gateway: JWT + Redis session + RBAC -> identity headers | active | [->](platform/forward-auth/INDEX.md) |
 | redis-keyspace | shared Redis key prefix/versioning + session & OTP key catalog + TTLs | active | [->](platform/redis-keyspace/INDEX.md) |
 | messenger | the only home for Telegram/Bale differences: drivers, capability flags (F-301), degradation policy (F-302), per-platform renderer | active | [->](platform/messenger/INDEX.md) |
+| tenant-context | carries the tenant a request resolved to; every scoped query derives its `tenantId` from it (ADR-0024) | active | [->](platform/tenant-context/INDEX.md) |
 
 ## Cross-cutting docs
 - [Surface map](SURFACES.md) — user-visible thing -> unit -> file, plus `## Flows` (cached walks). **Start here for any vague request.**

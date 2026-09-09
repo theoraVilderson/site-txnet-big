@@ -36,7 +36,7 @@ export class OtpService implements IOtpService {
     lang: string,
   ): Promise<void> {
     // Allowed by env *and* actually configured, or this request stops here.
-    const sender = this.channels.assertUsable(channel);
+    const sender = await this.channels.assertUsable(channel);
 
     // Distributed lock for idempotency
     if (!(await this.store.acquireLock(phoneNumber, purpose))) {

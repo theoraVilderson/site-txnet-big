@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import { BotViewRenderer } from '@txnet-backend/messenger';
+import { BotViewRenderer, aBotIntegration } from '@txnet-backend/messenger';
 import { AuthApiClient } from '../auth-api/auth-api.client';
 import { BotCopy } from '../locale/bot-copy';
 import { BotSessionStore } from '../session/bot-session.store';
@@ -88,7 +88,7 @@ function makeRouter(over: {
   return { router, nav, sessions, api, otp, langs, locale };
 }
 
-const ctx: ChatContext = { platform: 'telegram', chatId: '5501', senderId: 42, lang: 'fa' };
+const ctx: ChatContext = { integration: aBotIntegration(), platform: 'telegram', chatId: '5501', senderId: 42, lang: 'fa' };
 
 describe('ConversationRouter', () => {
   describe('/start', () => {
@@ -156,7 +156,7 @@ describe('ConversationRouter', () => {
       const result = await router.route({ ...ctx, text: '/logout' });
 
       expect(logout).toHaveBeenCalledWith({ refreshToken: 'r-1' }, expect.anything());
-      expect(sessions.clear).toHaveBeenCalledWith('telegram', '5501');
+      expect(sessions.clear).toHaveBeenCalledWith(ctx.integration, '5501');
       expect(result.view.id).toBe('signedOut');
     });
 
@@ -376,7 +376,7 @@ describe('ConversationRouter — language', () => {
 
     const result = await router.route({ ...ctx, callbackData: 'lang:en' });
 
-    expect(langs.choose).toHaveBeenCalledWith('telegram', '5501', 'en');
+    expect(langs.choose).toHaveBeenCalledWith(ctx.integration, '5501', 'en');
     // `lang` is what the dispatcher renders with, so the confirmation is not
     // written in the language the user just asked to leave.
     expect(result.lang).toBe('en');

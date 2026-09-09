@@ -56,7 +56,7 @@ export const envSchema = z.object({
   // How long a bot-link deep link stays usable before the user must ask for a
   // new one. Also the TTL of the pending-link record in Redis.
   BOT_LINK_TOKEN_TTL_SEC: z.coerce.number().int().positive().default(900),
-  // On boot, point every configured bot at this service's own webhook route.
+  // On boot, point every tenant's bot at this service's own webhook path.
   BOT_WEBHOOK_AUTO_REGISTER: z.enum(['true', 'false']).default('true'),
   // Where a platform reaches this service, when it is not `https://api.<domain>`
   // — a dev tunnel, or another app fronting this API. A platform that needs its
@@ -64,25 +64,17 @@ export const envSchema = z.object({
   BOT_WEBHOOK_PUBLIC_BASE: optional(z.string().url()),
 
   // --- Telegram Bot ---
-  TELEGRAM_BOT_TOKEN: optional(z.string()),
   TELEGRAM_API_BASE: z.string().url().default('https://api.telegram.org'),
-  // Bot username without '@' — only used to build the ?start=<token> deep link.
-  TELEGRAM_BOT_USERNAME: optional(z.string()),
+  // The deep-link host. The bot's username comes from its `BotIntegration`
+  // row now, not from here (F-066-i).
   TELEGRAM_DEEP_LINK_BASE: z.string().url().default('https://t.me'),
-  // Shared secret in the webhook path (and, for Telegram, also checked against
-  // the X-Telegram-Bot-Api-Secret-Token header when the platform sends one).
-  // Without it the platform's webhook route refuses every update.
-  TELEGRAM_WEBHOOK_SECRET: optional(z.string().min(16)),
   // Incoming side: the base Telegram calls back on. Its servers cannot open a
   // connection to every host, so this is usually a proxy in front of the API.
   TELEGRAM_WEBHOOK_PUBLIC_BASE: optional(z.string().url()),
 
   // --- Bale Bot (Telegram-compatible API shape) ---
-  BALE_BOT_TOKEN: optional(z.string()),
   BALE_API_BASE: z.string().url().default('https://tapi.bale.ai'),
-  BALE_BOT_USERNAME: optional(z.string()),
   BALE_DEEP_LINK_BASE: z.string().url().default('https://ble.ir'),
-  BALE_WEBHOOK_SECRET: optional(z.string().min(16)),
   BALE_WEBHOOK_PUBLIC_BASE: optional(z.string().url()),
 
   // Shared secret another service of this platform (bot-service) sends as
@@ -118,13 +110,19 @@ export const envSchema = z.object({
   // guessing a 6-digit reset code.
   FORGOT_VERIFY_RATE_LIMIT: z.coerce.number().int().positive().default(20),
 
-  // The tenant a request falls back to when its host matches no
-  // `tenant_domain` row (ADR-0020). The default keeps a single-tenant install
-  // behaving exactly as it did before resolution existed. **A deployment that
-  // serves resellers must set this on purpose**: the fallback cannot tell a
-  // misconfigured host from an unknown one, so leaving it here means every
-  // stray host is served as the platform owner.
-  DEFAULT_TENANT_SLUG: z.string().min(1).default('platform_owner'),
+  // There is deliberately no DEFAULT_TENANT_SLUG here. A request resolves its
+  // tenant from a `tenant_domain` row or from a claim it carries, and nothing
+  // else — a host that matches neither is answered a neutral 404 (ADR-0025,
+  // F-1210). A fallback cannot tell a misconfigured host from an unknown one,
+  // so it served every stray host as the platform owner.
+
+  // The Credential Vault's KEK (ADR-0026). This is a **path to a mounted
+  // secret**, never the key itself: a value here would be visible in
+  // `docker inspect`, in `/proc/<pid>/environ` and in every child process.
+  // Unset means the vault is unavailable and every credential operation is
+  // refused — the service still boots, because no tenant credential is stored
+  // anywhere yet (F-066-i is what starts writing them).
+  VAULT_KEK_FILE: optional(z.string().min(1)),
 
   LOCALES_DIR: z.string().default('./locales/langs'),
   LOCALES_WATCH: z.enum(['true', 'false']).default('false'),

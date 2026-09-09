@@ -2,29 +2,36 @@ import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotCopy } from '../locale/bot-copy';
 import {
-  BOT_PLATFORMS,
   BotClientRegistry,
-  BotPlatform,
+  BotIntegration,
+  redactedWebhookUrl,
+  resolveWebhookBase,
   TelegramLikeBotClient,
+  webhookUrl,
 } from '@txnet-backend/messenger';
+import { AuthApiBotIntegrationDirectory } from './bot-integration.directory';
 
 /**
- * Points every configured bot at this service's own webhook route on boot.
+ * Points every tenant's bot at this service's own webhook path on boot, and
+ * says whether it worked (F-321).
+ *
+ * **The platform registers on the tenant's behalf.** A reseller pastes a token
+ * into the panel and is done: it is this process, holding that token for the
+ * length of one call, that tells Telegram or Bale where to deliver. The
+ * alternative — asking fifty resellers to call `setWebhook` themselves — is
+ * fifty chances to point a bot somewhere else.
+ *
+ * It moved off environment variables with F-066-i. Before that there was one
+ * bot per platform and its URL carried a shared secret; now there is one per
+ * `BotIntegration`, its URL carries that row's own `webhookPath`, and the
+ * secret token travels in the header the platform echoes back.
+ *
+ * The outcome of each registration is written back to the row — `status` and
+ * `lastErrorAt` — because "the bot stopped answering" has to be answerable
+ * from the panel rather than from this service's log.
  *
  * It moved here from `auth-service` with ADR-0011: a bot token holds exactly
- * one webhook URL, so whoever registers it owns every update, and that is now
- * `bot-service`. The old `auth-service` route still answers for one release,
- * but nothing points a bot at it any more.
- *
- * A bot token holds exactly one webhook URL, and nothing in the product ever
- * sets it — so before this existed the deep link opened a bot that answered
- * nothing: `/start <token>` reached the platform and stopped there, while the
- * panel polled a link that could never leave `pending`.
- *
- * The URL is derived, never configured twice: it is the route
- * `BotLinkController` serves, built from the public base and the platform's
- * own webhook secret. `scripts/set-bot-webhook.sh` builds the identical URL
- * for the by-hand case.
+ * one webhook URL, so whoever registers it owns every update.
  */
 @Injectable()
 export class BotWebhookRegistrar implements OnApplicationBootstrap {
@@ -33,6 +40,7 @@ export class BotWebhookRegistrar implements OnApplicationBootstrap {
   constructor(
     private readonly config: ConfigService,
     private readonly bots: BotClientRegistry,
+    private readonly directory: AuthApiBotIntegrationDirectory,
     private readonly copy: BotCopy,
   ) {}
 
@@ -58,11 +66,21 @@ export class BotWebhookRegistrar implements OnApplicationBootstrap {
       return;
     }
 
+    const integrations = await this.directory.registrable();
+    if (!integrations.length) {
+      this.logger.log('no bot integrations to register');
+      return;
+    }
+
     // Registration is best-effort and must never hold up (or fail) boot: a
     // messenger that cannot be reached right now is a channel that is down,
-    // not a service that is broken.
-    await Promise.all(BOT_PLATFORMS.map((p) => this.register(p)));
-    await Promise.all(BOT_PLATFORMS.map((p) => this.publishCommands(p)));
+    // not a service that is broken. One tenant's failure is one tenant's,
+    // which is what per-integration handling buys over the old per-platform
+    // loop.
+    for (const integration of integrations) {
+      await this.register(integration);
+      await this.publishCommands(integration);
+    }
   }
 
   /**
@@ -71,8 +89,8 @@ export class BotWebhookRegistrar implements OnApplicationBootstrap {
    * a stale command menu is a channel that is slightly less discoverable, not
    * a service that is broken.
    */
-  private async publishCommands(platform: BotPlatform): Promise<void> {
-    const client = this.bots.client(platform);
+  private async publishCommands(integration: BotIntegration): Promise<void> {
+    const client = await this.client(integration, 'publishCommands');
     if (!client) return;
 
     const languages = (
@@ -95,62 +113,47 @@ export class BotWebhookRegistrar implements OnApplicationBootstrap {
       await client.setMyCommands(listFor(lang), lang);
     }
     this.logger.log(
-      `${platform}: command menu published (${languages.join(', ')})`,
+      `${this.name(integration)}: command menu published (${languages.join(', ')})`,
     );
   }
 
   /**
-   * Where *this* platform reaches this service, most specific first:
-   *
-   * 1. `<PLATFORM>_WEBHOOK_PUBLIC_BASE` — one platform needs a different way
-   *    in than the others. Telegram, for instance, cannot open a connection
-   *    to every host on the internet, so its updates come back through a
-   *    proxy while Bale calls the API directly.
-   * 2. `BOT_WEBHOOK_PUBLIC_BASE` — every platform goes through the same
-   *    front door: a dev tunnel, or another app fronting this API.
-   * 3. `https://api.<DOMAIN_NAME>` — the convention the Traefik router and
-   *    `scripts/set-bot-webhook.sh` already assume.
+   * Where this service is reachable, per platform — `messenger` owns the
+   * precedence and the URL shape, because the rotation route (F-322) builds
+   * the same address from another process and the two must not drift.
    */
-  private publicBase(platform: BotPlatform): string | null {
-    const perPlatform = this.config.get<string>(
-      `${platform.toUpperCase()}_WEBHOOK_PUBLIC_BASE`,
+  private publicBase(integration: BotIntegration): string | null {
+    return resolveWebhookBase(
+      (key) => this.config.get<string>(key),
+      integration.platform,
     );
-    const shared = this.config.get<string>('BOT_WEBHOOK_PUBLIC_BASE');
-    const domain = this.config.get<string>('DOMAIN_NAME');
-    const base =
-      perPlatform || shared || (domain ? `https://api.${domain}` : null);
-    return base ? base.replace(/\/+$/, '') : null;
   }
 
-  /** The exact path `WebhookController` serves, under the global `/api` prefix. */
-  private webhookUrl(base: string, platform: BotPlatform, secret: string): string {
-    return `${base}/api/bot/${platform}/webhook/${secret}`;
-  }
-
-  private async register(platform: BotPlatform): Promise<void> {
-    const client = this.bots.client(platform);
-    const secret = this.bots.webhookSecret(platform);
-    if (!client || !secret) {
-      // Nothing to register: without both, the link flow is off anyway
-      // (`BotClientRegistry.canLink`).
-      return;
-    }
-
-    const base = this.publicBase(platform);
+  private async register(integration: BotIntegration): Promise<void> {
+    const base = this.publicBase(integration);
     if (!base) {
       this.logger.warn(
-        `${platform}: no webhook base — set ${platform.toUpperCase()}_WEBHOOK_PUBLIC_BASE, BOT_WEBHOOK_PUBLIC_BASE or DOMAIN_NAME`,
+        `${integration.platform}: no webhook base — set ` +
+          `${integration.platform.toUpperCase()}_WEBHOOK_PUBLIC_BASE, ` +
+          `BOT_WEBHOOK_PUBLIC_BASE or DOMAIN_NAME`,
       );
       return;
     }
 
-    const url = this.webhookUrl(base, platform, secret);
+    const client = await this.client(integration, 'register');
+    if (!client) {
+      await this.directory.recordRegistration(integration, false);
+      return;
+    }
+
+    const url = webhookUrl(base, integration);
     const current = await client.getWebhookInfo();
 
     if (current === null) {
       this.logger.warn(
-        `${platform}: could not read the current webhook — not overwriting it`,
+        `${this.name(integration)}: could not read the current webhook — not overwriting it`,
       );
+      await this.directory.recordRegistration(integration, false);
       return;
     }
 
@@ -164,13 +167,15 @@ export class BotWebhookRegistrar implements OnApplicationBootstrap {
       current.allowedUpdates,
     );
     if (current.url === url && delivers) {
-      this.logger.log(`${platform}: webhook already registered`);
+      this.logger.log(`${this.name(integration)}: webhook already registered`);
+      await this.directory.recordRegistration(integration, true);
       return;
     }
 
-    // The URL carries the secret, so it is never logged in full.
+    // The URL carries the path, which is the credential — never logged in full.
     this.logger.log(
-      `${platform}: registering webhook ${base}/api/bot/${platform}/webhook/***` +
+      `${this.name(integration)}: registering webhook ` +
+        redactedWebhookUrl(base, integration.platform) +
         (current.url && current.url !== url
           ? ' (replacing a different one)'
           : '') +
@@ -178,8 +183,35 @@ export class BotWebhookRegistrar implements OnApplicationBootstrap {
           ? ` (previous registration delivered only: ${current.allowedUpdates.join(', ')})`
           : ''),
     );
-    if (await client.setWebhook(url, secret)) {
-      this.logger.log(`${platform}: webhook registered`);
-    }
+
+    const secret = await this.secret(integration);
+    const ok = await client.setWebhook(url, secret);
+    if (ok) this.logger.log(`${this.name(integration)}: webhook registered`);
+    await this.directory.recordRegistration(integration, ok);
+  }
+
+  private client(integration: BotIntegration, step: string) {
+    return this.bots.client(integration, `bot-app:BotWebhookRegistrar.${step}`);
+  }
+
+  /**
+   * The secret token to register with, and the header this bot's updates must
+   * then carry (F-321).
+   *
+   * It is a vault credential like the token is, so it is fetched the same way
+   * and held for exactly one call. `undefined` registers without one, which is
+   * what a tenant who has not been given a secret gets — the path is still 32
+   * random bytes.
+   */
+  private async secret(
+    integration: BotIntegration,
+  ): Promise<string | undefined> {
+    const value = await this.directory.webhookSecret(integration);
+    return value ?? undefined;
+  }
+
+  /** `telegram/@acmebot` — enough to find the row, never the path. */
+  private name(integration: BotIntegration): string {
+    return `${integration.platform}/@${integration.botUsername}`;
   }
 }

@@ -17,6 +17,7 @@ import { BotLinkStore } from './bot-link.store';
 import { BotLinkMessageKey, botLinkMessage } from './bot-link.messages';
 import { BotContact, BotUpdate, PendingBotLink } from './bot-link.types';
 import { parsePhone } from '../../common/validation/phone.schema';
+import { TenantContext } from '../../tenant-context/tenant-context';
 
 /** A messenger channel and the platform behind it are the same thing. */
 const CHANNEL_OF: Record<BotPlatform, OtpChannel> = {
@@ -80,9 +81,11 @@ export class BotLinkService {
     @Inject(OTP_SERVICE) private readonly otp: IOtpService,
   ) {}
 
-  /** Whether this platform can run the link flow (token + username + secret). */
-  canLink(platform: BotPlatform): boolean {
-    return this.bots.canLink(platform);
+  /** Whether the tenant in scope can run the link flow on this platform. */
+  canLink(platform: BotPlatform): Promise<boolean> {
+    const tenantId = TenantContext.currentOrNull()?.id;
+    if (!tenantId) return Promise.resolve(false);
+    return this.bots.canLink(tenantId, platform);
   }
 
   /**
@@ -122,6 +125,11 @@ export class BotLinkService {
       await this.prisma.linkedBotAccount.upsert({
         where: { userId_platform: { userId, platform } },
         create: {
+          // The ambient tenant is the one `withTenant` would inject anyway
+          // (F-066-l); Prisma's create input has no way to know that, so the
+          // three link writes name it. It is the user's own tenant by
+          // construction — the user was created, or found, in this scope.
+          tenantId: TenantContext.current('a bot link').id,
           userId,
           platform,
           platformUserId: chatId,
@@ -151,7 +159,16 @@ export class BotLinkService {
     lang: string;
     ip: string;
   }): Promise<StartedBotLink> {
-    if (!this.canLink(input.platform)) {
+    // The tenant's own bot, resolved once: it is both the check that the
+    // channel can run at all and the bot the deep link has to point at.
+    const integration = await this.bots.primaryFor(
+      TenantContext.current('a bot link').id,
+      input.platform,
+    );
+    if (
+      !integration?.botUsername ||
+      !(await this.bots.hasToken(integration))
+    ) {
       throw new BadRequestException('otp.channelNotConfigured');
     }
 
@@ -175,7 +192,7 @@ export class BotLinkService {
     link.lang = input.lang;
     await this.store.save(link);
 
-    const deepLink = this.bots.deepLink(input.platform, link.token);
+    const deepLink = this.bots.deepLink(integration, link.token);
     if (!deepLink) throw new BadRequestException('otp.channelNotConfigured');
 
     return {
@@ -360,6 +377,7 @@ export class BotLinkService {
     await this.prisma.linkedBotAccount.upsert({
       where: { userId_platform: { userId: user.id, platform } },
       create: {
+        tenantId: TenantContext.current('a bot link').id,
         userId: user.id,
         platform,
         platformUserId: chatId,
@@ -455,7 +473,11 @@ export class BotLinkService {
     chatId: string,
     outcome: BotLinkOutcome,
   ): Promise<void> {
-    const client = this.bots.client(platform);
+    const client = await this.bots.primaryClient(
+      TenantContext.current('a bot link reply').id,
+      platform,
+      'identity:BotLinkService',
+    );
     if (!client) return;
     const text = botLinkMessage(this.locale, outcome.lang, outcome.messageKey);
 

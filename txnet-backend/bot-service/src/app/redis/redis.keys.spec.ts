@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import { aBotIntegration } from '@txnet-backend/messenger';
 import { RedisKeys, RedisTtl } from './redis.keys';
 import { RedisService } from './redis.service';
 
@@ -12,12 +13,15 @@ import { RedisService } from './redis.service';
  * `bot-service` writes into the same keyspace `auth-service` does, so a change
  * here has to be a diff a human approves, not a green run.
  */
+const telegram = aBotIntegration({ id: 'integration-1' });
+const bale = aBotIntegration({ id: 'integration-2', platform: 'bale' });
+
 describe('RedisKeys — bot key catalogue', () => {
   it('builds every key from fixed arguments', () => {
     const built = {
-      botNav: RedisKeys.botNav('telegram', '5501'),
-      botSession: RedisKeys.botSession('telegram', '5501'),
-      botLang: RedisKeys.botLang('bale', '77'),
+      botNav: RedisKeys.botNav(telegram, '5501'),
+      botSession: RedisKeys.botSession(telegram, '5501'),
+      botLang: RedisKeys.botLang(bale, '77'),
     };
 
     expect(built).toMatchSnapshot();
@@ -35,9 +39,21 @@ describe('RedisKeys — bot key catalogue', () => {
     // ADR-0015: the platforms number their chats independently, so a chat id
     // alone can name two different chats. A key that dropped the platform
     // would hand one person's session to another.
-    expect(RedisKeys.botSession('telegram', '5501')).not.toBe(
-      RedisKeys.botSession('bale', '5501'),
+    expect(RedisKeys.botSession(telegram, '5501')).not.toBe(
+      RedisKeys.botSession(bale, '5501'),
     );
+  });
+
+  it('keeps two bots on one platform in separate keyspaces (F-320)', () => {
+    // The same argument one level down, and the one multi-tenancy turns on:
+    // two resellers' Telegram bots see the same chat id for the same person.
+    // The integration is the door the update came through, so it is what
+    // separates them — the platform on its own no longer can.
+    const other = aBotIntegration({ id: 'integration-9', tenantId: 'globex' });
+
+    for (const key of [RedisKeys.botNav, RedisKeys.botSession, RedisKeys.botLang]) {
+      expect(key(telegram, '5501')).not.toBe(key(other, '5501'));
+    }
   });
 
   it('keeps a language preference alive longer than the session that set it', () => {
@@ -63,15 +79,15 @@ describe('RedisService.keyPrefix — parity with auth-service', () => {
     // Both services address the same Redis; a bot session written under a
     // different prefix is a session auth-service's tooling cannot see.
     expect(prefixFor(base)).toBe('txnet:auth:v1:');
-    expect(prefixFor(base) + RedisKeys.botSession('telegram', '5501')).toBe(
-      'txnet:auth:v1:bot:session:telegram:5501',
+    expect(prefixFor(base) + RedisKeys.botSession(telegram, '5501')).toBe(
+      'txnet:auth:v1:bot:session:telegram:integration-1:5501',
     );
   });
 
   it('bumping the keyspace version moves every bot key at once', () => {
     expect(
       prefixFor({ ...base, REDIS_KEYSPACE_VERSION: 'v2' }) +
-        RedisKeys.botNav('telegram', '5501'),
-    ).toBe('txnet:auth:v2:bot:nav:telegram:5501');
+        RedisKeys.botNav(telegram, '5501'),
+    ).toBe('txnet:auth:v2:bot:nav:telegram:integration-1:5501');
   });
 });

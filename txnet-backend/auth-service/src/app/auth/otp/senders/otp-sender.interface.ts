@@ -17,11 +17,15 @@ export const OTP_SENDERS = Symbol('OTP_SENDERS');
 export interface IOtpSender {
   readonly channel: OtpChannel;
   /**
-   * Whether this environment actually has what the channel needs to send
-   * (a bot token, SMS credentials). An allowed-but-unconfigured channel is
+   * Whether the channel can actually send right now — for the **tenant in
+   * scope**, since a bot token belongs to that tenant's `BotIntegration` and
+   * not to the environment (F-066-i). An allowed-but-unconfigured channel is
    * never offered to a client — see `OtpChannelRegistry`.
+   *
+   * Asynchronous because answering it can mean a vault read. A sender whose
+   * answer is a config lookup may still return a plain boolean.
    */
-  isConfigured(): boolean;
+  isConfigured(): boolean | Promise<boolean>;
   /**
    * True for the messenger channels: they can only deliver to a chat id, so
    * the user must have linked (and contact-verified) that messenger first.

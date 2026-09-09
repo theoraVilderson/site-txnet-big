@@ -19,15 +19,22 @@ import { BotCopy } from '../locale/bot-copy';
  *     200 and `ok:false` (`auth-api/contract.md`).
  */
 
+const TENANT_ID = '3f1c0b6e-6d1e-4f6a-9b2f-2f9a5d0c7e11';
+
 const env: Record<string, unknown> = {
   AUTH_API_BASE_URL: 'http://auth:3000/',
   SERVICE_AUTH_TOKEN: 'svc-token',
+  BOT_TENANT_ID: TENANT_ID,
   AUTH_API_TIMEOUT_MS: 500,
 };
 
-const config = {
-  get: <T>(key: string, fallback?: T) => (env[key] as T) ?? fallback,
-} as unknown as ConfigService;
+const configFor = (overrides: Record<string, unknown> = {}) =>
+  ({
+    get: <T>(key: string, fallback?: T) =>
+      (({ ...env, ...overrides })[key] as T) ?? fallback,
+  }) as unknown as ConfigService;
+
+const config = configFor();
 
 const ctx: CallContext = { chatId: '5501', lang: 'fa', platform: 'telegram' };
 
@@ -100,6 +107,35 @@ describe('AuthApiClient transport', () => {
     });
     // No user token on a route that is not behind AuthGuard.
     expect(headers.authorization).toBeUndefined();
+  });
+
+  /**
+   * A bot chat has no host, and `auth-api` has no fallback tenant (ADR-0025):
+   * without this header every flow in this service is answered a neutral 404.
+   * The seam is `tenant`'s (`X-Tenant-Id`, honoured only from a verified
+   * service caller), so what is worth asserting here is that the bot actually
+   * uses it — and that an unconfigured install sends nothing rather than
+   * guessing a tenant.
+   */
+  it('names the tenant it serves on every call', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true, msg: 'ok' }));
+
+    await client().refresh({ refreshToken: 'r-1' }, ctx);
+
+    const headers = lastRequest().init.headers as Record<string, string>;
+    expect(headers['x-tenant-id']).toBe(TENANT_ID);
+  });
+
+  it('sends no tenant header at all when BOT_TENANT_ID is unset', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true, msg: 'ok' }));
+
+    await new AuthApiClient(configFor({ BOT_TENANT_ID: '' }), copy).refresh(
+      { refreshToken: 'r-1' },
+      ctx,
+    );
+
+    const headers = lastRequest().init.headers as Record<string, string>;
+    expect(headers['x-tenant-id']).toBeUndefined();
   });
 
   it('sends the user’s access token only when one was supplied', async () => {

@@ -46,7 +46,9 @@ describe('auth-api — signup, login, refresh, logout', () => {
 
       // identity/invariants.md #11: the row appears at verify-phone, not here.
       await expect(
-        e2e.prisma.user.count({ where: { phoneNumber: account.phoneNumber } }),
+        e2e.db((db) =>
+          db.user.count({ where: { phoneNumber: account.phoneNumber } }),
+        ),
       ).resolves.toBe(0);
 
       expect(e2e.otp.all()).toEqual([
@@ -97,9 +99,13 @@ describe('auth-api — signup, login, refresh, logout', () => {
       expect(res.body.data).not.toHaveProperty('refreshToken');
       expect(api.refreshCookie).toEqual(expect.any(String));
 
-      const user = await e2e.prisma.user.findUniqueOrThrow({
-        where: { phoneNumber: account.phoneNumber },
-      });
+      // `findFirst`, not `findUnique`: a phone number is unique **within a
+      // tenant** since F-065-b, so it is no longer a unique key on its own.
+      const user = await e2e.db((db) =>
+        db.user.findFirstOrThrow({
+          where: { phoneNumber: account.phoneNumber },
+        }),
+      );
       expect(user.username).toBe(account.username);
       expect(user.status).toBe('active');
       expect(user.phoneVerifiedAt).toBeInstanceOf(Date);
@@ -121,7 +127,9 @@ describe('auth-api — signup, login, refresh, logout', () => {
       expect(res.status).toBe(400);
       expect(res.body).toMatchObject({ ok: false, msg: 'system.badRequest' });
       await expect(
-        e2e.prisma.user.count({ where: { phoneNumber: account.phoneNumber } }),
+        e2e.db((db) =>
+          db.user.count({ where: { phoneNumber: account.phoneNumber } }),
+        ),
       ).resolves.toBe(0);
     });
 
@@ -139,7 +147,9 @@ describe('auth-api — signup, login, refresh, logout', () => {
       expect(replay.status).toBe(400);
       expect(replay.body.ok).toBe(false);
       await expect(
-        e2e.prisma.user.count({ where: { phoneNumber: account.phoneNumber } }),
+        e2e.db((db) =>
+          db.user.count({ where: { phoneNumber: account.phoneNumber } }),
+        ),
       ).resolves.toBe(1);
     });
   });

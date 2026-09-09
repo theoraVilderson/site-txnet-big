@@ -3,7 +3,7 @@ id: bot-app
 layer: interface
 status: active
 version: 1
-updated: 2026-09-06
+updated: 2026-09-09
 ---
 
 # bot-app — the conversation shell
@@ -51,9 +51,12 @@ hint, not a statement about the product. A reseller selling in Iran to a
 customer whose Telegram is English had no way to be understood, and the
 customer had no way to ask. The order (ADR-0016):
 
-1. **what the user chose** — `bot:lang:<platform>:<chatId>`, 180-day idle TTL,
-   outside both the session and the navigation state: a preference that expires
-   with the conversation that set it is one the user re-sets every time;
+1. **what the user chose** — `bot:lang:<platform>:<integrationId>:<chatId>`,
+   180-day idle TTL, outside both the session and the navigation state: a
+   preference that expires with the conversation that set it is one the user
+   re-sets every time. Per bot, not per platform (F-320) — one tenant's bot may
+   serve a language another's does not, so a choice carried across is one the
+   second bot cannot honour and the user never made there;
 2. **`BOT_DEFAULT_LANGUAGE`** — optional, and set only when the bot speaks
    something other than the rest of the deployment;
 3. **`DEFAULT_LANGUAGE`** — always set, so in practice this is the step that

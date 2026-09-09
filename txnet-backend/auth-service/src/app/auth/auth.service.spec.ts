@@ -511,7 +511,10 @@ describe('AuthService.verifyLoginOtp — the token purpose is load-bearing', () 
   });
 
   it('refuses the tokenless path for an unverified phone', async () => {
-    h.prisma.user.findUnique.mockResolvedValue(
+    // `findFirst`, not `findUnique`: since F-065-b a phone number is unique
+    // only within a tenant, so the lookup is the composite the ambient scope
+    // completes (ADR-0023 / ADR-0024).
+    h.prisma.user.findFirst.mockResolvedValue(
       activeUser({ phoneVerifiedAt: null }),
     );
 

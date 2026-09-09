@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { AuthApiClient } from '../auth-api/auth-api.client';
-import { ChatContext, FlowResult, NavState } from '../conversation/nav.types';
+import {
+  callContextOf,
+  ChatContext,
+  FlowResult,
+  NavState,
+} from '../conversation/nav.types';
 import { BotSessionStore } from '../session/bot-session.store';
 import { OtpStep } from './otp.step';
 import { PhoneNumbers } from './phone-number';
@@ -143,7 +148,7 @@ export class RegisterFlow {
           password,
           channel: c,
         },
-        { chatId: ctx.chatId, lang: ctx.lang, platform: ctx.platform },
+        callContextOf(ctx),
       ),
     );
     return { ...result, deleteIncoming: true };
@@ -152,13 +157,17 @@ export class RegisterFlow {
   private async code(ctx: ChatContext, state: NavState): Promise<FlowResult> {
     const result = await this.api.verifyPhone(
       { phoneNumber: state.data.phoneNumber, otpCode: (ctx.text ?? '').trim() },
-      { chatId: ctx.chatId, lang: ctx.lang, platform: ctx.platform },
+      callContextOf(ctx),
     );
     if (!result.ok) {
       return { view: ask('register.retryCode', { raw: result.msg }), nextState: state };
     }
     if (result.data?.refreshToken) {
-      await this.sessions.save(ctx.platform, ctx.chatId, result.data.refreshToken);
+      await this.sessions.save(
+        ctx.integration,
+        ctx.chatId,
+        result.data.refreshToken,
+      );
     }
     // Six questions deserve an answer. The router adds the member menu below
     // it, so the end of registration is a result and a next step in one message.

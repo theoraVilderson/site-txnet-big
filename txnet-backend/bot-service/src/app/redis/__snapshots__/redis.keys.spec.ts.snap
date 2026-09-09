@@ -2,9 +2,9 @@
 
 exports[`RedisKeys — bot key catalogue builds every key from fixed arguments 1`] = `
 {
-  "botLang": "bot:lang:bale:77",
-  "botNav": "bot:nav:telegram:5501",
-  "botSession": "bot:session:telegram:5501",
+  "botLang": "bot:lang:bale:integration-2:77",
+  "botNav": "bot:nav:telegram:integration-1:5501",
+  "botSession": "bot:session:telegram:integration-1:5501",
 }
 `;
 

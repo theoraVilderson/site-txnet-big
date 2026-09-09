@@ -3,8 +3,6 @@ import {
   Controller,
   HttpCode,
   HttpStatus,
-  NotFoundException,
-  Param,
   Post,
   Req,
   Res,
@@ -12,16 +10,10 @@ import {
   UsePipes,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { timingSafeEqual } from 'crypto';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { ok, err } from '../../common/response/response.util';
 import { RateLimit } from '../decorators/rate-limit.decorator';
 import { rateLimitSubject } from '../../common/security/service-caller';
-import {
-  BOT_PLATFORMS,
-  BotClientRegistry,
-  BotPlatform,
-} from '@txnet-backend/messenger';
 import { BotLinkService } from './bot-link.service';
 import {
   botLinkContactSchema,
@@ -31,7 +23,6 @@ import {
   botWebAppSessionSchema,
 } from './bot-link.schema';
 import { BotSessionService } from './bot-session.service';
-import { BotUpdate } from './bot-link.types';
 import { ServiceOnlyGuard } from '../../common/guards/service-only.guard';
 import { withRefreshCookie } from '../../common/http/refresh-cookie';
 import { resolveSwitchScope } from '../../common/security/switch-scope';
@@ -50,7 +41,6 @@ export class BotLinkController {
   constructor(
     private readonly links: BotLinkService,
     private readonly sessions: BotSessionService,
-    private readonly bots: BotClientRegistry,
   ) {}
 
   /**
@@ -198,42 +188,6 @@ export class BotLinkController {
   }
 
   /**
-   * @deprecated since 2026-09-06 — `bot-service` owns the webhook (ADR-0011).
-   * Kept for one release so a bot still pointed at this URL keeps working.
-   */
-  @Post(':platform/webhook/:secret')
-  @HttpCode(HttpStatus.OK)
-  @RateLimit({
-    key: (req) =>
-      `bot:webhook:${req.params?.platform}:${
-        req.body?.message?.chat?.id ?? req.ip
-      }`,
-    limit: 30,
-    windowSec: 60,
-  })
-  async webhook(
-    @Param('platform') platformParam: string,
-    @Param('secret') secret: string,
-    @Body() update: BotUpdate,
-    @Req() req: Request,
-  ) {
-    const platform = this.resolvePlatform(platformParam);
-    const expected = this.bots.webhookSecret(platform);
-    if (!expected || !secretMatches(secret, expected)) {
-      throw new NotFoundException();
-    }
-    const header = req.get('x-telegram-bot-api-secret-token');
-    if (header && !secretMatches(header, expected)) {
-      throw new NotFoundException();
-    }
-
-    // Always 200: a non-2xx makes the platform redeliver the same update, and
-    // handling is best-effort by design.
-    await this.links.handleUpdate(platform, update);
-    return { ok: true };
-  }
-
-  /**
    * "Has the user finished in the messenger yet?" — polled by the screen that
    * is showing the deep link.
    */
@@ -251,17 +205,4 @@ export class BotLinkController {
     return ok(await this.links.status(body.linkToken), 'auth.botLinkStatus');
   }
 
-  private resolvePlatform(value: string): BotPlatform {
-    const platform = BOT_PLATFORMS.find((p) => p === value);
-    if (!platform) throw new NotFoundException();
-    return platform;
-  }
-}
-
-/** Constant-time compare that tolerates a length mismatch. */
-function secretMatches(given: string, expected: string): boolean {
-  const a = Buffer.from(given ?? '');
-  const b = Buffer.from(expected);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
 }

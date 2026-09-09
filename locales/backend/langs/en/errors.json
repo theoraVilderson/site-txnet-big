@@ -32,7 +32,8 @@
       "expired": "The link expired. Request the code again.",
       "takenByAnotherAccount": "That messenger account is already linked to a different account",
       "noAccount": "No account is registered with this number"
-    }
+    },
+    "invalid": "The entered verification code is incorrect"
   },
   "auth": {
     "alreadyAuthenticated": "You are already signed in. Log out before signing in or registering again.",
@@ -44,7 +45,24 @@
     "invalidToken": "Invalid token",
     "otpChannels": "Available delivery methods",
     "sessionRevoked": "Your session has expired or been revoked",
-    "tokenExpired": "Token has expired"
+    "tokenExpired": "Token has expired",
+    "loginSuccess": "Welcome back",
+    "logoutSuccess": "You have been signed out",
+    "otpSent": "Your verification code is on its way",
+    "resetOtpSent": "Your password reset code is on its way",
+    "resetTokenGenerated": "Code confirmed. You can set a new password now.",
+    "invalidCredentials": "That number or password is not right",
+    "invalidOtp": "The entered verification code is incorrect",
+    "invalidOtpToken": "This request is no longer valid. Request a new code.",
+    "invalidRefreshToken": "Your session is not valid. Please sign in again.",
+    "refreshTokenRequired": "We could not find your session. Please sign in again.",
+    "sessionInactive": "Your session has expired or been revoked",
+    "invalidResetRequest": "That password reset request is not valid",
+    "invalidResetToken": "The password reset window has closed. Request a new one.",
+    "phoneNumberRequired": "Enter your phone number",
+    "phoneVerificationRequired": "Verify your phone number first",
+    "temporarilyLocked": "Too many failed attempts — sign-in is locked for a while. Try again shortly.",
+    "passwordResetSuccess": "Your password has been changed and your other devices are signed out"
   },
   "impersonation": {
     "notImpersonated": "This session is not impersonated",
@@ -84,5 +102,23 @@
     "notAMember": "That account is not one you can switch to",
     "removed": "The account was removed from your group here",
     "noScope": "This app could not be identified. Enable cookies, or try again from the panel or the bot."
+  },
+  "successful": "Done",
+  "failed": "That did not go through",
+  "password": {
+    "containsProfileData": "Your password must not contain your name, username or phone number"
+  },
+  "register": {
+    "success": "Your verification code is on its way",
+    "duplicateUser": "That number or username is already registered",
+    "pending": {
+      "expired": "Your registration window has closed. Please start again."
+    },
+    "defaultRoleMissing": "Registration is unavailable right now. Please contact support.",
+    "tenantUnresolved": "Registration is unavailable from this address. Please contact support.",
+    "phoneVerified": "Your phone number is verified"
+  },
+  "tenant": {
+    "claimMismatch": "This session does not belong to this address. Sign in again."
   }
 }

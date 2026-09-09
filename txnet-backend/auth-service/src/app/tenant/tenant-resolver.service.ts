@@ -1,104 +1,112 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { ResolvedTenant, normalizeHost } from './tenant';
+import { TenantCacheService } from './tenant-cache.service';
+import {
+  ResolvedTenant,
+  TenantClaim,
+  TenantClaimConflict,
+  normalizeHost,
+} from './tenant';
+
+type Identified = { id: string; slug: string };
 
 /**
- * How long a resolved host is trusted before it is looked up again.
- *
- * ADR-0020 accepts a lookup per request and says it belongs in a cache. This is
- * that cache, and it is deliberately the simplest one that can be correct: no
- * cross-process invalidation, because there is no writer to invalidate against
- * — tenant administration (adding a domain, verifying one) is F-018. A minute
- * is short enough that a newly verified domain works without a restart, and
- * long enough that the read stops being per-request.
- */
-export const TENANT_CACHE_TTL_MS = 60_000;
-
-type CacheEntry = { value: ResolvedTenant | null; expiresAt: number };
-
-/**
- * Resolves a request's tenant from its host (ADR-0020).
+ * Resolves a request's tenant from the claims it carries (ADR-0020, ADR-0025).
  *
  * This is `tenant`'s first service. It lives in the `auth-service` process the
  * way `app/account-switch/` hosts `audit`'s, because its only caller so far is
  * this app's edge — but the rule is tenant's, and `identity` never reads
  * `tenant_domain` itself (§8).
+ *
+ * Both lookups go through `TenantCacheService`, which is where the caching
+ * policy lives — including the reason it is shared rather than in-process
+ * (ADR-0025, F-1211). This class stays about the chain.
  */
 @Injectable()
 export class TenantResolverService {
-  private readonly logger = new Logger(TenantResolverService.name);
-  private readonly cache = new Map<string, CacheEntry>();
-
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
+    private readonly cache: TenantCacheService,
   ) {}
 
-  async resolve(rawHost: string | undefined | null): Promise<ResolvedTenant | null> {
-    const host = normalizeHost(rawHost);
-    // A request with no usable host still gets an answer — the fallback — so
-    // the empty key is a cache entry like any other rather than a special case.
-    const key = host ?? '';
-
-    const hit = this.cache.get(key);
-    if (hit && hit.expiresAt > Date.now()) return hit.value;
-
-    const value = await this.lookup(host);
-    this.cache.set(key, { value, expiresAt: Date.now() + TENANT_CACHE_TTL_MS });
-    return value;
-  }
-
-  private async lookup(host: string | null): Promise<ResolvedTenant | null> {
-    if (host) {
-      const row = await this.prisma.tenantDomain.findUnique({
-        where: { domainValue: host },
-        select: {
-          domainType: true,
-          verificationStatus: true,
-          tenant: { select: { id: true, slug: true } },
-        },
-      });
-
-      // A subdomain is issued by the platform, so matching the row is the whole
-      // proof. A custom domain is claimed by the reseller and is only theirs
-      // once ownership has been proven — `verificationStatus` defaults to
-      // `pending` and the schema documents it as meaningful for custom domains
-      // only (prisma/domains/tenant.prisma). An unverified one is treated as
-      // an unknown host: it falls through to the fallback below, exactly as a
-      // host with no row at all does.
-      //
-      // ASSUMED(2026-09-09): a `suspended` / `terminated` / soft-deleted tenant
-      // still resolves. What such a tenant may then *do* is a product rule and
-      // belongs to F-018 — see docs/domains/tenant/open-questions.md.
-      if (row && (row.domainType === 'subdomain' || row.verificationStatus === 'verified')) {
-        return { id: row.tenant.id, slug: row.tenant.slug, via: 'domain' };
-      }
-    }
-
-    return this.defaultTenant();
-  }
-
   /**
-   * The deployment's configured tenant, for a host that matched nothing.
+   * The chain, in order: a session's claim, then a verified service caller's
+   * bot claim, then the host. There is no fourth entry (ADR-0025): a request
+   * that carries no claim and arrives on a host no `tenant_domain` row matches
+   * resolves to `null`, and `TenantGuard` answers it a neutral 404. A fallback
+   * cannot tell a misconfigured host from an unknown one, so every stray host
+   * used to be served as whichever tenant `DEFAULT_TENANT_SLUG` named.
    *
-   * ADR-0020's accepted cost, stated where it is paid: in a deployment that
-   * serves resellers this silently absorbs every misconfigured host, so
-   * `DEFAULT_TENANT_SLUG` must be set on purpose there and never left at the
-   * single-tenant default.
+   * A claim and a surface that both resolve and disagree are **refused**
+   * (ADR-0024 decision 4) — `TenantClaimConflict`, never a silent preference
+   * for one of them.
    */
-  private async defaultTenant(): Promise<ResolvedTenant | null> {
-    const slug = this.config.get<string>('DEFAULT_TENANT_SLUG');
-    if (!slug) throw new Error('DEFAULT_TENANT_SLUG is required');
-
-    const tenant = await this.prisma.tenant.findFirst({
-      where: { slug },
-      select: { id: true, slug: true },
-    });
-    if (!tenant) {
-      this.logger.warn(`no tenant with slug '${slug}' — requests resolve to no tenant`);
-      return null;
+  async resolve(claim: TenantClaim): Promise<ResolvedTenant | null> {
+    const surface = await this.fromHost(claim.host);
+    const claimed = claim.session ?? claim.bot ?? null;
+    if (!claimed) {
+      return surface ? { ...surface, via: 'domain' } : null;
     }
-    return { id: tenant.id, slug: tenant.slug, via: 'default' };
+
+    const via = claim.session ? 'session' : 'bot';
+    if (surface) {
+      if (surface.id !== claimed) {
+        throw new TenantClaimConflict(claimed, { ...surface, via: 'domain' });
+      }
+      return { ...surface, via };
+    }
+
+    // No surface to agree or disagree with — the claim stands on its own, and
+    // is still checked against a real row: a token outliving the tenant it
+    // names resolves to nothing rather than to a tenant id nobody owns.
+    const tenant = await this.byId(claimed);
+    return tenant ? { ...tenant, via } : null;
+  }
+
+  /** The tenant a `tenant_domain` row maps this host to, or `null`. */
+  private async fromHost(rawHost: string | undefined | null): Promise<Identified | null> {
+    const host = normalizeHost(rawHost);
+    // A request with no usable host has no surface at all, and there is nothing
+    // to look up — the empty host must never be a cache key that could match a
+    // row.
+    if (!host) return null;
+
+    return this.cache.byHost(host, () => this.lookupHost(host));
+  }
+
+  private async lookupHost(host: string): Promise<Identified | null> {
+    const row = await this.prisma.tenantDomain.findUnique({
+      where: { domainValue: host },
+      select: {
+        domainType: true,
+        verificationStatus: true,
+        tenant: { select: { id: true, slug: true } },
+      },
+    });
+
+    // A subdomain is issued by the platform, so matching the row is the whole
+    // proof. A custom domain is claimed by the reseller and is only theirs
+    // once ownership has been proven — `verificationStatus` defaults to
+    // `pending` and the schema documents it as meaningful for custom domains
+    // only (prisma/domains/tenant.prisma). An unverified one is treated as
+    // an unknown host: it has no surface, exactly as a host with no row at all.
+    //
+    // ASSUMED(2026-09-09): a `suspended` / `terminated` / soft-deleted tenant
+    // still resolves. What such a tenant may then *do* is a product rule and
+    // belongs to F-018 — see docs/domains/tenant/open-questions.md.
+    if (row && (row.domainType === 'subdomain' || row.verificationStatus === 'verified')) {
+      return row.tenant;
+    }
+    return null;
+  }
+
+  /** The tenant a claim names, proven against a real row. */
+  private async byId(id: string): Promise<Identified | null> {
+    return this.cache.byId(id, () =>
+      this.prisma.tenant.findUnique({
+        where: { id },
+        select: { id: true, slug: true },
+      }),
+    );
   }
 }

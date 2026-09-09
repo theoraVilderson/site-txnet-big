@@ -18,6 +18,7 @@ import { BotLinkService } from '../bot-link/bot-link.service';
 import { BotPlatform } from '@txnet-backend/messenger';
 import { normalizePhone } from '../../common/validation/phone.schema';
 import { ok, err, safeExecute } from '../../common/response/response.util';
+import { TenantContext } from '../../tenant-context/tenant-context';
 
 /**
  * Registration data held in Redis between `register` and a successful
@@ -45,6 +46,12 @@ export class RegisterService {
     private readonly botLinks: BotLinkService,
   ) {}
 
+  /**
+   * The tenant is not a parameter: it is read from the ambient scope the edge
+   * opened (ADR-0024). `identity` still never resolves it and never reads
+   * `tenant_domain` — that table is `tenant`'s (§8) — it only refuses when the
+   * request resolved to no tenant at all.
+   */
   async register(input: RegisterInput, requestIp: string, lang: string) {
     return safeExecute(async () => {
       // 1. Password strength against profile data
@@ -61,14 +68,25 @@ export class RegisterService {
         throw e; // rethrow unexpected
       }
 
-      // 2. Get default tenant and role
-      const tenant = await this.prisma.tenant.findFirst({
-        where: { slug: 'platform_owner' },
-      });
+      // 2. The tenant this request resolved to, and the default role.
+      //
+      // The tenant is not looked up here any more: it arrives resolved from
+      // the host (ADR-0020, F-061-a) and is read from the ambient scope rather
+      // than a parameter (ADR-0024). `currentOrNull` rather than `current`
+      // because "no tenant" has a translated answer here; throwing would show
+      // the user an internal error for a deployment's misconfiguration.
+      // An unresolved tenant is a refusal, never
+      // a fallback — substituting `platform_owner` is what this row exists to
+      // stop, and on a deployment serving resellers it would file a stranger's
+      // account under the platform owner and look like a success.
+      const tenant = TenantContext.currentOrNull();
+      if (!tenant) {
+        return err('register.tenantUnresolved');
+      }
       const role = await this.prisma.role.findFirst({
         where: { name: 'user' },
       });
-      if (!tenant || !role) {
+      if (!role) {
         return err('register.defaultRoleMissing');
       }
 
@@ -114,11 +132,11 @@ export class RegisterService {
       // 7. Send OTP on a channel this environment actually offers. SMS is no
       // longer assumed: an operator running messengers-only must still be able
       // to register people.
-      const channel = input.channel ?? this.channels.defaultChannel();
+      const channel = input.channel ?? (await this.channels.defaultChannel());
       if (!channel) return err('otp.noChannelAvailable');
 
       if (this.channels.requiresLink(channel)) {
-        this.channels.assertUsable(channel);
+        await this.channels.assertUsable(channel);
         const platform = channel as unknown as BotPlatform;
         if (!(await this.botLinks.hasVerifiedLink(phoneNumber, platform))) {
           // No code yet: the bot sends it once this person proves the number

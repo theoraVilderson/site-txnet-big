@@ -117,17 +117,18 @@ model Tenant {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  users                 User[]                     @relation("TenantUsers")
-  branding              TenantBranding?
-  domains               TenantDomain[]
-  featureEntitlements   TenantFeatureEntitlement[]
-  staffMembers          TenantStaffMember[]
-  billingWallet         TenantBillingWallet?
-  usageMeters           TenantUsageMeter[]
-  gatewayConfig         TenantGatewayConfig?
-  smsConfigs            TenantSmsConfig[]
-  botIntegrations       TenantBotIntegration[]
-  restrictions          TenantRestriction[]
+  users               User[]                     @relation("TenantUsers")
+  branding            TenantBranding?
+  domains             TenantDomain[]
+  featureEntitlements TenantFeatureEntitlement[]
+  staffMembers        TenantStaffMember[]
+  billingWallet       TenantBillingWallet?
+  usageMeters         TenantUsageMeter[]
+  gatewayConfig       TenantGatewayConfig?
+  smsConfigs          TenantSmsConfig[]
+  restrictions        TenantRestriction[]
+  deks                TenantDek[]
+  credentials         TenantCredential[]
 
   @@map("tenant")
   @@schema("tenant")
@@ -135,20 +136,20 @@ model Tenant {
 
 /// ۲. برندینگ اختصاصی هر Tenant.
 model TenantBranding {
-  id                 String   @id @default(uuid()) @db.Uuid
-  tenantId           String   @unique @db.Uuid
-  brandName          String
-  logoUrl            String? // Object Storage (ArvanCloud)
-  faviconUrl         String?
-  primaryColorHex    String?
-  secondaryColorHex  String?
-  supportEmail       String?
-  supportPhone       String?
-  aboutText          String?
-  termsUrl           String?
-  privacyUrl         String?
-  defaultLanguage    Language @default(fa)
-  updatedAt          DateTime @updatedAt
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @unique @db.Uuid
+  brandName         String
+  logoUrl           String? // Object Storage (ArvanCloud)
+  faviconUrl        String?
+  primaryColorHex   String?
+  secondaryColorHex String?
+  supportEmail      String?
+  supportPhone      String?
+  aboutText         String?
+  termsUrl          String?
+  privacyUrl        String?
+  defaultLanguage   Language @default(fa)
+  updatedAt         DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -158,14 +159,14 @@ model TenantBranding {
 
 /// ۳. دامنه اختصاصی/زیردامنه هر Tenant (بخش ح سند: مکانیزم CNAME آروان‌کلاد).
 model TenantDomain {
-  id                   String                    @id @default(uuid()) @db.Uuid
-  tenantId             String                    @db.Uuid
-  domainType           TenantDomainType
-  domainValue          String                    @unique // myvpn.txnet.app یا myvpn.com
-  verificationStatus   DomainVerificationStatus  @default(pending) // فقط برای custom_domain معتبر
-  verificationToken    String? // برای رکورد TXT اثبات مالکیت
-  verifiedAt           DateTime?
-  arvanRegisteredAt    DateTime? // فیلد پیشنهادی بخش ح-۱: زمان ثبت در آروان‌کلاد
+  id                 String                   @id @default(uuid()) @db.Uuid
+  tenantId           String                   @db.Uuid
+  domainType         TenantDomainType
+  domainValue        String                   @unique // myvpn.txnet.app یا myvpn.com
+  verificationStatus DomainVerificationStatus @default(pending) // فقط برای custom_domain معتبر
+  verificationToken  String? // برای رکورد TXT اثبات مالکیت
+  verifiedAt         DateTime?
+  arvanRegisteredAt  DateTime? // فیلد پیشنهادی بخش ح-۱: زمان ثبت در آروان‌کلاد
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -176,13 +177,13 @@ model TenantDomain {
 
 /// ۴. پلن‌هایی که شما (پلتفرم) به Reseller می‌فروشید.
 model TenantFeaturePackage {
-  id                  String  @id @default(uuid()) @db.Uuid
+  id                  String   @id @default(uuid()) @db.Uuid
   name                String // «Starter»، «Growth»، «Enterprise»
   monthlyPrice        Decimal? @db.Decimal(18, 2) // ارز پایه؛ null یعنی خالص Pay-as-you-go
   includedFeatureKeys Json // Array — مثلاً ["spin_wheel","coupon_engine"]
   usageIncludedJson   Json // سقف رایگان، مثلاً {"sms_sent": 1000, "active_configs": 500}
   overageRuleJson     Json // نرخ هر واحد اضافه بعد از سقف رایگان
-  isActive            Boolean @default(true)
+  isActive            Boolean  @default(true)
 
   @@map("tenant_feature_package")
   @@schema("tenant")
@@ -194,8 +195,8 @@ model TenantFeatureEntitlement {
   id         String            @id @default(uuid()) @db.Uuid
   tenantId   String            @db.Uuid
   featureKey String // ai_recommendation, spin_wheel, affiliate_system, coupon_engine,
-                     // custom_bot_telegram, custom_bot_bale, own_gateway, own_sms,
-                     // multi_currency, dedicated_node_pool
+  // custom_bot_telegram, custom_bot_bale, own_gateway, own_sms,
+  // multi_currency, dedicated_node_pool
   isEnabled  Boolean           @default(false)
   source     EntitlementSource
   expiresAt  DateTime?
@@ -228,12 +229,12 @@ model TenantStaffMember {
 
 /// ب-۱. TenantBillingWallet — Tenant به شما بدهکار است.
 model TenantBillingWallet {
-  id             String  @id @default(uuid()) @db.Uuid
-  tenantId       String  @unique @db.Uuid
-  cachedBalance  Decimal @default(0) @db.Decimal(18, 2) // فقط Cache؛ منبع حقیقت TenantBillingTransaction است
-  version        Int     @default(0) // Optimistic Locking
+  id            String  @id @default(uuid()) @db.Uuid
+  tenantId      String  @unique @db.Uuid
+  cachedBalance Decimal @default(0) @db.Decimal(18, 2) // فقط Cache؛ منبع حقیقت TenantBillingTransaction است
+  version       Int     @default(0) // Optimistic Locking
 
-  tenant       Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant       Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   transactions TenantBillingTransaction[]
 
   @@map("tenant_billing_wallet")
@@ -242,14 +243,14 @@ model TenantBillingWallet {
 
 /// TenantBillingTransaction — Append-only، همان الگوی Ledger سند اصلی.
 model TenantBillingTransaction {
-  id           String                   @id @default(uuid()) @db.Uuid
-  walletId     String                   @db.Uuid
-  amount       Decimal                  @db.Decimal(18, 2)
+  id           String                  @id @default(uuid()) @db.Uuid
+  walletId     String                  @db.Uuid
+  amount       Decimal                 @db.Decimal(18, 2)
   direction    TenantLedgerDirection
   reasonType   TenantBillingReasonType
-  referenceId  String?                  @db.Uuid
-  balanceAfter Decimal                  @db.Decimal(18, 2)
-  createdAt    DateTime                 @default(now())
+  referenceId  String?                 @db.Uuid
+  balanceAfter Decimal                 @db.Decimal(18, 2)
+  createdAt    DateTime                @default(now())
 
   wallet      TenantBillingWallet @relation(fields: [walletId], references: [id])
   usageMeters TenantUsageMeter[]
@@ -262,18 +263,18 @@ model TenantBillingTransaction {
 /// TenantUsageMeter — برای مدل pay_as_you_go_metered؛ Worker
 /// `tenant_usage_metering` دوره‌ای مصرف را جمع می‌زند و از کیف‌پول کسر می‌کند.
 model TenantUsageMeter {
-  id                  String          @id @default(uuid()) @db.Uuid
-  tenantId            String          @db.Uuid
+  id                  String         @id @default(uuid()) @db.Uuid
+  tenantId            String         @db.Uuid
   meterKey            TenantMeterKey
   periodStart         DateTime
   periodEnd           DateTime
-  quantity            Decimal         @db.Decimal(18, 4)
-  unitPrice           Decimal         @db.Decimal(18, 8) // از TenantFeaturePackage.overageRuleJson
-  isBilled            Boolean         @default(false)
-  billedTransactionId String?         @db.Uuid
+  quantity            Decimal        @db.Decimal(18, 4)
+  unitPrice           Decimal        @db.Decimal(18, 8) // از TenantFeaturePackage.overageRuleJson
+  isBilled            Boolean        @default(false)
+  billedTransactionId String?        @db.Uuid
 
-  tenant             Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  billedTransaction  TenantBillingTransaction? @relation(fields: [billedTransactionId], references: [id])
+  tenant            Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  billedTransaction TenantBillingTransaction? @relation(fields: [billedTransactionId], references: [id])
 
   @@index([tenantId, meterKey, periodStart])
   @@map("tenant_usage_meter")
@@ -285,17 +286,17 @@ model TenantUsageMeter {
 /// TenantGatewayConfig — همیشه درگاه اختصاصی خودِ Tenant؛ هیچ گزینه‌ی
 /// اشتراکی با billing.PaymentGateway پلتفرم وجود ندارد.
 model TenantGatewayConfig {
-  id                   String                            @id @default(uuid()) @db.Uuid
-  tenantId             String                            @unique @db.Uuid
-  providerName         PaymentProviderName
-  gatewayCategory      GatewayCategory
-  merchantIdEncrypted  String? // SENSITIVE — never default-select
-  apiKeyEncrypted      String? // SENSITIVE — never default-select
-  verificationStatus   TenantGatewayVerificationStatus    @default(pending_test_transaction)
-  verifiedByAdminId    String?                            @db.Uuid
-  isActive             Boolean                            @default(false)
-  createdAt            DateTime                           @default(now())
-  updatedAt            DateTime                           @updatedAt
+  id                  String                          @id @default(uuid()) @db.Uuid
+  tenantId            String                          @unique @db.Uuid
+  providerName        PaymentProviderName
+  gatewayCategory     GatewayCategory
+  merchantIdEncrypted String? // SENSITIVE — never default-select
+  apiKeyEncrypted     String? // SENSITIVE — never default-select
+  verificationStatus  TenantGatewayVerificationStatus @default(pending_test_transaction)
+  verifiedByAdminId   String?                         @db.Uuid
+  isActive            Boolean                         @default(false)
+  createdAt           DateTime                        @default(now())
+  updatedAt           DateTime                        @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -306,12 +307,12 @@ model TenantGatewayConfig {
 /// TenantSmsConfig — use_platform_sms یعنی متری‌شدن با TenantUsageMeter،
 /// own_credentials یعنی مستقیم از پنل خودش بدون کسر از پلتفرم.
 model TenantSmsConfig {
-  id                  String        @id @default(uuid()) @db.Uuid
-  tenantId            String        @db.Uuid
-  mode                TenantSmsMode
-  ownProviderName     String?
-  ownApiKeyEncrypted  String? // SENSITIVE — never default-select
-  isActive            Boolean       @default(true)
+  id                 String        @id @default(uuid()) @db.Uuid
+  tenantId           String        @db.Uuid
+  mode               TenantSmsMode
+  ownProviderName    String?
+  ownApiKeyEncrypted String? // SENSITIVE — never default-select
+  isActive           Boolean       @default(true)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -319,35 +320,21 @@ model TenantSmsConfig {
   @@schema("tenant")
 }
 
-/// TenantBotIntegration — Instance مستقل تلگرام/بله برای هر Tenant؛
-/// webhookPath مجزا یعنی مشکل یک بات روی بقیه اثر نمی‌گذارد.
-model TenantBotIntegration {
-  id                 String         @id @default(uuid()) @db.Uuid
-  tenantId           String         @db.Uuid
-  platform           SocialPlatform
-  botTokenEncrypted  String // SENSITIVE — never default-select
-  botUsername        String
-  webhookPath        String         @unique
-  isActive           Boolean        @default(true)
-  connectedAt        DateTime       @default(now())
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId])
-  @@map("tenant_bot_integration")
-  @@schema("tenant")
-}
+// TenantBotIntegration lived here until F-066-h and is now
+// `automation.BotIntegration`: several bots per tenant with roles, and the
+// token held as a vault reference instead of a `botTokenEncrypted` column
+// (catalog 10.1, ADR-0026). The table was empty and no code ever read it.
 
 /// TenantRestriction — سقف مصرف در سطح یک برند کامل (همان الگوی
 /// governance.UserRestriction، این‌بار سطح Tenant).
 model TenantRestriction {
-  id              String           @id @default(uuid()) @db.Uuid
-  tenantId        String           @db.Uuid
-  restrictionKey  String // max_end_users, max_active_configs, max_monthly_traffic_gb,
-                          // max_staff_members, max_custom_domains
-  limitValueJson  Json
-  scope           RestrictionScope
-  isActive        Boolean          @default(true)
+  id             String           @id @default(uuid()) @db.Uuid
+  tenantId       String           @db.Uuid
+  restrictionKey String // max_end_users, max_active_configs, max_monthly_traffic_gb,
+  // max_staff_members, max_custom_domains
+  limitValueJson Json
+  scope          RestrictionScope
+  isActive       Boolean          @default(true)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -357,3 +344,159 @@ model TenantRestriction {
 }
 
 // =============================================================================
+
+// ── The Credential Vault (ADR-0026, catalog 20.4) ──────────────────────────
+//
+// Envelope encryption: one DEK per tenant, wrapped by a KEK that lives outside
+// this database (a mounted Docker Swarm secret). A dump of these two tables is
+// inert without that file, and a compromise of one tenant's DEK reaches only
+// that tenant's credentials — which is catalog 20.2's layer 5.
+//
+// Nothing here is ever default-selected into an API response: the only shape
+// an admin surface sees is `{configured, fingerprint, status, lastUsedAt}`
+// (tenant invariant #8). `ciphertext`, `iv`, `authTag` and `wrappedKey` are
+// read by `CredentialVaultService` and by nothing else.
+
+/// What a stored credential is for. The list is catalog 20.4's, verbatim;
+/// a new third-party integration adds a member here rather than a column
+/// somewhere else, so the vault stays the only home for a secret.
+enum TenantCredentialKind {
+  telegram_bot_token
+  bale_bot_token
+  sms_api_key
+  sms_sender_line
+  gateway_merchant_id
+  gateway_secret_key
+  panel_credentials
+  webhook_secret
+  ai_provider_api_key
+  /// A source panel's credentials, held only while a migration is in flight.
+  source_panel_credentials
+  cdn_dns_credentials
+
+  @@schema("tenant")
+}
+
+/// Where a credential version sits in its rotation.
+///
+/// `superseded` is the grace window ADR-0026 decision 4 requires: a newer
+/// version is already active, but an in-flight webhook signed against this one
+/// must still verify. It is destroyed — the row deleted — once the window has
+/// passed, which is why there is no `destroyed` member: a destroyed version is
+/// an absent row, not a row that still holds its ciphertext.
+enum TenantCredentialStatus {
+  active
+  superseded
+  expired
+  revoked
+
+  @@schema("tenant")
+}
+
+/// One data key per tenant, wrapped by the KEK. `wrappedKey` is the DEK
+/// sealed with AES-256-GCM under the KEK named by `kekId`; `kekId` is what
+/// makes a KEK rotation possible without re-encrypting every credential —
+/// only the DEK rows are re-wrapped.
+///
+/// A tenant may hold several rows over time; exactly one has `retiredAt = null`
+/// and that is the one new credentials are encrypted under. Old ones stay so
+/// credentials written under them remain readable.
+model TenantDek {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @db.Uuid
+  wrappedKey String // SENSITIVE — never default-select
+  kekId      String
+  createdAt  DateTime  @default(now())
+  retiredAt  DateTime?
+
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  credentials TenantCredential[]
+
+  @@index([tenantId, retiredAt])
+  @@map("tenant_dek")
+  @@schema("tenant")
+}
+
+/// One version of one credential, encrypted under its tenant's DEK.
+///
+/// `fingerprint` is a truncated hash of the plaintext (F-1214): it answers
+/// "is this the same value I already have?" without revealing anything, which
+/// is what makes the no-plaintext rule liveable for an admin UI.
+///
+/// `(tenantId, kind, label, version)` is unique so a rotation cannot collide
+/// with itself. "At most one `active` version per (tenantId, kind, label)" is
+/// a *partial* unique index, which Prisma cannot express — it is hand-written
+/// in this model's migration rather than deferred to F-041, because the vault
+/// depends on it to know which version to read.
+model TenantCredential {
+  id          String                 @id @default(uuid()) @db.Uuid
+  tenantId    String                 @db.Uuid
+  kind        TenantCredentialKind
+  /// Which one, when a tenant holds several of a kind — an SMS sender line, a
+  /// second bot. Empty string when the kind is singular for a tenant.
+  label       String                 @default("")
+  ciphertext  String // SENSITIVE — never default-select
+  iv          String // SENSITIVE — never default-select
+  authTag     String // SENSITIVE — never default-select
+  dekId       String                 @db.Uuid
+  fingerprint String
+  status      TenantCredentialStatus @default(active)
+  version     Int                    @default(1)
+  createdBy   String?                @db.Uuid
+  createdAt   DateTime               @default(now())
+  rotatedAt   DateTime?
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+
+  tenant Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  dek    TenantDek @relation(fields: [dekId], references: [id])
+
+  @@unique([tenantId, kind, label, version])
+  @@index([tenantId, kind, status])
+  @@index([status, rotatedAt])
+  @@map("tenant_credential")
+  @@schema("tenant")
+}
+
+/// One decryption of one credential (ADR-0026 decision 5, F-1215): who, which
+/// tenant, which kind, which caller. **Never the value, and never the
+/// fingerprint** — a log or an audit row is the one place a short secret and
+/// unlimited guesses meet (tenant invariant #8).
+///
+/// Written by `CredentialVaultService.use()`, which is the only method that
+/// returns a plaintext, and awaited before the plaintext is handed over: an
+/// unaudited decryption is a failed decryption. `verify` and `matches` write
+/// nothing, because they compare fingerprints and decrypt nothing.
+///
+/// **Deliberately carries no foreign key**, not to `tenant_credential` and not
+/// to `tenant`. An audit trail has to outlive what it describes, and both
+/// available FK behaviours are wrong here: `RESTRICT` would make
+/// `destroyExpiredVersions` unable to destroy a superseded version, which is
+/// the one thing ADR-0026 decision 4 requires it to do, and `CASCADE` would
+/// erase the record of every use of a credential at the moment it is removed.
+/// `audit.admin_audit_log` holds its `tenantId` the same way and for the same
+/// reason.
+model TenantCredentialAccess {
+  id           String               @id @default(uuid()) @db.Uuid
+  tenantId     String               @db.Uuid
+  /// The row that was decrypted. Not an FK — see the note above; the row it
+  /// names may legitimately be gone.
+  credentialId String               @db.Uuid
+  kind         TenantCredentialKind
+  label        String               @default("")
+  /// Which version was decrypted, so a rotation is visible in the trail.
+  version      Int
+  /// The code path that asked, e.g. `messenger:BotClientRegistry`. A string
+  /// rather than an enum: the set of callers grows with every integration,
+  /// and a migration per integration is not what this record is worth.
+  caller       String
+  /// The person on whose behalf, when there is one. A background worker or a
+  /// webhook has none, and `null` says so rather than naming a fake actor.
+  actorId      String?              @db.Uuid
+  createdAt    DateTime             @default(now())
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([credentialId, createdAt(sort: Desc)])
+  @@map("tenant_credential_access")
+  @@schema("tenant")
+}

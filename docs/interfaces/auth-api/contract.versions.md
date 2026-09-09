@@ -2,8 +2,8 @@
 id: auth-api
 layer: interface
 status: active
-version: 10
-updated: 2026-09-08
+version: 11
+updated: 2026-09-09
 ---
 
 # auth-api — version history
@@ -128,3 +128,29 @@ Input is unchanged for a user: any spelling still parses. What changed is what
 comes back, and what a client should store or compare — a client that has
 persisted `09…` values of its own must migrate them, exactly as
 `20260908000100_phone_numbers_are_e164` does for this service.
+
+## v11 — the internal bot-integration seam, and a webhook route removed
+
+**Removed:** `POST /auth/bots/:platform/webhook/:secret`, deprecated since
+2026-09-06 with nothing pointed at it. `bot-service` has owned the webhook
+since ADR-0011, and F-066-i deleted the environment variable this route's
+`:secret` was compared against, so it could no longer have answered.
+
+**New:** seven routes under `/internal/bot-integrations/*`, all behind
+`ServiceOnlyGuard` and all marked `@TenantAgnostic` — they exist so
+`bot-service` can find out *which* tenant an inbound update belongs to, and a
+route that answers that question cannot be required to have a tenant already.
+No public client is affected: a caller without `SERVICE_AUTH_TOKEN` gets the
+same 404 a nonexistent route gives.
+
+Two of them return a plaintext credential, which is the part worth being
+explicit about. F-323 says a bot token is never returned by any API; the reading
+taken here is that F-323 governs the tenant and admin surfaces — the value must
+never be readable by anyone who can see the panel — and that this seam is not
+one of those. It is reachable only with `SERVICE_AUTH_TOKEN`, which already buys
+its holder a captcha bypass and the rate-limit subject for every chat on the
+platform, a strictly larger power than one tenant's bot token. Every call still
+writes a vault audit row naming `bot-service` and the remote caller, so the
+trail F-1215 exists for is unbroken. The alternative — routing every outbound
+send through `auth-service` so no token ever crosses a process boundary — was
+weighed and is a backlog row of its own, not a silent widening of this one.

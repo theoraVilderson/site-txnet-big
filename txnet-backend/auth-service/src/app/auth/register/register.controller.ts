@@ -45,6 +45,9 @@ export class RegisterController {
     @Req() req: Request,
   ) {
     const lang = (req as any).language ?? 'fa';
+    // No tenant argument: the request's tenant is ambient from here down
+    // (ADR-0024). `identity` still never reads `tenant_domain` (§8) — it reads
+    // the scope `TenantContextMiddleware` opened from what `tenant` resolved.
     return this.registerService.register(body, ip, lang);
   }
 

@@ -1,3 +1,4 @@
+import { aBotIntegration } from '@txnet-backend/messenger';
 import { AuthApiClient } from '../auth-api/auth-api.client';
 import { ChatContext, NavState } from '../conversation/nav.types';
 import { BotSessionStore } from '../session/bot-session.store';
@@ -5,7 +6,7 @@ import { AccountSwitcher } from '../session/account-switcher';
 import { ChatAccess } from '../session/chat-access';
 import { AccountsFlow } from './accounts.flow';
 
-const ctx: ChatContext = { platform: 'telegram', chatId: '5501', senderId: 42, lang: 'fa' };
+const ctx: ChatContext = { integration: aBotIntegration(), platform: 'telegram', chatId: '5501', senderId: 42, lang: 'fa' };
 const ok = <T>(data: T) => ({ ok: true, msg: 'ok', data });
 
 const GROUP = {
@@ -69,7 +70,7 @@ describe('AccountsFlow', () => {
 
     await flow.start(ctx);
 
-    expect(sessions.save).toHaveBeenCalledWith('telegram', '5501', 'r-next');
+    expect(sessions.save).toHaveBeenCalledWith(ctx.integration, '5501', 'r-next');
   });
 
   it('switches and keeps the only refresh token that is still alive', async () => {
@@ -79,7 +80,7 @@ describe('AccountsFlow', () => {
     const result = await flow.handle(ctx, state, 'account:u-2');
 
     expect(api.switchAccount).toHaveBeenCalledWith({ userId: 'u-2' }, expect.anything());
-    expect(sessions.save).toHaveBeenLastCalledWith('telegram', '5501', 'r-sara');
+    expect(sessions.save).toHaveBeenLastCalledWith(ctx.integration, '5501', 'r-sara');
     expect(result.view.id).toBe('accounts.switched');
     expect(result.nextState).toBeNull();
   });
@@ -109,7 +110,7 @@ describe('AccountsFlow', () => {
 
     const result = await flow.start(ctx);
 
-    expect(sessions.clear).toHaveBeenCalledWith('telegram', '5501');
+    expect(sessions.clear).toHaveBeenCalledWith(ctx.integration, '5501');
     expect(api.listAccounts).not.toHaveBeenCalled();
     expect(result.view.id).toBe('accounts.signedOut');
   });
@@ -209,7 +210,7 @@ describe('AccountsFlow', () => {
     // auth-api has already revoked the session behind that token, so a chat
     // that kept it would answer every later tap with a failed refresh instead
     // of the sign-in offer.
-    expect(sessions.clear).toHaveBeenCalledWith('telegram', '5501');
+    expect(sessions.clear).toHaveBeenCalledWith(ctx.integration, '5501');
     expect(result.view.id).toBe('accounts.removedSelf');
   });
 

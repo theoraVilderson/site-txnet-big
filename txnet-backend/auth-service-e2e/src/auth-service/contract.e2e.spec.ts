@@ -103,6 +103,42 @@ describe('auth-api — wire contract', () => {
     });
   });
 
+  /**
+   * There is no fallback tenant (ADR-0025, F-1210). The claim worth checking
+   * over the wire is not the status alone but the *neutrality*: a host the
+   * platform does not serve must be indistinguishable from a path that does
+   * not exist, or a stranger learns there is a platform here to probe.
+   */
+  describe('an unknown host', () => {
+    const strange = { headers: { Host: 'stranger.example' } };
+
+    it('is a 404 that says exactly what an unknown route says', async () => {
+      const unknownHost = await api.post('/auth/captcha/challenge', {}, strange);
+      const unknownRoute = await api.post('/auth/does-not-exist', {});
+
+      expect(unknownHost.status).toBe(404);
+      expect(unknownHost.body).toMatchObject({
+        ok: false,
+        msg: 'system.notFound',
+        ref: expect.any(String),
+      });
+      // Same keys, same message — only the correlation id differs.
+      expect(Object.keys(unknownHost.body).sort()).toEqual(
+        Object.keys(unknownRoute.body).sort(),
+      );
+      expect(unknownHost.body.msg).toBe(unknownRoute.body.msg);
+    });
+
+    it('refuses the route that would otherwise have answered on the seeded host', async () => {
+      // The same call without the header is a 200 (see 'paths' below), so the
+      // 404 is the host being refused, not the route being missing.
+      const res = await api.post('/auth/captcha/challenge', {}, strange);
+
+      expect(res.status).toBe(404);
+      expect(res.body.data).toBeUndefined();
+    });
+  });
+
   describe('paths', () => {
     it('serves the auth routes under the global /api prefix only', async () => {
       const withPrefix = await request(e2e.server).post('/api/auth/captcha/challenge');

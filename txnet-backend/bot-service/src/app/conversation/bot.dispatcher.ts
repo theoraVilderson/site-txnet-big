@@ -38,14 +38,19 @@ export class BotDispatcher {
     const ctx: ChatContext = {
       ...rawCtx,
       lang: await this.langs.resolve(
-        rawCtx.platform,
+        rawCtx.integration,
         rawCtx.chatId,
         rawCtx.lang,
       ),
     };
-    const client = this.bots.client(ctx.platform);
+    const client = await this.bots.client(
+      ctx.integration,
+      'bot-app:BotDispatcher',
+    );
     if (!client) {
-      this.logger.warn(`${ctx.platform}: update for an unconfigured bot`);
+      this.logger.warn(
+        `${ctx.platform}: integration ${ctx.integration.id} has no usable token`,
+      );
       return;
     }
 
@@ -80,12 +85,12 @@ export class BotDispatcher {
       await client.sendMessage(ctx.chatId, text, rendered.replyMarkup);
 
       if (result.nextState) {
-        await this.nav.save(ctx.platform, ctx.chatId, {
+        await this.nav.save(ctx.integration, ctx.chatId, {
           ...result.nextState,
           lastView: result.view,
         });
       } else {
-        await this.nav.clear(ctx.platform, ctx.chatId);
+        await this.nav.clear(ctx.integration, ctx.chatId);
       }
     } catch (e: unknown) {
       this.logger.error(

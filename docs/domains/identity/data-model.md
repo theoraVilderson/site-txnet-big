@@ -1,7 +1,7 @@
 ---
 id: identity
 layer: domain
-updated: 2026-09-08
+updated: 2026-09-09
 ---
 
 # Data model — identity
@@ -9,13 +9,21 @@ updated: 2026-09-08
 **Do not copy the schema here.** Source of truth:
 `txnet-backend/prisma/domains/identity.prisma` (Postgres schema `identity`),
 migrated by `txnet-backend/prisma/domains/migrations/` — which starts at
-`20260908000000_init` plus the E.164 rewrite that follows it.
+`20260908000000_init` plus the E.164 rewrite that follows it and
+`20260909000300_identity_unique_per_tenant`.
 
 Every phone column (`user.phoneNumber`, `otp_code.phoneNumber`,
 `linked_bot_account.phoneNumber`) holds **E.164** and nothing else. That is
-what makes `user.phoneNumber`'s `@unique` mean one person: a national number
-is ambiguous between countries, and two real people would be conflated by it.
-See ADR-0018.
+what makes `user.phoneNumber` mean one person: a national number is ambiguous
+between countries, and two real people would be conflated by it. See ADR-0018.
+
+**One person, within one tenant.** Since F-065-b the uniqueness is
+`@@unique([tenantId, username])` and `@@unique([tenantId, phoneNumber])`, not a
+column-level `@unique` — two tenants may hold the same phone number as two
+unrelated accounts (ADR-0023). Nothing reads those columns without a tenant:
+`user` is in `TENANT_SCOPED_MODELS`, so every query is scoped by the ambient
+tenant or throws (ADR-0024). NULLs stay distinct, so a tenant may still have
+many users with no username.
 
 ## Tables owned
 | Table | Purpose | Tenant-scoped? | Retention |
@@ -26,7 +34,7 @@ See ADR-0018.
 | permission | permission key (`wallet.manual_adjust`, ...) | no | permanent |
 | role_permission | role<->permission join | no | — |
 | otp_code | OTP audit/history + fallback | no (has `phoneNumber`) | expire; Redis is truth (ADR-0007) |
-| linked_bot_account | user <-> Telegram/Bale chat id (OTP delivery source), plus the messenger-verified phone (`phoneNumber`) and the moment that proof succeeded (`contactVerifiedAt`) | via user | until unlinked |
+| linked_bot_account | user <-> Telegram/Bale chat id (OTP delivery source), plus the messenger-verified phone (`phoneNumber`) and the moment that proof succeeded (`contactVerifiedAt`) | yes (`tenantId`, F-066-l) | until unlinked |
 
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |
@@ -89,13 +97,15 @@ hash are cached in Redis only (`register:pending:<phone>`, 600s TTL, see
 
 - The "section 99" manual SQL in the schema (RLS, partial unique indexes,
   `platform_owner` CHECK) is **not yet applied**.
-- No migration history is committed yet (`prisma/migrations/` absent); schema is
-  currently applied via `prisma migrate dev` / `db push` in dev.
+- Migration history lives in `prisma/domains/migrations/` — hand-written SQL,
+  one history, applied before the first production data
+  (`docs/operations/migrations.md`).
 - 2026-09-08, still unmigrated like the rest (F-048): `session.ipAddress` and
   `session.userAgent` relaxed to nullable. Widening only — no existing row
   changes and no reader exists today, so it applies cleanly.
-- 2026-09-05 added, still unmigrated like the rest: `OtpPurpose.account_link`,
+- 2026-09-05 added: `OtpPurpose.account_link`,
   `linked_bot_account.phoneNumber`, `linked_bot_account.contactVerifiedAt`, and
-  `@@unique([platform, platformUserId])` on `linked_bot_account`. The unique
-  index can fail to create on an existing database that already has one chat id
-  on two users — check before applying (F-041).
+  a unique index on `linked_bot_account`, which F-066-l has since scoped to
+  `@@unique([tenantId, platform, platformUserId])`
+  (`20260909000400_bot_link_unique_per_tenant`). Migrated: the migration
+  backfills `tenantId` from the owning user before adding the index.

@@ -4,6 +4,15 @@ import {
   normalizeMessengerPhone,
 } from './bot-link.service';
 import { BotContact, PendingBotLink } from './bot-link.types';
+import { runWithTenant } from '../../tenant-context/tenant-context';
+
+/**
+ * A tenant in scope, the way `TenantContextMiddleware` opens one for a real
+ * request: a `linked_bot_account` row names the tenant it belongs to, because
+ * a chat id is unique within one and not across the platform (F-066-l).
+ */
+const inTenant = <T>(fn: () => Promise<T>): Promise<T> =>
+  runWithTenant({ id: 'tenant-1', slug: 'reseller-a', via: 'domain' }, fn);
 
 /**
  * The contact check is the only thing standing between "a messenger says this
@@ -113,13 +122,16 @@ describe('BotLinkService.handleUpdate — shared contact', () => {
   });
 
   it('links the chat and sends the code when the contact is the sender’s own', async () => {
-    await service.handleUpdate(
-      'telegram',
-      contactUpdate({ phone_number: '989123456789', user_id: CHAT }, CHAT),
+    await inTenant(() =>
+      service.handleUpdate(
+        'telegram',
+        contactUpdate({ phone_number: '989123456789', user_id: CHAT }, CHAT),
+      ),
     );
 
     expect(upsert).toHaveBeenCalledTimes(1);
     expect(upsert.mock.calls[0][0].create).toMatchObject({
+      tenantId: 'tenant-1',
       platformUserId: CHAT,
       phoneNumber: PHONE,
     });

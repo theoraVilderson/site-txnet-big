@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { BotPlatform } from '@txnet-backend/messenger';
+import { BotIntegration } from '@txnet-backend/messenger';
 import { RedisService } from '../redis/redis.service';
 import { RedisKeys, RedisTtl } from '../redis/redis.keys';
 
@@ -29,8 +29,11 @@ export class BotSessionStore {
     this.ttl = config.get<number>('BOT_SESSION_TTL_SEC', RedisTtl.botSession);
   }
 
-  async get(platform: BotPlatform, chatId: string): Promise<BotSession | null> {
-    const key = RedisKeys.botSession(platform, chatId);
+  async get(
+    integration: BotIntegration,
+    chatId: string,
+  ): Promise<BotSession | null> {
+    const key = RedisKeys.botSession(integration, chatId);
     const session = await this.redis.getJson<BotSession>(key);
     // Idle TTL: every message the chat sends pushes the expiry out again.
     if (session) await this.redis.touch(key, this.ttl);
@@ -38,18 +41,18 @@ export class BotSessionStore {
   }
 
   save(
-    platform: BotPlatform,
+    integration: BotIntegration,
     chatId: string,
     refreshToken: string,
   ): Promise<void> {
     return this.redis.setJson(
-      RedisKeys.botSession(platform, chatId),
+      RedisKeys.botSession(integration, chatId),
       { refreshToken, signedInAt: Date.now() } satisfies BotSession,
       this.ttl,
     );
   }
 
-  clear(platform: BotPlatform, chatId: string): Promise<void> {
-    return this.redis.del(RedisKeys.botSession(platform, chatId));
+  clear(integration: BotIntegration, chatId: string): Promise<void> {
+    return this.redis.del(RedisKeys.botSession(integration, chatId));
   }
 }

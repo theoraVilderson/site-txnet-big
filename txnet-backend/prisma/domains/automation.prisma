@@ -47,8 +47,8 @@ model BotWorker {
   isActive    Boolean           @default(true)
   createdAt   DateTime          @default(now())
 
-  schedules       BotSchedule[]
-  executionLogs   BotExecutionLog[]
+  schedules     BotSchedule[]
+  executionLogs BotExecutionLog[]
 
   @@map("bot_worker")
   @@schema("automation")
@@ -56,15 +56,15 @@ model BotWorker {
 
 /// 10.2 — فعال/غیرفعال برای بازه‌ی خاص.
 model BotSchedule {
-  id              String       @id @default(uuid()) @db.Uuid
-  botWorkerId     String       @db.Uuid
-  scheduleType    ScheduleType
-  windowStartAt   DateTime? // فقط time_window
-  windowEndAt     DateTime? // فقط time_window
-  cronExpression  String? // فقط cron_expression
-  timezone        String       @default("Asia/Tehran")
-  setByAdminId    String       @db.Uuid
-  isActive        Boolean      @default(true)
+  id             String       @id @default(uuid()) @db.Uuid
+  botWorkerId    String       @db.Uuid
+  scheduleType   ScheduleType
+  windowStartAt  DateTime? // فقط time_window
+  windowEndAt    DateTime? // فقط time_window
+  cronExpression String? // فقط cron_expression
+  timezone       String       @default("Asia/Tehran")
+  setByAdminId   String       @db.Uuid
+  isActive       Boolean      @default(true)
 
   botWorker BotWorker @relation(fields: [botWorkerId], references: [id])
 
@@ -74,15 +74,15 @@ model BotSchedule {
 
 /// 10.3 — رصد عملکرد هر اجرای Worker.
 model BotExecutionLog {
-  id              String          @id @default(uuid()) @db.Uuid
-  botWorkerId     String          @db.Uuid
-  triggeredBy     TriggerSource
-  startedAt       DateTime        @default(now())
-  finishedAt      DateTime?
-  status          ExecutionStatus
-  itemsProcessed  Int             @default(0)
-  errorsCount     Int             @default(0)
-  metricsJson     Json? // مثلاً برای campaign_sender: {"sent": 950, "failed": 12}
+  id             String          @id @default(uuid()) @db.Uuid
+  botWorkerId    String          @db.Uuid
+  triggeredBy    TriggerSource
+  startedAt      DateTime        @default(now())
+  finishedAt     DateTime?
+  status         ExecutionStatus
+  itemsProcessed Int             @default(0)
+  errorsCount    Int             @default(0)
+  metricsJson    Json? // مثلاً برای campaign_sender: {"sent": 950, "failed": 12}
 
   botWorker BotWorker @relation(fields: [botWorkerId], references: [id])
 
@@ -92,3 +92,71 @@ model BotExecutionLog {
 }
 
 // =============================================================================
+
+// 10.1 — Multiple bots per tenant (F-315, F-316; catalog 10.1, constraint C-05).
+// Replaces `tenant.TenantBotIntegration`, which no code ever read.
+
+/// Which job a tenant's bot does. C-05: the `primary` bot is the one that
+/// carries OTP and transactional alerts; `sales` / `support` / `secondary`
+/// exist for campaigns, secondary brands, and spreading ban risk.
+enum BotRole {
+  primary
+  sales
+  support
+  secondary
+
+  @@schema("automation")
+}
+
+/// Where an integration is in its lifecycle. `error` plus `lastErrorAt` is how
+/// a bot that upstream has banned or de-authorised stops being dialled.
+enum BotIntegrationStatus {
+  pending
+  active
+  disabled
+  error
+
+  @@schema("automation")
+}
+
+/// 10.1 — one bot instance a tenant owns, addressed by its own webhook path so
+/// that a token, ban or outage on one bot never reaches another tenant's.
+///
+/// `tenantId` carries no foreign key, which is the pattern every schema outside
+/// `tenant` uses for it. It is also deliberately NOT registered with the
+/// `withTenant` extension (`platform/tenant-context`): a webhook is resolved by
+/// its path in order to *discover* which tenant it belongs to, before any
+/// tenant is resolved — the same exception the vault tables take.
+model BotIntegration {
+  id            String               @id @default(uuid()) @db.Uuid
+  tenantId      String               @db.Uuid
+  platform      SocialPlatform
+  /// The @handle, without the leading `@`.
+  botUsername   String
+  role          BotRole              @default(primary)
+  /// The vault `label` half of a `CredentialRef`. The other two halves are
+  /// this row's `tenantId` and the kind implied by `platform`
+  /// (`telegram_bot_token` / `bale_bot_token`), so the token itself is never a
+  /// column here — ADR-0026, F-316. The webhook secret is the same label under
+  /// kind `webhook_secret`, which is what lets a rotation keep verifying an
+  /// in-flight update through its grace window.
+  credentialRef String
+  /// Unguessable, and the whole address: resolving it yields the tenant and
+  /// the platform. An unknown path is a 404, never a hint (ADR-0009).
+  webhookPath   String               @unique
+  status        BotIntegrationStatus @default(pending)
+  lastErrorAt   DateTime?
+  /// What this bot's platform can actually do, cached from the driver
+  /// (`platform/messenger`, F-301). Absent means "not probed yet".
+  capabilities  Json?
+  connectedAt   DateTime             @default(now())
+
+  @@unique([tenantId, platform, botUsername])
+  @@index([tenantId, status])
+  @@map("bot_integration")
+  @@schema("automation")
+}
+
+// Section 99 — `partial unique (tenantId, platform) where role = 'primary'`
+// cannot be expressed in Prisma. It lives as hand-written SQL in
+// `migrations/20260909000200_bot_integration`.

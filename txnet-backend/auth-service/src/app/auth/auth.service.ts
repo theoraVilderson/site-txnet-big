@@ -75,9 +75,9 @@ export class AuthService {
     );
   }
 
-  /** The delivery methods this environment offers, for a client to choose from. */
-  otpChannels() {
-    return ok({ channels: this.channels.describe() }, 'auth.otpChannels');
+  /** The delivery methods this tenant offers, for a client to choose from. */
+  async otpChannels() {
+    return ok({ channels: await this.channels.describe() }, 'auth.otpChannels');
   }
 
   async loginWithPassword(
@@ -140,7 +140,7 @@ export class AuthService {
       }
 
       if (user.twoFactorEnabled) {
-        const channel = this.resolveOtpChannel(user);
+        const channel = await this.resolveOtpChannel(user);
         await this.otp.issueOtp(
           user.phoneNumber!,
           OtpPurpose.login,
@@ -164,7 +164,7 @@ export class AuthService {
     lang: string,
   ) {
     return safeExecute(async () => {
-      const user = await this.prisma.user.findUnique({
+      const user = await this.prisma.user.findFirst({
         where: { phoneNumber },
         select: {
           id: true,
@@ -173,7 +173,7 @@ export class AuthService {
           preferredOtpChannel: true,
         },
       });
-      const resolvedChannel = this.resolveOtpChannel(user ?? {}, channel);
+      const resolvedChannel = await this.resolveOtpChannel(user ?? {}, channel);
 
       const link = await this.linkIfNeeded(
         resolvedChannel,
@@ -230,7 +230,7 @@ export class AuthService {
       }
 
       if (!input.phoneNumber) return err('auth.phoneNumberRequired');
-      const user = await this.prisma.user.findUnique({
+      const user = await this.prisma.user.findFirst({
         where: { phoneNumber: input.phoneNumber },
         include: {
           role: {
@@ -366,11 +366,11 @@ export class AuthService {
 
   async forgotPassword(input: ForgotPasswordInput, ip: string, lang: string) {
     return safeExecute(async () => {
-      const user = await this.prisma.user.findUnique({
+      const user = await this.prisma.user.findFirst({
         where: { phoneNumber: input.phoneNumber },
         select: { id: true, status: true, preferredOtpChannel: true },
       });
-      const channel = this.resolveOtpChannel(user ?? {}, input.channel);
+      const channel = await this.resolveOtpChannel(user ?? {}, input.channel);
 
       const link = await this.linkIfNeeded(
         channel,
@@ -401,7 +401,7 @@ export class AuthService {
         OtpPurpose.password_reset,
         input.otpCode,
       );
-      const user = await this.prisma.user.findUnique({
+      const user = await this.prisma.user.findFirst({
         where: { phoneNumber: input.phoneNumber },
         select: { id: true },
       });
@@ -546,11 +546,11 @@ export class AuthService {
     ip: string,
     lang: string,
   ) {
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.user.findFirst({
       where: { phoneNumber },
       select: { status: true, phoneVerifiedAt: true, preferredOtpChannel: true },
     });
-    const resolvedChannel = this.resolveOtpChannel(user ?? {}, channel);
+    const resolvedChannel = await this.resolveOtpChannel(user ?? {}, channel);
 
     const link = await this.linkIfNeeded(
       resolvedChannel,
@@ -583,7 +583,7 @@ export class AuthService {
    * mid-way through typing.
    */
   async proveAccountByOtp(phoneNumber: string, otpCode: string) {
-    const user = await this.prisma.user.findUnique({ where: { phoneNumber } });
+    const user = await this.prisma.user.findFirst({ where: { phoneNumber } });
     if (!user || user.deletedAt || user.status !== 'active') return null;
     if (!user.phoneVerifiedAt) return null;
     if (
@@ -725,7 +725,7 @@ export class AuthService {
     if (!this.channels.requiresLink(channel)) return null;
     // Rejects a channel switched off in this environment before we hand out a
     // link the bot could not honour.
-    this.channels.assertUsable(channel);
+    await this.channels.assertUsable(channel);
 
     const platform = channel as unknown as BotPlatform;
     if (await this.botLinks.hasVerifiedLink(phoneNumber, platform)) return null;
@@ -756,17 +756,20 @@ export class AuthService {
    * enum fields typed as the enum, and using `string` here would make TS
    * see it as incompatible with the actual user object.
    */
-  private resolveOtpChannel(
+  private async resolveOtpChannel(
     user: { preferredOtpChannel?: OtpChannel | null },
     explicitChannel?: OtpChannel,
-  ): OtpChannel {
+  ): Promise<OtpChannel> {
     // An explicitly named channel is never silently swapped: if it is off,
     // OtpService/linkIfNeeded rejects the request so the client can say why.
     if (explicitChannel) return explicitChannel;
-    if (user.preferredOtpChannel && this.channels.isAvailable(user.preferredOtpChannel)) {
+    if (
+      user.preferredOtpChannel &&
+      (await this.channels.isAvailable(user.preferredOtpChannel))
+    ) {
       return user.preferredOtpChannel;
     }
-    const fallback = this.channels.defaultChannel();
+    const fallback = await this.channels.defaultChannel();
     if (!fallback) throw new BadRequestException('otp.noChannelAvailable');
     return fallback;
   }

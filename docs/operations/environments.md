@@ -80,9 +80,7 @@ Traefik in the main stack can route to the other stacks).
 |---|---|
 | `OTP_ALLOWED_CHANNELS` | the switch. Comma-separated subset of `sms,telegram,bale`; default `sms`. A channel left out is invisible: absent from `GET /api/auth/otp/channels`, refused if a client names it. **It must reach the container** — an env var that only exists in `.env` and is not passed through in `dev-docker/docker-compose.main.yml` silently leaves the service on its default |
 | `OTP_DELIVERY_MODE` | `console` prints the code and calls no sender, so every allowed channel counts as configured (dev). `live` is the default |
-| `TELEGRAM_BOT_TOKEN` / `BALE_BOT_TOKEN` | without it the channel is not offered at all |
-| `TELEGRAM_BOT_USERNAME` / `BALE_BOT_USERNAME` | delivery still works for users who are already linked, but **no new user can link** — there is no deep link to send them to |
-| `TELEGRAM_WEBHOOK_SECRET` / `BALE_WEBHOOK_SECRET` | same: no webhook route means no link flow. At least 16 chars. The webhook is `https://api.<domain>/api/bot/<platform>/webhook/<secret>` (bot-service); a wrong secret answers 404 |
+| ~~`{TELEGRAM,BALE}_BOT_TOKEN` / `_BOT_USERNAME` / `_WEBHOOK_SECRET`~~ | **gone with F-066-i.** A bot's token, username, secret and path belong to the tenant that owns the bot, and live on its `automation.BotIntegration` row and in the Credential Vault. Setting a token variable now **refuses the boot** (`CredentialEnvGuard`, F-1216) |
 | `SERVICE_AUTH_TOKEN` | **must be identical in `auth-service` and `bot-service`** (>= 32 chars). It is how bot-service's calls skip the slide captcha and get a per-chat rate-limit bucket (ADR-0011). Wrong or unset in either place and *every* auth step inside the bot is refused with `captcha.required` — check this before reading any flow |
 | `AUTH_API_BASE_URL` | where bot-service reaches auth-service; in compose it is the in-network `http://auth-service:${AUTH_PORT}`, so bot traffic never leaves the private network |
 | `BOT_SESSION_TTL_SEC` / `BOT_NAV_TTL_SEC` | how long a chat stays signed in (30d idle) and how long a half-finished conversation is remembered (30m) |
@@ -91,30 +89,35 @@ Traefik in the main stack can route to the other stacks).
 | `TELEGRAM_WEBHOOK_PUBLIC_BASE` / `BALE_WEBHOOK_PUBLIC_BASE` | **incoming**: the base that platform calls back on. Empty falls back to `BOT_WEBHOOK_PUBLIC_BASE`, then `https://api.<DOMAIN_NAME>` |
 | `BOT_WEBHOOK_AUTO_REGISTER` | `false` stops **bot-service** registering webhooks on boot (leave it `true` unless something else owns them) |
 
-A messenger channel therefore has two levels: **token only** = existing linked
-users get codes; **token + username + secret** = new users can link themselves.
-`OtpChannelRegistry` logs the resolved `allowed=[…] available=[…]` line at boot —
-read it first when a channel "does not show up" in the panel.
+A messenger channel is now available **per tenant**: the operator switches the
+platform on with `OTP_ALLOWED_CHANNELS`, and each reseller supplies its own bot.
+`OtpChannelRegistry` logs only the resolved `allowed=[…]` line at boot — what is
+*available* depends on who is asking, so it cannot be answered without a
+request.
 
 **Where each one lives.** The four endpoint vars (`*_API_BASE`,
-`*_DEEP_LINK_BASE`) are shared defaults in `.env`. The six credentials
-(`{TELEGRAM,BALE}_BOT_TOKEN` / `_BOT_USERNAME` / `_WEBHOOK_SECRET`) are **per
-environment**, in `.env.dev` and `.env.prod`: a bot token can hold exactly one
-webhook URL, so dev and prod must be two different bots. Registering the same
-token twice silently steals the webhook from the other stack.
+`*_DEEP_LINK_BASE`) are shared defaults in `.env`; they describe a *platform*
+and are the same whoever the bot belongs to. Nothing that belongs to a tenant is
+in a file any more.
+
+Two bots still cannot share a token, because a token holds exactly one webhook
+URL — so dev and prod need two different `BotIntegration` rows with two
+different bots. That is now a data problem rather than a `.env.dev` /
+`.env.prod` one.
 
 The webhook URL itself is not configuration — it is derived:
-`<public base>/api/bot/<platform>/webhook/<that platform's secret>`, where
-the public base is `<PLATFORM>_WEBHOOK_PUBLIC_BASE`, else
-`BOT_WEBHOOK_PUBLIC_BASE`, else `https://api.<DOMAIN_NAME>`.
+`<public base>/api/bots/<platform>/<that bot's webhookPath>`, where the public
+base is `<PLATFORM>_WEBHOOK_PUBLIC_BASE`, else `BOT_WEBHOOK_PUBLIC_BASE`, else
+`https://api.<DOMAIN_NAME>`.
 
-**bot-service** registers that URL with every configured bot on boot
+**bot-service** registers that URL for every registrable integration on boot
 (`BotWebhookRegistrar`, off with `BOT_WEBHOOK_AUTO_REGISTER=false`); it reads
 `getWebhookInfo` first and only writes when the URL differs, so a restart is
-cheap and a webhook it cannot read is left alone.
-`scripts/set-bot-webhook.sh <dev|prod> [platform] [set|show|delete]` builds the
-identical URL by hand; `show` prints `getWebhookInfo`, which is the first thing
-to check when the bot goes quiet.
+cheap and a webhook it cannot read is left alone. The outcome is written back to
+the row as `status` + `lastErrorAt`, so `select status, last_error_at from
+automation.bot_integration` is the first thing to check when a bot goes quiet —
+`scripts/set-bot-webhook.sh` is gone, since there is no env token left for a
+shell script to read.
 
 Reachability is two separate problems, and dev has both:
 

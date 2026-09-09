@@ -1,8 +1,7 @@
 import {
   BotClientRegistry,
   BotViewRenderer,
-  MESSENGER_CAPABILITIES,
-} from '@txnet-backend/messenger';
+  MESSENGER_CAPABILITIES, aBotIntegration } from '@txnet-backend/messenger';
 import { BotCopy } from '../locale/bot-copy';
 import { ConversationStore } from './conversation.store';
 import { ChatLanguage } from '../locale/chat-language';
@@ -11,6 +10,7 @@ import { ConversationRouter } from './router';
 import { ChatContext, FlowResult } from './nav.types';
 
 const ctx: ChatContext = {
+  integration: aBotIntegration(),
   platform: 'telegram',
   chatId: '5501',
   lang: 'fa',
@@ -107,7 +107,7 @@ describe('BotDispatcher', () => {
     await dispatcher.handle(ctx);
 
     expect(nav.save).toHaveBeenCalledWith(
-      'telegram',
+      ctx.integration,
       '5501',
       expect.objectContaining({ step: 'login.code', lastView: view }),
     );
@@ -118,7 +118,7 @@ describe('BotDispatcher', () => {
 
     await dispatcher.handle(ctx);
 
-    expect(nav.clear).toHaveBeenCalledWith('telegram', '5501');
+    expect(nav.clear).toHaveBeenCalledWith(ctx.integration, '5501');
   });
 
   it('answers a tap before doing the work, so no button is left spinning', async () => {

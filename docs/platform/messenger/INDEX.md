@@ -2,13 +2,13 @@
 id: messenger
 layer: platform
 status: active
-version: 1
+version: 4
 keywords: [telegram, bale, messenger, bot client, capability flag, degradation, inline keyboard, webapp, sendMessage, ربات, تلگرام, بله, قابلیت, افت قابلیت]
 source:
   - txnet-backend/messenger/src/**
 owns_tables: []
-depends_on: [tenant]
-updated: 2026-09-06
+depends_on: [tenant, automation]
+updated: 2026-09-09
 ---
 
 # messenger
@@ -26,14 +26,17 @@ any business rule, translation content (`i18n`), account linking (`identity`,
 | File | Read it when |
 |---|---|
 | [contract.md](contract.md) | adding a platform, a capability flag, or a degradation rule |
+| [contract.integrations.md](contract.integrations.md) | a bot's token, or which client a caller gets |
+| [contract.webhook.md](contract.webhook.md) | where a bot's updates arrive, the secret-token check, or rotating a path |
 | [open-questions.md](open-questions.md) | something is undecided |
 
 ## Status
 
 `active` — an Nx library, `@txnet-backend/messenger`. Two consumers import it:
 `auth-service` (OTP delivery) and, from `F-303-b`, `bot-service`. The driver,
-the dated capability set, the `BotView` renderer and the deep-link adapter
-exist; media sending, payments and per-tenant branding do not.
+the dated capability set, the `BotView` renderer, the deep-link adapter and —
+since F-066-i — one client per `BotIntegration` exist; media sending, payments
+and per-tenant branding do not.
 
 ## Changelog
 | Date | Change |
@@ -42,5 +45,6 @@ exist; media sending, payments and per-tenant branding do not.
 | 2026-09-05 | Webhook addressing settled: one unguessable path per bot, not one shared door |
 | 2026-09-05 | Capability table verified against docs.bale.ai. The catalog's "Bale is a subset" premise does not hold: the divergence is **shape** (base URL, deep link, global name, payment rails), not missing capability. See ADR-0009's amendment |
 | 2026-09-06 | `draft -> active`: the unit ships as the Nx library `@txnet-backend/messenger`. The ADR-0009 seed moved out of `identity`, and `capabilities.ts` / `renderer.ts` / `deep-link.ts` are new. spec: F-301 F-302 |
+| 2026-09-09 | contract **v1 -> v4**, breaking: one client per `BotIntegration` instead of one per platform, tokens from the Credential Vault through a `BotIntegrationDirectory` port. Every registry method is keyed by an integration and most are now async. spec: F-320 F-321 F-323 |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

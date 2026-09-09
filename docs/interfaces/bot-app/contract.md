@@ -3,7 +3,7 @@ id: bot-app
 layer: interface
 status: active
 version: 10
-updated: 2026-09-08
+updated: 2026-09-09
 ---
 
 # bot-app — contract
@@ -70,7 +70,7 @@ contract — **not** a rule written in the bot because it is faster there
 
 | file | holds |
 |---|---|
-| `webhook/webhook.controller.ts` | `POST /api/bot/:platform/webhook/:secret` — one unguessable path per bot; wrong secret -> 404, known path -> always 200 |
+| `webhook/webhook.controller.ts` | `POST /api/bots/:platform/:webhookPath` — one unguessable path per bot, and the path is what resolves the tenant (F-320). Unknown path, wrong secret token, or a Telegram request with no header -> 404; known path -> always 200 |
 | `webhook/update.normalizer.ts` | the last place that knows what a Telegram `Update` looks like |
 | `conversation/router.ts` | `/start` (+ `F-314` payload), `/logout`, cancel, and reading a *typed* answer back to a choice |
 | `conversation/bot.dispatcher.ts` | render for this platform, send, delete the password message, remember the screen |
@@ -200,9 +200,9 @@ to Redis and reintroduces the silent-loss bug ADR-0010 exists to prevent.
 The bot's user is the same `User` as the panel's, proven by a
 `LinkedBotAccount` with `contactVerifiedAt` set (`identity`, invariant #12). It
 invents no identity model and holds no credential: only the ordinary `auth-api`
-refresh token at `bot:session:<platform>:<chatId>`, 30-day idle TTL — the chat's
-equivalent of the panel's cookie. `/logout`, a password reset and a self-removal
-(`F-0208`) each revoke it at `auth-api` and drop the entry.
+refresh token, in the `bot:session:` entry `redis-keyspace` catalogues — one per
+bot per chat, never per chat alone (F-320). `/logout`, a password reset and a
+self-removal (`F-0208`) each revoke it at `auth-api` and drop the entry.
 
 **A messenger chat id is not an authentication.** Without that Redis entry the
 chat is anonymous, however well known its owner is, and `/start` shows the guest

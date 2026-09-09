@@ -2,8 +2,8 @@
 id: auth-api
 layer: interface
 status: active
-version: 10
-updated: 2026-09-08
+version: 11
+updated: 2026-09-09
 ---
 
 # Contract — auth-api
@@ -113,7 +113,13 @@ cookies and rate limits. Field-level schemas live in code — link, do not copy:
 | POST `/auth/bots/link/contact` | platform, chatId, senderId, contact | 200, same outcome shape — the shared contact, checked against its sender (invariant #12). **Service callers only**; 404 otherwise | 10 / 300s per chat | — |
 | POST `/auth/bots/session` | platform, chatId, senderId?, contact? | 200 `{state:"authenticated", tokens}` — the ordinary token pair, because a contact-verified link **is** a credential (ADR-0012); `{state:"needsContact"}` when this chat has none yet and must send its card; `{ok:false, msg}` when the factor does not apply (`auth.botFactorNotAllowed` for a privileged role, `otp.botLink.noAccount`, `auth.invalidCredentials`). **Service callers only**; 404 otherwise | 10 / 300s per chat | — |
 | POST `/auth/bots/webapp/session` | platform, initData | 200 `{state:"authenticated", accessToken, expiresIn}` + sets `refresh_token` cookie — the Mini App presenting the signature its platform handed it (`F-310`, ADR-0017). `initData` is verified against that bot's token (HMAC-SHA-256, secret = `HMAC("WebAppData", token)`) and accepted for one hour after it was signed; the account it names is then subject to the identical rule as `/auth/bots/session`. `{state:"needsContact"}` when that messenger account has never shared its card — a Mini App cannot ask for one, so this is a refusal the *chat* closes. Every verification failure — forged, replayed, edited, or a bot this deployment has not configured — is the one answer `auth.invalidCredentials`. **Public**: the caller is a browser, and the signature is the credential | 20 / 900s | — |
-| POST `/auth/bots/:platform/webhook/:secret` | a Telegram/Bale `Update` | 200 `{ok:true}` **always** (a non-2xx makes the platform redeliver). `platform` is `telegram`\|`bale`; `:secret` is `TELEGRAM_WEBHOOK_SECRET`/`BALE_WEBHOOK_SECRET`, compared in constant time, and Telegram's `X-Telegram-Bot-Api-Secret-Token` header is checked too when present. A wrong secret, an unknown platform, or an unconfigured bot answers **404**, indistinguishable from a route that does not exist | 30 / 60s per chat | — |
+| POST `/internal/bot-integrations/resolve` | platform, webhookPath | 200 the `BotIntegration` that path names — tenant, platform, username, role, status, `credentialRef`. **Never a credential.** **Service callers only**; anyone else, and any unknown path, gets 404 | — | — |
+| POST `/internal/bot-integrations/registrable` | — | 200 every integration whose webhook the platform should keep live, `disabled` rows excluded (F-321). No credentials. **Service callers only** | — | — |
+| POST `/internal/bot-integrations/registration-result` | platform, webhookPath, ok | 200 `{recorded:true}` — writes `status` and `lastErrorAt`, which is what a tenant sees when its bot stops answering. **Service callers only** | — | — |
+| POST `/internal/bot-integrations/has-token` | platform, webhookPath | 200 `{configured}` — asked without decrypting anything, so it writes no audit row. **Service callers only** | — | — |
+| POST `/internal/bot-integrations/verify-secret` | platform, webhookPath, candidate | 200 `{valid}` — a fingerprint comparison, honouring a superseded version inside its rotation grace window (ADR-0026 decision 4). No decryption. **Service callers only** | — | — |
+| POST `/internal/bot-integrations/webhook-secret` | platform, webhookPath, caller? | 200 `{secret}` — a **plaintext**, for the process registering the webhook upstream. Audited. **Service callers only** | — | — |
+| POST `/internal/bot-integrations/token` | platform, webhookPath, caller? | 200 `{token}` — a **plaintext** bot token, for the process that is about to send as that bot. Every call writes a vault audit row naming `bot-service:<caller>` (F-1215). **Service callers only** | — | — |
 | POST `/auth/accounts/add/otp/request` | phoneNumber, channel? | 200 `{accepted:true}`, or the same `linkRequired` shape as `login/otp/request`. **Bearer required**; deliberately not behind the F-0101 check — a live session is this route's premise (C-21). The code is `OtpPurpose.account_switch_link`, its own purpose, so it can never be spent as a login | 10 / 900s **per caller** | — |
 | POST `/auth/accounts/add/otp/verify` | phoneNumber, otpCode(6) | 200 `{groupId, added, userId}`. `added:false` means it was already in the caller's own group. `userId` is the account that joined — the caller typed a phone number, so this is the only name it has for it, and it is what a surface then switches to | 20 / 900s per caller | — |
 | POST `/auth/accounts/add/password` | identifier, password | 200 `{groupId, added, userId}`, `userId` as above. Consumes the same per-account `login-failures` bucket as a password login | 20 / 900s per caller | — |
@@ -124,6 +130,7 @@ cookies and rate limits. Field-level schemas live in code — link, do not copy:
 | POST `/auth/captcha/verify` | challengeId | 200 `{token, expiresIn:120}` — `err('captcha.invalid')` if unknown/expired/too-fast | 30 / 900s (default — `CAPTCHA_RATE_LIMIT`) | — |
 | POST `/admin/users/:userId/impersonate` | reasonNote (>=10) | 200 `{accessToken, expiresIn:1800}` | — (needs `user.impersonate`) | — |
 | POST `/admin/impersonate/end` | — | 200 | — (Bearer of the impersonated session) | — |
+| POST `/admin/bots/:platform/:botUsername/webhook/rotate` | — | 200 `{rotated:true, registered, status}` (F-322). The bot is named by its `@handle` **within the tenant this request resolved to**, never by its path: the path is a credential, so it is neither an input nor an output. The old path stops resolving before the platform is called, so `registered:false` means a bot that is quiet, never one still listening on a burned address. 404 for an unknown platform, an unknown handle, or another tenant's bot | — (needs `bot.webhook_rotate`) | — |
 
 `tokens` = `{ accessToken, expiresIn }` in `data`; `refreshToken` is stripped
 from the body and set as the cookie.
@@ -157,6 +164,17 @@ above: a client that branches on the status code reads every business
 rejection as a success. `panel-web` branches on `ok`; so must any new client.
 Pinned by `auth-service-e2e/src/auth-service/contract.e2e.spec.ts`.
 
+**`msg` is translated from one namespace: `errors`.** All three shapes, both
+paths — `ResponseInterceptor` for a returned envelope, `I18nExceptionFilter` for
+a thrown one — and the Go gateway too (`auth-handler`, `forward-auth` v2). A key
+that can arrive both ways (`otp.invalid`, `captcha.invalid`) therefore has one
+sentence, not two that drift. The interceptor used to read a `messages`
+namespace no locale file defines, so every returned `msg` reached the client as
+the raw key; F-064 fixed that and `response.interceptor.spec.ts` holds every
+`ok()` / `err()` key in the service to both languages. The namespace is named
+`errors` for history rather than accuracy — it carries success text too — and
+renaming it would mean moving the Go gateway and every consumer at once.
+
 ## Status codes
 
 On a **thrown** error the status is meaningful; on a business rejection it is
@@ -185,7 +203,7 @@ Emits: nothing (no bus). Consumes: `identity` (all logic), `i18n` (strings),
 
 | Item | Deprecated since | Removal after | Replacement |
 |---|---|---|---|
-| `POST /auth/bots/:platform/webhook/:secret` | 2026-09-06 | 2026-12-06 | `POST /api/bot/:platform/webhook/:secret` on `bot-service`. A bot token holds exactly one webhook URL, so only one service may own it (ADR-0011); this route still answers, but `BotWebhookRegistrar` moved and nothing points a bot here any more |
+| `POST /auth/bots/:platform/webhook/:secret` | 2026-09-06 | **removed 2026-09-09** | `POST /api/bots/:platform/:webhookPath` on `bot-service`. Deprecated for one release with nothing pointed at it, then removed by F-066-i: its `:secret` was `TELEGRAM_WEBHOOK_SECRET`, a variable that no longer exists, so the route could not have answered anyway |
 | `POST /auth/register/verify-phone` body keyed by `userId` | 2026-09-04 | already removed | keyed by `phoneNumber` — register no longer creates a `user` row to key by |
 
 ## Version history

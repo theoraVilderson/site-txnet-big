@@ -1,3 +1,4 @@
+import { aBotIntegration } from '@txnet-backend/messenger';
 import { AuthApiClient } from '../auth-api/auth-api.client';
 import { ChatContext } from '../conversation/nav.types';
 import { BotSessionStore } from './bot-session.store';
@@ -18,6 +19,7 @@ import { ChatAccess } from './chat-access';
  */
 
 const ctx: ChatContext = {
+  integration: aBotIntegration(),
   platform: 'telegram',
   chatId: '5501',
   lang: 'fa',
@@ -61,7 +63,7 @@ describe('ChatAccess', () => {
     expect(await chatAccess.token(ctx)).toBe('a-1');
     expect(refresh).toHaveBeenCalledWith(
       { refreshToken: 'r-1' },
-      { chatId: '5501', lang: 'fa', platform: 'telegram' },
+      { chatId: '5501', lang: 'fa', platform: 'telegram', tenantId: 'tenant-1' },
     );
   });
 
@@ -84,7 +86,7 @@ describe('ChatAccess', () => {
     const { chatAccess } = access(store, refresh);
 
     expect(await chatAccess.token(ctx)).toBe('a-1');
-    expect(store.save).toHaveBeenCalledWith('telegram', '5501', 'r-2');
+    expect(store.save).toHaveBeenCalledWith(ctx.integration, '5501', 'r-2');
     // The second message of the same conversation.
     expect(await chatAccess.token(ctx)).toBe('a-2');
   });
@@ -104,7 +106,7 @@ describe('ChatAccess', () => {
     const { chatAccess } = access(store, refresh);
 
     expect(await chatAccess.token(ctx)).toBeNull();
-    expect(store.clear).toHaveBeenCalledWith('telegram', '5501');
+    expect(store.clear).toHaveBeenCalledWith(ctx.integration, '5501');
     expect(store.save).not.toHaveBeenCalled();
     // And the chat really is signed out, not just told so once.
     expect(await chatAccess.token(ctx)).toBeNull();
@@ -168,11 +170,11 @@ describe('ChatAccess', () => {
     }));
     const { chatAccess } = access(store, refresh);
 
-    await chatAccess.token({ platform: 'bale', chatId: '77', lang: 'en' });
+    await chatAccess.token({ integration: aBotIntegration(), platform: 'bale', chatId: '77', lang: 'en' });
 
     expect(refresh).toHaveBeenCalledWith(
       { refreshToken: 'r-1' },
-      { chatId: '77', lang: 'en', platform: 'bale' },
+      { chatId: '77', lang: 'en', platform: 'bale', tenantId: 'tenant-1' },
     );
   });
 });

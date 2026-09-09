@@ -3,6 +3,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { IOtpSender } from './otp-sender.interface';
 import { OtpChannel, OtpPurpose } from '../otp.interface';
 import { BotClientRegistry } from '@txnet-backend/messenger';
+import { TenantContext } from '../../../tenant-context/tenant-context';
 import { BotLinkStore } from '../../bot-link/bot-link.store';
 import { buildOtpChatMessage } from './otp-message.util';
 import { LocaleService } from '../../../locale/locale.service';
@@ -20,8 +21,18 @@ export class TelegramOtpSender implements IOtpSender {
     private readonly localeService: LocaleService,
   ) {}
 
-  isConfigured(): boolean {
-    return this.bots.client('telegram') !== null;
+  /**
+   * The tenant in scope has a usable telegram bot.
+   *
+   * Per tenant, not per deployment: the token lives on that tenant's own
+   * `BotIntegration` now (F-066-i). A request with no tenant resolved never
+   * reaches here — `TenantGuard` refuses it first — so asking for the current
+   * one is safe.
+   */
+  async isConfigured(): Promise<boolean> {
+    const tenantId = TenantContext.currentOrNull()?.id;
+    if (!tenantId) return false;
+    return this.bots.canSend(tenantId, 'telegram');
   }
 
   async send(
@@ -30,9 +41,16 @@ export class TelegramOtpSender implements IOtpSender {
     purpose: OtpPurpose,
     lang: string,
   ): Promise<void> {
-    const client = this.bots.client('telegram');
+    const tenantId = TenantContext.current('telegram OTP delivery').id;
+    const client = await this.bots.primaryClient(
+      tenantId,
+      'telegram',
+      'identity:TelegramOtpSender',
+    );
     if (!client) {
-      this.logger.error('TELEGRAM_BOT_TOKEN is not configured');
+      this.logger.error(
+        `tenant ${tenantId} has no usable telegram bot — OTP not sent`,
+      );
       throw new BadRequestException('otp.telegramNotConfigured');
     }
 
@@ -55,7 +73,7 @@ export class TelegramOtpSender implements IOtpSender {
    * promotes it.
    */
   private async resolveChatId(phoneNumber: string): Promise<string | null> {
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.user.findFirst({
       where: { phoneNumber },
       select: { id: true },
     });
