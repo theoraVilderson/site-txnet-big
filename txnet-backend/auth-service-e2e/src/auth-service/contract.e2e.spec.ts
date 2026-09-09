@@ -11,7 +11,11 @@
 import request from 'supertest';
 import { createE2eApp, E2eApp } from '../support/app';
 import { AuthApi, parseSetCookie } from '../support/api';
-import { COOKIE_DOMAIN } from '../support/env';
+import {
+  COOKIE_DOMAIN,
+  REFRESH_COOKIE,
+  REFRESH_MAX_AGE_SEC,
+} from '../support/env';
 import { newAccount, signUp } from '../support/fixtures';
 
 describe('auth-api — wire contract', () => {
@@ -118,7 +122,7 @@ describe('auth-api — wire contract', () => {
         otpCode: e2e.otp.latest(account.phoneNumber, 'register_phone_verify'),
       });
 
-      const cookie = parseSetCookie(res.headers['set-cookie'], 'refresh_token');
+      const cookie = parseSetCookie(res.headers['set-cookie'], REFRESH_COOKIE);
 
       expect(cookie).toBeDefined();
       expect(cookie?.attributes).toMatchObject({
@@ -126,7 +130,7 @@ describe('auth-api — wire contract', () => {
         path: '/',
         domain: COOKIE_DOMAIN,
         samesite: 'Lax',
-        'max-age': String(30 * 24 * 60 * 60),
+        'max-age': String(REFRESH_MAX_AGE_SEC),
       });
       // COOKIE_SECURE=false in this environment; anywhere else it is set.
       expect(cookie?.attributes.secure).toBeUndefined();

@@ -8,6 +8,7 @@
  */
 import { createE2eApp, E2eApp } from '../support/app';
 import { AuthApi, parseSetCookie } from '../support/api';
+import { ACCESS_TTL_SEC, REFRESH_COOKIE } from '../support/env';
 import { newAccount, signUp } from '../support/fixtures';
 
 describe('auth-api — signup, login, refresh, logout', () => {
@@ -89,7 +90,7 @@ describe('auth-api — signup, login, refresh, logout', () => {
           userId: expect.any(String),
           phoneVerified: true,
           accessToken: expect.any(String),
-          expiresIn: 900,
+          expiresIn: ACCESS_TTL_SEC,
         },
       });
       // The refresh token is a cookie, never a body field.
@@ -157,10 +158,10 @@ describe('auth-api — signup, login, refresh, logout', () => {
       expect(res.body).toEqual({
         ok: true,
         msg: 'auth.loginSuccess',
-        data: { accessToken: expect.any(String), expiresIn: 900 },
+        data: { accessToken: expect.any(String), expiresIn: ACCESS_TTL_SEC },
       });
 
-      const cookie = parseSetCookie(res.headers['set-cookie'], 'refresh_token');
+      const cookie = parseSetCookie(res.headers['set-cookie'], REFRESH_COOKIE);
       expect(cookie?.value).toEqual(expect.any(String));
       expect(cookie?.attributes).toMatchObject({ httponly: true, path: '/' });
     });
@@ -241,7 +242,7 @@ describe('auth-api — signup, login, refresh, logout', () => {
       expect(verified.body).toEqual({
         ok: true,
         msg: 'auth.loginSuccess',
-        data: { accessToken: expect.any(String), expiresIn: 900 },
+        data: { accessToken: expect.any(String), expiresIn: ACCESS_TTL_SEC },
       });
       expect(api.refreshCookie).toEqual(expect.any(String));
     });
@@ -270,7 +271,7 @@ describe('auth-api — signup, login, refresh, logout', () => {
       expect(res.body).toEqual({
         ok: true,
         msg: 'auth.refreshSuccess',
-        data: { accessToken: expect.any(String), expiresIn: 900 },
+        data: { accessToken: expect.any(String), expiresIn: ACCESS_TTL_SEC },
       });
       expect(api.refreshCookie).not.toBe(refreshToken);
 
@@ -293,7 +294,7 @@ describe('auth-api — signup, login, refresh, logout', () => {
     it('clears a cookie that no longer resolves to a live session (F-0101)', async () => {
       await signUp(api, e2e.otp);
       await api.logout();
-      api.setCookie('refresh_token', 'a-token-that-is-long-enough-to-pass-zod');
+      api.setCookie(REFRESH_COOKIE, 'a-token-that-is-long-enough-to-pass-zod');
 
       const res = await api.refresh();
 
@@ -301,7 +302,7 @@ describe('auth-api — signup, login, refresh, logout', () => {
         ok: false,
         msg: 'auth.invalidRefreshToken',
       });
-      const cleared = parseSetCookie(res.headers['set-cookie'], 'refresh_token');
+      const cleared = parseSetCookie(res.headers['set-cookie'], REFRESH_COOKIE);
       expect(cleared?.value).toBe('');
       expect(api.refreshCookie).toBeUndefined();
     });
@@ -328,7 +329,7 @@ describe('auth-api — signup, login, refresh, logout', () => {
         msg: 'auth.logoutSuccess',
         data: { success: true },
       });
-      const cleared = parseSetCookie(res.headers['set-cookie'], 'refresh_token');
+      const cleared = parseSetCookie(res.headers['set-cookie'], REFRESH_COOKIE);
       expect(cleared?.value).toBe('');
       expect(api.refreshCookie).toBeUndefined();
 

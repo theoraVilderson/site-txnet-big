@@ -9,6 +9,7 @@
  */
 import { createE2eApp, E2eApp } from '../support/app';
 import { AuthApi, parseSetCookie } from '../support/api';
+import { REFRESH_COOKIE } from '../support/env';
 import { signUp } from '../support/fixtures';
 
 describe('auth-api — the account switch group', () => {
@@ -95,7 +96,7 @@ describe('auth-api — the account switch group', () => {
       });
       // The refresh half never travels in the body — same rule as a login.
       expect(res.body.data.refreshToken).toBeUndefined();
-      expect(parseSetCookie(res.headers['set-cookie'], 'refresh_token')?.value)
+      expect(parseSetCookie(res.headers['set-cookie'], REFRESH_COOKIE)?.value)
         .toBeTruthy();
 
       // The token just issued is a working session for the *other* account…

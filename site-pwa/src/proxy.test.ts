@@ -4,10 +4,13 @@
 // need real Request/Response/Headers, not jsdom's.
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { proxy } from './proxy';
+import { proxy, REFRESH_COOKIE } from './proxy';
 import { PANEL_HOME } from '@/lib/routes';
 
 const ORIGIN = 'http://auth-service:3000';
+
+/** A cookie header for a visitor who holds a session. */
+const SIGNED_IN = `${REFRESH_COOKIE}=abc`;
 
 function requestFor(path: string, cookie?: string) {
   return new NextRequest(`https://panel.example.com${path}`, {
@@ -52,7 +55,7 @@ describe('which requests are checked at all', () => {
     ['a path that merely starts with a guarded prefix', '/auth/loginhelp'],
     ['a path that merely starts with the old signup prefix', '/auth/signuphelp'],
   ])('passes %s straight through, cookie or not', async (_label, path) => {
-    expect(await proxy(requestFor(path, 'refresh_token=abc'))).toBeNull();
+    expect(await proxy(requestFor(path, SIGNED_IN))).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -63,7 +66,7 @@ describe('which requests are checked at all', () => {
     ['/auth/register/step-two'],
   ])('guards %s', async (path) => {
     fetchMock.mockResolvedValue(upstream(200, { ok: true, data: { active: true } }));
-    const response = await proxy(requestFor(path, 'refresh_token=abc'));
+    const response = await proxy(requestFor(path, SIGNED_IN));
     expect(response?.headers.get('location')).toBe(
       `https://panel.example.com${PANEL_HOME}`,
     );
@@ -111,7 +114,7 @@ describe('the old /auth/signup path', () => {
     // A signed-in visitor on the old path must still land on the new one. The
     // guard then runs on `/auth/register` and sends them home from there, so
     // asking auth-service here would be a wasted round trip on every hit.
-    const response = await proxy(requestFor('/auth/signup', 'refresh_token=abc'));
+    const response = await proxy(requestFor('/auth/signup', SIGNED_IN));
 
     expect(response?.status).toBe(308);
     expect(fetchMock).not.toHaveBeenCalled();
@@ -128,7 +131,7 @@ describe('the session check', () => {
     // back to the login screen on the next real refresh.
     fetchMock.mockResolvedValue(upstream(200, { ok: true, data: { active: true } }));
 
-    await proxy(requestFor('/auth/login', 'refresh_token=abc'));
+    await proxy(requestFor('/auth/login', SIGNED_IN));
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).not.toContain('/auth/refresh');
@@ -138,14 +141,14 @@ describe('the session check', () => {
   it('goes to the internal origin and carries the cookie back', async () => {
     fetchMock.mockResolvedValue(upstream(200, { ok: true, data: { active: true } }));
 
-    await proxy(requestFor('/auth/login', 'refresh_token=abc'));
+    await proxy(requestFor('/auth/login', SIGNED_IN));
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${ORIGIN}/api/auth/session`);
     expect(init.method).toBe('GET');
     expect(init.cache).toBe('no-store');
-    expect(init.headers.cookie).toBe('refresh_token=abc');
+    expect(init.headers.cookie).toBe(SIGNED_IN);
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
@@ -154,7 +157,7 @@ describe('the session check', () => {
     vi.stubEnv('NEXT_PUBLIC_API_ORIGIN', 'https://api.example.com');
     fetchMock.mockResolvedValue(upstream(200, { ok: true, data: { active: true } }));
 
-    await proxy(requestFor('/auth/login', 'refresh_token=abc'));
+    await proxy(requestFor('/auth/login', SIGNED_IN));
 
     expect(fetchMock.mock.calls[0][0]).toBe(
       'https://api.example.com/api/auth/session',
@@ -167,7 +170,7 @@ describe('the session check', () => {
     fetchMock.mockRejectedValue(new TypeError('Failed to parse URL'));
 
     expect(
-      await proxy(requestFor('/auth/login', 'refresh_token=abc')),
+      await proxy(requestFor('/auth/login', SIGNED_IN)),
     ).toBeNull();
     expect(fetchMock.mock.calls[0][0]).toBe('/api/auth/session');
   });
@@ -179,7 +182,7 @@ describe('what the answer means', () => {
       upstream(200, { ok: true, data: { active: true } }),
     );
 
-    const response = await proxy(requestFor('/auth/login', 'refresh_token=abc'));
+    const response = await proxy(requestFor('/auth/login', SIGNED_IN));
 
     expect(response?.status).toBe(307);
     expect(response?.headers.get('location')).toBe(
@@ -192,7 +195,7 @@ describe('what the answer means', () => {
       upstream(200, { ok: false, msg: 'auth.sessionInactive' }),
     );
 
-    const response = await proxy(requestFor('/auth/login', 'refresh_token=abc'));
+    const response = await proxy(requestFor('/auth/login', SIGNED_IN));
 
     expect(response?.headers.get('location')).toBeNull();
     expect(response?.status).toBe(200);
@@ -206,7 +209,7 @@ describe('what the answer means', () => {
   ])('shows the form for %s', async (_label, status, body) => {
     fetchMock.mockResolvedValue(upstream(status, body));
 
-    const response = await proxy(requestFor('/auth/login', 'refresh_token=abc'));
+    const response = await proxy(requestFor('/auth/login', SIGNED_IN));
 
     expect(response?.headers.get('location')).toBeNull();
   });
@@ -217,7 +220,7 @@ describe('what the answer means', () => {
     // into the panel.
     fetchMock.mockResolvedValue(upstream(200, { ok: true, data: { active: false } }));
 
-    const response = await proxy(requestFor('/auth/login', 'refresh_token=abc'));
+    const response = await proxy(requestFor('/auth/login', SIGNED_IN));
 
     expect(response?.headers.get('location')).toBeNull();
   });
@@ -226,7 +229,7 @@ describe('what the answer means', () => {
     for (const data of [{}, { active: 'yes' }, { active: 1 }]) {
       fetchMock.mockResolvedValue(upstream(200, { ok: true, data }));
       const response = await proxy(
-        requestFor('/auth/login', 'refresh_token=abc'),
+        requestFor('/auth/login', SIGNED_IN),
       );
       expect(response?.headers.get('location')).toBeNull();
     }
@@ -235,7 +238,7 @@ describe('what the answer means', () => {
   it('shows the form when the body is not JSON', async () => {
     fetchMock.mockResolvedValue(upstream(200, '<html>gateway error</html>'));
 
-    const response = await proxy(requestFor('/auth/login', 'refresh_token=abc'));
+    const response = await proxy(requestFor('/auth/login', SIGNED_IN));
 
     expect(response?.headers.get('location')).toBeNull();
   });
@@ -244,7 +247,7 @@ describe('what the answer means', () => {
     fetchMock.mockRejectedValue(new Error('ECONNREFUSED'));
 
     expect(
-      await proxy(requestFor('/auth/login', 'refresh_token=abc')),
+      await proxy(requestFor('/auth/login', SIGNED_IN)),
     ).toBeNull();
   });
 
@@ -256,7 +259,7 @@ describe('what the answer means', () => {
     );
 
     expect(
-      await proxy(requestFor('/auth/login', 'refresh_token=abc')),
+      await proxy(requestFor('/auth/login', SIGNED_IN)),
     ).toBeNull();
   });
 });
@@ -265,41 +268,41 @@ describe('set-cookie forwarding', () => {
   it('forwards whatever auth-service sets on success', async () => {
     fetchMock.mockResolvedValue(
       upstream(200, { ok: true, data: { active: true } }, [
-        'refresh_token=unchanged; Path=/; HttpOnly',
+        `${REFRESH_COOKIE}=unchanged; Path=/; HttpOnly`,
       ]),
     );
 
-    const response = await proxy(requestFor('/auth/login', 'refresh_token=abc'));
+    const response = await proxy(requestFor('/auth/login', SIGNED_IN));
 
     expect(response?.headers.getSetCookie()).toEqual([
-      'refresh_token=unchanged; Path=/; HttpOnly',
+      `${REFRESH_COOKIE}=unchanged; Path=/; HttpOnly`,
     ]);
   });
 
   it('forwards the clear on failure, so a dead token costs one request only once', async () => {
     fetchMock.mockResolvedValue(
       upstream(401, { ok: false, msg: 'expired' }, [
-        'refresh_token=; Path=/; Max-Age=0',
+        `${REFRESH_COOKIE}=; Path=/; Max-Age=0`,
       ]),
     );
 
-    const response = await proxy(requestFor('/auth/login', 'refresh_token=abc'));
+    const response = await proxy(requestFor('/auth/login', SIGNED_IN));
 
     expect(response?.headers.get('location')).toBeNull();
     expect(response?.headers.getSetCookie()).toEqual([
-      'refresh_token=; Path=/; Max-Age=0',
+      `${REFRESH_COOKIE}=; Path=/; Max-Age=0`,
     ]);
   });
 
   it('forwards every cookie auth-service sets', async () => {
     fetchMock.mockResolvedValue(
       upstream(200, { ok: true, data: { active: true } }, [
-        'refresh_token=rotated; Path=/',
+        `${REFRESH_COOKIE}=rotated; Path=/`,
         'sid=s1; Path=/',
       ]),
     );
 
-    const response = await proxy(requestFor('/auth/login', 'refresh_token=abc'));
+    const response = await proxy(requestFor('/auth/login', SIGNED_IN));
 
     expect(response?.headers.getSetCookie()).toHaveLength(2);
   });

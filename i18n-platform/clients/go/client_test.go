@@ -23,6 +23,27 @@ import (
 // behaviours a vendored copy must not drift on. They are exercised against a
 // real gRPC server over a loopback socket, because half of them only exist in
 // the interaction with the stream.
+//
+// Its twin is clients/node/client.test.mjs. The two assert the same contract,
+// not the same list of tests: three cases here have no Node counterpart, and
+// each is a difference in the client's shape rather than a gap.
+//
+//   TestNewRequiresAnAddress          Go's New validates Config.Addr and
+//                                     returns an error. The Node factory hands
+//                                     `addr` to grpc-js, which rejects it
+//                                     itself, so there is nothing of ours to
+//                                     test.
+//   TestNewHonoursACancelledContext   Go boots under the caller's
+//                                     context.Context. Node's ready() takes no
+//                                     cancellation token.
+//   TestLanguagesKeepsTheConfiguredOrder
+//                                     Node asserts the same thing inside
+//                                     "defaultLang falls back to the first
+//                                     preload language" rather than in a case
+//                                     of its own.
+//
+// Anything else that lands in one file belongs in both. Add it to the twin in
+// the same change, or add a line here saying why it cannot exist there.
 
 // --- a scriptable locale-service ---------------------------------------
 
@@ -208,6 +229,20 @@ func TestNewBlocksUntilEveryPreloadLanguageIsCached(t *testing.T) {
 	for _, call := range svc.served() {
 		if call == "GetAvailableLocales" {
 			t.Error("GetAvailableLocales was called despite an explicit PreloadLangs")
+		}
+	}
+}
+
+// The Node twin's "an explicit preload list costs no GetAvailableLocales
+// round-trip". An explicit list is the whole answer, so asking the service what
+// it serves is a round trip on every boot of every service that configured one.
+func TestNewWithAnExplicitPreloadListSkipsGetAvailableLocales(t *testing.T) {
+	svc := twoLanguageService()
+	newClient(t, serve(t, svc), Config{Scope: "backend", PreloadLangs: []string{"en"}})
+
+	for _, call := range svc.served() {
+		if call == "GetAvailableLocales" {
+			t.Fatalf("served %v, want no GetAvailableLocales", svc.served())
 		}
 	}
 }

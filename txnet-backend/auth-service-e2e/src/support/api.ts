@@ -9,6 +9,7 @@
  */
 import request from 'supertest';
 import type { Server } from 'node:http';
+import { REFRESH_COOKIE } from './env';
 
 /** Long enough to clear CaptchaService's MIN_INTERACTION_MS human check. */
 const SLIDE_MS = 300;
@@ -58,7 +59,7 @@ export class AuthApi {
   }
 
   get refreshCookie(): string | undefined {
-    return this.cookies.get('refresh_token');
+    return this.cookies.get(REFRESH_COOKIE);
   }
 
   /** Adopt a cookie jar entry by hand (e.g. to replay an old token). */

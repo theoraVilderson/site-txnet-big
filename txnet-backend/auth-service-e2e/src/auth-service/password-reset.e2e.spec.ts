@@ -6,6 +6,7 @@
  */
 import { createE2eApp, E2eApp } from '../support/app';
 import { AuthApi, parseSetCookie } from '../support/api';
+import { ACCESS_TTL_SEC, REFRESH_COOKIE } from '../support/env';
 import { newAccount, signUp } from '../support/fixtures';
 
 const NEW_PASSWORD = 'Rene9ed!Secret';
@@ -67,11 +68,11 @@ describe('auth-api — password reset', () => {
       data: {
         success: true,
         accessToken: expect.any(String),
-        expiresIn: 900,
+        expiresIn: ACCESS_TTL_SEC,
       },
     });
     expect(reset.body.data).not.toHaveProperty('refreshToken');
-    const cookie = parseSetCookie(reset.headers['set-cookie'], 'refresh_token');
+    const cookie = parseSetCookie(reset.headers['set-cookie'], REFRESH_COOKIE);
     expect(cookie?.attributes).toMatchObject({ httponly: true, path: '/' });
     expect(laptop.refreshCookie).not.toBe(laptopTokenBefore);
 

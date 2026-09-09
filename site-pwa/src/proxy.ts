@@ -9,7 +9,12 @@ import { AUTH_REGISTER, PANEL_HOME } from "@/lib/routes";
  */
 const GUARDED_PATHS = ["/auth/login", AUTH_REGISTER];
 
-const REFRESH_COOKIE = "refresh_token";
+/**
+ * The session cookie this middleware reads. Exported so `proxy.test.ts` asserts
+ * against the same string the code uses — auth-service owns the name
+ * (`common/http/refresh-cookie.ts`) and a rename there has to fail here.
+ */
+export const REFRESH_COOKIE = "refresh_token";
 
 /**
  * The screen used to live at `/auth/signup`. It is `register` everywhere else

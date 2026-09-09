@@ -146,9 +146,12 @@ Three other stacks carry tests, and none of them uses jest:
 The shared locale clients are two implementations of one contract (a blocking
 boot, a per-language cache replace, the same fallback chain), so their tests are
 deliberately twins: `clients/go/client_test.go` and
-`clients/node/client.test.mjs` assert the same behaviours in the same order.
-Change one and change the other, or the "identical behaviour" both files claim
-in their header is only a claim.
+`clients/node/client.test.mjs` assert the same **contract**, not the same list
+of tests. Where a case exists in only one of them it is because the two clients
+differ in shape — Go boots inside `New` under a `context.Context`, Node's
+`ready()` is lazy and memoised — and each file's header names its own one-sided
+cases and why. Change one and change the other, or add a line to that list
+saying why the twin cannot have it.
 
 ## Next.js apps (`site-pwa`, `coinsite`)
 

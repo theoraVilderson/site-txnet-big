@@ -9,6 +9,25 @@
  *
  * Run with `npm test` (node:test — no test framework is added to this
  * package). It exercises the shipped `dist/`, which is what services import.
+ *
+ * The two files assert the same contract, not the same list of tests. Four
+ * cases here have no Go counterpart, and each is a difference in the client's
+ * shape rather than a gap:
+ *
+ *   "ready() is idempotent"          The Go client boots inside New(), so
+ *   "a failed boot is not cached"    there is no second call to be idempotent
+ *                                    about, and a failed boot returns an error
+ *                                    instead of a client. Node's boot is lazy
+ *                                    and its result is memoised, which is
+ *                                    exactly what these two pin.
+ *   "cached() exposes the whole      cached() and resync() are Node-only
+ *    snapshot"                       methods; the Go client exposes neither.
+ *   "resync refetches every preload
+ *    language"
+ *
+ * The Go file lists its own three in the same shape. Anything else that lands
+ * in one file belongs in both — add it to the twin in the same change, or add
+ * a line here saying why it cannot exist there.
  */
 import test, { after, before, describe } from "node:test";
 import assert from "node:assert/strict";

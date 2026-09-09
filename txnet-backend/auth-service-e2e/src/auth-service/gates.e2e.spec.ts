@@ -4,6 +4,7 @@
  * client that does not walk the challenge, or that retries too fast, gets a
  * specific answer it has to handle.
  */
+import { ConfigService } from '@nestjs/config';
 import { createE2eApp, E2eApp } from '../support/app';
 import { AuthApi, sleep } from '../support/api';
 import { newAccount, signUp } from '../support/fixtures';
@@ -11,9 +12,26 @@ import { newAccount, signUp } from '../support/fixtures';
 describe('auth-api — captcha and rate-limit gates', () => {
   let e2e: E2eApp;
   let api: AuthApi;
+  /**
+   * The limits the booted service is actually running with. Counting to a
+   * literal here pinned the same number in two places, so a deployment could
+   * not move one without the suite going red for the wrong reason — and a
+   * default changed in `env.validation.ts` alone would have gone unnoticed.
+   */
+  let limits: {
+    captcha: number;
+    forgotVerify: number;
+    loginFailureLock: number;
+  };
 
   beforeAll(async () => {
     e2e = await createE2eApp();
+    const config = e2e.app.get(ConfigService);
+    limits = {
+      captcha: config.get<number>('CAPTCHA_RATE_LIMIT')!,
+      forgotVerify: config.get<number>('FORGOT_VERIFY_RATE_LIMIT')!,
+      loginFailureLock: config.get<number>('LOGIN_FAILURE_LOCK_THRESHOLD')!,
+    };
   });
 
   afterAll(async () => {
@@ -144,8 +162,8 @@ describe('auth-api — captcha and rate-limit gates', () => {
   });
 
   describe('rate limits', () => {
-    it('cuts the captcha challenge off at 30 per window', async () => {
-      for (let i = 0; i < 30; i++) {
+    it('cuts the captcha challenge off at the configured limit', async () => {
+      for (let i = 0; i < limits.captcha; i++) {
         expect((await api.challenge()).status).toBe(200);
       }
 
@@ -159,10 +177,10 @@ describe('auth-api — captcha and rate-limit gates', () => {
       });
     });
 
-    it('cuts forgot-password OTP verification off at 20 per window', async () => {
+    it('cuts forgot-password OTP verification off at the configured limit', async () => {
       const phoneNumber = newAccount().phoneNumber;
 
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < limits.forgotVerify; i++) {
         const res = await api.forgotVerifyOtp({ phoneNumber, otpCode: '000000' });
         expect(res.status).not.toBe(429);
       }
@@ -173,12 +191,12 @@ describe('auth-api — captcha and rate-limit gates', () => {
       expect(blocked.body).toMatchObject({ ok: false, msg: 'system.rateLimit' });
     });
 
-    it('locks one account after ten failed passwords, without locking the IP', async () => {
+    it('locks one account after the configured failures, without locking the IP', async () => {
       const { account } = await signUp(api, e2e.otp);
       const attacker = new AuthApi(e2e.server);
       const wrong = { identifier: account.username, password: 'Wr0ng!Passw0rd' };
 
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < limits.loginFailureLock; i++) {
         const res = await attacker.login(wrong);
         expect(res.body).toMatchObject({ ok: false, msg: 'auth.invalidCredentials' });
       }
@@ -215,7 +233,7 @@ describe('auth-api — captcha and rate-limit gates', () => {
         account.phoneNumber.replace(/^0/, '+98'),
       ];
 
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < limits.loginFailureLock; i++) {
         await attacker.login({
           identifier: spellings[i % 2],
           password: 'Wr0ng!Passw0rd',
