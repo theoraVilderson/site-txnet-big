@@ -3,6 +3,7 @@ import { AuthApiClient } from '../auth-api/auth-api.client';
 import { ChatContext, FlowResult, NavState } from '../conversation/nav.types';
 import { BotSessionStore } from '../session/bot-session.store';
 import { OtpStep } from './otp.step';
+import { PhoneNumbers } from './phone-number';
 import { ACTIONS, ask, askContact, say } from './views';
 
 /**
@@ -19,6 +20,7 @@ export class ForgotFlow {
     private readonly api: AuthApiClient,
     private readonly otp: OtpStep,
     private readonly sessions: BotSessionStore,
+    private readonly phones: PhoneNumbers,
   ) {}
 
   start(): FlowResult {
@@ -35,7 +37,9 @@ export class ForgotFlow {
   ): Promise<FlowResult> {
     switch (state.step) {
       case 'forgot.phone': {
-        const phoneNumber = ctx.contact?.phone_number ?? (ctx.text ?? '').trim();
+        const phoneNumber = this.phones.read(
+          ctx.contact?.phone_number ?? (ctx.text ?? ''),
+        );
         if (!phoneNumber) {
           return {
             view: askContact('forgot.phone', { key: 'bot.login.askPhone' }),

@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import { AuthApiClient } from '../auth-api/auth-api.client';
 import { ChatContext, NavState } from '../conversation/nav.types';
 import { BotSessionStore } from '../session/bot-session.store';
@@ -5,6 +6,7 @@ import { AccountSwitcher } from '../session/account-switcher';
 import { ChatAccess } from '../session/chat-access';
 import { AccountAddFlow } from './account-add.flow';
 import { OtpStep } from './otp.step';
+import { PhoneNumbers } from './phone-number';
 
 const ctx: ChatContext = { platform: 'telegram', chatId: '5501', senderId: 42, lang: 'fa' };
 const ok = <T>(data: T) => ({ ok: true, msg: 'ok', data });
@@ -60,6 +62,7 @@ function harness(over: { session?: unknown; api?: Partial<AuthApiClient> } = {})
       // is a second place to forget it, and forgetting it signs the chat out
       // of both accounts at once.
       new AccountSwitcher(api, sessions),
+      new PhoneNumbers(new ConfigService({ DEFAULT_LANGUAGE: 'fa' })),
     ),
   };
 }
@@ -95,17 +98,18 @@ describe('AccountAddFlow', () => {
       at('accountAdd.phone', { proof: 'otp' }),
       null,
     );
-    expect(phone.nextState?.data.phoneNumber).toBe('09120000000');
+    // Typed nationally, carried as E.164 from the step that read it.
+    expect(phone.nextState?.data.phoneNumber).toBe('+989120000000');
     expect(phone.nextState?.step).toBe('accountAdd.channel');
 
     const sent = await flow.handle(
       ctx,
-      at('accountAdd.channel', { proof: 'otp', phoneNumber: '09120000000' }),
+      at('accountAdd.channel', { proof: 'otp', phoneNumber: '+989120000000' }),
       'channel:sms',
     );
 
     expect(api.requestAddOtp).toHaveBeenCalledWith(
-      { phoneNumber: '09120000000', channel: 'sms' },
+      { phoneNumber: '+989120000000', channel: 'sms' },
       expect.objectContaining({ accessToken: 'access-1' }),
     );
     expect(sent.nextState?.step).toBe('accountAdd.code');
@@ -132,7 +136,7 @@ describe('AccountAddFlow', () => {
 
     const result = await flow.handle(
       ctx,
-      at('accountAdd.channel', { proof: 'otp', phoneNumber: '09120000000' }),
+      at('accountAdd.channel', { proof: 'otp', phoneNumber: '+989120000000' }),
       'channel:telegram',
     );
 
@@ -146,12 +150,12 @@ describe('AccountAddFlow', () => {
 
     const result = await flow.handle(
       { ...ctx, text: '123456' },
-      at('accountAdd.code', { proof: 'otp', phoneNumber: '09120000000' }),
+      at('accountAdd.code', { proof: 'otp', phoneNumber: '+989120000000' }),
       null,
     );
 
     expect(api.addAccountByOtp).toHaveBeenCalledWith(
-      { phoneNumber: '09120000000', otpCode: '123456' },
+      { phoneNumber: '+989120000000', otpCode: '123456' },
       expect.objectContaining({ accessToken: 'access-1' }),
     );
     // The add answers with the id of the account that joined, and that id is
@@ -173,7 +177,7 @@ describe('AccountAddFlow', () => {
 
     await flow.handle(
       { ...ctx, text: '123456' },
-      at('accountAdd.code', { proof: 'otp', phoneNumber: '09120000000' }),
+      at('accountAdd.code', { proof: 'otp', phoneNumber: '+989120000000' }),
       null,
     );
 
@@ -194,7 +198,7 @@ describe('AccountAddFlow', () => {
 
     const result = await flow.handle(
       { ...ctx, text: '123456' },
-      at('accountAdd.code', { proof: 'otp', phoneNumber: '09120000000' }),
+      at('accountAdd.code', { proof: 'otp', phoneNumber: '+989120000000' }),
       null,
     );
 
@@ -214,7 +218,7 @@ describe('AccountAddFlow', () => {
           .mockResolvedValue({ ok: false, msg: 'accountSwitch.proofFailed' }),
       } as Partial<AuthApiClient>,
     });
-    const state = at('accountAdd.code', { proof: 'otp', phoneNumber: '09120000000' });
+    const state = at('accountAdd.code', { proof: 'otp', phoneNumber: '+989120000000' });
 
     const result = await flow.handle({ ...ctx, text: '000000' }, state, null);
 

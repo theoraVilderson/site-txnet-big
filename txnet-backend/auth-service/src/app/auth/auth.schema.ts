@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { iranPhoneSchema } from '../common/validation/phone.schema';
+import { phoneSchema } from '../common/validation/phone.schema';
 import { strongPasswordSchema } from '../common/validation/strong-password.schema';
 import { OtpChannel } from './otp/otp.interface';
 
@@ -9,14 +9,14 @@ export const passwordLoginSchema = z.object({
 });
 
 export const otpRequestSchema = z.object({
-  phoneNumber: iranPhoneSchema,
+  phoneNumber: phoneSchema,
   // اگر کاربر ندهد، از preferredOtpChannel پروفایل یا sms پیش‌فرض استفاده می‌شود
   channel: z.nativeEnum(OtpChannel).optional(),
 });
 
 export const otpVerifySchema = z
   .object({
-    phoneNumber: iranPhoneSchema.optional(),
+    phoneNumber: phoneSchema.optional(),
     otpToken: z.string().optional(),
     otpCode: z.string().length(6).regex(/^\d+$/),
   })
@@ -32,12 +32,12 @@ export const refreshSchema = z.object({
 });
 
 export const forgotPasswordSchema = z.object({
-  phoneNumber: iranPhoneSchema,
+  phoneNumber: phoneSchema,
   channel: z.nativeEnum(OtpChannel).optional(),
 });
 
 export const forgotVerifySchema = z.object({
-  phoneNumber: iranPhoneSchema,
+  phoneNumber: phoneSchema,
   otpCode: z.string().length(6).regex(/^\d+$/),
 });
 

@@ -26,6 +26,9 @@
       "bale": "بله"
     },
     "phonePlaceholder": "شماره موبایل حساب دوم",
+    "country": "کشور",
+    "countrySearch": "جست‌وجوی کشور",
+    "countryNoResults": "کشوری پیدا نشد",
     "identifierPlaceholder": "شماره موبایل یا نام کاربری",
     "passwordPlaceholder": "رمز عبور همان حساب",
     "sendCode": "ارسال کد",
@@ -43,5 +46,8 @@
     "removeFailed": "حذف این حساب ممکن نشد",
     "leave": "حذف همین حساب از مجموعهٔ این مرورگر",
     "leaveConfirm": "این حساب حذف شود و از اینجا خارج شوید؟"
+  },
+  "errors": {
+    "unreachable": "ارتباط با سرور برقرار نشد. اتصال خود را بررسی کنید و دوباره تلاش کنید."
   }
 }

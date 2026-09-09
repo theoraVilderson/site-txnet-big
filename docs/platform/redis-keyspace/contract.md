@@ -13,7 +13,10 @@ See ADR-0005. This unit is a convention + a key catalogue, not a service.
 ## TL;DR
 
 Every Redis key any TXNet service touches is prefixed
-`${REDIS_KEY_NAMESPACE}:${REDIS_KEYSPACE_VERSION}:` (default `txnet:auth:v1:`).
+`${REDIS_KEY_NAMESPACE}:${REDIS_KEYSPACE_VERSION}:` (default `txnet:auth:v2:`
+— `v1` was abandoned on 2026-09-08 when phone numbers became E.164, since six
+key names take the number as a component and the old spelling is unreachable
+from the new one; see ADR-0018).
 Node applies it via ioredis `keyPrefix`; Go assembles it in
 `auth-handler/internal/config/config.go` (`buildRedisKeyPrefix`). Bump
 `REDIS_KEYSPACE_VERSION` to abandon the entire keyspace at once (old keys
@@ -27,6 +30,10 @@ appended. The two implementations (TS `redis.service.ts`, Go `config.go`) must
 stay byte-identical — each carries a comment pointing at the other.
 
 ## Key catalogue (names are *after* the prefix)
+
+`<phone>` is always the E.164 form (`+989123456789`, ADR-0018) — the same
+string the database stores, so a key and a row can never disagree about which
+number they mean.
 
 | Key | Type | TTL | Written by | Read by |
 |---|---|---|---|---|

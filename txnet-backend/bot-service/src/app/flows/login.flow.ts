@@ -3,6 +3,7 @@ import { AuthApiClient } from '../auth-api/auth-api.client';
 import { ChatContext, FlowResult, NavState } from '../conversation/nav.types';
 import { BotSessionStore } from '../session/bot-session.store';
 import { OtpStep } from './otp.step';
+import { PhoneNumbers } from './phone-number';
 import { ACTIONS, ask, askContact, say } from './views';
 
 /**
@@ -17,6 +18,7 @@ export class LoginFlow {
     private readonly api: AuthApiClient,
     private readonly otp: OtpStep,
     private readonly sessions: BotSessionStore,
+    private readonly phones: PhoneNumbers,
   ) {}
 
   /**
@@ -174,9 +176,16 @@ export class LoginFlow {
     }
   }
 
-  /** The phone, shared as a contact or typed. `auth-api` normalizes it. */
+  /**
+   * The phone, shared as a contact or typed, read into the form `auth-api`
+   * stores (`phone-number.ts`) — a shared contact from outside the
+   * deployment's own region arrives without its `+` and is otherwise
+   * unreadable. `auth-api` still decides whether the number is acceptable.
+   */
   private async phone(ctx: ChatContext, state: NavState): Promise<FlowResult> {
-    const phoneNumber = ctx.contact?.phone_number ?? (ctx.text ?? '').trim();
+    const phoneNumber = this.phones.read(
+      ctx.contact?.phone_number ?? (ctx.text ?? ''),
+    );
     if (!phoneNumber) {
       return {
         view: askContact('login.phone', { key: 'bot.login.askPhone' }),

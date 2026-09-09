@@ -7,7 +7,7 @@
  * stdout. Reading that line is the closest a test can get to being the user
  * holding the phone, without stubbing anything the API does.
  *
- *   [otp:register_phone_verify:sms] 09121234567: 483920
+ *   [otp:register_phone_verify:sms] +989121234567: 483920
  */
 const OTP_LINE = /^\[otp:([a-z_]+):([a-z]+)\] (\S+): (\d{6})$/;
 

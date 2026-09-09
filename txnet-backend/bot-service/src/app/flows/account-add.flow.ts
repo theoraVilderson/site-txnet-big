@@ -4,6 +4,7 @@ import { ChatContext, FlowResult, NavState } from '../conversation/nav.types';
 import { AccountSwitcher } from '../session/account-switcher';
 import { ChatAccess } from '../session/chat-access';
 import { OtpStep } from './otp.step';
+import { PhoneNumbers } from './phone-number';
 import { ACTIONS, addProofView, ask, say } from './views';
 
 /**
@@ -40,6 +41,7 @@ export class AccountAddFlow {
     private readonly access: ChatAccess,
     private readonly otp: OtpStep,
     private readonly switcher: AccountSwitcher,
+    private readonly phones: PhoneNumbers,
   ) {}
 
   /** Which proof, asked before anything is typed. */
@@ -135,7 +137,7 @@ export class AccountAddFlow {
    * is that refusal is a worse screen than a plain question.
    */
   private async phone(ctx: ChatContext, state: NavState): Promise<FlowResult> {
-    const phoneNumber = (ctx.text ?? '').trim();
+    const phoneNumber = this.phones.read(ctx.text ?? '');
     if (!phoneNumber) {
       return {
         view: ask('accountAdd.phone', { key: 'bot.accounts.addAskPhone' }),

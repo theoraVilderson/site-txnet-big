@@ -33,6 +33,7 @@ export const BOT_COPY_FALLBACKS: Record<string, string> = {
   'bot.action.loginWithOtp': 'Sign in with a code',
   'bot.action.shareContact': 'Send my number',
   'bot.action.accounts': 'My accounts',
+  'bot.action.miniApp': '🚀 Open the app',
   'bot.action.addAccount': '➕ Add an account',
   'bot.action.addWithOtp': 'A code to its number',
   'bot.action.addWithPassword': 'Its password',
@@ -52,7 +53,7 @@ export const BOT_COPY_FALLBACKS: Record<string, string> = {
   // is answering a question, not being taught the security model.
   'bot.accounts.addPickProof': 'How should we add that account?',
   'bot.accounts.addAskPhone':
-    "Send that account's number (09xxxxxxxxx). The code goes to that number, not to this chat.",
+    "Send that account's number, with its country code if it is not from here. The code goes to that number, not to this chat.",
   'bot.accounts.addAskIdentifier': "Send that account's username or phone number.",
   'bot.accounts.addAskPassword':
     "Send that account's password. Your message is deleted right away.",
@@ -89,7 +90,7 @@ export const BOT_COPY_FALLBACKS: Record<string, string> = {
   'bot.common.signedOut': 'You are signed out.',
   'bot.common.notSignedIn': 'You are not signed in yet.',
   'bot.login.askPhone':
-    'Send your number with the button below, or type it yourself (09xxxxxxxxx).',
+    'Send your number with the button below, or type it yourself. A number from any country works — write it with its country code, like +49…',
   'bot.login.askIdentifier': 'Send your username or phone number.',
   // The fast path (ADR-0012). It asks for the card, not for a number, because
   // the card is the proof — there is no code after it.

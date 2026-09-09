@@ -16,7 +16,7 @@ import {
 import { OtpChannelRegistry } from '../otp/otp-channels.service';
 import { BotLinkService } from '../bot-link/bot-link.service';
 import { BotPlatform } from '@txnet-backend/messenger';
-import { normalizeIranPhone } from '../../common/validation/phone.schema';
+import { normalizePhone } from '../../common/validation/phone.schema';
 import { ok, err, safeExecute } from '../../common/response/response.util';
 
 /**
@@ -73,7 +73,7 @@ export class RegisterService {
       }
 
       // 3. Normalize phone number
-      const phoneNumber = normalizeIranPhone(input.phoneNumber);
+      const phoneNumber = normalizePhone(input.phoneNumber);
 
       // 4. Reject a username/phone already claimed by a real account. This
       // is a best-effort check — the Postgres unique constraint on `user`
@@ -152,7 +152,7 @@ export class RegisterService {
 
   async verifyPhone(input: VerifyPhoneInput) {
     return safeExecute(async () => {
-      const phoneNumber = normalizeIranPhone(input.phoneNumber);
+      const phoneNumber = normalizePhone(input.phoneNumber);
 
       const isValid = await this.otpService.verifyOtp(
         phoneNumber,

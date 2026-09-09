@@ -1,16 +1,16 @@
 import { z } from 'zod';
-import { iranPhoneSchema } from '../common/validation/phone.schema';
+import { phoneSchema } from '../common/validation/phone.schema';
 import { OtpChannel } from '../auth/otp/otp.interface';
 
 /** Ask for a proof code on the phone of the account being added. */
 export const addByOtpRequestSchema = z.object({
-  phoneNumber: iranPhoneSchema,
+  phoneNumber: phoneSchema,
   channel: z.nativeEnum(OtpChannel).optional(),
 });
 
 /** Spend that code and join the group. */
 export const addByOtpVerifySchema = z.object({
-  phoneNumber: iranPhoneSchema,
+  phoneNumber: phoneSchema,
   otpCode: z.string().length(6).regex(/^\d+$/),
 });
 

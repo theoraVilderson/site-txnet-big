@@ -27,6 +27,7 @@
     "jalaali-js": "^1.2.8",
     "jose": "^6.1.3",
     "jwt-decode": "^4.0.0",
+    "libphonenumber-js": "^1.13.12",
     "lucide-react": "^0.556.0",
     "mongoose": "^9.0.1",
     "next": "^16.1.0",

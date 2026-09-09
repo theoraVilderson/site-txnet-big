@@ -1,5 +1,13 @@
 import { OtpChannel, OtpPurpose } from '@prisma/client';
 import { AuthService } from './auth.service';
+import { normalizePhone } from '../common/validation/phone.schema';
+
+/**
+ * The canonical stored form is whatever `phone.schema` says it is (E.164 —
+ * ADR-0018), never a literal re-typed here: the lock bucket must follow the
+ * lookup automatically, which is the invariant these cases exist for.
+ */
+const CANONICAL_PHONE = normalizePhone('09123456789');
 
 jest.mock('argon2', () => ({
   argon2id: 2,
@@ -286,7 +294,7 @@ describe('AuthService.loginWithPassword — lockout', () => {
     );
 
     expect(h.rateLimiter.hit).toHaveBeenCalledWith(
-      'login-failures:09123456789',
+      `login-failures:${CANONICAL_PHONE}`,
       LOCK_THRESHOLD,
       LOCK_WINDOW_SEC,
     );
@@ -303,7 +311,7 @@ describe('AuthService.loginWithPassword — lockout', () => {
     );
 
     expect(h.rateLimiter.reset).toHaveBeenCalledWith(
-      'login-failures:09123456789',
+      `login-failures:${CANONICAL_PHONE}`,
     );
   });
 

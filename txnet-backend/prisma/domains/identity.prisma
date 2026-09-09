@@ -73,6 +73,8 @@ model User {
   tenantId               String     @db.Uuid // FK -> tenant.Tenant.id | کلید پارتیشن اصلی چندمستأجری؛ پیش‌فرض اپلیکیشنی = رکورد platform_owner
   fullName               String
   username               String?    @unique
+  /// E.164, always — `+989123456789`. The canonical stored form for every
+  /// phone column in this schema; see ADR-0018.
   phoneNumber            String?    @unique
   phoneVerifiedAt        DateTime? // تا زمانی که null است، حساب نیمه‌فعال محسوب می‌شود
   passwordHash           String // SENSITIVE — never default-select
@@ -118,8 +120,23 @@ model Session {
   id                      String                @id @default(uuid()) @db.Uuid
   userId                  String                @db.Uuid
   refreshTokenHash        String                @unique // خود توکن هرگز ذخیره نمی‌شود، فقط هش
-  ipAddress               String
-  userAgent               String
+
+  /// What the platform actually observed about the device, or nothing.
+  ///
+  /// Nullable since F-048: a session minted from a bot webhook is created by
+  /// `bot-service` on the account's behalf, and that request carries no user
+  /// agent and no client IP at all — only a chat id. Writing the bot
+  /// container's own address here made every chat on the platform look like
+  /// the same location, which a session list and an audit trail both read as
+  /// a fact. Null says the true thing: nothing was observed.
+  ipAddress               String?
+  userAgent               String?
+
+  /// The surface a session was minted from when there is no device to name —
+  /// `Telegram` / `Bale` for a messenger-originated session, null for a
+  /// browser, which describes itself through `userAgent`. Carried forward by
+  /// a refresh and by an account switch, for the same reason `scopeKey` is:
+  /// the session continues on the surface it started on.
   deviceLabel             String?
   issuedAt                DateTime              @default(now())
   expiresAt               DateTime
@@ -194,6 +211,8 @@ model RolePermission {
 model OtpCode {
   id          String     @id @default(uuid()) @db.Uuid
   userId      String?    @db.Uuid // در register_phone_verify ممکن است هنوز User نهایی نشده باشد
+  /// E.164 (ADR-0018). Indexed below, so a second spelling of one number
+  /// would read as a second number.
   phoneNumber String
   codeHash    String // خود کد هرگز plain ذخیره نمی‌شود، فقط هش (مثل رمز عبور)
   purpose     OtpPurpose
@@ -224,8 +243,9 @@ model LinkedBotAccount {
   platformUserId String // Chat ID
   /// The phone number the messenger itself reported for this account, taken
   /// from a shared contact whose `contact.user_id` equalled the sender id.
-  /// Normalized to 09xxxxxxxxx. Null on a link made before contact
-  /// verification existed.
+  /// Normalized to E.164 (ADR-0018) — messengers report it in whatever shape
+  /// the account was registered with, usually without the `+`. Null on a link
+  /// made before contact verification existed.
   phoneNumber    String?
   /// Set only when that ownership proof succeeded. An account may only carry
   /// OTP once this is non-null — see identity/invariants.md #12.

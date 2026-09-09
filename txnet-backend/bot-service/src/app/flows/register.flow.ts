@@ -3,6 +3,7 @@ import { AuthApiClient } from '../auth-api/auth-api.client';
 import { ChatContext, FlowResult, NavState } from '../conversation/nav.types';
 import { BotSessionStore } from '../session/bot-session.store';
 import { OtpStep } from './otp.step';
+import { PhoneNumbers } from './phone-number';
 import { ACTIONS, ask, askContact, say } from './views';
 
 /**
@@ -23,6 +24,7 @@ export class RegisterFlow {
     private readonly api: AuthApiClient,
     private readonly otp: OtpStep,
     private readonly sessions: BotSessionStore,
+    private readonly phones: PhoneNumbers,
   ) {}
 
   start(): FlowResult {
@@ -39,7 +41,9 @@ export class RegisterFlow {
   ): Promise<FlowResult> {
     switch (state.step) {
       case 'register.phone': {
-        const phoneNumber = ctx.contact?.phone_number ?? (ctx.text ?? '').trim();
+        const phoneNumber = this.phones.read(
+          ctx.contact?.phone_number ?? (ctx.text ?? ''),
+        );
         if (!phoneNumber) {
           return {
             view: askContact('register.phone', { key: 'bot.login.askPhone' }),

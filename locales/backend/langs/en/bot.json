@@ -22,7 +22,8 @@
     "addWithOtp": "A code to its number",
     "addWithPassword": "Its password",
     "removeAccount": "➖ Remove an account",
-    "confirmRemove": "Yes, remove it"
+    "confirmRemove": "Yes, remove it",
+    "miniApp": "🚀 Open the app"
   },
   "common": {
     "cancelled": "Cancelled; nothing was saved. Start again below whenever you like.",
@@ -36,7 +37,7 @@
     "backGone": "There is nothing before this. You can start from here:"
   },
   "login": {
-    "askPhone": "Send your number with the button below, or type it yourself (09xxxxxxxxx).",
+    "askPhone": "Send your number with the button below, or type it yourself. A number from any country works — write it with its country code, like +49…",
     "askIdentifier": "Send your username or phone number.",
     "askPassword": "Please send your password. Your message is deleted right away.",
     "askCode": "Send the 6-digit code.",
@@ -108,7 +109,7 @@
     "memberNoPhone": "{{name}}",
     "switched": "You are {{name}} now ✅",
     "addPickProof": "How should we add that account?",
-    "addAskPhone": "Send that account's number (09xxxxxxxxx). The code goes to that number, not to this chat.",
+    "addAskPhone": "Send that account's number, with its country code if it is not from here. The code goes to that number, not to this chat.",
     "addAskIdentifier": "Send that account's username or phone number.",
     "addAskPassword": "Send that account's password. Your message is deleted right away.",
     "added": "The account is added, but you are still signed in as before. Open “My accounts” to switch to it.",

@@ -1,6 +1,7 @@
 import { OtpChannel, OtpPurpose } from '@prisma/client';
 import { RegisterService } from './register.service';
 import { RedisTtl } from '../../redis/redis.keys';
+import { normalizePhone } from '../../common/validation/phone.schema';
 
 jest.mock('argon2', () => ({
   argon2id: 2,
@@ -19,7 +20,12 @@ const argon2 = require('argon2') as { hash: jest.Mock };
  * response saying which column collided.
  */
 
-const PHONE = '09123456789';
+// What a user types, and what the platform stores. The second is derived, not
+// re-typed: the canonical form is `phone.schema`'s to decide (E.164 —
+// ADR-0018), and every assertion below is about the *pending record following
+// the normalization*, not about which spelling won.
+const TYPED_PHONE = '09123456789';
+const PHONE = normalizePhone(TYPED_PHONE);
 const PENDING_KEY = `register:pending:${PHONE}`;
 
 type Harness = ReturnType<typeof harness>;

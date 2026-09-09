@@ -8,13 +8,26 @@ updated: 2026-09-05
 
 ## Current state
 
-- **No `prisma/migrations/` directory is committed.** The schema
-  (`txnet-backend/prisma/domains/*.prisma`, Postgres `multiSchema`) is applied in
-  dev via `prisma migrate dev` / `db push`. A real migration history must exist
-  before the first production deploy — tracked as a blocking open question in
-  `domains/identity/open-questions.md`.
+- **The migration history starts at `20260908000000_init`.** It lives in
+  `txnet-backend/prisma/domains/migrations/` — *inside* the schema folder,
+  which is where Prisma looks when `prisma.schema` names a directory rather
+  than a file. Putting it at `prisma/migrations/` makes every Prisma command
+  report "no migration found" while the files sit there in plain sight.
+- The history was started by the E.164 change (ADR-0018), which needed a data
+  migration and therefore a place to put one. This answers `D-5` for the
+  schema as a whole; the hand-written "section 99" SQL below is still
+  unowned and unapplied.
+- An existing database is brought into the history with
+  `prisma migrate resolve --applied <name>` per migration (the dev database
+  was baselined this way on 2026-09-08); a new one gets
+  `prisma migrate deploy`.
 - Prisma commands run from `txnet-backend/` (`npm run prisma:generate`,
   `npm run prisma:migrate`); `package.json` sets `prisma.schema = "prisma/domains"`.
+
+| migration | what it does |
+|---|---|
+| `20260908000000_init` | the whole schema as it stood on 2026-09-08, generated with `prisma migrate diff --from-empty` |
+| `20260908000100_phone_numbers_are_e164` | rewrites `09…` to `+98…` in the three phone columns. Guarded on the national shape, so it is idempotent and leaves anything already E.164 alone (ADR-0018) |
 
 ## Policy
 

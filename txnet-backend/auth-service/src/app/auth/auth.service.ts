@@ -11,7 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RateLimiter } from '../common/rate-limit/rate-limiter';
 import {
   detectIdentifierType,
-  normalizeIranPhone,
+  normalizePhone,
 } from '../common/validation/phone.schema';
 import {
   assertPasswordNotContainingProfile,
@@ -46,7 +46,8 @@ import {
   ResetPasswordInput,
 } from './auth.schema';
 
-const LOGIN_FAILURE_LOCK_THRESHOLD = 10;
+/** What `LOGIN_FAILURE_LOCK_THRESHOLD` is when a deployment sets nothing. */
+const LOGIN_FAILURE_LOCK_DEFAULT = 10;
 const LOGIN_FAILURE_WINDOW_SEC = 900;
 
 @Injectable()
@@ -62,6 +63,17 @@ export class AuthService {
     private readonly sessionService: SessionService,
     private readonly sessions: SessionStore,
   ) {}
+
+  /**
+   * How many failed passwords lock one account. Deployment config, not a
+   * constant: read per call so an environment can vary it without a rebuild.
+   */
+  private get loginFailureLockThreshold(): number {
+    return this.config.get<number>(
+      'LOGIN_FAILURE_LOCK_THRESHOLD',
+      LOGIN_FAILURE_LOCK_DEFAULT,
+    );
+  }
 
   /** The delivery methods this environment offers, for a client to choose from. */
   otpChannels() {
@@ -83,7 +95,7 @@ export class AuthService {
       // counter each, and ten attempts would become thirty.
       const identity =
         type === 'phone'
-          ? normalizeIranPhone(input.identifier)
+          ? normalizePhone(input.identifier)
           : input.identifier;
       const where =
         type === 'phone' ? { phoneNumber: identity } : { username: identity };
@@ -104,7 +116,7 @@ export class AuthService {
       const failureBucket = `login-failures:${identity}`;
       const attempt = await this.rateLimiter.hit(
         failureBucket,
-        LOGIN_FAILURE_LOCK_THRESHOLD,
+        this.loginFailureLockThreshold,
         LOGIN_FAILURE_WINDOW_SEC,
       );
       if (!attempt.allowed) {
@@ -302,8 +314,13 @@ export class AuthService {
       await this.sessionService.revokeSession(session.id, 'user_logout');
       const result = await this.sessionService.createSession(
         session.userId,
-        ip,
-        userAgent,
+        // A session that observed no device observes none on rotation either
+        // (F-048): the refresh arrives over the same path the mint did, so
+        // re-deriving here would write the bot container's address over the
+        // honest null within one access-token lifetime. A browser's IP is
+        // re-read as before — it legitimately moves.
+        session.ipAddress === null ? null : ip,
+        session.userAgent === null ? null : userAgent,
         // Carried forward, never re-derived from the request (ADR-0015). A
         // refresh is the *same* session continuing, so it stays in the scope
         // it was minted in — and the panel refreshes on every page load, so
@@ -311,7 +328,10 @@ export class AuthService {
         // moment anything about the request changed. Re-minting it as `null`
         // would be worse still: the account would quietly fall out of its own
         // switch group on the first rotation.
-        { scopeKey: session.scopeKey },
+        //
+        // `deviceLabel` rides along for the same reason: the surface a session
+        // was minted on does not change when its token does.
+        { scopeKey: session.scopeKey, deviceLabel: session.deviceLabel },
       );
       const accessToken = this.tokens.signAccessToken(
         session.user,
@@ -486,7 +506,7 @@ export class AuthService {
   async proveAccountByPassword(identifier: string, password: string) {
     const type = detectIdentifierType(identifier);
     const identity =
-      type === 'phone' ? normalizeIranPhone(identifier) : identifier;
+      type === 'phone' ? normalizePhone(identifier) : identifier;
     const where =
       type === 'phone' ? { phoneNumber: identity } : { username: identity };
 
@@ -494,12 +514,12 @@ export class AuthService {
     if (!user || user.deletedAt || user.status !== 'active') return null;
 
     // The same bucket login uses, on purpose: this route is another way to
-    // guess a password, so it has to consume the same 10-per-900s budget or it
-    // becomes the cheaper door (rule #11).
+    // guess a password, so it has to consume the same budget or it becomes the
+    // cheaper door (rule #11) — including when a deployment has changed it.
     const failureBucket = `login-failures:${identity}`;
     const attempt = await this.rateLimiter.hit(
       failureBucket,
-      LOGIN_FAILURE_LOCK_THRESHOLD,
+      this.loginFailureLockThreshold,
       LOGIN_FAILURE_WINDOW_SEC,
     );
     if (!attempt.allowed) throw new BadRequestException('auth.temporarilyLocked');
@@ -580,11 +600,12 @@ export class AuthService {
 
   async createSessionForUser(
     user: any,
-    ip: string,
-    userAgent: string,
+    ip: string | null,
+    userAgent: string | null,
     scopeKey?: string | null,
+    deviceLabel?: string | null,
   ) {
-    return this.issueSession(user, ip, userAgent, scopeKey);
+    return this.issueSession(user, ip, userAgent, scopeKey, deviceLabel);
   }
 
   /**
@@ -618,21 +639,32 @@ export class AuthService {
     scopeKey?: string | null,
   ) {
     const issued = await this.prisma.$transaction(async (tx) => {
-      await tx.session.update({
+      const outgoing = await tx.session.update({
         where: { id: fromSessionId },
         data: {
           revokedAt: new Date(),
           revokedReason: SessionRevokedReason.account_switched,
         },
+        select: { ipAddress: true, userAgent: true, deviceLabel: true },
       });
-      return this.sessionService.createSession(toUser.id, ip, userAgent, {
-        switchedFromUserId: fromUserId,
-        // A switch happens *within* one scope — `audit` only offered this
-        // member because it is in the caller's group here — so the incoming
-        // session inherits it (ADR-0015).
-        scopeKey,
-        tx,
-      });
+      return this.sessionService.createSession(
+        toUser.id,
+        // The switch is made on the surface the outgoing session was minted
+        // on, so its device facts are the incoming session's too (F-048). A
+        // switch inside a chat would otherwise re-stamp the bot container's
+        // address, which is the lie the null exists to stop.
+        outgoing.ipAddress === null ? null : ip,
+        outgoing.userAgent === null ? null : userAgent,
+        {
+          switchedFromUserId: fromUserId,
+          // A switch happens *within* one scope — `audit` only offered this
+          // member because it is in the caller's group here — so the incoming
+          // session inherits it (ADR-0015).
+          scopeKey,
+          deviceLabel: outgoing.deviceLabel,
+          tx,
+        },
+      );
     });
 
     await this.sessions.drop(fromSessionId, fromUserId);
@@ -653,15 +685,16 @@ export class AuthService {
    */
   private async issueSession(
     user: any,
-    ip: string,
-    userAgent: string,
+    ip: string | null,
+    userAgent: string | null,
     scopeKey?: string | null,
+    deviceLabel?: string | null,
   ) {
     const result = await this.sessionService.createSession(
       user.id,
       ip,
       userAgent,
-      { scopeKey },
+      { scopeKey, deviceLabel },
     );
     return {
       accessToken: this.tokens.signAccessToken(user, result.session.id),

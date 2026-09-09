@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { phoneVariants } from './phone.schema';
 
 /**
  * Strong password policy: min 8, max 72, at least one uppercase, one lowercase,
@@ -28,7 +29,9 @@ export function assertPasswordNotContainingProfile(
   const candidates = [
     profile.username,
     profile.fullName,
-    profile.phoneNumber,
+    // A phone is stored as E.164 but typed nationally, so the rule has to
+    // know every spelling of it — see `phoneVariants` (ADR-0018).
+    ...(profile.phoneNumber ? phoneVariants(profile.phoneNumber) : []),
   ].filter((v): v is string => !!v && v.length >= 3);
 
   for (const candidate of candidates) {

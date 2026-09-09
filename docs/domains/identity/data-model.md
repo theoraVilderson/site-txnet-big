@@ -1,13 +1,21 @@
 ---
 id: identity
 layer: domain
-updated: 2026-09-05
+updated: 2026-09-08
 ---
 
 # Data model — identity
 
 **Do not copy the schema here.** Source of truth:
-`txnet-backend/prisma/domains/identity.prisma` (Postgres schema `identity`).
+`txnet-backend/prisma/domains/identity.prisma` (Postgres schema `identity`),
+migrated by `txnet-backend/prisma/domains/migrations/` — which starts at
+`20260908000000_init` plus the E.164 rewrite that follows it.
+
+Every phone column (`user.phoneNumber`, `otp_code.phoneNumber`,
+`linked_bot_account.phoneNumber`) holds **E.164** and nothing else. That is
+what makes `user.phoneNumber`'s `@unique` mean one person: a national number
+is ambiguous between countries, and two real people would be conflated by it.
+See ADR-0018.
 
 ## Tables owned
 | Table | Purpose | Tenant-scoped? | Retention |
@@ -47,6 +55,29 @@ is inert: senders will not deliver to it. See invariants.md #12.
 being attached to two platform accounts — without it, a chat id could be made
 to receive a second account's codes.
 
+## A session records what was observed, not what was available (F-048)
+
+`session.ipAddress` and `session.userAgent` are nullable, and null is an
+answer rather than a gap. A session minted from a bot webhook is created by
+`bot-service` on the account's behalf: the HTTP request `auth-service` sees is
+that container's, so its address and user agent describe the platform, not the
+person, and are identical for every chat. Writing them was worse than writing
+nothing — a session list and an audit trail both read the column as a place.
+
+`session.deviceLabel` carries the one true thing instead: `Telegram` / `Bale`
+for a messenger-originated session, null for a browser, which already describes
+itself. `BotSessionService` is its only writer.
+
+The Mini App is the exception on both counts: a webview *is* a browser, so
+`bots/webapp/session` passes the real pair through and gets the label as well.
+
+Both facts are carried forward, never re-derived, by the two operations that
+re-mint a session — `refresh` and `switchSession` — for the same reason
+`scopeKey` is (ADR-0015): a rotation is the same session continuing on the same
+surface. Re-deriving would restore the container address within one
+access-token lifetime. A row that observed an IP still has it re-read on
+refresh; a browser legitimately moves.
+
 ## Register flow — no interim Postgres row
 
 `register` never inserts into `user`. The validated profile + argon2 password
@@ -60,6 +91,9 @@ hash are cached in Redis only (`register:pending:<phone>`, 600s TTL, see
   `platform_owner` CHECK) is **not yet applied**.
 - No migration history is committed yet (`prisma/migrations/` absent); schema is
   currently applied via `prisma migrate dev` / `db push` in dev.
+- 2026-09-08, still unmigrated like the rest (F-048): `session.ipAddress` and
+  `session.userAgent` relaxed to nullable. Widening only — no existing row
+  changes and no reader exists today, so it applies cleanly.
 - 2026-09-05 added, still unmigrated like the rest: `OtpPurpose.account_link`,
   `linked_bot_account.phoneNumber`, `linked_bot_account.contactVerifiedAt`, and
   `@@unique([platform, platformUserId])` on `linked_bot_account`. The unique

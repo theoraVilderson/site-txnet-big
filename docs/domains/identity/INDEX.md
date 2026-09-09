@@ -3,7 +3,7 @@ id: identity
 layer: domain
 status: active
 version: 1
-keywords: [users, login, auth, rbac, roles, permissions, sessions, otp, otp channel, delivery method, telegram, bale, bot account, bot link, share contact, forgot password, password reset]
+keywords: [users, login, auth, rbac, roles, permissions, sessions, otp, otp channel, delivery method, telegram, bale, bot account, bot link, share contact, forgot password, password reset, phone number, e164, phone format, country, شماره موبایل, فرمت شماره]
 source:
   - txnet-backend/prisma/domains/identity.prisma
   - txnet-backend/auth-service/src/app/auth/auth.service.ts
@@ -14,6 +14,7 @@ source:
   - txnet-backend/auth-service/src/app/auth/otp/otp.placeholder.service.ts
   - txnet-backend/auth-service/src/app/auth/otp/senders/**
   - txnet-backend/auth-service/src/app/auth/bot-link/bot-link.service.ts
+  - txnet-backend/auth-service/src/app/auth/bot-link/bot-session.service.ts
   - txnet-backend/auth-service/src/app/auth/bot-link/bot-link.store.ts
   - txnet-backend/auth-service/src/app/auth/bot-link/bot-link.messages.ts
   - txnet-backend/auth-service/src/app/auth/bot-link/bot-link.types.ts
@@ -22,7 +23,7 @@ source:
   - txnet-backend/auth-service/src/app/impersonation/impersonation.service.ts
 owns_tables: [user, session, role, permission, role_permission, otp_code, linked_bot_account]
 depends_on: [audit, i18n, redis-keyspace]
-updated: 2026-09-06
+updated: 2026-09-08
 ---
 
 # Identity

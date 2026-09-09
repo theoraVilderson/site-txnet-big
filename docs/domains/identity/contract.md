@@ -88,8 +88,11 @@ None. No message bus is wired up. Impersonation start/end write an
   submitted profile + hashed password sit in Redis (`register:pending:<phone>`,
   600s TTL) and are discarded (never promoted) if verification doesn't happen
   in time. See identity/invariants.md #11.
-- Login lockout: 10 failed attempts per identifier per 900s -> `temporarily
-  locked` (Redis counter, cleared on success).
+- Login lockout: `LOGIN_FAILURE_LOCK_THRESHOLD` failed attempts (default 10) per
+  identifier per 900s -> `temporarily locked` (Redis counter, cleared on
+  success). The threshold is deployment config — a white-label deployment with
+  a different risk appetite sets it without a rebuild — so a caller must treat
+  `temporarily locked` as the contract and the count as an environment detail.
 - Enumeration-safe: OTP request / forgot-password always return `{accepted:true}`.
 - The three **prove account** operations exist for `audit`'s account-switch
   group (F-0205) and mint nothing — no session, no token, no cookie. They

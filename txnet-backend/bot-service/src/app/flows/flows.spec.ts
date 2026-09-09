@@ -1,9 +1,11 @@
+import { ConfigService } from '@nestjs/config';
 import { AuthApiClient } from '../auth-api/auth-api.client';
 import { ChatContext, NavState } from '../conversation/nav.types';
 import { BotSessionStore } from '../session/bot-session.store';
 import { ForgotFlow } from './forgot.flow';
 import { LoginFlow } from './login.flow';
 import { OtpStep } from './otp.step';
+import { PhoneNumbers } from './phone-number';
 import { RegisterFlow } from './register.flow';
 
 const ctx: ChatContext = { platform: 'telegram', chatId: '5501', senderId: 42, lang: 'fa' };
@@ -26,12 +28,15 @@ function harness() {
   } as unknown as jest.Mocked<AuthApiClient>;
   const sessions = { save: jest.fn(), clear: jest.fn(), get: jest.fn() } as unknown as BotSessionStore;
   const otp = new OtpStep(api);
+  // A fa deployment, so a bare `0912…` is read as Iranian — the same default
+  // `auth-service` applies to a number typed without a `+` (ADR-0018).
+  const phones = new PhoneNumbers(new ConfigService({ DEFAULT_LANGUAGE: 'fa' }));
   return {
     api,
     sessions,
-    login: new LoginFlow(api, otp, sessions),
-    register: new RegisterFlow(api, otp, sessions),
-    forgot: new ForgotFlow(api, otp, sessions),
+    login: new LoginFlow(api, otp, sessions, phones),
+    register: new RegisterFlow(api, otp, sessions, phones),
+    forgot: new ForgotFlow(api, otp, sessions, phones),
   };
 }
 
@@ -55,7 +60,9 @@ describe('LoginFlow', () => {
 
     const requested = await login.handle(ctx, phone.nextState as NavState, 'channel:sms');
     expect(api.requestLoginOtp).toHaveBeenCalledWith(
-      { phoneNumber: '09121112233', channel: 'sms' },
+      // Typed nationally, sent as E.164 — the panel's picker does the same
+      // thing with the country it is on (`site-pwa/src/lib/phone.ts`).
+      { phoneNumber: '+989121112233', channel: 'sms' },
       expect.anything(),
     );
 
@@ -65,7 +72,7 @@ describe('LoginFlow', () => {
       null,
     );
     expect(api.verifyLoginOtp).toHaveBeenCalledWith(
-      { phoneNumber: '09121112233', otpCode: '123456' },
+      { phoneNumber: '+989121112233', otpCode: '123456' },
       expect.anything(),
     );
     expect(sessions.save).toHaveBeenCalledWith('telegram', '5501', 'r-1');
@@ -145,7 +152,7 @@ describe('RegisterFlow', () => {
       {
         fullName: 'Sara Ahmadi',
         username: 'sara',
-        phoneNumber: '09121112233',
+        phoneNumber: '+989121112233',
         password: 'Str0ng!pass',
         channel: 'sms',
       },

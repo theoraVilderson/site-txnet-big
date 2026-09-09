@@ -26,6 +26,9 @@
       "bale": "Bale"
     },
     "phonePlaceholder": "The other account's phone number",
+    "country": "Country",
+    "countrySearch": "Search countries",
+    "countryNoResults": "No country found",
     "identifierPlaceholder": "Phone number or username",
     "passwordPlaceholder": "That account's password",
     "sendCode": "Send the code",
@@ -43,5 +46,8 @@
     "removeFailed": "Could not remove that account",
     "leave": "Remove this account from the set on this browser",
     "leaveConfirm": "Remove this account and sign out here?"
+  },
+  "errors": {
+    "unreachable": "Could not reach the server. Check your connection and try again."
   }
 }

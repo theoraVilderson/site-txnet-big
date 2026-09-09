@@ -123,10 +123,12 @@ describe('strong-password.schema', () => {
     });
 
     describe('the check is whole-candidate containment, not token overlap', () => {
-      // Documented gap: only the FULL candidate string is searched for. A
-      // password built from one word of a multi-word fullName, or from the
-      // phone number without its leading zero, passes today. If this ever
-      // becomes a real policy requirement, these three expectations invert.
+      // Documented gap: only the FULL candidate string is searched for, so a
+      // password built from one word of a multi-word fullName still passes.
+      // The phone number is the exception, and deliberately so: it is stored
+      // as E.164 and typed nationally, so the rule expands it into every
+      // spelling (`phoneVariants`, ADR-0018) or it would hold for one form of
+      // a number and not the others.
       it('does not catch a single word of a multi-word fullName', () => {
         expect(() =>
           assertPasswordNotContainingProfile('Rezaei#2024', {
@@ -135,12 +137,17 @@ describe('strong-password.schema', () => {
         ).not.toThrow();
       });
 
-      it('does not catch the phone number without its leading zero', () => {
+      it.each([
+        ['E.164', '+989121234567'],
+        ['E.164 without the plus', '989121234567'],
+        ['national, with the trunk zero', '09121234567'],
+        ['national significant digits only', '9121234567'],
+      ])('catches the phone number written as %s', (_label, spelling) => {
         expect(() =>
-          assertPasswordNotContainingProfile('Pass#9121234567', {
+          assertPasswordNotContainingProfile(`Pass#${spelling}`, {
             phoneNumber: '09121234567',
           }),
-        ).not.toThrow();
+        ).toThrow(PasswordContainsProfileDataError);
       });
 
       it('does not catch a candidate broken up by a separator', () => {
