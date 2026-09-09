@@ -45,8 +45,33 @@ export const RedisKeys = {
   otpCooldown: (purpose: string, phone: string) =>
     `otp:cooldown:${tenantSegment('an OTP cooldown')}:${purpose}:${phone}`,
 
-  /** Fixed-window rate-limit counter for an arbitrary bucket. */
-  rateLimit: (bucket: string) => `ratelimit:${bucket}`,
+  /**
+   * Fixed-window rate-limit counter for an arbitrary bucket (F-1206, catalog
+   * 20.2 layer 6).
+   *
+   * The bucket string is the *route's*, and every route builds it from
+   * something the platform does not allocate: an IP, a messenger chat id, a
+   * username, a phone number. Each of those is the same value at two
+   * resellers' front doors, so without the segment one tenant's traffic spends
+   * another's budget — and `login-failures:<identity>` is worse than noisy: a
+   * reseller's `admin` is locked out because a *different* reseller's `admin`
+   * is being guessed at, which is a denial of service one tenant can aim at
+   * another for the price of ten bad passwords.
+   *
+   * The segment is applied here rather than inside `rateLimitSubject()`
+   * because two captcha routes and that login-failure bucket never go through
+   * the subject helper. A control that only holds for the call sites that
+   * remembered it is the shape of leak ADR-0024 exists to remove.
+   *
+   * **Unlike the phone-derived keys, this one does not throw without a scope.**
+   * A request to a host matching no `tenant_domain` row is exactly what a
+   * flood looks like, and it must stay countable while `TenantGuard` answers
+   * it a 404 — throwing would turn that into a 500 and hand an attacker an
+   * uncounted door. `none` is a literal no tenant id can equal, so the
+   * unresolved bucket is unreachable from inside a tenant.
+   */
+  rateLimit: (bucket: string) =>
+    `ratelimit:${TenantContext.currentOrNull()?.id ?? 'none'}:${bucket}`,
 
   /**
    * Pending registration payload (hashed password + profile fields) for a

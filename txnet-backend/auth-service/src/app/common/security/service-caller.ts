@@ -64,9 +64,15 @@ export function isServiceCaller(req: unknown): boolean {
 }
 
 /**
- * Who a per-caller rate limit counts against: the acting chat for a bot call,
- * the IP for everyone else. Every route's `RateLimit` key goes through this —
- * writing `req.ip` directly is what makes one bot look like one attacker.
+ * Who a per-caller rate limit counts against **within one tenant**: the acting
+ * chat for a bot call, the IP for everyone else. Prefer it to writing `req.ip`
+ * directly — that is what makes one bot look like one attacker.
+ *
+ * It deliberately says nothing about the tenant (F-1206). A chat id is the
+ * messenger's and an IP is the internet's, so both are the same value at two
+ * resellers' front doors; the tenant segment is added once, by
+ * `RedisKeys.rateLimit`, so that the two captcha routes and
+ * `login-failures:<identity>` — none of which call this — are scoped too.
  */
 export function rateLimitSubject(req: unknown): string {
   const r = req as { rateSubject?: string; ip?: string };

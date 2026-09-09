@@ -2,7 +2,7 @@
 id: redis-keyspace
 layer: platform
 status: active
-version: 4
+version: 5
 updated: 2026-09-09
 ---
 
@@ -66,7 +66,7 @@ apart.
 | `otp:code:<tenantId>:<purpose>:<phone>` | string (JSON `{codeHash,attemptCount}`) | 300s | auth-service `OtpStore.save` | auth-service verify Lua script |
 | `otp:lock:<tenantId>:<purpose>:<phone>` | string | 2s | `OtpStore.acquireLock` (`SET NX`) | — |
 | `otp:cooldown:<tenantId>:<purpose>:<phone>` | string | 60s | `OtpStore.startCooldown` | `OtpStore.isCoolingDown` |
-| `ratelimit:<bucket>` | counter | window seconds (per call site) | `RateLimiter.hit` (`INCR` + `EXPIRE` on first hit, Lua) | same |
+| `ratelimit:<tenantId>:<bucket>` | counter | window seconds (per call site) | `RateLimiter.hit` (`INCR` + `EXPIRE` on first hit, Lua) | same. `<tenantId>` is `none` when the request resolved to no tenant — this is the one tenant-segmented key that does not throw without a scope (F-066-o) |
 | `register:pending:<tenantId>:<phone>` | string (JSON profile + password hash) | 600s | auth-service `RegisterService.register` | auth-service `RegisterService.verifyPhone` |
 | `bot:nav:<platform>:<integrationId>:<chatId>` | string (JSON `NavState`: flow, step, collected fields, last view) | `BOT_NAV_TTL_SEC` (1800s) | bot-service `ConversationStore.save` | bot-service `ConversationRouter` |
 | `bot:session:<platform>:<integrationId>:<chatId>` | string (JSON `{refreshToken,signedInAt}`) | `BOT_SESSION_TTL_SEC` (30d, idle — pushed out on every read) | bot-service `BotSessionStore.save` | bot-service (menu, `/logout`) |
@@ -91,6 +91,25 @@ apart.
   error rather than an unscoped key — the same rule `withTenant` applies to a
   query (`tenant-context/contract.md` rule 3), for the same reason: the wrong
   answer here is two tenants sharing one slot.
+- **A rate-limit bucket carries `<tenantId>` too, and is the one that does not
+  throw.** The bucket string belongs to the route and is built from an IP, a
+  chat id, a username or a phone number — every one of them the same value at
+  two resellers' front doors, so without the segment one tenant's traffic
+  spends another's budget and `login-failures:<identity>` lets one reseller
+  lock out another's `admin` for the price of ten bad passwords (F-1206,
+  catalog 20.2 layer 6). The segment is applied by `RedisKeys.rateLimit`, not
+  by `rateLimitSubject()`: the two captcha routes and that login-failure bucket
+  never call the subject helper, and a control that only holds where it was
+  remembered is the leak ADR-0024 removes. It answers an unresolved tenant with
+  the literal `none` instead of throwing, because a request to an unknown host
+  is what a flood looks like and must stay countable while `TenantGuard`
+  answers it a 404 — throwing would make that a 500 and an uncounted door. No
+  tenant id can equal `none`, so the unresolved bucket is unreachable from
+  inside a tenant.
+  **What it does not buy:** an attacker who can address N tenants gets N
+  budgets from one IP. That is what "per-tenant buckets" costs and the catalog
+  asks for it anyway — a shared bucket is the noisy-neighbour outage above. A
+  platform-wide bucket alongside this one would answer it and is not built.
 - **A session key stays tenant-free.** `auth-handler` builds `session:<id>` in
   Go and has no tenant of its own; a segment here would make every gateway
   lookup miss, and a miss is read as *revoked*. Anything the Go side reads is

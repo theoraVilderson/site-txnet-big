@@ -11,7 +11,7 @@ exports[`RedisKeys — key catalogue builds every key from fixed arguments 1`] =
   "otpCode": "otp:code:tenant-1:login:09123456789",
   "otpCooldown": "otp:cooldown:tenant-1:login:09123456789",
   "otpLock": "otp:lock:tenant-1:login:09123456789",
-  "rateLimit": "ratelimit:login:1.2.3.4",
+  "rateLimit": "ratelimit:tenant-1:login:1.2.3.4",
   "registerPending": "register:pending:tenant-1:09123456789",
   "session": "session:sess-1",
   "tenantByHost": "tenant:host:myvpn.com",
