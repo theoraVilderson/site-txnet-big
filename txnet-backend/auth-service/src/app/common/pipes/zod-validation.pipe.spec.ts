@@ -37,12 +37,12 @@ describe('ZodValidationPipe', () => {
 
     // The schema's own transforms have to survive the pipe, or every caller
     // downstream sees the un-normalized form the client happened to send.
-    it('keeps the schema transform: +98… becomes 09…', () => {
+    it('keeps the schema transform: a national number becomes E.164', () => {
       const parsed = pipe.transform(validRegistration) as {
         phoneNumber: string;
       };
 
-      expect(parsed.phoneNumber).toBe('09120000000');
+      expect(parsed.phoneNumber).toBe('+989120000000');
     });
 
     it('strips a field the schema does not declare', () => {

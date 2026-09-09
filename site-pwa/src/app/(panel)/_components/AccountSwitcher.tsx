@@ -8,6 +8,7 @@ import { authApi } from "@/lib/auth-api";
 import { useLocale } from "@/context/LocaleContext";
 import { usePanelSession } from "../_context/PanelSessionContext";
 import { PANEL_ACCOUNTS_ADD } from "@/lib/routes";
+import { useApiErrorMessage } from "@/hooks/useApiError";
 
 /**
  * Current account, the rest of the group, "add an account" (F-0209).
@@ -27,6 +28,7 @@ export function AccountSwitcher() {
   const { group, isLoading, reload } = usePanelSession();
   const [isOpen, setIsOpen] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const toMessage = useApiErrorMessage();
   const [error, setError] = useState<string | null>(null);
   /**
    * Which member the user has asked to remove, and has not yet confirmed.
@@ -63,7 +65,7 @@ export function AccountSwitcher() {
       await authApi.switchAccount(userId);
       window.location.assign("/");
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("common", "accounts.switchFailed"));
+      setError(toMessage(e));
       setPendingId(null);
     }
   };
@@ -90,7 +92,7 @@ export function AccountSwitcher() {
       await reload();
       setConfirmingId(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("common", "accounts.removeFailed"));
+      setError(toMessage(e));
     } finally {
       setPendingId(null);
     }

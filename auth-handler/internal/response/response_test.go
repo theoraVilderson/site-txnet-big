@@ -75,8 +75,11 @@ func TestSafeExecuteConvertsAnErrorToTheErrorKey(t *testing.T) {
 	if got.OK || got.Msg != "failed" {
 		t.Errorf("SafeExecute() = %+v, want not-ok with the error key", got)
 	}
-	if got.Error != "redis: connection refused" {
-		t.Errorf("Error = %v, want the error text", got.Error)
+	// The error text names a host, a driver, a wrapped path. It belongs in the
+	// log, and the client gets the key alone — the rule `sanitizeError` follows
+	// on the other side of this platform.
+	if got.Error != nil {
+		t.Errorf("Error = %v, want nothing: the error text must not reach the wire", got.Error)
 	}
 }
 

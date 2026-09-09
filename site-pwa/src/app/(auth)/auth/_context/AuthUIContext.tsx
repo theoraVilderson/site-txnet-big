@@ -7,6 +7,8 @@ import { AUTH_KEY_MAP, type AuthTranslations } from "@auth/auth/_lib/translation
 
 interface AuthUIContextValue {
   isRtl: boolean;
+  /** The active language — the country picker names its countries in it. */
+  lang: string;
   /** shorthand: t.<key>  ==  t("auth", key) */
   t: AuthTranslations;
 }
@@ -56,7 +58,7 @@ export function AuthUIProvider({
   }, [ns, lt]);
 
   return (
-    <AuthUIContext.Provider value={{ isRtl, t }}>
+    <AuthUIContext.Provider value={{ isRtl, lang, t }}>
       {children}
     </AuthUIContext.Provider>
   );

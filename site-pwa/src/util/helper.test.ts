@@ -5,6 +5,8 @@ import {
   parsePersianDate,
   toEnglishDigits,
   toToman,
+  UNKNOWN_VALIDATION_KEY,
+  VALIDATIONS_NS,
   zodErrorToString,
 } from './helper';
 
@@ -250,21 +252,33 @@ describe('zodErrorToString', () => {
     return result.error;
   };
 
+  // A stand-in for `useLocale().t`, including its miss behaviour: an unknown
+  // key comes back as the key. The panel ships the real `validations`
+  // namespace for every language (`app/layout.tsx`).
+  const dictionary: Record<string, string> = {
+    unknown: 'Unknown validation error',
+    'fields.username.tooShort': 'Username must be at least 3 characters',
+  };
+  const t = (ns: string, key: string) =>
+    ns === 'validations' ? (dictionary[key] ?? key) : key;
+
   it('prefixes the field path by default', () => {
     const error = errorFor(
-      z.object({ username: z.string().min(3, 'نام کاربری الزامی است') }),
+      z.object({ username: z.string().min(3, 'fields.username.tooShort') }),
       { username: 'a' },
     );
-    expect(zodErrorToString(error)).toBe('username: نام کاربری الزامی است');
+    expect(zodErrorToString(error, { t })).toBe(
+      'username: Username must be at least 3 characters',
+    );
   });
 
   it('omits the path when withPath is false', () => {
     const error = errorFor(
-      z.object({ username: z.string().min(3, 'نام کاربری الزامی است') }),
+      z.object({ username: z.string().min(3, 'fields.username.tooShort') }),
       { username: 'a' },
     );
-    expect(zodErrorToString(error, { withPath: false })).toBe(
-      'نام کاربری الزامی است',
+    expect(zodErrorToString(error, { withPath: false, t })).toBe(
+      'Username must be at least 3 characters',
     );
   });
 
@@ -292,13 +306,56 @@ describe('zodErrorToString', () => {
     expect(zodErrorToString(error, { separator: ' | ' })).toContain(' | ');
   });
 
-  it.each([
-    ['null', null],
-    ['undefined', undefined],
-    ['an object without issues', {}],
-  ])('%s falls back to the generic message', (_label, value) => {
-    expect(zodErrorToString(value as unknown as ZodError)).toBe(
-      'خطای ناشناخته در اعتبارسنجی',
-    );
+  describe('it speaks the active language, never one fixed one (F-052)', () => {
+    it.each([
+      ['null', null],
+      ['undefined', undefined],
+      ['an object without issues', {}],
+    ])('%s yields the unknown-validation key, not a sentence', (_label, value) => {
+      expect(zodErrorToString(value as unknown as ZodError)).toBe(
+        UNKNOWN_VALIDATION_KEY,
+      );
+    });
+
+    it('translates the unknown-validation key when a translator is given', () => {
+      expect(zodErrorToString(null as unknown as ZodError, { t })).toBe(
+        'Unknown validation error',
+      );
+    });
+
+    it('asks for the key in the validations namespace', () => {
+      const seen: Array<[string, string]> = [];
+      zodErrorToString(null as unknown as ZodError, {
+        t: (ns, key) => {
+          seen.push([ns, key]);
+          return key;
+        },
+      });
+      expect(seen).toEqual([[VALIDATIONS_NS, UNKNOWN_VALIDATION_KEY]]);
+    });
+
+    it('emits no user-facing string of its own — every character comes from the translator', () => {
+      const error = errorFor(
+        z.object({ username: z.string().min(3, 'fields.username.tooShort') }),
+        { username: 'a' },
+      );
+      const shouted = zodErrorToString(error, {
+        withPath: false,
+        t: (_ns, key) => key.toUpperCase(),
+      });
+      expect(shouted).toBe('FIELDS.USERNAME.TOOSHORT');
+    });
+
+    it('leaves a message that is not a key alone', () => {
+      // A schema that has not been keyed yet still renders: `t` returns the
+      // key it was handed when it finds nothing, so the literal survives.
+      const error = errorFor(
+        z.object({ username: z.string().min(3, 'a literal sentence') }),
+        { username: 'a' },
+      );
+      expect(zodErrorToString(error, { withPath: false, t })).toBe(
+        'a literal sentence',
+      );
+    });
   });
 });

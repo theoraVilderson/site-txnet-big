@@ -1,5 +1,6 @@
 {
   "failed": "The submitted information is invalid",
+  "unknown": "Unknown validation error",
   "fields": {
     "fullName": {
       "tooShort": "Name must be at least 2 characters",

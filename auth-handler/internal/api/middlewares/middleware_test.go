@@ -3,6 +3,7 @@ package middlewares
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -149,8 +150,50 @@ func TestTimeoutCutsOffASlowHandler(t *testing.T) {
 	if w.Code != http.StatusServiceUnavailable {
 		t.Errorf("status = %d, want 503 from TimeoutHandler", w.Code)
 	}
-	if !strings.Contains(w.Body.String(), "request timeout") {
-		t.Errorf("body = %q, want the JSON timeout message", w.Body.String())
+	// The same envelope every other answer has: a caller that showed `msg` to
+	// a person must not need a second shape for the one answer no handler wrote.
+	var body struct {
+		OK  bool   `json:"ok"`
+		Msg string `json:"msg"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("body = %q, want the standard JSON envelope: %v", w.Body.String(), err)
+	}
+	if body.OK || body.Msg == "" {
+		t.Errorf("body = %+v, want ok:false and a message", body)
+	}
+}
+
+// A panic must reach the client as the envelope too, and never as the panic
+// value: that is a stack detail, and it goes to the log alone.
+func TestRecovererAnswersWithTheEnvelopeAndHidesThePanic(t *testing.T) {
+	var logs bytes.Buffer
+	h := Recoverer(slog.New(slog.NewTextHandler(&logs, nil)))(
+		http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+			panic("secret internal detail")
+		}))
+
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/validate", nil))
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", w.Code)
+	}
+	if strings.Contains(w.Body.String(), "secret internal detail") {
+		t.Errorf("body = %q, want the panic value absent", w.Body.String())
+	}
+	var body struct {
+		OK  bool   `json:"ok"`
+		Msg string `json:"msg"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("body = %q, want the standard JSON envelope: %v", w.Body.String(), err)
+	}
+	if body.OK || body.Msg == "" {
+		t.Errorf("body = %+v, want ok:false and a message", body)
+	}
+	if !strings.Contains(logs.String(), "secret internal detail") {
+		t.Errorf("log = %q, want the panic value recorded there", logs.String())
 	}
 }
 
@@ -177,7 +220,7 @@ func TestLanguageMiddlewarePutsLanguageAndStoreInContext(t *testing.T) {
 	var translated string
 
 	h := LanguageMiddleware(store)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		translated = Translate(r, "messages", "session_revoked")
+		translated = Translate(r, ErrorsNamespace, "auth.sessionRevoked")
 	}))
 	r := httptest.NewRequest(http.MethodGet, "/validate", nil)
 	r.Header.Set("Accept-Language", "en-US,en;q=0.9")
@@ -185,7 +228,7 @@ func TestLanguageMiddlewarePutsLanguageAndStoreInContext(t *testing.T) {
 
 	// With no live client the store echoes the key, which proves the lookup
 	// reached the store rather than the "no store in context" branch.
-	if translated != "session_revoked" {
+	if translated != "auth.sessionRevoked" {
 		t.Errorf("Translate() = %q, want the key echoed back", translated)
 	}
 }
@@ -194,8 +237,8 @@ func TestLanguageMiddlewarePutsLanguageAndStoreInContext(t *testing.T) {
 // empty string: an untranslated key on the wire is readable, a blank msg is not.
 func TestTranslateWithoutTheMiddlewareReturnsTheKey(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/validate", nil)
-	if got := Translate(r, "messages", "forbidden"); got != "forbidden" {
-		t.Errorf("Translate() = %q, want %q", got, "forbidden")
+	if got := Translate(r, ErrorsNamespace, "permissions.forbidden"); got != "permissions.forbidden" {
+		t.Errorf("Translate() = %q, want %q", got, "permissions.forbidden")
 	}
 }
 
@@ -204,7 +247,7 @@ func TestTranslateWithoutTheMiddlewareReturnsTheKey(t *testing.T) {
 func TestTranslateIgnoresAStringKeyedImposter(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/validate", nil)
 	ctx := withStringKey(r.Context(), "localeStore", unloadedStore("fa"))
-	if got := Translate(r.WithContext(ctx), "messages", "unauthorized"); got != "unauthorized" {
+	if got := Translate(r.WithContext(ctx), ErrorsNamespace, "auth.invalidToken"); got != "auth.invalidToken" {
 		t.Errorf("Translate() = %q, want the key; a string-keyed value must not be picked up", got)
 	}
 }

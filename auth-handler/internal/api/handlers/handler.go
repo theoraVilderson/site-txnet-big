@@ -35,29 +35,29 @@ func (h *Handler) Validate(w http.ResponseWriter, r *http.Request) {
 	result := response.SafeExecute(r.Context(), func() (interface{}, error) {
 		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if token == "" {
-			return response.Err("missing_bearer_token", nil), nil
+			return response.Err(keyAuthRequired, nil), nil
 		}
 
 		claims, err := jwt.Validate(token, h.secret)
 		if err != nil {
 			h.logger.Warn("token validation failed", "error", err)
-			return response.Err("unauthorized", nil), nil
+			return response.Err(keyInvalidToken, nil), nil
 		}
 
 		active, err := h.redis.SessionActive(h.keyPrefix + "session:" + claims.SessionID)
 		if err != nil {
 			h.logger.Error("session lookup failed", "error", err, "session_id", claims.SessionID)
-			return response.Err("internal_error", nil), nil
+			return response.Err(keyUnexpected, nil), nil
 		}
 		if !active {
-			return response.Err("session_revoked", nil), nil
+			return response.Err(keySessionRevoked, nil), nil
 		}
 
 		if h.engine != nil {
 			if unauthorized, ok := h.engine.Check(claims.RoleID, claims.Permissions); !ok {
 				h.logger.Warn("token claims unauthorized permissions",
 					"role", claims.RoleID, "user_id", claims.Sub, "unauthorized", unauthorized)
-				return response.Err("forbidden", nil), nil
+				return response.Err(keyForbidden, nil), nil
 			}
 		}
 
@@ -70,38 +70,57 @@ func (h *Handler) Validate(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("X-Impersonated", "true")
 			w.Header().Set("X-Impersonated-By", claims.ImpersonatedBy)
 		}
-		return response.Ok(nil, "successful"), nil
-	}, "successful", "failed")
+		return response.Ok(nil, keySuccess), nil
+	}, keySuccess, keyUnexpected)
 
 	// Map the outcome to an HTTP status BEFORE translation rewrites result.Msg.
 	// Traefik ForwardAuth only forwards the request upstream on a 2xx; any
 	// other status blocks it and is returned to the client as-is.
 	status := statusForKey(result.OK, result.Msg)
 
-	// Translate the message using the request's language.
-	result.Msg = middlewares.Translate(r, "messages", result.Msg)
+	// Translate the message using the request's language. Only a failure is
+	// translated: a 2xx never reaches a person — Traefik forwards the request
+	// upstream and throws this body away — while `msg` on a failure is shown
+	// as-is by whoever asked (`panel-web`, the bot).
+	if !result.OK {
+		result.Msg = middlewares.Translate(r, middlewares.ErrorsNamespace, result.Msg)
+	}
 
 	writeJSON(w, result, status)
 }
 
-// statusForKey maps an internal response message key to an HTTP status code.
+// The keys this gateway answers with. They name entries in the shared `errors`
+// namespace (`locales/backend/langs/*/errors.json`) — the same catalogue
+// `auth-service` translates against — because a caller shows `msg` to a person
+// and a gateway of its own invented vocabulary has nothing to translate with.
+const (
+	keyAuthRequired   = "auth.authorizationRequired"
+	keyInvalidToken   = "auth.invalidToken"
+	keySessionRevoked = "auth.sessionRevoked"
+	keyForbidden      = "permissions.forbidden"
+	keyUnexpected     = "system.unexpected"
+	// Never shown: a 2xx body is consumed by Traefik, not by a person.
+	keySuccess = "ok"
+)
+
+// statusForKey maps a response message key to an HTTP status code.
 func statusForKey(ok bool, msgKey string) int {
 	if ok {
 		return http.StatusOK
 	}
 	switch msgKey {
-	case "forbidden":
+	case keyForbidden:
 		return http.StatusForbidden
-	case "internal_error", "failed":
+	case keyUnexpected:
 		return http.StatusInternalServerError
-	default: // missing_bearer_token, unauthorized, session_revoked
+	default: // keyAuthRequired, keyInvalidToken, keySessionRevoked
 		return http.StatusUnauthorized
 	}
 }
 
 // Health is a simple health check endpoint.
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, response.Ok("healthy", "healthy"), http.StatusOK)
+	writeJSON(w, response.Ok("healthy", keySuccess), http.StatusOK)
 }
 
 // writeJSON writes a standardized JSON response.

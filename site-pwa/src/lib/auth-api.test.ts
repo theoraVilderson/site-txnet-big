@@ -1,5 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import type { authApi as AuthApi } from './auth-api';
+import type { ApiError } from './api-error';
 
 const ORIGIN = 'https://api.example.com';
 
@@ -65,16 +66,47 @@ describe('the envelope', () => {
     );
   });
 
-  it('falls back to a generic message when the body has no `msg`', async () => {
+  // auth-api translates before it answers, so `msg` is the sentence to show.
+  // The three answers that carry no translated text are marked `unreachable`
+  // instead, and the caller shows a line of its own (`useApiErrorMessage`) —
+  // never the detail below, which is written for a log.
+  it('marks a failure whose body has no `msg` unreachable', async () => {
     fetchMock.mockResolvedValue(envelope({ ok: false }, 500));
 
-    await expect(authApi.otpChannels()).rejects.toThrow('Request failed');
+    await expect(authApi.otpChannels()).rejects.toMatchObject({
+      name: 'ApiError',
+      unreachable: true,
+    });
   });
 
-  it('falls back to a generic message when the body is not JSON at all', async () => {
+  it('marks a failure whose body is not JSON at all unreachable', async () => {
     fetchMock.mockResolvedValue(envelope('<html>502</html>', 502));
 
-    await expect(authApi.otpChannels()).rejects.toThrow('Request failed');
+    await expect(authApi.otpChannels()).rejects.toMatchObject({
+      name: 'ApiError',
+      unreachable: true,
+    });
+  });
+
+  it('keeps the server message and its field errors, already translated', async () => {
+    fetchMock.mockResolvedValue(
+      envelope(
+        {
+          ok: false,
+          msg: 'اطلاعات وارد شده معتبر نیست',
+          ref: 'a1b2c3',
+          fieldErrors: [{ path: 'phoneNumber', message: 'شماره معتبر نیست' }],
+        },
+        400,
+      ),
+    );
+
+    await expect(authApi.otpChannels()).rejects.toMatchObject({
+      message: 'اطلاعات وارد شده معتبر نیست',
+      unreachable: false,
+      ref: 'a1b2c3',
+      fieldErrors: [{ path: 'phoneNumber', message: 'شماره معتبر نیست' }],
+    });
   });
 
   it('treats an unparseable body on a 200 as an empty envelope', async () => {
@@ -84,10 +116,19 @@ describe('the envelope', () => {
     await expect(authApi.otpChannels()).resolves.toBeUndefined();
   });
 
-  it('lets a network failure through untouched', async () => {
-    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+  it('turns a network failure into an unreachable ApiError, keeping the cause', async () => {
+    const cause = new TypeError('Failed to fetch');
+    fetchMock.mockRejectedValue(cause);
 
-    await expect(authApi.otpChannels()).rejects.toThrow('Failed to fetch');
+    // One failure shape for every caller: a screen that had to tell a
+    // TypeError from an envelope would end up showing one of them raw.
+    // `resetModules` in beforeEach means the class the client threw is the
+    // one from the same fresh module graph, not a statically imported twin.
+    const { ApiError } = await import('./api-error');
+    const thrown = await authApi.otpChannels().catch((e: unknown) => e);
+    expect(thrown).toBeInstanceOf(ApiError);
+    expect((thrown as ApiError).unreachable).toBe(true);
+    expect((thrown as ApiError).cause).toBe(cause);
   });
 });
 
@@ -115,6 +156,18 @@ describe('the request', () => {
     await authApi.verifyLoginOtp('09120000000', '123456');
 
     expect(lastCall().headers.get('x-captcha-token')).toBeNull();
+  });
+
+  it('sends the language the panel is showing, not the browser\'s', async () => {
+    // auth-api translates an error from Accept-Language, and a browser sends
+    // the OS language — so without this a Persian panel on an en-US machine
+    // gets English errors back.
+    const { setApiLanguage } = await import('./api-language');
+    setApiLanguage('fa');
+
+    await authApi.otpChannels();
+
+    expect(lastCall().headers.get('accept-language')).toBe('fa');
   });
 
   it('sends no authorization header before anything has signed in', async () => {

@@ -1,6 +1,9 @@
 // Browser calls api.${DOMAIN_NAME} directly (cross-origin, cookie-bearing) —
 // no Next.js proxy hop. Backend CORS (main.ts) allows this origin with
 // credentials; see docs/interfaces/auth-api/contract.md.
+import { ApiError } from "./api-error";
+import { apiLanguage } from "./api-language";
+
 const API_URL = `${process.env.NEXT_PUBLIC_API_ORIGIN}/api`;
 let accessToken: string | null = null;
 
@@ -15,15 +18,54 @@ let accessToken: string | null = null;
  */
 let sessionBootstrap: Promise<AuthResult> | null = null;
 
+/**
+ * Every call goes out with the language the user chose in this panel and comes
+ * back as either `data` or an {@link ApiError}. `auth-api` has already
+ * translated `msg` and each `fieldErrors[].message` into that language, so a
+ * caller shows them as they are; the two answers with no server text of their
+ * own (`fetch` threw, or the body had no envelope) are marked `unreachable` and
+ * the caller translates its own line.
+ */
 async function request<T>(path: string, init: RequestInit = {}, captchaToken?: string): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("content-type", "application/json");
+  const lang = apiLanguage();
+  if (lang) headers.set("accept-language", lang);
   if (accessToken) headers.set("authorization", `Bearer ${accessToken}`);
   if (captchaToken) headers.set("x-captcha-token", captchaToken);
-  const response = await fetch(`${API_URL}${path}`, { ...init, headers, credentials: "include" });
-  const body = await response.json().catch(() => ({}));
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, { ...init, headers, credentials: "include" });
+  } catch (cause) {
+    throw ApiError.unreachable(`${init.method ?? "GET"} ${path} did not reach auth-api`, cause);
+  }
+
+  const body = await response.json().catch(() => null);
+  if (body === null || typeof body !== "object") {
+    // A 2xx whose body cannot be read is still a success — an empty answer to
+    // a call that wanted nothing back. A failure with no readable body has no
+    // message in it, so nothing translated came back to show.
+    if (!response.ok) {
+      throw ApiError.unreachable(`${path} answered ${response.status} without a JSON envelope`);
+    }
+    return undefined as T;
+  }
   if (!response.ok || body.ok === false) {
-    throw new Error(body.msg ?? "Request failed");
+    // No `msg` means nothing translated came back — a bare gateway 502, say.
+    if (typeof body.msg !== "string" || body.msg.length === 0) {
+      throw ApiError.unreachable(`${path} answered ${response.status} with no message`);
+    }
+    throw new ApiError(body.msg, {
+      status: response.status,
+      ref: typeof body.ref === "string" ? body.ref : undefined,
+      fieldErrors: Array.isArray(body.fieldErrors)
+        ? (body.fieldErrors as unknown[])
+            .map((f) => f as { path?: unknown; message?: unknown })
+            .filter((f) => typeof f?.message === "string")
+            .map((f) => ({ path: String(f.path ?? ""), message: f.message as string }))
+        : [],
+    });
   }
   return body.data as T;
 }
@@ -100,6 +142,27 @@ export const authApi = {
   async logout() { const result = await request<{ success: boolean }>("/auth/logout", { method: "POST", body: JSON.stringify({}) }); accessToken = null; sessionBootstrap = null; return result; },
   /** An access token for this page load, from the refresh cookie. Throws if there is no live session. */
   async ensureSession() { sessionBootstrap ??= authApi.refresh(); return sessionBootstrap; },
+  /**
+   * Sign in from inside a messenger's Mini App (F-310, ADR-0017).
+   *
+   * `initData` is a string the messenger signed with the bot's own token; the
+   * server verifies it and answers with the ordinary session — the same cookie
+   * and the same access token a password login produces, so nothing past this
+   * line knows the panel is in a webview.
+   *
+   * `state: "needsContact"` is a refusal with a cause: this messenger account
+   * has never shared its number with the bot, so the platform's signature says
+   * who is looking but nothing yet says which account that is. It carries no
+   * token, and the caller falls through to the ordinary login screen.
+   */
+  async webAppSession(platform: "telegram" | "bale", initData: string) {
+    const result = await request<{ state: "authenticated" | "needsContact" } & Partial<AuthResult>>(
+      "/auth/bots/webapp/session",
+      { method: "POST", body: JSON.stringify({ platform, initData }) },
+    );
+    if (result.accessToken) { accessToken = result.accessToken; sessionBootstrap = Promise.resolve(result as AuthResult); }
+    return result;
+  },
   /** The caller's own account plus the accounts they may switch to (F-0206). */
   async listAccounts() { return request<SwitchGroup>("/auth/accounts", { method: "GET" }); },
   /**

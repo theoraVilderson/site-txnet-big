@@ -67,10 +67,13 @@ func main() {
 	mux.HandleFunc("/health", h.Health)
 
 	// Apply middleware chain.
+	// Order matters: Recoverer and Timeout both answer the client themselves,
+	// so both sit inside LanguageMiddleware — otherwise the one answer a user
+	// gets when something breaks is the only one not in their language.
 	wrapped := middlewares.Chain(mux,
-		middlewares.Recoverer(log),
 		middlewares.RequestLogger(log),
 		middlewares.LanguageMiddleware(localeStore),
+		middlewares.Recoverer(log),
 		middlewares.Timeout(5*time.Second),
 	)
 

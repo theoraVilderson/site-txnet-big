@@ -2,8 +2,8 @@
 id: forward-auth
 layer: platform
 status: active
-version: 1
-updated: 2026-09-04
+version: 2
+updated: 2026-09-08
 ---
 
 # Contract — forward-auth
@@ -34,10 +34,31 @@ Traefik middleware (`strip-fake-headers`).
 ## Status mapping
 
 - 200 valid. 401 missing/invalid/expired token or missing session marker
-  (`missing_bearer_token`, `unauthorized`, `session_revoked`). 403 policy denies
-  a claimed permission (`forbidden`). 500 Redis lookup error / unexpected. The
-  internal message key is mapped to the status **before** translation, then the
-  body `msg` is localized via `i18n` (namespace `messages`, `Accept-Language`).
+  (`auth.authorizationRequired`, `auth.invalidToken`, `auth.sessionRevoked`).
+  403 policy denies a claimed permission (`permissions.forbidden`). 500 Redis
+  lookup error / unexpected (`system.unexpected`). 503 the request outlived the
+  gateway's timeout (`system.unavailable`). The key is mapped to the status
+  **before** translation.
+
+## Every answer is the envelope, and `msg` is a sentence
+
+`{ok, msg}`, with `msg` translated into `Accept-Language` from the shared
+backend `errors` namespace (`locales/backend/langs/*/errors.json`) — the same
+catalogue `auth-api` translates against.
+
+- A key here **must exist in `errors`**. Until v2 this gateway translated
+  against a namespace called `messages`, which `locale-service` does not serve
+  and never did: every lookup fell through and the client was sent the raw key
+  (`session_revoked`). A caller shows `msg` to a person, so its language is not
+  a nicety.
+- The answers no handler wrote — a recovered panic, a timeout — carry the same
+  envelope in the same language. `Recoverer` and `Timeout` therefore sit
+  **inside** `LanguageMiddleware`; `cmd/server/main.go` says so.
+- A 2xx body is consumed by Traefik and never reaches a person, so success is
+  not translated.
+- Nothing internal is ever on the wire: a Go error's text and a panic value go
+  to the log alone (`response.SafeExecute`), the rule `auth-api`'s
+  `sanitizeError` follows on the other side.
 
 ## Consumes
 

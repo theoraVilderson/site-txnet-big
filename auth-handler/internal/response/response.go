@@ -37,8 +37,8 @@ func Err(msgKey string, errObj interface{}) Response {
 // If the function returns a Response already, it is passed through unchanged.
 // Otherwise, the returned value is wrapped in an Ok response.
 // If the function returns an error or panics, an Err response keyed by
-// errorMsgKey is returned; a panic is additionally logged (details are never
-// put on the wire).
+// errorMsgKey is returned; both are logged, and neither the error text nor the
+// panic value is ever put on the wire.
 func SafeExecute(ctx context.Context, fn func() (interface{}, error), successMsgKey string, errorMsgKey string) (resp Response) {
 	// Recover from panics and convert to an error response via the named
 	// return value, so callers never see a zero Response.
@@ -51,7 +51,12 @@ func SafeExecute(ctx context.Context, fn func() (interface{}, error), successMsg
 
 	result, err := fn()
 	if err != nil {
-		return Err(errorMsgKey, err.Error())
+		// The text of a Go error is an internal detail — a driver message, a
+		// host name, a wrapped path. It is logged, never put on the wire: the
+		// client gets the key, the same rule `auth-service`'s `sanitizeError`
+		// follows.
+		slog.ErrorContext(ctx, "handler returned an error", "error", err)
+		return Err(errorMsgKey, nil)
 	}
 	if r, ok := result.(Response); ok {
 		return r

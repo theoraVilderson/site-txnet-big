@@ -1,5 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { AuthApiClient, CallContext } from './auth-api.client';
+import { BotCopy } from '../locale/bot-copy';
 
 /**
  * Only the transport is tested here. Every method on this class is one line
@@ -11,7 +12,9 @@ import { AuthApiClient, CallContext } from './auth-api.client';
  *     from the body for the browser and there is no browser here. Miss it and
  *     every bot login succeeds and then cannot be resumed;
  *   - a network failure and a non-JSON body both become the same `ok:false`
- *     envelope, so no caller ever has two failure shapes to handle;
+ *     envelope, so no caller ever has two failure shapes to handle — and its
+ *     `msg` is a resolved sentence, because every caller renders `msg` as
+ *     `BotText.raw`, which never goes through the translator again;
  *   - it never reads the status code — a business rejection arrives with a
  *     200 and `ok:false` (`auth-api/contract.md`).
  */
@@ -27,6 +30,15 @@ const config = {
 } as unknown as ConfigService;
 
 const ctx: CallContext = { chatId: '5501', lang: 'fa', platform: 'telegram' };
+
+/** The sentence `bot.common.tryAgain` resolves to in `fa`. */
+const TRY_AGAIN = 'یه مشکلی از سمت ما پیش اومد. لطفاً دوباره تلاش کنید.';
+
+/** `BotCopy`, as far as the transport is concerned: a key in, a sentence out. */
+const copy = {
+  text: (lang: string, text: { key?: string }) =>
+    lang === 'fa' && text.key === 'bot.common.tryAgain' ? TRY_AGAIN : `?${text.key}`,
+} as unknown as BotCopy;
 
 /** A fetch Response with a JSON body and optional Set-Cookie headers. */
 function jsonResponse(
@@ -56,7 +68,7 @@ afterEach(() => {
 });
 
 function client() {
-  return new AuthApiClient(config);
+  return new AuthApiClient(config, copy);
 }
 
 function lastRequest() {
@@ -253,7 +265,7 @@ describe('AuthApiClient transport', () => {
 
     const res = await client().refresh({ refreshToken: 'r-1' }, ctx);
 
-    expect(res).toEqual({ ok: false, msg: 'bot.common.tryAgain' });
+    expect(res).toEqual({ ok: false, msg: TRY_AGAIN });
   });
 
   it('turns a non-JSON body into the same envelope', async () => {
@@ -269,7 +281,18 @@ describe('AuthApiClient transport', () => {
 
     const res = await client().refresh({ refreshToken: 'r-1' }, ctx);
 
-    expect(res).toEqual({ ok: false, msg: 'bot.common.tryAgain' });
+    expect(res).toEqual({ ok: false, msg: TRY_AGAIN });
+  });
+
+  it('replaces a failure envelope that carries no message', async () => {
+    // A gateway can answer JSON that is not this platform's envelope. `msg` is
+    // rendered as `raw`, so passing an empty one through puts a blank line in
+    // the chat where the reason belongs.
+    fetchMock.mockResolvedValue(jsonResponse({ ok: false }, { status: 502 }));
+
+    const res = await client().refresh({ refreshToken: 'r-1' }, ctx);
+
+    expect(res).toEqual({ ok: false, msg: TRY_AGAIN });
   });
 
   it('reads ok, not the status code', async () => {
@@ -319,7 +342,7 @@ describe('AuthApiClient transport', () => {
 
     const res = await client().refresh({ refreshToken: 'r-1' }, ctx);
 
-    expect(res).toEqual({ ok: false, msg: 'bot.common.tryAgain' });
+    expect(res).toEqual({ ok: false, msg: TRY_AGAIN });
   });
 
   it('passes an abort signal on every call', async () => {

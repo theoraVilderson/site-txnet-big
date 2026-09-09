@@ -3,11 +3,14 @@ package middlewares
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"auth-handler/internal/locale"
+	"auth-handler/internal/response"
 )
 
 // Chain applies middlewares in order. Chain(h, A, B) means "A wraps B wraps h".
@@ -36,14 +39,23 @@ func RequestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 	}
 }
 
-// Recoverer converts a panic into a 500 response.
+// ErrorsNamespace is where every message this gateway sends a client lives:
+// the shared backend catalogue, so a key here is one `auth-service` also knows.
+const ErrorsNamespace = "errors"
+
+// Recoverer converts a panic into a 500 carrying the standard envelope.
+//
+// It sits INSIDE LanguageMiddleware (see cmd/server/main.go) so the sentence it
+// writes is in the caller's language; the cost is that a panic in
+// LanguageMiddleware itself is not caught, which is three lines of map lookup.
 func Recoverer(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if err := recover(); err != nil {
+					// The panic value stays in the log: it is a stack detail.
 					log.Error("panic recovered", "error", err, "path", r.URL.Path)
-					http.Error(w, "internal server error", http.StatusInternalServerError)
+					WriteError(w, r, "system.unexpected", http.StatusInternalServerError)
 				}
 			}()
 			next.ServeHTTP(w, r)
@@ -52,10 +64,37 @@ func Recoverer(log *slog.Logger) func(http.Handler) http.Handler {
 }
 
 // Timeout cancels a request after a given duration.
+//
+// The handler is built per request rather than once per wrap: its timeout body
+// is fixed at construction, and a fixed body cannot be in the caller's
+// language. Everything hard about a timeout — buffering the handler's writes,
+// and the race between them and the deadline — stays in the stdlib.
 func Timeout(d time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		return http.TimeoutHandler(next, d, `{"error":"request timeout"}`)
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body := errorEnvelope(Translate(r, ErrorsNamespace, "system.unavailable"))
+			http.TimeoutHandler(next, d, body).ServeHTTP(w, r)
+		})
 	}
+}
+
+// WriteError sends the standard envelope with `msgKey` translated into the
+// request's language. Every answer this gateway gives a client has the shape a
+// caller already handles — `{ok, msg}` — including the ones no handler wrote.
+func WriteError(w http.ResponseWriter, r *http.Request, msgKey string, status int) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = io.WriteString(w, errorEnvelope(Translate(r, ErrorsNamespace, msgKey)))
+}
+
+func errorEnvelope(msg string) string {
+	encoded, err := json.Marshal(response.Response{OK: false, Msg: msg})
+	if err != nil {
+		// Response holds a bool and a string; this cannot fail, and a caller
+		// that got an empty body would still see the status.
+		return `{"ok":false,"msg":""}`
+	}
+	return string(encoded)
 }
 
 // statusWriter captures the HTTP status code for logging.

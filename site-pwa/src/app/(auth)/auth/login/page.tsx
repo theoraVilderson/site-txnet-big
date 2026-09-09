@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { OrganicField } from "@auth/auth/_components/OrganicField";
+import { PhoneField } from "@auth/auth/_components/PhoneField";
 import { PasswordField } from "@auth/auth/_components/PasswordField";
 import { NatureCaptchaUI } from "@auth/auth/_components/NatureCaptchaUI";
 import { OtpStep } from "@auth/auth/_components/OtpStep";
@@ -15,9 +16,11 @@ import {
   SuccessShell,
 } from "@auth/auth/_components/AuthCardShell";
 import { AuthFooterLinks } from "@auth/auth/_components/AuthFooterLinks";
+import { FormError } from "@auth/auth/_components/FormError";
 import { useAuthUI } from "@auth/auth/_context/AuthUIContext";
 import { useOtpTimer } from "@auth/auth/_hooks/useOtpTimer";
 import { useFirstPaint } from "@auth/auth/_hooks/useFirstPaint";
+import { useSubmitError } from "@auth/auth/_hooks/useSubmitError";
 import { useCaptcha } from "@auth/auth/_hooks/useCaptcha";
 import { useOtpChannels } from "@auth/auth/_hooks/useOtpChannels";
 import { useBotLink } from "@auth/auth/_hooks/useBotLink";
@@ -31,7 +34,7 @@ type LoginMethod = "username" | "phone";
 type Step = 1 | "link" | 2;
 
 export default function LoginPage() {
-  const { t, isRtl } = useAuthUI();
+  const { t, isRtl, lang } = useAuthUI();
   const router = useRouter();
   const firstPaint = useFirstPaint();
 
@@ -54,8 +57,11 @@ export default function LoginPage() {
 
   const isPhoneMethod = loginMethod === "phone";
 
+  const submitError = useSubmitError();
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    submitError.clear();
     setIsLoading(true);
     try {
       if (step === 1) {
@@ -93,8 +99,10 @@ export default function LoginPage() {
         router.replace(PANEL_HOME);
       }
     } catch (error) {
-      console.error(error);
-    } finally { setIsLoading(false); }
+      submitError.capture(error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const title = t.loginTitle;
@@ -125,6 +133,11 @@ export default function LoginPage() {
     <AnimatePresence mode="wait">
       <AuthCardShell animationKey="login" title={title} subtitle={subtitle}>
         <form onSubmit={handleSubmit} noValidate>
+          <FormError
+            message={submitError.error?.message ?? null}
+            fieldErrors={submitError.error?.fieldErrors}
+            reference={submitError.error?.ref}
+          />
           <AnimatePresence mode="wait">
             {step === 1 ? (
               <motion.div
@@ -201,14 +214,15 @@ export default function LoginPage() {
                       transition={{ duration: 0.3, ease: "easeInOut" }}
                     >
                       {isPhoneMethod ? (
-                        <OrganicField
+                        <PhoneField
                           id="phone"
                           label={t.phone}
-                          type="tel"
                           value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
-                          dir="ltr"
-                          autoComplete="tel"
+                          onChange={setPhone}
+                          lang={lang}
+                          countryLabel={t.country}
+                          searchLabel={t.countrySearch}
+                          noResultsLabel={t.countryNoResults}
                         />
                       ) : (
                         <div className="space-y-6">

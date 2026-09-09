@@ -94,42 +94,71 @@ export function parsePersianDate(
   }
 }
 
+/**
+ * The panel's translator — `useLocale().t` from `@/context/LocaleContext`.
+ * Typed here rather than imported so this module stays free of React.
+ */
+export type Translate = (
+  ns: string,
+  key: string,
+  vars?: Record<string, string | number>,
+) => string;
+
+/** The namespace every validation string is authored in (`locales/frontend`). */
+export const VALIDATIONS_NS = "validations";
+
+/** Shown when the argument is not a ZodError at all. */
+export const UNKNOWN_VALIDATION_KEY = "unknown";
+
 interface ZodFormatOptions {
   /**
-   * آیا نام فیلد قبل از پیام خطا بیاید؟
-   * @default false
-   * @example "username: نام کاربری الزامی است"
+   * Prefix each message with the field path, e.g. `username: <message>`.
+   * @default true
    */
   withPath?: boolean;
 
   /**
-   * کاراکتر جداکننده خطاها
+   * Separator between messages.
    * @default "\n"
    */
   separator?: string;
+
+  /**
+   * Translator for the active locale. Omitted -> every string comes back as
+   * its raw `validations` key, which is exactly what `useLocale().t` does on a
+   * miss and what the bot's renderer does with an untranslated key: a visible
+   * key, never a sentence in one fixed language.
+   */
+  t?: Translate;
 }
 
 /**
- * تبدیل ارورهای Zod به یک رشته متنی تمیز
- * @param error آبجکت ارور دریافت شده از zod
- * @param options تنظیمات اختیاری (نام فیلد، جداکننده)
+ * Render a `ZodError` as one string in the user's language.
+ *
+ * Issue messages are looked up in the `validations` namespace, so a schema
+ * authored as `z.string().min(3, "fields.username.tooShort")` speaks whatever
+ * locale is active. A message that is not a key survives unchanged — `t`
+ * returns the key it was given when it finds nothing — so this is safe to put
+ * in front of a schema that has not been keyed yet.
  */
 export const zodErrorToString = (
   error: ZodError,
   options: ZodFormatOptions = {},
 ): string => {
-  const { withPath = true, separator = "\n" } = options;
+  const {
+    withPath = true,
+    separator = "\n",
+    t = (_ns, key) => key,
+  } = options;
 
-  // اگر ارور نال بود یا فرمت ZodError نداشت
   if (!error || !error.issues) {
-    return "خطای ناشناخته در اعتبارسنجی";
+    return t(VALIDATIONS_NS, UNKNOWN_VALIDATION_KEY);
   }
 
   return error.issues
     .map((issue) => {
-      const message = issue.message;
+      const message = t(VALIDATIONS_NS, issue.message);
 
-      // اگر گزینه withPath روشن بود و فیلد مسیری داشت (مثلا user.name)
       if (withPath && issue.path.length > 0) {
         return `${issue.path.join(".")}: ${message}`;
       }

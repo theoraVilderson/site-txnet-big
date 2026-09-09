@@ -246,35 +246,35 @@ func TestValidateRefusalStatuses(t *testing.T) {
 			token:      "",
 			redis:      sessionActive,
 			wantStatus: http.StatusUnauthorized,
-			wantMsg:    "missing_bearer_token",
+			wantMsg:    keyAuthRequired,
 		},
 		{
 			name:       "token is not a JWT",
 			token:      "garbage",
 			redis:      sessionActive,
 			wantStatus: http.StatusUnauthorized,
-			wantMsg:    "unauthorized",
+			wantMsg:    keyInvalidToken,
 		},
 		{
 			name:       "token signed with another secret",
 			token:      wrongSecret,
 			redis:      sessionActive,
 			wantStatus: http.StatusUnauthorized,
-			wantMsg:    "unauthorized",
+			wantMsg:    keyInvalidToken,
 		},
 		{
 			name:       "token expired",
 			token:      expired,
 			redis:      sessionActive,
 			wantStatus: http.StatusUnauthorized,
-			wantMsg:    "unauthorized",
+			wantMsg:    keyInvalidToken,
 		},
 		{
 			name:       "session revoked",
 			token:      sign(t, validClaims(nil), testSecret),
 			redis:      func(string) string { return respNil },
 			wantStatus: http.StatusUnauthorized,
-			wantMsg:    "session_revoked",
+			wantMsg:    keySessionRevoked,
 		},
 		{
 			// A Redis that is down must not be read as "no session". That
@@ -284,7 +284,7 @@ func TestValidateRefusalStatuses(t *testing.T) {
 			token:      sign(t, validClaims(nil), testSecret),
 			redis:      func(string) string { return "" },
 			wantStatus: http.StatusInternalServerError,
-			wantMsg:    "internal_error",
+			wantMsg:    keyUnexpected,
 		},
 		{
 			name:       "claims a permission the role does not have",
@@ -292,7 +292,7 @@ func TestValidateRefusalStatuses(t *testing.T) {
 			redis:      sessionActive,
 			engine:     true,
 			wantStatus: http.StatusForbidden,
-			wantMsg:    "forbidden",
+			wantMsg:    keyForbidden,
 		},
 		{
 			name:       "role is not in the policy at all",
@@ -300,7 +300,7 @@ func TestValidateRefusalStatuses(t *testing.T) {
 			redis:      sessionActive,
 			engine:     true,
 			wantStatus: http.StatusForbidden,
-			wantMsg:    "forbidden",
+			wantMsg:    keyForbidden,
 		},
 	}
 
@@ -364,8 +364,8 @@ func TestValidateSetsIdentityHeadersOnSuccess(t *testing.T) {
 	}
 
 	body := decode(t, w)
-	if body["ok"] != true || body["msg"] != "successful" {
-		t.Errorf("body = %v, want ok/successful", body)
+	if body["ok"] != true || body["msg"] != keySuccess {
+		t.Errorf("body = %v, want ok/%s", body, keySuccess)
 	}
 
 	// The session key must be the prefix plus "session:" plus the claim, or
@@ -479,15 +479,14 @@ func TestStatusForKey(t *testing.T) {
 		key  string
 		want int
 	}{
-		{true, "successful", http.StatusOK},
+		{true, keySuccess, http.StatusOK},
 		{true, "healthy", http.StatusOK},
-		{false, "forbidden", http.StatusForbidden},
-		{false, "internal_error", http.StatusInternalServerError},
-		{false, "failed", http.StatusInternalServerError},
-		{false, "missing_bearer_token", http.StatusUnauthorized},
-		{false, "unauthorized", http.StatusUnauthorized},
-		{false, "session_revoked", http.StatusUnauthorized},
-		{false, "some_key_added_later", http.StatusUnauthorized},
+		{false, keyForbidden, http.StatusForbidden},
+		{false, keyUnexpected, http.StatusInternalServerError},
+		{false, keyAuthRequired, http.StatusUnauthorized},
+		{false, keyInvalidToken, http.StatusUnauthorized},
+		{false, keySessionRevoked, http.StatusUnauthorized},
+		{false, "some.key.added.later", http.StatusUnauthorized},
 		{false, "", http.StatusUnauthorized},
 	}
 	for _, tc := range tests {

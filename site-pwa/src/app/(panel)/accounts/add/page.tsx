@@ -4,12 +4,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, KeyRound, MessageSquare } from "lucide-react";
 import { OTPInput } from "@auth/auth/_components/OTPInput";
+import { PhoneField } from "@auth/auth/_components/PhoneField";
 import { useOtpChannels } from "@auth/auth/_hooks/useOtpChannels";
+import { useAutofill } from "@auth/auth/_hooks/useAutofill";
 import { authApi, type BotLinkRequired } from "@/lib/auth-api";
 import { useLocale } from "@/context/LocaleContext";
 import { OTP_LENGTH } from "@/lib/otp";
 import { PANEL_HOME } from "@/lib/routes";
 import { usePanelSession } from "../../_context/PanelSessionContext";
+import { useApiErrorMessage } from "@/hooks/useApiError";
 
 type Proof = "otp" | "password";
 
@@ -24,7 +27,7 @@ type Proof = "otp" | "password";
  * afterwards asks for none.
  */
 export default function AddAccountPage() {
-  const { t } = useLocale();
+  const { t, lang } = useLocale();
   const router = useRouter();
   const { reload } = usePanelSession();
   const channels = useOtpChannels();
@@ -34,9 +37,17 @@ export default function AddAccountPage() {
   const [otpCode, setOtpCode] = useState("");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+
+  // These two have placeholders rather than floating labels, so nothing here
+  // moves — but Confirm is disabled off `identifier`/`password`, and a fill
+  // React never hears about leaves it disabled under a filled-looking form.
+  // The password tab also mounts them late, which is why the hook holds the ref.
+  const { ref: identifierRef } = useAutofill(identifier);
+  const { ref: passwordRef } = useAutofill(password);
   const [codeSent, setCodeSent] = useState(false);
   const [botLink, setBotLink] = useState<BotLinkRequired | null>(null);
   const [pending, setPending] = useState(false);
+  const toMessage = useApiErrorMessage();
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
@@ -46,7 +57,7 @@ export default function AddAccountPage() {
     try {
       await action();
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("common", "accounts.failed"));
+      setError(toMessage(e));
     } finally {
       setPending(false);
     }
@@ -97,7 +108,7 @@ export default function AddAccountPage() {
     });
 
   const field =
-    "w-full rounded-2xl border-[1.5px] border-card-border bg-bg-inner px-5 py-3 text-text-primary outline-none transition-colors focus:border-primary";
+    "autofill-tamed w-full rounded-2xl border-[1.5px] border-card-border bg-bg-inner px-5 py-3 text-text-primary outline-none transition-colors focus:border-primary";
   const button =
     "w-full rounded-2xl bg-primary px-5 py-3 font-bold text-white shadow-lg shadow-primary-glow transition-opacity disabled:opacity-60";
 
@@ -157,13 +168,15 @@ export default function AddAccountPage() {
 
       {proof === "otp" && (
         <div className="space-y-4">
-          <input
-            className={field}
-            dir="ltr"
-            inputMode="tel"
-            placeholder={t("common", "accounts.phonePlaceholder")}
+          <PhoneField
+            id="add-account-phone"
+            label={t("common", "accounts.phonePlaceholder")}
             value={phoneNumber}
-            onChange={(e) => setPhoneNumber(e.target.value)}
+            onChange={setPhoneNumber}
+            lang={lang}
+            countryLabel={t("common", "accounts.country")}
+            searchLabel={t("common", "accounts.countrySearch")}
+            noResultsLabel={t("common", "accounts.countryNoResults")}
             disabled={codeSent || !!botLink}
           />
 
@@ -238,6 +251,7 @@ export default function AddAccountPage() {
       {proof === "password" && (
         <div className="space-y-4">
           <input
+            ref={identifierRef}
             className={field}
             dir="ltr"
             placeholder={t("common", "accounts.identifierPlaceholder")}
@@ -245,6 +259,7 @@ export default function AddAccountPage() {
             onChange={(e) => setIdentifier(e.target.value)}
           />
           <input
+            ref={passwordRef}
             className={field}
             dir="ltr"
             type="password"

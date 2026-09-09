@@ -11,6 +11,7 @@ import { I18nExceptionFilter } from './i18n-exception.filter';
 import { LocaleService } from '../../locale/locale.service';
 import { ZodValidationPipe } from '../pipes/zod-validation.pipe';
 import { fakeArgumentsHost } from '../../../test-support/execution-context';
+import { sanitizeError } from '../security/sanitize-error';
 
 /** Only the `errors` namespace is served, and only these keys are translated. */
 const catalog: Record<string, Record<string, string>> = {
@@ -198,19 +199,22 @@ describe('I18nExceptionFilter', () => {
     });
 
     // Duck-typed the way sanitizeError recognizes it — the spec must not need
-    // the generated Prisma client.
-    it('turns a Prisma unique-constraint error into a translated 409', () => {
+    // the generated Prisma client. Which key and status a Prisma code maps to
+    // is `sanitize-error.spec.ts`'s job, exhaustively; the filter's job is only
+    // to translate whatever key it was handed, and to leak nothing on the way.
+    it('translates the key sanitizeError returns for a Prisma error', () => {
       const prismaError = Object.assign(new Error('Unique constraint failed'), {
         name: 'PrismaClientKnownRequestError',
         code: 'P2002',
         meta: { target: ['users_phone_number_key'] },
       });
+      const { status, msgKey } = sanitizeError(prismaError);
       const { host, response } = fakeArgumentsHost({ language: 'fa' });
 
       filter.catch(prismaError, host);
 
-      expect(response.statusCode()).toBe(409);
-      expect(response.body()?.msg).toBe('تداخل داده');
+      expect(response.statusCode()).toBe(status);
+      expect(response.body()?.msg).toBe(catalog.fa[msgKey]);
       expect(JSON.stringify(response.body())).not.toMatch(/P2002|users_phone/);
     });
   });

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { BotCopy } from '../locale/bot-copy';
 import { BotContact, BotPlatform } from '@txnet-backend/messenger';
 import {
   AddAccountResult,
@@ -31,7 +32,10 @@ export class AuthApiClient {
   private readonly serviceToken: string;
   private readonly timeoutMs: number;
 
-  constructor(config: ConfigService) {
+  constructor(
+    config: ConfigService,
+    private readonly copy: BotCopy,
+  ) {
     this.baseUrl = config
       .get<string>('AUTH_API_BASE_URL', '')
       .replace(/\/+$/, '');
@@ -292,7 +296,7 @@ export class AuthApiClient {
       this.logger.error(
         `auth-api ${method} ${path} failed: ${e instanceof Error ? e.message : String(e)}`,
       );
-      return { ok: false, msg: 'bot.common.tryAgain' };
+      return this.unreachable(ctx.lang);
     } finally {
       clearTimeout(timer);
     }
@@ -304,7 +308,7 @@ export class AuthApiClient {
       this.logger.error(
         `auth-api ${method} ${path} answered ${response.status} with a non-JSON body`,
       );
-      return { ok: false, msg: 'bot.common.tryAgain' };
+      return this.unreachable(ctx.lang);
     }
 
     // auth-api strips the refresh token out of the body and sets it as an
@@ -315,7 +319,32 @@ export class AuthApiClient {
       (envelope.data as { refreshToken?: string }).refreshToken = refreshToken;
     }
 
+    // Every caller renders `msg` as `raw` — text another service has already
+    // translated. An envelope that carries none (a gateway 502, a proxy error
+    // page that happened to be JSON) would put an empty line on screen.
+    if (typeof envelope.msg !== 'string' || envelope.msg.length === 0) {
+      if (!envelope.ok) {
+        this.logger.error(
+          `auth-api ${method} ${path} answered ${response.status} with no msg`,
+        );
+        return this.unreachable(ctx.lang);
+      }
+      envelope.msg = '';
+    }
+
     return envelope;
+  }
+
+  /**
+   * `auth-api` never answered, or answered nothing this client can read.
+   *
+   * The text is resolved here rather than returned as a key: `msg` is rendered
+   * by every caller as `BotText.raw`, which is contractually a sentence another
+   * service already translated (`messenger/bot-view.ts`). Handing back
+   * `'bot.common.tryAgain'` put that key itself in front of the user.
+   */
+  private unreachable<T>(lang: string): ApiResult<T> {
+    return { ok: false, msg: this.copy.text(lang, { key: 'bot.common.tryAgain' }) };
   }
 }
 
