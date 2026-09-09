@@ -29,8 +29,8 @@ source:
   - txnet-backend/auth-service/src/app/impersonation/guards/**
   - txnet-backend/auth-service-e2e/**
 owns_tables: []
-depends_on: [identity, i18n, redis-keyspace]
-updated: 2026-09-08
+depends_on: [identity, i18n, redis-keyspace, tenant]
+updated: 2026-09-09
 ---
 # auth-api
 **Responsibility:** NestJS `auth-service` HTTP surface (`/api/auth/*`, `/admin/*` impersonation), translating HTTP <-> `identity`. **Not:** identity rules (`identity`), other services' edge check (`forward-auth`).

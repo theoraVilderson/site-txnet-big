@@ -1,11 +1,12 @@
 ---
 id: code-layout
 status: active
-updated: 2026-09-06
+updated: 2026-09-09
 unit_aliases:
   - identity:auth
   - identity:impersonation
   - audit:account-switch
+  - tenant:tenant
   - auth-api:auth-service
   - bot-app:bot-service
   - auth-api:auth-service-e2e
@@ -46,6 +47,7 @@ no code exists yet, so there is nothing to mirror until a service is built.
 | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
 | `txnet-backend/auth-service/src/app/<concern>/`                               | NestJS modules for units already live (`identity`)                                                                                        | `docs/domains/identity/`, `docs/interfaces/auth-api/`     |
 | `txnet-backend/auth-service/src/app/account-switch/`                          | the account-switch group — `audit`'s first service, hosted in this process because its only collaborators are identity's proof operations | `docs/domains/audit/`                                     |
+| `txnet-backend/auth-service/src/app/tenant/`                                  | `tenant`'s host -> tenant resolution — its first service, hosted here because the only caller so far is this app's edge (ADR-0020)   | `docs/domains/tenant/`                                    |
 | `txnet-backend/messenger/src/`                                                | Nx library `@txnet-backend/messenger`: bot driver, capability set, `BotView` renderer, deep links                                         | `docs/platform/messenger/`                                |
 | `txnet-backend/bot-service/src/app/`                                          | the Telegram/Bale surface: webhook, conversation state, flows                                                                             | `docs/interfaces/bot-app/`                                |
 | `txnet-backend/billing-service/src/app/`                                      | billing scaffold (not yet implementing `billing`)                                                                                         | `docs/domains/billing/` (stays `draft` until real)        |

@@ -209,6 +209,10 @@ services:
       - COOKIE_SECURE=${COOKIE_SECURE:-true}
       - TRUST_PROXY=${TRUST_PROXY}
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+      # The tenant a request falls back to when its Host matches no verified
+      # tenant_domain row (ADR-0020). Set it deliberately on a deployment that
+      # serves resellers — see .env.example.
+      - DEFAULT_TENANT_SLUG=${DEFAULT_TENANT_SLUG:-platform_owner}
       # Phone numbers are every country by default (ADR-0018). The region a
       # number typed without `+` belongs to follows DEFAULT_LANGUAGE unless
       # DEFAULT_PHONE_COUNTRY overrides it.

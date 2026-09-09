@@ -118,6 +118,14 @@ export const envSchema = z.object({
   // guessing a 6-digit reset code.
   FORGOT_VERIFY_RATE_LIMIT: z.coerce.number().int().positive().default(20),
 
+  // The tenant a request falls back to when its host matches no
+  // `tenant_domain` row (ADR-0020). The default keeps a single-tenant install
+  // behaving exactly as it did before resolution existed. **A deployment that
+  // serves resellers must set this on purpose**: the fallback cannot tell a
+  // misconfigured host from an unknown one, so leaving it here means every
+  // stray host is served as the platform owner.
+  DEFAULT_TENANT_SLUG: z.string().min(1).default('platform_owner'),
+
   LOCALES_DIR: z.string().default('./locales/langs'),
   LOCALES_WATCH: z.enum(['true', 'false']).default('false'),
   TRUST_PROXY: z.string().default('1'),
