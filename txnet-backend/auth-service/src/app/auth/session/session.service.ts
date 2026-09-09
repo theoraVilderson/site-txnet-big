@@ -25,8 +25,8 @@ export class SessionService {
    */
   async createSession(
     userId: string,
-    ip: string,
-    userAgent: string,
+    ip: string | null,
+    userAgent: string | null,
     options?: {
       isImpersonated?: boolean;
       impersonationSessionId?: string;
@@ -42,6 +42,17 @@ export class SessionService {
        * existing session and has to carry the old row's value forward.
        */
       scopeKey?: string | null;
+      /**
+       * What surface this session was minted from, when there is no device to
+       * name (F-048): `Telegram` / `Bale`. A browser leaves it unset and is
+       * described by its `userAgent`.
+       *
+       * `ip`/`userAgent` are nullable for the same reason. A bot webhook
+       * observes neither — the request `auth-service` sees is `bot-service`'s
+       * own — so a caller with nothing to report passes null rather than the
+       * container's address, which every chat on the platform would share.
+       */
+      deviceLabel?: string | null;
       tx?: Prisma.TransactionClient;
     },
   ) {
@@ -64,6 +75,7 @@ export class SessionService {
         impersonationSessionId: options?.impersonationSessionId,
         switchedFromUserId: options?.switchedFromUserId,
         scopeKey: options?.scopeKey ?? null,
+        deviceLabel: options?.deviceLabel ?? null,
       },
     });
 

@@ -203,6 +203,7 @@ export class AuthController {
   @RateLimit({
     key: (req) => `pwd:forgot:verify:${rateLimitSubject(req)}`,
     limit: 20,
+    configKey: 'FORGOT_VERIFY_RATE_LIMIT',
     windowSec: 900,
   })
   verifyForgot(@Body() body: any) {

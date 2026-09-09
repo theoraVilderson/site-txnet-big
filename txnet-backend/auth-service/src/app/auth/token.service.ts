@@ -2,6 +2,18 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 
+/**
+ * The TTL keys `envSchema` owns. They are validated at boot with real
+ * defaults (`config/env.validation.ts`), so this service never carries a
+ * second copy of a number: an absent TTL is a misconfiguration, not a value
+ * to guess. See BACKLOG F-054.
+ */
+type TokenTtlKey =
+  | 'JWT_ACCESS_TTL_SEC'
+  | 'OTP_TOKEN_TTL_SEC'
+  | 'RESET_TOKEN_TTL_SEC'
+  | 'IMPERSONATION_TOKEN_TTL_SEC';
+
 export type AuthClaims = {
   sub: string;
   tenantId: string;
@@ -37,7 +49,7 @@ export class TokenService {
     const payload = {
       ...claims,
       iat: now,
-      exp: now + (ttlSec ?? this.config.get<number>('JWT_ACCESS_TTL_SEC', 900)),
+      exp: now + (ttlSec ?? this.ttl('JWT_ACCESS_TTL_SEC')),
     };
     return this.signPayload(payload);
   }
@@ -64,7 +76,7 @@ export class TokenService {
         sessionId: '',
         purpose: 'otp_login',
       },
-      this.config.get<number>('OTP_TOKEN_TTL_SEC', 300),
+      this.ttl('OTP_TOKEN_TTL_SEC'),
     );
   }
 
@@ -78,7 +90,7 @@ export class TokenService {
         sessionId: '',
         purpose: 'password_reset',
       },
-      this.config.get<number>('RESET_TOKEN_TTL_SEC', 300),
+      this.ttl('RESET_TOKEN_TTL_SEC'),
     );
   }
 
@@ -100,7 +112,7 @@ export class TokenService {
         isImpersonated: true,
         impersonatedBy: adminId,
       },
-      this.config.get<number>('IMPERSONATION_TOKEN_TTL_SEC', 1800),
+      this.ttl('IMPERSONATION_TOKEN_TTL_SEC'),
     );
   }
 
@@ -154,6 +166,14 @@ export class TokenService {
 
   newRefreshToken(): string {
     return randomBytes(64).toString('base64url');
+  }
+
+  private ttl(key: TokenTtlKey): number {
+    const seconds = Number(this.config.get(key));
+    if (!Number.isFinite(seconds) || seconds <= 0) {
+      throw new Error(`${key} is required`);
+    }
+    return seconds;
   }
 
   private signPayload(payload: Record<string, any>): string {

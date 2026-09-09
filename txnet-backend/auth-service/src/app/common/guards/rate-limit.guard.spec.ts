@@ -1,4 +1,5 @@
 import { HttpException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { RateLimitGuard } from './rate-limit.guard';
 import { RateLimiter } from '../rate-limit/rate-limiter';
@@ -17,6 +18,7 @@ const loginLimit: RateLimitOptions = {
 describe('RateLimitGuard', () => {
   let reflector: { getAllAndOverride: jest.Mock };
   let limiter: { hit: jest.Mock };
+  let config: { get: jest.Mock };
   let guard: RateLimitGuard;
 
   beforeEach(() => {
@@ -24,14 +26,53 @@ describe('RateLimitGuard', () => {
     limiter = {
       hit: jest.fn().mockResolvedValue({ allowed: true, current: 1, limit: 5 }),
     };
+    // The real ConfigService's shape: a configured value, or the default.
+    config = { get: jest.fn((_key: string, fallback: number) => fallback) };
     guard = new RateLimitGuard(
       reflector as unknown as Reflector,
       limiter as unknown as RateLimiter,
+      config as unknown as ConfigService,
     );
   });
 
   const contextWithBody = (body: unknown) =>
     fakeExecutionContext({ extra: { body } });
+
+  // The limit is deployment config: a route names the variable and the guard
+  // reads it here, because decorator metadata is evaluated once at
+  // class-definition time and cannot see ConfigService.
+  describe('where the limit comes from', () => {
+    it('uses the decorated limit when the route names no variable', async () => {
+      await guard.canActivate(contextWithBody({ identifier: '0912' }).context);
+
+      expect(config.get).not.toHaveBeenCalled();
+      expect(limiter.hit).toHaveBeenCalledWith(expect.any(String), 5, 900);
+    });
+
+    it('reads the configured value when the route names one', async () => {
+      reflector.getAllAndOverride.mockReturnValue({
+        ...loginLimit,
+        configKey: 'LOGIN_LIMIT',
+      });
+      config.get.mockReturnValue(3);
+
+      await guard.canActivate(contextWithBody({ identifier: '0912' }).context);
+
+      expect(config.get).toHaveBeenCalledWith('LOGIN_LIMIT', 5);
+      expect(limiter.hit).toHaveBeenCalledWith(expect.any(String), 3, 900);
+    });
+
+    it('falls back to the decorated limit when nothing is configured', async () => {
+      reflector.getAllAndOverride.mockReturnValue({
+        ...loginLimit,
+        configKey: 'LOGIN_LIMIT',
+      });
+
+      await guard.canActivate(contextWithBody({ identifier: '0912' }).context);
+
+      expect(limiter.hit).toHaveBeenCalledWith(expect.any(String), 5, 900);
+    });
+  });
 
   it('is skipped on a route with no @RateLimit metadata', async () => {
     reflector.getAllAndOverride.mockReturnValue(undefined);

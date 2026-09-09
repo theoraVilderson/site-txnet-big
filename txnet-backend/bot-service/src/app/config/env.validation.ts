@@ -69,6 +69,13 @@ export const envSchema = z.object({
   /** Idle TTL on a chat's `/lang` choice. Defaults to `RedisTtl.botLang`. */
   BOT_LANG_TTL_SEC: optional(z.coerce.number().int().positive()),
   /**
+   * The region a number typed into the chat without a `+` belongs to. Unset,
+   * it follows the language the bot speaks, the same way `auth-service` reads
+   * it from `DEFAULT_LANGUAGE` (ADR-0018, `flows/phone-number.ts`) — so a
+   * deployment normally sets it once, for both services, or not at all.
+   */
+  DEFAULT_PHONE_COUNTRY: optional(z.string()),
+  /**
    * Which languages the messenger's own command menu is registered in
    * (`webhook/bot-webhook.registrar.ts`). Comma-separated; defaults to `fa,en`.
    */
@@ -90,3 +97,23 @@ export function validateEnv(raw: Record<string, unknown>): EnvConfig {
   }
   return parsed.data;
 }
+
+/**
+ * How every process in this service reads its environment — one object so the
+ * app and its tests cannot drift apart on it.
+ *
+ * `skipProcessEnv` is the load-bearing part. Docker compose passes each
+ * optional variable as `VAR=${VAR:-}`, so "unset" arrives as the empty string;
+ * `optional()` above turns that back into `undefined`, but `ConfigService.get`
+ * consults the validated env *first and `process.env` second*, so an undefined
+ * validated value fell straight through to the raw `''` and no default — the
+ * schema's or the call site's — ever ran. `BOT_LANG_TTL_SEC` then reached
+ * Redis as `expire <key> ''`, an error reply, and every webhook update
+ * answered 500. Making the validated env the only source is what the schema
+ * was written to be.
+ */
+export const envConfigOptions = {
+  isGlobal: true,
+  validate: validateEnv,
+  skipProcessEnv: true,
+} as const;

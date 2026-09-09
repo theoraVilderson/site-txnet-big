@@ -1,5 +1,19 @@
 import { OtpChannel, OtpPurpose } from '../otp.interface';
 
+/**
+ * The multi-provider token holding every sender this service was built with.
+ *
+ * `OtpChannelRegistry` injects the array and keys it by each sender's own
+ * `channel`, so adding a messenger is a sender class plus one entry in
+ * `auth.module.ts` — the one place that names the concrete classes — and never
+ * a change to the registry's arity.
+ *
+ * The residual limit is correct and deliberate: `OtpChannel` is a Prisma enum,
+ * so a genuinely new channel is also an enum migration. This token removes the
+ * wiring cost, not the schema one.
+ */
+export const OTP_SENDERS = Symbol('OTP_SENDERS');
+
 export interface IOtpSender {
   readonly channel: OtpChannel;
   /**

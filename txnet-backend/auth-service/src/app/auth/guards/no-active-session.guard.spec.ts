@@ -7,9 +7,19 @@ import { fakeExecutionContext } from '../../../test-support/execution-context';
 
 const ACCESS_SECRET = 'unit-test-access-secret';
 
+// The TTL is configured, not defaulted: TokenService refuses to mint without
+// it (F-054), and these guards only care that a token was signed at all.
+const stubbed: Record<string, unknown> = {
+  JWT_ACCESS_SECRET: ACCESS_SECRET,
+  JWT_ACCESS_TTL_SEC: 900,
+  OTP_TOKEN_TTL_SEC: 300,
+  RESET_TOKEN_TTL_SEC: 300,
+  IMPERSONATION_TOKEN_TTL_SEC: 1800,
+};
+
 const configStub = {
   get: (key: string, fallback?: unknown) =>
-    key === 'JWT_ACCESS_SECRET' ? ACCESS_SECRET : fallback,
+    key in stubbed ? stubbed[key] : fallback,
 } as unknown as ConfigService;
 
 const accessClaims: Omit<AuthClaims, 'iat' | 'exp'> = {
@@ -65,7 +75,11 @@ describe('NoActiveSessionGuard', () => {
     it('a token signed with another secret', async () => {
       const other = new TokenService({
         get: (key: string, fallback?: unknown) =>
-          key === 'JWT_ACCESS_SECRET' ? 'someone-elses-secret' : fallback,
+          key === 'JWT_ACCESS_SECRET'
+            ? 'someone-elses-secret'
+            : key in stubbed
+              ? stubbed[key]
+              : fallback,
       } as unknown as ConfigService);
       const { context } = contextWith(`Bearer ${other.sign(accessClaims)}`);
 

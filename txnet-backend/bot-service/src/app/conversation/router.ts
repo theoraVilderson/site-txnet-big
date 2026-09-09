@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   BotAction,
   BotView,
@@ -67,6 +68,7 @@ export class ConversationRouter {
     private readonly forgot: ForgotFlow,
     private readonly accounts: AccountsFlow,
     private readonly accountAdd: AccountAddFlow,
+    private readonly config: ConfigService,
   ) {}
 
   /**
@@ -391,7 +393,20 @@ export class ConversationRouter {
   /** Which menu this chat sees depends on its session, never on its chat id. */
   private async menu(ctx: ChatContext) {
     const session = await this.sessions.get(ctx.platform, ctx.chatId);
-    return session ? memberMenu() : guestMenu();
+    return session ? memberMenu(this.miniAppUrl()) : guestMenu();
+  }
+
+  /**
+   * Where the Mini App lives (`F-310`), or nothing.
+   *
+   * Only the member menu offers it. A chat with no session is one this bot has
+   * never signed in, and sending it into a webview to find out whether the
+   * messenger vouches for it there is a worse first answer than the sign-in
+   * button it already has — the panel's own login screen inside a webview is
+   * the thing chat-first exists to avoid making anyone use.
+   */
+  private miniAppUrl(): string | undefined {
+    return this.config.get<string>('PANEL_BASE_URL') || undefined;
   }
 
   /**

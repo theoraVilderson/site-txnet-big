@@ -28,12 +28,14 @@ function registry(
       key in env ? env[key] : fallback,
     ),
   };
-  return new OtpChannelRegistry(
-    config as never,
-    sender(OtpChannel.sms, configured.sms ?? true, false) as never,
-    sender(OtpChannel.bale, configured.bale ?? true, true) as never,
-    sender(OtpChannel.telegram, configured.telegram ?? true, true) as never,
-  );
+  // A set, the way the service is wired (`OTP_SENDERS`): the registry keys it
+  // by each sender's own `channel`, so this list can grow or shrink without
+  // the call changing shape.
+  return new OtpChannelRegistry(config as never, [
+    sender(OtpChannel.sms, configured.sms ?? true, false),
+    sender(OtpChannel.bale, configured.bale ?? true, true),
+    sender(OtpChannel.telegram, configured.telegram ?? true, true),
+  ] as never);
 }
 
 describe('OtpChannelRegistry — reading OTP_ALLOWED_CHANNELS', () => {

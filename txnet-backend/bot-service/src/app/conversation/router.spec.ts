@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import { BotViewRenderer } from '@txnet-backend/messenger';
 import { AuthApiClient } from '../auth-api/auth-api.client';
 import { BotCopy } from '../locale/bot-copy';
@@ -5,6 +6,7 @@ import { BotSessionStore } from '../session/bot-session.store';
 import { ChatLanguage } from '../locale/chat-language';
 import { LocaleService } from '../locale/locale.service';
 import { AccountAddFlow } from '../flows/account-add.flow';
+import { PhoneNumbers } from '../flows/phone-number';
 import { AccountsFlow } from '../flows/accounts.flow';
 import { AccountSwitcher } from '../session/account-switcher';
 import { ChatAccess } from '../session/chat-access';
@@ -54,6 +56,8 @@ function makeRouter(over: {
     languages: () => ['fa', 'en'],
   } as unknown as LocaleService;
 
+  const phones = new PhoneNumbers(new ConfigService({ DEFAULT_LANGUAGE: 'fa' }));
+
   const router = new ConversationRouter(
     nav,
     sessions,
@@ -63,9 +67,9 @@ function makeRouter(over: {
     locale,
     api,
     otp,
-    new LoginFlow(api, otp, sessions),
-    new RegisterFlow(api, otp, sessions),
-    new ForgotFlow(api, otp, sessions),
+    new LoginFlow(api, otp, sessions, phones),
+    new RegisterFlow(api, otp, sessions, phones),
+    new ForgotFlow(api, otp, sessions, phones),
     new AccountsFlow(
       api,
       new ChatAccess(api, sessions),
@@ -77,7 +81,9 @@ function makeRouter(over: {
       new ChatAccess(api, sessions),
       otp,
       new AccountSwitcher(api, sessions),
+      phones,
     ),
+    new ConfigService({ PANEL_BASE_URL: 'https://panel.example.test' }),
   );
   return { router, nav, sessions, api, otp, langs, locale };
 }

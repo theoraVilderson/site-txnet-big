@@ -14,6 +14,7 @@ export class CaptchaController {
   @RateLimit({
     key: (req) => `captcha:challenge:${req.ip}`,
     limit: 30,
+    configKey: 'CAPTCHA_RATE_LIMIT',
     windowSec: 900,
   })
   async challenge() {
@@ -26,6 +27,7 @@ export class CaptchaController {
   @RateLimit({
     key: (req) => `captcha:verify:${req.ip}`,
     limit: 30,
+    configKey: 'CAPTCHA_RATE_LIMIT',
     windowSec: 900,
   })
   async verify(@Body() body: ReturnType<typeof captchaVerifySchema.parse>) {

@@ -1,10 +1,7 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OtpChannel } from './otp.interface';
-import { IOtpSender } from './senders/otp-sender.interface';
-import { SmsOtpSender } from './senders/sms.sender';
-import { BaleOtpSender } from './senders/bale.sender';
-import { TelegramOtpSender } from './senders/telegram.sender';
+import { IOtpSender, OTP_SENDERS } from './senders/otp-sender.interface';
 
 export interface OtpChannelDescriptor {
   channel: OtpChannel;
@@ -34,15 +31,14 @@ export class OtpChannelRegistry {
 
   constructor(
     config: ConfigService,
-    smsSender: SmsOtpSender,
-    baleSender: BaleOtpSender,
-    telegramSender: TelegramOtpSender,
+    // The set, not three by name: every sender declares its own `channel`, so
+    // the registry never has to be edited to learn about a new one. See
+    // `OTP_SENDERS` — `auth.module.ts` is the only place the classes appear.
+    @Inject(OTP_SENDERS) senders: IOtpSender[],
   ) {
-    this.senders = new Map<OtpChannel, IOtpSender>([
-      [OtpChannel.sms, smsSender],
-      [OtpChannel.bale, baleSender],
-      [OtpChannel.telegram, telegramSender],
-    ]);
+    this.senders = new Map<OtpChannel, IOtpSender>(
+      senders.map((s) => [s.channel, s]),
+    );
 
     const raw = config.get<string[] | string>('OTP_ALLOWED_CHANNELS', ['sms']);
     const names = (

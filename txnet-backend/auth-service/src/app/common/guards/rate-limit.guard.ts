@@ -4,6 +4,7 @@ import {
   Injectable,
   HttpException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import {
   RATE_LIMIT_KEY,
@@ -16,6 +17,7 @@ export class RateLimitGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly rateLimiter: RateLimiter,
+    private readonly config: ConfigService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -25,10 +27,17 @@ export class RateLimitGuard implements CanActivate {
     );
     if (!options) return true;
 
+    // Resolved per request, not baked into the metadata: a route names the
+    // variable that may override its limit and the value is read here, so a
+    // deployment can vary it without a rebuild (`configKey` on the decorator).
+    const limit = options.configKey
+      ? this.config.get<number>(options.configKey, options.limit)
+      : options.limit;
+
     const request = context.switchToHttp().getRequest();
     const { allowed } = await this.rateLimiter.hit(
       options.key(request),
-      options.limit,
+      limit,
       options.windowSec,
     );
     if (!allowed) throw new HttpException('Too Many Requests', 429);

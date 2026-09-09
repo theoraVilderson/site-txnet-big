@@ -117,7 +117,7 @@ services:
       - JWT_SECRET=${JWT_ACCESS_SECRET}
       - REDIS_URL=${REDIS_URL}
       - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
-      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v1}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
       - PERMISSIONS_FILE_PATH=/src/auth-handler/configs/permissions.yaml
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
       - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
@@ -165,12 +165,17 @@ services:
       - DATABASE_URL=postgresql://${MAIN_DB_USERNAME}:${MAIN_DB_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
       - REDIS_URL=${REDIS_URL}
       - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
-      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v1}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
       - JWT_REFRESH_HASH_SECRET=${JWT_REFRESH_HASH_SECRET}
       - JWT_ACCESS_TTL_SEC=${JWT_ACCESS_TTL_SEC:-900}
       - OTP_TOKEN_TTL_SEC=${OTP_TOKEN_TTL_SEC:-300}
       - RESET_TOKEN_TTL_SEC=${RESET_TOKEN_TTL_SEC:-300}
+      # Abuse limits. Defaults are what the code shipped with; a deployment
+      # with a different risk appetite moves them without a rebuild.
+      - LOGIN_FAILURE_LOCK_THRESHOLD=${LOGIN_FAILURE_LOCK_THRESHOLD:-10}
+      - CAPTCHA_RATE_LIMIT=${CAPTCHA_RATE_LIMIT:-30}
+      - FORGOT_VERIFY_RATE_LIMIT=${FORGOT_VERIFY_RATE_LIMIT:-20}
       - OTP_DELIVERY_MODE=${OTP_DELIVERY_MODE:-console}
       # Which delivery methods this environment offers. Drop one from the list
       # and it disappears from GET /api/auth/otp/channels as well.
@@ -204,6 +209,11 @@ services:
       - COOKIE_SECURE=${COOKIE_SECURE:-true}
       - TRUST_PROXY=${TRUST_PROXY}
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+      # Phone numbers are every country by default (ADR-0018). The region a
+      # number typed without `+` belongs to follows DEFAULT_LANGUAGE unless
+      # DEFAULT_PHONE_COUNTRY overrides it.
+      - DEFAULT_PHONE_COUNTRY=${DEFAULT_PHONE_COUNTRY:-}
+      - SUPPORTED_PHONE_COUNTRIES=${SUPPORTED_PHONE_COUNTRIES:-}
       - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
       - LOCALE_SCOPE=backend
     networks:
@@ -273,7 +283,7 @@ services:
       # Same namespace and version as auth-service: one bump abandons every
       # key this platform holds, bot sessions included (ADR-0005).
       - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
-      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v1}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
       # In-network, so bot traffic never leaves the private network to reach
       # the API it depends on.
       - AUTH_API_BASE_URL=http://auth-service:${AUTH_PORT}
@@ -305,6 +315,9 @@ services:
       # inside the container, which is what `:-` guarantees here.
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
       - BOT_DEFAULT_LANGUAGE=${BOT_DEFAULT_LANGUAGE:-}
+      # The same variable auth-service reads: the region a number typed in the
+      # chat without a `+` belongs to. Unset, it follows the bot's language.
+      - DEFAULT_PHONE_COUNTRY=${DEFAULT_PHONE_COUNTRY:-}
       - BOT_LANG_TTL_SEC=${BOT_LANG_TTL_SEC:-}
       - BOT_COMMAND_LANGS=${BOT_COMMAND_LANGS:-}
       - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}

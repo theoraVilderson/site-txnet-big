@@ -6,10 +6,22 @@ import { AuthClaims, TokenService } from './token.service';
 const ACCESS_SECRET = 'unit-test-access-secret';
 const REFRESH_SECRET = 'unit-test-refresh-secret';
 
+// Deliberately *not* the production defaults (900/300/300/1800). Every TTL
+// assertion below reads these back, so a spec that passes proves the
+// configured value was honoured — not that a constant inside the service is
+// still the number someone typed there (F-054).
+const TTL = {
+  JWT_ACCESS_TTL_SEC: 111,
+  OTP_TOKEN_TTL_SEC: 222,
+  RESET_TOKEN_TTL_SEC: 333,
+  IMPERSONATION_TOKEN_TTL_SEC: 444,
+} as const;
+
 function configStub(values: Record<string, unknown> = {}): ConfigService {
   const all: Record<string, unknown> = {
     JWT_ACCESS_SECRET: ACCESS_SECRET,
     JWT_REFRESH_HASH_SECRET: REFRESH_SECRET,
+    ...TTL,
     ...values,
   };
   return {
@@ -78,7 +90,7 @@ describe('TokenService', () => {
 
       expect(claims).toMatchObject(baseClaims);
       expect(claims.iat).toBeGreaterThanOrEqual(before);
-      expect(claims.exp).toBe(claims.iat + 900);
+      expect(claims.exp).toBe(claims.iat + TTL.JWT_ACCESS_TTL_SEC);
     });
 
     it('honours an explicit TTL over JWT_ACCESS_TTL_SEC', () => {
@@ -90,6 +102,27 @@ describe('TokenService', () => {
       const service = new TokenService(configStub({ JWT_ACCESS_TTL_SEC: 120 }));
       const claims = service.verify(service.sign(baseClaims));
       expect(claims.exp - claims.iat).toBe(120);
+    });
+
+    // The service used to carry `config.get('JWT_ACCESS_TTL_SEC', 900)`, so an
+    // unset TTL silently minted a 15-minute token. `envSchema` owns these
+    // defaults; a missing one is a boot misconfiguration and must say so.
+    it.each([
+      ['sign', (s: TokenService) => s.sign(baseClaims), 'JWT_ACCESS_TTL_SEC'],
+      ['signOtpToken', (s: TokenService) => s.signOtpToken('u'), 'OTP_TOKEN_TTL_SEC'],
+      [
+        'signResetToken',
+        (s: TokenService) => s.signResetToken('+989120000000', 'u'),
+        'RESET_TOKEN_TTL_SEC',
+      ],
+      [
+        'signImpersonatedToken',
+        (s: TokenService) => s.signImpersonatedToken({ id: 'u' }, 's', 'a'),
+        'IMPERSONATION_TOKEN_TTL_SEC',
+      ],
+    ])('%s refuses to mint when its TTL is not configured', (_l, mint, key) => {
+      const service = new TokenService(configStub({ [key]: undefined }));
+      expect(() => mint(service)).toThrow(`${key} is required`);
     });
 
     it('emits a three-part token with an HS256 header', () => {
@@ -222,7 +255,7 @@ describe('TokenService', () => {
       expect(claims.purpose).toBe('otp_login');
       expect(claims.sessionId).toBe('');
       expect(claims.permissions).toEqual([]);
-      expect(claims.exp - claims.iat).toBe(300);
+      expect(claims.exp - claims.iat).toBe(TTL.OTP_TOKEN_TTL_SEC);
     });
 
     it('marks reset tokens with purpose=password_reset and no session', () => {
@@ -230,7 +263,7 @@ describe('TokenService', () => {
 
       expect(claims.purpose).toBe('password_reset');
       expect(claims.sessionId).toBe('');
-      expect(claims.exp - claims.iat).toBe(300);
+      expect(claims.exp - claims.iat).toBe(TTL.RESET_TOKEN_TTL_SEC);
     });
 
     // `verify()` is deliberately purpose-agnostic: auth.service.ts calls it on
@@ -290,7 +323,7 @@ describe('TokenService', () => {
       expect(claims.sub).toBe('user-1');
       expect(claims.isImpersonated).toBe(true);
       expect(claims.impersonatedBy).toBe('admin-9');
-      expect(claims.exp - claims.iat).toBe(1800);
+      expect(claims.exp - claims.iat).toBe(TTL.IMPERSONATION_TOKEN_TTL_SEC);
     });
   });
 

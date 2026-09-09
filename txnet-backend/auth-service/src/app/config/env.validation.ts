@@ -100,10 +100,35 @@ export const envSchema = z.object({
   RESET_TOKEN_TTL_SEC: z.coerce.number().int().positive().default(300),
   IMPERSONATION_TOKEN_TTL_SEC: z.coerce.number().int().positive().default(1800),
 
+  // --- Abuse limits ---
+  // Deployment config, not compile-time constants: a white-label deployment
+  // with a different risk appetite changes these without a rebuild. Today's
+  // values are the defaults, so an environment that sets none of them behaves
+  // exactly as the constants did. `auth-api`'s contract carries the same
+  // three, which is why they are named there and not only here.
+  //
+  // How many failed passwords lock ONE account (not the caller's IP) for
+  // `LOGIN_FAILURE_WINDOW_SEC`. Raising it makes guessing cheaper; lowering it
+  // makes a forgetful user easier to lock out on purpose.
+  LOGIN_FAILURE_LOCK_THRESHOLD: z.coerce.number().int().positive().default(10),
+  // Captcha challenges + verifications per IP per window. It gates every
+  // guarded route, so it is the ceiling on how fast a client may work at all.
+  CAPTCHA_RATE_LIMIT: z.coerce.number().int().positive().default(30),
+  // Password-reset OTP verifications per subject per window — the budget for
+  // guessing a 6-digit reset code.
+  FORGOT_VERIFY_RATE_LIMIT: z.coerce.number().int().positive().default(20),
+
   LOCALES_DIR: z.string().default('./locales/langs'),
   LOCALES_WATCH: z.enum(['true', 'false']).default('false'),
   TRUST_PROXY: z.string().default('1'),
   DEFAULT_LANGUAGE: z.string().default('fa'),
+
+  // Phone numbers (ADR-0018). Both optional and both read by
+  // `common/validation/phone.schema.ts`; declared here so a deployment
+  // configures them in the one place every other setting lives.
+  // Empty SUPPORTED_PHONE_COUNTRIES means every country the library knows.
+  DEFAULT_PHONE_COUNTRY: z.string().length(2).optional(),
+  SUPPORTED_PHONE_COUNTRIES: z.string().optional(),
 
   // locale-service (gRPC source of truth)
   LOCALE_SERVICE_ADDR: z.string().default('localhost:50051'),

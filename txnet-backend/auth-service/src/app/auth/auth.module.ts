@@ -6,6 +6,7 @@ import { ServiceOnlyGuard } from '../common/guards/service-only.guard';
 import { RegisterController } from './register/register.controller';
 import { RegisterService } from './register/register.service';
 import { OTP_SERVICE } from './otp/otp.interface';
+import { OTP_SENDERS } from './otp/senders/otp-sender.interface';
 import { OtpService } from './otp/otp.service';
 import { OtpChannelRegistry } from './otp/otp-channels.service';
 import { BotLinkController } from './bot-link/bot-link.controller';
@@ -58,6 +59,18 @@ import { CaptchaService } from './captcha/captcha.service';
     SmsOtpSender,
     BaleOtpSender,
     TelegramOtpSender,
+    // The one place the concrete senders are named. `OtpChannelRegistry` takes
+    // the array and keys it by each sender's own `channel`, so a new messenger
+    // is a class plus a line here (plus the `OtpChannel` enum migration).
+    {
+      provide: OTP_SENDERS,
+      useFactory: (
+        sms: SmsOtpSender,
+        bale: BaleOtpSender,
+        telegram: TelegramOtpSender,
+      ) => [sms, bale, telegram],
+      inject: [SmsOtpSender, BaleOtpSender, TelegramOtpSender],
+    },
     OtpChannelRegistry,
     BotLinkService,
     BotSessionService,

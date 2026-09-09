@@ -1,5 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from '../redis/redis.service';
+import { RedisKeys } from '../redis/redis.keys';
 import { BotSessionStore } from '../session/bot-session.store';
 import { ConversationStore } from './conversation.store';
 import { NavState } from './nav.types';
@@ -31,7 +32,7 @@ describe('ConversationStore', () => {
 
     await store.save('telegram', '5501', state);
 
-    const written = redis.values.get('bot:nav:telegram:5501') as NavState;
+    const written = redis.values.get(RedisKeys.botNav('telegram', '5501')) as NavState;
     expect(written.data).toEqual({ phoneNumber: '09121112233' });
   });
 
@@ -56,7 +57,10 @@ describe('BotSessionStore', () => {
     const session = await store.get('telegram', '5501');
 
     expect(session?.refreshToken).toBe('r-1');
-    expect(redis.touch).toHaveBeenCalledWith('bot:session:telegram:5501', expect.any(Number));
+    expect(redis.touch).toHaveBeenCalledWith(
+      RedisKeys.botSession('telegram', '5501'),
+      expect.any(Number),
+    );
   });
 
   it('reports a chat with no entry as signed out', async () => {
