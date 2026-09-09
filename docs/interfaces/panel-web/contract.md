@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 7
-updated: 2026-09-08
+version: 8
+updated: 2026-09-09
 ---
 
 # Contract — panel-web
@@ -177,54 +177,12 @@ is passed verbatim are in [contract.mini-app.md](contract.mini-app.md).
 
 ## Auth-screen session guard (F-0101)
 
-A signed-in visitor must never be shown the login or register screen. The check
-runs in `src/proxy.ts` (the Next 16 proxy, formerly `middleware.ts`), before the
-screen renders — not in the browser. That is the whole trick: the refresh token
-is httpOnly and unreadable by script, but on the server it is just a request
-header, and it reaches `panel.<domain>` because auth-service sets it with a
-`Domain` attribute (see auth-api `open-questions.md` — the contracts still claim
-otherwise).
-
-| request | what happens | cost |
-|---|---|---|
-| no `refresh_token` cookie | passes straight through | nothing — no request, no delay |
-| cookie present, still live | 307 to `PANEL_HOME` before any HTML is sent | one server-to-server call |
-| cookie present, dead | falls through to the form, cookie cleared | one server-to-server call, once |
-
-`GET /api/auth/session` is the question asked. It answers
-`{ok:true, data:{active}}` and changes nothing; `active: true` means the visitor
-is signed in, anything else means they need to log in. auth-service's
-`Set-Cookie` headers are still forwarded verbatim, so the clear of a dead token
-reaches the browser — after which the visitor is on the no-cookie row and pays
-nothing again.
-
-**It must not be `/auth/refresh`** (ADR-0013). Refresh *rotates*: it revokes the
-session it is asked about and mints a replacement. This handler runs on far more
-requests than the visitor ever sees a response to — `config.matcher` covers every
-non-static path, so RSC prefetches of `/auth/login`, redirects and in-flight
-duplicates all reach it — and every one of those rotations returned the new token
-in a `Set-Cookie` the browser might discard. The browser was then left holding a
-revoked cookie that still looked present, and the panel's own `ensureSession()`
-bounced the user to the login screen on the next page load. The rows it minted
-are still identifiable in `identity.session` by `userAgent = node`.
-
-**Fails open, always to the auth screen.** auth-service unreachable, a timeout
-(4s), an unparseable body — every one of them shows the form. A signed-in user
-seeing the login form is a slightly stale screen; a signed-out one redirected
-into the panel would be a bug.
-
-`AUTH_SERVICE_ORIGIN` keeps this hop inside `private_backend_network`. It exists
-because the public origin used for browser calls would send it back out through
-DNS + Traefik + TLS — the ~0.5-2s the TL;DR above accepts for the browser, but
-paid before first byte here, which is exactly what this check exists to avoid.
-It falls back to `NEXT_PUBLIC_API_ORIGIN` when unset (`next dev` outside
-compose).
-
-Every post-auth destination is `PANEL_HOME` from `lib/routes.ts` — `/`, the
-panel root at `panel.<domain>`. Relative on purpose: each tenant is served on
-its own white-label domain, so an absolute URL would pin them all to one host.
-`forgot-password` is deliberately not guarded: resetting a password while
-signed in elsewhere is legitimate.
+A signed-in visitor is never shown the login or register screen; the check runs
+server-side in `src/proxy.ts` before the screen renders. The whole rule — what
+is asked, why it is not `/auth/refresh`, how it fails, and how the panel names
+its tenant on the internal hop — is in
+[contract.session-guard.md](contract.session-guard.md). It moved out of this
+file at 250 lines (§10).
 
 ## Consumes
 

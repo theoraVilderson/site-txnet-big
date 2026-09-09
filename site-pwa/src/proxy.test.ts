@@ -152,6 +152,44 @@ describe('the session check', () => {
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
+  it('names the tenant it belongs to, by the public API host', async () => {
+    // F-066-r. The internal hop reaches auth-service as `auth-service:3000`,
+    // which matches no `tenant_domain` row — and since F-066-d removed the
+    // fallback tenant, an unresolved host is a 404, so the signed-in visitor
+    // was never redirected. The resolver's primary input is the host
+    // (ADR-0020), so the panel states the public one it actually belongs to.
+    vi.stubEnv('NEXT_PUBLIC_API_ORIGIN', 'https://api.example.com');
+    fetchMock.mockResolvedValue(upstream(200, { ok: true, data: { active: true } }));
+
+    await proxy(requestFor('/auth/login', SIGNED_IN));
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.headers['x-forwarded-host']).toBe('api.example.com');
+  });
+
+  it('names no host when it is already calling the public origin', async () => {
+    // There the real `Host` is already the right one; overriding it would be
+    // one more place that can disagree with the URL.
+    vi.stubEnv('AUTH_SERVICE_ORIGIN', undefined);
+    vi.stubEnv('NEXT_PUBLIC_API_ORIGIN', 'https://api.example.com');
+    fetchMock.mockResolvedValue(upstream(200, { ok: true, data: { active: true } }));
+
+    await proxy(requestFor('/auth/login', SIGNED_IN));
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.headers['x-forwarded-host']).toBeUndefined();
+  });
+
+  it('names no host when the public origin is unset, rather than an empty one', async () => {
+    vi.stubEnv('NEXT_PUBLIC_API_ORIGIN', undefined);
+    fetchMock.mockResolvedValue(upstream(200, { ok: true, data: { active: true } }));
+
+    await proxy(requestFor('/auth/login', SIGNED_IN));
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.headers['x-forwarded-host']).toBeUndefined();
+  });
+
   it('falls back to the public origin when the internal one is unset', async () => {
     vi.stubEnv('AUTH_SERVICE_ORIGIN', undefined);
     vi.stubEnv('NEXT_PUBLIC_API_ORIGIN', 'https://api.example.com');

@@ -43,6 +43,32 @@ function authServiceOrigin(): string {
   );
 }
 
+/**
+ * The host this deployment's API is reached at publicly, or `null`.
+ *
+ * auth-service resolves a request's tenant from the host it was called on
+ * (ADR-0020), and `req.hostname` there reads `X-Forwarded-Host` because that is
+ * what Traefik forwards. The hop below skips Traefik on purpose, so without
+ * this the host auth-service sees is the container name — which matches no
+ * `tenant_domain` row, and since F-066-d removed the fallback tenant an
+ * unresolved host is a neutral 404. The visitor stayed on the login form.
+ *
+ * So the panel states the host it belongs to. It states a *host*, not a tenant
+ * id: the id would need the service token `bot-service` carries, and that token
+ * also satisfies the captcha gate and moves the rate-limit subject — more than
+ * a session check should hold. A host is checked against verified domains and
+ * grants nothing else (`domains/tenant/contract.md`).
+ */
+function publicApiHost(): string | null {
+  const origin = process.env.NEXT_PUBLIC_API_ORIGIN;
+  if (!origin) return null;
+  try {
+    return new URL(origin).host;
+  } catch {
+    return null;
+  }
+}
+
 function isGuarded(pathname: string): boolean {
   return GUARDED_PATHS.some(
     (path) => pathname === path || pathname.startsWith(`${path}/`),
@@ -98,9 +124,22 @@ export async function proxy(request: NextRequest) {
   const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value;
   if (!refreshToken) return null;
 
-  const upstream = await fetch(`${authServiceOrigin()}/api/auth/session`, {
+  const origin = authServiceOrigin();
+  const headers: Record<string, string> = {
+    cookie: `${REFRESH_COOKIE}=${refreshToken}`,
+  };
+
+  // Only on the internal hop. When the call already goes to the public origin
+  // the real `Host` is the right one, and a second answer that can disagree
+  // with the URL is worth avoiding.
+  const apiHost = publicApiHost();
+  if (apiHost && origin !== process.env.NEXT_PUBLIC_API_ORIGIN) {
+    headers["x-forwarded-host"] = apiHost;
+  }
+
+  const upstream = await fetch(`${origin}/api/auth/session`, {
     method: "GET",
-    headers: { cookie: `${REFRESH_COOKIE}=${refreshToken}` },
+    headers,
     cache: "no-store",
     signal: AbortSignal.timeout(4000),
   }).catch(() => null);
