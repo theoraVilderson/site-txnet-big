@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-version: 7
+version: 8
 updated: 2026-09-09
 ---
 
@@ -25,7 +25,7 @@ usage); tenants collect from their own end users through their own gateway
 
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
-| **resolve tenant by claim** — implemented | `{host?, session?, bot?}` | `{id, slug, via}` or `null` — `null` means *no tenant*, never a fallback | sync | `TenantClaimConflict` when a claim and its surface disagree |
+| **resolve tenant by claim** — implemented | `{host?, session?, bot?}` | `{id, slug, via, surfacePurpose?}` or `null` — `null` means *no tenant*, never a fallback | sync | `TenantClaimConflict` when a claim and its surface disagree |
 | check entitlement | tenantId, featureKey | allowed / denied (+ source, expiry) | sync | — |
 | verify custom domain | tenantId, domainValue | verification status | async (DNS TXT / ArvanCloud) | token mismatch |
 | charge tenant | tenantId, reason, amount | `tenant_billing_transaction` (append-only) | sync tx | insufficient / wallet missing |
@@ -165,6 +165,48 @@ the panel holds a session, the session claim answers regardless of host.
 here is the same header restricted to a verified service caller — see
 `open-questions.md`.
 
+### A domain says what it is for, and a non-panel door serves nothing (F-1212)
+
+`tenant_domain` carries a `purpose` — `panel`, `subscription` or `assets`
+(catalog 13.1 / C-16). **Every purpose resolves to the same tenant.** Purpose is
+not a second tenancy and it never changes the answer above; it changes what may
+be *served* once the answer is known.
+
+The resolved answer therefore carries `surfacePurpose`, and it is set **only
+when a `tenant_domain` row matched the host**. Its absence and the value `panel`
+are different facts and are treated differently:
+
+| the request | `surfacePurpose` | what is served |
+|---|---|---|
+| matched a `panel` row | `panel` | everything |
+| matched a `subscription` / `assets` row | that value | only that purpose's allowlist |
+| matched no row — a claim answered alone, as an internal caller's does | absent | everything |
+
+**It is a fact about the surface, never about `via`.** A tenant's own session
+presented on that tenant's subscription domain resolves cleanly through the
+`session` entry of the chain and is exactly the request this rule refuses, so
+`surfacePurpose` travels with a claim-answered resolution too. A check that read
+`via` would let every signed-in browser through the door it is meant to close.
+
+`TenantGuard` enforces it, as the third of its refusals, with the **same neutral
+404** an unknown host gets — a subscription domain must not reveal that a panel
+lives elsewhere any more than a stranger's host may (F-1210). It runs before the
+`@TenantAgnostic` exemption, because the refusal is about the door and not about
+the route.
+
+**The allowlist for `subscription` and `assets` is empty in `auth-service`, and
+that is the answer rather than a gap.** Every controller this process holds is
+`/auth/*`, `/admin/*` or `/internal/*` — panel, admin and service-caller routes
+without exception. The `/sub` link catalog 13.1 names belongs to `network`,
+which has no service yet; its prefix goes into `SERVED_PATHS`
+(`app/tenant/tenant.ts`) in the same change that builds it.
+
+**What this row does not do.** Traefik still routes by fixed host
+(`panel.$DOMAIN`, `api.$DOMAIN`), so a tenant's own domains reach nothing yet
+and the panel deployable has no host-purpose check of its own. Per-tenant edge
+routing is F-018 / F-102; when it lands, `panel-web` needs the mirror of this
+rule or a subscription domain will render the panel from the other side.
+
 ## The Credential Vault (implemented — ADR-0026)
 
 Every third-party secret a tenant owns — bot token, gateway key, SMS
@@ -183,7 +225,7 @@ workers.
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
 | identity | `ownerUserId`, `tenant_staff_member.userId` | cannot create tenant/staff |
-| redis-keyspace | `tenant:host:*` / `tenant:id:*` — the resolution cache, written and retracted through `RedisKeys` (C-03) | resolution keeps working from Postgres; reads fail open (above) |
+| redis-keyspace | `tenant:host:*` / `tenant:id:*` — the resolution cache, written and retracted through `RedisKeys` (C-03). A `tenant:host:*` entry now carries `purpose`; one written before that column existed fails the shape check on read and is re-looked-up, so the change crossed its deploy without a keyspace version bump | resolution keeps working from Postgres; reads fail open (above) |
 | billing | `PaymentProviderName` / `GatewayCategory` enums for `tenant_gateway_config` | — |
 
 ## Guarantees (intended)

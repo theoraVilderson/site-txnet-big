@@ -12,6 +12,57 @@ import { Request } from 'express';
 export type TenantVia = 'session' | 'bot' | 'domain';
 
 /**
+ * What the `tenant_domain` row a request arrived on is *for* (catalog 13.1 /
+ * C-16, mirrored by `tenant.TenantDomainPurpose` in the schema).
+ *
+ * A tenant holds several domains at once and the roles never collapse onto one
+ * host: the panel on a `panel` domain, subscription links on a `subscription`
+ * one. All of them resolve to the same tenant — purpose is not a second
+ * tenancy — but only a `panel` domain serves this process's routes.
+ */
+export type TenantSurfacePurpose = 'panel' | 'subscription' | 'assets';
+
+/**
+ * The paths each non-panel surface serves, as path prefixes.
+ *
+ * **Both lists are empty, and that is the answer rather than a gap** (F-066-q).
+ * `auth-service` has no route a subscription or assets domain should ever
+ * answer: every controller it holds is `/auth/*`, `/admin/*` or `/internal/*` —
+ * panel, admin and service-caller routes without exception. The `/sub` link
+ * catalog 13.1 names is `network`'s, and `network` has no service yet; when it
+ * gains one, its prefix goes here in the same change.
+ *
+ * ASSUMED(2026-09-09): an `assets` domain serves nothing from this process
+ * either. F-1212 names only `subscription`, but an assets host answering
+ * `/auth/login` is the same bug under a different name, and denying is the
+ * side that fails safe — see `docs/domains/tenant/open-questions.md`.
+ */
+const SERVED_PATHS: Record<Exclude<TenantSurfacePurpose, 'panel'>, readonly string[]> =
+  {
+    subscription: [],
+    assets: [],
+  };
+
+/**
+ * May a surface with this purpose serve this path? (F-066-q, catalog F-1212.)
+ *
+ * Pure, and separate from the guard that calls it, so the rule can be asserted
+ * without an execution context — the same split {@link normalizeHost} makes.
+ *
+ * A prefix matches the path itself or a path below it, and never a longer
+ * sibling: `/sub` would allow `/sub` and `/sub/abc`, never `/subscribers`.
+ */
+export function surfaceServesPath(
+  purpose: TenantSurfacePurpose,
+  path: string,
+): boolean {
+  if (purpose === 'panel') return true;
+  return SERVED_PATHS[purpose].some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+  );
+}
+
+/**
  * The tenant a request belongs to (ADR-0020, ADR-0025).
  *
  * A **resolved** tenant, not the whole row: the id is what every scoped query
@@ -31,6 +82,19 @@ export interface ResolvedTenant {
    * a warning about which fallback fired.
    */
   via: TenantVia;
+  /**
+   * The purpose of the `tenant_domain` row the host matched, when one did
+   * (F-066-q). Absent means there was **no surface at all** — an internal
+   * caller on a container name no row names, whose claim answered alone — and
+   * absent is therefore unrestricted rather than denied.
+   *
+   * It is deliberately a fact about the *surface* and not about `via`. A
+   * tenant's own session presented on that tenant's subscription domain
+   * resolves through the `session` entry and is exactly the request this row
+   * refuses, so a check that read `via` would let every signed-in browser
+   * through the door it is meant to close.
+   */
+  surfacePurpose?: TenantSurfacePurpose;
 }
 
 /**

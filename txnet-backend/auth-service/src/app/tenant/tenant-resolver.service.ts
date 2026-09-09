@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
-import { TenantCacheService } from './tenant-cache.service';
+import { CachedSurface, TenantCacheService } from './tenant-cache.service';
 import {
   ResolvedTenant,
   TenantClaim,
@@ -9,6 +9,9 @@ import {
 } from './tenant';
 
 type Identified = { id: string; slug: string };
+
+/** A host that matched a row: the tenant it names, and what the door is for. */
+type Surface = CachedSurface;
 
 /**
  * Resolves a request's tenant from the claims it carries (ADR-0020, ADR-0025).
@@ -55,15 +58,18 @@ export class TenantResolverService {
     const surface = await this.fromHost(claim.host);
     const claimed = claim.session ?? claim.bot ?? null;
     if (!claimed) {
-      return surface ? { ...surface, via: 'domain' } : null;
+      return surface ? this.answer(surface, 'domain') : null;
     }
 
     const via = claim.session ? 'session' : 'bot';
     if (surface) {
       if (surface.id !== claimed) {
-        throw new TenantClaimConflict(claimed, { ...surface, via: 'domain' });
+        throw new TenantClaimConflict(claimed, this.answer(surface, 'domain'));
       }
-      return { ...surface, via };
+      // The claim answered, and the surface's purpose still travels with it: a
+      // session is proof of *who*, never a licence to be served on a door that
+      // serves no route (F-066-q).
+      return this.answer(surface, via);
     }
 
     // No surface to agree or disagree with — the claim stands on its own, and
@@ -73,8 +79,18 @@ export class TenantResolverService {
     return tenant ? { ...tenant, via } : null;
   }
 
+  /**
+   * The resolved answer for a matched surface. `surfacePurpose` is set only
+   * here, so "there was no surface" and "the surface serves everything" stay
+   * different states — the second is a `panel` row, the first is the absence
+   * of the field, and only the first is unrestricted by default.
+   */
+  private answer(surface: Surface, via: 'domain' | 'session' | 'bot'): ResolvedTenant {
+    return { id: surface.id, slug: surface.slug, via, surfacePurpose: surface.purpose };
+  }
+
   /** The tenant a `tenant_domain` row maps this host to, or `null`. */
-  private async fromHost(rawHost: string | undefined | null): Promise<Identified | null> {
+  private async fromHost(rawHost: string | undefined | null): Promise<Surface | null> {
     const host = normalizeHost(rawHost);
     // A request with no usable host has no surface at all, and there is nothing
     // to look up — the empty host must never be a cache key that could match a
@@ -84,11 +100,12 @@ export class TenantResolverService {
     return this.cache.byHost(host, () => this.lookupHost(host));
   }
 
-  private async lookupHost(host: string): Promise<Identified | null> {
+  private async lookupHost(host: string): Promise<Surface | null> {
     const row = await this.prisma.tenantDomain.findUnique({
       where: { domainValue: host },
       select: {
         domainType: true,
+        purpose: true,
         verificationStatus: true,
         tenant: { select: { id: true, slug: true } },
       },
@@ -105,7 +122,7 @@ export class TenantResolverService {
     // still resolves. What such a tenant may then *do* is a product rule and
     // belongs to F-018 — see docs/domains/tenant/open-questions.md.
     if (row && (row.domainType === 'subdomain' || row.verificationStatus === 'verified')) {
-      return row.tenant;
+      return { ...row.tenant, purpose: row.purpose };
     }
     return null;
   }

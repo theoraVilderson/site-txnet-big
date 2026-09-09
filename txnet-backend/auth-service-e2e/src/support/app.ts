@@ -79,11 +79,15 @@ async function seedTenantDomain(prisma: PrismaService): Promise<void> {
 
   await prisma.tenantDomain.upsert({
     where: { domainValue: E2E_HOST },
-    update: { tenantId: tenant.id },
+    // `purpose` is stated rather than defaulted: this suite drives panel
+    // routes, and a leftover row from an earlier run carrying any other
+    // purpose would answer every one of them a neutral 404 (F-066-q).
+    update: { tenantId: tenant.id, purpose: 'panel' },
     create: {
       tenantId: tenant.id,
       domainType: 'subdomain',
       domainValue: E2E_HOST,
+      purpose: 'panel',
       verificationStatus: 'verified',
       verifiedAt: new Date(),
     },

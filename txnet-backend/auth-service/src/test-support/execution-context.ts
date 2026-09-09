@@ -14,6 +14,8 @@ export interface FakeRequest {
   headers: Record<string, unknown>;
   method: string;
   originalUrl: string;
+  /** Express's path without the query string — what `TenantGuard` matches on. */
+  path: string;
   user?: unknown;
   language?: string;
   [key: string]: unknown;
@@ -37,10 +39,12 @@ export function fakeRequest(options: ContextOptions = {}): FakeRequest {
   for (const [name, value] of Object.entries(options.headers ?? {})) {
     if (value !== undefined) headers[name.toLowerCase()] = value;
   }
+  const url = options.url ?? '/api/auth/login';
   const request: FakeRequest = {
     headers,
     method: options.method ?? 'POST',
-    originalUrl: options.url ?? '/api/auth/login',
+    originalUrl: url,
+    path: url.split('?')[0],
     get: (name: string) => headers[name.toLowerCase()] as string | undefined,
     ...options.extra,
   };

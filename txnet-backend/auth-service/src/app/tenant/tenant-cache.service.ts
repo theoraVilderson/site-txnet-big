@@ -1,10 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RedisKeys, RedisTtl } from '../redis/redis.keys';
 import { RedisService } from '../redis/redis.service';
-import { normalizeHost } from './tenant';
+import { TenantSurfacePurpose, normalizeHost } from './tenant';
 
 /** A tenant reduced to what resolution answers with — see {@link ResolvedTenant}. */
 export type CachedTenant = { id: string; slug: string };
+
+/**
+ * What a host resolves to: the tenant, plus what that domain is *for*
+ * (F-066-q). The purpose belongs to the surface, so it is cached with the
+ * host lookup and never with {@link TenantCacheService.byId} — a claim names a
+ * tenant, and a tenant has no single purpose.
+ */
+export type CachedSurface = CachedTenant & { purpose: TenantSurfacePurpose };
+
+const PURPOSES: readonly string[] = ['panel', 'subscription', 'assets'];
 
 /**
  * The marker for "this was looked up and there is nothing", stored so a
@@ -14,6 +24,24 @@ export type CachedTenant = { id: string; slug: string };
  * answers nothing*. Collapsing them would send every unknown host to Postgres.
  */
 const MISS = '-';
+
+/** A cached value carries a tenant at all. */
+function isTenant(value: unknown): value is CachedTenant {
+  const row = value as CachedTenant | null;
+  return (
+    typeof row === 'object' &&
+    row !== null &&
+    typeof row.id === 'string' &&
+    typeof row.slug === 'string'
+  );
+}
+
+/** …and, for a host entry, a purpose this code still recognises. */
+function isSurface(value: unknown): value is CachedSurface {
+  return (
+    isTenant(value) && PURPOSES.includes((value as CachedSurface).purpose as string)
+  );
+}
 
 /**
  * The `host -> tenant` cache, invalidated explicitly rather than by TTL
@@ -50,9 +78,9 @@ export class TenantCacheService {
   /** The tenant this normalized host maps to, looked up at most once per TTL. */
   byHost(
     host: string,
-    lookup: () => Promise<CachedTenant | null>,
-  ): Promise<CachedTenant | null> {
-    return this.through(RedisKeys.tenantByHost(host), lookup);
+    lookup: () => Promise<CachedSurface | null>,
+  ): Promise<CachedSurface | null> {
+    return this.through(RedisKeys.tenantByHost(host), lookup, isSurface);
   }
 
   /** The tenant this claimed id proves to, looked up at most once per TTL. */
@@ -60,7 +88,7 @@ export class TenantCacheService {
     tenantId: string,
     lookup: () => Promise<CachedTenant | null>,
   ): Promise<CachedTenant | null> {
-    return this.through(RedisKeys.tenantById(tenantId), lookup);
+    return this.through(RedisKeys.tenantById(tenantId), lookup, isTenant);
   }
 
   /**
@@ -88,11 +116,12 @@ export class TenantCacheService {
     await this.redis.del(RedisKeys.tenantById(tenantId));
   }
 
-  private async through(
+  private async through<T extends CachedTenant>(
     key: string,
-    lookup: () => Promise<CachedTenant | null>,
-  ): Promise<CachedTenant | null> {
-    const hit = await this.read(key);
+    lookup: () => Promise<T | null>,
+    shape: (value: unknown) => value is T,
+  ): Promise<T | null> {
+    const hit = await this.read(key, shape);
     if (hit !== undefined) return hit;
 
     const value = await lookup();
@@ -101,7 +130,10 @@ export class TenantCacheService {
   }
 
   /** `undefined` means nothing is cached; `null` means a cached "no tenant". */
-  private async read(key: string): Promise<CachedTenant | null | undefined> {
+  private async read<T extends CachedTenant>(
+    key: string,
+    shape: (value: unknown) => value is T,
+  ): Promise<T | null | undefined> {
     let raw: string | null;
     try {
       raw = await this.redis.get(key);
@@ -116,14 +148,23 @@ export class TenantCacheService {
     if (raw === null) return undefined;
     if (raw === MISS) return null;
 
+    let parsed: unknown;
     try {
-      return JSON.parse(raw) as CachedTenant;
+      parsed = JSON.parse(raw);
     } catch {
       // A value this service did not write, or one left by an older shape.
       // Treating it as absent re-reads the row and overwrites it, which is
       // cheaper and safer than resolving a request from something unparseable.
       return undefined;
     }
+
+    // The shape is checked, not asserted, and that is what carries the
+    // `purpose` column across a deploy (F-066-q): every host entry written
+    // before it existed parses fine and lacks the field, and a surface whose
+    // purpose is unknown must not be treated as a panel one. Failing the check
+    // re-reads the row and overwrites the entry, so the old shape drains
+    // itself within one lookup per host instead of needing a keyspace bump.
+    return shape(parsed) ? parsed : undefined;
   }
 
   private async write(key: string, value: CachedTenant | null): Promise<void> {

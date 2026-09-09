@@ -13,7 +13,9 @@ import { TenantCacheService } from './tenant-cache.service';
  * about not failing a request when Redis is unavailable.
  */
 
-const TENANT = { id: 'tenant-reseller', slug: 'reseller' };
+// A host entry is a *surface*: the tenant plus what that door is for
+// (F-066-q). `byId` ignores the extra field, so one fixture serves both.
+const TENANT = { id: 'tenant-reseller', slug: 'reseller', purpose: 'panel' as const };
 
 function cacheOver(redis: Partial<Record<'get' | 'set' | 'del', jest.Mock>>) {
   const store = new Map<string, string>();
@@ -161,6 +163,25 @@ describe('TenantCacheService — a Redis outage slows resolution, it does not re
     await expect(cache.byHost('myvpn.com', async () => TENANT)).resolves.toEqual(
       TENANT,
     );
+    expect(store.get(RedisKeys.tenantByHost('myvpn.com'))).toBe(
+      JSON.stringify(TENANT),
+    );
+  });
+
+  it('re-reads a host entry written before `purpose` existed', async () => {
+    // This is how F-066-q's column crosses a deploy. An entry from the old
+    // shape parses perfectly and simply lacks the field, and a surface whose
+    // purpose is unknown must not be served as a panel one — so the shape is
+    // checked rather than asserted, and the stale entry drains itself within
+    // one lookup per host instead of needing a keyspace version bump.
+    const { cache, store } = cacheOver({});
+    const old = { id: TENANT.id, slug: TENANT.slug };
+    store.set(RedisKeys.tenantByHost('myvpn.com'), JSON.stringify(old));
+
+    const lookup = jest.fn(async () => TENANT);
+    await expect(cache.byHost('myvpn.com', lookup)).resolves.toEqual(TENANT);
+
+    expect(lookup).toHaveBeenCalledTimes(1);
     expect(store.get(RedisKeys.tenantByHost('myvpn.com'))).toBe(
       JSON.stringify(TENANT),
     );

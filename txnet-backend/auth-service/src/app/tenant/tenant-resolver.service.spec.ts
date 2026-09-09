@@ -20,6 +20,8 @@ const KNOWN = [DOMAIN_TENANT, OTHER_TENANT];
 
 type DomainRow = {
   domainType: 'subdomain' | 'custom_domain';
+  /** What the door is for (F-066-q). Every fixture here is a panel domain. */
+  purpose: 'panel' | 'subscription' | 'assets';
   verificationStatus: 'pending' | 'verified' | 'failed';
   tenant: { id: string; slug: string };
 };
@@ -67,8 +69,9 @@ function resolver(rows: Record<string, DomainRow>) {
   };
 }
 
-const subdomain = (): DomainRow => ({
+const subdomain = (purpose: DomainRow['purpose'] = 'panel'): DomainRow => ({
   domainType: 'subdomain',
+  purpose,
   verificationStatus: 'pending',
   tenant: DOMAIN_TENANT,
 });
@@ -77,6 +80,7 @@ const customDomain = (
   verificationStatus: DomainRow['verificationStatus'],
 ): DomainRow => ({
   domainType: 'custom_domain',
+  purpose: 'panel',
   verificationStatus,
   tenant: DOMAIN_TENANT,
 });
@@ -107,6 +111,7 @@ describe('TenantResolverService — which tenant a host resolves to', () => {
     await expect(service.resolve({ host: 'reseller.txnet.app' })).resolves.toEqual({
       ...DOMAIN_TENANT,
       via: 'domain',
+      surfacePurpose: 'panel',
     });
   });
 
@@ -116,6 +121,7 @@ describe('TenantResolverService — which tenant a host resolves to', () => {
     await expect(service.resolve({ host: 'myvpn.com' })).resolves.toEqual({
       ...DOMAIN_TENANT,
       via: 'domain',
+      surfacePurpose: 'panel',
     });
   });
 
@@ -149,6 +155,7 @@ describe('TenantResolverService — which tenant a host resolves to', () => {
     await expect(service.resolve({ host: 'MyVPN.com:8443' })).resolves.toEqual({
       ...DOMAIN_TENANT,
       via: 'domain',
+      surfacePurpose: 'panel',
     });
     expect(findUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { domainValue: 'myvpn.com' } }),
@@ -190,6 +197,7 @@ describe('TenantResolverService — the cache', () => {
     await expect(service.resolve({ host: 'myvpn.com' })).resolves.toEqual({
       ...DOMAIN_TENANT,
       via: 'domain',
+      surfacePurpose: 'panel',
     });
   });
 });
@@ -254,7 +262,10 @@ describe('TenantResolverService — the claim chain', () => {
 
     await expect(
       service.resolve({ host: 'myvpn.com', session: DOMAIN_TENANT.id }),
-    ).resolves.toEqual({ ...DOMAIN_TENANT, via: 'session' });
+      // The claim answered and the surface's purpose still travels with it:
+      // `via` says which proof was used, `surfacePurpose` says which door it
+      // arrived at, and F-066-q turns on the second, not the first.
+    ).resolves.toEqual({ ...DOMAIN_TENANT, via: 'session', surfacePurpose: 'panel' });
     expect(tenantById).not.toHaveBeenCalled();
   });
 });

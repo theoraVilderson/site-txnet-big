@@ -35,6 +35,22 @@ enum TenantDomainType {
   @@schema("tenant")
 }
 
+/// What a domain is for (catalog 13.1 / C-16). A tenant holds several at once,
+/// and the roles never collapse onto one host: the panel is served on a `panel`
+/// domain, subscription links on a `subscription` one. Resolution treats all of
+/// them alike — every purpose names the same tenant — but what may be *served*
+/// on each differs, which is what `surfaceServesPath` enforces (F-066-q).
+///
+/// `state` / `tlsStatus` / the health columns of that catalog block are F-102
+/// and F-113 and are deliberately not here: this column is the one F-1212 needs.
+enum TenantDomainPurpose {
+  panel
+  subscription
+  assets
+
+  @@schema("tenant")
+}
+
 enum DomainVerificationStatus {
   pending
   verified
@@ -163,6 +179,10 @@ model TenantDomain {
   tenantId           String                   @db.Uuid
   domainType         TenantDomainType
   domainValue        String                   @unique // myvpn.txnet.app یا myvpn.com
+  /// What this door is for. `panel` is the default because every domain that
+  /// existed before this column was a panel domain, and because it is the only
+  /// value that serves anything today (F-066-q).
+  purpose            TenantDomainPurpose      @default(panel)
   verificationStatus DomainVerificationStatus @default(pending) // فقط برای custom_domain معتبر
   verificationToken  String? // برای رکورد TXT اثبات مالکیت
   verifiedAt         DateTime?

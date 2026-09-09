@@ -60,6 +60,9 @@ async function seedApiDomain(tenantId) {
       tenantId,
       domainType: 'subdomain',
       domainValue: host,
+      // The platform owner's API host serves the panel routes; `subscription`
+      // and `assets` doors serve none of them (F-066-q).
+      purpose: 'panel',
       verificationStatus: 'verified',
       verifiedAt: new Date(),
     },
