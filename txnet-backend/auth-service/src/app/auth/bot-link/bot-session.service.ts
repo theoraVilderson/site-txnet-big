@@ -1,9 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { BotContact, BotPlatform } from '@txnet-backend/messenger';
+import {
+  BotClientRegistry,
+  BotContact,
+  BotPlatform,
+} from '@txnet-backend/messenger';
 import { PrismaService } from '../../prisma/prisma.service';
 import { normalizeMessengerPhone } from './bot-link.service';
 import { AuthService } from '../auth.service';
-import { botScopeKey } from '../../common/security/switch-scope';
+import { botScopeKey, SwitchScope } from '../../common/security/switch-scope';
 
 /**
  * Signing in with the messenger account itself (ADR-0012).
@@ -30,6 +34,37 @@ import { botScopeKey } from '../../common/security/switch-scope';
  */
 export const BOT_SESSION_ROLES: readonly string[] = ['user'];
 
+/**
+ * What a messenger-originated session is labelled as, when there is no device
+ * to name (F-048).
+ *
+ * A bot webhook carries a chat id and a language code. It carries no user
+ * agent, no client IP and nothing about the device, because the request
+ * `auth-service` sees was made by `bot-service`, not by the person. Writing
+ * that container's address into `Session.ipAddress` was worse than writing
+ * nothing: every chat on the platform shared one address, and a session list
+ * and an audit trail both read the column as a place the platform observed.
+ *
+ * So the honest pair is a null IP and this label. It buys no device data — the
+ * platform genuinely has none here — it only stops the row claiming some.
+ *
+ * The `@username` suffix `F-048` mentions is deliberately not here: the
+ * normalized update `messenger` hands over carries no sender username, and
+ * plumbing one through four files for a label suffix costs more than it says.
+ */
+export const MESSENGER_DEVICE_LABEL: Record<BotPlatform, string> = {
+  telegram: 'Telegram',
+  bale: 'Bale',
+};
+
+/**
+ * What the platform saw of the caller's device, or `null` when it saw nothing.
+ *
+ * `null` is not "unknown, fill in a default" — it is the answer. Only a caller
+ * that is genuinely a browser (the Mini App) has a pair to pass.
+ */
+export type ObservedDevice = { ip: string; userAgent: string } | null;
+
 export type BotSessionOutcome =
   | {
       state: 'authenticated';
@@ -46,12 +81,65 @@ export class BotSessionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auth: AuthService,
+    private readonly bots: BotClientRegistry,
   ) {}
 
   /**
+   * The same sign-in, asked for from inside the Mini App (`F-310`, ADR-0018).
+   *
+   * The chat is not on the line here — a browser in a webview is — so the
+   * proof arrives as `initData`, a string the platform signed with the bot's
+   * own token. Verifying it says *which messenger account* is looking at the
+   * page, and that is the identical fact a chat id carries on the route above:
+   * for a private chat both are the same platform user id, which is what
+   * `LinkedBotAccount.platformUserId` holds. Everything after that point —
+   * the link must be contact-verified, the account must be live, the role
+   * must be on the allow-list — is `authenticate`'s, unchanged.
+   *
+   * Two things are deliberately *not* shared with the chat route:
+   *
+   * - **No contact card.** A Mini App has no way to ask for one, so a chat
+   *   that has never shared its number gets `needsContact` and is sent back to
+   *   the conversation, where that question already has a screen.
+   * - **The scope is the browser's** (ADR-0015). The webview is a browser and
+   *   goes on to call `/auth/accounts` with the `device_id` cookie like any
+   *   other; minting its session under the *chat's* scope would show it a
+   *   switch group that none of its later calls could see.
+   */
+  async authenticateWebApp(
+    input: { platform: BotPlatform; initData: string },
+    observed: ObservedDevice,
+    scope: SwitchScope | null,
+  ): Promise<BotSessionOutcome> {
+    const verified = this.bots.verifyWebAppInitData(
+      input.platform,
+      input.initData,
+    );
+    if (!verified.ok) {
+      // One refusal for every reason: a forged signature, a replayed one and
+      // an unconfigured bot are the same answer to whoever is asking, and the
+      // log is where they are told apart.
+      this.logger.warn(
+        `${input.platform}: mini app initData rejected — ${verified.reason}`,
+      );
+      return { state: 'refused', key: 'auth.invalidCredentials' };
+    }
+
+    return this.authenticate(
+      { platform: input.platform, chatId: verified.data.user.id },
+      observed,
+      scope,
+    );
+  }
+
+  /**
    * Authenticate a chat, linking it first if a contact card came with the
-   * request. `ip`/`userAgent` are the bot's, which is what they are for every
-   * other bot-initiated call.
+   * request.
+   *
+   * `observed` is `null` on the chat route and a real pair only from the Mini
+   * App, where the caller actually is a browser (F-048). Either way the
+   * session is labelled with the messenger it came from, because that is the
+   * one true thing about the device on both paths.
    */
   async authenticate(
     input: {
@@ -60,8 +148,8 @@ export class BotSessionService {
       senderId?: string | number;
       contact?: BotContact;
     },
-    ip: string,
-    userAgent: string,
+    observed: ObservedDevice,
+    scope?: SwitchScope | null,
   ): Promise<BotSessionOutcome> {
     const linked = await this.linkedUser(input.platform, input.chatId);
     const user = linked ?? (await this.linkNow(input));
@@ -89,12 +177,15 @@ export class BotSessionService {
     // headers (ADR-0015): this call already names the chat it is signing in,
     // and that is exactly the switch scope. Reading `x-bot-platform` here
     // instead would make a one-tap sign-in depend on a header that says the
-    // same thing the body already does.
+    // same thing the body already does. A caller that *is* a browser passes
+    // its own scope instead (`authenticateWebApp`), because the chat is not
+    // the place that session will be used from.
     const tokens = await this.auth.createSessionForUser(
       user,
-      ip,
-      userAgent,
-      botScopeKey(input.platform, input.chatId),
+      observed?.ip ?? null,
+      observed?.userAgent ?? null,
+      scope ?? botScopeKey(input.platform, input.chatId),
+      MESSENGER_DEVICE_LABEL[input.platform],
     );
     return { state: 'authenticated', tokens };
   }

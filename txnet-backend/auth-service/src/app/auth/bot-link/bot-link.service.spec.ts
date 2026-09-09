@@ -11,25 +11,36 @@ import { BotContact, PendingBotLink } from './bot-link.types';
  * it is tested directly rather than through the controller.
  */
 describe('normalizeMessengerPhone', () => {
+  // Every spelling a messenger has been seen to send, for numbers in three
+  // different countries: the output is always the E.164 form the rest of
+  // identity stores (ADR-0018), and no case here is Iran-specific by
+  // construction.
   it.each([
-    ['989123456789', '09123456789'],
-    ['+98 912 345 6789', '09123456789'],
-    ['00989123456789', '09123456789'],
-    ['09123456789', '09123456789'],
-  ])('normalizes %s', (raw, expected) => {
+    ['Telegram-style, no plus', '989123456789', '+989123456789'],
+    ['international with spaces', '+98 912 345 6789', '+989123456789'],
+    ['00 prefix', '00989123456789', '+989123456789'],
+    ['national, as the owner types it', '09123456789', '+989123456789'],
+    ['a German number with no plus', '4915112345678', '+4915112345678'],
+    ['a US number', '+1 415 555 2671', '+14155552671'],
+  ])('%s: %s', (_label, raw, expected) => {
     expect(normalizeMessengerPhone(raw)).toBe(expected);
   });
 
-  it.each([['', null], ['12345', null], ['+15551234567', null]])(
-    'rejects %s',
-    (raw, expected) => {
-      expect(normalizeMessengerPhone(raw as string)).toBe(expected);
-    },
-  );
+  it.each([
+    ['empty', ''],
+    ['too short to be anyone', '12345'],
+    ['not a number at all', 'not-a-phone'],
+    ['a landline, which cannot receive a code', '+982112345678'],
+  ])('rejects %s', (_label, raw) => {
+    expect(normalizeMessengerPhone(raw as string)).toBeNull();
+  });
 });
 
 describe('BotLinkService.handleUpdate — shared contact', () => {
-  const PHONE = '09123456789';
+  // The pending link holds the canonical stored form; the messenger sends
+  // whatever the account was registered with. Both must resolve to the same
+  // number or the contact check refuses a genuine owner.
+  const PHONE = normalizeMessengerPhone('09123456789') as string;
   const CHAT = '55501';
 
   let link: PendingBotLink;

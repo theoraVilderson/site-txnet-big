@@ -4,9 +4,15 @@ import { TelegramLikeBotClient } from './telegram-like-bot.client';
 import { BOT_PLATFORMS, BotPlatform } from './bot-platform';
 import { buildDeepLink, DEEP_LINK_BASE } from './deep-link';
 import { capabilitiesOf, MessengerCapabilities } from './capabilities';
+import {
+  verifyWebAppInitData,
+  WebAppInitDataResult,
+  WEB_APP_INIT_DATA_MAX_AGE_SEC,
+} from './web-app-init-data';
 
 interface BotConfig {
   client: TelegramLikeBotClient | null;
+  token?: string;
   username?: string;
   deepLinkBase: string;
   webhookSecret?: string;
@@ -40,6 +46,7 @@ export class BotClientRegistry {
         this.logger.log(`${platform}: ${tokenKey} unset — channel disabled`);
       }
       return {
+        token,
         client: token
           ? new TelegramLikeBotClient(
               platform,
@@ -109,6 +116,25 @@ export class BotClientRegistry {
   canLink(platform: BotPlatform): boolean {
     const bot = this.bots[platform];
     return Boolean(bot.client && bot.username && bot.webhookSecret);
+  }
+
+  /**
+   * Verify a Mini App's `initData` against this platform's bot token
+   * (`F-310`, ADR-0017).
+   *
+   * The token never leaves this unit — a caller hands over the signed string
+   * and is told who it names, which is the same shape as every other question
+   * asked here. An unconfigured bot cannot have signed anything, so it answers
+   * `malformed` rather than pretending the signature was wrong.
+   */
+  verifyWebAppInitData(
+    platform: BotPlatform,
+    initData: string,
+    maxAgeSec: number = WEB_APP_INIT_DATA_MAX_AGE_SEC,
+  ): WebAppInitDataResult {
+    const token = this.bots[platform].token;
+    if (!token) return { ok: false, reason: 'malformed' };
+    return verifyWebAppInitData(platform, token, initData, maxAgeSec);
   }
 
   /** The platform's own deep-link shape, built in one place (`deep-link.ts`). */

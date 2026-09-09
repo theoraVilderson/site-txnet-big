@@ -16,6 +16,7 @@ import {
 import { BotLinkStore } from './bot-link.store';
 import { BotLinkMessageKey, botLinkMessage } from './bot-link.messages';
 import { BotContact, BotUpdate, PendingBotLink } from './bot-link.types';
+import { parsePhone } from '../../common/validation/phone.schema';
 
 /** A messenger channel and the platform behind it are the same thing. */
 const CHANNEL_OF: Record<BotPlatform, OtpChannel> = {
@@ -497,17 +498,25 @@ export class BotLinkService {
 
 /**
  * Messengers report a contact's number in whatever shape the account was
- * registered with (`989…`, `+989…`, `09…`). Normalize to the `09xxxxxxxxx`
- * form the rest of identity stores, or `null` if it is not an Iranian mobile.
+ * registered with, and Telegram in particular drops the `+`: `989…`,
+ * `+989…`, `09…` all arrive. Normalize to the E.164 form the rest of
+ * identity stores (ADR-0018), or `null` if it is not a number that can hold
+ * an account here.
+ *
+ * Two readings are tried, in this order, because they genuinely differ: a
+ * bare `4915112345678` is a German number written internationally without
+ * its `+`, but a bare `09121234567` is national. Reading it as national
+ * first, then as international, is what makes both work without a
+ * per-country branch.
  */
 export function normalizeMessengerPhone(raw: string): string | null {
-  const digits = (raw ?? '').replace(/\D/g, '');
-  const national = digits.startsWith('0098')
-    ? digits.slice(4)
-    : digits.startsWith('98')
-      ? digits.slice(2)
-      : digits.startsWith('0')
-        ? digits.slice(1)
-        : digits;
-  return /^9\d{9}$/.test(national) ? `0${national}` : null;
+  const trimmed = (raw ?? '').trim();
+  if (!trimmed) return null;
+
+  const digits = trimmed.replace(/\D/g, '');
+  return (
+    parsePhone(trimmed) ??
+    (digits ? parsePhone(`+${digits}`) : undefined) ??
+    null
+  );
 }

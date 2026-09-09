@@ -3,6 +3,7 @@ export * from './lib/capabilities';
 export * from './lib/bot-view';
 export * from './lib/update.types';
 export * from './lib/deep-link';
+export * from './lib/web-app-init-data';
 export * from './lib/renderer';
 export * from './lib/telegram-like-bot.client';
 export * from './lib/bot-client.registry';

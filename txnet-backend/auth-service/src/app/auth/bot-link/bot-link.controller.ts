@@ -7,10 +7,11 @@ import {
   Param,
   Post,
   Req,
+  Res,
   UseGuards,
   UsePipes,
 } from '@nestjs/common';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { timingSafeEqual } from 'crypto';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { ok, err } from '../../common/response/response.util';
@@ -27,10 +28,13 @@ import {
   botLinkResolveSchema,
   botLinkStatusSchema,
   botSessionSchema,
+  botWebAppSessionSchema,
 } from './bot-link.schema';
 import { BotSessionService } from './bot-session.service';
 import { BotUpdate } from './bot-link.types';
 import { ServiceOnlyGuard } from '../../common/guards/service-only.guard';
+import { withRefreshCookie } from '../../common/http/refresh-cookie';
+import { resolveSwitchScope } from '../../common/security/switch-scope';
 
 /**
  * The bot side of account linking.
@@ -128,13 +132,69 @@ export class BotLinkController {
   async session(@Body() body: any, @Req() req: Request) {
     const outcome = await this.sessions.authenticate(
       body,
-      req.ip ?? '',
-      req.get('user-agent') ?? 'bot',
+      // Nothing observed (F-048). `req.ip` here is `bot-service`'s container
+      // and the user agent is its HTTP client — neither says anything about
+      // the person, and both are identical for every chat on the platform.
+      // The session is labelled with the messenger instead.
+      null,
     );
     if (outcome.state === 'refused') {
       return err(outcome.key);
     }
     return ok(outcome, 'auth.botSession');
+  }
+
+  /**
+   * The same sign-in, from inside the Mini App (`F-310`, ADR-0018).
+   *
+   * Unlike every other route on this controller this one is **public**, and
+   * that is the point rather than an oversight: the caller is a browser in a
+   * messenger's webview, it holds no service token, and what it presents
+   * instead is a string the platform signed with the bot's own token. The
+   * signature *is* the authentication, so a `ServiceOnlyGuard` here would only
+   * be asking a browser for a secret no browser can keep.
+   *
+   * It answers like a browser login, not like the bot route: the refresh token
+   * goes into the httpOnly cookie and never into a body a script can read.
+   */
+  @Post('webapp/session')
+  @HttpCode(HttpStatus.OK)
+  @UsePipes(new ZodValidationPipe(botWebAppSessionSchema))
+  // Per-IP, unlike the chat routes: real browsers call this one, and the only
+  // chat id available before verification is one an attacker chose.
+  @RateLimit({
+    key: (req) => `bot:webapp:session:${rateLimitSubject(req)}`,
+    limit: 20,
+    windowSec: 900,
+  })
+  async webAppSession(
+    @Body() body: any,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const outcome = await this.sessions.authenticateWebApp(
+      body,
+      // The one messenger route where a device really is on the line: a
+      // webview is a browser, so its IP and user agent are the user's.
+      { ip: req.ip ?? '', userAgent: req.get('user-agent') ?? 'unknown' },
+      resolveSwitchScope(req),
+    );
+    if (outcome.state === 'refused') {
+      return err(outcome.key);
+    }
+    if (outcome.state === 'needsContact') {
+      // Not an error, and not something this surface can fix: the Mini App
+      // cannot ask for a contact card. The chat can, and already does.
+      return ok(outcome, 'auth.botSession');
+    }
+    // The browser's token shape, not the bot's: `{accessToken, expiresIn}` in
+    // `data` with the refresh half in the cookie, exactly as a password login
+    // answers. The caller here is `panel-web`, and it already reads that shape
+    // everywhere else.
+    return withRefreshCookie(
+      res,
+      ok({ state: outcome.state, ...outcome.tokens }, 'auth.botSession'),
+    );
   }
 
   /**

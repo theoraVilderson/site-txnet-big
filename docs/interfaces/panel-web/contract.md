@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 4
-updated: 2026-09-06
+version: 7
+updated: 2026-09-08
 ---
 
 # Contract — panel-web
@@ -41,6 +41,15 @@ below).
 | `GET /api/i18n/meta` | available locales + metadata |
 | `GET /api/i18n/version` | current locale snapshot version (for client cache-busting) |
 
+## Strings (F-052)
+
+No module here spells a user-facing sentence: `useLocale().t(ns, key)` is the
+only source, and a miss renders the raw key — visible, never one fixed
+language. Helpers included — `util/helper.ts`'s `zodErrorToString` takes `t`
+and resolves every issue message in the `validations` namespace, so a schema
+reads `z.string().min(3, "fields.username.tooShort")`. A message that is not a
+key survives unchanged, so an un-keyed schema still renders.
+
 ## Screens
 
 `/(auth)/auth/*` — login, register, forgot-password. `/` — the panel home (which
@@ -54,6 +63,21 @@ routes `/(Auth)/register`. `src/proxy.ts` answers the old path with a **308** to
 the new one, preserving the path suffix and the query string, because links to
 it exist outside this repo. Both paths are written once, as `AUTH_LOGIN` /
 `AUTH_REGISTER` in `src/lib/routes.ts`.
+
+### The phone field (ADR-0018)
+
+Every screen that asks for a phone number renders `PhoneField`, never a plain
+input: a country selector plus the national number, submitting **E.164** —
+which is what `auth-api` takes and stores. Countries come from
+`libphonenumber-js` (all of them), are named through `Intl.DisplayNames` in
+the panel's active language and flagged from the ISO code, so no country list
+or flag asset is shipped or translated by hand.
+
+The picker opens on the country the **deployment's** default language implies
+(`fa` → `IR`, `en` → `US`), not the browser's, so a Persian install does not
+make its users find Iran in a list of two hundred — while a reseller anywhere
+else is still one selection away.
+`NEXT_PUBLIC_DEFAULT_PHONE_COUNTRY` overrides that per install.
 
 ## Client API surface
 
@@ -72,6 +96,11 @@ The `useCaptcha()` hook (`_hooks/useCaptcha.ts`) drives the
 requests a challenge on mount, exchanges a completed slide for a pass via
 `captchaVerify`, and re-requests a challenge when that pass's 120s TTL
 elapses or a gated call is rejected.
+
+## Failures the user can read (F-063)
+
+`auth-api` answers already translated. What this panel sends, throws and shows:
+[contract.errors.md](contract.errors.md).
 
 ## OTP delivery method and messenger linking (F-0202, F-0203)
 
@@ -138,6 +167,14 @@ things follow for this app:
   rather than `reload()`ing the group — the token this tab holds is already
   dead. Removing anyone else leaves the session alone and just re-reads.
 
+## The same panel, inside a messenger (F-310, ADR-0017)
+
+The Mini App **is** this app — no separate build, route or layout — and the
+whole per-platform surface is `lib/mini-app.ts`. `PanelSessionProvider` trades
+the host's signed `initData` for the ordinary session, but only after the
+refresh cookie has failed. The behaviour, the two refusals and why `initData`
+is passed verbatim are in [contract.mini-app.md](contract.mini-app.md).
+
 ## Auth-screen session guard (F-0101)
 
 A signed-in visitor must never be shown the login or register screen. The check
@@ -200,7 +237,8 @@ signed in elsewhere is legitimate.
 
 `NEXT_PUBLIC_API_ORIGIN`, `AUTH_SERVICE_ORIGIN` (server-side only, see the
 auth-screen guard below), `LOCALE_SERVICE_ADDR`, `LOCALE_SCOPE=frontend`,
-`DEFAULT_LOCALE=fa`, cookies `NEXT_LOCALE` / `NEXT_THEME`. Themes:
+`DEFAULT_LOCALE=fa`, `NEXT_PUBLIC_DEFAULT_PHONE_COUNTRY` (optional, see the
+phone field above), cookies `NEXT_LOCALE` / `NEXT_THEME`. Themes:
 `light` / `dark` / `ocean`.
 
 ## Deprecations

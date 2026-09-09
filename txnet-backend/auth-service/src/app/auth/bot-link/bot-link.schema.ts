@@ -42,6 +42,23 @@ export const botSessionSchema = z.object({
 
 export type BotSessionInput = z.infer<typeof botSessionSchema>;
 
+/**
+ * Signing in from inside the Mini App (`F-310`, ADR-0018).
+ *
+ * There is no chat id and no service token here: the caller is a browser in a
+ * webview, and the *only* thing it presents is the string the platform signed.
+ * Everything this route needs — which messenger account is looking at the
+ * page — is inside that string, so accepting a chat id beside it would be
+ * accepting an unsigned claim next to a signed one.
+ */
+export const botWebAppSessionSchema = z.object({
+  platform: z.enum(['telegram', 'bale']),
+  /** The raw `initData` query string, verbatim. Never re-encoded by a client. */
+  initData: z.string().min(1).max(4096),
+});
+
+export type BotWebAppSessionInput = z.infer<typeof botWebAppSessionSchema>;
+
 export const botLinkContactSchema = z.object({
   platform: z.enum(['telegram', 'bale']),
   chatId: z.string().min(1).max(64),

@@ -8,7 +8,7 @@ source:
   - txnet-backend/bot-service/src/**
 owns_tables: []
 depends_on: [messenger, auth-api, i18n]
-updated: 2026-09-07
+updated: 2026-09-08
 ---
 
 # bot-app
@@ -30,22 +30,22 @@ differences (`messenger`), linking and OTP (`identity`/`auth-api`), copy (`i18n`
 ## Status
 
 `active` — the Nx app `bot-service`. Built: `F-303` (webhook, state, a session
-per chat, register / login / forgot / logout) and the switch group (`F-0205`,
-`F-0208`, `F-0210`). Everything else in §10.4 is `todo` — not working.
+per chat, register/login/forgot/logout), the switch group (`F-0205`, `F-0208`,
+`F-0210`) and `F-310` (the Mini App row). The rest of §10.4 is `todo`.
 
 ## Read first
 
 [ADR-0009](../../architecture/decisions/0009-bot-is-a-surface-not-a-second-implementation.md) (a surface, chat-first),
 [ADR-0010](../../architecture/decisions/0010-bot-conversation-state-redis-navigation-postgres-commitments.md) (where in-progress work lives),
 [ADR-0012](../../architecture/decisions/0012-a-contact-verified-messenger-link-is-an-authentication-factor.md) (the messenger account as a credential),
-[ADR-0014](../../architecture/decisions/0014-switching-accounts-in-the-bot-moves-the-session-not-the-link.md) (a switch moves the session, not the link), [ADR-0016](../../architecture/decisions/0016-the-deployment-picks-the-bots-language-not-the-messenger.md) (the deployment picks the language, not the messenger).
+[ADR-0014](../../architecture/decisions/0014-switching-accounts-in-the-bot-moves-the-session-not-the-link.md) (a switch moves the session, not the link), [ADR-0016](../../architecture/decisions/0016-the-deployment-picks-the-bots-language-not-the-messenger.md) (the deployment picks the language, not the messenger), [ADR-0017](../../architecture/decisions/0017-the-mini-app-signs-itself-in-with-the-signature-the-platform-hands-it.md) (the Mini App signs itself in).
 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-08 | Contract v9 -> **v10** (F-053): a transport failure answers with the sentence, not the key. `AuthApiClient` resolves `bot.common.tryAgain` itself, because `msg` is rendered as `raw` and `raw` is never translated again |
+| 2026-09-08 | contract v8 -> **v9**: `F-310` — the Mini App is a row on the member menu (`views.ts` `miniApp()`), opening `panel-web` inside the messenger. The page signs itself in from the platform's signature (ADR-0017); this unit hands over a URL and carries no credential |
 | 2026-09-07 | contract v7 -> **v8**: a successful add now switches the chat onto the account it just added (`auth-api` v8 answers `userId` from both add routes). The switch + persist pair moved out of `flows/accounts.flow.ts` into `session/account-switcher.ts`, which both flows use. A refused switch falls back to the old message — the add still stands |
 | 2026-09-06 | ADR-0015: the chat's switch group is scoped to the chat. Every account call carries `x-bot-platform` beside `x-bot-chat-id`, and `flows/accounts.flow.ts` gains the remove path (F-0208) — pick, confirm, done; removing the chat's own account drops the stored refresh token |
-| 2026-09-06 | `F-0210` (ADR-0014): the switch group in the member menu — one tap to become another of your own accounts. The session moves; the link does not |
-| 2026-09-06 | `F-0205` in the chat: an account joins the group by a code to its own phone or its own password. Adds no session and moves no link — the code goes to somebody else's number, so this flow takes the deep link rather than the in-place one |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

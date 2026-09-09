@@ -2,8 +2,8 @@
 id: bot-app
 layer: interface
 status: active
-version: 8
-updated: 2026-09-07
+version: 10
+updated: 2026-09-08
 ---
 
 # bot-app — contract
@@ -41,7 +41,7 @@ only way to reach a capability, and never a reason a chat flow was skipped. A
 
 The Mini App (`F-310`) is `panel-web` with a shared session — never a third UI.
 Both Telegram and Bale have a WebApp surface, so this is a product choice, not a
-platform limit.
+platform limit. It is **built** (2026-09-08): see § The Mini App below.
 
 ## The rule that matters more than the rest
 
@@ -76,12 +76,14 @@ contract — **not** a rule written in the bot because it is faster there
 | `conversation/bot.dispatcher.ts` | render for this platform, send, delete the password message, remember the screen |
 | `flows/otp.step.ts` | the channel question, the cross-messenger link, the in-place link |
 | `flows/{login,register,forgot}.flow.ts` | the three conversations |
+| `flows/phone-number.ts` | the number a person typed or shared, read into the form `auth-api` stores |
 | `flows/steps.ts` | which step of how many, and what has been answered — orientation only, no rules |
 | `locale/chat-language.ts` | which language this chat is spoken to in, and the order that decides it |
 | `session/bot-session.store.ts` | the chat's `auth-api` refresh token |
 | `session/chat-access.ts` | that refresh token traded for an access token, for the routes behind `AuthGuard` |
 | `session/account-switcher.ts` | becoming another account and keeping the chat's session on it — the one place that pair happens |
 | `flows/accounts.flow.ts` | the switch group, and becoming another member of it (`F-0210`) |
+| `flows/views.ts` `miniApp()` | the Mini App as a row on the member menu (`F-310`) |
 | `flows/account-add.flow.ts` | an account joining that group, by one of `F-0205`'s two proofs |
 | `auth-api/auth-api.client.ts` | the only way out |
 
@@ -120,9 +122,48 @@ number, `link/contact` proves it. The proof itself never moves:
 `contact.user_id === message.from.id` plus a phone match stays in `identity`
 (invariant #12).
 
+## The number, from any country (`F-062`, ADR-0018)
+
+A chat has no country picker, so `flows/phone-number.ts` does the panel's job:
+a number naming its own country is kept (`+49…`, `0049…`, a shared contact
+whose `+` the messenger dropped), a bare one belongs to the deployment's region
+(`DEFAULT_PHONE_COUNTRY`, else the bot's language). It **spells** a number and
+never judges one — unreadable input travels on untouched and returns as
+`auth-api`'s refusal. A bare *foreign* national number needs a country step:
+a screen, and a decision of its own.
+
 **The conversation shell** — orientation, Back, the language a chat is spoken
 to in, and the commands — is [conversation.md](conversation.md). It applies to
 every flow, including the §10.4 flows not yet written.
+
+## The Mini App (`F-310`, ADR-0017)
+
+One row on the member menu, `kind: 'web_app'`, pointing at `PANEL_BASE_URL`.
+That is the whole of this unit's share of the feature, and the smallness is the
+design: the Mini App is `panel-web`, so everything it can do it already does,
+and anything this unit added would be the third UI ADR-0009 forbids.
+
+Three decisions live here rather than in the panel:
+
+- **A menu row, not a `BotView.escape`.** An `escape` says "*this screen* is
+  done better on the web" — a claim about one screen. The Mini App is a
+  destination, so it sits where the other destinations are. Nothing moved into
+  it: chat-first holds, and a `BotView` whose chat path is empty because the
+  Mini App does it better is still a bug.
+- **The member menu only.** A chat with no session is one this bot has never
+  signed in; sending it into a webview to find out whether the messenger
+  vouches for it there is a worse first answer than the sign-in button it
+  already has.
+- **No row when `PANEL_BASE_URL` is unset.** A deployment with no published
+  panel shows a shorter menu rather than a button that opens nothing.
+
+The page then signs *itself* in: the platform hands it a signed `initData`,
+`panel-web` presents that to `POST /auth/bots/webapp/session`, and the session
+that comes back is the ordinary one (ADR-0017). This unit is not in that path
+at all — it hands over a URL, and the credential is the platform's signature,
+never anything this bot passes along. Degradation is the renderer's
+(`messenger`): a platform without the WebApp surface gets the same URL as a
+plain link.
 
 ## The switch group (`F-0205`, `F-0207`, `F-0210`)
 
@@ -194,6 +235,10 @@ its translation) — never in two of the three. Values may be rewritten freely;
 cite it by name and a miss renders the raw key instead of failing.
 `bot-service/src/app/locale/bot-copy.spec.ts` holds all three to one key set,
 one `{{placeholder}}` set, and to the keys the code actually asks for.
+
+**A failure is a sentence, never a key.** An `AuthApiClient` `msg` renders as
+`BotText.raw`, never translated again — so the answers `auth-api` did not
+translate (no answer, a non-JSON body, no `msg`) are resolved in `ctx.lang`.
 
 ## Consumers
 

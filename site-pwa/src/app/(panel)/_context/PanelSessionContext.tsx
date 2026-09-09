@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { authApi, type SwitchGroup } from "@/lib/auth-api";
+import { miniAppHost } from "@/lib/mini-app";
 import { AUTH_LOGIN } from "@/lib/routes";
 
 type PanelSession = {
@@ -34,6 +35,14 @@ const PanelSessionContext = createContext<PanelSession | null>(null);
  * they are sent to the login screen. That is the mirror of `src/proxy.ts`,
  * which sends a signed-in visitor away from the login screen (F-0101): the two
  * together are what makes "one browser, one account" visible to the user.
+ *
+ * **Inside a Mini App there is one more thing to ask first** (F-310, ADR-0017).
+ * A messenger's webview starts with no cookie, so the cookie's absence is not
+ * evidence of anything there — the host is holding a signature that says who
+ * is looking. Asking it is the difference between the panel opening straight
+ * into the user's account and the panel opening on a login screen inside a
+ * messenger that already knows who they are. It is only ever asked *after* the
+ * cookie fails, so a webview that is already signed in costs nothing extra.
  */
 export function PanelSessionProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -48,7 +57,7 @@ export function PanelSessionProvider({ children }: { children: ReactNode }) {
     let alive = true;
     (async () => {
       try {
-        await authApi.ensureSession();
+        await establishSession();
         const next = await authApi.listAccounts();
         if (alive) setGroup(next);
       } catch {
@@ -69,6 +78,28 @@ export function PanelSessionProvider({ children }: { children: ReactNode }) {
       {children}
     </PanelSessionContext.Provider>
   );
+}
+
+/**
+ * The session this page load runs on: the refresh cookie if there is one, and
+ * otherwise the messenger's own signature when the page is a Mini App.
+ *
+ * Throws when neither answers, which is the single failure the caller acts on.
+ * A `needsContact` answer throws for the same reason a missing cookie does —
+ * the number was never shared with the bot, so the ordinary login screen is
+ * exactly the right next screen, and the chat is where that gap is closed.
+ */
+async function establishSession() {
+  try {
+    return await authApi.ensureSession();
+  } catch (cookieFailure) {
+    const host = miniAppHost();
+    if (!host) throw cookieFailure;
+    host.ready();
+    const result = await authApi.webAppSession(host.platform, host.initData);
+    if (result.state !== "authenticated") throw cookieFailure;
+    return result;
+  }
 }
 
 export function usePanelSession() {

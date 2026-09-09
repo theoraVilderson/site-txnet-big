@@ -2,8 +2,8 @@
 id: auth-api
 layer: interface
 status: active
-version: 8
-updated: 2026-09-07
+version: 10
+updated: 2026-09-08
 ---
 
 # Contract — auth-api
@@ -36,6 +36,15 @@ cookies and rate limits. Field-level schemas live in code — link, do not copy:
   It stays httpOnly, so no script on any subdomain can read it.
 - CORS: credentials on; allowed origin is `FRONTEND_ORIGIN` (fail-closed in
   production if unset).
+- **`phoneNumber` is E.164 in and out** — `+989123456789` (ADR-0018). Any
+  spelling a person types is accepted (spaces, dashes, a leading `0`, Persian
+  digits, `+`, `00`); every response and every stored value is E.164. Numbers
+  from **every country** are valid, not only Iran, and a number that cannot
+  receive an SMS (a fixed line) is refused with `phone.invalidFormat`. A
+  number typed without a `+` is read as belonging to the region
+  `DEFAULT_PHONE_COUNTRY` names, defaulting to the one `DEFAULT_LANGUAGE`
+  implies; `SUPPORTED_PHONE_COUNTRIES`, empty by default, narrows which
+  countries may sign up at all.
 - The `/auth/accounts/*` routes are the mirror image of the F-0101 rule below:
   every one of them requires `Authorization: Bearer` and none is behind
   `NoActiveSessionGuard`. A live session is what they are *about* — the caller
@@ -73,13 +82,23 @@ cookies and rate limits. Field-level schemas live in code — link, do not copy:
   (F-0201). Single-use — consumed by the first gated request it satisfies —
   and expires 120s after the slide completes, whichever comes first.
 
+- Three of the numbers below are **deployment config, not fixed limits**. The
+  value in the table is the default an environment that sets nothing gets;
+  a deployment overrides it without a rebuild:
+  `CAPTCHA_RATE_LIMIT` (both `/auth/captcha/*` routes),
+  `FORGOT_VERIFY_RATE_LIMIT` (`/auth/password/forgot/verify-otp`) and
+  `LOGIN_FAILURE_LOCK_THRESHOLD` (the per-account lock on `/auth/login/password`
+  and `/auth/accounts/add/password`). A client must not assume any of the three:
+  429 and `auth.temporarilyLocked` are the contract, the counts are not.
+  Every other limit in the table is fixed at the route.
+
 ## Endpoints
 
 | Method + path | Body (zod) | Success | Rate limit (per IP) | Captcha |
 |---|---|---|---|---|
 | POST `/auth/register` | fullName, username, phoneNumber, password | 201 `{phoneNumber, requiresPhoneVerification}` — no `user` row created yet | 10 / 3600s | required |
 | POST `/auth/register/verify-phone` | phoneNumber, otpCode(6) | 200 tokens + sets `refresh_token` cookie — this is where the `user` row is actually created | 20 / 3600s | — |
-| POST `/auth/login/password` | identifier, password | 200 tokens, **or** `{requiresOtp:true, otpToken}`. Every pre-password rejection is the same `auth.invalidCredentials`; `auth.phoneVerificationRequired` is only ever returned to a caller whose password was correct. Beyond the per-IP limit below, failures are also counted 10 / 900s per account (normalized identifier) -> `auth.temporarilyLocked` | 20 / 900s | required |
+| POST `/auth/login/password` | identifier, password | 200 tokens, **or** `{requiresOtp:true, otpToken}`. Every pre-password rejection is the same `auth.invalidCredentials`; `auth.phoneVerificationRequired` is only ever returned to a caller whose password was correct. Beyond the per-IP limit below, failures are also counted 10 / 900s per account (normalized identifier, default — `LOGIN_FAILURE_LOCK_THRESHOLD`) -> `auth.temporarilyLocked` | 20 / 900s | required |
 | GET  `/auth/otp/channels` | — | 200 `{channels:[{channel:"sms"\|"telegram"\|"bale", requiresLink:boolean}]}` — only what this environment has switched on **and** configured. A client renders this list; it must not hard-code the three names | 60 / 900s | — |
 | POST `/auth/login/otp/request` | phoneNumber, channel? | 200 `{accepted:true}`, **or** 200 `{accepted:true, linkRequired:true, platform, linkToken, deepLink, expiresIn}` when the chosen messenger is not linked yet — no code was sent, the bot will send it after the user shares their contact | 10 / 900s | required |
 | POST `/auth/login/otp/verify` | (phoneNumber \| otpToken) + otpCode(6) | 200 tokens | 20 / 900s | — |
@@ -87,12 +106,13 @@ cookies and rate limits. Field-level schemas live in code — link, do not copy:
 | GET `/auth/session` | cookie only | 200 `{active}` — read-only "does this refresh token still resolve to a live session?". Mutates nothing; a dead cookie is still cleared, since it can never succeed again. Answers from Postgres, not the Redis liveness cache. This is the question `panel-web`'s proxy asks server-to-server before rendering an auth screen (F-0101) | — | — |
 | POST `/auth/logout` | refreshToken? (else cookie) | 200 `{success:true}`; clears cookie | — | — |
 | POST `/auth/password/forgot` | phoneNumber, channel? | 200 `{accepted:true}`, or the same `linkRequired` shape as `login/otp/request` | 10 / 900s | required |
-| POST `/auth/password/forgot/verify-otp` | phoneNumber, otpCode(6) | 200 `{resetToken}` | 20 / 900s | — |
+| POST `/auth/password/forgot/verify-otp` | phoneNumber, otpCode(6) | 200 `{resetToken}` | 20 / 900s (default — `FORGOT_VERIFY_RATE_LIMIT`) | — |
 | POST `/auth/password/reset` | resetToken, newPassword | 200 `{success:true}` + tokens + sets `refresh_token` cookie. Every session the account had is revoked first; the returned one is minted after that revocation, so this device stays signed in and no other does | — | — |
 | POST `/auth/bots/link/status` | linkToken | 200 `{state:"pending"\|"linked"\|"failed", otpSent, failureKey?}` — polled by the screen showing the deep link | 120 / 900s | — |
 | POST `/auth/bots/link/resolve` | platform, chatId, startToken?, languageCode? | 200 `{state, needsContact, otpSent, messageKey, failureKey?, lang}` — what a `/start` means for this chat. **Service callers only**; anyone else gets 404 | 30 / 60s per chat | — |
 | POST `/auth/bots/link/contact` | platform, chatId, senderId, contact | 200, same outcome shape — the shared contact, checked against its sender (invariant #12). **Service callers only**; 404 otherwise | 10 / 300s per chat | — |
 | POST `/auth/bots/session` | platform, chatId, senderId?, contact? | 200 `{state:"authenticated", tokens}` — the ordinary token pair, because a contact-verified link **is** a credential (ADR-0012); `{state:"needsContact"}` when this chat has none yet and must send its card; `{ok:false, msg}` when the factor does not apply (`auth.botFactorNotAllowed` for a privileged role, `otp.botLink.noAccount`, `auth.invalidCredentials`). **Service callers only**; 404 otherwise | 10 / 300s per chat | — |
+| POST `/auth/bots/webapp/session` | platform, initData | 200 `{state:"authenticated", accessToken, expiresIn}` + sets `refresh_token` cookie — the Mini App presenting the signature its platform handed it (`F-310`, ADR-0017). `initData` is verified against that bot's token (HMAC-SHA-256, secret = `HMAC("WebAppData", token)`) and accepted for one hour after it was signed; the account it names is then subject to the identical rule as `/auth/bots/session`. `{state:"needsContact"}` when that messenger account has never shared its card — a Mini App cannot ask for one, so this is a refusal the *chat* closes. Every verification failure — forged, replayed, edited, or a bot this deployment has not configured — is the one answer `auth.invalidCredentials`. **Public**: the caller is a browser, and the signature is the credential | 20 / 900s | — |
 | POST `/auth/bots/:platform/webhook/:secret` | a Telegram/Bale `Update` | 200 `{ok:true}` **always** (a non-2xx makes the platform redeliver). `platform` is `telegram`\|`bale`; `:secret` is `TELEGRAM_WEBHOOK_SECRET`/`BALE_WEBHOOK_SECRET`, compared in constant time, and Telegram's `X-Telegram-Bot-Api-Secret-Token` header is checked too when present. A wrong secret, an unknown platform, or an unconfigured bot answers **404**, indistinguishable from a route that does not exist | 30 / 60s per chat | — |
 | POST `/auth/accounts/add/otp/request` | phoneNumber, channel? | 200 `{accepted:true}`, or the same `linkRequired` shape as `login/otp/request`. **Bearer required**; deliberately not behind the F-0101 check — a live session is this route's premise (C-21). The code is `OtpPurpose.account_switch_link`, its own purpose, so it can never be spent as a login | 10 / 900s **per caller** | — |
 | POST `/auth/accounts/add/otp/verify` | phoneNumber, otpCode(6) | 200 `{groupId, added, userId}`. `added:false` means it was already in the caller's own group. `userId` is the account that joined — the caller typed a phone number, so this is the only name it has for it, and it is what a surface then switches to | 20 / 900s per caller | — |
@@ -100,8 +120,8 @@ cookies and rate limits. Field-level schemas live in code — link, do not copy:
 | GET  `/auth/accounts` | — | 200 `{groupId, current, members}` — `{userId, fullName, phoneMasked}` each, `current` being the caller. Members are the caller's **own tenant** only (C-22); no group yet answers `members: []` | 120 / 900s per caller | — |
 | POST `/auth/accounts/switch` | userId | 200 tokens + `{userId, fullName}` + sets `refresh_token` cookie, and the caller's session is revoked `account_switched` in the same transaction. **No credential in the body** — that is the point of the group. Not a member, another group, another tenant, deleted or suspended all answer the one business rejection `accountSwitch.notAMember` | 30 / 900s per caller | — |
 | POST `/auth/accounts/remove` | userId | 200 `{userId, removed}` (F-0208). Removes that member from the group **on this surface only**, and revokes that account's sessions in this scope alone (`account_unlinked`) — its sessions elsewhere are untouched. Works from either side: `userId` may be the caller's own, which is how an account leaves. Mints nothing and sets no cookie, so a self-removal is a sign-out. Every refusal is `accountSwitch.notAMember` | 30 / 900s per caller | — |
-| POST `/auth/captcha/challenge` | — | 200 `{challengeId}`, 60s to complete the slide | 30 / 900s | — |
-| POST `/auth/captcha/verify` | challengeId | 200 `{token, expiresIn:120}` — `err('captcha.invalid')` if unknown/expired/too-fast | 30 / 900s | — |
+| POST `/auth/captcha/challenge` | — | 200 `{challengeId}`, 60s to complete the slide | 30 / 900s (default — `CAPTCHA_RATE_LIMIT`) | — |
+| POST `/auth/captcha/verify` | challengeId | 200 `{token, expiresIn:120}` — `err('captcha.invalid')` if unknown/expired/too-fast | 30 / 900s (default — `CAPTCHA_RATE_LIMIT`) | — |
 | POST `/admin/users/:userId/impersonate` | reasonNote (>=10) | 200 `{accessToken, expiresIn:1800}` | — (needs `user.impersonate`) | — |
 | POST `/admin/impersonate/end` | — | 200 | — (Bearer of the impersonated session) | — |
 
@@ -168,72 +188,10 @@ Emits: nothing (no bus). Consumes: `identity` (all logic), `i18n` (strings),
 | `POST /auth/bots/:platform/webhook/:secret` | 2026-09-06 | 2026-12-06 | `POST /api/bot/:platform/webhook/:secret` on `bot-service`. A bot token holds exactly one webhook URL, so only one service may own it (ADR-0011); this route still answers, but `BotWebhookRegistrar` moved and nothing points a bot here any more |
 | `POST /auth/register/verify-phone` body keyed by `userId` | 2026-09-04 | already removed | keyed by `phoneNumber` — register no longer creates a `user` row to key by |
 
-## v6 — a service credential, and the webhook moves out
+## Version history
 
-Additive for every existing client. New: `X-Service-Token` (see Conventions),
-`POST /auth/bots/link/resolve` and `POST /auth/bots/link/contact`. Changed: on
-the rate-limited routes the bucket is the **acting subject** — the chat for a
-service call, the IP for everyone else (`common/security/service-caller.ts`).
-Deprecated: this service's bot webhook, above.
-
-The captcha waiver is the part to be careful with. `SERVICE_AUTH_TOKEN` is a
-bearer secret for a *process*: leaking it buys an attacker the ability to call
-`register` / `login/otp/request` / `password/forgot` without solving a slide,
-and the per-chat + per-phone limits (and the OTP cooldown) are then the only
-thing between them and OTP flooding. Rotate it like a database password, and
-never set it in an environment that does not run `bot-service`.
-
-## Breaking: v5 — `password/reset` returns a session
-
-`POST /auth/password/reset` now answers with `{success:true, accessToken,
-expiresIn}` and sets the `refresh_token` cookie, where it previously returned
-`{success:true}` alone. The revocation is unchanged and still total — the
-returned session is created after it. **Affected consumer:** `panel-web`,
-updated in the same change. Additive for any client that ignores the new
-fields.
-
-## Breaking: v7 — the switch group is scoped to the surface (ADR-0015)
-
-Every `/auth/accounts/*` route changes meaning: it now reads the group
-belonging to the calling browser or chat instead of one global group per
-person. A client that sends no `device_id` cookie (or a bot that omits
-`x-bot-platform`) is refused rather than served a global group, so this is a
-break, not an addition. Consumers from the reverse lookup: `panel-web` and
-`bot-app` — both updated in the same change. `POST /auth/accounts/remove` is
-new in the same version (F-0208).
-
-No deprecation window: the old shape has no production client — there is no
-production deployment and `prisma/migrations/` does not exist yet (D-5).
-
-Additive since 2026-09-06: the five `/auth/accounts/*` routes (F-0205 through
-F-0207 — the switch group). They take nothing away from any existing client;
-`POST /auth/accounts/switch` is the only new route that sets the
-`refresh_token` cookie, and it sets exactly the same cookie a login does
-(`common/http/refresh-cookie.ts` is now the one definition, so a session minted
-by a switch and one minted by a login cannot disagree about the cookie's
-`domain` and leave two of them in the browser).
-
-Additive since 2026-09-06: `GET /auth/session` (ADR-0013) — the read-only
-"is this visitor signed in?" question. Nothing is taken away: `POST
-/auth/refresh` keeps its meaning and its rotation. It exists because using
-`refresh` as a probe revoked the session being asked about, and any caller that
-dropped the rotated cookie silently signed the user out.
-
-Additive since 2026-09-06: `POST /auth/bots/session` (ADR-0012) — signing in
-as the messenger account itself. It takes nothing away: every OTP route keeps
-its meaning, and a caller that does not use it sees no change.
-
-Also in v5, additive: `GET /auth/otp/channels`, `POST /auth/bots/link/status`,
-`POST /auth/bots/:platform/webhook/:secret`, and the `linkRequired` variant of
-the two OTP-request responses. A client that does not understand `linkRequired`
-will show "code sent" for a code that is not coming, so treat adopting it as
-required rather than optional for anything offering a messenger channel.
-
-## Breaking: v3 — captcha now required on register/login/forgot
-
-`register`, `login/password`, `login/otp/request` and `password/forgot` now
-reject with `captcha.required` (400) if `X-Captcha-Token` is missing, expired,
-or already spent. **Affected consumer:** `panel-web` — updated in the same
-change (`lib/auth-api.ts` + the three auth pages now run `useCaptcha()` first).
-Any other client of this API must adopt the challenge/verify flow before
-calling these four routes.
+Every version of this contract, what it changed and who it affected, is in
+[contract.versions.md](contract.versions.md). It moved out of this file at 250
+lines (§10): a wire contract is read to answer "what does this endpoint do
+now", and a growing history of what it used to do pushes that answer further
+down the page every release.

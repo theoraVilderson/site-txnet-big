@@ -2,8 +2,8 @@
 id: auth-api
 layer: interface
 status: active
-version: 8
-keywords: [auth api, login endpoint, register endpoint, auth-service, captcha, bot check, human verification, otp channels endpoint, bot webhook, telegram webhook, bale webhook, forgot password endpoint]
+version: 10
+keywords: [auth api, login endpoint, register endpoint, auth-service, captcha, bot check, human verification, otp channels endpoint, bot webhook, telegram webhook, bale webhook, forgot password endpoint, mini app session, webapp session, initdata]
 source:
   - txnet-backend/auth-service/src/main.ts
   - txnet-backend/auth-service/src/app/auth/auth.controller.ts
@@ -30,17 +30,17 @@ source:
   - txnet-backend/auth-service-e2e/**
 owns_tables: []
 depends_on: [identity, i18n, redis-keyspace]
-updated: 2026-09-06
+updated: 2026-09-08
 ---
 # auth-api
 **Responsibility:** NestJS `auth-service` HTTP surface (`/api/auth/*`, `/admin/*` impersonation), translating HTTP <-> `identity`. **Not:** identity rules (`identity`), other services' edge check (`forward-auth`).
-See [contract.md](contract.md) (HTTP API) and [open-questions.md](open-questions.md) (undecided items).
+See [contract.md](contract.md) (HTTP API), [contract.versions.md](contract.versions.md) (when a shape changed and who it broke) and [open-questions.md](open-questions.md) (undecided items).
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-08 | v9 -> **v10**, breaking (ADR-0018): `phoneNumber` is E.164 in every request and response, and numbers from every country are accepted — it was the Iranian national form and nothing else. Consumers: `panel-web` updated in the same change (`PhoneField`), `bot-app` needs none, `forward-auth` never sees a number. `REDIS_KEYSPACE_VERSION` v1 -> v2 in the same deploy |
+| 2026-09-08 | v8 -> **v9**, additive: `POST /auth/bots/webapp/session` (F-310, ADR-0017) — the Mini App presenting the `initData` its platform signed. The only public route on the bot controller, and the only one that mints a session under the *browser's* switch scope. The version history moved to `contract.versions.md` (§10, 250 lines) |
 | 2026-09-07 | Contract v7 -> **v8** (additive, patch): both `POST /auth/accounts/add/*` verify routes now answer `userId` alongside `{groupId, added}` — the account that joined, on both the new-member and the already-a-member branch. Consumers: `bot-app` switches to it (F-0210), `panel-web` ignores it and needed no change |
 | 2026-09-06 | Contract v6 -> **v7** (breaking, ADR-0015): every `/auth/accounts/*` route now acts on the group of the *calling surface* — a `device_id` cookie for a browser, `x-bot-platform` + `x-bot-chat-id` for a bot chat — instead of one global group per person. New route `POST /auth/accounts/remove` (F-0208), which revokes only that scope's sessions. Consumers `panel-web` and `bot-app` updated in the same change |
 | 2026-09-06 | Additive: the switch group's five routes, `POST /auth/accounts/add/*` (F-0205) + `GET /auth/accounts` (F-0206) + `POST /auth/accounts/switch` (F-0207). Bearer required, F-0101 deliberately not applied, rate-limited per caller rather than per IP. `withRefreshCookie`/`cookieOptions` moved out of `auth.controller.ts` into `common/http/refresh-cookie.ts` — two controllers mint sessions now, and two definitions of that cookie would mean two cookies |
-| 2026-09-06 | Additive: `POST /auth/bots/session` — signing in as the messenger account itself (ADR-0012) |
-| 2026-09-05 | Tests, no code change: `auth-service-e2e` now drives the real app over HTTP against a containerised Postgres + Redis — signup/OTP/login/refresh/logout, forgot -> verify -> reset (incl. the total revocation), both gates, and the envelopes/cookie/CORS of this contract. Added to `source:`. Two contract mismatches it surfaced are in [open-questions.md](open-questions.md) |
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

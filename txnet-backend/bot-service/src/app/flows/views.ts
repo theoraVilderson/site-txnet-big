@@ -26,6 +26,7 @@ export const ACTIONS = {
   shareContact: 'contact:share',
   linkCheck: 'link:check',
   linkOpen: 'link:open',
+  miniApp: 'menu:miniapp',
 } as const;
 
 export const cancel: BotAction = {
@@ -106,9 +107,40 @@ export function guestMenu(): BotView {
   ]);
 }
 
-/** The signed-in menu. Everything past sign-out arrives with §10.4's own rows. */
-export function memberMenu(): BotView {
+/**
+ * The Mini App as a choice on a menu (`F-310`).
+ *
+ * `kind: 'web_app'` is intent, not a widget: a platform that has the surface
+ * opens the panel inside the messenger, and one that does not gets the same
+ * URL as an ordinary link (`messenger`'s degradation table). Either way the
+ * page it opens signs itself in from the platform's own signature, so this is
+ * one tap and not a second login.
+ *
+ * It is a *row on the menu* rather than a `BotView.escape`, and the difference
+ * is deliberate. An `escape` says "this screen is done better on the web",
+ * which is a claim about a specific screen; the Mini App is a destination of
+ * its own, offered where the other destinations are. Chat-first is untouched
+ * either way (ADR-0009): nothing below this row moved into it.
+ */
+export function miniApp(url: string): BotAction {
+  return {
+    id: ACTIONS.miniApp,
+    kind: 'web_app',
+    url,
+    label: { key: 'bot.action.miniApp' },
+  };
+}
+
+/**
+ * The signed-in menu. Everything past sign-out arrives with §10.4's own rows.
+ *
+ * `miniAppUrl` is optional because `PANEL_BASE_URL` is: a deployment that has
+ * not published a panel yet shows a menu without the row, rather than a button
+ * that opens nothing.
+ */
+export function memberMenu(miniAppUrl?: string): BotView {
   return view('menu.member', { key: 'bot.menu.member' }, [
+    ...(miniAppUrl ? [[miniApp(miniAppUrl)]] : []),
     [{ id: ACTIONS.accounts, label: { key: 'bot.action.accounts' } }],
     [
       { id: ACTIONS.help, label: { key: 'bot.action.help' } },
