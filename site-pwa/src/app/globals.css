@@ -135,6 +135,7 @@
   --color-leaf-bg: var(--leaf-bg);
   --color-error: var(--error-color);
   --color-error-bg: var(--error-bg);
+  --color-error-border: var(--error-border);
   --color-tab-bg: var(--tab-bg);
   --color-tab-active: var(--tab-active);
 }
@@ -305,11 +306,19 @@ button {
   transition: all 0.3s ease;
 }
 
+/* The border belongs to `.field-nature`, which sits at `inset: 0` — exactly the
+   input's own box. Autofill is painted by the browser *on the input*, so an
+   opaque fill covers that 1.5px border along every straight edge and leaves
+   only the arcs of the fill's own corners showing: the stray hairline an
+   autofilled field shows and an empty one does not. A transparent border of
+   the same width keeps the fill (clipped to the padding box) off the border,
+   and the padding gives back the 1.5px so the field's size is unchanged. */
 .organic-field input {
   width: 100%;
   background: transparent;
-  border: none;
-  padding: 18px 20px;
+  border: 1.5px solid transparent;
+  border-radius: 20px;
+  padding: 16.5px 18.5px;
   color: var(--text-input);
   font-size: 16px;
   outline: none;
@@ -364,6 +373,32 @@ button {
 .organic-field input:focus + label,
 .organic-field input:not(:placeholder-shown) + label,
 .organic-field label.floated {
+  top: 0;
+  font-size: 13px;
+  font-weight: bold;
+  color: var(--accent-primary);
+  background: var(--bg-inner);
+  border-radius: 4px;
+}
+
+/* Autofill has to float the label in CSS alone, with no JS in it.
+   Chrome fills before hydration and, while the fill is still a *preview*, the
+   text is painted but the value is not exposed to script at all — `value` is
+   `""` and `:placeholder-shown` still matches, so both the rule above and
+   `useAutofill` are blind to it and the label sits under the painted text
+   until hydration finishes. `:-webkit-autofill` is the one thing that matches
+   from the first paint. Separate blocks per selector: one unknown selector
+   would drop the whole list. */
+.organic-field input:-webkit-autofill + label::before {
+  opacity: 1;
+}
+
+.organic-field input:autofill + label::before {
+  opacity: 1;
+}
+
+.organic-field input:-webkit-autofill + label,
+.organic-field input:autofill + label {
   top: 0;
   font-size: 13px;
   font-weight: bold;
@@ -453,8 +488,32 @@ input::-webkit-credentials-auto-fill-button {
   }
 }
 
-.password-field-input:-webkit-autofill {
+/* An explicit duration matters: with the default `0s` the start event is not
+   dispatched reliably outside Chromium. `:autofill` is the standard selector —
+   it lives in its own rule because one unknown selector would drop the whole
+   list. */
+.password-field-input:-webkit-autofill,
+.organic-field input:-webkit-autofill {
   animation-name: onAutoFillStart;
+  animation-duration: 1ms;
+}
+
+.password-field-input:autofill,
+.organic-field input:autofill {
+  animation-name: onAutoFillStart;
+  animation-duration: 1ms;
+}
+
+/* The password label's float lives in framer-motion's inline style, and the
+   label sits *before* the input, so this is the one place `:has()` and
+   `!important` are the only way to get it right on the first paint — same
+   preview-state gap as the `.organic-field` rules above. The values are the
+   ones motion animates to once it is hydrated, so nothing moves when it takes
+   over. */
+div:has(> .password-field-input:-webkit-autofill) > .password-field-label,
+div:has(> .password-field-input:autofill) > .password-field-label {
+  top: 0 !important;
+  transform: translateY(-50%) scale(0.85) !important;
 }
 
 .password-field-input:-webkit-autofill,
@@ -466,24 +525,36 @@ input::-webkit-credentials-auto-fill-button {
   caret-color: var(--text-input);
 }
 
-.password-field-input:not(:-webkit-autofill) {
-  animation-name: onAutoFillCancel;
-}
-
-.organic-field input:-webkit-autofill {
-  animation-name: onAutoFillStart;
-}
-
+.password-field-input:not(:-webkit-autofill),
 .organic-field input:not(:-webkit-autofill) {
   animation-name: onAutoFillCancel;
+  animation-duration: 1ms;
 }
 
-/* organic-field input autofill: border-radius مثل PasswordField و
-   override رنگ پس‌زمینه پیش‌فرض مرورگر */
+/* Any themed field that is not one of the two above: the browser's own
+   autofill background is a light yellow that ignores the theme entirely, so
+   every dark-panel field needs the same inset-shadow trick. */
+.autofill-tamed:-webkit-autofill,
+.autofill-tamed:-webkit-autofill:hover,
+.autofill-tamed:-webkit-autofill:focus,
+.autofill-tamed:autofill {
+  box-shadow: 0 0 0 30px var(--bg-inner) inset !important;
+  -webkit-text-fill-color: var(--text-input) !important;
+  caret-color: var(--text-input);
+}
+
+/* override رنگ پس‌زمینه پیش‌فرض مرورگر. شعاع رو اینجا دوباره تعریف نمی‌کنیم:
+   فیلد خودش border-radius: 20px داره و هر مقدار دیگه‌ای همون خط نازک گوشه رو
+   برمی‌گردونه. بلوک جدا برای هر سلکتور: یک سلکتور ناشناس کل لیست رو دور می‌ریزه. */
 .organic-field-input:-webkit-autofill,
 .organic-field-input:-webkit-autofill:hover,
 .organic-field-input:-webkit-autofill:focus {
-  border-radius: 16px;
+  box-shadow: 0 0 0 30px var(--bg-inner) inset !important;
+  -webkit-text-fill-color: var(--text-input) !important;
+  caret-color: var(--text-input);
+}
+
+.organic-field-input:autofill {
   box-shadow: 0 0 0 30px var(--bg-inner) inset !important;
   -webkit-text-fill-color: var(--text-input) !important;
   caret-color: var(--text-input);

@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { type ChangeEvent, type ReactNode } from "react";
+
+import { useAutofill } from "@auth/auth/_hooks/useAutofill";
 
 export interface OrganicFieldProps {
   id: string;
@@ -23,17 +25,7 @@ export const OrganicField = ({
   dir = "auto",
   autoComplete,
 }: OrganicFieldProps) => {
-  const [autofilled, setAutofilled] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // اگر مرورگر قبل از mount شدن کامپوننت فیلد رو autofill کرده باشه،
-  // انیمیشن CSS قبل از attach شدن هندلر React اجرا شده. روی mount چک می‌کنیم.
-  useEffect(() => {
-    const el = inputRef.current;
-    if (el && el.matches(":-webkit-autofill")) {
-      setAutofilled(true);
-    }
-  }, []);
+  const { ref, autofilled, onAnimationStart } = useAutofill(value);
 
   const floated = autofilled || value.length > 0;
 
@@ -41,7 +33,7 @@ export const OrganicField = ({
     <div className="organic-field">
       <div className="field-nature" />
       <input
-        ref={inputRef}
+        ref={ref}
         type={type}
         id={id}
         name={id}
@@ -50,10 +42,7 @@ export const OrganicField = ({
         placeholder={placeholder}
         autoComplete={autoComplete}
         className={`organic-field-input ${dir === "ltr" ? "dir-ltr text-left font-mono" : ""}`}
-        onAnimationStart={(e) => {
-          if (e.animationName === "onAutoFillStart") setAutofilled(true);
-          else if (e.animationName === "onAutoFillCancel") setAutofilled(false);
-        }}
+        onAnimationStart={onAnimationStart}
       />
       <label htmlFor={id} className={floated ? "floated" : ""}>
         {label}

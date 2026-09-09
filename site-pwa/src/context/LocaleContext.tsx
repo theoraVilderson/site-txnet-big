@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { useStore } from "zustand";
 import { motion, AnimatePresence } from "framer-motion";
+import { setApiLanguage } from "@/lib/api-language";
 import {
   createLocaleStore,
   type LocaleStoreApi,
@@ -54,6 +55,10 @@ export function LocaleProvider({
   useEffect(() => {
     document.documentElement.dir = isRtl ? "rtl" : "ltr";
     document.documentElement.lang = lang;
+    // Same job, one layer out: auth-api reads Accept-Language to decide which
+    // language to translate an error into, and the browser's own header names
+    // the OS language, not this one.
+    setApiLanguage(lang);
   }, [lang, isRtl]);
 
   return (

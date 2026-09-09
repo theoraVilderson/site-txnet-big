@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Eye, EyeOff } from "lucide-react";
 
+import { useAutofill } from "@auth/auth/_hooks/useAutofill";
+
 interface PasswordFieldProps {
   id: string;
   label: string;
@@ -52,28 +54,16 @@ export function PasswordField({
   const [showText, setShowText] = useState(false);
   const [focused, setFocused] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
-  // مرورگر یا پسورد منیجر وقتی پسورد رو خودکار پر می‌کنه، رویداد onChange رو صدا
-  // نمی‌زنه، پس value همچنان خالی می‌مونه. با انیمیشن CSS روی :-webkit-autofill
-  // این حالت رو تشخیص می‌دیم تا لیبل بدون نیاز به کلیک کاربر بالا بره.
-  const [autofilled, setAutofilled] = useState(false);
 
-  const inputRef = useRef<HTMLInputElement>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
+  // A password manager fills without an event React can see, and the CSS
+  // marker fires before hydration — `useAutofill` covers both.
+  const { ref, autofilled, onAnimationStart } = useAutofill(value);
   const floated = focused || autofilled || value.length > 0;
 
   useEffect(() => () => clearTimeout(timeoutRef.current), []);
-
-  // اگر مرورگر قبل از mount شدن کامپوننت فیلد رو autofill کرده باشه،
-  // انیمیشن CSS قبل از attach شدن هندلر React اجرا شده و onAnimationStart
-  // هیچوقت صدا زده نمیشه. برای همین روی mount چک می‌کنیم.
-  useEffect(() => {
-    const el = inputRef.current;
-    if (el && el.matches(":-webkit-autofill")) {
-      setAutofilled(true);
-    }
-  }, []);
 
   // اگه کاربر همه متن رو پاک کرد، حالت نمایش پسورد رو ریست کن
   useEffect(() => {
@@ -128,7 +118,7 @@ export function PasswordField({
               : { top: "50%", y: "-50%", scale: 1 }
           }
           transition={{ duration: 0.2, ease: "easeOut" }}
-          className={`absolute start-5 rtl:origin-right ltr:origin-left pointer-events-none z-30 px-1.5 rounded bg-bg-inner transition-colors duration-300 ${
+          className={`password-field-label absolute start-5 rtl:origin-right ltr:origin-left pointer-events-none z-30 px-1.5 rounded bg-bg-inner transition-colors duration-300 ${
             floated ? "text-primary font-bold" : "text-[var(--text-label)]"
           }`}
         >
@@ -140,7 +130,7 @@ export function PasswordField({
             تا در هر زبانی تایپ از چپ شروع شود و جای دکمه چشم در راست حفظ شود.
         */}
         <input
-          ref={inputRef}
+          ref={ref}
           id={id}
           name={id}
           type={showText ? "text" : "password"}
@@ -150,11 +140,7 @@ export function PasswordField({
           onChange={onChange}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          onAnimationStart={(e) => {
-            if (e.animationName === "onAutoFillStart") setAutofilled(true);
-            else if (e.animationName === "onAutoFillCancel")
-              setAutofilled(false);
-          }}
+          onAnimationStart={onAnimationStart}
           aria-invalid={!!error}
           className={`password-field-input w-full bg-transparent border-none rounded-2xl outline-none pt-5 pb-3 pl-5 pr-12 font-mono tracking-widest text-base text-[var(--text-input)] text-left z-20 relative ${
             isAnimating ? "opacity-0" : "opacity-100"

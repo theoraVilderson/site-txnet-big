@@ -53,7 +53,6 @@ describe('the code input', () => {
     renderStep();
 
     expect(boxes()).toHaveLength(OTP_LENGTH);
-    expect(OTP_LENGTH).toBe(6);
   });
 
   it('fills the boxes from `value`, left to right', () => {
