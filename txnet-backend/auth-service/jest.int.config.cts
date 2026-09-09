@@ -1,6 +1,7 @@
 /**
- * Integration specs (`*.int.spec.ts`): they start a real Redis in a container,
- * so they are kept out of the unit run and given a container-sized timeout.
+ * Integration specs (`*.int.spec.ts`): they start a real server in a container
+ * — Redis for the stores, Postgres for the tenant-isolation harness — so they
+ * are kept out of the unit run and given a container-sized timeout.
  *   npm run test:int
  */
 module.exports = {
