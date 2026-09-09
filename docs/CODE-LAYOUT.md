@@ -48,8 +48,10 @@ no code exists yet, so there is nothing to mirror until a service is built.
 | `txnet-backend/auth-service/src/app/<concern>/`                               | NestJS modules for units already live (`identity`)                                                                                        | `docs/domains/identity/`, `docs/interfaces/auth-api/`     |
 | `txnet-backend/auth-service/src/app/account-switch/`                          | the account-switch group — `audit`'s first service, hosted in this process because its only collaborators are identity's proof operations | `docs/domains/audit/`                                     |
 | `txnet-backend/auth-service/src/app/tenant/`                                  | `tenant`'s host -> tenant resolution — its first service, hosted here because the only caller so far is this app's edge (ADR-0020)   | `docs/domains/tenant/`                                    |
+| `txnet-backend/shared-core/src/lib/<unit>/`                                   | Nx library `@txnet-backend/shared-core`: a rule two Nx **apps** must both hold, and an app cannot import an app. `automation/schedule.ts` is the first — the writer and the runner of a schedule cannot be allowed to disagree about what one means | the unit named by the folder (`docs/domains/automation/`) |
 | `txnet-backend/messenger/src/`                                                | Nx library `@txnet-backend/messenger`: bot driver, capability set, `BotView` renderer, deep links                                         | `docs/platform/messenger/`                                |
 | `txnet-backend/bot-service/src/app/`                                          | the Telegram/Bale surface: webhook, conversation state, flows                                                                             | `docs/interfaces/bot-app/`                                |
+| `txnet-backend/worker-service/src/app/`                                       | background work: the tick publisher, the tick consumer, the job registry. Serves no HTTP (ADR-0027)                                        | `docs/domains/automation/`                                |
 | `txnet-backend/billing-service/src/app/`                                      | billing scaffold (not yet implementing `billing`)                                                                                         | `docs/domains/billing/` (stays `draft` until real)        |
 | `txnet-backend/prisma/domains/*.prisma`                                       | one schema file per business domain                                                                                                       | `owns_tables:` in that domain's `INDEX.md`                |
 | `auth-handler/internal/`                                                      | Go Traefik ForwardAuth gateway                                                                                                            | `docs/platform/forward-auth/`                             |
@@ -94,7 +96,7 @@ auth-service/src/app/auth/
 | file                                    | what runs                                      | needs   | how                |
 | --------------------------------------- | ---------------------------------------------- | ------- | ------------------ |
 | `*.spec.ts`                             | one class, collaborators mocked                | nothing | `npm test`         |
-| `*.int.spec.ts`                         | one store against a real Redis                 | Docker  | `npm run test:int` |
+| `*.int.spec.ts`                         | one store against a real Redis, or the isolation harness against a real Postgres | Docker  | `npm run test:int` |
 | `auth-service-e2e/src/**/*.e2e.spec.ts` | the whole app over HTTP, real Postgres + Redis | Docker  | `npm run test:e2e` |
 
 All three run in CI (`.github/workflows/ci.yml`), one job each.
@@ -134,6 +136,7 @@ filename fragment is enough. Which fragment:
 | the captcha gate or a rate limit | `gates.e2e` |
 | forgot-password, reset, or session revocation | `password-reset.e2e` |
 | the account-switch group | `account-switch.e2e` |
+| the `/admin/workers` routes | `worker-admin.e2e` |
 | anything read from config — a domain, an origin, a language | `deployment.e2e` |
 
 **Run all six only when the change is global**, and it is global exactly when
@@ -256,6 +259,9 @@ role holds it. **Project-owned** — three stacks here, so three vocabularies.
 | bot answers, but every auth step is refused                                           | the seam: `SERVICE_AUTH_TOKEN` must be the _same_ value in `bot-service` and `auth-service`, or the captcha guard rejects every call                                                                         | the conversation state               |
 | the bot signs a chat out mid-conversation, or a signed-in screen says "not signed in" | `bot-service`'s `session/chat-access.ts` — refreshing **rotates**, so a rotation that was not written back leaves the chat holding a spent token                                                             | the flow that showed the screen      |
 | a caller silently stopped passing something after a signature changed                 | every call site of that symbol — `grep -rn` the name before trusting any of them; a green suite proves nothing here, because a path nobody listed is a path nobody wrote a test for (`00-PROTOCOL.md` §6.2b) | the callee, whose own tests all pass |
+| a scheduled job never runs, or runs when it was switched off                          | `shared-core/src/lib/automation/schedule.ts` — `workerIsDue` / `workerIsRunnable` are the only place `isActive` and the three schedule shapes are read, for the tick publisher and the admin surface alike    | the job's own class                  |
+| a schedule an admin typed was accepted and then never ran                             | `auth-service/src/app/automation/worker-admin.service.ts` — it refuses a shape that could never run, so a row that got in either predates F-031-b or was written by hand; `GET /admin/workers` answers its `shapeError` | the tick publisher                   |
+| a job ran but left no `bot_execution_log`, or one that never finished                 | `worker-service/src/app/automation/tick.consumer.ts` — the row is opened before the handler and closed in both paths                                                                                         | the publisher                        |
 | a workspace-library import resolves in tests but the service will not boot            | the app's `webpack.config.js` — `TsconfigPathsPlugin` is what makes `@txnet-backend/*` resolve; `transpileOnly` hides its absence until runtime                                                              | the library                          |
 | works locally, fails deployed                                                         | `.env` / `.env.dev` / `.env.prod` layering, `dev-docker/`, `swarm/`                                                                                                                                          | any unit at all                      |
 

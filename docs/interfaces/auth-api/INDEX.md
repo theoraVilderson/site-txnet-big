@@ -2,7 +2,7 @@
 id: auth-api
 layer: interface
 status: active
-version: 11
+version: 12
 keywords: [auth api, login endpoint, register endpoint, auth-service, captcha, bot check, human verification, otp channels endpoint, bot webhook, telegram webhook, bale webhook, forgot password endpoint, mini app session, webapp session, initdata]
 source:
   - txnet-backend/auth-service/src/main.ts
@@ -12,6 +12,8 @@ source:
   - txnet-backend/auth-service/src/app/auth/auth.schema.ts
   - txnet-backend/auth-service/src/app/auth/bot-link/bot-link.controller.ts
   - txnet-backend/auth-service/src/app/automation/bot-integration.controller.ts
+  - txnet-backend/auth-service/src/app/automation/worker-admin.controller.ts
+  - txnet-backend/auth-service/src/app/tenant/vault/vault-internal.controller.ts
   - txnet-backend/auth-service/src/app/common/security/service-caller.ts
   - txnet-backend/auth-service/src/app/common/guards/service-only.guard.ts
   - txnet-backend/auth-service/src/app/auth/bot-link/bot-link.schema.ts
@@ -34,14 +36,14 @@ depends_on: [identity, i18n, redis-keyspace, tenant, automation]
 updated: 2026-09-09
 ---
 # auth-api
-**Responsibility:** NestJS `auth-service` HTTP surface (`/api/auth/*`, `/admin/*` impersonation), translating HTTP <-> `identity`. **Not:** identity rules (`identity`), other services' edge check (`forward-auth`).
+**Responsibility:** NestJS `auth-service` HTTP surface (`/api/auth/*`, `/admin/*` impersonation and worker administration), translating HTTP <-> `identity`. **Not:** identity rules (`identity`), other services' edge check (`forward-auth`).
 See [contract.md](contract.md) (HTTP API), [contract.versions.md](contract.versions.md) (when a shape changed and who it broke) and [open-questions.md](open-questions.md) (undecided items).
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-09 | v11 -> **v12** (F-031-b), additive: five `/admin/workers` routes behind `worker.manage` — the write surface over the background worker registry `worker-service` reads. This contract now **emits**: one `admin_manual` tick per `POST /admin/workers/:key/run`. Consumers: none affected; no existing shape changed. Reasoning in `contract.versions.md` v12 |
 | 2026-09-09 | v10 -> **v11** (F-066-i): `POST /auth/bots/:platform/webhook/:secret` **removed** — deprecated 2026-09-06, and its `:secret` env variable is gone. New: seven service-only `/internal/bot-integrations/*` routes `bot-service` resolves a webhook path through, two of which return a plaintext credential over that seam. Consumers: `bot-app` updated in the same change; `panel-web` and `forward-auth` unaffected. Reasoning in `contract.versions.md` v11 |
 | 2026-09-08 | v9 -> **v10**, breaking (ADR-0018): `phoneNumber` is E.164 in every request and response, and numbers from every country are accepted — it was the Iranian national form and nothing else. Consumers: `panel-web` updated in the same change (`PhoneField`), `bot-app` needs none, `forward-auth` never sees a number. `REDIS_KEYSPACE_VERSION` v1 -> v2 in the same deploy |
 | 2026-09-08 | v8 -> **v9**, additive: `POST /auth/bots/webapp/session` (F-310, ADR-0017) — the Mini App presenting the `initData` its platform signed. The only public route on the bot controller, and the only one that mints a session under the *browser's* switch scope. The version history moved to `contract.versions.md` (§10, 250 lines) |
 | 2026-09-07 | Contract v7 -> **v8** (additive, patch): both `POST /auth/accounts/add/*` verify routes now answer `userId` alongside `{groupId, added}` — the account that joined, on both the new-member and the already-a-member branch. Consumers: `bot-app` switches to it (F-0210), `panel-web` ignores it and needed no change |
-| 2026-09-06 | Contract v6 -> **v7** (breaking, ADR-0015): every `/auth/accounts/*` route now acts on the group of the *calling surface* — a `device_id` cookie for a browser, `x-bot-platform` + `x-bot-chat-id` for a bot chat — instead of one global group per person. New route `POST /auth/accounts/remove` (F-0208), which revokes only that scope's sessions. Consumers `panel-web` and `bot-app` updated in the same change |
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

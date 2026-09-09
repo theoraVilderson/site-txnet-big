@@ -2,7 +2,7 @@
 id: auth-api
 layer: interface
 status: active
-version: 11
+version: 12
 updated: 2026-09-09
 ---
 
@@ -154,3 +154,22 @@ writes a vault audit row naming `bot-service` and the remote caller, so the
 trail F-1215 exists for is unbroken. The alternative — routing every outbound
 send through `auth-service` so no token ever crosses a process boundary — was
 weighed and is a backlog row of its own, not a silent widening of this one.
+
+## v12 — the admin surface over the background workers
+
+**Additive.** Five new routes under `/admin/workers`, all behind
+`worker.manage`. Nothing existing changed shape, so no client must move.
+
+Two things are worth naming. The first is that this contract now **emits**: one
+`admin_manual` tick per `POST /admin/workers/:key/run`. ADR-0027 moved
+background *work* out of this request-serving process and says nothing against
+publishing a message from it — the run still happens in `worker-service`. The
+connection is opened on first use and `RABBITMQ_URL` is optional, because the
+process that answers `/auth/login` must boot without a broker.
+
+The second is that `automation.invalidSchedule` returns a non-null `error`
+payload, `{reason}`. Every other business rejection in this service carries
+`error: null`. An admin who is told only "invalid schedule" is left guessing
+which of three mutually exclusive shapes they missed, and the reason is the
+output of the same function the runtime declines on — so it is the runtime's
+own answer, not a second opinion.

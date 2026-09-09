@@ -120,5 +120,9 @@
   },
   "tenant": {
     "claimMismatch": "This session does not belong to this address. Sign in again."
+  },
+  "automation": {
+    "invalidSchedule": "That schedule could never run — see the reason.",
+    "workerInactive": "This worker is switched off; switch it on before running it."
   }
 }

@@ -46,6 +46,7 @@ or container names. Add a row the first time a walk needs it.
 | notification | messenger | rate-limited queue for campaigns and bulk sends (`F-313`, §9.8) | a ban earned by a campaign kills OTP delivery on the same token |
 | messenger | automation | `BotIntegrationDirectory` — which bot a webhook path names, and its vault credentials (F-320) | a bot that resolves to no row answers 404 at the door; nothing above ever sees why |
 | bot-app | auth-api | `POST /internal/bot-integrations/*` over `X-Service-Token` — the same directory, for the process with no database | if `auth-service` is unreachable, *every* inbound update is a 404, not a 5xx: an unresolvable path and an unknown one are the same answer by design |
+| automation | auth-api | `POST /internal/vault/destroy-expired` over `X-Service-Token` — a scheduled job asking the process that owns the Credential Vault to sweep it (F-031-c) | a retention sweep that silently stopped looks exactly like one with nothing to do; the symptom is old `superseded` rows, and the trail is `bot_execution_log` for `vault_credential_retention`, not a log line in `auth-service` |
 
 ## Manual notes
 

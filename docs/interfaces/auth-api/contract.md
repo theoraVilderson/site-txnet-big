@@ -2,7 +2,7 @@
 id: auth-api
 layer: interface
 status: active
-version: 11
+version: 12
 updated: 2026-09-09
 ---
 
@@ -70,13 +70,35 @@ cookies and rate limits. Field-level schemas live in code — link, do not copy:
   treated as "no session" and passes through — `POST /auth/logout` (or letting
   the session expire) is what clears the block.
 - Service callers (v6, ADR-0011): another service of this platform —
-  `bot-service` today — sends `X-Service-Token` (compared in constant time
+  `bot-service` and, since F-031-c, `worker-service` — sends `X-Service-Token` (compared in constant time
   against `SERVICE_AUTH_TOKEN`) and optionally `X-Bot-Chat-Id`. A valid token
   does exactly two things: the captcha requirement is waived, and the per-IP
   rate-limit bucket becomes a per-chat one (every bot call shares one IP, so the
   per-IP bucket would lock out the whole bot). It is **not** an authentication:
   it names the calling process, never a user, and every route still proves the
   person the same way. A missing or wrong token behaves exactly as before.
+  On the `/internal/*` routes it does more, because those have no user to
+  prove: there it is the whole door, and `ServiceOnlyGuard` answers 404 without
+  it — the same answer a route that does not exist gives, so the seam cannot be
+  mapped by probing. Two callers use it for opposite reasons: `bot-service`
+  asks *which tenant* an inbound webhook belongs to, and `worker-service` asks
+  for work to be done in a process it cannot import (an Nx app cannot import an
+  Nx app). Both are `@TenantAgnostic`, and that is not a widening: a sweep
+  across every tenant's expired credential versions has no tenant to be scoped
+  to, and neither does the question "whose webhook is this".
+- **Every rate-limit bucket is per tenant** (F-1206, catalog 20.2 layer 6). The
+  subject a route names — an IP, a bot chat id, a caller's user id, or the
+  identity a login attempt was made against — is prefixed with the request's
+  resolved tenant before it becomes a counter, in `RedisKeys.rateLimit` rather
+  than in `rateLimitSubject()`, so the two captcha routes and the
+  `login-failures:<identity>` counter are covered without having asked. Two
+  resellers therefore never share a budget: an IP is the internet's and a chat
+  id is the messenger's, so both arrive identical at every reseller's front
+  door, and one tenant's traffic used to be able to lock out another's users —
+  most sharply through `login-failures`, where ten bad passwords against one
+  reseller's `admin` locked every reseller's. A request that resolved to no
+  tenant is still counted, under a segment no tenant id can equal. The rule and
+  what it costs are in `redis-keyspace/contract.md`.
 - Bot check: `X-Captcha-Token` header, required on the routes marked below.
   Obtained from `POST /auth/captcha/challenge` + `POST /auth/captcha/verify`
   (F-0201). Single-use — consumed by the first gated request it satisfies —
@@ -120,6 +142,7 @@ cookies and rate limits. Field-level schemas live in code — link, do not copy:
 | POST `/internal/bot-integrations/verify-secret` | platform, webhookPath, candidate | 200 `{valid}` — a fingerprint comparison, honouring a superseded version inside its rotation grace window (ADR-0026 decision 4). No decryption. **Service callers only** | — | — |
 | POST `/internal/bot-integrations/webhook-secret` | platform, webhookPath, caller? | 200 `{secret}` — a **plaintext**, for the process registering the webhook upstream. Audited. **Service callers only** | — | — |
 | POST `/internal/bot-integrations/token` | platform, webhookPath, caller? | 200 `{token}` — a **plaintext** bot token, for the process that is about to send as that bot. Every call writes a vault audit row naming `bot-service:<caller>` (F-1215). **Service callers only** | — | — |
+| POST `/internal/vault/destroy-expired` | — | 200 `{destroyed}` — how many superseded credential versions were past their rotation grace window and are now gone (ADR-0026 rule 4). A **count**, and nothing that names what was destroyed. Idempotent: a second call inside the same window answers 0. Called by `worker-service`'s `vault_credential_retention` job (F-031-c). **Service callers only**; anyone else gets 404 | — | — |
 | POST `/auth/accounts/add/otp/request` | phoneNumber, channel? | 200 `{accepted:true}`, or the same `linkRequired` shape as `login/otp/request`. **Bearer required**; deliberately not behind the F-0101 check — a live session is this route's premise (C-21). The code is `OtpPurpose.account_switch_link`, its own purpose, so it can never be spent as a login | 10 / 900s **per caller** | — |
 | POST `/auth/accounts/add/otp/verify` | phoneNumber, otpCode(6) | 200 `{groupId, added, userId}`. `added:false` means it was already in the caller's own group. `userId` is the account that joined — the caller typed a phone number, so this is the only name it has for it, and it is what a surface then switches to | 20 / 900s per caller | — |
 | POST `/auth/accounts/add/password` | identifier, password | 200 `{groupId, added, userId}`, `userId` as above. Consumes the same per-account `login-failures` bucket as a password login | 20 / 900s per caller | — |
@@ -131,6 +154,11 @@ cookies and rate limits. Field-level schemas live in code — link, do not copy:
 | POST `/admin/users/:userId/impersonate` | reasonNote (>=10) | 200 `{accessToken, expiresIn:1800}` | — (needs `user.impersonate`) | — |
 | POST `/admin/impersonate/end` | — | 200 | — (Bearer of the impersonated session) | — |
 | POST `/admin/bots/:platform/:botUsername/webhook/rotate` | — | 200 `{rotated:true, registered, status}` (F-322). The bot is named by its `@handle` **within the tenant this request resolved to**, never by its path: the path is a credential, so it is neither an input nor an output. The old path stops resolving before the platform is called, so `registered:false` means a bot that is quiet, never one still listening on a burned address. 404 for an unknown platform, an unknown handle, or another tenant's bot | — (needs `bot.webhook_rotate`) | — |
+| GET  `/admin/workers` | — | 200 `[{key, name, description, category, isActive, schedules:[{id, scheduleType, windowStartAt, windowEndAt, cronExpression, timezone, isActive, shapeError}], lastRun}]` (F-031-b). `shapeError` is non-null on a schedule that could never run — the one way a row typed straight into the database becomes visible | — (needs `worker.manage`) | — |
+| POST `/admin/workers/:key/schedules` | scheduleType (`always_on`\|`time_window`\|`cron_expression`), windowStartAt?, windowEndAt?, cronExpression?, timezone (default `Asia/Tehran`) | 200 `{scheduleId}`. A shape the three types do not allow is a **business rejection** — `automation.invalidSchedule` with `error: {reason}` naming the rule that broke, checked by the same function the tick publisher declines on. 404 for a key no worker has registered | — (needs `worker.manage`) | — |
+| PATCH `/admin/workers/:key/schedules/:scheduleId` | isActive | 200 `{scheduleId, isActive}`. There is no delete — a schedule is switched off, because `bot_execution_log` and `setByAdminId` explain past runs. 404 if that schedule is not that worker's | — (needs `worker.manage`) | — |
+| PATCH `/admin/workers/:key` | isActive | 200 `{key, isActive}` — the kill switch (automation invariant #1), with a `bot_toggle` audit row written in the same transaction | — (needs `worker.manage`) | — |
+| POST `/admin/workers/:key/run` | — | 200 `{published:true}` — publishes an `admin_manual` tick. It means **asked for**, never finished: the run happens in `worker-service` and its outcome is a `bot_execution_log` row. `automation.workerInactive` (a business rejection) for a worker switched off — a manual run bypasses the schedule, never the switch. 503 if the broker is unreachable or `RABBITMQ_URL` is unset | — (needs `worker.manage`) | — |
 
 `tokens` = `{ accessToken, expiresIn }` in `data`; `refreshToken` is stripped
 from the body and set as the cookie.
@@ -196,8 +224,15 @@ not (see above).
 
 ## Emits / Consumes
 
-Emits: nothing (no bus). Consumes: `identity` (all logic), `i18n` (strings),
-`redis-keyspace` (sessions/OTP/rate limits/captcha).
+Emits: `automation.tick.<key>` with `triggeredBy: admin_manual`, to the
+`txnet.automation` topic exchange, from `POST /admin/workers/:key/run` alone
+(F-031-b, `domains/automation/contract.md`). The connection is lazy and
+`RABBITMQ_URL` is optional here: this process answers logins, so an unreachable
+broker fails that one route and nothing else.
+
+Consumes: `identity` (all logic), `i18n` (strings), `redis-keyspace`
+(sessions/OTP/rate limits/captcha), `automation` (the worker registry the
+`/admin/workers` routes write).
 
 ## Deprecations
 

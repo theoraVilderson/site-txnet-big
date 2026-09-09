@@ -149,6 +149,30 @@ describe('auth-api — wire contract', () => {
     });
   });
 
+  describe('POST /internal/vault/destroy-expired', () => {
+    /**
+     * The half of this route that a browser can reach, which is the half worth
+     * asserting on the wire: **it cannot**. `ServiceOnlyGuard` answers 404, not
+     * 401, so the route is indistinguishable from one that does not exist and
+     * cannot be found by probing (F-031-c).
+     *
+     * The authorised half is not covered here on purpose: this harness sets no
+     * `SERVICE_AUTH_TOKEN`, and giving it one is a change to
+     * `support/**` — the files every e2e spec boots — which makes every run in
+     * this project a six-file run. What the route does once it is through the
+     * guard is a vault question, and `vault-enforcement.spec.ts` is where the
+     * vault's rules are stated.
+     */
+    it('is 404 to a caller without a service token, like a route that does not exist', async () => {
+      const res = await request(e2e.server).post(
+        '/api/internal/vault/destroy-expired',
+      );
+
+      expect(res.status).toBe(404);
+      expect(res.body).not.toHaveProperty('destroyed');
+    });
+  });
+
   describe('the refresh cookie', () => {
     it('is httpOnly, domain-wide, lax, and 30 days long', async () => {
       const account = newAccount();
