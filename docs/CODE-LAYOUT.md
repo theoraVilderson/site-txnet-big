@@ -99,12 +99,77 @@ auth-service/src/app/auth/
 
 All three run in CI (`.github/workflows/ci.yml`), one job each.
 
+### Running them without burning the session
+
+`ts-jest` runs with `isolatedModules`: it transpiles and does **not**
+type-check, which is what makes the suite ~19s instead of ~44s. The type check
+is not gone, it moved — `npx tsc -p auth-service/tsconfig.spec.json --noEmit`,
+once, before an item is declared done (`AGENTS.md`).
+
+**`-t "<name>"` does not narrow anything.** Jest boots and compiles all 33
+suites and *then* filters, so `npm test -t Foo` costs a full run. Narrow by
+**path**: `npx jest -c auth-service/jest.config.cts <path>` is ~8s for one
+unit's folder. Run the paths you touched while iterating, and `npm test` once at
+the end.
+
+**Narrow the e2e run the same way — by path, to the files the change can
+reach.** `npm run test:e2e` is ~230s: ~31s of Docker start-up, then six files
+that cost strictly additively, because `maxWorkers: 1` (one Postgres, one
+Redis, every spec wiping them between tests). One file is **~74s** — the
+container start-up is a floor you always pay, and everything above it is the
+files you chose.
+
+```bash
+npx jest -c auth-service-e2e/jest.config.cts contract.e2e      # ~74s
+npx jest -c auth-service-e2e/jest.config.cts 'contract|gates'  # a regex, not a path
+```
+
+The positional argument is a regex matched against the full path, so a
+filename fragment is enough. Which fragment:
+
+| what the change touched | run |
+|---|---|
+| an envelope, a status code, the `api` prefix, CORS, the refresh cookie's attributes | `contract.e2e` |
+| register / OTP / verify-phone / login / refresh / logout | `auth-flow.e2e` |
+| the captcha gate or a rate limit | `gates.e2e` |
+| forgot-password, reset, or session revocation | `password-reset.e2e` |
+| the account-switch group | `account-switch.e2e` |
+| anything read from config — a domain, an origin, a language | `deployment.e2e` |
+
+**Run all six only when the change is global**, and it is global exactly when
+it is in one of these: `auth-service-e2e/src/support/**` (the harness every
+file boots), `app.module.ts`, `main.ts`, a global guard / filter / pipe /
+middleware, or `prisma/seed.js`. Those reach every file by construction, and a
+one-file run then proves nothing about the other five.
+
+A backlog item that changed no `contract.md` row runs **no** e2e at all — the
+rule below has not moved.
+
+**Never start an e2e run the user did not ask for.** Writing an `*.e2e.spec.ts`
+when a `contract.md` row changed is still required; *running* the tier is the
+user's call, because at ~74s a file it is the one command in this repo that can
+eat a session on its own. Say which file now covers the change and let them
+decide. `npm test` and the path-narrowed unit runs need no such permission.
+
 The e2e project boots `AppModule` in-process and drives it with supertest, so
 it answers "does this route still return that shape?" — the questions
 `interfaces/auth-api/contract.md` asks. A unit spec cannot answer them: the
 prefix, the guards, the cookie and the error envelope are all assembled
 outside the class under test. Start there when a change is about the wire,
 not the rule.
+
+### Order of work — the spec is written first
+
+A new feature or capability starts with its test. Write the `*.spec.ts` that
+states the invariant the item turns on, watch it fail for the reason you
+expect, then write the implementation, then run it. An item whose first edit is
+production code was written in the wrong order, and its test — authored after
+the fact, against code already in front of you — asserts what the code does
+rather than what it must do. That is the failure mode the ceiling below is
+also aimed at.
+
+Failing first is the part that carries the value: a spec that has never been
+red has not been shown to test anything.
 
 **Ceiling — a budget, not a target.** One backlog item earns at most **one** new
 `*.spec.ts`, covering the invariant the item turns on: the thing that would

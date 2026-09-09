@@ -151,6 +151,10 @@ is yours.
   has already been run once.
 - Never ingest the whole catalog at once. An area you are not building costs
   nothing; ingesting it early fills the backlog with rows nobody can start.
+- Tests come before the code they cover, and the e2e tier is never run
+  unasked. Both rules live with the rest of the test policy in
+  `docs/CODE-LAYOUT.md` ("Order of work" and "Running them without burning the
+  session") — read them there before writing an item's first line.
 
 ## Decide once
 
@@ -209,7 +213,10 @@ python3 tools/where.py --check
 python3 tools/conventions.py
 ```
 
-All five must pass. `done` in the backlog means **code exists and is
+All five must pass. For a change that touched TypeScript, so must
+`npx tsc -p auth-service/tsconfig.spec.json --noEmit` from `txnet-backend/` —
+jest transpiles without type-checking (`docs/CODE-LAYOUT.md`), so this is the
+only thing that type-checks the specs. `done` in the backlog means **code exists and is
 reachable** — not documented, not planned. Half-finished work stays `doing`
 with a note, never silently `done`.
 

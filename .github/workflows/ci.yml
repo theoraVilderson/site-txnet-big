@@ -72,6 +72,13 @@ jobs:
       - name: jest
         run: npx nx run-many -t test --parallel=2 --skip-nx-cache
 
+      # jest transpiles without type-checking (`auth-service/jest.config.cts`
+      # sets `isolatedModules`, which is what keeps the suite under 20s), and
+      # the webpack build below is `transpileOnly` — so this step is the only
+      # thing in CI that type-checks the spec files.
+      - name: tsc (specs)
+        run: npx tsc -p auth-service/tsconfig.spec.json --noEmit
+
       # A webpack build is the only thing that proves a workspace-library
       # import (`@txnet-backend/*`) actually resolves: ts-loader runs with
       # `transpileOnly`, so a wrong alias type-checks, bundles a

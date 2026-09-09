@@ -105,6 +105,13 @@ before it starts — that is what the announcement is for.
 Repeat it. Each run picks the next unblocked item, implements it, updates the
 backlog, and stops. A fresh session needs no other context.
 
+**Build one named row instead of the first eligible one**
+> Run MODE: NEXT for F-066-a.
+
+Same loop, but you choose the row. It still refuses if the row is not `todo`
+or a `depends_on` is not `done` — building out of order is how a half-built
+dependency gets discovered mid-item.
+
 ## House style
 
 **Teach it a rule you already follow in code**
