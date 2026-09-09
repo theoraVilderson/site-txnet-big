@@ -90,6 +90,9 @@ export const TenantContext = {
    * Whether the current work is the audited cross-tenant escape. Read by
    * F-066-b's extension to decide between injecting a `tenantId` and leaving a
    * query alone; `runAcrossTenants` would do nothing observable without it.
+   *
+   * @deprecated since 2026-09-09 (F-066-m-b), with {@link runAcrossTenants}
+   * and on the same schedule — it exists only to make that flag observable.
    */
   isAcrossTenants(): boolean {
     return storage.getStore()?.acrossTenants ?? false;
@@ -115,10 +118,24 @@ export function runWithTenant<T>(
 /**
  * The one escape from tenant scoping (ADR-0024 decision 3).
  *
- * It is a single greppable symbol on purpose — `grep -rn runAcrossTenants` is
- * the audit. Never add a second escape; widen this one's callers instead. It is
- * a stopgap for F-1202 (F-066-m), where the escape becomes a database role that
- * cannot bypass RLS at all.
+ * @deprecated since 2026-09-09 (F-066-m-b). Remove after F-066-n. Inject
+ * `CrossTenantPrismaService` instead — it is the same escape, made of a
+ * database role rather than a flag, and it has no callers to convert: the four
+ * this had (`TenantResolverService`, `CredentialVaultService`,
+ * `PrismaBotIntegrationDirectory`, the e2e harness) already hold it.
+ *
+ * **It does not work any more, and that is why it is going.** It binds no
+ * `app.tenant_id`, so on any table carrying an RLS policy — which since
+ * F-066-m-b is every table with a `tenantId` column — the application pool is
+ * shown *no* rows rather than every tenant's. It fails in the safe direction
+ * and it reads, at a call site, exactly like the working escape it used to be.
+ * A callback cannot be the audit trail for something a connection string
+ * decides.
+ *
+ * It stays for one release rather than being deleted alongside its replacement
+ * (§8): nothing in this repo calls it, and a symbol removed in the same change
+ * that replaces it gives an out-of-tree caller a compile error with no reading
+ * to do.
  *
  * **`await` inside the callback, not outside it.** A Prisma promise is lazy: it
  * runs when it is awaited, so `runAcrossTenants(() => prisma.user.findMany())`

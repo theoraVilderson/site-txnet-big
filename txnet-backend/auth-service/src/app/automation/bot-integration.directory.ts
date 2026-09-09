@@ -6,8 +6,7 @@ import {
   BotPlatform,
   newWebhookPath,
 } from '@txnet-backend/messenger';
-import { PrismaService } from '../prisma/prisma.service';
-import { runAcrossTenants } from '../tenant-context/tenant-context';
+import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import {
   CredentialRef,
   CredentialUnavailable,
@@ -42,6 +41,17 @@ const TOKEN_KIND: Record<BotPlatform, TenantCredentialKind> = {
  * `TENANT_SCOPED_MODELS` (ADR-0024, `tenant/contract.vault.md`), and why the
  * escape is named here rather than hidden. What confines the answer is the
  * path itself — unguessable, unique, and never trusted before it resolves.
+ *
+ * Since F-066-m-b the escape is `CrossTenantPrismaService` rather than
+ * `runAcrossTenants`, because `bot_integration` now carries an RLS policy and
+ * the callback never made the application's own pool able to read past one. The
+ * two writes below (`recordRegistration`, `rotateWebhookPath`) go through it as
+ * well, and that is a widening of catalog 20.2 layer 1, which names cross-tenant
+ * *reads*: both address a row by its primary key, both are the platform
+ * recording what it just did to an integration it reached by path, and neither
+ * has a tenant in scope to be checked against for the same reason the reads do
+ * not. The alternative — resolving the tenant first, purely to write a row the
+ * lookup already found — would add a query that could only ever agree.
  */
 /** The columns {@link PrismaBotIntegrationDirectory.project} reads. */
 type PrismaBotIntegrationRow = Omit<BotIntegration, 'platform'> & {
@@ -53,7 +63,7 @@ export class PrismaBotIntegrationDirectory implements BotIntegrationDirectory {
   private readonly logger = new Logger(PrismaBotIntegrationDirectory.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma: CrossTenantPrismaService,
     private readonly vault: CredentialVaultService,
   ) {}
 
@@ -62,9 +72,9 @@ export class PrismaBotIntegrationDirectory implements BotIntegrationDirectory {
     webhookPath: string,
   ): Promise<BotIntegration | null> {
     if (!webhookPath) return null;
-    const row = await runAcrossTenants(async () =>
-      this.prisma.botIntegration.findUnique({ where: { webhookPath } }),
-    );
+    const row = await this.prisma.botIntegration.findUnique({
+      where: { webhookPath },
+    });
     // The path is unique platform-wide, so a row found under the wrong
     // platform is a path being replayed against the other messenger's route.
     // It answers `null` like any unknown path: the caller renders one 404.
@@ -76,11 +86,9 @@ export class PrismaBotIntegrationDirectory implements BotIntegrationDirectory {
     tenantId: string,
     platform: BotPlatform,
   ): Promise<BotIntegration | null> {
-    const row = await runAcrossTenants(async () =>
-      this.prisma.botIntegration.findFirst({
-        where: { tenantId, platform, role: 'primary' },
-      }),
-    );
+    const row = await this.prisma.botIntegration.findFirst({
+      where: { tenantId, platform, role: 'primary' },
+    });
     return row ? this.project(row) : null;
   }
 
@@ -100,13 +108,11 @@ export class PrismaBotIntegrationDirectory implements BotIntegrationDirectory {
     botUsername: string,
   ): Promise<BotIntegration | null> {
     if (!botUsername) return null;
-    const row = await runAcrossTenants(async () =>
-      this.prisma.botIntegration.findUnique({
-        where: {
-          tenantId_platform_botUsername: { tenantId, platform, botUsername },
-        },
-      }),
-    );
+    const row = await this.prisma.botIntegration.findUnique({
+      where: {
+        tenantId_platform_botUsername: { tenantId, platform, botUsername },
+      },
+    });
     return row ? this.project(row) : null;
   }
 
@@ -119,11 +125,9 @@ export class PrismaBotIntegrationDirectory implements BotIntegrationDirectory {
    * them out would make the failure permanent.
    */
   async allRegistrable(): Promise<BotIntegration[]> {
-    const rows = await runAcrossTenants(async () =>
-      this.prisma.botIntegration.findMany({
-        where: { status: { not: 'disabled' } },
-      }),
-    );
+    const rows = await this.prisma.botIntegration.findMany({
+      where: { status: { not: 'disabled' } },
+    });
     return rows.map((row) => this.project(row));
   }
 
@@ -138,14 +142,12 @@ export class PrismaBotIntegrationDirectory implements BotIntegrationDirectory {
     integrationId: string,
     outcome: { ok: boolean },
   ): Promise<void> {
-    await runAcrossTenants(async () =>
-      this.prisma.botIntegration.update({
-        where: { id: integrationId },
-        data: outcome.ok
-          ? { status: 'active', lastErrorAt: null }
-          : { status: 'error', lastErrorAt: new Date() },
-      }),
-    );
+    await this.prisma.botIntegration.update({
+      where: { id: integrationId },
+      data: outcome.ok
+        ? { status: 'active', lastErrorAt: null }
+        : { status: 'error', lastErrorAt: new Date() },
+    });
   }
 
   /**
@@ -172,12 +174,10 @@ export class PrismaBotIntegrationDirectory implements BotIntegrationDirectory {
     for (let attempt = 0; ; attempt++) {
       const webhookPath = newWebhookPath();
       try {
-        const row = await runAcrossTenants(async () =>
-          this.prisma.botIntegration.update({
-            where: { id: integration.id },
-            data: { webhookPath, status: 'pending', lastErrorAt: null },
-          }),
-        );
+        const row = await this.prisma.botIntegration.update({
+          where: { id: integration.id },
+          data: { webhookPath, status: 'pending', lastErrorAt: null },
+        });
         return this.project(row);
       } catch (err) {
         const code = (err as { code?: string }).code;

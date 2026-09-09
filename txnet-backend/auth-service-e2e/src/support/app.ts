@@ -22,9 +22,9 @@ import type { Server } from 'node:http';
 import { AppModule } from '../../../auth-service/src/app/app.module';
 import { I18nExceptionFilter } from '../../../auth-service/src/app/common/filters/i18n-exception.filter';
 import { LocaleService } from '../../../auth-service/src/app/locale/locale.service';
+import { CrossTenantPrismaService } from '../../../auth-service/src/app/prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../../auth-service/src/app/prisma/prisma.service';
 import { RedisService } from '../../../auth-service/src/app/redis/redis.service';
-import { runAcrossTenants } from '../../../auth-service/src/app/tenant-context/tenant-context';
 import { LocaleStub } from './locale.stub';
 import { OtpInbox } from './otp';
 
@@ -45,11 +45,13 @@ export interface E2eApp {
   /**
    * A direct read, for asserting what a request left behind.
    *
-   * It runs inside `runAcrossTenants()` because a test assertion is not a
-   * request: no middleware opened a tenant scope for it, and a query on a
-   * scoped model would throw rather than answer (ADR-0024). Using the named
-   * escape is also the honest description — the suite is checking rows the way
-   * a platform owner would, from outside any tenant's surface.
+   * It is handed the **cross-tenant** client, because a test assertion is not
+   * a request: no middleware opened a tenant scope for it, and a query on a
+   * scoped model through the application pool would throw rather than answer
+   * (ADR-0024). Since F-066-m-b that client is the escape — the suite checks
+   * rows the way a platform owner would, from outside any tenant's surface,
+   * and it does so through the same seam production code uses rather than
+   * through a callback that only tests had left.
    */
   db<T>(read: (prisma: PrismaService) => Promise<T>): Promise<T>;
   redis: RedisService;
@@ -121,17 +123,25 @@ export async function createE2eApp(): Promise<E2eApp> {
   await app.init();
 
   const prisma = app.get(PrismaService);
+  // The other pool (F-066-m-b). Seeding and resetting are cross-tenant work by
+  // definition — they touch every tenant's rows from outside any request — and
+  // `tenant_domain` is policied now, so the application pool is the wrong
+  // client to ask even though this tier's schema carries no policies to prove
+  // it (see `env.ts`: `prisma db push` skips the migration history).
+  const crossTenant = app.get(CrossTenantPrismaService);
   const redis = app.get(RedisService);
 
-  await seedTenantDomain(prisma);
+  await seedTenantDomain(crossTenant);
 
   const reset = async () => {
     // Order matters: children first, and the seeded tenant owner survives —
     // a tenant row points at it, and `RegisterService` needs that tenant.
-    await prisma.$executeRawUnsafe('DELETE FROM identity.otp_code');
-    await prisma.$executeRawUnsafe('DELETE FROM identity.session');
-    await prisma.$executeRawUnsafe('DELETE FROM identity.linked_bot_account');
-    await prisma.$executeRawUnsafe(
+    await crossTenant.$executeRawUnsafe('DELETE FROM identity.otp_code');
+    await crossTenant.$executeRawUnsafe('DELETE FROM identity.session');
+    await crossTenant.$executeRawUnsafe(
+      'DELETE FROM identity.linked_bot_account',
+    );
+    await crossTenant.$executeRawUnsafe(
       'DELETE FROM identity."user" WHERE id NOT IN (SELECT "ownerUserId" FROM tenant.tenant)',
     );
     // Sessions, OTP records, rate-limit counters and captcha passes all live
@@ -146,9 +156,7 @@ export async function createE2eApp(): Promise<E2eApp> {
     app,
     server: app.getHttpServer(),
     prisma,
-    // `await` *inside* the scope, not outside it: a Prisma promise is lazy,
-    // so a scope that has already returned is a scope the query never ran in.
-    db: (read) => runAcrossTenants(async () => await read(prisma)),
+    db: (read) => read(crossTenant),
     redis,
     otp,
     reset,

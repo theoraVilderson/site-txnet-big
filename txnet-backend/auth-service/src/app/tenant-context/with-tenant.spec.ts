@@ -7,6 +7,8 @@ import {
 } from './tenant-context';
 import {
   TENANT_SCOPED_MODELS,
+  TenantBinder,
+  bindTenantThroughTransaction,
   scopeArgs,
   tenantScopeQueryMap,
 } from './with-tenant';
@@ -116,10 +118,23 @@ describe('scopeArgs — every operation shape carries the tenant', () => {
 describe('withTenant — the extension around a query', () => {
   const run = async (fn: () => Promise<unknown>) => fn();
 
+  /**
+   * A binder that records what it was asked to bind and then runs the query,
+   * standing in for the `SET LOCAL` + query transaction F-066-m-a installs.
+   */
+  const bound: string[] = [];
+  const bind: TenantBinder = async (tenantId, query) => {
+    bound.push(tenantId);
+    return query();
+  };
+  beforeEach(() => {
+    bound.length = 0;
+  });
+
   /** The `$allOperations` hook the extension installs for a registered model. */
   const hookFor = (model: string) =>
     (
-      tenantScopeQueryMap() as Record<
+      tenantScopeQueryMap(bind) as Record<
         string,
         { $allOperations: (p: unknown) => Promise<unknown> }
       >
@@ -127,7 +142,7 @@ describe('withTenant — the extension around a query', () => {
   const hook = () => hookFor(TENANT_SCOPED_MODELS[0]);
 
   it('registers exactly the models the registry names', () => {
-    expect(Object.keys(tenantScopeQueryMap())).toEqual([
+    expect(Object.keys(tenantScopeQueryMap(bind))).toEqual([
       ...TENANT_SCOPED_MODELS,
     ]);
   });
@@ -203,5 +218,121 @@ describe('withTenant — the extension around a query', () => {
       ),
     );
     expect(query).toHaveBeenCalledWith(args);
+  });
+});
+
+/**
+ * F-066-m-a moves the boundary into Postgres. The extension no longer only
+ * rewrites arguments — it also tells the database which tenant this query acts
+ * for, by setting `app.tenant_id` in the *same transaction* as the query. The
+ * RLS policy reads that setting; unset, it is `NULL`, `"tenantId" = NULL` is
+ * never true, and the row is invisible.
+ *
+ * That "same transaction" is the whole thing, and it is what fails silently
+ * when it is wrong: bind on one connection and query on another and the query
+ * simply returns nothing — a lost row rather than an error, which reads as a
+ * bug in whatever asked. So it is asserted here, on the shape of the batch.
+ */
+describe('the tenant is bound in the database, in the query’s own transaction', () => {
+  const TX = 'tenant-1';
+
+  it('hands the unawaited query to the transaction, beside the binding', async () => {
+    // A Prisma promise is a *description* of a query until something awaits
+    // it. That is the whole mechanism here: the description is handed to
+    // `$transaction`, which runs it on the connection the setting was bound
+    // on. A binder that awaited it first would have executed it already, on
+    // some other pooled connection, with no tenant bound — and under RLS that
+    // is zero rows rather than an error.
+    //
+    // So the fake query returns a thenable that is not its own result: if the
+    // binder awaits it, `$transaction` receives `'rows'` instead of the
+    // thenable, and this test says so.
+    const lazy = { then: (cb: (v: string) => void) => cb('rows') };
+    let ops: unknown[] = [];
+    const bindStatement = Symbol('set_config');
+    const client = {
+      $executeRaw: () => bindStatement as unknown,
+      $transaction: async (batch: unknown[]) => {
+        ops = batch;
+        return batch;
+      },
+    };
+
+    const result = await bindTenantThroughTransaction(client)(
+      TX,
+      () => lazy as unknown as string,
+    );
+
+    expect(ops).toEqual([bindStatement, lazy]);
+    expect(result).toBe('rows');
+  });
+
+  it('sets the setting as transaction-local, never for the session', async () => {
+    let sql = '';
+    let local: unknown;
+    const client = {
+      $executeRaw: (strings: TemplateStringsArray, ...values: unknown[]) => {
+        sql = strings.join('?');
+        local = values[1];
+        return null as unknown;
+      },
+      $transaction: async (ops: unknown[]) => ops,
+    };
+    await bindTenantThroughTransaction(client)(TX, () => null);
+
+    // `is_local = true` is what makes the setting die with the transaction.
+    // Session-wide, it would outlive this request on a pooled connection and
+    // hand the next tenant's query the previous tenant's scope — the leak the
+    // whole layer exists to close.
+    expect(sql).toContain('set_config');
+    expect(sql).toContain('app.tenant_id');
+    expect(local).toBe(true);
+  });
+
+  it('binds the tenant in scope for every scoped query', async () => {
+    const query = jest.fn().mockResolvedValue(null);
+    const seen: string[] = [];
+    const record: TenantBinder = async (tenantId, run) => {
+      seen.push(tenantId);
+      return run();
+    };
+    const hook = (
+      tenantScopeQueryMap(record) as Record<
+        string,
+        { $allOperations: (p: unknown) => Promise<unknown> }
+      >
+    )['user'].$allOperations;
+
+    await runWithTenant(TENANT, () =>
+      hook({ model: 'user', operation: 'findFirst', args: {}, query }),
+    );
+
+    expect(seen).toEqual([TENANT.id]);
+  });
+
+  it('binds nothing inside the audited escape', async () => {
+    // `runAcrossTenants` is served by a database role whose policy is
+    // `USING (true)`, not by a tenant setting — so binding one here would be
+    // both meaningless and misleading. Retiring the escape onto its own pool
+    // is F-066-m-b.
+    const query = jest.fn().mockResolvedValue(null);
+    const seen: string[] = [];
+    const record: TenantBinder = async (tenantId, run) => {
+      seen.push(tenantId);
+      return run();
+    };
+    const hook = (
+      tenantScopeQueryMap(record) as Record<
+        string,
+        { $allOperations: (p: unknown) => Promise<unknown> }
+      >
+    )['user'].$allOperations;
+
+    await runAcrossTenants(async () =>
+      hook({ model: 'user', operation: 'findFirst', args: {}, query }),
+    );
+
+    expect(seen).toEqual([]);
+    expect(query).toHaveBeenCalled();
   });
 });

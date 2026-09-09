@@ -8,9 +8,11 @@ updated: 2026-09-09
 # Invariants — tenant
 
 Rows 1-7 were extracted from schema comments during onboarding and none of them
-is enforced in code yet. **Rows 8-12 are** — they are the Credential Vault's
-(F-066-f and F-066-g, ADR-0026), and the `Enforced by` column names the code
-that holds each one.
+is enforced in code yet. **Rows 8-13 are** — 8-12 are the Credential Vault's
+(F-066-f and F-066-g, ADR-0026) and 13 is Row-Level Security (F-066-m-a,
+completed by F-066-m-b). The
+`Enforced by` column names what holds each one; row 13 is the first whose
+enforcer is not application code at all.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -26,6 +28,7 @@ that holds each one.
 | 10 | **At most one `active` version per `(tenantId, kind, label)`** | partial unique index `tenant_credential_one_active_per_kind_label`, migration `20260909000000_credential_vault` | the vault reads "the active version" as one row; two makes it whichever the planner found first, so a rotation that half-failed silently un-rotates |
 | 11 | **Every decryption of a credential is recorded before its plaintext is returned** | `CredentialVaultService.use()` awaits the `tenant_credential_access` insert and does not catch it, so an unaudited decryption throws instead of handing a value back (F-1215) | a trail that is complete only in appearance is worse than none: the one decryption nobody can explain is the one that was not written |
 | 12 | **No tenant-owned credential is read from an environment variable; a service holding one refuses to start** | `CredentialEnvGuard.onModuleInit` against the total `CREDENTIAL_ENV_VARS` map, minus the dated `GRACED_ENV_VARS` exceptions (F-1216, ADR-0026 rule 6) | a leftover `TELEGRAM_BOT_TOKEN` keeps one tenant's bot working after multi-bot ships, so nobody notices the vault was never wired up. By the time it is load-bearing it is too late to refuse it |
+| 13 | **A tenant-scoped row is invisible to a connection that has not said which tenant it is acting for, and no application mistake can make it visible** | Postgres, not code. Every one of the 25 tables with a `tenantId` column carries `ENABLE`/`FORCE ROW LEVEL SECURITY`, a `tenant_isolation` policy for `txnet_app` reading `public.current_tenant_id()`, and a `cross_tenant` policy for `txnet_cross_tenant` — migrations `20260909000500_row_level_security` (2 tables) and `20260909001500_row_level_security_all_tables` (the other 23, in three shapes the second file explains). The service connects as `DATABASE_APP_URL`, a login role that owns no table and carries `NOBYPASSRLS`, so the policy binds it; `withTenant` sets `app.tenant_id` in each query's own transaction (`platform/tenant-context/contract.md` rule 5). The reads that *produce* a tenant — host, vault, webhook path — use `DATABASE_CROSS_TENANT_URL`, a second role whose policy is `USING (true)`: **a policy, never a bypass**, so no connection string in this system turns the rules off | every layer above this is application code, and ADR-0024 accepts that raw SQL, nested writes and a queue consumer written next year all sit outside it. This row is what is left when one of them is wrong. Unbound, `current_tenant_id()` is NULL and `"tenantId" = NULL` is never true — so the failure is **no rows**, never another tenant's |
 
 ## How to test
 
@@ -48,6 +51,37 @@ one, that a variable naming a location is not claimed as a credential, and
 that the grace list is exactly the six names live code still reads. Both fail
 silently if they are wrong, which is what earns them the one spec file
 `docs/CODE-LAYOUT.md` budgets per item.
+
+Row 13's *behaviour* is held by
+`tenant-context/isolation-harness.int.spec.ts` (**F-066-n**, catalog 20.2
+layer 3), which is the whole deliverable of that row. The five properties it
+measures are the five that were proved by hand against Postgres 18 on the day
+this row shipped: unbound reads see nothing, a bound read sees one tenant, a
+write naming another tenant is refused, the binding dies with its transaction,
+and the app role can neither disable RLS nor `SET ROLE` into the cross-tenant
+policy.
+
+It needs a tier of its own, and the reason is worth keeping: the e2e suite
+builds its schema with `prisma db push`, which skips the migration history and
+therefore every policy, every role and `current_tenant_id()` — a policy test
+there would pass by describing a database nobody ships. So the harness starts a
+Postgres, applies the committed migrations and the SQL inside
+`scripts/db-login-roles.sh` (both read off disk, so editing either is what turns
+it red), and measures the properties above through the production path rather
+than through SQL that restates the policy. `npm run test:int`.
+
+What keeps it honest is its negative control: the migration role is asserted to
+see *both* tenants. A harness that only ever observes isolation cannot tell a
+system that isolates from a probe that is broken — and that assertion is also
+the plainest statement of why the service has no fallback from
+`DATABASE_APP_URL` to `DATABASE_URL`.
+
+Its *coverage* is held, by `tenant-context/rls-coverage.spec.ts` (F-066-m-b):
+the schema is parsed for `tenantId` columns, the migration history for policies,
+and a table in the first without a policy in the second fails. That is the half
+of the row a spec can reach without a database, and it is the half that would
+otherwise rot silently — a model gaining a `tenantId` next month is green
+everywhere else, because RLS is not something Prisma models at all.
 
 ## The one exception to #8, and why it is narrow (2026-09-09, F-066-i)
 

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { TenantCredentialKind, TenantCredentialStatus } from '@prisma/client';
-import { PrismaService } from '../../prisma/prisma.service';
+import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { KekService } from './kek.service';
 import {
   fingerprint,
@@ -127,8 +127,25 @@ export class CredentialVaultService {
    */
   private readonly dekCache = new Map<string, Buffer>();
 
+  /**
+   * **Why the cross-tenant pool (F-066-m-b).** Every method here takes the
+   * tenant as an argument and filters on it — invariant 9 is that a credential
+   * is encrypted under its own tenant's DEK, and the `tenantId` parameter is
+   * what holds it. But the callers are not inside a tenant scope: the vault is
+   * reached from `bot-service` over the `X-Service-Token` seam, and from a
+   * webhook whose tenant is only known *because* this lookup succeeded. Since
+   * the three vault tables now carry RLS policies, the application pool would
+   * show them nothing at all.
+   *
+   * So the scoping here stays where ADR-0026 put it — in the required
+   * `tenantId` argument on every method, not in an ambient scope — and the
+   * database's second policy is what lets those queries run. The vault tables
+   * are deliberately outside `TENANT_SCOPED_MODELS` for the same reason
+   * (`tenant/contract.vault.md`); nothing about that changed, only which
+   * connection asks.
+   */
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma: CrossTenantPrismaService,
     private readonly kek: KekService,
   ) {}
 

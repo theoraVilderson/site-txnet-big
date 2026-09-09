@@ -32,6 +32,8 @@ updated: 2026-09-09
 | `20260909000100_credential_access_audit` | adds `tenant.tenant_credential_access` — one row per credential decryption (ADR-0026 rule 5, F-1215). Additive, and deliberately **without foreign keys**: an audit trail outlives what it describes, so a `RESTRICT` to `tenant_credential` would block `destroyExpiredVersions` and a `CASCADE` would erase a credential's usage history at the moment it is removed |
 | `20260909000200_bot_integration` | creates `automation.bot_integration` — several bots per tenant, with roles (catalog 10.1 / C-05, F-315 F-316) — and drops `tenant.tenant_bot_integration`. **Destructive**, and the one case the policy below allows without an expand/contract pair: the old table was created empty by init and no service, job or seed ever read or wrote it. Carries its own **section 99** SQL: `bot_integration_one_primary_per_tenant_platform`, the partial unique index that *is* C-05 |
 | `20260909000300_identity_unique_per_tenant` | replaces `identity.user`'s two platform-wide unique indexes with `@@unique([tenantId, username])` and `@@unique([tenantId, phoneNumber])` (ADR-0023, F-065-b). The new constraint is strictly weaker than the one it drops, so no row can fail to migrate and there is nothing to backfill. The migration carries its own rollback plan, which expires with the first cross-tenant duplicate |
+| `20260909000400_bot_link_unique_per_tenant` | `@@unique([tenantId, platform, platformUserId])` on `identity.linked_bot_account`, plus the denormalized `tenantId` it needs (catalog 10.5, F-066-l) |
+| `20260909000500_row_level_security` | **hand-written, section 99.** `public.current_tenant_id()`, the group roles `txnet_app` / `txnet_cross_tenant`, their grants, and RLS (`ENABLE` + `FORCE`) with a `tenant_isolation` policy on `identity.user` and `identity.linked_bot_account` (catalog 20.2 layer 1, F-1202, F-066-m-a). Additive; the rollback is `DROP POLICY` + `DISABLE ROW LEVEL SECURITY` on the two tables. **Needs the manual step below** — it creates the group roles, not the login roles |
 
 ## Policy
 
@@ -43,15 +45,16 @@ updated: 2026-09-09
 - Every destructive migration writes its rollback plan first.
 - One base currency, one `platform_owner` tenant — seed data, not migrations.
 
-## The "section 99" SQL (owned; two applied, the rest not)
+## The "section 99" SQL (owned; RLS and two indexes applied, the rest not)
 
 The schema header documents controls Prisma cannot express, to be delivered as
-hand-written SQL migrations. Two are applied — both partial unique indexes,
-each inside the migration that created the table it guards. The rest are not:
+hand-written SQL migrations. Row-Level Security is now applied in full, plus two
+partial unique indexes, each inside the migration that created the table it
+guards. The rest are not:
 
 | Control | Tables | Why it matters |
 |---|---|---|
-| Row-Level Security | every `tenantId` table | structural cross-tenant isolation (ADR-0001) |
+| Row-Level Security — **done**, in `20260909000500_row_level_security` (2 tables) and `20260909001500_row_level_security_all_tables` (the other 23) | all 25 `tenantId` tables carry `ENABLE`/`FORCE ROW LEVEL SECURITY`, a `tenant_isolation` policy and a `cross_tenant` one. Three policy shapes, because `tenantId` does not mean the same thing everywhere — the second migration's header lists which table has which and why. `tenant.tenant` itself is **not** covered: it has no `tenantId` column, so its rule would be `id = current_tenant_id()`, a row of its own. Coverage is asserted by `rls-coverage.spec.ts`, not trusted | structural cross-tenant isolation (ADR-0001) |
 | Partial unique indexes | `currency_policy`, `user_restriction`, active coupons, `tenant` (`platform_owner`), `currency` (`isBaseCurrency`) — **`tenant_credential` is done**, in `20260909000000_credential_vault`, and **`bot_integration` is done**, in `20260909000200_bot_integration` | uniqueness that only applies to active/one row |
 | Multi-column CHECK | `tenant`, `currency`, schedule tables | "exactly one" / mutually-exclusive-fields rules |
 | Native range partitioning | `network.traffic_raw_log`, `support.chat_message`, `ai.user_behavior_event` | high-volume append + `DROP PARTITION` instead of `DELETE` |
@@ -76,6 +79,56 @@ records it in `_prisma_migrations` like any other step, which is what keeps the
 two kinds in one history. A generated migration must never be edited after it
 has been applied anywhere; add a new one instead.
 
+
+## The two RLS login roles — a manual step per database
+
+`20260909000500_row_level_security` creates the *group* roles and the policies.
+It cannot create the roles the services log in as, because those carry
+passwords and a password does not belong in a committed file. That step is:
+
+```bash
+./scripts/db-login-roles.sh          # ENV_FILE=.env.prod for production
+```
+
+It reads `DB_APP_PASSWORD` and `DB_CROSS_TENANT_PASSWORD` (`.env.example`) and
+creates `txnet_app_user` and `txnet_cross_tenant_user` — idempotent, and
+re-running it with a new password is how one is rotated.
+
+**Why the services do not connect as `MAIN_DB_USERNAME`.** RLS is not enforced
+against a superuser, and not against a table's own owner. `MAIN_DB_USERNAME` is
+both — it is what `prisma migrate` runs as — so a service connecting with it
+would leave every policy in place and completely inert. `auth-service` therefore
+reads `DATABASE_APP_URL` and **refuses to boot without it**: a fallback to
+`DATABASE_URL` would silently restore exactly the state the policies exist to
+end, and nothing would look wrong. `DATABASE_URL` stays in the environment only
+because the Prisma CLI reads it by name.
+
+Since F-066-m-b there is a second one, `DATABASE_CROSS_TENANT_URL`
+(`txnet_cross_tenant_user`), required on the same terms. It is what the reads
+that *produce* a tenant go through — host -> tenant, webhook path -> bot,
+credential -> DEK — because those tables are policied now and the app pool is
+shown nothing on them. Pointing it at `DATABASE_APP_URL` makes domain
+resolution and the vault answer no rows; pointing it at `DATABASE_URL` un-does
+the layer. Its role's `USING (true)` is a **policy**, not `BYPASSRLS`: neither
+login role can turn the rules off, only be granted different ones.
+
+**A migration role that is not a superuser needs `txnet_cross_tenant`.**
+`FORCE ROW LEVEL SECURITY` binds a table's owner; only superuser status exempts
+it. The stock compose stack is fine — `MAIN_DB_USERNAME` is the image's
+superuser — but a hardened install that demotes it must grant it membership of
+`txnet_cross_tenant`, or `prisma db seed` will insert nothing and say so
+nowhere.
+
+The cost, stated plainly: **an existing database does not come up until this
+script has been run once.** That is deliberate, and it is the same shape as
+ADR-0018's keyspace bump — a visible, one-time operator action in exchange for
+a boundary that cannot be half-applied.
+
+Not covered by either: the e2e tier, which builds its schema with
+`prisma db push` and therefore skips the migration history — every section 99
+statement with it. `DATABASE_APP_URL` and `DATABASE_CROSS_TENANT_URL` there are
+both the same connection as `DATABASE_URL`, and proving isolation against real
+policies is F-066-n.
 
 ## Seed data (`txnet-backend/prisma/seed.js`)
 

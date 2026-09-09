@@ -169,10 +169,29 @@ services:
     environment:
       - PORT=${AUTH_PORT}
       - NODE_ENV=${NODE_ENV:-development}
+      # The owner connection. Prisma's CLI reads it by name; the running
+      # service does not use it — it owns every table, and Row-Level
+      # Security does not apply to a table's owner (F-066-m-a).
       - DATABASE_URL=postgresql://${MAIN_DB_USERNAME}:${MAIN_DB_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      # What the service actually connects with: a login role that owns
+      # nothing and carries NOBYPASSRLS, so the policies bind. Created by
+      # `./scripts/db-login-roles.sh`, which is a manual step on an
+      # existing database — the service refuses to boot without it.
+      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      # The second pool (F-066-m-b). Same database, different role: its policy
+      # is `USING (true)`, so it answers the reads that resolve a tenant and
+      # therefore cannot run inside one. A policy, not a bypass — this role
+      # carries NOBYPASSRLS too.
+      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
       - REDIS_URL=${REDIS_URL}
       - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
       - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v3}
+      # The one message this process publishes: an `admin_manual` tick from
+      # `POST /admin/workers/:key/run` (F-031-b). Optional by design — the
+      # connection is opened on first use, so an environment without a broker
+      # boots and serves logins, and only that route answers 503.
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+      - AUTOMATION_EXCHANGE=${AUTOMATION_EXCHANGE:-txnet.automation}
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
       - JWT_REFRESH_HASH_SECRET=${JWT_REFRESH_HASH_SECRET}
       - JWT_ACCESS_TTL_SEC=${JWT_ACCESS_TTL_SEC:-900}
@@ -352,6 +371,62 @@ services:
       auth-service:
         condition: service_started
       locale-service:
+        condition: service_healthy
+
+  # ===========================================================================
+  # NestJS Worker Service (Nx Monorepo) — background work, no HTTP surface
+  # ===========================================================================
+  # ADR-0027: background work runs as RabbitMQ consumers in a process that
+  # serves no requests. There are no Traefik labels and no port below, and that
+  # is the decision rather than an omission — an in-process scheduler runs
+  # inside a request-serving replica, so two replicas run every job twice and a
+  # slow job degrades logins.
+  worker-service:
+    build:
+      context: ../txnet-backend
+      dockerfile: Dockerfile
+      target: ${ENVIRONMENT}
+      extra_hosts:
+        - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
+      args:
+        - APP_NAME=worker-service
+        - DOCKER_REGISTRY=${DOCKER_REGISTRY}
+    container_name: ${STACK_NAME:-txnet}-worker-service
+    restart: unless-stopped
+    volumes:
+      - ../txnet-backend:/app:delegated
+      - /app/node_modules
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      # The same NOBYPASSRLS login role auth-service uses, and no fallback to
+      # the owner connection (F-066-m-a). automation's three worker tables
+      # carry no tenantId and no policy; the grants cover every schema.
+      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+      - AUTOMATION_EXCHANGE=${AUTOMATION_EXCHANGE:-txnet.automation}
+      - AUTOMATION_QUEUE=${AUTOMATION_QUEUE:-txnet.automation.ticks}
+      - AUTOMATION_PREFETCH=${AUTOMATION_PREFETCH:-4}
+      - AUTOMATION_TENANT_CONCURRENCY=${AUTOMATION_TENANT_CONCURRENCY:-2}
+      - AUTOMATION_DEFER_MS=${AUTOMATION_DEFER_MS:-5000}
+      - AUTOMATION_TICK_INTERVAL_MS=${AUTOMATION_TICK_INTERVAL_MS:-60000}
+      - AUTOMATION_RUN_TIMEOUT_MS=${AUTOMATION_RUN_TIMEOUT_MS:-600000}
+      # The internal seam a job reaches another service's code through
+      # (F-031-c). `VaultRetentionJob` calls auth-service because the
+      # Credential Vault is tenant's code in that process and an Nx app cannot
+      # import an Nx app. Both are optional here: this service boots without
+      # them and the job fails its own run, into bot_execution_log.
+      - AUTH_API_BASE_URL=http://auth-service:${AUTH_PORT}
+      - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
+      - AUTH_API_TIMEOUT_MS=${AUTH_API_TIMEOUT_MS:-30000}
+      - WORKER_NAME=${WORKER_NAME:-}
+    networks:
+      - private_backend_network
+    labels:
+      - "txnet.logging=true"
+    depends_on:
+      main-db:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
 
   # ===========================================================================

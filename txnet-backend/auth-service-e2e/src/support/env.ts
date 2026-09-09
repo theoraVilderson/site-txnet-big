@@ -91,6 +91,21 @@ export function applyE2eEnv(
   const env: Record<string, string> = {
     NODE_ENV: 'test',
     DATABASE_URL: databaseUrl,
+    // The restricted role the service connects as in a real deployment
+    // (F-066-m-a). This tier has no such role and no policies to enforce
+    // against one: `migrateAndSeed` builds the schema with `prisma db push`,
+    // which skips the migration history and therefore skips every "section 99"
+    // statement — the RLS policies included. So it is the same connection,
+    // deliberately, and proving isolation against the real policies is the
+    // harness F-066-n exists to build.
+    DATABASE_APP_URL: databaseUrl,
+    // And the cross-tenant pool (F-066-m-b), for the same reason and with the
+    // same value: with no policies in this schema there is nothing for a
+    // second role to be granted differently. What the suite does exercise is
+    // that the resolver, the vault and the bot directory all reach their rows
+    // through a client the tenant extension is not applied to — that half is
+    // real here, and it is the half a wiring mistake would break.
+    DATABASE_CROSS_TENANT_URL: databaseUrl,
     REDIS_URL: redisUrl,
     REDIS_KEY_NAMESPACE: 'txnet:auth',
     REDIS_KEYSPACE_VERSION: 'e2e',

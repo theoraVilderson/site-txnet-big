@@ -25,7 +25,25 @@ export const envSchema = z.object({
     .default('development'),
   PORT: z.coerce.number().int().positive().default(3001),
 
+  // The migration/owner connection. Prisma's CLI reads it by name
+  // (`datasource db { url = env("DATABASE_URL") }`), so it stays; the running
+  // service does not use it.
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  // What the service actually connects with: a login role that owns no table
+  // and carries NOBYPASSRLS, so the Row-Level Security policies apply to it
+  // (F-066-m-a). Required, and deliberately without a fallback to
+  // `DATABASE_URL` — falling back would silently restore the state RLS exists
+  // to end, and nothing would look wrong.
+  DATABASE_APP_URL: z.string().min(1, 'DATABASE_APP_URL is required'),
+  // The second pool (F-066-m-b): the login role whose policy is `USING (true)`,
+  // for the handful of reads that resolve a tenant and so cannot run inside
+  // one — host -> tenant, webhook path -> bot, credential -> DEK. Required for
+  // the same reason as the one above and with no fallback for a stronger one:
+  // pointing it at `DATABASE_APP_URL` makes domain resolution and the vault
+  // return nothing, and pointing it at `DATABASE_URL` un-does the whole layer.
+  DATABASE_CROSS_TENANT_URL: z
+    .string()
+    .min(1, 'DATABASE_CROSS_TENANT_URL is required'),
   REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
   // Every Redis key this service writes is prefixed with
   // `${REDIS_KEY_NAMESPACE}:${REDIS_KEYSPACE_VERSION}:`.
@@ -139,6 +157,15 @@ export const envSchema = z.object({
   // locale-service (gRPC source of truth)
   LOCALE_SERVICE_ADDR: z.string().default('localhost:50051'),
   LOCALE_SCOPE: z.string().default('backend'),
+
+  // The automation exchange, for the one message this process publishes: an
+  // `admin_manual` tick (F-031-b, ADR-0027). `RABBITMQ_URL` is **optional
+  // here and required in `worker-service`**, and the asymmetry is deliberate:
+  // a worker with no broker has nothing to do, while this process answers
+  // logins and must boot without one. Unset, `POST /admin/workers/:key/run`
+  // answers 503 and nothing else is affected.
+  RABBITMQ_URL: optional(z.string().min(1)),
+  AUTOMATION_EXCHANGE: z.string().min(1).default('txnet.automation'),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

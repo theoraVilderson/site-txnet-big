@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { TenantCacheService } from './tenant-cache.service';
 import {
   ResolvedTenant,
@@ -21,11 +21,21 @@ type Identified = { id: string; slug: string };
  * Both lookups go through `TenantCacheService`, which is where the caching
  * policy lives — including the reason it is shared rather than in-process
  * (ADR-0025, F-1211). This class stays about the chain.
+ *
+ * **Why the cross-tenant pool (F-066-m-b).** Both of its queries run before a
+ * tenant exists to scope them to: this class is what produces the answer that
+ * every other query is then scoped by. Since `tenant.tenant_domain` carries an
+ * RLS policy, asking it on the application pool — which has bound no
+ * `app.tenant_id`, because there is nothing to bind — returns no rows, and
+ * every request on this platform would be answered a neutral 404. So the
+ * resolver holds the other client, and holding it is the audit: it is a
+ * constructor, not a callback, and `grep -rn CrossTenantPrismaService` lists
+ * every reader that has one.
  */
 @Injectable()
 export class TenantResolverService {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma: CrossTenantPrismaService,
     private readonly cache: TenantCacheService,
   ) {}
 

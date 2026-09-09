@@ -134,20 +134,66 @@ export function scopeArgs(
 }
 
 /**
- * The extension itself. Applied once, to the client every service injects
- * (`prisma.module.ts`), so no call site opts in and none can opt out.
+ * How a query tells Postgres which tenant it acts for (F-066-m-a, catalog 20.2
+ * layer 1).
  *
- * `runAcrossTenants()` is the single exception: inside it the arguments are
- * passed through untouched. That is what makes the escape observable — without
- * `isAcrossTenants()` this extension could not tell "read every tenant,
- * deliberately" from "this code forgot" (ADR-0024 decision 3).
+ * The RLS policy on a scoped table reads `app.tenant_id`; the binder is what
+ * sets it. Everything below turns on one property: **the setting and the query
+ * are one transaction**. Postgres scopes a `set_config(..., is_local => true)`
+ * to the transaction that ran it, and Prisma hands out a pooled connection per
+ * statement — so a setting bound outside the query's transaction is bound on
+ * some other connection, and the query then runs with no tenant at all. Under
+ * RLS that is not an error: it is zero rows.
  */
+export type TenantBinder = <T>(
+  tenantId: string,
+  query: () => T | Promise<T>,
+) => Promise<T>;
+
+/** The slice of `PrismaClient` {@link bindTenantThroughTransaction} needs. */
+export interface TenantBindableClient {
+  $executeRaw(
+    query: TemplateStringsArray,
+    ...values: unknown[]
+  ): unknown;
+  $transaction(operations: unknown[]): Promise<unknown[]>;
+}
+
+/**
+ * The real binder: a two-statement batch transaction, `SET LOCAL` then the
+ * query.
+ *
+ * `query()` is called but **not awaited** — a Prisma promise is lazy, so what
+ * it returns is a description of a query rather than a running one, and handing
+ * that description to `$transaction` is what puts both statements on one
+ * connection. Awaiting it first would execute it immediately, on a connection
+ * of its own, with no setting bound. (The same laziness `runAcrossTenants`
+ * warns about, used deliberately this time.)
+ *
+ * **Known limit, and it fails closed.** A registered model queried inside an
+ * interactive `prisma.$transaction(async (tx) => …)` cannot be bound this way:
+ * the batch would nest. No call site does that today (§6.2b — the four
+ * interactive transactions in this service touch `session`,
+ * `linked_account_member`, `admin_audit_log` and the vault, none of them
+ * registered), and the failure if one appears is a refused or empty query, not
+ * a cross-tenant read.
+ */
+export function bindTenantThroughTransaction(
+  client: TenantBindableClient,
+): TenantBinder {
+  return async <T>(tenantId: string, query: () => T | Promise<T>) => {
+    const bind = client.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, ${true})`;
+    const [, result] = await client.$transaction([bind, query()]);
+    return result as T;
+  };
+}
+
 /**
  * The `query` map the extension installs — one `$allOperations` hook per
  * registered model. Exported because `Prisma.defineExtension` returns an opaque
  * function, and this map, not that function, is the rule worth testing.
  */
-export function tenantScopeQueryMap() {
+export function tenantScopeQueryMap(bind: TenantBinder) {
   const scope = async ({
     model,
     operation,
@@ -163,7 +209,8 @@ export function tenantScopeQueryMap() {
 
     const what = `${model}.${operation}`;
     const tenant = TenantContext.current(what);
-    return query(scopeArgs(operation, args, tenant.id, what));
+    const scoped = scopeArgs(operation, args, tenant.id, what);
+    return bind(tenant.id, () => query(scoped));
   };
 
   // Built from the registry rather than written out per model, so adding a
@@ -179,14 +226,21 @@ export function tenantScopeQueryMap() {
  * The extension itself. Applied once, to the client every service injects
  * (`prisma.module.ts`), so no call site opts in and none can opt out.
  *
+ * It takes the client it is about to extend, because since F-066-m-a the
+ * extension has a second job: binding `app.tenant_id` for the RLS policy, which
+ * needs a client to open the transaction on. `$extends` returns a *new* client
+ * and leaves this one alone, so passing the base in is not a cycle.
+ *
  * `runAcrossTenants()` is the single exception: inside it the arguments are
- * passed through untouched. That is what makes the escape observable — without
- * `isAcrossTenants()` this extension could not tell "read every tenant,
- * deliberately" from "this code forgot" (ADR-0024 decision 3).
+ * passed through untouched and nothing is bound. That is what makes the escape
+ * observable — without `isAcrossTenants()` this extension could not tell "read
+ * every tenant, deliberately" from "this code forgot" (ADR-0024 decision 3).
+ * Under RLS the escape is served by a database role whose policy is
+ * `USING (true)`; giving it its own pool, and retiring it, is F-066-m-b.
  */
-export function withTenant() {
+export function withTenant(client: TenantBindableClient) {
   return Prisma.defineExtension({
     name: 'withTenant',
-    query: tenantScopeQueryMap(),
+    query: tenantScopeQueryMap(bindTenantThroughTransaction(client)),
   } as Parameters<typeof Prisma.defineExtension>[0]);
 }
