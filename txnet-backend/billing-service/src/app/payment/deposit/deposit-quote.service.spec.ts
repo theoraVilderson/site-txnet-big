@@ -74,6 +74,7 @@ type Setup = {
 function build({ rows = [gatewayRow()], coupons = noCoupons('20.00'), quoteFee }: Setup = {}) {
   const tx = {
     $executeRaw: async () => 0,
+    tenant: { findUnique: async () => ({ tenantType: 'reseller' }) },
     tenantGatewayConfig: {
       findFirst: async () => rows[0] ?? null,
       findMany: async () => rows,
@@ -125,11 +126,12 @@ describe('DepositQuoteService.quote', () => {
     });
 
     const quote = await asTenant(() =>
-      service.quote({ userId: USER, gatewayId: GATEWAY, amount: d('20.00'), couponCodes: ['save5', 'old'] }),
+      service.quote({ userId: USER, gatewayId: GATEWAY, source: 'tenant', amount: d('20.00'), couponCodes: ['save5', 'old'] }),
     );
 
     expect(quote).toEqual({
       gatewayId: GATEWAY,
+      source: 'tenant',
       amount: '20.00',
       coupons: [{ code: 'SAVE5', discount: '5.00' }],
       rejected: [{ code: 'OLD', reason: 'expired' }],
@@ -153,7 +155,7 @@ describe('DepositQuoteService.quote', () => {
     });
 
     const quote = await asTenant(() =>
-      service.quote({ userId: USER, gatewayId: GATEWAY, amount: d('10.00'), couponCodes: [] }),
+      service.quote({ userId: USER, gatewayId: GATEWAY, source: 'tenant', amount: d('10.00'), couponCodes: [] }),
     );
 
     // 10.00 at 600000 is 6,000,000 rial; 1% is 60,000 rial, which is 0.10.
@@ -170,7 +172,7 @@ describe('DepositQuoteService.quote', () => {
     });
 
     const quote = await asTenant(() =>
-      service.quote({ userId: USER, gatewayId: GATEWAY, amount: d('10.00'), couponCodes: [] }),
+      service.quote({ userId: USER, gatewayId: GATEWAY, source: 'tenant', amount: d('10.00'), couponCodes: [] }),
     );
 
     expect(quote.fee).toBe('0.01');
@@ -188,7 +190,7 @@ describe('DepositQuoteService.quote', () => {
     });
 
     const quote = await asTenant(() =>
-      service.quote({ userId: USER, gatewayId: GATEWAY, amount: d('10.00'), couponCodes: ['ALL'] }),
+      service.quote({ userId: USER, gatewayId: GATEWAY, source: 'tenant', amount: d('10.00'), couponCodes: ['ALL'] }),
     );
 
     expect(quote).toMatchObject({ free: true, fee: '0.00', payable: '0.00', credited: '10.00', charge: null });
@@ -198,7 +200,7 @@ describe('DepositQuoteService.quote', () => {
     const service = build({ rows: [] });
 
     await expect(
-      asTenant(() => service.quote({ userId: USER, gatewayId: GATEWAY, amount: d('10.00'), couponCodes: [] })),
+      asTenant(() => service.quote({ userId: USER, gatewayId: GATEWAY, source: 'tenant', amount: d('10.00'), couponCodes: [] })),
     ).rejects.toBeInstanceOf(DepositGatewayNotFound);
   });
 });
@@ -214,6 +216,7 @@ describe('DepositQuoteService.listGateways', () => {
     expect(gateways).toEqual([
       {
         id: GATEWAY,
+        source: 'tenant',
         displayName: 'Zarinpal',
         providerName: 'zarinpal',
         category: 'domestic_rial',

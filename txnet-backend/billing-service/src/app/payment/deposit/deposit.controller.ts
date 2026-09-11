@@ -106,6 +106,7 @@ export class DepositController {
       const quote = await this.deposits.quote({
         userId,
         gatewayId: body.gatewayId,
+        source: body.source,
         amount: new Prisma.Decimal(body.amount),
         couponCodes: body.couponCodes,
       });

@@ -301,7 +301,7 @@ model PaymentGateway {
   gatewayCategory     GatewayCategory
   supportedCurrencies Json // Array مثل ["USD","EUR"] یا ["USDT","BTC"]
   isActive            Boolean          @default(true)
-  merchantId          String // SENSITIVE — never default-select
+  merchantId          String // DEPRECATED (D-25): never read — a platform gateway's merchant id is the platform_owner tenant's vault entry
   minAcceptAmount     Decimal          @db.Decimal(18, 2)
   maxAcceptAmount     Decimal          @db.Decimal(18, 2)
   feeCalculationMode  FeeCalcMode

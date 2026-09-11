@@ -70,7 +70,7 @@ in `billing-service/src/app/payment/gateway/`; the deposit quote calls them (F-0
 | Sandbox is `PAYMENT_GATEWAY_SANDBOX`, per environment; the boot refuses it with `NODE_ENV=production` | a sandbox "verify" would credit money that never moved |
 | A reseller gateway's merchant id is the vault's `gateway_merchant_id`, `label` = `providerName`, read by `vault.use` with `caller: billing:<provider>` on every call and kept by nobody | ADR-0026, ADR-0039 |
 | The vault reads run on the app pool bound to the request's tenant — a config of another tenant is `CredentialUnavailable('missing')` | ADR-0039; `gateway-merchant.int.spec.ts` |
-| A platform-brand `payment_gateway`'s `merchantId` is **not** covered: still a plaintext column, read by no code | out of this row; decide before a platform gateway takes a payment |
+| A platform-brand `payment_gateway`'s merchant id is the `platform_owner` tenant's vault entry, the same `gateway_merchant_id` / provider label; the plaintext `merchantId` column is deprecated and never read | D-25 (F-092-s) |
 
 ## Gateway pricing (built — F-092-e)
 
@@ -179,7 +179,7 @@ None planned yet (no bus). Payment confirmation is expected to drive
 | catalog | `servicePlanId` / `categoryId` for coupon scope + order pricing | coupon scope check fails |
 | currency | base-currency amounts only in; display conversion is currency's job | — |
 | tenant | `tenantId` denormalized on `wallet_transaction` / `payment_transaction` for reporting | — |
-| tenant | a reseller's `tenant_gateway_config` rows — pricing and provider, never the secret columns — read under RLS in the request's `tenantTransaction` (F-092-o) | no gateway to offer: the list is empty |
+| tenant | the request tenant's `tenant_gateway_config` rows — pricing and provider, never the secret columns — read under RLS in its `tenantTransaction` (F-092-o); `tenant.tenantType`, to offer `payment_gateway` to the `platform_owner` alone (F-092-s) | no gateway to offer: the list is empty |
 
 ## Guarantees (intended)
 
@@ -199,4 +199,4 @@ None planned yet (no bus). Payment confirmation is expected to drive
 
 | Item | Deprecated since | Removal after | Replacement |
 |---|---|---|---|
-| — | — | — | — |
+| `payment_gateway.merchantId` (never read) | 2026-09-11 | once a platform gateway's merchant id is in the vault in every environment | the `platform_owner` tenant's vault `gateway_merchant_id` (D-25) |

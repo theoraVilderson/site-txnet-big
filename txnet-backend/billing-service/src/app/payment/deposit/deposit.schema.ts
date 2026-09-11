@@ -9,6 +9,8 @@ const ZERO = /^0(\.0{1,2})?$/;
 
 export const depositQuoteSchema = z.object({
   gatewayId: z.string({ message: E.gatewayInvalid }).uuid({ message: E.gatewayInvalid }),
+  /** The table the id is from, as the gateway list answered it (D-25). */
+  source: z.enum(['tenant', 'platform'], { message: E.gatewayInvalid }).default('tenant'),
   amount: z
     .string({ message: E.amountInvalid })
     .regex(AMOUNT, { message: E.amountInvalid })
