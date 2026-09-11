@@ -655,16 +655,40 @@ services:
       - NODE_ENV=${NODE_ENV:-development}
       - GLOBAL_PREFIX=${BILLING_GLOBAL_PREFIX:-api}
       - PUBLIC_HOST=billing-service
+      # The app role, never the owner: RLS does not bind a table's owner
+      # (F-066-m-a). No cross-tenant pool — this service resolves no tenant,
+      # it reads the one forward-auth forwards (F-092-a).
+      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      # The response envelope translates through locale-service (F-094).
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+      - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
     networks:
       - private_backend_network
     labels:
       - "traefik.enable=true"
+      - "traefik.http.services.billing-service.loadbalancer.server.port=3000"
+
+      # `strip-fake-headers,my-auth` in that order: strip what the client
+      # claimed, then let the gate set what it proved. The required gate, not
+      # the optional one — every billing route needs a signed-in caller, and the
+      # service refuses a request that arrives without the identity headers
+      # (`app/request/identity.middleware.ts`). `/api/health` is not published.
+      - "traefik.http.routers.billing-service-http.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/billing`)"
+      - "traefik.http.routers.billing-service-http.entrypoints=web"
+      - "traefik.http.routers.billing-service-http.middlewares=strip-fake-headers,my-auth"
+      - "traefik.http.routers.billing-service-http.service=billing-service"
+
       - "traefik.http.routers.billing-service.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/billing`)"
       - "traefik.http.routers.billing-service.entrypoints=websecure"
       - "traefik.http.routers.billing-service.tls.certresolver=myresolver"
       - "traefik.http.routers.billing-service.middlewares=strip-fake-headers,my-auth"
-      - "traefik.http.services.billing-service.loadbalancer.server.port=3000"
+      - "traefik.http.routers.billing-service.service=billing-service"
       - "txnet.logging=true"
+    depends_on:
+      main-db:
+        condition: service_healthy
+      locale-service:
+        condition: service_healthy
 
   # ===========================================================================
   # Next.js PWA — Main Frontend Application

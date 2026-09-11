@@ -40,6 +40,20 @@ export const envSchema = z.object({
    * address nothing outside could reach.
    */
   PUBLIC_HOST: z.string().min(1).default('localhost'),
+
+  /**
+   * The connection the service queries with (F-092-a): a login role that owns
+   * nothing and carries `NOBYPASSRLS`, so the Row-Level Security policies bind.
+   * Required, with no fallback to `DATABASE_URL` — the owner connection, which
+   * RLS does not apply to. A fallback here is a silent return to no isolation,
+   * the reasoning `auth-service`'s schema gives for the same variable.
+   */
+  DATABASE_APP_URL: z.string().min(1, 'DATABASE_APP_URL is required'),
+
+  /** The envelope's translator (`locale/locale.service.ts`). */
+  LOCALE_SERVICE_ADDR: z.string().min(1).default('localhost:50051'),
+  LOCALE_SCOPE: z.string().min(1).default('backend'),
+  DEFAULT_LANGUAGE: z.string().min(1).default('fa'),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

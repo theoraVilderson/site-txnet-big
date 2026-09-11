@@ -8,36 +8,39 @@ import { envSchema, validateEnv } from './env.validation';
  * below are about that: what a missing variable does, and what the empty string
  * compose actually sends does.
  */
+const DB = { DATABASE_APP_URL: 'postgresql://app@db/txnet' };
+
 describe('envSchema', () => {
-  it('starts with nothing configured', () => {
-    // A scaffold has to stay runnable with an empty environment, or the schema
-    // is a reason not to run it rather than a check on it.
-    const env = validateEnv({});
+  it('starts with nothing configured but the database', () => {
+    // Since F-092-a the service queries Postgres, so the app connection is the
+    // one thing an empty environment cannot default; everything else still
+    // must, or the schema is a reason not to run it rather than a check on it.
+    const env = validateEnv({ DATABASE_APP_URL: 'postgresql://app@db/txnet' });
     expect(env.PORT).toBe(3000);
     expect(env.GLOBAL_PREFIX).toBe('api');
     expect(env.NODE_ENV).toBe('development');
   });
 
   it('coerces the port compose passes as a string', () => {
-    expect(validateEnv({ PORT: '4000' }).PORT).toBe(4000);
+    expect(validateEnv({ ...DB, PORT: '4000' }).PORT).toBe(4000);
   });
 
   it('refuses a port that is not a usable one', () => {
     // The whole point of validating: a nonsense port must stop the boot rather
     // than become `NaN` and bind somewhere unpredictable.
-    expect(() => validateEnv({ PORT: 'not-a-number' })).toThrow();
-    expect(() => validateEnv({ PORT: '0' })).toThrow();
-    expect(() => validateEnv({ PORT: '-1' })).toThrow();
+    expect(() => validateEnv({ ...DB, PORT: 'not-a-number' })).toThrow();
+    expect(() => validateEnv({ ...DB, PORT: '0' })).toThrow();
+    expect(() => validateEnv({ ...DB, PORT: '-1' })).toThrow();
   });
 
   it('refuses an environment name it does not know', () => {
-    expect(() => validateEnv({ NODE_ENV: 'staging' })).toThrow();
+    expect(() => validateEnv({ ...DB, NODE_ENV: 'staging' })).toThrow();
   });
 
   it('refuses an empty prefix rather than serving from the root', () => {
     // `''` would silently move every route, which is the kind of change that
     // must be asked for rather than fallen into.
-    expect(() => validateEnv({ GLOBAL_PREFIX: '' })).toThrow();
+    expect(() => validateEnv({ ...DB, GLOBAL_PREFIX: '' })).toThrow();
   });
 
   it('names every variable it rejected, not just the first', () => {
@@ -45,7 +48,7 @@ describe('envSchema', () => {
     // deploy attempt would make a misconfigured environment take several.
     let message: Record<string, unknown> = {};
     try {
-      envSchema.parse({ PORT: 'x', NODE_ENV: 'staging' });
+      envSchema.parse({ ...DB, PORT: 'x', NODE_ENV: 'staging' });
     } catch (error) {
       message = (error as { flatten: () => { fieldErrors: Record<string, unknown> } })
         .flatten().fieldErrors;
