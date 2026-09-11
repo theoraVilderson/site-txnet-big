@@ -5,6 +5,7 @@ import { envConfigOptions } from './config/env.validation';
 import { HealthController } from './health.controller';
 import { LanguageMiddleware } from './locale/language.middleware';
 import { LocaleModule } from './locale/locale.module';
+import { CouponModule } from './payment/coupon/coupon.module';
 import { GatewayModule } from './payment/gateway/gateway.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { IdentityMiddleware } from './request/identity.middleware';
@@ -17,6 +18,7 @@ import { WalletModule } from './wallet/wallet.module';
     LocaleModule,
     WalletModule,
     GatewayModule,
+    CouponModule,
   ],
   controllers: [HealthController],
 })

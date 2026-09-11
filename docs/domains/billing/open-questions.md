@@ -1,7 +1,7 @@
 ---
 id: billing
 layer: domain
-updated: 2026-09-04
+updated: 2026-09-11
 ---
 
 # Open questions — billing
@@ -12,3 +12,4 @@ updated: 2026-09-04
 | 2026-09-04 | No idempotency-key column on `payment_transaction`. How is double-credit prevented across webhook + reconciliation + admin? | resolved | **Answered 2026-09-09 by ADR-0028**: `@@unique([gatewayId, gatewayTrackingCode])` plus a status guard, both inside the crediting transaction. A gateway with no stable tracking code cannot be integrated without a new decision | -> ADR-0028 + migration |
 | 2026-09-04 | Who triggers provisioning (`network.config`) on payment success — synchronous call, outbox, or RabbitMQ? | resolved | **Answered 2026-09-09 by ADR-0021: a transactional outbox.** The producer writes its row and its event in one transaction; a relay delivers them. The "synchronous call until a bus exists" assumption is withdrawn | -> ADR-0021 |
 | 2026-09-04 | `wallet_transfer_request.otpCodeHash` — does it reuse `identity` OTP infra or its own? | no | ASSUMED(2026-09-04): reuses `OtpService` with a transfer purpose | -> rules.md |
+| 2026-09-11 | `perUserUsageLimit = 0`: legacy read 0 as unlimited; the schema gave it no meaning. What should it mean? | resolved | **Answered 2026-09-11 by the user: 0 is unlimited**, as in legacy | -> contract.md "Coupon validation" + `billing.prisma` comment |

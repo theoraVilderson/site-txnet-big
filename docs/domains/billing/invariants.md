@@ -16,7 +16,7 @@ From schema comments. 1-4 are enforced by `WalletLedgerService` (F-092-b), 8 in 
 | 3 | Every balance-changing operation is a single Postgres transaction | `WalletLedgerService` writes only on the caller's `tenantTransaction` `tx` | partial writes, phantom balances |
 | 4 | `cachedBalance` writes use the optimistic-lock `version` column | `WalletLedgerService` — `where { id, version }`, `count 0` throws | lost update under concurrency |
 | 5 | Wallet transfer is atomic: sender debit + receiver credit in one tx, only after OTP confirm | planned service layer | money created/destroyed |
-| 6 | A user never holds more live redemptions of a coupon than its `perUserUsageLimit` — counted in the reserving transaction, since the limit may exceed 1 (D-21) | planned F-092-h; there is no longer a DB unique | coupon abuse |
+| 6 | A user never holds more live redemptions of a coupon than its `perUserUsageLimit` (`0` = unlimited) — counted in the reserving transaction, since the limit may exceed 1 (D-21) | planned F-092-h; there is no longer a DB unique | coupon abuse |
 | 7 | A payment is credited to a wallet at most once regardless of confirmation source | schema: `gatewayTrackingCode` unique per gateway column, and exactly one gateway column set (ADR-0028, F-092-d); the status-guarded credit is F-092-j | double credit |
 | 8 | `merchantId` / gateway secrets never default-selected or logged | a reseller's merchant id is read from the vault per call and never logged by a driver (F-092-f, `zarinpal.provider.spec.ts`); `payment_gateway.merchantId` still planned `select`/`omit` | gateway takeover |
 | 9 | Reconciliation never auto-reverses a credit; mismatches are flagged for a human | planned reconciliation worker | wrongful clawback |

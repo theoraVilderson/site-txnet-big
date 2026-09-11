@@ -226,7 +226,7 @@ model Coupon {
   maxDiscountCap      Decimal?          @db.Decimal(18, 2) // فقط برای درصدی
   minPurchaseAmount   Decimal?          @db.Decimal(18, 2)
   totalUsageLimit     Int? // null = نامحدود
-  perUserUsageLimit   Int               @default(1)
+  perUserUsageLimit   Int               @default(1) // 0 = unlimited
   usedCount           Int               @default(0)
   reservedCount       Int               @default(0)
   expiresAt           DateTime?

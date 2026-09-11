@@ -8,10 +8,30 @@ updated: 2026-09-11
 
 # Contract — billing
 
-**Three things built** — the wallet credit/debit primitive (F-092-b), the
-gateway pricing calculator (F-092-e) and the payment provider port (F-092-f),
-all below. Every other row in *Provides* is still intent from
+**Four things built** — the wallet credit/debit primitive (F-092-b), the
+gateway pricing calculator (F-092-e), the payment provider port (F-092-f) and
+coupon validation (F-092-g), all below. Every other row in *Provides* is still intent from
 `txnet-backend/prisma/domains/billing.prisma`.
+
+## Coupon validation (built — F-092-g)
+
+`CouponValidationService.validate(tx, {codes, amount, target, userId})` and the pure
+`applyCoupons` in `billing-service/src/app/payment/coupon/coupon-validation.ts`; no route
+calls them yet (F-092-o quotes, F-092-h reserves what was applied). Reserves nothing.
+
+| Rule | Why |
+|---|---|
+| Codes are trimmed, upper-cased, blanks dropped, de-duplicated; a stored `coupon.code` must be upper-case — the admin writer normalises | legacy behaviour kept; the lookup is exact |
+| Applied in the order typed, each on what the previous left (60% then 50% of 20 = 12 + 4); `totalDiscount` is the calculator's `discount` | D-21, D-23 |
+| A percentage is rounded **down** to the cent, then capped by `maxDiscountCap`; any discount is capped at the running payable | never give away an unrounded cent |
+| A failing code is `rejected` with a closed `reason` and takes nothing; the route maps `reason` to an i18n key (C-01) | the codes after it see the untouched payable |
+| Gates, in order: inactive / targeted at someone else → `not_found`; `wallet_credit` → `not_a_discount` (F-092-m); `expiresAt <= now` → `expired`; scope; `minPurchaseAmount` against the **amount**; per-user; capacity | legacy order |
+| Scope: no `coupon_service_scope` row is open; a top-up matches no scoped coupon; a plan matches a row naming the plan or its category | schema comment |
+| Per-user: the user's `pending` + `confirmed` redemptions `>= perUserUsageLimit` refuses — the user's own unfinished hold counts; a limit of `0` is unlimited | invariant 6; `0` answered by the user 2026-09-11, as in legacy |
+| Capacity: `usedCount + reservedCount >= totalUsageLimit` refuses; `null` is unlimited. Advisory — F-092-h takes it atomically | the count here can be stale by the time of reserving |
+| A code whose discount comes to zero is `nothing_to_discount`, not applied at zero | legacy applied it and spent a use on nothing |
+| Read in the caller's `tenantTransaction`, else `TenantScopeConflict`. `coupon` stays out of `TENANT_SCOPED_MODELS`: its shared-read RLS policy (own or `tenantId` NULL) is the scope | the extension would hide the platform's coupons; `coupon-validation.int.spec.ts` |
+| A broken coupon row (percentage outside (0, 100], fixed <= 0) or an amount <= 0 / finer than a cent is `InvalidCouponInput` | refused, never clamped |
 
 ## Payment providers (built — F-092-f)
 
@@ -118,6 +138,7 @@ reserve/confirm state machine.
 | confirm payment | gateway webhook / reconciliation / admin | wallet credit + `payment_transaction.status = success` | async | duplicate, mismatch (flagged) |
 | initiate wallet transfer | senderId, receiverId, amount | `wallet_transfer_request` (`pending_otp`) | sync | — |
 | confirm wallet transfer | transferId, OTP | atomic debit+credit, `confirmed` | sync tx | bad/expired OTP (5 tries -> cancelled) |
+| validate coupons — **built**, see above | tx, codes[], amount, target, userId | applied (couponId, code, discount), rejected (code, reason), totalDiscount, payable | sync, read | invalid input, scope conflict |
 | redeem coupon | couponId/code, userId, orderRef | `coupon_redemption` (`pending`) + discount amount | sync | expired, over limit, out of scope |
 | finalize coupon | redemptionId, paymentTxId | `confirmed` (or `expired`/`cancelled`) | sync | — |
 | accrue affiliate commission | triggering paymentId | `affiliate_commission` (`pending`) | async | — |
