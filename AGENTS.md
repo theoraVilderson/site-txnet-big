@@ -143,7 +143,8 @@ if it exists.
 is yours.
 
 - Commits: conventional commits (`feat(identity): ...`). Scope = unit `id`.
-  Reference the catalog id in the body: `spec: F-105`.
+  Reference the catalog id in the body: `spec: F-105`. A finished backlog item
+  is committed without asking — see "When an item is done, commit it" below.
 - Delivery loop: MODE: INGEST pulls **one area** of the catalog into the backlog
   the day you start building it (`python3 tools/spec.py --todo` shows what is
   left); `/next` (MODE: NEXT) then ships one backlog item per session.
@@ -229,6 +230,41 @@ with a note, never silently `done`.
 rest — see §6e. Stop and hand off early, while your reading of the problem is
 still clear; a session that has started re-reading its own files has already
 lost the thread.
+
+## When an item is done, commit it
+
+**Standing instruction from the user (2026-09-11): a backlog item that lands
+`done` is committed by the agent, in the same session, without asking.** It
+replaces "commit only when asked" for this case and no other. The message format
+is `docs/CODE-LAYOUT.md` "Commits".
+
+- **When:** the row is `done` and every check in "Before declaring any work
+  done" passed. A row left `doing`, a HANDOFF, a DIAGNOSE fix, or work that is
+  not a backlog item is not committed unasked.
+- **One commit per item.** A file holding two items' changes is split, so each
+  commit carries its own item's state of that file. A `git mv` stages itself —
+  check `git diff --cached` belongs to the item before committing.
+- **Stage by path, never `git add -A` / `git add .`** — exactly the files the
+  item touched: its proof column, the docs it changed, anything moved.
+- **Message:** subject, blank line, a body that says what changed, why, and
+  which tests ran with their counts (and what was *not* run), then
+  `spec: <backlog id>`, then the tool's attribution trailer if it has one.
+- **Never** push, amend or rewrite a commit that is not this session's own and
+  local, skip hooks, or commit on a detached HEAD or mid-rebase/merge.
+
+**Ask instead of committing — name the file and the doubt — when:**
+
+- `git status` shows a change the item did not make (the user's own work, or an
+  earlier session's), especially inside a file the item also touched;
+- a file looks like a secret or local config (`.env*`, keys, credentials,
+  `*.local.*`), a build output (`dist/`, `coverage/`), or a lockfile / generated
+  file changed without the item meaning to;
+- a hunk could belong to either of two items, or to none;
+- a check failed, was skipped, or could not run;
+- the branch is not the one the session started on.
+
+A commit that is wrong is cheap to fix locally, but only if the user knows it
+happened — so the report always ends with the commit hash(es) and subjects.
 
 ## If you cannot run shell commands
 

@@ -103,7 +103,8 @@ before it starts — that is what the announcement is for.
 > Run MODE: NEXT.
 
 Repeat it. Each run picks the next unblocked item, implements it, updates the
-backlog, and stops. A fresh session needs no other context.
+backlog, commits it (`AGENTS.md` "When an item is done, commit it" — it asks
+first when a file is in doubt), and stops. A fresh session needs no other context.
 
 **Build one named row instead of the first eligible one**
 > Run MODE: NEXT for F-066-a.
