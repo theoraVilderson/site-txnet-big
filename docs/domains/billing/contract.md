@@ -8,10 +8,28 @@ updated: 2026-09-11
 
 # Contract — billing
 
-**Four things built** — the wallet credit/debit primitive (F-092-b), the
-gateway pricing calculator (F-092-e), the payment provider port (F-092-f) and
-coupon validation (F-092-g), all below. Every other row in *Provides* is still intent from
+**Five things built** — the wallet credit/debit primitive (F-092-b), the
+gateway pricing calculator (F-092-e), the payment provider port (F-092-f),
+coupon validation (F-092-g) and coupon reservation (F-092-h), all below. Every other row in *Provides* is still intent from
 `txnet-backend/prisma/domains/billing.prisma`.
+
+## Coupon reservation (built — F-092-h)
+
+`CouponReservationService.reserve(tx, {userId, orderReferenceId, paymentTransactionId?, applied})`,
+`.confirm(tx, orderReferenceId)`, `.release(tx, orderReferenceId, 'cancelled' | 'expired')` in
+`billing-service/src/app/payment/coupon/coupon-reservation.ts`, over the SQL functions of migration
+`20260911000200_coupon_reservation`; no route calls them yet (F-092-i reserves, F-092-j / F-092-k settle).
+
+| Rule | Why |
+|---|---|
+| `reserve` writes one `pending` `coupon_redemption` and `reservedCount + 1` per applied coupon, taking coupons in id order | two orders stacking the same codes never deadlock |
+| Under a row lock on the coupon it re-checks active / visible / targeted, `wallet_credit`, expiry, per-user (`pending` + `confirmed`, `0` unlimited) and `usedCount + reservedCount < totalUsageLimit` | invariant 6; legacy's count-then-upsert gave the last slot twice (`coupon-reservation.int.spec.ts`) |
+| Scope and minimum purchase are not re-checked — they are validation's, on the same request | they do not move with other buyers |
+| A coupon that can no longer be held is `CouponReservationRefused {code, reason}` (a `CouponRejection`); it wrote nothing, the holds before it did — the caller's transaction must abort and re-quote | a partial set of holds must never commit |
+| `confirm` moves the order's `pending` rows to `confirmed`, `reservedCount - n`, `usedCount + n`; `release` to `cancelled` / `expired`, `reservedCount - n`. Only `pending` moves: a repeat answers `0`, a confirmed use is never given back | duplicate callback, late expiry |
+| A hold has no clock of its own; it lives as long as its payment (F-092-k expires both) | legacy's 20-minute lock TTL goes |
+| Runs in the caller's `tenantTransaction`, else `TenantScopeConflict`; a coupon of another tenant is `not_found` | the functions scope by `app.tenant_id` |
+| A platform coupon's counters move only through these functions; the `coupon` RLS policy is unchanged | ADR-0040 |
 
 ## Coupon validation (built — F-092-g)
 
@@ -126,7 +144,7 @@ One `Wallet` per user; `cachedBalance` is a cache, `WalletTransaction`
 (append-only) is the truth (ADR-0002). Payments come in through a
 `PaymentGateway` (platform brand only) with two confirmation defences (webhook +
 reconciliation worker) plus manual admin fallback. Coupons use a two-phase
-reserve/confirm state machine.
+reserve/confirm state machine (built, F-092-h).
 
 ## Provides (intended)
 
@@ -139,8 +157,8 @@ reserve/confirm state machine.
 | initiate wallet transfer | senderId, receiverId, amount | `wallet_transfer_request` (`pending_otp`) | sync | — |
 | confirm wallet transfer | transferId, OTP | atomic debit+credit, `confirmed` | sync tx | bad/expired OTP (5 tries -> cancelled) |
 | validate coupons — **built**, see above | tx, codes[], amount, target, userId | applied (couponId, code, discount), rejected (code, reason), totalDiscount, payable | sync, read | invalid input, scope conflict |
-| redeem coupon | couponId/code, userId, orderRef | `coupon_redemption` (`pending`) + discount amount | sync | expired, over limit, out of scope |
-| finalize coupon | redemptionId, paymentTxId | `confirmed` (or `expired`/`cancelled`) | sync | — |
+| reserve coupons — **built**, see above | tx, userId, orderReferenceId, paymentTransactionId?, applied[] | `coupon_redemption` rows (`pending`) | sync tx | refused (reason), invalid input, scope conflict |
+| confirm / release coupons — **built**, see above | tx, orderReferenceId, outcome | count moved to `confirmed` / `cancelled` / `expired` | sync tx | scope conflict |
 | accrue affiliate commission | triggering paymentId | `affiliate_commission` (`pending`) | async | — |
 
 ## Emits (events)
