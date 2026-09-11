@@ -1,0 +1,291 @@
+{
+  "_readme": "F-0611 golden cases for priceAtGateway (F-092-e). Every value is a string, never a JSON number, so no case is read through a float. A config is the gateway's pricing columns as they sit on payment_gateway / tenant_gateway_config; a case may override any of them. Add a row here for every gateway config that reaches production.",
+  "configs": {
+    "zarinpal-platform": {
+      "taxRatePercent": "10",
+      "minAcceptAmount": "1.00",
+      "maxAcceptAmount": "500.00",
+      "feeCalculationMode": "manual",
+      "feeType": "percentage",
+      "feeValue": "1.0000",
+      "feeFloor": "0.05",
+      "feeCeiling": "4.00",
+      "useLiveRate": true,
+      "staticRate": null,
+      "percentageModifier": "2",
+      "fixedAmountModifier": "0",
+      "minRate": "400000",
+      "maxRate": "3000000",
+      "roundingStep": "1000",
+      "roundingMode": "up"
+    },
+    "reseller-usd-card": {
+      "taxRatePercent": "0",
+      "minAcceptAmount": "5.00",
+      "maxAcceptAmount": "1000.00",
+      "feeCalculationMode": "manual",
+      "feeType": "fixed",
+      "feeValue": "0.2500",
+      "feeFloor": null,
+      "feeCeiling": null,
+      "useLiveRate": false,
+      "staticRate": "1",
+      "percentageModifier": "0",
+      "fixedAmountModifier": "0",
+      "minRate": null,
+      "maxRate": null,
+      "roundingStep": null,
+      "roundingMode": "up"
+    }
+  },
+  "cases": [
+    {
+      "name": "percentage fee between floor and ceiling, tax on the amount",
+      "config": "zarinpal-platform",
+      "input": { "amount": "100.00", "discount": "0", "liveRate": "1000000", "chargeDecimals": 0 },
+      "expect": { "gap": "0.00", "tax": "10.00", "fee": "1.00", "payable": "111.00", "credited": "100.00", "free": false, "rate": "1020000", "chargedAmountMinor": "113220000" }
+    },
+    {
+      "name": "percentage fee above the ceiling is capped",
+      "config": "zarinpal-platform",
+      "input": { "amount": "500.00", "discount": "0", "liveRate": "1000000", "chargeDecimals": 0 },
+      "expect": { "gap": "0.00", "tax": "50.00", "fee": "4.00", "payable": "554.00", "credited": "500.00", "free": false, "rate": "1020000", "chargedAmountMinor": "565080000" }
+    },
+    {
+      "name": "percentage fee below the floor is raised to it",
+      "config": "zarinpal-platform",
+      "input": { "amount": "1.00", "discount": "0", "liveRate": "1000000", "chargeDecimals": 0 },
+      "expect": { "gap": "0.00", "tax": "0.10", "fee": "0.05", "payable": "1.15", "credited": "1.00", "free": false, "rate": "1020000", "chargedAmountMinor": "1173000" }
+    },
+    {
+      "name": "tax and fee finer than a cent round up, never down",
+      "config": "zarinpal-platform",
+      "input": { "amount": "12.34", "discount": "0", "liveRate": "1000000", "chargeDecimals": 0 },
+      "expect": { "gap": "0.00", "tax": "1.24", "fee": "0.13", "payable": "13.71", "credited": "12.34", "free": false, "rate": "1020000", "chargedAmountMinor": "13984200" }
+    },
+    {
+      "name": "amount at the gateway maximum is accepted",
+      "config": "zarinpal-platform",
+      "override": { "feeCeiling": null },
+      "input": { "amount": "500.00", "discount": "0", "liveRate": "1000000", "chargeDecimals": 0 },
+      "expect": { "gap": "0.00", "tax": "50.00", "fee": "5.00", "payable": "555.00", "credited": "500.00", "free": false, "rate": "1020000", "chargedAmountMinor": "566100000" }
+    },
+    {
+      "name": "amount one cent over the gateway maximum is refused",
+      "config": "zarinpal-platform",
+      "input": { "amount": "500.01", "discount": "0", "liveRate": "1000000", "chargeDecimals": 0 },
+      "error": "AmountOutOfGatewayRange"
+    },
+    {
+      "name": "amount one cent under the gateway minimum is refused, even when a coupon would have covered it",
+      "config": "zarinpal-platform",
+      "input": { "amount": "0.99", "discount": "0.99", "liveRate": "1000000", "chargeDecimals": 0 },
+      "error": "AmountOutOfGatewayRange"
+    },
+    {
+      "name": "coupon interaction: a payable under the minimum is raised to it and the gap is credited too",
+      "config": "zarinpal-platform",
+      "input": { "amount": "5.00", "discount": "4.50", "liveRate": "1000000", "chargeDecimals": 0 },
+      "expect": { "gap": "0.50", "tax": "0.10", "fee": "0.05", "payable": "1.15", "credited": "5.50", "free": false, "rate": "1020000", "chargedAmountMinor": "1173000" }
+    },
+    {
+      "name": "coupon interaction: a discount that leaves the minimum exactly needs no gap",
+      "config": "zarinpal-platform",
+      "input": { "amount": "5.00", "discount": "4.00", "liveRate": "1000000", "chargeDecimals": 0 },
+      "expect": { "gap": "0.00", "tax": "0.10", "fee": "0.05", "payable": "1.15", "credited": "5.00", "free": false, "rate": "1020000", "chargedAmountMinor": "1173000" }
+    },
+    {
+      "name": "coupon interaction: a discount covering everything is the free path — no tax, no fee, no rate",
+      "config": "zarinpal-platform",
+      "input": { "amount": "20.00", "discount": "20.00", "liveRate": null, "chargeDecimals": 0 },
+      "expect": { "gap": "0.00", "tax": "0.00", "fee": "0.00", "payable": "0.00", "credited": "20.00", "free": true, "rate": null, "chargedAmountMinor": null }
+    },
+    {
+      "name": "the free path through an automatic-fee gateway needs no quote",
+      "config": "zarinpal-platform",
+      "override": { "feeCalculationMode": "automatic" },
+      "input": { "amount": "20.00", "discount": "20.00", "liveRate": null, "chargeDecimals": 0 },
+      "expect": { "gap": "0.00", "tax": "0.00", "fee": "0.00", "payable": "0.00", "credited": "20.00", "free": true, "rate": null, "chargedAmountMinor": null }
+    },
+    {
+      "name": "coupon interaction: a discount larger than the amount is the coupon engine's bug, not a free deposit",
+      "config": "zarinpal-platform",
+      "input": { "amount": "20.00", "discount": "20.01", "liveRate": "1000000", "chargeDecimals": 0 },
+      "error": "InvalidPricingInput"
+    },
+    {
+      "name": "a negative discount is refused",
+      "config": "zarinpal-platform",
+      "input": { "amount": "20.00", "discount": "-1.00", "liveRate": "1000000", "chargeDecimals": 0 },
+      "error": "InvalidPricingInput"
+    },
+    {
+      "name": "an amount finer than a cent is refused, not rounded",
+      "config": "zarinpal-platform",
+      "input": { "amount": "10.001", "discount": "0", "liveRate": "1000000", "chargeDecimals": 0 },
+      "error": "InvalidPricingInput"
+    },
+    {
+      "name": "a zero amount is refused",
+      "config": "zarinpal-platform",
+      "input": { "amount": "0", "discount": "0", "liveRate": "1000000", "chargeDecimals": 0 },
+      "error": "InvalidPricingInput"
+    },
+    {
+      "name": "automatic fee: the provider's quote is used",
+      "config": "zarinpal-platform",
+      "override": { "feeCalculationMode": "automatic" },
+      "input": { "amount": "100.00", "discount": "0", "quotedFee": "0.30", "liveRate": "1000000", "chargeDecimals": 0 },
+      "expect": { "gap": "0.00", "tax": "10.00", "fee": "0.30", "payable": "110.30", "credited": "100.00", "free": false, "rate": "1020000", "chargedAmountMinor": "112506000" }
+    },
+    {
+      "name": "automatic fee: a quote above the ceiling is capped exactly as a manual fee is (legacy display and charge disagreed here)",
+      "config": "zarinpal-platform",
+      "override": { "feeCalculationMode": "automatic" },
+      "input": { "amount": "100.00", "discount": "0", "quotedFee": "9.00", "liveRate": "1000000", "chargeDecimals": 0 },
+      "expect": { "gap": "0.00", "tax": "10.00", "fee": "4.00", "payable": "114.00", "credited": "100.00", "free": false, "rate": "1020000", "chargedAmountMinor": "116280000" }
+    },
+    {
+      "name": "automatic fee: a quote below the floor is raised to it",
+      "config": "zarinpal-platform",
+      "override": { "feeCalculationMode": "automatic" },
+      "input": { "amount": "100.00", "discount": "0", "quotedFee": "0", "liveRate": "1000000", "chargeDecimals": 0 },
+      "expect": { "gap": "0.00", "tax": "10.00", "fee": "0.05", "payable": "110.05", "credited": "100.00", "free": false, "rate": "1020000", "chargedAmountMinor": "112251000" }
+    },
+    {
+      "name": "automatic fee without a quote is refused",
+      "config": "zarinpal-platform",
+      "override": { "feeCalculationMode": "automatic" },
+      "input": { "amount": "100.00", "discount": "0", "liveRate": "1000000", "chargeDecimals": 0 },
+      "error": "FeeQuoteRequired"
+    },
+    {
+      "name": "zero modifiers leave the rate as it is, and an exact step is not bumped",
+      "config": "zarinpal-platform",
+      "override": { "percentageModifier": "0", "fixedAmountModifier": "0" },
+      "input": { "amount": "100.00", "discount": "0", "liveRate": "1000000", "chargeDecimals": 0 },
+      "expect": { "gap": "0.00", "tax": "10.00", "fee": "1.00", "payable": "111.00", "credited": "100.00", "free": false, "rate": "1000000", "chargedAmountMinor": "111000000" }
+    },
+    {
+      "name": "negative modifiers lower the rate before rounding up",
+      "config": "zarinpal-platform",
+      "override": { "percentageModifier": "-1.5", "fixedAmountModifier": "-500" },
+      "input": { "amount": "100.00", "discount": "0", "liveRate": "1000000", "chargeDecimals": 0 },
+      "expect": { "gap": "0.00", "tax": "10.00", "fee": "1.00", "payable": "111.00", "credited": "100.00", "free": false, "rate": "985000", "chargedAmountMinor": "109335000" }
+    },
+    {
+      "name": "boundary rounding up: a rate one step's fraction over a multiple goes to the next step",
+      "config": "zarinpal-platform",
+      "input": { "amount": "100.00", "discount": "0", "liveRate": "987654.32", "chargeDecimals": 0 },
+      "expect": { "gap": "0.00", "tax": "10.00", "fee": "1.00", "payable": "111.00", "credited": "100.00", "free": false, "rate": "1008000", "chargedAmountMinor": "111888000" }
+    },
+    {
+      "name": "boundary rounding nearest: below the half goes down to the step",
+      "config": "zarinpal-platform",
+      "override": { "roundingMode": "nearest" },
+      "input": { "amount": "100.00", "discount": "0", "liveRate": "987654.32", "chargeDecimals": 0 },
+      "expect": { "gap": "0.00", "tax": "10.00", "fee": "1.00", "payable": "111.00", "credited": "100.00", "free": false, "rate": "1007000", "chargedAmountMinor": "111777000" }
+    },
+    {
+      "name": "boundary rounding nearest: exactly half goes up",
+      "config": "zarinpal-platform",
+      "override": { "roundingMode": "nearest", "percentageModifier": "0" },
+      "input": { "amount": "100.00", "discount": "0", "liveRate": "1000500", "chargeDecimals": 0 },
+      "expect": { "gap": "0.00", "tax": "10.00", "fee": "1.00", "payable": "111.00", "credited": "100.00", "free": false, "rate": "1001000", "chargedAmountMinor": "111111000" }
+    },
+    {
+      "name": "a rounding mode other than up or nearest is refused",
+      "config": "zarinpal-platform",
+      "override": { "roundingMode": "down" },
+      "input": { "amount": "100.00", "discount": "0", "liveRate": "1000000", "chargeDecimals": 0 },
+      "error": "InvalidPricingInput"
+    },
+    {
+      "name": "out-of-range rate: above maxRate after the markup is refused, never clamped",
+      "config": "zarinpal-platform",
+      "input": { "amount": "100.00", "discount": "0", "liveRate": "2950000", "chargeDecimals": 0 },
+      "error": "RateOutOfRange"
+    },
+    {
+      "name": "out-of-range rate: below minRate is refused, never clamped",
+      "config": "zarinpal-platform",
+      "input": { "amount": "100.00", "discount": "0", "liveRate": "350000", "chargeDecimals": 0 },
+      "error": "RateOutOfRange"
+    },
+    {
+      "name": "a rate exactly at maxRate is accepted",
+      "config": "zarinpal-platform",
+      "override": { "percentageModifier": "0" },
+      "input": { "amount": "100.00", "discount": "0", "liveRate": "3000000", "chargeDecimals": 0 },
+      "expect": { "gap": "0.00", "tax": "10.00", "fee": "1.00", "payable": "111.00", "credited": "100.00", "free": false, "rate": "3000000", "chargedAmountMinor": "333000000" }
+    },
+    {
+      "name": "no live rate falls back to the gateway's staticRate, modifiers still applied",
+      "config": "zarinpal-platform",
+      "override": { "staticRate": "1100000" },
+      "input": { "amount": "100.00", "discount": "0", "liveRate": null, "chargeDecimals": 0 },
+      "expect": { "gap": "0.00", "tax": "10.00", "fee": "1.00", "payable": "111.00", "credited": "100.00", "free": false, "rate": "1122000", "chargedAmountMinor": "124542000" }
+    },
+    {
+      "name": "no live rate and no staticRate: the gateway cannot price",
+      "config": "zarinpal-platform",
+      "input": { "amount": "100.00", "discount": "0", "liveRate": null, "chargeDecimals": 0 },
+      "error": "RateUnavailable"
+    },
+    {
+      "name": "a staticRate of zero counts as not configured",
+      "config": "zarinpal-platform",
+      "override": { "staticRate": "0" },
+      "input": { "amount": "100.00", "discount": "0", "liveRate": null, "chargeDecimals": 0 },
+      "error": "RateUnavailable"
+    },
+    {
+      "name": "useLiveRate false ignores a live rate and uses staticRate",
+      "config": "zarinpal-platform",
+      "override": { "useLiveRate": false, "staticRate": "1050000" },
+      "input": { "amount": "100.00", "discount": "0", "liveRate": "1000000", "chargeDecimals": 0 },
+      "expect": { "gap": "0.00", "tax": "10.00", "fee": "1.00", "payable": "111.00", "credited": "100.00", "free": false, "rate": "1071000", "chargedAmountMinor": "118881000" }
+    },
+    {
+      "name": "reseller USD card: fixed fee, no tax, charged in cents",
+      "config": "reseller-usd-card",
+      "input": { "amount": "10.00", "discount": "0", "liveRate": null, "chargeDecimals": 2 },
+      "expect": { "gap": "0.00", "tax": "0.00", "fee": "0.25", "payable": "10.25", "credited": "10.00", "free": false, "rate": "1", "chargedAmountMinor": "1025" }
+    },
+    {
+      "name": "a fixed fee finer than a cent rounds up",
+      "config": "reseller-usd-card",
+      "override": { "feeValue": "0.1234" },
+      "input": { "amount": "10.00", "discount": "0", "liveRate": null, "chargeDecimals": 2 },
+      "expect": { "gap": "0.00", "tax": "0.00", "fee": "0.13", "payable": "10.13", "credited": "10.00", "free": false, "rate": "1", "chargedAmountMinor": "1013" }
+    },
+    {
+      "name": "a charged amount finer than the minor unit rounds up to the next one",
+      "config": "reseller-usd-card",
+      "override": { "staticRate": "0.333" },
+      "input": { "amount": "10.00", "discount": "0", "liveRate": null, "chargeDecimals": 0 },
+      "expect": { "gap": "0.00", "tax": "0.00", "fee": "0.25", "payable": "10.25", "credited": "10.00", "free": false, "rate": "0.333", "chargedAmountMinor": "4" }
+    },
+    {
+      "name": "a fee floor above its ceiling is a broken config",
+      "config": "zarinpal-platform",
+      "override": { "feeFloor": "5.00" },
+      "input": { "amount": "100.00", "discount": "0", "liveRate": "1000000", "chargeDecimals": 0 },
+      "error": "InvalidPricingInput"
+    },
+    {
+      "name": "a gateway minimum above its maximum is a broken config",
+      "config": "zarinpal-platform",
+      "override": { "minAcceptAmount": "600.00" },
+      "input": { "amount": "100.00", "discount": "0", "liveRate": "1000000", "chargeDecimals": 0 },
+      "error": "InvalidPricingInput"
+    },
+    {
+      "name": "huge amounts keep every digit",
+      "config": "zarinpal-platform",
+      "override": { "maxAcceptAmount": "9999999999999999.99", "feeCeiling": null, "maxRate": null },
+      "input": { "amount": "9999999999999999.99", "discount": "0", "liveRate": "99999999.99999999", "chargeDecimals": 0 },
+      "expect": { "gap": "0.00", "tax": "1000000000000000.00", "fee": "100000000000000.00", "payable": "11099999999999999.99", "credited": "9999999999999999.99", "free": false, "rate": "102000000", "chargedAmountMinor": "1132199999999999998980000" }
+    }
+  ]
+}

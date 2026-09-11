@@ -8,9 +8,31 @@ updated: 2026-09-11
 
 # Contract — billing
 
-**One operation built** — the wallet credit/debit primitive (F-092-b, below).
-Every other row in *Provides* is still intent from
-`txnet-backend/prisma/domains/billing.prisma`.
+**Two operations built** — the wallet credit/debit primitive (F-092-b) and the
+gateway pricing calculator (F-092-e), both below. Every other row in *Provides*
+is still intent from `txnet-backend/prisma/domains/billing.prisma`.
+
+## Gateway pricing (built — F-092-e)
+
+`priceAtGateway(request)` and `feeBasis(request)` in
+`billing-service/src/app/payment/pricing/gateway-pricing.ts`; no route calls
+them yet (F-092-o shows the quote, F-092-i charges it). The worked numbers are
+`gateway-pricing.golden.json` (F-0611).
+
+| Rule | Why |
+|---|---|
+| The quote shown and the amount charged both come from `priceAtGateway`; nothing else does money arithmetic on a deposit | F-0612 — legacy clamped a quoted fee on one path only |
+| Pure: the provider's fee quote and the FX rate are arguments. The caller asks the provider for `feeBasis(request)`; the staleness ladder decides whether a `liveRate` is passed | F-0610; F-0607 needs a clock |
+| Order: `amount` in `[minAcceptAmount, maxAcceptAmount]` → minus `discount` → gap → tax → fee → `payable`; `credited = amount + gap` | F-092-o's quote shape |
+| Gap: a remainder above zero and under the minimum is raised to it, and the difference is credited too | legacy behaviour kept |
+| Tax and a percentage fee are taken on that remainder (after discount and gap), never on each other | a fully discounted deposit is then free, not a tax bill |
+| Remainder zero is the free path: no tax, fee, rate or quote; `chargedAmountMinor = null` | nothing reaches the gateway |
+| A `discount` above `amount` is `InvalidPricingInput`, not a free deposit | the coupon engine (F-092-g) caps stacking |
+| `feeFloor` / `feeCeiling` bind a quoted fee exactly as they bind a manual one | the legacy bug named on the row |
+| Cents round **up**; the rate rounds to `roundingStep` up or nearest (half up); `chargedAmountMinor` rounds up | F-0609 — never down |
+| Rate = (`liveRate` if `useLiveRate`, else or if absent `staticRate`) × (1 + `percentageModifier`/100) + `fixedAmountModifier`, then rounded; a missing or non-positive source is `RateUnavailable` | F-0607's last rung disables the gateway |
+| A rounded rate outside `[minRate, maxRate]` is `RateOutOfRange` — refused, never clamped | F-0607: a wrong rate costs an unbounded amount |
+| Errors are plain classes with English messages (C-01); the route that first exposes one maps it to an i18n key | as for the ledger |
 
 ## Payment and coupon storage (built — F-092-d)
 
@@ -71,6 +93,7 @@ reserve/confirm state machine.
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
 | credit / debit wallet — **built**, see above | tx, userId, amount, reasonType, referenceId | `wallet_transaction` + new `balanceAfter` | sync tx | insufficient funds, version conflict, invalid amount |
+| price a deposit — **built**, see above | gateway pricing, amount, discount, quotedFee?, liveRate?, chargeDecimals | base, discount, gap, tax, fee, payable, credited, rate, chargedAmountMinor | sync, pure | invalid input, amount out of gateway range, fee quote required, rate unavailable / out of range |
 | start payment | userId, gatewayId or tenantGatewayConfigId, amount, couponCodes[] | payment intent + redirect / deposit address | sync | amount out of gateway range |
 | confirm payment | gateway webhook / reconciliation / admin | wallet credit + `payment_transaction.status = success` | async | duplicate, mismatch (flagged) |
 | initiate wallet transfer | senderId, receiverId, amount | `wallet_transfer_request` (`pending_otp`) | sync | — |
