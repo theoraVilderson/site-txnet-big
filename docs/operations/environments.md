@@ -15,8 +15,17 @@ updated: 2026-09-05
 | `.env.prod` | prod overrides | no (real secrets) |
 | `.env.example` | annotated template for all three blocks | yes |
 
-`scripts/dev.compose.sh` -> `--env-file .env --env-file .env.dev -p devtxnet`.
-`scripts/prod.compose.sh` -> `--env-file .env --env-file .env.prod -p prodtxnet`.
+`scripts/dev.compose.sh` -> `--env-file .env --env-file .env.dev -p devtxnet`,
+with `dev-docker/docker-compose.dev.yml` layered over the main file.
+`scripts/prod.compose.sh` -> `--env-file .env --env-file .env.prod -p prodtxnet`,
+the main file alone.
+
+`docker-compose.dev.yml` runs `billing-service` from the host checkout on stock
+`node:24-bookworm`: no image build, the host's own `node_modules`, and
+`scripts/dev-serve.js` reloading on save. Packages are installed with npm **on
+the host**; a Prisma schema change needs `npx prisma generate` on the host and a
+container restart. The image must match the host's libc and Node major, or the
+host's native modules (Prisma engine, SWC) do not load.
 Different project name + `STACK_NAME` + network names + host ports, so dev and
 prod can run on one host at once. `dev-docker/dev-setup.sh` orchestrates the
 main stack + the three independent stacks.

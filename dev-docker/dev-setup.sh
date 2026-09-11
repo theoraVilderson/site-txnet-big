@@ -129,7 +129,7 @@ start_main() {
   log "▶ Starting Main Stack (Traefik, Backends, Frontends, DBs)..."
   # shared .env first, then dev overrides (.env.dev) — later file wins
   (cd "$ROOT_DIR" && \
-     docker compose --env-file .env --env-file .env.dev -p txnet-main -f "${SCRIPT_DIR}/docker-compose.main.yml" "$action" $detach_flag)
+     docker compose --env-file .env --env-file .env.dev -p txnet-main -f "${SCRIPT_DIR}/docker-compose.main.yml" -f "${SCRIPT_DIR}/docker-compose.dev.yml" "$action" $detach_flag)
   log "  ✓ Main Stack started"
 }
 
@@ -139,7 +139,7 @@ stop_all() {
 
   log "▶ Stopping Main Stack..."
   (cd "$ROOT_DIR" && \
-     docker compose --env-file .env --env-file .env.dev -p txnet-main -f "${SCRIPT_DIR}/docker-compose.main.yml" down) || true
+     docker compose --env-file .env --env-file .env.dev -p txnet-main -f "${SCRIPT_DIR}/docker-compose.main.yml" -f "${SCRIPT_DIR}/docker-compose.dev.yml" down) || true
 
   log "▶ Stopping Bug Tracker..."
   (cd "${SCRIPT_DIR}/bug-tracker" && \

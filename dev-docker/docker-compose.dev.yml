@@ -1,0 +1,32 @@
+# =============================================================================
+# Dev-only overrides, layered over docker-compose.main.yml by
+# `scripts/dev.compose.sh`. Prod runs the main file alone (`scripts/prod.compose.sh`),
+# so nothing here reaches it.
+# =============================================================================
+#
+# billing-service runs straight from the host checkout: no image is built and
+# no npm install runs in a container.
+#
+#   - `node_modules` is the host's own (`txnet-backend/node_modules`, bind
+#     mounted with the rest of the tree). To add or upgrade a package, run npm
+#     on the host; the container sees it on its next restart.
+#   - The image is stock Node 24 on Debian (glibc) because that is what the host
+#     is: the host's native modules — the Prisma engine
+#     (`debian-openssl-3.0.x`), `@swc/core-linux-x64-gnu` — do not load on
+#     Alpine (musl) or on Node 20. The `-slim` variant has no OpenSSL, which
+#     Prisma needs.
+#   - `scripts/dev-serve.js` keeps one webpack watch alive and restarts the app
+#     on every save, so a code change needs neither a rebuild nor a restart. A
+#     schema change needs `npx prisma generate` on the host, then a restart.
+
+services:
+  billing-service:
+    build: !reset null
+    image: ${DOCKER_REGISTRY}/node:24-bookworm
+    pull_policy: missing
+    working_dir: /app
+    command: ["node", "scripts/dev-serve.js"]
+    environment:
+      - APP_NAME=billing-service
+    volumes: !override
+      - ../txnet-backend:/app:delegated
