@@ -28,7 +28,7 @@ export function backendVitestConfig(root: string, name: string, test: TestOption
       globals: true,
       environment: 'node',
       include: ['src/**/*.spec.ts'],
-      // `*.int.spec.ts` needs Docker; it runs from auth-service/vitest.int.config.mts.
+      // `*.int.spec.ts` needs Docker; it runs from <project>/vitest.int.config.mts (`npm run test:int`).
       exclude: ['**/node_modules/**', 'src/**/*.int.spec.ts'],
       coverage: { reportsDirectory: `../coverage/${name}` },
       ...test,

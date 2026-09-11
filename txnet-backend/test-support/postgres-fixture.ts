@@ -1,6 +1,10 @@
 /**
  * A throwaway Postgres carrying **the database this repo actually ships**.
  *
+ * At the workspace root, beside `vitest.shared.mts`, rather than inside an app:
+ * `auth-service`'s isolation harness and `billing-service`'s wallet race
+ * (F-092-p) both start it, and neither app may import the other.
+ *
  * The isolation harness (`tenant-context/isolation-harness.int.spec.ts`) needs
  * something no other tier in this workspace has: a database built from the
  * committed migration history, with the two login roles Row-Level Security
@@ -34,7 +38,7 @@ process.env.TESTCONTAINERS_RYUK_DISABLED ??= 'true';
 const IMAGE =
   process.env.TEST_POSTGRES_IMAGE ?? 'docker.arvancloud.ir/postgres:18-alpine';
 
-const REPO = join(__dirname, '../../../..');
+const REPO = join(__dirname, '../..');
 const DOMAINS = join(REPO, 'txnet-backend/prisma/domains');
 const MIGRATIONS = join(DOMAINS, 'migrations');
 const ROLE_SCRIPT = join(REPO, 'scripts/db-login-roles.sh');

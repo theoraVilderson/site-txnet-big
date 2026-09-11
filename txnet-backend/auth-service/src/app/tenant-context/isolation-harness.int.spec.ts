@@ -53,7 +53,7 @@ import {
   PostgresFixture,
   startPostgresFixture,
   tenantScopedTables,
-} from '../../test-support/postgres-fixture';
+} from '../../../../test-support/postgres-fixture';
 
 vi.setConfig({ testTimeout: HARNESS_TIMEOUT_MS, hookTimeout: HARNESS_TIMEOUT_MS });
 

@@ -10,7 +10,7 @@ source:
   - txnet-backend/auth-service/src/app/prisma/cross-tenant-prisma.service.ts
   - txnet-backend/prisma/domains/migrations/20260909000500_row_level_security/**
   - txnet-backend/prisma/domains/migrations/20260909001500_row_level_security_all_tables/**
-  - txnet-backend/auth-service/src/test-support/postgres-fixture.ts
+  - txnet-backend/test-support/postgres-fixture.ts
 owns_tables: []
 depends_on: [tenant]
 updated: 2026-09-11

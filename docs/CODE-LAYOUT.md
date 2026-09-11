@@ -100,14 +100,14 @@ the first (F-092-b); its edge (`request/`, `prisma/`, `locale/`) stays out of
 | file                                    | what runs                                      | needs   | how                |
 | --------------------------------------- | ---------------------------------------------- | ------- | ------------------ |
 | `*.spec.ts`                             | one class, collaborators mocked                | nothing | `npm test`         |
-| `*.int.spec.ts`                         | one store against a real Redis, or the isolation harness against a real Postgres | Docker  | `npm run test:int` |
+| `*.int.spec.ts`                         | one store against a real Redis, or a real Postgres built from the migration history (isolation harness, wallet race) | Docker  | `npm run test:int` |
 | `auth-service-e2e/src/**/*.e2e.spec.ts` | the whole app over HTTP, real Postgres + Redis | Docker  | `npm run test:e2e` |
 
 All three run in CI (`.github/workflows/ci.yml`), one job each.
 
 The integration tier shares nothing between files: each `*.int.spec.ts` starts
-its **own** container on an ephemeral port (`test-support/redis-fixture.ts`,
-`postgres-fixture.ts`) and flushes it between cases. So a failure that only
+its **own** container on an ephemeral port (`auth-service/src/test-support/redis-fixture.ts`,
+`txnet-backend/test-support/postgres-fixture.ts`) and flushes it between cases. So a failure that only
 happens when the tier runs whole is contention for the machine, never state
 left behind by another file — the e2e tier is the one with a single shared
 Postgres and Redis (`fileParallelism: false`).

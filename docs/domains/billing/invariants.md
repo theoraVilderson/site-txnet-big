@@ -24,6 +24,7 @@ From schema comments. 1-4 are enforced by `WalletLedgerService` (F-092-b); the r
 
 ## How to test
 
-Concurrent debit (version conflict): `wallet-ledger.spec.ts`, against a fake
-store — not yet against a real Postgres. Still to write: transfer atomicity,
+Concurrent debit (version conflict): `wallet-ledger.spec.ts` against a fake
+store, and `wallet-ledger.int.spec.ts` against a real Postgres under the app
+role and RLS (`npm run test:int`). Still to write: transfer atomicity,
 duplicate-webhook idempotency.
