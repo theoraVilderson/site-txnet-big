@@ -47,7 +47,8 @@ func main() {
 
 	// Connect to locale-service (source of truth) and block until the initial
 	// snapshots are cached, then keep them live over the Watch stream.
-	localeStore := locale.NewStore(cfg.LocaleServiceAddr, cfg.LocaleScope, cfg.DefaultLanguage, log)
+	localeStore := locale.NewStore(cfg.LocaleServiceAddr, cfg.LocaleScope, cfg.DefaultLanguage, log).
+		WithBootTimeout(cfg.LocaleBootTimeout)
 	if err := localeStore.Load(); err != nil {
 		log.Error("initial locale load failed", "error", err, "addr", cfg.LocaleServiceAddr)
 		os.Exit(1)
@@ -64,6 +65,9 @@ func main() {
 	// Set up HTTP routes.
 	mux := http.NewServeMux()
 	mux.HandleFunc("/validate", h.Validate)
+	// The optional gate: same decision, but a caller with no credential is
+	// admitted as anonymous (ADR-0031). The realtime router uses it.
+	mux.HandleFunc("/validate-optional", h.ValidateOptional)
 	mux.HandleFunc("/health", h.Health)
 
 	// Apply middleware chain.

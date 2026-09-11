@@ -7,6 +7,7 @@
  * itself, it passes `captcha: null` (send nothing) or a token of its own and
  * goes through the raw helpers.
  */
+import { RequestHeaders } from '@txnet-backend/shared-core';
 import request from 'supertest';
 import type { Server } from 'node:http';
 import { REFRESH_COOKIE } from './env';
@@ -137,7 +138,10 @@ export class AuthApi {
       ...options,
       headers: {
         ...(options.headers ?? {}),
-        ...(token ? { 'X-Captcha-Token': token } : {}),
+        // The declared name, not a third casing of it (C-04). This file spelled
+        // it `X-Captcha-Token` while the guard read `x-captcha-token`; they are
+        // one header, and the suite passing either way is why nobody noticed.
+        ...(token ? { [RequestHeaders.captchaToken]: token } : {}),
       },
     });
   }

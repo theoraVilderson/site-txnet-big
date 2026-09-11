@@ -26,6 +26,7 @@ const accessClaims: Omit<AuthClaims, 'iat' | 'exp'> = {
   sub: 'user-1',
   tenantId: 'tenant-1',
   roleId: 'role-1',
+  roleName: 'user',
   permissions: ['user.read'],
   sessionId: 'session-1',
 };

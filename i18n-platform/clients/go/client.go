@@ -73,13 +73,27 @@ type Client struct {
 
 var varRe = regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_]+)\s*\}\}`)
 
+// DefaultBootTimeout is how long New blocks for the first snapshots when a
+// caller sets no BootTimeout.
+//
+// Exported rather than inlined (F-086, ADR-0036): it was a bare
+// `10 * time.Second` here while `auth-handler` passed `60 * time.Second`, two
+// hardcoded numbers for one wait, disagreeing by six times, with nothing
+// saying which was intended. A caller that cares now overrides it against a
+// named default instead of against a literal it cannot see.
+//
+// Ten seconds is the right library default: a caller that can retry should
+// find out quickly that locale-service is not there. A caller that blocks its
+// own boot on this — `auth-handler` does — wants longer, and says so.
+const DefaultBootTimeout = 10 * time.Second
+
 // New dials locale-service and performs the blocking boot.
 func New(ctx context.Context, cfg Config) (*Client, error) {
 	if cfg.Addr == "" {
 		return nil, errors.New("localeclient: Addr is required")
 	}
 	if cfg.BootTimeout == 0 {
-		cfg.BootTimeout = 10 * time.Second
+		cfg.BootTimeout = DefaultBootTimeout
 	}
 	if cfg.MaxBackoff == 0 {
 		cfg.MaxBackoff = 30 * time.Second

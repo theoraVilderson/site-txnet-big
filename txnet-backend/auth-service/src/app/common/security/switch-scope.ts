@@ -1,11 +1,13 @@
+import { RequestHeaders } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 import { isBotPlatform } from '@txnet-backend/messenger';
 import { refreshCookieOptions } from '../http/refresh-cookie';
 import { readCookie } from '../http/cookies';
 import { BOT_CHAT_HEADER, isServiceCaller } from './service-caller';
 
-/** Which messenger a bot-originated call is acting for. */
-export const BOT_PLATFORM_HEADER = 'x-bot-platform';
+/** Which messenger a bot-originated call is acting for. Name from the wire
+ * contract, not a second spelling of it (C-04). */
+export const BOT_PLATFORM_HEADER = RequestHeaders.botPlatform;
 
 /** The browser's partition key. Server-minted, httpOnly, never read by script. */
 export const DEVICE_COOKIE = 'device_id';

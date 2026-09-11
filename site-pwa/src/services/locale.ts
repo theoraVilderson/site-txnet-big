@@ -1,7 +1,7 @@
 "use server";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { DEFAULT_LOCALE, LOCALE_COOKIE } from "@/env";
-import { getAvailableLocales, ensureReady } from "@/lib/locale-store";
+import { ensureReady } from "@/lib/locale-store";
 import { startWatching } from "@/lib/locale-watcher";
 import {
   getCurrentUserId,
@@ -24,17 +24,13 @@ export async function getUserLocale() {
   const localeCookie = cookieStore.get(LOCALE_COOKIE)?.value;
   if (localeCookie) return localeCookie;
 
-  // ۳. تشخیص خودکار از Accept-Language — روی لیست دینامیک زبان‌های موجود
-  const available = getAvailableLocales();
-  const headersList = await headers();
-  const acceptLanguage = headersList.get("accept-language");
-  if (acceptLanguage) {
-    for (const code of available) {
-      if (acceptLanguage.includes(code)) return code;
-    }
-  }
-
-  // ۴. پیش‌فرض
+  // 3. The deployment's language. Nothing below this line: the browser's
+  //    `Accept-Language` used to be consulted here and is deliberately not,
+  //    which is the whole of F-068. A Persian deployment answers an English
+  //    browser in Persian, the same rule `ChatLanguage` follows for the bot
+  //    (F-046, ADR-0016) — the header is a guess about the person, while
+  //    `DEFAULT_LANGUAGE` is a statement about the deployment, and the two
+  //    choices above are the person actually saying so.
   return DEFAULT_LOCALE;
 }
 

@@ -49,18 +49,71 @@ function errorsFile(lang: string): Record<string, string> {
 }
 
 /**
- * Every key handed to `ok()` / `err()` in shipped code, plus the two defaults
- * those helpers fall back to when a call site names none.
+ * Every key this service can put in front of a user, plus the two defaults
+ * `ok()` / `err()` fall back to when a call site names none.
+ *
+ * A returned envelope is only half of them. The other half is *thrown*: a
+ * `BadRequestException('otp.smsNotConfigured')`, an `i18nKey` on an exception
+ * body, and — the ones a form shows under its own inputs — the zod messages
+ * that `ZodValidationPipe` copies into `fieldErrors[].i18nKey`. Both halves
+ * land in the same `errors` namespace and both are translated by the same
+ * `|| key` fallback, so a missing sentence in either is the same raw dotted
+ * key on the same screen.
  */
+const KEY = "'([a-zA-Z][a-zA-Z0-9]*(?:\\.[a-zA-Z0-9_]+){0,5})'";
+const EMITTERS = [
+  // throw new BadRequestException('key') and its siblings
+  `new (?:BadRequest|Unauthorized|Forbidden|NotFound|Conflict|TooManyRequests|ServiceUnavailable|InternalServerError)Exception\\(\\s*${KEY}`,
+  // an explicit key on an exception body, or on an error class
+  `i18nKey[:=]\\s*${KEY}`,
+  // zod messages — these become fieldErrors[].i18nKey
+  `\\.(?:min|max|regex|length|email|nonempty)\\([^)]*?,\\s*${KEY}\\s*\\)`,
+  `\\bmessage:\\s*${KEY}`,
+];
+
+/**
+ * The key argument of every `ok(...)` / `err(...)` in a file.
+ *
+ * Read by walking the call's parentheses rather than by one regex: the data
+ * argument is routinely an object literal spread over a dozen lines, and a
+ * pattern that stops at the first `(` or `;` silently skips those call sites.
+ * `auth.refreshSuccess` was skipped that way, and shipped untranslated.
+ */
+function envelopeKeys(source: string): string[] {
+  const out: string[] = [];
+  const call = /\b(ok|err)\(/g;
+  for (const m of source.matchAll(call)) {
+    const start = (m.index ?? 0) + m[0].length;
+    let depth = 1;
+    let i = start;
+    for (; i < source.length && depth > 0; i++) {
+      const c = source[i];
+      if (c === '(' || c === '{' || c === '[') depth++;
+      else if (c === ')' || c === '}' || c === ']') depth--;
+    }
+    // The key is the call's last string literal argument: `err('k')`,
+    // `ok(data, 'k')`, or `ok(data, cond ? 'a' : 'b')`.
+    const args = source.slice(start, i - 1);
+    const literals = [...args.matchAll(new RegExp(KEY, 'g'))].map((l) => l[1]);
+    out.push(...literals);
+  }
+  return out;
+}
+
 function keysReturnedByCode(): string[] {
   const found = new Set<string>(['successful', 'failed']);
-  const call = /\b(?:ok|err)\(\s*(?:[^();]*?,\s*)?'([a-zA-Z][a-zA-Z0-9_.]*)'\s*[,)]/g;
   const walk = (dir: string) => {
     for (const name of readdirSync(dir)) {
       const path = join(dir, name);
       if (statSync(path).isDirectory()) walk(path);
       else if (name.endsWith('.ts') && !name.endsWith('.spec.ts')) {
-        for (const m of readFileSync(path, 'utf-8').matchAll(call)) found.add(m[1]);
+        const source = readFileSync(path, 'utf-8');
+        const keys = [...envelopeKeys(source)];
+        for (const pattern of EMITTERS) {
+          for (const m of source.matchAll(new RegExp(pattern, 'g'))) keys.push(m[1]);
+        }
+        // A one-segment name is a local label, not a key in this namespace.
+        for (const key of keys) if (key.includes('.')) found.add(key);
       }
     }
   };

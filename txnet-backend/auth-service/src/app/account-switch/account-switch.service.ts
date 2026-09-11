@@ -297,6 +297,45 @@ export class AccountSwitchService {
         scopeKey,
       );
 
+      // ADR-0034: the switch moves the **place**, not the one session that
+      // asked. A place can hold more than one session for an account — a bot
+      // chat and its Mini App hold two under one scope (ADR-0032) — so the
+      // outgoing account's *other* sessions here go with it, and the group
+      // records who this place is now. Without the pointer, the swept surface
+      // signs itself back in against the `LinkedBotAccount` — which never
+      // moves (ADR-0014) — and snaps to the account just left.
+      //
+      // **After the mint, and it cannot be allowed to fail the request.** The
+      // switch has already happened by this line: the caller's old session is
+      // revoked and the only copy of its replacement is in `tokens`, on its way
+      // into a cookie or the chat's Redis entry. A throw here would return 500,
+      // strand those tokens, and leave the user signed out of *every* account
+      // with nothing to come back to. That is not hypothetical — it is what a
+      // stale Prisma client did on 2026-09-10, and it is why this is
+      // best-effort rather than part of the transaction.
+      //
+      // What a failure costs instead: the other surface stays on the outgoing
+      // account, which is precisely the behaviour that predates this ADR.
+      try {
+        // Names the *outgoing* account, so the session just minted for the
+        // target is never one of its candidates.
+        await this.sessionService.revokeSessionsForUserInScope(
+          callerUserId,
+          scopeKey,
+          'account_switched',
+        );
+        await this.prisma.linkedAccountGroup.update({
+          where: { id: callerMembership.groupId },
+          data: { actingAsUserId: targetUserId },
+        });
+      } catch (error) {
+        this.logger.error(
+          `account-switch: switched caller=${callerUserId} -> ${targetUserId} in scope=${scopeKey}, but the place was not moved with it: ${
+            (error as Error)?.message ?? error
+          }`,
+        );
+      }
+
       return ok(
         { userId: target.id, fullName: target.fullName, ...tokens },
         'accountSwitch.switched',

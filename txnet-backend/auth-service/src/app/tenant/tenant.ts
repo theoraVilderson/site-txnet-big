@@ -1,3 +1,4 @@
+import { IdentityHeaders } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 
 /**
@@ -126,8 +127,14 @@ export type TenantClaim = {
 
 /** Which tenant a service caller is acting for. Honoured only from a verified
  * service caller — see {@link TenantClaim.bot}. Named after catalog C-01's
- * header so a single name survives into the platform-staff case. */
-export const TENANT_ID_HEADER = 'x-tenant-id';
+ * header so a single name survives into the platform-staff case.
+ *
+ * One name, two directions: a service caller *sends* it and `auth-handler`
+ * *writes* it on the way back out. HTTP header names are case-insensitive, so
+ * `x-tenant-id` and `X-Tenant-Id` were one string declared twice — read it
+ * with `headerValue`, which lowercases, rather than by indexing with this
+ * constant (ADR-0036, C-04). */
+export const TENANT_ID_HEADER = IdentityHeaders.tenantId;
 
 /**
  * Thrown when a request's claimed tenant and its surface's tenant disagree

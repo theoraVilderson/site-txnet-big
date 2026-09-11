@@ -1,7 +1,11 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ExecutionStatus } from '@prisma/client';
-import { BrokerService, TickMessage } from '../broker/broker.service';
+import {
+  BrokerService,
+  DeadLetterError,
+  TickMessage,
+} from '../broker/broker.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WorkerRegistryService } from './worker-registry.service';
 import { TenantConcurrencyGate } from './tenant-concurrency.gate';
@@ -57,13 +61,19 @@ export class TickConsumer implements OnModuleInit {
     // `bot_execution_log`, so invariant #3 keeps meaning what it says — every
     // row is a run that was actually attempted, and counting rows still counts
     // runs.
-    const admission = this.gate.admit(tick);
+    const admission = await this.gate.admit(tick);
     if (!admission.admitted) {
-      if (admission.retry) this.defer(admission.retry, admission.afterMs);
-      // A dropped tick returns normally rather than throwing: the gate has
-      // already logged why, and throwing would nack it a second time and say
-      // the job failed, which it never started.
-      return;
+      if (admission.retry) {
+        this.defer(admission.retry, admission.afterMs);
+        return;
+      }
+      // Given up on after `MAX_DEFERRALS`. Before F-067-d this returned
+      // normally and the message was acked into nothing — the gate's own log
+      // line was the only trace of a tick nobody ran. It is now rejected to the
+      // dead-letter queue, and `DeadLetterError` is what keeps that out of
+      // `bot_execution_log`: a tick that was never admitted never started, so
+      // it is not a failed run.
+      throw new DeadLetterError(admission.dropped ?? 'refused by the tenant gate');
     }
 
     const botWorkerId = await this.registry.idOf(tick.key);
@@ -111,7 +121,12 @@ export class TickConsumer implements OnModuleInit {
       // whose jobs all fail would otherwise reach its cap once and stay there
       // until the process restarts — a fairness control that turns into an
       // outage is worse than none.
-      this.gate.release(tick);
+      //
+      // The lease, not the tick: since F-067-e a slot is one member of a
+      // shared set, and one of a tenant's runs finishing must return one slot
+      // rather than clear what every other replica is holding. `release` never
+      // throws, so it cannot replace the job's own outcome from in here.
+      await this.gate.release(admission.lease);
     }
   }
 
@@ -130,7 +145,10 @@ export class TickConsumer implements OnModuleInit {
    */
   private defer(retry: TickMessage, afterMs: number): void {
     const timer = setTimeout(() => {
-      this.broker.publishTick(retry).catch((err: unknown) =>
+      // `deferrals + 1` publishes have now been made of this tick: the first,
+      // and one per yield. The count rides on the message so a dead-letter row
+      // written later does not report the twentieth attempt as the first.
+      this.broker.publishTick(retry, (retry.deferrals ?? 0) + 1).catch((err: unknown) =>
         this.logger.error(
           `could not re-publish deferred tick ${retry.key}: ${err instanceof Error ? err.message : String(err)}`,
         ),

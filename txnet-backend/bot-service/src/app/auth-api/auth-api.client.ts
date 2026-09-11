@@ -1,3 +1,8 @@
+import {
+  IdentityHeaders,
+  REFRESH_TOKEN_COOKIE,
+  RequestHeaders,
+} from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotCopy } from '../locale/bot-copy';
@@ -128,11 +133,31 @@ export class AuthApiClient {
     return this.call('POST', '/api/auth/refresh', body, ctx);
   }
 
+  /**
+   * Sign out of this chat's current account.
+   *
+   * ADR-0035: when the place still holds another account the user proved, the
+   * answer carries **that account's session** instead of nothing, and the chat
+   * is expected to keep it. `switchedTo` is how the two outcomes are told
+   * apart.
+   */
   logout(
     body: { refreshToken: string },
     ctx: CallContext,
-  ): Promise<ApiResult<{ success: boolean }>> {
+  ): Promise<
+    ApiResult<
+      { success: boolean; switchedTo?: { userId: string; fullName: string } } & Partial<TokenPair>
+    >
+  > {
     return this.call('POST', '/api/auth/logout', body, ctx);
+  }
+
+  /** Sign out of every account this chat holds (`F-0211`, ADR-0035). */
+  logoutAll(
+    body: { refreshToken: string },
+    ctx: CallContext,
+  ): Promise<ApiResult<{ success: boolean }>> {
+    return this.call('POST', '/api/auth/logout/all', body, ctx);
   }
 
   // --- the caller's own accounts (the rule stays in audit) -----------------
@@ -276,7 +301,7 @@ export class AuthApiClient {
         headers: {
           'content-type': 'application/json',
           'accept-language': ctx.lang,
-          'x-service-token': this.serviceToken,
+          [RequestHeaders.serviceToken]: this.serviceToken,
           // Which tenant this chat belongs to — the one its bot's webhook
           // path resolved to (F-320). A bot request has no host to resolve and
           // auth-api has no fallback tenant (ADR-0025), so a call that names
@@ -285,14 +310,16 @@ export class AuthApiClient {
           // verified. `BOT_TENANT_ID` remains as the fallback for the calls
           // that are not answering an update.
           ...(ctx.tenantId || this.tenantId
-            ? { 'x-tenant-id': ctx.tenantId || this.tenantId }
+            ? { [IdentityHeaders.tenantId]: ctx.tenantId || this.tenantId }
             : {}),
-          'x-bot-chat-id': ctx.chatId,
+          [RequestHeaders.botChatId]: ctx.chatId,
           // The other half of the chat's identity (ADR-0015). Sent on every
           // call rather than only the account ones: it costs a header, and a
           // per-route rule about which calls carry it is exactly the kind of
           // thing that is right when written and wrong six months later.
-          ...(ctx.platform ? { 'x-bot-platform': ctx.platform } : {}),
+          ...(ctx.platform
+            ? { [RequestHeaders.botPlatform]: ctx.platform }
+            : {}),
           // Only the routes behind `AuthGuard` carry one. The service token
           // says which service is calling; this says on whose behalf.
           ...(ctx.accessToken
@@ -326,7 +353,7 @@ export class AuthApiClient {
     // auth-api strips the refresh token out of the body and sets it as an
     // httpOnly cookie for the browser. There is no browser here, so the bot
     // reads it back off the header and keeps it in its own session store.
-    const refreshToken = readSetCookie(response, 'refresh_token');
+    const refreshToken = readSetCookie(response, REFRESH_TOKEN_COOKIE);
     if (refreshToken && envelope.ok && envelope.data) {
       (envelope.data as { refreshToken?: string }).refreshToken = refreshToken;
     }

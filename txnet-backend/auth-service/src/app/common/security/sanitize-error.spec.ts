@@ -9,6 +9,10 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { BackendI18nKeys } from '@txnet-backend/shared-core';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { sanitizeError, SanitizedError } from './sanitize-error';
 
 /**
@@ -444,5 +448,43 @@ describe('sanitizeError', () => {
         expect(sanitizeError(thrown).ref).toMatch(/^[0-9a-f]{10}$/);
       }
     });
+  });
+});
+
+/**
+ * F-081. The generic keys this file answers with are also the ones
+ * `auth-handler` answers with in Go, and both languages used to spell them by
+ * hand against one JSON file. Both now import generated constants — but those
+ * are two generated files, from two generators. This is the check that they
+ * describe the same catalogue, for the keys the two services actually share.
+ */
+describe('the errors catalogue both languages are generated from', () => {
+  const goFile = readFileSync(
+    join(__dirname, '../../../../../../auth-handler/internal/i18nkeys/keys_generated.go'),
+    'utf8',
+  );
+  const goConst = (name: string): string | undefined =>
+    new RegExp(`\\b${name}\\s*=\\s*"([^"]+)"`).exec(goFile)?.[1];
+
+  it.each([
+    ['ErrorsAuthAuthorizationRequired', BackendI18nKeys.errors.auth.authorizationRequired],
+    ['ErrorsAuthInvalidToken', BackendI18nKeys.errors.auth.invalidToken],
+    ['ErrorsAuthSessionRevoked', BackendI18nKeys.errors.auth.sessionRevoked],
+    ['ErrorsPermissionsForbidden', BackendI18nKeys.errors.permissions.forbidden],
+    ['ErrorsSystemUnexpected', BackendI18nKeys.errors.system.unexpected],
+    ['ErrorsSystemUnavailable', BackendI18nKeys.errors.system.unavailable],
+  ])('Go %s is the same key TypeScript sends', (goName, tsKey) => {
+    expect(goConst(goName)).toBe(tsKey);
+  });
+
+  it('answers only with keys that exist in the catalogue', () => {
+    // A generic key that is not in `errors.json` reaches the user untranslated,
+    // as the raw key — which is the failure every constant here prevents.
+    const known = new Set<string>(Object.values(BackendI18nKeys.errors.system));
+    for (const status of [400, 401, 403, 404, 409, 429, 500, 502, 503]) {
+      const { msgKey } = sanitizeError(new HttpException('x', status));
+      const [group] = msgKey.split('.');
+      if (group === 'system') expect(known).toContain(msgKey);
+    }
   });
 });

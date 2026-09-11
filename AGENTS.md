@@ -211,9 +211,10 @@ python3 tools/backlog.py
 python3 tools/features-scan.py --check
 python3 tools/where.py --check
 python3 tools/conventions.py
+python3 tools/contracts.py
 ```
 
-All five must pass. For a change that touched TypeScript, so must
+All six must pass. For a change that touched TypeScript, so must
 `npx tsc -p auth-service/tsconfig.spec.json --noEmit` from `txnet-backend/` —
 jest transpiles without type-checking (`docs/CODE-LAYOUT.md`), so this is the
 only thing that type-checks the specs. `done` in the backlog means **code exists and is

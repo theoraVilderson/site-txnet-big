@@ -34,6 +34,34 @@ updated: 2026-09-09
 | `20260909000300_identity_unique_per_tenant` | replaces `identity.user`'s two platform-wide unique indexes with `@@unique([tenantId, username])` and `@@unique([tenantId, phoneNumber])` (ADR-0023, F-065-b). The new constraint is strictly weaker than the one it drops, so no row can fail to migrate and there is nothing to backfill. The migration carries its own rollback plan, which expires with the first cross-tenant duplicate |
 | `20260909000400_bot_link_unique_per_tenant` | `@@unique([tenantId, platform, platformUserId])` on `identity.linked_bot_account`, plus the denormalized `tenantId` it needs (catalog 10.5, F-066-l) |
 | `20260909000500_row_level_security` | **hand-written, section 99.** `public.current_tenant_id()`, the group roles `txnet_app` / `txnet_cross_tenant`, their grants, and RLS (`ENABLE` + `FORCE`) with a `tenant_isolation` policy on `identity.user` and `identity.linked_bot_account` (catalog 20.2 layer 1, F-1202, F-066-m-a). Additive; the rollback is `DROP POLICY` + `DISABLE ROW LEVEL SECURITY` on the two tables. **Needs the manual step below** — it creates the group roles, not the login roles |
+| `20260910002000_switch_scope_acting_as` | adds `audit.linked_account_group.actingAsUserId` — which member of the group a **place** is currently acting as (ADR-0034), so a switch made on one surface is followed by the other. Additive and nullable: every existing group reads `NULL`, which is exactly the pre-ADR behaviour, so there is nothing to backfill. Deliberately **without a foreign key** to `identity.user`: the pointer is read through `linked_account_member`, so a stale one resolves to no member and falls back to the link — where a cross-schema `RESTRICT` would instead block deleting a user who once switched. Rollback is the `DROP COLUMN` carried in the file |
+
+## Applying one to the dev stack — the step that bites
+
+`npm run prisma:generate` on the host is **not** enough. `dev-docker` mounts
+the repo at `/app` but keeps `/app/node_modules` as its own volume, so each
+container carries its own generated client and the host's is invisible to it.
+A container running last week's client answers a query naming a new column with
+`Unknown argument \`<column>\`` and a 500 — the schema is right, the migration
+is applied, and the service still fails.
+
+So a schema change on dev is three steps, not two:
+
+```bash
+docker exec txnet-dev-postgres psql -U admin -d devtxnet -f -   # or migrate deploy
+docker exec txnet-dev-auth-service sh -c 'cd /app && npx prisma generate --schema prisma/domains'
+docker restart txnet-dev-auth-service
+```
+
+Every service with its own `node_modules` volume that reads the changed table
+needs its own `generate`. Verify rather than assume:
+`docker exec <container> grep -c <newColumn> /app/node_modules/.prisma/client/index.d.ts`.
+
+This cost a real lockout on 2026-09-10 (ADR-0034): the stale client made a
+post-switch write throw, and the switch had already revoked the caller's
+session — so the user was signed out of every account at once. The code is now
+ordered so that cannot happen again, but the deploy step is still the step to
+get wrong.
 
 ## Policy
 

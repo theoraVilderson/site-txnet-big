@@ -284,6 +284,7 @@ describe('AccountSwitchService.list / switchTo / remove', () => {
   let switchSession: jest.Mock;
   let revokeInScope: jest.Mock;
   let deletedGroups: string[];
+  let groupUpdate: jest.Mock;
 
   const put = (scopeKey: string, userId: string, groupId: string) => {
     members[rowKey(scopeKey, userId)] = {
@@ -335,6 +336,8 @@ describe('AccountSwitchService.list / switchTo / remove', () => {
       }),
     };
 
+    groupUpdate = jest.fn(async (args: any) => ({ id: args.where.id }));
+
     const prisma: any = {
       user: {
         findUnique: jest.fn(({ where }: any) => USERS[where.id] ?? null),
@@ -350,6 +353,7 @@ describe('AccountSwitchService.list / switchTo / remove', () => {
           deletedGroups.push(where.id);
           return { id: where.id };
         }),
+        update: groupUpdate,
       },
       $transaction: jest.fn(async (fn: any) =>
         fn({
@@ -359,6 +363,7 @@ describe('AccountSwitchService.list / switchTo / remove', () => {
               deletedGroups.push(where.id);
               return { id: where.id };
             },
+            update: groupUpdate,
           },
         }),
       ),
@@ -431,6 +436,89 @@ describe('AccountSwitchService.list / switchTo / remove', () => {
     expect(res.ok).toBe(true);
     expect(res.data.members).toEqual([]);
     expect(res.data.groupId).toBeNull();
+  });
+
+  /**
+   * ADR-0034. A bot chat and its Mini App are one place holding two sessions
+   * (ADR-0032), so a switch that moved only the caller's session left the
+   * other surface signed in as the account just switched away from.
+   *
+   * The place remembers instead. Revoking the sibling session is what makes
+   * the other surface ask again; the pointer is what makes it come back as the
+   * right account rather than snapping to the `LinkedBotAccount`, which
+   * ADR-0014 deliberately never moves.
+   */
+  it("writes the target onto the place's own group", async () => {
+    await service.switchTo(BROWSER, CALLER, SESSION, SAME_TENANT, '1.1.1.1', 'jest');
+
+    expect(groupUpdate).toHaveBeenCalledWith({
+      where: { id: members[rowKey(BROWSER, CALLER)].groupId },
+      data: { actingAsUserId: SAME_TENANT },
+    });
+  });
+
+  /**
+   * The ordering is the fix for a real lockout, not a preference. The sweep
+   * and the pointer are not in one transaction with the mint, so a throw
+   * between them must still leave the caller holding a session. With the sweep
+   * first, a failure signed the user out of *every* account with nothing to
+   * come back to — observed 2026-09-10, when a stale Prisma client made the
+   * pointer write throw.
+   */
+  it('mints the replacement before sweeping anything', async () => {
+    await service.switchTo(BROWSER, CALLER, SESSION, SAME_TENANT, '1.1.1.1', 'jest');
+
+    expect(switchSession.mock.invocationCallOrder[0]).toBeLessThan(
+      revokeInScope.mock.invocationCallOrder[0],
+    );
+    expect(switchSession.mock.invocationCallOrder[0]).toBeLessThan(
+      groupUpdate.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('leaves the caller signed in when remembering the place fails', async () => {
+    groupUpdate.mockRejectedValue(new Error('column does not exist'));
+
+    const res: any = await service.switchTo(
+      BROWSER,
+      CALLER,
+      SESSION,
+      SAME_TENANT,
+      '1.1.1.1',
+      'jest',
+    );
+
+    // The switch already happened and the only copy of the new tokens is in
+    // this response, so it must still carry them. A 500 here would strand them
+    // and leave the caller signed out of every account.
+    expect(switchSession).toHaveBeenCalled();
+    expect(res.ok).toBe(true);
+    expect(res.data.userId).toBe(SAME_TENANT);
+  });
+
+  it("revokes the outgoing account's other sessions in this place", async () => {
+    await service.switchTo(BROWSER, CALLER, SESSION, SAME_TENANT, '1.1.1.1', 'jest');
+
+    expect(revokeInScope).toHaveBeenCalledWith(
+      CALLER,
+      BROWSER,
+      'account_switched',
+    );
+  });
+
+  it('leaves the pointer alone when the switch is refused', async () => {
+    const res: any = await service.switchTo(
+      BROWSER,
+      CALLER,
+      SESSION,
+      OTHER_TENANT,
+      '1.1.1.1',
+      'jest',
+    );
+
+    expect(res.ok).toBe(false);
+    expect(groupUpdate).not.toHaveBeenCalled();
+    expect(revokeInScope).not.toHaveBeenCalled();
   });
 
   it('switches to a member of the same group and tenant', async () => {

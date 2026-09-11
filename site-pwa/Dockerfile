@@ -3,12 +3,25 @@ FROM ${DOCKER_REGISTRY}/node:22 AS base
 WORKDIR /app
 
 FROM base AS deps
-ENV HTTP_PROXY="http://193.228.169.47:47723" \
-    HTTPS_PROXY="http://193.228.169.47:47723" \
-    NO_PROXY="" \
-    http_proxy="http://193.228.169.47:47723" \
-    https_proxy="http://193.228.169.47:47723" \
-    no_proxy=""
+
+# The proxy `npm install` goes through, if any (F-088).
+#
+# This baked `http://193.228.169.47:47723` into the image — one developer's
+# machine, in a file every build of this app reads. Every other Dockerfile in
+# the repo sets these to `""` (`txnet-backend/Dockerfile`, `coinsite/Dockerfile`,
+# `auth-handler/Dockerfile`), so the panel was the one image whose network
+# behaviour depended on a host that may not exist. An empty default keeps that
+# shape; whoever needs a proxy passes `--build-arg BUILD_HTTP_PROXY=...` or sets
+# `BUILD_HTTP_PROXY` in `.env`, which compose forwards.
+ARG BUILD_HTTP_PROXY=""
+ARG BUILD_HTTPS_PROXY=""
+ARG BUILD_NO_PROXY=""
+ENV HTTP_PROXY="${BUILD_HTTP_PROXY}" \
+    HTTPS_PROXY="${BUILD_HTTPS_PROXY}" \
+    NO_PROXY="${BUILD_NO_PROXY}" \
+    http_proxy="${BUILD_HTTP_PROXY}" \
+    https_proxy="${BUILD_HTTPS_PROXY}" \
+    no_proxy="${BUILD_NO_PROXY}"
 COPY package.json package-lock.json ./
 # vendored tarball of the shared @txnet/locale-client (file: dependency)
 COPY vendor ./vendor

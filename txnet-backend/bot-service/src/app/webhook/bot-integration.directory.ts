@@ -1,3 +1,4 @@
+import { RequestHeaders } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -143,7 +144,7 @@ export class AuthApiBotIntegrationDirectory implements BotIntegrationDirectory {
           method: 'POST',
           headers: {
             'content-type': 'application/json',
-            'x-service-token': this.serviceToken,
+            [RequestHeaders.serviceToken]: this.serviceToken,
           },
           body: JSON.stringify(body),
           signal: controller.signal,

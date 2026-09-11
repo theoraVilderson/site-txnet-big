@@ -8,10 +8,22 @@ const isProduction = process.env.NODE_ENV === 'production';
 module.exports = {
   mode: isProduction ? 'production' : 'development',
   target: 'node',
-  entry: './src/main.ts',
+  // Two entries, not one. `seed-bot-integration` is a one-shot provisioning
+  // command that has to write to the credential vault, and ADR-0026 gives the
+  // vault a single owner — building it here lets it call
+  // `CredentialVaultService` directly instead of growing a second copy of the
+  // KEK/DEK/AES-GCM code in a standalone script. It is never started by the
+  // container; `scripts/seed-bot-integration.sh` runs it on demand.
+  //
+  // `filename` must stay a `[name]` template for this to work, and
+  // `scripts/dev-serve.js` already looks for `main.js` when it sees one.
+  entry: {
+    main: './src/main.ts',
+    'seed-bot-integration': './src/seed-bot-integration.ts',
+  },
   output: {
     path: path.resolve(__dirname, '../dist/auth-service'),
-    filename: 'main.js',
+    filename: '[name].js',
     clean: false,
   },
   externalsPresets: { node: true },

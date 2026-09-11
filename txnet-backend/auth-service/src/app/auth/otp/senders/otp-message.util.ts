@@ -1,3 +1,5 @@
+import { BackendI18nKeys } from '@txnet-backend/shared-core';
+
 import { OtpPurpose } from '../otp.interface';
 
 /**
@@ -14,6 +16,25 @@ export interface OtpNamespace {
     smsBody?: string;
   };
 }
+
+/**
+ * The `notifications` key holding each purpose's title (F-084, ADR-0036).
+ *
+ * `resolveTitle` reads `otp.title[purpose]` — a key chosen at runtime, which
+ * no generated constant can see. This exhaustive map is the compile-time half:
+ * a new `OtpPurpose` does not compile without a row, and each row is a
+ * generated constant, so a title renamed in `notifications.json` fails the
+ * build. `locale/dynamic-keys.spec.ts` asserts the map and the runtime lookup
+ * name the same key, and that each has a sentence in every language.
+ */
+const T = BackendI18nKeys.notifications.otp.title;
+export const OTP_TITLE_KEY: Record<OtpPurpose, string> = {
+  [OtpPurpose.login]: T.login,
+  [OtpPurpose.register_phone_verify]: T.register_phone_verify,
+  [OtpPurpose.password_reset]: T.password_reset,
+  [OtpPurpose.account_link]: T.account_link,
+  [OtpPurpose.account_switch_link]: T.account_switch_link,
+};
 
 // English fallbacks used when a locale namespace/key is missing, so OTP
 // delivery never breaks just because of a translation gap.

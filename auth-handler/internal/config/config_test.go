@@ -19,8 +19,11 @@ func TestBuildRedisKeyPrefix(t *testing.T) {
 		version   string
 		want      string
 	}{
-		{"the deployed default", "txnet:auth", "v1", "txnet:auth:v1:"},
-		{"a bumped keyspace", "txnet:auth", "v2", "txnet:auth:v2:"},
+		// Inputs to the algorithm, not the deployed default — that lives in
+		// contracts/redis/keyspace.json and is asserted by
+		// keyspace_contract_test.go.
+		{"a superseded keyspace", "txnet:auth", "v1", "txnet:auth:v1:"},
+		{"the deployed keyspace", "txnet:auth", "v2", "txnet:auth:v2:"},
 		{"a single-segment namespace", "acme", "v7", "acme:v7:"},
 		// auth-service's envSchema strips these before its own prefix is
 		// assembled; Go strips them here. Both sides must, or a namespace
@@ -47,20 +50,11 @@ func TestBuildRedisKeyPrefixKeepsInnerColons(t *testing.T) {
 	}
 }
 
-func TestLoadDefaultsTheRedisKeyPrefix(t *testing.T) {
-	// Load() is what production actually calls; the default has to survive it,
-	// since neither compose file sets REDIS_KEY_NAMESPACE explicitly in dev.
-	t.Setenv("JWT_SECRET", "test-secret")
-	t.Setenv("REDIS_URL", "redis://127.0.0.1:6379")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if cfg.RedisKeyPrefix != "txnet:auth:v1:" {
-		t.Errorf("RedisKeyPrefix = %q, want %q", cfg.RedisKeyPrefix, "txnet:auth:v1:")
-	}
-}
+// TestLoadDefaultsTheRedisKeyPrefix lived here and hardcoded "txnet:auth:v1:".
+// It is now TestContractLoadUsesTheDeclaredDefaults in keyspace_contract_test.go,
+// which reads the default out of contracts/redis/keyspace.json instead — a test
+// that pins the value in a second place is how the defaults drifted apart in
+// the first place (ADR-0036).
 
 func TestLoadUsesConfiguredNamespaceAndVersion(t *testing.T) {
 	t.Setenv("JWT_SECRET", "test-secret")

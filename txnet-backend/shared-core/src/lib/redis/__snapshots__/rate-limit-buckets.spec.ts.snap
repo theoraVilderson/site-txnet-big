@@ -1,0 +1,29 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`RateLimitBucket records the whole rate-limited surface in one place 1`] = `
+[
+  "LOGIN_PWD = login:pwd",
+  "LOGIN_OTP_REQUEST = login:otp:req",
+  "LOGIN_OTP_VERIFY = login:otp:verify",
+  "LOGIN_FAILURES = login-failures",
+  "REGISTER = register",
+  "REGISTER_VERIFY = register:verify",
+  "PASSWORD_FORGOT = pwd:forgot",
+  "PASSWORD_FORGOT_VERIFY = pwd:forgot:verify",
+  "OTP_DELIVERY_STATUS = otp:delivery",
+  "OTP_CHANNELS = otp:channels",
+  "CAPTCHA_CHALLENGE = captcha:challenge",
+  "CAPTCHA_VERIFY = captcha:verify",
+  "BOT_LINK_RESOLVE = bot:link:resolve",
+  "BOT_LINK_CONTACT = bot:link:contact",
+  "BOT_LINK_STATUS = bot:link:status",
+  "BOT_SESSION = bot:session",
+  "BOT_WEBAPP_SESSION = bot:webapp:session",
+  "ACCOUNTS_ADD_OTP_REQUEST = accounts:add:otp:req",
+  "ACCOUNTS_ADD_OTP_VERIFY = accounts:add:otp:verify",
+  "ACCOUNTS_ADD_PASSWORD = accounts:add:pwd",
+  "ACCOUNTS_LIST = accounts:list",
+  "ACCOUNTS_SWITCH = accounts:switch",
+  "ACCOUNTS_REMOVE = accounts:remove",
+]
+`;

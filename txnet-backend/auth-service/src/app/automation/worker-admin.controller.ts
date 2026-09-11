@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
   UsePipes,
@@ -19,7 +20,11 @@ import {
   setScheduleSchema,
   toggleWorkerSchema,
 } from './worker-admin.schema';
-import { WorkerAdminService, WorkerView } from './worker-admin.service';
+import {
+  DeadLetterView,
+  WorkerAdminService,
+  WorkerView,
+} from './worker-admin.service';
 
 /**
  * The admin surface over the background workers (F-031-b).
@@ -45,6 +50,23 @@ export class WorkerAdminController {
   @Get()
   async list(): Promise<WorkerView[]> {
     return this.workers.list();
+  }
+
+  /**
+   * What the queue could not deliver (F-067-d) — newest first.
+   *
+   * Declared before every `:key` route below it so the literal wins the match;
+   * there is no `GET /admin/workers/:key`, but a later one would otherwise
+   * swallow this path silently.
+   *
+   * Read-only. Putting a dead message back on the exchange is a decision about
+   * ordering and idempotency rather than a button, and it belongs to a row of
+   * its own.
+   */
+  @Get('dead-letters')
+  async deadLetters(@Query('limit') limit?: string): Promise<DeadLetterView[]> {
+    const parsed = Number(limit);
+    return this.workers.deadLetters(Number.isFinite(parsed) ? parsed : undefined);
   }
 
   /** Give a worker a schedule. A shape that could never run is refused here. */

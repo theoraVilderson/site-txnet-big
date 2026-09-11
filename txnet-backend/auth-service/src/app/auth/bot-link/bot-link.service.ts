@@ -8,6 +8,7 @@ import {
   OtpPurpose,
   OTP_SERVICE,
 } from '../otp/otp.interface';
+import { OtpDeliveryStore } from '../otp/otp-delivery.store';
 import {
   BOT_PLATFORMS,
   BotClientRegistry,
@@ -79,6 +80,7 @@ export class BotLinkService {
     private readonly bots: BotClientRegistry,
     private readonly locale: LocaleService,
     @Inject(OTP_SERVICE) private readonly otp: IOtpService,
+    private readonly deliveries: OtpDeliveryStore,
   ) {}
 
   /** Whether the tenant in scope can run the link flow on this platform. */
@@ -406,12 +408,20 @@ export class BotLinkService {
     let sent = false;
     if (link.purpose !== OtpPurpose.account_link) {
       try {
+        // Handles with no reader: this send is triggered by the user sharing
+        // their contact in the chat, so there is no HTTP caller holding a 202
+        // to hand them to and nobody can subscribe to the channel. The status
+        // is still written, and it is what `link.otpSent` reports through
+        // `/auth/bots/link/status`, which this flow polls. Giving *this* flow
+        // a socket is a separate change: the client here is the screen showing
+        // a deep link, and it never received a channel token.
         await this.otp.issueOtp(
           link.phoneNumber,
           link.purpose,
           CHANNEL_OF[platform],
           link.ip,
           link.lang,
+          await this.deliveries.mintHandles(),
         );
         sent = true;
       } catch (e: unknown) {

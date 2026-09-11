@@ -16,11 +16,13 @@
  * suite exercises real host resolution (`via: 'domain'`) instead of proving a
  * fallback, which is what it used to do.
  */
+import { RequestHeaders } from '@txnet-backend/shared-core';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { Server } from 'node:http';
 import { AppModule } from '../../../auth-service/src/app/app.module';
 import { I18nExceptionFilter } from '../../../auth-service/src/app/common/filters/i18n-exception.filter';
+import { ResponseInterceptor } from '../../../auth-service/src/app/common/interceptors/response.interceptor';
 import { LocaleService } from '../../../auth-service/src/app/locale/locale.service';
 import { CrossTenantPrismaService } from '../../../auth-service/src/app/prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../../auth-service/src/app/prisma/prisma.service';
@@ -107,12 +109,15 @@ export async function createE2eApp(): Promise<E2eApp> {
   const locale = app.get(LocaleService);
 
   app.useGlobalFilters(new I18nExceptionFilter(locale));
+  // Same pair as `main.ts`. `LocaleStub.getKey` returns undefined, so every
+  // `msg` here stays the i18n key the specs assert on.
+  app.useGlobalInterceptors(new ResponseInterceptor(locale));
   app.getHttpAdapter().getInstance().set('trust proxy', '1');
   app.enableCors({
     origin: [process.env.FRONTEND_ORIGIN as string],
     credentials: true,
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-captcha-token'],
+    allowedHeaders: ['Content-Type', 'Authorization', RequestHeaders.captchaToken],
     optionsSuccessStatus: 204,
   });
   app.useGlobalPipes(

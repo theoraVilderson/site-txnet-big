@@ -1,4 +1,8 @@
 import {
+  RateLimitBucket,
+  rateLimitBucketKey,
+} from '@txnet-backend/shared-core';
+import {
   Body,
   Controller,
   Get,
@@ -71,8 +75,8 @@ export class AccountSwitchController {
   @UseGuards(AuthGuard)
   @UsePipes(new ZodValidationPipe(addByOtpRequestSchema))
   @RateLimit({
-    key: (req) => `accounts:add:otp:req:${req?.user?.sub ?? req?.ip}`,
-    limit: 10,
+    key: (req) => rateLimitBucketKey(RateLimitBucket.ACCOUNTS_ADD_OTP_REQUEST, req?.user?.sub ?? req?.ip),
+    configKey: 'ACCOUNTS_ADD_OTP_REQUEST_RATE_LIMIT',
     windowSec: 900,
   })
   requestAddOtp(@Body() body: any, @Ip() ip: string, @Req() req: Request) {
@@ -90,8 +94,8 @@ export class AccountSwitchController {
   @UseGuards(AuthGuard)
   @UsePipes(new ZodValidationPipe(addByOtpVerifySchema))
   @RateLimit({
-    key: (req) => `accounts:add:otp:verify:${req?.user?.sub ?? req?.ip}`,
-    limit: 20,
+    key: (req) => rateLimitBucketKey(RateLimitBucket.ACCOUNTS_ADD_OTP_VERIFY, req?.user?.sub ?? req?.ip),
+    configKey: 'ACCOUNTS_ADD_OTP_VERIFY_RATE_LIMIT',
     windowSec: 900,
   })
   addByOtp(@Body() body: any, @Req() req: Request) {
@@ -107,8 +111,8 @@ export class AccountSwitchController {
   @UseGuards(AuthGuard)
   @UsePipes(new ZodValidationPipe(addByPasswordSchema))
   @RateLimit({
-    key: (req) => `accounts:add:pwd:${req?.user?.sub ?? req?.ip}`,
-    limit: 20,
+    key: (req) => rateLimitBucketKey(RateLimitBucket.ACCOUNTS_ADD_PASSWORD, req?.user?.sub ?? req?.ip),
+    configKey: 'ACCOUNTS_ADD_PASSWORD_RATE_LIMIT',
     windowSec: 900,
   })
   addByPassword(@Body() body: any, @Req() req: Request) {
@@ -129,8 +133,8 @@ export class AccountSwitchController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)
   @RateLimit({
-    key: (req) => `accounts:list:${req?.user?.sub ?? req?.ip}`,
-    limit: 120,
+    key: (req) => rateLimitBucketKey(RateLimitBucket.ACCOUNTS_LIST, req?.user?.sub ?? req?.ip),
+    configKey: 'ACCOUNTS_LIST_RATE_LIMIT',
     windowSec: 900,
   })
   list(@Req() req: Request) {
@@ -151,8 +155,8 @@ export class AccountSwitchController {
   @UseGuards(AuthGuard)
   @UsePipes(new ZodValidationPipe(switchAccountSchema))
   @RateLimit({
-    key: (req) => `accounts:switch:${req?.user?.sub ?? req?.ip}`,
-    limit: 30,
+    key: (req) => rateLimitBucketKey(RateLimitBucket.ACCOUNTS_SWITCH, req?.user?.sub ?? req?.ip),
+    configKey: 'ACCOUNTS_SWITCH_RATE_LIMIT',
     windowSec: 900,
   })
   async switchTo(
@@ -189,8 +193,8 @@ export class AccountSwitchController {
   @UseGuards(AuthGuard)
   @UsePipes(new ZodValidationPipe(removeAccountSchema))
   @RateLimit({
-    key: (req) => `accounts:remove:${req?.user?.sub ?? req?.ip}`,
-    limit: 30,
+    key: (req) => rateLimitBucketKey(RateLimitBucket.ACCOUNTS_REMOVE, req?.user?.sub ?? req?.ip),
+    configKey: 'ACCOUNTS_REMOVE_RATE_LIMIT',
     windowSec: 900,
   })
   remove(@Body() body: any, @Req() req: Request) {

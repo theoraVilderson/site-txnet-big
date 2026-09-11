@@ -2,8 +2,8 @@
 id: bot-app
 layer: interface
 status: active
-version: 10
-updated: 2026-09-09
+version: 11
+updated: 2026-09-10
 ---
 
 # bot-app — contract
@@ -70,8 +70,7 @@ contract — **not** a rule written in the bot because it is faster there
 
 | file | holds |
 |---|---|
-| `webhook/webhook.controller.ts` | `POST /api/bots/:platform/:webhookPath` — one unguessable path per bot, and the path is what resolves the tenant (F-320). Unknown path, wrong secret token, or a Telegram request with no header -> 404; known path -> always 200 |
-| `webhook/update.normalizer.ts` | the last place that knows what a Telegram `Update` looks like |
+| the front door — `webhook/**`, `common/service-only.guard.ts` | the route, what it verifies, and why it now publishes the update instead of running it (F-067-b): [contract.webhook.md](contract.webhook.md) |
 | `conversation/router.ts` | `/start` (+ `F-314` payload), `/logout`, cancel, and reading a *typed* answer back to a choice |
 | `conversation/bot.dispatcher.ts` | render for this platform, send, delete the password message, remember the screen |
 | `flows/otp.step.ts` | the channel question, the cross-messenger link, the in-place link |
@@ -138,32 +137,9 @@ every flow, including the §10.4 flows not yet written.
 
 ## The Mini App (`F-310`, ADR-0017)
 
-One row on the member menu, `kind: 'web_app'`, pointing at `PANEL_BASE_URL`.
-That is the whole of this unit's share of the feature, and the smallness is the
-design: the Mini App is `panel-web`, so everything it can do it already does,
-and anything this unit added would be the third UI ADR-0009 forbids.
-
-Three decisions live here rather than in the panel:
-
-- **A menu row, not a `BotView.escape`.** An `escape` says "*this screen* is
-  done better on the web" — a claim about one screen. The Mini App is a
-  destination, so it sits where the other destinations are. Nothing moved into
-  it: chat-first holds, and a `BotView` whose chat path is empty because the
-  Mini App does it better is still a bug.
-- **The member menu only.** A chat with no session is one this bot has never
-  signed in; sending it into a webview to find out whether the messenger
-  vouches for it there is a worse first answer than the sign-in button it
-  already has.
-- **No row when `PANEL_BASE_URL` is unset.** A deployment with no published
-  panel shows a shorter menu rather than a button that opens nothing.
-
-The page then signs *itself* in: the platform hands it a signed `initData`,
-`panel-web` presents that to `POST /auth/bots/webapp/session`, and the session
-that comes back is the ordinary one (ADR-0017). This unit is not in that path
-at all — it hands over a URL, and the credential is the platform's signature,
-never anything this bot passes along. Degradation is the renderer's
-(`messenger`): a platform without the WebApp surface gets the same URL as a
-plain link.
+One row on the member menu, and this unit's whole share of the feature. The row,
+the three decisions that live here rather than in the panel, and the marker the
+URL carries are in [contract.mini-app.md](contract.mini-app.md).
 
 ## The switch group (`F-0205`, `F-0207`, `F-0210`)
 
@@ -201,12 +177,25 @@ The bot's user is the same `User` as the panel's, proven by a
 `LinkedBotAccount` with `contactVerifiedAt` set (`identity`, invariant #12). It
 invents no identity model and holds no credential: only the ordinary `auth-api`
 refresh token, in the `bot:session:` entry `redis-keyspace` catalogues — one per
-bot per chat, never per chat alone (F-320). `/logout`, a password reset and a
-self-removal (`F-0208`) each revoke it at `auth-api` and drop the entry.
+bot per chat, never per chat alone (F-320). A password reset and a self-removal
+(`F-0208`) each revoke it at `auth-api` and drop the entry. `/logout` no longer
+always does: since ADR-0035 it signs out of **one** account, and when this
+place still holds another the answer carries *that* account's session — which
+the chat keeps, staying signed in as them. Signing out of everything is its own
+action on the accounts screen (`F-0211`), two taps, because the tap that opens
+the question must not be the tap that answers it.
 
 **A messenger chat id is not an authentication.** Without that Redis entry the
 chat is anonymous, however well known its owner is, and `/start` shows the guest
 menu.
+
+**And the entry alone is not one either** (ADR-0033, 2026-09-10). It is a local
+cache, and it cannot know the session behind it was revoked somewhere else — a
+Mini App logout, an `F-0208` removal, thirty idle days. So which menu a chat
+sees is decided by `ChatAccess.token()`, which refreshes first and drops the
+entry when `auth-api` refuses, and never by the entry's presence. That costs a
+menu render one round trip; the alternative is a member menu shown to someone
+who is signed out, failing on their first tap.
 
 ## Deep links (`F-314`)
 
@@ -242,8 +231,9 @@ translate (no answer, a non-JSON body, no `msg`) are resolved in `ctx.lang`.
 
 ## Consumers
 
-None. This is a leaf surface: things call *out* of it, nothing calls into it
-except `messenger` handing over a normalized update.
+`automation`. Since F-067-b the webhook enqueues and `worker-service` runs the
+flow by calling `internal/bots/dispatch` ([contract.webhook.md](contract.webhook.md)).
+Otherwise this is still a surface things call *out* of.
 
 ## Open
 

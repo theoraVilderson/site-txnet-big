@@ -16,6 +16,8 @@ import { BotSessionStore } from './session/bot-session.store';
 import { ChatAccess } from './session/chat-access';
 import { BotIntegrationModule } from './webhook/bot-integration.module';
 import { BotWebhookRegistrar } from './webhook/bot-webhook.registrar';
+import { BotDispatchController } from './webhook/bot-dispatch.controller';
+import { BotUpdatePublisher } from './webhook/bot-update.publisher';
 import { UpdateNormalizer } from './webhook/update.normalizer';
 import { WebhookController } from './webhook/webhook.controller';
 
@@ -33,9 +35,14 @@ import { WebhookController } from './webhook/webhook.controller';
     MessengerModule.forRoot({ imports: [BotIntegrationModule] }),
     AuthApiModule,
   ],
-  controllers: [WebhookController],
+  // Two doors, and only one of them is on the internet. `WebhookController`
+  // is the platforms' (verify, enqueue, 200); `BotDispatchController` is
+  // `worker-service`'s, behind the service token, and is where the
+  // conversation actually runs (F-067-b).
+  controllers: [WebhookController, BotDispatchController],
   providers: [
     UpdateNormalizer,
+    BotUpdatePublisher,
     BotDispatcher,
     ConversationRouter,
     ConversationStore,

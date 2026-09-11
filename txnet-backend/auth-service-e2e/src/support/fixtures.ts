@@ -92,7 +92,9 @@ export async function signUp(
   const account = newAccount(overrides);
 
   const registered = await api.register(account);
-  if (registered.status !== 201) {
+  // 202, not 201: `register` queues the code rather than sending it (v13,
+  // F-067-a) and creates no row here in any case.
+  if (registered.status !== 202) {
     throw new Error(
       `register failed: ${registered.status} ${JSON.stringify(registered.body)}`,
     );

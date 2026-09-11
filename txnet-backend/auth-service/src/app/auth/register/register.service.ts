@@ -14,6 +14,8 @@ import {
   OtpPurpose,
 } from '../otp/otp.interface';
 import { OtpChannelRegistry } from '../otp/otp-channels.service';
+import { otpRealtimeChannel } from '@txnet-backend/shared-core';
+import { OtpDeliveryStore } from '../otp/otp-delivery.store';
 import { BotLinkService } from '../bot-link/bot-link.service';
 import { BotPlatform } from '@txnet-backend/messenger';
 import { normalizePhone } from '../../common/validation/phone.schema';
@@ -44,6 +46,7 @@ export class RegisterService {
     @Inject(OTP_SERVICE) private readonly otpService: IOtpService,
     private readonly channels: OtpChannelRegistry,
     private readonly botLinks: BotLinkService,
+    private readonly deliveries: OtpDeliveryStore,
   ) {}
 
   /**
@@ -155,16 +158,27 @@ export class RegisterService {
         }
       }
 
+      const delivery = await this.deliveries.mintHandles();
       await this.otpService.issueOtp(
         phoneNumber,
         OtpPurpose.register_phone_verify,
         channel,
         requestIp,
         lang,
+        delivery,
       );
 
       // 8. Success
-      return ok({ phoneNumber, requiresPhoneVerification: true }, 'register.success');
+      return ok(
+        {
+          phoneNumber,
+          requiresPhoneVerification: true,
+          deliveryId: delivery.deliveryId,
+          channel: otpRealtimeChannel(delivery.channelId),
+          channelToken: delivery.channelToken,
+        },
+        'register.success',
+      );
     });
   }
 

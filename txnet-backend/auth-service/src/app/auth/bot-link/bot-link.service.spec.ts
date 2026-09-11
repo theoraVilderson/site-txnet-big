@@ -110,6 +110,11 @@ describe('BotLinkService.handleUpdate — shared contact', () => {
       bots as never,
       locale as never,
       { issueOtp, verifyOtp: jest.fn() } as never,
+      { mintHandles: jest.fn().mockResolvedValue({
+          deliveryId: 'a'.repeat(32),
+          channelId: 'c'.repeat(32),
+          channelToken: 'd'.repeat(32),
+        }) } as never,
     );
   });
 
@@ -142,6 +147,7 @@ describe('BotLinkService.handleUpdate — shared contact', () => {
       'telegram',
       '1.2.3.4',
       'en',
+      expect.objectContaining({ deliveryId: 'a'.repeat(32) }),
     );
     expect(link.state).toBe('linked');
     expect(link.otpSent).toBe(true);
@@ -208,6 +214,7 @@ describe('BotLinkService — language for a chat with no pending link', () => {
       { client: () => undefined } as never,
       locale as never,
       { issueOtp: jest.fn(), verifyOtp: jest.fn() } as never,
+      { mintHandles: jest.fn() } as never,
     );
   };
 

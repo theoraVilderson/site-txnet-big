@@ -34,15 +34,36 @@ describe('auth-api — signup, login, refresh, logout', () => {
 
       const res = await api.register(account);
 
-      expect(res.status).toBe(201);
+      // 202, not 201: since v13 the code is queued rather than sent, and no
+      // row is created here in any case (identity/invariants.md #11).
+      expect(res.status).toBe(202);
       expect(res.body).toEqual({
         ok: true,
         msg: 'register.success',
         data: {
           phoneNumber: account.phoneNumber,
           requiresPhoneVerification: true,
+          // The status handle (F-067-a) and the realtime channel that carries
+          // the same answer without being asked (F-067-j). All three are
+          // minted per request, before anything is known about the phone
+          // number, so their presence says nothing about the account.
+          deliveryId: expect.stringMatching(/^[0-9a-f]{32}$/),
+          channel: expect.stringMatching(/^otp:[0-9a-f]{32}$/),
+          channelToken: expect.stringMatching(/^[0-9a-f]{32}$/),
         },
       });
+
+      // The three are distinct values. Reusing one for two purposes would put
+      // the capability that reads the status into a channel name, which
+      // reaches Redis pub/sub, gateway logs and metrics (F-067-j).
+      const handles = res.body.data;
+      expect(
+        new Set([
+          handles.deliveryId,
+          handles.channel.slice('otp:'.length),
+          handles.channelToken,
+        ]).size,
+      ).toBe(3);
 
       // identity/invariants.md #11: the row appears at verify-phone, not here.
       await expect(
@@ -66,9 +87,10 @@ describe('auth-api — signup, login, refresh, logout', () => {
 
       const res = await api.register(newAccount({ phoneNumber: account.phoneNumber }));
 
-      // 201 with `ok: false` — a business rejection keeps the route's own
-      // status; see contract.md "Response envelopes".
-      expect(res.status).toBe(201);
+      // 202 with `ok: false` — a business rejection keeps the route's own
+      // status, and `register`'s is 202 since v13; see contract.md
+      // "Response envelopes".
+      expect(res.status).toBe(202);
       expect(res.body).toMatchObject({ ok: false, msg: 'register.duplicateUser' });
     });
   });
@@ -235,11 +257,20 @@ describe('auth-api — signup, login, refresh, logout', () => {
       const requested = await api.requestLoginOtp({
         phoneNumber: account.phoneNumber,
       });
-      expect(requested.status).toBe(200);
+      // 202: the code is queued, not sent (v13).
+      expect(requested.status).toBe(202);
       expect(requested.body).toEqual({
         ok: true,
         msg: 'auth.otpSent',
-        data: { accepted: true },
+        data: {
+          accepted: true,
+          // Minted per request, before anything is known about the number —
+          // which is what keeps them from answering the existence question
+          // `{accepted:true}` refuses (F-067-a, F-067-j).
+          deliveryId: expect.stringMatching(/^[0-9a-f]{32}$/),
+          channel: expect.stringMatching(/^otp:[0-9a-f]{32}$/),
+          channelToken: expect.stringMatching(/^[0-9a-f]{32}$/),
+        },
       });
 
       const code = e2e.otp.latest(account.phoneNumber, 'login');
@@ -265,8 +296,19 @@ describe('auth-api — signup, login, refresh, logout', () => {
       expect(res.body).toEqual({
         ok: true,
         msg: 'auth.otpSent',
-        data: { accepted: true },
+        data: {
+          accepted: true,
+          // Minted per request, before anything is known about the number —
+          // which is what keeps them from answering the existence question
+          // `{accepted:true}` refuses (F-067-a, F-067-j).
+          deliveryId: expect.stringMatching(/^[0-9a-f]{32}$/),
+          channel: expect.stringMatching(/^otp:[0-9a-f]{32}$/),
+          channelToken: expect.stringMatching(/^[0-9a-f]{32}$/),
+        },
       });
+      // The handles above are handed out anyway. Nothing was sent, and the
+      // status they address stays `queued` for ever — indistinguishable from
+      // a slow provider, which is the whole point.
       expect(e2e.otp.isEmpty()).toBe(true);
     });
   });

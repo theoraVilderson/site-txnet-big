@@ -89,7 +89,7 @@ func TestIntegrationSessionActive(t *testing.T) {
 	redisURL := integrationURL(t)
 	c := newTestClientFor(t, redisURL)
 
-	key := keyPrefix + "session:live"
+	key := SessionKey(keyPrefix, "live")
 	seed(t, redisURL, "SET", key, `{"userId":"u1","revoked":false}`, "EX", "60")
 	t.Cleanup(func() { seed(t, redisURL, "DEL", key) })
 
@@ -109,7 +109,7 @@ func TestIntegrationMissingKeyIsNotAnError(t *testing.T) {
 	// A revoked session is a deleted key. Redis answers $-1, and the gateway
 	// must read that as "not active", not as "Redis is broken" — the two lead
 	// to different HTTP statuses.
-	alive, err := c.SessionActive(keyPrefix + "session:definitely-absent")
+	alive, err := c.SessionActive(SessionKey(keyPrefix, "definitely-absent"))
 	if err != nil {
 		t.Fatalf("SessionActive on a missing key returned an error: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestIntegrationSessionExpiresOnItsOwn(t *testing.T) {
 	redisURL := integrationURL(t)
 	c := newTestClientFor(t, redisURL)
 
-	key := keyPrefix + "session:expiring"
+	key := SessionKey(keyPrefix, "expiring")
 	seed(t, redisURL, "SET", key, "x", "PX", "150")
 
 	if alive, err := c.SessionActive(key); err != nil || !alive {
@@ -146,7 +146,7 @@ func TestIntegrationLargePayloadCrossesTheBufferBoundary(t *testing.T) {
 
 	// bufio's default buffer is 4096 bytes; a bulk reply larger than that is
 	// the case where a parser that forgets io.ReadFull silently truncates.
-	key := keyPrefix + "session:large"
+	key := SessionKey(keyPrefix, "large")
 	seed(t, redisURL, "SET", key, strings.Repeat("a", 10_000))
 	t.Cleanup(func() { seed(t, redisURL, "DEL", key) })
 
@@ -163,10 +163,10 @@ func TestIntegrationPooledConnectionSurvivesManyCommands(t *testing.T) {
 	redisURL := integrationURL(t)
 	c := newTestClientFor(t, redisURL)
 
-	present := keyPrefix + "session:pooled"
+	present := SessionKey(keyPrefix, "pooled")
 	seed(t, redisURL, "SET", present, "x")
 	t.Cleanup(func() { seed(t, redisURL, "DEL", present) })
-	absent := keyPrefix + "session:pooled-absent"
+	absent := SessionKey(keyPrefix, "pooled-absent")
 
 	// Alternating hit/miss on a reused connection: if readReply ever left a
 	// stray "\r\n" in the stream, the next reply would be misparsed.
@@ -186,7 +186,7 @@ func TestIntegrationConcurrentLookups(t *testing.T) {
 	redisURL := integrationURL(t)
 	c := newTestClientFor(t, redisURL)
 
-	key := keyPrefix + "session:concurrent"
+	key := SessionKey(keyPrefix, "concurrent")
 	seed(t, redisURL, "SET", key, "x")
 	t.Cleanup(func() { seed(t, redisURL, "DEL", key) })
 
@@ -221,7 +221,7 @@ func TestIntegrationWrongTypeIsReportedAsAnError(t *testing.T) {
 	// GET against a SET key: a real error reply, which must not be mistaken
 	// for "no session" — that would fail open into a 401 storm rather than a
 	// logged fault.
-	key := keyPrefix + "session:wrongtype"
+	key := SessionKey(keyPrefix, "wrongtype")
 	seed(t, redisURL, "DEL", key)
 	seed(t, redisURL, "SADD", key, "member")
 	t.Cleanup(func() { seed(t, redisURL, "DEL", key) })
@@ -249,7 +249,7 @@ func TestIntegrationAuthFailureIsSurfaced(t *testing.T) {
 	// On a Redis with no password this is ERR ("without any password
 	// configured"); on one with a password it is WRONGPASS. Either way the
 	// client must refuse the connection instead of proceeding unauthenticated.
-	if _, err := c.SessionActive(keyPrefix + "session:whatever"); err == nil {
+	if _, err := c.SessionActive(SessionKey(keyPrefix, "whatever")); err == nil {
 		t.Fatal("expected AUTH with a bogus password to fail")
 	}
 }

@@ -2,7 +2,7 @@
 id: identity
 layer: domain
 status: active
-updated: 2026-09-09
+updated: 2026-09-10
 ---
 
 # Invariants — identity
@@ -12,7 +12,7 @@ Statements that must be true at all times. **Outrank every feature request.**
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
 | 1 | `passwordHash`, `twoFactorSecret`, `otp_code.codeHash` are never returned by a default select and never logged | service-layer `select`/`omit`; `sanitizeError` | credential disclosure |
-| 2 | The plain OTP code and plain refresh token are never persisted — only an argon2id hash (OTP) / HMAC hash (refresh) | `OtpService`, `TokenService` | token replay if store leaks |
+| 2 | The plain OTP code and plain refresh token are never persisted — only an argon2id hash (OTP) / HMAC hash (refresh). **Nor does the code cross a process boundary** (F-067-a): it is drawn inside the one process that sends it, and the message that asks for a send carries the phone, purpose and channel but never a code | `OtpService.mint` + `deliverOtp` (the only two places a code exists), `TokenService`; `otp.service.spec.ts` asserts the published message's exact field set | token replay if the store — or now the queue — leaks |
 | 3 | A password change or reset revokes every session of that user (Postgres `updateMany` + Redis `dropAllForUser`) in one transaction. A session issued to the resetting device *after* that revocation is not an exception to it — no session that existed before the reset survives | `AuthService.resetPassword` | stolen session survives password change |
 | 4 | JWT verification always uses HS256 regardless of the token header `alg` | `TokenService.verify`, Go `jwt.Validate` | `alg:none` / alg-confusion forgery |
 | 5 | Every User has exactly one `tenantId` and one `roleId` (both non-null FKs) | schema NOT NULL FKs | orphaned / cross-tenant identity |
@@ -29,6 +29,9 @@ Statements that must be true at all times. **Outrank every feature request.**
 
 1. Repository/service unit tests assert `passwordHash` absent from returned DTOs.
 2. `OtpService` test: issue twice within cooldown -> 429; 6th verify -> exhausted.
+   Since F-067-a also: `issueOtp` publishes and draws nothing, a publish the
+   broker did not confirm leaves no cooldown behind, and `deliverOtp` stores an
+   argon2id hash and never the code (`otp.service.spec.ts`).
 3. `AuthService.resetPassword` test: pre-existing session `isActive()` -> false after.
 4. `TokenService.verify` test: token with `alg:none` header -> `UnauthorizedException`.
 5. `ImpersonationService` test: equal/greater role -> `ForbiddenException`; audit

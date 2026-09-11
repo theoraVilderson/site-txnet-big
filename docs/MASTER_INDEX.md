@@ -1,7 +1,7 @@
 ---
 id: master-index
 status: active
-updated: 2026-09-09
+updated: 2026-09-10
 ---
 
 # Master Index
@@ -46,6 +46,7 @@ no service yet. A unit that is `active` with an empty `source:` is a lie and
 | redis-keyspace | shared Redis key prefix/versioning + session & OTP key catalog + TTLs | active | [->](platform/redis-keyspace/INDEX.md) |
 | messenger | the only home for Telegram/Bale differences: drivers, capability flags (F-301), degradation policy (F-302), per-platform renderer | active | [->](platform/messenger/INDEX.md) |
 | tenant-context | carries the tenant a request resolved to; every scoped query derives its `tenantId` from it (ADR-0024) | active | [->](platform/tenant-context/INDEX.md) |
+| realtime | one WebSocket per signed-in user, multiplexed into channels; the upgrade is authenticated by `forward-auth` (ADR-0030) | active | [->](platform/realtime/INDEX.md) |
 
 ## Cross-cutting docs
 - [Surface map](SURFACES.md) — user-visible thing -> unit -> file, plus `## Flows` (cached walks). **Start here for any vague request.**

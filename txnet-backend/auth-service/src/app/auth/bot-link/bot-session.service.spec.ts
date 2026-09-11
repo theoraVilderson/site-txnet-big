@@ -40,6 +40,12 @@ function harness(over: {
       findUnique: jest.fn().mockResolvedValue(over.user ?? linkedUser),
       findFirst: jest.fn().mockResolvedValue(over.byPhone ?? null),
     },
+    // ADR-0034: the place's own group, and whether it is acting as someone
+    // other than the linked account. Default is "never switched".
+    linkedAccountMember: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      findFirst: jest.fn().mockResolvedValue({ id: 'still-a-member' }),
+    },
   };
   const auth = {
     createSessionForUser: jest.fn().mockResolvedValue({
@@ -182,21 +188,22 @@ describe('BotSessionService', () => {
  * The Mini App path (`F-310`, ADR-0018). Two things are its own and neither is
  * visible from the chat route's tests: an unverifiable signature is refused
  * before anything is looked up, and the session it mints belongs to the
- * *browser's* scope — a webview that was signed into the chat's scope would
- * show a switch group none of its later calls could see (ADR-0015).
+ * **chat's** scope, taken from the same verified `initData` (ADR-0032). The
+ * browser it happens to be running in has a `device_id` cookie and that cookie
+ * does not decide anything here — the Mini App and the chat it was opened from
+ * are one place.
  */
 describe('BotSessionService.authenticateWebApp', () => {
   const webApp = { platform: 'telegram' as const, initData: 'signed' };
 
-  it('signs in the account the signature names, under the browser scope', async () => {
+  it("signs in the account the signature names, under the chat's scope", async () => {
     const { service, auth } = harness({ link: { userId: 'u-1' } });
 
     const outcome = await inTenant(() =>
-      service.authenticateWebApp(
-        webApp,
-        { ip: '1.2.3.4', userAgent: 'Mozilla/5.0' },
-        'device:abc',
-      ),
+      service.authenticateWebApp(webApp, {
+        ip: '1.2.3.4',
+        userAgent: 'Mozilla/5.0',
+      }),
     );
 
     expect(outcome).toMatchObject({ state: 'authenticated' });
@@ -204,8 +211,33 @@ describe('BotSessionService.authenticateWebApp', () => {
       expect.anything(),
       '1.2.3.4',
       'Mozilla/5.0',
-      'device:abc',
+      // The chat named by the signature — the same key `/auth/bots/session`
+      // uses from the chat itself, so the two share one switch group.
+      'bot:telegram:5501',
       'Telegram',
+    );
+  });
+
+  it('keys the scope by platform, so two messengers never share a chat id', async () => {
+    const { service, auth, bots } = harness({ link: { userId: 'u-1' } });
+    bots.verifyWebAppInitData.mockResolvedValue({
+      ok: true,
+      data: { platform: 'bale', user: { id: '5501' }, authDate: 1 },
+    });
+
+    await inTenant(() =>
+      service.authenticateWebApp(
+        { platform: 'bale', initData: 'signed' },
+        { ip: '1.2.3.4', userAgent: 'Mozilla/5.0' },
+      ),
+    );
+
+    expect(auth.createSessionForUser).toHaveBeenCalledWith(
+      expect.anything(),
+      '1.2.3.4',
+      'Mozilla/5.0',
+      'bot:bale:5501',
+      expect.anything(),
     );
   });
 
@@ -218,13 +250,94 @@ describe('BotSessionService.authenticateWebApp', () => {
 
     expect(
       await inTenant(() =>
-        service.authenticateWebApp(
-          webApp,
-          { ip: '', userAgent: 'Mozilla/5.0' },
-          'device:abc',
-        ),
+        service.authenticateWebApp(webApp, {
+          ip: '',
+          userAgent: 'Mozilla/5.0',
+        }),
       ),
     ).toEqual({ state: 'refused', key: 'auth.invalidCredentials' });
     expect(prisma.linkedBotAccount.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ADR-0034, the reading half.
+ *
+ * A chat's `LinkedBotAccount` never moves (ADR-0014), so before this an
+ * implicit sign-in always landed on the linked account — including right after
+ * the user switched away from it, which is what made a switch look like it had
+ * not happened on the other surface.
+ */
+describe('BotSessionService — an implicit sign-in follows the place', () => {
+  const webApp = { platform: 'telegram' as const, initData: 'signed' };
+  const SWITCHED_TO = 'u-switched-to';
+
+  /** A harness whose user lookup answers by id, as the real one does. */
+  function placeHarness(actingAsUserId: string | null) {
+    const h = harness({ link: { userId: 'u-1' } });
+    h.prisma.user.findUnique.mockImplementation(async ({ where }: any) =>
+      where.id === SWITCHED_TO
+        ? { ...linkedUser, id: SWITCHED_TO }
+        : { ...linkedUser, id: 'u-1' },
+    );
+    h.prisma.linkedAccountMember.findUnique.mockResolvedValue({
+      groupId: 'g1',
+      group: { actingAsUserId },
+    });
+    return h;
+  }
+
+  const signedInAs = (auth: any) =>
+    auth.createSessionForUser.mock.calls[0][0].id;
+
+  it('signs in as the account this place last switched to', async () => {
+    const { service, auth } = placeHarness(SWITCHED_TO);
+
+    await inTenant(() =>
+      service.authenticateWebApp(webApp, { ip: '', userAgent: 'Mozilla/5.0' }),
+    );
+
+    expect(signedInAs(auth)).toBe(SWITCHED_TO);
+  });
+
+  it('falls back to the linked account when the place never switched', async () => {
+    const { service, auth } = placeHarness(null);
+
+    await inTenant(() =>
+      service.authenticateWebApp(webApp, { ip: '', userAgent: 'Mozilla/5.0' }),
+    );
+
+    expect(signedInAs(auth)).toBe('u-1');
+  });
+
+  it('falls back when the pointer names someone no longer in this group', async () => {
+    // Removed by `F-0208` from this scope, or deleted outright. A stale
+    // pointer must never be an authentication — the membership row is what
+    // says the account is still one of this place's.
+    const h = placeHarness(SWITCHED_TO);
+    h.prisma.linkedAccountMember.findFirst.mockResolvedValue(null);
+
+    await inTenant(() =>
+      h.service.authenticateWebApp(webApp, { ip: '', userAgent: 'Mozilla/5.0' }),
+    );
+
+    expect(signedInAs(h.auth)).toBe('u-1');
+  });
+
+  it('refuses to follow a pointer at an account that is no longer active', async () => {
+    const h = placeHarness(SWITCHED_TO);
+    h.prisma.user.findUnique.mockImplementation(async ({ where }: any) =>
+      where.id === SWITCHED_TO
+        ? { ...linkedUser, id: SWITCHED_TO, status: 'suspended' }
+        : { ...linkedUser, id: 'u-1' },
+    );
+
+    await inTenant(() =>
+      h.service.authenticateWebApp(webApp, { ip: '', userAgent: 'Mozilla/5.0' }),
+    );
+
+    // Not a refusal: the place simply is not that account any more, and the
+    // linked account is still perfectly entitled to sign in.
+    expect(signedInAs(h.auth)).toBe('u-1');
   });
 });

@@ -1,3 +1,4 @@
+import { buildRedisKeyPrefix } from '@txnet-backend/shared-core';
 import { ConfigService } from '@nestjs/config';
 import { aBotIntegration } from '@txnet-backend/messenger';
 import { RedisKeys, RedisTtl } from './redis.keys';
@@ -31,6 +32,17 @@ describe('RedisKeys — bot key catalogue', () => {
     expect(Object.keys(RedisKeys).sort()).toMatchSnapshot();
   });
 
+  /**
+   * F-076 merged the four per-app catalogues, so `RedisTtl` is now the whole
+   * platform's and this snapshot lists lifetimes this service never uses. That
+   * is the cost of one catalogue, and it is the cheaper side of the trade: four
+   * catalogues is how `session:` came to be spelled in two places.
+   *
+   * The three that matter here are still pinned, and the snapshot still fails
+   * if any lifetime **changes** — which is the point, since a TTL is the
+   * difference between a preference that survives a conversation and one the
+   * user has to set again every time.
+   */
   it('keeps the canonical TTLs stable', () => {
     expect(RedisTtl).toMatchSnapshot();
   });
@@ -77,17 +89,20 @@ describe('RedisService.keyPrefix — parity with auth-service', () => {
 
   it('lands in the same namespace auth-service writes to', () => {
     // Both services address the same Redis; a bot session written under a
-    // different prefix is a session auth-service's tooling cannot see.
-    expect(prefixFor(base)).toBe('txnet:auth:v1:');
+    // different prefix is a session auth-service's tooling cannot see. The
+    // value comes from the one declaration rather than a literal — the
+    // defaults disagreeing across services is precisely what happened
+    // (ADR-0036).
+    expect(prefixFor(base)).toBe(buildRedisKeyPrefix());
     expect(prefixFor(base) + RedisKeys.botSession(telegram, '5501')).toBe(
-      'txnet:auth:v1:bot:session:telegram:integration-1:5501',
+      `${buildRedisKeyPrefix()}bot:session:telegram:integration-1:5501`,
     );
   });
 
   it('bumping the keyspace version moves every bot key at once', () => {
     expect(
-      prefixFor({ ...base, REDIS_KEYSPACE_VERSION: 'v2' }) +
+      prefixFor({ ...base, REDIS_KEYSPACE_VERSION: 'v99' }) +
         RedisKeys.botNav(telegram, '5501'),
-    ).toBe('txnet:auth:v2:bot:nav:telegram:integration-1:5501');
+    ).toBe('txnet:auth:v99:bot:nav:telegram:integration-1:5501');
   });
 });

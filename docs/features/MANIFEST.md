@@ -9,7 +9,7 @@ Rebuild: `python3 tools/features-scan.py`
 
 - catalog files: 1
 - addressable blocks: 164
-- features: 180
+- features: 202
 
 **Never read the catalog directly.** `python3 tools/spec.py <F-id>` prints exactly the block you need.
 
@@ -108,12 +108,12 @@ Rebuild: `python3 tools/features-scan.py`
 | `App-Features.md` · 9.7 No-Fallback Rule | 8 |  | D-03 |  |
 | `App-Features.md` · 9.8 A Queue Resilient to Bot Bans | 6 |  |  |  |
 | `App-Features.md` Bot as a Full Panel | 4 |  | D-02 |  |
-| `App-Features.md` · 10.1 Multiple Bots per Tenant | 15 |  | C-05 |  |
-| `App-Features.md` · 10.2 Webhook Architecture | 10 |  |  |  |
+| `App-Features.md` · 10.1 Multiple Bots per Tenant | 21 | F-315 F-316 | C-05 |  |
+| `App-Features.md` · 10.2 Webhook Architecture | 16 | F-320 F-321 F-322 |  |  |
 | `App-Features.md` · 10.3 Telegram/Bale Abstraction Layer | 9 | F-301 F-302 |  |  |
 | `App-Features.md` · 10.4 Full Bot Capabilities | 23 | F-1531 F-303 F-304 F-305 F-306 F-308 F-309 F-310 F-311 F-312 F-313 F-314 F-318 F-319 |  |  |
 | `App-Features.md` · 10.5 Account Linking | 8 |  | C-05 |  |
-| `App-Features.md` · 10.6 Bot Token Security | 6 |  |  |  |
+| `App-Features.md` · 10.6 Bot Token Security | 10 | F-323 |  |  |
 | `App-Features.md` Unified Support | 2 |  |  |  |
 | `App-Features.md` · 11.1 One Door, No Choice | 15 |  |  | Conversation Message |
 | `App-Features.md` · 11.2 Behavior | 10 |  |  |  |
@@ -156,9 +156,9 @@ Rebuild: `python3 tools/features-scan.py`
 | `App-Features.md` · 19.5 Reseller Risk | 6 |  |  |  |
 | `App-Features.md` Governance, Isolation, Treasury and Audit | 2 |  |  |  |
 | `App-Features.md` · 20.1 Audit Log | 14 |  |  | AdminAuditLog |
-| `App-Features.md` · 20.2 Multi-Tenant Isolation — Six Layers | 9 |  |  |  |
-| `App-Features.md` · 20.3 Tenant Detection | 13 |  | C-01 |  |
-| `App-Features.md` · 20.4 Credential Vault | 21 |  |  | TenantCredential TenantDek |
+| `App-Features.md` · 20.2 Multi-Tenant Isolation — Six Layers | 18 | F-1202 F-1203 F-1204 F-1205 F-1206 F-1207 |  |  |
+| `App-Features.md` · 20.3 Tenant Detection | 21 | F-1208 F-1209 F-1210 F-1211 F-1212 | C-01 |  |
+| `App-Features.md` · 20.4 Credential Vault | 29 | F-1213 F-1214 F-1215 F-1216 F-1217 |  | TenantCredential TenantDek |
 | `App-Features.md` · 20.5 The 360° User View | 6 |  |  |  |
 | `App-Features.md` · 20.6 User Settings | 10 |  |  |  |
 | `App-Features.md` Platform Management Console | 23 |  | D-01 |  |
@@ -228,9 +228,15 @@ Rebuild: `python3 tools/features-scan.py`
 | F-312 | Sub-reseller panel inside the bot | new | 10.4 Full Bot Capabilities |
 | F-313 | Bulk sending with segmentation + a rate-limited queue | new | 10.4 Full Bot Capabilities |
 | F-314 | Login deep links: ?start=buy_<sku> / ?start=ref_<code> / ?start=trial | new | 10.4 Full Bot Capabilities |
+| F-315 | Several bots per tenant, with roles: primary, sales, support, secondary | new | 10.1 Multiple Bots per Tenant |
+| F-316 | automation.BotIntegration carries a credentialRef — a vault reference, not a token column | changed | 10.1 Multiple Bots per Tenant |
 | F-317 | Bot text, menus, emoji and buttons fully overridable by the tenant (override within its ow | core | 1.8 Full Text Override by Tenant |
 | F-318 | Channel-membership gate for claiming a free trial | new | 10.4 Full Bot Capabilities |
 | F-319 | Per-user notification settings inside the bot | new | 10.4 Full Bot Capabilities |
+| F-320 | The tenant is resolved from a random 32-byte webhookPath, never from the message body | new | 10.2 Webhook Architecture |
+| F-321 | The platform performs setWebhook / deleteWebhook on the tenant's behalf; status and lastEr | new | 10.2 Webhook Architecture |
+| F-322 | Rotating the webhook path re-registers upstream, and the old path immediately stops respon | new | 10.2 Webhook Architecture |
+| F-323 | A bot token lives only in the vault: never logged, never returned by any API, never render | new | 10.6 Bot Token Security |
 | F-402 | Routing based on the user's ISP — tracking success rate per (ISP × inbound × hour) and ser | new | 7.7 Connection Intelligence and ISP-Based Routing |
 | F-403 | Automatic detection of an inbound getting blocked, from a drop in success rate | new | 7.7 Connection Intelligence and ISP-Based Routing |
 | F-404 | Automatic inbound rotation: create new, mirror, retire old, no admin involvement | new | 7.7 Connection Intelligence and ISP-Based Routing |
@@ -311,6 +317,22 @@ Rebuild: `python3 tools/features-scan.py`
 | F-1107 | Rate limiting on account creation, free trials, and OTP | core | 19.4 Fraud and Abuse Detection |
 | F-1108 | Per-tenant device-fingerprint blocklist | new | 19.4 Fraud and Abuse Detection |
 | F-1201 | Staff seats and time-bound access | core | 3.12 RBAC Down to the Reseller Level |
+| F-1202 | Row-Level Security on (tenantId, resellerPath), plus a separate role and connection pool f | new | 20.2 Multi-Tenant Isolation — Six Layers |
+| F-1203 | A tenant-scoped Prisma extension — every query passes through withTenant | new | 20.2 Multi-Tenant Isolation — Six Layers |
+| F-1204 | An automated harness that measures isolation | new | 20.2 Multi-Tenant Isolation — Six Layers |
+| F-1205 | A per-tenant queue concurrency cap | later | 20.2 Multi-Tenant Isolation — Six Layers |
+| F-1206 | Per-tenant rate-limit buckets at the edge | new | 20.2 Multi-Tenant Isolation — Six Layers |
+| F-1207 | A tenant's gateway / SMS / bot / AI credentials are its own; a failure stays confined to t | new | 20.2 Multi-Tenant Isolation — Six Layers |
+| F-1208 | The corrected detection chain: verified custom domain, then X-Tenant-Id on platform-staff  | changed | 20.3 Tenant Detection |
+| F-1209 | No code outside the resolver reads the Host header — one reader, one decision, one context | new | 20.3 Tenant Detection |
+| F-1210 | An unknown or unverified host returns a neutral 404 at the edge and never falls back to a  | changed | 20.3 Tenant Detection |
+| F-1211 | The host → tenantId cache is explicitly invalidated on creation, verification, switchover  | new | 20.3 Tenant Detection |
+| F-1212 | A purpose = subscription domain resolves the tenant but serves no panel route | new | 20.3 Tenant Detection |
+| F-1213 | Envelope encryption: one DEK per tenant, wrapped by a KEK held outside the database | new | 20.4 Credential Vault |
+| F-1214 | A truncated-hash fingerprint per credential, and versioned rotation with a grace window | new | 20.4 Credential Vault |
+| F-1215 | Every decryption writes an audit row — who, which tenant, which type, which caller | new | 20.4 Credential Vault |
+| F-1216 | No tenant-owned credential is read from an environment variable; a service refuses to boot | new | 20.4 Credential Vault |
+| F-1217 | An expiry date is supported on every credential | new | 20.4 Credential Vault |
 | F-1301 | Public API with a per-tenant key (plan feature api.public) | core | Public API and Integration |
 | F-1302 | Outbound webhooks for events (purchase, expiry, volume exhaustion, domain change) | new | Public API and Integration |
 | F-1303 | Embeddable sales widget/iframe for a reseller's site | new | Public API and Integration |

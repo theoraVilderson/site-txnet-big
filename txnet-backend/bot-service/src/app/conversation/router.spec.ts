@@ -28,6 +28,9 @@ function makeRouter(over: {
   api?: Partial<AuthApiClient>;
   otp?: Partial<OtpStep>;
   langs?: Partial<ChatLanguage>;
+  env?: Record<string, string>;
+  /** `null` makes the stored refresh token one `auth-api` refuses. */
+  access?: string | null;
 } = {}) {
   const nav = {
     get: jest.fn().mockResolvedValue(over.state ?? null),
@@ -39,7 +42,18 @@ function makeRouter(over: {
     clear: jest.fn(),
     save: jest.fn(),
   } as unknown as BotSessionStore;
-  const api = { logout: jest.fn().mockResolvedValue({ ok: true, msg: 'ok' }), ...over.api } as unknown as AuthApiClient;
+  const accessToken = over.access === undefined ? 'access-token' : over.access;
+  const api = {
+    logout: jest.fn().mockResolvedValue({ ok: true, msg: 'ok' }),
+    // `ChatAccess` refreshes before every authenticated call, and a refusal is
+    // how a session revoked somewhere else reaches this bot at all.
+    refresh: jest.fn().mockResolvedValue(
+      accessToken
+        ? { ok: true, msg: 'ok', data: { accessToken } }
+        : { ok: false, msg: 'auth.sessionExpired' },
+    ),
+    ...over.api,
+  } as unknown as AuthApiClient;
   const otp = { submitContact: jest.fn(), ...over.otp } as unknown as OtpStep;
 
   const langs = {
@@ -83,7 +97,10 @@ function makeRouter(over: {
       new AccountSwitcher(api, sessions),
       phones,
     ),
-    new ConfigService({ PANEL_BASE_URL: 'https://panel.example.test' }),
+    new ConfigService(
+      over.env ?? { PANEL_BASE_URL: 'https://panel.example.test' },
+    ),
+    new ChatAccess(api, sessions),
   );
   return { router, nav, sessions, api, otp, langs, locale };
 }
@@ -111,6 +128,94 @@ describe('ConversationRouter', () => {
       // without it makes the capability invisible.
       expect((result.view.actions ?? []).flat().map((a) => a.id)).toContain(
         'menu:accounts',
+      );
+    });
+
+    /**
+     * ADR-0033. The chat's Redis entry is a cache of "this chat has a
+     * session", and nothing local can know it was revoked somewhere else — a
+     * Mini App logout, an `F-0208` removal, thirty days of silence. `/start`
+     * used to trust it, so the bot answered a signed-out user with the member
+     * menu and only failed on the first tap.
+     */
+    it('shows the guest menu when the stored session no longer refreshes', async () => {
+      const { router } = makeRouter({
+        session: { refreshToken: 'r-revoked', signedInAt: 1 },
+        access: null,
+      });
+
+      const result = await router.route({ ...ctx, text: '/start' });
+
+      expect(result.view.id).toBe('menu.guest');
+    });
+
+    it('drops the chat entry rather than asking again next message', async () => {
+      const { router, sessions } = makeRouter({
+        session: { refreshToken: 'r-revoked', signedInAt: 1 },
+        access: null,
+      });
+
+      await router.route({ ...ctx, text: '/start' });
+
+      expect(sessions.clear).toHaveBeenCalled();
+    });
+
+    /**
+     * `F-310`. The row is the only thing that opens the panel inside the
+     * messenger, and the marker is the only thing that tells the page which
+     * WebApp script to load — without it the panel loaded none, found no
+     * signature, and sent every Mini App visitor to the login screen
+     * (fixed 2026-09-10).
+     */
+    it('offers the Mini App, marked with the messenger it opens in', async () => {
+      const { router } = makeRouter({ session: { refreshToken: 'r-1', signedInAt: 1 } });
+
+      const result = await router.route({ ...ctx, text: '/start' });
+
+      const row = (result.view.actions ?? [])
+        .flat()
+        .find((a) => a.id === 'menu:miniapp');
+      expect(row?.kind).toBe('web_app');
+      expect(row?.url).toBe('https://panel.example.test/?ma=telegram');
+    });
+
+    it('marks it with Bale when that is the messenger on the line', async () => {
+      const { router } = makeRouter({ session: { refreshToken: 'r-1', signedInAt: 1 } });
+
+      const result = await router.route({ ...ctx, platform: 'bale', text: '/start' });
+
+      const row = (result.view.actions ?? [])
+        .flat()
+        .find((a) => a.id === 'menu:miniapp');
+      expect(row?.url).toBe('https://panel.example.test/?ma=bale');
+    });
+
+    it('leaves the query the deployment already put on PANEL_BASE_URL', async () => {
+      const { router } = makeRouter({
+        session: { refreshToken: 'r-1', signedInAt: 1 },
+        env: { PANEL_BASE_URL: 'https://panel.example.test/panel?theme=dark' },
+      });
+
+      const result = await router.route({ ...ctx, text: '/start' });
+
+      const row = (result.view.actions ?? [])
+        .flat()
+        .find((a) => a.id === 'menu:miniapp');
+      expect(row?.url).toBe(
+        'https://panel.example.test/panel?theme=dark&ma=telegram',
+      );
+    });
+
+    it('shows a menu without the row when no panel is published', async () => {
+      const { router } = makeRouter({
+        session: { refreshToken: 'r-1', signedInAt: 1 },
+        env: {},
+      });
+
+      const result = await router.route({ ...ctx, text: '/start' });
+
+      expect((result.view.actions ?? []).flat().map((a) => a.id)).not.toContain(
+        'menu:miniapp',
       );
     });
 
@@ -145,7 +250,92 @@ describe('ConversationRouter', () => {
     });
   });
 
+  /**
+   * ADR-0035. `auth-api` may hand the chat another account's session on the
+   * way out — the next account this place already holds. Dropping the entry
+   * there would throw away a session minted for this chat and nobody else, and
+   * the user would be signed out of a place that is still signed in.
+   */
   describe('leaving', () => {
+    it('keeps the session auth-api handed back and stays signed in', async () => {
+      const logout = jest.fn().mockResolvedValue({
+        ok: true,
+        msg: 'ok',
+        data: {
+          success: true,
+          switchedTo: { userId: 'u-2', fullName: 'The Other One' },
+          refreshToken: 'r-for-u-2',
+          accessToken: 'a',
+        },
+      });
+      const { router, sessions } = makeRouter({
+        session: { refreshToken: 'r-1', signedInAt: 1 },
+        api: { logout },
+      });
+
+      await router.route({ ...ctx, text: '/logout' });
+
+      expect(sessions.save).toHaveBeenCalledWith(
+        expect.anything(),
+        ctx.chatId,
+        'r-for-u-2',
+      );
+      expect(sessions.clear).not.toHaveBeenCalled();
+    });
+
+    it('drops the entry when there was nobody to fall back onto', async () => {
+      const logout = jest
+        .fn()
+        .mockResolvedValue({ ok: true, msg: 'ok', data: { success: true } });
+      const { router, sessions } = makeRouter({
+        session: { refreshToken: 'r-1', signedInAt: 1 },
+        api: { logout },
+      });
+
+      await router.route({ ...ctx, text: '/logout' });
+
+      expect(sessions.clear).toHaveBeenCalled();
+    });
+
+    it('asks before signing out of everything', async () => {
+      const logoutAll = jest.fn();
+      const { router, sessions } = makeRouter({
+        session: { refreshToken: 'r-1', signedInAt: 1 },
+        api: { logoutAll },
+      });
+
+      const result = await router.route({
+        ...ctx,
+        callbackData: 'accounts:logoutAll',
+      });
+
+      // The tap that opens the question must not be the tap that answers it.
+      expect(result.view.id).toBe('accounts.signOutAll');
+      expect(logoutAll).not.toHaveBeenCalled();
+      expect(sessions.clear).not.toHaveBeenCalled();
+    });
+
+    it('signs out of every account once confirmed', async () => {
+      const logoutAll = jest
+        .fn()
+        .mockResolvedValue({ ok: true, msg: 'ok', data: { success: true } });
+      const { router, sessions } = makeRouter({
+        session: { refreshToken: 'r-1', signedInAt: 1 },
+        api: { logoutAll },
+      });
+
+      await router.route({
+        ...ctx,
+        callbackData: 'accounts:logoutAll:confirm',
+      });
+
+      expect(logoutAll).toHaveBeenCalledWith(
+        expect.objectContaining({ refreshToken: 'r-1' }),
+        expect.anything(),
+      );
+      expect(sessions.clear).toHaveBeenCalled();
+    });
+
     it('/logout revokes the session at auth-api and drops the chat’s own', async () => {
       const logout = jest.fn().mockResolvedValue({ ok: true, msg: 'ok' });
       const { router, sessions } = makeRouter({

@@ -1,0 +1,45 @@
+# =============================================================================
+# TXNet — custom Postgres metrics for postgres-exporter (F-067-c)
+# =============================================================================
+# The four numbers F-067-g set out to watch were queue depth, consumer count,
+# dead-letter arrivals and **the age of the oldest unpublished outbox row**.
+# The first three read off RabbitMQ's own exporter; this one cannot, because
+# it is a fact about a Postgres table, and until F-067-c there was no such
+# table and no Postgres scrape target at all.
+#
+# WHY AN EXPORTER AND NOT A /metrics ON worker-service
+#
+# ADR-0027 makes worker-service a deployable that serves no requests: no port,
+# no Traefik label, no route. Bolting an HTTP surface onto it to expose one
+# gauge gives back exactly what that ADR removed. The number is a `SELECT`, the
+# database already answers `SELECT`s, and an exporter beside node-exporter and
+# cAdvisor is the same shape of thing those already are.
+#
+# The exporter connects as `txnet_app_user` — the RLS-enforced role, not the
+# owner. `automation.outbox_event` has no `tenantId` and therefore no policy,
+# so that role reads it whole; giving a monitoring container the superuser to
+# count rows would be the wrong trade in the other direction.
+# =============================================================================
+
+automation_outbox:
+  # `master: true` — run on the primary only, not on a replica.
+  master: true
+  cache_seconds: 15
+  query: >-
+    SELECT
+      COALESCE(EXTRACT(EPOCH FROM (now() - MIN("occurredAt"))), 0)::float8
+        AS oldest_unpublished_seconds,
+      COUNT(*)::bigint AS unpublished_rows,
+      COALESCE(MAX("attempts"), 0)::bigint AS max_attempts
+    FROM automation.outbox_event
+    WHERE "publishedAt" IS NULL
+  metrics:
+    - oldest_unpublished_seconds:
+        usage: "GAUGE"
+        description: "Age in seconds of the oldest unpublished automation.outbox_event row. Zero means the outbox is empty."
+    - unpublished_rows:
+        usage: "GAUGE"
+        description: "How many automation.outbox_event rows are waiting for OutboxRelayJob."
+    - max_attempts:
+        usage: "GAUGE"
+        description: "Publish attempts on the most-retried unpublished row. A climbing number is a row the broker keeps refusing."

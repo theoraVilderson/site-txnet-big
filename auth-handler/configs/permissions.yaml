@@ -1,11 +1,49 @@
 # Role -> allowed permissions. Used as defense-in-depth.
+#
+# `auth-handler` enforces this on every gated request: a token claiming a
+# permission its role is not granted here is refused 403 before the request
+# reaches any service. Nest enforces the same names again with
+# `PermissionsGuard`, and `tools/contracts.py` is what makes the two lists
+# agree — three names were enforced in TypeScript and missing here (F-085),
+# which made those routes unreachable rather than merely ungated.
+#
+# Adding a permission here does NOT grant it to anyone: the token's
+# `permissions[]` comes from the database role. This file can only take a
+# claimed permission away.
+#
+# A role is keyed by `identity.role.name` **exactly as `prisma/seed.js`
+# spells it**, case included — the token's `roleName` claim, never its
+# `roleId`, which is a UUID that differs on every database (ADR-0037). A role
+# missing here is refused every gated request, and `tools/contracts.py` fails
+# when a seeded role has no entry.
 roles:
-  admin:
+  # Above `Admin` in the impersonation rank and a superset of it here. The seed
+  # makes the platform owner this role.
+  SuperAdmin:
     permissions:
       - user.read
       - user.write
       - user.impersonate
-  support:
+      - worker.manage
+      - bot.webhook_rotate
+      - realtime.tenant.read
+  Admin:
+    permissions:
+      - user.read
+      - user.write
+      - user.impersonate
+      # Platform-wide background workers: see what exists, schedule, switch
+      # off, run now. Not tenant-scoped by design — a worker is a platform
+      # process, not a reseller's — so the permission is what confines it.
+      - worker.manage
+      # Rotate a bot's webhook secret.
+      - bot.webhook_rotate
+      # The reseller-wide realtime feed. It carries events about *other
+      # people* in the tenant, so it is an operator's view and membership of
+      # the tenant is not enough on its own. `gateway-service` also requires
+      # an exact tenant match; this is the other half.
+      - realtime.tenant.read
+  Support:
     permissions:
       - user.read
   user:

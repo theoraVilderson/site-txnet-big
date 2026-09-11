@@ -1,7 +1,7 @@
 ---
 id: code-layout
 status: active
-updated: 2026-09-09
+updated: 2026-09-10
 unit_aliases:
   - identity:auth
   - identity:impersonation
@@ -13,6 +13,7 @@ unit_aliases:
   - panel-web:site-pwa
   - marketing-web:coinsite
   - forward-auth:auth-handler
+  - realtime:gateway-service
   - i18n:i18n-platform
   - i18n:locales
   - redis-keyspace:redis
@@ -52,6 +53,7 @@ no code exists yet, so there is nothing to mirror until a service is built.
 | `txnet-backend/messenger/src/`                                                | Nx library `@txnet-backend/messenger`: bot driver, capability set, `BotView` renderer, deep links                                         | `docs/platform/messenger/`                                |
 | `txnet-backend/bot-service/src/app/`                                          | the Telegram/Bale surface: webhook, conversation state, flows                                                                             | `docs/interfaces/bot-app/`                                |
 | `txnet-backend/worker-service/src/app/`                                       | background work: the tick publisher, the tick consumer, the job registry. Serves no HTTP (ADR-0027)                                        | `docs/domains/automation/`                                |
+| `txnet-backend/gateway-service/src/app/`                                      | the WebSocket gateway: the upgrade, the connection registry, the channel rules. Holds sockets and nothing else (ADR-0030)                    | `docs/platform/realtime/`                                 |
 | `txnet-backend/billing-service/src/app/`                                      | billing scaffold (not yet implementing `billing`)                                                                                         | `docs/domains/billing/` (stays `draft` until real)        |
 | `txnet-backend/prisma/domains/*.prisma`                                       | one schema file per business domain                                                                                                       | `owns_tables:` in that domain's `INDEX.md`                |
 | `auth-handler/internal/`                                                      | Go Traefik ForwardAuth gateway                                                                                                            | `docs/platform/forward-auth/`                             |
@@ -100,6 +102,13 @@ auth-service/src/app/auth/
 | `auth-service-e2e/src/**/*.e2e.spec.ts` | the whole app over HTTP, real Postgres + Redis | Docker  | `npm run test:e2e` |
 
 All three run in CI (`.github/workflows/ci.yml`), one job each.
+
+The integration tier shares nothing between files: each `*.int.spec.ts` starts
+its **own** container on an ephemeral port (`test-support/redis-fixture.ts`,
+`postgres-fixture.ts`) and flushes it between cases. So a failure that only
+happens when the tier runs whole is contention for the machine, never state
+left behind by another file — the e2e tier is the one with a single shared
+Postgres and Redis (`maxWorkers: 1`).
 
 ### Running them without burning the session
 
@@ -262,6 +271,8 @@ role holds it. **Project-owned** — three stacks here, so three vocabularies.
 | a scheduled job never runs, or runs when it was switched off                          | `shared-core/src/lib/automation/schedule.ts` — `workerIsDue` / `workerIsRunnable` are the only place `isActive` and the three schedule shapes are read, for the tick publisher and the admin surface alike    | the job's own class                  |
 | a schedule an admin typed was accepted and then never ran                             | `auth-service/src/app/automation/worker-admin.service.ts` — it refuses a shape that could never run, so a row that got in either predates F-031-b or was written by hand; `GET /admin/workers` answers its `shapeError` | the tick publisher                   |
 | a job ran but left no `bot_execution_log`, or one that never finished                 | `worker-service/src/app/automation/tick.consumer.ts` — the row is opened before the handler and closed in both paths                                                                                         | the publisher                        |
+| a WebSocket will not open, or opens and closes at once                                 | the **status** first: a 401 is `auth-handler` (the token was not in `Sec-WebSocket-Protocol`, or the router lost `my-auth`), a 429 is the per-user cap, a 4401 close is the session re-check. Only then `gateway-service/src/app/realtime/realtime.gateway.ts`                 | the page that opened it   |
+| a socket is open but a channel delivers nothing                                        | `gateway-service/src/app/realtime/channel.ts` — a refused subscribe answers an `error` frame the page may be dropping. If it was *subscribed*, nothing published: there is no producer until F-067-i, and with two replicas there is no fan-out at all | the channel's producer |
 | a workspace-library import resolves in tests but the service will not boot            | the app's `webpack.config.js` — `TsconfigPathsPlugin` is what makes `@txnet-backend/*` resolve; `transpileOnly` hides its absence until runtime                                                              | the library                          |
 | works locally, fails deployed                                                         | `.env` / `.env.dev` / `.env.prod` layering, `dev-docker/`, `swarm/`                                                                                                                                          | any unit at all                      |
 

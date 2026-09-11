@@ -173,3 +173,41 @@ payload, `{reason}`. Every other business rejection in this service carries
 which of three mutually exclusive shapes they missed, and the reason is the
 output of the same function the runtime declines on — so it is the runtime's
 own answer, not a second opinion.
+
+## v14 — the OTP delivery result arrives unasked (F-067-j)
+
+Additive. The three routes that answer 202 gained two fields beside
+`deliveryId`: `channel`, the realtime channel the result is published on, and
+`channelToken`, the proof `gateway-service` demands before it will serve it.
+`POST /auth/login/password` gained the same two on its `requiresOtp` branch.
+`POST /internal/otp/deliver` gained `channelId`, since the process that sends
+the code is not the one that minted the channel.
+
+A client that ignores them keeps working and keeps polling
+`POST /auth/otp/delivery/status`, which is unchanged and is still the record —
+a realtime event is at-most-once and is dropped when nobody is listening
+(`realtime/contract.fanout.md`). The socket is the fast path, never the truth.
+
+**Why a token and not just the channel name.** Both are 128-bit randoms minted
+per request, so either alone would be unguessable. They are separate because a
+channel name is *routed*: it reaches Redis pub/sub, gateway logs and metrics,
+while a token is only ever compared. Reusing the delivery id as the channel
+name would put the capability that reads the status into all of those places
+for nothing.
+
+**Why the channel works even when no code was sent.** Handles are minted before
+the route knows whether there is an account behind the phone number, exactly as
+`deliveryId` is. A channel that only existed for a real account would answer,
+through a subscription that succeeds or is refused, the account-existence
+question `{accepted:true}` exists to refuse — and it would answer it on a
+socket, where the route's rate limits do not apply.
+
+The pre-login socket this depends on is ADR-0031; before it, the gate refused
+any upgrade without a session and these three routes have none by definition.
+
+## Removed shapes
+
+| Item | Deprecated since | Removal after | Replacement |
+|---|---|---|---|
+| `POST /auth/bots/:platform/webhook/:secret` | 2026-09-06 | **removed 2026-09-09** | `POST /api/bots/:platform/:webhookPath` on `bot-service`. Deprecated for one release with nothing pointed at it, then removed by F-066-i: its `:secret` was `TELEGRAM_WEBHOOK_SECRET`, a variable that no longer exists, so the route could not have answered anyway |
+| `POST /auth/register/verify-phone` body keyed by `userId` | 2026-09-04 | already removed | keyed by `phoneNumber` — register no longer creates a `user` row to key by |

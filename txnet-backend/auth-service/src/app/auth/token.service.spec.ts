@@ -34,6 +34,7 @@ const baseClaims: Omit<AuthClaims, 'iat' | 'exp'> = {
   sub: 'user-1',
   tenantId: 'tenant-1',
   roleId: 'role-1',
+  roleName: 'user',
   permissions: ['user.read'],
   sessionId: 'session-1',
 };
@@ -296,6 +297,7 @@ describe('TokenService', () => {
       tenantId: 'tenant-1',
       roleId: 'role-1',
       role: {
+        name: 'Admin',
         rolePermissions: [
           { permission: { key: 'user.read' } },
           { permission: { key: 'user.write' } },
@@ -313,6 +315,30 @@ describe('TokenService', () => {
         tokens.signAccessToken({ id: 'u', tenantId: 't', roleId: 'r' }, 's'),
       );
       expect(claims.permissions).toEqual([]);
+    });
+
+    // `forward-auth` keys `permissions.yaml` by role *name*. `roleId` is a
+    // database UUID that differs on every seed, so a token carrying only the id
+    // was refused 403 by the gateway on every request (ADR-0037).
+    it.each([
+      ['an access token', () => tokens.signAccessToken(user, 'session-1')],
+      [
+        'an impersonated token',
+        () => tokens.signImpersonatedToken(user, 'session-1', 'admin-9'),
+      ],
+    ])('carries the role name beside the id on %s', (_label, mint) => {
+      const claims = tokens.verify(mint());
+      expect(claims.roleId).toBe('role-1');
+      expect(claims.roleName).toBe('Admin');
+    });
+
+    it('signs an empty role name when the role is not loaded', () => {
+      // Empty, not absent: the gateway reads it as a role no policy grants and
+      // refuses, which is the same answer a missing claim must get.
+      const claims = tokens.verify(
+        tokens.signAccessToken({ id: 'u', tenantId: 't', roleId: 'r' }, 's'),
+      );
+      expect(claims.roleName).toBe('');
     });
 
     it('records who is impersonating whom', () => {

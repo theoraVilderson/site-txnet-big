@@ -4,6 +4,7 @@ import (
 	"io"
 	"log/slog"
 	"testing"
+	"time"
 )
 
 // A Store that has not connected to locale-service is not a broken Store —
@@ -67,3 +68,45 @@ func TestUnconnectedStoreLifecycleIsANoop(t *testing.T) {
 // so an unreachable-address test would cost a minute of every `go test ./...`
 // run to assert one error return. What Load builds — the gRPC client's cache,
 // fallback and watch — is covered in i18n-platform/clients/go.
+
+// F-086. The boot timeout was hardcoded twice at two different values — 60s
+// here and 10s inside the shared client — and which one applied depended on
+// whether the caller happened to set the field. These assertions are about the
+// two ways that can go wrong once it is configurable.
+func TestBootTimeoutDefaultsAndOverrides(t *testing.T) {
+	store := newTestStore("", "backend", "fa")
+	if store.bootTimeout != DefaultBootTimeout {
+		t.Errorf("bootTimeout = %v, want the declared default %v",
+			store.bootTimeout, DefaultBootTimeout)
+	}
+
+	store.WithBootTimeout(5 * time.Second)
+	if store.bootTimeout != 5*time.Second {
+		t.Errorf("bootTimeout = %v after override, want 5s", store.bootTimeout)
+	}
+}
+
+// An unset or nonsensical LOCALE_BOOT_TIMEOUT must not mean "give up
+// immediately". A gateway that stops waiting before its translations arrive
+// comes up serving raw message keys to every user, which is worse than a slow
+// boot and much harder to notice.
+func TestBootTimeoutIgnoresNonPositiveOverrides(t *testing.T) {
+	for _, d := range []time.Duration{0, -1 * time.Second} {
+		store := newTestStore("", "backend", "fa").WithBootTimeout(d)
+		if store.bootTimeout != DefaultBootTimeout {
+			t.Errorf("WithBootTimeout(%v) left bootTimeout = %v, want %v",
+				d, store.bootTimeout, DefaultBootTimeout)
+		}
+	}
+}
+
+// Load's own deadline has to outlast the boot wait it contains, or the outer
+// context cancels first and the operator reads a bare "context deadline
+// exceeded" instead of the client's explanation of what it was waiting for.
+func TestDialTimeoutOutlastsTheBootWait(t *testing.T) {
+	store := newTestStore("", "backend", "fa").WithBootTimeout(20 * time.Second)
+	if store.dialTimeout() <= store.bootTimeout {
+		t.Errorf("dialTimeout() = %v, must exceed bootTimeout %v",
+			store.dialTimeout(), store.bootTimeout)
+	}
+}

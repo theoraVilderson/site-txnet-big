@@ -12,6 +12,13 @@ export const ACTIONS = {
   register: 'menu:register',
   forgot: 'menu:forgot',
   logout: 'menu:logout',
+  /**
+   * `F-0211`. Not on the member menu on purpose (ADR-0035): it is reached from
+   * the accounts screen, where the user is already looking at the set it ends,
+   * and it asks before it acts. Two ids, because the asking is the point.
+   */
+  logoutAllAsk: 'accounts:logoutAll',
+  logoutAll: 'accounts:logoutAll:confirm',
   accounts: 'menu:accounts',
   accountAdd: 'accounts:add',
   accountRemove: 'accounts:remove',
@@ -122,6 +129,17 @@ export function guestMenu(): BotView {
  * its own, offered where the other destinations are. Chat-first is untouched
  * either way (ADR-0009): nothing below this row moved into it.
  */
+/**
+ * The query parameter the Mini App URL carries, and the panel's half of it
+ * (`site-pwa/src/lib/mini-app.ts`).
+ *
+ * It names the messenger, because the page cannot tell: each platform serves
+ * its own WebApp script and injects nothing until that script is loaded, so a
+ * panel with no marker loaded neither and had no signature to sign in with.
+ * A hint, not a credential — the server still verifies the signature itself.
+ */
+export const MINI_APP_PARAM = 'ma';
+
 export function miniApp(url: string): BotAction {
   return {
     id: ACTIONS.miniApp,
@@ -195,9 +213,31 @@ export function accountsView(
       // Only offered once there is something to remove — an empty group takes
       // the `accounts.none` branch above and never reaches here.
       [removeAccount],
+      // Last row, and only where a group exists: signing out of *everything*
+      // belongs beside the set it ends, not on the menu next to the ordinary
+      // sign-out (ADR-0035). It asks before it acts.
+      [signOutAll],
       [cancel],
     ],
   );
+}
+
+/** The one confirmation the accounts screen insists on (`F-0211`). */
+export const signOutAll: BotAction = {
+  id: ACTIONS.logoutAllAsk,
+  label: { key: 'bot.action.signOutAll' },
+};
+
+/**
+ * "Really sign out of all of them?" — a screen, because an inline keyboard has
+ * no other way to ask. The confirming button carries its own id, so a stale
+ * tap on the previous screen can never be read as a yes.
+ */
+export function signOutAllConfirmView(): BotView {
+  return view('accounts.signOutAll', { key: 'bot.accounts.signOutAllAsk' }, [
+    [{ id: ACTIONS.logoutAll, label: { key: 'bot.action.signOutAllYes' } }],
+    [cancel],
+  ]);
 }
 
 /**

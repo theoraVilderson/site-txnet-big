@@ -1,6 +1,4 @@
 {
-  "save": "Save",
-  "cancel": "Cancel",
   "logout": "Log out",
   "loggingOut": "Logging out…",
   "accounts": {
@@ -9,7 +7,6 @@
     "groupEmpty": "You have not added another account yet.",
     "switchTo": "Switch to",
     "switching": "…",
-    "switchFailed": "Could not switch account",
     "add": "Add an account",
     "addTitle": "Add another account",
     "addSubtitle": "To join, that account has to prove itself: a code sent to its own phone, or its own password.",
@@ -33,7 +30,6 @@
     "passwordPlaceholder": "That account's password",
     "sendCode": "Send the code",
     "confirm": "Confirm",
-    "failed": "That did not work",
     "linkRequired": "That account has not connected the bot yet. It needs to share its number in the bot first; the code is sent after that.",
     "openBot": "Open the bot",
     "linkDone": "Done — continue",
@@ -43,9 +39,11 @@
     "removeYes": "Remove",
     "removeCancel": "Keep it",
     "removing": "…",
-    "removeFailed": "Could not remove that account",
     "leave": "Remove this account from the set on this browser",
-    "leaveConfirm": "Remove this account and sign out here?"
+    "leaveConfirm": "Remove this account and sign out here?",
+    "signOutAll": "Sign out of all accounts",
+    "signOutAllConfirm": "You will be signed out of every account on this device. No account is removed.",
+    "signOutAllYes": "Yes, sign out of all"
   },
   "errors": {
     "unreachable": "Could not reach the server. Check your connection and try again."

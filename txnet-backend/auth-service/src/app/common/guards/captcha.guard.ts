@@ -1,3 +1,4 @@
+import { RequestHeaders, headerValue } from '@txnet-backend/shared-core';
 import {
   CanActivate,
   ExecutionContext,
@@ -30,7 +31,7 @@ export class CaptchaGuard implements CanActivate {
     // limits are what carry the load instead (ADR-0011).
     if (isServiceCaller(request)) return true;
 
-    const token = request.headers['x-captcha-token'];
+    const token = headerValue(request.headers, RequestHeaders.captchaToken);
     const passed = await this.captcha.consumePass(
       typeof token === 'string' ? token : undefined,
     );

@@ -1,8 +1,14 @@
+import { RedisTtl } from '@txnet-backend/shared-core';
+import {
+  RateLimitBucket,
+  rateLimitBucketKey,
+} from '@txnet-backend/shared-core';
 import {
   BadRequestException,
   ConflictException,
   Injectable,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as argon2 from 'argon2';
@@ -24,6 +30,11 @@ import {
   OTP_SERVICE,
 } from './otp/otp.interface';
 import { OtpChannelRegistry } from './otp/otp-channels.service';
+import { otpRealtimeChannel } from '@txnet-backend/shared-core';
+import {
+  OtpDeliveryStore,
+  type OtpDeliveryHandles,
+} from './otp/otp-delivery.store';
 import { BotPlatform } from '@txnet-backend/messenger';
 import { BotLinkService } from './bot-link/bot-link.service';
 import { TokenService } from './token.service';
@@ -48,10 +59,38 @@ import {
 
 /** What `LOGIN_FAILURE_LOCK_THRESHOLD` is when a deployment sets nothing. */
 const LOGIN_FAILURE_LOCK_DEFAULT = 10;
-const LOGIN_FAILURE_WINDOW_SEC = 900;
+/**
+ * The failure window is `RedisTtl.loginFailureWindow` (F-078). It used to be a
+ * private 900 here, duplicating a catalogue entry that nothing imported — the
+ * entry existed and only its own snapshot ever referenced it.
+ */
+const LOGIN_FAILURE_WINDOW_SEC = RedisTtl.loginFailureWindow;
+
+/**
+ * The three fields a 202 hands back (F-067-j).
+ *
+ * `deliveryId` reads the status; `channel` and `channelToken` hear the result
+ * live. A client uses whichever it can and the two are not alternatives it has
+ * to choose between — the socket is the fast path and the status is the record
+ * (D-15), so a client that opened one and missed an event still reads the
+ * other.
+ *
+ * Built in one place because three routes answer this shape and a fourth will;
+ * a field added to two of them and forgotten in the third is the kind of drift
+ * only a client discovers.
+ */
+function deliveryHandles(delivery: OtpDeliveryHandles) {
+  return {
+    deliveryId: delivery.deliveryId,
+    channel: otpRealtimeChannel(delivery.channelId),
+    channelToken: delivery.channelToken,
+  };
+}
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly rateLimiter: RateLimiter,
@@ -62,6 +101,7 @@ export class AuthService {
     private readonly botLinks: BotLinkService,
     private readonly sessionService: SessionService,
     private readonly sessions: SessionStore,
+    private readonly deliveries: OtpDeliveryStore,
   ) {}
 
   /**
@@ -78,6 +118,23 @@ export class AuthService {
   /** The delivery methods this tenant offers, for a client to choose from. */
   async otpChannels() {
     return ok({ channels: await this.channels.describe() }, 'auth.otpChannels');
+  }
+
+  /**
+   * What became of the send a 202 accepted (F-067-a).
+   *
+   * An id nobody minted, and one whose TTL has passed, both answer `queued` —
+   * the same thing a code still sitting on the queue answers. That is
+   * deliberate: the routes that mint an id do so whether or not a code was
+   * really issued (`OtpDeliveryStore.newId`), and an answer that distinguished
+   * "never queued" from "not delivered yet" would hand back the account
+   * existence those routes refuse to state.
+   */
+  async otpDeliveryStatus(deliveryId: string) {
+    const status = (await this.deliveries.read(deliveryId)) ?? {
+      state: 'queued' as const,
+    };
+    return ok(status, 'auth.otpDeliveryStatus');
   }
 
   async loginWithPassword(
@@ -113,7 +170,10 @@ export class AuthService {
         return err('auth.invalidCredentials');
       }
 
-      const failureBucket = `login-failures:${identity}`;
+      const failureBucket = rateLimitBucketKey(
+      RateLimitBucket.LOGIN_FAILURES,
+      identity,
+    );
       const attempt = await this.rateLimiter.hit(
         failureBucket,
         this.loginFailureLockThreshold,
@@ -141,15 +201,20 @@ export class AuthService {
 
       if (user.twoFactorEnabled) {
         const channel = await this.resolveOtpChannel(user);
+        const delivery = await this.deliveries.mintHandles();
         await this.otp.issueOtp(
           user.phoneNumber!,
           OtpPurpose.login,
           channel,
           ip,
           lang,
+          delivery,
         );
         const otpToken = this.tokens.signOtpToken(user.id);
-        return ok({ requiresOtp: true, otpToken }, 'auth.otpSent');
+        return ok(
+          { requiresOtp: true, otpToken, ...deliveryHandles(delivery) },
+          'auth.otpSent',
+        );
       }
 
       const sessionData = await this.issueSession(user, ip, userAgent, scopeKey);
@@ -184,6 +249,11 @@ export class AuthService {
       );
       if (link) return link;
 
+      // Minted whether or not a code is issued: handles handed out only for a
+      // real account would answer the question `{accepted:true}` exists to
+      // refuse, and the channel would answer it a second time by accepting or
+      // refusing a subscription (`OtpDeliveryStore.mintHandles`).
+      const delivery = await this.deliveries.mintHandles();
       if (user?.status === 'active' && user.phoneVerifiedAt) {
         await this.otp.issueOtp(
           phoneNumber,
@@ -191,9 +261,13 @@ export class AuthService {
           resolvedChannel,
           ip,
           lang,
+          delivery,
         );
       }
-      return ok({ accepted: true }, 'auth.otpSent');
+      return ok(
+        { accepted: true, ...deliveryHandles(delivery) },
+        'auth.otpSent',
+      );
     });
   }
 
@@ -297,19 +371,35 @@ export class AuthService {
         where: {
           refreshTokenHash: this.tokens.refreshHash(input.refreshToken),
         },
-        include: {
-          user: {
-            include: {
-              role: {
-                include: { rolePermissions: { include: { permission: true } } },
-              },
-            },
-          },
-        },
       });
       if (!session || session.revokedAt || session.expiresAt <= new Date()) {
         return err('auth.invalidRefreshToken');
       }
+
+      // Read as its own query rather than `include`d on the session above,
+      // and the reason is RLS, not style. `identity.user` carries the
+      // `tenantId = current_tenant_id()` policy and `identity.session` carries
+      // none, so the two tables answer to different rules in one statement.
+      // The setting that policy reads is bound by the tenant extension, which
+      // hooks `TENANT_SCOPED_MODELS` as the **top-level** model of a query
+      // (`tenant-context/with-tenant.ts`) — a join reached from `session` never
+      // passes through it. Unbound, Postgres filtered the joined row away,
+      // Prisma found a required relation missing and threw
+      // `Inconsistent query result`, and that 500 is what the panel read as
+      // "not signed in" on every dashboard load.
+      //
+      // Null here is now a real answer rather than a crash: the session exists
+      // but its user is not visible in this request's tenant scope. Refusing
+      // is right — a session belongs to the tenant it was minted in.
+      const user = await this.prisma.user.findUnique({
+        where: { id: session.userId },
+        include: {
+          role: {
+            include: { rolePermissions: { include: { permission: true } } },
+          },
+        },
+      });
+      if (!user) return err('auth.invalidRefreshToken');
 
       await this.sessionService.revokeSession(session.id, 'user_logout');
       const result = await this.sessionService.createSession(
@@ -334,7 +424,7 @@ export class AuthService {
         { scopeKey: session.scopeKey, deviceLabel: session.deviceLabel },
       );
       const accessToken = this.tokens.signAccessToken(
-        session.user,
+        user,
         result.session.id,
       );
       return ok(
@@ -356,12 +446,193 @@ export class AuthService {
         where: {
           refreshTokenHash: this.tokens.refreshHash(input.refreshToken),
         },
-        select: { id: true },
+        select: { id: true, userId: true, scopeKey: true },
       });
-      if (session)
+      if (!session) return ok({ success: true }, 'auth.logoutSuccess');
+
+      // ADR-0033: signing out is a statement about the **place**, not about
+      // the one token that carried the request. A place can hold more than one
+      // session for the same account — a bot chat and its Mini App are one
+      // place (ADR-0032) and hold two — and revoking only the caller's left the
+      // chat signed in after a Mini App logout, which is not what "log out"
+      // means to anyone.
+      //
+      // The scope comes off the row the token resolved to, never off the
+      // request: this route is public (it reads a cookie, not a Bearer), so the
+      // request cannot be trusted to name the place it is signing out of.
+      //
+      // A session with no scope — impersonation, or anything minted before
+      // ADR-0015 — matches no place, so it falls back to revoking itself.
+      if (!session.scopeKey) {
         await this.sessionService.revokeSession(session.id, 'user_logout');
+        return ok({ success: true }, 'auth.logoutSuccess');
+      }
+
+      await this.sessionService.revokeSessionsForUserInScope(
+        session.userId,
+        session.scopeKey,
+        'user_logout',
+      );
+
+      // ADR-0035: a place that still holds another account the user already
+      // proved does not go dark — it falls back onto it. This grants nothing
+      // new: being signed in as the outgoing account already carried the right
+      // to become any member with no credential (`F-0207`), so the fallback is
+      // a switch the user could have made a moment earlier by hand.
+      //
+      // Leaving the place entirely is `logoutEverywhere`, deliberately its own
+      // action rather than a mode of this one.
+      const fallback = await this.fallbackMember(
+        session.scopeKey,
+        session.userId,
+      );
+      if (!fallback) return ok({ success: true }, 'auth.logoutSuccess');
+
+      try {
+        const tokens = await this.createSessionForUser(
+          fallback.user,
+          null,
+          null,
+          session.scopeKey,
+        );
+        await this.prisma.linkedAccountGroup.update({
+          where: { id: fallback.groupId },
+          data: { actingAsUserId: fallback.user.id },
+        });
+        return ok(
+          {
+            success: true,
+            switchedTo: {
+              userId: fallback.user.id,
+              fullName: fallback.user.fullName,
+            },
+            ...tokens,
+          },
+          'auth.logoutSwitched',
+        );
+      } catch (error) {
+        // The revoke already happened, so the one thing this must not become
+        // is a 500. "You are logged out" is true and complete on its own;
+        // coming back up as someone else is the part that failed.
+        this.logger.error(
+          `logout: signed ${session.userId} out of ${session.scopeKey}, but the fallback onto ${fallback.user.id} failed: ${
+            (error as Error)?.message ?? error
+          }`,
+        );
+        return ok({ success: true }, 'auth.logoutSuccess');
+      }
+    });
+  }
+
+  /**
+   * Sign out of **every** account this place holds (ADR-0035).
+   *
+   * The deliberate one. Ordinary logout falls back onto the group, which is
+   * right for "I am done with this account" and wrong for "I am handing this
+   * device over" — so that second intention gets its own route rather than
+   * being a checkbox on the first.
+   *
+   * It signs out; it does not un-prove. The group's membership rows stand, so
+   * signing back in and switching costs no new OTP. Taking an account out of
+   * the place is `F-0208`.
+   */
+  async logoutEverywhere(input: LogoutInput) {
+    return safeExecute(async () => {
+      if (!input.refreshToken)
+        return ok({ success: true }, 'auth.logoutSuccess');
+      const session = await this.prisma.session.findUnique({
+        where: {
+          refreshTokenHash: this.tokens.refreshHash(input.refreshToken),
+        },
+        select: { id: true, userId: true, scopeKey: true },
+      });
+      if (!session) return ok({ success: true }, 'auth.logoutSuccess');
+
+      if (!session.scopeKey) {
+        await this.sessionService.revokeSession(session.id, 'user_logout');
+        return ok({ success: true }, 'auth.logoutSuccess');
+      }
+
+      const membership = await this.prisma.linkedAccountMember.findUnique({
+        where: {
+          scopeKey_userId: {
+            scopeKey: session.scopeKey,
+            userId: session.userId,
+          },
+        },
+        select: { groupId: true },
+      });
+
+      const members = membership
+        ? await this.prisma.linkedAccountMember.findMany({
+            where: { scopeKey: session.scopeKey, groupId: membership.groupId },
+            select: { userId: true },
+          })
+        : [{ userId: session.userId }];
+
+      // The caller's own is in there when a group exists, and added here when
+      // it does not — an account with no group still has to be signed out.
+      const userIds = new Set(members.map((m) => m.userId));
+      userIds.add(session.userId);
+
+      for (const userId of userIds) {
+        await this.sessionService.revokeSessionsForUserInScope(
+          userId,
+          session.scopeKey,
+          'user_logout',
+        );
+      }
+
+      if (membership) {
+        // The place is nobody now. Without this, the next implicit sign-in
+        // would come back up as whoever it was last acting as (ADR-0034) —
+        // which is the opposite of what this route was reached for.
+        await this.prisma.linkedAccountGroup.update({
+          where: { id: membership.groupId },
+          data: { actingAsUserId: null },
+        });
+      }
+
       return ok({ success: true }, 'auth.logoutSuccess');
     });
+  }
+
+  /**
+   * Who this place falls back onto when `outgoingUserId` signs out.
+   *
+   * **The oldest remaining member**, so the answer never depends on row order
+   * or on which account was most recently touched: a group of three signs out
+   * into the same account every time, and in a bot chat that is normally the
+   * account the chat was linked with.
+   *
+   * `null` — no group here, nobody else in it, or nobody left who could hold a
+   * session — is not an error. It is an ordinary full logout.
+   */
+  private async fallbackMember(scopeKey: string, outgoingUserId: string) {
+    const membership = await this.prisma.linkedAccountMember.findUnique({
+      where: { scopeKey_userId: { scopeKey, userId: outgoingUserId } },
+      select: { groupId: true },
+    });
+    if (!membership) return null;
+
+    const members = await this.prisma.linkedAccountMember.findMany({
+      where: { scopeKey, groupId: membership.groupId },
+      select: { userId: true, addedAt: true },
+    });
+
+    const candidates = members
+      .filter((m) => m.userId !== outgoingUserId)
+      .sort((a, b) => a.addedAt.getTime() - b.addedAt.getTime());
+
+    for (const candidate of candidates) {
+      // The same conditions any sign-in applies. A suspended or deleted member
+      // is skipped rather than refused — the next one may be fine, and if none
+      // is, the place is simply signed out.
+      const user = await this.findUserForSession(candidate.userId);
+      if (!user || user.deletedAt || user.status !== 'active') continue;
+      return { user, groupId: membership.groupId };
+    }
+    return null;
   }
 
   async forgotPassword(input: ForgotPasswordInput, ip: string, lang: string) {
@@ -381,6 +652,7 @@ export class AuthService {
       );
       if (link) return link;
 
+      const delivery = await this.deliveries.mintHandles();
       if (user?.status === 'active') {
         await this.otp.issueOtp(
           input.phoneNumber,
@@ -388,9 +660,13 @@ export class AuthService {
           channel,
           ip,
           lang,
+          delivery,
         );
       }
-      return ok({ accepted: true }, 'auth.resetOtpSent');
+      return ok(
+        { accepted: true, ...deliveryHandles(delivery) },
+        'auth.resetOtpSent',
+      );
     });
   }
 
@@ -516,7 +792,15 @@ export class AuthService {
     // The same bucket login uses, on purpose: this route is another way to
     // guess a password, so it has to consume the same budget or it becomes the
     // cheaper door (rule #11) — including when a deployment has changed it.
-    const failureBucket = `login-failures:${identity}`;
+    //
+    // It used to be spelled by hand here and at the login site, with this
+    // comment between them saying they had to stay identical and nothing
+    // making them. Both now name the same registry entry, so they cannot
+    // diverge without a compile error (F-077, C-05).
+    const failureBucket = rateLimitBucketKey(
+      RateLimitBucket.LOGIN_FAILURES,
+      identity,
+    );
     const attempt = await this.rateLimiter.hit(
       failureBucket,
       this.loginFailureLockThreshold,
@@ -568,6 +852,12 @@ export class AuthService {
         resolvedChannel,
         ip,
         lang,
+        // Minted and never handed out: this route answers `{accepted:true}`
+        // and nothing else (`auth-api/contract.md`), so nobody can subscribe
+        // to the channel and it simply expires. The handles exist because
+        // `issueOtp` records a delivery status for every send, and a send with
+        // no status would be the one the fallback cannot answer for.
+        await this.deliveries.mintHandles(),
       );
     }
     return null;

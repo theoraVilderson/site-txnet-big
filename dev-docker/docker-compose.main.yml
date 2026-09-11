@@ -117,11 +117,17 @@ services:
       - JWT_SECRET=${JWT_ACCESS_SECRET}
       - REDIS_URL=${REDIS_URL}
       - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
-      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v3}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
       - PERMISSIONS_FILE_PATH=/src/auth-handler/configs/permissions.yaml
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
       - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
       - LOCALE_SCOPE=backend
+      # How long the boot blocks for the first snapshots (F-086). It was
+      # hardcoded twice at two different values; the gateway waits longer than
+      # the shared client's default because it cannot retry — it blocks its own
+      # start, and coming up without translations means serving raw message
+      # keys to every user.
+      - LOCALE_BOOT_TIMEOUT=${LOCALE_BOOT_TIMEOUT:-60s}
     depends_on:
       locale-service:
         condition: service_healthy
@@ -137,7 +143,40 @@ services:
       - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-User-Permissions="
       - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Tenant-Id="
       - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Role-Id="
-      - "traefik.http.middlewares.my-auth.forwardauth.authResponseHeaders=X-User-Id,X-Tenant-Id,X-Role-Id,X-User-Permissions,X-Impersonated,X-Impersonated-By"
+      # The impersonation pair. Forwarded since the feature shipped and never
+      # stripped, which `tools/contracts.py` found on its first run (F-072).
+      # `my-auth` happens to cover it — Traefik deletes every header in
+      # `authResponseHeaders` from the request before copying the auth
+      # response onto it — but that is a property of one middleware, not a
+      # boundary: a router carrying `strip-fake-headers` without a ForwardAuth
+      # would pass a client-set `X-Impersonated: true` straight through, and
+      # downstream reads it as an audit fact about who is acting.
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Impersonated="
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Impersonated-By="
+      # F-067-h. `gateway-service` re-checks `session:<id>` on a timer, because
+      # a WebSocket outlives by hours the access token that opened it. It is
+      # stripped here for the same reason as every header above: downstream
+      # trusts it, so a client must not be able to set it.
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Session-Id="
+      # ADR-0031. Set by the optional gate on a 2xx that identified nobody, so
+      # `gateway-service` can tell an anonymous caller from a router that lost
+      # its middleware. Stripped here because downstream reads it as evidence
+      # that the gate ran.
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Auth-Anonymous="
+      - "traefik.http.middlewares.my-auth.forwardauth.authResponseHeaders=X-User-Id,X-Tenant-Id,X-Role-Id,X-User-Permissions,X-Impersonated,X-Impersonated-By,X-Session-Id"
+
+      # The optional gate (ADR-0031): the same decision as `my-auth` for a
+      # caller that brought a credential, and a 200 identifying nobody for one
+      # that did not. The realtime router uses it, because a WebSocket here is
+      # opened before anyone signs in — the OTP delivery result is pushed onto
+      # one during registration (F-067-j).
+      #
+      # It is a second middleware rather than a flag on the first because
+      # ForwardAuth's address is what chooses the behaviour, and a router picks
+      # a middleware by name. Every other router keeps `my-auth` and is
+      # unaffected.
+      - "traefik.http.middlewares.my-auth-optional.forwardauth.address=http://authorization-handler:${INTERAL_BACKEND_PORT:-8080}/validate-optional"
+      - "traefik.http.middlewares.my-auth-optional.forwardauth.authResponseHeaders=X-User-Id,X-Tenant-Id,X-Role-Id,X-User-Permissions,X-Impersonated,X-Impersonated-By,X-Session-Id,X-Auth-Anonymous"
 
       - "txnet.logging=true"
 
@@ -185,13 +224,13 @@ services:
       - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
       - REDIS_URL=${REDIS_URL}
       - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
-      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v3}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
       # The one message this process publishes: an `admin_manual` tick from
       # `POST /admin/workers/:key/run` (F-031-b). Optional by design — the
       # connection is opened on first use, so an environment without a broker
       # boots and serves logins, and only that route answers 503.
       - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
-      - AUTOMATION_EXCHANGE=${AUTOMATION_EXCHANGE:-txnet.automation}
+      - AUTOMATION_EXCHANGE=${AUTOMATION_EXCHANGE:-txnet.automation}  # default declared in shared-core/src/lib/automation/bot-update.ts (F-079)
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
       - JWT_REFRESH_HASH_SECRET=${JWT_REFRESH_HASH_SECRET}
       - JWT_ACCESS_TTL_SEC=${JWT_ACCESS_TTL_SEC:-900}
@@ -200,8 +239,33 @@ services:
       # Abuse limits. Defaults are what the code shipped with; a deployment
       # with a different risk appetite moves them without a rebuild.
       - LOGIN_FAILURE_LOCK_THRESHOLD=${LOGIN_FAILURE_LOCK_THRESHOLD:-10}
-      - CAPTCHA_RATE_LIMIT=${CAPTCHA_RATE_LIMIT:-30}
-      - FORGOT_VERIFY_RATE_LIMIT=${FORGOT_VERIFY_RATE_LIMIT:-20}
+      # Per-route request limits (F-087). Forwarded empty when unset: the
+      # default for each lives once, in auth-service's env schema, so it is not
+      # repeated here where it could disagree.
+      - LOGIN_PWD_RATE_LIMIT=${LOGIN_PWD_RATE_LIMIT:-}
+      - LOGIN_OTP_REQUEST_RATE_LIMIT=${LOGIN_OTP_REQUEST_RATE_LIMIT:-}
+      - LOGIN_OTP_VERIFY_RATE_LIMIT=${LOGIN_OTP_VERIFY_RATE_LIMIT:-}
+      - REGISTER_RATE_LIMIT=${REGISTER_RATE_LIMIT:-}
+      - REGISTER_VERIFY_RATE_LIMIT=${REGISTER_VERIFY_RATE_LIMIT:-}
+      - PASSWORD_FORGOT_RATE_LIMIT=${PASSWORD_FORGOT_RATE_LIMIT:-}
+      - FORGOT_VERIFY_RATE_LIMIT=${FORGOT_VERIFY_RATE_LIMIT:-}
+      - OTP_DELIVERY_STATUS_RATE_LIMIT=${OTP_DELIVERY_STATUS_RATE_LIMIT:-}
+      - OTP_CHANNELS_RATE_LIMIT=${OTP_CHANNELS_RATE_LIMIT:-}
+      - CAPTCHA_RATE_LIMIT=${CAPTCHA_RATE_LIMIT:-}
+      - BOT_LINK_RESOLVE_RATE_LIMIT=${BOT_LINK_RESOLVE_RATE_LIMIT:-}
+      - BOT_LINK_CONTACT_RATE_LIMIT=${BOT_LINK_CONTACT_RATE_LIMIT:-}
+      - BOT_LINK_STATUS_RATE_LIMIT=${BOT_LINK_STATUS_RATE_LIMIT:-}
+      - BOT_SESSION_RATE_LIMIT=${BOT_SESSION_RATE_LIMIT:-}
+      - BOT_WEBAPP_SESSION_RATE_LIMIT=${BOT_WEBAPP_SESSION_RATE_LIMIT:-}
+      - ACCOUNTS_ADD_OTP_REQUEST_RATE_LIMIT=${ACCOUNTS_ADD_OTP_REQUEST_RATE_LIMIT:-}
+      - ACCOUNTS_ADD_OTP_VERIFY_RATE_LIMIT=${ACCOUNTS_ADD_OTP_VERIFY_RATE_LIMIT:-}
+      - ACCOUNTS_ADD_PASSWORD_RATE_LIMIT=${ACCOUNTS_ADD_PASSWORD_RATE_LIMIT:-}
+      - ACCOUNTS_LIST_RATE_LIMIT=${ACCOUNTS_LIST_RATE_LIMIT:-}
+      - ACCOUNTS_SWITCH_RATE_LIMIT=${ACCOUNTS_SWITCH_RATE_LIMIT:-}
+      - ACCOUNTS_REMOVE_RATE_LIMIT=${ACCOUNTS_REMOVE_RATE_LIMIT:-}
+      # The platform-wide ceiling over every guarded route, as a multiple of
+      # that route's own per-tenant limit (F-066-s). 0 switches it off.
+      - PLATFORM_RATE_LIMIT_FACTOR=${PLATFORM_RATE_LIMIT_FACTOR:-10}
       - OTP_DELIVERY_MODE=${OTP_DELIVERY_MODE:-console}
       # Which delivery methods this environment offers. Drop one from the list
       # and it disappears from GET /api/auth/otp/channels as well.
@@ -311,7 +375,7 @@ services:
       # Same namespace and version as auth-service: one bump abandons every
       # key this platform holds, bot sessions included (ADR-0005).
       - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
-      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v3}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
       # In-network, so bot traffic never leaves the private network to reach
       # the API it depends on.
       - AUTH_API_BASE_URL=http://auth-service:${AUTH_PORT}
@@ -322,6 +386,15 @@ services:
       # prints the id it created.
       - BOT_TENANT_ID=${BOT_TENANT_ID:-}
       - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
+      # The webhook verifies and enqueues; worker-service runs the flow and
+      # calls back in (F-067-b). Required here, unlike in auth-service: this
+      # service's only route is the one that publishes.
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+      - AUTOMATION_EXCHANGE=${AUTOMATION_EXCHANGE:-txnet.automation}  # default declared in shared-core/src/lib/automation/bot-update.ts (F-079)
+      # Must equal worker-service's BOT_UPDATE_QUEUES: this side hashes a chat
+      # into a routing key, that side declares the queues bound to it (D-16).
+      - BOT_UPDATE_QUEUES=${BOT_UPDATE_QUEUES:-4}
+      - AUTOMATION_PUBLISH_CONFIRM_MS=${AUTOMATION_PUBLISH_CONFIRM_MS:-5000}
       - BOT_SESSION_TTL_SEC=${BOT_SESSION_TTL_SEC:-2592000}
       - BOT_NAV_TTL_SEC=${BOT_NAV_TTL_SEC:-1800}
       - TELEGRAM_API_BASE=${TELEGRAM_API_BASE:-https://api.telegram.org}
@@ -372,6 +445,11 @@ services:
         condition: service_started
       locale-service:
         condition: service_healthy
+      # Since F-067-b the webhook's whole job is to publish, so this service
+      # cannot serve its one route without the broker and refuses to boot
+      # without RABBITMQ_URL.
+      rabbitmq:
+        condition: service_healthy
 
   # ===========================================================================
   # NestJS Worker Service (Nx Monorepo) — background work, no HTTP surface
@@ -398,17 +476,47 @@ services:
       - /app/node_modules
     environment:
       - NODE_ENV=${NODE_ENV:-development}
+      # Which app `scripts/dev-serve.js` builds and runs. The Dockerfile bakes
+      # this from its `APP_NAME` build arg, but that arg sits in the *base*
+      # stage, so giving it a new value invalidates the cache from layer one
+      # and re-runs `npm ci` — which needs egress this host does not have.
+      # Setting it here overrides the image's own ENV, so every backend app can
+      # share one built image. The source tree is bind-mounted and
+      # node_modules is a volume, so nothing else about the image differs.
+      - APP_NAME=worker-service
       # The same NOBYPASSRLS login role auth-service uses, and no fallback to
       # the owner connection (F-066-m-a). automation's three worker tables
       # carry no tenantId and no policy; the grants cover every schema.
       - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
       - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
-      - AUTOMATION_EXCHANGE=${AUTOMATION_EXCHANGE:-txnet.automation}
-      - AUTOMATION_QUEUE=${AUTOMATION_QUEUE:-txnet.automation.ticks}
+      # The shared store behind the per-tenant run cap (F-067-e). Same
+      # namespace and version as auth-service and bot-service: one bump
+      # abandons every key this platform holds (ADR-0005).
+      - REDIS_URL=${REDIS_URL}
+      - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      - AUTOMATION_EXCHANGE=${AUTOMATION_EXCHANGE:-txnet.automation}  # default declared in shared-core/src/lib/automation/bot-update.ts (F-079)
+      # `.v2`: F-067-d declares this queue with a dead-letter exchange, and a
+      # durable queue's arguments cannot be changed in place — asserting the old
+      # name would fail every boot with PRECONDITION_FAILED. The old
+      # `txnet.automation.ticks` drains itself and can be deleted at leisure.
+      - AUTOMATION_QUEUE=${AUTOMATION_QUEUE:-txnet.automation.ticks.v2}
+      - AUTOMATION_DLX=${AUTOMATION_DLX:-txnet.automation.dlx}
+      - AUTOMATION_DEAD_QUEUE=${AUTOMATION_DEAD_QUEUE:-txnet.automation.ticks.dead}
+      - BOT_UPDATE_QUEUE_PREFIX=${BOT_UPDATE_QUEUE_PREFIX:-txnet.automation.bot.update}
+      # One consumer per queue at prefetch 1, so a chat's updates stay in
+      # order; the count is this bot's whole cross-chat parallelism (F-067-b).
+      - BOT_UPDATE_QUEUES=${BOT_UPDATE_QUEUES:-4}
       - AUTOMATION_PREFETCH=${AUTOMATION_PREFETCH:-4}
+      # Shared across replicas since F-067-e — a set of expiring leases in
+      # Redis, not a per-process count.
       - AUTOMATION_TENANT_CONCURRENCY=${AUTOMATION_TENANT_CONCURRENCY:-2}
       - AUTOMATION_DEFER_MS=${AUTOMATION_DEFER_MS:-5000}
+      # How many unpublished outbox_event rows one relay run claims (F-067-c).
+      - AUTOMATION_OUTBOX_BATCH=${AUTOMATION_OUTBOX_BATCH:-100}
       - AUTOMATION_TICK_INTERVAL_MS=${AUTOMATION_TICK_INTERVAL_MS:-60000}
+      # Also the lifetime of a tenant run lease (F-067-e): the slot a dead
+      # process held and the run row it left open expire together.
       - AUTOMATION_RUN_TIMEOUT_MS=${AUTOMATION_RUN_TIMEOUT_MS:-600000}
       # The internal seam a job reaches another service's code through
       # (F-031-c). `VaultRetentionJob` calls auth-service because the
@@ -418,6 +526,10 @@ services:
       - AUTH_API_BASE_URL=http://auth-service:${AUTH_PORT}
       - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
       - AUTH_API_TIMEOUT_MS=${AUTH_API_TIMEOUT_MS:-30000}
+      # The other end of the same seam: bot-service owns the conversation a
+      # queued update runs (F-067-b).
+      - BOT_API_BASE_URL=http://bot-service:${BOT_PORT:-3000}
+      - BOT_API_TIMEOUT_MS=${BOT_API_TIMEOUT_MS:-30000}
       - WORKER_NAME=${WORKER_NAME:-}
     networks:
       - private_backend_network
@@ -427,6 +539,94 @@ services:
       main-db:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+
+  # ===========================================================================
+  # NestJS Gateway Service (Nx Monorepo) — the WebSocket gateway (F-067-h)
+  # ---------------------------------------------------------------------------
+  # One socket per signed-in user, multiplexed into channels. It holds no
+  # database and no JWT secret: the upgrade goes through `my-auth` like every
+  # other request, and this process reads the identity headers that come back
+  # (ADR-0030). That is the whole reason owning a realtime gateway is cheap
+  # here — there is no second identity model to run beside the first.
+  #
+  # Its one dependency is the Redis holding `session:<id>`, which it re-reads
+  # on a timer so a revoked session does not keep a live socket.
+  # ===========================================================================
+  gateway-service:
+    build:
+      context: ../txnet-backend
+      dockerfile: Dockerfile
+      target: ${ENVIRONMENT}
+      extra_hosts:
+        - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
+      args:
+        - APP_NAME=gateway-service
+        - DOCKER_REGISTRY=${DOCKER_REGISTRY}
+    container_name: ${STACK_NAME:-txnet}-gateway-service
+    restart: unless-stopped
+    volumes:
+      - ../txnet-backend:/app:delegated
+      - /app/node_modules
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${REALTIME_PORT:-3000}
+      # Same namespace and version as auth-service, bot-service and
+      # worker-service: one bump abandons every key this platform holds
+      # (ADR-0005). This process only ever reads `session:<id>`.
+      - REDIS_URL=${REDIS_URL}
+      - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      # Must agree with the router rule below. A socket reachable on a path the
+      # gate does not cover would be an unauthenticated socket.
+      - REALTIME_PATH=${REALTIME_PATH:-/realtime}
+      - REALTIME_HEARTBEAT_MS=${REALTIME_HEARTBEAT_MS:-30000}
+      # The window a revoked session keeps its socket — a security number, not
+      # a tuning one. One EXISTS per distinct session per tick.
+      - REALTIME_SESSION_RECHECK_MS=${REALTIME_SESSION_RECHECK_MS:-60000}
+      - REALTIME_MAX_SUBSCRIPTIONS=${REALTIME_MAX_SUBSCRIPTIONS:-32}
+      - REALTIME_MAX_CONNECTIONS_PER_USER=${REALTIME_MAX_CONNECTIONS_PER_USER:-4}
+      # The cap that applies when there is no user to count against (ADR-0031).
+      - REALTIME_MAX_CONNECTIONS_PER_IP=${REALTIME_MAX_CONNECTIONS_PER_IP:-16}
+      - REALTIME_MAX_FRAME_BYTES=${REALTIME_MAX_FRAME_BYTES:-8192}
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.gateway-service.loadbalancer.server.port=${REALTIME_PORT:-3000}"
+
+      # The realtime router. `strip-fake-headers,my-auth-optional` in that
+      # order: strip what the client claimed, then let the gate set what it
+      # proved. Traefik runs a WebSocket upgrade through ForwardAuth like any
+      # other request, which is what makes one gate answer for both (ADR-0030).
+      #
+      # **The optional gate, not `my-auth`** (ADR-0031). A socket here is the
+      # live-data transport and is opened before anyone signs in, so an upgrade
+      # with no credential has to reach the service rather than be refused at
+      # the gate. A credential that *is* presented and fails is still a 401 —
+      # the gate does not downgrade it — so an authenticated socket is exactly
+      # as authenticated as it was before this changed.
+      #
+      # No rate-limit middleware here on purpose: `auth-rate-limit` counts
+      # requests, and a WebSocket is one request that then lives for hours —
+      # it would do nothing against the failure that matters, which is one
+      # client opening sockets in a loop. That is capped inside the service
+      # instead (REALTIME_MAX_CONNECTIONS_PER_USER, and
+      # REALTIME_MAX_CONNECTIONS_PER_IP for anonymous sockets, which have no
+      # user to be counted against).
+      - "traefik.http.routers.gateway-service-http.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`${REALTIME_PATH:-/realtime}`)"
+      - "traefik.http.routers.gateway-service-http.entrypoints=web"
+      - "traefik.http.routers.gateway-service-http.middlewares=strip-fake-headers,my-auth-optional"
+      - "traefik.http.routers.gateway-service-http.service=gateway-service"
+
+      - "traefik.http.routers.gateway-service-https.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`${REALTIME_PATH:-/realtime}`)"
+      - "traefik.http.routers.gateway-service-https.entrypoints=websecure"
+      - "traefik.http.routers.gateway-service-https.tls.certresolver=myresolver"
+      - "traefik.http.routers.gateway-service-https.middlewares=strip-fake-headers,my-auth-optional"
+      - "traefik.http.routers.gateway-service-https.service=gateway-service"
+      - "txnet.logging=true"
+    depends_on:
+      memory-data:
         condition: service_healthy
 
   # ===========================================================================
@@ -449,8 +649,12 @@ services:
       - ../txnet-backend:/app:delegated
       - /app/node_modules
     environment:
+      # Validated at boot by `app/config/env.validation.ts` (F-089); a typo'd
+      # variable is a refusal to start rather than a default nobody chose.
       - PORT=3000
       - NODE_ENV=${NODE_ENV:-development}
+      - GLOBAL_PREFIX=${BILLING_GLOBAL_PREFIX:-api}
+      - PUBLIC_HOST=billing-service
     networks:
       - private_backend_network
     labels:
@@ -474,6 +678,12 @@ services:
         - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+        # Empty unless the machine building the image needs a proxy for npm
+        # (F-088). The value used to be baked into the Dockerfile as one
+        # developer's host.
+        BUILD_HTTP_PROXY: ${BUILD_HTTP_PROXY:-}
+        BUILD_HTTPS_PROXY: ${BUILD_HTTPS_PROXY:-}
+        BUILD_NO_PROXY: ${BUILD_NO_PROXY:-}
     container_name: ${STACK_NAME:-txnet}-site-pwa
     restart: unless-stopped
     volumes:
@@ -511,6 +721,18 @@ services:
       - AUTH_SERVICE_ORIGIN=http://auth-service:${AUTH_PORT}
       - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
       - LOCALE_SCOPE=frontend
+      # The language a stranger is answered in, same variable the backend reads.
+      # Both names, one value: only NEXT_PUBLIC_ reaches the browser bundle, and
+      # `lib/phone` needs it there to open the country picker on the right
+      # region (src/env.ts).
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+      - NEXT_PUBLIC_DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+      # The realtime gateway answers on api.${DOMAIN_NAME} at the same path the
+      # Traefik router rule below carries my-auth-optional on. NEXT_PUBLIC_ is
+      # the only prefix Next inlines into the browser bundle, and the socket is
+      # opened only there (src/env.ts). One value, from the same REALTIME_PATH
+      # gateway-service reads, so the two cannot drift apart.
+      - NEXT_PUBLIC_REALTIME_PATH=${REALTIME_PATH:-/realtime}
     depends_on:
       locale-service:
         condition: service_healthy
@@ -564,6 +786,11 @@ services:
       - /app/node_modules # anonymous vol: keep the image's node_modules
     environment:
       - NODE_ENV=${NODE_ENV:-development}
+      # The apex domain greets visitors in the deployment's language. coinsite
+      # has no locale-service client, so this is the whole of its i18n: `lang`
+      # and `dir` on <html> (src/env.ts).
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+      - NEXT_PUBLIC_DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
     networks:
       - private_backend_network
     labels:

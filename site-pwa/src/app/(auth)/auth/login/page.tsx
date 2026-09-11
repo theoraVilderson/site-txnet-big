@@ -24,6 +24,7 @@ import { useSubmitError } from "@auth/auth/_hooks/useSubmitError";
 import { useCaptcha } from "@auth/auth/_hooks/useCaptcha";
 import { useOtpChannels } from "@auth/auth/_hooks/useOtpChannels";
 import { useBotLink } from "@auth/auth/_hooks/useBotLink";
+import { useOtpDelivery } from "@auth/auth/_hooks/useOtpDelivery";
 import { authApi } from "@/lib/auth-api";
 import { PANEL_HOME } from "@/lib/routes";
 import { OTP_LENGTH } from "@/lib/otp";
@@ -45,6 +46,7 @@ export default function LoginPage() {
   const captcha = useCaptcha();
   const otpTimer = useOtpTimer();
   const channels = useOtpChannels();
+  const delivery = useOtpDelivery();
   const botLink = useBotLink(() => {
     setStep(2);
     otpTimer.start(120);
@@ -80,6 +82,8 @@ export default function LoginPage() {
             botLink.start(result);
             setStep("link");
           } else {
+            // A code was queued: from here the screen hears what became of it.
+            delivery.start(result);
             setStep(2);
             otpTimer.start(120);
           }
@@ -90,7 +94,7 @@ export default function LoginPage() {
           } finally {
             captcha.spend();
           }
-          if ("requiresOtp" in result) { setLoginMethod("phone"); setStep(2); otpTimer.start(120); }
+          if ("requiresOtp" in result) { delivery.start(result); setLoginMethod("phone"); setStep(2); otpTimer.start(120); }
           else { setIsSuccess(true); router.replace(PANEL_HOME); }
         }
       } else if (step === 2) {
@@ -286,7 +290,8 @@ export default function LoginPage() {
                 timerSeconds={otpTimer.seconds}
                 timerFormatted={otpTimer.formatted}
                 onResend={() => otpTimer.start(120)}
-                onEditPhone={() => setStep(1)}
+                onEditPhone={() => { delivery.reset(); setStep(1); }}
+                delivery={delivery.delivery}
               />
             )}
           </AnimatePresence>

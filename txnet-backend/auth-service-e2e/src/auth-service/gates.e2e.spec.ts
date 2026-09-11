@@ -134,7 +134,7 @@ describe('auth-api — captcha and rate-limit gates', () => {
       const first = await api.register(newAccount(), { captcha: token });
       const second = await api.register(newAccount(), { captcha: token });
 
-      expect(first.status).toBe(201);
+      expect(first.status).toBe(202);
       expect(first.body.ok).toBe(true);
       expect(second.status).toBe(400);
       expect(second.body).toMatchObject({ ok: false, msg: 'captcha.required' });

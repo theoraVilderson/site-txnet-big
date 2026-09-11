@@ -8,15 +8,34 @@ import { RedisKeys } from '../../redis/redis.keys';
  * dangling id `dropAllForUser` deletes harmlessly — rather than the drop
  * failing.
  */
-function ownerOf(raw: string | null): string | null {
+function markerOf(raw: string | null): LiveSession | null {
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as { userId?: unknown };
-    return typeof parsed.userId === 'string' ? parsed.userId : null;
+    const parsed = JSON.parse(raw) as { userId?: unknown; scopeKey?: unknown };
+    if (typeof parsed.userId !== 'string') return null;
+    return {
+      userId: parsed.userId,
+      scopeKey: typeof parsed.scopeKey === 'string' ? parsed.scopeKey : null,
+    };
   } catch {
     return null;
   }
 }
+
+function ownerOf(raw: string | null): string | null {
+  return markerOf(raw)?.userId ?? null;
+}
+
+/**
+ * What the marker says about a live session.
+ *
+ * `scopeKey` is the switch scope the session was minted under (ADR-0015), and
+ * it is here rather than only in Postgres because ADR-0032 makes it decide the
+ * scope of every authenticated request — a read `AuthGuard` was already doing.
+ * `null` for a session minted before that shipped, which is why every caller
+ * falls back to the request's own scope rather than refusing.
+ */
+export type LiveSession = { userId: string; scopeKey: string | null };
 
 /**
  * Owns the session keyspace in Redis: the per-session "is this still alive?"
@@ -35,13 +54,14 @@ export class SessionStore {
     sessionId: string,
     userId: string,
     ttlSec: number,
+    scopeKey?: string | null,
   ): Promise<void> {
     const indexKey = RedisKeys.userSessions(userId);
     await this.redis.client
       .multi()
       .set(
         RedisKeys.session(sessionId),
-        JSON.stringify({ userId, revoked: false }),
+        JSON.stringify({ userId, revoked: false, scopeKey: scopeKey ?? null }),
         'EX',
         ttlSec,
       )
@@ -52,6 +72,17 @@ export class SessionStore {
 
   isActive(sessionId: string): Promise<boolean> {
     return this.redis.exists(RedisKeys.session(sessionId));
+  }
+
+  /**
+   * The live session behind an id, or `null` if there is none.
+   *
+   * `AuthGuard` reads this instead of {@link isActive}: it is the same single
+   * round trip, and it answers both questions the guard has — is the session
+   * still alive, and which switch scope was it minted under (ADR-0032).
+   */
+  async read(sessionId: string): Promise<LiveSession | null> {
+    return markerOf(await this.redis.get(RedisKeys.session(sessionId)));
   }
 
   /**

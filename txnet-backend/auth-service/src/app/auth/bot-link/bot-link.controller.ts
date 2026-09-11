@@ -1,4 +1,8 @@
 import {
+  RateLimitBucket,
+  rateLimitBucketKey,
+} from '@txnet-backend/shared-core';
+import {
   Body,
   Controller,
   HttpCode,
@@ -25,7 +29,6 @@ import {
 import { BotSessionService } from './bot-session.service';
 import { ServiceOnlyGuard } from '../../common/guards/service-only.guard';
 import { withRefreshCookie } from '../../common/http/refresh-cookie';
-import { resolveSwitchScope } from '../../common/security/switch-scope';
 
 /**
  * The bot side of account linking.
@@ -54,8 +57,8 @@ export class BotLinkController {
   @UseGuards(ServiceOnlyGuard)
   @UsePipes(new ZodValidationPipe(botLinkResolveSchema))
   @RateLimit({
-    key: (req) => `bot:link:resolve:${req.body?.chatId ?? rateLimitSubject(req)}`,
-    limit: 30,
+    key: (req) => rateLimitBucketKey(RateLimitBucket.BOT_LINK_RESOLVE, req.body?.chatId ?? rateLimitSubject(req)),
+    configKey: 'BOT_LINK_RESOLVE_RATE_LIMIT',
     windowSec: 60,
   })
   async resolve(@Body() body: any) {
@@ -80,8 +83,8 @@ export class BotLinkController {
   @UseGuards(ServiceOnlyGuard)
   @UsePipes(new ZodValidationPipe(botLinkContactSchema))
   @RateLimit({
-    key: (req) => `bot:link:contact:${req.body?.chatId ?? rateLimitSubject(req)}`,
-    limit: 10,
+    key: (req) => rateLimitBucketKey(RateLimitBucket.BOT_LINK_CONTACT, req.body?.chatId ?? rateLimitSubject(req)),
+    configKey: 'BOT_LINK_CONTACT_RATE_LIMIT',
     windowSec: 300,
   })
   async contact(@Body() body: any) {
@@ -115,8 +118,8 @@ export class BotLinkController {
   @UseGuards(ServiceOnlyGuard)
   @UsePipes(new ZodValidationPipe(botSessionSchema))
   @RateLimit({
-    key: (req) => `bot:session:${req.body?.chatId ?? rateLimitSubject(req)}`,
-    limit: 10,
+    key: (req) => rateLimitBucketKey(RateLimitBucket.BOT_SESSION, req.body?.chatId ?? rateLimitSubject(req)),
+    configKey: 'BOT_SESSION_RATE_LIMIT',
     windowSec: 300,
   })
   async session(@Body() body: any, @Req() req: Request) {
@@ -153,8 +156,8 @@ export class BotLinkController {
   // Per-IP, unlike the chat routes: real browsers call this one, and the only
   // chat id available before verification is one an attacker chose.
   @RateLimit({
-    key: (req) => `bot:webapp:session:${rateLimitSubject(req)}`,
-    limit: 20,
+    key: (req) => rateLimitBucketKey(RateLimitBucket.BOT_WEBAPP_SESSION, rateLimitSubject(req)),
+    configKey: 'BOT_WEBAPP_SESSION_RATE_LIMIT',
     windowSec: 900,
   })
   async webAppSession(
@@ -162,13 +165,12 @@ export class BotLinkController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const outcome = await this.sessions.authenticateWebApp(
-      body,
+    const outcome = await this.sessions.authenticateWebApp(body, {
       // The one messenger route where a device really is on the line: a
       // webview is a browser, so its IP and user agent are the user's.
-      { ip: req.ip ?? '', userAgent: req.get('user-agent') ?? 'unknown' },
-      resolveSwitchScope(req),
-    );
+      ip: req.ip ?? '',
+      userAgent: req.get('user-agent') ?? 'unknown',
+    });
     if (outcome.state === 'refused') {
       return err(outcome.key);
     }
@@ -197,8 +199,8 @@ export class BotLinkController {
   // Generous on purpose: the screen polls every 2.5s for as long as the user
   // is in the messenger, and each call is one Redis read.
   @RateLimit({
-    key: (req) => `bot:link:status:${rateLimitSubject(req)}`,
-    limit: 300,
+    key: (req) => rateLimitBucketKey(RateLimitBucket.BOT_LINK_STATUS, rateLimitSubject(req)),
+    configKey: 'BOT_LINK_STATUS_RATE_LIMIT',
     windowSec: 900,
   })
   async status(@Body() body: { linkToken: string }) {

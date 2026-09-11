@@ -8,7 +8,7 @@ source:
   - txnet-backend/bot-service/src/**
 owns_tables: []
 depends_on: [messenger, auth-api, i18n]
-updated: 2026-09-09
+updated: 2026-09-10
 ---
 
 # bot-app
@@ -22,9 +22,10 @@ differences (`messenger`), linking and OTP (`identity`/`auth-api`), copy (`i18n`
 ## Files
 | File | Read it when |
 |---|---|
-| 2026-09-09 | The webhook is `POST /api/bots/:platform/:webhookPath` and resolves its tenant from the path — one bot per tenant `BotIntegration`, not one per platform from env (F-066-i, spec: F-320 F-321). `ChatContext` carries the integration, and every `auth-api` call names its tenant |
 | [contract.md](contract.md) | adding a bot flow, a menu, or a deep link |
+| [contract.webhook.md](contract.webhook.md) | the front door: the webhook, the queue set behind it, the seam a worker runs a flow through |
 | [contract.accounts.md](contract.accounts.md) | the switch group: moving between accounts, whose set it is, how one joins |
+| [contract.mini-app.md](contract.mini-app.md) | the `web_app` menu row, and the `?ma=` marker that says which SDK the panel loads |
 | [conversation.md](conversation.md) | the shell every screen gets: orientation, Back, language, commands |
 | [open-questions.md](open-questions.md) | something is undecided |
 
@@ -44,8 +45,7 @@ per chat, register/login/forgot/logout), the switch group (`F-0205`, `F-0208`,
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-10 | Contract v10 -> **v11** (F-067-b): the webhook verifies and **enqueues**, and no longer converses. Rule 3 of the front door inverted — a publish the broker did not confirm is now a 5xx the platform redelivers, where the route used to answer 200 whatever happened. New file [contract.webhook.md](contract.webhook.md); `automation` is this unit's first consumer |
 | 2026-09-08 | Contract v9 -> **v10** (F-053): a transport failure answers with the sentence, not the key. `AuthApiClient` resolves `bot.common.tryAgain` itself, because `msg` is rendered as `raw` and `raw` is never translated again |
-| 2026-09-08 | contract v8 -> **v9**: `F-310` — the Mini App is a row on the member menu (`views.ts` `miniApp()`), opening `panel-web` inside the messenger. The page signs itself in from the platform's signature (ADR-0017); this unit hands over a URL and carries no credential |
-| 2026-09-07 | contract v7 -> **v8**: a successful add now switches the chat onto the account it just added (`auth-api` v8 answers `userId` from both add routes). The switch + persist pair moved out of `flows/accounts.flow.ts` into `session/account-switcher.ts`, which both flows use. A refused switch falls back to the old message — the add still stands |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

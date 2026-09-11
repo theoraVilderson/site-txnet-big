@@ -39,6 +39,19 @@ export interface WorkerView {
   } | null;
 }
 
+/** One message the queue could not deliver (F-067-d). */
+export interface DeadLetterView {
+  id: string;
+  routingKey: string;
+  workerKey: string | null;
+  reason: string;
+  attempts: number;
+  detail: string;
+  payload: unknown;
+  rawPayload: string | null;
+  deadLetteredAt: Date;
+}
+
 /**
  * The admin write surface over the worker registry (F-031-b).
  *
@@ -105,6 +118,41 @@ export class WorkerAdminService {
             errorsCount: worker.executionLogs[0].errorsCount,
           }
         : null,
+    }));
+  }
+
+  /**
+   * What the queue could not deliver (F-067-d).
+   *
+   * The rows are written by `worker-service`, which drains the dead-letter
+   * queue into `automation.dead_letter`; this route is the reading half, and it
+   * is here for the reason the rest of this surface is — `worker-service`
+   * serves no HTTP by design (ADR-0027).
+   *
+   * Newest first, and bounded: an operator opening this after an incident wants
+   * the last thing that died, and a table that grows with every failure must
+   * not be answered whole.
+   *
+   * The payload is returned in full. A tick carries no secret — it is a worker
+   * key, a timestamp and a reason — and a dead-letter row an operator cannot
+   * read the body of does not answer the question they came with.
+   */
+  async deadLetters(limit = 50): Promise<DeadLetterView[]> {
+    const rows = await this.prisma.deadLetter.findMany({
+      orderBy: { deadLetteredAt: 'desc' },
+      take: Math.min(Math.max(limit, 1), 200),
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      routingKey: row.routingKey,
+      workerKey: row.workerKey,
+      reason: row.reason,
+      attempts: row.attempts,
+      detail: row.detail,
+      payload: row.payload,
+      rawPayload: row.rawPayload,
+      deadLetteredAt: row.deadLetteredAt,
     }));
   }
 

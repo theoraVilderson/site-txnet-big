@@ -18,7 +18,45 @@ type Store struct {
 	addr        string
 	scope       string
 	defaultLang string
+	bootTimeout time.Duration
 	logger      *slog.Logger
+}
+
+// DefaultBootTimeout is how long Load waits for the first snapshots.
+//
+// **One value, from config** (F-086, ADR-0036). This was `60 * time.Second`
+// here and `10 * time.Second` inside the shared client — two hardcoded numbers
+// for the same wait, disagreeing by six times. Whichever one applied depended
+// on whether the caller happened to set the field, which is not a decision
+// anybody made.
+//
+// Sixty is the right default for *this* process rather than for the library:
+// `auth-handler` and `locale-service` start together, and a gateway that gives
+// up before its translations arrive comes up serving raw message keys to every
+// user. The shared client's ten seconds suits a caller that can retry; this one
+// cannot, because it blocks the boot.
+const DefaultBootTimeout = 60 * time.Second
+
+// dialTimeout bounds the whole of Load, not just the boot wait — the dial and
+// the snapshot fetch both happen inside it. Half again as long as the boot
+// timeout so the inner deadline is the one that fires, and its clearer error is
+// the one an operator reads.
+func (s *Store) dialTimeout() time.Duration {
+	return s.bootTimeout + s.bootTimeout/2
+}
+
+// WithBootTimeout overrides how long Load waits. Zero or negative keeps
+// DefaultBootTimeout: an unset or nonsensical env var must not mean "give up
+// immediately", which is the failure a plain assignment would allow.
+//
+// A setter rather than another positional parameter: NewStore already takes
+// four, and the five call sites that do not care about this should not have to
+// mention it.
+func (s *Store) WithBootTimeout(d time.Duration) *Store {
+	if d > 0 {
+		s.bootTimeout = d
+	}
+	return s
 }
 
 // NewStore configures (but does not yet connect) a locale store.
@@ -33,20 +71,21 @@ func NewStore(addr, scope, defaultLang string, logger *slog.Logger) *Store {
 		scope = "backend"
 	}
 	return &Store{
-		addr: addr, scope: scope, defaultLang: defaultLang, logger: logger,
+		addr: addr, scope: scope, defaultLang: defaultLang,
+		bootTimeout: DefaultBootTimeout, logger: logger,
 	}
 }
 
 // Load dials locale-service and blocks until the initial snapshots are cached.
 func (s *Store) Load() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), s.dialTimeout())
 	defer cancel()
 
 	client, err := localeclient.New(ctx, localeclient.Config{
 		Addr:        s.addr,
 		Scope:       s.scope,
 		DefaultLang: s.defaultLang,
-		BootTimeout: 60 * time.Second, // survive locale-service still starting
+		BootTimeout: s.bootTimeout,
 		Logger:      s.logger,
 	})
 	if err != nil {

@@ -11,13 +11,16 @@ import { fakeExecutionContext } from '../../../test-support/execution-context';
 
 const loginLimit: RateLimitOptions = {
   key: (req) => `login:${req.body?.identifier}`,
-  limit: 5,
+  configKey: 'LOGIN_PWD_RATE_LIMIT',
   windowSec: 900,
 };
 
+/** What the validated env holds for each limit — the schema's defaults. */
+const configured: Record<string, number> = { LOGIN_PWD_RATE_LIMIT: 5 };
+
 describe('RateLimitGuard', () => {
   let reflector: { getAllAndOverride: jest.Mock };
-  let limiter: { hit: jest.Mock };
+  let limiter: { hit: jest.Mock; hitPlatform: jest.Mock };
   let config: { get: jest.Mock };
   let guard: RateLimitGuard;
 
@@ -25,9 +28,16 @@ describe('RateLimitGuard', () => {
     reflector = { getAllAndOverride: jest.fn().mockReturnValue(loginLimit) };
     limiter = {
       hit: jest.fn().mockResolvedValue({ allowed: true, current: 1, limit: 5 }),
+      // The platform-wide ceiling over the same bucket (F-066-s). It is
+      // exercised in `rate-limit-platform.spec.ts`; here it always allows, so
+      // these cases still describe the per-tenant counter alone.
+      hitPlatform: jest
+        .fn()
+        .mockResolvedValue({ allowed: true, current: 1, limit: 50 }),
     };
-    // The real ConfigService's shape: a configured value, or the default.
-    config = { get: jest.fn((_key: string, fallback: number) => fallback) };
+    // The validated env: every limit has a value, because the schema gives
+    // each one a default.
+    config = { get: jest.fn((key: string) => configured[key]) };
     guard = new RateLimitGuard(
       reflector as unknown as Reflector,
       limiter as unknown as RateLimiter,
@@ -38,39 +48,53 @@ describe('RateLimitGuard', () => {
   const contextWithBody = (body: unknown) =>
     fakeExecutionContext({ extra: { body } });
 
-  // The limit is deployment config: a route names the variable and the guard
-  // reads it here, because decorator metadata is evaluated once at
-  // class-definition time and cannot see ConfigService.
+  /**
+   * F-087, decided 2026-09-11: every limit is deployment config and every one
+   * has a default. The default lives once, in the env schema — not on the
+   * decorator as well — so the guard reads the variable and has no second
+   * number to fall back on. Decorator metadata is evaluated once at
+   * class-definition time and cannot see ConfigService, which is why the route
+   * names the variable and the guard resolves it per request.
+   */
   describe('where the limit comes from', () => {
-    it('uses the decorated limit when the route names no variable', async () => {
-      await guard.canActivate(contextWithBody({ identifier: '0912' }).context);
-
-      expect(config.get).not.toHaveBeenCalled();
-      expect(limiter.hit).toHaveBeenCalledWith(expect.any(String), 5, 900);
-    });
-
-    it('reads the configured value when the route names one', async () => {
-      reflector.getAllAndOverride.mockReturnValue({
-        ...loginLimit,
-        configKey: 'LOGIN_LIMIT',
-      });
-      config.get.mockReturnValue(3);
+    it('reads the limit from the variable the route names', async () => {
+      config.get.mockImplementation((key: string) =>
+        key === 'LOGIN_PWD_RATE_LIMIT' ? 3 : undefined,
+      );
 
       await guard.canActivate(contextWithBody({ identifier: '0912' }).context);
 
-      expect(config.get).toHaveBeenCalledWith('LOGIN_LIMIT', 5);
+      expect(config.get).toHaveBeenCalledWith('LOGIN_PWD_RATE_LIMIT');
       expect(limiter.hit).toHaveBeenCalledWith(expect.any(String), 3, 900);
     });
 
-    it('falls back to the decorated limit when nothing is configured', async () => {
-      reflector.getAllAndOverride.mockReturnValue({
-        ...loginLimit,
-        configKey: 'LOGIN_LIMIT',
-      });
-
+    it('uses the schema default when the environment sets nothing', async () => {
       await guard.canActivate(contextWithBody({ identifier: '0912' }).context);
 
       expect(limiter.hit).toHaveBeenCalledWith(expect.any(String), 5, 900);
+    });
+
+    it('refuses to guess when the variable resolves to nothing', async () => {
+      // Only reachable if a route names a key the schema does not declare,
+      // which the `configKey` type already forbids. If it happens anyway it is
+      // a deployment bug, and a silent default is exactly the failure the
+      // decision was made to avoid — so it fails the request loudly.
+      config.get.mockReturnValue(undefined);
+
+      await expect(
+        guard.canActivate(contextWithBody({ identifier: '0912' }).context),
+      ).rejects.toThrow(/LOGIN_PWD_RATE_LIMIT/);
+      expect(limiter.hit).not.toHaveBeenCalled();
+    });
+
+    it('refuses a limit that is not a positive whole number', async () => {
+      for (const bad of [0, -1, 2.5, Number.NaN]) {
+        config.get.mockReturnValue(bad);
+        await expect(
+          guard.canActivate(contextWithBody({ identifier: '0912' }).context),
+        ).rejects.toThrow(/LOGIN_PWD_RATE_LIMIT/);
+      }
+      expect(limiter.hit).not.toHaveBeenCalled();
     });
   });
 
@@ -111,9 +135,12 @@ describe('RateLimitGuard', () => {
   it('passes the configured limit and window straight through', async () => {
     reflector.getAllAndOverride.mockReturnValue({
       key: () => 'otp:send',
-      limit: 3,
+      configKey: 'OTP_CHANNELS_RATE_LIMIT',
       windowSec: 60,
     });
+    config.get.mockImplementation((key: string) =>
+      key === 'OTP_CHANNELS_RATE_LIMIT' ? 3 : undefined,
+    );
     const { context } = fakeExecutionContext();
 
     await expect(guard.canActivate(context)).resolves.toBe(true);

@@ -2,8 +2,8 @@
 id: forward-auth
 layer: platform
 status: active
-version: 2
-updated: 2026-09-08
+version: 3
+updated: 2026-09-11
 ---
 
 # Contract — forward-auth
@@ -21,15 +21,65 @@ Traefik middleware (`strip-fake-headers`).
 
 | Method + path | Behaviour |
 |---|---|
-| `GET /validate` | `Authorization: Bearer <jwt>` -> validate signature (HMAC-SHA256, always HS256) + `exp` + required claims -> check Redis key `<prefix>session:<sessionId>` exists -> if a policy file is loaded, check every claimed permission is granted to `roleId` -> set identity headers, return 200 |
+| `GET /validate` | the access JWT (`Authorization: Bearer <jwt>`, or a WebSocket upgrade's subprotocol — see below) -> validate signature (HMAC-SHA256, always HS256) + `exp` + required claims -> check Redis key `<prefix>session:<sessionId>` exists -> if a policy file is loaded, check every claimed permission is granted to the token's `roleName`, matched exactly against the file's role keys (ADR-0037) -> set identity headers, return 200 |
+| `GET /validate-optional` | the **same decision**, except that a request carrying no credential at all is answered 200 with `X-Auth-Anonymous: true` and no identity headers (ADR-0031). A credential that *is* presented and fails is refused exactly as above — absent is anonymous, invalid is still 401 |
 | `GET /health` | 200 `healthy` |
+
+## Where the token comes from
+
+`Authorization: Bearer <jwt>` is the form every caller uses, and it wins
+whenever it is present.
+
+Since F-067-h there is a second: a **WebSocket upgrade** may carry it in
+`Sec-WebSocket-Protocol` as `txnet.v1, <jwt>`. A browser cannot set headers on
+`new WebSocket()` — that list is the one thing about the upgrade a page
+chooses — and Traefik runs an upgrade through this middleware like any other
+request, which is what lets one gate answer for both and is why realtime needs
+no second identity model (ADR-0030).
+
+The list is **anchored, never scanned**: exactly two entries, `txnet.v1` first
+and the token second. Anything else is `auth.authorizationRequired`. Scanning
+for the marker would let a caller append a second credential after one already
+rejected; the header is attacker-controlled, so its shape is matched, not
+interpreted. `gateway-service` selects `txnet.v1` in the handshake response and
+never the token — a selected subprotocol is echoed on the 101.
+
+Additive: an `Authorization` header behaves exactly as before, so this is a
+patch and not a version bump (`00-PROTOCOL.md` §8).
+
+## The optional gate
+
+`/validate-optional` exists for one router: realtime. A WebSocket on this
+platform is the live-data transport and is opened before anyone signs in — the
+OTP delivery result is pushed onto one during registration (F-067-j) — so an
+upgrade with no credential has to reach `gateway-service` rather than be
+refused here. Not gating the path at all would move the check into that
+service, which is the second identity model ADR-0030 exists to avoid. This is
+the third answer: one gate, one decision, two outcomes.
+
+**Absent is anonymous; invalid is still 401.** A credential that was presented
+and did not check out is never downgraded to "nobody". Downgrading it would
+turn an expired token into a silent loss of privilege — a page that shows
+nothing instead of one told to sign in again — and would let a caller reach an
+admitted state by corrupting its own token, which is the one thing an optional
+gate must not offer.
+
+"Presented" is read broadly and deliberately: an `Authorization` header with
+anything in it, or a `Sec-WebSocket-Protocol` list carrying more than the
+marker. A malformed list is therefore a 401 rather than a quiet admission. The
+bare marker — `new WebSocket(url, ['txnet.v1'])`, which is what a page with no
+token sends — is the ordinary anonymous upgrade.
+
+Traefik reaches it through a second middleware, `my-auth-optional`. It is a
+separate middleware rather than a flag because ForwardAuth's address is what
+chooses the behaviour and a router selects a middleware by name; every other
+router keeps `my-auth` and is unaffected.
 
 ## Response headers on success
 
-`X-User-Id` (`sub`), `X-Tenant-Id`, `X-Role-Id`, `X-User-Permissions`
-(comma-joined), and when impersonating: `X-Impersonated: true`,
-`X-Impersonated-By`. Traefik is configured to forward exactly these
-(`authResponseHeaders`).
+The declared list, the Traefik forward and strip lists, and how the two are
+checked differently: **[contract.headers.md](contract.headers.md)**. Split out
+at ~200 lines (§10); it is one self-contained topic with its own gate.
 
 ## Status mapping
 
@@ -39,6 +89,13 @@ Traefik middleware (`strip-fake-headers`).
   lookup error / unexpected (`system.unexpected`). 503 the request outlived the
   gateway's timeout (`system.unavailable`). The key is mapped to the status
   **before** translation.
+- Every failure key is a generated constant (`auth-handler/internal/i18nkeys`),
+  the same catalogue `auth-service` answers from in TypeScript (F-081). A key
+  renamed in `errors.json` is a build failure here, not a raw key on a screen.
+- **A 2xx `msg` is `ok`, and `ok` is not a translation key.** That is safe only
+  because failures alone are translated — a success body is consumed by
+  Traefik or a health probe and never read by a person. A success body that
+  starts reaching a person needs a real key first.
 
 ## Every answer is the envelope, and `msg` is a sentence
 
@@ -74,7 +131,7 @@ catalogue `auth-api` translates against.
 `REDIS_URL`; `REDIS_KEY_NAMESPACE` / `REDIS_KEYSPACE_VERSION` — must equal
 `auth-service`'s; `PERMISSIONS_FILE_PATH` (`configs/permissions.yaml`, optional —
 absent disables the RBAC step); `LOCALE_SERVICE_ADDR` / `LOCALE_SCOPE=backend`;
-HTTP timeouts. Policy file format: `roles: <role>: permissions: - <key>`.
+HTTP timeouts. Policy file format: `roles: <role>: permissions: - <key>`, where `<role>` is `identity.role.name` spelled as `prisma/seed.js` spells it (ADR-0037).
 
 ## Guarantees
 

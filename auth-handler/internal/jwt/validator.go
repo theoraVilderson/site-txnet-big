@@ -22,9 +22,13 @@ var (
 
 // Claims represents the custom JWT claims expected from the auth service.
 type Claims struct {
-	Sub            string   `json:"sub"`
-	TenantID       string   `json:"tenantId"`
-	RoleID         string   `json:"roleId"`
+	Sub      string `json:"sub"`
+	TenantID string `json:"tenantId"`
+	RoleID   string `json:"roleId"`
+	// RoleName is what the policy file is keyed by. RoleID is a database
+	// UUID that differs on every seed, so it can never address a role in a
+	// file checked into the repo (ADR-0037).
+	RoleName       string   `json:"roleName"`
 	SessionID      string   `json:"sessionId"`
 	Permissions    []string `json:"permissions"`
 	IsImpersonated bool     `json:"isImpersonated"`

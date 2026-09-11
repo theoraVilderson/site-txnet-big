@@ -1,0 +1,87 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`the key catalogue builds every bot family 1`] = `
+{
+  "botLang": "bot:lang:telegram:integration-1:5501",
+  "botNav": "bot:nav:telegram:integration-1:5501",
+  "botSession": "bot:session:telegram:integration-1:5501",
+}
+`;
+
+exports[`the key catalogue builds every scoped family 1`] = `
+{
+  "botLinkChat": "botlink:chat:tenant-1:telegram:55501",
+  "botLinkPhone": "botlink:phone:tenant-1:telegram:+989123456789",
+  "botLinkProvenChat": "botlink:proven:tenant-1:telegram:+989123456789",
+  "otpCode": "otp:code:tenant-1:login:+989123456789",
+  "otpCooldown": "otp:cooldown:tenant-1:login:+989123456789",
+  "otpDelivery": "otp:delivery:tenant-1:del-1",
+  "otpLock": "otp:lock:tenant-1:login:+989123456789",
+  "rateLimit": "ratelimit:tenant-1:login:1.2.3.4",
+  "registerPending": "register:pending:tenant-1:+989123456789",
+}
+`;
+
+exports[`the key catalogue builds every unscoped family 1`] = `
+{
+  "botLinkToken": "botlink:token:tok-1",
+  "captchaChallenge": "captcha:challenge:chal-1",
+  "captchaVerified": "captcha:verified:pass-1",
+  "otpChannel": "otp:channel:chan-1",
+  "rateLimitPlatform": "ratelimit:platform:login:1.2.3.4",
+  "realtimeFanout": "realtime:user:user-1",
+  "session": "session:sess-1",
+  "tenantByHost": "tenant:host:myvpn.com",
+  "tenantById": "tenant:id:tenant-1",
+  "tenantRuns": "automation:tenant-runs:tenant-1",
+  "userSessions": "user:user-1:sessions",
+}
+`;
+
+exports[`the key catalogue keeps the canonical TTLs stable 1`] = `
+{
+  "botLang": 15552000,
+  "botLink": 900,
+  "botNav": 1800,
+  "botSession": 2592000,
+  "captchaChallenge": 60,
+  "captchaVerified": 120,
+  "loginFailureWindow": 900,
+  "otpChannel": 300,
+  "otpCode": 300,
+  "otpCooldown": 60,
+  "otpDelivery": 300,
+  "otpLock": 2,
+  "registerPending": 600,
+  "tenantResolution": 600,
+  "tenantResolutionMiss": 60,
+}
+`;
+
+exports[`the key catalogue leaves nothing in the catalogue unexercised 1`] = `
+[
+  "botLang",
+  "botLinkChat",
+  "botLinkPhone",
+  "botLinkProvenChat",
+  "botLinkToken",
+  "botNav",
+  "botSession",
+  "captchaChallenge",
+  "captchaVerified",
+  "otpChannel",
+  "otpCode",
+  "otpCooldown",
+  "otpDelivery",
+  "otpLock",
+  "rateLimit",
+  "rateLimitPlatform",
+  "realtimeFanout",
+  "registerPending",
+  "session",
+  "tenantByHost",
+  "tenantById",
+  "tenantRuns",
+  "userSessions",
+]
+`;

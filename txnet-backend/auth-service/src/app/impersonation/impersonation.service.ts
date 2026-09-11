@@ -1,3 +1,4 @@
+import { RedisTtl } from '@txnet-backend/shared-core';
 import {
   BadRequestException,
   ForbiddenException,
@@ -8,8 +9,13 @@ import { TokenService } from '../auth/token.service';
 import { SessionService } from '../auth/session/session.service';
 import { SessionStore } from '../auth/session/session.store';
 
-/** An impersonated session is short-lived by design (invariant #7). */
-const IMPERSONATION_TTL_SEC = 30 * 60;
+/**
+ * An impersonated session is short-lived by design (invariant #7).
+ *
+ * From the catalogue rather than a private const (F-078): a number an
+ * invariant is written about should not live somewhere no catalogue can see.
+ */
+const IMPERSONATION_TTL_SEC = RedisTtl.impersonation;
 
 @Injectable()
 export class ImpersonationService {

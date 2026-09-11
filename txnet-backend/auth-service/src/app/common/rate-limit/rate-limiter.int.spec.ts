@@ -1,6 +1,8 @@
+import { ConfigService } from '@nestjs/config';
 import { RedisKeys } from '../../redis/redis.keys';
 import {
   RedisFixture,
+  expectTtlSeconds,
   startRedisFixture,
 } from '../../../test-support/redis-fixture';
 import { RateLimiter } from './rate-limiter';
@@ -22,7 +24,11 @@ describe('RateLimiter (real Redis)', () => {
 
   beforeAll(async () => {
     fx = await startRedisFixture();
-    limiter = new RateLimiter(fx.redis);
+    // The platform ceiling (F-066-s) has its own spec; off here, so this
+    // tier keeps asserting the tenant-scoped counter's Redis behaviour.
+    limiter = new RateLimiter(fx.redis, {
+      get: () => 0,
+    } as unknown as ConfigService);
   });
 
   afterAll(async () => {
@@ -37,7 +43,7 @@ describe('RateLimiter (real Redis)', () => {
     it('attaches the TTL on the very first hit', async () => {
       await limiter.hit(BUCKET, 5, 60);
 
-      expect(await fx.raw.ttl(key())).toBe(60);
+      await expectTtlSeconds(fx.raw, key(), 60);
     });
 
     it('never leaves a counter without an expiry', async () => {
@@ -69,7 +75,7 @@ describe('RateLimiter (real Redis)', () => {
       const afterExpiry = await limiter.hit(BUCKET, 2, 60);
 
       expect(afterExpiry).toEqual({ allowed: true, current: 1, limit: 2 });
-      expect(await fx.raw.ttl(key())).toBe(60);
+      await expectTtlSeconds(fx.raw, key(), 60);
     });
   });
 

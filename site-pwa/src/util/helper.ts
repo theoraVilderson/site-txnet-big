@@ -140,6 +140,12 @@ interface ZodFormatOptions {
  * locale is active. A message that is not a key survives unchanged — `t`
  * returns the key it was given when it finds nothing — so this is safe to put
  * in front of a schema that has not been keyed yet.
+ *
+ * **The key here is whatever a schema put in `.message`, so no generated
+ * constant can check it** (F-084). No shipped schema is keyed today, and F-083
+ * deleted the fifteen `validations` keys nothing reached. The first schema
+ * that is keyed should author its messages from `FrontendI18nKeys.validations`
+ * rather than as literals — that is the whole of the check available here.
  */
 export const zodErrorToString = (
   error: ZodError,

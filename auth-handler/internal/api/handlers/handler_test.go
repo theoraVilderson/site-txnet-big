@@ -50,18 +50,28 @@ func sign(t *testing.T, claims map[string]any, secret string) string {
 	return header + "." + payload + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
+// realRoleID is what auth-service actually signs as `roleId`: the database
+// foreign key, a UUID that differs on every seed. The policy file is keyed by
+// role name, which travels beside it as `roleName` (ADR-0037).
+const realRoleID = "6f1c2d4e-8a3b-4c5d-9e7f-0a1b2c3d4e5f"
+
 // validClaims is a token that passes jwt.Validate; individual tests override
 // the fields they are about.
 func validClaims(overrides map[string]any) map[string]any {
 	claims := map[string]any{
 		"sub":         "user-1",
 		"tenantId":    "tenant-1",
-		"roleId":      "admin",
+		"roleId":      realRoleID,
+		"roleName":    "admin",
 		"sessionId":   "sess-1",
 		"permissions": []string{"user.read", "user.write"},
 		"exp":         time.Now().Add(time.Hour).Unix(),
 	}
 	for k, v := range overrides {
+		if v == nil { // nil drops the claim, so a test can mint an older token
+			delete(claims, k)
+			continue
+		}
 		claims[k] = v
 	}
 	return claims
@@ -288,7 +298,17 @@ func TestValidateRefusalStatuses(t *testing.T) {
 		},
 		{
 			name:       "claims a permission the role does not have",
-			token:      sign(t, validClaims(map[string]any{"roleId": "user", "permissions": []string{"user.write"}}), testSecret),
+			token:      sign(t, validClaims(map[string]any{"roleName": "user", "permissions": []string{"user.write"}}), testSecret),
+			redis:      sessionActive,
+			engine:     true,
+			wantStatus: http.StatusForbidden,
+			wantMsg:    keyForbidden,
+		},
+		{
+			// A token minted before roleName existed must not slip past the
+			// policy: no name is a role nobody is granted.
+			name:       "token without roleName is refused by the policy",
+			token:      sign(t, validClaims(map[string]any{"roleName": nil}), testSecret),
 			redis:      sessionActive,
 			engine:     true,
 			wantStatus: http.StatusForbidden,
@@ -296,7 +316,7 @@ func TestValidateRefusalStatuses(t *testing.T) {
 		},
 		{
 			name:       "role is not in the policy at all",
-			token:      sign(t, validClaims(map[string]any{"roleId": "ghost", "permissions": []string{"user.read"}}), testSecret),
+			token:      sign(t, validClaims(map[string]any{"roleName": "ghost", "permissions": []string{"user.read"}}), testSecret),
 			redis:      sessionActive,
 			engine:     true,
 			wantStatus: http.StatusForbidden,
@@ -336,6 +356,10 @@ func TestValidateRefusalStatuses(t *testing.T) {
 
 // The identity headers are the handoff to every service behind the gateway:
 // downstream trusts them precisely because it cannot see the token.
+//
+// It is also the regression for ADR-0037: the token has a UUID `roleId`, as a
+// real one does, and the policy engine is on. Looking the policy up by that id
+// answered 403 to every real request.
 func TestValidateSetsIdentityHeadersOnSuccess(t *testing.T) {
 	h, redis := newHandler(t, sessionActive, testEngine(t))
 	w := call(t, h, sign(t, validClaims(nil), testSecret))
@@ -346,7 +370,7 @@ func TestValidateSetsIdentityHeadersOnSuccess(t *testing.T) {
 	want := map[string]string{
 		"X-User-Id":          "user-1",
 		"X-Tenant-Id":        "tenant-1",
-		"X-Role-Id":          "admin",
+		"X-Role-Id":          realRoleID,
 		"X-User-Permissions": "user.read,user.write",
 	}
 	for header, value := range want {
@@ -364,8 +388,8 @@ func TestValidateSetsIdentityHeadersOnSuccess(t *testing.T) {
 	}
 
 	body := decode(t, w)
-	if body["ok"] != true || body["msg"] != keySuccess {
-		t.Errorf("body = %v, want ok/%s", body, keySuccess)
+	if body["ok"] != true || body["msg"] != msgSuccess {
+		t.Errorf("body = %v, want ok/%s", body, msgSuccess)
 	}
 
 	// The session key must be the prefix plus "session:" plus the claim, or
@@ -405,7 +429,7 @@ func TestValidateForwardsImpersonation(t *testing.T) {
 func TestValidateWithoutEngineSkipsPolicyOnly(t *testing.T) {
 	h, _ := newHandler(t, sessionActive, nil)
 	token := sign(t, validClaims(map[string]any{
-		"roleId":      "ghost",
+		"roleName":    "ghost",
 		"permissions": []string{"anything.at.all"},
 	}), testSecret)
 
@@ -479,7 +503,7 @@ func TestStatusForKey(t *testing.T) {
 		key  string
 		want int
 	}{
-		{true, keySuccess, http.StatusOK},
+		{true, msgSuccess, http.StatusOK},
 		{true, "healthy", http.StatusOK},
 		{false, keyForbidden, http.StatusForbidden},
 		{false, keyUnexpected, http.StatusInternalServerError},
@@ -501,7 +525,7 @@ func TestStatusForKey(t *testing.T) {
 // forbidden request would come back as 401 in Persian but 403 in English.
 func TestValidateStatusIsChosenBeforeTranslation(t *testing.T) {
 	h, _ := newHandler(t, sessionActive, testEngine(t))
-	token := sign(t, validClaims(map[string]any{"roleId": "user", "permissions": []string{"user.write"}}), testSecret)
+	token := sign(t, validClaims(map[string]any{"roleName": "user", "permissions": []string{"user.write"}}), testSecret)
 
 	// A store with no client translates to the key itself, which is the
 	// closest a unit test gets to "translation happened".
@@ -551,5 +575,269 @@ func TestValidateAlwaysWritesJSONEnvelope(t *testing.T) {
 	// The refusal must not leak internals into the error field.
 	if errField, ok := body["error"]; ok {
 		t.Errorf("error = %v on a session refusal, want it omitted", errField)
+	}
+}
+
+// --- the WebSocket upgrade (F-067-h) ------------------------------------
+
+// callWS runs Validate with a `Sec-WebSocket-Protocol` header instead of an
+// `Authorization` one — what a browser sends, because `new WebSocket()` takes
+// no headers and this is the only one it lets the page choose.
+func callWS(t *testing.T, h *Handler, protocol string) *httptest.ResponseRecorder {
+	t.Helper()
+	r := httptest.NewRequest(http.MethodGet, "/validate", nil)
+	if protocol != "" {
+		r.Header.Set("Sec-WebSocket-Protocol", protocol)
+	}
+	w := httptest.NewRecorder()
+	h.Validate(w, r)
+	return w
+}
+
+// The upgrade is authenticated by the same gate as every other request — that
+// is the whole reason this platform owns its realtime gateway rather than
+// running a second identity model beside it (D-9).
+func TestValidateAcceptsTokenFromWebSocketSubprotocol(t *testing.T) {
+	h, _ := newHandler(t, sessionActive, testEngine(t))
+	token := sign(t, validClaims(nil), testSecret)
+
+	w := callWS(t, h, realtimeSubprotocol+", "+token)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %q)", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get("X-User-Id"); got != "user-1" {
+		t.Errorf("X-User-Id = %q, want the subprotocol token's subject", got)
+	}
+}
+
+// An `Authorization` header still wins. A request carrying both is not a
+// browser, and the header is the form every non-WebSocket caller uses.
+func TestValidatePrefersAuthorizationOverSubprotocol(t *testing.T) {
+	h, _ := newHandler(t, sessionActive, testEngine(t))
+	good := sign(t, validClaims(nil), testSecret)
+
+	r := httptest.NewRequest(http.MethodGet, "/validate", nil)
+	r.Header.Set("Authorization", "Bearer "+good)
+	r.Header.Set("Sec-WebSocket-Protocol", realtimeSubprotocol+", garbage")
+	w := httptest.NewRecorder()
+	h.Validate(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %q)", w.Code, w.Body.String())
+	}
+}
+
+// The subprotocol list is attacker-controlled, so every shape that is not
+// exactly `<marker>, <token>` must fail closed rather than be guessed at. A
+// header that parsed loosely would let a caller smuggle a token past the
+// marker the gateway keys on.
+func TestValidateRejectsMalformedSubprotocol(t *testing.T) {
+	token := sign(t, validClaims(nil), testSecret)
+
+	tests := []struct {
+		name     string
+		protocol string
+		wantMsg  string
+	}{
+		{"empty header", "", keyAuthRequired},
+		{"marker only, no token", realtimeSubprotocol, keyAuthRequired},
+		{"marker with an empty token", realtimeSubprotocol + ", ", keyAuthRequired},
+		{"token without the marker", token, keyAuthRequired},
+		{"another protocol entirely", "graphql-ws, " + token, keyAuthRequired},
+		{"marker not first", "chat, " + realtimeSubprotocol + ", " + token, keyAuthRequired},
+		{"marker present, token is not a JWT", realtimeSubprotocol + ", garbage", keyInvalidToken},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			h, _ := newHandler(t, sessionActive, testEngine(t))
+			w := callWS(t, h, tc.protocol)
+
+			if w.Code != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want 401 (body %q)", w.Code, w.Body.String())
+			}
+			if body := decode(t, w); body["msg"] != tc.wantMsg {
+				t.Errorf("msg = %v, want %q", body["msg"], tc.wantMsg)
+			}
+			if got := w.Header().Get("X-User-Id"); got != "" {
+				t.Errorf("X-User-Id = %q on a refusal, want it unset", got)
+			}
+		})
+	}
+}
+
+// The socket outlives the token that opened it: an access JWT is minted for
+// ~15 minutes and a connection is held for hours. `gateway-service` therefore
+// has to re-ask whether the session is still live, and it can only ask about a
+// session it was told the id of — none of the other identity headers name one.
+func TestValidateSetsSessionIdHeader(t *testing.T) {
+	h, _ := newHandler(t, sessionActive, testEngine(t))
+	w := call(t, h, sign(t, validClaims(nil), testSecret))
+
+	if got := w.Header().Get("X-Session-Id"); got != "sess-1" {
+		t.Errorf("X-Session-Id = %q, want %q", got, "sess-1")
+	}
+}
+
+func TestValidateOmitsSessionIdOnRefusal(t *testing.T) {
+	h, _ := newHandler(t, func(string) string { return respNil }, testEngine(t))
+	w := call(t, h, sign(t, validClaims(nil), testSecret))
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", w.Code)
+	}
+	if got := w.Header().Get("X-Session-Id"); got != "" {
+		t.Errorf("X-Session-Id = %q on a refusal, want it unset", got)
+	}
+}
+
+// --- the optional gate (ADR-0031) --------------------------------------
+
+// ValidateOptional exists so one router can serve a caller that has a session
+// and a caller that does not. The realtime path is the first: a WebSocket is
+// this platform's live-data transport and it is opened before anyone signs in,
+// so an upgrade with no credential has to reach the gateway rather than be
+// refused at the gate.
+//
+// The property that makes it safe is narrow and it is the only one worth
+// pinning: **absent is anonymous, invalid is still 401.** A credential that
+// was presented and did not check out must never be downgraded to "nobody",
+// because that turns every expired token into a silent privilege drop instead
+// of the re-authentication the client is waiting to be told to do.
+
+func callOptional(t *testing.T, h *Handler, token string) *httptest.ResponseRecorder {
+	t.Helper()
+	r := httptest.NewRequest(http.MethodGet, "/validate-optional", nil)
+	if token != "" {
+		r.Header.Set("Authorization", "Bearer "+token)
+	}
+	w := httptest.NewRecorder()
+	h.ValidateOptional(w, r)
+	return w
+}
+
+func TestValidateOptionalAdmitsACallerWithNoCredential(t *testing.T) {
+	h, _ := newHandler(t, sessionActive, testEngine(t))
+
+	w := callOptional(t, h, "")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %q)", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get(HeaderAnonymous); got != "true" {
+		t.Errorf("%s = %q, want %q — the marker is how the gateway tells "+
+			"'nobody is signed in' from 'the middleware never ran'",
+			HeaderAnonymous, got, "true")
+	}
+	for _, header := range []string{"X-User-Id", "X-Tenant-Id", "X-Session-Id", "X-User-Permissions"} {
+		if got := w.Header().Get(header); got != "" {
+			t.Errorf("%s = %q, want empty — an anonymous caller has no identity", header, got)
+		}
+	}
+}
+
+func TestValidateOptionalStillIdentifiesACallerWithACredential(t *testing.T) {
+	h, _ := newHandler(t, sessionActive, testEngine(t))
+
+	w := callOptional(t, h, sign(t, validClaims(nil), testSecret))
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %q)", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get("X-User-Id"); got != "user-1" {
+		t.Errorf("X-User-Id = %q, want user-1", got)
+	}
+	if got := w.Header().Get("X-Session-Id"); got != "sess-1" {
+		t.Errorf("X-Session-Id = %q, want sess-1", got)
+	}
+	if got := w.Header().Get(HeaderAnonymous); got != "" {
+		t.Errorf("%s = %q, want empty — this caller was identified", HeaderAnonymous, got)
+	}
+}
+
+// The one that matters. A token that was offered and failed is a refusal, not
+// an anonymous caller: downgrading it would turn an expired session into a
+// page that silently shows nothing instead of one that signs the user back in.
+func TestValidateOptionalRefusesAnInvalidCredentialRatherThanDowngrading(t *testing.T) {
+	cases := []struct {
+		name  string
+		token func(t *testing.T) string
+		redis func(string) string
+	}{
+		{
+			name:  "bad signature",
+			token: func(t *testing.T) string { return sign(t, validClaims(nil), "not-the-secret") },
+			redis: sessionActive,
+		},
+		{
+			name: "expired",
+			token: func(t *testing.T) string {
+				return sign(t, validClaims(map[string]any{
+					"exp": time.Now().Add(-time.Hour).Unix(),
+				}), testSecret)
+			},
+			redis: sessionActive,
+		},
+		{
+			name:  "session revoked",
+			token: func(t *testing.T) string { return sign(t, validClaims(nil), testSecret) },
+			redis: func(string) string { return respNil },
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, _ := newHandler(t, tc.redis, testEngine(t))
+
+			w := callOptional(t, h, tc.token(t))
+
+			if w.Code != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want 401 (body %q)", w.Code, w.Body.String())
+			}
+			if got := w.Header().Get(HeaderAnonymous); got != "" {
+				t.Errorf("%s = %q, want empty — a presented credential that "+
+					"failed must not be downgraded to anonymous", HeaderAnonymous, got)
+			}
+		})
+	}
+}
+
+// A WebSocket upgrade carries its token in the subprotocol list, so the
+// optional gate has to read it from there too — otherwise every authenticated
+// socket on the optional router silently becomes an anonymous one.
+func TestValidateOptionalReadsTheSubprotocolToken(t *testing.T) {
+	h, _ := newHandler(t, sessionActive, testEngine(t))
+	token := sign(t, validClaims(nil), testSecret)
+
+	r := httptest.NewRequest(http.MethodGet, "/validate-optional", nil)
+	r.Header.Set("Sec-WebSocket-Protocol", realtimeSubprotocol+", "+token)
+	w := httptest.NewRecorder()
+	h.ValidateOptional(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %q)", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get("X-User-Id"); got != "user-1" {
+		t.Errorf("X-User-Id = %q, want the subprotocol token's subject", got)
+	}
+}
+
+// A browser that opens a plain `new WebSocket(url, ['txnet.v1'])` — no token,
+// because nobody is signed in — offers the marker alone. That is the ordinary
+// anonymous upgrade and it must not read as a malformed credential.
+func TestValidateOptionalTreatsTheBareMarkerAsAnonymous(t *testing.T) {
+	h, _ := newHandler(t, sessionActive, testEngine(t))
+
+	r := httptest.NewRequest(http.MethodGet, "/validate-optional", nil)
+	r.Header.Set("Sec-WebSocket-Protocol", realtimeSubprotocol)
+	w := httptest.NewRecorder()
+	h.ValidateOptional(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %q)", w.Code, w.Body.String())
+	}
+	if got := w.Header().Get(HeaderAnonymous); got != "true" {
+		t.Errorf("%s = %q, want %q", HeaderAnonymous, got, "true")
 	}
 }

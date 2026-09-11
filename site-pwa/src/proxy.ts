@@ -13,6 +13,13 @@ const GUARDED_PATHS = ["/auth/login", AUTH_REGISTER];
  * The session cookie this middleware reads. Exported so `proxy.test.ts` asserts
  * against the same string the code uses — auth-service owns the name
  * (`common/http/refresh-cookie.ts`) and a rename there has to fail here.
+ *
+ * **It is still a hand-copied string, and nothing enforces that.** Every other
+ * spelling in the platform now imports it from
+ * `shared-core/src/lib/http/cookies.ts` (ADR-0036, C-04). This app cannot: it
+ * is not in the Nx workspace and has no path to that library, so C-04's check
+ * skips it. Whether to vendor a tarball the way `@txnet/locale-client` already
+ * is, is open — `docs/platform/forward-auth/open-questions.md`, 2026-09-11.
  */
 export const REFRESH_COOKIE = "refresh_token";
 

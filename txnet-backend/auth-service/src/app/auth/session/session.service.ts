@@ -1,3 +1,4 @@
+import { REFRESH_TOKEN_LIFETIME_SEC } from '@txnet-backend/shared-core';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TokenService } from '../token.service';
@@ -59,7 +60,11 @@ export class SessionService {
     const sessionId = randomUUID();
     const refreshToken = this.tokens.newRefreshToken();
     const refreshTokenHash = this.tokens.refreshHash(refreshToken);
-    const expiresInSec = options?.expiresInSec ?? 30 * 24 * 60 * 60;
+    // The same 30 days the refresh cookie's Max-Age carries, from the one
+    // place that declares it (C-04). The token and the cookie are one
+    // lifetime: a token outliving its cookie is a live session the browser
+    // has thrown away, and the reverse is a browser refused on every refresh.
+    const expiresInSec = options?.expiresInSec ?? REFRESH_TOKEN_LIFETIME_SEC;
     const expiresAt = new Date(Date.now() + expiresInSec * 1000);
     const db = options?.tx ?? this.prisma;
 
@@ -80,7 +85,12 @@ export class SessionService {
     });
 
     if (!options?.tx) {
-      await this.sessions.register(sessionId, userId, expiresInSec);
+      await this.sessions.register(
+        sessionId,
+        userId,
+        expiresInSec,
+        session.scopeKey,
+      );
       const noop = async (): Promise<void> => undefined;
       return { session, refreshToken, activateCache: noop };
     }
@@ -88,7 +98,8 @@ export class SessionService {
     return {
       session,
       refreshToken,
-      activateCache: () => this.sessions.register(sessionId, userId, expiresInSec),
+      activateCache: () =>
+        this.sessions.register(sessionId, userId, expiresInSec, session.scopeKey),
     };
   }
 

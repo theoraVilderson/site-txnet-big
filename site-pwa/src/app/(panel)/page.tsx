@@ -6,6 +6,11 @@ import { useLocale } from "@/context/LocaleContext";
 import { PANEL_ACCOUNTS_ADD } from "@/lib/routes";
 import { usePanelSession } from "./_context/PanelSessionContext";
 
+import { FrontendI18nKeys } from "@/generated/i18n-keys";
+
+/** The `common` namespace as generated constants (F-083, C-06). */
+const C = FrontendI18nKeys.common;
+
 /**
  * The panel home. Until there is a product surface here it says the one thing
  * a switch changes — which account this browser is — because a switcher whose
@@ -26,7 +31,7 @@ export default function Home() {
   return (
     <div className="mx-auto w-full max-w-[560px] px-6 py-10">
       <p className="mb-1 text-sm text-text-secondary">
-        {t("common", "accounts.signedInAs")}
+        {t("common", C.accounts.signedInAs)}
       </p>
       <h1 className="text-2xl font-bold text-text-primary">
         {group.current.fullName}
@@ -37,11 +42,11 @@ export default function Home() {
 
       <div className="mt-8 rounded-2xl border border-card-border bg-card-bg p-5">
         <h2 className="mb-3 text-sm font-bold text-text-primary">
-          {t("common", "accounts.groupTitle")}
+          {t("common", C.accounts.groupTitle)}
         </h2>
         {group.members.length === 0 ? (
           <p className="text-sm text-text-secondary">
-            {t("common", "accounts.groupEmpty")}
+            {t("common", C.accounts.groupEmpty)}
           </p>
         ) : (
           <ul className="space-y-2">
@@ -65,7 +70,7 @@ export default function Home() {
           className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-primary"
         >
           <Plus size={16} />
-          {t("common", "accounts.add")}
+          {t("common", C.accounts.add)}
         </Link>
       </div>
     </div>

@@ -1,3 +1,7 @@
+import {
+  REFRESH_TOKEN_COOKIE,
+  REFRESH_TOKEN_LIFETIME_SEC,
+} from '@txnet-backend/shared-core';
 import { Response } from 'express';
 
 /**
@@ -21,7 +25,11 @@ export function refreshCookieOptions() {
     // panel-web's proxy reads it server-side (F-0101).
     path: '/',
     domain: `.${domainName}`,
-    maxAge: 30 * 24 * 60 * 60 * 1000,
+    // The one lifetime, shared with the token the cookie carries
+    // (`shared-core/src/lib/http/cookies.ts`, C-04). Express wants
+    // milliseconds and every TTL in this platform is in seconds, so the
+    // conversion is here, at the one call site that needs it.
+    maxAge: REFRESH_TOKEN_LIFETIME_SEC * 1000,
   };
 }
 
@@ -37,7 +45,11 @@ export function withRefreshCookie<T extends { ok?: boolean; data?: any }>(
   result: T,
 ): T {
   if (result?.ok && result?.data?.refreshToken) {
-    res.cookie('refresh_token', result.data.refreshToken, refreshCookieOptions());
+    res.cookie(
+      REFRESH_TOKEN_COOKIE,
+      result.data.refreshToken,
+      refreshCookieOptions(),
+    );
     const { refreshToken, ...rest } = result.data;
     result.data = rest;
   }

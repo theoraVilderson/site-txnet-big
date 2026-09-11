@@ -88,3 +88,30 @@ function buildRedisService(env: Record<string, string>): RedisService {
  * themselves are milliseconds.
  */
 export const INTEGRATION_TIMEOUT_MS = 180_000;
+
+/**
+ * Asserts that `key` carries `seconds` of TTL, tolerating the one second
+ * Redis's own rounding can take off.
+ *
+ * `TTL` replies with the remaining milliseconds rounded to the nearest second,
+ * so a key written with `EX 60` reads 60 only while less than half a second has
+ * passed since the write, and 59 from then on. Every assertion of this shape
+ * sits one or two awaits behind the write — a millisecond when a spec file runs
+ * alone, and unbounded when it runs beside four others that are each starting a
+ * container. Exact equality therefore asserts two things at once: that the TTL
+ * is right, and that the machine was not busy. Only the first is a fact about
+ * the code.
+ *
+ * One second of slack is the entire tolerance, so the failures worth having all
+ * survive it: a wrong catalogue constant is off by far more, a key written with
+ * no expiry reads -1, and a key that is not there reads -2.
+ */
+export async function expectTtlSeconds(
+  raw: Redis,
+  key: string,
+  seconds: number,
+): Promise<void> {
+  const ttl = await raw.ttl(key);
+  expect(ttl).toBeGreaterThanOrEqual(seconds - 1);
+  expect(ttl).toBeLessThanOrEqual(seconds);
+}

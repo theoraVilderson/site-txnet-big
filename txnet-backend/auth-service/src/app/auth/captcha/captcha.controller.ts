@@ -1,3 +1,7 @@
+import {
+  RateLimitBucket,
+  rateLimitBucketKey,
+} from '@txnet-backend/shared-core';
 import { Body, Controller, HttpCode, HttpStatus, Post, UsePipes } from '@nestjs/common';
 import { CaptchaService } from './captcha.service';
 import { captchaVerifySchema } from './captcha.schema';
@@ -12,8 +16,7 @@ export class CaptchaController {
   @Post('challenge')
   @HttpCode(HttpStatus.OK)
   @RateLimit({
-    key: (req) => `captcha:challenge:${req.ip}`,
-    limit: 30,
+    key: (req) => rateLimitBucketKey(RateLimitBucket.CAPTCHA_CHALLENGE, req.ip),
     configKey: 'CAPTCHA_RATE_LIMIT',
     windowSec: 900,
   })
@@ -25,8 +28,7 @@ export class CaptchaController {
   @HttpCode(HttpStatus.OK)
   @UsePipes(new ZodValidationPipe(captchaVerifySchema))
   @RateLimit({
-    key: (req) => `captcha:verify:${req.ip}`,
-    limit: 30,
+    key: (req) => rateLimitBucketKey(RateLimitBucket.CAPTCHA_VERIFY, req.ip),
     configKey: 'CAPTCHA_RATE_LIMIT',
     windowSec: 900,
   })

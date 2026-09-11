@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import { RateLimiter } from './rate-limiter';
 import { RedisService } from '../../redis/redis.service';
 import { runWithTenant } from '../../tenant-context/tenant-context';
@@ -31,7 +32,11 @@ describe('rate-limit buckets are per tenant', () => {
       keys.push(key);
     }),
   } as unknown as RedisService;
-  const limiter = new RateLimiter(redis);
+  // The platform ceiling has a spec of its own; here it is switched off so
+  // the keys asserted below are only the tenant-scoped ones.
+  const limiter = new RateLimiter(redis, {
+    get: jest.fn(() => 0),
+  } as unknown as ConfigService);
 
   beforeEach(() => {
     keys.length = 0;

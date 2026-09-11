@@ -8,6 +8,11 @@ alerting:
         - targets:
             - "alertmanager:9093"
 
+# The first rule file this stack has had (F-067-g). Alertmanager and its Bale
+# receiver were wired long before anything could fire into them.
+rule_files:
+  - "/etc/prometheus/automation.rules.yml"
+
 scrape_configs:
   - job_name: "prometheus"
     static_configs:
@@ -20,3 +25,41 @@ scrape_configs:
   - job_name: "cadvisor"
     static_configs:
       - targets: ["cadvisor:8080"]
+
+  # RabbitMQ, in two jobs rather than one, because the plugin serves two
+  # different things (F-067-g).
+  #
+  # `rabbitmq` is the aggregated endpoint: broker health, connections, and
+  # `rabbitmq_queue_messages_ready` summed over every queue with no `queue`
+  # label at all. That sum cannot answer "which queue is backing up", which is
+  # what the automation alerts ask.
+  #
+  # `rabbitmq-queues` is the per-object endpoint, narrowed to the two families
+  # that carry the per-queue numbers. Unnarrowed it returns a series per object
+  # for every family the broker has, which grows with the broker rather than
+  # with what is watched.
+  #
+  # No published port on either: RabbitMQ and this stack share
+  # `private_backend_network`, so 15692 is reachable in-network and stays
+  # unreachable from outside it.
+  - job_name: "rabbitmq"
+    static_configs:
+      - targets: ["rabbitmq:15692"]
+
+  # The one number the broker cannot answer (F-067-c): the age of the oldest
+  # unpublished `automation.outbox_event` row. `postgres-exporter` runs the
+  # single query in `config-dev/postgres-queries.yaml` and serves nothing else
+  # — its default collectors are switched off, because per-table churn nobody
+  # is alerting on is 15 days of series for no question.
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+
+  - job_name: "rabbitmq-queues"
+    metrics_path: /metrics/detailed
+    params:
+      family:
+        - queue_coarse_metrics
+        - queue_consumer_count
+    static_configs:
+      - targets: ["rabbitmq:15692"]

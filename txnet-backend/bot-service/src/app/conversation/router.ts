@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   BotAction,
+  BotPlatform,
   BotView,
   BotViewRenderer,
   parseStart,
@@ -26,9 +27,12 @@ import {
   helpView,
   languageView,
   memberMenu,
+  MINI_APP_PARAM,
   say,
+  signOutAllConfirmView,
 } from '../flows/views';
 import { progressOf, summaryOf } from '../flows/steps';
+import { ChatAccess } from '../session/chat-access';
 import { ConversationStore } from './conversation.store';
 import { callContextOf, ChatContext, FlowResult, NavState } from './nav.types';
 
@@ -69,6 +73,7 @@ export class ConversationRouter {
     private readonly accounts: AccountsFlow,
     private readonly accountAdd: AccountAddFlow,
     private readonly config: ConfigService,
+    private readonly access: ChatAccess,
   ) {}
 
   /**
@@ -97,6 +102,10 @@ export class ConversationRouter {
     if (command === '/logout' || actionId === ACTIONS.logout) {
       return this.logout(ctx);
     }
+    if (actionId === ACTIONS.logoutAllAsk) {
+      return { view: signOutAllConfirmView(), nextState: null };
+    }
+    if (actionId === ACTIONS.logoutAll) return this.logoutAll(ctx);
     if (command === '/help' || actionId === ACTIONS.help) return this.help(state);
     if (command === '/lang' || actionId === ACTIONS.language) {
       return this.languages(ctx, state);
@@ -375,25 +384,90 @@ export class ConversationRouter {
     return { view: await this.menu(ctx), nextState: null };
   }
 
+  /**
+   * Sign out of the account this chat is on.
+   *
+   * ADR-0035: `auth-api` may answer with **another account's session** — the
+   * next account this place already holds — in which case the chat keeps it
+   * and stays signed in as them. Dropping the entry there would throw away a
+   * session that was just minted for this chat and nobody else.
+   *
+   * Signing out of everything is `ACTIONS.logoutAll`, which lives on the
+   * accounts screen behind its own confirmation, not on the main menu.
+   */
   private async logout(ctx: ChatContext): Promise<FlowResult> {
     const session = await this.sessions.get(ctx.integration, ctx.chatId);
-    if (session) {
-      await this.api.logout(
-        { refreshToken: session.refreshToken },
-        callContextOf(ctx),
-      );
-      await this.sessions.clear(ctx.integration, ctx.chatId);
+    if (!session) {
+      return {
+        view: say('signedOut', { key: 'bot.common.signedOut' }),
+        nextState: null,
+      };
     }
+
+    const result = await this.api.logout(
+      { refreshToken: session.refreshToken },
+      callContextOf(ctx),
+    );
+
+    const handover = result.ok ? result.data : undefined;
+    if (handover?.switchedTo && handover.refreshToken) {
+      await this.sessions.save(
+        ctx.integration,
+        ctx.chatId,
+        handover.refreshToken,
+      );
+      return {
+        view: say('signedOutSwitched', {
+          key: 'bot.common.signedOutSwitched',
+          values: { name: handover.switchedTo.fullName },
+        }),
+        nextState: null,
+      };
+    }
+
+    await this.sessions.clear(ctx.integration, ctx.chatId);
     return {
       view: say('signedOut', { key: 'bot.common.signedOut' }),
       nextState: null,
     };
   }
 
-  /** Which menu this chat sees depends on its session, never on its chat id. */
-  private async menu(ctx: ChatContext) {
+  /**
+   * Sign out of every account this chat holds (`F-0211`, ADR-0035).
+   *
+   * Its own action because it is its own intention. Reached from the accounts
+   * screen rather than the main menu, so the destructive one is never the
+   * button beside the ordinary one.
+   */
+  private async logoutAll(ctx: ChatContext): Promise<FlowResult> {
     const session = await this.sessions.get(ctx.integration, ctx.chatId);
-    return session ? memberMenu(this.miniAppUrl()) : guestMenu();
+    if (session) {
+      await this.api.logoutAll(
+        { refreshToken: session.refreshToken },
+        callContextOf(ctx),
+      );
+      await this.sessions.clear(ctx.integration, ctx.chatId);
+    }
+    return {
+      view: say('signedOutAll', { key: 'bot.common.signedOutAll' }),
+      nextState: null,
+    };
+  }
+
+  /**
+   * Which menu this chat sees depends on its session, never on its chat id.
+   *
+   * It asks `ChatAccess` rather than reading the Redis entry, and the
+   * difference is the whole point (ADR-0033): the entry is a local cache of
+   * "this chat has a session", and nothing local can know that session was
+   * revoked somewhere else — a Mini App logout, an `F-0208` removal, thirty
+   * days of silence. `ChatAccess` refreshes, so a refusal both answers the
+   * question and drops the dead entry. The cost is one round trip on a menu
+   * render, which is what every other authenticated screen already pays.
+   */
+  private async menu(ctx: ChatContext) {
+    const token = await this.access.token(ctx);
+    return token ? memberMenu(this.miniAppUrl(ctx.platform)) : guestMenu();
   }
 
   /**
@@ -404,9 +478,21 @@ export class ConversationRouter {
    * messenger vouches for it there is a worse first answer than the sign-in
    * button it already has — the panel's own login screen inside a webview is
    * the thing chat-first exists to avoid making anyone use.
+   *
+   * The URL carries `?ma=<platform>` because the page cannot work that out for
+   * itself: neither messenger injects its `WebApp` global, each serves its own
+   * script, and a page that loaded neither found nothing to sign in with
+   * (fixed 2026-09-10). It is a hint about which SDK to fetch and **not** a
+   * credential — the signature that comes back is still the only thing
+   * `/auth/bots/webapp/session` accepts, so a forged marker buys an attacker
+   * the wrong script and nothing else.
    */
-  private miniAppUrl(): string | undefined {
-    return this.config.get<string>('PANEL_BASE_URL') || undefined;
+  private miniAppUrl(platform: BotPlatform): string | undefined {
+    const base = this.config.get<string>('PANEL_BASE_URL');
+    if (!base) return undefined;
+    const url = new URL(base);
+    url.searchParams.set(MINI_APP_PARAM, platform);
+    return url.toString();
   }
 
   /**

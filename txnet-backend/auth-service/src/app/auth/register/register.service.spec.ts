@@ -67,6 +67,13 @@ function harness() {
     startLink: jest.fn().mockResolvedValue({ linkUrl: 'https://t.me/bot?start=tok' }),
     promoteProvenChat: jest.fn().mockResolvedValue(undefined),
   };
+  const deliveries = {
+    mintHandles: jest.fn().mockResolvedValue({
+      deliveryId: 'a'.repeat(32),
+      channelId: 'c'.repeat(32),
+      channelToken: 'd'.repeat(32),
+    }),
+  };
 
   const service = new RegisterService(
     prisma as never,
@@ -74,9 +81,10 @@ function harness() {
     otpService as never,
     channels as never,
     botLinks as never,
+    deliveries as never,
   );
 
-  return { service, prisma, redis, otpService, channels, botLinks };
+  return { service, prisma, redis, otpService, channels, botLinks, deliveries };
 }
 
 const input = (over: Record<string, unknown> = {}) => ({
@@ -111,7 +119,15 @@ describe('RegisterService.register — the pending record', () => {
     expect(res).toEqual({
       ok: true,
       msg: 'register.success',
-      data: { phoneNumber: PHONE, requiresPhoneVerification: true },
+      data: {
+        phoneNumber: PHONE,
+        requiresPhoneVerification: true,
+        deliveryId: 'a'.repeat(32),
+        // The realtime channel and the proof it needs (F-067-j). A client
+        // hears the delivery result here instead of polling for it.
+        channel: `otp:${'c'.repeat(32)}`,
+        channelToken: 'd'.repeat(32),
+      },
     });
     expect(h.redis.setJson).toHaveBeenCalledWith(
       PENDING_KEY,
@@ -174,6 +190,7 @@ describe('RegisterService.register — the pending record', () => {
       OtpChannel.sms,
       '1.2.3.4',
       'fa',
+      expect.objectContaining({ deliveryId: 'a'.repeat(32) }),
     );
   });
 
@@ -326,6 +343,7 @@ describe('RegisterService.register — messenger channels', () => {
       OtpChannel.telegram,
       '1.2.3.4',
       'fa',
+      expect.objectContaining({ deliveryId: 'a'.repeat(32) }),
     );
   });
 

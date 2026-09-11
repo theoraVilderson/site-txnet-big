@@ -1,6 +1,7 @@
 import { RedisKeys } from '../../redis/redis.keys';
 import {
   RedisFixture,
+  expectTtlSeconds,
   startRedisFixture,
 } from '../../../test-support/redis-fixture';
 import { SessionStore } from './session.store';
@@ -48,8 +49,8 @@ describe('SessionStore (real Redis)', () => {
         revoked: false,
       });
       expect(await fx.raw.smembers(indexKey(USER))).toEqual([SESSION]);
-      expect(await fx.raw.ttl(sessionKey(SESSION))).toBe(TTL);
-      expect(await fx.raw.ttl(indexKey(USER))).toBe(TTL);
+      await expectTtlSeconds(fx.raw, sessionKey(SESSION), TTL);
+      await expectTtlSeconds(fx.raw, indexKey(USER), TTL);
     });
 
     it('leaves no half-written state — either all three keys or none', async () => {
@@ -75,8 +76,13 @@ describe('SessionStore (real Redis)', () => {
       // expired markers would make a revocation look like it worked.
       await store.register(SESSION, USER, TTL);
 
-      const markerTtl = await fx.raw.ttl(sessionKey(SESSION));
+      // The index is read first on purpose. Both keys were written with the
+      // same TTL, and `TTL` rounds to the nearest second, so whichever is read
+      // second can come back a second lower for no reason but the clock.
+      // Reading the index first means that drift can only make the index look
+      // longer-lived, which is the direction this assertion already allows.
       const indexTtl = await fx.raw.ttl(indexKey(USER));
+      const markerTtl = await fx.raw.ttl(sessionKey(SESSION));
       expect(indexTtl).toBeGreaterThanOrEqual(markerTtl);
     });
 
@@ -98,7 +104,7 @@ describe('SessionStore (real Redis)', () => {
 
       // Otherwise the index would expire while a long-lived session still
       // needs to be revocable through it.
-      expect(await fx.raw.ttl(indexKey(USER))).toBe(7200);
+      await expectTtlSeconds(fx.raw, indexKey(USER), 7200);
     });
 
     it('re-registering the same id is idempotent in the index', async () => {
@@ -267,7 +273,7 @@ describe('SessionStore (real Redis)', () => {
 
       expect(await store.isActive('new')).toBe(true);
       expect(await fx.raw.smembers(indexKey(USER))).toEqual(['new']);
-      expect(await fx.raw.ttl(indexKey(USER))).toBe(TTL);
+      await expectTtlSeconds(fx.raw, indexKey(USER), TTL);
     });
   });
 });

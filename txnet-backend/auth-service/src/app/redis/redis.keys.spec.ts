@@ -1,3 +1,8 @@
+import {
+  REDIS_KEYSPACE_VERSION_DEFAULT,
+  REDIS_KEY_NAMESPACE_DEFAULT,
+  buildRedisKeyPrefix,
+} from '@txnet-backend/shared-core';
 import { ConfigService } from '@nestjs/config';
 import { envSchema } from '../config/env.validation';
 import { RedisKeys, RedisTtl } from './redis.keys';
@@ -30,6 +35,7 @@ describe('RedisKeys — key catalogue', () => {
       otpLock: RedisKeys.otpLock('login', '09123456789'),
       otpCooldown: RedisKeys.otpCooldown('login', '09123456789'),
       rateLimit: RedisKeys.rateLimit('login:1.2.3.4'),
+      rateLimitPlatform: RedisKeys.rateLimitPlatform('login:1.2.3.4'),
       registerPending: RedisKeys.registerPending('09123456789'),
       botLinkToken: RedisKeys.botLinkToken('tok-1'),
       botLinkPhone: RedisKeys.botLinkPhone('telegram', '09123456789'),
@@ -70,6 +76,19 @@ describe('RedisKeys — key catalogue', () => {
     }
   });
 
+  it('keeps the platform-wide bucket free of any tenant', () => {
+    // F-066-s: the counter that caps one caller across every tenant it can
+    // name. `platform` sits where a tenant id sits and no tenant id can equal
+    // it, so the bucket is unreachable from inside a tenant — the same
+    // argument that makes `none` safe for an unresolved request.
+    expect(
+      runWithTenant(TENANT, () => RedisKeys.rateLimitPlatform('login:ip')),
+    ).toBe('ratelimit:platform:login:ip');
+    expect(RedisKeys.rateLimitPlatform('login:ip')).toBe(
+      'ratelimit:platform:login:ip',
+    );
+  });
+
   it('keeps a session key tenant-free, so auth-handler still finds it', () => {
     // `auth-handler` builds `session:<id>` in Go from the same prefix and has
     // no tenant of its own (redis-keyspace/contract.md). A tenant segment here
@@ -78,9 +97,19 @@ describe('RedisKeys — key catalogue', () => {
     expect(RedisKeys.userSessions('user-1')).toBe('user:user-1:sessions');
   });
 
+  /**
+   * F-076 merged the four per-app catalogues into
+   * `shared-core/src/lib/redis/keys.ts`, so this service now *sees* families it
+   * does not use — `tenantRuns` is `worker-service`'s, the `bot*` TTLs are
+   * `bot-service`'s. The snapshot therefore lists more than the one above
+   * builds, and "every family is exercised somewhere" moved with the catalogue
+   * to `shared-core/src/lib/redis/keys.spec.ts`.
+   *
+   * What this snapshot still proves is the thing that matters here: nothing was
+   * **removed or renamed** by the merge. A key that changes shape does not
+   * fail, it silently stops finding data that is already there.
+   */
   it('exposes a builder for every key family, and nothing unbuilt', () => {
-    // Guards the other direction: a key added to the catalogue without a
-    // snapshot line above would otherwise ship untested.
     expect(Object.keys(RedisKeys).sort()).toMatchSnapshot();
   });
 
@@ -107,86 +136,68 @@ describe('RedisService.keyPrefix — the namespace every key inherits', () => {
 
   const base = { REDIS_URL: 'redis://127.0.0.1:6379' };
 
-  it('defaults to the documented namespace and version', () => {
-    expect(prefixFor(base)).toBe('txnet:auth:v1:');
+  it('defaults to the one declared keyspace', () => {
+    // The value itself lives in `contracts/redis/keyspace.json`, not here — a
+    // second copy of it is exactly how the defaults drifted apart (ADR-0036).
+    expect(prefixFor(base)).toBe(
+      buildRedisKeyPrefix(
+        REDIS_KEY_NAMESPACE_DEFAULT,
+        REDIS_KEYSPACE_VERSION_DEFAULT,
+      ),
+    );
   });
 
   it('produces the on-the-wire key auth-handler reads back', () => {
     // handler.go: h.keyPrefix + "session:" + claims.SessionID
     expect(prefixFor(base) + RedisKeys.session('sess-1')).toBe(
-      'txnet:auth:v1:session:sess-1',
+      `${buildRedisKeyPrefix()}session:sess-1`,
     );
   });
 
   it('bumping the keyspace version moves every key at once', () => {
-    const v1 = prefixFor(base) + RedisKeys.session('sess-1');
-    const v2 =
-      prefixFor({ ...base, REDIS_KEYSPACE_VERSION: 'v2' }) +
+    // What the version is *for*: one change abandons the whole keyspace, which
+    // is a forced logout of everybody (C-03).
+    const current = prefixFor(base) + RedisKeys.session('sess-1');
+    const bumped =
+      prefixFor({ ...base, REDIS_KEYSPACE_VERSION: 'v99' }) +
       RedisKeys.session('sess-1');
 
-    expect(v2).not.toBe(v1);
-    expect(v2).toBe('txnet:auth:v2:session:sess-1');
+    expect(bumped).not.toBe(current);
+    expect(bumped).toBe('txnet:auth:v99:session:sess-1');
   });
 
   /**
-   * auth-handler builds the same prefix in Go (config.buildRedisKeyPrefix).
-   * The two must agree exactly or the gateway looks up sessions nobody wrote:
-   * every request would 401 with `session_revoked` while the sessions sit
-   * there under a slightly different name.
+   * The Go side is `config.buildRedisKeyPrefix`, and the two must agree
+   * exactly or the gateway looks up sessions nobody wrote: every request 401s
+   * with `session_revoked` while the sessions sit there under a slightly
+   * different name.
+   *
+   * **That parity is no longer tested here**, and deliberately. This file used
+   * to hold a TypeScript transcription of the Go function and compare it with
+   * the Node implementation — which tested that two TypeScript functions
+   * agreed, and could never have caught the Go side drifting. ADR-0036
+   * replaced it with `contracts/redis/keyspace.json` plus a test in each
+   * language: `shared-core/src/lib/redis/keyspace.contract.spec.ts` and
+   * `auth-handler/internal/config/keyspace_contract_test.go`.
+   *
+   * What is still this file's job is the chain in between: the env schema
+   * normalises, and `RedisService` hands the result to the shared builder.
    */
-  describe('parity with auth-handler/internal/config/config.go', () => {
-    /** A transcription of Go's buildRedisKeyPrefix, held next to its twin. */
-    const goBuildRedisKeyPrefix = (namespace: string, version: string) =>
-      namespace.replace(/:+$/, '') + ':' + version + ':';
-
-    /**
-     * Go normalises the raw environment value (TrimRight ':'); the Node side
-     * normalises earlier, in `envSchema`, and `RedisService` sees only the
-     * result. So parity is a property of the whole chain, and testing
-     * `RedisService` on a raw value would be testing a state the service can
-     * never actually be handed.
-     */
-    const nodePrefixFromEnv = (namespace: string, version: string) =>
-      prefixFor({
-        ...base,
-        REDIS_KEY_NAMESPACE:
-          envSchema.shape.REDIS_KEY_NAMESPACE.parse(namespace),
-        REDIS_KEYSPACE_VERSION: version,
-      });
-
-    it.each([
-      ['txnet:auth', 'v1'],
-      ['txnet:auth', 'v2'],
-      ['acme', 'v7'],
-      // The shapes that would split the keyspace if only one side normalised.
-      ['txnet:auth:', 'v1'],
-      ['txnet:auth::', 'v1'],
-    ])(
-      'agrees for REDIS_KEY_NAMESPACE=%s REDIS_KEYSPACE_VERSION=%s',
-      (namespace, version) => {
-        expect(nodePrefixFromEnv(namespace, version)).toBe(
-          goBuildRedisKeyPrefix(namespace, version),
-        );
-      },
+  it('normalises a namespace written with a trailing colon', () => {
+    // A trailing colon that only one language strips splits the keyspace in
+    // two, which reads as every session having been revoked. Both the schema
+    // and the builder strip it now, so the typo is harmless either way in.
+    expect(envSchema.shape.REDIS_KEY_NAMESPACE.parse('txnet:auth:')).toBe(
+      'txnet:auth',
     );
+    expect(prefixFor({ ...base, REDIS_KEY_NAMESPACE: 'txnet:auth:' })).toBe(
+      buildRedisKeyPrefix('txnet:auth', REDIS_KEYSPACE_VERSION_DEFAULT),
+    );
+  });
 
-    it('is the env schema, not RedisService, that strips the trailing colon', () => {
-      // Says where the invariant lives, so a later refactor that drops the
-      // transform fails here with the reason attached rather than in
-      // production as a mass logout.
-      expect(envSchema.shape.REDIS_KEY_NAMESPACE.parse('txnet:auth:')).toBe(
-        'txnet:auth',
-      );
-      expect(prefixFor({ ...base, REDIS_KEY_NAMESPACE: 'txnet:auth:' })).toBe(
-        'txnet:auth::v1:',
-      );
-    });
-
-    it('defaults on both sides are the same namespace', () => {
-      expect(envSchema.shape.REDIS_KEY_NAMESPACE.parse(undefined)).toBe(
-        'txnet:auth',
-      );
-      expect(prefixFor(base)).toBe(goBuildRedisKeyPrefix('txnet:auth', 'v1'));
-    });
+  it('takes its default namespace from the same declaration Go does', () => {
+    expect(envSchema.shape.REDIS_KEY_NAMESPACE.parse(undefined)).toBe(
+      REDIS_KEY_NAMESPACE_DEFAULT,
+    );
   });
 });

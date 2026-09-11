@@ -1,0 +1,24 @@
+{
+  "note": "Hand-written, language-neutral. The declared home of the Redis keyspace prefix (ADR-0036, C-03, C-04). Read by txnet-backend/shared-core/src/lib/redis/keyspace.contract.spec.ts and auth-handler/internal/config/keyspace_contract_test.go. Change a value here and both sides go red until they agree. Bumping `version` is a forced logout of every session on the platform — that is what the field is for, and it means every service and auth-handler deploy together.",
+  "namespaceDefault": "txnet:auth",
+  "version": "v2",
+  "prefixCases": [
+    { "namespace": "txnet:auth", "version": "v2", "prefix": "txnet:auth:v2:" },
+    { "namespace": "acme", "version": "v7", "prefix": "acme:v7:" },
+    { "namespace": "txnet:auth:eu", "version": "v2", "prefix": "txnet:auth:eu:v2:" },
+    { "namespace": "txnet:auth:", "version": "v2", "prefix": "txnet:auth:v2:" },
+    { "namespace": "txnet:auth::", "version": "v2", "prefix": "txnet:auth:v2:" }
+  ],
+  "keys": {
+    "note": "Key names, after the prefix. Only the families more than one language builds are declared here — auth-handler builds `session:` in Go and gateway-service and auth-service build it in TypeScript, so a disagreement is silent: the lookup misses, and a miss is read as `revoked`. The tenant-derived families are TypeScript-only and live in shared-core/src/lib/redis/keys.ts alone.",
+    "session": "session:<id>",
+    "otpChannel": "otp:channel:<id>",
+    "userSessions": "user:<id>:sessions"
+  },
+  "keyCases": [
+    { "builder": "session", "id": "sess-1", "key": "session:sess-1" },
+    { "builder": "otpChannel", "id": "chan-1", "key": "otp:channel:chan-1" },
+    { "builder": "userSessions", "id": "user-1", "key": "user:user-1:sessions" }
+  ],
+  "prefixCasesNote": "The last two are the shapes that split the keyspace if only one language normalises. A trailing colon in REDIS_KEY_NAMESPACE is the operator typo this file exists to make harmless."
+}

@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 8
-updated: 2026-09-09
+version: 10
+updated: 2026-09-10
 ---
 
 # Contract — panel-web
@@ -49,6 +49,45 @@ language. Helpers included — `util/helper.ts`'s `zodErrorToString` takes `t`
 and resolves every issue message in the `validations` namespace, so a schema
 reads `z.string().min(3, "fields.username.tooShort")`. A message that is not a
 key survives unchanged, so an un-keyed schema still renders.
+
+## Which language a visitor gets (F-068)
+
+`getUserLocale()` (`services/locale.ts`) decides, and the order is fixed:
+
+| # | Source | Why it ranks here |
+|---|---|---|
+| 1 | the signed-in account's saved language | the person said so, and said it durably |
+| 2 | the `NEXT_LOCALE` cookie | the person said so on this device |
+| 3 | `DEFAULT_LANGUAGE` (`DEFAULT_LOCALE` in `src/env.ts`) | the deployment says so |
+
+**There is no fourth row, and `Accept-Language` is not one of them.** The
+browser header is a guess about the visitor; `DEFAULT_LANGUAGE` is a statement
+about the deployment, and a reseller selling in Persian is not overruled by a
+browser that happens to be installed in English. This is the panel's half of the
+rule `bot-app` already follows for `ChatLanguage` (F-046, ADR-0016), where the
+messenger's language hint sits below `DEFAULT_LANGUAGE` for the same reason.
+
+Rank 1 answers only for a visitor who is actually signed in. `getCurrentUserId()`
+(`services/user-locale-mock.ts`) returns `null` until the real session exists —
+it used to return a fixed id for everyone, with that id seeded to `en`, which
+made rank 1 match every anonymous visitor and swallow the two rows beneath it.
+A mock that claims a user is the one way this table can be correct and the
+panel still wrong, so check it before re-reading anything below.
+
+
+The panel still sends its resolved `lang` as `Accept-Language` to `auth-api`
+(F-053, `contract.errors.md`) — that is this rule reaching the backend, not an
+exception to it.
+
+`DEFAULT_LOCALE` is read from the environment, not written in the source. It
+takes `NEXT_PUBLIC_DEFAULT_LANGUAGE` first, then `DEFAULT_LANGUAGE`, then `fa`.
+Both names carry the same value, set once as `DEFAULT_LANGUAGE` in `.env` and
+mapped to both in `docker-compose.main.yml`; the `NEXT_PUBLIC_` one exists
+because `src/env.ts` is reachable from a `"use client"` component
+(`PhoneField` -> `lib/phone`, which opens the country picker on the region the
+deployment's language implies) and Next inlines only `NEXT_PUBLIC_` variables
+into the browser bundle. Setting only the bare name leaves the client half on
+`fa` while the server half is correct.
 
 ## Screens
 
@@ -195,7 +234,9 @@ file at 250 lines (§10).
 
 `NEXT_PUBLIC_API_ORIGIN`, `AUTH_SERVICE_ORIGIN` (server-side only, see the
 auth-screen guard below), `LOCALE_SERVICE_ADDR`, `LOCALE_SCOPE=frontend`,
-`DEFAULT_LOCALE=fa`, `NEXT_PUBLIC_DEFAULT_PHONE_COUNTRY` (optional, see the
+`DEFAULT_LANGUAGE` + `NEXT_PUBLIC_DEFAULT_LANGUAGE` (both from the one `.env`
+value; `DEFAULT_LOCALE` in `src/env.ts` reads them — see the language section
+above), `NEXT_PUBLIC_DEFAULT_PHONE_COUNTRY` (optional, see the
 phone field above), cookies `NEXT_LOCALE` / `NEXT_THEME`. Themes:
 `light` / `dark` / `ocean`.
 

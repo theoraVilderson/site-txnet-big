@@ -1,0 +1,47 @@
+{
+  "note": "Hand-written, language-neutral. The declared home of every HTTP name that crosses a process boundary in this platform (ADR-0036, C-04). Read by txnet-backend/shared-core/src/lib/http/wire.contract.spec.ts, by auth-handler/internal/api/handlers/headers_contract_test.go, and by tools/contracts.py. Change a value here and every consumer goes red until it agrees. Unlike contracts/jwt/ts-to-go.json this file is NOT generated: Traefik reads YAML and has no toolchain that could consume a generated Go or TypeScript file, so the source has to be a format all three sides read.",
+  "identityHeaders": {
+    "note": "Written by auth-handler onto a 2xx from /validate, forwarded by Traefik (authResponseHeaders) and stripped from the inbound request (strip-fake-headers). Canonical casing is the spelling auth-handler writes; HTTP header names are case-insensitive on the wire, so a Node reader lowercases before indexing req.headers.",
+    "userId": "X-User-Id",
+    "tenantId": "X-Tenant-Id",
+    "roleId": "X-Role-Id",
+    "sessionId": "X-Session-Id",
+    "permissions": "X-User-Permissions",
+    "impersonated": "X-Impersonated",
+    "impersonatedBy": "X-Impersonated-By"
+  },
+  "alwaysSetIdentityHeaders": [
+    "X-User-Id",
+    "X-Tenant-Id",
+    "X-Role-Id",
+    "X-Session-Id",
+    "X-User-Permissions"
+  ],
+  "impersonationHeaders": [
+    "X-Impersonated",
+    "X-Impersonated-By"
+  ],
+  "gateHeaders": {
+    "note": "Not an identity header: it says the gate ran and identified nobody (ADR-0031). Forwarded and stripped exactly like the identity set.",
+    "anonymous": "X-Auth-Anonymous"
+  },
+  "requestHeaders": {
+    "note": "Sent by a caller and read by a service. Declared lowercase because that is how Node exposes an inbound header name. The tenant header is not here: x-tenant-id and X-Tenant-Id are one case-insensitive name, so both directions use identityHeaders.tenantId.",
+    "serviceToken": "x-service-token",
+    "captchaToken": "x-captcha-token",
+    "botChatId": "x-bot-chat-id",
+    "botPlatform": "x-bot-platform"
+  },
+  "proxyHeaders": {
+    "note": "Set by Traefik, not by anything in this repo, so there is no drift to prevent — recorded only so the codebase spells each one in exactly one place (C-04).",
+    "forwardedFor": "X-Forwarded-For"
+  },
+  "cookieLifetimesSec": {
+    "note": "Seconds, matching Max-Age and every TTL in the platform. The cookie and the token it carries are one lifetime: a cookie outliving its token is a browser that believes it is signed in and is refused on every refresh.",
+    "refreshToken": 2592000
+  },
+  "cookies": {
+    "note": "One name per cookie that crosses the browser boundary, and the one lifetime its Max-Age and its token TTL share. The options builder stays with the code that sets the cookie.",
+    "refreshToken": "refresh_token"
+  }
+}

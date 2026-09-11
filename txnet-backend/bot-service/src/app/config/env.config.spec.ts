@@ -30,10 +30,12 @@ describe('env config', () => {
       // Exactly what docker compose puts in the container.
       process.env[key] = '';
     }
-    // The three the schema insists on, so the module can boot at all.
+    // The four the schema insists on, so the module can boot at all.
     process.env.DOMAIN_NAME ??= 'example.test';
     process.env.AUTH_API_BASE_URL ??= 'http://auth.example.test';
     process.env.SERVICE_AUTH_TOKEN ??= 'a-service-auth-token-long-enough-for-the-schema';
+    // Never dialled: this spec boots `ConfigModule` alone, not the broker.
+    process.env.RABBITMQ_URL ??= 'amqp://guest:guest@localhost:5672';
   });
 
   afterEach(() => {

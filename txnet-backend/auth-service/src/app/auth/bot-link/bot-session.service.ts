@@ -102,15 +102,16 @@ export class BotSessionService {
    * - **No contact card.** A Mini App has no way to ask for one, so a chat
    *   that has never shared its number gets `needsContact` and is sent back to
    *   the conversation, where that question already has a screen.
-   * - **The scope is the browser's** (ADR-0015). The webview is a browser and
-   *   goes on to call `/auth/accounts` with the `device_id` cookie like any
-   *   other; minting its session under the *chat's* scope would show it a
-   *   switch group that none of its later calls could see.
+   * - **The scope is the chat's** (ADR-0032), taken from the same verified
+   *   `initData` and never from the webview's `device_id` cookie. The Mini App
+   *   is not another place with another audience: it is the chat, opened as a
+   *   webview, so an account added in one belongs to the other. Its later
+   *   calls agree because an authenticated request now takes its scope from
+   *   the session it is holding rather than re-deriving it (`AuthGuard`).
    */
   async authenticateWebApp(
     input: { platform: BotPlatform; initData: string },
     observed: ObservedDevice,
-    scope: SwitchScope | null,
   ): Promise<BotSessionOutcome> {
     const integration = await this.bots.primaryFor(
       TenantContext.current('a mini app session').id,
@@ -129,10 +130,11 @@ export class BotSessionService {
       return { state: 'refused', key: 'auth.invalidCredentials' };
     }
 
+    const chatId = verified.data.user.id;
     return this.authenticate(
-      { platform: input.platform, chatId: verified.data.user.id },
+      { platform: input.platform, chatId },
       observed,
-      scope,
+      botScopeKey(input.platform, chatId),
     );
   }
 
@@ -177,21 +179,75 @@ export class BotSessionService {
       return { state: 'refused', key: 'auth.botFactorNotAllowed' };
     }
 
+    // ADR-0034: this place may be acting as another member of its group.
+    // Only an *implicit* sign-in consults it — here, where the messenger link
+    // is the credential (ADR-0012) and the caller named no account. A password
+    // login names its account and is never redirected.
+    const acting = await this.actingAs(
+      scope ?? botScopeKey(input.platform, input.chatId),
+      user.id,
+    );
+
     // The scope is derived from the input rather than from the request
     // headers (ADR-0015): this call already names the chat it is signing in,
     // and that is exactly the switch scope. Reading `x-bot-platform` here
     // instead would make a one-tap sign-in depend on a header that says the
-    // same thing the body already does. A caller that *is* a browser passes
-    // its own scope instead (`authenticateWebApp`), because the chat is not
-    // the place that session will be used from.
+    // same thing the body already does. Both callers land on the same key —
+    // `authenticateWebApp` passes the chat named by the signature it just
+    // verified (ADR-0032), so the Mini App and the chat share one group.
     const tokens = await this.auth.createSessionForUser(
-      user,
+      acting ?? user,
       observed?.ip ?? null,
       observed?.userAgent ?? null,
       scope ?? botScopeKey(input.platform, input.chatId),
       MESSENGER_DEVICE_LABEL[input.platform],
     );
     return { state: 'authenticated', tokens };
+  }
+
+  /**
+   * The member this place is currently acting as, or `null` for "itself".
+   *
+   * Three things have to hold before a pointer is honoured, and each is a way
+   * it could otherwise become an authentication of its own:
+   *
+   * - the linked account must still be a member of a group **in this scope**,
+   *   because that group is the only thing the pointer is scoped by;
+   * - the pointer must name someone still in that same group here — an
+   *   `F-0208` removal leaves the pointer behind on purpose (it is not a
+   *   membership record), so a stale one must resolve to nothing;
+   * - the target must load and pass the same conditions any sign-in applies.
+   *
+   * Any of them failing falls back to the linked account, which is exactly
+   * ADR-0014's behaviour and never an error: "this place has not switched, or
+   * cannot any more" and "sign in as the linked account" are one answer.
+   */
+  private async actingAs(scopeKey: SwitchScope, linkedUserId: string) {
+    const membership = await this.prisma.linkedAccountMember.findUnique({
+      where: { scopeKey_userId: { scopeKey, userId: linkedUserId } },
+      select: { groupId: true, group: { select: { actingAsUserId: true } } },
+    });
+    const target = membership?.group?.actingAsUserId;
+    if (!target || target === linkedUserId) return null;
+
+    const stillAMember = await this.prisma.linkedAccountMember.findFirst({
+      where: { scopeKey, userId: target, groupId: membership.groupId },
+      select: { id: true },
+    });
+    if (!stillAMember) return null;
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: target },
+      include: {
+        role: {
+          include: { rolePermissions: { include: { permission: true } } },
+        },
+      },
+    });
+    if (!user || user.deletedAt || user.status !== 'active') return null;
+    if (!user.phoneVerifiedAt) return null;
+    if (!BOT_SESSION_ROLES.includes(user.role?.name)) return null;
+    return user;
   }
 
   /** The account this chat has already proven it belongs to, if any. */

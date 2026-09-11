@@ -73,11 +73,14 @@ func LoadFile(path string) (*Engine, error) {
 	return &Engine{roles: roles}, nil
 }
 
-// Check verifies that roleID exists and that every permission in
+// Check verifies that roleName exists and that every permission in
 // claimedPermissions is actually granted to that role.
 // It returns the list of unauthorized permissions and a boolean indicating success.
-func (e *Engine) Check(roleID string, claimedPermissions []string) (unauthorized []string, ok bool) {
-	role, exists := e.roles[roleID]
+//
+// roleName is `identity.role.name`, matched exactly: the column is unique
+// case-sensitively, so folding case could merge two distinct roles.
+func (e *Engine) Check(roleName string, claimedPermissions []string) (unauthorized []string, ok bool) {
+	role, exists := e.roles[roleName]
 	if !exists {
 		return claimedPermissions, false
 	}

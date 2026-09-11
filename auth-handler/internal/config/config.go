@@ -2,6 +2,7 @@
 package config
 
 import (
+	"auth-handler/internal/locale"
 	"fmt"
 	"os"
 	"strconv"
@@ -21,6 +22,7 @@ type Config struct {
 	DefaultLanguage   string
 	LocaleServiceAddr string
 	LocaleScope       string
+	LocaleBootTimeout time.Duration
 	ReadTimeout       time.Duration
 	WriteTimeout      time.Duration
 	IdleTimeout       time.Duration
@@ -40,8 +42,8 @@ func Load() (Config, error) {
 		// (`${REDIS_KEY_NAMESPACE}:${REDIS_KEYSPACE_VERSION}:`) so this gateway
 		// reads the same `session:*` keys the auth-service writes.
 		RedisKeyPrefix: buildRedisKeyPrefix(
-			getEnv("REDIS_KEY_NAMESPACE", "txnet:auth"),
-			getEnv("REDIS_KEYSPACE_VERSION", "v1"),
+			getEnv("REDIS_KEY_NAMESPACE", DefaultRedisKeyNamespace),
+			getEnv("REDIS_KEYSPACE_VERSION", DefaultRedisKeyspaceVersion),
 		),
 		PermissionsFile:   getEnv("PERMISSIONS_FILE_PATH", "configs/permissions.yaml"),
 		LocalesDir:        getEnv("LOCALES_DIR", "./locales/langs"),
@@ -49,6 +51,9 @@ func Load() (Config, error) {
 		DefaultLanguage:   getEnv("DEFAULT_LANGUAGE", "fa"),
 		LocaleServiceAddr: getEnv("LOCALE_SERVICE_ADDR", "localhost:50051"),
 		LocaleScope:       getEnv("LOCALE_SCOPE", "backend"),
+		// Read like every other timeout in this struct rather than hardcoded
+		// in two packages at two different values (F-086).
+		LocaleBootTimeout: getEnvDuration("LOCALE_BOOT_TIMEOUT", locale.DefaultBootTimeout),
 		ReadTimeout:       getEnvDuration("HTTP_READ_TIMEOUT", 5*time.Second),
 		WriteTimeout:      getEnvDuration("HTTP_WRITE_TIMEOUT", 5*time.Second),
 		IdleTimeout:       getEnvDuration("HTTP_IDLE_TIMEOUT", 60*time.Second),
@@ -81,9 +86,31 @@ func (c Config) validate() error {
 
 // Helper functions.
 
-// buildRedisKeyPrefix mirrors auth-service's RedisService: the namespace with
-// any trailing ':' stripped, then ":<version>:". Keep this in sync with
-// txnet-backend/auth-service/src/app/redis/redis.service.ts.
+// The keyspace defaults, declared in contracts/redis/keyspace.json and held to
+// it by keyspace_contract_test.go (ADR-0036, C-03).
+//
+// They were `txnet:auth` and `v1` here, `v2` in `.env` and `v3` in
+// docker-compose, so which keyspace a container read depended on whether
+// `.env` reached it. The fleet was genuinely split — 8 live sessions under
+// `v1` and 7 under `v2` when F-075 measured it — and a user whose session was
+// in the half a given service could not see was signed out by that service
+// and signed in by the next one. Unified on `v2`, the value `.env` already
+// carried, so the sessions living in dev survived.
+//
+// Changing the version is a forced logout of everybody. That is what it is
+// for, and it means every service and this gateway deploy together: a rolling
+// deploy across a version change is a partial outage by construction.
+const (
+	DefaultRedisKeyNamespace    = "txnet:auth"
+	DefaultRedisKeyspaceVersion = "v2"
+)
+
+// buildRedisKeyPrefix is the one prefix algorithm, shared with
+// shared-core/src/lib/redis/keyspace.ts through contracts/redis/keyspace.json.
+//
+// The TrimRight is not defensive tidying: a trailing colon in
+// REDIS_KEY_NAMESPACE that only one language strips puts Go and Node in
+// different keyspaces, which reads as every session being revoked.
 func buildRedisKeyPrefix(namespace, version string) string {
 	return strings.TrimRight(namespace, ":") + ":" + version + ":"
 }

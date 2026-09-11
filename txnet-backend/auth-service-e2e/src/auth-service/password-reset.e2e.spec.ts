@@ -37,11 +37,19 @@ describe('auth-api — password reset', () => {
     const laptopTokenBefore = laptop.refreshCookie;
 
     const asked = await laptop.forgotPassword({ phoneNumber: account.phoneNumber });
-    expect(asked.status).toBe(200);
+    // 202: the code is queued, not sent (v13).
+    expect(asked.status).toBe(202);
     expect(asked.body).toEqual({
       ok: true,
       msg: 'auth.resetOtpSent',
-      data: { accepted: true },
+    data: {
+      accepted: true,
+      // Minted per request, before anything is known about the number
+      // (F-067-a, F-067-j).
+      deliveryId: expect.stringMatching(/^[0-9a-f]{32}$/),
+      channel: expect.stringMatching(/^otp:[0-9a-f]{32}$/),
+      channelToken: expect.stringMatching(/^[0-9a-f]{32}$/),
+    },
     });
 
     const code = e2e.otp.latest(account.phoneNumber, 'password_reset');
@@ -131,8 +139,17 @@ describe('auth-api — password reset', () => {
     expect(res.body).toEqual({
       ok: true,
       msg: 'auth.resetOtpSent',
-      data: { accepted: true },
+    data: {
+      accepted: true,
+      // Minted per request, before anything is known about the number
+      // (F-067-a, F-067-j).
+      deliveryId: expect.stringMatching(/^[0-9a-f]{32}$/),
+      channel: expect.stringMatching(/^otp:[0-9a-f]{32}$/),
+      channelToken: expect.stringMatching(/^[0-9a-f]{32}$/),
+    },
     });
+    // Handed out anyway: handles that appeared only for a real account would
+    // undo this route's whole reason for answering the same way twice.
     expect(e2e.otp.isEmpty()).toBe(true);
   });
 

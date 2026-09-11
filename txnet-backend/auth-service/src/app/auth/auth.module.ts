@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { RateLimitGuard } from '../common/guards/rate-limit.guard';
 import { CaptchaGuard } from '../common/guards/captcha.guard';
@@ -24,6 +24,9 @@ import { NoActiveSessionGuard } from './guards/no-active-session.guard';
 import { SessionService } from './session/session.service';
 import { SessionStore } from './session/session.store';
 import { OtpStore } from './otp/otp.store';
+import { OtpDeliveryStore } from './otp/otp-delivery.store';
+import { OtpDeliveryPublisher } from './otp/otp-delivery.publisher';
+import { OtpInternalController } from './otp/otp-internal.controller';
 import { RateLimiter } from '../common/rate-limit/rate-limiter';
 import { LocaleModule } from '../locale/locale.module';
 import { MessengerModule } from '@txnet-backend/messenger';
@@ -43,7 +46,10 @@ import { CaptchaService } from './captcha/captcha.service';
   // service seam `bot-service` has to use (F-320).
   imports: [
     LocaleModule,
-    AutomationModule,
+    // `forwardRef` on both sides: this module needs `AuthBrokerPublisher`
+    // (F-067-a) and `AutomationModule` needs `AuthGuard`'s dependencies for
+    // its admin controller (F-031-b).
+    forwardRef(() => AutomationModule),
     MessengerModule.forRoot({ imports: [AutomationModule] }),
   ],
   controllers: [
@@ -51,6 +57,7 @@ import { CaptchaService } from './captcha/captcha.service';
     AuthController,
     CaptchaController,
     BotLinkController,
+    OtpInternalController,
   ],
   providers: [
     RegisterService,
@@ -62,6 +69,8 @@ import { CaptchaService } from './captcha/captcha.service';
     SessionService,
     SessionStore,
     OtpStore,
+    OtpDeliveryStore,
+    OtpDeliveryPublisher,
     RateLimiter,
     CaptchaService,
     SmsOtpSender,

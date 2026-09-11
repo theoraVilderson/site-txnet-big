@@ -2,8 +2,8 @@
 id: identity
 layer: domain
 status: active
-version: 10
-updated: 2026-09-09
+version: 11
+updated: 2026-09-10
 ---
 
 # identity — version history
@@ -16,6 +16,39 @@ Newest first is *not* the order here: the sections are kept as they were
 written, and `version` in the front matter above says where the contract is now.
 The current version's own section stays in `contract.md` until the next one
 displaces it.
+
+## v10 — a bot link is unique within a tenant
+
+**Breaking, in meaning rather than in shape.** A messenger account
+(`linked_bot_account`) was bound to at most one User across the whole platform;
+it is now bound within a tenant (`@@unique([tenantId, platform, platformUserId])`,
+migration `20260909000400_bot_link_unique_per_tenant`). Catalog 10.5 is why, and
+it scopes linking at the **tenant**, not at the bot: a person who starts in a
+reseller's sales bot is the same person in that reseller's support bot.
+
+What changes for a caller is what an answer *means*, not what it looks like:
+
+- **link messenger account** refuses `chat already linked elsewhere` about the
+  requesting tenant only. The same chat may hold a link with every reseller on
+  the platform, and none of them is told the others exist. Before this, whoever
+  linked a chat first held it against everyone else — and a chat id is issued by
+  the messenger, so it is the same id in every bot.
+- The OTP senders resolve a chat within the requesting tenant, so a code is
+  never delivered to a chat that proved itself to somebody else's bot.
+
+No operation gained or lost a parameter, and no wire shape moved.
+`linkedBotAccount` joins `user` in `TENANT_SCOPED_MODELS`, so the ten lookup
+sites were not edited (`platform/tenant-context/contract.md`); the three writes
+name the ambient tenant only because Prisma's create input requires the column.
+The pending-link pointer `botlink:chat:*` gains the same tenant segment its two
+neighbours already carry — the last phone-adjacent key F-065-c left tenant-free
+(`platform/redis-keyspace/contract.md`).
+
+**Affected consumers** (every unit listing `identity` in `depends_on`): audit,
+billing, currency, engagement, fraud, governance, network, notification, ai,
+support, tenant, auth-api, forward-auth. None of them queries identity's tables
+and none passes a chat id for another tenant, so no consumer call site changes.
+Nothing is deprecated, because no shape is removed.
 
 ## v9 — a person is identified within a tenant
 

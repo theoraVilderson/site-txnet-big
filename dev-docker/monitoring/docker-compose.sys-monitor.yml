@@ -17,6 +17,16 @@ networks:
 configs:
   prometheus_config:
     file: ./config-dev/prometheus.yml
+  # The alert rules prometheus.yml names in `rule_files:` (F-067-g). A separate
+  # config because a rule file is edited on its own cadence: a threshold moves
+  # without the scrape layout moving with it.
+  automation_rules:
+    file: ./config-dev/automation.rules.yml
+  # The one Postgres-side number the automation alerts need (F-067-c): the age
+  # of the oldest unpublished outbox row. A query file rather than an HTTP
+  # surface on worker-service, which ADR-0027 says serves no requests.
+  postgres_queries:
+    file: ./config-dev/postgres-queries.yaml
   promtail_config:
     file: ./config-dev/promtail.yaml
   alertmanager_config:
@@ -48,6 +58,8 @@ services:
     configs:
       - source: prometheus_config
         target: /etc/prometheus/prometheus.yml
+      - source: automation_rules
+        target: /etc/prometheus/automation.rules.yml
     volumes:
       - prometheus_data:/prometheus
     networks:
@@ -148,6 +160,40 @@ services:
       - /var/lib/docker/:/var/lib/docker:ro
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
       - /run/containerd/containerd.sock:/run/containerd/containerd.sock:ro
+    networks:
+      - private_backend_network
+
+  # ===========================================================================
+  # Postgres Exporter — the outbox gauge, and nothing else yet (F-067-c)
+  # ===========================================================================
+  # The fourth of F-067-g's four numbers. The other three come off RabbitMQ's
+  # own exporter; this one is a fact about a table, so it needs a Postgres
+  # scrape target, and this stack had none.
+  #
+  # It connects as `txnet_app_user` — the RLS-enforced application role, the
+  # same one auth-service and worker-service use (F-066-m-a). Not the owner:
+  # a monitoring container that can read every row of every table in order to
+  # count one is a credential in the wrong place. `automation.outbox_event`
+  # carries no `tenantId` and therefore no policy, so that role reads it whole.
+  #
+  # `main-db` lives in the main stack; the two share `private_backend_network`,
+  # which is how prometheus already reaches `rabbitmq:15692`. No published
+  # port, for the same reason.
+  postgres-exporter:
+    image: ${DOCKER_REGISTRY}/prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: txnet-postgres-exporter
+    restart: unless-stopped
+    environment:
+      - DATA_SOURCE_NAME=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}?sslmode=disable
+      # Only the custom queries. The exporter's built-in collectors are
+      # per-database and per-table churn nobody has asked a question about yet,
+      # and every one of them is a series Prometheus keeps for 15 days.
+      - PG_EXPORTER_EXTEND_QUERY_PATH=/etc/postgres-exporter/queries.yaml
+      - PG_EXPORTER_DISABLE_DEFAULT_METRICS=true
+      - PG_EXPORTER_DISABLE_SETTINGS_METRICS=true
+    configs:
+      - source: postgres_queries
+        target: /etc/postgres-exporter/queries.yaml
     networks:
       - private_backend_network
 

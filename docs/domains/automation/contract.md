@@ -3,7 +3,7 @@ id: automation
 layer: domain
 status: active
 version: 5
-updated: 2026-09-09
+updated: 2026-09-11
 ---
 
 # Contract — automation
@@ -34,6 +34,7 @@ Separately, every bot a tenant owns is a `bot_integration` row — the registry
 | toggle worker | key, isActive | updated row + `bot_toggle` audit row, one transaction | sync | — |
 | run now | key | `automation.tick.<key>` with `triggeredBy: admin_manual` | async | worker `isActive=false` — refused; broker unreachable — 503 |
 | record run | botWorkerId, trigger, metrics | `bot_execution_log` | async | — |
+| list dead letters | limit | `dead_letter` rows, newest first — routing key, worker key, reason, attempts, body | sync | — |
 | resolve webhook path | webhookPath | `BotIntegration` (tenant + platform + role + `credentialRef`) | sync | unknown path — a 404, never a hint |
 | list a tenant's bots | tenantId | `BotIntegration[]`, never a credential | sync | — |
 | register / retire a bot | tenantId, platform, botUsername, role | `BotIntegration` | sync | duplicate `(tenant, platform, username)`; second `primary` |
@@ -107,8 +108,12 @@ routes that write what it reads (F-031-b).
 
 ## Emits (events)
 
-`automation.tick.<key>`, to the topic exchange `AUTOMATION_EXCHANGE`
-(`txnet.automation`), persistent, consumed by `worker-service`. Two processes
+`automation.tick.<key>`, to the topic exchange `AUTOMATION_EXCHANGE`, whose
+default is declared once in `shared-core/src/lib/automation/bot-update.ts` as
+`AUTOMATION_EXCHANGE_DEFAULT` (`txnet.automation`, F-079, ADR-0036) — it was
+three independent zod defaults plus a fourth in compose, and a publisher and a
+consumer that disagree about an exchange both start cleanly while the broker
+drops every message. Persistent, consumed by `worker-service`. Two processes
 publish it — `worker-service`'s timer (`cron`) and `auth-service`'s admin route
 (`admin_manual`) — and the message is the same four fields either way. It is not
 a cross-domain event: ADR-0021's outbox is a separate mechanism and is not built

@@ -25,16 +25,23 @@ const accessClaims: Omit<AuthClaims, 'iat' | 'exp'> = {
   sub: 'user-1',
   tenantId: 'tenant-1',
   roleId: 'role-1',
+  roleName: 'user',
   permissions: ['user.read'],
   sessionId: 'session-1',
 };
 
-function contextWith(header?: string) {
-  const request: { get: (name: string) => string | undefined; user?: unknown } =
-    {
-      get: (name: string) =>
-        name.toLowerCase() === 'authorization' ? header : undefined,
-    };
+function contextWith(header?: string, switchScope: string | null = null) {
+  const request: {
+    get: (name: string) => string | undefined;
+    user?: unknown;
+    switchScope?: string | null;
+  } = {
+    get: (name: string) =>
+      name.toLowerCase() === 'authorization' ? header : undefined,
+    // What `SwitchScopeMiddleware` decided from the request itself, before the
+    // guard has read the session (ADR-0032).
+    switchScope,
+  };
   return {
     request,
     context: {
@@ -45,14 +52,16 @@ function contextWith(header?: string) {
 
 describe('AuthGuard', () => {
   let tokens: TokenService;
-  let sessions: { isActive: jest.Mock };
+  let sessions: { read: jest.Mock };
   let guard: AuthGuard;
 
   beforeEach(() => {
     tokens = new TokenService(configStub);
     // Say yes to every session id, so the assertions below turn on the token
     // itself and not on an incidental Redis miss.
-    sessions = { isActive: jest.fn().mockResolvedValue(true) };
+    sessions = {
+      read: jest.fn().mockResolvedValue({ userId: 'user-1', scopeKey: null }),
+    };
     guard = new AuthGuard(tokens, sessions as unknown as SessionStore);
   });
 
@@ -79,11 +88,11 @@ describe('AuthGuard', () => {
 
       await expect(guard.canActivate(context)).resolves.toBe(true);
       expect(request.user).toMatchObject(accessClaims);
-      expect(sessions.isActive).toHaveBeenCalledWith('session-1');
+      expect(sessions.read).toHaveBeenCalledWith('session-1');
     });
 
     it('rejects a token whose session has been revoked', async () => {
-      sessions.isActive.mockResolvedValue(false);
+      sessions.read.mockResolvedValue(null);
       const { context } = contextWith(`Bearer ${tokens.sign(accessClaims)}`);
 
       await expect(guard.canActivate(context)).rejects.toThrow(
@@ -95,7 +104,7 @@ describe('AuthGuard', () => {
       const { context } = contextWith(`Bearer ${tokens.sign(accessClaims, -1)}`);
 
       await expect(guard.canActivate(context)).rejects.toThrow('token expired');
-      expect(sessions.isActive).not.toHaveBeenCalled();
+      expect(sessions.read).not.toHaveBeenCalled();
     });
 
     it('rejects a token signed with another secret', async () => {
@@ -143,5 +152,68 @@ describe('AuthGuard', () => {
       );
       expect(request.user).toBeUndefined();
     });
+  });
+});
+
+/**
+ * ADR-0032, half one. The scope of an authenticated call is the one stamped on
+ * its session, not the one re-derived from the request — which is what lets a
+ * Mini App session minted under `bot:telegram:<chat>` still see that chat's
+ * group when it calls `/auth/accounts` with only a `device_id` cookie.
+ */
+describe('AuthGuard — the switch scope of an authenticated call', () => {
+  let tokens: TokenService;
+  let sessions: { read: jest.Mock };
+  let guard: AuthGuard;
+
+  beforeEach(() => {
+    tokens = new TokenService(configStub);
+    sessions = {
+      read: jest.fn().mockResolvedValue({ userId: 'user-1', scopeKey: null }),
+    };
+    guard = new AuthGuard(tokens, sessions as unknown as SessionStore);
+  });
+
+  it("replaces the request's scope with the session's own", async () => {
+    sessions.read.mockResolvedValue({
+      userId: 'user-1',
+      scopeKey: 'bot:telegram:5501',
+    });
+    const { context, request } = contextWith(
+      `Bearer ${tokens.sign(accessClaims)}`,
+      'device:aaaa-bbbb',
+    );
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(request.switchScope).toBe('bot:telegram:5501');
+  });
+
+  it('leaves the request alone for a session minted before this shipped', async () => {
+    // No `scopeKey` on the marker — the behaviour that predates ADR-0032, so
+    // an old session keeps working without a keyspace flush.
+    sessions.read.mockResolvedValue({ userId: 'user-1', scopeKey: null });
+    const { context, request } = contextWith(
+      `Bearer ${tokens.sign(accessClaims)}`,
+      'device:aaaa-bbbb',
+    );
+
+    await guard.canActivate(context);
+
+    expect(request.switchScope).toBe('device:aaaa-bbbb');
+  });
+
+  it('does not let a swapped cookie move an authenticated caller', async () => {
+    sessions.read.mockResolvedValue({
+      userId: 'user-1',
+      scopeKey: 'device:the-one-it-was-minted-under',
+    });
+    const { context, request } = contextWith(
+      `Bearer ${tokens.sign(accessClaims)}`,
+      'device:a-cookie-someone-pasted-in',
+    );
+
+    await guard.canActivate(context);
+
+    expect(request.switchScope).toBe('device:the-one-it-was-minted-under');
   });
 });

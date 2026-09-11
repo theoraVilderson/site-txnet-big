@@ -3,7 +3,7 @@ id: messenger
 layer: platform
 status: active
 version: 4
-updated: 2026-09-09
+updated: 2026-09-10
 ---
 
 # messenger — contract
@@ -80,6 +80,7 @@ Verified against [docs.bale.ai](https://docs.bale.ai/),
 | file download | 20 MB | 20 MB | no |
 | delete an **incoming** message in a private chat | yes, within 48 h | yes, within 48 h (same wording, `deleteMessage`) | no — verified 2026-09-06 |
 | Mini App / WebApp | `window.Telegram.WebApp` | `window.Bale.WebApp` | **name only** |
+| Mini App SDK the page must load | `https://telegram.org/js/telegram-web-app.js?63` | `https://tapi.bale.ai/miniapp.js?3` | **yes — different URL** (verified 2026-09-10) |
 | Mini App identity proof | HMAC-SHA-256 over the sorted data-check-string, secret = HMAC(bot token, `"WebAppData"`) | **the same scheme** | no |
 | in-chat payment | provider tokens / Stars | own wallet: `sendInvoice`, `answerPreCheckoutQuery`, `inquireTransaction` | **yes — different rails** |
 | API base URL | `api.telegram.org/bot<token>` | `tapi.bale.ai/bot<token>` | **yes** |
@@ -101,6 +102,12 @@ That changes what this unit is mostly for. Ranked by real risk:
    the `F-0203` link token already in production is Telegram-shaped.
 3. **Naming** — base URL and `window.Bale.WebApp` vs `window.Telegram.WebApp`.
    Cheap to get right, silently broken if hard-coded anywhere above this unit.
+4. **The SDK** — *neither* global exists until the page loads that platform's
+   own script, and a page that loads none fails **silently**: it simply finds
+   no host and shows the ordinary login screen. That is exactly how `F-310`
+   shipped broken on 2026-09-08. The page cannot pick the script itself, so the
+   bot marks the URL (`?ma=<platform>`, `docs/interfaces/bot-app/contract.md`)
+   and `site-pwa/src/lib/mini-app.ts` holds the two URLs above.
 
 **Rule:** every row above carries the date it was verified. A flag with no date
 is not a flag. Re-read both platforms' docs before adding an axis, and record

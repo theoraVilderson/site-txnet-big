@@ -23,7 +23,9 @@
     "addWithPassword": "Its password",
     "removeAccount": "➖ Remove an account",
     "confirmRemove": "Yes, remove it",
-    "miniApp": "🚀 Open the app"
+    "miniApp": "🚀 Open the app",
+    "signOutAll": "Sign out of all accounts",
+    "signOutAllYes": "Yes, sign out of all"
   },
   "common": {
     "cancelled": "Cancelled; nothing was saved. Start again below whenever you like.",
@@ -34,7 +36,9 @@
     "signedOut": "You are signed out.",
     "notSignedIn": "You are not signed in yet.",
     "expired": "This conversation sat idle for a while, so I closed it; nothing was saved. Start again below.",
-    "backGone": "There is nothing before this. You can start from here:"
+    "backGone": "There is nothing before this. You can start from here:",
+    "signedOutSwitched": "Signed out of that account — you are now “{{name}}”.",
+    "signedOutAll": "Signed out of every account in this chat. None of them was removed."
   },
   "login": {
     "askPhone": "Send your number with the button below, or type it yourself. A number from any country works — write it with its country code, like +49…",
@@ -119,6 +123,7 @@
     "removeConfirmSelf": "Remove {{name}} — the one you are using right now?\nYou will be signed out of this chat, and the others stay where they are.",
     "removed": "Removed from this chat's accounts ✅",
     "removedSelf": "Removed, and you are signed out here. Sign in again whenever you like.",
-    "removeFailed": "That account is no longer one of this chat's accounts."
+    "removeFailed": "That account is no longer one of this chat's accounts.",
+    "signOutAllAsk": "You will be signed out of every account in this chat. None is removed, and they stay reachable later without a new code. Sure?"
   }
 }

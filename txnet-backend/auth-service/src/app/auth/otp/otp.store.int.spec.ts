@@ -1,6 +1,7 @@
 import { RedisKeys, RedisTtl } from '../../redis/redis.keys';
 import {
   RedisFixture,
+  expectTtlSeconds,
   startRedisFixture,
 } from '../../../test-support/redis-fixture';
 import { OtpPurpose } from './otp.interface';
@@ -72,7 +73,7 @@ describe('OtpStore (real Redis)', () => {
     it('attaches the catalogue TTL', async () => {
       await store.save(PHONE, PURPOSE, HASH);
 
-      expect(await fx.raw.ttl(codeKey())).toBe(RedisTtl.otpCode);
+      await expectTtlSeconds(fx.raw, codeKey(), RedisTtl.otpCode);
     });
   });
 
@@ -274,7 +275,7 @@ describe('OtpStore (real Redis)', () => {
     it('expires on its own', async () => {
       await store.startCooldown(PHONE, PURPOSE);
       const key = fx.keyPrefix + RedisKeys.otpCooldown(PURPOSE, PHONE);
-      expect(await fx.raw.ttl(key)).toBe(RedisTtl.otpCooldown);
+      await expectTtlSeconds(fx.raw, key, RedisTtl.otpCooldown);
 
       await fx.raw.pexpire(key, 60);
       await new Promise((resolve) => setTimeout(resolve, 150));

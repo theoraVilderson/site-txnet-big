@@ -8,13 +8,17 @@ import { PhoneField } from "@auth/auth/_components/PhoneField";
 import { useOtpChannels } from "@auth/auth/_hooks/useOtpChannels";
 import { useAutofill } from "@auth/auth/_hooks/useAutofill";
 import { authApi, type BotLinkRequired } from "@/lib/auth-api";
+import { CHANNEL_LABEL, PROOF_LABEL, type Proof } from "./labels";
 import { useLocale } from "@/context/LocaleContext";
 import { OTP_LENGTH } from "@/lib/otp";
 import { PANEL_HOME } from "@/lib/routes";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 
-type Proof = "otp" | "password";
+import { FrontendI18nKeys } from "@/generated/i18n-keys";
+
+/** The `common` namespace as generated constants (F-083, C-06). */
+const C = FrontendI18nKeys.common;
 
 /**
  * Adding another account to the switch group (F-0205, rendered for F-0209).
@@ -87,7 +91,7 @@ export default function AddAccountPage() {
         setCodeSent(true);
         return;
       }
-      setError(t("common", "accounts.linkPending"));
+      setError(t("common", C.accounts.linkPending));
     });
 
   const finish = async () => {
@@ -116,17 +120,17 @@ export default function AddAccountPage() {
     return (
       <div className="mx-auto w-full max-w-[440px] px-6 py-10">
         <h1 className="mb-2 text-xl font-bold text-text-primary">
-          {t("common", "accounts.addedTitle")}
+          {t("common", C.accounts.addedTitle)}
         </h1>
         <p className="mb-6 text-sm text-text-secondary">
-          {t("common", "accounts.addedBody")}
+          {t("common", C.accounts.addedBody)}
         </p>
         <button
           type="button"
           className={button}
           onClick={() => router.push(PANEL_HOME)}
         >
-          {t("common", "accounts.backToPanel")}
+          {t("common", C.accounts.backToPanel)}
         </button>
       </div>
     );
@@ -135,10 +139,10 @@ export default function AddAccountPage() {
   return (
     <div className="mx-auto w-full max-w-[440px] px-6 py-10">
       <h1 className="mb-1 text-xl font-bold text-text-primary">
-        {t("common", "accounts.addTitle")}
+        {t("common", C.accounts.addTitle)}
       </h1>
       <p className="mb-6 text-sm text-text-secondary">
-        {t("common", "accounts.addSubtitle")}
+        {t("common", C.accounts.addSubtitle)}
       </p>
 
       <div className="mb-6 flex gap-1 rounded-2xl border border-card-border bg-tab-bg p-1.5">
@@ -161,7 +165,7 @@ export default function AddAccountPage() {
             ) : (
               <KeyRound size={16} />
             )}
-            {t("common", `accounts.proof.${option}`)}
+            {t("common", PROOF_LABEL[option])}
           </button>
         ))}
       </div>
@@ -170,13 +174,13 @@ export default function AddAccountPage() {
         <div className="space-y-4">
           <PhoneField
             id="add-account-phone"
-            label={t("common", "accounts.phonePlaceholder")}
+            label={t("common", C.accounts.phonePlaceholder)}
             value={phoneNumber}
             onChange={setPhoneNumber}
             lang={lang}
-            countryLabel={t("common", "accounts.country")}
-            searchLabel={t("common", "accounts.countrySearch")}
-            noResultsLabel={t("common", "accounts.countryNoResults")}
+            countryLabel={t("common", C.accounts.country)}
+            searchLabel={t("common", C.accounts.countrySearch)}
+            noResultsLabel={t("common", C.accounts.countryNoResults)}
             disabled={codeSent || !!botLink}
           />
 
@@ -193,7 +197,7 @@ export default function AddAccountPage() {
                       : "text-text-secondary hover:text-text-primary"
                   }`}
                 >
-                  {t("common", `accounts.channel.${channel}`)}
+                  {t("common", CHANNEL_LABEL[channel])}
                 </button>
               ))}
             </div>
@@ -202,7 +206,7 @@ export default function AddAccountPage() {
           {botLink && (
             <div className="space-y-3 rounded-2xl border border-card-border bg-bg-inner p-4">
               <p className="text-sm text-text-secondary">
-                {t("common", "accounts.linkRequired")}
+                {t("common", C.accounts.linkRequired)}
               </p>
               <a
                 href={botLink.deepLink}
@@ -210,7 +214,7 @@ export default function AddAccountPage() {
                 rel="noreferrer"
                 className="block text-center text-sm font-bold text-primary underline"
               >
-                {t("common", "accounts.openBot")}
+                {t("common", C.accounts.openBot)}
               </a>
               <button
                 type="button"
@@ -218,7 +222,7 @@ export default function AddAccountPage() {
                 disabled={pending}
                 onClick={() => pollBotLink(botLink.linkToken)}
               >
-                {t("common", "accounts.linkDone")}
+                {t("common", C.accounts.linkDone)}
               </button>
             </div>
           )}
@@ -241,8 +245,8 @@ export default function AddAccountPage() {
               onClick={codeSent ? verifyCode : requestCode}
             >
               {codeSent
-                ? t("common", "accounts.confirm")
-                : t("common", "accounts.sendCode")}
+                ? t("common", C.accounts.confirm)
+                : t("common", C.accounts.sendCode)}
             </button>
           )}
         </div>
@@ -254,7 +258,7 @@ export default function AddAccountPage() {
             ref={identifierRef}
             className={field}
             dir="ltr"
-            placeholder={t("common", "accounts.identifierPlaceholder")}
+            placeholder={t("common", C.accounts.identifierPlaceholder)}
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
           />
@@ -264,7 +268,7 @@ export default function AddAccountPage() {
             dir="ltr"
             type="password"
             autoComplete="off"
-            placeholder={t("common", "accounts.passwordPlaceholder")}
+            placeholder={t("common", C.accounts.passwordPlaceholder)}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
@@ -274,7 +278,7 @@ export default function AddAccountPage() {
             disabled={pending || !identifier || !password}
             onClick={submitPassword}
           >
-            {t("common", "accounts.confirm")}
+            {t("common", C.accounts.confirm)}
           </button>
         </div>
       )}
@@ -291,7 +295,7 @@ export default function AddAccountPage() {
         className="mt-6 flex items-center gap-2 text-sm text-text-secondary transition-colors hover:text-primary"
       >
         <ArrowRight size={16} className="ltr:-scale-x-100" />
-        {t("common", "accounts.backToPanel")}
+        {t("common", C.accounts.backToPanel)}
       </button>
     </div>
   );

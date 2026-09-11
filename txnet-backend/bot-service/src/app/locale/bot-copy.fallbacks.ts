@@ -24,6 +24,8 @@ export const BOT_COPY_FALLBACKS: Record<string, string> = {
   'bot.action.forgot': 'I forgot my password',
   'bot.action.logout': 'Sign out',
   'bot.action.cancel': 'Cancel',
+  'bot.action.signOutAll': 'Sign out of all accounts',
+  'bot.action.signOutAllYes': 'Yes, sign out of all',
   'bot.action.menu': 'Main menu',
   'bot.action.help': 'Help',
   'bot.action.language': '🌐 Language / زبان',
@@ -39,6 +41,8 @@ export const BOT_COPY_FALLBACKS: Record<string, string> = {
   'bot.action.addWithPassword': 'Its password',
   'bot.action.removeAccount': '➖ Remove an account',
   'bot.action.confirmRemove': 'Yes, remove it',
+  'bot.accounts.signOutAllAsk':
+    'You will be signed out of every account in this chat. None is removed, and they stay reachable later without a new code. Sure?',
   'bot.accounts.pick':
     'You are signed in as {{name}}. Tap any other account to carry on as that one.',
   'bot.accounts.none':
@@ -88,6 +92,12 @@ export const BOT_COPY_FALLBACKS: Record<string, string> = {
   'bot.common.tryAgain': 'Something went wrong on our side. Please try again.',
   'bot.common.signedIn': 'You are signed in ✅',
   'bot.common.signedOut': 'You are signed out.',
+  // ADR-0035: signing out of one account lands on the next one this place
+  // already holds, rather than ending the place.
+  'bot.common.signedOutSwitched':
+    'Signed out of that account — you are now \u201c{{name}}\u201d.',
+  'bot.common.signedOutAll':
+    'Signed out of every account in this chat. None of them was removed.',
   'bot.common.notSignedIn': 'You are not signed in yet.',
   'bot.login.askPhone':
     'Send your number with the button below, or type it yourself. A number from any country works — write it with its country code, like +49…',

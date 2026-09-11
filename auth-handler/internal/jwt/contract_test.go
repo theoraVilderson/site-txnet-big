@@ -53,6 +53,9 @@ func TestContractAccessTokenFromTypeScript(t *testing.T) {
 		{"Sub", claims.Sub, "user-contract-1"},
 		{"TenantID", claims.TenantID, "tenant-contract-1"},
 		{"RoleID", claims.RoleID, "role-contract-1"},
+		// What the policy engine keys on (ADR-0037). A rename on either side
+		// turns every gated request into a 403, so it is pinned here.
+		{"RoleName", claims.RoleName, "Admin"},
 		{"SessionID", claims.SessionID, "session-contract-1"},
 	} {
 		if tc.got != tc.want {
@@ -83,6 +86,10 @@ func TestContractImpersonatedTokenFromTypeScript(t *testing.T) {
 	}
 	if claims.ImpersonatedBy != "admin-contract-1" {
 		t.Errorf("ImpersonatedBy = %q, want %q", claims.ImpersonatedBy, "admin-contract-1")
+	}
+	// The target's role, not the actor's: policy applies to who is being acted as.
+	if claims.RoleName != "Support" {
+		t.Errorf("RoleName = %q, want %q", claims.RoleName, "Support")
 	}
 }
 

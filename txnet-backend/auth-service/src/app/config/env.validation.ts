@@ -1,3 +1,9 @@
+import {
+  AUTOMATION_EXCHANGE_DEFAULT,
+  REDIS_KEYSPACE_VERSION_DEFAULT,
+  REDIS_KEY_NAMESPACE_DEFAULT,
+  normalizeRedisNamespace,
+} from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 const otpChannelsSchema = z
@@ -18,6 +24,19 @@ const otpChannelsSchema = z
  */
 const optional = <T extends z.ZodTypeAny>(schema: T) =>
   z.preprocess((v) => (v === '' ? undefined : v), schema.optional());
+
+/**
+ * A per-route request limit: a positive whole number with a default.
+ *
+ * The empty string counts as unset, for the reason `optional` above exists —
+ * compose passes `VAR=${VAR:-}`, and `''` coerced to a number is `0`, which
+ * would fail validation for a variable nobody set.
+ */
+const rateLimit = (fallback: number) =>
+  z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().positive().default(fallback),
+  );
 
 export const envSchema = z.object({
   NODE_ENV: z
@@ -52,11 +71,14 @@ export const envSchema = z.object({
   REDIS_KEY_NAMESPACE: z
     .string()
     .min(1)
-    .default('txnet:auth')
+    .default(REDIS_KEY_NAMESPACE_DEFAULT)
     // no trailing colon — it's added when the prefix is assembled
-    .transform((v) => v.replace(/:+$/, '')),
-  REDIS_KEYSPACE_VERSION: z.string().min(1).default('v1'),
-  FRONTEND_ORIGIN: z.string().url().optional(),
+    .transform(normalizeRedisNamespace),
+  REDIS_KEYSPACE_VERSION: z
+    .string()
+    .min(1)
+    .default(REDIS_KEYSPACE_VERSION_DEFAULT),
+  FRONTEND_ORIGIN: optional(z.string().url()),
   DOMAIN_NAME: z.string().min(1, 'DOMAIN_NAME is required'),
   COOKIE_SECURE: z.coerce.boolean().default(true),
 
@@ -121,12 +143,53 @@ export const envSchema = z.object({
   // `LOGIN_FAILURE_WINDOW_SEC`. Raising it makes guessing cheaper; lowering it
   // makes a forgetful user easier to lock out on purpose.
   LOGIN_FAILURE_LOCK_THRESHOLD: z.coerce.number().int().positive().default(10),
-  // Captcha challenges + verifications per IP per window. It gates every
-  // guarded route, so it is the ceiling on how fast a client may work at all.
-  CAPTCHA_RATE_LIMIT: z.coerce.number().int().positive().default(30),
+  // ---- Per-route request limits (F-087) ----------------------------------
+  //
+  // Decided 2026-09-11: **every** `@RateLimit` route's limit is deployment
+  // config, and every one has a default. Tightening login throttling under
+  // attack used to need a rebuild and a redeploy for 19 of 22 routes.
+  //
+  // The default lives here and nowhere else — not on the decorator, not in
+  // docker-compose — so there is one number per limit. A route names its
+  // variable with a `configKey` typed as `RateLimitConfigKey`, which is why a
+  // misspelled name is a compile error instead of a silent fall-back to a
+  // default. Each value is requests per subject per that route's window; the
+  // windows stay on the routes (`auth-api/contract.rate-limits.md`). The
+  // platform-wide ceiling above scales from these, so raising one raises its
+  // ceiling too.
+  LOGIN_PWD_RATE_LIMIT: rateLimit(20),
+  LOGIN_OTP_REQUEST_RATE_LIMIT: rateLimit(10),
+  LOGIN_OTP_VERIFY_RATE_LIMIT: rateLimit(20),
+  REGISTER_RATE_LIMIT: rateLimit(10),
+  REGISTER_VERIFY_RATE_LIMIT: rateLimit(20),
+  PASSWORD_FORGOT_RATE_LIMIT: rateLimit(10),
   // Password-reset OTP verifications per subject per window — the budget for
   // guessing a 6-digit reset code.
-  FORGOT_VERIFY_RATE_LIMIT: z.coerce.number().int().positive().default(20),
+  FORGOT_VERIFY_RATE_LIMIT: rateLimit(20),
+  OTP_DELIVERY_STATUS_RATE_LIMIT: rateLimit(120),
+  OTP_CHANNELS_RATE_LIMIT: rateLimit(60),
+  // Captcha challenges + verifications per IP per window, one budget for both
+  // routes. It gates every guarded route, so it is the ceiling on how fast a
+  // client may work at all.
+  CAPTCHA_RATE_LIMIT: rateLimit(30),
+  BOT_LINK_RESOLVE_RATE_LIMIT: rateLimit(30),
+  BOT_LINK_CONTACT_RATE_LIMIT: rateLimit(10),
+  BOT_LINK_STATUS_RATE_LIMIT: rateLimit(300),
+  BOT_SESSION_RATE_LIMIT: rateLimit(10),
+  BOT_WEBAPP_SESSION_RATE_LIMIT: rateLimit(20),
+  ACCOUNTS_ADD_OTP_REQUEST_RATE_LIMIT: rateLimit(10),
+  ACCOUNTS_ADD_OTP_VERIFY_RATE_LIMIT: rateLimit(20),
+  ACCOUNTS_ADD_PASSWORD_RATE_LIMIT: rateLimit(20),
+  ACCOUNTS_LIST_RATE_LIMIT: rateLimit(120),
+  ACCOUNTS_SWITCH_RATE_LIMIT: rateLimit(30),
+  ACCOUNTS_REMOVE_RATE_LIMIT: rateLimit(30),
+  // The platform-wide ceiling over every guarded route's bucket, as a
+  // multiple of that route's own per-tenant limit (F-066-s). Per-tenant
+  // buckets hand one IP a fresh budget for every tenant it can name, so this
+  // is what caps the total; a caller behind a large NAT that legitimately
+  // uses many resellers is the reason it is a multiple and not `1`. `0`
+  // switches the ceiling off and writes no platform counter at all.
+  PLATFORM_RATE_LIMIT_FACTOR: z.coerce.number().int().nonnegative().default(10),
 
   // There is deliberately no DEFAULT_TENANT_SLUG here. A request resolves its
   // tenant from a `tenant_domain` row or from a claim it carries, and nothing
@@ -151,7 +214,7 @@ export const envSchema = z.object({
   // `common/validation/phone.schema.ts`; declared here so a deployment
   // configures them in the one place every other setting lives.
   // Empty SUPPORTED_PHONE_COUNTRIES means every country the library knows.
-  DEFAULT_PHONE_COUNTRY: z.string().length(2).optional(),
+  DEFAULT_PHONE_COUNTRY: optional(z.string().length(2)),
   SUPPORTED_PHONE_COUNTRIES: z.string().optional(),
 
   // locale-service (gRPC source of truth)
@@ -165,10 +228,29 @@ export const envSchema = z.object({
   // logins and must boot without one. Unset, `POST /admin/workers/:key/run`
   // answers 503 and nothing else is affected.
   RABBITMQ_URL: optional(z.string().min(1)),
-  AUTOMATION_EXCHANGE: z.string().min(1).default('txnet.automation'),
+  AUTOMATION_EXCHANGE: z
+    .string()
+    .min(1)
+    .default(AUTOMATION_EXCHANGE_DEFAULT),
+  // How long that publish waits to be confirmed before the route answers 503
+  // (F-067-f, D-18). Same default as `worker-service`, and the same reason for
+  // bounding it at all: an unanswered publish must fail the caller rather than
+  // hold a request open.
+  AUTOMATION_PUBLISH_CONFIRM_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(5_000),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
+
+/**
+ * The env variables that hold a per-route request limit. `@RateLimit` takes one
+ * of these as `configKey`, so a route cannot name a variable the schema does
+ * not declare — and every declared one has a default (F-087).
+ */
+export type RateLimitConfigKey = Extract<keyof EnvConfig, `${string}_RATE_LIMIT`>;
 
 export function validateEnv(raw: Record<string, unknown>): EnvConfig {
   const parsed = envSchema.safeParse(raw);

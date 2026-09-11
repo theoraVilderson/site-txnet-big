@@ -1,6 +1,7 @@
 import { RedisKeys, RedisTtl } from '../../redis/redis.keys';
 import {
   RedisFixture,
+  expectTtlSeconds,
   startRedisFixture,
 } from '../../../test-support/redis-fixture';
 import { CaptchaService } from './captcha.service';
@@ -63,7 +64,9 @@ describe('CaptchaService (real Redis)', () => {
     it('attaches the catalogue TTL, so an abandoned widget cleans itself up', async () => {
       const { challengeId } = await service.issueChallenge();
 
-      expect(await fx.raw.ttl(challengeKey(challengeId))).toBe(
+      await expectTtlSeconds(
+        fx.raw,
+        challengeKey(challengeId),
         RedisTtl.captchaChallenge,
       );
     });
@@ -85,7 +88,9 @@ describe('CaptchaService (real Redis)', () => {
       const result = await service.verifyChallenge(challengeId);
 
       expect(result).toMatchObject({ expiresIn: RedisTtl.captchaVerified });
-      expect(await fx.raw.ttl(passKey(result!.token))).toBe(
+      await expectTtlSeconds(
+        fx.raw,
+        passKey(result!.token),
         RedisTtl.captchaVerified,
       );
     });

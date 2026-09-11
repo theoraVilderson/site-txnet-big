@@ -359,3 +359,29 @@ describe('zodErrorToString', () => {
     });
   });
 });
+
+/**
+ * F-083. The `validations` namespace shipped sixteen keys and the panel reached
+ * one of them: no shipped schema is keyed yet, so every `fields.*` message and
+ * `failed` existed only in a doc comment and in the local dictionary above.
+ * They were deleted from `locales/` in the same change — left there, the next
+ * audit finds them again. What remains is what `zodErrorToString` can actually
+ * produce on its own.
+ */
+describe('the validations namespace', () => {
+  it('holds exactly the key zodErrorToString falls back to', async () => {
+    const { FrontendI18nKeys } = await import('@/generated/i18n-keys');
+    expect(Object.values(FrontendI18nKeys.validations)).toEqual([UNKNOWN_VALIDATION_KEY]);
+  });
+
+  it('asks for a key the generated catalogue has, when the error is empty', () => {
+    const asked: string[] = [];
+    zodErrorToString(null as unknown as ZodError, {
+      t: (ns, key) => {
+        asked.push(`${ns}:${key}`);
+        return key;
+      },
+    });
+    expect(asked).toEqual([`${VALIDATIONS_NS}:${UNKNOWN_VALIDATION_KEY}`]);
+  });
+});

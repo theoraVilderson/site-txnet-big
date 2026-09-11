@@ -3,11 +3,12 @@ id: marketing-web
 layer: interface
 status: draft
 version: 1
-keywords: [landing site, coinsite, marketing site]
-source: []
+keywords: [landing site, coinsite, marketing site, apex domain, home page, صفحه اصلی, سایت اصلی, لندینگ, default language, زبان پیشفرض, سایت انگلیسی میاد]
+source:
+  - coinsite/src/**
 owns_tables: []
 depends_on: []
-updated: 2026-09-04
+updated: 2026-09-10
 ---
 
 # marketing-web
@@ -27,6 +28,7 @@ API.
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-10 | F-068: `<html lang="en">` was hardcoded while `.env` said `DEFAULT_LANGUAGE=fa`, so the apex domain greeted every visitor in the wrong language and direction. `src/env.ts` now derives `lang` + `dir` from the environment. Still a skeleton — no locale-service client, no cookie, no switcher (user decision, 2026-09-10); `source:` claimed at the same time |
 | 2026-09-04 | Documented as a skeleton during onboarding |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

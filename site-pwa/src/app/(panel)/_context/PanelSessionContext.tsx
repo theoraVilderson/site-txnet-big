@@ -93,7 +93,7 @@ async function establishSession() {
   try {
     return await authApi.ensureSession();
   } catch (cookieFailure) {
-    const host = miniAppHost();
+    const host = await miniAppHost();
     if (!host) throw cookieFailure;
     host.ready();
     const result = await authApi.webAppSession(host.platform, host.initData);

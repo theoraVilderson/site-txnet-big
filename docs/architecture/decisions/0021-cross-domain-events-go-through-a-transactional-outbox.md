@@ -51,6 +51,11 @@ directly.
 - Negative / accepted cost: a new unit — the outbox table, the relay, and its
   own failure modes (relay stalled, outbox growing, poison message). It needs
   monitoring in `dev-docker/`'s existing stack from the first event, not later.
+  **Built 2026-09-10 (F-067-c) inside `automation`, not as a new unit** — the
+  status-quo boundary won, which §6.6 makes a note rather than a superseding
+  ADR (D-14, on the F-067-c backlog row). One table and one job; splitting it
+  out stays cheap while it is still one of each. The monitoring landed with
+  it.
 - Negative / accepted cost: every consumer carries idempotency bookkeeping.
 - Negative / accepted cost: flows become eventually consistent. A user can pay
   and see "provisioning" rather than a config. The UI has to say so honestly.

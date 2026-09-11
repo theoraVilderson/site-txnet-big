@@ -18,6 +18,12 @@ export type AuthClaims = {
   sub: string;
   tenantId: string;
   roleId: string;
+  /**
+   * `identity.role.name`. `forward-auth` keys its policy file by it: `roleId`
+   * is a UUID that differs on every seed and cannot address a checked-in file
+   * (ADR-0037).
+   */
+  roleName: string;
   permissions: string[];
   sessionId: string;
   passwordVersion?: number;
@@ -61,6 +67,7 @@ export class TokenService {
       sub: user.id,
       tenantId: user.tenantId,
       roleId: user.roleId,
+      roleName: user.role?.name ?? '',
       permissions,
       sessionId,
     });
@@ -72,6 +79,7 @@ export class TokenService {
         sub: userId,
         tenantId: '',
         roleId: '',
+        roleName: '',
         permissions: [],
         sessionId: '',
         purpose: 'otp_login',
@@ -86,6 +94,7 @@ export class TokenService {
         sub: userId,
         tenantId: '',
         roleId: '',
+        roleName: '',
         permissions: [],
         sessionId: '',
         purpose: 'password_reset',
@@ -107,6 +116,7 @@ export class TokenService {
         sub: targetUser.id,
         tenantId: targetUser.tenantId,
         roleId: targetUser.roleId,
+        roleName: targetUser.role?.name ?? '',
         permissions,
         sessionId,
         isImpersonated: true,

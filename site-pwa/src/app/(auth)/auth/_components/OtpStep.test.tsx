@@ -36,6 +36,7 @@ function renderStep(props: Partial<Parameters<typeof OtpStep>[0]> = {}) {
       timerFormatted="01:30"
       onResend={onResend}
       onEditPhone={onEditPhone}
+      delivery={null}
       {...props}
     />,
   );

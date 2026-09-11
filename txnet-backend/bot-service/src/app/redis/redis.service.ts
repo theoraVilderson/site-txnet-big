@@ -1,4 +1,9 @@
 import {
+  REDIS_KEYSPACE_VERSION_DEFAULT,
+  REDIS_KEY_NAMESPACE_DEFAULT,
+  buildRedisKeyPrefix,
+} from '@txnet-backend/shared-core';
+import {
   Injectable,
   Logger,
   OnModuleDestroy,
@@ -20,9 +25,15 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   public readonly keyPrefix: string;
 
   constructor(config: ConfigService) {
-    const namespace = config.get<string>('REDIS_KEY_NAMESPACE', 'txnet:auth');
-    const version = config.get<string>('REDIS_KEYSPACE_VERSION', 'v1');
-    this.keyPrefix = `${namespace}:${version}:`;
+    const namespace = config.get<string>(
+      'REDIS_KEY_NAMESPACE',
+      REDIS_KEY_NAMESPACE_DEFAULT,
+    );
+    const version = config.get<string>(
+      'REDIS_KEYSPACE_VERSION',
+      REDIS_KEYSPACE_VERSION_DEFAULT,
+    );
+    this.keyPrefix = buildRedisKeyPrefix(namespace, version);
 
     this.client = new Redis(config.get<string>('REDIS_URL')!, {
       keyPrefix: this.keyPrefix,

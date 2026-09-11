@@ -16,8 +16,8 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # The five docs gates from AGENTS.md → "Before declaring any work done".
-  # All five must pass; they need nothing but python3 and the repo itself.
+  # The six docs gates from AGENTS.md → "Before declaring any work done".
+  # All six must pass; they need nothing but python3 and the repo itself.
   # ---------------------------------------------------------------------------
   gates:
     name: docs gates
@@ -42,6 +42,55 @@ jobs:
       - name: conventions
         if: ${{ !cancelled() }}
         run: python3 tools/conventions.py
+      # The sixth gate (ADR-0036): Traefik reads YAML and cannot import a
+      # constant, so the header lists are compared with contracts/http/wire.json
+      # here rather than by a test on either side of the wire.
+      - name: contracts
+        if: ${{ !cancelled() }}
+        run: python3 tools/contracts.py
+      # Cross-language key parity, metadata and `{{var}}` parity across every
+      # locale file (F-084). The script has existed since onboarding and no
+      # workflow ran it, so an English file missing a Persian key shipped as a
+      # raw key on an English screen.
+      - uses: actions/setup-node@v4
+        if: ${{ !cancelled() }}
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: locales/package-lock.json
+      - name: locale validate
+        if: ${{ !cancelled() }}
+        working-directory: locales
+        run: npm ci && npm run locale:validate
+
+  # ---------------------------------------------------------------------------
+  # The committed i18n key constants are current (ADR-0036, F-080).
+  #
+  # The generators read locales/ from disk, so no locale-service is needed.
+  # Their output is deterministic (sorted, no timestamp, no snapshot version),
+  # which is what makes `git diff --exit-code` a check rather than noise: a key
+  # added, renamed or removed in locales/ without regenerating fails here, and
+  # a renamed key still cited by code fails the build of whatever cites it.
+  # ---------------------------------------------------------------------------
+  i18n-keys:
+    name: i18n keys are generated
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: locales/package-lock.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: npm ci
+        working-directory: locales
+      - name: regenerate
+        run: make -C i18n-platform i18n-keys
+      - name: output is committed and current
+        run: git diff --exit-code -- txnet-backend/shared-core/src/lib/i18n site-pwa/src/generated auth-handler/internal/i18nkeys
 
   # ---------------------------------------------------------------------------
   # NestJS workspace: jest through Nx.

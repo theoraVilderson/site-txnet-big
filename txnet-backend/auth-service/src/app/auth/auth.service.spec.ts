@@ -53,6 +53,15 @@ function harness() {
         args,
       })),
     },
+    // ADR-0035: logging out of one account falls back onto the place's group,
+    // so `logout` reads it. Default is "no group here" — an ordinary full
+    // logout, which is what every other case in this file assumes.
+    linkedAccountMember: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
+      deleteMany: jest.fn(),
+    },
+    linkedAccountGroup: { update: jest.fn().mockResolvedValue({}) },
     $transaction: jest.fn(async (ops: unknown[]) => ops),
   };
   const rateLimiter = {
@@ -90,8 +99,21 @@ function harness() {
       refreshToken: 'refresh-new',
     }),
     revokeSession: jest.fn().mockResolvedValue(undefined),
+    revokeSessionsForUserInScope: jest.fn().mockResolvedValue(1),
   };
   const sessions = { dropAllForUser: jest.fn().mockResolvedValue(undefined) };
+
+  // F-067-a: every OTP route now hands back a delivery id, whether or not a
+  // code was issued, and writes the send's status under it.
+  const deliveries = {
+    mark: jest.fn(),
+    read: jest.fn().mockResolvedValue(null),
+    mintHandles: jest.fn().mockResolvedValue({
+      deliveryId: 'a'.repeat(32),
+      channelId: 'c'.repeat(32),
+      channelToken: 'd'.repeat(32),
+    }),
+  };
 
   const service = new AuthService(
     prisma as never,
@@ -103,6 +125,7 @@ function harness() {
     botLinks as never,
     sessionService as never,
     sessions as never,
+    deliveries as never,
   );
 
   return {
@@ -363,7 +386,15 @@ describe('AuthService.loginWithPassword — two-factor', () => {
     expect(res).toEqual({
       ok: true,
       msg: 'auth.otpSent',
-      data: { requiresOtp: true, otpToken: 'otp-token' },
+      data: {
+        requiresOtp: true,
+        otpToken: 'otp-token',
+        deliveryId: 'a'.repeat(32),
+        // Where the delivery result is pushed, and the proof that channel
+        // needs (F-067-j).
+        channel: `otp:${'c'.repeat(32)}`,
+        channelToken: 'd'.repeat(32),
+      },
     });
     expect(h.otp.issueOtp).toHaveBeenCalledWith(
       '09123456789',
@@ -371,6 +402,7 @@ describe('AuthService.loginWithPassword — two-factor', () => {
       OtpChannel.sms,
       '1.2.3.4',
       'fa',
+      expect.objectContaining({ deliveryId: 'a'.repeat(32) }),
     );
     expect(h.tokens.signOtpToken).toHaveBeenCalledWith('user-1');
     // The half-finished login must not mint anything usable.
@@ -395,6 +427,7 @@ describe('AuthService.loginWithPassword — two-factor', () => {
       OtpChannel.telegram,
       '1.2.3.4',
       'fa',
+      expect.objectContaining({ deliveryId: 'a'.repeat(32) }),
     );
   });
 
@@ -416,6 +449,7 @@ describe('AuthService.loginWithPassword — two-factor', () => {
       OtpChannel.bale,
       '1.2.3.4',
       'fa',
+      expect.objectContaining({ deliveryId: 'a'.repeat(32) }),
     );
   });
 
@@ -611,13 +645,54 @@ describe('AuthService.refresh — rotation', () => {
     userId: 'user-1',
     revokedAt: null,
     expiresAt: new Date(Date.now() + 60_000),
-    user: activeUser(),
     ...over,
   });
 
   beforeEach(() => {
     jest.clearAllMocks();
     h = harness();
+    h.prisma.user.findUnique.mockResolvedValue(activeUser());
+  });
+
+  /**
+   * **Why the user is not `include`d on the session.** `identity.user` carries
+   * an RLS policy (`tenantId = current_tenant_id()`); `identity.session` does
+   * not. The tenant setting the policy reads is bound by the Prisma extension,
+   * and the extension hooks `TENANT_SCOPED_MODELS` as the **top-level** model
+   * of a query. A `session.findUnique` reaching `user` through a join is
+   * therefore unbound: Postgres filters the joined row away, Prisma finds a
+   * required relation missing and throws `Inconsistent query result`, and the
+   * 500 reaches the panel as "not signed in" — so every dashboard load bounced
+   * to `/auth/login`. Reading the user as its own `user.findUnique` puts the
+   * query back through the binder.
+   */
+  it('reads the user through the scoped model, never as a join', async () => {
+    h.prisma.session.findUnique.mockResolvedValue(liveSession());
+
+    await h.service.refresh(
+      { refreshToken: 'refresh-old' } as never,
+      '1.2.3.4',
+      'jest-ua',
+    );
+
+    expect(h.prisma.session.findUnique.mock.calls[0][0].include).toBeUndefined();
+    expect(h.prisma.user.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'user-1' } }),
+    );
+  });
+
+  it('refuses the refresh when the tenant scope hides the user', async () => {
+    h.prisma.session.findUnique.mockResolvedValue(liveSession());
+    h.prisma.user.findUnique.mockResolvedValue(null);
+
+    const res = await h.service.refresh(
+      { refreshToken: 'refresh-old' } as never,
+      '1.2.3.4',
+      'jest-ua',
+    );
+
+    expect(res).toMatchObject({ ok: false, msg: 'auth.invalidRefreshToken' });
+    expect(h.sessionService.revokeSession).not.toHaveBeenCalled();
   });
 
   it('looks the session up by the hash, never by the token itself', async () => {
@@ -853,5 +928,283 @@ describe('AuthService.resetPassword — every session dies', () => {
       error: null,
     });
     expect(h.prisma.$transaction).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ADR-0033. Signing out is a statement about the **place**, not about the one
+ * token that happened to carry the request: the bot chat and its Mini App are
+ * one place (ADR-0032) and hold two sessions, so revoking only the caller's
+ * left the chat signed in after a Mini App logout.
+ */
+describe('AuthService.logout — the scope signs out, not just the token', () => {
+  let h: ReturnType<typeof harness>;
+
+  beforeEach(() => {
+    h = harness();
+  });
+
+  it("revokes every session that user holds in the session's own scope", async () => {
+    h.prisma.session.findUnique.mockResolvedValue({
+      id: 'session-mini-app',
+      userId: 'user-1',
+      scopeKey: 'bot:telegram:5501',
+    });
+
+    const res = await h.service.logout({ refreshToken: 'a-refresh-token' });
+
+    expect(h.sessionService.revokeSessionsForUserInScope).toHaveBeenCalledWith(
+      'user-1',
+      'bot:telegram:5501',
+      'user_logout',
+    );
+    expect(res).toMatchObject({ ok: true, msg: 'auth.logoutSuccess' });
+  });
+
+  it('takes the scope from the session, never from the request', async () => {
+    // The route is public — it reads a cookie, not a Bearer — so the only
+    // trustworthy statement about which place is signing out is the row the
+    // refresh token resolves to.
+    h.prisma.session.findUnique.mockResolvedValue({
+      id: 'session-1',
+      userId: 'user-1',
+      scopeKey: 'device:abc',
+    });
+
+    await h.service.logout({ refreshToken: 'a-refresh-token' });
+
+    expect(h.sessionService.revokeSessionsForUserInScope).toHaveBeenCalledWith(
+      'user-1',
+      'device:abc',
+      'user_logout',
+    );
+  });
+
+  it('falls back to the single session when it carries no scope', async () => {
+    // Impersonation, and anything minted before ADR-0015. A null scope matches
+    // no place, so widening here would revoke nothing or — worse — everything.
+    h.prisma.session.findUnique.mockResolvedValue({
+      id: 'session-1',
+      userId: 'user-1',
+      scopeKey: null,
+    });
+
+    await h.service.logout({ refreshToken: 'a-refresh-token' });
+
+    expect(h.sessionService.revokeSessionsForUserInScope).not.toHaveBeenCalled();
+    expect(h.sessionService.revokeSession).toHaveBeenCalledWith(
+      'session-1',
+      'user_logout',
+    );
+  });
+
+  it('still answers success for a token that resolves to nothing', async () => {
+    h.prisma.session.findUnique.mockResolvedValue(null);
+
+    const res = await h.service.logout({ refreshToken: 'stale' });
+
+    expect(res).toMatchObject({ ok: true });
+    expect(h.sessionService.revokeSessionsForUserInScope).not.toHaveBeenCalled();
+    expect(h.sessionService.revokeSession).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ADR-0035. Logging out of one account does not end the *place* when the place
+ * still holds another account the user already proved: it falls back onto it.
+ *
+ * The reasoning ADR-0033 was written under still stands — "log out" must never
+ * leave you signed in as *yourself* by accident — but a group member is not an
+ * accident: being signed in as A already grants the right to become B with no
+ * credential (F-0207), so falling back grants nothing new. Leaving the place
+ * entirely is its own action, `logoutEverywhere`.
+ */
+describe('AuthService.logout — falls back onto the group', () => {
+  let h: ReturnType<typeof harness>;
+
+  const inScope = {
+    id: 'session-a',
+    userId: 'user-a',
+    scopeKey: 'bot:telegram:5501',
+  };
+
+  beforeEach(() => {
+    h = harness();
+    h.prisma.session.findUnique.mockResolvedValue(inScope);
+  });
+
+  function groupOf(members: Array<{ userId: string; addedAt: number }>) {
+    h.prisma.linkedAccountMember.findUnique.mockResolvedValue({
+      groupId: 'g1',
+      scopeKey: inScope.scopeKey,
+    });
+    h.prisma.linkedAccountMember.findMany.mockResolvedValue(
+      members.map((m) => ({
+        userId: m.userId,
+        addedAt: new Date(m.addedAt),
+        groupId: 'g1',
+      })),
+    );
+    // `findUserForSession` reads this. Every member is a live, ordinary
+    // account unless a case says otherwise.
+    h.prisma.user.findUnique.mockImplementation(async ({ where }: any) => ({
+      id: where.id,
+      fullName: `Name of ${where.id}`,
+      status: 'active',
+      deletedAt: null,
+      role: { name: 'user', rolePermissions: [] },
+    }));
+  }
+
+  it('signs the place in as the remaining member', async () => {
+    groupOf([
+      { userId: 'user-a', addedAt: 1 },
+      { userId: 'user-b', addedAt: 2 },
+    ]);
+
+    const res: any = await h.service.logout({ refreshToken: 'r' });
+
+    expect(h.sessionService.revokeSessionsForUserInScope).toHaveBeenCalledWith(
+      'user-a',
+      inScope.scopeKey,
+      'user_logout',
+    );
+    expect(res.data.switchedTo).toMatchObject({ userId: 'user-b' });
+    expect(res.data.accessToken).toBeTruthy();
+  });
+
+  it('records the fallback as what the place is now acting as', async () => {
+    groupOf([
+      { userId: 'user-a', addedAt: 1 },
+      { userId: 'user-b', addedAt: 2 },
+    ]);
+
+    await h.service.logout({ refreshToken: 'r' });
+
+    expect(h.prisma.linkedAccountGroup.update).toHaveBeenCalledWith({
+      where: { id: 'g1' },
+      data: { actingAsUserId: 'user-b' },
+    });
+  });
+
+  it('falls back onto the oldest member, so the choice is never arbitrary', async () => {
+    groupOf([
+      { userId: 'user-c', addedAt: 3 },
+      { userId: 'user-a', addedAt: 1 },
+      { userId: 'user-b', addedAt: 2 },
+    ]);
+
+    const res: any = await h.service.logout({ refreshToken: 'r' });
+
+    // `user-a` is signing out, so the oldest of the rest. A group of three
+    // must not sign out into a different account depending on row order.
+    expect(res.data.switchedTo.userId).toBe('user-b');
+  });
+
+  it('is an ordinary full logout when the place holds nobody else', async () => {
+    groupOf([{ userId: 'user-a', addedAt: 1 }]);
+
+    const res: any = await h.service.logout({ refreshToken: 'r' });
+
+    expect(res.data.switchedTo).toBeUndefined();
+    expect(res.data.accessToken).toBeUndefined();
+    expect(res.data.success).toBe(true);
+  });
+
+  it('is an ordinary full logout when the account is in no group here', async () => {
+    h.prisma.linkedAccountMember.findUnique.mockResolvedValue(null);
+
+    const res: any = await h.service.logout({ refreshToken: 'r' });
+
+    expect(res.data.switchedTo).toBeUndefined();
+  });
+
+  it('skips a fallback the platform would refuse anyway', async () => {
+    groupOf([
+      { userId: 'user-a', addedAt: 1 },
+      { userId: 'user-suspended', addedAt: 2 },
+    ]);
+    h.service.findUserForSession = jest.fn().mockResolvedValue(null);
+
+    const res: any = await h.service.logout({ refreshToken: 'r' });
+
+    // Nothing to fall back onto is the same answer as no group: signed out.
+    expect(res.data.switchedTo).toBeUndefined();
+    expect(res.data.success).toBe(true);
+  });
+
+  it('still signs the place out when the fallback itself fails', async () => {
+    groupOf([
+      { userId: 'user-a', addedAt: 1 },
+      { userId: 'user-b', addedAt: 2 },
+    ]);
+    h.sessionService.createSession.mockRejectedValue(new Error('db is down'));
+
+    const res: any = await h.service.logout({ refreshToken: 'r' });
+
+    // The revoke already happened. A failure to come back up as someone else
+    // must never turn "you are logged out" into a 500 that says nothing.
+    expect(res.ok).toBe(true);
+    expect(res.data.switchedTo).toBeUndefined();
+  });
+});
+
+/** ADR-0035: the deliberate one. Everything in this place, gone. */
+describe('AuthService.logoutEverywhere', () => {
+  let h: ReturnType<typeof harness>;
+
+  beforeEach(() => {
+    h = harness();
+    h.prisma.session.findUnique.mockResolvedValue({
+      id: 'session-a',
+      userId: 'user-a',
+      scopeKey: 'bot:telegram:5501',
+    });
+    h.prisma.linkedAccountMember.findUnique.mockResolvedValue({
+      groupId: 'g1',
+      scopeKey: 'bot:telegram:5501',
+    });
+    h.prisma.linkedAccountMember.findMany.mockResolvedValue([
+      { userId: 'user-a', addedAt: new Date(1), groupId: 'g1' },
+      { userId: 'user-b', addedAt: new Date(2), groupId: 'g1' },
+    ]);
+  });
+
+  it('revokes every member of the place, not only the caller', async () => {
+    const res: any = await h.service.logoutEverywhere({ refreshToken: 'r' });
+
+    expect(h.sessionService.revokeSessionsForUserInScope).toHaveBeenCalledWith(
+      'user-a',
+      'bot:telegram:5501',
+      'user_logout',
+    );
+    expect(h.sessionService.revokeSessionsForUserInScope).toHaveBeenCalledWith(
+      'user-b',
+      'bot:telegram:5501',
+      'user_logout',
+    );
+    expect(res.data.success).toBe(true);
+  });
+
+  it('forgets who the place was acting as', async () => {
+    await h.service.logoutEverywhere({ refreshToken: 'r' });
+
+    expect(h.prisma.linkedAccountGroup.update).toHaveBeenCalledWith({
+      where: { id: 'g1' },
+      data: { actingAsUserId: null },
+    });
+  });
+
+  it('never falls back onto anyone', async () => {
+    const res: any = await h.service.logoutEverywhere({ refreshToken: 'r' });
+
+    expect(res.data.switchedTo).toBeUndefined();
+    expect(res.data.accessToken).toBeUndefined();
+  });
+
+  it('leaves the group standing — this signs out, it does not un-prove', async () => {
+    await h.service.logoutEverywhere({ refreshToken: 'r' });
+
+    expect(h.prisma.linkedAccountMember.deleteMany).not.toHaveBeenCalled();
   });
 });

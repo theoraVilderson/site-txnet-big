@@ -3,10 +3,13 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { WorkerRegistryService } from './worker-registry.service';
 import { TickPublisher } from './tick.publisher';
 import { TickConsumer } from './tick.consumer';
+import { DeadLetterDrain } from './dead-letter.drain';
 import { TenantConcurrencyGate } from './tenant-concurrency.gate';
+import { TenantRunLeases } from './tenant-run.leases';
 import { JOBS, Job } from './job';
 import { HeartbeatJob } from '../jobs/heartbeat.job';
 import { VaultRetentionJob } from '../jobs/vault-retention.job';
+import { OutboxRelayJob } from '../jobs/outbox-relay.job';
 
 /**
  * Adding a job is two lines here and one new class: the class itself, and its
@@ -24,15 +27,18 @@ import { VaultRetentionJob } from '../jobs/vault-retention.job';
   providers: [
     HeartbeatJob,
     VaultRetentionJob,
+    OutboxRelayJob,
     {
       provide: JOBS,
-      inject: [HeartbeatJob, VaultRetentionJob],
+      inject: [HeartbeatJob, VaultRetentionJob, OutboxRelayJob],
       useFactory: (...jobs: Job[]) => jobs,
     },
     WorkerRegistryService,
     TickPublisher,
+    TenantRunLeases,
     TenantConcurrencyGate,
     TickConsumer,
+    DeadLetterDrain,
   ],
 })
 export class AutomationModule {}

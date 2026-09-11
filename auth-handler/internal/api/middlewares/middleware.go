@@ -2,6 +2,7 @@
 package middlewares
 
 import (
+	"auth-handler/internal/i18nkeys"
 	"context"
 	"encoding/json"
 	"io"
@@ -41,7 +42,7 @@ func RequestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 
 // ErrorsNamespace is where every message this gateway sends a client lives:
 // the shared backend catalogue, so a key here is one `auth-service` also knows.
-const ErrorsNamespace = "errors"
+const ErrorsNamespace = i18nkeys.NamespaceErrors
 
 // Recoverer converts a panic into a 500 carrying the standard envelope.
 //
@@ -55,7 +56,7 @@ func Recoverer(log *slog.Logger) func(http.Handler) http.Handler {
 				if err := recover(); err != nil {
 					// The panic value stays in the log: it is a stack detail.
 					log.Error("panic recovered", "error", err, "path", r.URL.Path)
-					WriteError(w, r, "system.unexpected", http.StatusInternalServerError)
+					WriteError(w, r, i18nkeys.ErrorsSystemUnexpected, http.StatusInternalServerError)
 				}
 			}()
 			next.ServeHTTP(w, r)
@@ -72,7 +73,7 @@ func Recoverer(log *slog.Logger) func(http.Handler) http.Handler {
 func Timeout(d time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			body := errorEnvelope(Translate(r, ErrorsNamespace, "system.unavailable"))
+			body := errorEnvelope(Translate(r, ErrorsNamespace, i18nkeys.ErrorsSystemUnavailable))
 			http.TimeoutHandler(next, d, body).ServeHTTP(w, r)
 		})
 	}

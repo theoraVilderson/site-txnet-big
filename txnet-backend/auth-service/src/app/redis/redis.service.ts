@@ -1,4 +1,9 @@
 import {
+  REDIS_KEYSPACE_VERSION_DEFAULT,
+  REDIS_KEY_NAMESPACE_DEFAULT,
+  buildRedisKeyPrefix,
+} from '@txnet-backend/shared-core';
+import {
   Injectable,
   Logger,
   OnModuleDestroy,
@@ -35,10 +40,13 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly config: ConfigService) {
     const namespace = this.config.get<string>(
       'REDIS_KEY_NAMESPACE',
-      'txnet:auth',
+      REDIS_KEY_NAMESPACE_DEFAULT,
     );
-    const version = this.config.get<string>('REDIS_KEYSPACE_VERSION', 'v1');
-    this.keyPrefix = `${namespace}:${version}:`;
+    const version = this.config.get<string>(
+      'REDIS_KEYSPACE_VERSION',
+      REDIS_KEYSPACE_VERSION_DEFAULT,
+    );
+    this.keyPrefix = buildRedisKeyPrefix(namespace, version);
 
     this.client = new Redis(this.config.get<string>('REDIS_URL')!, {
       keyPrefix: this.keyPrefix,
@@ -69,6 +77,20 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   get(key: string): Promise<string | null> {
     return this.client.get(key);
+  }
+
+  /**
+   * Publish on a Redis pub/sub channel (F-067-j).
+   *
+   * `channel` is a **fully-built wire name**, prefix included, and that is not
+   * an oversight: ioredis prepends `keyPrefix` to key arguments only, and
+   * Redis does not count a pub/sub channel as a key. Taking the finished name
+   * keeps the one place that difference matters at the call site, next to the
+   * comment explaining it, rather than hidden in a method that silently does
+   * the opposite of every other method here.
+   */
+  async publish(channel: string, body: string): Promise<void> {
+    await this.client.publish(channel, body);
   }
 
   async set(key: string, value: string, ttlSec?: number): Promise<void> {

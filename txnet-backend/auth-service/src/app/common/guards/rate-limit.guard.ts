@@ -27,20 +27,36 @@ export class RateLimitGuard implements CanActivate {
     );
     if (!options) return true;
 
-    // Resolved per request, not baked into the metadata: a route names the
-    // variable that may override its limit and the value is read here, so a
-    // deployment can vary it without a rebuild (`configKey` on the decorator).
-    const limit = options.configKey
-      ? this.config.get<number>(options.configKey, options.limit)
-      : options.limit;
+    // Resolved per request, not baked into the metadata: the route names its
+    // variable and the value is read here, so a deployment varies it without a
+    // rebuild (F-087). There is no second number to fall back on — the schema
+    // gives every limit a default, so a missing or nonsensical value means
+    // something is wrong with the deployment, and guessing would hide it.
+    const limit = this.config.get<number>(options.configKey);
+    if (typeof limit !== 'number' || !Number.isInteger(limit) || limit <= 0) {
+      throw new Error(
+        `rate limit ${options.configKey} resolved to ${String(limit)}; ` +
+          'every limit must be a positive whole number with a schema default',
+      );
+    }
 
     const request = context.switchToHttp().getRequest();
-    const { allowed } = await this.rateLimiter.hit(
-      options.key(request),
+    const bucket = options.key(request);
+
+    // Two counters, both incremented before either is judged: the tenant's
+    // own budget, and the platform-wide ceiling over the same bucket
+    // (F-066-s). A refused request is still traffic, so it counts in both —
+    // hammering a limited route keeps the window open rather than resetting
+    // it. Only the guard's buckets are caller-derived; the login-failure
+    // counter names the account under attack and stays tenant-scoped.
+    const tenant = await this.rateLimiter.hit(bucket, limit, options.windowSec);
+    const platform = await this.rateLimiter.hitPlatform(
+      bucket,
       limit,
       options.windowSec,
     );
-    if (!allowed) throw new HttpException('Too Many Requests', 429);
+    if (!tenant.allowed || !platform.allowed)
+      throw new HttpException('Too Many Requests', 429);
     return true;
   }
 }

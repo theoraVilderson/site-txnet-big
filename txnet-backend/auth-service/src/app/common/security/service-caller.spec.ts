@@ -1,4 +1,6 @@
 import { ConfigService } from '@nestjs/config';
+import { RequestHeaders } from '@txnet-backend/shared-core';
+
 import {
   isServiceCaller,
   rateLimitSubject,
@@ -51,6 +53,28 @@ describe('ServiceCallerMiddleware', () => {
 
     expect(isServiceCaller(req)).toBe(true);
     expect(rateLimitSubject(req)).toBe('203.0.113.9');
+  });
+
+  /**
+   * F-074. This service and `bot-service` each declared their own
+   * `SERVICE_TOKEN_HEADER` holding the same string, and the chat and platform
+   * headers were re-spelled raw at six more call sites. Both now come from
+   * `contracts/http/wire.json` through `shared-core` (ADR-0036, C-04).
+   *
+   * The spec above deliberately keeps its literals — it is asserting the
+   * strings that actually go on the wire, which is the one place a literal is
+   * the point rather than a duplicate. This test is what joins the two: the
+   * middleware reads the *declared* name, so a rename in the fixture makes
+   * these tests fail rather than quietly reading a header nobody sends.
+   */
+  it('reads the header names the wire contract declares', () => {
+    const req = run({
+      [RequestHeaders.serviceToken]: TOKEN,
+      [RequestHeaders.botChatId]: '5501',
+    });
+
+    expect(isServiceCaller(req)).toBe(true);
+    expect(rateLimitSubject(req)).toBe('bot:5501');
   });
 
   it('answers for a request the middleware never saw', () => {

@@ -1,0 +1,194 @@
+# =============================================================================
+# TXNet — alert rules for the automation queue (F-067-g)
+# =============================================================================
+# The first alert rules this platform has had. Alertmanager and its Bale
+# receiver have been wired since 2026-09-04 with nothing able to fire into them.
+#
+# What these watch is F-067-d's dead-letter path and the queue in front of it.
+# Automation invariant #9 says a message that leaves the queue leaves a record;
+# these rules are how a person finds out that it did.
+#
+# Queue names are the `AUTOMATION_*` defaults from
+# `txnet-backend/worker-service/src/app/config/env.validation.ts`. An
+# environment that overrides a queue name must move it here too — these are
+# literals on purpose, because a rule that silently matches nothing is worse
+# than one that fails a `promtool` check.
+#
+# There is no "consumer lag" metric, because RabbitMQ has no consumer offset to
+# subtract from. The pair that answers the same question is depth (work
+# waiting) and consumer count (anyone to do it), and both are below.
+# =============================================================================
+
+groups:
+  - name: automation.queue
+    rules:
+      # Everything below reads off this target. A broker that stops answering
+      # takes every rule with it, and silence is not health.
+      - alert: AutomationBrokerDown
+        expr: up{job="rabbitmq"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          unit: automation
+        annotations:
+          summary: "RabbitMQ is not answering Prometheus"
+          description: >-
+            The rabbitmq scrape target has been down for 5 minutes, so every
+            other automation alert is blind. Ticks are not being consumed and
+            `POST /admin/workers/:key/run` fails at the publish.
+
+      # AUTOMATION_TICK_INTERVAL_MS is 60s by default and one tick is published
+      # per due worker, so a backlog that survives ten minutes is not a burst —
+      # it is work arriving faster than AUTOMATION_PREFETCH drains it.
+      - alert: AutomationQueueBacklog
+        expr: rabbitmq_detailed_queue_messages_ready{queue="txnet.automation.ticks.v2"} > 100
+        for: 10m
+        labels:
+          severity: warning
+          unit: automation
+        annotations:
+          summary: "The automation tick queue is backing up"
+          description: >-
+            {{ $value }} ticks are waiting on txnet.automation.ticks.v2 and have
+            been for 10 minutes. Either a handler is slower than its schedule or
+            AUTOMATION_PREFETCH is too low for the number of due workers.
+
+      # The severe half of "lag": work is accruing and nobody is taking it.
+      # worker-service is down, or its consumer died without the process dying.
+      #
+      # `or absent(...)` is not decoration. A bare `== 0` can only fire on a
+      # series that exists, and the series exists only once the queue has been
+      # declared — which worker-service does on boot. So the one failure a
+      # consumer alert most needs to catch, a worker-service that has never
+      # started at all, is exactly the one a bare `== 0` cannot see.
+      - alert: AutomationQueueNoConsumer
+        expr: >-
+          rabbitmq_detailed_queue_consumers{queue="txnet.automation.ticks.v2"} == 0
+          or absent(rabbitmq_detailed_queue_consumers{queue="txnet.automation.ticks.v2"})
+        for: 5m
+        labels:
+          severity: critical
+          unit: automation
+        annotations:
+          summary: "Nothing is consuming the automation tick queue"
+          description: >-
+            txnet.automation.ticks.v2 has had no consumer for 5 minutes, so no
+            scheduled job is running. Check worker-service; the queue is durable,
+            so the ticks are waiting rather than lost. If the queue itself is
+            missing, worker-service has not booted since the broker was reset —
+            it declares the queue, so nothing else will.
+
+      # A counter, not the dead queue's depth: DeadLetterDrain empties that
+      # queue continuously, so a gauge is zero again between two scrapes and the
+      # arrival is never seen. This counts basic.reject / basic.nack
+      # dead-letterings, which is exactly how F-067-d moves a message.
+      #
+      # It is broker-global rather than per-queue. automation's is the only DLX
+      # on this broker today; the day a second one exists, this alert stops
+      # being able to say which.
+      - alert: AutomationDeadLetterArrived
+        expr: increase(rabbitmq_global_messages_dead_lettered_rejected_total[15m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          unit: automation
+        annotations:
+          summary: "A message was dead-lettered instead of run"
+          description: >-
+            {{ $value }} message(s) were rejected onto the dead-letter exchange
+            in the last 15 minutes. Read them at GET /admin/workers/dead-letters;
+            `reason` says whether the body was unparseable, the handler failed,
+            or the tenant gate gave up.
+
+      # The drain nacks with requeue when it cannot write the row, because at
+      # that moment the queue holds the only copy. So a dead queue that stays
+      # non-empty means the record is not being written — the failure is
+      # arriving and nothing is recording it.
+      - alert: AutomationDeadLetterDrainStalled
+        expr: rabbitmq_detailed_queue_messages_ready{queue="txnet.automation.ticks.dead"} > 0
+        for: 10m
+        labels:
+          severity: critical
+          unit: automation
+        annotations:
+          summary: "The dead-letter drain is not writing records"
+          description: >-
+            txnet.automation.ticks.dead has held messages for 10 minutes.
+            DeadLetterDrain requeues rather than acks when Postgres is
+            unwritable, so this is the queue holding the only copy of a failure
+            that is not in automation.dead_letter. Invariant #9 is not being met.
+
+  # ===========================================================================
+  # The outbox (F-067-c, ADR-0021)
+  # ===========================================================================
+  # The fourth number F-067-g named and could not ship, because the table it
+  # reads did not exist. It comes off `postgres-exporter` rather than the
+  # broker: an unpublished row is a fact about Postgres, and by definition it
+  # has never reached RabbitMQ, so nothing on the broker side can see it.
+  #
+  # `OutboxRelayJob` ticks with the rest of the workers, so the floor on every
+  # threshold here is AUTOMATION_TICK_INTERVAL_MS (60s by default). A row that
+  # is thirty seconds old is not late; a row that is five minutes old has
+  # missed several ticks.
+  - name: automation.outbox
+    rules:
+      # The one number that catches every way the relay can stop: the job
+      # switched off, the schedule never created, the broker refusing, the
+      # process down. All of them look the same from here — rows accruing and
+      # ageing — which is why this is the alert and depth is only its detail.
+      - alert: AutomationOutboxStalled
+        expr: automation_outbox_oldest_unpublished_seconds > 300
+        for: 5m
+        labels:
+          severity: critical
+          unit: automation
+        annotations:
+          summary: "The outbox relay is not draining"
+          description: >-
+            The oldest unpublished automation.outbox_event row is {{ $value |
+            humanizeDuration }} old. A committed transaction promised to
+            announce that event and it has not been published. Check that
+            `outbox_relay` has an active `always_on` bot_schedule and that its
+            last bot_execution_log row is not `failed`; `lastError` on the row
+            says what the broker did.
+
+      # Depth without age: the relay is publishing, but slower than events
+      # arrive. Distinct from the alert above on purpose — one is stopped and
+      # one is behind, and the second is a batch-size or replica question
+      # rather than an outage.
+      - alert: AutomationOutboxBacklog
+        expr: automation_outbox_unpublished_rows > 1000
+        for: 15m
+        labels:
+          severity: warning
+          unit: automation
+        annotations:
+          summary: "The outbox is filling faster than it drains"
+          description: >-
+            {{ $value }} events have been waiting in automation.outbox_event
+            for 15 minutes. AUTOMATION_OUTBOX_BATCH is what one relay run
+            claims and AUTOMATION_TICK_INTERVAL_MS is how often it runs — the
+            product is the ceiling, and it has been reached.
+
+      # A row the broker keeps refusing. The relay never gives up on one — an
+      # outbox row is durable and a consumer that does not exist yet is not a
+      # reason to throw an event away — so a climbing attempt count is the only
+      # thing that separates "retrying" from "will retry for ever".
+      #
+      # Today this is the expected state of any event that is published at all:
+      # no domain consumes `outbox.#` yet, every publish is `mandatory`, and an
+      # unroutable message is returned rather than acked. The alert firing on
+      # the first producer's first event is the point.
+      - alert: AutomationOutboxRowRefused
+        expr: automation_outbox_max_attempts > 10
+        for: 10m
+        labels:
+          severity: warning
+          unit: automation
+        annotations:
+          summary: "An outbox event has been refused repeatedly"
+          description: >-
+            An unpublished automation.outbox_event row has been attempted
+            {{ $value }} times. Read `lastError` on it: `unroutable` means
+            nothing has bound a queue to `outbox.<type>`, `nacked` means the
+            broker refused the message, `timeout` means it stopped answering.

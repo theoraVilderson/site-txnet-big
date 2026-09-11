@@ -3,12 +3,25 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ChevronDown, Plus, Trash2, UserRound, X } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  LogOut,
+  Plus,
+  Trash2,
+  UserRound,
+  X,
+} from "lucide-react";
 import { authApi } from "@/lib/auth-api";
 import { useLocale } from "@/context/LocaleContext";
 import { usePanelSession } from "../_context/PanelSessionContext";
-import { PANEL_ACCOUNTS_ADD } from "@/lib/routes";
+import { PANEL_ACCOUNTS_ADD, AUTH_LOGIN } from "@/lib/routes";
 import { useApiErrorMessage } from "@/hooks/useApiError";
+
+import { FrontendI18nKeys } from "@/generated/i18n-keys";
+
+/** The `common` namespace as generated constants (F-083, C-06). */
+const C = FrontendI18nKeys.common;
 
 /**
  * Current account, the rest of the group, "add an account" (F-0209).
@@ -39,6 +52,7 @@ export function AccountSwitcher() {
    * name the account being removed in place, where the user is already looking.
    */
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [confirmingSignOutAll, setConfirmingSignOutAll] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -149,7 +163,7 @@ export function AccountSwitcher() {
               confirmingId === group.current.userId ? (
                 <div className="flex items-center gap-2 border-b border-card-border bg-leaf-bg px-4 py-2.5">
                   <span className="min-w-0 flex-1 text-xs text-text-primary">
-                    {t("common", "accounts.leaveConfirm")}
+                    {t("common", C.accounts.leaveConfirm)}
                   </span>
                   <button
                     type="button"
@@ -158,12 +172,12 @@ export function AccountSwitcher() {
                     className="shrink-0 rounded-lg px-2 py-1 text-xs font-bold text-error transition-colors hover:bg-card-bg disabled:opacity-60"
                   >
                     {pendingId === group.current.userId
-                      ? t("common", "accounts.removing")
-                      : t("common", "accounts.removeYes")}
+                      ? t("common", C.accounts.removing)
+                      : t("common", C.accounts.removeYes)}
                   </button>
                   <button
                     type="button"
-                    aria-label={t("common", "accounts.removeCancel")}
+                    aria-label={t("common", C.accounts.removeCancel)}
                     onClick={() => setConfirmingId(null)}
                     className="shrink-0 rounded-lg p-1 text-text-secondary transition-colors hover:bg-card-bg"
                   >
@@ -179,7 +193,7 @@ export function AccountSwitcher() {
                   className="flex w-full items-center gap-2 border-b border-card-border px-4 py-2 text-xs text-text-secondary transition-colors hover:bg-leaf-bg hover:text-error disabled:opacity-60"
                 >
                   <Trash2 size={13} className="shrink-0" />
-                  {t("common", "accounts.leave")}
+                  {t("common", C.accounts.leave)}
                 </button>
               )
             )}
@@ -187,7 +201,7 @@ export function AccountSwitcher() {
             {group.members.length > 0 && (
               <div className="py-1">
                 <p className="px-4 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wide text-text-secondary">
-                  {t("common", "accounts.switchTo")}
+                  {t("common", C.accounts.switchTo)}
                 </p>
                 {group.members.map((member) =>
                   confirmingId === member.userId ? (
@@ -196,7 +210,7 @@ export function AccountSwitcher() {
                       className="flex items-center gap-2 bg-leaf-bg px-4 py-2.5"
                     >
                       <span className="min-w-0 flex-1 text-xs text-text-primary">
-                        {t("common", "accounts.removeConfirm").replace(
+                        {t("common", C.accounts.removeConfirm).replace(
                           "{{name}}",
                           member.fullName,
                         )}
@@ -208,12 +222,12 @@ export function AccountSwitcher() {
                         className="shrink-0 rounded-lg px-2 py-1 text-xs font-bold text-error transition-colors hover:bg-card-bg disabled:opacity-60"
                       >
                         {pendingId === member.userId
-                          ? t("common", "accounts.removing")
-                          : t("common", "accounts.removeYes")}
+                          ? t("common", C.accounts.removing)
+                          : t("common", C.accounts.removeYes)}
                       </button>
                       <button
                         type="button"
-                        aria-label={t("common", "accounts.removeCancel")}
+                        aria-label={t("common", C.accounts.removeCancel)}
                         onClick={() => setConfirmingId(null)}
                         className="shrink-0 rounded-lg p-1 text-text-secondary transition-colors hover:bg-card-bg"
                       >
@@ -246,14 +260,14 @@ export function AccountSwitcher() {
                         </span>
                         {pendingId === member.userId && (
                           <span className="text-xs text-text-secondary">
-                            {t("common", "accounts.switching")}
+                            {t("common", C.accounts.switching)}
                           </span>
                         )}
                       </button>
                       <button
                         type="button"
-                        aria-label={t("common", "accounts.remove")}
-                        title={t("common", "accounts.remove")}
+                        aria-label={t("common", C.accounts.remove)}
+                        title={t("common", C.accounts.remove)}
                         disabled={pendingId !== null}
                         onClick={() => setConfirmingId(member.userId)}
                         className="shrink-0 rounded-lg p-2 me-2 text-text-secondary transition-colors hover:text-error disabled:opacity-60"
@@ -280,8 +294,58 @@ export function AccountSwitcher() {
               className="flex w-full items-center gap-2 border-t border-card-border px-4 py-3 text-sm font-bold text-text-secondary transition-colors hover:bg-leaf-bg hover:text-primary"
             >
               <Plus size={16} />
-              {t("common", "accounts.add")}
+              {t("common", C.accounts.add)}
             </button>
+
+            {/*
+              `F-0211`. Deliberately the last row of a menu that has to be
+              opened, behind its own confirmation, and worded as what it does —
+              ordinary logout lives on the nav, far from here. The two are
+              different intentions (ADR-0035) and the destructive one must not
+              be reachable by a mis-tap.
+            */}
+            {confirmingSignOutAll ? (
+              <div className="border-t border-card-border px-4 py-3">
+                <p className="mb-2 text-xs text-text-secondary">
+                  {t("common", C.accounts.signOutAllConfirm)}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={pendingId !== null}
+                    onClick={async () => {
+                      setPendingId("__all__");
+                      try {
+                        await authApi.logoutAll();
+                      } catch {
+                        // Already gone server-side is the same outcome.
+                      }
+                      router.replace(AUTH_LOGIN);
+                    }}
+                    className="rounded-lg bg-error px-3 py-1.5 text-xs font-bold text-white disabled:opacity-60"
+                  >
+                    {t("common", C.accounts.signOutAllYes)}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingSignOutAll(false)}
+                    className="rounded-lg px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => setConfirmingSignOutAll(true)}
+                className="flex w-full items-center gap-2 border-t border-card-border px-4 py-3 text-sm text-text-secondary transition-colors hover:bg-leaf-bg hover:text-error"
+              >
+                <LogOut size={16} className="rtl:-scale-x-100" />
+                {t("common", C.accounts.signOutAll)}
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

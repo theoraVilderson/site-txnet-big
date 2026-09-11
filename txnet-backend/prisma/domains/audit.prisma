@@ -84,6 +84,24 @@ model LinkedAccountGroup {
   id        String   @id @default(uuid()) @db.Uuid
   createdAt DateTime @default(now())
 
+  /// Which member this **place** is currently acting as (ADR-0034).
+  ///
+  /// A group belongs to one scope, so this is the scope's own answer to "who
+  /// am I signed in as here" — and it is deliberately *not* a session: the
+  /// bot chat and its Mini App are one place holding two sessions (ADR-0032),
+  /// and before this column a switch moved whichever one made it and left the
+  /// other on the outgoing account.
+  ///
+  /// Read only where the sign-in is **implicit** — the messenger link is the
+  /// credential (ADR-0012), so there is no account named by the caller to
+  /// override. A password login names its account and is never redirected.
+  ///
+  /// `null` means the place has never switched: sign-in falls back to the
+  /// `LinkedBotAccount`, which is exactly ADR-0014's behaviour. It survives a
+  /// logout on purpose — that is the "accepted cost" ADR-0014 wrote down, and
+  /// this column is what closes it.
+  actingAsUserId String? @db.Uuid
+
   members LinkedAccountMember[]
 
   @@map("linked_account_group")

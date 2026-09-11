@@ -19,7 +19,21 @@ exports[`RedisKeys — bot key catalogue exposes a builder for every key family,
 exports[`RedisKeys — bot key catalogue keeps the canonical TTLs stable 1`] = `
 {
   "botLang": 15552000,
+  "botLink": 900,
   "botNav": 1800,
   "botSession": 2592000,
+  "captchaChallenge": 60,
+  "captchaVerified": 120,
+  "impersonation": 1800,
+  "loginFailureWindow": 900,
+  "otpChannel": 300,
+  "otpCode": 300,
+  "otpCooldown": 60,
+  "otpDelivery": 300,
+  "otpLock": 2,
+  "refreshToken": 2592000,
+  "registerPending": 600,
+  "tenantResolution": 600,
+  "tenantResolutionMiss": 60,
 }
 `;

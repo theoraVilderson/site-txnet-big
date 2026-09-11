@@ -51,6 +51,15 @@ export const logoutSchema = z.object({
 });
 
 export type PasswordLoginInput = z.infer<typeof passwordLoginSchema>;
+/**
+ * The handle a 202 hands back (F-067-a). A hex id and nothing else — it names
+ * one send, not a phone number, so a caller cannot turn it into a question
+ * about who was sent a code.
+ */
+export const otpDeliveryStatusSchema = z.object({
+  deliveryId: z.string().regex(/^[0-9a-f]{32}$/),
+});
+
 export type OtpRequestInput = z.infer<typeof otpRequestSchema>;
 export type OtpVerifyInput = z.infer<typeof otpVerifySchema>;
 export type RefreshInput = z.infer<typeof refreshSchema>;

@@ -1,3 +1,4 @@
+import { headerValue } from '@txnet-backend/shared-core';
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { NextFunction, Request, Response } from 'express';
 import { TenantResolverService } from '../../tenant/tenant-resolver.service';
@@ -102,7 +103,8 @@ export class TenantMiddleware implements NestMiddleware {
    */
   private botClaim(req: Request): string | null {
     if (!isServiceCaller(req)) return null;
-    const claimed = req.headers[TENANT_ID_HEADER];
-    return typeof claimed === 'string' && claimed ? claimed : null;
+    // `headerValue` lowercases the declared name and drops a blank value, so
+    // a header that arrived carrying nothing cannot become tenant `""`.
+    return headerValue(req.headers, TENANT_ID_HEADER) ?? null;
   }
 }

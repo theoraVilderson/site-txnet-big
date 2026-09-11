@@ -76,11 +76,18 @@ export const activeDeployment = (): Deployment => active;
 /** `JWT_ACCESS_TTL_SEC` below — the `expiresIn` every token response carries. */
 export const ACCESS_TTL_SEC = 900;
 
-/** The refresh cookie's name — `auth-service`'s `common/http/refresh-cookie.ts`. */
-export const REFRESH_COOKIE = 'refresh_token';
-
-/** That cookie's `Max-Age`, in seconds (the service sets it in ms). */
-export const REFRESH_MAX_AGE_SEC = 30 * 24 * 60 * 60;
+/**
+ * The refresh cookie's name and lifetime, re-exported from the one place that
+ * declares them (`shared-core/src/lib/http/cookies.ts`, C-04) rather than
+ * typed again here.
+ *
+ * The comment above says why: a spec that types the value by hand pins it in a
+ * second place, and the service can then change it while the suite stays
+ * green. Importing makes a rename a compile error in the suite, which is the
+ * one thing a hand-copied constant can never be.
+ */
+export { REFRESH_TOKEN_COOKIE as REFRESH_COOKIE } from '@txnet-backend/shared-core';
+export { REFRESH_TOKEN_LIFETIME_SEC as REFRESH_MAX_AGE_SEC } from '@txnet-backend/shared-core';
 
 export function applyE2eEnv(
   deployment: Deployment = PRIMARY_DEPLOYMENT,

@@ -1,3 +1,4 @@
+import { IdentityHeaders } from '@txnet-backend/shared-core';
 import { ConfigService } from '@nestjs/config';
 import { AuthApiClient, CallContext } from './auth-api.client';
 import { BotCopy } from '../locale/bot-copy';
@@ -116,6 +117,11 @@ describe('AuthApiClient transport', () => {
    * service caller), so what is worth asserting here is that the bot actually
    * uses it — and that an unconfigured install sends nothing rather than
    * guessing a tenant.
+   *
+   * Read through `IdentityHeaders.tenantId` rather than a literal: this is the
+   * one header the platform sends in both directions, and it was spelled
+   * `x-tenant-id` here and `X-Tenant-Id` by the gateway. They are one
+   * case-insensitive name, and F-074 collapsed them onto one declaration.
    */
   it('names the tenant it serves on every call', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ ok: true, msg: 'ok' }));
@@ -123,7 +129,7 @@ describe('AuthApiClient transport', () => {
     await client().refresh({ refreshToken: 'r-1' }, ctx);
 
     const headers = lastRequest().init.headers as Record<string, string>;
-    expect(headers['x-tenant-id']).toBe(TENANT_ID);
+    expect(headers[IdentityHeaders.tenantId]).toBe(TENANT_ID);
   });
 
   it('sends no tenant header at all when BOT_TENANT_ID is unset', async () => {
@@ -135,7 +141,7 @@ describe('AuthApiClient transport', () => {
     );
 
     const headers = lastRequest().init.headers as Record<string, string>;
-    expect(headers['x-tenant-id']).toBeUndefined();
+    expect(headers[IdentityHeaders.tenantId]).toBeUndefined();
   });
 
   it('sends the user’s access token only when one was supplied', async () => {

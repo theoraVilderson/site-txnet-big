@@ -24,6 +24,7 @@ import { useSubmitError } from "@auth/auth/_hooks/useSubmitError";
 import { useCaptcha } from "@auth/auth/_hooks/useCaptcha";
 import { useOtpChannels } from "@auth/auth/_hooks/useOtpChannels";
 import { useBotLink } from "@auth/auth/_hooks/useBotLink";
+import { useOtpDelivery } from "@auth/auth/_hooks/useOtpDelivery";
 import { authApi } from "@/lib/auth-api";
 import { PANEL_HOME } from "@/lib/routes";
 import { OTP_LENGTH } from "@/lib/otp";
@@ -44,6 +45,7 @@ export default function ForgotPasswordPage() {
   const channels = useOtpChannels();
   // The bot delivers the code itself once the user confirms their number
   // there, so linking lands the flow straight on the code step.
+  const delivery = useOtpDelivery();
   const botLink = useBotLink(() => {
     setStep(2);
     otpTimer.start(120);
@@ -81,6 +83,8 @@ export default function ForgotPasswordPage() {
           botLink.start(result);
           setStep("link");
         } else {
+          // A code was queued: from here the screen hears what became of it.
+          delivery.start(result);
           setStep(2);
           otpTimer.start(120);
         }
@@ -201,7 +205,8 @@ export default function ForgotPasswordPage() {
                 timerSeconds={otpTimer.seconds}
                 timerFormatted={otpTimer.formatted}
                 onResend={() => otpTimer.start(120)}
-                onEditPhone={() => setStep(1)}
+                onEditPhone={() => { delivery.reset(); setStep(1); }}
+                delivery={delivery.delivery}
               />
             )}
 

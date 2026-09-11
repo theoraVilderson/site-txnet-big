@@ -6,24 +6,6 @@
     "requestInProgress": "Your previous request is still being processed",
     "cooldownActive": "Please wait a moment before requesting a new code",
     "attemptsExhausted": "The number of allowed attempts has been exhausted",
-    "channels": {
-      "notAllowed": "This method of sending the code is currently not allowed",
-      "notSupported": "This method of sending the code is not supported",
-      "bale": {
-        "notConfigured": "The Bale messaging service is currently not configured",
-        "notLinked": "Your Bale account is not linked",
-        "sendFailed": "Sending message via Bale encountered an error"
-      },
-      "telegram": {
-        "notConfigured": "The Telegram service is currently not configured",
-        "notLinked": "Your Telegram account is not linked",
-        "sendFailed": "Sending message via Telegram encountered an error"
-      },
-      "sms": {
-        "notConfigured": "The SMS service is currently not configured",
-        "sendFailed": "Sending SMS encountered an error"
-      }
-    },
     "channelNotConfigured": "This method of sending the code is not available right now",
     "noChannelAvailable": "No method of sending the code is available right now",
     "botLink": {
@@ -33,7 +15,19 @@
       "takenByAnotherAccount": "That messenger account is already linked to a different account",
       "noAccount": "No account is registered with this number"
     },
-    "invalid": "The entered verification code is incorrect"
+    "invalid": "The entered verification code is incorrect",
+    "deliveryUnavailable": "The verification code could not be queued for sending. Please try again.",
+    "channelNotAllowed": "This method of sending the code is currently not allowed",
+    "channelNotSupported": "This method of sending the code is not supported",
+    "smsNotConfigured": "The SMS service is currently not configured",
+    "smsSendFailed": "Sending the SMS did not go through",
+    "telegramNotConfigured": "The Telegram service is currently not configured",
+    "telegramNotLinked": "Your Telegram account is not linked",
+    "baleNotConfigured": "The Bale messaging service is currently not configured",
+    "baleNotLinked": "Your Bale account is not linked",
+    "deliveryFailed": "The code could not be sent. Please try again.",
+    "invalidLength": "The verification code is six digits",
+    "mustBeNumeric": "The verification code is digits only"
   },
   "auth": {
     "alreadyAuthenticated": "You are already signed in. Log out before signing in or registering again.",
@@ -48,7 +42,9 @@
     "tokenExpired": "Token has expired",
     "loginSuccess": "Welcome back",
     "logoutSuccess": "You have been signed out",
+    "logoutSwitched": "Signed out of that account and switched to your other one",
     "otpSent": "Your verification code is on its way",
+    "otpDeliveryStatus": "Delivery status",
     "resetOtpSent": "Your password reset code is on its way",
     "resetTokenGenerated": "Code confirmed. You can set a new password now.",
     "invalidCredentials": "That number or password is not right",
@@ -62,7 +58,11 @@
     "phoneNumberRequired": "Enter your phone number",
     "phoneVerificationRequired": "Verify your phone number first",
     "temporarilyLocked": "Too many failed attempts — sign-in is locked for a while. Try again shortly.",
-    "passwordResetSuccess": "Your password has been changed and your other devices are signed out"
+    "passwordResetSuccess": "Your password has been changed and your other devices are signed out",
+    "refreshSuccess": "Signed in",
+    "sessionActive": "Your session is active",
+    "botLinkResolved": "Link status",
+    "botLinkContact": "Number received"
   },
   "impersonation": {
     "notImpersonated": "This session is not impersonated",
@@ -106,7 +106,13 @@
   "successful": "Done",
   "failed": "That did not go through",
   "password": {
-    "containsProfileData": "Your password must not contain your name, username or phone number"
+    "containsProfileData": "Your password must not contain your name, username or phone number",
+    "tooShort": "Your password must be at least 8 characters",
+    "tooLong": "Your password must be at most 72 characters",
+    "needsLowercase": "Your password must contain a lowercase letter",
+    "needsUppercase": "Your password must contain an uppercase letter",
+    "needsDigit": "Your password must contain a digit",
+    "needsSpecialChar": "Your password must contain a special character"
   },
   "register": {
     "success": "Your verification code is on its way",
@@ -124,5 +130,20 @@
   "automation": {
     "invalidSchedule": "That schedule could never run — see the reason.",
     "workerInactive": "This worker is switched off; switch it on before running it."
+  },
+  "username": {
+    "tooShort": "Your username must be at least 3 characters",
+    "tooLong": "Your username must be at most 32 characters",
+    "invalidChars": "A username may only contain English letters, digits and an underscore"
+  },
+  "fullName": {
+    "tooShort": "Enter your full name",
+    "tooLong": "Your name must be at most 120 characters"
+  },
+  "phone": {
+    "invalidFormat": "Enter a valid mobile number"
+  },
+  "validation": {
+    "failed": "Some of the submitted information is invalid."
   }
 }

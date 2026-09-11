@@ -18,7 +18,7 @@ func writePolicy(t *testing.T, content string) string {
 	return path
 }
 
-// shippedPolicy mirrors configs/permissions.yaml, indentation included.
+// shippedPolicy has the shape of configs/permissions.yaml, indentation included.
 const shippedPolicy = `# Role -> allowed permissions. Used as defense-in-depth.
 roles:
   admin:

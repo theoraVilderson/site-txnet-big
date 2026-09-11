@@ -196,6 +196,48 @@ describe('auth-api — wire contract', () => {
       expect(cookie?.attributes.secure).toBeUndefined();
     });
 
+    /**
+     * F-073. Every route that mints a session writes this cookie, and until
+     * this row two of them built the attributes separately —
+     * `register.controller.ts` re-declared `domain`, `secure`, `sameSite` and
+     * `maxAge` inline instead of calling `refreshCookieOptions()`.
+     *
+     * The failure that guards against is silent: a cookie written with a
+     * different `domain` does not overwrite the other one, so the browser
+     * holds two `refresh_token` cookies, sends whichever it likes, and the
+     * user lands in a session they did not choose. Nothing is red anywhere.
+     *
+     * Asserting the two attribute sets are *equal* is the only assertion that
+     * catches it — checking each route against a literal would stay green with
+     * two copies that happen to agree today and drift tomorrow.
+     */
+    it('has identical attributes whether it came from register or from login', async () => {
+      const account = newAccount();
+      await api.register(account);
+      const fromRegister = await api.verifyPhone({
+        phoneNumber: account.phoneNumber,
+        otpCode: e2e.otp.latest(account.phoneNumber, 'register_phone_verify'),
+      });
+      api.clearCookies();
+
+      const fromLogin = await api.login({
+        identifier: account.username,
+        password: account.password,
+      });
+
+      const registered = parseSetCookie(
+        fromRegister.headers['set-cookie'],
+        REFRESH_COOKIE,
+      );
+      const loggedIn = parseSetCookie(
+        fromLogin.headers['set-cookie'],
+        REFRESH_COOKIE,
+      );
+
+      expect(registered?.attributes).toBeDefined();
+      expect(loggedIn?.attributes).toEqual(registered?.attributes);
+    });
+
     it('is the only place a refresh token is ever returned', async () => {
       const { account } = await signUp(api, e2e.otp);
       api.clearCookies();

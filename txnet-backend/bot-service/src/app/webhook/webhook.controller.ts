@@ -15,11 +15,21 @@ import {
   BotUpdate,
   isBotPlatform,
 } from '@txnet-backend/messenger';
-import { BotDispatcher } from '../conversation/bot.dispatcher';
+import { BotUpdatePublisher } from './bot-update.publisher';
 import { UpdateNormalizer } from './update.normalizer';
 
 /**
  * The bot's front door: one unguessable path per bot (ADR-0009, F-320).
+ *
+ * **It verifies and enqueues; it does not converse (F-067-b).** Until
+ * 2026-09-10 this route ran the whole conversation — the dispatcher, the
+ * `auth-api` call inside it and the `sendMessage` back to the platform —
+ * before answering. Telegram gives a webhook a few seconds and redelivers what
+ * it did not hear back about, so one slow tenant occupied the shared
+ * `bot-service` and earned duplicate updates for everyone on it. The flow now
+ * runs in `worker-service`, which calls back into this process's
+ * `internal/bots/dispatch`; per-chat ordering is a property of the queue set
+ * (D-16, `shared-core` `bot-update.ts`).
  *
  * `POST /bots/{platform}/{webhookPath}`, where `webhookPath` is the random
  * 32-byte string on that tenant's own `BotIntegration` row. **The tenant is
@@ -38,16 +48,20 @@ import { UpdateNormalizer } from './update.normalizer';
  *     request, not only when the platform chose to send one (F-321). Bale does
  *     not send the field, and that is the one case a missing header is allowed
  *     — see {@link secretRequired}.
- *   - once the path *and* the secret are known good the answer is **always
- *     200**, whatever the handling did. A non-2xx makes the platform redeliver
- *     the same update, and handling is best-effort by design.
+ *   - once the path *and* the secret are known good the answer is **200 as
+ *     soon as the update is safely on the broker** — and only then. A non-2xx
+ *     makes the platform redeliver, which used to be the thing to avoid at any
+ *     cost, because handling was best-effort and a redelivery replayed whatever
+ *     the flow had already done. Now it is the recovery path: an update the
+ *     broker did not confirm would otherwise be lost with a 200 behind it, so
+ *     it escapes as a 5xx and the platform brings it back (D-18).
  */
 @Controller('bots')
 export class WebhookController {
   constructor(
     private readonly bots: BotClientRegistry,
     private readonly normalizer: UpdateNormalizer,
-    private readonly dispatcher: BotDispatcher,
+    private readonly updates: BotUpdatePublisher,
   ) {}
 
   @Post(':platform/:webhookPath')
@@ -73,8 +87,17 @@ export class WebhookController {
       if (!valid) throw new NotFoundException();
     }
 
+    // Normalised *here*, while the integration that resolved the path is in
+    // hand: the last place that knows what a Telegram `Update` looks like stays
+    // in front of the queue, so what rides the broker is this platform's own
+    // shape rather than a vendor's. What does not ride it is the integration —
+    // `BotUpdateMessage` carries the webhook path instead, and the consumer's
+    // side resolves the tenant from it exactly as this route just did.
     const ctx = this.normalizer.normalize(platform, integration, update);
-    if (ctx) await this.dispatcher.handle(ctx);
+    if (ctx) {
+      const { integration: _resolved, ...message } = ctx;
+      await this.updates.publish({ ...message, webhookPath });
+    }
 
     return { ok: true };
   }

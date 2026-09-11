@@ -1,11 +1,19 @@
+import { RequestHeaders } from '@txnet-backend/shared-core';
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NextFunction, Request, Response } from 'express';
 import { timingSafeEqual } from 'crypto';
 
-export const SERVICE_TOKEN_HEADER = 'x-service-token';
+/**
+ * Re-exported, not re-declared. The name is owned by
+ * `contracts/http/wire.json` and imported from `shared-core` (ADR-0036, C-04)
+ * — `bot-service` declared its own copy of this same string, which is the
+ * shape that drifts. The alias stays because every call site in this service
+ * already reads well with it.
+ */
+export const SERVICE_TOKEN_HEADER = RequestHeaders.serviceToken;
 /** Which chat a bot-originated call is acting for — the rate-limit subject. */
-export const BOT_CHAT_HEADER = 'x-bot-chat-id';
+export const BOT_CHAT_HEADER = RequestHeaders.botChatId;
 
 /**
  * Marks a request as coming from another service of this platform

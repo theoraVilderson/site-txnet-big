@@ -1,4 +1,8 @@
 import {
+  RateLimitBucket,
+  rateLimitBucketKey,
+} from '@txnet-backend/shared-core';
+import {
   Body,
   Controller,
   HttpCode,
@@ -10,12 +14,14 @@ import {
   UseGuards,
   UsePipes,
 } from '@nestjs/common';
+import { REFRESH_TOKEN_COOKIE } from '@txnet-backend/shared-core';
 import { Request, Response } from 'express';
 import { RegisterService } from './register.service';
 import { AuthService } from '../auth.service';
 import { registerSchema, verifyPhoneSchema } from './register.schema';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { ResponseType } from '../../common/response/response.util';
+import { refreshCookieOptions } from '../../common/http/refresh-cookie';
 import { RateLimit } from '../decorators/rate-limit.decorator';
 import { RequireCaptcha } from '../decorators/require-captcha.decorator';
 import { rateLimitSubject } from '../../common/security/service-caller';
@@ -29,14 +35,17 @@ export class RegisterController {
     private readonly authService: AuthService,
   ) {}
 
+  // 202, not 201 (F-067-a): nothing is created here — the `user` row lands at
+  // `verify-phone` (invariant #11) — and the code is accepted for delivery
+  // rather than delivered.
   @Post('register')
-  @HttpCode(HttpStatus.CREATED)
+  @HttpCode(HttpStatus.ACCEPTED)
   @UseGuards(NoActiveSessionGuard)
   @UsePipes(new ZodValidationPipe(registerSchema))
   @RequireCaptcha()
   @RateLimit({
-    key: (req) => `register:${rateLimitSubject(req)}`,
-    limit: 10,
+    key: (req) => rateLimitBucketKey(RateLimitBucket.REGISTER, rateLimitSubject(req)),
+    configKey: 'REGISTER_RATE_LIMIT',
     windowSec: 3600,
   })
   register(
@@ -55,8 +64,8 @@ export class RegisterController {
   @HttpCode(HttpStatus.OK)
   @UsePipes(new ZodValidationPipe(verifyPhoneSchema))
   @RateLimit({
-    key: (req) => `register:verify:${rateLimitSubject(req)}`,
-    limit: 20,
+    key: (req) => rateLimitBucketKey(RateLimitBucket.REGISTER_VERIFY, rateLimitSubject(req)),
+    configKey: 'REGISTER_VERIFY_RATE_LIMIT',
     windowSec: 3600,
   })
   async verifyPhone(
@@ -76,16 +85,15 @@ export class RegisterController {
         resolveSwitchScope(req),
       );
       const { refreshToken, ...safeTokens } = tokens;
-      const DOMAINNAME = process.env.DOMAIN_NAME!;
 
-      res.cookie('refresh_token', refreshToken, {
-        httpOnly: true,
-        secure: process.env.COOKIE_SECURE !== 'false',
-        sameSite: 'lax',
-        path: '/', // تغییر اول
-        domain: `.${DOMAINNAME}`, // تغییر دوم
-        maxAge: 30 * 24 * 60 * 60 * 1000,
-      });
+      // The shared builder, not a second copy of it. This block used to
+      // re-declare `domain`, `secure`, `sameSite` and `maxAge` inline, which
+      // is the split-cookie failure `refresh-cookie.ts` warns about in its own
+      // comment: a cookie written here with a different `domain` than the one
+      // `auth` writes would not overwrite it, the browser would hold two
+      // `refresh_token` cookies, and the user would land in whichever session
+      // it chose to send.
+      res.cookie(REFRESH_TOKEN_COOKIE, refreshToken, refreshCookieOptions());
       result.data = { ...result.data, ...safeTokens };
     }
     return result;

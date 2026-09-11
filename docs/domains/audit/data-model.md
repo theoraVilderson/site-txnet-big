@@ -15,7 +15,7 @@ Source of truth: `txnet-backend/prisma/domains/audit.prisma` (Postgres schema
 |---|---|---|---|
 | admin_audit_log | every `AdminAction` with before/after JSON, target ref, admin IP | denormalized `tenantId` | permanent, immutable |
 | impersonation_session | admin -> target user, reason note, optional linked ticket, start/end | denormalized via admin/target | permanent |
-| linked_account_group / linked_account_member | a set of a user's own accounts they can switch between; `verifiedViaOtp` | via member users | permanent |
+| linked_account_group / linked_account_member | a set of a user's own accounts they can switch between; `verifiedViaOtp`. The group belongs to one **scope** (`member.scopeKey`, ADR-0015), and `group.actingAsUserId` is that place's answer to "which of us am I signed in as here" (ADR-0034) — written by a switch, read only by an *implicit* sign-in, and inert when it names someone no longer a member here | via member users | permanent |
 
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |

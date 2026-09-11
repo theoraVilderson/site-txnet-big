@@ -160,3 +160,119 @@ model BotIntegration {
 // Section 99 — `partial unique (tenantId, platform) where role = 'primary'`
 // cannot be expressed in Prisma. It lives as hand-written SQL in
 // `migrations/20260909000200_bot_integration`.
+
+// =============================================================================
+
+// F-067-d — the record of a message the queue could not deliver.
+
+/// Which of this service's three ending paths a message took. Derived from the
+/// message itself (`worker-service/src/app/automation/dead-letter.ts`), because
+/// AMQP carries nothing back through a rejection.
+enum DeadLetterReason {
+  /// The handler threw. Its run is a `bot_execution_log` row with `failed`.
+  handler_failed
+  /// The body is not JSON, so no run was ever opened for it.
+  unparseable
+  /// The tenant concurrency gate gave up after `MAX_DEFERRALS` (invariant #8).
+  gate_gave_up
+
+  @@schema("automation")
+}
+
+/// 10.4 — one message that left the automation queue without being handled.
+///
+/// Before this table a rejected message was destroyed by the broker, which was
+/// defensible only while every message was a tick that recurs on the next
+/// interval. An OTP send, an outbox event or a bot update does not recur
+/// (F-067-a, F-067-b, F-067-c), so the queue needed somewhere for them to land
+/// and an operator needed somewhere to read it.
+///
+/// **No `tenantId` column**, like the three worker tables above it: a worker is
+/// platform-wide, and a tick's tenant — when it has one — is already inside
+/// `payload`. Adding the column would mean choosing an RLS policy shape for a
+/// table with no tenant-scoped reader.
+model DeadLetter {
+  id         String           @id @default(uuid()) @db.Uuid
+  /// `automation.tick.<key>` — the address the message was published to.
+  routingKey String
+  /// The worker it belonged to, from the body or the routing key. Null when
+  /// neither said, which is itself worth seeing.
+  workerKey  String?
+  reason     DeadLetterReason
+  /// Publishes or dead-letterings of this message, whichever counted higher.
+  attempts   Int              @default(1)
+  /// One line: which queue it died out of, what the broker said, and why.
+  detail     String
+  /// The body, when it was JSON.
+  payload    Json?
+  /// The body as text, only when it was not — never both.
+  rawPayload String?
+
+  deadLetteredAt DateTime @default(now())
+
+  @@index([deadLetteredAt(sort: Desc)])
+  @@index([workerKey, deadLetteredAt(sort: Desc)])
+  @@map("dead_letter")
+  @@schema("automation")
+}
+
+// =============================================================================
+
+// F-067-c — the transactional outbox ADR-0021 decided on 2026-09-09.
+
+/// 10.5 — one cross-domain event, written **inside the transaction that caused
+/// it** and published afterwards by `OutboxRelayJob`.
+///
+/// ADR-0021's failure case is specific: a confirmed payment must provision a
+/// config, and calling the panel synchronously means either the money
+/// transaction rolls back after the money moved, or the money moves and no
+/// service appears. Inserting this row in the same transaction as the ledger
+/// append removes the window in which one happened and the other did not.
+///
+/// **Delivery is at-least-once, never exactly-once.** `id` is the event id and
+/// rides as the AMQP `messageId`; a consumer that cannot safely process the
+/// same event twice is a bug in the consumer (ADR-0021).
+///
+/// **No `tenantId` column**, the same call the four tables above it make: the
+/// relay is a platform-wide process and reads under no scope, so a column here
+/// would need an RLS policy shape chosen for a table with no tenant-scoped
+/// reader. The tenant an event belongs to is inside `payload`, where the
+/// domain that wrote it decides what its own event means.
+///
+/// **It lives in `automation` rather than in a unit of its own** (D-14): one
+/// table and one job, beside the worker runtime that already owns the exchange
+/// it publishes to. ADR-0021 called it a new unit; splitting it out later stays
+/// cheap while it is still one of each.
+model OutboxEvent {
+  id          String @id @default(uuid()) @db.Uuid
+  /// What the event is about: `billing.payment`, `network.config`.
+  aggregate   String
+  /// Which one — the id of the row inside that aggregate.
+  aggregateId String
+  /// What happened: `payment.confirmed`. It is the routing-key suffix under
+  /// `outbox.`, so it must be a dot-separated path — `outboxRoutingKey`
+  /// (`shared-core`) refuses anything else rather than publish to a key that
+  /// silently matches no binding.
+  type        String
+  payload     Json
+  /// When the producing transaction said it happened — not when it was sent.
+  occurredAt  DateTime @default(now())
+  /// Null until a **confirmed, routable** publish (invariant #10). This column
+  /// is the whole relay state; there is no `claimedAt`, because a claim is a
+  /// row lock (`FOR UPDATE SKIP LOCKED`) and a lock ends with its transaction.
+  publishedAt DateTime?
+  /// Publishes attempted, successful or not.
+  attempts    Int      @default(0)
+  /// Why the last attempt did not publish. Cleared when one does.
+  lastError   String?
+
+  @@index([publishedAt, occurredAt])
+  @@map("outbox_event")
+  @@schema("automation")
+}
+
+// Section 99 — the relay's own index is partial (`WHERE "publishedAt" IS
+// NULL`), which Prisma cannot express. It lives as hand-written SQL in
+// `migrations/20260910001000_automation_outbox`, alongside the composite index
+// above: the composite is what Prisma keeps in step, the partial one is what
+// stays small as the published rows accumulate.

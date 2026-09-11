@@ -1,3 +1,5 @@
+import { BackendI18nKeys } from '@txnet-backend/shared-core';
+
 import { LocaleService } from '../../locale/locale.service';
 
 /**
@@ -17,6 +19,29 @@ export type BotLinkMessageKey =
   | 'linked'
   | 'linkedNoCode'
   | 'unknownCommand';
+
+/**
+ * The locale key for each message (F-084, ADR-0036).
+ *
+ * This lookup was `` `otp.botLink.${key}` `` — a key built at runtime, which a
+ * generated constant cannot check. An exhaustive `Record` over the union holds
+ * both ends: a new message does not compile without a row, and every row is a
+ * generated constant, so a key renamed in `notifications.json` does not
+ * compile either. `locale/dynamic-keys.spec.ts` asserts each has a sentence.
+ */
+const N = BackendI18nKeys.notifications.otp.botLink;
+export const BOT_LINK_MESSAGE_KEY: Record<BotLinkMessageKey, string> = {
+  askContact: N.askContact,
+  askContactButton: N.askContactButton,
+  senderMismatch: N.senderMismatch,
+  phoneMismatch: N.phoneMismatch,
+  expired: N.expired,
+  takenByAnotherAccount: N.takenByAnotherAccount,
+  noAccount: N.noAccount,
+  linked: N.linked,
+  linkedNoCode: N.linkedNoCode,
+  unknownCommand: N.unknownCommand,
+};
 
 const FALLBACKS: Record<BotLinkMessageKey, string> = {
   askContact:
@@ -44,7 +69,7 @@ export function botLinkMessage(
 ): string {
   // Flat dot-notation lookup against the same `notifications` namespace the
   // OTP body comes from — one file per language, one place to translate.
-  const value = locale.getKey(lang, 'notifications', `otp.botLink.${key}`);
+  const value = locale.getKey(lang, 'notifications', BOT_LINK_MESSAGE_KEY[key]);
   return typeof value === 'string' && value.length > 0
     ? value
     : FALLBACKS[key];

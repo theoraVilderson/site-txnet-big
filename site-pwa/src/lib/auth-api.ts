@@ -94,6 +94,36 @@ export type BotLinkRequired = {
 };
 export type OtpRequested = { accepted: boolean; linkRequired?: undefined };
 export type OtpRequestResult = OtpRequested | BotLinkRequired;
+
+/**
+ * The three handles every route that queues a code answers with (`auth-api`
+ * v14). They address two different things: `deliveryId` reads the record, and
+ * `channel` + `channelToken` hear the same answer sooner, over the socket.
+ *
+ * They are minted before the route knows whether there is an account behind
+ * the number — which is what keeps a 202 from being an account-existence
+ * oracle, and it is why a status still on `queued` means *not yet*, never *no
+ * such number*.
+ */
+export type OtpDeliveryHandles = {
+  deliveryId: string;
+  /** A realtime channel name, `otp:<channelId>` — subscribed to verbatim. */
+  channel: string;
+  /** The proof `gateway-service` demands before it will serve that channel. */
+  channelToken: string;
+};
+export type OtpDeliveryState = "queued" | "sent" | "failed";
+/** `failureKey` is a machine key on `failed` only; the screen maps it itself. */
+export type OtpDeliveryStatus = { state: OtpDeliveryState; failureKey?: string };
+
+/** A code was queued: 202, with the handles that say what became of it. */
+export type OtpQueued = { accepted: true; linkRequired?: undefined } & OtpDeliveryHandles;
+/**
+ * The `linkRequired` half carries **no handles**, deliberately: nothing was
+ * queued, because the bot sends the code itself once the user shares their
+ * contact there.
+ */
+export type OtpQueuedResult = OtpQueued | BotLinkRequired;
 /**
  * One account in the caller's switch group (F-0206). The phone arrives already
  * masked — the server never sends the full number to this page, because the
@@ -118,17 +148,17 @@ export type BotLinkStatus = {
 
 export const authApi = {
   async loginPassword(identifier: string, password: string, captchaToken: string) {
-    const result = await request<AuthResult | { requiresOtp: boolean }>("/auth/login/password", { method: "POST", body: JSON.stringify({ identifier, password }) }, captchaToken);
+    const result = await request<AuthResult | ({ requiresOtp: true; otpToken: string } & OtpDeliveryHandles)>("/auth/login/password", { method: "POST", body: JSON.stringify({ identifier, password }) }, captchaToken);
     if ("accessToken" in result) accessToken = result.accessToken;
     return result;
   },
   /** The delivery methods this deployment has switched on. */
   async otpChannels() { return request<{ channels: OtpChannelDescriptor[] }>("/auth/otp/channels", { method: "GET" }); },
-  async requestLoginOtp(phoneNumber: string, captchaToken: string, channel?: OtpChannel) { return request<OtpRequestResult>("/auth/login/otp/request", { method: "POST", body: JSON.stringify({ phoneNumber, ...(channel ? { channel } : {}) }) }, captchaToken); },
+  async requestLoginOtp(phoneNumber: string, captchaToken: string, channel?: OtpChannel) { return request<OtpQueuedResult>("/auth/login/otp/request", { method: "POST", body: JSON.stringify({ phoneNumber, ...(channel ? { channel } : {}) }) }, captchaToken); },
   async verifyLoginOtp(phoneNumber: string, otpCode: string) { const result = await request<AuthResult>("/auth/login/otp/verify", { method: "POST", body: JSON.stringify({ phoneNumber, otpCode }) }); accessToken = result.accessToken; return result; },
-  async register(input: { fullName: string; username: string; phoneNumber: string; password: string }, captchaToken: string, channel?: OtpChannel) { return request<({ phoneNumber: string; requiresPhoneVerification: boolean } & { linkRequired?: undefined }) | ({ phoneNumber: string; requiresPhoneVerification: boolean } & BotLinkRequired)>("/auth/register", { method: "POST", body: JSON.stringify({ ...input, ...(channel ? { channel } : {}) }) }, captchaToken); },
+  async register(input: { fullName: string; username: string; phoneNumber: string; password: string }, captchaToken: string, channel?: OtpChannel) { return request<({ phoneNumber: string; requiresPhoneVerification: boolean } & OtpDeliveryHandles & { linkRequired?: undefined }) | ({ phoneNumber: string; requiresPhoneVerification: boolean } & BotLinkRequired)>("/auth/register", { method: "POST", body: JSON.stringify({ ...input, ...(channel ? { channel } : {}) }) }, captchaToken); },
   async verifyPhone(phoneNumber: string, otpCode: string) { const result = await request<AuthResult & { userId: string }>("/auth/register/verify-phone", { method: "POST", body: JSON.stringify({ phoneNumber, otpCode }) }); accessToken = result.accessToken; return result; },
-  async forgot(phoneNumber: string, captchaToken: string, channel?: OtpChannel) { return request<OtpRequestResult>("/auth/password/forgot", { method: "POST", body: JSON.stringify({ phoneNumber, ...(channel ? { channel } : {}) }) }, captchaToken); },
+  async forgot(phoneNumber: string, captchaToken: string, channel?: OtpChannel) { return request<OtpQueuedResult>("/auth/password/forgot", { method: "POST", body: JSON.stringify({ phoneNumber, ...(channel ? { channel } : {}) }) }, captchaToken); },
   async verifyForgot(phoneNumber: string, otpCode: string) { return request<{ resetToken: string }>("/auth/password/forgot/verify-otp", { method: "POST", body: JSON.stringify({ phoneNumber, otpCode }) }); },
   /**
    * Resetting revokes every session the account had and returns a fresh one
@@ -136,10 +166,47 @@ export const authApi = {
    * everywhere else.
    */
   async reset(resetToken: string, newPassword: string) { const result = await request<{ success: boolean } & AuthResult>("/auth/password/reset", { method: "POST", body: JSON.stringify({ resetToken, newPassword }) }); if (result.accessToken) accessToken = result.accessToken; return result; },
+  /**
+   * What became of one queued code (`auth-api` v13, D-15).
+   *
+   * The record, not a notification about it: a screen whose socket never
+   * opened, or that reconnected past the push, reads this. An id nobody minted
+   * and one whose 300s life has passed both answer `queued`, which is the same
+   * answer a slow provider gives — see {@link OtpDeliveryHandles}.
+   */
+  async otpDeliveryStatus(deliveryId: string) { return request<OtpDeliveryStatus>("/auth/otp/delivery/status", { method: "POST", body: JSON.stringify({ deliveryId }) }); },
   /** Has the user finished linking in the messenger yet? */
   async botLinkStatus(linkToken: string) { return request<BotLinkStatus>("/auth/bots/link/status", { method: "POST", body: JSON.stringify({ linkToken }) }); },
   async refresh() { const result = await request<AuthResult>("/auth/refresh", { method: "POST", body: JSON.stringify({}) }); accessToken = result.accessToken; return result; },
-  async logout() { const result = await request<{ success: boolean }>("/auth/logout", { method: "POST", body: JSON.stringify({}) }); accessToken = null; sessionBootstrap = null; return result; },
+  /**
+   * Sign out of the account this browser is holding.
+   *
+   * ADR-0035: when the place still holds another account the user proved, the
+   * server **falls back onto it** and answers with that account's session
+   * rather than nothing. So this does not always end in the login screen — the
+   * caller reads `switchedTo` to tell the two outcomes apart.
+   */
+  async logout() {
+    const result = await request<{ success: boolean; switchedTo?: { userId: string; fullName: string } } & Partial<AuthResult>>(
+      "/auth/logout",
+      { method: "POST", body: JSON.stringify({}) },
+    );
+    if (result.switchedTo && result.accessToken) {
+      accessToken = result.accessToken;
+      sessionBootstrap = Promise.resolve(result as AuthResult);
+    } else {
+      accessToken = null;
+      sessionBootstrap = null;
+    }
+    return result;
+  },
+  /**
+   * Sign out of **every** account this browser holds (`F-0211`).
+   *
+   * The deliberate one, and never the same button as `logout()` — see
+   * `SignOutEverywhere`, which asks first.
+   */
+  async logoutAll() { const result = await request<{ success: boolean }>("/auth/logout/all", { method: "POST", body: JSON.stringify({}) }); accessToken = null; sessionBootstrap = null; return result; },
   /** An access token for this page load, from the refresh cookie. Throws if there is no live session. */
   async ensureSession() { sessionBootstrap ??= authApi.refresh(); return sessionBootstrap; },
   /**
