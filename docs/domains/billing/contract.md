@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 1
+version: 2
 updated: 2026-09-11
 ---
 
@@ -11,6 +11,21 @@ updated: 2026-09-11
 **One operation built** — the wallet credit/debit primitive (F-092-b, below).
 Every other row in *Provides* is still intent from
 `txnet-backend/prisma/domains/billing.prisma`.
+
+## Payment and coupon storage (built — F-092-d)
+
+Schema only; no route writes these yet. Migration
+`20260911000000_payment_legacy_port`, proved by
+`billing-service/src/app/payment/payment-schema.int.spec.ts`.
+
+| Rule | Why |
+|---|---|
+| A `payment_transaction` names exactly one gateway: `gatewayId` (platform brand) or `tenantGatewayConfigId` (a reseller's own) — a CHECK | ADR-0006: a reseller's gateway is never a `payment_gateway` row |
+| `gatewayTrackingCode` is unique per gateway column; for Zarinpal it holds `authority`, not `ref_id` (`gatewayReferenceId`) | ADR-0028 — `authority` is what a duplicate callback shares |
+| A payment's coupons are its `coupon_redemption` rows; there is no `couponId` column | codes stack, applied in order (D-21) |
+| `perUserUsageLimit` may exceed 1 and is **not** enforced by an index — the redemption transaction counts it | D-21; F-092-h |
+| Amounts are base currency; `chargedAmountMinor` + `exchangeRateSnapshot` are what the gateway was asked for, frozen at intent | ADR-0019 |
+| `displayName` and gateway pricing (fee / tax / min / max, and F-0609's rate columns) have the same columns on `payment_gateway` and `tenant.tenant_gateway_config` | one calculator reads both (F-092-e) |
 
 ## Request edge (built — F-092-a)
 
@@ -56,7 +71,7 @@ reserve/confirm state machine.
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
 | credit / debit wallet — **built**, see above | tx, userId, amount, reasonType, referenceId | `wallet_transaction` + new `balanceAfter` | sync tx | insufficient funds, version conflict, invalid amount |
-| start payment | userId, gatewayId, amount, couponId? | payment intent + redirect / deposit address | sync | amount out of gateway range |
+| start payment | userId, gatewayId or tenantGatewayConfigId, amount, couponCodes[] | payment intent + redirect / deposit address | sync | amount out of gateway range |
 | confirm payment | gateway webhook / reconciliation / admin | wallet credit + `payment_transaction.status = success` | async | duplicate, mismatch (flagged) |
 | initiate wallet transfer | senderId, receiverId, amount | `wallet_transfer_request` (`pending_otp`) | sync | — |
 | confirm wallet transfer | transferId, OTP | atomic debit+credit, `confirmed` | sync tx | bad/expired OTP (5 tries -> cancelled) |
@@ -86,9 +101,11 @@ None planned yet (no bus). Payment confirmation is expected to drive
   `balanceAfter`) + bump `cachedBalance` + `version`.
 - Payment confirmation is idempotent across webhook / reconciliation / admin
   (`confirmationSource`); a mismatch is `flagged_mismatch`, never auto-reversed.
-- `coupon_redemption` unique `(couponId, userId)` enforces `perUserUsageLimit = 1`
-  at the DB.
-- Crypto: `exchangeRateSnapshot` is frozen at intent time, never recomputed.
+- `perUserUsageLimit` is counted when a coupon is reserved, inside the payment
+  transaction — **changed in v2**: it was a DB unique `(couponId, userId)` that
+  capped every coupon at one use per user (D-21).
+- `exchangeRateSnapshot` is frozen at intent time, never recomputed — on crypto
+  and on the rial/card path (ADR-0019).
 
 ## Deprecations
 

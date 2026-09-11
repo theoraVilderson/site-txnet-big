@@ -12,6 +12,7 @@ enum ServicePlanBillingModel {
 enum DiscountType {
   percentage
   fixed_amount
+  wallet_credit // a gift code: redeemed straight into the wallet (D-21, F-092-m)
 
   @@schema("catalog")
 }

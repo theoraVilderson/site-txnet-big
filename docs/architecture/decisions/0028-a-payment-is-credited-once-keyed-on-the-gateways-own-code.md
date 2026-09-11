@@ -52,3 +52,9 @@ copies of a retry share is the gateway's.
 - The constraint is a migration on a table that has no rows today, so it costs
   nothing now and cannot be added quietly later — a duplicate already in the
   table would block it.
+- **Built 2026-09-11 (F-092-d), once per gateway column.** A reseller's gateway
+  is a `tenant.tenant_gateway_config` row, never a `payment_gateway` one
+  (ADR-0006), so a payment names exactly one of `gatewayId` /
+  `tenantGatewayConfigId` (a CHECK) and the key is also held as
+  `@@unique([tenantGatewayConfigId, gatewayTrackingCode])`. The decision is
+  unchanged: the gateway's own code, unique per gateway, in Postgres.

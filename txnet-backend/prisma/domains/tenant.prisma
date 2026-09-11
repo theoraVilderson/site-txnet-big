@@ -140,7 +140,7 @@ model Tenant {
   staffMembers        TenantStaffMember[]
   billingWallet       TenantBillingWallet?
   usageMeters         TenantUsageMeter[]
-  gatewayConfig       TenantGatewayConfig?
+  gatewayConfigs      TenantGatewayConfig[]
   smsConfigs          TenantSmsConfig[]
   restrictions        TenantRestriction[]
   deks                TenantDek[]
@@ -305,9 +305,13 @@ model TenantUsageMeter {
 
 /// TenantGatewayConfig — همیشه درگاه اختصاصی خودِ Tenant؛ هیچ گزینه‌ی
 /// اشتراکی با billing.PaymentGateway پلتفرم وجود ندارد.
+/// A reseller may run several, one per provider (D-20), each priced like a
+/// billing.PaymentGateway: displayName and the fee / tax / min / max and rate
+/// columns match it.
 model TenantGatewayConfig {
   id                  String                          @id @default(uuid()) @db.Uuid
-  tenantId            String                          @unique @db.Uuid
+  tenantId            String                          @db.Uuid
+  displayName         String // what the panel's gateway selector shows
   providerName        PaymentProviderName
   gatewayCategory     GatewayCategory
   merchantIdEncrypted String? // SENSITIVE — never default-select
@@ -315,11 +319,29 @@ model TenantGatewayConfig {
   verificationStatus  TenantGatewayVerificationStatus @default(pending_test_transaction)
   verifiedByAdminId   String?                         @db.Uuid
   isActive            Boolean                         @default(false)
+  taxRatePercent      Decimal                         @default(10) @db.Decimal(5, 2)
+  minAcceptAmount     Decimal                         @db.Decimal(18, 2)
+  maxAcceptAmount     Decimal                         @db.Decimal(18, 2)
+  feeCalculationMode  FeeCalcMode
+  feeType             FeeType
+  feeValue            Decimal                         @db.Decimal(18, 4)
+  feeFloor            Decimal?                        @db.Decimal(18, 2)
+  feeCeiling          Decimal?                        @db.Decimal(18, 2)
+  useLiveRate         Boolean                         @default(true)
+  staticRate          Decimal?                        @db.Decimal(18, 8)
+  percentageModifier  Decimal                         @default(0) @db.Decimal(9, 4) // + = markup
+  fixedAmountModifier Decimal                         @default(0) @db.Decimal(18, 8)
+  minRate             Decimal?                        @db.Decimal(18, 8)
+  maxRate             Decimal?                        @db.Decimal(18, 8)
+  roundingStep        Decimal?                        @db.Decimal(18, 8)
+  roundingMode        RateRoundingMode                @default(up)
   createdAt           DateTime                        @default(now())
   updatedAt           DateTime                        @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant   Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payments PaymentTransaction[]
 
+  @@unique([tenantId, providerName])
   @@map("tenant_gateway_config")
   @@schema("tenant")
 }

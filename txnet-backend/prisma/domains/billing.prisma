@@ -78,6 +78,15 @@ enum FeeType {
   @@schema("billing")
 }
 
+/// How a gateway's quoted rate is rounded to its `roundingStep` (catalog F-0609).
+/// There is deliberately no `down`: rounding a rate down is a loss on every sale.
+enum RateRoundingMode {
+  up
+  nearest
+
+  @@schema("billing")
+}
+
 enum ConfirmationMode {
   automatic
   manual_admin_required
@@ -275,9 +284,9 @@ model CouponRedemption {
   coupon             Coupon              @relation(fields: [couponId], references: [id])
   paymentTransaction PaymentTransaction? @relation(fields: [paymentTransactionId], references: [id])
 
-  // یونیک (couponId, userId) وقتی perUserUsageLimit=1 خودِ دیتابیس جلوی
-  // مصرف دوباره را می‌گیرد.
-  @@unique([couponId, userId])
+  // No unique (couponId, userId): perUserUsageLimit may exceed 1 (D-21), so
+  // the limit is counted in the redemption transaction, not by an index.
+  @@index([couponId, userId])
   @@map("coupon_redemption")
   @@schema("billing")
 }
@@ -301,6 +310,16 @@ model PaymentGateway {
   feeValue            Decimal          @db.Decimal(18, 4)
   feeFloor            Decimal?         @db.Decimal(18, 2)
   feeCeiling          Decimal?         @db.Decimal(18, 2)
+  // Rate from base currency to what the gateway charges in (F-0609). The same
+  // columns sit on tenant.TenantGatewayConfig; one calculator reads both.
+  useLiveRate         Boolean          @default(true)
+  staticRate          Decimal?         @db.Decimal(18, 8)
+  percentageModifier  Decimal          @default(0) @db.Decimal(9, 4) // + = markup
+  fixedAmountModifier Decimal          @default(0) @db.Decimal(18, 8)
+  minRate             Decimal?         @db.Decimal(18, 8)
+  maxRate             Decimal?         @db.Decimal(18, 8)
+  roundingStep        Decimal?         @db.Decimal(18, 8)
+  roundingMode        RateRoundingMode @default(up)
   confirmationMode    ConfirmationMode @default(automatic)
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
@@ -317,24 +336,44 @@ model PaymentTransaction {
   id                    String              @id @default(uuid()) @db.Uuid
   tenantId              String?             @db.Uuid // denormalized indexed
   userId                String              @db.Uuid
-  gatewayId             String              @db.Uuid
-  amountRequested       Decimal             @db.Decimal(18, 2)
+  // Exactly one of the two gateway columns is set — the platform brand's or a
+  // reseller's own (ADR-0006). A CHECK in 20260911000000_payment_legacy_port
+  // enforces it; Prisma cannot express it.
+  gatewayId             String?             @db.Uuid
+  tenantGatewayConfigId String?             @db.Uuid
+  amountRequested       Decimal             @db.Decimal(18, 2) // base, before coupons
   feeApplied            Decimal             @db.Decimal(18, 2)
+  taxApplied            Decimal             @default(0) @db.Decimal(18, 2)
+  discountApplied       Decimal             @default(0) @db.Decimal(18, 2) // every coupon together
+  amountCredited        Decimal             @db.Decimal(18, 2) // base + adjustment gap
+  // What the gateway is asked to charge, in its own currency's minor unit, and
+  // the base->that-currency rate that produced it (ADR-0019). Frozen at intent.
+  chargedAmountMinor    BigInt
+  exchangeRateSnapshot  Decimal?            @db.Decimal(18, 8)
   status                PaymentStatus       @default(pending)
-  gatewayTrackingCode   String?
-  couponId              String?             @db.Uuid
+  gatewayTrackingCode   String? // the id a duplicate callback shares — Zarinpal `authority` (ADR-0028)
+  gatewayReferenceId    String? // the receipt number of a paid payment — Zarinpal `ref_id`
+  cardPanMasked         String?
+  failureCode           String?
   confirmationSource    ConfirmationSource?
   confirmedByAdminId    String?             @db.Uuid
   manualConfirmReason   String? // اجباری در سطح اپلیکیشن اگر confirmationSource=admin_manual
   createdAt             DateTime            @default(now())
   expiresAt             DateTime? // معمولاً now()+15min
 
-  gateway                 PaymentGateway            @relation(fields: [gatewayId], references: [id])
+  // Restrict, not the optional-relation default SetNull: a payment is a
+  // permanent record, and nulling its gateway would also break the CHECK.
+  gateway                 PaymentGateway?           @relation(fields: [gatewayId], references: [id], onDelete: Restrict)
+  tenantGatewayConfig     TenantGatewayConfig?      @relation(fields: [tenantGatewayConfigId], references: [id], onDelete: Restrict)
   couponRedemptions       CouponRedemption[]
   reconciliationLogs      PaymentReconciliationLog[]
   cryptoDetail            CryptoPaymentDetail?
   affiliateCommissions    AffiliateCommission[]
 
+  // ADR-0028, once per gateway column. NULLs never collide, so a pending row
+  // with no code yet, or a row on the other column, is outside each key.
+  @@unique([gatewayId, gatewayTrackingCode])
+  @@unique([tenantGatewayConfigId, gatewayTrackingCode])
   @@index([tenantId])
   @@index([status, expiresAt])
   @@map("payment_transaction")
