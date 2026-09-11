@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 3
+version: 4
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -34,6 +34,7 @@ display-currency conversion (`currency`), plan prices (`catalog`).
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-11 | contract v4 (F-092-t, D-26): a gateway's vault merchant id is labelled with the gateway row (`gateway:<source>:<id>`), not the provider — every gateway its own account. Consumers tenant, network, ai, engagement — none built against it; no credential of this kind was stored, so nothing migrates |
 | 2026-09-11 | contract v3 (F-092-q, ADR-0038): no tax on a top-up — `taxApplied` and both gateway `taxRatePercent` columns dropped, the price has no tax. Consumers tenant, network, ai, engagement — none built against it |
 | 2026-09-11 | contract v2 (F-092-d): a payment names one of two gateway columns; the per-user coupon limit is no longer a DB unique. Consumers tenant, network, ai, engagement — none built against it |
 | 2026-09-11 | draft -> active: the wallet credit/debit primitive (F-092-b) is the first built operation |

@@ -4,7 +4,7 @@ import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { CouponValidationService, RejectedCoupon } from '../coupon/coupon-validation';
-import { GatewayMerchant } from '../gateway/gateway-merchant';
+import { GatewayMerchant, GatewaySource } from '../gateway/gateway-merchant';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import {
   feeQuoteAmountMinor,
@@ -31,9 +31,10 @@ import {
  *    active, and offered **only** when the request tenant is the
  *    `platform_owner` (ADR-0006, D-25). That table has no tenant column and no
  *    policy, so the tenant type read here is the whole of the boundary.
- * The platform owner is offered both. Its merchant id, for either, is its own
- * vault's `gateway_merchant_id` labelled with the provider; the plaintext
- * `payment_gateway.merchantId` column is never read.
+ * The platform owner is offered both. Every gateway's merchant id is its own:
+ * the request tenant's vault entry labelled with that gateway row (D-26,
+ * `gateway-merchant.ts`); the plaintext `payment_gateway.merchantId` column is
+ * never read.
  *
  * A quote reserves nothing and writes nothing. The provider's fee quote and the
  * vault read happen after the transaction closes: a database connection is
@@ -41,7 +42,7 @@ import {
  */
 
 /** Which table a gateway id belongs to. Ids never cross tables. */
-export type GatewaySource = 'tenant' | 'platform';
+export type { GatewaySource };
 
 export type DepositGateway = {
   id: string;
@@ -197,10 +198,10 @@ export class DepositQuoteService {
     if (gateway.feeCalculationMode === FeeCalcMode.automatic) {
       const amountMinor = feeQuoteAmountMinor(priceRequest);
       if (amountMinor !== null) {
-        // Either table's merchant id is the request tenant's vault entry for the
-        // provider: a platform gateway is offered to the platform owner alone.
+        // This gateway's own account, in the request tenant's vault (D-26): a
+        // platform gateway is offered to the platform owner alone.
         const credentials = await this.merchant.credentialsFor(
-          { tenantId: tenant.id, providerName: gateway.providerName },
+          { tenantId: tenant.id, source: request.source, gatewayId: gateway.id, providerName: gateway.providerName },
           userId,
         );
         const { feeMinor } = await provider.quoteFee({ credentials, amountMinor });

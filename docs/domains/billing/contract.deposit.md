@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 3
+version: 4
 updated: 2026-09-11
 ---
 
@@ -31,7 +31,7 @@ Both routes sit behind the gate like every billing route ("Request edge" in
 | Money is a base-currency decimal string (ADR-0019); `charge` is `{currency, decimals, amountMinor}` as the gateway will be asked, `amountMinor` a string, or `null` on the free path | JSON has no bigint and no exact decimal |
 | A `tenant` gateway is the request tenant's own `tenant_gateway_config`, `isActive` **and** `verified`; a `platform` gateway is an active `payment_gateway`, offered **only** when the request tenant is `platform_owner`, which is offered both (D-25). Either needs a driver. Anything else — another tenant's, a reseller asking for a platform one, an id named with the wrong `source` — is **404** `billing.gatewayNotFound` | ADR-0006: no shared gateway for resellers (`deposit-gateways.int.spec.ts`) |
 | Rows are read in a `tenantTransaction` with an explicit column list — never `merchantIdEncrypted` / `apiKeyEncrypted` / `payment_gateway.merchantId` | the strict RLS on `tenant_gateway_config` binds only there; `payment_gateway` has no policy, so the tenant type is the whole boundary; invariant 8 |
-| For either table the merchant id is the request tenant's vault `gateway_merchant_id`, labelled with the provider — so the platform owner's platform and own gateway of one provider share one merchant id | D-25 |
+| Every gateway pays into its own account: its merchant id is the request tenant's vault `gateway_merchant_id` labelled `gateway:<source>:<gatewayId>` ("Payment providers" in `contract.md`) | D-26 |
 | Coupons are validated in the same transaction as a wallet top-up. A rejected code is not an error: the quote goes on without it and `rejected[].message` is translated, one i18n key per `reason` | codes stack; a typo must not hide the rest of the breakdown |
 | An automatic fee: the provider is asked for `feeQuoteAmountMinor`, its answer converted by `quotedFeeFromMinor` (rounded **up** to the cent). The vault and the provider are called after the transaction closes; the free path calls neither | no connection is held across a call to a bank |
 | `liveRate` is `null` until F-092-c: a gateway prices from its `staticRate`, or refuses | F-0607's last rung |
