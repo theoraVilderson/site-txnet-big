@@ -302,7 +302,6 @@ model PaymentGateway {
   supportedCurrencies Json // Array مثل ["USD","EUR"] یا ["USDT","BTC"]
   isActive            Boolean          @default(true)
   merchantId          String // SENSITIVE — never default-select
-  taxRatePercent      Decimal          @default(10) @db.Decimal(5, 2)
   minAcceptAmount     Decimal          @db.Decimal(18, 2)
   maxAcceptAmount     Decimal          @db.Decimal(18, 2)
   feeCalculationMode  FeeCalcMode
@@ -343,7 +342,6 @@ model PaymentTransaction {
   tenantGatewayConfigId String?             @db.Uuid
   amountRequested       Decimal             @db.Decimal(18, 2) // base, before coupons
   feeApplied            Decimal             @db.Decimal(18, 2)
-  taxApplied            Decimal             @default(0) @db.Decimal(18, 2)
   discountApplied       Decimal             @default(0) @db.Decimal(18, 2) // every coupon together
   amountCredited        Decimal             @db.Decimal(18, 2) // base + adjustment gap
   // What the gateway is asked to charge, in its own currency's minor unit, and

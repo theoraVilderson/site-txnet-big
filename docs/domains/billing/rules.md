@@ -23,7 +23,7 @@ while `pending`; `usedCount` increments on `confirmed`.
 | # | Rule | Trigger | Exception |
 |---|---|---|---|
 | 1 | Fee is computed per gateway: `manual` vs `automatic`, `fixed` vs `percentage`, with optional floor/ceiling | payment start | — |
-| 2 | `taxRatePercent` default 10% applies per gateway | payment | — |
+| 2 | A top-up carries no tax; tax is charged when credit buys a service (ADR-0038) | payment | — |
 | 3 | Coupon `minPurchaseAmount` / `maxDiscountCap` (percentage only) bound the discount | redeem | — |
 | 4 | Targeted coupon (`visibility = targeted`) requires a `coupon_allowed_user` row | redeem | — |
 | 5 | Affiliate commission is separate from `identity.user.referredByUserId` — it needs its own status ledger | payment success by referred user | — |

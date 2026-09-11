@@ -319,7 +319,6 @@ model TenantGatewayConfig {
   verificationStatus  TenantGatewayVerificationStatus @default(pending_test_transaction)
   verifiedByAdminId   String?                         @db.Uuid
   isActive            Boolean                         @default(false)
-  taxRatePercent      Decimal                         @default(10) @db.Decimal(5, 2)
   minAcceptAmount     Decimal                         @db.Decimal(18, 2)
   maxAcceptAmount     Decimal                         @db.Decimal(18, 2)
   feeCalculationMode  FeeCalcMode

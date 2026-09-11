@@ -106,11 +106,11 @@ function insertPayment(gateway: {
   return owner.$executeRawUnsafe(`
     INSERT INTO billing.payment_transaction
       (id, "tenantId", "userId", "gatewayId", "tenantGatewayConfigId", "gatewayTrackingCode",
-       "amountRequested", "feeApplied", "taxApplied", "discountApplied", "amountCredited",
+       "amountRequested", "feeApplied", "discountApplied", "amountCredited",
        "chargedAmountMinor", "exchangeRateSnapshot")
     VALUES ('${id}', '${TENANT}', '${USER}', ${uuidOrNull(gateway.gatewayId)},
             ${uuidOrNull(gateway.tenantGatewayConfigId)}, ${gateway.authority ? `'${gateway.authority}'` : 'NULL'},
-            10.00, 0.20, 1.00, 0.00, 10.00, 11220000, 1020000.00000000)
+            10.00, 0.20, 0.00, 10.00, 10404000, 1020000.00000000)
   `);
 }
 

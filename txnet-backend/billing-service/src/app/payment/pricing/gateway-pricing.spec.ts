@@ -6,7 +6,7 @@ import { Prisma } from '@prisma/client';
 import { feeBasis, GatewayPricing, priceAtGateway, PriceRequest } from './gateway-pricing';
 
 /**
- * The gateway pricing calculator (F-092-e; catalog F-0609..F-0611).
+ * The gateway pricing calculator (F-092-e, F-092-q; catalog F-0609..F-0611).
  *
  * The cases live in `gateway-pricing.golden.json`, hand-computed and written as
  * strings, so a change to the arithmetic shows up as a changed expected value
@@ -31,7 +31,6 @@ type Golden = {
     };
     expect?: {
       gap: string;
-      tax: string;
       fee: string;
       payable: string;
       credited: string;
@@ -48,7 +47,6 @@ const golden = JSON.parse(
 ) as Golden;
 
 const DECIMAL_COLUMNS = [
-  'taxRatePercent',
   'minAcceptAmount',
   'maxAcceptAmount',
   'feeValue',
@@ -96,7 +94,6 @@ describe('priceAtGateway — golden cases', () => {
       amount: price.amount.toFixed(2),
       discount: price.discount.toFixed(2),
       gap: price.gap.toFixed(2),
-      tax: price.tax.toFixed(2),
       fee: price.fee.toFixed(2),
       payable: price.payable.toFixed(2),
       credited: price.credited.toFixed(2),

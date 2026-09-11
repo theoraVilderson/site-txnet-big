@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 2
+version: 3
 updated: 2026-09-11
 ---
 
@@ -23,10 +23,11 @@ them yet (F-092-o shows the quote, F-092-i charges it). The worked numbers are
 |---|---|
 | The quote shown and the amount charged both come from `priceAtGateway`; nothing else does money arithmetic on a deposit | F-0612 — legacy clamped a quoted fee on one path only |
 | Pure: the provider's fee quote and the FX rate are arguments. The caller asks the provider for `feeBasis(request)`; the staleness ladder decides whether a `liveRate` is passed | F-0610; F-0607 needs a clock |
-| Order: `amount` in `[minAcceptAmount, maxAcceptAmount]` → minus `discount` → gap → tax → fee → `payable`; `credited = amount + gap` | F-092-o's quote shape |
+| Order: `amount` in `[minAcceptAmount, maxAcceptAmount]` → minus `discount` → gap → fee → `payable`; `credited = amount + gap` | F-092-o's quote shape |
+| **No tax on a top-up** — the result has no tax field (changed in v3) | ADR-0038: tax is charged when credit buys a service |
 | Gap: a remainder above zero and under the minimum is raised to it, and the difference is credited too | legacy behaviour kept |
-| Tax and a percentage fee are taken on that remainder (after discount and gap), never on each other | a fully discounted deposit is then free, not a tax bill |
-| Remainder zero is the free path: no tax, fee, rate or quote; `chargedAmountMinor = null` | nothing reaches the gateway |
+| A percentage fee is taken on that remainder (after discount and gap) | the fee follows what reaches the gateway |
+| Remainder zero is the free path: no fee, rate or quote; `chargedAmountMinor = null` | nothing reaches the gateway |
 | A `discount` above `amount` is `InvalidPricingInput`, not a free deposit | the coupon engine (F-092-g) caps stacking |
 | `feeFloor` / `feeCeiling` bind a quoted fee exactly as they bind a manual one | the legacy bug named on the row |
 | Cents round **up**; the rate rounds to `roundingStep` up or nearest (half up); `chargedAmountMinor` rounds up | F-0609 — never down |
@@ -44,10 +45,10 @@ Schema only; no route writes these yet. Migration
 |---|---|
 | A `payment_transaction` names exactly one gateway: `gatewayId` (platform brand) or `tenantGatewayConfigId` (a reseller's own) — a CHECK | ADR-0006: a reseller's gateway is never a `payment_gateway` row |
 | `gatewayTrackingCode` is unique per gateway column; for Zarinpal it holds `authority`, not `ref_id` (`gatewayReferenceId`) | ADR-0028 — `authority` is what a duplicate callback shares |
-| A payment's coupons are its `coupon_redemption` rows; there is no `couponId` column | codes stack, applied in order (D-21) |
+| A payment's coupons are its `coupon_redemption` rows; there is no `couponId` column | codes stack, applied in order, each on what the previous left (D-21) |
 | `perUserUsageLimit` may exceed 1 and is **not** enforced by an index — the redemption transaction counts it | D-21; F-092-h |
 | Amounts are base currency; `chargedAmountMinor` + `exchangeRateSnapshot` are what the gateway was asked for, frozen at intent | ADR-0019 |
-| `displayName` and gateway pricing (fee / tax / min / max, and F-0609's rate columns) have the same columns on `payment_gateway` and `tenant.tenant_gateway_config` | one calculator reads both (F-092-e) |
+| `displayName` and gateway pricing (fee / min / max, and F-0609's rate columns; no tax rate since v3, ADR-0038) have the same columns on `payment_gateway` and `tenant.tenant_gateway_config` | one calculator reads both (F-092-e) |
 
 ## Request edge (built — F-092-a)
 
@@ -93,7 +94,7 @@ reserve/confirm state machine.
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
 | credit / debit wallet — **built**, see above | tx, userId, amount, reasonType, referenceId | `wallet_transaction` + new `balanceAfter` | sync tx | insufficient funds, version conflict, invalid amount |
-| price a deposit — **built**, see above | gateway pricing, amount, discount, quotedFee?, liveRate?, chargeDecimals | base, discount, gap, tax, fee, payable, credited, rate, chargedAmountMinor | sync, pure | invalid input, amount out of gateway range, fee quote required, rate unavailable / out of range |
+| price a deposit — **built**, see above | gateway pricing, amount, discount, quotedFee?, liveRate?, chargeDecimals | base, discount, gap, fee, payable, credited, rate, chargedAmountMinor | sync, pure | invalid input, amount out of gateway range, fee quote required, rate unavailable / out of range |
 | start payment | userId, gatewayId or tenantGatewayConfigId, amount, couponCodes[] | payment intent + redirect / deposit address | sync | amount out of gateway range |
 | confirm payment | gateway webhook / reconciliation / admin | wallet credit + `payment_transaction.status = success` | async | duplicate, mismatch (flagged) |
 | initiate wallet transfer | senderId, receiverId, amount | `wallet_transfer_request` (`pending_otp`) | sync | — |

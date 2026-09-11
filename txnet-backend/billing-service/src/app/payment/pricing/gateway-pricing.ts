@@ -24,12 +24,14 @@ import { FeeCalcMode, FeeType, PaymentGateway, Prisma, RateRoundingMode } from '
  *  3. gap — a remainder above zero but under the gateway minimum is raised to
  *     the minimum, and the difference is credited too, so the user pays more
  *     and receives exactly that much more;
- *  4. tax — `taxRatePercent` of that basis, never of the fee;
- *  5. fee — fixed, a percentage of the basis, or the provider's quote, then the
+ *  4. fee — fixed, a percentage of the basis, or the provider's quote, then the
  *     floor and the ceiling, in every mode;
- *  6. payable = basis + tax + fee; credited = amount + gap.
- * A remainder of zero is the free path: nothing is charged, so there is no
- * tax, no fee and no rate, and no quote is needed.
+ *  5. payable = basis + fee; credited = amount + gap.
+ * A remainder of zero is the free path: nothing is charged, so there is no fee
+ * and no rate, and no quote is needed.
+ *
+ * There is no tax here. A top-up is a prepayment, not a sale: tax is charged
+ * when the credit buys a service (ADR-0038).
  *
  * Money is rounded to the cent **up**, never down, and so is the rate at its
  * `roundingStep` unless the gateway says `nearest`. A rate outside
@@ -38,7 +40,6 @@ import { FeeCalcMode, FeeType, PaymentGateway, Prisma, RateRoundingMode } from '
  */
 export type GatewayPricing = Pick<
   PaymentGateway,
-  | 'taxRatePercent'
   | 'minAcceptAmount'
   | 'maxAcceptAmount'
   | 'feeCalculationMode'
@@ -75,7 +76,6 @@ export type GatewayPrice = {
   amount: Prisma.Decimal;
   discount: Prisma.Decimal;
   gap: Prisma.Decimal;
-  tax: Prisma.Decimal;
   fee: Prisma.Decimal;
   payable: Prisma.Decimal;
   credited: Prisma.Decimal;
@@ -163,7 +163,6 @@ function checkConfig(p: GatewayPricing): void {
   if (dec(p.minAcceptAmount).gt(dec(p.maxAcceptAmount))) {
     throw new InvalidPricingInput('minAcceptAmount is above maxAcceptAmount');
   }
-  if (dec(p.taxRatePercent).lt(0)) throw new InvalidPricingInput('taxRatePercent is negative');
   if (dec(p.feeValue).lt(0)) throw new InvalidPricingInput('feeValue is negative');
   if (p.feeFloor != null && p.feeCeiling != null && dec(p.feeFloor).gt(dec(p.feeCeiling))) {
     throw new InvalidPricingInput('feeFloor is above feeCeiling');
@@ -264,7 +263,6 @@ export function priceAtGateway(request: PriceRequest): GatewayPrice {
       amount: out(amount, MONEY_SCALE),
       discount: out(discount, MONEY_SCALE),
       gap: out(ZERO, MONEY_SCALE),
-      tax: out(ZERO, MONEY_SCALE),
       fee: out(ZERO, MONEY_SCALE),
       payable: out(ZERO, MONEY_SCALE),
       credited: out(credited, MONEY_SCALE),
@@ -274,9 +272,8 @@ export function priceAtGateway(request: PriceRequest): GatewayPrice {
     };
   }
 
-  const tax = centsUp(basis.mul(dec(pricing.taxRatePercent)).div(100));
   const fee = feeOf(pricing, basis, request.quotedFee);
-  const payable = basis.plus(tax).plus(fee);
+  const payable = basis.plus(fee);
   const rate = rateOf(pricing, request.liveRate);
   const charged = payable
     .mul(rate)
@@ -287,7 +284,6 @@ export function priceAtGateway(request: PriceRequest): GatewayPrice {
     amount: out(amount, MONEY_SCALE),
     discount: out(discount, MONEY_SCALE),
     gap: out(gap, MONEY_SCALE),
-    tax: out(tax, MONEY_SCALE),
     fee: out(fee, MONEY_SCALE),
     payable: out(payable, MONEY_SCALE),
     credited: out(credited, MONEY_SCALE),
