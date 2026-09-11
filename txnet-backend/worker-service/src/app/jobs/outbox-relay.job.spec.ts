@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { ConfigService } from '@nestjs/config';
 import { PublishNotConfirmedError } from '@txnet-backend/shared-core';
 import { OutboxRelayJob } from './outbox-relay.job';
@@ -54,12 +55,12 @@ describe('OutboxRelayJob', () => {
     const outsideTx: unknown[] = [];
 
     const tx = {
-      $queryRaw: jest.fn(async () => {
+      $queryRaw: vi.fn(async () => {
         claimed.push(rows);
         return rows;
       }),
       outboxEvent: {
-        update: jest.fn(async (args: unknown) => {
+        update: vi.fn(async (args: unknown) => {
           inTx.updates.push(args);
           return args;
         }),
@@ -67,7 +68,7 @@ describe('OutboxRelayJob', () => {
     };
 
     const prisma = {
-      $transaction: jest.fn(async (fn: (c: typeof tx) => Promise<void>) => {
+      $transaction: vi.fn(async (fn: (c: typeof tx) => Promise<void>) => {
         inTx.updates = [];
         try {
           await fn(tx);
@@ -78,7 +79,7 @@ describe('OutboxRelayJob', () => {
         committed.push(...inTx.updates);
       }),
       outboxEvent: {
-        update: jest.fn(async (args: unknown) => {
+        update: vi.fn(async (args: unknown) => {
           outsideTx.push(args);
           return args;
         }),
@@ -97,7 +98,7 @@ describe('OutboxRelayJob', () => {
 
   const jobWith = (
     prisma: unknown,
-    publish: jest.Mock,
+    publish: Mock,
     batch?: number,
   ): OutboxRelayJob =>
     new OutboxRelayJob(
@@ -108,7 +109,7 @@ describe('OutboxRelayJob', () => {
 
   it('publishes every claimed row and stamps each one inside the transaction', async () => {
     const { prisma, committed } = prismaWith([row('a'), row('b')]);
-    const publish = jest.fn().mockResolvedValue(undefined);
+    const publish = vi.fn().mockResolvedValue(undefined);
 
     const result = await jobWith(prisma, publish).run();
 
@@ -124,7 +125,7 @@ describe('OutboxRelayJob', () => {
 
   it('sends the row to outbox.<type>, as the wire shape, with the row id as the event id', async () => {
     const { prisma } = prismaWith([row('a')]);
-    const publish = jest.fn().mockResolvedValue(undefined);
+    const publish = vi.fn().mockResolvedValue(undefined);
 
     await jobWith(prisma, publish).run();
 
@@ -140,7 +141,7 @@ describe('OutboxRelayJob', () => {
 
   it('does not stamp a row the broker would not take, and stops the batch there', async () => {
     const { prisma, committed } = prismaWith([row('a'), row('b'), row('c')]);
-    const publish = jest
+    const publish = vi
       .fn()
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(
@@ -160,7 +161,7 @@ describe('OutboxRelayJob', () => {
 
   it('records why on the failed row, outside the transaction that rolled back', async () => {
     const { prisma, outsideTx } = prismaWith([row('a')]);
-    const publish = jest
+    const publish = vi
       .fn()
       .mockRejectedValue(
         new PublishNotConfirmedError('unroutable', 'reached no queue'),
@@ -180,7 +181,7 @@ describe('OutboxRelayJob', () => {
 
   it('a run that found nothing to publish is a success, not a failure', async () => {
     const { prisma } = prismaWith([]);
-    const publish = jest.fn();
+    const publish = vi.fn();
 
     const result = await jobWith(prisma, publish).run();
 
@@ -194,7 +195,7 @@ describe('OutboxRelayJob', () => {
 
   it('refuses an event type that is not a routing-key path, without publishing it', async () => {
     const { prisma, outsideTx } = prismaWith([row('a', 'payment confirmed')]);
-    const publish = jest.fn().mockResolvedValue(undefined);
+    const publish = vi.fn().mockResolvedValue(undefined);
 
     await expect(jobWith(prisma, publish).run()).rejects.toThrow();
 

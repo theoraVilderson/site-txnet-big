@@ -10,10 +10,10 @@ function fakeRedis() {
   const values = new Map<string, unknown>();
   return {
     values,
-    setJson: jest.fn(async (key: string, value: unknown) => void values.set(key, value)),
-    getJson: jest.fn(async (key: string) => values.get(key) ?? null),
-    del: jest.fn(async (key: string) => void values.delete(key)),
-    touch: jest.fn(async () => undefined),
+    setJson: vi.fn(async (key: string, value: unknown) => void values.set(key, value)),
+    getJson: vi.fn(async (key: string) => values.get(key) ?? null),
+    del: vi.fn(async (key: string) => void values.delete(key)),
+    touch: vi.fn(async () => undefined),
   };
 }
 

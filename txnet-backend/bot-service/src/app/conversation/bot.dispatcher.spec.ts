@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import {
   BotClientRegistry,
   BotViewRenderer,
@@ -20,13 +21,13 @@ const ctx: ChatContext = {
 
 function harness(result: FlowResult) {
   const client = {
-    sendMessage: jest.fn().mockResolvedValue(1),
-    deleteMessage: jest.fn().mockResolvedValue(true),
-    answerCallbackQuery: jest.fn().mockResolvedValue(undefined),
+    sendMessage: vi.fn().mockResolvedValue(1),
+    deleteMessage: vi.fn().mockResolvedValue(true),
+    answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
   };
   const bots = { client: () => client } as unknown as BotClientRegistry;
-  const router = { route: jest.fn().mockResolvedValue(result) } as unknown as ConversationRouter;
-  const nav = { save: jest.fn(), clear: jest.fn() } as unknown as ConversationStore;
+  const router = { route: vi.fn().mockResolvedValue(result) } as unknown as ConversationRouter;
+  const nav = { save: vi.fn(), clear: vi.fn() } as unknown as ConversationStore;
   const copy = {
     translator: () => (t: { key?: string; raw?: string }) => t.raw ?? t.key ?? '',
     text: (_l: string, t: { key?: string }) => t.key ?? '',
@@ -131,7 +132,7 @@ describe('BotDispatcher', () => {
 
   it('tells the user something went wrong rather than letting the update redeliver', async () => {
     const { dispatcher, client } = harness({ view, nextState: null });
-    (dispatcher as unknown as { router: { route: jest.Mock } }).router.route.mockRejectedValue(
+    (dispatcher as unknown as { router: { route: Mock } }).router.route.mockRejectedValue(
       new Error('boom'),
     );
 

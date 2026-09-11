@@ -152,7 +152,7 @@ describe('confirmedPublisher', () => {
   });
 
   it('rejects with `timeout` when the broker never answers', async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     try {
       const c = channel();
       const publish = confirmedPublisher(c.fake, 5_000);
@@ -160,16 +160,16 @@ describe('confirmedPublisher', () => {
       const sending = reasonOf(
         publish('txnet.automation', 'automation.tick.heartbeat', body()),
       );
-      jest.advanceTimersByTime(5_000);
+      vi.advanceTimersByTime(5_000);
 
       await expect(sending).resolves.toBe('timeout');
     } finally {
-      jest.useRealTimers();
+      vi.useRealTimers();
     }
   });
 
   it('does not leave a timer running once the broker has answered', async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     try {
       const c = channel();
       const publish = confirmedPublisher(c.fake, 5_000);
@@ -180,9 +180,9 @@ describe('confirmedPublisher', () => {
 
       // A timer left pending would hold a shutting-down process open, which is
       // why `defer` in the tick consumer unrefs its own.
-      expect(jest.getTimerCount()).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
     } finally {
-      jest.useRealTimers();
+      vi.useRealTimers();
     }
   });
 });

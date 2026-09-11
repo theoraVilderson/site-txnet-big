@@ -54,7 +54,7 @@ import {
   tenantScopedTables,
 } from '../../test-support/postgres-fixture';
 
-jest.setTimeout(HARNESS_TIMEOUT_MS);
+vi.setConfig({ testTimeout: HARNESS_TIMEOUT_MS, hookTimeout: HARNESS_TIMEOUT_MS });
 
 /** Two tenants and a user in each — the smallest world in which "leak" means anything. */
 const TENANT_A = '11111111-1111-4111-8111-111111111111';

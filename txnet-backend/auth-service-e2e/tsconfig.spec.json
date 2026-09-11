@@ -5,10 +5,9 @@
     "module": "commonjs",
     "moduleResolution": "node10",
     "esModuleInterop": true,
-    "types": ["jest", "node"]
+    "types": ["vitest/globals", "node"]
   },
   "include": [
-    "jest.config.cts",
     "src/**/*.ts",
     "../auth-service/src/**/*.ts"
   ]

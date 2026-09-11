@@ -1,3 +1,4 @@
+import type { MockInstance } from 'vitest';
 import { Reflector } from '@nestjs/core';
 import { Logger, NotFoundException } from '@nestjs/common';
 import { TenantGuard } from './tenant.guard';
@@ -37,7 +38,7 @@ describe('a non-panel surface serves no panel route', () => {
 
   describe('TenantGuard', () => {
     let guard: TenantGuard;
-    let warn: jest.SpyInstance;
+    let warn: MockInstance;
 
     const on = (purpose: string, via: string) => ({
       id: 'tenant-b',
@@ -50,10 +51,10 @@ describe('a non-panel surface serves no panel route', () => {
       guard = new TenantGuard({
         getAllAndOverride: () => undefined,
       } as unknown as Reflector);
-      warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+      warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     });
 
-    afterEach(() => jest.restoreAllMocks());
+    afterEach(() => vi.restoreAllMocks());
 
     it('lets a panel surface through', () => {
       const { context } = fakeExecutionContext({
@@ -96,7 +97,7 @@ describe('a non-panel surface serves no panel route', () => {
 
       try {
         guard.canActivate(context);
-        fail('expected a refusal');
+        expect.unreachable('expected a refusal');
       } catch (error) {
         expect((error as NotFoundException).message).toBe('Not Found');
       }

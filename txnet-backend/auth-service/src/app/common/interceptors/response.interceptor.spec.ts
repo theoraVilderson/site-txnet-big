@@ -149,7 +149,7 @@ describe('ResponseInterceptor', () => {
     }) as never;
 
   function harness(catalog: Record<string, string> = {}) {
-    const getKey = jest.fn((_lang: string, ns: string, key: string) =>
+    const getKey = vi.fn((_lang: string, ns: string, key: string) =>
       ns === 'errors' ? catalog[key] : undefined,
     );
     const locale = { getKey, getDefaultLanguage: () => 'fa' };

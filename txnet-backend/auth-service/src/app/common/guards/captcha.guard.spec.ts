@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { HttpException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { CaptchaGuard } from './captcha.guard';
@@ -6,13 +7,13 @@ import { REQUIRE_CAPTCHA_KEY } from '../../auth/decorators/require-captcha.decor
 import { fakeExecutionContext } from '../../../test-support/execution-context';
 
 describe('CaptchaGuard', () => {
-  let reflector: { getAllAndOverride: jest.Mock };
-  let captcha: { consumePass: jest.Mock };
+  let reflector: { getAllAndOverride: Mock };
+  let captcha: { consumePass: Mock };
   let guard: CaptchaGuard;
 
   beforeEach(() => {
-    reflector = { getAllAndOverride: jest.fn().mockReturnValue(true) };
-    captcha = { consumePass: jest.fn().mockResolvedValue(true) };
+    reflector = { getAllAndOverride: vi.fn().mockReturnValue(true) };
+    captcha = { consumePass: vi.fn().mockResolvedValue(true) };
     guard = new CaptchaGuard(
       reflector as unknown as Reflector,
       captcha as unknown as CaptchaService,

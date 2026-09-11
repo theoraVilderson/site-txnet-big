@@ -175,7 +175,7 @@ describe('channelRefusal', () => {
     // this is the one family whose authorization touches the network at all.
     it('refuses a malformed id without reading the store', async () => {
       const store: ChannelProofs = {
-        otpChannelToken: jest.fn().mockResolvedValue(TOKEN),
+        otpChannelToken: vi.fn().mockResolvedValue(TOKEN),
       };
       await expect(refuse(null, 'otp:not-hex', TOKEN, store)).resolves.toBe(
         'realtime.channelForbidden',

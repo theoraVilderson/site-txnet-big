@@ -1,3 +1,5 @@
+import type { Mock } from 'vitest';
+import * as argon2Module from 'argon2';
 import { OtpChannel, OtpPurpose } from '@prisma/client';
 import { AuthService } from './auth.service';
 import { normalizePhone } from '../common/validation/phone.schema';
@@ -9,15 +11,14 @@ import { normalizePhone } from '../common/validation/phone.schema';
  */
 const CANONICAL_PHONE = normalizePhone('09123456789');
 
-jest.mock('argon2', () => ({
+vi.mock('argon2', () => ({
   argon2id: 2,
-  verify: jest.fn(),
-  hash: jest.fn(),
+  verify: vi.fn(),
+  hash: vi.fn(),
 }));
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const argon2 = require('argon2') as {
-  verify: jest.Mock;
-  hash: jest.Mock;
+const argon2 = argon2Module as unknown as {
+  verify: Mock;
+  hash: Mock;
 };
 
 /**
@@ -42,13 +43,13 @@ type Harness = ReturnType<typeof harness>;
 function harness() {
   const prisma = {
     user: {
-      findFirst: jest.fn(),
-      findUnique: jest.fn(),
-      update: jest.fn((args: unknown) => ({ __op: 'user.update', args })),
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn((args: unknown) => ({ __op: 'user.update', args })),
     },
     session: {
-      findUnique: jest.fn(),
-      updateMany: jest.fn((args: unknown) => ({
+      findUnique: vi.fn(),
+      updateMany: vi.fn((args: unknown) => ({
         __op: 'session.updateMany',
         args,
       })),
@@ -57,58 +58,58 @@ function harness() {
     // so `logout` reads it. Default is "no group here" — an ordinary full
     // logout, which is what every other case in this file assumes.
     linkedAccountMember: {
-      findUnique: jest.fn().mockResolvedValue(null),
-      findMany: jest.fn().mockResolvedValue([]),
-      deleteMany: jest.fn(),
+      findUnique: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
+      deleteMany: vi.fn(),
     },
-    linkedAccountGroup: { update: jest.fn().mockResolvedValue({}) },
-    $transaction: jest.fn(async (ops: unknown[]) => ops),
+    linkedAccountGroup: { update: vi.fn().mockResolvedValue({}) },
+    $transaction: vi.fn(async (ops: unknown[]) => ops),
   };
   const rateLimiter = {
-    hit: jest.fn().mockResolvedValue({ allowed: true, current: 1, limit: 10 }),
-    reset: jest.fn().mockResolvedValue(undefined),
+    hit: vi.fn().mockResolvedValue({ allowed: true, current: 1, limit: 10 }),
+    reset: vi.fn().mockResolvedValue(undefined),
   };
   const tokens = {
-    signAccessToken: jest.fn().mockReturnValue('access-token'),
-    signOtpToken: jest.fn().mockReturnValue('otp-token'),
-    signResetToken: jest.fn().mockReturnValue('reset-token'),
-    refreshHash: jest.fn((t: string) => `hash(${t})`),
-    verify: jest.fn(),
+    signAccessToken: vi.fn().mockReturnValue('access-token'),
+    signOtpToken: vi.fn().mockReturnValue('otp-token'),
+    signResetToken: vi.fn().mockReturnValue('reset-token'),
+    refreshHash: vi.fn((t: string) => `hash(${t})`),
+    verify: vi.fn(),
   };
   const config = {
-    get: jest.fn((_key: string, fallback?: unknown) => fallback),
+    get: vi.fn((_key: string, fallback?: unknown) => fallback),
   };
   const otp = {
-    issueOtp: jest.fn().mockResolvedValue(undefined),
-    verifyOtp: jest.fn().mockResolvedValue(true),
+    issueOtp: vi.fn().mockResolvedValue(undefined),
+    verifyOtp: vi.fn().mockResolvedValue(true),
   };
   const channels = {
-    describe: jest.fn().mockReturnValue([]),
-    requiresLink: jest.fn().mockReturnValue(false),
-    assertUsable: jest.fn(),
-    isAvailable: jest.fn().mockReturnValue(true),
-    defaultChannel: jest.fn().mockReturnValue(OtpChannel.sms),
+    describe: vi.fn().mockReturnValue([]),
+    requiresLink: vi.fn().mockReturnValue(false),
+    assertUsable: vi.fn(),
+    isAvailable: vi.fn().mockReturnValue(true),
+    defaultChannel: vi.fn().mockReturnValue(OtpChannel.sms),
   };
   const botLinks = {
-    hasVerifiedLink: jest.fn().mockResolvedValue(true),
-    startLink: jest.fn(),
+    hasVerifiedLink: vi.fn().mockResolvedValue(true),
+    startLink: vi.fn(),
   };
   const sessionService = {
-    createSession: jest.fn().mockResolvedValue({
+    createSession: vi.fn().mockResolvedValue({
       session: { id: 'session-new' },
       refreshToken: 'refresh-new',
     }),
-    revokeSession: jest.fn().mockResolvedValue(undefined),
-    revokeSessionsForUserInScope: jest.fn().mockResolvedValue(1),
+    revokeSession: vi.fn().mockResolvedValue(undefined),
+    revokeSessionsForUserInScope: vi.fn().mockResolvedValue(1),
   };
-  const sessions = { dropAllForUser: jest.fn().mockResolvedValue(undefined) };
+  const sessions = { dropAllForUser: vi.fn().mockResolvedValue(undefined) };
 
   // F-067-a: every OTP route now hands back a delivery id, whether or not a
   // code was issued, and writes the send's status under it.
   const deliveries = {
-    mark: jest.fn(),
-    read: jest.fn().mockResolvedValue(null),
-    mintHandles: jest.fn().mockResolvedValue({
+    mark: vi.fn(),
+    read: vi.fn().mockResolvedValue(null),
+    mintHandles: vi.fn().mockResolvedValue({
       deliveryId: 'a'.repeat(32),
       channelId: 'c'.repeat(32),
       channelToken: 'd'.repeat(32),
@@ -171,7 +172,7 @@ describe('AuthService.loginWithPassword — one answer for every bad credential'
   let h: Harness;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     h = harness();
   });
 
@@ -256,7 +257,7 @@ describe('AuthService.loginWithPassword — lockout', () => {
   let h: Harness;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     h = harness();
     h.prisma.user.findFirst.mockResolvedValue(activeUser());
   });
@@ -371,7 +372,7 @@ describe('AuthService.loginWithPassword — two-factor', () => {
   let h: Harness;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     h = harness();
     argon2.verify.mockResolvedValue(true);
   });
@@ -475,7 +476,7 @@ describe('AuthService.verifyLoginOtp — the token purpose is load-bearing', () 
   let h: Harness;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     h = harness();
   });
 
@@ -573,7 +574,7 @@ describe('AuthService.sessionStatus — the read-only half', () => {
   });
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     h = harness();
   });
 
@@ -649,7 +650,7 @@ describe('AuthService.refresh — rotation', () => {
   });
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     h = harness();
     h.prisma.user.findUnique.mockResolvedValue(activeUser());
   });
@@ -822,7 +823,7 @@ describe('AuthService.resetPassword — every session dies', () => {
   let h: Harness;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     h = harness();
     argon2.hash.mockResolvedValue('new-argon2-hash');
     h.tokens.verify.mockReturnValue({
@@ -1124,7 +1125,7 @@ describe('AuthService.logout — falls back onto the group', () => {
       { userId: 'user-a', addedAt: 1 },
       { userId: 'user-suspended', addedAt: 2 },
     ]);
-    h.service.findUserForSession = jest.fn().mockResolvedValue(null);
+    h.service.findUserForSession = vi.fn().mockResolvedValue(null);
 
     const res: any = await h.service.logout({ refreshToken: 'r' });
 

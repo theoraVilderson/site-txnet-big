@@ -1,3 +1,4 @@
+import type { MockInstance } from 'vitest';
 import { BOT_PLATFORMS } from './bot-platform';
 import { capabilitiesOf } from './capabilities';
 import {
@@ -15,7 +16,7 @@ describe('TelegramLikeBotClient webhook registration', () => {
   const client = () =>
     new TelegramLikeBotClient('telegram', 'https://api.test', 'TOKEN', 1000);
 
-  let fetchMock: jest.SpyInstance;
+  let fetchMock: MockInstance;
 
   const reply = (result: unknown) =>
     ({
@@ -24,7 +25,7 @@ describe('TelegramLikeBotClient webhook registration', () => {
     }) as unknown as Response;
 
   beforeEach(() => {
-    fetchMock = jest
+    fetchMock = vi
       .spyOn(global, 'fetch')
       .mockResolvedValue(reply({ url: '' }));
   });

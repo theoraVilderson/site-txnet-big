@@ -93,10 +93,10 @@ jobs:
         run: git diff --exit-code -- txnet-backend/shared-core/src/lib/i18n site-pwa/src/generated auth-handler/internal/i18nkeys
 
   # ---------------------------------------------------------------------------
-  # NestJS workspace: jest through Nx.
+  # NestJS workspace: vitest through Nx.
   # ---------------------------------------------------------------------------
   backend:
-    name: backend (jest)
+    name: backend (vitest)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -118,13 +118,12 @@ jobs:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
         run: npx prisma generate
 
-      - name: jest
+      - name: vitest
         run: npx nx run-many -t test --parallel=2 --skip-nx-cache
 
-      # jest transpiles without type-checking (`auth-service/jest.config.cts`
-      # sets `isolatedModules`, which is what keeps the suite under 20s), and
-      # the webpack build below is `transpileOnly` — so this step is the only
-      # thing in CI that type-checks the spec files.
+      # vitest transpiles through SWC without type-checking
+      # (`vitest.shared.mts`), and the webpack build below is `transpileOnly`
+      # — so this step is the only thing in CI that type-checks the spec files.
       - name: tsc (specs)
         run: npx tsc -p auth-service/tsconfig.spec.json --noEmit
 
@@ -167,7 +166,7 @@ jobs:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
         run: npx prisma generate
 
-      - name: jest (e2e)
+      - name: vitest (e2e)
         run: npm run test:e2e
 
   # ---------------------------------------------------------------------------
@@ -200,7 +199,7 @@ jobs:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
         run: npx prisma generate
 
-      - name: jest (integration)
+      - name: vitest (integration)
         run: npm run test:int
 
   # ---------------------------------------------------------------------------

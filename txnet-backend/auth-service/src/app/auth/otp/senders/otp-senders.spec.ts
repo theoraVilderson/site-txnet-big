@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotClientRegistry } from '@txnet-backend/messenger';
@@ -28,7 +29,7 @@ const CODE = '123456';
 
 function localeService(namespace?: unknown) {
   return {
-    getNamespace: jest.fn(() => namespace),
+    getNamespace: vi.fn(() => namespace),
   } as unknown as LocaleService;
 }
 
@@ -37,8 +38,8 @@ function prisma({
   link = null as { platformUserId: string } | null,
 } = {}) {
   return {
-    user: { findFirst: jest.fn(async () => user) },
-    linkedBotAccount: { findFirst: jest.fn(async () => link) },
+    user: { findFirst: vi.fn(async () => user) },
+    linkedBotAccount: { findFirst: vi.fn(async () => link) },
   };
 }
 
@@ -46,10 +47,10 @@ function prisma({
  * The registry as a sender uses it since F-066-i: both questions are per
  * tenant, and the bot is that tenant's `primary` one (C-05).
  */
-function registry(client: { sendMessage: jest.Mock } | null) {
+function registry(client: { sendMessage: Mock } | null) {
   return {
-    primaryClient: jest.fn(async () => client),
-    canSend: jest.fn(async () => client !== null),
+    primaryClient: vi.fn(async () => client),
+    canSend: vi.fn(async () => client !== null),
   } as unknown as BotClientRegistry;
 }
 
@@ -62,13 +63,13 @@ const inTenant = <T>(fn: () => Promise<T> | T): Promise<T> | T =>
 
 function links(provenChat: string | null) {
   return {
-    provenChat: jest.fn(async () => provenChat),
+    provenChat: vi.fn(async () => provenChat),
   } as unknown as BotLinkStore;
 }
 
 function botClient() {
   return {
-    sendMessage: jest.fn(async (_chatId: string, _text: string) => undefined),
+    sendMessage: vi.fn(async (_chatId: string, _text: string) => undefined),
   };
 }
 
@@ -80,7 +81,7 @@ interface SmsPayload {
 }
 
 function smsProvider(result: { ok: boolean; msg: string }) {
-  return jest.fn(async (_payload: SmsPayload, _sender: string) => result);
+  return vi.fn(async (_payload: SmsPayload, _sender: string) => result);
 }
 
 // The two messenger senders are the same class twice over, so they are tested

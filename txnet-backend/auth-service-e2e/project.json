@@ -5,10 +5,10 @@
   "projectType": "application",
   "targets": {
     "e2e": {
-      "executor": "@nx/jest:jest",
+      "executor": "@nx/vitest:test",
       "outputs": ["{workspaceRoot}/coverage/{e2eProjectRoot}"],
       "options": {
-        "jestConfig": "auth-service-e2e/jest.config.cts"
+        "configFile": "auth-service-e2e/vitest.config.mts"
       }
     }
   }

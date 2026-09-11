@@ -235,7 +235,14 @@ describe('auth-api — wire contract', () => {
       );
 
       expect(registered?.attributes).toBeDefined();
-      expect(loggedIn?.attributes).toEqual(registered?.attributes);
+      // `expires` is now + max-age, so two requests a second apart write two
+      // different dates for the same lifetime. `max-age` carries that lifetime
+      // exactly and is compared below; `expires` only has to be present.
+      const { expires: registeredExpires, ...fromRegisterAttrs } = registered!.attributes;
+      const { expires: loggedInExpires, ...fromLoginAttrs } = loggedIn!.attributes;
+      expect(registeredExpires).toBeDefined();
+      expect(loggedInExpires).toBeDefined();
+      expect(fromLoginAttrs).toEqual(fromRegisterAttrs);
     });
 
     it('is the only place a refresh token is ever returned', async () => {

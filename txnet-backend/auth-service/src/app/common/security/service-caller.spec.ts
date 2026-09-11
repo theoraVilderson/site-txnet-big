@@ -14,11 +14,11 @@ function run(
   configured: string | undefined = TOKEN,
 ) {
   const config = {
-    get: jest.fn().mockReturnValue(configured),
+    get: vi.fn().mockReturnValue(configured),
   } as unknown as ConfigService;
   const middleware = new ServiceCallerMiddleware(config);
   const req: any = { headers, ip: '203.0.113.9' };
-  const next = jest.fn();
+  const next = vi.fn();
   middleware.use(req, {} as any, next);
   expect(next).toHaveBeenCalled();
   return req;

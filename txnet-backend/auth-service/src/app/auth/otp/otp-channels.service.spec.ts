@@ -16,7 +16,7 @@ const sender = (channel: OtpChannel, configured: boolean, requiresLink: boolean)
   channel,
   isConfigured: () => configured,
   requiresLinkedAccount: requiresLink,
-  send: jest.fn(),
+  send: vi.fn(),
 });
 
 function registry(
@@ -24,7 +24,7 @@ function registry(
   configured: Partial<Record<OtpChannel, boolean>> = {},
 ) {
   const config = {
-    get: jest.fn((key: string, fallback?: unknown) =>
+    get: vi.fn((key: string, fallback?: unknown) =>
       key in env ? env[key] : fallback,
     ),
   };
@@ -70,7 +70,7 @@ describe('OtpChannelRegistry — reading OTP_ALLOWED_CHANNELS', () => {
   });
 
   it('drops a name that is not a channel and keeps the rest', async () => {
-    const warn = jest
+    const warn = vi
       .spyOn(require('@nestjs/common').Logger.prototype, 'warn')
       .mockImplementation(() => undefined);
 

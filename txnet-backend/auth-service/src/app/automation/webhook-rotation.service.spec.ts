@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { ConfigService } from '@nestjs/config';
 import { aBotIntegration, newWebhookPath } from '@txnet-backend/messenger';
 import { WebhookRotationService } from './webhook-rotation.service';
@@ -12,7 +13,7 @@ describe('WebhookRotationService', () => {
     ({ get: (key: string) => env[key] }) as unknown as ConfigService;
 
   const build = (options: {
-    setWebhook?: jest.Mock;
+    setWebhook?: Mock;
     client?: unknown;
     env?: Record<string, string>;
   } = {}) => {
@@ -20,19 +21,19 @@ describe('WebhookRotationService', () => {
     const order: string[] = [];
     const setWebhook =
       options.setWebhook ??
-      jest.fn(async () => {
+      vi.fn(async () => {
         order.push('setWebhook');
         return true;
       });
 
-    const rotateWebhookPath = jest.fn(async () => {
+    const rotateWebhookPath = vi.fn(async () => {
       order.push('rotateWebhookPath');
       return { ...integration, webhookPath: newWebhookPath(), status: 'pending' as const };
     });
-    const recordRegistration = jest.fn(async () => {
+    const recordRegistration = vi.fn(async () => {
       order.push('recordRegistration');
     });
-    const webhookSecret = jest.fn(async () => 'the-secret');
+    const webhookSecret = vi.fn(async () => 'the-secret');
 
     const directory = {
       rotateWebhookPath,
@@ -40,7 +41,7 @@ describe('WebhookRotationService', () => {
       webhookSecret,
     };
     const bots = {
-      client: jest.fn(async () =>
+      client: vi.fn(async () =>
         options.client === undefined ? { setWebhook } : options.client,
       ),
     };
@@ -86,7 +87,7 @@ describe('WebhookRotationService', () => {
   });
 
   it('keeps the rotation when the platform refuses, and says it is unregistered', async () => {
-    const setWebhook = jest.fn(async () => false);
+    const setWebhook = vi.fn(async () => false);
     const { service, integration, rotateWebhookPath, recordRegistration } =
       build({ setWebhook });
 

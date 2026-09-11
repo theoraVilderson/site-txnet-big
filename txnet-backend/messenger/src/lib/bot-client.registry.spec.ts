@@ -50,17 +50,17 @@ function directory(
   },
 ) {
   return {
-    byWebhookPath: jest.fn(async () => null),
-    primaryFor: jest.fn(async (tenantId: string, platform: string) =>
+    byWebhookPath: vi.fn(async () => null),
+    primaryFor: vi.fn(async (tenantId: string, platform: string) =>
       platform === 'telegram' && tenantId === telegram.tenantId
         ? telegram
         : platform === 'bale' && tenantId === bale.tenantId
           ? bale
           : null,
     ),
-    token: jest.fn(async (i: BotIntegration) => tokens[i.id] ?? null),
-    hasToken: jest.fn(async (i: BotIntegration) => tokens[i.id] != null),
-    verifyWebhookSecret: jest.fn(async (_i: BotIntegration, c: string) =>
+    token: vi.fn(async (i: BotIntegration) => tokens[i.id] ?? null),
+    hasToken: vi.fn(async (i: BotIntegration) => tokens[i.id] != null),
+    verifyWebhookSecret: vi.fn(async (_i: BotIntegration, c: string) =>
       c === 'the-secret',
     ),
   } satisfies BotIntegrationDirectory & Record<string, unknown>;
@@ -141,7 +141,7 @@ describe('BotClientRegistry', () => {
       // none.
       const nameless = aBotIntegration({ botUsername: '' });
       const dir = directory({ [nameless.id]: 'tg-token' });
-      dir.primaryFor = jest.fn(async (_t: string, _p: string) => nameless);
+      dir.primaryFor = vi.fn(async (_t: string, _p: string) => nameless);
       const { r } = registry({}, dir);
 
       await expect(r.canLink(nameless.tenantId, 'telegram')).resolves.toBe(

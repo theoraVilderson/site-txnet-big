@@ -1,8 +1,9 @@
+import type { Mocked } from 'vitest';
 import axios from 'axios';
 import { replaceVar } from './helper';
 import { SmsProviderService } from './sms-provider.service';
 
-jest.mock('axios');
+vi.mock('axios');
 
 /**
  * The provider is the only third-party call in the OTP path, and it is one
@@ -12,16 +13,16 @@ jest.mock('axios');
  * code that was sent, and the user would wait for an SMS that was refused.
  */
 
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+const mockedAxios = axios as Mocked<typeof axios>;
 
 function provider(apiKey = 'user@pass') {
-  const get = jest.fn();
+  const get = vi.fn();
   mockedAxios.create.mockReturnValue({ get } as never);
   return { service: new SmsProviderService('https://sms.example', apiKey), get };
 }
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('replaceVar', () => {

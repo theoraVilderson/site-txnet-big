@@ -1,3 +1,4 @@
+import type { Mocked } from 'vitest';
 import { aBotIntegration } from '@txnet-backend/messenger';
 import { AuthApiClient } from '../auth-api/auth-api.client';
 import { ChatContext, NavState } from '../conversation/nav.types';
@@ -19,22 +20,22 @@ function harness(over: { session?: unknown; api?: Partial<AuthApiClient> } = {})
   const api = {
     // Every authenticated call is preceded by a refresh, and the refresh
     // rotates — `r-next` is what must end up in the store.
-    refresh: jest
+    refresh: vi
       .fn()
       .mockResolvedValue(ok({ accessToken: 'access-1', expiresIn: 900, refreshToken: 'r-next' })),
-    listAccounts: jest.fn().mockResolvedValue(ok(GROUP)),
-    switchAccount: jest.fn().mockResolvedValue(
+    listAccounts: vi.fn().mockResolvedValue(ok(GROUP)),
+    switchAccount: vi.fn().mockResolvedValue(
       ok({ userId: 'u-2', fullName: 'Sara', accessToken: 'a', expiresIn: 900, refreshToken: 'r-sara' }),
     ),
-    removeAccount: jest.fn().mockResolvedValue(ok({ userId: 'u-2', removed: true })),
+    removeAccount: vi.fn().mockResolvedValue(ok({ userId: 'u-2', removed: true })),
     ...over.api,
-  } as unknown as jest.Mocked<AuthApiClient>;
+  } as unknown as Mocked<AuthApiClient>;
   const sessions = {
-    get: jest.fn().mockResolvedValue(
+    get: vi.fn().mockResolvedValue(
       'session' in over ? over.session : { refreshToken: 'r-1', signedInAt: 0 },
     ),
-    save: jest.fn(),
-    clear: jest.fn(),
+    save: vi.fn(),
+    clear: vi.fn(),
   } as unknown as BotSessionStore;
   return {
     api,
@@ -88,7 +89,7 @@ describe('AccountsFlow', () => {
   it('keeps the user on the list when auth-api refuses the switch', async () => {
     const { flow, sessions } = harness({
       api: {
-        switchAccount: jest
+        switchAccount: vi
           .fn()
           .mockResolvedValue({ ok: false, msg: 'accountSwitch.notAMember' }),
       } as Partial<AuthApiClient>,
@@ -105,7 +106,7 @@ describe('AccountsFlow', () => {
 
   it('signs the chat out when its refresh token is no longer accepted', async () => {
     const { flow, sessions, api } = harness({
-      api: { refresh: jest.fn().mockResolvedValue({ ok: false, msg: 'auth.sessionExpired' }) } as Partial<AuthApiClient>,
+      api: { refresh: vi.fn().mockResolvedValue({ ok: false, msg: 'auth.sessionExpired' }) } as Partial<AuthApiClient>,
     });
 
     const result = await flow.start(ctx);
@@ -127,7 +128,7 @@ describe('AccountsFlow', () => {
   it('tells a lone account how to gain a second one instead of showing an empty list', async () => {
     const { flow } = harness({
       api: {
-        listAccounts: jest.fn().mockResolvedValue(ok({ ...GROUP, groupId: null, members: [] })),
+        listAccounts: vi.fn().mockResolvedValue(ok({ ...GROUP, groupId: null, members: [] })),
       } as Partial<AuthApiClient>,
     });
 
@@ -196,7 +197,7 @@ describe('AccountsFlow', () => {
   it('drops the stored token when the chat removes its OWN account', async () => {
     const { flow, sessions } = harness({
       api: {
-        removeAccount: jest.fn().mockResolvedValue(ok({ userId: 'u-1', removed: true })),
+        removeAccount: vi.fn().mockResolvedValue(ok({ userId: 'u-1', removed: true })),
       } as Partial<AuthApiClient>,
     });
     const state: NavState = {

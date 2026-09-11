@@ -100,7 +100,7 @@ describe('TenantConcurrencyGate', () => {
     // pays for them — and, since F-067-e, they cost no Redis round trip
     // either: the ungated path is the common one and must stay free.
     const { g, leases } = gate(1);
-    const acquire = jest.spyOn(leases, 'acquire');
+    const acquire = vi.spyOn(leases, 'acquire');
     expect((await g.admit(tick())).admitted).toBe(true);
     expect((await g.admit(tick())).admitted).toBe(true);
     expect(acquire).not.toHaveBeenCalled();

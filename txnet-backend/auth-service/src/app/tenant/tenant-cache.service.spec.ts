@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { RedisKeys, RedisTtl } from '../redis/redis.keys';
 import { TenantCacheService } from './tenant-cache.service';
 
@@ -17,14 +18,14 @@ import { TenantCacheService } from './tenant-cache.service';
 // (F-066-q). `byId` ignores the extra field, so one fixture serves both.
 const TENANT = { id: 'tenant-reseller', slug: 'reseller', purpose: 'panel' as const };
 
-function cacheOver(redis: Partial<Record<'get' | 'set' | 'del', jest.Mock>>) {
+function cacheOver(redis: Partial<Record<'get' | 'set' | 'del', Mock>>) {
   const store = new Map<string, string>();
   const client = {
-    get: jest.fn(async (key: string) => store.get(key) ?? null),
-    set: jest.fn(async (key: string, value: string) => {
+    get: vi.fn(async (key: string) => store.get(key) ?? null),
+    set: vi.fn(async (key: string, value: string) => {
       store.set(key, value);
     }),
-    del: jest.fn(async (...keys: string[]) => {
+    del: vi.fn(async (...keys: string[]) => {
       keys.forEach((key) => store.delete(key));
     }),
     ...redis,
@@ -35,8 +36,8 @@ function cacheOver(redis: Partial<Record<'get' | 'set' | 'del', jest.Mock>>) {
 describe('TenantCacheService — invalidation, not expiry', () => {
   it('forgets a domain, so the next read goes back to the database', async () => {
     const { cache } = cacheOver({});
-    const lookup = jest
-      .fn<Promise<typeof TENANT | null>, []>()
+    const lookup = vi
+      .fn<() => Promise<typeof TENANT | null>>()
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(TENANT);
 
@@ -62,8 +63,8 @@ describe('TenantCacheService — invalidation, not expiry', () => {
 
   it('forgets a tenant id, so a token outliving its tenant stops answering its own claim', async () => {
     const { cache } = cacheOver({});
-    const lookup = jest
-      .fn<Promise<typeof TENANT | null>, []>()
+    const lookup = vi
+      .fn<() => Promise<typeof TENANT | null>>()
       .mockResolvedValueOnce(TENANT)
       .mockResolvedValueOnce(null);
 
@@ -74,7 +75,7 @@ describe('TenantCacheService — invalidation, not expiry', () => {
 
   it('throws when it cannot retract a mapping, rather than reporting a switchover that did not happen', async () => {
     const { cache } = cacheOver({
-      del: jest.fn(async () => {
+      del: vi.fn(async () => {
         throw new Error('redis down');
       }),
     });
@@ -95,7 +96,7 @@ describe('TenantCacheService — invalidation, not expiry', () => {
 describe('TenantCacheService — a cached "no tenant" is an answer', () => {
   it('serves an unknown host from the cache instead of the database', async () => {
     const { cache } = cacheOver({});
-    const lookup = jest.fn(async () => null);
+    const lookup = vi.fn(async () => null);
 
     await cache.byHost('stranger.example', lookup);
     await expect(cache.byHost('stranger.example', lookup)).resolves.toBeNull();
@@ -132,7 +133,7 @@ describe('TenantCacheService — a cached "no tenant" is an answer', () => {
 describe('TenantCacheService — a Redis outage slows resolution, it does not refuse it', () => {
   it('falls back to the database when the read throws', async () => {
     const { cache } = cacheOver({
-      get: jest.fn(async () => {
+      get: vi.fn(async () => {
         throw new Error('redis down');
       }),
     });
@@ -146,7 +147,7 @@ describe('TenantCacheService — a Redis outage slows resolution, it does not re
 
   it('still answers when the write throws', async () => {
     const { cache } = cacheOver({
-      set: jest.fn(async () => {
+      set: vi.fn(async () => {
         throw new Error('redis down');
       }),
     });
@@ -178,7 +179,7 @@ describe('TenantCacheService — a Redis outage slows resolution, it does not re
     const old = { id: TENANT.id, slug: TENANT.slug };
     store.set(RedisKeys.tenantByHost('myvpn.com'), JSON.stringify(old));
 
-    const lookup = jest.fn(async () => TENANT);
+    const lookup = vi.fn(async () => TENANT);
     await expect(cache.byHost('myvpn.com', lookup)).resolves.toEqual(TENANT);
 
     expect(lookup).toHaveBeenCalledTimes(1);

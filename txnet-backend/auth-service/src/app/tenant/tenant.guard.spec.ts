@@ -1,3 +1,4 @@
+import type { MockInstance } from 'vitest';
 import { Reflector } from '@nestjs/core';
 import { ForbiddenException, Logger, NotFoundException } from '@nestjs/common';
 import { TenantGuard } from './tenant.guard';
@@ -14,7 +15,7 @@ import { fakeExecutionContext } from '../../test-support/execution-context';
  */
 describe('TenantGuard', () => {
   let guard: TenantGuard;
-  let warn: jest.SpyInstance;
+  let warn: MockInstance;
 
   const resolved = { id: 'tenant-b', slug: 'reseller-b', via: 'domain' as const };
 
@@ -30,10 +31,10 @@ describe('TenantGuard', () => {
     guard = new TenantGuard({
       getAllAndOverride: () => undefined,
     } as unknown as Reflector);
-    warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
   });
 
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
 
   it('lets a resolved request with no conflict through', () => {
     const { context } = fakeExecutionContext({ extra: { tenant: resolved } });
@@ -62,7 +63,7 @@ describe('TenantGuard', () => {
 
     try {
       guard.canActivate(context);
-      fail('expected a refusal');
+      expect.unreachable('expected a refusal');
     } catch (error) {
       expect((error as NotFoundException).message).toBe('Not Found');
     }
@@ -96,7 +97,7 @@ describe('TenantGuard', () => {
 
     try {
       guard.canActivate(context);
-      fail('expected a refusal');
+      expect.unreachable('expected a refusal');
     } catch (error) {
       expect((error as ForbiddenException).message).toBe('tenant.claimMismatch');
     }

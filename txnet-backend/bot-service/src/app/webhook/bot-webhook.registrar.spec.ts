@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { ConfigService } from '@nestjs/config';
 import {
   aBotIntegration,
@@ -56,9 +57,9 @@ const INTEGRATIONS: Record<BotPlatform, BotIntegration> = {
 };
 
 type FakeClient = {
-  getWebhookInfo: jest.Mock<Promise<WebhookInfo | null>, []>;
-  setWebhook: jest.Mock<Promise<boolean>, [string, string]>;
-  setMyCommands: jest.Mock<Promise<boolean>, [unknown, string?]>;
+  getWebhookInfo: Mock<() => Promise<WebhookInfo | null>>;
+  setWebhook: Mock<(url: string, secret: string) => Promise<boolean>>;
+  setMyCommands: Mock<(commands: unknown, languageCode?: string) => Promise<boolean>>;
 };
 
 /** A webhook already registered at `url`, delivering everything by default. */
@@ -68,9 +69,9 @@ function info(url: string, allowedUpdates: string[] = []): WebhookInfo {
 
 function fakeClient(current: WebhookInfo | null = info('')): FakeClient {
   return {
-    getWebhookInfo: jest.fn(async () => current),
-    setWebhook: jest.fn(async (_url: string, _secret: string) => true),
-    setMyCommands: jest.fn(async (_list: unknown, _lang?: string) => true),
+    getWebhookInfo: vi.fn(async () => current),
+    setWebhook: vi.fn(async (_url: string, _secret: string) => true),
+    setMyCommands: vi.fn(async (_list: unknown, _lang?: string) => true),
   };
 }
 
@@ -96,13 +97,13 @@ function build({
   ) as Record<BotPlatform, FakeClient | null>;
 
   const bots = {
-    client: jest.fn(async (i: BotIntegration) => resolved[i.platform]),
+    client: vi.fn(async (i: BotIntegration) => resolved[i.platform]),
   } as unknown as BotClientRegistry;
 
-  const recordRegistration = jest.fn(async () => undefined);
+  const recordRegistration = vi.fn(async () => undefined);
   const directory = {
-    registrable: jest.fn(async () => BOT_PLATFORMS.map((p) => INTEGRATIONS[p])),
-    webhookSecret: jest.fn(async (i: BotIntegration) => secrets[i.platform] ?? null),
+    registrable: vi.fn(async () => BOT_PLATFORMS.map((p) => INTEGRATIONS[p])),
+    webhookSecret: vi.fn(async (i: BotIntegration) => secrets[i.platform] ?? null),
     recordRegistration,
   } as unknown as AuthApiBotIntegrationDirectory;
 

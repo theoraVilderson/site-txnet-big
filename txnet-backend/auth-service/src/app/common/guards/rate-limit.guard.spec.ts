@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { HttpException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
@@ -19,25 +20,25 @@ const loginLimit: RateLimitOptions = {
 const configured: Record<string, number> = { LOGIN_PWD_RATE_LIMIT: 5 };
 
 describe('RateLimitGuard', () => {
-  let reflector: { getAllAndOverride: jest.Mock };
-  let limiter: { hit: jest.Mock; hitPlatform: jest.Mock };
-  let config: { get: jest.Mock };
+  let reflector: { getAllAndOverride: Mock };
+  let limiter: { hit: Mock; hitPlatform: Mock };
+  let config: { get: Mock };
   let guard: RateLimitGuard;
 
   beforeEach(() => {
-    reflector = { getAllAndOverride: jest.fn().mockReturnValue(loginLimit) };
+    reflector = { getAllAndOverride: vi.fn().mockReturnValue(loginLimit) };
     limiter = {
-      hit: jest.fn().mockResolvedValue({ allowed: true, current: 1, limit: 5 }),
+      hit: vi.fn().mockResolvedValue({ allowed: true, current: 1, limit: 5 }),
       // The platform-wide ceiling over the same bucket (F-066-s). It is
       // exercised in `rate-limit-platform.spec.ts`; here it always allows, so
       // these cases still describe the per-tenant counter alone.
-      hitPlatform: jest
+      hitPlatform: vi
         .fn()
         .mockResolvedValue({ allowed: true, current: 1, limit: 50 }),
     };
     // The validated env: every limit has a value, because the schema gives
     // each one a default.
-    config = { get: jest.fn((key: string) => configured[key]) };
+    config = { get: vi.fn((key: string) => configured[key]) };
     guard = new RateLimitGuard(
       reflector as unknown as Reflector,
       limiter as unknown as RateLimiter,

@@ -25,45 +25,45 @@ type Harness = ReturnType<typeof harness>;
 function harness() {
   const txClient = {
     impersonationSession: {
-      create: jest.fn().mockResolvedValue({ id: 'imp-1' }),
+      create: vi.fn().mockResolvedValue({ id: 'imp-1' }),
     },
-    session: { create: jest.fn().mockResolvedValue({ id: 'session-imp' }) },
-    adminAuditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-1' }) },
+    session: { create: vi.fn().mockResolvedValue({ id: 'session-imp' }) },
+    adminAuditLog: { create: vi.fn().mockResolvedValue({ id: 'audit-1' }) },
   };
   const prisma = {
-    user: { findUnique: jest.fn() },
+    user: { findUnique: vi.fn() },
     session: {
-      findUnique: jest.fn(),
-      update: jest.fn((args: unknown) => ({ __op: 'session.update', args })),
+      findUnique: vi.fn(),
+      update: vi.fn((args: unknown) => ({ __op: 'session.update', args })),
     },
     impersonationSession: {
-      update: jest.fn((args: unknown) => ({
+      update: vi.fn((args: unknown) => ({
         __op: 'impersonationSession.update',
         args,
       })),
     },
     adminAuditLog: {
-      create: jest.fn((args: unknown) => ({ __op: 'adminAuditLog.create', args })),
+      create: vi.fn((args: unknown) => ({ __op: 'adminAuditLog.create', args })),
     },
-    $transaction: jest.fn(async (arg: unknown) =>
+    $transaction: vi.fn(async (arg: unknown) =>
       typeof arg === 'function'
         ? (arg as (tx: unknown) => unknown)(txClient)
         : arg,
     ),
   };
   const tokens = {
-    signImpersonatedToken: jest.fn().mockReturnValue('impersonated-token'),
+    signImpersonatedToken: vi.fn().mockReturnValue('impersonated-token'),
   };
-  const activateCache = jest.fn().mockResolvedValue(undefined);
+  const activateCache = vi.fn().mockResolvedValue(undefined);
   const sessionService = {
-    createSession: jest.fn().mockResolvedValue({
+    createSession: vi.fn().mockResolvedValue({
       session: { id: 'session-imp' },
       refreshToken: 'r',
       activateCache,
     }),
-    revokeSession: jest.fn().mockResolvedValue(undefined),
+    revokeSession: vi.fn().mockResolvedValue(undefined),
   };
-  const sessions = { drop: jest.fn().mockResolvedValue(undefined) };
+  const sessions = { drop: vi.fn().mockResolvedValue(undefined) };
 
   const service = new ImpersonationService(
     prisma as never,
@@ -120,7 +120,7 @@ describe('ImpersonationService.startImpersonation — rank', () => {
   let h: Harness;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     h = harness();
   });
 
@@ -180,7 +180,7 @@ describe('ImpersonationService.startImpersonation — rank', () => {
     actors(h, ROLES.unknown, ROLES.user);
     await expect(start(h)).rejects.toBeInstanceOf(ForbiddenException);
 
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     actors(h, ROLES.unknown, { id: 'role-y', name: 'Auditor' });
     await expect(start(h)).rejects.toBeInstanceOf(ForbiddenException);
   });
@@ -196,7 +196,7 @@ describe('ImpersonationService.startImpersonation — preconditions', () => {
   let h: Harness;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     h = harness();
   });
 
@@ -246,7 +246,7 @@ describe('ImpersonationService.startImpersonation — transaction and audit', ()
   let h: Harness;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     h = harness();
     actors(h, ROLES.admin, ROLES.user);
   });
@@ -365,7 +365,7 @@ describe('ImpersonationService.endImpersonation', () => {
   });
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     h = harness();
   });
 

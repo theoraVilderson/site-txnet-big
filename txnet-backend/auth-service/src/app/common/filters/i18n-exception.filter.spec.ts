@@ -1,3 +1,4 @@
+import type { MockInstance } from 'vitest';
 import {
   BadRequestException,
   ConflictException,
@@ -33,28 +34,28 @@ const catalog: Record<string, Record<string, string>> = {
 
 function localeStub() {
   return {
-    getKey: jest.fn(
+    getKey: vi.fn(
       (lang: string, namespace: string, key: string) =>
         namespace === 'errors' ? catalog[lang]?.[key] : undefined,
     ),
-    getDefaultLanguage: jest.fn(() => 'fa'),
+    getDefaultLanguage: vi.fn(() => 'fa'),
   };
 }
 
 describe('I18nExceptionFilter', () => {
   let locale: ReturnType<typeof localeStub>;
   let filter: I18nExceptionFilter;
-  let warn: jest.SpyInstance;
-  let error: jest.SpyInstance;
+  let warn: MockInstance;
+  let error: MockInstance;
 
   beforeEach(() => {
     locale = localeStub();
     filter = new I18nExceptionFilter(locale as unknown as LocaleService);
-    warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
-    error = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    error = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
   });
 
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => vi.restoreAllMocks());
 
   describe('the response envelope', () => {
     it('is { ok: false, msg, ref } with the translated message', () => {

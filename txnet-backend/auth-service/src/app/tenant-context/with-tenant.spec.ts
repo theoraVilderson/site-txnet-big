@@ -148,7 +148,7 @@ describe('withTenant — the extension around a query', () => {
   });
 
   it('passes the scoped arguments to the query', async () => {
-    const query = jest.fn().mockResolvedValue(null);
+    const query = vi.fn().mockResolvedValue(null);
     await run(() =>
       runWithTenant(TENANT, () =>
         hook()({ model: 'user', operation: 'findFirst', args: { where: { username: 'ali' } }, query }),
@@ -158,7 +158,7 @@ describe('withTenant — the extension around a query', () => {
   });
 
   it('throws instead of running a query with no tenant in scope', async () => {
-    const query = jest.fn();
+    const query = vi.fn();
     await expect(
       hook()({ model: 'user', operation: 'findFirst', args: {}, query }),
     ).rejects.toThrow(TenantContextMissing);
@@ -166,7 +166,7 @@ describe('withTenant — the extension around a query', () => {
   });
 
   it('throws for a request that resolved to no tenant, too', async () => {
-    const query = jest.fn();
+    const query = vi.fn();
     await expect(
       runWithTenant(null, () =>
         hook()({ model: 'user', operation: 'findFirst', args: {}, query }),
@@ -181,7 +181,7 @@ describe('withTenant — the extension around a query', () => {
     // both. Without this registry entry the "is this chat taken?" lookup is
     // answered from every tenant's rows at once, and the second reseller is
     // told the chat belongs to somebody else's account.
-    const query = jest.fn().mockResolvedValue(null);
+    const query = vi.fn().mockResolvedValue(null);
     await run(() =>
       runWithTenant(TENANT, () =>
         hookFor('linkedBotAccount')({
@@ -210,7 +210,7 @@ describe('withTenant — the extension around a query', () => {
   });
 
   it('leaves the query untouched inside the audited escape', async () => {
-    const query = jest.fn().mockResolvedValue(null);
+    const query = vi.fn().mockResolvedValue(null);
     const args = { where: { username: 'ali' } };
     await run(() =>
       runAcrossTenants(() =>
@@ -290,7 +290,7 @@ describe('the tenant is bound in the database, in the query’s own transaction'
   });
 
   it('binds the tenant in scope for every scoped query', async () => {
-    const query = jest.fn().mockResolvedValue(null);
+    const query = vi.fn().mockResolvedValue(null);
     const seen: string[] = [];
     const record: TenantBinder = async (tenantId, run) => {
       seen.push(tenantId);
@@ -315,7 +315,7 @@ describe('the tenant is bound in the database, in the query’s own transaction'
     // `USING (true)`, not by a tenant setting — so binding one here would be
     // both meaningless and misleading. Retiring the escape onto its own pool
     // is F-066-m-b.
-    const query = jest.fn().mockResolvedValue(null);
+    const query = vi.fn().mockResolvedValue(null);
     const seen: string[] = [];
     const record: TenantBinder = async (tenantId, run) => {
       seen.push(tenantId);

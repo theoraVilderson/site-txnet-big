@@ -26,13 +26,13 @@ describe('WorkerAdminService', () => {
 
   const build = (worker: typeof WORKER | null = WORKER) => {
     const botWorker = {
-      findUnique: jest.fn(async () => worker),
-      update: jest.fn(async () => ({ ...(worker as typeof WORKER), isActive: false })),
-      findMany: jest.fn(async () => []),
+      findUnique: vi.fn(async () => worker),
+      update: vi.fn(async () => ({ ...(worker as typeof WORKER), isActive: false })),
+      findMany: vi.fn(async () => []),
     };
-    const botSchedule = { create: jest.fn(async (args: unknown) => args) };
+    const botSchedule = { create: vi.fn(async (args: unknown) => args) };
     const adminAuditLog = {
-      create: jest.fn(async (_args: { data: Record<string, unknown> }) => ({
+      create: vi.fn(async (_args: { data: Record<string, unknown> }) => ({
         id: 'audit-1',
       })),
     };
@@ -40,11 +40,11 @@ describe('WorkerAdminService', () => {
       botWorker,
       botSchedule,
       adminAuditLog,
-      $transaction: jest.fn(async (fn: (tx: unknown) => unknown) =>
+      $transaction: vi.fn(async (fn: (tx: unknown) => unknown) =>
         fn({ botWorker, adminAuditLog }),
       ),
     };
-    const publisher = { publishManualTick: jest.fn(async () => undefined) };
+    const publisher = { publishManualTick: vi.fn(async () => undefined) };
     const service = new WorkerAdminService(
       prisma as never,
       publisher as never,

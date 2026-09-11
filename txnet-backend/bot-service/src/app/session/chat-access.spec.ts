@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { aBotIntegration } from '@txnet-backend/messenger';
 import { AuthApiClient } from '../auth-api/auth-api.client';
 import { ChatContext } from '../conversation/nav.types';
@@ -28,11 +29,11 @@ const ctx: ChatContext = {
 function sessions(initial?: { refreshToken: string }) {
   const store = {
     value: initial ?? null,
-    get: jest.fn(async () => store.value),
-    save: jest.fn(async (_p: string, _c: string, token: string) => {
+    get: vi.fn(async () => store.value),
+    save: vi.fn(async (_p: string, _c: string, token: string) => {
       store.value = { refreshToken: token };
     }),
-    clear: jest.fn(async () => {
+    clear: vi.fn(async () => {
       store.value = null;
     }),
   };
@@ -41,7 +42,7 @@ function sessions(initial?: { refreshToken: string }) {
 
 function access(
   store: ReturnType<typeof sessions>,
-  refresh: jest.Mock,
+  refresh: Mock,
 ) {
   const api = { refresh } as unknown as AuthApiClient;
   return {
@@ -53,7 +54,7 @@ function access(
 describe('ChatAccess', () => {
   it('mints an access token from the stored refresh token', async () => {
     const store = sessions({ refreshToken: 'r-1' });
-    const refresh = jest.fn(async () => ({
+    const refresh = vi.fn(async () => ({
       ok: true,
       msg: 'ok',
       data: { accessToken: 'a-1', expiresIn: 900, refreshToken: 'r-2' },
@@ -70,7 +71,7 @@ describe('ChatAccess', () => {
   it('stores the rotated refresh token, so the next message still works', async () => {
     const store = sessions({ refreshToken: 'r-1' });
     let call = 0;
-    const refresh = jest.fn(async ({ refreshToken }: { refreshToken: string }) => {
+    const refresh = vi.fn(async ({ refreshToken }: { refreshToken: string }) => {
       call += 1;
       // auth-api refuses a spent token — exactly what would happen if the
       // rotation were not stored.
@@ -93,7 +94,7 @@ describe('ChatAccess', () => {
 
   it('reports a chat with no session as signed out without calling auth-api', async () => {
     const store = sessions(null as unknown as { refreshToken: string });
-    const refresh = jest.fn();
+    const refresh = vi.fn();
     const { chatAccess } = access(store, refresh);
 
     expect(await chatAccess.token(ctx)).toBeNull();
@@ -102,7 +103,7 @@ describe('ChatAccess', () => {
 
   it('signs the chat out here when auth-api refuses the refresh', async () => {
     const store = sessions({ refreshToken: 'r-1' });
-    const refresh = jest.fn(async () => ({ ok: false, msg: 'auth.session.revoked' }));
+    const refresh = vi.fn(async () => ({ ok: false, msg: 'auth.session.revoked' }));
     const { chatAccess } = access(store, refresh);
 
     expect(await chatAccess.token(ctx)).toBeNull();
@@ -116,7 +117,7 @@ describe('ChatAccess', () => {
     // A malformed success is not a session; carrying on with `undefined` as a
     // bearer token would fail at the next call with a far worse message.
     const store = sessions({ refreshToken: 'r-1' });
-    const refresh = jest.fn(async () => ({ ok: true, msg: 'ok', data: { expiresIn: 900 } }));
+    const refresh = vi.fn(async () => ({ ok: true, msg: 'ok', data: { expiresIn: 900 } }));
     const { chatAccess } = access(store, refresh);
 
     expect(await chatAccess.token(ctx)).toBeNull();
@@ -127,7 +128,7 @@ describe('ChatAccess', () => {
     // Not every auth-api answer carries a new refresh token; clearing or
     // overwriting with undefined would sign the chat out for no reason.
     const store = sessions({ refreshToken: 'r-1' });
-    const refresh = jest.fn(async () => ({
+    const refresh = vi.fn(async () => ({
       ok: true,
       msg: 'ok',
       data: { accessToken: 'a-1', expiresIn: 900 },
@@ -145,7 +146,7 @@ describe('ChatAccess', () => {
     // credential in Redis longer than auth-api intends it to exist. Two calls
     // must be two refreshes.
     const store = sessions({ refreshToken: 'r-1' });
-    const refresh = jest.fn(async () => ({
+    const refresh = vi.fn(async () => ({
       ok: true,
       msg: 'ok',
       data: { accessToken: 'a-1', expiresIn: 900 },
@@ -163,7 +164,7 @@ describe('ChatAccess', () => {
     // ADR-0015: without the platform, auth-api cannot tell two chats apart
     // and refuses rather than guessing.
     const store = sessions({ refreshToken: 'r-1' });
-    const refresh = jest.fn(async () => ({
+    const refresh = vi.fn(async () => ({
       ok: true,
       msg: 'ok',
       data: { accessToken: 'a-1', expiresIn: 900 },

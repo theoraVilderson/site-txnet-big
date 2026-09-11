@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from './auth.guard';
@@ -52,7 +53,7 @@ function contextWith(header?: string, switchScope: string | null = null) {
 
 describe('AuthGuard', () => {
   let tokens: TokenService;
-  let sessions: { read: jest.Mock };
+  let sessions: { read: Mock };
   let guard: AuthGuard;
 
   beforeEach(() => {
@@ -60,7 +61,7 @@ describe('AuthGuard', () => {
     // Say yes to every session id, so the assertions below turn on the token
     // itself and not on an incidental Redis miss.
     sessions = {
-      read: jest.fn().mockResolvedValue({ userId: 'user-1', scopeKey: null }),
+      read: vi.fn().mockResolvedValue({ userId: 'user-1', scopeKey: null }),
     };
     guard = new AuthGuard(tokens, sessions as unknown as SessionStore);
   });
@@ -163,13 +164,13 @@ describe('AuthGuard', () => {
  */
 describe('AuthGuard — the switch scope of an authenticated call', () => {
   let tokens: TokenService;
-  let sessions: { read: jest.Mock };
+  let sessions: { read: Mock };
   let guard: AuthGuard;
 
   beforeEach(() => {
     tokens = new TokenService(configStub);
     sessions = {
-      read: jest.fn().mockResolvedValue({ userId: 'user-1', scopeKey: null }),
+      read: vi.fn().mockResolvedValue({ userId: 'user-1', scopeKey: null }),
     };
     guard = new AuthGuard(tokens, sessions as unknown as SessionStore);
   });

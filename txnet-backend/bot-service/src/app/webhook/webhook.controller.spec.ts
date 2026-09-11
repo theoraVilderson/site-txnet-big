@@ -62,14 +62,14 @@ const ctx = {
 function controller({
   integrations = { [PATH]: telegram } as Record<string, BotIntegration>,
   secret = SECRET as string | null,
-  normalize = jest.fn(() => ctx),
-  publish = jest.fn(async (_message: unknown) => undefined),
+  normalize = vi.fn(() => ctx),
+  publish = vi.fn(async (_message: unknown) => undefined),
 } = {}) {
-  const byWebhookPath = jest.fn(
+  const byWebhookPath = vi.fn(
     async (platform: string, path: string) =>
       integrations[path]?.platform === platform ? integrations[path] : null,
   );
-  const verifyWebhookSecret = jest.fn(
+  const verifyWebhookSecret = vi.fn(
     async (_i: BotIntegration, candidate: string) =>
       secret !== null && candidate === secret,
   );
@@ -131,7 +131,7 @@ describe('WebhookController', () => {
     // an update nobody holds, and the platform's redelivery is the only
     // recovery this path has until F-067-c gives it a durable store (D-18).
     const { c } = controller({
-      publish: jest.fn(async (_message: unknown) => {
+      publish: vi.fn(async (_message: unknown) => {
         throw new ServiceUnavailableException('the update was not queued');
       }),
     });
@@ -234,7 +234,7 @@ describe('WebhookController', () => {
   it('answers 200 for an update the normalizer dropped', async () => {
     // A message from another bot is nothing to do — but redelivering it
     // forever is worse than ignoring it once.
-    const { c, publish } = controller({ normalize: jest.fn(() => null) });
+    const { c, publish } = controller({ normalize: vi.fn(() => null) });
 
     await expect(
       c.webhook('telegram', PATH, update, request(header)),

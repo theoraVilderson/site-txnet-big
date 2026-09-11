@@ -5,11 +5,10 @@
   "projectType": "application",
   "targets": {
     "e2e": {
-      "executor": "@nx/jest:jest",
+      "executor": "@nx/vitest:test",
       "outputs": ["{workspaceRoot}/coverage/{e2eProjectRoot}"],
       "options": {
-        "jestConfig": "billing-service-e2e/jest.config.cts",
-        "passWithNoTests": true
+        "configFile": "billing-service-e2e/vitest.config.mts"
       },
       "dependsOn": ["billing-service:build", "billing-service:serve"]
     }

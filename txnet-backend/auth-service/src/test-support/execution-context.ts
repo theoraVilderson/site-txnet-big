@@ -6,6 +6,7 @@
  * whole Nest testing module to get those costs a second per spec file and
  * proves nothing extra, so the specs construct them here instead.
  */
+import type { Mock } from 'vitest';
 import { ArgumentsHost, ExecutionContext } from '@nestjs/common';
 
 export interface FakeRequest {
@@ -81,8 +82,8 @@ export function fakeExecutionContext(options: ContextOptions = {}): FakeContext 
 }
 
 export interface FakeResponse {
-  status: jest.Mock;
-  json: jest.Mock;
+  status: Mock;
+  json: Mock;
   /** The body handed to `json()`, or undefined if nothing was sent. */
   body(): Record<string, unknown> | undefined;
   /** The status code passed to `status()`. */
@@ -91,9 +92,9 @@ export interface FakeResponse {
 
 export function fakeResponse(): FakeResponse {
   const response = {
-    status: jest.fn(() => response),
-    json: jest.fn(() => response),
-  } as unknown as FakeResponse & { status: jest.Mock; json: jest.Mock };
+    status: vi.fn(() => response),
+    json: vi.fn(() => response),
+  } as unknown as FakeResponse & { status: Mock; json: Mock };
 
   response.body = () => response.json.mock.calls[0]?.[0];
   response.statusCode = () => response.status.mock.calls[0]?.[0];

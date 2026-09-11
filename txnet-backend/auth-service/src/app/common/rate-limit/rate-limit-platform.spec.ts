@@ -28,20 +28,20 @@ describe('the platform-wide rate-limit ceiling', () => {
   const keys: string[] = [];
   const counts = new Map<string, number>();
   const redis = {
-    incrementWithTtl: jest.fn(async (key: string) => {
+    incrementWithTtl: vi.fn(async (key: string) => {
       keys.push(key);
       const next = (counts.get(key) ?? 0) + 1;
       counts.set(key, next);
       return next;
     }),
-    del: jest.fn(async (key: string) => {
+    del: vi.fn(async (key: string) => {
       keys.push(key);
     }),
   } as unknown as RedisService;
 
   const limiterWithFactor = (factor: number) =>
     new RateLimiter(redis, {
-      get: jest.fn(() => factor),
+      get: vi.fn(() => factor),
     } as unknown as ConfigService);
 
   beforeEach(() => {
@@ -115,11 +115,11 @@ describe('the platform-wide rate-limit ceiling', () => {
     const guardWith = (limiter: RateLimiter) =>
       new RateLimitGuard(
         {
-          getAllAndOverride: jest.fn().mockReturnValue(route),
+          getAllAndOverride: vi.fn().mockReturnValue(route),
         } as unknown as Reflector,
         limiter,
         {
-          get: jest.fn(() => 2),
+          get: vi.fn(() => 2),
         } as unknown as ConfigService,
       );
     const call = () => fakeExecutionContext({ extra: { ip: '203.0.113.9' } });

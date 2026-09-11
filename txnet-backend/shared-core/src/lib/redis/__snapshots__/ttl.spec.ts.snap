@@ -1,6 +1,6 @@
-// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`RedisTtl records the whole catalogue in one place 1`] = `
+exports[`RedisTtl > records the whole catalogue in one place 1`] = `
 {
   "botLang": 15552000,
   "botLink": 900,

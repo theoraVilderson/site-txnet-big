@@ -50,8 +50,8 @@ function memoryCache() {
 }
 
 function resolver(rows: Record<string, DomainRow>) {
-  const findUnique = jest.fn(async ({ where }: any) => rows[where.domainValue] ?? null);
-  const tenantById = jest.fn(
+  const findUnique = vi.fn(async ({ where }: any) => rows[where.domainValue] ?? null);
+  const tenantById = vi.fn(
     async ({ where }: any) => KNOWN.find((t) => t.id === where.id) ?? null,
   );
   const prisma = {

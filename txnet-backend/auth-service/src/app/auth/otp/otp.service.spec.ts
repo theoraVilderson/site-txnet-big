@@ -1,3 +1,4 @@
+import type { Mock, Mocked } from 'vitest';
 import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import { OtpService } from './otp.service';
 import { OtpStore } from './otp.store';
@@ -33,12 +34,12 @@ const HANDLES = {
  *    wait 60s before retrying it.
  */
 describe('OtpService — delivery leaves the request path', () => {
-  const sender = { send: jest.fn() };
-  let store: jest.Mocked<Pick<OtpStore, 'acquireLock' | 'releaseLock' | 'isCoolingDown' | 'startCooldown' | 'save'>>;
-  let delivery: { mark: jest.Mock; read: jest.Mock };
-  let publisher: { publishDelivery: jest.Mock };
-  let prisma: { otpCode: { create: jest.Mock } };
-  let channels: { assertUsable: jest.Mock; isConsoleOnly: jest.Mock };
+  const sender = { send: vi.fn() };
+  let store: Mocked<Pick<OtpStore, 'acquireLock' | 'releaseLock' | 'isCoolingDown' | 'startCooldown' | 'save'>>;
+  let delivery: { mark: Mock; read: Mock };
+  let publisher: { publishDelivery: Mock };
+  let prisma: { otpCode: { create: Mock } };
+  let channels: { assertUsable: Mock; isConsoleOnly: Mock };
   let service: OtpService;
 
   const issue = () =>
@@ -54,20 +55,20 @@ describe('OtpService — delivery leaves the request path', () => {
     );
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     store = {
-      acquireLock: jest.fn().mockResolvedValue(true),
-      releaseLock: jest.fn().mockResolvedValue(undefined),
-      isCoolingDown: jest.fn().mockResolvedValue(false),
-      startCooldown: jest.fn().mockResolvedValue(undefined),
-      save: jest.fn().mockResolvedValue(undefined),
+      acquireLock: vi.fn().mockResolvedValue(true),
+      releaseLock: vi.fn().mockResolvedValue(undefined),
+      isCoolingDown: vi.fn().mockResolvedValue(false),
+      startCooldown: vi.fn().mockResolvedValue(undefined),
+      save: vi.fn().mockResolvedValue(undefined),
     } as never;
-    delivery = { mark: jest.fn().mockResolvedValue(undefined), read: jest.fn() };
-    publisher = { publishDelivery: jest.fn().mockResolvedValue(undefined) };
-    prisma = { otpCode: { create: jest.fn().mockResolvedValue({}) } };
+    delivery = { mark: vi.fn().mockResolvedValue(undefined), read: vi.fn() };
+    publisher = { publishDelivery: vi.fn().mockResolvedValue(undefined) };
+    prisma = { otpCode: { create: vi.fn().mockResolvedValue({}) } };
     channels = {
-      assertUsable: jest.fn().mockResolvedValue(sender),
-      isConsoleOnly: jest.fn().mockReturnValue(false),
+      assertUsable: vi.fn().mockResolvedValue(sender),
+      isConsoleOnly: vi.fn().mockReturnValue(false),
     };
     service = new OtpService(
       store as unknown as OtpStore,
@@ -129,7 +130,7 @@ describe('OtpService — delivery leaves the request path', () => {
 
   it('still delivers inline in console mode, so a dev box needs no broker', async () => {
     channels.isConsoleOnly.mockReturnValue(true);
-    const log = jest.spyOn(console, 'info').mockImplementation(() => undefined);
+    const log = vi.spyOn(console, 'info').mockImplementation(() => undefined);
 
     await issue();
 

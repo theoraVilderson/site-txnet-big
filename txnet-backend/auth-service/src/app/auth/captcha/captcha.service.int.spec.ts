@@ -165,7 +165,7 @@ describe('CaptchaService (real Redis)', () => {
       const { challengeId } = await service.issueChallenge();
       await fx.raw.set(challengeKey(challengeId), String(issuedAt), 'KEEPTTL');
 
-      const clock = jest
+      const clock = vi
         .spyOn(Date, 'now')
         .mockReturnValue(issuedAt + ageMs);
       try {

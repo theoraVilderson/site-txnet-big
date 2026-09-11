@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { ConfigService } from '@nestjs/config';
 import { VaultRetentionJob } from './vault-retention.job';
 
@@ -35,10 +36,10 @@ describe('VaultRetentionJob', () => {
       json: async () => body,
     }) as Response;
 
-  let fetchMock: jest.Mock;
+  let fetchMock: Mock;
 
   beforeEach(() => {
-    fetchMock = jest.fn();
+    fetchMock = vi.fn();
     global.fetch = fetchMock as unknown as typeof fetch;
   });
 

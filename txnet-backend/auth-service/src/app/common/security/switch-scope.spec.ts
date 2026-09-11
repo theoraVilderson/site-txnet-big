@@ -11,7 +11,7 @@ import { botScopeOf, DEVICE_COOKIE } from './switch-scope';
  */
 describe('SwitchScopeMiddleware', () => {
   const run = (req: any) => {
-    const res: any = { cookie: jest.fn() };
+    const res: any = { cookie: vi.fn() };
     new SwitchScopeMiddleware().use(req, res, () => undefined);
     return { scope: req.switchScope, res };
   };

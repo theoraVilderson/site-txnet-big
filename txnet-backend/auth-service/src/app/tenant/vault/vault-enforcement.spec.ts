@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { TenantCredentialStatus } from '@prisma/client';
 import {
   CREDENTIAL_ENV_VARS,
@@ -101,27 +102,27 @@ describe('F-1215 — every decryption writes an audit row', () => {
     lastUsedAt: null,
   };
 
-  function vault(createAccess: jest.Mock) {
+  function vault(createAccess: Mock) {
     const prisma = {
       tenantCredential: {
-        findFirst: jest.fn().mockResolvedValue(row),
-        update: jest.fn().mockResolvedValue(row),
+        findFirst: vi.fn().mockResolvedValue(row),
+        update: vi.fn().mockResolvedValue(row),
       },
       tenantCredentialAccess: { create: createAccess },
     };
     const service = new CredentialVaultService(prisma as never, {} as never);
     // The DEK unwrap is KekService's job and is covered by vault.crypto.spec;
     // what this describe is about starts after the plaintext exists.
-    jest
-      .spyOn(service as never, 'dekKey')
-      .mockResolvedValue(Buffer.alloc(32) as never);
+    vi
+      .spyOn(service as unknown as { dekKey: () => Promise<Buffer> }, 'dekKey')
+      .mockResolvedValue(Buffer.alloc(32));
     return { service, prisma };
   }
 
   it('records who, which tenant, which kind and which caller — never the value', async () => {
-    const create = jest.fn().mockResolvedValue({});
+    const create = vi.fn().mockResolvedValue({});
     const { service } = vault(create);
-    jest
+    vi
       .spyOn(
         await import('./vault.crypto'),
         'open',
@@ -152,9 +153,9 @@ describe('F-1215 — every decryption writes an audit row', () => {
   it('fails the call when the row cannot be written', async () => {
     // An unaudited decryption is not one this service hands a value back for.
     // The opposite choice to `lastUsedAt`, which is fire-and-forget.
-    const create = jest.fn().mockRejectedValue(new Error('audit table is down'));
+    const create = vi.fn().mockRejectedValue(new Error('audit table is down'));
     const { service } = vault(create);
-    jest
+    vi
       .spyOn(await import('./vault.crypto'), 'open')
       .mockReturnValue('the-secret');
 

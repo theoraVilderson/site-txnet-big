@@ -18,13 +18,13 @@ describe('SessionService.revokeSessionsForUserInScope', () => {
   beforeEach(() => {
     prisma = {
       session: {
-        findMany: jest.fn().mockResolvedValue([{ id: 's1' }, { id: 's2' }]),
-        updateMany: jest.fn().mockResolvedValue({ count: 2 }),
+        findMany: vi.fn().mockResolvedValue([{ id: 's1' }, { id: 's2' }]),
+        updateMany: vi.fn().mockResolvedValue({ count: 2 }),
       },
     };
     sessions = {
-      drop: jest.fn().mockResolvedValue(undefined),
-      dropAllForUser: jest.fn().mockResolvedValue(undefined),
+      drop: vi.fn().mockResolvedValue(undefined),
+      dropAllForUser: vi.fn().mockResolvedValue(undefined),
     };
     service = new SessionService(prisma, {} as any, sessions);
   });
@@ -81,13 +81,13 @@ describe('SessionService.revokeSessionsForUserInScope', () => {
 /** The scope has to survive onto the row, or nothing above it can work. */
 describe('SessionService.createSession — scopeKey', () => {
   const build = () => {
-    const create = jest.fn(async (args: any) => ({ id: 'sess-1', ...args.data }));
+    const create = vi.fn(async (args: any) => ({ id: 'sess-1', ...args.data }));
     const prisma: any = { session: { create } };
     const tokens: any = {
       newRefreshToken: () => 'refresh',
       refreshHash: () => 'hash',
     };
-    const sessions: any = { register: jest.fn() };
+    const sessions: any = { register: vi.fn() };
     return { create, service: new SessionService(prisma, tokens, sessions) };
   };
 

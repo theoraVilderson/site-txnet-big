@@ -216,7 +216,7 @@ python3 tools/contracts.py
 
 All six must pass. For a change that touched TypeScript, so must
 `npx tsc -p auth-service/tsconfig.spec.json --noEmit` from `txnet-backend/` —
-jest transpiles without type-checking (`docs/CODE-LAYOUT.md`), so this is the
+vitest transpiles (SWC) without type-checking (`docs/CODE-LAYOUT.md`), so this is the
 only thing that type-checks the specs. `done` in the backlog means **code exists and is
 reachable** — not documented, not planned. Half-finished work stays `doing`
 with a note, never silently `done`.

@@ -1,3 +1,4 @@
+import type { Mock, Mocked } from 'vitest';
 import { aBotIntegration } from '@txnet-backend/messenger';
 import { ConfigService } from '@nestjs/config';
 import { AuthApiClient } from '../auth-api/auth-api.client';
@@ -14,20 +15,20 @@ const ok = <T>(data: T) => ({ ok: true, msg: 'ok', data });
 
 function harness() {
   const api = {
-    otpChannels: jest.fn().mockResolvedValue(
+    otpChannels: vi.fn().mockResolvedValue(
       ok({ channels: [{ channel: 'sms', requiresLink: false }] }),
     ),
-    requestLoginOtp: jest.fn().mockResolvedValue(ok({ accepted: true })),
-    verifyLoginOtp: jest.fn().mockResolvedValue(ok({ accessToken: 'a', expiresIn: 900, refreshToken: 'r-1' })),
-    loginWithPassword: jest.fn().mockResolvedValue(ok({ accessToken: 'a', expiresIn: 900, refreshToken: 'r-2' })),
-    botSession: jest.fn().mockResolvedValue(ok({ state: 'needsContact' })),
-    register: jest.fn().mockResolvedValue(ok({ accepted: true, requiresPhoneVerification: true })),
-    verifyPhone: jest.fn().mockResolvedValue(ok({ accessToken: 'a', expiresIn: 900, refreshToken: 'r-3' })),
-    forgotPassword: jest.fn().mockResolvedValue(ok({ accepted: true })),
-    verifyForgotOtp: jest.fn().mockResolvedValue(ok({ resetToken: 'reset-1' })),
-    resetPassword: jest.fn().mockResolvedValue(ok({ success: true, accessToken: 'a', expiresIn: 900, refreshToken: 'r-4' })),
-  } as unknown as jest.Mocked<AuthApiClient>;
-  const sessions = { save: jest.fn(), clear: jest.fn(), get: jest.fn() } as unknown as BotSessionStore;
+    requestLoginOtp: vi.fn().mockResolvedValue(ok({ accepted: true })),
+    verifyLoginOtp: vi.fn().mockResolvedValue(ok({ accessToken: 'a', expiresIn: 900, refreshToken: 'r-1' })),
+    loginWithPassword: vi.fn().mockResolvedValue(ok({ accessToken: 'a', expiresIn: 900, refreshToken: 'r-2' })),
+    botSession: vi.fn().mockResolvedValue(ok({ state: 'needsContact' })),
+    register: vi.fn().mockResolvedValue(ok({ accepted: true, requiresPhoneVerification: true })),
+    verifyPhone: vi.fn().mockResolvedValue(ok({ accessToken: 'a', expiresIn: 900, refreshToken: 'r-3' })),
+    forgotPassword: vi.fn().mockResolvedValue(ok({ accepted: true })),
+    verifyForgotOtp: vi.fn().mockResolvedValue(ok({ resetToken: 'reset-1' })),
+    resetPassword: vi.fn().mockResolvedValue(ok({ success: true, accessToken: 'a', expiresIn: 900, refreshToken: 'r-4' })),
+  } as unknown as Mocked<AuthApiClient>;
+  const sessions = { save: vi.fn(), clear: vi.fn(), get: vi.fn() } as unknown as BotSessionStore;
   const otp = new OtpStep(api);
   // A fa deployment, so a bare `0912…` is read as Iranian — the same default
   // `auth-service` applies to a number typed without a `+` (ADR-0018).
@@ -87,7 +88,7 @@ describe('LoginFlow', () => {
 
   it('keeps the chat on the code step, with auth-api’s reason, on a wrong code', async () => {
     const { login, api, sessions } = harness();
-    (api.verifyLoginOtp as jest.Mock).mockResolvedValue({ ok: false, msg: 'کد نادرست است' });
+    (api.verifyLoginOtp as Mock).mockResolvedValue({ ok: false, msg: 'کد نادرست است' });
     const state: NavState = { flow: 'login', step: 'login.code', data: { phoneNumber: '09121112233' } };
 
     const result = await login.handle({ ...ctx, text: '000000' }, state, null);
@@ -104,7 +105,7 @@ describe('LoginFlow', () => {
     const good = await login.handle({ ...ctx, text: 'Str0ng!pass' }, state, null);
     expect(good.deleteIncoming).toBe(true);
 
-    (api.loginWithPassword as jest.Mock).mockResolvedValue({ ok: false, msg: 'نام کاربری یا رمز اشتباه است' });
+    (api.loginWithPassword as Mock).mockResolvedValue({ ok: false, msg: 'نام کاربری یا رمز اشتباه است' });
     const bad = await login.handle({ ...ctx, text: 'nope' }, state, null);
     expect(bad.deleteIncoming).toBe(true);
     expect(bad.view.body.raw).toBe('نام کاربری یا رمز اشتباه است');
@@ -112,7 +113,7 @@ describe('LoginFlow', () => {
 
   it('continues into the code step when the account answers requiresOtp', async () => {
     const { login, api } = harness();
-    (api.loginWithPassword as jest.Mock).mockResolvedValue(ok({ requiresOtp: true, otpToken: 't' }));
+    (api.loginWithPassword as Mock).mockResolvedValue(ok({ requiresOtp: true, otpToken: 't' }));
     const state: NavState = { flow: 'login', step: 'login.password', data: { identifier: 'sara' } };
 
     const result = await login.handle({ ...ctx, text: 'Str0ng!pass' }, state, null);
@@ -172,7 +173,7 @@ describe('RegisterFlow', () => {
 
   it('shows auth-api’s duplicate-account answer instead of deciding itself', async () => {
     const { register, api } = harness();
-    (api.register as jest.Mock).mockResolvedValue({ ok: false, msg: 'این شماره قبلاً ثبت شده است' });
+    (api.register as Mock).mockResolvedValue({ ok: false, msg: 'این شماره قبلاً ثبت شده است' });
     const state: NavState = {
       flow: 'register',
       step: 'register.password',
@@ -216,7 +217,7 @@ describe('ForgotFlow', () => {
 describe('LoginFlow — the messenger account as the credential (ADR-0012)', () => {
   it('signs a linked chat in on the spot, with nothing typed and no code', async () => {
     const { login, api, sessions } = harness();
-    (api.botSession as jest.Mock).mockResolvedValue(
+    (api.botSession as Mock).mockResolvedValue(
       ok({ state: 'authenticated', tokens: { refreshToken: 'r-9' } }),
     );
 
@@ -237,7 +238,7 @@ describe('LoginFlow — the messenger account as the credential (ADR-0012)', () 
     const asked = await login.start(ctx);
     expect(asked.view.id).toBe('login.chat');
 
-    (api.botSession as jest.Mock).mockResolvedValue(
+    (api.botSession as Mock).mockResolvedValue(
       ok({ state: 'authenticated', tokens: { refreshToken: 'r-10' } }),
     );
     const done = await login.handle(
@@ -255,7 +256,7 @@ describe('LoginFlow — the messenger account as the credential (ADR-0012)', () 
     // a decision this flow makes — it opens the OTP/password screen instead.
     const { login, api } = harness();
     const asked = await login.start(ctx);
-    (api.botSession as jest.Mock).mockResolvedValue({
+    (api.botSession as Mock).mockResolvedValue({
       ok: false,
       msg: 'این روش برای این حساب مجاز نیست',
     });

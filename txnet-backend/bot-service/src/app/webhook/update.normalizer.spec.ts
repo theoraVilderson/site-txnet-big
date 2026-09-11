@@ -15,7 +15,7 @@ import { UpdateNormalizer } from './update.normalizer';
 // A locale service that knows two languages and falls back to fa.
 function locale() {
   return {
-    resolveLanguage: jest.fn((code?: string) =>
+    resolveLanguage: vi.fn((code?: string) =>
       code && ['en', 'fa'].includes(code.split('-')[0]) ? code.split('-')[0] : 'fa',
     ),
   } as unknown as LocaleService;

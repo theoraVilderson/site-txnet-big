@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { AccountSwitchService } from './account-switch.service';
 
 /** The two surfaces every test below keeps apart (ADR-0015). */
@@ -21,7 +22,7 @@ describe('AccountSwitchService.addByPassword', () => {
   let created: any[];
   let createdMany: any[];
   let service: AccountSwitchService;
-  let proveByPassword: jest.Mock;
+  let proveByPassword: Mock;
 
   const input = { identifier: '09123456789', password: 'pw' };
 
@@ -29,18 +30,18 @@ describe('AccountSwitchService.addByPassword', () => {
     members = {};
     created = [];
     createdMany = [];
-    proveByPassword = jest.fn().mockResolvedValue({ id: TARGET });
+    proveByPassword = vi.fn().mockResolvedValue({ id: TARGET });
 
     const memberDelegate = {
-      findUnique: jest.fn(({ where }: any) => {
+      findUnique: vi.fn(({ where }: any) => {
         const { scopeKey, userId } = where.scopeKey_userId;
         return members[rowKey(scopeKey, userId)] ?? null;
       }),
-      create: jest.fn((args: any) => {
+      create: vi.fn((args: any) => {
         created.push(args.data);
         return args.data;
       }),
-      createMany: jest.fn((args: any) => {
+      createMany: vi.fn((args: any) => {
         createdMany.push(...args.data);
         return { count: args.data.length };
       }),
@@ -48,7 +49,7 @@ describe('AccountSwitchService.addByPassword', () => {
 
     const prisma: any = {
       user: {
-        findUnique: jest.fn(({ where }: any) =>
+        findUnique: vi.fn(({ where }: any) =>
           where.id === CALLER
             ? {
                 id: CALLER,
@@ -60,8 +61,8 @@ describe('AccountSwitchService.addByPassword', () => {
         ),
       },
       linkedAccountMember: memberDelegate,
-      linkedAccountGroup: { create: jest.fn(async () => ({ id: 'group-1' })) },
-      $transaction: jest.fn(async (fn: any) =>
+      linkedAccountGroup: { create: vi.fn(async () => ({ id: 'group-1' })) },
+      $transaction: vi.fn(async (fn: any) =>
         fn({
           linkedAccountMember: memberDelegate,
           linkedAccountGroup: { create: async () => ({ id: 'group-1' }) },
@@ -281,10 +282,10 @@ describe('AccountSwitchService.list / switchTo / remove', () => {
     { id: string; userId: string; groupId: string; scopeKey: string }
   >;
   let service: AccountSwitchService;
-  let switchSession: jest.Mock;
-  let revokeInScope: jest.Mock;
+  let switchSession: Mock;
+  let revokeInScope: Mock;
   let deletedGroups: string[];
-  let groupUpdate: jest.Mock;
+  let groupUpdate: Mock;
 
   const put = (scopeKey: string, userId: string, groupId: string) => {
     members[rowKey(scopeKey, userId)] = {
@@ -302,33 +303,33 @@ describe('AccountSwitchService.list / switchTo / remove', () => {
     put(BROWSER, SAME_TENANT, 'g1');
     put(BROWSER, OTHER_TENANT, 'g1');
 
-    switchSession = jest.fn().mockResolvedValue({
+    switchSession = vi.fn().mockResolvedValue({
       accessToken: 'access',
       refreshToken: 'refresh',
       expiresIn: 900,
     });
-    revokeInScope = jest.fn().mockResolvedValue(1);
+    revokeInScope = vi.fn().mockResolvedValue(1);
 
     const memberDelegate = {
-      findUnique: jest.fn(({ where }: any) => {
+      findUnique: vi.fn(({ where }: any) => {
         const { scopeKey, userId } = where.scopeKey_userId;
         return members[rowKey(scopeKey, userId)] ?? null;
       }),
-      findMany: jest.fn(({ where }: any) =>
+      findMany: vi.fn(({ where }: any) =>
         Object.values(members).filter(
           (m) =>
             m.groupId === where.groupId &&
             (where.userId?.not === undefined || m.userId !== where.userId.not),
         ),
       ),
-      delete: jest.fn(({ where }: any) => {
+      delete: vi.fn(({ where }: any) => {
         const found = Object.entries(members).find(
           ([, m]) => m.id === where.id,
         );
         if (found) delete members[found[0]];
         return found?.[1];
       }),
-      deleteMany: jest.fn(({ where }: any) => {
+      deleteMany: vi.fn(({ where }: any) => {
         for (const [k, m] of Object.entries(members)) {
           if (m.groupId === where.groupId) delete members[k];
         }
@@ -336,12 +337,12 @@ describe('AccountSwitchService.list / switchTo / remove', () => {
       }),
     };
 
-    groupUpdate = jest.fn(async (args: any) => ({ id: args.where.id }));
+    groupUpdate = vi.fn(async (args: any) => ({ id: args.where.id }));
 
     const prisma: any = {
       user: {
-        findUnique: jest.fn(({ where }: any) => USERS[where.id] ?? null),
-        findMany: jest.fn(({ where }: any) =>
+        findUnique: vi.fn(({ where }: any) => USERS[where.id] ?? null),
+        findMany: vi.fn(({ where }: any) =>
           where.id.in
             .map((id: string) => USERS[id])
             .filter((u: any) => u && u.tenantId === where.tenantId),
@@ -349,13 +350,13 @@ describe('AccountSwitchService.list / switchTo / remove', () => {
       },
       linkedAccountMember: memberDelegate,
       linkedAccountGroup: {
-        delete: jest.fn(({ where }: any) => {
+        delete: vi.fn(({ where }: any) => {
           deletedGroups.push(where.id);
           return { id: where.id };
         }),
         update: groupUpdate,
       },
-      $transaction: jest.fn(async (fn: any) =>
+      $transaction: vi.fn(async (fn: any) =>
         fn({
           linkedAccountMember: memberDelegate,
           linkedAccountGroup: {
@@ -372,7 +373,7 @@ describe('AccountSwitchService.list / switchTo / remove', () => {
     service = new AccountSwitchService(
       prisma,
       {
-        findUserForSession: jest.fn(async (id: string) => USERS[id] ?? null),
+        findUserForSession: vi.fn(async (id: string) => USERS[id] ?? null),
         switchSession,
       } as any,
       { revokeSessionsForUserInScope: revokeInScope } as any,

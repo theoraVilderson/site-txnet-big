@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { IdentityHeaders } from '@txnet-backend/shared-core';
 import { ConfigService } from '@nestjs/config';
 import { AuthApiClient, CallContext } from './auth-api.client';
@@ -64,15 +65,15 @@ function jsonResponse(
   } as unknown as Response;
 }
 
-let fetchMock: jest.Mock;
+let fetchMock: Mock;
 
 beforeEach(() => {
-  fetchMock = jest.fn();
+  fetchMock = vi.fn();
   global.fetch = fetchMock as unknown as typeof fetch;
 });
 
 afterEach(() => {
-  jest.restoreAllMocks();
+  vi.restoreAllMocks();
 });
 
 function client() {

@@ -1,16 +1,17 @@
+import type { Mock } from 'vitest';
+import * as argon2Module from 'argon2';
 import { OtpChannel, OtpPurpose } from '@prisma/client';
 import { RegisterService } from './register.service';
 import { RedisTtl } from '../../redis/redis.keys';
 import { normalizePhone } from '../../common/validation/phone.schema';
 import { runWithTenant } from '../../tenant-context/tenant-context';
 
-jest.mock('argon2', () => ({
+vi.mock('argon2', () => ({
   argon2id: 2,
-  hash: jest.fn(),
-  verify: jest.fn(),
+  hash: vi.fn(),
+  verify: vi.fn(),
 }));
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const argon2 = require('argon2') as { hash: jest.Mock };
+const argon2 = argon2Module as unknown as { hash: Mock };
 
 /**
  * Registration is two steps with a Redis record in between, and the whole
@@ -42,33 +43,33 @@ type Harness = ReturnType<typeof harness>;
 
 function harness() {
   const prisma = {
-    role: { findFirst: jest.fn().mockResolvedValue({ id: 'role-user' }) },
+    role: { findFirst: vi.fn().mockResolvedValue({ id: 'role-user' }) },
     user: {
-      findFirst: jest.fn().mockResolvedValue(null),
-      create: jest.fn().mockResolvedValue({ id: 'user-1' }),
+      findFirst: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({ id: 'user-1' }),
     },
   };
   const redis = {
-    setJson: jest.fn().mockResolvedValue(undefined),
-    getJson: jest.fn(),
-    del: jest.fn().mockResolvedValue(undefined),
+    setJson: vi.fn().mockResolvedValue(undefined),
+    getJson: vi.fn(),
+    del: vi.fn().mockResolvedValue(undefined),
   };
   const otpService = {
-    issueOtp: jest.fn().mockResolvedValue(undefined),
-    verifyOtp: jest.fn().mockResolvedValue(true),
+    issueOtp: vi.fn().mockResolvedValue(undefined),
+    verifyOtp: vi.fn().mockResolvedValue(true),
   };
   const channels = {
-    defaultChannel: jest.fn().mockReturnValue(OtpChannel.sms),
-    requiresLink: jest.fn().mockReturnValue(false),
-    assertUsable: jest.fn(),
+    defaultChannel: vi.fn().mockReturnValue(OtpChannel.sms),
+    requiresLink: vi.fn().mockReturnValue(false),
+    assertUsable: vi.fn(),
   };
   const botLinks = {
-    hasVerifiedLink: jest.fn().mockResolvedValue(true),
-    startLink: jest.fn().mockResolvedValue({ linkUrl: 'https://t.me/bot?start=tok' }),
-    promoteProvenChat: jest.fn().mockResolvedValue(undefined),
+    hasVerifiedLink: vi.fn().mockResolvedValue(true),
+    startLink: vi.fn().mockResolvedValue({ linkUrl: 'https://t.me/bot?start=tok' }),
+    promoteProvenChat: vi.fn().mockResolvedValue(undefined),
   };
   const deliveries = {
-    mintHandles: jest.fn().mockResolvedValue({
+    mintHandles: vi.fn().mockResolvedValue({
       deliveryId: 'a'.repeat(32),
       channelId: 'c'.repeat(32),
       channelToken: 'd'.repeat(32),
@@ -108,7 +109,7 @@ describe('RegisterService.register — the pending record', () => {
   let h: Harness;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     h = harness();
     argon2.hash.mockResolvedValue('argon2-hash');
   });
@@ -205,7 +206,7 @@ describe('RegisterService.register — refusals', () => {
   let h: Harness;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     h = harness();
     argon2.hash.mockResolvedValue('argon2-hash');
   });
@@ -288,7 +289,7 @@ describe('RegisterService.register — messenger channels', () => {
   let h: Harness;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     h = harness();
     argon2.hash.mockResolvedValue('argon2-hash');
     h.channels.requiresLink.mockReturnValue(true);
@@ -376,7 +377,7 @@ describe('RegisterService.verifyPhone', () => {
     );
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     h = harness();
     h.redis.getJson.mockResolvedValue(pending);
   });

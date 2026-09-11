@@ -33,8 +33,8 @@ const EXPIRES_AT = 4102444800; // 2100-01-01T00:00:00Z
  * something.
  */
 const FROZEN_NOW_SEC = 1767225600; // 2026-01-01T00:00:00Z
-jest.useFakeTimers({ now: FROZEN_NOW_SEC * 1000 });
-afterAll(() => jest.useRealTimers());
+vi.useFakeTimers({ now: FROZEN_NOW_SEC * 1000 });
+afterAll(() => vi.useRealTimers());
 
 const ttl = EXPIRES_AT - FROZEN_NOW_SEC;
 

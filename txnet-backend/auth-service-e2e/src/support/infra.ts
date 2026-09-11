@@ -3,7 +3,7 @@
  * Postgres (the record) and Redis (sessions, OTP, rate limits, captcha).
  *
  * Both run in throwaway containers, started once for the whole e2e run in
- * `global-setup.ts` and stopped in `global-teardown.ts`. Jest workers are
+ * `global-setup.ts` and stopped in `global-teardown.ts`. Test workers are
  * forked after global setup, so the connection strings are handed to them
  * through a small JSON file rather than through `process.env` — one file,
  * one source of truth, and no dependence on how a runner propagates env.

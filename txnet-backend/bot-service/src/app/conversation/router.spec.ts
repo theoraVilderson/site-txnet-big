@@ -33,37 +33,37 @@ function makeRouter(over: {
   access?: string | null;
 } = {}) {
   const nav = {
-    get: jest.fn().mockResolvedValue(over.state ?? null),
-    save: jest.fn(),
-    clear: jest.fn(),
+    get: vi.fn().mockResolvedValue(over.state ?? null),
+    save: vi.fn(),
+    clear: vi.fn(),
   } as unknown as ConversationStore;
   const sessions = {
-    get: jest.fn().mockResolvedValue(over.session ?? null),
-    clear: jest.fn(),
-    save: jest.fn(),
+    get: vi.fn().mockResolvedValue(over.session ?? null),
+    clear: vi.fn(),
+    save: vi.fn(),
   } as unknown as BotSessionStore;
   const accessToken = over.access === undefined ? 'access-token' : over.access;
   const api = {
-    logout: jest.fn().mockResolvedValue({ ok: true, msg: 'ok' }),
+    logout: vi.fn().mockResolvedValue({ ok: true, msg: 'ok' }),
     // `ChatAccess` refreshes before every authenticated call, and a refusal is
     // how a session revoked somewhere else reaches this bot at all.
-    refresh: jest.fn().mockResolvedValue(
+    refresh: vi.fn().mockResolvedValue(
       accessToken
         ? { ok: true, msg: 'ok', data: { accessToken } }
         : { ok: false, msg: 'auth.sessionExpired' },
     ),
     ...over.api,
   } as unknown as AuthApiClient;
-  const otp = { submitContact: jest.fn(), ...over.otp } as unknown as OtpStep;
+  const otp = { submitContact: vi.fn(), ...over.otp } as unknown as OtpStep;
 
   const langs = {
-    resolve: jest.fn(async (_p: unknown, _c: unknown, hint: string) => hint),
-    chosen: jest.fn().mockResolvedValue(null),
-    choose: jest.fn().mockResolvedValue(true),
+    resolve: vi.fn(async (_p: unknown, _c: unknown, hint: string) => hint),
+    chosen: vi.fn().mockResolvedValue(null),
+    choose: vi.fn().mockResolvedValue(true),
     ...over.langs,
   } as unknown as ChatLanguage;
   const locale = {
-    locales: jest.fn().mockResolvedValue([
+    locales: vi.fn().mockResolvedValue([
       { code: 'fa', native_name: 'فارسی' },
       { code: 'en', native_name: 'English' },
     ]),
@@ -220,7 +220,7 @@ describe('ConversationRouter', () => {
     });
 
     it('finishes a panel-started link instead of opening a menu (F-0203)', async () => {
-      const linkResolve = jest.fn().mockResolvedValue({
+      const linkResolve = vi.fn().mockResolvedValue({
         ok: true,
         msg: 'ok',
         data: { state: 'pending', needsContact: true, otpSent: false, messageKey: 'askContact', lang: 'fa' },
@@ -258,7 +258,7 @@ describe('ConversationRouter', () => {
    */
   describe('leaving', () => {
     it('keeps the session auth-api handed back and stays signed in', async () => {
-      const logout = jest.fn().mockResolvedValue({
+      const logout = vi.fn().mockResolvedValue({
         ok: true,
         msg: 'ok',
         data: {
@@ -284,7 +284,7 @@ describe('ConversationRouter', () => {
     });
 
     it('drops the entry when there was nobody to fall back onto', async () => {
-      const logout = jest
+      const logout = vi
         .fn()
         .mockResolvedValue({ ok: true, msg: 'ok', data: { success: true } });
       const { router, sessions } = makeRouter({
@@ -298,7 +298,7 @@ describe('ConversationRouter', () => {
     });
 
     it('asks before signing out of everything', async () => {
-      const logoutAll = jest.fn();
+      const logoutAll = vi.fn();
       const { router, sessions } = makeRouter({
         session: { refreshToken: 'r-1', signedInAt: 1 },
         api: { logoutAll },
@@ -316,7 +316,7 @@ describe('ConversationRouter', () => {
     });
 
     it('signs out of every account once confirmed', async () => {
-      const logoutAll = jest
+      const logoutAll = vi
         .fn()
         .mockResolvedValue({ ok: true, msg: 'ok', data: { success: true } });
       const { router, sessions } = makeRouter({
@@ -337,7 +337,7 @@ describe('ConversationRouter', () => {
     });
 
     it('/logout revokes the session at auth-api and drops the chat’s own', async () => {
-      const logout = jest.fn().mockResolvedValue({ ok: true, msg: 'ok' });
+      const logout = vi.fn().mockResolvedValue({ ok: true, msg: 'ok' });
       const { router, sessions } = makeRouter({
         session: { refreshToken: 'r-1', signedInAt: 1 },
         api: { logout },
@@ -400,7 +400,7 @@ describe('ConversationRouter', () => {
   });
 
   it('hands the panel-link contact to identity and stops there', async () => {
-    const submitContact = jest.fn().mockResolvedValue({
+    const submitContact = vi.fn().mockResolvedValue({
       view: { id: 'otp.code', body: { key: 'bot.login.askCode' } },
       nextState: { flow: 'login', step: 'login.code', data: {} },
     });

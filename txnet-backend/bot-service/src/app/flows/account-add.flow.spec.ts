@@ -1,3 +1,4 @@
+import type { Mocked } from 'vitest';
 import { aBotIntegration } from '@txnet-backend/messenger';
 import { ConfigService } from '@nestjs/config';
 import { AuthApiClient } from '../auth-api/auth-api.client';
@@ -20,20 +21,20 @@ const at = (step: string, data: Record<string, string> = {}): NavState => ({
 
 function harness(over: { session?: unknown; api?: Partial<AuthApiClient> } = {}) {
   const api = {
-    refresh: jest
+    refresh: vi
       .fn()
       .mockResolvedValue(ok({ accessToken: 'access-1', expiresIn: 900, refreshToken: 'r-next' })),
-    otpChannels: jest
+    otpChannels: vi
       .fn()
       .mockResolvedValue(ok({ channels: [{ channel: 'sms', requiresLink: false }] })),
-    requestAddOtp: jest.fn().mockResolvedValue(ok({ accepted: true })),
-    addAccountByOtp: jest
+    requestAddOtp: vi.fn().mockResolvedValue(ok({ accepted: true })),
+    addAccountByOtp: vi
       .fn()
       .mockResolvedValue(ok({ groupId: 'g-1', added: true, userId: 'u-new' })),
-    addAccountByPassword: jest
+    addAccountByPassword: vi
       .fn()
       .mockResolvedValue(ok({ groupId: 'g-1', added: true, userId: 'u-new' })),
-    switchAccount: jest.fn().mockResolvedValue(
+    switchAccount: vi.fn().mockResolvedValue(
       ok({
         userId: 'u-new',
         fullName: 'Sara',
@@ -43,13 +44,13 @@ function harness(over: { session?: unknown; api?: Partial<AuthApiClient> } = {})
       }),
     ),
     ...over.api,
-  } as unknown as jest.Mocked<AuthApiClient>;
+  } as unknown as Mocked<AuthApiClient>;
   const sessions = {
-    get: jest.fn().mockResolvedValue(
+    get: vi.fn().mockResolvedValue(
       'session' in over ? over.session : { refreshToken: 'r-1', signedInAt: 0 },
     ),
-    save: jest.fn(),
-    clear: jest.fn(),
+    save: vi.fn(),
+    clear: vi.fn(),
   } as unknown as BotSessionStore;
   return {
     api,
@@ -122,7 +123,7 @@ describe('AccountAddFlow', () => {
     // cannot match (identity invariant #12). The deep link is the honest one.
     const { flow, api } = harness({
       api: {
-        requestAddOtp: jest.fn().mockResolvedValue(
+        requestAddOtp: vi.fn().mockResolvedValue(
           ok({
             accepted: true,
             linkRequired: true,
@@ -131,7 +132,7 @@ describe('AccountAddFlow', () => {
             deepLink: 'https://t.me/bot?start=lt-1',
           }),
         ),
-        linkResolve: jest.fn(),
+        linkResolve: vi.fn(),
       } as Partial<AuthApiClient>,
     });
 
@@ -191,7 +192,7 @@ describe('AccountAddFlow', () => {
     // lie about the state of the group.
     const { flow, sessions } = harness({
       api: {
-        switchAccount: jest
+        switchAccount: vi
           .fn()
           .mockResolvedValue({ ok: false, msg: 'accountSwitch.notAMember' }),
       } as Partial<AuthApiClient>,
@@ -214,7 +215,7 @@ describe('AccountAddFlow', () => {
   it('keeps the user on the code step when auth-api refuses the proof', async () => {
     const { flow } = harness({
       api: {
-        addAccountByOtp: jest
+        addAccountByOtp: vi
           .fn()
           .mockResolvedValue({ ok: false, msg: 'accountSwitch.proofFailed' }),
       } as Partial<AuthApiClient>,
@@ -259,7 +260,7 @@ describe('AccountAddFlow', () => {
     // it is taken back out on every path — including the one that falls back.
     const { flow } = harness({
       api: {
-        switchAccount: jest
+        switchAccount: vi
           .fn()
           .mockResolvedValue({ ok: false, msg: 'accountSwitch.notAMember' }),
       } as Partial<AuthApiClient>,
@@ -278,7 +279,7 @@ describe('AccountAddFlow', () => {
   it('deletes the password message even when the proof is rejected', async () => {
     const { flow } = harness({
       api: {
-        addAccountByPassword: jest
+        addAccountByPassword: vi
           .fn()
           .mockResolvedValue({ ok: false, msg: 'accountSwitch.proofFailed' }),
       } as Partial<AuthApiClient>,

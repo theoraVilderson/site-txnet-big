@@ -30,25 +30,25 @@ function harness(over: {
 } = {}) {
   const prisma = {
     linkedBotAccount: {
-      findFirst: jest
+      findFirst: vi
         .fn()
         .mockResolvedValueOnce(over.link ?? null)
         .mockResolvedValue(over.taken ?? null),
-      upsert: jest.fn(),
+      upsert: vi.fn(),
     },
     user: {
-      findUnique: jest.fn().mockResolvedValue(over.user ?? linkedUser),
-      findFirst: jest.fn().mockResolvedValue(over.byPhone ?? null),
+      findUnique: vi.fn().mockResolvedValue(over.user ?? linkedUser),
+      findFirst: vi.fn().mockResolvedValue(over.byPhone ?? null),
     },
     // ADR-0034: the place's own group, and whether it is acting as someone
     // other than the linked account. Default is "never switched".
     linkedAccountMember: {
-      findUnique: jest.fn().mockResolvedValue(null),
-      findFirst: jest.fn().mockResolvedValue({ id: 'still-a-member' }),
+      findUnique: vi.fn().mockResolvedValue(null),
+      findFirst: vi.fn().mockResolvedValue({ id: 'still-a-member' }),
     },
   };
   const auth = {
-    createSessionForUser: jest.fn().mockResolvedValue({
+    createSessionForUser: vi.fn().mockResolvedValue({
       accessToken: 'a',
       refreshToken: 'r',
       expiresIn: 900,
@@ -58,8 +58,8 @@ function harness(over: {
   // token); what this service does with the answer is what is asserted here,
   // so the fake is the answer and nothing else.
   const bots = {
-    primaryFor: jest.fn().mockResolvedValue(aBotIntegration()),
-    verifyWebAppInitData: jest.fn().mockResolvedValue({
+    primaryFor: vi.fn().mockResolvedValue(aBotIntegration()),
+    verifyWebAppInitData: vi.fn().mockResolvedValue({
       ok: true,
       data: { platform: 'telegram', user: { id: '5501' }, authDate: 1 },
     }),

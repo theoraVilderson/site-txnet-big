@@ -1,6 +1,6 @@
-// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`RedisKeys — bot key catalogue builds every key from fixed arguments 1`] = `
+exports[`RedisKeys — bot key catalogue > builds every key from fixed arguments 1`] = `
 {
   "botLang": "bot:lang:bale:integration-2:77",
   "botNav": "bot:nav:telegram:integration-1:5501",
@@ -8,7 +8,7 @@ exports[`RedisKeys — bot key catalogue builds every key from fixed arguments 1
 }
 `;
 
-exports[`RedisKeys — bot key catalogue exposes a builder for every key family, and nothing unbuilt 1`] = `
+exports[`RedisKeys — bot key catalogue > exposes a builder for every key family, and nothing unbuilt 1`] = `
 [
   "botLang",
   "botNav",
@@ -16,7 +16,7 @@ exports[`RedisKeys — bot key catalogue exposes a builder for every key family,
 ]
 `;
 
-exports[`RedisKeys — bot key catalogue keeps the canonical TTLs stable 1`] = `
+exports[`RedisKeys — bot key catalogue > keeps the canonical TTLs stable 1`] = `
 {
   "botLang": 15552000,
   "botLink": 900,

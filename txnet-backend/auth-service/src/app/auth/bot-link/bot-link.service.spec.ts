@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { OtpPurpose } from '../otp/otp.interface';
 import {
   BotLinkService,
@@ -53,10 +54,10 @@ describe('BotLinkService.handleUpdate — shared contact', () => {
   const CHAT = '55501';
 
   let link: PendingBotLink;
-  let upsert: jest.Mock;
+  let upsert: Mock;
   let sent: { chatId: string; text: string }[];
   let service: BotLinkService;
-  let issueOtp: jest.Mock;
+  let issueOtp: Mock;
 
   beforeEach(() => {
     link = {
@@ -70,36 +71,36 @@ describe('BotLinkService.handleUpdate — shared contact', () => {
       otpSent: false,
       createdAt: Date.now(),
     };
-    upsert = jest.fn();
-    issueOtp = jest.fn().mockResolvedValue(undefined);
+    upsert = vi.fn();
+    issueOtp = vi.fn().mockResolvedValue(undefined);
     sent = [];
 
     const prisma = {
       linkedBotAccount: {
-        findFirst: jest.fn().mockResolvedValue(null),
+        findFirst: vi.fn().mockResolvedValue(null),
         upsert,
       },
-      user: { findFirst: jest.fn().mockResolvedValue({ id: 'user-1' }) },
+      user: { findFirst: vi.fn().mockResolvedValue({ id: 'user-1' }) },
     };
     const store = {
-      byChat: jest.fn().mockResolvedValue(link),
-      byToken: jest.fn().mockResolvedValue(link),
-      update: jest.fn(async (l: PendingBotLink) => {
+      byChat: vi.fn().mockResolvedValue(link),
+      byToken: vi.fn().mockResolvedValue(link),
+      update: vi.fn(async (l: PendingBotLink) => {
         link = l;
       }),
-      releaseChat: jest.fn(),
-      saveProvenChat: jest.fn(),
-      provenChat: jest.fn().mockResolvedValue(null),
-      clearProvenChat: jest.fn(),
+      releaseChat: vi.fn(),
+      saveProvenChat: vi.fn(),
+      provenChat: vi.fn().mockResolvedValue(null),
+      clearProvenChat: vi.fn(),
     };
     const client = {
-      sendMessage: jest.fn(async (chatId: string, text: string) => {
+      sendMessage: vi.fn(async (chatId: string, text: string) => {
         sent.push({ chatId, text });
       }),
-      clearKeyboard: jest.fn(async (chatId: string, text: string) => {
+      clearKeyboard: vi.fn(async (chatId: string, text: string) => {
         sent.push({ chatId, text });
       }),
-      requestContact: jest.fn(),
+      requestContact: vi.fn(),
     };
     const bots = { client: () => client };
     const locale = { getKey: () => undefined };
@@ -109,8 +110,8 @@ describe('BotLinkService.handleUpdate — shared contact', () => {
       store as never,
       bots as never,
       locale as never,
-      { issueOtp, verifyOtp: jest.fn() } as never,
-      { mintHandles: jest.fn().mockResolvedValue({
+      { issueOtp, verifyOtp: vi.fn() } as never,
+      { mintHandles: vi.fn().mockResolvedValue({
           deliveryId: 'a'.repeat(32),
           channelId: 'c'.repeat(32),
           channelToken: 'd'.repeat(32),
@@ -207,14 +208,14 @@ describe('BotLinkService — language for a chat with no pending link', () => {
         return base && served.includes(base) ? base : 'fa';
       },
     };
-    const store = { byToken: jest.fn().mockResolvedValue(null) };
+    const store = { byToken: vi.fn().mockResolvedValue(null) };
     return new BotLinkService(
       {} as never,
       store as never,
       { client: () => undefined } as never,
       locale as never,
-      { issueOtp: jest.fn(), verifyOtp: jest.fn() } as never,
-      { mintHandles: jest.fn() } as never,
+      { issueOtp: vi.fn(), verifyOtp: vi.fn() } as never,
+      { mintHandles: vi.fn() } as never,
     );
   };
 

@@ -1,3 +1,4 @@
+import type { Mocked } from 'vitest';
 import { aBotIntegration } from '@txnet-backend/messenger';
 import { AuthApiClient } from '../auth-api/auth-api.client';
 import { OtpChannelDescriptor } from '../auth-api/auth-api.types';
@@ -23,15 +24,15 @@ function ctxFor(platform: 'telegram' | 'bale'): ChatContext {
 const state: NavState = { flow: 'login', step: 'login.channel', data: { phoneNumber: '09121112233' } };
 
 describe('OtpStep', () => {
-  let api: jest.Mocked<Partial<AuthApiClient>>;
+  let api: Mocked<Partial<AuthApiClient>>;
   let step: OtpStep;
 
   beforeEach(() => {
     api = {
-      otpChannels: jest.fn().mockResolvedValue({ ok: true, msg: 'ok', data: { channels: CHANNELS } }),
-      linkResolve: jest.fn(),
-      linkContact: jest.fn(),
-      linkStatus: jest.fn(),
+      otpChannels: vi.fn().mockResolvedValue({ ok: true, msg: 'ok', data: { channels: CHANNELS } }),
+      linkResolve: vi.fn(),
+      linkContact: vi.fn(),
+      linkStatus: vi.fn(),
     };
     step = new OtpStep(api as unknown as AuthApiClient);
   });
@@ -71,7 +72,7 @@ describe('OtpStep', () => {
     });
 
     it('says so when the environment has no channel at all', async () => {
-      api.otpChannels = jest
+      api.otpChannels = vi
         .fn()
         .mockResolvedValue({ ok: true, msg: 'ok', data: { channels: [] } });
 
@@ -81,7 +82,7 @@ describe('OtpStep', () => {
 
   describe('requesting the code', () => {
     it('asks for the code when auth-api simply sent one', async () => {
-      const send = jest.fn().mockResolvedValue({
+      const send = vi.fn().mockResolvedValue({
         ok: true,
         msg: 'ok',
         data: { accepted: true },
@@ -97,7 +98,7 @@ describe('OtpStep', () => {
     it('links in place when the chosen messenger is this very chat', async () => {
       // No deep-link round trip: the user is already talking to the bot that
       // would deliver the code, so the link conversation happens right here.
-      const send = jest.fn().mockResolvedValue({
+      const send = vi.fn().mockResolvedValue({
         ok: true,
         msg: 'ok',
         data: {
@@ -108,7 +109,7 @@ describe('OtpStep', () => {
           deepLink: 'https://t.me/bot?start=tok-abc',
         },
       });
-      api.linkResolve = jest.fn().mockResolvedValue({
+      api.linkResolve = vi.fn().mockResolvedValue({
         ok: true,
         msg: 'ok',
         data: { state: 'pending', needsContact: true, otpSent: false, messageKey: 'askContact', lang: 'fa' },
@@ -126,7 +127,7 @@ describe('OtpStep', () => {
     });
 
     it('hands over the other messenger’s deep link and waits to be told', async () => {
-      const send = jest.fn().mockResolvedValue({
+      const send = vi.fn().mockResolvedValue({
         ok: true,
         msg: 'ok',
         data: {
@@ -150,7 +151,7 @@ describe('OtpStep', () => {
     });
 
     it('shows auth-api’s own rejection rather than inventing one', async () => {
-      const send = jest.fn().mockResolvedValue({ ok: false, msg: 'کد را کمی بعد بخواهید' });
+      const send = vi.fn().mockResolvedValue({ ok: false, msg: 'کد را کمی بعد بخواهید' });
 
       const result = await step.request(ctxFor('telegram'), state, 'sms', 'login.code', send);
 
@@ -163,7 +164,7 @@ describe('OtpStep', () => {
     const waiting: NavState = { ...state, step: 'login.link', linkToken: 'tok-xyz', linkPlatform: 'bale' };
 
     it('moves on to the code once the other messenger reports linked', async () => {
-      api.linkStatus = jest.fn().mockResolvedValue({
+      api.linkStatus = vi.fn().mockResolvedValue({
         ok: true,
         msg: 'ok',
         data: { state: 'linked', otpSent: true },
@@ -176,7 +177,7 @@ describe('OtpStep', () => {
     });
 
     it('keeps waiting, and shows why when the link actually failed', async () => {
-      api.linkStatus = jest.fn().mockResolvedValue({
+      api.linkStatus = vi.fn().mockResolvedValue({
         ok: true,
         msg: 'ok',
         data: { state: 'failed', otpSent: false, failureKey: 'otp.botLink.phoneMismatch' },
@@ -191,7 +192,7 @@ describe('OtpStep', () => {
 
   describe('the contact shared while linking in place', () => {
     it('asks for the code once identity accepted the contact', async () => {
-      api.linkContact = jest.fn().mockResolvedValue({
+      api.linkContact = vi.fn().mockResolvedValue({
         ok: true,
         msg: 'ok',
         data: { state: 'linked', needsContact: false, otpSent: true, messageKey: 'linked', lang: 'fa' },
@@ -206,7 +207,7 @@ describe('OtpStep', () => {
     it('stops the flow with identity’s own reason when the contact is refused', async () => {
       // The proof itself (contact.user_id === sender) is checked in identity,
       // invariant #12 — this only renders the answer.
-      api.linkContact = jest.fn().mockResolvedValue({
+      api.linkContact = vi.fn().mockResolvedValue({
         ok: true,
         msg: 'ok',
         data: {

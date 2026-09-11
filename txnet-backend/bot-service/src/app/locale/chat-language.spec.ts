@@ -16,9 +16,9 @@ function make(
   } = {},
 ) {
   const redis = {
-    getJson: jest.fn().mockResolvedValue(over.stored ?? null),
-    setJson: jest.fn(),
-    touch: jest.fn(),
+    getJson: vi.fn().mockResolvedValue(over.stored ?? null),
+    setJson: vi.fn(),
+    touch: vi.fn(),
   };
   const locale = { languages: () => over.served ?? ['fa', 'en'] };
   const env: Record<string, string | undefined> = {

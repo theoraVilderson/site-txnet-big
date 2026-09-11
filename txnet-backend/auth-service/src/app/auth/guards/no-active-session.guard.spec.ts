@@ -1,3 +1,4 @@
+import type { Mock } from 'vitest';
 import { ConflictException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NoActiveSessionGuard } from './no-active-session.guard';
@@ -36,12 +37,12 @@ const contextWith = (header?: string) =>
 
 describe('NoActiveSessionGuard', () => {
   let tokens: TokenService;
-  let sessions: { isActive: jest.Mock };
+  let sessions: { isActive: Mock };
   let guard: NoActiveSessionGuard;
 
   beforeEach(() => {
     tokens = new TokenService(configStub);
-    sessions = { isActive: jest.fn().mockResolvedValue(true) };
+    sessions = { isActive: vi.fn().mockResolvedValue(true) };
     guard = new NoActiveSessionGuard(
       tokens,
       sessions as unknown as SessionStore,

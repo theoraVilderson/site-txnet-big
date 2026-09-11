@@ -108,34 +108,35 @@ its **own** container on an ephemeral port (`test-support/redis-fixture.ts`,
 `postgres-fixture.ts`) and flushes it between cases. So a failure that only
 happens when the tier runs whole is contention for the machine, never state
 left behind by another file — the e2e tier is the one with a single shared
-Postgres and Redis (`maxWorkers: 1`).
+Postgres and Redis (`fileParallelism: false`).
 
 ### Running them without burning the session
 
-`ts-jest` runs with `isolatedModules`: it transpiles and does **not**
-type-check, which is what makes the suite ~19s instead of ~44s. The type check
-is not gone, it moved — `npx tsc -p auth-service/tsconfig.spec.json --noEmit`,
-once, before an item is declared done (`AGENTS.md`).
+vitest transpiles through SWC (`txnet-backend/vitest.shared.mts`) and does
+**not** type-check. SWC rather than vite's default transformer, because Nest's
+injection needs `emitDecoratorMetadata`. The type check is not gone, it moved —
+`npx tsc -p auth-service/tsconfig.spec.json --noEmit`, once, before an item is
+declared done (`AGENTS.md`).
 
-**`-t "<name>"` does not narrow anything.** Jest boots and compiles all 33
-suites and *then* filters, so `npm test -t Foo` costs a full run. Narrow by
-**path**: `npx jest -c auth-service/jest.config.cts <path>` is ~8s for one
-unit's folder. Run the paths you touched while iterating, and `npm test` once at
-the end.
+**`-t "<name>"` does not narrow anything.** vitest collects and transforms all
+46 files and *then* filters, so `npm test -t Foo` costs a full run (~39s).
+Narrow by **path**: `npx vitest run -c auth-service/vitest.config.mts <path>`
+is ~11s for one unit's folder. Run the paths you touched while iterating, and
+`npm test` once at the end.
 
 **Narrow the e2e run the same way — by path, to the files the change can
-reach.** `npm run test:e2e` is ~230s: ~31s of Docker start-up, then six files
-that cost strictly additively, because `maxWorkers: 1` (one Postgres, one
-Redis, every spec wiping them between tests). One file is **~74s** — the
+reach.** `npm run test:e2e` is ~250s: ~31s of Docker start-up, then six files
+that cost strictly additively, because `fileParallelism: false` (one Postgres, one
+Redis, every spec wiping them between tests). One file is **~65s** — the
 container start-up is a floor you always pay, and everything above it is the
 files you chose.
 
 ```bash
-npx jest -c auth-service-e2e/jest.config.cts contract.e2e      # ~74s
-npx jest -c auth-service-e2e/jest.config.cts 'contract|gates'  # a regex, not a path
+npx vitest run -c auth-service-e2e/vitest.config.mts contract.e2e              # one file
+npx vitest run -c auth-service-e2e/vitest.config.mts contract.e2e gates.e2e    # several: one fragment each
 ```
 
-The positional argument is a regex matched against the full path, so a
+Each positional argument is a substring matched against the file path, so a
 filename fragment is enough. Which fragment:
 
 | what the change touched | run |
@@ -214,7 +215,8 @@ Existing `*.e2e.spec.ts` files stay. That tier earned its place.
 
 ### Outside the Nest workspace
 
-Three other stacks carry tests, and none of them uses jest:
+Three other stacks carry tests, and none of them shares the Nest workspace's
+vitest setup:
 
 | where                                    | runner                       | how                                        |
 | ---------------------------------------- | ---------------------------- | ------------------------------------------ |
