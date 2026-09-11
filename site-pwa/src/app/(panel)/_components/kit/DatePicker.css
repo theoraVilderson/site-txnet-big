@@ -1,0 +1,102 @@
+/*
+ * The calendar popup of `DatePicker.tsx` (F-093-b), on the panel's theme
+ * tokens. react-multi-date-picker ships its own colours inline, hence the
+ * `!important`s. Scoped to `.panel-date-picker` so no other picker is touched.
+ */
+
+.panel-date-picker.rmdp-wrapper {
+  background: var(--card-bg) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--card-border);
+  box-shadow: 0 20px 40px -10px var(--card-shadow) !important;
+  border-radius: 20px !important;
+  padding: 12px !important;
+  color: var(--text-primary) !important;
+}
+
+.panel-date-picker .rmdp-header {
+  margin-bottom: 15px !important;
+  font-weight: 800 !important;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.panel-date-picker .rmdp-header-values {
+  color: var(--accent-primary) !important;
+}
+
+.panel-date-picker .rmdp-arrow-container {
+  background-color: var(--bg-inner) !important;
+  border: 1px solid var(--card-border);
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  transition: all 0.3s ease;
+}
+
+.panel-date-picker .rmdp-arrow {
+  border-color: var(--text-secondary) !important;
+}
+
+.panel-date-picker .rmdp-arrow-container:hover {
+  background-color: var(--accent-primary) !important;
+  border-color: var(--accent-primary);
+}
+
+.panel-date-picker .rmdp-arrow-container:hover .rmdp-arrow {
+  border-color: white !important;
+}
+
+.panel-date-picker .rmdp-week-day {
+  color: var(--text-secondary) !important;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.panel-date-picker .rmdp-day {
+  width: 36px !important;
+  height: 36px !important;
+  font-size: 0.9rem !important;
+  color: var(--text-primary) !important;
+}
+
+.panel-date-picker .rmdp-day span {
+  border-radius: 10px !important;
+}
+
+.panel-date-picker .rmdp-day:not(.rmdp-disabled):not(.rmdp-day-hidden) span:hover {
+  background-color: var(--leaf-bg) !important;
+  color: var(--accent-primary) !important;
+}
+
+.panel-date-picker .rmdp-day.rmdp-today span {
+  background-color: transparent !important;
+  border: 1px solid var(--accent-primary) !important;
+  color: var(--accent-primary) !important;
+}
+
+.panel-date-picker .rmdp-day.rmdp-selected span:not(.highlight) {
+  background-color: var(--accent-primary) !important;
+  box-shadow: 0 4px 15px var(--accent-glow) !important;
+  color: white !important;
+}
+
+.panel-date-picker .rmdp-day.rmdp-deactive {
+  opacity: 0.4;
+}
+
+.panel-date-picker .rmdp-month-picker,
+.panel-date-picker .rmdp-year-picker {
+  background: var(--card-bg) !important;
+}
+
+.panel-date-picker.ep-arrow::after {
+  background-color: var(--card-bg) !important;
+}
+
+@media (max-width: 768px) {
+  .panel-date-picker .rmdp-day {
+    width: 40px !important;
+    height: 40px !important;
+  }
+}

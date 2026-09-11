@@ -1,10 +1,8 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { ZodError, z } from 'zod';
 import {
-  formatPricetoToman,
   parsePersianDate,
   toEnglishDigits,
-  toToman,
   UNKNOWN_VALIDATION_KEY,
   VALIDATIONS_NS,
   zodErrorToString,
@@ -17,96 +15,6 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.restoreAllMocks();
-});
-
-describe('toToman', () => {
-  it.each([
-    ['whole toman', 10_000, 1_000],
-    ['zero', 0, 0],
-    ['one rial rounds up to one toman', 1, 1],
-    ['nine rial rounds up to one toman', 9, 1],
-    ['exactly ten rial', 10, 1],
-    ['eleven rial rounds up', 11, 2],
-    ['large amount', 123_456_789, 12_345_679],
-  ])('%s: %i rial -> %i toman', (_label, rial, toman) => {
-    expect(toToman(rial)).toBe(toman);
-  });
-
-  it('always rounds up, never down — the user is never undercharged', () => {
-    for (let rial = 0; rial <= 100; rial++) {
-      expect(toToman(rial)).toBeGreaterThanOrEqual(rial / 10);
-      expect(toToman(rial) - rial / 10).toBeLessThan(1);
-    }
-  });
-
-  it.each([
-    ['float input is ceiled too', 10.5, 2],
-    ['float that lands exactly', 100.0, 10],
-    ['sub-rial float', 0.4, 1],
-  ])('%s: %p -> %i', (_label, rial, toman) => {
-    expect(toToman(rial)).toBe(toman);
-  });
-
-  describe('negative amounts (refunds) round toward zero, not away from it', () => {
-    // Math.ceil(-1.5) === -1. A refund therefore loses up to 9 rial in the
-    // user's favour. Pinned as current behaviour, not endorsed as policy.
-    it.each([
-      [-10, -1],
-      [-15, -1],
-      [-19, -1],
-      [-20, -2],
-    ])('%i rial -> %i toman', (rial, toman) => {
-      expect(toToman(rial)).toBe(toman);
-    });
-  });
-
-  it('propagates non-finite input instead of masking it', () => {
-    expect(toToman(NaN)).toBeNaN();
-    expect(toToman(Infinity)).toBe(Infinity);
-  });
-});
-
-describe('formatPricetoToman', () => {
-  // Note the export is `formatPricetoToman` (lowercase `to`), not
-  // `formatPriceToToman`. Renaming it is a separate change.
-  const persianDigitsToEnglish = (s: string) =>
-    toEnglishDigits(s).replace(/[^\d-]/g, '');
-
-  it.each([
-    ['ten thousand rial', 10_000],
-    ['zero', 0],
-    ['single toman', 5],
-    ['a million rial', 1_000_000],
-    ['an amount needing rounding', 12_345],
-  ])('%s renders the toman value in Persian digits', (_label, rial) => {
-    const formatted = formatPricetoToman(rial);
-    expect(persianDigitsToEnglish(formatted)).toBe(String(toToman(rial)));
-  });
-
-  it('emits Persian digits, never ASCII ones', () => {
-    const formatted = formatPricetoToman(10_000);
-    expect(formatted).toMatch(/[۰-۹]/);
-    expect(formatted).not.toMatch(/[0-9]/);
-  });
-
-  it('groups thousands', () => {
-    // 10,000 rial = 1,000 toman -> four digits plus one group separator.
-    const formatted = formatPricetoToman(10_000);
-    expect(formatted.replace(/[۰-۹]/g, '')).not.toBe('');
-  });
-
-  it('does not group a value below one thousand', () => {
-    const formatted = formatPricetoToman(9_990); // 999 toman
-    expect(formatted.replace(/[۰-۹]/g, '')).toBe('');
-  });
-
-  it('is consistent with toToman for every sample', () => {
-    for (const rial of [0, 1, 9, 10, 11, 999, 10_000, 987_654_321]) {
-      expect(persianDigitsToEnglish(formatPricetoToman(rial))).toBe(
-        String(toToman(rial)),
-      );
-    }
-  });
 });
 
 describe('toEnglishDigits', () => {

@@ -1,6 +1,25 @@
 {
   "logout": "Log out",
   "loggingOut": "Logging out…",
+  "shell": {
+    "navigation": "Panel menu",
+    "openMenu": "Open the menu",
+    "closeMenu": "Close the menu",
+    "collapse": "Collapse the menu",
+    "expand": "Expand the menu",
+    "preferences": "Language and theme",
+    "menu": {
+      "dashboard": "Dashboard",
+      "buy": "Buy a service",
+      "myServices": "My services",
+      "financial": "Finances",
+      "financialHistory": "Financial history",
+      "deposit": "Top up",
+      "tutorials": "Guides and downloads",
+      "support": "Support",
+      "settings": "Settings"
+    }
+  },
   "accounts": {
     "signedInAs": "Signed in as",
     "groupTitle": "Your other accounts",
@@ -47,5 +66,106 @@
   },
   "errors": {
     "unreachable": "Could not reach the server. Check your connection and try again."
+  },
+  "kit": {
+    "loading": "Loading…",
+    "pagination": {
+      "navigation": "Pages",
+      "summary": "Showing {{from}}–{{to}} of {{total}}",
+      "previous": "Previous page",
+      "next": "Next page",
+      "goTo": "Page {{page}}"
+    },
+    "datePicker": {
+      "placeholder": "Pick a date",
+      "clear": "Clear the date"
+    }
+  },
+  "money": {
+    "currency": {
+      "IRT": {
+        "format": "{{amount}} Toman",
+        "major": {
+          "one": "Toman",
+          "other": "Toman"
+        }
+      },
+      "IRR": {
+        "major": {
+          "one": "rial",
+          "other": "rials"
+        }
+      },
+      "USD": {
+        "major": {
+          "one": "US dollar",
+          "other": "US dollars"
+        },
+        "minor": {
+          "one": "cent",
+          "other": "cents"
+        }
+      }
+    },
+    "words": {
+      "amount": "{{words}} {{currency}}",
+      "amountWithMinor": "{{words}} {{currency}} and {{minorWords}} {{minor}}",
+      "negative": "minus {{words}}",
+      "zero": "zero",
+      "ones": {
+        "one": "one",
+        "two": "two",
+        "three": "three",
+        "four": "four",
+        "five": "five",
+        "six": "six",
+        "seven": "seven",
+        "eight": "eight",
+        "nine": "nine"
+      },
+      "teens": {
+        "ten": "ten",
+        "eleven": "eleven",
+        "twelve": "twelve",
+        "thirteen": "thirteen",
+        "fourteen": "fourteen",
+        "fifteen": "fifteen",
+        "sixteen": "sixteen",
+        "seventeen": "seventeen",
+        "eighteen": "eighteen",
+        "nineteen": "nineteen"
+      },
+      "tens": {
+        "twenty": "twenty",
+        "thirty": "thirty",
+        "forty": "forty",
+        "fifty": "fifty",
+        "sixty": "sixty",
+        "seventy": "seventy",
+        "eighty": "eighty",
+        "ninety": "ninety"
+      },
+      "hundreds": {
+        "one": "one hundred",
+        "two": "two hundred",
+        "three": "three hundred",
+        "four": "four hundred",
+        "five": "five hundred",
+        "six": "six hundred",
+        "seven": "seven hundred",
+        "eight": "eight hundred",
+        "nine": "nine hundred"
+      },
+      "scales": {
+        "thousand": "thousand",
+        "million": "million",
+        "billion": "billion",
+        "trillion": "trillion"
+      },
+      "tensAndOnes": "{{tens}}-{{ones}}",
+      "hundredsAndRest": "{{hundreds}} {{rest}}",
+      "scaled": "{{count}} {{scale}}",
+      "groups": "{{high}} {{low}}"
+    }
   }
 }

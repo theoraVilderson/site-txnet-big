@@ -31,19 +31,6 @@ export async function generateJIT<PayloadType>(
 export function getEnv(key: string) {
   return process.env[key]!;
 }
-// lib/formatters.ts
-
-export const formatPricetoToman = (amountInRial: number): string => {
-  // 1. تبدیل به تومان
-  const toman = toToman(amountInRial);
-
-  // 2. جدا کردن سه رقم سه رقم (مثلا: 10,000)
-  return toman.toLocaleString("fa-IR");
-};
-
-export const toToman = (amountInRial: number): number => {
-  return Math.ceil(amountInRial / 10);
-};
 export const toEnglishDigits = (str: string) => {
   if (!str) return "";
   return str.replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d).toString());

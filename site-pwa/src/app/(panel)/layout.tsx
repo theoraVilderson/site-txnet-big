@@ -1,4 +1,4 @@
-import { PanelNav } from "./_components/PanelNav";
+import { PanelShell } from "./_components/PanelShell";
 import { PanelRealtimeProvider } from "./_context/PanelRealtimeContext";
 import { PanelSessionProvider } from "./_context/PanelSessionContext";
 
@@ -18,10 +18,7 @@ export default function PanelLayout({
         makes one connection outlive every screen under it (F-070-c).
       */}
       <PanelRealtimeProvider>
-        <div className="relative flex min-h-screen w-full flex-col transition-colors duration-500">
-          <PanelNav />
-          <main className="relative z-10 w-full flex-1">{children}</main>
-        </div>
+        <PanelShell>{children}</PanelShell>
       </PanelRealtimeProvider>
     </PanelSessionProvider>
   );

@@ -1,6 +1,25 @@
 {
   "logout": "خروج",
   "loggingOut": "در حال خروج…",
+  "shell": {
+    "navigation": "منوی پنل",
+    "openMenu": "باز کردن منو",
+    "closeMenu": "بستن منو",
+    "collapse": "جمع کردن منو",
+    "expand": "باز کردن منو",
+    "preferences": "زبان و تم",
+    "menu": {
+      "dashboard": "داشبورد",
+      "buy": "خرید سرویس",
+      "myServices": "سرویس‌های من",
+      "financial": "امور مالی",
+      "financialHistory": "تاریخچه مالی",
+      "deposit": "افزایش موجودی",
+      "tutorials": "آموزش و دانلود",
+      "support": "پشتیبانی",
+      "settings": "تنظیمات"
+    }
+  },
   "accounts": {
     "signedInAs": "وارد شده به‌عنوان",
     "groupTitle": "حساب‌های دیگر شما",
@@ -47,5 +66,106 @@
   },
   "errors": {
     "unreachable": "ارتباط با سرور برقرار نشد. اتصال خود را بررسی کنید و دوباره تلاش کنید."
+  },
+  "kit": {
+    "loading": "در حال بارگذاری…",
+    "pagination": {
+      "navigation": "صفحه‌ها",
+      "summary": "نمایش {{from}} تا {{to}} از {{total}}",
+      "previous": "صفحه قبل",
+      "next": "صفحه بعد",
+      "goTo": "صفحه {{page}}"
+    },
+    "datePicker": {
+      "placeholder": "انتخاب تاریخ",
+      "clear": "حذف تاریخ"
+    }
+  },
+  "money": {
+    "currency": {
+      "IRT": {
+        "format": "{{amount}} تومان",
+        "major": {
+          "one": "تومان",
+          "other": "تومان"
+        }
+      },
+      "IRR": {
+        "major": {
+          "one": "ریال",
+          "other": "ریال"
+        }
+      },
+      "USD": {
+        "major": {
+          "one": "دلار آمریکا",
+          "other": "دلار آمریکا"
+        },
+        "minor": {
+          "one": "سنت",
+          "other": "سنت"
+        }
+      }
+    },
+    "words": {
+      "amount": "{{words}} {{currency}}",
+      "amountWithMinor": "{{words}} {{currency}} و {{minorWords}} {{minor}}",
+      "negative": "منفی {{words}}",
+      "zero": "صفر",
+      "ones": {
+        "one": "یک",
+        "two": "دو",
+        "three": "سه",
+        "four": "چهار",
+        "five": "پنج",
+        "six": "شش",
+        "seven": "هفت",
+        "eight": "هشت",
+        "nine": "نه"
+      },
+      "teens": {
+        "ten": "ده",
+        "eleven": "یازده",
+        "twelve": "دوازده",
+        "thirteen": "سیزده",
+        "fourteen": "چهارده",
+        "fifteen": "پانزده",
+        "sixteen": "شانزده",
+        "seventeen": "هفده",
+        "eighteen": "هجده",
+        "nineteen": "نوزده"
+      },
+      "tens": {
+        "twenty": "بیست",
+        "thirty": "سی",
+        "forty": "چهل",
+        "fifty": "پنجاه",
+        "sixty": "شصت",
+        "seventy": "هفتاد",
+        "eighty": "هشتاد",
+        "ninety": "نود"
+      },
+      "hundreds": {
+        "one": "صد",
+        "two": "دویست",
+        "three": "سیصد",
+        "four": "چهارصد",
+        "five": "پانصد",
+        "six": "ششصد",
+        "seven": "هفتصد",
+        "eight": "هشتصد",
+        "nine": "نهصد"
+      },
+      "scales": {
+        "thousand": "هزار",
+        "million": "میلیون",
+        "billion": "میلیارد",
+        "trillion": "تریلیون"
+      },
+      "tensAndOnes": "{{tens}} و {{ones}}",
+      "hundredsAndRest": "{{hundreds}} و {{rest}}",
+      "scaled": "{{count}} {{scale}}",
+      "groups": "{{high}} و {{low}}"
+    }
   }
 }
