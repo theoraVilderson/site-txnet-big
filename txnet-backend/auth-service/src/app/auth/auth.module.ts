@@ -28,6 +28,8 @@ import { OtpDeliveryStore } from './otp/otp-delivery.store';
 import { OtpDeliveryPublisher } from './otp/otp-delivery.publisher';
 import { OtpInternalController } from './otp/otp-internal.controller';
 import { RateLimiter } from '../common/rate-limit/rate-limiter';
+import { RATE_LIMIT_STORE } from '@txnet-backend/shared-core';
+import { RedisService } from '../redis/redis.service';
 import { LocaleModule } from '../locale/locale.module';
 import { MessengerModule } from '@txnet-backend/messenger';
 import { AutomationModule } from '../automation/automation.module';
@@ -72,6 +74,8 @@ import { CaptchaService } from './captcha/captcha.service';
     OtpDeliveryStore,
     OtpDeliveryPublisher,
     RateLimiter,
+    // The limiter lives in shared-core (F-092-r) and counts in this service's Redis.
+    { provide: RATE_LIMIT_STORE, useExisting: RedisService },
     CaptchaService,
     SmsOtpSender,
     BaleOtpSender,

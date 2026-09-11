@@ -10,6 +10,8 @@ source:
   - auth-handler/internal/cache/keys.go
   - txnet-backend/auth-service/src/app/redis/redis.keys.ts
   - txnet-backend/auth-service/src/app/redis/redis.service.ts
+  - txnet-backend/shared-core/src/lib/rate-limit/**
+  - txnet-backend/billing-service/src/app/redis/**
   - txnet-backend/auth-service/src/app/auth/session/session.store.ts
   - txnet-backend/auth-service/src/app/auth/otp/otp.store.ts
   - txnet-backend/auth-service/src/app/auth/bot-link/bot-link.store.ts

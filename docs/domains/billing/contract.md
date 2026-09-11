@@ -119,6 +119,7 @@ Schema only; no route writes these yet. Migration
 | The handler runs inside `runWithTenant({ id: X-Tenant-Id })`; `identityOf(req)` returns the rest. This service resolves no tenant itself | same file |
 | Queries go through `PrismaService` on `DATABASE_APP_URL` with `withTenant` applied — no cross-tenant pool. `TENANT_SCOPED_MODELS` holds no billing model yet: the row that first queries one registers it | `billing-service/src/app/prisma/prisma.module.ts` |
 | Success and errors use the `shared-core` envelope, translated per `Accept-Language` | `billing-service/src/main.ts` |
+| Every route but `health` carries `@RateLimit` with a bucket of the caller's `userId`, enforced by the global `RateLimitGuard` (the `shared-core` limiter, counted in Redis, F-092-r). A new route without one fails `request/rate-limit-coverage.spec.ts`; over the limit is **429** `system.rateLimit` | `billing-service/src/app/app.module.ts` |
 | `GET /api/health` bypasses the identity check and is not published by Traefik | `billing-service/src/app/health.controller.ts` |
 
 ## Wallet ledger (built — F-092-b)

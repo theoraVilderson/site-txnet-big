@@ -673,6 +673,14 @@ services:
       - VAULT_KEK_FILE=${VAULT_KEK_FILE:-/run/secrets/vault-kek}
       # Refused when NODE_ENV=production.
       - PAYMENT_GATEWAY_SANDBOX=${PAYMENT_GATEWAY_SANDBOX:-false}
+      # The rate limiter's counters (F-092-r) — the keyspace every service writes.
+      - REDIS_URL=${REDIS_URL}
+      - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      # Per-user limits; empty means the schema default (F-087).
+      - PLATFORM_RATE_LIMIT_FACTOR=${PLATFORM_RATE_LIMIT_FACTOR:-}
+      - DEPOSIT_GATEWAYS_RATE_LIMIT=${DEPOSIT_GATEWAYS_RATE_LIMIT:-}
+      - DEPOSIT_QUOTE_RATE_LIMIT=${DEPOSIT_QUOTE_RATE_LIMIT:-}
     networks:
       - private_backend_network
     labels:

@@ -20,3 +20,6 @@ export * from './lib/envelope/response';
 export * from './lib/envelope/sanitize-error';
 export * from './lib/envelope/response.interceptor';
 export * from './lib/envelope/i18n-exception.filter';
+export * from './lib/rate-limit/rate-limiter';
+export * from './lib/rate-limit/rate-limit.guard';
+export * from './lib/rate-limit/rate-limit.decorator';

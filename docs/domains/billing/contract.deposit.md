@@ -37,7 +37,7 @@ Both routes sit behind the gate like every billing route ("Request edge" in
 | `liveRate` is `null` until F-092-c: a gateway prices from its `staticRate`, or refuses | F-0607's last rung |
 | Out of the gateway's range is **400** `billing.amountOutOfRange`; no usable rate, rate out of range, a provider failure, no merchant id, no driver are all **503** `billing.gatewayUnavailable` — the cause goes to the log only | the user's move is the same: another gateway |
 | A quote reserves and writes nothing | F-092-i reserves, on the request that pays |
+| Per user, per 900s: the list `DEPOSIT_GATEWAYS_RATE_LIMIT` (default 120), a quote `DEPOSIT_QUOTE_RATE_LIMIT` (default 60); **429** past it (F-092-r) | a quote at an automatic-fee gateway is a call to the bank |
 
-**Not covered:** no rate limit — `billing-service` has no Redis, and a quote at
-an automatic-fee gateway is one provider call. `amount` is base currency; the
-display-currency step the F-092-i row names arrives with F-025.
+**Not covered:** `amount` is base currency; the display-currency step the
+F-092-i row names arrives with F-025.

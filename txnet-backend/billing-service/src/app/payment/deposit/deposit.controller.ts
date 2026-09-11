@@ -11,11 +11,17 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { BackendI18nKeys, CredentialUnavailable } from '@txnet-backend/shared-core';
+import {
+  BackendI18nKeys,
+  CredentialUnavailable,
+  RateLimitBucket,
+  rateLimitBucketKey,
+} from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { LocaleService } from '../../locale/locale.service';
 import { identityOf } from '../../request/identity.middleware';
+import { RateLimit } from '../../request/rate-limit';
 import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import type { CouponRejection } from '../coupon/coupon-validation';
 import { GatewayFailure, ProviderNotSupported } from '../gateway/payment-provider';
@@ -66,7 +72,7 @@ function toHttp(e: unknown): unknown {
  * The panel's top-up page (F-092-o): `GET /api/billing/deposit/gateways` and
  * `POST /api/billing/deposit/quote`. Behind the gate like every billing route
  * (`app.module.ts`); the user and the tenant come from its headers, never from
- * the body.
+ * the body. Both are limited per user (F-092-r).
  */
 @Controller('billing/deposit')
 export class DepositController {
@@ -76,12 +82,22 @@ export class DepositController {
   ) {}
 
   @Get('gateways')
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.DEPOSIT_GATEWAYS, identityOf(req).userId),
+    configKey: 'DEPOSIT_GATEWAYS_RATE_LIMIT',
+    windowSec: 900,
+  })
   gateways() {
     return this.deposits.listGateways();
   }
 
   @Post('quote')
   @HttpCode(HttpStatus.OK)
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.DEPOSIT_QUOTE, identityOf(req).userId),
+    configKey: 'DEPOSIT_QUOTE_RATE_LIMIT',
+    windowSec: 900,
+  })
   async quote(@Body(new ZodValidationPipe(depositQuoteSchema)) body: DepositQuoteBody, @Req() req: Request) {
     const { userId } = identityOf(req);
     const lang = (req as { language?: string }).language || this.locale.getDefaultLanguage();

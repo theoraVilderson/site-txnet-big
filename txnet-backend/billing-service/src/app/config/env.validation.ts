@@ -1,4 +1,18 @@
+import {
+  REDIS_KEYSPACE_VERSION_DEFAULT,
+  REDIS_KEY_NAMESPACE_DEFAULT,
+} from '@txnet-backend/shared-core';
 import { z } from 'zod';
+
+/**
+ * A per-route request limit: a positive whole number with a default, and `''`
+ * (compose's `VAR=${VAR:-}`) read as unset — `auth-service`'s rule (F-087).
+ */
+const rateLimit = (fallback: number) =>
+  z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().positive().default(fallback),
+  );
 
 /**
  * `billing-service`'s environment, validated at boot (F-089, ADR-0036).
@@ -73,12 +87,40 @@ export const envSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => v === 'true'),
+
+  /**
+   * The rate limiter's counters (F-092-r, D-24). Required: a limit counted in
+   * process memory is one budget per replica, and a route with no counter is
+   * unlimited — refusing to boot is the only honest answer. The same keyspace
+   * prefix every service writes under, so one `REDIS_KEYSPACE_VERSION` bump
+   * abandons every key (ADR-0005).
+   */
+  REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
+  REDIS_KEY_NAMESPACE: z.string().min(1).default(REDIS_KEY_NAMESPACE_DEFAULT),
+  REDIS_KEYSPACE_VERSION: z
+    .string()
+    .min(1)
+    .default(REDIS_KEYSPACE_VERSION_DEFAULT),
+
+  /** The platform-wide ceiling over one bucket, as a multiple of the route's own limit; `0` switches it off (F-066-s). */
+  PLATFORM_RATE_LIMIT_FACTOR: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().nonnegative().default(10),
+  ),
+
+  // Requests per user per the route's window (the windows stay on the routes).
+  // The defaults live here and nowhere else (F-087).
+  DEPOSIT_GATEWAYS_RATE_LIMIT: rateLimit(120),
+  DEPOSIT_QUOTE_RATE_LIMIT: rateLimit(60),
 }).refine((env) => !(env.NODE_ENV === 'production' && env.PAYMENT_GATEWAY_SANDBOX), {
   message: 'PAYMENT_GATEWAY_SANDBOX=true is refused when NODE_ENV=production',
   path: ['PAYMENT_GATEWAY_SANDBOX'],
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
+
+/** The variables a route may name as its `configKey`; a misspelled one does not compile (F-087). */
+export type RateLimitConfigKey = Extract<keyof EnvConfig, `${string}_RATE_LIMIT`>;
 
 export function validateEnv(raw: Record<string, unknown>): EnvConfig {
   const parsed = envSchema.safeParse(raw);

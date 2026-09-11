@@ -76,6 +76,14 @@ export const RateLimitBucket = {
   ACCOUNTS_LIST: 'accounts:list',
   ACCOUNTS_SWITCH: 'accounts:switch',
   ACCOUNTS_REMOVE: 'accounts:remove',
+
+  /**
+   * The top-up page's read routes in `billing-service` (F-092-r), per user. A
+   * quote at an automatic-fee gateway is one call to the bank, so this budget
+   * is also what stands between a user and the merchant's own limit there.
+   */
+  DEPOSIT_GATEWAYS: 'deposit:gateways',
+  DEPOSIT_QUOTE: 'deposit:quote',
 } as const;
 
 export type RateLimitBucket =

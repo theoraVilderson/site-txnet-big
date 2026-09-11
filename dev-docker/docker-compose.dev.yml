@@ -30,3 +30,6 @@ services:
       - APP_NAME=billing-service
     volumes: !override
       - ../txnet-backend:/app:delegated
+      # `!override` replaces main.yml's list, so the vault KEK it mounts must be
+      # repeated here — without it the service refuses to boot (ADR-0039).
+      - ./secrets/vault-kek:/run/secrets/vault-kek:ro
