@@ -1,10 +1,11 @@
 ---
 id: billing
 layer: domain
-status: draft
+status: active
 version: 1
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
-source: []
+source:
+  - txnet-backend/billing-service/src/app/wallet/**
 owns_tables: [wallet, wallet_transaction, sub_account, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission]
 depends_on: [identity, catalog, currency, tenant, tenant-context, forward-auth, i18n]
 updated: 2026-09-11
@@ -31,6 +32,7 @@ display-currency conversion (`currency`), plan prices (`catalog`).
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-11 | draft -> active: the wallet credit/debit primitive (F-092-b) is the first built operation |
 | 2026-09-04 | Documented from schema during onboarding — no service yet |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

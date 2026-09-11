@@ -55,7 +55,7 @@ no code exists yet, so there is nothing to mirror until a service is built.
 | `txnet-backend/bot-service/src/app/`                                          | the Telegram/Bale surface: webhook, conversation state, flows                                                                             | `docs/interfaces/bot-app/`                                |
 | `txnet-backend/worker-service/src/app/`                                       | background work: the tick publisher, the tick consumer, the job registry. Serves no HTTP (ADR-0027)                                        | `docs/domains/automation/`                                |
 | `txnet-backend/gateway-service/src/app/`                                      | the WebSocket gateway: the upgrade, the connection registry, the channel rules. Holds sockets and nothing else (ADR-0030)                    | `docs/platform/realtime/`                                 |
-| `txnet-backend/billing-service/src/app/`                                      | billing service: the request edge (F-092-a) — identity, tenant scope, envelope; no `billing` operation yet                               | `docs/domains/billing/` (stays `draft` until real)        |
+| `txnet-backend/billing-service/src/app/`                                      | billing service: the request edge (F-092-a) — identity, tenant scope, envelope; `wallet/` the credit/debit primitive (F-092-b)          | `docs/domains/billing/`                                   |
 | `txnet-backend/prisma/domains/*.prisma`                                       | one schema file per business domain                                                                                                       | `owns_tables:` in that domain's `INDEX.md`                |
 | `auth-handler/internal/`                                                      | Go Traefik ForwardAuth gateway                                                                                                            | `docs/platform/forward-auth/`                             |
 | `i18n-platform/services/locale-service/` + `i18n-platform/clients/{go,node}/` | gRPC translation source of truth + shared clients                                                                                         | `docs/platform/i18n/`                                     |
@@ -91,8 +91,9 @@ auth-service/src/app/auth/
   __tests__/ (or *.spec.ts)
 ```
 
-`billing-service` serves requests but holds no business logic yet — it stays out
-of `domains/billing`'s `source:` until it implements a *Provides* row.
+`billing-service`'s business logic lives in `src/app/<concern>/` — `wallet/` is
+the first (F-092-b); its edge (`request/`, `prisma/`, `locale/`) stays out of
+`domains/billing`'s `source:`.
 
 ### Three tiers of test, told apart by the filename
 

@@ -7,9 +7,15 @@ import { LanguageMiddleware } from './locale/language.middleware';
 import { LocaleModule } from './locale/locale.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { IdentityMiddleware } from './request/identity.middleware';
+import { WalletModule } from './wallet/wallet.module';
 
 @Module({
-  imports: [ConfigModule.forRoot(envConfigOptions), PrismaModule, LocaleModule],
+  imports: [
+    ConfigModule.forRoot(envConfigOptions),
+    PrismaModule,
+    LocaleModule,
+    WalletModule,
+  ],
   controllers: [HealthController],
 })
 export class AppModule implements NestModule {

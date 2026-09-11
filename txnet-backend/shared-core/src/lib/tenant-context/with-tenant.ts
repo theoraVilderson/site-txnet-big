@@ -25,9 +25,14 @@ import {
  * joined `user` with F-066-l — catalog 10.5 links a messenger account to a
  * person *within a tenant*, and a chat id is the one identifier here that the
  * messenger issues rather than we do, so it is identical across every
- * reseller's bots.
+ * reseller's bots. `walletTransaction` joined with F-092-b — the first billing
+ * model; `wallet` itself carries no `tenantId` and is reached through its owner.
  */
-export const TENANT_SCOPED_MODELS = ['user', 'linkedBotAccount'] as const;
+export const TENANT_SCOPED_MODELS = [
+  'user',
+  'linkedBotAccount',
+  'walletTransaction',
+] as const;
 
 export type TenantScopedModel = (typeof TENANT_SCOPED_MODELS)[number];
 

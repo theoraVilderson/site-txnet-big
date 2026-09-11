@@ -94,7 +94,8 @@ I read across tenants" has to leave with the right answer.
    accepted cost).
 2. **A registered model is always scoped.** The registry is explicit — a model
    gaining a `tenantId` column does not silently change how it is queried. The
-   first entry is `User`; `LinkedBotAccount` joins it with F-066-l.
+   first entry is `User`; `LinkedBotAccount` joins it with F-066-l, and
+   `WalletTransaction` — the first billing model, written only inside `tenantTransaction` — with F-092-b.
 3. **No context is an error.** The extension throws `TenantContextMissing`
    rather than running the query unscoped. The wrong answer here is a
    cross-tenant read, so failing loud is the only safe default. The same

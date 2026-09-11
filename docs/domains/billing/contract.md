@@ -1,16 +1,16 @@
 ---
 id: billing
 layer: domain
-status: draft
+status: active
 version: 1
-updated: 2026-09-04
+updated: 2026-09-11
 ---
 
 # Contract — billing
 
-**DRAFT — no operation built yet.** `txnet-backend/billing-service` serves
-requests (F-092-a, below) but implements none of the operations in *Provides*.
-Those shapes are intent from `txnet-backend/prisma/domains/billing.prisma`.
+**One operation built** — the wallet credit/debit primitive (F-092-b, below).
+Every other row in *Provides* is still intent from
+`txnet-backend/prisma/domains/billing.prisma`.
 
 ## Request edge (built — F-092-a)
 
@@ -22,6 +22,26 @@ Those shapes are intent from `txnet-backend/prisma/domains/billing.prisma`.
 | Queries go through `PrismaService` on `DATABASE_APP_URL` with `withTenant` applied — no cross-tenant pool. `TENANT_SCOPED_MODELS` holds no billing model yet: the row that first queries one registers it | `billing-service/src/app/prisma/prisma.module.ts` |
 | Success and errors use the `shared-core` envelope, translated per `Accept-Language` | `billing-service/src/main.ts` |
 | `GET /api/health` bypasses the identity check and is not published by Traefik | `billing-service/src/app/health.controller.ts` |
+
+## Wallet ledger (built — F-092-b)
+
+`WalletLedgerService.credit(tx, entry)` / `.debit(tx, entry)` in
+`billing-service/src/app/wallet/wallet-ledger.service.ts`; no route calls it yet
+(F-092-i, F-092-j, F-092-m will).
+
+| Rule | Why |
+|---|---|
+| Takes the caller's `tx`, which must come from `tenantTransaction(prisma, fn)`; `walletTransaction` is a registered model, so any other transaction is refused | the balance and the reason it moved commit together (`tenant-context` rule 5) |
+| `entry.userId` must come from a tenant-scoped source — `X-User-Id`, or a row read under the scope | `wallet` has no `tenantId`; the ledger row is stamped with the tenant in scope |
+| `amount` is base currency, `> 0`, at most 2 decimal places; anything else is `InvalidLedgerAmount`, never rounded | invariant 2; `Decimal(18, 2)` would round the amount but not `balanceAfter` |
+| `cachedBalance` is updated with `where { id, version }` **before** the row is appended; `count = 0` is `WalletVersionConflict` | invariants 1, 4 — a loser appends nothing |
+| A lost race is thrown, not retried; the caller restarts its whole transaction | a retry inside the same transaction cannot read the row fresh |
+| A debit below zero, or from a user with no wallet, is `InsufficientFunds` | a missing wallet is a zero balance |
+| A first credit opens the wallet (`createMany … skipDuplicates`) | two first credits meet at the version guard, not at the unique `ownerUserId` |
+| Returns the appended `wallet_transaction`, whose `balanceAfter` is the new balance | — |
+
+The errors are plain classes with English messages (C-01); the route that first
+exposes one maps it to an i18n key.
 
 ## TL;DR
 
@@ -35,7 +55,7 @@ reserve/confirm state machine.
 
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
-| credit / debit wallet | userId, amount, reasonType, referenceId | `wallet_transaction` + new `balanceAfter` | sync tx | insufficient funds, version conflict |
+| credit / debit wallet — **built**, see above | tx, userId, amount, reasonType, referenceId | `wallet_transaction` + new `balanceAfter` | sync tx | insufficient funds, version conflict, invalid amount |
 | start payment | userId, gatewayId, amount, couponId? | payment intent + redirect / deposit address | sync | amount out of gateway range |
 | confirm payment | gateway webhook / reconciliation / admin | wallet credit + `payment_transaction.status = success` | async | duplicate, mismatch (flagged) |
 | initiate wallet transfer | senderId, receiverId, amount | `wallet_transfer_request` (`pending_otp`) | sync | — |
