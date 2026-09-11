@@ -79,6 +79,8 @@ class TransportFailure extends Error {}
 
 export class ZarinpalProvider implements PaymentProvider {
   readonly name = PaymentProviderName.zarinpal;
+  readonly chargeCurrency = 'IRR';
+  readonly chargeDecimals = 0;
 
   private readonly host: string;
   private readonly fetchImpl: typeof fetch;
@@ -95,7 +97,7 @@ export class ZarinpalProvider implements PaymentProvider {
   async request(input: PaymentRequestInput): Promise<PaymentRequestResult> {
     const data = await this.once('request', input.credentials, {
       amount: this.wireAmount(input.amountMinor),
-      currency: 'IRR',
+      currency: this.chargeCurrency,
       callback_url: input.callbackUrl,
       description: input.description,
       metadata: { mobile: input.mobile, email: input.email },
@@ -130,7 +132,7 @@ export class ZarinpalProvider implements PaymentProvider {
   async quoteFee(input: FeeQuoteInput): Promise<FeeQuote> {
     const data = await this.retried('feeCalculation', input.credentials, {
       amount: this.wireAmount(input.amountMinor),
-      currency: 'IRR',
+      currency: this.chargeCurrency,
     });
     this.requireCode(data, [100]);
     const suggested = data['suggested_amount'];

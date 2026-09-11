@@ -145,5 +145,23 @@
   },
   "validation": {
     "failed": "Some of the submitted information is invalid."
+  },
+  "billing": {
+    "gatewayNotFound": "That payment gateway is not available.",
+    "gatewayUnavailable": "This payment gateway cannot take payments right now. Choose another gateway or try again later.",
+    "gatewayInvalid": "Choose a payment gateway.",
+    "amountInvalid": "Enter a valid amount.",
+    "amountOutOfRange": "The amount is outside the range this gateway accepts.",
+    "couponCodesInvalid": "The discount codes could not be read.",
+    "coupon": {
+      "notFound": "This discount code is not valid.",
+      "notADiscount": "This is a gift code. Redeem it on the gift code page.",
+      "expired": "This discount code has expired.",
+      "outOfScope": "This discount code cannot be used for a wallet top-up.",
+      "belowMinPurchase": "The amount is below this discount code's minimum.",
+      "perUserLimitReached": "You have already used this discount code as many times as it allows.",
+      "capacityReached": "This discount code has been used up.",
+      "nothingToDiscount": "Nothing is left for this discount code to take off."
+    }
   }
 }

@@ -59,6 +59,10 @@ export type FeeQuote = { feeMinor: bigint };
 
 export interface PaymentProvider {
   readonly name: PaymentProviderName;
+  /** The currency this gateway charges in, ISO 4217 — Zarinpal `IRR`. */
+  readonly chargeCurrency: string;
+  /** Decimal places of its minor unit — `priceAtGateway`'s `chargeDecimals`. */
+  readonly chargeDecimals: number;
   /** Mint a payment intent. **Never retried**: every attempt mints a new authority. */
   request(input: PaymentRequestInput): Promise<PaymentRequestResult>;
   /** Confirm a payment. Retried on transport failure; "already verified" is success. */

@@ -8,9 +8,11 @@ updated: 2026-09-11
 
 # Contract — billing
 
-**Five things built** — the wallet credit/debit primitive (F-092-b), the
+**Six things built** — the wallet credit/debit primitive (F-092-b), the
 gateway pricing calculator (F-092-e), the payment provider port (F-092-f),
-coupon validation (F-092-g) and coupon reservation (F-092-h), all below. Every other row in *Provides* is still intent from
+coupon validation (F-092-g) and coupon reservation (F-092-h), all below, and the
+deposit quote + gateway list routes (F-092-o) in
+**[contract.deposit.md](contract.deposit.md)** (§10). Every other row in *Provides* is still intent from
 `txnet-backend/prisma/domains/billing.prisma`.
 
 ## Coupon reservation (built — F-092-h)
@@ -34,8 +36,8 @@ coupon validation (F-092-g) and coupon reservation (F-092-h), all below. Every o
 ## Coupon validation (built — F-092-g)
 
 `CouponValidationService.validate(tx, {codes, amount, target, userId})` and the pure
-`applyCoupons` in `billing-service/src/app/payment/coupon/coupon-validation.ts`; no route
-calls them yet (F-092-o quotes, F-092-h reserves what was applied). Reserves nothing.
+`applyCoupons` in `billing-service/src/app/payment/coupon/coupon-validation.ts`; the deposit
+quote calls it (F-092-o), F-092-i will reserve what was applied. Reserves nothing.
 
 | Rule | Why |
 |---|---|
@@ -53,12 +55,13 @@ calls them yet (F-092-o quotes, F-092-h reserves what was applied). Reserves not
 
 ## Payment providers (built — F-092-f)
 
-`PaymentProviderRegistry.get(providerName)` and `GatewayMerchant.credentialsFor(config, actorId?)`
-in `billing-service/src/app/payment/gateway/`; no route calls them yet (F-092-o, F-092-i, F-092-j).
+`PaymentProviderRegistry.get(providerName)` / `.has(providerName)` and `GatewayMerchant.credentialsFor(config, actorId?)`
+in `billing-service/src/app/payment/gateway/`; the deposit quote calls them (F-092-o), F-092-i and F-092-j will.
 
 | Rule | Why |
 |---|---|
 | A driver answers `request` → `{authority, redirectUrl}`, `verify` → `{referenceId, cardPan, alreadyVerified}`, `inquire` → `{status}`, `quoteFee` → `{feeMinor}` | legacy `IPaymentStrategy`, minus its settings row |
+| A driver names `chargeCurrency` and `chargeDecimals` — Zarinpal `IRR`, `0` — which the caller hands the calculator | the minor unit is the wire's, not a money rule |
 | Amounts cross the port as `bigint` in the gateway currency's minor unit — `chargedAmountMinor`; Zarinpal is sent `IRR`. `feeMinor` is converted to base currency by the caller, with the rate, before it is `quotedFee` | a driver holds no rate and no money rule |
 | `request` is **never retried**; `verify`, `inquire`, `quoteFee` are retried on a transport failure only (timeout, network, 5xx), 3 attempts | each `request` mints an authority; an answer does not change on a retry |
 | Zarinpal `verify`: `100` and `101` are both success, `101` is `alreadyVerified` | the legacy bug on the row |
@@ -72,14 +75,14 @@ in `billing-service/src/app/payment/gateway/`; no route calls them yet (F-092-o,
 ## Gateway pricing (built — F-092-e)
 
 `priceAtGateway(request)` and `feeBasis(request)` in
-`billing-service/src/app/payment/pricing/gateway-pricing.ts`; no route calls
-them yet (F-092-o shows the quote, F-092-i charges it). The worked numbers are
+`billing-service/src/app/payment/pricing/gateway-pricing.ts`; the deposit quote
+calls them (F-092-o), F-092-i will charge with them. The worked numbers are
 `gateway-pricing.golden.json` (F-0611).
 
 | Rule | Why |
 |---|---|
 | The quote shown and the amount charged both come from `priceAtGateway`; nothing else does money arithmetic on a deposit | F-0612 — legacy clamped a quoted fee on one path only |
-| Pure: the provider's fee quote and the FX rate are arguments. The caller asks the provider for `feeBasis(request)`; the staleness ladder decides whether a `liveRate` is passed | F-0610; F-0607 needs a clock |
+| Pure: the provider's fee quote and the FX rate are arguments. The caller asks the provider for `feeQuoteAmountMinor(request)` and passes `quotedFeeFromMinor(request, feeMinor)` (cents up); the staleness ladder decides whether a `liveRate` is passed | F-0610; F-0607 needs a clock |
 | Order: `amount` in `[minAcceptAmount, maxAcceptAmount]` → minus `discount` → gap → fee → `payable`; `credited = amount + gap` | F-092-o's quote shape |
 | **No tax on a top-up** — the result has no tax field (changed in v3) | ADR-0038: tax is charged when credit buys a service |
 | Gap: a remainder above zero and under the minimum is raised to it, and the difference is credited too | legacy behaviour kept |
@@ -151,6 +154,7 @@ reserve/confirm state machine (built, F-092-h).
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
 | credit / debit wallet — **built**, see above | tx, userId, amount, reasonType, referenceId | `wallet_transaction` + new `balanceAfter` | sync tx | insufficient funds, version conflict, invalid amount |
+| quote a deposit + list gateways — **built**, [contract.deposit.md](contract.deposit.md) | userId (header), gatewayId, amount, couponCodes[] | selectable gateways; the price breakdown + rejected codes | sync, read | gateway not found, amount out of range, gateway unavailable |
 | price a deposit — **built**, see above | gateway pricing, amount, discount, quotedFee?, liveRate?, chargeDecimals | base, discount, gap, fee, payable, credited, rate, chargedAmountMinor | sync, pure | invalid input, amount out of gateway range, fee quote required, rate unavailable / out of range |
 | start payment | userId, gatewayId or tenantGatewayConfigId, amount, couponCodes[] | payment intent + redirect / deposit address | sync | amount out of gateway range |
 | confirm payment | gateway webhook / reconciliation / admin | wallet credit + `payment_transaction.status = success` | async | duplicate, mismatch (flagged) |
@@ -174,6 +178,7 @@ None planned yet (no bus). Payment confirmation is expected to drive
 | catalog | `servicePlanId` / `categoryId` for coupon scope + order pricing | coupon scope check fails |
 | currency | base-currency amounts only in; display conversion is currency's job | — |
 | tenant | `tenantId` denormalized on `wallet_transaction` / `payment_transaction` for reporting | — |
+| tenant | a reseller's `tenant_gateway_config` rows — pricing and provider, never the secret columns — read under RLS in the request's `tenantTransaction` (F-092-o) | no gateway to offer: the list is empty |
 
 ## Guarantees (intended)
 

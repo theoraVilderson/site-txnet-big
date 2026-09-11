@@ -12,7 +12,8 @@ import { FeeCalcMode, FeeType, PaymentGateway, Prisma, RateRoundingMode } from '
  * Pure: no I/O, no clock, no database, no float. Everything that needs one of
  * those is the caller's and arrives as an argument:
  *  - `quotedFee` — an automatic-fee gateway's quote, asked of the provider for
- *    `feeBasis(request)` and converted to base currency (F-092-f);
+ *    `feeQuoteAmountMinor(request)` and converted back by `quotedFeeFromMinor`
+ *    (F-092-f, F-092-o) — the conversion is money arithmetic, so it lives here;
  *  - `liveRate` — the FX rate the staleness ladder still allows (F-0607). Pass
  *    `null` when it allows none; the gateway's `staticRate` is then used, and
  *    with no `staticRate` the gateway cannot price.
@@ -249,11 +250,42 @@ export function feeBasis(request: PriceRequest): Prisma.Decimal {
   return out(settle(request).basis, MONEY_SCALE);
 }
 
-export function priceAtGateway(request: PriceRequest): GatewayPrice {
-  const { chargeDecimals, pricing } = request;
+function checkChargeDecimals(chargeDecimals: number): void {
   if (!Number.isInteger(chargeDecimals) || chargeDecimals < 0) {
     throw new InvalidPricingInput('chargeDecimals must be a non-negative integer');
   }
+}
+
+/**
+ * `feeBasis` as a provider is asked to quote it: in the gateway currency's
+ * minor unit, at the rate `priceAtGateway` will charge, rounded up. `null` on
+ * the free path — ask for nothing.
+ */
+export function feeQuoteAmountMinor(request: PriceRequest): bigint | null {
+  checkChargeDecimals(request.chargeDecimals);
+  const { basis } = settle(request);
+  if (basis.isZero()) return null;
+  const rate = rateOf(request.pricing, request.liveRate);
+  const minor = basis.mul(rate).mul(new Dec(10).pow(request.chargeDecimals)).toDecimalPlaces(0, Dec.ROUND_CEIL);
+  return BigInt(minor.toFixed(0));
+}
+
+/**
+ * A provider's fee quote, in the gateway currency's minor unit, as the base
+ * currency `quotedFee` — at the same rate, rounded **up** to the cent, so a fee
+ * smaller than a cent still costs one.
+ */
+export function quotedFeeFromMinor(request: PriceRequest, feeMinor: bigint): Prisma.Decimal {
+  checkChargeDecimals(request.chargeDecimals);
+  if (feeMinor < BigInt(0)) throw new InvalidPricingInput('feeMinor is negative');
+  const rate = rateOf(request.pricing, request.liveRate);
+  const fee = new Dec(feeMinor.toString()).div(new Dec(10).pow(request.chargeDecimals)).div(rate);
+  return out(centsUp(fee), MONEY_SCALE);
+}
+
+export function priceAtGateway(request: PriceRequest): GatewayPrice {
+  const { chargeDecimals, pricing } = request;
+  checkChargeDecimals(chargeDecimals);
 
   const { amount, discount, gap, basis } = settle(request);
   const credited = amount.plus(gap);

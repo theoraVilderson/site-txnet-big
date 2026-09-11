@@ -27,6 +27,11 @@ export class PaymentProviderRegistry {
     ]);
   }
 
+  /** A gateway whose provider has no driver cannot take a payment, so a selector hides it. */
+  has(name: PaymentProviderName): boolean {
+    return this.providers.has(name);
+  }
+
   get(name: PaymentProviderName): PaymentProvider {
     const provider = this.providers.get(name);
     if (!provider) throw new ProviderNotSupported(name);

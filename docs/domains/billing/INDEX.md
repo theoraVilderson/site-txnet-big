@@ -25,6 +25,7 @@ display-currency conversion (`currency`), plan prices (`catalog`).
 | File | Read it when |
 |---|---|
 | [contract.md](contract.md) | using or changing billing from outside |
+| [contract.deposit.md](contract.deposit.md) | the panel's top-up routes: gateway list and deposit quote |
 | [invariants.md](invariants.md) | writing any code that touches it |
 | [data-model.md](data-model.md) | changing storage |
 | [rules.md](rules.md) | implementing inside this unit |
