@@ -9,7 +9,7 @@ Rebuild: `python3 tools/features-scan.py`
 
 - catalog files: 1
 - addressable blocks: 164
-- features: 202
+- features: 215
 
 **Never read the catalog directly.** `python3 tools/spec.py <F-id>` prints exactly the block you need.
 
@@ -74,12 +74,12 @@ Rebuild: `python3 tools/features-scan.py`
 | `App-Features.md` · 5.11 Manual Balance Adjustment | 4 |  |  |  |
 | `App-Features.md` · 5.12 Treasury and FX Risk | 20 |  |  | TreasuryConversion TreasurySnapshot |
 | `App-Features.md` Dollar Pricing and FX Rate Engine | 2 |  |  |  |
-| `App-Features.md` · 6.1 Why Dollars | 8 |  |  |  |
-| `App-Features.md` · 6.2 The FX Worker | 14 |  |  |  |
-| `App-Features.md` · 6.3 Rate Staleness Ladder | 11 |  |  |  |
-| `App-Features.md` · 6.4 Manual Rate | 4 |  |  |  |
-| `App-Features.md` · 6.5 Gateway Pricing Engine | 21 |  |  |  |
-| `App-Features.md` · 6.6 One Calculator for Display and Charging | 8 |  |  |  |
+| `App-Features.md` · 6.1 Why Dollars | 13 | F-0601 F-0602 |  |  |
+| `App-Features.md` · 6.2 The FX Worker | 21 | F-0603 F-0604 F-0605 F-0606 | D-22 |  |
+| `App-Features.md` · 6.3 Rate Staleness Ladder | 15 | F-0607 |  |  |
+| `App-Features.md` · 6.4 Manual Rate | 8 | F-0608 |  |  |
+| `App-Features.md` · 6.5 Gateway Pricing Engine | 27 | F-0609 F-0610 F-0611 |  |  |
+| `App-Features.md` · 6.6 One Calculator for Display and Charging | 13 | F-0612 F-0613 |  |  |
 | `App-Features.md` Network Service: Supply, Stability and Connection Intelligence | 2 |  |  |  |
 | `App-Features.md` · 7.1 Panel Abstraction and Drivers | 28 |  |  |  |
 | `App-Features.md` · 7.2 Bring Your Own Node (Customer's Own Panel) | 16 |  | C-18 |  |
@@ -301,6 +301,19 @@ Rebuild: `python3 tools/features-scan.py`
 | F-0208 | Removing an account from the group — from either side — revoking that member's live sessio | changed | 2.8 Account Switching |
 | F-0209 | The panel's account switcher: current account, the rest of the group, "add an account", on | changed | 2.8 Account Switching |
 | F-0210 | Switching accounts inside the bot | changed | 2.8 Account Switching |
+| F-0601 | Products are priced only in USD — one catalog.Price row per variant, no per-currency price | new | 6.1 Why Dollars |
+| F-0602 | A price change writes a new Price row and keeps the old one; an invoice is computed at the | new | 6.1 Why Dollars |
+| F-0603 | FX worker off the request path: every 5 minutes all active sources are queried concurrentl | new | 6.2 The FX Worker |
+| F-0604 | Failed answers and values outside a hard sanity band are discarded; at least minSources (d | new | 6.2 The FX Worker |
+| F-0605 | A move beyond maxDeviationPercent (default 5%) is rejected and raises a critical alert | new | 6.2 The FX Worker |
+| F-0606 | An accepted rate writes a snapshot and is cached in Redis; every quoted price records its  | new | 6.2 The FX Worker |
+| F-0607 | Staleness ladder: under 15 min normal; 15–60 min last rate with the gateway degraded and a | new | 6.3 Rate Staleness Ladder |
+| F-0608 | An admin pins a manual rate with a reason and an expiry: a status = manual snapshot, audit | new | 6.4 Manual Rate |
+| F-0609 | Per-gateway rate config: useLiveRate, staticRate, percentage and fixed modifiers, minRate  | new | 6.5 Gateway Pricing Engine |
+| F-0610 | The calculator is a pure function in precise decimal — no I/O, no clock, no database, no f | new | 6.5 Gateway Pricing Engine |
+| F-0611 | Golden-file tests: every production gateway config, zero and negative modifiers, boundary  | new | 6.5 Gateway Pricing Engine |
+| F-0612 | The display path and the charging path call the exact same calculator | new | 6.6 One Calculator for Display and Charging |
+| F-0613 | Every converted number is shown with ≈ and the rate's timestamp on hover | new | 6.6 One Calculator for Display and Charging |
 | F-1001 | Revenue, cost, and margin dashboard per user / panel / product / reseller | new | Reseller Profitability Tools |
 | F-1002 | Bandwidth cost attribution to the panel owner | core | Reseller Profitability Tools |
 | F-1003 | "This user costs more than they pay" alert | new | Reseller Profitability Tools |

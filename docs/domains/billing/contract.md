@@ -8,9 +8,20 @@ updated: 2026-09-04
 
 # Contract — billing
 
-**DRAFT — schema only.** `txnet-backend/billing-service` is an empty Nx
-scaffold. Shapes below are intent from
-`txnet-backend/prisma/domains/billing.prisma`.
+**DRAFT — no operation built yet.** `txnet-backend/billing-service` serves
+requests (F-092-a, below) but implements none of the operations in *Provides*.
+Those shapes are intent from `txnet-backend/prisma/domains/billing.prisma`.
+
+## Request edge (built — F-092-a)
+
+| What | Where |
+|---|---|
+| Every route is under `/api/billing/*`, published by Traefik behind `strip-fake-headers,my-auth` — the required gate | `dev-docker/docker-compose.main.yml` |
+| A request without `X-User-Id`, `X-Tenant-Id`, `X-Role-Id` and `X-Session-Id` is refused **401** — never served with no tenant, never with half a set. `X-User-Permissions` may be empty or absent: an empty list | `billing-service/src/app/request/identity.middleware.ts` |
+| The handler runs inside `runWithTenant({ id: X-Tenant-Id })`; `identityOf(req)` returns the rest. This service resolves no tenant itself | same file |
+| Queries go through `PrismaService` on `DATABASE_APP_URL` with `withTenant` applied — no cross-tenant pool. `TENANT_SCOPED_MODELS` holds no billing model yet: the row that first queries one registers it | `billing-service/src/app/prisma/prisma.module.ts` |
+| Success and errors use the `shared-core` envelope, translated per `Accept-Language` | `billing-service/src/main.ts` |
+| `GET /api/health` bypasses the identity check and is not published by Traefik | `billing-service/src/app/health.controller.ts` |
 
 ## TL;DR
 

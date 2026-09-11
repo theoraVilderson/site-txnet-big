@@ -2,9 +2,10 @@
 id: tenant-context
 layer: platform
 status: active
-version: 6
+version: 7
 keywords: [tenant context, isolation harness, measure isolation, isolation test, prove isolation, RLS test, tenant leak test, ambient tenant, withTenant, tenant scoping, cross-tenant, cross-tenant pool, second connection pool, tenant isolation, data mixing, tenant leak, runAcrossTenants, CrossTenantPrismaService, tenant middleware, scoped query, RLS, row level security, row-level security, database role, cannot bypass RLS, app.tenant_id, DATABASE_APP_URL, DATABASE_CROSS_TENANT_URL, permission denied for table, no rows come back, query returns nothing, host not resolving, vault returns nothing, تنانت, ایزولاسیون تنانت, قاطی شدن اطلاعات تنت, داده تنانت قاطی, اسکوپ تنانت]
 source:
+  - txnet-backend/shared-core/src/lib/tenant-context/**
   - txnet-backend/auth-service/src/app/tenant-context/**
   - txnet-backend/auth-service/src/app/prisma/cross-tenant-prisma.service.ts
   - txnet-backend/prisma/domains/migrations/20260909000500_row_level_security/**
@@ -12,7 +13,7 @@ source:
   - txnet-backend/auth-service/src/test-support/postgres-fixture.ts
 owns_tables: []
 depends_on: [tenant]
-updated: 2026-09-09
+updated: 2026-09-11
 ---
 
 # tenant-context
@@ -47,9 +48,8 @@ agreement rule included),
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-11 | contract **v7**: a registered model works inside an interactive transaction opened with `tenantTransaction` (bound once, rolled back together) and is refused in one opened any other way — before, its query ran beside the transaction and survived a rollback. No caller did that; consumers `billing`, `redis-keyspace` unaffected. F-095 |
 | 2026-09-09 | contract **v6**: the layer becomes measurable. `isolation-harness.int.spec.ts` (catalog 20.2 layer 3) applies the committed migration history and `scripts/db-login-roles.sh`'s SQL to a throwaway Postgres and measures tenant invariant 13's five properties through the production path, with a negative control. spec: F-1204 |
 | 2026-09-09 | contract **v5**: every `tenantId` table is policied (25 of 25, three policy shapes), and the escape becomes `CrossTenantPrismaService` on `DATABASE_CROSS_TENANT_URL` — a role whose policy is `USING (true)`, never a bypass. `runAcrossTenants` / `isAcrossTenants` deprecated, no callers left. Consumer: `redis-keyspace`, unaffected. spec: F-1202 |
 | 2026-09-09 | contract **v4**: the rule moves into the database. `withTenant(client)` binds `app.tenant_id` in each query's own transaction, RLS policies on `identity.user` + `identity.linked_bot_account` enforce it, and the service connects as a role that cannot bypass them (`DATABASE_APP_URL`). `runAcrossTenants` now returns *no* rows on a policied table — half-retired, finished by F-066-m-b. spec: F-1202 |
-| 2026-09-09 | contract **v3**: `withTenant` ships — a query on a registered model is scoped or refused, and `TenantScopeConflict` joins `TenantContextMissing`. spec: F-1203 |
-
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

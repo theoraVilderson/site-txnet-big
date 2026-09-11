@@ -151,6 +151,9 @@ is yours.
   has already been run once.
 - Never ingest the whole catalog at once. An area you are not building costs
   nothing; ingesting it early fills the backlog with rows nobody can start.
+- `docs/legacy/txnetsite-perv/` is the previous app, kept only to port from
+  (`F-092-*` / `F-093-*`). Open only the files its `README.md` names for your
+  row — never the folder whole, never `txnetsite-perv.zip`.
 - Tests come before the code they cover, and the e2e tier is never run
   unasked. Both rules live with the rest of the test policy in
   `docs/CODE-LAYOUT.md` ("Order of work" and "Running them without burning the

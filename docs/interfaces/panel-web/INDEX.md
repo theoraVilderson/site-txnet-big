@@ -3,12 +3,12 @@ id: panel-web
 layer: interface
 status: active
 version: 12
-keywords: [panel, site-pwa, user panel, register, signup, captcha, bot check, forgot password, otp channel picker, bot link, telegram link, bale link, account switcher, switch account, multi account, add account, panel session, mini app, miniapp, webapp, panel inside telegram, panel inside bale, مینی اپ, پنل داخل تلگرام, پنل داخل بله, phone field, country picker, country code, dial code, فیلد شماره, انتخاب کشور, کد کشور, error message, form error, خطا نمایش داده نمیشه, ارور نشون نمیده, پیام خطا, خطا به زبان اشتباه, نمایش خطا, default language, زبان پیشفرض, سایت انگلیسی میاد, زبان اشتباه, به جای فارسی انگلیسی, DEFAULT_LANGUAGE, websocket, socket, realtime, live updates, push, reconnect, subscribe, channel, socket client]
+keywords: [panel, site-pwa, user panel, register, signup, captcha, bot check, forgot password, otp channel picker, bot link, telegram link, bale link, account switcher, switch account, multi account, add account, panel session, mini app, miniapp, webapp, panel inside telegram, panel inside bale, مینی اپ, پنل داخل تلگرام, پنل داخل بله, phone field, country picker, country code, dial code, فیلد شماره, انتخاب کشور, کد کشور, error message, form error, خطا نمایش داده نمیشه, ارور نشون نمیده, پیام خطا, خطا به زبان اشتباه, نمایش خطا, default language, زبان پیشفرض, سایت انگلیسی میاد, زبان اشتباه, به جای فارسی انگلیسی, DEFAULT_LANGUAGE, websocket, socket, realtime, live updates, push, reconnect, subscribe, channel, socket client, sidebar, side menu, dashboard shell, dashboard layout, mobile drawer, hamburger menu, collapse sidebar, top bar, سایدبار, منوی کناری, منوی موبایل, داشبورد پنل, ui kit, pagination, skeleton, date picker, jalali calendar, amount in words, money format, صفحه بندی, تقویم شمسی, مبلغ به حروف]
 source:
   - site-pwa/src/**
 owns_tables: []
 depends_on: [auth-api, i18n, realtime]
-updated: 2026-09-10
+updated: 2026-09-11
 ---
 
 # panel-web
@@ -26,6 +26,8 @@ to `auth-api`), translation content (`i18n`).
 | [contract.md](contract.md) | changing routes / the API proxy / i18n endpoints |
 | [contract.realtime.md](contract.realtime.md) | the panel opens, holds or loses a WebSocket (F-070-a), an auth screen waits on an OTP delivery (F-070-b), or a signed-in screen wants live updates (F-070-c) |
 | [contract.mini-app.md](contract.mini-app.md) | the panel is running inside Telegram or Bale (F-310) |
+| [contract.shell.md](contract.shell.md) | a panel page gets a menu entry, a top-bar control is added, or the sidebar / mobile drawer misbehaves (F-093-a) |
+| [contract.kit.md](contract.kit.md) | a money page formats an amount, spells it, pages a table, picks a date or shows a skeleton (F-093-b) |
 | [contract.session-guard.md](contract.session-guard.md) | a signed-in visitor is not redirected off an auth screen (F-0101) |
 | [open-questions.md](open-questions.md) | something is undecided |
 

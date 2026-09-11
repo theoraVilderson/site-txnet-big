@@ -650,6 +650,11 @@ A pending conversion row older than 24 hours warns; older than 72 hours is criti
 
 ### 6.1 Why Dollars
 
+| id | feature | status | depends_on | note |
+| --- | --- | --- | --- | --- |
+| F-0601 | Products are priced only in USD — one `catalog.Price` row per variant, no per-currency price matrix and no per-currency coupons | new | — | ADR-0019 in this repo |
+| F-0602 | A price change writes a new `Price` row and keeps the old one; an invoice is computed at the price effective when it was issued, and a test proves it | new | F-0601 | same rule as F-505 / F-503 |
+
 Products are priced **exclusively in dollars**. `catalog.Price` is a `(variantId, priceMicro, effectiveFrom, isActive)` row.
 
 - No per-currency price matrix, no per-currency coupons
@@ -657,6 +662,13 @@ Products are priced **exclusively in dollars**. `catalog.Price` is a `(variantId
 - **Yesterday's invoice is computed at yesterday's price** — and this has a test, because "obviously that's how it works" is exactly how it breaks
 
 ### 6.2 The FX Worker
+
+| id | feature | status | depends_on | note |
+| --- | --- | --- | --- | --- |
+| F-0603 | FX worker off the request path: every 5 minutes all active sources are queried concurrently with a 3-second timeout | new | — | sources and where the worker must run: D-22 in `docs/BACKLOG.md` |
+| F-0604 | Failed answers and values outside a hard sanity band are discarded; at least `minSources` (default 2) must remain, and the median is taken, never the mean | new | F-0603 | one broken API cannot move the price |
+| F-0605 | A move beyond `maxDeviationPercent` (default 5%) is rejected and raises a critical alert | new | F-0604 | — |
+| F-0606 | An accepted rate writes a snapshot and is cached in Redis; every quoted price records its `rateSnapshotId` | new | F-0605 | the snapshot ADR-0019 requires on the rial path |
 
 **Completely decoupled from the request path.** Every-5-minutes loop:
 
@@ -672,6 +684,10 @@ Every quoted price records its own `rateSnapshotId`.
 
 ### 6.3 Rate Staleness Ladder
 
+| id | feature | status | depends_on | note |
+| --- | --- | --- | --- | --- |
+| F-0607 | Staleness ladder: under 15 min normal; 15–60 min last rate with the gateway `degraded` and admins alerted; over 60 min the gateway's `staticRate`; over 60 min with no `staticRate` the gateway is disabled | new | F-0606 | what a national-internet shutdown actually hits |
+
 | Age of last snapshot           | Behavior                                                       |
 | ------------------------------ | -------------------------------------------------------------- |
 | Under 15 minutes               | normal                                                         |
@@ -683,9 +699,19 @@ Rejecting a sale costs one sale; a wrong guess costs an unbounded amount.
 
 ### 6.4 Manual Rate
 
+| id | feature | status | depends_on | note |
+| --- | --- | --- | --- | --- |
+| F-0608 | An admin pins a manual rate with a reason and an expiry: a `status = manual` snapshot, audited, shown as an admin banner until it expires | new | F-0606 | — |
+
 An admin can pin a **manual rate with a reason and an expiry**. It writes a snapshot with `status = manual`, is audited, and is shown as a banner in the admin panel until it expires.
 
 ### 6.5 Gateway Pricing Engine
+
+| id | feature | status | depends_on | note |
+| --- | --- | --- | --- | --- |
+| F-0609 | Per-gateway rate config: `useLiveRate`, `staticRate`, percentage and fixed modifiers, `minRate` / `maxRate`, `roundingStep`, `roundingMode` up or nearest — never down | new | F-0606 | — |
+| F-0610 | The calculator is a pure function in precise decimal — no I/O, no clock, no database, no float | new | F-0609 | — |
+| F-0611 | Golden-file tests: every production gateway config, zero and negative modifiers, boundary rounding, min/max amounts, coupon interaction, out-of-range rates | new | F-0610 | — |
 
 ```jsonc
 {
@@ -707,6 +733,11 @@ The calculator is a **pure function**: no I/O, no clock, no database.
 - Golden-file tests: every gateway config in production, zero and negative modifiers, boundary rounding, min/max amounts, coupon interaction, out-of-range rates
 
 ### 6.6 One Calculator for Display and Charging
+
+| id | feature | status | depends_on | note |
+| --- | --- | --- | --- | --- |
+| F-0612 | The display path and the charging path call the exact same calculator | new | F-0610 | — |
+| F-0613 | Every converted number is shown with `≈` and the rate's timestamp on hover | new | F-0612 | — |
 
 **The display path and the charging path call the exact same function.** If the wallet page says ≈ 300,000 tomans and settlement then wants 340,000, trust is gone.
 

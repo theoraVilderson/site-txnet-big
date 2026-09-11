@@ -3,11 +3,11 @@ id: billing
 layer: domain
 status: draft
 version: 1
-keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate]
+keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source: []
 owns_tables: [wallet, wallet_transaction, sub_account, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission]
-depends_on: [identity, catalog, currency, tenant]
-updated: 2026-09-04
+depends_on: [identity, catalog, currency, tenant, tenant-context, forward-auth, i18n]
+updated: 2026-09-11
 ---
 
 # Billing

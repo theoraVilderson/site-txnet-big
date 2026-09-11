@@ -81,3 +81,6 @@ yarn-error.log*
 # ------------------------------------------------------------------------------
 .vercel
 repomix-output.xml
+
+# The previous app's archive; what is worth porting lives in docs/legacy/txnetsite-perv/
+txnetsite-perv.zip

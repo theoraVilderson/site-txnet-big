@@ -2,8 +2,8 @@
 id: tenant-context
 layer: platform
 status: active
-version: 6
-updated: 2026-09-09
+version: 7
+updated: 2026-09-11
 ---
 
 # Contract — tenant-context
@@ -33,11 +33,19 @@ scope is an error, not an unscoped query.
 | `runAcrossTenants(fn)` **@deprecated** | thunk | the thunk's result | sync/async | — |
 | `withTenant(client)` (Prisma extension) | the client it is about to extend | an extension, applied once in `prisma.module.ts` | — | `TenantContextMissing`, `TenantScopeConflict` |
 | `bindTenantThroughTransaction(client)` | a Prisma client | a `TenantBinder` — `SET LOCAL app.tenant_id` and the query, as one transaction | — | whatever the query throws |
+| `tenantTransaction(client, fn, options?)` | the extended client, a body taking `tx` | the body's result, committed or rolled back as one transaction bound to the tenant in scope (rule 5) | async | `TenantContextMissing`, whatever the body throws |
 | `TENANT_SCOPED_MODELS` | — | the registry, by Prisma delegate name | — | — |
 | `CrossTenantPrismaService` (injected) | — | a Prisma client on the cross-tenant role | — | whatever the query throws |
 
-`ResolvedTenant` is `tenant`'s type and is re-exported, never redefined
-(`txnet-backend/auth-service/src/app/tenant/tenant.ts`).
+**Where it lives (F-094).** The scope, `withTenant` and the binder are in
+`shared-core/src/lib/tenant-context/`, imported as `@txnet-backend/shared-core`,
+so every service holds the one rule and none a copy. The shared scope carries a
+`ScopedTenant` — `{ id }`, all the binder needs, and all a service behind
+`forward-auth` has (`X-Tenant-Id`). `auth-service`'s
+`app/tenant-context/tenant-context.ts` wraps the same storage and narrows the
+type back to `ResolvedTenant` — `tenant`'s type, never redefined — so the table
+above holds for that service as written; `app/tenant-context/with-tenant.ts`
+re-exports.
 
 `current()` takes an optional label naming what was being attempted; it appears
 in the thrown message, because the whole value of throwing is that the report
@@ -145,10 +153,16 @@ I read across tenants" has to leave with the right answer.
    connection and hand the next tenant the previous one's scope.
 
    The cost is one transaction per scoped query, and it is the price of the
-   layer. The limit is that a registered model **cannot be queried inside an
-   interactive `$transaction`** — the batch would nest. No call site does
-   (§6.2b), and the failure if one appears is an empty or refused query, never
-   a cross-tenant read.
+   layer. **Inside an interactive `$transaction` that batch runs beside the
+   transaction, not in it** — measured: an update then a throw survived the
+   rollback. So there the tenant is bound once (F-095): `tenantTransaction(prisma,
+   fn)` runs the `SET LOCAL` as the transaction's first statement and the
+   extension only rewrites `tx`'s arguments. In an interactive transaction opened
+   any other way a registered model is refused (`TenantScopeConflict`). Which
+   transaction a query is in comes from Prisma's internal `__internalParams`;
+   the harness's interactive-transaction cases go red if an upgrade moves it. A
+   batch `$transaction([…])` keeps per-query binding (`resetPassword`); whether
+   that is atomic with its sibling statements is not measured.
 6. **A session's tenant and a surface's tenant must agree.** Both present and
    different is a refusal, not a preference for one. This is the leak ADR-0024
    records: today a tenant-A user can authenticate through tenant-B's host.

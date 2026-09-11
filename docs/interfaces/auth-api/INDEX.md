@@ -23,6 +23,7 @@ source:
   - txnet-backend/auth-service/src/app/auth/register/register.controller.ts
   - txnet-backend/auth-service/src/app/auth/register/register.schema.ts
   - txnet-backend/auth-service/src/app/common/**
+  - txnet-backend/shared-core/src/lib/envelope/**
   - txnet-backend/auth-service/src/app/config/**
   - txnet-backend/auth-service/src/app/locale/**
   - txnet-backend/auth-service/src/app/prisma/**
