@@ -71,6 +71,12 @@ export class TenantScopeConflict extends Error {
 type TenantScope = {
   tenant: ScopedTenant | null;
   acrossTenants: boolean;
+  /**
+   * The tenant the enclosing `tenantTransaction` bound as its first statement
+   * (F-095), or absent outside one. `withTenant` reads it to decide whether a
+   * query inside an interactive transaction may run there unbatched.
+   */
+  transactionTenantId?: string;
 };
 
 const storage = new AsyncLocalStorage<TenantScope>();
@@ -106,7 +112,37 @@ export const TenantContext = {
   isAcrossTenants(): boolean {
     return storage.getStore()?.acrossTenants ?? false;
   },
+
+  /**
+   * The tenant the enclosing interactive transaction bound, or `null`. Only
+   * `withTenant` should need this; see {@link runInBoundTransaction}.
+   */
+  transactionTenantId(): string | null {
+    return storage.getStore()?.transactionTenantId ?? null;
+  },
 };
+
+/**
+ * Run `fn` — the body of an interactive transaction that has just bound
+ * `app.tenant_id` — with that fact in scope. Called by `tenantTransaction`
+ * (`with-tenant.ts`) and by nothing else: marking a transaction bound that is
+ * not would let a registered model run in it with no tenant set, which RLS
+ * answers with no rows rather than a leak, but answers wrongly.
+ *
+ * A `runWithTenant` opened inside `fn` replaces the whole scope and so drops the
+ * mark — a query there is refused, not run against the other tenant's binding.
+ */
+export function runInBoundTransaction<T>(tenantId: string, fn: () => T): T {
+  const scope = storage.getStore();
+  return storage.run(
+    {
+      tenant: scope?.tenant ?? null,
+      acrossTenants: scope?.acrossTenants ?? false,
+      transactionTenantId: tenantId,
+    },
+    fn,
+  );
+}
 
 /**
  * Run `fn` with `tenant` in scope. Entered once per request, at the edge

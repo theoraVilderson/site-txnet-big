@@ -44,6 +44,7 @@
  *   npm run test:int
  */
 import { PrismaClient } from '@prisma/client';
+import { tenantTransaction } from '@txnet-backend/shared-core';
 import { PrismaService } from '../prisma/prisma.service';
 import { ResolvedTenant, TenantScopeConflict, runWithTenant } from './tenant-context';
 import { withTenant } from './with-tenant';
@@ -311,6 +312,56 @@ describe('a tenant-scoped row is invisible to a connection that named no tenant'
     await expect(
       appRaw.$executeRawUnsafe('SET ROLE txnet_cross_tenant'),
     ).rejects.toThrow(/permission denied|not a member/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2b. Inside an interactive transaction (F-095)
+// ---------------------------------------------------------------------------
+//
+// Before F-095 the extension bound every registered-model query in a batch of
+// its own, and inside `$transaction(async (tx) => …)` that batch ran *beside*
+// the transaction rather than in it: an update followed by a throw was measured
+// here to survive the rollback. A wallet ledger row written that way commits
+// even when the balance write it belongs to is refused.
+describe('a registered model inside an interactive transaction', () => {
+  const nameOf = async (id: string) =>
+    (
+      await owner.$queryRawUnsafe<{ fullName: string }[]>(
+        `SELECT "fullName" FROM identity."user" WHERE id = '${id}'`,
+      )
+    )[0].fullName;
+
+  it('is written in that transaction and rolled back with it', async () => {
+    const [target] = await owner.$queryRawUnsafe<{ id: string; fullName: string }[]>(
+      `SELECT id, "fullName" FROM identity."user" WHERE "tenantId" = '${TENANT_A}'`,
+    );
+
+    await expect(
+      runWithTenant(asTenant(TENANT_A, 'alpha'), async () =>
+        tenantTransaction(app, async (tx) => {
+          await tx.user.update({
+            where: { id: target.id },
+            data: { fullName: 'written then rolled back' },
+          });
+          // Bound by the transaction, not per query: it sees one tenant.
+          expect(await tx.user.count()).toBe(1);
+          throw new Error('roll back');
+        }),
+      ),
+    ).rejects.toThrow('roll back');
+
+    expect(await nameOf(target.id)).toBe(target.fullName);
+  });
+
+  it('is refused in a transaction that did not bind the tenant', async () => {
+    // A plain `$transaction` has no bound tenant for the hook to rely on, and
+    // binding per query is exactly what escaped the rollback above.
+    await expect(
+      runWithTenant(asTenant(TENANT_A, 'alpha'), async () =>
+        app.$transaction(async (tx) => tx.user.count()),
+      ),
+    ).rejects.toBeInstanceOf(TenantScopeConflict);
   });
 });
 

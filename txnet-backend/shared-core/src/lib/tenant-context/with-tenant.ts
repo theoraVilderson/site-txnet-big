@@ -1,5 +1,9 @@
-import { Prisma } from '@prisma/client';
-import { TenantContext, TenantScopeConflict } from './tenant-context';
+import { Prisma, PrismaClient } from '@prisma/client';
+import {
+  TenantContext,
+  TenantScopeConflict,
+  runInBoundTransaction,
+} from './tenant-context';
 
 /**
  * The tenant-scoped Prisma extension (ADR-0024 decision 2, catalog 20.2
@@ -170,13 +174,10 @@ export interface TenantBindableClient {
  * of its own, with no setting bound. (The same laziness `runAcrossTenants`
  * warns about, used deliberately this time.)
  *
- * **Known limit, and it fails closed.** A registered model queried inside an
- * interactive `prisma.$transaction(async (tx) => …)` cannot be bound this way:
- * the batch would nest. No call site does that today (§6.2b — the four
- * interactive transactions in this service touch `session`,
- * `linked_account_member`, `admin_audit_log` and the vault, none of them
- * registered), and the failure if one appears is a refused or empty query, not
- * a cross-tenant read.
+ * **Not inside an interactive transaction.** There this batch runs *beside* the
+ * transaction rather than in it — measured: an update followed by a throw
+ * survived the rollback. So the query map below never uses it there; such a
+ * transaction binds once, up front, through {@link tenantTransaction}.
  */
 export function bindTenantThroughTransaction(
   client: TenantBindableClient,
@@ -194,23 +195,48 @@ export function bindTenantThroughTransaction(
  * function, and this map, not that function, is the rule worth testing.
  */
 export function tenantScopeQueryMap(bind: TenantBinder) {
-  const scope = async ({
-    model,
-    operation,
-    args,
-    query,
-  }: {
+  const scope = async (params: {
     model: string;
     operation: string;
     args: unknown;
     query: (args: unknown) => Promise<unknown>;
+    __internalParams?: { transaction?: { kind?: string } };
   }) => {
+    const { model, operation, args, query } = params;
     if (TenantContext.isAcrossTenants()) return query(args);
 
     const what = `${model}.${operation}`;
     const tenant = TenantContext.current(what);
     const scoped = scopeArgs(operation, args, tenant.id, what);
-    return bind(tenant.id, () => query(scoped));
+    const bound = TenantContext.transactionTenantId();
+
+    // Which transaction a query belongs to is not in Prisma's public callback
+    // type; `__internalParams.transaction.kind` is `'itx'` inside
+    // `$transaction(async (tx) => …)` (Prisma 6). Inside a `tenantTransaction`
+    // body its absence means we can no longer tell `tx.x` from `prisma.x`, so
+    // that is refused rather than guessed. `isolation-harness.int.spec.ts`
+    // is what turns red if an upgrade moves the field.
+    const internal = params.__internalParams;
+    if (bound !== null && internal === undefined) {
+      throw new TenantScopeConflict(
+        `${what} — cannot tell whether this query is in the transaction ` +
+          `(Prisma no longer exposes __internalParams)`,
+        tenant.id,
+      );
+    }
+
+    if (internal?.transaction?.kind !== 'itx') {
+      return bind(tenant.id, () => query(scoped));
+    }
+    if (bound !== tenant.id) {
+      throw new TenantScopeConflict(
+        `${what} inside an interactive $transaction that bound no tenant — ` +
+          `open it with tenantTransaction()`,
+        tenant.id,
+      );
+    }
+    // The transaction's first statement bound this tenant on this connection.
+    return query(scoped);
   };
 
   // Built from the registry rather than written out per model, so adding a
@@ -243,4 +269,37 @@ export function withTenant(client: TenantBindableClient) {
     name: 'withTenant',
     query: tenantScopeQueryMap(bindTenantThroughTransaction(client)),
   } as Parameters<typeof Prisma.defineExtension>[0]);
+}
+
+/** The options Prisma's interactive `$transaction` takes. */
+export type TenantTransactionOptions = {
+  maxWait?: number;
+  timeout?: number;
+  isolationLevel?: Prisma.TransactionIsolationLevel;
+};
+
+/**
+ * An interactive transaction in which registered models are scoped (F-095).
+ *
+ * The tenant in scope is bound with `SET LOCAL` as the transaction's first
+ * statement, so every later statement on `tx` — scoped model, unregistered
+ * model or raw SQL — runs on that connection under that tenant, and commits or
+ * rolls back together. The extension then only rewrites arguments for `tx`'s
+ * registered-model queries; it refuses them in a `$transaction` opened any
+ * other way.
+ *
+ * Pass the extended client (`PrismaService`), so `tx` carries the extension.
+ * A top-level `prisma.x` call inside `fn` is not in the transaction — the same
+ * as anywhere in Prisma — and binds itself as usual.
+ */
+export async function tenantTransaction<R>(
+  client: Pick<PrismaClient, '$transaction'>,
+  fn: (tx: Prisma.TransactionClient) => Promise<R>,
+  options?: TenantTransactionOptions,
+): Promise<R> {
+  const tenant = TenantContext.current('tenantTransaction');
+  return client.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenant.id}, ${true})`;
+    return runInBoundTransaction(tenant.id, () => fn(tx));
+  }, options);
 }
