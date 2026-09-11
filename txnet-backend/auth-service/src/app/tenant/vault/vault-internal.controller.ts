@@ -1,7 +1,7 @@
 import { Controller, Post, UseGuards } from '@nestjs/common';
 import { ServiceOnlyGuard } from '../../common/guards/service-only.guard';
 import { TenantAgnostic } from '../tenant-agnostic.decorator';
-import { CredentialVaultService } from './credential-vault.service';
+import { CredentialVaultService } from '@txnet-backend/shared-core';
 
 /**
  * The vault's one internal route (F-031-c), and the reason it now has a

@@ -11,7 +11,7 @@ import {
   CredentialRef,
   CredentialUnavailable,
   CredentialVaultService,
-} from '../tenant/vault/credential-vault.service';
+} from '@txnet-backend/shared-core';
 
 /**
  * Which vault kind holds a platform's bot token.

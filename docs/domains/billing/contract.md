@@ -8,9 +8,28 @@ updated: 2026-09-11
 
 # Contract — billing
 
-**Two operations built** — the wallet credit/debit primitive (F-092-b) and the
-gateway pricing calculator (F-092-e), both below. Every other row in *Provides*
-is still intent from `txnet-backend/prisma/domains/billing.prisma`.
+**Three things built** — the wallet credit/debit primitive (F-092-b), the
+gateway pricing calculator (F-092-e) and the payment provider port (F-092-f),
+all below. Every other row in *Provides* is still intent from
+`txnet-backend/prisma/domains/billing.prisma`.
+
+## Payment providers (built — F-092-f)
+
+`PaymentProviderRegistry.get(providerName)` and `GatewayMerchant.credentialsFor(config, actorId?)`
+in `billing-service/src/app/payment/gateway/`; no route calls them yet (F-092-o, F-092-i, F-092-j).
+
+| Rule | Why |
+|---|---|
+| A driver answers `request` → `{authority, redirectUrl}`, `verify` → `{referenceId, cardPan, alreadyVerified}`, `inquire` → `{status}`, `quoteFee` → `{feeMinor}` | legacy `IPaymentStrategy`, minus its settings row |
+| Amounts cross the port as `bigint` in the gateway currency's minor unit — `chargedAmountMinor`; Zarinpal is sent `IRR`. `feeMinor` is converted to base currency by the caller, with the rate, before it is `quotedFee` | a driver holds no rate and no money rule |
+| `request` is **never retried**; `verify`, `inquire`, `quoteFee` are retried on a transport failure only (timeout, network, 5xx), 3 attempts | each `request` mints an authority; an answer does not change on a retry |
+| Zarinpal `verify`: `100` and `101` are both success, `101` is `alreadyVerified` | the legacy bug on the row |
+| A failure is `GatewayFailure` with a closed `reason` and the provider's code; the route that first exposes one maps `reason` to an i18n key (C-01) | as for the ledger and the calculator |
+| `unavailable` means the outcome is unknown, not that the payment failed | reconciliation (F-092-l) settles it |
+| Sandbox is `PAYMENT_GATEWAY_SANDBOX`, per environment; the boot refuses it with `NODE_ENV=production` | a sandbox "verify" would credit money that never moved |
+| A reseller gateway's merchant id is the vault's `gateway_merchant_id`, `label` = `providerName`, read by `vault.use` with `caller: billing:<provider>` on every call and kept by nobody | ADR-0026, ADR-0039 |
+| The vault reads run on the app pool bound to the request's tenant — a config of another tenant is `CredentialUnavailable('missing')` | ADR-0039; `gateway-merchant.int.spec.ts` |
+| A platform-brand `payment_gateway`'s `merchantId` is **not** covered: still a plaintext column, read by no code | out of this row; decide before a platform gateway takes a payment |
 
 ## Gateway pricing (built — F-092-e)
 

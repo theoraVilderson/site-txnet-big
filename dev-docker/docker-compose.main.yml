@@ -644,10 +644,17 @@ services:
         - DOCKER_REGISTRY=${DOCKER_REGISTRY}
     container_name: ${STACK_NAME:-txnet}-billing-service
     restart: unless-stopped
-    command: node dist/billing-service/main.js
+    # No `command:` — the image's CMD, as for auth-service. On the dev target
+    # that is `scripts/dev-serve.js`: one webpack watch over the mounted
+    # source, restarting the app on every save, so a code change needs no
+    # rebuild. A pinned `node dist/.../main.js` ran whatever bundle was last
+    # built and ignored every edit.
     volumes:
       - ../txnet-backend:/app:delegated
       - /app/node_modules
+      # The same vault KEK auth-service mounts, read-only: this service decrypts
+      # a gateway's merchant id itself (ADR-0039).
+      - ./secrets/vault-kek:/run/secrets/vault-kek:ro
     environment:
       # Validated at boot by `app/config/env.validation.ts` (F-089); a typo'd
       # variable is a refusal to start rather than a default nobody chose.
@@ -662,6 +669,10 @@ services:
       # The response envelope translates through locale-service (F-094).
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
       - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
+      # A PATH, never the key (ADR-0026).
+      - VAULT_KEK_FILE=${VAULT_KEK_FILE:-/run/secrets/vault-kek}
+      # Refused when NODE_ENV=production.
+      - PAYMENT_GATEWAY_SANDBOX=${PAYMENT_GATEWAY_SANDBOX:-false}
     networks:
       - private_backend_network
     labels:

@@ -19,16 +19,14 @@ const DESTROY_EXPIRED_PATH = '/api/internal/vault/destroy-expired';
  * under the tenant's DEK), which is why it could wait for a scheduler; it is
  * not a reason for it to keep waiting now that one exists.
  *
- * **Why this is an HTTP call and not a method call.** The vault is `tenant`'s
- * code and it lives inside `auth-service`; an Nx application cannot import
- * another Nx application. The two ways out were to move the vault into a
- * workspace library or to reach it over the internal seam, and this is the
- * seam — the same `ServiceOnlyGuard` + `SERVICE_AUTH_TOKEN` door F-066-i built
- * for `bot-service` (`interfaces/auth-api/contract.md`). A library move would
- * drag the vault's Prisma models, its KEK service and its audit trail across an
- * app boundary to serve one caller, and the vault's own contract says the
- * obligation to *schedule* this belongs to `automation` — not that the code
- * has to live here.
+ * **Why this is an HTTP call and not a method call.** The vault has been a
+ * `shared-core` library since F-092-f (ADR-0039), but loading it means holding
+ * the KEK and a pool that can see every tenant's credential rows — a sweep that
+ * decrypts nothing needs neither. So it stays the seam: the same
+ * `ServiceOnlyGuard` + `SERVICE_AUTH_TOKEN` door F-066-i built for
+ * `bot-service` (`interfaces/auth-api/contract.md`). The vault's own contract
+ * says the obligation to *schedule* this belongs to `automation` — not that
+ * the code has to live here.
  *
  * **Safe to run twice** (the `Job` contract): destroying a row that is already
  * gone deletes nothing and answers 0.

@@ -3,7 +3,7 @@ id: tenant
 layer: domain
 status: active
 version: 7
-updated: 2026-09-09
+updated: 2026-09-11
 ---
 
 # Contract — tenant / the Credential Vault
@@ -13,9 +13,19 @@ after: the vault has its own consumers — `messenger` reads a bot token,
 `network` a panel login, `billing` a gateway key — and none of them cares how a
 host resolves to a tenant.
 
-Implemented by `CredentialVaultService` (`app/tenant/vault/`, F-066-f) and
-`CredentialEnvGuard` (F-066-g). **ADR-0026** is the why, and this file does not
-restate it.
+Implemented by `CredentialVaultService` (F-066-f) and `CredentialEnvGuard`
+(F-066-g), in `shared-core/src/lib/tenant/vault/` since F-092-f. **ADR-0026** is
+the why, and this file does not restate it.
+
+## Who loads it (ADR-0039)
+
+| Service | `VAULT_DB` binds | Uses |
+|---|---|---|
+| `auth-service` (`app/tenant/vault/vault.module.ts`) | the cross-tenant pool — its readers resolve a tenant through the vault | every operation, the internal destroy route |
+| `billing-service` (`payment/gateway/gateway.module.ts`) | the app pool, each vault query bound to the request's tenant; `$transaction` refused, so no `put` | `use` of `gateway_merchant_id` |
+
+A loader mounts the same `VAULT_KEK_FILE` and gets `CredentialEnvGuard` with
+it. Every rule below holds in either process.
 
 ## What it is for
 

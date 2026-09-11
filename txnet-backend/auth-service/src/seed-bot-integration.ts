@@ -35,7 +35,7 @@ import { TenantCredentialKind } from '@prisma/client';
 import { newWebhookPath } from '@txnet-backend/messenger';
 import { AppModule } from './app/app.module';
 import { CrossTenantPrismaService } from './app/prisma/cross-tenant-prisma.service';
-import { CredentialVaultService } from './app/tenant/vault/credential-vault.service';
+import { CredentialVaultService } from '@txnet-backend/shared-core';
 
 const TOKEN_KIND: Record<string, TenantCredentialKind> = {
   telegram: TenantCredentialKind.telegram_bot_token,

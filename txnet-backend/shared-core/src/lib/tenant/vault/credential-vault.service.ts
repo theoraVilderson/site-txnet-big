@@ -1,6 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { TenantCredentialKind, TenantCredentialStatus } from '@prisma/client';
-import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import {
+  PrismaClient,
+  TenantCredentialKind,
+  TenantCredentialStatus,
+} from '@prisma/client';
 import { KekService } from './kek.service';
 import {
   fingerprint,
@@ -111,6 +114,26 @@ export class CredentialUnavailable extends Error {
  */
 export const ROTATION_GRACE_SEC = 6 * 60 * 60;
 
+/**
+ * The connection the vault queries through — the three vault tables and a
+ * transaction, nothing else.
+ *
+ * **Each service that loads the vault decides which connection that is**
+ * (ADR-0039), because the vault tables carry RLS and the right pool depends on
+ * whether the caller already has a tenant. `auth-service` binds its
+ * cross-tenant pool: its callers resolve a tenant *through* the vault.
+ * `billing-service` binds its app pool with the vault models bound to the
+ * request's tenant, so a `tenantId` argument naming another tenant finds no
+ * row at the database, not only in this class.
+ */
+export type VaultDb = Pick<
+  PrismaClient,
+  'tenantCredential' | 'tenantDek' | 'tenantCredentialAccess' | '$transaction'
+>;
+
+/** The injection token a host module binds to its {@link VaultDb}. */
+export const VAULT_DB = Symbol('VAULT_DB');
+
 @Injectable()
 export class CredentialVaultService {
   private readonly logger = new Logger(CredentialVaultService.name);
@@ -128,24 +151,23 @@ export class CredentialVaultService {
   private readonly dekCache = new Map<string, Buffer>();
 
   /**
-   * **Why the cross-tenant pool (F-066-m-b).** Every method here takes the
-   * tenant as an argument and filters on it — invariant 9 is that a credential
-   * is encrypted under its own tenant's DEK, and the `tenantId` parameter is
-   * what holds it. But the callers are not inside a tenant scope: the vault is
-   * reached from `bot-service` over the `X-Service-Token` seam, and from a
-   * webhook whose tenant is only known *because* this lookup succeeded. Since
-   * the three vault tables now carry RLS policies, the application pool would
-   * show them nothing at all.
+   * **Why the connection is injected (F-066-m-b, ADR-0039).** Every method here
+   * takes the tenant as an argument and filters on it — invariant 9 is that a
+   * credential is encrypted under its own tenant's DEK, and the `tenantId`
+   * parameter is what holds it. In `auth-service` the callers are not inside a
+   * tenant scope: the vault is reached from `bot-service` over the
+   * `X-Service-Token` seam, and from a webhook whose tenant is only known
+   * *because* this lookup succeeded, so that host binds its cross-tenant pool.
+   * In `billing-service` a tenant is always in scope, so that host binds the
+   * app pool under it. See {@link VaultDb}.
    *
-   * So the scoping here stays where ADR-0026 put it — in the required
-   * `tenantId` argument on every method, not in an ambient scope — and the
-   * database's second policy is what lets those queries run. The vault tables
-   * are deliberately outside `TENANT_SCOPED_MODELS` for the same reason
-   * (`tenant/contract.vault.md`); nothing about that changed, only which
-   * connection asks.
+   * Either way the scoping here stays where ADR-0026 put it — in the required
+   * `tenantId` argument on every method, not in an ambient scope. The vault
+   * tables are deliberately outside `TENANT_SCOPED_MODELS` for that reason
+   * (`tenant/contract.vault.md`).
    */
   constructor(
-    private readonly prisma: CrossTenantPrismaService,
+    @Inject(VAULT_DB) private readonly prisma: VaultDb,
     private readonly kek: KekService,
   ) {}
 

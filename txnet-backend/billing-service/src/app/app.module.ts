@@ -5,6 +5,7 @@ import { envConfigOptions } from './config/env.validation';
 import { HealthController } from './health.controller';
 import { LanguageMiddleware } from './locale/language.middleware';
 import { LocaleModule } from './locale/locale.module';
+import { GatewayModule } from './payment/gateway/gateway.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { IdentityMiddleware } from './request/identity.middleware';
 import { WalletModule } from './wallet/wallet.module';
@@ -15,6 +16,7 @@ import { WalletModule } from './wallet/wallet.module';
     PrismaModule,
     LocaleModule,
     WalletModule,
+    GatewayModule,
   ],
   controllers: [HealthController],
 })

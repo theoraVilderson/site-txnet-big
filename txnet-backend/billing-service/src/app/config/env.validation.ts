@@ -54,6 +54,28 @@ export const envSchema = z.object({
   LOCALE_SERVICE_ADDR: z.string().min(1).default('localhost:50051'),
   LOCALE_SCOPE: z.string().min(1).default('backend'),
   DEFAULT_LANGUAGE: z.string().min(1).default('fa'),
+
+  /**
+   * The Credential Vault's KEK — a **path to a mounted secret**, never the key
+   * (ADR-0026). The same file `auth-service` mounts: this service decrypts a
+   * gateway's merchant id itself (ADR-0039). Unset, the service boots and every
+   * gateway call that needs a merchant id is refused. Compose passes an unset
+   * variable as `''`, which `KekService` reads as unset.
+   */
+  VAULT_KEK_FILE: z.string().default(''),
+
+  /**
+   * Every gateway driver talks to its provider's sandbox (F-092-f). Per
+   * environment, never per tenant. Refused in production: a sandbox that
+   * "verifies" a payment credits a wallet with money that never moved.
+   */
+  PAYMENT_GATEWAY_SANDBOX: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+}).refine((env) => !(env.NODE_ENV === 'production' && env.PAYMENT_GATEWAY_SANDBOX), {
+  message: 'PAYMENT_GATEWAY_SANDBOX=true is refused when NODE_ENV=production',
+  path: ['PAYMENT_GATEWAY_SANDBOX'],
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
