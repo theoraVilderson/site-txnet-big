@@ -32,6 +32,90 @@
     "unavailable": "موجودی در دسترس نیست",
     "retry": "تلاش مجدد"
   },
+  "financial": {
+    "title": "امور مالی",
+    "subtitle": "گردش حساب کیف پول و پرداخت‌های شما",
+    "tabs": {
+      "ledger": "گردش حساب",
+      "payments": "پرداخت‌ها"
+    },
+    "balance": "موجودی فعلی",
+    "columns": {
+      "type": "نوع",
+      "description": "شرح و شناسه",
+      "amount": "مبلغ",
+      "date": "تاریخ",
+      "status": "وضعیت",
+      "balanceAfter": "مانده حساب",
+      "gateway": "درگاه"
+    },
+    "empty": {
+      "ledger": "هیچ تراکنشی یافت نشد.",
+      "payments": "هیچ پرداختی یافت نشد."
+    },
+    "failed": "فهرست بارگیری نشد.",
+    "retry": "تلاش مجدد",
+    "expand": "نمایش جزئیات",
+    "collapse": "بستن جزئیات",
+    "copy": "کپی شناسه",
+    "copied": "کپی شد",
+    "filter": {
+      "open": "فیلتر پیشرفته",
+      "close": "بستن فیلتر",
+      "active": "فیلتر فعال است",
+      "search": "جستجو",
+      "searchPlaceholder": "نوع تراکنش…",
+      "type": "نوع",
+      "direction": "جهت",
+      "status": "وضعیت",
+      "from": "از تاریخ",
+      "to": "تا تاریخ",
+      "all": "همه",
+      "apply": "اعمال فیلترها",
+      "reset": "بازنشانی"
+    },
+    "direction": {
+      "credit": "واریز",
+      "debit": "برداشت"
+    },
+    "reason": {
+      "payment_gateway": "پرداخت از درگاه",
+      "coupon_redemption": "کد تخفیف",
+      "traffic_consumption": "مصرف ترافیک",
+      "admin_manual_adjust": "اصلاح دستی ادمین",
+      "affiliate_commission": "پورسانت همکاری",
+      "sub_account_charge": "شارژ زیرمجموعه",
+      "wallet_transfer_in": "انتقال دریافتی",
+      "wallet_transfer_out": "انتقال ارسالی"
+    },
+    "status": {
+      "pending": "در انتظار",
+      "success": "موفق",
+      "failed": "ناموفق",
+      "expired": "منقضی"
+    },
+    "gatewaySource": {
+      "platform": "درگاه پلتفرم",
+      "tenant": "درگاه فروشنده",
+      "none": "بدون درگاه"
+    },
+    "detail": {
+      "reference": "شماره ارجاع",
+      "trackingCode": "شناسه پرداخت",
+      "gateway": "درگاه پرداخت",
+      "requested": "مبلغ درخواستی",
+      "charged": "مبلغ ارسالی به درگاه",
+      "rate": "نرخ تبدیل",
+      "fee": "کارمزد",
+      "discount": "تخفیف",
+      "credited": "مبلغ واریزشده",
+      "card": "کارت پرداخت",
+      "failureCode": "کد خطای درگاه",
+      "expiresAt": "مهلت پرداخت",
+      "balanceAfter": "مانده پس از تراکنش",
+      "noCoupons": "ریز کدهای تخفیف در پاسخ این سرویس نیست."
+    }
+  },
   "accounts": {
     "signedInAs": "وارد شده به‌عنوان",
     "groupTitle": "حساب‌های دیگر شما",

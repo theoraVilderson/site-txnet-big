@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { PANEL_FINANCIAL } from "@/lib/routes";
 import { useWalletBalance } from "../_hooks/useWalletBalance";
 import { BASE_CURRENCY, formatMoney } from "../_lib/money";
 
@@ -45,7 +46,7 @@ interface QuickAction {
 const QUICK_ACTIONS: readonly QuickAction[] = [
   { id: "top-up", label: W.topUp, icon: PlusCircle, href: null, lead: true }, // F-093-e
   { id: "gift-code", label: W.giftCode, icon: Ticket, href: null }, // F-093-g (a modal)
-  { id: "history", label: W.history, icon: History, href: null }, // F-093-d
+  { id: "history", label: W.history, icon: History, href: PANEL_FINANCIAL }, // F-093-d
 ];
 
 /**

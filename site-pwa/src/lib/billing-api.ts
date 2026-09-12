@@ -23,9 +23,8 @@ const call = createApiClient({
 });
 
 /**
- * What `GET /wallet/history` answers, narrowed to the part this app reads today.
- * The route answers `total`, `page`, `pageSize` and `rows[]` beside it
- * (`billing/contract.history.md`); F-093-d is the row that needs those.
+ * What `GET /wallet/history` answers, narrowed to the part the top bar reads.
+ * The full page is {@link WalletHistoryPage} (`billing/contract.history.md`).
  */
 export interface WalletBalance {
   /**
@@ -36,6 +35,61 @@ export interface WalletBalance {
    */
   balance: string;
 }
+
+/** One page of either list. The two lists differ only in their row. */
+export interface Paged<Row> {
+  total: number;
+  page: number;
+  pageSize: number;
+  rows: Row[];
+}
+
+/**
+ * A movement of money in the wallet ledger.
+ *
+ * It has no `status`, and that is the point: a row exists only because money
+ * moved. An attempt that failed is a {@link WalletPaymentRow} and lives in the
+ * other list — in legacy the two shared one collection, which is how a failed
+ * top-up got counted as a movement (`billing/contract.history.md`).
+ */
+export interface WalletLedgerRow {
+  id: string;
+  /** Base currency, a decimal string. Unsigned — `direction` carries the sign. */
+  amount: string;
+  direction: "credit" | "debit";
+  /** `WalletReasonType`: what caused the movement. There is no free-text title. */
+  reasonType: string;
+  /** The row that caused it — a payment, a transfer, a commission. */
+  referenceId: string | null;
+  /** The balance the ledger wrote after this row. Never recomputed here or there. */
+  balanceAfter: string;
+  createdAt: string;
+}
+
+export type WalletHistoryPage = Paged<WalletLedgerRow> & WalletBalance;
+
+/** A top-up attempt. Only a `success` one has a ledger row beside it (F-092-j writes it). */
+export interface WalletPaymentRow {
+  id: string;
+  status: "pending" | "success" | "failed" | "expired";
+  amountRequested: string;
+  fee: string;
+  discount: string;
+  amountCredited: string;
+  /** What the gateway was asked for, and the rate that produced it — frozen at intent (ADR-0019). */
+  charge: { amountMinor: string; rate: string | null };
+  trackingCode: string | null;
+  /** The receipt number of a paid payment — what a user quotes to support. */
+  referenceId: string | null;
+  cardPanMasked: string | null;
+  failureCode: string | null;
+  /** Exactly one of the two gateway columns is set, and this says which (ADR-0006). */
+  gateway: { source: "platform" | "tenant"; id: string; displayName: string } | null;
+  createdAt: string;
+  expiresAt: string | null;
+}
+
+export type WalletPaymentsPage = Paged<WalletPaymentRow>;
 
 export const billingApi = {
   /**
@@ -53,5 +107,26 @@ export const billingApi = {
    */
   async walletBalance(): Promise<WalletBalance> {
     return call<WalletBalance>("/wallet/history?page=1&pageSize=1", { method: "GET" });
+  },
+
+  /**
+   * A page of the wallet ledger (F-093-d). `query` is already built and
+   * encoded — `financial/_lib/filters.ts` owns that, including turning the
+   * day the user picked on a calendar into the instants this route takes.
+   *
+   * The page's `balance` rides along because it is this route's first field;
+   * it is the same figure the top bar shows, read the same way.
+   */
+  async walletHistory(query: string): Promise<WalletHistoryPage> {
+    return call<WalletHistoryPage>(`/wallet/history?${query}`, { method: "GET" });
+  },
+
+  /**
+   * A page of top-up attempts (F-093-d) — the list the ledger deliberately
+   * does not carry. A separate call to a separate route, so a status filter
+   * meant for attempts can never narrow the ledger.
+   */
+  async walletPayments(query: string): Promise<WalletPaymentsPage> {
+    return call<WalletPaymentsPage>(`/wallet/payments?${query}`, { method: "GET" });
   },
 };

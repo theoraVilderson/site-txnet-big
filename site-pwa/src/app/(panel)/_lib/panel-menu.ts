@@ -10,7 +10,7 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { PANEL_HOME } from "@/lib/routes";
+import { PANEL_FINANCIAL, PANEL_HOME } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 /** The shell's menu labels as generated constants (C-06). */
@@ -58,7 +58,7 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
     icon: Wallet,
     children: [
       // F-093-d
-      { id: "financial-history", label: M.financialHistory, icon: ReceiptText, href: null },
+      { id: "financial-history", label: M.financialHistory, icon: ReceiptText, href: PANEL_FINANCIAL },
       // F-093-e
       { id: "deposit", label: M.deposit, icon: CreditCard, href: null },
     ],

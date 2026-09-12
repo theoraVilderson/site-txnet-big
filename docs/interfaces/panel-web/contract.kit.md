@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 12
-updated: 2026-09-11
+version: 14
+updated: 2026-09-12
 ---
 
 # Contract — panel-web: the shared UI kit (F-093-b)
@@ -11,7 +11,9 @@ updated: 2026-09-11
 Split from [contract.md](contract.md) at 250 lines (§10). The pieces every
 money page (F-093-c..g) builds on, so none of them re-derives a formatter, a
 calendar or a pager. Components live in `(panel)/_components/kit/`, pure
-helpers in `(panel)/_lib/`. No page uses them yet.
+helpers in `(panel)/_lib/`. F-093-d is the first page to use them, and
+[contract.financial.md](contract.financial.md) is the worked example of what a
+page still owns on top of them.
 
 | piece | file | what a page passes |
 |---|---|---|
@@ -21,6 +23,7 @@ helpers in `(panel)/_lib/`. No page uses them yet.
 | `DatePicker` | `_components/kit/DatePicker.tsx` | `value` / `onChange` as ISO `YYYY-MM-DD` |
 | `formatMoney`, `amountInWords` | `_lib/money.ts` | amount, currency code, `useLocale()` |
 | `copyText` | `_lib/clipboard.ts` | text; resolves `false` when refused |
+| `formatInstant` | `_lib/datetime.ts` | an ISO instant, `useLocale().lang` |
 
 ## Rules a page row has to know
 
@@ -44,6 +47,15 @@ helpers in `(panel)/_lib/`. No page uses them yet.
    which timezone, is the caller's decision, not the picker's.
 6. **`Pagination` owns no navigation.** It calls `onPageChange`; the page pushes
    `?page=` and shows its skeleton. It renders nothing for one page.
+7. **A timestamp is an instant, and the calendar is the language's.**
+   `formatInstant` reads the calendar from the language tag — `fa` is Jalali to
+   ICU already — so there is no calendar table here either and a new language
+   needs no entry in one. The zone is the viewer's: someone checking when a
+   payment expired wants the clock on their own wall. An absent or unreadable
+   instant answers `null` rather than a placeholder, so the caller hides the
+   line instead of printing a date nothing vouches for. Added by F-093-d;
+   `contract.financial.md` rule 2 is the other half, where a *picked day* goes
+   back the other way and becomes a range of instants.
 
 ## Proof
 

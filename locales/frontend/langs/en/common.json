@@ -32,6 +32,90 @@
     "unavailable": "Balance unavailable",
     "retry": "Retry"
   },
+  "financial": {
+    "title": "Finances",
+    "subtitle": "Your wallet movements and your payments",
+    "tabs": {
+      "ledger": "Wallet movements",
+      "payments": "Payments"
+    },
+    "balance": "Current balance",
+    "columns": {
+      "type": "Type",
+      "description": "Description and id",
+      "amount": "Amount",
+      "date": "Date",
+      "status": "Status",
+      "balanceAfter": "Balance",
+      "gateway": "Gateway"
+    },
+    "empty": {
+      "ledger": "No transactions found.",
+      "payments": "No payments found."
+    },
+    "failed": "The list could not be loaded.",
+    "retry": "Retry",
+    "expand": "Show details",
+    "collapse": "Hide details",
+    "copy": "Copy the id",
+    "copied": "Copied",
+    "filter": {
+      "open": "Advanced filter",
+      "close": "Close the filter",
+      "active": "A filter is active",
+      "search": "Search",
+      "searchPlaceholder": "Transaction type…",
+      "type": "Type",
+      "direction": "Direction",
+      "status": "Status",
+      "from": "From",
+      "to": "To",
+      "all": "All",
+      "apply": "Apply filters",
+      "reset": "Reset"
+    },
+    "direction": {
+      "credit": "Credit",
+      "debit": "Debit"
+    },
+    "reason": {
+      "payment_gateway": "Gateway payment",
+      "coupon_redemption": "Gift code",
+      "traffic_consumption": "Traffic usage",
+      "admin_manual_adjust": "Manual adjustment",
+      "affiliate_commission": "Affiliate commission",
+      "sub_account_charge": "Sub-account top-up",
+      "wallet_transfer_in": "Transfer received",
+      "wallet_transfer_out": "Transfer sent"
+    },
+    "status": {
+      "pending": "Pending",
+      "success": "Successful",
+      "failed": "Failed",
+      "expired": "Expired"
+    },
+    "gatewaySource": {
+      "platform": "Platform gateway",
+      "tenant": "Reseller gateway",
+      "none": "No gateway"
+    },
+    "detail": {
+      "reference": "Reference number",
+      "trackingCode": "Payment id",
+      "gateway": "Payment gateway",
+      "requested": "Amount requested",
+      "charged": "Amount sent to the gateway",
+      "rate": "Exchange rate",
+      "fee": "Fee",
+      "discount": "Discount",
+      "credited": "Amount credited",
+      "card": "Card",
+      "failureCode": "Gateway failure code",
+      "expiresAt": "Pay before",
+      "balanceAfter": "Balance after this row",
+      "noCoupons": "This service does not answer the individual gift codes."
+    }
+  },
   "accounts": {
     "signedInAs": "Signed in as",
     "groupTitle": "Your other accounts",

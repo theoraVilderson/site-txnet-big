@@ -2,7 +2,7 @@
 id: panel-web
 layer: interface
 status: active
-version: 13
+version: 14
 updated: 2026-09-12
 ---
 
@@ -59,9 +59,10 @@ about the data path rather than the bar.
    `{balance}` is already that route's first field. A `GET /wallet/balance`
    would be a second endpoint answering a value the first one has.
 4. **The quick actions follow rule 2 above** — `href: null` hides the entry
-   rather than rendering a dead link — so all three are hidden until F-093-e,
-   F-093-g and F-093-d land, and the dropdown says so. Legacy's fourth entry
-   (`/services`) is not ported: it duplicated the sidebar's `my-services`.
+   rather than rendering a dead link. `history` points at `PANEL_FINANCIAL`
+   since F-093-d; top-up and gift code stay hidden until F-093-e and F-093-g,
+   and the dropdown says so. Legacy's fourth entry (`/services`) is not ported:
+   it duplicated the sidebar's `my-services`.
 5. **A failed read is not a zero.** `"0.00"` is a real balance — a user with no
    wallet reads as zero, not a 404 — so a failure shows its own line and a
    retry, and keeps the last good figure rather than blanking it.
