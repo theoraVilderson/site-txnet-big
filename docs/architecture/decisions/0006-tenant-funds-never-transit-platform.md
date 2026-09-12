@@ -1,12 +1,13 @@
 ---
 id: adr-0006
-status: accepted
-updated: 2026-09-04
+status: superseded
+updated: 2026-09-12
+superseded_by: adr-0041
 ---
 
 # ADR 0006 — Tenant end-user funds never transit the platform
 
-- **Status:** accepted
+- **Status:** superseded by **ADR-0041** (2026-09-12) — its rule is still the **default**: a tenant sees only the gateways it configured itself. What changed is that the platform owner may grant a tenant another party's gateway, and then settles what that gateway collected.
 - **Date:** 2026-09-04 (documented; predates this doc)
 - **Affects units:** tenant, billing
 

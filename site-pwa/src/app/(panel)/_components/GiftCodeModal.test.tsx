@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { GiftCodeModal } from "./GiftCodeModal";
 import { useLocale } from "@/context/LocaleContext";
@@ -28,6 +28,19 @@ import { ApiError } from "@/lib/api-error";
  * where it actually belongs. This client keeps no copy of any of them.
  */
 
+/**
+ * Above vitest's 5s default, for the machine and not for the code.
+ *
+ * These cases drive a real animated dialog: framer-motion springs, an `auto`
+ * height, an exit animation to wait out. Alone the slowest is ~1.7s, but this
+ * file runs beside 19 others and the workspace oversubscribes the box — the
+ * same contention `docs/CODE-LAYOUT.md` warns about, which arrives as a
+ * *timeout* and reads exactly like a broken assertion. The animation was made
+ * cheap first (`contract.shell.md` rule 6 has that measurement); this is the
+ * headroom left over, so a slow machine cannot turn a passing suite red.
+ */
+vi.setConfig({ testTimeout: 15_000 });
+
 vi.mock("@/context/LocaleContext", () => ({ useLocale: vi.fn() }));
 vi.mock("@/lib/billing-api", () => ({
   billingApi: { redeemGift: vi.fn() },
@@ -51,6 +64,20 @@ function open(props: Partial<Parameters<typeof GiftCodeModal>[0]> = {}) {
 const codeBox = () => screen.getByRole("textbox");
 const submit = () => screen.getByRole("button", { name: "wallet.gift.submit" });
 
+/**
+ * Put a code in the box in one change rather than eight keystrokes.
+ *
+ * It runs the same `onChange` the user does — the case and the padding are
+ * handled there either way. What it skips is seven re-renders of an animated
+ * dialog, which is not what any of these cases is about and which cost enough
+ * to matter: typing character by character put this file at 4.2s against
+ * vitest's 5s ceiling. The one case that *is* about how typing transforms a
+ * code still types (`contract.shell.md` rule 6 has the measurement).
+ */
+function fillCode(value: string) {
+  fireEvent.change(codeBox(), { target: { value } });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(useLocale).mockReturnValue({ lang: "en", t } as ReturnType<typeof useLocale>);
@@ -68,7 +95,7 @@ describe("a refused code", () => {
     );
     const { onRedeemed } = open();
 
-    await user.type(codeBox(), "SUMMER20");
+    fillCode("SUMMER20");
     await user.click(submit());
 
     // The refusal, in the words billing already translated.
@@ -87,7 +114,7 @@ describe("a refused code", () => {
     redeemGift.mockRejectedValue(new ApiError("This gift code is not valid.", { status: 409 }));
     open();
 
-    await user.type(codeBox(), "GIFT1O");
+    fillCode("GIFT1O");
     await user.click(submit());
 
     await screen.findByRole("alert");
@@ -100,13 +127,16 @@ describe("a refused code", () => {
     redeemGift.mockRejectedValueOnce(new ApiError("This gift code has expired.", { status: 409 }));
     open();
 
-    await user.type(codeBox(), "OLDCODE");
+    fillCode("OLDCODE");
     await user.click(submit());
     await screen.findByRole("alert");
 
     await user.click(submit());
 
-    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    // Behind the alert's exit animation, so this waits on a render, not a call.
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument(), {
+      timeout: 5_000,
+    });
   });
 });
 
@@ -115,7 +145,7 @@ describe("a redeemed code", () => {
     const user = userEvent.setup();
     const { onRedeemed } = open();
 
-    await user.type(codeBox(), "gift10");
+    fillCode("gift10");
     await user.click(submit());
 
     expect(await screen.findByText("wallet.gift.successTitle")).toBeInTheDocument();
@@ -146,7 +176,7 @@ describe("a redeemed code", () => {
     redeemGift.mockReturnValue(new Promise((resolve) => (answer = resolve as never)));
     open();
 
-    await user.type(codeBox(), "GIFT10");
+    fillCode("GIFT10");
     await user.click(submit());
 
     expect(screen.getByRole("button", { name: "wallet.gift.submitting" })).toBeDisabled();
@@ -180,5 +210,37 @@ describe("the box itself", () => {
     open({ open: false });
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("renders outside its caller's subtree, not under it", () => {
+    // The portal is load-bearing, not tidiness. Its caller sits in a top bar
+    // carrying `backdrop-blur-xl`, and an element with a `backdrop-filter` is
+    // the containing block for every fixed-position descendant — so `fixed
+    // inset-0` rendered in place meant that 64px bar, and the modal came up
+    // invisible. The bar's `z-20` caps the stacking order the same way. jsdom
+    // has neither of those semantics, so this is the part of it a spec can
+    // hold: the dialog is a child of `body`, not of whatever mounted it.
+    const { container } = render(
+      <div data-testid="caller">
+        <GiftCodeModal open onClose={vi.fn()} />
+      </div>,
+    );
+
+    const dialog = screen.getByRole("dialog");
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.body.contains(dialog)).toBe(true);
+  });
+
+  it("locks the page behind it, and gives the scroll back on close", async () => {
+    const { rerender, onClose } = open();
+    expect(document.body.style.overflow).toBe("hidden");
+
+    rerender(<GiftCodeModal open={false} onClose={onClose} />);
+
+    // The dialog animates out, so the lock lifts when it unmounts rather than
+    // on the prop change — a page left unscrollable is the failure that matters.
+    await waitFor(() => expect(document.body.style.overflow).not.toBe("hidden"), {
+      timeout: 5_000,
+    });
   });
 });

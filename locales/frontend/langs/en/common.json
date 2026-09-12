@@ -46,6 +46,67 @@
       "done": "Close"
     }
   },
+  "deposit": {
+    "title": "Top up your wallet",
+    "subtitle": "Choose an amount and add it to your balance.",
+    "amount": {
+      "label": "Top-up amount",
+      "placeholder": "0.00",
+      "slider": "Top-up amount",
+      "presets": "Suggested amounts",
+      "min": "Minimum {{amount}}",
+      "max": "Maximum {{amount}}",
+      "belowMin": "The least this gateway takes is {{amount}}.",
+      "aboveMax": "The most this gateway takes is {{amount}}."
+    },
+    "coupon": {
+      "label": "Have a discount code?",
+      "placeholder": "SPRING2026",
+      "add": "Apply",
+      "remove": "Remove {{code}}",
+      "applied": "Codes added ({{count}})",
+      "duplicate": "That code is already in the list.",
+      "active": "Applied",
+      "rejected": "Not applied",
+      "needsAmount": "Enter an amount first."
+    },
+    "gateway": {
+      "label": "Payment gateway",
+      "empty": "No payment gateway is available right now.",
+      "loading": "Loading gateways…",
+      "retry": "Try again",
+      "range": "{{min}} to {{max}}"
+    },
+    "wallet": {
+      "current": "Current balance",
+      "incoming": "Will be added",
+      "pending": "Enter an amount",
+      "secure": "Secure gateway"
+    },
+    "summary": {
+      "title": "Final bill",
+      "details": "Bill details",
+      "amount": "Top-up amount",
+      "fee": "Service fee",
+      "free": "Free",
+      "discount": "Discount ({{code}})",
+      "gap": "This gateway will not take less than its minimum, so {{amount}} more is charged — and credited to your wallet with the rest.",
+      "payable": "Payable",
+      "charge": "Charged by the gateway as {{amount}}",
+      "credited": "Credited to your wallet",
+      "pay": "Confirm and pay",
+      "payFree": "Confirm and credit",
+      "starting": "Taking you to the gateway…",
+      "quoting": "Working out the bill…",
+      "idle": "Enter an amount to see the bill.",
+      "refund": "A paid top-up is final and cannot be refunded.",
+      "freeNotice": "Your codes cover this top-up in full. Nothing is charged and the credit is immediate.",
+      "freeTitle": "Wallet topped up",
+      "freeDone": "{{amount}} was added to your wallet.",
+      "newBalance": "New balance: {{balance}}",
+      "again": "Top up again"
+    }
+  },
   "financial": {
     "title": "Finances",
     "subtitle": "Your wallet movements and your payments",

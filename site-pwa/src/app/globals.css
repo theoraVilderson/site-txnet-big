@@ -297,6 +297,90 @@ button {
   }
 }
 
+/* The two lights behind the gift-code modal (F-093-g), on the `zenGlow` pulse
+   above. A decorative, infinite animation belongs in CSS: framer-motion would
+   hold a requestAnimationFrame loop open for as long as the modal is mounted,
+   to drive something nobody looks at directly — and in jsdom that loop is pure
+   cost, which is how it first showed up (two specs timing out under a parallel
+   run that passed on their own). Reduced motion is handled here for the same
+   reason: the animation is CSS, so its off switch is too. */
+.gift-orb {
+  animation: zenGlow 5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gift-orb {
+    animation: none;
+  }
+}
+
+/* The gift-code modal's one-shot entrances (F-093-g): the header pieces, the
+   code label and the submit button, staggered by an `animation-delay` utility
+   at the call site.
+
+   These are CSS and not framer-motion for a measured reason. The code box is a
+   controlled input, so every keystroke re-renders the dialog; each motion
+   component in that tree pays for the re-render, and with six of them a spec
+   that types eight characters went from ~2.0s to ~4.2s and started hitting
+   vitest's 5s ceiling under a parallel run. framer-motion is kept for what
+   needs it — an exit animation, an `auto` height, an imperative shake — and a
+   one-shot entrance with neither needs none of it. */
+@keyframes giftRise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.gift-rise {
+  animation: giftRise 0.34s ease-out both;
+}
+
+.gift-pop {
+  animation: giftPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes giftPop {
+  from {
+    opacity: 0;
+    transform: rotate(-35deg) scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes giftRise {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes giftPop {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .gift-rise,
+  .gift-pop {
+    animation-duration: 0.15s;
+    animation-delay: 0s !important;
+  }
+}
+
 .organic-field {
   position: relative;
   margin-bottom: 20px;
@@ -563,4 +647,46 @@ div:has(> .password-field-input:autofill) > .password-field-label {
   box-shadow: 0 0 0 30px var(--bg-inner) inset !important;
   -webkit-text-fill-color: var(--text-input) !important;
   caret-color: var(--text-input);
+}
+
+/* The top-up page's amount slider (F-093-e). A range input has no themeable
+   parts in Tailwind, so the track and the thumb are written out here against
+   the same tokens everything else on the page uses. Ported from legacy's
+   `Deposit.css`, minus its `dir="rtl"` attribute on the input: a range input is
+   already mirrored by the document direction, and setting it a second time on
+   the element flipped the fill back in `fa`. */
+.range-slider {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 5px;
+  background: var(--card-border);
+  outline: none;
+}
+
+.range-slider:disabled {
+  opacity: 0.5;
+}
+
+.range-slider::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  box-shadow: 0 0 10px var(--accent-glow);
+  cursor: pointer;
+}
+
+.range-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  box-shadow: 0 0 10px var(--accent-glow);
+  cursor: pointer;
 }

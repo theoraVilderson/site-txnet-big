@@ -2,7 +2,7 @@
 id: panel-web
 layer: interface
 status: active
-version: 15
+version: 16
 updated: 2026-09-12
 ---
 
@@ -61,8 +61,10 @@ about the data path rather than the bar.
 4. **The quick actions follow rule 2 above** — an entry with no destination is
    hidden rather than rendered as a dead link. A destination is an `href` *or* a
    `modal`: `history` points at `PANEL_FINANCIAL` since F-093-d, `gift-code`
-   opens the modal below since F-093-g, and top-up alone is still hidden,
-   waiting on F-093-e. A `modal` entry renders as a `button`, never a `Link`
+   opens the modal below since F-093-g, and `top-up` points at `PANEL_DEPOSIT`
+   since F-093-e ([contract.deposit.md](contract.deposit.md)) — so every entry
+   has a destination now, and the filter stays because it is how the next one
+   is added. A `modal` entry renders as a `button`, never a `Link`
    with a dead href — a link that navigates nowhere is still announced as a link
    and offered to "open in a new tab". Legacy's fourth entry (`/services`) is
    not ported: it duplicated the sidebar's `my-services`.
@@ -104,11 +106,88 @@ navigates to, and rule 4 above is how a second one is added.
 4. **The success panel waits to be closed.** Legacy dismissed itself on a timer
    whose callback read a stale `status` to decide whether to — and the user has
    just been shown a number they may want to read twice.
+5. **The motion is on the frame, never on the money.** This is the most animated
+   surface in the panel on purpose — redeeming a gift is the one moment here
+   that is pure good news, and the rest of the app is deliberately flat. The
+   card springs, the check draws itself, a burst fires, a refusal shakes the
+   body of the card. **No figure is ever animated from one value to another**: a
+   number counting up is a number that is briefly wrong, which is the same habit
+   rules 1 and 2 exist to break. Everything collapses to a plain cross-fade
+   under `prefers-reduced-motion` — in CSS where the animation is CSS, and via
+   `useReducedMotion` where it is not — and every decorative element (the two
+   orbs, the sparks, the focus underline, the button sweep) is `aria-hidden`
+   and inert.
+6. **CSS animates, framer-motion only where CSS cannot.** framer-motion earns
+   its place for an *exit* animation, an `auto` height, or an imperative shake;
+   a one-shot entrance and an infinite decorative pulse have none of those, and
+   belong in `globals.css` (`.gift-rise`, `.gift-pop`, `.gift-orb`). This is
+   measured, not taste. The code box is controlled, so **every keystroke
+   re-renders the dialog and each motion component in it pays for that
+   re-render**. Six of them took this unit's slowest spec from 2.0s to **4.2s
+   against vitest's 5s ceiling**, and it then failed 4 of 6 full-suite runs
+   while passing alone — a timeout, which reads exactly like a broken assertion
+   and is not one. Moving the six to CSS gave back 2.3s of it; filling the code
+   box with one change event instead of eight simulated keystrokes gave back the
+   rest, and the spec now runs at **1.7s**. The residue was contention from the
+   other 19 spec files, so the file also takes `testTimeout: 15s` — headroom for
+   the machine, after the code was made cheap and not instead of it. Five
+   consecutive full runs are clean, where 4 of 6 had been failing. A new
+   animation here starts in CSS and moves only if it turns out to need one of
+   the three.
+
+   The cost needs a controlled input to bite, so the success panel keeps
+   framer-motion: it mounts once, on an answer, and what it animates — a stroke
+   drawing along its own path, eight sparks whose end point is computed per
+   angle — is what the library is actually for.
+
+   The wider rule, for any panel screen: **a spec that drives a controlled input
+   through an animated tree pays per character.** Type only where the typing is
+   what the case is about.
+7. **It locks the page behind it and gives the scroll back on unmount.** The
+   lock lifts when the dialog leaves, not when the prop flips, because the
+   dialog animates out; a page left unscrollable is the failure that matters.
+8. **The overlay scrolls; the card is not centred in a frame that cannot.**
+   `fixed inset-0 overflow-y-auto` holding a `flex min-h-full items-center`
+   wrapper, with the backdrop `fixed` so it does not scroll away. A centred card
+   in a frame with no scroll is clipped at **both** ends the moment it outgrows
+   the viewport, and the end that goes is the one with the title on it. An error
+   message is enough to trigger that — it grows the card by the height of a
+   sentence — which is exactly how it was found in `fa`.
+
+9. **It is portaled to `document.body`, and that is load-bearing.** Its caller
+   is `WalletButton`, in a top bar carrying `backdrop-blur-xl` — and **an
+   element with a `backdrop-filter` is the containing block for every
+   fixed-position descendant.** So `fixed inset-0` rendered in place did not
+   mean the viewport, it meant that 64px rounded bar, and the modal opened
+   invisible, looking exactly like an `overflow: hidden` on the nav. The bar's
+   `z-20` caps the stacking order the same way, so rule 8's `z-50` could never
+   clear the sidebar's `z-40` from in there either. **Any overlay this shell
+   grows next — the notifications panel of F-093-h included — has the same two
+   problems and wants the same portal**, because this bar and the sidebar both
+   carry `backdrop-blur-xl`. jsdom models neither the containing block nor the
+   stacking context, so the spec holds the part it can: the dialog is a child of
+   `body` and not of whatever mounted it.
+
+**The RTL trap this screen fell into, for anyone adding to it:** rule 4 above
+says sides are logical, and the failure mode is not forgetting it but *mixing*
+it. `start-1/2` with `-translate-x-1/2` centres a thing in LTR and throws it off
+the left edge in RTL, because the first half is direction-aware and the second
+half is not. Either stay physical on both (`left-1/2` with `-translate-x-1/2`,
+fine when the thing is symmetric, which is what the success burst does) or use
+`ltr:`/`rtl:` variants the way the drawer's slide does. The focus underline
+under the code box was the mixed kind and is gone: the border turning `primary`
+with its glow already says where focus is, and a straight line under a
+`rounded-2xl` border was never the tidier answer.
 
 The modal is mounted outside the dropdown's own `open &&`, so closing the
 dropdown does not unmount a code the user is half-way through typing, and the
 dropdown suspends its own Escape and outside-press handlers while the modal is
 up. One key closing both would leave the user with neither.
+
+`AnimatePresence` is what stays mounted; the dialog is not, so **mounting is the
+reset** — a closed modal holds no half-typed code and no previous attempt's
+error, with no effect that has to remember to clear each one. Resetting in an
+effect is also what `react-hooks/set-state-in-effect` refuses.
 
 ## State
 

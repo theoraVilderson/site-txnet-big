@@ -19,3 +19,9 @@ export const PANEL_ACCOUNTS_ADD = "/accounts/add";
  * wallet control's `history` quick action both point here.
  */
 export const PANEL_FINANCIAL = "/financial";
+/**
+ * The top-up page (F-093-e). Under `/financial` on purpose: `activeHref` then
+ * lights the financial group for it without a second rule
+ * (`panel-web/contract.shell.md` rule 3).
+ */
+export const PANEL_DEPOSIT = "/financial/deposit";

@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { PANEL_FINANCIAL } from "@/lib/routes";
+import { PANEL_DEPOSIT, PANEL_FINANCIAL } from "@/lib/routes";
 import { useWalletBalance } from "../_hooks/useWalletBalance";
 import { BASE_CURRENCY, formatMoney } from "../_lib/money";
 import { GiftCodeModal } from "./GiftCodeModal";
@@ -53,7 +53,7 @@ interface QuickAction {
  * route to one page is what `activeHref` then has to disambiguate.
  */
 const QUICK_ACTIONS: readonly QuickAction[] = [
-  { id: "top-up", label: W.topUp, icon: PlusCircle, href: null, lead: true }, // F-093-e
+  { id: "top-up", label: W.topUp, icon: PlusCircle, href: PANEL_DEPOSIT, lead: true }, // F-093-e
   { id: "gift-code", label: W.giftCode, icon: Ticket, href: null, modal: "gift-code" }, // F-093-g
   { id: "history", label: W.history, icon: History, href: PANEL_FINANCIAL }, // F-093-d
 ];
@@ -100,7 +100,8 @@ export function WalletButton() {
   }, [open, giftOpen]);
 
   // An entry with neither destination is the "not built yet" state, and stays
-  // hidden (`contract.shell.md` rule 2) — today that is top-up alone (F-093-e).
+  // hidden (`contract.shell.md` rule 2). Every entry has one since F-093-e;
+  // the filter stays, because rule 4 is how the next one is added.
   const visible = QUICK_ACTIONS.filter((a) => a.href !== null || a.modal !== undefined);
 
   function openModal(modal: NonNullable<QuickAction["modal"]>) {
