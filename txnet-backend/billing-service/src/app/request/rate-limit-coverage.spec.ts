@@ -39,7 +39,18 @@ import { envSchema } from '../config/env.validation';
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 const APP = join(__dirname, '..');
-const EXEMPT = new Set(['HealthController']);
+/**
+ * Controllers with no caller to limit at all.
+ *
+ * `HealthController` is the container's own probe, outside the gate for the
+ * reason `app.module.ts` gives. `DepositInternalController` is the
+ * service-to-service seam (F-092-k): the only caller is `worker-service`'s
+ * tick, proven by `SERVICE_AUTH_TOKEN` and refused as a 404 otherwise, so there
+ * is no user, no tenant and nothing forgeable to build a bucket from — and a
+ * limit here would throttle the platform's own sweep, which is a way to leave
+ * coupon capacity held rather than a way to protect anything.
+ */
+const EXEMPT = new Set(['HealthController', 'DepositInternalController']);
 
 /**
  * Controllers with no identity to bucket on, and what they count instead.

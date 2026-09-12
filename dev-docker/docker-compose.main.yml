@@ -530,6 +530,12 @@ services:
       # queued update runs (F-067-b).
       - BOT_API_BASE_URL=http://bot-service:${BOT_PORT:-3000}
       - BOT_API_TIMEOUT_MS=${BOT_API_TIMEOUT_MS:-30000}
+      # The third end of it: billing-service owns what an expired top-up is —
+      # the coupon reservation functions and this platform's two pools live
+      # there (F-092-k). The same SERVICE_AUTH_TOKEN above opens it; the token
+      # says which process is calling and never which user.
+      - BILLING_API_BASE_URL=http://billing-service:3000
+      - BILLING_API_TIMEOUT_MS=${BILLING_API_TIMEOUT_MS:-30000}
       # The FX worker's sources and its per-source deadline (F-0603, D-22).
       # A list rather than a constant because three of the four exchanges are
       # on the US OFAC list since June 2026 and dropping one must be config.
@@ -680,6 +686,11 @@ services:
       # calls auth-service (F-093-c) — so the same origin, and the service
       # refuses to boot without one when NODE_ENV=production.
       - FRONTEND_ORIGIN=https://panel.${DOMAIN_NAME}
+      # The platform's own processes on the internal seam (F-092-k): the
+      # worker's expiry tick proves itself with this and nothing else reaches
+      # `/api/internal/*`, which Traefik does not route at all. Empty closes
+      # the seam — and is refused when NODE_ENV=production.
+      - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
       # The app role, never the owner: RLS does not bind a table's owner
       # (F-066-m-a). Every gated route reads the tenant forward-auth forwards
       # (F-092-a) and uses this pool.

@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 7
+version: 8
 updated: 2026-09-12
 ---
 
@@ -89,8 +89,8 @@ shown.
 | The callback is `https://<the tenant's own panel domain>/api/billing/deposit/callback` — a proven custom domain first, else the platform subdomain, read from `tenant_domain` and never from a request header. No such domain is a refusal (**503**), not a guess | ADR-0020: the callback route is public and resolved by Host (F-092-j), so a reseller's customer must come back to the brand they paid on. `PAYMENT_CALLBACK_ORIGIN` overrides it with one origin for every tenant — dev and test only |
 | `amount` is base currency, as on a quote, and is converted for the gateway exactly once, inside `priceAtGateway` | the legacy `amount * 10` toman→rial step ran in the browser; the display-currency step is F-025's |
 
-**Not covered:** expiring a pending payment is F-092-k's. Nothing in the panel
-calls `start` yet (F-093-e).
+**Not covered:** nothing in the panel calls `start` yet (F-093-e). Expiring a
+pending payment is below.
 
 ## Settling the payment (built — F-092-j)
 
@@ -137,3 +137,29 @@ page rather than the envelope every other route answers.
 route only names the paths and the codes. Nothing tells the panel a balance
 changed in real time: the outbox event has no consumer, and
 `panel-web/contract.shell.md` still says so.
+
+## Expiring what nobody came back for (built — F-092-k)
+
+`DepositExpiryService` + `DepositInternalController` in
+`billing-service/src/app/payment/deposit/`, run by `worker-service`'s
+`DepositExpiryJob` (`domains/automation/contract.worker.md`).
+
+`start` writes a `pending` payment holding a slot of every coupon it applied,
+and the callback settles the ones a payer came back for. This is the rest: a
+tab closed at the bank, an authority nobody used. Without it every abandoned
+top-up holds somebody else's coupon capacity for ever.
+
+| Rule | Why |
+|---|---|
+| `POST /api/internal/billing/deposit/expire-pending`, behind `ServiceOnlyGuard` (`SERVICE_AUTH_TOKEN`) — no gate, no identity, no tenant, and not under Traefik's `/api/billing` router | the caller is a process, not a person. `automation` owns *when*; the rules are billing's, and an Nx app cannot import an Nx app. A refusal is a neutral 404, like every internal seam |
+| The **scan** is cross-tenant, every **write** is scoped: one `tenantTransaction` per tenant | which tenants have a due payment is what the sweep is looking for, so the read cannot run inside one — and on the app pool RLS would answer nothing at all. This is the second `CrossTenantPrismaService` reader in this service; `grep -rn CrossTenantPrismaService` is still the audit |
+| **The flip is the guard**, exactly as the callback's: `updateMany({ id, status: pending, expiresAt <= now })`, and the release hangs off its `count` | a bank can confirm a payment between the scan and the write. Releasing a confirmed use's hold would give back capacity that is spent. It is also what makes the sweep safe to run twice, which an at-least-once tick (ADR-0027) requires |
+| Holds are released **`expired`**, never `cancelled` | nothing failed; the clock ran out. `close()` owns the other word, and `coupon_redemption` stays able to tell an abandoned payment from a refused one |
+| The row **stays**, and so does its `expiresAt` | legacy expired a payment by deleting it and its locks on two Mongo TTLs, losing the attempt from the audit trail. F-092-l inquires an expired payment at the gateway, and *when we stopped waiting* is part of what a mismatch is judged on — so this is the one non-`pending` status that keeps a clock |
+| One batch per run, `PAYMENT_EXPIRY_BATCH_SIZE` (default 200), oldest first; one `now` for the scan and every guard under it | a backlog drains in bounded transactions and the next tick takes the next batch. A shared `now` stops a row that was due at read time being spared by the clock moving |
+| A due row with **no `tenantId`** is counted and logged `error`, not swept | the app pool cannot write it — RLS scopes by that column. `withTenant` makes it impossible on create, so one appearing is a schema fault, and a quiet zero would hide it |
+
+**Not covered:** a payment the gateway may still have taken money for. This job
+only reads a clock — it asks no gateway anything, and an `expired` row is not a
+statement that nothing was paid. Inquiring one is F-092-l's, and invariant 9
+stands: never auto-reverse, and never auto-close on silence.

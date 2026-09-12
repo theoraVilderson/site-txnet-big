@@ -94,6 +94,18 @@ export const envSchema = z.object({
    */
   FRONTEND_ORIGIN: z.string().default(''),
 
+  /**
+   * The platform's own processes, proving themselves to the internal seam
+   * (`ServiceOnlyGuard`, ADR-0011). `worker-service`'s expiry tick is the only
+   * caller today (F-092-k).
+   *
+   * Empty closes the seam rather than opening it: the guard answers 404 to
+   * everything, which is the safe direction but also a sweep that silently
+   * never runs — so it is **required in production**, like `FRONTEND_ORIGIN`
+   * above and for the mirror-image reason.
+   */
+  SERVICE_AUTH_TOKEN: z.string().default(''),
+
   /** The envelope's translator (`locale/locale.service.ts`). */
   LOCALE_SERVICE_ADDR: z.string().min(1).default('localhost:50051'),
   LOCALE_SCOPE: z.string().min(1).default('backend'),
@@ -144,6 +156,17 @@ export const envSchema = z.object({
   ),
 
   /**
+   * How many due payments one expiry sweep takes (F-092-k). The sweep is a
+   * queue consumer's run, not a request: a bound exists so that a backlog
+   * drains in bounded transactions rather than one long one, and the next tick
+   * takes the next batch. Oldest first, so nothing is starved.
+   */
+  PAYMENT_EXPIRY_BATCH_SIZE: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().positive().default(200),
+  ),
+
+  /**
    * One callback origin for every tenant, instead of the tenant's own panel
    * domain (F-092-i). Development and test only: no tenant owns a host a
    * gateway's sandbox can reach, and `https://<domainValue>` would send the
@@ -181,6 +204,9 @@ export const envSchema = z.object({
 }).refine((env) => !(env.NODE_ENV === 'production' && env.PAYMENT_GATEWAY_SANDBOX), {
   message: 'PAYMENT_GATEWAY_SANDBOX=true is refused when NODE_ENV=production',
   path: ['PAYMENT_GATEWAY_SANDBOX'],
+}).refine((env) => !(env.NODE_ENV === 'production' && !env.SERVICE_AUTH_TOKEN), {
+  message: 'SERVICE_AUTH_TOKEN is required when NODE_ENV=production: without it every internal call is refused and the expiry sweep never runs',
+  path: ['SERVICE_AUTH_TOKEN'],
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

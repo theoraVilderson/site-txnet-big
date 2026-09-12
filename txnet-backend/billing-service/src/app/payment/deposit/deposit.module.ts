@@ -8,6 +8,8 @@ import { FxRateReader } from '../pricing/fx-rate.reader';
 import { DepositCallbackController } from './deposit-callback.controller';
 import { DepositCallbackService } from './deposit-callback.service';
 import { DepositController } from './deposit.controller';
+import { DepositExpiryService } from './deposit-expiry.service';
+import { DepositInternalController } from './deposit-internal.controller';
 import { DepositQuoteService } from './deposit-quote.service';
 import { DepositStartService } from './deposit-start.service';
 
@@ -22,11 +24,15 @@ import { DepositStartService } from './deposit-start.service';
  * first because it is the only **public** one on this service — see its own
  * doc comment, and `app.module.ts` for the middleware that stands in for the
  * gate on it.
+ *
+ * `DepositInternalController` is a third, for the mirror-image reason: it is
+ * the only **service-to-service** one, reached by `worker-service`'s expiry
+ * tick (F-092-k) and by nothing from the edge at all.
  */
 @Module({
   imports: [LocaleModule, CouponModule, GatewayModule, WalletModule],
-  controllers: [DepositController, DepositCallbackController],
-  providers: [DepositQuoteService, DepositStartService, DepositCallbackService, FxRateReader],
-  exports: [DepositQuoteService, DepositStartService, DepositCallbackService],
+  controllers: [DepositController, DepositCallbackController, DepositInternalController],
+  providers: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositExpiryService, FxRateReader],
+  exports: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositExpiryService],
 })
 export class DepositModule {}

@@ -270,6 +270,18 @@ export const envSchema = z.object({
   BOT_API_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
 
   /**
+   * The third end of that seam: `billing-service`, which owns what an expired
+   * top-up is — the coupon reservation functions, the tenant-scoped pool and
+   * the cross-tenant one (F-092-k, `DepositExpiryJob`). Optional for the same
+   * reason as the two above, and it shares `SERVICE_AUTH_TOKEN`: the token says
+   * which process is calling and never which user, so one platform credential
+   * opens every internal door and none of them widen what a caller may do.
+   */
+  BILLING_API_BASE_URL: optional(z.string()),
+  /** How long the expiry sweep may take. One bounded batch of small writes. */
+  BILLING_API_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+
+  /**
    * Which USDT/IRT order books the FX worker polls (F-0603), by `FxSource.key`
    * — `nobitex,tabdeal,wallex,bitpin`.
    *

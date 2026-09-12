@@ -9,6 +9,7 @@ import { TenantRunLeases } from './tenant-run.leases';
 import { JOBS, Job } from './job';
 import { HeartbeatJob } from '../jobs/heartbeat.job';
 import { VaultRetentionJob } from '../jobs/vault-retention.job';
+import { DepositExpiryJob } from '../jobs/deposit-expiry.job';
 import { OutboxRelayJob } from '../jobs/outbox-relay.job';
 import { FxRateJob } from '../jobs/fx-rate.job';
 import { FxRatePoller } from '../currency/fx-rate.poller';
@@ -30,13 +31,14 @@ import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
   providers: [
     HeartbeatJob,
     VaultRetentionJob,
+    DepositExpiryJob,
     OutboxRelayJob,
     FxRatePoller,
     FxRateSnapshotStore,
     FxRateJob,
     {
       provide: JOBS,
-      inject: [HeartbeatJob, VaultRetentionJob, OutboxRelayJob, FxRateJob],
+      inject: [HeartbeatJob, VaultRetentionJob, DepositExpiryJob, OutboxRelayJob, FxRateJob],
       useFactory: (...jobs: Job[]) => jobs,
     },
     WorkerRegistryService,

@@ -2,8 +2,8 @@
 id: automation
 layer: domain
 status: active
-version: 6
-updated: 2026-09-10
+version: 7
+updated: 2026-09-12
 ---
 
 # Contract — automation: the worker half
@@ -66,6 +66,7 @@ Why each of those is the answer — and what a Redis that cannot be reached does
 |---|---|---|
 | `worker_heartbeat` | nothing, and records that it did — the proof the tick path is alive | — |
 | `vault_credential_retention` | destroys superseded credential versions past their rotation grace window (ADR-0026 rule 4) | `AUTH_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
+| `deposit_pending_expiry` | expires `pending` top-ups past their `expiresAt` and gives the coupon holds they took back (F-092-k, `domains/billing/contract.deposit.md`) | `BILLING_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 
 The retention job is the first job that does real work, and what it settled is
 how a job reaches code it cannot import.
@@ -84,6 +85,20 @@ process that owns one to act, and never handles the value.
 whose seam is unconfigured fails its own run into `bot_execution_log` and every
 other job keeps running; requiring them at boot would stop the consumer
 draining the queue because one job's dependency is missing.
+
+**A job is registered; it is not scheduled.** `WorkerRegistryService` upserts a
+`bot_worker` row on boot, and the publisher ticks a job only for the
+`bot_schedule` rows an operator set through `/admin/workers` (F-031-b). A new
+job therefore runs never until somebody schedules it — which is a deliberate
+default for a sweep that writes, and the first thing to check when one appears
+to do nothing.
+
+**One token opens every internal door, and widens nothing.** `SERVICE_AUTH_TOKEN`
+says which *process* is calling and never which user, so the expiry job reuses
+the credential the retention job already holds rather than introducing a second
+one. The guard behind it is `shared-core`'s `ServiceOnlyGuard` since F-092-k;
+`auth-service`'s own class of that name is its security middleware's other half,
+and `bot-service`'s is a third copy that should collapse into the shared one.
 
 **A job never succeeds quietly.** An unreachable service, a guard's 404 and an
 answer in a shape the job does not recognise are each indistinguishable from
