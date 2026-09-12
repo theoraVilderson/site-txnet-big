@@ -2,7 +2,7 @@
 id: currency
 layer: domain
 status: active
-version: 2
+version: 3
 keywords: [currency, exchange rate, fx, display currency, usd rate, rial rate, dollar price, usdt, order book, exchange]
 source:
   - txnet-backend/worker-service/src/app/currency/**
@@ -38,5 +38,6 @@ billing-service's and not `billing`'s.
 | 2026-09-12 | `draft` -> `active`: first code (F-0603, the FX worker's poll step) |
 | 2026-09-12 | `contract.fx-worker.md` v2 — F-0604: the discard/quorum/median step. Still publishes no rate |
 | 2026-09-12 | `contract.fx-worker.md` v3 — F-0605: the deviation gate and its critical alert (`dev-docker/monitoring/config-dev/currency.rules.yml`). Still publishes no rate; the baseline is in the job's memory until F-0606 |
+| 2026-09-12 | `contract.fx-worker.md` v4 — F-0606-a: **the unit publishes**. An accepted rate is an append-only `currency_exchange_rate` row cached under `fx:rate:{code}` (no TTL — F-0607-a's ladder reads its age), and the deviation baseline moved out of the job's memory into it. First published interface, so the Consumers section is no longer empty |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

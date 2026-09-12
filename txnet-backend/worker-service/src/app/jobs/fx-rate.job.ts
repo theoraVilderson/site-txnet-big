@@ -5,33 +5,35 @@ import { Job, JobResult } from '../automation/job';
 import { accepted, gateFxDeviation } from '../currency/fx-rate.gate';
 import { answered, FxRatePoller } from '../currency/fx-rate.poller';
 import { reduceFxReads, reduced } from '../currency/fx-rate.reducer';
+import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
 import { FxSource, fxSourcesByKey } from '../currency/fx-source';
 
 /**
- * F-0603 / F-0604 / F-0605 — the FX worker, **off the request path** and
+ * F-0603 / F-0604 / F-0605 / F-0606-a — the FX worker, **off the request
+ * path** and
  * nowhere near it.
  *
- * Steps 1 to 3 of the catalog's five-step loop: every active source queried
+ * Steps 1 to 4 of the catalog's five-step loop: every active source queried
  * concurrently with a three-second timeout (F-0603, `FxRatePoller`), then the
  * failures and the values outside the hard band discarded, `minSources`
  * required to remain, and the **median** taken (F-0604, `reduceFxReads`), then
- * a move beyond `maxDeviationPercent` refused (F-0605, `gateFxDeviation`).
- * Steps 4-5 are F-0606 (write the snapshot and cache it in Redis).
+ * a move beyond `maxDeviationPercent` refused (F-0605, `gateFxDeviation`), and
+ * then — F-0606-a, `FxRateSnapshotStore` — an append-only snapshot written and
+ * the rate cached under `fx:rate:{code}`. Step 5 is F-0606-b, in `billing`.
  *
- * **So this job computes and gates a rate but still publishes nothing.**
- * Nothing reads a rate from this unit until F-0606 writes the snapshot and the
- * cache entry; until then an accepted median is a number in a run log.
+ * **So this job now publishes.** An accepted median stops being a number in a
+ * run log and becomes a `currency.CurrencyExchangeRate` row with an id, which
+ * is the row ADR-0019 requires before anything can be priced in rial.
  *
- * **The baseline the gate compares against lives in this object, and only
- * until F-0606.** A rejected reading never becomes it — that is the whole
+ * **The baseline the gate compares against is that snapshot, not this
+ * object's memory.** A rejected reading never becomes it — that is the whole
  * security of the gate, because a baseline that moved on a refusal could be
- * walked anywhere in 5% steps. In memory means a restart is a cold start and
- * the first poll after it is ungated, and it means two replicas gate against
- * their own histories rather than a shared one. Both are real holes and both
- * close in F-0606, which gives the last accepted rate a durable home in
- * `currency.CurrencyExchangeRate` and `fx:rate:{code}`; until that row exists
- * there is nowhere else for it to be, and a gate that only works after a boot
- * settles is worth more than no gate.
+ * walked anywhere in 5% steps. Holding it in memory meant a restart was a cold
+ * start (and the first poll after one ungated), and that two replicas gated
+ * against their own histories; both closed here, because
+ * `FxRateSnapshotStore.lastAccepted` reads one shared, durable value. It is
+ * read at the top of every run rather than cached in a field on purpose: a
+ * field would reintroduce the per-replica history this row removed.
  *
  * The run log is the other half of the point: a `bot_execution_log` row per run
  * saying which sources answered, what each of them said, which were discarded
@@ -52,8 +54,13 @@ import { FxSource, fxSourcesByKey } from '../currency/fx-source';
  * change: `AUTOMATION_TICK_INTERVAL_MS` defaults to 60s, so a five-minute
  * occurrence is found by the publisher well inside its own interval.
  *
- * **Safe to run twice** (the `Job` contract): it reads four public endpoints
- * and writes nothing.
+ * **Safe to run twice** (the `Job` contract), in the sense that matters: a
+ * second run writes a second snapshot rather than corrupting the first, and
+ * that snapshot is a genuine second reading of the market. The rate table is a
+ * history of what was quoted and when, not a set of distinct values, so a
+ * duplicate reading is a row and not a conflict — and the second run's gate
+ * compares against the first, so an accidental double tick cannot move the
+ * rate any further than one tick could.
  *
  * **It does not succeed quietly.** A poll where every source failed returns the
  * same "0 processed" shape as a poll of an empty source list, and both look
@@ -73,21 +80,15 @@ export class FxRateJob implements Job {
   readonly key = 'fx_rate_refresh';
   readonly name = 'FX rate refresh';
   readonly description =
-    'Queries every active USDT/IRT order book concurrently with a 3s timeout (F-0603), discards failures and out-of-band values, takes the median of at least minSources (F-0604), and refuses a move beyond FX_MAX_DEVIATION_PERCENT since the last accepted rate (F-0605). Does not publish the rate yet — F-0606 caches it.';
+    'Queries every active USDT/IRT order book concurrently with a 3s timeout (F-0603), discards failures and out-of-band values, takes the median of at least minSources (F-0604), refuses a move beyond FX_MAX_DEVIATION_PERCENT since the last accepted rate (F-0605), and writes an append-only snapshot cached under fx:rate:{code} (F-0606-a).';
   readonly category = BotWorkerCategory.data_aggregation;
 
   private readonly logger = new Logger(FxRateJob.name);
 
-  /**
-   * The last rate this process accepted — F-0605's baseline, and nothing else.
-   * Null until the first accepted poll, which is what makes a cold start
-   * ungated. **Assigned only on the accepted branch**; see the class comment.
-   */
-  private lastAccepted: Prisma.Decimal | null = null;
-
   constructor(
     private readonly config: ConfigService,
     private readonly poller: FxRatePoller,
+    private readonly snapshots: FxRateSnapshotStore,
   ) {}
 
   async run(): Promise<JobResult> {
@@ -121,9 +122,11 @@ export class FxRateJob implements Job {
     if (!reduced(reduction))
       throw new Error(`no FX rate this poll: ${reduction.reason}`);
 
+    // The baseline, read fresh from the shared store every run. Not held in a
+    // field: a field is the per-replica history F-0606-a exists to remove.
     const gated = gateFxDeviation(
       reduction.rialPerUsdt,
-      this.lastAccepted,
+      await this.snapshots.lastAccepted(),
       this.maxDeviationPercent(),
     );
 
@@ -157,7 +160,9 @@ export class FxRateJob implements Job {
       };
     }
 
-    this.lastAccepted = gated.rialPerUsdt;
+    // Step 4. The snapshot is written before anything claims the rate is live,
+    // and it is what the *next* run's baseline will be read from.
+    const published = await this.snapshots.publish(gated.rialPerUsdt);
 
     this.logger.log(
       `${reduction.used.length}/${sources.length} source(s) used, ` +
@@ -165,16 +170,21 @@ export class FxRateJob implements Job {
         (gated.deviationPercent === null
           ? ' (cold start — no deviation gate)'
           : ` (${gated.deviationPercent.toString()}% move)`) +
-        ': ' +
+        `, snapshot ${published.snapshot.id}: ` +
         reads.map((o) => `${o.source}=${o.rialPerUsdt.toString()}`).join(' '),
     );
 
     return {
       itemsProcessed: reduction.used.length,
-      errorsCount: reduction.discarded.length,
+      // A snapshot that is durable but uncached is a degraded run, not a
+      // healthy one: every reader goes to the table until the next poll
+      // rewrites the key, and nothing else would ever say so.
+      errorsCount: reduction.discarded.length + (published.cached ? 0 : 1),
       metrics: {
         ...metrics,
         accepted: true,
+        snapshotId: published.snapshot.id,
+        cached: published.cached,
         deviationPercent:
           gated.deviationPercent === null
             ? null

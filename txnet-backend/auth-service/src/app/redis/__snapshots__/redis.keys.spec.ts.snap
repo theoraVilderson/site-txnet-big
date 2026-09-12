@@ -29,6 +29,7 @@ exports[`RedisKeys — key catalogue > exposes a builder for every key family, a
   "botLinkToken",
   "captchaChallenge",
   "captchaVerified",
+  "fxRate",
   "otpChannel",
   "otpCode",
   "otpCooldown",

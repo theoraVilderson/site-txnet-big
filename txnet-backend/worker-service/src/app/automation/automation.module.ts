@@ -12,6 +12,7 @@ import { VaultRetentionJob } from '../jobs/vault-retention.job';
 import { OutboxRelayJob } from '../jobs/outbox-relay.job';
 import { FxRateJob } from '../jobs/fx-rate.job';
 import { FxRatePoller } from '../currency/fx-rate.poller';
+import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
 
 /**
  * Adding a job is two lines here and one new class: the class itself, and its
@@ -31,6 +32,7 @@ import { FxRatePoller } from '../currency/fx-rate.poller';
     VaultRetentionJob,
     OutboxRelayJob,
     FxRatePoller,
+    FxRateSnapshotStore,
     FxRateJob,
     {
       provide: JOBS,

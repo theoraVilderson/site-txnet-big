@@ -349,6 +349,20 @@ export const envSchema = z.object({
    */
   FX_MAX_DEVIATION_PERCENT: z.string().min(1).default('5'),
 
+  /**
+   * F-0606-a — which `currency.code` the worker's snapshots and its
+   * `fx:rate:{code}` cache entry are written against.
+   *
+   * Config rather than a constant for the same reason `FX_SOURCES` is: the
+   * currency a platform quotes in is a deployment's fact, not this code's. It
+   * names a row that must already exist — the worker will not create one,
+   * because a `currency` row carries `isBaseCurrency` and `decimalPlaces` and a
+   * background job guessing at those is how a platform acquires a second base
+   * currency (currency invariant #1). A code with no row is a failed run that
+   * says so.
+   */
+  FX_QUOTE_CURRENCY_CODE: z.string().min(1).default('IRR'),
+
   /** Optional label in every log line, for a deployment running several. */
   WORKER_NAME: optional(z.string()),
 });

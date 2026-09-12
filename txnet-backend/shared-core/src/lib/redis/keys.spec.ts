@@ -63,6 +63,7 @@ describe('the key catalogue', () => {
       tenantByHost: UnscopedRedisKeys.tenantByHost('myvpn.com'),
       tenantById: UnscopedRedisKeys.tenantById('tenant-1'),
       tenantRuns: UnscopedRedisKeys.tenantRuns('tenant-1'),
+      fxRate: UnscopedRedisKeys.fxRate('IRR'),
     }).toMatchSnapshot();
   });
 

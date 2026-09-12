@@ -164,6 +164,25 @@ export const UnscopedRedisKeys = {
    * is the only thing that knows whose work this is.
    */
   tenantRuns: (tenantId: string) => `automation:tenant-runs:${tenantId}`,
+
+  /**
+   * The rate the FX worker last accepted for one currency, cached from the
+   * `currency.CurrencyExchangeRate` snapshot that backs it (F-0606-a).
+   *
+   * **Unscoped because a rate is the platform's, not a reseller's.** Every
+   * tenant prices against the same USD→IRR reading; a per-tenant segment would
+   * mean N polls of the same four order books and N different answers to one
+   * question about the world.
+   *
+   * The value is the snapshot, not the number: `{snapshotId, currencyCode,
+   * rate, source, effectiveAt}`. `snapshotId` is what F-0606-b records on a
+   * quoted price, and `effectiveAt` is what F-0607-a's staleness ladder reads —
+   * which is also why this key is written **without a TTL**. An expiry would
+   * delete the evidence the ladder is made of and turn a rate the ladder would
+   * have called degraded into no rate at all, silently and at the worst moment.
+   * The snapshot row is the truth; a miss here is answered from the table.
+   */
+  fxRate: (currencyCode: string) => `fx:rate:${currencyCode}`,
 } as const;
 
 /**
