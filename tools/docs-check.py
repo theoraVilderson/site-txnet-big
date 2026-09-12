@@ -10,6 +10,13 @@ Checks:
   6. open-questions rows without a date
   7. every unit is reachable from MASTER_INDEX.md
   8. every path a doc *claims* points at real code actually exists
+
+`--room [path ...]` prints how many lines each capped doc file has left instead
+of checking anything. Ask it *before* writing prose into a contract, not after:
+the ceiling is the cheapest rule in this repo to satisfy early and the most
+expensive to satisfy late — trimming a finished 290-line contract back to 250
+cost one session a dozen edit-and-recount rounds, and every one of them risked
+cutting a decision rather than a word.
 """
 import os
 import re
@@ -240,7 +247,47 @@ def check_claimed_paths():
                             f"exist — this table is what a DIAGNOSE session opens first")
 
 
+def room(paths: list[str]) -> int:
+    """How many lines each capped doc file has left. See the module docstring.
+
+    It measures each file exactly the way the check above measures it —
+    `body_lines` for an INDEX (front matter is not counted), the raw file for a
+    contract — because a budget that disagrees with the checker is worse than
+    no budget: it is read as permission.
+    """
+    if paths:
+        targets = [Path(p) if Path(p).is_absolute() else ROOT / p for p in paths]
+    else:
+        targets = []
+        for d in unit_dirs():
+            targets.append(d / "INDEX.md")
+            targets += [d / "contract.md"] + sorted(d.glob("contract.*.md"))
+
+    worst = 0
+    for f in targets:
+        if not f.exists():
+            if paths:
+                print(f"missing  {f}")
+                worst = 1
+            continue
+        if f.name == "INDEX.md":
+            cap, n = MAX_INDEX_LINES, body_lines(f)
+        else:
+            cap, n = MAX_CONTRACT_LINES, len(f.read_text(encoding="utf-8").splitlines())
+        left = cap - n
+        flag = "OVER" if left < 0 else ("tight" if left < 20 else "ok")
+        if paths or left < 20:
+            print(f"{flag:>5}  {n:>4}/{cap}  {left:>+5}  {f.relative_to(ROOT)}")
+    if not paths:
+        print("\n(only files with under 20 lines left are shown; pass paths for all)")
+    return worst
+
+
 def main() -> int:
+    if "--room" in sys.argv:
+        i = sys.argv.index("--room")
+        return room(sys.argv[i + 1:])
+
     units, tmpl = {}, re.compile(r"_TEMPLATE")
 
     groups = set()

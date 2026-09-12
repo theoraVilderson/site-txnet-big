@@ -182,6 +182,23 @@ already by `docs/CODE-LAYOUT.md` "Order of work", and repeated here because it i
 a speed rule as much as a correctness one: code written against a failing target
 is faster than code you go back and test.
 
+**9. Ask how much room a doc has before writing prose into it, not after.**
+`docs-check.py` caps a contract at 250 lines and an INDEX body at 40, and the
+cap is checked at the end — so a finished 290-line contract turns into a dozen
+rounds of trim-and-recount, each one a chance to cut a decision instead of a
+word. One command, and it counts exactly the way the checker counts:
+
+```bash
+python3 tools/docs-check.py --room docs/domains/<unit>/contract.<topic>.md
+```
+
+With no paths it lists every capped file with under 20 lines left — which is
+most of them, because this is a mature docs tree. **If the room is less than
+what you are about to write, that is the signal to open a
+`contract.<topic>.md`, not to write small.** Deciding that first costs one
+command; deciding it after costs the dozen rounds *and* leaves compressed prose
+behind. Measured 2026-09-12 on F-0606-a, which is where the dozen rounds went.
+
 **Where this still leaks:** one session read ~74 KB of `00-PROTOCOL.md`,
 `CODE-LAYOUT.md` and `CONVENTIONS.md` whole where a slice would have done.
 `brief.py` prints §6b and the `C-nn` ids in play; it does not yet print the
@@ -329,6 +346,17 @@ cd txnet-backend && { npm test > /tmp/test.log 2>&1 & \
 Note the braces. `cd X && (A) & (B) &` binds the `cd` to the **first** subshell
 only, and the second command then runs in the wrong directory and reports
 `Missing script` — which reads exactly like a repo problem and is not one.
+
+**Spend 50 seconds before that pair, not 180 after it.** Narrowing while
+iterating only covers the project you are editing, so a shared file's blast
+radius arrives in the end-of-item run — and a failed pair costs ~180s to learn
+one thing. `grep -rln "toMatchSnapshot"` over the directories your change
+reaches is **0.01s** and names every other project that enumerates what you
+touched; running those specs and one `tsc -p <project>/tsconfig.spec.json` is
+~40s. Measured 2026-09-12 (F-0606-a: one key added to `shared-core`, two red
+snapshots in two projects that were never edited, plus a type error in the new
+spec — all three found by the wasted pair). The table is in
+`docs/CODE-LAYOUT.md` "Running them without burning the session".
 
 **Do not add a third suite to that pair.** `site-pwa`'s vitest alongside the
 workspace's seven projects oversubscribes the machine: ~130 files fail that pass

@@ -153,6 +153,26 @@ projects' 49 spec files were run by nobody. What that hid, on the day it was
 fixed: a red snapshot in `shared-core` (a rate-limit bucket added without its
 snapshot updated).
 
+**Before the run that says done, spend 50 seconds on the fan-out.** Narrowing
+while iterating only covers the project you are editing, so the end-of-item pair
+is where a *shared* file's blast radius arrives — and a pair that fails has cost
+~180s and bought one line of information. Measured 2026-09-12, on the item that
+added one key to `shared-core`'s catalogue:
+
+| step | cost | what it catches |
+|---|---|---|
+| `grep -rln "toMatchSnapshot" --include=*.spec.ts <the dirs your change reaches>` | **0.01s** | every other project that *enumerates* what you changed — three files here, in three projects, none of them the one being edited |
+| those specs, narrowed per project | **23s** | the two red snapshots the full pair found |
+| `npx tsc -p <project>/tsconfig.spec.json --noEmit` | **17s** | a type error in your own new spec — vitest transpiles without checking, so nothing else would |
+| the folder you edited | **8.5s** | the item's own work |
+
+That is ~49s against the ~180s of a pair that fails, and the confidence is
+identical: the whole pair still runs once, at the end, green. The rule
+generalises past snapshots — **ask who else reads the thing you changed before
+you ask the whole workspace.** A shared enum, a `shared-core` export or a
+generated constant all have this shape: the specs that break are never in the
+project you were editing, which is exactly why narrowing misses them.
+
 **`-t "<name>"` does not narrow anything.** vitest collects and transforms every
 file and *then* filters, so `-t Foo` costs a full run. Narrow by **path, inside
 one project**: `npx vitest run -c billing-service/vitest.config.mts <path>` is
