@@ -10,7 +10,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
-    "test": "vitest run -c auth-service/vitest.config.mts",
+    "typecheck": "bash scripts/typecheck.sh",
+    "test": "nx run-many -t test",
     "test:int": "vitest run -c auth-service/vitest.int.config.mts && vitest run -c billing-service/vitest.int.config.mts",
     "test:e2e": "vitest run -c auth-service-e2e/vitest.config.mts"
   },

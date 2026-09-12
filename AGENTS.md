@@ -218,10 +218,25 @@ python3 tools/conventions.py
 python3 tools/contracts.py
 ```
 
-All six must pass. For a change that touched TypeScript, so must
-`npx tsc -p auth-service/tsconfig.spec.json --noEmit` from `txnet-backend/` —
-vitest transpiles (SWC) without type-checking (`docs/CODE-LAYOUT.md`), so this is the
-only thing that type-checks the specs. `done` in the backlog means **code exists and is
+All six must pass. For a change that touched TypeScript, so must these two,
+from `txnet-backend/`:
+
+```bash
+npm test          # nx run-many -t test — all 7 unit projects, ~80s
+npm run typecheck # tsc --noEmit over all 16 tsconfigs, ~2m
+```
+
+**Run both whole; do not substitute one project for the workspace.** vitest
+transpiles through SWC without type-checking (`docs/CODE-LAYOUT.md`), so
+`typecheck` is the only thing that checks types at all — and a
+`tsconfig.spec.json` sees its spec files plus what they statically `import`,
+nothing more. Until 2026-09-12 this line named one project's tsconfig and `npm
+test` ran one project's specs; between them they missed 49 spec files and two
+type errors that broke `billing-service`'s build. Narrow **while iterating** by
+all means (`docs/CODE-LAYOUT.md` says how) — just not for the run that says
+done.
+
+`done` in the backlog means **code exists and is
 reachable** — not documented, not planned. Half-finished work stays `doing`
 with a note, never silently `done`.
 

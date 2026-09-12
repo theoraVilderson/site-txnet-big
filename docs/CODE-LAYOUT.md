@@ -117,13 +117,37 @@ Postgres and Redis (`fileParallelism: false`).
 vitest transpiles through SWC (`txnet-backend/vitest.shared.mts`) and does
 **not** type-check. SWC rather than vite's default transformer, because Nest's
 injection needs `emitDecoratorMetadata`. The type check is not gone, it moved —
-`npx tsc -p auth-service/tsconfig.spec.json --noEmit`, once, before an item is
-declared done (`AGENTS.md`).
+**`npm run typecheck`**, once, before an item is declared done (`AGENTS.md`).
 
-**`-t "<name>"` does not narrow anything.** vitest collects and transforms all
-46 files and *then* filters, so `npm test -t Foo` costs a full run (~39s).
-Narrow by **path**: `npx vitest run -c auth-service/vitest.config.mts <path>`
-is ~11s for one unit's folder. Run the paths you touched while iterating, and
+That script (`txnet-backend/scripts/typecheck.sh`) runs `tsc --noEmit` over
+every `tsconfig.{app,lib,spec}.json` it can glob — 16 of them, eight at a time,
+~2m (serially it is 5m; `TYPECHECK_JOBS` tunes the pool). It has to be one run
+per config: a `tsconfig.spec.json` pulls in its spec files plus what they
+statically `import` and nothing else, so **no project sees the workspace**.
+`*-e2e` is in the list because type-checking a spec is not running it.
+
+While iterating, check the one project you are editing —
+`npx tsc -p billing-service/tsconfig.app.json --noEmit`, ~20s — and run the
+whole thing at the end. A dynamic `import()` with a computed path is invisible
+to all of it: that is why `billing-service` shipped two type errors in a
+controller no spec imported.
+
+**`npm test` is `nx run-many -t test`** — all **seven** unit projects
+(auth-service, billing-service, bot-service, gateway-service, messenger,
+shared-core, worker-service), 93 files, ~1713 tests, ~80s. The project list is
+Nx's, inferred from each `vitest.config.mts` by the `@nx/vitest` plugin in
+`nx.json`, which excludes the two `*-e2e` directories — so a new project joins
+the run the day it gets a config, and the e2e tier still never runs unasked.
+
+Until 2026-09-12 this script ran `auth-service` alone, and the other six
+projects' 49 spec files were run by nobody. What that hid, on the day it was
+fixed: a red snapshot in `shared-core` (a rate-limit bucket added without its
+snapshot updated).
+
+**`-t "<name>"` does not narrow anything.** vitest collects and transforms every
+file and *then* filters, so `-t Foo` costs a full run. Narrow by **path, inside
+one project**: `npx vitest run -c billing-service/vitest.config.mts <path>` is
+~10s for one unit's folder. Run the paths you touched while iterating, and
 `npm test` once at the end.
 
 **Narrow the e2e run the same way — by path, to the files the change can

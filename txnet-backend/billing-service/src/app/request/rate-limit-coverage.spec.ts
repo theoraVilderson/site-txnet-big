@@ -20,6 +20,18 @@ import { RATE_LIMIT_KEY, RateLimitOptions } from '@txnet-backend/shared-core';
 
 import { envSchema } from '../config/env.validation';
 
+/**
+ * This file imports every controller for real, which pulls in its whole Nest
+ * module graph — far more work than vitest's 5s default allows once `npm test`
+ * runs the seven backend projects side by side and the CPU is contended. It
+ * was under that default until 2026-09-12 and failed intermittently the day
+ * the runner started covering more than one project.
+ *
+ * The budget is deliberately loose: nothing here is timing-sensitive, so the
+ * only thing a tight timeout can catch is the machine being busy.
+ */
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+
 const APP = join(__dirname, '..');
 const EXEMPT = new Set(['HealthController']);
 
