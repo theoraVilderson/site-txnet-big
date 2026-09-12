@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { authApi, type SwitchGroup } from "@/lib/auth-api";
 import { miniAppHost } from "@/lib/mini-app";
 import { AUTH_LOGIN } from "@/lib/routes";
+import { currentReturnPath, rememberReturnTo } from "@/lib/return-to";
 
 type PanelSession = {
   /** null while the session is still being established. */
@@ -63,6 +64,12 @@ export function PanelSessionProvider({ children }: { children: ReactNode }) {
       } catch {
         // Expired, revoked, or never signed in — all one answer. `replace`, so
         // the panel is not reachable with Back.
+        //
+        // Where they were going is remembered first (F-093-i, ADR-0042): this
+        // is the one place the panel discovers it has no session, so it is the
+        // one place that still knows the destination. The login screen hands it
+        // back; a path that is not this origin's is dropped there and here.
+        rememberReturnTo(currentReturnPath());
         router.replace(AUTH_LOGIN);
       } finally {
         if (alive) setIsLoading(false);

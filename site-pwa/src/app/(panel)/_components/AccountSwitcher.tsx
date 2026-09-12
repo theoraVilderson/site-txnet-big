@@ -16,6 +16,7 @@ import { authApi } from "@/lib/auth-api";
 import { useLocale } from "@/context/LocaleContext";
 import { usePanelSession } from "../_context/PanelSessionContext";
 import { PANEL_ACCOUNTS_ADD, AUTH_LOGIN } from "@/lib/routes";
+import { clearReturnTo } from "@/lib/return-to";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
@@ -320,6 +321,8 @@ export function AccountSwitcher() {
                       } catch {
                         // Already gone server-side is the same outcome.
                       }
+                      // Signing out on purpose, like `LogoutButton` (F-093-i).
+                      clearReturnTo();
                       router.replace(AUTH_LOGIN);
                     }}
                     className="rounded-lg bg-error px-3 py-1.5 text-xs font-bold text-white disabled:opacity-60"

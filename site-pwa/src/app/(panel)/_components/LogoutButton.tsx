@@ -8,6 +8,7 @@ import { authApi } from "@/lib/auth-api";
 import { useLocale } from "@/context/LocaleContext";
 import { usePanelSession } from "../_context/PanelSessionContext";
 import { AUTH_LOGIN } from "@/lib/routes";
+import { clearReturnTo } from "@/lib/return-to";
 
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
@@ -39,6 +40,9 @@ export function LogoutButton({ collapsed = false }: { collapsed?: boolean }) {
       // login screen, so a failed call must not strand the user here.
     }
     // replace, not push: the panel must not be reachable with Back.
+    // Leaving on purpose is not a bounce: there is no intent to come back
+    // to, and the next person to sign in on this tab must not inherit one.
+    clearReturnTo();
     router.replace(AUTH_LOGIN);
   };
 

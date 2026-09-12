@@ -87,9 +87,12 @@ These pages sit inside `(panel)`, so a session that expired during the trip to
 the bank is a login redirect and the query string is lost. The payment itself
 is unaffected — it settled before the redirect — and the reference is on the
 financial page. Making them public would mean a result page that cannot say
-whose payment it is, so the fix belongs at the guard instead: **F-093-i**, which
-teaches the login redirect to remember the path it bounced from. Nothing on
-these two pages changes when it lands.
+whose payment it is, so the fix belongs at the guard instead — and landed
+there: **F-093-i** (ADR-0042) teaches the login redirect to remember the path it
+bounced from, in `sessionStorage`, as a relative path and nothing else. A payer
+whose session expired at the bank now signs in and arrives back on this page,
+with the reference still on the query string. Nothing on these two pages
+changed.
 
 ## Proof
 

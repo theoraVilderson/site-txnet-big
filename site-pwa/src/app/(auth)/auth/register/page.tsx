@@ -27,7 +27,7 @@ import { useBotLink } from "@auth/auth/_hooks/useBotLink";
 import { useOtpDelivery } from "@auth/auth/_hooks/useOtpDelivery";
 import { authApi } from "@/lib/auth-api";
 import { OTP_LENGTH } from "@/lib/otp";
-import { PANEL_HOME } from "@/lib/routes";
+import { consumeReturnTo } from "@/lib/return-to";
 
 export default function RegisterPage() {
   const { t, isRtl, lang } = useAuthUI();
@@ -94,7 +94,7 @@ export default function RegisterPage() {
         }
       } else if (step === 2) {
         await authApi.verifyPhone(phone, otp);
-        setIsSuccess(true); router.replace(PANEL_HOME);
+        setIsSuccess(true); router.replace(consumeReturnTo());
       }
     } catch (error) {
       submitError.capture(error);

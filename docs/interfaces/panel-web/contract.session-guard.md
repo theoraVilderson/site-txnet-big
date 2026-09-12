@@ -2,14 +2,16 @@
 id: panel-web
 layer: interface
 status: active
-version: 9
+version: 10
 updated: 2026-09-12
 ---
 
 # panel-web — the auth-screen session guard (F-0101)
 
-Split out of [contract.md](contract.md) at 250 lines (§10). This is one
-self-contained rule with one implementation file, `src/proxy.ts`.
+Split out of [contract.md](contract.md) at 250 lines (§10). Two rules about
+one thing — who gets sent where when a session is or is not there: the
+server-side guard in `src/proxy.ts`, and since F-093-i what the *other*
+direction remembers, in `src/lib/return-to.ts`.
 
 ## Auth-screen session guard (F-0101)
 
@@ -114,3 +116,31 @@ holding the service token (`domains/tenant/contract.md`), and that token also
 satisfies the captcha gate and moves the rate-limit subject off the IP — more
 authority than a read-only session check should carry. A host is checked
 against verified domains and grants nothing else.
+
+## Return-to-intent on the login redirect (F-093-i, ADR-0042)
+
+The guard above sends a signed-in visitor *into* the panel. This is the
+opposite redirect — `PanelSessionProvider` and `PanelRealtimeProvider` sending
+a visitor with no session *out* to the login screen — and what it now
+remembers. `router.replace(AUTH_LOGIN)` carries no path, so before F-093-i a
+deep link that arrived without a live session was simply spent.
+
+| Rule | Why |
+|---|---|
+| The destination lives in **`sessionStorage`**, never in a query parameter on the login URL | the redirect is client-side and in the same tab, so a per-tab store is enough — and it keeps a payment reference out of a second URL, out of history and out of logs. A `?returnTo=` is forgeable from outside by construction (ADR-0042 rule 1) |
+| A stored destination is a **relative path and nothing else**: one leading `/`, never `//`, no backslash, no whitespace or control characters. Validated on the way in **and** on the way out | an open `returnTo` on a sign-in screen is the classic phishing vector — our domain in the address bar for the trust-establishing half of the trip. Anything that fails is dropped for the panel home, never corrected |
+| `/auth/*` is refused as a destination | it is same-origin and safe, and returning to it after signing in is only a loop |
+| The rule lives in **one module** (`lib/return-to.ts`); guards call `rememberReturnTo`, the three sign-in screens call `consumeReturnTo`, pages know nothing | the destination is lost at the guard, so a per-page fix would be the same rule written five times and forgotten in the sixth |
+| **Reading consumes it**, and a deliberate sign-out (`LogoutButton`, *sign out of all devices*) clears it | the next person to sign in on that tab must not land on the previous one's payment |
+| Every storage access is wrapped and a failure is not an error path | a private window or blocked site data degrades to the panel home, which is the behaviour before this existed |
+
+**This is a UX redirect, not a boundary.** The panel's Traefik router carries no
+`my-auth`; the real gate is on the API. Nothing here decides what anybody may
+see, which is why a forged destination is the only risk it adds — and rule 2 is
+the whole of the answer to it.
+
+**The proxy guard above cannot participate.** It runs before any script and
+cannot read the tab's storage, so a signed-in visitor who opens `/auth/login`
+is still sent to the panel home with a stored intent left behind. Bounded: the
+next bounce overwrites it, a sign-out clears it, and making it participate
+would mean putting the path back in the URL.

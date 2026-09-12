@@ -26,7 +26,7 @@ import { useOtpChannels } from "@auth/auth/_hooks/useOtpChannels";
 import { useBotLink } from "@auth/auth/_hooks/useBotLink";
 import { useOtpDelivery } from "@auth/auth/_hooks/useOtpDelivery";
 import { authApi } from "@/lib/auth-api";
-import { PANEL_HOME } from "@/lib/routes";
+import { consumeReturnTo } from "@/lib/return-to";
 import { OTP_LENGTH } from "@/lib/otp";
 
 /** 1 phone + method · "link" connect the messenger · 2 code · 3 new password */
@@ -96,7 +96,7 @@ export default function ForgotPasswordPage() {
         // form.
         await authApi.reset(resetToken, newPassword);
         setIsSuccess(true);
-        router.replace(PANEL_HOME);
+        router.replace(consumeReturnTo());
       }
     } catch (error) {
       submitError.capture(error);

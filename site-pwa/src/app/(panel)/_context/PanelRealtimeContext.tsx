@@ -12,6 +12,7 @@ import {
 import { useRouter } from "next/navigation";
 import { authApi } from "@/lib/auth-api";
 import { AUTH_LOGIN } from "@/lib/routes";
+import { currentReturnPath, rememberReturnTo } from "@/lib/return-to";
 import { createRealtimeClient, type RealtimeClient } from "@/lib/realtime";
 import { usePanelSession } from "./PanelSessionContext";
 
@@ -81,7 +82,11 @@ export function PanelRealtimeProvider({ children }: { children: ReactNode }) {
       // `401` no browser can see.
       credential: () => authApi.getAccessToken(),
       onSessionLost: () => {
-        if (alive) routerRef.current.replace(AUTH_LOGIN);
+        if (!alive) return;
+        // A session lost mid-visit bounces like one that was never there, and
+        // remembers the page it interrupted (F-093-i).
+        rememberReturnTo(currentReturnPath());
+        routerRef.current.replace(AUTH_LOGIN);
       },
       onCredentialRejected: () => {
         // The upgrade was refused before a socket existed. The client has
@@ -92,6 +97,7 @@ export function PanelRealtimeProvider({ children }: { children: ReactNode }) {
           // No cookie either. Retrying would ask a question already answered.
           if (!alive) return;
           socket.close();
+          rememberReturnTo(currentReturnPath());
           routerRef.current.replace(AUTH_LOGIN);
         });
       },

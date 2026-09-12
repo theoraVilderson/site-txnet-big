@@ -26,7 +26,7 @@ import { useOtpChannels } from "@auth/auth/_hooks/useOtpChannels";
 import { useBotLink } from "@auth/auth/_hooks/useBotLink";
 import { useOtpDelivery } from "@auth/auth/_hooks/useOtpDelivery";
 import { authApi } from "@/lib/auth-api";
-import { PANEL_HOME } from "@/lib/routes";
+import { consumeReturnTo } from "@/lib/return-to";
 import { OTP_LENGTH } from "@/lib/otp";
 
 type LoginMethod = "username" | "phone";
@@ -95,12 +95,12 @@ export default function LoginPage() {
             captcha.spend();
           }
           if ("requiresOtp" in result) { delivery.start(result); setLoginMethod("phone"); setStep(2); otpTimer.start(120); }
-          else { setIsSuccess(true); router.replace(PANEL_HOME); }
+          else { setIsSuccess(true); router.replace(consumeReturnTo()); }
         }
       } else if (step === 2) {
         await authApi.verifyLoginOtp(phone, otp);
         setIsSuccess(true);
-        router.replace(PANEL_HOME);
+        router.replace(consumeReturnTo());
       }
     } catch (error) {
       submitError.capture(error);
