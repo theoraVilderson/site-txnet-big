@@ -27,11 +27,16 @@ import {
  * messenger issues rather than we do, so it is identical across every
  * reseller's bots. `walletTransaction` joined with F-092-b — the first billing
  * model; `wallet` itself carries no `tenantId` and is reached through its owner.
+ * `paymentTransaction` joined with F-092-n, the first row to query it: its
+ * history list is filtered by a user id that arrives in a header, so without
+ * the scope a page would be one mis-set header away from another tenant's
+ * payments.
  */
 export const TENANT_SCOPED_MODELS = [
   'user',
   'linkedBotAccount',
   'walletTransaction',
+  'paymentTransaction',
 ] as const;
 
 export type TenantScopedModel = (typeof TENANT_SCOPED_MODELS)[number];

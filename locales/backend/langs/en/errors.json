@@ -153,6 +153,9 @@
     "amountInvalid": "Enter a valid amount.",
     "amountOutOfRange": "The amount is outside the range this gateway accepts.",
     "couponCodesInvalid": "The discount codes could not be read.",
+    "pageInvalid": "The page number or page size is not valid.",
+    "historyFilterInvalid": "The selected filters could not be read.",
+    "historyRangeInvalid": "The selected date range is not valid.",
     "coupon": {
       "notFound": "This discount code is not valid.",
       "notADiscount": "This is a gift code. Redeem it on the gift code page.",

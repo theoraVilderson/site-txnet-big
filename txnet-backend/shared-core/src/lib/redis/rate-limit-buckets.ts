@@ -84,6 +84,15 @@ export const RateLimitBucket = {
    */
   DEPOSIT_GATEWAYS: 'deposit:gateways',
   DEPOSIT_QUOTE: 'deposit:quote',
+
+  /**
+   * The financial page's two read routes in `billing-service` (F-092-n), per
+   * user. Cheaper per call than a quote — neither leaves the database — but the
+   * page refetches on every filter change, so the budget is the panel's own
+   * typing speed rather than a bank's limit.
+   */
+  WALLET_HISTORY: 'wallet:history',
+  WALLET_PAYMENTS: 'wallet:payments',
 } as const;
 
 export type RateLimitBucket =

@@ -3,16 +3,18 @@ id: billing
 layer: domain
 status: active
 version: 4
-updated: 2026-09-11
+updated: 2026-09-12
 ---
 
 # Contract — billing
 
-**Six things built** — the wallet credit/debit primitive (F-092-b), the
+**Seven things built** — the wallet credit/debit primitive (F-092-b), the
 gateway pricing calculator (F-092-e), the payment provider port (F-092-f),
-coupon validation (F-092-g) and coupon reservation (F-092-h), all below, and the
+coupon validation (F-092-g) and coupon reservation (F-092-h), all below, the
 deposit quote + gateway list routes (F-092-o) in
-**[contract.deposit.md](contract.deposit.md)** (§10). Every other row in *Provides* is still intent from
+**[contract.deposit.md](contract.deposit.md)**, and the wallet history +
+payment attempt routes (F-092-n) in
+**[contract.history.md](contract.history.md)** (both §10). Every other row in *Provides* is still intent from
 `txnet-backend/prisma/domains/billing.prisma`.
 
 ## Coupon reservation (built — F-092-h)
@@ -157,6 +159,7 @@ reserve/confirm state machine (built, F-092-h).
 |---|---|---|---|---|
 | credit / debit wallet — **built**, see above | tx, userId, amount, reasonType, referenceId | `wallet_transaction` + new `balanceAfter` | sync tx | insufficient funds, version conflict, invalid amount |
 | quote a deposit + list gateways — **built**, [contract.deposit.md](contract.deposit.md) | userId (header), gatewayId, amount, couponCodes[] | selectable gateways; the price breakdown + rejected codes | sync, read | gateway not found, amount out of range, gateway unavailable |
+| read the wallet history — **built**, [contract.history.md](contract.history.md) | userId (header), type / direction / date / search filters, page | the ledger page with its `balanceAfter` column and the wallet balance; separately, the payment attempts | sync, read | — |
 | price a deposit — **built**, see above | gateway pricing, amount, discount, quotedFee?, liveRate?, chargeDecimals | base, discount, gap, fee, payable, credited, rate, chargedAmountMinor | sync, pure | invalid input, amount out of gateway range, fee quote required, rate unavailable / out of range |
 | start payment | userId, gatewayId or tenantGatewayConfigId, amount, couponCodes[] | payment intent + redirect / deposit address | sync | amount out of gateway range |
 | confirm payment | gateway webhook / reconciliation / admin | wallet credit + `payment_transaction.status = success` | async | duplicate, mismatch (flagged) |

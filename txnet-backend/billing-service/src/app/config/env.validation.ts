@@ -112,6 +112,8 @@ export const envSchema = z.object({
   // The defaults live here and nowhere else (F-087).
   DEPOSIT_GATEWAYS_RATE_LIMIT: rateLimit(120),
   DEPOSIT_QUOTE_RATE_LIMIT: rateLimit(60),
+  WALLET_HISTORY_RATE_LIMIT: rateLimit(180),
+  WALLET_PAYMENTS_RATE_LIMIT: rateLimit(120),
 }).refine((env) => !(env.NODE_ENV === 'production' && env.PAYMENT_GATEWAY_SANDBOX), {
   message: 'PAYMENT_GATEWAY_SANDBOX=true is refused when NODE_ENV=production',
   path: ['PAYMENT_GATEWAY_SANDBOX'],

@@ -1,0 +1,12 @@
+{
+  "reasonType": {
+    "payment_gateway": "شارژ کیف پول از درگاه پرداخت",
+    "coupon_redemption": "کد هدیه",
+    "traffic_consumption": "مصرف ترافیک",
+    "admin_manual_adjust": "اصلاح دستی توسط پشتیبانی",
+    "affiliate_commission": "پورسانت معرفی دوستان",
+    "sub_account_charge": "شارژ اکانت فرعی",
+    "wallet_transfer_in": "انتقال دریافتی از کیف پول دیگر",
+    "wallet_transfer_out": "انتقال به کیف پول دیگر"
+  }
+}

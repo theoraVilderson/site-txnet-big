@@ -9,7 +9,7 @@ source:
   - txnet-backend/billing-service/src/app/payment/**
 owns_tables: [wallet, wallet_transaction, sub_account, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission]
 depends_on: [identity, catalog, currency, tenant, tenant-context, forward-auth, i18n]
-updated: 2026-09-11
+updated: 2026-09-12
 ---
 
 # Billing
@@ -26,6 +26,7 @@ display-currency conversion (`currency`), plan prices (`catalog`).
 |---|---|
 | [contract.md](contract.md) | using or changing billing from outside |
 | [contract.deposit.md](contract.deposit.md) | the panel's top-up routes: gateway list and deposit quote |
+| [contract.history.md](contract.history.md) | the panel's financial page: the wallet ledger and the top-up attempts |
 | [invariants.md](invariants.md) | writing any code that touches it |
 | [data-model.md](data-model.md) | changing storage |
 | [rules.md](rules.md) | implementing inside this unit |
