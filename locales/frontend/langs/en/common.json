@@ -338,5 +338,31 @@
       "scaled": "{{count}} {{scale}}",
       "groups": "{{high}} {{low}}"
     }
+  },
+  "paymentResult": {
+    "success": {
+      "title": "Payment successful",
+      "subtitle": "Your wallet has been topped up.",
+      "alreadyTitle": "This payment was already settled",
+      "alreadySubtitle": "Your wallet was credited once for this payment and will not be credited again.",
+      "reference": "Reference number",
+      "copy": "Copy the reference number",
+      "copied": "Copied",
+      "toPanel": "Back to the panel",
+      "toFinancial": "View financial history"
+    },
+    "failure": {
+      "title": "Payment did not go through",
+      "subtitle": "This payment was not settled.",
+      "code": "Error code",
+      "unknown": "The payment failed.",
+      "INVALID_PARAMS": "The gateway came back without the details needed to settle this payment.",
+      "TRANSACTION_NOT_FOUND": "No transaction was found for these details.",
+      "GATEWAY_CONNECTION_ERROR": "The gateway could not be reached. Any amount taken is held until this is resolved.",
+      "VERIFICATION_FAILED": "The gateway did not confirm this payment, or it was cancelled.",
+      "SYSTEM_ERROR": "Something went wrong while settling this payment. Any amount taken is held until this is resolved.",
+      "retry": "Try again",
+      "toPanel": "Back to the panel"
+    }
   }
 }

@@ -25,3 +25,10 @@ export const PANEL_FINANCIAL = "/financial";
  * (`panel-web/contract.shell.md` rule 3).
  */
 export const PANEL_DEPOSIT = "/financial/deposit";
+/**
+ * Where a bank returns a payer (F-093-f). These two are `billing`'s to name:
+ * `deposit-callback.controller.ts` redirects to them by path, so they are the
+ * one pair of routes here that cannot be renamed from this side alone.
+ */
+export const PAYMENT_SUCCESS = "/payment/success";
+export const PAYMENT_FAILED = "/payment/failed";
