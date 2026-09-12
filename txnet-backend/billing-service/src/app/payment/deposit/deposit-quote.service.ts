@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
+import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CouponValidationService, RejectedCoupon } from '../coupon/coupon-validation';
 import { GatewayMerchant, GatewaySource, merchantLabel } from '../gateway/gateway-merchant';
@@ -100,6 +101,7 @@ export const money = (v: Prisma.Decimal) => v.toFixed(2);
 export class DepositQuoteService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly crossTenant: CrossTenantPrismaService,
     private readonly coupons: CouponValidationService,
     private readonly providers: PaymentProviderRegistry,
     private readonly merchant: GatewayMerchant,
@@ -108,12 +110,26 @@ export class DepositQuoteService {
 
   async listGateways(): Promise<DepositGateway[]> {
     const tenant = TenantContext.current('deposit gateways');
-    const rows = await tenantTransaction(this.prisma, (tx) => selectableGateways(tx, tenant.id));
+    const rows = await tenantTransaction(this.prisma, (tx) =>
+      selectableGateways(tx, this.crossTenant, tenant.id),
+    );
     // Outside the transaction: the vault queries on its own bound connection.
-    const configured = await this.merchant.configuredLabels(tenant.id);
+    //
+    // **Per owning tenant, not per caller** (F-096-b): a granted gateway's
+    // merchant id is in its owner's vault (D-26, ADR-0041 §3), so asking this
+    // tenant's vault about it would answer "not configured" and F-092-u would
+    // drop the row — a granted gateway silently missing rather than offered.
+    // One read per distinct owner, which is one for all but a tenant that has
+    // been granted gateways by several lenders.
+    const owners = [...new Set(rows.map((g) => g.ownerTenantId))];
+    const configured = new Map(
+      await Promise.all(
+        owners.map(async (id) => [id, await this.merchant.configuredLabels(id)] as const),
+      ),
+    );
     return rows
       .filter((g) => this.providers.has(g.providerName))
-      .filter((g) => configured.has(merchantLabel(g.source, g.id)))
+      .filter((g) => configured.get(g.ownerTenantId)?.has(merchantLabel(g.source, g.id)) ?? false)
       .map((g) => ({
         id: g.id,
         source: g.source,
@@ -130,7 +146,7 @@ export class DepositQuoteService {
     const { userId, gatewayId, amount } = request;
 
     const { gateway, coupons } = await tenantTransaction(this.prisma, async (tx) => {
-      const gateway = await selectGateway(tx, tenant.id, gatewayId, request.source);
+      const gateway = await selectGateway(tx, this.crossTenant, tenant.id, gatewayId, request.source);
       if (!gateway) throw new DepositGatewayNotFound(gatewayId, request.source);
       const coupons = await this.coupons.validate(tx, {
         codes: request.couponCodes,
@@ -146,7 +162,9 @@ export class DepositQuoteService {
       {
         gateway,
         ref: {
-          tenantId: tenant.id,
+          // Whose vault, not whose request: a granted gateway is priced and
+          // charged with its owner's account (ADR-0041 §3, F-096-b).
+          tenantId: gateway.ownerTenantId,
           source: request.source,
           gatewayId: gateway.id,
           providerName: gateway.providerName,

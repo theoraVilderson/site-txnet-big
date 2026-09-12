@@ -12,6 +12,7 @@ import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
 import type { EnvConfig } from '../../config/env.validation';
+import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WalletLedgerService } from '../../wallet/wallet-ledger.service';
 import { CouponReservationService } from '../coupon/coupon-reservation';
@@ -106,6 +107,7 @@ const description = (paymentId: string) => `Wallet top-up ${paymentId}`;
 export class DepositStartService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly crossTenant: CrossTenantPrismaService,
     private readonly coupons: CouponValidationService,
     private readonly reservations: CouponReservationService,
     private readonly providers: PaymentProviderRegistry,
@@ -122,7 +124,7 @@ export class DepositStartService {
     // 1. Read: the gateway, the coupons as they stand, and where the bank will
     //    send the user back to. Nothing is held after this closes.
     const { gateway, coupons, callbackUrl } = await tenantTransaction(this.prisma, async (tx) => {
-      const gateway = await selectGateway(tx, tenant.id, gatewayId, source);
+      const gateway = await selectGateway(tx, this.crossTenant, tenant.id, gatewayId, source);
       if (!gateway) throw new DepositGatewayNotFound(gatewayId, source);
       const coupons = await this.coupons.validate(tx, {
         codes: request.couponCodes,
@@ -134,7 +136,9 @@ export class DepositStartService {
     });
 
     const ref: MerchantGatewayRef = {
-      tenantId: tenant.id,
+      // Whose vault holds the merchant id: this tenant for a gateway it owns,
+      // the lender for one granted to it (ADR-0041 §3, F-096-b).
+      tenantId: gateway.ownerTenantId,
       source,
       gatewayId: gateway.id,
       providerName: gateway.providerName,
@@ -162,6 +166,12 @@ export class DepositStartService {
           id: paymentId,
           userId,
           ...(source === 'platform' ? { gatewayId: gateway.id } : { tenantGatewayConfigId: gateway.id }),
+          // Which grant this payment was taken under, or NULL for a gateway the
+          // tenant owns (F-096-a). It is written here rather than at settlement
+          // because the grant can be withdrawn between the two, and what the
+          // platform owes is decided by the grant the payment was *made* under
+          // (ADR-0041 §4); F-096-d accrues from this column.
+          grantId: gateway.grantId,
           amountRequested: price.amount,
           feeApplied: price.fee,
           discountApplied: price.discount,

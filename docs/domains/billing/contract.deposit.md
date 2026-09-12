@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 9
+version: 10
 updated: 2026-09-12
 ---
 
@@ -137,6 +137,28 @@ page rather than the envelope every other route answers.
 route only names the paths and the codes. Nothing tells the panel a balance
 changed in real time: the outbox event has no consumer, and
 `panel-web/contract.shell.md` still says so.
+
+## A gateway somebody else owns (built — F-096-b)
+
+`deposit-pricing.ts`, read by both the list and the quote. ADR-0041 §1, §2, §6.
+
+The default stays ADR-0006's: a tenant is offered the gateways it configured,
+and the platform's own only to the platform owner. A **grant** is the one
+exception, and it changes which rows are offered — not how they are priced.
+
+| Rule | Why |
+|---|---|
+| A tenant is offered its own gateways and then the ones granted to it, each group oldest first; a row already offered as its own is not offered twice | its own is what it configured and expects first. The platform owner granting itself a gateway would otherwise see it doubled |
+| A grant is read from the **borrower's** own scope (`payment_gateway_grant.tenantId`), and the gateway row it names is read on the **cross-tenant** pool, bounded to those ids | the lender's `tenant_gateway_config` row is invisible to the borrower's connection, so the read cannot be scoped by the borrower — it is scoped by the grant instead. Second reader of that pool in this service; it selects `GATEWAY_COLUMNS`, so no secret column is read (invariant 8) |
+| A withdrawn grant, a deactivated gateway and an unverified one each remove the row from the list **and** from the quote, at the same moment | ADR-0041 §6: a grant never keeps a dead gateway alive. `isActive`/`verified` are checked on the row, so a lender switching its gateway off withdraws it from every tenant it was granted to without anyone touching a grant |
+| `selectGateway` looks for a grant **after** the tenant's own row misses | owning a row is cheaper to prove and is the ordinary case, so no other payment pays for the grant read |
+| The vault filter (F-092-u) asks the **owning** tenant's vault, not the caller's | a granted gateway's merchant id is its owner's (D-26, ADR-0041 §3). Asking the caller would answer "not configured" and drop the row — a granted gateway silently missing rather than offered |
+| A payment records the grant it was taken under (`payment_transaction.grantId`), written at `start` | the grant can be withdrawn between starting and settling, and what the platform owes is decided by the grant the payment was *made* under (ADR-0041 §4). F-096-d accrues from this column |
+
+**Not covered here:** charging one. The credential that a granted gateway is
+charged with, and the audit rule around reading it, are F-096-c's; the debt it
+accrues is F-096-d's. Nothing surfaces or creates a grant yet — that is
+F-096-e's, and until then a grant row is written by hand.
 
 ## Expiring what nobody came back for (built — F-092-k)
 

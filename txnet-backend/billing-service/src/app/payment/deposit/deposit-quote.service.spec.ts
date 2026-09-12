@@ -82,6 +82,9 @@ function build({ rows = [gatewayRow()], coupons = noCoupons('20.00'), quoteFee, 
   const tx = {
     $executeRaw: async () => 0,
     tenant: { findUnique: async () => ({ tenantType: 'reseller' }) },
+    // No grant: `selectGateway` looks for one only after the tenant's own row
+    // misses, and `selectableGateways` always asks (F-096-b).
+    paymentGatewayGrant: { findMany: async () => [] },
     tenantGatewayConfig: {
       findFirst: async () => rows[0] ?? null,
       findMany: async () => rows,
@@ -123,6 +126,10 @@ function build({ rows = [gatewayRow()], coupons = noCoupons('20.00'), quoteFee, 
   const fx = { current: async () => liveRate ?? null };
   return new DepositQuoteService(
     prisma as never,
+    // No grant in this fixture: `tenantGatewayConfig.findMany` on the
+    // cross-tenant pool is only reached for a gateway somebody granted
+    // (F-096-b), and these cases are about a tenant's own.
+    { tenantGatewayConfig: { findMany: async () => [] } } as never,
     couponService as never,
     registry as never,
     merchant as never,

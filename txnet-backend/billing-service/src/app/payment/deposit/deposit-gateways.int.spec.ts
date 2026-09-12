@@ -23,6 +23,7 @@ import {
   PostgresFixture,
   startPostgresFixture,
 } from '../../../../../test-support/postgres-fixture';
+import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CouponValidationService } from '../coupon/coupon-validation';
 import { DepositGatewayNotFound, DepositQuoteService } from './deposit-quote.service';
@@ -34,6 +35,7 @@ const TENANT_B = '22222222-2222-4222-8222-222222222222';
 const PLATFORM = '33333333-3333-4333-8333-333333333333';
 const USER = '44444444-4444-4444-8444-444444444444';
 
+const ADMIN = '55555555-5555-4555-8555-555555555555';
 const A_ZARINPAL = 'aaaaaaaa-0000-4000-8000-000000000001';
 const A_PENDING = 'aaaaaaaa-0000-4000-8000-000000000002';
 const A_INACTIVE = 'aaaaaaaa-0000-4000-8000-000000000003';
@@ -45,6 +47,7 @@ const PLATFORM_INACTIVE = 'dddddddd-0000-4000-8000-000000000002';
 let pg: PostgresFixture;
 let owner: PrismaClient;
 let app: PrismaService;
+let crossTenant: CrossTenantPrismaService;
 let service: DepositQuoteService;
 
 beforeAll(async () => {
@@ -96,6 +99,9 @@ beforeAll(async () => {
 
   const base = new PrismaService(pg.appUrl);
   app = base.$extends(withTenant(base)) as unknown as PrismaService;
+  // The second pool, unextended, exactly as the module wires it: a granted
+  // gateway belongs to the lender and the borrower's policy hides it (F-096-b).
+  crossTenant = new CrossTenantPrismaService(pg.crossTenantUrl);
 
   // Every provider has a driver here, so what hides a row is the query alone.
   const driver = { name: 'zarinpal', chargeCurrency: 'IRR', chargeDecimals: 0 };
@@ -106,10 +112,20 @@ beforeAll(async () => {
     credentialsFor: async () => {
       throw new Error('a manual-fee quote reads no credential');
     },
-    configuredLabels: async () =>
+    // Keyed by the **owning** tenant since F-096-b: a granted gateway's
+    // merchant id is in the lender's vault, so a fake that answered the same
+    // set for everybody would hide the bug it exists to catch.
+    configuredLabels: async (tenantId: string) =>
       new Set([
-        ...[A_ZARINPAL, A_PENDING, A_INACTIVE, B_ZARINPAL, P_OWN].map((id) => `gateway:tenant:${id}`),
-        ...[PLATFORM_ZARINPAL, PLATFORM_INACTIVE].map((id) => `gateway:platform:${id}`),
+        ...({
+          [TENANT_A]: [A_ZARINPAL, A_PENDING, A_INACTIVE],
+          [TENANT_B]: [B_ZARINPAL],
+          [PLATFORM]: [P_OWN],
+        }[tenantId] ?? []
+        ).map((id) => `gateway:tenant:${id}`),
+        ...(tenantId === PLATFORM
+          ? [PLATFORM_ZARINPAL, PLATFORM_INACTIVE].map((id) => `gateway:platform:${id}`)
+          : []),
       ]),
     requireConfigured: async () => undefined,
   };
@@ -118,6 +134,7 @@ beforeAll(async () => {
   const fx = { current: async () => null };
   service = new DepositQuoteService(
     app,
+    crossTenant,
     new CouponValidationService(),
     registry as never,
     merchant as never,
@@ -126,9 +143,32 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await Promise.allSettled([app?.$disconnect(), owner?.$disconnect()]);
+  await Promise.allSettled([app?.$disconnect(), crossTenant?.$disconnect(), owner?.$disconnect()]);
   await pg?.stop();
 });
+
+/** The platform owner grants a gateway to a tenant (ADR-0041 §1). Owner role: this is an operator's act. */
+function grant(id: string, toTenant: string, gatewayId: string | null, configId: string | null) {
+  return owner.$executeRawUnsafe(`
+    INSERT INTO billing.payment_gateway_grant (id, "tenantId", "gatewayId", "tenantGatewayConfigId", "grantedByAdminId")
+    VALUES ('${id}', '${toTenant}', ${gatewayId ? `'${gatewayId}'` : 'NULL'},
+            ${configId ? `'${configId}'` : 'NULL'}, '${ADMIN}')
+  `);
+}
+
+function withdrawGrant(id: string) {
+  return owner.$executeRawUnsafe(`
+    UPDATE billing.payment_gateway_grant
+       SET "isActive" = false, "withdrawnAt" = now(), "withdrawnByAdminId" = '${ADMIN}'
+     WHERE id = '${id}'
+  `);
+}
+
+function setGatewayActive(id: string, active: boolean) {
+  return owner.$executeRawUnsafe(
+    `UPDATE tenant.tenant_gateway_config SET "isActive" = ${active} WHERE id = '${id}'`,
+  );
+}
 
 const quoteAs = (tenantId: string, gatewayId: string, source: 'tenant' | 'platform' = 'tenant') =>
   runWithTenant({ id: tenantId }, () =>
@@ -184,5 +224,94 @@ describe('deposit gateways under RLS', () => {
     ["a tenant gateway's id named as a platform one", PLATFORM, P_OWN],
   ])('refuses a platform gateway to %s', async (_label, tenantId, gatewayId) => {
     await expect(quoteAs(tenantId, gatewayId, 'platform')).rejects.toBeInstanceOf(DepositGatewayNotFound);
+  });
+});
+
+/**
+ * ADR-0041 / F-096-b. A grant is the one way a tenant reaches a gateway it does
+ * not own, and only a real database can say so: `tenant_gateway_config` has the
+ * strict policy, so the borrower's own connection is shown nothing at all — the
+ * read runs on the cross-tenant pool, bounded to the ids the borrower's own
+ * grants named.
+ *
+ * Each case here is a way the boundary could be wrong in a direction nobody
+ * would notice: a gateway offered to a tenant that was never granted it, a
+ * gateway still offered after the grant was withdrawn or after its owner
+ * switched it off, or a granted gateway that lists but cannot be quoted.
+ */
+describe('a granted gateway (ADR-0041)', () => {
+  const GRANT_TENANT = 'eeeeeeee-0000-4000-8000-000000000001';
+  const GRANT_PLATFORM = 'eeeeeeee-0000-4000-8000-000000000002';
+
+  afterEach(async () => {
+    await owner.$executeRawUnsafe(`DELETE FROM billing.payment_gateway_grant`);
+    await setGatewayActive(B_ZARINPAL, true);
+  });
+
+  it('offers tenant B\'s gateway to tenant A, after its own and marked with its owner', async () => {
+    await grant(GRANT_TENANT, TENANT_A, null, B_ZARINPAL);
+
+    const a = await runWithTenant({ id: TENANT_A }, () => service.listGateways());
+
+    // Its own first, the borrowed one after: a tenant's own gateway is the one
+    // it configured and the one it expects to see first.
+    expect(a.map((g) => g.id)).toEqual([A_ZARINPAL, B_ZARINPAL]);
+  });
+
+  it('quotes the granted gateway on its owner\'s stored pricing', async () => {
+    await grant(GRANT_TENANT, TENANT_A, null, B_ZARINPAL);
+
+    await expect(quoteAs(TENANT_A, B_ZARINPAL)).resolves.toMatchObject({
+      fee: '0.20',
+      payable: '20.20',
+    });
+  });
+
+  it('offers a platform gateway to a reseller only through a grant', async () => {
+    await expect(quoteAs(TENANT_A, PLATFORM_ZARINPAL, 'platform')).rejects.toBeInstanceOf(
+      DepositGatewayNotFound,
+    );
+
+    await grant(GRANT_PLATFORM, TENANT_A, PLATFORM_ZARINPAL, null);
+
+    const a = await runWithTenant({ id: TENANT_A }, () => service.listGateways());
+    expect(a.map((g) => [g.source, g.id])).toContainEqual(['platform', PLATFORM_ZARINPAL]);
+    await expect(quoteAs(TENANT_A, PLATFORM_ZARINPAL, 'platform')).resolves.toMatchObject({
+      source: 'platform',
+      fee: '0.40',
+    });
+  });
+
+  it('takes it away again the moment the grant is withdrawn', async () => {
+    await grant(GRANT_TENANT, TENANT_A, null, B_ZARINPAL);
+    await withdrawGrant(GRANT_TENANT);
+
+    const a = await runWithTenant({ id: TENANT_A }, () => service.listGateways());
+
+    expect(a.map((g) => g.id)).toEqual([A_ZARINPAL]);
+    await expect(quoteAs(TENANT_A, B_ZARINPAL)).rejects.toBeInstanceOf(DepositGatewayNotFound);
+  });
+
+  it("takes it away when its owner switches it off, with the grant untouched (ADR-0041 §6)", async () => {
+    await grant(GRANT_TENANT, TENANT_A, null, B_ZARINPAL);
+    await setGatewayActive(B_ZARINPAL, false);
+
+    const a = await runWithTenant({ id: TENANT_A }, () => service.listGateways());
+    const b = await runWithTenant({ id: TENANT_B }, () => service.listGateways());
+
+    // Gone for the borrower and for its owner at the same moment, which is the
+    // whole of §6 — a grant never keeps a dead gateway alive.
+    expect(a.map((g) => g.id)).toEqual([A_ZARINPAL]);
+    expect(b).toEqual([]);
+  });
+
+  it('grants nothing to a tenant that was not named', async () => {
+    await grant(GRANT_TENANT, TENANT_A, null, B_ZARINPAL);
+
+    const b = await runWithTenant({ id: TENANT_B }, () => service.listGateways());
+
+    // Tenant B owns the gateway and sees it; nobody else's grant is visible to
+    // it, and it gains nothing from one made to A.
+    expect(b.map((g) => g.id)).toEqual([B_ZARINPAL]);
   });
 });

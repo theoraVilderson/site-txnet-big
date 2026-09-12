@@ -102,6 +102,9 @@ function build(setup: Setup = {}) {
   const tx = {
     $executeRaw: async () => 0,
     tenant: { findUnique: async () => ({ tenantType: 'reseller' }) },
+    // No grant: `selectGateway` looks for one only after the tenant's own row
+    // misses, and `selectableGateways` always asks (F-096-b).
+    paymentGatewayGrant: { findMany: async () => [] },
     tenantGatewayConfig: { findFirst: async () => row },
     // The filter and the order are the service's, so the fake applies the
     // `where` and `orderBy` it was handed rather than answering every row: what
@@ -180,6 +183,10 @@ function build(setup: Setup = {}) {
 
   const service = new DepositStartService(
     prisma as never,
+    // No grant in this fixture: `tenantGatewayConfig.findMany` on the
+    // cross-tenant pool is only reached for a gateway somebody granted
+    // (F-096-b), and these cases are about a tenant's own.
+    { tenantGatewayConfig: { findMany: async () => [] } } as never,
     { validate: async () => coupons } as never,
     reservations as never,
     registry as never,
