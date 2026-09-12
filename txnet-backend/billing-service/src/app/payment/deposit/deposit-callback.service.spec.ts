@@ -25,6 +25,7 @@ import { CredentialUnavailable, runWithTenant } from '@txnet-backend/shared-core
 
 import { GatewayFailure } from '../gateway/payment-provider';
 import { DepositCallbackService } from './deposit-callback.service';
+import { DepositSettlementService } from './deposit-settlement';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '44444444-4444-4444-8444-444444444444';
@@ -129,12 +130,17 @@ function build(setup: Setup = {}) {
     },
   };
 
+  // The real settlement service over the same fakes (F-092-l extracted it):
+  // the flip, the credit, the confirm and the event are asserted below exactly
+  // as when this file was written, and a stub here would assert nothing.
+  const settlement = new DepositSettlementService(prisma as never, reservations as never, ledger as never);
+
   const service = new DepositCallbackService(
     prisma as never,
     reservations as never,
     registry as never,
     merchant as never,
-    ledger as never,
+    settlement,
   );
   return { service, calls };
 }

@@ -9,6 +9,8 @@ import { DepositCallbackController } from './deposit-callback.controller';
 import { DepositCallbackService } from './deposit-callback.service';
 import { DepositController } from './deposit.controller';
 import { DepositExpiryService } from './deposit-expiry.service';
+import { DepositReconciliationService } from './deposit-reconciliation.service';
+import { DepositSettlementService } from './deposit-settlement';
 import { DepositInternalController } from './deposit-internal.controller';
 import { DepositQuoteService } from './deposit-quote.service';
 import { DepositStartService } from './deposit-start.service';
@@ -27,12 +29,13 @@ import { DepositStartService } from './deposit-start.service';
  *
  * `DepositInternalController` is a third, for the mirror-image reason: it is
  * the only **service-to-service** one, reached by `worker-service`'s expiry
- * tick (F-092-k) and by nothing from the edge at all.
+ * tick (F-092-k) and its reconciliation tick (F-092-l), and by nothing from
+ * the edge at all.
  */
 @Module({
   imports: [LocaleModule, CouponModule, GatewayModule, WalletModule],
   controllers: [DepositController, DepositCallbackController, DepositInternalController],
-  providers: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositExpiryService, FxRateReader],
-  exports: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositExpiryService],
+  providers: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositSettlementService, DepositExpiryService, DepositReconciliationService, FxRateReader],
+  exports: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositExpiryService, DepositReconciliationService],
 })
 export class DepositModule {}

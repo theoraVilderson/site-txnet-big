@@ -167,6 +167,29 @@ export const envSchema = z.object({
   ),
 
   /**
+   * Reconciliation (F-092-l): how many payments one run asks the gateway about,
+   * how long an answer counts as recent, and how far back it looks at all.
+   *
+   * The recheck window is what stops the oldest unresolvable payment filling
+   * every batch for ever — a payment asked about inside it is skipped — and the
+   * lookback is the admission that a gateway's own records are not unbounded
+   * either: past it, an unclaimed payment is an operator's question and not a
+   * job's. Every run costs one gateway call per payment, so the batch is small.
+   */
+  RECONCILIATION_BATCH_SIZE: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().positive().default(50),
+  ),
+  RECONCILIATION_RECHECK_SEC: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().positive().default(6 * 3600),
+  ),
+  RECONCILIATION_LOOKBACK_SEC: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().positive().default(7 * 24 * 3600),
+  ),
+
+  /**
    * One callback origin for every tenant, instead of the tenant's own panel
    * domain (F-092-i). Development and test only: no tenant owns a host a
    * gateway's sandbox can reach, and `https://<domainValue>` would send the

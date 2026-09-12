@@ -1,13 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfirmationSource, PaymentStatus, Prisma, RedemptionStatus, WalletReasonType } from '@prisma/client';
+import { ConfirmationSource, PaymentStatus, RedemptionStatus } from '@prisma/client';
 import { CredentialUnavailable, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../../prisma/prisma.service';
-import { WalletLedgerService } from '../../wallet/wallet-ledger.service';
 import { CouponReservationService } from '../coupon/coupon-reservation';
-import { GatewayMerchant, GatewaySource, MerchantGatewayRef } from '../gateway/gateway-merchant';
+import { GatewayMerchant } from '../gateway/gateway-merchant';
 import { GatewayFailure, GatewayFailureReason } from '../gateway/payment-provider';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
+import { PAYMENT_SELECT, PaymentRow, DepositSettlementService, gatewayRefOf } from './deposit-settlement';
 
 /**
  * Settling a top-up (F-092-j) — the half of a payment the bank starts.
@@ -89,22 +89,6 @@ export type CallbackRequest = {
  */
 const UNSETTLED: readonly GatewayFailureReason[] = ['unavailable', 'amount_mismatch'];
 
-/** What the row is selected as. No secret column is ever on this list (invariant 8). */
-const PAYMENT_SELECT = {
-  id: true,
-  userId: true,
-  status: true,
-  gatewayId: true,
-  tenantGatewayConfigId: true,
-  amountCredited: true,
-  chargedAmountMinor: true,
-  gatewayReferenceId: true,
-  gateway: { select: { providerName: true } },
-  tenantGatewayConfig: { select: { providerName: true } },
-} satisfies Prisma.PaymentTransactionSelect;
-
-type PaymentRow = Prisma.PaymentTransactionGetPayload<{ select: typeof PAYMENT_SELECT }>;
-
 @Injectable()
 export class DepositCallbackService {
   private readonly logger = new Logger(DepositCallbackService.name);
@@ -114,7 +98,7 @@ export class DepositCallbackService {
     private readonly reservations: CouponReservationService,
     private readonly providers: PaymentProviderRegistry,
     private readonly merchant: GatewayMerchant,
-    private readonly ledger: WalletLedgerService,
+    private readonly settlement: DepositSettlementService,
   ) {}
 
   async settle(request: CallbackRequest): Promise<CallbackOutcome> {
@@ -176,7 +160,7 @@ export class DepositCallbackService {
 
   /** Ask the gateway — outside every transaction — and act on what it says. */
   private async verifyAndCredit(payment: PaymentRow, authority: string): Promise<CallbackOutcome> {
-    const ref = this.gatewayRef(payment);
+    const ref = gatewayRefOf(payment);
     const provider = this.providers.get(ref.providerName);
 
     let verified: { referenceId: string; cardPan: string | null };
@@ -194,44 +178,27 @@ export class DepositCallbackService {
       return await this.refused(payment, e);
     }
 
-    // 4. The money. The flip, the credit, the coupon uses and the event, in one
-    //    transaction — and the flip first, because its `count` is the guard the
-    //    other three hang off.
-    return await tenantTransaction(this.prisma, async (tx) => {
-      const { count } = await tx.paymentTransaction.updateMany({
-        where: { id: payment.id, status: PaymentStatus.pending },
-        data: {
-          status: PaymentStatus.success,
-          gatewayReferenceId: verified.referenceId,
-          cardPanMasked: verified.cardPan,
-          // The enum names webhook, reconciliation and admin; a browser
-          // returning from the bank is the first of those — the gateway's own
-          // confirmation, taken automatically.
-          confirmationSource: ConfirmationSource.webhook_auto,
-          // A payment that has landed has no clock left to run out (F-092-k).
-          expiresAt: null,
-        },
-      });
-      if (count !== 1) {
-        // Another callback flipped it between our read and this write. It did
-        // the crediting; this one must not, and must not report a failure
-        // either — the user paid, and the payment is settled.
-        return { kind: 'success', paymentId: payment.id, referenceId: verified.referenceId, alreadyPaid: true };
-      }
-
-      await this.ledger.credit(tx, {
-        userId: payment.userId,
-        // `amountCredited`, which already carries the adjustment gap the quote
-        // computed. `amountRequested` is what the user typed.
-        amount: payment.amountCredited,
-        reasonType: WalletReasonType.payment_gateway,
-        referenceId: payment.id,
-      });
-      await this.reservations.confirm(tx, payment.id);
-      await this.publishConfirmed(tx, payment, verified.referenceId);
-
-      return { kind: 'success', paymentId: payment.id, referenceId: verified.referenceId, alreadyPaid: false };
-    });
+    // 4. The money — the flip, the credit, the coupon uses and the event, in
+    //    one transaction, and none of it spelled here: `DepositSettlementService`
+    //    is that transaction, shared with reconciliation (F-092-l) so the two
+    //    ways of learning a payment landed cannot drift into two ways of
+    //    crediting it.
+    const credited = await this.settlement.creditVerified(
+      payment,
+      { referenceId: verified.referenceId, cardPan: verified.cardPan },
+      // A browser returning from the bank is the gateway's own confirmation,
+      // taken automatically — the first of the enum's three.
+      ConfirmationSource.webhook_auto,
+    );
+    return {
+      kind: 'success',
+      paymentId: payment.id,
+      referenceId: verified.referenceId,
+      // Not credited here means another caller flipped the row between our read
+      // and the write. It did the crediting; this one must not report a failure
+      // either — the user paid, and the payment is settled.
+      alreadyPaid: !credited,
+    };
   }
 
   /**
@@ -274,58 +241,5 @@ export class DepositCallbackService {
       if (count !== 1) return;
       await this.reservations.release(tx, payment.id, RedemptionStatus.cancelled);
     });
-  }
-
-  /**
-   * The cross-domain announcement, in the transaction that made it true
-   * (ADR-0021).
-   *
-   * `payload` carries its own `tenantId` because the relay reads under no
-   * scope and `outbox_event` has no tenant column of its own
-   * (`prisma/domains/automation.prisma`) — the domain that writes an event
-   * decides what it means, and this one means "this tenant's user was
-   * credited".
-   *
-   * Money is a decimal **string**, the same rule every billing route answers
-   * under (ADR-0019): JSON has no exact decimal, and a float here would be a
-   * rounding error that arrives in a consumer nobody has written yet.
-   */
-  private async publishConfirmed(tx: Prisma.TransactionClient, payment: PaymentRow, referenceId: string): Promise<void> {
-    const tenant = TenantContext.current('deposit callback event');
-    const ref = this.gatewayRef(payment);
-    await tx.outboxEvent.create({
-      data: {
-        aggregate: 'billing.payment',
-        aggregateId: payment.id,
-        type: 'billing.payment.confirmed',
-        payload: {
-          tenantId: tenant.id,
-          userId: payment.userId,
-          paymentId: payment.id,
-          amountCredited: payment.amountCredited.toFixed(2),
-          gateway: { source: ref.source, id: ref.gatewayId },
-          gatewayReferenceId: referenceId,
-          confirmationSource: ConfirmationSource.webhook_auto,
-        },
-      },
-      select: { id: true },
-    });
-  }
-
-  /**
-   * Which gateway this payment names. Exactly one of the two columns is set — a
-   * CHECK says so (ADR-0006, ADR-0028) — so the branch is total and a row with
-   * neither is a schema violation rather than a case to handle.
-   */
-  private gatewayRef(payment: PaymentRow): MerchantGatewayRef {
-    const tenant = TenantContext.current('deposit callback gateway');
-    const platform = payment.gatewayId !== null;
-    const source: GatewaySource = platform ? 'platform' : 'tenant';
-    const gatewayId = platform ? payment.gatewayId : payment.tenantGatewayConfigId;
-    const providerName = platform ? payment.gateway?.providerName : payment.tenantGatewayConfig?.providerName;
-    if (!gatewayId || !providerName) {
-      throw new Error(`payment ${payment.id} names no gateway; the CHECK in 20260911000000_payment_legacy_port should forbid it`);
-    }
-    return { tenantId: tenant.id, source, gatewayId, providerName };
   }
 }

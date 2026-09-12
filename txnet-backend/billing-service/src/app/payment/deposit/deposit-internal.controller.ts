@@ -2,6 +2,10 @@ import { Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
 import { ServiceOnlyGuard } from '@txnet-backend/shared-core';
 
 import { DepositExpiryResult, DepositExpiryService } from './deposit-expiry.service';
+import {
+  DepositReconciliationResult,
+  DepositReconciliationService,
+} from './deposit-reconciliation.service';
 
 /**
  * The seam `worker-service` reaches billing through (F-092-k).
@@ -27,7 +31,10 @@ import { DepositExpiryResult, DepositExpiryService } from './deposit-expiry.serv
 @Controller('internal/billing/deposit')
 @UseGuards(ServiceOnlyGuard)
 export class DepositInternalController {
-  constructor(private readonly expiry: DepositExpiryService) {}
+  constructor(
+    private readonly expiry: DepositExpiryService,
+    private readonly reconciliation: DepositReconciliationService,
+  ) {}
 
   /**
    * Expire every `pending` payment past its `expiresAt`, one batch, and give
@@ -41,5 +48,20 @@ export class DepositInternalController {
   @HttpCode(200)
   expirePending(): Promise<DepositExpiryResult> {
     return this.expiry.expirePending();
+  }
+
+  /**
+   * Ask the gateway about payments nobody came back for (F-092-l): credit the
+   * ones it confirms, flag the ones whose amount it reports differently, and
+   * record every answer.
+   *
+   * Separate from the sweep above rather than a step inside it, because the two
+   * have different costs and want different schedules: expiry is a clock and
+   * touches no gateway, reconciliation is one call to a bank per payment.
+   */
+  @Post('reconcile')
+  @HttpCode(200)
+  reconcile(): Promise<DepositReconciliationResult> {
+    return this.reconciliation.reconcile();
   }
 }

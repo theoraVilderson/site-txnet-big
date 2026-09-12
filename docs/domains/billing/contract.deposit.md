@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 8
+version: 9
 updated: 2026-09-12
 ---
 
@@ -163,3 +163,36 @@ top-up holds somebody else's coupon capacity for ever.
 only reads a clock — it asks no gateway anything, and an `expired` row is not a
 statement that nothing was paid. Inquiring one is F-092-l's, and invariant 9
 stands: never auto-reverse, and never auto-close on silence.
+
+## Asking the gateway later (built — F-092-l)
+
+`DepositReconciliationService`, behind the same internal controller, run by
+`worker-service`'s `DepositReconciliationJob`.
+
+The callback settles a payment whose payer came back; the expiry sweep closes
+the clock on the ones who did not. This is the third case, and the one both
+leave open on purpose: **a payment the gateway could not be reached about.**
+"Silence is not a refusal" above is what creates it, and until this existed
+nothing ever came back to resolve one. Legacy's `isVerified` (codes 100/101)
+was the same idea with nothing scheduling it.
+
+| Rule | Why |
+|---|---|
+| `POST /api/internal/billing/deposit/reconcile`, the same seam and guard as the expiry sweep, and a **separate** route and job | one call to a bank per payment against a clock that calls none: merging them ties the cheap frequent sweep to the rate a bank will answer |
+| It asks about `expired` rows and `pending` rows past their clock, that **carry an authority**, inside a lookback window, and not if a log row was written inside the recheck window | no authority means the gateway was never asked to mint one. Without the recheck window the oldest unresolvable payment fills every batch for ever; past the lookback, an unclaimed payment is an operator's question, not a job's |
+| **It credits and it flags. It never closes and it never reverses** | invariant 9. `ReconciliationAction` has exactly three words, and that is the vocabulary: closing a row is the clock's job (F-092-k), and an auto-reversal is the one write this table can never take back |
+| A `verified` or `paid` inquiry is followed by a **`verify`**, and the credit goes through `DepositSettlementService` with `confirmationSource: reconciliation_auto` | `verified` still has to be verified — that call is where the reference number is. The shared path means a payer arriving a second earlier still credits exactly once (ADR-0028, invariant 7); `count: 0` is logged `no_action_needed`, not a failure |
+| An **amount mismatch** is `flagged_mismatch` and nothing else happens | crediting either figure would be this job inventing a price, and closing the row would hide a payment somebody's money is behind. It is written down for a person |
+| `in_bank`, `failed` and `reversed` are recorded `no_action_needed` | not finished, or finished owing nothing. Neither is a reason for this job to write to a payment |
+| An answer the gateway **could not give** — `unavailable`, an unreadable merchant id, anything unexpected — writes **no log row at all** and counts as an error of the run | a row saying "checked, nothing to do" is what retires a payment from every later sweep, and a timeout is not an answer. `authority_invalid` is the exception: that is an answer, and final |
+| Every gateway call happens outside every transaction; the scan is cross-tenant and each payment is handled inside its own tenant's scope | the callback's rule, and a sweep holds a connection for a whole batch rather than one request |
+| `gatewayReportedStatus` stores the gateway's own word, not our reading of it | a mismatch is investigated by a person who needs what the bank actually said |
+
+**Known asymmetry:** `payment_reconciliation_log` carries no `tenantId`, so it
+is not one of the tables `20260909001500_row_level_security_all_tables` gave a
+policy shape to — it hangs off a payment that has one. Giving it a column and a
+policy is a schema change and a row of its own.
+
+**Not covered:** nothing surfaces a `flagged_mismatch` to an operator yet. It
+is a `bot_execution_log` metric and a table, which is where an admin screen
+will read it from.

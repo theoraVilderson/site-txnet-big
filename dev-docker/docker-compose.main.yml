@@ -536,6 +536,9 @@ services:
       # says which process is calling and never which user.
       - BILLING_API_BASE_URL=http://billing-service:3000
       - BILLING_API_TIMEOUT_MS=${BILLING_API_TIMEOUT_MS:-30000}
+      # Reconciliation's own budget (F-092-l): a batch there is one call to a
+      # bank per payment, and the bank is the slow part.
+      - BILLING_RECONCILE_TIMEOUT_MS=${BILLING_RECONCILE_TIMEOUT_MS:-120000}
       # The FX worker's sources and its per-source deadline (F-0603, D-22).
       # A list rather than a constant because three of the four exchanges are
       # on the US OFAC list since June 2026 and dropping one must be config.

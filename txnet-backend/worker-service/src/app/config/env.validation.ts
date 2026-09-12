@@ -280,6 +280,12 @@ export const envSchema = z.object({
   BILLING_API_BASE_URL: optional(z.string()),
   /** How long the expiry sweep may take. One bounded batch of small writes. */
   BILLING_API_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+  /**
+   * And how long reconciliation may take, which is a different number for a
+   * different reason: a batch there is one call to a **bank** per payment, and
+   * the bank is the slow part (F-092-l).
+   */
+  BILLING_RECONCILE_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
 
   /**
    * Which USDT/IRT order books the FX worker polls (F-0603), by `FxSource.key`

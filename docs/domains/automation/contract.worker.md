@@ -67,6 +67,7 @@ Why each of those is the answer — and what a Redis that cannot be reached does
 | `worker_heartbeat` | nothing, and records that it did — the proof the tick path is alive | — |
 | `vault_credential_retention` | destroys superseded credential versions past their rotation grace window (ADR-0026 rule 4) | `AUTH_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 | `deposit_pending_expiry` | expires `pending` top-ups past their `expiresAt` and gives the coupon holds they took back (F-092-k, `domains/billing/contract.deposit.md`) | `BILLING_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
+| `deposit_reconciliation` | asks the gateway about pending and expired top-ups: credits what it confirms, flags an amount it reports differently, never closes or reverses one (F-092-l) | the same two |
 
 The retention job is the first job that does real work, and what it settled is
 how a job reaches code it cannot import.
@@ -85,6 +86,11 @@ process that owns one to act, and never handles the value.
 whose seam is unconfigured fails its own run into `bot_execution_log` and every
 other job keeps running; requiring them at boot would stop the consumer
 draining the queue because one job's dependency is missing.
+
+**Two jobs over one seam are still two jobs.** Expiry reads a clock and calls
+no gateway; reconciliation makes one call to a bank per payment. They are
+separate keys with separate schedules and separate timeouts, because merging
+them would tie the cheap frequent one to the rate a bank will answer.
 
 **A job is registered; it is not scheduled.** `WorkerRegistryService` upserts a
 `bot_worker` row on boot, and the publisher ticks a job only for the
