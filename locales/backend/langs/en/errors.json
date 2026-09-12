@@ -156,6 +156,7 @@
     "pageInvalid": "The page number or page size is not valid.",
     "historyFilterInvalid": "The selected filters could not be read.",
     "historyRangeInvalid": "The selected date range is not valid.",
+    "giftCodeInvalid": "Enter a valid gift code.",
     "coupon": {
       "notFound": "This discount code is not valid.",
       "notADiscount": "This is a gift code. Redeem it on the gift code page.",
@@ -165,6 +166,13 @@
       "perUserLimitReached": "You have already used this discount code as many times as it allows.",
       "capacityReached": "This discount code has been used up.",
       "nothingToDiscount": "Nothing is left for this discount code to take off."
+    },
+    "gift": {
+      "notFound": "This gift code is not valid.",
+      "notAGiftCode": "This is a discount code. Enter it when you top up your wallet.",
+      "expired": "This gift code has expired.",
+      "perUserLimitReached": "You have already used this gift code.",
+      "capacityReached": "This gift code has been used up."
     }
   }
 }

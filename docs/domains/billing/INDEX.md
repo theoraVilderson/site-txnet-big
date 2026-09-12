@@ -27,6 +27,7 @@ display-currency conversion (`currency`), plan prices (`catalog`).
 | [contract.md](contract.md) | using or changing billing from outside |
 | [contract.deposit.md](contract.deposit.md) | the panel's top-up routes: gateway list and deposit quote |
 | [contract.history.md](contract.history.md) | the panel's financial page: the wallet ledger and the top-up attempts |
+| [contract.gift.md](contract.gift.md) | the panel's gift-code box: redeeming a wallet-credit coupon |
 | [invariants.md](invariants.md) | writing any code that touches it |
 | [data-model.md](data-model.md) | changing storage |
 | [rules.md](rules.md) | implementing inside this unit |

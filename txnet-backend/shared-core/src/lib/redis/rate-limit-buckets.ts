@@ -93,6 +93,16 @@ export const RateLimitBucket = {
    */
   WALLET_HISTORY: 'wallet:history',
   WALLET_PAYMENTS: 'wallet:payments',
+
+  /**
+   * Redeeming a gift code in `billing-service` (F-092-m), per user. The one
+   * budget on this list that is a security control rather than a cost control:
+   * a gift code is a bearer secret worth money, and the route is the only thing
+   * that says whether one exists. Its limit is set far below the read routes'
+   * for that reason, and lowering it further costs a user nothing — nobody
+   * types twenty gift codes in a quarter of an hour.
+   */
+  GIFT_REDEEM: 'gift:redeem',
 } as const;
 
 export type RateLimitBucket =
