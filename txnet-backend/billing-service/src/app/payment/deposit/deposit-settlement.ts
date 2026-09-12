@@ -48,6 +48,10 @@ export const PAYMENT_SELECT = {
   // it off the row, because nothing brought it (F-092-l).
   gatewayTrackingCode: true,
   gatewayReferenceId: true,
+  // The grant it was taken under, or NULL (F-096-a). Settling and reconciling
+  // both charge the same gateway the payment was started at, so both read the
+  // credential along the same grant (ADR-0041 §3).
+  grantId: true,
   gateway: { select: { providerName: true } },
   tenantGatewayConfig: { select: { providerName: true } },
 } satisfies Prisma.PaymentTransactionSelect;
@@ -170,5 +174,8 @@ export function gatewayRefOf(payment: PaymentRow): MerchantGatewayRef {
       `payment ${payment.id} names no gateway; the CHECK in 20260911000000_payment_legacy_port should forbid it`,
     );
   }
-  return { tenantId: tenant.id, source, gatewayId, providerName };
+  // `tenantId` stays the tenant in scope: for an owned gateway that is whose
+  // vault holds it, and for a granted one `GrantedVaultAccess` re-derives the
+  // owner from the grant rather than trusting this field.
+  return { tenantId: tenant.id, source, gatewayId, providerName, grantId: payment.grantId };
 }

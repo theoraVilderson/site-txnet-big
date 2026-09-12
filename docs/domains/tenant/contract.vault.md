@@ -2,8 +2,8 @@
 id: tenant
 layer: domain
 status: active
-version: 7
-updated: 2026-09-11
+version: 8
+updated: 2026-09-12
 ---
 
 # Contract — tenant / the Credential Vault
@@ -22,7 +22,7 @@ the why, and this file does not restate it.
 | Service | `VAULT_DB` binds | Uses |
 |---|---|---|
 | `auth-service` (`app/tenant/vault/vault.module.ts`) | the cross-tenant pool — its readers resolve a tenant through the vault | every operation, the internal destroy route |
-| `billing-service` (`payment/gateway/gateway.module.ts`) | the app pool, each vault query bound to the request's tenant; `$transaction` refused, so no `put` | `use` of `gateway_merchant_id` |
+| `billing-service` (`payment/gateway/gateway.module.ts`) | the app pool, each vault query bound to the request's tenant — **except inside a proved grant**, below; `$transaction` refused, so no `put` | `use` of `gateway_merchant_id` |
 
 A loader mounts the same `VAULT_KEK_FILE` and gets `CredentialEnvGuard` with
 it. Every rule below holds in either process.
@@ -189,3 +189,23 @@ the join: `automation.bot_integration.credentialRef` is the `label` half of a
 `tenantId` and `platform`. The webhook secret takes the **same** label under
 kind `webhook_secret`, which is what puts rule 4's grace window to work — an
 update signed against the previous secret still verifies while it rotates.
+
+## The one crossing (ADR-0041 §3, F-096-c)
+
+`billing-service`'s binding is the request's tenant, and a granted gateway is
+the one case that has to read past it: the gateway is charged with its
+**owner's** merchant id (D-26), so a payment inside the borrowing tenant reads a
+credential of the lending one.
+
+| Rule | Why |
+|---|---|
+| The bind target is overridden **for the duration of one call**, by `GrantedVaultAccess.along(...)`, and by nothing else | a second connection would let every vault read in that service reach every tenant's credentials, for ever, to serve one case. The narrow path is revocable by deleting a row |
+| The grant is **proved first**, on the application pool, inside the borrower's own scope — so the RLS policy on `payment_gateway_grant` is what refuses a grant made to somebody else | the caller cannot assert a grant; it can only name one that answers |
+| It must be live **and name the gateway being charged** | otherwise one grant is a key to every gateway that lender owns |
+| The owner is **re-derived** from the grant (the platform owner tenant, or the lender's own row read for that one id) and never taken from the caller | a ref carrying somebody else's tenant id then changes nothing |
+| The access row lands in the **owner's** scope, with a caller tag naming the grant (`billing:<provider>:grant:<id>`) | a lender can see every use of its own account and under which grant. Nothing has to remember to log: the vault writes it |
+
+Proof: `payment/gateway/granted-vault-access.spec.ts` for the refusals,
+`payment/gateway/gateway-merchant.int.spec.ts` for the crossing itself against
+a real policy — the same borrower and credential that are refused without a
+grant.

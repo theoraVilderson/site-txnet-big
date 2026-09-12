@@ -42,7 +42,9 @@ import {
   startPostgresFixture,
 } from '../../../../../test-support/postgres-fixture';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { GatewayMerchant } from './gateway-merchant';
+import { GrantedVaultAccess } from './granted-vault-access';
 import { tenantBoundVaultDb } from './tenant-bound-vault-db';
 
 vi.setConfig({ testTimeout: HARNESS_TIMEOUT_MS, hookTimeout: HARNESS_TIMEOUT_MS });
@@ -54,6 +56,8 @@ const A_OWN = 'aaaaaaaa-0000-4000-8000-000000000001';
 const A_PLATFORM = 'aaaaaaaa-0000-4000-8000-000000000002';
 const A_NO_CREDENTIAL = 'aaaaaaaa-0000-4000-8000-000000000003';
 const B_OWN = 'bbbbbbbb-0000-4000-8000-000000000001';
+const ADMIN = '55555555-5555-4555-8555-555555555555';
+const GRANT = 'cccccccc-0000-4000-8000-000000000001';
 
 let pg: PostgresFixture;
 let keyDir: string;
@@ -80,6 +84,19 @@ beforeAll(async () => {
       VALUES ('${id}', 'reseller', '${id}', '${slug}', 'active', 'pay_as_you_go_metered', now())
     `);
   }
+  // Tenant B owns a gateway and lends it to A (ADR-0041). The grant row is the
+  // only thing that will open B's vault to a payment inside A.
+  await owner.$executeRawUnsafe(`
+    INSERT INTO tenant.tenant_gateway_config
+      (id, "tenantId", "displayName", "providerName", "gatewayCategory", "verificationStatus", "isActive",
+       "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt")
+    VALUES ('${B_OWN}', '${TENANT_B}', 'beta zarinpal', 'zarinpal', 'domestic_rial', 'verified', true,
+       1.00, 1000.00, 'manual', 'percentage', 1.0000, now())
+  `);
+  await owner.$executeRawUnsafe(`
+    INSERT INTO billing.payment_gateway_grant (id, "tenantId", "tenantGatewayConfigId", "grantedByAdminId")
+    VALUES ('${GRANT}', '${TENANT_A}', '${B_OWN}', '${ADMIN}')
+  `);
   await owner.$disconnect();
 
   // auth-service's side: the cross-tenant pool writes both tenants' merchants.
@@ -98,7 +115,8 @@ beforeAll(async () => {
   // billing-service's side, exactly as `gateway.module.ts` builds it.
   const base = new PrismaService(pg.appUrl);
   app = base.$extends(withTenant(base)) as unknown as PrismaService;
-  merchant = new GatewayMerchant(new CredentialVaultService(tenantBoundVaultDb(app), kekFor()));
+  const granted = new GrantedVaultAccess(app, new CrossTenantPrismaService(pg.crossTenantUrl));
+  merchant = new GatewayMerchant(new CredentialVaultService(tenantBoundVaultDb(app), kekFor()), granted);
 });
 
 afterAll(async () => {
@@ -178,5 +196,66 @@ it('refuses to confirm a gateway that has no merchant id, and confirms one that 
     await expect(
       merchant.requireConfigured(zarinpal(TENANT_A, 'tenant', A_NO_CREDENTIAL)),
     ).rejects.toMatchObject({ name: 'CredentialUnavailable', reason: 'missing' });
+  });
+});
+
+/**
+ * ADR-0041 §3 / F-096-c — the one crossing, and only along a grant.
+ *
+ * The case above ("finds no row for another tenant's gateway") is this one's
+ * control: the same credential, the same borrower, and the only difference is a
+ * grant. Only a database can say it, because what refuses without the grant is
+ * the RLS policy and not a `where`.
+ */
+describe('a granted gateway is charged with its owner\'s merchant id', () => {
+  const granted = { ...zarinpal(TENANT_A, 'tenant', B_OWN), grantId: GRANT };
+
+  it("reads the lender's credential along the grant, and audits it in the lender's scope", async () => {
+    const credentials = await runWithTenant({ id: TENANT_A }, () =>
+      merchant.credentialsFor(granted, ACTOR),
+    );
+
+    expect(credentials).toEqual({ merchantId: 'merchant-beta' });
+    const rows = await accessRows(TENANT_B);
+    expect(rows).toHaveLength(1);
+    // The lender can see who used its account and under which grant.
+    expect(rows[0]).toMatchObject({ caller: `billing:zarinpal:grant:${GRANT}`, actorId: ACTOR });
+  });
+
+  it('refuses the same read with the grant withdrawn', async () => {
+    await crossTenant.$executeRawUnsafe(`
+      UPDATE billing.payment_gateway_grant
+         SET "isActive" = false, "withdrawnAt" = now(), "withdrawnByAdminId" = '${ADMIN}'
+       WHERE id = '${GRANT}'
+    `);
+
+    const failure = await runWithTenant({ id: TENANT_A }, () =>
+      merchant.credentialsFor(granted, ACTOR),
+    ).catch((e: unknown) => e);
+
+    expect(failure).toMatchObject({ name: 'GrantNotUsable', reason: 'not_found' });
+
+    await crossTenant.$executeRawUnsafe(`
+      UPDATE billing.payment_gateway_grant
+         SET "isActive" = true, "withdrawnAt" = NULL, "withdrawnByAdminId" = NULL
+       WHERE id = '${GRANT}'
+    `);
+  });
+
+  it('leaves the vault bound to the request tenant again afterwards', async () => {
+    await runWithTenant({ id: TENANT_A }, () => merchant.credentialsFor(granted, ACTOR));
+
+    // The very next read is an ordinary one, and must see A's vault and not B's.
+    await expect(
+      runWithTenant({ id: TENANT_A }, () => merchant.credentialsFor(zarinpal(TENANT_A, 'tenant', A_OWN))),
+    ).resolves.toEqual({ merchantId: 'merchant-alpha' });
+  });
+
+  it("lists the lender's labels along the grant, which is what keeps it on the top-up page", async () => {
+    const labels = await runWithTenant({ id: TENANT_A }, () =>
+      merchant.configuredLabels(TENANT_B, GRANT, { source: 'tenant', gatewayId: B_OWN }),
+    );
+
+    expect([...labels]).toContain(`gateway:tenant:${B_OWN}`);
   });
 });

@@ -5,6 +5,7 @@ import {
 } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { vaultTenantOverride } from './granted-vault-access';
 
 /**
  * The connection `billing-service`'s vault queries through (ADR-0039).
@@ -19,6 +20,13 @@ import { PrismaService } from '../../prisma/prisma.service';
  * The vault models stay out of `TENANT_SCOPED_MODELS` (`tenant/contract.vault.md`):
  * this binds `app.tenant_id` and rewrites no arguments, so `auth-service` is
  * untouched.
+ *
+ * **One exception, and it is a proved one** (ADR-0041 §3, F-096-c): inside
+ * `GrantedVaultAccess.along(...)` the bind target is the **gateway owner's**
+ * tenant instead, because a granted gateway is charged with its owner's
+ * merchant id. The override cannot be opened without a grant that has been read
+ * back on this pool, in the borrower's own scope — so RLS is still what decides,
+ * one call at a time. Everything else here is unchanged.
  *
  * **Reads only.** `$transaction` is refused: `put` rotates inside an
  * interactive transaction, where a per-query bind would run beside it rather
@@ -38,7 +46,11 @@ export function tenantBoundVaultDb(prisma: PrismaService): VaultDb {
       operation: string;
       args: unknown;
       query: (args: unknown) => Promise<unknown>;
-    }) => bind(TenantContext.current(`${model}.${operation}`).id, () => query(args)),
+    }) =>
+      bind(
+        vaultTenantOverride()?.tenantId ?? TenantContext.current(`${model}.${operation}`).id,
+        () => query(args),
+      ),
   };
   const bound = prisma.$extends({
     query: {

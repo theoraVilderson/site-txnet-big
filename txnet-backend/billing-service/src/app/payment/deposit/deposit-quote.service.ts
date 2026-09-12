@@ -121,10 +121,21 @@ export class DepositQuoteService {
     // drop the row — a granted gateway silently missing rather than offered.
     // One read per distinct owner, which is one for all but a tenant that has
     // been granted gateways by several lenders.
-    const owners = [...new Set(rows.map((g) => g.ownerTenantId))];
+    // One entry per owning tenant, each read where that tenant's vault is —
+    // for a lender, along one of the grants that named its gateways (F-096-c).
+    const byOwner = new Map(rows.map((g) => [g.ownerTenantId, g]));
     const configured = new Map(
       await Promise.all(
-        owners.map(async (id) => [id, await this.merchant.configuredLabels(id)] as const),
+        [...byOwner.values()].map(
+          async (g) =>
+            [
+              g.ownerTenantId,
+              await this.merchant.configuredLabels(g.ownerTenantId, g.grantId, {
+                source: g.source,
+                gatewayId: g.id,
+              }),
+            ] as const,
+        ),
       ),
     );
     return rows
@@ -168,6 +179,9 @@ export class DepositQuoteService {
           source: request.source,
           gatewayId: gateway.id,
           providerName: gateway.providerName,
+          // Naming the grant is what opens the owner's vault, and only after it
+          // is proved (ADR-0041 §3).
+          grantId: gateway.grantId,
         },
         amount,
         discount: coupons.totalDiscount,

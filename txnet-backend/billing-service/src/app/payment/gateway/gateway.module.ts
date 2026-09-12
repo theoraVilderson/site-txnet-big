@@ -8,6 +8,7 @@ import {
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { GatewayMerchant } from './gateway-merchant';
+import { GrantedVaultAccess } from './granted-vault-access';
 import { PaymentProviderRegistry } from './payment-provider.registry';
 import { tenantBoundVaultDb } from './tenant-bound-vault-db';
 
@@ -30,8 +31,9 @@ import { tenantBoundVaultDb } from './tenant-bound-vault-db';
     CredentialEnvGuard,
     { provide: VAULT_DB, inject: [PrismaService], useFactory: tenantBoundVaultDb },
     PaymentProviderRegistry,
+    GrantedVaultAccess,
     GatewayMerchant,
   ],
-  exports: [PaymentProviderRegistry, GatewayMerchant],
+  exports: [PaymentProviderRegistry, GatewayMerchant, GrantedVaultAccess],
 })
 export class GatewayModule {}

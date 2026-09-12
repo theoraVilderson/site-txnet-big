@@ -142,6 +142,7 @@ export class DepositStartService {
       source,
       gatewayId: gateway.id,
       providerName: gateway.providerName,
+      grantId: gateway.grantId,
     };
     const { provider, price } = await priceDeposit(
       { providers: this.providers, merchant: this.merchant, fx: this.fx },

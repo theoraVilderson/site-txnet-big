@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 10
+version: 11
 updated: 2026-09-12
 ---
 
@@ -155,10 +155,18 @@ exception, and it changes which rows are offered — not how they are priced.
 | The vault filter (F-092-u) asks the **owning** tenant's vault, not the caller's | a granted gateway's merchant id is its owner's (D-26, ADR-0041 §3). Asking the caller would answer "not configured" and drop the row — a granted gateway silently missing rather than offered |
 | A payment records the grant it was taken under (`payment_transaction.grantId`), written at `start` | the grant can be withdrawn between starting and settling, and what the platform owes is decided by the grant the payment was *made* under (ADR-0041 §4). F-096-d accrues from this column |
 
-**Not covered here:** charging one. The credential that a granted gateway is
-charged with, and the audit rule around reading it, are F-096-c's; the debt it
-accrues is F-096-d's. Nothing surfaces or creates a grant yet — that is
-F-096-e's, and until then a grant row is written by hand.
+**Charging one** (F-096-c): a ref may name its grant, and naming one is what
+opens the **owner's** vault — after the grant has been proved on the
+application pool in the borrower's own scope, against that gateway. Every vault
+read a gateway needs goes through `GatewayMerchant`, so "along a grant and
+nowhere else" is one file's property and not four call sites' discipline; the
+rules and the refusals are `domains/tenant/contract.vault.md` "The one
+crossing", and the access row lands in the lender's scope tagged with the
+grant.
+
+**Not covered here:** the debt a granted payment accrues is F-096-d's, and
+nothing surfaces or creates a grant yet — that is F-096-e's, and until then a
+grant row is written by hand.
 
 ## Expiring what nobody came back for (built — F-092-k)
 

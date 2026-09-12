@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PaymentProviderName, TenantCredentialKind, TenantCredentialStatus } from '@prisma/client';
 import { CredentialUnavailable, CredentialVaultService } from '@txnet-backend/shared-core';
 
+import { GrantedVaultAccess } from './granted-vault-access';
 import type { GatewayCredentials } from './payment-provider';
 
 /** Which table a gateway row is in: a tenant's `tenant_gateway_config`, or the platform brand's `payment_gateway`. */
@@ -14,6 +15,12 @@ export type MerchantGatewayRef = {
   source: GatewaySource;
   gatewayId: string;
   providerName: PaymentProviderName;
+  /**
+   * The grant this gateway is used under, or `null`/absent when the tenant owns
+   * it (ADR-0041 §3, F-096-c). Naming one is what opens the owner's vault, and
+   * it is proved before it opens anything — `GrantedVaultAccess`.
+   */
+  grantId?: string | null;
 };
 
 /**
@@ -45,18 +52,50 @@ export const merchantLabel = (source: GatewaySource, gatewayId: string) => `gate
  * `configuredLabels` and `requireConfigured` are for (F-092-u): offering one
  * means the user picks it and the payment fails after they have chosen.
  */
+/**
+ * **The one door** (ADR-0041 §3). Every vault read a gateway needs goes through
+ * this class, so "a credential is read along a grant and nowhere else" is a
+ * property of one file rather than a rule four call sites must remember: a ref
+ * that names a grant is served through `GrantedVaultAccess`, one that does not
+ * is served exactly as before.
+ */
 @Injectable()
 export class GatewayMerchant {
-  constructor(private readonly vault: CredentialVaultService) {}
+  constructor(
+    private readonly vault: CredentialVaultService,
+    private readonly granted: GrantedVaultAccess,
+  ) {}
+
+  /**
+   * Run `fn` where the credential actually lives: here for an owned gateway,
+   * inside the proved grant for a borrowed one. `fn` is handed the tenant whose
+   * vault answered, because for a grant that is re-derived rather than taken
+   * from the ref.
+   */
+  private whereItLives<T>(gateway: MerchantGatewayRef, fn: (tenantId: string) => Promise<T>): Promise<T> {
+    if (!gateway.grantId) return fn(gateway.tenantId);
+    return this.granted.along(
+      { grantId: gateway.grantId, source: gateway.source, gatewayId: gateway.gatewayId },
+      fn,
+    );
+  }
+
+  /** The audit tag the access row carries. A borrowed credential says which grant lent it. */
+  private caller(gateway: MerchantGatewayRef): string {
+    const base = `billing:${gateway.providerName}`;
+    return gateway.grantId ? `${base}:grant:${gateway.grantId}` : base;
+  }
 
   async credentialsFor(gateway: MerchantGatewayRef, actorId: string | null = null): Promise<GatewayCredentials> {
-    const merchantId = await this.vault.use(
-      {
-        tenantId: gateway.tenantId,
-        kind: TenantCredentialKind.gateway_merchant_id,
-        label: merchantLabel(gateway.source, gateway.gatewayId),
-      },
-      { caller: `billing:${gateway.providerName}`, actorId },
+    const merchantId = await this.whereItLives(gateway, (tenantId) =>
+      this.vault.use(
+        {
+          tenantId,
+          kind: TenantCredentialKind.gateway_merchant_id,
+          label: merchantLabel(gateway.source, gateway.gatewayId),
+        },
+        { caller: this.caller(gateway), actorId },
+      ),
     );
     return { merchantId };
   }
@@ -66,8 +105,10 @@ export class GatewayMerchant {
    * `tenant_credential_access` row, because nothing is decrypted. The list
    * filters on `merchantLabel(...)` of each gateway (F-092-u).
    */
-  async configuredLabels(tenantId: string): Promise<Set<string>> {
-    const credentials = await this.vault.list(tenantId);
+  async configuredLabels(tenantId: string, grantId?: string | null, gateway?: { source: GatewaySource; gatewayId: string }): Promise<Set<string>> {
+    const credentials = await (grantId && gateway
+      ? this.granted.along({ grantId, ...gateway }, (owner) => this.vault.list(owner))
+      : this.vault.list(tenantId));
     return new Set(
       credentials
         .filter((c) => c.kind === TenantCredentialKind.gateway_merchant_id && c.configured)
@@ -81,14 +122,16 @@ export class GatewayMerchant {
    * payment itself (F-092-u).
    */
   async requireConfigured(gateway: MerchantGatewayRef): Promise<void> {
-    const ref = {
-      tenantId: gateway.tenantId,
-      kind: TenantCredentialKind.gateway_merchant_id,
-      label: merchantLabel(gateway.source, gateway.gatewayId),
-    };
-    const summary = await this.vault.summary(ref);
-    if (!summary?.configured || summary.status !== TenantCredentialStatus.active) {
-      throw new CredentialUnavailable(ref, summary ? 'revoked' : 'missing');
-    }
+    await this.whereItLives(gateway, async (tenantId) => {
+      const ref = {
+        tenantId,
+        kind: TenantCredentialKind.gateway_merchant_id,
+        label: merchantLabel(gateway.source, gateway.gatewayId),
+      };
+      const summary = await this.vault.summary(ref);
+      if (!summary?.configured || summary.status !== TenantCredentialStatus.active) {
+        throw new CredentialUnavailable(ref, summary ? 'revoked' : 'missing');
+      }
+    });
   }
 }
