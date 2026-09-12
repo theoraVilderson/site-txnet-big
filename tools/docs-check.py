@@ -9,7 +9,9 @@ Checks:
   5. ASSUMED(YYYY-MM-DD) tags older than MAX_AGE_DAYS
   6. open-questions rows without a date
   7. every unit is reachable from MASTER_INDEX.md
+  8. every path a doc *claims* points at real code actually exists
 """
+import os
 import re
 import sys
 import glob as globlib
@@ -105,6 +107,137 @@ def unit_dirs():
             if idx.parent == base:
                 continue  # the layer's own INDEX, not a unit
             yield idx.parent
+
+
+# --- 8. a claimed path must exist -------------------------------------------
+#
+# Check 3 validates a unit's `source:`, which is the only place the protocol
+# names. Three other columns make the same claim — "this path is the code" — and
+# nothing checked them, so they rotted silently:
+#
+#   * `BACKLOG.md` `proof` — F-016 cited a file deleted a week earlier, while
+#     the row read `done`. `done` means the code exists; the proof is the whole
+#     evidence for that, so a broken one makes the status unverifiable.
+#   * `SURFACES.md` `component` — `where.py --check` already covers this one.
+#   * `CODE-LAYOUT.md`'s tables — the symptom -> role table sent a DIAGNOSE
+#     session to `site-pwa/src/app/api/auth/[...path]/route.ts`, removed on
+#     2026-09-05. A wrong file opened confidently is the expensive failure §3c
+#     exists to prevent.
+#
+# Prose is deliberately **not** checked. A contract's Deprecations table names
+# removed files on purpose, and `MIGRATION.md` names scaffolding it also tells
+# you to delete — both are correct, and flagging them would teach the reader to
+# ignore this check.
+
+# Reject a glob, a brace expansion, a placeholder or an ellipsis: those are
+# patterns, and a pattern is not a claim about one file.
+PATH_REJECT = re.compile(r"[*{}<>$\s]|\.\.\.|…")
+PATH_SHAPE = re.compile(r"^[\w./@()\[\]-]+$")
+
+
+def claimed_paths(cell: str):
+    """The substrings of one table cell that assert a real file, unescaped."""
+    out = []
+    for raw in re.split(r"[,\s]+", cell.replace("\\_", "_")):
+        cand = raw.strip().strip("`\"'").rstrip(".,;:)")
+        if not cand or "/" not in cand or cand.startswith(("http", "#")):
+            continue
+        if PATH_REJECT.search(cand) or not PATH_SHAPE.match(cand):
+            continue
+        if not (re.search(r"\.[a-z0-9]+$", cand) or cand.endswith("/")):
+            continue
+        # A bare one-word directory (`dist/`, `src/`) is a fragment in a
+        # sentence, not an address — two segments is the floor for a claim.
+        if cand.endswith("/") and cand.strip("/").count("/") == 0:
+            continue
+        out.append(cand)
+    return out
+
+
+_PATH_INDEX = None
+_INDEX_SKIP = {".git", "node_modules", "dist", ".next", "__pycache__", ".nx",
+               "coverage", "venv", ".venv"}
+
+
+def path_index():
+    """Every file and directory in the repo, repo-relative, walked once."""
+    global _PATH_INDEX
+    if _PATH_INDEX is None:
+        out = set()
+        for dirpath, dirnames, filenames in os.walk(ROOT):
+            dirnames[:] = [d for d in dirnames if d not in _INDEX_SKIP]
+            base = Path(dirpath)
+            for name in dirnames:
+                out.add(str((base / name).relative_to(ROOT)) + "/")
+            for name in filenames:
+                out.add(str((base / name).relative_to(ROOT)))
+        _PATH_INDEX = out
+    return _PATH_INDEX
+
+
+def resolve_claim(cand: str):
+    """-> the path it names, or None.
+
+    Matched as a **suffix**, not only from the repo root, because that is the
+    convention these tables already use: `CODE-LAYOUT.md` says to look in
+    `session/chat-access.ts` and `automation/schedule.ts`, which are
+    `bot-service/src/app/…` and `shared-core/src/lib/…`. Requiring full paths
+    would have made this a checker that silently skipped every row of the one
+    table it was written for — the failure it exists to catch.
+
+    A suffix match is deliberately weaker than an exact one: it answers "does
+    this name anything at all", not "is this the right file". That is the
+    question here. A path pointing at nothing is the bug (F-016's proof, and
+    the removed auth proxy this table named for a week); a path that is merely
+    imprecise is a reader's problem, not a checker's.
+    """
+    if cand in path_index() or (ROOT / cand).exists():
+        return cand
+    needle = "/" + cand.rstrip("/") + ("/" if cand.endswith("/") else "")
+    for known in path_index():
+        if known.endswith(needle):
+            return known
+    return None
+
+
+def check_claimed_paths():
+    """Rows in the three files whose columns claim a path points at real code."""
+    # (file, which cell index holds the claim, which cell identifies the row)
+    sites = [
+        ("docs/BACKLOG.md", 6, 0),
+        ("docs/SURFACES.md", 4, 0),
+    ]
+    for rel, col, key in sites:
+        f = ROOT / rel
+        if not f.exists():
+            continue
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if not line.startswith("|"):
+                continue
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cells) <= col or cells[0].startswith(("-", "id", "surface")):
+                continue
+            if "(removed)" in line:
+                continue  # a row that documents something gone, on purpose
+            for cand in claimed_paths(cells[col]):
+                if resolve_claim(cand) is None:
+                    errors.append(
+                        f"{rel}: {cells[key]} claims `{cand}`, which does not exist. "
+                        f"A `done` row proven by a missing file is a status nobody "
+                        f"can verify — repoint it or say where the code went")
+
+    # CODE-LAYOUT's tables are prose-heavy, so only backticked candidates count.
+    layout = ROOT / "docs/CODE-LAYOUT.md"
+    if layout.exists():
+        for n, line in enumerate(layout.read_text(encoding="utf-8").splitlines(), 1):
+            if not line.startswith("|") or "(removed)" in line:
+                continue
+            for quoted in re.findall(r"`([^`]+)`", line):
+                for cand in claimed_paths(quoted):
+                    if resolve_claim(cand) is None:
+                        errors.append(
+                            f"docs/CODE-LAYOUT.md:{n}: names `{cand}`, which does not "
+                            f"exist — this table is what a DIAGNOSE session opens first")
 
 
 def main() -> int:
@@ -245,6 +378,8 @@ def main() -> int:
         for uid in units:
             if uid not in listed:
                 errors.append(f"unit '{uid}' is not listed in MASTER_INDEX.md")
+
+    check_claimed_paths()
 
     print(f"units: {len(units)}")
     for uid in sorted(consumers):
