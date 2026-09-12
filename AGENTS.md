@@ -131,6 +131,66 @@ files whose relevant slice for one row is a few dozen lines out of 1275. Use
 briefing's one-line summaries without opening the contracts will get the rules
 wrong, and the briefing cannot tell you that it did.
 
+## The reading pattern — how to read the files, once you know which
+
+`brief.py` answers *which* files. This answers *how*, and it is where a session's
+budget is actually won or lost. Every number below was measured in this repo on
+2026-09-12: a rule with a number beside it gets followed, and one without it does
+not.
+
+**1. Measure before optimising.** The six checks under "Before declaring any work
+done" total **5.5s**. They are not the slow part and never were — reading is, and
+it is most of a session's cost before the first line of code. Time the thing you
+are about to speed up, or you will speed up the wrong thing.
+
+**2. `grep`/`sed` the file; do not `cat` it.** The difference is not marginal:
+
+| instead of | do this | cost |
+|---|---|---|
+| reading `docs/BACKLOG.md` (270 KB, ~67k tokens) | `grep -n "<row-id>" docs/BACKLOG.md` | ~600 tokens — **100x less** |
+| reading a `contract.*.md` for one fact | `grep -n "channel\|event" <file>` | ~400 vs ~2,800 |
+| reading a long source file | `sed -n '1,150p'`, or `grep -n "export \|interface "` first | a quarter of it |
+
+A whole-file read is right when you will use most of the file — a unit's
+`contract.md`, a component you are about to change. It is wrong for anything
+tabular, indexed or long, which is most of `docs/`.
+
+**3. Batch independent reads into one message.** Three `Bash` calls in one block,
+not three turns. Nothing about the work changes; the round trips go away.
+
+**4. Never read `BACKLOG.md` whole.** §6b.1 says to, and `brief.py --next` makes
+it unnecessary — the row, its eligibility and its inputs for ~600 tokens instead
+of ~67,000. It is 203 rows and grows every session, so this is the largest single
+saving available and it costs nothing.
+
+**5. Surface an architectural decision the moment you find it.** Mid-item it is
+one question; end-of-item it is a rebuild. See "Decide once" below: ADR-0015 is
+the worked example of getting this wrong, and F-093-c (the CORS path, 2026-09-12)
+of getting it right — one question, and five later rows inherited the answer.
+
+**6. List the call sites before changing a signature** (§6.2b — cheap enough to
+be unconditional). One `grep -rn` on `request()` found 24 call sites, all inside
+one file, and that is what chose the safe refactor: keep the signature, delegate
+the body, touch no caller.
+
+**7. Prove a refactor with the existing suite before building on it.** Extract,
+then immediately run the tests that already cover it — `auth-api.test.ts` is 29
+tests in 10s. The same red answer five files later costs an hour to localise.
+
+**8. Write the spec first and watch it fail for the reason you named.** Required
+already by `docs/CODE-LAYOUT.md` "Order of work", and repeated here because it is
+a speed rule as much as a correctness one: code written against a failing target
+is faster than code you go back and test.
+
+**Where this still leaks:** one session read ~74 KB of `00-PROTOCOL.md`,
+`CODE-LAYOUT.md` and `CONVENTIONS.md` whole where a slice would have done.
+`brief.py` prints §6b and the `C-nn` ids in play; it does not yet print the
+contract rule sections, and until it does that read is yours to narrow by hand.
+
+**Is any of it working?** `python3 tools/cost.py` prints the fixed read tax and
+its trend from git. Run it when a session feels slow, and before proposing a fix
+to make it faster.
+
 ## Code written without an agent
 
 If the user has been coding on their own, the docs are behind. Do not guess at
