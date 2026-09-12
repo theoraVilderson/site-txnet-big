@@ -96,6 +96,17 @@ export const RateLimitBucket = {
   DEPOSIT_START: 'deposit:start',
 
   /**
+   * Settling a top-up in `billing-service` (F-092-j), per **authority** — the
+   * one bucket on this list whose subject is not a caller, because the caller
+   * is a bank redirecting a browser and carries no identity at all. One
+   * authority is one payment, so the budget is how many times a single payment
+   * may be presented for settlement in a window: a user reloading the result
+   * page costs one each time, and anything beyond that is a replay of a
+   * redirect that has already been answered.
+   */
+  DEPOSIT_CALLBACK: 'deposit:callback',
+
+  /**
    * The financial page's two read routes in `billing-service` (F-092-n), per
    * user. Cheaper per call than a quote — neither leaves the database — but the
    * page refetches on every filter change, so the budget is the panel's own

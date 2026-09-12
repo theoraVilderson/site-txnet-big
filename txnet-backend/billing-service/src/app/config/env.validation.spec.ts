@@ -8,11 +8,17 @@ import { envSchema, validateEnv } from './env.validation';
  * below are about that: what a missing variable does, and what the empty string
  * compose actually sends does.
  */
-const DB = { DATABASE_APP_URL: 'postgresql://app@db/txnet', REDIS_URL: 'redis://redis:6379' };
+const DB = {
+  DATABASE_APP_URL: 'postgresql://app@db/txnet',
+  // Required since F-092-j: the gateway callback is public, so it resolves its
+  // tenant from the Host, and that read cannot run on the scoped pool.
+  DATABASE_CROSS_TENANT_URL: 'postgresql://cross@db/txnet',
+  REDIS_URL: 'redis://redis:6379',
+};
 
 describe('envSchema', () => {
   it('starts with nothing configured but the database', () => {
-    // Since F-092-a the service queries Postgres, so the app connection is the
+    // Since F-092-a the service queries Postgres, so its connections are the
     // one thing an empty environment cannot default; everything else still
     // must, or the schema is a reason not to run it rather than a check on it.
     const env = validateEnv(DB);

@@ -13,6 +13,7 @@ export * from './lib/redis/rate-limit-buckets';
 export * from './lib/i18n/keys.backend.generated';
 export * from './lib/tenant-context/tenant-context';
 export * from './lib/tenant-context/with-tenant';
+export * from './lib/tenant/host';
 export * from './lib/tenant/vault/kek.service';
 export * from './lib/tenant/vault/credential-vault.service';
 export * from './lib/tenant/vault/credential-env';

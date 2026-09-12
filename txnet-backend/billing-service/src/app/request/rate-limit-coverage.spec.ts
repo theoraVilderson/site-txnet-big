@@ -11,6 +11,12 @@
  * a controller added next month is covered the day it is written. `health` is
  * the one exception, and it is outside the gate for the reason `app.module.ts`
  * gives.
+ *
+ * There is a second, narrower list below. A **public** route has no caller to
+ * bucket on, so "one budget for everyone" is not a bug there but the only thing
+ * available — and the assertion has to be relaxed rather than deleted, because
+ * the route still has to be limited. It names the controller, so putting a
+ * gated route on it is a deliberate edit and shows up in a diff as one.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -34,6 +40,18 @@ vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 const APP = join(__dirname, '..');
 const EXEMPT = new Set(['HealthController']);
+
+/**
+ * Controllers with no identity to bucket on, and what they count instead.
+ *
+ * `DepositCallbackController` is a bank redirecting a browser (F-092-j): no
+ * session, no token, no `X-User-Id`. Its budget is per **authority** — one
+ * payment's worth of settlement attempts — which is asserted in
+ * `payment/deposit/deposit-callback.controller.ts`'s own reading and cannot be
+ * asserted here, because the fake request this file builds is an identity and
+ * nothing else.
+ */
+const PUBLIC = new Set(['DepositCallbackController']);
 
 function controllerFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
@@ -74,16 +92,37 @@ describe('billing rate limits', () => {
   });
 
   it('limits every route, from a variable the schema defaults, on a bucket of the caller alone', async () => {
-    const defaults = envSchema.parse({ DATABASE_APP_URL: 'x', REDIS_URL: 'x' }) as Record<string, unknown>;
+    const defaults = envSchema.parse({
+      DATABASE_APP_URL: 'x',
+      DATABASE_CROSS_TENANT_URL: 'x',
+      REDIS_URL: 'x',
+    }) as Record<string, unknown>;
 
     for (const { name, options } of await routes()) {
       expect(options, `${name} has no @RateLimit`).toBeDefined();
       const limit = defaults[options!.configKey];
       expect(Number.isInteger(limit) && (limit as number) > 0, `${name}: ${options!.configKey} has no positive default`).toBe(true);
 
+      if (PUBLIC.has(name.split('.')[0])) continue;
+
       const mine = options!.key(asUser('user-a'));
       expect(mine, `${name} buckets on something other than the caller`).toContain('user-a');
       expect(options!.key(asUser('user-b')), `${name} gives two users one budget`).not.toBe(mine);
+    }
+  });
+
+  it('counts a public route on its own subject, since it has no caller', async () => {
+    const found = (await routes()).filter((r) => PUBLIC.has(r.name.split('.')[0]));
+    expect(found.length, 'the public list names a controller that no longer exists').toBeGreaterThan(0);
+
+    for (const { name, options } of found) {
+      const bank = { query: { Authority: 'A0001', Status: 'OK' } };
+      const other = { query: { Authority: 'A0002', Status: 'OK' } };
+      expect(options!.key(bank), `${name} does not count the authority`).toContain('A0001');
+      expect(options!.key(other), `${name} gives two payments one budget`).not.toBe(options!.key(bank));
+      // No identity anywhere on the request: a public route that read one would
+      // be reading a header nothing strips.
+      expect(options!.key({ query: {} })).toBeTruthy();
     }
   });
 

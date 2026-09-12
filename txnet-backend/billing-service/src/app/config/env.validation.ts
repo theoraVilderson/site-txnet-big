@@ -65,6 +65,18 @@ export const envSchema = z.object({
   DATABASE_APP_URL: z.string().min(1, 'DATABASE_APP_URL is required'),
 
   /**
+   * The second pool, for the one read that resolves a tenant instead of running
+   * inside one (F-092-j): which tenant owns the host a bank redirected a
+   * browser to. Required, and pointed at `txnet_cross_tenant_user` — pointing
+   * it at `DATABASE_APP_URL` makes every gateway callback a 404, and pointing
+   * it at `DATABASE_URL` un-does the isolation layer. `auth-service`'s schema
+   * says the same about the same variable.
+   */
+  DATABASE_CROSS_TENANT_URL: z
+    .string()
+    .min(1, 'DATABASE_CROSS_TENANT_URL is required'),
+
+  /**
    * The panel's origin, for CORS with credentials (F-093-c). Comma-separated.
    *
    * This service shipped with no CORS at all and a comment saying the panel
@@ -152,6 +164,16 @@ export const envSchema = z.object({
   DEPOSIT_QUOTE_RATE_LIMIT: rateLimit(60),
   /** Each call holds coupons and mints an authority at the bank (`payment/deposit/deposit-start.service.ts`). */
   DEPOSIT_START_RATE_LIMIT: rateLimit(20),
+  /**
+   * The gateway callback (`payment/deposit/deposit-callback.controller.ts`),
+   * counted per **authority** rather than per user: it is the platform's only
+   * public billing route, and a bank redirecting a browser carries no identity
+   * to bucket on. One authority is one payment, so this is how many times a
+   * single payment may be presented for settlement in a quarter of an hour —
+   * generous enough for a user reloading the result page, and far below what it
+   * costs to make a second authority.
+   */
+  DEPOSIT_CALLBACK_RATE_LIMIT: rateLimit(30),
   WALLET_HISTORY_RATE_LIMIT: rateLimit(180),
   WALLET_PAYMENTS_RATE_LIMIT: rateLimit(120),
   /** A code-guessing oracle if it were generous (`payment/gift/gift.controller.ts`). */

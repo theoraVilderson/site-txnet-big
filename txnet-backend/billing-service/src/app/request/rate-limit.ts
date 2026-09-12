@@ -7,5 +7,10 @@ import type { RateLimitConfigKey } from '../config/env.validation';
  * `configKey` the schema does not declare does not compile (F-087). Build the
  * bucket from the caller — `identityOf(req).userId` — never from anything two
  * users share.
+ *
+ * The gateway callback is the one exception, and it is not a loophole: it is
+ * public, so there is no caller to build a bucket from, and it counts the
+ * authority instead (F-092-j). `rate-limit-coverage.spec.ts` holds the list of
+ * controllers allowed to do that, and it has one entry.
  */
 export const RateLimit = (options: RateLimitOptions<RateLimitConfigKey>) => SharedRateLimit(options);

@@ -2,17 +2,17 @@
 id: billing
 layer: domain
 status: active
-version: 6
+version: 7
 updated: 2026-09-12
 ---
 
 # Contract — billing
 
-**Eight things built** — the wallet credit/debit primitive (F-092-b), the
+**Nine things built** — the wallet credit/debit primitive (F-092-b), the
 gateway pricing calculator (F-092-e), the payment provider port (F-092-f),
-coupon validation (F-092-g) and coupon reservation (F-092-h), all below, the
-top-up page's routes — the gateway list and quote (F-092-o) and starting the
-payment (F-092-i) — in
+coupon validation (F-092-g) and coupon reservation (F-092-h), all below, one
+whole top-up — the gateway list and quote (F-092-o), starting the payment
+(F-092-i) and the callback that settles it (F-092-j) — in
 **[contract.deposit.md](contract.deposit.md)**, and the wallet history +
 payment attempt routes (F-092-n) in
 **[contract.history.md](contract.history.md)** (both §10). Every other row in *Provides* is still intent from
@@ -24,7 +24,7 @@ payment attempt routes (F-092-n) in
 `.confirm(tx, orderReferenceId)`, `.release(tx, orderReferenceId, 'cancelled' | 'expired')` in
 `billing-service/src/app/payment/coupon/coupon-reservation.ts`, over the SQL functions of migration
 `20260911000200_coupon_reservation`; `deposit/start` reserves and, on its free path, confirms (F-092-i);
-F-092-j / F-092-k settle the rest.
+the callback confirms (F-092-j) and F-092-k expires the rest.
 
 | Rule | Why |
 |---|---|
@@ -60,7 +60,7 @@ quote calls it (F-092-o) and `deposit/start` reserves what it applied (F-092-i).
 ## Payment providers (built — F-092-f)
 
 `PaymentProviderRegistry.get(providerName)` / `.has(providerName)` and `GatewayMerchant.credentialsFor(config, actorId?)`
-in `billing-service/src/app/payment/gateway/`; the deposit quote (F-092-o) and `deposit/start` (F-092-i) call them, F-092-j will.
+in `billing-service/src/app/payment/gateway/`; the deposit quote (F-092-o), `deposit/start` (F-092-i) and the callback that verifies (F-092-j) call them.
 
 | Rule | Why |
 |---|---|
@@ -121,20 +121,22 @@ numbers are `gateway-pricing.golden.json` (F-0611).
 
 | What | Where |
 |---|---|
-| Every route is under `/api/billing/*`, published by Traefik behind `strip-fake-headers,my-auth` — the required gate | `dev-docker/docker-compose.main.yml` |
+| Every route is under `/api/billing/*`, published by Traefik behind `strip-fake-headers,my-auth` — the required gate. **One exception:** `deposit/callback` is published with `strip-fake-headers` alone, on a higher-priority router with no `Host(...)`, because a bank redirects a browser to whichever tenant's panel domain it was minted on (F-092-j) | `dev-docker/docker-compose.main.yml` |
 | A request without `X-User-Id`, `X-Tenant-Id`, `X-Role-Id` and `X-Session-Id` is refused **401** — never served with no tenant, never with half a set. `X-User-Permissions` may be empty or absent: an empty list | `billing-service/src/app/request/identity.middleware.ts` |
-| The handler runs inside `runWithTenant({ id: X-Tenant-Id })`; `identityOf(req)` returns the rest. This service resolves no tenant itself | same file |
-| Queries go through `PrismaService` on `DATABASE_APP_URL` with `withTenant` applied — no cross-tenant pool. `TENANT_SCOPED_MODELS` holds no billing model yet: the row that first queries one registers it | `billing-service/src/app/prisma/prisma.module.ts` |
+| The handler runs inside `runWithTenant({ id: X-Tenant-Id })`; `identityOf(req)` returns the rest | same file |
+| On the public callback there are no headers to read, so `CallbackTenantMiddleware` resolves the tenant from the **Host** against `tenant_domain` and opens the scope itself; an unknown or unproven host is a neutral **404** (ADR-0025). A middleware and not a guard — the rate limiter counts on the tenant in context | `billing-service/src/app/request/callback-tenant.middleware.ts` |
+| Queries go through `PrismaService` on `DATABASE_APP_URL` with `withTenant` applied. Since F-092-j there is a **second** pool, `CrossTenantPrismaService` on `DATABASE_CROSS_TENANT_URL`, held by the callback middleware alone: that read is what *produces* a tenant, so it cannot run inside one. It is a policy (`USING (true)`), never a bypass — neither role holds `BYPASSRLS` — and `grep -rn CrossTenantPrismaService` is the audit | `billing-service/src/app/prisma/prisma.module.ts` |
 | Success and errors use the `shared-core` envelope, translated per `Accept-Language` | `billing-service/src/main.ts` |
 | **CORS is on for `FRONTEND_ORIGIN`, with credentials** (added F-093-c): the panel calls these routes from the browser, cross-origin at `api.<domain>`, with the access token as a Bearer header. A missing origin is a refusal to boot when `NODE_ENV=production` — never "allow any origin"; the permissive fallback is dev-and-localhost only. This service was built asserting the panel used a same-origin proxy, which `panel-web` had already deprecated (`panel-web/contract.md`), and no caller existed to make that wrong visible | `billing-service/src/main.ts` |
-| Every route but `health` carries `@RateLimit` with a bucket of the caller's `userId`, enforced by the global `RateLimitGuard` (the `shared-core` limiter, counted in Redis, F-092-r). A new route without one fails `request/rate-limit-coverage.spec.ts`; over the limit is **429** `system.rateLimit` | `billing-service/src/app/app.module.ts` |
+| Every route but `health` carries `@RateLimit`, enforced by the global `RateLimitGuard` (the `shared-core` limiter, counted in Redis, F-092-r), bucketed on the caller's `userId` — except the public callback, which has no caller and counts the **authority**. A new route without one, or a gated one bucketed on anything but its caller, fails `request/rate-limit-coverage.spec.ts`; over the limit is **429** `system.rateLimit` | `billing-service/src/app/app.module.ts` |
 | `GET /api/health` bypasses the identity check and is not published by Traefik | `billing-service/src/app/health.controller.ts` |
 
 ## Wallet ledger (built — F-092-b)
 
 `WalletLedgerService.credit(tx, entry)` / `.debit(tx, entry)` in
 `billing-service/src/app/wallet/wallet-ledger.service.ts`; the gift box calls it
-(F-092-m) and so does a fully discounted top-up (F-092-i); F-092-j will.
+(F-092-m), a fully discounted top-up (F-092-i), and the gateway callback that
+settles every other one (F-092-j).
 
 | Rule | Why |
 |---|---|

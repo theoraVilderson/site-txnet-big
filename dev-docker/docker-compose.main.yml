@@ -681,9 +681,13 @@ services:
       # refuses to boot without one when NODE_ENV=production.
       - FRONTEND_ORIGIN=https://panel.${DOMAIN_NAME}
       # The app role, never the owner: RLS does not bind a table's owner
-      # (F-066-m-a). No cross-tenant pool — this service resolves no tenant,
-      # it reads the one forward-auth forwards (F-092-a).
+      # (F-066-m-a). Every gated route reads the tenant forward-auth forwards
+      # (F-092-a) and uses this pool.
       - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      # The second pool, for the one read that resolves a tenant instead of
+      # running inside one: the public gateway callback's host lookup (F-092-j).
+      # Its role's policy is `USING (true)` and it holds no BYPASSRLS.
+      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
       # The response envelope translates through locale-service (F-094).
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
       - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
@@ -705,6 +709,8 @@ services:
       - DEPOSIT_GATEWAYS_RATE_LIMIT=${DEPOSIT_GATEWAYS_RATE_LIMIT:-}
       - DEPOSIT_QUOTE_RATE_LIMIT=${DEPOSIT_QUOTE_RATE_LIMIT:-}
       - DEPOSIT_START_RATE_LIMIT=${DEPOSIT_START_RATE_LIMIT:-}
+      # The callback's budget is per authority, not per user: it is public.
+      - DEPOSIT_CALLBACK_RATE_LIMIT=${DEPOSIT_CALLBACK_RATE_LIMIT:-}
       - WALLET_HISTORY_RATE_LIMIT=${WALLET_HISTORY_RATE_LIMIT:-}
       - WALLET_PAYMENTS_RATE_LIMIT=${WALLET_PAYMENTS_RATE_LIMIT:-}
       - GIFT_REDEEM_RATE_LIMIT=${GIFT_REDEEM_RATE_LIMIT:-}
@@ -729,6 +735,38 @@ services:
       - "traefik.http.routers.billing-service.tls.certresolver=myresolver"
       - "traefik.http.routers.billing-service.middlewares=strip-fake-headers,my-auth"
       - "traefik.http.routers.billing-service.service=billing-service"
+
+      # The gateway callback (F-092-j) — the one billing route **without**
+      # `my-auth`, because a bank redirects a browser to it and a browser
+      # arriving from a bank carries no session. `strip-fake-headers` stays:
+      # nothing reads an identity here, and a public route is exactly where a
+      # forged `X-Tenant-Id` would be tried.
+      #
+      # **No `Host(...)` on purpose.** The callback is minted on each tenant's
+      # own panel domain (ADR-0020), so a rule naming one host would work for
+      # the platform and for nobody else, and adding a Traefik label per
+      # reseller is the per-container tenancy ADR-0025 forecloses. The path is
+      # the whole rule; which tenant it belongs to is decided by the service,
+      # against `tenant_domain`, and a host nobody owns gets a neutral 404
+      # there rather than a route here.
+      #
+      # The priority beats both the gated `/api/billing` routers above and the
+      # panel's own `Host(panel.…)` router, which would otherwise serve this
+      # path to Next.js. It is explicit rather than left to Traefik's
+      # rule-length default, because that default is not a rule anyone should
+      # have to recompute when a hostname changes.
+      - "traefik.http.routers.billing-callback-http.rule=PathPrefix(`/api/billing/deposit/callback`)"
+      - "traefik.http.routers.billing-callback-http.entrypoints=web"
+      - "traefik.http.routers.billing-callback-http.priority=200"
+      - "traefik.http.routers.billing-callback-http.middlewares=strip-fake-headers"
+      - "traefik.http.routers.billing-callback-http.service=billing-service"
+
+      - "traefik.http.routers.billing-callback.rule=PathPrefix(`/api/billing/deposit/callback`)"
+      - "traefik.http.routers.billing-callback.entrypoints=websecure"
+      - "traefik.http.routers.billing-callback.priority=200"
+      - "traefik.http.routers.billing-callback.tls.certresolver=myresolver"
+      - "traefik.http.routers.billing-callback.middlewares=strip-fake-headers"
+      - "traefik.http.routers.billing-callback.service=billing-service"
       - "txnet.logging=true"
     depends_on:
       main-db:

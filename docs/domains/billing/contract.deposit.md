@@ -2,16 +2,17 @@
 id: billing
 layer: domain
 status: active
-version: 6
+version: 7
 updated: 2026-09-12
 ---
 
 # Contract — billing / the top-up page
 
-A topic file of `contract.md` (§10): every route the top-up page calls — the
-gateway list and the quote (F-092-o), and the payment the quote described
-(F-092-i). Its consumer is the panel (F-093-e), which none of the other
-sections has.
+A topic file of `contract.md` (§10): the whole of one top-up — the gateway list
+and the quote (F-092-o), the payment the quote described (F-092-i), and the
+callback that settles it (F-092-j). The first three are the panel's (F-093-e);
+the last is a **bank's**, and is the one route here nothing in this platform
+calls.
 
 ## Routes (built — F-092-o, F-092-i)
 
@@ -88,6 +89,51 @@ shown.
 | The callback is `https://<the tenant's own panel domain>/api/billing/deposit/callback` — a proven custom domain first, else the platform subdomain, read from `tenant_domain` and never from a request header. No such domain is a refusal (**503**), not a guess | ADR-0020: the callback route is public and resolved by Host (F-092-j), so a reseller's customer must come back to the brand they paid on. `PAYMENT_CALLBACK_ORIGIN` overrides it with one origin for every tenant — dev and test only |
 | `amount` is base currency, as on a quote, and is converted for the gateway exactly once, inside `priceAtGateway` | the legacy `amount * 10` toman→rial step ran in the browser; the display-currency step is F-025's |
 
-**Not covered:** settling the payment — the callback, the credit and the coupon
-confirm are F-092-j's, and expiring a pending one F-092-k's. Nothing in the
-panel calls `start` yet (F-093-e).
+**Not covered:** expiring a pending payment is F-092-k's. Nothing in the panel
+calls `start` yet (F-093-e).
+
+## Settling the payment (built — F-092-j)
+
+`DepositCallbackService` + `DepositCallbackController` in
+`billing-service/src/app/payment/deposit/`, and
+`request/callback-tenant.middleware.ts` in front of them. The other half of
+`start`: where the bank sends the payer back.
+
+**It is the one public route on this service**, and that shapes everything
+below. A gateway redirects a *browser*, which carries no session, no token and
+nothing `my-auth` could check — so Traefik publishes
+`/api/billing/deposit/callback` with `strip-fake-headers` and **no gate**, the
+tenant comes from the Host, and the answer is a **302** to the panel's result
+page rather than the envelope every other route answers.
+
+| Route | Query | Answers |
+|---|---|---|
+| `GET /api/billing/deposit/callback` | `Authority`, `Status` — read case-insensitively | **302** to `/payment/success?ref=&already=` or `/payment/failed?error=<code>` on the host it arrived on |
+
+| Rule | Why |
+|---|---|
+| **Verify outside every transaction; flip, credit, confirm and announce inside one.** A connection is never held across a call to a bank, and the money never moves without the ledger row, the coupon uses and the outbox event moving with it | invariants 1-3, ADR-0021. The half legacy got right, kept |
+| **The flip is the guard:** `updateMany({ where: { id, status: pending } })`, and the credit hangs off its `count`, never off a status read a moment earlier. `count: 0` answers `alreadyPaid` — a success, not a failure | ADR-0028, invariant 7. Two callbacks both see `pending`; Postgres re-checks the `where` after the loser waits on the winner's row lock. A bank retries by design, and a payer reloads |
+| A refusal the gateway **stated** closes the payment: `failed` with the `GatewayFailureReason` as `failureCode`, holds **released** `cancelled` — nothing timed out. `Status` not `OK` is such a refusal and costs no vault read | the holds are capacity somebody else can use |
+| **Silence is not a refusal.** `unavailable`, `amount_mismatch`, an unreadable merchant id and any unexpected error leave the row exactly `pending` and touch nothing | invariant 9. The money may have moved; closing the row is what makes a payment reconciliation (F-092-l) will never revisit. It is also why a mismatch is not settled here — `flagged_mismatch` is F-092-l's |
+| The amount verified is the row's `chargedAmountMinor`, never recomputed | re-pricing at settlement is how a rate that moved becomes a mismatch (ADR-0019, invariant 12) |
+| The credit is `amountCredited` (which already carries the adjustment gap), reason `payment_gateway`, `referenceId` the payment's own id; `confirmationSource` is `webhook_auto` and `expiresAt` becomes `null` | `amountRequested` is what the user typed; a landed payment has no clock left (F-092-k) |
+| The outbox row is `billing.payment` / `billing.payment.confirmed`, written **in** the crediting transaction, its `payload` carrying its own `tenantId` | ADR-0021. `outbox_event` has no tenant column — the relay reads under no scope. **Nothing consumes it yet**: the relay marks it `unroutable`, which is visible rather than silent |
+| The five failure codes are legacy's verbatim — `INVALID_PARAMS`, `TRANSACTION_NOT_FOUND`, `GATEWAY_CONNECTION_ERROR`, `VERIFICATION_FAILED`, `SYSTEM_ERROR` | F-093-f turns exactly these into i18n keys. Nothing here throws to the client: a payer lands on a page whatever happened |
+| Per **authority**, per 900s: `DEPOSIT_CALLBACK_RATE_LIMIT` (default 30) | there is no caller to bucket on. One authority is one payment, and `rate-limit-coverage.spec.ts` names this controller as the only route allowed to count anything but a user |
+
+### The tenant of a public route
+
+`CallbackTenantMiddleware`, holding this service's **second** Postgres pool.
+
+| Rule | Why |
+|---|---|
+| The tenant is `tenant_domain` for the normalized Host: a `panel` row that is a platform subdomain, or a custom domain that is **verified**. The same rows `start` mints a callback URL from | they must agree, or a tenant mints callbacks to a host this refuses (ADR-0020) |
+| Anything else — unknown host, unproven domain, no Host at all — is a **neutral 404** | ADR-0025 decision 3. There is no fallback tenant: a callback absorbed into the wrong tenant credits the wrong wallet |
+| That read holds `CrossTenantPrismaService` (`DATABASE_CROSS_TENANT_URL`, policy `USING (true)`, no `BYPASSRLS`), and is the only one in this service | the read is what *produces* the scope, so it cannot run inside one; on the app pool RLS shows it no rows and every callback 404s. `grep -rn CrossTenantPrismaService` is the audit |
+| A **middleware**, not a guard, and uncached | `RateLimiter.hit` keys on the tenant in context and guards run after middleware. `auth-service` caches the same lookup because it is on every request; this one is on a payment, and the cache's invalidation rules are `tenant`'s to own (F-018) |
+
+**Not covered:** the panel pages the redirect lands on are F-093-f's — this
+route only names the paths and the codes. Nothing tells the panel a balance
+changed in real time: the outbox event has no consumer, and
+`panel-web/contract.shell.md` still says so.

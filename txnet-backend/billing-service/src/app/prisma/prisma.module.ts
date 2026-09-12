@@ -3,10 +3,16 @@ import { ConfigService } from '@nestjs/config';
 import { withTenant } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../config/env.validation';
+import { CrossTenantPrismaService } from './cross-tenant-prisma.service';
 import { PrismaService } from './prisma.service';
 
 /**
- * The tenant-scoped client every billing service injects (ADR-0024).
+ * The two pools this service talks to Postgres through (ADR-0024, F-092-j).
+ *
+ * `PrismaService` is the one everything injects. `CrossTenantPrismaService` is
+ * the other, held by exactly one reader — the public gateway callback's
+ * middleware, whose lookup is what *produces* a tenant and so cannot run inside
+ * one. It is not extended with `withTenant`, for the reason that class gives.
  *
  * A factory for the reason `auth-service/src/app/prisma/prisma.module.ts`
  * documents: `$extends` returns a new client, so the `PrismaService` token
@@ -27,7 +33,15 @@ import { PrismaService } from './prisma.service';
         return base.$extends(withTenant(base)) as unknown as PrismaService;
       },
     },
+    {
+      provide: CrossTenantPrismaService,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<EnvConfig, true>) =>
+        new CrossTenantPrismaService(
+          config.get('DATABASE_CROSS_TENANT_URL', { infer: true }),
+        ),
+    },
   ],
-  exports: [PrismaService],
+  exports: [PrismaService, CrossTenantPrismaService],
 })
 export class PrismaModule {}

@@ -161,29 +161,13 @@ export class TenantClaimConflict extends Error {
 /**
  * The host, reduced to the form `tenant_domain.domainValue` is stored in.
  *
- * Pure, and separate from the lookup, so the rule can be asserted without a
- * database — the same split `common/security/switch-scope.ts` makes.
+ * Moved to `shared-core` by F-092-j and re-exported here, so this module stays
+ * the one place this service's tenant code imports from. `billing-service`'s
+ * public gateway callback resolves a tenant from a Host too, and an Nx app
+ * cannot import an Nx app — see the function's own doc comment for why a second
+ * spelling is worse than a move.
  */
-export function normalizeHost(raw: string | undefined | null): string | null {
-  if (typeof raw !== 'string') return null;
-  let host = raw.trim().toLowerCase();
-  if (!host) return null;
-
-  if (host.startsWith('[')) {
-    // An IPv6 literal is bracketed and its port sits outside the brackets:
-    // `[::1]:3001`. Splitting on the first colon would truncate the address.
-    const close = host.indexOf(']');
-    if (close === -1) return null; // malformed — no host to speak of
-    host = host.slice(0, close + 1);
-  } else {
-    const colon = host.indexOf(':');
-    if (colon !== -1) host = host.slice(0, colon);
-  }
-
-  // A fully-qualified name may carry the root dot: `myvpn.com.` is `myvpn.com`.
-  host = host.replace(/\.+$/, '');
-  return host || null;
-}
+export { normalizeHost } from '@txnet-backend/shared-core';
 
 /**
  * The tenant this request resolved to, or `null` when it resolved to none.
