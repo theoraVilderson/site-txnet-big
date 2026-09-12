@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { ChevronDown, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { LangDropdown } from "@auth/auth/_components/LangDropdown";
+import { CollapsedTooltip } from "./CollapsedTooltip";
+import { LogoutButton } from "./LogoutButton";
 import { ThemeDropdown } from "@auth/auth/_components/ThemeDropdown";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
@@ -202,8 +204,12 @@ export function PanelSidebar() {
           </button>
         </div>
 
-        {/* On a phone the top bar has no room for these, so the drawer holds them. */}
-        <div className="flex items-center justify-between gap-2 border-b border-card-border px-5 py-3 sm:hidden">
+        {/* The drawer holds these for as long as it exists — below `lg`, the
+            same breakpoint that decides whether this is a drawer or a rail.
+            They used to reappear in the top bar at `sm`, which put them back
+            beside a menu button that is also only there below `lg`, and that
+            combination is what broke the bar across the tablet band. */}
+        <div className="flex items-center justify-between gap-2 border-b border-card-border px-5 py-3 lg:hidden">
           <span className="text-sm font-medium text-text-secondary">
             {t("common", S.preferences)}
           </span>
@@ -223,6 +229,19 @@ export function PanelSidebar() {
             isMenuGroup(entry) ? renderGroup(entry) : renderLink(entry, false),
           )}
         </nav>
+
+        {/*
+          Logout's one home, at every width (ADR-0035). It is a nav action, not
+          a top-bar control: the switcher's own last row is *sign out of all
+          devices*, and that comment is explicit that ordinary logout lives on
+          the nav, far from it — the two are different intentions and the
+          destructive one must not sit a mis-tap away from the everyday one.
+          Keeping it here also takes the widest control out of a bar that was
+          over budget at 360px **and** at 700px.
+        */}
+        <div className="shrink-0 border-t border-card-border px-3 py-4">
+          <LogoutButton collapsed={collapsed} />
+        </div>
       </aside>
 
       {drawerOpen && (
@@ -233,24 +252,5 @@ export function PanelSidebar() {
         />
       )}
     </>
-  );
-}
-
-/** The label beside an icon-only entry; decorative, the label is also `sr-only`. */
-function CollapsedTooltip({
-  collapsed,
-  label,
-}: {
-  collapsed: boolean;
-  label: string;
-}) {
-  if (!collapsed) return null;
-  return (
-    <span
-      aria-hidden
-      className="pointer-events-none absolute start-full top-1/2 z-50 ms-3 hidden -translate-y-1/2 whitespace-nowrap rounded-lg border border-card-border bg-card-bg px-2 py-1 text-xs text-text-primary opacity-0 shadow-lg backdrop-blur-xl transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 lg:block"
-    >
-      {label}
-    </span>
   );
 }

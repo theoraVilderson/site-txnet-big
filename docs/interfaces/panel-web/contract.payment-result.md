@@ -87,7 +87,9 @@ These pages sit inside `(panel)`, so a session that expired during the trip to
 the bank is a login redirect and the query string is lost. The payment itself
 is unaffected — it settled before the redirect — and the reference is on the
 financial page. Making them public would mean a result page that cannot say
-whose payment it is.
+whose payment it is, so the fix belongs at the guard instead: **F-093-i**, which
+teaches the login redirect to remember the path it bounced from. Nothing on
+these two pages changes when it lands.
 
 ## Proof
 

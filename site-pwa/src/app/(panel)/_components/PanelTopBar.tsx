@@ -7,7 +7,6 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { usePanelUiStore } from "../_stores/panel-ui-store";
 import { AccountSwitcher } from "./AccountSwitcher";
-import { LogoutButton } from "./LogoutButton";
 import { PANEL_SIDEBAR_ID } from "./PanelSidebar";
 import { WalletButton } from "./WalletButton";
 
@@ -51,18 +50,24 @@ export function PanelTopBar() {
       </div>
       <div className="flex min-w-0 items-center gap-1 sm:gap-3">
         <WalletButton />
-        <Divider className="hidden sm:block" />
+        <Divider className="hidden lg:block" />
         <AccountSwitcher />
-        <Divider className="hidden sm:block" />
-        <div className="hidden sm:flex">
+        {/* Language and theme return at `lg`, not at `sm`. They belong to the
+            drawer for exactly as long as the drawer exists, and the drawer
+            exists below `lg`. Splitting the two breakpoints is what left the
+            bar broken across the whole tablet band: at `sm` these two come
+            back while the menu button is still there, so 640–1023px was the
+            *widest* the row ever gets, not the narrowest. Measured at 700px:
+            620px of content box against a row that wanted ~643px even after
+            logout had moved out. Below `lg` it is now ~430px. */}
+        <Divider className="hidden lg:block" />
+        <div className="hidden lg:flex">
           <LangDropdown />
         </div>
-        <Divider className="hidden sm:block" />
-        <div className="hidden sm:flex">
+        <Divider className="hidden lg:block" />
+        <div className="hidden lg:flex">
           <ThemeDropdown />
         </div>
-        <Divider />
-        <LogoutButton />
       </div>
     </header>
   );

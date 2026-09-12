@@ -736,6 +736,38 @@ services:
       - "traefik.http.routers.billing-service.middlewares=strip-fake-headers,my-auth"
       - "traefik.http.routers.billing-service.service=billing-service"
 
+      # The CORS preflight, and the one thing `my-auth` must not see.
+      #
+      # The panel calls billing cross-origin with a bearer token (F-093-c), so
+      # every call is preceded by an `OPTIONS` the browser sends **without**
+      # the Authorization header — by specification. The gate refuses it, and a
+      # refused preflight means the browser never sends the real request at
+      # all: what the user sees is the panel's own "could not reach the server"
+      # line, on a service that is up and answering. `auth-service` never hit
+      # this because its routers carry no `my-auth`; billing is the first gated
+      # thing a browser talks to directly.
+      #
+      # Nothing is weakened. A preflight carries no credentials, no cookies and
+      # no body, `strip-fake-headers` still runs so nothing can claim an
+      # identity on it, and the real request behind it still goes through the
+      # gate. What answers here is the service's own `enableCors`, which knows
+      # the allowed origin (`FRONTEND_ORIGIN`) and replies 204.
+      #
+      # Priority beats the two gated routers above and stays under the
+      # callback's 200, which is Host-less and must keep winning on its path.
+      - "traefik.http.routers.billing-preflight-http.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/billing`) && Method(`OPTIONS`)"
+      - "traefik.http.routers.billing-preflight-http.entrypoints=web"
+      - "traefik.http.routers.billing-preflight-http.priority=150"
+      - "traefik.http.routers.billing-preflight-http.middlewares=strip-fake-headers"
+      - "traefik.http.routers.billing-preflight-http.service=billing-service"
+
+      - "traefik.http.routers.billing-preflight.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/billing`) && Method(`OPTIONS`)"
+      - "traefik.http.routers.billing-preflight.entrypoints=websecure"
+      - "traefik.http.routers.billing-preflight.priority=150"
+      - "traefik.http.routers.billing-preflight.tls.certresolver=myresolver"
+      - "traefik.http.routers.billing-preflight.middlewares=strip-fake-headers"
+      - "traefik.http.routers.billing-preflight.service=billing-service"
+
       # The gateway callback (F-092-j) — the one billing route **without**
       # `my-auth`, because a bank redirects a browser to it and a browser
       # arriving from a bank carries no session. `strip-fake-headers` stays:

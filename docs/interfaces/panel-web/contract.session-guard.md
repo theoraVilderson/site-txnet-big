@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 8
-updated: 2026-09-09
+version: 9
+updated: 2026-09-12
 ---
 
 # panel-web — the auth-screen session guard (F-0101)
@@ -79,6 +79,35 @@ and only when it is actually using the internal origin. On the public origin
 the real `Host` is already right, and a second answer that can disagree with
 the URL is worth not having. Unset or unparseable: no header, and the guard
 fails open to the form as it does for every other failure.
+
+### The header only counts if Express trusts it (fixed 2026-09-12)
+
+Setting `X-Forwarded-Host` is half the job. The other half is auth-service
+believing it, and since 2026-09-01 (`2009d55`) it did not — so this guard answered 404 to
+every call and failed open to the form. **A signed-in visitor was shown the
+login screen, exactly the thing this file exists to prevent.**
+
+`TenantMiddleware` reads `req.hostname`, which returns the forwarded host only
+when Express's `trust proxy` is on. `main.ts` set it from `TRUST_PROXY`, an
+environment variable, so Express received the **string** `'1'` — and Express
+reads that setting by type: `1` means *one hop*, `'1'` means *the list of
+trusted IP addresses `["1"]`*, which matches nothing. No error, no log.
+
+It stayed hidden because it is invisible from the public side: a request
+through Traefik already carries the real `Host`, so tenants resolved and login
+worked. Only this internal hop, whose whole point is that the true host travels
+in a header, could see it. `req.ip` was wrong everywhere at the same time,
+which is what an IP rate-limit bucket keys on.
+
+`trustProxySetting` in `shared-core` is the coercion, used by auth-service,
+bot-service and the e2e harness — the harness had hardcoded `'1'` too, so it
+reproduced the bug rather than catching it. A hop count becomes a number and a
+boolean a boolean; `loopback`, `uniquelocal` and address lists stay strings,
+because Express means those as written.
+
+**The symptom to recognise:** `TenantGuard` logging `host 'auth-service'
+resolves to no tenant`. The host in that line is a container name, and a
+container name in a tenant lookup means the forwarded header was not trusted.
 
 **A host, not a tenant id.** `X-Tenant-Id` is honoured only from a caller
 holding the service token (`domains/tenant/contract.md`), and that token also

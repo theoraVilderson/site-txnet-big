@@ -16,7 +16,7 @@
  * suite exercises real host resolution (`via: 'domain'`) instead of proving a
  * fallback, which is what it used to do.
  */
-import { RequestHeaders } from '@txnet-backend/shared-core';
+import { RequestHeaders, trustProxySetting } from '@txnet-backend/shared-core';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { Server } from 'node:http';
@@ -112,7 +112,10 @@ export async function createE2eApp(): Promise<E2eApp> {
   // Same pair as `main.ts`. `LocaleStub.getKey` returns undefined, so every
   // `msg` here stays the i18n key the specs assert on.
   app.useGlobalInterceptors(new ResponseInterceptor(locale));
-  app.getHttpAdapter().getInstance().set('trust proxy', '1');
+  // Through the helper, and not `'1'`: this harness stood in for production
+  // while reproducing production's bug, so an X-Forwarded-Host test here
+  // would have passed for the wrong reason.
+  app.getHttpAdapter().getInstance().set('trust proxy', trustProxySetting('1'));
   app.enableCors({
     origin: [process.env.FRONTEND_ORIGIN as string],
     credentials: true,

@@ -1,4 +1,4 @@
-import { RequestHeaders } from '@txnet-backend/shared-core';
+import { RequestHeaders, trustProxySetting } from '@txnet-backend/shared-core';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app/app.module';
@@ -15,7 +15,10 @@ async function bootstrap() {
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
   const frontendOrigin = configService.get<string>('FRONTEND_ORIGIN');
 
-  const trustProxy = configService.get<string>('TRUST_PROXY', '1');
+  // Coerced, not passed through: Express reads this setting by type and an
+  // env var is always a string, which is how `'1'` came to mean "trust the
+  // IP list ['1']" instead of "trust one hop" (`trustProxySetting`).
+  const trustProxy = trustProxySetting(configService.get<string>('TRUST_PROXY'));
   const expressApp = app.getHttpAdapter().getInstance();
   const localeService = app.get(LocaleService);
 

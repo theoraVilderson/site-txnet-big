@@ -5,6 +5,7 @@ export * from './lib/automation/bot-update';
 export * from './lib/automation/outbox';
 export * from './lib/realtime/fanout';
 export * from './lib/http/headers';
+export * from './lib/http/trust-proxy';
 export * from './lib/http/cookies';
 export * from './lib/redis/keyspace';
 export * from './lib/redis/keys';

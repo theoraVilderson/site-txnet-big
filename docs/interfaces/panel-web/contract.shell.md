@@ -33,6 +33,48 @@ under `(panel)` renders in: `_components/PanelShell.tsx` = `PanelSidebar` +
    `AccountSwitcher` (F-0209). A new top-bar control (wallet F-093-c,
    notifications F-093-h) goes before the switcher and must fit a 360px bar:
    below `sm`, language and theme already moved into the drawer to make room.
+   **The budget is the row, not the control**, and it is the rule that is
+   easiest to break by adding something reasonable. Measured at 360px: the bar
+   has **304px** of content box, and once the wallet joined the row it wanted
+   **~337px**. The overflow lands on whichever control is last, so the control
+   that looks broken is rarely the one at fault. Three consequences, each of
+   them learned the expensive way on `LogoutButton`:
+   - **Shrinking the last control does not fix a row that is over budget.**
+     Collapsing its label returns ~34px against a 33px overflow, so the next
+     digit in a balance spills it again.
+   - **A `sm:` escape hatch is not a fix either.** Moving it to the drawer only
+     below `sm` left the bar broken across the whole tablet band, because at
+     `sm` the language and theme controls come *back* while the menu button is
+     still there: **640–1023px is the widest the row ever gets**, not the
+     narrowest. Measured at 700px, 620px of content box against ~643px of row
+     even after logout had left. **A control the drawer holds is held for as
+     long as the drawer exists, which is below `lg`** — the breakpoint that
+     decides drawer-or-rail is the one these follow, and `sm` never was.
+     Below `lg` the bar is now the menu button, the wallet and the switcher,
+     ~430px.
+   - **The header cannot clip the spill.** The wallet and switcher dropdowns are
+     absolutely positioned children of it, so `overflow-hidden` there cuts the
+     open menus and leaves the overflow.
+
+   So a control that does not fit does not belong in the bar. Logout is now a
+   **nav** entry (below), which is where ADR-0035 always said it lived.
+
+6. **Logout is a nav action, not a top-bar control.** It renders in the
+   sidebar footer at every width, shaped like a menu entry — same padding and
+   icon size, `lg:sr-only` label with a `CollapsedTooltip` on the collapsed
+   rail. The placement is not a layout preference: `AccountSwitcher`'s menu
+   ends with *sign out of all devices*, behind its own confirmation, and the
+   everyday logout is deliberately kept away from it, because the two are
+   different intentions and the destructive one must not be a mis-tap from the
+   ordinary one. Putting logout in that menu would undo the separation; putting
+   it in the bar was what broke the bar.
+
+   What remains below `lg` — the menu button, the wallet, the switcher — is
+   ~286px at 360px and ~430px at 700px, and fits both. **The wallet's figure is the one unbounded term left**:
+   it has no truncation, so a long enough balance puts the row back over
+   budget. Bounding it means accepting a truncated balance, which the wallet
+   control's rule 1 has an opinion about, so it is a decision and not a
+   tidy-up.
 
 ## The wallet control (F-093-c)
 

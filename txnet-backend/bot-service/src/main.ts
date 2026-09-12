@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 import { AppModule } from './app/app.module';
+import { trustProxySetting } from '@txnet-backend/shared-core';
 
 /**
  * bot-service — the bot as a product surface (`bot-app`, ADR-0009/0011).
@@ -17,7 +18,9 @@ async function bootstrap() {
   const logger = new Logger('bootstrap');
 
   app.setGlobalPrefix('api');
-  app.getHttpAdapter().getInstance().set('trust proxy', config.get('TRUST_PROXY', '1'));
+  // The same coercion auth-service needs: a string here silently untrusts
+  // every `X-Forwarded-*` header (`trustProxySetting`).
+  app.getHttpAdapter().getInstance().set('trust proxy', trustProxySetting(config.get('TRUST_PROXY')));
 
   const port = config.get<number>('PORT', 3002);
   await app.listen(port);
