@@ -83,22 +83,36 @@ type Setup = {
   payments?: ReturnType<typeof paymentRow>[];
 };
 
-/** Records the `where` each list was asked for, which is where a filter is lost. */
+type Slice = { skip: number; take: number };
+
+/**
+ * Records the `where` each list was asked for, which is where a filter is lost,
+ * and the `skip`/`take`, which is where a page is. The echoed `page` in the
+ * answer is not enough on its own: it can be right while the query read the
+ * wrong slice.
+ */
 function build({ wallet = { id: WALLET, cachedBalance: d('30.00') }, rows = [ledgerRow()], payments = [paymentRow()] }: Setup = {}) {
-  const asked: { ledger?: Prisma.WalletTransactionWhereInput; payments?: Prisma.PaymentTransactionWhereInput } = {};
+  const asked: {
+    ledger?: Prisma.WalletTransactionWhereInput;
+    payments?: Prisma.PaymentTransactionWhereInput;
+    ledgerSlice?: Slice;
+    paymentsSlice?: Slice;
+  } = {};
   const tx = {
     $executeRaw: async () => 0,
     wallet: { findUnique: async () => wallet },
     walletTransaction: {
-      findMany: async (args: { where: Prisma.WalletTransactionWhereInput }) => {
+      findMany: async (args: { where: Prisma.WalletTransactionWhereInput } & Slice) => {
         asked.ledger = args.where;
+        asked.ledgerSlice = { skip: args.skip, take: args.take };
         return rows;
       },
       count: async () => rows.length,
     },
     paymentTransaction: {
-      findMany: async (args: { where: Prisma.PaymentTransactionWhereInput }) => {
+      findMany: async (args: { where: Prisma.PaymentTransactionWhereInput } & Slice) => {
         asked.payments = args.where;
+        asked.paymentsSlice = { skip: args.skip, take: args.take };
         return payments;
       },
       count: async () => payments.length,
@@ -208,6 +222,26 @@ describe('WalletHistoryService.ledger', () => {
     expect(asked.ledger?.walletId).toBe(WALLET);
     expect(asked.ledger?.createdAt).toEqual({ gte: from, lte: to });
   });
+
+  /**
+   * The defaults moved out of the schema and into the service on 2026-09-12
+   * (`wallet-history.schema.ts` says why), so nothing but this says what an
+   * absent page means. Both routes must agree, which is why `payments` asserts
+   * it too rather than trusting that one helper serves both.
+   */
+  it('reads the first page of ten when the query named no page, and the asked-for slice when it did', async () => {
+    const first = build();
+    const answer = await runWithTenant({ id: TENANT }, () => first.service.ledger({ userId: USER, lang: 'fa' }));
+    expect(first.asked.ledgerSlice).toEqual({ skip: 0, take: 10 });
+    expect(answer).toMatchObject({ page: 1, pageSize: 10 });
+
+    const asked = build();
+    const third = await runWithTenant({ id: TENANT }, () =>
+      asked.service.ledger({ userId: USER, lang: 'fa', page: 3, pageSize: 25 }),
+    );
+    expect(asked.asked.ledgerSlice).toEqual({ skip: 50, take: 25 });
+    expect(third).toMatchObject({ page: 3, pageSize: 25 });
+  });
 });
 
 describe('WalletHistoryService.payments', () => {
@@ -242,5 +276,17 @@ describe('WalletHistoryService.payments', () => {
       id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
       displayName: 'درگاه فروشنده',
     });
+  });
+
+  it('reads the first page of ten when the query named no page, and the asked-for slice when it did', async () => {
+    const first = build();
+    const answer = await runWithTenant({ id: TENANT }, () => first.service.payments({ userId: USER }));
+    expect(first.asked.paymentsSlice).toEqual({ skip: 0, take: 10 });
+    expect(answer).toMatchObject({ page: 1, pageSize: 10 });
+
+    const asked = build();
+    const second = await runWithTenant({ id: TENANT }, () => asked.service.payments({ userId: USER, page: 2, pageSize: 50 }));
+    expect(asked.asked.paymentsSlice).toEqual({ skip: 50, take: 50 });
+    expect(second).toMatchObject({ page: 2, pageSize: 50 });
   });
 });

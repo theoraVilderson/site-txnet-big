@@ -22,9 +22,22 @@ const instant = (key: string) => z.coerce.date({ message: key });
 const many = <T extends z.ZodTypeAny>(item: T) =>
   z.preprocess((v) => (v === undefined ? undefined : Array.isArray(v) ? v : [v]), z.array(item));
 
+/**
+ * Paging names no default here. The schema's job is to refuse a page the caller
+ * *did* send and cannot have — not a whole number, not positive, over 100 — and
+ * an absent one is not a bad one. What "absent" means is the service's to
+ * decide, and `WalletHistoryService` decides it once for both routes.
+ *
+ * Written as `.default()` until 2026-09-12. It read well and it was a lie to
+ * the type system: `z.infer` marks a defaulted key optional in this workspace
+ * (`strictNullChecks` is off, so zod cannot tell a value apart from one that
+ * may be `undefined`), so the type said `page?: number` while the parse
+ * guaranteed a number. Spreading that into a request type that required `page`
+ * is what broke `nx build billing-service`.
+ */
 const paging = {
-  page: z.coerce.number({ message: E.pageInvalid }).int().positive().default(1),
-  pageSize: z.coerce.number({ message: E.pageInvalid }).int().positive().max(100).default(10),
+  page: z.coerce.number({ message: E.pageInvalid }).int().positive().optional(),
+  pageSize: z.coerce.number({ message: E.pageInvalid }).int().positive().max(100).optional(),
 };
 
 export const walletHistorySchema = z

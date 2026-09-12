@@ -64,8 +64,9 @@ export type LedgerPageRequest = {
   from?: Date;
   to?: Date;
   search?: string;
-  page: number;
-  pageSize: number;
+  /** Absent is the first page — `DEFAULT_PAGE`. The schema names no default (`wallet-history.schema.ts`). */
+  page?: number;
+  pageSize?: number;
 };
 
 export type LedgerRow = {
@@ -94,8 +95,8 @@ export type PaymentPageRequest = {
   statuses?: readonly PaymentStatus[];
   from?: Date;
   to?: Date;
-  page: number;
-  pageSize: number;
+  page?: number;
+  pageSize?: number;
 };
 
 export type PaymentRow = {
@@ -158,6 +159,20 @@ const PAYMENT_COLUMNS = {
   tenantGatewayConfig: { select: { id: true, displayName: true } },
 } satisfies Prisma.PaymentTransactionSelect;
 
+/**
+ * What an absent page means. Here and nowhere else — both routes resolve it
+ * through `paged()`, so the two lists cannot drift apart, and neither can this
+ * and a second copy in the schema. `pageSize` is bounded at 100 by the schema
+ * when it is sent; this is only what to use when it was not.
+ */
+const DEFAULT_PAGE = 1;
+const DEFAULT_PAGE_SIZE = 10;
+
+const paged = (request: { page?: number; pageSize?: number }) => ({
+  page: request.page ?? DEFAULT_PAGE,
+  pageSize: request.pageSize ?? DEFAULT_PAGE_SIZE,
+});
+
 @Injectable()
 export class WalletHistoryService {
   constructor(
@@ -167,7 +182,8 @@ export class WalletHistoryService {
 
   async ledger(request: LedgerPageRequest): Promise<LedgerPage> {
     TenantContext.current('wallet history');
-    const { userId, page, pageSize } = request;
+    const { userId } = request;
+    const { page, pageSize } = paged(request);
 
     const reasonType = this.reasonFilter(request);
     const empty = (balance: string): LedgerPage => ({ balance, total: 0, page, pageSize, rows: [] });
@@ -241,7 +257,8 @@ export class WalletHistoryService {
    */
   async payments(request: PaymentPageRequest): Promise<PaymentPage> {
     TenantContext.current('wallet payments');
-    const { userId, page, pageSize } = request;
+    const { userId } = request;
+    const { page, pageSize } = paged(request);
 
     const where: Prisma.PaymentTransactionWhereInput = {
       userId,
