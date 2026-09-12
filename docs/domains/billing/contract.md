@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 4
+version: 5
 updated: 2026-09-12
 ---
 
@@ -111,6 +111,7 @@ Schema only; no route writes these yet. Migration
 | A payment's coupons are its `coupon_redemption` rows; there is no `couponId` column | codes stack, applied in order, each on what the previous left (D-21) |
 | `perUserUsageLimit` may exceed 1 and is **not** enforced by an index — the redemption transaction counts it | D-21; F-092-h |
 | Amounts are base currency; `chargedAmountMinor` + `exchangeRateSnapshot` are what the gateway was asked for, frozen at intent | ADR-0019 |
+| `exchangeRateSnapshotId` says **which** reading that rate was — a FK to `currency.currency_exchange_rate`, `RESTRICT`, null on a `staticRate` gateway. The FX worker appends a row per accepted poll, so the number alone identifies nothing | F-0606-b |
 | `displayName` and gateway pricing (fee / min / max, and F-0609's rate columns; no tax rate since v3, ADR-0038) have the same columns on `payment_gateway` and `tenant.tenant_gateway_config` | one calculator reads both (F-092-e) |
 
 ## Request edge (built — F-092-a)
@@ -198,7 +199,12 @@ None planned yet (no bus). Payment confirmation is expected to drive
   transaction — **changed in v2**: it was a DB unique `(couponId, userId)` that
   capped every coupon at one use per user (D-21).
 - `exchangeRateSnapshot` is frozen at intent time, never recomputed — on crypto
-  and on the rial/card path (ADR-0019).
+  and on the rial/card path (ADR-0019) — and since F-0606-b it is frozen
+  together with `exchangeRateSnapshotId`. `priceAtGateway` returns the pair:
+  the rate it charged at, and the `currency_exchange_rate` row that rate was
+  derived from, or neither when the gateway priced from its own `staticRate`.
+  A live rate handed to it without a snapshot id is a caller bug, not a quiet
+  fall back — the state ADR-0019 says the rial path must never be in.
 
 ## Deprecations
 

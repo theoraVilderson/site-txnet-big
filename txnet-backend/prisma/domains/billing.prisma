@@ -348,6 +348,11 @@ model PaymentTransaction {
   // the base->that-currency rate that produced it (ADR-0019). Frozen at intent.
   chargedAmountMinor    BigInt
   exchangeRateSnapshot  Decimal?            @db.Decimal(18, 8)
+  // Which rate that was: the `currency_exchange_rate` row the number was read
+  // from (F-0606-b, ADR-0019). The FX worker appends a row every accepted poll,
+  // so the rate alone does not say which reading priced this payment. NULL on a
+  // gateway that priced from its own `staticRate`, and before F-092-c.
+  exchangeRateSnapshotId String?            @db.Uuid
   status                PaymentStatus       @default(pending)
   gatewayTrackingCode   String? // the id a duplicate callback shares — Zarinpal `authority` (ADR-0028)
   gatewayReferenceId    String? // the receipt number of a paid payment — Zarinpal `ref_id`
@@ -362,6 +367,9 @@ model PaymentTransaction {
   // Restrict, not the optional-relation default SetNull: a payment is a
   // permanent record, and nulling its gateway would also break the CHECK.
   gateway                 PaymentGateway?           @relation(fields: [gatewayId], references: [id], onDelete: Restrict)
+  // Restrict for the same reason as the gateway: the snapshot is the evidence
+  // the payment was priced correctly, and the rate table is append-only anyway.
+  exchangeRateSnapshotRow CurrencyExchangeRate?     @relation(fields: [exchangeRateSnapshotId], references: [id], onDelete: Restrict)
   tenantGatewayConfig     TenantGatewayConfig?      @relation(fields: [tenantGatewayConfigId], references: [id], onDelete: Restrict)
   couponRedemptions       CouponRedemption[]
   reconciliationLogs      PaymentReconciliationLog[]

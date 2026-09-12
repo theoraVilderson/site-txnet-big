@@ -14,9 +14,12 @@ import { FeeCalcMode, FeeType, PaymentGateway, Prisma, RateRoundingMode } from '
  *  - `quotedFee` — an automatic-fee gateway's quote, asked of the provider for
  *    `feeQuoteAmountMinor(request)` and converted back by `quotedFeeFromMinor`
  *    (F-092-f, F-092-o) — the conversion is money arithmetic, so it lives here;
- *  - `liveRate` — the FX rate the staleness ladder still allows (F-0607). Pass
- *    `null` when it allows none; the gateway's `staticRate` is then used, and
- *    with no `staticRate` the gateway cannot price.
+ *  - `liveRate` — the FX rate the staleness ladder still allows (F-0607),
+ *    together with the `currency_exchange_rate` row it was read from. Pass
+ *    `null` when the ladder allows none; the gateway's `staticRate` is then
+ *    used, and with no `staticRate` the gateway cannot price. The two travel as
+ *    one value because ADR-0019 forbids the state where they are separable: a
+ *    rate no snapshot backs (F-0606-b).
  *
  * The order, which is the order of F-092-o's quote:
  *  1. `amount` (what the user asked to credit) must lie in the gateway's
@@ -39,6 +42,20 @@ import { FeeCalcMode, FeeType, PaymentGateway, Prisma, RateRoundingMode } from '
  * `[minRate, maxRate]` is refused rather than clamped: rejecting a sale costs
  * one sale, charging at a wrong rate costs an unbounded amount (F-0607).
  */
+/**
+ * The FX worker's published rate and the snapshot it came from (F-0606-a).
+ *
+ * `snapshotId` is a `currency.currency_exchange_rate` id. It is not derivable
+ * from the rate — the worker appends a row every accepted poll, so the same
+ * number can belong to many of them, and which one priced a payment is the
+ * evidence ADR-0019 asks a rial invoice to keep.
+ */
+export type FxRateSnapshot = {
+  snapshotId: string;
+  /** Base -> the gateway currency, before this gateway's modifiers. */
+  rate: Prisma.Decimal;
+};
+
 export type GatewayPricing = Pick<
   PaymentGateway,
   | 'minAcceptAmount'
@@ -67,8 +84,8 @@ export type PriceRequest = {
   discount: Prisma.Decimal;
   /** Required when `feeCalculationMode` is `automatic` and something is charged. Base currency. */
   quotedFee?: Prisma.Decimal | null;
-  /** Base -> gateway-currency rate the caller may use; `null` when none. */
-  liveRate?: Prisma.Decimal | null;
+  /** The rate the caller may use and the snapshot behind it; `null` when none. */
+  liveRate?: FxRateSnapshot | null;
   /** Decimal places of the gateway currency's minor unit: Zarinpal's rial is 0, a USD card is 2. */
   chargeDecimals: number;
 };
@@ -84,6 +101,13 @@ export type GatewayPrice = {
   free: boolean;
   /** The effective rate charged at — `exchangeRateSnapshot`. `null` on the free path. */
   rate: Prisma.Decimal | null;
+  /**
+   * The `currency_exchange_rate` row `rate` was derived from — F-0606-b's
+   * record of *which* rate this price was quoted at. `null` when the gateway
+   * priced from its own `staticRate`, and on the free path, where there is no
+   * rate to attribute.
+   */
+  rateSnapshotId: string | null;
   /** `payable` in the gateway currency's minor unit, rounded up. `null` on the free path. */
   chargedAmountMinor: bigint | null;
 };
@@ -219,12 +243,23 @@ function feeOf(p: GatewayPricing, basis: Dec, quotedFee: Prisma.Decimal | null |
   return fee;
 }
 
-function rateOf(p: GatewayPricing, liveRate: Prisma.Decimal | null | undefined): Dec {
+type RateUsed = { rate: Dec; snapshotId: string | null };
+
+function rateOf(p: GatewayPricing, liveRate: FxRateSnapshot | null | undefined): RateUsed {
   const usable = (v: Prisma.Decimal | null | undefined): Dec | null => {
     const d = decOrNull(v);
     return d && d.gt(0) ? d : null;
   };
-  const source = (p.useLiveRate ? usable(liveRate) : null) ?? usable(p.staticRate);
+
+  // The live rate is preferred, and only it carries a snapshot: a `staticRate`
+  // is a column on the gateway, not a reading of a market.
+  const offered = p.useLiveRate ? liveRate : null;
+  const live = offered ? usable(offered.rate) : null;
+  if (offered && live && offered.snapshotId.trim() === '') {
+    throw new InvalidPricingInput('liveRate has no snapshotId');
+  }
+  const snapshotId = offered && live ? offered.snapshotId : null;
+  const source = live ?? usable(p.staticRate);
   if (!source) throw new RateUnavailable();
 
   let rate = source.mul(dec(p.percentageModifier).div(100).plus(1)).plus(dec(p.fixedAmountModifier));
@@ -239,7 +274,7 @@ function rateOf(p: GatewayPricing, liveRate: Prisma.Decimal | null | undefined):
   if (rate.lte(0) || (min && rate.lt(min)) || (max && rate.gt(max))) {
     throw new RateOutOfRange(out(rate));
   }
-  return rate;
+  return { rate, snapshotId };
 }
 
 /**
@@ -265,7 +300,7 @@ export function feeQuoteAmountMinor(request: PriceRequest): bigint | null {
   checkChargeDecimals(request.chargeDecimals);
   const { basis } = settle(request);
   if (basis.isZero()) return null;
-  const rate = rateOf(request.pricing, request.liveRate);
+  const { rate } = rateOf(request.pricing, request.liveRate);
   const minor = basis.mul(rate).mul(new Dec(10).pow(request.chargeDecimals)).toDecimalPlaces(0, Dec.ROUND_CEIL);
   return BigInt(minor.toFixed(0));
 }
@@ -278,7 +313,7 @@ export function feeQuoteAmountMinor(request: PriceRequest): bigint | null {
 export function quotedFeeFromMinor(request: PriceRequest, feeMinor: bigint): Prisma.Decimal {
   checkChargeDecimals(request.chargeDecimals);
   if (feeMinor < BigInt(0)) throw new InvalidPricingInput('feeMinor is negative');
-  const rate = rateOf(request.pricing, request.liveRate);
+  const { rate } = rateOf(request.pricing, request.liveRate);
   const fee = new Dec(feeMinor.toString()).div(new Dec(10).pow(request.chargeDecimals)).div(rate);
   return out(centsUp(fee), MONEY_SCALE);
 }
@@ -300,13 +335,14 @@ export function priceAtGateway(request: PriceRequest): GatewayPrice {
       credited: out(credited, MONEY_SCALE),
       free: true,
       rate: null,
+      rateSnapshotId: null,
       chargedAmountMinor: null,
     };
   }
 
   const fee = feeOf(pricing, basis, request.quotedFee);
   const payable = basis.plus(fee);
-  const rate = rateOf(pricing, request.liveRate);
+  const { rate, snapshotId } = rateOf(pricing, request.liveRate);
   const charged = payable
     .mul(rate)
     .mul(new Dec(10).pow(chargeDecimals))
@@ -321,6 +357,7 @@ export function priceAtGateway(request: PriceRequest): GatewayPrice {
     credited: out(credited, MONEY_SCALE),
     free: false,
     rate: out(rate),
+    rateSnapshotId: snapshotId,
     chargedAmountMinor: BigInt(charged.toFixed(0)),
   };
 }

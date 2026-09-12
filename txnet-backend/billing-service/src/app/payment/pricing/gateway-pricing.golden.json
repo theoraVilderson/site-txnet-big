@@ -53,6 +53,7 @@
         "credited": "100.00",
         "free": false,
         "rate": "1020000",
+        "rateSnapshotId": "a7c0f3e2-5b6d-4a19-9f28-3c1d8e4b70aa",
         "chargedAmountMinor": "103020000"
       }
     },
@@ -72,6 +73,7 @@
         "credited": "500.00",
         "free": false,
         "rate": "1020000",
+        "rateSnapshotId": "a7c0f3e2-5b6d-4a19-9f28-3c1d8e4b70aa",
         "chargedAmountMinor": "514080000"
       }
     },
@@ -91,6 +93,7 @@
         "credited": "1.00",
         "free": false,
         "rate": "1020000",
+        "rateSnapshotId": "a7c0f3e2-5b6d-4a19-9f28-3c1d8e4b70aa",
         "chargedAmountMinor": "1071000"
       }
     },
@@ -110,6 +113,7 @@
         "credited": "12.34",
         "free": false,
         "rate": "1020000",
+        "rateSnapshotId": "a7c0f3e2-5b6d-4a19-9f28-3c1d8e4b70aa",
         "chargedAmountMinor": "12719400"
       }
     },
@@ -132,6 +136,7 @@
         "credited": "500.00",
         "free": false,
         "rate": "1020000",
+        "rateSnapshotId": "a7c0f3e2-5b6d-4a19-9f28-3c1d8e4b70aa",
         "chargedAmountMinor": "515100000"
       }
     },
@@ -173,6 +178,7 @@
         "credited": "5.50",
         "free": false,
         "rate": "1020000",
+        "rateSnapshotId": "a7c0f3e2-5b6d-4a19-9f28-3c1d8e4b70aa",
         "chargedAmountMinor": "1071000"
       }
     },
@@ -192,6 +198,7 @@
         "credited": "5.00",
         "free": false,
         "rate": "1020000",
+        "rateSnapshotId": "a7c0f3e2-5b6d-4a19-9f28-3c1d8e4b70aa",
         "chargedAmountMinor": "1071000"
       }
     },
@@ -211,6 +218,7 @@
         "credited": "20.00",
         "free": true,
         "rate": null,
+        "rateSnapshotId": null,
         "chargedAmountMinor": null
       }
     },
@@ -233,6 +241,7 @@
         "credited": "20.00",
         "free": true,
         "rate": null,
+        "rateSnapshotId": null,
         "chargedAmountMinor": null
       }
     },
@@ -300,6 +309,7 @@
         "credited": "100.00",
         "free": false,
         "rate": "1020000",
+        "rateSnapshotId": "a7c0f3e2-5b6d-4a19-9f28-3c1d8e4b70aa",
         "chargedAmountMinor": "102306000"
       }
     },
@@ -323,6 +333,7 @@
         "credited": "100.00",
         "free": false,
         "rate": "1020000",
+        "rateSnapshotId": "a7c0f3e2-5b6d-4a19-9f28-3c1d8e4b70aa",
         "chargedAmountMinor": "106080000"
       }
     },
@@ -346,6 +357,7 @@
         "credited": "100.00",
         "free": false,
         "rate": "1020000",
+        "rateSnapshotId": "a7c0f3e2-5b6d-4a19-9f28-3c1d8e4b70aa",
         "chargedAmountMinor": "102051000"
       }
     },
@@ -383,6 +395,7 @@
         "credited": "100.00",
         "free": false,
         "rate": "1000000",
+        "rateSnapshotId": "a7c0f3e2-5b6d-4a19-9f28-3c1d8e4b70aa",
         "chargedAmountMinor": "101000000"
       }
     },
@@ -406,6 +419,7 @@
         "credited": "100.00",
         "free": false,
         "rate": "985000",
+        "rateSnapshotId": "a7c0f3e2-5b6d-4a19-9f28-3c1d8e4b70aa",
         "chargedAmountMinor": "99485000"
       }
     },
@@ -425,6 +439,7 @@
         "credited": "100.00",
         "free": false,
         "rate": "1008000",
+        "rateSnapshotId": "a7c0f3e2-5b6d-4a19-9f28-3c1d8e4b70aa",
         "chargedAmountMinor": "101808000"
       }
     },
@@ -447,6 +462,7 @@
         "credited": "100.00",
         "free": false,
         "rate": "1007000",
+        "rateSnapshotId": "a7c0f3e2-5b6d-4a19-9f28-3c1d8e4b70aa",
         "chargedAmountMinor": "101707000"
       }
     },
@@ -470,6 +486,7 @@
         "credited": "100.00",
         "free": false,
         "rate": "1001000",
+        "rateSnapshotId": "a7c0f3e2-5b6d-4a19-9f28-3c1d8e4b70aa",
         "chargedAmountMinor": "101101000"
       }
     },
@@ -528,6 +545,7 @@
         "credited": "100.00",
         "free": false,
         "rate": "3000000",
+        "rateSnapshotId": "a7c0f3e2-5b6d-4a19-9f28-3c1d8e4b70aa",
         "chargedAmountMinor": "303000000"
       }
     },
@@ -550,6 +568,7 @@
         "credited": "100.00",
         "free": false,
         "rate": "1122000",
+        "rateSnapshotId": null,
         "chargedAmountMinor": "113322000"
       }
     },
@@ -598,6 +617,7 @@
         "credited": "100.00",
         "free": false,
         "rate": "1071000",
+        "rateSnapshotId": null,
         "chargedAmountMinor": "108171000"
       }
     },
@@ -617,6 +637,7 @@
         "credited": "10.00",
         "free": false,
         "rate": "1",
+        "rateSnapshotId": null,
         "chargedAmountMinor": "1025"
       }
     },
@@ -639,6 +660,7 @@
         "credited": "10.00",
         "free": false,
         "rate": "1",
+        "rateSnapshotId": null,
         "chargedAmountMinor": "1013"
       }
     },
@@ -661,6 +683,7 @@
         "credited": "10.00",
         "free": false,
         "rate": "0.333",
+        "rateSnapshotId": null,
         "chargedAmountMinor": "4"
       }
     },
@@ -713,6 +736,7 @@
         "credited": "9999999999999999.99",
         "free": false,
         "rate": "102000000",
+        "rateSnapshotId": "a7c0f3e2-5b6d-4a19-9f28-3c1d8e4b70aa",
         "chargedAmountMinor": "1030199999999999998980000"
       }
     }

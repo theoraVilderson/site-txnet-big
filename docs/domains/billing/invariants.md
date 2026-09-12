@@ -22,6 +22,7 @@ From schema comments, plus 11 from the gift path (F-092-m). 1-4 are enforced by 
 | 9 | Reconciliation never auto-reverses a credit; mismatches are flagged for a human | planned reconciliation worker | wrongful clawback |
 | 10 | All monetary columns are base currency only — no per-row currency column | schema (ADR-0002) | currency drift |
 | 11 | A `coupon_redemption` row credits a wallet at most once: the wallet movement it caused names **it**, not its coupon, and both are written in one transaction | `billing.redeem_gift_coupon` takes the use and `WalletLedgerService.credit` stamps `referenceId` inside the same `tenantTransaction` (F-092-m) | a gift code spent for nothing, or credited twice |
+| 12 | A payment's `exchangeRateSnapshot` names the reading it came from: a rate read from the FX worker is stored with the `currency_exchange_rate` row's id, and a price quoted from a gateway's own `staticRate` stores neither | `priceAtGateway` returns `rate` and `rateSnapshotId` together and refuses a live rate with no snapshot id (F-0606-b, `gateway-pricing.spec.ts`); the column is a real FK, `ON DELETE RESTRICT` (`payment-schema.int.spec.ts`) | a rial invoice nobody can prove was priced correctly (ADR-0019) |
 
 ## How to test
 

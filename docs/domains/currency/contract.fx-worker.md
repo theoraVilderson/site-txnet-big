@@ -9,8 +9,8 @@ updated: 2026-09-12
 # Contract — the FX worker (currency)
 
 Governs the loop that discovers the USD→IRR rate: backlog rows **F-0603**,
-**F-0604**, **F-0605** and **F-0606-a** (built), F-0606-b (in `billing`, not
-built). Read it before changing anything under
+**F-0604**, **F-0605**, **F-0606-a** and **F-0606-b** (in `billing`) — all
+built. Read it before changing anything under
 `txnet-backend/worker-service/src/app/currency/`.
 
 ## TL;DR
@@ -25,12 +25,12 @@ source.
 | 2 | failures and out-of-band values discarded, `minSources` must remain, **median** | F-0604 | yes |
 | 3 | a move beyond `maxDeviationPercent` rejected + critical alert | F-0605 | yes |
 | 4 | snapshot written, rate cached in Redis `fx:rate:{code}` | F-0606-a | yes |
-| 5 | every quoted price records its `rateSnapshotId` | F-0606-b | no |
+| 5 | every quoted price records its `rateSnapshotId` | F-0606-b | yes |
 
 **This loop now publishes** — an accepted median is a
 `currency.CurrencyExchangeRate` row cached under `fx:rate:{currencyCode}`, the
-rate ADR-0019 requires before anything can be priced in rial. Step 5 is still
-missing: a quoted price does not yet record *which* snapshot it was priced at.
+rate ADR-0019 requires before anything can be priced in rial. Step 5 is built,
+in `billing` (F-0606-b); the read of this key, F-092-c, is not.
 
 **A reader takes the snapshot from the cache and falls back to the table**, and
 must do both — the key is a cache of the row, not a second copy of the number.
@@ -154,7 +154,7 @@ no snapshot backs, the one state ADR-0019 says the rial path must never be in.
 `rate`, not its `isActive`. "The current rate" is the newest `effectiveAt`,
 which the `[currencyId, effectiveAt desc]` index answers; deactivating the
 previous row to say so rewrites history for a query that does not need it, and
-F-0606-b is about to point invoices at these rows by id.
+F-0606-b now points invoices at these rows by id, under a `RESTRICT` FK.
 
 **No TTL on the key, deliberately.** F-0607-a's ladder is a function of the
 snapshot's age, so an expiry would delete the evidence it is made of: a rate the
@@ -239,11 +239,11 @@ rather than staying empty: `fx:rate:{currencyCode}`
 (`docs/platform/redis-keyspace/contract.md`) and the `CurrencyExchangeRate` rows
 behind it.
 
-The consumers it is for are `billing`'s: the rial deposit path, which will read
-the cached snapshot and record its `snapshotId` on the quote (F-0606-b,
-F-092-c), and the staleness ladder, which reads `effectiveAt` (F-0607-a/b).
-Neither exists yet, so nobody has been notified: `DepositQuoteService` still
-passes `liveRate: null` and prices from the gateway's `staticRate` or refuses.
+The consumers it is for are `billing`'s: the rial deposit path and the
+staleness ladder, which reads `effectiveAt` (F-0607-a/b). **`billing` is ready
+for the first** — F-0606-b made `PriceRequest.liveRate` a `{snapshotId, rate}`
+pair, so nothing can price without saying which row it used. The read is what
+is missing: `DepositQuoteService` still passes `liveRate: null` until F-092-c.
 
 The other cross-unit coupling is not an interface: `ops-observability` has a
 rule file whose expressions depend on two `metricsJson` key names this unit

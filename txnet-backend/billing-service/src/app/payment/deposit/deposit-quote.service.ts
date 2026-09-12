@@ -197,8 +197,10 @@ export class DepositQuoteService {
       pricing: gateway,
       amount,
       discount: coupons.totalDiscount,
-      // No FX worker yet: the gateway prices from its `staticRate` or refuses.
-      // F-092-c passes the rate the staleness ladder allows.
+      // The FX worker publishes (F-0606-a), but nothing here reads it yet: the
+      // gateway prices from its `staticRate` or refuses. F-092-c passes the
+      // snapshot the staleness ladder allows, and `price.rateSnapshotId` is
+      // then the row F-092-i freezes on the payment (F-0606-b).
       liveRate: null,
       chargeDecimals: provider.chargeDecimals,
     };

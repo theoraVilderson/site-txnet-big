@@ -99,6 +99,7 @@ function insertPayment(gateway: {
   gatewayId?: string;
   tenantGatewayConfigId?: string;
   authority?: string;
+  rateSnapshotId?: string;
 }) {
   paymentSeq += 1;
   const id = `aaaaaaaa-0000-4000-8000-${String(paymentSeq).padStart(12, '0')}`;
@@ -107,10 +108,11 @@ function insertPayment(gateway: {
     INSERT INTO billing.payment_transaction
       (id, "tenantId", "userId", "gatewayId", "tenantGatewayConfigId", "gatewayTrackingCode",
        "amountRequested", "feeApplied", "discountApplied", "amountCredited",
-       "chargedAmountMinor", "exchangeRateSnapshot")
+       "chargedAmountMinor", "exchangeRateSnapshot", "exchangeRateSnapshotId")
     VALUES ('${id}', '${TENANT}', '${USER}', ${uuidOrNull(gateway.gatewayId)},
             ${uuidOrNull(gateway.tenantGatewayConfigId)}, ${gateway.authority ? `'${gateway.authority}'` : 'NULL'},
-            10.00, 0.20, 0.00, 10.00, 10404000, 1020000.00000000)
+            10.00, 0.20, 0.00, 10.00, 10404000, 1020000.00000000,
+            ${uuidOrNull(gateway.rateSnapshotId)})
   `);
 }
 
@@ -129,6 +131,7 @@ async function sqlstate(statement: Promise<unknown>): Promise<string | null> {
 
 const UNIQUE_VIOLATION = '23505';
 const CHECK_VIOLATION = '23514';
+const FOREIGN_KEY_VIOLATION = '23503';
 
 describe('ADR-0028: a gateway tracking code is unique per gateway', () => {
   it('refuses a second payment with the same authority on the same platform gateway', async () => {
@@ -172,6 +175,26 @@ describe('a payment names exactly one gateway', () => {
         }),
       ),
     ).toBe(CHECK_VIOLATION);
+  });
+});
+
+describe('F-0606-b: the rate snapshot a payment was priced at', () => {
+  it('refuses an id no currency_exchange_rate row answers', async () => {
+    // The column exists to be evidence; an id pointing at nothing is not
+    // evidence, so the FK is the enforcement and not a convention (ADR-0019).
+    expect(
+      await sqlstate(
+        insertPayment({
+          gatewayId: PLATFORM_GATEWAY,
+          authority: 'S0001',
+          rateSnapshotId: 'ffffffff-0000-4000-8000-000000000000',
+        }),
+      ),
+    ).toBe(FOREIGN_KEY_VIOLATION);
+  });
+
+  it('accepts a payment that names no snapshot — a staticRate gateway, and every row before F-092-c', async () => {
+    expect(await sqlstate(insertPayment({ gatewayId: PLATFORM_GATEWAY, authority: 'S0002' }))).toBeNull();
   });
 });
 
