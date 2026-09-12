@@ -32,5 +32,7 @@ exports[`RateLimitBucket > records the whole rate-limited surface in one place 1
   "WALLET_HISTORY = wallet:history",
   "WALLET_PAYMENTS = wallet:payments",
   "GIFT_REDEEM = gift:redeem",
+  "SETTLEMENT_ADMIN_READ = settlement:admin:read",
+  "SETTLEMENT_ADMIN_WRITE = settlement:admin:write",
 ]
 `;

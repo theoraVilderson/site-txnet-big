@@ -124,6 +124,21 @@ export const RateLimitBucket = {
    * types twenty gift codes in a quarter of an hour.
    */
   GIFT_REDEEM: 'gift:redeem',
+
+  /**
+   * The platform owner's settlement surface in `billing-service` (F-096-e),
+   * per operator. Two buckets rather than one because the surface is read far
+   * more often than it is written — an operator refreshes what is owed while
+   * making a transfer, and grants a gateway a handful of times ever.
+   *
+   * Neither budget is a security control: the door is the `platform_owner`
+   * check and the permission, and an operator who reaches these routes at all
+   * is already the one person allowed to. They are here because
+   * `request/rate-limit-coverage.spec.ts` admits no unlimited route, and
+   * because a runaway admin UI polling `owed` is a cost like any other.
+   */
+  SETTLEMENT_ADMIN_READ: 'settlement:admin:read',
+  SETTLEMENT_ADMIN_WRITE: 'settlement:admin:write',
 } as const;
 
 export type RateLimitBucket =

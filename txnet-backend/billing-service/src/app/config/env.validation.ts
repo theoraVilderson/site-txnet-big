@@ -224,6 +224,15 @@ export const envSchema = z.object({
   WALLET_PAYMENTS_RATE_LIMIT: rateLimit(120),
   /** A code-guessing oracle if it were generous (`payment/gift/gift.controller.ts`). */
   GIFT_REDEEM_RATE_LIMIT: rateLimit(10),
+  /**
+   * The operator settlement surface (`settlement/settlement.controller.ts`,
+   * F-096-e), per operator. The read budget is the admin UI's refresh rate
+   * while a transfer is being made; the write budget is far lower because a
+   * grant, a withdrawal and a payout are each a deliberate human act, and
+   * nobody records thirty payouts in a quarter of an hour.
+   */
+  SETTLEMENT_ADMIN_READ_RATE_LIMIT: rateLimit(120),
+  SETTLEMENT_ADMIN_WRITE_RATE_LIMIT: rateLimit(30),
 }).refine((env) => !(env.NODE_ENV === 'production' && env.PAYMENT_GATEWAY_SANDBOX), {
   message: 'PAYMENT_GATEWAY_SANDBOX=true is refused when NODE_ENV=production',
   path: ['PAYMENT_GATEWAY_SANDBOX'],

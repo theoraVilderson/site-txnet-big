@@ -11,7 +11,12 @@ import { PrismaClient } from '@prisma/client';
  *
  * The one generated client covers every schema (`prisma/domains/`,
  * `multiSchema`); what makes this billing's is that it only ever queries the
- * `billing` models. It connects as `DATABASE_APP_URL` for the reason
+ * `billing` models — with **one exception**, added deliberately rather than
+ * drifted into: `settlement/` writes `audit.admin_audit_log`, because its five
+ * routes are audited admin actions and the ledger they operate on is here.
+ * `domains/audit/contract.settlement.md` says why the routes did not move to
+ * `auth-service` instead. Nothing else in this service reaches another schema,
+ * and `grep -rn adminAuditLog billing-service/` is that claim. It connects as `DATABASE_APP_URL` for the reason
  * `auth-service`'s `PrismaService` gives: Row-Level Security does not bind a
  * table's owner, and the owner is what `DATABASE_URL` is. There is no fallback
  * to it.

@@ -12,6 +12,10 @@ account switching (catalog 2.8, C-21/C-22) on 2026-09-06. **#3, #4, #6, #7 and
 #8 are enforced in code** as of F-0205 / F-0206 / F-0207 / F-0208. #1, #2 and
 #5 remain unenforced here — impersonation is written by identity.
 
+**#9–#11 arrived with F-096-e (2026-09-12)** and are the first invariants in
+this unit enforced outside `auth-service`: the settlement operator surface is
+`billing-service` code, for the reason `contract.settlement.md` gives.
+
 **#3 was rewritten on 2026-09-06 by ADR-0015**, which made a group belong to
 the surface it was built on rather than to the person. #4, #6 and #7 are
 unchanged by it — deliberately, and that is the argument for the shape chosen:
@@ -27,6 +31,9 @@ see the ADR on why the *member row* carries the scope and not the group.
 | 6 | A switch never crosses `tenantId`: membership may span tenants (it records a human), but the list and the switch itself only ever offer members of the caller's own tenant (C-22) | `AccountSwitchService.list` (tenant-filtered query) + `.switchTo` (F-0206/F-0207) | a session for brand B handed to a page served on brand A's domain |
 | 7 | Switching revokes the outgoing session in the same transaction that issues the incoming one (C-21). One browser holds exactly one live session at every instant, which is what keeps F-0101's "one device, one account" true | `AuthService.switchSession` — one `$transaction`, and the Redis marker order below | an orphaned live session the user cannot see or end; F-0101 becomes a lie |
 | 8 | Every member row of one `groupId` shares one `scopeKey`, and a group is never left with fewer than two members (ADR-0015). A group split across scopes would be readable from one surface and half-readable from another; a group of one is not a switcher | `AccountSwitchService.join` (inherits the founder row's scope) and `.remove` (tears the group down at one member) | a switcher that lists members it cannot switch to, on a surface that never proved them |
+| 9 | **No settlement operation runs for a caller whose tenant is not `platform_owner`** (ADR-0041, F-096-e). Every public method of `SettlementService` opens with `assertOperator`, which reads the caller's tenant on the application pool. The permission `settlement.manage` is *not* this invariant: a reseller administers its own roles and can grant itself that permission | `SettlementService.assertOperator`, called from every operation; asserted over every method from one list in `settlement.service.spec.ts` | a reseller reaching a pool whose RLS policy is `USING (true)` — every tenant's settlement ledger readable, and its own tenant grantable the platform's gateway |
+| 10 | A grant, a withdrawal and a payout each write their `admin_audit_log` row **inside the transaction that performs the act** (F-096-e). A withdrawal that lost its race writes none at all — the `updateMany` filter carries `isActive: true` | `SettlementService`, one `$transaction` per operation | a grant with nobody's name on it, or two audit rows each claiming to be the one that stopped a grant |
+| 11 | A payout never exceeds what is outstanding for that tenant, and is never zero or negative (ADR-0041 §5) | `SettlementService.recordPayout`, summed from the two ledgers on the call | a negative balance the platform reads as a tenant owing *it* money, recorded through a settlement ledger |
 
 ## How to test
 
@@ -59,3 +66,19 @@ see the ADR on why the *member row* carries the scope and not the group.
    assertion is written negatively on purpose, because the wide call sits right
    next to the narrow one), and deletes the group once one member would be
    left.
+
+9, 10, 11. `billing-service/src/app/settlement/settlement.service.spec.ts`.
+
+   **#9 is asserted from a list of every public method**, not once per route,
+   because the way it breaks is a method added later that forgets the call —
+   `EVERY_OPERATION` is that list, and a new operation is one line on it. Each
+   case also asserts that nothing at all was written.
+
+   **#10 is asserted as write order**, the way F-096-d asserts the accrual's:
+   the fake transaction records each write by name, so `['grant', 'audit']` is
+   checkable and an audit row written outside the transaction is not. The lost
+   race is its own case and expects `['withdraw']` with no audit.
+
+   Mutation-checked 2026-09-12: dropping `isActive: true` from the withdrawal's
+   `updateMany` filter turns the race case red, and removing `assertOperator`
+   from `owed()` alone turns two cases red.

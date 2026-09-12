@@ -21,6 +21,13 @@ enum AdminAction {
   tenant_feature_grant
   tenant_gateway_config_change
   tenant_domain_verify
+  // ADR-0041 §5/§6, F-096-e — the operator surface over granted gateways.
+  // Three values rather than one `tenant_settlement_approve`, because a trail
+  // that cannot tell a grant from its withdrawal does not answer the question
+  // it exists for: who let this tenant collect, and who stopped it.
+  gateway_grant_create
+  gateway_grant_withdraw
+  gateway_settlement_payout
 
   @@schema("audit")
 }
@@ -35,6 +42,11 @@ enum AuditTargetType {
   currency_policy
   bot_worker
   restriction
+  // F-096-e. A grant and a payout are their own things: neither is the
+  // `gateway` row (which the grant only points at) nor the `payment` that
+  // accrued under it.
+  gateway_grant
+  settlement_payout
 
   @@schema("audit")
 }
