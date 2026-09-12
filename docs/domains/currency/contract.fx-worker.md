@@ -29,15 +29,14 @@ source.
 
 **This loop now publishes** — an accepted median is a
 `currency.CurrencyExchangeRate` row cached under `fx:rate:{currencyCode}`, the
-rate ADR-0019 requires before anything can be priced in rial. Step 5 is built,
-in `billing` (F-0606-b); the read of this key, F-092-c, is not.
+rate ADR-0019 requires before anything can be priced in rial. Step 5 is built in
+`billing` (F-0606-b), and so is the read of this key (F-092-c).
 
 **A reader takes the snapshot from the cache and falls back to the table**, and
 must do both — the key is a cache of the row, not a second copy of the number.
 It holds `{snapshotId, currencyCode, rate, source, effectiveAt}` so a caller can
 record the id (F-0606-b) and judge the age (F-0607-a) without a query. **The
-ladder is the reader's**: this unit publishes the last rate it accepted and
-when, not a judgement about whether that is fresh enough to quote.
+ladder is the reader's**: this unit publishes the rate it last accepted and when.
 
 ## What is built
 
@@ -239,11 +238,12 @@ rather than staying empty: `fx:rate:{currencyCode}`
 (`docs/platform/redis-keyspace/contract.md`) and the `CurrencyExchangeRate` rows
 behind it.
 
-The consumers it is for are `billing`'s: the rial deposit path and the
-staleness ladder, which reads `effectiveAt` (F-0607-a/b). **`billing` is ready
-for the first** — F-0606-b made `PriceRequest.liveRate` a `{snapshotId, rate}`
-pair, so nothing can price without saying which row it used. The read is what
-is missing: `DepositQuoteService` still passes `liveRate: null` until F-092-c.
+The consumers are `billing`'s: the rial deposit path and the staleness ladder,
+which reads `effectiveAt` (F-0607-a/b). **The first is connected** —
+`billing`'s `FxRateReader` (F-092-c) reads this key for a `useLiveRate` gateway
+and falls back to the table, into the `{snapshotId, rate}` pair F-0606-b made
+`PriceRequest.liveRate`, so nothing prices without naming its row. Its rules are
+`billing/contract.deposit.md`'s; the age is still F-0607-a's.
 
 The other cross-unit coupling is not an interface: `ops-observability` has a
 rule file whose expressions depend on two `metricsJson` key names this unit

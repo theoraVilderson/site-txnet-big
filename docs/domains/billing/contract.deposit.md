@@ -2,8 +2,8 @@
 id: billing
 layer: domain
 status: active
-version: 4
-updated: 2026-09-11
+version: 5
+updated: 2026-09-12
 ---
 
 # Contract — billing / deposit quote
@@ -36,10 +36,28 @@ Both routes sit behind the gate like every billing route ("Request edge" in
 | A fully discounted top-up is quoted whatever the vault holds | nothing reaches the gateway on the free path |
 | Coupons are validated in the same transaction as a wallet top-up. A rejected code is not an error: the quote goes on without it and `rejected[].message` is translated, one i18n key per `reason` | codes stack; a typo must not hide the rest of the breakdown |
 | An automatic fee: the provider is asked for `feeQuoteAmountMinor`, its answer converted by `quotedFeeFromMinor` (rounded **up** to the cent). The vault and the provider are called after the transaction closes; the free path calls neither | no connection is held across a call to a bank |
-| `liveRate` is `null` until F-092-c: a gateway prices from its `staticRate`, or refuses | F-0607's last rung |
+| A `useLiveRate` gateway is priced at the rate the FX worker last published (`FxRateReader`, F-092-c); one that does not ask for a live rate is never read for, and prices from its `staticRate` | a quote is not the place to spend a Redis round trip proving a column's value |
+| No readable rate is `liveRate: null` — the gateway's `staticRate`, or a refusal — and never an error of its own: Redis down, a value that no longer parses, no `currency` row and no snapshot ever written are all the same answer | a 500 on a quote where the user's move is the same as a 503's: another gateway |
 | Out of the gateway's range is **400** `billing.amountOutOfRange`; no usable rate, rate out of range, a provider failure, no merchant id, no driver are all **503** `billing.gatewayUnavailable` — the cause goes to the log only | the user's move is the same: another gateway |
 | A quote reserves and writes nothing | F-092-i reserves, on the request that pays |
 | Per user, per 900s: the list `DEPOSIT_GATEWAYS_RATE_LIMIT` (default 120), a quote `DEPOSIT_QUOTE_RATE_LIMIT` (default 60); **429** past it (F-092-r) | a quote at an automatic-fee gateway is a call to the bank |
 
+## The live rate (built — F-092-c)
+
+`FxRateReader` in `billing-service/src/app/payment/pricing/`. The read side of
+`currency`'s FX loop, and the last piece ADR-0019 wants before a rial gateway
+can quote: the worker has published since F-0606-a and `priceAtGateway` has
+recorded which snapshot priced a payment since F-0606-b, and what sat between
+them was nobody reading the key.
+
+| Rule | Why |
+|---|---|
+| Cache first, table second, and both: `fx:rate:{FX_QUOTE_CURRENCY_CODE}` (`UnscopedRedisKeys.fxRate`, C-03), then the newest `effectiveAt` for that code | the key is a cache of a `currency_exchange_rate` row, so a miss is a question for the table and never an answer (`currency/contract.fx-worker.md`) |
+| An unreadable or unparseable cache value is a **miss**, logged, not an answer | otherwise a Redis outage silently drops every live-rate gateway to its `staticRate`, at whatever price that column happens to name |
+| A rate with no snapshot id, or one that is not positive, is refused from either store — both halves or neither | ADR-0019's forbidden state, and `priceAtGateway` treats a snapshotless rate as a caller bug (`InvalidPricingInput`), which is a 500 |
+| No tenant is bound for the table read, and none is needed | `currency_exchange_rate` has no `tenantId` and so no RLS policy: the rate is the platform's, and every tenant prices from the same one |
+| It does not judge the rate's **age** | the staleness ladder is F-0607-a's, and reads the `effectiveAt` this leaves on the snapshot |
+
 **Not covered:** `amount` is base currency; the display-currency step the
-F-092-i row names arrives with F-025.
+F-092-i row names arrives with F-025. The rate's age is unjudged until
+F-0607-a, so a rate the ladder would call *degraded* is quoted as a normal one.

@@ -113,7 +113,16 @@ beforeAll(async () => {
       ]),
     requireConfigured: async () => undefined,
   };
-  service = new DepositQuoteService(app, new CouponValidationService(), registry as never, merchant as never);
+  // No FX rate published in this fixture: these cases are about which gateway
+  // is selectable, and a `staticRate` prices them (F-092-c).
+  const fx = { current: async () => null };
+  service = new DepositQuoteService(
+    app,
+    new CouponValidationService(),
+    registry as never,
+    merchant as never,
+    fx as never,
+  );
 });
 
 afterAll(async () => {

@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { LocaleModule } from '../../locale/locale.module';
 import { CouponModule } from '../coupon/coupon.module';
 import { GatewayModule } from '../gateway/gateway.module';
+import { FxRateReader } from '../pricing/fx-rate.reader';
 import { DepositController } from './deposit.controller';
 import { DepositQuoteService } from './deposit-quote.service';
 
@@ -13,7 +14,7 @@ import { DepositQuoteService } from './deposit-quote.service';
 @Module({
   imports: [LocaleModule, CouponModule, GatewayModule],
   controllers: [DepositController],
-  providers: [DepositQuoteService],
+  providers: [DepositQuoteService, FxRateReader],
   exports: [DepositQuoteService],
 })
 export class DepositModule {}

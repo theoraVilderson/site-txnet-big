@@ -74,9 +74,11 @@ type Setup = {
   quoteFee?: (amountMinor: bigint) => bigint;
   /** Gateway ids with a merchant id in the vault. Every row's, unless a case says otherwise. */
   configured?: string[];
+  /** What the FX reader answers (F-092-c). `undefined` is a platform with no published rate. */
+  liveRate?: { snapshotId: string; rate: Prisma.Decimal };
 };
 
-function build({ rows = [gatewayRow()], coupons = noCoupons('20.00'), quoteFee, configured }: Setup = {}) {
+function build({ rows = [gatewayRow()], coupons = noCoupons('20.00'), quoteFee, configured, liveRate }: Setup = {}) {
   const tx = {
     $executeRaw: async () => 0,
     tenant: { findUnique: async () => ({ tenantType: 'reseller' }) },
@@ -116,11 +118,15 @@ function build({ rows = [gatewayRow()], coupons = noCoupons('20.00'), quoteFee, 
     },
   };
   const couponService = { validate: async () => coupons };
+  // No live rate published, which is what these cases were written against:
+  // the gateway prices from its `staticRate` (F-092-c).
+  const fx = { current: async () => liveRate ?? null };
   return new DepositQuoteService(
     prisma as never,
     couponService as never,
     registry as never,
     merchant as never,
+    fx as never,
   );
 }
 
@@ -157,6 +163,23 @@ describe('DepositQuoteService.quote', () => {
     });
     // The wire is JSON: a bigint in the answer would throw at serialisation.
     expect(() => JSON.stringify(quote)).not.toThrow();
+  });
+
+  it('charges at the rate the FX worker published, not at the gateway\'s staticRate', async () => {
+    // F-092-c. The row asks for a live rate and has a `staticRate` of 1,000,000
+    // to fall back on; with one published, the published one is what the user
+    // is charged at — the whole point of the loop that discovers it.
+    const service = build({
+      coupons: noCoupons('10.00'),
+      liveRate: { snapshotId: 'snap-1', rate: new Prisma.Decimal('1042500') },
+    });
+
+    const quote = await asTenant(() =>
+      service.quote({ userId: USER, gatewayId: GATEWAY, source: 'tenant', amount: d('10.00'), couponCodes: [] }),
+    );
+
+    // 10.00 + 1% fee = 10.10, at 1,042,500 rather than at 1,000,000.
+    expect(quote.charge).toEqual({ currency: 'IRR', decimals: 0, amountMinor: '10529250' });
   });
 
   it("asks an automatic-fee provider in its minor unit and converts the answer back at the charge rate", async () => {

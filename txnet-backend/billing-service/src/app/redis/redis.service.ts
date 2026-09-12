@@ -14,8 +14,8 @@ return current
 `;
 
 /**
- * `billing-service`'s Redis, for one thing: the rate limiter's counters
- * (F-092-r, D-24). Under the platform's one keyspace prefix, so a
+ * `billing-service`'s Redis: the rate limiter's counters (F-092-r, D-24) and
+ * the FX worker's published rate (F-092-c). Under the platform's one keyspace prefix, so a
  * `REDIS_KEYSPACE_VERSION` bump abandons these keys with every other
  * (ADR-0005). Keys are built by `shared-core`'s `RateLimiter`, never here
  * (C-03).
@@ -59,5 +59,16 @@ export class RedisService implements RateLimitStore, OnModuleInit, OnModuleDestr
 
   async del(key: string): Promise<void> {
     await this.client.del(key);
+  }
+
+  /**
+   * One read, for the FX worker's published rate (F-092-c). The key is built by
+   * `UnscopedRedisKeys.fxRate` and carries the same prefix the worker wrote it
+   * under (ADR-0005), so this is a read of that process's key and not a second
+   * copy of it. Money still never lives here: the value is a cache of a
+   * `currency_exchange_rate` row, and a miss is answered from the table.
+   */
+  get(key: string): Promise<string | null> {
+    return this.client.get(key);
   }
 }

@@ -6,6 +6,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CouponValidationService, RejectedCoupon } from '../coupon/coupon-validation';
 import { GatewayMerchant, GatewaySource, merchantLabel } from '../gateway/gateway-merchant';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
+import { FxRateReader } from '../pricing/fx-rate.reader';
 import {
   feeBasis,
   feeQuoteAmountMinor,
@@ -138,6 +139,7 @@ export class DepositQuoteService {
     private readonly coupons: CouponValidationService,
     private readonly providers: PaymentProviderRegistry,
     private readonly merchant: GatewayMerchant,
+    private readonly fx: FxRateReader,
   ) {}
 
   async listGateways(): Promise<DepositGateway[]> {
@@ -197,11 +199,14 @@ export class DepositQuoteService {
       pricing: gateway,
       amount,
       discount: coupons.totalDiscount,
-      // The FX worker publishes (F-0606-a), but nothing here reads it yet: the
-      // gateway prices from its `staticRate` or refuses. F-092-c passes the
-      // snapshot the staleness ladder allows, and `price.rateSnapshotId` is
-      // then the row F-092-i freezes on the payment (F-0606-b).
-      liveRate: null,
+      // The rate the FX worker last published, and the snapshot behind it
+      // (F-092-c). Read only for a gateway that asked for one: a `staticRate`
+      // gateway prices from its own column, and a quote is not the place to
+      // spend a Redis round trip proving that. `null` — no rate published, or
+      // none readable — leaves `rateOf` with the `staticRate`, or a refusal the
+      // edge answers 503. `price.rateSnapshotId` is the row F-092-i freezes on
+      // the payment (F-0606-b); judging the rate's age is F-0607-a's.
+      liveRate: gateway.useLiveRate ? await this.fx.current() : null,
       chargeDecimals: provider.chargeDecimals,
     };
 
