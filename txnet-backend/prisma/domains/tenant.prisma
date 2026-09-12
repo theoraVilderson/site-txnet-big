@@ -339,6 +339,9 @@ model TenantGatewayConfig {
 
   tenant   Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   payments PaymentTransaction[]
+  /// Grants of this gateway to other tenants (ADR-0041, F-096-a). The owner is
+  /// unchanged by a grant; this is only who else may use it.
+  grants   PaymentGatewayGrant[]
 
   @@unique([tenantId, providerName])
   @@map("tenant_gateway_config")

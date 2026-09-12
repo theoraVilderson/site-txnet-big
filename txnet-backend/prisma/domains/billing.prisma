@@ -324,6 +324,8 @@ model PaymentGateway {
   updatedAt           DateTime         @updatedAt
 
   transactions PaymentTransaction[]
+  /// Grants of this gateway to tenants that do not own it (ADR-0041, F-096-a).
+  grants       PaymentGatewayGrant[]
 
   @@map("payment_gateway")
   @@schema("billing")
@@ -360,6 +362,10 @@ model PaymentTransaction {
   failureCode           String?
   confirmationSource    ConfirmationSource?
   confirmedByAdminId    String?             @db.Uuid
+  /// The grant this payment was taken under (ADR-0041, F-096-a). NULL is the
+  /// ordinary case: the tenant used a gateway it owns. Non-null means the money
+  /// landed in somebody else's merchant account and this tenant is owed it.
+  grantId               String?             @db.Uuid
   manualConfirmReason   String? // اجباری در سطح اپلیکیشن اگر confirmationSource=admin_manual
   createdAt             DateTime            @default(now())
   expiresAt             DateTime? // معمولاً now()+15min
@@ -371,6 +377,8 @@ model PaymentTransaction {
   // the payment was priced correctly, and the rate table is append-only anyway.
   exchangeRateSnapshotRow CurrencyExchangeRate?     @relation(fields: [exchangeRateSnapshotId], references: [id], onDelete: Restrict)
   tenantGatewayConfig     TenantGatewayConfig?      @relation(fields: [tenantGatewayConfigId], references: [id], onDelete: Restrict)
+  grant                   PaymentGatewayGrant?      @relation(fields: [grantId], references: [id], onDelete: Restrict)
+  settlementEntry         GatewaySettlementEntry?
   couponRedemptions       CouponRedemption[]
   reconciliationLogs      PaymentReconciliationLog[]
   cryptoDetail            CryptoPaymentDetail?
@@ -451,3 +459,88 @@ model AffiliateCommission {
 }
 
 // =============================================================================
+
+// =============================================================================
+// 8.5 — Granted gateways and what they collect (ADR-0041, F-096-a)
+// =============================================================================
+
+/// ADR-0041 — یک tenant می‌تواند از درگاهی که مالکش نیست استفاده کند، فقط با
+/// اعطای صریح مالک پلتفرم. Schema only for now: no service reads it (F-096-b).
+///
+/// `tenantId` is the **borrowing** tenant — the one the grant is *to*. It
+/// carries that name and not `granteeTenantId` because it is the column RLS
+/// and `withTenant` key on, and a grant is exactly the borrower's to see.
+/// Which tenant *owns* the gateway is the gateway row's business, not this one's.
+model PaymentGatewayGrant {
+  id                    String    @id @default(uuid()) @db.Uuid
+  tenantId              String    @db.Uuid
+  // Exactly one of the two, like `payment_transaction`: the platform's own
+  // gateway or another reseller's. A CHECK enforces it (Prisma cannot).
+  gatewayId             String?   @db.Uuid
+  tenantGatewayConfigId String?   @db.Uuid
+  grantedByAdminId      String    @db.Uuid
+  /// Withdrawn, not deleted: a payment that was taken through this grant keeps
+  /// pointing at it, and what was owed stays explicable (ADR-0041 §6).
+  isActive              Boolean   @default(true)
+  grantedAt             DateTime  @default(now())
+  withdrawnAt           DateTime?
+  withdrawnByAdminId    String?   @db.Uuid
+  note                  String?
+
+  // Restrict, like `payment_transaction`'s: a grant is a record, and nulling
+  // its gateway would break the CHECK as well as the story.
+  gateway             PaymentGateway?      @relation(fields: [gatewayId], references: [id], onDelete: Restrict)
+  tenantGatewayConfig TenantGatewayConfig? @relation(fields: [tenantGatewayConfigId], references: [id], onDelete: Restrict)
+  payments            PaymentTransaction[]
+  settlementEntries   GatewaySettlementEntry[]
+
+  @@index([tenantId, isActive])
+  @@map("payment_gateway_grant")
+  @@schema("billing")
+}
+
+/// ADR-0041 §4 — بدهی پلتفرم به tenant قرض‌گیرنده: هر پرداخت موفق از درگاه
+/// اعطاشده، مبلغ واریزشده (منهای کارمزد درگاه) را اینجا انباشته می‌کند.
+/// Append-only, one row per payment, written inside the crediting transaction.
+model GatewaySettlementEntry {
+  id                   String   @id @default(uuid()) @db.Uuid
+  grantId              String   @db.Uuid
+  /// The tenant that is **owed** — the borrower whose user was credited.
+  tenantId             String   @db.Uuid
+  /// One accrual per payment, so a retried callback cannot accrue twice.
+  paymentTransactionId String   @unique @db.Uuid
+  /// Base currency (ADR-0019, C-02). `amountCredited` net of the gateway fee.
+  amount               Decimal  @db.Decimal(18, 2)
+  accruedAt            DateTime @default(now())
+
+  grant              PaymentGatewayGrant @relation(fields: [grantId], references: [id])
+  paymentTransaction PaymentTransaction  @relation(fields: [paymentTransactionId], references: [id])
+
+  @@index([tenantId, accruedAt(sort: Desc)])
+  @@map("gateway_settlement_entry")
+  @@schema("billing")
+}
+
+/// ADR-0041 §5 — تسویه، یک پرداخت دستیِ ثبت‌شده است؛ هرگز خودکار نیست.
+/// اپراتور پول را بیرون از سیستم منتقل می‌کند و اینجا با سند و هویت خودش ثبت.
+model GatewaySettlementPayout {
+  id                String   @id @default(uuid()) @db.Uuid
+  /// The tenant that was paid.
+  tenantId          String   @db.Uuid
+  /// Base currency (ADR-0019, C-02). What is still owed is the accruals minus these.
+  amount            Decimal  @db.Decimal(18, 2)
+  paidAt            DateTime @default(now())
+  /// Never null in practice: a payout is a person's act and is attributed (ADR-0041 §5).
+  recordedByAdminId String   @db.Uuid
+  /// Free text: "bank transfer", "sheba", a gateway's own payout id.
+  method            String?
+  reference         String?
+  /// The transfer's proof. A **key**, not a URL: the object store is D-8's port
+  /// and lands with F-033, so nothing resolves this yet (F-096-e).
+  proofAttachmentKey String?
+  notes             String?
+
+  @@index([tenantId, paidAt(sort: Desc)])
+  @@map("gateway_settlement_payout")
+  @@schema("billing")
+}
