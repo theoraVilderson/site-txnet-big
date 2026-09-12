@@ -2,16 +2,17 @@
 id: billing
 layer: domain
 status: active
-version: 5
+version: 6
 updated: 2026-09-12
 ---
 
 # Contract — billing
 
-**Seven things built** — the wallet credit/debit primitive (F-092-b), the
+**Eight things built** — the wallet credit/debit primitive (F-092-b), the
 gateway pricing calculator (F-092-e), the payment provider port (F-092-f),
 coupon validation (F-092-g) and coupon reservation (F-092-h), all below, the
-deposit quote + gateway list routes (F-092-o) in
+top-up page's routes — the gateway list and quote (F-092-o) and starting the
+payment (F-092-i) — in
 **[contract.deposit.md](contract.deposit.md)**, and the wallet history +
 payment attempt routes (F-092-n) in
 **[contract.history.md](contract.history.md)** (both §10). Every other row in *Provides* is still intent from
@@ -22,7 +23,8 @@ payment attempt routes (F-092-n) in
 `CouponReservationService.reserve(tx, {userId, orderReferenceId, paymentTransactionId?, applied})`,
 `.confirm(tx, orderReferenceId)`, `.release(tx, orderReferenceId, 'cancelled' | 'expired')` in
 `billing-service/src/app/payment/coupon/coupon-reservation.ts`, over the SQL functions of migration
-`20260911000200_coupon_reservation`; no route calls them yet (F-092-i reserves, F-092-j / F-092-k settle).
+`20260911000200_coupon_reservation`; `deposit/start` reserves and, on its free path, confirms (F-092-i);
+F-092-j / F-092-k settle the rest.
 
 | Rule | Why |
 |---|---|
@@ -39,7 +41,7 @@ payment attempt routes (F-092-n) in
 
 `CouponValidationService.validate(tx, {codes, amount, target, userId})` and the pure
 `applyCoupons` in `billing-service/src/app/payment/coupon/coupon-validation.ts`; the deposit
-quote calls it (F-092-o), F-092-i will reserve what was applied. Reserves nothing.
+quote calls it (F-092-o) and `deposit/start` reserves what it applied (F-092-i). Reserves nothing.
 
 | Rule | Why |
 |---|---|
@@ -58,7 +60,7 @@ quote calls it (F-092-o), F-092-i will reserve what was applied. Reserves nothin
 ## Payment providers (built — F-092-f)
 
 `PaymentProviderRegistry.get(providerName)` / `.has(providerName)` and `GatewayMerchant.credentialsFor(config, actorId?)`
-in `billing-service/src/app/payment/gateway/`; the deposit quote calls them (F-092-o), F-092-i and F-092-j will.
+in `billing-service/src/app/payment/gateway/`; the deposit quote (F-092-o) and `deposit/start` (F-092-i) call them, F-092-j will.
 
 | Rule | Why |
 |---|---|
@@ -78,9 +80,10 @@ in `billing-service/src/app/payment/gateway/`; the deposit quote calls them (F-0
 ## Gateway pricing (built — F-092-e)
 
 `priceAtGateway(request)` and `feeBasis(request)` in
-`billing-service/src/app/payment/pricing/gateway-pricing.ts`; the deposit quote
-calls them (F-092-o), F-092-i will charge with them. The worked numbers are
-`gateway-pricing.golden.json` (F-0611).
+`billing-service/src/app/payment/pricing/gateway-pricing.ts`, reached by both
+deposit routes through the shared `deposit/deposit-pricing.ts` (F-092-o,
+F-092-i), so the quote and the charge cannot be computed differently. The worked
+numbers are `gateway-pricing.golden.json` (F-0611).
 
 | Rule | Why |
 |---|---|
@@ -100,7 +103,7 @@ calls them (F-092-o), F-092-i will charge with them. The worked numbers are
 
 ## Payment and coupon storage (built — F-092-d)
 
-Schema only; no route writes these yet. Migration
+`deposit/start` is the first writer of `payment_transaction` (F-092-i). Migration
 `20260911000000_payment_legacy_port`, proved by
 `billing-service/src/app/payment/payment-schema.int.spec.ts`.
 
@@ -130,8 +133,8 @@ Schema only; no route writes these yet. Migration
 ## Wallet ledger (built — F-092-b)
 
 `WalletLedgerService.credit(tx, entry)` / `.debit(tx, entry)` in
-`billing-service/src/app/wallet/wallet-ledger.service.ts`; no route calls it yet
-(F-092-i, F-092-j, F-092-m will).
+`billing-service/src/app/wallet/wallet-ledger.service.ts`; the gift box calls it
+(F-092-m) and so does a fully discounted top-up (F-092-i); F-092-j will.
 
 | Rule | Why |
 |---|---|
@@ -163,7 +166,7 @@ reserve/confirm state machine (built, F-092-h).
 | quote a deposit + list gateways — **built**, [contract.deposit.md](contract.deposit.md) | userId (header), gatewayId, amount, couponCodes[] | selectable gateways; the price breakdown + rejected codes | sync, read | gateway not found, amount out of range, gateway unavailable |
 | read the wallet history — **built**, [contract.history.md](contract.history.md) | userId (header), type / direction / date / search filters, page | the ledger page with its `balanceAfter` column and the wallet balance; separately, the payment attempts | sync, read | — |
 | price a deposit — **built**, see above | gateway pricing, amount, discount, quotedFee?, liveRate?, chargeDecimals | base, discount, gap, fee, payable, credited, rate, chargedAmountMinor | sync, pure | invalid input, amount out of gateway range, fee quote required, rate unavailable / out of range |
-| start payment | userId, gatewayId or tenantGatewayConfigId, amount, couponCodes[] | payment intent + redirect / deposit address | sync | amount out of gateway range |
+| start a top-up — **built**, [contract.deposit.md](contract.deposit.md) | userId (header), gatewayId, source, amount, couponCodes[] | the payment id + the gateway's redirect URL, or a credited wallet on the free path | sync | gateway not found, amount out of gateway range, coupon hold refused, gateway unavailable |
 | confirm payment | gateway webhook / reconciliation / admin | wallet credit + `payment_transaction.status = success` | async | duplicate, mismatch (flagged) |
 | initiate wallet transfer | senderId, receiverId, amount | `wallet_transfer_request` (`pending_otp`) | sync | — |
 | confirm wallet transfer | transferId, OTP | atomic debit+credit, `confirmed` | sync tx | bad/expired OTP (5 tries -> cancelled) |
@@ -185,6 +188,7 @@ None planned yet (no bus). Payment confirmation is expected to drive
 | catalog | `servicePlanId` / `categoryId` for coupon scope + order pricing | coupon scope check fails |
 | currency | base-currency amounts only in; display conversion is currency's job | — |
 | tenant | `tenantId` denormalized on `wallet_transaction` / `payment_transaction` for reporting | — |
+| tenant | the request tenant's `tenant_domain` rows — the `panel` host a gateway callback comes back to, proven custom domain first (F-092-i, ADR-0020). Read under RLS in its `tenantTransaction`; never a request header | no host to answer on: starting a payment is refused 503 |
 | tenant | the request tenant's `tenant_gateway_config` rows — pricing and provider, never the secret columns — read under RLS in its `tenantTransaction` (F-092-o); `tenant.tenantType`, to offer `payment_gateway` to the `platform_owner` alone (F-092-s) | no gateway to offer: the list is empty |
 
 ## Guarantees (intended)

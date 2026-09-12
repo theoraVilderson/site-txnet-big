@@ -2,26 +2,29 @@
 id: billing
 layer: domain
 status: active
-version: 5
+version: 6
 updated: 2026-09-12
 ---
 
-# Contract — billing / deposit quote
+# Contract — billing / the top-up page
 
-A topic file of `contract.md` (§10): the top-up page's read side, the first
-billing routes. Its consumer is the panel (F-093-e), which none of the other
-sections has. F-092-i, starting a payment, belongs beside it.
+A topic file of `contract.md` (§10): every route the top-up page calls — the
+gateway list and the quote (F-092-o), and the payment the quote described
+(F-092-i). Its consumer is the panel (F-093-e), which none of the other
+sections has.
 
-## Routes (built — F-092-o)
+## Routes (built — F-092-o, F-092-i)
 
-`DepositController` + `DepositQuoteService` in `billing-service/src/app/payment/deposit/`.
-Both routes sit behind the gate like every billing route ("Request edge" in
-`contract.md`): the user and the tenant come from its headers, never from the body.
+`DepositController` + `DepositQuoteService` / `DepositStartService` in
+`billing-service/src/app/payment/deposit/`. All three sit behind the gate like
+every billing route ("Request edge" in `contract.md`): the user and the tenant
+come from its headers, never from the body.
 
 | Route | Body | Answers `data` |
 |---|---|---|
 | `GET /api/billing/deposit/gateways` | — | `[{id, source, displayName, providerName, category, minAmount, maxAmount}]` — platform gateways first, each table oldest first |
 | `POST /api/billing/deposit/quote` | `{gatewayId, source?, amount, couponCodes?}` — `source` `tenant` (default) or `platform`, as the list answered it; `amount` a decimal string, ≤ 2 places, > 0; ≤ 10 codes of ≤ 64 chars | `{gatewayId, source, amount, coupons[{code, discount}], rejected[{code, reason, message}], discount, gap, fee, payable, credited, free, charge}` |
+| `POST /api/billing/deposit/start` (F-092-i) | the quote's body, exactly | `{paymentId, free, redirectUrl, amount, discount, fee, payable, credited, balance}` |
 
 ## Rules
 
@@ -39,8 +42,8 @@ Both routes sit behind the gate like every billing route ("Request edge" in
 | A `useLiveRate` gateway is priced at the rate the FX worker last published (`FxRateReader`, F-092-c); one that does not ask for a live rate is never read for, and prices from its `staticRate` | a quote is not the place to spend a Redis round trip proving a column's value |
 | No readable rate is `liveRate: null` — the gateway's `staticRate`, or a refusal — and never an error of its own: Redis down, a value that no longer parses, no `currency` row and no snapshot ever written are all the same answer | a 500 on a quote where the user's move is the same as a 503's: another gateway |
 | Out of the gateway's range is **400** `billing.amountOutOfRange`; no usable rate, rate out of range, a provider failure, no merchant id, no driver are all **503** `billing.gatewayUnavailable` — the cause goes to the log only | the user's move is the same: another gateway |
-| A quote reserves and writes nothing | F-092-i reserves, on the request that pays |
-| Per user, per 900s: the list `DEPOSIT_GATEWAYS_RATE_LIMIT` (default 120), a quote `DEPOSIT_QUOTE_RATE_LIMIT` (default 60); **429** past it (F-092-r) | a quote at an automatic-fee gateway is a call to the bank |
+| A quote reserves and writes nothing | `start` reserves, on the request that pays |
+| Per user, per 900s: the list `DEPOSIT_GATEWAYS_RATE_LIMIT` (default 120), a quote `DEPOSIT_QUOTE_RATE_LIMIT` (default 60), a start `DEPOSIT_START_RATE_LIMIT` (default 20); **429** past it (F-092-r) | a quote at an automatic-fee gateway is a call to the bank; a start is one plus a hold on somebody's coupon capacity |
 
 ## The live rate (built — F-092-c)
 
@@ -61,3 +64,30 @@ them was nobody reading the key.
 **Not covered:** `amount` is base currency; the display-currency step the
 F-092-i row names arrives with F-025. The rate's age is unjudged until
 F-0607-a, so a rate the ladder would call *degraded* is quoted as a normal one.
+
+## Starting the payment (built — F-092-i)
+
+`DepositStartService` in `billing-service/src/app/payment/deposit/`, over the
+same gateway selection and pricing as the quote (`deposit-pricing.ts`, shared so
+the two cannot drift — F-0612). The body is the quote's, because the price is
+recomputed here from the same inputs: a client never sends back a number it was
+shown.
+
+| Rule | Why |
+|---|---|
+| **The order is: price, hold the coupons, write the payment, *then* mint.** A refusal after the gateway has been called is an authority nobody will pay | `request` is never retried, because every attempt mints one ("Payment providers" in `contract.md`). Legacy called the gateway first and created the row after, which loses a paid authority instead |
+| Three transactions, none open across a call to a bank: the reads (gateway, coupons, callback host); the `payment_transaction` + its holds, together or not at all; the authority, once there is one | the same rule the quote follows for the vault and the fee quote |
+| The holds name the **payment**: `orderReferenceId` = `paymentTransactionId` = the row's id, minted before the row is written | F-092-j confirms and F-092-k expires by that id |
+| A hold that can no longer be taken aborts the whole transaction and is **409**, one i18n key per `reason` — the same keys a rejected code gets on a quote. Nothing was written | `CouponReservationRefused`; the panel re-quotes and shows the breakdown without it |
+| The row carries the quote's own numbers — `amountRequested` / `discountApplied` / `feeApplied` / `amountCredited` / `chargedAmountMinor` — and the rate **with** its snapshot id, or neither | invariant 12, ADR-0019 |
+| `expiresAt` is `now + PAYMENT_PENDING_TTL_SEC` (default 900) on a pending payment and `null` on one that already landed. The holds have no clock of their own | legacy gave the row and its coupon locks two TTLs, so a lock could outlive its payment |
+| `gatewayTrackingCode` is the `authority`, written after the gateway answers. A `request` that succeeded and whose authority was not stored leaves a `pending` row with no code — found late by F-092-l / F-092-k, rather than not at all | ADR-0028 |
+| A gateway that will not mint: the row is `failed` with the `GatewayFailure.reason` as `failureCode`, and the holds are **released** `cancelled` — nothing timed out | a live hold behind a payment that never existed is spent capacity |
+| **The free path** (`payable` = 0): the wallet is credited, the holds become uses and the row is written `success` with `chargedAmountMinor` 0, all in the write transaction. It asks neither the vault nor the provider, and answers `redirectUrl: null` with the new `balance` | invariants 1-3; nothing reaches a gateway, so nothing will ever call back about it |
+| `confirmationSource` stays **null** on the free path: the enum names webhook, reconciliation and admin, and none of them happened | a value invented for it would make the three that mean something ambiguous |
+| The callback is `https://<the tenant's own panel domain>/api/billing/deposit/callback` — a proven custom domain first, else the platform subdomain, read from `tenant_domain` and never from a request header. No such domain is a refusal (**503**), not a guess | ADR-0020: the callback route is public and resolved by Host (F-092-j), so a reseller's customer must come back to the brand they paid on. `PAYMENT_CALLBACK_ORIGIN` overrides it with one origin for every tenant — dev and test only |
+| `amount` is base currency, as on a quote, and is converted for the gateway exactly once, inside `priceAtGateway` | the legacy `amount * 10` toman→rial step ran in the browser; the display-currency step is F-025's |
+
+**Not covered:** settling the payment — the callback, the credit and the coupon
+confirm are F-092-j's, and expiring a pending one F-092-k's. Nothing in the
+panel calls `start` yet (F-093-e).

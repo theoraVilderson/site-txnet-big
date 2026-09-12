@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { FeeCalcMode, Prisma, TenantGatewayVerificationStatus, TenantType } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../../prisma/prisma.service';
@@ -7,13 +7,7 @@ import { CouponValidationService, RejectedCoupon } from '../coupon/coupon-valida
 import { GatewayMerchant, GatewaySource, merchantLabel } from '../gateway/gateway-merchant';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { FxRateReader } from '../pricing/fx-rate.reader';
-import {
-  feeBasis,
-  feeQuoteAmountMinor,
-  PriceRequest,
-  priceAtGateway,
-  quotedFeeFromMinor,
-} from '../pricing/gateway-pricing';
+import { priceDeposit, selectableGateways, selectGateway } from './deposit-pricing';
 
 /**
  * What the panel's top-up page shows before anyone pays (F-092-o): the gateways
@@ -21,8 +15,9 @@ import {
  *
  * The panel renders this breakdown and does no arithmetic of its own — legacy
  * computed it twice, in `Deposit.tsx` and on the server, and the two drifted.
- * Every number here is `priceAtGateway`'s, the function the payment intent
- * charges with (F-092-i), so the quote and the charge cannot disagree (F-0612).
+ * Every number here is `priceAtGateway`'s, through the `deposit-pricing.ts` the
+ * payment intent charges with (F-092-i), so the quote and the charge cannot
+ * disagree (F-0612).
  *
  * A gateway comes from one of two tables, and every answer names which:
  *  - `tenant` — the request tenant's own `tenant_gateway_config`, selectable
@@ -32,7 +27,7 @@ import {
  *  - `platform` — the platform brand's `payment_gateway`, selectable when
  *    active, and offered **only** when the request tenant is the
  *    `platform_owner` (ADR-0006, D-25). That table has no tenant column and no
- *    policy, so the tenant type read here is the whole of the boundary.
+ *    policy, so the tenant type read there is the whole of the boundary.
  * The platform owner is offered both. Every gateway's merchant id is its own:
  * the request tenant's vault entry labelled with that gateway row (D-26,
  * `gateway-merchant.ts`); the plaintext `payment_gateway.merchantId` column is
@@ -99,38 +94,7 @@ export class DepositGatewayNotFound extends Error {
   }
 }
 
-const SELECTABLE = { isActive: true, verificationStatus: TenantGatewayVerificationStatus.verified };
-const PLATFORM_SELECTABLE = { isActive: true };
-
-/**
- * What a quote needs of a row — the columns both tables share. Selected
- * explicitly, so neither table's secret column is ever read: the deprecated
- * `*Encrypted` pair, or `payment_gateway.merchantId` (invariant 8).
- */
-const GATEWAY_COLUMNS = {
-  id: true,
-  createdAt: true,
-  displayName: true,
-  providerName: true,
-  gatewayCategory: true,
-  minAcceptAmount: true,
-  maxAcceptAmount: true,
-  feeCalculationMode: true,
-  feeType: true,
-  feeValue: true,
-  feeFloor: true,
-  feeCeiling: true,
-  useLiveRate: true,
-  staticRate: true,
-  percentageModifier: true,
-  fixedAmountModifier: true,
-  minRate: true,
-  maxRate: true,
-  roundingStep: true,
-  roundingMode: true,
-} satisfies Prisma.TenantGatewayConfigSelect & Prisma.PaymentGatewaySelect;
-
-const money = (v: Prisma.Decimal) => v.toFixed(2);
+export const money = (v: Prisma.Decimal) => v.toFixed(2);
 
 @Injectable()
 export class DepositQuoteService {
@@ -144,24 +108,7 @@ export class DepositQuoteService {
 
   async listGateways(): Promise<DepositGateway[]> {
     const tenant = TenantContext.current('deposit gateways');
-    const rows = await tenantTransaction(this.prisma, async (tx) => {
-      const platform = (await this.isPlatformOwner(tx, tenant.id))
-        ? await tx.paymentGateway.findMany({
-            where: PLATFORM_SELECTABLE,
-            select: GATEWAY_COLUMNS,
-            orderBy: { createdAt: 'asc' },
-          })
-        : [];
-      const own = await tx.tenantGatewayConfig.findMany({
-        where: { ...SELECTABLE, tenantId: tenant.id },
-        select: GATEWAY_COLUMNS,
-        orderBy: { createdAt: 'asc' },
-      });
-      return [
-        ...platform.map((g) => ({ ...g, source: 'platform' as const })),
-        ...own.map((g) => ({ ...g, source: 'tenant' as const })),
-      ];
-    });
+    const rows = await tenantTransaction(this.prisma, (tx) => selectableGateways(tx, tenant.id));
     // Outside the transaction: the vault queries on its own bound connection.
     const configured = await this.merchant.configuredLabels(tenant.id);
     return rows
@@ -183,7 +130,7 @@ export class DepositQuoteService {
     const { userId, gatewayId, amount } = request;
 
     const { gateway, coupons } = await tenantTransaction(this.prisma, async (tx) => {
-      const gateway = await this.selectable(tx, tenant.id, gatewayId, request.source);
+      const gateway = await selectGateway(tx, tenant.id, gatewayId, request.source);
       if (!gateway) throw new DepositGatewayNotFound(gatewayId, request.source);
       const coupons = await this.coupons.validate(tx, {
         codes: request.couponCodes,
@@ -194,45 +141,22 @@ export class DepositQuoteService {
       return { gateway, coupons };
     });
 
-    const provider = this.providers.get(gateway.providerName);
-    const priceRequest: PriceRequest = {
-      pricing: gateway,
-      amount,
-      discount: coupons.totalDiscount,
-      // The rate the FX worker last published, and the snapshot behind it
-      // (F-092-c). Read only for a gateway that asked for one: a `staticRate`
-      // gateway prices from its own column, and a quote is not the place to
-      // spend a Redis round trip proving that. `null` — no rate published, or
-      // none readable — leaves `rateOf` with the `staticRate`, or a refusal the
-      // edge answers 503. `price.rateSnapshotId` is the row F-092-i freezes on
-      // the payment (F-0606-b); judging the rate's age is F-0607-a's.
-      liveRate: gateway.useLiveRate ? await this.fx.current() : null,
-      chargeDecimals: provider.chargeDecimals,
-    };
+    const { provider, price } = await priceDeposit(
+      { providers: this.providers, merchant: this.merchant, fx: this.fx },
+      {
+        gateway,
+        ref: {
+          tenantId: tenant.id,
+          source: request.source,
+          gatewayId: gateway.id,
+          providerName: gateway.providerName,
+        },
+        amount,
+        discount: coupons.totalDiscount,
+        actorId: userId,
+      },
+    );
 
-    const gatewayRef = {
-      tenantId: tenant.id,
-      source: request.source,
-      gatewayId: gateway.id,
-      providerName: gateway.providerName,
-    };
-
-    if (gateway.feeCalculationMode === FeeCalcMode.automatic) {
-      const amountMinor = feeQuoteAmountMinor(priceRequest);
-      if (amountMinor !== null) {
-        // This gateway's own account, in the request tenant's vault (D-26): a
-        // platform gateway is offered to the platform owner alone.
-        const credentials = await this.merchant.credentialsFor(gatewayRef, userId);
-        const { feeMinor } = await provider.quoteFee({ credentials, amountMinor });
-        priceRequest.quotedFee = quotedFeeFromMinor(priceRequest, feeMinor);
-      }
-    } else if (!feeBasis(priceRequest).isZero()) {
-      // A manual fee asks the vault for no value, so nothing would notice a
-      // gateway with no merchant id until the payment (F-092-u).
-      await this.merchant.requireConfigured(gatewayRef);
-    }
-
-    const price = priceAtGateway(priceRequest);
     return {
       gatewayId: gateway.id,
       source: request.source,
@@ -254,18 +178,5 @@ export class DepositQuoteService {
               amountMinor: price.chargedAmountMinor.toString(),
             },
     };
-  }
-
-  private async isPlatformOwner(tx: Prisma.TransactionClient, tenantId: string): Promise<boolean> {
-    const row = await tx.tenant.findUnique({ where: { id: tenantId }, select: { tenantType: true } });
-    return row?.tenantType === TenantType.platform_owner;
-  }
-
-  private async selectable(tx: Prisma.TransactionClient, tenantId: string, id: string, source: GatewaySource) {
-    if (source === 'platform') {
-      if (!(await this.isPlatformOwner(tx, tenantId))) return null;
-      return tx.paymentGateway.findFirst({ where: { ...PLATFORM_SELECTABLE, id }, select: GATEWAY_COLUMNS });
-    }
-    return tx.tenantGatewayConfig.findFirst({ where: { ...SELECTABLE, id, tenantId }, select: GATEWAY_COLUMNS });
   }
 }

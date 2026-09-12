@@ -120,6 +120,26 @@ export const envSchema = z.object({
     .min(1)
     .default(REDIS_KEYSPACE_VERSION_DEFAULT),
 
+  /**
+   * How long a `pending` payment stays payable, and with it the coupon holds it
+   * took (F-092-i). Legacy gave the row a 20-minute Mongo TTL and its coupon
+   * locks a separate one, which is how a lock could outlive its payment; here
+   * there is one clock and F-092-k reads it.
+   */
+  PAYMENT_PENDING_TTL_SEC: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().positive().default(900),
+  ),
+
+  /**
+   * One callback origin for every tenant, instead of the tenant's own panel
+   * domain (F-092-i). Development and test only: no tenant owns a host a
+   * gateway's sandbox can reach, and `https://<domainValue>` would send the
+   * browser nowhere. Unset in production, where ADR-0020 wants a reseller's
+   * customer back on the brand they paid on.
+   */
+  PAYMENT_CALLBACK_ORIGIN: z.string().default(''),
+
   /** The platform-wide ceiling over one bucket, as a multiple of the route's own limit; `0` switches it off (F-066-s). */
   PLATFORM_RATE_LIMIT_FACTOR: z.preprocess(
     (v) => (v === '' ? undefined : v),
@@ -130,6 +150,8 @@ export const envSchema = z.object({
   // The defaults live here and nowhere else (F-087).
   DEPOSIT_GATEWAYS_RATE_LIMIT: rateLimit(120),
   DEPOSIT_QUOTE_RATE_LIMIT: rateLimit(60),
+  /** Each call holds coupons and mints an authority at the bank (`payment/deposit/deposit-start.service.ts`). */
+  DEPOSIT_START_RATE_LIMIT: rateLimit(20),
   WALLET_HISTORY_RATE_LIMIT: rateLimit(180),
   WALLET_PAYMENTS_RATE_LIMIT: rateLimit(120),
   /** A code-guessing oracle if it were generous (`payment/gift/gift.controller.ts`). */

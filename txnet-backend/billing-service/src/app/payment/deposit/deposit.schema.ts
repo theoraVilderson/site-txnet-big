@@ -24,3 +24,12 @@ export const depositQuoteSchema = z.object({
 });
 
 export type DepositQuoteBody = z.infer<typeof depositQuoteSchema>;
+
+/**
+ * Starting a top-up takes exactly what quoting it took (F-092-i): the payment
+ * is priced from the same inputs by the same code, so a body that could quote
+ * and not pay would be a way for the two to disagree.
+ */
+export const depositStartSchema = depositQuoteSchema;
+
+export type DepositStartBody = z.infer<typeof depositStartSchema>;

@@ -86,6 +86,16 @@ export const RateLimitBucket = {
   DEPOSIT_QUOTE: 'deposit:quote',
 
   /**
+   * Starting a top-up in `billing-service` (F-092-i), per user. Not a read: each
+   * call holds coupons, writes a `payment_transaction` and mints an authority at
+   * the bank, and every abandoned one sits pending until the expiry job clears
+   * it. Its budget is therefore far below the quote's — a user picks a gateway
+   * once and pays, and anything that looks like a hundred of these in a quarter
+   * of an hour is a stuck client or somebody burning coupon capacity.
+   */
+  DEPOSIT_START: 'deposit:start',
+
+  /**
    * The financial page's two read routes in `billing-service` (F-092-n), per
    * user. Cheaper per call than a quote — neither leaves the database — but the
    * page refetches on every filter change, so the budget is the panel's own

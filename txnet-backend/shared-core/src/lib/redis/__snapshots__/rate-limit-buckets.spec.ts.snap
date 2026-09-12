@@ -27,6 +27,7 @@ exports[`RateLimitBucket > records the whole rate-limited surface in one place 1
   "ACCOUNTS_REMOVE = accounts:remove",
   "DEPOSIT_GATEWAYS = deposit:gateways",
   "DEPOSIT_QUOTE = deposit:quote",
+  "DEPOSIT_START = deposit:start",
   "WALLET_HISTORY = wallet:history",
   "WALLET_PAYMENTS = wallet:payments",
   "GIFT_REDEEM = gift:redeem",

@@ -691,6 +691,11 @@ services:
       - VAULT_KEK_FILE=${VAULT_KEK_FILE:-/run/secrets/vault-kek}
       # Refused when NODE_ENV=production.
       - PAYMENT_GATEWAY_SANDBOX=${PAYMENT_GATEWAY_SANDBOX:-false}
+      # How long a pending top-up stays payable, and its coupon holds with it (F-092-i).
+      - PAYMENT_PENDING_TTL_SEC=${PAYMENT_PENDING_TTL_SEC:-}
+      # One gateway-callback origin for every tenant. Dev and test only — in
+      # production the host is the tenant's own panel domain (ADR-0020).
+      - PAYMENT_CALLBACK_ORIGIN=${PAYMENT_CALLBACK_ORIGIN:-}
       # The rate limiter's counters (F-092-r) — the keyspace every service writes.
       - REDIS_URL=${REDIS_URL}
       - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
@@ -699,6 +704,7 @@ services:
       - PLATFORM_RATE_LIMIT_FACTOR=${PLATFORM_RATE_LIMIT_FACTOR:-}
       - DEPOSIT_GATEWAYS_RATE_LIMIT=${DEPOSIT_GATEWAYS_RATE_LIMIT:-}
       - DEPOSIT_QUOTE_RATE_LIMIT=${DEPOSIT_QUOTE_RATE_LIMIT:-}
+      - DEPOSIT_START_RATE_LIMIT=${DEPOSIT_START_RATE_LIMIT:-}
       - WALLET_HISTORY_RATE_LIMIT=${WALLET_HISTORY_RATE_LIMIT:-}
       - WALLET_PAYMENTS_RATE_LIMIT=${WALLET_PAYMENTS_RATE_LIMIT:-}
       - GIFT_REDEEM_RATE_LIMIT=${GIFT_REDEEM_RATE_LIMIT:-}
