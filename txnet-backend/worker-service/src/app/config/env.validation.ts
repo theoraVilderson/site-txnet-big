@@ -296,6 +296,39 @@ export const envSchema = z.object({
    */
   FX_SOURCE_TIMEOUT_MS: z.coerce.number().int().positive().default(3_000),
 
+  /**
+   * F-0604 — how many readings must survive before a median means anything.
+   *
+   * The catalog's own default. One surviving source is exactly the broken API
+   * this step defends against, with nothing left to outvote it, so a shortfall
+   * is a failed run and no rate rather than a best effort: the last accepted
+   * rate stays live and an operator is told which exchange stopped answering.
+   * Raising it to 3 is what makes the median actually outvote an outlier, and
+   * is worth doing as soon as a third source has been seen to answer.
+   */
+  FX_MIN_SOURCES: z.coerce.number().int().min(1).default(2),
+  /**
+   * F-0604's hard sanity band, in **rial per USDT**, inclusive on both edges.
+   * A string rather than a number: these are money and money is `Decimal`
+   * (C-02), and a rate near the top of this band is past the point where a
+   * float stops being exact.
+   *
+   * Wide on purpose — roughly a factor of ten either side of where this market
+   * has been — because this step has no history to compare against and so the
+   * band's only job is to reject values that cannot be a price at all: an
+   * amount column read as a price, a stale zero. Disagreement between
+   * exchanges is the median's job and a *move* is F-0605's. A band tight
+   * enough to catch a tenfold unit error would reject the true rate the first
+   * time the market moved, and this market moves; `FxSource.unit` is what
+   * prevents that error instead.
+   *
+   * The numbers are this repo's estimate, not D-22's — see
+   * `docs/domains/currency/open-questions.md`. The run log prints every
+   * reading, so they can be tightened against evidence.
+   */
+  FX_SANITY_MIN_RIAL: z.string().min(1).default('100000'),
+  FX_SANITY_MAX_RIAL: z.string().min(1).default('10000000'),
+
   /** Optional label in every log line, for a deployment running several. */
   WORKER_NAME: optional(z.string()),
 });

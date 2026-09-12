@@ -36,5 +36,6 @@ billing-service's and not `billing`'s.
 |---|---|
 | 2026-09-04 | Documented from schema during onboarding — no service yet |
 | 2026-09-12 | `draft` -> `active`: first code (F-0603, the FX worker's poll step) |
+| 2026-09-12 | `contract.fx-worker.md` v2 — F-0604: the discard/quorum/median step. Still publishes no rate |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->
