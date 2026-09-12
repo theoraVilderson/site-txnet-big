@@ -1,7 +1,7 @@
 ---
 id: code-layout
 status: active
-updated: 2026-09-10
+updated: 2026-09-12
 unit_aliases:
   - identity:auth
   - identity:impersonation
@@ -53,7 +53,8 @@ no code exists yet, so there is nothing to mirror until a service is built.
 | `txnet-backend/shared-core/src/lib/<unit>/`                                   | Nx library `@txnet-backend/shared-core`: a rule two Nx **apps** must both hold, and an app cannot import an app. `automation/schedule.ts` is the first — the writer and the runner of a schedule cannot be allowed to disagree about what one means | the unit named by the folder (`docs/domains/automation/`) |
 | `txnet-backend/messenger/src/`                                                | Nx library `@txnet-backend/messenger`: bot driver, capability set, `BotView` renderer, deep links                                         | `docs/platform/messenger/`                                |
 | `txnet-backend/bot-service/src/app/`                                          | the Telegram/Bale surface: webhook, conversation state, flows                                                                             | `docs/interfaces/bot-app/`                                |
-| `txnet-backend/worker-service/src/app/`                                       | background work: the tick publisher, the tick consumer, the job registry. Serves no HTTP (ADR-0027)                                        | `docs/domains/automation/`                                |
+| `txnet-backend/worker-service/src/app/`                                       | background work: the tick publisher, the tick consumer, the job registry, and `jobs/*.job.ts` — one shell per scheduled job. Serves no HTTP (ADR-0027)                                        | `docs/domains/automation/`                                |
+| `txnet-backend/worker-service/src/app/currency/`                              | the FX worker's own logic — the D-22 source registry and the concurrent poller (F-0603). Its *shell* (`jobs/fx-rate.job.ts`) stays automation's, the same split billing-service's edge takes | `docs/domains/currency/`                                  |
 | `txnet-backend/gateway-service/src/app/`                                      | the WebSocket gateway: the upgrade, the connection registry, the channel rules. Holds sockets and nothing else (ADR-0030)                    | `docs/platform/realtime/`                                 |
 | `txnet-backend/billing-service/src/app/`                                      | billing service: the request edge (F-092-a) — identity, tenant scope, envelope; `wallet/` the credit/debit primitive (F-092-b)          | `docs/domains/billing/`                                   |
 | `txnet-backend/prisma/domains/*.prisma`                                       | one schema file per business domain                                                                                                       | `owns_tables:` in that domain's `INDEX.md`                |

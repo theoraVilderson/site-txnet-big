@@ -269,6 +269,33 @@ export const envSchema = z.object({
    */
   BOT_API_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
 
+  /**
+   * Which USDT/IRT order books the FX worker polls (F-0603), by `FxSource.key`
+   * — `nobitex,tabdeal,wallex,bitpin`.
+   *
+   * **Config rather than code, because D-22 ends on a compliance question.**
+   * Nobitex, Wallex and Bitpin were put on the US OFAC list in June 2026, and
+   * whether the business keeps reading a given exchange is not a decision a
+   * release should encode. Dropping one is an environment change.
+   *
+   * The default is the two endpoints D-22 states in full and that have been
+   * seen to answer. `wallex` and `bitpin` are implemented but off: their URLs
+   * are this repo's guess rather than D-22's, and a source that can only fail
+   * is a permanently red line in the run log. Add them in the change that
+   * confirms them — two is also F-0604's `minSources` default, so the default
+   * here is the minimum that can produce a rate at all.
+   */
+  FX_SOURCES: z.string().min(1).default('nobitex,tabdeal'),
+  /**
+   * The per-source deadline, and the catalog's own number (section 6.2 step 1).
+   *
+   * It is per source and not per poll, which is what makes the concurrency
+   * worth having: an exchange that has stopped answering — the expected
+   * weather during a national-internet shutdown, which is exactly when this
+   * loop matters — costs its own reading and holds up none of the others.
+   */
+  FX_SOURCE_TIMEOUT_MS: z.coerce.number().int().positive().default(3_000),
+
   /** Optional label in every log line, for a deployment running several. */
   WORKER_NAME: optional(z.string()),
 });

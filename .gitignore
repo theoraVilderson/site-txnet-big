@@ -36,6 +36,10 @@ auth-handler/tmp/
 # ------------------------------------------------------------------------------
 # env files (contain passwords / API keys / JWT secrets)
 .env*
+# ...except the template, which carries no value — every secret-shaped entry
+# in it is a placeholder (`change-me-*`, `replace_with_your_own_*`). It is the
+# only record of what a deployment must set, so it belongs in the repo.
+!.env.example
 # private keys of every flavour
 *.pem
 *.key

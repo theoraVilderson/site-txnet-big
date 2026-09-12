@@ -530,6 +530,13 @@ services:
       # queued update runs (F-067-b).
       - BOT_API_BASE_URL=http://bot-service:${BOT_PORT:-3000}
       - BOT_API_TIMEOUT_MS=${BOT_API_TIMEOUT_MS:-30000}
+      # The FX worker's sources and its per-source deadline (F-0603, D-22).
+      # A list rather than a constant because three of the four exchanges are
+      # on the US OFAC list since June 2026 and dropping one must be config.
+      # The default is the two endpoints D-22 states in full; wallex and bitpin
+      # are implemented but unverified.
+      - FX_SOURCES=${FX_SOURCES:-nobitex,tabdeal}
+      - FX_SOURCE_TIMEOUT_MS=${FX_SOURCE_TIMEOUT_MS:-3000}
       - WORKER_NAME=${WORKER_NAME:-}
     networks:
       - private_backend_network

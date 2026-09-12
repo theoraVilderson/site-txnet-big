@@ -10,6 +10,8 @@ import { JOBS, Job } from './job';
 import { HeartbeatJob } from '../jobs/heartbeat.job';
 import { VaultRetentionJob } from '../jobs/vault-retention.job';
 import { OutboxRelayJob } from '../jobs/outbox-relay.job';
+import { FxRateJob } from '../jobs/fx-rate.job';
+import { FxRatePoller } from '../currency/fx-rate.poller';
 
 /**
  * Adding a job is two lines here and one new class: the class itself, and its
@@ -28,9 +30,11 @@ import { OutboxRelayJob } from '../jobs/outbox-relay.job';
     HeartbeatJob,
     VaultRetentionJob,
     OutboxRelayJob,
+    FxRatePoller,
+    FxRateJob,
     {
       provide: JOBS,
-      inject: [HeartbeatJob, VaultRetentionJob, OutboxRelayJob],
+      inject: [HeartbeatJob, VaultRetentionJob, OutboxRelayJob, FxRateJob],
       useFactory: (...jobs: Job[]) => jobs,
     },
     WorkerRegistryService,
