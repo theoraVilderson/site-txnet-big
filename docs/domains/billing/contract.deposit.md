@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 11
+version: 12
 updated: 2026-09-12
 ---
 
@@ -164,9 +164,19 @@ rules and the refusals are `domains/tenant/contract.vault.md` "The one
 crossing", and the access row lands in the lender's scope tagged with the
 grant.
 
-**Not covered here:** the debt a granted payment accrues is F-096-d's, and
-nothing surfaces or creates a grant yet — that is F-096-e's, and until then a
-grant row is written by hand.
+**The debt it leaves** (F-096-d): a payment whose `grantId` is set writes one
+`gateway_settlement_entry` — **inside the crediting transaction**, beside the
+ledger row and the outbox event, because a wallet that grew without the debt
+recorded is a tenant owed money nothing knows about and no sweep can
+reconstruct it. The amount is `amountCredited` **net of `feeApplied`** (§4: the
+payer covered the gateway's cut and the gateway kept it), floored at zero — a
+fee larger than the credit is not a debt in the other direction. It hangs off
+the same `count` as the credit, so a retried callback or a reconciliation sweep
+accrues nothing, and the unique key on `paymentTransactionId` is the second
+line under that.
+
+**Not covered here:** nothing surfaces or creates a grant yet — that is
+F-096-e's, and until then a grant row is written by hand.
 
 ## Expiring what nobody came back for (built — F-092-k)
 

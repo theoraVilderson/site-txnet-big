@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfirmationSource, PaymentStatus, Prisma, WalletReasonType } from '@prisma/client';
 import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
@@ -43,6 +43,9 @@ export const PAYMENT_SELECT = {
   gatewayId: true,
   tenantGatewayConfigId: true,
   amountCredited: true,
+  // The gateway's own cut, which the payer covered. A granted gateway's
+  // accrual is net of it (ADR-0041 §4, F-096-d).
+  feeApplied: true,
   chargedAmountMinor: true,
   // The authority. The callback arrives holding one; reconciliation has to read
   // it off the row, because nothing brought it (F-092-l).
@@ -66,6 +69,8 @@ export type VerifiedPayment = {
 
 @Injectable()
 export class DepositSettlementService {
+  private readonly logger = new Logger(DepositSettlementService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly reservations: CouponReservationService,
@@ -108,8 +113,56 @@ export class DepositSettlementService {
         referenceId: payment.id,
       });
       await this.reservations.confirm(tx, payment.id);
+      await this.accrueSettlement(tx, payment);
       await this.publishConfirmed(tx, payment, verified.referenceId, source);
       return true;
+    });
+  }
+
+  /**
+   * What a granted gateway just collected for somebody else (ADR-0041 §4,
+   * F-096-d).
+   *
+   * The money landed in the **gateway owner's** merchant account, while this
+   * tenant's user was credited out of the platform's pocket — so the platform
+   * owes this tenant, and that debt is written here.
+   *
+   * **Inside the crediting transaction**, for the reason the ledger row and the
+   * outbox event are: a wallet that grew without the debt being recorded is a
+   * tenant that is owed money nothing knows about, and no later sweep can
+   * reconstruct it. The unique key on `paymentTransactionId` is what makes that
+   * safe under the guard above — a retried callback and a reconciliation sweep
+   * both reach this code, and only the call that won the flip gets here.
+   *
+   * **Net of the gateway's fee** (§4): the payer covered `feeApplied` and the
+   * gateway kept it, so it never reaches the owner's account and is not owed on.
+   * A fee larger than the credit is not a debt in the other direction — the
+   * accrual floors at zero and says so, because a negative one would be the
+   * platform quietly invoicing a tenant through a settlement ledger.
+   */
+  private async accrueSettlement(tx: Prisma.TransactionClient, payment: PaymentRow): Promise<void> {
+    if (!payment.grantId) return;
+    const tenant = TenantContext.current('settlement accrual');
+
+    const net = payment.amountCredited.minus(payment.feeApplied);
+    const amount = net.isNegative() ? new Prisma.Decimal(0) : net;
+    if (net.isNegative()) {
+      this.logger.warn(
+        `payment ${payment.id}: fee ${payment.feeApplied.toFixed(2)} exceeds the credit ` +
+          `${payment.amountCredited.toFixed(2)}; accruing 0 to tenant ${tenant.id}`,
+      );
+    }
+
+    await tx.gatewaySettlementEntry.create({
+      data: {
+        grantId: payment.grantId,
+        // The tenant that is **owed**: the borrower whose user was credited,
+        // which is the tenant this transaction is bound to.
+        tenantId: tenant.id,
+        paymentTransactionId: payment.id,
+        amount,
+      },
+      select: { id: true },
     });
   }
 
