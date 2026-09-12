@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { PaymentProviderName, TenantCredentialKind } from '@prisma/client';
-import { CredentialVaultService } from '@txnet-backend/shared-core';
+import { PaymentProviderName, TenantCredentialKind, TenantCredentialStatus } from '@prisma/client';
+import { CredentialUnavailable, CredentialVaultService } from '@txnet-backend/shared-core';
 
 import type { GatewayCredentials } from './payment-provider';
 
@@ -41,6 +41,9 @@ export const merchantLabel = (source: GatewaySource, gatewayId: string) => `gate
  *
  * `CredentialUnavailable` passes through: a gateway with no merchant id in the
  * vault cannot take a payment, and the route decides what the user is told.
+ * Such a gateway is also kept off the top-up page, which is what
+ * `configuredLabels` and `requireConfigured` are for (F-092-u): offering one
+ * means the user picks it and the payment fails after they have chosen.
  */
 @Injectable()
 export class GatewayMerchant {
@@ -56,5 +59,36 @@ export class GatewayMerchant {
       { caller: `billing:${gateway.providerName}`, actorId },
     );
     return { merchantId };
+  }
+
+  /**
+   * The vault labels this tenant holds a merchant id under — one read, no
+   * `tenant_credential_access` row, because nothing is decrypted. The list
+   * filters on `merchantLabel(...)` of each gateway (F-092-u).
+   */
+  async configuredLabels(tenantId: string): Promise<Set<string>> {
+    const credentials = await this.vault.list(tenantId);
+    return new Set(
+      credentials
+        .filter((c) => c.kind === TenantCredentialKind.gateway_merchant_id && c.configured)
+        .map((c) => c.label),
+    );
+  }
+
+  /**
+   * Refuses a gateway that has no usable merchant id, without decrypting one —
+   * for the manual-fee path, which otherwise asks the vault nothing until the
+   * payment itself (F-092-u).
+   */
+  async requireConfigured(gateway: MerchantGatewayRef): Promise<void> {
+    const ref = {
+      tenantId: gateway.tenantId,
+      kind: TenantCredentialKind.gateway_merchant_id,
+      label: merchantLabel(gateway.source, gateway.gatewayId),
+    };
+    const summary = await this.vault.summary(ref);
+    if (!summary?.configured || summary.status !== TenantCredentialStatus.active) {
+      throw new CredentialUnavailable(ref, summary ? 'revoked' : 'missing');
+    }
   }
 }

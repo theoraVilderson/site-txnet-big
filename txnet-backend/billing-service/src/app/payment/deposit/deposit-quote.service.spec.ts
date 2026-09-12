@@ -8,7 +8,10 @@
  *    never zero;
  *  - the free path never reaches the provider or the vault;
  *  - the list carries the columns a selector needs and nothing else — a
- *    `tenant_gateway_config` row holds deprecated secret columns (invariant 8).
+ *    `tenant_gateway_config` row holds deprecated secret columns (invariant 8);
+ *  - a gateway with no merchant id in the vault is not offered and cannot be
+ *    quoted (F-092-u) — offering one means a user picks it and the payment
+ *    fails afterwards.
  *
  * The calculator's own rules are `gateway-pricing.spec.ts`; which rows are
  * selectable under RLS is `deposit-gateways.int.spec.ts`.
@@ -69,9 +72,11 @@ type Setup = {
   rows?: ReturnType<typeof gatewayRow>[];
   coupons?: CouponValidation;
   quoteFee?: (amountMinor: bigint) => bigint;
+  /** Gateway ids with a merchant id in the vault. Every row's, unless a case says otherwise. */
+  configured?: string[];
 };
 
-function build({ rows = [gatewayRow()], coupons = noCoupons('20.00'), quoteFee }: Setup = {}) {
+function build({ rows = [gatewayRow()], coupons = noCoupons('20.00'), quoteFee, configured }: Setup = {}) {
   const tx = {
     $executeRaw: async () => 0,
     tenant: { findUnique: async () => ({ tenantType: 'reseller' }) },
@@ -97,10 +102,17 @@ function build({ rows = [gatewayRow()], coupons = noCoupons('20.00'), quoteFee }
       return zarinpal;
     },
   };
+  const withMerchant = configured ?? rows.map((r) => r.id as string);
   const merchant = {
     credentialsFor: async () => {
       if (!quoteFee) throw new Error('the vault must not be read here');
       return { merchantId: 'merchant' };
+    },
+    configuredLabels: async () => new Set(withMerchant.map((id) => `gateway:tenant:${id}`)),
+    requireConfigured: async ({ gatewayId }: { gatewayId: string }) => {
+      if (!withMerchant.includes(gatewayId)) {
+        throw Object.assign(new Error('no merchant id'), { name: 'CredentialUnavailable', reason: 'missing' });
+      }
     },
   };
   const couponService = { validate: async () => coupons };
@@ -225,5 +237,46 @@ describe('DepositQuoteService.listGateways', () => {
       },
     ]);
     expect(JSON.stringify(gateways)).not.toContain('SECRET');
+  });
+});
+
+describe('a gateway with no merchant id (F-092-u)', () => {
+  it('is left out of the list, because the payment would fail at it', async () => {
+    const service = build({
+      rows: [gatewayRow(), gatewayRow({ id: 'no-merchant-row', displayName: 'Unconfigured' })],
+      configured: [GATEWAY],
+    });
+
+    const gateways = await asTenant(() => service.listGateways());
+
+    expect(gateways.map((g) => g.id)).toEqual([GATEWAY]);
+  });
+
+  it('is refused on a quote that would charge, even with a manual fee', async () => {
+    const service = build({ configured: [] });
+
+    await expect(
+      asTenant(() =>
+        service.quote({ userId: USER, gatewayId: GATEWAY, source: 'tenant', amount: d('20.00'), couponCodes: [] }),
+      ),
+    ).rejects.toMatchObject({ name: 'CredentialUnavailable' });
+  });
+
+  it('still quotes a fully discounted deposit, which reaches no gateway', async () => {
+    const service = build({
+      configured: [],
+      coupons: {
+        applied: [{ couponId: 'c1', code: 'ALL', discount: d('20.00') }],
+        rejected: [],
+        totalDiscount: d('20.00'),
+        payable: d('0'),
+      },
+    });
+
+    await expect(
+      asTenant(() =>
+        service.quote({ userId: USER, gatewayId: GATEWAY, source: 'tenant', amount: d('20.00'), couponCodes: ['ALL'] }),
+      ),
+    ).resolves.toMatchObject({ free: true, payable: '0.00' });
   });
 });

@@ -14,6 +14,8 @@
  * And, since D-26, that every gateway pays into its own account: two gateways
  * of one provider under one tenant read two merchant ids, and a gateway with
  * no credential of its own is refused rather than handed a provider-wide one.
+ * `configuredLabels` is what keeps such a gateway off the top-up page at all
+ * (F-092-u), so it must see this tenant's gateway labels and nothing else.
  *
  * The credentials are written the way `auth-service` writes them: its vault,
  * on the cross-tenant pool, under the same KEK file.
@@ -159,4 +161,22 @@ it('refuses a gateway with no merchant id of its own, though a provider-wide one
   await expect(
     runWithTenant({ id: TENANT_A }, () => merchant.credentialsFor(zarinpal(TENANT_A, 'tenant', A_NO_CREDENTIAL))),
   ).rejects.toMatchObject({ name: 'CredentialUnavailable', reason: 'missing' });
+});
+
+it('lists the gateway labels this tenant has a merchant id for, and no other kind', async () => {
+  const labels = await runWithTenant({ id: TENANT_A }, () => merchant.configuredLabels(TENANT_A));
+
+  // The provider-wide `zarinpal` row is a `gateway_merchant_id` too, so it is
+  // listed; what matters is that no gateway label of another tenant is.
+  expect(labels).toEqual(new Set([`gateway:tenant:${A_OWN}`, `gateway:platform:${A_PLATFORM}`, 'zarinpal']));
+  expect(labels.has(`gateway:tenant:${B_OWN}`)).toBe(false);
+});
+
+it('refuses to confirm a gateway that has no merchant id, and confirms one that has', async () => {
+  await runWithTenant({ id: TENANT_A }, async () => {
+    await expect(merchant.requireConfigured(zarinpal(TENANT_A, 'tenant', A_OWN))).resolves.toBeUndefined();
+    await expect(
+      merchant.requireConfigured(zarinpal(TENANT_A, 'tenant', A_NO_CREDENTIAL)),
+    ).rejects.toMatchObject({ name: 'CredentialUnavailable', reason: 'missing' });
+  });
 });

@@ -4,9 +4,10 @@ import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { CouponValidationService, RejectedCoupon } from '../coupon/coupon-validation';
-import { GatewayMerchant, GatewaySource } from '../gateway/gateway-merchant';
+import { GatewayMerchant, GatewaySource, merchantLabel } from '../gateway/gateway-merchant';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import {
+  feeBasis,
   feeQuoteAmountMinor,
   PriceRequest,
   priceAtGateway,
@@ -35,6 +36,10 @@ import {
  * the request tenant's vault entry labelled with that gateway row (D-26,
  * `gateway-merchant.ts`); the plaintext `payment_gateway.merchantId` column is
  * never read.
+ *
+ * A gateway with no merchant id in the vault is not offered and cannot be
+ * quoted (F-092-u): it would take the user to a payment that fails. A fully
+ * discounted top-up is the exception, because it reaches no gateway at all.
  *
  * A quote reserves nothing and writes nothing. The provider's fee quote and the
  * vault read happen after the transaction closes: a database connection is
@@ -155,8 +160,11 @@ export class DepositQuoteService {
         ...own.map((g) => ({ ...g, source: 'tenant' as const })),
       ];
     });
+    // Outside the transaction: the vault queries on its own bound connection.
+    const configured = await this.merchant.configuredLabels(tenant.id);
     return rows
       .filter((g) => this.providers.has(g.providerName))
+      .filter((g) => configured.has(merchantLabel(g.source, g.id)))
       .map((g) => ({
         id: g.id,
         source: g.source,
@@ -195,18 +203,26 @@ export class DepositQuoteService {
       chargeDecimals: provider.chargeDecimals,
     };
 
+    const gatewayRef = {
+      tenantId: tenant.id,
+      source: request.source,
+      gatewayId: gateway.id,
+      providerName: gateway.providerName,
+    };
+
     if (gateway.feeCalculationMode === FeeCalcMode.automatic) {
       const amountMinor = feeQuoteAmountMinor(priceRequest);
       if (amountMinor !== null) {
         // This gateway's own account, in the request tenant's vault (D-26): a
         // platform gateway is offered to the platform owner alone.
-        const credentials = await this.merchant.credentialsFor(
-          { tenantId: tenant.id, source: request.source, gatewayId: gateway.id, providerName: gateway.providerName },
-          userId,
-        );
+        const credentials = await this.merchant.credentialsFor(gatewayRef, userId);
         const { feeMinor } = await provider.quoteFee({ credentials, amountMinor });
         priceRequest.quotedFee = quotedFeeFromMinor(priceRequest, feeMinor);
       }
+    } else if (!feeBasis(priceRequest).isZero()) {
+      // A manual fee asks the vault for no value, so nothing would notice a
+      // gateway with no merchant id until the payment (F-092-u).
+      await this.merchant.requireConfigured(gatewayRef);
     }
 
     const price = priceAtGateway(priceRequest);

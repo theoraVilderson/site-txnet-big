@@ -100,10 +100,18 @@ beforeAll(async () => {
   // Every provider has a driver here, so what hides a row is the query alone.
   const driver = { name: 'zarinpal', chargeCurrency: 'IRR', chargeDecimals: 0 };
   const registry = { has: () => true, get: () => driver };
+  // Every gateway here has a merchant id; that the vault decides this is
+  // `gateway-merchant.int.spec.ts`, and the filter itself is the unit spec.
   const merchant = {
     credentialsFor: async () => {
       throw new Error('a manual-fee quote reads no credential');
     },
+    configuredLabels: async () =>
+      new Set([
+        ...[A_ZARINPAL, A_PENDING, A_INACTIVE, B_ZARINPAL, P_OWN].map((id) => `gateway:tenant:${id}`),
+        ...[PLATFORM_ZARINPAL, PLATFORM_INACTIVE].map((id) => `gateway:platform:${id}`),
+      ]),
+    requireConfigured: async () => undefined,
   };
   service = new DepositQuoteService(app, new CouponValidationService(), registry as never, merchant as never);
 });
