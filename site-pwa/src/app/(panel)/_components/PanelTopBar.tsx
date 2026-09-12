@@ -9,6 +9,7 @@ import { usePanelUiStore } from "../_stores/panel-ui-store";
 import { AccountSwitcher } from "./AccountSwitcher";
 import { LogoutButton } from "./LogoutButton";
 import { PANEL_SIDEBAR_ID } from "./PanelSidebar";
+import { WalletButton } from "./WalletButton";
 
 /** The shell's strings as generated constants (C-06). */
 const S = FrontendI18nKeys.common.shell;
@@ -23,6 +24,11 @@ const Divider = ({ className = "" }: { className?: string }) => (
  * opens the sidebar drawer below `lg`. There is no profile menu: the account
  * switcher is that job (F-0209). Below `sm`, language and theme move into the
  * drawer, because the bar has no room for four controls on a phone.
+ *
+ * `WalletButton` (F-093-c) sits before the switcher, which is where
+ * `contract.shell.md` rule 5 puts a new control; on a phone it is the one thing
+ * beside the switcher that the 360px bar still has room for, because its
+ * caption collapses to the figure alone.
  */
 export function PanelTopBar() {
   const { t } = useLocale();
@@ -44,6 +50,8 @@ export function PanelTopBar() {
         </button>
       </div>
       <div className="flex min-w-0 items-center gap-1 sm:gap-3">
+        <WalletButton />
+        <Divider className="hidden sm:block" />
         <AccountSwitcher />
         <Divider className="hidden sm:block" />
         <div className="hidden sm:flex">

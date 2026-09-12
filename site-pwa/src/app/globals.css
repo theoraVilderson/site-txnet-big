@@ -133,6 +133,11 @@
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-leaf-bg: var(--leaf-bg);
+  /* The figure a money screen leads with (F-093-c). All three themes have
+     defined --gold-primary since the shell landed; only the Tailwind
+     mapping was missing, so the class did not exist to be used. */
+  --color-gold: var(--gold-primary);
+  --color-gold-bg: var(--gold-bg);
   --color-error: var(--error-color);
   --color-error-bg: var(--error-bg);
   --color-error-border: var(--error-border);

@@ -64,6 +64,24 @@ export const envSchema = z.object({
    */
   DATABASE_APP_URL: z.string().min(1, 'DATABASE_APP_URL is required'),
 
+  /**
+   * The panel's origin, for CORS with credentials (F-093-c). Comma-separated.
+   *
+   * This service shipped with no CORS at all and a comment saying the panel
+   * reached it "through its own API proxy, never from the browser". The panel
+   * had removed that proxy a week earlier and lists it under Deprecations
+   * (`panel-web/contract.md`): server-to-server was the source of an
+   * intermittent 502, so every call from the browser now goes cross-origin to
+   * `api.<domain>` with the access token as a Bearer header. Nothing was red,
+   * because until F-093-c no panel screen had asked billing for anything.
+   *
+   * Required in production, exactly as `auth-service` requires it: a missing
+   * origin there means fail-closed, never "allow any origin" — a wallet route
+   * readable by any page on the internet that can borrow a session is worse
+   * than one no page can reach.
+   */
+  FRONTEND_ORIGIN: z.string().default(''),
+
   /** The envelope's translator (`locale/locale.service.ts`). */
   LOCALE_SERVICE_ADDR: z.string().min(1).default('localhost:50051'),
   LOCALE_SCOPE: z.string().min(1).default('backend'),

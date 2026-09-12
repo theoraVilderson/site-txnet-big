@@ -1,8 +1,7 @@
 // Browser calls api.${DOMAIN_NAME} directly (cross-origin, cookie-bearing) —
 // no Next.js proxy hop. Backend CORS (main.ts) allows this origin with
 // credentials; see docs/interfaces/auth-api/contract.md.
-import { ApiError } from "./api-error";
-import { apiLanguage } from "./api-language";
+import { createApiClient } from "./api-request";
 
 const API_URL = `${process.env.NEXT_PUBLIC_API_ORIGIN}/api`;
 let accessToken: string | null = null;
@@ -20,54 +19,24 @@ let sessionBootstrap: Promise<AuthResult> | null = null;
 
 /**
  * Every call goes out with the language the user chose in this panel and comes
- * back as either `data` or an {@link ApiError}. `auth-api` has already
- * translated `msg` and each `fieldErrors[].message` into that language, so a
- * caller shows them as they are; the two answers with no server text of their
- * own (`fetch` threw, or the body had no envelope) are marked `unreachable` and
- * the caller translates its own line.
+ * back as either `data` or an `ApiError` — {@link createApiClient} is where that
+ * envelope is read, for this service and for `billing-api` alike.
+ *
+ * The credential is a callback rather than the value, because `accessToken`
+ * above is reassigned by half the methods below: a client built with the value
+ * would keep sending the token this module was loaded with.
  */
+const call = createApiClient({
+  baseUrl: API_URL,
+  service: "auth-api",
+  credential: () => accessToken,
+});
+
 async function request<T>(path: string, init: RequestInit = {}, captchaToken?: string): Promise<T> {
-  const headers = new Headers(init.headers);
-  headers.set("content-type", "application/json");
-  const lang = apiLanguage();
-  if (lang) headers.set("accept-language", lang);
-  if (accessToken) headers.set("authorization", `Bearer ${accessToken}`);
-  if (captchaToken) headers.set("x-captcha-token", captchaToken);
-
-  let response: Response;
-  try {
-    response = await fetch(`${API_URL}${path}`, { ...init, headers, credentials: "include" });
-  } catch (cause) {
-    throw ApiError.unreachable(`${init.method ?? "GET"} ${path} did not reach auth-api`, cause);
-  }
-
-  const body = await response.json().catch(() => null);
-  if (body === null || typeof body !== "object") {
-    // A 2xx whose body cannot be read is still a success — an empty answer to
-    // a call that wanted nothing back. A failure with no readable body has no
-    // message in it, so nothing translated came back to show.
-    if (!response.ok) {
-      throw ApiError.unreachable(`${path} answered ${response.status} without a JSON envelope`);
-    }
-    return undefined as T;
-  }
-  if (!response.ok || body.ok === false) {
-    // No `msg` means nothing translated came back — a bare gateway 502, say.
-    if (typeof body.msg !== "string" || body.msg.length === 0) {
-      throw ApiError.unreachable(`${path} answered ${response.status} with no message`);
-    }
-    throw new ApiError(body.msg, {
-      status: response.status,
-      ref: typeof body.ref === "string" ? body.ref : undefined,
-      fieldErrors: Array.isArray(body.fieldErrors)
-        ? (body.fieldErrors as unknown[])
-            .map((f) => f as { path?: unknown; message?: unknown })
-            .filter((f) => typeof f?.message === "string")
-            .map((f) => ({ path: String(f.path ?? ""), message: f.message as string }))
-        : [],
-    });
-  }
-  return body.data as T;
+  // `site-pwa` is outside C-04's check and has no path to `shared-core` (see
+  // `forward-auth/open-questions.md`), so this name is written here as it
+  // always has been rather than imported from the wire contract.
+  return call<T>(path, init, captchaToken ? { "x-captcha-token": captchaToken } : undefined);
 }
 
 export type AuthResult = { accessToken: string; expiresIn: number };

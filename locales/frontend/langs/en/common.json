@@ -20,6 +20,18 @@
       "settings": "Settings"
     }
   },
+  "wallet": {
+    "label": "Wallet balance",
+    "open": "Open wallet",
+    "close": "Close wallet",
+    "quickActions": "Quick actions",
+    "topUp": "Top up",
+    "giftCode": "Gift code",
+    "history": "Financial history",
+    "noActions": "No actions available yet",
+    "unavailable": "Balance unavailable",
+    "retry": "Retry"
+  },
   "accounts": {
     "signedInAs": "Signed in as",
     "groupTitle": "Your other accounts",

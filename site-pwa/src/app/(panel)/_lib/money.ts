@@ -13,6 +13,18 @@ import type { Translate } from "@/util/helper";
  * formats a string without turning it into a float first.
  */
 
+/**
+ * The currency every amount from the API is denominated in: ADR-0019 made USD
+ * the single `Currency.isBaseCurrency = true` row, with two decimal places, and
+ * every `Decimal` money column in every schema is in it.
+ *
+ * It is a constant here because no route names its currency yet — the
+ * display-currency step is `F-025`, and `billing/contract.history.md` says so
+ * under "Not covered". The day a route answers a currency code, a screen reads
+ * it from the answer and this constant has one caller left to delete.
+ */
+export const BASE_CURRENCY = "USD";
+
 /** `useLocale()` narrowed to what this module reads. */
 export interface MoneyLocale {
   lang: string;

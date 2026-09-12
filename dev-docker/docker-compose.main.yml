@@ -662,6 +662,10 @@ services:
       - NODE_ENV=${NODE_ENV:-development}
       - GLOBAL_PREFIX=${BILLING_GLOBAL_PREFIX:-api}
       - PUBLIC_HOST=billing-service
+      # The panel calls this from the browser, cross-origin, the same way it
+      # calls auth-service (F-093-c) — so the same origin, and the service
+      # refuses to boot without one when NODE_ENV=production.
+      - FRONTEND_ORIGIN=https://panel.${DOMAIN_NAME}
       # The app role, never the owner: RLS does not bind a table's owner
       # (F-066-m-a). No cross-tenant pool — this service resolves no tenant,
       # it reads the one forward-auth forwards (F-092-a).
