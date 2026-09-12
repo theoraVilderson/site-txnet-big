@@ -329,6 +329,26 @@ export const envSchema = z.object({
   FX_SANITY_MIN_RIAL: z.string().min(1).default('100000'),
   FX_SANITY_MAX_RIAL: z.string().min(1).default('10000000'),
 
+  /**
+   * F-0605 — how far the median may move from the **last accepted** rate before
+   * the poll is refused and a critical alert fires. The catalog's own default.
+   *
+   * A different question from the sanity band above, not a tighter version of
+   * it. The band is absolute and has to be wide; this is relative, and it is
+   * the only step that catches a toman order book read as rial — in band,
+   * agreed on by every source because they are all read the same way, and ten
+   * times wrong. Against the last accepted rate that is a 90% fall.
+   *
+   * A string for the same reason as the band (C-02): it is compared against
+   * money. Raising it past a few percent is giving up the check — the Tehran
+   * market's own five-minute moves are well inside 5%, and a legitimate move
+   * bigger than that arrives as one rejected poll and then, five minutes later,
+   * an accepted one, because the *next* comparison is against the same
+   * baseline and the market has kept going. What it costs is an alert, which
+   * is the correct amount of noise for a rate moving that fast.
+   */
+  FX_MAX_DEVIATION_PERCENT: z.string().min(1).default('5'),
+
   /** Optional label in every log line, for a deployment running several. */
   WORKER_NAME: optional(z.string()),
 });

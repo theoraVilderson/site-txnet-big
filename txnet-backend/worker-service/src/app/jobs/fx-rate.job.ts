@@ -2,26 +2,36 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotWorkerCategory, Prisma } from '@prisma/client';
 import { Job, JobResult } from '../automation/job';
+import { accepted, gateFxDeviation } from '../currency/fx-rate.gate';
 import { answered, FxRatePoller } from '../currency/fx-rate.poller';
 import { reduceFxReads, reduced } from '../currency/fx-rate.reducer';
 import { FxSource, fxSourcesByKey } from '../currency/fx-source';
 
 /**
- * F-0603 / F-0604 — the FX worker, **off the request path** and nowhere near
- * it.
+ * F-0603 / F-0604 / F-0605 — the FX worker, **off the request path** and
+ * nowhere near it.
  *
- * Steps 1 and 2 of the catalog's five-step loop: every active source queried
+ * Steps 1 to 3 of the catalog's five-step loop: every active source queried
  * concurrently with a three-second timeout (F-0603, `FxRatePoller`), then the
  * failures and the values outside the hard band discarded, `minSources`
- * required to remain, and the **median** taken (F-0604, `reduceFxReads`).
- * Steps 3-5 are F-0605 (reject a move beyond `maxDeviationPercent` and alert)
- * and F-0606 (write the snapshot and cache it in Redis).
+ * required to remain, and the **median** taken (F-0604, `reduceFxReads`), then
+ * a move beyond `maxDeviationPercent` refused (F-0605, `gateFxDeviation`).
+ * Steps 4-5 are F-0606 (write the snapshot and cache it in Redis).
  *
- * **So this job computes a rate but still publishes nothing.** Nothing reads a
- * rate from this unit until F-0606 writes the snapshot and the cache entry;
- * until then the median is a number in a run log. That is deliberate — a rate
- * anything is priced from must go through F-0605's deviation gate first, and
- * that gate does not exist yet.
+ * **So this job computes and gates a rate but still publishes nothing.**
+ * Nothing reads a rate from this unit until F-0606 writes the snapshot and the
+ * cache entry; until then an accepted median is a number in a run log.
+ *
+ * **The baseline the gate compares against lives in this object, and only
+ * until F-0606.** A rejected reading never becomes it — that is the whole
+ * security of the gate, because a baseline that moved on a refusal could be
+ * walked anywhere in 5% steps. In memory means a restart is a cold start and
+ * the first poll after it is ungated, and it means two replicas gate against
+ * their own histories rather than a shared one. Both are real holes and both
+ * close in F-0606, which gives the last accepted rate a durable home in
+ * `currency.CurrencyExchangeRate` and `fx:rate:{code}`; until that row exists
+ * there is nowhere else for it to be, and a gate that only works after a boot
+ * settles is worth more than no gate.
  *
  * The run log is the other half of the point: a `bot_execution_log` row per run
  * saying which sources answered, what each of them said, which were discarded
@@ -53,16 +63,27 @@ import { FxSource, fxSourcesByKey } from '../currency/fx-source';
  * invariant #3) — the same rule `VaultRetentionJob` states for the same reason.
  * A shortfall is not a degraded success. One surviving source *is* the broken
  * API F-0604 exists to defend against, with nothing left to outvote it.
+ *
+ * A rate refused by F-0605's gate is that same `failed` run, reached by
+ * returning rather than throwing so that the numbers survive into the run log —
+ * they are what the alert is about. See the comment on that branch.
  */
 @Injectable()
 export class FxRateJob implements Job {
   readonly key = 'fx_rate_refresh';
   readonly name = 'FX rate refresh';
   readonly description =
-    'Queries every active USDT/IRT order book concurrently with a 3s timeout (F-0603), discards failures and out-of-band values, and takes the median of at least minSources (F-0604). Does not publish the rate yet — F-0605 gates it and F-0606 caches it.';
+    'Queries every active USDT/IRT order book concurrently with a 3s timeout (F-0603), discards failures and out-of-band values, takes the median of at least minSources (F-0604), and refuses a move beyond FX_MAX_DEVIATION_PERCENT since the last accepted rate (F-0605). Does not publish the rate yet — F-0606 caches it.';
   readonly category = BotWorkerCategory.data_aggregation;
 
   private readonly logger = new Logger(FxRateJob.name);
+
+  /**
+   * The last rate this process accepted — F-0605's baseline, and nothing else.
+   * Null until the first accepted poll, which is what makes a cold start
+   * ungated. **Assigned only on the accepted branch**; see the class comment.
+   */
+  private lastAccepted: Prisma.Decimal | null = null;
 
   constructor(
     private readonly config: ConfigService,
@@ -100,17 +121,78 @@ export class FxRateJob implements Job {
     if (!reduced(reduction))
       throw new Error(`no FX rate this poll: ${reduction.reason}`);
 
+    const gated = gateFxDeviation(
+      reduction.rialPerUsdt,
+      this.lastAccepted,
+      this.maxDeviationPercent(),
+    );
+
+    // A rejection is a failed run like a shortfall, but it **returns** rather
+    // than throwing, and that is deliberate. A thrown error reaches
+    // `bot_execution_log` as `{ error: <message> }` and nothing else — the
+    // per-source readings, the median and the size of the move are all lost,
+    // and those three numbers are the entire content of this alert. Returned
+    // with `itemsProcessed: 0` and a non-zero `errorsCount`, `TickConsumer`
+    // records exactly the same `failed` status and keeps the evidence.
+    //
+    // `accepted` and `rejectedDeviationPercent` are the two keys
+    // `currency.rules.yml` reads, and they are why the run log needs the shape
+    // rather than the status: an accepted rate with one dead exchange is
+    // `partial`, not `success`, so a rule that asked the status could not tell
+    // it from a refusal. Renaming either key silently disarms that alert — see
+    // `docs/operations/observability.md`.
+    if (!accepted(gated)) {
+      this.logger.error(`FX rate rejected: ${gated.reason}`);
+      return {
+        itemsProcessed: 0,
+        errorsCount: reduction.discarded.length + 1,
+        metrics: {
+          ...metrics,
+          accepted: false,
+          rejected: gated.reason,
+          rejectedDeviationPercent: gated.deviationPercent.toNumber(),
+          maxDeviationPercent: gated.maxDeviationPercent.toNumber(),
+          previousRialPerUsdt: gated.previous.toString(),
+        },
+      };
+    }
+
+    this.lastAccepted = gated.rialPerUsdt;
+
     this.logger.log(
       `${reduction.used.length}/${sources.length} source(s) used, ` +
-        `median ${reduction.rialPerUsdt.toString()} rial/USDT: ` +
+        `median ${reduction.rialPerUsdt.toString()} rial/USDT` +
+        (gated.deviationPercent === null
+          ? ' (cold start — no deviation gate)'
+          : ` (${gated.deviationPercent.toString()}% move)`) +
+        ': ' +
         reads.map((o) => `${o.source}=${o.rialPerUsdt.toString()}`).join(' '),
     );
 
     return {
       itemsProcessed: reduction.used.length,
       errorsCount: reduction.discarded.length,
-      metrics,
+      metrics: {
+        ...metrics,
+        accepted: true,
+        deviationPercent:
+          gated.deviationPercent === null
+            ? null
+            : gated.deviationPercent.toNumber(),
+        previousRialPerUsdt:
+          gated.previous === null ? null : gated.previous.toString(),
+      },
     };
+  }
+
+  /**
+   * F-0605's band, read at run time like the rest — and a string in config for
+   * the reason the sanity band is one (C-02): it is compared against money.
+   */
+  private maxDeviationPercent(): Prisma.Decimal {
+    return new Prisma.Decimal(
+      this.config.get<string>('FX_MAX_DEVIATION_PERCENT', '5'),
+    );
   }
 
   /**

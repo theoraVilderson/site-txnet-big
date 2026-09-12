@@ -2,14 +2,14 @@
 id: currency
 layer: domain
 status: active
-version: 2
+version: 3
 updated: 2026-09-12
 ---
 
 # Contract — the FX worker (currency)
 
-Governs the loop that discovers the USD→IRR rate: backlog rows **F-0603** and
-**F-0604** (built), F-0605 / F-0606 (not built). Read it before changing
+Governs the loop that discovers the USD→IRR rate: backlog rows **F-0603**,
+**F-0604** and **F-0605** (built), F-0606 (not built). Read it before changing
 anything under `txnet-backend/worker-service/src/app/currency/`.
 
 ## TL;DR
@@ -22,14 +22,14 @@ the rate the loop last published, never a source.
 |---|---|---|---|
 | 1 | every active source queried concurrently, 3s each | F-0603 | yes |
 | 2 | failures and out-of-band values discarded, `minSources` must remain, **median** | F-0604 | yes |
-| 3 | a move beyond `maxDeviationPercent` rejected + critical alert | F-0605 | no |
+| 3 | a move beyond `maxDeviationPercent` rejected + critical alert | F-0605 | yes |
 | 4 | snapshot written, rate cached in Redis `fx:rate:{code}` | F-0606 | no |
 | 5 | every quoted price records its `rateSnapshotId` | F-0606 | no |
 
-**This loop computes a rate and still publishes nothing.** Steps 1 and 2 run;
-the median lands in the run log and nowhere else. No caller may read a rate
-from this unit until F-0606, because a rate anything is priced from has to pass
-F-0605's deviation gate first and that gate does not exist yet.
+**This loop computes and gates a rate and still publishes nothing.** Steps 1
+to 3 run; an accepted median lands in the run log and nowhere else. No caller
+may read a rate from this unit until F-0606 writes the snapshot and the cache
+entry.
 
 ## What is built
 
@@ -37,7 +37,8 @@ F-0605's deviation gate first and that gate does not exist yet.
 |---|---|---|---|---|
 | poll the active sources | the source list | one outcome per source — rial rate + latency, or a reason + latency | async, off the request path | **none — it does not throw** |
 | reduce the outcomes (`reduceFxReads`) | the outcomes + `{minSources, sanityMinRial, sanityMaxRial}` | the median rial rate + the sources used + what was discarded and why, **or** a shortfall with the same discard list | sync, pure | **none — a shortfall is a value, not a throw** |
-| the `fx_rate_refresh` job | a tick | `bot_execution_log` row: per-source readings and latencies, the discard reasons, the median | async | `FX_SOURCES` empty/unknown, or fewer than `minSources` readings survived — the run is `failed` |
+| gate the move (`gateFxDeviation`) | the median + the last accepted rate (or null) + `maxDeviationPercent` | accepted, with how far it moved, **or** rejected, with the move, the baseline and the band | sync, pure | **none — a refusal is a value, not a throw** |
+| the `fx_rate_refresh` job | a tick | `bot_execution_log` row: per-source readings and latencies, the discard reasons, the median, `accepted` and the deviation | async | `FX_SOURCES` empty/unknown, or fewer than `minSources` readings survived — the run is `failed`. A **refused** rate is also `failed`, but by returning rather than throwing, so the numbers survive |
 
 ## The sources (D-22)
 
@@ -97,6 +98,66 @@ lower middle is deterministic, is always a price some exchange actually quoted
 — which is what F-0606's snapshot has to be able to point at — and errs toward
 the cheaper dollar, the side that cannot overcharge a user.
 
+## What F-0605 refuses, and what it cannot yet
+
+| knob | default | what it is for |
+|---|---|---|
+| `FX_MAX_DEVIATION_PERCENT` | `5` | how far the median may move from the **last accepted** rate |
+
+**A different question from the band, not a tighter version of it.** The band
+is absolute and asks whether a number can be a price at all. This gate is
+relative and asks whether the price can have *moved* this far since the last
+rate we accepted — which makes it the one step that catches the failure the
+band is documented as unable to catch: a toman order book read as rial. That
+reading is in band, every source agrees with it because they are all read the
+same way, the median passes it through, and it is ten times wrong. Against the
+last accepted rate it is a 90% fall.
+
+**The baseline is the last *accepted* rate, never the last computed one.** A
+rejected reading does not become the next baseline; if it did, two polls of a
+broken source would walk the rate anywhere in 5% steps, which is the attack the
+row exists to stop. `gateFxDeviation` cannot get this wrong — it holds nothing
+and takes the baseline as an argument — so the rule is the job's to keep.
+
+**"Beyond" is strict and symmetric.** Exactly `maxDeviationPercent` is a move of
+that size and not one beyond it, and a fall is as suspicious as a rise.
+
+**A refusal keeps the old rate, which is why the alert is not optional.** The
+visible consequence of this gate working is that nothing changes — the platform
+goes on quoting the last accepted rate, and a stale rate answers every query
+exactly like a fresh one. A legitimate move larger than the band therefore
+costs one refused poll and one alert, and recovers on a later one only because
+the market keeps going; the gate does not re-baseline itself.
+
+**The baseline lives in the job's memory until F-0606.** There is nowhere else
+for it yet: `currency.CurrencyExchangeRate` and `fx:rate:{code}` are F-0606's
+row. Two consequences, both real and both closing there — a restart is a cold
+start, so the first poll after one is **ungated**; and two replicas gate against
+their own histories rather than a shared one. F-0604's quorum and band are what
+guard the ungated poll.
+
+## The alert (F-0605's other half)
+
+A rejection is an operator's problem, not a tenant's: an Alertmanager rule over
+a metric, the shape F-067-g set for the queue, and not a notification row.
+
+- `FxRateJob` writes `accepted` and `rejectedDeviationPercent` into the run's
+  `metricsJson`.
+- `postgres-exporter` reads them (`config-dev/postgres-queries.yaml`, query
+  `currency_fx`) — Postgres and not a `/metrics`, because ADR-0027 makes
+  `worker-service` a process that serves no requests.
+- `config-dev/currency.rules.yml` alerts: `CurrencyFxRateRejected` (critical, no
+  threshold — any refusal), `CurrencyFxRateStale` (critical, nothing accepted
+  for 30 minutes), `CurrencyFxRateNeverAccepted` (warning, the schedule was
+  never created).
+
+**The run's `status` cannot carry this.** An accepted rate polled while one
+exchange was down is `partial`, not `success`, because `errorsCount` carries
+the discards — so `status` cannot separate a refusal from a dead source, and
+those are a critical and a warning. That is why the job writes `accepted`
+explicitly, and why renaming that key disarms the alert without breaking
+anything visible. How it is wired: `docs/operations/observability.md`.
+
 ## Rules this step holds
 
 1. **Concurrent.** Sources polled in sequence are readings of different
@@ -120,6 +181,16 @@ the cheaper dollar, the side that cannot overcharge a user.
 7. **The reduction is pure and total.** It reads no clock, no config and no
    network, and every failure is a returned value. That is what lets the
    median's behaviour on a hostile sample be a unit test rather than a story.
+8. **The gate is pure and total too**, for the same reason and one more: a gate
+   that threw would take the loop down on exactly the poll it exists to survive.
+9. **A rejected rate never becomes the baseline.** See above — this is the whole
+   security of the gate, and it is a property of the caller.
+10. **A refusal is a `failed` run that keeps its numbers.** It returns rather
+    than throwing, because a thrown error reaches `bot_execution_log` as
+    `{ error: <message> }` and the per-source readings, the median and the size
+    of the move — the entire content of the alert — are lost. `itemsProcessed:
+    0` with a non-zero `errorsCount` is the same `failed` status by the same
+    rule (`TickConsumer.statusOf`), with the evidence intact.
 
 ## How it is scheduled
 
@@ -138,6 +209,10 @@ precisely so the decision has evidence — see `open-questions.md`.
 
 ## Consumers
 
-Nobody yet, deliberately (see the TL;DR) — F-0604 changed no published
+Nobody yet, deliberately (see the TL;DR) — F-0605 changed no published
 interface, so there is no consumer to notify. The first consumer is F-0606's
 cache entry, read by billing's rial path (ADR-0019).
+
+The one cross-unit coupling this row did add is not an interface: `ops-observability`
+now has a rule file whose expressions depend on two `metricsJson` key names this
+unit writes. That is named in both places on purpose.

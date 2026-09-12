@@ -43,3 +43,59 @@ automation_outbox:
     - max_attempts:
         usage: "GAUGE"
         description: "Publish attempts on the most-retried unpublished row. A climbing number is a row the broker keeps refusing."
+
+# =============================================================================
+# currency — the FX worker's deviation gate (F-0605)
+# =============================================================================
+# F-0605 says a move beyond `maxDeviationPercent` is rejected AND raises a
+# critical alert. The rejection is `FxRateJob`; this is the alert's half, and
+# it comes off Postgres for the same reason the outbox age does — worker-service
+# serves no requests (ADR-0027) and there is no app-level `/metrics` anywhere in
+# this repo to put a counter on. What the worker does have is a
+# `bot_execution_log` row per run, which is a fact about a table.
+#
+# WHY THE ROW'S `status` IS NOT THE FILTER
+#
+# An accepted rate polled while one exchange was down is `partial`, not
+# `success`: `errorsCount` carries the discards and `TickConsumer.statusOf`
+# reads it. So `status` cannot separate "the rate was refused" from "a source
+# was down", and those are a critical alert and a warning respectively. The job
+# writes `accepted` into `metricsJson` precisely so this query can. Renaming
+# that key, or `rejectedDeviationPercent`, disarms the rules in
+# `currency.rules.yml` without breaking anything visible.
+#
+# The window is seven days, not all history: `bot_execution_log` is append-only
+# and this runs every 15 seconds. A gate that has not accepted a rate in a week
+# has had its alert firing for six days and change.
+# =============================================================================
+
+currency_fx:
+  master: true
+  cache_seconds: 15
+  query: >-
+    SELECT
+      COALESCE(
+        EXTRACT(EPOCH FROM (now() - MAX(l."startedAt")
+          FILTER (WHERE l."metricsJson"->>'accepted' = 'true'))),
+        -1)::float8 AS seconds_since_accepted,
+      COUNT(*) FILTER (
+        WHERE l."metricsJson"->>'accepted' = 'false'
+          AND l."startedAt" > now() - interval '1 hour')::bigint
+        AS rejections_1h,
+      COALESCE(MAX((l."metricsJson"->>'rejectedDeviationPercent')::float8)
+        FILTER (WHERE l."startedAt" > now() - interval '1 hour'), 0)::float8
+        AS max_rejected_deviation_percent_1h
+    FROM automation.bot_execution_log l
+    JOIN automation.bot_worker w ON w.id = l."botWorkerId"
+    WHERE w.key = 'fx_rate_refresh'
+      AND l."startedAt" > now() - interval '7 days'
+  metrics:
+    - seconds_since_accepted:
+        usage: "GAUGE"
+        description: "Age in seconds of the last FX rate the deviation gate accepted. -1 means no accepted rate in the last seven days — including a platform that has never run the worker."
+    - rejections_1h:
+        usage: "GAUGE"
+        description: "How many fx_rate_refresh runs in the last hour were refused by F-0605's deviation gate. Any non-zero value is a critical alert."
+    - max_rejected_deviation_percent_1h:
+        usage: "GAUGE"
+        description: "The largest move, in percent, that the gate refused in the last hour. Zero when nothing was refused."

@@ -12,6 +12,7 @@ alerting:
 # receiver were wired long before anything could fire into them.
 rule_files:
   - "/etc/prometheus/automation.rules.yml"
+  - "/etc/prometheus/currency.rules.yml"
 
 scrape_configs:
   - job_name: "prometheus"

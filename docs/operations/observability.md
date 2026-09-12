@@ -1,7 +1,7 @@
 ---
 id: ops-observability
 status: active
-updated: 2026-09-10
+updated: 2026-09-12
 ---
 
 # Observability
@@ -19,25 +19,44 @@ independently (and, in Swarm, run global-mode agents on every node).
 | Promtail | — | ships container logs (labelled `txnet.logging=true`) to Loki; `deploy.mode: global` in Swarm |
 | node-exporter | — | host metrics; global |
 | cAdvisor | 8080 | container metrics; global |
-| postgres-exporter | — | the outbox gauge, and nothing else (F-067-c); default collectors off |
+| postgres-exporter | — | the outbox gauge and the FX gate's gauges (F-067-c, F-0605); default collectors off |
 | Alertmanager | 9094 | routes alerts (config incl. a `bale_token.txt` for Bale notifications) |
 
 Config lives in `dev-docker/monitoring/config-dev/` (`prometheus.yml`,
-`promtail.yaml`, `alertmanager.yml`, `automation.rules.yml`), each mounted as a
-compose `config`. Swarm expects `config-${ENV_NAME}/prometheus.yml` + secret
+`promtail.yaml`, `alertmanager.yml`, `automation.rules.yml`,
+`currency.rules.yml`), each mounted as a compose `config`. Swarm expects `config-${ENV_NAME}/prometheus.yml` + secret
 files present on the manager — see the gap on that below.
 
 ## Alert rules
 
-`config-dev/automation.rules.yml` — the only rule file, and the first this
-platform has had (F-067-g, 2026-09-10). Until it existed `prometheus.yml` had no
-`rule_files:` key, so Alertmanager and its Bale receiver had been wired since
-2026-09-04 with nothing able to fire into them.
+`config-dev/automation.rules.yml` — the first rule file this platform had
+(F-067-g, 2026-09-10). Until it existed `prometheus.yml` had no `rule_files:`
+key, so Alertmanager and its Bale receiver had been wired since 2026-09-04 with
+nothing able to fire into them.
 
 Eight rules: five over the automation queue, three over the outbox (F-067-c).
 What each one *means* is
 `docs/domains/automation/contract.monitoring.md`; this file is how they are
 wired.
+
+`config-dev/currency.rules.yml` — three rules over the FX worker's deviation
+gate (F-0605, 2026-09-12), and the second rule file. **One file per unit, not
+one file growing**: a rule's meaning lives in its own unit's contract
+(`docs/domains/currency/contract.fx-worker.md`), and a `rule_files:` list is
+cheaper to read than a file with two unrelated halves.
+
+F-0605 is the first row where the alert *is* half the feature rather than
+monitoring added afterwards — a rate refused for moving too far leaves the old
+one live, and a stale rate answers every query exactly like a fresh one. The
+rules therefore watch two different things: that a refusal happened
+(`CurrencyFxRateRejected`, critical, no threshold) and that an acceptance has
+not (`CurrencyFxRateStale`).
+
+**They read `metricsJson` keys, not the run's `status`.** An accepted FX rate
+polled while one exchange was down is `partial` rather than `success`, so the
+status cannot tell a refused rate from a dead source — a critical and a warning.
+`FxRateJob` writes `accepted` and `rejectedDeviationPercent` for these rules to
+read; renaming either key disarms them and breaks nothing visible.
 
 **RabbitMQ is scraped by two jobs, not one.** The `rabbitmq_prometheus` plugin
 is enabled in the `4.2-management-alpine` image already, and it serves two
@@ -52,11 +71,14 @@ Neither job needs a published port: RabbitMQ and the monitoring stack share the
 external `private_backend_network`, so 15692 is reachable in-network and stays
 unreachable from outside it.
 
-**Postgres is scraped for exactly one query (F-067-c).** The age of the oldest
-unpublished `automation.outbox_event` row is a fact about a table — an
-unpublished event has by definition never reached the broker — so it is the
-first number here that cannot come off RabbitMQ. It comes from
-`postgres-exporter` running `config-dev/postgres-queries.yaml`, with
+**Postgres is scraped for two queries (F-067-c, F-0605).** The age of the
+oldest unpublished `automation.outbox_event` row is a fact about a table — an
+unpublished event has by definition never reached the broker — so it was the
+first number here that could not come off RabbitMQ. The FX gate's numbers
+(`currency_fx`, over `automation.bot_execution_log`) are the second, for the
+same reason turned the other way: they are facts about a job that talks to no
+broker at all. Both come from `postgres-exporter` running
+`config-dev/postgres-queries.yaml`, with
 `PG_EXPORTER_DISABLE_DEFAULT_METRICS` on: the built-in collectors are per-table
 churn nobody is alerting on, and every one of them is 15 days of series.
 
@@ -75,6 +97,7 @@ cd dev-docker/monitoring
 docker run --rm --entrypoint promtool \
   -v "$PWD/config-dev/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
   -v "$PWD/config-dev/automation.rules.yml:/etc/prometheus/automation.rules.yml:ro" \
+  -v "$PWD/config-dev/currency.rules.yml:/etc/prometheus/currency.rules.yml:ro" \
   ${DOCKER_REGISTRY}/prom/prometheus:v2.53.0 check config /etc/prometheus/prometheus.yml
 ```
 
@@ -95,7 +118,9 @@ client. Compose caps json-file logs at 10m x 3.
 - No metrics endpoint exposed by auth-service / auth-handler / locale-service yet
   (Prometheus has nothing app-level to scrape). No Node or Go Prometheus client
   is installed anywhere in the repo. Every number the automation alerts read
-  came off the broker instead, which is why they could ship without one.
+  came off the broker instead, which is why they could ship without one; F-0605
+  took the Postgres route rather than adding the first one, because a worker's
+  run log is already in a table.
   Anything else only Postgres knows — the `automation.dead_letter` row count,
   for instance — now has a route: add a query to
   `config-dev/postgres-queries.yaml`, which F-067-c opened for the outbox age.

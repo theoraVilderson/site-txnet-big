@@ -543,6 +543,7 @@ services:
       - FX_MIN_SOURCES=${FX_MIN_SOURCES:-2}
       - FX_SANITY_MIN_RIAL=${FX_SANITY_MIN_RIAL:-100000}
       - FX_SANITY_MAX_RIAL=${FX_SANITY_MAX_RIAL:-10000000}
+      - FX_MAX_DEVIATION_PERCENT=${FX_MAX_DEVIATION_PERCENT:-5}
       - WORKER_NAME=${WORKER_NAME:-}
     networks:
       - private_backend_network

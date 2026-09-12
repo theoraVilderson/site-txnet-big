@@ -1,0 +1,97 @@
+# =============================================================================
+# TXNet — alert rules for the FX worker's deviation gate (F-0605)
+# =============================================================================
+# F-0605 is two halves and only one of them is code. `FxRateJob` refuses a
+# median that moved beyond `FX_MAX_DEVIATION_PERCENT` since the last accepted
+# rate; that refusal is worth nothing unless somebody is told, because the
+# consequence of the gate working is that the platform keeps quoting an OLD
+# rate — which looks exactly like everything being fine until it is days stale.
+#
+# The rate here is a rejection, not a notification row: a tenant is not told
+# that an exchange lied, an operator is. That is the shape F-067-g established
+# for the queue and `operations/observability.md` is how it is wired.
+#
+# Everything below reads `currency_fx_*` from `postgres-exporter`, defined in
+# `config-dev/postgres-queries.yaml`. It is Postgres and not the broker and not
+# a `/metrics` because worker-service serves no requests (ADR-0027) — the same
+# argument, in full, as the outbox gauge.
+#
+# The worker's own schedule is `*/5 * * * *` (a `bot_schedule` row, not a
+# constant), so five minutes is the floor under every `for:` here. A single
+# missed poll is not an incident.
+# =============================================================================
+
+groups:
+  - name: currency.fx
+    rules:
+      # THE row F-0605 asks for. Any refusal at all is critical, with no
+      # threshold and no `for:` — a refused rate is not a degraded rate, it is
+      # the gate saying that either an exchange is lying about the price of a
+      # dollar or the market has moved 5% in five minutes. Both need a person,
+      # and the second one needs them faster than the first.
+      #
+      # The alert intentionally does not clear the moment the next poll is
+      # accepted: `rejections_1h` holds it for an hour, because a refusal that
+      # resolves itself is the one most worth looking at afterwards — it is
+      # what a single bad reading from one source looks like.
+      - alert: CurrencyFxRateRejected
+        expr: currency_fx_rejections_1h > 0
+        for: 0m
+        labels:
+          severity: critical
+          unit: currency
+        annotations:
+          summary: "An FX rate was refused for moving too far"
+          description: >-
+            {{ $value }} fx_rate_refresh run(s) in the last hour were refused by
+            F-0605's deviation gate; the largest move was
+            {{ with query "currency_fx_max_rejected_deviation_percent_1h" }}{{ . | first | value | printf "%.2f" }}{{ end }}%.
+            The platform is still quoting the last ACCEPTED rate, so nothing is
+            mispriced yet and nothing is fresh either. Read the run's
+            bot_execution_log row: `perSource` says what each exchange answered,
+            and a single source ten times out from the others is a book read in
+            the wrong unit (`FxSource.unit`), not a market move.
+
+      # The gate's own failure mode, and the reason the alert above cannot be
+      # the only one. A refusal keeps the old rate live; if refusals keep
+      # happening — or if the worker stops running at all — that old rate goes
+      # stale silently, because a stale rate still answers every query.
+      #
+      # 30 minutes is six missed polls. Below that it is a slow exchange.
+      - alert: CurrencyFxRateStale
+        expr: currency_fx_seconds_since_accepted > 1800
+        for: 5m
+        labels:
+          severity: critical
+          unit: currency
+        annotations:
+          summary: "No FX rate has been accepted for half an hour"
+          description: >-
+            The last accepted USD→IRR rate is {{ $value | humanizeDuration }}
+            old and every price quoted since is based on it. Either the gate is
+            refusing every poll (see CurrencyFxRateRejected), fewer than
+            FX_MIN_SOURCES exchanges are answering, or `fx_rate_refresh` has no
+            active bot_schedule. Its last bot_execution_log row says which.
+
+      # -1 is the exporter's "no accepted rate in the seven-day window", which
+      # on a fresh platform means the worker has never successfully run. It is
+      # a separate rule rather than a wider threshold on the one above because
+      # it is a different sentence to read at 3am — nothing has broken, the
+      # worker was never switched on.
+      #
+      # A day, not thirty minutes: an operator who has just brought the stack up
+      # should be able to create the schedule without being paged for it.
+      - alert: CurrencyFxRateNeverAccepted
+        expr: currency_fx_seconds_since_accepted == -1
+        for: 24h
+        labels:
+          severity: warning
+          unit: currency
+        annotations:
+          summary: "The FX worker has never accepted a rate"
+          description: >-
+            No fx_rate_refresh run has produced an accepted rate in the last
+            seven days. The job registers itself on boot but an admin has to
+            give it a `*/5 * * * *` cron_expression schedule through
+            /admin/workers (F-031-b); until then it never ticks. Nothing prices
+            in rial yet (F-0606 is the row that publishes), so this is a warning.

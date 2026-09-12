@@ -22,6 +22,8 @@ configs:
   # without the scrape layout moving with it.
   automation_rules:
     file: ./config-dev/automation.rules.yml
+  currency_rules:
+    file: ./config-dev/currency.rules.yml
   # The one Postgres-side number the automation alerts need (F-067-c): the age
   # of the oldest unpublished outbox row. A query file rather than an HTTP
   # surface on worker-service, which ADR-0027 says serves no requests.
@@ -60,6 +62,8 @@ services:
         target: /etc/prometheus/prometheus.yml
       - source: automation_rules
         target: /etc/prometheus/automation.rules.yml
+      - source: currency_rules
+        target: /etc/prometheus/currency.rules.yml
     volumes:
       - prometheus_data:/prometheus
     networks:
