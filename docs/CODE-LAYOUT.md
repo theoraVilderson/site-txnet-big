@@ -132,6 +132,14 @@ whole thing at the end. A dynamic `import()` with a computed path is invisible
 to all of it: that is why `billing-service` shipped two type errors in a
 controller no spec imported.
 
+**The two end-of-item commands run in parallel, and only those two.** `npm test`
+and `npm run typecheck` cost ~80s and ~120s; one is vitest and one is `tsc`, so
+together they are **132s** measured, against ~200s in sequence (`AGENTS.md` has the exact line,
+including the shell trap in it). Adding `site-pwa`'s vitest to that pair is where
+it stops working: ~130 files then fail that pass on their own, which is this
+section's own contention warning arriving as something that looks like a
+regression. One suite at a time per runner.
+
 **`npm test` is `nx run-many -t test`** — all **seven** unit projects
 (auth-service, billing-service, bot-service, gateway-service, messenger,
 shared-core, worker-service), 93 files, ~1713 tests, ~80s. The project list is

@@ -100,6 +100,37 @@ is a polyglot monorepo (Nx/NestJS, Go, two Next.js apps), so unlike a single
 `apps/api` tree, a unit's `source:` globs are the authoritative path, not a
 single fixed root — `docs/CODE-LAYOUT.md` lists the roots.
 
+## Starting a backlog item — one command before the first read
+
+The tiered read protocol narrows to a *unit* and stops there. Between "the row
+says `panel-web`" and "these four files govern this row" sits a search that
+every session pays again: open the unit's INDEX router, read its `Files` table,
+guess which `contract.<topic>.md` applies, find the dependency row's contract the
+same way, then look up the legacy files and the conventions. That is eight reads
+to learn something the repo already knows.
+
+```bash
+python3 tools/brief.py <backlog-id>      # or --next for the first eligible row
+```
+
+It prints, in well under a second: the row and whether it is actually eligible
+(per dependency, so a blocked row names its blocker); the legacy files that row
+is allowed to open; **every doc file that names this row or one of its
+dependencies**, which is how a `contract.<topic>.md` says what it governs; the
+dependency units' contract files for tier 3; the `C-nn` ids that bind this
+unit's code, split by whether anything actually fails on a violation; the test
+budget and the narrowed commands for the right stack; and §6b itself — 25 lines
+of a 687-line fixed file, instead of all of it.
+
+It reads no source and decides nothing. Every path it names is still read by
+you; what it removes is the hunting, and the re-reading of three cross-cutting
+files whose relevant slice for one row is a few dozen lines out of 1275. Use
+`-q` to get the paths alone when you already know the shape of the work.
+
+**It is a funnel, not a substitute for reading.** A session that acts on the
+briefing's one-line summaries without opening the contracts will get the rules
+wrong, and the briefing cannot tell you that it did.
+
 ## Code written without an agent
 
 If the user has been coding on their own, the docs are behind. Do not guess at
@@ -225,6 +256,25 @@ from `txnet-backend/`:
 npm test          # nx run-many -t test — all 7 unit projects, ~80s
 npm run typecheck # tsc --noEmit over all 16 tsconfigs, ~2m
 ```
+
+**Start those two together — they are ~80s and ~120s, and one is vitest while
+the other is `tsc`. Measured 2026-09-12: **132s** for the pair, both fully
+green, against ~200s one after the other.**
+
+```bash
+cd txnet-backend && { npm test > /tmp/test.log 2>&1 & \
+                      npm run typecheck > /tmp/tc.log 2>&1 & wait; }
+```
+
+Note the braces. `cd X && (A) & (B) &` binds the `cd` to the **first** subshell
+only, and the second command then runs in the wrong directory and reports
+`Missing script` — which reads exactly like a repo problem and is not one.
+
+**Do not add a third suite to that pair.** `site-pwa`'s vitest alongside the
+workspace's seven projects oversubscribes the machine: ~130 files fail that pass
+on their own, arriving as a wall of red that looks like a real regression. It is
+the contention `docs/CODE-LAYOUT.md` warns about for the integration tier, and
+the cheap way to tell the two apart is to re-run the suite on its own.
 
 **Run both whole; do not substitute one project for the workspace.** vitest
 transpiles through SWC without type-checking (`docs/CODE-LAYOUT.md`), so
