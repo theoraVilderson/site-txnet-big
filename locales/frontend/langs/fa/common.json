@@ -30,7 +30,21 @@
     "history": "تاریخچه مالی",
     "noActions": "هنوز عملیاتی در دسترس نیست",
     "unavailable": "موجودی در دسترس نیست",
-    "retry": "تلاش مجدد"
+    "retry": "تلاش مجدد",
+    "gift": {
+      "title": "کد هدیه",
+      "subtitle": "اعتبار هدیه را به کیف پول خود اضافه کنید",
+      "inputLabel": "کد اختصاصی شما",
+      "placeholder": "TXNET-2024",
+      "clear": "پاک کردن کد",
+      "submit": "فعال‌سازی و شارژ",
+      "submitting": "در حال بررسی کد…",
+      "close": "بستن",
+      "successTitle": "کد هدیه فعال شد",
+      "credited": "{{amount}} به کیف پول شما اضافه شد.",
+      "newBalance": "موجودی جدید: {{balance}}",
+      "done": "بستن"
+    }
   },
   "financial": {
     "title": "امور مالی",

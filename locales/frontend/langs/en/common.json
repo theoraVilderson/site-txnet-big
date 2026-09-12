@@ -30,7 +30,21 @@
     "history": "Financial history",
     "noActions": "No actions available yet",
     "unavailable": "Balance unavailable",
-    "retry": "Retry"
+    "retry": "Retry",
+    "gift": {
+      "title": "Gift code",
+      "subtitle": "Add gift credit to your wallet",
+      "inputLabel": "Your code",
+      "placeholder": "TXNET-2024",
+      "clear": "Clear the code",
+      "submit": "Redeem and credit",
+      "submitting": "Checking the code…",
+      "close": "Close",
+      "successTitle": "Gift code redeemed",
+      "credited": "{{amount}} was added to your wallet.",
+      "newBalance": "New balance: {{balance}}",
+      "done": "Close"
+    }
   },
   "financial": {
     "title": "Finances",

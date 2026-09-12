@@ -91,6 +91,25 @@ export interface WalletPaymentRow {
 
 export type WalletPaymentsPage = Paged<WalletPaymentRow>;
 
+/**
+ * What `POST /gift/redeem` answers (`billing/contract.gift.md`).
+ *
+ * `balance` is the wallet's balance **after** the credit, written by the same
+ * transaction that appended the ledger row — so it is a balance billing
+ * answered, not one this app worked out. Nothing on this side adds `credited`
+ * to a figure it is holding: that is exactly the legacy bug F-093-g does not
+ * port, where a *refused* code still added an `undefined` amount to the store
+ * and showed success over a balance of `NaN`.
+ */
+export interface GiftRedemption {
+  /** The code as stored, which is the trimmed, upper-cased form of what was typed. */
+  code: string;
+  /** Base currency, a decimal string. Always `> 0` — a zero-value coupon raises server-side. */
+  credited: string;
+  /** The balance after the credit. Base currency, a decimal string. */
+  balance: string;
+}
+
 export const billingApi = {
   /**
    * The wallet's balance, and nothing else.
@@ -128,5 +147,26 @@ export const billingApi = {
    */
   async walletPayments(query: string): Promise<WalletPaymentsPage> {
     return call<WalletPaymentsPage>(`/wallet/payments?${query}`, { method: "GET" });
+  },
+
+  /**
+   * Redeem a gift code (F-093-g), crediting the wallet in one transaction.
+   *
+   * Every refusal is a **409** carrying a sentence billing has already
+   * translated — "this is a discount code, enter it when you top up", and four
+   * others — so it arrives as an `ApiError` whose `message` goes straight on
+   * screen (`contract.errors.md`). There is no reason code to branch on here,
+   * and deliberately so: each message already names the box the code belongs
+   * in, which is the job a `reason` would otherwise be doing in this client.
+   *
+   * The route is rate-limited far below the read routes (10 per 900s), because
+   * it is the only thing that says whether a given code exists. A caller that
+   * retried on the user's behalf would spend that budget for them.
+   */
+  async redeemGift(code: string): Promise<GiftRedemption> {
+    return call<GiftRedemption>("/gift/redeem", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    });
   },
 };

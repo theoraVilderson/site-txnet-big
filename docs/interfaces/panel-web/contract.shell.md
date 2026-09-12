@@ -2,7 +2,7 @@
 id: panel-web
 layer: interface
 status: active
-version: 14
+version: 15
 updated: 2026-09-12
 ---
 
@@ -58,11 +58,14 @@ about the data path rather than the bar.
 3. **The balance is read from `wallet/history` with the smallest page**, because
    `{balance}` is already that route's first field. A `GET /wallet/balance`
    would be a second endpoint answering a value the first one has.
-4. **The quick actions follow rule 2 above** — `href: null` hides the entry
-   rather than rendering a dead link. `history` points at `PANEL_FINANCIAL`
-   since F-093-d; top-up and gift code stay hidden until F-093-e and F-093-g,
-   and the dropdown says so. Legacy's fourth entry (`/services`) is not ported:
-   it duplicated the sidebar's `my-services`.
+4. **The quick actions follow rule 2 above** — an entry with no destination is
+   hidden rather than rendered as a dead link. A destination is an `href` *or* a
+   `modal`: `history` points at `PANEL_FINANCIAL` since F-093-d, `gift-code`
+   opens the modal below since F-093-g, and top-up alone is still hidden,
+   waiting on F-093-e. A `modal` entry renders as a `button`, never a `Link`
+   with a dead href — a link that navigates nowhere is still announced as a link
+   and offered to "open in a new tab". Legacy's fourth entry (`/services`) is
+   not ported: it duplicated the sidebar's `my-services`.
 5. **A failed read is not a zero.** `"0.00"` is a real balance — a user with no
    wallet reads as zero, not a 404 — so a failure shows its own line and a
    retry, and keeps the last good figure rather than blanking it.
@@ -71,8 +74,45 @@ about the data path rather than the bar.
 both it and `auth-api` read. See [contract.md](contract.md) "Client API surface"
 for why the browser calls `api.<domain>` directly rather than through a proxy.
 
+## The gift-code modal (F-093-g)
+
+`_components/GiftCodeModal.tsx`, opened by the wallet's `gift-code` quick
+action. A code box is not worth a route — there is nothing to link to, bookmark
+or come back to — so this is the first overlay the dropdown opens rather than
+navigates to, and rule 4 above is how a second one is added.
+
+1. **A refusal ends the submit.** `billing` answers every unredeemable code with
+   a 409 and a sentence it has already translated
+   ([billing/contract.gift.md](../../domains/billing/contract.gift.md)), so the
+   client throws and there is no success path to fall into. This is the bug the
+   port exists to leave behind: legacy's `DiscountModal.tsx` set its error on a
+   `nok` answer and then ran the success branch anyway, because the branch had
+   no `return`.
+2. **Nothing here touches the balance.** A redemption tells the wallet control
+   to re-read, and is never handed an amount to add — rule 1 of the wallet
+   control above, which is the other half of the same legacy bug: every answer
+   did `walletBalance + data.amount`, and on a refusal `amount` is undefined, so
+   a dead code showed "gift activated" over a balance of `NaN`. The `credited`
+   and `balance` the success panel shows are billing's own answer to that one
+   call, formatted — not a sum worked out here.
+3. **The five refusals stay on the server side of the wire.** Each already names
+   where the code does belong ("this is a discount code, enter it when you top
+   up"), so this app keeps no copy of any of them and branches on no reason
+   code. It follows [contract.errors.md](contract.errors.md): the sentence goes
+   on screen as it arrived, `role="alert"`, cleared per attempt, with the `ref`
+   shown so a user can quote it.
+4. **The success panel waits to be closed.** Legacy dismissed itself on a timer
+   whose callback read a stale `status` to decide whether to — and the user has
+   just been shown a number they may want to read twice.
+
+The modal is mounted outside the dropdown's own `open &&`, so closing the
+dropdown does not unmount a code the user is half-way through typing, and the
+dropdown suspends its own Escape and outside-press handlers while the modal is
+up. One key closing both would leave the user with neither.
+
 ## State
 
 `_stores/panel-ui-store.ts` — collapsed (desktop), drawer open (below `lg`),
 the one open submenu. UI only, in memory, reset by a reload. A modal that must
-cover the sidebar (F-093-g) needs a z-index above the sidebar's `z-40`.
+cover the sidebar (F-093-g) needs a z-index above the sidebar's `z-40` and its
+`z-30` backdrop; `GiftCodeModal` is `z-50` for that reason.

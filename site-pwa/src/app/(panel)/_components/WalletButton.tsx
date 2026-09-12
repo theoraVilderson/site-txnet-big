@@ -16,28 +16,37 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { PANEL_FINANCIAL } from "@/lib/routes";
 import { useWalletBalance } from "../_hooks/useWalletBalance";
 import { BASE_CURRENCY, formatMoney } from "../_lib/money";
+import { GiftCodeModal } from "./GiftCodeModal";
 
 /** The control's strings as generated constants (C-06). */
 const W = FrontendI18nKeys.common.wallet;
 
 /**
- * One quick action. `href: null` is the shell's own convention for a page that
- * does not exist yet (`contract.shell.md` rule 2): the entry is **hidden**, never
- * rendered as a dead link, and the row that builds the page fills this in.
+ * One quick action.
+ *
+ * `href` is a page; `modal` is one of this panel's own overlays. `href: null`
+ * with no `modal` is the shell's own convention for a destination that does not
+ * exist yet (`contract.shell.md` rule 2): the entry is **hidden**, never
+ * rendered as a dead link, and the row that builds it fills this in. F-093-g
+ * filled in the gift code with a `modal` rather than an `href` because a code
+ * box is not worth a route — there is nothing to link to, bookmark or come back
+ * to, and a page would leave the wallet to show a single input.
  */
 interface QuickAction {
   id: string;
   label: string;
   icon: LucideIcon;
   href: string | null;
+  /** Opens an overlay instead of navigating. Exclusive with `href`. */
+  modal?: "gift-code";
   /** Highlighted as the action the panel wants (legacy's full-width deposit button). */
   lead?: boolean;
 }
 
 /**
- * The actions legacy's `Vault.tsx` offered, in its order. All three wait on
- * their own row, so today this list renders empty and the dropdown is the
- * balance plus one line saying so — the same honest state the sidebar is in.
+ * The actions legacy's `Vault.tsx` offered, in its order. Each waits on its own
+ * row, and one that has not landed is hidden rather than rendered dead — so
+ * this list shrinks and grows without the dropdown needing to know why.
  *
  * Legacy's fourth entry ("buy TXNet services") is not here: it linked to
  * `/services`, which is the sidebar's own `my-services` entry, and a second
@@ -45,7 +54,7 @@ interface QuickAction {
  */
 const QUICK_ACTIONS: readonly QuickAction[] = [
   { id: "top-up", label: W.topUp, icon: PlusCircle, href: null, lead: true }, // F-093-e
-  { id: "gift-code", label: W.giftCode, icon: Ticket, href: null }, // F-093-g (a modal)
+  { id: "gift-code", label: W.giftCode, icon: Ticket, href: null, modal: "gift-code" }, // F-093-g
   { id: "history", label: W.history, icon: History, href: PANEL_FINANCIAL }, // F-093-d
 ];
 
@@ -64,13 +73,18 @@ export function WalletButton() {
   const { t, lang } = useLocale();
   const { balance, isLoading, failed, refresh } = useWalletBalance();
   const [open, setOpen] = useState(false);
+  const [giftOpen, setGiftOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
 
   // `pointerdown` rather than `click`, so a press that starts outside closes the
   // menu before the thing under it reacts to the same gesture.
+  // Suspended while the modal is up: its backdrop covers this control, so an
+  // outside press is aimed at the modal, and an Escape there is the modal's to
+  // answer. Without this, one key closes both and the dropdown is gone when the
+  // user comes back to it.
   useEffect(() => {
-    if (!open) return;
+    if (!open || giftOpen) return;
     function onPointerDown(event: PointerEvent) {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     }
@@ -83,11 +97,16 @@ export function WalletButton() {
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open]);
+  }, [open, giftOpen]);
 
-  const visible = QUICK_ACTIONS.filter(
-    (a): a is QuickAction & { href: string } => a.href !== null,
-  );
+  // An entry with neither destination is the "not built yet" state, and stays
+  // hidden (`contract.shell.md` rule 2) — today that is top-up alone (F-093-e).
+  const visible = QUICK_ACTIONS.filter((a) => a.href !== null || a.modal !== undefined);
+
+  function openModal(modal: NonNullable<QuickAction["modal"]>) {
+    setOpen(false);
+    if (modal === "gift-code") setGiftOpen(true);
+  }
 
   return (
     <div className="relative" ref={rootRef}>
@@ -175,25 +194,39 @@ export function WalletButton() {
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-2">
-              {visible.map(({ id, label, icon: Icon, href, lead }) => (
-                <Link
-                  key={id}
-                  href={href}
-                  onClick={() => setOpen(false)}
-                  className={
-                    lead
-                      ? "col-span-2 flex items-center justify-center gap-2 rounded-xl bg-primary p-3 text-sm font-bold text-white hover:brightness-110"
-                      : "flex flex-col items-center justify-center gap-1.5 rounded-xl bg-leaf-bg p-3 text-xs font-medium text-text-primary hover:bg-card-border"
-                  }
-                >
-                  <Icon size={lead ? 18 : 20} aria-hidden />
-                  {label && <span>{t("common", label)}</span>}
-                </Link>
-              ))}
+              {visible.map(({ id, label, icon: Icon, href, modal, lead }) => {
+                const className = lead
+                  ? "col-span-2 flex items-center justify-center gap-2 rounded-xl bg-primary p-3 text-sm font-bold text-white hover:brightness-110"
+                  : "flex flex-col items-center justify-center gap-1.5 rounded-xl bg-leaf-bg p-3 text-xs font-medium text-text-primary hover:bg-card-border";
+                const inside = (
+                  <>
+                    <Icon size={lead ? 18 : 20} aria-hidden />
+                    {label && <span>{t("common", label)}</span>}
+                  </>
+                );
+                // A modal entry is a `button`, not a `Link` with a dead href: a
+                // link that navigates nowhere is announced as a link and
+                // offered to "open in a new tab".
+                return modal ? (
+                  <button key={id} type="button" onClick={() => openModal(modal)} className={className}>
+                    {inside}
+                  </button>
+                ) : (
+                  <Link key={id} href={href as string} onClick={() => setOpen(false)} className={className}>
+                    {inside}
+                  </Link>
+                );
+              })}
             </div>
           )}
         </div>
       )}
+
+      {/* Outside the dropdown's own `open &&`: opening it closes the dropdown,
+          and a modal unmounted by that would take the user's half-typed code
+          with it. A redemption makes the top bar re-read its balance — it is
+          never handed an amount to add (`contract.shell.md` rule 1). */}
+      <GiftCodeModal open={giftOpen} onClose={() => setGiftOpen(false)} onRedeemed={refresh} />
     </div>
   );
 }
