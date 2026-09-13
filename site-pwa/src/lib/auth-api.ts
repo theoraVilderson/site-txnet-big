@@ -109,6 +109,25 @@ export type SwitchGroup = {
   members: SwitchAccount[];
 };
 
+/**
+ * Who this caller is and what it may do (F-097).
+ *
+ * `permissions` is the list the access token carries, which is the same list
+ * `forward-auth` gates every request on — so a surface that hides an entry the
+ * caller does not hold is hiding exactly what the edge would refuse. `tenant.type`
+ * is the second door an operator surface needs: `settlement.manage` on a
+ * reseller's own role does not make that reseller the platform owner.
+ */
+export type Me = {
+  userId: string;
+  fullName: string;
+  role: { id: string; name: string };
+  permissions: string[];
+  tenant: { id: string; type: "platform_owner" | "reseller" };
+  isImpersonated: boolean;
+  impersonatedBy?: string;
+};
+
 export type BotLinkStatus = {
   state: "pending" | "linked" | "failed";
   otpSent: boolean;
@@ -201,6 +220,8 @@ export const authApi = {
   },
   /** The caller's own account plus the accounts they may switch to (F-0206). */
   async listAccounts() { return request<SwitchGroup>("/auth/accounts", { method: "GET" }); },
+  /** The caller's own identity and authority (F-097). */
+  async me() { return request<Me>("/auth/me", { method: "GET" }); },
   /**
    * Add another account to the group (F-0205) — proved by a code sent to that
    * account's own phone, or by that account's own password.

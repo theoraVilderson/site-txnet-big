@@ -74,6 +74,14 @@ export const RateLimitBucket = {
   ACCOUNTS_ADD_OTP_VERIFY: 'accounts:add:otp:verify',
   ACCOUNTS_ADD_PASSWORD: 'accounts:add:pwd',
   ACCOUNTS_LIST: 'accounts:list',
+
+  /**
+   * `GET /auth/me` (F-097), per caller. A read of the caller's own row, but the
+   * one every panel screen asks on load, so the budget is a client in a loop
+   * rather than a person.
+   */
+  ME: 'me',
+
   ACCOUNTS_SWITCH: 'accounts:switch',
   ACCOUNTS_REMOVE: 'accounts:remove',
 

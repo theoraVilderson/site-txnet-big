@@ -183,6 +183,7 @@ export const envSchema = z.object({
   ACCOUNTS_LIST_RATE_LIMIT: rateLimit(120),
   ACCOUNTS_SWITCH_RATE_LIMIT: rateLimit(30),
   ACCOUNTS_REMOVE_RATE_LIMIT: rateLimit(30),
+  ME_RATE_LIMIT: rateLimit(120),
   // The platform-wide ceiling over every guarded route's bucket, as a
   // multiple of that route's own per-tenant limit (F-066-s). Per-tenant
   // buckets hand one IP a fresh budget for every tenant it can name, so this

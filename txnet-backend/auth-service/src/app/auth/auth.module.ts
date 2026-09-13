@@ -35,6 +35,8 @@ import { MessengerModule } from '@txnet-backend/messenger';
 import { AutomationModule } from '../automation/automation.module';
 import { CaptchaController } from './captcha/captcha.controller';
 import { CaptchaService } from './captcha/captcha.service';
+import { MeController } from './me/me.controller';
+import { MeService } from './me/me.service';
 
 @Module({
   // Required because LocaleModule is not @Global(): SmsOtpSender,
@@ -60,10 +62,12 @@ import { CaptchaService } from './captcha/captcha.service';
     CaptchaController,
     BotLinkController,
     OtpInternalController,
+    MeController,
   ],
   providers: [
     RegisterService,
     TokenService,
+    MeService,
     AuthService,
     AuthGuard,
     NoActiveSessionGuard,

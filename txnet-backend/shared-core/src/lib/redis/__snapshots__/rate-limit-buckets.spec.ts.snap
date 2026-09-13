@@ -23,6 +23,7 @@ exports[`RateLimitBucket > records the whole rate-limited surface in one place 1
   "ACCOUNTS_ADD_OTP_VERIFY = accounts:add:otp:verify",
   "ACCOUNTS_ADD_PASSWORD = accounts:add:pwd",
   "ACCOUNTS_LIST = accounts:list",
+  "ME = me",
   "ACCOUNTS_SWITCH = accounts:switch",
   "ACCOUNTS_REMOVE = accounts:remove",
   "DEPOSIT_GATEWAYS = deposit:gateways",

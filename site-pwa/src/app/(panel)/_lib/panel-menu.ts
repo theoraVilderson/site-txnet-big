@@ -16,7 +16,26 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 /** The shell's menu labels as generated constants (C-06). */
 const M = FrontendI18nKeys.common.shell.menu;
 
-export interface PanelMenuLink {
+/**
+ * Every RBAC permission key an entry needs before it is rendered — all of them,
+ * the way `PermissionsGuard` requires all of them server-side. Absent is the
+ * common case: a menu entry every signed-in user may see.
+ *
+ * This is where "no `admin` in the URL" lands in the browser (F-097, D-28).
+ * There is one panel; an operator sees more of it because of what they hold,
+ * never because of a path or a second app. The list is compared against the
+ * `permissions` from `GET /auth/me`, which is the access token's own list — the
+ * one `forward-auth` gates every request on — so an entry hidden here is an
+ * entry the edge would have refused anyway.
+ *
+ * A permission is **not** always the whole answer: an operator-only surface
+ * must also check `tenant.type === "platform_owner"`, because a reseller
+ * administers its own roles and can grant itself the key
+ * (`docs/domains/audit/contract.settlement.md`, invariant #9).
+ */
+type PermissionGated = { requires?: readonly string[] };
+
+export interface PanelMenuLink extends PermissionGated {
   id: string;
   /** A `common` namespace key. */
   label: string;
@@ -29,7 +48,7 @@ export interface PanelMenuLink {
   href: string | null;
 }
 
-export interface PanelMenuGroup {
+export interface PanelMenuGroup extends PermissionGated {
   id: string;
   label: string;
   icon: LucideIcon;
@@ -74,15 +93,30 @@ export function isMenuGroup<T extends PanelMenuEntry | VisibleMenuEntry>(
   return "children" in entry;
 }
 
-/** The menu as rendered: links with no page dropped, then groups left empty. */
+/**
+ * The menu as rendered: entries the caller may not see dropped, then links with
+ * no page, then groups left with nothing in them.
+ *
+ * `held` is the `permissions` from `GET /auth/me`. It is a required argument
+ * rather than an optional one on purpose — a default of "holds everything"
+ * would make a forgotten call site render an operator's menu silently, and a
+ * default of `[]` would hide a real entry just as silently. Passing it is one
+ * line at the single call site (`PanelSidebar`), and the compiler asks for it.
+ */
 export function visibleMenu(
   entries: readonly PanelMenuEntry[],
+  held: readonly string[],
 ): VisibleMenuEntry[] {
+  const permitted = (e: PermissionGated) =>
+    (e.requires ?? []).every((key) => held.includes(key));
   const hasPage = (l: PanelMenuLink): l is VisibleMenuLink => l.href !== null;
   const out: VisibleMenuEntry[] = [];
   for (const entry of entries) {
+    if (!permitted(entry)) continue;
     if (isMenuGroup(entry)) {
-      const children = entry.children.filter(hasPage);
+      const children = entry.children.filter(
+        (c) => permitted(c) && hasPage(c),
+      ) as VisibleMenuLink[];
       if (children.length > 0) out.push({ ...entry, children });
     } else if (hasPage(entry)) {
       out.push(entry);

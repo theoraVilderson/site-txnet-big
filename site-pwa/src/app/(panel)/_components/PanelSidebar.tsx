@@ -21,6 +21,7 @@ import {
   type VisibleMenuLink,
 } from "../_lib/panel-menu";
 import { usePanelUiStore } from "../_stores/panel-ui-store";
+import { usePanelSession } from "../_context/PanelSessionContext";
 
 /** The shell's strings as generated constants (C-06). */
 const S = FrontendI18nKeys.common.shell;
@@ -54,7 +55,11 @@ export function PanelSidebar() {
       })),
     );
 
-  const menu = useMemo(() => visibleMenu(PANEL_MENU), []);
+  // Authority comes off the caller, never off the path (F-097): until `me`
+  // answers, nothing gated is shown.
+  const { me } = usePanelSession();
+  const held = me?.permissions;
+  const menu = useMemo(() => visibleMenu(PANEL_MENU, held ?? []), [held]);
   const active = activeHref(menuHrefs(menu), pathname);
 
   // A navigation closes the drawer, and opens the group the new page is in —

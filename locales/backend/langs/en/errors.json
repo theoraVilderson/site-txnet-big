@@ -38,6 +38,7 @@
     "botSession": "Signed in",
     "invalidToken": "Invalid token",
     "otpChannels": "Available delivery methods",
+    "me": "Your account",
     "sessionRevoked": "Your session has expired or been revoked",
     "tokenExpired": "Token has expired",
     "loginSuccess": "Welcome back",

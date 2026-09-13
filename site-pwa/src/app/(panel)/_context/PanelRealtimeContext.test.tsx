@@ -55,6 +55,7 @@ let options: RealtimeClientOptions;
 
 function signedInAs(userId: string | null) {
   session.mockReturnValue({
+    me: null,
     group: userId
       ? ({ current: { userId } } as never)
       : null,

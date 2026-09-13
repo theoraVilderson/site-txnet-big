@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
-import { authApi, type SwitchGroup } from "@/lib/auth-api";
+import { authApi, type Me, type SwitchGroup } from "@/lib/auth-api";
 import { miniAppHost } from "@/lib/mini-app";
 import { AUTH_LOGIN } from "@/lib/routes";
 import { currentReturnPath, rememberReturnTo } from "@/lib/return-to";
@@ -17,6 +17,13 @@ import { currentReturnPath, rememberReturnTo } from "@/lib/return-to";
 type PanelSession = {
   /** null while the session is still being established. */
   group: SwitchGroup | null;
+  /**
+   * Who the caller is and what it may do (F-097) — null while loading, and null
+   * if `GET /auth/me` failed. A failed `me` is **not** a missing session: the
+   * panel stays, and every permission-gated surface stays hidden, which is the
+   * safe direction to be wrong in.
+   */
+  me: Me | null;
   isLoading: boolean;
   /** Re-read the group — after adding an account, or after a switch. */
   reload: () => Promise<void>;
@@ -48,10 +55,14 @@ const PanelSessionContext = createContext<PanelSession | null>(null);
 export function PanelSessionProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [group, setGroup] = useState<SwitchGroup | null>(null);
+  const [me, setMe] = useState<Me | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // A switch changes who the caller is, so `me` is re-read with the group.
   const reload = useCallback(async () => {
-    setGroup(await authApi.listAccounts());
+    const [next, who] = await Promise.all([authApi.listAccounts(), readMe()]);
+    setGroup(next);
+    setMe(who);
   }, []);
 
   useEffect(() => {
@@ -59,8 +70,14 @@ export function PanelSessionProvider({ children }: { children: ReactNode }) {
     (async () => {
       try {
         await establishSession();
-        const next = await authApi.listAccounts();
-        if (alive) setGroup(next);
+        const [next, who] = await Promise.all([
+          authApi.listAccounts(),
+          readMe(),
+        ]);
+        if (alive) {
+          setGroup(next);
+          setMe(who);
+        }
       } catch {
         // Expired, revoked, or never signed in — all one answer. `replace`, so
         // the panel is not reachable with Back.
@@ -81,7 +98,7 @@ export function PanelSessionProvider({ children }: { children: ReactNode }) {
   }, [router]);
 
   return (
-    <PanelSessionContext.Provider value={{ group, isLoading, reload }}>
+    <PanelSessionContext.Provider value={{ group, me, isLoading, reload }}>
       {children}
     </PanelSessionContext.Provider>
   );
@@ -106,6 +123,15 @@ async function establishSession() {
     const result = await authApi.webAppSession(host.platform, host.initData);
     if (result.state !== "authenticated") throw cookieFailure;
     return result;
+  }
+}
+
+/** `me`, or null — never a reason to leave the panel (see `PanelSession.me`). */
+async function readMe(): Promise<Me | null> {
+  try {
+    return await authApi.me();
+  } catch {
+    return null;
   }
 }
 

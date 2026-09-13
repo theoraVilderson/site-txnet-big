@@ -22,7 +22,11 @@ under `(panel)` renders in: `_components/PanelShell.tsx` = `PanelSidebar` +
    it; a group with no visible child is hidden with it. `panel-menu.test.ts`
    reads the route tree and fails when an `href` has no `page.tsx` under
    `(panel)`. A page in a nested route group needs that test widened, not
-   skipped.
+   skipped. **An entry the caller may not use is hidden the same way** (F-097):
+   `requires: [...]` lists permission keys, all needed, compared against
+   `usePanelSession().me.permissions` (`GET /auth/me`). No `me` hides every
+   gated entry. An operator-only page also checks `me.tenant.type` — the key
+   alone is not the boundary. Never a role word in a route (D-28, F-098).
 3. **One entry is highlighted:** the longest href that is the path or a
    whole-segment prefix of it (`activeHref`). A detail page under
    `/financial/…` lights its parent without a second rule.

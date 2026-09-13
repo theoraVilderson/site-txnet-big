@@ -33,9 +33,16 @@ const link = (id: string, href: string | null): PanelMenuEntry => ({
   href,
 });
 
+/**
+ * No entry in `PANEL_MENU` is permission-gated yet, so the cases above pass any
+ * list. Named rather than `[]` so it stays obvious that those two assertions are
+ * about pages and highlighting, not about authority.
+ */
+const HOLDS_EVERYTHING = ["settlement.manage", "worker.manage"];
+
 describe("PANEL_MENU", () => {
   it("links only to pages that exist under the (panel) route group", () => {
-    const hrefs = visibleMenu(PANEL_MENU).flatMap((entry) =>
+    const hrefs = visibleMenu(PANEL_MENU, HOLDS_EVERYTHING).flatMap((entry) =>
       "children" in entry ? entry.children.map((c) => c.href) : [entry.href],
     );
 
@@ -75,13 +82,79 @@ describe("visibleMenu", () => {
       link("support", "/support"),
     ];
 
-    const visible = visibleMenu(menu);
+    const visible = visibleMenu(menu, HOLDS_EVERYTHING);
 
     expect(visible.map((e) => e.id)).toEqual(["home", "accounts", "support"]);
     const accounts = visible[1];
     expect("children" in accounts && accounts.children.map((c) => c.id)).toEqual(
       ["add"],
     );
+  });
+
+  /**
+   * The permission gate (F-097). This is the half of "no `admin` in the URL"
+   * that the browser can see: authority comes off the caller, so an entry the
+   * caller holds no permission for is never rendered — and, because the same
+   * `permissions[]` is what `forward-auth` enforces, hiding it hides exactly
+   * what the edge would have refused.
+   *
+   * Every case below passes an existing page, so a failure can only be the
+   * gate. `held` is what `GET /auth/me` answered; **an empty list gates
+   * everything gated**, which is the safe direction — a caller whose `me` call
+   * failed sees the ungated panel, not an operator's.
+   */
+  it("hides an entry whose permissions the caller does not hold", () => {
+    const menu: PanelMenuEntry[] = [
+      link("home", "/"),
+      { id: "settle", label: "settle", icon: Home, href: "/settle", requires: ["settlement.manage"] },
+    ];
+
+    expect(visibleMenu(menu, []).map((e) => e.id)).toEqual(["home"]);
+    expect(visibleMenu(menu, ["worker.manage"]).map((e) => e.id)).toEqual(["home"]);
+    expect(visibleMenu(menu, ["settlement.manage"]).map((e) => e.id)).toEqual([
+      "home",
+      "settle",
+    ]);
+  });
+
+  it("needs every permission an entry names, the way PermissionsGuard does", () => {
+    const menu: PanelMenuEntry[] = [
+      { id: "both", label: "both", icon: Home, href: "/both", requires: ["a", "b"] },
+    ];
+
+    expect(visibleMenu(menu, ["a"]).map((e) => e.id)).toEqual([]);
+    expect(visibleMenu(menu, ["a", "b"]).map((e) => e.id)).toEqual(["both"]);
+  });
+
+  it("drops a group left with no permitted child, and gates a whole group by its own requirement", () => {
+    const operatorOnly: PanelMenuEntry = {
+      id: "operations",
+      label: "operations",
+      icon: Wallet,
+      requires: ["worker.manage"],
+      children: [{ id: "workers", label: "workers", icon: Home, href: "/workers" }],
+    };
+    const mixed: PanelMenuEntry = {
+      id: "financial",
+      label: "financial",
+      icon: Wallet,
+      children: [
+        { id: "history", label: "history", icon: Home, href: "/financial" },
+        { id: "settle", label: "settle", icon: Home, href: "/settle", requires: ["settlement.manage"] },
+      ],
+    };
+
+    const plain = visibleMenu([operatorOnly, mixed], []);
+    expect(plain.map((e) => e.id)).toEqual(["financial"]);
+    expect("children" in plain[0] && plain[0].children.map((c) => c.id)).toEqual(
+      ["history"],
+    );
+
+    const operator = visibleMenu([operatorOnly, mixed], [
+      "worker.manage",
+      "settlement.manage",
+    ]);
+    expect(operator.map((e) => e.id)).toEqual(["operations", "financial"]);
   });
 });
 

@@ -38,6 +38,7 @@
     "botSession": "ورود انجام شد",
     "invalidToken": "توکن نامعتبر است",
     "otpChannels": "روش‌های موجود ارسال کد",
+    "me": "حساب شما",
     "sessionRevoked": "نشست شما منقضی یا باطل شده است",
     "tokenExpired": "توکن منقضی شده است",
     "loginSuccess": "خوش آمدید",
