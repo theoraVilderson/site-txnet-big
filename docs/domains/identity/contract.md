@@ -56,8 +56,12 @@ refused with `auth.permissionsChanged` once Redis holds a different fingerprint 
 
 ## Emits (events)
 
-None. No message bus is wired up. Impersonation start/end write an
-`audit.admin_audit_log` row **synchronously in the same transaction**.
+No message bus. Impersonation start/end write an `audit.admin_audit_log` row
+**synchronously in the same transaction**.
+
+| channel | when | payload | consumer |
+|---|---|---|---|
+| Postgres `NOTIFY identity_permissions_changed` (F-101-b, ADR-0043) | after commit of a `role_permission` write, a `user.roleId` change, or a `permission.key` rename — from triggers, so SQL and migrations count | JSON, ids only: `{kind:"role",roleId}`, `{kind:"user",userId,roleId}`, `{kind:"all"}` | auth-service `PermissionNotificationsListener`, which rewrites `role:<id>:permissions` / `user:<id>:role`. Not queued: a listener that was away recomputes every role on connect |
 
 ## Consumes
 

@@ -2,7 +2,7 @@
 id: identity
 layer: domain
 status: active
-updated: 2026-09-10
+updated: 2026-09-13
 ---
 
 # Invariants — identity
@@ -24,6 +24,7 @@ Statements that must be true at all times. **Outrank every feature request.**
 | 13 | The failed-login counter is keyed on the **normalized** identifier — the same value the account lookup uses — so one account is one lock regardless of how the phone number was spelled | `AuthService.loginWithPassword` | the 10/900s lock multiplied by every accepted phone format |
 | 12 | A `linked_bot_account` may only carry an OTP once `contactVerifiedAt` is set, and it is only set from a contact whose `contact.user_id` equals the sender's id and whose phone equals the number the code was requested for. One `(tenantId, platform, platformUserId)` belongs to at most one User — **within a tenant**, not across the platform (F-066-l): the chat id is the messenger's, so the same person is the same id in every reseller's bot, and a platform-wide rule would let whoever linked first hold the chat against all the others | `BotLinkService.handleContact` + `@@unique([tenantId, platform, platformUserId])`, scoped by `withTenant`; senders filter on `contactVerifiedAt` | a forged contact card redirects someone else's OTP to the attacker's chat — and, unscoped, one reseller's link silently answering another's `/start` |
 | 11 | Register creates no `user` row until phone OTP verification succeeds; the submitted profile + password hash live only in Redis (`register:pending:<tenantId>:<phone>`) until then | `RegisterService.register` / `.verifyPhone` | unclaimed/abandoned "semi-active" accounts occupying a username or phone number |
+| 14 | A token's `permHash` and the fingerprint written to `role:<roleId>:permissions` are computed by the **one** function (`permissionFingerprint`) over the **one** relation (`role.rolePermissions.permission.key`); Redis is rewritten by a Postgres trigger's notification, never by an application write path, and a missing key refuses nobody (ADR-0043) | `TokenService`, `PermissionNotificationsListener`, migration `20260913000000_identity_permissions_notify`; `permission-notifications.listener.spec.ts` compares a written fingerprint with a minted one | two computations drifting reads as every token on the platform being stale at once; a missed notification leaves a changed role honoured until the next connect |
 
 ## How to test
 

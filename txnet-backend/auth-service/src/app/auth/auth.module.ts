@@ -38,6 +38,12 @@ import { CaptchaService } from './captcha/captcha.service';
 import { MeController } from './me/me.controller';
 import { MeService } from './me/me.service';
 import { PermissionStateStore } from './permissions/permission-state.store';
+import {
+  PERMISSIONS_LISTEN_CLIENT,
+  PermissionNotificationsListener,
+} from './permissions/permission-notifications.listener';
+import { Client } from 'pg';
+import { ConfigService } from '@nestjs/config';
 
 @Module({
   // Required because LocaleModule is not @Global(): SmsOtpSender,
@@ -72,6 +78,16 @@ import { PermissionStateStore } from './permissions/permission-state.store';
     AuthService,
     AuthGuard,
     PermissionStateStore,
+    PermissionNotificationsListener,
+    // One `pg` client per connection attempt, as the running service's own
+    // least-privileged login (`DATABASE_APP_URL`) — LISTEN needs no grant, and
+    // the owner connection is never used by a running process (F-066-m-a).
+    {
+      provide: PERMISSIONS_LISTEN_CLIENT,
+      useFactory: (config: ConfigService) => () =>
+        new Client({ connectionString: config.get<string>('DATABASE_APP_URL') }),
+      inject: [ConfigService],
+    },
     NoActiveSessionGuard,
     ServiceOnlyGuard,
     SessionService,

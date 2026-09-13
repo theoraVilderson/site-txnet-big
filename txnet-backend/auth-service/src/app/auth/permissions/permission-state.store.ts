@@ -32,4 +32,18 @@ export class PermissionStateStore {
     if (currentRole && currentRole !== claims.roleId) return true;
     return !!currentHash && currentHash !== (claims.permHash ?? '');
   }
+
+  /**
+   * Record a role's current fingerprint (F-101-b). No TTL: it stays true until
+   * Postgres reports the next change, and an expiry would only turn a known
+   * fingerprint back into an unknown one that refuses nobody.
+   */
+  async writeRole(roleId: string, fingerprint: string): Promise<void> {
+    await this.redis.set(RedisKeys.rolePermissions(roleId), fingerprint);
+  }
+
+  /** Record the role a user holds now (F-101-b). No TTL, for the same reason. */
+  async writeUserRole(userId: string, roleId: string): Promise<void> {
+    await this.redis.set(RedisKeys.userRole(userId), roleId);
+  }
 }
