@@ -306,4 +306,134 @@ export const billingApi = {
       body: JSON.stringify({ code }),
     });
   },
+
+  /**
+   * Every gateway the caller may manage (F-102-d): the platform owner all of
+   * them, a tenant its own. Billing decides which; this sends no tenant.
+   */
+  async adminGateways(): Promise<AdminGateway[]> {
+    return call<AdminGateway[]>("/gateways", { method: "GET" });
+  },
+
+  /** Create a gateway. A secret in the body is relayed to the vault and never answered. */
+  async createGateway(body: CreateGatewayBody): Promise<AdminGateway> {
+    return call<AdminGateway>("/gateways", { method: "POST", body: JSON.stringify(body) });
+  },
+
+  /** Change only what `body` names. An absent secret keeps the stored one. */
+  async updateGateway(source: GatewaySource, id: string, body: UpdateGatewayBody): Promise<AdminGateway> {
+    return call<AdminGateway>(`/gateways/${source}/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+
+  /** Delete — or, when a payment or link points at it, deactivate — one gateway (ADR-0041 §6). */
+  async deleteGateway(source: GatewaySource, id: string): Promise<GatewayRemoved> {
+    return call<GatewayRemoved>(`/gateways/${source}/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+
+  /** Every link (grant) the platform has made. Platform owner only; anyone else is refused 403. */
+  async gatewayGrants(): Promise<GatewayGrant[]> {
+    return call<GatewayGrant[]>("/settlement/grants", { method: "GET" });
+  },
+
+  /** Link a gateway to a tenant that does not own it (ADR-0041). */
+  async createGatewayGrant(body: CreateGatewayGrantBody): Promise<{ id: string }> {
+    return call<{ id: string }>("/settlement/grants", { method: "POST", body: JSON.stringify(body) });
+  },
+
+  /** Unlink: the grant is withdrawn, never deleted. */
+  async withdrawGatewayGrant(id: string): Promise<{ id: string }> {
+    return call<{ id: string }>(`/settlement/grants/${encodeURIComponent(id)}/withdraw`, { method: "POST" });
+  },
+};
+
+/** Which table a gateway row is in — the pair `source` + `id` names a row (D-25). */
+export type GatewaySource = "platform" | "tenant";
+
+/** Whether one secret is stored. There is no field that could carry its value. */
+export interface GatewaySecretState {
+  configured: boolean;
+  version: number | null;
+  rotatedAt: string | null;
+}
+
+/** A gateway as `GET /gateways` answers it (`billing` F-102-c). Decimals are strings (C-02). */
+export interface AdminGateway {
+  source: GatewaySource;
+  id: string;
+  /** The owning tenant; `null` for a platform gateway. */
+  tenantId: string | null;
+  displayName: string;
+  providerName: string;
+  gatewayCategory: string;
+  isActive: boolean;
+  verificationStatus: string | null;
+  description: string | null;
+  supportedCurrencies: unknown;
+  confirmationMode: string | null;
+  minAcceptAmount: string;
+  maxAcceptAmount: string;
+  feeCalculationMode: string;
+  feeType: string;
+  feeValue: string;
+  feeFloor: string | null;
+  feeCeiling: string | null;
+  useLiveRate: boolean;
+  staticRate: string | null;
+  percentageModifier: string | null;
+  fixedAmountModifier: string | null;
+  minRate: string | null;
+  maxRate: string | null;
+  roundingStep: string | null;
+  roundingMode: string | null;
+  /** `null` when billing could not ask the vault; the row is still manageable. */
+  credentials: { merchantId: GatewaySecretState; secretKey: GatewaySecretState } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+type GatewayFieldsBody = {
+  displayName?: string;
+  providerName?: string;
+  gatewayCategory?: string;
+  isActive?: boolean;
+  minAcceptAmount?: string;
+  maxAcceptAmount?: string;
+  feeCalculationMode?: string;
+  feeType?: string;
+  feeValue?: string;
+  feeFloor?: string | null;
+  feeCeiling?: string | null;
+  verificationStatus?: string;
+  /** Write-only. Sent when typed, never read back. */
+  merchantId?: string;
+  secretKey?: string;
+};
+
+export type CreateGatewayBody = GatewayFieldsBody & { source: GatewaySource; tenantId?: string };
+export type UpdateGatewayBody = GatewayFieldsBody;
+
+export interface GatewayRemoved {
+  id: string;
+  source: GatewaySource;
+  mode: "deleted" | "deactivated";
+  grantsWithdrawn: number;
+}
+
+/** A link of one gateway to one borrowing tenant (`audit/contract.settlement.md`). */
+export interface GatewayGrant {
+  id: string;
+  tenantId: string;
+  gatewayId: string | null;
+  tenantGatewayConfigId: string | null;
+  isActive: boolean;
+  note: string | null;
+  grantedAt: string;
+  withdrawnAt: string | null;
+}
+
+export type CreateGatewayGrantBody = {
+  tenantId: string;
+  gatewayId?: string;
+  tenantGatewayConfigId?: string;
+  note?: string;
 };

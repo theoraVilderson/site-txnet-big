@@ -26,6 +26,12 @@ export const PANEL_FINANCIAL = "/financial";
  */
 export const PANEL_DEPOSIT = "/financial/deposit";
 /**
+ * Payment gateway management (F-102-d). One route for every audience: the
+ * platform owner sees every gateway and the links, a tenant its own (D-31).
+ * No role word in it (F-098).
+ */
+export const PANEL_GATEWAYS = "/gateways";
+/**
  * Where a bank returns a payer (F-093-f). These two are `billing`'s to name:
  * `deposit-callback.controller.ts` redirects to them by path, so they are the
  * one pair of routes here that cannot be renamed from this side alone.
