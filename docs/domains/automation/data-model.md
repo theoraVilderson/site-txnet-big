@@ -2,7 +2,7 @@
 id: automation
 layer: domain
 status: draft
-updated: 2026-09-10
+updated: 2026-09-13
 ---
 
 # Data model — automation
@@ -38,7 +38,7 @@ is a platform-wide process, and a tick's tenant — when it has one — is insid
 `20260909001500_row_level_security_all_tables` policies every table *with* a
 `tenantId`, so a table without one is simply readable by the roles already
 granted the schema. Only `worker-service` writes it, draining the dead-letter
-queue; only `auth-service` reads it, at `GET /admin/workers/dead-letters`.
+queue; only `auth-service` reads it, at `GET /auth/workers/dead-letters`.
 
 `outbox_event` carries **no `tenantId`** for the same reason `dead_letter`
 does not, plus one of its own: the relay is a platform-wide process that must

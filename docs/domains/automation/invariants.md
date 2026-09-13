@@ -2,7 +2,7 @@
 id: automation
 layer: domain
 status: active
-updated: 2026-09-10
+updated: 2026-09-13
 ---
 
 # Invariants — automation
@@ -36,7 +36,7 @@ do is fall back to running always. It never runs, and the tick publisher logs
 which shape rule it broke.
 
 Since F-031-b the shape is also checked at the moment it is **written**
-(`POST /admin/workers/:key/schedules`), and the refusal names the rule that was
+(`POST /auth/workers/:key/schedules`), and the refusal names the rule that was
 broken. The runtime check stays: a row typed straight into Postgres still
 reaches the publisher, so the write surface is the place a person is told, not
 the place the invariant is held.
@@ -101,7 +101,7 @@ are an ack, a refusal, a message the broker returned as unroutable, and silence
 publish that reached no queue.
 
 #3 is still not covered by a spec. F-031-b makes it *reachable* — `POST
-/admin/workers/:key/run` is a way to start a run on demand — but asserting it
+/auth/workers/:key/run` is a way to start a run on demand — but asserting it
 needs a real broker and a real `bot_execution_log` to count rows in, which is
 the `*.int.spec.ts` tier and a fixture this repo does not have yet (the
 Postgres fixture exists; a RabbitMQ one does not). Stated as an open gap rather

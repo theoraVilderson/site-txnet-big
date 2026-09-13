@@ -3,7 +3,7 @@ id: automation
 layer: domain
 status: active
 version: 7
-updated: 2026-09-12
+updated: 2026-09-13
 ---
 
 # Contract — automation: the worker half
@@ -94,7 +94,7 @@ them would tie the cheap frequent one to the rate a bank will answer.
 
 **A job is registered; it is not scheduled.** `WorkerRegistryService` upserts a
 `bot_worker` row on boot, and the publisher ticks a job only for the
-`bot_schedule` rows an operator set through `/admin/workers` (F-031-b). A new
+`bot_schedule` rows an operator set through `/auth/workers` (F-031-b). A new
 job therefore runs never until somebody schedules it — which is a deliberate
 default for a sweep that writes, and the first thing to check when one appears
 to do nothing.
@@ -114,7 +114,7 @@ most: it is the kind of job nobody looks at while it is working.
 
 ## The admin surface (F-031-b)
 
-Five routes under `/admin/workers`, in `auth-service`. Moved to
+Five routes under `/auth/workers`, in `auth-service`. Moved to
 [contract.admin.md](contract.admin.md) when this file passed 250 lines (§10):
 its audience is an admin panel, and everything else here is the runtime.
 
@@ -165,7 +165,7 @@ That is the opposite of the main queue's rule, and it is the opposite for the
 reason the main queue's rule works: there, a message that keeps failing has
 somewhere to go.
 
-`GET /admin/workers/dead-letters` is the reading half, in `auth-service` for the
+`GET /auth/workers/dead-letters` is the reading half, in `auth-service` for the
 same reason the rest of the admin surface is (ADR-0027). It is read-only:
 re-driving a dead message back onto the exchange is a decision about ordering
 and idempotency, not a button, and it belongs to a row of its own.
@@ -188,7 +188,7 @@ exchange and never the queue.
 and `timeout`, bounded by `AUTOMATION_PUBLISH_CONFIRM_MS`. It is invariant #10.
 In `worker-service` a failed publish is logged and the occurrence is lost, the
 cost the deferral path already accepts. In `auth-service` it fails the route:
-`POST /admin/workers/:key/run` answers 503, the shape it already used for an
+`POST /auth/workers/:key/run` answers 503, the shape it already used for an
 unreachable broker (D-18). Answering 200 and reconciling needs the durable store
 F-067-c builds.
 

@@ -3,7 +3,7 @@ id: currency
 layer: domain
 status: active
 version: 4
-updated: 2026-09-12
+updated: 2026-09-13
 ---
 
 # Contract — the FX worker (currency)
@@ -224,7 +224,7 @@ breaking anything visible.
 
 Every five minutes, and that is a **`bot_schedule` row, not a constant**. The
 job registers itself as `fx_rate_refresh` on boot; an admin gives it a
-`cron_expression` of `*/5 * * * *` through `/admin/workers` (F-031-b), and
+`cron_expression` of `*/5 * * * *` through `/auth/workers` (F-031-b), and
 `AUTOMATION_TICK_INTERVAL_MS` (60s) finds that occurrence well inside its own
 interval. No change to `automation`'s contract was needed or made.
 

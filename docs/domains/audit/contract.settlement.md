@@ -3,7 +3,7 @@ id: audit
 layer: domain
 status: active
 version: 1
-updated: 2026-09-12
+updated: 2026-09-13
 ---
 
 # Contract — the settlement operator surface
@@ -19,14 +19,14 @@ on is `billing`'s (`payment_gateway_grant`, `gateway_settlement_entry`,
 `gateway_settlement_payout`, F-096-a), and the rules for what those rows *mean*
 are `domains/billing/contract.deposit.md` "The debt it leaves".
 
-**The code lives in `billing-service`**, not beside the other `/admin` routes in
+**The code lives in `billing-service`**, not beside the other operator routes in
 `auth-service`. The tables, the money arithmetic and `isPlatformOwner` are all
 there, and moving the routes would put the ledger's arithmetic outside the unit
 whose contract states it. The cost is the one exception below.
 
 ## Routes
 
-`/api/billing/admin/settlement/*`. Every one of them requires **both** doors in
+`/api/billing/settlement/*`. Every one of them requires **both** doors in
 "Who may reach it".
 
 | Operation | Input | Output | Errors |

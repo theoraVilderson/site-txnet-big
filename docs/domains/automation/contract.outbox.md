@@ -3,7 +3,7 @@ id: automation
 layer: domain
 status: active
 version: 6
-updated: 2026-09-10
+updated: 2026-09-13
 ---
 
 # Contract — automation: the transactional outbox
@@ -141,6 +141,6 @@ delivered, and the alternative — a plain publish the broker acks into nothing
 - No consumer, no consumer-side idempotency store (above).
 - No retention or archive of published rows. ADR-0021 makes the table an audit
   trail; when that stops being worth keeping needs a producer with an opinion.
-- No admin surface. `GET /admin/workers/dead-letters` has no outbox twin —
+- No admin surface. `GET /auth/workers/dead-letters` has no outbox twin —
   the alerts in `contract.monitoring.md` are how a person learns something is
   wrong, and the row itself is a `SELECT` away.

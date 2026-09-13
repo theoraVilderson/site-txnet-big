@@ -3,7 +3,7 @@ id: realtime
 layer: platform
 status: active
 version: 2
-updated: 2026-09-10
+updated: 2026-09-13
 ---
 
 # Contract — realtime channels
@@ -56,7 +56,7 @@ weaken later:
 
 **No permission grants another person's `user:` channel.** An admin with every
 permission on the platform still cannot listen in here — acting as someone else
-is impersonation, and impersonation leaves an `audit` row (`/admin/impersonate`).
+is impersonation, and impersonation leaves an `audit` row (`/auth/users/:userId/impersonate`).
 A permission that skipped that would make it invisible.
 
 **A `tenant:` channel needs the permission *and* an exact tenant match.** The

@@ -3,7 +3,7 @@ id: tenant
 layer: domain
 status: active
 version: 8
-updated: 2026-09-09
+updated: 2026-09-13
 ---
 
 # Contract — tenant
@@ -196,7 +196,7 @@ the route.
 
 **The allowlist for `subscription` and `assets` is empty in `auth-service`, and
 that is the answer rather than a gap.** Every controller this process holds is
-`/auth/*`, `/admin/*` or `/internal/*` — panel, admin and service-caller routes
+`/auth/*` or `/internal/*` — panel, operator and service-caller routes
 without exception. The `/sub` link catalog 13.1 names belongs to `network`,
 which has no service yet; its prefix goes into `SERVED_PATHS`
 (`app/tenant/tenant.ts`) in the same change that builds it.

@@ -3,14 +3,14 @@ id: automation
 layer: domain
 status: active
 version: 5
-updated: 2026-09-11
+updated: 2026-09-13
 ---
 
 # Contract — automation
 
 **Implemented.** `bot_integration` has a service —
 `auth-service/src/app/automation/` (F-066-i). The worker half has a runtime,
-`worker-service` (F-031-a), and since F-031-b a write surface: five `/admin/workers`
+`worker-service` (F-031-a), and since F-031-b a write surface: five `/auth/workers`
 routes in `auth-service`, which is where an authenticated admin, a permissions
 guard and the audit log already are. Nothing in the table below is intent any more.
 
@@ -103,7 +103,7 @@ row naming `bot-service` as the caller, so F-1215's trail is unbroken.
 
 Moved to **[contract.worker.md](contract.worker.md)** (§10 — this file reached
 262 lines). Three processes' worth of behaviour: `worker-service` and its tick
-(F-031-a), the jobs that run on it (F-031-c), and the five `/admin/workers`
+(F-031-a), the jobs that run on it (F-031-c), and the five `/auth/workers`
 routes that write what it reads (F-031-b).
 
 ## Emits (events)

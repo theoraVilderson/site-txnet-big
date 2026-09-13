@@ -3,7 +3,7 @@ id: automation
 layer: domain
 status: active
 version: 5
-updated: 2026-09-10
+updated: 2026-09-13
 ---
 
 # Contract — automation: the admin surface
@@ -13,7 +13,7 @@ file is the runtime — the exchange, the queues, the tick, the dead-letter path
 This one is the five HTTP routes an admin drives it with, which have a
 different audience and change for different reasons.
 
-Five routes under `/admin/workers`, all behind `worker.manage`. They are in
+Five routes under `/auth/workers`, all behind `worker.manage`. They are in
 `auth-service` because `worker-service` serves no HTTP by design (ADR-0027) and
 because this is the process that already authenticates an admin — the two meet
 at the three tables and at one exchange, and nowhere else.

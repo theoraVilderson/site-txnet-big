@@ -12,7 +12,7 @@ source:
   - txnet-backend/prisma/domains/automation.prisma
 owns_tables: [bot_worker, bot_schedule, bot_execution_log, bot_integration, dead_letter, outbox_event]
 depends_on: [tenant, bot-app]
-updated: 2026-09-10
+updated: 2026-09-13
 ---
 
 # Automation
@@ -22,7 +22,7 @@ updated: 2026-09-10
 **Built so far:** `bot_integration`, the worker *runtime* — `worker-service`
 registers each job as a `bot_worker`, publishes a tick per due schedule and
 appends a `bot_execution_log` per run — the admin surface that writes them,
-five `/admin/workers` routes in `auth-service` (F-031-b), the first job that
+five `/auth/workers` routes in `auth-service` (F-031-b), the first job that
 does real work (`vault_credential_retention`, F-031-c), and since F-067-a a
 second queue this process consumes without a schedule: OTP delivery. Since
 F-067-c the outbox ADR-0021 decided exists too — the table and its relay job.
@@ -35,7 +35,7 @@ F-067-c the outbox ADR-0021 decided exists too — the table and its relay job.
 | [contract.worker.md](contract.worker.md) | the worker runtime, the queues, the jobs |
 | [contract.tenant-cap.md](contract.tenant-cap.md) | one tenant is taking every run slot (catalog 20.2 layer 4) |
 | [contract.outbox.md](contract.outbox.md) | announcing a cross-domain event, or consuming one (ADR-0021) |
-| [contract.admin.md](contract.admin.md) | the five `/admin/workers` routes |
+| [contract.admin.md](contract.admin.md) | the five `/auth/workers` routes |
 | [contract.monitoring.md](contract.monitoring.md) | an alert fired, or a threshold needs moving |
 | [invariants.md](invariants.md) | writing any code that touches it |
 | [data-model.md](data-model.md) | changing storage |
