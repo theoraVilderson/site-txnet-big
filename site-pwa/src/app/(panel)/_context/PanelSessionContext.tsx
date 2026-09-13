@@ -58,6 +58,17 @@ export function PanelSessionProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // ADR-0043: a call refused because this user's permissions changed has
+  // already refreshed the token by the time this runs; `me` was read from the
+  // old one, so the menu would otherwise keep offering what the gate now refuses.
+  useEffect(
+    () =>
+      authApi.onPermissionsRefreshed(() => {
+        void readMe().then(setMe);
+      }),
+    [],
+  );
+
   // A switch changes who the caller is, so `me` is re-read with the group.
   const reload = useCallback(async () => {
     const [next, who] = await Promise.all([authApi.listAccounts(), readMe()]);

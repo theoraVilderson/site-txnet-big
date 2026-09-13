@@ -192,7 +192,9 @@ not (see above).
   to answer 201, which was already inaccurate — no row is created until
   `verify-phone` (identity/invariants.md #11).
 - 400 validation (`fieldErrors`) or a guard's refusal (`captcha.required`).
-- 401 bad/missing/expired token or revoked session (`AuthGuard`).
+- 401 bad/missing/expired token or revoked session (`AuthGuard`), or
+  `auth.permissionsChanged` with `error.reason: "permissionsChanged"` when the
+  token's role changed after mint (ADR-0043) — refresh once and retry on the `reason`.
 - 403 insufficient permission / impersonation of a non-lower role / sensitive
   action during impersonation.
 - 409 `auth.alreadyAuthenticated` (F-0101), or an OTP issue already in flight

@@ -21,6 +21,12 @@ export class ApiError extends Error {
   /** Correlation id for the server-side log line — shown so a user can quote it. */
   readonly ref?: string;
   /**
+   * The envelope's `error.reason`: a machine-readable cause a client acts on —
+   * `permissionsChanged` means "refresh once and retry" (ADR-0043). Match on
+   * this, never on `message`, which is translated.
+   */
+  readonly reason?: string;
+  /**
    * True when `message` did NOT come from `auth-api`: the network failed, or
    * the answer had no envelope to read. Nothing here is translated, so a UI
    * must show its own string instead of `message`.
@@ -33,6 +39,7 @@ export class ApiError extends Error {
       status: number;
       fieldErrors?: ApiFieldError[];
       ref?: string;
+      reason?: string;
       unreachable?: boolean;
       cause?: unknown;
     },
@@ -42,6 +49,7 @@ export class ApiError extends Error {
     this.status = init.status;
     this.fieldErrors = init.fieldErrors ?? [];
     this.ref = init.ref;
+    this.reason = init.reason;
     this.unreachable = init.unreachable ?? false;
   }
 

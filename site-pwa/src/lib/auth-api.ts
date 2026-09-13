@@ -18,6 +18,33 @@ let accessToken: string | null = null;
 let sessionBootstrap: Promise<AuthResult> | null = null;
 
 /**
+ * A refresh made because a call was refused with `permissionsChanged`
+ * (ADR-0043) — single-flight for the reason `sessionBootstrap` is: refresh
+ * rotates the token, and a page that fires three calls into a changed role gets
+ * three refusals at once. One refresh answers all of them.
+ *
+ * `/auth/refresh` itself is neither behind the gate nor behind `AuthGuard`, so
+ * it can never answer this refusal and this can never wait on itself.
+ */
+let permissionsRefresh: Promise<void> | null = null;
+
+/** Told after that refresh, so what was rendered from the old token (`me`) is read again. */
+const permissionsRefreshed = new Set<() => void>();
+
+function refreshAfterPermissionsChanged(): Promise<void> {
+  permissionsRefresh ??= authApi
+    .refresh()
+    .then((result) => {
+      sessionBootstrap = Promise.resolve(result);
+      for (const listener of permissionsRefreshed) listener();
+    })
+    .finally(() => {
+      permissionsRefresh = null;
+    });
+  return permissionsRefresh;
+}
+
+/**
  * Every call goes out with the language the user chose in this panel and comes
  * back as either `data` or an `ApiError` — {@link createApiClient} is where that
  * envelope is read, for this service and for `billing-api` alike.
@@ -30,6 +57,7 @@ const call = createApiClient({
   baseUrl: API_URL,
   service: "auth-api",
   credential: () => accessToken,
+  onPermissionsChanged: () => refreshAfterPermissionsChanged(),
 });
 
 async function request<T>(path: string, init: RequestInit = {}, captchaToken?: string): Promise<T> {
@@ -222,6 +250,18 @@ export const authApi = {
   async listAccounts() { return request<SwitchGroup>("/auth/accounts", { method: "GET" }); },
   /** The caller's own identity and authority (F-097). */
   async me() { return request<Me>("/auth/me", { method: "GET" }); },
+  /** The single-flight refresh every client runs when a call's permissions went stale (ADR-0043). */
+  refreshAfterPermissionsChanged,
+  /**
+   * Run `listener` after each such refresh; returns the unsubscribe. The panel
+   * session re-reads `me` here, so the menu follows the gate.
+   */
+  onPermissionsRefreshed(listener: () => void) {
+    permissionsRefreshed.add(listener);
+    return () => {
+      permissionsRefreshed.delete(listener);
+    };
+  },
   /**
    * Add another account to the group (F-0205) — proved by a code sent to that
    * account's own phone, or by that account's own password.

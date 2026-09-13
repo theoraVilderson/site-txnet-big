@@ -393,3 +393,107 @@ describe('the switch group', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * A call refused because the caller's permissions changed after its token was
+ * minted (ADR-0043). The gate answers 401 with `error.reason:
+ * "permissionsChanged"`, and the one thing that must hold is that the user never
+ * sees that refusal: the panel refreshes once, retries once, and the menu is
+ * told. Each case below is a way that goes wrong without a single visible error
+ * anywhere else — a retry storm, a double refresh that rotates the token out
+ * from under the other call, or an ordinary sign-out mistaken for this.
+ */
+describe('a call refused because permissions changed', () => {
+  const stale = () =>
+    envelope(
+      { ok: false, msg: 'Your access has changed.', error: { reason: 'permissionsChanged' } },
+      401,
+    );
+  const refreshed = (token: string) =>
+    envelope({ ok: true, data: { accessToken: token, expiresIn: 900 } });
+  const accounts = () =>
+    envelope({ ok: true, data: { groupId: null, current: { userId: 'u-1', fullName: 'A', phoneMasked: null }, members: [] } });
+  const auth = (call: unknown[]) => new Headers((call[1] as RequestInit).headers).get('authorization');
+
+  it('refreshes once and retries with the new token', async () => {
+    fetchMock
+      .mockResolvedValueOnce(stale())
+      .mockResolvedValueOnce(refreshed('tok-new'))
+      .mockResolvedValueOnce(accounts());
+
+    await expect(authApi.listAccounts()).resolves.toMatchObject({ groupId: null });
+
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+    expect(urls).toEqual([
+      `${ORIGIN}/api/auth/accounts`,
+      `${ORIGIN}/api/auth/refresh`,
+      `${ORIGIN}/api/auth/accounts`,
+    ]);
+    expect(auth(fetchMock.mock.calls[2])).toBe('Bearer tok-new');
+  });
+
+  it('refreshes once for several calls refused together', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.endsWith('/auth/refresh')) return refreshed('tok-new');
+      const sawRefresh = fetchMock.mock.calls.some((c) => String(c[0]).endsWith('/auth/refresh'));
+      return sawRefresh ? accounts() : stale();
+    });
+
+    await Promise.all([authApi.listAccounts(), authApi.listAccounts(), authApi.listAccounts()]);
+
+    const refreshes = fetchMock.mock.calls.filter((c) => String(c[0]).endsWith('/auth/refresh'));
+    expect(refreshes).toHaveLength(1);
+  });
+
+  it('throws a second refusal rather than retrying again', async () => {
+    fetchMock
+      .mockResolvedValueOnce(stale())
+      .mockResolvedValueOnce(refreshed('tok-new'))
+      .mockResolvedValueOnce(stale());
+
+    const thrown = (await authApi.listAccounts().catch((e: unknown) => e)) as ApiError;
+
+    expect(thrown.status).toBe(401);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not refresh on an ordinary 401, which means the session is gone', async () => {
+    fetchMock.mockResolvedValueOnce(
+      envelope({ ok: false, msg: 'Your session has expired.' }, 401),
+    );
+
+    await expect(authApi.listAccounts()).rejects.toMatchObject({ status: 401 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws the original refusal when the refresh itself fails', async () => {
+    fetchMock
+      .mockResolvedValueOnce(stale())
+      .mockResolvedValueOnce(envelope({ ok: false, msg: 'Your session has expired.' }, 401));
+
+    const thrown = (await authApi.listAccounts().catch((e: unknown) => e)) as ApiError;
+
+    expect(thrown.message).toBe('Your access has changed.');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('tells listeners after the refresh, so the panel re-reads `me`', async () => {
+    const listener = vi.fn();
+    const unsubscribe = authApi.onPermissionsRefreshed(listener);
+    fetchMock
+      .mockResolvedValueOnce(stale())
+      .mockResolvedValueOnce(refreshed('tok-new'))
+      .mockResolvedValueOnce(accounts());
+
+    await authApi.listAccounts();
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    unsubscribe();
+    fetchMock
+      .mockResolvedValueOnce(stale())
+      .mockResolvedValueOnce(refreshed('tok-newer'))
+      .mockResolvedValueOnce(accounts());
+    await authApi.listAccounts();
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+});

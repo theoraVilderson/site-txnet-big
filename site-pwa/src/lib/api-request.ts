@@ -29,7 +29,17 @@ export interface ApiClientConfig {
    * credential after the first rotation.
    */
   credential?: () => string | null | undefined;
+  /**
+   * Called once when a call is refused with `error.reason === "permissionsChanged"`
+   * (ADR-0043), before that call is retried. It must leave `credential()`
+   * answering a fresh token. Absent means no retry. Only `auth-api` can mint one,
+   * so every client passes `auth-api`'s single-flight refresh.
+   */
+  onPermissionsChanged?: () => Promise<void>;
 }
+
+/** The `error.reason` that means "refresh once and retry" (ADR-0043). Never `msg`: that is translated. */
+export const PERMISSIONS_CHANGED = "permissionsChanged";
 
 export type ApiCall = <T>(
   path: string,
@@ -46,8 +56,13 @@ export type ApiCall = <T>(
  * no envelope — are marked `unreachable`, and the caller translates its own
  * line (`useApiErrorMessage`).
  */
-export function createApiClient({ baseUrl, service, credential }: ApiClientConfig): ApiCall {
-  return async function call<T>(
+export function createApiClient({
+  baseUrl,
+  service,
+  credential,
+  onPermissionsChanged,
+}: ApiClientConfig): ApiCall {
+  async function once<T>(
     path: string,
     init: RequestInit = {},
     extraHeaders?: Record<string, string | undefined>,
@@ -87,9 +102,11 @@ export function createApiClient({ baseUrl, service, credential }: ApiClientConfi
       if (typeof body.msg !== "string" || body.msg.length === 0) {
         throw ApiError.unreachable(`${path} answered ${response.status} with no message`);
       }
+      const detail = body.error as { reason?: unknown } | null | undefined;
       throw new ApiError(body.msg, {
         status: response.status,
         ref: typeof body.ref === "string" ? body.ref : undefined,
+        reason: typeof detail?.reason === "string" ? detail.reason : undefined,
         fieldErrors: Array.isArray(body.fieldErrors)
           ? (body.fieldErrors as unknown[])
               .map((f) => f as { path?: unknown; message?: unknown })
@@ -99,5 +116,37 @@ export function createApiClient({ baseUrl, service, credential }: ApiClientConfi
       });
     }
     return body.data as T;
+  }
+
+  /**
+   * One retry, for one refusal (ADR-0043): a call refused because the caller's
+   * permissions changed after its token was minted. The token is refreshed —
+   * `/auth/refresh` re-reads the role from Postgres — and the call is sent once
+   * more with whatever `credential()` now answers. A second refusal is thrown as
+   * it is, never looped, and a refresh that fails throws the original refusal so
+   * the caller sees exactly what it would have seen before this existed.
+   */
+  return async function call<T>(
+    path: string,
+    init: RequestInit = {},
+    extraHeaders?: Record<string, string | undefined>,
+  ): Promise<T> {
+    try {
+      return await once<T>(path, init, extraHeaders);
+    } catch (error) {
+      if (
+        !onPermissionsChanged ||
+        !(error instanceof ApiError) ||
+        error.reason !== PERMISSIONS_CHANGED
+      ) {
+        throw error;
+      }
+      try {
+        await onPermissionsChanged();
+      } catch {
+        throw error;
+      }
+      return once<T>(path, init, extraHeaders);
+    }
   };
 }

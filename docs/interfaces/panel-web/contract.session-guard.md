@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 10
-updated: 2026-09-12
+updated: 2026-09-13
 ---
 
 # panel-web — the auth-screen session guard (F-0101)
@@ -116,6 +116,25 @@ holding the service token (`domains/tenant/contract.md`), and that token also
 satisfies the captcha gate and moves the rate-limit subject off the IP — more
 authority than a read-only session check should carry. A host is checked
 against verified domains and grants nothing else.
+
+## A call refused because permissions changed (F-101-c, ADR-0043)
+
+The gate and `AuthGuard` answer 401 with `error.reason: "permissionsChanged"` when
+the caller's role changed after its token was minted. The user never sees it:
+
+1. **`createApiClient` retries once.** On that `reason` — never on `msg`, which is
+   translated — it runs the client's `onPermissionsChanged`, then sends the call
+   again with whatever `credential()` now answers. A second refusal is thrown.
+   A refresh that fails throws the original refusal. Any other 401 is untouched:
+   it still means the session is gone.
+2. **One refresh for any number of refused calls.** `auth-api`'s
+   `refreshAfterPermissionsChanged` is single-flight, and `billing-api` passes the
+   same one: refresh rotates the token, so two would sign one of the calls out.
+3. **`me` follows the token.** After the refresh, `onPermissionsRefreshed`
+   listeners run; `PanelSessionProvider` re-reads `me`, so a gated menu entry
+   appears or disappears with the gate rather than on the next page load.
+
+An idle panel changes nothing until it next calls: there is no push.
 
 ## Return-to-intent on the login redirect (F-093-i, ADR-0042)
 

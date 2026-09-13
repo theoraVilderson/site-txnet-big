@@ -20,6 +20,9 @@ const call = createApiClient({
   baseUrl: API_URL,
   service: "billing-service",
   credential: () => authApi.getAccessToken(),
+  // Billing is behind the gate, so it is the client most likely to be refused
+  // with `permissionsChanged` (ADR-0043). The refresh is auth-api's, shared.
+  onPermissionsChanged: () => authApi.refreshAfterPermissionsChanged(),
 });
 
 /**
