@@ -35,6 +35,14 @@ const M = FrontendI18nKeys.common.shell.menu;
  */
 type PermissionGated = { requires?: readonly string[] };
 
+/**
+ * The permission that stands for every other one — `SuperAdmin` holds it
+ * instead of a list (F-101-d). The twin of shared-core's `ALL_PERMISSIONS`,
+ * spelled again because this app has no path to shared-core (C-04). Only the
+ * bare `*` is a wildcard.
+ */
+const ALL_PERMISSIONS = "*";
+
 export interface PanelMenuLink extends PermissionGated {
   id: string;
   /** A `common` namespace key. */
@@ -108,6 +116,7 @@ export function visibleMenu(
   held: readonly string[],
 ): VisibleMenuEntry[] {
   const permitted = (e: PermissionGated) =>
+    held.includes(ALL_PERMISSIONS) ||
     (e.requires ?? []).every((key) => held.includes(key));
   const hasPage = (l: PanelMenuLink): l is VisibleMenuLink => l.href !== null;
   const out: VisibleMenuEntry[] = [];

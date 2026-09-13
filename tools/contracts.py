@@ -56,6 +56,19 @@ TS_PERMISSION_RE = re.compile(
     r"new PermissionsGuard\(\s*\[([^\]]*)\]", re.S)
 TS_PERMISSION_CONST_RE = re.compile(
     r"_PERMISSION\s*=\s*'([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+)'")
+# F-101-d: every check goes through `holdsPermission(held, key)`, so the key it
+# is given is a permission name whatever its constant is called —
+# `SETTLEMENT_MANAGE` was missed by the `_PERMISSION` suffix above.
+TS_HOLDS_RE = re.compile(
+    r"holdsPermission\(\s*[^,]+?,\s*"
+    r"(?:'([^']+)'|([A-Z][A-Z0-9_]*))\s*\)")
+# A check that bypasses the helper does not know what `*` means, and refuses
+# SuperAdmin silently.
+TS_RAW_CHECK_RE = re.compile(r"permissions\??\.(?:includes|indexOf|some)\(")
+TS_PERMISSION_HELPER = "txnet-backend/shared-core/src/lib/http/permissions.ts"
+# The one role the policy file may grant `*` (ADR-0043 as amended).
+ALL_PERMISSIONS = "*"
+ALL_PERMISSIONS_ROLE = "SuperAdmin"
 DEFAULT_ROLE_RE = re.compile(
     r"where:\s*\{\s*name:\s*'([^']+)'\s*\}")
 
@@ -226,6 +239,25 @@ def typescript_permissions() -> dict[str, list[str]]:
             for match in TS_PERMISSION_RE.finditer(text):
                 names += re.findall(r"'([^']+)'", match.group(1))
             names += TS_PERMISSION_CONST_RE.findall(text)
+            rel = str(path.relative_to(ROOT))
+            for literal, constant in TS_HOLDS_RE.findall(text):
+                if literal:
+                    names.append(literal)
+                    continue
+                value = re.search(
+                    rf"\bconst\s+{constant}\s*=\s*'([^']+)'", text)
+                if value:
+                    names.append(value.group(1))
+                else:
+                    errors.append(
+                        f"{rel} checks holdsPermission(..., {constant}) but "
+                        f"{constant} is not a string constant in that file — "
+                        f"this scan cannot see which permission it is")
+            if rel != TS_PERMISSION_HELPER and TS_RAW_CHECK_RE.search(text):
+                errors.append(
+                    f"{rel} checks a permission list directly — use "
+                    f"holdsPermission() from shared-core, or `*` (SuperAdmin) "
+                    f"is refused there")
             for name in names:
                 found.setdefault(name, []).append(
                     str(path.relative_to(ROOT)))
@@ -236,6 +268,13 @@ def check_permissions() -> None:
     roles, _order = parse_permissions()
     if not roles:
         return
+
+    for role, perms in roles.items():
+        if ALL_PERMISSIONS in perms and role != ALL_PERMISSIONS_ROLE:
+            errors.append(
+                f"{PERMISSIONS.relative_to(ROOT)} grants {ALL_PERMISSIONS!r} to "
+                f"{role!r} — only {ALL_PERMISSIONS_ROLE} may hold every "
+                f"permission (ADR-0043)")
 
     granted = set().union(*roles.values()) if roles else set()
     written = typescript_permissions()

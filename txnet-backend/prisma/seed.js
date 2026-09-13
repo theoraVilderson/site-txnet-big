@@ -70,6 +70,24 @@ async function seedApiDomain(tenantId) {
   console.log(`[seed] created tenant_domain '${host}' -> platform_owner.`);
 }
 
+// F-101-d (ADR-0043 as amended): SuperAdmin holds the one permission `*`, which
+// every check reads as "any key". Migration 20260913000100 makes the same grant
+// on a database whose role already existed; on a fresh one the role is created
+// above, after migrations ran, so the grant has to happen here too.
+async function grantAllPermissionsToSuperAdmin() {
+  const role = await prisma.role.findUniqueOrThrow({ where: { name: 'SuperAdmin' } });
+  const all = await prisma.permission.upsert({
+    where: { key: '*' },
+    update: {},
+    create: { key: '*' },
+  });
+  await prisma.rolePermission.upsert({
+    where: { roleId_permissionId: { roleId: role.id, permissionId: all.id } },
+    update: {},
+    create: { roleId: role.id, permissionId: all.id },
+  });
+}
+
 function generatePassword() {
   // Satisfies strongPasswordSchema (upper, lower, digit, special, 8-72 chars)
   // without ever containing the owner's username/fullName.
@@ -84,6 +102,7 @@ async function main() {
       create: { name, isSystemRole: true },
     });
   }
+  await grantAllPermissionsToSuperAdmin();
 
   const existingTenant = await prisma.tenant.findUnique({
     where: { slug: 'platform_owner' },

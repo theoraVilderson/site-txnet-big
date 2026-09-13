@@ -1,4 +1,7 @@
-import { RealtimeChannelFamily } from '@txnet-backend/shared-core';
+import {
+  RealtimeChannelFamily,
+  holdsPermission,
+} from '@txnet-backend/shared-core';
 import { timingSafeEqual } from 'node:crypto';
 
 /**
@@ -145,7 +148,7 @@ export async function channelRefusal(
     case RealtimeChannelFamily.tenant:
       if (!identity) return 'realtime.channelForbidden';
       return id === identity.tenantId &&
-        identity.permissions.includes(TENANT_CHANNEL_PERMISSION)
+        holdsPermission(identity.permissions, TENANT_CHANNEL_PERMISSION)
         ? null
         : 'realtime.channelForbidden';
 

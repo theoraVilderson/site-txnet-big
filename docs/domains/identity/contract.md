@@ -2,7 +2,7 @@
 id: identity
 layer: domain
 status: active
-version: 12
+version: 13
 updated: 2026-09-13
 ---
 
@@ -53,6 +53,9 @@ Access-token claims (consumed by `forward-auth` and upstream services):
 `permHash` is `permissionFingerprint(permissions)` at mint (ADR-0043): a token is
 refused with `auth.permissionsChanged` once Redis holds a different fingerprint for
 `roleId`, or a different role for `sub`. A missing key refuses nothing.
+`permissions[]` may be `["*"]`: that is `SuperAdmin`, which holds every permission
+(v13, F-101-d). A consumer asks `holdsPermission(permissions, key)` and never
+`includes` — a check that does not know `*` refuses SuperAdmin.
 
 ## Emits (events)
 

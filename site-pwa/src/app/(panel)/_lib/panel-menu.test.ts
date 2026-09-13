@@ -126,6 +126,15 @@ describe("visibleMenu", () => {
     expect(visibleMenu(menu, ["a", "b"]).map((e) => e.id)).toEqual(["both"]);
   });
 
+  it('shows every entry to a holder of "*", and treats no other pattern as a wildcard (F-101-d)', () => {
+    const menu: PanelMenuEntry[] = [
+      { id: "both", label: "both", icon: Home, href: "/both", requires: ["a.x", "b.y"] },
+    ];
+
+    expect(visibleMenu(menu, ["*"]).map((e) => e.id)).toEqual(["both"]);
+    expect(visibleMenu(menu, ["a.*", "b.*"]).map((e) => e.id)).toEqual([]);
+  });
+
   it("drops a group left with no permitted child, and gates a whole group by its own requirement", () => {
     const operatorOnly: PanelMenuEntry = {
       id: "operations",

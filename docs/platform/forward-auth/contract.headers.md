@@ -110,3 +110,12 @@ It also asserts that **every** role `prisma/seed.js` creates has an entry in the
 file, spelled the same. The engine looks the role up by the token's `roleName`
 claim, never by `roleId` — a database UUID no checked-in file can address — so a
 seeded role missing from the file is refused on every gated request (ADR-0037).
+
+**`*` allows every permission (F-101-d, ADR-0043 as amended).** A role whose
+entry lists `- *` is allowed any claimed permission, including one no line
+names. Only `SuperAdmin` may carry it, and only the bare `*` — `user.*` is an
+ordinary name. `X-User-Permissions` then reads `*`, so a consumer must ask
+through shared-core's `holdsPermission`; `contracts.py` fails on a TypeScript
+`permissions.includes(...)`, and follows `holdsPermission(held, CONSTANT)` to
+the constant's value — which is how `settlement.manage` (enforced, granted to
+nobody) was found and given to `Admin`.

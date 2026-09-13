@@ -10,6 +10,17 @@ updated: 2026-09-13
 - **Date:** 2026-09-13
 - **Affects units:** identity, auth-api, forward-auth, redis-keyspace, panel-web
 
+> **Amended 2026-09-13 (F-101-d, D-30) — SuperAdmin holds `*`.** The policy
+> file is still the ceiling, but for one role the ceiling is "everything": its
+> entry is `- *`, and the database grants it the single permission `*`, so a
+> permission a feature adds reaches SuperAdmin with no edit anywhere. Every
+> check reads `*` through one helper — `RolePolicy.Allows` in Go,
+> `holdsPermission` in shared-core — and only the bare `*` is a wildcard.
+> `tools/contracts.py` fails if any other role carries it, or if a TypeScript
+> check reads a permission list without the helper. The price, accepted on the
+> user's call: a sensitive permission added later is SuperAdmin's without
+> review. Tenant and person scoping is not a permission and is untouched.
+
 ## Context
 
 The user asked for a change to a role's permissions to be visible at once

@@ -95,6 +95,18 @@ describe('channelRefusal', () => {
         'realtime.channelForbidden',
       );
     });
+
+    // F-101-d: `*` stands for the permission, never for the tenant match.
+    it('lets "*" stand for the permission, and still refuses another tenant', async () => {
+      const superAdmin = identity({ permissions: ['*'] });
+      await expect(refuse(superAdmin, 'tenant:tenant-1')).resolves.toBeNull();
+      await expect(refuse(superAdmin, 'tenant:tenant-2')).resolves.toBe(
+        'realtime.channelForbidden',
+      );
+      await expect(refuse(superAdmin, 'user:user-2')).resolves.toBe(
+        'realtime.channelForbidden',
+      );
+    });
   });
 
   /**

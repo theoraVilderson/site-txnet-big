@@ -4,6 +4,7 @@ import {
   Injectable,
   ForbiddenException,
 } from '@nestjs/common';
+import { holdsPermission } from '@txnet-backend/shared-core';
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
@@ -14,7 +15,7 @@ export class PermissionsGuard implements CanActivate {
     const user = request.user;
     if (!user) throw new ForbiddenException();
     const hasPermission = this.requiredPermissions.every((perm) =>
-      user.permissions?.includes(perm),
+      holdsPermission(user.permissions, perm),
     );
     if (!hasPermission)
       throw new ForbiddenException('Insufficient permissions');

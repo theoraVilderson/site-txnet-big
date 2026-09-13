@@ -16,17 +16,17 @@
 # `roleId`, which is a UUID that differs on every database (ADR-0037). A role
 # missing here is refused every gated request, and `tools/contracts.py` fails
 # when a seeded role has no entry.
+#
+# `*` allows every permission, including one no line here names yet (F-101-d,
+# ADR-0043 as amended). Only `SuperAdmin` may carry it — `tools/contracts.py`
+# fails otherwise — and only the bare `*`: `user.*` is an ordinary name.
 roles:
-  # Above `Admin` in the impersonation rank and a superset of it here. The seed
-  # makes the platform owner this role.
+  # Above `Admin` in the impersonation rank. The seed makes the platform owner
+  # this role, and the database grants it the one permission `*`, so a feature
+  # that adds a permission needs no line here for SuperAdmin to hold it.
   SuperAdmin:
     permissions:
-      - user.read
-      - user.write
-      - user.impersonate
-      - worker.manage
-      - bot.webhook_rotate
-      - realtime.tenant.read
+      - *
   Admin:
     permissions:
       - user.read
@@ -43,6 +43,10 @@ roles:
       # the tenant is not enough on its own. `gateway-service` also requires
       # an exact tenant match; this is the other half.
       - realtime.tenant.read
+      # The platform's settlement surface (F-096-e). Not the boundary on its
+      # own: `SettlementService.assertOperator` also requires the platform
+      # owner's tenant, because a reseller administers its own roles.
+      - settlement.manage
   Support:
     permissions:
       - user.read

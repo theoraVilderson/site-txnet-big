@@ -8,6 +8,7 @@ export * from './lib/http/headers';
 export * from './lib/http/service-only.guard';
 export * from './lib/http/trust-proxy';
 export * from './lib/http/cookies';
+export * from './lib/http/permissions';
 export * from './lib/redis/keyspace';
 export * from './lib/redis/keys';
 export * from './lib/redis/ttl';

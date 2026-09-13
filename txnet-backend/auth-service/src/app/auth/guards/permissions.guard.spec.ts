@@ -73,8 +73,15 @@ describe.each(implementations)('PermissionsGuard (%s)', (_name, Guard) => {
     );
   });
 
-  // Permission names are compared verbatim; there is no wildcard or prefix
-  // expansion anywhere in this guard.
+  // F-101-d: the bare `*` SuperAdmin holds satisfies every requirement, one
+  // named nowhere yet included. It is the only wildcard.
+  it('lets a holder of "*" through every requirement', () => {
+    const guard = new Guard(['user.read', 'settlement.manage']);
+
+    expect(guard.canActivate(contextFor({ permissions: ['*'] }))).toBe(true);
+  });
+
+  // Otherwise names are compared verbatim; there is no prefix expansion.
   it.each([
     ['a prefix of the required name', 'user'],
     ['a wildcard', 'user.*'],

@@ -1,4 +1,5 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
+import { holdsPermission } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
@@ -27,7 +28,7 @@ export const SETTLEMENT_MANAGE = 'settlement.manage';
 export class SettlementPermissionGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<Request>();
-    if (!identityOf(req).permissions.includes(SETTLEMENT_MANAGE)) {
+    if (!holdsPermission(identityOf(req).permissions, SETTLEMENT_MANAGE)) {
       throw new ForbiddenException(`${SETTLEMENT_MANAGE} is required`);
     }
     return true;
