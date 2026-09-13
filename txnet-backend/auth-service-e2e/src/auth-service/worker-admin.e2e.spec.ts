@@ -1,6 +1,6 @@
 /**
  * The `/auth/workers` routes on the wire (F-031-b; moved from `/admin/workers`
- * by F-098, which keeps the old spelling as a deprecated alias until 2026-10-13).
+ * by F-098, and the old spelling removed by F-099).
  *
  * What only this level can answer is what the guards and the envelope do
  * *before* any handler runs: an unauthenticated caller and a signed-in user
@@ -85,16 +85,11 @@ describe('auth-api — the worker admin surface', () => {
     expect(run.status).toBe(401);
   });
 
-  it('still answers on the deprecated /admin spelling, behind the same guards', async () => {
-    // §8: a renamed route keeps its old shape for one release (F-098, removed
-    // after 2026-10-13). The alias must be the same guarded handler — a 404
-    // here breaks a caller early, and a 200 would mean a second, unguarded door.
-    const { accessToken } = await signUp(api, e2e.otp);
+  it('no longer answers on the /admin spelling at all', async () => {
+    // F-099 removed the alias F-098 kept. 404 and not 401: a caller must not
+    // learn that a guarded route still lives behind the old path.
+    const res = await api.get('/admin/workers');
 
-    const anonymous = await api.get('/admin/workers');
-    const unprivileged = await api.get('/admin/workers', { bearer: accessToken });
-
-    expect(anonymous.status).toBe(401);
-    expect(unprivileged.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 });

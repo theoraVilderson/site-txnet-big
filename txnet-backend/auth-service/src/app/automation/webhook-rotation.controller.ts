@@ -28,11 +28,11 @@ import { WebhookRotationService } from './webhook-rotation.service';
  * says the rotation happened and whether the platform accepted it, and the new
  * path reaches the operator through the bot working again.
  *
- * Mounted at `/auth/bots`; the `admin` spelling is the deprecated alias (F-098, since 2026-09-13, removed after 2026-10-13):
- * a role word never belongs in a URL — authority is the caller's permissions, and the path names
- * the service that hosts the route. Both spellings reach this same guarded handler until then.
+ * Mounted at `/auth/bots`; a role word never belongs in a URL — authority is the caller's
+ * permissions, and the path names the service that hosts the route. The `/admin` spelling was
+ * removed by F-099 (2026-09-13).
  */
-@Controller(['auth/bots', 'admin/bots'])
+@Controller('auth/bots')
 export class WebhookRotationController {
   constructor(
     private readonly directory: PrismaBotIntegrationDirectory,

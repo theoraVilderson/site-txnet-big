@@ -217,9 +217,17 @@ stays until then: it is the only thing routing `/api/admin/*`. Consumers: `panel
 `bot-app` call none of these routes; the `worker-admin` e2e spec moved, and asserts the alias.
 `audit`'s `/api/billing/admin/settlement/*` moved the same way, in `billing-service`.
 
+## Breaking: v20 — the `/admin` aliases are removed (F-099)
+
+The deprecated `/admin/*` spelling v19 kept, and `/api/billing/admin/settlement/*` beside it,
+answer 404. Removed the same day on the user's call, ahead of the 2026-10-13 date §8 set —
+no caller in the repo used them. With them went the https router's host-only rule in
+`docker-compose.main.yml`, which existed only to route `/api/admin/*`.
+
 ## Removed shapes
 
 | Item | Deprecated since | Removal after | Replacement |
 |---|---|---|---|
+| `/admin/*` in `auth-service`, `/api/billing/admin/settlement/*` in `billing-service` | 2026-09-13 | **removed 2026-09-13** (F-099), on the user's call | the same path under `/auth` and `/api/billing/settlement` (F-098) |
 | `POST /auth/bots/:platform/webhook/:secret` | 2026-09-06 | **removed 2026-09-09** | `POST /api/bots/:platform/:webhookPath` on `bot-service`. Deprecated for one release with nothing pointed at it, then removed by F-066-i: its `:secret` was `TELEGRAM_WEBHOOK_SECRET`, a variable that no longer exists, so the route could not have answered anyway |
 | `POST /auth/register/verify-phone` body keyed by `userId` | 2026-09-04 | already removed | keyed by `phoneNumber` — register no longer creates a `user` row to key by |

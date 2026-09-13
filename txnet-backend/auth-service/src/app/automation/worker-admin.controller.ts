@@ -42,11 +42,11 @@ import {
  * row on the switch is what makes it reviewable.
  */
 /**
- * Mounted at `/auth/workers`; the `admin` spelling is the deprecated alias (F-098, since 2026-09-13, removed after 2026-10-13):
- * a role word never belongs in a URL — authority is the caller's permissions, and the path names
- * the service that hosts the route. Both spellings reach this same guarded handler until then.
+ * Mounted at `/auth/workers`; a role word never belongs in a URL — authority is the caller's
+ * permissions, and the path names the service that hosts the route. The `/admin` spelling was
+ * removed by F-099 (2026-09-13).
  */
-@Controller(['auth/workers', 'admin/workers'])
+@Controller('auth/workers')
 @UseGuards(AuthGuard, new PermissionsGuard(['worker.manage']))
 export class WorkerAdminController {
   constructor(private readonly workers: WorkerAdminService) {}

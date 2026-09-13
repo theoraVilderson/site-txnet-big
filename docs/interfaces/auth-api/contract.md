@@ -2,7 +2,7 @@
 id: auth-api
 layer: interface
 status: active
-version: 19
+version: 20
 updated: 2026-09-13
 ---
 
@@ -17,7 +17,7 @@ cookies and rate limits. Field-level schemas live in code — link, do not copy:
 ## Conventions
 
 - Base path: routed by Traefik as `Host(api.<domain>) && PathPrefix(/api/auth)`.
-  Controllers are mounted at `/auth` (the `/admin` aliases are deprecated, below), and `/api` is a **Nest
+  Controllers are mounted at `/auth` — never at a role word (F-098) — and `/api` is a **Nest
   global prefix** (`main.ts`, `app.setGlobalPrefix('api')`) — Traefik matches on
   it but does not strip it, so the full path is `/api/auth/...` in-network as
   well as at the edge. A server-to-server caller must include it.
@@ -229,10 +229,8 @@ Consumes: `identity` (all logic), `i18n` (strings), `redis-keyspace`
 
 ## Deprecations
 
-**Live — `/admin/*`, since 2026-09-13, removed after 2026-10-13 (v19, F-098).** Every
-`/admin/<rest>` route in this service answers identically at `/auth/<rest>`: the same
-handler, the same guards. A role word never belongs in a URL — authority is the caller's
-permissions (`GET /auth/me`). Earlier deprecations are in [contract.versions.md](contract.versions.md).
+None live. Shapes that were deprecated, and what removed them, are in
+[contract.versions.md](contract.versions.md).
 
 ## Version history
 

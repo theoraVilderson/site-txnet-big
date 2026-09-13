@@ -332,7 +332,6 @@ services:
 
       # https router for auth-service (with TLS)
       - "traefik.http.routers.auth-service-https.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/auth`)"
-      - "traefik.http.routers.auth-service-https.rule=Host(`api.${DOMAIN_NAME}`)"
       - "traefik.http.routers.auth-service-https.entrypoints=websecure"
       - "traefik.http.routers.auth-service-https.tls.certresolver=myresolver"
       - "traefik.http.routers.auth-service-https.middlewares=auth-rate-limit"
