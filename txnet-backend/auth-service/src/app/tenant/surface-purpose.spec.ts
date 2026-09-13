@@ -20,7 +20,7 @@ describe('a non-panel surface serves no panel route', () => {
   describe('surfaceServesPath', () => {
     it('serves every path on a panel surface', () => {
       expect(surfaceServesPath('panel', '/api/auth/login')).toBe(true);
-      expect(surfaceServesPath('panel', '/api/admin/workers')).toBe(true);
+      expect(surfaceServesPath('panel', '/api/auth/workers')).toBe(true);
     });
 
     it('serves no auth-service path on a subscription surface', () => {

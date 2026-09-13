@@ -93,5 +93,5 @@ groups:
             No fx_rate_refresh run has produced an accepted rate in the last
             seven days. The job registers itself on boot but an admin has to
             give it a `*/5 * * * *` cron_expression schedule through
-            /admin/workers (F-031-b); until then it never ticks. Nothing prices
+            /api/auth/workers (F-031-b); until then it never ticks. Nothing prices
             in rial yet (F-0606 is the row that publishes), so this is a warning.

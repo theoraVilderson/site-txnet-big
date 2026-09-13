@@ -3,7 +3,7 @@ id: auth-api
 layer: interface
 status: active
 version: 12
-updated: 2026-09-09
+updated: 2026-09-13
 ---
 
 # auth-api — version history
@@ -204,6 +204,18 @@ socket, where the route's rate limits do not apply.
 
 The pre-login socket this depends on is ADR-0031; before it, the gate refused
 any upgrade without a session and these three routes have none by definition.
+
+## Breaking: v19 — no role word in a URL (F-098)
+
+The four `/admin` prefixes move under the service that hosts them, on the user's call
+(D-28): `/admin/users/:userId/impersonate`, `/admin/impersonate/end`,
+`/admin/bots/:platform/:botUsername/webhook/rotate` and `/admin/workers/*` become the same
+paths under `/auth`. Bodies, answers and guards are unchanged — authorisation was never in
+the path. The old spelling is a deprecated alias of the same handler until **2026-10-13**
+(§8), which is also why the https router's host-only rule in `docker-compose.main.yml`
+stays until then: it is the only thing routing `/api/admin/*`. Consumers: `panel-web` and
+`bot-app` call none of these routes; the `worker-admin` e2e spec moved, and asserts the alias.
+`audit`'s `/api/billing/admin/settlement/*` moved the same way, in `billing-service`.
 
 ## Removed shapes
 

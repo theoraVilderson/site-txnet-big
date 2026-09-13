@@ -226,7 +226,7 @@ export const envSchema = z.object({
   // `admin_manual` tick (F-031-b, ADR-0027). `RABBITMQ_URL` is **optional
   // here and required in `worker-service`**, and the asymmetry is deliberate:
   // a worker with no broker has nothing to do, while this process answers
-  // logins and must boot without one. Unset, `POST /admin/workers/:key/run`
+  // logins and must boot without one. Unset, `POST /auth/workers/:key/run`
   // answers 503 and nothing else is affected.
   RABBITMQ_URL: optional(z.string().min(1)),
   AUTOMATION_EXCHANGE: z

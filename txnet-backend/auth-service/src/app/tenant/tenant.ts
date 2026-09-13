@@ -28,8 +28,9 @@ export type TenantSurfacePurpose = 'panel' | 'subscription' | 'assets';
  *
  * **Both lists are empty, and that is the answer rather than a gap** (F-066-q).
  * `auth-service` has no route a subscription or assets domain should ever
- * answer: every controller it holds is `/auth/*`, `/admin/*` or `/internal/*` —
- * panel, admin and service-caller routes without exception. The `/sub` link
+ * answer: every controller it holds is `/auth/*` or `/internal/*` (plus the
+ * deprecated `/admin/*` aliases, F-098) — panel, operator and service-caller
+ * routes without exception. The `/sub` link
  * catalog 13.1 names is `network`'s, and `network` has no service yet; when it
  * gains one, its prefix goes here in the same change.
  *

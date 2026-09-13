@@ -201,7 +201,7 @@ filename fragment is enough. Which fragment:
 | the captcha gate or a rate limit | `gates.e2e` |
 | forgot-password, reset, or session revocation | `password-reset.e2e` |
 | the account-switch group | `account-switch.e2e` |
-| the `/admin/workers` routes | `worker-admin.e2e` |
+| the `/auth/workers` routes | `worker-admin.e2e` |
 | anything read from config — a domain, an origin, a language | `deployment.e2e` |
 
 **Run all six only when the change is global**, and it is global exactly when

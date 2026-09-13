@@ -226,7 +226,7 @@ services:
       - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
       - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
       # The one message this process publishes: an `admin_manual` tick from
-      # `POST /admin/workers/:key/run` (F-031-b). Optional by design — the
+      # `POST /api/auth/workers/:key/run` (F-031-b). Optional by design — the
       # connection is opened on first use, so an environment without a broker
       # boots and serves logins, and only that route answers 503.
       - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672

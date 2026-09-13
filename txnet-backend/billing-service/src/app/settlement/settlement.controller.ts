@@ -48,14 +48,17 @@ const STATUS: Record<SettlementRejection, 403 | 404 | 409> = {
 
 /**
  * The platform owner's settlement back office (ADR-0041 §5/§6, F-096-e):
- * `/api/billing/admin/settlement/*`.
+ * `/api/billing/settlement/*`. The old `/api/billing/admin/settlement/*` still
+ * answers as a deprecated alias until 2026-10-13 (F-098): a role word never
+ * belongs in a URL, and the second door below is what makes this an operator
+ * surface — never the path.
  *
  * Five routes, which is the whole of what ADR-0041 leaves to an operator: make
  * a grant, withdraw one, see them, see what is owed, and record the transfer
  * that discharges it. Everything they touch was built by F-096-a..d and, until
  * this row, was reachable only from a SQL client.
  *
- * **Why it is in `billing-service` and not beside the other `/admin` routes.**
+ * **Why it is in `billing-service` and not beside the other operator routes.**
  * Every other admin surface on this platform lives in `auth-service`, which is
  * also the only writer of `admin_audit_log` today. The three settlement tables,
  * the money arithmetic and `isPlatformOwner` are all here, and moving the
@@ -76,7 +79,7 @@ const STATUS: Record<SettlementRejection, 403 | 404 | 409> = {
  * borrowing, who is being paid. The caller's own tenant still comes only from
  * the gate.
  */
-@Controller('billing/admin/settlement')
+@Controller(['billing/settlement', 'billing/admin/settlement'])
 @UseGuards(SettlementPermissionGuard)
 export class SettlementController {
   constructor(private readonly settlement: SettlementService) {}

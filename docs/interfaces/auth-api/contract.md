@@ -2,8 +2,8 @@
 id: auth-api
 layer: interface
 status: active
-version: 18
-updated: 2026-09-11
+version: 19
+updated: 2026-09-13
 ---
 
 # Contract — auth-api
@@ -17,7 +17,7 @@ cookies and rate limits. Field-level schemas live in code — link, do not copy:
 ## Conventions
 
 - Base path: routed by Traefik as `Host(api.<domain>) && PathPrefix(/api/auth)`.
-  Controllers are mounted at `/auth` and `/admin`, and `/api` is a **Nest
+  Controllers are mounted at `/auth` (the `/admin` aliases are deprecated, below), and `/api` is a **Nest
   global prefix** (`main.ts`, `app.setGlobalPrefix('api')`) — Traefik matches on
   it but does not strip it, so the full path is `/api/auth/...` in-network as
   well as at the edge. A server-to-server caller must include it.
@@ -27,7 +27,7 @@ cookies and rate limits. Field-level schemas live in code — link, do not copy:
 - Language: `Accept-Language` -> resolved by `LanguageMiddleware` via
   `i18n` (`locale-service`); every `msg` is localized.
 - Auth: `Authorization: Bearer <access JWT>` for protected routes
-  (`/admin/*`). The refresh token travels as the httpOnly cookie
+  (e.g. `/auth/me`, `/auth/workers/*`). The refresh token travels as the httpOnly cookie
   `refresh_token` and/or a JSON body field — its attributes, why they are what
   they are, and the rule that every route writes the identical one:
   **[contract.cookies.md](contract.cookies.md)**.
@@ -127,14 +127,14 @@ cookies and rate limits. Field-level schemas live in code — link, do not copy:
 | POST `/auth/accounts/remove` | userId | 200 `{userId, removed}` (F-0208). Removes that member from the group **on this surface only**, and revokes that account's sessions in this scope alone (`account_unlinked`) — its sessions elsewhere are untouched. Works from either side: `userId` may be the caller's own, which is how an account leaves. Mints nothing and sets no cookie, so a self-removal is a sign-out. Every refusal is `accountSwitch.notAMember` | 30 / 900s per caller | — |
 | POST `/auth/captcha/challenge` | — | 200 `{challengeId}`, 60s to complete the slide | 30 / 900s (default — `CAPTCHA_RATE_LIMIT`) | — |
 | POST `/auth/captcha/verify` | challengeId | 200 `{token, expiresIn:120}` — `err('captcha.invalid')` if unknown/expired/too-fast | 30 / 900s (default — `CAPTCHA_RATE_LIMIT`) | — |
-| POST `/admin/users/:userId/impersonate` | reasonNote (>=10) | 200 `{accessToken, expiresIn:1800}` | — (needs `user.impersonate`) | — |
-| POST `/admin/impersonate/end` | — | 200 | — (Bearer of the impersonated session) | — |
-| POST `/admin/bots/:platform/:botUsername/webhook/rotate` | — | 200 `{rotated:true, registered, status}` (F-322). The bot is named by its `@handle` **within the tenant this request resolved to**, never by its path: the path is a credential, so it is neither an input nor an output. The old path stops resolving before the platform is called, so `registered:false` means a bot that is quiet, never one still listening on a burned address. 404 for an unknown platform, an unknown handle, or another tenant's bot | — (needs `bot.webhook_rotate`) | — |
-| GET  `/admin/workers` | — | 200 `[{key, name, description, category, isActive, schedules:[{id, scheduleType, windowStartAt, windowEndAt, cronExpression, timezone, isActive, shapeError}], lastRun}]` (F-031-b). `shapeError` is non-null on a schedule that could never run — the one way a row typed straight into the database becomes visible | — (needs `worker.manage`) | — |
-| POST `/admin/workers/:key/schedules` | scheduleType (`always_on`\|`time_window`\|`cron_expression`), windowStartAt?, windowEndAt?, cronExpression?, timezone (default `Asia/Tehran`) | 200 `{scheduleId}`. A shape the three types do not allow is a **business rejection** — `automation.invalidSchedule` with `error: {reason}` naming the rule that broke, checked by the same function the tick publisher declines on. 404 for a key no worker has registered | — (needs `worker.manage`) | — |
-| PATCH `/admin/workers/:key/schedules/:scheduleId` | isActive | 200 `{scheduleId, isActive}`. There is no delete — a schedule is switched off, because `bot_execution_log` and `setByAdminId` explain past runs. 404 if that schedule is not that worker's | — (needs `worker.manage`) | — |
-| PATCH `/admin/workers/:key` | isActive | 200 `{key, isActive}` — the kill switch (automation invariant #1), with a `bot_toggle` audit row written in the same transaction | — (needs `worker.manage`) | — |
-| POST `/admin/workers/:key/run` | — | 200 `{published:true}` — publishes an `admin_manual` tick. It means **asked for**, never finished: the run happens in `worker-service` and its outcome is a `bot_execution_log` row. `automation.workerInactive` (a business rejection) for a worker switched off — a manual run bypasses the schedule, never the switch. 503 if the broker is unreachable, if `RABBITMQ_URL` is unset, or if the broker did not confirm the publish (F-067-f, D-18) — in every case nothing was queued and pressing it again is the recovery | — (needs `worker.manage`) | — |
+| POST `/auth/users/:userId/impersonate` | reasonNote (>=10) | 200 `{accessToken, expiresIn:1800}` | — (needs `user.impersonate`) | — |
+| POST `/auth/impersonate/end` | — | 200 | — (Bearer of the impersonated session) | — |
+| POST `/auth/bots/:platform/:botUsername/webhook/rotate` | — | 200 `{rotated:true, registered, status}` (F-322). The bot is named by its `@handle` **within the tenant this request resolved to**, never by its path: the path is a credential, so it is neither an input nor an output. The old path stops resolving before the platform is called, so `registered:false` means a bot that is quiet, never one still listening on a burned address. 404 for an unknown platform, an unknown handle, or another tenant's bot | — (needs `bot.webhook_rotate`) | — |
+| GET  `/auth/workers` | — | 200 `[{key, name, description, category, isActive, schedules:[{id, scheduleType, windowStartAt, windowEndAt, cronExpression, timezone, isActive, shapeError}], lastRun}]` (F-031-b). `shapeError` is non-null on a schedule that could never run — the one way a row typed straight into the database becomes visible | — (needs `worker.manage`) | — |
+| POST `/auth/workers/:key/schedules` | scheduleType (`always_on`\|`time_window`\|`cron_expression`), windowStartAt?, windowEndAt?, cronExpression?, timezone (default `Asia/Tehran`) | 200 `{scheduleId}`. A shape the three types do not allow is a **business rejection** — `automation.invalidSchedule` with `error: {reason}` naming the rule that broke, checked by the same function the tick publisher declines on. 404 for a key no worker has registered | — (needs `worker.manage`) | — |
+| PATCH `/auth/workers/:key/schedules/:scheduleId` | isActive | 200 `{scheduleId, isActive}`. There is no delete — a schedule is switched off, because `bot_execution_log` and `setByAdminId` explain past runs. 404 if that schedule is not that worker's | — (needs `worker.manage`) | — |
+| PATCH `/auth/workers/:key` | isActive | 200 `{key, isActive}` — the kill switch (automation invariant #1), with a `bot_toggle` audit row written in the same transaction | — (needs `worker.manage`) | — |
+| POST `/auth/workers/:key/run` | — | 200 `{published:true}` — publishes an `admin_manual` tick. It means **asked for**, never finished: the run happens in `worker-service` and its outcome is a `bot_execution_log` row. `automation.workerInactive` (a business rejection) for a worker switched off — a manual run bypasses the schedule, never the switch. 503 if the broker is unreachable, if `RABBITMQ_URL` is unset, or if the broker did not confirm the publish (F-067-f, D-18) — in every case nothing was queued and pressing it again is the recovery | — (needs `worker.manage`) | — |
 
 `tokens` = `{ accessToken, expiresIn }` in `data`; `refreshToken` is stripped
 from the body and set as the cookie.
@@ -202,7 +202,7 @@ not (see above).
   cooldown, or OTP attempts exhausted. The per-account login lockout is **not**
   a 429 — it is a business rejection, `auth.temporarilyLocked` with 200.
 - 503 the broker did not confirm an OTP publish, or is unreachable
-  (`otp.deliveryUnavailable`) — the same shape `POST /admin/workers/:key/run`
+  (`otp.deliveryUnavailable`) — the same shape `POST /auth/workers/:key/run`
   already used (D-18). It fails OTP login and register; password login is
   untouched, and `OTP_DELIVERY_MODE=console` never reaches the broker.
 - 500 unexpected — envelope `msg` = `system.unexpected`, real error only in logs
@@ -214,7 +214,7 @@ Emits, both to the `txnet.automation` topic exchange through one lazy
 connection (`AuthBrokerPublisher`):
 
 - `automation.tick.<key>` with `triggeredBy: admin_manual`, from
-  `POST /admin/workers/:key/run` alone (F-031-b, `domains/automation/contract.md`).
+  `POST /auth/workers/:key/run` alone (F-031-b, `domains/automation/contract.md`).
 - `otp.delivery.send`, from every route that asks for an OTP (F-067-a). It
   carries phone, purpose, channel, language, tenant, a delivery id and a
   realtime channel id (v14) — and no code.
@@ -225,12 +225,14 @@ and password reset with 503. Password login and every session route are unaffect
 
 Consumes: `identity` (all logic), `i18n` (strings), `redis-keyspace`
 (sessions/OTP/rate limits/captcha), `automation` (the worker registry the
-`/admin/workers` routes write).
+`/auth/workers` routes write).
 
 ## Deprecations
 
-None live. Shapes that were deprecated, and what removed them, are in
-[contract.versions.md](contract.versions.md).
+**Live — `/admin/*`, since 2026-09-13, removed after 2026-10-13 (v19, F-098).** Every
+`/admin/<rest>` route in this service answers identically at `/auth/<rest>`: the same
+handler, the same guards. A role word never belongs in a URL — authority is the caller's
+permissions (`GET /auth/me`). Earlier deprecations are in [contract.versions.md](contract.versions.md).
 
 ## Version history
 

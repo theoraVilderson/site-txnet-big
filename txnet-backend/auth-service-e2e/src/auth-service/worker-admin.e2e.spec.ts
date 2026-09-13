@@ -1,5 +1,6 @@
 /**
- * The `/admin/workers` routes on the wire (F-031-b).
+ * The `/auth/workers` routes on the wire (F-031-b; moved from `/admin/workers`
+ * by F-098, which keeps the old spelling as a deprecated alias until 2026-10-13).
  *
  * What only this level can answer is what the guards and the envelope do
  * *before* any handler runs: an unauthenticated caller and a signed-in user
@@ -40,7 +41,7 @@ describe('auth-api — the worker admin surface', () => {
   });
 
   it('refuses an unauthenticated caller with 401 and the thrown-error envelope', async () => {
-    const res = await api.get('/admin/workers');
+    const res = await api.get('/auth/workers');
 
     expect(res.status).toBe(401);
     expect(res.body.ok).toBe(false);
@@ -52,7 +53,7 @@ describe('auth-api — the worker admin surface', () => {
   it('refuses a signed-in user without worker.manage with 403', async () => {
     const { accessToken } = await signUp(api, e2e.otp);
 
-    const res = await api.get('/admin/workers', { bearer: accessToken });
+    const res = await api.get('/auth/workers', { bearer: accessToken });
 
     expect(res.status).toBe(403);
     expect(res.body.ok).toBe(false);
@@ -62,7 +63,7 @@ describe('auth-api — the worker admin surface', () => {
     const { accessToken } = await signUp(api, e2e.otp);
 
     const res = await api.post(
-      '/admin/workers/heartbeat/schedules',
+      '/auth/workers/heartbeat/schedules',
       { scheduleType: 'not-a-type' },
       { bearer: accessToken },
     );
@@ -76,11 +77,24 @@ describe('auth-api — the worker admin surface', () => {
     // Straight through supertest: `AuthApi` has no PATCH, and adding one
     // would edit `support/**`, which every other e2e file boots.
     const toggle = await request(e2e.server)
-      .patch('/api/admin/workers/heartbeat')
+      .patch('/api/auth/workers/heartbeat')
       .send({ isActive: false });
-    const run = await api.post('/admin/workers/heartbeat/run', {});
+    const run = await api.post('/auth/workers/heartbeat/run', {});
 
     expect(toggle.status).toBe(401);
     expect(run.status).toBe(401);
+  });
+
+  it('still answers on the deprecated /admin spelling, behind the same guards', async () => {
+    // §8: a renamed route keeps its old shape for one release (F-098, removed
+    // after 2026-10-13). The alias must be the same guarded handler — a 404
+    // here breaks a caller early, and a 200 would mean a second, unguarded door.
+    const { accessToken } = await signUp(api, e2e.otp);
+
+    const anonymous = await api.get('/admin/workers');
+    const unprivileged = await api.get('/admin/workers', { bearer: accessToken });
+
+    expect(anonymous.status).toBe(401);
+    expect(unprivileged.status).toBe(403);
   });
 });

@@ -41,7 +41,12 @@ import {
  * into another's. The permission is what confines the surface, and the audit
  * row on the switch is what makes it reviewable.
  */
-@Controller('admin/workers')
+/**
+ * Mounted at `/auth/workers`; the `admin` spelling is the deprecated alias (F-098, since 2026-09-13, removed after 2026-10-13):
+ * a role word never belongs in a URL — authority is the caller's permissions, and the path names
+ * the service that hosts the route. Both spellings reach this same guarded handler until then.
+ */
+@Controller(['auth/workers', 'admin/workers'])
 @UseGuards(AuthGuard, new PermissionsGuard(['worker.manage']))
 export class WorkerAdminController {
   constructor(private readonly workers: WorkerAdminService) {}
@@ -56,7 +61,7 @@ export class WorkerAdminController {
    * What the queue could not deliver (F-067-d) — newest first.
    *
    * Declared before every `:key` route below it so the literal wins the match;
-   * there is no `GET /admin/workers/:key`, but a later one would otherwise
+   * there is no `GET /auth/workers/:key`, but a later one would otherwise
    * swallow this path silently.
    *
    * Read-only. Putting a dead message back on the exchange is a decision about

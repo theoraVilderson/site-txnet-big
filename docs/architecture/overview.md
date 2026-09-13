@@ -24,7 +24,7 @@ rich intent comments but no service — those doc units are `draft`.
 ```
 internet -> Traefik (TLS, routing)
               |-- ForwardAuth middleware --> auth-handler (Go)  : JWT + Redis session + RBAC
-              |-> auth-service (NestJS)   /api/auth/*, /admin/*
+              |-> auth-service (NestJS)   /api/auth/*
               |-> bot-service (NestJS)     /api/bots/* : the Telegram/Bale surface
               |-> billing-service (NestJS, scaffold, behind ForwardAuth)
               |-> site-pwa (Next.js)      panel.<domain>

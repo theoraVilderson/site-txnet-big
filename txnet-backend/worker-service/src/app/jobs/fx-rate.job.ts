@@ -47,7 +47,7 @@ import { FxSource, fxSourcesByKey } from '../currency/fx-source';
  * **Every five minutes is a `bot_schedule` row, not a constant in here.** The
  * worker registers itself as `fx_rate_refresh` on boot (`WorkerRegistryService`)
  * and an admin gives it a five-minute `cron_expression` schedule through
- * `/admin/workers` (F-031-b) — the exact expression is in
+ * `/auth/workers` (F-031-b) — the exact expression is in
  * `docs/domains/currency/contract.fx-worker.md`, because a cron string cannot
  * be written inside a block comment without ending it. That is the existing
  * mechanism and it needs no

@@ -33,7 +33,7 @@ no service yet. A unit that is `active` with an empty `source:` is a lie and
 ## Interfaces — outside-world touchpoints
 | id | surface | status | doc |
 |---|---|---|---|
-| auth-api | NestJS auth-service HTTP API: `/api/auth/*`, `/admin/*` impersonation | active | [->](interfaces/auth-api/INDEX.md) |
+| auth-api | NestJS auth-service HTTP API: `/api/auth/*`, impersonation included | active | [->](interfaces/auth-api/INDEX.md) |
 | panel-web | Next.js user panel (site-pwa): auth screens, locale/theme, API proxy | active | [->](interfaces/panel-web/INDEX.md) |
 | marketing-web | Next.js public landing site (coinsite) | draft | [->](interfaces/marketing-web/INDEX.md) |
 | bot-app | the bot as a full product surface (D-02, §10.4): platform-agnostic flows + screens for Telegram and Bale | active | [->](interfaces/bot-app/INDEX.md) |

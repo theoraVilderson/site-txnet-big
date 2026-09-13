@@ -35,7 +35,7 @@ groups:
           description: >-
             The rabbitmq scrape target has been down for 5 minutes, so every
             other automation alert is blind. Ticks are not being consumed and
-            `POST /admin/workers/:key/run` fails at the publish.
+            `POST /api/auth/workers/:key/run` fails at the publish.
 
       # AUTOMATION_TICK_INTERVAL_MS is 60s by default and one tick is published
       # per due worker, so a backlog that survives ten minutes is not a burst —
@@ -96,7 +96,7 @@ groups:
           summary: "A message was dead-lettered instead of run"
           description: >-
             {{ $value }} message(s) were rejected onto the dead-letter exchange
-            in the last 15 minutes. Read them at GET /admin/workers/dead-letters;
+            in the last 15 minutes. Read them at GET /api/auth/workers/dead-letters;
             `reason` says whether the body was unparseable, the handler failed,
             or the tenant gate gave up.
 

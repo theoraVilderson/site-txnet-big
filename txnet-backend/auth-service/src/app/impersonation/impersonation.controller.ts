@@ -11,7 +11,12 @@ import { ImpersonationService } from './impersonation.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { PermissionsGuard } from './guards/permissions.guard';
 
-@Controller('admin')
+/**
+ * Impersonation start and end, under `/auth` — the `admin` spelling is the deprecated alias (F-098, since 2026-09-13, removed after 2026-10-13):
+ * a role word never belongs in a URL — authority is the caller's permissions, and the path names
+ * the service that hosts the route. Both spellings reach this same guarded handler until then.
+ */
+@Controller(['auth', 'admin'])
 export class ImpersonationController {
   constructor(private readonly impersonationService: ImpersonationService) {}
 
