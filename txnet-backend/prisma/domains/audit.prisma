@@ -28,6 +28,11 @@ enum AdminAction {
   gateway_grant_create
   gateway_grant_withdraw
   gateway_settlement_payout
+  // F-102-b (D-31) — managing the gateway itself. Delete is its own value
+  // because a deleted gateway and a deactivated one leave different trails.
+  gateway_create
+  gateway_update
+  gateway_delete
 
   @@schema("audit")
 }
