@@ -1,4 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { permissionFingerprint } from './permissions/permission-fingerprint';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 
@@ -25,6 +26,12 @@ export type AuthClaims = {
    */
   roleName: string;
   permissions: string[];
+  /**
+   * `permissionFingerprint(permissions)` at mint time. The gate and `AuthGuard`
+   * refuse the token once the role's fingerprint in Redis differs (ADR-0043).
+   * Absent on tokens minted before that shipped, and on single-purpose tokens.
+   */
+  permHash?: string;
   sessionId: string;
   passwordVersion?: number;
   isImpersonated?: boolean;
@@ -69,6 +76,7 @@ export class TokenService {
       roleId: user.roleId,
       roleName: user.role?.name ?? '',
       permissions,
+      permHash: permissionFingerprint(permissions),
       sessionId,
     });
   }
@@ -118,6 +126,7 @@ export class TokenService {
         roleId: targetUser.roleId,
         roleName: targetUser.role?.name ?? '',
         permissions,
+        permHash: permissionFingerprint(permissions),
         sessionId,
         isImpersonated: true,
         impersonatedBy: adminId,

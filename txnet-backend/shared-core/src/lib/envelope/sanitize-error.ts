@@ -26,6 +26,13 @@ export interface SanitizedError {
   /** i18n key in the `errors` namespace — safe to translate and send out */
   msgKey: string;
   fieldErrors?: FieldError[];
+  /**
+   * A machine-readable cause a client acts on, sent as `error.reason` — e.g.
+   * `permissionsChanged`, which means "refresh once and retry" (ADR-0043).
+   * `msg` is translated and cannot be matched on; this can. Only an identifier
+   * ever passes (`isSafeReason`), never text a throw happened to carry.
+   */
+  reason?: string;
   /** short correlation id — also written to the server log */
   ref: string;
   /** full detail — SERVER LOG ONLY, never sent to the client */
@@ -128,6 +135,11 @@ function fromPrisma(e: unknown): { status: number; msgKey: string } | null {
   return null;
 }
 
+/** A reason is a bare identifier: nothing a thrown message could smuggle out. */
+function isSafeReason(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-z][A-Za-z0-9]{0,63}$/.test(value);
+}
+
 export function sanitizeError(exception: unknown): SanitizedError {
   const ref = newRef();
   const detail = describe(exception);
@@ -162,9 +174,11 @@ export function sanitizeError(exception: unknown): SanitizedError {
 
     // An explicit i18n key on the body, or a `message` that *is* a key.
     const candidate = obj ? (obj['i18nKey'] ?? obj['message']) : res;
+    const reason = obj ? obj['reason'] : undefined;
     return {
       status,
       msgKey: isSafeKey(candidate) ? candidate : genericKeyFor(status),
+      ...(isSafeReason(reason) ? { reason } : {}),
       ref,
       detail,
       logLevel,

@@ -3,6 +3,7 @@ import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from './auth.guard';
 import { SessionStore } from './session/session.store';
+import { PermissionStateStore } from './permissions/permission-state.store';
 import { AuthClaims, TokenService } from './token.service';
 
 const ACCESS_SECRET = 'unit-test-access-secret';
@@ -54,6 +55,7 @@ function contextWith(header?: string, switchScope: string | null = null) {
 describe('AuthGuard', () => {
   let tokens: TokenService;
   let sessions: { read: Mock };
+  let permissions: { isStale: Mock };
   let guard: AuthGuard;
 
   beforeEach(() => {
@@ -63,7 +65,12 @@ describe('AuthGuard', () => {
     sessions = {
       read: vi.fn().mockResolvedValue({ userId: 'user-1', scopeKey: null }),
     };
-    guard = new AuthGuard(tokens, sessions as unknown as SessionStore);
+    permissions = { isStale: vi.fn().mockResolvedValue(false) };
+    guard = new AuthGuard(
+      tokens,
+      sessions as unknown as SessionStore,
+      permissions as unknown as PermissionStateStore,
+    );
   });
 
   describe('authorization header', () => {
@@ -99,6 +106,30 @@ describe('AuthGuard', () => {
       await expect(guard.canActivate(context)).rejects.toThrow(
         'session revoked',
       );
+    });
+
+    it('refuses a token whose permissions are stale, naming the reason a client acts on', async () => {
+      // ADR-0043. The guard's own routes (workers, impersonation) are not behind
+      // the gate, so a token the gate refuses must not work here either.
+      permissions.isStale.mockResolvedValue(true);
+      const { context, request } = contextWith(`Bearer ${tokens.sign(accessClaims)}`);
+
+      const thrown = await guard.canActivate(context).catch((e: unknown) => e);
+
+      expect(thrown).toBeInstanceOf(UnauthorizedException);
+      expect((thrown as UnauthorizedException).getResponse()).toMatchObject({
+        i18nKey: 'auth.permissionsChanged',
+        reason: 'permissionsChanged',
+      });
+      expect(request.user).toBeUndefined();
+    });
+
+    it('does not ask about permissions for a session that is already gone', async () => {
+      sessions.read.mockResolvedValue(null);
+      const { context } = contextWith(`Bearer ${tokens.sign(accessClaims)}`);
+
+      await expect(guard.canActivate(context)).rejects.toThrow('session revoked');
+      expect(permissions.isStale).not.toHaveBeenCalled();
     });
 
     it('rejects an expired token before touching the session store', async () => {
@@ -165,6 +196,7 @@ describe('AuthGuard', () => {
 describe('AuthGuard — the switch scope of an authenticated call', () => {
   let tokens: TokenService;
   let sessions: { read: Mock };
+  let permissions: { isStale: Mock };
   let guard: AuthGuard;
 
   beforeEach(() => {
@@ -172,7 +204,12 @@ describe('AuthGuard — the switch scope of an authenticated call', () => {
     sessions = {
       read: vi.fn().mockResolvedValue({ userId: 'user-1', scopeKey: null }),
     };
-    guard = new AuthGuard(tokens, sessions as unknown as SessionStore);
+    permissions = { isStale: vi.fn().mockResolvedValue(false) };
+    guard = new AuthGuard(
+      tokens,
+      sessions as unknown as SessionStore,
+      permissions as unknown as PermissionStateStore,
+    );
   });
 
   it("replaces the request's scope with the session's own", async () => {

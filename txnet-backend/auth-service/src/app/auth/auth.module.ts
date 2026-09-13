@@ -37,6 +37,7 @@ import { CaptchaController } from './captcha/captcha.controller';
 import { CaptchaService } from './captcha/captcha.service';
 import { MeController } from './me/me.controller';
 import { MeService } from './me/me.service';
+import { PermissionStateStore } from './permissions/permission-state.store';
 
 @Module({
   // Required because LocaleModule is not @Global(): SmsOtpSender,
@@ -70,6 +71,7 @@ import { MeService } from './me/me.service';
     MeService,
     AuthService,
     AuthGuard,
+    PermissionStateStore,
     NoActiveSessionGuard,
     ServiceOnlyGuard,
     SessionService,
@@ -113,6 +115,9 @@ import { MeService } from './me/me.service';
       useClass: CaptchaGuard,
     },
   ],
-  exports: [AuthGuard, TokenService, SessionService, SessionStore, AuthService],
+  // PermissionStateStore is exported with AuthGuard for the reason TokenService
+  // and SessionStore are: a module that puts AuthGuard on a controller has to
+  // be able to resolve every one of its dependencies (F-031-b).
+  exports: [AuthGuard, TokenService, SessionService, SessionStore, PermissionStateStore, AuthService],
 })
 export class AuthModule {}

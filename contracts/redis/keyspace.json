@@ -13,12 +13,16 @@
     "note": "Key names, after the prefix. Only the families more than one language builds are declared here — auth-handler builds `session:` in Go and gateway-service and auth-service build it in TypeScript, so a disagreement is silent: the lookup misses, and a miss is read as `revoked`. The tenant-derived families are TypeScript-only and live in shared-core/src/lib/redis/keys.ts alone.",
     "session": "session:<id>",
     "otpChannel": "otp:channel:<id>",
-    "userSessions": "user:<id>:sessions"
+    "userSessions": "user:<id>:sessions",
+    "rolePermissions": "role:<id>:permissions",
+    "userRole": "user:<id>:role"
   },
   "keyCases": [
     { "builder": "session", "id": "sess-1", "key": "session:sess-1" },
     { "builder": "otpChannel", "id": "chan-1", "key": "otp:channel:chan-1" },
-    { "builder": "userSessions", "id": "user-1", "key": "user:user-1:sessions" }
+    { "builder": "userSessions", "id": "user-1", "key": "user:user-1:sessions" },
+    { "builder": "rolePermissions", "id": "role-1", "key": "role:role-1:permissions" },
+    { "builder": "userRole", "id": "user-1", "key": "user:user-1:role" }
   ],
   "prefixCasesNote": "The last two are the shapes that split the keyspace if only one language normalises. A trailing colon in REDIS_KEY_NAMESPACE is the operator typo this file exists to make harmless."
 }

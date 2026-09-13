@@ -385,3 +385,50 @@ describe('TokenService', () => {
     });
   });
 });
+
+/**
+ * The permission fingerprint every access token carries (ADR-0043). The gate
+ * refuses a token whose fingerprint differs from the role's current one in
+ * Redis, so the two things that must hold are exactly the two ways it could
+ * go wrong without a single red test:
+ *
+ * - **Row order is not a change.** Postgres returns `role_permission` in no
+ *   promised order; a fingerprint that followed it would read as every token on
+ *   the platform being stale, and every user bounced to a refresh, at random.
+ * - **A different set is a change**, or the whole mechanism refuses nothing.
+ */
+describe('TokenService — permission fingerprint (ADR-0043)', () => {
+  const tokens = new TokenService(configStub());
+  const userWith = (keys: string[]) => ({
+    id: 'user-1',
+    tenantId: 'tenant-1',
+    roleId: 'role-1',
+    role: {
+      name: 'user',
+      rolePermissions: keys.map((key) => ({ permission: { key } })),
+    },
+  });
+  const hashOf = (token: string) => tokens.verify(token).permHash;
+
+  it('is the same for the same set in any order', () => {
+    const a = hashOf(tokens.signAccessToken(userWith(['user.read', 'user.write']), 's-1'));
+    const b = hashOf(tokens.signAccessToken(userWith(['user.write', 'user.read']), 's-1'));
+
+    expect(a).toMatch(/^[0-9a-f]{32}$/);
+    expect(b).toBe(a);
+  });
+
+  it('changes when the set changes', () => {
+    const before = hashOf(tokens.signAccessToken(userWith(['user.read']), 's-1'));
+    const after = hashOf(tokens.signAccessToken(userWith(['user.read', 'user.write']), 's-1'));
+
+    expect(after).not.toBe(before);
+  });
+
+  it('is carried by an impersonated token too, computed the same way', () => {
+    const plain = hashOf(tokens.signAccessToken(userWith(['user.read']), 's-1'));
+    const acting = hashOf(tokens.signImpersonatedToken(userWith(['user.read']), 's-2', 'operator-1'));
+
+    expect(acting).toBe(plain);
+  });
+});

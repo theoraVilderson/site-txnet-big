@@ -46,6 +46,9 @@ export class I18nExceptionFilter implements ExceptionFilter {
       msg: translate(safe.msgKey),
       ref: safe.ref,
     };
+    // What a client acts on without reading `msg` (ADR-0043). Absent unless
+    // the throw named one, so no existing answer changes shape.
+    if (safe.reason) body['error'] = { reason: safe.reason };
     if (safe.fieldErrors?.length) {
       body['fieldErrors'] = safe.fieldErrors.map((f) => ({
         path: f.path,

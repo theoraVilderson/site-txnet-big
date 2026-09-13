@@ -182,8 +182,28 @@ const respNil = "$-1\r\n"
 
 // --- handler under test ------------------------------------------------
 
-// sessionActive answers every GET with a live session.
-func sessionActive(string) string { return respBulk("active") }
+// sessionActive answers a live session, and nothing for any other key — which
+// is what Redis looks like before any permission fingerprint is written
+// (ADR-0043), so the decision turns on the session alone.
+func sessionActive(cmd string) string {
+	if strings.Contains(cmd, ":session:") {
+		return respBulk("active")
+	}
+	return respNil
+}
+
+// redisWith answers each GET whose key ends with one of the given suffixes, and
+// nothing otherwise, so a test can script what Redis knows key by key.
+func redisWith(values map[string]string) func(string) string {
+	return func(cmd string) string {
+		for suffix, value := range values {
+			if strings.HasSuffix(cmd, suffix) {
+				return respBulk(value)
+			}
+		}
+		return respNil
+	}
+}
 
 func newHandler(t *testing.T, redisReply func(string) string, engine *auth.Engine) (*Handler, *fakeRedis) {
 	t.Helper()
@@ -297,6 +317,22 @@ func TestValidateRefusalStatuses(t *testing.T) {
 			wantMsg:    keyUnexpected,
 		},
 		{
+			// ADR-0043: the role's set changed after this token was minted.
+			name:       "the role's permissions changed since the token was minted",
+			token:      sign(t, validClaims(map[string]any{"permHash": "hash-then"}), testSecret),
+			redis:      redisWith(map[string]string{":session:sess-1": "active", ":permissions": "hash-now"}),
+			wantStatus: http.StatusUnauthorized,
+			wantMsg:    keyPermissionsChanged,
+		},
+		{
+			// The case a role's own fingerprint cannot see: the user left it.
+			name:       "the user holds another role now",
+			token:      sign(t, validClaims(map[string]any{"permHash": "hash-now"}), testSecret),
+			redis:      redisWith(map[string]string{":session:sess-1": "active", ":permissions": "hash-now", ":role": "another-role"}),
+			wantStatus: http.StatusUnauthorized,
+			wantMsg:    keyPermissionsChanged,
+		},
+		{
 			name:       "claims a permission the role does not have",
 			token:      sign(t, validClaims(map[string]any{"roleName": "user", "permissions": []string{"user.write"}}), testSecret),
 			redis:      sessionActive,
@@ -392,12 +428,59 @@ func TestValidateSetsIdentityHeadersOnSuccess(t *testing.T) {
 		t.Errorf("body = %v, want ok/%s", body, msgSuccess)
 	}
 
-	// The session key must be the prefix plus "session:" plus the claim, or
-	// the gateway reads a keyspace auth-service never writes.
+	// Every key must be the prefix plus the family plus the claim, or the
+	// gateway reads a keyspace auth-service never writes. Three keys, one
+	// decision: the session, the role's fingerprint, the user's role (ADR-0043).
 	cmds := redis.commands()
-	if len(cmds) != 1 || cmds[0] != "GET txnet:session:sess-1" {
-		t.Errorf("redis commands = %v, want one GET of txnet:session:sess-1", cmds)
+	wantCmds := []string{
+		"GET txnet:session:sess-1",
+		"GET txnet:role:" + realRoleID + ":permissions",
+		"GET txnet:user:user-1:role",
 	}
+	if strings.Join(cmds, "|") != strings.Join(wantCmds, "|") {
+		t.Errorf("redis commands = %v, want %v", cmds, wantCmds)
+	}
+}
+
+// ADR-0043, the half of the rule a refusal table cannot show. Only a *known*
+// difference refuses: a fingerprint that still matches passes, and so does a
+// Redis that knows nothing yet — read the other way, shipping the check would
+// sign out every user at once. And the refusal says why in `error.reason`,
+// because `msg` is translated and a client cannot match on it.
+func TestValidatePermissionFingerprint(t *testing.T) {
+	current := sign(t, validClaims(map[string]any{"permHash": "hash-now"}), testSecret)
+
+	for _, tc := range []struct {
+		name  string
+		redis map[string]string
+	}{
+		{"the fingerprint and the role still match", map[string]string{
+			":session:sess-1": "active", ":permissions": "hash-now", ":role": realRoleID,
+		}},
+		{"Redis knows nothing about the role or the user yet", map[string]string{
+			":session:sess-1": "active",
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, _ := newHandler(t, redisWith(tc.redis), testEngine(t))
+			if w := call(t, h, current); w.Code != http.StatusOK {
+				t.Errorf("status = %d, want 200 (body %q)", w.Code, w.Body.String())
+			}
+		})
+	}
+
+	t.Run("a refusal names the reason a client refreshes on", func(t *testing.T) {
+		h, _ := newHandler(t, redisWith(map[string]string{
+			":session:sess-1": "active", ":permissions": "hash-later",
+		}), testEngine(t))
+		w := call(t, h, current)
+
+		body := decode(t, w)
+		detail, _ := body["error"].(map[string]any)
+		if detail["reason"] != reasonPermissionsChanged {
+			t.Errorf("error = %v, want reason %q", body["error"], reasonPermissionsChanged)
+		}
+	})
 }
 
 // An impersonated request must be labelled as such all the way down, or an

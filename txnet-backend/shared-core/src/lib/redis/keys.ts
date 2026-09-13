@@ -60,6 +60,18 @@ export const UnscopedRedisKeys = {
   session: (sessionId: string) => `session:${sessionId}`,
   /** SET of a user's live session ids, so they can all be dropped without a scan. */
   userSessions: (userId: string) => `user:${userId}:sessions`,
+  /**
+   * The fingerprint of one role's current permission set (ADR-0043). Written by
+   * `auth-service` when Postgres notifies a change; read on every request by
+   * `auth-handler` and `AuthGuard`. Missing means nothing is known — never
+   * "changed" — so an empty Redis refuses nobody.
+   */
+  rolePermissions: (roleId: string) => `role:${roleId}:permissions`,
+  /**
+   * The role a user holds now, written only when it changes (ADR-0043). A
+   * role's own fingerprint cannot notice a user leaving it for another.
+   */
+  userRole: (userId: string) => `user:${userId}:role`,
 
   /**
    * The token that authorizes a subscription to one OTP delivery's realtime

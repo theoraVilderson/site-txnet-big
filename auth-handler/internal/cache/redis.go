@@ -71,6 +71,44 @@ func (c *Client) SessionActive(key string) (bool, error) {
 	return value != "", nil
 }
 
+// GetMany reads several keys in one round trip. Every GET is written before
+// any reply is read — a pipeline — so the gate's per-request exchange with Redis
+// stays one however many keys its decision needs (ADR-0043). A missing key
+// reads as "". Any error discards the connection, as SessionActive does.
+func (c *Client) GetMany(keys ...string) ([]string, error) {
+	conn, err := c.acquire()
+	if err != nil {
+		return nil, err
+	}
+	if err := conn.SetDeadline(time.Now().Add(c.readTimeout)); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("cache: set deadline: %w", err)
+	}
+
+	var b strings.Builder
+	for _, key := range keys {
+		fmt.Fprintf(&b, "*2\r\n$3\r\nGET\r\n$%d\r\n%s\r\n", len(key), key)
+	}
+	if _, err := conn.Write([]byte(b.String())); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("cache: write: %w", err)
+	}
+
+	reader := bufio.NewReader(conn)
+	values := make([]string, len(keys))
+	for i := range keys {
+		value, err := readReply(reader)
+		if err != nil {
+			_ = conn.Close()
+			return nil, err
+		}
+		values[i] = value
+	}
+
+	c.release(conn)
+	return values, nil
+}
+
 // Close drains and closes all pooled connections.
 func (c *Client) Close() {
 	close(c.pool)

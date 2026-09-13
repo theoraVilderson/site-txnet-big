@@ -28,12 +28,17 @@ type Claims struct {
 	// RoleName is what the policy file is keyed by. RoleID is a database
 	// UUID that differs on every seed, so it can never address a role in a
 	// file checked into the repo (ADR-0037).
-	RoleName       string   `json:"roleName"`
-	SessionID      string   `json:"sessionId"`
-	Permissions    []string `json:"permissions"`
-	IsImpersonated bool     `json:"isImpersonated"`
-	ImpersonatedBy string   `json:"impersonatedBy"`
-	Exp            int64    `json:"exp"`
+	RoleName    string   `json:"roleName"`
+	SessionID   string   `json:"sessionId"`
+	Permissions []string `json:"permissions"`
+	// PermHash fingerprints Permissions as they were when the token was minted.
+	// The gate compares it to the role's current fingerprint in Redis, so a
+	// changed role is refused at once rather than after the token expires
+	// (ADR-0043). Empty on a token minted before that shipped.
+	PermHash       string `json:"permHash"`
+	IsImpersonated bool   `json:"isImpersonated"`
+	ImpersonatedBy string `json:"impersonatedBy"`
+	Exp            int64  `json:"exp"`
 }
 
 // Validate checks the JWT signature and required claims.

@@ -3,7 +3,7 @@ id: redis-keyspace
 layer: platform
 status: active
 version: 5
-updated: 2026-09-11
+updated: 2026-09-13
 ---
 
 # Contract — redis-keyspace
@@ -119,6 +119,8 @@ open for an event that can never come.
 |---|---|---|---|---|
 | `session:<sessionId>` | string (JSON `{userId,revoked,scopeKey}`) | session lifetime (default 30d; 30m for impersonation) | auth-service `SessionStore.register` | auth-service `AuthGuard` (`SessionStore.read`), auth-handler `/validate` |
 | `user:<userId>:sessions` | set of sessionIds | = session lifetime | auth-service `SessionStore` | auth-service (bulk revoke) |
+| `role:<roleId>:permissions` | string — fingerprint of the role's permission set (ADR-0043) | none | auth-service, on a Postgres notification (F-101-b) | auth-handler `/validate`, auth-service `PermissionStateStore` — **missing means unknown, never changed** |
+| `user:<userId>:role` | string — the role the user holds now (ADR-0043) | none | auth-service, on a Postgres notification (F-101-b) | auth-handler `/validate`, auth-service `PermissionStateStore` — missing means unknown |
 | `otp:code:<tenantId>:<purpose>:<phone>` | string (JSON `{codeHash,attemptCount}`) | 300s | auth-service `OtpStore.save` | auth-service verify Lua script |
 | `otp:lock:<tenantId>:<purpose>:<phone>` | string | 2s | `OtpStore.acquireLock` (`SET NX`) | — |
 | `otp:cooldown:<tenantId>:<purpose>:<phone>` | string | 60s | `OtpStore.startCooldown` | `OtpStore.isCoolingDown` |

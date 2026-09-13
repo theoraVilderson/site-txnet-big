@@ -31,10 +31,12 @@ exports[`the key catalogue > builds every unscoped family 1`] = `
   "otpChannel": "otp:channel:chan-1",
   "rateLimitPlatform": "ratelimit:platform:login:1.2.3.4",
   "realtimeFanout": "realtime:user:user-1",
+  "rolePermissions": "role:role-1:permissions",
   "session": "session:sess-1",
   "tenantByHost": "tenant:host:myvpn.com",
   "tenantById": "tenant:id:tenant-1",
   "tenantRuns": "automation:tenant-runs:tenant-1",
+  "userRole": "user:user-1:role",
   "userSessions": "user:user-1:sessions",
 }
 `;
@@ -60,10 +62,12 @@ exports[`the key catalogue > leaves nothing in the catalogue unexercised 1`] = `
   "rateLimitPlatform",
   "realtimeFanout",
   "registerPending",
+  "rolePermissions",
   "session",
   "tenantByHost",
   "tenantById",
   "tenantRuns",
+  "userRole",
   "userSessions",
 ]
 `;

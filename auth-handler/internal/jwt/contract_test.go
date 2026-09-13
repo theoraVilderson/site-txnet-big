@@ -57,6 +57,9 @@ func TestContractAccessTokenFromTypeScript(t *testing.T) {
 		// turns every gated request into a 403, so it is pinned here.
 		{"RoleName", claims.RoleName, "Admin"},
 		{"SessionID", claims.SessionID, "session-contract-1"},
+		// The fingerprint the gate compares to Redis (ADR-0043). A rename on
+		// either side reads as every token being stale.
+		{"PermHash", claims.PermHash, "contract-perm-hash-1"},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %q, want %q", tc.field, tc.got, tc.want)

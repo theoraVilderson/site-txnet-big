@@ -67,6 +67,7 @@ describe('TokenService — auth-handler wire contract', () => {
         roleId: 'role-contract-1',
         roleName: 'Admin',
         permissions: ['user.read', 'billing.read'],
+        permHash: 'contract-perm-hash-1',
         sessionId: 'session-contract-1',
       },
       ttl,

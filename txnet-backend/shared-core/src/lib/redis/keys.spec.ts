@@ -54,6 +54,8 @@ describe('the key catalogue', () => {
     expect({
       session: UnscopedRedisKeys.session('sess-1'),
       userSessions: UnscopedRedisKeys.userSessions('user-1'),
+      rolePermissions: UnscopedRedisKeys.rolePermissions('role-1'),
+      userRole: UnscopedRedisKeys.userRole('user-1'),
       otpChannel: UnscopedRedisKeys.otpChannel('chan-1'),
       realtimeFanout: UnscopedRedisKeys.realtimeFanout('user:user-1'),
       rateLimitPlatform: UnscopedRedisKeys.rateLimitPlatform('login:1.2.3.4'),
@@ -108,6 +110,8 @@ describe('the families auth-handler also builds', () => {
     session: UnscopedRedisKeys.session,
     otpChannel: UnscopedRedisKeys.otpChannel,
     userSessions: UnscopedRedisKeys.userSessions,
+    rolePermissions: UnscopedRedisKeys.rolePermissions,
+    userRole: UnscopedRedisKeys.userRole,
   };
 
   it.each(fixture.keyCases)(

@@ -8,12 +8,14 @@ import { Request } from 'express';
 import { TokenService } from './token.service';
 import { SessionStore } from './session/session.store';
 import { SwitchScope } from '../common/security/switch-scope';
+import { PermissionStateStore } from './permissions/permission-state.store';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
     private readonly tokens: TokenService,
     private readonly sessions: SessionStore,
+    private readonly permissions: PermissionStateStore,
   ) {}
 
   async canActivate(context: ExecutionContext) {
@@ -35,6 +37,16 @@ export class AuthGuard implements CanActivate {
 
     const session = await this.sessions.read(claims.sessionId);
     if (!session) throw new UnauthorizedException('session revoked');
+
+    // ADR-0043: the same rule `auth-handler` applies at the gate, because this
+    // service's own guarded routes are not behind the gate. `reason` is what a
+    // client matches on to refresh once and retry; `msg` is translated.
+    if (await this.permissions.isStale(claims)) {
+      throw new UnauthorizedException({
+        i18nKey: 'auth.permissionsChanged',
+        reason: 'permissionsChanged',
+      });
+    }
 
     // ADR-0032: for an authenticated call the scope is the one stamped on the
     // session, not the one `SwitchScopeMiddleware` re-derived from the request.

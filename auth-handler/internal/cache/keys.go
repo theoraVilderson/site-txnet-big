@@ -40,6 +40,19 @@ func UserSessionsKey(prefix, userID string) string {
 	return prefix + "user:" + userID + ":sessions"
 }
 
+// RolePermissionsKey holds the fingerprint of one role's current permission
+// set (ADR-0043). Written by auth-service when Postgres reports a change; read
+// here on every request. Missing means "nothing known", never "changed".
+func RolePermissionsKey(prefix, roleID string) string {
+	return prefix + "role:" + roleID + ":permissions"
+}
+
+// UserRoleKey holds the role a user holds now, written only when it changes
+// (ADR-0043). A role's own fingerprint cannot notice a user leaving it.
+func UserRoleKey(prefix, userID string) string {
+	return prefix + "user:" + userID + ":role"
+}
+
 // OtpChannelKey is the token authorizing one OTP realtime subscription.
 //
 // Written by `auth-service`, read by `gateway-service`. Declared here for the

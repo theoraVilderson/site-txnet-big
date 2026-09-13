@@ -23,11 +23,15 @@ import { sanitizeError, SanitizedError } from './sanitize-error';
  * server-log only.
  */
 
-/** Everything that is actually serialized to the client. */
+/**
+ * Everything that is actually serialized to the client — `reason` included since
+ * ADR-0043, so every leak case below covers it too.
+ */
 const outward = (s: SanitizedError) =>
   JSON.stringify({
     status: s.status,
     msgKey: s.msgKey,
+    reason: s.reason,
     fieldErrors: s.fieldErrors,
     ref: s.ref,
   });
@@ -200,6 +204,34 @@ describe('sanitizeError', () => {
         }),
       );
       expect(result.msgKey).toBe('phone.invalidFormat');
+    });
+
+    it('passes a reason that is a bare identifier, for a client to act on', () => {
+      // ADR-0043: `permissionsChanged` tells a client to refresh and retry;
+      // `msg` is translated and cannot be matched on.
+      const out = sanitizeError(
+        new UnauthorizedException({
+          i18nKey: 'auth.permissionsChanged',
+          reason: 'permissionsChanged',
+        }),
+      );
+
+      expect(out.msgKey).toBe('auth.permissionsChanged');
+      expect(out.reason).toBe('permissionsChanged');
+    });
+
+    it.each([
+      ['a sentence', 'the role table changed at 10:42'],
+      ['a dotted key', 'auth.permissionsChanged'],
+      ['a Prisma code', 'P2002 on identity.role_permission'],
+      ['not a string', 42],
+    ])('drops a reason that is %s', (_label, reason) => {
+      const out = sanitizeError(
+        new UnauthorizedException({ i18nKey: 'auth.invalidToken', reason }),
+      );
+
+      expect(out.reason).toBeUndefined();
+      expect(outward(out)).not.toContain(String(reason));
     });
 
     it('falls back to body.message only when it is itself a key', () => {

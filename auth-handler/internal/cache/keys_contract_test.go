@@ -40,9 +40,11 @@ func TestContractKeyNames(t *testing.T) {
 	}
 
 	builders := map[string]func(prefix, id string) string{
-		"session":      SessionKey,
-		"otpChannel":   OtpChannelKey,
-		"userSessions": UserSessionsKey,
+		"session":         SessionKey,
+		"otpChannel":      OtpChannelKey,
+		"userSessions":    UserSessionsKey,
+		"rolePermissions": RolePermissionsKey,
+		"userRole":        UserRoleKey,
 	}
 
 	const prefix = "txnet:auth:v2:"

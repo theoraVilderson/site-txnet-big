@@ -57,15 +57,27 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request) response.Respon
 			return response.Err(keyInvalidToken, nil), nil
 		}
 
-		active, err := h.redis.SessionActive(
+		// One round trip for the three things a decision reads: whether the
+		// session lives, what the token's role grants now, and which role the
+		// user holds now (ADR-0043).
+		values, err := h.redis.GetMany(
 			cache.SessionKey(h.keyPrefix, claims.SessionID),
+			cache.RolePermissionsKey(h.keyPrefix, claims.RoleID),
+			cache.UserRoleKey(h.keyPrefix, claims.Sub),
 		)
 		if err != nil {
 			h.logger.Error("session lookup failed", "error", err, "session_id", claims.SessionID)
 			return response.Err(keyUnexpected, nil), nil
 		}
-		if !active {
+		if values[0] == "" {
 			return response.Err(keySessionRevoked, nil), nil
+		}
+		if stalePermissions(claims, values[1], values[2]) {
+			h.logger.Info("token permissions are stale",
+				"user_id", claims.Sub, "role_id", claims.RoleID)
+			return response.Err(keyPermissionsChanged, map[string]string{
+				"reason": reasonPermissionsChanged,
+			}), nil
 		}
 
 		if h.engine != nil {
@@ -225,11 +237,12 @@ func tokenFrom(r *http.Request) string {
 // `errors.json` is now a build failure in both languages, not a raw key shown
 // to a user of whichever side was missed.
 const (
-	keyAuthRequired   = i18nkeys.ErrorsAuthAuthorizationRequired
-	keyInvalidToken   = i18nkeys.ErrorsAuthInvalidToken
-	keySessionRevoked = i18nkeys.ErrorsAuthSessionRevoked
-	keyForbidden      = i18nkeys.ErrorsPermissionsForbidden
-	keyUnexpected     = i18nkeys.ErrorsSystemUnexpected
+	keyAuthRequired       = i18nkeys.ErrorsAuthAuthorizationRequired
+	keyInvalidToken       = i18nkeys.ErrorsAuthInvalidToken
+	keySessionRevoked     = i18nkeys.ErrorsAuthSessionRevoked
+	keyPermissionsChanged = i18nkeys.ErrorsAuthPermissionsChanged
+	keyForbidden          = i18nkeys.ErrorsPermissionsForbidden
+	keyUnexpected         = i18nkeys.ErrorsSystemUnexpected
 )
 
 // msgSuccess is the `msg` of a 2xx. **It is not a translation key**, and was
@@ -255,7 +268,7 @@ func statusForKey(ok bool, msgKey string) int {
 		return http.StatusForbidden
 	case keyUnexpected:
 		return http.StatusInternalServerError
-	default: // keyAuthRequired, keyInvalidToken, keySessionRevoked
+	default: // keyAuthRequired, keyInvalidToken, keySessionRevoked, keyPermissionsChanged
 		return http.StatusUnauthorized
 	}
 }
@@ -273,4 +286,21 @@ func writeJSON(w http.ResponseWriter, resp response.Response, status int) {
 		// If encoding fails, we can't do much; log it.
 		// (we could use a logger here, but to avoid import cycles we just ignore)
 	}
+}
+
+// reasonPermissionsChanged is the machine-readable half of that refusal. `msg`
+// is translated, so a client cannot match on it; `error.reason` is what tells
+// a client to refresh once and retry instead of sending the user to sign in.
+const reasonPermissionsChanged = "permissionsChanged"
+
+// stalePermissions reports whether what the token says the caller may do is no
+// longer true (ADR-0043): the user holds another role now, or the role's set
+// has changed since the token was minted. An empty value means Redis knows
+// nothing, and knowing nothing is never a reason to refuse — the session check
+// above is the one that fails closed.
+func stalePermissions(claims jwt.Claims, currentHash, currentRole string) bool {
+	if currentRole != "" && currentRole != claims.RoleID {
+		return true
+	}
+	return currentHash != "" && currentHash != claims.PermHash
 }

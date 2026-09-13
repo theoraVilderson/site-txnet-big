@@ -40,6 +40,7 @@
     "otpChannels": "روش‌های موجود ارسال کد",
     "me": "حساب شما",
     "sessionRevoked": "نشست شما منقضی یا باطل شده است",
+    "permissionsChanged": "دسترسی‌های شما تغییر کرده است. نشست شما تازه می‌شود.",
     "tokenExpired": "توکن منقضی شده است",
     "loginSuccess": "خوش آمدید",
     "logoutSuccess": "از حساب خارج شدید",

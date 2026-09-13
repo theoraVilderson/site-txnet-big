@@ -3,7 +3,7 @@ id: forward-auth
 layer: platform
 status: active
 version: 3
-updated: 2026-09-11
+updated: 2026-09-13
 ---
 
 # Contract — forward-auth
@@ -85,6 +85,11 @@ at ~200 lines (§10); it is one self-contained topic with its own gate.
 
 - 200 valid. 401 missing/invalid/expired token or missing session marker
   (`auth.authorizationRequired`, `auth.invalidToken`, `auth.sessionRevoked`).
+- 401 `auth.permissionsChanged` with `error: {reason: "permissionsChanged"}` when
+  Redis holds a different fingerprint for the token's role or a different role
+  for its user (ADR-0043). A client refreshes once and retries on the `reason`,
+  never on `msg`. A missing key is not a mismatch. All three keys are read in one
+  pipelined round trip.
   403 policy denies a claimed permission (`permissions.forbidden`). 500 Redis
   lookup error / unexpected (`system.unexpected`). 503 the request outlived the
   gateway's timeout (`system.unavailable`). The key is mapped to the status
