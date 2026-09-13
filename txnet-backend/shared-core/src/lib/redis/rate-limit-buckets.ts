@@ -147,6 +147,15 @@ export const RateLimitBucket = {
    */
   SETTLEMENT_ADMIN_READ: 'settlement:admin:read',
   SETTLEMENT_ADMIN_WRITE: 'settlement:admin:write',
+
+  /**
+   * Gateway management in `billing-service` (F-102-c), per user. Two buckets for
+   * the settlement surface's reason: the list is read on every visit, a gateway
+   * is created or changed a handful of times ever. Each write also costs a call
+   * to `auth-service`'s vault seam, which the write budget bounds.
+   */
+  GATEWAY_ADMIN_READ: 'gateway:admin:read',
+  GATEWAY_ADMIN_WRITE: 'gateway:admin:write',
 } as const;
 
 export type RateLimitBucket =

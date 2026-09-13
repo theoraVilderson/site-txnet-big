@@ -47,6 +47,10 @@ roles:
       # own: `SettlementService.assertOperator` also requires the platform
       # owner's tenant, because a reseller administers its own roles.
       - settlement.manage
+      # Payment gateway management (F-102-c, D-31). A tenant's Admin manages
+      # its own gateways; `GatewayAdminService` keeps everyone else's, the
+      # platform's and verification for the platform owner.
+      - gateway.manage
   Support:
     permissions:
       - user.read

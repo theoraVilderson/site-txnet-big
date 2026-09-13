@@ -106,6 +106,15 @@ export const envSchema = z.object({
    */
   SERVICE_AUTH_TOKEN: z.string().default(''),
 
+  /**
+   * `auth-service`'s internal seam, where a gateway's secrets are written
+   * (F-102-c → F-102-a, D-31). Optional at boot on purpose: payments never use
+   * it, so an unset value refuses only the gateway management writes, at call
+   * time, rather than the whole service.
+   */
+  AUTH_API_BASE_URL: z.string().default(''),
+  AUTH_API_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+
   /** The envelope's translator (`locale/locale.service.ts`). */
   LOCALE_SERVICE_ADDR: z.string().min(1).default('localhost:50051'),
   LOCALE_SCOPE: z.string().min(1).default('backend'),
@@ -233,6 +242,9 @@ export const envSchema = z.object({
    */
   SETTLEMENT_ADMIN_READ_RATE_LIMIT: rateLimit(120),
   SETTLEMENT_ADMIN_WRITE_RATE_LIMIT: rateLimit(30),
+  /** Gateway management (`payment/gateway-admin/gateway-admin.controller.ts`, F-102-c), per user. */
+  GATEWAY_ADMIN_READ_RATE_LIMIT: rateLimit(120),
+  GATEWAY_ADMIN_WRITE_RATE_LIMIT: rateLimit(30),
 }).refine((env) => !(env.NODE_ENV === 'production' && env.PAYMENT_GATEWAY_SANDBOX), {
   message: 'PAYMENT_GATEWAY_SANDBOX=true is refused when NODE_ENV=production',
   path: ['PAYMENT_GATEWAY_SANDBOX'],

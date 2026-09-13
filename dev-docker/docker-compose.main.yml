@@ -693,6 +693,9 @@ services:
       # `/api/internal/*`, which Traefik does not route at all. Empty closes
       # the seam — and is refused when NODE_ENV=production.
       - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
+      # The other direction on the same seam (F-102-c): gateway management
+      # relays a gateway's secrets to auth-service, the vault's only writer.
+      - AUTH_API_BASE_URL=http://auth-service:${AUTH_PORT}
       # The app role, never the owner: RLS does not bind a table's owner
       # (F-066-m-a). Every gated route reads the tenant forward-auth forwards
       # (F-092-a) and uses this pool.

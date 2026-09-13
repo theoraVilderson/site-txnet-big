@@ -18,6 +18,26 @@ payment attempt routes (F-092-n) in
 **[contract.history.md](contract.history.md)** (both §10). Every other row in *Provides* is still intent from
 `txnet-backend/prisma/domains/billing.prisma`.
 
+## Gateway management (built — F-102-b/c, D-31)
+
+`/api/billing/gateways` (`payment/gateway-admin/`): `GET` list, `POST` create,
+`PATCH` / `DELETE :source/:id`. Behind `gateway.manage`; the permission is not
+the boundary. Linking a gateway to another tenant is the settlement grant
+(`domains/audit/contract.settlement.md`), not this surface.
+
+| Rule | Why |
+|---|---|
+| The platform owner manages every gateway; any other tenant only its own `tenant_gateway_config` rows. Anything else is `gateway_not_found` | a reseller who could edit another's gateway could point its merchant id at its own account; a 404 does not confirm the row exists |
+| Only the platform owner sets `verificationStatus`; a tenant changing a verified gateway's secret resets it to `pending_test_transaction`, committed **before** the secret is written | a verified gateway is otherwise a place to swap in an unverified account |
+| `merchantId` / `secretKey` are relayed to `auth-service` (`VaultSecretClient` → F-102-a) and appear in no answer, audit row or column; answers carry `credentials` as `{configured, version, rotatedAt}` | write-only secrets (ADR-0026 guarantee 1); `billing` still loads the vault read-only |
+| Delete: a row nothing points at is deleted; one a payment or grant points at is deactivated and its live grants withdrawn. Secrets are revoked **first** | ADR-0041 §6; a failure part-way leaves a gateway that cannot charge |
+| Every write lands with its `admin_audit_log` row (`gateway_create` / `_update` / `_delete`) in one transaction | who changed a gateway is the question after money went somewhere unexpected |
+
+Refusals name their `reason`: 403 `not_platform_owner`, `verification_is_platform_owners`;
+404 `gateway_not_found`, `tenant_not_found`; 409 `provider_already_configured`;
+400 `invalid_range`, `missing_field`; 502 `secrets_unavailable`. Proof:
+`gateway-admin.service.spec.ts`, `vault-secret.client.spec.ts`.
+
 ## Coupon reservation (built — F-092-h)
 
 `CouponReservationService.reserve(tx, {userId, orderReferenceId, paymentTransactionId?, applied})`,

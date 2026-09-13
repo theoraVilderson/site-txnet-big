@@ -15,6 +15,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 import { CallbackTenantMiddleware } from './request/callback-tenant.middleware';
 import { IdentityMiddleware } from './request/identity.middleware';
+import { GatewayAdminModule } from './payment/gateway-admin/gateway-admin.module';
 import { SettlementModule } from './settlement/settlement.module';
 import { WalletModule } from './wallet/wallet.module';
 
@@ -47,6 +48,7 @@ const INTERNAL_ROUTES = 'internal/*';
     DepositModule,
     GiftModule,
     SettlementModule,
+    GatewayAdminModule,
   ],
   controllers: [HealthController],
   providers: [

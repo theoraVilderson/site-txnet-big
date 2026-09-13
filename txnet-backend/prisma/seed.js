@@ -88,6 +88,23 @@ async function grantAllPermissionsToSuperAdmin() {
   });
 }
 
+// F-102-c (D-31): a tenant's Admin manages its own payment gateways. The same
+// grant as migration 20260913000300, for a fresh database whose roles are
+// created here after migrations ran.
+async function grantGatewayManageToAdmin() {
+  const role = await prisma.role.findUniqueOrThrow({ where: { name: 'Admin' } });
+  const permission = await prisma.permission.upsert({
+    where: { key: 'gateway.manage' },
+    update: {},
+    create: { key: 'gateway.manage' },
+  });
+  await prisma.rolePermission.upsert({
+    where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } },
+    update: {},
+    create: { roleId: role.id, permissionId: permission.id },
+  });
+}
+
 function generatePassword() {
   // Satisfies strongPasswordSchema (upper, lower, digit, special, 8-72 chars)
   // without ever containing the owner's username/fullName.
@@ -103,6 +120,7 @@ async function main() {
     });
   }
   await grantAllPermissionsToSuperAdmin();
+  await grantGatewayManageToAdmin();
 
   const existingTenant = await prisma.tenant.findUnique({
     where: { slug: 'platform_owner' },
