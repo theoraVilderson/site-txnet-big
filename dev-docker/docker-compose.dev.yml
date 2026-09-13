@@ -4,28 +4,72 @@
 # so nothing here reaches it.
 # =============================================================================
 #
-# billing-service runs straight from the host checkout: no image is built and
-# no npm install runs in a container.
+# Every NestJS service (auth, bot, worker, gateway, billing) runs straight from
+# the host checkout: no image is built and no `npm ci` runs in a container.
 #
 #   - `node_modules` is the host's own (`txnet-backend/node_modules`, bind
-#     mounted with the rest of the tree). To add or upgrade a package, run npm
-#     on the host; the container sees it on its next restart.
+#     mounted with the rest of the tree). main.yml's anonymous `/app/node_modules`
+#     volume is dropped here on purpose — it would hide the host's copy behind an
+#     empty one. To add or upgrade a package, run npm on the host; the container
+#     sees it on its next restart.
 #   - The image is stock Node 24 on Debian (glibc) because that is what the host
 #     is: the host's native modules — the Prisma engine
-#     (`debian-openssl-3.0.x`), `@swc/core-linux-x64-gnu` — do not load on
-#     Alpine (musl) or on Node 20. The `-slim` variant has no OpenSSL, which
-#     Prisma needs.
+#     (`debian-openssl-3.0.x`), `@swc/core-linux-x64-gnu`, `@nx/nx-linux-x64-gnu`
+#     — do not load on Alpine (musl) or on Node 20. The `-slim` variant has no
+#     OpenSSL, which Prisma needs.
 #   - `scripts/dev-serve.js` keeps one webpack watch alive and restarts the app
 #     on every save, so a code change needs neither a rebuild nor a restart. A
 #     schema change needs `npx prisma generate` on the host, then a restart.
+#   - `volumes: !override` replaces main.yml's list whole, so any other mount a
+#     service needs (the vault KEK) is repeated here, or the service loses it.
+#   - `build: !reset null` is written **in each service**, never in the anchor
+#     below: a YAML merge key (`<<:`) drops compose's `!reset` tag, and the
+#     service then silently builds its image — `npm ci` included — again.
+
+x-host-node: &host-node
+  image: ${DOCKER_REGISTRY}/node:24-bookworm
+  pull_policy: missing
+  working_dir: /app
+  command: ["node", "scripts/dev-serve.js"]
 
 services:
-  billing-service:
+  auth-service:
+    <<: *host-node
     build: !reset null
-    image: ${DOCKER_REGISTRY}/node:24-bookworm
-    pull_policy: missing
-    working_dir: /app
-    command: ["node", "scripts/dev-serve.js"]
+    environment:
+      - APP_NAME=auth-service
+    volumes: !override
+      - ../txnet-backend:/app:delegated
+      # The vault's KEK (ADR-0039): without it auth-service refuses to boot.
+      - ./secrets/vault-kek:/run/secrets/vault-kek:ro
+
+  bot-service:
+    <<: *host-node
+    build: !reset null
+    environment:
+      - APP_NAME=bot-service
+    volumes: !override
+      - ../txnet-backend:/app:delegated
+
+  worker-service:
+    <<: *host-node
+    build: !reset null
+    environment:
+      - APP_NAME=worker-service
+    volumes: !override
+      - ../txnet-backend:/app:delegated
+
+  gateway-service:
+    <<: *host-node
+    build: !reset null
+    environment:
+      - APP_NAME=gateway-service
+    volumes: !override
+      - ../txnet-backend:/app:delegated
+
+  billing-service:
+    <<: *host-node
+    build: !reset null
     environment:
       - APP_NAME=billing-service
     volumes: !override
