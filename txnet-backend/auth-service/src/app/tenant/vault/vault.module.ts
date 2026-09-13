@@ -6,6 +6,8 @@ import {
   VAULT_DB,
 } from '@txnet-backend/shared-core';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
+import { GatewayCredentialController } from './gateway-credential.controller';
+import { GatewayCredentialService } from './gateway-credential.service';
 import { VaultInternalController } from './vault-internal.controller';
 
 /**
@@ -34,10 +36,13 @@ import { VaultInternalController } from './vault-internal.controller';
  * `PrismaModule` is `@Global`, so it is not imported here.
  */
 @Module({
-  controllers: [VaultInternalController],
+  // F-102-a: the second controller is the gateway-secret write seam for
+  // `billing-service`, which loads the vault read-only (ADR-0039, D-31).
+  controllers: [VaultInternalController, GatewayCredentialController],
   providers: [
     KekService,
     CredentialVaultService,
+    GatewayCredentialService,
     CredentialEnvGuard,
     { provide: VAULT_DB, useExisting: CrossTenantPrismaService },
   ],

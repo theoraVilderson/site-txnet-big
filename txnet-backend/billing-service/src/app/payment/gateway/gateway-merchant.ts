@@ -1,12 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { PaymentProviderName, TenantCredentialKind, TenantCredentialStatus } from '@prisma/client';
-import { CredentialUnavailable, CredentialVaultService } from '@txnet-backend/shared-core';
+import {
+  CredentialUnavailable,
+  CredentialVaultService,
+  gatewayCredentialLabel,
+  type GatewayCredentialSource,
+} from '@txnet-backend/shared-core';
 
 import { GrantedVaultAccess } from './granted-vault-access';
 import type { GatewayCredentials } from './payment-provider';
 
 /** Which table a gateway row is in: a tenant's `tenant_gateway_config`, or the platform brand's `payment_gateway`. */
-export type GatewaySource = 'tenant' | 'platform';
+export type GatewaySource = GatewayCredentialSource;
 
 /** One gateway row, as the vault is asked about it. */
 export type MerchantGatewayRef = {
@@ -25,9 +30,10 @@ export type MerchantGatewayRef = {
 
 /**
  * The vault label of one gateway's merchant id: `gateway:<source>:<gatewayId>`,
- * in the shape the bot's `bot:<platform>:<username>` labels already use.
+ * in the shape the bot's `bot:<platform>:<username>` labels already use. The
+ * spelling is `shared-core`'s, because `auth-service` writes under it (F-102-a).
  */
-export const merchantLabel = (source: GatewaySource, gatewayId: string) => `gateway:${source}:${gatewayId}`;
+export const merchantLabel = (source: GatewaySource, gatewayId: string) => gatewayCredentialLabel(source, gatewayId);
 
 /**
  * A gateway's merchant id, from its tenant's vault (F-092-f, ADR-0006,

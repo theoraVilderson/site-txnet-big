@@ -5,6 +5,9 @@ import {
   TenantCredentialStatus,
 } from '@prisma/client';
 import { KekService } from './kek.service';
+// The label two processes must spell identically (F-102-a) — exported from
+// here so it arrives wherever the vault itself does.
+export * from './gateway-label';
 import {
   fingerprint,
   fingerprintsMatch,

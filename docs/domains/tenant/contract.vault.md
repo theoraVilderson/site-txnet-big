@@ -21,8 +21,18 @@ the why, and this file does not restate it.
 
 | Service | `VAULT_DB` binds | Uses |
 |---|---|---|
-| `auth-service` (`app/tenant/vault/vault.module.ts`) | the cross-tenant pool — its readers resolve a tenant through the vault | every operation, the internal destroy route |
+| `auth-service` (`app/tenant/vault/vault.module.ts`) | the cross-tenant pool — its readers resolve a tenant through the vault | every operation, the internal destroy route, and **the only writer of a gateway's secrets** (F-102-a, below) |
 | `billing-service` (`payment/gateway/gateway.module.ts`) | the app pool, each vault query bound to the request's tenant — **except inside a proved grant**, below; `$transaction` refused, so no `put` | `use` of `gateway_merchant_id` |
+
+**Gateway secrets are written over a seam, not by `billing` (D-31).**
+`POST /internal/vault/gateway-credential` (+ `/state`, `/revoke`,
+`GatewayCredentialService`) stores `gateway_merchant_id` / `gateway_secret_key`
+under `gatewayCredentialLabel(source, gatewayId)` — the one spelling, in
+`shared-core`, that `billing`'s `merchantLabel` delegates to. The vault is the
+one re-derived from the gateway row (a `tenant_gateway_config`'s `tenantId`; the
+platform owner for a `payment_gateway`), never the caller's. It answers
+`{configured, version, rotatedAt}` per secret: no value, no fingerprint, and no
+value in a refusal.
 
 A loader mounts the same `VAULT_KEK_FILE` and gets `CredentialEnvGuard` with
 it. Every rule below holds in either process.
