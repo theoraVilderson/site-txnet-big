@@ -81,6 +81,134 @@
       "empty": "No links yet.",
       "live": "Linked",
       "withdrawn": "Unlinked"
+    },
+    "wizard": {
+      "stepOf": "Step {{current}} of {{total}}",
+      "back": "Back",
+      "next": "Continue",
+      "create": "Create gateway",
+      "creating": "Creating…",
+      "close": "Close",
+      "confirmClose": "What you entered will not be saved. Leave anyway?",
+      "tip": "Tip",
+      "optional": "Optional",
+      "edit": "Change",
+      "steps": {
+        "provider": {
+          "title": "Provider",
+          "subtitle": "Which service should take the payments?",
+          "tip": "Choose by who pays you: Iranian bank cards, international cards or crypto. Category and name are filled in for you and can be changed later."
+        },
+        "details": {
+          "title": "Details",
+          "subtitle": "The name and the amounts this gateway accepts",
+          "tip": "The display name is what a user sees at checkout. Amounts are in the base currency (USD), even for a rial gateway; the rate is applied at payment time."
+        },
+        "fee": {
+          "title": "Fee",
+          "subtitle": "What each payment is charged",
+          "tip": "Manual: you set the fee. Automatic: the provider quotes it at payment time. The fee floor and ceiling apply in both modes."
+        },
+        "secrets": {
+          "title": "Connect",
+          "subtitle": "The keys from the provider's dashboard",
+          "tip": "These are stored encrypted in the vault and never shown again, not even to you. Don't have them now? Add them later with Edit."
+        },
+        "review": {
+          "title": "Review",
+          "subtitle": "Look everything over before creating it",
+          "tip": "Suggestion: create it inactive, run a test transaction, then activate it."
+        }
+      },
+      "owner": {
+        "label": "Who is this gateway for?",
+        "tenant": "Tenant",
+        "tenantDesc": "A tenant's own gateway (yours, or the tenant id you enter)",
+        "platform": "Platform",
+        "platformDesc": "A central gateway you link to tenants"
+      },
+      "providers": {
+        "zarinpal": {
+          "desc": "Rial gateway, Shetab bank cards",
+          "where": "In the Zarinpal dashboard, copy the merchant code from your gateways."
+        },
+        "idpay": {
+          "desc": "Rial gateway, Shetab bank cards",
+          "where": "In the IDPay dashboard, take the API key from the web service section."
+        },
+        "nowpayments": {
+          "desc": "Crypto payments (BTC, USDT, …)",
+          "where": "In the NOWPayments dashboard, create the API key and IPN secret under Settings."
+        },
+        "stripe": {
+          "desc": "International Visa and Mastercard",
+          "where": "In the Stripe dashboard, take the keys from Developers › API keys."
+        }
+      },
+      "categories": {
+        "domestic_rial": "Domestic rial",
+        "international_card": "International card",
+        "crypto": "Crypto"
+      },
+      "feeModes": {
+        "manual": {
+          "title": "Manual",
+          "desc": "A percentage or fixed amount you set"
+        },
+        "automatic": {
+          "title": "Automatic",
+          "desc": "Quoted by the provider at payment time"
+        }
+      },
+      "feeTypes": {
+        "percentage": "Percentage",
+        "fixed": "Fixed amount"
+      },
+      "verification": {
+        "pending_test_transaction": "Awaiting a test transaction",
+        "verified": "Verified",
+        "failed": "Failed"
+      },
+      "hints": {
+        "displayName": "e.g. \"Pay by bank card\"",
+        "amounts": "The smallest and largest single payment, in USD",
+        "isActive": "Best left off until you have tested it",
+        "advanced": "Fee floor and ceiling",
+        "automaticNote": "The fee is taken from the provider at the moment of payment.",
+        "tenantId": "Leave empty to create it for your own tenant"
+      },
+      "preview": {
+        "title": "Fee preview",
+        "amount": "For a payment of",
+        "fee": "Fee",
+        "invalid": "Enter a valid fee value"
+      },
+      "secrets": {
+        "show": "Show",
+        "hide": "Hide",
+        "missing": "Without the keys the gateway cannot take payments. You can add them later with Edit.",
+        "entered": "Entered",
+        "notEntered": "Not entered",
+        "safe": "Stored encrypted"
+      },
+      "review": {
+        "owner": "Owner",
+        "yes": "Yes",
+        "no": "No",
+        "range": "Amount range",
+        "floor": "Floor",
+        "ceiling": "Ceiling",
+        "none": "—"
+      },
+      "done": {
+        "title": "\"{{name}}\" is created",
+        "subtitle": "A few steps to the first payment:",
+        "step1": "Run a small test transaction",
+        "step2": "If you skipped the keys, add them with Edit",
+        "step3": "Activate the gateway so users can see it",
+        "another": "Add another gateway",
+        "finish": "View gateways"
+      }
     }
   },
   "wallet": {

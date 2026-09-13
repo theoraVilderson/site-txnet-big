@@ -12,6 +12,7 @@ import { useGateways } from "../_hooks/useGateways";
 import { canManageLinks } from "../_lib/gateway-form";
 import { GatewayFormModal } from "./GatewayFormModal";
 import { GatewayLinks } from "./GatewayLinks";
+import { GatewayWizard } from "./GatewayWizard";
 
 const G = FrontendI18nKeys.common.gateways;
 
@@ -109,7 +110,20 @@ export function GatewaysView() {
             </button>
           </div>
         ) : gateways.length === 0 ? (
-          <p className="text-sm text-text-secondary">{t("common", G.empty)}</p>
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <span className="grid size-14 place-items-center rounded-2xl bg-[var(--leaf-bg)] text-primary">
+              <Landmark size={26} aria-hidden />
+            </span>
+            <p className="text-sm text-text-secondary">{t("common", G.empty)}</p>
+            <button
+              type="button"
+              onClick={() => setEditing("new")}
+              className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-white shadow-md"
+            >
+              <Plus size={16} aria-hidden />
+              {t("common", G.add)}
+            </button>
+          </div>
         ) : (
           <ul className="divide-y divide-card-border">
             {gateways.map((g) => (
@@ -152,9 +166,19 @@ export function GatewaysView() {
 
       {owner && grants && <GatewayLinks gateways={gateways} grants={grants} onChanged={reload} />}
 
-      {editing && (
+      {editing === "new" && (
+        <GatewayWizard
+          me={me}
+          onClose={() => setEditing(null)}
+          onCreated={async () => {
+            setNotice(null);
+            await reload();
+          }}
+        />
+      )}
+      {editing && editing !== "new" && (
         <GatewayFormModal
-          gateway={editing === "new" ? null : editing}
+          gateway={editing}
           me={me}
           onClose={() => setEditing(null)}
           onSaved={async () => {
