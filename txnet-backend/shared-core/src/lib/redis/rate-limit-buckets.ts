@@ -163,6 +163,13 @@ export const RateLimitBucket = {
    */
   PAYMENT_MANUAL_READ: 'payment:manual:read',
   PAYMENT_MANUAL_WRITE: 'payment:manual:write',
+
+  /**
+   * One of the caller's own payments (F-093-l), per user. Its own bucket, not
+   * `WALLET_PAYMENTS`: the pending page polls it, and a payer watching a
+   * verifying payment must not use up the financial page's list budget.
+   */
+  WALLET_PAYMENT: 'wallet:payment',
 } as const;
 
 export type RateLimitBucket =

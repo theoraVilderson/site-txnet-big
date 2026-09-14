@@ -29,7 +29,7 @@ import { signResultToken } from './payment-result-token';
  */
 
 /** The panel pages the browser is handed back to. Relative, on the host it arrived on. */
-const RESULT_PATH = { success: '/payment/success', failed: '/payment/failed' } as const;
+const RESULT_PATH = { success: '/payment/success', failed: '/payment/failed', pending: '/payment/pending' } as const;
 
 /**
  * Where the browser goes: the result page for the outcome, carrying the outcome
@@ -45,7 +45,7 @@ function resultUrl(outcome: SettledCallback, secret: string): string {
   // Absolute to the panel the payer started from: the callback may have landed
   // on a relay or the API host, where a relative path is a 404.
   const origin = outcome.returnOrigin ?? '';
-  const path = outcome.kind === 'failed' ? RESULT_PATH.failed : RESULT_PATH.success;
+  const path = outcome.kind === 'failed' ? RESULT_PATH.failed : outcome.kind === 'verifying' ? RESULT_PATH.pending : RESULT_PATH.success;
   if (!secret) return `${origin}${path}`;
   return `${origin}${path}?t=${encodeURIComponent(signResultToken(outcome, secret))}`;
 }

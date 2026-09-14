@@ -93,6 +93,11 @@ export interface WalletPaymentRow {
   gateway: { source: "platform" | "tenant"; id: string; displayName: string } | null;
   createdAt: string;
   expiresAt: string | null;
+  /**
+   * `pending` with its retry clock running (F-092-x): the gateway met the
+   * verify with silence and billing is asking again. The money may have moved.
+   */
+  verifying: boolean;
 }
 
 export type WalletPaymentsPage = Paged<WalletPaymentRow>;
@@ -262,6 +267,14 @@ export const billingApi = {
    */
   async walletPayments(query: string): Promise<WalletPaymentsPage> {
     return call<WalletPaymentsPage>(`/wallet/payments?${query}`, { method: "GET" });
+  },
+
+  /**
+   * One of the caller's own top-up attempts (F-093-l) — what `/payment/pending`
+   * polls until the payment settles. Another user's id is a 404.
+   */
+  async walletPayment(id: string): Promise<WalletPaymentRow> {
+    return call<WalletPaymentRow>(`/wallet/payments/${encodeURIComponent(id)}`, { method: "GET" });
   },
 
   /**

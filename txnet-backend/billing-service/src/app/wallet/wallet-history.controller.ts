@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Req } from '@nestjs/common';
+import { Controller, Get, NotFoundException, Param, ParseUUIDPipe, Query, Req } from '@nestjs/common';
 import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
@@ -54,5 +54,21 @@ export class WalletHistoryController {
   })
   payments(@Query(new ZodValidationPipe(walletPaymentsSchema)) query: WalletPaymentsQuery, @Req() req: Request) {
     return this.history.payments({ userId: identityOf(req).userId, ...query });
+  }
+
+  /**
+   * One of the caller's own top-up attempts (F-093-l) — what `/payment/pending`
+   * polls. Another user's id is the same 404 as an id that does not exist.
+   */
+  @Get('payments/:id')
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.WALLET_PAYMENT, identityOf(req).userId),
+    configKey: 'WALLET_PAYMENT_RATE_LIMIT',
+    windowSec: 900,
+  })
+  async payment(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
+    const row = await this.history.payment(identityOf(req).userId, id);
+    if (!row) throw new NotFoundException();
+    return row;
   }
 }

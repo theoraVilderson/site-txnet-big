@@ -587,6 +587,16 @@
       "SYSTEM_ERROR": "Something went wrong while settling this payment. Any amount taken is held until this is resolved.",
       "retry": "Try again",
       "toPanel": "Back to the panel"
+    },
+    "pending": {
+      "title": "Confirming your payment",
+      "subtitle": "The gateway has not confirmed this payment yet. We are checking with it again automatically.",
+      "safe": "If money was taken from your account, it is safe: your wallet is credited as soon as the gateway confirms it.",
+      "doNotPayAgain": "Do not pay again for this top-up.",
+      "checking": "Checking…",
+      "toFinancial": "View financial history",
+      "closedTitle": "This payment was not settled",
+      "closedSubtitle": "The gateway did not confirm this payment. If money was taken, it is returned by your bank."
     }
   }
 }

@@ -117,6 +117,11 @@ export type PaymentRow = {
   gateway: { source: 'platform' | 'tenant'; id: string; displayName: string } | null;
   createdAt: string;
   expiresAt: string | null;
+  /**
+   * `pending` with its retry clock running (F-092-x): the gateway met the
+   * verify with silence and is being asked again. The money may have moved.
+   */
+  verifying: boolean;
 };
 
 export type PaymentPage = {
@@ -155,6 +160,7 @@ const PAYMENT_COLUMNS = {
   failureCode: true,
   createdAt: true,
   expiresAt: true,
+  nextVerifyAt: true,
   gateway: { select: { id: true, displayName: true } },
   tenantGatewayConfig: { select: { id: true, displayName: true } },
 } satisfies Prisma.PaymentTransactionSelect;
@@ -172,6 +178,39 @@ const paged = (request: { page?: number; pageSize?: number }) => ({
   page: request.page ?? DEFAULT_PAGE,
   pageSize: request.pageSize ?? DEFAULT_PAGE_SIZE,
 });
+
+type PaymentColumns = Prisma.PaymentTransactionGetPayload<{ select: typeof PAYMENT_COLUMNS }>;
+
+/** One attempt as both routes answer it. */
+function paymentRowOf(r: PaymentColumns): PaymentRow {
+  return {
+    id: r.id,
+    status: r.status,
+    amountRequested: money(r.amountRequested),
+    fee: money(r.feeApplied),
+    discount: money(r.discountApplied),
+    amountCredited: money(r.amountCredited),
+    charge: {
+      amountMinor: r.chargedAmountMinor.toString(),
+      rate: r.exchangeRateSnapshot === null ? null : r.exchangeRateSnapshot.toString(),
+    },
+    trackingCode: r.gatewayTrackingCode,
+    referenceId: r.gatewayReferenceId,
+    cardPanMasked: r.cardPanMasked,
+    failureCode: r.failureCode,
+    // Exactly one of the two columns is set — a CHECK enforces it
+    // (ADR-0006, F-092-d) — and the answer names which, as the deposit
+    // routes do, since the ids never cross tables.
+    gateway: r.gateway
+      ? { source: 'platform' as const, id: r.gateway.id, displayName: r.gateway.displayName }
+      : r.tenantGatewayConfig
+        ? { source: 'tenant' as const, id: r.tenantGatewayConfig.id, displayName: r.tenantGatewayConfig.displayName }
+        : null,
+    createdAt: r.createdAt.toISOString(),
+    expiresAt: r.expiresAt?.toISOString() ?? null,
+    verifying: r.status === PaymentStatus.pending && r.nextVerifyAt !== null,
+  };
+}
 
 @Injectable()
 export class WalletHistoryService {
@@ -278,38 +317,21 @@ export class WalletHistoryService {
         tx.paymentTransaction.count({ where }),
       ]);
 
-      return {
-        total,
-        page,
-        pageSize,
-        rows: rows.map((r) => ({
-          id: r.id,
-          status: r.status,
-          amountRequested: money(r.amountRequested),
-          fee: money(r.feeApplied),
-          discount: money(r.discountApplied),
-          amountCredited: money(r.amountCredited),
-          charge: {
-            amountMinor: r.chargedAmountMinor.toString(),
-            rate: r.exchangeRateSnapshot === null ? null : r.exchangeRateSnapshot.toString(),
-          },
-          trackingCode: r.gatewayTrackingCode,
-          referenceId: r.gatewayReferenceId,
-          cardPanMasked: r.cardPanMasked,
-          failureCode: r.failureCode,
-          // Exactly one of the two columns is set — a CHECK enforces it
-          // (ADR-0006, F-092-d) — and the answer names which, as the deposit
-          // routes do, since the ids never cross tables.
-          gateway: r.gateway
-            ? { source: 'platform' as const, id: r.gateway.id, displayName: r.gateway.displayName }
-            : r.tenantGatewayConfig
-              ? { source: 'tenant' as const, id: r.tenantGatewayConfig.id, displayName: r.tenantGatewayConfig.displayName }
-              : null,
-          createdAt: r.createdAt.toISOString(),
-          expiresAt: r.expiresAt?.toISOString() ?? null,
-        })),
-      };
+      return { total, page, pageSize, rows: rows.map(paymentRowOf) };
     });
+  }
+
+  /**
+   * One of the caller's own payments, or `null` (F-093-l): what the pending
+   * page polls. By id **and** user, so another user's payment id answers
+   * exactly what a made-up one does.
+   */
+  async payment(userId: string, id: string): Promise<PaymentRow | null> {
+    TenantContext.current('wallet payment');
+    const row = await tenantTransaction(this.prisma, (tx) =>
+      tx.paymentTransaction.findFirst({ where: { id, userId }, select: PAYMENT_COLUMNS }),
+    );
+    return row ? paymentRowOf(row) : null;
   }
 
   /**

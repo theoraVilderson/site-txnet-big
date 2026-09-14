@@ -4,8 +4,8 @@ import type { CSSProperties, ReactNode } from "react";
 import { confettiBurst } from "../_lib/celebration";
 
 export interface PaymentResultCardProps {
-  /** `success` for a settled payment, `failure` for one that is not. */
-  tone: "success" | "failure";
+  /** `success` for a settled payment, `failure` for one that is not, `pending` for one not yet known (F-093-l). */
+  tone: "success" | "failure" | "pending";
   /**
    * Burst the confetti. Only a payment settled on *this* visit — a reload with
    * `?already=1` says so quietly (contract.payment-result.md rule 3).
@@ -30,6 +30,13 @@ const TONE = {
     text: "text-error",
     disc: "var(--error-bg)",
     heading: "text-error",
+  },
+  // Theme green like success — the money is safe — with a clock, not a tick.
+  pending: {
+    vars: { "--pay-tone": "var(--accent-primary)", "--pay-glow": "var(--accent-glow)" },
+    text: "text-primary",
+    disc: "var(--leaf-bg)",
+    heading: "text-text-primary",
   },
 } as const;
 
@@ -70,6 +77,7 @@ export function PaymentResultCard({
 }: PaymentResultCardProps) {
   const style = TONE[tone];
   const success = tone === "success";
+  const pending = tone === "pending";
 
   return (
     <div className="mx-auto flex min-h-[70vh] w-full max-w-md items-center p-4 md:p-8">
@@ -127,7 +135,7 @@ export function PaymentResultCard({
               </svg>
             ))}
 
-          <div className={`relative size-full ${success ? "pay-emblem-success" : "pay-emblem-failure"}`}>
+          <div className={`relative size-full ${success || pending ? "pay-emblem-success" : "pay-emblem-failure"}`}>
             <svg viewBox="0 0 112 112" className={`size-full ${style.text}`}>
               <circle className="pay-disc" cx="56" cy="56" r="50" fill={style.disc} />
               <circle
@@ -143,7 +151,19 @@ export function PaymentResultCard({
                 transform="rotate(-90 56 56)"
                 style={{ animationDelay: "150ms" }}
               />
-              {success ? (
+              {pending ? (
+                // Clock hands, pulsing while billing keeps asking. No draw-in:
+                // two animations on one element would fight over `animation`.
+                <path
+                  className="motion-safe:animate-pulse"
+                  d="M56 34v24l15 9"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="7"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              ) : success ? (
                 <path
                   className="pay-stroke"
                   d="M36 57.5 50 71l27-29"

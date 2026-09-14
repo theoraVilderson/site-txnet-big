@@ -36,6 +36,11 @@ describe('signResultToken', () => {
     expect(payload).toEqual({ k: 'f', c: 'SYSTEM_ERROR', e: Math.floor(NOW / 1000) + RESULT_TOKEN_TTL_SEC });
   });
 
+  it('carries a verifying payment by its id only (F-093-l)', () => {
+    const { payload } = decode(signResultToken({ kind: 'verifying', paymentId: 'p-1' }, SECRET, NOW));
+    expect(payload).toEqual({ k: 'v', p: 'p-1', e: Math.floor(NOW / 1000) + RESULT_TOKEN_TTL_SEC });
+  });
+
   it('is an HMAC-SHA256 of the body under the shared secret', () => {
     const { body, mac } = decode(
       signResultToken({ kind: 'success', referenceId: null, alreadyPaid: false }, SECRET, NOW),

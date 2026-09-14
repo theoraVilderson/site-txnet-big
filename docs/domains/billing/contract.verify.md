@@ -23,7 +23,7 @@ columns of `payment_transaction` (migration `20260914000100_payment_verify_retry
 |---|---|
 | **"Verifying" is not a status.** It is a `pending` row whose `nextVerifyAt` is non-null; `verifyAttempts` (default 0) is the rung it last climbed | every guard ADR-0028 hangs off `status: pending` — the credit, `close()`, the expiry flip — stays exactly as it was (invariant 7) |
 | The ladder is 30 s, 1, 2, 5, 10, 30 min, then hourly, indexed by the attempts **already made** (`verifyRetryDelaySec`) | the measured Zarinpal downtime is about a minute (2026-09-14); hourly after that so a gateway that stays down is not hammered |
-| **Silence schedules.** At the callback: `unavailable`, `amount_mismatch`, an unreadable merchant id or any unexpected error. At reconciliation: an `in_bank` answer, and any inquire or verify that got no answer except `authority_invalid` | ADR-0044 decision 2. The callback's outcome code is still `GATEWAY_CONNECTION_ERROR` until F-093-l gives the panel a page for it |
+| **Silence schedules.** At the callback: `unavailable`, `amount_mismatch`, an unreadable merchant id or any unexpected error. At reconciliation: an `in_bank` answer, and any inquire or verify that got no answer except `authority_invalid` | ADR-0044 decision 2. The callback then answers `verifying` → `/payment/pending?t=` (below) |
 | The schedule write is `updateMany({ id, status: pending, verifyAttempts: <read> })` and changes only the two columns | a callback and a sweep hearing silence together cannot both climb from one rung; a row settled in between is left alone |
 | **A settled answer clears `nextVerifyAt`** and keeps `verifyAttempts`: the credit (`DepositSettlementService`), a stated refusal (`close()`), and at reconciliation `failed`, `reversed`, `authority_invalid` and a `flagged_mismatch` — the last in the same transaction as its log row | how many tries it took is part of what a person reads later; a mismatch is a person's question, not the ladder's |
 | **The expiry sweep skips a verifying row**, in its scan and in its guard (`nextVerifyAt: null`) | ADR-0044 decision 4: the gateway may have the money, so the coupon holds stay until a settled answer or a person closes it |
@@ -70,4 +70,11 @@ decided), `unsettled` (inquire only), `confirmed_manually` (confirm only).
 | `creditVerified` refuses `admin_manual` without the person, and a person on any other source | the enum and the columns cannot disagree |
 | The amount is never a parameter: the credit is the row's `amountCredited` | a person confirms *that* it was paid, not *what* |
 | Per user, per 900s: the list `PAYMENT_MANUAL_READ_RATE_LIMIT` (120), inquire and confirm `PAYMENT_MANUAL_WRITE_RATE_LIMIT` (30) | each write is a call to a bank |
+
+## The payer watches it (built — F-093-l)
+
+| Rule | Why |
+|---|---|
+| The callback's silence answers `{kind: 'verifying', paymentId}`, signed `{k:'v', p, e}` (`payment-result-token.ts`) and redirected to `RESULT_PATH.pending` | ADR-0044 decision 7: a payer never reads "failed" for a payment that may have been charged |
+| `GET /api/billing/wallet/payments/:id` answers one `WalletPaymentRow` of **the caller's own** (`id` and `userId` together; anyone else's is **404**), per user `WALLET_PAYMENT_RATE_LIMIT` (300 / 900 s). Both payment routes carry `verifying` = `pending` and `nextVerifyAt` set | the page polls it every 10 s; its own bucket so polling never spends the financial page's |
 

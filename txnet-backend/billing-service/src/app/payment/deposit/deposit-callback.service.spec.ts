@@ -246,7 +246,8 @@ describe('DepositCallbackService.settle', () => {
 
     const outcome = await settle(service);
 
-    expect(outcome).toEqual({ kind: 'failed', code: 'GATEWAY_CONNECTION_ERROR' });
+    // The panel's pending page, not "failed" (F-093-l, ADR-0044 decision 7).
+    expect(outcome).toEqual({ kind: 'verifying', paymentId: PAYMENT });
     expectOnlyVerifying(calls);
     expect(calls.settled).toEqual([]);
     expect(calls.credited).toEqual([]);
@@ -259,7 +260,8 @@ describe('DepositCallbackService.settle', () => {
 
     const outcome = await settle(service);
 
-    expect(outcome).toEqual({ kind: 'failed', code: 'GATEWAY_CONNECTION_ERROR' });
+    // The panel's pending page, not "failed" (F-093-l, ADR-0044 decision 7).
+    expect(outcome).toEqual({ kind: 'verifying', paymentId: PAYMENT });
     expectOnlyVerifying(calls);
     expect(calls.credited).toEqual([]);
   });
@@ -274,7 +276,8 @@ describe('DepositCallbackService.settle', () => {
 
     const outcome = await settle(service);
 
-    expect(outcome).toEqual({ kind: 'failed', code: 'GATEWAY_CONNECTION_ERROR' });
+    // The panel's pending page, not "failed" (F-093-l, ADR-0044 decision 7).
+    expect(outcome).toEqual({ kind: 'verifying', paymentId: PAYMENT });
     expectOnlyVerifying(calls);
     expect(calls.credited).toEqual([]);
   });

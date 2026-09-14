@@ -59,7 +59,11 @@ export type CallbackFailureCode =
   | 'INVALID_PARAMS'
   /** No payment of this tenant carries that authority. */
   | 'TRANSACTION_NOT_FOUND'
-  /** The gateway did not answer, or answered something that settles nothing. The row is untouched. */
+  /**
+   * The gateway did not answer. Since F-093-l nothing sends it: that case is
+   * the `verifying` outcome. Kept so a token signed before the change still
+   * reads, and because the panel's key list is checked against this union.
+   */
   | 'GATEWAY_CONNECTION_ERROR'
   /** The gateway answered, and the answer was no. */
   | 'VERIFICATION_FAILED'
@@ -75,7 +79,12 @@ export type CallbackOutcome =
       /** This callback found the payment already settled — by a reload, a retry, or a race it lost. */
       alreadyPaid: boolean;
     }
-  | { kind: 'failed'; code: CallbackFailureCode };
+  | { kind: 'failed'; code: CallbackFailureCode }
+  /**
+   * The gateway met the verify with silence: still `pending`, now verifying
+   * (F-092-x). The panel's pending page polls it (F-093-l, ADR-0044 decision 7).
+   */
+  | { kind: 'verifying'; paymentId: string };
 
 /** The outcome, plus the panel origin the payment was started from when the row has one. */
 export type SettledCallback = CallbackOutcome & { returnOrigin?: string };
@@ -238,7 +247,9 @@ export class DepositCallbackService {
         `payment ${payment.id} left pending, verifying again at ${retryAt?.toISOString() ?? '(already moved)'}: ` +
           `${cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause)}`,
       );
-      return { kind: 'failed', code: 'GATEWAY_CONNECTION_ERROR' };
+      // Not "failed": the money may have moved, and a payer told otherwise pays
+      // again. The pending page polls the row and shows whatever it becomes.
+      return { kind: 'verifying', paymentId: payment.id };
     }
 
     await this.close(payment, (cause as GatewayFailure).reason);

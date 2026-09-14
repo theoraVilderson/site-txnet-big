@@ -8,8 +8,8 @@ updated: 2026-09-12
 
 # Contract — panel-web: where a bank returns a payer (F-093-f)
 
-A topic file of [contract.md](contract.md) (§10). Two pages,
-`/payment/success` and `/payment/failed`, under
+A topic file of [contract.md](contract.md) (§10). Three pages,
+`/payment/success`, `/payment/failed` and — since F-093-l — `/payment/pending`, under
 `(panel)/payment/`: `success/page.tsx` and `failed/page.tsx` read the query
 string, `_lib/payment-result.ts` turns it into what is shown, and
 `_components/` holds the card both share. They are the far end of
@@ -27,6 +27,7 @@ payment under a status guard, credited the wallet and written the event
 (`?t=`, rule 10), and the whole of both pages is how that is read.
 
 That is why neither page has a client data path, a loading state or an effect.
+`/payment/pending` is the one exception, and rule 11 says why and how far.
 
 ## Rules
 
@@ -84,6 +85,20 @@ That is why neither page has a client data path, a loading state or an effect.
    a user: a real token forwarded within 15 minutes shows a real payment. A
    reload after expiry lands on `/financial`, where the row is.
 
+11. **A verifying payment gets its own page, and only it polls (F-093-l,
+   ADR-0044 decision 7).** When the gateway met the callback's verify with
+   silence, billing signs `{k:'v', p:<paymentId>}` and redirects to
+   `PAYMENT_PENDING`. `_lib/result-token.ts` accepts it only when `p` is a uuid
+   (it becomes a request path). `PaymentPendingView` says the money is safe and
+   not to pay again, and polls `billingApi.walletPayment` every
+   `PENDING_POLL_MS` (10 s — 90 reads in 15 min against a 300 budget).
+   `_lib/pending-payment.ts` decides: `pending` or a failed read keeps waiting;
+   `success` becomes `PaymentSuccessView` with the reference (rule 4's
+   allowlist), celebrating; `failed` / `expired` becomes a "not settled" card.
+   It settles nothing and asks no gateway — billing's retries do
+   (`domains/billing/contract.verify.md`). The `pending` tone is theme green
+   with clock hands, never gold.
+
 ## What these pages do not do
 
 No amount, no wallet figure, no gateway name: the redirect carries none of
@@ -120,6 +135,7 @@ changed.
 union, the paths against the controller's `RESULT_PATH`, every key these pages
 can reach against the shipped `en` and `fa` content, rules 2, 3 and 4 as
 cases, and the confetti as deterministic, outward and token-coloured.
-`payment/_lib/result-token.test.ts` — rule 10: tokens minted by billing's own
+`payment/_lib/pending-payment.test.ts` — rule 11's states and the poll budget.
+`payment/_lib/result-token.test.ts` — rule 10 (and 11's uuid-only `k:'v'`): tokens minted by billing's own
 signer are shown; a foreign key, an edited body, an expiry, garbage and an
 empty secret are all `null`.

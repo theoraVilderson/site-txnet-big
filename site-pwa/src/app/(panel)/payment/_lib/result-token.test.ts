@@ -32,6 +32,20 @@ describe("a token billing signed", () => {
   });
 });
 
+describe("a verifying payment (F-093-l)", () => {
+  const PAYMENT = "77777777-7777-4777-8777-777777777777";
+
+  it("carries the payment the pending page polls", () => {
+    const token = signResultToken({ kind: "verifying", paymentId: PAYMENT }, SECRET, NOW);
+    expect(readResultToken(token, SECRET, NOW)).toEqual({ kind: "verifying", paymentId: PAYMENT });
+  });
+
+  it("refuses a payment id that is not a uuid, even signed", () => {
+    const token = signResultToken({ kind: "verifying", paymentId: "../../wallet" }, SECRET, NOW);
+    expect(readResultToken(token, SECRET, NOW)).toBeNull();
+  });
+});
+
 describe("anything else shows nothing", () => {
   it.each([undefined, "", "abc", "a.b.c", ["x", "y"]])("refuses %p", (raw) => {
     expect(readResultToken(raw as string | undefined, SECRET, NOW)).toBeNull();

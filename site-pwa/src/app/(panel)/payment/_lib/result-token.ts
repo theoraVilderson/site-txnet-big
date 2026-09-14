@@ -10,7 +10,11 @@ import {
 
 export type VerifiedResult =
   | { kind: "success"; success: PaymentSuccess }
-  | { kind: "failed"; failure: PaymentFailure };
+  | { kind: "failed"; failure: PaymentFailure }
+  /** A verifying payment (F-093-l): the id `/payment/pending` polls. */
+  | { kind: "verifying"; paymentId: string };
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * The outcome `billing`'s callback signed into `?t=`, or `null` when there is
@@ -36,7 +40,7 @@ export function readResultToken(raw: QueryValue, secret: string, nowMs = Date.no
   const given = Buffer.from(mac, "base64url");
   if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
 
-  let payload: { k?: unknown; r?: unknown; a?: unknown; c?: unknown; e?: unknown };
+  let payload: { k?: unknown; r?: unknown; a?: unknown; c?: unknown; e?: unknown; p?: unknown };
   try {
     payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
   } catch {
@@ -47,6 +51,10 @@ export function readResultToken(raw: QueryValue, secret: string, nowMs = Date.no
   if (payload.k === "s") {
     const ref = typeof payload.r === "string" ? payload.r : undefined;
     return { kind: "success", success: readSuccess(ref, payload.a === 1 ? "1" : undefined) };
+  }
+  if (payload.k === "v") {
+    // Signed or not, it becomes part of a request path: only a uuid is one.
+    return typeof payload.p === "string" && UUID.test(payload.p) ? { kind: "verifying", paymentId: payload.p } : null;
   }
   if (payload.k === "f") {
     return { kind: "failed", failure: readFailure(typeof payload.c === "string" ? payload.c : undefined) };

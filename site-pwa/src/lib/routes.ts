@@ -38,3 +38,5 @@ export const PANEL_GATEWAYS = "/gateways";
  */
 export const PAYMENT_SUCCESS = "/payment/success";
 export const PAYMENT_FAILED = "/payment/failed";
+/** A verifying payment (F-093-l): billing's callback writes this path out too. */
+export const PAYMENT_PENDING = "/payment/pending";

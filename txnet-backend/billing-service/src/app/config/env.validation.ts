@@ -249,6 +249,8 @@ export const envSchema = z.object({
   DEPOSIT_CALLBACK_RATE_LIMIT: rateLimit(30),
   WALLET_HISTORY_RATE_LIMIT: rateLimit(180),
   WALLET_PAYMENTS_RATE_LIMIT: rateLimit(120),
+  /** One payment, polled by the pending page every 10 s (F-093-l). */
+  WALLET_PAYMENT_RATE_LIMIT: rateLimit(300),
   /** A code-guessing oracle if it were generous (`payment/gift/gift.controller.ts`). */
   GIFT_REDEEM_RATE_LIMIT: rateLimit(10),
   /**

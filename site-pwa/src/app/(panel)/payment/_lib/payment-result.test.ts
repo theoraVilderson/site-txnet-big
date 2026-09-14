@@ -7,7 +7,7 @@ import {
   readFailure,
   readSuccess,
 } from "./payment-result";
-import { PAYMENT_FAILED, PAYMENT_SUCCESS } from "@/lib/routes";
+import { PAYMENT_FAILED, PAYMENT_PENDING, PAYMENT_SUCCESS } from "@/lib/routes";
 import { confettiBurst } from "./celebration";
 
 /**
@@ -69,6 +69,7 @@ describe("the paths billing redirects to", () => {
     if (!paths) throw new Error("RESULT_PATH is no longer a literal — this test is stale");
     expect(paths[1]).toContain(`'${PAYMENT_SUCCESS}'`);
     expect(paths[1]).toContain(`'${PAYMENT_FAILED}'`);
+    expect(paths[1]).toContain(`'${PAYMENT_PENDING}'`);
   });
 });
 

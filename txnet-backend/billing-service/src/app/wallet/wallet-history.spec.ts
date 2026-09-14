@@ -71,6 +71,7 @@ function paymentRow(overrides: Record<string, unknown> = {}) {
     failureCode: 'cancelled_by_user',
     createdAt: new Date('2026-09-10T09:00:00Z'),
     expiresAt: null,
+    nextVerifyAt: null,
     gateway: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', displayName: 'زرین‌پال' },
     tenantGatewayConfig: null,
     ...overrides,
@@ -116,6 +117,10 @@ function build({ wallet = { id: WALLET, cachedBalance: d('30.00') }, rows = [led
         return payments;
       },
       count: async () => payments.length,
+      findFirst: async (args: { where: Prisma.PaymentTransactionWhereInput }) => {
+        asked.payments = args.where;
+        return payments[0] ?? null;
+      },
     },
   };
   const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
@@ -288,5 +293,28 @@ describe('WalletHistoryService.payments', () => {
     const second = await runWithTenant({ id: TENANT }, () => asked.service.payments({ userId: USER, page: 2, pageSize: 50 }));
     expect(asked.asked.paymentsSlice).toEqual({ skip: 50, take: 50 });
     expect(second).toMatchObject({ page: 2, pageSize: 50 });
+  });
+
+  it('says a pending payment is verifying while its retry clock runs (F-093-l)', async () => {
+    const { service } = build({
+      payments: [paymentRow({ status: 'pending', nextVerifyAt: new Date('2026-09-14T10:00:00Z') }), paymentRow({ status: 'failed' })],
+    });
+    const result = await runWithTenant({ id: TENANT }, () => service.payments({ userId: USER, ...page }));
+    expect(result.rows.map((r) => r.verifying)).toEqual([true, false]);
+  });
+});
+
+describe('WalletHistoryService.payment', () => {
+  it("answers one of the caller's own payments, by id and user together (F-093-l)", async () => {
+    const { service, asked } = build({ payments: [paymentRow({ status: 'pending', nextVerifyAt: new Date() })] });
+    const row = await runWithTenant({ id: TENANT }, () => service.payment(USER, '77777777-7777-4777-8777-777777777777'));
+
+    expect(asked.payments).toEqual({ id: '77777777-7777-4777-8777-777777777777', userId: USER });
+    expect(row).toMatchObject({ status: 'pending', verifying: true });
+  });
+
+  it('answers null for a payment that is not the caller’s', async () => {
+    const { service } = build({ payments: [] });
+    expect(await runWithTenant({ id: TENANT }, () => service.payment(USER, '77777777-7777-4777-8777-777777777777'))).toBeNull();
   });
 });

@@ -26,11 +26,14 @@ export const RESULT_TOKEN_TTL_SEC = 15 * 60;
  */
 export type ResultOutcome =
   | { kind: 'success'; referenceId: string | null; alreadyPaid: boolean }
-  | { kind: 'failed'; code: string };
+  | { kind: 'failed'; code: string }
+  | { kind: 'verifying'; paymentId: string };
 
 export type ResultTokenPayload =
   | { k: 's'; r?: string; a?: 1; e: number }
-  | { k: 'f'; c: string; e: number };
+  | { k: 'f'; c: string; e: number }
+  /** A verifying payment (F-093-l): the id the pending page polls, nothing else. */
+  | { k: 'v'; p: string; e: number };
 
 export function signResultToken(outcome: ResultOutcome, secret: string, nowMs = Date.now()): string {
   // An empty key is a MAC anyone can compute; refuse rather than sign with it.
@@ -39,7 +42,9 @@ export function signResultToken(outcome: ResultOutcome, secret: string, nowMs = 
   const payload: ResultTokenPayload =
     outcome.kind === 'failed'
       ? { k: 'f', c: outcome.code, e }
-      : {
+      : outcome.kind === 'verifying'
+        ? { k: 'v', p: outcome.paymentId, e }
+        : {
           k: 's',
           ...(outcome.referenceId ? { r: outcome.referenceId } : {}),
           ...(outcome.alreadyPaid ? { a: 1 as const } : {}),
