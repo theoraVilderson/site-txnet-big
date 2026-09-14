@@ -23,7 +23,7 @@ import type { Request } from 'express';
 import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
 import { ZodValidationPipe } from '../../request/zod-validation.pipe';
-import { ManualConfirmBody, manualConfirmSchema } from './manual-confirm.schema';
+import { ManualAuthorityBody, ManualConfirmBody, manualAuthoritySchema, manualConfirmSchema } from './manual-confirm.schema';
 import { ManualActor, ManualConfirmRefused, ManualConfirmService } from './manual-confirm.service';
 
 /** The permission (F-092-z, ADR-0044 decision 6). SuperAdmin holds it as `*`; `Admin` by migration. */
@@ -94,6 +94,24 @@ export class ManualConfirmController {
   ) {
     // The schema requires both keys; the cast is for the non-strict tsconfig.
     return this.refusing(() => this.manual.confirm(this.actor(req, ip), id, body as Required<ManualConfirmBody>));
+  }
+
+  /**
+   * Attach an authority whose write was lost, read off the gateway's own panel,
+   * and ask the gateway about it (F-092-af). 409 when the payment already has
+   * one (`authority_present`) or another payment holds it (`authority_taken`).
+   */
+  @Post(':id/authority')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(WRITE)
+  async attachAuthority(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(manualAuthoritySchema)) body: ManualAuthorityBody,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    // The schema requires the key; the cast is for the non-strict tsconfig.
+    return this.refusing(() => this.manual.attachAuthority(this.actor(req, ip), id, body.authority as string));
   }
 
   private async refusing<T>(run: () => Promise<T>): Promise<T> {

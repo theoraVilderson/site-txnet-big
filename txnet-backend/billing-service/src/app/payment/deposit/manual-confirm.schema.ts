@@ -15,3 +15,18 @@ export const manualConfirmSchema = z
   .strict();
 
 export type ManualConfirmBody = z.infer<typeof manualConfirmSchema>;
+
+/**
+ * The body of attaching a lost authority (F-092-af). `.strict()`, like the
+ * confirmation. Only the gateway's own identifier — who and why are the
+ * caller's identity and the log line; what it proves is the gateway's answer.
+ */
+export const manualAuthoritySchema = z
+  .object({
+    /** The gateway's authority, as its own panel shows it. */
+    authority: z.string().trim().min(1, { message: 'authority must not be empty' }).max(64),
+  })
+  .strict();
+
+export type ManualAuthorityBody = z.infer<typeof manualAuthoritySchema>;
+

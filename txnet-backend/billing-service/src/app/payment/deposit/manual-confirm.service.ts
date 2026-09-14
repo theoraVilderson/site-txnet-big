@@ -1,11 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ConfirmationSource, PaymentStatus, Prisma, TenantType } from '@prisma/client';
 import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
+import type { EnvConfig } from '../../config/env.validation';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AskAnswer, DepositReconciliationService } from './deposit-reconciliation.service';
 import { DepositSettlementService, PAYMENT_SELECT } from './deposit-settlement';
+import { attachAuthority } from './payment-callback-url';
 
 /**
  * A person finishing a payment the gateway would not (F-092-z, ADR-0044
@@ -35,7 +38,12 @@ import { DepositSettlementService, PAYMENT_SELECT } from './deposit-settlement';
 
 export type ManualActor = { adminId: string; tenantId: string; ip: string };
 
-export type ManualConfirmRejection = 'payment_not_found' | 'not_verifying';
+/**
+ * `not_open`: the payment is `success` or `failed` — settled, not a person's to
+ * reopen (F-092-af; `not_verifying` before it). `authority_present` and
+ * `authority_taken` answer attaching an authority (F-092-af).
+ */
+export type ManualConfirmRejection = 'payment_not_found' | 'not_open' | 'authority_present' | 'authority_taken';
 
 export class ManualConfirmRefused extends Error {
   constructor(readonly reason: ManualConfirmRejection, detail?: string) {
@@ -60,6 +68,8 @@ export type ManualAnswer = {
 
 export type VerifyingPaymentView = {
   id: string;
+  /** `pending` or `expired` (F-092-af). */
+  status: 'pending' | 'expired';
   tenantId: string | null;
   userId: string;
   source: 'platform' | 'tenant';
@@ -80,6 +90,7 @@ const SCOPE_SELECT = {
   id: true,
   tenantId: true,
   status: true,
+  gatewayTrackingCode: true,
   nextVerifyAt: true,
   verifyFlaggedAt: true,
   gatewayId: true,
@@ -90,6 +101,7 @@ const SCOPE_SELECT = {
 
 const VIEW_SELECT = {
   id: true,
+  status: true,
   tenantId: true,
   userId: true,
   gatewayId: true,
@@ -120,15 +132,22 @@ export class ManualConfirmService {
     private readonly crossTenant: CrossTenantPrismaService,
     private readonly reconciliation: DepositReconciliationService,
     private readonly settlement: DepositSettlementService,
+    private readonly config: ConfigService<EnvConfig, true>,
   ) {}
 
-  /** Verifying and flagged payments the caller may act on, oldest first. */
+  /**
+   * Every open payment the caller may act on — `pending` or `expired`,
+   * verifying or not, with or without an authority — made inside the
+   * reconciliation lookback, oldest first (F-092-af, ADR-0046 decision 7). A
+   * payer in a hurry reaches a person before the jobs reach the payment.
+   */
   async list(actor: ManualActor): Promise<VerifyingPaymentView[]> {
     const owner = await this.isOwner(actor);
+    const lookbackSec = this.config.get('RECONCILIATION_LOOKBACK_SEC', { infer: true });
     const rows = await this.crossTenant.paymentTransaction.findMany({
       where: {
-        status: PaymentStatus.pending,
-        OR: [{ nextVerifyAt: { not: null } }, { verifyFlaggedAt: { not: null } }],
+        status: { in: [PaymentStatus.pending, PaymentStatus.expired] },
+        createdAt: { gte: new Date(Date.now() - lookbackSec * 1000) },
         ...(owner ? {} : this.tenantScope(actor)),
       },
       select: VIEW_SELECT,
@@ -139,6 +158,7 @@ export class ManualConfirmService {
       const gw = r.gateway ?? r.tenantGatewayConfig;
       return {
         id: r.id,
+        status: r.status as 'pending' | 'expired',
         tenantId: r.tenantId,
         userId: r.userId,
         source: r.gatewayId ? 'platform' : 'tenant',
@@ -154,6 +174,33 @@ export class ManualConfirmService {
         nextVerifyAt: r.nextVerifyAt,
         flaggedAt: r.verifyFlaggedAt,
       };
+    });
+  }
+
+  /**
+   * Give a payment the authority its write lost — read by a person off the
+   * gateway's own panel — then ask the gateway about it at once (F-092-af, the
+   * third way of ADR-0046 decision 4). Only a payment with none: nothing a
+   * person types overwrites an authority, and the unique index refuses one
+   * another payment holds. A wrong authority costs nothing: the gateway refuses
+   * it, and the refusal is recorded like any other.
+   */
+  async attachAuthority(actor: ManualActor, paymentId: string, authority: string): Promise<ManualAnswer> {
+    const { tenantId, hasAuthority } = await this.eligibleRow(actor, paymentId);
+    if (hasAuthority) throw new ManualConfirmRefused('authority_present', paymentId);
+    return runWithTenant({ id: tenantId }, async () => {
+      let attached: boolean;
+      try {
+        attached = await tenantTransaction(this.prisma, (tx) => attachAuthority(tx, paymentId, authority));
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+          throw new ManualConfirmRefused('authority_taken', paymentId);
+        }
+        throw e;
+      }
+      if (!attached) throw new ManualConfirmRefused('authority_present', paymentId);
+      this.logger.warn(`payment ${paymentId}: authority attached by hand by ${actor.adminId}`);
+      return this.answerOf(paymentId, await this.reconciliation.askOnce(paymentId));
     });
   }
 
@@ -197,8 +244,12 @@ export class ManualConfirmService {
     return { paymentId, outcome, gatewayStatus: asked.gatewayStatus, referenceId: asked.referenceId };
   }
 
-  /** The payment's tenant, if the caller may act on it and it is verifying or flagged. */
+  /** The payment's tenant, if the caller may act on it and it is still open. */
   private async eligible(actor: ManualActor, paymentId: string): Promise<string> {
+    return (await this.eligibleRow(actor, paymentId)).tenantId;
+  }
+
+  private async eligibleRow(actor: ManualActor, paymentId: string): Promise<{ tenantId: string; hasAuthority: boolean }> {
     const [owner, row] = await Promise.all([
       this.isOwner(actor),
       this.crossTenant.paymentTransaction.findUnique({ where: { id: paymentId }, select: SCOPE_SELECT }),
@@ -213,10 +264,11 @@ export class ManualConfirmService {
           row.tenantGatewayConfig?.tenantId === actor.tenantId));
     if (!inScope || !row?.tenantId) throw new ManualConfirmRefused('payment_not_found', paymentId);
 
-    if (row.status !== PaymentStatus.pending || (row.nextVerifyAt === null && row.verifyFlaggedAt === null)) {
-      throw new ManualConfirmRefused('not_verifying', paymentId);
+    // Open is all it takes (F-092-af): a settled payment is not a person's to reopen.
+    if (row.status !== PaymentStatus.pending && row.status !== PaymentStatus.expired) {
+      throw new ManualConfirmRefused('not_open', paymentId);
     }
-    return row.tenantId;
+    return { tenantId: row.tenantId, hasAuthority: row.gatewayTrackingCode !== null };
   }
 
   private tenantScope(actor: ManualActor): Prisma.PaymentTransactionWhereInput {

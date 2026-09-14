@@ -70,14 +70,17 @@ type Setup = {
   row?: ReturnType<typeof scopeRow> | null;
   ask?: AskAnswer;
   lostTheFlip?: boolean;
+  /** How many rows the guarded authority write matches; a throw is the unique index refusing it. */
+  attach?: number | Error;
 };
 
 function build(setup: Setup = {}) {
-  const { callerTenant = RESELLER, row = scopeRow(), ask = { kind: 'unanswered', gatewayStatus: null, referenceId: null }, lostTheFlip = false } = setup;
+  const { callerTenant = RESELLER, row = scopeRow(), ask = { kind: 'unanswered', gatewayStatus: null, referenceId: null }, lostTheFlip = false, attach = 1 } = setup;
   const calls = {
     asked: [] as Array<{ paymentId: string; tenantInScope: string | null }>,
     credits: [] as Array<{ source: string; verified: unknown; manual: Record<string, unknown> | undefined; tenantInScope: string | null }>,
     listed: [] as Array<Record<string, unknown>>,
+    attached: [] as Array<Record<string, unknown>>,
   };
 
   const prisma = {
@@ -87,7 +90,17 @@ function build(setup: Setup = {}) {
       }),
     },
     $transaction: (fn: (t: unknown) => unknown) =>
-      fn({ $executeRaw: async () => 0, paymentTransaction: { findFirst: async () => paymentRow() } }),
+      fn({
+        $executeRaw: async () => 0,
+        paymentTransaction: {
+          findFirst: async () => paymentRow(),
+          updateMany: async (args: Record<string, unknown>) => {
+            calls.attached.push({ ...args, tenantInScope: TenantContext.currentOrNull()?.id ?? null });
+            if (attach instanceof Error) throw attach;
+            return { count: attach };
+          },
+        },
+      }),
   };
   const crossTenant = {
     paymentTransaction: {
@@ -111,7 +124,14 @@ function build(setup: Setup = {}) {
     },
   };
 
-  const service = new ManualConfirmService(prisma as never, crossTenant as never, reconciliation as never, settlement as never);
+  const config = { get: (key: string) => (key === 'RECONCILIATION_LOOKBACK_SEC' ? 7 * 86_400 : undefined) };
+  const service = new ManualConfirmService(
+    prisma as never,
+    crossTenant as never,
+    reconciliation as never,
+    settlement as never,
+    config as never,
+  );
   const actor = { adminId: ADMIN, tenantId: callerTenant, ip: '10.0.0.9' };
   return { service, calls, actor };
 }
@@ -150,23 +170,41 @@ describe('ManualConfirmService scope', () => {
     const { service, calls, actor } = build();
     await service.list(actor);
     expect(calls.listed[0]['where']).toMatchObject({
-      status: PaymentStatus.pending,
       tenantId: RESELLER,
       grantId: null,
       tenantGatewayConfig: { tenantId: RESELLER },
     });
   });
 
-  it('refuses a payment that is not verifying', async () => {
-    const { service, actor } = build({ row: scopeRow({ nextVerifyAt: null }) });
-    await expect(service.confirm(actor, PAYMENT, BODY)).rejects.toBeInstanceOf(ManualConfirmRefused);
-    await expect(service.confirm(actor, PAYMENT, BODY)).rejects.toMatchObject({ reason: 'not_verifying' });
+  // F-092-af (ADR-0046 decision 7): a payer in a hurry messages the operator;
+  // the operator must be able to act on the payment whatever the jobs have
+  // or have not got round to — not only once it is verifying.
+  it('lists every open payment inside the lookback: pending or expired, verifying or not, with or without an authority', async () => {
+    const { service, calls, actor } = build({ callerTenant: OWNER });
+    const before = Date.now();
+    await service.list(actor);
+    const where = calls.listed[0]['where'] as Record<string, { in?: string[]; gte?: Date }>;
+    expect(where['status']).toEqual({ in: [PaymentStatus.pending, PaymentStatus.expired] });
+    expect(before - where['createdAt'].gte!.getTime()).toBeGreaterThanOrEqual(7 * 86_400_000 - 1_000);
+    expect(where).not.toHaveProperty('OR');
+    expect(where).not.toHaveProperty('gatewayTrackingCode');
   });
 
-  it('accepts a flagged payment whose clock was cleared', async () => {
-    const { service, calls, actor } = build({ row: scopeRow({ nextVerifyAt: null, verifyFlaggedAt: new Date() }) });
+  it.each([
+    ['a pending payment not yet verifying', scopeRow({ nextVerifyAt: null })],
+    ['an expired payment', scopeRow({ status: PaymentStatus.expired, nextVerifyAt: null })],
+    ['a flagged payment whose clock was cleared', scopeRow({ nextVerifyAt: null, verifyFlaggedAt: new Date() })],
+  ])('accepts %s', async (_what, row) => {
+    const { service, calls, actor } = build({ row });
     await service.inquire(actor, PAYMENT);
     expect(calls.asked).toHaveLength(1);
+  });
+
+  it.each([PaymentStatus.success, PaymentStatus.failed])('refuses a %s payment as not open', async (status) => {
+    const { service, calls, actor } = build({ row: scopeRow({ status }) });
+    await expect(service.confirm(actor, PAYMENT, BODY)).rejects.toBeInstanceOf(ManualConfirmRefused);
+    await expect(service.confirm(actor, PAYMENT, BODY)).rejects.toMatchObject({ reason: 'not_open' });
+    expect(calls.asked).toEqual([]);
   });
 });
 
@@ -213,3 +251,45 @@ describe('ManualConfirmService.confirm', () => {
     expect((await service.confirm(actor, PAYMENT, BODY)).outcome).toBe('already_settled');
   });
 });
+
+describe('ManualConfirmService.attachAuthority (F-092-ad, F-092-af)', () => {
+  const AUTH = 'A00000000000000000000000000000000077';
+
+  it('writes the authority only where the payment has none, inside its tenant, then asks the gateway', async () => {
+    const { service, calls, actor } = build({
+      row: scopeRow({ nextVerifyAt: null, gatewayTrackingCode: null }),
+      ask: { kind: 'credited', gatewayStatus: 'paid', referenceId: 'R-9' },
+    });
+
+    const result = await service.attachAuthority(actor, PAYMENT, AUTH);
+
+    expect(calls.attached).toEqual([
+      { where: { id: PAYMENT, gatewayTrackingCode: null }, data: { gatewayTrackingCode: AUTH }, tenantInScope: RESELLER },
+    ]);
+    expect(calls.asked).toEqual([{ paymentId: PAYMENT, tenantInScope: RESELLER }]);
+    expect(result).toEqual({ paymentId: PAYMENT, outcome: 'credited', gatewayStatus: 'paid', referenceId: 'R-9' });
+  });
+
+  it('refuses a payment that already carries an authority, and asks nothing', async () => {
+    const { service, calls, actor } = build({ row: scopeRow({ gatewayTrackingCode: 'A1' }) });
+
+    await expect(service.attachAuthority(actor, PAYMENT, AUTH)).rejects.toMatchObject({ reason: 'authority_present' });
+    expect(calls.attached).toEqual([]);
+    expect(calls.asked).toEqual([]);
+  });
+
+  it('refuses an authority another payment already holds', async () => {
+    const taken = new Prisma.PrismaClientKnownRequestError('unique', { code: 'P2002', clientVersion: 'test' });
+    const { service, calls, actor } = build({ row: scopeRow({ gatewayTrackingCode: null }), attach: taken });
+
+    await expect(service.attachAuthority(actor, PAYMENT, AUTH)).rejects.toMatchObject({ reason: 'authority_taken' });
+    expect(calls.asked).toEqual([]);
+  });
+
+  it('refuses when an authority arrived between the read and the write', async () => {
+    const { service, actor } = build({ row: scopeRow({ gatewayTrackingCode: null }), attach: 0 });
+
+    await expect(service.attachAuthority(actor, PAYMENT, AUTH)).rejects.toMatchObject({ reason: 'authority_present' });
+  });
+});
+
