@@ -159,6 +159,12 @@ async function seedWorkerSchedules(adminId) {
   }
 }
 
+function generatePassword() {
+  // Satisfies strongPasswordSchema (upper, lower, digit, special, 8-72 chars)
+  // without ever containing the owner's username/fullName.
+  return `${randomBytes(15).toString('base64url')}Aa1!`;
+}
+
 async function main() {
   for (const name of ROLE_NAMES) {
     await prisma.role.upsert({
