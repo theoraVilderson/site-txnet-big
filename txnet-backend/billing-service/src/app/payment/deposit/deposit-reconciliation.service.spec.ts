@@ -66,6 +66,8 @@ type Calls = {
   updated: Array<Record<string, unknown>>;
   /** Offered authorities taken back off a payment (F-092-ag). */
   withdrawn: Array<{ paymentId: unknown; authority: unknown }>;
+  /** Payments whose coupon holds a gateway `failed` gave back (F-092-ai). */
+  holdsReleased: string[];
 };
 
 type Setup = {
@@ -121,6 +123,7 @@ function build(setup: Setup = {}) {
     logs: [],
     updated: [],
     withdrawn: [],
+    holdsReleased: [],
   };
   const scoped = () => TenantContext.currentOrNull()?.id ?? null;
 
@@ -194,6 +197,10 @@ function build(setup: Setup = {}) {
       calls.closedReversed.push(payment.id);
       return true;
     },
+    releaseFailedHolds: async (_tx: unknown, payment: { id: string }) => {
+      calls.holdsReleased.push(payment.id);
+      return 1;
+    },
   };
   const config = {
     get: (key: string) =>
@@ -250,7 +257,10 @@ describe('DepositReconciliationService', () => {
     expect(result).toMatchObject({ confirmed: 0, flagged: 1 });
   });
 
-  it('never closes a payment the gateway says failed — it records and moves on', async () => {
+  // F-092-ai (ADR-0047 decision 4): Zarinpal's `failed` is final (the user
+  // checked), so the coupon slots a payment holds go back at once rather than
+  // COUPON_HOLD_AFTER_EXPIRY_SEC later. The payment itself still stays open.
+  it('never closes a payment the gateway says failed, but gives its coupon holds back beside the log row', async () => {
     const { service, calls } = build({ inquiry: 'failed' });
 
     const result = await service.reconcile();
@@ -258,6 +268,8 @@ describe('DepositReconciliationService', () => {
     expect(calls.verified).toEqual([]);
     expect(calls.credited).toEqual([]);
     expect(calls.updated).toEqual([]);
+    expect(calls.closedReversed).toEqual([]);
+    expect(calls.holdsReleased).toEqual([PAYMENT]);
     expect(calls.logs[0]).toMatchObject({
       actionTaken: ReconciliationAction.no_action_needed,
       gatewayReportedStatus: 'failed',
@@ -588,6 +600,15 @@ describe('DepositReconciliationService — authorities only offered (F-092-ag, A
 
     expect(calls.withdrawn).toEqual([{ paymentId: PAYMENT, authority: AUTHORITY }]);
     expect(calls.closedReversed).toEqual([]);
+  });
+
+  it('keeps the coupon holds when only an offered authority is called failed — that answer is not about this payment', async () => {
+    const { service, calls } = build({ ...due, row: offered([AUTHORITY]), inquiry: 'failed' });
+
+    await service.verifyDue();
+
+    expect(calls.withdrawn).toEqual([{ paymentId: PAYMENT, authority: AUTHORITY }]);
+    expect(calls.holdsReleased).toEqual([]);
   });
 });
 

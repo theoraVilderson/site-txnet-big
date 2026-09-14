@@ -66,6 +66,11 @@ function build({ lostTheFlip = false, rowIs = PaymentStatus.pending as PaymentSt
 
   const tx = {
     $executeRaw: async () => 0,
+    // The row lock `releaseFailedHolds` takes: found only while the row is still open.
+    $queryRaw: async () => {
+      calls.writes.push('lock');
+      return rowIs === PaymentStatus.pending || rowIs === PaymentStatus.expired ? [{ locked: 1 }] : [];
+    },
     paymentTransaction: {
       // The row really is `rowIs`: a guard naming another status matches nothing.
       updateMany: async ({ where, data }: { where: { status: PaymentStatus }; data: Record<string, unknown> }) => {
@@ -270,6 +275,30 @@ describe('DepositSettlementService — the debt a granted gateway leaves', () =>
       await expect(close(service, tx)).resolves.toBe(false);
 
       expect(calls.writes).toEqual(['miss:pending', 'miss:expired']);
+    });
+  });
+
+  describe('releaseFailedHolds — the gateway says the payment failed (F-092-ai, ADR-0047 decision 4)', () => {
+    const release = (service: DepositSettlementService, tx: unknown) =>
+      runWithTenant({ id: TENANT }, () => service.releaseFailedHolds(tx as never, paymentRow()));
+
+    it('gives the holds of an open payment back cancelled, under its row lock, and flips nothing', async () => {
+      for (const rowIs of [PaymentStatus.pending, PaymentStatus.expired]) {
+        const { service, calls, tx } = build({ rowIs });
+
+        await expect(release(service, tx)).resolves.toBe(1);
+
+        expect(calls.writes).toEqual(['lock', 'release:cancelled']);
+        expect(calls.flips).toEqual([]);
+      }
+    });
+
+    it('releases nothing for a payment already settled', async () => {
+      const { service, calls, tx } = build({ rowIs: PaymentStatus.success });
+
+      await expect(release(service, tx)).resolves.toBe(0);
+
+      expect(calls.writes).toEqual(['lock']);
     });
   });
 

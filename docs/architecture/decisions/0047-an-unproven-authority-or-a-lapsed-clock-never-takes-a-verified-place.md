@@ -6,7 +6,7 @@ updated: 2026-09-14
 
 # ADR 0047 — An unproven authority, or a lapsed clock, never takes a place that needs proof
 
-- **Status:** accepted 2026-09-14 (rows F-092-ag, F-092-ah)
+- **Status:** accepted 2026-09-14 (rows F-092-ag, F-092-ah, F-092-ai)
 - **Date:** 2026-09-14
 - **Affects units:** billing
 
@@ -53,6 +53,13 @@ state belongs.
    `postgres-exporter`; `BillingCouponOverLimit` fires when it is above zero.
    The claim without a limit check stays: refusing money already paid is still
    the worse error.
+4. **A gateway's `failed` gives the coupons back at once.** Zarinpal's `failed`
+   is final (the user checked): no charge can follow it. So an inquiry about a
+   payment's **own** authority answering `failed` releases its holds
+   `cancelled` in the log row's transaction, under the row lock, while the row
+   is `pending` or `expired`. The payment stays open — invariant 9 still closes
+   only on `reversed`. A `failed` about an offered authority releases nothing:
+   it is not an answer about this payment.
 
 ## Consequences
 

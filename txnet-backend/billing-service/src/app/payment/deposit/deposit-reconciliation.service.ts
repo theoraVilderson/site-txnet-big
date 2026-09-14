@@ -432,7 +432,12 @@ export class DepositReconciliationService {
         ReconciliationAction.no_action_needed,
         undefined,
         status !== 'in_bank',
-        status === 'reversed' ? (tx) => this.settlement.closeReversed(tx, payment) : undefined,
+        status === 'reversed'
+          ? (tx) => this.settlement.closeReversed(tx, payment)
+          : // Final at Zarinpal (F-092-ai): the holds go back now, the row stays open.
+            status === 'failed'
+            ? (tx) => this.settlement.releaseFailedHolds(tx, payment)
+            : undefined,
       );
       if (status === 'in_bank') {
         await onRetry(payment);

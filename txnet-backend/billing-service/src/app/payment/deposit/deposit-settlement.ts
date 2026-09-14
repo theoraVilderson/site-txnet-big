@@ -175,6 +175,24 @@ export class DepositSettlementService {
    * A `billing.payment.reversed` event is written with it, for the payer's
    * notice (F-067-m). Answers whether this call closed it.
    */
+  /**
+   * The gateway answered `failed` about the payment's own authority (F-092-ai,
+   * ADR-0047 decision 4). Zarinpal's `failed` is final — the user checked — so
+   * no late charge can follow, and the coupon slots go back now rather than
+   * `COUPON_HOLD_AFTER_EXPIRY_SEC` after the clock. `cancelled`: the gateway
+   * said no. The payment itself is not flipped (invariant 9 closes only on
+   * `reversed`). On the caller's transaction, under the row lock a crediting
+   * flip waits on, and only while the row is still open. Answers how many moved.
+   */
+  async releaseFailedHolds(tx: Prisma.TransactionClient, payment: PaymentRow): Promise<number> {
+    const locked = await tx.$queryRaw<unknown[]>`
+      SELECT 1 FROM "billing"."payment_transaction"
+       WHERE "id" = ${payment.id}::uuid AND "status" IN ('pending', 'expired')
+         FOR UPDATE`;
+    if (locked.length === 0) return 0;
+    return this.reservations.release(tx, payment.id, RedemptionStatus.cancelled);
+  }
+
   async closeReversed(tx: Prisma.TransactionClient, payment: PaymentRow): Promise<boolean> {
     const data = {
       status: PaymentStatus.failed,
