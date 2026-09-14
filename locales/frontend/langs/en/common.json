@@ -20,7 +20,8 @@
       "tutorials": "Guides and downloads",
       "support": "Support",
       "settings": "Settings",
-      "coupons": "Coupons and gift codes"
+      "coupons": "Coupons and gift codes",
+      "catalog": "Catalog"
     },
     "paymentCredited": {
       "title": "Payment confirmed",
@@ -994,6 +995,138 @@
         "prefix": "Up to 8 letters or digits"
       },
       "usageTitle": "Usage of batch {{label}}"
+    }
+  },
+  "catalog": {
+    "title": "Catalog",
+    "subtitle": "Categories, products, their variants and each variant's price history.",
+    "loading": "Loading the catalog…",
+    "retry": "Try again",
+    "saved": "Saved.",
+    "empty": "No products here yet.",
+    "cancel": "Cancel",
+    "save": "Save",
+    "close": "Close",
+    "platform": "Platform",
+    "deactivate": "Switch off",
+    "activate": "Switch on",
+    "inactive": "Off",
+    "newCategory": "New category",
+    "newProduct": "New product",
+    "newVariant": "New variant",
+    "newPrice": "New price",
+    "open": "Variants and prices",
+    "filters": {
+      "category": "Category",
+      "allCategories": "All categories",
+      "scope": "Owner",
+      "scopeAll": "Everyone's",
+      "scopePlatform": "Platform",
+      "scopeTenant": "A tenant",
+      "tenantId": "Tenant ID"
+    },
+    "category": {
+      "key": "Key",
+      "nameKey": "Name key",
+      "shared": "Shared with every tenant"
+    },
+    "product": {
+      "key": "Key",
+      "nameKey": "Name key",
+      "descriptionKey": "Description key",
+      "fulfilmentKind": "Fulfilment",
+      "featureKeys": "Feature keys",
+      "featureKeysHint": "What a Grant of it unlocks, e.g. vpn.access — one per line or comma.",
+      "category": "Category",
+      "owner": "Whose product",
+      "ownerOwn": "My own",
+      "ownerPlatform": "The platform's",
+      "ownerTenant": "Another tenant's",
+      "tenantId": "Tenant ID",
+      "nameHint": "Names are translation keys, not text."
+    },
+    "variant": {
+      "sku": "SKU",
+      "skuHint": "Upper-case letters, digits, _ or -. It cannot change later: links use it.",
+      "billingMode": "Billing",
+      "visibility": "Visibility",
+      "qualityTier": "Quality tier",
+      "durationDays": "Duration (days)",
+      "durationHint": "Leave empty for permanent access.",
+      "permanent": "Permanent",
+      "days": "{{count}} days",
+      "price": "First price (USD)",
+      "quotas": "Quotas",
+      "addQuota": "Add a quota",
+      "metric": "Metric",
+      "limit": "Limit",
+      "resetPolicy": "Resets",
+      "remove": "Remove"
+    },
+    "price": {
+      "amount": "Price (USD)",
+      "day": "From day",
+      "dayHint": "Empty or today: from now. A change never rewrites an old price.",
+      "current": "Current",
+      "scheduled": "Scheduled",
+      "history": "Price history",
+      "effectiveFrom": "From {{time}}",
+      "noPrice": "No price in effect — not for sale"
+    },
+    "fulfilmentKind": {
+      "network_access": "Network access",
+      "external_order": "External order",
+      "feature_access": "Feature access",
+      "wallet_topup": "Wallet top-up"
+    },
+    "visibility": {
+      "public": "Public",
+      "unlisted": "Unlisted (direct link)",
+      "admin_only": "Admin only"
+    },
+    "billingMode": {
+      "prepaid": "Prepaid",
+      "metered": "Metered"
+    },
+    "qualityTier": {
+      "standard": "Standard",
+      "premium": "Premium"
+    },
+    "metric": {
+      "traffic_bytes": "Traffic (bytes)",
+      "concurrent_devices": "Devices at once",
+      "order_units": "Order units",
+      "feature_items": "Feature items",
+      "api_calls": "API calls"
+    },
+    "resetPolicy": {
+      "none": "Never",
+      "monthly": "Monthly",
+      "daily": "Daily"
+    },
+    "errors": {
+      "required": "Required",
+      "uuid": "Enter a valid ID",
+      "key": "Lower-case letters, digits and _, starting with a letter",
+      "i18nKey": "A translation key, like catalog.product.vpn.name",
+      "featureKey": "Each feature key looks like vpn.access",
+      "sku": "2–40 upper-case letters, digits, _ or -",
+      "decimal": "A price like 12 or 12.50",
+      "duration": "A whole number of days from 1 to 3650",
+      "quota": "Each limit is a whole number",
+      "quotaRepeat": "Each metric once",
+      "pastDay": "A price cannot start on a day already past"
+    },
+    "refusals": {
+      "not_platform_owner": "Only the platform owner manages the platform's or another tenant's catalog.",
+      "tenant_not_found": "That tenant was not found.",
+      "category_not_found": "That category was not found, or is another tenant's.",
+      "product_not_found": "That product was not found.",
+      "variant_not_found": "That variant was not found.",
+      "price_not_found": "That price was not found.",
+      "key_taken": "This key is already used here.",
+      "sku_taken": "This SKU is already sold here.",
+      "price_in_the_past": "A price cannot start in the past: it would change invoices already issued."
     }
   }
 }

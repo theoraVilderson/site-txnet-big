@@ -37,6 +37,11 @@ export const PANEL_GATEWAYS = "/gateways";
  * billing answers the platform owner every coupon, a tenant its own (D-33).
  */
 export const PANEL_COUPONS = "/coupons";
+/**
+ * Catalog management (F-026-f). One route for every audience: billing answers
+ * the platform owner every item, a tenant its own (D-34).
+ */
+export const PANEL_CATALOG = "/catalog";
 /** Payments the gateway has not confirmed, for a person to settle (F-093-n). */
 export const PANEL_MANUAL_PAYMENTS = "/payments/manual";
 /**

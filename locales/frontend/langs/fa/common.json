@@ -20,7 +20,8 @@
       "tutorials": "آموزش و دانلود",
       "support": "پشتیبانی",
       "settings": "تنظیمات",
-      "coupons": "کوپن و کد هدیه"
+      "coupons": "کوپن و کد هدیه",
+      "catalog": "کاتالوگ"
     },
     "paymentCredited": {
       "title": "پرداخت تأیید شد",
@@ -994,6 +995,138 @@
         "prefix": "حداکثر ۸ حرف لاتین یا عدد"
       },
       "usageTitle": "گزارش استفاده دسته {{label}}"
+    }
+  },
+  "catalog": {
+    "title": "کاتالوگ",
+    "subtitle": "دسته‌ها، محصولات، واریانت‌هایشان و تاریخچه قیمت هر واریانت.",
+    "loading": "در حال بارگذاری کاتالوگ…",
+    "retry": "دوباره تلاش کنید",
+    "saved": "ذخیره شد.",
+    "empty": "هنوز محصولی اینجا نیست.",
+    "cancel": "انصراف",
+    "save": "ذخیره",
+    "close": "بستن",
+    "platform": "پلتفرم",
+    "deactivate": "خاموش کردن",
+    "activate": "روشن کردن",
+    "inactive": "خاموش",
+    "newCategory": "دسته جدید",
+    "newProduct": "محصول جدید",
+    "newVariant": "واریانت جدید",
+    "newPrice": "قیمت جدید",
+    "open": "واریانت‌ها و قیمت‌ها",
+    "filters": {
+      "category": "دسته",
+      "allCategories": "همه دسته‌ها",
+      "scope": "مالک",
+      "scopeAll": "همه",
+      "scopePlatform": "پلتفرم",
+      "scopeTenant": "یک تنت",
+      "tenantId": "شناسه تنت"
+    },
+    "category": {
+      "key": "کلید",
+      "nameKey": "کلید نام",
+      "shared": "مشترک با همه تنت‌ها"
+    },
+    "product": {
+      "key": "کلید",
+      "nameKey": "کلید نام",
+      "descriptionKey": "کلید توضیح",
+      "fulfilmentKind": "نوع تحویل",
+      "featureKeys": "کلیدهای قابلیت",
+      "featureKeysHint": "آنچه Grant این محصول باز می‌کند، مثل vpn.access — هر کدام در یک خط یا با کاما.",
+      "category": "دسته",
+      "owner": "مالک محصول",
+      "ownerOwn": "خودم",
+      "ownerPlatform": "پلتفرم",
+      "ownerTenant": "تنت دیگر",
+      "tenantId": "شناسه تنت",
+      "nameHint": "نام‌ها کلید ترجمه‌اند، نه متن."
+    },
+    "variant": {
+      "sku": "SKU",
+      "skuHint": "حروف بزرگ انگلیسی، رقم، _ یا -. بعداً قابل تغییر نیست: لینک‌ها از آن استفاده می‌کنند.",
+      "billingMode": "نوع پرداخت",
+      "visibility": "نمایش",
+      "qualityTier": "سطح کیفیت",
+      "durationDays": "مدت (روز)",
+      "durationHint": "برای دسترسی دائمی خالی بگذارید.",
+      "permanent": "دائمی",
+      "days": "{{count}} روز",
+      "price": "قیمت اولیه (USD)",
+      "quotas": "سهمیه‌ها",
+      "addQuota": "افزودن سهمیه",
+      "metric": "معیار",
+      "limit": "سقف",
+      "resetPolicy": "بازنشانی",
+      "remove": "حذف"
+    },
+    "price": {
+      "amount": "قیمت (USD)",
+      "day": "از روز",
+      "dayHint": "خالی یا امروز: از همین حالا. تغییر قیمت، قیمت قبلی را بازنویسی نمی‌کند.",
+      "current": "فعلی",
+      "scheduled": "زمان‌بندی‌شده",
+      "history": "تاریخچه قیمت",
+      "effectiveFrom": "از {{time}}",
+      "noPrice": "قیمتی در جریان نیست — قابل فروش نیست"
+    },
+    "fulfilmentKind": {
+      "network_access": "دسترسی شبکه",
+      "external_order": "سفارش خارجی",
+      "feature_access": "دسترسی به قابلیت",
+      "wallet_topup": "شارژ کیف پول"
+    },
+    "visibility": {
+      "public": "عمومی",
+      "unlisted": "مخفی (با لینک مستقیم)",
+      "admin_only": "فقط ادمین"
+    },
+    "billingMode": {
+      "prepaid": "پیش‌پرداخت",
+      "metered": "مصرفی"
+    },
+    "qualityTier": {
+      "standard": "استاندارد",
+      "premium": "پریمیوم"
+    },
+    "metric": {
+      "traffic_bytes": "ترافیک (بایت)",
+      "concurrent_devices": "دستگاه همزمان",
+      "order_units": "واحد سفارش",
+      "feature_items": "آیتم قابلیت",
+      "api_calls": "فراخوانی API"
+    },
+    "resetPolicy": {
+      "none": "هرگز",
+      "monthly": "ماهانه",
+      "daily": "روزانه"
+    },
+    "errors": {
+      "required": "الزامی است",
+      "uuid": "یک شناسه معتبر وارد کنید",
+      "key": "حروف کوچک انگلیسی، رقم و _، که با حرف شروع شود",
+      "i18nKey": "یک کلید ترجمه، مثل catalog.product.vpn.name",
+      "featureKey": "هر کلید قابلیت مثل vpn.access است",
+      "sku": "۲ تا ۴۰ حرف بزرگ انگلیسی، رقم، _ یا -",
+      "decimal": "قیمتی مثل 12 یا 12.50",
+      "duration": "عددی صحیح از ۱ تا ۳۶۵۰ روز",
+      "quota": "هر سقف یک عدد صحیح است",
+      "quotaRepeat": "هر معیار فقط یک بار",
+      "pastDay": "قیمت نمی‌تواند از روزی که گذشته شروع شود"
+    },
+    "refusals": {
+      "not_platform_owner": "فقط مالک پلتفرم کاتالوگ پلتفرم یا تنت دیگر را مدیریت می‌کند.",
+      "tenant_not_found": "آن تنت پیدا نشد.",
+      "category_not_found": "آن دسته پیدا نشد یا مال تنت دیگری است.",
+      "product_not_found": "آن محصول پیدا نشد.",
+      "variant_not_found": "آن واریانت پیدا نشد.",
+      "price_not_found": "آن قیمت پیدا نشد.",
+      "key_taken": "این کلید اینجا قبلاً استفاده شده است.",
+      "sku_taken": "این SKU اینجا قبلاً فروخته می‌شود.",
+      "price_in_the_past": "قیمت نمی‌تواند از گذشته شروع شود: فاکتورهای صادرشده را تغییر می‌دهد."
     }
   }
 }
