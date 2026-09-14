@@ -138,6 +138,7 @@ docker compose --env-file .env -p txnet-main -f dev-docker/docker-compose.main.y
 | Panel (site-pwa)  | `https://panel.txnet.cyou`                              |
 | API (auth)        | `https://api.txnet.cyou/api/auth`                       |
 | API (billing)     | `https://api.txnet.cyou/api/billing`                    |
+| API (catalog)     | `https://api.txnet.cyou/api/catalog` (billing-service)  |
 | Traefik Dashboard | `https://monitor.txnet.cyou/dashboard/`                 |
 | RabbitMQ Admin    | `https://mq.txnet.cyou`                                 |
 | Grafana           | `http://localhost:3001` or `https://grafana.txnet.cyou` |

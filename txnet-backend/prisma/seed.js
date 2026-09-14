@@ -98,7 +98,7 @@ async function grantAllPermissionsToSuperAdmin() {
 // 20260914000900's grant, for a fresh database.
 async function grantGatewayManageToAdmin() {
   const role = await prisma.role.findUniqueOrThrow({ where: { name: 'Admin' } });
-  for (const key of ['gateway.manage', 'payment.confirm_manual', 'coupon.manage']) {
+  for (const key of ['gateway.manage', 'payment.confirm_manual', 'coupon.manage', 'catalog.manage']) {
     const permission = await prisma.permission.upsert({ where: { key }, update: {}, create: { key } });
     await prisma.rolePermission.upsert({
       where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } },

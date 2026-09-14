@@ -795,6 +795,34 @@ services:
       - "traefik.http.routers.billing-preflight.middlewares=strip-fake-headers"
       - "traefik.http.routers.billing-preflight.service=billing-service"
 
+      # Catalog management (F-026-d) runs inside billing-service (ADR-0049) but
+      # is published on its own path, `/api/catalog` — the user's call,
+      # 2026-09-14, over `/api/billing/catalog`. The same gate and the same
+      # preflight exemption as billing above, for the same reasons.
+      - "traefik.http.routers.catalog-http.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/catalog`)"
+      - "traefik.http.routers.catalog-http.entrypoints=web"
+      - "traefik.http.routers.catalog-http.middlewares=strip-fake-headers,my-auth"
+      - "traefik.http.routers.catalog-http.service=billing-service"
+
+      - "traefik.http.routers.catalog.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/catalog`)"
+      - "traefik.http.routers.catalog.entrypoints=websecure"
+      - "traefik.http.routers.catalog.tls.certresolver=myresolver"
+      - "traefik.http.routers.catalog.middlewares=strip-fake-headers,my-auth"
+      - "traefik.http.routers.catalog.service=billing-service"
+
+      - "traefik.http.routers.catalog-preflight-http.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/catalog`) && Method(`OPTIONS`)"
+      - "traefik.http.routers.catalog-preflight-http.entrypoints=web"
+      - "traefik.http.routers.catalog-preflight-http.priority=150"
+      - "traefik.http.routers.catalog-preflight-http.middlewares=strip-fake-headers"
+      - "traefik.http.routers.catalog-preflight-http.service=billing-service"
+
+      - "traefik.http.routers.catalog-preflight.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/catalog`) && Method(`OPTIONS`)"
+      - "traefik.http.routers.catalog-preflight.entrypoints=websecure"
+      - "traefik.http.routers.catalog-preflight.priority=150"
+      - "traefik.http.routers.catalog-preflight.tls.certresolver=myresolver"
+      - "traefik.http.routers.catalog-preflight.middlewares=strip-fake-headers"
+      - "traefik.http.routers.catalog-preflight.service=billing-service"
+
       # The gateway callback (F-092-j) — the one billing route **without**
       # `my-auth`, because a bank redirects a browser to it and a browser
       # arriving from a bank carries no session. `strip-fake-headers` stays:

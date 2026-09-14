@@ -59,6 +59,9 @@ roles:
       # manages its own coupons; the service keeps platform coupons and other
       # tenants' for the platform owner (F-502-c).
       - coupon.manage
+      # Catalog management (F-026-d, D-34). A tenant's Admin manages its own
+      # catalog; the service keeps platform items for the platform owner.
+      - catalog.manage
   Support:
     permissions:
       - user.read

@@ -47,6 +47,17 @@ enum AdminAction {
   // F-502-d — a gift-code batch. Export is audited: the file is the credit.
   coupon_batch_create
   coupon_batch_export
+  // F-026-d — catalog management. Nothing is deleted, so no delete values; a
+  // price has its own two, because a new price and a switched-off one are
+  // opposite acts on what an invoice is computed at.
+  catalog_category_create
+  catalog_category_update
+  catalog_product_create
+  catalog_product_update
+  catalog_variant_create
+  catalog_variant_update
+  catalog_price_set
+  catalog_price_deactivate
   coupon_batch_deactivate
 
   @@schema("audit")
@@ -69,6 +80,12 @@ enum AuditTargetType {
   settlement_payout
   // F-502-d. A batch of gift codes, not any one coupon in it.
   coupon_batch
+  // F-026-d. Catalog management audits the item it touched; a price is its
+  // own target because it is written as history, never as an edit.
+  product_category
+  product
+  product_variant
+  price
 
   @@schema("audit")
 }

@@ -173,6 +173,13 @@ export const RateLimitBucket = {
   COUPON_ADMIN_WRITE: 'coupon:admin:write',
 
   /**
+   * Catalog management in `billing-service` (F-026-d), per user. The page reads
+   * on every visit; a write — a new price above all — is a deliberate human act.
+   */
+  CATALOG_ADMIN_READ: 'catalog:admin:read',
+  CATALOG_ADMIN_WRITE: 'catalog:admin:write',
+
+  /**
    * One of the caller's own payments (F-093-l), per user. Its own bucket, not
    * `WALLET_PAYMENTS`: the pending page polls it, and a payer watching a
    * verifying payment must not use up the financial page's list budget.

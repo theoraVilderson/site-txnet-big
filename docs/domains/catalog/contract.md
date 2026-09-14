@@ -8,9 +8,31 @@ updated: 2026-09-14
 
 # Contract — catalog
 
-**Storage built (F-026-a); reads built (F-026-c), in-process only —
-`catalog/catalog-reads.ts`, proved by `catalog-reads.spec.ts`.** Management
-lands with F-026-d. Decision: ADR-0049.
+**Storage built (F-026-a); reads built (F-026-c), in-process —
+`catalog/catalog-reads.ts`, proved by `catalog-reads.spec.ts`; management built
+(F-026-d) at `/api/catalog` — `catalog/catalog-admin.*`, proved by
+`catalog-admin.service.spec.ts`.** Decision: ADR-0049.
+
+## HTTP surface (F-026-d)
+
+`/api/catalog`, served by billing-service on its own Traefik route (the
+user's call, 2026-09-14), behind `my-auth`, `catalog.manage`
+(`CatalogPermissionGuard`, first door only) and per-user budgets
+`CATALOG_ADMIN_READ` / `CATALOG_ADMIN_WRITE` (120 / 30 per 15 min). The
+platform owner manages platform items and any tenant's; any other tenant its
+own — another tenant's item, or the platform's, answers 404.
+
+| Route | Body / query | Answer | Refusals |
+|---|---|---|---|
+| `GET /categories` | — | the platform's and the caller's own (owner: all) | — |
+| `POST /categories`, `PATCH /categories/:id` | `tenantId?` (absent / `null` / uuid), `key`, `nameKey`; patch `nameKey`, `isActive` | category | `not_platform_owner` 403, `category_not_found` 404, `key_taken` 409 |
+| `GET /products` | `categoryId?`, `tenantId?` (owner: uuid or `platform`) | products | — |
+| `POST /products`, `GET\|PATCH /products/:id` | `categoryId`, `key`, `nameKey`, `descriptionKey?`, `fulfilmentKind`, `featureKeys?`, `defaultQuotas?`; patch has no key or kind | product; `GET` with variants and each price history | `category_not_found` (another tenant's category), `product_not_found`, `key_taken` |
+| `POST /products/:id/variants`, `PATCH /variants/:id` | `sku`, `billingMode`, `visibility`, `quotas?`, `durationDays?`, `panelGroupId?`, `qualityTier?`, first `price`; patch has no SKU or billing mode | variant with prices | `variant_not_found`, `sku_taken`, `price_in_the_past` |
+| `POST /variants/:id/prices` | `amount`, `effectiveFrom?` (default now; never in the past) | a **new** price row | `variant_not_found`, `price_in_the_past` 400 |
+| `POST /prices/:id/deactivate` | — | the price, switched off | `price_not_found` |
+
+Every write leaves an `admin_audit_log` row (`catalog_*` actions). Nothing is deleted.
 
 ## TL;DR
 
