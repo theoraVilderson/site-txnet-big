@@ -278,27 +278,37 @@ describe('DepositSettlementService — the debt a granted gateway leaves', () =>
     });
   });
 
-  describe('releaseFailedHolds — the gateway says the payment failed (F-092-ai, ADR-0047 decision 4)', () => {
-    const release = (service: DepositSettlementService, tx: unknown) =>
-      runWithTenant({ id: TENANT }, () => service.releaseFailedHolds(tx as never, paymentRow()));
+  describe('closeFailed — the gateway says the payment failed (F-092-aj, ADR-0047 decision 4)', () => {
+    const close = (service: DepositSettlementService, tx: unknown) =>
+      runWithTenant({ id: TENANT }, () => service.closeFailed(tx as never, paymentRow()));
 
-    it('gives the holds of an open payment back cancelled, under its row lock, and flips nothing', async () => {
-      for (const rowIs of [PaymentStatus.pending, PaymentStatus.expired]) {
-        const { service, calls, tx } = build({ rowIs });
+    it('closes a pending payment failed, gives its holds back cancelled, and announces nothing', async () => {
+      const { service, calls, tx } = build({ rowIs: PaymentStatus.pending });
 
-        await expect(release(service, tx)).resolves.toBe(1);
+      await expect(close(service, tx)).resolves.toBe(true);
 
-        expect(calls.writes).toEqual(['lock', 'release:cancelled']);
-        expect(calls.flips).toEqual([]);
-      }
+      expect(calls.writes).toEqual(['flip', 'release:cancelled']);
+      expect(calls.flips[0]).toMatchObject({
+        where: { id: PAYMENT, status: PaymentStatus.pending },
+        data: { status: PaymentStatus.failed, failureCode: 'payment_failed', expiresAt: null, nextVerifyAt: null },
+      });
+      expect(calls.events).toEqual([]);
     });
 
-    it('releases nothing for a payment already settled', async () => {
+    it('closes an expired one the same way', async () => {
+      const { service, calls, tx } = build({ rowIs: PaymentStatus.expired });
+
+      await expect(close(service, tx)).resolves.toBe(true);
+
+      expect(calls.writes).toEqual(['miss:pending', 'flip', 'release:cancelled']);
+    });
+
+    it('does nothing to a payment already settled', async () => {
       const { service, calls, tx } = build({ rowIs: PaymentStatus.success });
 
-      await expect(release(service, tx)).resolves.toBe(0);
+      await expect(close(service, tx)).resolves.toBe(false);
 
-      expect(calls.writes).toEqual(['lock']);
+      expect(calls.writes).toEqual(['miss:pending', 'miss:expired']);
     });
   });
 

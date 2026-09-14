@@ -39,13 +39,14 @@ import { clearVerifyRetry, flagLongVerifying, scheduleVerifyRetry } from './veri
  * than guessing, precisely so that something can come back later and ask. This
  * is that something.
  *
- * **It credits and it flags. It never closes and it never reverses.**
- * (invariant 9.) The only write it makes to a payment is the credit a gateway
- * confirmed, through the same guarded path the callback uses. A gateway saying
- * `failed` or `reversed` is written to `payment_reconciliation_log` and nothing
- * else: the clock (F-092-k) is what closes a row, an auto-reversal is the one
- * write this table can never take back, and `ReconciliationAction` has exactly
- * three words for a reason — confirm, flag, or leave alone.
+ * **It credits and it flags. It never reverses, and it closes only on the
+ * gateway's final word** (invariant 9). The writes it makes to a payment are
+ * the credit a gateway confirmed, through the same guarded path the callback
+ * uses, and — since ADR-0046 decision 5 and ADR-0047 decision 4 — the close a
+ * gateway's `reversed` or `failed` about the row's own authority settles. An
+ * auto-reversal of a credit is the one write this table can never take back,
+ * and `ReconciliationAction` has exactly three words for a reason — confirm,
+ * flag, or leave alone.
  *
  * **An answer the gateway could not give writes no log row at all.** A row
  * saying "checked, nothing to do" is what makes the payment invisible to every
@@ -423,9 +424,10 @@ export class DepositReconciliationService {
       // `in_bank` is not finished, `failed` and `reversed` are finished and owe
       // nothing. `in_bank` is not a settled answer, so a pending row keeps
       // verifying (F-092-x); `failed` and `reversed` are, so its retry clock
-      // stops. Only `reversed` closes the row, beside its log row: the bank is
-      // returning the money, and the payer is told (F-092-ae, ADR-0046
-      // decision 5). `failed` still closes nothing — the clock owns that.
+      // stops, and both close the row beside its log row: `reversed` because
+      // the bank is returning the money and the payer is told (F-092-ae,
+      // ADR-0046 decision 5), `failed` because at Zarinpal it is final and
+      // nothing was paid (F-092-aj, ADR-0047 decision 4).
       await this.record(
         payment,
         status,
@@ -434,9 +436,9 @@ export class DepositReconciliationService {
         status !== 'in_bank',
         status === 'reversed'
           ? (tx) => this.settlement.closeReversed(tx, payment)
-          : // Final at Zarinpal (F-092-ai): the holds go back now, the row stays open.
+          : // Final at Zarinpal (F-092-aj, ADR-0047 decision 4): the payment closes.
             status === 'failed'
-            ? (tx) => this.settlement.releaseFailedHolds(tx, payment)
+            ? (tx) => this.settlement.closeFailed(tx, payment)
             : undefined,
       );
       if (status === 'in_bank') {
