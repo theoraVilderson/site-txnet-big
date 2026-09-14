@@ -91,7 +91,7 @@ ADR-0021 calls the outbox a new unit; splitting it out later stays cheap while
 it is still one of each.
 
 **It needs an `always_on` `bot_schedule`**, exactly like the other two — a job
-with no schedule never becomes due. Its latency is therefore one
+with no schedule never becomes due. `prisma/seed.js` creates it (2026-09-14). Its latency is therefore one
 `AUTOMATION_TICK_INTERVAL_MS`, 60 seconds by default, and the day an event
 cannot wait a minute that is a schedule change rather than a rewrite.
 
@@ -150,7 +150,7 @@ every other stays so.
 | Then `{type:'billing.payment.confirmed', paymentId, amountCredited}` on `user:<userId>` (`RealtimePublisher`), then `POST /api/internal/notify/user` on auth-service with `X-Tenant-Id` = the payload's tenant and template `paymentCredited` | the live half is at most once and cheap; the bot half needs the tenant's bots, which are auth-service's |
 | A side effect that throws **deletes the marker** and rethrows: nack, no requeue, dead-letter | the event stays owed instead of being recorded as handled |
 | A payload missing its tenant, user, payment, amount or source throws | whose payment it is is never guessed |
-| **The relay still needs its schedule.** `outbox_relay` is not in `SEEDED_SCHEDULES`; unscheduled, the event is never published and nobody is told | ADR-0045 consequences — an operator decision, not this consumer's |
+| **The relay's schedule is seeded** (2026-09-14): `outbox_relay` is in `SEEDED_SCHEDULES`, `always_on`. A database seeded before that needs `prisma db seed` re-run; unscheduled, the event is never published and nobody is told | ADR-0045 consequences — the operator decided it once, in the seed, rather than per deployment |
 
 ## The second consumer: a reversed payment (F-067-m, ADR-0046)
 

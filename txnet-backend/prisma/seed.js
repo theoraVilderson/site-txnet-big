@@ -123,7 +123,7 @@ async function seedCurrencies() {
   }
 }
 
-// Four jobs run from a `bot_schedule` row seeded here; every other job waits
+// Six jobs run from a `bot_schedule` row seeded here; every other job waits
 // for an operator (`automation/contract.worker.md` "A job is registered; it is
 // not scheduled"). The worker creates its own `bot_worker` rows on boot; before
 // that first boot there is nothing to schedule yet, and a re-run adds them.
@@ -144,6 +144,10 @@ const SEEDED_SCHEDULES = [
   // Due verify retries (F-092-ac): every tick, so the ladder's 30 s rung waits a
   // minute, not five. Only rows whose retry has come; most ticks ask nothing.
   { key: 'deposit_verify_retry', scheduleType: 'always_on', cronExpression: null },
+  // The outbox relay (ADR-0021, decided 2026-09-14): unscheduled, every event a
+  // payment writes — a late credit, a reversal — is never published, and the
+  // payer is never told. Every tick, so a notice waits a minute at most.
+  { key: 'outbox_relay', scheduleType: 'always_on', cronExpression: null },
 ];
 
 async function seedWorkerSchedules(adminId) {
