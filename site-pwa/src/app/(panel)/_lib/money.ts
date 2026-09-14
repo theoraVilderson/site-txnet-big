@@ -1,4 +1,5 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { numberLocale } from "./digits";
 import type { Translate } from "@/util/helper";
 
 /**
@@ -124,8 +125,8 @@ function toDecimalString({ negative, minorUnits, decimals }: Rounded): string {
 }
 
 /**
- * `150000`, `"IRT"`, fa -> `۱۵۰٬۰۰۰ تومان`. Digits and separators follow the
- * language; unreadable input comes back as it was rather than as `NaN`.
+ * `150000`, `"IRT"`, fa -> `150,000 تومان`. Latin digits in every language
+ * (`digits.ts`); the currency word follows the language; unreadable input comes back as it was rather than as `NaN`.
  */
 export function formatMoney(
   amount: string | number,
@@ -143,13 +144,13 @@ export function formatMoney(
   const nonIso = NON_ISO[currency];
   if (!nonIso) {
     try {
-      return new Intl.NumberFormat(lang, { style: "currency", currency, ...digits }).format(exact);
+      return new Intl.NumberFormat(numberLocale(lang), { style: "currency", currency, ...digits }).format(exact);
     } catch {
       // Not a code Intl can read: the figure, then the code as given.
-      return `${new Intl.NumberFormat(lang, digits).format(exact)} ${currency}`;
+      return `${new Intl.NumberFormat(numberLocale(lang), digits).format(exact)} ${currency}`;
     }
   }
-  return t("common", nonIso.format, { amount: new Intl.NumberFormat(lang, digits).format(exact) });
+  return t("common", nonIso.format, { amount: new Intl.NumberFormat(numberLocale(lang), digits).format(exact) });
 }
 
 function spellBelowThousand(n: number, t: Translate): string {

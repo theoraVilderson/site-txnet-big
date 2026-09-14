@@ -207,6 +207,15 @@ export const envSchema = z.object({
    */
   PAYMENT_CALLBACK_ORIGIN: z.string().default(''),
 
+  /**
+   * The HMAC key the deposit callback signs its redirect with, shared with
+   * `site-pwa`'s server and nothing else (`payment-result-token.ts`). The panel
+   * shows a payment result only under a valid signature, so a hand-typed
+   * `/payment/success?ref=…` shows nothing. Empty in development sends every
+   * payer to the financial page instead; refused when NODE_ENV=production.
+   */
+  PAYMENT_RESULT_SECRET: z.string().default(''),
+
   /** The platform-wide ceiling over one bucket, as a multiple of the route's own limit; `0` switches it off (F-066-s). */
   PLATFORM_RATE_LIMIT_FACTOR: z.preprocess(
     (v) => (v === '' ? undefined : v),
@@ -251,6 +260,9 @@ export const envSchema = z.object({
 }).refine((env) => !(env.NODE_ENV === 'production' && !env.SERVICE_AUTH_TOKEN), {
   message: 'SERVICE_AUTH_TOKEN is required when NODE_ENV=production: without it every internal call is refused and the expiry sweep never runs',
   path: ['SERVICE_AUTH_TOKEN'],
+}).refine((env) => !(env.NODE_ENV === 'production' && env.PAYMENT_RESULT_SECRET.length < 32), {
+  message: 'PAYMENT_RESULT_SECRET (32+ characters) is required when NODE_ENV=production: without it no payment result can be shown',
+  path: ['PAYMENT_RESULT_SECRET'],
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

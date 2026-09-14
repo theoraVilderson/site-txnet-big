@@ -60,7 +60,7 @@ func main() {
 	}
 
 	// Create handler.
-	h := handlers.New(redisClient, cfg.JWTSecret, cfg.RedisKeyPrefix, engine, log)
+	h := handlers.New(redisClient, cfg.JWTSecret, cfg.RedisKeyPrefix, engine, log).WithCORSOrigins(cfg.CORSAllowedOrigins)
 
 	// Set up HTTP routes.
 	mux := http.NewServeMux()

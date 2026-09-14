@@ -71,3 +71,11 @@ export const REALTIME_URL: string = toSocketUrl(
   process.env.NEXT_PUBLIC_REALTIME_ORIGIN || process.env.NEXT_PUBLIC_API_ORIGIN || "",
   REALTIME_PATH,
 );
+
+/**
+ * The HMAC key `billing`'s deposit callback signs the payment result with
+ * (`payment/_lib/result-token.ts`). **Server only** — no `NEXT_PUBLIC_` mirror,
+ * so it is `""` in any browser bundle. Empty means no result is ever shown and
+ * every payer lands on the financial page.
+ */
+export const PAYMENT_RESULT_SECRET = process.env.PAYMENT_RESULT_SECRET || "";

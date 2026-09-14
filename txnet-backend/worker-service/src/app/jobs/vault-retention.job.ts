@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotWorkerCategory } from '@prisma/client';
 import { Job, JobResult } from '../automation/job';
+import { envelopeData } from '../automation/internal-answer';
 
 /** The one route this job exists to call. Service callers only; 404 otherwise. */
 const DESTROY_EXPIRED_PATH = '/api/internal/vault/destroy-expired';
@@ -104,8 +105,8 @@ export class VaultRetentionJob implements Job {
         );
       }
 
-      const body: unknown = await response.json();
-      const destroyed = (body as { destroyed?: unknown })?.destroyed;
+      // auth-service answers `{ ok, msg, data }` (`envelopeData`).
+      const destroyed = envelopeData(await response.json())?.destroyed;
       if (typeof destroyed !== 'number') {
         throw new Error(
           `auth-api answered ${DESTROY_EXPIRED_PATH} without a numeric 'destroyed'`,

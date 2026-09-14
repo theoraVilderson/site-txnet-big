@@ -63,6 +63,35 @@ describe('ZarinpalProvider — request', () => {
     expect(calls[0].body).toMatchObject({ amount: 1_250_000, currency: 'IRR', merchant_id: MERCHANT });
   });
 
+  // `-9` is Zarinpal's "validation error", and only its message says which
+  // field — a merchant id of the wrong shape, a callback it will not accept.
+  // Without it the log reads "request refused" and nobody can act.
+  it("keeps Zarinpal's validation detail for the log, with the merchant id redacted", async () => {
+    const { provider } = gateway([
+      {
+        status: 422,
+        body: {
+          data: [],
+          errors: {
+            code: -9,
+            message: 'The input params invalid, validation error.',
+            validations: [{ merchant_id: `The merchant id ${MERCHANT} must be 36 characters.` }, { callback_url: 'The callback url format is invalid.' }],
+          },
+        },
+      },
+    ]);
+
+    const failure = (await provider
+      .request({ credentials, amountMinor: BigInt(22_802_500), callbackUrl: 'https://x.example/cb', description: 'top-up' })
+      .catch((e: unknown) => e)) as GatewayFailure;
+
+    expect(failure.reason).toBe('invalid_request');
+    expect(failure.message).toContain('validation error');
+    expect(failure.message).toContain('merchant_id: The merchant id [redacted] must be 36 characters.');
+    expect(failure.message).toContain('callback_url: The callback url format is invalid.');
+    expect(failure.message).not.toContain(MERCHANT);
+  });
+
   it('is never retried, even when the failure was only a timeout', async () => {
     const { provider, calls } = gateway([timeout(), { body: { data: { code: 100, authority: 'A2' } } }]);
 

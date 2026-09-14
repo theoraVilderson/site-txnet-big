@@ -225,15 +225,25 @@ describe('TokenService', () => {
   });
 
   describe('verify — expiry', () => {
-    it('rejects a token whose exp has passed', () => {
-      expect(() => tokens.verify(tokens.sign(baseClaims, -1))).toThrow(
-        'token expired',
-      );
+    // `reason` is what the panel refreshes on; `msg` is translated (see
+    // forward-auth "Status mapping" — the gate answers the same refusal).
+    it('rejects a token whose exp has passed, naming the reason', () => {
+      let thrown: unknown;
+      try {
+        tokens.verify(tokens.sign(baseClaims, -1));
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown).toBeInstanceOf(UnauthorizedException);
+      expect((thrown as UnauthorizedException).getResponse()).toMatchObject({
+        i18nKey: 'auth.tokenExpired',
+        reason: 'tokenExpired',
+      });
     });
 
     it('rejects a token whose exp is exactly now (exp is exclusive)', () => {
       expect(() => tokens.verify(tokens.sign(baseClaims, 0))).toThrow(
-        'token expired',
+        UnauthorizedException,
       );
     });
 

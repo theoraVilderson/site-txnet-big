@@ -23,8 +23,13 @@ export class AuthGuard implements CanActivate {
       .switchToHttp()
       .getRequest<Request & { user?: any; switchScope?: SwitchScope | null }>();
     const header = request.get('authorization') ?? '';
+    // `reason` as at the gate: a page that called before its session was
+    // established gets a token from the refresh cookie and sends again.
     if (!header.startsWith('Bearer '))
-      throw new UnauthorizedException('authorization required');
+      throw new UnauthorizedException({
+        i18nKey: 'auth.authorizationRequired',
+        reason: 'authorizationRequired',
+      });
 
     const claims = this.tokens.verify(header.slice(7));
 
@@ -36,7 +41,14 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('invalid token');
 
     const session = await this.sessions.read(claims.sessionId);
-    if (!session) throw new UnauthorizedException('session revoked');
+    // `reason` as at the gate: a session another tab's refresh rotated is
+    // mended by the refresh cookie, a real sign-out is not.
+    if (!session) {
+      throw new UnauthorizedException({
+        i18nKey: 'auth.sessionRevoked',
+        reason: 'sessionRevoked',
+      });
+    }
 
     // ADR-0043: the same rule `auth-handler` applies at the gate, because this
     // service's own guarded routes are not behind the gate. `reason` is what a

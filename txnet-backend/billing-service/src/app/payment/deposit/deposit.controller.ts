@@ -163,6 +163,7 @@ export class DepositController {
         source: body.source,
         amount: new Prisma.Decimal(body.amount),
         couponCodes: body.couponCodes,
+        origin: req.headers.origin ?? null,
       });
     } catch (e) {
       throw toHttp(e);

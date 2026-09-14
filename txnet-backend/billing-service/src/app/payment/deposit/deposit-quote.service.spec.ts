@@ -70,6 +70,8 @@ const noCoupons = (amount: string): CouponValidation => ({
 
 type Setup = {
   rows?: ReturnType<typeof gatewayRow>[];
+  /** The tenant's default quick amounts (F-092-v); absent is no `deposit_setting` row. */
+  tenantPresets?: Prisma.Decimal[];
   coupons?: CouponValidation;
   quoteFee?: (amountMinor: bigint) => bigint;
   /** Gateway ids with a merchant id in the vault. Every row's, unless a case says otherwise. */
@@ -78,13 +80,14 @@ type Setup = {
   liveRate?: { snapshotId: string; rate: Prisma.Decimal };
 };
 
-function build({ rows = [gatewayRow()], coupons = noCoupons('20.00'), quoteFee, configured, liveRate }: Setup = {}) {
+function build({ rows = [gatewayRow()], coupons = noCoupons('20.00'), quoteFee, configured, liveRate, tenantPresets }: Setup = {}) {
   const tx = {
     $executeRaw: async () => 0,
     tenant: { findUnique: async () => ({ tenantType: 'reseller' }) },
     // No grant: `selectGateway` looks for one only after the tenant's own row
     // misses, and `selectableGateways` always asks (F-096-b).
     paymentGatewayGrant: { findMany: async () => [] },
+    depositSetting: { findUnique: async () => (tenantPresets ? { presets: tenantPresets } : null) },
     tenantGatewayConfig: {
       findFirst: async () => rows[0] ?? null,
       findMany: async () => rows,
@@ -264,9 +267,25 @@ describe('DepositQuoteService.listGateways', () => {
         category: 'domestic_rial',
         minAmount: '1.00',
         maxAmount: '1000.00',
+        presets: [],
       },
     ]);
     expect(JSON.stringify(gateways)).not.toContain('SECRET');
+  });
+
+  // F-092-v: the gateway's own list, else the tenant's, never outside the range.
+  it("offers each gateway's quick amounts: its own, else the tenant's, inside what it accepts", async () => {
+    const service = build({
+      rows: [
+        gatewayRow({ depositPresets: [d('3'), d('7')] }),
+        gatewayRow({ id: 'second', displayName: 'Second', minAcceptAmount: d('2.00'), maxAcceptAmount: d('10.00'), depositPresets: [] }),
+      ],
+      tenantPresets: [d('1'), d('2.5'), d('50')],
+    });
+
+    const gateways = await asTenant(() => service.listGateways());
+
+    expect(gateways.map((g) => g.presets)).toEqual([['3.00', '7.00'], ['2.50']]);
   });
 });
 

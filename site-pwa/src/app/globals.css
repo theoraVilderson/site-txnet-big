@@ -690,3 +690,183 @@ div:has(> .password-field-input:autofill) > .password-field-label {
   box-shadow: 0 0 10px var(--accent-glow);
   cursor: pointer;
 }
+
+/* ── Payment result (F-093-f) ────────────────────────────────────────────────
+   The end of a payment is the moment a user most wants to *feel* it landed,
+   so it gets a real sequence: the ring draws, the mark draws, the emblem pops,
+   the waves go out and the confetti flies — ~1.1s, once. A failure draws its
+   cross and shakes once, and nothing celebrates.
+
+   CSS and not framer-motion, for the reason written above `giftRise`: a card
+   that mounts once has no exit, no `auto` height and no gesture
+   (contract.payment-result.md). Every element's resting style is its final
+   state and the keyframes run `both`, so `prefers-reduced-motion` only has to
+   switch animation off to show the finished page. Colours come from `--pay-tone`,
+   which the card sets from theme tokens — never gold. */
+
+.pay-card {
+  animation: payCardIn 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+}
+
+.pay-rise {
+  animation: payRise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.pay-halo {
+  background: radial-gradient(circle, var(--pay-glow) 0%, transparent 70%);
+  animation: payHalo 1.2s ease-out 0.15s both, payBreath 3.6s ease-in-out 1.4s infinite;
+}
+
+.pay-ripple {
+  border: 2px solid var(--pay-tone);
+  opacity: 0;
+  animation: payRipple 1.1s cubic-bezier(0.1, 0.6, 0.3, 1) both;
+}
+
+.pay-disc {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: payDisc 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.pay-stroke {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: payDraw 0.5s cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+
+.pay-emblem-success {
+  animation: payPop 0.5s cubic-bezier(0.34, 1.8, 0.64, 1) 0.95s both;
+}
+
+.pay-emblem-failure {
+  animation: payShake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) 0.9s both;
+}
+
+.pay-confetti {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  opacity: 0;
+  animation: payBurst 1.3s cubic-bezier(0.12, 0.7, 0.3, 1) both;
+}
+
+.pay-twinkle {
+  animation: payTwinkle 2.8s ease-in-out infinite both;
+}
+
+/* The receipt: a ticket with a notch bitten out of each side. */
+.pay-ticket {
+  -webkit-mask:
+    radial-gradient(circle 10px at 0 50%, #0000 97%, #000) left / 51% 100% no-repeat,
+    radial-gradient(circle 10px at 100% 50%, #0000 97%, #000) right / 51% 100% no-repeat;
+  mask:
+    radial-gradient(circle 10px at 0 50%, #0000 97%, #000) left / 51% 100% no-repeat,
+    radial-gradient(circle 10px at 100% 50%, #0000 97%, #000) right / 51% 100% no-repeat;
+}
+
+.pay-shine {
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.45) 50%, transparent 65%);
+  transform: translateX(-120%);
+  animation: payShine 1.1s ease-in-out 1.25s both;
+}
+
+.pay-pop-in {
+  animation: payPopIn 0.35s cubic-bezier(0.34, 1.8, 0.64, 1) both;
+}
+
+@keyframes payCardIn {
+  from { opacity: 0; transform: translateY(18px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes payRise {
+  from { opacity: 0; transform: translateY(10px); filter: blur(4px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+
+@keyframes payHalo {
+  from { opacity: 0; transform: scale(0.4); }
+  60% { opacity: 1; transform: scale(1.15); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes payBreath {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.08); opacity: 0.75; }
+}
+
+@keyframes payRipple {
+  from { opacity: 0.7; transform: scale(0.6); }
+  to { opacity: 0; transform: scale(2.1); }
+}
+
+@keyframes payDisc {
+  from { opacity: 0; transform: scale(0.3); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes payDraw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes payPop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.14); }
+  70% { transform: scale(0.97); }
+  100% { transform: scale(1); }
+}
+
+@keyframes payShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-7px) rotate(-3deg); }
+  40% { transform: translateX(6px) rotate(2deg); }
+  60% { transform: translateX(-4px) rotate(-1deg); }
+  80% { transform: translateX(2px); }
+}
+
+@keyframes payBurst {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.2) rotate(0deg); }
+  12% { opacity: 1; }
+  70% { opacity: 1; }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy) + 36px)) scale(1) rotate(var(--rot));
+  }
+}
+
+@keyframes payTwinkle {
+  0%, 100% { opacity: 0; transform: scale(0.5) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1) rotate(90deg); }
+}
+
+@keyframes payShine {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(120%); }
+}
+
+@keyframes payPopIn {
+  from { opacity: 0; transform: scale(0.4); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pay-card,
+  .pay-rise,
+  .pay-halo,
+  .pay-disc,
+  .pay-stroke,
+  .pay-emblem-success,
+  .pay-emblem-failure,
+  .pay-pop-in {
+    animation: none;
+  }
+
+  .pay-ripple,
+  .pay-confetti,
+  .pay-shine,
+  .pay-twinkle {
+    display: none;
+  }
+}

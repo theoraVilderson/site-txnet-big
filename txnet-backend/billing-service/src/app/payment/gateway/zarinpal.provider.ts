@@ -71,8 +71,29 @@ const RETRY_DELAYS_MS = [500, 1500];
 
 type ZarinpalBody = {
   data?: Record<string, unknown> | unknown[];
-  errors?: { code?: number | string; message?: string } | unknown[];
+  errors?: { code?: number | string; message?: string; validations?: unknown } | unknown[];
 };
+
+/**
+ * Zarinpal's own words for a refusal — `message` and, for `-9`, which field
+ * failed validation — for the log line `toHttp` writes; never for a user. A
+ * validation message may quote the value it refused, so the merchant id is
+ * redacted wherever it appears (billing invariant 8).
+ */
+function refusalDetail(errors: { message?: unknown; validations?: unknown }, merchantId: string): string {
+  const parts: string[] = [];
+  if (typeof errors.message === 'string' && errors.message) parts.push(errors.message);
+  const validations = Array.isArray(errors.validations) ? errors.validations : errors.validations ? [errors.validations] : [];
+  for (const entry of validations) {
+    if (!entry || typeof entry !== 'object') continue;
+    for (const [field, text] of Object.entries(entry as Record<string, unknown>)) {
+      parts.push(`${field}: ${Array.isArray(text) ? text.join(' ') : String(text)}`);
+    }
+  }
+  if (parts.length === 0) return '';
+  const detail = parts.join('; ').slice(0, 500);
+  return `: ${merchantId ? detail.split(merchantId).join('[redacted]') : detail}`;
+}
 
 /** No answer reached us. The only failure a retry can change. */
 class TransportFailure extends Error {}
@@ -211,7 +232,7 @@ export class ZarinpalProvider implements PaymentProvider {
     const errors = parsed.errors;
     if (errors && !Array.isArray(errors) && errors.code !== undefined) {
       const code = String(errors.code);
-      throw this.failure(FAILURE_BY_CODE[code] ?? 'unexpected', code, `${method} refused`);
+      throw this.failure(FAILURE_BY_CODE[code] ?? 'unexpected', code, `${method} refused${refusalDetail(errors, credentials.merchantId)}`);
     }
     if (!parsed.data || Array.isArray(parsed.data)) {
       throw this.failure('unexpected', null, `${method}: HTTP ${response.status} with no data`);

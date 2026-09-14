@@ -5,8 +5,9 @@ import { AlertCircle, ChevronDown, Loader2, Receipt, ShieldCheck, Sparkles } fro
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { DepositQuote } from "@/lib/billing-api";
-import { BASE_CURRENCY, formatMoney } from "../../../_lib/money";
-import { fromMinor } from "../_lib/deposit-amount";
+import { BASE_CURRENCY, amountInWords, formatMoney } from "../../../_lib/money";
+import { numberLocale } from "../../../_lib/digits";
+import { fromMinor, tomanFromRial } from "../_lib/deposit-amount";
 
 const D = FrontendI18nKeys.common.deposit.summary;
 
@@ -54,13 +55,21 @@ export function PaymentSummary({
   const free = quote?.free ?? false;
   const canPay = quote !== null && !isQuoting && !isStarting;
   const charge = quote?.charge ? fromMinor(quote.charge.amountMinor, quote.charge.decimals) : null;
+  // A rial gateway is read in toman, and spelled out: the figure a person
+  // checks against the bank's page before they confirm (not arithmetic on the
+  // bill — a unit change of the charge billing answered).
+  const rial = quote?.charge?.currency === "IRR" && quote.charge.decimals === 0 ? quote.charge.amountMinor : null;
+  const toman = rial ? tomanFromRial(rial) : null;
+  const tomanWhole = toman !== null && !toman.includes(".");
+  const chargeWords =
+    toman === null ? null : tomanWhole ? amountInWords(toman, "IRT", { lang, t }) : amountInWords(rial!, "IRR", { lang, t });
 
   const lines = quote && (
     <div className="space-y-3">
       {/* The gateway would not take what was left, so the payment was raised —
           and the extra is credited, not kept. `credited` already carries it. */}
       {quote.gap !== "0.00" && (
-        <p className="flex items-start gap-2 rounded-2xl border border-gold/20 bg-gold-bg p-3 text-[11px] font-bold leading-relaxed text-gold">
+        <p className="flex items-start gap-2 rounded-2xl border border-primary/20 bg-leaf-bg p-3 text-[11px] font-bold leading-relaxed text-primary">
           <Sparkles size={16} className="shrink-0" aria-hidden />
           {t("common", D.gap, { amount: money(quote.gap) })}
         </p>
@@ -99,12 +108,12 @@ export function PaymentSummary({
           <span className="text-xl font-bold text-primary">{t("common", D.free)}</span>
         ) : (
           <>
-            <span dir="ltr" className="block text-2xl font-bold text-gold">
+            <span dir="ltr" className="block text-2xl font-bold text-primary">
               {money(quote.payable)}
             </span>
             {/* What the bank's own page will say, at the rate that priced this
                 quote (ADR-0019). Hidden when the figure cannot be read. */}
-            {charge !== null && quote.charge && (
+            {toman === null && charge !== null && quote.charge && (
               <span dir="ltr" className="block text-[10px] text-text-secondary">
                 {t("common", D.charge, { amount: `${charge} ${quote.charge.currency}` })}
               </span>
@@ -115,14 +124,32 @@ export function PaymentSummary({
     </div>
   );
 
+  const rialCharge = quote && !free && toman !== null && rial !== null && (
+    <div className="rounded-2xl border border-primary/25 bg-leaf-bg p-3.5">
+      <p className="text-[11px] font-bold text-text-secondary">{t("common", D.chargeTitle)}</p>
+      {chargeWords && (
+        <p className="mt-1.5 text-sm font-bold leading-7 text-text-primary">
+          <span className="sr-only">{t("common", D.chargeWords)}: </span>
+          {chargeWords}
+        </p>
+      )}
+      <p className="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+        <span className="text-xl font-bold text-primary">
+          {formatMoney(toman, "IRT", { lang, t }, { decimals: tomanWhole ? 0 : 1 })}
+        </span>
+        <span className="text-[10px] text-text-secondary">
+          {t("common", D.chargeRial, { amount: new Intl.NumberFormat(numberLocale(lang)).format(rial as unknown as number) })}
+        </span>
+      </p>
+    </div>
+  );
+
   const button = (
     <button
       type="button"
       disabled={!canPay}
       onClick={onPay}
-      className={`flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-sm font-bold text-white transition-[filter] disabled:cursor-not-allowed disabled:bg-card-border disabled:text-text-secondary ${
-        free ? "bg-primary hover:brightness-110" : "bg-gold hover:brightness-110"
-      }`}
+      className={`flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-sm font-bold text-white transition-[filter] disabled:cursor-not-allowed disabled:bg-card-border disabled:text-text-secondary bg-primary hover:brightness-110`}
     >
       {isStarting ? (
         <>
@@ -164,6 +191,7 @@ export function PaymentSummary({
         {open && lines}
         {failure}
         {total}
+        {rialCharge}
         {button}
       </div>
     );
@@ -181,6 +209,7 @@ export function PaymentSummary({
       <div className="space-y-4 p-5">
         {lines}
         <div className="border-t border-card-border pt-4">{total}</div>
+        {rialCharge}
 
         {free && (
           <p className="flex items-start gap-2 rounded-2xl border border-primary/20 bg-leaf-bg p-3 text-[11px] font-bold leading-relaxed text-primary">

@@ -7,7 +7,7 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { DepositGateway } from "@/lib/billing-api";
 import { toEnglishDigits } from "@/util/helper";
 import { BASE_CURRENCY, amountInWords, formatMoney } from "../../../_lib/money";
-import { fromCents, presetAmounts, toCents } from "../_lib/deposit-amount";
+import { fromCents, offeredPresets, toCents } from "../_lib/deposit-amount";
 
 const D = FrontendI18nKeys.common.deposit.amount;
 
@@ -53,7 +53,7 @@ export function AmountInput({ amount, onAmountChange, gateway, disabled }: Amoun
   const cents = toCents(amount);
   const min = gateway ? toCents(gateway.minAmount) : null;
   const max = gateway ? toCents(gateway.maxAmount) : null;
-  const presets = gateway ? presetAmounts(gateway.minAmount, gateway.maxAmount) : [];
+  const presets = gateway ? offeredPresets(gateway) : [];
 
   // A hundred stops across whatever range this gateway takes. A slider is a
   // coarse control; the box beside it is how an exact figure gets typed.
@@ -68,7 +68,7 @@ export function AmountInput({ amount, onAmountChange, gateway, disabled }: Amoun
   return (
     <section className="rounded-3xl border border-card-border bg-card-bg p-5 shadow-sm sm:p-6">
       <div className="mb-4 flex items-center gap-2">
-        <Coins size={16} className="text-gold" aria-hidden />
+        <Coins size={16} className="text-primary" aria-hidden />
         <label htmlFor={inputId} className="text-sm font-bold text-text-primary">
           {t("common", D.label)}
         </label>
@@ -76,7 +76,7 @@ export function AmountInput({ amount, onAmountChange, gateway, disabled }: Amoun
 
       <div
         className={`flex items-center rounded-2xl border-2 bg-bg-inner px-4 py-3 transition-colors ${
-          focused ? "border-gold" : "border-card-border"
+          focused ? "border-primary" : "border-card-border"
         }`}
       >
         <span className="me-3 shrink-0 text-sm font-bold text-text-secondary opacity-50">
@@ -100,7 +100,7 @@ export function AmountInput({ amount, onAmountChange, gateway, disabled }: Amoun
 
       {/* The figure in words, hidden when the locale has no words for it
           (`contract.kit.md` rule 4) rather than printed as a gap. */}
-      <p className="mt-3 min-h-[1.75rem] text-xs font-bold text-gold">{words}</p>
+      <p className="mt-3 min-h-[1.75rem] text-xs font-bold text-primary">{words}</p>
 
       {presets.length > 0 && (
         <div
@@ -117,7 +117,7 @@ export function AmountInput({ amount, onAmountChange, gateway, disabled }: Amoun
               onClick={() => onAmountChange(preset)}
               className={`rounded-xl border px-2 py-2.5 text-xs font-bold transition-colors ${
                 cents !== null && cents === toCents(preset)
-                  ? "border-gold bg-gold text-white"
+                  ? "border-primary bg-primary text-white"
                   : "border-card-border bg-bg-inner text-text-secondary hover:border-text-primary"
               }`}
             >

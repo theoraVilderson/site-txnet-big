@@ -84,6 +84,8 @@ type Setup = {
   requestFails?: Error;
   domains?: Array<{ domainValue: string; domainType: string; verificationStatus: string }>;
   callbackOrigin?: string;
+  /** `FRONTEND_ORIGIN`, comma-separated like CORS reads it. */
+  frontendOrigin?: string;
 };
 
 function build(setup: Setup = {}) {
@@ -94,6 +96,7 @@ function build(setup: Setup = {}) {
     requestFails,
     domains = [{ domainValue: 'myvpn.txnet.app', domainType: 'subdomain', verificationStatus: 'pending' }],
     callbackOrigin = '',
+    frontendOrigin = '',
   } = setup;
 
   const calls: Calls = { created: [], updated: [], reserved: [], settled: [], credited: [], requested: [] };
@@ -178,7 +181,7 @@ function build(setup: Setup = {}) {
   };
   const config = {
     get: (key: string) =>
-      ({ GLOBAL_PREFIX: 'api', PAYMENT_CALLBACK_ORIGIN: callbackOrigin, PAYMENT_PENDING_TTL_SEC: 900 })[key],
+      ({ GLOBAL_PREFIX: 'api', PAYMENT_CALLBACK_ORIGIN: callbackOrigin, PAYMENT_PENDING_TTL_SEC: 900, FRONTEND_ORIGIN: frontendOrigin })[key],
   };
 
   const service = new DepositStartService(
@@ -200,9 +203,9 @@ function build(setup: Setup = {}) {
 
 const asTenant = <T>(fn: () => Promise<T>) => runWithTenant({ id: TENANT }, fn);
 
-const start = (service: DepositStartService, couponCodes: string[] = []) =>
+const start = (service: DepositStartService, couponCodes: string[] = [], origin?: string) =>
   asTenant(() =>
-    service.start({ userId: USER, gatewayId: GATEWAY, source: 'tenant', amount: d('20.00'), couponCodes }),
+    service.start({ userId: USER, gatewayId: GATEWAY, source: 'tenant', amount: d('20.00'), couponCodes, origin }),
   );
 
 describe('DepositStartService.start', () => {
@@ -258,6 +261,20 @@ describe('DepositStartService.start', () => {
     // ADR-0020: the callback is a public route resolved by Host, so a reseller's
     // customer must come back to the brand they paid on.
     expect(calls.requested[0].callbackUrl).toBe('https://myvpn.com/api/billing/deposit/callback');
+  });
+
+  // F-092-w: an operator whose Zarinpal terminal is registered on another domain
+  // writes the callback into the gateway; it goes to the gateway verbatim.
+  it("sends the gateway's own callback address when one is set, before any domain rule", async () => {
+    const { service, calls } = build({
+      row: gatewayRow({ callbackUrl: 'https://pay.example.org/api/billing/deposit/callback' }),
+      domains: [{ domainValue: 'claimed.example', domainType: 'custom_domain', verificationStatus: 'pending' }],
+      callbackOrigin: 'https://env.example',
+    });
+
+    await start(service);
+
+    expect(calls.requested[0].callbackUrl).toBe('https://pay.example.org/api/billing/deposit/callback');
   });
 
   it('refuses a tenant whose only custom domain is unproven, rather than guessing a host', async () => {
@@ -333,5 +350,28 @@ describe('DepositStartService.start', () => {
 
     await expect(start(service)).rejects.toBeInstanceOf(DepositGatewayNotFound);
     expect(calls.created).toEqual([]);
+  });
+});
+
+describe('DepositStartService.start — where the payer is sent back to', () => {
+  // The bank's callback can arrive on a host that is not the panel (a relay
+  // `callbackUrl`, or the API host), so the result page's origin is the one the
+  // payer started from, captured here and read back by the callback.
+  it('stores the Origin the panel called from when CORS allows it', async () => {
+    const { service, calls } = build({ frontendOrigin: 'https://a.example, https://panel.txnet.cyou' });
+    await start(service, [], 'https://panel.txnet.cyou');
+    expect(calls.created[0]).toMatchObject({ returnOrigin: 'https://panel.txnet.cyou' });
+  });
+
+  it('stores an Origin on one of the tenant’s own panel hosts', async () => {
+    const { service, calls } = build();
+    await start(service, [], 'https://myvpn.txnet.app');
+    expect(calls.created[0]).toMatchObject({ returnOrigin: 'https://myvpn.txnet.app' });
+  });
+
+  it('drops an Origin nobody vouches for, rather than redirecting a payer there', async () => {
+    const { service, calls } = build({ frontendOrigin: 'https://panel.txnet.cyou' });
+    await start(service, [], 'https://evil.example');
+    expect(calls.created[0]).toMatchObject({ returnOrigin: null });
   });
 });

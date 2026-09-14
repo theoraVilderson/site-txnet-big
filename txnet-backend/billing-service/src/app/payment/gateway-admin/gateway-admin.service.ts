@@ -13,6 +13,7 @@ import {
 
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { InvalidDepositPresets, normalizePresets } from '../deposit/deposit-presets';
 import type { GatewaySource } from '../gateway/gateway-merchant';
 
 /** What the vault writer says about one secret. Never a value. */
@@ -65,6 +66,10 @@ export type GatewayFields = {
   confirmationMode?: string;
   /** Tenant gateways only, and only the platform owner may set it. */
   verificationStatus?: string;
+  /** Quick amounts on the top-up page; empty inherits the tenant's default (F-092-v). */
+  depositPresets?: string[];
+  /** The callback address sent to the provider; `null` = the tenant's panel domain (F-092-w). */
+  callbackUrl?: string | null;
 };
 export type CreateGatewayInput = GatewayFields & GatewaySecretValues & { source: GatewaySource; tenantId?: string };
 export type UpdateGatewayInput = GatewayFields & GatewaySecretValues;
@@ -97,6 +102,10 @@ export type GatewayView = {
   maxRate: string | null;
   roundingStep: string | null;
   roundingMode: string | null;
+  /** This gateway's own quick amounts; empty means it inherits the tenant's default (F-092-v). */
+  depositPresets: string[];
+  /** The callback address sent to the provider, or `null` for the tenant's panel domain (F-092-w). */
+  callbackUrl: string | null;
   /** `null` when the vault writer could not be asked; the list still renders. */
   credentials: GatewaySecretsState | null;
   createdAt: Date;
@@ -110,7 +119,9 @@ export type GatewayAdminRejection =
   | 'verification_is_platform_owners'
   | 'provider_already_configured'
   | 'invalid_range'
-  | 'missing_field';
+  | 'missing_field'
+  | 'invalid_presets'
+  | 'invalid_callback';
 
 /** A refusal. Its message names the rule and a row id, never a value. */
 export class GatewayAdminRefused extends Error {
@@ -147,6 +158,28 @@ const NOT_CONFIGURED: GatewaySecretsState = {
 type Row = Record<string, unknown>;
 
 const str = (v: unknown): string | null => (v === null || v === undefined ? null : String(v));
+/**
+ * A callback address as stored: trimmed, absolute, http or https — anything a
+ * browser could be sent to that is not a web page (`javascript:`, `data:`) is
+ * refused. Empty clears it. Which host it names is the operator's call: it is
+ * the one their provider terminal is registered on.
+ */
+function callbackAddress(value: string | null): string | null {
+  const trimmed = value?.trim() ?? '';
+  if (!trimmed) return null;
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    throw new GatewayAdminRefused('invalid_callback', 'not an absolute address');
+  }
+  if ((url.protocol !== 'https:' && url.protocol !== 'http:') || trimmed.length > 500) {
+    throw new GatewayAdminRefused('invalid_callback', 'only http(s), at most 500 characters');
+  }
+  return trimmed;
+}
+
+const presetStrings = (v: unknown): string[] => (Array.isArray(v) ? v.map((d) => new Prisma.Decimal(String(d)).toFixed(2)) : []);
 const dec = (v: unknown): Prisma.Decimal | null => (v === null || v === undefined || v === '' ? null : new Prisma.Decimal(String(v)));
 
 /**
@@ -188,6 +221,41 @@ export class GatewayAdminService {
     private readonly all: CrossTenantPrismaService,
     @Inject(GATEWAY_SECRET_WRITER) private readonly secrets: GatewaySecretWriter,
   ) {}
+
+  /**
+   * The caller's own default quick amounts (F-092-v) — a gateway with a list of
+   * its own overrides them. Always the caller's tenant: a tenant's price list
+   * is its own business, the platform owner's included.
+   */
+  async presets(actor: GatewayActor): Promise<string[]> {
+    const row = await this.all.depositSetting.findUnique({ where: { tenantId: actor.tenantId } });
+    return presetStrings(row?.presets);
+  }
+
+  async setPresets(actor: GatewayActor, values: string[]): Promise<string[]> {
+    const presets = this.presetDecimals(values);
+    const before = await this.presets(actor);
+    await this.all.$transaction(async (tx) => {
+      await tx.depositSetting.upsert({
+        where: { tenantId: actor.tenantId },
+        create: { tenantId: actor.tenantId, presets, updatedByUserId: actor.adminId },
+        update: { presets, updatedByUserId: actor.adminId },
+      });
+      await tx.adminAuditLog.create({
+        data: {
+          tenantId: actor.tenantId,
+          adminId: actor.adminId,
+          action: 'deposit_presets_update',
+          targetEntityType: 'config',
+          targetEntityId: actor.tenantId,
+          oldValue: { presets: before },
+          newValue: { presets: presetStrings(presets) },
+          adminIpAddress: actor.ip,
+        },
+      });
+    });
+    return presetStrings(presets);
+  }
 
   /** Every gateway the caller may manage, platform rows first. */
   async list(actor: GatewayActor, filter: { tenantId?: string } = {}): Promise<GatewayView[]> {
@@ -446,6 +514,8 @@ export class GatewayAdminService {
   /** The columns a patch names, converted. Only named columns: a secret key is not one, and never becomes one. */
   private columns(input: GatewayFields, source: GatewaySource): Row {
     const data: Row = {};
+    if (input.depositPresets !== undefined) data['depositPresets'] = this.presetDecimals(input.depositPresets);
+    if (input.callbackUrl !== undefined) data['callbackUrl'] = callbackAddress(input.callbackUrl);
     for (const k of PLAIN_COLUMNS) if (input[k] !== undefined) data[k] = input[k];
     for (const k of DECIMAL_COLUMNS) if (input[k] !== undefined) data[k] = dec(input[k]);
     for (const [k, values] of Object.entries(ENUM_COLUMNS)) {
@@ -470,7 +540,19 @@ export class GatewayAdminService {
       if (row[k] !== undefined) out[k] = row[k];
     }
     for (const k of DECIMAL_COLUMNS) if (row[k] !== undefined) out[k] = str(row[k]);
+    if (row['depositPresets'] !== undefined) out['depositPresets'] = presetStrings(row['depositPresets']);
+    if (row['callbackUrl'] !== undefined) out['callbackUrl'] = str(row['callbackUrl']);
     return out;
+  }
+
+  /** A list as stored, or the refusal that names why it cannot be. */
+  private presetDecimals(values: string[]): Prisma.Decimal[] {
+    try {
+      return normalizePresets(values).map((v) => new Prisma.Decimal(v));
+    } catch (e) {
+      if (e instanceof InvalidDepositPresets) throw new GatewayAdminRefused('invalid_presets', e.message);
+      throw e;
+    }
   }
 
   private assertRanges(v: GatewayFields | Record<string, unknown>): void {
@@ -520,6 +602,8 @@ export class GatewayAdminService {
       maxRate: str(row['maxRate']),
       roundingStep: str(row['roundingStep']),
       roundingMode: str(row['roundingMode']),
+      depositPresets: presetStrings(row['depositPresets']),
+      callbackUrl: str(row['callbackUrl']),
       credentials,
       createdAt: row['createdAt'] as Date,
       updatedAt: row['updatedAt'] as Date,

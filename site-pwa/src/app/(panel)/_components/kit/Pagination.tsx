@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { numberLocale } from "../../_lib/digits";
 import { PAGE_GAP, pageItems, pageRange } from "../../_lib/pagination";
 
 const P = FrontendI18nKeys.common.kit.pagination;
@@ -29,7 +30,7 @@ export function Pagination({ page, totalPages, totalItems, pageSize, onPageChang
   const { lang, t } = useLocale();
   if (totalPages <= 1) return null;
 
-  const n = new Intl.NumberFormat(lang);
+  const n = new Intl.NumberFormat(numberLocale(lang));
   const { from, to } = pageRange(page, pageSize, totalItems);
   const go = (target: number) => {
     if (target >= 1 && target <= totalPages && target !== page) onPageChange(target);

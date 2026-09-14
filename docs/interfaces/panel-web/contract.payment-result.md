@@ -23,8 +23,8 @@ callback — the top-up page that *starts* the trip is
 call nothing, and retry nothing.** By the time the browser arrives, the
 callback has verified with the gateway outside every transaction, flipped the
 payment under a status guard, credited the wallet and written the event
-(ADR-0028). What reaches this app is a redirect carrying at most three query
-parameters, and the whole of both pages is how those are read.
+(ADR-0028). What reaches this app is a redirect carrying one signed token
+(`?t=`, rule 10), and the whole of both pages is how that is read.
 
 That is why neither page has a client data path, a loading state or an effect.
 
@@ -72,6 +72,18 @@ That is why neither page has a client data path, a loading state or an effect.
    ([contract.shell.md](contract.shell.md) rule 2). Legacy's failure screen
    linked to one anyway. The failure page offers the top-up page and the panel.
 
+10. **Only a signed outcome is shown (2026-09-13).** The query string used to
+   be the outcome, so `/payment/success?ref=X` typed by hand showed a paid
+   top-up. The callback now sends `?t=<base64url JSON>.<HMAC-SHA256>` under
+   `PAYMENT_RESULT_SECRET` (billing `payment-result-token.ts`), expiring in 15
+   minutes; `_lib/result-token.ts` verifies it on the server with a
+   constant-time compare. No token, a bad MAC, an edited body, an expiry, a
+   success token on the failed page or no secret configured is a redirect to
+   `/financial` — never a guess. The payload still passes rules 2–4's readers.
+   The secret is server-only (`env.ts`, no `NEXT_PUBLIC_` mirror). Not bound to
+   a user: a real token forwarded within 15 minutes shows a real payment. A
+   reload after expiry lands on `/financial`, where the row is.
+
 ## What these pages do not do
 
 No amount, no wallet figure, no gateway name: the redirect carries none of
@@ -80,6 +92,14 @@ change. The financial page is where a top-up attempt is looked at in full
 (F-093-d), and it shows the same reference. No animation library — rule 6 of
 [contract.shell.md](contract.shell.md) earns framer-motion for an exit, an
 `auto` height or an imperative gesture, and a card that mounts once has none.
+
+The motion (2026-09-13) is CSS keyframes in `globals.css` (`pay-*`): ring and
+mark draw, the emblem pops (success) or shakes once (failure), and a fresh
+success adds waves and confetti — never on `?already=1` (rule 3). Colours are
+theme tokens only, never gold. Every resting style is the final state, so
+`prefers-reduced-motion` switches animation off and shows the finished page.
+The confetti comes from `_lib/celebration.ts` with a fixed seed: the page is
+server-rendered, and a `Math.random()` burst would fail hydration.
 
 ## Known gap
 
@@ -98,5 +118,8 @@ changed.
 
 `payment/_lib/payment-result.test.ts` — the code list against the service's own
 union, the paths against the controller's `RESULT_PATH`, every key these pages
-can reach against the shipped `en` and `fa` content, and rules 2, 3 and 4 as
-cases.
+can reach against the shipped `en` and `fa` content, rules 2, 3 and 4 as
+cases, and the confetti as deterministic, outward and token-coloured.
+`payment/_lib/result-token.test.ts` — rule 10: tokens minted by billing's own
+signer are shown; a foreign key, an edited body, an expiry, garbage and an
+empty secret are all `null`.

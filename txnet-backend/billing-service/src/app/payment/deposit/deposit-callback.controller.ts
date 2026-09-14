@@ -1,9 +1,12 @@
 import { Controller, Get, Query, Req, Res } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
 import type { Request, Response } from 'express';
 
+import type { EnvConfig } from '../../config/env.validation';
 import { RateLimit } from '../../request/rate-limit';
-import { CallbackFailureCode, CallbackOutcome, DepositCallbackService } from './deposit-callback.service';
+import { DepositCallbackService, SettledCallback } from './deposit-callback.service';
+import { signResultToken } from './payment-result-token';
 
 /**
  * Where a bank sends the payer back (F-092-j).
@@ -28,24 +31,31 @@ import { CallbackFailureCode, CallbackOutcome, DepositCallbackService } from './
 /** The panel pages the browser is handed back to. Relative, on the host it arrived on. */
 const RESULT_PATH = { success: '/payment/success', failed: '/payment/failed' } as const;
 
-function resultUrl(outcome: CallbackOutcome): string {
-  if (outcome.kind === 'failed') {
-    return `${RESULT_PATH.failed}?error=${encodeURIComponent(outcome.code satisfies CallbackFailureCode)}`;
-  }
-  const params = new URLSearchParams();
-  // The receipt number, for the user to quote at support. Absent only on a row
-  // settled before the column existed, or by an admin who had none.
-  if (outcome.referenceId) params.set('ref', outcome.referenceId);
-  // A reload, or a redirect that raced another: the page says "already paid"
-  // rather than celebrating a second time (legacy's `already_paid`).
-  if (outcome.alreadyPaid) params.set('already', '1');
-  const query = params.toString();
-  return query ? `${RESULT_PATH.success}?${query}` : RESULT_PATH.success;
+/**
+ * Where the browser goes: the result page for the outcome, carrying the outcome
+ * **only** as a signed `?t=` (`payment-result-token.ts`). Nothing readable is
+ * put on the query string any more, because the page used to print what it was
+ * given and a hand-typed `?ref=` was a paid top-up on screen.
+ *
+ * With no secret configured there is no token, and the panel sends a payer
+ * without one to the financial page — where the real row is — rather than
+ * guessing. Production refuses to boot that way (`env.validation.ts`).
+ */
+function resultUrl(outcome: SettledCallback, secret: string): string {
+  // Absolute to the panel the payer started from: the callback may have landed
+  // on a relay or the API host, where a relative path is a 404.
+  const origin = outcome.returnOrigin ?? '';
+  const path = outcome.kind === 'failed' ? RESULT_PATH.failed : RESULT_PATH.success;
+  if (!secret) return `${origin}${path}`;
+  return `${origin}${path}?t=${encodeURIComponent(signResultToken(outcome, secret))}`;
 }
 
 @Controller('billing/deposit')
 export class DepositCallbackController {
-  constructor(private readonly callbacks: DepositCallbackService) {}
+  constructor(
+    private readonly callbacks: DepositCallbackService,
+    private readonly config: ConfigService<EnvConfig, true>,
+  ) {}
 
   /**
    * Zarinpal names its query parameters `Authority` and `Status` (ADR-0028).
@@ -71,7 +81,7 @@ export class DepositCallbackController {
       authority: authorityOf(req),
       gatewayStatus: paramOf(req, 'status'),
     });
-    res.redirect(resultUrl(outcome));
+    res.redirect(resultUrl(outcome, this.config.get('PAYMENT_RESULT_SECRET', { infer: true })));
   }
 }
 

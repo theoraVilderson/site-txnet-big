@@ -83,8 +83,20 @@ at ~200 lines (§10); it is one self-contained topic with its own gate.
 
 ## Status mapping
 
-- 200 valid. 401 missing/invalid/expired token or missing session marker
+- 200 valid. 401 missing/invalid token or missing session marker
   (`auth.authorizationRequired`, `auth.invalidToken`, `auth.sessionRevoked`).
+- 401 `auth.tokenExpired` with `error: {reason: "tokenExpired"}` only for a token
+  whose signature checks out, names a session, and whose `exp` has passed. The
+  panel refreshes once from the cookie and retries, as for `permissionsChanged`.
+  A forged or malformed token is `auth.invalidToken` with no reason.
+  `auth-service`'s `TokenService.verify` answers the same refusal.
+- 401 `auth.sessionRevoked` carries `error: {reason: "sessionRevoked"}`: signed
+  out, or **rotated** — every refresh revokes the session it replaces, so one
+  tab's refresh retires the token another tab holds. Only the refresh cookie
+  can tell which, so the panel tries it once (`AuthGuard` answers the same).
+- 401 `auth.authorizationRequired` carries `error: {reason: "authorizationRequired"}`:
+  no credential at all — usually a page that called before its session was
+  established. The panel gets a token from the cookie and sends again.
 - 401 `auth.permissionsChanged` with `error: {reason: "permissionsChanged"}` when
   Redis holds a different fingerprint for the token's role or a different role
   for its user (ADR-0043). A client refreshes once and retries on the `reason`,
@@ -101,6 +113,13 @@ at ~200 lines (§10); it is one self-contained topic with its own gate.
   because failures alone are translated — a success body is consumed by
   Traefik or a health probe and never read by a person. A success body that
   starts reaching a person needs a real key first.
+- **A refusal is readable cross-origin.** Traefik returns it to the browser as
+  it is, so the service's own CORS never runs on it. When the request's `Origin`
+  is in `CORS_ALLOWED_ORIGINS`, a non-2xx carries
+  `Access-Control-Allow-Origin: <that origin>` + `-Allow-Credentials: true`
+  (`Vary: Origin` whenever an Origin was sent). A 2xx carries none — Traefik
+  discards it and the service answers CORS itself. Without it an expired token
+  reads in the panel as "unreachable" and `permissionsChanged` never refreshes.
 
 ## Every answer is the envelope, and `msg` is a sentence
 
@@ -136,7 +155,7 @@ catalogue `auth-api` translates against.
 `REDIS_URL`; `REDIS_KEY_NAMESPACE` / `REDIS_KEYSPACE_VERSION` — must equal
 `auth-service`'s; `PERMISSIONS_FILE_PATH` (`configs/permissions.yaml`, optional —
 absent disables the RBAC step); `LOCALE_SERVICE_ADDR` / `LOCALE_SCOPE=backend`;
-HTTP timeouts. Policy file format: `roles: <role>: permissions: - <key>`, where `<role>` is `identity.role.name` spelled as `prisma/seed.js` spells it (ADR-0037).
+`CORS_ALLOWED_ORIGINS` (comma-separated, the panel origin; empty adds no CORS); HTTP timeouts. Policy file format: `roles: <role>: permissions: - <key>`, where `<role>` is `identity.role.name` spelled as `prisma/seed.js` spells it (ADR-0037).
 
 ## Guarantees
 

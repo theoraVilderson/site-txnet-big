@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotWorkerCategory } from '@prisma/client';
 import { Job, JobResult } from '../automation/job';
+import { envelopeData } from '../automation/internal-answer';
 
 /** The one route this job exists to call. Service callers only; 404 otherwise. */
 const EXPIRE_PENDING_PATH = '/api/internal/billing/deposit/expire-pending';
@@ -102,8 +103,9 @@ export class DepositExpiryJob implements Job {
         throw new Error(`billing answered ${response.status} to ${EXPIRE_PENDING_PATH}`);
       }
 
-      const body: unknown = await response.json();
-      const counts = ['scanned', 'expired', 'unattributed'].map((k) => (body as Record<string, unknown>)?.[k]);
+      // billing answers `{ ok, msg, data }` (`envelopeData`).
+      const body = envelopeData(await response.json());
+      const counts = ['scanned', 'expired', 'unattributed'].map((k) => body?.[k]);
       if (!counts.every((v) => typeof v === 'number')) {
         throw new Error(`billing answered ${EXPIRE_PENDING_PATH} without its three counts`);
       }

@@ -172,7 +172,11 @@ export class TokenService {
       typeof payload.exp !== 'number' ||
       payload.exp <= Math.floor(Date.now() / 1000)
     ) {
-      throw new UnauthorizedException('token expired');
+      // `reason` is what the panel refreshes on (the gate answers the same).
+      throw new UnauthorizedException({
+        i18nKey: 'auth.tokenExpired',
+        reason: 'tokenExpired',
+      });
     }
     return payload;
   }

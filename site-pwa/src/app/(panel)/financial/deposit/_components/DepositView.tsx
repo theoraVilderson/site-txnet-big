@@ -148,7 +148,7 @@ export function DepositView() {
             {t("common", D.summary.freeDone, { amount: money(credited.credited) })}
           </p>
           {credited.balance !== null && (
-            <p dir="ltr" className="mt-1 text-sm font-bold text-gold">
+            <p dir="ltr" className="mt-1 text-sm font-bold text-primary">
               {t("common", D.summary.newBalance, { balance: money(credited.balance) })}
             </p>
           )}
@@ -179,7 +179,7 @@ export function DepositView() {
     // The mobile footer is `fixed`, so the column ends above where it sits.
     <div className="mx-auto w-full max-w-6xl p-4 pb-56 md:p-8 md:pb-8">
       <header className="mb-8 flex items-center gap-3">
-        <span className="flex size-12 items-center justify-center rounded-2xl bg-gold-bg text-gold">
+        <span className="flex size-12 items-center justify-center rounded-2xl bg-leaf-bg text-primary">
           <Sparkles size={24} aria-hidden />
         </span>
         <div>

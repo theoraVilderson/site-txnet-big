@@ -30,6 +30,8 @@ type Config struct {
 	RedisDialTimeout  time.Duration
 	RedisReadTimeout  time.Duration
 	RedisPoolSize     int
+	// Browser origins allowed to read a refusal (comma-separated CORS_ALLOWED_ORIGINS).
+	CORSAllowedOrigins []string
 }
 
 // Load reads configuration from environment and validates required fields.
@@ -61,6 +63,8 @@ func Load() (Config, error) {
 		RedisDialTimeout:  getEnvDuration("REDIS_DIAL_TIMEOUT", 2*time.Second),
 		RedisReadTimeout:  getEnvDuration("REDIS_READ_TIMEOUT", 2*time.Second),
 		RedisPoolSize:     getEnvInt("REDIS_POOL_SIZE", 10),
+		// The panel calls gated services cross-origin; see handlers.WithCORSOrigins.
+		CORSAllowedOrigins: strings.Split(os.Getenv("CORS_ALLOWED_ORIGINS"), ","),
 	}
 
 	if err := cfg.validate(); err != nil {

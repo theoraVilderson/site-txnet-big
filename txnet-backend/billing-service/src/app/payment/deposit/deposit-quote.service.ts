@@ -9,6 +9,7 @@ import { GatewayMerchant, GatewaySource, merchantLabel } from '../gateway/gatewa
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { FxRateReader } from '../pricing/fx-rate.reader';
 import { priceDeposit, selectableGateways, selectGateway } from './deposit-pricing';
+import { resolvePresets } from './deposit-presets';
 
 /**
  * What the panel's top-up page shows before anyone pays (F-092-o): the gateways
@@ -55,6 +56,12 @@ export type DepositGateway = {
   /** Base currency, the gateway's accepted range for `amount`. */
   minAmount: string;
   maxAmount: string;
+  /**
+   * Quick amounts for the amount box (F-092-v): this gateway's own list, else
+   * the tenant's default, only amounts inside `minAmount`..`maxAmount`. Empty
+   * means the panel draws its automatic ladder.
+   */
+  presets: string[];
 };
 
 export type DepositQuoteRequest = {
@@ -110,9 +117,12 @@ export class DepositQuoteService {
 
   async listGateways(): Promise<DepositGateway[]> {
     const tenant = TenantContext.current('deposit gateways');
-    const rows = await tenantTransaction(this.prisma, (tx) =>
-      selectableGateways(tx, this.crossTenant, tenant.id),
-    );
+    // The caller's default list, not a lender's: the amounts follow what this
+    // tenant sells, whoever's gateway takes the payment.
+    const { rows, tenantPresets } = await tenantTransaction(this.prisma, async (tx) => ({
+      rows: await selectableGateways(tx, this.crossTenant, tenant.id),
+      tenantPresets: (await tx.depositSetting.findUnique({ where: { tenantId: tenant.id } }))?.presets ?? [],
+    }));
     // Outside the transaction: the vault queries on its own bound connection.
     //
     // **Per owning tenant, not per caller** (F-096-b): a granted gateway's
@@ -149,6 +159,7 @@ export class DepositQuoteService {
         category: g.gatewayCategory,
         minAmount: money(g.minAcceptAmount),
         maxAmount: money(g.maxAcceptAmount),
+        presets: resolvePresets(g.depositPresets, tenantPresets, { min: g.minAcceptAmount, max: g.maxAcceptAmount }),
       }));
   }
 

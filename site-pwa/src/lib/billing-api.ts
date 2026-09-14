@@ -22,7 +22,10 @@ const call = createApiClient({
   credential: () => authApi.getAccessToken(),
   // Billing is behind the gate, so it is the client most likely to be refused
   // with `permissionsChanged` (ADR-0043). The refresh is auth-api's, shared.
-  onPermissionsChanged: () => authApi.refreshAfterPermissionsChanged(),
+  onCredentialRefused: (stale) => authApi.refreshCredential(stale),
+  // A page that fetches on mount (the top-up page's gateways) waits for the
+  // page-load session instead of racing it with no token.
+  credentialSettled: () => authApi.credentialSettled(),
 });
 
 /**
@@ -134,6 +137,11 @@ export interface DepositGateway {
   /** Base currency, decimal strings. The gateway's own range — the amount box's bounds. */
   minAmount: string;
   maxAmount: string;
+  /**
+   * Quick amounts (F-092-v): the gateway's own list, else the tenant's default,
+   * already inside the range. Empty means none was configured.
+   */
+  presets: string[];
 }
 
 /** A coupon that priced into the quote. `discount` is what this code took, after the ones before it. */
@@ -325,6 +333,16 @@ export const billingApi = {
     return call<AdminGateway>(`/gateways/${source}/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
   },
 
+  /** The caller tenant's default quick amounts on the top-up page (F-092-v). */
+  async gatewayPresets(): Promise<{ presets: string[] }> {
+    return call<{ presets: string[] }>("/gateways/presets", { method: "GET" });
+  },
+
+  /** Replace them; billing answers the list as stored (sorted, two decimals). */
+  async setGatewayPresets(presets: string[]): Promise<{ presets: string[] }> {
+    return call<{ presets: string[] }>("/gateways/presets", { method: "PUT", body: JSON.stringify({ presets }) });
+  },
+
   /** Delete — or, when a payment or link points at it, deactivate — one gateway (ADR-0041 §6). */
   async deleteGateway(source: GatewaySource, id: string): Promise<GatewayRemoved> {
     return call<GatewayRemoved>(`/gateways/${source}/${encodeURIComponent(id)}`, { method: "DELETE" });
@@ -385,6 +403,10 @@ export interface AdminGateway {
   maxRate: string | null;
   roundingStep: string | null;
   roundingMode: string | null;
+  /** This gateway's own quick amounts; empty inherits the tenant's default (F-092-v). */
+  depositPresets: string[];
+  /** The callback address sent to the provider; `null` = the tenant's panel domain (F-092-w). */
+  callbackUrl: string | null;
   /** `null` when billing could not ask the vault; the row is still manageable. */
   credentials: { merchantId: GatewaySecretState; secretKey: GatewaySecretState } | null;
   createdAt: string;
@@ -404,6 +426,8 @@ type GatewayFieldsBody = {
   feeFloor?: string | null;
   feeCeiling?: string | null;
   verificationStatus?: string;
+  depositPresets?: string[];
+  callbackUrl?: string | null;
   /** Write-only. Sent when typed, never read back. */
   merchantId?: string;
   secretKey?: string;

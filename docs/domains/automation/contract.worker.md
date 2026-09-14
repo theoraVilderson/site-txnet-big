@@ -97,7 +97,19 @@ them would tie the cheap frequent one to the rate a bank will answer.
 `bot_schedule` rows an operator set through `/auth/workers` (F-031-b). A new
 job therefore runs never until somebody schedules it — which is a deliberate
 default for a sweep that writes, and the first thing to check when one appears
-to do nothing.
+to do nothing. **Three exceptions are seeded** by `prisma/seed.js`
+(`SEEDED_SCHEDULES`): `fx_rate_refresh`, and — decided by the user 2026-09-14
+— `deposit_pending_expiry` (`always_on`) and `deposit_reconciliation` (`*/5`).
+Left unscheduled, a payment the bank took but never called back about is never
+credited, which is the manual top-up legacy needed. The seed never touches a
+job that already has a schedule.
+
+**An internal answer is enveloped.** `auth-service` and `billing-service` send
+every route, `/api/internal/*` included, through shared-core's
+`ResponseInterceptor`: `{ ok, msg, data }`. A job reads its counts from
+`data` via `automation/internal-answer.ts` (`envelopeData`), never the top
+level — until 2026-09-14 all three HTTP jobs did, and each failed its first
+real run the moment it was scheduled.
 
 **One token opens every internal door, and widens nothing.** `SERVICE_AUTH_TOKEN`
 says which *process* is calling and never which user, so the expiry job reuses

@@ -9,6 +9,7 @@ import {
   updateBody,
   validateForm,
 } from "./_lib/gateway-form";
+import { MAX_PRESETS, addPreset } from "./_lib/presets";
 
 /**
  * The gateways page (F-102-d), and the part of it that has to be true without
@@ -64,6 +65,8 @@ const GATEWAY: AdminGateway = {
   maxRate: null,
   roundingStep: null,
   roundingMode: "up",
+  depositPresets: ["2.00", "5.00"],
+  callbackUrl: null,
   credentials: {
     merchantId: { configured: true, version: 3, rotatedAt: "2026-09-13T10:00:00.000Z" },
     secretKey: { configured: false, version: null, rotatedAt: null },
@@ -125,10 +128,84 @@ describe("gateway form — validation", () => {
   });
 });
 
+/**
+ * Zarinpal's merchant id is a 36-character UUID, and Zarinpal refuses anything
+ * else only at payment time (`-9`, "must be at least 36 characters") — after
+ * the operator believed the gateway was set up. Named here, at the keyboard.
+ */
+describe("gateway form — a Zarinpal merchant id", () => {
+  const base = { ...emptyForm("tenant"), displayName: "Z", providerName: "zarinpal", gatewayCategory: "domestic_rial", minAcceptAmount: "1", maxAcceptAmount: "20", feeValue: "0" };
+
+  it("must be a UUID when one is typed", () => {
+    expect(validateForm({ ...base, merchantId: "12345678" })).toEqual({ merchantId: "merchantFormat" });
+    expect(validateForm({ ...base, merchantId: " 1b2c3d4e-5f60-4a7b-8c9d-0e1f2a3b4c5d " })).toEqual({});
+  });
+
+  it("may be left empty, which keeps the stored one", () => {
+    expect(validateForm({ ...base, merchantId: "" })).toEqual({});
+  });
+
+  it("is not judged for another provider", () => {
+    expect(validateForm({ ...base, providerName: "nowpayments", merchantId: "short-api-key" })).toEqual({});
+  });
+});
+
 describe("linking gateways to tenants", () => {
   it("is offered to the platform owner only, whatever permissions a reseller holds", () => {
     expect(canManageLinks(OWNER_ME)).toBe(true);
     expect(canManageLinks(RESELLER_ME)).toBe(false);
     expect(canManageLinks(null)).toBe(false);
+  });
+});
+
+/**
+ * Quick amounts (F-093-k over F-092-v). A gateway's own list overrides the
+ * tenant's default; empty inherits. The editor refuses what billing would, so
+ * a list that looks saved is a list billing stored.
+ */
+describe("quick amounts", () => {
+  it("adds an amount sorted and in two decimals, and refuses what billing would", () => {
+    expect(addPreset(["5.00"], " 2.5 ")).toEqual({ list: ["2.50", "5.00"] });
+    expect(addPreset(["2.50"], "2.5")).toEqual({ error: "duplicate" });
+    expect(addPreset([], "0")).toEqual({ error: "positive" });
+    expect(addPreset([], "1.005")).toEqual({ error: "decimal" });
+    expect(addPreset([], "abc")).toEqual({ error: "decimal" });
+    const full = Array.from({ length: MAX_PRESETS }, (_, i) => `${i + 1}.00`);
+    expect(addPreset(full, "99")).toEqual({ error: "limit" });
+  });
+
+  it("starts an edit from the gateway's list and sends it only when it changed", () => {
+    const form = formFromGateway(GATEWAY);
+    expect(form.depositPresets).toEqual(["2.00", "5.00"]);
+    expect(updateBody(GATEWAY, form, OWNER_ME)).toEqual({});
+    expect(updateBody(GATEWAY, { ...form, depositPresets: ["2.00"] }, OWNER_ME)).toEqual({ depositPresets: ["2.00"] });
+    expect(updateBody(GATEWAY, { ...form, depositPresets: [] }, OWNER_ME)).toEqual({ depositPresets: [] });
+  });
+
+  it("sends a new gateway's list only when one was set", () => {
+    const create = { ...emptyForm("tenant"), displayName: "X", providerName: "idpay", gatewayCategory: "domestic_rial", minAcceptAmount: "1", maxAcceptAmount: "20", feeValue: "0" };
+    expect(createBody(create, OWNER_ME)).not.toHaveProperty("depositPresets");
+    expect(createBody({ ...create, depositPresets: ["2.00", "2.50"] }, OWNER_ME).depositPresets).toEqual(["2.00", "2.50"]);
+  });
+});
+
+/** F-092-w: the callback address sent to Zarinpal, per gateway. Empty = the panel domain. */
+describe("gateway form — callback address", () => {
+  const base = { ...emptyForm("tenant"), displayName: "Z", providerName: "zarinpal", gatewayCategory: "domestic_rial", minAcceptAmount: "1", maxAcceptAmount: "20", feeValue: "0" };
+
+  it("must be an absolute http(s) address when one is typed", () => {
+    expect(validateForm({ ...base, callbackUrl: "pay.example.org/cb" })).toEqual({ callbackUrl: "url" });
+    expect(validateForm({ ...base, callbackUrl: " https://pay.example.org/api/billing/deposit/callback " })).toEqual({});
+  });
+
+  it("is sent on create only when typed, and on edit only when changed — empty clears it", () => {
+    expect(createBody(base, OWNER_ME)).not.toHaveProperty("callbackUrl");
+    expect(createBody({ ...base, callbackUrl: " https://pay.example.org/cb " }, OWNER_ME).callbackUrl).toBe("https://pay.example.org/cb");
+
+    const withUrl = { ...GATEWAY, callbackUrl: "https://pay.example.org/cb" };
+    const form = formFromGateway(withUrl);
+    expect(form.callbackUrl).toBe("https://pay.example.org/cb");
+    expect(updateBody(withUrl, form, OWNER_ME)).toEqual({});
+    expect(updateBody(withUrl, { ...form, callbackUrl: "" }, OWNER_ME)).toEqual({ callbackUrl: null });
   });
 });

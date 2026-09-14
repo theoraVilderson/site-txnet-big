@@ -29,6 +29,10 @@ describe('VaultRetentionJob', () => {
     AUTH_API_TIMEOUT_MS: 30_000,
   };
 
+  // auth-service answers every route through shared-core's `ResponseInterceptor`,
+  // so a real success is `{ ok, msg, data }` — the internal seam included.
+  const enveloped = (data: unknown) => ({ ok: true, msg: 'successful', data });
+
   const answer = (status: number, body: unknown) =>
     ({
       ok: status >= 200 && status < 300,
@@ -44,7 +48,7 @@ describe('VaultRetentionJob', () => {
   });
 
   it('reports the count auth-api destroyed', async () => {
-    fetchMock.mockResolvedValue(answer(200, { destroyed: 3 }));
+    fetchMock.mockResolvedValue(answer(200, enveloped({ destroyed: 3 })));
 
     const result = await new VaultRetentionJob(configWith(configured)).run();
 
@@ -56,7 +60,7 @@ describe('VaultRetentionJob', () => {
   });
 
   it('calls the internal route with the service token, and nothing else', async () => {
-    fetchMock.mockResolvedValue(answer(200, { destroyed: 0 }));
+    fetchMock.mockResolvedValue(answer(200, enveloped({ destroyed: 0 })));
 
     await new VaultRetentionJob(configWith(configured)).run();
 
@@ -70,7 +74,7 @@ describe('VaultRetentionJob', () => {
   });
 
   it('a run that destroyed nothing is still a success', async () => {
-    fetchMock.mockResolvedValue(answer(200, { destroyed: 0 }));
+    fetchMock.mockResolvedValue(answer(200, enveloped({ destroyed: 0 })));
 
     const result = await new VaultRetentionJob(configWith(configured)).run();
 
@@ -98,8 +102,15 @@ describe('VaultRetentionJob', () => {
   });
 
   it('fails the run when the answer carries no count', async () => {
-    fetchMock.mockResolvedValue(answer(200, { ok: true, data: { destroyed: 2 } }));
+    fetchMock.mockResolvedValue(answer(200, enveloped({})));
 
+    await expect(
+      new VaultRetentionJob(configWith(configured)).run(),
+    ).rejects.toThrow(/destroyed/);
+
+    // A bare body is not what auth-service sends; reading one as a count is how
+    // this job reported every real answer as a failure until 2026-09-14.
+    fetchMock.mockResolvedValue(answer(200, { destroyed: 2 }));
     await expect(
       new VaultRetentionJob(configWith(configured)).run(),
     ).rejects.toThrow(/destroyed/);

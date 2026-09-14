@@ -10,6 +10,7 @@ import { CalendarDays, ChevronDown, X } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { toEnglishDigits } from "@/util/helper";
+import { LATIN_DIGITS } from "../../_lib/digits";
 import "./DatePicker.css";
 
 const D = FrontendI18nKeys.common.kit.datePicker;
@@ -64,6 +65,7 @@ export function DatePicker({ label, value, onChange, placeholder }: DatePickerPr
         onChange={handleChange}
         calendar={calendar}
         locale={locale}
+        digits={LATIN_DIGITS}
         format="YYYY/MM/DD"
         calendarPosition={isRtl ? "bottom-right" : "bottom-left"}
         editable={false}

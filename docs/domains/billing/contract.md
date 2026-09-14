@@ -21,7 +21,8 @@ payment attempt routes (F-092-n) in
 ## Gateway management (built — F-102-b/c, D-31)
 
 `/api/billing/gateways` (`payment/gateway-admin/`): `GET` list, `POST` create,
-`PATCH` / `DELETE :source/:id`. Behind `gateway.manage`; the permission is not
+`PATCH` / `DELETE :source/:id`, and `GET` / `PUT presets` — the caller's own
+default quick amounts (F-092-v). Behind `gateway.manage`; the permission is not
 the boundary. Linking a gateway to another tenant is the settlement grant
 (`domains/audit/contract.settlement.md`), not this surface.
 
@@ -31,12 +32,13 @@ the boundary. Linking a gateway to another tenant is the settlement grant
 | Only the platform owner sets `verificationStatus`; a tenant changing a verified gateway's secret resets it to `pending_test_transaction`, committed **before** the secret is written | a verified gateway is otherwise a place to swap in an unverified account |
 | `merchantId` / `secretKey` are relayed to `auth-service` (`VaultSecretClient` → F-102-a) and appear in no answer, audit row or column; answers carry `credentials` as `{configured, version, rotatedAt}` | write-only secrets (ADR-0026 guarantee 1); `billing` still loads the vault read-only |
 | Delete: a row nothing points at is deleted; one a payment or grant points at is deactivated and its live grants withdrawn. Secrets are revoked **first** | ADR-0041 §6; a failure part-way leaves a gateway that cannot charge |
+| Quick amounts (F-092-v): a gateway's `depositPresets` overrides the tenant's `presets` (`billing.deposit_setting`); both written through `deposit-presets.ts` — positive, 2 decimals, unique, ascending, at most 8; empty inherits. A default-list write is audited `deposit_presets_update` | one rule for both lists; the top-up page never judges a list |
 | Every write lands with its `admin_audit_log` row (`gateway_create` / `_update` / `_delete`) in one transaction | who changed a gateway is the question after money went somewhere unexpected |
 
 Refusals name their `reason`: 403 `not_platform_owner`, `verification_is_platform_owners`;
 404 `gateway_not_found`, `tenant_not_found`; 409 `provider_already_configured`;
-400 `invalid_range`, `missing_field`; 502 `secrets_unavailable`. Proof:
-`gateway-admin.service.spec.ts`, `vault-secret.client.spec.ts`.
+400 `invalid_range`, `missing_field`, `invalid_presets`, `invalid_callback` (`callbackUrl`, F-092-w: absolute http(s), ≤500, `null` clears); 502 `secrets_unavailable`. Proof:
+`gateway-admin.service.spec.ts`, `deposit-presets.spec.ts`, `vault-secret.client.spec.ts`.
 
 ## Coupon reservation (built — F-092-h)
 

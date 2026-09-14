@@ -76,6 +76,9 @@ export type CallbackOutcome =
     }
   | { kind: 'failed'; code: CallbackFailureCode };
 
+/** The outcome, plus the panel origin the payment was started from when the row has one. */
+export type SettledCallback = CallbackOutcome & { returnOrigin?: string };
+
 export type CallbackRequest = {
   /** `payment_transaction.gatewayTrackingCode` — Zarinpal's `Authority` (ADR-0028). */
   authority: string;
@@ -101,7 +104,16 @@ export class DepositCallbackService {
     private readonly settlement: DepositSettlementService,
   ) {}
 
-  async settle(request: CallbackRequest): Promise<CallbackOutcome> {
+  async settle(request: CallbackRequest): Promise<SettledCallback> {
+    let returnOrigin: string | null = null;
+    const outcome = await this.outcomeOf(request, (origin) => (returnOrigin = origin));
+    return returnOrigin ? { ...outcome, returnOrigin } : outcome;
+  }
+
+  private async outcomeOf(
+    request: CallbackRequest,
+    foundOrigin: (origin: string | null) => void,
+  ): Promise<CallbackOutcome> {
     const tenant = TenantContext.current('deposit callback');
     const { authority } = request;
     if (!authority) return { kind: 'failed', code: 'INVALID_PARAMS' };
@@ -113,9 +125,10 @@ export class DepositCallbackService {
       const payment = await tenantTransaction(this.prisma, (tx) =>
         tx.paymentTransaction.findFirst({
           where: { gatewayTrackingCode: authority },
-          select: PAYMENT_SELECT,
+          select: { ...PAYMENT_SELECT, returnOrigin: true },
         }),
       );
+      foundOrigin(payment?.returnOrigin ?? null);
       if (!payment) {
         // Not logged as an error: an authority nobody minted is what a stray
         // bookmark or a probe looks like, and it is the same answer either way.

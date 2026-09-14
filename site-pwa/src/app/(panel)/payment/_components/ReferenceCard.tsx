@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, ReceiptText } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { copyText } from "../../_lib/clipboard";
 import { PAYMENT_RESULT_KEYS as P } from "../_lib/payment-result";
@@ -12,6 +12,8 @@ import { PAYMENT_RESULT_KEYS as P } from "../_lib/payment-result";
  * The tick follows what `copyText` actually answered, the same way
  * `financial/_components/DetailItem.tsx` does — legacy showed it
  * unconditionally, so a refused copy looked like a successful one.
+ *
+ * Drawn as a ticket (`pay-ticket`), in the panel's green — never gold.
  */
 export function ReferenceCard({ reference }: { reference: string }) {
   const { t } = useLocale();
@@ -24,23 +26,33 @@ export function ReferenceCard({ reference }: { reference: string }) {
   };
 
   return (
-    <div className="mt-6 rounded-2xl border border-card-border bg-gold-bg p-4">
-      <span className="text-[10px] tracking-widest text-gold uppercase">
+    <div className="pay-ticket relative mt-7 overflow-hidden rounded-2xl border border-card-border bg-leaf-bg">
+      <span aria-hidden className="pay-shine pointer-events-none absolute inset-0" />
+
+      <div className="flex items-center justify-center gap-1.5 px-6 pt-4 text-xs font-medium text-text-label">
+        <ReceiptText size={14} aria-hidden />
         {t("common", P.success.reference)}
-      </span>
-      <div className="mt-1 flex items-center justify-center gap-2">
-        <span dir="ltr" className="font-mono text-lg font-bold break-all text-text-primary">
-          {reference}
-        </span>
-        <button
-          type="button"
-          onClick={copy}
-          aria-label={t("common", copied ? P.success.copied : P.success.copy)}
-          className="shrink-0 rounded-md p-1 text-gold transition-colors hover:bg-gold-bg"
-        >
-          {copied ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />}
-        </button>
       </div>
+      <p dir="ltr" className="px-6 pt-1 pb-4 font-mono text-xl font-bold tracking-[0.12em] break-all text-text-primary">
+        {reference}
+      </p>
+
+      <div aria-hidden className="mx-5 border-t-2 border-dashed border-card-border" />
+
+      <button
+        type="button"
+        onClick={copy}
+        className={`flex w-full items-center justify-center gap-2 px-6 py-3 text-sm font-semibold transition-colors ${
+          copied ? "text-primary" : "text-text-secondary hover:text-text-primary"
+        } active:scale-[0.98]`}
+      >
+        {copied ? (
+          <Check key="done" size={16} strokeWidth={3} className="pay-pop-in" aria-hidden />
+        ) : (
+          <Copy key="copy" size={16} aria-hidden />
+        )}
+        <span aria-live="polite">{t("common", copied ? P.success.copied : P.success.copy)}</span>
+      </button>
     </div>
   );
 }

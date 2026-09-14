@@ -320,6 +320,10 @@ model PaymentGateway {
   roundingStep        Decimal?         @db.Decimal(18, 8)
   roundingMode        RateRoundingMode @default(up)
   confirmationMode    ConfirmationMode @default(automatic)
+  // Quick amounts on the top-up page (F-092-v). Empty = the tenant's default.
+  depositPresets      Decimal[]           @default([]) @db.Decimal(18, 2)
+  // The callback address the provider is given (F-092-w). Null = the tenant's panel domain.
+  callbackUrl         String?
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
@@ -328,6 +332,19 @@ model PaymentGateway {
   grants       PaymentGatewayGrant[]
 
   @@map("payment_gateway")
+  @@schema("billing")
+}
+
+/// A tenant's default quick amounts on the top-up page (F-092-v); a gateway's
+/// own `depositPresets` override them. Base currency (ADR-0019). One row per
+/// tenant, written through `deposit-presets.ts`.
+model DepositSetting {
+  tenantId        String    @id @db.Uuid
+  presets         Decimal[] @default([]) @db.Decimal(18, 2)
+  updatedByUserId String?   @db.Uuid
+  updatedAt       DateTime  @updatedAt
+
+  @@map("deposit_setting")
   @@schema("billing")
 }
 
@@ -369,6 +386,7 @@ model PaymentTransaction {
   manualConfirmReason   String? // اجباری در سطح اپلیکیشن اگر confirmationSource=admin_manual
   createdAt             DateTime            @default(now())
   expiresAt             DateTime? // معمولاً now()+15min
+  returnOrigin           String? // the panel origin the payer started from; the callback redirects there
 
   // Restrict, not the optional-relation default SetNull: a payment is a
   // permanent record, and nulling its gateway would also break the CHECK.

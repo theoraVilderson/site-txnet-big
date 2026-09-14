@@ -25,6 +25,7 @@ page still owns on top of them.
 | `formatMoney`, `amountInWords` | `_lib/money.ts` | amount, currency code, `useLocale()` |
 | `copyText` | `_lib/clipboard.ts` | text; resolves `false` when refused |
 | `formatInstant` | `_lib/datetime.ts` | an ISO instant, `useLocale().lang` |
+| `numberLocale`, `LATIN_DIGITS` | `_lib/digits.ts` | `useLocale().lang` — the locale every `Intl` formatter takes |
 
 ## Rules a page row has to know
 
@@ -57,6 +58,11 @@ page still owns on top of them.
    line instead of printing a date nothing vouches for. Added by F-093-d;
    `contract.financial.md` rule 2 is the other half, where a *picked day* goes
    back the other way and becomes a range of instants.
+8. **Digits are Latin in every language** (user decision, 2026-09-13). Every
+   `Intl` formatter takes `numberLocale(lang)` (`<lang>-u-nu-latn`), never the
+   bare `lang`, and `DatePicker` passes `LATIN_DIGITS`. Only the glyphs are
+   fixed: `fa` still reads Jalali and its own currency words. A literal Persian
+   digit in `locales/` is the same violation. Proof: `_lib/digits.test.ts`.
 
 ## Proof
 

@@ -23,7 +23,7 @@ come from its headers, never from the body.
 
 | Route | Body | Answers `data` |
 |---|---|---|
-| `GET /api/billing/deposit/gateways` | — | `[{id, source, displayName, providerName, category, minAmount, maxAmount}]` — platform gateways first, each table oldest first |
+| `GET /api/billing/deposit/gateways` | — | `[{id, source, displayName, providerName, category, minAmount, maxAmount, presets}]` — platform gateways first, each table oldest first. `presets` (F-092-v): the gateway's own list, else the caller tenant's default, only amounts inside the range; empty = the panel's ladder |
 | `POST /api/billing/deposit/quote` | `{gatewayId, source?, amount, couponCodes?}` — `source` `tenant` (default) or `platform`, as the list answered it; `amount` a decimal string, ≤ 2 places, > 0; ≤ 10 codes of ≤ 64 chars | `{gatewayId, source, amount, coupons[{code, discount}], rejected[{code, reason, message}], discount, gap, fee, payable, credited, free, charge}` |
 | `POST /api/billing/deposit/start` (F-092-i) | the quote's body, exactly | `{paymentId, free, redirectUrl, amount, discount, fee, payable, credited, balance}` |
 
@@ -108,7 +108,7 @@ page rather than the envelope every other route answers.
 
 | Route | Query | Answers |
 |---|---|---|
-| `GET /api/billing/deposit/callback` | `Authority`, `Status` — read case-insensitively | **302** to `/payment/success?ref=&already=` or `/payment/failed?error=<code>` on the host it arrived on |
+| `GET /api/billing/deposit/callback` | `Authority`, `Status` — read case-insensitively | **302** to `/payment/success?t=` or `/payment/failed?t=` — `t` an HMAC-signed `{outcome, ref, already, code, exp 15 min}` under `PAYMENT_RESULT_SECRET` (`payment-result-token.ts`), nothing readable beside it — on the panel origin `start` captured (`payment_transaction.returnOrigin`: the browser's `Origin`, kept only if in `FRONTEND_ORIGIN` or a proven panel host of the tenant); relative when the row has none |
 
 | Rule | Why |
 |---|---|

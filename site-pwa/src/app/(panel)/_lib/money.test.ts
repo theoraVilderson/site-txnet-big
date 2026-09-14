@@ -72,10 +72,10 @@ describe("formatMoney", () => {
     expect(digitsOf(formatMoney("1500.5", "IRT", en))).toBe("1501");
   });
 
-  it("writes digits in the script of the language", () => {
+  it("writes Latin digits in every language, the currency word in the language's", () => {
     const persian = formatMoney("150000", "IRT", fa);
-    expect(persian).toMatch(/[۰-۹]/);
-    expect(persian).not.toMatch(/[0-9]/);
+    expect(persian).not.toMatch(/[۰-۹]/);
+    expect(persian).toContain("150,000");
     expect(persian).toContain("تومان");
     expect(formatMoney("150000", "IRT", en)).not.toMatch(/[۰-۹]/);
   });

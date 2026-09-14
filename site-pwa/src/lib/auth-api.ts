@@ -18,30 +18,99 @@ let accessToken: string | null = null;
 let sessionBootstrap: Promise<AuthResult> | null = null;
 
 /**
- * A refresh made because a call was refused with `permissionsChanged`
- * (ADR-0043) — single-flight for the reason `sessionBootstrap` is: refresh
- * rotates the token, and a page that fires three calls into a changed role gets
- * three refusals at once. One refresh answers all of them.
+ * **One refresh for the whole browser.** Refresh *rotates* the session: the one
+ * it replaces is revoked on the spot. So two refreshes racing with the same
+ * cookie sign the loser out, and a tab that refreshes retires the token every
+ * other tab holds. Three things make calls, the socket and several tabs live on
+ * one session:
+ *
+ * - in this tab, every refresh — a refused call, the socket, a stale role — is
+ *   the same in-flight promise;
+ * - across tabs, `navigator.locks` lets one refresh run at a time;
+ * - the new token is broadcast (memory to memory, never storage), and a tab
+ *   adopts it when it names the same user, so it retries on it instead of
+ *   rotating the session out from under the tab that just refreshed.
  *
  * `/auth/refresh` itself is neither behind the gate nor behind `AuthGuard`, so
- * it can never answer this refusal and this can never wait on itself.
+ * it can never answer a refusal this retries and this can never wait on itself.
  */
-let permissionsRefresh: Promise<void> | null = null;
+let credentialRefresh: Promise<void> | null = null;
 
-/** Told after that refresh, so what was rendered from the old token (`me`) is read again. */
+/** Any refresh in flight — the page load's or a later one — settled either way. */
+let pending: Promise<void> | null = null;
+function track<T>(p: Promise<T>): Promise<T> {
+  const settled = p.then(
+    () => undefined,
+    () => undefined,
+  );
+  pending = settled;
+  void settled.then(() => {
+    if (pending === settled) pending = null;
+  });
+  return p;
+}
+const credentialSettled = (): Promise<void> => pending ?? Promise.resolve();
+
+/** Told after each refresh, so what was rendered from the old token (`me`) is read again. */
 const permissionsRefreshed = new Set<() => void>();
 
-function refreshAfterPermissionsChanged(): Promise<void> {
-  permissionsRefresh ??= authApi
-    .refresh()
-    .then((result) => {
-      sessionBootstrap = Promise.resolve(result);
-      for (const listener of permissionsRefreshed) listener();
-    })
-    .finally(() => {
-      permissionsRefresh = null;
-    });
-  return permissionsRefresh;
+const AUTH_CHANNEL = "txnet:auth";
+const REFRESH_LOCK = "txnet:auth-refresh";
+
+const channel: BroadcastChannel | null = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(AUTH_CHANNEL);
+// A channel keeps Node's event loop alive; a browser has no `unref`.
+(channel as unknown as { unref?: () => void } | null)?.unref?.();
+
+/** The `sub` a token names, read without verifying — only to tell whose token a broadcast carries. */
+function subjectOf(token: string | null): string | null {
+  const payload = token?.split(".")[1];
+  if (!payload) return null;
+  try {
+    const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+    const sub = (JSON.parse(json) as { sub?: unknown }).sub;
+    return typeof sub === "string" ? sub : null;
+  } catch {
+    return null;
+  }
+}
+
+if (channel) {
+  channel.onmessage = (event: MessageEvent) => {
+    const next = (event.data as { accessToken?: unknown } | null)?.accessToken;
+    // Another user's token is another account signed in elsewhere, not a rotation of ours.
+    if (typeof next === "string" && accessToken && subjectOf(next) === subjectOf(accessToken)) {
+      accessToken = next;
+    }
+  };
+}
+
+function withRefreshLock(fn: () => Promise<void>): Promise<void> {
+  const locks = typeof navigator === "undefined" ? undefined : (navigator as Navigator & { locks?: LockManager }).locks;
+  return locks ? locks.request(REFRESH_LOCK, fn).then(() => undefined) : fn();
+}
+
+/**
+ * Leave `accessToken` live. `stale` is the token a refused call carried: when
+ * it has already been replaced — here, or by a broadcast — there is nothing to
+ * refresh, and refreshing anyway would rotate the session again.
+ */
+function refreshCredential(stale: string | null = null): Promise<void> {
+  if (stale && accessToken && accessToken !== stale) return Promise.resolve();
+  // No token was sent while one is being established: that one is the answer.
+  // A second refresh with the same cookie would sign the first out.
+  if (!stale && pending) {
+    return pending.then(() => (accessToken ? undefined : refreshCredential(stale)));
+  }
+  credentialRefresh ??= withRefreshLock(async () => {
+    // Another tab may have rotated while this one waited for the lock.
+    if (stale && accessToken && accessToken !== stale) return;
+    const result = await authApi.refresh();
+    sessionBootstrap = Promise.resolve(result);
+    for (const listener of permissionsRefreshed) listener();
+  }).finally(() => {
+    credentialRefresh = null;
+  });
+  return credentialRefresh;
 }
 
 /**
@@ -57,8 +126,19 @@ const call = createApiClient({
   baseUrl: API_URL,
   service: "auth-api",
   credential: () => accessToken,
-  onPermissionsChanged: () => refreshAfterPermissionsChanged(),
+  onCredentialRefused: (stale) => refreshCredential(stale),
+  // `/auth/refresh` itself must not wait on the refresh it is.
+  credentialSettled: () => credentialSettled(),
 });
+
+/**
+ * `/auth/refresh` alone: no retry and no waiting for a credential, because it
+ * *is* the thing every other call waits for and retries on.
+ */
+const rawCall = createApiClient({ baseUrl: API_URL, service: "auth-api", credential: () => accessToken });
+function rawRequest<T>(path: string, init: RequestInit): Promise<T> {
+  return rawCall<T>(path, init);
+}
 
 async function request<T>(path: string, init: RequestInit = {}, captchaToken?: string): Promise<T> {
   // `site-pwa` is outside C-04's check and has no path to `shared-core` (see
@@ -193,7 +273,13 @@ export const authApi = {
   async otpDeliveryStatus(deliveryId: string) { return request<OtpDeliveryStatus>("/auth/otp/delivery/status", { method: "POST", body: JSON.stringify({ deliveryId }) }); },
   /** Has the user finished linking in the messenger yet? */
   async botLinkStatus(linkToken: string) { return request<BotLinkStatus>("/auth/bots/link/status", { method: "POST", body: JSON.stringify({ linkToken }) }); },
-  async refresh() { const result = await request<AuthResult>("/auth/refresh", { method: "POST", body: JSON.stringify({}) }); accessToken = result.accessToken; return result; },
+  async refresh() {
+    const result = await track(rawRequest<AuthResult>("/auth/refresh", { method: "POST", body: JSON.stringify({}) }));
+    accessToken = result.accessToken;
+    // Every rotation retires the token the other tabs hold; hand them this one.
+    channel?.postMessage({ accessToken: result.accessToken });
+    return result;
+  },
   /**
    * Sign out of the account this browser is holding.
    *
@@ -250,8 +336,10 @@ export const authApi = {
   async listAccounts() { return request<SwitchGroup>("/auth/accounts", { method: "GET" }); },
   /** The caller's own identity and authority (F-097). */
   async me() { return request<Me>("/auth/me", { method: "GET" }); },
-  /** The single-flight refresh every client runs when a call's permissions went stale (ADR-0043). */
-  refreshAfterPermissionsChanged,
+  /** The one refresh every client and the socket run (see `credentialRefresh`). */
+  refreshCredential,
+  /** Resolves once no credential is being established; a call with none waits on it. */
+  credentialSettled,
   /**
    * Run `listener` after each such refresh; returns the unsubscribe. The panel
    * session re-reads `me` here, so the menu follows the gate.

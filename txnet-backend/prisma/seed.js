@@ -1,7 +1,7 @@
 // Bootstraps the state the app assumes always exists but nothing ever
 // creates: the `platform_owner` Tenant, the default RBAC roles, one owner
 // User for that tenant, and the `tenant_domain` row for the host its API is
-// served on. Idempotent — safe to run on every `db push` / `migrate dev` /
+// served on, the two ADR-0019 currencies and the schedules of the three jobs that must never wait for an operator. Idempotent — safe to run on every `db push` / `migrate dev` /
 // `migrate reset`.
 //
 // The domain row is not a convenience. There is no fallback tenant (ADR-0025):
@@ -105,10 +105,57 @@ async function grantGatewayManageToAdmin() {
   });
 }
 
-function generatePassword() {
-  // Satisfies strongPasswordSchema (upper, lower, digit, special, 8-72 chars)
-  // without ever containing the owner's username/fullName.
-  return `${randomBytes(15).toString('base64url')}Aa1!`;
+// ADR-0019: USD is the one base currency, two decimal places, and every money
+// column is in it; IRR is what a rial gateway is paid in and what the FX worker
+// quotes (`FX_QUOTE_CURRENCY_CODE`). Nothing else writes these rows, and the
+// worker deliberately refuses to guess them (currency/open-questions.md), so a
+// fresh install without them fails every rial quote with `RateUnavailable`.
+// `update: {}` on purpose: an operator's later change to a row is theirs.
+const CURRENCIES = [
+  { code: 'USD', name: 'US Dollar', symbol: '$', decimalPlaces: 2, isBaseCurrency: true },
+  { code: 'IRR', name: 'Iranian Rial', symbol: '﷼', decimalPlaces: 0, isBaseCurrency: false },
+];
+
+async function seedCurrencies() {
+  for (const c of CURRENCIES) {
+    await prisma.currency.upsert({ where: { code: c.code }, update: {}, create: c });
+  }
+}
+
+// Three jobs run from a `bot_schedule` row seeded here; every other job waits
+// for an operator (`automation/contract.worker.md` "A job is registered; it is
+// not scheduled"). The worker creates its own `bot_worker` rows on boot; before
+// that first boot there is nothing to schedule yet, and a re-run adds them.
+// A job that already has any schedule is left exactly as the operator set it.
+//
+// - `fx_rate_refresh`: without it no rate is ever written
+//   (currency/contract.fx-worker.md "How it is scheduled").
+// - `deposit_pending_expiry` and `deposit_reconciliation` (decided 2026-09-14):
+//   unscheduled, an abandoned top-up holds its coupon slots for ever and a
+//   payment the bank took but whose callback never arrived is never credited —
+//   the manual top-up legacy needed. Too costly to leave to someone remembering.
+const SEEDED_SCHEDULES = [
+  { key: 'fx_rate_refresh', scheduleType: 'cron_expression', cronExpression: '*/5 * * * *' },
+  // Every tick (AUTOMATION_TICK_INTERVAL_MS, 60s): a clock, and it calls no gateway.
+  { key: 'deposit_pending_expiry', scheduleType: 'always_on', cronExpression: null },
+  // One gateway call per due payment, so a cron rather than every tick.
+  { key: 'deposit_reconciliation', scheduleType: 'cron_expression', cronExpression: '*/5 * * * *' },
+];
+
+async function seedWorkerSchedules(adminId) {
+  for (const { key, scheduleType, cronExpression } of SEEDED_SCHEDULES) {
+    const worker = await prisma.botWorker.findUnique({ where: { key } });
+    if (!worker) {
+      console.log(`[seed] ${key} not registered yet — start worker-service once, then re-run the seed.`);
+      continue;
+    }
+    const existing = await prisma.botSchedule.findFirst({ where: { botWorkerId: worker.id } });
+    if (existing) continue;
+    await prisma.botSchedule.create({
+      data: { botWorkerId: worker.id, scheduleType, cronExpression, setByAdminId: adminId },
+    });
+    console.log(`[seed] scheduled ${key} (${cronExpression ?? scheduleType}).`);
+  }
 }
 
 async function main() {
@@ -121,6 +168,7 @@ async function main() {
   }
   await grantAllPermissionsToSuperAdmin();
   await grantGatewayManageToAdmin();
+  await seedCurrencies();
 
   const existingTenant = await prisma.tenant.findUnique({
     where: { slug: 'platform_owner' },
@@ -130,6 +178,7 @@ async function main() {
     // Not `return`: an install seeded before ADR-0025 has the tenant but no
     // domain row, and that install now answers 404 until it gets one.
     await seedApiDomain(existingTenant.id);
+    await seedWorkerSchedules(existingTenant.ownerUserId);
     return;
   }
 
@@ -168,6 +217,7 @@ async function main() {
   });
 
   await seedApiDomain(tenant.id);
+  await seedWorkerSchedules(ownerId);
 
   console.log('[seed] created platform_owner tenant + roles + owner user.');
   console.log('[seed]   owner username: platform_owner');

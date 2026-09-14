@@ -94,3 +94,26 @@ export function fromMinor(amountMinor: string, decimals: number): string | null 
   const digits = amountMinor.padStart(decimals + 1, "0");
   return `${digits.slice(0, -decimals)}.${digits.slice(-decimals)}`;
 }
+
+/**
+ * The buttons one gateway offers (F-093-k): the list its tenant or the gateway
+ * itself configured, as billing resolved it, else the automatic ladder — so a
+ * tenant that set nothing sees exactly what it saw before.
+ */
+export function offeredPresets(gateway: { minAmount: string; maxAmount: string; presets?: readonly string[] }): string[] {
+  return gateway.presets && gateway.presets.length > 0 ? [...gateway.presets] : presetAmounts(gateway.minAmount, gateway.maxAmount);
+}
+
+/**
+ * A rial amount in toman, as a decimal string: `"4563010"` -> `"456301"`,
+ * `"4563015"` -> `"456301.5"`. Ten rial to the toman is a unit, not an exchange
+ * rate, so this is string work, and an odd rial stays visible as a tenth rather
+ * than being rounded off a figure the bank will charge exactly.
+ */
+export function tomanFromRial(rial: string): string | null {
+  if (!/^\d+$/.test(rial)) return null;
+  const padded = rial.padStart(2, "0");
+  const whole = padded.slice(0, -1).replace(/^0+(?=\d)/, "");
+  const tenth = padded.slice(-1);
+  return tenth === "0" ? whole : `${whole}.${tenth}`;
+}

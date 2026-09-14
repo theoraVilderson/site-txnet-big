@@ -457,6 +457,21 @@ describe('a call refused because permissions changed', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
+  it('refreshes and retries a call refused only because the access token expired', async () => {
+    fetchMock
+      .mockResolvedValueOnce(envelope({ ok: false, msg: 'Token has expired', error: { reason: 'tokenExpired' } }, 401))
+      .mockResolvedValueOnce(refreshed('tok-new'))
+      .mockResolvedValueOnce(accounts());
+
+    await expect(authApi.listAccounts()).resolves.toMatchObject({ groupId: null });
+    expect(fetchMock.mock.calls.map((c) => String(c[0]))).toEqual([
+      `${ORIGIN}/api/auth/accounts`,
+      `${ORIGIN}/api/auth/refresh`,
+      `${ORIGIN}/api/auth/accounts`,
+    ]);
+    expect(auth(fetchMock.mock.calls[2])).toBe('Bearer tok-new');
+  });
+
   it('does not refresh on an ordinary 401, which means the session is gone', async () => {
     fetchMock.mockResolvedValueOnce(
       envelope({ ok: false, msg: 'Your session has expired.' }, 401),
@@ -497,3 +512,143 @@ describe('a call refused because permissions changed', () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * Every call whose access token was refused for a reason a refresh can mend is
+ * refreshed and sent again, once — and there is one refresh for the whole
+ * browser. Refresh *rotates* the session: the one it replaces is revoked on the
+ * spot, so two refreshes racing with the same cookie sign the loser out, and a
+ * tab that refreshes retires the token every other tab is holding. The shared
+ * lock and the broadcast are what let several tabs and the socket live on one
+ * session.
+ */
+describe('one refresh for every call, socket and tab', () => {
+  const jwt = (sub: string, n: string) =>
+    `h.${Buffer.from(JSON.stringify({ sub, n })).toString('base64url')}.s`;
+  const refreshed = (token: string) => envelope({ ok: true, data: { accessToken: token, expiresIn: 900 } });
+  const accounts = () =>
+    envelope({ ok: true, data: { groupId: null, current: { userId: 'u-1', fullName: 'A', phoneMasked: null }, members: [] } });
+  const revoked = () => envelope({ ok: false, msg: 'Session revoked', error: { reason: 'sessionRevoked' } }, 401);
+  const auth = (call: unknown[]) => new Headers((call[1] as RequestInit).headers).get('authorization');
+  const refreshes = () => fetchMock.mock.calls.filter((c) => String(c[0]).endsWith('/auth/refresh'));
+  const tick = () => new Promise((r) => setTimeout(r, 20));
+  const channels: BroadcastChannel[] = [];
+  const otherTab = () => {
+    const c = new BroadcastChannel('txnet:auth');
+    channels.push(c);
+    return c;
+  };
+  afterEach(() => channels.splice(0).forEach((c) => c.close()));
+
+  it('refreshes and retries a call whose session was revoked by a rotation elsewhere', async () => {
+    fetchMock.mockResolvedValueOnce(refreshed(jwt('u-1', 'a')));
+    await authApi.ensureSession();
+    fetchMock.mockResolvedValueOnce(revoked()).mockResolvedValueOnce(refreshed(jwt('u-1', 'b'))).mockResolvedValueOnce(accounts());
+
+    await expect(authApi.listAccounts()).resolves.toMatchObject({ groupId: null });
+    expect(auth(fetchMock.mock.calls[3])).toBe(`Bearer ${jwt('u-1', 'b')}`);
+  });
+
+  it('shares one refresh between the socket and a refused call', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.endsWith('/auth/refresh')) return refreshed(jwt('u-1', 'n'));
+      return refreshes().length ? accounts() : revoked();
+    });
+
+    await Promise.all([authApi.refreshCredential(), authApi.listAccounts()]);
+    expect(refreshes()).toHaveLength(1);
+  });
+
+  it('tells other tabs the new token, and adopts the one another tab rotated', async () => {
+    const tab = otherTab();
+    const heard: unknown[] = [];
+    tab.onmessage = (e) => heard.push(e.data);
+    fetchMock.mockResolvedValueOnce(refreshed(jwt('u-1', 'a')));
+    await authApi.ensureSession();
+    await tick();
+    expect(heard).toEqual([{ accessToken: jwt('u-1', 'a') }]);
+
+    tab.postMessage({ accessToken: jwt('u-1', 'b') });
+    await tick();
+    fetchMock.mockResolvedValueOnce(accounts());
+    await authApi.listAccounts();
+    expect(auth(fetchMock.mock.calls[1])).toBe(`Bearer ${jwt('u-1', 'b')}`);
+  });
+
+  it('ignores a token for another user', async () => {
+    fetchMock.mockResolvedValueOnce(refreshed(jwt('u-1', 'a')));
+    await authApi.ensureSession();
+    otherTab().postMessage({ accessToken: jwt('u-2', 'x') });
+    await tick();
+    fetchMock.mockResolvedValueOnce(accounts());
+    await authApi.listAccounts();
+    expect(auth(fetchMock.mock.calls[1])).toBe(`Bearer ${jwt('u-1', 'a')}`);
+  });
+
+  it('retries with a token already adopted, without rotating the session again', async () => {
+    fetchMock.mockResolvedValueOnce(refreshed(jwt('u-1', 'a')));
+    await authApi.ensureSession();
+    const tab = otherTab();
+    fetchMock
+      .mockImplementationOnce(async () => {
+        tab.postMessage({ accessToken: jwt('u-1', 'b') });
+        await tick();
+        return revoked();
+      })
+      .mockResolvedValueOnce(accounts());
+
+    await authApi.listAccounts();
+    expect(refreshes()).toHaveLength(1); // the page-load one only
+    expect(auth(fetchMock.mock.calls[2])).toBe(`Bearer ${jwt('u-1', 'b')}`);
+  });
+
+  it('throws the original refusal when the cookie cannot mend it either', async () => {
+    fetchMock.mockResolvedValueOnce(refreshed(jwt('u-1', 'a')));
+    await authApi.ensureSession();
+    fetchMock.mockResolvedValueOnce(revoked()).mockResolvedValueOnce(envelope({ ok: false, msg: 'Invalid refresh token' }, 401));
+
+    await expect(authApi.listAccounts()).rejects.toThrow('Session revoked');
+  });
+
+  it('a call made before the page-load session resolves waits for it and carries the token', async () => {
+    let answer!: (r: Response) => void;
+    fetchMock
+      .mockImplementationOnce(() => new Promise<Response>((r) => (answer = r)))
+      .mockResolvedValueOnce(accounts());
+
+    const session = authApi.ensureSession();
+    const call = authApi.listAccounts();
+    await tick();
+    expect(fetchMock).toHaveBeenCalledTimes(1); // only the refresh is out
+    answer(refreshed(jwt('u-1', 'a')));
+    await session;
+    await call;
+    expect(auth(fetchMock.mock.calls[1])).toBe(`Bearer ${jwt('u-1', 'a')}`);
+  });
+
+  it('a call refused for carrying no credential gets one from the cookie and is sent again', async () => {
+    fetchMock
+      .mockResolvedValueOnce(envelope({ ok: false, msg: 'Authorization required', error: { reason: 'authorizationRequired' } }, 401))
+      .mockResolvedValueOnce(refreshed(jwt('u-1', 'a')))
+      .mockResolvedValueOnce(accounts());
+
+    await expect(authApi.listAccounts()).resolves.toMatchObject({ groupId: null });
+    expect(refreshes()).toHaveLength(1);
+    expect(auth(fetchMock.mock.calls[2])).toBe(`Bearer ${jwt('u-1', 'a')}`);
+  });
+
+  it('shares the page-load refresh with a call refused for carrying no credential', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.endsWith('/auth/refresh')) {
+        await tick();
+        return refreshed(jwt('u-1', 'a'));
+      }
+      const hasToken = new Headers((fetchMock.mock.calls.at(-1)![1] as RequestInit).headers).get('authorization');
+      return hasToken ? accounts() : envelope({ ok: false, msg: 'Authorization required', error: { reason: 'authorizationRequired' } }, 401);
+    });
+
+    await Promise.all([authApi.ensureSession(), authApi.listAccounts()]);
+    expect(refreshes()).toHaveLength(1);
+  });
+});
+

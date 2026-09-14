@@ -66,6 +66,8 @@ export type DepositStartRequest = {
   /** Base currency (ADR-0019), > 0, at most 2 decimal places. */
   amount: Prisma.Decimal;
   couponCodes: readonly string[];
+  /** The browser's `Origin` header — where the result page is, if it checks out. */
+  origin?: string | null;
 };
 
 /** Money as decimal strings in base currency, as the quote answers them. */
@@ -123,7 +125,7 @@ export class DepositStartService {
 
     // 1. Read: the gateway, the coupons as they stand, and where the bank will
     //    send the user back to. Nothing is held after this closes.
-    const { gateway, coupons, callbackUrl } = await tenantTransaction(this.prisma, async (tx) => {
+    const { gateway, coupons, callbackUrl, returnOrigin } = await tenantTransaction(this.prisma, async (tx) => {
       const gateway = await selectGateway(tx, this.crossTenant, tenant.id, gatewayId, source);
       if (!gateway) throw new DepositGatewayNotFound(gatewayId, source);
       const coupons = await this.coupons.validate(tx, {
@@ -132,7 +134,12 @@ export class DepositStartService {
         target: { kind: 'wallet_top_up' },
         userId,
       });
-      return { gateway, coupons, callbackUrl: await this.callbackUrl(tx, tenant.id) };
+      return {
+        gateway,
+        coupons,
+        callbackUrl: gateway.callbackUrl ?? (await this.callbackUrl(tx, tenant.id)),
+        returnOrigin: await this.returnOrigin(tx, tenant.id, request.origin),
+      };
     });
 
     const ref: MerchantGatewayRef = {
@@ -187,6 +194,7 @@ export class DepositStartService {
           // A hold has no clock of its own: it lives as long as its payment,
           // and a payment that has already landed never expires.
           expiresAt: price.free ? null : new Date(Date.now() + ttl * 1000),
+          returnOrigin,
         },
         select: { id: true },
       });
@@ -266,7 +274,51 @@ export class DepositStartService {
   }
 
   /**
-   * Where the gateway sends the user back to — the tenant's own panel host
+   * The panel origin the result page is on: the browser's `Origin`, kept only
+   * when CORS already trusts it (`FRONTEND_ORIGIN`) or it is one of this
+   * tenant's proven panel hosts. The callback can land on a relay or the API
+   * host, so a relative redirect would miss the panel; an origin nobody vouches
+   * for is dropped rather than becoming an open redirect.
+   */
+  private async returnOrigin(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    origin: string | null | undefined,
+  ): Promise<string | null> {
+    let parsed: URL;
+    try {
+      parsed = new URL(origin ?? '');
+    } catch {
+      return null;
+    }
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+
+    const allowed = this.config
+      .get('FRONTEND_ORIGIN', { infer: true })
+      .split(',')
+      .map((o) => o.trim().replace(/\/+$/, ''))
+      .filter(Boolean);
+    if (allowed.includes(parsed.origin)) return parsed.origin;
+
+    const rows = await tx.tenantDomain.findMany({
+      where: {
+        tenantId,
+        purpose: TenantDomainPurpose.panel,
+        OR: [
+          { domainType: TenantDomainType.subdomain },
+          { verificationStatus: DomainVerificationStatus.verified },
+        ],
+      },
+      select: { domainValue: true, domainType: true },
+      orderBy: [{ domainType: 'desc' }, { domainValue: 'asc' }],
+    });
+    return parsed.protocol === 'https:' && rows.some((r) => r.domainValue === parsed.host) ? parsed.origin : null;
+  }
+
+  /**
+   * Where the gateway sends the user back to when the gateway names no address
+   * of its own (`callbackUrl`, F-092-w — an operator whose terminal is
+   * registered on another domain writes it, and it is sent verbatim) — the tenant's own panel host
    * (ADR-0020), never the platform's and never a header the client set.
    *
    * A proven custom domain wins: it is the brand the user chose to pay on, and

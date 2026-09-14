@@ -33,6 +33,8 @@ enum AdminAction {
   gateway_create
   gateway_update
   gateway_delete
+  // F-092-v — a tenant's default quick amounts on the top-up page.
+  deposit_presets_update
 
   @@schema("audit")
 }

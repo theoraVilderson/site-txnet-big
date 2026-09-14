@@ -82,6 +82,13 @@ function table(rows: Row[], name: string, writes: string[]) {
       hit.forEach((r) => Object.assign(r, data));
       return { count: hit.length };
     },
+    upsert: async ({ where, create, update }: { where: Row; create: Row; update: Row }) => {
+      writes.push(`${name}.upsert`);
+      const row = rows.find((r) => matches(r, where));
+      if (row) return Object.assign(row, update);
+      rows.push({ ...create });
+      return create;
+    },
     delete: async ({ where }: { where: Row }) => {
       writes.push(`${name}.delete`);
       const i = rows.findIndex((r) => matches(r, where));
@@ -117,6 +124,7 @@ function build(seed: { payments?: Row[]; grants?: Row[]; verified?: boolean } = 
     tenantGatewayConfig,
     paymentTransaction: table(seed.payments ?? [], 'paymentTransaction', writes),
     paymentGatewayGrant: table(seed.grants ?? [], 'paymentGatewayGrant', writes),
+    depositSetting: table([], 'depositSetting', writes),
     adminAuditLog: {
       create: async ({ data }: { data: Row }) => {
         writes.push('audit');
@@ -301,3 +309,61 @@ describe('GatewayAdminService — delete (ADR-0041 §6)', () => {
 
 // Keep the Decimal import honest: amounts are decimal strings on the way in (C-02).
 void Prisma.Decimal;
+
+/**
+ * Quick amounts on the top-up page (F-092-v): a gateway's own list and the
+ * tenant's default. Both are written through `normalizePresets`, so what the
+ * top-up page is handed is already sorted, unique and in two decimals.
+ */
+describe('GatewayAdminService — quick amounts (F-092-v)', () => {
+  it("stores a gateway's own list normalised, and answers it", async () => {
+    const { service, db } = build();
+
+    const view = await service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { depositPresets: ['5', '2.5', '5.00'] });
+
+    expect(view.depositPresets).toEqual(['2.50', '5.00']);
+    const row = db.tenantGatewayConfig.rows.find((r) => r['id'] === RESELLER_GW)!;
+    expect((row['depositPresets'] as Prisma.Decimal[]).map((d) => d.toFixed(2))).toEqual(['2.50', '5.00']);
+  });
+
+  it('refuses a list it cannot store, and writes nothing', async () => {
+    const { service, writes } = build();
+
+    expect((await refusal(() => service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { depositPresets: ['0'] }))).reason).toBe(
+      'invalid_presets',
+    );
+    expect(writes).toEqual([]);
+  });
+
+  it("reads and writes the caller's own default list, audited, and no other tenant's", async () => {
+    const { service, audit } = build();
+
+    expect(await service.presets(actor(RESELLER))).toEqual([]);
+    expect(await service.setPresets(actor(RESELLER), ['2.5', '2'])).toEqual(['2.00', '2.50']);
+    expect(await service.presets(actor(RESELLER))).toEqual(['2.00', '2.50']);
+    expect(await service.presets(actor(OTHER))).toEqual([]);
+    expect(audit.at(-1)).toMatchObject({ tenantId: RESELLER, action: 'deposit_presets_update', targetEntityType: 'config', targetEntityId: RESELLER });
+  });
+});
+
+/** F-092-w: the callback address Zarinpal is given, written per gateway. */
+describe('GatewayAdminService — callback address (F-092-w)', () => {
+  it('stores an http(s) address trimmed, answers it, and clears it with null', async () => {
+    const { service } = build();
+
+    const set = await service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { callbackUrl: ' https://pay.example.org/cb ' });
+    expect(set.callbackUrl).toBe('https://pay.example.org/cb');
+
+    const cleared = await service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { callbackUrl: null });
+    expect(cleared.callbackUrl).toBeNull();
+  });
+
+  it('refuses anything that is not an absolute http(s) address, and writes nothing', async () => {
+    const { service, writes } = build();
+
+    for (const callbackUrl of ['pay.example.org/cb', 'javascript:alert(1)', 'ftp://x.example/cb']) {
+      expect((await refusal(() => service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { callbackUrl }))).reason).toBe('invalid_callback');
+    }
+    expect(writes).toEqual([]);
+  });
+});

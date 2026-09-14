@@ -8,6 +8,7 @@ import {
   readSuccess,
 } from "./payment-result";
 import { PAYMENT_FAILED, PAYMENT_SUCCESS } from "@/lib/routes";
+import { confettiBurst } from "./celebration";
 
 /**
  * F-093-f. Two things break silently on these pages.
@@ -138,5 +139,32 @@ describe("a settled payment", () => {
     expect(readSuccess("REF123", "1").alreadyPaid).toBe(true);
     expect(readSuccess("REF123", "true").alreadyPaid).toBe(false);
     expect(readSuccess("REF123", undefined).alreadyPaid).toBe(false);
+  });
+});
+
+describe("the success confetti", () => {
+  // Rendered on the server and hydrated in the browser, so a Math.random()
+  // burst would be a hydration mismatch on the one page a payer celebrates on.
+  it("is the same burst on every render", () => {
+    expect(confettiBurst(24)).toEqual(confettiBurst(24));
+    expect(confettiBurst(24)).toHaveLength(24);
+  });
+
+  it("flies outward in every direction, within the card", () => {
+    const burst = confettiBurst(24);
+    expect(burst.some((p) => p.dx < 0) && burst.some((p) => p.dx > 0)).toBe(true);
+    expect(burst.some((p) => p.dy < 0) && burst.some((p) => p.dy > 0)).toBe(true);
+    for (const p of burst) {
+      const distance = Math.hypot(p.dx, p.dy);
+      expect(distance).toBeGreaterThanOrEqual(70);
+      expect(distance).toBeLessThanOrEqual(170);
+    }
+  });
+
+  it("is painted with theme tokens only — never gold", () => {
+    for (const p of confettiBurst(24)) {
+      expect(p.color).toMatch(/^var\(--[a-z-]+\)$/);
+      expect(p.color).not.toContain("gold");
+    }
   });
 });

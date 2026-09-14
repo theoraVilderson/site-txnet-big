@@ -122,6 +122,10 @@ services:
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
       - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
       - LOCALE_SCOPE=backend
+      # Browser origins that may read a refusal (401/403/500) from this gate.
+      # Traefik returns it to the client as-is, so the service's own CORS never
+      # runs on it; without this an expired token reads as a CORS error.
+      - CORS_ALLOWED_ORIGINS=https://panel.${DOMAIN_NAME}
       # How long the boot blocks for the first snapshots (F-086). It was
       # hardcoded twice at two different values; the gateway waits longer than
       # the shared client's default because it cannot retry — it blocks its own
@@ -693,6 +697,9 @@ services:
       # `/api/internal/*`, which Traefik does not route at all. Empty closes
       # the seam — and is refused when NODE_ENV=production.
       - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
+      # The HMAC key the deposit callback signs the payment result with; the
+      # panel shows a result only under it. Same value on site-pwa below.
+      - PAYMENT_RESULT_SECRET=${PAYMENT_RESULT_SECRET:-}
       # The other direction on the same seam (F-102-c): gateway management
       # relays a gateway's secrets to auth-service, the vault's only writer.
       - AUTH_API_BASE_URL=http://auth-service:${AUTH_PORT}
@@ -869,6 +876,9 @@ services:
       # back on every auth call (~0.5-2s), which previously surfaced as an
       # intermittent 502 on login/register — accepted so cookies land without
       # the proxy rewriting anything.
+      # Server only: verifies billing's signed payment result (?t=), so a
+      # hand-typed /payment/success?ref=… shows nothing. Same value as billing.
+      - PAYMENT_RESULT_SECRET=${PAYMENT_RESULT_SECRET:-}
       - NEXT_PUBLIC_API_ORIGIN=https://api.${DOMAIN_NAME}
       # Server-to-server only, for the auth-screen session check in src/proxy.ts:
       # that one stays on private_backend_network, since it runs before the login

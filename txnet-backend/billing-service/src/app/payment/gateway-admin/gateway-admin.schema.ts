@@ -52,6 +52,10 @@ const fields = {
   supportedCurrencies: z.array(z.string().regex(/^[A-Z0-9]{2,10}$/)).max(20),
   confirmationMode: z.nativeEnum(ConfirmationMode),
   verificationStatus: z.nativeEnum(TenantGatewayVerificationStatus),
+  // Normalised and bounded by `deposit-presets.ts`; the schema only keeps the shape sane.
+  depositPresets: z.array(z.string().max(20)).max(20),
+  // Checked by `callbackAddress` in the service; the schema only bounds it.
+  callbackUrl: z.string().max(600).nullable(),
   merchantId: secret('merchantId'),
   secretKey: secret('secretKey'),
 };
@@ -70,6 +74,9 @@ export const createGatewaySchema = z
   .strict();
 
 export const updateGatewaySchema = z.object(optional).strict();
+
+export const depositPresetsSchema = z.object({ presets: z.array(z.string().max(20)).max(20) }).strict();
+export type DepositPresetsBody = z.infer<typeof depositPresetsSchema>;
 
 export const listGatewaysSchema = z.object({ tenantId: uuid('tenantId').optional() });
 

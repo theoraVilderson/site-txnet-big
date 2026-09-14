@@ -86,6 +86,18 @@ describe('AuthGuard', () => {
         UnauthorizedException,
       );
     });
+
+    // A page that calls before its session is established sends no credential;
+    // `reason` lets the panel get one from the refresh cookie and send again.
+    it('names a missing credential so the panel can fetch one', async () => {
+      const { context } = contextWith(undefined);
+      await expect(guard.canActivate(context)).rejects.toMatchObject({
+        response: {
+          i18nKey: 'auth.authorizationRequired',
+          reason: 'authorizationRequired',
+        },
+      });
+    });
   });
 
   describe('access tokens', () => {
@@ -103,9 +115,11 @@ describe('AuthGuard', () => {
       sessions.read.mockResolvedValue(null);
       const { context } = contextWith(`Bearer ${tokens.sign(accessClaims)}`);
 
-      await expect(guard.canActivate(context)).rejects.toThrow(
-        'session revoked',
-      );
+      // `reason` lets the panel try its refresh cookie once: a session another
+      // tab rotated is mended by it, a real sign-out is not.
+      await expect(guard.canActivate(context)).rejects.toMatchObject({
+        response: { i18nKey: 'auth.sessionRevoked', reason: 'sessionRevoked' },
+      });
     });
 
     it('refuses a token whose permissions are stale, naming the reason a client acts on', async () => {
@@ -128,14 +142,18 @@ describe('AuthGuard', () => {
       sessions.read.mockResolvedValue(null);
       const { context } = contextWith(`Bearer ${tokens.sign(accessClaims)}`);
 
-      await expect(guard.canActivate(context)).rejects.toThrow('session revoked');
+      await expect(guard.canActivate(context)).rejects.toMatchObject({
+        response: { reason: 'sessionRevoked' },
+      });
       expect(permissions.isStale).not.toHaveBeenCalled();
     });
 
     it('rejects an expired token before touching the session store', async () => {
       const { context } = contextWith(`Bearer ${tokens.sign(accessClaims, -1)}`);
 
-      await expect(guard.canActivate(context)).rejects.toThrow('token expired');
+      await expect(guard.canActivate(context)).rejects.toMatchObject({
+        response: { reason: 'tokenExpired' },
+      });
       expect(sessions.read).not.toHaveBeenCalled();
     });
 

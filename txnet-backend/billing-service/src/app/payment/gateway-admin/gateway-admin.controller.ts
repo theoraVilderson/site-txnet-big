@@ -16,6 +16,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
@@ -29,9 +30,11 @@ import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import type { GatewaySource } from '../gateway/gateway-merchant';
 import {
   CreateGatewayBody,
+  DepositPresetsBody,
   ListGatewaysQuery,
   UpdateGatewayBody,
   createGatewaySchema,
+  depositPresetsSchema,
   listGatewaysSchema,
   updateGatewaySchema,
 } from './gateway-admin.schema';
@@ -54,6 +57,8 @@ const STATUS: Record<GatewayAdminRejection, 400 | 403 | 404 | 409> = {
   provider_already_configured: 409,
   invalid_range: 400,
   missing_field: 400,
+  invalid_presets: 400,
+  invalid_callback: 400,
 };
 
 const READ = {
@@ -99,6 +104,22 @@ export class GatewayAdminController {
   @RateLimit(READ)
   async list(@Query(new ZodValidationPipe(listGatewaysSchema)) query: ListGatewaysQuery, @Req() req: Request, @Ip() ip: string) {
     return this.refusing(() => this.gateways.list(this.actor(req, ip), { tenantId: query.tenantId }));
+  }
+
+  /**
+   * The caller's default quick amounts on the top-up page (F-092-v). Declared
+   * before `:source/:id` only for reading order — one segment never matches two.
+   */
+  @Get('presets')
+  @RateLimit(READ)
+  async presets(@Req() req: Request, @Ip() ip: string) {
+    return this.refusing(async () => ({ presets: await this.gateways.presets(this.actor(req, ip)) }));
+  }
+
+  @Put('presets')
+  @RateLimit(WRITE)
+  async setPresets(@Body(new ZodValidationPipe(depositPresetsSchema)) body: DepositPresetsBody, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(async () => ({ presets: await this.gateways.setPresets(this.actor(req, ip), body.presets ?? []) }));
   }
 
   @Post()

@@ -170,7 +170,8 @@ and turns one into the other, then reads `GET /auth/accounts`.
 `authApi.ensureSession()` does that **once per page load**, and the "once"
 is load-bearing: `refresh` rotates the token, so two concurrent calls race and
 the loser is handed a token that no longer resolves to a session. React Strict
-Mode alone produces that pair. A single cached promise is the whole mechanism.
+Mode alone produces that pair. Every later refresh is `refreshCredential`:
+one per browser (single-flight, `navigator.locks`, broadcast to same-user tabs).
 
 No live session sends the visitor to `AUTH_LOGIN`. That is the mirror of the
 auth-screen guard below: one keeps a signed-in visitor off the login screen,

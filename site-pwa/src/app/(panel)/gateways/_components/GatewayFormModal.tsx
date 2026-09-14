@@ -9,6 +9,7 @@ import { useApiErrorMessage } from "@/hooks/useApiError";
 import type { Me } from "@/lib/auth-api";
 import { billingApi, type AdminGateway } from "@/lib/billing-api";
 import { Select } from "../../_components/kit/Select";
+import { PresetsEditor } from "./PresetsEditor";
 import {
   CATEGORIES,
   FEE_MODES,
@@ -164,6 +165,22 @@ export function GatewayFormModal({ gateway, me, onClose, onSaved }: GatewayFormM
               ),
             )}
           </div>
+        </fieldset>
+
+        <div className="mt-4 flex flex-col gap-1">
+          {text("callbackUrl", t("common", G.callback.label), true)}
+          {!errors.callbackUrl && <p className="text-[11px] leading-5 text-text-secondary">{t("common", G.callback.hint)}</p>}
+        </div>
+
+        <fieldset className="mt-4 rounded-2xl border border-card-border p-4">
+          <legend className="px-1 text-xs font-bold text-text-primary">{t("common", G.presets.title)}</legend>
+          <p className="mb-3 text-[11px] text-text-secondary">{t("common", G.presets.gatewayHint)}</p>
+          <PresetsEditor
+            id="gw-edit-depositPresets"
+            value={form.depositPresets}
+            onChange={(next) => set("depositPresets", next)}
+            emptyText={t("common", G.presets.inherit)}
+          />
         </fieldset>
 
         {failure && (

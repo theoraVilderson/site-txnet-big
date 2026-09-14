@@ -3,6 +3,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -22,11 +23,30 @@ type Handler struct {
 	keyPrefix string       // Redis keyspace prefix, shared with auth-service
 	engine    *auth.Engine // nil means policy enforcement is disabled
 	logger    *slog.Logger
+	// origins a refusal may be read from (CORS_ALLOWED_ORIGINS); empty adds no CORS headers.
+	corsOrigins map[string]struct{}
 }
 
 // New creates a new Handler instance.
 func New(redis *cache.Client, jwtSecret, redisKeyPrefix string, engine *auth.Engine, logger *slog.Logger) *Handler {
 	return &Handler{redis: redis, secret: jwtSecret, keyPrefix: redisKeyPrefix, engine: engine, logger: logger}
+}
+
+// WithCORSOrigins names the browser origins allowed to read a refusal.
+//
+// Traefik returns a ForwardAuth refusal to the client as it is, so the upstream
+// service's own CORS never runs on it. Without these headers the browser hides
+// a 401 behind a CORS error, and the panel cannot tell an expired token from an
+// unreachable server — so it never refreshes. Only refusals get them: a 2xx is
+// discarded by Traefik, and the service answers CORS for itself.
+func (h *Handler) WithCORSOrigins(origins []string) *Handler {
+	h.corsOrigins = make(map[string]struct{}, len(origins))
+	for _, o := range origins {
+		if o = strings.TrimSpace(o); o != "" {
+			h.corsOrigins[o] = struct{}{}
+		}
+	}
+	return h
 }
 
 // Validate is the main authentication endpoint.
@@ -48,11 +68,19 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request) response.Respon
 	return response.SafeExecute(r.Context(), func() (interface{}, error) {
 		token := tokenFrom(r)
 		if token == "" {
-			return response.Err(keyAuthRequired, nil), nil
+			// Most often a page that called before its session was established;
+			// the panel turns its refresh cookie into a token and sends again.
+			return response.Err(keyAuthRequired, map[string]string{"reason": reasonAuthorizationRequired}), nil
 		}
 
 		claims, err := jwt.Validate(token, h.secret)
 		if err != nil {
+			// Only a token this gate issued and time alone retired is "expired":
+			// the signature checked out and it names a session. Anything else
+			// stays invalid, with no reason a client would refresh on.
+			if errors.Is(err, jwt.ErrExpired) && claims.Sub != "" && claims.SessionID != "" {
+				return response.Err(keyTokenExpired, map[string]string{"reason": reasonTokenExpired}), nil
+			}
 			h.logger.Warn("token validation failed", "error", err)
 			return response.Err(keyInvalidToken, nil), nil
 		}
@@ -70,7 +98,10 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request) response.Respon
 			return response.Err(keyUnexpected, nil), nil
 		}
 		if values[0] == "" {
-			return response.Err(keySessionRevoked, nil), nil
+			// Also what a rotated session looks like: every refresh revokes the
+			// one it replaces, so another tab's refresh retires this token. The
+			// client tries its refresh cookie once; a real sign-out fails there.
+			return response.Err(keySessionRevoked, map[string]string{"reason": reasonSessionRevoked}), nil
 		}
 		if stalePermissions(claims, values[1], values[2]) {
 			h.logger.Info("token permissions are stale",
@@ -131,9 +162,26 @@ func (h *Handler) finish(w http.ResponseWriter, r *http.Request, result response
 	// as-is by whoever asked (`panel-web`, the bot).
 	if !result.OK {
 		result.Msg = middlewares.Translate(r, middlewares.ErrorsNamespace, result.Msg)
+		h.allowOrigin(w, r)
 	}
 
 	writeJSON(w, result, status)
+}
+
+// allowOrigin lets an allow-listed browser origin read this refusal. The origin
+// is echoed, never `*`: the panel sends credentials, and `*` with credentials
+// is refused by every browser.
+func (h *Handler) allowOrigin(w http.ResponseWriter, r *http.Request) {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return
+	}
+	w.Header().Add("Vary", "Origin")
+	if _, ok := h.corsOrigins[origin]; !ok {
+		return
+	}
+	w.Header().Set("Access-Control-Allow-Origin", origin)
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
 }
 
 // ValidateOptional is the same decision as Validate for a caller that brought
@@ -239,6 +287,7 @@ func tokenFrom(r *http.Request) string {
 const (
 	keyAuthRequired       = i18nkeys.ErrorsAuthAuthorizationRequired
 	keyInvalidToken       = i18nkeys.ErrorsAuthInvalidToken
+	keyTokenExpired       = i18nkeys.ErrorsAuthTokenExpired
 	keySessionRevoked     = i18nkeys.ErrorsAuthSessionRevoked
 	keyPermissionsChanged = i18nkeys.ErrorsAuthPermissionsChanged
 	keyForbidden          = i18nkeys.ErrorsPermissionsForbidden
@@ -292,6 +341,17 @@ func writeJSON(w http.ResponseWriter, resp response.Response, status int) {
 // is translated, so a client cannot match on it; `error.reason` is what tells
 // a client to refresh once and retry instead of sending the user to sign in.
 const reasonPermissionsChanged = "permissionsChanged"
+
+// reasonTokenExpired tells a client the access token only aged out: refresh
+// once from the cookie and retry, instead of sending the user to sign in.
+const reasonTokenExpired = "tokenExpired"
+
+// reasonSessionRevoked: the session marker is gone — signed out, or rotated by
+// a refresh elsewhere. Only the refresh cookie can tell which.
+const reasonSessionRevoked = "sessionRevoked"
+
+// reasonAuthorizationRequired: no credential was sent at all.
+const reasonAuthorizationRequired = "authorizationRequired"
 
 // stalePermissions reports whether what the token says the caller may do is no
 // longer true (ADR-0043): the user holds another role now, or the role's set

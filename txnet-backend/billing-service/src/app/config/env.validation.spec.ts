@@ -61,4 +61,13 @@ describe('envSchema', () => {
     }
     expect(Object.keys(message).sort()).toEqual(['NODE_ENV', 'PORT']);
   });
+
+  it('refuses production without a PAYMENT_RESULT_SECRET a result page can trust', () => {
+    const prod = { ...DB, NODE_ENV: 'production', FRONTEND_ORIGIN: 'https://panel.example', SERVICE_AUTH_TOKEN: 't' };
+    const refused = (env: Record<string, unknown>) =>
+      envSchema.safeParse(env).error?.issues.some((i) => i.path[0] === 'PAYMENT_RESULT_SECRET') ?? false;
+    expect(refused(prod)).toBe(true);
+    expect(refused({ ...prod, PAYMENT_RESULT_SECRET: 'short' })).toBe(true);
+    expect(refused({ ...prod, PAYMENT_RESULT_SECRET: 'k'.repeat(32) })).toBe(false);
+  });
 });

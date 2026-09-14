@@ -124,7 +124,7 @@ export function CouponInput({ codes, onAdd, onRemove, quote, disabled }: CouponI
                   refusal ? "border-error-border bg-error-bg/30" : "border-card-border bg-bg-inner"
                 }`}
               >
-                <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-gold-bg text-gold">
+                <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-leaf-bg text-primary">
                   <Sparkles size={16} aria-hidden />
                 </span>
                 <div className="min-w-0 flex-1">

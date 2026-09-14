@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotWorkerCategory } from '@prisma/client';
 import { Job, JobResult } from '../automation/job';
+import { envelopeData } from '../automation/internal-answer';
 
 /** The one route this job exists to call. Service callers only; 404 otherwise. */
 const RECONCILE_PATH = '/api/internal/billing/deposit/reconcile';
@@ -98,7 +99,8 @@ export class DepositReconciliationJob implements Job {
         throw new Error(`billing answered ${response.status} to ${RECONCILE_PATH}`);
       }
 
-      const body = (await response.json()) as Record<string, unknown>;
+      // billing answers `{ ok, msg, data }` (`envelopeData`).
+      const body = envelopeData(await response.json());
       const counts = Object.fromEntries(COUNTS.map((k) => [k, body?.[k]]));
       if (!Object.values(counts).every((v) => typeof v === 'number')) {
         throw new Error(`billing answered ${RECONCILE_PATH} without its five counts`);

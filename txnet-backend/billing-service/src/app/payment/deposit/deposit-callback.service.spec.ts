@@ -309,3 +309,17 @@ describe('DepositCallbackService.settle', () => {
     expect(calls.credited).toEqual([]);
   });
 });
+
+describe('DepositCallbackService.settle — the origin the payer started from', () => {
+  it('hands the row’s returnOrigin to the redirect, on success and on failure', async () => {
+    const { service } = build({ row: { ...paymentRow(), returnOrigin: 'https://panel.txnet.cyou' } as never });
+    expect(await settle(service)).toMatchObject({ kind: 'success', returnOrigin: 'https://panel.txnet.cyou' });
+
+    const refused = build({ row: { ...paymentRow(), returnOrigin: 'https://panel.txnet.cyou' } as never });
+    expect(await settle(refused.service, { gatewayStatus: 'NOK' })).toEqual({
+      kind: 'failed',
+      code: 'VERIFICATION_FAILED',
+      returnOrigin: 'https://panel.txnet.cyou',
+    });
+  });
+});

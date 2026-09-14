@@ -13,13 +13,15 @@
  * expired wants the clock on their own wall, not the server's.
  */
 
+import { numberLocale } from "./digits";
+
 type Parts = Intl.DateTimeFormatOptions;
 
 const DATE_ONLY: Parts = { year: "numeric", month: "2-digit", day: "2-digit" };
 const WITH_TIME: Parts = { ...DATE_ONLY, hour: "2-digit", minute: "2-digit" };
 
 /**
- * `"2026-09-12T08:30:00.000Z"`, `fa` -> `۱۴۰۵/۰۶/۲۱ ۱۲:۰۰`.
+ * `"2026-09-12T08:30:00.000Z"`, `fa` -> `1405/06/21 12:00` (Jalali, Latin digits — `digits.ts`).
  *
  * `null` for an absent or unreadable instant rather than a placeholder string:
  * a caller that has nothing to show hides the line, and one that wants a dash
@@ -35,7 +37,7 @@ export function formatInstant(
   const date = new Date(instant);
   if (Number.isNaN(date.getTime())) return null;
   try {
-    return new Intl.DateTimeFormat(lang, withTime ? WITH_TIME : DATE_ONLY).format(date);
+    return new Intl.DateTimeFormat(numberLocale(lang), withTime ? WITH_TIME : DATE_ONLY).format(date);
   } catch {
     // Not a tag Intl can read. The instant as it arrived beats nothing.
     return instant;

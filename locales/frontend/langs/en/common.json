@@ -68,7 +68,9 @@
     "errors": {
       "required": "Required",
       "decimal": "Enter a number such as 12.50",
-      "range": "Must not be above the maximum"
+      "range": "Must not be above the maximum",
+      "merchantFormat": "A Zarinpal merchant id is 36 characters, like xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+      "url": "Enter a full address like https://example.com/..."
     },
     "links": {
       "title": "Links to other tenants",
@@ -209,6 +211,34 @@
         "another": "Add another gateway",
         "finish": "View gateways"
       }
+    },
+    "presets": {
+      "title": "Quick top-up amounts",
+      "subtitle": "Ready-made buttons on the top-up page; a user picks one with a tap instead of typing.",
+      "defaultTitle": "Default list",
+      "defaultHint": "Shown for every gateway, except one with a list of its own. Amounts outside a gateway's minimum and maximum are hidden automatically.",
+      "gatewayHint": "Optional. Leave empty to show the default list.",
+      "empty": "No amounts yet; the buttons are built from the gateway's minimum and maximum.",
+      "inherit": "From the default list",
+      "placeholder": "e.g. 2.5",
+      "add": "Add",
+      "remove": "Remove {{amount}}",
+      "count": "{{count}} of {{max}}",
+      "save": "Save list",
+      "saving": "Saving…",
+      "saved": "List saved.",
+      "errors": {
+        "decimal": "A number like 2.5, at most two decimals",
+        "positive": "The amount must be above zero",
+        "duplicate": "Already in the list",
+        "limit": "At most {{max}} amounts"
+      }
+    },
+    "callback": {
+      "label": "Callback address",
+      "hint": "The address given to the gateway to send the user back to after paying. It must be on the domain the terminal is registered on in the provider's dashboard and reach this system's /api/billing/deposit/callback. Empty = the panel domain.",
+      "placeholder": "https://example.com/api/billing/deposit/callback",
+      "default": "The panel domain (default)"
     }
   },
   "wallet": {
@@ -295,7 +325,10 @@
       "freeTitle": "Wallet topped up",
       "freeDone": "{{amount}} was added to your wallet.",
       "newBalance": "New balance: {{balance}}",
-      "again": "Top up again"
+      "again": "Top up again",
+      "chargeTitle": "What you pay at the gateway",
+      "chargeWords": "In words",
+      "chargeRial": "That is {{amount}} rial"
     }
   },
   "financial": {

@@ -32,7 +32,7 @@ import { AUTH_LOGIN } from "@/lib/routes";
 
 vi.mock("./PanelSessionContext", () => ({ usePanelSession: vi.fn() }));
 vi.mock("@/lib/auth-api", () => ({
-  authApi: { getAccessToken: vi.fn(), refresh: vi.fn() },
+  authApi: { getAccessToken: vi.fn(), refreshCredential: vi.fn() },
 }));
 vi.mock("@/lib/realtime", () => ({ createRealtimeClient: vi.fn() }));
 
@@ -42,7 +42,8 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }) }));
 const session = vi.mocked(usePanelSession);
 const makeClient = vi.mocked(createRealtimeClient);
 const getAccessToken = vi.mocked(authApi.getAccessToken);
-const refresh = vi.mocked(authApi.refresh);
+// The shared refresh, never a second `refresh()` racing a refused call with the same cookie.
+const refresh = vi.mocked(authApi.refreshCredential);
 
 /** A stand-in for `RealtimeClient`; the transport has its own spec. */
 function fakeClient() {
@@ -137,7 +138,7 @@ describe("when the gateway says the session is gone", () => {
 
 describe("when the upgrade was refused before a socket existed", () => {
   it("refreshes the access token and leaves the retry to the client", async () => {
-    refresh.mockResolvedValue({ accessToken: "token-2", expiresIn: 900 });
+    refresh.mockResolvedValue(undefined);
     renderHook(() => usePanelRealtime(), { wrapper });
 
     options.onCredentialRejected?.();

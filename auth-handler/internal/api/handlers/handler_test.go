@@ -297,7 +297,7 @@ func TestValidateRefusalStatuses(t *testing.T) {
 			token:      expired,
 			redis:      sessionActive,
 			wantStatus: http.StatusUnauthorized,
-			wantMsg:    keyInvalidToken,
+			wantMsg:    keyTokenExpired,
 		},
 		{
 			name:       "session revoked",
@@ -655,9 +655,13 @@ func TestValidateAlwaysWritesJSONEnvelope(t *testing.T) {
 			t.Errorf("envelope is missing %q: %v", key, body)
 		}
 	}
-	// The refusal must not leak internals into the error field.
+	// The refusal must not leak internals into the error field: the one thing
+	// it may carry is the public `reason` a client refreshes on.
 	if errField, ok := body["error"]; ok {
-		t.Errorf("error = %v on a session refusal, want it omitted", errField)
+		detail, _ := errField.(map[string]any)
+		if len(detail) != 1 || detail["reason"] != reasonSessionRevoked {
+			t.Errorf("error = %v on a session refusal, want only reason %q", errField, reasonSessionRevoked)
+		}
 	}
 }
 
@@ -922,5 +926,58 @@ func TestValidateOptionalTreatsTheBareMarkerAsAnonymous(t *testing.T) {
 	}
 	if got := w.Header().Get(HeaderAnonymous); got != "true" {
 		t.Errorf("%s = %q, want %q", HeaderAnonymous, got, "true")
+	}
+}
+
+// An access token lives minutes; the refresh cookie lives days. A token that is
+// only *old* is the everyday refusal, and the client can mend it without the
+// user noticing — but only if the refusal says so in `error.reason`, since `msg`
+// is translated. A forged or malformed token is never called expired: that
+// would invite a refresh for a credential this gate never issued.
+func TestValidateNamesAnExpiredToken(t *testing.T) {
+	h, _ := newHandler(t, sessionActive, nil)
+	reasonOf := func(w *httptest.ResponseRecorder) any {
+		detail, _ := decode(t, w)["error"].(map[string]any)
+		return detail["reason"]
+	}
+
+	expired := sign(t, validClaims(map[string]any{"exp": time.Now().Add(-time.Minute).Unix()}), testSecret)
+	w := call(t, h, expired)
+	if w.Code != http.StatusUnauthorized || reasonOf(w) != reasonTokenExpired {
+		t.Fatalf("expired: status %d reason %v, want 401 %q", w.Code, reasonOf(w), reasonTokenExpired)
+	}
+
+	forgedExpired := sign(t, validClaims(map[string]any{"exp": time.Now().Add(-time.Minute).Unix()}), "not-the-gateway-secret")
+	noSession := sign(t, validClaims(map[string]any{"sessionId": "", "exp": time.Now().Add(-time.Minute).Unix()}), testSecret)
+	for name, token := range map[string]string{"forged": forgedExpired, "garbage": "a.b.c", "no session id": noSession} {
+		if w := call(t, h, token); reasonOf(w) != nil {
+			t.Errorf("%s: reason = %v, want none", name, reasonOf(w))
+		}
+	}
+}
+
+// A missing session marker is also what a *rotated* session looks like: every
+// refresh revokes the session it replaces, so another tab's refresh retires the
+// token this one holds. The refusal names it so the client can try the shared
+// refresh cookie once — which mends a rotation and fails for a real sign-out.
+func TestValidateNamesARevokedSession(t *testing.T) {
+	h, _ := newHandler(t, func(string) string { return respNil }, nil)
+	w := call(t, h, sign(t, validClaims(nil), testSecret))
+	detail, _ := decode(t, w)["error"].(map[string]any)
+	if w.Code != http.StatusUnauthorized || detail["reason"] != reasonSessionRevoked {
+		t.Fatalf("status %d error %v, want 401 reason %q", w.Code, detail, reasonSessionRevoked)
+	}
+}
+
+// No credential at all is what a page sends when it calls before its session is
+// established. The refusal names it so the panel can turn the refresh cookie
+// into a token and send the call again; with no cookie that fails, and the
+// sign-in message stands.
+func TestValidateNamesAMissingCredential(t *testing.T) {
+	h, _ := newHandler(t, sessionActive, nil)
+	w := call(t, h, "")
+	detail, _ := decode(t, w)["error"].(map[string]any)
+	if w.Code != http.StatusUnauthorized || detail["reason"] != reasonAuthorizationRequired {
+		t.Fatalf("status %d error %v, want 401 reason %q", w.Code, detail, reasonAuthorizationRequired)
 	}
 }

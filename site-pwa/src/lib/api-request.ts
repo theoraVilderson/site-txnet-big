@@ -30,16 +30,36 @@ export interface ApiClientConfig {
    */
   credential?: () => string | null | undefined;
   /**
-   * Called once when a call is refused with `error.reason === "permissionsChanged"`
-   * (ADR-0043), before that call is retried. It must leave `credential()`
-   * answering a fresh token. Absent means no retry. Only `auth-api` can mint one,
-   * so every client passes `auth-api`'s single-flight refresh.
+   * Called once when a call is refused for a reason a refresh can mend
+   * ({@link REFRESH_REASONS}), with the token that call carried, before it is
+   * retried. It must leave `credential()` answering a live token — and may do so
+   * without refreshing when that token was already replaced (another call, the
+   * socket, or another tab). Absent means no retry. Only `auth-api` can mint
+   * one, so every client passes `auth-api`'s `refreshCredential`.
    */
-  onPermissionsChanged?: () => Promise<void>;
+  onCredentialRefused?: (staleToken: string | null) => Promise<void>;
+  /**
+   * Resolves when no credential is being established — the page-load refresh
+   * or any other. A call with no credential waits for it first, so a page that
+   * fetches on mount does not race the session provider. Never starts one.
+   */
+  credentialSettled?: () => Promise<void>;
 }
 
 /** The `error.reason` that means "refresh once and retry" (ADR-0043). Never `msg`: that is translated. */
 export const PERMISSIONS_CHANGED = "permissionsChanged";
+/** The access token only aged out; the refresh cookie still mends it. Same single refresh and retry. */
+export const TOKEN_EXPIRED = "tokenExpired";
+/** The session is gone: signed out, or rotated by a refresh elsewhere — only the cookie can tell. */
+export const SESSION_REVOKED = "sessionRevoked";
+/** No credential was sent — a call made before the session was established. */
+export const AUTHORIZATION_REQUIRED = "authorizationRequired";
+export const REFRESH_REASONS: ReadonlySet<string> = new Set([
+  PERMISSIONS_CHANGED,
+  TOKEN_EXPIRED,
+  SESSION_REVOKED,
+  AUTHORIZATION_REQUIRED,
+]);
 
 export type ApiCall = <T>(
   path: string,
@@ -60,7 +80,8 @@ export function createApiClient({
   baseUrl,
   service,
   credential,
-  onPermissionsChanged,
+  onCredentialRefused,
+  credentialSettled,
 }: ApiClientConfig): ApiCall {
   async function once<T>(
     path: string,
@@ -119,30 +140,34 @@ export function createApiClient({
   }
 
   /**
-   * One retry, for one refusal (ADR-0043): a call refused because the caller's
-   * permissions changed after its token was minted. The token is refreshed —
-   * `/auth/refresh` re-reads the role from Postgres — and the call is sent once
-   * more with whatever `credential()` now answers. A second refusal is thrown as
-   * it is, never looped, and a refresh that fails throws the original refusal so
-   * the caller sees exactly what it would have seen before this existed.
+   * One retry, for one refusal a refresh can mend: permissions changed
+   * (ADR-0043), the access token expired, or its session was rotated by a
+   * refresh elsewhere. The credential is refreshed — or adopted, when it was
+   * already replaced — and the call is sent once more with whatever
+   * `credential()` now answers. A refused call never reached its handler, so a
+   * retried POST runs once. A second refusal is thrown as it is, never looped,
+   * and a refresh that fails throws the original refusal.
    */
   return async function call<T>(
     path: string,
     init: RequestInit = {},
     extraHeaders?: Record<string, string | undefined>,
   ): Promise<T> {
+    if (credentialSettled && !credential?.()) await credentialSettled();
+    const sent = credential?.() ?? null;
     try {
       return await once<T>(path, init, extraHeaders);
     } catch (error) {
       if (
-        !onPermissionsChanged ||
+        !onCredentialRefused ||
         !(error instanceof ApiError) ||
-        error.reason !== PERMISSIONS_CHANGED
+        !error.reason ||
+        !REFRESH_REASONS.has(error.reason)
       ) {
         throw error;
       }
       try {
-        await onPermissionsChanged();
+        await onCredentialRefused(sent);
       } catch {
         throw error;
       }

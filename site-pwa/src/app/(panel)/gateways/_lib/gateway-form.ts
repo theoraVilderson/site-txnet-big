@@ -1,5 +1,6 @@
 import type { Me } from "@/lib/auth-api";
 import type { AdminGateway, CreateGatewayBody, GatewaySource, UpdateGatewayBody } from "@/lib/billing-api";
+import { samePresets } from "./presets";
 
 /** The values billing's enums accept. Shown as they are: a provider name is a logo, not a sentence. */
 export const PROVIDERS = ["zarinpal", "idpay", "nowpayments", "stripe"] as const;
@@ -34,12 +35,28 @@ export interface GatewayForm {
   verificationStatus: string;
   merchantId: string;
   secretKey: string;
+  /** This gateway's own quick amounts, as `addPreset` keeps them; empty inherits the tenant's default. */
+  depositPresets: string[];
+  /** The callback address sent to the provider; empty = the tenant's panel domain (F-092-w). */
+  callbackUrl: string;
 }
 
-export type FormError = "required" | "decimal" | "range";
+export type FormError = "required" | "decimal" | "range" | "merchantFormat" | "url";
 export type FormErrors = Partial<Record<keyof GatewayForm, FormError>>;
 
 const DECIMAL = /^(0|[1-9]\d{0,15})(\.\d{1,8})?$/;
+/** An absolute http(s) address — what billing stores as a callback. */
+function isWebAddress(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+/** A Zarinpal merchant id: 36 characters, 8-4-4-4-12 hex. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const REQUIRED = ["displayName", "providerName", "gatewayCategory", "minAcceptAmount", "maxAcceptAmount", "feeValue"] as const;
 const DECIMALS = ["minAcceptAmount", "maxAcceptAmount", "feeValue", "feeFloor", "feeCeiling"] as const;
 const NULLABLE = new Set<keyof GatewayForm>(["feeFloor", "feeCeiling"]);
@@ -80,6 +97,8 @@ export function emptyForm(source: GatewaySource): GatewayForm {
     verificationStatus: "",
     merchantId: "",
     secretKey: "",
+    depositPresets: [],
+    callbackUrl: "",
   };
 }
 
@@ -106,6 +125,8 @@ export function formFromGateway(g: AdminGateway): GatewayForm {
     verificationStatus: g.verificationStatus ?? "",
     merchantId: "",
     secretKey: "",
+    depositPresets: [...(g.depositPresets ?? [])],
+    callbackUrl: g.callbackUrl ?? "",
   };
 }
 
@@ -123,6 +144,11 @@ export function validateForm(form: GatewayForm): FormErrors {
   };
   pair("minAcceptAmount", "maxAcceptAmount");
   pair("feeFloor", "feeCeiling");
+  // Zarinpal refuses any other shape only at payment time (`-9`), long after the
+  // operator believed the gateway was ready. An empty box keeps the stored id.
+  const merchantId = form.merchantId.trim();
+  if (form.providerName === "zarinpal" && merchantId && !UUID.test(merchantId)) errors.merchantId = "merchantFormat";
+  if (form.callbackUrl.trim() && !isWebAddress(form.callbackUrl.trim())) errors.callbackUrl = "url";
   return errors;
 }
 
@@ -152,6 +178,8 @@ export function createBody(form: GatewayForm, me: Me | null): CreateGatewayBody 
     if (form.tenantId.trim()) body.tenantId = form.tenantId.trim();
     if (form.verificationStatus) body.verificationStatus = form.verificationStatus;
   }
+  if (form.depositPresets.length > 0) body.depositPresets = form.depositPresets;
+  if (form.callbackUrl.trim()) body.callbackUrl = form.callbackUrl.trim();
   return { ...(body as unknown as CreateGatewayBody), ...secrets(form) };
 }
 
@@ -170,5 +198,7 @@ export function updateBody(original: AdminGateway, form: GatewayForm, me: Me | n
   ) {
     body.verificationStatus = form.verificationStatus;
   }
+  if (!samePresets(form.depositPresets, before.depositPresets)) body.depositPresets = form.depositPresets;
+  if (form.callbackUrl.trim() !== before.callbackUrl.trim()) body.callbackUrl = form.callbackUrl.trim() || null;
   return { ...(body as UpdateGatewayBody), ...secrets(form) };
 }

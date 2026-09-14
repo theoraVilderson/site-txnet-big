@@ -91,9 +91,10 @@ export function PanelRealtimeProvider({ children }: { children: ReactNode }) {
       onCredentialRejected: () => {
         // The upgrade was refused before a socket existed. The client has
         // already stopped and will retry with backoff, so all this owes it is
-        // a live token — `refresh()` and not `ensureSession()`, which is
-        // memoised per page load and would hand back the same dead one.
-        authApi.refresh().catch(() => {
+        // a live token — the shared refresh, not `ensureSession()` (memoised per
+        // page load, the same dead token) and not a second `refresh()` racing a
+        // refused call with the same cookie, which would sign one of them out.
+        authApi.refreshCredential().catch(() => {
           // No cookie either. Retrying would ask a question already answered.
           if (!alive) return;
           socket.close();

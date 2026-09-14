@@ -12,6 +12,11 @@ import {
   scopeArgs,
   tenantScopeQueryMap,
 } from './with-tenant';
+import {
+  TenantContext as SharedContext,
+  runWithTenant as sharedRunWithTenant,
+  tenantTransaction,
+} from '@txnet-backend/shared-core';
 
 /**
  * F-066-b turns one guarantee on: a query on a registered model either carries
@@ -334,5 +339,28 @@ describe('the tenant is bound in the database, in the query’s own transaction'
 
     expect(seen).toEqual([]);
     expect(query).toHaveBeenCalled();
+  });
+});
+
+describe('tenantTransaction — the body runs with the binding in scope', () => {
+  it('keeps the mark for a body that returns an unawaited query', async () => {
+    // `tenantTransaction(prisma, (tx) => tx.model.update(...))` — no `async`.
+    // The body returns a lazy Prisma promise, which only runs when awaited; if
+    // that await happens after the scope that marks the transaction bound has
+    // closed, the extension refuses it as "bound no tenant" (deposit start,
+    // 2026-09-13: a 500 after the bank had already minted an authority).
+    const lazy = {
+      then: (ok: (v: string | null) => void) => ok(SharedContext.transactionTenantId()),
+    };
+    const client = {
+      $transaction: async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ $executeRaw: async () => 1 }),
+    };
+
+    const seen = await sharedRunWithTenant(TENANT, () =>
+      tenantTransaction(client as never, () => lazy as unknown as Promise<string | null>),
+    );
+
+    expect(seen).toBe(TENANT.id);
   });
 });

@@ -32,6 +32,7 @@ import { useApiErrorMessage } from "@/hooks/useApiError";
 import type { Me } from "@/lib/auth-api";
 import { billingApi } from "@/lib/billing-api";
 import { Select } from "../../_components/kit/Select";
+import { PresetsEditor } from "./PresetsEditor";
 import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
 import {
   CATEGORIES,
@@ -98,7 +99,8 @@ export function GatewayWizard({ me, onClose, onCreated }: GatewayWizardProps) {
   const reduceMotion = useReducedMotion();
   const owner = isPlatformOwner(me);
 
-  const [form, setForm] = useState<GatewayForm>(() => emptyForm("tenant"));
+  const initialForm = () => emptyForm(owner ? "platform" : "tenant");
+  const [form, setForm] = useState<GatewayForm>(initialForm);
   const [stepIndex, setStepIndex] = useState(0);
   const [reached, setReached] = useState(0);
   const [direction, setDirection] = useState(1);
@@ -173,7 +175,7 @@ export function GatewayWizard({ me, onClose, onCreated }: GatewayWizardProps) {
   };
 
   const restart = () => {
-    setForm(emptyForm("tenant"));
+    setForm(initialForm());
     setErrors({});
     setCreated(null);
     setTouched(false);
@@ -201,12 +203,13 @@ export function GatewayWizard({ me, onClose, onCreated }: GatewayWizardProps) {
     </div>
   );
 
+  // The wrapper carries the input's direction: with only the input `ltr`, its
+  // `pe-*` pads the right while the suffix's `end-*` sits left in RTL, on the text.
   const textInput = (k: keyof GatewayForm, opts: { ltr?: boolean; suffix?: string; placeholder?: string; decimal?: boolean } = {}) => (
-    <div className="relative">
+    <div className="relative" dir={opts.ltr ? "ltr" : undefined}>
       <input
         id={`gw-${k}`}
         className={`${input} ${errors[k] ? invalidInput : ""} ${opts.suffix ? "pe-14" : ""}`}
-        dir={opts.ltr ? "ltr" : undefined}
         inputMode={opts.decimal ? "decimal" : undefined}
         placeholder={opts.placeholder}
         aria-invalid={Boolean(errors[k])}
@@ -369,6 +372,19 @@ export function GatewayWizard({ me, onClose, onCreated }: GatewayWizardProps) {
             hint={t("common", W.hints.isActive)}
           />
         </div>
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <label htmlFor="gw-depositPresets" className="flex items-center gap-2 text-xs font-bold text-text-primary">
+            {t("common", FrontendI18nKeys.common.gateways.presets.title)}
+            <span className="font-normal text-text-secondary">({t("common", W.optional)})</span>
+          </label>
+          <p className="text-[11px] leading-5 text-text-secondary">{t("common", FrontendI18nKeys.common.gateways.presets.gatewayHint)}</p>
+          <PresetsEditor
+            id="gw-depositPresets"
+            value={form.depositPresets}
+            onChange={(next) => set("depositPresets", next)}
+            emptyText={t("common", FrontendI18nKeys.common.gateways.presets.inherit)}
+          />
+        </div>
       </div>
     ),
 
@@ -395,6 +411,13 @@ export function GatewayWizard({ me, onClose, onCreated }: GatewayWizardProps) {
           <ShieldCheck size={14} aria-hidden />
           {t("common", W.secrets.safe)}
         </p>
+        {labeled(
+          "callbackUrl",
+          t("common", G.callback.label),
+          textInput("callbackUrl", { ltr: true, placeholder: t("common", G.callback.placeholder) }),
+          t("common", G.callback.hint),
+          true,
+        )}
         {owner && form.source === "tenant" && (
           <div className="sm:max-w-xs">
             {labeled(
@@ -533,8 +556,8 @@ export function GatewayWizard({ me, onClose, onCreated }: GatewayWizardProps) {
                 <motion.div key={step.id} initial={slide} animate={{ x: 0, opacity: 1 }} exit={reduceMotion ? {} : { opacity: 0 }} transition={{ duration: 0.18 }} className="flex flex-col gap-5">
                   <p className="text-xs text-text-secondary">{t("common", W.steps[step.id].subtitle)}</p>
                   {steps[step.id]}
-                  <aside className="flex items-start gap-3 rounded-2xl border border-dashed border-[var(--gold-primary)]/50 bg-[var(--gold-bg)] p-3">
-                    <Lightbulb size={16} className="mt-0.5 shrink-0 text-[var(--gold-primary)]" aria-hidden />
+                  <aside className="flex items-start gap-3 rounded-2xl border border-dashed border-[var(--accent-primary)]/40 bg-[var(--leaf-bg)] p-3">
+                    <Lightbulb size={16} className="mt-0.5 shrink-0 text-primary" aria-hidden />
                     <p className="text-xs leading-6 text-text-primary">
                       <b>{t("common", W.tip)}: </b>
                       {t("common", W.steps[step.id].tip)}
@@ -622,11 +645,10 @@ function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange
 function SecretInput({ id, value, onChange, showLabel, hideLabel }: { id: string; value: string; onChange: (v: string) => void; showLabel: string; hideLabel: string }) {
   const [visible, setVisible] = useState(false);
   return (
-    <div className="relative">
+    <div className="relative" dir="ltr">
       <input
         id={id}
         className={`${input} pe-11 font-mono`}
-        dir="ltr"
         type={visible ? "text" : "password"}
         autoComplete="new-password"
         autoCorrect="off"
@@ -727,9 +749,8 @@ function FeeStep({ form, set, errors, textInput, labeled, choice, money }: FeeSt
           <div className="flex flex-wrap items-end justify-between gap-3">
             <label className="flex flex-col gap-1 text-[11px] opacity-90">
               {t("common", W.preview.amount)}
-              <span className="relative">
+              <span className="relative" dir="ltr">
                 <input
-                  dir="ltr"
                   inputMode="decimal"
                   value={sample}
                   onChange={(e) => setSample(e.target.value)}
@@ -811,6 +832,16 @@ function ReviewStep({ form, owner, money, onEdit }: { form: GatewayForm; owner: 
         [t("common", F.category), category ? t("common", W.categories[category]) : none],
         [t("common", W.review.range), <span key="r" dir="ltr">{`${money(form.minAcceptAmount || "0")} – ${money(form.maxAcceptAmount || "0")}`}</span>],
         [t("common", F.isActive), form.isActive ? t("common", W.review.yes) : t("common", W.review.no)],
+        [
+          t("common", FrontendI18nKeys.common.gateways.presets.title),
+          form.depositPresets.length > 0 ? (
+            <span key="p" dir="ltr">
+              {form.depositPresets.map((p) => money(p)).join(" · ")}
+            </span>
+          ) : (
+            t("common", FrontendI18nKeys.common.gateways.presets.inherit)
+          ),
+        ],
       ])}
       {section("fee", [
         [t("common", F.feeValue), feeText],
@@ -820,13 +851,23 @@ function ReviewStep({ form, owner, money, onEdit }: { form: GatewayForm; owner: 
       {section("secrets", [
         [t("common", G.merchantId), secretState(form.merchantId)],
         [t("common", G.secretKey), secretState(form.secretKey)],
+        [
+          t("common", G.callback.label),
+          form.callbackUrl.trim() ? (
+            <span key="cb" dir="ltr" className="break-all">
+              {form.callbackUrl.trim()}
+            </span>
+          ) : (
+            t("common", G.callback.default)
+          ),
+        ],
         ...(owner && form.source === "tenant" && form.verificationStatus
           ? ([[t("common", F.verification), t("common", W.verification[form.verificationStatus as (typeof VERIFICATION)[number]])]] as [string, ReactNode][])
           : []),
       ])}
       {missingSecrets && (
-        <p className="flex items-start gap-2 rounded-xl border border-[var(--gold-primary)]/40 bg-[var(--gold-bg)] p-3 text-xs text-text-primary">
-          <TriangleAlert size={14} className="mt-0.5 shrink-0 text-[var(--gold-primary)]" aria-hidden />
+        <p className="flex items-start gap-2 rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] p-3 text-xs text-text-primary">
+          <TriangleAlert size={14} className="mt-0.5 shrink-0 text-error" aria-hidden />
           {t("common", W.secrets.missing)}
         </p>
       )}

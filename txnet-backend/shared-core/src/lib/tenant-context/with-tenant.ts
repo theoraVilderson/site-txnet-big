@@ -310,6 +310,8 @@ export async function tenantTransaction<R>(
   const tenant = TenantContext.current('tenantTransaction');
   return client.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenant.id}, ${true})`;
-    return runInBoundTransaction(tenant.id, () => fn(tx));
+    // Awaited inside the scope: a body that returns an unawaited Prisma promise
+    // only runs when awaited, and outside this scope it would be refused.
+    return runInBoundTransaction(tenant.id, async () => await fn(tx));
   }, options);
 }

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { billingApi, type DepositGateway, type DepositQuote } from "@/lib/billing-api";
 import { ApiError } from "@/lib/api-error";
 import { QUOTE_DEBOUNCE_MS, useDepositQuote, type DepositInputs } from "./_hooks/useDepositQuote";
-import { fromCents, fromMinor, presetAmounts, toCents } from "./_lib/deposit-amount";
+import { fromCents, fromMinor, offeredPresets, presetAmounts, tomanFromRial, toCents } from "./_lib/deposit-amount";
 
 /**
  * The top-up page (F-093-e), and the one thing about it that has to be true:
@@ -39,6 +39,7 @@ const GATEWAY: DepositGateway = {
   category: "iranian_gateway",
   minAmount: "1.00",
   maxAmount: "500.00",
+  presets: [],
 };
 
 /** A quote whose numbers are deliberately not derivable from each other. */
@@ -254,5 +255,41 @@ describe("fromMinor", () => {
     expect(fromMinor("12.3", 2)).toBeNull();
     expect(fromMinor("-5", 2)).toBeNull();
     expect(fromMinor("5", -1)).toBeNull();
+  });
+});
+
+/**
+ * A rial gateway's charge, as the page says it to a person: in toman, which is
+ * what an Iranian reads a price in. Ten rial to the toman is a unit, not a rate,
+ * so this is exact decimal work on the string — never `/ 10` on a float.
+ */
+describe("tomanFromRial", () => {
+  it("divides whole rial by ten exactly", () => {
+    expect(tomanFromRial("4563010")).toBe("456301");
+    expect(tomanFromRial("10")).toBe("1");
+  });
+
+  it("keeps the odd rial as a tenth of a toman instead of rounding it away", () => {
+    expect(tomanFromRial("4563015")).toBe("456301.5");
+    expect(tomanFromRial("5")).toBe("0.5");
+  });
+
+  it("answers null for anything that is not whole rial", () => {
+    expect(tomanFromRial("12.5")).toBeNull();
+    expect(tomanFromRial("")).toBeNull();
+  });
+});
+
+/** F-093-k: the list the tenant or the gateway set wins; without one, the ladder. */
+describe("offeredPresets", () => {
+  const gateway = { minAmount: "1.00", maxAmount: "500.00" };
+
+  it("offers the configured list as billing answered it", () => {
+    expect(offeredPresets({ ...gateway, presets: ["2.00", "2.50"] })).toEqual(["2.00", "2.50"]);
+  });
+
+  it("falls back to the automatic ladder when nothing is configured", () => {
+    expect(offeredPresets({ ...gateway, presets: [] })).toEqual(presetAmounts("1.00", "500.00"));
+    expect(offeredPresets(gateway)).toEqual(presetAmounts("1.00", "500.00"));
   });
 });

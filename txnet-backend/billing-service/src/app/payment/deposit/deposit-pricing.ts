@@ -60,6 +60,8 @@ export const GATEWAY_COLUMNS = {
   maxRate: true,
   roundingStep: true,
   roundingMode: true,
+  depositPresets: true,
+  callbackUrl: true,
 } satisfies Prisma.TenantGatewayConfigSelect & Prisma.PaymentGatewaySelect;
 
 export type SelectedGateway = Prisma.TenantGatewayConfigGetPayload<{ select: typeof GATEWAY_COLUMNS }>;
