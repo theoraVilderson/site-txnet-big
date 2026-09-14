@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfirmationSource, PaymentStatus, Prisma, WalletReasonType } from '@prisma/client';
+import { ConfirmationSource, PaymentStatus, Prisma, RedemptionStatus, WalletReasonType } from '@prisma/client';
 import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../../prisma/prisma.service';
@@ -158,6 +158,57 @@ export class DepositSettlementService {
       if (manual) await this.auditManual(tx, payment, verified.referenceId, manual);
       return true;
     });
+  }
+
+  /**
+   * The gateway reversed the payment — it is returning the money to the payer
+   * (F-092-ae, ADR-0046 decision 5). Closed `failed` / `reversed`, on the
+   * **caller's** transaction so the reconciliation log row commits with it.
+   *
+   * Guarded like the credit, `pending` then `expired`: a pending row's holds go
+   * back `cancelled` (nothing timed out); an expired one's already went back.
+   * A `billing.payment.reversed` event is written with it, for the payer's
+   * notice (F-067-m). Answers whether this call closed it.
+   */
+  async closeReversed(tx: Prisma.TransactionClient, payment: PaymentRow): Promise<boolean> {
+    const data = {
+      status: PaymentStatus.failed,
+      failureCode: 'reversed',
+      expiresAt: null,
+      nextVerifyAt: null,
+    };
+    const flip = async (from: PaymentStatus) =>
+      (await tx.paymentTransaction.updateMany({ where: { id: payment.id, status: from }, data })).count === 1;
+    const from = (await flip(PaymentStatus.pending))
+      ? PaymentStatus.pending
+      : (await flip(PaymentStatus.expired))
+        ? PaymentStatus.expired
+        : null;
+    if (from === null) return false;
+
+    if (from === PaymentStatus.pending) await this.reservations.release(tx, payment.id, RedemptionStatus.cancelled);
+    const tenant = TenantContext.current('deposit reversal event');
+    const ref = gatewayRefOf(payment);
+    await tx.outboxEvent.create({
+      data: {
+        aggregate: 'billing.payment',
+        aggregateId: payment.id,
+        type: 'billing.payment.reversed',
+        payload: {
+          tenantId: tenant.id,
+          userId: payment.userId,
+          paymentId: payment.id,
+          // What the payer was charged and the bank is returning, in the gateway
+          // currency's minor unit — a string, as every amount on the wire.
+          chargedAmountMinor: payment.chargedAmountMinor.toString(),
+          amountCredited: payment.amountCredited.toFixed(2),
+          gateway: { source: ref.source, id: ref.gatewayId },
+        },
+      },
+      select: { id: true },
+    });
+    this.logger.warn(`payment ${payment.id} closed: the gateway reversed it`);
+    return true;
   }
 
   /**

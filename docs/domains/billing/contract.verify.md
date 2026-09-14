@@ -116,3 +116,16 @@ ADR-0046 decision 4. `payment-callback-url.ts`; `DepositStartService`,
 | `reconcile` first looks, per merchant account, at open rows with no authority older than `AUTHORITY_RECOVERY_AFTER_SEC` (120) inside the lookback, and reads `listUnverified` once for them (Zarinpal `unVerified.json`: the last 100). An entry is attached only if its `callbackUrl` names **that** row **and** its amount is `chargedAmountMinor`; the run answers `authoritiesRecovered` | the amount alone confuses two payments of one price. A row minted before F-092-ad has no `p` and is a person's. A gateway with no list, or no answer, recovers nothing this run |
 | Every attach is `updateMany({ id, gatewayTrackingCode: null })`; the unique index refuses an authority another payment holds | nothing overwrites an authority that arrived meanwhile (ADR-0028) |
 
+## The bank returns the money (built — F-092-ae)
+
+ADR-0046 decisions 5, 6. `DepositSettlementService.closeReversed`,
+`DepositReconciliationService`, `PaymentProvider.verifyWindowSec`.
+
+| Rule | Why |
+|---|---|
+| An inquiry answering `reversed` — in a run, `verifyDue`, or a person's inquire — writes its log row **and**, in the same transaction, closes the payment: `pending` then `expired` guarded, `failed` / `failureCode: reversed`, `expiresAt` and `nextVerifyAt` null | the gateway is returning the payer's money; left open, the row held coupon slots and read "verifying" for a week |
+| A pending row's holds are released `cancelled`; an expired row's were released by the clock | nothing timed out — the payment was refused after the fact |
+| The same transaction writes `billing.payment` / `billing.payment.reversed`, payload `{tenantId, userId, paymentId, chargedAmountMinor, amountCredited, gateway}` | the payer's notice (F-067-m), and the money never moves without its event (ADR-0021) |
+| An inquiry answering `failed` still closes nothing | the clock owns that; `failed` from an inquiry is not the bank returning anything |
+| Every driver declares `verifyWindowSec` — `null` for Zarinpal, whose paid payments are not returned unverified. On a windowed gateway a verifying payment is flagged at `min(VERIFY_FLAG_AFTER_SEC, window / 2)` after it was made | a flag after a day is useless for a gateway that returns the money in 20 minutes; half the window leaves a person time to act |
+

@@ -105,6 +105,8 @@ export class ZarinpalProvider implements PaymentProvider {
   readonly name = PaymentProviderName.zarinpal;
   readonly chargeCurrency = 'IRR';
   readonly chargeDecimals = 0;
+  /** A paid Zarinpal payment is not returned for want of a verify (checked by the user, 2026-09-14). */
+  readonly verifyWindowSec = null;
 
   private readonly host: string;
   private readonly fetchImpl: typeof fetch;

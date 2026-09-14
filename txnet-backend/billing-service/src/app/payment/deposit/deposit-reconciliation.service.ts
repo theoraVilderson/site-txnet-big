@@ -300,7 +300,6 @@ export class DepositReconciliationService {
     due: Array<{ id: string; tenantId: string | null }>,
     now: Date,
   ): Promise<DepositReconciliationResult> {
-    const flagAfterSec = this.config.get('VERIFY_FLAG_AFTER_SEC', { infer: true });
     const result: DepositReconciliationResult = {
       scanned: due.length,
       confirmed: 0,
@@ -309,9 +308,8 @@ export class DepositReconciliationService {
       errors: 0,
       flaggedForPerson: 0,
     };
-    const flagBefore = new Date(now.getTime() - flagAfterSec * 1000);
     const onRetry = async (payment: PaymentRow) => {
-      if (await this.scheduleRetry(payment, now, flagBefore)) result.flaggedForPerson++;
+      if (await this.scheduleRetry(payment, now)) result.flaggedForPerson++;
     };
 
     for (const row of due) {
@@ -327,7 +325,7 @@ export class DepositReconciliationService {
     }
 
     if (result.flaggedForPerson > 0) {
-      this.logger.warn(`${result.flaggedForPerson} payment(s) still verifying after ${flagAfterSec}s, flagged for a person`);
+      this.logger.warn(`${result.flaggedForPerson} payment(s) still verifying past their flag time, flagged for a person`);
     }
     if (result.confirmed > 0 || result.flagged > 0) {
       this.logger.log(
@@ -345,10 +343,8 @@ export class DepositReconciliationService {
    */
   async askOnce(paymentId: string): Promise<AskAnswer> {
     const now = new Date();
-    const flagAfterSec = this.config.get('VERIFY_FLAG_AFTER_SEC', { infer: true });
-    const flagBefore = new Date(now.getTime() - flagAfterSec * 1000);
     return this.reconcileOne(paymentId, async (payment) => {
-      await this.scheduleRetry(payment, now, flagBefore);
+      await this.scheduleRetry(payment, now);
     });
   }
 
@@ -387,11 +383,19 @@ export class DepositReconciliationService {
 
     if (!PAYABLE.includes(status)) {
       // `in_bank` is not finished, `failed` and `reversed` are finished and owe
-      // nothing. All three are recorded and none of them are acted on: closing
-      // a row is the clock's job, and reversing one is nobody's. `in_bank` is
-      // not a settled answer, so a pending row keeps verifying (F-092-x);
-      // `failed` and `reversed` are, so its retry clock stops.
-      await this.record(payment, status, ReconciliationAction.no_action_needed, undefined, status !== 'in_bank');
+      // nothing. `in_bank` is not a settled answer, so a pending row keeps
+      // verifying (F-092-x); `failed` and `reversed` are, so its retry clock
+      // stops. Only `reversed` closes the row, beside its log row: the bank is
+      // returning the money, and the payer is told (F-092-ae, ADR-0046
+      // decision 5). `failed` still closes nothing — the clock owns that.
+      await this.record(
+        payment,
+        status,
+        ReconciliationAction.no_action_needed,
+        undefined,
+        status !== 'in_bank',
+        status === 'reversed' ? (tx) => this.settlement.closeReversed(tx, payment) : undefined,
+      );
       if (status === 'in_bank') {
         await onRetry(payment);
         return answer('in_bank', status);
@@ -485,12 +489,20 @@ export class DepositReconciliationService {
 
   /**
    * The next rung of the retry ladder (F-092-x), and the flag for a person once
-   * the payment has been verifying for a day (F-092-y) — in one transaction.
-   * Only a `pending` row climbs, so asking about an `expired` one schedules
-   * nothing. Answers whether this call flagged it.
+   * the payment has been verifying for a day (F-092-y) — or, on a gateway that
+   * returns an unverified payment, for half its window (F-092-ae, ADR-0046
+   * decision 6), while a person can still act — in one transaction. Only a
+   * `pending` row climbs, so asking about an `expired` one schedules nothing.
+   * Answers whether this call flagged it.
    */
-  private async scheduleRetry(payment: PaymentRow, now: Date, flagBefore: Date): Promise<boolean> {
+  private async scheduleRetry(payment: PaymentRow, now: Date): Promise<boolean> {
     if (payment.status !== PaymentStatus.pending) return false;
+    const window = this.providers.get(gatewayRefOf(payment).providerName).verifyWindowSec;
+    const flagAfterSec = Math.min(
+      this.config.get('VERIFY_FLAG_AFTER_SEC', { infer: true }),
+      window === null ? Infinity : Math.floor(window / 2),
+    );
+    const flagBefore = new Date(now.getTime() - flagAfterSec * 1000);
     return tenantTransaction(this.prisma, async (tx) => {
       const scheduled = await scheduleVerifyRetry(tx, payment, now);
       return scheduled !== null && (await flagLongVerifying(tx, payment.id, flagBefore, now));
@@ -513,6 +525,8 @@ export class DepositReconciliationService {
     notes?: string,
     /** The answer is settled: a verifying row stops verifying, in the same transaction. */
     settled = false,
+    /** A write that must commit with the log row (F-092-ae: closing a reversed payment). */
+    alsoIn?: (tx: Prisma.TransactionClient) => Promise<unknown>,
   ): Promise<void> {
     const tenant = TenantContext.current('reconciliation log');
     await tenantTransaction(this.prisma, async (tx) => {
@@ -526,6 +540,7 @@ export class DepositReconciliationService {
         select: { id: true },
       });
       if (settled && payment.nextVerifyAt) await clearVerifyRetry(tx, payment.id);
+      if (alsoIn) await alsoIn(tx);
     });
     this.logger.debug(`payment ${payment.id} of tenant ${tenant.id}: ${reported} -> ${action}`);
   }

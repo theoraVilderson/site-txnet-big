@@ -78,6 +78,13 @@ export interface PaymentProvider {
   readonly chargeCurrency: string;
   /** Decimal places of its minor unit — `priceAtGateway`'s `chargeDecimals`. */
   readonly chargeDecimals: number;
+  /**
+   * How long the gateway keeps a paid payment we have not verified before it
+   * returns the money, in seconds — `null` when it does not (ADR-0046 decision 6).
+   * A verifying payment on a windowed gateway is flagged for a person at half of
+   * it. Required, so a new driver cannot forget to say.
+   */
+  readonly verifyWindowSec: number | null;
   /** Mint a payment intent. **Never retried**: every attempt mints a new authority. */
   request(input: PaymentRequestInput): Promise<PaymentRequestResult>;
   /** Confirm a payment. Retried on transport failure; "already verified" is success. */

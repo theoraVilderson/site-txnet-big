@@ -56,18 +56,21 @@ type Calls = {
   /** Everything written, in order, so "inside the transaction" is checkable. */
   writes: string[];
   accruals: Array<Record<string, unknown>>;
+  flips: Array<Record<string, unknown>>;
+  events: Array<Record<string, unknown>>;
   committed: boolean;
 };
 
 function build({ lostTheFlip = false, rowIs = PaymentStatus.pending as PaymentStatus } = {}) {
-  const calls: Calls = { writes: [], accruals: [], committed: false };
+  const calls: Calls = { writes: [], accruals: [], flips: [], events: [], committed: false };
 
   const tx = {
     $executeRaw: async () => 0,
     paymentTransaction: {
       // The row really is `rowIs`: a guard naming another status matches nothing.
-      updateMany: async ({ where }: { where: { status: PaymentStatus } }) => {
+      updateMany: async ({ where, data }: { where: { status: PaymentStatus }; data: Record<string, unknown> }) => {
         const matched = !lostTheFlip && where.status === rowIs;
+        if (matched) calls.flips.push({ where, data });
         calls.writes.push(matched ? 'flip' : `miss:${where.status}`);
         return { count: matched ? 1 : 0 };
       },
@@ -80,7 +83,8 @@ function build({ lostTheFlip = false, rowIs = PaymentStatus.pending as PaymentSt
       },
     },
     outboxEvent: {
-      create: async () => {
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        calls.events.push(data);
         calls.writes.push('event');
         return { id: 'event-1' };
       },
@@ -108,6 +112,10 @@ function build({ lostTheFlip = false, rowIs = PaymentStatus.pending as PaymentSt
       calls.writes.push('confirm');
       return 1;
     },
+    release: async (_tx: unknown, _order: string, outcome: string) => {
+      calls.writes.push(`release:${outcome}`);
+      return 1;
+    },
     claimExpired: async () => {
       calls.writes.push('claim-expired');
       return 1;
@@ -121,7 +129,7 @@ function build({ lostTheFlip = false, rowIs = PaymentStatus.pending as PaymentSt
   };
 
   const service = new DepositSettlementService(prisma as never, reservations as never, ledger as never);
-  return { service, calls };
+  return { service, calls, tx };
 }
 
 const settle = (service: DepositSettlementService, payment: PaymentRow) =>
@@ -221,6 +229,45 @@ describe('DepositSettlementService — the debt a granted gateway leaves', () =>
       await settle(service, paymentRow({ status: PaymentStatus.expired }));
 
       expect(calls.writes).toEqual(['flip', 'credit', 'confirm', 'event']);
+    });
+  });
+
+  describe('closeReversed — the gateway returned the money (F-092-ae, ADR-0046 decision 5)', () => {
+    const close = (service: DepositSettlementService, tx: unknown) =>
+      runWithTenant({ id: TENANT }, () => service.closeReversed(tx as never, paymentRow()));
+
+    it('closes a pending payment, gives its holds back cancelled, and announces it — all on the caller\'s transaction', async () => {
+      const { service, calls, tx } = build({ rowIs: PaymentStatus.pending });
+
+      await expect(close(service, tx)).resolves.toBe(true);
+
+      expect(calls.writes).toEqual(['flip', 'release:cancelled', 'event']);
+      expect(calls.flips[0]).toMatchObject({
+        where: { id: PAYMENT, status: PaymentStatus.pending },
+        data: { status: PaymentStatus.failed, failureCode: 'reversed', expiresAt: null, nextVerifyAt: null },
+      });
+      expect(calls.events[0]).toMatchObject({
+        aggregate: 'billing.payment',
+        aggregateId: PAYMENT,
+        type: 'billing.payment.reversed',
+        payload: { tenantId: TENANT, userId: USER, paymentId: PAYMENT, chargedAmountMinor: '19800000' },
+      });
+    });
+
+    it('closes an expired one without releasing anything — the clock already did', async () => {
+      const { service, calls, tx } = build({ rowIs: PaymentStatus.expired });
+
+      await expect(close(service, tx)).resolves.toBe(true);
+
+      expect(calls.writes).toEqual(['miss:pending', 'flip', 'event']);
+    });
+
+    it('does nothing to a payment already settled, and announces nothing', async () => {
+      const { service, calls, tx } = build({ rowIs: PaymentStatus.success });
+
+      await expect(close(service, tx)).resolves.toBe(false);
+
+      expect(calls.writes).toEqual(['miss:pending', 'miss:expired']);
     });
   });
 

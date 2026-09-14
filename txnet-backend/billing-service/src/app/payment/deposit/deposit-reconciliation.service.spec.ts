@@ -58,6 +58,7 @@ type Calls = {
   inquired: Array<{ authority: string; tenantInScope: string | null }>;
   verified: Array<{ authority: string; amountMinor: bigint }>;
   credited: Array<{ source: string; paymentId: string }>;
+  closedReversed: string[];
   logs: Array<Record<string, unknown>>;
   updated: Array<Record<string, unknown>>;
 };
@@ -81,6 +82,8 @@ type Setup = {
   credentialsFail?: Error;
   /** Open payments with no authority, as the recovery scan finds them (F-092-ad). */
   lost?: Array<Record<string, unknown>>;
+  /** The gateway's verify window, in seconds (ADR-0046 decision 6). */
+  verifyWindowSec?: number | null;
   /** What the gateway's unverified list answers. */
   unverified?: Array<{ authority: string; amountMinor: bigint; callbackUrl: string }>;
 };
@@ -98,9 +101,10 @@ function build(setup: Setup = {}) {
     credentialsFail,
     lost = [],
     unverified = [],
+    verifyWindowSec = null,
   } = setup;
 
-  const calls: Calls = { scans: [], inquired: [], verified: [], credited: [], logs: [], updated: [] };
+  const calls: Calls = { scans: [], inquired: [], verified: [], credited: [], closedReversed: [], logs: [], updated: [] };
   const scoped = () => TenantContext.currentOrNull()?.id ?? null;
 
   const tx = {
@@ -138,6 +142,7 @@ function build(setup: Setup = {}) {
     name: 'zarinpal',
     chargeCurrency: 'IRR',
     chargeDecimals: 0,
+    verifyWindowSec,
     listUnverified: async () => unverified,
     inquire: async ({ authority }: { authority: string }) => {
       calls.inquired.push({ authority, tenantInScope: scoped() });
@@ -161,6 +166,10 @@ function build(setup: Setup = {}) {
     creditVerified: async (payment: { id: string }, _v: unknown, source: string) => {
       calls.credited.push({ source, paymentId: payment.id });
       return !lostTheFlip;
+    },
+    closeReversed: async (_tx: unknown, payment: { id: string }) => {
+      calls.closedReversed.push(payment.id);
+      return true;
     },
   };
   const config = {
@@ -233,13 +242,18 @@ describe('DepositReconciliationService', () => {
     expect(result).toMatchObject({ confirmed: 0, flagged: 0, unchanged: 1 });
   });
 
-  it('never reverses a payment the gateway says was reversed', async () => {
-    const { service, calls } = build({ inquiry: 'reversed' });
+  // ADR-0046 decision 5: the gateway's own `reversed` is final — the bank is
+  // returning the money — so the payment closes and the payer is told. Nothing
+  // is ever reversed *by us*: there is no credit to take back.
+  it('closes a payment the gateway says was reversed, beside its log row, and stops its retries', async () => {
+    const { service, calls } = build({ inquiry: 'reversed', row: paymentRow({ nextVerifyAt: new Date() }) });
 
-    await service.reconcile();
+    const result = await service.reconcile();
 
-    expect(calls.updated).toEqual([]);
-    expect(calls.logs[0]).toMatchObject({ actionTaken: ReconciliationAction.no_action_needed });
+    expect(calls.closedReversed).toEqual([PAYMENT]);
+    expect(calls.logs[0]).toMatchObject({ actionTaken: ReconciliationAction.no_action_needed, gatewayReportedStatus: 'reversed' });
+    expect(calls.credited).toEqual([]);
+    expect(result).toMatchObject({ confirmed: 0, unchanged: 1 });
   });
 
   it('leaves a payment still in the bank alone', async () => {
@@ -401,6 +415,24 @@ describe('DepositReconciliationService', () => {
     // The retry is still scheduled, hourly now.
     expect(calls.updated.some((u) => (u['data'] as Record<string, unknown>)['verifyAttempts'] === 10)).toBe(true);
     expect(result).toMatchObject({ flaggedForPerson: 1 });
+  });
+
+  it('flags a verifying payment at half its gateway\'s verify window, not after a day (ADR-0046 decision 6)', async () => {
+    const { service, calls } = build({
+      due: [],
+      verifying: [{ id: PAYMENT, tenantId: TENANT }],
+      row: paymentRow({ status: PaymentStatus.pending, verifyAttempts: 2, nextVerifyAt: new Date() }),
+      inquiryFails: new GatewayFailure('idpay', 'unavailable', null, 'timed out'),
+      verifyWindowSec: 1_200,
+      flagMatches: 1,
+    });
+
+    await service.verifyDue();
+
+    const flag = calls.updated.find((u) => 'verifyFlaggedAt' in (u['data'] as object));
+    const cutoff = ((flag?.['where'] as Record<string, unknown>)['createdAt'] as { lte: Date }).lte;
+    expect(Date.now() - cutoff.getTime()).toBeGreaterThanOrEqual(600_000 - 1_000);
+    expect(Date.now() - cutoff.getTime()).toBeLessThan(600_000 + 1_000);
   });
 
   it('inquires inside the payment owner tenant scope', async () => {
