@@ -75,7 +75,45 @@ export type DepositReconciliationResult = {
   flaggedForPerson: number;
 };
 
+/**
+ * What asking about one payment came to — the detail a person needs (F-092-z),
+ * which a run folds into its counts.
+ */
+export type AskKind =
+  /** The gateway confirmed it and this call credited it. */
+  | 'credited'
+  /** The gateway confirmed it and another path had already credited it. */
+  | 'already_settled'
+  /** The gateway took a different amount: `flagged_mismatch`. */
+  | 'mismatch'
+  /** A settled no: `failed`, `reversed`, or an authority the gateway does not know. */
+  | 'refused'
+  /** Not finished at the bank. Unsettled. */
+  | 'in_bank'
+  /** No answer — a timeout, an unreadable merchant id, anything unexpected. Unsettled. */
+  | 'unanswered'
+  /** The row carries no authority, or is not readable in its tenant's scope. */
+  | 'unaskable';
+
+export type AskAnswer = { kind: AskKind; gatewayStatus: string | null; referenceId: string | null };
+
 type Outcome = 'confirmed' | 'flagged' | 'unchanged' | 'errors';
+
+const COUNTED_AS: Record<AskKind, Outcome> = {
+  credited: 'confirmed',
+  already_settled: 'unchanged',
+  mismatch: 'flagged',
+  refused: 'unchanged',
+  in_bank: 'unchanged',
+  unanswered: 'errors',
+  unaskable: 'errors',
+};
+
+const answer = (kind: AskKind, gatewayStatus: string | null = null, referenceId: string | null = null): AskAnswer => ({
+  kind,
+  gatewayStatus,
+  referenceId,
+});
 
 /** Called wherever an answer was not settled: schedule the next ask, flag if it is a day old. */
 type RetryHook = (payment: PaymentRow) => Promise<void>;
@@ -174,8 +212,8 @@ export class DepositReconciliationService {
         result.errors++;
         continue;
       }
-      const outcome = await runWithTenant({ id: row.tenantId }, () => this.reconcileOne(row.id, onRetry));
-      result[outcome]++;
+      const asked = await runWithTenant({ id: row.tenantId }, () => this.reconcileOne(row.id, onRetry));
+      result[COUNTED_AS[asked.kind]]++;
     }
 
     if (result.flaggedForPerson > 0) {
@@ -190,6 +228,21 @@ export class DepositReconciliationService {
   }
 
   /**
+   * Ask about one payment now, by exactly the rules a run follows — the credit,
+   * the log row, the retry clock and the flag (F-092-z: a person's "inquire"
+   * and the first step of a manual confirmation). The caller has already bound
+   * the payment's own tenant.
+   */
+  async askOnce(paymentId: string): Promise<AskAnswer> {
+    const now = new Date();
+    const flagAfterSec = this.config.get('VERIFY_FLAG_AFTER_SEC', { infer: true });
+    const flagBefore = new Date(now.getTime() - flagAfterSec * 1000);
+    return this.reconcileOne(paymentId, async (payment) => {
+      await this.scheduleRetry(payment, now, flagBefore);
+    });
+  }
+
+  /**
    * One payment, inside its own tenant's scope.
    *
    * Everything that talks to a gateway happens **outside** every transaction —
@@ -197,7 +250,7 @@ export class DepositReconciliationService {
    * the callback: a connection held open across a call to a bank is a
    * connection nobody else can have, and a sweep holds it for a whole batch.
    */
-  private async reconcileOne(paymentId: string, onRetry: RetryHook): Promise<Outcome> {
+  private async reconcileOne(paymentId: string, onRetry: RetryHook): Promise<AskAnswer> {
     const payment = await tenantTransaction(this.prisma, (tx) =>
       tx.paymentTransaction.findFirst({ where: { id: paymentId }, select: PAYMENT_SELECT }),
     );
@@ -205,11 +258,11 @@ export class DepositReconciliationService {
       // The cross-tenant scan saw it and the tenant-scoped read did not, which
       // means the row's `tenantId` disagrees with the one it was grouped under.
       this.logger.error(`payment ${paymentId} is not readable inside its own tenant scope`);
-      return 'errors';
+      return answer('unaskable');
     }
 
     const authority = payment.gatewayTrackingCode;
-    if (!authority) return 'unchanged';
+    if (!authority) return answer('unaskable');
 
     const ref = gatewayRefOf(payment);
     const provider = this.providers.get(ref.providerName);
@@ -225,12 +278,15 @@ export class DepositReconciliationService {
     if (!PAYABLE.includes(status)) {
       // `in_bank` is not finished, `failed` and `reversed` are finished and owe
       // nothing. All three are recorded and none of them are acted on: closing
-      // a row is the clock's job, and reversing one is nobody's.
-      // `in_bank` is not a settled answer, so a pending row keeps verifying
-      // (F-092-x); `failed` and `reversed` are, so its retry clock stops.
+      // a row is the clock's job, and reversing one is nobody's. `in_bank` is
+      // not a settled answer, so a pending row keeps verifying (F-092-x);
+      // `failed` and `reversed` are, so its retry clock stops.
       await this.record(payment, status, ReconciliationAction.no_action_needed, undefined, status !== 'in_bank');
-      if (status === 'in_bank') await onRetry(payment);
-      return 'unchanged';
+      if (status === 'in_bank') {
+        await onRetry(payment);
+        return answer('in_bank', status);
+      }
+      return answer('refused', status);
     }
 
     return await this.confirm(payment, authority, status, onRetry);
@@ -242,7 +298,7 @@ export class DepositReconciliationService {
     authority: string,
     status: PaymentInquiryStatus,
     onRetry: RetryHook,
-  ): Promise<Outcome> {
+  ): Promise<AskAnswer> {
     const ref = gatewayRefOf(payment);
     const provider = this.providers.get(ref.providerName);
 
@@ -265,9 +321,9 @@ export class DepositReconciliationService {
         // person, and nothing else happens.
         await this.record(payment, status, ReconciliationAction.flagged_mismatch, e.message, true);
         this.logger.warn(`payment ${payment.id} flagged: ${e.message}`);
-        return 'flagged';
+        return answer('mismatch', status);
       }
-      return await this.unanswered(payment, e, onRetry);
+      return await this.unanswered(payment, e, onRetry, status);
     }
 
     const credited = await this.settlement.creditVerified(
@@ -283,7 +339,7 @@ export class DepositReconciliationService {
       credited ? ReconciliationAction.auto_confirmed : ReconciliationAction.no_action_needed,
       credited ? `credited, reference ${verified.referenceId}` : 'already settled by another path',
     );
-    return credited ? 'confirmed' : 'unchanged';
+    return answer(credited ? 'credited' : 'already_settled', status, verified.referenceId);
   }
 
   /**
@@ -297,10 +353,12 @@ export class DepositReconciliationService {
     payment: PaymentRow,
     cause: unknown,
     onRetry: RetryHook,
-  ): Promise<'unchanged' | 'errors'> {
+    /** What `inquire` said before the `verify` that went unanswered, if it got that far. */
+    inquired: string | null = null,
+  ): Promise<AskAnswer> {
     if (cause instanceof GatewayFailure && cause.reason === 'authority_invalid') {
       await this.record(payment, 'authority_invalid', ReconciliationAction.no_action_needed, cause.message, true);
-      return 'unchanged';
+      return answer('refused', 'authority_invalid');
     }
     // Silence schedules the next ask, exactly as at the callback (F-092-x).
     await onRetry(payment);
@@ -312,7 +370,7 @@ export class DepositReconciliationService {
     } else {
       this.logger.warn(`payment ${payment.id} not answered for: ${what}`);
     }
-    return 'errors';
+    return answer('unanswered', inquired);
   }
 
   /**

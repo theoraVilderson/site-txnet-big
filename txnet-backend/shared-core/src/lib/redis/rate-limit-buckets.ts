@@ -156,6 +156,13 @@ export const RateLimitBucket = {
    */
   GATEWAY_ADMIN_READ: 'gateway:admin:read',
   GATEWAY_ADMIN_WRITE: 'gateway:admin:write',
+
+  /**
+   * Manual payment confirmation in `billing-service` (F-092-z), per user. The
+   * list is polled by a screen; an inquire or a confirm is a call to a bank.
+   */
+  PAYMENT_MANUAL_READ: 'payment:manual:read',
+  PAYMENT_MANUAL_WRITE: 'payment:manual:write',
 } as const;
 
 export type RateLimitBucket =

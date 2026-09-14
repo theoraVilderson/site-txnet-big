@@ -83,6 +83,13 @@ function build({ lostTheFlip = false } = {}) {
         return { id: 'event-1' };
       },
     },
+    adminAuditLog: {
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        calls.writes.push('audit');
+        calls.accruals.push(data);
+        return { id: 'audit-1' };
+      },
+    },
   };
   const prisma = {
     $transaction: async (fn: (t: typeof tx) => Promise<unknown>) => {
@@ -169,5 +176,34 @@ describe('DepositSettlementService — the debt a granted gateway leaves', () =>
     await settle(service, paymentRow({ grantId: GRANT, amountCredited: d('1.00'), feeApplied: d('1.50') }));
 
     expect(calls.accruals[0]).toMatchObject({ amount: d('0') });
+  });
+
+  it('writes a person’s credit with its audit row in the same transaction (F-092-z)', async () => {
+    const { service, calls } = build();
+
+    await runWithTenant({ id: TENANT }, () =>
+      service.creditVerified(paymentRow({ verifyAttempts: 3 }), { referenceId: 'R-1', cardPan: null }, ConfirmationSource.admin_manual, {
+        adminId: USER,
+        reason: 'checked the gateway panel',
+        ip: '10.0.0.9',
+      }),
+    );
+
+    expect(calls.writes).toEqual(['flip', 'credit', 'confirm', 'event', 'audit']);
+    expect(calls.accruals[0]).toMatchObject({
+      tenantId: TENANT,
+      action: 'payment_manual_confirm',
+      targetEntityId: PAYMENT,
+      newValue: { gatewayReferenceId: 'R-1', reason: 'checked the gateway panel' },
+    });
+  });
+
+  it('refuses admin_manual without the person, and a person on any other source', async () => {
+    const { service } = build();
+    const run = (source: ConfirmationSource, manual?: { adminId: string; reason: string; ip: string }) =>
+      runWithTenant({ id: TENANT }, () => service.creditVerified(paymentRow(), { referenceId: 'R', cardPan: null }, source, manual));
+
+    await expect(run(ConfirmationSource.admin_manual)).rejects.toThrow(/ManualConfirmation/);
+    await expect(run(ConfirmationSource.webhook_auto, { adminId: USER, reason: 'x', ip: 'y' })).rejects.toThrow(/ManualConfirmation/);
   });
 });

@@ -91,18 +91,19 @@ async function grantAllPermissionsToSuperAdmin() {
 // F-102-c (D-31): a tenant's Admin manages its own payment gateways. The same
 // grant as migration 20260913000300, for a fresh database whose roles are
 // created here after migrations ran.
+// F-092-z (ADR-0044 decision 6): the same Admin confirms a verifying payment
+// on those gateways by hand — migration 20260914000300's grant, for a fresh
+// database.
 async function grantGatewayManageToAdmin() {
   const role = await prisma.role.findUniqueOrThrow({ where: { name: 'Admin' } });
-  const permission = await prisma.permission.upsert({
-    where: { key: 'gateway.manage' },
-    update: {},
-    create: { key: 'gateway.manage' },
-  });
-  await prisma.rolePermission.upsert({
-    where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } },
-    update: {},
-    create: { roleId: role.id, permissionId: permission.id },
-  });
+  for (const key of ['gateway.manage', 'payment.confirm_manual']) {
+    const permission = await prisma.permission.upsert({ where: { key }, update: {}, create: { key } });
+    await prisma.rolePermission.upsert({
+      where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } },
+      update: {},
+      create: { roleId: role.id, permissionId: permission.id },
+    });
+  }
 }
 
 // ADR-0019: USD is the one base currency, two decimal places, and every money

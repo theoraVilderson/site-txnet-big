@@ -51,6 +51,10 @@ roles:
       # its own gateways; `GatewayAdminService` keeps everyone else's, the
       # platform's and verification for the platform owner.
       - gateway.manage
+      # Confirming a verifying payment by hand (F-092-z, ADR-0044 decision 6),
+      # on those same gateways; `ManualConfirmService` confines a tenant to its
+      # own users' payments on its own gateway configs.
+      - payment.confirm_manual
   Support:
     permissions:
       - user.read

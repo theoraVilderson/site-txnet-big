@@ -11,8 +11,8 @@ updated: 2026-09-14
 A topic file of `contract.md` (§10): what happens to a top-up the gateway met
 with **silence** — charged, perhaps, but not confirmed. ADR-0044 is the why.
 `contract.deposit.md` owns the callback, the expiry sweep and reconciliation;
-this file owns the retry clock all three now read, and (with F-092-y, F-092-z)
-the flag for a person and the manual confirmation.
+this file owns the retry clock all three now read, the flag for a person
+(F-092-y) and the manual confirmation (F-092-z).
 
 ## The retry clock (built — F-092-x)
 
@@ -44,3 +44,30 @@ columns of `payment_transaction` (migration `20260914000100_payment_verify_retry
 
 **The cadence is the job's**, not the ladder's: `deposit_reconciliation` is
 seeded `*/5`, so a 30 s rung is asked on the next tick. The ladder is a floor.
+
+## A person confirms it (built — F-092-z)
+
+`ManualConfirmController` + `ManualConfirmService` in
+`billing-service/src/app/payment/deposit/`. Behind `payment.confirm_manual`
+(`Admin` by migration `20260914000300_payment_confirm_manual` and `seed.js`;
+SuperAdmin through `*`, ADR-0043). The permission is not the boundary.
+
+| Route | Body | Answers `data` |
+|---|---|---|
+| `GET /api/billing/payments/manual` | — | `[{id, tenantId, userId, source, gatewayId, gatewayName, providerName, amountRequested, amountCredited, chargedAmountMinor, authority, createdAt, verifyAttempts, nextVerifyAt, flaggedAt}]` — `pending` and verifying or flagged, oldest first, at most 200 |
+| `POST /api/billing/payments/manual/:id/inquire` | — | `{paymentId, outcome, gatewayStatus, referenceId}` |
+| `POST /api/billing/payments/manual/:id/confirm` | `{referenceId ≤64, reason 5..500}`, strict | the same shape |
+
+`outcome`: `credited` / `already_settled` / `refused` / `mismatch` (the gateway
+decided), `unsettled` (inquire only), `confirmed_manually` (confirm only).
+
+| Rule | Why |
+|---|---|
+| **Scope like `gateway.manage`:** the platform owner any payment; any other tenant only a payment whose `tenantId` is its own, on a `tenant_gateway_config` it owns, with no `grantId`. Everything else — and a row with no `tenantId` — is **404** `payment_not_found`, the list filtered the same way | ADR-0044 decision 6: a platform gateway's money is in the platform's account, a granted one's in the lender's; a 404 confirms nothing |
+| Eligible only while `pending` and verifying or flagged; otherwise **409** `not_verifying` | a closed payment is not a person's to reopen |
+| **The gateway is asked first, every time** — `DepositReconciliationService.askOnce`, a run's own rules for one payment (credit, log row, retry clock, flag), inside the payment's tenant scope | "if that settles, the ordinary path runs" — a confirmed, refused or mismatched answer decides, and the person does not |
+| Only `in_bank` or silence lets a person credit: `DepositSettlementService.creditVerified` with `admin_manual`, the gateway reference as `gatewayReferenceId`, `confirmedByAdminId`, `manualConfirmReason` — and the `payment_manual_confirm` / `payment` audit row (`tenantId` the payment's) **in the crediting transaction** | invariant 7: the same guarded flip, so a gateway answering a second earlier still credits once; a credit without its trail is what legacy did |
+| `creditVerified` refuses `admin_manual` without the person, and a person on any other source | the enum and the columns cannot disagree |
+| The amount is never a parameter: the credit is the row's `amountCredited` | a person confirms *that* it was paid, not *what* |
+| Per user, per 900s: the list `PAYMENT_MANUAL_READ_RATE_LIMIT` (120), inquire and confirm `PAYMENT_MANUAL_WRITE_RATE_LIMIT` (30) | each write is a call to a bank |
+

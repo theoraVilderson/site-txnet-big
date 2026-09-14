@@ -14,6 +14,8 @@ import { DepositSettlementService } from './deposit-settlement';
 import { DepositInternalController } from './deposit-internal.controller';
 import { DepositQuoteService } from './deposit-quote.service';
 import { DepositStartService } from './deposit-start.service';
+import { ManualConfirmController } from './manual-confirm.controller';
+import { ManualConfirmService } from './manual-confirm.service';
 
 /**
  * The top-up page (F-092-o, F-092-i): the gateway list, the quote, and starting
@@ -34,8 +36,8 @@ import { DepositStartService } from './deposit-start.service';
  */
 @Module({
   imports: [LocaleModule, CouponModule, GatewayModule, WalletModule],
-  controllers: [DepositController, DepositCallbackController, DepositInternalController],
-  providers: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositSettlementService, DepositExpiryService, DepositReconciliationService, FxRateReader],
+  controllers: [DepositController, DepositCallbackController, DepositInternalController, ManualConfirmController],
+  providers: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositSettlementService, DepositExpiryService, DepositReconciliationService, ManualConfirmService, FxRateReader],
   exports: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositExpiryService, DepositReconciliationService],
 })
 export class DepositModule {}

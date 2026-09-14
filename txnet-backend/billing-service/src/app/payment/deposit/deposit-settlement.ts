@@ -71,6 +71,9 @@ export type VerifiedPayment = {
   cardPan: string | null;
 };
 
+/** A person's confirmation (F-092-z): who, why, and from where — the audit row's content. */
+export type ManualConfirmation = { adminId: string; reason: string; ip: string };
+
 @Injectable()
 export class DepositSettlementService {
   private readonly logger = new Logger(DepositSettlementService.name);
@@ -93,7 +96,12 @@ export class DepositSettlementService {
     payment: PaymentRow,
     verified: VerifiedPayment,
     source: ConfirmationSource,
+    /** Required with `admin_manual`, and refused without it (F-092-z). */
+    manual?: ManualConfirmation,
   ): Promise<boolean> {
+    if ((source === ConfirmationSource.admin_manual) !== (manual !== undefined)) {
+      throw new Error('an admin_manual credit needs a ManualConfirmation, and only it may carry one');
+    }
     return tenantTransaction(this.prisma, async (tx) => {
       const { count } = await tx.paymentTransaction.updateMany({
         where: { id: payment.id, status: PaymentStatus.pending },
@@ -102,6 +110,7 @@ export class DepositSettlementService {
           gatewayReferenceId: verified.referenceId,
           cardPanMasked: verified.cardPan,
           confirmationSource: source,
+          ...(manual ? { confirmedByAdminId: manual.adminId, manualConfirmReason: manual.reason } : {}),
           // A payment that has landed has no clock left to run out (F-092-k),
           // and nothing left to verify (F-092-x).
           expiresAt: null,
@@ -121,7 +130,40 @@ export class DepositSettlementService {
       await this.reservations.confirm(tx, payment.id);
       await this.accrueSettlement(tx, payment);
       await this.publishConfirmed(tx, payment, verified.referenceId, source);
+      if (manual) await this.auditManual(tx, payment, verified.referenceId, manual);
       return true;
+    });
+  }
+
+  /**
+   * The trail of a person's credit, in the transaction that made it (F-092-z).
+   * Attributed to the payment's tenant — the scope bound here, which the
+   * `admin_audit_log` policy requires — whoever the person works for.
+   */
+  private async auditManual(
+    tx: Prisma.TransactionClient,
+    payment: PaymentRow,
+    referenceId: string,
+    manual: ManualConfirmation,
+  ): Promise<void> {
+    const tenant = TenantContext.current('manual confirmation audit');
+    await tx.adminAuditLog.create({
+      data: {
+        tenantId: tenant.id,
+        adminId: manual.adminId,
+        action: 'payment_manual_confirm',
+        targetEntityType: 'payment',
+        targetEntityId: payment.id,
+        oldValue: { status: PaymentStatus.pending, verifyAttempts: payment.verifyAttempts },
+        newValue: {
+          status: PaymentStatus.success,
+          gatewayReferenceId: referenceId,
+          amountCredited: payment.amountCredited.toFixed(2),
+          reason: manual.reason,
+        },
+        adminIpAddress: manual.ip,
+      },
+      select: { id: true },
     });
   }
 
