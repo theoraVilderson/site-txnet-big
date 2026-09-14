@@ -20,6 +20,7 @@ import { GatewayMerchant } from '../gateway/gateway-merchant';
 import { GatewayFailure, PaymentInquiryStatus } from '../gateway/payment-provider';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { PAYMENT_SELECT, PaymentRow, DepositSettlementService, gatewayRefOf } from './deposit-settlement';
+import { clearVerifyRetry, scheduleVerifyRetry } from './verify-retry';
 
 /**
  * Going and asking (F-092-l).
@@ -186,7 +187,10 @@ export class DepositReconciliationService {
       // `in_bank` is not finished, `failed` and `reversed` are finished and owe
       // nothing. All three are recorded and none of them are acted on: closing
       // a row is the clock's job, and reversing one is nobody's.
-      await this.record(payment, status, ReconciliationAction.no_action_needed);
+      // `in_bank` is not a settled answer, so a pending row keeps verifying
+      // (F-092-x); `failed` and `reversed` are, so its retry clock stops.
+      await this.record(payment, status, ReconciliationAction.no_action_needed, undefined, status !== 'in_bank');
+      if (status === 'in_bank') await this.scheduleRetry(payment);
       return 'unchanged';
     }
 
@@ -219,7 +223,7 @@ export class DepositReconciliationService {
         // would be inventing a price, and closing the row would hide a payment
         // somebody's money is sitting behind — so it is written down for a
         // person, and nothing else happens.
-        await this.record(payment, status, ReconciliationAction.flagged_mismatch, e.message);
+        await this.record(payment, status, ReconciliationAction.flagged_mismatch, e.message, true);
         this.logger.warn(`payment ${payment.id} flagged: ${e.message}`);
         return 'flagged';
       }
@@ -254,9 +258,11 @@ export class DepositReconciliationService {
     cause: unknown,
   ): Promise<'unchanged' | 'errors'> {
     if (cause instanceof GatewayFailure && cause.reason === 'authority_invalid') {
-      await this.record(payment, 'authority_invalid', ReconciliationAction.no_action_needed, cause.message);
+      await this.record(payment, 'authority_invalid', ReconciliationAction.no_action_needed, cause.message, true);
       return 'unchanged';
     }
+    // Silence schedules the next ask, exactly as at the callback (F-092-x).
+    await this.scheduleRetry(payment);
     const what = cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause);
     // A credential this job cannot read is the same shape as a gateway that did
     // not answer: unknown, and worth asking again rather than recording.
@@ -266,6 +272,15 @@ export class DepositReconciliationService {
       this.logger.warn(`payment ${payment.id} not answered for: ${what}`);
     }
     return 'errors';
+  }
+
+  /**
+   * The next rung of the retry ladder (F-092-x). Only a `pending` row climbs —
+   * the guard sees to that — so asking about an `expired` one schedules nothing.
+   */
+  private async scheduleRetry(payment: PaymentRow): Promise<void> {
+    if (payment.status !== PaymentStatus.pending) return;
+    await tenantTransaction(this.prisma, (tx) => scheduleVerifyRetry(tx, payment, new Date()));
   }
 
   /**
@@ -282,10 +297,12 @@ export class DepositReconciliationService {
     reported: string,
     action: ReconciliationAction,
     notes?: string,
+    /** The answer is settled: a verifying row stops verifying, in the same transaction. */
+    settled = false,
   ): Promise<void> {
     const tenant = TenantContext.current('reconciliation log');
-    await tenantTransaction(this.prisma, (tx) =>
-      (tx as Prisma.TransactionClient).paymentReconciliationLog.create({
+    await tenantTransaction(this.prisma, async (tx) => {
+      await (tx as Prisma.TransactionClient).paymentReconciliationLog.create({
         data: {
           paymentTransactionId: payment.id,
           gatewayReportedStatus: reported,
@@ -293,8 +310,9 @@ export class DepositReconciliationService {
           notes: notes ?? null,
         },
         select: { id: true },
-      }),
-    );
+      });
+      if (settled && payment.nextVerifyAt) await clearVerifyRetry(tx, payment.id);
+    });
     this.logger.debug(`payment ${payment.id} of tenant ${tenant.id}: ${reported} -> ${action}`);
   }
 }

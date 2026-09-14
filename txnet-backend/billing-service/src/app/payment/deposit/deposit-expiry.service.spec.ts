@@ -176,4 +176,13 @@ describe('DepositExpiryService', () => {
     expect(calls.scans[0]['take']).toBe(50);
     expect(calls.scans[0]['where']).toMatchObject({ status: PaymentStatus.pending });
   });
+
+  it('never expires a verifying payment — its holds outlive the silence (F-092-x)', async () => {
+    const { service, calls } = build({ due: [{ id: PAYMENT_1, tenantId: TENANT_A }] });
+
+    await service.expirePending();
+
+    expect(calls.scans[0]['where']).toMatchObject({ nextVerifyAt: null });
+    expect(calls.updated[0].where).toMatchObject({ nextVerifyAt: null });
+  });
 });

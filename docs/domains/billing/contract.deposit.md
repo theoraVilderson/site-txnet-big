@@ -199,6 +199,8 @@ top-up holds somebody else's coupon capacity for ever.
 | One batch per run, `PAYMENT_EXPIRY_BATCH_SIZE` (default 200), oldest first; one `now` for the scan and every guard under it | a backlog drains in bounded transactions and the next tick takes the next batch. A shared `now` stops a row that was due at read time being spared by the clock moving |
 | A due row with **no `tenantId`** is counted and logged `error`, not swept | the app pool cannot write it — RLS scopes by that column. `withTenant` makes it impossible on create, so one appearing is a schema fault, and a quiet zero would hide it |
 
+A **verifying** row (`nextVerifyAt` set) is skipped — `contract.verify.md`.
+
 **Not covered:** a payment the gateway may still have taken money for. This job
 only reads a clock — it asks no gateway anything, and an `expired` row is not a
 statement that nothing was paid. Inquiring one is F-092-l's, and invariant 9

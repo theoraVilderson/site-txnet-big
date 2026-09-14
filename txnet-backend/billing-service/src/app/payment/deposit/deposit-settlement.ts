@@ -55,6 +55,10 @@ export const PAYMENT_SELECT = {
   // both charge the same gateway the payment was started at, so both read the
   // credential along the same grant (ADR-0041 §3).
   grantId: true,
+  // The retry clock (F-092-x): the rung a silence climbs from, and whether the
+  // row is verifying at all.
+  verifyAttempts: true,
+  nextVerifyAt: true,
   gateway: { select: { providerName: true } },
   tenantGatewayConfig: { select: { providerName: true } },
 } satisfies Prisma.PaymentTransactionSelect;
@@ -98,8 +102,10 @@ export class DepositSettlementService {
           gatewayReferenceId: verified.referenceId,
           cardPanMasked: verified.cardPan,
           confirmationSource: source,
-          // A payment that has landed has no clock left to run out (F-092-k).
+          // A payment that has landed has no clock left to run out (F-092-k),
+          // and nothing left to verify (F-092-x).
           expiresAt: null,
+          nextVerifyAt: null,
         },
       });
       if (count !== 1) return false;

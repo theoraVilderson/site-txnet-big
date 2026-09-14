@@ -1,12 +1,12 @@
 ---
 id: adr-0044
-status: proposed
+status: accepted
 updated: 2026-09-14
 ---
 
 # ADR 0044 — An unverified payment keeps its own retry clock, and a person may confirm it
 
-- **Status:** proposed (rows F-092-x … F-093-o; accepted when F-092-x lands)
+- **Status:** accepted 2026-09-14, when F-092-x landed (rows F-092-x … F-093-o)
 - **Date:** 2026-09-14
 - **Affects units:** billing, automation, panel-web, identity (one permission)
 

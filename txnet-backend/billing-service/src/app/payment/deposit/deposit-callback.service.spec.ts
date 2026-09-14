@@ -45,6 +45,8 @@ function paymentRow(overrides: Record<string, unknown> = {}) {
     amountCredited: d('19.80'),
     chargedAmountMinor: BigInt(19_800_000),
     gatewayReferenceId: null,
+    verifyAttempts: 0,
+    nextVerifyAt: null,
     gateway: null,
     tenantGatewayConfig: { providerName: 'zarinpal' },
     ...overrides,
@@ -230,7 +232,14 @@ describe('DepositCallbackService.settle', () => {
     expect(calls.credited).toEqual([]);
   });
 
-  it('leaves the row pending when the gateway could not answer — that outcome is F-092-l’s', async () => {
+  /** Silence touches only the retry clock (F-092-x): never the status, never the holds. */
+  const expectOnlyVerifying = (calls: Calls) => {
+    expect(calls.updated).toHaveLength(1);
+    expect(calls.updated[0].where).toMatchObject({ id: PAYMENT, status: 'pending', verifyAttempts: 0 });
+    expect(Object.keys(calls.updated[0].data).sort()).toEqual(['nextVerifyAt', 'verifyAttempts']);
+  };
+
+  it('leaves the row pending, and verifying, when the gateway could not answer', async () => {
     const { service, calls } = build({
       verifyFails: new GatewayFailure('zarinpal', 'unavailable', null, 'timed out'),
     });
@@ -238,7 +247,7 @@ describe('DepositCallbackService.settle', () => {
     const outcome = await settle(service);
 
     expect(outcome).toEqual({ kind: 'failed', code: 'GATEWAY_CONNECTION_ERROR' });
-    expect(calls.updated).toEqual([]);
+    expectOnlyVerifying(calls);
     expect(calls.settled).toEqual([]);
     expect(calls.credited).toEqual([]);
   });
@@ -251,7 +260,7 @@ describe('DepositCallbackService.settle', () => {
     const outcome = await settle(service);
 
     expect(outcome).toEqual({ kind: 'failed', code: 'GATEWAY_CONNECTION_ERROR' });
-    expect(calls.updated).toEqual([]);
+    expectOnlyVerifying(calls);
     expect(calls.credited).toEqual([]);
   });
 
@@ -266,7 +275,7 @@ describe('DepositCallbackService.settle', () => {
     const outcome = await settle(service);
 
     expect(outcome).toEqual({ kind: 'failed', code: 'GATEWAY_CONNECTION_ERROR' });
-    expect(calls.updated).toEqual([]);
+    expectOnlyVerifying(calls);
     expect(calls.credited).toEqual([]);
   });
 

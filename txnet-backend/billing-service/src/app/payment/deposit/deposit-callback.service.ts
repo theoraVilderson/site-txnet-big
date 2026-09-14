@@ -8,6 +8,7 @@ import { GatewayMerchant } from '../gateway/gateway-merchant';
 import { GatewayFailure, GatewayFailureReason } from '../gateway/payment-provider';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { PAYMENT_SELECT, PaymentRow, DepositSettlementService, gatewayRefOf } from './deposit-settlement';
+import { scheduleVerifyRetry } from './verify-retry';
 
 /**
  * Settling a top-up (F-092-j) — the half of a payment the bank starts.
@@ -227,8 +228,15 @@ export class DepositCallbackService {
       UNSETTLED.includes(cause.reason);
 
     if (unsettled) {
+      // Still `pending`, but now verifying: the retry clock says when to ask
+      // again (F-092-x, ADR-0044 decision 2), rather than waiting for the
+      // expiry clock and the reconciliation window.
+      const retryAt = await tenantTransaction(this.prisma, (tx) =>
+        scheduleVerifyRetry(tx, payment, new Date()),
+      );
       this.logger.warn(
-        `payment ${payment.id} left pending: ${cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause)}`,
+        `payment ${payment.id} left pending, verifying again at ${retryAt?.toISOString() ?? '(already moved)'}: ` +
+          `${cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause)}`,
       );
       return { kind: 'failed', code: 'GATEWAY_CONNECTION_ERROR' };
     }
@@ -249,7 +257,7 @@ export class DepositCallbackService {
     await tenantTransaction(this.prisma, async (tx) => {
       const { count } = await tx.paymentTransaction.updateMany({
         where: { id: payment.id, status: PaymentStatus.pending },
-        data: { status: PaymentStatus.failed, failureCode, expiresAt: null },
+        data: { status: PaymentStatus.failed, failureCode, expiresAt: null, nextVerifyAt: null },
       });
       if (count !== 1) return;
       await this.reservations.release(tx, payment.id, RedemptionStatus.cancelled);

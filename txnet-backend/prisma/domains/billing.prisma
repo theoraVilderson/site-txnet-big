@@ -387,6 +387,11 @@ model PaymentTransaction {
   createdAt             DateTime            @default(now())
   expiresAt             DateTime? // معمولاً now()+15min
   returnOrigin           String? // the panel origin the payer started from; the callback redirects there
+  /// A verifying payment (F-092-x, ADR-0044): the row stays `pending`, and a
+  /// non-null `nextVerifyAt` means the gateway met a verify or inquire with
+  /// silence and must be asked again then. `verifyAttempts` is the ladder rung.
+  verifyAttempts         Int                 @default(0)
+  nextVerifyAt           DateTime?
 
   // Restrict, not the optional-relation default SetNull: a payment is a
   // permanent record, and nulling its gateway would also break the CHECK.
@@ -408,6 +413,7 @@ model PaymentTransaction {
   @@unique([tenantGatewayConfigId, gatewayTrackingCode])
   @@index([tenantId])
   @@index([status, expiresAt])
+  @@index([status, nextVerifyAt])
   @@map("payment_transaction")
   @@schema("billing")
 }

@@ -45,6 +45,8 @@ function paymentRow(overrides: Record<string, unknown> = {}) {
     chargedAmountMinor: BigInt(19_800_000),
     gatewayTrackingCode: AUTHORITY,
     gatewayReferenceId: null,
+    verifyAttempts: 0,
+    nextVerifyAt: null,
     gateway: null,
     tenantGatewayConfig: { providerName: 'zarinpal' },
     ...overrides,
@@ -239,6 +241,34 @@ describe('DepositReconciliationService', () => {
 
     expect(calls.logs).toEqual([]);
     expect(result).toMatchObject({ scanned: 1, confirmed: 0, errors: 1 });
+  });
+
+  it('schedules the next ask on silence about a pending row, and touches nothing else (F-092-x)', async () => {
+    const { service, calls } = build({
+      row: paymentRow({ status: PaymentStatus.pending, verifyAttempts: 1 }),
+      inquiryFails: new GatewayFailure('zarinpal', 'unavailable', null, 'timed out'),
+    });
+
+    await service.reconcile();
+
+    expect(calls.updated).toHaveLength(1);
+    expect(calls.updated[0]).toMatchObject({
+      where: { id: PAYMENT, status: PaymentStatus.pending, verifyAttempts: 1 },
+      data: { verifyAttempts: 2 },
+    });
+  });
+
+  it('stops a verifying row verifying when the gateway settles the question (F-092-x)', async () => {
+    const { service, calls } = build({
+      row: paymentRow({ status: PaymentStatus.pending, nextVerifyAt: new Date() }),
+      inquiry: 'failed',
+    });
+
+    await service.reconcile();
+
+    expect(calls.updated).toEqual([
+      { where: { id: PAYMENT, nextVerifyAt: { not: null } }, data: { nextVerifyAt: null } },
+    ]);
   });
 
   it('writes no log row when the merchant id cannot be read', async () => {

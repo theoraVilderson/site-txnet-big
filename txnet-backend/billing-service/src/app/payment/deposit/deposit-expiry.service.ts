@@ -78,7 +78,10 @@ export class DepositExpiryService {
     const take = this.config.get('PAYMENT_EXPIRY_BATCH_SIZE', { infer: true });
 
     const due = await this.crossTenant.paymentTransaction.findMany({
-      where: { status: PaymentStatus.pending, expiresAt: { lte: now } },
+      // A verifying row is skipped (F-092-x, ADR-0044 decision 4): the gateway
+      // may have the money, so its holds stay until a settled answer or a
+      // person closes it.
+      where: { status: PaymentStatus.pending, expiresAt: { lte: now }, nextVerifyAt: null },
       select: { id: true, tenantId: true },
       // Oldest first: a backlog larger than one batch drains in the order it
       // accumulated, and no row can be starved by newer ones arriving.
@@ -136,7 +139,7 @@ export class DepositExpiryService {
           // flip to `success` and `close()`'s to `failed`. Those are final; an
           // expired payment is still inquired at the gateway by F-092-l, and
           // when we stopped waiting is part of what a mismatch is judged on.
-          where: { id, status: PaymentStatus.pending, expiresAt: { lte: now } },
+          where: { id, status: PaymentStatus.pending, expiresAt: { lte: now }, nextVerifyAt: null },
           data: { status: PaymentStatus.expired },
         });
         if (count !== 1) continue;
