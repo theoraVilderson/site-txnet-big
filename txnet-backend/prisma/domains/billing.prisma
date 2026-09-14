@@ -392,6 +392,10 @@ model PaymentTransaction {
   /// silence and must be asked again then. `verifyAttempts` is the ladder rung.
   verifyAttempts         Int                 @default(0)
   nextVerifyAt           DateTime?
+  /// Set once when a payment is still verifying `VERIFY_FLAG_AFTER_SEC` (24 h)
+  /// after it was made: a person should look (F-092-y, ADR-0044 decision 5).
+  /// Retries go on; it is history, never cleared.
+  verifyFlaggedAt        DateTime?
 
   // Restrict, not the optional-relation default SetNull: a payment is a
   // permanent record, and nulling its gateway would also break the CHECK.

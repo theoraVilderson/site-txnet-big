@@ -67,7 +67,7 @@ Why each of those is the answer — and what a Redis that cannot be reached does
 | `worker_heartbeat` | nothing, and records that it did — the proof the tick path is alive | — |
 | `vault_credential_retention` | destroys superseded credential versions past their rotation grace window (ADR-0026 rule 4) | `AUTH_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 | `deposit_pending_expiry` | expires `pending` top-ups past their `expiresAt` and gives the coupon holds they took back (F-092-k, `domains/billing/contract.deposit.md`) | `BILLING_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
-| `deposit_reconciliation` | asks the gateway about pending and expired top-ups: credits what it confirms, flags an amount it reports differently, never closes or reverses one (F-092-l) | the same two |
+| `deposit_reconciliation` | asks the gateway about pending and expired top-ups, and first about verifying ones whose retry is due: credits what it confirms, flags a differing amount or a payment still verifying after a day, never closes or reverses one (F-092-l, F-092-y; `domains/billing/contract.verify.md`) | the same two |
 
 The retention job is the first job that does real work, and what it settled is
 how a job reaches code it cannot import.

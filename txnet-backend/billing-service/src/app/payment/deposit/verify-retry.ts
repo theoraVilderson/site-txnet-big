@@ -42,6 +42,30 @@ export async function scheduleVerifyRetry(
 }
 
 /**
+ * Still verifying a day after it was made: flag it for a person (F-092-y,
+ * ADR-0044 decision 5). Set once — the `verifyFlaggedAt: null` guard — and
+ * never on a row that has stopped verifying. Answers whether this call set it.
+ */
+export async function flagLongVerifying(
+  tx: Prisma.TransactionClient,
+  paymentId: string,
+  createdBefore: Date,
+  now: Date,
+): Promise<boolean> {
+  const { count } = await tx.paymentTransaction.updateMany({
+    where: {
+      id: paymentId,
+      status: PaymentStatus.pending,
+      nextVerifyAt: { not: null },
+      verifyFlaggedAt: null,
+      createdAt: { lte: createdBefore },
+    },
+    data: { verifyFlaggedAt: now },
+  });
+  return count === 1;
+}
+
+/**
  * A settled answer: the payment is no longer verifying. `verifyAttempts` stays
  * — how many times it took is part of the record a person reads later.
  */

@@ -197,6 +197,15 @@ export const envSchema = z.object({
     (v) => (v === '' ? undefined : v),
     z.coerce.number().int().positive().default(7 * 24 * 3600),
   ),
+  /**
+   * How long a payment may stay verifying — measured from when it was made —
+   * before reconciliation flags it for a person (F-092-y, ADR-0044 decision 5).
+   * The retries go on after it, hourly, to the lookback.
+   */
+  VERIFY_FLAG_AFTER_SEC: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().positive().default(24 * 3600),
+  ),
 
   /**
    * One callback origin for every tenant, instead of the tenant's own panel

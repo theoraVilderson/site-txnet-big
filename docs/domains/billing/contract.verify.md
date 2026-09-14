@@ -29,7 +29,18 @@ columns of `payment_transaction` (migration `20260914000100_payment_verify_retry
 | **The expiry sweep skips a verifying row**, in its scan and in its guard (`nextVerifyAt: null`) | ADR-0044 decision 4: the gateway may have the money, so the coupon holds stay until a settled answer or a person closes it |
 | Scheduling on an `expired` row writes nothing — the guard is `pending` | an expired row is reconciliation's to ask about on its own window, as before |
 
-**Not covered:** reconciliation does not yet *take* a row because
-`nextVerifyAt` is due — it still waits for `expiresAt` and the recheck window,
-so the ladder is recorded but only the callback's first silence sets it in
-motion. That is F-092-y, which also flags a row after 24 h of retries.
+## Taking a due retry, and the flag for a person (built — F-092-y)
+
+`DepositReconciliationService.reconcile`, over one more column —
+`verifyFlaggedAt` (migration `20260914000200_payment_verify_flag`).
+
+| Rule | Why |
+|---|---|
+| **Two scans, verifying first.** A `pending` row with `nextVerifyAt <= now`, an authority and inside the lookback is taken **without** `expiresAt` or the recheck window; the ordinary scan (`expired`, or `pending` past its clock with `nextVerifyAt: null`) gets the batch room left | ADR-0044 decision 3. The ladder already spaces the asks; a backlog of old rows must not starve a payer waiting out a one-minute outage |
+| A due verifying row is credited, flagged, cleared or re-scheduled by exactly the F-092-l / F-092-x rules — nothing about the answer is new | one guarded settlement path (invariant 7) |
+| **The flag:** where a retry is scheduled, the same transaction sets `verifyFlaggedAt = now` on a row created more than `VERIFY_FLAG_AFTER_SEC` ago (default 86400), guarded `pending`, still verifying, not yet flagged | ADR-0044 decision 5. Measured from `createdAt`: the first silence is at most the 15-min pending clock later, and no third column is needed |
+| The flag is **history, never cleared**, and stops nothing: retries go on hourly until `RECONCILIATION_LOOKBACK_SEC`, after which the row leaves the scan, still verifying, for a person (F-092-z) | its holds stay held (ADR-0044 consequences); a person closing it is the release |
+| The answer gains a sixth count, `flaggedForPerson`; `DepositReconciliationJob` logs it as a warning and keeps its five required counts | an older billing still answers a run the job understands |
+
+**The cadence is the job's**, not the ladder's: `deposit_reconciliation` is
+seeded `*/5`, so a 30 s rung is asked on the next tick. The ladder is a floor.

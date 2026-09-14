@@ -64,6 +64,10 @@ type Calls = {
 
 type Setup = {
   due?: Array<{ id: string; tenantId: string | null }>;
+  /** What the verifying scan finds — rows whose `nextVerifyAt` has come (F-092-y). */
+  verifying?: Array<{ id: string; tenantId: string | null }>;
+  /** How many rows the 24-hour flag write matches. */
+  flagMatches?: number;
   row?: ReturnType<typeof paymentRow> | null;
   /** What `inquire` answers. */
   inquiry?: 'verified' | 'paid' | 'in_bank' | 'failed' | 'reversed';
@@ -80,6 +84,8 @@ type Setup = {
 function build(setup: Setup = {}) {
   const {
     due = [{ id: PAYMENT, tenantId: TENANT }],
+    verifying = [],
+    flagMatches = 0,
     row = paymentRow(),
     inquiry = 'paid',
     inquiryFails,
@@ -97,6 +103,8 @@ function build(setup: Setup = {}) {
       findFirst: async () => row,
       updateMany: async (args: Record<string, unknown>) => {
         calls.updated.push(args);
+        const data = args['data'] as Record<string, unknown>;
+        if ('verifyFlaggedAt' in data) return { count: flagMatches };
         return { count: lostTheFlip ? 0 : 1 };
       },
     },
@@ -113,7 +121,8 @@ function build(setup: Setup = {}) {
     paymentTransaction: {
       findMany: async (args: Record<string, unknown>) => {
         calls.scans.push(args);
-        return due;
+        const where = args['where'] as Record<string, unknown>;
+        return where['nextVerifyAt'] ? verifying : due;
       },
     },
   };
@@ -146,7 +155,10 @@ function build(setup: Setup = {}) {
       return !lostTheFlip;
     },
   };
-  const config = { get: (key: string) => (key === 'RECONCILIATION_BATCH_SIZE' ? 50 : 3600) };
+  const config = {
+    get: (key: string) =>
+      ({ RECONCILIATION_BATCH_SIZE: 50, VERIFY_FLAG_AFTER_SEC: 86_400 })[key] ?? 3600,
+  };
 
   const service = new DepositReconciliationService(
     prisma as never,
@@ -251,11 +263,13 @@ describe('DepositReconciliationService', () => {
 
     await service.reconcile();
 
-    expect(calls.updated).toHaveLength(1);
     expect(calls.updated[0]).toMatchObject({
       where: { id: PAYMENT, status: PaymentStatus.pending, verifyAttempts: 1 },
       data: { verifyAttempts: 2 },
     });
+    // The only other write is F-092-y's guarded flag attempt; nothing touches status.
+    expect(calls.updated.every((u) => !('status' in (u['data'] as object)))).toBe(true);
+    expect(calls.updated).toHaveLength(2);
   });
 
   it('stops a verifying row verifying when the gateway settles the question (F-092-x)', async () => {
@@ -312,10 +326,58 @@ describe('DepositReconciliationService', () => {
 
     await service.reconcile();
 
-    const where = calls.scans[0]['where'] as Record<string, unknown>;
+    const where = calls.scans[1]['where'] as Record<string, unknown>;
     expect(where['gatewayTrackingCode']).toEqual({ not: null });
     expect(JSON.stringify(where)).toContain(PaymentStatus.expired);
-    expect(calls.scans[0]['take']).toBe(50);
+    // A verifying row belongs to the first scan, never to this one.
+    expect(JSON.stringify(where)).toContain('"nextVerifyAt":null');
+    expect(calls.scans[1]['take']).toBe(50);
+  });
+
+  it('takes a verifying row when its retry is due, without waiting for its clock or the recheck window (F-092-y)', async () => {
+    const { service, calls } = build({ due: [], verifying: [{ id: PAYMENT, tenantId: TENANT }] });
+
+    const result = await service.reconcile();
+
+    const where = calls.scans[0]['where'] as Record<string, unknown>;
+    expect(where).toMatchObject({ status: PaymentStatus.pending, gatewayTrackingCode: { not: null } });
+    expect(where['nextVerifyAt']).toMatchObject({ lte: expect.any(Date) });
+    expect(where).not.toHaveProperty('expiresAt');
+    expect(where).not.toHaveProperty('reconciliationLogs');
+    expect(where).toHaveProperty('createdAt');
+    expect(calls.inquired).toHaveLength(1);
+    expect(result).toMatchObject({ scanned: 1, confirmed: 1 });
+  });
+
+  it('gives the ordinary scan only the room the verifying rows left in the batch', async () => {
+    const verifying = Array.from({ length: 50 }, (_, i) => ({ id: `v-${i}`, tenantId: TENANT }));
+    const { service, calls } = build({ verifying, inquiry: 'in_bank' });
+
+    await service.reconcile();
+
+    expect(calls.scans).toHaveLength(1);
+  });
+
+  it('flags a payment still verifying 24 hours after it was made, and keeps asking (F-092-y)', async () => {
+    const { service, calls } = build({
+      due: [],
+      verifying: [{ id: PAYMENT, tenantId: TENANT }],
+      row: paymentRow({ status: PaymentStatus.pending, verifyAttempts: 9, nextVerifyAt: new Date() }),
+      inquiryFails: new GatewayFailure('zarinpal', 'unavailable', null, 'timed out'),
+      flagMatches: 1,
+    });
+
+    const result = await service.reconcile();
+
+    const flag = calls.updated.find((u) => 'verifyFlaggedAt' in (u['data'] as object));
+    expect(flag).toMatchObject({
+      where: { id: PAYMENT, status: PaymentStatus.pending, verifyFlaggedAt: null, nextVerifyAt: { not: null } },
+    });
+    const cutoff = ((flag?.['where'] as Record<string, unknown>)['createdAt'] as { lte: Date }).lte;
+    expect(Date.now() - cutoff.getTime()).toBeGreaterThanOrEqual(86_400_000 - 1000);
+    // The retry is still scheduled, hourly now.
+    expect(calls.updated.some((u) => (u['data'] as Record<string, unknown>)['verifyAttempts'] === 10)).toBe(true);
+    expect(result).toMatchObject({ flaggedForPerson: 1 });
   });
 
   it('inquires inside the payment owner tenant scope', async () => {

@@ -11,7 +11,10 @@ const RECONCILE_PATH = '/api/internal/billing/deposit/reconcile';
 /** The counts billing answers with. All five, or the answer is not one this job understands. */
 const COUNTS = ['scanned', 'confirmed', 'flagged', 'unchanged', 'errors'] as const;
 
-type ReconciliationCounts = Record<(typeof COUNTS)[number], number>;
+type ReconciliationCounts = Record<(typeof COUNTS)[number], number> & {
+  /** Still verifying a day after it was made, flagged this run (F-092-y). Absent from an older billing. */
+  flaggedForPerson?: number;
+};
 
 /**
  * Going and asking the gateway about payments nobody came back for (F-092-l).
@@ -41,7 +44,7 @@ export class DepositReconciliationJob implements Job {
   readonly key = 'deposit_reconciliation';
   readonly name = 'Top-up reconciliation';
   readonly description =
-    'Asks the gateway about pending and expired top-ups: credits what it confirms, flags an amount it reports differently (F-092-l).';
+    'Asks the gateway about pending and expired top-ups and about verifying ones when their retry is due: credits what it confirms, flags an amount it reports differently, and a payment still verifying after a day (F-092-l, F-092-y).';
   readonly category = BotWorkerCategory.other;
 
   private readonly logger = new Logger(DepositReconciliationJob.name);
@@ -71,6 +74,11 @@ export class DepositReconciliationJob implements Job {
     // way this job has to say so is the run row an operator reads.
     if (counts.flagged > 0) {
       this.logger.warn(`${counts.flagged} payment(s) flagged_mismatch — billing.payment_reconciliation_log has them`);
+    }
+    if (counts.flaggedForPerson) {
+      this.logger.warn(
+        `${counts.flaggedForPerson} payment(s) still verifying after a day — payment_transaction.verifyFlaggedAt has them`,
+      );
     }
     return {
       itemsProcessed: counts.scanned,
@@ -105,7 +113,11 @@ export class DepositReconciliationJob implements Job {
       if (!Object.values(counts).every((v) => typeof v === 'number')) {
         throw new Error(`billing answered ${RECONCILE_PATH} without its five counts`);
       }
-      return counts as ReconciliationCounts;
+      const flaggedForPerson = body?.['flaggedForPerson'];
+      return {
+        ...(counts as ReconciliationCounts),
+        ...(typeof flaggedForPerson === 'number' ? { flaggedForPerson } : {}),
+      };
     } finally {
       clearTimeout(timer);
     }

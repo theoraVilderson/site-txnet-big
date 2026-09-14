@@ -20,7 +20,7 @@ import { GatewayMerchant } from '../gateway/gateway-merchant';
 import { GatewayFailure, PaymentInquiryStatus } from '../gateway/payment-provider';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { PAYMENT_SELECT, PaymentRow, DepositSettlementService, gatewayRefOf } from './deposit-settlement';
-import { clearVerifyRetry, scheduleVerifyRetry } from './verify-retry';
+import { clearVerifyRetry, flagLongVerifying, scheduleVerifyRetry } from './verify-retry';
 
 /**
  * Going and asking (F-092-l).
@@ -71,7 +71,14 @@ export type DepositReconciliationResult = {
   unchanged: number;
   /** Payments the gateway would not answer about. No log row; the next run asks again. */
   errors: number;
+  /** Payments this run found still verifying a day after they were made, and flagged for a person (F-092-y). */
+  flaggedForPerson: number;
 };
+
+type Outcome = 'confirmed' | 'flagged' | 'unchanged' | 'errors';
+
+/** Called wherever an answer was not settled: schedule the next ask, flag if it is a day old. */
+type RetryHook = (payment: PaymentRow) => Promise<void>;
 
 /** Inquiry answers that mean the money is at the gateway and a `verify` should be attempted. */
 const PAYABLE: readonly PaymentInquiryStatus[] = ['verified', 'paid'];
@@ -94,33 +101,57 @@ export class DepositReconciliationService {
     const take = this.config.get('RECONCILIATION_BATCH_SIZE', { infer: true });
     const recheckSec = this.config.get('RECONCILIATION_RECHECK_SEC', { infer: true });
     const lookbackSec = this.config.get('RECONCILIATION_LOOKBACK_SEC', { infer: true });
+    const flagAfterSec = this.config.get('VERIFY_FLAG_AFTER_SEC', { infer: true });
+    // A window, not for ever: a gateway's own records are not unbounded
+    // either, and a payment nobody has claimed in a month is an operator's
+    // question rather than a job's. It bounds the retries too (ADR-0044 decision 5).
+    const lookback = { gte: new Date(now.getTime() - lookbackSec * 1000) };
 
-    const due = await this.crossTenant.paymentTransaction.findMany({
+    // 1. Verifying rows whose retry has come (F-092-y, ADR-0044 decision 3).
+    //    Their own clock is the whole of their due-ness: neither `expiresAt` nor
+    //    the recheck window applies, since the ladder already spaces the asks.
+    //    Scanned first, so a backlog of ordinary rows cannot starve a payer
+    //    whose money is waiting on a one-minute outage.
+    const verifying = await this.crossTenant.paymentTransaction.findMany({
       where: {
-        // `expired` is the ordinary case — F-092-k gets there first — and a
-        // `pending` row past its clock is the one F-092-j left open on silence
-        // and the sweep has not reached yet.
-        OR: [
-          { status: PaymentStatus.expired },
-          { status: PaymentStatus.pending, expiresAt: { lte: now } },
-        ],
-        // No authority means the gateway was never asked to mint one, so there
-        // is nothing on its side to ask about.
+        status: PaymentStatus.pending,
+        nextVerifyAt: { lte: now },
         gatewayTrackingCode: { not: null },
-        // A window, not for ever: a gateway's own records are not unbounded
-        // either, and a payment nobody has claimed in a month is an operator's
-        // question rather than a job's.
-        createdAt: { gte: new Date(now.getTime() - lookbackSec * 1000) },
-        // Asked recently enough is asked. Without this the oldest unresolvable
-        // payment would fill every batch for ever.
-        reconciliationLogs: {
-          none: { checkedAt: { gte: new Date(now.getTime() - recheckSec * 1000) } },
-        },
+        createdAt: lookback,
       },
       select: { id: true, tenantId: true },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { nextVerifyAt: 'asc' },
       take,
     });
+
+    // 2. The ordinary rows, in whatever room is left.
+    const ordinary =
+      verifying.length >= take
+        ? []
+        : await this.crossTenant.paymentTransaction.findMany({
+            where: {
+              // `expired` is the ordinary case — F-092-k gets there first — and a
+              // `pending` row past its clock is one the sweep has not reached yet.
+              // A verifying row is the first scan's, never this one's.
+              OR: [
+                { status: PaymentStatus.expired },
+                { status: PaymentStatus.pending, expiresAt: { lte: now }, nextVerifyAt: null },
+              ],
+              // No authority means the gateway was never asked to mint one, so there
+              // is nothing on its side to ask about.
+              gatewayTrackingCode: { not: null },
+              createdAt: lookback,
+              // Asked recently enough is asked. Without this the oldest unresolvable
+              // payment would fill every batch for ever.
+              reconciliationLogs: {
+                none: { checkedAt: { gte: new Date(now.getTime() - recheckSec * 1000) } },
+              },
+            },
+            select: { id: true, tenantId: true },
+            orderBy: { createdAt: 'asc' },
+            take: take - verifying.length,
+          });
+    const due = [...verifying, ...ordinary];
 
     const result: DepositReconciliationResult = {
       scanned: due.length,
@@ -128,6 +159,11 @@ export class DepositReconciliationService {
       flagged: 0,
       unchanged: 0,
       errors: 0,
+      flaggedForPerson: 0,
+    };
+    const flagBefore = new Date(now.getTime() - flagAfterSec * 1000);
+    const onRetry = async (payment: PaymentRow) => {
+      if (await this.scheduleRetry(payment, now, flagBefore)) result.flaggedForPerson++;
     };
 
     for (const row of due) {
@@ -138,10 +174,13 @@ export class DepositReconciliationService {
         result.errors++;
         continue;
       }
-      const outcome = await runWithTenant({ id: row.tenantId }, () => this.reconcileOne(row.id));
+      const outcome = await runWithTenant({ id: row.tenantId }, () => this.reconcileOne(row.id, onRetry));
       result[outcome]++;
     }
 
+    if (result.flaggedForPerson > 0) {
+      this.logger.warn(`${result.flaggedForPerson} payment(s) still verifying after ${flagAfterSec}s, flagged for a person`);
+    }
     if (result.confirmed > 0 || result.flagged > 0) {
       this.logger.log(
         `reconciled ${result.scanned}: ${result.confirmed} confirmed, ${result.flagged} flagged, ${result.errors} unanswered`,
@@ -158,7 +197,7 @@ export class DepositReconciliationService {
    * the callback: a connection held open across a call to a bank is a
    * connection nobody else can have, and a sweep holds it for a whole batch.
    */
-  private async reconcileOne(paymentId: string): Promise<'confirmed' | 'flagged' | 'unchanged' | 'errors'> {
+  private async reconcileOne(paymentId: string, onRetry: RetryHook): Promise<Outcome> {
     const payment = await tenantTransaction(this.prisma, (tx) =>
       tx.paymentTransaction.findFirst({ where: { id: paymentId }, select: PAYMENT_SELECT }),
     );
@@ -180,7 +219,7 @@ export class DepositReconciliationService {
       const credentials = await this.merchant.credentialsFor(ref, payment.userId);
       ({ status } = await provider.inquire({ credentials, authority }));
     } catch (e) {
-      return await this.unanswered(payment, e);
+      return await this.unanswered(payment, e, onRetry);
     }
 
     if (!PAYABLE.includes(status)) {
@@ -190,11 +229,11 @@ export class DepositReconciliationService {
       // `in_bank` is not a settled answer, so a pending row keeps verifying
       // (F-092-x); `failed` and `reversed` are, so its retry clock stops.
       await this.record(payment, status, ReconciliationAction.no_action_needed, undefined, status !== 'in_bank');
-      if (status === 'in_bank') await this.scheduleRetry(payment);
+      if (status === 'in_bank') await onRetry(payment);
       return 'unchanged';
     }
 
-    return await this.confirm(payment, authority, status);
+    return await this.confirm(payment, authority, status, onRetry);
   }
 
   /** The gateway says the money is there. Take it, through the one guarded path. */
@@ -202,7 +241,8 @@ export class DepositReconciliationService {
     payment: PaymentRow,
     authority: string,
     status: PaymentInquiryStatus,
-  ): Promise<'confirmed' | 'flagged' | 'unchanged' | 'errors'> {
+    onRetry: RetryHook,
+  ): Promise<Outcome> {
     const ref = gatewayRefOf(payment);
     const provider = this.providers.get(ref.providerName);
 
@@ -227,7 +267,7 @@ export class DepositReconciliationService {
         this.logger.warn(`payment ${payment.id} flagged: ${e.message}`);
         return 'flagged';
       }
-      return await this.unanswered(payment, e);
+      return await this.unanswered(payment, e, onRetry);
     }
 
     const credited = await this.settlement.creditVerified(
@@ -256,13 +296,14 @@ export class DepositReconciliationService {
   private async unanswered(
     payment: PaymentRow,
     cause: unknown,
+    onRetry: RetryHook,
   ): Promise<'unchanged' | 'errors'> {
     if (cause instanceof GatewayFailure && cause.reason === 'authority_invalid') {
       await this.record(payment, 'authority_invalid', ReconciliationAction.no_action_needed, cause.message, true);
       return 'unchanged';
     }
     // Silence schedules the next ask, exactly as at the callback (F-092-x).
-    await this.scheduleRetry(payment);
+    await onRetry(payment);
     const what = cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause);
     // A credential this job cannot read is the same shape as a gateway that did
     // not answer: unknown, and worth asking again rather than recording.
@@ -275,12 +316,17 @@ export class DepositReconciliationService {
   }
 
   /**
-   * The next rung of the retry ladder (F-092-x). Only a `pending` row climbs —
-   * the guard sees to that — so asking about an `expired` one schedules nothing.
+   * The next rung of the retry ladder (F-092-x), and the flag for a person once
+   * the payment has been verifying for a day (F-092-y) — in one transaction.
+   * Only a `pending` row climbs, so asking about an `expired` one schedules
+   * nothing. Answers whether this call flagged it.
    */
-  private async scheduleRetry(payment: PaymentRow): Promise<void> {
-    if (payment.status !== PaymentStatus.pending) return;
-    await tenantTransaction(this.prisma, (tx) => scheduleVerifyRetry(tx, payment, new Date()));
+  private async scheduleRetry(payment: PaymentRow, now: Date, flagBefore: Date): Promise<boolean> {
+    if (payment.status !== PaymentStatus.pending) return false;
+    return tenantTransaction(this.prisma, async (tx) => {
+      const scheduled = await scheduleVerifyRetry(tx, payment, now);
+      return scheduled !== null && (await flagLongVerifying(tx, payment.id, flagBefore, now));
+    });
   }
 
   /**

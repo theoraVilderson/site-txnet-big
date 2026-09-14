@@ -13,6 +13,7 @@ source:
   - txnet-backend/prisma/domains/migrations/20260912000100_payment_rate_snapshot_id/**
   - txnet-backend/prisma/domains/migrations/20260912000200_gateway_grant_and_settlement/**
   - txnet-backend/prisma/domains/migrations/20260914000100_payment_verify_retry/**
+  - txnet-backend/prisma/domains/migrations/20260914000200_payment_verify_flag/**
 owns_tables: [wallet, wallet_transaction, sub_account, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout]
 depends_on: [identity, catalog, currency, tenant, tenant-context, forward-auth, i18n]
 updated: 2026-09-14
