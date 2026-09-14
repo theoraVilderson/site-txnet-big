@@ -26,8 +26,8 @@ import { TenantContext, TenantScopeConflict } from '@txnet-backend/shared-core';
  */
 export type CouponTarget =
   | { kind: 'wallet_top_up' }
-  /** Buying a plan: a scoped coupon applies when a scope row names this plan or its category. */
-  | { kind: 'service'; servicePlanId: string; categoryId: string };
+  /** Buying a variant: a scoped coupon applies when a scope row names this variant or its product (F-026-a). */
+  | { kind: 'purchase'; productId: string; variantId: string };
 
 export type CouponRequest = {
   /** As typed. Blank entries are dropped, the rest trimmed, upper-cased and de-duplicated. */
@@ -77,7 +77,7 @@ export type CouponFacts = Pick<
   | 'allowedChannels'
 > & {
   /** Its `coupon_service_scope` rows; none is an open scope. */
-  scopes: Array<{ servicePlanId: string | null; categoryId: string | null }>;
+  scopes: Array<{ productId: string | null; variantId: string | null }>;
   /** A `coupon_allowed_user` row names this user. Matters only when `visibility` is `targeted`. */
   allowsUser: boolean;
   /** This user's `pending` + `confirmed` redemptions of it (billing invariant 6). */
@@ -218,9 +218,7 @@ function isNewUser(createdAt: Date | null, withinDays: number, now: Date): boole
 function inScope(c: CouponFacts, target: CouponTarget): boolean {
   if (c.scopes.length === 0) return true;
   if (target.kind === 'wallet_top_up') return false;
-  return c.scopes.some(
-    (s) => s.servicePlanId === target.servicePlanId || s.categoryId === target.categoryId,
-  );
+  return c.scopes.some((s) => s.variantId === target.variantId || s.productId === target.productId);
 }
 
 /**
@@ -324,7 +322,7 @@ export class CouponValidationService {
         : await tx.coupon.findMany({
             where: { code: { in: codes }, deletedAt: null },
             include: {
-              serviceScopes: { select: { servicePlanId: true, categoryId: true } },
+              serviceScopes: { select: { productId: true, variantId: true } },
               allowedUsers: { where: { userId }, select: { id: true }, take: 1 },
               gateways: { select: { gatewayId: true, tenantGatewayConfigId: true } },
               _count: { select: { redemptions: { where: { userId, status: { in: LIVE } } } } },

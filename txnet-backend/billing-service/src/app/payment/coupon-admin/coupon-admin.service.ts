@@ -9,7 +9,7 @@ import type { GatewaySource } from '../gateway/gateway-merchant';
 export type CouponActor = { adminId: string; tenantId: string; ip: string };
 
 export type CouponGatewayRef = { source: GatewaySource; id: string };
-export type CouponScopeRef = { servicePlanId?: string | null; categoryId?: string | null };
+export type CouponScopeRef = { productId?: string | null; variantId?: string | null };
 
 /** Every editable field, as it travels: decimals as strings (C-02), instants as ISO strings or `Date`s. */
 export type CouponFields = {
@@ -82,7 +82,7 @@ export type CouponView = {
   allowedUserIds: string[];
   tenantIds: string[];
   gateways: CouponGatewayRef[];
-  serviceScopes: Array<{ servicePlanId: string | null; categoryId: string | null }>;
+  serviceScopes: Array<{ productId: string | null; variantId: string | null }>;
   status: CouponStatus;
   deletedAt: Date | null;
   createdAt: Date;
@@ -409,7 +409,7 @@ export class CouponAdminService {
         allowedUserIds: of(users, id).map((u) => u.userId),
         tenantIds: of(tenants, id).map((t) => t.tenantId),
         gateways: of(gateways, id).map((g) => (g.gatewayId ? { source: 'platform' as const, id: g.gatewayId } : { source: 'tenant' as const, id: g.tenantGatewayConfigId as string })),
-        serviceScopes: of(scopes, id).map((s) => ({ servicePlanId: s.servicePlanId ?? null, categoryId: s.categoryId ?? null })),
+        serviceScopes: of(scopes, id).map((s) => ({ productId: s.productId ?? null, variantId: s.variantId ?? null })),
         status: statusOf(row, now),
         deletedAt: date(row['deletedAt']),
         createdAt: row['createdAt'] as Date,
@@ -559,13 +559,13 @@ export class CouponAdminService {
 
     if (patch.serviceScopes !== undefined) {
       for (const s of serviceScopes) {
-        const plan = s.servicePlanId ?? null;
-        const category = s.categoryId ?? null;
-        if ((plan === null) === (category === null)) throw new CouponAdminRefused('scope_not_found', 'a scope names one plan or one category');
-        const found = plan
-          ? await this.all.servicePlan.findUnique({ where: { id: plan }, select: { tenantId: true } })
-          : await this.all.productCategory.findUnique({ where: { id: category as string }, select: { tenantId: true } });
-        if (!found || (found.tenantId !== null && found.tenantId !== tenantId)) throw new CouponAdminRefused('scope_not_found', plan ?? category ?? '');
+        const product = s.productId ?? null;
+        const variant = s.variantId ?? null;
+        if ((product === null) === (variant === null)) throw new CouponAdminRefused('scope_not_found', 'a scope names one product or one variant');
+        const found = variant
+          ? await this.all.productVariant.findUnique({ where: { id: variant }, select: { tenantId: true } })
+          : await this.all.product.findUnique({ where: { id: product as string }, select: { tenantId: true } });
+        if (!found || (found.tenantId !== null && found.tenantId !== tenantId)) throw new CouponAdminRefused('scope_not_found', variant ?? product ?? '');
       }
     }
     return { tenantIds, allowedUserIds, gateways, serviceScopes };
@@ -626,7 +626,7 @@ export class CouponAdminService {
       if (replace) await tx.couponServiceScope.deleteMany({ where: { couponId } });
       if (rel.serviceScopes.length) {
         await tx.couponServiceScope.createMany({
-          data: rel.serviceScopes.map((s) => ({ couponId, servicePlanId: s.servicePlanId ?? null, categoryId: s.categoryId ?? null })),
+          data: rel.serviceScopes.map((s) => ({ couponId, productId: s.productId ?? null, variantId: s.variantId ?? null })),
         });
       }
     }

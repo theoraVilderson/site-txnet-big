@@ -108,8 +108,8 @@ export interface CouponForm {
   allowedChannels: CouponChannel[];
   /** `source:id` of each gateway it is limited to. */
   gateways: string[];
-  planIds: string;
-  categoryIds: string;
+  productIds: string;
+  variantIds: string;
   label: string;
   note: string;
 }
@@ -143,8 +143,8 @@ export function emptyCouponForm(): CouponForm {
     periodDays: "",
     allowedChannels: [],
     gateways: [],
-    planIds: "",
-    categoryIds: "",
+    productIds: "",
+    variantIds: "",
     label: "",
     note: "",
   };
@@ -239,8 +239,8 @@ export function formFromCoupon(c: AdminCoupon): CouponForm {
     periodDays: s(c.periodDays),
     allowedChannels: [...c.allowedChannels],
     gateways: c.gateways.map((g) => `${g.source}:${g.id}`),
-    planIds: c.serviceScopes.flatMap((x) => (x.servicePlanId ? [x.servicePlanId] : [])).join("\n"),
-    categoryIds: c.serviceScopes.flatMap((x) => (x.categoryId ? [x.categoryId] : [])).join("\n"),
+    productIds: c.serviceScopes.flatMap((x) => (x.productId ? [x.productId] : [])).join("\n"),
+    variantIds: c.serviceScopes.flatMap((x) => (x.variantId ? [x.variantId] : [])).join("\n"),
     label: c.label ?? "",
     note: c.note ?? "",
   };
@@ -310,7 +310,7 @@ export function validateCouponForm(f: CouponForm, me: Me | null, original: Admin
   const users = ids(f.allowedUserIds);
   if (users.some((u) => !UUID.test(u))) put("allowedUserIds", E.uuid);
   else if (f.visibility === "targeted" && users.length === 0) put("allowedUserIds", E.targetedNeedsUsers);
-  for (const k of ["tenantIds", "planIds", "categoryIds"] as const) {
+  for (const k of ["tenantIds", "productIds", "variantIds"] as const) {
     if (ids(f[k]).some((u) => !UUID.test(u))) put(k, E.uuid);
   }
   return errors;
@@ -348,7 +348,7 @@ function wire(f: CouponForm): Required<UpdateCouponBody> {
       const [source, id] = g.split(":");
       return { source: source === "platform" ? "platform" : "tenant", id };
     }),
-    serviceScopes: [...ids(f.planIds).map((servicePlanId) => ({ servicePlanId })), ...ids(f.categoryIds).map((categoryId) => ({ categoryId }))],
+    serviceScopes: [...ids(f.productIds).map((productId) => ({ productId })), ...ids(f.variantIds).map((variantId) => ({ variantId }))],
     label: orNull(f.label),
     note: orNull(f.note),
   };

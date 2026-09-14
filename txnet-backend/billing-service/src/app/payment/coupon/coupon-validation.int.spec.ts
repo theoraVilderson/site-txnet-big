@@ -40,7 +40,8 @@ const ADMIN = '33333333-3333-4333-8333-333333333333';
 const USER = '44444444-4444-4444-8444-444444444444';
 const OTHER_USER = '55555555-5555-4555-8555-555555555555';
 const CATEGORY = '66666666-6666-4666-8666-666666666666';
-const OTHER_PLAN = '88888888-8888-4888-8888-888888888888';
+const PRODUCT = 'abababab-abab-4bab-8bab-abababababab';
+const OTHER_VARIANT = '88888888-8888-4888-8888-888888888888';
 
 let pg: PostgresFixture;
 let owner: PrismaClient;
@@ -58,7 +59,11 @@ beforeAll(async () => {
     `);
   }
   await owner.$executeRawUnsafe(`
-    INSERT INTO catalog.product_category (id, key, name) VALUES ('${CATEGORY}', 'vpn', 'VPN')
+    INSERT INTO catalog.product_category (id, key, "nameKey") VALUES ('${CATEGORY}', 'vpn', 'catalog.category.vpn.name')
+  `);
+  await owner.$executeRawUnsafe(`
+    INSERT INTO catalog.product (id, "categoryId", key, "nameKey", "fulfilmentKind")
+    VALUES ('${PRODUCT}', '${CATEGORY}', 'vpn_basic', 'catalog.product.vpn_basic.name', 'network_access')
   `);
 
   const coupons: Array<[string, string | null, string, number]> = [
@@ -80,8 +85,8 @@ beforeAll(async () => {
     INSERT INTO billing.coupon_tenant (id, "couponId", "tenantId") VALUES (gen_random_uuid(), '${couponId('a2')}', '${TENANT_A}')
   `);
   await owner.$executeRawUnsafe(`
-    INSERT INTO billing.coupon_service_scope (id, "couponId", "categoryId")
-    VALUES (gen_random_uuid(), '${couponId('a5')}', '${CATEGORY}')
+    INSERT INTO billing.coupon_service_scope (id, "couponId", "productId")
+    VALUES (gen_random_uuid(), '${couponId('a5')}', '${PRODUCT}')
   `);
 
   // TWICE10: USER holds one pending and one confirmed; the finished ones do not count.
@@ -148,7 +153,7 @@ it('loads the service scope with the coupon', async () => {
     validator.validate(tx, {
       ...topUp(['VPNONLY10']),
       userId: USER,
-      target: { kind: 'service', servicePlanId: OTHER_PLAN, categoryId: CATEGORY },
+      target: { kind: 'purchase', productId: PRODUCT, variantId: OTHER_VARIANT },
     }),
   );
   expect(bought.rejected).toEqual([]);

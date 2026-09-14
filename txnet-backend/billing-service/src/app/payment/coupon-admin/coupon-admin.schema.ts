@@ -51,7 +51,7 @@ const fields = {
   tenantIds: z.array(uuid('tenantIds')).max(1000),
   gateways: z.array(z.object({ source: z.enum(GATEWAY_CREDENTIAL_SOURCES), id: uuid('gateway id') }).strict()).max(50),
   serviceScopes: z
-    .array(z.object({ servicePlanId: uuid('servicePlanId').nullable().optional(), categoryId: uuid('categoryId').nullable().optional() }).strict())
+    .array(z.object({ productId: uuid('productId').nullable().optional(), variantId: uuid('variantId').nullable().optional() }).strict())
     .max(100),
 };
 

@@ -87,7 +87,7 @@ model Config {
   tenantId            String         @db.Uuid
   userId              String         @db.Uuid
   panelId             String         @db.Uuid
-  servicePlanId       String         @db.Uuid
+  // What it draws on — a Grant — lands with F-026-b; the plan it once named is gone (ADR-0049).
   uuid                String         @unique // UUID واقعی روی Xray
   protocol            ConfigProtocol
   status              ConfigStatus   @default(active)
@@ -96,8 +96,7 @@ model Config {
   regenerateUsedCount Int            @default(0)
   createdAt           DateTime       @default(now())
 
-  panel       Panel       @relation(fields: [panelId], references: [id])
-  servicePlan ServicePlan @relation(fields: [servicePlanId], references: [id])
+  panel Panel @relation(fields: [panelId], references: [id])
 
   actionLogs       ConfigActionLog[]
   trafficRawLogs   TrafficRawLog[]

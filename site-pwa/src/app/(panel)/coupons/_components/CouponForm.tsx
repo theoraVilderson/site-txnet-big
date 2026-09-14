@@ -325,8 +325,8 @@ export function CouponForm({
                 t("common", F.gatewaysHint),
               )}
               <div className="grid gap-3 sm:grid-cols-2">
-                {field("planIds", t("common", F.planIds), text("planIds", { ltr: true, area: true }), t("common", F.scopeHint))}
-                {field("categoryIds", t("common", F.categoryIds), text("categoryIds", { ltr: true, area: true }))}
+                {field("productIds", t("common", F.productIds), text("productIds", { ltr: true, area: true }), t("common", F.scopeHint))}
+                {field("variantIds", t("common", F.variantIds), text("variantIds", { ltr: true, area: true }))}
               </div>
             </>,
           )}

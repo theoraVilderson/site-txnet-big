@@ -20,8 +20,8 @@ import {
  */
 const D = (v: string | number) => new Prisma.Decimal(v);
 const NOW = new Date('2026-09-11T12:00:00Z');
-const PLAN = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-const CATEGORY = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const VARIANT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const PRODUCT = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const TENANT = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
 let seq = 0;
@@ -174,18 +174,18 @@ describe('each gate refuses with its own reason', () => {
     ['a gift code is not a discount (F-092-m)', { discountType: DiscountType.wallet_credit }, 'not_a_discount'],
     ['expired at this instant', { expiresAt: NOW }, 'expired'],
     ['expires later', { expiresAt: new Date('2026-09-11T12:00:01Z') }, null],
-    ['scoped to a plan, used on a top-up', { scopes: [{ servicePlanId: PLAN, categoryId: null }] }, 'out_of_scope'],
+    ['scoped to a variant, used on a top-up', { scopes: [{ productId: null, variantId: VARIANT }] }, 'out_of_scope'],
     [
-      'scoped to the category of the plan bought',
-      { scopes: [{ servicePlanId: null, categoryId: CATEGORY }] },
+      'scoped to the product of the variant bought',
+      { scopes: [{ productId: PRODUCT, variantId: null }] },
       null,
-      { kind: 'service', servicePlanId: 'other-plan', categoryId: CATEGORY },
+      { kind: 'purchase', productId: PRODUCT, variantId: 'other-variant' },
     ],
     [
-      'scoped to another plan and category',
-      { scopes: [{ servicePlanId: PLAN, categoryId: null }] },
+      'scoped to another variant and product',
+      { scopes: [{ productId: null, variantId: VARIANT }] },
       'out_of_scope',
-      { kind: 'service', servicePlanId: 'other-plan', categoryId: CATEGORY },
+      { kind: 'purchase', productId: PRODUCT, variantId: 'other-variant' },
     ],
     ['per-user limit held by live redemptions', { perUserUsageLimit: 2, liveRedemptionsByUser: 2 }, 'per_user_limit_reached'],
     ['per-user limit above 1 with room left (D-21)', { perUserUsageLimit: 3, liveRedemptionsByUser: 2 }, null],

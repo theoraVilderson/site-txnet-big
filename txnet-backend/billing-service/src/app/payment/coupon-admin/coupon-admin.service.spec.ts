@@ -147,8 +147,8 @@ function build(seed: { redemptions?: Row[]; coupons?: Row[] } = {}) {
     paymentGateway: table([{ id: PLATFORM_GW }], 'paymentGateway', writes),
     tenantGatewayConfig: table([{ id: RESELLER_GW, tenantId: RESELLER }, { id: OTHER_GW, tenantId: OTHER }], 'tenantGatewayConfig', writes),
     paymentGatewayGrant: table([], 'paymentGatewayGrant', writes),
-    servicePlan: table([], 'servicePlan', writes),
-    productCategory: table([], 'productCategory', writes),
+    product: table([], 'product', writes),
+    productVariant: table([], 'productVariant', writes),
     adminAuditLog: {
       create: async ({ data }: { data: Row }) => {
         writes.push('audit');

@@ -179,7 +179,6 @@ export const FrontendI18nKeys = {
       "form": {
         "cancel": "coupons.form.cancel",
         "cap": "coupons.form.cap",
-        "categoryIds": "coupons.form.categoryIds",
         "channel": {
           "bot": "coupons.form.channel.bot",
           "panel": "coupons.form.channel.panel",
@@ -218,7 +217,7 @@ export const FrontendI18nKeys = {
         "percentage": "coupons.form.percentage",
         "periodDays": "coupons.form.periodDays",
         "periodUsageLimit": "coupons.form.periodUsageLimit",
-        "planIds": "coupons.form.planIds",
+        "productIds": "coupons.form.productIds",
         "public": "coupons.form.public",
         "save": "coupons.form.save",
         "saving": "coupons.form.saving",
@@ -256,6 +255,7 @@ export const FrontendI18nKeys = {
         "userIdsHint": "coupons.form.userIdsHint",
         "validFrom": "coupons.form.validFrom",
         "value": "coupons.form.value",
+        "variantIds": "coupons.form.variantIds",
         "visibility": "coupons.form.visibility",
         "weekday": {
           "fri": "coupons.form.weekday.fri",

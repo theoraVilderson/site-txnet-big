@@ -10,6 +10,8 @@ usage:
     python3 tools/spec.py F-0705          the feature's block, printed
     python3 tools/spec.py F-0705 --row    just the one table row
     python3 tools/spec.py --area 07       every feature in section 07
+    python3 tools/spec.py --section 4.4   one sub-section's block, ids or not —
+                                          for prose a row's feature depends on
     python3 tools/spec.py --todo          catalog ids with no backlog row yet
     python3 tools/spec.py --list          every id + title (the cheap overview)
 """
@@ -106,6 +108,25 @@ def main() -> int:
             print(f"## {b['title']}   ({b['file'].name}:{b['start']}-{b['end']})")
             print("\n".join(b["body"][1:]))
             print()
+        return 0
+
+    if "--section" in args:
+        # A sub-section with no feature id (a definition, a model) is still spec:
+        # `--area` only reaches blocks that hold an id, so this is its address.
+        num = args[args.index("--section") + 1]
+        hit = [b for b in blocks if re.match(rf"{re.escape(num)}(\s|$)", b["title"])]
+        if not hit:
+            print(f"no sub-section {num} — its number is in docs/features/MANIFEST.md", file=sys.stderr)
+            return 1
+        for b in hit:
+            print(f"# {b['title']}   ({b['file'].name}:{b['start']}-{b['end']})")
+            print("#" + "-" * 70)
+            body = b["body"]
+            if len(body) > MAX_PRINT and "--full" not in args:
+                print("\n".join(body[:MAX_PRINT]))
+                print(f"\n… {len(body) - MAX_PRINT} more lines. Re-run with --full only if needed.")
+            else:
+                print("\n".join(body))
         return 0
 
     ids = [a for a in args if re.fullmatch(r"[Ff]-\d{3,4}", a)]

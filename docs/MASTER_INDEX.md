@@ -1,7 +1,7 @@
 ---
 id: master-index
 status: active
-updated: 2026-09-11
+updated: 2026-09-14
 ---
 
 # Master Index
@@ -19,7 +19,8 @@ no service yet. A unit that is `active` with an empty `source:` is a lie and
 | tenant | multi-tenant / reseller white-label: branding, domains, entitlements, tenant billing, BYO integrations | active | [->](domains/tenant/INDEX.md) |
 | billing | user wallet ledger, sub-accounts, transfers, coupons, payment gateways/transactions, affiliate | active | [->](domains/billing/INDEX.md) |
 | currency | multi-currency display layer: exchange rates, user preference, admin currency policy, and the FX worker that discovers the USD→IRR rate | active | [->](domains/currency/INDEX.md) |
-| catalog | product categories, service plans, direct promotions | draft | [->](domains/catalog/INDEX.md) |
+| catalog | what is for sale: categories, products, variants (SKU) and their USD price history | draft | [->](domains/catalog/INDEX.md) |
+| entitlement | Grants — the one answer to "may this user use X" — with their lifecycle and quota adjustments | draft | [->](domains/entitlement/INDEX.md) |
 | network | panels (VPN infra) + drivers, user configs (Xray/VPN), panel groups, subscription links, traffic logs + aggregates, IP access rules | draft | [->](domains/network/INDEX.md) |
 | governance | per-user settings, temporal access grants, user restrictions/caps | draft | [->](domains/governance/INDEX.md) |
 | automation | definition + scheduling + run logs of background workers | active | [->](domains/automation/INDEX.md) |

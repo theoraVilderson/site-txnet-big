@@ -530,7 +530,7 @@ export interface AdminCoupon {
   allowedUserIds: string[];
   tenantIds: string[];
   gateways: CouponGatewayRef[];
-  serviceScopes: Array<{ servicePlanId: string | null; categoryId: string | null }>;
+  serviceScopes: Array<{ productId: string | null; variantId: string | null }>;
   status: CouponStatus;
   deletedAt: string | null;
   createdAt: string;
@@ -582,7 +582,7 @@ export interface UpdateCouponBody {
   allowedUserIds?: string[];
   tenantIds?: string[];
   gateways?: CouponGatewayRef[];
-  serviceScopes?: Array<{ servicePlanId?: string | null; categoryId?: string | null }>;
+  serviceScopes?: Array<{ productId?: string | null; variantId?: string | null }>;
 }
 
 export interface CreateCouponBody extends UpdateCouponBody {

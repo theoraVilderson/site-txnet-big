@@ -1,10 +1,40 @@
-// بخش پنج: Schema `catalog` — کاتالوگ محصولات و سرویس‌ها (چندمنظوره، نه فقط VPN)
+// Schema `catalog` — what is for sale (F-026-a, D-34, ADR-0049).
+// Spec: `tools/spec.py --section 4.1` .. `4.3`, F-501, F-0601, F-0602.
 // =============================================================================
 
-enum ServicePlanBillingModel {
-  pay_as_you_go
-  fixed_package
-  one_time
+/// How a sold variant is fulfilled (§4.1). A new product type is a new kind and
+/// a handler — never a new billing table.
+enum FulfilmentKind {
+  network_access
+  external_order
+  feature_access
+  wallet_topup
+
+  @@schema("catalog")
+}
+
+/// §4.2: `public` is listed; `unlisted` is sold by a direct link only;
+/// `admin_only` is never sold, only assigned by an admin (F-506).
+enum VariantVisibility {
+  public
+  unlisted
+  admin_only
+
+  @@schema("catalog")
+}
+
+/// §4.4: paid up front, or metered against a billing cursor.
+enum VariantBillingMode {
+  prepaid
+  metered
+
+  @@schema("catalog")
+}
+
+/// F-408: a node quality tier with its own price multiplier.
+enum QualityTier {
+  standard
+  premium
 
   @@schema("catalog")
 }
@@ -17,60 +47,103 @@ enum DiscountType {
   @@schema("catalog")
 }
 
-/// 4.1 — دسته‌بندی محصول؛ کلید رشته آزاد (نه Enum بسته) برای افزودن دسته
-/// جدید بدون Deploy. tenantId=null یعنی دسته‌بندی مشترک پلتفرم.
+/// A group of products (`vpn`, `followers`, ...). `tenantId` null = the
+/// platform's, read by every tenant; a set one is that tenant's own. The key is
+/// unique inside a tenant (a partial index in the migration).
 model ProductCategory {
-  id       String  @id @default(uuid()) @db.Uuid
-  tenantId String? @db.Uuid
-  key      String  @unique // vpn, fake_member, ...
-  name     String
-  isActive Boolean @default(true)
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String?  @db.Uuid
+  key       String
+  /// An i18n key, not text (§4.3).
+  nameKey   String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
-  servicePlans        ServicePlan[]
-  couponServiceScopes CouponServiceScope[]
+  products Product[]
 
   @@index([tenantId])
   @@map("product_category")
   @@schema("catalog")
 }
 
-/// 4.2 — پلن سرویس؛ همه قیمت‌ها فقط در ارز پایه سیستم.
-/// tenantId=null یعنی پلن مشترک پلتفرم؛ پر یعنی قیمت‌گذاری اختصاصی یک Tenant.
-model ServicePlan {
-  id            String                  @id @default(uuid()) @db.Uuid
-  tenantId      String?                 @db.Uuid
-  categoryId    String                  @db.Uuid
-  name          String
-  billingModel  ServicePlanBillingModel
-  basePrice     Decimal?                @db.Decimal(18, 2)
-  pricePerUnit  Decimal?                @db.Decimal(18, 8) // فقط برای pay_as_you_go
-  unitLabel     String? // "GB" یا "1000 followers"
-  isActive      Boolean                 @default(true)
-  attributesJson Json // فیلدهای اختصاصی هر دسته، مثلاً {"platform": "instagram"}
+/// The marketing object (§4.2). Name and description are i18n keys (§4.3).
+model Product {
+  id             String         @id @default(uuid()) @db.Uuid
+  tenantId       String?        @db.Uuid
+  categoryId     String         @db.Uuid
+  key            String
+  nameKey        String
+  descriptionKey String?
+  fulfilmentKind FulfilmentKind
+  /// What a Grant of this product unlocks (§4.4).
+  featureKeys    String[]       @default([])
+  /// Quotas a new variant starts from, by metric (§4.5).
+  defaultQuotas  Json           @default("{}")
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @default(now()) @updatedAt
 
-  category   ProductCategory        @relation(fields: [categoryId], references: [id])
-  promotions ServicePlanPromotion[]
-  configs    Config[]
+  category            ProductCategory      @relation(fields: [categoryId], references: [id])
+  variants            ProductVariant[]
   couponServiceScopes CouponServiceScope[]
 
   @@index([tenantId])
-  @@map("service_plan")
+  @@index([categoryId])
+  @@map("product")
   @@schema("catalog")
 }
 
-/// 4.3 — تخفیف مستقیم روی پلن، بدون کد تخفیف.
-model ServicePlanPromotion {
-  id             String       @id @default(uuid()) @db.Uuid
-  servicePlanId  String       @db.Uuid
-  discountType   DiscountType
-  discountValue  Decimal      @db.Decimal(18, 2)
-  startsAt       DateTime
-  endsAt         DateTime
-  isActive       Boolean      @default(true)
+/// The sellable unit, a SKU (§4.2). `tenantId` is its product's — a trigger
+/// holds it — so RLS reads it without a join. The SKU is unique inside a tenant.
+model ProductVariant {
+  id           String             @id @default(uuid()) @db.Uuid
+  tenantId     String?            @db.Uuid
+  productId    String             @db.Uuid
+  sku          String
+  /// Optional wording of its own; the product's name otherwise.
+  nameKey      String?
+  /// Quota per metric (§4.5), e.g. `{"traffic_bytes": {"limit": 53687091200, "resetPolicy": "none"}}`.
+  quotas       Json               @default("{}")
+  /// Null = permanent.
+  durationDays Int?
+  billingMode  VariantBillingMode
+  visibility   VariantVisibility
+  /// Where a `network_access` Grant is provisioned (F-027); no FK until that unit is built.
+  panelGroupId String?            @db.Uuid
+  qualityTier  QualityTier        @default(standard)
+  isActive     Boolean            @default(true)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @default(now()) @updatedAt
 
-  servicePlan ServicePlan @relation(fields: [servicePlanId], references: [id])
+  product             Product              @relation(fields: [productId], references: [id])
+  prices              Price[]
+  couponServiceScopes CouponServiceScope[]
 
-  @@map("service_plan_promotion")
+  @@index([tenantId])
+  @@index([productId])
+  @@map("product_variant")
+  @@schema("catalog")
+}
+
+/// A variant's price in USD (ADR-0019, C-02) from `effectiveFrom` on. History:
+/// a change is a new row, and a trigger refuses any update but `isActive` and
+/// any delete (F-0602) — yesterday's invoice is computed at yesterday's price.
+model Price {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String?  @db.Uuid
+  variantId        String   @db.Uuid
+  amount           Decimal  @db.Decimal(18, 2)
+  effectiveFrom    DateTime
+  isActive         Boolean  @default(true)
+  createdByAdminId String?  @db.Uuid
+  createdAt        DateTime @default(now())
+
+  variant ProductVariant @relation(fields: [variantId], references: [id])
+
+  @@index([variantId, effectiveFrom(sort: Desc)])
+  @@index([tenantId])
+  @@map("price")
   @@schema("catalog")
 }
 

@@ -341,16 +341,18 @@ model CouponBatch {
   @@schema("billing")
 }
 
-/// اسکوپ کوپن روی یک پلن یا یک دسته؛ نبود رکورد یعنی Open Scope.
+/// A coupon limited to one product or one variant (F-026-a); a CHECK holds
+/// exactly one. No row at all = any purchase.
 model CouponServiceScope {
-  id            String  @id @default(uuid()) @db.Uuid
-  couponId      String  @db.Uuid
-  servicePlanId String? @db.Uuid
-  categoryId    String? @db.Uuid
+  id        String  @id @default(uuid()) @db.Uuid
+  couponId  String  @db.Uuid
+  productId String? @db.Uuid
+  variantId String? @db.Uuid
 
-  coupon      Coupon           @relation(fields: [couponId], references: [id])
-  servicePlan ServicePlan?     @relation(fields: [servicePlanId], references: [id])
-  category    ProductCategory? @relation(fields: [categoryId], references: [id])
+  coupon  Coupon          @relation(fields: [couponId], references: [id])
+  // Restrict, not Prisma's SetNull: a nulled side would break the one-of CHECK.
+  product Product?        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Restrict)
 
   @@map("coupon_service_scope")
   @@schema("billing")
