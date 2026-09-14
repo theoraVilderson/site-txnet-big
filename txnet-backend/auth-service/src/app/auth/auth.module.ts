@@ -27,6 +27,8 @@ import { OtpStore } from './otp/otp.store';
 import { OtpDeliveryStore } from './otp/otp-delivery.store';
 import { OtpDeliveryPublisher } from './otp/otp-delivery.publisher';
 import { OtpInternalController } from './otp/otp-internal.controller';
+import { UserNotifyInternalController } from './notify/user-notify-internal.controller';
+import { UserNotifier } from './notify/user-notifier';
 import { RateLimiter } from '../common/rate-limit/rate-limiter';
 import { RATE_LIMIT_STORE } from '@txnet-backend/shared-core';
 import { RedisService } from '../redis/redis.service';
@@ -69,9 +71,11 @@ import { ConfigService } from '@nestjs/config';
     CaptchaController,
     BotLinkController,
     OtpInternalController,
+    UserNotifyInternalController,
     MeController,
   ],
   providers: [
+    UserNotifier,
     RegisterService,
     TokenService,
     MeService,

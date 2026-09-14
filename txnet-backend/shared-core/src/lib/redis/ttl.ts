@@ -66,6 +66,13 @@ export const RedisTtl = {
    */
   tenantResolutionMiss: 60,
 
+  /**
+   * How long an outbox consumer remembers an event it handled (ADR-0045). Longer
+   * than any redelivery a broker or a relay retry produces in practice; after it
+   * a duplicate is possible, which a notification can afford.
+   */
+  outboxProcessed: 7 * 24 * 3600,
+
   botNav: 30 * 60,
   botSession: 30 * 24 * 3600,
   /** Long: this is a preference, not a session. It is re-armed on every use. */

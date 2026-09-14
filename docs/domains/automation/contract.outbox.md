@@ -136,9 +136,26 @@ correct answer rather than a gap: an event announced to nobody is not an event
 delivered, and the alternative — a plain publish the broker acks into nothing
 — is what invariant #10 exists to forbid.
 
+## The first consumer: the payer notice (F-067-l, ADR-0045)
+
+`PaymentConfirmedConsumer` in `worker-service/src/app/outbox/`, on its own
+queue `AUTOMATION_PAYMENT_CONFIRMED_QUEUE` bound to exactly
+`outbox.billing.payment.confirmed`, so that type stops being `unroutable` and
+every other stays so.
+
+| Rule | Why |
+|---|---|
+| A `webhook_auto` credit is acked and nothing is sent | that payer is on the success page; the notice is for a **late** credit — reconciliation or a person |
+| **Dedupe first:** `SET NX` `UnscopedRedisKeys.outboxProcessed('payment-credited-notify', <event id>)`, `RedisTtl.outboxProcessed` (7 days), before any side effect; already set is an ack | at-least-once delivery (ADR-0021) must not tell the payer twice |
+| Then `{type:'billing.payment.confirmed', paymentId, amountCredited}` on `user:<userId>` (`RealtimePublisher`), then `POST /api/internal/notify/user` on auth-service with `X-Tenant-Id` = the payload's tenant and template `paymentCredited` | the live half is at most once and cheap; the bot half needs the tenant's bots, which are auth-service's |
+| A side effect that throws **deletes the marker** and rethrows: nack, no requeue, dead-letter | the event stays owed instead of being recorded as handled |
+| A payload missing its tenant, user, payment, amount or source throws | whose payment it is is never guessed |
+| **The relay still needs its schedule.** `outbox_relay` is not in `SEEDED_SCHEDULES`; unscheduled, the event is never published and nobody is told | ADR-0045 consequences — an operator decision, not this consumer's |
+
 ## What is not built
 
-- No consumer, no consumer-side idempotency store (above).
+- One consumer only (below); no Postgres idempotency store — ADR-0045 chose
+  Redis for the first, and a consumer that moves money must choose again.
 - No retention or archive of published rows. ADR-0021 makes the table an audit
   trail; when that stops being worth keeping needs a producer with an opinion.
 - No admin surface. `GET /auth/workers/dead-letters` has no outbox twin —

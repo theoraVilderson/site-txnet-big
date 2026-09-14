@@ -21,5 +21,8 @@
       "linkedNoCode": "Your number is confirmed. You can request your code now.",
       "unknownCommand": "Open the link from the site to connect this messenger to your account."
     }
+  },
+  "payment": {
+    "credited": "✅ Your payment was confirmed and {{amount}} was added to your wallet. Reference: {{reference}}"
   }
 }

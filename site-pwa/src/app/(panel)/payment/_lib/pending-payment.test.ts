@@ -1,5 +1,5 @@
 import type { WalletPaymentRow } from "@/lib/billing-api";
-import { PENDING_POLL_MS, pendingStateOf } from "./pending-payment";
+import { PENDING_POLL_MS, pendingStateOf, readPaymentCredited } from "./pending-payment";
 
 /**
  * `/payment/pending` (F-093-l, ADR-0044 decision 7). What breaks silently:
@@ -56,5 +56,29 @@ describe("pendingStateOf", () => {
 describe("the poll", () => {
   it("stays inside the route's budget over its 15-minute window", () => {
     expect((15 * 60 * 1000) / PENDING_POLL_MS).toBeLessThanOrEqual(300 / 2);
+  });
+});
+
+/**
+ * The live half of F-067-l (ADR-0045): worker-service publishes
+ * `{type:'billing.payment.confirmed', paymentId, amountCredited}` on the
+ * payer's `user:` channel when a late credit lands. A stranger's shape must
+ * not reach a toast.
+ */
+describe("readPaymentCredited", () => {
+  it("reads the event worker-service publishes", () => {
+    expect(
+      readPaymentCredited({ type: "billing.payment.confirmed", paymentId: "p-1", amountCredited: "19.80" }),
+    ).toEqual({ paymentId: "p-1", amountCredited: "19.80" });
+  });
+
+  it.each([
+    null,
+    "billing.payment.confirmed",
+    { type: "wallet.changed", paymentId: "p-1", amountCredited: "19.80" },
+    { type: "billing.payment.confirmed", paymentId: "p-1", amountCredited: "<b>9</b>" },
+    { type: "billing.payment.confirmed", amountCredited: "19.80" },
+  ])("ignores %j", (payload) => {
+    expect(readPaymentCredited(payload)).toBeNull();
   });
 });

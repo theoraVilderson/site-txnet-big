@@ -167,11 +167,13 @@ builds a new one. `AccountSwitcher` already throws the whole document away
 (`window.location.assign`), which achieves the same thing — but that is its
 choice, and this keying is what makes it a rule of the socket instead.
 
-**There is no producer for a signed-in channel yet.** `F-067-i`'s fan-out has
-one caller and it publishes to an anonymous `otp:` channel; `F-034` live chat
-is the first thing that will subscribe a `user:` channel. So what this
-consumer currently proves is a connection that survives navigation and a
-switch, not anything a user can see.
+**The first producer on a signed-in channel is a late credit (F-067-l,
+ADR-0045).** `worker-service` publishes `{type:'billing.payment.confirmed',
+paymentId, amountCredited}` on `user:<userId>`. Two listeners share the
+channel: `useWalletBalance` re-reads on any event, and
+`_components/PaymentCreditedToast.tsx` (at the layout) shows "payment
+confirmed" for 8 s for this one shape only — `readPaymentCredited` ignores the
+rest and refuses an amount that is not a decimal string.
 
 ## Identity does not change on a live socket
 

@@ -31,6 +31,7 @@ exports[`RedisKeys — bot key catalogue > keeps the canonical TTLs stable 1`] =
   "otpCooldown": 60,
   "otpDelivery": 300,
   "otpLock": 2,
+  "outboxProcessed": 604800,
   "refreshToken": 2592000,
   "registerPending": 600,
   "tenantResolution": 600,

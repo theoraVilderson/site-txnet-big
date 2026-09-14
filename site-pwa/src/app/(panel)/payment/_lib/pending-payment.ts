@@ -28,3 +28,17 @@ export function pendingStateOf(row: WalletPaymentRow | null): PendingState {
   if (row.status === "success") return { kind: "credited", reference: readSuccess(row.referenceId ?? undefined, undefined).reference };
   return { kind: "closed" };
 }
+
+/**
+ * A late credit announced on the payer's own `user:` channel (F-067-l,
+ * ADR-0045), or `null` for anything else on it. The amount must look like
+ * billing's decimal string — it is printed.
+ */
+export function readPaymentCredited(payload: unknown): { paymentId: string; amountCredited: string } | null {
+  if (!payload || typeof payload !== "object") return null;
+  const p = payload as Record<string, unknown>;
+  if (p.type !== "billing.payment.confirmed") return null;
+  if (typeof p.paymentId !== "string" || !p.paymentId) return null;
+  if (typeof p.amountCredited !== "string" || !/^\d{1,16}(\.\d{1,2})?$/.test(p.amountCredited)) return null;
+  return { paymentId: p.paymentId, amountCredited: p.amountCredited };
+}

@@ -10,6 +10,7 @@ import { OtpChannel, OtpPurpose } from '../otp.interface';
 import { BaleOtpSender } from './bale.sender';
 import { SmsOtpSender } from './sms.sender';
 import { TelegramOtpSender } from './telegram.sender';
+import { UserNotifier } from '../../notify/user-notifier';
 
 /**
  * The senders are where a one-time code leaves the platform, so the question
@@ -347,5 +348,76 @@ describe('SMS OTP sender', () => {
 
     expect(loc.getNamespace).toHaveBeenCalledWith('fa', 'notifications');
     expect(sendSMS.mock.calls[0]![0].msg).toContain('کد ورود');
+  });
+});
+
+/**
+ * Messaging a user on their linked bot (F-067-l, ADR-0045 decision 2). The OTP
+ * senders' neighbour: the same bot registry and the same verified links, for a
+ * named template instead of a code.
+ */
+describe('UserNotifier', () => {
+  function notifierPrisma({
+    user = { languagePreference: 'en' } as { languagePreference: string } | null,
+    links: linked = [] as Array<{ platform: string; platformUserId: string }>,
+  } = {}) {
+    return {
+      user: { findFirst: vi.fn(async () => user) },
+      linkedBotAccount: { findMany: vi.fn(async () => linked) },
+    };
+  }
+  const ns = { payment: { credited: 'Credited {{amount}} (ref {{reference}})' } };
+
+  it('sends the template in the user’s language to every verified linked chat with a usable bot', async () => {
+    const client = botClient();
+    const db = notifierPrisma({ links: [{ platform: 'telegram', platformUserId: '5501' }] });
+    const locale = localeService(ns);
+    const notifier = new UserNotifier(db as unknown as PrismaService, registry(client), locale);
+
+    const out = await inTenant(() =>
+      notifier.notify({ userId: 'user-1', template: 'paymentCredited', params: { amount: '19.80', reference: '900' } }),
+    );
+
+    expect(out).toEqual({ sent: ['telegram'] });
+    expect(locale.getNamespace).toHaveBeenCalledWith('en', 'notifications');
+    expect(client.sendMessage).toHaveBeenCalledWith('5501', 'Credited 19.80 (ref 900)');
+    expect(db.linkedBotAccount.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'user-1', contactVerifiedAt: { not: null } } }),
+    );
+  });
+
+  it('sends nothing, and is not an error, for a user with no linked chat or no bot', async () => {
+    const none = new UserNotifier(notifierPrisma() as unknown as PrismaService, registry(botClient()), localeService(ns));
+    expect(await inTenant(() => none.notify({ userId: 'user-1', template: 'paymentCredited', params: {} }))).toEqual({ sent: [] });
+
+    const noBot = new UserNotifier(
+      notifierPrisma({ links: [{ platform: 'bale', platformUserId: '7' }] }) as unknown as PrismaService,
+      registry(null),
+      localeService(ns),
+    );
+    expect(await inTenant(() => noBot.notify({ userId: 'user-1', template: 'paymentCredited', params: {} }))).toEqual({ sent: [] });
+  });
+
+  it('throws when every send failed, so the caller retries the event', async () => {
+    const client = { sendMessage: vi.fn(async () => Promise.reject(new Error('telegram down'))) };
+    const notifier = new UserNotifier(
+      notifierPrisma({ links: [{ platform: 'telegram', platformUserId: '5501' }] }) as unknown as PrismaService,
+      registry(client),
+      localeService(ns),
+    );
+    await expect(
+      inTenant(() => notifier.notify({ userId: 'user-1', template: 'paymentCredited', params: { amount: '1', reference: '' } })),
+    ).rejects.toThrow(/telegram down/);
+  });
+
+  it('falls back to English text when the namespace has no template', async () => {
+    const client = botClient();
+    const notifier = new UserNotifier(
+      notifierPrisma({ links: [{ platform: 'telegram', platformUserId: '5501' }] }) as unknown as PrismaService,
+      registry(client),
+      localeService(undefined),
+    );
+    await inTenant(() => notifier.notify({ userId: 'user-1', template: 'paymentCredited', params: { amount: '19.80', reference: '900' } }));
+    expect(client.sendMessage.mock.calls[0][1]).toContain('19.80');
   });
 });

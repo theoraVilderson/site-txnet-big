@@ -195,6 +195,15 @@ export const UnscopedRedisKeys = {
    * The snapshot row is the truth; a miss here is answered from the table.
    */
   fxRate: (currencyCode: string) => `fx:rate:${currencyCode}`,
+
+  /**
+   * An outbox event one consumer has already handled (ADR-0045, F-067-l). Taken
+   * with `SET NX` before any side effect, because delivery is at-least-once
+   * (ADR-0021); a consumer whose side effect fails deletes it before rethrowing.
+   * Unscoped: `worker-service` has no request tenant, and the event id is
+   * already unique platform-wide.
+   */
+  outboxProcessed: (consumer: string, eventId: string) => `outbox:processed:${consumer}:${eventId}`,
 } as const;
 
 /**

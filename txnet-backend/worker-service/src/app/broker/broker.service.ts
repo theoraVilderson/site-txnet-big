@@ -10,9 +10,13 @@ import {
   botUpdateQueueName,
   BOT_UPDATE_ROUTING_PREFIX,
   confirmedPublisher,
+  outboxRoutingKey,
   type ConfirmedPublish,
   type OutboxMessage,
 } from '@txnet-backend/shared-core';
+
+/** The billing event F-067-l consumes — `billing/contract.deposit.md`'s outbox row. */
+export const PAYMENT_CONFIRMED_EVENT = 'billing.payment.confirmed';
 
 /** What a consumer is handed. `key` is the `<key>` of `automation.tick.<key>`. */
 export interface TickMessage {
@@ -96,6 +100,9 @@ export interface BotUpdateMessage {
 
 export type BotUpdateHandler = (message: BotUpdateMessage) => Promise<void>;
 
+/** What an outbox consumer is handed: the relay's message, as published. */
+export type OutboxHandler = (event: OutboxMessage) => Promise<void>;
+
 /**
  * The header every publish stamps with how many times this message has been
  * published. It is read back by `deadLetterRecordOf` (F-067-d), and it lives
@@ -168,6 +175,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   private readonly deadExchange: string;
   private readonly deadQueue: string;
   private readonly otpQueue: string;
+  private readonly paymentConfirmedQueue: string;
   private readonly botUpdatePrefix: string;
   private readonly botUpdateQueues: number;
   private readonly confirmMs: number;
@@ -182,6 +190,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     this.deadExchange = config.getOrThrow<string>('AUTOMATION_DLX');
     this.deadQueue = config.getOrThrow<string>('AUTOMATION_DEAD_QUEUE');
     this.otpQueue = config.getOrThrow<string>('AUTOMATION_OTP_QUEUE');
+    this.paymentConfirmedQueue = config.getOrThrow<string>('AUTOMATION_PAYMENT_CONFIRMED_QUEUE');
     this.botUpdatePrefix = config.getOrThrow<string>('BOT_UPDATE_QUEUE_PREFIX');
     this.botUpdateQueues = config.getOrThrow<number>('BOT_UPDATE_QUEUES');
     this.confirmMs = config.getOrThrow<number>('AUTOMATION_PUBLISH_CONFIRM_MS');
@@ -224,6 +233,19 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       arguments: { 'x-dead-letter-exchange': this.deadExchange },
     });
     await this.channel.bindQueue(this.otpQueue, this.exchange, 'otp.delivery.#');
+
+    // The first outbox consumer (F-067-l, ADR-0045). Bound to exactly one event
+    // type, so the relay's `mandatory` publish of it stops being `unroutable`
+    // and every other type stays so — visibly, as before.
+    await this.channel.assertQueue(this.paymentConfirmedQueue, {
+      durable: true,
+      arguments: { 'x-dead-letter-exchange': this.deadExchange },
+    });
+    await this.channel.bindQueue(
+      this.paymentConfirmedQueue,
+      this.exchange,
+      outboxRoutingKey(PAYMENT_CONFIRMED_EVENT),
+    );
 
     // The bot-update set (F-067-b, D-16). One queue per slot, each bound to
     // exactly its own routing key — not one queue on `bot.update.#`, which
@@ -390,6 +412,37 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
           `OTP delivery ${request.deliveryId} failed: ${
             err instanceof Error ? err.message : String(err)
           }`,
+        );
+        channel.nack(message, false, false);
+      }
+    });
+  }
+
+  /**
+   * Start consuming `billing.payment.confirmed` outbox events (F-067-l).
+   *
+   * The rules every consumer here follows: acked late, nacked without requeue,
+   * so a handler that throws dead-letters. Deduping by the event id is the
+   * handler's (ADR-0045), because only it knows what "handled" means.
+   */
+  async consumePaymentConfirmed(handle: OutboxHandler): Promise<void> {
+    const channel = this.require();
+    await channel.consume(this.paymentConfirmedQueue, async (message) => {
+      if (message === null) return;
+      let event: OutboxMessage;
+      try {
+        event = JSON.parse(message.content.toString()) as OutboxMessage;
+      } catch {
+        this.logger.error('dead-lettering an outbox event that is not JSON');
+        channel.nack(message, false, false);
+        return;
+      }
+      try {
+        await handle(event);
+        channel.ack(message);
+      } catch (err) {
+        this.logger.error(
+          `outbox event ${event.id} (${event.type}) failed: ${err instanceof Error ? err.message : String(err)}`,
         );
         channel.nack(message, false, false);
       }

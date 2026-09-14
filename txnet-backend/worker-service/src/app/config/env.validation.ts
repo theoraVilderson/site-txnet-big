@@ -115,6 +115,8 @@ export const envSchema = z.object({
    * two depths can be alerted on separately (F-067-g).
    */
   AUTOMATION_OTP_QUEUE: z.string().min(1).default('txnet.automation.otp'),
+  /** The queue `billing.payment.confirmed` outbox events land in for the payer notice (F-067-l, ADR-0045). */
+  AUTOMATION_PAYMENT_CONFIRMED_QUEUE: z.string().min(1).default('txnet.automation.outbox.payment-confirmed'),
   /**
    * The bot-update queue set (F-067-b): `<prefix>.0` … `<prefix>.N-1`, each
    * bound to its own `bot.update.<slot>` on the same exchange and

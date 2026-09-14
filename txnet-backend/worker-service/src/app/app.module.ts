@@ -7,6 +7,7 @@ import { BrokerModule } from './broker/broker.module';
 import { AutomationModule } from './automation/automation.module';
 import { OtpModule } from './otp/otp.module';
 import { BotModule } from './bot/bot.module';
+import { OutboxModule } from './outbox/outbox.module';
 import { RealtimeModule } from './realtime/realtime.module';
 
 @Module({
@@ -19,6 +20,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     AutomationModule,
     OtpModule,
     BotModule,
+    OutboxModule,
   ],
 })
 export class AppModule {}

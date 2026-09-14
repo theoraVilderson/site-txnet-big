@@ -66,6 +66,7 @@ describe('the key catalogue', () => {
       tenantById: UnscopedRedisKeys.tenantById('tenant-1'),
       tenantRuns: UnscopedRedisKeys.tenantRuns('tenant-1'),
       fxRate: UnscopedRedisKeys.fxRate('IRR'),
+      outboxProcessed: UnscopedRedisKeys.outboxProcessed('payment-credited-notify', 'evt-1'),
     }).toMatchSnapshot();
   });
 

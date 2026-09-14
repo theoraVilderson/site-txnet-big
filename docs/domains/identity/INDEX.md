@@ -14,6 +14,7 @@ source:
   - txnet-backend/auth-service/src/app/auth/otp/otp-delivery.store.ts
   - txnet-backend/auth-service/src/app/auth/otp/otp-delivery.publisher.ts
   - txnet-backend/auth-service/src/app/auth/otp/otp-internal.controller.ts
+  - txnet-backend/auth-service/src/app/auth/notify/**
   - txnet-backend/auth-service/src/app/auth/otp/senders/**
   - txnet-backend/auth-service/src/app/auth/bot-link/bot-link.service.ts
   - txnet-backend/auth-service/src/app/auth/bot-link/bot-session.service.ts

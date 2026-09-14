@@ -20,6 +20,11 @@
       "tutorials": "Guides and downloads",
       "support": "Support",
       "settings": "Settings"
+    },
+    "paymentCredited": {
+      "title": "Payment confirmed",
+      "body": "{{amount}} was added to your wallet.",
+      "dismiss": "Dismiss"
     }
   },
   "gateways": {

@@ -20,6 +20,11 @@
       "tutorials": "آموزش و دانلود",
       "support": "پشتیبانی",
       "settings": "تنظیمات"
+    },
+    "paymentCredited": {
+      "title": "پرداخت تأیید شد",
+      "body": "{{amount}} به کیف پول شما اضافه شد.",
+      "dismiss": "بستن"
     }
   },
   "gateways": {

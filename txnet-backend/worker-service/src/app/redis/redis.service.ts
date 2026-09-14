@@ -90,6 +90,18 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    * (`realtime/contract.md`); the durable answer, where one exists, belongs
    * to the producing domain, not to the socket.
    */
+  /**
+   * `SET key 1 NX EX ttl` — whether this call took the key (ADR-0045: an
+   * outbox consumer's "have I handled this event" marker).
+   */
+  async setNx(key: string, ttlSec: number): Promise<boolean> {
+    return (await this.client.set(key, '1', 'EX', ttlSec, 'NX')) === 'OK';
+  }
+
+  async del(key: string): Promise<void> {
+    await this.client.del(key);
+  }
+
   publish(channel: string, body: string): Promise<number> {
     return this.client.publish(channel, body);
   }

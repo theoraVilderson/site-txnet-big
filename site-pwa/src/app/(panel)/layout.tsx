@@ -1,4 +1,5 @@
 import { PanelShell } from "./_components/PanelShell";
+import { PaymentCreditedToast } from "./_components/PaymentCreditedToast";
 import { PanelRealtimeProvider } from "./_context/PanelRealtimeContext";
 import { PanelSessionProvider } from "./_context/PanelSessionContext";
 
@@ -19,6 +20,8 @@ export default function PanelLayout({
       */}
       <PanelRealtimeProvider>
         <PanelShell>{children}</PanelShell>
+        {/* F-067-l: a late credit is announced on any screen (ADR-0045). */}
+        <PaymentCreditedToast />
       </PanelRealtimeProvider>
     </PanelSessionProvider>
   );

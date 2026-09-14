@@ -15,6 +15,7 @@ exports[`RedisTtl > records the whole catalogue in one place 1`] = `
   "otpCooldown": 60,
   "otpDelivery": 300,
   "otpLock": 2,
+  "outboxProcessed": 604800,
   "refreshToken": 2592000,
   "registerPending": 600,
   "tenantResolution": 600,
