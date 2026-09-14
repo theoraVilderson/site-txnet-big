@@ -1,17 +1,29 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, RotateCw, SearchCheck, ShieldCheck, TriangleAlert } from "lucide-react";
+import { KeyRound, Loader2, RotateCw, SearchCheck, ShieldCheck, TriangleAlert } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { billingApi, type ManualAnswer, type VerifyingPayment } from "@/lib/billing-api";
 import { BASE_CURRENCY, formatMoney } from "../../../_lib/money";
 import { formatInstant } from "../../../_lib/datetime";
-import { MANUAL_KEYS as K, OUTCOME_KEYS, canConfirmByHand, validateConfirm, type ConfirmInput } from "../_lib/manual-confirm";
+import {
+  MANUAL_KEYS as K,
+  OUTCOME_KEYS,
+  canAttachAuthority,
+  canConfirmByHand,
+  stateBadges,
+  validateAuthority,
+  validateConfirm,
+  type ConfirmInput,
+  type StateBadge,
+} from "../_lib/manual-confirm";
 
 /**
  * The manual confirmation screen (F-093-n, ADR-0044 decision 6) — what
- * replaces legacy's off-the-books manual top-up.
+ * replaces legacy's off-the-books manual top-up. Since F-093-o it lists every
+ * open payment (ADR-0046 decision 7), badged by state, and takes a lost
+ * authority by hand.
  *
  * **Inquire, then confirm.** Each payment offers "ask the gateway" first. Only
  * when that answers `unsettled` does the hand-confirm form appear, asking for
@@ -117,6 +129,9 @@ function ManualPaymentItem({ row, onSettled }: { row: VerifyingPayment; onSettle
   const [form, setForm] = useState<ConfirmInput>({ referenceId: "", reason: "" });
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof ConfirmInput, string>>>({});
   const [formOpen, setFormOpen] = useState(false);
+  const [authorityOpen, setAuthorityOpen] = useState(false);
+  const [authority, setAuthority] = useState("");
+  const [authorityError, setAuthorityError] = useState<string | null>(null);
 
   const run = async (call: () => Promise<ManualAnswer>) => {
     setBusy(true);
@@ -133,6 +148,18 @@ function ManualPaymentItem({ row, onSettled }: { row: VerifyingPayment; onSettle
     } finally {
       setBusy(false);
     }
+  };
+
+  const submitAuthority = (event: React.FormEvent) => {
+    event.preventDefault();
+    const checked = validateAuthority(authority);
+    if (!checked.ok) {
+      setAuthorityError(checked.error);
+      return;
+    }
+    setAuthorityError(null);
+    setAuthorityOpen(false);
+    void run(() => billingApi.manualAttachAuthority(row.id, checked.authority));
   };
 
   const submit = (event: React.FormEvent) => {
@@ -156,15 +183,9 @@ function ManualPaymentItem({ row, onSettled }: { row: VerifyingPayment; onSettle
           <span className="flex flex-wrap items-center gap-2 text-sm font-bold text-text-primary">
             <span dir="ltr">{money}</span>
             {row.gatewayName && <span className="text-xs font-medium text-text-secondary">{row.gatewayName}</span>}
-            <span className="rounded-full border border-primary/20 bg-leaf-bg px-2 py-0.5 text-[10px] font-bold text-primary">
-              {t("common", K.verifying)}
-            </span>
-            {row.flaggedAt && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-error-border bg-error-bg px-2 py-0.5 text-[10px] font-bold text-error">
-                <TriangleAlert size={10} aria-hidden />
-                {t("common", K.flagged)}
-              </span>
-            )}
+            {stateBadges(row).map((badge) => (
+              <Badge key={badge} badge={badge} />
+            ))}
           </span>
           <span className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-secondary">
             <span>
@@ -193,6 +214,17 @@ function ManualPaymentItem({ row, onSettled }: { row: VerifyingPayment; onSettle
             {busy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <SearchCheck size={14} aria-hidden />}
             {t("common", busy ? K.inquiring : K.inquire)}
           </button>
+          {canAttachAuthority(row) && !authorityOpen && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setAuthorityOpen(true)}
+              className="inline-flex items-center gap-1 rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-primary hover:bg-leaf-bg disabled:opacity-50"
+            >
+              <KeyRound size={14} aria-hidden />
+              {t("common", K.attachAuthority)}
+            </button>
+          )}
           {canConfirmByHand(answer?.outcome ?? null) && !formOpen && (
             <button
               type="button"
@@ -220,6 +252,40 @@ function ManualPaymentItem({ row, onSettled }: { row: VerifyingPayment; onSettle
         <p role="alert" className="text-xs font-bold text-error">
           {actionError}
         </p>
+      )}
+
+      {authorityOpen && canAttachAuthority(row) && (
+        <form onSubmit={submitAuthority} className="flex flex-col gap-3 rounded-2xl border border-card-border bg-bg-inner p-4">
+          <p className="text-sm font-bold text-text-primary">{t("common", K.authorityForm.title)}</p>
+          <p className="text-xs leading-5 text-text-secondary">{t("common", K.authorityForm.hint)}</p>
+          <label className="flex flex-col gap-1 text-xs text-text-secondary">
+            {t("common", K.authorityForm.label)}
+            <input
+              dir="ltr"
+              value={authority}
+              maxLength={64}
+              onChange={(e) => setAuthority(e.target.value)}
+              className="rounded-xl border border-card-border bg-card-bg px-3 py-2 font-mono text-sm text-text-primary"
+            />
+            {authorityError && <span className="text-error">{t("common", authorityError)}</span>}
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-text-on-accent disabled:opacity-50"
+            >
+              {t("common", K.authorityForm.submit)}
+            </button>
+            <button
+              type="button"
+              onClick={() => setAuthorityOpen(false)}
+              className="rounded-xl px-4 py-2 text-xs font-medium text-text-secondary hover:bg-leaf-bg"
+            >
+              {t("common", K.authorityForm.cancel)}
+            </button>
+          </div>
+        </form>
       )}
 
       {formOpen && canConfirmByHand(answer?.outcome ?? null) && (
@@ -269,3 +335,22 @@ function ManualPaymentItem({ row, onSettled }: { row: VerifyingPayment; onSettle
     </li>
   );
 }
+
+/** A state badge. Theme tokens only; a badge that asks for a person reads as an alert. */
+function Badge({ badge }: { badge: StateBadge }) {
+  const { t } = useLocale();
+  const alert = badge === "flagged" || badge === "noAuthority";
+  return (
+    <span
+      className={
+        alert
+          ? "inline-flex items-center gap-1 rounded-full border border-error-border bg-error-bg px-2 py-0.5 text-[10px] font-bold text-error"
+          : "rounded-full border border-primary/20 bg-leaf-bg px-2 py-0.5 text-[10px] font-bold text-primary"
+      }
+    >
+      {alert && <TriangleAlert size={10} aria-hidden />}
+      {t("common", K.state[badge])}
+    </span>
+  );
+}
+

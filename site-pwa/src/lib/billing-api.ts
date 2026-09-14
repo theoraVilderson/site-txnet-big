@@ -343,6 +343,14 @@ export const billingApi = {
   },
 
   /** Billing asks the gateway once more first; it credits by hand only if that stays unsettled. */
+  /** Attach an authority whose write was lost, then ask the gateway (F-092-af). */
+  async manualAttachAuthority(id: string, authority: string): Promise<ManualAnswer> {
+    return call<ManualAnswer>(`/payments/manual/${encodeURIComponent(id)}/authority`, {
+      method: "POST",
+      body: JSON.stringify({ authority }),
+    });
+  },
+
   async manualConfirm(id: string, body: { referenceId: string; reason: string }): Promise<ManualAnswer> {
     return call<ManualAnswer>(`/payments/manual/${encodeURIComponent(id)}/confirm`, {
       method: "POST",
@@ -398,9 +406,10 @@ export const billingApi = {
 /** Which table a gateway row is in — the pair `source` + `id` names a row (D-25). */
 export type GatewaySource = "platform" | "tenant";
 
-/** A payment waiting on a person (F-092-z): `pending`, and verifying or flagged. */
+/** An open payment a person may act on (F-092-z; every `pending` or `expired` one since F-092-af). */
 export interface VerifyingPayment {
   id: string;
+  status: "pending" | "expired";
   tenantId: string | null;
   userId: string;
   source: GatewaySource;

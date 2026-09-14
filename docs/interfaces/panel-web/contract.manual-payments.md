@@ -6,7 +6,7 @@ version: 18
 updated: 2026-09-14
 ---
 
-# Contract — panel-web: payments to confirm (F-093-n)
+# Contract — panel-web: payments to confirm (F-093-n, F-093-o)
 
 A topic file of [contract.md](contract.md) (§10). One page, `/payments/manual`
 (`PANEL_MANUAL_PAYMENTS`), under `(panel)/payments/manual/`: `page.tsx` is a
@@ -39,12 +39,25 @@ top-up.
 5. **Nothing is patched from an answer.** A settled answer re-reads the list;
    its sentence moves to a page-level notice, because its row leaves the list.
    An `unsettled` answer keeps the row and opens the way to the form.
-6. **Flagged is visible.** A payment billing flagged after a day of retries
-   (F-092-y) carries a "needs a person" badge beside "verifying". Colours are
+6. **Every open payment, badged** (F-093-o, ADR-0046 decision 7). Billing lists
+   every `pending` or `expired` payment of the lookback; `stateBadges` names
+   each: `waiting` (pending, not verifying — likely still at the bank),
+   `verifying`, `expired`, and the two that ask for a person as alerts —
+   `flagged` (a day, or half a gateway's window) and `noAuthority`. Colours are
    theme tokens, never gold.
+7. **A lost authority is typed in, then asked about.** Only a payment with no
+   authority offers "enter authority" (`canAttachAuthority`); the form takes
+   the gateway's authority (1–64, trimmed — `validateAuthority` mirrors
+   `manualAuthoritySchema`) and `billingApi.manualAttachAuthority` answers the
+   gateway's word, handled like an inquire.
+8. **The payer's pending page** (`pendingStateOf`) keeps waiting on an
+   `expired` payment — billing still asks the gateway for a week — and says
+   "reversed, the bank is returning it" for `failed` / `failureCode: reversed`.
 
 ## Proof
 
 `payments/manual/manual-payments.test.ts` — the outcome union against the
 service source, `validateConfirm`'s limits, `canConfirmByHand` for every
-outcome, the menu entry's permission, every key in `en` and `fa`.
+outcome, `stateBadges` per state, `canAttachAuthority` and
+`validateAuthority`, the menu entry's permission, every key in `en` and `fa`.
+`payment/_lib/pending-payment.test.ts` — expired waits, reversed reads so.

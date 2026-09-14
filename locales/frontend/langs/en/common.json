@@ -621,17 +621,17 @@
       "checking": "Checking…",
       "toFinancial": "View financial history",
       "closedTitle": "This payment was not settled",
-      "closedSubtitle": "The gateway did not confirm this payment. If money was taken, it is returned by your bank."
+      "closedSubtitle": "The gateway did not confirm this payment. If money was taken, it is returned by your bank.",
+      "reversedTitle": "Payment reversed",
+      "reversedSubtitle": "The gateway reversed this payment and your wallet was not charged. The bank is returning the money to your card; if it has not arrived within 72 hours, contact support."
     }
   },
   "manualPayments": {
     "title": "Payments to confirm",
-    "subtitle": "Payments the gateway has not confirmed. Ask the gateway first; confirm by hand only if it still cannot say.",
-    "empty": "No payments are waiting for confirmation.",
+    "subtitle": "Every open payment of the last seven days. Ask the gateway first; confirm by hand only if it still cannot say.",
+    "empty": "There are no open payments.",
     "loading": "Loading payments…",
     "retry": "Retry",
-    "verifying": "Verifying",
-    "flagged": "Needs a person",
     "attempts": "Checks: {{count}}",
     "nextCheck": "Next automatic check",
     "createdAt": "Paid at",
@@ -658,6 +658,22 @@
       "mismatch": "The gateway reports a different amount. Nothing was credited; this needs investigating.",
       "unsettled": "The gateway still cannot confirm or refuse it. You may confirm it by hand.",
       "confirmed_manually": "Confirmed by hand. The wallet was credited."
+    },
+    "state": {
+      "waiting": "Awaiting payment",
+      "verifying": "Verifying",
+      "flagged": "Needs a person",
+      "expired": "Expired",
+      "noAuthority": "No authority"
+    },
+    "attachAuthority": "Enter authority",
+    "authorityForm": {
+      "title": "Enter this payment's authority",
+      "hint": "Copy the authority from the gateway's own panel. The gateway is asked at once; a wrong one only earns the gateway's refusal.",
+      "label": "Authority",
+      "submit": "Save and ask",
+      "cancel": "Cancel",
+      "invalid": "Enter the authority (at most 64 characters)."
     }
   }
 }

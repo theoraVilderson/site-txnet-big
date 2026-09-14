@@ -12,6 +12,8 @@ import { readSuccess } from "./payment-result";
 export type PendingState =
   | { kind: "waiting" }
   | { kind: "credited"; reference: string | null }
+  /** The gateway reversed it: the bank is returning the money (F-092-ae). */
+  | { kind: "reversed" }
   | { kind: "closed" };
 
 /**
@@ -22,10 +24,13 @@ export type PendingState =
 export const PENDING_POLL_MS = 10_000;
 
 export function pendingStateOf(row: WalletPaymentRow | null): PendingState {
-  // A read that failed is not an outcome; the next poll asks again.
-  if (row === null || row.status === "pending") return { kind: "waiting" };
+  // A read that failed is not an outcome; the next poll asks again. An expired
+  // payment is still asked about for a week and credited when the bank confirms
+  // it (ADR-0046 decision 1) — "not settled" would send the payer to pay again.
+  if (row === null || row.status === "pending" || row.status === "expired") return { kind: "waiting" };
   // The reference passes the success page's own printable allowlist.
   if (row.status === "success") return { kind: "credited", reference: readSuccess(row.referenceId ?? undefined, undefined).reference };
+  if (row.failureCode === "reversed") return { kind: "reversed" };
   return { kind: "closed" };
 }
 

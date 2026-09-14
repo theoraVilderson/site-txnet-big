@@ -44,8 +44,19 @@ describe("pendingStateOf", () => {
     expect(pendingStateOf(row({ status: "success", referenceId: "<script>" }))).toEqual({ kind: "credited", reference: null });
   });
 
-  it.each(["failed", "expired"] as const)("says a %s payment was not settled", (status) => {
-    expect(pendingStateOf(row({ status, verifying: false }))).toEqual({ kind: "closed" });
+  it("says a failed payment was not settled", () => {
+    expect(pendingStateOf(row({ status: "failed", verifying: false }))).toEqual({ kind: "closed" });
+  });
+
+  // F-093-o (ADR-0046 decision 1): an expired payment is still asked about for a
+  // week and is credited when the bank confirms it — "not settled" would send
+  // the payer to pay again.
+  it("keeps waiting on an expired payment: billing still asks the gateway about it", () => {
+    expect(pendingStateOf(row({ status: "expired", verifying: false }))).toEqual({ kind: "waiting" });
+  });
+
+  it("says the bank is returning a payment the gateway reversed (F-092-ae)", () => {
+    expect(pendingStateOf(row({ status: "failed", failureCode: "reversed", verifying: false }))).toEqual({ kind: "reversed" });
   });
 
   it("keeps waiting when the payment could not be read — a network blip is not an outcome", () => {

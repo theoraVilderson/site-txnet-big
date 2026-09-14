@@ -7,9 +7,13 @@ import {
   MANUAL_KEYS,
   OUTCOME_KEYS,
   PAYMENT_CONFIRM_MANUAL,
+  canAttachAuthority,
   canConfirmByHand,
+  stateBadges,
+  validateAuthority,
   validateConfirm,
 } from "./_lib/manual-confirm";
+import type { VerifyingPayment } from "@/lib/billing-api";
 
 /**
  * The manual confirmation screen (F-093-n, ADR-0044 decision 6). What breaks
@@ -66,6 +70,59 @@ describe("canConfirmByHand", () => {
     for (const settled of ["credited", "already_settled", "refused", "mismatch", "confirmed_manually"] as const) {
       expect(canConfirmByHand(settled)).toBe(false);
     }
+  });
+});
+
+// F-093-o (ADR-0046 decision 7): every open payment is listed, so the badges
+// are what tells a person which one needs them.
+const payment = (overrides: Partial<VerifyingPayment>): VerifyingPayment => ({
+  id: "77777777-7777-4777-8777-777777777777",
+  status: "pending",
+  tenantId: null,
+  userId: "44444444-4444-4444-8444-444444444444",
+  source: "tenant",
+  gatewayId: null,
+  gatewayName: null,
+  providerName: "zarinpal",
+  amountRequested: "10.00",
+  amountCredited: "10.00",
+  chargedAmountMinor: "1000000",
+  authority: "A1",
+  createdAt: "2026-09-14T10:00:00Z",
+  verifyAttempts: 0,
+  nextVerifyAt: null,
+  flaggedAt: null,
+  ...overrides,
+});
+
+describe("stateBadges", () => {
+  it.each<[string, Partial<VerifyingPayment>, string[]]>([
+    ["a payer still at the bank", {}, ["waiting"]],
+    ["a verifying payment", { nextVerifyAt: "2026-09-14T10:01:00Z", verifyAttempts: 1 }, ["verifying"]],
+    ["a flagged one", { nextVerifyAt: "2026-09-14T11:00:00Z", flaggedAt: "2026-09-15T10:00:00Z" }, ["verifying", "flagged"]],
+    ["an expired one", { status: "expired" }, ["expired"]],
+    ["one whose authority was lost", { authority: null }, ["waiting", "noAuthority"]],
+  ])("names %s", (_what, overrides, badges) => {
+    expect(stateBadges(payment(overrides))).toEqual(badges);
+  });
+
+  it("has a sentence for every badge, in the keys", () => {
+    for (const badge of ["waiting", "verifying", "flagged", "expired", "noAuthority"] as const) {
+      expect(MANUAL_KEYS.state[badge]).toBeTruthy();
+    }
+  });
+});
+
+describe("attaching a lost authority", () => {
+  it("is offered only for a payment that has none", () => {
+    expect(canAttachAuthority(payment({ authority: null }))).toBe(true);
+    expect(canAttachAuthority(payment({ authority: "A1" }))).toBe(false);
+  });
+
+  it("mirrors billing's limits, trimmed", () => {
+    expect(validateAuthority(" A000123 ")).toEqual({ ok: true, authority: "A000123" });
+    expect(validateAuthority("  ")).toEqual({ ok: false, error: MANUAL_KEYS.authorityForm.invalid });
+    expect(validateAuthority("x".repeat(65))).toEqual({ ok: false, error: MANUAL_KEYS.authorityForm.invalid });
   });
 });
 

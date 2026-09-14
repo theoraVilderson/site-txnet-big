@@ -44,12 +44,13 @@ export function PaymentPendingView({ paymentId }: { paymentId: string }) {
   // Credited on this visit: the real celebration, not the quiet "already" one.
   if (state.kind === "credited") return <PaymentSuccessView reference={state.reference} alreadyPaid={false} />;
 
-  const closed = state.kind === "closed";
+  const closed = state.kind === "closed" || state.kind === "reversed";
+  const reversed = state.kind === "reversed";
   return (
     <PaymentResultCard
       tone={closed ? "failure" : "pending"}
-      title={t("common", closed ? P.pending.closedTitle : P.pending.title)}
-      message={t("common", closed ? P.pending.closedSubtitle : P.pending.subtitle)}
+      title={t("common", reversed ? P.pending.reversedTitle : closed ? P.pending.closedTitle : P.pending.title)}
+      message={t("common", reversed ? P.pending.reversedSubtitle : closed ? P.pending.closedSubtitle : P.pending.subtitle)}
       actions={
         <Link href={PANEL_FINANCIAL} className={SECONDARY_ACTION}>
           <History size={16} aria-hidden />

@@ -1,5 +1,5 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import type { ManualOutcome } from "@/lib/billing-api";
+import type { ManualOutcome, VerifyingPayment } from "@/lib/billing-api";
 
 /** Every string the screen can show (C-06). */
 export const MANUAL_KEYS = FrontendI18nKeys.common.manualPayments;
@@ -45,3 +45,38 @@ export function validateConfirm(input: ConfirmInput): ConfirmValidation {
   if (reason.length < 5 || reason.length > 500) errors.reason = MANUAL_KEYS.form.invalidReason;
   return Object.keys(errors).length > 0 ? { ok: false, errors } : { ok: true, body: { referenceId, reason } };
 }
+
+/**
+ * What a person needs to know about an open payment at a glance (F-093-o,
+ * ADR-0046 decision 7): every `pending` or `expired` one is listed now, so the
+ * badges carry the triage.
+ *  - `waiting`: pending and not verifying — most likely a payer still at the bank;
+ *  - `verifying`: the gateway met a verify with silence and is being asked again;
+ *  - `flagged`: a person should look (a day, or half a gateway's window);
+ *  - `expired`: the clock ran out; billing still asks the gateway for a week;
+ *  - `noAuthority`: the authority was lost — attach it from the gateway's panel.
+ */
+export type StateBadge = "waiting" | "verifying" | "flagged" | "expired" | "noAuthority";
+
+export function stateBadges(row: VerifyingPayment): StateBadge[] {
+  const badges: StateBadge[] = [];
+  if (row.status === "expired") badges.push("expired");
+  else badges.push(row.nextVerifyAt ? "verifying" : "waiting");
+  if (row.flaggedAt) badges.push("flagged");
+  if (row.authority === null) badges.push("noAuthority");
+  return badges;
+}
+
+/** Only a payment with no authority takes one — billing refuses the rest (`authority_present`). */
+export function canAttachAuthority(row: VerifyingPayment): boolean {
+  return row.authority === null;
+}
+
+/** billing's `manualAuthoritySchema`, mirrored. */
+export function validateAuthority(input: string): { ok: true; authority: string } | { ok: false; error: string } {
+  const authority = input.trim();
+  return authority.length >= 1 && authority.length <= 64
+    ? { ok: true, authority }
+    : { ok: false, error: MANUAL_KEYS.authorityForm.invalid };
+}
+
