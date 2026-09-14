@@ -230,4 +230,23 @@ describe('ZarinpalProvider — inquiry and fee quote', () => {
     await expect(provider.quoteFee({ credentials, amountMinor: BigInt(10_000) })).resolves.toEqual({ feeMinor: BigInt(500) });
     expect(calls[0].url).toBe('https://payment.zarinpal.com/pg/v4/payment/feeCalculation.json');
   });
+
+  // The sandbox has no `feeCalculation` route (404, checked 2026-09-14), so an
+  // automatic-fee gateway could never be quoted in sandbox. The real fee is
+  // asked of production in every environment (the user's call, 2026-09-14);
+  // payments themselves stay on the sandbox.
+  it('asks production for the fee even in sandbox, while payments stay on the sandbox', async () => {
+    const { provider, calls } = gateway(
+      [
+        { body: { data: { code: 100, amount: 10_000, suggested_amount: 10_500 } } },
+        { body: { data: { code: 100, authority: 'A1' } } },
+      ],
+      { sandbox: true },
+    );
+
+    await expect(provider.quoteFee({ credentials, amountMinor: BigInt(10_000) })).resolves.toEqual({ feeMinor: BigInt(500) });
+    await provider.request({ credentials, amountMinor: BigInt(10_000), callbackUrl: 'https://x.example/cb', description: 'd' });
+    expect(calls[0].url).toBe('https://payment.zarinpal.com/pg/v4/payment/feeCalculation.json');
+    expect(calls[1].url).toBe('https://sandbox.zarinpal.com/pg/v4/payment/request.json');
+  });
 });

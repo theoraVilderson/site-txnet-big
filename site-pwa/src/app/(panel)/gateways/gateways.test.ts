@@ -3,6 +3,7 @@ import type { AdminGateway } from "@/lib/billing-api";
 import type { Me } from "@/lib/auth-api";
 import {
   canManageLinks,
+  changedFields,
   createBody,
   emptyForm,
   formFromGateway,
@@ -119,12 +120,48 @@ describe("gateway form — what a save sends", () => {
 
 describe("gateway form — validation", () => {
   it("names each field that would be refused, before a request is made", () => {
-    expect(validateForm(emptyForm("tenant"))).toEqual(
-      expect.objectContaining({ displayName: "required", providerName: "required", minAcceptAmount: "required", maxAcceptAmount: "required" }),
-    );
+    expect(validateForm(emptyForm("tenant"))).toEqual({ displayName: "required", providerName: "required", gatewayCategory: "required" });
     expect(validateForm({ ...formFromGateway(GATEWAY), minAcceptAmount: "600" })).toEqual({ minAcceptAmount: "range" });
     expect(validateForm({ ...formFromGateway(GATEWAY), feeValue: "1,5" })).toEqual({ feeValue: "decimal" });
     expect(validateForm(formFromGateway(GATEWAY))).toEqual({});
+  });
+
+  it("does not ask an automatic-fee gateway for a fee value it never uses", () => {
+    const automatic = { ...formFromGateway(GATEWAY), feeCalculationMode: "automatic", feeValue: "" };
+    expect(validateForm(automatic)).toEqual({});
+    expect(validateForm({ ...automatic, feeCalculationMode: "manual" })).toEqual({ feeValue: "required" });
+  });
+});
+
+/** A gateway may leave either end of its amount range open: empty is no limit, not zero. */
+describe("gateway form — an open amount range", () => {
+  it("accepts empty bounds and reads a missing one as empty", () => {
+    const open = formFromGateway({ ...GATEWAY, minAcceptAmount: null, maxAcceptAmount: null });
+    expect(open.minAcceptAmount).toBe("");
+    expect(open.maxAcceptAmount).toBe("");
+    expect(validateForm(open)).toEqual({});
+    expect(validateForm({ ...open, minAcceptAmount: "600" })).toEqual({});
+  });
+
+  it("clears a bound on edit with null, and leaves an unset one out of a create", () => {
+    const form = formFromGateway(GATEWAY);
+    expect(updateBody(GATEWAY, { ...form, maxAcceptAmount: " " }, OWNER_ME)).toEqual({ maxAcceptAmount: null });
+    const create = { ...emptyForm("tenant"), displayName: "X", providerName: "idpay", gatewayCategory: "domestic_rial", feeValue: "0" };
+    expect(createBody(create, OWNER_ME)).not.toHaveProperty("minAcceptAmount");
+    expect(createBody(create, OWNER_ME)).not.toHaveProperty("maxAcceptAmount");
+  });
+});
+
+/** The edit screen lists what a save will change before it is pressed. */
+describe("gateway form — what changed", () => {
+  it("names the changed fields, a typed secret among them, and nothing for an untouched form", () => {
+    const form = formFromGateway(GATEWAY);
+    expect(changedFields(GATEWAY, form, OWNER_ME)).toEqual([]);
+    expect(changedFields(GATEWAY, { ...form, feeValue: "2", secretKey: "sk", depositPresets: [] }, OWNER_ME)).toEqual([
+      "feeValue",
+      "depositPresets",
+      "secretKey",
+    ]);
   });
 });
 

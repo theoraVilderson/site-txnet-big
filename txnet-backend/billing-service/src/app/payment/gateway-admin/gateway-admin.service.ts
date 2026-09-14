@@ -45,8 +45,9 @@ export type GatewayFields = {
   providerName?: string;
   gatewayCategory?: string;
   isActive?: boolean;
-  minAcceptAmount?: string;
-  maxAcceptAmount?: string;
+  /** `null` is no limit on that side. */
+  minAcceptAmount?: string | null;
+  maxAcceptAmount?: string | null;
   feeCalculationMode?: string;
   feeType?: string;
   feeValue?: string;
@@ -87,8 +88,8 @@ export type GatewayView = {
   description: string | null;
   supportedCurrencies: unknown;
   confirmationMode: string | null;
-  minAcceptAmount: string;
-  maxAcceptAmount: string;
+  minAcceptAmount: string | null;
+  maxAcceptAmount: string | null;
   feeCalculationMode: string;
   feeType: string;
   feeValue: string;
@@ -147,7 +148,7 @@ const DECIMAL_COLUMNS = [
 const PLAIN_COLUMNS = ['displayName', 'isActive', 'useLiveRate'] as const;
 const ENUM_COLUMNS = { providerName: PaymentProviderName, gatewayCategory: GatewayCategory, feeCalculationMode: FeeCalcMode, feeType: FeeType, roundingMode: RateRoundingMode } as const;
 const PLATFORM_ONLY = ['description', 'supportedCurrencies', 'confirmationMode'] as const;
-const REQUIRED_ON_CREATE = ['displayName', 'providerName', 'gatewayCategory', 'minAcceptAmount', 'maxAcceptAmount', 'feeCalculationMode', 'feeType', 'feeValue'] as const;
+const REQUIRED_ON_CREATE = ['displayName', 'providerName', 'gatewayCategory', 'feeCalculationMode', 'feeType', 'feeValue'] as const;
 const SECRET_KEYS = ['merchantId', 'secretKey'] as const;
 
 const NOT_CONFIGURED: GatewaySecretsState = {
@@ -587,8 +588,8 @@ export class GatewayAdminService {
       description: source === 'platform' ? str(row['description']) : null,
       supportedCurrencies: source === 'platform' ? (row['supportedCurrencies'] ?? []) : null,
       confirmationMode: source === 'platform' ? str(row['confirmationMode']) : null,
-      minAcceptAmount: String(row['minAcceptAmount']),
-      maxAcceptAmount: String(row['maxAcceptAmount']),
+      minAcceptAmount: str(row['minAcceptAmount']),
+      maxAcceptAmount: str(row['maxAcceptAmount']),
       feeCalculationMode: row['feeCalculationMode'] as string,
       feeType: row['feeType'] as string,
       feeValue: String(row['feeValue']),

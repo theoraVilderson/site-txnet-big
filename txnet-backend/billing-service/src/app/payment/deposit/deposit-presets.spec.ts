@@ -61,4 +61,11 @@ describe('resolvePresets', () => {
     expect(resolvePresets([], [], range)).toEqual([]);
     expect(resolvePresets([], null, range)).toEqual([]);
   });
+
+  it('bounds only by the side a gateway set — a missing minimum or maximum is no limit', () => {
+    const list = [d('0.5'), d('2'), d('150')];
+    expect(resolvePresets(list, [], { min: null, max: null })).toEqual(['0.50', '2.00', '150.00']);
+    expect(resolvePresets(list, [], { min: d('1'), max: null })).toEqual(['2.00', '150.00']);
+    expect(resolvePresets(list, [], { min: null, max: d('100') })).toEqual(['0.50', '2.00']);
+  });
 });

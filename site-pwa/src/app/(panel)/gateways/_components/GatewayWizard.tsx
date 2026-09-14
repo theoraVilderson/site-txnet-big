@@ -1,19 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowLeft,
   ArrowRight,
-  Bitcoin,
   Building2,
   Check,
-  ChevronDown,
-  CircleCheckBig,
-  CreditCard,
-  Eye,
-  EyeOff,
   Globe,
   KeyRound,
   Landmark,
@@ -47,12 +41,12 @@ import {
 import {
   WIZARD_STEPS,
   applyProvider,
-  feePreview,
   firstInvalidStep,
   stepErrors,
   type Provider,
   type WizardStepId,
 } from "../_lib/gateway-wizard";
+import { ChoiceCards, FeeFields, PROVIDER_ICONS, SecretInput, Toggle, useRangeText } from "./gateway-fields";
 
 const G = FrontendI18nKeys.common.gateways;
 const F = G.form;
@@ -64,12 +58,6 @@ const STEP_ICONS: Record<WizardStepId, LucideIcon> = {
   fee: Percent,
   secrets: KeyRound,
   review: ListChecks,
-};
-const PROVIDER_ICONS: Record<Provider, LucideIcon> = {
-  zarinpal: Landmark,
-  idpay: Landmark,
-  nowpayments: Bitcoin,
-  stripe: CreditCard,
 };
 
 const input =
@@ -85,12 +73,12 @@ interface GatewayWizardProps {
 
 /**
  * Add a gateway, one concern per step (F-102-e): provider → details → fee →
- * keys → review. Editing stays in `GatewayFormModal`; both build the same
- * {@link GatewayForm} and send it through `createBody`, so the wizard adds no
- * rule of its own.
+ * keys → review. Editing is `GatewayEditor`; both build the same
+ * {@link GatewayForm} from the controls in `gateway-fields.tsx`, and the wizard
+ * sends it through `createBody`, so it adds no rule of its own.
  *
  * A full-screen sheet below `sm`, a dialog above it with the step list at the
- * side on `lg`. Secrets are write-only exactly as in the modal: the review step
+ * side on `lg`. Secrets are write-only exactly as in the editor: the review step
  * says whether one was entered, never what it is.
  */
 export function GatewayWizard({ me, onClose, onCreated }: GatewayWizardProps) {
@@ -233,43 +221,7 @@ export function GatewayWizard({ me, onClose, onCreated }: GatewayWizardProps) {
     value: string,
     options: readonly { value: V; title: string; desc?: string; icon?: LucideIcon }[],
     onPick: (v: V) => void,
-  ) => (
-    <div role="radiogroup" aria-label={name} className="grid gap-2 sm:grid-cols-2">
-      {options.map((o) => {
-        const selected = o.value === value;
-        const Icon = o.icon;
-        return (
-          <button
-            key={o.value}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            onClick={() => onPick(o.value)}
-            className={`relative flex items-start gap-3 rounded-2xl border p-3 text-start transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-glow)] ${
-              selected
-                ? "border-[var(--accent-primary)] bg-[var(--leaf-bg)] shadow-sm"
-                : "border-card-border bg-[var(--bg-inner)] hover:border-[var(--accent-primary)]"
-            }`}
-          >
-            {Icon && (
-              <span className={`grid size-9 shrink-0 place-items-center rounded-xl ${selected ? "bg-primary text-white" : "bg-card-bg text-primary"}`}>
-                <Icon size={18} aria-hidden />
-              </span>
-            )}
-            <span className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-sm font-bold text-text-primary">{o.title}</span>
-              {o.desc && <span className="text-[11px] leading-5 text-text-secondary">{o.desc}</span>}
-            </span>
-            {selected && (
-              <span className="absolute end-2 top-2 grid size-5 place-items-center rounded-full bg-primary text-white">
-                <Check size={12} aria-hidden />
-              </span>
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
+  ) => <ChoiceCards name={name} value={value} options={options} onPick={onPick} />;
 
   const secretInput = (k: "merchantId" | "secretKey") => <SecretInput id={`gw-${k}`} value={form[k]} onChange={(v) => set(k, v)} showLabel={t("common", W.secrets.show)} hideLabel={t("common", W.secrets.hide)} />;
 
@@ -361,8 +313,8 @@ export function GatewayWizard({ me, onClose, onCreated }: GatewayWizardProps) {
             />,
           )}
         </div>
-        {labeled("minAcceptAmount", t("common", F.minAmount), textInput("minAcceptAmount", { ltr: true, decimal: true, suffix: BASE_CURRENCY, placeholder: "1" }))}
-        {labeled("maxAcceptAmount", t("common", F.maxAmount), textInput("maxAcceptAmount", { ltr: true, decimal: true, suffix: BASE_CURRENCY, placeholder: "500" }))}
+        {labeled("minAcceptAmount", t("common", F.minAmount), textInput("minAcceptAmount", { ltr: true, decimal: true, suffix: BASE_CURRENCY, placeholder: t("common", G.range.noLimit) }), undefined, true)}
+        {labeled("maxAcceptAmount", t("common", F.maxAmount), textInput("maxAcceptAmount", { ltr: true, decimal: true, suffix: BASE_CURRENCY, placeholder: t("common", G.range.noLimit) }), undefined, true)}
         <p className="-mt-2 text-[11px] text-text-secondary sm:col-span-2">{t("common", W.hints.amounts)}</p>
         <div className="sm:col-span-2">
           <Toggle
@@ -388,7 +340,7 @@ export function GatewayWizard({ me, onClose, onCreated }: GatewayWizardProps) {
       </div>
     ),
 
-    fee: <FeeStep form={form} set={set} errors={errors} textInput={textInput} labeled={labeled} choice={choice} money={money} />,
+    fee: <FeeFields form={form} set={set} errors={errors} money={money} />,
 
     secrets: (
       <div className="flex flex-col gap-4">
@@ -620,161 +572,9 @@ export function GatewayWizard({ me, onClose, onCreated }: GatewayWizardProps) {
   );
 }
 
-type Set = <K extends keyof GatewayForm>(k: K, v: GatewayForm[K]) => void;
-
-function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-card-border bg-[var(--bg-inner)] p-3 text-start transition-colors hover:border-[var(--accent-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-glow)]"
-    >
-      <span className="flex flex-col gap-0.5">
-        <span className="text-sm font-bold text-text-primary">{label}</span>
-        {hint && <span className="text-[11px] text-text-secondary">{hint}</span>}
-      </span>
-      <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${checked ? "bg-primary" : "bg-[var(--leaf-bg)] ring-1 ring-inset ring-card-border"}`}>
-        <span className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-all ${checked ? "start-[1.375rem]" : "start-0.5"}`} />
-      </span>
-    </button>
-  );
-}
-
-function SecretInput({ id, value, onChange, showLabel, hideLabel }: { id: string; value: string; onChange: (v: string) => void; showLabel: string; hideLabel: string }) {
-  const [visible, setVisible] = useState(false);
-  return (
-    <div className="relative" dir="ltr">
-      <input
-        id={id}
-        className={`${input} pe-11 font-mono`}
-        type={visible ? "text" : "password"}
-        autoComplete="new-password"
-        autoCorrect="off"
-        autoCapitalize="off"
-        spellCheck={false}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-      <button
-        type="button"
-        onClick={() => setVisible((v) => !v)}
-        aria-label={visible ? hideLabel : showLabel}
-        className="absolute inset-y-0 end-1 grid w-9 place-items-center text-text-secondary hover:text-text-primary"
-      >
-        {visible ? <EyeOff size={16} aria-hidden /> : <Eye size={16} aria-hidden />}
-      </button>
-    </div>
-  );
-}
-
-interface FeeStepProps {
-  form: GatewayForm;
-  set: Set;
-  errors: FormErrors;
-  textInput: (k: keyof GatewayForm, opts?: { ltr?: boolean; suffix?: string; placeholder?: string; decimal?: boolean }) => ReactNode;
-  labeled: (k: keyof GatewayForm, label: string, control: ReactNode, hint?: string, optional?: boolean) => ReactNode;
-  choice: <V extends string>(name: string, value: string, options: readonly { value: V; title: string; desc?: string; icon?: LucideIcon }[], onPick: (v: V) => void) => ReactNode;
-  money: (amount: string) => string;
-}
-
-function FeeStep({ form, set, errors, textInput, labeled, choice, money }: FeeStepProps) {
-  const { t } = useLocale();
-  const [sample, setSample] = useState("100");
-  const [advanced, setAdvanced] = useState(Boolean(form.feeFloor || form.feeCeiling || errors.feeFloor || errors.feeCeiling));
-  const manual = form.feeCalculationMode === "manual";
-  const fee = useMemo(() => feePreview(form, sample), [form, sample]);
-
-  return (
-    <div className="flex flex-col gap-5">
-      {choice(
-        t("common", F.feeMode),
-        form.feeCalculationMode,
-        [
-          { value: "manual", title: t("common", W.feeModes.manual.title), desc: t("common", W.feeModes.manual.desc), icon: Percent },
-          { value: "automatic", title: t("common", W.feeModes.automatic.title), desc: t("common", W.feeModes.automatic.desc), icon: CircleCheckBig },
-        ] as const,
-        (v) => set("feeCalculationMode", v),
-      )}
-
-      {manual ? (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-bold text-text-primary">{t("common", F.feeType)}</span>
-            <div role="radiogroup" aria-label={t("common", F.feeType)} className="grid grid-cols-2 gap-1 rounded-xl border border-card-border bg-[var(--bg-inner)] p-1">
-              {(["percentage", "fixed"] as const).map((ft) => (
-                <button
-                  key={ft}
-                  type="button"
-                  role="radio"
-                  aria-checked={form.feeType === ft}
-                  onClick={() => set("feeType", ft)}
-                  className={`rounded-lg px-2 py-2 text-xs font-bold transition-all ${form.feeType === ft ? "bg-primary text-white shadow-sm" : "text-text-secondary hover:text-text-primary"}`}
-                >
-                  {t("common", W.feeTypes[ft])}
-                </button>
-              ))}
-            </div>
-          </div>
-          {labeled("feeValue", t("common", F.feeValue), textInput("feeValue", { ltr: true, decimal: true, suffix: form.feeType === "percentage" ? "%" : BASE_CURRENCY }))}
-        </div>
-      ) : (
-        <p className="rounded-xl bg-[var(--leaf-bg)] p-3 text-xs text-text-primary">{t("common", W.hints.automaticNote)}</p>
-      )}
-
-      <div className="rounded-2xl border border-card-border">
-        <button
-          type="button"
-          onClick={() => setAdvanced((a) => !a)}
-          aria-expanded={advanced}
-          className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-xs font-bold text-text-primary"
-        >
-          <span>
-            {t("common", W.hints.advanced)} <span className="font-normal text-text-secondary">({t("common", W.optional)})</span>
-          </span>
-          <ChevronDown size={16} className={`text-text-secondary transition-transform ${advanced ? "rotate-180" : ""}`} aria-hidden />
-        </button>
-        {advanced && (
-          <div className="grid gap-4 border-t border-card-border p-3 sm:grid-cols-2">
-            {labeled("feeFloor", t("common", F.feeFloor), textInput("feeFloor", { ltr: true, decimal: true, suffix: BASE_CURRENCY }))}
-            {labeled("feeCeiling", t("common", F.feeCeiling), textInput("feeCeiling", { ltr: true, decimal: true, suffix: BASE_CURRENCY }))}
-          </div>
-        )}
-      </div>
-
-      {manual && (
-        <div className="rounded-2xl bg-[image:var(--card-gradient)] p-4 text-white shadow-md">
-          <p className="mb-3 text-xs font-bold opacity-90">{t("common", W.preview.title)}</p>
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <label className="flex flex-col gap-1 text-[11px] opacity-90">
-              {t("common", W.preview.amount)}
-              <span className="relative" dir="ltr">
-                <input
-                  inputMode="decimal"
-                  value={sample}
-                  onChange={(e) => setSample(e.target.value)}
-                  className="w-32 rounded-lg border border-white/30 bg-white/15 px-2 py-1.5 pe-10 text-sm font-bold text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-white/40"
-                />
-                <span className="pointer-events-none absolute inset-y-0 end-2 flex items-center text-[10px] font-bold opacity-80">{BASE_CURRENCY}</span>
-              </span>
-            </label>
-            <div className="text-end">
-              <p className="text-[11px] opacity-90">{t("common", W.preview.fee)}</p>
-              <p className="text-xl font-bold" dir="ltr">
-                {fee === null ? "—" : money(fee)}
-              </p>
-            </div>
-          </div>
-          {fee === null && sample.trim() !== "" && <p className="mt-2 text-[11px] opacity-90">{t("common", W.preview.invalid)}</p>}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function ReviewStep({ form, owner, money, onEdit }: { form: GatewayForm; owner: boolean; money: (a: string) => string; onEdit: (id: WizardStepId) => void }) {
   const { t } = useLocale();
+  const rangeText = useRangeText(money);
   const none = t("common", W.review.none);
   const provider = form.providerName as Provider;
   const category = form.gatewayCategory as (typeof CATEGORIES)[number];
@@ -830,7 +630,7 @@ function ReviewStep({ form, owner, money, onEdit }: { form: GatewayForm; owner: 
       {section("details", [
         [t("common", F.displayName), form.displayName || none],
         [t("common", F.category), category ? t("common", W.categories[category]) : none],
-        [t("common", W.review.range), <span key="r" dir="ltr">{`${money(form.minAcceptAmount || "0")} – ${money(form.maxAcceptAmount || "0")}`}</span>],
+        [t("common", W.review.range), <span key="r" dir="ltr">{rangeText(form.minAcceptAmount, form.maxAcceptAmount)}</span>],
         [t("common", F.isActive), form.isActive ? t("common", W.review.yes) : t("common", W.review.no)],
         [
           t("common", FrontendI18nKeys.common.gateways.presets.title),

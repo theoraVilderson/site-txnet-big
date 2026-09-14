@@ -1,6 +1,6 @@
 "use client";
 
-import { CreditCard, RotateCw } from "lucide-react";
+import { CreditCard, FlaskConical, RotateCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { DepositGateway } from "@/lib/billing-api";
@@ -98,19 +98,34 @@ export function GatewaySelector({
                   {gateway.displayName.slice(0, 1).toUpperCase()}
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-bold text-text-primary">
-                    {gateway.displayName}
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate text-sm font-bold text-text-primary">{gateway.displayName}</span>
+                    {gateway.testing && (
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-primary px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                        <FlaskConical size={10} aria-hidden />
+                        {t("common", D.testing)}
+                      </span>
+                    )}
                   </span>
                   <span dir="ltr" className="block truncate text-[11px] text-text-secondary">
-                    {t("common", D.range, {
-                      min: money(gateway.minAmount),
-                      max: money(gateway.maxAmount),
-                    })}
+                    {gateway.minAmount && gateway.maxAmount
+                      ? t("common", D.range, { min: money(gateway.minAmount), max: money(gateway.maxAmount) })
+                      : gateway.minAmount
+                        ? t("common", D.rangeFrom, { min: money(gateway.minAmount) })
+                        : gateway.maxAmount
+                          ? t("common", D.rangeUpTo, { max: money(gateway.maxAmount) })
+                          : t("common", D.rangeAny)}
                   </span>
                 </span>
               </button>
             );
           })}
+          {selected?.testing && (
+            <p className="flex items-start gap-2 rounded-xl border border-dashed border-primary bg-leaf-bg p-3 text-[11px] leading-5 text-text-primary sm:col-span-2">
+              <FlaskConical size={14} className="mt-0.5 shrink-0 text-primary" aria-hidden />
+              {t("common", D.testingHint)}
+            </p>
+          )}
         </div>
       )}
     </section>

@@ -43,10 +43,11 @@ export function normalizePresets(values: readonly string[]): string[] {
 export function resolvePresets(
   gateway: readonly Prisma.Decimal[] | null | undefined,
   tenantDefault: readonly Prisma.Decimal[] | null | undefined,
-  range: { min: Prisma.Decimal; max: Prisma.Decimal },
+  /** A bound left `null` is no limit on that side. */
+  range: { min: Prisma.Decimal | null; max: Prisma.Decimal | null },
 ): string[] {
   const list = gateway && gateway.length > 0 ? gateway : (tenantDefault ?? []);
   return list
-    .filter((a) => a.gte(range.min) && a.lte(range.max))
+    .filter((a) => (range.min == null || a.gte(range.min)) && (range.max == null || a.lte(range.max)))
     .map((a) => new Prisma.Decimal(a).toFixed(2));
 }

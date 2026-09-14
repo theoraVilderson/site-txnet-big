@@ -57,9 +57,10 @@ function isWebAddress(value: string): boolean {
 
 /** A Zarinpal merchant id: 36 characters, 8-4-4-4-12 hex. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const REQUIRED = ["displayName", "providerName", "gatewayCategory", "minAcceptAmount", "maxAcceptAmount", "feeValue"] as const;
+const REQUIRED = ["displayName", "providerName", "gatewayCategory"] as const;
 const DECIMALS = ["minAcceptAmount", "maxAcceptAmount", "feeValue", "feeFloor", "feeCeiling"] as const;
-const NULLABLE = new Set<keyof GatewayForm>(["feeFloor", "feeCeiling"]);
+/** Empty is sent as `null`: no fee floor or ceiling, and no minimum or maximum amount. */
+const NULLABLE = new Set<keyof GatewayForm>(["feeFloor", "feeCeiling", "minAcceptAmount", "maxAcceptAmount"]);
 /** Every field an edit may send, secrets and verification aside — they have rules of their own below. */
 const EDITABLE = [
   "displayName",
@@ -115,8 +116,8 @@ export function formFromGateway(g: AdminGateway): GatewayForm {
     providerName: g.providerName,
     gatewayCategory: g.gatewayCategory,
     isActive: g.isActive,
-    minAcceptAmount: g.minAcceptAmount,
-    maxAcceptAmount: g.maxAcceptAmount,
+    minAcceptAmount: g.minAcceptAmount ?? "",
+    maxAcceptAmount: g.maxAcceptAmount ?? "",
     feeCalculationMode: g.feeCalculationMode,
     feeType: g.feeType,
     feeValue: g.feeValue,
@@ -134,6 +135,8 @@ export function formFromGateway(g: AdminGateway): GatewayForm {
 export function validateForm(form: GatewayForm): FormErrors {
   const errors: FormErrors = {};
   for (const k of REQUIRED) if (form[k].trim() === "") errors[k] = "required";
+  // An automatic fee is the provider's quote; the stored value is never read.
+  if (form.feeCalculationMode === "manual" && form.feeValue.trim() === "") errors.feeValue = "required";
   for (const k of DECIMALS) {
     const v = form[k].trim();
     if (v !== "" && !errors[k] && !DECIMAL.test(v)) errors[k] = "decimal";
@@ -178,6 +181,8 @@ export function createBody(form: GatewayForm, me: Me | null): CreateGatewayBody 
     if (form.tenantId.trim()) body.tenantId = form.tenantId.trim();
     if (form.verificationStatus) body.verificationStatus = form.verificationStatus;
   }
+  // Billing requires a fee value; an automatic-fee gateway left it empty.
+  if (body.feeValue === undefined || body.feeValue === "") body.feeValue = "0";
   if (form.depositPresets.length > 0) body.depositPresets = form.depositPresets;
   if (form.callbackUrl.trim()) body.callbackUrl = form.callbackUrl.trim();
   return { ...(body as unknown as CreateGatewayBody), ...secrets(form) };
@@ -188,6 +193,8 @@ export function updateBody(original: AdminGateway, form: GatewayForm, me: Me | n
   const before = formFromGateway(original);
   const body: Record<string, unknown> = {};
   for (const k of EDITABLE) {
+    // An emptied fee value (automatic mode) keeps the stored one rather than sending "".
+    if (k === "feeValue" && form.feeValue.trim() === "") continue;
     if (form[k] !== before[k]) body[k] = value(form, k);
   }
   if (
@@ -201,4 +208,9 @@ export function updateBody(original: AdminGateway, form: GatewayForm, me: Me | n
   if (!samePresets(form.depositPresets, before.depositPresets)) body.depositPresets = form.depositPresets;
   if (form.callbackUrl.trim() !== before.callbackUrl.trim()) body.callbackUrl = form.callbackUrl.trim() || null;
   return { ...(body as UpdateGatewayBody), ...secrets(form) };
+}
+
+/** The fields a save would send, in the order it sends them — the edit screen's list of changes. */
+export function changedFields(original: AdminGateway, form: GatewayForm, me: Me | null): (keyof GatewayForm)[] {
+  return Object.keys(updateBody(original, form, me)) as (keyof GatewayForm)[];
 }

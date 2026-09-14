@@ -8,7 +8,7 @@ import { CouponValidationService, RejectedCoupon } from '../coupon/coupon-valida
 import { GatewayMerchant, GatewaySource, merchantLabel } from '../gateway/gateway-merchant';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { FxRateReader } from '../pricing/fx-rate.reader';
-import { priceDeposit, selectableGateways, selectGateway } from './deposit-pricing';
+import { priceDeposit, selectableGateways, selectGateway, type SelectOptions } from './deposit-pricing';
 import { resolvePresets } from './deposit-presets';
 
 /**
@@ -53,15 +53,17 @@ export type DepositGateway = {
   displayName: string;
   providerName: string;
   category: string;
-  /** Base currency, the gateway's accepted range for `amount`. */
-  minAmount: string;
-  maxAmount: string;
+  /** Base currency, the gateway's accepted range for `amount`; `null` is no limit on that side. */
+  minAmount: string | null;
+  maxAmount: string | null;
   /**
    * Quick amounts for the amount box (F-092-v): this gateway's own list, else
    * the tenant's default, only amounts inside `minAmount`..`maxAmount`. Empty
    * means the panel draws its automatic ladder.
    */
   presets: string[];
+  /** Off or not yet verified — offered only to a caller who may manage gateways, to test it. */
+  testing: boolean;
 };
 
 export type DepositQuoteRequest = {
@@ -71,6 +73,8 @@ export type DepositQuoteRequest = {
   /** Base currency (ADR-0019), > 0, at most 2 decimal places. */
   amount: Prisma.Decimal;
   couponCodes: readonly string[];
+  /** The caller holds `gateway.manage`: its own switched-off gateways may be priced too. */
+  canTest?: boolean;
 };
 
 /** Money as decimal strings in base currency; `amountMinor` as a string, since JSON has no bigint. */
@@ -115,12 +119,12 @@ export class DepositQuoteService {
     private readonly fx: FxRateReader,
   ) {}
 
-  async listGateways(): Promise<DepositGateway[]> {
+  async listGateways(options: SelectOptions = {}): Promise<DepositGateway[]> {
     const tenant = TenantContext.current('deposit gateways');
     // The caller's default list, not a lender's: the amounts follow what this
     // tenant sells, whoever's gateway takes the payment.
     const { rows, tenantPresets } = await tenantTransaction(this.prisma, async (tx) => ({
-      rows: await selectableGateways(tx, this.crossTenant, tenant.id),
+      rows: await selectableGateways(tx, this.crossTenant, tenant.id, options),
       tenantPresets: (await tx.depositSetting.findUnique({ where: { tenantId: tenant.id } }))?.presets ?? [],
     }));
     // Outside the transaction: the vault queries on its own bound connection.
@@ -157,9 +161,10 @@ export class DepositQuoteService {
         displayName: g.displayName,
         providerName: g.providerName,
         category: g.gatewayCategory,
-        minAmount: money(g.minAcceptAmount),
-        maxAmount: money(g.maxAcceptAmount),
+        minAmount: g.minAcceptAmount == null ? null : money(g.minAcceptAmount),
+        maxAmount: g.maxAcceptAmount == null ? null : money(g.maxAcceptAmount),
         presets: resolvePresets(g.depositPresets, tenantPresets, { min: g.minAcceptAmount, max: g.maxAcceptAmount }),
+        testing: g.testing,
       }));
   }
 
@@ -168,7 +173,7 @@ export class DepositQuoteService {
     const { userId, gatewayId, amount } = request;
 
     const { gateway, coupons } = await tenantTransaction(this.prisma, async (tx) => {
-      const gateway = await selectGateway(tx, this.crossTenant, tenant.id, gatewayId, request.source);
+      const gateway = await selectGateway(tx, this.crossTenant, tenant.id, gatewayId, request.source, { canTest: request.canTest });
       if (!gateway) throw new DepositGatewayNotFound(gatewayId, request.source);
       const coupons = await this.coupons.validate(tx, {
         codes: request.couponCodes,

@@ -139,9 +139,11 @@ export interface DepositGateway {
   /** The driver behind it (`zarinpal`, …). Shown as the logo, never branched on. */
   providerName: string;
   category: string;
-  /** Base currency, decimal strings. The gateway's own range — the amount box's bounds. */
-  minAmount: string;
-  maxAmount: string;
+  /** Base currency, decimal strings. The gateway's own range — the amount box's bounds; `null` is no limit on that side. */
+  minAmount: string | null;
+  maxAmount: string | null;
+  /** Off or not yet verified: shown only to someone who may manage gateways, so they can test it. */
+  testing: boolean;
   /**
    * Quick amounts (F-092-v): the gateway's own list, else the tenant's default,
    * already inside the range. Empty means none was configured.
@@ -476,8 +478,9 @@ export interface AdminGateway {
   description: string | null;
   supportedCurrencies: unknown;
   confirmationMode: string | null;
-  minAcceptAmount: string;
-  maxAcceptAmount: string;
+  /** `null` is no limit on that side. */
+  minAcceptAmount: string | null;
+  maxAcceptAmount: string | null;
   feeCalculationMode: string;
   feeType: string;
   feeValue: string;
@@ -506,8 +509,8 @@ type GatewayFieldsBody = {
   providerName?: string;
   gatewayCategory?: string;
   isActive?: boolean;
-  minAcceptAmount?: string;
-  maxAcceptAmount?: string;
+  minAcceptAmount?: string | null;
+  maxAcceptAmount?: string | null;
   feeCalculationMode?: string;
   feeType?: string;
   feeValue?: string;

@@ -22,8 +22,12 @@ import {
  * its three bugs — see `zarinpal.provider.spec.ts`:
  *
  *  - `verify` read `101` (already verified) as a failure;
- *  - every call was retried, `request` included, and so was a definite refusal;
- *  - the fee quote always went to the production host, sandbox or not.
+ *  - every call was retried, `request` included, and so was a definite refusal.
+ *
+ * **The fee quote always goes to production, sandbox or not.** The sandbox has
+ * no `feeCalculation` route (404, checked 2026-09-14), so an automatic-fee
+ * gateway could never be priced there; the real fee is asked for in every
+ * environment (the user's call, 2026-09-14). Payments stay on the sandbox.
  *
  * Amounts are sent as `IRR`. Legacy sent `IRT` and multiplied by ten in the
  * browser; a rial minor unit is what `priceAtGateway` produces
@@ -68,6 +72,9 @@ const INQUIRY_STATUS: Record<string, PaymentInquiryStatus> = {
   FAILED: 'failed',
   REVERSED: 'reversed',
 };
+
+/** Where every call goes outside sandbox, and where the fee quote goes always. */
+const PRODUCTION_HOST = 'https://payment.zarinpal.com/pg';
 
 /** Attempts for a call that is safe to repeat. Delays between them, in ms. */
 const RETRY_DELAYS_MS = [500, 1500];
@@ -115,7 +122,7 @@ export class ZarinpalProvider implements PaymentProvider {
   private readonly timeoutMs: number;
 
   constructor(options: ZarinpalOptions) {
-    this.host = `https://${options.sandbox ? 'sandbox' : 'payment'}.zarinpal.com/pg`;
+    this.host = options.sandbox ? 'https://sandbox.zarinpal.com/pg' : PRODUCTION_HOST;
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.sleep = options.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
     this.now = options.now ?? Date.now;
@@ -250,7 +257,8 @@ export class ZarinpalProvider implements PaymentProvider {
   ): Promise<Record<string, unknown>> {
     let response: Response;
     try {
-      response = await this.fetchImpl(`${this.host}/v4/payment/${method}.json`, {
+      const host = method === 'feeCalculation' ? PRODUCTION_HOST : this.host;
+      response = await this.fetchImpl(`${host}/v4/payment/${method}.json`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
         body: JSON.stringify({ merchant_id: credentials.merchantId, ...body }),

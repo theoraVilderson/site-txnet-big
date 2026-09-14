@@ -83,6 +83,44 @@
       "merchantFormat": "A Zarinpal merchant id is 36 characters, like xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
       "url": "Enter a full address like https://example.com/..."
     },
+    "range": {
+      "between": "{{min}} – {{max}}",
+      "from": "From {{min}}",
+      "upTo": "Up to {{max}}",
+      "any": "Any amount",
+      "noLimit": "No limit"
+    },
+    "editor": {
+      "sections": {
+        "general": {
+          "title": "General",
+          "subtitle": "Name, provider and whether it is live"
+        },
+        "amounts": {
+          "title": "Amounts",
+          "subtitle": "What a single payment may be, and the quick buttons"
+        },
+        "fee": {
+          "title": "Fee",
+          "subtitle": "What each payment is charged"
+        },
+        "connection": {
+          "title": "Connection",
+          "subtitle": "Keys and the address the bank returns to"
+        }
+      },
+      "accepts": "Accepts",
+      "amountsHint": "Both are optional: an empty box means no limit on that side.",
+      "keepCurrent": "A value is stored. Leave empty to keep it, or type a new one to replace it.",
+      "enterNew": "Nothing is stored yet; the gateway cannot take payments without it.",
+      "unsaved": "{{count}} unsaved change(s)",
+      "clean": "No changes",
+      "changesTitle": "Will be saved:",
+      "discard": "Discard",
+      "needsAttention": "Some fields need attention",
+      "changed": "Changed",
+      "confirmClose": "You have unsaved changes. Leave without saving?"
+    },
     "links": {
       "title": "Links to other tenants",
       "subtitle": "Let another tenant take payments through one of these gateways. The money it collects is owed to that tenant.",
@@ -130,7 +168,7 @@
         "review": {
           "title": "Review",
           "subtitle": "Look everything over before creating it",
-          "tip": "Suggestion: create it inactive, run a test transaction, then activate it."
+          "tip": "Suggestion: create it switched off, make a small payment through it from the top-up page (you see it marked “Test”), then switch it on."
         }
       },
       "owner": {
@@ -184,10 +222,10 @@
       },
       "hints": {
         "displayName": "e.g. \"Pay by bank card\"",
-        "amounts": "The smallest and largest single payment, in USD",
-        "isActive": "Best left off until you have tested it",
+        "amounts": "Optional: the smallest and largest single payment, in USD. Empty means no limit.",
+        "isActive": "Off: users do not see it, but gateway managers see it on the top-up page marked “Test” and can make a test payment through it.",
         "advanced": "Fee floor and ceiling",
-        "automaticNote": "The fee is taken from the provider at the moment of payment.",
+        "automaticNote": "The fee is asked of the provider's live service at the moment of payment — in the test environment too.",
         "tenantId": "Leave empty to create it for your own tenant"
       },
       "preview": {
@@ -216,9 +254,9 @@
       "done": {
         "title": "\"{{name}}\" is created",
         "subtitle": "A few steps to the first payment:",
-        "step1": "Run a small test transaction",
+        "step1": "Make a small payment through it from the top-up page — it is marked “Test” for you",
         "step2": "If you skipped the keys, add them with Edit",
-        "step3": "Activate the gateway so users can see it",
+        "step3": "Switch it on (a tenant gateway must also be verified) so users can see it",
         "another": "Add another gateway",
         "finish": "View gateways"
       }
@@ -307,7 +345,12 @@
       "empty": "No payment gateway is available right now.",
       "loading": "Loading gateways…",
       "retry": "Try again",
-      "range": "{{min}} to {{max}}"
+      "range": "{{min}} to {{max}}",
+      "rangeFrom": "From {{min}}",
+      "rangeUpTo": "Up to {{max}}",
+      "rangeAny": "Any amount",
+      "testing": "Test",
+      "testingHint": "This gateway is off or not yet verified, and only gateway managers see it. The payment is real and the amount is added to your wallet."
     },
     "wallet": {
       "current": "Current balance",

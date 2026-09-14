@@ -16,6 +16,7 @@ import {
   BackendI18nKeys,
   CredentialUnavailable,
   RateLimitBucket,
+  holdsPermission,
   rateLimitBucketKey,
 } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
@@ -33,6 +34,13 @@ import { DepositCallbackUnavailable, DepositStartService } from './deposit-start
 import { DepositQuoteBody, depositQuoteSchema, DepositStartBody, depositStartSchema } from './deposit.schema';
 
 const E = BackendI18nKeys.errors.billing;
+
+/**
+ * Test mode: whoever may manage gateways is also offered its own switched-off
+ * ones (`deposit-pricing.ts` `SelectOptions`). The same permission the gateway
+ * management routes require, read from the gate's headers — never from a body.
+ */
+const canTest = (req: Request) => holdsPermission(identityOf(req).permissions, 'gateway.manage');
 
 /** Every rejection reason has a message; a new reason does not compile until it gets one. */
 const COUPON_REJECTION_KEY: Record<CouponRejection, string> = {
@@ -103,8 +111,8 @@ export class DepositController {
     configKey: 'DEPOSIT_GATEWAYS_RATE_LIMIT',
     windowSec: 900,
   })
-  gateways() {
-    return this.deposits.listGateways();
+  gateways(@Req() req: Request) {
+    return this.deposits.listGateways({ canTest: canTest(req) });
   }
 
   @Post('quote')
@@ -125,6 +133,7 @@ export class DepositController {
         source: body.source,
         amount: new Prisma.Decimal(body.amount),
         couponCodes: body.couponCodes,
+        canTest: canTest(req),
       });
       return {
         ...quote,
@@ -164,6 +173,7 @@ export class DepositController {
         amount: new Prisma.Decimal(body.amount),
         couponCodes: body.couponCodes,
         origin: req.headers.origin ?? null,
+        canTest: canTest(req),
       });
     } catch (e) {
       throw toHttp(e);

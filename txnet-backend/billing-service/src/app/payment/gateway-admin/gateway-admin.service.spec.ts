@@ -238,6 +238,19 @@ describe('GatewayAdminService — who may manage which gateway', () => {
       (await refusal(() => service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { minAcceptAmount: '900.00' }))).reason,
     ).toBe('invalid_range');
   });
+
+  it('creates a gateway with no amount range and clears a bound on edit — null is no limit, not a missing field', async () => {
+    const { service, db } = build();
+
+    const created = await service.create(actor(OWNER), { source: 'tenant', tenantId: OTHER, ...FIELDS, providerName: 'stripe', minAcceptAmount: undefined, maxAcceptAmount: undefined });
+    expect([created.minAcceptAmount, created.maxAcceptAmount]).toEqual([null, null]);
+
+    const updated = await service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { maxAcceptAmount: null });
+    expect(updated.maxAcceptAmount).toBeNull();
+    expect(db.tenantGatewayConfig.rows.find((r) => r['id'] === RESELLER_GW)?.['maxAcceptAmount']).toBeNull();
+    // With the maximum open, any minimum is a valid range.
+    await expect(service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { minAcceptAmount: '900.00' })).resolves.toBeDefined();
+  });
 });
 
 describe('GatewayAdminService — what never leaves', () => {

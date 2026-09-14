@@ -62,15 +62,18 @@ const STEPS = [1, 2, 5, 10, 20, 50];
  * The maximum is always offered last when it fits, because "everything this
  * gateway will take" is the one amount a user is most likely to want and the
  * least likely to type correctly. An unreadable or empty range offers nothing.
+ * A bound the gateway left open (`null`) is no limit: without a maximum the
+ * ladder is the whole of `STEPS` and nothing is appended.
  */
-export function presetAmounts(minAmount: string, maxAmount: string): string[] {
-  const min = toCents(minAmount);
-  const max = toCents(maxAmount);
-  if (min === null || max === null || max <= 0 || min > max) return [];
+export function presetAmounts(minAmount: string | null, maxAmount: string | null): string[] {
+  const min = minAmount === null ? 0 : toCents(minAmount);
+  const max = maxAmount === null ? null : toCents(maxAmount);
+  if (min === null || (maxAmount !== null && (max === null || max <= 0 || min > max))) return [];
 
   // A gateway with no floor of its own still needs somewhere to start the
   // ladder; one base-currency unit is the smallest step worth a button.
   const base = min > 0 ? min : SCALE;
+  if (max === null) return STEPS.map((step) => fromCents(base * step));
   // One slot is held back for the maximum, so a long ladder cannot crowd it out.
   const ladder = STEPS.map((step) => base * step)
     .filter((c) => c > 0 && c <= max)
@@ -100,7 +103,7 @@ export function fromMinor(amountMinor: string, decimals: number): string | null 
  * itself configured, as billing resolved it, else the automatic ladder — so a
  * tenant that set nothing sees exactly what it saw before.
  */
-export function offeredPresets(gateway: { minAmount: string; maxAmount: string; presets?: readonly string[] }): string[] {
+export function offeredPresets(gateway: { minAmount: string | null; maxAmount: string | null; presets?: readonly string[] }): string[] {
   return gateway.presets && gateway.presets.length > 0 ? [...gateway.presets] : presetAmounts(gateway.minAmount, gateway.maxAmount);
 }
 

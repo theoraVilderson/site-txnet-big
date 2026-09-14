@@ -268,9 +268,30 @@ describe('DepositQuoteService.listGateways', () => {
         minAmount: '1.00',
         maxAmount: '1000.00',
         presets: [],
+        testing: false,
       },
     ]);
     expect(JSON.stringify(gateways)).not.toContain('SECRET');
+  });
+
+  // Test mode: which rows are reached is the query's (the int spec); what a row
+  // is called once reached is this — off, or a tenant row not yet verified.
+  it('marks a switched-off or unverified gateway as testing, for a manager', async () => {
+    const service = build({
+      rows: [
+        gatewayRow(),
+        gatewayRow({ id: 'off', isActive: false }),
+        gatewayRow({ id: 'pending', verificationStatus: 'pending_test_transaction' }),
+      ],
+    });
+
+    const gateways = await asTenant(() => service.listGateways({ canTest: true }));
+
+    expect(gateways.map((g) => [g.id, g.testing])).toEqual([
+      [GATEWAY, false],
+      ['off', true],
+      ['pending', true],
+    ]);
   });
 
   // F-092-v: the gateway's own list, else the tenant's, never outside the range.

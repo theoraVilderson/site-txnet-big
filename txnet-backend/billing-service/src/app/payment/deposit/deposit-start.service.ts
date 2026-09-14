@@ -69,6 +69,8 @@ export type DepositStartRequest = {
   couponCodes: readonly string[];
   /** The browser's `Origin` header — where the result page is, if it checks out. */
   origin?: string | null;
+  /** The caller holds `gateway.manage`: its own switched-off gateways may take a test payment. */
+  canTest?: boolean;
 };
 
 /** Money as decimal strings in base currency, as the quote answers them. */
@@ -127,7 +129,7 @@ export class DepositStartService {
     // 1. Read: the gateway, the coupons as they stand, and where the bank will
     //    send the user back to. Nothing is held after this closes.
     const { gateway, coupons, callbackUrl, returnOrigin } = await tenantTransaction(this.prisma, async (tx) => {
-      const gateway = await selectGateway(tx, this.crossTenant, tenant.id, gatewayId, source);
+      const gateway = await selectGateway(tx, this.crossTenant, tenant.id, gatewayId, source, { canTest: request.canTest });
       if (!gateway) throw new DepositGatewayNotFound(gatewayId, source);
       const coupons = await this.coupons.validate(tx, {
         codes: request.couponCodes,

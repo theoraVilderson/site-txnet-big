@@ -25,7 +25,8 @@ describe("gateway wizard", () => {
     expect(stepErrors(form, "provider").feeValue).toBeUndefined();
     const picked = applyProvider(form, "zarinpal");
     expect(stepErrors(picked, "provider")).toEqual({});
-    expect(Object.keys(stepErrors(picked, "details")).sort()).toEqual(["maxAcceptAmount", "minAcceptAmount"]);
+    // An amount range is optional: a picked provider already fills everything the details step needs.
+    expect(stepErrors(picked, "details")).toEqual({});
   });
 
   it("finds the first step with an error, for the review step's submit", () => {

@@ -23,7 +23,7 @@ import { FeeCalcMode, FeeType, PaymentGateway, Prisma, RateRoundingMode } from '
  *
  * The order, which is the order of F-092-o's quote:
  *  1. `amount` (what the user asked to credit) must lie in the gateway's
- *     `[minAcceptAmount, maxAcceptAmount]`;
+ *     `[minAcceptAmount, maxAcceptAmount]` — a bound left null is no limit;
  *  2. `discount` (every coupon together, F-092-g) comes off it;
  *  3. gap — a remainder above zero but under the gateway minimum is raised to
  *     the minimum, and the difference is credited too, so the user pays more
@@ -123,10 +123,10 @@ export class InvalidPricingInput extends Error {
 /** The requested amount is outside what this gateway accepts. */
 export class AmountOutOfGatewayRange extends Error {
   constructor(
-    readonly min: Prisma.Decimal,
-    readonly max: Prisma.Decimal,
+    readonly min: Prisma.Decimal | null,
+    readonly max: Prisma.Decimal | null,
   ) {
-    super(`amount must be between ${min.toFixed(MONEY_SCALE)} and ${max.toFixed(MONEY_SCALE)}`);
+    super(`amount must be between ${min?.toFixed(MONEY_SCALE) ?? 'any'} and ${max?.toFixed(MONEY_SCALE) ?? 'any'}`);
     this.name = 'AmountOutOfGatewayRange';
   }
 }
@@ -185,7 +185,7 @@ function money(v: Prisma.Decimal, name: string): Dec {
 type Settled = { amount: Dec; discount: Dec; gap: Dec; basis: Dec };
 
 function checkConfig(p: GatewayPricing): void {
-  if (dec(p.minAcceptAmount).gt(dec(p.maxAcceptAmount))) {
+  if (p.minAcceptAmount != null && p.maxAcceptAmount != null && dec(p.minAcceptAmount).gt(dec(p.maxAcceptAmount))) {
     throw new InvalidPricingInput('minAcceptAmount is above maxAcceptAmount');
   }
   if (dec(p.feeValue).lt(0)) throw new InvalidPricingInput('feeValue is negative');
@@ -211,13 +211,15 @@ function settle(request: PriceRequest): Settled {
   if (discount.lt(0)) throw new InvalidPricingInput('discount is negative');
   if (discount.gt(amount)) throw new InvalidPricingInput('discount is larger than the amount');
 
-  const min = dec(pricing.minAcceptAmount);
-  if (amount.lt(min) || amount.gt(dec(pricing.maxAcceptAmount))) {
+  // A bound the gateway left unset is no limit; with no minimum there is no gap.
+  const min = decOrNull(pricing.minAcceptAmount);
+  const max = decOrNull(pricing.maxAcceptAmount);
+  if ((min && amount.lt(min)) || (max && amount.gt(max))) {
     throw new AmountOutOfGatewayRange(pricing.minAcceptAmount, pricing.maxAcceptAmount);
   }
 
   const remainder = amount.minus(discount);
-  const gap = remainder.gt(0) && remainder.lt(min) ? min.minus(remainder) : ZERO;
+  const gap = min && remainder.gt(0) && remainder.lt(min) ? min.minus(remainder) : ZERO;
   return { amount, discount, gap, basis: remainder.plus(gap) };
 }
 

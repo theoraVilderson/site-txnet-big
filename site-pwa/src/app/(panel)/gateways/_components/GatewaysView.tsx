@@ -11,7 +11,7 @@ import { usePanelSession } from "../../_context/PanelSessionContext";
 import { Skeleton } from "../../_components/kit/Skeleton";
 import { useGateways } from "../_hooks/useGateways";
 import { canManageLinks } from "../_lib/gateway-form";
-import { GatewayFormModal } from "./GatewayFormModal";
+import { GatewayEditor } from "./GatewayEditor";
 import { DepositPresetsCard } from "./DepositPresetsCard";
 import { GatewayLinks } from "./GatewayLinks";
 import { GatewayWizard } from "./GatewayWizard";
@@ -243,7 +243,7 @@ export function GatewaysView() {
         />
       )}
       {editing && editing !== "new" && (
-        <GatewayFormModal
+        <GatewayEditor
           gateway={editing}
           me={me}
           onClose={() => setEditing(null)}

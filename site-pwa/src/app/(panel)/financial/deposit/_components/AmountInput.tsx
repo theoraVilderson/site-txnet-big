@@ -51,8 +51,9 @@ export function AmountInput({ amount, onAmountChange, gateway, disabled }: Amoun
   const words = amountInWords(amount, BASE_CURRENCY, { lang, t });
 
   const cents = toCents(amount);
-  const min = gateway ? toCents(gateway.minAmount) : null;
-  const max = gateway ? toCents(gateway.maxAmount) : null;
+  // A bound the gateway left open is `null`: no check on that side, and no slider without both.
+  const min = gateway?.minAmount ? toCents(gateway.minAmount) : null;
+  const max = gateway?.maxAmount ? toCents(gateway.maxAmount) : null;
   const presets = gateway ? offeredPresets(gateway) : [];
 
   // A hundred stops across whatever range this gateway takes. A slider is a
@@ -141,8 +142,8 @@ export function AmountInput({ amount, onAmountChange, gateway, disabled }: Amoun
             className="range-slider"
           />
           <div className="mt-3 flex justify-between text-[10px] font-bold text-text-secondary">
-            <span>{t("common", D.min, { amount: money(gateway!.minAmount) })}</span>
-            <span>{t("common", D.max, { amount: money(gateway!.maxAmount) })}</span>
+            <span>{t("common", D.min, { amount: money(fromCents(min)) })}</span>
+            <span>{t("common", D.max, { amount: money(fromCents(max)) })}</span>
           </div>
         </div>
       )}
@@ -151,9 +152,9 @@ export function AmountInput({ amount, onAmountChange, gateway, disabled }: Amoun
           user a round trip, and the server is still the one that decides. */}
       <p className="mt-3 min-h-[1.25rem] text-[11px] font-bold text-error" role="status">
         {cents !== null && min !== null && cents > 0 && cents < min
-          ? t("common", D.belowMin, { amount: money(gateway!.minAmount) })
+          ? t("common", D.belowMin, { amount: money(fromCents(min)) })
           : cents !== null && max !== null && cents > max
-            ? t("common", D.aboveMax, { amount: money(gateway!.maxAmount) })
+            ? t("common", D.aboveMax, { amount: money(fromCents(max)) })
             : ""}
       </p>
     </section>

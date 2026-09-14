@@ -40,6 +40,7 @@ const GATEWAY: DepositGateway = {
   minAmount: "1.00",
   maxAmount: "500.00",
   presets: [],
+  testing: false,
 };
 
 /** A quote whose numbers are deliberately not derivable from each other. */
@@ -238,6 +239,12 @@ describe("presetAmounts", () => {
   it("offers nothing rather than an unusable step when the range is empty", () => {
     expect(presetAmounts("100.00", "50.00")).toEqual([]);
     expect(presetAmounts("nonsense", "50.00")).toEqual([]);
+  });
+
+  it("builds the ladder for a gateway that left either end of its range open", () => {
+    expect(presetAmounts(null, null)).toEqual(["1.00", "2.00", "5.00", "10.00", "20.00", "50.00"]);
+    expect(presetAmounts("5.00", null)).toEqual(["5.00", "10.00", "25.00", "50.00", "100.00", "250.00"]);
+    expect(presetAmounts(null, "8.00")).toEqual(["1.00", "2.00", "5.00", "8.00"]);
   });
 });
 

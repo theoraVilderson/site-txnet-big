@@ -319,8 +319,8 @@ model TenantGatewayConfig {
   verificationStatus  TenantGatewayVerificationStatus @default(pending_test_transaction)
   verifiedByAdminId   String?                         @db.Uuid
   isActive            Boolean                         @default(false)
-  minAcceptAmount     Decimal                         @db.Decimal(18, 2)
-  maxAcceptAmount     Decimal                         @db.Decimal(18, 2)
+  minAcceptAmount     Decimal?                        @db.Decimal(18, 2) // null = no minimum
+  maxAcceptAmount     Decimal?                        @db.Decimal(18, 2) // null = no maximum
   feeCalculationMode  FeeCalcMode
   feeType             FeeType
   feeValue            Decimal                         @db.Decimal(18, 4)

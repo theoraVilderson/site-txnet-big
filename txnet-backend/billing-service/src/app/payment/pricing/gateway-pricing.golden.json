@@ -163,6 +163,77 @@
       "error": "AmountOutOfGatewayRange"
     },
     {
+      "name": "no maximum: an amount past the old ceiling is accepted",
+      "config": "zarinpal-platform",
+      "override": {
+        "maxAcceptAmount": null
+      },
+      "input": {
+        "amount": "1000.00",
+        "discount": "0",
+        "liveRate": "1000000",
+        "chargeDecimals": 0
+      },
+      "expect": {
+        "gap": "0.00",
+        "fee": "4.00",
+        "payable": "1004.00",
+        "credited": "1000.00",
+        "free": false,
+        "rate": "1020000",
+        "rateSnapshotId": "a7c0f3e2-5b6d-4a19-9f28-3c1d8e4b70aa",
+        "chargedAmountMinor": "1024080000"
+      }
+    },
+    {
+      "name": "no minimum: an amount under the old floor is accepted",
+      "config": "zarinpal-platform",
+      "override": {
+        "minAcceptAmount": null,
+        "feeFloor": null
+      },
+      "input": {
+        "amount": "0.50",
+        "discount": "0",
+        "liveRate": "1000000",
+        "chargeDecimals": 0
+      },
+      "expect": {
+        "gap": "0.00",
+        "fee": "0.01",
+        "payable": "0.51",
+        "credited": "0.50",
+        "free": false,
+        "rate": "1020000",
+        "rateSnapshotId": "a7c0f3e2-5b6d-4a19-9f28-3c1d8e4b70aa",
+        "chargedAmountMinor": "520200"
+      }
+    },
+    {
+      "name": "no minimum: a coupon's small remainder is charged as it is, with no gap",
+      "config": "zarinpal-platform",
+      "override": {
+        "minAcceptAmount": null,
+        "feeFloor": null
+      },
+      "input": {
+        "amount": "5.00",
+        "discount": "4.50",
+        "liveRate": "1000000",
+        "chargeDecimals": 0
+      },
+      "expect": {
+        "gap": "0.00",
+        "fee": "0.01",
+        "payable": "0.51",
+        "credited": "5.00",
+        "free": false,
+        "rate": "1020000",
+        "rateSnapshotId": "a7c0f3e2-5b6d-4a19-9f28-3c1d8e4b70aa",
+        "chargedAmountMinor": "520200"
+      }
+    },
+    {
       "name": "coupon interaction: a payable under the minimum is raised to it and the gap is credited too",
       "config": "zarinpal-platform",
       "input": {

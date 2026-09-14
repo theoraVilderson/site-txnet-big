@@ -228,6 +228,58 @@ describe('deposit gateways under RLS', () => {
 });
 
 /**
+ * Test mode (the user's call, 2026-09-14): a gateway cannot be tested while it
+ * is off, and switching it on shows it to every user. So a caller who may
+ * manage gateways (`canTest`) is also offered the ones that are off or not yet
+ * verified — its **own** only, each marked `testing` — and everyone else sees
+ * exactly what the cases above say.
+ */
+describe('test mode — a gateway manager is offered its own switched-off gateways', () => {
+  it('lists them to a manager, marked, and to nobody else', async () => {
+    const manager = await runWithTenant({ id: TENANT_A }, () => service.listGateways({ canTest: true }));
+
+    expect(new Map(manager.map((g) => [g.id, g.testing]))).toEqual(
+      new Map([
+        [A_ZARINPAL, false],
+        [A_PENDING, true],
+        [A_INACTIVE, true],
+      ]),
+    );
+    const user = await runWithTenant({ id: TENANT_A }, () => service.listGateways());
+    expect(user.map((g) => [g.id, g.testing])).toEqual([[A_ZARINPAL, false]]);
+  });
+
+  it.each([
+    ['awaiting its test transaction', A_PENDING],
+    ['inactive', A_INACTIVE],
+  ])('quotes a gateway that is %s for a manager', async (_label, gatewayId) => {
+    await expect(
+      runWithTenant({ id: TENANT_A }, () =>
+        service.quote({ userId: USER, gatewayId, source: 'tenant', amount: new Prisma.Decimal('20.00'), couponCodes: [], canTest: true }),
+      ),
+    ).resolves.toMatchObject({ gatewayId, fee: '0.20' });
+  });
+
+  it("never reaches another tenant's gateway, even for a manager", async () => {
+    await expect(
+      runWithTenant({ id: TENANT_A }, () =>
+        service.quote({ userId: USER, gatewayId: B_ZARINPAL, source: 'tenant', amount: new Prisma.Decimal('20.00'), couponCodes: [], canTest: true }),
+      ),
+    ).rejects.toBeInstanceOf(DepositGatewayNotFound);
+  });
+
+  it("offers the platform owner's manager the switched-off platform gateway too", async () => {
+    const gateways = await runWithTenant({ id: PLATFORM }, () => service.listGateways({ canTest: true }));
+
+    expect(gateways.map((g) => [g.source, g.id, g.testing])).toEqual([
+      ['platform', PLATFORM_ZARINPAL, false],
+      ['platform', PLATFORM_INACTIVE, true],
+      ['tenant', P_OWN, false],
+    ]);
+  });
+});
+
+/**
  * ADR-0041 / F-096-b. A grant is the one way a tenant reaches a gateway it does
  * not own, and only a real database can say so: `tenant_gateway_config` has the
  * strict policy, so the borrower's own connection is shown nothing at all — the

@@ -72,6 +72,8 @@ route returns the whole breakdown instead of the pieces of one.
    source of its presets (`_lib/deposit-amount.ts`). Legacy kept six rial
    figures and a two-million ceiling in `_util/constants.ts` — one tenant's
    pricing decision compiled into the app, wrong for every other tenant.
+   Either bound may be `null` (no limit): the box checks only the side that is
+   set, the slider needs both, and with no maximum the ladder is `STEPS` alone.
    **Still open:** a tenant cannot yet name its *own* preset ladder; deriving
    one from the range it already publishes is what this row does instead of
    inventing a route.

@@ -35,6 +35,18 @@ const SELECTABLE = { isActive: true, verificationStatus: TenantGatewayVerificati
 const PLATFORM_SELECTABLE = { isActive: true };
 
 /**
+ * Test mode (the user's call, 2026-09-14). A gateway cannot be tested while it
+ * is off, and switching it on shows it to every user — so a caller who may
+ * manage gateways is also offered its **own** gateways that are off or not yet
+ * verified, each marked `testing`. A granted gateway is somebody else's and is
+ * never offered this way.
+ */
+export type SelectOptions = { canTest?: boolean };
+
+const testingOf = (row: { isActive: boolean; verificationStatus?: string | null }): boolean =>
+  !row.isActive || (row.verificationStatus != null && row.verificationStatus !== TenantGatewayVerificationStatus.verified);
+
+/**
  * What a quote needs of a row — the columns both tables share. Selected
  * explicitly, so neither table's secret column is ever read: the deprecated
  * `*Encrypted` pair, or `payment_gateway.merchantId` (invariant 8).
@@ -42,6 +54,7 @@ const PLATFORM_SELECTABLE = { isActive: true };
 export const GATEWAY_COLUMNS = {
   id: true,
   createdAt: true,
+  isActive: true,
   displayName: true,
   providerName: true,
   gatewayCategory: true,
@@ -84,6 +97,8 @@ export type GatewayOffer = SelectedGateway & {
   source: GatewaySource;
   grantId: string | null;
   ownerTenantId: string;
+  /** Off, or a tenant row not yet verified: reached only in test mode ({@link SelectOptions}). */
+  testing: boolean;
 };
 
 /**
@@ -178,6 +193,7 @@ async function grantedGateways(
           source: 'platform' as const,
           grantId: grantOf.get(g.id) ?? null,
           ownerTenantId: platformOwner,
+          testing: false,
         })),
       );
     }
@@ -195,6 +211,7 @@ async function grantedGateways(
         source: 'tenant' as const,
         grantId: grantOf.get(g.id) ?? null,
         ownerTenantId,
+        testing: false,
       })),
     );
   }
@@ -209,21 +226,22 @@ export async function selectGateway(
   tenantId: string,
   id: string,
   source: GatewaySource,
+  options: SelectOptions = {},
 ): Promise<GatewayOffer | null> {
   if (source === 'platform') {
     if (await isPlatformOwner(tx, tenantId)) {
       const row = await tx.paymentGateway.findFirst({
-        where: { ...PLATFORM_SELECTABLE, id },
+        where: options.canTest ? { id } : { ...PLATFORM_SELECTABLE, id },
         select: GATEWAY_COLUMNS,
       });
-      return row ? { ...row, source, grantId: null, ownerTenantId: tenantId } : null;
+      return row ? { ...row, source, grantId: null, ownerTenantId: tenantId, testing: testingOf(row) } : null;
     }
   } else {
     const row = await tx.tenantGatewayConfig.findFirst({
-      where: { ...SELECTABLE, id, tenantId },
-      select: GATEWAY_COLUMNS,
+      where: options.canTest ? { id, tenantId } : { ...SELECTABLE, id, tenantId },
+      select: { ...GATEWAY_COLUMNS, verificationStatus: true },
     });
-    if (row) return { ...row, source, grantId: null, ownerTenantId: tenantId };
+    if (row) return { ...row, source, grantId: null, ownerTenantId: tenantId, testing: testingOf(row) };
   }
   // Not this tenant's own. It may still be granted to it — and a grant is
   // checked second on purpose: owning a row is cheaper to prove and is the
@@ -244,23 +262,24 @@ export async function selectableGateways(
   tx: Prisma.TransactionClient,
   crossTenant: CrossTenantPrismaService,
   tenantId: string,
+  options: SelectOptions = {},
 ): Promise<GatewayOffer[]> {
   const platform = (await isPlatformOwner(tx, tenantId))
     ? await tx.paymentGateway.findMany({
-        where: PLATFORM_SELECTABLE,
+        where: options.canTest ? {} : PLATFORM_SELECTABLE,
         select: GATEWAY_COLUMNS,
         orderBy: { createdAt: 'asc' },
       })
     : [];
   const own = await tx.tenantGatewayConfig.findMany({
-    where: { ...SELECTABLE, tenantId },
-    select: GATEWAY_COLUMNS,
+    where: options.canTest ? { tenantId } : { ...SELECTABLE, tenantId },
+    select: { ...GATEWAY_COLUMNS, verificationStatus: true },
     orderBy: { createdAt: 'asc' },
   });
   const granted = await grantedGateways(tx, crossTenant, tenantId);
   return [
-    ...platform.map((g) => ({ ...g, source: 'platform' as const, grantId: null, ownerTenantId: tenantId })),
-    ...own.map((g) => ({ ...g, source: 'tenant' as const, grantId: null, ownerTenantId: tenantId })),
+    ...platform.map((g) => ({ ...g, source: 'platform' as const, grantId: null, ownerTenantId: tenantId, testing: testingOf(g) })),
+    ...own.map((g) => ({ ...g, source: 'tenant' as const, grantId: null, ownerTenantId: tenantId, testing: testingOf(g) })),
     // A row already offered as this tenant's own is not offered twice: a
     // platform owner granted its own gateway would otherwise see it doubled.
     ...granted.filter((g) => !platform.some((p) => p.id === g.id) && !own.some((o) => o.id === g.id)),

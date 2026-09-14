@@ -33,8 +33,9 @@ const fields = {
   providerName: z.nativeEnum(PaymentProviderName),
   gatewayCategory: z.nativeEnum(GatewayCategory),
   isActive: z.boolean(),
-  minAcceptAmount: decimal('minAcceptAmount'),
-  maxAcceptAmount: decimal('maxAcceptAmount'),
+  // Either bound may be null: no limit on that side.
+  minAcceptAmount: decimal('minAcceptAmount').nullable(),
+  maxAcceptAmount: decimal('maxAcceptAmount').nullable(),
   feeCalculationMode: z.nativeEnum(FeeCalcMode),
   feeType: z.nativeEnum(FeeType),
   feeValue: decimal('feeValue'),

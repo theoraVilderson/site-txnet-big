@@ -93,7 +93,7 @@ in `billing-service/src/app/payment/gateway/`; the deposit quote (F-092-o), `dep
 | Zarinpal `verify`: `100` and `101` are both success, `101` is `alreadyVerified` | the legacy bug on the row |
 | A failure is `GatewayFailure` with a closed `reason` and the provider's code; the route that first exposes one maps `reason` to an i18n key (C-01) | as for the ledger and the calculator |
 | `unavailable` means the outcome is unknown, not that the payment failed | reconciliation (F-092-l) settles it |
-| Sandbox is `PAYMENT_GATEWAY_SANDBOX`, per environment; the boot refuses it with `NODE_ENV=production` | a sandbox "verify" would credit money that never moved |
+| Sandbox is `PAYMENT_GATEWAY_SANDBOX`, per environment; the boot refuses it with `NODE_ENV=production`. **Zarinpal's `quoteFee` goes to production in every environment** — the sandbox has no `feeCalculation` route (404), so an automatic fee could never be quoted there (the user's call, 2026-09-14) | a sandbox "verify" would credit money that never moved |
 | **Every gateway has its own merchant account** (changed in v4): the vault's `gateway_merchant_id` of the gateway's tenant, `label` = `gateway:<source>:<gatewayId>` (`tenant` for a `tenant_gateway_config` row, `platform` for a `payment_gateway` row), read by `vault.use` with `caller: billing:<provider>` on every call and kept by nobody. No fallback to a provider-wide label; a recreated gateway row stores its merchant id again | D-26; ADR-0026, ADR-0039; `gateway-merchant.int.spec.ts` |
 | The vault reads run on the app pool bound to the request's tenant — a config of another tenant is `CredentialUnavailable('missing')` | ADR-0039; `gateway-merchant.int.spec.ts` |
 | A platform-brand `payment_gateway`'s merchant id is in the `platform_owner` tenant's vault under its own `gateway:platform:<id>` label; the plaintext `merchantId` column is deprecated and never read | D-25, D-26 |
@@ -111,7 +111,7 @@ numbers are `gateway-pricing.golden.json` (F-0611).
 |---|---|
 | The quote shown and the amount charged both come from `priceAtGateway`; nothing else does money arithmetic on a deposit | F-0612 — legacy clamped a quoted fee on one path only |
 | Pure: the provider's fee quote and the FX rate are arguments. The caller asks the provider for `feeQuoteAmountMinor(request)` and passes `quotedFeeFromMinor(request, feeMinor)` (cents up); the staleness ladder decides whether a `liveRate` is passed | F-0610; F-0607 needs a clock |
-| Order: `amount` in `[minAcceptAmount, maxAcceptAmount]` → minus `discount` → gap → fee → `payable`; `credited = amount + gap` | F-092-o's quote shape |
+| Order: `amount` in `[minAcceptAmount, maxAcceptAmount]` → minus `discount` → gap → fee → `payable`; `credited = amount + gap`. Either bound may be `null` — no limit on that side, and no gap without a minimum (migration `20260914000800`) | F-092-o's quote shape; the user's call, 2026-09-14 |
 | **No tax on a top-up** — the result has no tax field (changed in v3) | ADR-0038: tax is charged when credit buys a service |
 | Gap: a remainder above zero and under the minimum is raised to it, and the difference is credited too | legacy behaviour kept |
 | A percentage fee is taken on that remainder (after discount and gap) | the fee follows what reaches the gateway |
