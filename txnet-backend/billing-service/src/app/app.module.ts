@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { RateLimitGuard } from '@txnet-backend/shared-core';
 
 import { CatalogModule } from './catalog/catalog.module';
+import { EntitlementModule } from './entitlement/entitlement.module';
 import { envConfigOptions } from './config/env.validation';
 import { HealthController } from './health.controller';
 import { LanguageMiddleware } from './locale/language.middleware';
@@ -53,6 +54,7 @@ const INTERNAL_ROUTES = 'internal/*';
     GatewayAdminModule,
     CouponAdminModule,
     CatalogModule,
+    EntitlementModule,
   ],
   controllers: [HealthController],
   providers: [

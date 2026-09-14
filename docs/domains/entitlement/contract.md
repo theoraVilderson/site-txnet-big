@@ -8,9 +8,9 @@ updated: 2026-09-14
 
 # Contract — entitlement
 
-**Storage built (F-026-b); no service code yet** — issue, transition and check
-land with F-026-e. Spec: catalog §4.4–4.6 (`tools/spec.py --section 4.4`).
-Decision: ADR-0049.
+**Storage built (F-026-b); Grant core built (F-026-e) —
+`entitlement/grant.ts`, proved by `grant.spec.ts`.** In-process only. Spec:
+catalog §4.4–4.6 (`tools/spec.py --section 4.4`). Decision: ADR-0049.
 
 ## TL;DR
 
@@ -19,15 +19,20 @@ feature key exist?** A Grant is issued from a catalog variant (its quotas,
 duration and feature keys copied at issue), moves one way through its states,
 and changes its quota only through `quota_adjustment` rows.
 
-## Provides (intended, F-026-e)
+## Provides (built, F-026-e — `GrantService`)
 
-| Operation | Input | Output | Sync/Async | Errors |
+| Operation | Input | Output | Sync/Async | Errors (`EntitlementRefused.reason`) |
 |---|---|---|---|---|
-| issue | userId, variantId, source, sourceReferenceId?, startsAt? | Grant + the subscription token, once | sync, inside the caller's transaction | variant not found / not assignable; already issued for that cause |
-| transition | grantId, to-status, reason | Grant | sync | illegal transition |
-| has active grant | userId, featureKey | boolean (+ the Grant) | sync | — |
-| adjust quota | grantId, metric, delta, source, expiresAt? | QuotaAdjustment | sync | Grant not active |
-| rotate subscription token | grantId (its owner) | the new token, once | sync | — |
+| `issue(tx, …)` | userId, variantId, source, sourceReferenceId?, startsAt?, issuedByAdminId? | `{grant, token}` — the token once; a repeat for the same cause answers the first Grant and `token: null` | inside the caller's transaction | `variant_not_found`, `variant_not_assignable`, `already_issued` (a concurrent issue won: retry) |
+| `transition(tx, id, to, reason?)` | grantId, status | Grant; staying put is a no-op | caller's transaction | `grant_not_found`, `illegal_transition` |
+| `activeGrant` / `hasActiveGrant` | userId, featureKey, at? | the longest-lasting active Grant / boolean | own tenant transaction | — |
+| `adjustQuota(tx, …)` | grantId, metric, delta, source, capPercent?, expiresAt?, reason? | QuotaAdjustment | caller's transaction | `grant_not_found`, `grant_not_active` |
+| `rotateToken(tx, id, userId)` | grantId, its user | the new token, once | caller's transaction | `grant_not_found` (also for another user's) |
+
+Issue rules: a `purchase` needs a `public` or `unlisted` variant; any other
+source may assign any live variant, `admin_only` included (F-506). A purchase
+starts `pending`; every other source `active`. Quotas, feature keys, billing
+mode and `endsAt = startsAt + durationDays` are copied at issue.
 
 In-process calls from `billing-service` modules (ADR-0049); HTTP routes are
 added only when a row needs them.
