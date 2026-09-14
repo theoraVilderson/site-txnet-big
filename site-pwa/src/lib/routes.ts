@@ -31,6 +31,8 @@ export const PANEL_DEPOSIT = "/financial/deposit";
  * No role word in it (F-098).
  */
 export const PANEL_GATEWAYS = "/gateways";
+/** Payments the gateway has not confirmed, for a person to settle (F-093-n). */
+export const PANEL_MANUAL_PAYMENTS = "/payments/manual";
 /**
  * Where a bank returns a payer (F-093-f). These two are `billing`'s to name:
  * `deposit-callback.controller.ts` redirects to them by path, so they are the

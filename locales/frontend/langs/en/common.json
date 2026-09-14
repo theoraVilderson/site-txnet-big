@@ -16,6 +16,7 @@
       "financialHistory": "Financial history",
       "deposit": "Top up",
       "gateways": "Payment gateways",
+      "manualPayments": "Payments to confirm",
       "tutorials": "Guides and downloads",
       "support": "Support",
       "settings": "Settings"
@@ -611,6 +612,42 @@
       "toFinancial": "View financial history",
       "closedTitle": "This payment was not settled",
       "closedSubtitle": "The gateway did not confirm this payment. If money was taken, it is returned by your bank."
+    }
+  },
+  "manualPayments": {
+    "title": "Payments to confirm",
+    "subtitle": "Payments the gateway has not confirmed. Ask the gateway first; confirm by hand only if it still cannot say.",
+    "empty": "No payments are waiting for confirmation.",
+    "loading": "Loading payments…",
+    "retry": "Retry",
+    "verifying": "Verifying",
+    "flagged": "Needs a person",
+    "attempts": "Checks: {{count}}",
+    "nextCheck": "Next automatic check",
+    "createdAt": "Paid at",
+    "authority": "Authority",
+    "user": "User",
+    "tenant": "Tenant",
+    "inquire": "Ask the gateway",
+    "inquiring": "Asking…",
+    "confirmByHand": "Confirm by hand",
+    "form": {
+      "title": "Confirm this payment by hand",
+      "hint": "Only if you have checked the gateway's own panel and the money is there. The wallet is credited with the payment's own amount and the confirmation is recorded under your name.",
+      "referenceId": "Gateway reference number",
+      "reason": "Reason",
+      "submit": "Credit the wallet",
+      "cancel": "Cancel",
+      "invalidReference": "Enter the reference number the gateway shows (up to 64 characters).",
+      "invalidReason": "Write a reason of 5 to 500 characters."
+    },
+    "outcome": {
+      "credited": "The gateway confirmed it and the wallet was credited.",
+      "already_settled": "This payment was already settled.",
+      "refused": "The gateway says this payment did not go through. Nothing was credited.",
+      "mismatch": "The gateway reports a different amount. Nothing was credited; this needs investigating.",
+      "unsettled": "The gateway still cannot confirm or refuse it. You may confirm it by hand.",
+      "confirmed_manually": "Confirmed by hand. The wallet was credited."
     }
   }
 }

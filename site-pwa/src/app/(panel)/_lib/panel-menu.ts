@@ -5,13 +5,14 @@ import {
   Headphones,
   Home,
   Landmark,
+  ShieldCheck,
   ReceiptText,
   Settings,
   ShoppingCart,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME } from "@/lib/routes";
+import { PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME, PANEL_MANUAL_PAYMENTS } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 /** The shell's menu labels as generated constants (C-06). */
@@ -92,6 +93,8 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
       // F-102-d. The permission hides it; what the page then shows is decided
       // by the tenant type, server-side (D-31).
       { id: "gateways", label: M.gateways, icon: Landmark, href: PANEL_GATEWAYS, requires: ["gateway.manage"] },
+      // F-093-n. Like gateways: the permission hides it, billing scopes what it lists.
+      { id: "manual-payments", label: M.manualPayments, icon: ShieldCheck, href: PANEL_MANUAL_PAYMENTS, requires: ["payment.confirm_manual"] },
     ],
   },
   { id: "tutorials", label: M.tutorials, icon: BookOpen, href: null },

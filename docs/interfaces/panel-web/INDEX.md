@@ -8,7 +8,7 @@ source:
   - site-pwa/src/**
 owns_tables: []
 depends_on: [auth-api, i18n, realtime]
-updated: 2026-09-12
+updated: 2026-09-14
 ---
 
 # panel-web
@@ -29,6 +29,7 @@ to `auth-api`), translation content (`i18n`).
 | [contract.shell.md](contract.shell.md) | a panel page gets a menu entry, a top-bar control is added, a wallet quick action opens something (F-093-g), or the sidebar / mobile drawer misbehaves (F-093-a) |
 | [contract.kit.md](contract.kit.md) | a money page formats an amount, spells it, pages a table, picks a date, shows a skeleton or prints a timestamp (F-093-b) |
 | [contract.deposit.md](contract.deposit.md) | the top-up page — its amount box, discount codes, gateway picker or bill, or a figure on it that looks wrong (F-093-e) |
+| [contract.manual-payments.md](contract.manual-payments.md) | a person confirms a payment the gateway would not — the list, inquire-then-confirm, or an outcome that reads wrong (F-093-n) |
 | [contract.payment-result.md](contract.payment-result.md) | a bank returns a payer to `/payment/success` or `/payment/failed` — a reference, an "already paid", or an error code that reads wrong (F-093-f) |
 | [contract.financial.md](contract.financial.md) | the financial page's two lists, its filters, or a date range that returns the wrong day (F-093-d) |
 | [contract.session-guard.md](contract.session-guard.md) | a signed-in visitor is not redirected off an auth screen (F-0101) |

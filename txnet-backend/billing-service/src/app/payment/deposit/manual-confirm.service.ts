@@ -44,7 +44,11 @@ export class ManualConfirmRefused extends Error {
   }
 }
 
-export type ManualOutcome = Exclude<AskAnswer['kind'], 'credited' | 'in_bank' | 'unanswered' | 'unaskable'> | 'credited' | 'unsettled' | 'confirmed_manually';
+/**
+ * Spelled out, not derived: the panel's screen reads this union from this file
+ * to prove it has a sentence for every word (F-093-n).
+ */
+export type ManualOutcome = 'credited' | 'already_settled' | 'refused' | 'mismatch' | 'unsettled' | 'confirmed_manually';
 
 export type ManualAnswer = {
   paymentId: string;

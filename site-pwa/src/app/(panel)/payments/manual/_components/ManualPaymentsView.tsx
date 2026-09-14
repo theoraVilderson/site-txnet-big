@@ -1,0 +1,271 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { Loader2, RotateCw, SearchCheck, ShieldCheck, TriangleAlert } from "lucide-react";
+import { useLocale } from "@/context/LocaleContext";
+import { useApiErrorMessage } from "@/hooks/useApiError";
+import { billingApi, type ManualAnswer, type VerifyingPayment } from "@/lib/billing-api";
+import { BASE_CURRENCY, formatMoney } from "../../../_lib/money";
+import { formatInstant } from "../../../_lib/datetime";
+import { MANUAL_KEYS as K, OUTCOME_KEYS, canConfirmByHand, validateConfirm, type ConfirmInput } from "../_lib/manual-confirm";
+
+/**
+ * The manual confirmation screen (F-093-n, ADR-0044 decision 6) — what
+ * replaces legacy's off-the-books manual top-up.
+ *
+ * **Inquire, then confirm.** Each payment offers "ask the gateway" first. Only
+ * when that answers `unsettled` does the hand-confirm form appear, asking for
+ * the gateway's reference number and a reason. Billing asks the gateway once
+ * more before it credits, so a payment that settled in between is settled by
+ * the gateway, not by the person.
+ *
+ * Nothing is patched into the list from an answer: after every inquire or
+ * confirm the list is read again, because billing decides what the payment
+ * became.
+ */
+export function ManualPaymentsView() {
+  const { t } = useLocale();
+  const errorMessage = useApiErrorMessage();
+  const [rows, setRows] = useState<VerifyingPayment[]>([]);
+  const [isLoading, setLoading] = useState(true);
+  const [error, setError] = useState<unknown>(null);
+  // The row a settled answer was about leaves the list on reload; its sentence stays here.
+  const [notice, setNotice] = useState<ManualAnswer | null>(null);
+
+  const reload = useCallback(async () => {
+    try {
+      setRows(await billingApi.manualPayments());
+      setError(null);
+    } catch (e) {
+      setError(e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const settled = useCallback(
+    async (answer: ManualAnswer) => {
+      setNotice(answer);
+      await reload();
+    },
+    [reload],
+  );
+
+  useEffect(() => {
+    // Every setState in reload runs after its first await, as in `useGateways`.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void reload();
+  }, [reload]);
+
+  return (
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
+      <header>
+        <h1 className="flex items-center gap-2 text-lg font-bold text-text-primary">
+          <ShieldCheck size={18} className="text-primary" aria-hidden />
+          {t("common", K.title)}
+        </h1>
+        <p className="text-xs text-text-secondary">{t("common", K.subtitle)}</p>
+      </header>
+
+      {notice && (
+        <p role="status" className="rounded-xl border border-card-border bg-card-bg p-3 text-xs font-bold text-text-primary">
+          {t("common", OUTCOME_KEYS[notice.outcome])}
+          {notice.referenceId && (
+            <span dir="ltr" className="ms-2 font-mono font-normal text-text-secondary">
+              {notice.referenceId}
+            </span>
+          )}
+        </p>
+      )}
+
+      <section className="rounded-3xl border border-card-border bg-card-bg p-5 shadow-sm sm:p-6">
+        {isLoading ? (
+          <p className="flex items-center gap-2 text-xs text-text-secondary">
+            <Loader2 size={14} className="animate-spin" aria-hidden />
+            {t("common", K.loading)}
+          </p>
+        ) : error ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p role="alert" className="text-xs font-bold text-error">
+              {errorMessage(error)}
+            </p>
+            <button type="button" onClick={() => void reload()} className="inline-flex items-center gap-1 text-xs font-bold text-primary">
+              <RotateCw size={14} aria-hidden />
+              {t("common", K.retry)}
+            </button>
+          </div>
+        ) : rows.length === 0 ? (
+          <p className="py-6 text-center text-sm text-text-secondary">{t("common", K.empty)}</p>
+        ) : (
+          <ul className="divide-y divide-card-border">
+            {rows.map((row) => (
+              <ManualPaymentItem key={row.id} row={row} onSettled={settled} />
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function ManualPaymentItem({ row, onSettled }: { row: VerifyingPayment; onSettled: (answer: ManualAnswer) => Promise<void> }) {
+  const { lang, t } = useLocale();
+  const errorMessage = useApiErrorMessage();
+  const [busy, setBusy] = useState(false);
+  const [answer, setAnswer] = useState<ManualAnswer | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [form, setForm] = useState<ConfirmInput>({ referenceId: "", reason: "" });
+  const [formErrors, setFormErrors] = useState<Partial<Record<keyof ConfirmInput, string>>>({});
+  const [formOpen, setFormOpen] = useState(false);
+
+  const run = async (call: () => Promise<ManualAnswer>) => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const out = await call();
+      setAnswer(out);
+      if (out.outcome !== "unsettled") {
+        setFormOpen(false);
+        await onSettled(out);
+      }
+    } catch (e) {
+      setActionError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const checked = validateConfirm(form);
+    if (!checked.ok) {
+      setFormErrors(checked.errors);
+      return;
+    }
+    setFormErrors({});
+    void run(() => billingApi.manualConfirm(row.id, checked.body));
+  };
+
+  const money = formatMoney(row.amountCredited, BASE_CURRENCY, { lang, t });
+  const settledOutcome = answer && answer.outcome !== "unsettled";
+
+  return (
+    <li className="flex flex-col gap-3 py-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <span className="flex flex-wrap items-center gap-2 text-sm font-bold text-text-primary">
+            <span dir="ltr">{money}</span>
+            {row.gatewayName && <span className="text-xs font-medium text-text-secondary">{row.gatewayName}</span>}
+            <span className="rounded-full border border-primary/20 bg-leaf-bg px-2 py-0.5 text-[10px] font-bold text-primary">
+              {t("common", K.verifying)}
+            </span>
+            {row.flaggedAt && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-error-border bg-error-bg px-2 py-0.5 text-[10px] font-bold text-error">
+                <TriangleAlert size={10} aria-hidden />
+                {t("common", K.flagged)}
+              </span>
+            )}
+          </span>
+          <span className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-secondary">
+            <span>
+              {t("common", K.createdAt)}: <span dir="ltr">{formatInstant(row.createdAt, lang)}</span>
+            </span>
+            <span>{t("common", K.attempts, { count: String(row.verifyAttempts) })}</span>
+            {row.nextVerifyAt && (
+              <span>
+                {t("common", K.nextCheck)}: <span dir="ltr">{formatInstant(row.nextVerifyAt, lang)}</span>
+              </span>
+            )}
+          </span>
+          <span className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] text-text-secondary" dir="ltr">
+            {row.authority && <span>{t("common", K.authority)}: {row.authority}</span>}
+            <span>{t("common", K.user)}: {row.userId}</span>
+            {row.tenantId && <span>{t("common", K.tenant)}: {row.tenantId}</span>}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void run(() => billingApi.manualInquire(row.id))}
+            className="inline-flex items-center gap-1 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-text-on-accent disabled:opacity-50"
+          >
+            {busy ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <SearchCheck size={14} aria-hidden />}
+            {t("common", busy ? K.inquiring : K.inquire)}
+          </button>
+          {canConfirmByHand(answer?.outcome ?? null) && !formOpen && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setFormOpen(true)}
+              className="rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-primary hover:bg-leaf-bg disabled:opacity-50"
+            >
+              {t("common", K.confirmByHand)}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {answer && (
+        <p role="status" className={`text-xs font-bold ${settledOutcome ? "text-primary" : "text-text-primary"}`}>
+          {t("common", OUTCOME_KEYS[answer.outcome])}
+          {answer.gatewayStatus && (
+            <span dir="ltr" className="ms-2 font-mono font-normal text-text-secondary">
+              ({answer.gatewayStatus})
+            </span>
+          )}
+        </p>
+      )}
+      {actionError && (
+        <p role="alert" className="text-xs font-bold text-error">
+          {actionError}
+        </p>
+      )}
+
+      {formOpen && canConfirmByHand(answer?.outcome ?? null) && (
+        <form onSubmit={submit} className="flex flex-col gap-3 rounded-2xl border border-card-border bg-bg-inner p-4">
+          <p className="text-sm font-bold text-text-primary">{t("common", K.form.title)}</p>
+          <p className="text-xs leading-5 text-text-secondary">{t("common", K.form.hint)}</p>
+          <label className="flex flex-col gap-1 text-xs text-text-secondary">
+            {t("common", K.form.referenceId)}
+            <input
+              dir="ltr"
+              value={form.referenceId}
+              maxLength={64}
+              onChange={(e) => setForm((f) => ({ ...f, referenceId: e.target.value }))}
+              className="rounded-xl border border-card-border bg-card-bg px-3 py-2 text-sm text-text-primary"
+            />
+            {formErrors.referenceId && <span className="text-error">{t("common", formErrors.referenceId)}</span>}
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-text-secondary">
+            {t("common", K.form.reason)}
+            <textarea
+              value={form.reason}
+              maxLength={500}
+              rows={3}
+              onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}
+              className="rounded-xl border border-card-border bg-card-bg px-3 py-2 text-sm text-text-primary"
+            />
+            {formErrors.reason && <span className="text-error">{t("common", formErrors.reason)}</span>}
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-text-on-accent disabled:opacity-50"
+            >
+              {t("common", K.form.submit)}
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormOpen(false)}
+              className="rounded-xl px-4 py-2 text-xs font-medium text-text-secondary hover:bg-leaf-bg"
+            >
+              {t("common", K.form.cancel)}
+            </button>
+          </div>
+        </form>
+      )}
+    </li>
+  );
+}

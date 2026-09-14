@@ -332,6 +332,24 @@ export const billingApi = {
    * Every gateway the caller may manage (F-102-d): the platform owner all of
    * them, a tenant its own. Billing decides which; this sends no tenant.
    */
+  /** Payments waiting on a person, in the caller's scope (F-093-n → F-092-z). */
+  async manualPayments(): Promise<VerifyingPayment[]> {
+    return call<VerifyingPayment[]>("/payments/manual", { method: "GET" });
+  },
+
+  /** Ask the gateway now; whatever it settles is settled by billing's ordinary path. */
+  async manualInquire(id: string): Promise<ManualAnswer> {
+    return call<ManualAnswer>(`/payments/manual/${encodeURIComponent(id)}/inquire`, { method: "POST" });
+  },
+
+  /** Billing asks the gateway once more first; it credits by hand only if that stays unsettled. */
+  async manualConfirm(id: string, body: { referenceId: string; reason: string }): Promise<ManualAnswer> {
+    return call<ManualAnswer>(`/payments/manual/${encodeURIComponent(id)}/confirm`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
   async adminGateways(): Promise<AdminGateway[]> {
     return call<AdminGateway[]>("/gateways", { method: "GET" });
   },
@@ -379,6 +397,36 @@ export const billingApi = {
 
 /** Which table a gateway row is in — the pair `source` + `id` names a row (D-25). */
 export type GatewaySource = "platform" | "tenant";
+
+/** A payment waiting on a person (F-092-z): `pending`, and verifying or flagged. */
+export interface VerifyingPayment {
+  id: string;
+  tenantId: string | null;
+  userId: string;
+  source: GatewaySource;
+  gatewayId: string | null;
+  gatewayName: string | null;
+  providerName: string | null;
+  amountRequested: string;
+  amountCredited: string;
+  chargedAmountMinor: string;
+  authority: string | null;
+  createdAt: string;
+  verifyAttempts: number;
+  nextVerifyAt: string | null;
+  /** Still verifying a day after it was made (F-092-y). */
+  flaggedAt: string | null;
+}
+
+/** What asking the gateway, or confirming by hand, came to (billing `ManualOutcome`). */
+export type ManualOutcome = "credited" | "already_settled" | "refused" | "mismatch" | "unsettled" | "confirmed_manually";
+
+export interface ManualAnswer {
+  paymentId: string;
+  outcome: ManualOutcome;
+  gatewayStatus: string | null;
+  referenceId: string | null;
+}
 
 /** Whether one secret is stored. There is no field that could carry its value. */
 export interface GatewaySecretState {
