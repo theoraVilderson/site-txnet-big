@@ -102,3 +102,17 @@ ADR-0046 decision 2. `PaymentVerifyInput.deadlineAt`, honoured by
 | A driver cuts each attempt's timeout to what is left, starts none at or past the deadline, and skips a pause that would reach it; all three end as `unavailable` | the one failure the callback already reads as silence, so the row becomes verifying and the payer lands on `/payment/pending` |
 | Only the callback sets a deadline. Reconciliation and a person's inquire keep the driver's own attempts | nobody is waiting on a sweep, and a person asked for the full answer |
 
+## A lost authority is found again (built — F-092-ad)
+
+ADR-0046 decision 4. `payment-callback-url.ts`; `DepositStartService`,
+`DepositCallbackService`, `DepositReconciliationService.recoverAuthorities`,
+`ZarinpalProvider.listUnverified`. The third way, by hand, is F-092-af's.
+
+| Rule | Why |
+|---|---|
+| Every callback URL a gateway is told carries `?p=<paymentId>`, added to the tenant's panel URL or a gateway's own `callbackUrl` (F-092-w: host, path and query kept) | `start` stores the authority only after the gateway answers; a write lost there leaves a paid payment no authority names |
+| A callback whose authority no row carries reads the row `p` names — only one with **no** authority, `pending` or `expired`. It verifies the query's authority against the **row's** amount. Success attaches the authority **in the crediting flip** (guarded `gatewayTrackingCode: null`); silence attaches it and schedules a retry | the payer's own redirect is the cheapest recovery there is |
+| For such a row a stated refusal, or `Status` not `OK`, **writes nothing** and answers `TRANSACTION_NOT_FOUND` | an id typed into a URL must not close somebody else's payment |
+| `reconcile` first looks, per merchant account, at open rows with no authority older than `AUTHORITY_RECOVERY_AFTER_SEC` (120) inside the lookback, and reads `listUnverified` once for them (Zarinpal `unVerified.json`: the last 100). An entry is attached only if its `callbackUrl` names **that** row **and** its amount is `chargedAmountMinor`; the run answers `authoritiesRecovered` | the amount alone confuses two payments of one price. A row minted before F-092-ad has no `p` and is a person's. A gateway with no list, or no answer, recovers nothing this run |
+| Every attach is `updateMany({ id, gatewayTrackingCode: null })`; the unique index refuses an authority another payment holds | nothing overwrites an authority that arrived meanwhile (ADR-0028) |
+

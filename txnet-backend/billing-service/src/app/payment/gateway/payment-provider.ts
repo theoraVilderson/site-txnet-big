@@ -58,6 +58,15 @@ export type PaymentInquiryStatus = 'verified' | 'paid' | 'in_bank' | 'failed' | 
 
 export type PaymentInquiryResult = { status: PaymentInquiryStatus };
 
+/** A payment the gateway holds paid and unverified (F-092-ad). */
+export type UnverifiedPayment = {
+  authority: string;
+  /** In the gateway currency's minor unit, as `chargedAmountMinor`. */
+  amountMinor: bigint;
+  /** The callback URL the payment was minted with — it names our payment id (`?p=`). */
+  callbackUrl: string;
+};
+
 export type FeeQuoteInput = { credentials: GatewayCredentials; amountMinor: bigint };
 
 /** The provider's fee for `amountMinor`, in the same unit. The caller converts it for `quotedFee`. */
@@ -75,6 +84,13 @@ export interface PaymentProvider {
   verify(input: PaymentVerifyInput): Promise<PaymentVerifyResult>;
   /** Ask where a payment is, without verifying it. Retried on transport failure. */
   inquire(input: PaymentInquiryInput): Promise<PaymentInquiryResult>;
+  /**
+   * The payments this merchant holds paid and unverified, when the gateway can
+   * list them — how an authority whose write was lost is found again (F-092-ad,
+   * ADR-0046 decision 4). Optional: a gateway without such a list omits it.
+   * Retried on transport failure.
+   */
+  listUnverified?(input: { credentials: GatewayCredentials }): Promise<UnverifiedPayment[]>;
   /** The provider's own fee quote, for `feeCalculationMode = automatic`. Retried on transport failure. */
   quoteFee(input: FeeQuoteInput): Promise<FeeQuote>;
 }

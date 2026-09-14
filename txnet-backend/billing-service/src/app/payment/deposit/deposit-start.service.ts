@@ -23,6 +23,7 @@ import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { FxRateReader } from '../pricing/fx-rate.reader';
 import { priceDeposit, selectGateway } from './deposit-pricing';
 import { DepositGatewayNotFound, money } from './deposit-quote.service';
+import { withPaymentId } from './payment-callback-url';
 
 /**
  * Starting a top-up (F-092-i) — the first billing route that writes money.
@@ -237,7 +238,8 @@ export class DepositStartService {
       minted = await provider.request({
         credentials,
         amountMinor: price.chargedAmountMinor as bigint,
-        callbackUrl: callbackUrl as string,
+        // Names the payment, so a lost authority write can be found again (F-092-ad).
+        callbackUrl: withPaymentId(callbackUrl as string, paymentId),
         description: description(paymentId),
       });
     } catch (e) {

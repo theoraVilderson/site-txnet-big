@@ -108,7 +108,7 @@ page rather than the envelope every other route answers.
 
 | Route | Query | Answers |
 |---|---|---|
-| `GET /api/billing/deposit/callback` | `Authority`, `Status` — read case-insensitively | **302** to `/payment/success?t=`, `/payment/failed?t=` or — on silence, a verifying payment (F-093-l) — `/payment/pending?t=` — `t` an HMAC-signed `{outcome, ref, already, code \| paymentId, exp 15 min}` under `PAYMENT_RESULT_SECRET` (`payment-result-token.ts`), nothing readable beside it — on the panel origin `start` captured (`payment_transaction.returnOrigin`: the browser's `Origin`, kept only if in `FRONTEND_ORIGIN` or a proven panel host of the tenant); relative when the row has none |
+| `GET /api/billing/deposit/callback` | `Authority`, `Status` — read case-insensitively; `p`, the payment id the URL was minted with (F-092-ad, `contract.verify.md`) | **302** to `/payment/success?t=`, `/payment/failed?t=` or — on silence, a verifying payment (F-093-l) — `/payment/pending?t=` — `t` an HMAC-signed `{outcome, ref, already, code \| paymentId, exp 15 min}` under `PAYMENT_RESULT_SECRET` (`payment-result-token.ts`), nothing readable beside it — on the panel origin `start` captured (`payment_transaction.returnOrigin`: the browser's `Origin`, kept only if in `FRONTEND_ORIGIN` or a proven panel host of the tenant); relative when the row has none |
 
 | Rule | Why |
 |---|---|

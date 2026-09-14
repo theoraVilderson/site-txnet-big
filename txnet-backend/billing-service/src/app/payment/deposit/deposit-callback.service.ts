@@ -10,6 +10,7 @@ import { GatewayMerchant } from '../gateway/gateway-merchant';
 import { GatewayFailure, GatewayFailureReason } from '../gateway/payment-provider';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { PAYMENT_SELECT, PaymentRow, DepositSettlementService, gatewayRefOf } from './deposit-settlement';
+import { attachAuthority } from './payment-callback-url';
 import { scheduleVerifyRetry } from './verify-retry';
 
 /**
@@ -96,6 +97,11 @@ export type CallbackRequest = {
   authority: string;
   /** The gateway's own verdict on the query string — Zarinpal's `Status`. `OK` means "ask me". */
   gatewayStatus: string | null;
+  /**
+   * The payment id the callback URL was minted with (`?p=`, F-092-ad), already
+   * checked to be a UUID. Consulted only when no row carries the authority.
+   */
+  paymentId?: string | null;
 };
 
 /**
@@ -135,12 +141,29 @@ export class DepositCallbackService {
       // 1. Read. The client is tenant-scoped, so an authority belonging to
       //    another reseller is simply not found — the host resolved this tenant
       //    (ADR-0025) and nothing on the query string can widen it.
-      const payment = await tenantTransaction(this.prisma, (tx) =>
+      let payment = await tenantTransaction(this.prisma, (tx) =>
         tx.paymentTransaction.findFirst({
           where: { gatewayTrackingCode: authority },
           select: { ...PAYMENT_SELECT, returnOrigin: true },
         }),
       );
+      // No row carries it: perhaps the write of this authority was lost after
+      // the gateway minted it (F-092-ad, ADR-0046 decision 4). The id the
+      // callback URL names finds that payment — only one still without an
+      // authority, and still open.
+      const recovered = !payment && !!request.paymentId;
+      if (recovered) {
+        payment = await tenantTransaction(this.prisma, (tx) =>
+          tx.paymentTransaction.findFirst({
+            where: {
+              id: request.paymentId as string,
+              gatewayTrackingCode: null,
+              status: { in: [PaymentStatus.pending, PaymentStatus.expired] },
+            },
+            select: { ...PAYMENT_SELECT, returnOrigin: true },
+          }),
+        );
+      }
       foundOrigin(payment?.returnOrigin ?? null);
       if (!payment) {
         // Not logged as an error: an authority nobody minted is what a stray
@@ -173,11 +196,13 @@ export class DepositCallbackService {
       //    to say anything else — so the holds go back now rather than at the
       //    expiry job's convenience.
       if (request.gatewayStatus && request.gatewayStatus.toUpperCase() !== 'OK') {
-        await this.close(payment, 'payment_failed');
+        // A recovered payment is not closed on the query string's word: anyone
+        // can type an id and `NOK` into a URL.
+        if (!recovered) await this.close(payment, 'payment_failed');
         return { kind: 'failed', code: 'VERIFICATION_FAILED' };
       }
 
-      return await this.verifyAndCredit(payment, authority);
+      return await this.verifyAndCredit(payment, authority, recovered);
     } catch (e) {
       // The row is untouched by definition: everything that writes is inside a
       // transaction below this, and a throw rolled it back.
@@ -187,7 +212,7 @@ export class DepositCallbackService {
   }
 
   /** Ask the gateway — outside every transaction — and act on what it says. */
-  private async verifyAndCredit(payment: PaymentRow, authority: string): Promise<CallbackOutcome> {
+  private async verifyAndCredit(payment: PaymentRow, authority: string, recovered: boolean): Promise<CallbackOutcome> {
     const ref = gatewayRefOf(payment);
     const provider = this.providers.get(ref.providerName);
 
@@ -210,7 +235,7 @@ export class DepositCallbackService {
         deadlineAt,
       });
     } catch (e) {
-      return await this.refused(payment, e);
+      return await this.refused(payment, e, recovered ? authority : null);
     }
 
     // 4. The money — the flip, the credit, the coupon uses and the event, in
@@ -220,7 +245,12 @@ export class DepositCallbackService {
     //    crediting it.
     const credited = await this.settlement.creditVerified(
       payment,
-      { referenceId: verified.referenceId, cardPan: verified.cardPan },
+      {
+        referenceId: verified.referenceId,
+        cardPan: verified.cardPan,
+        // Written in the crediting flip, guarded `gatewayTrackingCode: null`.
+        ...(recovered ? { authority } : {}),
+      },
       // A browser returning from the bank is the gateway's own confirmation,
       // taken automatically — the first of the enum's three.
       ConfirmationSource.webhook_auto,
@@ -242,19 +272,33 @@ export class DepositCallbackService {
    * payment and gives the coupon capacity back, while silence changes nothing
    * at all and waits for F-092-l.
    */
-  private async refused(payment: PaymentRow, cause: unknown): Promise<CallbackOutcome> {
+  private async refused(
+    payment: PaymentRow,
+    cause: unknown,
+    /** The authority a recovered payment was found for (F-092-ad), or `null`. */
+    recoveredAuthority: string | null = null,
+  ): Promise<CallbackOutcome> {
     const unsettled =
       cause instanceof CredentialUnavailable ||
       !(cause instanceof GatewayFailure) ||
       UNSETTLED.includes(cause.reason);
 
+    if (recoveredAuthority !== null && !unsettled) {
+      // The gateway refused the authority this URL brought. Nothing is written:
+      // the payment's real authority may still arrive, and an id typed into a
+      // URL must not be able to close somebody else's payment.
+      return { kind: 'failed', code: 'TRANSACTION_NOT_FOUND' };
+    }
+
     if (unsettled) {
       // Still `pending`, but now verifying: the retry clock says when to ask
       // again (F-092-x, ADR-0044 decision 2), rather than waiting for the
-      // expiry clock and the reconciliation window.
-      const retryAt = await tenantTransaction(this.prisma, (tx) =>
-        scheduleVerifyRetry(tx, payment, new Date()),
-      );
+      // expiry clock and the reconciliation window. A recovered payment keeps
+      // the authority it was found for, so the retries have something to ask.
+      const retryAt = await tenantTransaction(this.prisma, async (tx) => {
+        if (recoveredAuthority !== null) await attachAuthority(tx, payment.id, recoveredAuthority);
+        return scheduleVerifyRetry(tx, payment, new Date());
+      });
       this.logger.warn(
         `payment ${payment.id} left pending, verifying again at ${retryAt?.toISOString() ?? '(already moved)'}: ` +
           `${cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause)}`,

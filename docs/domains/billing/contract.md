@@ -86,7 +86,7 @@ in `billing-service/src/app/payment/gateway/`; the deposit quote (F-092-o), `dep
 
 | Rule | Why |
 |---|---|
-| A driver answers `request` → `{authority, redirectUrl}`, `verify` → `{referenceId, cardPan, alreadyVerified}`, `inquire` → `{status}`, `quoteFee` → `{feeMinor}` | legacy `IPaymentStrategy`, minus its settings row |
+| A driver answers `request` → `{authority, redirectUrl}`, `verify` → `{referenceId, cardPan, alreadyVerified}` (optional `deadlineAt`, F-092-ab), `inquire` → `{status}`, `quoteFee` → `{feeMinor}`, and — when its gateway can list them — `listUnverified` → `[{authority, amountMinor, callbackUrl}]` (F-092-ad) | legacy `IPaymentStrategy`, minus its settings row |
 | A driver names `chargeCurrency` and `chargeDecimals` — Zarinpal `IRR`, `0` — which the caller hands the calculator | the minor unit is the wire's, not a money rule |
 | Amounts cross the port as `bigint` in the gateway currency's minor unit — `chargedAmountMinor`; Zarinpal is sent `IRR`. `feeMinor` is converted to base currency by the caller, with the rate, before it is `quotedFee` | a driver holds no rate and no money rule |
 | `request` is **never retried**; `verify`, `inquire`, `quoteFee` are retried on a transport failure only (timeout, network, 5xx), 3 attempts | each `request` mints an authority; an answer does not change on a retry |

@@ -15,6 +15,8 @@ const COUNTS = ['scanned', 'confirmed', 'flagged', 'unchanged', 'errors'] as con
 type ReconciliationCounts = Record<(typeof COUNTS)[number], number> & {
   /** Still verifying a day after it was made, flagged this run (F-092-y). Absent from an older billing. */
   flaggedForPerson?: number;
+  /** Lost authorities found in a gateway's unverified list this run (F-092-ad). Absent from an older billing. */
+  authoritiesRecovered?: number;
 };
 
 /**
@@ -117,9 +119,11 @@ export class DepositReconciliationJob implements Job {
         throw new Error(`billing answered ${this.path} without its five counts`);
       }
       const flaggedForPerson = body?.['flaggedForPerson'];
+      const authoritiesRecovered = body?.['authoritiesRecovered'];
       return {
         ...(counts as ReconciliationCounts),
         ...(typeof flaggedForPerson === 'number' ? { flaggedForPerson } : {}),
+        ...(typeof authoritiesRecovered === 'number' ? { authoritiesRecovered } : {}),
       };
     } finally {
       clearTimeout(timer);

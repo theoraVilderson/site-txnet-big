@@ -79,6 +79,10 @@ type Setup = {
   lostTheFlip?: boolean;
   /** The vault cannot hand out this gateway's merchant id. */
   credentialsFail?: Error;
+  /** Open payments with no authority, as the recovery scan finds them (F-092-ad). */
+  lost?: Array<Record<string, unknown>>;
+  /** What the gateway's unverified list answers. */
+  unverified?: Array<{ authority: string; amountMinor: bigint; callbackUrl: string }>;
 };
 
 function build(setup: Setup = {}) {
@@ -92,6 +96,8 @@ function build(setup: Setup = {}) {
     verifyFails,
     lostTheFlip = false,
     credentialsFail,
+    lost = [],
+    unverified = [],
   } = setup;
 
   const calls: Calls = { scans: [], inquired: [], verified: [], credited: [], logs: [], updated: [] };
@@ -122,6 +128,7 @@ function build(setup: Setup = {}) {
       findMany: async (args: Record<string, unknown>) => {
         calls.scans.push(args);
         const where = args['where'] as Record<string, unknown>;
+        if (where['gatewayTrackingCode'] === null) return lost;
         return where['nextVerifyAt'] ? verifying : due;
       },
     },
@@ -131,6 +138,7 @@ function build(setup: Setup = {}) {
     name: 'zarinpal',
     chargeCurrency: 'IRR',
     chargeDecimals: 0,
+    listUnverified: async () => unverified,
     inquire: async ({ authority }: { authority: string }) => {
       calls.inquired.push({ authority, tenantInScope: scoped() });
       if (inquiryFails) throw inquiryFails;
@@ -326,12 +334,13 @@ describe('DepositReconciliationService', () => {
 
     await service.reconcile();
 
-    const where = calls.scans[1]['where'] as Record<string, unknown>;
+    // scans: [authority recovery, stalled retries, the ordinary rows]
+    const where = calls.scans[2]['where'] as Record<string, unknown>;
     expect(where['gatewayTrackingCode']).toEqual({ not: null });
     expect(JSON.stringify(where)).toContain(PaymentStatus.expired);
     // A verifying row belongs to verifyDue, never to this scan.
     expect(JSON.stringify(where)).toContain('"nextVerifyAt":null');
-    expect(calls.scans[1]['take']).toBe(50);
+    expect(calls.scans[2]['take']).toBe(50);
   });
 
   it('takes a verifying row when its retry is due, without waiting for its clock or the recheck window (F-092-y)', async () => {
@@ -364,11 +373,12 @@ describe('DepositReconciliationService', () => {
     const sweep = build({ due: [{ id: PAYMENT, tenantId: TENANT }], verifying: [] });
     const before = Date.now();
     await sweep.service.reconcile();
-    expect(sweep.calls.scans).toHaveLength(2);
-    const stalled = (sweep.calls.scans[0]['where'] as Record<string, { lte: Date }>)['nextVerifyAt'].lte.getTime();
+    // scans: [authority recovery, stalled retries, the ordinary rows]
+    expect(sweep.calls.scans).toHaveLength(3);
+    const stalled = (sweep.calls.scans[1]['where'] as Record<string, { lte: Date }>)['nextVerifyAt'].lte.getTime();
     expect(stalled).toBeLessThanOrEqual(before - 600_000 + 1_000);
     expect(stalled).toBeGreaterThanOrEqual(before - 600_000 - 1_000);
-    expect(JSON.stringify(sweep.calls.scans[1]['where'])).toContain('"nextVerifyAt":null');
+    expect(JSON.stringify(sweep.calls.scans[2]['where'])).toContain('"nextVerifyAt":null');
   });
 
   it('flags a payment still verifying 24 hours after it was made, and keeps asking (F-092-y)', async () => {
@@ -401,3 +411,56 @@ describe('DepositReconciliationService', () => {
     expect(calls.inquired[0].tenantInScope).toBe(TENANT);
   });
 });
+
+describe('DepositReconciliationService — finding a lost authority again (F-092-ad, ADR-0046 decision 4)', () => {
+  const lostRow = (overrides: Record<string, unknown> = {}) => ({
+    ...paymentRow({ gatewayTrackingCode: null }),
+    tenantId: TENANT,
+    ...overrides,
+  });
+
+  it('attaches the authority whose callback URL names the payment and whose amount matches, and counts it', async () => {
+    const { service, calls } = build({
+      due: [],
+      lost: [lostRow()],
+      unverified: [
+        { authority: 'A-WRONG-AMOUNT', amountMinor: BigInt(1), callbackUrl: `https://myvpn.com/api/billing/deposit/callback?p=${PAYMENT}` },
+        { authority: AUTHORITY, amountMinor: BigInt(19_800_000), callbackUrl: `https://myvpn.com/api/billing/deposit/callback?p=${PAYMENT}` },
+      ],
+    });
+
+    const result = await service.reconcile();
+
+    const attaches = calls.updated.filter((u) => 'gatewayTrackingCode' in (u['data'] as object));
+    expect(attaches).toEqual([
+      { where: { id: PAYMENT, gatewayTrackingCode: null }, data: { gatewayTrackingCode: AUTHORITY } },
+    ]);
+    expect(result).toMatchObject({ authoritiesRecovered: 1 });
+  });
+
+  it('never attaches by amount alone — two payments of one amount are indistinguishable', async () => {
+    const { service, calls } = build({
+      due: [],
+      lost: [lostRow()],
+      unverified: [{ authority: AUTHORITY, amountMinor: BigInt(19_800_000), callbackUrl: 'https://myvpn.com/api/billing/deposit/callback' }],
+    });
+
+    const result = await service.reconcile();
+
+    expect(calls.updated.filter((u) => 'gatewayTrackingCode' in (u['data'] as object))).toEqual([]);
+    expect(result).toMatchObject({ authoritiesRecovered: 0 });
+  });
+
+  it('looks only at open payments with no authority, old enough that start is not still writing one', async () => {
+    const { service, calls } = build({ due: [] });
+    const before = Date.now();
+
+    await service.reconcile();
+
+    const scan = calls.scans.find((c) => (c['where'] as Record<string, unknown>)['gatewayTrackingCode'] === null);
+    const where = scan?.['where'] as Record<string, { lte?: Date; in?: string[] }>;
+    expect(where['status']).toEqual({ in: [PaymentStatus.pending, PaymentStatus.expired] });
+    expect(where['createdAt'].lte!.getTime()).toBeLessThanOrEqual(before - 120_000 + 1_000);
+  });
+});
+

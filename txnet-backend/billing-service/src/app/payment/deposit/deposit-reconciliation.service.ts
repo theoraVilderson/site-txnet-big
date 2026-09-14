@@ -20,6 +20,7 @@ import { GatewayMerchant } from '../gateway/gateway-merchant';
 import { GatewayFailure, PaymentInquiryStatus } from '../gateway/payment-provider';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { PAYMENT_SELECT, PaymentRow, DepositSettlementService, gatewayRefOf } from './deposit-settlement';
+import { attachAuthority, paymentIdInUrl } from './payment-callback-url';
 import { clearVerifyRetry, flagLongVerifying, scheduleVerifyRetry } from './verify-retry';
 
 /**
@@ -73,6 +74,8 @@ export type DepositReconciliationResult = {
   errors: number;
   /** Payments this run found still verifying a day after they were made, and flagged for a person (F-092-y). */
   flaggedForPerson: number;
+  /** Payments whose lost authority this run found in the gateway's unverified list (F-092-ad). */
+  authoritiesRecovered?: number;
 };
 
 /**
@@ -118,6 +121,13 @@ const answer = (kind: AskKind, gatewayStatus: string | null = null, referenceId:
 /** Called wherever an answer was not settled: schedule the next ask, flag if it is a day old. */
 type RetryHook = (payment: PaymentRow) => Promise<void>;
 
+/**
+ * How old an authority-less payment must be before its gateway's unverified
+ * list is searched for it (F-092-ad): `start` writes the authority a moment
+ * after the gateway answers, and a younger row is most likely still in there.
+ */
+export const AUTHORITY_RECOVERY_AFTER_SEC = 120;
+
 /** How overdue a retry must be before the sweep stands in for `deposit_verify_retry` (F-092-ac). */
 export const VERIFY_RETRY_STALLED_SEC = 600;
 
@@ -146,6 +156,10 @@ export class DepositReconciliationService {
     const now = new Date();
     const take = this.config.get('RECONCILIATION_BATCH_SIZE', { infer: true });
     const recheckSec = this.config.get('RECONCILIATION_RECHECK_SEC', { infer: true });
+
+    // 0. Authorities whose write was lost, found in the gateway's own list, so
+    //    the scans below can ask about those payments like any other.
+    const authoritiesRecovered = await this.recoverAuthorities(now, take);
 
     // 1. A safety net, not a schedule: a verifying row whose retry is ten
     //    minutes overdue means `deposit_verify_retry` is not running — a
@@ -180,7 +194,70 @@ export class DepositReconciliationService {
             orderBy: { createdAt: 'asc' },
             take: take - stalled.length,
           });
-    return this.askAll([...stalled, ...ordinary], now);
+    return { ...(await this.askAll([...stalled, ...ordinary], now)), authoritiesRecovered };
+  }
+
+  /**
+   * An open payment with no authority — `start`'s write of it was lost after
+   * the gateway minted one — is looked for in its gateway's list of paid,
+   * unverified payments (F-092-ad, ADR-0046 decision 4). An entry is attached
+   * only when its callback URL names **this** payment (`?p=`) **and** its amount
+   * is the row's `chargedAmountMinor`: the amount alone would confuse two
+   * payments of one price. A gateway with no such list, or one that does not
+   * answer, recovers nothing this run and is asked again the next.
+   */
+  private async recoverAuthorities(now: Date, take: number): Promise<number> {
+    const rows = await this.crossTenant.paymentTransaction.findMany({
+      where: {
+        gatewayTrackingCode: null,
+        status: { in: [PaymentStatus.pending, PaymentStatus.expired] },
+        createdAt: { ...this.lookback(now), lte: new Date(now.getTime() - AUTHORITY_RECOVERY_AFTER_SEC * 1000) },
+      },
+      select: { ...PAYMENT_SELECT, tenantId: true },
+      orderBy: { createdAt: 'asc' },
+      take,
+    });
+
+    // One list per merchant account a row can name: tenant, gateway column and grant.
+    const groups = new Map<string, typeof rows>();
+    for (const row of rows) {
+      if (!row.tenantId) continue;
+      const key = [row.tenantId, row.gatewayId, row.tenantGatewayConfigId, row.grantId].join('|');
+      groups.set(key, [...(groups.get(key) ?? []), row]);
+    }
+
+    let recovered = 0;
+    for (const group of groups.values()) {
+      recovered += await runWithTenant({ id: group[0].tenantId as string }, async () => {
+        const ref = gatewayRefOf(group[0]);
+        const provider = this.providers.get(ref.providerName);
+        if (!provider.listUnverified) return 0;
+        let list;
+        try {
+          const credentials = await this.merchant.credentialsFor(ref, group[0].userId);
+          list = await provider.listUnverified({ credentials });
+        } catch (e) {
+          this.logger.warn(`unverified list of gateway ${ref.gatewayId} not read: ${e instanceof Error ? e.message : String(e)}`);
+          return 0;
+        }
+        let attached = 0;
+        for (const row of group) {
+          const entry = list.find((u) => paymentIdInUrl(u.callbackUrl) === row.id && u.amountMinor === row.chargedAmountMinor);
+          if (!entry) continue;
+          try {
+            if (await tenantTransaction(this.prisma, (tx) => attachAuthority(tx, row.id, entry.authority))) {
+              this.logger.warn(`payment ${row.id} recovered its lost authority from the gateway's unverified list`);
+              attached++;
+            }
+          } catch (e) {
+            // The unique index: another payment already holds this authority.
+            this.logger.error(`payment ${row.id}: authority from the unverified list not attached: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        }
+        return attached;
+      });
+    }
+    return recovered;
   }
 
   /**

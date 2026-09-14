@@ -111,6 +111,36 @@ describe('ZarinpalProvider — request', () => {
   });
 });
 
+describe('ZarinpalProvider — listUnverified (F-092-ad)', () => {
+  it('reads the paid-but-unverified list: authority, amount in rial, and the callback URL it was minted with', async () => {
+    const { provider, calls } = gateway([
+      {
+        body: {
+          data: {
+            code: '100',
+            message: 'Success',
+            authorities: [
+              { authority: 'A00000000000000000000000000000000001', amount: 50500, callback_url: 'https://myvpn.com/cb?p=x', referer: 'r', date: '2026-09-14 10:00:00' },
+              { authority: '', amount: 1, callback_url: 'https://myvpn.com/cb' },
+              { authority: 'A00000000000000000000000000000000002', amount: 'not a number', callback_url: 'https://myvpn.com/cb' },
+            ],
+          },
+          errors: [],
+        },
+      },
+    ]);
+
+    const list = await provider.listUnverified({ credentials });
+
+    expect(calls[0].url).toBe('https://payment.zarinpal.com/pg/v4/payment/unVerified.json');
+    expect(calls[0].body).toEqual({ merchant_id: MERCHANT });
+    // An entry we cannot read in full is skipped, never guessed at.
+    expect(list).toEqual([
+      { authority: 'A00000000000000000000000000000000001', amountMinor: BigInt(50_500), callbackUrl: 'https://myvpn.com/cb?p=x' },
+    ]);
+  });
+});
+
 describe('ZarinpalProvider — verify', () => {
   it('reads 101 (already verified) as success', async () => {
     const { provider } = gateway([{ body: { data: { code: 101, ref_id: 201, card_pan: '502229******5995' } } }]);

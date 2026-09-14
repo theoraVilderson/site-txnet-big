@@ -14,6 +14,7 @@ import {
   PaymentRequestResult,
   PaymentVerifyInput,
   PaymentVerifyResult,
+  UnverifiedPayment,
 } from './payment-provider';
 
 /**
@@ -154,6 +155,27 @@ export class ZarinpalProvider implements PaymentProvider {
     const status = INQUIRY_STATUS[String(data['status'])];
     if (!status) throw this.failure('unexpected', null, `inquiry status '${String(data['status'])}'`);
     return { status };
+  }
+
+  /**
+   * `unVerified.json`: the last 100 payments Zarinpal holds paid and not yet
+   * verified by us. An entry missing a field or carrying a non-integer amount is
+   * skipped — a list we half-read must not attach a guessed authority.
+   */
+  async listUnverified(input: { credentials: GatewayCredentials }): Promise<UnverifiedPayment[]> {
+    const data = await this.retried('unVerified', input.credentials, {});
+    this.requireCode(data, [100]);
+    const entries = Array.isArray(data['authorities']) ? (data['authorities'] as unknown[]) : [];
+    const list: UnverifiedPayment[] = [];
+    for (const entry of entries) {
+      if (!entry || typeof entry !== 'object') continue;
+      const { authority, amount, callback_url: callbackUrl } = entry as Record<string, unknown>;
+      if (typeof authority !== 'string' || !authority) continue;
+      if (typeof amount !== 'number' || !Number.isSafeInteger(amount) || amount <= 0) continue;
+      if (typeof callbackUrl !== 'string' || !callbackUrl) continue;
+      list.push({ authority, amountMinor: BigInt(amount), callbackUrl });
+    }
+    return list;
   }
 
   async quoteFee(input: FeeQuoteInput): Promise<FeeQuote> {

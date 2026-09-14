@@ -6,6 +6,7 @@ import type { Request, Response } from 'express';
 import type { EnvConfig } from '../../config/env.validation';
 import { RateLimit } from '../../request/rate-limit';
 import { DepositCallbackService, SettledCallback } from './deposit-callback.service';
+import { CALLBACK_PAYMENT_PARAM, paymentIdOf } from './payment-callback-url';
 import { signResultToken } from './payment-result-token';
 
 /**
@@ -80,6 +81,8 @@ export class DepositCallbackController {
     const outcome = await this.callbacks.settle({
       authority: authorityOf(req),
       gatewayStatus: paramOf(req, 'status'),
+      // The payment the callback URL was minted for (F-092-ad).
+      paymentId: paymentIdOf(paramOf(req, CALLBACK_PAYMENT_PARAM)),
     });
     res.redirect(resultUrl(outcome, this.config.get('PAYMENT_RESULT_SECRET', { infer: true })));
   }

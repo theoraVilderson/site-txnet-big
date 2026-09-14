@@ -256,25 +256,29 @@ describe('DepositStartService.start', () => {
       ],
     });
 
-    await start(service);
+    const started = await start(service);
 
     // ADR-0020: the callback is a public route resolved by Host, so a reseller's
-    // customer must come back to the brand they paid on.
-    expect(calls.requested[0].callbackUrl).toBe('https://myvpn.com/api/billing/deposit/callback');
+    // customer must come back to the brand they paid on. It names the payment
+    // (F-092-ad), so an authority whose write was lost can be found again.
+    expect(calls.requested[0].callbackUrl).toBe(`https://myvpn.com/api/billing/deposit/callback?p=${started.paymentId}`);
   });
 
   // F-092-w: an operator whose Zarinpal terminal is registered on another domain
   // writes the callback into the gateway; it goes to the gateway verbatim.
   it("sends the gateway's own callback address when one is set, before any domain rule", async () => {
     const { service, calls } = build({
-      row: gatewayRow({ callbackUrl: 'https://pay.example.org/api/billing/deposit/callback' }),
+      row: gatewayRow({ callbackUrl: 'https://pay.example.org/api/billing/deposit/callback?brand=x' }),
       domains: [{ domainValue: 'claimed.example', domainType: 'custom_domain', verificationStatus: 'pending' }],
       callbackOrigin: 'https://env.example',
     });
 
-    await start(service);
+    const started = await start(service);
 
-    expect(calls.requested[0].callbackUrl).toBe('https://pay.example.org/api/billing/deposit/callback');
+    // Its host, path and query kept; only the payment id is added.
+    expect(calls.requested[0].callbackUrl).toBe(
+      `https://pay.example.org/api/billing/deposit/callback?brand=x&p=${started.paymentId}`,
+    );
   });
 
   it('refuses a tenant whose only custom domain is unproven, rather than guessing a host', async () => {

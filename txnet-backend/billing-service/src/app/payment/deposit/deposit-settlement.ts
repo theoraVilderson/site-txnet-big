@@ -70,6 +70,11 @@ export type PaymentRow = Prisma.PaymentTransactionGetPayload<{ select: typeof PA
 export type VerifiedPayment = {
   referenceId: string;
   cardPan: string | null;
+  /**
+   * The authority to write in the same flip, for a payment found without one
+   * (F-092-ad). The flip is then also guarded `gatewayTrackingCode: null`.
+   */
+  authority?: string;
 };
 
 /** A person's confirmation (F-092-z): who, why, and from where — the audit row's content. */
@@ -114,6 +119,7 @@ export class DepositSettlementService {
         // and nothing left to verify (F-092-x).
         expiresAt: null,
         nextVerifyAt: null,
+        ...(verified.authority ? { gatewayTrackingCode: verified.authority } : {}),
       };
       // Two guards, tried in order, rather than `status: { in: [...] }`: which
       // one matched is what says whether the coupon holds are still held. A row
@@ -121,7 +127,12 @@ export class DepositSettlementService {
       // decision 1) — the money is paid either way, and only a settled row is
       // matched by neither.
       const flip = async (from: PaymentStatus) =>
-        (await tx.paymentTransaction.updateMany({ where: { id: payment.id, status: from }, data })).count === 1;
+        (
+          await tx.paymentTransaction.updateMany({
+            where: { id: payment.id, status: from, ...(verified.authority ? { gatewayTrackingCode: null } : {}) },
+            data,
+          })
+        ).count === 1;
       const from = (await flip(PaymentStatus.pending))
         ? PaymentStatus.pending
         : (await flip(PaymentStatus.expired))

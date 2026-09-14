@@ -69,21 +69,30 @@ type Setup = {
   lostTheFlip?: boolean;
   /** The vault cannot hand out this gateway's merchant id. */
   credentialsFail?: Error;
+  /** A payment of this tenant whose authority write was lost: found only by id with no code (F-092-ad). */
+  lost?: ReturnType<typeof paymentRow>;
 };
 
 function build(setup: Setup = {}) {
-  const { row = paymentRow(), verifyFails, lostTheFlip = false, credentialsFail } = setup;
+  const { row = paymentRow(), verifyFails, lostTheFlip = false, credentialsFail, lost } = setup;
   const calls: Calls = { updated: [], settled: [], credited: [], verified: [], events: [] };
 
   const tx = {
     $executeRaw: async () => 0,
     paymentTransaction: {
-      findFirst: async ({ where }: { where: Record<string, unknown> }) =>
-        where['gatewayTrackingCode'] === AUTHORITY ? row : null,
+      findFirst: async ({ where }: { where: Record<string, unknown> }) => {
+        if (where['gatewayTrackingCode'] === AUTHORITY) return row;
+        if (lost && where['id'] === lost.id && where['gatewayTrackingCode'] === null) return lost;
+        return null;
+      },
       updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
         calls.updated.push({ where, data });
         // A guard naming a status the row does not have matches nothing.
-        const statusMatches = where['status'] === undefined || where['status'] === row?.status;
+        const current = lost ?? row;
+        const statusMatches =
+          where['status'] === undefined ||
+          where['status'] === current?.status ||
+          JSON.stringify(where['status']).includes(`"${current?.status}"`);
         return { count: lostTheFlip || !statusMatches ? 0 : 1 };
       },
     },
@@ -154,9 +163,16 @@ function build(setup: Setup = {}) {
   return { service, calls };
 }
 
-const settle = (service: DepositCallbackService, query: { authority?: string; gatewayStatus?: string | null } = {}) =>
+const settle = (
+  service: DepositCallbackService,
+  query: { authority?: string; gatewayStatus?: string | null; paymentId?: string | null } = {},
+) =>
   runWithTenant({ id: TENANT }, () =>
-    service.settle({ authority: query.authority ?? AUTHORITY, gatewayStatus: query.gatewayStatus ?? 'OK' }),
+    service.settle({
+      authority: query.authority ?? AUTHORITY,
+      gatewayStatus: query.gatewayStatus ?? 'OK',
+      paymentId: query.paymentId ?? null,
+    }),
   );
 
 describe('DepositCallbackService.settle', () => {
@@ -365,3 +381,58 @@ describe('DepositCallbackService.settle — the origin the payer started from', 
     });
   });
 });
+
+describe('DepositCallbackService.settle — an authority whose write was lost (F-092-ad, ADR-0046 decision 4)', () => {
+  const lost = () => paymentRow({ gatewayTrackingCode: null });
+
+  it('finds the payment by the id its callback URL carries, verifies it, and attaches the authority in the crediting flip', async () => {
+    const { service, calls } = build({ row: null, lost: lost() });
+
+    const outcome = await settle(service, { paymentId: PAYMENT });
+
+    expect(outcome).toEqual({ kind: 'success', paymentId: PAYMENT, referenceId: '900900900', alreadyPaid: false });
+    // Verified with the row's own amount, never the query's.
+    expect(calls.verified[0]).toMatchObject({ authority: AUTHORITY, amountMinor: BigInt(19_800_000) });
+    expect(calls.updated[0].where).toMatchObject({ id: PAYMENT, gatewayTrackingCode: null });
+    expect(calls.updated[0].data).toMatchObject({ status: 'success', gatewayTrackingCode: AUTHORITY });
+    expect(calls.credited).toHaveLength(1);
+  });
+
+  it('attaches the authority on silence, so the retry ladder can ask about it', async () => {
+    const { service, calls } = build({
+      row: null,
+      lost: lost(),
+      verifyFails: new GatewayFailure('zarinpal', 'unavailable', null, 'timed out'),
+    });
+
+    const outcome = await settle(service, { paymentId: PAYMENT });
+
+    expect(outcome).toEqual({ kind: 'verifying', paymentId: PAYMENT });
+    const attach = calls.updated.find((u) => 'gatewayTrackingCode' in u.data);
+    expect(attach).toMatchObject({ where: { id: PAYMENT, gatewayTrackingCode: null }, data: { gatewayTrackingCode: AUTHORITY } });
+    expect(calls.credited).toEqual([]);
+  });
+
+  it('touches nothing when the gateway refuses that authority — a stranger cannot close a payment by naming it', async () => {
+    const { service, calls } = build({
+      row: null,
+      lost: lost(),
+      verifyFails: new GatewayFailure('zarinpal', 'authority_invalid', '-54', 'unknown authority'),
+    });
+
+    const outcome = await settle(service, { paymentId: PAYMENT });
+
+    expect(outcome).toEqual({ kind: 'failed', code: 'TRANSACTION_NOT_FOUND' });
+    expect(calls.updated).toEqual([]);
+    expect(calls.settled).toEqual([]);
+  });
+
+  it('ignores the id when a row already carries the authority', async () => {
+    const { service, calls } = build({ lost: lost() });
+
+    await settle(service, { paymentId: PAYMENT });
+
+    expect(calls.updated[0].where).not.toHaveProperty('gatewayTrackingCode');
+  });
+});
+
