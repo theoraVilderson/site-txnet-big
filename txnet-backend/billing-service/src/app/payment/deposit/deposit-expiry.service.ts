@@ -43,6 +43,15 @@ import { CouponReservationService } from '../coupon/coupon-reservation';
  * the clock ran out. `DepositCallbackService.close()` owns the other word, and
  * the two stay distinguishable in `coupon_redemption` precisely so that an
  * audit can tell an abandoned payment from a refused one.
+ *
+ * **The clock closes the payment, not its coupons** (F-092-ah, ADR-0047
+ * decision 2). A bank may still charge a payment after its clock, and a slot
+ * handed to someone else meanwhile is how a late credit took a coupon past its
+ * limit. So the flip keeps the holds, and a second pass gives them back only
+ * once the payment has been `expired` for `COUPON_HOLD_AFTER_EXPIRY_SEC` —
+ * under a row lock that still finds it `expired`, so a late credit racing the
+ * release either waits for it (and claims the uses back) or has already
+ * confirmed them (and the release moves nothing).
  */
 
 /** What one sweep did. Every number is reported, including the one nothing can act on. */
@@ -58,6 +67,8 @@ export type DepositExpiryResult = {
    * (`withTenant` injects the column on create) and not a quiet zero.
    */
   unattributed: number;
+  /** Expired payments whose coupon holds this sweep gave back, past `COUPON_HOLD_AFTER_EXPIRY_SEC` (F-092-ah). */
+  holdsReleased: number;
 };
 
 @Injectable()
@@ -114,7 +125,47 @@ export class DepositExpiryService {
     }
 
     if (expired > 0) this.logger.log(`expired ${expired} pending payment(s)`);
-    return { scanned: due.length, expired, unattributed };
+
+    const holdsReleased = await this.releaseLapsedHolds(now, take);
+    if (holdsReleased > 0) this.logger.log(`gave back the coupon holds of ${holdsReleased} expired payment(s)`);
+    return { scanned: due.length, expired, unattributed, holdsReleased };
+  }
+
+  /**
+   * The second pass: expired payments still holding coupons, expired longer
+   * than `COUPON_HOLD_AFTER_EXPIRY_SEC`. One transaction per payment, each
+   * taking the row lock a crediting flip would wait on.
+   */
+  private async releaseLapsedHolds(now: Date, take: number): Promise<number> {
+    const holdSec = this.config.get('COUPON_HOLD_AFTER_EXPIRY_SEC', { infer: true });
+    const lapsed = await this.crossTenant.paymentTransaction.findMany({
+      where: {
+        status: PaymentStatus.expired,
+        expiresAt: { lte: new Date(now.getTime() - holdSec * 1000) },
+        couponRedemptions: { some: { status: RedemptionStatus.pending } },
+      },
+      select: { id: true, tenantId: true },
+      orderBy: { expiresAt: 'asc' },
+      take,
+    });
+
+    let released = 0;
+    for (const { id, tenantId } of lapsed) {
+      // A row with no tenant was never expired by this job; the first scan reports that fault.
+      if (!tenantId) continue;
+      released += await runWithTenant({ id: tenantId }, () =>
+        tenantTransaction(this.prisma, async (tx) => {
+          const locked = await tx.$queryRaw<unknown[]>`
+            SELECT 1 FROM "billing"."payment_transaction"
+             WHERE "id" = ${id}::uuid AND "status" = 'expired'
+               FOR UPDATE`;
+          if (locked.length === 0) return 0;
+          await this.reservations.release(tx, id, RedemptionStatus.expired);
+          return 1;
+        }),
+      );
+    }
+    return released;
   }
 
   /**
@@ -142,9 +193,8 @@ export class DepositExpiryService {
           where: { id, status: PaymentStatus.pending, expiresAt: { lte: now }, nextVerifyAt: null },
           data: { status: PaymentStatus.expired },
         });
-        if (count !== 1) continue;
-        await this.reservations.release(tx, id, RedemptionStatus.expired);
-        expired++;
+        // The holds stay: `releaseLapsedHolds` gives them back later (F-092-ah).
+        if (count === 1) expired++;
       }
       return expired;
     });

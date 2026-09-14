@@ -13,6 +13,7 @@ alerting:
 rule_files:
   - "/etc/prometheus/automation.rules.yml"
   - "/etc/prometheus/currency.rules.yml"
+  - "/etc/prometheus/billing.rules.yml"
 
 scrape_configs:
   - job_name: "prometheus"

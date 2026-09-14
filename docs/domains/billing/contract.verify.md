@@ -90,7 +90,7 @@ and `billing.claim_expired_coupon_redemptions` (migration
 | Rule | Why |
 |---|---|
 | **The flip tries `pending`, then `expired`**, two guarded `updateMany`s in the crediting transaction; `count: 0` on both is "already settled" | an outage longer than the 15-min clock expires the row before anyone hears the bank. Before this, reconciliation logged a paid expired payment "already settled" and never credited it |
-| Which guard matched picks the coupon path: `pending` confirms the holds; `expired` **claims back** the uses the sweep released `expired` — `usedCount + n`, `reservedCount` untouched, **no limit check** | the payer was charged the discounted price. A coupon past its limit is visible; money refused over a counter is not recoverable by anyone |
+| Which guard matched picks the coupon path: both confirm the holds still kept (an expired row keeps them `COUPON_HOLD_AFTER_EXPIRY_SEC`, F-092-ah); `expired` also **claims back** the uses the sweep released `expired` — `usedCount + n`, `reservedCount` untouched, **no limit check**. A coupon left past its limit raises `BillingCouponOverLimit` | the payer was charged the discounted price. A coupon past its limit is visible; money refused over a counter is not recoverable by anyone |
 | The callback verifies an `expired` row exactly like a `pending` one; only `failed` answers `VERIFICATION_FAILED` without asking. Silence on an expired row schedules nothing (the ladder guards `pending`) — reconciliation's ordinary scan owns it | reopening a `failed` row would overrule a stated refusal; an `expired` one was never refused |
 
 ## The callback's budget (built — F-092-ab)
@@ -140,7 +140,7 @@ ADR-0046 decisions 5, 6. `DepositSettlementService.closeReversed`,
 | Rule | Why |
 |---|---|
 | An inquiry answering `reversed` — in a run, `verifyDue`, or a person's inquire — writes its log row **and**, in the same transaction, closes the payment: `pending` then `expired` guarded, `failed` / `failureCode: reversed`, `expiresAt` and `nextVerifyAt` null | the gateway is returning the payer's money; left open, the row held coupon slots and read "verifying" for a week |
-| A pending row's holds are released `cancelled`; an expired row's were released by the clock | nothing timed out — the payment was refused after the fact |
+| The holds still kept — a pending row's, or an expired row's inside `COUPON_HOLD_AFTER_EXPIRY_SEC` (F-092-ah) — are released `cancelled` | nothing timed out — the payment was refused after the fact |
 | The same transaction writes `billing.payment` / `billing.payment.reversed`, payload `{tenantId, userId, paymentId, chargedAmountMinor, amountCredited, gateway}` | the payer's notice (F-067-m), and the money never moves without its event (ADR-0021) |
 | An inquiry answering `failed` still closes nothing | the clock owns that; `failed` from an inquiry is not the bank returning anything |
 | Every driver declares `verifyWindowSec` — `null` for Zarinpal, whose paid payments are not returned unverified. On a windowed gateway a verifying payment is flagged at `min(VERIFY_FLAG_AFTER_SEC, window / 2)` after it was made | a flag after a day is useless for a gateway that returns the money in 20 minutes; half the window leaves a person time to act |

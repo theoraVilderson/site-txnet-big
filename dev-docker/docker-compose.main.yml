@@ -720,6 +720,8 @@ services:
       - PAYMENT_GATEWAY_SANDBOX=${PAYMENT_GATEWAY_SANDBOX:-false}
       # How long a pending top-up stays payable, and its coupon holds with it (F-092-i).
       - PAYMENT_PENDING_TTL_SEC=${PAYMENT_PENDING_TTL_SEC:-}
+      # How long an expired top-up keeps its coupon holds — the bank may still charge it (F-092-ah).
+      - COUPON_HOLD_AFTER_EXPIRY_SEC=${COUPON_HOLD_AFTER_EXPIRY_SEC:-}
       # How long the callback waits on the bank's verify before answering "verifying" (F-092-ab).
       - DEPOSIT_CALLBACK_VERIFY_BUDGET_MS=${DEPOSIT_CALLBACK_VERIFY_BUDGET_MS:-}
       # One gateway-callback origin for every tenant. Dev and test only — in

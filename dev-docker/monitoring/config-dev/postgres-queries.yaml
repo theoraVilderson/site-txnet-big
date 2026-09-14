@@ -21,6 +21,21 @@
 # count rows would be the wrong trade in the other direction.
 # =============================================================================
 
+# billing — coupons past their limit (F-092-ah, ADR-0047 decision 3). A late
+# credit claims a use back without a limit check; this is how that is seen.
+# `billing.coupons_over_limit()` is SECURITY DEFINER because coupon RLS shows an
+# unbound connection only the platform-wide coupons — it answers a count, nothing
+# else. Metric: `billing_coupon_over_limit`.
+billing_coupon:
+  master: true
+  cache_seconds: 60
+  query: >-
+    SELECT billing.coupons_over_limit()::bigint AS over_limit
+  metrics:
+    - over_limit:
+        usage: "GAUGE"
+        description: "Coupons whose usedCount is above totalUsageLimit, across every tenant."
+
 automation_outbox:
   # `master: true` — run on the primary only, not on a replica.
   master: true

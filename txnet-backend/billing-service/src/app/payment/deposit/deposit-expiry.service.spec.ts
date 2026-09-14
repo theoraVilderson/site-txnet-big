@@ -43,16 +43,24 @@ type Setup = {
   /** Payment ids whose guarded flip matches nothing — something settled them first. */
   lost?: string[];
   batchSize?: number;
+  /** Expired payments still holding coupons past `COUPON_HOLD_AFTER_EXPIRY_SEC` (F-092-ah). */
+  lapsed?: Due[];
+  /** Payment ids no longer `expired` under the row lock — a late credit won. */
+  settledSince?: string[];
 };
 
+const HOLD_AFTER_EXPIRY_SEC = 3600;
+
 function build(setup: Setup = {}) {
-  const { due = [], lost = [], batchSize = 200 } = setup;
+  const { due = [], lost = [], batchSize = 200, lapsed = [], settledSince = [] } = setup;
   const calls: Calls = { scans: [], updated: [], released: [] };
 
   const scoped = () => TenantContext.currentOrNull()?.id ?? null;
 
   const tx = {
     $executeRaw: async () => 0,
+    // The row lock the release takes on a payment still `expired`.
+    $queryRaw: async (_sql: TemplateStringsArray, id: string) => (settledSince.includes(id) ? [] : [{ locked: 1 }]),
     paymentTransaction: {
       updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
         calls.updated.push({ where, data, tenantInScope: scoped() });
@@ -67,7 +75,8 @@ function build(setup: Setup = {}) {
     paymentTransaction: {
       findMany: async (args: Record<string, unknown>) => {
         calls.scans.push({ ...args, tenantInScope: scoped() });
-        return due;
+        const where = args['where'] as Record<string, unknown>;
+        return where['status'] === PaymentStatus.expired ? lapsed : due;
       },
     },
   };
@@ -79,7 +88,7 @@ function build(setup: Setup = {}) {
     },
   };
 
-  const config = { get: () => batchSize };
+  const config = { get: (key: string) => (key === 'COUPON_HOLD_AFTER_EXPIRY_SEC' ? HOLD_AFTER_EXPIRY_SEC : batchSize) };
 
   const service = new DepositExpiryService(
     prisma as never,
@@ -91,17 +100,47 @@ function build(setup: Setup = {}) {
 }
 
 describe('DepositExpiryService', () => {
-  it('expires a due payment and gives its coupon holds back as expired', async () => {
+  // F-092-ah (ADR-0047 decision 2): the clock closes the payment, not the
+  // coupon. A bank may still charge an expired payment, and a slot handed to
+  // someone else meanwhile is how a coupon ended past its limit.
+  it('expires a due payment and keeps its coupon holds', async () => {
     const { service, calls } = build({ due: [{ id: PAYMENT_1, tenantId: TENANT_A }] });
 
     const result = await service.expirePending();
 
-    expect(result).toEqual({ scanned: 1, expired: 1, unattributed: 0 });
+    expect(result).toEqual({ scanned: 1, expired: 1, unattributed: 0, holdsReleased: 0 });
     expect(calls.updated).toHaveLength(1);
     expect(calls.updated[0].data).toMatchObject({ status: PaymentStatus.expired });
+    expect(calls.released).toEqual([]);
+  });
+
+  it('gives the holds back as expired once the payment has been expired for COUPON_HOLD_AFTER_EXPIRY_SEC', async () => {
+    const { service, calls } = build({ lapsed: [{ id: PAYMENT_2, tenantId: TENANT_B }] });
+    const before = Date.now();
+
+    const result = await service.expirePending();
+
+    const where = calls.scans[1]['where'] as Record<string, { lte?: Date } | unknown>;
+    expect(where).toMatchObject({
+      status: PaymentStatus.expired,
+      couponRedemptions: { some: { status: RedemptionStatus.pending } },
+    });
+    const cutoff = (where['expiresAt'] as { lte: Date }).lte.getTime();
+    expect(cutoff).toBeLessThanOrEqual(before - HOLD_AFTER_EXPIRY_SEC * 1000 + 1_000);
+    expect(cutoff).toBeGreaterThanOrEqual(before - HOLD_AFTER_EXPIRY_SEC * 1000 - 1_000);
     expect(calls.released).toEqual([
-      { orderReferenceId: PAYMENT_1, outcome: RedemptionStatus.expired, tenantInScope: TENANT_A },
+      { orderReferenceId: PAYMENT_2, outcome: RedemptionStatus.expired, tenantInScope: TENANT_B },
     ]);
+    expect(result).toMatchObject({ holdsReleased: 1 });
+  });
+
+  it('releases nothing for a payment a late credit settled between the scan and the row lock', async () => {
+    const { service, calls } = build({ lapsed: [{ id: PAYMENT_2, tenantId: TENANT_B }], settledSince: [PAYMENT_2] });
+
+    const result = await service.expirePending();
+
+    expect(calls.released).toEqual([]);
+    expect(result).toMatchObject({ holdsReleased: 0 });
   });
 
   it('guards the flip on the row still being pending, and on its clock', async () => {
@@ -164,7 +203,7 @@ describe('DepositExpiryService', () => {
 
     const result = await service.expirePending();
 
-    expect(result).toEqual({ scanned: 2, expired: 1, unattributed: 1 });
+    expect(result).toEqual({ scanned: 2, expired: 1, unattributed: 1, holdsReleased: 0 });
     expect(calls.updated.map((u) => u.where['id'])).toEqual([PAYMENT_2]);
   });
 

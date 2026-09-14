@@ -186,6 +186,18 @@ export const envSchema = z.object({
   ),
 
   /**
+   * How long an expired top-up keeps its coupon holds before the sweep gives
+   * them back (F-092-ah, ADR-0047 decision 2). The clock closes the payment,
+   * not the coupon: a bank may still charge it, and a slot handed to someone
+   * else meanwhile is how a late credit took a coupon past its limit. `0` is
+   * the old behaviour — holds released with the payment.
+   */
+  COUPON_HOLD_AFTER_EXPIRY_SEC: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().nonnegative().default(3600),
+  ),
+
+  /**
    * Reconciliation (F-092-l): how many payments one run asks the gateway about,
    * how long an answer counts as recent, and how far back it looks at all.
    *

@@ -151,11 +151,13 @@ export class DepositSettlementService {
         reasonType: WalletReasonType.payment_gateway,
         referenceId: payment.id,
       });
-      // A pending row still holds its coupon slots; an expired one gave them
-      // back, and the payer paid the discounted price anyway — so the uses are
-      // claimed back, past the coupon's limit if they must be.
-      if (from === PaymentStatus.pending) await this.reservations.confirm(tx, payment.id);
-      else await this.reservations.claimExpired(tx, payment.id);
+      // A pending row holds its coupon slots, and so does an expired one until
+      // COUPON_HOLD_AFTER_EXPIRY_SEC has passed (F-092-ah, ADR-0047 decision 2):
+      // those holds become uses. Any the sweep already gave back are claimed
+      // back, past the coupon's limit if they must be — the payer paid the
+      // discounted price. Each call moves only its own status, so both run.
+      await this.reservations.confirm(tx, payment.id);
+      if (from === PaymentStatus.expired) await this.reservations.claimExpired(tx, payment.id);
       await this.accrueSettlement(tx, payment);
       await this.publishConfirmed(tx, payment, verified.referenceId, source);
       if (manual) await this.auditManual(tx, payment, verified.referenceId, manual);
@@ -189,7 +191,8 @@ export class DepositSettlementService {
         : null;
     if (from === null) return false;
 
-    if (from === PaymentStatus.pending) await this.reservations.release(tx, payment.id, RedemptionStatus.cancelled);
+    // An expired row may still hold its coupons (F-092-ah); a release moves only live holds, so both statuses run it.
+    await this.reservations.release(tx, payment.id, RedemptionStatus.cancelled);
     const tenant = TenantContext.current('deposit reversal event');
     const ref = gatewayRefOf(payment);
     await tx.outboxEvent.create({

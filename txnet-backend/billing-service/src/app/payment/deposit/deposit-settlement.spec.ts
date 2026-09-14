@@ -213,14 +213,16 @@ describe('DepositSettlementService — the debt a granted gateway leaves', () =>
   });
 
   describe('a payment the gateway confirms after its clock ran out (F-092-aa, ADR-0046 decision 1)', () => {
-    it('credits an expired payment, and claims back the coupon uses the clock released', async () => {
+    it('credits an expired payment: confirms the holds it still keeps, and claims back any the clock released', async () => {
       const { service, calls } = build({ rowIs: PaymentStatus.expired });
 
       // Read `pending` a moment ago; the expiry sweep flipped it since. The
-      // guard, not the read, decides which coupon path runs.
+      // guard, not the read, decides which coupon path runs. Since F-092-ah an
+      // expired row usually still holds its coupons, and releases them only
+      // COUPON_HOLD_AFTER_EXPIRY_SEC later — so both run; each moves only its own.
       await expect(settle(service, paymentRow({ status: PaymentStatus.pending }))).resolves.toBe(true);
 
-      expect(calls.writes).toEqual(['miss:pending', 'flip', 'credit', 'claim-expired', 'event']);
+      expect(calls.writes).toEqual(['miss:pending', 'flip', 'credit', 'confirm', 'claim-expired', 'event']);
     });
 
     it('confirms the holds of a payment still pending, and never claims', async () => {
@@ -254,12 +256,12 @@ describe('DepositSettlementService — the debt a granted gateway leaves', () =>
       });
     });
 
-    it('closes an expired one without releasing anything — the clock already did', async () => {
+    it('closes an expired one and gives back the holds it still keeps, cancelled (F-092-ah)', async () => {
       const { service, calls, tx } = build({ rowIs: PaymentStatus.expired });
 
       await expect(close(service, tx)).resolves.toBe(true);
 
-      expect(calls.writes).toEqual(['miss:pending', 'flip', 'event']);
+      expect(calls.writes).toEqual(['miss:pending', 'flip', 'release:cancelled', 'event']);
     });
 
     it('does nothing to a payment already settled, and announces nothing', async () => {

@@ -1,0 +1,30 @@
+# =============================================================================
+# TXNet — alert rules for billing (F-092-ah, ADR-0047 decision 3)
+# =============================================================================
+# Reads `postgres-exporter` (`postgres-queries.yaml`, `billing_coupon`).
+# =============================================================================
+
+groups:
+  - name: billing.coupon
+    rules:
+      # A payment credited after its clock claims its coupon use back without a
+      # limit check: refusing money already paid is the worse error (ADR-0046
+      # decision 1). Since F-092-ah the holds outlive the clock by
+      # COUPON_HOLD_AFTER_EXPIRY_SEC, so this fires only for a charge later than
+      # that — rare, allowed, and never silent.
+      - alert: BillingCouponOverLimit
+        expr: billing_coupon_over_limit > 0
+        for: 1m
+        labels:
+          severity: warning
+          unit: billing
+        annotations:
+          summary: "A coupon has been used past its limit"
+          description: >-
+            {{ $value }} coupon(s) have usedCount above totalUsageLimit. A bank
+            charged a payment after its coupon hold was given back and someone
+            else took the slot. Find them with
+            `SELECT code, "usedCount", "totalUsageLimit" FROM billing.coupon
+            WHERE "usedCount" > "totalUsageLimit"`, and decide whether to raise
+            the limit or leave it spent. If it fires often,
+            COUPON_HOLD_AFTER_EXPIRY_SEC is shorter than the gateway's own delay.

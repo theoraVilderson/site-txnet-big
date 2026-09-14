@@ -347,15 +347,19 @@ describe('DepositCallbackService.settle', () => {
   });
 
   it('verifies and credits a payment whose clock ran out before the payer came back (F-092-aa)', async () => {
-    // Our own outage outlasted the 15-minute clock: the sweep expired the row
-    // and released its holds, and the bank has the money all the same.
+    // Our own outage outlasted the 15-minute clock: the sweep expired the row,
+    // and the bank has the money all the same. The holds it still keeps become
+    // uses; any already given back are claimed back (F-092-ah).
     const { service, calls } = build({ row: paymentRow({ status: 'expired' }) });
 
     const outcome = await settle(service);
 
     expect(outcome).toEqual({ kind: 'success', paymentId: PAYMENT, referenceId: '900900900', alreadyPaid: false });
     expect(calls.credited).toEqual([{ amount: '19.80', referenceId: PAYMENT, reasonType: 'payment_gateway' }]);
-    expect(calls.settled).toEqual([{ orderReferenceId: PAYMENT, outcome: 'claimed-expired' }]);
+    expect(calls.settled).toEqual([
+      { orderReferenceId: PAYMENT, outcome: 'confirmed' },
+      { orderReferenceId: PAYMENT, outcome: 'claimed-expired' },
+    ]);
   });
 
   it('does not reopen a payment already refused', async () => {
