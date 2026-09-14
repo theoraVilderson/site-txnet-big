@@ -6,11 +6,13 @@ import {
   CheckCircle2,
   Clock,
   CreditCard,
+  ShieldCheck,
   Store,
   TimerOff,
   type LucideIcon,
 } from "lucide-react";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import type { WalletPaymentRow } from "@/lib/billing-api";
 import type { Direction, PaymentStatus } from "./filters";
 
 const F = FrontendI18nKeys.common.financial;
@@ -54,6 +56,24 @@ export const STATUS_TONES: Record<PaymentStatus, Tone> = {
     labelKey: F.status.expired,
   },
 };
+
+/**
+ * A `pending` payment the gateway met with silence and billing is asking again
+ * (F-092-x, F-093-m). Not a status of its own — the row stays `pending` — but
+ * it must not read "pending": the money may already be taken. Theme green,
+ * because the message is "safe", and never gold.
+ */
+export const VERIFYING_TONE: Tone = {
+  icon: ShieldCheck,
+  className: "border-primary/20 bg-leaf-bg text-primary",
+  labelKey: F.status.verifying,
+};
+
+/** The tone a payment row is read by: its status, or verifying. */
+export function paymentTone(row: Pick<WalletPaymentRow, "status" | "verifying">): Tone {
+  if (row.status === "pending" && row.verifying) return VERIFYING_TONE;
+  return STATUS_TONES[row.status] ?? STATUS_TONES.pending;
+}
 
 /** Money in and money out. The only two a ledger row can be. */
 export const DIRECTION_TONES: Record<Direction, Tone> = {

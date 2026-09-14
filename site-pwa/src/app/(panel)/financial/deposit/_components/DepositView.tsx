@@ -9,10 +9,12 @@ import { billingApi, type DepositGateway, type DepositStarted } from "@/lib/bill
 import { useWalletBalance } from "../../../_hooks/useWalletBalance";
 import { BASE_CURRENCY, formatMoney } from "../../../_lib/money";
 import { useDepositQuote } from "../_hooks/useDepositQuote";
+import { useVerifyingGuard } from "../_hooks/useVerifyingGuard";
 import { AmountInput } from "./AmountInput";
 import { CouponInput } from "./CouponInput";
 import { GatewaySelector, gatewayKey } from "./GatewaySelector";
 import { PaymentSummary } from "./PaymentSummary";
+import { VerifyingBanner, VerifyingConfirm } from "./VerifyingNotice";
 import { WalletPreview } from "./WalletPreview";
 
 const D = FrontendI18nKeys.common.deposit;
@@ -89,6 +91,10 @@ export function DepositView() {
   }, [asked]);
 
   const quote = useDepositQuote({ gateway, amount, codes });
+  // A payment the gateway met with silence: shown, and asked about before a
+  // second one — warn and confirm, never block (F-093-m, ADR-0044 decision 7).
+  const verifyingGuard = useVerifyingGuard();
+  const onPay = () => void verifyingGuard.guard(() => void pay());
 
   const addCode = useCallback((code: string) => setCodes((all) => [...all, code]), []);
   const removeCode = useCallback(
@@ -171,7 +177,7 @@ export function DepositView() {
       isQuoting={quote.isQuoting}
       error={startError ?? (quote.error ? messageFor(quote.error) : null)}
       isStarting={isStarting}
-      onPay={pay}
+      onPay={onPay}
     />
   );
 
@@ -187,6 +193,15 @@ export function DepositView() {
           <p className="mt-1 text-sm text-text-secondary">{t("common", D.subtitle)}</p>
         </div>
       </header>
+
+      {verifyingGuard.verifying && <VerifyingBanner payment={verifyingGuard.verifying} />}
+      {verifyingGuard.warning && (
+        <VerifyingConfirm
+          payment={verifyingGuard.warning}
+          onConfirm={verifyingGuard.confirm}
+          onCancel={verifyingGuard.cancel}
+        />
+      )}
 
       <div className="flex flex-col gap-8 md:flex-row md:items-start">
         <div className="w-full space-y-6 md:w-7/12">
@@ -235,7 +250,7 @@ export function DepositView() {
           isQuoting={quote.isQuoting}
           error={startError ?? (quote.error ? messageFor(quote.error) : null)}
           isStarting={isStarting}
-          onPay={pay}
+          onPay={onPay}
           compact
         />
       </div>

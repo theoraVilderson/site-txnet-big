@@ -17,7 +17,7 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { WalletPaymentRow } from "@/lib/billing-api";
 import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
 import { formatInstant } from "../../_lib/datetime";
-import { GATEWAY_TONES, STATUS_TONES } from "../_lib/tones";
+import { GATEWAY_TONES, paymentTone } from "../_lib/tones";
 import { Badge } from "./Badge";
 import { DetailItem } from "./DetailItem";
 import { ExpandableRow } from "./ExpandableRow";
@@ -43,7 +43,7 @@ export function PaymentRow({ row }: { row: WalletPaymentRow }) {
   const { lang, t } = useLocale();
   const [expanded, setExpanded] = useState(false);
 
-  const status = STATUS_TONES[row.status] ?? STATUS_TONES.pending;
+  const status = paymentTone(row);
   const gateway = GATEWAY_TONES[row.gateway?.source ?? "none"];
   const StatusIcon = status.icon;
   const money = (amount: string) => formatMoney(amount, BASE_CURRENCY, { lang, t });
@@ -131,7 +131,8 @@ export function PaymentRow({ row }: { row: WalletPaymentRow }) {
               valueClassName="text-error"
             />
           )}
-          {expiresAt && row.status === "pending" && (
+          {/* A verifying payment's clock no longer closes it (F-092-x). */}
+          {expiresAt && row.status === "pending" && !row.verifying && (
             <DetailItem icon={TimerOff} label={t("common", F.detail.expiresAt)} value={expiresAt} />
           )}
         </>

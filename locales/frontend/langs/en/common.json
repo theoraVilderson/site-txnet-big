@@ -329,6 +329,19 @@
       "chargeTitle": "What you pay at the gateway",
       "chargeWords": "In words",
       "chargeRial": "That is {{amount}} rial"
+    },
+    "verifying": {
+      "notice": {
+        "title": "A payment is being verified",
+        "body": "The gateway has not confirmed your payment of {{amount}} yet. If money was taken, it is safe and your wallet is credited as soon as the gateway confirms it.",
+        "toFinancial": "View it in your financial history"
+      },
+      "warn": {
+        "title": "You have a payment being verified",
+        "body": "Your payment of {{amount}} may already have been taken by the gateway. Paying again could charge you twice.",
+        "confirm": "Pay anyway",
+        "cancel": "Don’t pay"
+      }
     }
   },
   "financial": {
@@ -391,7 +404,8 @@
       "pending": "Pending",
       "success": "Successful",
       "failed": "Failed",
-      "expired": "Expired"
+      "expired": "Expired",
+      "verifying": "Verifying"
     },
     "gatewaySource": {
       "platform": "Platform gateway",

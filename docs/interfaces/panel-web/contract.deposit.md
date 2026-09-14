@@ -99,6 +99,15 @@ route returns the whole breakdown instead of the pieces of one.
     [contract.shell.md](contract.shell.md) rule 6 says earn framer-motion. The
     amount box is controlled and re-renders the whole form per keystroke, which
     is exactly the cost that rule was measured on.
+13. **A verifying payment warns; it never blocks (F-093-m, ADR-0044 decision 7 —
+    the user's choice, 2026-09-14).** `useVerifyingGuard` reads the caller's
+    `pending` attempts (`VERIFYING_QUERY`) when the page opens and shows
+    `VerifyingBanner` (the money is safe, where to watch it) for one with
+    `verifying`. Pay goes through `guard`, which **re-reads** at that moment: none
+    verifying pays at once; one verifying opens `VerifyingConfirm` — "don't pay"
+    is the prominent, focused answer, "pay anyway" always pays. A check that
+    fails pays: a courtesy must not become a gate. Proof:
+    `deposit/verifying-guard.test.ts`.
 
 ## What this page does not do
 

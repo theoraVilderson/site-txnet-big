@@ -85,6 +85,12 @@ balance column of every row above it — permanently, and invisibly.
 9. **Only theme tokens, never a raw palette class.** Three themes ship
    (`globals.css`); the badge tones live in `_lib/tones.ts` and an
    `emerald-500` written inline is legible in one theme by luck.
+10. **A verifying payment reads "در حال تأیید", not "pending" (F-093-m).** The row
+   stays `pending` (F-092-x); `paymentTone(row)` picks `VERIFYING_TONE` (theme
+   green, a shield — never gold) when the route's `verifying` is set, and the
+   row stops showing an expiry, because that clock no longer closes it. There is
+   no status filter for it: it is a `pending` attempt, and filtering `pending`
+   finds it.
 
 ## Not covered
 
