@@ -19,6 +19,8 @@ export const OUTCOME_KEYS: Record<ManualOutcome, string> = {
   mismatch: MANUAL_KEYS.outcome.mismatch,
   unsettled: MANUAL_KEYS.outcome.unsettled,
   confirmed_manually: MANUAL_KEYS.outcome.confirmed_manually,
+  rejected_manually: MANUAL_KEYS.outcome.rejected_manually,
+  still_in_bank: MANUAL_KEYS.outcome.still_in_bank,
 };
 
 /**
@@ -28,6 +30,24 @@ export const OUTCOME_KEYS: Record<ManualOutcome, string> = {
  */
 export function canConfirmByHand(lastOutcome: ManualOutcome | null): boolean {
   return lastOutcome === "unsettled";
+}
+
+/**
+ * Reject by hand (F-093-p → F-092-ak) is offered on the same condition as
+ * confirming: the gateway was asked **here** and could not say. Billing asks
+ * once more itself, answers `still_in_bank` for a payer still at the bank, and
+ * never rejects money the gateway can see.
+ */
+export function canRejectByHand(lastOutcome: ManualOutcome | null): boolean {
+  return lastOutcome === "unsettled";
+}
+
+/** billing's `manualRejectSchema`, mirrored. */
+export function validateReject(input: string): { ok: true; reason: string } | { ok: false; error: string } {
+  const reason = input.trim();
+  return reason.length >= 5 && reason.length <= 500
+    ? { ok: true, reason }
+    : { ok: false, error: MANUAL_KEYS.rejectForm.invalidReason };
 }
 
 export type ConfirmInput = { referenceId: string; reason: string };

@@ -53,11 +53,20 @@ top-up.
 8. **The payer's pending page** (`pendingStateOf`) keeps waiting on an
    `expired` payment — billing still asks the gateway for a week — and says
    "reversed, the bank is returning it" for `failed` / `failureCode: reversed`.
+9. **Reject by hand, after asking** (F-093-p → F-092-ak). "Reject by hand"
+   appears on the same condition as "confirm by hand" (`canRejectByHand`:
+   the last answer here was `unsettled`). Its form takes only a reason (5–500,
+   trimmed — `validateReject` mirrors `manualRejectSchema`) and warns that a
+   rejected payment the bank did charge is not reopened automatically. Billing
+   answers `rejected_manually`, or `still_in_bank` for a payer still at the
+   bank, or the gateway's own word; each has its sentence, and all reload the
+   list like any settled answer. Error-toned theme tokens, never gold.
 
 ## Proof
 
 `payments/manual/manual-payments.test.ts` — the outcome union against the
 service source, `validateConfirm`'s limits, `canConfirmByHand` for every
 outcome, `stateBadges` per state, `canAttachAuthority` and
-`validateAuthority`, the menu entry's permission, every key in `en` and `fa`.
+`validateAuthority`, `canRejectByHand` for every outcome and `validateReject`'s
+limits, the menu entry's permission, every key in `en` and `fa`.
 `payment/_lib/pending-payment.test.ts` — expired waits, reversed reads so.

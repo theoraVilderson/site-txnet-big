@@ -641,6 +641,15 @@
     "inquire": "Ask the gateway",
     "inquiring": "Asking…",
     "confirmByHand": "Confirm by hand",
+    "rejectByHand": "Reject by hand",
+    "rejectForm": {
+      "title": "Reject this payment by hand",
+      "hint": "Only if you have checked the gateway's own panel and no money arrived. The payment is closed as failed, its coupon is released, and the rejection is recorded under your name. If the bank did take the money, a rejected payment is not reopened automatically.",
+      "reason": "Reason",
+      "submit": "Reject the payment",
+      "cancel": "Cancel",
+      "invalidReason": "Write a reason of 5 to 500 characters."
+    },
     "form": {
       "title": "Confirm this payment by hand",
       "hint": "Only if you have checked the gateway's own panel and the money is there. The wallet is credited with the payment's own amount and the confirmation is recorded under your name.",
@@ -656,8 +665,10 @@
       "already_settled": "This payment was already settled.",
       "refused": "The gateway says this payment did not go through. Nothing was credited.",
       "mismatch": "The gateway reports a different amount. Nothing was credited; this needs investigating.",
-      "unsettled": "The gateway still cannot confirm or refuse it. You may confirm it by hand.",
-      "confirmed_manually": "Confirmed by hand. The wallet was credited."
+      "unsettled": "The gateway still cannot confirm or refuse it. You may confirm or reject it by hand.",
+      "confirmed_manually": "Confirmed by hand. The wallet was credited.",
+      "rejected_manually": "Rejected by hand. The payment is closed and nothing was credited.",
+      "still_in_bank": "The payer is still on the bank's page, so it cannot be rejected yet. Ask again in a few minutes."
     },
     "state": {
       "waiting": "Awaiting payment",

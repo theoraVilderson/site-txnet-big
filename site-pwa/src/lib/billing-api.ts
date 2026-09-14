@@ -358,6 +358,14 @@ export const billingApi = {
     });
   },
 
+  /** End a payment nobody paid (F-092-ak). Billing asks the gateway first and never rejects money it can see. */
+  async manualReject(id: string, reason: string): Promise<ManualAnswer> {
+    return call<ManualAnswer>(`/payments/manual/${encodeURIComponent(id)}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    });
+  },
+
   async adminGateways(): Promise<AdminGateway[]> {
     return call<AdminGateway[]>("/gateways", { method: "GET" });
   },
@@ -428,7 +436,17 @@ export interface VerifyingPayment {
 }
 
 /** What asking the gateway, or confirming by hand, came to (billing `ManualOutcome`). */
-export type ManualOutcome = "credited" | "already_settled" | "refused" | "mismatch" | "unsettled" | "confirmed_manually";
+export type ManualOutcome =
+  | "credited"
+  | "already_settled"
+  | "refused"
+  | "mismatch"
+  | "unsettled"
+  | "confirmed_manually"
+  /** A person closed it; the gateway saw no money (F-092-ak). */
+  | "rejected_manually"
+  /** Not rejected: the payer is still at the bank (F-092-ak). */
+  | "still_in_bank";
 
 export interface ManualAnswer {
   paymentId: string;

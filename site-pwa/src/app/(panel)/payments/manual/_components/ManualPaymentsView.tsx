@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { KeyRound, Loader2, RotateCw, SearchCheck, ShieldCheck, TriangleAlert } from "lucide-react";
+import { Ban, KeyRound, Loader2, RotateCw, SearchCheck, ShieldCheck, TriangleAlert } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { billingApi, type ManualAnswer, type VerifyingPayment } from "@/lib/billing-api";
@@ -12,9 +12,11 @@ import {
   OUTCOME_KEYS,
   canAttachAuthority,
   canConfirmByHand,
+  canRejectByHand,
   stateBadges,
   validateAuthority,
   validateConfirm,
+  validateReject,
   type ConfirmInput,
   type StateBadge,
 } from "../_lib/manual-confirm";
@@ -132,6 +134,10 @@ function ManualPaymentItem({ row, onSettled }: { row: VerifyingPayment; onSettle
   const [authorityOpen, setAuthorityOpen] = useState(false);
   const [authority, setAuthority] = useState("");
   const [authorityError, setAuthorityError] = useState<string | null>(null);
+  // F-093-p: rejecting by hand — offered on the same condition as confirming.
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectError, setRejectError] = useState<string | null>(null);
 
   const run = async (call: () => Promise<ManualAnswer>) => {
     setBusy(true);
@@ -141,6 +147,7 @@ function ManualPaymentItem({ row, onSettled }: { row: VerifyingPayment; onSettle
       setAnswer(out);
       if (out.outcome !== "unsettled") {
         setFormOpen(false);
+        setRejectOpen(false);
         await onSettled(out);
       }
     } catch (e) {
@@ -171,6 +178,17 @@ function ManualPaymentItem({ row, onSettled }: { row: VerifyingPayment; onSettle
     }
     setFormErrors({});
     void run(() => billingApi.manualConfirm(row.id, checked.body));
+  };
+
+  const submitReject = (event: React.FormEvent) => {
+    event.preventDefault();
+    const checked = validateReject(rejectReason);
+    if (!checked.ok) {
+      setRejectError(checked.error);
+      return;
+    }
+    setRejectError(null);
+    void run(() => billingApi.manualReject(row.id, checked.reason));
   };
 
   const money = formatMoney(row.amountCredited, BASE_CURRENCY, { lang, t });
@@ -233,6 +251,17 @@ function ManualPaymentItem({ row, onSettled }: { row: VerifyingPayment; onSettle
               className="rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-primary hover:bg-leaf-bg disabled:opacity-50"
             >
               {t("common", K.confirmByHand)}
+            </button>
+          )}
+          {canRejectByHand(answer?.outcome ?? null) && !rejectOpen && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setRejectOpen(true)}
+              className="inline-flex items-center gap-1 rounded-xl border border-error-border px-3 py-2 text-xs font-bold text-error hover:bg-error-bg disabled:opacity-50"
+            >
+              <Ban size={14} aria-hidden />
+              {t("common", K.rejectByHand)}
             </button>
           )}
         </div>
@@ -328,6 +357,43 @@ function ManualPaymentItem({ row, onSettled }: { row: VerifyingPayment; onSettle
               className="rounded-xl px-4 py-2 text-xs font-medium text-text-secondary hover:bg-leaf-bg"
             >
               {t("common", K.form.cancel)}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {rejectOpen && canRejectByHand(answer?.outcome ?? null) && (
+        <form onSubmit={submitReject} className="flex flex-col gap-3 rounded-2xl border border-error-border bg-bg-inner p-4">
+          <p className="flex items-center gap-2 text-sm font-bold text-error">
+            <TriangleAlert size={14} aria-hidden />
+            {t("common", K.rejectForm.title)}
+          </p>
+          <p className="text-xs leading-5 text-text-secondary">{t("common", K.rejectForm.hint)}</p>
+          <label className="flex flex-col gap-1 text-xs text-text-secondary">
+            {t("common", K.rejectForm.reason)}
+            <textarea
+              value={rejectReason}
+              maxLength={500}
+              rows={3}
+              onChange={(e) => setRejectReason(e.target.value)}
+              className="rounded-xl border border-card-border bg-card-bg px-3 py-2 text-sm text-text-primary"
+            />
+            {rejectError && <span className="text-error">{t("common", rejectError)}</span>}
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded-xl border border-error-border bg-error-bg px-4 py-2 text-xs font-bold text-error disabled:opacity-50"
+            >
+              {t("common", K.rejectForm.submit)}
+            </button>
+            <button
+              type="button"
+              onClick={() => setRejectOpen(false)}
+              className="rounded-xl px-4 py-2 text-xs font-medium text-text-secondary hover:bg-leaf-bg"
+            >
+              {t("common", K.rejectForm.cancel)}
             </button>
           </div>
         </form>

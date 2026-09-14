@@ -9,9 +9,11 @@ import {
   PAYMENT_CONFIRM_MANUAL,
   canAttachAuthority,
   canConfirmByHand,
+  canRejectByHand,
   stateBadges,
   validateAuthority,
   validateConfirm,
+  validateReject,
 } from "./_lib/manual-confirm";
 import type { VerifyingPayment } from "@/lib/billing-api";
 
@@ -123,6 +125,32 @@ describe("attaching a lost authority", () => {
     expect(validateAuthority(" A000123 ")).toEqual({ ok: true, authority: "A000123" });
     expect(validateAuthority("  ")).toEqual({ ok: false, error: MANUAL_KEYS.authorityForm.invalid });
     expect(validateAuthority("x".repeat(65))).toEqual({ ok: false, error: MANUAL_KEYS.authorityForm.invalid });
+  });
+});
+
+// F-093-p (F-092-ak): ending a payment nobody paid. The same shape as
+// confirming — the gateway asked on this screen first, and a reason billing keeps.
+describe("rejecting by hand", () => {
+  it("is offered only once the gateway was asked here and left it unsettled", () => {
+    expect(canRejectByHand(null)).toBe(false);
+    expect(canRejectByHand("unsettled")).toBe(true);
+    for (const outcome of [
+      "credited",
+      "already_settled",
+      "refused",
+      "mismatch",
+      "confirmed_manually",
+      "rejected_manually",
+      "still_in_bank",
+    ] as const) {
+      expect(canRejectByHand(outcome)).toBe(false);
+    }
+  });
+
+  it("mirrors billing's reason limits, trimmed", () => {
+    expect(validateReject("  the payer never paid ")).toEqual({ ok: true, reason: "the payer never paid" });
+    expect(validateReject("ok")).toEqual({ ok: false, error: MANUAL_KEYS.rejectForm.invalidReason });
+    expect(validateReject("x".repeat(501))).toEqual({ ok: false, error: MANUAL_KEYS.rejectForm.invalidReason });
   });
 });
 
