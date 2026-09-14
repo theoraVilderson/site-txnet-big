@@ -165,6 +165,14 @@ export const RateLimitBucket = {
   PAYMENT_MANUAL_WRITE: 'payment:manual:write',
 
   /**
+   * Coupon and gift-code management in `billing-service` (F-502-f), per user.
+   * The list and reports are read on every visit; a write — including a batch
+   * export, which hands out credit — is a deliberate human act.
+   */
+  COUPON_ADMIN_READ: 'coupon:admin:read',
+  COUPON_ADMIN_WRITE: 'coupon:admin:write',
+
+  /**
    * One of the caller's own payments (F-093-l), per user. Its own bucket, not
    * `WALLET_PAYMENTS`: the pending page polls it, and a payer watching a
    * verifying payment must not use up the financial page's list budget.

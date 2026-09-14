@@ -20,6 +20,7 @@ payment attempt routes (F-092-n) in
 
 ## Gateway management (built — F-102-b/c, D-31)
 
+`/api/billing/coupons` (`payment/coupon-admin/`): coupons, gift-code batches, usage — `contract.coupon.md`.
 `/api/billing/gateways` (`payment/gateway-admin/`): `GET` list, `POST` create,
 `PATCH` / `DELETE :source/:id`, and `GET` / `PUT presets` — the caller's own
 default quick amounts (F-092-v). Behind `gateway.manage`; the permission is not
@@ -57,7 +58,7 @@ the callback confirms (F-092-j) and F-092-k expires the rest.
 | `confirm` moves the order's `pending` rows to `confirmed`, `reservedCount - n`, `usedCount + n`; `release` to `cancelled` / `expired`, `reservedCount - n`. Only `pending` moves: a repeat answers `0`, a confirmed use is never given back | duplicate callback, late expiry |
 | A hold has no clock of its own; it lives as long as its payment (F-092-k expires both) | legacy's 20-minute lock TTL goes |
 | Runs in the caller's `tenantTransaction`, else `TenantScopeConflict`; a coupon of another tenant is `not_found` | the functions scope by `app.tenant_id` |
-| A platform coupon's counters move only through these functions; the `coupon` RLS policy is unchanged | ADR-0040 |
+| A platform coupon's counters move only through these functions; whose users it serves is [contract.coupon.md](contract.coupon.md) | ADR-0040, ADR-0048 |
 
 ## Coupon validation (built — F-092-g)
 
@@ -71,12 +72,12 @@ quote calls it (F-092-o) and `deposit/start` reserves what it applied (F-092-i).
 | Applied in the order typed, each on what the previous left (60% then 50% of 20 = 12 + 4); `totalDiscount` is the calculator's `discount` | D-21, D-23 |
 | A percentage is rounded **down** to the cent, then capped by `maxDiscountCap`; any discount is capped at the running payable | never give away an unrounded cent |
 | A failing code is `rejected` with a closed `reason` and takes nothing; the route maps `reason` to an i18n key (C-01) | the codes after it see the untouched payable |
-| Gates, in order: inactive / targeted at someone else → `not_found`; `wallet_credit` → `not_a_discount` (F-092-m); `expiresAt <= now` → `expired`; scope; `minPurchaseAmount` against the **amount**; per-user; capacity | legacy order |
+| Gates, in order: inactive / soft-deleted / targeted at someone else → `not_found`; `wallet_credit` → `not_a_discount` (F-092-m); a platform coupon on a tenant gateway → `platform_coupon_needs_platform_gateway` (F-502-b); then F-502-k's limits interleaved as [contract.coupon.md](contract.coupon.md) lists; `expiresAt <= now` → `expired`; scope; `minPurchaseAmount` against the **amount**; per-user; capacity | legacy order |
 | Scope: no `coupon_service_scope` row is open; a top-up matches no scoped coupon; a plan matches a row naming the plan or its category | schema comment |
 | Per-user: the user's `pending` + `confirmed` redemptions `>= perUserUsageLimit` refuses — the user's own unfinished hold counts; a limit of `0` is unlimited | invariant 6; `0` answered by the user 2026-09-11, as in legacy |
 | Capacity: `usedCount + reservedCount >= totalUsageLimit` refuses; `null` is unlimited. Advisory — F-092-h takes it atomically | the count here can be stale by the time of reserving |
 | A code whose discount comes to zero is `nothing_to_discount`, not applied at zero | legacy applied it and spent a use on nothing |
-| Read in the caller's `tenantTransaction`, else `TenantScopeConflict`. `coupon` stays out of `TENANT_SCOPED_MODELS`: its shared-read RLS policy (own or `tenantId` NULL) is the scope | the extension would hide the platform's coupons; `coupon-validation.int.spec.ts` |
+| Read in the caller's `tenantTransaction`, else `TenantScopeConflict`. `coupon` stays out of `TENANT_SCOPED_MODELS`: its shared-read RLS policy (own, or a platform coupon that serves the tenant — ADR-0048) is the scope | the extension would hide the platform's coupons; `coupon-validation.int.spec.ts` |
 | A broken coupon row (percentage outside (0, 100], fixed <= 0) or an amount <= 0 / finer than a cent is `InvalidCouponInput` | refused, never clamped |
 
 ## Payment providers (built — F-092-f)

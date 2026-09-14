@@ -5,7 +5,8 @@
  * Two things only a database can say. First, which coupons a tenant sees:
  * `coupon` is not in `TENANT_SCOPED_MODELS`, because the extension would add
  * `tenantId = <mine>` and hide the platform-wide rows. Its RLS policy is the
- * shared-read shape instead (`NULL OR mine`, `20260909001500_…`), and it binds
+ * shared-read shape instead (`mine`, or a platform coupon that serves me —
+ * ADR-0048, `20260914000900_…`), and it binds
  * only on a connection that set `app.tenant_id` — so the read must run in a
  * `tenantTransaction`, and a code of another tenant must find nothing even
  * though it exists. Second, what counts toward the per-user limit: live
@@ -74,6 +75,10 @@ beforeAll(async () => {
       VALUES ('${couponId(suffix)}', ${tenantId ? `'${tenantId}'` : 'NULL'}, '${code}', 'percentage', 10.00, ${perUser}, '${ADMIN}')
     `);
   }
+  // PLATFORM10 serves tenant A's users by name (ADR-0048); B is not named.
+  await owner.$executeRawUnsafe(`
+    INSERT INTO billing.coupon_tenant (id, "couponId", "tenantId") VALUES (gen_random_uuid(), '${couponId('a2')}', '${TENANT_A}')
+  `);
   await owner.$executeRawUnsafe(`
     INSERT INTO billing.coupon_service_scope (id, "couponId", "categoryId")
     VALUES (gen_random_uuid(), '${couponId('a5')}', '${CATEGORY}')

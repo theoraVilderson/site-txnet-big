@@ -32,6 +32,11 @@ export const PANEL_DEPOSIT = "/financial/deposit";
  * No role word in it (F-098).
  */
 export const PANEL_GATEWAYS = "/gateways";
+/**
+ * Coupon and gift-code management (F-502-g/h). One route for every audience:
+ * billing answers the platform owner every coupon, a tenant its own (D-33).
+ */
+export const PANEL_COUPONS = "/coupons";
 /** Payments the gateway has not confirmed, for a person to settle (F-093-n). */
 export const PANEL_MANUAL_PAYMENTS = "/payments/manual";
 /**

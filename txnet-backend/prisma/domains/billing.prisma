@@ -38,6 +38,14 @@ enum CouponVisibility {
   @@schema("billing")
 }
 
+/// Where a coupon may be typed (F-502-j). An empty `allowedChannels` = anywhere.
+enum CouponChannel {
+  panel
+  bot
+
+  @@schema("billing")
+}
+
 enum RedemptionStatus {
   pending
   confirmed
@@ -219,8 +227,14 @@ model WalletTransferRequest {
 /// موتور کوپن — Coupon
 model Coupon {
   id                  String            @id @default(uuid()) @db.Uuid
-  tenantId            String?           @db.Uuid // null = کوپن سراسری پلتفرم
-  code                String            @unique
+  // null = a platform coupon. It serves the users of the tenants its
+  // `coupon_tenant` rows name, and with none the platform owner's own users
+  // (ADR-0048) — no longer every tenant's.
+  tenantId            String?           @db.Uuid
+  // Unique inside a tenant (and once among platform coupons) while not deleted:
+  // two partial unique indexes Prisma cannot express, in
+  // `20260914000900_coupon_management_schema`.
+  code                String
   discountType        DiscountType
   discountValue       Decimal           @db.Decimal(18, 2)
   maxDiscountCap      Decimal?          @db.Decimal(18, 2) // فقط برای درصدی
@@ -233,12 +247,97 @@ model Coupon {
   isActive            Boolean           @default(true)
   visibility          CouponVisibility  @default(public)
   createdByAdminId    String            @db.Uuid
+  // The limits of F-502-j (D-33); each is checked by F-502-k with its own reason.
+  // Null or empty = no limit. The clock is the server's; weekday and hour are
+  // read in Asia/Tehran.
+  validFrom           DateTime?
+  /// ISO weekdays the coupon works on, 1 = Monday … 7 = Sunday. Empty = every day.
+  activeWeekdays      Int[]             @default([])
+  /// Hour window [from, to), 0..23 and 1..24; `from > to` wraps midnight. Both or neither.
+  activeHourFrom      Int?
+  activeHourTo        Int?
+  maxPurchaseAmount   Decimal?          @db.Decimal(18, 2)
+  firstPurchaseOnly   Boolean           @default(false)
+  /// Only a user whose account is at most this many days old.
+  newUserWithinDays   Int?
+  /// At most `periodUsageLimit` uses per user in any `periodDays` days. Both or neither.
+  periodUsageLimit    Int?
+  periodDays          Int?
+  allowedChannels     CouponChannel[]   @default([])
+  /// What the admin calls it; never shown to a user.
+  label               String?
+  note                String?
+  /// A gift code generated in a batch (F-502-d); null = made one at a time.
+  batchId             String?           @db.Uuid
+  /// Soft delete (D-33): a used coupon is hidden, kept for its receipts.
+  deletedAt           DateTime?
+  deletedByAdminId    String?           @db.Uuid
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @default(now()) @updatedAt
 
   serviceScopes CouponServiceScope[]
   allowedUsers  CouponAllowedUser[]
   redemptions   CouponRedemption[]
+  tenants       CouponTenant[]
+  gateways      CouponGateway[]
+  batch         CouponBatch?      @relation(fields: [batchId], references: [id])
 
+  @@index([tenantId, code])
+  @@index([batchId])
   @@map("coupon")
+  @@schema("billing")
+}
+
+/// A tenant whose users a platform coupon (`tenantId` null) serves (ADR-0048).
+/// No row = the platform owner's own users only. Written by the platform owner
+/// on the cross-tenant pool; a tenant's connection reads the rows naming it.
+model CouponTenant {
+  id       String @id @default(uuid()) @db.Uuid
+  couponId String @db.Uuid
+  tenantId String @db.Uuid
+
+  coupon Coupon @relation(fields: [couponId], references: [id])
+
+  @@unique([couponId, tenantId])
+  @@index([tenantId])
+  @@map("coupon_tenant")
+  @@schema("billing")
+}
+
+/// A gateway a coupon is limited to (F-502-j). No row = any gateway. Names
+/// exactly one of the two gateway kinds, as a payment does.
+model CouponGateway {
+  id                    String  @id @default(uuid()) @db.Uuid
+  couponId              String  @db.Uuid
+  gatewayId             String? @db.Uuid
+  // A FK to `tenant.tenant_gateway_config` in the migration only, so the tenant
+  // schema file carries no back-relation for a billing-side limit.
+  tenantGatewayConfigId String? @db.Uuid
+
+  coupon  Coupon          @relation(fields: [couponId], references: [id])
+  gateway PaymentGateway? @relation(fields: [gatewayId], references: [id])
+
+  @@index([couponId])
+  @@map("coupon_gateway")
+  @@schema("billing")
+}
+
+/// A batch of single-use gift codes generated together (F-502-d, D-33).
+/// `tenantId` null = the platform owner's batch.
+model CouponBatch {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String?   @db.Uuid
+  label            String
+  note             String?
+  createdByAdminId String    @db.Uuid
+  createdAt        DateTime  @default(now())
+  /// The whole batch switched off at once; its codes' `isActive` follow.
+  deactivatedAt    DateTime?
+
+  coupons Coupon[]
+
+  @@index([tenantId, createdAt])
+  @@map("coupon_batch")
   @@schema("billing")
 }
 
@@ -328,6 +427,7 @@ model PaymentGateway {
   updatedAt           DateTime         @updatedAt
 
   transactions PaymentTransaction[]
+  couponLimits CouponGateway[]
   /// Grants of this gateway to tenants that do not own it (ADR-0041, F-096-a).
   grants       PaymentGatewayGrant[]
 

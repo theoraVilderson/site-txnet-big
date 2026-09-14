@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { CouponChannel, Prisma } from '@prisma/client';
 import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
@@ -73,6 +73,8 @@ export type DepositQuoteRequest = {
   /** Base currency (ADR-0019), > 0, at most 2 decimal places. */
   amount: Prisma.Decimal;
   couponCodes: readonly string[];
+  /** Where the codes were typed (F-502-k). Absent = the panel. */
+  channel?: CouponChannel;
   /** The caller holds `gateway.manage`: its own switched-off gateways may be priced too. */
   canTest?: boolean;
 };
@@ -179,6 +181,10 @@ export class DepositQuoteService {
         codes: request.couponCodes,
         amount,
         target: { kind: 'wallet_top_up' },
+        gatewaySource: request.source,
+        gatewayId,
+        // The panel's routes are the only caller today; the bot's top-up passes `bot` (F-306-a).
+        channel: request.channel ?? CouponChannel.panel,
         userId,
       });
       return { gateway, coupons };

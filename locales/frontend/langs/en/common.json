@@ -19,7 +19,8 @@
       "manualPayments": "Payments to confirm",
       "tutorials": "Guides and downloads",
       "support": "Support",
-      "settings": "Settings"
+      "settings": "Settings",
+      "coupons": "Coupons and gift codes"
     },
     "paymentCredited": {
       "title": "Payment confirmed",
@@ -728,6 +729,263 @@
       "submit": "Save and ask",
       "cancel": "Cancel",
       "invalid": "Enter the authority (at most 64 characters)."
+    }
+  },
+  "coupons": {
+    "title": "Coupons and gift codes",
+    "subtitle": "Discount codes for purchases, and gift codes that credit a wallet.",
+    "tabs": {
+      "discount": "Discount coupons",
+      "gift": "Gift codes"
+    },
+    "add": "New coupon",
+    "empty": "No coupons match.",
+    "loading": "Loading coupons…",
+    "retry": "Retry",
+    "filters": {
+      "status": "Status",
+      "all": "All",
+      "search": "Code or label",
+      "scope": "Owner",
+      "scopeAll": "Everyone's",
+      "scopePlatform": "Platform",
+      "scopeTenant": "A tenant",
+      "tenantId": "Tenant ID"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Off",
+      "scheduled": "Not started",
+      "expired": "Expired",
+      "exhausted": "Used up",
+      "deleted": "Deleted"
+    },
+    "list": {
+      "platform": "Platform",
+      "tenant": "Tenant {{id}}",
+      "percentOff": "{{value}}% off",
+      "amountOff": "{{amount}} off",
+      "cap": "up to {{amount}}",
+      "usedOf": "{{used}} / {{limit}} used",
+      "used": "{{used}} used",
+      "reserved": "{{count}} on hold",
+      "expires": "Until {{date}}",
+      "noExpiry": "No end date",
+      "targeted": "Targeted",
+      "limited": "Limits",
+      "edit": "Edit",
+      "usage": "Usage",
+      "delete": "Delete",
+      "activate": "Turn on",
+      "deactivate": "Turn off"
+    },
+    "confirmDelete": "Delete “{{code}}”? A coupon anyone has used is hidden instead, and stays on their receipts.",
+    "deleted": "The coupon was deleted.",
+    "softDeleted": "The coupon had been used, so it was switched off and hidden. Its receipts are kept.",
+    "created": "Coupon {{code}} created.",
+    "saved": "Changes saved.",
+    "form": {
+      "createTitle": "New coupon",
+      "editTitle": "Edit coupon {{code}}",
+      "sections": {
+        "basics": {
+          "title": "Code and discount",
+          "subtitle": "What is typed and what it takes off"
+        },
+        "limits": {
+          "title": "Limits",
+          "subtitle": "Purchase size and how often it may be used"
+        },
+        "schedule": {
+          "title": "When",
+          "subtitle": "Dates, weekdays and hours — Tehran time"
+        },
+        "audience": {
+          "title": "Who",
+          "subtitle": "Everyone, named users, first purchase or new accounts"
+        },
+        "where": {
+          "title": "Where",
+          "subtitle": "Channels, gateways and services"
+        }
+      },
+      "owner": "Whose coupon",
+      "ownerOwn": "My tenant",
+      "ownerPlatform": "Platform",
+      "ownerTenant": "Another tenant",
+      "tenantId": "Tenant ID",
+      "code": "Code",
+      "codeHint": "3–40 letters, digits, - or _. Stored in capitals.",
+      "label": "Label",
+      "note": "Note",
+      "noteHint": "Only admins see the label and note.",
+      "type": "Discount type",
+      "percentage": "Percent",
+      "fixed": "Fixed amount",
+      "value": "Value",
+      "cap": "Maximum discount",
+      "minPurchase": "Minimum purchase",
+      "maxPurchase": "Maximum purchase",
+      "totalLimit": "Total uses",
+      "totalLimitHint": "Empty = unlimited",
+      "perUserLimit": "Uses per user",
+      "perUserHint": "0 = unlimited",
+      "isActive": "On",
+      "validFrom": "Starts",
+      "expiresAt": "Ends (inclusive)",
+      "weekdays": "Only on these days",
+      "weekdaysHint": "None selected = every day",
+      "weekday": {
+        "mon": "Mon",
+        "tue": "Tue",
+        "wed": "Wed",
+        "thu": "Thu",
+        "fri": "Fri",
+        "sat": "Sat",
+        "sun": "Sun"
+      },
+      "hourFrom": "From hour",
+      "hourTo": "To hour",
+      "hoursHint": "0–23 to 1–24; a window past midnight (22 to 2) works too.",
+      "firstPurchaseOnly": "First purchase only",
+      "newUserWithinDays": "Accounts at most this many days old",
+      "periodUsageLimit": "Uses per user in a period",
+      "periodDays": "Period (days)",
+      "visibility": "Who may use it",
+      "public": "Anyone with the code",
+      "targeted": "Only named users",
+      "userIds": "User IDs",
+      "userIdsHint": "One per line. Each must live in a tenant this coupon serves.",
+      "tenantIds": "Serves users of these tenants",
+      "tenantIdsHint": "One per line. Empty = the platform's own users only.",
+      "channels": "Only where typed",
+      "channel": {
+        "panel": "Panel",
+        "bot": "Bot"
+      },
+      "channelsHint": "None selected = anywhere",
+      "gateways": "Only on these gateways",
+      "gatewaysHint": "None selected = any gateway. A platform coupon works on platform gateways only.",
+      "noGateways": "No gateways to choose from.",
+      "planIds": "Service plan IDs",
+      "categoryIds": "Category IDs",
+      "scopeHint": "One per line. Empty = every service.",
+      "frozen": "This coupon has been used, so its type and value cannot change.",
+      "optional": "optional",
+      "save": "Save",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "confirmClose": "You have unsaved changes. Leave without saving?"
+    },
+    "errors": {
+      "required": "Required",
+      "code": "3–40 letters, digits, - or _",
+      "decimal": "Enter an amount above zero, such as 12.50",
+      "percentMax": "A percentage is at most 100",
+      "capPercentOnly": "Only a percentage discount has a maximum",
+      "range": "Out of range",
+      "integer": "Enter a whole number",
+      "pair": "Fill both or neither",
+      "dates": "The end must be after the start",
+      "uuid": "Enter valid IDs, one per line",
+      "targetedNeedsUsers": "Name at least one user",
+      "capacityBelowUsed": "Cannot be below what is already used or on hold"
+    },
+    "refusals": {
+      "not_platform_owner": "Only the platform owner can manage platform coupons or another tenant's.",
+      "coupon_not_found": "That coupon does not exist or is not yours.",
+      "tenant_not_found": "No tenant has that ID.",
+      "code_taken": "Another live coupon already uses this code.",
+      "invalid_code": "The code may use 3–40 letters, digits, - or _.",
+      "invalid_value": "The discount value is not valid for its type.",
+      "invalid_limit": "One of the limits is not valid.",
+      "limits_not_for_gift_codes": "A gift code cannot have purchase, time, channel, gateway or service limits.",
+      "tenants_are_platform_coupons": "Only a platform coupon can serve other tenants.",
+      "targeted_needs_users": "A targeted coupon needs at least one user.",
+      "user_out_of_scope": "A named user lives in a tenant this coupon does not serve.",
+      "platform_coupon_needs_platform_gateway": "A platform coupon can be limited to platform gateways only.",
+      "gateway_not_found": "A chosen gateway is not one this coupon's users can pay through.",
+      "scope_not_found": "A service plan or category was not found.",
+      "used_coupon_frozen": "This coupon has been used; its type and value cannot change.",
+      "capacity_below_used": "Total uses cannot be below what is already used or on hold.",
+      "batch_not_found": "That batch does not exist or is not yours.",
+      "invalid_batch": "The batch could not be made with these settings."
+    },
+    "usage": {
+      "title": "Usage of {{code}}",
+      "empty": "Nobody has used it yet.",
+      "loading": "Loading usage…",
+      "totals": {
+        "redemptions": "Redemptions",
+        "used": "Used",
+        "reserved": "On hold",
+        "released": "Released",
+        "discountGiven": "Discount given"
+      },
+      "columns": {
+        "code": "Code",
+        "user": "User",
+        "payment": "Payment",
+        "amount": "Discount",
+        "status": "Status",
+        "time": "When"
+      },
+      "status": {
+        "pending": "On hold",
+        "confirmed": "Used",
+        "expired": "Released",
+        "cancelled": "Cancelled"
+      },
+      "close": "Close"
+    },
+    "gift": {
+      "add": "Generate gift codes",
+      "empty": "No gift-code batches yet.",
+      "loading": "Loading batches…",
+      "list": {
+        "codes": "{{count}} codes",
+        "usedOf": "{{used}} / {{count}} redeemed",
+        "reserved": "{{count}} on hold",
+        "created": "Made {{date}}",
+        "deactivated": "Switched off",
+        "live": "Live",
+        "download": "Download CSV",
+        "deactivate": "Switch off batch",
+        "usage": "Usage",
+        "platform": "Platform",
+        "tenant": "Tenant {{id}}"
+      },
+      "confirmDeactivate": "Switch off every code in “{{label}}”? Codes already redeemed keep their credit.",
+      "deactivatedNotice": "{{count}} code(s) switched off.",
+      "createdNotice": "{{count}} gift codes made in “{{label}}”. Download the CSV to hand them out.",
+      "downloaded": "The CSV was downloaded. Whoever holds it holds the credit; the download was recorded.",
+      "form": {
+        "title": "Generate gift codes",
+        "label": "Batch name",
+        "note": "Note",
+        "count": "How many codes",
+        "countHint": "1 to 5000, each usable once",
+        "value": "Credit per code",
+        "prefix": "Prefix",
+        "prefixHint": "Optional, up to 8 letters or digits: YLD-7KQ2M9XHRT",
+        "expiresAt": "Usable until (inclusive)",
+        "owner": "Whose batch",
+        "ownerOwn": "My tenant",
+        "ownerPlatform": "Platform",
+        "ownerTenant": "Another tenant",
+        "tenantId": "Tenant ID",
+        "tenantIds": "Redeemable by users of these tenants",
+        "tenantIdsHint": "Platform batches only. One per line; empty = the platform's own users.",
+        "submit": "Generate",
+        "submitting": "Generating…",
+        "cancel": "Cancel"
+      },
+      "errors": {
+        "label": "Name the batch",
+        "count": "Enter a whole number from 1 to 5000",
+        "prefix": "Up to 8 letters or digits"
+      },
+      "usageTitle": "Usage of batch {{label}}"
     }
   }
 }

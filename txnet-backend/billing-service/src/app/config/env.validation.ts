@@ -290,6 +290,9 @@ export const envSchema = z.object({
   /** Manual payment confirmation (`payment/deposit/manual-confirm.controller.ts`, F-092-z), per user. */
   PAYMENT_MANUAL_READ_RATE_LIMIT: rateLimit(120),
   PAYMENT_MANUAL_WRITE_RATE_LIMIT: rateLimit(30),
+  /** Coupon management (`payment/coupon-admin/coupon-admin.controller.ts`, F-502-f), per user. */
+  COUPON_ADMIN_READ_RATE_LIMIT: rateLimit(120),
+  COUPON_ADMIN_WRITE_RATE_LIMIT: rateLimit(30),
 }).refine((env) => !(env.NODE_ENV === 'production' && env.PAYMENT_GATEWAY_SANDBOX), {
   message: 'PAYMENT_GATEWAY_SANDBOX=true is refused when NODE_ENV=production',
   path: ['PAYMENT_GATEWAY_SANDBOX'],

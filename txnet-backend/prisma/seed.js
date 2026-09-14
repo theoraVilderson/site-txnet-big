@@ -94,9 +94,11 @@ async function grantAllPermissionsToSuperAdmin() {
 // F-092-z (ADR-0044 decision 6): the same Admin confirms a verifying payment
 // on those gateways by hand — migration 20260914000300's grant, for a fresh
 // database.
+// F-502-a (D-33): the same Admin manages its own tenant's coupons — migration
+// 20260914000900's grant, for a fresh database.
 async function grantGatewayManageToAdmin() {
   const role = await prisma.role.findUniqueOrThrow({ where: { name: 'Admin' } });
-  for (const key of ['gateway.manage', 'payment.confirm_manual']) {
+  for (const key of ['gateway.manage', 'payment.confirm_manual', 'coupon.manage']) {
     const permission = await prisma.permission.upsert({ where: { key }, update: {}, create: { key } });
     await prisma.rolePermission.upsert({
       where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } },

@@ -39,6 +39,8 @@ exports[`RateLimitBucket > records the whole rate-limited surface in one place 1
   "GATEWAY_ADMIN_WRITE = gateway:admin:write",
   "PAYMENT_MANUAL_READ = payment:manual:read",
   "PAYMENT_MANUAL_WRITE = payment:manual:write",
+  "COUPON_ADMIN_READ = coupon:admin:read",
+  "COUPON_ADMIN_WRITE = coupon:admin:write",
   "WALLET_PAYMENT = wallet:payment",
 ]
 `;

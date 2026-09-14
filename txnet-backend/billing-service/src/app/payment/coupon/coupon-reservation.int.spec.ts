@@ -52,6 +52,7 @@ const COUPONS: Array<[string, string | null, string, number | null, number]> = [
   ['b4', TENANT_B, 'BETAONLY', null, 0],
   ['b5', TENANT_A, 'LIFECYCLE', 1, 0],
   ['b6', TENANT_A, 'LATEPAID', 1, 0],
+  ['b7', TENANT_A, 'DELETED', null, 0],
 ];
 
 let pg: PostgresFixture;
@@ -75,6 +76,13 @@ beforeAll(async () => {
       VALUES ('${couponId(suffix)}', ${tenantId ? `'${tenantId}'` : 'NULL'}, '${code}', 'percentage', 10.00, ${total ?? 'NULL'}, ${perUser}, '${ADMIN}')
     `);
   }
+  // PLATFORM serves tenant A by name; B is not named (ADR-0048). DELETED is soft-deleted.
+  await owner.$executeRawUnsafe(`
+    INSERT INTO billing.coupon_tenant (id, "couponId", "tenantId") VALUES (gen_random_uuid(), '${couponId('b3')}', '${TENANT_A}')
+  `);
+  await owner.$executeRawUnsafe(`
+    UPDATE billing.coupon SET "deletedAt" = now(), "deletedByAdminId" = '${ADMIN}' WHERE id = '${couponId('b7')}'
+  `);
 
   const base = new PrismaService(pg.appUrl);
   app = base.$extends(withTenant(base)) as unknown as PrismaService;
@@ -188,6 +196,16 @@ it("reserves a platform coupon from a tenant's connection, and never another ten
   ).rejects.toMatchObject({ code: 'BETAONLY', reason: 'not_found' });
   await expect(counters('b4')).resolves.toEqual({ usedCount: 0, reservedCount: 0 });
   await expect(redemptions('b4')).resolves.toEqual([]);
+});
+
+it('refuses a platform coupon that does not serve the tenant, and a soft-deleted coupon (F-502-b)', async () => {
+  await expect(
+    asTenant(TENANT_B, (tx) => reservations.reserve(tx, reservationOf('b3', USER))),
+  ).rejects.toMatchObject({ code: 'PLATFORM', reason: 'not_found' });
+  await expect(
+    asTenant(TENANT_A, (tx) => reservations.reserve(tx, reservationOf('b7', USER))),
+  ).rejects.toMatchObject({ code: 'DELETED', reason: 'not_found' });
+  await expect(redemptions('b7')).resolves.toEqual([]);
 });
 
 it('confirms and releases once, and a confirmed use is never given back', async () => {

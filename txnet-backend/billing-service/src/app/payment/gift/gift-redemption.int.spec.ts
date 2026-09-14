@@ -12,8 +12,9 @@
  *     together (billing invariants 1-3, 11).
  *   - The last slot, and the per-user limit (invariant 6), under a race. The
  *     coupon row is locked first, as `reserve_coupon` locks it.
- *   - A platform coupon (`tenantId` NULL) redeems from a tenant's connection,
- *     whose RLS `WITH CHECK` refuses to update it directly (ADR-0040).
+ *   - A platform coupon (`tenantId` NULL) redeems from a tenant's connection it
+ *     serves, whose RLS `WITH CHECK` refuses to update it directly (ADR-0040);
+ *     a code is unique only inside a tenant, so the tenant's own wins (ADR-0048).
  *   - A discount coupon typed into the gift box is refused and credits
  *     nothing — the mirror of validation's `not_a_discount`.
  *
@@ -48,6 +49,9 @@ const COUPONS: Array<[string, string | null, string, string, string, number | nu
   ['e4', null, 'GIFTGLOBAL', 'wallet_credit', '7.50', 5, 0],
   ['e5', TENANT_B, 'GIFTBETA', 'wallet_credit', '3.00', null, 0],
   ['e6', TENANT_A, 'DISCOUNT10', 'percentage', '10.00', null, 0],
+  // A platform twin of GIFTPLAIN serving tenant A, and a soft-deleted gift.
+  ['e7', null, 'GIFTPLAIN', 'wallet_credit', '99.00', null, 0],
+  ['e8', TENANT_A, 'GIFTGONE', 'wallet_credit', '4.00', null, 0],
 ];
 
 let pg: PostgresFixture;
@@ -84,6 +88,14 @@ beforeAll(async () => {
       VALUES ('${couponId(suffix)}', ${tenantId ? `'${tenantId}'` : 'NULL'}, '${code}', '${type}', ${value}, ${total ?? 'NULL'}, ${perUser}, '${ADMIN}')
     `);
   }
+  for (const suffix of ['e4', 'e7']) {
+    await owner.$executeRawUnsafe(`
+      INSERT INTO billing.coupon_tenant (id, "couponId", "tenantId") VALUES (gen_random_uuid(), '${couponId(suffix)}', '${TENANT_A}')
+    `);
+  }
+  await owner.$executeRawUnsafe(`
+    UPDATE billing.coupon SET "deletedAt" = now(), "deletedByAdminId" = '${ADMIN}' WHERE id = '${couponId('e8')}'
+  `);
 
   const base = new PrismaService(pg.appUrl);
   app = base.$extends(withTenant(base)) as unknown as PrismaService;
@@ -225,6 +237,15 @@ it("redeems a platform code from a tenant's connection, and never another tenant
   });
   await expect(balanceOf(u)).resolves.toBe('7.50');
   await expect(counters('e5')).resolves.toEqual({ usedCount: 0, reservedCount: 0 });
+
+  // Not named by the coupon's tenant rows: unknown to tenant B (ADR-0048).
+  await expect(redeem(TENANT_B, 'e4', user(9))).rejects.toMatchObject({ reason: 'not_found' });
+});
+
+it("takes the tenant's own code over a platform twin, and refuses a soft-deleted gift (F-502-b)", async () => {
+  await expect(counters('e7')).resolves.toEqual({ usedCount: 0, reservedCount: 0 });
+  await expect(redeem(TENANT_A, 'e8', user(10))).rejects.toMatchObject({ code: 'GIFTGONE', reason: 'not_found' });
+  await expect(balanceOf(user(10))).resolves.toBe(null);
 });
 
 it('refuses a discount coupon typed into the gift box, and credits nothing', async () => {

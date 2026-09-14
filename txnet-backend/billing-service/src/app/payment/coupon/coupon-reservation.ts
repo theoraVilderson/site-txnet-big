@@ -43,8 +43,11 @@ export class CouponReservationRefused extends Error {
 const REFUSALS: readonly CouponRejection[] = [
   'not_found',
   'not_a_discount',
+  'not_started',
   'expired',
+  'first_purchase_only',
   'per_user_limit_reached',
+  'period_limit_reached',
   'capacity_reached',
 ];
 

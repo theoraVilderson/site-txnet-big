@@ -39,6 +39,15 @@ enum AdminAction {
   // `payment_manual_confirm`: a credit by hand and a refusal by hand are
   // opposite acts, and the trail must say which one a person took.
   payment_manual_reject
+  // F-502-c (D-33) — managing a coupon. Delete is its own value; `newValue.mode`
+  // tells a hard delete from a soft one.
+  coupon_create
+  coupon_update
+  coupon_delete
+  // F-502-d — a gift-code batch. Export is audited: the file is the credit.
+  coupon_batch_create
+  coupon_batch_export
+  coupon_batch_deactivate
 
   @@schema("audit")
 }
@@ -58,6 +67,8 @@ enum AuditTargetType {
   // accrued under it.
   gateway_grant
   settlement_payout
+  // F-502-d. A batch of gift codes, not any one coupon in it.
+  coupon_batch
 
   @@schema("audit")
 }

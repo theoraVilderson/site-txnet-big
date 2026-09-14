@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  CouponChannel,
   DomainVerificationStatus,
   PaymentStatus,
   Prisma,
@@ -67,6 +68,8 @@ export type DepositStartRequest = {
   /** Base currency (ADR-0019), > 0, at most 2 decimal places. */
   amount: Prisma.Decimal;
   couponCodes: readonly string[];
+  /** Where the codes were typed (F-502-k). Absent = the panel. */
+  channel?: CouponChannel;
   /** The browser's `Origin` header — where the result page is, if it checks out. */
   origin?: string | null;
   /** The caller holds `gateway.manage`: its own switched-off gateways may take a test payment. */
@@ -135,6 +138,10 @@ export class DepositStartService {
         codes: request.couponCodes,
         amount,
         target: { kind: 'wallet_top_up' },
+        gatewaySource: source,
+        gatewayId,
+        // The panel's routes are the only caller today; the bot's top-up passes `bot` (F-306-a).
+        channel: request.channel ?? CouponChannel.panel,
         userId,
       });
       return {

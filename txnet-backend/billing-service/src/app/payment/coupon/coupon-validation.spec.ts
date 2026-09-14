@@ -22,12 +22,14 @@ const D = (v: string | number) => new Prisma.Decimal(v);
 const NOW = new Date('2026-09-11T12:00:00Z');
 const PLAN = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const CATEGORY = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const TENANT = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
 let seq = 0;
 function coupon(code: string, over: Partial<CouponFacts> = {}): CouponFacts {
   seq += 1;
   return {
     id: `coupon-${seq}`,
+    tenantId: TENANT,
     code,
     discountType: DiscountType.percentage,
     discountValue: D(10),
@@ -40,6 +42,21 @@ function coupon(code: string, over: Partial<CouponFacts> = {}): CouponFacts {
     expiresAt: null,
     isActive: true,
     visibility: CouponVisibility.public,
+    deletedAt: null,
+    validFrom: null,
+    activeWeekdays: [],
+    activeHourFrom: null,
+    activeHourTo: null,
+    maxPurchaseAmount: null,
+    firstPurchaseOnly: false,
+    newUserWithinDays: null,
+    periodUsageLimit: null,
+    periodDays: null,
+    allowedChannels: [],
+    gateways: [],
+    liveRedemptionsInPeriod: 0,
+    userCreatedAt: new Date('2026-01-01T00:00:00Z'),
+    userHasPurchased: false,
     scopes: [],
     allowsUser: false,
     liveRedemptionsByUser: 0,
@@ -189,6 +206,90 @@ describe('each gate refuses with its own reason', () => {
       expect(r.rejected).toEqual([{ code: 'CODE', reason }]);
       expect(r.applied).toEqual([]);
       expect(r.payable.toFixed(2)).toBe('20.00');
+    }
+  });
+});
+
+describe('ownership (F-502-b, ADR-0048)', () => {
+  const onGateway = (gatewaySource: 'platform' | 'tenant', codes = ['CODE']): CouponRequest => ({
+    ...topUp('20.00', codes),
+    gatewaySource,
+  });
+
+  it('refuses a soft-deleted coupon as unknown', () => {
+    const r = applyCoupons(onGateway('platform'), [coupon('CODE', { deletedAt: NOW })], NOW);
+    expect(r.rejected).toEqual([{ code: 'CODE', reason: 'not_found' }]);
+  });
+
+  it("refuses a platform coupon on a tenant's own gateway with its own reason", () => {
+    const r = applyCoupons(onGateway('tenant'), [coupon('CODE', { tenantId: null })], NOW);
+    expect(r.rejected).toEqual([{ code: 'CODE', reason: 'platform_coupon_needs_platform_gateway' }]);
+  });
+
+  it('applies a platform coupon on a platform gateway, and a tenant coupon on either', () => {
+    expect(applyCoupons(onGateway('platform'), [coupon('CODE', { tenantId: null })], NOW).rejected).toEqual([]);
+    expect(applyCoupons(onGateway('tenant'), [coupon('CODE')], NOW).rejected).toEqual([]);
+    expect(applyCoupons(onGateway('platform'), [coupon('CODE')], NOW).rejected).toEqual([]);
+  });
+
+  it("prefers the tenant's own coupon when a platform coupon shares its code", () => {
+    const own = coupon('CODE', { discountValue: D(50) });
+    const platform = coupon('CODE', { tenantId: null, discountValue: D(10) });
+    for (const rows of [[platform, own], [own, platform]]) {
+      const r = applyCoupons(onGateway('tenant'), rows, NOW);
+      expect(r.applied).toEqual([{ couponId: own.id, code: 'CODE', discount: D('10.00') }]);
+    }
+  });
+
+  it('ignores a soft-deleted twin and uses the live coupon of that code', () => {
+    const gone = coupon('CODE', { deletedAt: NOW, discountValue: D(50) });
+    const live = coupon('CODE', { tenantId: null });
+    const r = applyCoupons(onGateway('platform'), [gone, live], NOW);
+    expect(r.applied.map((a) => a.couponId)).toEqual([live.id]);
+  });
+});
+
+describe('the limits of F-502-j each refuse with their own reason (F-502-k)', () => {
+  // NOW is 2026-09-11T12:00:00Z: a Friday, 15:30 in Asia/Tehran (UTC+3:30).
+  const GATEWAY = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const on: Partial<CouponRequest> = { channel: 'panel', gatewaySource: 'tenant', gatewayId: GATEWAY };
+  const cases: Array<[string, Partial<CouponFacts>, string | null, Partial<CouponRequest>?]> = [
+    ['starts later', { validFrom: new Date('2026-09-11T12:00:01Z') }, 'not_started'],
+    ['started at this instant', { validFrom: NOW }, null],
+    ['only on Friday, in Tehran', { activeWeekdays: [5] }, null],
+    ['only on Saturday and Sunday', { activeWeekdays: [6, 7] }, 'outside_window'],
+    ['15:00-16:00 Tehran', { activeHourFrom: 15, activeHourTo: 16 }, null],
+    ['16:00-17:00 Tehran', { activeHourFrom: 16, activeHourTo: 17 }, 'outside_window'],
+    ['a window wrapping midnight that holds 15:30', { activeHourFrom: 14, activeHourTo: 2 }, null],
+    ['a window wrapping midnight that misses 15:30', { activeHourFrom: 22, activeHourTo: 6 }, 'outside_window'],
+    ['a maximum purchase below the amount', { maxPurchaseAmount: D('19.99') }, 'above_max_purchase'],
+    ['a maximum purchase equal to the amount', { maxPurchaseAmount: D('20.00') }, null],
+    ['first purchase only, for a user who has bought', { firstPurchaseOnly: true, userHasPurchased: true }, 'first_purchase_only'],
+    ['first purchase only, for a user who has not', { firstPurchaseOnly: true }, null],
+    ['new users within 7 days, for an older account', { newUserWithinDays: 7, userCreatedAt: new Date('2026-09-04T11:59:59Z') }, 'not_a_new_user'],
+    ['new users within 7 days, for a 7-day-old account', { newUserWithinDays: 7, userCreatedAt: new Date('2026-09-04T12:00:00Z') }, null],
+    ['new users only, for an account it cannot find', { newUserWithinDays: 7, userCreatedAt: null }, 'not_a_new_user'],
+    ['two uses per 30 days, both taken', { periodUsageLimit: 2, periodDays: 30, liveRedemptionsInPeriod: 2 }, 'period_limit_reached'],
+    ['two uses per 30 days, one taken', { periodUsageLimit: 2, periodDays: 30, liveRedemptionsInPeriod: 1 }, null],
+    ['bot only, typed in the panel', { allowedChannels: ['bot'] }, 'wrong_channel'],
+    ['panel or bot, typed in the panel', { allowedChannels: ['bot', 'panel'] }, null],
+    ['limited to another gateway', { gateways: [{ gatewayId: null, tenantGatewayConfigId: 'other' }] }, 'wrong_gateway'],
+    ['limited to this tenant gateway', { gateways: [{ gatewayId: null, tenantGatewayConfigId: GATEWAY }] }, null],
+    [
+      'limited to a platform gateway with the same id as this tenant one',
+      { gateways: [{ gatewayId: GATEWAY, tenantGatewayConfigId: null }] },
+      'wrong_gateway',
+    ],
+    ['a gateway limit when no gateway is named', { gateways: [{ gatewayId: null, tenantGatewayConfigId: GATEWAY }] }, 'wrong_gateway', { gatewayId: undefined, gatewaySource: undefined }],
+    ['a channel limit when no channel is named', { allowedChannels: ['panel'] }, 'wrong_channel', { channel: undefined }],
+  ];
+
+  it.each(cases)('%s', (_name, over, reason, request = {}) => {
+    const r = applyCoupons({ ...topUp('20.00', ['CODE']), ...on, ...request }, [coupon('CODE', over)], NOW);
+    if (reason === null) {
+      expect(r.rejected).toEqual([]);
+    } else {
+      expect(r.rejected).toEqual([{ code: 'CODE', reason }]);
     }
   });
 });

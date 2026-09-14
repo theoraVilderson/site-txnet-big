@@ -55,6 +55,10 @@ roles:
       # on those same gateways; `ManualConfirmService` confines a tenant to its
       # own users' payments on its own gateway configs.
       - payment.confirm_manual
+      # Coupon and gift-code management (F-502-a, D-33). A tenant's Admin
+      # manages its own coupons; the service keeps platform coupons and other
+      # tenants' for the platform owner (F-502-c).
+      - coupon.manage
   Support:
     permissions:
       - user.read
