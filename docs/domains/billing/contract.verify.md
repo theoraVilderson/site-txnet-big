@@ -78,3 +78,15 @@ decided), `unsettled` (inquire only), `confirmed_manually` (confirm only).
 | The callback's silence answers `{kind: 'verifying', paymentId}`, signed `{k:'v', p, e}` (`payment-result-token.ts`) and redirected to `RESULT_PATH.pending` | ADR-0044 decision 7: a payer never reads "failed" for a payment that may have been charged |
 | `GET /api/billing/wallet/payments/:id` answers one `WalletPaymentRow` of **the caller's own** (`id` and `userId` together; anyone else's is **404**), per user `WALLET_PAYMENT_RATE_LIMIT` (300 / 900 s). Both payment routes carry `verifying` = `pending` and `nextVerifyAt` set | the page polls it every 10 s; its own bucket so polling never spends the financial page's |
 
+## Paid after the clock ran out (built — F-092-aa)
+
+ADR-0046 decision 1. `DepositSettlementService.creditVerified`, the callback,
+and `billing.claim_expired_coupon_redemptions` (migration
+`20260914000400_claim_expired_coupon_redemptions`).
+
+| Rule | Why |
+|---|---|
+| **The flip tries `pending`, then `expired`**, two guarded `updateMany`s in the crediting transaction; `count: 0` on both is "already settled" | an outage longer than the 15-min clock expires the row before anyone hears the bank. Before this, reconciliation logged a paid expired payment "already settled" and never credited it |
+| Which guard matched picks the coupon path: `pending` confirms the holds; `expired` **claims back** the uses the sweep released `expired` — `usedCount + n`, `reservedCount` untouched, **no limit check** | the payer was charged the discounted price. A coupon past its limit is visible; money refused over a counter is not recoverable by anyone |
+| The callback verifies an `expired` row exactly like a `pending` one; only `failed` answers `VERIFICATION_FAILED` without asking. Silence on an expired row schedules nothing (the ladder guards `pending`) — reconciliation's ordinary scan owns it | reopening a `failed` row would overrule a stated refusal; an `expired` one was never refused |
+

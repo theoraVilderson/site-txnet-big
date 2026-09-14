@@ -19,7 +19,8 @@ import { GatewaySource, MerchantGatewayRef } from '../gateway/gateway-merchant';
  * coupon confirm and the outbox event, in one transaction, guarded by the row's
  * own status.
  *
- * **The flip is the guard.** `updateMany({ where: { id, status: pending } })`,
+ * **The flip is the guard.** `updateMany({ where: { id, status: pending } })`
+ * — or `expired`, for a payment the bank confirms after its clock (F-092-aa) —
  * with everything else hanging off its `count` — never off a status read a
  * moment earlier. A bank redirecting twice, a retried webhook and a
  * reconciliation run racing the payer all see `pending`, and Postgres re-checks
@@ -103,21 +104,30 @@ export class DepositSettlementService {
       throw new Error('an admin_manual credit needs a ManualConfirmation, and only it may carry one');
     }
     return tenantTransaction(this.prisma, async (tx) => {
-      const { count } = await tx.paymentTransaction.updateMany({
-        where: { id: payment.id, status: PaymentStatus.pending },
-        data: {
-          status: PaymentStatus.success,
-          gatewayReferenceId: verified.referenceId,
-          cardPanMasked: verified.cardPan,
-          confirmationSource: source,
-          ...(manual ? { confirmedByAdminId: manual.adminId, manualConfirmReason: manual.reason } : {}),
-          // A payment that has landed has no clock left to run out (F-092-k),
-          // and nothing left to verify (F-092-x).
-          expiresAt: null,
-          nextVerifyAt: null,
-        },
-      });
-      if (count !== 1) return false;
+      const data = {
+        status: PaymentStatus.success,
+        gatewayReferenceId: verified.referenceId,
+        cardPanMasked: verified.cardPan,
+        confirmationSource: source,
+        ...(manual ? { confirmedByAdminId: manual.adminId, manualConfirmReason: manual.reason } : {}),
+        // A payment that has landed has no clock left to run out (F-092-k),
+        // and nothing left to verify (F-092-x).
+        expiresAt: null,
+        nextVerifyAt: null,
+      };
+      // Two guards, tried in order, rather than `status: { in: [...] }`: which
+      // one matched is what says whether the coupon holds are still held. A row
+      // read `pending` may have been expired by the sweep since (ADR-0046
+      // decision 1) — the money is paid either way, and only a settled row is
+      // matched by neither.
+      const flip = async (from: PaymentStatus) =>
+        (await tx.paymentTransaction.updateMany({ where: { id: payment.id, status: from }, data })).count === 1;
+      const from = (await flip(PaymentStatus.pending))
+        ? PaymentStatus.pending
+        : (await flip(PaymentStatus.expired))
+          ? PaymentStatus.expired
+          : null;
+      if (from === null) return false;
 
       await this.ledger.credit(tx, {
         userId: payment.userId,
@@ -127,7 +137,11 @@ export class DepositSettlementService {
         reasonType: WalletReasonType.payment_gateway,
         referenceId: payment.id,
       });
-      await this.reservations.confirm(tx, payment.id);
+      // A pending row still holds its coupon slots; an expired one gave them
+      // back, and the payer paid the discounted price anyway — so the uses are
+      // claimed back, past the coupon's limit if they must be.
+      if (from === PaymentStatus.pending) await this.reservations.confirm(tx, payment.id);
+      else await this.reservations.claimExpired(tx, payment.id);
       await this.accrueSettlement(tx, payment);
       await this.publishConfirmed(tx, payment, verified.referenceId, source);
       if (manual) await this.auditManual(tx, payment, verified.referenceId, manual);

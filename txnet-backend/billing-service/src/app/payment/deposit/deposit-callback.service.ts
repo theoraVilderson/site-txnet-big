@@ -156,12 +156,14 @@ export class DepositCallbackService {
           alreadyPaid: true,
         };
       }
-      if (payment.status !== PaymentStatus.pending) {
-        // `failed` or `expired`: F-092-k closed it, or an earlier callback did.
-        // Reopening it here would be this service deciding against the job that
-        // owns the clock.
+      if (payment.status === PaymentStatus.failed) {
+        // A stated refusal, by an earlier callback or the gateway. Final.
         return { kind: 'failed', code: 'VERIFICATION_FAILED' };
       }
+      // `pending`, or `expired`: the clock ran out before the payer came back —
+      // our own outage outlasting it is the usual reason — and the bank may
+      // have the money all the same. It is verified like a pending one, and the
+      // settlement claims back the holds the clock released (ADR-0046 decision 1).
 
       // 3. The gateway's own verdict, before we spend a vault read on it. A
       //    payer who pressed cancel is a settled answer — the bank is not going

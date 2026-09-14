@@ -85,6 +85,19 @@ export class CouponReservationService {
   }
 
   /**
+   * A payment credited after its clock ran out (ADR-0046 decision 1): the
+   * holds the clock released `expired` become uses again. The slots were given
+   * back, so this may take a coupon past its limit — the payer was charged the
+   * discounted price, and the discount is honoured. Returns how many moved.
+   */
+  async claimExpired(tx: Prisma.TransactionClient, orderReferenceId: string): Promise<number> {
+    assertTenantTransaction('coupon claim');
+    const [{ moved }] = await tx.$queryRaw<Array<{ moved: number }>>`
+      SELECT billing.claim_expired_coupon_redemptions(${orderReferenceId}::uuid) AS moved`;
+    return moved;
+  }
+
+  /**
    * The order's pending holds give their slots back — `cancelled` when the
    * payment failed, `expired` when it timed out. A confirmed use is never
    * released.

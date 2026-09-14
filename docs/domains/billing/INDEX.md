@@ -15,6 +15,7 @@ source:
   - txnet-backend/prisma/domains/migrations/20260914000100_payment_verify_retry/**
   - txnet-backend/prisma/domains/migrations/20260914000200_payment_verify_flag/**
   - txnet-backend/prisma/domains/migrations/20260914000300_payment_confirm_manual/**
+  - txnet-backend/prisma/domains/migrations/20260914000400_claim_expired_coupon_redemptions/**
 owns_tables: [wallet, wallet_transaction, sub_account, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout]
 depends_on: [identity, catalog, currency, tenant, tenant-context, forward-auth, i18n]
 updated: 2026-09-14

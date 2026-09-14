@@ -59,15 +59,17 @@ type Calls = {
   committed: boolean;
 };
 
-function build({ lostTheFlip = false } = {}) {
+function build({ lostTheFlip = false, rowIs = PaymentStatus.pending as PaymentStatus } = {}) {
   const calls: Calls = { writes: [], accruals: [], committed: false };
 
   const tx = {
     $executeRaw: async () => 0,
     paymentTransaction: {
-      updateMany: async () => {
-        calls.writes.push('flip');
-        return { count: lostTheFlip ? 0 : 1 };
+      // The row really is `rowIs`: a guard naming another status matches nothing.
+      updateMany: async ({ where }: { where: { status: PaymentStatus } }) => {
+        const matched = !lostTheFlip && where.status === rowIs;
+        calls.writes.push(matched ? 'flip' : `miss:${where.status}`);
+        return { count: matched ? 1 : 0 };
       },
     },
     gatewaySettlementEntry: {
@@ -104,6 +106,10 @@ function build({ lostTheFlip = false } = {}) {
   const reservations = {
     confirm: async () => {
       calls.writes.push('confirm');
+      return 1;
+    },
+    claimExpired: async () => {
+      calls.writes.push('claim-expired');
       return 1;
     },
   };
@@ -167,7 +173,7 @@ describe('DepositSettlementService — the debt a granted gateway leaves', () =>
 
     await expect(settle(service, paymentRow({ grantId: GRANT }))).resolves.toBe(false);
 
-    expect(calls.writes).toEqual(['flip']);
+    expect(calls.writes).toEqual(['miss:pending', 'miss:expired']);
   });
 
   it('floors a fee larger than the credit at zero, rather than owing backwards', async () => {
@@ -195,6 +201,26 @@ describe('DepositSettlementService — the debt a granted gateway leaves', () =>
       action: 'payment_manual_confirm',
       targetEntityId: PAYMENT,
       newValue: { gatewayReferenceId: 'R-1', reason: 'checked the gateway panel' },
+    });
+  });
+
+  describe('a payment the gateway confirms after its clock ran out (F-092-aa, ADR-0046 decision 1)', () => {
+    it('credits an expired payment, and claims back the coupon uses the clock released', async () => {
+      const { service, calls } = build({ rowIs: PaymentStatus.expired });
+
+      // Read `pending` a moment ago; the expiry sweep flipped it since. The
+      // guard, not the read, decides which coupon path runs.
+      await expect(settle(service, paymentRow({ status: PaymentStatus.pending }))).resolves.toBe(true);
+
+      expect(calls.writes).toEqual(['miss:pending', 'flip', 'credit', 'claim-expired', 'event']);
+    });
+
+    it('confirms the holds of a payment still pending, and never claims', async () => {
+      const { service, calls } = build({ rowIs: PaymentStatus.pending });
+
+      await settle(service, paymentRow({ status: PaymentStatus.expired }));
+
+      expect(calls.writes).toEqual(['flip', 'credit', 'confirm', 'event']);
     });
   });
 

@@ -51,6 +51,7 @@ const COUPONS: Array<[string, string | null, string, number | null, number]> = [
   ['b3', null, 'PLATFORM', 5, 0],
   ['b4', TENANT_B, 'BETAONLY', null, 0],
   ['b5', TENANT_A, 'LIFECYCLE', 1, 0],
+  ['b6', TENANT_A, 'LATEPAID', 1, 0],
 ];
 
 let pg: PostgresFixture;
@@ -221,6 +222,29 @@ it('confirms and releases once, and a confirmed use is never given back', async 
   await expect(
     asTenant(TENANT_A, (tx) => reservations.reserve(tx, reservationOf('b5', USER))),
   ).rejects.toMatchObject({ reason: 'capacity_reached' });
+});
+
+it('claims back an expired hold for a payment credited late, past the limit, once (F-092-aa)', async () => {
+  const late = nextOrder();
+  await asTenant(TENANT_A, (tx) => reservations.reserve(tx, reservationOf('b6', USER, late)));
+  await asTenant(TENANT_A, (tx) => reservations.release(tx, late, 'expired'));
+  // The clock gave the only slot back, and someone else took it and paid.
+  const other = nextOrder();
+  await asTenant(TENANT_A, (tx) => reservations.reserve(tx, reservationOf('b6', OTHER_USER, other)));
+  await asTenant(TENANT_A, (tx) => reservations.confirm(tx, other));
+
+  await expect(asTenant(TENANT_A, (tx) => reservations.claimExpired(tx, late))).resolves.toBe(1);
+  await expect(asTenant(TENANT_A, (tx) => reservations.claimExpired(tx, late))).resolves.toBe(0);
+  // A confirmed or cancelled use is never claimed: only `expired` moves.
+  await expect(asTenant(TENANT_A, (tx) => reservations.claimExpired(tx, other))).resolves.toBe(0);
+
+  await expect(counters('b6')).resolves.toEqual({ usedCount: 2, reservedCount: 0 });
+  await expect(redemptions('b6')).resolves.toEqual(
+    expect.arrayContaining([
+      { userId: USER, status: 'confirmed' },
+      { userId: OTHER_USER, status: 'confirmed' },
+    ]),
+  );
 });
 
 it('refuses to reserve outside a tenantTransaction', async () => {

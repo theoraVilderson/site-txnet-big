@@ -82,7 +82,9 @@ function build(setup: Setup = {}) {
         where['gatewayTrackingCode'] === AUTHORITY ? row : null,
       updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
         calls.updated.push({ where, data });
-        return { count: lostTheFlip ? 0 : 1 };
+        // A guard naming a status the row does not have matches nothing.
+        const statusMatches = where['status'] === undefined || where['status'] === row?.status;
+        return { count: lostTheFlip || !statusMatches ? 0 : 1 };
       },
     },
     outboxEvent: {
@@ -114,6 +116,10 @@ function build(setup: Setup = {}) {
   const reservations = {
     confirm: async (_tx: unknown, orderReferenceId: string) => {
       calls.settled.push({ orderReferenceId, outcome: 'confirmed' });
+      return 1;
+    },
+    claimExpired: async (_tx: unknown, orderReferenceId: string) => {
+      calls.settled.push({ orderReferenceId, outcome: 'claimed-expired' });
       return 1;
     },
     release: async (_tx: unknown, orderReferenceId: string, outcome: string) => {
@@ -311,8 +317,20 @@ describe('DepositCallbackService.settle', () => {
     expect(calls.verified).toEqual([]);
   });
 
-  it('does not settle a payment the expiry job already closed', async () => {
+  it('verifies and credits a payment whose clock ran out before the payer came back (F-092-aa)', async () => {
+    // Our own outage outlasted the 15-minute clock: the sweep expired the row
+    // and released its holds, and the bank has the money all the same.
     const { service, calls } = build({ row: paymentRow({ status: 'expired' }) });
+
+    const outcome = await settle(service);
+
+    expect(outcome).toEqual({ kind: 'success', paymentId: PAYMENT, referenceId: '900900900', alreadyPaid: false });
+    expect(calls.credited).toEqual([{ amount: '19.80', referenceId: PAYMENT, reasonType: 'payment_gateway' }]);
+    expect(calls.settled).toEqual([{ orderReferenceId: PAYMENT, outcome: 'claimed-expired' }]);
+  });
+
+  it('does not reopen a payment already refused', async () => {
+    const { service, calls } = build({ row: paymentRow({ status: 'failed' }) });
 
     const outcome = await settle(service);
 
