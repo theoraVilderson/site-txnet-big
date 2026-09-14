@@ -10,6 +10,7 @@ import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { resolveTenant, surfaceServesPath, tenantConflict } from './tenant';
 import { TENANT_AGNOSTIC } from './tenant-agnostic.decorator';
+import { BackendI18nKeys } from '@txnet-backend/shared-core';
 
 /**
  * The three ways a request's tenancy can be refused, in the one place a refusal
@@ -64,7 +65,7 @@ export class TenantGuard implements CanActivate {
       this.logger.warn(
         `${request.method} ${request.originalUrl} refused: ${conflict.message}`,
       );
-      throw new ForbiddenException('tenant.claimMismatch');
+      throw new ForbiddenException(BackendI18nKeys.errors.tenant.claimMismatch);
     }
 
     // Before the exemption, because this refusal is about the door and not

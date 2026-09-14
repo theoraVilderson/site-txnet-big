@@ -6,6 +6,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { proxy, REFRESH_COOKIE } from './proxy';
 import { PANEL_HOME } from '@/lib/routes';
+import { ProxyHeaders } from '@/generated/wire';
 
 const ORIGIN = 'http://auth-service:3000';
 
@@ -164,7 +165,7 @@ describe('the session check', () => {
     await proxy(requestFor('/auth/login', SIGNED_IN));
 
     const [, init] = fetchMock.mock.calls[0];
-    expect(init.headers['x-forwarded-host']).toBe('api.example.com');
+    expect(init.headers[ProxyHeaders.forwardedHost]).toBe('api.example.com');
   });
 
   it('names no host when it is already calling the public origin', async () => {
@@ -177,7 +178,7 @@ describe('the session check', () => {
     await proxy(requestFor('/auth/login', SIGNED_IN));
 
     const [, init] = fetchMock.mock.calls[0];
-    expect(init.headers['x-forwarded-host']).toBeUndefined();
+    expect(init.headers[ProxyHeaders.forwardedHost]).toBeUndefined();
   });
 
   it('names no host when the public origin is unset, rather than an empty one', async () => {
@@ -187,7 +188,7 @@ describe('the session check', () => {
     await proxy(requestFor('/auth/login', SIGNED_IN));
 
     const [, init] = fetchMock.mock.calls[0];
-    expect(init.headers['x-forwarded-host']).toBeUndefined();
+    expect(init.headers[ProxyHeaders.forwardedHost]).toBeUndefined();
   });
 
   it('falls back to the public origin when the internal one is unset', async () => {

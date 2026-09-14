@@ -7,6 +7,7 @@ import {
 import { Request } from 'express';
 import { TokenService } from '../token.service';
 import { SessionStore } from '../session/session.store';
+import { BackendI18nKeys } from '@txnet-backend/shared-core';
 
 /**
  * Rejects login/register while the caller already holds a live session, so a
@@ -36,7 +37,7 @@ export class NoActiveSessionGuard implements CanActivate {
     if (claims.purpose || !claims.sessionId) return true;
 
     if (await this.sessions.isActive(claims.sessionId)) {
-      throw new ConflictException('auth.alreadyAuthenticated');
+      throw new ConflictException(BackendI18nKeys.errors.auth.alreadyAuthenticated);
     }
     return true;
   }

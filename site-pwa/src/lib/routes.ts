@@ -5,6 +5,7 @@
  */
 export const PANEL_HOME = "/";
 export const AUTH_LOGIN = "/auth/login";
+export const AUTH_FORGOT_PASSWORD = "/auth/forgot-password";
 /**
  * The account-creation screen. `register` is the name auth-api, the bot and
  * coinsite have always used; the panel called it `signup` until this constant

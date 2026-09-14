@@ -1,3 +1,4 @@
+import { RealtimeEvents } from "@/generated/wire";
 import type { WalletPaymentRow } from "@/lib/billing-api";
 import { readSuccess } from "./payment-result";
 
@@ -40,7 +41,7 @@ export function pendingStateOf(row: WalletPaymentRow | null): PendingState {
  * billing's decimal string — it is printed.
  */
 export function readPaymentCredited(payload: unknown): { paymentId: string; amountCredited: string } | null {
-  return readPaymentEvent(payload, "billing.payment.confirmed");
+  return readPaymentEvent(payload, RealtimeEvents.paymentConfirmed);
 }
 
 /**
@@ -48,7 +49,7 @@ export function readPaymentCredited(payload: unknown): { paymentId: string; amou
  * ADR-0046 decision 5) — the bank is returning the money — or `null`.
  */
 export function readPaymentReversed(payload: unknown): { paymentId: string; amountCredited: string } | null {
-  return readPaymentEvent(payload, "billing.payment.reversed");
+  return readPaymentEvent(payload, RealtimeEvents.paymentReversed);
 }
 
 function readPaymentEvent(payload: unknown, type: string): { paymentId: string; amountCredited: string } | null {

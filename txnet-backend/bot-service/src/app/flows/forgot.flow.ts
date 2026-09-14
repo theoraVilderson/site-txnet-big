@@ -10,6 +10,7 @@ import { BotSessionStore } from '../session/bot-session.store';
 import { OtpStep } from './otp.step';
 import { PhoneNumbers } from './phone-number';
 import { ACTIONS, ask, askContact, say } from './views';
+import { BotKeys } from '../locale/bot-keys';
 
 /**
  * Resetting a forgotten password from the chat.
@@ -30,7 +31,7 @@ export class ForgotFlow {
 
   start(): FlowResult {
     return {
-      view: askContact('forgot.phone', { key: 'bot.login.askPhone' }),
+      view: askContact('forgot.phone', { key: BotKeys.login.askPhone }),
       nextState: { flow: 'forgot', step: 'forgot.phone', data: {} },
     };
   }
@@ -47,13 +48,13 @@ export class ForgotFlow {
         );
         if (!phoneNumber) {
           return {
-            view: askContact('forgot.phone', { key: 'bot.login.askPhone' }),
+            view: askContact('forgot.phone', { key: BotKeys.login.askPhone }),
             nextState: state,
           };
         }
         const channels = await this.otp.channelView(ctx);
         if (!channels) {
-          return { view: say('otp.none', { key: 'bot.channel.none' }), nextState: null };
+          return { view: say('otp.none', { key: BotKeys.channel.none }), nextState: null };
         }
         return {
           view: channels,
@@ -68,7 +69,7 @@ export class ForgotFlow {
       case 'forgot.channel': {
         const channel = this.otp.channelFromAction(actionId);
         if (!channel) {
-          return { view: say('otp.pick', { key: 'bot.common.pickOne' }), nextState: state };
+          return { view: say('otp.pick', { key: BotKeys.common.pickOne }), nextState: state };
         }
         return this.otp.request(ctx, state, channel, 'forgot.code', (c) =>
           this.api.forgotPassword(
@@ -83,7 +84,7 @@ export class ForgotFlow {
 
       case 'forgot.link':
         if (actionId === ACTIONS.linkCheck) return this.otp.checkLink(ctx, state);
-        return { view: say('forgot.wait', { key: 'bot.common.pickOne' }), nextState: state };
+        return { view: say('forgot.wait', { key: BotKeys.common.pickOne }), nextState: state };
 
       case 'forgot.code': {
         const verified = await this.api.verifyForgotOtp(
@@ -94,7 +95,7 @@ export class ForgotFlow {
           return { view: ask('forgot.retryCode', { raw: verified.msg }), nextState: state };
         }
         return {
-          view: ask('forgot.password', { key: 'bot.forgot.askPassword' }),
+          view: ask('forgot.password', { key: BotKeys.forgot.askPassword }),
           nextState: {
             ...state,
             step: 'forgot.password',
@@ -126,14 +127,14 @@ export class ForgotFlow {
           );
         }
         return {
-          view: say('forgot.done', { key: 'bot.forgot.done' }),
+          view: say('forgot.done', { key: BotKeys.forgot.done }),
           nextState: null,
           deleteIncoming: true,
         };
       }
 
       default:
-        return { view: say('forgot.lost', { key: 'bot.common.unknown' }), nextState: null };
+        return { view: say('forgot.lost', { key: BotKeys.common.unknown }), nextState: null };
     }
   }
 }

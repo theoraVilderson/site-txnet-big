@@ -1,4 +1,4 @@
-import { RedisTtl, UnscopedRedisKeys, type OutboxMessage } from '@txnet-backend/shared-core';
+import { OutboxEventType, RedisTtl, UnscopedRedisKeys, type OutboxMessage } from '@txnet-backend/shared-core';
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -53,7 +53,7 @@ export class PaymentReversedConsumer implements OnApplicationBootstrap {
 
     try {
       await this.realtime.publish(`user:${payment.userId}`, {
-        type: 'billing.payment.reversed',
+        type: OutboxEventType.PAYMENT_REVERSED,
         paymentId: payment.paymentId,
         amountCredited: payment.amountCredited,
       });

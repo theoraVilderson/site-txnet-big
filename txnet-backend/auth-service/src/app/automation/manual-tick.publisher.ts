@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { automationTickRoutingKey } from '@txnet-backend/shared-core';
 import { AuthBrokerPublisher } from './broker.publisher';
 
 /**
@@ -25,7 +26,7 @@ export class ManualTickPublisher {
    */
   async publishManualTick(key: string): Promise<void> {
     await this.broker.publishJson(
-      `automation.tick.${key}`,
+      automationTickRoutingKey(key),
       {
         key,
         at: new Date().toISOString(),

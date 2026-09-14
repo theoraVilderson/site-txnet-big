@@ -1,4 +1,7 @@
+import type { ScheduleType } from '@prisma/client';
 import { CronTime, validateCronExpression } from 'cron';
+
+export type { ScheduleType };
 
 /**
  * When a worker is due — the whole of automation invariants #1 and #2, as a
@@ -20,8 +23,6 @@ import { CronTime, validateCronExpression } from 'cron';
  * Postgres, and it is the reason `isActive` cannot be forgotten at one call
  * site and honoured at another: there is only one call site.
  */
-
-export type ScheduleType = 'always_on' | 'time_window' | 'cron_expression';
 
 /** The `bot_schedule` columns this decision reads, and no others. */
 export interface ScheduleRow {

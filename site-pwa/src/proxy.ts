@@ -1,27 +1,24 @@
 // Next 16 middleware (`proxy.ts`, formerly `middleware.ts`).
 import { NextResponse, type NextRequest } from "next/server";
-import { AUTH_REGISTER, PANEL_HOME } from "@/lib/routes";
+import { Cookies, ProxyHeaders } from "@/generated/wire";
+import { AUTH_LOGIN, AUTH_REGISTER, PANEL_HOME } from "@/lib/routes";
 
 /**
  * Auth screens a signed-in visitor has no business seeing. `forgot-password` is
  * deliberately absent: resetting a password while signed in elsewhere is
  * legitimate.
  */
-const GUARDED_PATHS = ["/auth/login", AUTH_REGISTER];
+const GUARDED_PATHS = [AUTH_LOGIN, AUTH_REGISTER];
 
 /**
  * The session cookie this middleware reads. Exported so `proxy.test.ts` asserts
  * against the same string the code uses — auth-service owns the name
  * (`common/http/refresh-cookie.ts`) and a rename there has to fail here.
  *
- * **It is still a hand-copied string, and nothing enforces that.** Every other
- * spelling in the platform now imports it from
- * `shared-core/src/lib/http/cookies.ts` (ADR-0036, C-04). This app cannot: it
- * is not in the Nx workspace and has no path to that library, so C-04's check
- * skips it. Whether to vendor a tarball the way `@txnet/locale-client` already
- * is, is open — `docs/platform/forward-auth/open-questions.md`, 2026-09-11.
+ * Generated from `contracts/http/wire.json` (C-04): this app cannot import
+ * `shared-core`, so it reads the same contract through `@/generated/wire`.
  */
-export const REFRESH_COOKIE = "refresh_token";
+export const REFRESH_COOKIE = Cookies.refreshToken;
 
 /**
  * The screen used to live at `/auth/signup`. It is `register` everywhere else
@@ -141,7 +138,7 @@ export async function proxy(request: NextRequest) {
   // with the URL is worth avoiding.
   const apiHost = publicApiHost();
   if (apiHost && origin !== process.env.NEXT_PUBLIC_API_ORIGIN) {
-    headers["x-forwarded-host"] = apiHost;
+    headers[ProxyHeaders.forwardedHost] = apiHost;
   }
 
   const upstream = await fetch(`${origin}/api/auth/session`, {

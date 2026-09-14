@@ -1,9 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { OTP_DELIVERY_ROUTING_KEY } from '@txnet-backend/shared-core';
 import { AuthBrokerPublisher } from '../../automation/broker.publisher';
 import { OtpDeliveryRequest } from './otp.interface';
-
-/** The routing key an OTP send is published under. Bound by `worker-service`. */
-export const OTP_DELIVERY_ROUTING_KEY = 'otp.delivery.send';
 
 /**
  * Publishes the request to send one OTP (F-067-a).

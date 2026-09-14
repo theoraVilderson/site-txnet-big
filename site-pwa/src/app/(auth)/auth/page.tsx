@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
+import { AUTH_LOGIN } from "@/lib/routes";
 
 export default function AuthIndexPage() {
-  redirect("/auth/login");
+  redirect(AUTH_LOGIN);
 }

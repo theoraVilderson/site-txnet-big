@@ -1,3 +1,4 @@
+import { SocialPlatform } from '@prisma/client';
 import { z } from 'zod';
 
 /** The client polls the same token it was handed with the deep link. */
@@ -14,7 +15,7 @@ export type BotLinkStatusInput = z.infer<typeof botLinkStatusSchema>;
  * `identity` and may exist only once (ADR-0011).
  */
 export const botLinkResolveSchema = z.object({
-  platform: z.enum(['telegram', 'bale']),
+  platform: z.nativeEnum(SocialPlatform),
   chatId: z.string().min(1).max(64),
   /** The `?start=` payload. Absent means a bare `/start`. */
   startToken: z.string().min(1).max(128).optional(),
@@ -27,7 +28,7 @@ export const botLinkResolveSchema = z.object({
  * and one that has not is told to send it.
  */
 export const botSessionSchema = z.object({
-  platform: z.enum(['telegram', 'bale']),
+  platform: z.nativeEnum(SocialPlatform),
   chatId: z.string().min(1).max(64),
   senderId: z.union([z.string().min(1).max(64), z.number()]).optional(),
   contact: z
@@ -52,7 +53,7 @@ export type BotSessionInput = z.infer<typeof botSessionSchema>;
  * accepting an unsigned claim next to a signed one.
  */
 export const botWebAppSessionSchema = z.object({
-  platform: z.enum(['telegram', 'bale']),
+  platform: z.nativeEnum(SocialPlatform),
   /** The raw `initData` query string, verbatim. Never re-encoded by a client. */
   initData: z.string().min(1).max(4096),
 });
@@ -60,7 +61,7 @@ export const botWebAppSessionSchema = z.object({
 export type BotWebAppSessionInput = z.infer<typeof botWebAppSessionSchema>;
 
 export const botLinkContactSchema = z.object({
-  platform: z.enum(['telegram', 'bale']),
+  platform: z.nativeEnum(SocialPlatform),
   chatId: z.string().min(1).max(64),
   /** `message.from.id` — the sender the contact card is compared against. */
   senderId: z.union([z.string().min(1).max(64), z.number()]),

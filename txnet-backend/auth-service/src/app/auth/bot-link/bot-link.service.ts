@@ -19,6 +19,7 @@ import { BotLinkMessageKey, botLinkMessage } from './bot-link.messages';
 import { BotContact, BotUpdate, PendingBotLink } from './bot-link.types';
 import { parsePhone } from '../../common/validation/phone.schema';
 import { TenantContext } from '../../tenant-context/tenant-context';
+import { BackendI18nKeys } from '@txnet-backend/shared-core';
 
 /** A messenger channel and the platform behind it are the same thing. */
 const CHANNEL_OF: Record<BotPlatform, OtpChannel> = {
@@ -171,7 +172,7 @@ export class BotLinkService {
       !integration?.botUsername ||
       !(await this.bots.hasToken(integration))
     ) {
-      throw new BadRequestException('otp.channelNotConfigured');
+      throw new BadRequestException(BackendI18nKeys.errors.otp.channelNotConfigured);
     }
 
     // Re-asking inside the TTL hands back the same link: a second deep link
@@ -195,7 +196,7 @@ export class BotLinkService {
     await this.store.save(link);
 
     const deepLink = this.bots.deepLink(integration, link.token);
-    if (!deepLink) throw new BadRequestException('otp.channelNotConfigured');
+    if (!deepLink) throw new BadRequestException(BackendI18nKeys.errors.otp.channelNotConfigured);
 
     return {
       linkRequired: true,
@@ -209,7 +210,7 @@ export class BotLinkService {
   /** What the waiting client polls for. */
   async status(token: string): Promise<BotLinkStatus> {
     const link = await this.store.byToken(token);
-    if (!link) return { state: 'failed', otpSent: false, failureKey: 'otp.botLink.expired' };
+    if (!link) return { state: 'failed', otpSent: false, failureKey: BackendI18nKeys.errors.otp.botLink.expired };
     return {
       state: link.state,
       otpSent: link.otpSent,
@@ -332,12 +333,12 @@ export class BotLinkService {
       this.logger.warn(
         `${platform}: contact sent by ${senderId} describes ${contact.user_id ?? 'nobody'} — rejected`,
       );
-      return this.fail(link, 'senderMismatch', 'otp.botLink.senderMismatch');
+      return this.fail(link, 'senderMismatch', BackendI18nKeys.errors.otp.botLink.senderMismatch);
     }
 
     const shared = normalizeMessengerPhone(contact.phone_number);
     if (!shared || shared !== link.phoneNumber) {
-      return this.fail(link, 'phoneMismatch', 'otp.botLink.phoneMismatch');
+      return this.fail(link, 'phoneMismatch', BackendI18nKeys.errors.otp.botLink.phoneMismatch);
     }
 
     // One messenger account, one platform account.
@@ -353,7 +354,7 @@ export class BotLinkService {
       return this.fail(
         link,
         'takenByAnotherAccount',
-        'otp.botLink.takenByAnotherAccount',
+        BackendI18nKeys.errors.otp.botLink.takenByAnotherAccount,
       );
     }
 
@@ -373,7 +374,7 @@ export class BotLinkService {
       }
       // Otherwise the sender has proven this number is theirs, so telling them
       // it has no account reveals nothing they could not already establish.
-      return this.fail(link, 'noAccount', 'otp.botLink.noAccount');
+      return this.fail(link, 'noAccount', BackendI18nKeys.errors.otp.botLink.noAccount);
     }
 
     await this.prisma.linkedBotAccount.upsert({
@@ -472,7 +473,7 @@ export class BotLinkService {
       needsContact: false,
       otpSent: false,
       messageKey,
-      failureKey: messageKey === 'expired' ? 'otp.botLink.expired' : undefined,
+      failureKey: messageKey === 'expired' ? BackendI18nKeys.errors.otp.botLink.expired : undefined,
       lang,
     };
   }

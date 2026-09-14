@@ -6,6 +6,7 @@ import { ChatAccess } from '../session/chat-access';
 import { OtpStep } from './otp.step';
 import { PhoneNumbers } from './phone-number';
 import { ACTIONS, addProofView, ask, say } from './views';
+import { BotKeys } from '../locale/bot-keys';
 
 /**
  * Adding an account to the caller's switch group, in the chat (`F-0205`).
@@ -68,7 +69,7 @@ export class AccountAddFlow {
       case 'accountAdd.method':
         if (actionId === ACTIONS.addWithPassword) {
           return {
-            view: ask('accountAdd.identifier', { key: 'bot.accounts.addAskIdentifier' }),
+            view: ask('accountAdd.identifier', { key: BotKeys.accounts.addAskIdentifier }),
             nextState: {
               ...state,
               step: 'accountAdd.identifier',
@@ -80,7 +81,7 @@ export class AccountAddFlow {
         }
         if (actionId === ACTIONS.addWithOtp) {
           return {
-            view: ask('accountAdd.phone', { key: 'bot.accounts.addAskPhone' }),
+            view: ask('accountAdd.phone', { key: BotKeys.accounts.addAskPhone }),
             nextState: {
               ...state,
               step: 'accountAdd.phone',
@@ -88,7 +89,7 @@ export class AccountAddFlow {
             },
           };
         }
-        return { view: say('accountAdd.pick', { key: 'bot.common.pickOne' }), nextState: state };
+        return { view: say('accountAdd.pick', { key: BotKeys.common.pickOne }), nextState: state };
 
       case 'accountAdd.phone':
         return this.phone(ctx, state);
@@ -101,7 +102,7 @@ export class AccountAddFlow {
 
       case 'accountAdd.link':
         if (actionId === ACTIONS.linkCheck) return this.otp.checkLink(ctx, state);
-        return { view: say('accountAdd.wait', { key: 'bot.common.pickOne' }), nextState: state };
+        return { view: say('accountAdd.wait', { key: BotKeys.common.pickOne }), nextState: state };
 
       case 'accountAdd.code':
         if (actionId === ACTIONS.resend) {
@@ -111,7 +112,7 @@ export class AccountAddFlow {
 
       case 'accountAdd.identifier':
         return {
-          view: ask('accountAdd.password', { key: 'bot.accounts.addAskPassword' }),
+          view: ask('accountAdd.password', { key: BotKeys.accounts.addAskPassword }),
           nextState: {
             ...state,
             step: 'accountAdd.password',
@@ -123,7 +124,7 @@ export class AccountAddFlow {
         return this.password(ctx, state);
 
       default:
-        return { view: say('accountAdd.lost', { key: 'bot.common.unknown' }), nextState: null };
+        return { view: say('accountAdd.lost', { key: BotKeys.common.unknown }), nextState: null };
     }
   }
 
@@ -140,13 +141,13 @@ export class AccountAddFlow {
     const phoneNumber = this.phones.read(ctx.text ?? '');
     if (!phoneNumber) {
       return {
-        view: ask('accountAdd.phone', { key: 'bot.accounts.addAskPhone' }),
+        view: ask('accountAdd.phone', { key: BotKeys.accounts.addAskPhone }),
         nextState: state,
       };
     }
     const channels = await this.otp.channelView(ctx);
     if (!channels) {
-      return { view: say('otp.none', { key: 'bot.channel.none' }), nextState: null };
+      return { view: say('otp.none', { key: BotKeys.channel.none }), nextState: null };
     }
     return {
       view: channels,
@@ -165,7 +166,7 @@ export class AccountAddFlow {
   ): Promise<FlowResult> {
     const channel = this.otp.channelFromAction(actionId);
     if (!channel) {
-      return { view: say('otp.pick', { key: 'bot.common.pickOne' }), nextState: state };
+      return { view: say('otp.pick', { key: BotKeys.common.pickOne }), nextState: state };
     }
     const accessToken = await this.access.token(ctx);
     if (!accessToken) return signedOut();
@@ -199,7 +200,7 @@ export class AccountAddFlow {
       // with a way to ask for a new one, exactly as signing in does.
       return {
         view: ask('accountAdd.retryCode', { raw: result.msg }, [
-          [{ id: ACTIONS.resend, label: { key: 'bot.action.resend' } }],
+          [{ id: ACTIONS.resend, label: { key: BotKeys.action.resend } }],
         ]),
         nextState: state,
       };
@@ -257,7 +258,7 @@ export class AccountAddFlow {
 
     return {
       view: say('accountAdd.switched', {
-        key: 'bot.accounts.switched',
+        key: BotKeys.accounts.switched,
         values: { name: switched.fullName },
       }),
       nextState: null,
@@ -275,7 +276,7 @@ export class AccountAddFlow {
  */
 function added(): FlowResult {
   return {
-    view: say('accountAdd.done', { key: 'bot.accounts.added' }),
+    view: say('accountAdd.done', { key: BotKeys.accounts.added }),
     nextState: null,
   };
 }
@@ -283,7 +284,7 @@ function added(): FlowResult {
 /** Same shape as the switch flow's: the router attaches the guest menu. */
 function signedOut(): FlowResult {
   return {
-    view: say('accountAdd.signedOut', { key: 'bot.common.notSignedIn' }),
+    view: say('accountAdd.signedOut', { key: BotKeys.common.notSignedIn }),
     nextState: null,
   };
 }

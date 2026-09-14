@@ -32,7 +32,7 @@
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { TenantCredentialKind } from '@prisma/client';
-import { newWebhookPath } from '@txnet-backend/messenger';
+import { BotPlatform, newWebhookPath } from '@txnet-backend/messenger';
 import { AppModule } from './app/app.module';
 import { CrossTenantPrismaService } from './app/prisma/cross-tenant-prisma.service';
 import { CredentialVaultService } from '@txnet-backend/shared-core';
@@ -43,7 +43,7 @@ const TOKEN_KIND: Record<string, TenantCredentialKind> = {
 };
 
 interface Options {
-  platform: 'telegram' | 'bale';
+  platform: BotPlatform;
   botUsername: string;
   token: string;
   webhookSecret: string;

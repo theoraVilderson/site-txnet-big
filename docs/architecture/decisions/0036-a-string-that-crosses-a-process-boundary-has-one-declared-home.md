@@ -1,7 +1,7 @@
 ---
 id: adr-0036
 status: accepted
-updated: 2026-09-11
+updated: 2026-09-14
 ---
 
 # ADR 0036 — A string that crosses a process boundary has one declared home
@@ -110,3 +110,29 @@ call 2026-09-11, so sessions currently live in dev survive the change.
 - **Leaving the comments and being careful.** This is the status quo, and the
   `v1`/`v2`/`v3` split plus the dead `X-Actor-Id` entry are the evidence it
   does not hold.
+
+## Amendment — 2026-09-14: `site-pwa` reads the contracts through generated code
+
+**Context.** `site-pwa` is not in the Nx workspace and cannot import
+`shared-core`, so C-04 skipped it and the panel kept hand-copies of the refresh
+cookie, the captcha and forwarded headers, and the realtime event types
+(`forward-auth/open-questions.md`, 2026-09-11). The two options recorded then
+were a vendored tarball or leaving it in review.
+
+**Decision.** Neither. `tools/wire-gen.py` generates
+`site-pwa/src/generated/wire.ts` from `contracts/http/wire.json` and the new
+`contracts/realtime/events.json`; `tools/contracts.py` — already the sixth CI
+gate — fails when the committed copy is stale. `OutboxEventType` is held to
+`events.json` by `routing-keys.contract.spec.ts`. C-04 and C-08 gain check
+blocks over `site-pwa`.
+
+**Why not the tarball.** A published artifact is a build, a version and a sync
+step for a handful of names; a generated file is none of those and uses the gate
+that already exists. This narrows the "Alternatives considered" line on
+generated constants: still wrong *instead of* the fixture, right as the fixture's
+read-only copy for the one consumer that cannot import it.
+
+**Follow-up.** API route paths are the same failure one level up — each is
+spelled in a Nest decorator and again in every client — and are a backlog row
+of their own (F-103).
+

@@ -9,6 +9,7 @@ import { ChatLanguage } from '../locale/chat-language';
 import { ConversationStore } from './conversation.store';
 import { ConversationRouter } from './router';
 import { ChatContext } from './nav.types';
+import { BotKeys } from '../locale/bot-keys';
 
 /**
  * Runs one update end to end: route it, render the screen for *this* platform,
@@ -79,7 +80,7 @@ export class BotDispatcher {
       const t = this.copy.translator(lang);
       const rendered = this.renderer.render(ctx.platform, result.view, t);
       const text = deletionFailed
-        ? `${this.copy.text(lang, { key: 'bot.register.passwordKept' })}\n\n${rendered.text}`
+        ? `${this.copy.text(lang, { key: BotKeys.register.passwordKept })}\n\n${rendered.text}`
         : rendered.text;
 
       await client.sendMessage(ctx.chatId, text, rendered.replyMarkup);
@@ -101,7 +102,7 @@ export class BotDispatcher {
       try {
         await client.sendMessage(
           ctx.chatId,
-          this.copy.text(ctx.lang, { key: 'bot.common.tryAgain' }),
+          this.copy.text(ctx.lang, { key: BotKeys.common.tryAgain }),
         );
       } catch {
         // The messenger itself is unreachable; the log line above is all there is.

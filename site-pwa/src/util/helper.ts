@@ -4,12 +4,13 @@ import { NextRequest } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { toGregorian } from "jalaali-js";
 import { ZodError } from "zod";
+import { ProxyHeaders } from "@/generated/wire";
 
 export function getIpFromHeader(headers: NextRequest["headers"]) {
-  return headers.get("x-forwarded-for")?.split?.(",")?.shift?.() || "127.0.0.1";
+  return headers.get(ProxyHeaders.forwardedFor)?.split?.(",")?.shift?.() || "127.0.0.1";
 }
 export function getHostFromHeader(headers: NextRequest["headers"]) {
-  return headers.get("x-forwarded-host") ?? headers.get("host") ?? "";
+  return headers.get(ProxyHeaders.forwardedHost) ?? headers.get("host") ?? "";
 }
 
 export async function generateJIT<PayloadType>(

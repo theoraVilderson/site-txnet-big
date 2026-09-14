@@ -10,6 +10,7 @@ import {
   webhookUrl,
 } from '@txnet-backend/messenger';
 import { AuthApiBotIntegrationDirectory } from './bot-integration.directory';
+import { BotKeys } from '../locale/bot-keys';
 
 /**
  * Points every tenant's bot at this service's own webhook path on boot, and
@@ -52,12 +53,12 @@ export class BotWebhookRegistrar implements OnApplicationBootstrap {
    * this list is discovery, never the only way in.
    */
   private static readonly COMMANDS = [
-    { command: 'start', key: 'bot.command.start' },
-    { command: 'menu', key: 'bot.command.menu' },
-    { command: 'help', key: 'bot.command.help' },
-    { command: 'lang', key: 'bot.command.lang' },
-    { command: 'cancel', key: 'bot.command.cancel' },
-    { command: 'logout', key: 'bot.command.logout' },
+    { command: 'start', key: BotKeys.command.start },
+    { command: 'menu', key: BotKeys.command.menu },
+    { command: 'help', key: BotKeys.command.help },
+    { command: 'lang', key: BotKeys.command.lang },
+    { command: 'cancel', key: BotKeys.command.cancel },
+    { command: 'logout', key: BotKeys.command.logout },
   ];
 
   async onApplicationBootstrap(): Promise<void> {

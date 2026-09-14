@@ -5,6 +5,7 @@ import { OtpChannel, OtpPurpose } from '../otp.interface';
 import { SmsProviderService } from './sms-provider/sms-provider.service';
 import { LocaleService } from '../../../locale/locale.service';
 import { buildOtpSmsTemplate } from './otp-message.util';
+import { BackendI18nKeys } from '@txnet-backend/shared-core';
 
 @Injectable()
 export class SmsOtpSender implements IOtpSender {
@@ -41,7 +42,7 @@ export class SmsOtpSender implements IOtpSender {
   ): Promise<void> {
     if (!this.provider) {
       this.logger.error('SMS_API_URL / SMS_API_KEY is not configured');
-      throw new BadRequestException('otp.smsNotConfigured');
+      throw new BadRequestException(BackendI18nKeys.errors.otp.smsNotConfigured);
     }
 
     const ns = this.localeService.getNamespace(lang, 'notifications');
@@ -55,7 +56,7 @@ export class SmsOtpSender implements IOtpSender {
       this.logger.error(
         `SMS send failed for ${phoneNumber} purpose=${purpose}: ${result.msg}`,
       );
-      throw new BadRequestException('otp.smsSendFailed');
+      throw new BadRequestException(BackendI18nKeys.errors.otp.smsSendFailed);
     }
   }
 }

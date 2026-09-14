@@ -21,6 +21,7 @@ import {
   SwitchResult,
   TokenPair,
 } from './auth-api.types';
+import { BotKeys } from '../locale/bot-keys';
 
 /**
  * The only way out of `bot-app`.
@@ -380,10 +381,10 @@ export class AuthApiClient {
    * The text is resolved here rather than returned as a key: `msg` is rendered
    * by every caller as `BotText.raw`, which is contractually a sentence another
    * service already translated (`messenger/bot-view.ts`). Handing back
-   * `'bot.common.tryAgain'` put that key itself in front of the user.
+   * `BotKeys.common.tryAgain` put that key itself in front of the user.
    */
   private unreachable<T>(lang: string): ApiResult<T> {
-    return { ok: false, msg: this.copy.text(lang, { key: 'bot.common.tryAgain' }) };
+    return { ok: false, msg: this.copy.text(lang, { key: BotKeys.common.tryAgain }) };
   }
 }
 

@@ -1,3 +1,4 @@
+import { ScheduleType } from '@prisma/client';
 import { z } from 'zod';
 
 /**
@@ -11,7 +12,7 @@ import { z } from 'zod';
  * about. Zod's job is to establish that there is a candidate row to check.
  */
 export const setScheduleSchema = z.object({
-  scheduleType: z.enum(['always_on', 'time_window', 'cron_expression']),
+  scheduleType: z.nativeEnum(ScheduleType),
   windowStartAt: z.coerce.date().nullish(),
   windowEndAt: z.coerce.date().nullish(),
   cronExpression: z.string().trim().min(1).nullish(),

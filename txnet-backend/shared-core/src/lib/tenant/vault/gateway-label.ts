@@ -1,5 +1,6 @@
 /** Which table a gateway row is in: a tenant's `tenant_gateway_config`, or the platform brand's `payment_gateway`. */
-export type GatewayCredentialSource = 'tenant' | 'platform';
+export const GATEWAY_CREDENTIAL_SOURCES = ['tenant', 'platform'] as const;
+export type GatewayCredentialSource = (typeof GATEWAY_CREDENTIAL_SOURCES)[number];
 
 /**
  * The vault label of one gateway's secrets: `gateway:<source>:<gatewayId>`.

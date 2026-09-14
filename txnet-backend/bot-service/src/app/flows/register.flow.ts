@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AuthApiClient } from '../auth-api/auth-api.client';
+import { OtpChannelName } from '../auth-api/auth-api.types';
 import {
   callContextOf,
   ChatContext,
@@ -10,6 +11,7 @@ import { BotSessionStore } from '../session/bot-session.store';
 import { OtpStep } from './otp.step';
 import { PhoneNumbers } from './phone-number';
 import { ACTIONS, ask, askContact, say } from './views';
+import { BotKeys } from '../locale/bot-keys';
 
 /**
  * Creating an account from the chat.
@@ -34,7 +36,7 @@ export class RegisterFlow {
 
   start(): FlowResult {
     return {
-      view: askContact('register.phone', { key: 'bot.login.askPhone' }),
+      view: askContact('register.phone', { key: BotKeys.login.askPhone }),
       nextState: { flow: 'register', step: 'register.phone', data: {} },
     };
   }
@@ -51,12 +53,12 @@ export class RegisterFlow {
         );
         if (!phoneNumber) {
           return {
-            view: askContact('register.phone', { key: 'bot.login.askPhone' }),
+            view: askContact('register.phone', { key: BotKeys.login.askPhone }),
             nextState: state,
           };
         }
         return {
-          view: ask('register.name', { key: 'bot.register.askName' }),
+          view: ask('register.name', { key: BotKeys.register.askName }),
           nextState: {
             ...state,
             step: 'register.name',
@@ -67,7 +69,7 @@ export class RegisterFlow {
 
       case 'register.name':
         return {
-          view: ask('register.username', { key: 'bot.register.askUsername' }),
+          view: ask('register.username', { key: BotKeys.register.askUsername }),
           nextState: {
             ...state,
             step: 'register.username',
@@ -82,7 +84,7 @@ export class RegisterFlow {
         };
         const channels = await this.otp.channelView(ctx);
         if (!channels) {
-          return { view: say('otp.none', { key: 'bot.channel.none' }), nextState: null };
+          return { view: say('otp.none', { key: BotKeys.channel.none }), nextState: null };
         }
         return { view: channels, nextState: { ...withUsername, step: 'register.channel' } };
       }
@@ -94,10 +96,10 @@ export class RegisterFlow {
       case 'register.channel': {
         const channel = this.otp.channelFromAction(actionId);
         if (!channel) {
-          return { view: say('otp.pick', { key: 'bot.common.pickOne' }), nextState: state };
+          return { view: say('otp.pick', { key: BotKeys.common.pickOne }), nextState: state };
         }
         return {
-          view: ask('register.password', { key: 'bot.register.askPassword' }),
+          view: ask('register.password', { key: BotKeys.register.askPassword }),
           nextState: {
             ...state,
             step: 'register.password',
@@ -114,13 +116,13 @@ export class RegisterFlow {
 
       case 'register.link':
         if (actionId === ACTIONS.linkCheck) return this.otp.checkLink(ctx, state);
-        return { view: say('register.wait', { key: 'bot.common.pickOne' }), nextState: state };
+        return { view: say('register.wait', { key: BotKeys.common.pickOne }), nextState: state };
 
       case 'register.code':
         return this.code(ctx, state);
 
       default:
-        return { view: say('register.lost', { key: 'bot.common.unknown' }), nextState: null };
+        return { view: say('register.lost', { key: BotKeys.common.unknown }), nextState: null };
     }
   }
 
@@ -134,11 +136,11 @@ export class RegisterFlow {
     const password = (ctx.text ?? '').trim();
     if (!password) {
       return {
-        view: ask('register.password', { key: 'bot.register.askPassword' }),
+        view: ask('register.password', { key: BotKeys.register.askPassword }),
         nextState: state,
       };
     }
-    const channel = state.data.channel as 'sms' | 'telegram' | 'bale';
+    const channel = state.data.channel as OtpChannelName;
     const result = await this.otp.request(ctx, state, channel, 'register.code', (c) =>
       this.api.register(
         {
@@ -171,6 +173,6 @@ export class RegisterFlow {
     }
     // Six questions deserve an answer. The router adds the member menu below
     // it, so the end of registration is a result and a next step in one message.
-    return { view: say('register.done', { key: 'bot.register.done' }), nextState: null };
+    return { view: say('register.done', { key: BotKeys.register.done }), nextState: null };
   }
 }

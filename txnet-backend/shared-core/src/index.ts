@@ -3,6 +3,7 @@ export * from './lib/automation/schedule';
 export * from './lib/automation/confirm-publish';
 export * from './lib/automation/bot-update';
 export * from './lib/automation/outbox';
+export * from './lib/automation/routing-keys';
 export * from './lib/realtime/fanout';
 export * from './lib/http/headers';
 export * from './lib/http/service-only.guard';

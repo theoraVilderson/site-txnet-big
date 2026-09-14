@@ -1,4 +1,4 @@
-import { RedisTtl } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, RedisTtl } from '@txnet-backend/shared-core';
 import {
   RateLimitBucket,
   rateLimitBucketKey,
@@ -806,7 +806,7 @@ export class AuthService {
       this.loginFailureLockThreshold,
       LOGIN_FAILURE_WINDOW_SEC,
     );
-    if (!attempt.allowed) throw new BadRequestException('auth.temporarilyLocked');
+    if (!attempt.allowed) throw new BadRequestException(BackendI18nKeys.errors.auth.temporarilyLocked);
 
     if (!(await argon2.verify(user.passwordHash, password))) return null;
     await this.rateLimiter.reset(failureBucket);
@@ -1060,7 +1060,7 @@ export class AuthService {
       return user.preferredOtpChannel;
     }
     const fallback = await this.channels.defaultChannel();
-    if (!fallback) throw new BadRequestException('otp.noChannelAvailable');
+    if (!fallback) throw new BadRequestException(BackendI18nKeys.errors.otp.noChannelAvailable);
     return fallback;
   }
 }

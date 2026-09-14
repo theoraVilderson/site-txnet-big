@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useAuthUI } from "@auth/auth/_context/AuthUIContext";
-import { AUTH_LOGIN, AUTH_REGISTER } from "@/lib/routes";
+import { AUTH_FORGOT_PASSWORD, AUTH_LOGIN, AUTH_REGISTER } from "@/lib/routes";
 
 type FooterVariant = "login" | "register" | "forgot-password";
 
@@ -18,7 +18,7 @@ export function AuthFooterLinks({ variant }: { variant: FooterVariant }) {
       {variant === "login" && (
         <>
           <Link
-            href="/auth/forgot-password"
+            href={AUTH_FORGOT_PASSWORD}
             className="text-text-secondary hover:text-primary font-medium transition-colors"
           >
             {t.forgotPassword}

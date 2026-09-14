@@ -9,6 +9,7 @@ import { normalizeMessengerPhone } from './bot-link.service';
 import { AuthService } from '../auth.service';
 import { botScopeKey, SwitchScope } from '../../common/security/switch-scope';
 import { TenantContext } from '../../tenant-context/tenant-context';
+import { BackendI18nKeys } from '@txnet-backend/shared-core';
 
 /**
  * Signing in with the messenger account itself (ADR-0012).
@@ -127,7 +128,7 @@ export class BotSessionService {
       this.logger.warn(
         `${input.platform}: mini app initData rejected — ${verified.reason}`,
       );
-      return { state: 'refused', key: 'auth.invalidCredentials' };
+      return { state: 'refused', key: BackendI18nKeys.errors.auth.invalidCredentials };
     }
 
     const chatId = verified.data.user.id;
@@ -167,16 +168,16 @@ export class BotSessionService {
     // an account is said before the caller has proven anything. Here the proof
     // came first, so these are simply the account's own conditions.
     if (user.deletedAt || user.status !== 'active') {
-      return { state: 'refused', key: 'auth.invalidCredentials' };
+      return { state: 'refused', key: BackendI18nKeys.errors.auth.invalidCredentials };
     }
     if (!user.phoneVerifiedAt) {
-      return { state: 'refused', key: 'auth.phoneVerificationRequired' };
+      return { state: 'refused', key: BackendI18nKeys.errors.auth.phoneVerificationRequired };
     }
     if (!BOT_SESSION_ROLES.includes(user.role?.name)) {
       this.logger.warn(
         `${input.platform}: chat=${input.chatId} holds role ${user.role?.name} — bot factor refused`,
       );
-      return { state: 'refused', key: 'auth.botFactorNotAllowed' };
+      return { state: 'refused', key: BackendI18nKeys.errors.auth.botFactorNotAllowed };
     }
 
     // ADR-0034: this place may be acting as another member of its group.
@@ -293,11 +294,11 @@ export class BotSessionService {
       this.logger.warn(
         `${platform}: contact sent by ${senderId} describes ${contact.user_id ?? 'nobody'} — rejected`,
       );
-      return 'otp.botLink.senderMismatch';
+      return BackendI18nKeys.errors.otp.botLink.senderMismatch;
     }
 
     const phoneNumber = normalizeMessengerPhone(contact.phone_number);
-    if (!phoneNumber) return 'otp.botLink.phoneMismatch';
+    if (!phoneNumber) return BackendI18nKeys.errors.otp.botLink.phoneMismatch;
 
     const user = await this.prisma.user.findFirst({
       where: { phoneNumber, deletedAt: null },
@@ -311,14 +312,14 @@ export class BotSessionService {
     // this number is theirs, so they could establish the same by trying to
     // register with it. `BotLinkService.handleContact` answers the same way
     // for the same reason.
-    if (!user) return 'otp.botLink.noAccount';
+    if (!user) return BackendI18nKeys.errors.otp.botLink.noAccount;
 
     // One messenger account, one platform account.
     const takenBySomeoneElse = await this.prisma.linkedBotAccount.findFirst({
       where: { platform, platformUserId: chatId, userId: { not: user.id } },
       select: { id: true },
     });
-    if (takenBySomeoneElse) return 'otp.botLink.takenByAnotherAccount';
+    if (takenBySomeoneElse) return BackendI18nKeys.errors.otp.botLink.takenByAnotherAccount;
 
     await this.prisma.linkedBotAccount.upsert({
       where: { userId_platform: { userId: user.id, platform } },

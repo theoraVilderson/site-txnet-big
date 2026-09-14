@@ -7,18 +7,18 @@ import {
 import { ConfigService } from '@nestjs/config';
 import * as amqp from 'amqplib';
 import {
+  AUTOMATION_TICK_ROUTING_PREFIX,
+  automationTickRoutingKey,
   botUpdateQueueName,
   BOT_UPDATE_ROUTING_PREFIX,
   confirmedPublisher,
+  OTP_DELIVERY_ROUTING_PREFIX,
+  OutboxEventType,
   outboxRoutingKey,
+  topicBindingAll,
   type ConfirmedPublish,
   type OutboxMessage,
 } from '@txnet-backend/shared-core';
-
-/** The billing event F-067-l consumes — `billing/contract.deposit.md`'s outbox row. */
-export const PAYMENT_CONFIRMED_EVENT = 'billing.payment.confirmed';
-/** The outbox event a reversed payment writes (F-092-ae), consumed for the payer notice (F-067-m). */
-export const PAYMENT_REVERSED_EVENT = 'billing.payment.reversed';
 
 /** What a consumer is handed. `key` is the `<key>` of `automation.tick.<key>`. */
 export interface TickMessage {
@@ -225,7 +225,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       durable: true,
       arguments: { 'x-dead-letter-exchange': this.deadExchange },
     });
-    await this.channel.bindQueue(this.queue, this.exchange, 'automation.tick.#');
+    await this.channel.bindQueue(this.queue, this.exchange, topicBindingAll(AUTOMATION_TICK_ROUTING_PREFIX));
 
     // OTP delivery gets its own queue on the same exchange (F-067-a). Its own,
     // because a slow SMS provider must not sit in front of a tick and because
@@ -236,7 +236,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       durable: true,
       arguments: { 'x-dead-letter-exchange': this.deadExchange },
     });
-    await this.channel.bindQueue(this.otpQueue, this.exchange, 'otp.delivery.#');
+    await this.channel.bindQueue(this.otpQueue, this.exchange, topicBindingAll(OTP_DELIVERY_ROUTING_PREFIX));
 
     // The first outbox consumer (F-067-l, ADR-0045). Bound to exactly one event
     // type, so the relay's `mandatory` publish of it stops being `unroutable`
@@ -248,7 +248,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     await this.channel.bindQueue(
       this.paymentConfirmedQueue,
       this.exchange,
-      outboxRoutingKey(PAYMENT_CONFIRMED_EVENT),
+      outboxRoutingKey(OutboxEventType.PAYMENT_CONFIRMED),
     );
     // The second (F-067-m): its own queue, so a backlog of one notice never
     // sits in front of the other and each depth is watched on its own.
@@ -256,7 +256,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       durable: true,
       arguments: { 'x-dead-letter-exchange': this.deadExchange },
     });
-    await this.channel.bindQueue(this.paymentReversedQueue, this.exchange, outboxRoutingKey(PAYMENT_REVERSED_EVENT));
+    await this.channel.bindQueue(this.paymentReversedQueue, this.exchange, outboxRoutingKey(OutboxEventType.PAYMENT_REVERSED));
 
     // The bot-update set (F-067-b, D-16). One queue per slot, each bound to
     // exactly its own routing key — not one queue on `bot.update.#`, which
@@ -310,7 +310,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     if (!this.publish) throw new Error('broker channel is not open');
     await this.publish(
       this.exchange,
-      `automation.tick.${tick.key}`,
+      automationTickRoutingKey(tick.key),
       Buffer.from(JSON.stringify(tick)),
       {
         persistent: true,

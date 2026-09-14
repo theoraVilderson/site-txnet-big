@@ -4,6 +4,7 @@ import { AuthApiClient } from '../auth-api/auth-api.client';
 import {
   ApiResult,
   OtpChannelDescriptor,
+  OTP_CHANNEL_NAMES,
   OtpChannelName,
   OtpRequestResult,
 } from '../auth-api/auth-api.types';
@@ -14,6 +15,7 @@ import {
   NavState,
 } from '../conversation/nav.types';
 import { ACTIONS, ask, say, view } from './views';
+import { BotKey, BotKeys, botLinkMessageKey } from '../locale/bot-keys';
 
 export const CHANNEL_ACTION_PREFIX = 'channel:';
 
@@ -57,7 +59,7 @@ export class OtpStep {
     const ordered = orderForPlatform(ctx.platform, channels);
     return ask(
       'otp.channels',
-      { key: 'bot.login.pickChannel' },
+      { key: BotKeys.login.pickChannel },
       ordered.map((descriptor) => [
         {
           id: `${CHANNEL_ACTION_PREFIX}${descriptor.channel}`,
@@ -71,9 +73,7 @@ export class OtpStep {
   channelFromAction(actionId: string | null): OtpChannelName | null {
     if (!actionId?.startsWith(CHANNEL_ACTION_PREFIX)) return null;
     const name = actionId.slice(CHANNEL_ACTION_PREFIX.length);
-    return ['sms', 'telegram', 'bale'].includes(name)
-      ? (name as OtpChannelName)
-      : null;
+    return OTP_CHANNEL_NAMES.find((channel) => channel === name) ?? null;
   }
 
   /**
@@ -97,7 +97,7 @@ export class OtpStep {
     const data = result.data;
     if (!data?.linkRequired) {
       return {
-        view: ask('otp.code', { key: 'bot.login.askCode' }),
+        view: ask('otp.code', { key: BotKeys.login.askCode }),
         nextState: { ...state, step: codeStep },
       };
     }
@@ -136,13 +136,13 @@ export class OtpStep {
         return {
           view: {
             id: 'link.contact',
-            body: { key: `otp.botLink.${resolved.data.messageKey}` },
+            body: { key: botLinkMessageKey(resolved.data.messageKey) },
             actions: [
               [
                 {
                   id: ACTIONS.shareContact,
                   kind: 'contact',
-                  label: { key: 'bot.action.shareContact' },
+                  label: { key: BotKeys.action.shareContact },
                 },
               ],
             ],
@@ -152,7 +152,7 @@ export class OtpStep {
       }
       // Already linked from this chat: the code is on its way.
       return {
-        view: ask('otp.code', { key: 'bot.login.askCode' }),
+        view: ask('otp.code', { key: BotKeys.login.askCode }),
         nextState: next,
       };
     }
@@ -162,7 +162,7 @@ export class OtpStep {
       view: view(
         'link.other',
         {
-          key: 'bot.link.required',
+          key: BotKeys.link.required,
           values: { platform: platformName(linkPlatform) },
         },
         [
@@ -172,12 +172,12 @@ export class OtpStep {
               kind: 'url',
               url: data.deepLink ?? '',
               label: {
-                key: 'bot.link.open',
+                key: BotKeys.link.open,
                 values: { platform: platformName(linkPlatform) },
               },
             },
           ],
-          [{ id: ACTIONS.linkCheck, label: { key: 'bot.link.check' } }],
+          [{ id: ACTIONS.linkCheck, label: { key: BotKeys.link.check } }],
         ],
       ),
       nextState: { ...next, step: `${state.flow}.link` },
@@ -187,7 +187,7 @@ export class OtpStep {
   /** "I have done that" on a cross-messenger link. */
   async checkLink(ctx: ChatContext, state: NavState): Promise<FlowResult> {
     if (!state.linkToken) {
-      return { view: say('link.expired', { key: 'bot.common.tryAgain' }), nextState: null };
+      return { view: say('link.expired', { key: BotKeys.common.tryAgain }), nextState: null };
     }
     const status = await this.api.linkStatus(
       { linkToken: state.linkToken },
@@ -202,16 +202,16 @@ export class OtpStep {
           failureKey
             ? { key: failureKey }
             : {
-                key: 'bot.link.waiting',
+                key: BotKeys.link.waiting,
                 values: { platform: platformName(state.linkPlatform) },
               },
-          [[{ id: ACTIONS.linkCheck, label: { key: 'bot.link.check' } }]],
+          [[{ id: ACTIONS.linkCheck, label: { key: BotKeys.link.check } }]],
         ),
         nextState: state,
       };
     }
     return {
-      view: ask('otp.code', { key: 'bot.login.askCode' }),
+      view: ask('otp.code', { key: BotKeys.login.askCode }),
       nextState: { ...state, step: `${state.flow}.code` },
     };
   }
@@ -222,7 +222,7 @@ export class OtpStep {
    */
   async submitContact(ctx: ChatContext, state: NavState): Promise<FlowResult> {
     if (!ctx.contact) {
-      return { view: say('link.noContact', { key: 'bot.common.pickOne' }), nextState: state };
+      return { view: say('link.noContact', { key: BotKeys.common.pickOne }), nextState: state };
     }
     const outcome = await this.api.linkContact(
       {
@@ -242,13 +242,13 @@ export class OtpStep {
       );
       return {
         view: say('link.rejected', {
-          key: `otp.botLink.${outcome.data.messageKey}`,
+          key: botLinkMessageKey(outcome.data.messageKey),
         }),
         nextState: null,
       };
     }
     return {
-      view: ask('otp.code', { key: 'bot.login.askCode' }),
+      view: ask('otp.code', { key: BotKeys.login.askCode }),
       nextState: { ...state, step: `${state.flow}.code` },
     };
   }
@@ -278,8 +278,15 @@ export function orderForPlatform(
  * chat on this same platform, is a real destination.
  */
 function channelLabel(_platform: BotPlatform, channel: OtpChannelName) {
-  return { key: `bot.channel.${channel}` };
+  return { key: CHANNEL_NAME_KEY[channel] };
 }
+
+/** Each channel's button label — exhaustive over the union, so a new channel needs a key (C-07). */
+export const CHANNEL_NAME_KEY: Record<OtpChannelName, BotKey> = {
+  sms: BotKeys.channel.sms,
+  telegram: BotKeys.channel.telegram,
+  bale: BotKeys.channel.bale,
+};
 
 function platformName(platform?: BotPlatform): string {
   return platform === 'bale' ? 'Bale' : 'Telegram';

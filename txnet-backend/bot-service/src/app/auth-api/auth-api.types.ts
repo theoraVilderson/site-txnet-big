@@ -1,4 +1,4 @@
-import { BotPlatform } from '@txnet-backend/messenger';
+import { BOT_PLATFORMS, BotPlatform } from '@txnet-backend/messenger';
 
 /**
  * The `auth-api` envelope. **`ok` is the only field that says whether the
@@ -17,7 +17,8 @@ export interface ApiResult<T> {
   ref?: string;
 }
 
-export type OtpChannelName = 'sms' | 'telegram' | 'bale';
+export type OtpChannelName = 'sms' | BotPlatform;
+export const OTP_CHANNEL_NAMES: readonly OtpChannelName[] = ['sms', ...BOT_PLATFORMS];
 
 export interface OtpChannelDescriptor {
   channel: OtpChannelName;

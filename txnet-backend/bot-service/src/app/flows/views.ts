@@ -1,4 +1,5 @@
 import { BotAction, BotText, BotView } from '@txnet-backend/messenger';
+import { BotKeys } from '../locale/bot-keys';
 
 /**
  * The screens shared by every flow. They are `BotView`s — keys and choices,
@@ -38,12 +39,12 @@ export const ACTIONS = {
 
 export const cancel: BotAction = {
   id: ACTIONS.cancel,
-  label: { key: 'bot.action.cancel' },
+  label: { key: BotKeys.action.cancel },
 };
 
 export const back: BotAction = {
   id: ACTIONS.back,
-  label: { key: 'bot.action.back' },
+  label: { key: BotKeys.action.back },
 };
 
 /** `lang:fa`, `lang:en` — the code is the payload, so no table maps them. */
@@ -75,18 +76,18 @@ export const REMOVE_ACTION_PREFIX = 'drop:';
 /** Start `F-0205`'s proof conversation from the account list. */
 export const addAccount: BotAction = {
   id: ACTIONS.accountAdd,
-  label: { key: 'bot.action.addAccount' },
+  label: { key: BotKeys.action.addAccount },
 };
 
 /** Open the "which one should go?" screen (`F-0208`). */
 export const removeAccount: BotAction = {
   id: ACTIONS.accountRemove,
-  label: { key: 'bot.action.removeAccount' },
+  label: { key: BotKeys.action.removeAccount },
 };
 
 export const toMenu: BotAction = {
   id: ACTIONS.menu,
-  label: { key: 'bot.action.menu' },
+  label: { key: BotKeys.action.menu },
 };
 
 export function view(
@@ -103,13 +104,13 @@ export function view(
  * common case and a returning user should not have to read three options.
  */
 export function guestMenu(): BotView {
-  return view('menu.guest', { key: 'bot.menu.guest' }, [
-    [{ id: ACTIONS.login, label: { key: 'bot.action.login' } }],
-    [{ id: ACTIONS.register, label: { key: 'bot.action.register' } }],
-    [{ id: ACTIONS.forgot, label: { key: 'bot.action.forgot' } }],
+  return view('menu.guest', { key: BotKeys.menu.guest }, [
+    [{ id: ACTIONS.login, label: { key: BotKeys.action.login } }],
+    [{ id: ACTIONS.register, label: { key: BotKeys.action.register } }],
+    [{ id: ACTIONS.forgot, label: { key: BotKeys.action.forgot } }],
     [
-      { id: ACTIONS.help, label: { key: 'bot.action.help' } },
-      { id: ACTIONS.language, label: { key: 'bot.action.language' } },
+      { id: ACTIONS.help, label: { key: BotKeys.action.help } },
+      { id: ACTIONS.language, label: { key: BotKeys.action.language } },
     ],
   ]);
 }
@@ -145,7 +146,7 @@ export function miniApp(url: string): BotAction {
     id: ACTIONS.miniApp,
     kind: 'web_app',
     url,
-    label: { key: 'bot.action.miniApp' },
+    label: { key: BotKeys.action.miniApp },
   };
 }
 
@@ -157,14 +158,14 @@ export function miniApp(url: string): BotAction {
  * that opens nothing.
  */
 export function memberMenu(miniAppUrl?: string): BotView {
-  return view('menu.member', { key: 'bot.menu.member' }, [
+  return view('menu.member', { key: BotKeys.menu.member }, [
     ...(miniAppUrl ? [[miniApp(miniAppUrl)]] : []),
-    [{ id: ACTIONS.accounts, label: { key: 'bot.action.accounts' } }],
+    [{ id: ACTIONS.accounts, label: { key: BotKeys.action.accounts } }],
     [
-      { id: ACTIONS.help, label: { key: 'bot.action.help' } },
-      { id: ACTIONS.language, label: { key: 'bot.action.language' } },
+      { id: ACTIONS.help, label: { key: BotKeys.action.help } },
+      { id: ACTIONS.language, label: { key: BotKeys.action.language } },
     ],
-    [{ id: ACTIONS.logout, label: { key: 'bot.action.logout' } }],
+    [{ id: ACTIONS.logout, label: { key: BotKeys.action.logout } }],
   ]);
 }
 
@@ -190,7 +191,7 @@ export function accountsView(
     return view(
       'accounts.none',
       {
-        key: 'bot.accounts.none',
+        key: BotKeys.accounts.none,
         values: { name: current.fullName },
       },
       [[addAccount], [toMenu]],
@@ -198,13 +199,13 @@ export function accountsView(
   }
   return view(
     'accounts.list',
-    { key: 'bot.accounts.pick', values: { name: current.fullName } },
+    { key: BotKeys.accounts.pick, values: { name: current.fullName } },
     [
       ...members.map((m) => [
         {
           id: `${ACCOUNT_ACTION_PREFIX}${m.userId}`,
           label: {
-            key: m.phoneMasked ? 'bot.accounts.member' : 'bot.accounts.memberNoPhone',
+            key: m.phoneMasked ? BotKeys.accounts.member : BotKeys.accounts.memberNoPhone,
             values: { name: m.fullName, phone: m.phoneMasked ?? '' },
           },
         },
@@ -225,7 +226,7 @@ export function accountsView(
 /** The one confirmation the accounts screen insists on (`F-0211`). */
 export const signOutAll: BotAction = {
   id: ACTIONS.logoutAllAsk,
-  label: { key: 'bot.action.signOutAll' },
+  label: { key: BotKeys.action.signOutAll },
 };
 
 /**
@@ -234,8 +235,8 @@ export const signOutAll: BotAction = {
  * tap on the previous screen can never be read as a yes.
  */
 export function signOutAllConfirmView(): BotView {
-  return view('accounts.signOutAll', { key: 'bot.accounts.signOutAllAsk' }, [
-    [{ id: ACTIONS.logoutAll, label: { key: 'bot.action.signOutAllYes' } }],
+  return view('accounts.signOutAll', { key: BotKeys.accounts.signOutAllAsk }, [
+    [{ id: ACTIONS.logoutAll, label: { key: BotKeys.action.signOutAllYes } }],
     [cancel],
   ]);
 }
@@ -257,7 +258,7 @@ export function removeAccountsView(
     {
       id: `${REMOVE_ACTION_PREFIX}${m.userId}`,
       label: {
-        key: m.phoneMasked ? 'bot.accounts.member' : 'bot.accounts.memberNoPhone',
+        key: m.phoneMasked ? BotKeys.accounts.member : BotKeys.accounts.memberNoPhone,
         values: { name: m.fullName, phone: m.phoneMasked ?? '' },
       },
     },
@@ -265,13 +266,13 @@ export function removeAccountsView(
 
   return view(
     'accounts.remove.pick',
-    { key: 'bot.accounts.removePick' },
+    { key: BotKeys.accounts.removePick },
     [
       ...members.map(row),
       [
         {
           id: `${REMOVE_ACTION_PREFIX}${current.userId}`,
-          label: { key: 'bot.accounts.removeSelf', values: { name: current.fullName } },
+          label: { key: BotKeys.accounts.removeSelf, values: { name: current.fullName } },
         },
       ],
       [cancel],
@@ -294,14 +295,14 @@ export function removeConfirmView(
   return view(
     'accounts.remove.confirm',
     {
-      key: isSelf ? 'bot.accounts.removeConfirmSelf' : 'bot.accounts.removeConfirm',
+      key: isSelf ? BotKeys.accounts.removeConfirmSelf : BotKeys.accounts.removeConfirm,
       values: { name: target.fullName },
     },
     [
       [
         {
           id: `${REMOVE_ACTION_PREFIX}${target.userId}`,
-          label: { key: 'bot.action.confirmRemove' },
+          label: { key: BotKeys.action.confirmRemove },
         },
       ],
       [cancel],
@@ -324,9 +325,9 @@ export function removeConfirmView(
  * none.
  */
 export function addProofView(): BotView {
-  return ask('accountAdd.method', { key: 'bot.accounts.addPickProof' }, [
-    [{ id: ACTIONS.addWithOtp, label: { key: 'bot.action.addWithOtp' } }],
-    [{ id: ACTIONS.addWithPassword, label: { key: 'bot.action.addWithPassword' } }],
+  return ask('accountAdd.method', { key: BotKeys.accounts.addPickProof }, [
+    [{ id: ACTIONS.addWithOtp, label: { key: BotKeys.action.addWithOtp } }],
+    [{ id: ACTIONS.addWithPassword, label: { key: BotKeys.action.addWithPassword } }],
   ]);
 }
 
@@ -352,7 +353,7 @@ export function languageView(
   locales: Array<{ code: string; nativeName: string }>,
   current: string,
 ): BotView {
-  return view('language', { key: 'bot.language.pick' }, [
+  return view('language', { key: BotKeys.language.pick }, [
     ...locales.map((l) => [
       {
         id: `${LANGUAGE_ACTION_PREFIX}${l.code}`,
@@ -364,7 +365,7 @@ export function languageView(
 }
 
 export function helpView(): BotView {
-  return view('help', { key: 'bot.help.body' }, [[toMenu]]);
+  return view('help', { key: BotKeys.help.body }, [[toMenu]]);
 }
 
 /**
@@ -397,7 +398,7 @@ export function askContact(id: string, body: BotText): BotView {
       {
         id: ACTIONS.shareContact,
         kind: 'contact',
-        label: { key: 'bot.action.shareContact' },
+        label: { key: BotKeys.action.shareContact },
       },
     ],
     [cancel],

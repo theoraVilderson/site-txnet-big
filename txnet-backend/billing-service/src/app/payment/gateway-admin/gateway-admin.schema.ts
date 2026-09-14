@@ -7,6 +7,7 @@ import {
   RateRoundingMode,
   TenantGatewayVerificationStatus,
 } from '@prisma/client';
+import { GATEWAY_CREDENTIAL_SOURCES } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 /**
@@ -66,7 +67,7 @@ const optional = Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v
 
 export const createGatewaySchema = z
   .object({
-    source: z.enum(['platform', 'tenant']),
+    source: z.enum(GATEWAY_CREDENTIAL_SOURCES),
     /** Whose gateway, for a tenant row. Absent is the caller's own tenant; another is the platform owner's alone. */
     tenantId: uuid('tenantId').optional(),
     ...optional,

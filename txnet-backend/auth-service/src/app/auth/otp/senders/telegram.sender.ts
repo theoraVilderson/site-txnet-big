@@ -7,6 +7,7 @@ import { TenantContext } from '../../../tenant-context/tenant-context';
 import { BotLinkStore } from '../../bot-link/bot-link.store';
 import { buildOtpChatMessage } from './otp-message.util';
 import { LocaleService } from '../../../locale/locale.service';
+import { BackendI18nKeys } from '@txnet-backend/shared-core';
 
 @Injectable()
 export class TelegramOtpSender implements IOtpSender {
@@ -51,11 +52,11 @@ export class TelegramOtpSender implements IOtpSender {
       this.logger.error(
         `tenant ${tenantId} has no usable telegram bot — OTP not sent`,
       );
-      throw new BadRequestException('otp.telegramNotConfigured');
+      throw new BadRequestException(BackendI18nKeys.errors.otp.telegramNotConfigured);
     }
 
     const chatId = await this.resolveChatId(phoneNumber);
-    if (!chatId) throw new BadRequestException('otp.telegramNotLinked');
+    if (!chatId) throw new BadRequestException(BackendI18nKeys.errors.otp.telegramNotLinked);
 
     const ns = this.localeService.getNamespace(lang, 'notifications');
     const text = buildOtpChatMessage(ns, code, purpose);

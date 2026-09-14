@@ -13,6 +13,7 @@ import {
   removeConfirmView,
   say,
 } from './views';
+import { BotKeys } from '../locale/bot-keys';
 
 /**
  * Moving between the accounts one person holds, inside the chat (`F-0210`),
@@ -103,7 +104,7 @@ export class AccountsFlow {
       // Free text on a screen that is nothing but choices. The router turns a
       // view with words and no actions into a hint on the screen the user is
       // actually on, so this re-asks rather than emptying the chat.
-      return { view: say('accounts.pickOne', { key: 'bot.common.pickOne' }), nextState: state };
+      return { view: say('accounts.pickOne', { key: BotKeys.common.pickOne }), nextState: state };
     }
     return this.switchTo(ctx, state, actionId.slice(ACCOUNT_ACTION_PREFIX.length));
   }
@@ -133,7 +134,7 @@ export class AccountsFlow {
 
     return {
       view: say('accounts.switched', {
-        key: 'bot.accounts.switched',
+        key: BotKeys.accounts.switched,
         values: { name: switched.fullName },
       }),
       nextState: null,
@@ -183,7 +184,7 @@ export class AccountsFlow {
       // Gone between the two taps — removed from the panel, or switched away
       // from. Say the ordinary refusal rather than inventing a name.
       return {
-        view: say('accounts.removeRefused', { key: 'bot.accounts.removeFailed' }),
+        view: say('accounts.removeRefused', { key: BotKeys.accounts.removeFailed }),
         nextState: null,
       };
     }
@@ -230,13 +231,13 @@ export class AccountsFlow {
     if (isSelf) {
       await this.sessions.clear(ctx.integration, ctx.chatId);
       return {
-        view: say('accounts.removedSelf', { key: 'bot.accounts.removedSelf' }),
+        view: say('accounts.removedSelf', { key: BotKeys.accounts.removedSelf }),
         nextState: null,
       };
     }
 
     return {
-      view: say('accounts.removed', { key: 'bot.accounts.removed' }),
+      view: say('accounts.removed', { key: BotKeys.accounts.removed }),
       nextState: null,
     };
   }
@@ -248,7 +249,7 @@ export class AccountsFlow {
    */
   private signedOut(): FlowResult {
     return {
-      view: say('accounts.signedOut', { key: 'bot.common.notSignedIn' }),
+      view: say('accounts.signedOut', { key: BotKeys.common.notSignedIn }),
       nextState: null,
     };
   }

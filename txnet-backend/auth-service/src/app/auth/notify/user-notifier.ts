@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { BotClientRegistry } from '@txnet-backend/messenger';
+import { BotClientRegistry, BotPlatform } from '@txnet-backend/messenger';
 
 import { LocaleService } from '../../locale/locale.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -10,7 +10,7 @@ export const NOTIFY_TEMPLATES = ['paymentCredited', 'paymentReversed'] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
 export type NotifyRequest = { userId: string; template: NotifyTemplate; params: Record<string, string> };
-export type NotifyResult = { sent: Array<'telegram' | 'bale'> };
+export type NotifyResult = { sent: BotPlatform[] };
 
 type NotificationsNamespace = { payment?: { credited?: string; reversed?: string } };
 
@@ -78,7 +78,7 @@ export class UserNotifier {
     const sent: NotifyResult['sent'] = [];
     let lastError: unknown = null;
     for (const link of links) {
-      const platform = link.platform as 'telegram' | 'bale';
+      const platform: BotPlatform = link.platform;
       const client = await this.bots.primaryClient(tenantId, platform, 'identity:UserNotifier');
       if (!client) continue;
       try {

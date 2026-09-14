@@ -2,6 +2,7 @@ import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config';
 import { OtpChannel } from './otp.interface';
 import { IOtpSender, OTP_SENDERS } from './senders/otp-sender.interface';
+import { BackendI18nKeys } from '@txnet-backend/shared-core';
 
 export interface OtpChannelDescriptor {
   channel: OtpChannel;
@@ -126,12 +127,12 @@ export class OtpChannelRegistry {
   /** Throws the right i18n key if `channel` cannot be used at all. */
   async assertUsable(channel: OtpChannel): Promise<IOtpSender> {
     const sender = this.senders.get(channel);
-    if (!sender) throw new BadRequestException('otp.channelNotSupported');
+    if (!sender) throw new BadRequestException(BackendI18nKeys.errors.otp.channelNotSupported);
     if (!this.isAllowed(channel)) {
-      throw new BadRequestException('otp.channelNotAllowed');
+      throw new BadRequestException(BackendI18nKeys.errors.otp.channelNotAllowed);
     }
     if (!(await this.isAvailable(channel))) {
-      throw new BadRequestException('otp.channelNotConfigured');
+      throw new BadRequestException(BackendI18nKeys.errors.otp.channelNotConfigured);
     }
     return sender;
   }

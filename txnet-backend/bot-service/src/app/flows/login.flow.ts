@@ -10,6 +10,7 @@ import { BotSessionStore } from '../session/bot-session.store';
 import { OtpStep } from './otp.step';
 import { PhoneNumbers } from './phone-number';
 import { ACTIONS, ask, askContact, say } from './views';
+import { BotKeys } from '../locale/bot-keys';
 
 /**
  * Signing in, exactly as the panel does it: a one-time code on a channel the
@@ -44,12 +45,12 @@ export class LoginFlow {
 
   private methodChoice(): FlowResult {
     return {
-      view: ask('login.method', { key: 'bot.login.askIdentifier' }, [
-        [{ id: ACTIONS.loginOtp, label: { key: 'bot.action.loginWithOtp' } }],
+      view: ask('login.method', { key: BotKeys.login.askIdentifier }, [
+        [{ id: ACTIONS.loginOtp, label: { key: BotKeys.action.loginWithOtp } }],
         [
           {
             id: ACTIONS.loginPassword,
-            label: { key: 'bot.action.loginWithPassword' },
+            label: { key: BotKeys.action.loginWithPassword },
           },
         ],
       ]),
@@ -77,7 +78,7 @@ export class LoginFlow {
       return this.signIn(ctx, result.data.tokens?.refreshToken);
     }
     return {
-      view: askContact('login.chat', { key: 'bot.login.askChatContact' }),
+      view: askContact('login.chat', { key: BotKeys.login.askChatContact }),
       nextState: { ...state, step: 'login.chat' },
     };
   }
@@ -92,7 +93,7 @@ export class LoginFlow {
   private async chatContact(ctx: ChatContext, state: NavState): Promise<FlowResult> {
     if (!ctx.contact) {
       return {
-        view: askContact('login.chat', { key: 'bot.login.askChatContact' }),
+        view: askContact('login.chat', { key: BotKeys.login.askChatContact }),
         nextState: state,
       };
     }
@@ -124,7 +125,7 @@ export class LoginFlow {
         // user finds out about at the end (`flows/steps.ts`).
         if (actionId === ACTIONS.loginPassword) {
           return {
-            view: ask('login.identifier', { key: 'bot.login.askIdentifier' }),
+            view: ask('login.identifier', { key: BotKeys.login.askIdentifier }),
             nextState: {
               ...state,
               step: 'login.identifier',
@@ -133,7 +134,7 @@ export class LoginFlow {
           };
         }
         return {
-          view: askContact('login.phone', { key: 'bot.login.askPhone' }),
+          view: askContact('login.phone', { key: BotKeys.login.askPhone }),
           nextState: {
             ...state,
             step: 'login.phone',
@@ -155,7 +156,7 @@ export class LoginFlow {
 
       case 'login.link':
         if (actionId === ACTIONS.linkCheck) return this.otp.checkLink(ctx, state);
-        return { view: say('login.wait', { key: 'bot.common.pickOne' }), nextState: state };
+        return { view: say('login.wait', { key: BotKeys.common.pickOne }), nextState: state };
 
       case 'login.code':
         if (actionId === ACTIONS.resend) {
@@ -165,7 +166,7 @@ export class LoginFlow {
 
       case 'login.identifier':
         return {
-          view: ask('login.password', { key: 'bot.login.askPassword' }),
+          view: ask('login.password', { key: BotKeys.login.askPassword }),
           nextState: {
             ...state,
             step: 'login.password',
@@ -177,7 +178,7 @@ export class LoginFlow {
         return this.password(ctx, state);
 
       default:
-        return { view: say('login.lost', { key: 'bot.common.unknown' }), nextState: null };
+        return { view: say('login.lost', { key: BotKeys.common.unknown }), nextState: null };
     }
   }
 
@@ -193,7 +194,7 @@ export class LoginFlow {
     );
     if (!phoneNumber) {
       return {
-        view: askContact('login.phone', { key: 'bot.login.askPhone' }),
+        view: askContact('login.phone', { key: BotKeys.login.askPhone }),
         nextState: state,
       };
     }
@@ -204,7 +205,7 @@ export class LoginFlow {
     };
     const channels = await this.otp.channelView(ctx);
     if (!channels) {
-      return { view: say('otp.none', { key: 'bot.channel.none' }), nextState: null };
+      return { view: say('otp.none', { key: BotKeys.channel.none }), nextState: null };
     }
     return { view: channels, nextState: next };
   }
@@ -216,7 +217,7 @@ export class LoginFlow {
   ): Promise<FlowResult> {
     const channel = this.otp.channelFromAction(actionId);
     if (!channel) {
-      return { view: say('otp.pick', { key: 'bot.common.pickOne' }), nextState: state };
+      return { view: say('otp.pick', { key: BotKeys.common.pickOne }), nextState: state };
     }
     const withChannel: NavState = {
       ...state,
@@ -238,7 +239,7 @@ export class LoginFlow {
     if (!result.ok) {
       return {
         view: ask('login.retryCode', { raw: result.msg }, [
-          [{ id: ACTIONS.resend, label: { key: 'bot.action.resend' } }],
+          [{ id: ACTIONS.resend, label: { key: BotKeys.action.resend } }],
         ]),
         nextState: state,
       };
@@ -263,7 +264,7 @@ export class LoginFlow {
     if (result.data?.requiresOtp) {
       const channels = await this.otp.channelView(ctx);
       return {
-        view: channels ?? say('otp.none', { key: 'bot.channel.none' }),
+        view: channels ?? say('otp.none', { key: BotKeys.channel.none }),
         nextState: channels
           ? { ...state, step: 'login.channel' }
           : null,
@@ -284,6 +285,6 @@ export class LoginFlow {
     // Say it happened. The menu that follows is attached by the router, so a
     // success is a sentence *and* somewhere to go — not a menu the user has to
     // infer a result from.
-    return { view: say('login.done', { key: 'bot.common.signedIn' }), nextState: null };
+    return { view: say('login.done', { key: BotKeys.common.signedIn }), nextState: null };
   }
 }

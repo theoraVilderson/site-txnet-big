@@ -343,6 +343,23 @@ def check_default_role() -> None:
                 f"request by a newly registered user is refused by the gateway")
 
 
+def check_generated_wire() -> None:
+    """`site-pwa` reads the contracts through a generated copy (C-04, C-08).
+
+    It cannot import `shared-core`, so `tools/wire-gen.py` writes
+    `site-pwa/src/generated/wire.ts` from `contracts/`. A copy nobody
+    regenerated is the drift the contract exists to stop, so it is a failure
+    here rather than a reminder.
+    """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("wire_gen", Path(__file__).parent / "wire-gen.py")
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+    if gen.stale():
+        errors.append(f"{gen.OUT.relative_to(ROOT)} is stale or missing — "
+                      f"run python3 tools/wire-gen.py and commit it")
+
+
 def main() -> int:
     show = "--list" in sys.argv
 
@@ -372,6 +389,7 @@ def main() -> int:
     check_forward(forward, fixture)
     check_permissions()
     check_default_role()
+    check_generated_wire()
 
     for e in errors:
         print(f"ERROR {e}")

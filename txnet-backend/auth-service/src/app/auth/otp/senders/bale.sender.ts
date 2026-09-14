@@ -7,6 +7,7 @@ import { TenantContext } from '../../../tenant-context/tenant-context';
 import { BotLinkStore } from '../../bot-link/bot-link.store';
 import { buildOtpChatMessage } from './otp-message.util';
 import { LocaleService } from '../../../locale/locale.service';
+import { BackendI18nKeys } from '@txnet-backend/shared-core';
 
 @Injectable()
 export class BaleOtpSender implements IOtpSender {
@@ -51,11 +52,11 @@ export class BaleOtpSender implements IOtpSender {
       this.logger.error(
         `tenant ${tenantId} has no usable bale bot — OTP not sent`,
       );
-      throw new BadRequestException('otp.baleNotConfigured');
+      throw new BadRequestException(BackendI18nKeys.errors.otp.baleNotConfigured);
     }
 
     const chatId = await this.resolveChatId(phoneNumber);
-    if (!chatId) throw new BadRequestException('otp.baleNotLinked');
+    if (!chatId) throw new BadRequestException(BackendI18nKeys.errors.otp.baleNotLinked);
 
     const ns = this.localeService.getNamespace(lang, 'notifications');
     const text = buildOtpChatMessage(ns, code, purpose);

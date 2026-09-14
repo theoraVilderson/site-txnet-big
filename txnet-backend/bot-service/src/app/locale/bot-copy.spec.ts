@@ -1,10 +1,12 @@
-import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
+import { BackendI18nKeys } from '@txnet-backend/shared-core';
 import { BotCopy } from './bot-copy';
 import { BOT_COPY_FALLBACKS } from './bot-copy.fallbacks';
+import { BotKeys, botLinkMessageKey } from './bot-keys';
 import { BotFlow } from '../conversation/nav.types';
-import { OtpChannelName } from '../auth-api/auth-api.types';
-import { stepsOf } from '../flows/steps';
+import { CHANNEL_NAME_KEY } from '../flows/otp.step';
+import { CHANNEL_SUMMARY_KEY, PROGRESS_KEY, stepsOf } from '../flows/steps';
 
 /**
  * The copy contract.
@@ -31,7 +33,6 @@ function repoRoot(): string {
 }
 
 const ROOT = repoRoot();
-const SRC = join(ROOT, 'txnet-backend', 'bot-service', 'src');
 
 /** `bot.json` is nested; every key the bot uses is the flat `bot.`-prefixed one. */
 function flatten(obj: Record<string, unknown>, prefix: string): Record<string, string> {
@@ -52,35 +53,20 @@ const fa = langFile('fa');
 const en = langFile('en');
 const fallback = BOT_COPY_FALLBACKS;
 
-/** Every `'bot.*'` literal in shipped code — what the flows and views ask for. */
-function keysUsedInCode(): string[] {
-  const found = new Set<string>();
-  const walk = (dir: string) => {
-    for (const name of readdirSync(dir)) {
-      const path = join(dir, name);
-      if (statSync(path).isDirectory()) walk(path);
-      else if (name.endsWith('.ts') && !name.endsWith('.spec.ts')) {
-        for (const m of readFileSync(path, 'utf-8').matchAll(/'(bot\.[A-Za-z.]+)'/g)) found.add(m[1]);
-      }
-    }
-  };
-  walk(SRC);
-  return [...found].sort();
-}
-
 /**
- * The keys code builds at runtime instead of spelling out, so the scan above
- * cannot see them. Both are `Record`s of a union: adding a flow or an OTP
- * channel stops compiling here until its key exists.
+ * Every key the code can ask for. Flows reach keys only through `BotKeys`
+ * (C-07 forbids a literal), so its leaves are the whole set the code can
+ * name; the keys chosen at runtime go through exhaustive `Record`s of a union,
+ * which do not compile until each member has a key.
  */
-const FLOWS: Record<BotFlow, true> = {
-  login: true,
-  register: true,
-  forgot: true,
-  accounts: true,
-  accountAdd: true,
-};
-const CHANNELS: Record<OtpChannelName, true> = { sms: true, telegram: true, bale: true };
+function leaves(tree: object, out: string[] = []): string[] {
+  for (const value of Object.values(tree)) {
+    if (typeof value === 'string') out.push(value);
+    else leaves(value as object, out);
+  }
+  return out;
+}
+const botKeys = leaves(BotKeys).sort();
 
 function placeholders(text: string): string[] {
   return [...text.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]).sort();
@@ -116,32 +102,30 @@ describe('bot copy — placeholders survive a rewrite', () => {
 });
 
 describe('bot copy — every key the code asks for exists', () => {
-  const used = keysUsedInCode();
-
-  it('finds the keys at all (guards the scan itself)', () => {
-    expect(used.length).toBeGreaterThan(50);
+  it('the fallback table is exactly the generated bot namespace', () => {
+    expect(Object.keys(fallback).sort()).toEqual(botKeys);
   });
 
-  it.each(used)('%s is a real key', (key) => {
-    expect(Object.keys(fallback)).toContain(key);
-    expect(Object.keys(fa)).toContain(key);
-    expect(Object.keys(en)).toContain(key);
-  });
-
-  it.each(Object.keys(FLOWS))('progress line exists for the %s flow', (flow) => {
-    // `progressOf` returns nothing for a flow with no steps (`accounts` is one
-    // screen), so that flow needs no key and must not be asked for one.
+  it.each(Object.entries(PROGRESS_KEY))('the %s flow counts steps only when it has a progress line', (flow, key) => {
+    // `accounts` is one screen: no steps, so no key — and a flow with steps
+    // and no key would silently lose its progress line.
     const steps = stepsOf({ flow: flow as BotFlow, step: '', data: {} });
-    if (steps.length === 0) return;
-    expect(Object.keys(fallback)).toContain(`bot.progress.${flow}`);
-    expect(Object.keys(fa)).toContain(`bot.progress.${flow}`);
+    expect(key === null).toBe(steps.length === 0);
   });
 
-  it.each(Object.keys(CHANNELS))('%s has a channel name and a summary line', (channel) => {
-    for (const key of [`bot.channel.${channel}`, `bot.field.channel.${channel}`]) {
-      expect(Object.keys(fallback)).toContain(key);
+  it.each(Object.keys(CHANNEL_NAME_KEY))('%s has a channel name and a summary line', (channel) => {
+    for (const key of [
+      CHANNEL_NAME_KEY[channel as keyof typeof CHANNEL_NAME_KEY],
+      CHANNEL_SUMMARY_KEY[channel as keyof typeof CHANNEL_SUMMARY_KEY],
+    ]) {
       expect(Object.keys(fa)).toContain(key);
     }
+  });
+
+  it('maps a link outcome to its notifications key, and an unknown one to try-again', () => {
+    expect(botLinkMessageKey('linked')).toBe(BackendI18nKeys.notifications.otp.botLink.linked);
+    expect(botLinkMessageKey('noSuchOutcome')).toBe(BotKeys.common.tryAgain);
+    expect(botLinkMessageKey('toString')).toBe(BotKeys.common.tryAgain);
   });
 });
 

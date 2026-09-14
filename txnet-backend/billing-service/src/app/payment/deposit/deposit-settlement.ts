@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfirmationSource, PaymentStatus, Prisma, RedemptionStatus, WalletReasonType } from '@prisma/client';
-import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import { OutboxEventType, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { WalletLedgerService } from '../../wallet/wallet-ledger.service';
@@ -253,7 +253,7 @@ export class DepositSettlementService {
       data: {
         aggregate: 'billing.payment',
         aggregateId: payment.id,
-        type: 'billing.payment.reversed',
+        type: OutboxEventType.PAYMENT_REVERSED,
         payload: {
           tenantId: tenant.id,
           userId: payment.userId,
@@ -376,7 +376,7 @@ export class DepositSettlementService {
       data: {
         aggregate: 'billing.payment',
         aggregateId: payment.id,
-        type: 'billing.payment.confirmed',
+        type: OutboxEventType.PAYMENT_CONFIRMED,
         payload: {
           tenantId: tenant.id,
           userId: payment.userId,

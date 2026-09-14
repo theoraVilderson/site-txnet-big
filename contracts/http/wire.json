@@ -34,7 +34,8 @@
   },
   "proxyHeaders": {
     "note": "Set by Traefik, not by anything in this repo, so there is no drift to prevent — recorded only so the codebase spells each one in exactly one place (C-04).",
-    "forwardedFor": "X-Forwarded-For"
+    "forwardedFor": "X-Forwarded-For",
+    "forwardedHost": "X-Forwarded-Host"
   },
   "cookieLifetimesSec": {
     "note": "Seconds, matching Max-Age and every TTL in the platform. The cookie and the token it carries are one lifetime: a cookie outliving its token is a browser that believes it is signed in and is refused on every refresh.",

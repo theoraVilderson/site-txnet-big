@@ -1,3 +1,4 @@
+import { AUTOMATION_TICK_ROUTING_PREFIX } from '@txnet-backend/shared-core';
 import { ATTEMPTS_HEADER, DeadMessage } from '../broker/broker.service';
 import { MAX_DEFERRALS } from './tenant-concurrency.gate';
 
@@ -105,8 +106,8 @@ function workerKeyOf(
   if (payload && typeof payload.key === 'string' && payload.key) {
     return payload.key;
   }
-  const suffix = routingKey.startsWith('automation.tick.')
-    ? routingKey.slice('automation.tick.'.length)
+  const suffix = routingKey.startsWith(AUTOMATION_TICK_ROUTING_PREFIX)
+    ? routingKey.slice(AUTOMATION_TICK_ROUTING_PREFIX.length)
     : '';
   return suffix || null;
 }

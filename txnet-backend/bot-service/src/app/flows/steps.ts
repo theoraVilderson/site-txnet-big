@@ -1,5 +1,7 @@
 import { BotText } from '@txnet-backend/messenger';
+import { OtpChannelName } from '../auth-api/auth-api.types';
 import { BotFlow, NavState } from '../conversation/nav.types';
+import { BotKey, BotKeys } from '../locale/bot-keys';
 
 /**
  * Where a conversation is, and what the user has already said.
@@ -62,16 +64,36 @@ const FLOW_STEPS: Record<Exclude<BotFlow, 'login' | 'accountAdd'>, string[]> = {
  * One key per flow rather than one key plus an interpolated flow name: a
  * template cannot hold another template, and a Persian sentence that reads
  * naturally is not the English one with a word swapped in.
+ *
+ * An exhaustive `Record` rather than `` `bot.progress.${flow}` `` (C-07): a new
+ * flow does not compile without a row, and a renamed key does not compile at
+ * all. `null` is a flow with nothing to count (`accounts`, see `FLOW_STEPS`).
  */
+export const PROGRESS_KEY: Record<BotFlow, BotKey | null> = {
+  login: BotKeys.progress.login,
+  register: BotKeys.progress.register,
+  forgot: BotKeys.progress.forgot,
+  accountAdd: BotKeys.progress.accountAdd,
+  accounts: null,
+};
+
 export function progressOf(state: NavState): BotText | undefined {
+  const key = PROGRESS_KEY[state.flow];
   const steps = stepsOf(state);
   const at = steps.indexOf(state.step);
-  if (at < 0) return undefined;
+  if (!key || at < 0) return undefined;
   return {
-    key: `bot.progress.${state.flow}`,
+    key,
     values: { n: at + 1, total: steps.length },
   };
 }
+
+/** The summary line for the channel a code was sent to. */
+export const CHANNEL_SUMMARY_KEY: Record<OtpChannelName, BotKey> = {
+  sms: BotKeys.field.channel.sms,
+  telegram: BotKeys.field.channel.telegram,
+  bale: BotKeys.field.channel.bale,
+};
 
 /**
  * The fields worth echoing, in the order they are asked for. A password is
@@ -79,10 +101,10 @@ export function progressOf(state: NavState): BotText | undefined {
  * and repeating it back would undo the deletion it just got.
  */
 const ECHOED: Array<{ field: string; key: string }> = [
-  { field: 'phoneNumber', key: 'bot.field.phone' },
-  { field: 'identifier', key: 'bot.field.identifier' },
-  { field: 'fullName', key: 'bot.field.name' },
-  { field: 'username', key: 'bot.field.username' },
+  { field: 'phoneNumber', key: BotKeys.field.phone },
+  { field: 'identifier', key: BotKeys.field.identifier },
+  { field: 'fullName', key: BotKeys.field.name },
+  { field: 'username', key: BotKeys.field.username },
 ];
 
 /** What the user has told this conversation so far, one line each. */
@@ -94,8 +116,9 @@ export function summaryOf(state: NavState): BotText[] {
   }
   // The channel is a choice, not typed text: its own key, so "Here, in this
   // chat" reads the same in the summary as it did on the button.
-  if (state.data.channel) {
-    lines.push({ key: `bot.field.channel.${state.data.channel}` });
+  const channel = state.data.channel as OtpChannelName | undefined;
+  if (channel && Object.prototype.hasOwnProperty.call(CHANNEL_SUMMARY_KEY, channel)) {
+    lines.push({ key: CHANNEL_SUMMARY_KEY[channel] });
   }
   return lines;
 }

@@ -1,6 +1,7 @@
 // Browser calls api.${DOMAIN_NAME} directly (cross-origin, cookie-bearing) —
 // no Next.js proxy hop. Backend CORS (main.ts) allows this origin with
 // credentials; see docs/interfaces/auth-api/contract.md.
+import { RequestHeaders } from "@/generated/wire";
 import { createApiClient } from "./api-request";
 
 const API_URL = `${process.env.NEXT_PUBLIC_API_ORIGIN}/api`;
@@ -141,10 +142,7 @@ function rawRequest<T>(path: string, init: RequestInit): Promise<T> {
 }
 
 async function request<T>(path: string, init: RequestInit = {}, captchaToken?: string): Promise<T> {
-  // `site-pwa` is outside C-04's check and has no path to `shared-core` (see
-  // `forward-auth/open-questions.md`), so this name is written here as it
-  // always has been rather than imported from the wire contract.
-  return call<T>(path, init, captchaToken ? { "x-captcha-token": captchaToken } : undefined);
+  return call<T>(path, init, captchaToken ? { [RequestHeaders.captchaToken]: captchaToken } : undefined);
 }
 
 export type AuthResult = { accessToken: string; expiresIn: number };

@@ -35,6 +35,7 @@ import { progressOf, summaryOf } from '../flows/steps';
 import { ChatAccess } from '../session/chat-access';
 import { ConversationStore } from './conversation.store';
 import { callContextOf, ChatContext, FlowResult, NavState } from './nav.types';
+import { BotKeys, botLinkMessageKey } from '../locale/bot-keys';
 
 /** The one step that belongs to no flow: the panel drives it (`F-0203`). */
 export const PANEL_LINK_STEP = 'panelLink.contact';
@@ -117,7 +118,7 @@ export class ConversationRouter {
       return { view: await this.menu(ctx), nextState: null };
     }
     if (actionId === ACTIONS.cancel || command === '/cancel') {
-      return { view: say('cancelled', { key: 'bot.common.cancelled' }), nextState: null };
+      return { view: say('cancelled', { key: BotKeys.common.cancelled }), nextState: null };
     }
     if (actionId === ACTIONS.back) return this.back(ctx, state);
 
@@ -152,7 +153,7 @@ export class ConversationRouter {
       case 'accountAdd':
         return this.accountAdd.handle(ctx, state, actionId);
       default:
-        return { view: say('unknown', { key: 'bot.common.unknown' }), nextState: null };
+        return { view: say('unknown', { key: BotKeys.common.unknown }), nextState: null };
     }
   }
 
@@ -171,7 +172,7 @@ export class ConversationRouter {
       return { view: await this.menu(ctx), nextState: null };
     }
     return {
-      view: say('expired', { key: 'bot.common.expired' }),
+      view: say('expired', { key: BotKeys.common.expired }),
       nextState: null,
     };
   }
@@ -185,7 +186,7 @@ export class ConversationRouter {
   private back(ctx: ChatContext, state: NavState | null): FlowResult {
     const previous = state?.history?.[state.history.length - 1];
     if (!previous?.lastView) {
-      return { view: say('backGone', { key: 'bot.common.backGone' }), nextState: null };
+      return { view: say('backGone', { key: BotKeys.common.backGone }), nextState: null };
     }
     return {
       view: bare(previous.lastView),
@@ -204,7 +205,7 @@ export class ConversationRouter {
   private help(state: NavState | null): FlowResult {
     if (!state?.lastView) return { view: helpView(), nextState: null };
     return {
-      view: { ...bare(state.lastView), id: 'help', hint: { key: 'bot.help.body' } },
+      view: { ...bare(state.lastView), id: 'help', hint: { key: BotKeys.help.body } },
       nextState: state,
     };
   }
@@ -226,7 +227,7 @@ export class ConversationRouter {
       // One language served: offering a choice that has no alternative is
       // noise, so say plainly that there is nothing to switch to.
       return {
-        view: say('language.only', { key: 'bot.language.only' }),
+        view: say('language.only', { key: BotKeys.language.only }),
         nextState: state,
       };
     }
@@ -247,14 +248,14 @@ export class ConversationRouter {
     const lang = actionId.slice(LANGUAGE_ACTION_PREFIX.length);
     const ok = await this.langs.choose(ctx.integration, ctx.chatId, lang);
     if (!ok) {
-      return { view: say('language.unknown', { key: 'bot.common.tryAgain' }), nextState: state };
+      return { view: say('language.unknown', { key: BotKeys.common.tryAgain }), nextState: state };
     }
     // This very reply is already in the new language: the dispatcher renders
     // with `result.lang` when a result carries one, so the confirmation is not
     // written in the language the user just asked to leave.
     if (state?.lastView) {
       return {
-        view: { ...bare(state.lastView), hint: { key: 'bot.language.changed' } },
+        view: { ...bare(state.lastView), hint: { key: BotKeys.language.changed } },
         nextState: state,
         lang,
       };
@@ -353,13 +354,13 @@ export class ConversationRouter {
         return {
           view: {
             id: 'link.contact',
-            body: { key: `otp.botLink.${resolved.data.messageKey}` },
+            body: { key: botLinkMessageKey(resolved.data.messageKey) },
             actions: [
               [
                 {
                   id: ACTIONS.shareContact,
                   kind: 'contact',
-                  label: { key: 'bot.action.shareContact' },
+                  label: { key: BotKeys.action.shareContact },
                 },
               ],
             ],
@@ -370,7 +371,7 @@ export class ConversationRouter {
         };
       }
       return {
-        view: say('link.done', { key: `otp.botLink.${resolved.data.messageKey}` }),
+        view: say('link.done', { key: botLinkMessageKey(resolved.data.messageKey) }),
         nextState: null,
       };
     }
@@ -399,7 +400,7 @@ export class ConversationRouter {
     const session = await this.sessions.get(ctx.integration, ctx.chatId);
     if (!session) {
       return {
-        view: say('signedOut', { key: 'bot.common.signedOut' }),
+        view: say('signedOut', { key: BotKeys.common.signedOut }),
         nextState: null,
       };
     }
@@ -418,7 +419,7 @@ export class ConversationRouter {
       );
       return {
         view: say('signedOutSwitched', {
-          key: 'bot.common.signedOutSwitched',
+          key: BotKeys.common.signedOutSwitched,
           values: { name: handover.switchedTo.fullName },
         }),
         nextState: null,
@@ -427,7 +428,7 @@ export class ConversationRouter {
 
     await this.sessions.clear(ctx.integration, ctx.chatId);
     return {
-      view: say('signedOut', { key: 'bot.common.signedOut' }),
+      view: say('signedOut', { key: BotKeys.common.signedOut }),
       nextState: null,
     };
   }
@@ -449,7 +450,7 @@ export class ConversationRouter {
       await this.sessions.clear(ctx.integration, ctx.chatId);
     }
     return {
-      view: say('signedOutAll', { key: 'bot.common.signedOutAll' }),
+      view: say('signedOutAll', { key: BotKeys.common.signedOutAll }),
       nextState: null,
     };
   }
