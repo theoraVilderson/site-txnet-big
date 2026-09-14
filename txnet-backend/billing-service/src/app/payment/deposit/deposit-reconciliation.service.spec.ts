@@ -329,7 +329,7 @@ describe('DepositReconciliationService', () => {
     const where = calls.scans[1]['where'] as Record<string, unknown>;
     expect(where['gatewayTrackingCode']).toEqual({ not: null });
     expect(JSON.stringify(where)).toContain(PaymentStatus.expired);
-    // A verifying row belongs to the first scan, never to this one.
+    // A verifying row belongs to verifyDue, never to this scan.
     expect(JSON.stringify(where)).toContain('"nextVerifyAt":null');
     expect(calls.scans[1]['take']).toBe(50);
   });
@@ -337,7 +337,7 @@ describe('DepositReconciliationService', () => {
   it('takes a verifying row when its retry is due, without waiting for its clock or the recheck window (F-092-y)', async () => {
     const { service, calls } = build({ due: [], verifying: [{ id: PAYMENT, tenantId: TENANT }] });
 
-    const result = await service.reconcile();
+    const result = await service.verifyDue();
 
     const where = calls.scans[0]['where'] as Record<string, unknown>;
     expect(where).toMatchObject({ status: PaymentStatus.pending, gatewayTrackingCode: { not: null } });
@@ -349,13 +349,26 @@ describe('DepositReconciliationService', () => {
     expect(result).toMatchObject({ scanned: 1, confirmed: 1 });
   });
 
-  it('gives the ordinary scan only the room the verifying rows left in the batch', async () => {
-    const verifying = Array.from({ length: 50 }, (_, i) => ({ id: `v-${i}`, tenantId: TENANT }));
-    const { service, calls } = build({ verifying, inquiry: 'in_bank' });
+  // F-092-ac (ADR-0046 decision 3): due retries ride their own minute job, so
+  // the ladder's short rungs are not stuck behind the five-minute sweep — and
+  // neither run asks the bank about a payment that is the other's.
+  it('keeps the two runs apart: verifyDue scans only due retries, reconcile only the ordinary rows', async () => {
+    const retries = build({ due: [{ id: 'ordinary', tenantId: TENANT }], verifying: [{ id: PAYMENT, tenantId: TENANT }] });
+    await retries.service.verifyDue();
+    expect(retries.calls.scans).toHaveLength(1);
+    expect((retries.calls.scans[0]['where'] as Record<string, unknown>)['nextVerifyAt']).toMatchObject({ lte: expect.any(Date) });
 
-    await service.reconcile();
-
-    expect(calls.scans).toHaveLength(1);
+    // The sweep's ordinary scan never takes a verifying row; its first scan takes
+    // one only once its retry is ten minutes overdue — the minute job is not
+    // running (an unscheduled deployment), and a payer must not be stranded.
+    const sweep = build({ due: [{ id: PAYMENT, tenantId: TENANT }], verifying: [] });
+    const before = Date.now();
+    await sweep.service.reconcile();
+    expect(sweep.calls.scans).toHaveLength(2);
+    const stalled = (sweep.calls.scans[0]['where'] as Record<string, { lte: Date }>)['nextVerifyAt'].lte.getTime();
+    expect(stalled).toBeLessThanOrEqual(before - 600_000 + 1_000);
+    expect(stalled).toBeGreaterThanOrEqual(before - 600_000 - 1_000);
+    expect(JSON.stringify(sweep.calls.scans[1]['where'])).toContain('"nextVerifyAt":null');
   });
 
   it('flags a payment still verifying 24 hours after it was made, and keeps asking (F-092-y)', async () => {
@@ -367,7 +380,7 @@ describe('DepositReconciliationService', () => {
       flagMatches: 1,
     });
 
-    const result = await service.reconcile();
+    const result = await service.verifyDue();
 
     const flag = calls.updated.find((u) => 'verifyFlaggedAt' in (u['data'] as object));
     expect(flag).toMatchObject({

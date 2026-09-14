@@ -118,6 +118,9 @@ const answer = (kind: AskKind, gatewayStatus: string | null = null, referenceId:
 /** Called wherever an answer was not settled: schedule the next ask, flag if it is a day old. */
 type RetryHook = (payment: PaymentRow) => Promise<void>;
 
+/** How overdue a retry must be before the sweep stands in for `deposit_verify_retry` (F-092-ac). */
+export const VERIFY_RETRY_STALLED_SEC = 600;
+
 /** Inquiry answers that mean the money is at the gateway and a `verify` should be attempted. */
 const PAYABLE: readonly PaymentInquiryStatus[] = ['verified', 'paid'];
 
@@ -134,43 +137,31 @@ export class DepositReconciliationService {
     private readonly config: ConfigService<EnvConfig, true>,
   ) {}
 
+  /**
+   * The ordinary sweep (F-092-l): `expired` rows, and `pending` rows past their
+   * clock that are not verifying. Verifying rows are `verifyDue`'s, on its own
+   * minute job (F-092-ac, ADR-0046 decision 3).
+   */
   async reconcile(): Promise<DepositReconciliationResult> {
     const now = new Date();
     const take = this.config.get('RECONCILIATION_BATCH_SIZE', { infer: true });
     const recheckSec = this.config.get('RECONCILIATION_RECHECK_SEC', { infer: true });
-    const lookbackSec = this.config.get('RECONCILIATION_LOOKBACK_SEC', { infer: true });
-    const flagAfterSec = this.config.get('VERIFY_FLAG_AFTER_SEC', { infer: true });
-    // A window, not for ever: a gateway's own records are not unbounded
-    // either, and a payment nobody has claimed in a month is an operator's
-    // question rather than a job's. It bounds the retries too (ADR-0044 decision 5).
-    const lookback = { gte: new Date(now.getTime() - lookbackSec * 1000) };
 
-    // 1. Verifying rows whose retry has come (F-092-y, ADR-0044 decision 3).
-    //    Their own clock is the whole of their due-ness: neither `expiresAt` nor
-    //    the recheck window applies, since the ladder already spaces the asks.
-    //    Scanned first, so a backlog of ordinary rows cannot starve a payer
-    //    whose money is waiting on a one-minute outage.
-    const verifying = await this.crossTenant.paymentTransaction.findMany({
-      where: {
-        status: PaymentStatus.pending,
-        nextVerifyAt: { lte: now },
-        gatewayTrackingCode: { not: null },
-        createdAt: lookback,
-      },
-      select: { id: true, tenantId: true },
-      orderBy: { nextVerifyAt: 'asc' },
-      take,
-    });
+    // 1. A safety net, not a schedule: a verifying row whose retry is ten
+    //    minutes overdue means `deposit_verify_retry` is not running — a
+    //    deployment whose seed was not re-run — and a payer must not be
+    //    stranded by that. Taken first, like the retries it stands in for.
+    const stalled = await this.dueVerifying(now, new Date(now.getTime() - VERIFY_RETRY_STALLED_SEC * 1000), take);
 
     // 2. The ordinary rows, in whatever room is left.
     const ordinary =
-      verifying.length >= take
+      stalled.length >= take
         ? []
         : await this.crossTenant.paymentTransaction.findMany({
             where: {
               // `expired` is the ordinary case — F-092-k gets there first — and a
               // `pending` row past its clock is one the sweep has not reached yet.
-              // A verifying row is the first scan's, never this one's.
+              // A verifying row is `verifyDue`'s, never this scan's.
               OR: [
                 { status: PaymentStatus.expired },
                 { status: PaymentStatus.pending, expiresAt: { lte: now }, nextVerifyAt: null },
@@ -178,7 +169,7 @@ export class DepositReconciliationService {
               // No authority means the gateway was never asked to mint one, so there
               // is nothing on its side to ask about.
               gatewayTrackingCode: { not: null },
-              createdAt: lookback,
+              createdAt: this.lookback(now),
               // Asked recently enough is asked. Without this the oldest unresolvable
               // payment would fill every batch for ever.
               reconciliationLogs: {
@@ -187,10 +178,52 @@ export class DepositReconciliationService {
             },
             select: { id: true, tenantId: true },
             orderBy: { createdAt: 'asc' },
-            take: take - verifying.length,
+            take: take - stalled.length,
           });
-    const due = [...verifying, ...ordinary];
+    return this.askAll([...stalled, ...ordinary], now);
+  }
 
+  /**
+   * Verifying rows whose retry has come (F-092-y), run every tick by
+   * `deposit_verify_retry` (F-092-ac). Their own clock is the whole of their
+   * due-ness: neither `expiresAt` nor the recheck window applies, since the
+   * ladder already spaces the asks.
+   */
+  async verifyDue(): Promise<DepositReconciliationResult> {
+    const now = new Date();
+    const take = this.config.get('RECONCILIATION_BATCH_SIZE', { infer: true });
+    return this.askAll(await this.dueVerifying(now, now, take), now);
+  }
+
+  private dueVerifying(now: Date, dueBy: Date, take: number): Promise<Array<{ id: string; tenantId: string | null }>> {
+    return this.crossTenant.paymentTransaction.findMany({
+      where: {
+        status: PaymentStatus.pending,
+        nextVerifyAt: { lte: dueBy },
+        gatewayTrackingCode: { not: null },
+        createdAt: this.lookback(now),
+      },
+      select: { id: true, tenantId: true },
+      orderBy: { nextVerifyAt: 'asc' },
+      take,
+    });
+  }
+
+  /**
+   * A window, not for ever: a gateway's own records are not unbounded either,
+   * and a payment nobody has claimed in a week is an operator's question
+   * rather than a job's. It bounds the retries too (ADR-0044 decision 5).
+   */
+  private lookback(now: Date): { gte: Date } {
+    const lookbackSec = this.config.get('RECONCILIATION_LOOKBACK_SEC', { infer: true });
+    return { gte: new Date(now.getTime() - lookbackSec * 1000) };
+  }
+
+  private async askAll(
+    due: Array<{ id: string; tenantId: string | null }>,
+    now: Date,
+  ): Promise<DepositReconciliationResult> {
+    const flagAfterSec = this.config.get('VERIFY_FLAG_AFTER_SEC', { infer: true });
     const result: DepositReconciliationResult = {
       scanned: due.length,
       confirmed: 0,

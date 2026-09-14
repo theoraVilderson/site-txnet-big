@@ -64,4 +64,15 @@ export class DepositInternalController {
   reconcile(): Promise<DepositReconciliationResult> {
     return this.reconciliation.reconcile();
   }
+
+  /**
+   * Ask again about verifying payments whose retry has come (F-092-ac,
+   * ADR-0046 decision 3). Every tick, so the retry ladder's short rungs are
+   * kept to the minute rather than to the sweep's five; the same counts.
+   */
+  @Post('verify-due')
+  @HttpCode(200)
+  verifyDue(): Promise<DepositReconciliationResult> {
+    return this.reconciliation.verifyDue();
+  }
 }

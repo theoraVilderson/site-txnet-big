@@ -123,7 +123,7 @@ async function seedCurrencies() {
   }
 }
 
-// Three jobs run from a `bot_schedule` row seeded here; every other job waits
+// Four jobs run from a `bot_schedule` row seeded here; every other job waits
 // for an operator (`automation/contract.worker.md` "A job is registered; it is
 // not scheduled"). The worker creates its own `bot_worker` rows on boot; before
 // that first boot there is nothing to schedule yet, and a re-run adds them.
@@ -141,6 +141,9 @@ const SEEDED_SCHEDULES = [
   { key: 'deposit_pending_expiry', scheduleType: 'always_on', cronExpression: null },
   // One gateway call per due payment, so a cron rather than every tick.
   { key: 'deposit_reconciliation', scheduleType: 'cron_expression', cronExpression: '*/5 * * * *' },
+  // Due verify retries (F-092-ac): every tick, so the ladder's 30 s rung waits a
+  // minute, not five. Only rows whose retry has come; most ticks ask nothing.
+  { key: 'deposit_verify_retry', scheduleType: 'always_on', cronExpression: null },
 ];
 
 async function seedWorkerSchedules(adminId) {

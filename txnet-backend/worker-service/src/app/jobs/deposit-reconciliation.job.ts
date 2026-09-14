@@ -5,8 +5,9 @@ import { BotWorkerCategory } from '@prisma/client';
 import { Job, JobResult } from '../automation/job';
 import { envelopeData } from '../automation/internal-answer';
 
-/** The one route this job exists to call. Service callers only; 404 otherwise. */
+/** The routes these jobs exist to call. Service callers only; 404 otherwise. */
 const RECONCILE_PATH = '/api/internal/billing/deposit/reconcile';
+const VERIFY_DUE_PATH = '/api/internal/billing/deposit/verify-due';
 
 /** The counts billing answers with. All five, or the answer is not one this job understands. */
 const COUNTS = ['scanned', 'confirmed', 'flagged', 'unchanged', 'errors'] as const;
@@ -41,11 +42,13 @@ type ReconciliationCounts = Record<(typeof COUNTS)[number], number> & {
  */
 @Injectable()
 export class DepositReconciliationJob implements Job {
-  readonly key = 'deposit_reconciliation';
-  readonly name = 'Top-up reconciliation';
-  readonly description =
-    'Asks the gateway about pending and expired top-ups and about verifying ones when their retry is due: credits what it confirms, flags an amount it reports differently, and a payment still verifying after a day (F-092-l, F-092-y).';
+  readonly key: string = 'deposit_reconciliation';
+  readonly name: string = 'Top-up reconciliation';
+  readonly description: string =
+    'Asks the gateway about pending and expired top-ups nobody came back for: credits what it confirms and flags an amount it reports differently (F-092-l). Verifying ones are deposit_verify_retry\'s.';
   readonly category = BotWorkerCategory.other;
+  /** The billing route a run calls. */
+  protected readonly path: string = RECONCILE_PATH;
 
   private readonly logger = new Logger(DepositReconciliationJob.name);
   private readonly baseUrl: string;
@@ -91,7 +94,7 @@ export class DepositReconciliationJob implements Job {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const response = await fetch(`${this.baseUrl}${RECONCILE_PATH}`, {
+      const response = await fetch(`${this.baseUrl}${this.path}`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -104,14 +107,14 @@ export class DepositReconciliationJob implements Job {
       if (!response.ok) {
         // 404 is the guard's answer to a caller it does not recognise, which is
         // the shape a rotated-away `SERVICE_AUTH_TOKEN` takes here.
-        throw new Error(`billing answered ${response.status} to ${RECONCILE_PATH}`);
+        throw new Error(`billing answered ${response.status} to ${this.path}`);
       }
 
       // billing answers `{ ok, msg, data }` (`envelopeData`).
       const body = envelopeData(await response.json());
       const counts = Object.fromEntries(COUNTS.map((k) => [k, body?.[k]]));
       if (!Object.values(counts).every((v) => typeof v === 'number')) {
-        throw new Error(`billing answered ${RECONCILE_PATH} without its five counts`);
+        throw new Error(`billing answered ${this.path} without its five counts`);
       }
       const flaggedForPerson = body?.['flaggedForPerson'];
       return {
@@ -123,3 +126,22 @@ export class DepositReconciliationJob implements Job {
     }
   }
 }
+
+/**
+ * Asking again about verifying payments whose retry is due (F-092-ac,
+ * ADR-0046 decision 3).
+ *
+ * The same seam, answer and failure rules as reconciliation, on a different
+ * route and a different schedule: `always_on`, one tick a minute. Riding the
+ * five-minute sweep kept the retry ladder's 30 s rung waiting up to five
+ * minutes, and a payer watches `/payment/pending` for exactly that long.
+ */
+@Injectable()
+export class DepositVerifyRetryJob extends DepositReconciliationJob {
+  override readonly key = 'deposit_verify_retry';
+  override readonly name = 'Top-up verify retry';
+  override readonly description =
+    'Asks the gateway again about verifying top-ups whose retry is due: credits what it confirms, re-schedules silence, flags a payment still verifying after a day (F-092-x, F-092-y, F-092-ac).';
+  protected override readonly path = VERIFY_DUE_PATH;
+}
+

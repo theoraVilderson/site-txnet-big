@@ -36,14 +36,15 @@ columns of `payment_transaction` (migration `20260914000100_payment_verify_retry
 
 | Rule | Why |
 |---|---|
-| **Two scans, verifying first.** A `pending` row with `nextVerifyAt <= now`, an authority and inside the lookback is taken **without** `expiresAt` or the recheck window; the ordinary scan (`expired`, or `pending` past its clock with `nextVerifyAt: null`) gets the batch room left | ADR-0044 decision 3. The ladder already spaces the asks; a backlog of old rows must not starve a payer waiting out a one-minute outage |
+| **Two runs since F-092-ac.** `verifyDue` (`POST /internal/billing/deposit/verify-due`, job `deposit_verify_retry`, every tick) takes a `pending` row with `nextVerifyAt <= now`, an authority and inside the lookback, **without** `expiresAt` or the recheck window. `reconcile` takes the ordinary scan (`expired`, or `pending` past its clock with `nextVerifyAt: null`), after a verifying row only once its retry is `VERIFY_RETRY_STALLED_SEC` (600) overdue | ADR-0044 decision 3, ADR-0046 decision 3. On the `*/5` sweep a 30 s rung waited five minutes; the stall net keeps an unscheduled deployment from stranding a payer |
 | A due verifying row is credited, flagged, cleared or re-scheduled by exactly the F-092-l / F-092-x rules — nothing about the answer is new | one guarded settlement path (invariant 7) |
 | **The flag:** where a retry is scheduled, the same transaction sets `verifyFlaggedAt = now` on a row created more than `VERIFY_FLAG_AFTER_SEC` ago (default 86400), guarded `pending`, still verifying, not yet flagged | ADR-0044 decision 5. Measured from `createdAt`: the first silence is at most the 15-min pending clock later, and no third column is needed |
 | The flag is **history, never cleared**, and stops nothing: retries go on hourly until `RECONCILIATION_LOOKBACK_SEC`, after which the row leaves the scan, still verifying, for a person (F-092-z) | its holds stay held (ADR-0044 consequences); a person closing it is the release |
 | The answer gains a sixth count, `flaggedForPerson`; `DepositReconciliationJob` logs it as a warning and keeps its five required counts | an older billing still answers a run the job understands |
 
-**The cadence is the job's**, not the ladder's: `deposit_reconciliation` is
-seeded `*/5`, so a 30 s rung is asked on the next tick. The ladder is a floor.
+**The cadence is the job's**, not the ladder's: `deposit_verify_retry` is
+seeded `always_on` (one tick = 60 s), so a 30 s rung is asked within a minute.
+The ladder is a floor.
 
 ## A person confirms it (built — F-092-z)
 
