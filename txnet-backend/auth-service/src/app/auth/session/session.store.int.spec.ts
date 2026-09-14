@@ -44,9 +44,12 @@ describe('SessionStore (real Redis)', () => {
     it('writes the marker, the index entry and both TTLs', async () => {
       await store.register(SESSION, USER, TTL);
 
+      // `scopeKey` is the switch scope the session was minted under (ADR-0015);
+      // a session registered without one stores it as null.
       expect(JSON.parse((await fx.raw.get(sessionKey(SESSION)))!)).toEqual({
         userId: USER,
         revoked: false,
+        scopeKey: null,
       });
       expect(await fx.raw.smembers(indexKey(USER))).toEqual([SESSION]);
       await expectTtlSeconds(fx.raw, sessionKey(SESSION), TTL);
