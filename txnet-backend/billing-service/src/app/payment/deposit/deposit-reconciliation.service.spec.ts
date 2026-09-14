@@ -21,7 +21,7 @@
  * same settlement service.
  */
 import { ConfirmationSource, PaymentStatus, Prisma, ReconciliationAction } from '@prisma/client';
-import { CredentialUnavailable, TenantContext } from '@txnet-backend/shared-core';
+import { CredentialUnavailable, TenantContext, runWithTenant } from '@txnet-backend/shared-core';
 
 import { GatewayFailure } from '../gateway/payment-provider';
 import { DepositReconciliationService } from './deposit-reconciliation.service';
@@ -33,6 +33,9 @@ const PAYMENT = '77777777-7777-4777-8777-777777777777';
 const AUTHORITY = 'A0000000000000000000000000000001';
 
 const d = (v: string) => new Prisma.Decimal(v);
+
+/** Something to ask about: the row's own authority, or one offered for it (F-092-ag). */
+const ASKABLE_OR = [{ gatewayTrackingCode: { not: null } }, { authorityCandidates: { isEmpty: false } }];
 
 function paymentRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -57,10 +60,12 @@ type Calls = {
   scans: Array<Record<string, unknown>>;
   inquired: Array<{ authority: string; tenantInScope: string | null }>;
   verified: Array<{ authority: string; amountMinor: bigint }>;
-  credited: Array<{ source: string; paymentId: string }>;
+  credited: Array<{ source: string; paymentId: string; authority?: string }>;
   closedReversed: string[];
   logs: Array<Record<string, unknown>>;
   updated: Array<Record<string, unknown>>;
+  /** Offered authorities taken back off a payment (F-092-ag). */
+  withdrawn: Array<{ paymentId: unknown; authority: unknown }>;
 };
 
 type Setup = {
@@ -74,6 +79,8 @@ type Setup = {
   inquiry?: 'verified' | 'paid' | 'in_bank' | 'failed' | 'reversed';
   /** `inquire` throws this instead of answering. */
   inquiryFails?: Error;
+  /** Per authority, what `inquire` answers or throws — overrides `inquiry` (F-092-ag). */
+  inquiryByAuthority?: Record<string, string | Error>;
   /** `verify` throws this instead of confirming. */
   verifyFails?: Error;
   /** The guarded flip matched nothing — something settled the payment first. */
@@ -96,6 +103,7 @@ function build(setup: Setup = {}) {
     row = paymentRow(),
     inquiry = 'paid',
     inquiryFails,
+    inquiryByAuthority = {},
     verifyFails,
     lostTheFlip = false,
     credentialsFail,
@@ -104,11 +112,23 @@ function build(setup: Setup = {}) {
     verifyWindowSec = null,
   } = setup;
 
-  const calls: Calls = { scans: [], inquired: [], verified: [], credited: [], closedReversed: [], logs: [], updated: [] };
+  const calls: Calls = {
+    scans: [],
+    inquired: [],
+    verified: [],
+    credited: [],
+    closedReversed: [],
+    logs: [],
+    updated: [],
+    withdrawn: [],
+  };
   const scoped = () => TenantContext.currentOrNull()?.id ?? null;
 
   const tx = {
-    $executeRaw: async () => 0,
+    $executeRaw: async (sql: TemplateStringsArray, ...values: unknown[]) => {
+      if (sql.join('?').includes('array_remove')) calls.withdrawn.push({ authority: values[0], paymentId: values[1] });
+      return 1;
+    },
     paymentTransaction: {
       findFirst: async () => row,
       updateMany: async (args: Record<string, unknown>) => {
@@ -146,6 +166,9 @@ function build(setup: Setup = {}) {
     listUnverified: async () => unverified,
     inquire: async ({ authority }: { authority: string }) => {
       calls.inquired.push({ authority, tenantInScope: scoped() });
+      const own = inquiryByAuthority[authority];
+      if (own instanceof Error) throw own;
+      if (own) return { status: own };
       if (inquiryFails) throw inquiryFails;
       return { status: inquiry };
     },
@@ -163,8 +186,8 @@ function build(setup: Setup = {}) {
     },
   };
   const settlement = {
-    creditVerified: async (payment: { id: string }, _v: unknown, source: string) => {
-      calls.credited.push({ source, paymentId: payment.id });
+    creditVerified: async (payment: { id: string }, v: { authority?: string }, source: string) => {
+      calls.credited.push({ source, paymentId: payment.id, ...(v.authority ? { authority: v.authority } : {}) });
       return !lostTheFlip;
     },
     closeReversed: async (_tx: unknown, payment: { id: string }) => {
@@ -343,14 +366,14 @@ describe('DepositReconciliationService', () => {
     expect(result).toMatchObject({ confirmed: 0, unchanged: 1 });
   });
 
-  it('asks only about payments past their clock that carry an authority', async () => {
+  it('asks only about payments past their clock that carry an authority, or have one offered', async () => {
     const { service, calls } = build({ due: [] });
 
     await service.reconcile();
 
     // scans: [authority recovery, stalled retries, the ordinary rows]
     const where = calls.scans[2]['where'] as Record<string, unknown>;
-    expect(where['gatewayTrackingCode']).toEqual({ not: null });
+    expect(JSON.stringify(where)).toContain(JSON.stringify(ASKABLE_OR));
     expect(JSON.stringify(where)).toContain(PaymentStatus.expired);
     // A verifying row belongs to verifyDue, never to this scan.
     expect(JSON.stringify(where)).toContain('"nextVerifyAt":null');
@@ -363,7 +386,7 @@ describe('DepositReconciliationService', () => {
     const result = await service.verifyDue();
 
     const where = calls.scans[0]['where'] as Record<string, unknown>;
-    expect(where).toMatchObject({ status: PaymentStatus.pending, gatewayTrackingCode: { not: null } });
+    expect(where).toMatchObject({ status: PaymentStatus.pending, OR: ASKABLE_OR });
     expect(where['nextVerifyAt']).toMatchObject({ lte: expect.any(Date) });
     expect(where).not.toHaveProperty('expiresAt');
     expect(where).not.toHaveProperty('reconciliationLogs');
@@ -493,6 +516,78 @@ describe('DepositReconciliationService — finding a lost authority again (F-092
     const where = scan?.['where'] as Record<string, { lte?: Date; in?: string[] }>;
     expect(where['status']).toEqual({ in: [PaymentStatus.pending, PaymentStatus.expired] });
     expect(where['createdAt'].lte!.getTime()).toBeLessThanOrEqual(before - 120_000 + 1_000);
+  });
+});
+
+describe('DepositReconciliationService — authorities only offered (F-092-ag, ADR-0047 decision 1)', () => {
+  const offered = (candidates: string[]) =>
+    paymentRow({
+      status: PaymentStatus.pending,
+      gatewayTrackingCode: null,
+      authorityCandidates: candidates,
+      nextVerifyAt: new Date(),
+    });
+  const due = { due: [], verifying: [{ id: PAYMENT, tenantId: TENANT }] };
+
+  it('takes back a candidate the gateway does not know, and credits through the one it confirms — attaching it only then', async () => {
+    const { service, calls } = build({
+      ...due,
+      row: offered(['FORGED', AUTHORITY]),
+      inquiryByAuthority: { FORGED: new GatewayFailure('zarinpal', 'authority_invalid', '-54', 'unknown authority') },
+    });
+
+    const result = await service.verifyDue();
+
+    expect(calls.inquired.map((i) => i.authority)).toEqual(['FORGED', AUTHORITY]);
+    expect(calls.withdrawn).toEqual([{ paymentId: PAYMENT, authority: 'FORGED' }]);
+    expect(calls.verified).toEqual([{ authority: AUTHORITY, amountMinor: BigInt(19_800_000) }]);
+    expect(calls.credited).toEqual([
+      { source: ConfirmationSource.reconciliation_auto, paymentId: PAYMENT, authority: AUTHORITY },
+    ]);
+    expect(calls.logs[0]).toMatchObject({ actionTaken: ReconciliationAction.auto_confirmed });
+    expect(result).toMatchObject({ confirmed: 1 });
+  });
+
+  it('keeps every candidate and schedules the next ask when the gateway is silent', async () => {
+    const { service, calls } = build({
+      ...due,
+      row: offered(['FORGED', AUTHORITY]),
+      inquiryFails: new GatewayFailure('zarinpal', 'unavailable', null, 'timed out'),
+    });
+
+    const result = await service.verifyDue();
+
+    expect(calls.inquired).toHaveLength(2);
+    expect(calls.withdrawn).toEqual([]);
+    expect(calls.logs).toEqual([]);
+    expect(calls.updated.some((u) => (u['data'] as Record<string, unknown>)['verifyAttempts'] === 1)).toBe(true);
+    expect(result).toMatchObject({ errors: 1, confirmed: 0 });
+  });
+
+  it('takes back a candidate verified at another amount — it is another payment\'s — and flags nothing', async () => {
+    const { service, calls } = build({
+      ...due,
+      row: offered([AUTHORITY]),
+      verifyFails: new GatewayFailure('zarinpal', 'amount_mismatch', '-53', 'verified 1 rial'),
+    });
+
+    // A person's inquire binds the payment's own tenant before it asks.
+    const answer = await runWithTenant({ id: TENANT }, () => service.askOnce(PAYMENT));
+
+    expect(calls.withdrawn).toEqual([{ paymentId: PAYMENT, authority: AUTHORITY }]);
+    expect(calls.logs).toEqual([]);
+    expect(calls.credited).toEqual([]);
+    // Nothing left to ask about: a person may confirm it by hand, as with no authority at all.
+    expect(answer.kind).toBe('unaskable');
+  });
+
+  it('takes back a candidate the gateway calls failed or reversed, and closes nothing', async () => {
+    const { service, calls } = build({ ...due, row: offered([AUTHORITY]), inquiry: 'reversed' });
+
+    await service.verifyDue();
+
+    expect(calls.withdrawn).toEqual([{ paymentId: PAYMENT, authority: AUTHORITY }]);
+    expect(calls.closedReversed).toEqual([]);
   });
 });
 

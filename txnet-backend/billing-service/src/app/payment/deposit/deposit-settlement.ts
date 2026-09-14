@@ -51,6 +51,9 @@ export const PAYMENT_SELECT = {
   // The authority. The callback arrives holding one; reconciliation has to read
   // it off the row, because nothing brought it (F-092-l).
   gatewayTrackingCode: true,
+  // Authorities offered while it has none (F-092-ag): what reconciliation asks
+  // about when the row carries no authority of its own.
+  authorityCandidates: true,
   gatewayReferenceId: true,
   // The grant it was taken under, or NULL (F-096-a). Settling and reconciling
   // both charge the same gateway the payment was started at, so both read the

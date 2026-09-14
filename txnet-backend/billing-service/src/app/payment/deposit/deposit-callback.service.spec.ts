@@ -26,6 +26,7 @@ import { CredentialUnavailable, runWithTenant } from '@txnet-backend/shared-core
 import { GatewayFailure } from '../gateway/payment-provider';
 import { DepositCallbackService } from './deposit-callback.service';
 import { DepositSettlementService } from './deposit-settlement';
+import { MAX_AUTHORITY_CANDIDATES } from './payment-callback-url';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '44444444-4444-4444-8444-444444444444';
@@ -398,7 +399,11 @@ describe('DepositCallbackService.settle — an authority whose write was lost (F
     expect(calls.credited).toHaveLength(1);
   });
 
-  it('attaches the authority on silence, so the retry ladder can ask about it', async () => {
+  // F-092-ag (ADR-0047 decision 1): silence proves nothing about the authority
+  // a URL brought, so it is offered beside the payment, never written into the
+  // one column a verified authority lives in. A forged one cannot then hold the
+  // place the real one needs.
+  it('offers the authority on silence, and never writes it where a verified authority lives', async () => {
     const { service, calls } = build({
       row: null,
       lost: lost(),
@@ -408,9 +413,26 @@ describe('DepositCallbackService.settle — an authority whose write was lost (F
     const outcome = await settle(service, { paymentId: PAYMENT });
 
     expect(outcome).toEqual({ kind: 'verifying', paymentId: PAYMENT });
-    const attach = calls.updated.find((u) => 'gatewayTrackingCode' in u.data);
-    expect(attach).toMatchObject({ where: { id: PAYMENT, gatewayTrackingCode: null }, data: { gatewayTrackingCode: AUTHORITY } });
+    expect(calls.updated.find((u) => 'gatewayTrackingCode' in u.data)).toBeUndefined();
+    expect(calls.updated.find((u) => 'authorityCandidates' in u.data)).toEqual({
+      where: { id: PAYMENT, gatewayTrackingCode: null, NOT: { authorityCandidates: { has: AUTHORITY } } },
+      data: { authorityCandidates: { push: AUTHORITY } },
+    });
     expect(calls.credited).toEqual([]);
+  });
+
+  it('offers nothing more to a payment already holding the most candidates, and still waits for the bank', async () => {
+    const full = Array.from({ length: MAX_AUTHORITY_CANDIDATES }, (_, i) => `OFFERED-${i}`);
+    const { service, calls } = build({
+      row: null,
+      lost: paymentRow({ gatewayTrackingCode: null, authorityCandidates: full }),
+      verifyFails: new GatewayFailure('zarinpal', 'unavailable', null, 'timed out'),
+    });
+
+    const outcome = await settle(service, { paymentId: PAYMENT });
+
+    expect(outcome).toEqual({ kind: 'verifying', paymentId: PAYMENT });
+    expect(calls.updated.find((u) => 'authorityCandidates' in u.data)).toBeUndefined();
   });
 
   it('touches nothing when the gateway refuses that authority — a stranger cannot close a payment by naming it', async () => {

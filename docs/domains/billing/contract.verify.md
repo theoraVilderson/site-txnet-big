@@ -113,10 +113,24 @@ ADR-0046 decision 4. `payment-callback-url.ts`; `DepositStartService`,
 | Rule | Why |
 |---|---|
 | Every callback URL a gateway is told carries `?p=<paymentId>`, added to the tenant's panel URL or a gateway's own `callbackUrl` (F-092-w: host, path and query kept) | `start` stores the authority only after the gateway answers; a write lost there leaves a paid payment no authority names |
-| A callback whose authority no row carries reads the row `p` names — only one with **no** authority, `pending` or `expired`. It verifies the query's authority against the **row's** amount. Success attaches the authority **in the crediting flip** (guarded `gatewayTrackingCode: null`); silence attaches it and schedules a retry | the payer's own redirect is the cheapest recovery there is |
+| A callback whose authority no row carries reads the row `p` names — only one with **no** authority, `pending` or `expired`. It verifies the query's authority against the **row's** amount. Success attaches the authority **in the crediting flip** (guarded `gatewayTrackingCode: null`); silence **offers** it (F-092-ag, below) and schedules a retry | the payer's own redirect is the cheapest recovery there is |
 | For such a row a stated refusal, or `Status` not `OK`, **writes nothing** and answers `TRANSACTION_NOT_FOUND` | an id typed into a URL must not close somebody else's payment |
 | `reconcile` first looks, per merchant account, at open rows with no authority older than `AUTHORITY_RECOVERY_AFTER_SEC` (120) inside the lookback, and reads `listUnverified` once for them (Zarinpal `unVerified.json`: the last 100). An entry is attached only if its `callbackUrl` names **that** row **and** its amount is `chargedAmountMinor`; the run answers `authoritiesRecovered` | the amount alone confuses two payments of one price. A row minted before F-092-ad has no `p` and is a person's. A gateway with no list, or no answer, recovers nothing this run |
 | Every attach is `updateMany({ id, gatewayTrackingCode: null })`; the unique index refuses an authority another payment holds | nothing overwrites an authority that arrived meanwhile (ADR-0028) |
+
+## An offered authority waits for proof (built — F-092-ag)
+
+ADR-0047 decision 1. `offerAuthority` / `withdrawAuthority`
+(`payment-callback-url.ts`), `DepositReconciliationService.askCandidates`.
+
+| Rule | Why |
+|---|---|
+| A `?p=` callback that met silence appends its authority to `authorityCandidates` — guarded `gatewayTrackingCode: null` and not already listed, at most `MAX_AUTHORITY_CANDIDATES` (10). Past the cap nothing is added; the retry is still scheduled | anyone with the payment id can offer one. Before, silence wrote it into `gatewayTrackingCode` and a forged one held the real one's place |
+| `verifyDue` and the ordinary scan take a row with its own authority **or** a non-empty candidate list | a candidate nobody asks about recovers nothing |
+| A row with no authority asks each candidate in order — inquire, then verify at `chargedAmountMinor`. The first confirmed is credited `reconciliation_auto` with the authority attached in the flip, and logged `auto_confirmed` | the same proof the row's own authority needs |
+| A candidate the gateway disowns — `authority_invalid`, `amount_mismatch`, `payment_failed`, or an inquiry `failed` / `reversed` — is removed with `array_remove`, and **nothing else**: no log row, flag or close | an unproven authority is not evidence about this payment; a mismatch on it is another payment's |
+| Any other failure, or `in_bank`, keeps every candidate and schedules the next ask (`unanswered`). All disowned answers `unaskable`, which lets a person confirm by hand | merchant-wide trouble says nothing about one authority |
+| The unverified list (by `p` + amount) and a person still attach directly | both are proof already |
 
 ## The bank returns the money (built — F-092-ae)
 

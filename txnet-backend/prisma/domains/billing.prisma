@@ -374,6 +374,12 @@ model PaymentTransaction {
   exchangeRateSnapshotId String?            @db.Uuid
   status                PaymentStatus       @default(pending)
   gatewayTrackingCode   String? // the id a duplicate callback shares — Zarinpal `authority` (ADR-0028)
+  /// Authorities **offered** for a payment that has none, and not yet proven
+  /// (F-092-ag, ADR-0047 decision 1): a callback naming this row by `?p=` met
+  /// silence. One the gateway confirms becomes `gatewayTrackingCode` in the
+  /// crediting flip; one it disowns is taken back off. At most
+  /// `MAX_AUTHORITY_CANDIDATES`.
+  authorityCandidates   String[]            @default([])
   gatewayReferenceId    String? // the receipt number of a paid payment — Zarinpal `ref_id`
   cardPanMasked         String?
   failureCode           String?

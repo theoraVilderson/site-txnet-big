@@ -17,10 +17,15 @@ import type { EnvConfig } from '../../config/env.validation';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GatewayMerchant } from '../gateway/gateway-merchant';
-import { GatewayFailure, PaymentInquiryStatus } from '../gateway/payment-provider';
+import {
+  GatewayCredentials,
+  GatewayFailure,
+  PaymentInquiryStatus,
+  PaymentProvider,
+} from '../gateway/payment-provider';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { PAYMENT_SELECT, PaymentRow, DepositSettlementService, gatewayRefOf } from './deposit-settlement';
-import { attachAuthority, paymentIdInUrl } from './payment-callback-url';
+import { attachAuthority, paymentIdInUrl, withdrawAuthority } from './payment-callback-url';
 import { clearVerifyRetry, flagLongVerifying, scheduleVerifyRetry } from './verify-retry';
 
 /**
@@ -134,6 +139,33 @@ export const VERIFY_RETRY_STALLED_SEC = 600;
 /** Inquiry answers that mean the money is at the gateway and a `verify` should be attempted. */
 const PAYABLE: readonly PaymentInquiryStatus[] = ['verified', 'paid'];
 
+/**
+ * A row there is something to ask the gateway about: its own authority, or one
+ * offered for it (F-092-ag). A row with neither was never minted, or lost its
+ * authority to a write nobody has recovered yet.
+ */
+const ASKABLE = [
+  { gatewayTrackingCode: { not: null } },
+  { authorityCandidates: { isEmpty: false } },
+] satisfies Prisma.PaymentTransactionWhereInput[];
+
+/**
+ * What the gateway said about an **offered** authority (F-092-ag): it confirmed
+ * the payment at this row's amount, it disowned the authority for this row, or
+ * it said nothing that settles either.
+ */
+type CandidateVerdict =
+  | { kind: 'confirmed'; status: PaymentInquiryStatus; verified: { referenceId: string; cardPan: string | null } }
+  | { kind: 'disowned' }
+  | { kind: 'silent' };
+
+/**
+ * The gateway's refusals that are about **this authority for this payment**. A
+ * merchant-wide failure (`merchant_rejected`, `rate_limited`, `unavailable`, …)
+ * says nothing about the candidate, so it is kept and asked again.
+ */
+const DISOWNS = ['authority_invalid', 'amount_mismatch', 'payment_failed'];
+
 @Injectable()
 export class DepositReconciliationService {
   private readonly logger = new Logger(DepositReconciliationService.name);
@@ -176,13 +208,17 @@ export class DepositReconciliationService {
               // `expired` is the ordinary case — F-092-k gets there first — and a
               // `pending` row past its clock is one the sweep has not reached yet.
               // A verifying row is `verifyDue`'s, never this scan's.
-              OR: [
-                { status: PaymentStatus.expired },
-                { status: PaymentStatus.pending, expiresAt: { lte: now }, nextVerifyAt: null },
+              AND: [
+                {
+                  OR: [
+                    { status: PaymentStatus.expired },
+                    { status: PaymentStatus.pending, expiresAt: { lte: now }, nextVerifyAt: null },
+                  ],
+                },
+                // No authority, and none offered, means there is nothing on the
+                // gateway's side to ask about.
+                { OR: ASKABLE },
               ],
-              // No authority means the gateway was never asked to mint one, so there
-              // is nothing on its side to ask about.
-              gatewayTrackingCode: { not: null },
               createdAt: this.lookback(now),
               // Asked recently enough is asked. Without this the oldest unresolvable
               // payment would fill every batch for ever.
@@ -277,7 +313,7 @@ export class DepositReconciliationService {
       where: {
         status: PaymentStatus.pending,
         nextVerifyAt: { lte: dueBy },
-        gatewayTrackingCode: { not: null },
+        OR: ASKABLE,
         createdAt: this.lookback(now),
       },
       select: { id: true, tenantId: true },
@@ -368,7 +404,9 @@ export class DepositReconciliationService {
     }
 
     const authority = payment.gatewayTrackingCode;
-    if (!authority) return answer('unaskable');
+    if (!authority) {
+      return payment.authorityCandidates?.length ? await this.askCandidates(payment, onRetry) : answer('unaskable');
+    }
 
     const ref = gatewayRefOf(payment);
     const provider = this.providers.get(ref.providerName);
@@ -404,6 +442,89 @@ export class DepositReconciliationService {
     }
 
     return await this.confirm(payment, authority, status, onRetry);
+  }
+
+  /**
+   * A payment with no authority of its own but authorities **offered** for it
+   * (F-092-ag, ADR-0047 decision 1). Each is asked about in turn, by the rules
+   * the row's own authority would be — inquire, then verify at the row's amount.
+   *
+   * The first the gateway confirms is credited and attached in the crediting
+   * flip (guarded `gatewayTrackingCode: null`). One it disowns — unknown, paid at
+   * another amount, not paid — is taken back off the row and **nothing else
+   * happens**: no log row, no flag, no close, because an unproven authority is
+   * not evidence about this payment. Silence about any keeps them all and
+   * schedules the next ask. When every candidate was disowned there is nothing
+   * left to ask about, which is `unaskable` — the answer that lets a person
+   * confirm by hand.
+   */
+  private async askCandidates(payment: PaymentRow, onRetry: RetryHook): Promise<AskAnswer> {
+    const ref = gatewayRefOf(payment);
+    const provider = this.providers.get(ref.providerName);
+    let credentials: GatewayCredentials;
+    try {
+      credentials = await this.merchant.credentialsFor(ref, payment.userId);
+    } catch (e) {
+      return await this.unanswered(payment, e, onRetry);
+    }
+
+    let silent = false;
+    for (const candidate of payment.authorityCandidates) {
+      const verdict = await this.askCandidate(provider, credentials, payment, candidate);
+      if (verdict.kind === 'silent') {
+        silent = true;
+        continue;
+      }
+      if (verdict.kind === 'disowned') {
+        await tenantTransaction(this.prisma, (tx) => withdrawAuthority(tx, payment.id, candidate));
+        this.logger.warn(`payment ${payment.id}: an offered authority was disowned by the gateway and taken back`);
+        continue;
+      }
+      const credited = await this.settlement.creditVerified(
+        payment,
+        { ...verdict.verified, authority: candidate },
+        ConfirmationSource.reconciliation_auto,
+      );
+      await this.record(
+        payment,
+        verdict.status,
+        credited ? ReconciliationAction.auto_confirmed : ReconciliationAction.no_action_needed,
+        credited
+          ? `credited through an offered authority, reference ${verdict.verified.referenceId}`
+          : 'already settled by another path',
+      );
+      return answer(credited ? 'credited' : 'already_settled', verdict.status, verdict.verified.referenceId);
+    }
+
+    if (!silent) return answer('unaskable');
+    await onRetry(payment);
+    return answer('unanswered');
+  }
+
+  private async askCandidate(
+    provider: PaymentProvider,
+    credentials: GatewayCredentials,
+    payment: PaymentRow,
+    authority: string,
+  ): Promise<CandidateVerdict> {
+    const verdictOf = (e: unknown): CandidateVerdict =>
+      e instanceof GatewayFailure && DISOWNS.includes(e.reason) ? { kind: 'disowned' } : { kind: 'silent' };
+
+    let status: PaymentInquiryStatus;
+    try {
+      ({ status } = await provider.inquire({ credentials, authority }));
+    } catch (e) {
+      return verdictOf(e);
+    }
+    if (status === 'in_bank') return { kind: 'silent' };
+    if (!PAYABLE.includes(status)) return { kind: 'disowned' };
+
+    try {
+      const verified = await provider.verify({ credentials, authority, amountMinor: payment.chargedAmountMinor });
+      return { kind: 'confirmed', status, verified };
+    } catch (e) {
+      return verdictOf(e);
+    }
   }
 
   /** The gateway says the money is there. Take it, through the one guarded path. */

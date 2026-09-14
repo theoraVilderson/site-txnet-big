@@ -10,7 +10,7 @@ import { GatewayMerchant } from '../gateway/gateway-merchant';
 import { GatewayFailure, GatewayFailureReason } from '../gateway/payment-provider';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { PAYMENT_SELECT, PaymentRow, DepositSettlementService, gatewayRefOf } from './deposit-settlement';
-import { attachAuthority } from './payment-callback-url';
+import { offerAuthority } from './payment-callback-url';
 import { scheduleVerifyRetry } from './verify-retry';
 
 /**
@@ -293,10 +293,13 @@ export class DepositCallbackService {
     if (unsettled) {
       // Still `pending`, but now verifying: the retry clock says when to ask
       // again (F-092-x, ADR-0044 decision 2), rather than waiting for the
-      // expiry clock and the reconciliation window. A recovered payment keeps
-      // the authority it was found for, so the retries have something to ask.
+      // expiry clock and the reconciliation window. A recovered payment is
+      // **offered** the authority it was found for, not given it (F-092-ag,
+      // ADR-0047 decision 1): silence proves nothing about an authority anyone
+      // with the payment id could have typed, so it waits beside the row until
+      // the gateway confirms it, and cannot hold the place of the real one.
       const retryAt = await tenantTransaction(this.prisma, async (tx) => {
-        if (recoveredAuthority !== null) await attachAuthority(tx, payment.id, recoveredAuthority);
+        if (recoveredAuthority !== null) await offerAuthority(tx, payment, recoveredAuthority);
         return scheduleVerifyRetry(tx, payment, new Date());
       });
       this.logger.warn(

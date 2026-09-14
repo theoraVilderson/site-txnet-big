@@ -58,3 +58,47 @@ export async function attachAuthority(
   return count === 1;
 }
 
+/**
+ * How many unproven authorities one payment may be offered (F-092-ag). Each
+ * costs a gateway call per retry, and anyone who has the payment id can offer
+ * one; past it a forged flood gains nothing more, and the real authority still
+ * comes back through the gateway's unverified list or a person.
+ */
+export const MAX_AUTHORITY_CANDIDATES = 10;
+
+/**
+ * Offer an authority for a payment that has none, **without** attaching it
+ * (F-092-ag, ADR-0047 decision 1). A callback that met silence cannot tell a
+ * real authority from a forged one, so it must not take the one column a
+ * verified authority lives in. Reconciliation asks about each candidate, and
+ * the one the gateway confirms is attached in the crediting flip. Answers
+ * whether this call added it.
+ */
+export async function offerAuthority(
+  tx: Prisma.TransactionClient,
+  payment: { id: string; authorityCandidates?: readonly string[] | null },
+  authority: string,
+): Promise<boolean> {
+  if ((payment.authorityCandidates ?? []).length >= MAX_AUTHORITY_CANDIDATES) return false;
+  const { count } = await tx.paymentTransaction.updateMany({
+    where: { id: payment.id, gatewayTrackingCode: null, NOT: { authorityCandidates: { has: authority } } },
+    data: { authorityCandidates: { push: authority } },
+  });
+  return count === 1;
+}
+
+/**
+ * Take back a candidate the gateway disowned. `array_remove` in SQL rather than
+ * a `set` of the list read earlier, so a candidate offered meanwhile is kept.
+ */
+export async function withdrawAuthority(
+  tx: Prisma.TransactionClient,
+  paymentId: string,
+  authority: string,
+): Promise<void> {
+  await tx.$executeRaw`
+    UPDATE "billing"."payment_transaction"
+       SET "authorityCandidates" = array_remove("authorityCandidates", ${authority})
+     WHERE "id" = ${paymentId}::uuid`;
+}
+
