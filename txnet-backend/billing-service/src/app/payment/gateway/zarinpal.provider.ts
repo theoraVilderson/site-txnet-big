@@ -34,6 +34,8 @@ export type ZarinpalOptions = {
   sandbox: boolean;
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
+  /** The clock a deadline is read against. Tests pass a fake one. */
+  now?: () => number;
   timeoutMs?: number;
 };
 
@@ -106,12 +108,14 @@ export class ZarinpalProvider implements PaymentProvider {
   private readonly host: string;
   private readonly fetchImpl: typeof fetch;
   private readonly sleep: (ms: number) => Promise<void>;
+  private readonly now: () => number;
   private readonly timeoutMs: number;
 
   constructor(options: ZarinpalOptions) {
     this.host = `https://${options.sandbox ? 'sandbox' : 'payment'}.zarinpal.com/pg`;
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.sleep = options.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+    this.now = options.now ?? Date.now;
     this.timeoutMs = options.timeoutMs ?? 15_000;
   }
 
@@ -130,10 +134,12 @@ export class ZarinpalProvider implements PaymentProvider {
   }
 
   async verify(input: PaymentVerifyInput): Promise<PaymentVerifyResult> {
-    const data = await this.retried('verify', input.credentials, {
-      amount: this.wireAmount(input.amountMinor),
-      authority: input.authority,
-    });
+    const data = await this.retried(
+      'verify',
+      input.credentials,
+      { amount: this.wireAmount(input.amountMinor), authority: input.authority },
+      input.deadlineAt,
+    );
     const code = this.requireCode(data, [100, 101]);
     return {
       referenceId: String(data['ref_id']),
@@ -179,18 +185,28 @@ export class ZarinpalProvider implements PaymentProvider {
     }
   }
 
-  /** For calls that are safe to repeat. Only a transport failure is retried — an answer does not change. */
+  /**
+   * For calls that are safe to repeat. Only a transport failure is retried — an
+   * answer does not change. With a deadline, each attempt's timeout is cut to
+   * what is left of it, and an attempt that would start at or past it is not
+   * made (F-092-ab).
+   */
   private async retried(
     method: string,
     credentials: GatewayCredentials,
     body: Record<string, unknown>,
+    deadlineAt?: number,
   ): Promise<Record<string, unknown>> {
+    const remaining = () => (deadlineAt === undefined ? this.timeoutMs : deadlineAt - this.now());
     for (let attempt = 0; ; attempt++) {
+      if (remaining() <= 0) {
+        throw this.failure('unavailable', null, `${method}: deadline reached after ${attempt} attempt(s)`);
+      }
       try {
-        return await this.post(method, credentials, body);
+        return await this.post(method, credentials, body, Math.min(this.timeoutMs, remaining()));
       } catch (err) {
         if (!(err instanceof TransportFailure)) throw err;
-        if (attempt >= RETRY_DELAYS_MS.length) {
+        if (attempt >= RETRY_DELAYS_MS.length || remaining() <= RETRY_DELAYS_MS[attempt]) {
           throw this.failure('unavailable', null, `${method} after ${attempt + 1} attempts: ${err.message}`);
         }
         await this.sleep(RETRY_DELAYS_MS[attempt]);
@@ -206,6 +222,7 @@ export class ZarinpalProvider implements PaymentProvider {
     method: string,
     credentials: GatewayCredentials,
     body: Record<string, unknown>,
+    timeoutMs = this.timeoutMs,
   ): Promise<Record<string, unknown>> {
     let response: Response;
     try {
@@ -213,7 +230,7 @@ export class ZarinpalProvider implements PaymentProvider {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
         body: JSON.stringify({ merchant_id: credentials.merchantId, ...body }),
-        signal: AbortSignal.timeout(this.timeoutMs),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (err) {
       throw new TransportFailure((err as Error).name || 'network error');

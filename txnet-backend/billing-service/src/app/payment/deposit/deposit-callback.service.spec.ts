@@ -57,7 +57,7 @@ type Calls = {
   updated: Array<{ where: Record<string, unknown>; data: Record<string, unknown> }>;
   settled: Array<{ orderReferenceId: string; outcome: string }>;
   credited: Array<{ amount: string; referenceId?: string; reasonType: string }>;
-  verified: Array<{ authority: string; amountMinor: bigint }>;
+  verified: Array<{ authority: string; amountMinor: bigint; deadlineAt?: number }>;
   events: Array<Record<string, unknown>>;
 };
 
@@ -100,8 +100,8 @@ function build(setup: Setup = {}) {
     name: 'zarinpal',
     chargeCurrency: 'IRR',
     chargeDecimals: 0,
-    verify: async ({ authority, amountMinor }: { authority: string; amountMinor: bigint }) => {
-      calls.verified.push({ authority, amountMinor });
+    verify: async ({ authority, amountMinor, deadlineAt }: { authority: string; amountMinor: bigint; deadlineAt?: number }) => {
+      calls.verified.push({ authority, amountMinor, ...(deadlineAt === undefined ? {} : { deadlineAt }) });
       if (verifyFails) throw verifyFails;
       return { referenceId: '900900900', cardPan: '6037********1234', alreadyVerified: false };
     },
@@ -149,6 +149,7 @@ function build(setup: Setup = {}) {
     registry as never,
     merchant as never,
     settlement,
+    { get: (key: string) => (key === 'DEPOSIT_CALLBACK_VERIFY_BUDGET_MS' ? 8_000 : undefined) } as never,
   );
   return { service, calls };
 }
@@ -166,7 +167,7 @@ describe('DepositCallbackService.settle', () => {
 
     expect(outcome).toEqual({ kind: 'success', paymentId: PAYMENT, referenceId: '900900900', alreadyPaid: false });
     // The amount asked about is the one the row was charged at, never recomputed here.
-    expect(calls.verified).toEqual([{ authority: AUTHORITY, amountMinor: BigInt(19_800_000) }]);
+    expect(calls.verified).toEqual([{ authority: AUTHORITY, amountMinor: BigInt(19_800_000), deadlineAt: expect.any(Number) }]);
     // The flip is guarded by the status in its own `where` (ADR-0028).
     expect(calls.updated).toHaveLength(1);
     expect(calls.updated[0].where).toMatchObject({ id: PAYMENT, status: 'pending' });
@@ -182,6 +183,17 @@ describe('DepositCallbackService.settle', () => {
       { amount: '19.80', referenceId: PAYMENT, reasonType: 'payment_gateway' },
     ]);
     expect(calls.settled).toEqual([{ orderReferenceId: PAYMENT, outcome: 'confirmed' }]);
+  });
+
+  it('gives the gateway a deadline of its budget, so a payer is never held past it (F-092-ab)', async () => {
+    const { service, calls } = build();
+    const before = Date.now();
+
+    await settle(service);
+
+    const { deadlineAt } = calls.verified[0];
+    expect(deadlineAt).toBeGreaterThanOrEqual(before + 8_000);
+    expect(deadlineAt).toBeLessThanOrEqual(Date.now() + 8_000);
   });
 
   it('writes the outbox event in the transaction that credited (ADR-0021)', async () => {

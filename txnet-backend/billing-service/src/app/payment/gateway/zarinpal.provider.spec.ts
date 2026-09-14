@@ -21,10 +21,13 @@ type Reply = { status?: number; body?: unknown } | Error;
 const MERCHANT = 'merchant-5b3f-secret';
 const credentials = { merchantId: MERCHANT };
 
-function gateway(replies: Reply[], options: { sandbox?: boolean } = {}) {
-  const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+function gateway(replies: Reply[], options: { sandbox?: boolean; takesMs?: number } = {}) {
+  const calls: Array<{ url: string; body: Record<string, unknown>; at: number }> = [];
+  // A fake clock: every call to the gateway costs `takesMs`, every pause its own length.
+  const clock = { ms: 0 };
   const fetchImpl = (async (url: string, init: { body: string }) => {
-    calls.push({ url, body: JSON.parse(init.body) });
+    calls.push({ url, body: JSON.parse(init.body), at: clock.ms });
+    clock.ms += options.takesMs ?? 0;
     const reply = replies.shift();
     if (!reply) throw new Error('the fake gateway was called more often than the test expected');
     if (reply instanceof Error) throw reply;
@@ -33,9 +36,12 @@ function gateway(replies: Reply[], options: { sandbox?: boolean } = {}) {
   const provider = new ZarinpalProvider({
     sandbox: options.sandbox ?? false,
     fetchImpl,
-    sleep: async () => undefined,
+    sleep: async (ms: number) => {
+      clock.ms += ms;
+    },
+    now: () => clock.ms,
   });
-  return { provider, calls };
+  return { provider, calls, clock };
 }
 
 const timeout = () => Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' });
@@ -144,6 +150,29 @@ describe('ZarinpalProvider — verify', () => {
       reason: 'unavailable',
     });
     expect(calls).toHaveLength(3);
+  });
+
+  // F-092-ab (ADR-0046 decision 2): the callback holds a payer's browser, so
+  // it hands the driver a deadline. Every attempt fits inside it, and the one
+  // that would start past it is not made — the retry ladder takes over.
+  it('stops retrying at the deadline it was given, and says unavailable', async () => {
+    const { provider, calls } = gateway([timeout(), timeout(), timeout()], { takesMs: 6_000 });
+
+    await expect(
+      provider.verify({ credentials, authority: 'A1', amountMinor: BigInt(10_000), deadlineAt: 8_000 }),
+    ).rejects.toMatchObject({ reason: 'unavailable' });
+    // 0 → 6000, a 500 ms pause, 6500 → the deadline. No third attempt.
+    expect(calls.map((c) => c.at)).toEqual([0, 6_500]);
+  });
+
+  it('makes no attempt at all once the deadline has passed', async () => {
+    const { provider, calls, clock } = gateway([{ body: { data: { code: 100, ref_id: 1 } } }]);
+    clock.ms = 9_000;
+
+    await expect(
+      provider.verify({ credentials, authority: 'A1', amountMinor: BigInt(10_000), deadlineAt: 8_000 }),
+    ).rejects.toMatchObject({ reason: 'unavailable' });
+    expect(calls).toHaveLength(0);
   });
 
   it('never puts the merchant id in what it throws (billing invariant 8)', async () => {

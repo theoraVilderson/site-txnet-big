@@ -35,6 +35,12 @@ export type PaymentVerifyInput = {
   credentials: GatewayCredentials;
   authority: string;
   amountMinor: bigint;
+  /**
+   * Epoch ms after which no attempt is started and none is waited on; missing
+   * means the driver's own attempts. A caller holding a browser sets it
+   * (F-092-ab, ADR-0046 decision 2) — past it the answer is `unavailable`.
+   */
+  deadlineAt?: number;
 };
 
 /** `referenceId` is `payment_transaction.gatewayReferenceId`. */

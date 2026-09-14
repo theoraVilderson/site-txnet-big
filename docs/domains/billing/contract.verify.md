@@ -90,3 +90,14 @@ and `billing.claim_expired_coupon_redemptions` (migration
 | Which guard matched picks the coupon path: `pending` confirms the holds; `expired` **claims back** the uses the sweep released `expired` — `usedCount + n`, `reservedCount` untouched, **no limit check** | the payer was charged the discounted price. A coupon past its limit is visible; money refused over a counter is not recoverable by anyone |
 | The callback verifies an `expired` row exactly like a `pending` one; only `failed` answers `VERIFICATION_FAILED` without asking. Silence on an expired row schedules nothing (the ladder guards `pending`) — reconciliation's ordinary scan owns it | reopening a `failed` row would overrule a stated refusal; an `expired` one was never refused |
 
+## The callback's budget (built — F-092-ab)
+
+ADR-0046 decision 2. `PaymentVerifyInput.deadlineAt`, honoured by
+`ZarinpalProvider.retried`; set by `DepositCallbackService`.
+
+| Rule | Why |
+|---|---|
+| The callback verifies with `deadlineAt = now + DEPOSIT_CALLBACK_VERIFY_BUDGET_MS` (default 8000), taken **before** the vault read | the driver's three attempts at 15 s held a payer's browser up to ~47 s; the vault read is part of that wait |
+| A driver cuts each attempt's timeout to what is left, starts none at or past the deadline, and skips a pause that would reach it; all three end as `unavailable` | the one failure the callback already reads as silence, so the row becomes verifying and the payer lands on `/payment/pending` |
+| Only the callback sets a deadline. Reconciliation and a person's inquire keep the driver's own attempts | nobody is waiting on a sweep, and a person asked for the full answer |
+

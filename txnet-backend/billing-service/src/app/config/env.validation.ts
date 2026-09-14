@@ -159,6 +159,16 @@ export const envSchema = z.object({
    * locks a separate one, which is how a lock could outlive its payment; here
    * there is one clock and F-092-k reads it.
    */
+  /**
+   * How long the deposit callback waits on the gateway's verify, vault read
+   * included, before it answers `verifying` and leaves the rest to the retry
+   * ladder (F-092-ab, ADR-0046 decision 2). The driver's own attempts could
+   * otherwise hold a payer's browser for ~47 s.
+   */
+  DEPOSIT_CALLBACK_VERIFY_BUDGET_MS: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().positive().default(8_000),
+  ),
   PAYMENT_PENDING_TTL_SEC: z.preprocess(
     (v) => (v === '' ? undefined : v),
     z.coerce.number().int().positive().default(900),

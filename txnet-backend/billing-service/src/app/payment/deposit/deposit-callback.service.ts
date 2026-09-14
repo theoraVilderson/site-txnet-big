@@ -1,7 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ConfirmationSource, PaymentStatus, RedemptionStatus } from '@prisma/client';
 import { CredentialUnavailable, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
+import type { EnvConfig } from '../../config/env.validation';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CouponReservationService } from '../coupon/coupon-reservation';
 import { GatewayMerchant } from '../gateway/gateway-merchant';
@@ -112,6 +114,7 @@ export class DepositCallbackService {
     private readonly providers: PaymentProviderRegistry,
     private readonly merchant: GatewayMerchant,
     private readonly settlement: DepositSettlementService,
+    private readonly config: ConfigService<EnvConfig, true>,
   ) {}
 
   async settle(request: CallbackRequest): Promise<SettledCallback> {
@@ -188,6 +191,12 @@ export class DepositCallbackService {
     const ref = gatewayRefOf(payment);
     const provider = this.providers.get(ref.providerName);
 
+    // A payer's browser is waiting on this answer. Past the budget the gateway
+    // is silent as far as the payer is concerned: the pending page and the
+    // retry ladder take over (F-092-ab, ADR-0046 decision 2). Started before the
+    // vault read, which is part of what the payer waits for.
+    const deadlineAt = Date.now() + this.config.get('DEPOSIT_CALLBACK_VERIFY_BUDGET_MS', { infer: true });
+
     let verified: { referenceId: string; cardPan: string | null };
     try {
       const credentials = await this.merchant.credentialsFor(ref, payment.userId);
@@ -198,6 +207,7 @@ export class DepositCallbackService {
         // at settlement time is how a rate that moved becomes a mismatch
         // (ADR-0019, invariant 12).
         amountMinor: payment.chargedAmountMinor,
+        deadlineAt,
       });
     } catch (e) {
       return await this.refused(payment, e);
