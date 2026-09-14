@@ -8,8 +8,9 @@ updated: 2026-09-14
 
 # Contract — catalog
 
-**Storage built (F-026-a); no service code yet.** Reads land with F-026-c,
-management with F-026-d. Decision: ADR-0049.
+**Storage built (F-026-a); reads built (F-026-c), in-process only —
+`catalog/catalog-reads.ts`, proved by `catalog-reads.spec.ts`.** Management
+lands with F-026-d. Decision: ADR-0049.
 
 ## TL;DR
 
@@ -24,9 +25,9 @@ platform's row, readable by every tenant. Names are i18n keys (§4.3).
 
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
-| list what a caller may buy | tenant (ambient), category? | active products + `public` variants with the price in effect (F-026-c) | sync | — |
-| a variant by SKU | sku | the variant, `public` or `unlisted` (F-026-c) | sync | not found / `admin_only` |
-| the price at an instant | variantId, at | the price row effective then (F-0602) | sync | no price |
+| `listOffers(at?)` — built | tenant (ambient), instant (default now) | every `public` variant under an active product and category, with the price in effect; a variant with no price is not offered | sync | — |
+| `offerBySku(sku, at?)` — built | sku | the offer, `public` or `unlisted`; the caller's own SKU over the platform's | sync | `null`: unknown, `admin_only`, switched off, or no price |
+| `priceAt(variantId, at)` — built | variantId, instant | the newest active price row with `effectiveFrom <= at` (F-0602) | sync | `null` |
 | manage category / product / variant, write a new price | admin payload, `catalog.manage` | row (F-026-d) | sync | — |
 
 ## Emits (events)
