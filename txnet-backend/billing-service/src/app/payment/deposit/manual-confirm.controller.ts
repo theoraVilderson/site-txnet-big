@@ -23,7 +23,14 @@ import type { Request } from 'express';
 import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
 import { ZodValidationPipe } from '../../request/zod-validation.pipe';
-import { ManualAuthorityBody, ManualConfirmBody, manualAuthoritySchema, manualConfirmSchema } from './manual-confirm.schema';
+import {
+  ManualAuthorityBody,
+  ManualConfirmBody,
+  ManualRejectBody,
+  manualAuthoritySchema,
+  manualConfirmSchema,
+  manualRejectSchema,
+} from './manual-confirm.schema';
 import { ManualActor, ManualConfirmRefused, ManualConfirmService } from './manual-confirm.service';
 
 /** The permission (F-092-z, ADR-0044 decision 6). SuperAdmin holds it as `*`; `Admin` by migration. */
@@ -112,6 +119,23 @@ export class ManualConfirmController {
   ) {
     // The schema requires the key; the cast is for the non-strict tsconfig.
     return this.refusing(() => this.manual.attachAuthority(this.actor(req, ip), id, body.authority as string));
+  }
+
+  /**
+   * End an open payment nobody paid (F-092-ak). Billing asks the gateway first;
+   * `still_in_bank` and every answer that sees money write nothing.
+   */
+  @Post(':id/reject')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(WRITE)
+  async reject(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(manualRejectSchema)) body: ManualRejectBody,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    // The schema requires the key; the cast is for the non-strict tsconfig.
+    return this.refusing(() => this.manual.reject(this.actor(req, ip), id, { reason: body.reason as string }));
   }
 
   private async refusing<T>(run: () => Promise<T>): Promise<T> {

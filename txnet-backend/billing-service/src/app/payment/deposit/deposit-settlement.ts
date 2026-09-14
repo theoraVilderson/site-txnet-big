@@ -214,6 +214,37 @@ export class DepositSettlementService {
     return from;
   }
 
+  /**
+   * A person ends an open payment nobody paid (F-092-ak). `ManualConfirmService`
+   * has already asked the gateway and found no money it can see; this is the
+   * close and its trail — `failed` / `rejected_manually`, holds released
+   * `cancelled`, and a `payment_manual_reject` audit row — in **one**
+   * transaction, so a close with no trail cannot exist. No event: nothing was
+   * paid. Answers whether this call closed it.
+   */
+  async rejectManually(payment: PaymentRow, manual: ManualConfirmation): Promise<boolean> {
+    return tenantTransaction(this.prisma, async (tx) => {
+      const from = await this.closeOpen(tx, payment, 'rejected_manually');
+      if (from === null) return false;
+      const tenant = TenantContext.current('manual rejection audit');
+      await tx.adminAuditLog.create({
+        data: {
+          tenantId: tenant.id,
+          adminId: manual.adminId,
+          action: 'payment_manual_reject',
+          targetEntityType: 'payment',
+          targetEntityId: payment.id,
+          oldValue: { status: from, verifyAttempts: payment.verifyAttempts },
+          newValue: { status: PaymentStatus.failed, failureCode: 'rejected_manually', reason: manual.reason },
+          adminIpAddress: manual.ip,
+        },
+        select: { id: true },
+      });
+      this.logger.warn(`payment ${payment.id} rejected by hand by ${manual.adminId}`);
+      return true;
+    });
+  }
+
   async closeReversed(tx: Prisma.TransactionClient, payment: PaymentRow): Promise<boolean> {
     if ((await this.closeOpen(tx, payment, 'reversed')) === null) return false;
     const tenant = TenantContext.current('deposit reversal event');

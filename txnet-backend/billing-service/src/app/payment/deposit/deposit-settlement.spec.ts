@@ -312,6 +312,43 @@ describe('DepositSettlementService — the debt a granted gateway leaves', () =>
     });
   });
 
+  describe('rejectManually — a person ends an open payment nobody paid (F-092-ak)', () => {
+    const MANUAL = { adminId: USER, reason: 'The payer never paid and asked for the coupon back', ip: '10.0.0.9' };
+    const reject = (service: DepositSettlementService) =>
+      runWithTenant({ id: TENANT }, () => service.rejectManually(paymentRow(), MANUAL));
+
+    it('closes it failed / rejected_manually, gives the holds back, and writes the audit row in the same transaction', async () => {
+      const { service, calls } = build({ rowIs: PaymentStatus.expired });
+
+      await expect(reject(service)).resolves.toBe(true);
+
+      expect(calls.writes).toEqual(['miss:pending', 'flip', 'release:cancelled', 'audit']);
+      expect(calls.flips[0]).toMatchObject({
+        data: { status: PaymentStatus.failed, failureCode: 'rejected_manually', expiresAt: null, nextVerifyAt: null },
+      });
+      expect(calls.accruals[0]).toMatchObject({
+        tenantId: TENANT,
+        adminId: USER,
+        action: 'payment_manual_reject',
+        targetEntityType: 'payment',
+        targetEntityId: PAYMENT,
+        oldValue: { status: PaymentStatus.expired },
+        newValue: { status: PaymentStatus.failed, failureCode: 'rejected_manually', reason: MANUAL.reason },
+        adminIpAddress: '10.0.0.9',
+      });
+      expect(calls.events).toEqual([]);
+      expect(calls.committed).toBe(true);
+    });
+
+    it('writes nothing, and no audit row, when another path settled it first', async () => {
+      const { service, calls } = build({ rowIs: PaymentStatus.success });
+
+      await expect(reject(service)).resolves.toBe(false);
+
+      expect(calls.writes).toEqual(['miss:pending', 'miss:expired']);
+    });
+  });
+
   it('refuses admin_manual without the person, and a person on any other source', async () => {
     const { service } = build();
     const run = (source: ConfirmationSource, manual?: { adminId: string; reason: string; ip: string }) =>

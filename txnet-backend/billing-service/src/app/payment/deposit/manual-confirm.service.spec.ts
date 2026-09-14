@@ -81,6 +81,7 @@ function build(setup: Setup = {}) {
     credits: [] as Array<{ source: string; verified: unknown; manual: Record<string, unknown> | undefined; tenantInScope: string | null }>,
     listed: [] as Array<Record<string, unknown>>,
     attached: [] as Array<Record<string, unknown>>,
+    rejects: [] as Array<{ manual: Record<string, unknown>; tenantInScope: string | null }>,
   };
 
   const prisma = {
@@ -120,6 +121,10 @@ function build(setup: Setup = {}) {
   const settlement = {
     creditVerified: async (_p: unknown, verified: unknown, source: string, manual?: Record<string, unknown>) => {
       calls.credits.push({ source, verified, manual, tenantInScope: TenantContext.currentOrNull()?.id ?? null });
+      return !lostTheFlip;
+    },
+    rejectManually: async (_p: unknown, manual: Record<string, unknown>) => {
+      calls.rejects.push({ manual, tenantInScope: TenantContext.currentOrNull()?.id ?? null });
       return !lostTheFlip;
     },
   };
@@ -249,6 +254,65 @@ describe('ManualConfirmService.confirm', () => {
   it('answers already_settled when another path won the flip between the ask and the credit', async () => {
     const { service, actor } = build({ lostTheFlip: true });
     expect((await service.confirm(actor, PAYMENT, BODY)).outcome).toBe('already_settled');
+  });
+});
+
+// F-092-ak: a person ends a payment nobody paid. The gateway is asked first,
+// exactly as for a confirmation — money it can see is never a person's to refuse.
+describe('ManualConfirmService.reject (F-092-ak)', () => {
+  const REASON = { reason: 'The payer says they never paid and wants the coupon back' };
+
+  it.each<[string, AskAnswer]>([
+    ['the gateway stays silent', { kind: 'unanswered', gatewayStatus: null, referenceId: null }],
+    ['there is no authority to ask about', { kind: 'unaskable', gatewayStatus: null, referenceId: null }],
+    ['the gateway does not know the authority', { kind: 'refused', gatewayStatus: 'authority_invalid', referenceId: null }],
+  ])('closes a payment by hand when %s, with the person and the reason', async (_what, ask) => {
+    const { service, calls, actor } = build({ ask });
+
+    const result = await service.reject(actor, PAYMENT, REASON);
+
+    expect(calls.asked).toEqual([{ paymentId: PAYMENT, tenantInScope: RESELLER }]);
+    expect(calls.rejects).toEqual([
+      { manual: { adminId: ADMIN, reason: REASON.reason, ip: '10.0.0.9' }, tenantInScope: RESELLER },
+    ]);
+    expect(result).toEqual({ paymentId: PAYMENT, outcome: 'rejected_manually', gatewayStatus: ask.gatewayStatus, referenceId: null });
+  });
+
+  it('refuses to reject a payment still at the bank, and changes nothing', async () => {
+    const { service, calls, actor } = build({ ask: { kind: 'in_bank', gatewayStatus: 'in_bank', referenceId: null } });
+
+    const result = await service.reject(actor, PAYMENT, REASON);
+
+    expect(calls.rejects).toEqual([]);
+    expect(result.outcome).toBe('still_in_bank');
+  });
+
+  it.each<AskAnswer['kind']>(['credited', 'already_settled', 'mismatch'])(
+    'never rejects a payment the gateway has money for (%s) — its answer decides',
+    async (kind) => {
+      const { service, calls, actor } = build({ ask: { kind, gatewayStatus: 'paid', referenceId: 'R' } });
+
+      const result = await service.reject(actor, PAYMENT, REASON);
+
+      expect(calls.rejects).toEqual([]);
+      expect(result.outcome).toBe(kind);
+    },
+  );
+
+  it('answers refused when the gateway’s own failed closed it during the ask', async () => {
+    const { service, actor } = build({ ask: { kind: 'refused', gatewayStatus: 'failed', referenceId: null }, lostTheFlip: true });
+    expect((await service.reject(actor, PAYMENT, REASON)).outcome).toBe('refused');
+  });
+
+  it('answers already_settled when another path settled it after the gateway went silent', async () => {
+    const { service, actor } = build({ lostTheFlip: true });
+    expect((await service.reject(actor, PAYMENT, REASON)).outcome).toBe('already_settled');
+  });
+
+  it('refuses a payment that is no longer open, and asks nothing', async () => {
+    const { service, calls, actor } = build({ row: scopeRow({ status: PaymentStatus.failed }) });
+    await expect(service.reject(actor, PAYMENT, REASON)).rejects.toMatchObject({ reason: 'not_open' });
+    expect(calls.asked).toEqual([]);
   });
 });
 

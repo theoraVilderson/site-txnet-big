@@ -30,3 +30,16 @@ export const manualAuthoritySchema = z
 
 export type ManualAuthorityBody = z.infer<typeof manualAuthoritySchema>;
 
+/**
+ * The body of rejecting a payment by hand (F-092-ak). `.strict()`, like the
+ * others. Only a reason: what is closed is the row, as billing reads it.
+ */
+export const manualRejectSchema = z
+  .object({
+    /** Why a person, not the gateway, is ending this payment. Kept in the audit row. */
+    reason: z.string().trim().min(5, { message: 'reason must be at least 5 characters' }).max(500),
+  })
+  .strict();
+
+export type ManualRejectBody = z.infer<typeof manualRejectSchema>;
+

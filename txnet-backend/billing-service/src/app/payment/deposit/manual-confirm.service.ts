@@ -56,7 +56,17 @@ export class ManualConfirmRefused extends Error {
  * Spelled out, not derived: the panel's screen reads this union from this file
  * to prove it has a sentence for every word (F-093-n).
  */
-export type ManualOutcome = 'credited' | 'already_settled' | 'refused' | 'mismatch' | 'unsettled' | 'confirmed_manually';
+export type ManualOutcome =
+  | 'credited'
+  | 'already_settled'
+  | 'refused'
+  | 'mismatch'
+  | 'unsettled'
+  | 'confirmed_manually'
+  /** F-092-ak: a person closed it — the gateway saw no money. */
+  | 'rejected_manually'
+  /** F-092-ak: not rejected — the payer is still at the bank and may be about to pay. */
+  | 'still_in_bank';
 
 export type ManualAnswer = {
   paymentId: string;
@@ -235,6 +245,45 @@ export class ManualConfirmService {
         outcome: credited ? 'confirmed_manually' : 'already_settled',
         gatewayStatus: asked.gatewayStatus,
         referenceId: credited ? input.referenceId : null,
+      };
+    });
+  }
+
+  /**
+   * End a payment nobody paid (F-092-ak). Ask first, as for a confirmation:
+   * money the gateway can see — `credited`, `already_settled`, `mismatch` — is
+   * never a person's to refuse, and `in_bank` is a payer who may be about to
+   * pay, so both answer and write nothing. Silence, no authority to ask about,
+   * or a refusal that left the row open (`authority_invalid`) let a person close
+   * it, with a reason, through `DepositSettlementService.rejectManually`.
+   */
+  async reject(actor: ManualActor, paymentId: string, input: { reason: string }): Promise<ManualAnswer> {
+    const tenantId = await this.eligible(actor, paymentId);
+    return runWithTenant({ id: tenantId }, async () => {
+      const asked = await this.reconciliation.askOnce(paymentId);
+      if (asked.kind === 'in_bank') {
+        return { paymentId, outcome: 'still_in_bank', gatewayStatus: asked.gatewayStatus, referenceId: null };
+      }
+      if (asked.kind === 'credited' || asked.kind === 'already_settled' || asked.kind === 'mismatch') {
+        return this.answerOf(paymentId, asked);
+      }
+
+      const payment = await tenantTransaction(this.prisma, (tx) =>
+        tx.paymentTransaction.findFirst({ where: { id: paymentId }, select: PAYMENT_SELECT }),
+      );
+      if (!payment) throw new ManualConfirmRefused('payment_not_found', paymentId);
+
+      const closed = await this.settlement.rejectManually(payment, {
+        adminId: actor.adminId,
+        reason: input.reason,
+        ip: actor.ip,
+      });
+      return {
+        paymentId,
+        // Not closed here: the ask's own `failed` closed it (F-092-aj), or another path settled it.
+        outcome: closed ? 'rejected_manually' : asked.kind === 'refused' ? 'refused' : 'already_settled',
+        gatewayStatus: asked.gatewayStatus,
+        referenceId: null,
       };
     });
   }
