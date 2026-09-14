@@ -632,8 +632,12 @@ export interface CouponRemoved {
   mode: "deleted" | "soft_deleted";
 }
 
+/** billing's `RedemptionStatus` — one declaration for the filter and the rows (C-09). */
+export const REDEMPTION_STATUSES = ["pending", "confirmed", "expired", "cancelled"] as const;
+export type RedemptionStatus = (typeof REDEMPTION_STATUSES)[number];
+
 export interface UsageQuery {
-  status?: "pending" | "confirmed" | "expired" | "cancelled";
+  status?: RedemptionStatus;
   from?: string;
   to?: string;
   page?: number;
@@ -651,7 +655,7 @@ export interface CouponUsageItem {
   paymentTransactionId: string | null;
   paymentStatus: string | null;
   discountAmount: string;
-  status: "pending" | "confirmed" | "expired" | "cancelled";
+  status: RedemptionStatus;
   redeemedAt: string;
 }
 

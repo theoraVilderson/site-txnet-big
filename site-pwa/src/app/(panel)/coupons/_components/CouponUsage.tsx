@@ -5,18 +5,30 @@ import { createPortal } from "react-dom";
 import { Loader2, RotateCw, X } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
-import { billingApi, type CouponUsageReport } from "@/lib/billing-api";
+import { billingApi, type CouponUsageReport, type UsageQuery } from "@/lib/billing-api";
+import { DatePicker } from "../../_components/kit/DatePicker";
 import { Pagination } from "../../_components/kit/Pagination";
+import { Select } from "../../_components/kit/Select";
 import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
 import { formatInstant } from "../../_lib/datetime";
-import { COUPON_KEYS as K, refusalKey } from "../_lib/coupon-form";
+import {
+  COUPON_KEYS as K,
+  USAGE_STATUSES,
+  emptyUsageFilter,
+  refusalKey,
+  usageQuery,
+  validateUsageFilter,
+  type UsageFilter,
+} from "../_lib/coupon-form";
 
 const U = K.usage;
 
 /**
- * Who used a coupon or a batch (F-502-e): the totals first — what it gave, what
- * is still on hold — then each redemption. `load` is the coupon's or the
- * batch's report; the view does not know which.
+ * Who used a coupon or a batch (F-502-e, F-502-i): the totals first — what it
+ * gave, what is still on hold — then each redemption, narrowed by status and a
+ * Tehran day range. Billing's totals follow the range but not the status, so
+ * they still answer "what did it give" while the list shows one status. `load`
+ * is the coupon's or the batch's report; the view does not know which.
  */
 export function CouponUsage({
   coupon,
@@ -26,32 +38,48 @@ export function CouponUsage({
 }: {
   coupon?: { id: string; code: string };
   title?: string;
-  load?: (page: number) => Promise<CouponUsageReport>;
+  load?: (query: UsageQuery) => Promise<CouponUsageReport>;
   onClose: () => void;
 }) {
   const { t, lang } = useLocale();
   const errorMessage = useApiErrorMessage();
   const [page, setPage] = useState(1);
+  const [filter, setFilter] = useState<UsageFilter>(emptyUsageFilter);
   const [report, setReport] = useState<CouponUsageReport | null>(null);
   const [error, setError] = useState<unknown>(null);
+  const badRange = validateUsageFilter(filter);
 
   const fetchPage = useCallback(
     async (p: number) => {
+      const query = usageQuery(filter, p);
       try {
-        setReport(await (load ? load(p) : billingApi.couponUsage(coupon!.id, { page: p, pageSize: 20 })));
+        setReport(await (load ? load(query) : billingApi.couponUsage(coupon!.id, query)));
         setError(null);
       } catch (e) {
         setError(e);
       }
     },
-    [coupon, load],
+    [coupon, load, filter],
   );
 
   useEffect(() => {
+    // A range that ends before it starts is not sent: billing would answer an empty page.
+    if (badRange) return;
     // Every setState in fetchPage runs after its first await.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchPage(page);
-  }, [fetchPage, page]);
+  }, [fetchPage, page, badRange]);
+
+  /** A new filter starts again from the first page. */
+  const narrow = (patch: Partial<UsageFilter>) => {
+    setFilter((f) => ({ ...f, ...patch }));
+    setPage(1);
+  };
+  const filtered = Boolean(filter.status || filter.from || filter.to);
+  const statusOptions = [
+    { value: "", label: t("common", U.filters.all) },
+    ...USAGE_STATUSES.map((s) => ({ value: s, label: t("common", U.status[s]) })),
+  ];
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -82,6 +110,31 @@ export function CouponUsage({
           </button>
         </header>
         <div className="flex flex-col gap-4 overflow-y-auto p-4">
+          <div className="flex flex-wrap items-end gap-2">
+            <Select
+              ariaLabel={t("common", U.filters.status)}
+              value={filter.status}
+              onChange={(v) => narrow({ status: v as UsageFilter["status"] })}
+              options={statusOptions}
+              className="w-36"
+            />
+            <div className="w-40">
+              <DatePicker label={t("common", U.filters.from)} value={filter.from || null} onChange={(v) => narrow({ from: v ?? "" })} />
+            </div>
+            <div className="w-40">
+              <DatePicker label={t("common", U.filters.to)} value={filter.to || null} onChange={(v) => narrow({ to: v ?? "" })} />
+            </div>
+            {filtered && (
+              <button type="button" onClick={() => narrow(emptyUsageFilter())} className="pb-2 text-xs font-bold text-primary">
+                {t("common", U.filters.clear)}
+              </button>
+            )}
+          </div>
+          {badRange && (
+            <p role="alert" className="text-xs font-bold text-error">
+              {t("common", badRange)}
+            </p>
+          )}
           {error ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p role="alert" className="text-xs font-bold text-error">

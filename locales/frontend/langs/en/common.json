@@ -936,6 +936,14 @@
         "expired": "Released",
         "cancelled": "Cancelled"
       },
+      "filters": {
+        "status": "Status",
+        "all": "All",
+        "from": "From",
+        "to": "To",
+        "clear": "Clear filters",
+        "badRange": "The end day is before the start day."
+      },
       "close": "Close"
     },
     "gift": {

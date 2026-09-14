@@ -10,14 +10,18 @@ import {
   COUPON_MANAGE,
   REFUSAL_KEYS,
   STATUS_TONES,
+  USAGE_STATUSES,
   createBody,
   dayToInstant,
   emptyCouponForm,
+  emptyUsageFilter,
   formFromCoupon,
   instantToDay,
   isUsed,
   updateBody,
+  usageQuery,
   validateCouponForm,
+  validateUsageFilter,
 } from "./_lib/coupon-form";
 
 /**
@@ -190,6 +194,39 @@ describe("days and instants", () => {
     expect(instantToDay(dayToInstant("2026-10-01", "start"), "start")).toBe("2026-10-01");
     expect(instantToDay(dayToInstant("2026-10-31", "end"), "end")).toBe("2026-10-31");
     expect(instantToDay(COUPON.expiresAt, "end")).toBe("2026-03-20");
+  });
+});
+
+/**
+ * The usage report's filters (F-502-i). Billing reads `from` as `gte` and `to`
+ * as `lte` over `redeemedAt`, so a picked "to" day ends on its own last instant
+ * in Tehran — not the next midnight, which would count a redemption at 00:00.
+ */
+describe("the usage filter", () => {
+  it("offers exactly billing's redemption statuses", () => {
+    const prisma = readFileSync(join(REPO, "txnet-backend/prisma/domains/billing.prisma"), "utf8");
+    const values = /enum RedemptionStatus \{([^}]*)\}/.exec(prisma)![1].split("\n").map((l) => l.trim()).filter((l) => /^[a-z_]+$/.test(l));
+    expect([...USAGE_STATUSES].sort()).toEqual(values.sort());
+  });
+
+  it("sends only the page when nothing is filtered", () => {
+    expect(usageQuery(emptyUsageFilter(), 3)).toEqual({ page: 3, pageSize: 20 });
+  });
+
+  it("sends a status and an inclusive Tehran day range", () => {
+    expect(usageQuery({ status: "confirmed", from: "2026-10-01", to: "2026-10-31" }, 1)).toEqual({
+      status: "confirmed",
+      from: "2026-10-01T00:00:00+03:30",
+      to: "2026-10-31T23:59:59.999+03:30",
+      page: 1,
+      pageSize: 20,
+    });
+  });
+
+  it("refuses a range that ends before it starts, and allows a single day", () => {
+    expect(validateUsageFilter({ status: "", from: "2026-10-02", to: "2026-10-01" })).toBe(COUPON_KEYS.usage.filters.badRange);
+    expect(validateUsageFilter({ status: "", from: "2026-10-01", to: "2026-10-01" })).toBeNull();
+    expect(validateUsageFilter({ status: "", from: "2026-10-01", to: "" })).toBeNull();
   });
 });
 

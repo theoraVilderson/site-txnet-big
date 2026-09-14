@@ -187,7 +187,7 @@ export function GiftCodes({ me, owner }: { me: Me | null; owner: boolean }) {
       {usageOf && (
         <CouponUsage
           title={t("common", G.usageTitle, { label: usageOf.label })}
-          load={(p) => billingApi.giftBatchUsage(usageOf.id, { page: p, pageSize: 20 })}
+          load={(query) => billingApi.giftBatchUsage(usageOf.id, query)}
           onClose={() => setUsageOf(null)}
         />
       )}

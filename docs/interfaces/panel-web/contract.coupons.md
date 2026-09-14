@@ -49,7 +49,13 @@ The routes, the scope and every rule are
    `CouponStatus`, test-checked against billing's union).
 9. **Usage** opens billing's report for the coupon: totals (redemptions, used,
    on hold, released, discount given) then each redemption, paginated. A
-   deleted coupon keeps only this action.
+   deleted coupon keeps only this action. **Filters (F-502-i):** a status from
+   `REDEMPTION_STATUSES` (test-checked against Prisma's `RedemptionStatus`) and
+   a Tehran day range — `from` the day's first instant, `to` its **last**
+   (`23:59:59.999+03:30`), since billing reads `to` as `lte`. A new filter goes
+   back to page 1; a range ending before it starts is said, not sent. Billing's
+   totals follow the range and ignore the status, and the view says nothing
+   more about them than billing does.
 
 10. **Gift codes (tab 2, F-502-h) are never on screen.** Generating answers
     the batch (label, counts), not its codes; "Download CSV" fetches
@@ -67,7 +73,8 @@ The routes, the scope and every rule are
 `coupons/coupons.test.ts` — refusal and status unions against the service
 source, `validateCouponForm` per rule, `createBody` (reseller vs owner, days,
 limits), `updateBody` (only changes, null clears), the Tehran day round trip,
-the menu permission, every key in `en` and `fa`.
+the menu permission, the usage filter (`usageQuery`, `validateUsageFilter`,
+statuses against Prisma), every key in `en` and `fa`.
 `coupons/gift-codes.test.ts` — `validateGiftBatch` per rule and against
 `GIFT_BATCH_MAX` in the service, `giftBatchBody` (reseller vs owner, prefix,
 inclusive day), every gift key in `en` and `fa`.
