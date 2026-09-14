@@ -4,7 +4,7 @@ layer: domain
 status: draft
 version: 1
 keywords: [grant, entitlement, access, quota, quota adjustment, subscription token, free grant, feature key]
-source: []
+source: [txnet-backend/prisma/domains/entitlement.prisma, txnet-backend/prisma/domains/migrations/20260914001600_entitlement_grant/**, txnet-backend/billing-service/src/app/entitlement/**]
 owns_tables: [grant, quota_adjustment]
 depends_on: [catalog, identity, tenant]
 updated: 2026-09-14

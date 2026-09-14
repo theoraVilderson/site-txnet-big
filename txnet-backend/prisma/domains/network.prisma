@@ -87,7 +87,8 @@ model Config {
   tenantId            String         @db.Uuid
   userId              String         @db.Uuid
   panelId             String         @db.Uuid
-  // What it draws on — a Grant — lands with F-026-b; the plan it once named is gone (ADR-0049).
+  /// The Grant whose quota it draws on (§4.6, F-026-b); its tenant is the config's.
+  grantId             String         @db.Uuid
   uuid                String         @unique // UUID واقعی روی Xray
   protocol            ConfigProtocol
   status              ConfigStatus   @default(active)
@@ -97,6 +98,7 @@ model Config {
   createdAt           DateTime       @default(now())
 
   panel Panel @relation(fields: [panelId], references: [id])
+  grant Grant @relation(fields: [grantId], references: [id])
 
   actionLogs       ConfigActionLog[]
   trafficRawLogs   TrafficRawLog[]

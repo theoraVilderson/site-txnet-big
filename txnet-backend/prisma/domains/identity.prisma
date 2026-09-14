@@ -109,6 +109,7 @@ model User {
   wallet               Wallet?
   deviceFingerprints   DeviceFingerprint[]
   otpCodes             OtpCode[]
+  grants               Grant[]
 
   /// ADR-0023: a person is identified *within* a tenant. Two resellers selling
   /// to the same human are two rows, in two tenants, and neither can see the

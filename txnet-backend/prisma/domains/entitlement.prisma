@@ -1,0 +1,120 @@
+// Schema `entitlement` — what a user holds (F-026-b, D-34, ADR-0049).
+// Spec: `tools/spec.py --section 4.4` .. `4.6`.
+// =============================================================================
+
+/// Why a Grant exists (§4.4).
+enum GrantSource {
+  purchase
+  admin_grant
+  coupon
+  affiliate_reward
+  migration
+  trial
+  rollover
+
+  @@schema("entitlement")
+}
+
+/// `pending → active → (suspended | exhausted | expired | cancelled)`; only
+/// `suspended → active` goes back. A trigger holds it (`grant_status_one_way`).
+enum GrantStatus {
+  pending
+  active
+  suspended
+  exhausted
+  expired
+  cancelled
+
+  @@schema("entitlement")
+}
+
+enum SharingPolicy {
+  exclusive
+  shared_pool
+
+  @@schema("entitlement")
+}
+
+/// The countable quota metrics (§4.5). Duration is `endsAt`, not a metric.
+enum QuotaMetric {
+  traffic_bytes
+  concurrent_devices
+  order_units
+  feature_items
+  api_calls
+
+  @@schema("entitlement")
+}
+
+/// One entitlement: "does an active Grant with this feature key exist?" is the
+/// only access question (§4.4). Quotas, duration and feature keys are copied
+/// from the variant at issue, so a later catalog edit never changes what was
+/// sold. Strictly tenant-scoped: never shared-read.
+model Grant {
+  id                    String             @id @default(uuid()) @db.Uuid
+  tenantId              String             @db.Uuid
+  userId                String             @db.Uuid
+  /// The variant it was issued from; null for one issued without a catalog item (`migration`).
+  variantId             String?            @db.Uuid
+  source                GrantSource
+  /// What issued it — the payment, the coupon redemption, the admin action. With
+  /// `source`, unique when set, so issuing twice for one cause is refused.
+  sourceReferenceId     String?            @db.Uuid
+  status                GrantStatus        @default(pending)
+  statusReason          String?
+  startsAt              DateTime
+  /// Null = permanent.
+  endsAt                DateTime?
+  billingMode           VariantBillingMode
+  featureKeys           String[]           @default([])
+  /// Per metric, copied from the variant: `{"traffic_bytes": {"limit": ..., "resetPolicy": "none"}}`.
+  quotas                Json               @default("{}")
+  sharingPolicy         SharingPolicy      @default(exclusive)
+  /// SHA-256 of the subscription token, lowercase hex. The token itself is shown
+  /// once — at issue and on rotation — and never stored (the user's call, 2026-09-14).
+  subscriptionTokenHash String             @unique
+  tokenRotatedAt        DateTime           @default(now())
+  /// Billing cursor for metered usage.
+  billedBytes           BigInt             @default(0)
+  /// The owning reseller node (C-15). Always null until reseller nodes exist (F-901).
+  resellerPath          String?
+  issuedByAdminId       String?            @db.Uuid
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @default(now()) @updatedAt
+
+  user             User              @relation(fields: [userId], references: [id])
+  variant          ProductVariant?   @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  quotaAdjustments QuotaAdjustment[]
+  configs          Config[]
+
+  @@index([tenantId, userId])
+  @@index([userId, status])
+  @@map("grant")
+  @@schema("entitlement")
+}
+
+/// A signed change to one quota metric of a Grant (§4.4, C-09 rollover). History:
+/// a trigger refuses any update or delete.
+model QuotaAdjustment {
+  id               String      @id @default(uuid()) @db.Uuid
+  tenantId         String      @db.Uuid
+  grantId          String      @db.Uuid
+  metric           QuotaMetric
+  delta            BigInt
+  source           GrantSource
+  /// Rollover only: the most of the old Grant's remainder carried, in percent.
+  capPercent       Int?
+  expiresAt        DateTime?
+  reason           String?
+  createdByAdminId String?     @db.Uuid
+  createdAt        DateTime    @default(now())
+
+  grant Grant @relation(fields: [grantId], references: [id])
+
+  @@index([grantId])
+  @@index([tenantId])
+  @@map("quota_adjustment")
+  @@schema("entitlement")
+}
+
+// =============================================================================

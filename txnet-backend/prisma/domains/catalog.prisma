@@ -119,6 +119,7 @@ model ProductVariant {
   product             Product              @relation(fields: [productId], references: [id])
   prices              Price[]
   couponServiceScopes CouponServiceScope[]
+  grants              Grant[]
 
   @@index([tenantId])
   @@index([productId])
