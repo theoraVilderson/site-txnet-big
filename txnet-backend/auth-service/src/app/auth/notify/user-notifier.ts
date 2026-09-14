@@ -6,19 +6,25 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContext } from '../../tenant-context/tenant-context';
 
 /** The named messages a service may ask to send. A template, never text: the words are this service's, in the user's language. */
-export const NOTIFY_TEMPLATES = ['paymentCredited'] as const;
+export const NOTIFY_TEMPLATES = ['paymentCredited', 'paymentReversed'] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
 export type NotifyRequest = { userId: string; template: NotifyTemplate; params: Record<string, string> };
 export type NotifyResult = { sent: Array<'telegram' | 'bale'> };
 
-type NotificationsNamespace = { payment?: { credited?: string } };
+type NotificationsNamespace = { payment?: { credited?: string; reversed?: string } };
 
 /** The key path in `notifications` each template reads, and the English it falls back to. */
 const TEMPLATE_TEXT: Record<NotifyTemplate, { read: (ns: NotificationsNamespace | undefined) => string | undefined; fallback: string }> = {
   paymentCredited: {
     read: (ns) => ns?.payment?.credited,
     fallback: '✅ Your payment was confirmed and {{amount}} was added to your wallet. Reference: {{reference}}',
+  },
+  // F-067-m: the gateway reversed the payment; the bank returns the money (ADR-0046 decision 5).
+  paymentReversed: {
+    read: (ns) => ns?.payment?.reversed,
+    fallback:
+      '↩️ Your payment of {{amount}} was reversed by the gateway and was not added to your wallet. The bank is returning it to your card; if it has not arrived within 72 hours, contact support.',
   },
 };
 

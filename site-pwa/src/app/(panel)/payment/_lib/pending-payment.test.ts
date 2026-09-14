@@ -1,5 +1,5 @@
 import type { WalletPaymentRow } from "@/lib/billing-api";
-import { PENDING_POLL_MS, pendingStateOf, readPaymentCredited } from "./pending-payment";
+import { PENDING_POLL_MS, pendingStateOf, readPaymentCredited, readPaymentReversed } from "./pending-payment";
 
 /**
  * `/payment/pending` (F-093-l, ADR-0044 decision 7). What breaks silently:
@@ -82,3 +82,25 @@ describe("readPaymentCredited", () => {
     expect(readPaymentCredited(payload)).toBeNull();
   });
 });
+
+describe("readPaymentReversed (F-067-m)", () => {
+  it("reads the event worker-service publishes when the gateway reversed a payment", () => {
+    expect(
+      readPaymentReversed({ type: "billing.payment.reversed", paymentId: "p-1", amountCredited: "19.80" }),
+    ).toEqual({ paymentId: "p-1", amountCredited: "19.80" });
+  });
+
+  it.each([
+    null,
+    { type: "billing.payment.confirmed", paymentId: "p-1", amountCredited: "19.80" },
+    { type: "billing.payment.reversed", paymentId: "p-1", amountCredited: "<b>9</b>" },
+    { type: "billing.payment.reversed", amountCredited: "19.80" },
+  ])("ignores %j", (payload) => {
+    expect(readPaymentReversed(payload)).toBeNull();
+  });
+
+  it("is never read as a credit", () => {
+    expect(readPaymentCredited({ type: "billing.payment.reversed", paymentId: "p-1", amountCredited: "19.80" })).toBeNull();
+  });
+});
+

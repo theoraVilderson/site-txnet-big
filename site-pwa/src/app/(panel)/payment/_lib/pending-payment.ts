@@ -35,9 +35,21 @@ export function pendingStateOf(row: WalletPaymentRow | null): PendingState {
  * billing's decimal string — it is printed.
  */
 export function readPaymentCredited(payload: unknown): { paymentId: string; amountCredited: string } | null {
+  return readPaymentEvent(payload, "billing.payment.confirmed");
+}
+
+/**
+ * A payment the gateway reversed, announced on the same channel (F-067-m,
+ * ADR-0046 decision 5) — the bank is returning the money — or `null`.
+ */
+export function readPaymentReversed(payload: unknown): { paymentId: string; amountCredited: string } | null {
+  return readPaymentEvent(payload, "billing.payment.reversed");
+}
+
+function readPaymentEvent(payload: unknown, type: string): { paymentId: string; amountCredited: string } | null {
   if (!payload || typeof payload !== "object") return null;
   const p = payload as Record<string, unknown>;
-  if (p.type !== "billing.payment.confirmed") return null;
+  if (p.type !== type) return null;
   if (typeof p.paymentId !== "string" || !p.paymentId) return null;
   if (typeof p.amountCredited !== "string" || !/^\d{1,16}(\.\d{1,2})?$/.test(p.amountCredited)) return null;
   return { paymentId: p.paymentId, amountCredited: p.amountCredited };

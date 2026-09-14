@@ -1,16 +1,14 @@
-import { IdentityHeaders, RedisTtl, RequestHeaders, UnscopedRedisKeys, type OutboxMessage } from '@txnet-backend/shared-core';
+import { RedisTtl, UnscopedRedisKeys, type OutboxMessage } from '@txnet-backend/shared-core';
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { BrokerService } from '../broker/broker.service';
 import { RealtimePublisher } from '../realtime/realtime.publisher';
 import { RedisService } from '../redis/redis.service';
+import { UserNoticeSender } from './user-notice';
 
 /** This consumer's segment of the processed-event key (ADR-0045). */
 const CONSUMER = 'payment-credited-notify';
-
-/** auth-service's seam for messaging a user on their linked bot (ADR-0045 decision 2). */
-const NOTIFY_PATH = '/api/internal/notify/user';
 
 /** The part of billing's `billing.payment.confirmed` payload this reads (`DepositSettlementService.publishConfirmed`). */
 type PaymentConfirmed = {
@@ -45,9 +43,7 @@ type PaymentConfirmed = {
 @Injectable()
 export class PaymentConfirmedConsumer implements OnApplicationBootstrap {
   private readonly logger = new Logger(PaymentConfirmedConsumer.name);
-  private readonly baseUrl: string;
-  private readonly serviceToken: string;
-  private readonly timeoutMs: number;
+  private readonly notices: UserNoticeSender;
 
   constructor(
     private readonly broker: BrokerService,
@@ -55,9 +51,7 @@ export class PaymentConfirmedConsumer implements OnApplicationBootstrap {
     private readonly realtime: RealtimePublisher,
     config: ConfigService,
   ) {
-    this.baseUrl = config.get<string>('AUTH_API_BASE_URL', '').replace(/\/+$/, '');
-    this.serviceToken = config.get<string>('SERVICE_AUTH_TOKEN', '');
-    this.timeoutMs = config.get<number>('AUTH_API_TIMEOUT_MS', 30_000);
+    this.notices = new UserNoticeSender(config);
   }
 
   async onApplicationBootstrap() {
@@ -88,31 +82,13 @@ export class PaymentConfirmedConsumer implements OnApplicationBootstrap {
     }
   }
 
-  private async notify(payment: PaymentConfirmed): Promise<void> {
-    if (!this.baseUrl) throw new Error('AUTH_API_BASE_URL is not set');
-    if (!this.serviceToken) throw new Error('SERVICE_AUTH_TOKEN is not set');
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-    try {
-      const response = await fetch(`${this.baseUrl}${NOTIFY_PATH}`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          [RequestHeaders.serviceToken]: this.serviceToken,
-          [IdentityHeaders.tenantId]: payment.tenantId,
-        },
-        body: JSON.stringify({
-          userId: payment.userId,
-          template: 'paymentCredited',
-          params: { amount: payment.amountCredited, reference: payment.gatewayReferenceId ?? '' },
-        }),
-        signal: controller.signal,
-      });
-      if (!response.ok) throw new Error(`auth-api answered ${response.status} to ${NOTIFY_PATH}`);
-    } finally {
-      clearTimeout(timer);
-    }
+  private notify(payment: PaymentConfirmed): Promise<void> {
+    return this.notices.send({
+      tenantId: payment.tenantId,
+      userId: payment.userId,
+      template: 'paymentCredited',
+      params: { amount: payment.amountCredited, reference: payment.gatewayReferenceId ?? '' },
+    });
   }
 }
 

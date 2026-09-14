@@ -173,7 +173,9 @@ paymentId, amountCredited}` on `user:<userId>`. Two listeners share the
 channel: `useWalletBalance` re-reads on any event, and
 `_components/PaymentCreditedToast.tsx` (at the layout) shows "payment
 confirmed" for 8 s for this one shape only — `readPaymentCredited` ignores the
-rest and refuses an amount that is not a decimal string.
+rest and refuses an amount that is not a decimal string. Since F-067-m the same
+toast also shows "payment reversed" for `{type:'billing.payment.reversed',
+paymentId, amountCredited}` (`readPaymentReversed`), the last event heard.
 
 ## Identity does not change on a live socket
 

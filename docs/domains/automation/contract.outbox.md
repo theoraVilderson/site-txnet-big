@@ -152,9 +152,22 @@ every other stays so.
 | A payload missing its tenant, user, payment, amount or source throws | whose payment it is is never guessed |
 | **The relay still needs its schedule.** `outbox_relay` is not in `SEEDED_SCHEDULES`; unscheduled, the event is never published and nobody is told | ADR-0045 consequences — an operator decision, not this consumer's |
 
+## The second consumer: a reversed payment (F-067-m, ADR-0046)
+
+`PaymentReversedConsumer`, on its own queue `AUTOMATION_PAYMENT_REVERSED_QUEUE`
+bound to exactly `outbox.billing.payment.reversed`. Both consumers send through
+`outbox/user-notice.ts` (`UserNoticeSender`).
+
+| Rule | Why |
+|---|---|
+| Every reversal is told — there is no source to skip | nobody watches a reversal happen; a payer who paid and got nothing must hear why |
+| Its marker is `outboxProcessed('payment-reversed-notify', <event id>)`, never the credited notice's | one payment can carry both events in its life; neither may swallow the other |
+| `{type:'billing.payment.reversed', paymentId, amountCredited}` on `user:<userId>`, then template `paymentReversed` with `{amount}` | the panel toast and the bot message; the words are auth-service's, in the user's language |
+| Otherwise the first consumer's rules: dedupe before any side effect, marker given back on a throw, a payload without tenant, user, payment or amount throws | ADR-0045 |
+
 ## What is not built
 
-- One consumer only (below); no Postgres idempotency store — ADR-0045 chose
+- Two payer notices only; no Postgres idempotency store — ADR-0045 chose
   Redis for the first, and a consumer that moves money must choose again.
 - No retention or archive of published rows. ADR-0021 makes the table an audit
   trail; when that stops being worth keeping needs a producer with an opinion.

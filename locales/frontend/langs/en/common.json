@@ -25,6 +25,11 @@
       "title": "Payment confirmed",
       "body": "{{amount}} was added to your wallet.",
       "dismiss": "Dismiss"
+    },
+    "paymentReversed": {
+      "title": "Payment reversed",
+      "body": "Your payment of {{amount}} was reversed by the gateway; the bank is returning it to your card.",
+      "dismiss": "Dismiss"
     }
   },
   "gateways": {

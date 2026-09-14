@@ -17,6 +17,8 @@ import {
 
 /** The billing event F-067-l consumes — `billing/contract.deposit.md`'s outbox row. */
 export const PAYMENT_CONFIRMED_EVENT = 'billing.payment.confirmed';
+/** The outbox event a reversed payment writes (F-092-ae), consumed for the payer notice (F-067-m). */
+export const PAYMENT_REVERSED_EVENT = 'billing.payment.reversed';
 
 /** What a consumer is handed. `key` is the `<key>` of `automation.tick.<key>`. */
 export interface TickMessage {
@@ -176,6 +178,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   private readonly deadQueue: string;
   private readonly otpQueue: string;
   private readonly paymentConfirmedQueue: string;
+  private readonly paymentReversedQueue: string;
   private readonly botUpdatePrefix: string;
   private readonly botUpdateQueues: number;
   private readonly confirmMs: number;
@@ -191,6 +194,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     this.deadQueue = config.getOrThrow<string>('AUTOMATION_DEAD_QUEUE');
     this.otpQueue = config.getOrThrow<string>('AUTOMATION_OTP_QUEUE');
     this.paymentConfirmedQueue = config.getOrThrow<string>('AUTOMATION_PAYMENT_CONFIRMED_QUEUE');
+    this.paymentReversedQueue = config.getOrThrow<string>('AUTOMATION_PAYMENT_REVERSED_QUEUE');
     this.botUpdatePrefix = config.getOrThrow<string>('BOT_UPDATE_QUEUE_PREFIX');
     this.botUpdateQueues = config.getOrThrow<number>('BOT_UPDATE_QUEUES');
     this.confirmMs = config.getOrThrow<number>('AUTOMATION_PUBLISH_CONFIRM_MS');
@@ -246,6 +250,13 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       this.exchange,
       outboxRoutingKey(PAYMENT_CONFIRMED_EVENT),
     );
+    // The second (F-067-m): its own queue, so a backlog of one notice never
+    // sits in front of the other and each depth is watched on its own.
+    await this.channel.assertQueue(this.paymentReversedQueue, {
+      durable: true,
+      arguments: { 'x-dead-letter-exchange': this.deadExchange },
+    });
+    await this.channel.bindQueue(this.paymentReversedQueue, this.exchange, outboxRoutingKey(PAYMENT_REVERSED_EVENT));
 
     // The bot-update set (F-067-b, D-16). One queue per slot, each bound to
     // exactly its own routing key — not one queue on `bot.update.#`, which
@@ -426,8 +437,17 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
    * handler's (ADR-0045), because only it knows what "handled" means.
    */
   async consumePaymentConfirmed(handle: OutboxHandler): Promise<void> {
+    await this.consumeOutbox(this.paymentConfirmedQueue, handle);
+  }
+
+  /** Start consuming `billing.payment.reversed` outbox events (F-067-m), by the same rules. */
+  async consumePaymentReversed(handle: OutboxHandler): Promise<void> {
+    await this.consumeOutbox(this.paymentReversedQueue, handle);
+  }
+
+  private async consumeOutbox(queue: string, handle: OutboxHandler): Promise<void> {
     const channel = this.require();
-    await channel.consume(this.paymentConfirmedQueue, async (message) => {
+    await channel.consume(queue, async (message) => {
       if (message === null) return;
       let event: OutboxMessage;
       try {
