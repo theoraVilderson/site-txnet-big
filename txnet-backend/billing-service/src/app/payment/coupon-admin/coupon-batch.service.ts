@@ -20,8 +20,10 @@ export type GenerateBatchInput = {
   label: string;
   note?: string | null;
   count: number;
-  /** The wallet credit each code gives, base currency (C-02). */
+  /** The wallet credit each code gives, base currency (C-02). `0` for a free-service batch. */
   value: string;
+  /** Set: every code is a `free_grant` of this variant (F-502-l-a) and `value` must be 0. */
+  grantVariantId?: string | null;
   /** Upper-cased and joined with a dash: `YLD-7KQ2M9XHRT`. */
   prefix?: string | null;
   expiresAt?: string | Date | null;
@@ -78,7 +80,14 @@ export class CouponBatchService {
     } catch {
       throw new CouponAdminRefused('invalid_value', 'value');
     }
-    if (!value.isPositive() || value.isZero() || value.decimalPlaces() > 2) throw new CouponAdminRefused('invalid_value', 'value');
+    const grantVariantId = input.grantVariantId ?? null;
+    if (grantVariantId) {
+      // A free-service batch gives a Grant, never money.
+      if (!value.isZero()) throw new CouponAdminRefused('invalid_value', 'value');
+      await this.coupons.assertGrantVariant(tenantId, grantVariantId);
+    } else if (!value.isPositive() || value.isZero() || value.decimalPlaces() > 2) {
+      throw new CouponAdminRefused('invalid_value', 'value');
+    }
     const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
     if (expiresAt && Number.isNaN(expiresAt.getTime())) throw new CouponAdminRefused('invalid_limit', 'expiresAt');
     const tenantIds = [...new Set(input.tenantIds ?? [])];
@@ -98,8 +107,9 @@ export class CouponBatchService {
             data: codes.slice(i, i + CHUNK).map((code) => ({
               tenantId,
               code,
-              discountType: DiscountType.wallet_credit,
+              discountType: grantVariantId ? DiscountType.free_grant : DiscountType.wallet_credit,
               discountValue: value,
+              grantVariantId,
               totalUsageLimit: 1,
               perUserUsageLimit: 1,
               expiresAt,
@@ -125,7 +135,7 @@ export class CouponBatchService {
             targetEntityId: row.id,
             oldValue: Prisma.DbNull,
             // The count and the terms — never a code.
-            newValue: { label, count, value: value.toFixed(2), prefix, expiresAt: expiresAt?.toISOString() ?? null, tenantIds },
+            newValue: { label, count, value: value.toFixed(2), grantVariantId, prefix, expiresAt: expiresAt?.toISOString() ?? null, tenantIds },
             adminIpAddress: actor.ip,
           },
         });

@@ -53,6 +53,8 @@ const fields = {
   serviceScopes: z
     .array(z.object({ productId: uuid('productId').nullable().optional(), variantId: uuid('variantId').nullable().optional() }).strict())
     .max(100),
+  /** A `free_grant` coupon's variant (F-502-l-a). */
+  grantVariantId: uuid('grantVariantId').nullable(),
 };
 
 const optional = Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v.optional()])) as {
@@ -93,6 +95,8 @@ export const generateBatchSchema = z
     note: z.string().trim().max(1000).nullable().optional(),
     count: z.number().int().min(1).max(GIFT_BATCH_MAX),
     value: decimal('value'),
+    /** Set: a free-service batch of this variant, and `value` is 0 (F-502-l-a). */
+    grantVariantId: uuid('grantVariantId').nullable().optional(),
     prefix: z.string().trim().max(8).nullable().optional(),
     expiresAt: instant('expiresAt').nullable().optional(),
     tenantIds: z.array(uuid('tenantIds')).max(1000).optional(),

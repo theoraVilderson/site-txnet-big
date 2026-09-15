@@ -907,6 +907,7 @@
       "platform_coupon_needs_platform_gateway": "A platform coupon can be limited to platform gateways only.",
       "gateway_not_found": "A chosen gateway is not one this coupon's users can pay through.",
       "scope_not_found": "A product or variant was not found.",
+      "variant_not_found": "That catalog variant was not found, is switched off, or is another tenant's.",
       "used_coupon_frozen": "This coupon has been used; its type and value cannot change.",
       "capacity_below_used": "Total uses cannot be below what is already used or on hold.",
       "batch_not_found": "That batch does not exist or is not yours.",

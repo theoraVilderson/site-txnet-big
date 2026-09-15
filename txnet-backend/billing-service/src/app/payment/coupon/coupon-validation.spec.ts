@@ -172,6 +172,7 @@ describe('each gate refuses with its own reason', () => {
     ['targeted at someone else — indistinguishable from unknown', { visibility: CouponVisibility.targeted }, 'not_found'],
     ['targeted at this user', { visibility: CouponVisibility.targeted, allowsUser: true }, null],
     ['a gift code is not a discount (F-092-m)', { discountType: DiscountType.wallet_credit }, 'not_a_discount'],
+    ['a free-service code is not a discount (F-502-l-a)', { discountType: DiscountType.free_grant }, 'not_a_discount'],
     ['expired at this instant', { expiresAt: NOW }, 'expired'],
     ['expires later', { expiresAt: new Date('2026-09-11T12:00:01Z') }, null],
     ['scoped to a variant, used on a top-up', { scopes: [{ productId: null, variantId: VARIANT }] }, 'out_of_scope'],

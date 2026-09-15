@@ -145,3 +145,49 @@ describe('whose users a platform coupon serves', () => {
 it('ships the coupon.manage permission', async () => {
   await expect(owner.permission.count({ where: { key: 'coupon.manage' } })).resolves.toBe(1);
 });
+
+/**
+ * A `free_grant` coupon (F-502-l-a, D-35) gives a Grant of one variant: the
+ * database holds that it names exactly that variant and no value, and the
+ * top-up engine refuses it as not a discount, as it does a gift code.
+ */
+describe('a free_grant coupon', () => {
+  const CATEGORY = '88888888-8888-4888-8888-8888888888a1';
+  const PRODUCT = '88888888-8888-4888-8888-8888888888a2';
+  const VARIANT = '88888888-8888-4888-8888-8888888888a3';
+  const FREE = '88888888-8888-4888-8888-8888888888a4';
+
+  beforeAll(async () => {
+    await owner.$executeRawUnsafe(`INSERT INTO catalog.product_category (id, key, "nameKey") VALUES ('${CATEGORY}', 'vpn', 'k.v')`);
+    await owner.$executeRawUnsafe(`
+      INSERT INTO catalog.product (id, "categoryId", key, "nameKey", "fulfilmentKind") VALUES ('${PRODUCT}', '${CATEGORY}', 'vpn_free', 'k.p', 'network_access')
+    `);
+    await owner.$executeRawUnsafe(`
+      INSERT INTO catalog.product_variant (id, "productId", sku, "billingMode", visibility) VALUES ('${VARIANT}', '${PRODUCT}', 'FREE-30', 'prepaid', 'public')
+    `);
+  });
+
+  const insert = (id: string, code: string, type: string, value: string, variant: string | null) =>
+    owner.$executeRawUnsafe(`
+      INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "createdByAdminId", "grantVariantId")
+      VALUES ('${id}', '${RESELLER_A}', '${code}', '${type}', ${value}, '${ADMIN}', ${variant ? `'${variant}'` : 'NULL'})
+    `);
+
+  it('names exactly one variant, only for that type, and carries no value', async () => {
+    await expect(insert('88888888-8888-4888-8888-8888888888b1', 'FREENOVARIANT', 'free_grant', '0', null)).rejects.toThrow(/coupon_free_grant_names_variant/);
+    await expect(insert('88888888-8888-4888-8888-8888888888b2', 'FREEWITHVALUE', 'free_grant', '5.00', VARIANT)).rejects.toThrow(/coupon_free_grant_has_no_value/);
+    await expect(insert('88888888-8888-4888-8888-8888888888b3', 'PERCENTVARIANT', 'percentage', '10.00', VARIANT)).rejects.toThrow(/coupon_free_grant_names_variant/);
+    await expect(insert(FREE, 'FREEVPN', 'free_grant', '0', VARIANT)).resolves.toBe(1);
+  });
+
+  it('is refused at the top-up as not a discount', async () => {
+    const rows = await runWithTenant({ id: RESELLER_A }, () =>
+      tenantTransaction(app, (tx: Prisma.TransactionClient) =>
+        tx.$queryRawUnsafe<{ outcome: string }[]>(
+          `SELECT billing.reserve_coupon('${FREE}'::uuid, '${ADMIN}'::uuid, gen_random_uuid(), NULL, 1.00) AS outcome`,
+        ),
+      ),
+    );
+    expect(rows[0].outcome).toBe('not_a_discount');
+  });
+});

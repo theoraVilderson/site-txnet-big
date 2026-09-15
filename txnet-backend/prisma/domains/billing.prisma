@@ -269,6 +269,8 @@ model Coupon {
   note                String?
   /// A gift code generated in a batch (F-502-d); null = made one at a time.
   batchId             String?           @db.Uuid
+  /// A `free_grant` coupon's variant (F-502-l-a); null for every other type. A CHECK holds both.
+  grantVariantId      String?           @db.Uuid
   /// Soft delete (D-33): a used coupon is hidden, kept for its receipts.
   deletedAt           DateTime?
   deletedByAdminId    String?           @db.Uuid
@@ -281,6 +283,7 @@ model Coupon {
   tenants       CouponTenant[]
   gateways      CouponGateway[]
   batch         CouponBatch?      @relation(fields: [batchId], references: [id])
+  grantVariant  ProductVariant?   @relation(fields: [grantVariantId], references: [id], onDelete: Restrict)
 
   @@index([tenantId, code])
   @@index([batchId])

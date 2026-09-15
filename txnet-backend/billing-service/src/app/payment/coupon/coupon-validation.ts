@@ -151,7 +151,8 @@ export function normalizeCouponCodes(codes: readonly string[]): string[] {
 function gate(c: CouponFacts, request: CouponRequest, now: Date): CouponRejection | null {
   if (!c.isActive || c.deletedAt) return 'not_found';
   if (c.visibility === CouponVisibility.targeted && !c.allowsUser) return 'not_found';
-  if (c.discountType === DiscountType.wallet_credit) return 'not_a_discount';
+  // A gift code and a free-service code are redeemed in the gift box, not priced here (F-502-l-a).
+  if (c.discountType === DiscountType.wallet_credit || c.discountType === DiscountType.free_grant) return 'not_a_discount';
   if (c.tenantId === null && request.gatewaySource === 'tenant') return 'platform_coupon_needs_platform_gateway';
   if (c.validFrom && now.getTime() < c.validFrom.getTime()) return 'not_started';
   if (c.expiresAt && now.getTime() >= c.expiresAt.getTime()) return 'expired';

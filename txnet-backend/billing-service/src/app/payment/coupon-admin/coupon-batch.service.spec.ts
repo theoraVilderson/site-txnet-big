@@ -22,6 +22,7 @@ const RESELLER = '22222222-2222-4222-8222-222222222222';
 const OTHER = '33333333-3333-4333-8333-333333333333';
 const ADMIN = '44444444-4444-4444-8444-444444444444';
 const OTHER_BATCH = '55555555-5555-4555-8555-555555555555';
+const VARIANT = '66666666-6666-4666-8666-666666666666';
 
 const actor = (tenantId: string) => ({ adminId: ADMIN, tenantId, ip: '10.0.0.9' });
 
@@ -84,6 +85,7 @@ function build() {
     coupon: table([{ id: 'live', tenantId: RESELLER, code: 'TAKEN-AAAAAAAAAA', deletedAt: null, usedCount: 0, reservedCount: 0, isActive: true }], 'coupon', writes),
     couponBatch: table([{ id: OTHER_BATCH, tenantId: OTHER, label: 'theirs', createdAt: new Date(), deactivatedAt: null }], 'couponBatch', writes),
     couponTenant: table([], 'couponTenant', writes),
+    productVariant: table([{ id: VARIANT, tenantId: null, isActive: true, product: { isActive: true, category: { isActive: true } } }], 'productVariant', writes),
     adminAuditLog: {
       create: async ({ data }: { data: Row }) => {
         writes.push('audit');
@@ -145,6 +147,19 @@ describe('CouponBatchService — generate', () => {
     expect((await refusal(() => service.generate(actor(RESELLER), { ...BATCH, count: 0 }))).reason).toBe('invalid_batch');
     expect((await refusal(() => service.generate(actor(RESELLER), { ...BATCH, count: 5001 }))).reason).toBe('invalid_batch');
     expect((await refusal(() => service.generate(actor(RESELLER), { ...BATCH, value: '0' }))).reason).toBe('invalid_value');
+  });
+
+  it('makes free-service codes when the batch names a variant, with no value (F-502-l-a)', async () => {
+    const { service, db } = build();
+    const batch = await service.generate(actor(RESELLER), { label: 'free month', count: 3, value: '0', grantVariantId: VARIANT });
+    const codes = db.coupon.rows.filter((r) => r['batchId'] === batch.id);
+    expect(codes).toHaveLength(3);
+    for (const c of codes) {
+      expect(c).toMatchObject({ discountType: DiscountType.free_grant, grantVariantId: VARIANT, totalUsageLimit: 1, perUserUsageLimit: 1 });
+      expect(Number(String(c['discountValue']))).toBe(0);
+    }
+    expect((await refusal(() => service.generate(actor(RESELLER), { label: 'x', count: 1, value: '5', grantVariantId: VARIANT }))).reason).toBe('invalid_value');
+    expect((await refusal(() => service.generate(actor(RESELLER), { label: 'x', count: 1, value: '0', grantVariantId: OTHER_BATCH }))).reason).toBe('variant_not_found');
   });
 });
 

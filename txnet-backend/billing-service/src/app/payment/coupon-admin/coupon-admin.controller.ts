@@ -51,6 +51,7 @@ export const COUPON_REFUSAL_STATUS: Record<CouponAdminRejection, 400 | 403 | 404
   tenant_not_found: 404,
   gateway_not_found: 404,
   scope_not_found: 404,
+  variant_not_found: 404,
   code_taken: 409,
   used_coupon_frozen: 409,
   capacity_below_used: 409,

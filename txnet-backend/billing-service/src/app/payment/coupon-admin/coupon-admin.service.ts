@@ -43,6 +43,8 @@ export type CouponFields = {
   gateways?: CouponGatewayRef[];
   /** `coupon_service_scope`; none = open scope. Given = the whole set. */
   serviceScopes?: CouponScopeRef[];
+  /** The variant a `free_grant` coupon grants (F-502-l-a); null for every other type. */
+  grantVariantId?: string | null;
 };
 /** `tenantId`: absent = the caller's tenant; `null` = a platform coupon; another id = the platform owner's alone. */
 export type CreateCouponInput = CouponFields & { code: string; discountType: string; discountValue: string; tenantId?: string | null };
@@ -83,6 +85,7 @@ export type CouponView = {
   tenantIds: string[];
   gateways: CouponGatewayRef[];
   serviceScopes: Array<{ productId: string | null; variantId: string | null }>;
+  grantVariantId: string | null;
   status: CouponStatus;
   deletedAt: Date | null;
   createdAt: Date;
@@ -97,7 +100,10 @@ export type CouponListFilter = {
   /** The platform owner only; a tenant's is ignored. `platform` = platform coupons. */
   tenantId?: string;
   status?: (typeof COUPON_LIST_STATUSES)[number];
-  /** `discount` = percentage and fixed; `gift` = wallet credit. */
+  /**
+   * `discount` = percentage, fixed and a free-service coupon made one at a time;
+   * `gift` = wallet credit and free-service codes made in a batch.
+   */
   kind?: (typeof COUPON_KINDS)[number];
   /** Part of the code or the label. */
   q?: string;
@@ -121,6 +127,8 @@ export type CouponAdminRejection =
   | 'platform_coupon_needs_platform_gateway'
   | 'gateway_not_found'
   | 'scope_not_found'
+  /** A `free_grant` coupon's variant: unknown, switched off, or not the platform's or the coupon owner's. */
+  | 'variant_not_found'
   | 'used_coupon_frozen'
   | 'capacity_below_used'
   | 'batch_not_found'
@@ -142,6 +150,7 @@ const DECIMAL_COLUMNS = ['discountValue', 'maxDiscountCap', 'minPurchaseAmount',
 const PLAIN_COLUMNS = [
   'code', 'discountType', 'totalUsageLimit', 'perUserUsageLimit', 'isActive', 'visibility', 'activeWeekdays', 'activeHourFrom',
   'activeHourTo', 'firstPurchaseOnly', 'newUserWithinDays', 'periodUsageLimit', 'periodDays', 'allowedChannels', 'label', 'note',
+  'grantVariantId',
 ] as const;
 const DATE_COLUMNS = ['expiresAt', 'validFrom'] as const;
 /**
@@ -289,6 +298,8 @@ export class CouponAdminService {
       if (used) {
         if (next['discountType'] !== fresh['discountType']) throw new CouponAdminRefused('used_coupon_frozen', 'discountType');
         if (!dec(next['discountValue'])!.equals(dec(fresh['discountValue'])!)) throw new CouponAdminRefused('used_coupon_frozen', 'discountValue');
+        // A redemption already issued a Grant of this variant: the receipt names it.
+        if ((next['grantVariantId'] ?? null) !== (fresh['grantVariantId'] ?? null)) throw new CouponAdminRefused('used_coupon_frozen', 'grantVariantId');
       }
       const floor = Number(fresh['usedCount']) + Number(fresh['reservedCount']);
       if (patch.totalUsageLimit !== undefined && patch.totalUsageLimit !== null && patch.totalUsageLimit < floor) {
@@ -410,6 +421,7 @@ export class CouponAdminService {
         tenantIds: of(tenants, id).map((t) => t.tenantId),
         gateways: of(gateways, id).map((g) => (g.gatewayId ? { source: 'platform' as const, id: g.gatewayId } : { source: 'tenant' as const, id: g.tenantGatewayConfigId as string })),
         serviceScopes: of(scopes, id).map((s) => ({ productId: s.productId ?? null, variantId: s.variantId ?? null })),
+        grantVariantId: str(row['grantVariantId']),
         status: statusOf(row, now),
         deletedAt: date(row['deletedAt']),
         createdAt: row['createdAt'] as Date,
@@ -432,8 +444,12 @@ export class CouponAdminService {
     if (filter.status === 'active') and.push({ isActive: true }, { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] });
     if (filter.status === 'inactive') and.push({ isActive: false });
     if (filter.status === 'expired') and.push({ expiresAt: { lte: now } });
-    if (filter.kind === 'gift') and.push({ discountType: DiscountType.wallet_credit });
-    if (filter.kind === 'discount') and.push({ discountType: { in: [DiscountType.percentage, DiscountType.fixed_amount] } });
+    if (filter.kind === 'gift') {
+      and.push({ OR: [{ discountType: DiscountType.wallet_credit }, { discountType: DiscountType.free_grant, batchId: { not: null } }] });
+    }
+    if (filter.kind === 'discount') {
+      and.push({ OR: [{ discountType: { in: [DiscountType.percentage, DiscountType.fixed_amount] } }, { discountType: DiscountType.free_grant, batchId: null }] });
+    }
     if (filter.batchId) and.push({ batchId: filter.batchId });
     const q = filter.q?.trim();
     if (q) and.push({ OR: [{ code: { contains: q.toUpperCase() } }, { label: { contains: q, mode: 'insensitive' } }] });
@@ -463,13 +479,25 @@ export class CouponAdminService {
     const type = next['discountType'] as string;
     if (!(type in DiscountType)) throw new CouponAdminRefused('invalid_value', 'discountType');
     if (!((next['visibility'] as string) in CouponVisibility)) throw new CouponAdminRefused('invalid_value', 'visibility');
-    const value = dec(next['discountValue']);
-    if (!value || !value.isPositive() || value.isZero()) throw new CouponAdminRefused('invalid_value', 'discountValue');
-    if (type === DiscountType.percentage && value.greaterThan(100)) throw new CouponAdminRefused('invalid_value', 'a percentage is at most 100');
+    const grantVariantId = (next['grantVariantId'] as string | null | undefined) ?? null;
+    next['grantVariantId'] = grantVariantId;
+    if (type === DiscountType.free_grant) {
+      // A free service (F-502-l-a): it names the variant it grants and gives no money.
+      if (!grantVariantId) throw new CouponAdminRefused('invalid_value', 'grantVariantId');
+      const zero = dec(next['discountValue'] ?? '0');
+      if (!zero || !zero.isZero()) throw new CouponAdminRefused('invalid_value', 'discountValue');
+      next['discountValue'] = '0';
+    } else {
+      if (grantVariantId) throw new CouponAdminRefused('invalid_value', 'grantVariantId');
+      const value = dec(next['discountValue']);
+      if (!value || !value.isPositive() || value.isZero()) throw new CouponAdminRefused('invalid_value', 'discountValue');
+      if (type === DiscountType.percentage && value.greaterThan(100)) throw new CouponAdminRefused('invalid_value', 'a percentage is at most 100');
+    }
     const cap = dec(next['maxDiscountCap']);
     if (cap && (type !== DiscountType.percentage || !cap.isPositive() || cap.isZero())) throw new CouponAdminRefused('invalid_value', 'maxDiscountCap');
 
-    if (type === DiscountType.wallet_credit) {
+    // Both are redeemed in the gift-code box, which reads no purchase, gateway or channel.
+    if (type === DiscountType.wallet_credit || type === DiscountType.free_grant) {
       for (const k of NOT_FOR_GIFT_CODES) if (next[k] !== null && next[k] !== undefined) throw new CouponAdminRefused('limits_not_for_gift_codes', k);
       if ((next['activeWeekdays'] as unknown[]).length > 0 || (next['allowedChannels'] as unknown[]).length > 0 || next['firstPurchaseOnly'] === true) {
         throw new CouponAdminRefused('limits_not_for_gift_codes');
@@ -568,7 +596,26 @@ export class CouponAdminService {
         if (!found || (found.tenantId !== null && found.tenantId !== tenantId)) throw new CouponAdminRefused('scope_not_found', variant ?? product ?? '');
       }
     }
+
+    const grantVariantId = next['grantVariantId'] as string | null;
+    if (grantVariantId && (patch.grantVariantId !== undefined || patch.discountType !== undefined)) {
+      await this.assertGrantVariant(tenantId, grantVariantId);
+    }
     return { tenantIds, allowedUserIds, gateways, serviceScopes };
+  }
+
+  /**
+   * The variant a `free_grant` coupon or batch grants (F-502-l-a): live, and the
+   * platform's or the coupon owner's. A platform coupon grants only a platform
+   * variant, as it pays only through a platform gateway (ADR-0048).
+   */
+  async assertGrantVariant(tenantId: string | null, variantId: string): Promise<void> {
+    const v = await this.all.productVariant.findUnique({
+      where: { id: variantId },
+      select: { tenantId: true, isActive: true, product: { select: { isActive: true, category: { select: { isActive: true } } } } },
+    });
+    const live = v !== null && v.isActive && v.product.isActive && v.product.category.isActive;
+    if (!live || (v.tenantId !== null && v.tenantId !== tenantId)) throw new CouponAdminRefused('variant_not_found', variantId);
   }
 
   /**

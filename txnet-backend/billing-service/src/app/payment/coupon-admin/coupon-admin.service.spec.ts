@@ -35,6 +35,18 @@ const PLATFORM_COUPON = '99999999-9999-4999-8999-999999999999';
 const PLATFORM_GW = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const RESELLER_GW = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const OTHER_GW = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const PLATFORM_VARIANT = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+const RESELLER_VARIANT = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+const OTHER_VARIANT = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+const OFF_VARIANT = '0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a0a';
+
+const live = { isActive: true, product: { isActive: true, category: { isActive: true } } };
+const VARIANTS = [
+  { id: PLATFORM_VARIANT, tenantId: null, ...live },
+  { id: RESELLER_VARIANT, tenantId: RESELLER, ...live },
+  { id: OTHER_VARIANT, tenantId: OTHER, ...live },
+  { id: OFF_VARIANT, tenantId: RESELLER, isActive: true, product: { isActive: false, category: { isActive: true } } },
+];
 
 const actor = (tenantId: string) => ({ adminId: ADMIN, tenantId, ip: '10.0.0.9' });
 
@@ -148,7 +160,7 @@ function build(seed: { redemptions?: Row[]; coupons?: Row[] } = {}) {
     tenantGatewayConfig: table([{ id: RESELLER_GW, tenantId: RESELLER }, { id: OTHER_GW, tenantId: OTHER }], 'tenantGatewayConfig', writes),
     paymentGatewayGrant: table([], 'paymentGatewayGrant', writes),
     product: table([], 'product', writes),
-    productVariant: table([], 'productVariant', writes),
+    productVariant: table(VARIANTS.map((v) => ({ ...v })), 'productVariant', writes),
     adminAuditLog: {
       create: async ({ data }: { data: Row }) => {
         writes.push('audit');
@@ -310,5 +322,55 @@ describe('CouponAdminService — delete', () => {
     expect(db.coupon.rows[0]).toMatchObject({ isActive: false, deletedByAdminId: ADMIN });
     expect(db.coupon.rows[0]['deletedAt']).toBeInstanceOf(Date);
     expect((await refusal(() => service.update(actor(RESELLER), RESELLER_COUPON, { isActive: true }))).reason).toBe('coupon_not_found');
+  });
+});
+
+/**
+ * A `free_grant` coupon (F-502-l-a, D-35; catalog §4.7): it gives a Grant of one
+ * catalog variant, so it names that variant and carries no value. It is redeemed
+ * in the gift-code box, so it takes a gift code's limits and no purchase ones.
+ */
+describe('CouponAdminService — a free_grant coupon', () => {
+  const FREE = { code: 'freevpn', discountType: 'free_grant', discountValue: '0' } as const;
+
+  it("names a live variant of the platform's or its own tenant's, and carries no value", async () => {
+    const { service, audit } = build();
+    await expect(service.create(actor(RESELLER), { ...FREE, grantVariantId: RESELLER_VARIANT })).resolves.toMatchObject({
+      discountType: 'free_grant',
+      grantVariantId: RESELLER_VARIANT,
+      tenantId: RESELLER,
+    });
+    await expect(service.create(actor(RESELLER), { ...FREE, code: 'freeplatform', grantVariantId: PLATFORM_VARIANT })).resolves.toMatchObject({
+      grantVariantId: PLATFORM_VARIANT,
+    });
+    expect(audit.map((a) => a['action'])).toEqual(['coupon_create', 'coupon_create']);
+  });
+
+  it('refuses one with no variant, with a value, or with a purchase limit', async () => {
+    const { service } = build();
+    expect((await refusal(() => service.create(actor(RESELLER), FREE))).reason).toBe('invalid_value');
+    expect((await refusal(() => service.create(actor(RESELLER), { ...FREE, discountValue: '5', grantVariantId: RESELLER_VARIANT }))).reason).toBe('invalid_value');
+    expect(
+      (await refusal(() => service.create(actor(RESELLER), { ...FREE, grantVariantId: RESELLER_VARIANT, minPurchaseAmount: '5' }))).reason,
+    ).toBe('limits_not_for_gift_codes');
+  });
+
+  it("refuses another tenant's variant, a switched-off one, and a tenant's variant on a platform coupon", async () => {
+    const { service } = build();
+    expect((await refusal(() => service.create(actor(RESELLER), { ...FREE, grantVariantId: OTHER_VARIANT }))).reason).toBe('variant_not_found');
+    expect((await refusal(() => service.create(actor(RESELLER), { ...FREE, grantVariantId: OFF_VARIANT }))).reason).toBe('variant_not_found');
+    expect((await refusal(() => service.create(actor(OWNER), { ...FREE, tenantId: null, grantVariantId: RESELLER_VARIANT }))).reason).toBe('variant_not_found');
+  });
+
+  it('refuses a variant on any other type', async () => {
+    const { service } = build();
+    expect((await refusal(() => service.create(actor(RESELLER), { ...DISCOUNT, grantVariantId: RESELLER_VARIANT }))).reason).toBe('invalid_value');
+  });
+
+  it('freezes the variant of a used coupon', async () => {
+    const { service } = build({
+      coupons: [coupon({ id: RESELLER_COUPON, tenantId: RESELLER, discountType: 'free_grant', discountValue: '0', grantVariantId: RESELLER_VARIANT, usedCount: 1 })],
+    });
+    expect((await refusal(() => service.update(actor(RESELLER), RESELLER_COUPON, { grantVariantId: PLATFORM_VARIANT }))).reason).toBe('used_coupon_frozen');
   });
 });

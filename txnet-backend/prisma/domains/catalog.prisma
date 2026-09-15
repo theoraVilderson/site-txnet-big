@@ -43,6 +43,7 @@ enum DiscountType {
   percentage
   fixed_amount
   wallet_credit // a gift code: redeemed straight into the wallet (D-21, F-092-m)
+  free_grant // a free service: redeemed into a Grant of `coupon.grantVariantId` (F-502-l, D-35)
 
   @@schema("catalog")
 }
@@ -120,6 +121,7 @@ model ProductVariant {
   prices              Price[]
   couponServiceScopes CouponServiceScope[]
   grants              Grant[]
+  grantingCoupons     Coupon[]
 
   @@index([tenantId])
   @@index([productId])

@@ -40,6 +40,7 @@ export const REFUSAL_KEYS: Record<CouponRejection, string> = {
   platform_coupon_needs_platform_gateway: COUPON_KEYS.refusals.platform_coupon_needs_platform_gateway,
   gateway_not_found: COUPON_KEYS.refusals.gateway_not_found,
   scope_not_found: COUPON_KEYS.refusals.scope_not_found,
+  variant_not_found: COUPON_KEYS.refusals.variant_not_found,
   used_coupon_frozen: COUPON_KEYS.refusals.used_coupon_frozen,
   capacity_below_used: COUPON_KEYS.refusals.capacity_below_used,
   batch_not_found: COUPON_KEYS.refusals.batch_not_found,

@@ -492,6 +492,7 @@ export type CouponRejection =
   | "platform_coupon_needs_platform_gateway"
   | "gateway_not_found"
   | "scope_not_found"
+  | "variant_not_found"
   | "used_coupon_frozen"
   | "capacity_below_used"
   | "batch_not_found"

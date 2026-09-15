@@ -88,7 +88,7 @@ by `coupon-admin.service.spec.ts`. Refusals are `CouponAdminRefused.reason`.
 | `tenantIds` (`coupon_tenant`) only on a platform coupon (`tenants_are_platform_coupons`) | ADR-0048 decision 2 |
 | `targeted` needs at least one user (`targeted_needs_users`); every user lives in a tenant the coupon serves — its own, the named ones, or the platform owner's when none (`user_out_of_scope`) | a targeted coupon nobody can use is a mistake, not a setting |
 | Gateways: a platform coupon names platform gateways only (`platform_coupon_needs_platform_gateway`); a tenant coupon its own `tenant` gateways or ones actively granted to it (`gateway_not_found`) | ADR-0048 decision 4, ADR-0041 |
-| A service scope names one plan or one category, platform-wide or the coupon's tenant's (`scope_not_found`) | the scope table's shape |
+| A service scope names one product or one variant, the platform's or the coupon's tenant's (`scope_not_found`) | the scope table's shape (F-026-a) |
 | Values: a percentage in (0, 100], a cap on a percentage only, a positive value (`invalid_value`); the limit CHECKs answered first as `invalid_limit` | a reason, not a database error |
 | A gift code (`wallet_credit`) takes no purchase, window, channel, gateway, scope or period limit (`limits_not_for_gift_codes`); expiry, per-user and total limits and targeting it keeps | `redeem_gift_coupon` reads only those |
 | A used coupon (a counter above zero or any redemption row) keeps `discountType` and `discountValue` (`used_coupon_frozen`); `totalUsageLimit` never below `usedCount + reservedCount` (`capacity_below_used`) | a receipt already says what it took |
@@ -111,6 +111,23 @@ by `coupon-admin.service.spec.ts`. Refusals are `CouponAdminRefused.reason`.
 | CSV export (`code,value,expires_at,status,used`, CRLF) is audited as `coupon_batch_export` with the row count | whoever holds the file holds the credit |
 | Deactivate switches every live code of the batch off and stamps `deactivatedAt` once; repeating it is harmless (`coupon_batch_deactivate`) | one act for a leaked batch |
 | Another tenant's batch is `batch_not_found`; the list carries `codes`, `used`, `reserved` per batch, soft-deleted codes excluded | as a coupon's reach |
+
+## Free service (built — F-502-l-a; redeeming it is F-502-l-b)
+
+Migration `20260915000100_coupon_free_grant`; `coupon-admin.service.ts`,
+`coupon-batch.service.ts`, `coupon-validation.ts`. Proved by
+`coupon-admin.service.spec.ts`, `coupon-batch.service.spec.ts`,
+`coupon-validation.spec.ts` and `coupon-scope.int.spec.ts`. D-35.
+
+| Rule | Why |
+|---|---|
+| `free_grant` names one variant in `grantVariantId` and carries value 0; no other type names one (CHECKs `coupon_free_grant_names_variant`, `coupon_free_grant_has_no_value`; `invalid_value` first) | it gives a Grant of that variant, not money (catalog §4.7) |
+| The variant is live (it, its product and its category on) and the platform's or the coupon owner's; a platform coupon names only a platform variant (`variant_not_found`). Any visibility, `admin_only` included | a coupon may assign what is not for sale (F-506) |
+| It takes a gift code's limits and no purchase ones (`limits_not_for_gift_codes`) | it is redeemed in the gift box (D-35) |
+| A used one keeps `grantVariantId` too (`used_coupon_frozen`) | a Grant was already issued from it |
+| Validation and `reserve_coupon` refuse it at the top-up as `not_a_discount` | as a gift code |
+| A batch naming `grantVariantId` makes free-service codes with value 0 (`invalid_value` otherwise) | D-35: created both ways |
+| List kinds: `discount` = percentage, fixed and a free-service coupon made alone; `gift` = wallet credit and free-service codes made in a batch | the tab each is created in |
 
 ## Usage report (built — F-502-e)
 
