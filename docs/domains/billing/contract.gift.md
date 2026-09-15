@@ -38,6 +38,17 @@ user and the tenant come from its headers, never from the body.
 | A coupon whose `discountValue` is not `> 0` in cents **raises**, and reaches the client as a 500 | an admin's broken row, never a user's mistake — telling the user their code is invalid would hide it |
 | Per user, per 900s: `GIFT_REDEEM_RATE_LIMIT`, default **10**; **429** past it | a gift code is a bearer secret worth money and this route is the only thing that says whether one exists — an unlimited version is a code-guessing oracle |
 
-**Not covered:** issuing gift codes (an admin surface, not built); a gift code
-that buys a service rather than credit — `wallet_credit` always lands in the
-wallet.
+## Free-service codes (built — F-502-l-b, D-35)
+
+Migration `20260915000200_gift_redeems_free_grant`; `GiftRedemptionService` with
+`GrantService` (ADR-0049). Proved by `gift-redemption.int.spec.ts`.
+
+| Rule | Why |
+|---|---|
+| A `free_grant` code is redeemed in the same box, under the same gates and row lock; the redemption is `confirmed` at 0 and `usedCount` moves | D-35: one box for every code that is not a discount |
+| The function answers the coupon's `grantVariantId`; the service issues the Grant in the same transaction — `source = coupon`, `sourceReferenceId` = the redemption row — so a use and its Grant commit together | one cause, one Grant (entitlement invariant 7) |
+| No wallet is opened or credited | a free service gives no money |
+| The answer is `{kind: "free_grant", code, grant: {id, variantId, startsAt, endsAt, featureKeys}, subscriptionKey}`; the key is shown this once and only its hash is stored. A credit answers `{kind: "wallet_credit", code, credited, balance}` | the user's call, 2026-09-14 |
+| A variant switched off after the coupon was made refuses the issue and rolls the use back (500) | an admin's broken coupon, never a user's mistake |
+
+**Not covered:** a `/sub` link for the key (F-113, F-027); the panel showing it (F-502-l-c).

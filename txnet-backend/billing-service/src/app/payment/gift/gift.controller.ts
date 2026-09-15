@@ -49,7 +49,23 @@ export class GiftController {
     const { userId } = identityOf(req);
     try {
       const result = await this.gifts.redeem({ userId, code: body.code });
+      if (result.kind === 'free_grant') {
+        // D-35: the subscription key is shown this once; it is never stored.
+        return {
+          kind: result.kind,
+          code: result.code,
+          grant: {
+            id: result.grant.id,
+            variantId: result.grant.variantId,
+            startsAt: result.grant.startsAt,
+            endsAt: result.grant.endsAt,
+            featureKeys: result.grant.featureKeys,
+          },
+          subscriptionKey: result.token,
+        };
+      }
       return {
+        kind: result.kind,
         code: result.code,
         credited: result.credited.toFixed(2),
         balance: result.balanceAfter.toFixed(2),

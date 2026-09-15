@@ -20,6 +20,8 @@
  *
  *   npm run test:int
  */
+import { createHash } from 'node:crypto';
+
 import { Prisma, PrismaClient } from '@prisma/client';
 import { runWithTenant, withTenant } from '@txnet-backend/shared-core';
 
@@ -28,6 +30,7 @@ import {
   PostgresFixture,
   startPostgresFixture,
 } from '../../../../../test-support/postgres-fixture';
+import { GrantService } from '../../entitlement/grant';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LedgerEntry, WalletLedgerService } from '../../wallet/wallet-ledger.service';
 import { GiftCodeRefused, GiftRedemptionService } from './gift-redemption.service';
@@ -76,7 +79,7 @@ beforeAll(async () => {
   await owner.$executeRawUnsafe(`
     INSERT INTO identity.role (id, name, "isSystemRole") VALUES ('${ROLE}', 'harness_user', false)
   `);
-  for (let n = 1; n <= 8; n += 1) {
+  for (let n = 1; n <= 12; n += 1) {
     await owner.$executeRawUnsafe(`
       INSERT INTO identity."user" (id, "tenantId", "fullName", "passwordHash", "roleId", "updatedAt")
       VALUES ('${user(n)}', '${TENANT_A}', 'harness ${n}', 'x', '${ROLE}', now())
@@ -97,10 +100,29 @@ beforeAll(async () => {
     UPDATE billing.coupon SET "deletedAt" = now(), "deletedByAdminId" = '${ADMIN}' WHERE id = '${couponId('e8')}'
   `);
 
+  // F-502-l-b: a free-service code of the platform's 30-day VPN variant, once per user.
+  await owner.$executeRawUnsafe(`INSERT INTO catalog.product_category (id, key, "nameKey") VALUES ('${CATEGORY}', 'vpn', 'k.c')`);
+  await owner.$executeRawUnsafe(`
+    INSERT INTO catalog.product (id, "categoryId", key, "nameKey", "fulfilmentKind", "featureKeys")
+    VALUES ('${PRODUCT}', '${CATEGORY}', 'vpn_basic', 'k.p', 'network_access', ARRAY['vpn.access'])
+  `);
+  await owner.$executeRawUnsafe(`
+    INSERT INTO catalog.product_variant (id, "productId", sku, "billingMode", visibility, "durationDays", quotas)
+    VALUES ('${VARIANT}', '${PRODUCT}', 'VPN-30', 'prepaid', 'public', 30, '{"traffic_bytes": {"limit": 53687091200, "resetPolicy": "none"}}')
+  `);
+  await owner.$executeRawUnsafe(`
+    INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "perUserUsageLimit", "createdByAdminId", "grantVariantId")
+    VALUES ('${couponId('e9')}', '${TENANT_A}', 'FREEVPN', 'free_grant', 0, 1, '${ADMIN}', '${VARIANT}')
+  `);
+
   const base = new PrismaService(pg.appUrl);
   app = base.$extends(withTenant(base)) as unknown as PrismaService;
-  gifts = new GiftRedemptionService(app, new WalletLedgerService());
+  gifts = new GiftRedemptionService(app, new WalletLedgerService(), new GrantService(app));
 });
+
+const CATEGORY = '99999999-9999-4999-8999-9999999999a1';
+const PRODUCT = '99999999-9999-4999-8999-9999999999a2';
+const VARIANT = '99999999-9999-4999-8999-9999999999a3';
 
 afterAll(async () => {
   await Promise.allSettled([app?.$disconnect(), owner?.$disconnect()]);
@@ -111,7 +133,8 @@ function couponId(suffix: string) {
   return `77777777-7777-4777-8777-7777777777${suffix}`;
 }
 
-const codeOf = (suffix: string) => COUPONS.find(([s]) => s === suffix)![2];
+// `e9` is inserted apart from COUPONS: it names a variant (F-502-l-b).
+const codeOf = (suffix: string) => (suffix === 'e9' ? 'FREEVPN' : COUPONS.find(([s]) => s === suffix)![2]);
 
 const asTenant = <T>(tenantId: string, fn: () => Promise<T>) => runWithTenant({ id: tenantId }, fn);
 
@@ -137,6 +160,7 @@ const ledgerOf = async (userId: string) =>
 it('credits the wallet by the code\'s value and marks the redemption used, in one transaction', async () => {
   const u = user(1);
   const result = await redeem(TENANT_A, 'e1', u);
+  if (result.kind !== 'wallet_credit') throw new Error(`expected a wallet credit, got ${result.kind}`);
 
   expect(result.code).toBe('GIFTPLAIN');
   expect(result.credited.toFixed(2)).toBe('12.34');
@@ -181,6 +205,7 @@ async function raceWhileFirstIsOpen(suffix: string, first: string, second: strin
         return held.then(() => super.credit(tx, entry));
       }
     })(),
+    new GrantService(app),
   );
 
   const a = asTenant(TENANT_A, () => stalling.redeem({ userId: first, code: codeOf(suffix) }));
@@ -256,6 +281,42 @@ it('refuses a discount coupon typed into the gift box, and credits nothing', asy
   });
   await expect(balanceOf(u)).resolves.toBe(null);
   await expect(counters('e6')).resolves.toEqual({ usedCount: 0, reservedCount: 0 });
+});
+
+/**
+ * A free-service code (F-502-l-b, D-35): the same box, the same gates under the
+ * same lock — and instead of a credit, a Grant of the coupon's variant issued in
+ * that transaction. The subscription token is answered once and only its hash
+ * is stored.
+ */
+it('issues a Grant of the variant for a free-service code, in one transaction with its use', async () => {
+  const u = user(11);
+  const result = await redeem(TENANT_A, 'e9', u);
+  if (result.kind !== 'free_grant') throw new Error(`expected a Grant, got ${result.kind}`);
+
+  expect(result.code).toBe('FREEVPN');
+  expect(result.grant).toMatchObject({ userId: u, tenantId: TENANT_A, variantId: VARIANT, source: 'coupon', status: 'active', featureKeys: ['vpn.access'] });
+  expect(result.grant.endsAt!.getTime() - result.grant.startsAt.getTime()).toBe(30 * 86_400_000);
+
+  const stored = await owner.grant.findUniqueOrThrow({ where: { id: result.grant.id } });
+  expect(stored.sourceReferenceId).toBe(result.redemptionId);
+  expect(stored.subscriptionTokenHash).toBe(createHash('sha256').update(result.token).digest('hex'));
+  // `billedBytes` is a BigInt, which JSON.stringify refuses on its own.
+  expect(JSON.stringify(stored, (_k, v) => (typeof v === 'bigint' ? v.toString() : v))).not.toContain(result.token);
+
+  const redemption = await owner.couponRedemption.findFirstOrThrow({ where: { id: result.redemptionId } });
+  expect(redemption).toMatchObject({ userId: u, status: 'confirmed', couponId: couponId('e9') });
+  expect(redemption.discountAppliedAmount.toFixed(2)).toBe('0.00');
+  await expect(counters('e9')).resolves.toEqual({ usedCount: 1, reservedCount: 0 });
+  // A free service gives no money: no wallet is opened.
+  await expect(balanceOf(u)).resolves.toBe(null);
+});
+
+it('refuses a second use of a free-service code by the same user, and issues no second Grant', async () => {
+  const u = user(12);
+  await redeem(TENANT_A, 'e9', u);
+  await expect(redeem(TENANT_A, 'e9', u)).rejects.toMatchObject({ code: 'FREEVPN', reason: 'per_user_limit_reached' });
+  await expect(owner.grant.count({ where: { userId: u } })).resolves.toBe(1);
 });
 
 it('refuses an unknown code without opening a wallet', async () => {

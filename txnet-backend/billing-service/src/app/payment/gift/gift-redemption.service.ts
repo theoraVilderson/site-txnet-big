@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, WalletReasonType } from '@prisma/client';
+import { Grant, GrantSource, Prisma, WalletReasonType } from '@prisma/client';
 import { tenantTransaction } from '@txnet-backend/shared-core';
 
+import { GrantService } from '../../entitlement/grant';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WalletLedgerService } from '../../wallet/wallet-ledger.service';
 import { normalizeCouponCodes } from '../coupon/coupon-validation';
@@ -42,16 +43,28 @@ export type GiftRejection =
   /** `usedCount + reservedCount` has reached `totalUsageLimit`. */
   | 'capacity_reached';
 
-export type GiftRedemption = {
-  /** The `coupon_redemption` row; the ledger entry's `referenceId`. */
-  redemptionId: string;
-  /** As stored, not as typed. */
-  code: string;
-  /** Base currency (ADR-0019), what the wallet gained. */
-  credited: Prisma.Decimal;
-  /** The wallet's balance after this credit, from the ledger row itself. */
-  balanceAfter: Prisma.Decimal;
-};
+export type GiftRedemption =
+  | {
+      kind: 'wallet_credit';
+      /** The `coupon_redemption` row; the ledger entry's `referenceId`. */
+      redemptionId: string;
+      /** As stored, not as typed. */
+      code: string;
+      /** Base currency (ADR-0019), what the wallet gained. */
+      credited: Prisma.Decimal;
+      /** The wallet's balance after this credit, from the ledger row itself. */
+      balanceAfter: Prisma.Decimal;
+    }
+  | {
+      /** A free-service code (F-502-l-b, D-35): a Grant instead of money. */
+      kind: 'free_grant';
+      /** The `coupon_redemption` row; the Grant's `sourceReferenceId`. */
+      redemptionId: string;
+      code: string;
+      grant: Grant;
+      /** The subscription token, answered this once; only its hash is stored. */
+      token: string;
+    };
 
 /** The user's code cannot be redeemed. Nothing was written. */
 export class GiftCodeRefused extends Error {
@@ -72,13 +85,14 @@ const REFUSALS: readonly GiftRejection[] = [
   'capacity_reached',
 ];
 
-type RedeemRow = { outcome: string; redemption_id: string | null; credited: Prisma.Decimal | null };
+type RedeemRow = { outcome: string; redemption_id: string | null; credited: Prisma.Decimal | null; grant_variant_id: string | null };
 
 @Injectable()
 export class GiftRedemptionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ledger: WalletLedgerService,
+    private readonly grants: GrantService,
   ) {}
 
   /**
@@ -97,7 +111,7 @@ export class GiftRedemptionService {
 
     return tenantTransaction(this.prisma, async (tx) => {
       const [row] = await tx.$queryRaw<RedeemRow[]>`
-        SELECT outcome, redemption_id, credited
+        SELECT outcome, redemption_id, credited, grant_variant_id
           FROM billing.redeem_gift_coupon(${code}::text, ${userId}::uuid)`;
 
       if (row.outcome !== 'redeemed') {
@@ -107,6 +121,21 @@ export class GiftRedemptionService {
         // Nothing was written, but the throw rolls the transaction back anyway:
         // the caller owns nothing here that a refusal should keep.
         throw new GiftCodeRefused(code, row.outcome as GiftRejection);
+      }
+
+      // A free-service code (F-502-l-b): the Grant is issued in this transaction,
+      // keyed on the redemption row, so a use and its Grant commit together. A
+      // variant switched off after the coupon was made throws here and rolls the
+      // use back — an admin's broken coupon, never the user's mistake.
+      if (row.grant_variant_id) {
+        const issued = await this.grants.issue(tx, {
+          userId,
+          variantId: row.grant_variant_id,
+          source: GrantSource.coupon,
+          sourceReferenceId: row.redemption_id as string,
+        });
+        if (!issued.token) throw new Error(`redemption ${row.redemption_id} already had a Grant`);
+        return { kind: 'free_grant' as const, redemptionId: row.redemption_id as string, code, grant: issued.grant, token: issued.token };
       }
 
       const credited = row.credited as Prisma.Decimal;
@@ -121,6 +150,7 @@ export class GiftRedemptionService {
       });
 
       return {
+        kind: 'wallet_credit' as const,
         redemptionId: row.redemption_id as string,
         code,
         credited,
