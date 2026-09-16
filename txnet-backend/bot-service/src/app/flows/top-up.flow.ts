@@ -30,6 +30,11 @@ export const AMOUNT_ACTION_PREFIX = 'topup:a:';
  * the credit and `worker-service`'s payer notice tells every linked chat, for a
  * payment started here even when a webhook settled it
  * (`automation/contract.outbox.md`).
+ *
+ * A gateway paid **inside the chat** (Telegram Stars, F-104-m) is offered only
+ * because every call names this chat's messenger (`X-Bot-Platform`). Its
+ * `start` answers an invoice instead of a URL: the screen says to pay below,
+ * and the dispatcher sends the invoice after it. Its result is `InChatPayment`'s.
  */
 @Injectable()
 export class TopUpFlow {
@@ -129,12 +134,28 @@ export class TopUpFlow {
     if (!started.ok || !started.data) return { view: say('topUp.refused', { raw: started.msg }), nextState: null };
 
     const s = started.data;
-    if (s.free || !s.redirectUrl) {
+    if (s.free) {
       return {
         view: say('topUp.credited', { key: BotKeys.topUp.credited, values: { credited: s.credited, balance: s.balance ?? '' } }),
         nextState: null,
       };
     }
+    if (s.invoice) {
+      return {
+        view: say('topUp.payInChat', { key: BotKeys.topUp.payInChat }),
+        nextState: null,
+        invoice: {
+          title: { key: BotKeys.topUp.invoiceTitle },
+          description: { key: BotKeys.topUp.invoiceDescription, values: { credited: s.credited } },
+          label: { key: BotKeys.topUp.invoiceLabel },
+          payload: s.invoice.payload,
+          currency: s.invoice.currency,
+          amount: Number(s.invoice.amountMinor),
+        },
+      };
+    }
+    // Neither free, nor a page, nor an invoice: nothing the payer could pay with.
+    if (!s.redirectUrl) return { view: say('topUp.refused', { key: BotKeys.common.tryAgain }), nextState: null };
     return {
       view: view('topUp.pay', { key: BotKeys.topUp.pay }, [
         [{ id: 'topup:open', kind: 'url', url: s.redirectUrl, label: { key: BotKeys.action.payNow } }],
@@ -146,7 +167,7 @@ export class TopUpFlow {
 
   private async callContext(ctx: ChatContext): Promise<BillingCallContext | null> {
     const accessToken = await this.access.token(ctx);
-    return accessToken ? { lang: ctx.lang, accessToken } : null;
+    return accessToken ? { lang: ctx.lang, accessToken, platform: ctx.platform } : null;
   }
 
   private signedOut(): FlowResult {

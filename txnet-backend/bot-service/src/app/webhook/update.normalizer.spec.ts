@@ -50,6 +50,31 @@ describe('UpdateNormalizer', () => {
     });
   });
 
+  it('addresses a pre-checkout query to the payer’s private chat, carrying the payment (F-104-m)', () => {
+    const { normalizer: n } = normalizer();
+
+    const ctx = n.normalize('telegram', aBotIntegration(), {
+      pre_checkout_query: { id: 'q1', from: { id: 5501, language_code: 'en' }, currency: 'XTR', total_amount: 770, invoice_payload: 'p-3' },
+    });
+
+    expect(ctx).toMatchObject({ chatId: '5501', lang: 'en', payment: { kind: 'pre_checkout', queryId: 'q1', totalAmount: 770 } });
+  });
+
+  it('carries a successful payment on its service message (F-104-m)', () => {
+    const { normalizer: n } = normalizer();
+
+    const ctx = n.normalize('telegram', aBotIntegration(), {
+      message: {
+        message_id: 9,
+        chat: { id: 5501 },
+        from: { id: 5501 },
+        successful_payment: { currency: 'XTR', total_amount: 770, invoice_payload: 'p-3', telegram_payment_charge_id: 'tg-1' },
+      },
+    });
+
+    expect(ctx?.payment).toMatchObject({ kind: 'payment_succeeded', chatId: '5501', platformChargeId: 'tg-1' });
+  });
+
   it('stringifies a numeric chat id, so a Redis key is never built from a number', () => {
     // RedisKeys.botNav takes a string; a number would key
     // `bot:nav:telegram:5501` here and `...:5501` there only by luck of

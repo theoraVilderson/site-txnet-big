@@ -146,6 +146,7 @@ every other stays so.
 | Rule | Why |
 |---|---|
 | A `webhook_auto` credit is acked and nothing is sent — **unless the payload's `channel` is `bot`** (F-306-a; absent = `panel`) | a panel payer is on the success page; the notice is for a **late** credit. A bot payer started in a chat and waits there |
+| A payload with `shownInChat: true` is acked and nothing is sent, whatever its channel (F-104-m) | billing sets it only on the credit the bot's `paid` relay made, and the bot has already said it in that chat |
 | **Dedupe first:** `SET NX` `UnscopedRedisKeys.outboxProcessed('payment-credited-notify', <event id>)`, `RedisTtl.outboxProcessed` (7 days), before any side effect; already set is an ack | at-least-once delivery (ADR-0021) must not tell the payer twice |
 | Then `{type:'billing.payment.confirmed', paymentId, amountCredited}` on `user:<userId>` (`RealtimePublisher`), then `POST /api/internal/notify/user` on auth-service with `X-Tenant-Id` = the payload's tenant and template `paymentCredited` | the live half is at most once and cheap; the bot half needs the tenant's bots, which are auth-service's |
 | A side effect that throws **deletes the marker** and rethrows: nack, no requeue, dead-letter | the event stays owed instead of being recorded as handled |

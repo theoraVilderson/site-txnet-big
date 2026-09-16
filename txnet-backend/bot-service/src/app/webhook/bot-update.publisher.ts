@@ -39,6 +39,8 @@ export interface BotUpdateMessage {
   callbackData?: string;
   callbackQueryId?: string;
   messageId?: number;
+  /** A payment event (F-104-m) — the platform's own numbers, relayed to billing. */
+  payment?: ChatContext['payment'];
 }
 
 /**

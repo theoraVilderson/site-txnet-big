@@ -3,6 +3,7 @@ import {
   BotIntegration,
   BotPlatform,
   BotUpdate,
+  parsePaymentEvent,
 } from '@txnet-backend/messenger';
 import { LocaleService } from '../locale/locale.service';
 import { ChatContext } from '../conversation/nav.types';
@@ -27,6 +28,21 @@ export class UpdateNormalizer {
     integration: BotIntegration,
     update: BotUpdate,
   ): ChatContext | null {
+    // A payment the messenger reported (F-104-l, F-104-m). A pre-checkout query
+    // has no chat of its own: an invoice is sent to a private chat, whose id
+    // is the payer's.
+    const payment = update ? parsePaymentEvent(update) : null;
+    if (payment?.kind === 'pre_checkout') {
+      return {
+        platform,
+        integration,
+        chatId: payment.fromId,
+        senderId: payment.fromId,
+        lang: this.lang(update.pre_checkout_query?.from?.language_code),
+        payment,
+      };
+    }
+
     const callback = update?.callback_query;
     if (callback?.message?.chat?.id) {
       return {
@@ -54,6 +70,7 @@ export class UpdateNormalizer {
       text: typeof message.text === 'string' ? message.text : undefined,
       contact: message.contact,
       messageId: message.message_id,
+      ...(payment ? { payment } : {}),
     };
   }
 

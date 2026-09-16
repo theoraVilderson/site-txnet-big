@@ -26,7 +26,7 @@ export interface BotMessage {
 /** Same field names on Telegram and Bale (read 2026-09-16). */
 export interface BotPreCheckoutQuery {
   id: string;
-  from?: { id: number | string };
+  from?: { id: number | string; language_code?: string };
   currency: string;
   total_amount: number;
   invoice_payload: string;

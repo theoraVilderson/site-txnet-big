@@ -1,3 +1,4 @@
+import { BotPlatform } from '@txnet-backend/messenger';
 import { RequestHeaders } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -42,12 +43,38 @@ export interface DepositStarted extends DepositQuote {
   redirectUrl: string | null;
   /** The new balance, on the free path only. */
   balance: string | null;
+  /**
+   * What the chat's invoice carries, for a gateway paid inside the chat (F-104-k):
+   * the payload comes back with the payment's events, `amountMinor` is whole
+   * units of `currency` (Stars). `null` for every other gateway.
+   */
+  invoice: { payload: string; currency: string; amountMinor: string } | null;
+}
+
+/** A messenger's payment event as billing takes it back (F-104-k); the amount as a string. */
+export interface InChatPaymentBody {
+  paymentId: string;
+  currency: string;
+  totalAmount: string;
+}
+
+export type PreCheckoutVerdict = { approved: true } | { approved: false; reason: 'not_found' | 'not_payable' | 'amount_mismatch' };
+
+export interface InChatPaid {
+  status: 'credited' | 'already_settled' | 'unsettled' | 'not_found';
+  credited: string | null;
 }
 
 /** Whose call this is: the chat's access token, in the chat's language. */
 export interface BillingCallContext {
   lang: string;
   accessToken: string;
+  /**
+   * The messenger this chat is on. Sent as `X-Bot-Platform`, which billing
+   * believes only beside the service token: it is what offers a gateway paid
+   * inside this messenger's chat (F-104-k) and no other.
+   */
+  platform: BotPlatform;
 }
 
 /**
@@ -96,6 +123,16 @@ export class BillingApiClient {
     return this.call('POST', '/api/billing/deposit/start', body, ctx);
   }
 
+  /** Relay a `pre_checkout_query` (F-104-m). */
+  preCheckout(body: InChatPaymentBody, ctx: BillingCallContext): Promise<ApiResult<PreCheckoutVerdict>> {
+    return this.call('POST', '/api/billing/deposit/in-chat/pre-checkout', body, ctx);
+  }
+
+  /** Relay a `successful_payment`, with the platform's charge id (F-104-m). */
+  paid(body: InChatPaymentBody & { chargeId: string }, ctx: BillingCallContext): Promise<ApiResult<InChatPaid>> {
+    return this.call('POST', '/api/billing/deposit/in-chat/paid', body, ctx);
+  }
+
   private async call<T>(method: 'GET' | 'POST', path: string, body: unknown, ctx: BillingCallContext): Promise<ApiResult<T>> {
     if (!this.isConfigured) return this.unreachable(ctx.lang);
 
@@ -110,6 +147,7 @@ export class BillingApiClient {
           'accept-language': ctx.lang,
           authorization: `Bearer ${ctx.accessToken}`,
           [RequestHeaders.serviceToken]: this.serviceToken,
+          [RequestHeaders.botPlatform]: ctx.platform,
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         signal: controller.signal,

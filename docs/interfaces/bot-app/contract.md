@@ -142,14 +142,14 @@ One row on the member menu, and this unit's whole share of the feature. The row,
 the three decisions that live here rather than in the panel, and the marker the
 URL carries are in [contract.mini-app.md](contract.mini-app.md).
 
-## Top-up (`F-306-a`)
+## Top-up (`F-306-a`, `F-104-m`)
 
-Gateway → amount (its quick amounts, or typed) → billing's quote → `start` → a
-`url` button to the bank, or the credit on a free top-up. The panel's deposit
-routes, **through the gate** (`BILLING_API_BASE_URL`, Traefik's in-network
-`api.<domain>` alias), the chat's access token as Bearer, never billing-service
-directly; `X-Service-Token` rides along so billing records the `bot` channel.
-Every number is billing's. It ends at `start`; the bank's result is the payer notice.
+Gateway → amount → billing's quote → `start` → a bank `url` button, the credit (free), or an **invoice** (in-chat gateway: `FlowResult.invoice`, sent after the screen).
+Billing's deposit routes **through the gate** (`BILLING_API_BASE_URL`), chat access token as Bearer; `X-Service-Token` records the `bot` channel,
+and `X-Bot-Platform` (believed only beside it) is what offers an in-chat gateway of this messenger. Every number is billing's; it ends at `start`.
+A payment event (`ChatContext.payment`) never reaches a flow: `InChatPayment` relays it to `deposit/in-chat/*` as the payer. Every
+`pre_checkout_query` is answered — refusals as `topUp.refused*`, signed-out and billing-down included — since an unanswered one is cancelled in 10 s.
+`successful_payment` → `paidCredited`, or `paidPending` if nothing credited; billing marks that credit `shownInChat`, so the payer notice stays silent.
 
 ## The switch group (`F-0205`, `F-0207`, `F-0210`)
 

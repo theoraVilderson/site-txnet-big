@@ -104,7 +104,7 @@ const ref = (overrides: Partial<{ currency: string; totalAmount: bigint; userId:
 describe('DepositInChatService.preCheckout', () => {
   it('approves the open payment, takes the payment id as its authority and starts the verify clock', async () => {
     const { service, calls } = build();
-    await expect(asTenant(() => service.preCheckout(ref()))).resolves.toEqual({ ok: true });
+    await expect(asTenant(() => service.preCheckout(ref()))).resolves.toEqual({ approved: true });
 
     expect(calls.reads[0]).toEqual({ id: PAYMENT, userId: USER });
     const [authority, clock] = calls.updates;
@@ -118,7 +118,7 @@ describe('DepositInChatService.preCheckout', () => {
     const { service, calls } = build(
       paymentRow({ gatewayTrackingCode: PAYMENT, nextVerifyAt: new Date(), verifyAttempts: 1, expiresAt: new Date(0) }),
     );
-    await expect(asTenant(() => service.preCheckout(ref()))).resolves.toEqual({ ok: true });
+    await expect(asTenant(() => service.preCheckout(ref()))).resolves.toEqual({ approved: true });
     expect(calls.updates).toHaveLength(1);
   });
 
@@ -133,14 +133,14 @@ describe('DepositInChatService.preCheckout', () => {
     ];
     for (const [row, r, reason] of cases) {
       const { service, calls } = build(row);
-      await expect(asTenant(() => service.preCheckout(r))).resolves.toEqual({ ok: false, reason });
+      await expect(asTenant(() => service.preCheckout(r))).resolves.toEqual({ approved: false, reason });
       expect(calls.updates).toEqual([]);
     }
   });
 
   it('refuses a payment at a gateway that does not settle in chat', async () => {
     const { service } = build(paymentRow({ tenantGatewayConfig: { providerName: 'zarinpal' } }));
-    await expect(asTenant(() => service.preCheckout(ref()))).resolves.toEqual({ ok: false, reason: 'not_found' });
+    await expect(asTenant(() => service.preCheckout(ref()))).resolves.toEqual({ approved: false, reason: 'not_found' });
   });
 });
 

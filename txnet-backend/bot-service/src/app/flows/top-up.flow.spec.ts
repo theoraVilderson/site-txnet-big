@@ -47,7 +47,7 @@ describe('TopUpFlow', () => {
 
     const result = await flow.start(ctx);
 
-    expect(billing.listGateways).toHaveBeenCalledWith({ lang: 'fa', accessToken: 'access-1' });
+    expect(billing.listGateways).toHaveBeenCalledWith({ lang: 'fa', accessToken: 'access-1', platform: 'telegram' });
     expect(ids(result)).toContain(`topup:g:tenant:${GW}`);
     expect(result.nextState?.step).toBe('topUp.gateway');
   });
@@ -85,7 +85,7 @@ describe('TopUpFlow', () => {
 
     const result = await flow.handle({ ...ctx, text: '۱۰۰' }, onAmount, null);
 
-    expect(billing.quote).toHaveBeenCalledWith({ gatewayId: GW, source: 'tenant', amount: '100' }, { lang: 'fa', accessToken: 'access-1' });
+    expect(billing.quote).toHaveBeenCalledWith({ gatewayId: GW, source: 'tenant', amount: '100' }, { lang: 'fa', accessToken: 'access-1', platform: 'telegram' });
     expect(result.view.body).toMatchObject({ values: { payable: '102.00', fee: '2.00', credited: '100.00' } });
     expect(ids(result)).toContain('topup:pay');
     expect(result.nextState).toMatchObject({ step: 'topUp.confirm', data: { amount: '100' } });
@@ -105,10 +105,26 @@ describe('TopUpFlow', () => {
 
     const result = await flow.handle(ctx, onConfirm, 'topup:pay');
 
-    expect(billing.start).toHaveBeenCalledWith({ gatewayId: GW, source: 'tenant', amount: '100.00' }, { lang: 'fa', accessToken: 'access-1' });
+    expect(billing.start).toHaveBeenCalledWith({ gatewayId: GW, source: 'tenant', amount: '100.00' }, { lang: 'fa', accessToken: 'access-1', platform: 'telegram' });
     const pay = (result.view.actions ?? []).flat().find((a) => a.kind === 'url');
     expect(pay?.url).toBe('https://pay.example/StartPay/A1');
     // Started is a commitment billing holds now (ADR-0010): nothing here may start it twice.
+    expect(result.nextState).toBeNull();
+  });
+
+  it('hands an in-chat gateway’s invoice to the dispatcher instead of a URL, and never says credited (F-104-m)', async () => {
+    const { flow } = harness({
+      billing: {
+        start: vi.fn().mockResolvedValue(
+          ok({ paymentId: 'p-3', free: false, redirectUrl: null, invoice: { payload: 'p-3', currency: 'XTR', amountMinor: '770' }, amount: '10.00', discount: '0.00', fee: '0.00', payable: '10.00', credited: '10.00', balance: null }),
+        ),
+      },
+    });
+
+    const result = await flow.handle(ctx, onConfirm, 'topup:pay');
+
+    expect(result.view.id).toBe('topUp.payInChat');
+    expect(result.invoice).toMatchObject({ payload: 'p-3', currency: 'XTR', amount: 770, description: { values: { credited: '10.00' } } });
     expect(result.nextState).toBeNull();
   });
 

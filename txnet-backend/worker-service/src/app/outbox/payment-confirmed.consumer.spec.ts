@@ -130,6 +130,15 @@ describe('PaymentConfirmedConsumer.handle', () => {
     expect(calls.fetched).toHaveLength(1);
   });
 
+  it('tells nobody again about an in-chat payment the bot already answered in the chat (F-104-m)', async () => {
+    const { consumer, calls } = build();
+
+    await consumer.handle(event({ confirmationSource: 'webhook_auto', channel: 'bot', shownInChat: true }));
+
+    expect(calls.set).toEqual([]);
+    expect(calls.fetched).toEqual([]);
+  });
+
   it('gives the marker back and rethrows when auth-service fails, so the event stays owed', async () => {
     const { consumer, calls } = build({ notifyStatus: 502 });
 

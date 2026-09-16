@@ -44,7 +44,12 @@ export type InChatPaymentRef = {
 };
 
 export type PreCheckoutRefusal = 'not_found' | 'not_payable' | 'amount_mismatch';
-export type PreCheckoutVerdict = { ok: true } | { ok: false; reason: PreCheckoutRefusal };
+/**
+ * `approved`, never `ok`: the response interceptor passes any object with an
+ * `ok` key through as an envelope of its own, and the bot would read a refusal
+ * as billing being unreachable.
+ */
+export type PreCheckoutVerdict = { approved: true } | { approved: false; reason: PreCheckoutRefusal };
 
 export type InChatPaidResult = {
   status: 'credited' | 'already_settled' | 'unsettled' | 'not_found';
@@ -67,15 +72,15 @@ export class DepositInChatService {
 
   async preCheckout(ref: InChatPaymentRef, now = new Date()): Promise<PreCheckoutVerdict> {
     const found = await this.find(ref);
-    if (!found) return { ok: false, reason: 'not_found' };
+    if (!found) return { approved: false, reason: 'not_found' };
     const { payment, provider } = found;
 
-    if (payment.status !== PaymentStatus.pending) return { ok: false, reason: 'not_payable' };
+    if (payment.status !== PaymentStatus.pending) return { approved: false, reason: 'not_payable' };
     const approved = payment.gatewayTrackingCode === payment.id;
     // Past its clock and never approved: the sweep may close it any moment.
-    if (!approved && (!payment.expiresAt || payment.expiresAt <= now)) return { ok: false, reason: 'not_payable' };
+    if (!approved && (!payment.expiresAt || payment.expiresAt <= now)) return { approved: false, reason: 'not_payable' };
     if (ref.currency !== provider.chargeCurrency || ref.totalAmount !== payment.chargedAmountMinor) {
-      return { ok: false, reason: 'amount_mismatch' };
+      return { approved: false, reason: 'amount_mismatch' };
     }
 
     const ok = await tenantTransaction(this.prisma, async (tx) => {
@@ -92,7 +97,7 @@ export class DepositInChatService {
       if (payment.nextVerifyAt === null) await scheduleVerifyRetry(tx, payment, now);
       return true;
     });
-    return ok ? { ok: true } : { ok: false, reason: 'not_payable' };
+    return ok ? { approved: true } : { approved: false, reason: 'not_payable' };
   }
 
   async paid(ref: InChatPaymentRef & { chargeId: string }): Promise<InChatPaidResult> {
@@ -115,7 +120,8 @@ export class DepositInChatService {
 
     const credited = await this.settlement.creditVerified(
       payment,
-      { referenceId: ref.chargeId, cardPan: null, ...(received ? { received } : {}) },
+      // The bot that relayed this shows the result in the chat itself (F-104-m).
+      { referenceId: ref.chargeId, cardPan: null, shownInChat: true, ...(received ? { received } : {}) },
       ConfirmationSource.webhook_auto,
     );
     const after = await this.read(ref);

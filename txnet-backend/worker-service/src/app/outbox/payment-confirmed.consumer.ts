@@ -20,6 +20,8 @@ type PaymentConfirmed = {
   confirmationSource: string;
   /** Where the top-up was started (F-306-a); absent on an event written before it = the panel. */
   channel: string;
+  /** The chat that relayed an in-chat payment already showed the result (F-104-m). */
+  shownInChat: boolean;
 };
 
 /**
@@ -31,7 +33,9 @@ type PaymentConfirmed = {
  * `webhook_auto` credit is acknowledged and nothing is sent — that payer is
  * looking at the success page already — **unless the top-up was started in the
  * bot** (F-306-a): the bank's page sent that payer to a browser, and the chat
- * they paid from is where they wait for the answer.
+ * they paid from is where they wait for the answer. And not when the event says
+ * `shownInChat` (F-104-m): the bot relayed that payment's `successful_payment`
+ * and answered in the chat itself, so a notice would be the same news twice.
  *
  * **Once, at-least-once delivery notwithstanding.** The marker is `SET NX`
  * before any side effect; a redelivered event finds it and stops. A side
@@ -65,6 +69,7 @@ export class PaymentConfirmedConsumer implements OnApplicationBootstrap {
 
   async handle(event: OutboxMessage): Promise<void> {
     const payment = paymentOf(event);
+    if (payment.shownInChat) return;
     if (payment.confirmationSource === 'webhook_auto' && payment.channel !== 'bot') return;
 
     const marker = UnscopedRedisKeys.outboxProcessed(CONSUMER, event.id);
@@ -116,5 +121,6 @@ function paymentOf(event: OutboxMessage): PaymentConfirmed {
     gatewayReferenceId: str('gatewayReferenceId'),
     confirmationSource,
     channel: str('channel') ?? 'panel',
+    shownInChat: p['shownInChat'] === true,
   };
 }

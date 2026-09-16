@@ -24,7 +24,9 @@ function harness(result: FlowResult) {
     sendMessage: vi.fn().mockResolvedValue(1),
     deleteMessage: vi.fn().mockResolvedValue(true),
     answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
+    sendInvoice: vi.fn().mockResolvedValue({ ok: true, messageId: 2 }),
   };
+  const payments = { handle: vi.fn().mockResolvedValue(undefined) };
   const bots = { client: () => client } as unknown as BotClientRegistry;
   const router = { route: vi.fn().mockResolvedValue(result) } as unknown as ConversationRouter;
   const nav = { save: vi.fn(), clear: vi.fn() } as unknown as ConversationStore;
@@ -46,7 +48,10 @@ function harness(result: FlowResult) {
         resolve: async (_p: unknown, _c: unknown, hint: string) => hint,
       } as unknown as ChatLanguage,
       bots,
+      payments as never,
     ),
+    payments,
+    router,
   };
 }
 
@@ -138,5 +143,43 @@ describe('BotDispatcher', () => {
 
     await expect(dispatcher.handle(ctx)).resolves.toBeUndefined();
     expect(client.sendMessage).toHaveBeenCalledWith('5501', 'bot.common.tryAgain');
+  });
+
+  it('sends a flow’s invoice after its screen, translated (F-104-m)', async () => {
+    const { dispatcher, client } = harness({
+      view: { id: 'topUp.payInChat', body: { key: 'bot.topUp.payInChat' } },
+      nextState: null,
+      invoice: {
+        title: { key: 'bot.topUp.invoiceTitle' },
+        description: { key: 'bot.topUp.invoiceDescription' },
+        label: { key: 'bot.topUp.invoiceLabel' },
+        payload: 'p-3',
+        currency: 'XTR',
+        amount: 770,
+      },
+    });
+
+    await dispatcher.handle({ ...ctx, text: undefined, messageId: undefined });
+
+    expect(client.sendMessage.mock.invocationCallOrder[0]).toBeLessThan(client.sendInvoice.mock.invocationCallOrder[0]);
+    expect(client.sendInvoice).toHaveBeenCalledWith('5501', {
+      title: 'bot.topUp.invoiceTitle',
+      description: 'bot.topUp.invoiceDescription',
+      payload: 'p-3',
+      currency: 'XTR',
+      prices: [{ label: 'bot.topUp.invoiceLabel', amount: 770 }],
+    });
+  });
+
+  it('relays a payment event without routing it or touching the conversation (F-104-m)', async () => {
+    const { dispatcher, client, payments, router, nav } = harness({ view, nextState: null });
+    const payment = { kind: 'pre_checkout', queryId: 'q1', fromId: '5501', currency: 'XTR', totalAmount: 770, payload: 'p-3' } as const;
+
+    await dispatcher.handle({ ...ctx, text: undefined, messageId: undefined, payment });
+
+    expect(payments.handle).toHaveBeenCalledWith(expect.objectContaining({ payment }), client);
+    expect(router.route).not.toHaveBeenCalled();
+    expect(nav.clear).not.toHaveBeenCalled();
+    expect(client.sendMessage).not.toHaveBeenCalled();
   });
 });

@@ -89,6 +89,11 @@ export type VerifiedPayment = {
    * caller does not bring it here. Missing means exactly what was asked.
    */
   received?: GatewayReceipt;
+  /**
+   * The payer is told the result by the chat that relayed it (F-104-k, F-104-m):
+   * the event says so, and the payer notice does not send a second message.
+   */
+  shownInChat?: boolean;
 };
 
 /** An amount the gateway says arrived, in `currency`'s minor unit of `decimals` places. */
@@ -222,7 +227,7 @@ export class DepositSettlementService {
         if (from === PaymentStatus.expired) await this.reservations.claimExpired(tx, payment.id);
       }
       await this.accrueSettlement(tx, settled);
-      await this.publishConfirmed(tx, settled, verified.referenceId, source, payment.amountCredited, verified.received);
+      await this.publishConfirmed(tx, settled, verified.referenceId, source, payment.amountCredited, verified.received, verified.shownInChat);
       if (manual) await this.auditManual(tx, settled, verified.referenceId, manual);
       return true;
     });
@@ -435,6 +440,7 @@ export class DepositSettlementService {
     /** What the payment was priced to credit, before any receipt changed it. */
     amountAsked: Prisma.Decimal,
     received: GatewayReceipt | undefined,
+    shownInChat: boolean | undefined,
   ): Promise<void> {
     const tenant = TenantContext.current('deposit settlement event');
     const ref = gatewayRefOf(payment);
@@ -459,6 +465,7 @@ export class DepositSettlementService {
           gatewayReferenceId: referenceId,
           confirmationSource: source,
           channel: payment.channel,
+          ...(shownInChat ? { shownInChat: true } : {}),
         },
       },
       select: { id: true },

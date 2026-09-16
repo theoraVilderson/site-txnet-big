@@ -2,7 +2,9 @@ import {
   BotContact,
   BotIntegration,
   BotPlatform,
+  BotText,
   BotView,
+  PaymentEvent,
 } from '@txnet-backend/messenger';
 
 /** Which conversation the chat is in the middle of. */
@@ -75,6 +77,22 @@ export interface ChatContext {
   callbackQueryId?: string;
   /** So a password message can be deleted the moment it is used. */
   messageId?: number;
+  /**
+   * A payment the messenger reported (F-104-l): a `pre_checkout_query` or a
+   * `successful_payment`. Handled by `InChatPayment`, never by a flow.
+   */
+  payment?: PaymentEvent;
+}
+
+/** An invoice a flow asks the dispatcher to send after its screen (F-104-m); copy as keys, numbers as billing's. */
+export interface FlowInvoice {
+  title: BotText;
+  description: BotText;
+  label: BotText;
+  payload: string;
+  currency: string;
+  /** Whole units of `currency`, as billing answered it. */
+  amount: number;
 }
 
 /**
@@ -86,6 +104,8 @@ export interface FlowResult {
   nextState: NavState | null;
   /** Delete the user's own message — a password, never anything else. */
   deleteIncoming?: boolean;
+  /** Send this invoice right after the screen (F-104-m). */
+  invoice?: FlowInvoice;
   /**
    * Render this reply in a language other than the one the update arrived in.
    * Set only by the language chooser: a confirmation written in the language

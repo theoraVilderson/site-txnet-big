@@ -138,6 +138,15 @@
     "askAmount": "How much would you like to add? Pick an amount or type one.",
     "quote": "Amount: {{amount}}\nFee: {{fee}}\nYou pay: {{payable}}\nAdded to your wallet: {{credited}}",
     "pay": "Your payment is ready. Tap the button below to pay — once it is confirmed, you will get a message here.",
-    "credited": "{{credited}} was added to your wallet. Your balance is now {{balance}} ✅"
+    "credited": "{{credited}} was added to your wallet. Your balance is now {{balance}} ✅",
+    "payInChat": "Your invoice is below. Pay it right here in the chat — you will get a message as soon as it is confirmed.",
+    "invoiceTitle": "Wallet top-up",
+    "invoiceDescription": "{{credited}} added to your wallet",
+    "invoiceLabel": "Top-up",
+    "paidCredited": "{{credited}} was added to your wallet ✅",
+    "paidPending": "Your payment arrived and is being checked. You will get a message here once it is in your wallet.",
+    "refusedNotFound": "This invoice is not yours or no longer exists. Start a new top-up from the menu.",
+    "refusedNotPayable": "This invoice has expired or was already paid. Start a new top-up from the menu.",
+    "refusedAmount": "This invoice no longer matches its payment. Start a new top-up from the menu."
   }
 }

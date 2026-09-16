@@ -13,10 +13,33 @@ import {
   BotClientRegistry,
   BotContact,
   isBotPlatform,
+  PaymentEvent,
 } from '@txnet-backend/messenger';
 import { ServiceOnlyGuard } from '../common/service-only.guard';
 import { BotDispatcher } from '../conversation/bot.dispatcher';
 import { ChatContext } from '../conversation/nav.types';
+
+/** `messenger`'s `PaymentEvent`, as it rode the broker (F-104-m). */
+const paymentSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('pre_checkout'),
+    queryId: z.string().min(1),
+    fromId: z.string().min(1),
+    currency: z.string().min(1),
+    totalAmount: z.number().int(),
+    payload: z.string().min(1),
+  }),
+  z.object({
+    kind: z.literal('payment_succeeded'),
+    chatId: z.string().min(1),
+    fromId: z.string().min(1),
+    currency: z.string().min(1),
+    totalAmount: z.number().int(),
+    payload: z.string().min(1),
+    platformChargeId: z.string().min(1),
+    providerChargeId: z.string().nullable(),
+  }),
+]);
 
 const dispatchSchema = z.object({
   platform: z.string().refine(isBotPlatform, 'unknown platform'),
@@ -29,6 +52,7 @@ const dispatchSchema = z.object({
   callbackData: z.string().optional(),
   callbackQueryId: z.string().optional(),
   messageId: z.number().optional(),
+  payment: paymentSchema.optional(),
 });
 
 /**
@@ -111,6 +135,7 @@ export class BotDispatchController {
       callbackData: parsed.data.callbackData,
       callbackQueryId: parsed.data.callbackQueryId,
       messageId: parsed.data.messageId,
+      payment: parsed.data.payment as PaymentEvent | undefined,
     };
     await this.dispatcher.handle(ctx);
     return { dispatched: true };

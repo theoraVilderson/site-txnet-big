@@ -12,6 +12,7 @@ import { OtpStep } from './flows/otp.step';
 import { PhoneNumbers } from './flows/phone-number';
 import { RegisterFlow } from './flows/register.flow';
 import { TopUpFlow } from './flows/top-up.flow';
+import { InChatPayment } from './flows/in-chat-payment';
 import { BillingApiClient } from './billing-api/billing-api.client';
 import { AccountSwitcher } from './session/account-switcher';
 import { BotSessionStore } from './session/bot-session.store';
@@ -60,6 +61,7 @@ import { WebhookController } from './webhook/webhook.controller';
     AccountAddFlow,
     BillingApiClient,
     TopUpFlow,
+    InChatPayment,
     BotWebhookRegistrar,
   ],
 })

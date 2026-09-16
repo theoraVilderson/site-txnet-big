@@ -10,6 +10,7 @@ import { ConversationStore } from './conversation.store';
 import { ConversationRouter } from './router';
 import { ChatContext } from './nav.types';
 import { BotKeys } from '../locale/bot-keys';
+import { InChatPayment } from '../flows/in-chat-payment';
 
 /**
  * Runs one update end to end: route it, render the screen for *this* platform,
@@ -30,6 +31,7 @@ export class BotDispatcher {
     private readonly copy: BotCopy,
     private readonly langs: ChatLanguage,
     private readonly bots: BotClientRegistry,
+    private readonly payments: InChatPayment,
   ) {}
 
   async handle(rawCtx: ChatContext): Promise<void> {
@@ -56,6 +58,13 @@ export class BotDispatcher {
     }
 
     try {
+      // A payment is not a message to a screen (F-104-m): it is relayed, and
+      // the conversation, if any, is left exactly as it was.
+      if (ctx.payment) {
+        await this.payments.handle(ctx, client);
+        return;
+      }
+
       // Acknowledge a tap first: an unanswered callback leaves a spinner on
       // the button for as long as the flow takes.
       if (ctx.callbackQueryId) {
@@ -84,6 +93,22 @@ export class BotDispatcher {
         : rendered.text;
 
       await client.sendMessage(ctx.chatId, text, rendered.replyMarkup);
+
+      // The invoice goes after the screen that explains it (F-104-m).
+      if (result.invoice) {
+        const { title, description, label, payload, currency, amount } = result.invoice;
+        const sent = await client.sendInvoice(ctx.chatId, {
+          title: t(title),
+          description: t(description),
+          payload,
+          currency,
+          prices: [{ label: t(label), amount }],
+        });
+        if ('reason' in sent) {
+          this.logger.error(`${ctx.platform}: invoice for payment ${payload} not sent: ${sent.reason}`);
+          await client.sendMessage(ctx.chatId, this.copy.text(lang, { key: BotKeys.common.tryAgain }));
+        }
+      }
 
       if (result.nextState) {
         await this.nav.save(ctx.integration, ctx.chatId, {
