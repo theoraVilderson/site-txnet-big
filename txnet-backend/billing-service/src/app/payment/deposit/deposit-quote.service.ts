@@ -183,7 +183,7 @@ export class DepositQuoteService {
         target: { kind: 'wallet_top_up' },
         gatewaySource: request.source,
         gatewayId,
-        // The panel's routes are the only caller today; the bot's top-up passes `bot` (F-306-a).
+        // `bot` when the bot's top-up called (F-306-a, `DepositController.channelOf`).
         channel: request.channel ?? CouponChannel.panel,
         userId,
       });

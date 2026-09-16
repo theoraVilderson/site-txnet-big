@@ -11,6 +11,8 @@ import { LoginFlow } from './flows/login.flow';
 import { OtpStep } from './flows/otp.step';
 import { PhoneNumbers } from './flows/phone-number';
 import { RegisterFlow } from './flows/register.flow';
+import { TopUpFlow } from './flows/top-up.flow';
+import { BillingApiClient } from './billing-api/billing-api.client';
 import { AccountSwitcher } from './session/account-switcher';
 import { BotSessionStore } from './session/bot-session.store';
 import { ChatAccess } from './session/chat-access';
@@ -56,6 +58,8 @@ import { WebhookController } from './webhook/webhook.controller';
     ForgotFlow,
     AccountsFlow,
     AccountAddFlow,
+    BillingApiClient,
+    TopUpFlow,
     BotWebhookRegistrar,
   ],
 })

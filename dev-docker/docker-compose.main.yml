@@ -55,8 +55,13 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ../dev_letsencrypt:/letsencrypt
     networks:
-      - public_gateway_network
-      - private_backend_network
+      public_gateway_network:
+      private_backend_network:
+        # The API host, answered in-network (F-306-a): bot-service reaches the
+        # panel's billing routes through this gate, as `api.<domain>` so the
+        # router rules match, without leaving the private network.
+        aliases:
+          - api.${DOMAIN_NAME}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.dashboard-http.rule=Host(`monitor.${DOMAIN_NAME}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
@@ -453,6 +458,10 @@ services:
       # In-network, so bot traffic never leaves the private network to reach
       # the API it depends on.
       - AUTH_API_BASE_URL=http://auth-service:${AUTH_PORT}
+      # Billing through the gate, never billing-service directly (F-306-a): its
+      # routes trust only what `my-auth` writes. The chat's access token is the
+      # Bearer; Traefik's network alias keeps it in-network.
+      - BILLING_API_BASE_URL=http://api.${DOMAIN_NAME}
       # A bot chat has no host to resolve a tenant from, and there is no
       # fallback tenant (ADR-0025). Since F-066-i an update names its own
       # tenant — the one its webhook path resolved to — so this is only the

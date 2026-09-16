@@ -11,7 +11,8 @@ export type BotFlow =
   | 'register'
   | 'forgot'
   | 'accounts'
-  | 'accountAdd';
+  | 'accountAdd'
+  | 'topUp';
 
 /**
  * Navigation state: the screen, the breadcrumb and a half-typed input.

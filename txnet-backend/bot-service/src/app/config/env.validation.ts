@@ -58,6 +58,13 @@ export const envSchema = z.object({
    * `BotIntegration` lookup, and the header stays exactly where it is.
    */
   BOT_TENANT_ID: optional(z.string().uuid()),
+  /**
+   * Where the panel's billing routes answer **through the gate** (F-306-a):
+   * Traefik, as `api.<domain>` — in-network by its alias, not the internet.
+   * Never billing-service directly: those routes trust only the headers
+   * `my-auth` writes. Unset, the member menu has no top-up row.
+   */
+  BILLING_API_BASE_URL: optional(z.string().url()),
   AUTH_API_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
 
   /** How long a chat stays signed in without touching the bot. */

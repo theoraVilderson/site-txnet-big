@@ -387,6 +387,15 @@ describe('DepositStartService.start — where the payer is sent back to', () => 
     expect(calls.created[0]).toMatchObject({ returnOrigin: 'https://myvpn.txnet.app' });
   });
 
+  it('records where the top-up was started — the panel unless the bot said so (F-306-a)', async () => {
+    const { service, calls } = build();
+    await start(service);
+    await asTenant(() =>
+      service.start({ userId: USER, gatewayId: GATEWAY, source: 'tenant', amount: d('20.00'), couponCodes: [], channel: 'bot' }),
+    );
+    expect(calls.created.map((c) => (c as { channel?: string }).channel)).toEqual(['panel', 'bot']);
+  });
+
   it('drops an Origin nobody vouches for, rather than redirecting a payer there', async () => {
     const { service, calls } = build({ frontendOrigin: 'https://panel.txnet.cyou' });
     await start(service, [], 'https://evil.example');

@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 1
-updated: 2026-09-14
+updated: 2026-09-16
 ---
 
 # Contract — billing / coupon ownership and management
@@ -68,7 +68,8 @@ facts); `reserve_coupon` in `20260914001200_coupon_limit_gates`. Proved by
 | Full gate order: `not_found`, `not_a_discount`, `platform_coupon_needs_platform_gateway`, `not_started`, `expired`, `outside_window`, `wrong_channel`, `wrong_gateway`, `out_of_scope`, `below_min_purchase`, `above_max_purchase`, `first_purchase_only`, `not_a_new_user`, `per_user_limit_reached`, `period_limit_reached`, `capacity_reached` | each refusal its own i18n key under `billing.coupon.*` (C-07) |
 | Weekday and hour are read in Asia/Tehran from the server's instant; a window past midnight keeps the weekday it is now | the tenant market's clock; the client's is never asked |
 | A channel or gateway limit with no channel / gateway named is refused | a limit is never passed by omission |
-| Quote and start pass `gatewaySource`, `gatewayId` and `channel` (absent = `panel`) | only the panel calls them until F-306-a |
+| Quote and start pass `gatewaySource`, `gatewayId` and `channel`. `channel` is `bot` only when the request carries a valid `X-Service-Token` (`presentsServiceToken`), never from the body; otherwise `panel` (F-306-a) | a body field would let any panel user spend a bot-only coupon. The bot calls through the gate like the panel, so the token is the one thing that tells them apart |
+| `start` writes that channel on `payment_transaction.channel` (default `panel`, `20260916000300_payment_channel`), and `billing.payment.confirmed` carries it | the payer notice tells a `bot` payer about a webhook credit (`automation/contract.outbox.md`) |
 | `newUserWithinDays` reads `identity.user.createdAt` in the caller's tenant transaction; an account not found is not new | identity is a dependency already |
 | ASSUMED(2026-09-14): a purchase is a `success` payment until orders exist (F-501) | the only purchase built |
 | `reserve_coupon` re-checks `not_started`, `period_limit_reached` and `first_purchase_only` under the coupon's row lock; first purchase also refuses a live hold of another first-purchase coupon on a different order | counts another buyer can move; cross-coupon it is best-effort |

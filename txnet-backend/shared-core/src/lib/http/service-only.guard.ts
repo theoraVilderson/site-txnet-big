@@ -37,19 +37,25 @@ export class ServiceOnlyGuard implements CanActivate {
   }
 
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest<Request>();
-    const given = request.headers[RequestHeaders.serviceToken];
-    if (typeof given !== 'string' || !this.matches(given)) {
+    if (!presentsServiceToken(context.switchToHttp().getRequest<Request>(), this.expected)) {
       throw new NotFoundException();
     }
     return true;
   }
+}
 
-  private matches(given: string): boolean {
-    if (!this.expected) return false;
-    const a = Buffer.from(given);
-    const b = Buffer.from(this.expected);
-    if (a.length !== b.length) return false;
-    return timingSafeEqual(a, b);
-  }
+/**
+ * Whether a request carries this platform's `SERVICE_AUTH_TOKEN`. The guard's
+ * check, for a route that is not service-only but answers one differently: the
+ * billing deposit routes record a payment as started from the `bot` channel
+ * only when the token checks out (F-306-a), because a body field saying so
+ * could be sent by any panel user.
+ */
+export function presentsServiceToken(request: Pick<Request, 'headers'>, expected: string | undefined): boolean {
+  const given = request.headers[RequestHeaders.serviceToken];
+  if (typeof given !== 'string' || !expected) return false;
+  const a = Buffer.from(given);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }

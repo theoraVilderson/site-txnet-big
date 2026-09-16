@@ -3,7 +3,7 @@ id: automation
 layer: domain
 status: active
 version: 6
-updated: 2026-09-13
+updated: 2026-09-16
 ---
 
 # Contract — automation: the transactional outbox
@@ -145,7 +145,7 @@ every other stays so.
 
 | Rule | Why |
 |---|---|
-| A `webhook_auto` credit is acked and nothing is sent | that payer is on the success page; the notice is for a **late** credit — reconciliation or a person |
+| A `webhook_auto` credit is acked and nothing is sent — **unless the payload's `channel` is `bot`** (F-306-a; absent = `panel`) | a panel payer is on the success page; the notice is for a **late** credit. A bot payer started in a chat and waits there |
 | **Dedupe first:** `SET NX` `UnscopedRedisKeys.outboxProcessed('payment-credited-notify', <event id>)`, `RedisTtl.outboxProcessed` (7 days), before any side effect; already set is an ack | at-least-once delivery (ADR-0021) must not tell the payer twice |
 | Then `{type:'billing.payment.confirmed', paymentId, amountCredited}` on `user:<userId>` (`RealtimePublisher`), then `POST /api/internal/notify/user` on auth-service with `X-Tenant-Id` = the payload's tenant and template `paymentCredited` | the live half is at most once and cheap; the bot half needs the tenant's bots, which are auth-service's |
 | A side effect that throws **deletes the marker** and rethrows: nack, no requeue, dead-letter | the event stays owed instead of being recorded as handled |

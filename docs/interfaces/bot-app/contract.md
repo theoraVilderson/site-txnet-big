@@ -3,7 +3,7 @@ id: bot-app
 layer: interface
 status: active
 version: 11
-updated: 2026-09-10
+updated: 2026-09-16
 ---
 
 # bot-app — contract
@@ -84,7 +84,8 @@ contract — **not** a rule written in the bot because it is faster there
 | `flows/accounts.flow.ts` | the switch group, and becoming another member of it (`F-0210`) |
 | `flows/views.ts` `miniApp()` | the Mini App as a row on the member menu (`F-310`) |
 | `flows/account-add.flow.ts` | an account joining that group, by one of `F-0205`'s two proofs |
-| `auth-api/auth-api.client.ts` | the only way out |
+| `auth-api/auth-api.client.ts` | the only way out — to identity |
+| `flows/top-up.flow.ts`, `billing-api/billing-api.client.ts` | the wallet top-up, and the way out to billing (F-306-a, below) |
 
 **The bot reaches `auth-api` with a service credential** (`X-Service-Token`,
 ADR-0011): it waives the slide captcha — a chat cannot drag one — and moves the
@@ -140,6 +141,15 @@ every flow, including the §10.4 flows not yet written.
 One row on the member menu, and this unit's whole share of the feature. The row,
 the three decisions that live here rather than in the panel, and the marker the
 URL carries are in [contract.mini-app.md](contract.mini-app.md).
+
+## Top-up (`F-306-a`)
+
+Gateway → amount (its quick amounts, or typed) → billing's quote → `start` → a
+`url` button to the bank, or the credit on a free top-up. The panel's deposit
+routes, **through the gate** (`BILLING_API_BASE_URL`, Traefik's in-network
+`api.<domain>` alias), the chat's access token as Bearer, never billing-service
+directly; `X-Service-Token` rides along so billing records the `bot` channel.
+Every number is billing's. It ends at `start`; the bank's result is the payer notice.
 
 ## The switch group (`F-0205`, `F-0207`, `F-0210`)
 

@@ -18,6 +18,8 @@ type PaymentConfirmed = {
   amountCredited: string;
   gatewayReferenceId: string | null;
   confirmationSource: string;
+  /** Where the top-up was started (F-306-a); absent on an event written before it = the panel. */
+  channel: string;
 };
 
 /**
@@ -27,7 +29,9 @@ type PaymentConfirmed = {
  * A credit is **late** when anything but the payer's own browser brought it:
  * reconciliation retrying a verifying payment, or a person confirming one. A
  * `webhook_auto` credit is acknowledged and nothing is sent — that payer is
- * looking at the success page already.
+ * looking at the success page already — **unless the top-up was started in the
+ * bot** (F-306-a): the bank's page sent that payer to a browser, and the chat
+ * they paid from is where they wait for the answer.
  *
  * **Once, at-least-once delivery notwithstanding.** The marker is `SET NX`
  * before any side effect; a redelivered event finds it and stops. A side
@@ -61,7 +65,7 @@ export class PaymentConfirmedConsumer implements OnApplicationBootstrap {
 
   async handle(event: OutboxMessage): Promise<void> {
     const payment = paymentOf(event);
-    if (payment.confirmationSource === 'webhook_auto') return;
+    if (payment.confirmationSource === 'webhook_auto' && payment.channel !== 'bot') return;
 
     const marker = UnscopedRedisKeys.outboxProcessed(CONSUMER, event.id);
     if (!(await this.redis.setNx(marker, RedisTtl.outboxProcessed))) {
@@ -104,5 +108,13 @@ function paymentOf(event: OutboxMessage): PaymentConfirmed {
   if (!tenantId || !userId || !paymentId || !amountCredited || !confirmationSource) {
     throw new Error(`outbox event ${event.id} has a payload without its tenant, user, payment, amount or source`);
   }
-  return { tenantId, userId, paymentId, amountCredited, gatewayReferenceId: str('gatewayReferenceId'), confirmationSource };
+  return {
+    tenantId,
+    userId,
+    paymentId,
+    amountCredited,
+    gatewayReferenceId: str('gatewayReferenceId'),
+    confirmationSource,
+    channel: str('channel') ?? 'panel',
+  };
 }

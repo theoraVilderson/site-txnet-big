@@ -84,7 +84,7 @@ export function readPhoneNumber(
  * every non-ASCII digit on the floor — a Persian-typed foreign number would
  * then read as a shorter, valid, *different* number.
  */
-function digitValue(digit: string): string {
+export function digitValue(digit: string): string {
   const code = digit.codePointAt(0) ?? 0;
   for (let value = 0; value <= 9; value++) {
     // The zero of a digit's own block is the first codepoint below it that is

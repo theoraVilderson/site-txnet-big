@@ -510,6 +510,9 @@ model PaymentTransaction {
   createdAt             DateTime            @default(now())
   expiresAt             DateTime? // معمولاً now()+15min
   returnOrigin           String? // the panel origin the payer started from; the callback redirects there
+  /// Where the top-up was started (F-306-a): the panel, or the bot through the
+  /// gate. The payer notice tells a `bot` payer about a webhook credit too.
+  channel                CouponChannel       @default(panel)
   /// A verifying payment (F-092-x, ADR-0044): the row stays `pending`, and a
   /// non-null `nextVerifyAt` means the gateway met a verify or inquire with
   /// silence and must be asked again then. `verifyAttempts` is the ladder rung.

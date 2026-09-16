@@ -9,6 +9,7 @@ import {
   parseStartPayload,
 } from '@txnet-backend/messenger';
 import { AuthApiClient } from '../auth-api/auth-api.client';
+import { BillingApiClient } from '../billing-api/billing-api.client';
 import { BotCopy } from '../locale/bot-copy';
 import { ChatLanguage } from '../locale/chat-language';
 import { LocaleService } from '../locale/locale.service';
@@ -18,6 +19,7 @@ import { AccountsFlow } from '../flows/accounts.flow';
 import { ForgotFlow } from '../flows/forgot.flow';
 import { LoginFlow } from '../flows/login.flow';
 import { RegisterFlow } from '../flows/register.flow';
+import { TopUpFlow } from '../flows/top-up.flow';
 import { OtpStep } from '../flows/otp.step';
 import {
   ACTIONS,
@@ -75,6 +77,8 @@ export class ConversationRouter {
     private readonly accountAdd: AccountAddFlow,
     private readonly config: ConfigService,
     private readonly access: ChatAccess,
+    private readonly topUp: TopUpFlow,
+    private readonly billing: BillingApiClient,
   ) {}
 
   /**
@@ -127,6 +131,8 @@ export class ConversationRouter {
     // so it is dispatched here rather than out of `AccountsFlow.handle`.
     if (actionId === ACTIONS.accountAdd) return this.accountAdd.start(ctx);
 
+    if (actionId === ACTIONS.topUp) return this.topUp.start(ctx);
+
     if (actionId === ACTIONS.login) return this.login.start(ctx);
     if (actionId === ACTIONS.register) return this.register.start();
     if (actionId === ACTIONS.forgot) return this.forgot.start();
@@ -152,6 +158,8 @@ export class ConversationRouter {
         return this.accounts.handle(ctx, state, actionId);
       case 'accountAdd':
         return this.accountAdd.handle(ctx, state, actionId);
+      case 'topUp':
+        return this.topUp.handle(ctx, state, actionId);
       default:
         return { view: say('unknown', { key: BotKeys.common.unknown }), nextState: null };
     }
@@ -468,7 +476,7 @@ export class ConversationRouter {
    */
   private async menu(ctx: ChatContext) {
     const token = await this.access.token(ctx);
-    return token ? memberMenu(this.miniAppUrl(ctx.platform)) : guestMenu();
+    return token ? memberMenu(this.miniAppUrl(ctx.platform), this.billing.isConfigured) : guestMenu();
   }
 
   /**

@@ -25,7 +25,10 @@
     "confirmRemove": "Yes, remove it",
     "miniApp": "🚀 Open the app",
     "signOutAll": "Sign out of all accounts",
-    "signOutAllYes": "Yes, sign out of all"
+    "signOutAllYes": "Yes, sign out of all",
+    "topUp": "💳 Top up my wallet",
+    "toPayment": "Continue to payment",
+    "payNow": "Pay"
   },
   "common": {
     "cancelled": "Cancelled; nothing was saved. Start again below whenever you like.",
@@ -77,7 +80,8 @@
     "login": "Signing in · step {{n}} of {{total}}",
     "register": "Creating your account · step {{n}} of {{total}}",
     "forgot": "Resetting your password · step {{n}} of {{total}}",
-    "accountAdd": "Adding an account · step {{n}} of {{total}}"
+    "accountAdd": "Adding an account · step {{n}} of {{total}}",
+    "topUp": "Topping up · step {{n}} of {{total}}"
   },
   "field": {
     "phone": "Number: {{value}} ✅",
@@ -88,7 +92,9 @@
       "sms": "Code by SMS ✅",
       "telegram": "Code by Telegram ✅",
       "bale": "Code by Bale ✅"
-    }
+    },
+    "gateway": "Gateway: {{value}} ✅",
+    "amount": "Amount: {{value}} ✅"
   },
   "help": {
     "body": "I look after your account right here in the chat: sign in, create an account, or change your password — without going anywhere else.\n\n/menu — the main menu\n/logout — sign out of this chat"
@@ -125,5 +131,13 @@
     "removedSelf": "Removed, and you are signed out here. Sign in again whenever you like.",
     "removeFailed": "That account is no longer one of this chat's accounts.",
     "signOutAllAsk": "You will be signed out of every account in this chat. None is removed, and they stay reachable later without a new code. Sure?"
+  },
+  "topUp": {
+    "pickGateway": "Which gateway would you like to pay with?",
+    "none": "No payment gateway is available right now. Please try again a little later.",
+    "askAmount": "How much would you like to add? Pick an amount or type one.",
+    "quote": "Amount: {{amount}}\nFee: {{fee}}\nYou pay: {{payable}}\nAdded to your wallet: {{credited}}",
+    "pay": "Your payment is ready. Tap the button below to pay — once it is confirmed, you will get a message here.",
+    "credited": "{{credited}} was added to your wallet. Your balance is now {{balance}} ✅"
   }
 }

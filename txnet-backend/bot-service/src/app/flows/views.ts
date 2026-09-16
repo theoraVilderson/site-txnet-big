@@ -35,6 +35,8 @@ export const ACTIONS = {
   linkCheck: 'link:check',
   linkOpen: 'link:open',
   miniApp: 'menu:miniapp',
+  topUp: 'menu:topup',
+  topUpPay: 'topup:pay',
 } as const;
 
 export const cancel: BotAction = {
@@ -157,9 +159,11 @@ export function miniApp(url: string): BotAction {
  * not published a panel yet shows a menu without the row, rather than a button
  * that opens nothing.
  */
-export function memberMenu(miniAppUrl?: string): BotView {
+export function memberMenu(miniAppUrl?: string, topUp = false): BotView {
   return view('menu.member', { key: BotKeys.menu.member }, [
     ...(miniAppUrl ? [[miniApp(miniAppUrl)]] : []),
+    // F-306-a. Only where billing is reachable (`BillingApiClient.isConfigured`).
+    ...(topUp ? [[{ id: ACTIONS.topUp, label: { key: BotKeys.action.topUp } }]] : []),
     [{ id: ACTIONS.accounts, label: { key: BotKeys.action.accounts } }],
     [
       { id: ACTIONS.help, label: { key: BotKeys.action.help } },

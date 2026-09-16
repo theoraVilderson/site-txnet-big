@@ -11,10 +11,12 @@ import {
   Req,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { CouponChannel, Prisma } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
 import {
   BackendI18nKeys,
   CredentialUnavailable,
+  presentsServiceToken,
   RateLimitBucket,
   holdsPermission,
   rateLimitBucketKey,
@@ -112,7 +114,19 @@ export class DepositController {
     private readonly deposits: DepositQuoteService,
     private readonly starts: DepositStartService,
     private readonly locale: LocaleService,
+    private readonly config: ConfigService,
   ) {}
+
+  /**
+   * Where this top-up was started (F-306-a). The bot reaches these routes
+   * through the gate like the panel, and adds `X-Service-Token`; nothing in the
+   * body can claim `bot`, or any panel user could spend a bot-only coupon.
+   */
+  private channelOf(req: Request): CouponChannel {
+    return presentsServiceToken(req, this.config.get<string>('SERVICE_AUTH_TOKEN'))
+      ? CouponChannel.bot
+      : CouponChannel.panel;
+  }
 
   @Get('gateways')
   @RateLimit({
@@ -142,6 +156,7 @@ export class DepositController {
         source: body.source,
         amount: new Prisma.Decimal(body.amount),
         couponCodes: body.couponCodes,
+        channel: this.channelOf(req),
         canTest: canTest(req),
       });
       return {
@@ -181,6 +196,7 @@ export class DepositController {
         source: body.source,
         amount: new Prisma.Decimal(body.amount),
         couponCodes: body.couponCodes,
+        channel: this.channelOf(req),
         origin: req.headers.origin ?? null,
         canTest: canTest(req),
       });

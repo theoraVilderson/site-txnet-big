@@ -65,6 +65,8 @@ export const PAYMENT_SELECT = {
   // row is verifying at all.
   verifyAttempts: true,
   nextVerifyAt: true,
+  // Where it was started (F-306-a): the payer notice reads it off the event.
+  channel: true,
   gateway: { select: { providerName: true } },
   tenantGatewayConfig: { select: { providerName: true } },
 } satisfies Prisma.PaymentTransactionSelect;
@@ -456,6 +458,7 @@ export class DepositSettlementService {
           gateway: { source: ref.source, id: ref.gatewayId },
           gatewayReferenceId: referenceId,
           confirmationSource: source,
+          channel: payment.channel,
         },
       },
       select: { id: true },

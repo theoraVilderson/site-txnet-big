@@ -121,6 +121,15 @@ describe('PaymentConfirmedConsumer.handle', () => {
     expect(calls.fetched).toEqual([]);
   });
 
+  it('tells a payer who started in the bot even about a webhook credit — no success page is in front of them (F-306-a)', async () => {
+    const { consumer, calls } = build();
+
+    await consumer.handle(event({ confirmationSource: 'webhook_auto', channel: 'bot' }));
+
+    expect(calls.set).toHaveLength(1);
+    expect(calls.fetched).toHaveLength(1);
+  });
+
   it('gives the marker back and rethrows when auth-service fails, so the event stays owed', async () => {
     const { consumer, calls } = build({ notifyStatus: 502 });
 

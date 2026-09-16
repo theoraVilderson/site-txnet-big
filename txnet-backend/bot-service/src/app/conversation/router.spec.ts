@@ -9,6 +9,8 @@ import { AccountAddFlow } from '../flows/account-add.flow';
 import { PhoneNumbers } from '../flows/phone-number';
 import { AccountsFlow } from '../flows/accounts.flow';
 import { AccountSwitcher } from '../session/account-switcher';
+import { TopUpFlow } from '../flows/top-up.flow';
+import { BillingApiClient } from '../billing-api/billing-api.client';
 import { ChatAccess } from '../session/chat-access';
 import { ForgotFlow } from '../flows/forgot.flow';
 import { LoginFlow } from '../flows/login.flow';
@@ -31,6 +33,8 @@ function makeRouter(over: {
   env?: Record<string, string>;
   /** `null` makes the stored refresh token one `auth-api` refuses. */
   access?: string | null;
+  /** Billing is reachable, so the member menu offers a top-up (F-306-a). */
+  topUp?: boolean;
 } = {}) {
   const nav = {
     get: vi.fn().mockResolvedValue(over.state ?? null),
@@ -101,6 +105,8 @@ function makeRouter(over: {
       over.env ?? { PANEL_BASE_URL: 'https://panel.example.test' },
     ),
     new ChatAccess(api, sessions),
+    { start: vi.fn(), handle: vi.fn() } as unknown as TopUpFlow,
+    { isConfigured: over.topUp ?? false } as unknown as BillingApiClient,
   );
   return { router, nav, sessions, api, otp, langs, locale };
 }
@@ -204,6 +210,17 @@ describe('ConversationRouter', () => {
       expect(row?.url).toBe(
         'https://panel.example.test/panel?theme=dark&ma=telegram',
       );
+    });
+
+    it('offers a top-up on the member menu only where billing is reachable', async () => {
+      const session = { refreshToken: 'r-1', signedInAt: 1 };
+      const idsOf = async (topUp: boolean) =>
+        ((await makeRouter({ session, topUp }).router.route({ ...ctx, text: '/start' })).view.actions ?? [])
+          .flat()
+          .map((a) => a.id);
+
+      expect(await idsOf(true)).toContain('menu:topup');
+      expect(await idsOf(false)).not.toContain('menu:topup');
     });
 
     it('shows a menu without the row when no panel is published', async () => {

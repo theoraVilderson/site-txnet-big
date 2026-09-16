@@ -68,7 +68,7 @@ export type DepositStartRequest = {
   /** Base currency (ADR-0019), > 0, at most 2 decimal places. */
   amount: Prisma.Decimal;
   couponCodes: readonly string[];
-  /** Where the codes were typed (F-502-k). Absent = the panel. */
+  /** Where the top-up was started, and so where the codes were typed (F-502-k, F-306-a). Absent = the panel. */
   channel?: CouponChannel;
   /** The browser's `Origin` header — where the result page is, if it checks out. */
   origin?: string | null;
@@ -140,7 +140,7 @@ export class DepositStartService {
         target: { kind: 'wallet_top_up' },
         gatewaySource: source,
         gatewayId,
-        // The panel's routes are the only caller today; the bot's top-up passes `bot` (F-306-a).
+        // `bot` when the bot's top-up called (F-306-a, `DepositController.channelOf`).
         channel: request.channel ?? CouponChannel.panel,
         userId,
       });
@@ -205,6 +205,9 @@ export class DepositStartService {
           // and a payment that has already landed never expires.
           expiresAt: price.free ? null : new Date(Date.now() + ttl * 1000),
           returnOrigin,
+          // Where it was started (F-306-a): the payer notice tells a bot payer
+          // even about a webhook credit, since no success page is in front of them.
+          channel: request.channel ?? CouponChannel.panel,
         },
         select: { id: true },
       });

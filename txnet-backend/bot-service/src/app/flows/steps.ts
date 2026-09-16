@@ -56,6 +56,7 @@ const FLOW_STEPS: Record<Exclude<BotFlow, 'login' | 'accountAdd'>, string[]> = {
   // count and "step 1 of 1" is noise on a screen that is already a list. An
   // empty list makes `progressOf` return nothing, which is the honest answer.
   accounts: [],
+  topUp: ['topUp.gateway', 'topUp.amount', 'topUp.confirm'],
 };
 
 /**
@@ -75,6 +76,7 @@ export const PROGRESS_KEY: Record<BotFlow, BotKey | null> = {
   forgot: BotKeys.progress.forgot,
   accountAdd: BotKeys.progress.accountAdd,
   accounts: null,
+  topUp: BotKeys.progress.topUp,
 };
 
 export function progressOf(state: NavState): BotText | undefined {
@@ -105,6 +107,9 @@ const ECHOED: Array<{ field: string; key: string }> = [
   { field: 'identifier', key: BotKeys.field.identifier },
   { field: 'fullName', key: BotKeys.field.name },
   { field: 'username', key: BotKeys.field.username },
+  // F-306-a. What was picked and typed — never a price, which is billing's to say.
+  { field: 'gateway', key: BotKeys.field.gateway },
+  { field: 'amount', key: BotKeys.field.amount },
 ];
 
 /** What the user has told this conversation so far, one line each. */
