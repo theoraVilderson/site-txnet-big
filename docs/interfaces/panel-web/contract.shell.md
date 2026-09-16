@@ -234,6 +234,9 @@ up. One key closing both would leave the user with neither.
 reset** — a closed modal holds no half-typed code and no previous attempt's
 error, with no effect that has to remember to clear each one. Resetting in an
 effect is also what `react-hooks/set-state-in-effect` refuses.
+7. **A free-service code shows its key once** (F-502-l-c, D-35): a `free_grant`
+   answer shows the service and its `subscriptionKey` with a copy button and
+   "shown only this once" — billing keeps only the hash. No money figure, no burst.
 
 ## State
 

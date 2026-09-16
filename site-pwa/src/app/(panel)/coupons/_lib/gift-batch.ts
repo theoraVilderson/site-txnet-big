@@ -14,7 +14,11 @@ export interface GiftBatchForm {
   label: string;
   note: string;
   count: string;
+  /** What each code gives: a wallet credit, or a free service (F-502-l-c). */
+  kind: "credit" | "service";
   value: string;
+  /** A free-service batch only: the catalog variant each code grants. */
+  grantVariantId: string;
   prefix: string;
   /** `YYYY-MM-DD`, Tehran's day; the code works through it. */
   expiresAt: string;
@@ -24,7 +28,7 @@ export interface GiftBatchForm {
 export type GiftBatchErrors = Partial<Record<keyof GiftBatchForm, string>>;
 
 export function emptyGiftBatchForm(): GiftBatchForm {
-  return { owner: "own", tenantId: "", label: "", note: "", count: "10", value: "", prefix: "", expiresAt: "", tenantIds: "" };
+  return { owner: "own", tenantId: "", label: "", note: "", count: "10", kind: "credit", value: "", grantVariantId: "", prefix: "", expiresAt: "", tenantIds: "" };
 }
 
 const DECIMAL = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
@@ -37,7 +41,11 @@ export function validateGiftBatch(f: GiftBatchForm, me: Me | null): GiftBatchErr
   if (!f.label.trim()) errors.label = GIFT_KEYS.errors.label;
   const count = f.count.trim();
   if (!/^\d{1,4}$/.test(count) || Number(count) < 1 || Number(count) > GIFT_BATCH_MAX) errors.count = GIFT_KEYS.errors.count;
-  if (!DECIMAL.test(f.value.trim()) || Number(f.value) <= 0) errors.value = COUPON_KEYS.errors.decimal;
+  if (f.kind === "service") {
+    if (!UUID.test(f.grantVariantId.trim())) errors.grantVariantId = COUPON_KEYS.errors.uuid;
+  } else if (!DECIMAL.test(f.value.trim()) || Number(f.value) <= 0) {
+    errors.value = COUPON_KEYS.errors.decimal;
+  }
   if (f.prefix.trim() && !/^[A-Za-z0-9]{1,8}$/.test(f.prefix.trim())) errors.prefix = GIFT_KEYS.errors.prefix;
   if (isPlatformOwner(me) && f.owner === "tenant" && !UUID.test(f.tenantId.trim())) errors.tenantId = COUPON_KEYS.errors.uuid;
   if (ids(f.tenantIds).some((t) => !UUID.test(t))) errors.tenantIds = COUPON_KEYS.errors.uuid;
@@ -45,7 +53,9 @@ export function validateGiftBatch(f: GiftBatchForm, me: Me | null): GiftBatchErr
 }
 
 export function giftBatchBody(f: GiftBatchForm, me: Me | null): GenerateGiftBatchBody {
-  const body: GenerateGiftBatchBody = { label: f.label.trim(), count: Number(f.count.trim()), value: f.value.trim() };
+  const service = f.kind === "service";
+  const body: GenerateGiftBatchBody = { label: f.label.trim(), count: Number(f.count.trim()), value: service ? "0" : f.value.trim() };
+  if (service) body.grantVariantId = f.grantVariantId.trim();
   if (f.note.trim()) body.note = f.note.trim();
   if (f.prefix.trim()) body.prefix = f.prefix.trim().toUpperCase();
   if (f.expiresAt) body.expiresAt = dayToInstant(f.expiresAt, "end");

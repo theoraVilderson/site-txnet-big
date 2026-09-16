@@ -85,6 +85,7 @@ const COUPON: AdminCoupon = {
   tenantIds: [],
   gateways: [],
   serviceScopes: [],
+  grantVariantId: null,
   status: "active",
   deletedAt: null,
   createdAt: "2026-03-01T00:00:00.000Z",
@@ -227,6 +228,48 @@ describe("the usage filter", () => {
     expect(validateUsageFilter({ status: "", from: "2026-10-02", to: "2026-10-01" })).toBe(COUPON_KEYS.usage.filters.badRange);
     expect(validateUsageFilter({ status: "", from: "2026-10-01", to: "2026-10-01" })).toBeNull();
     expect(validateUsageFilter({ status: "", from: "2026-10-01", to: "" })).toBeNull();
+  });
+});
+
+/**
+ * A free-service coupon (F-502-l-c, D-35): it gives a Grant of one catalog
+ * variant, so it names that variant and no value, and it is redeemed in the
+ * gift box — so, as billing refuses them, it takes no purchase, period or
+ * time-of-day limit.
+ */
+describe("a free-service coupon", () => {
+  const free = () => ({ ...emptyCouponForm(), code: "freevpn", discountType: "free_grant" as const, discountValue: "", grantVariantId: UUID });
+
+  it("needs a variant and no value", () => {
+    expect(validateCouponForm(free(), RESELLER, null)).toEqual({});
+    expect(validateCouponForm({ ...free(), grantVariantId: "" }, RESELLER, null)).toMatchObject({ grantVariantId: COUPON_KEYS.errors.uuid });
+    expect(validateCouponForm({ ...free(), grantVariantId: "nope" }, RESELLER, null)).toMatchObject({ grantVariantId: COUPON_KEYS.errors.uuid });
+  });
+
+  it.each([
+    [{ minPurchaseAmount: "5" }, "minPurchaseAmount"],
+    [{ maxPurchaseAmount: "50" }, "maxPurchaseAmount"],
+    [{ periodUsageLimit: "1", periodDays: "7" }, "periodUsageLimit"],
+    [{ activeHourFrom: "8", activeHourTo: "20" }, "activeHourFrom"],
+    [{ validFrom: "2026-10-01" }, "validFrom"],
+    [{ newUserWithinDays: "7" }, "newUserWithinDays"],
+  ])("refuses %o on %s, as billing does", (patch, field) => {
+    expect(validateCouponForm({ ...free(), ...patch }, RESELLER, null)).toMatchObject({ [field]: COUPON_KEYS.errors.notForFreeService });
+  });
+
+  it("sends the variant with a value of 0 and no cap", () => {
+    const body = createBody({ ...free(), maxDiscountCap: "9" }, RESELLER);
+    expect(body).toMatchObject({ code: "FREEVPN", discountType: "free_grant", discountValue: "0", grantVariantId: UUID });
+    expect(body).not.toHaveProperty("maxDiscountCap");
+  });
+
+  it("sends no variant for any other type", () => {
+    expect(createBody({ ...emptyCouponForm(), code: "yalda", discountValue: "15", grantVariantId: UUID }, RESELLER)).not.toHaveProperty("grantVariantId");
+  });
+
+  it("keeps the type and the variant when an existing one is edited", () => {
+    const form = formFromCoupon({ ...COUPON, discountType: "free_grant", discountValue: "0.00", maxDiscountCap: null, grantVariantId: UUID });
+    expect(form).toMatchObject({ discountType: "free_grant", grantVariantId: UUID });
   });
 });
 

@@ -14,7 +14,8 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { ApiError } from "@/lib/api-error";
-import { billingApi, type GiftRedemption } from "@/lib/billing-api";
+import { billingApi, type GiftGrant, type GiftRedemption } from "@/lib/billing-api";
+import { formatInstant } from "../_lib/datetime";
 import { BASE_CURRENCY, formatMoney } from "../_lib/money";
 
 /** The modal's strings as generated constants (C-06). */
@@ -266,7 +267,9 @@ function GiftCodeDialog({ onClose, onRedeemed }: Omit<GiftCodeModalProps, "open"
               </button>
             </div>
 
-            {redeemed ? (
+            {redeemed?.kind === "free_grant" ? (
+              <ServiceGranted redemption={redeemed} onClose={onClose} />
+            ) : redeemed ? (
               <Success
                 reduce={!!reduce}
                 credited={money(redeemed.credited)}
@@ -386,6 +389,65 @@ function GiftCodeDialog({ onClose, onRedeemed }: Omit<GiftCodeModalProps, "open"
           </motion.div>
         </motion.div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * A free-service code (F-502-l-c, D-35): a Grant instead of money. Billing keeps
+ * only the subscription key's hash, so this is the one time the key exists in
+ * the clear — it is shown with a copy button and a sentence that says so, and
+ * nothing on this screen is a money figure. The frame stays flat: no burst, so
+ * nothing moves while the user is reading a key.
+ */
+function ServiceGranted({ redemption, onClose }: { redemption: GiftGrant; onClose: () => void }) {
+  const { t, lang } = useLocale();
+  const [copied, setCopied] = useState(false);
+  const until = redemption.grant.endsAt ? formatInstant(redemption.grant.endsAt, lang) : null;
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(redemption.subscriptionKey);
+      setCopied(true);
+    } catch {
+      // No clipboard (an old browser, an insecure origin): the key stays selectable.
+    }
+  };
+
+  return (
+    <div className="py-2 text-center">
+      <div className="mx-auto mb-5 flex size-20 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 text-white shadow-xl shadow-primary-glow">
+        <Sparkles size={32} aria-hidden />
+      </div>
+      <p className="text-lg font-black text-text-primary">{t("common", G.serviceTitle)}</p>
+      <p className="mt-1.5 text-sm text-text-secondary">
+        {until ? t("common", G.serviceUntil, { until }) : t("common", G.servicePermanent)}
+      </p>
+
+      <div className="mt-5 rounded-2xl border border-card-border bg-bg-inner p-3 text-start">
+        <p className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-text-secondary">{t("common", G.keyLabel)}</p>
+        <div className="flex items-center gap-2">
+          <code className="min-w-0 flex-1 select-all break-all font-mono text-xs text-text-primary" dir="ltr">
+            {redemption.subscriptionKey}
+          </code>
+          <button
+            type="button"
+            onClick={() => void copy()}
+            className="shrink-0 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white"
+          >
+            {t("common", copied ? G.copied : G.copy)}
+          </button>
+        </div>
+        <p className="mt-2 text-[11px] font-bold text-error">{t("common", G.keyOnce)}</p>
+      </div>
+
+      <button
+        type="button"
+        onClick={onClose}
+        className="mt-6 w-full rounded-2xl bg-leaf-bg py-3.5 text-sm font-bold text-text-primary transition-[background-color] duration-200 hover:bg-card-border"
+      >
+        {t("common", G.done)}
+      </button>
     </div>
   );
 }

@@ -70,6 +70,25 @@ describe("giftBatchBody", () => {
   });
 });
 
+/** A batch of free-service codes (F-502-l-c, D-35): a variant, and no value. */
+describe("a free-service batch", () => {
+  const service = () => ({ ...emptyGiftBatchForm(), label: "Free month", count: "20", kind: "service" as const, value: "", grantVariantId: UUID });
+
+  it("needs a variant and no value", () => {
+    expect(validateGiftBatch(service(), RESELLER)).toEqual({});
+    expect(validateGiftBatch({ ...service(), grantVariantId: "nope" }, RESELLER)).toMatchObject({ grantVariantId: COUPON_KEYS.errors.uuid });
+  });
+
+  it("still needs a value for a credit batch, and no variant", () => {
+    expect(validateGiftBatch({ ...service(), kind: "credit" }, RESELLER)).toMatchObject({ value: COUPON_KEYS.errors.decimal });
+    expect(giftBatchBody({ ...service(), kind: "credit", value: "5" }, RESELLER)).not.toHaveProperty("grantVariantId");
+  });
+
+  it("sends the variant with a value of 0", () => {
+    expect(giftBatchBody(service(), RESELLER)).toEqual({ label: "Free month", count: 20, value: "0", grantVariantId: UUID });
+  });
+});
+
 describe("every gift key", () => {
   const flatten = (v: unknown): string[] => (typeof v === "string" ? [v] : v && typeof v === "object" ? Object.values(v).flatMap(flatten) : []);
   const shipped = (lang: string) => {

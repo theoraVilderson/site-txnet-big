@@ -232,10 +232,13 @@ export function CouponForm({
                     options={[
                       { value: "percentage", label: t("common", F.percentage) },
                       { value: "fixed_amount", label: t("common", F.fixed) },
+                      { value: "free_grant", label: t("common", F.freeService) },
                     ]}
                   />,
                 )}
-                {field("discountValue", t("common", F.value), text("discountValue", { ltr: true, decimal: true, disabled: frozen }))}
+                {form.discountType === "free_grant"
+                  ? field("grantVariantId", t("common", F.grantVariantId), text("grantVariantId", { ltr: true, disabled: frozen }), t("common", F.grantVariantHint))
+                  : field("discountValue", t("common", F.value), text("discountValue", { ltr: true, decimal: true, disabled: frozen }))}
                 {form.discountType === "percentage" && field("maxDiscountCap", t("common", F.cap), text("maxDiscountCap", { ltr: true, decimal: true }))}
               </div>
               <Toggle checked={form.isActive} onChange={(v) => set("isActive", v)} label={t("common", F.isActive)} />

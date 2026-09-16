@@ -112,7 +112,9 @@ export type WalletPaymentsPage = Paged<WalletPaymentRow>;
  * port, where a *refused* code still added an `undefined` amount to the store
  * and showed success over a balance of `NaN`.
  */
-export interface GiftRedemption {
+export interface GiftCredit {
+  /** Absent on an answer from before F-502-l-b; a credit either way. */
+  kind?: "wallet_credit";
   /** The code as stored, which is the trimmed, upper-cased form of what was typed. */
   code: string;
   /** Base currency, a decimal string. Always `> 0` — a zero-value coupon raises server-side. */
@@ -120,6 +122,17 @@ export interface GiftRedemption {
   /** The balance after the credit. Base currency, a decimal string. */
   balance: string;
 }
+
+/** A free-service code (F-502-l-b, D-35): a Grant, and its subscription key shown this once. */
+export interface GiftGrant {
+  kind: "free_grant";
+  code: string;
+  grant: { id: string; variantId: string | null; startsAt: string; endsAt: string | null; featureKeys: string[] };
+  /** Billing keeps only its hash: this answer is the only time it exists in the clear. */
+  subscriptionKey: string;
+}
+
+export type GiftRedemption = GiftCredit | GiftGrant;
 
 /**
  * One gateway the user may pay through, as `GET /deposit/gateways` answers it
@@ -504,7 +517,7 @@ export interface AdminCoupon {
   /** `null` = a platform coupon. */
   tenantId: string | null;
   code: string;
-  discountType: "percentage" | "fixed_amount" | "wallet_credit";
+  discountType: "percentage" | "fixed_amount" | "wallet_credit" | "free_grant";
   discountValue: string;
   maxDiscountCap: string | null;
   minPurchaseAmount: string | null;
@@ -532,6 +545,8 @@ export interface AdminCoupon {
   tenantIds: string[];
   gateways: CouponGatewayRef[];
   serviceScopes: Array<{ productId: string | null; variantId: string | null }>;
+  /** A free-service coupon's catalog variant (F-502-l-a); null for every other type. */
+  grantVariantId: string | null;
   status: CouponStatus;
   deletedAt: string | null;
   createdAt: string;
@@ -559,7 +574,7 @@ export interface CouponListQuery {
 
 export interface UpdateCouponBody {
   code?: string;
-  discountType?: "percentage" | "fixed_amount" | "wallet_credit";
+  discountType?: "percentage" | "fixed_amount" | "wallet_credit" | "free_grant";
   discountValue?: string;
   maxDiscountCap?: string | null;
   minPurchaseAmount?: string | null;
@@ -584,11 +599,12 @@ export interface UpdateCouponBody {
   tenantIds?: string[];
   gateways?: CouponGatewayRef[];
   serviceScopes?: Array<{ productId?: string | null; variantId?: string | null }>;
+  grantVariantId?: string | null;
 }
 
 export interface CreateCouponBody extends UpdateCouponBody {
   code: string;
-  discountType: "percentage" | "fixed_amount" | "wallet_credit";
+  discountType: "percentage" | "fixed_amount" | "wallet_credit" | "free_grant";
   discountValue: string;
   /** Absent = the caller's tenant; `null` = platform; another id = the platform owner's alone. */
   tenantId?: string | null;
@@ -623,6 +639,8 @@ export interface GenerateGiftBatchBody {
   count: number;
   /** Base currency, a decimal string. */
   value: string;
+  /** Set: every code gives a Grant of this variant, and `value` is "0" (F-502-l-a). */
+  grantVariantId?: string | null;
   prefix?: string | null;
   expiresAt?: string | null;
   tenantIds?: string[];

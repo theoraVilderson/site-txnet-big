@@ -186,6 +186,35 @@ describe("a redeemed code", () => {
   });
 });
 
+/**
+ * A free-service code (F-502-l-c, D-35): billing answers a Grant and its
+ * subscription key instead of a credit. The key is shown this once — billing
+ * keeps only its hash — so the screen says so, and no money figure appears.
+ */
+describe("a free-service code", () => {
+  it("shows the activated service and its key once, and no credit", async () => {
+    const user = userEvent.setup();
+    redeemGift.mockResolvedValue({
+      kind: "free_grant",
+      code: "FREEVPN",
+      grant: { id: "g1", variantId: "v1", startsAt: "2026-09-15T00:00:00.000Z", endsAt: "2026-10-15T00:00:00.000Z", featureKeys: ["vpn.access"] },
+      subscriptionKey: "KEY-3kq9-once",
+    });
+    const { onRedeemed } = open();
+
+    fillCode("FREEVPN");
+    await user.click(submit());
+
+    expect(await screen.findByText("wallet.gift.serviceTitle")).toBeInTheDocument();
+    expect(screen.getByText("KEY-3kq9-once")).toBeInTheDocument();
+    expect(screen.getByText("wallet.gift.keyOnce")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "wallet.gift.copy" })).toBeInTheDocument();
+    expect(screen.queryByText(/wallet\.gift\.credited/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/wallet\.gift\.newBalance/)).not.toBeInTheDocument();
+    expect(onRedeemed).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("the box itself", () => {
   it("refuses to submit an empty code without spending a request", async () => {
     const user = userEvent.setup();

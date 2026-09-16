@@ -509,6 +509,10 @@ function VariantCard({ variant: v, money, onChanged }: { variant: CatalogVariant
           <p className="font-mono text-sm font-bold text-text-primary" dir="ltr">
             {v.sku}
           </p>
+          {/* The id a free-service coupon names (F-502-l-c). */}
+          <p className="select-all font-mono text-[10px] text-text-secondary" dir="ltr">
+            {v.id}
+          </p>
           <p className="text-[11px] text-text-secondary">
             {t("common", K.visibility[v.visibility])} · {t("common", K.billingMode[v.billingMode])} ·{" "}
             {v.durationDays === null ? t("common", K.variant.permanent) : t("common", K.variant.days, { count: v.durationDays })}

@@ -83,8 +83,10 @@ export interface CouponForm {
   owner: CouponOwnerChoice;
   tenantId: string;
   code: string;
-  discountType: "percentage" | "fixed_amount";
+  discountType: "percentage" | "fixed_amount" | "free_grant";
   discountValue: string;
+  /** A free service only: the catalog variant it grants (F-502-l-c). */
+  grantVariantId: string;
   maxDiscountCap: string;
   minPurchaseAmount: string;
   maxPurchaseAmount: string;
@@ -124,6 +126,7 @@ export function emptyCouponForm(): CouponForm {
     code: "",
     discountType: "percentage",
     discountValue: "",
+    grantVariantId: "",
     maxDiscountCap: "",
     minPurchaseAmount: "",
     maxPurchaseAmount: "",
@@ -218,8 +221,9 @@ export function formFromCoupon(c: AdminCoupon): CouponForm {
     owner: c.tenantId === null ? "platform" : "own",
     tenantId: c.tenantId ?? "",
     code: c.code,
-    discountType: c.discountType === "fixed_amount" ? "fixed_amount" : "percentage",
+    discountType: c.discountType === "fixed_amount" || c.discountType === "free_grant" ? c.discountType : "percentage",
     discountValue: c.discountValue,
+    grantVariantId: c.grantVariantId ?? "",
     maxDiscountCap: s(c.maxDiscountCap),
     minPurchaseAmount: s(c.minPurchaseAmount),
     maxPurchaseAmount: s(c.maxPurchaseAmount),
@@ -269,9 +273,19 @@ export function validateCouponForm(f: CouponForm, me: Me | null, original: Admin
   if (!CODE.test(f.code.trim().toUpperCase())) put("code", E.code);
   if (!original && isPlatformOwner(me) && f.owner === "tenant" && !UUID.test(f.tenantId.trim())) put("tenantId", E.uuid);
 
-  const value = f.discountValue.trim();
-  if (!DECIMAL.test(value) || Number(value) <= 0) put("discountValue", E.decimal);
-  else if (f.discountType === "percentage" && Number(value) > 100) put("discountValue", E.percentMax);
+  if (f.discountType === "free_grant") {
+    // A free service names the variant it grants and gives no money (F-502-l-c).
+    if (!UUID.test(f.grantVariantId.trim())) put("grantVariantId", E.uuid);
+    // It is redeemed in the gift box, which reads no purchase, period or clock.
+    for (const k of ["minPurchaseAmount", "maxPurchaseAmount", "periodUsageLimit", "periodDays", "activeHourFrom", "activeHourTo", "newUserWithinDays"] as const) {
+      if (!blank(f[k])) put(k, E.notForFreeService);
+    }
+    if (f.validFrom) put("validFrom", E.notForFreeService);
+  } else {
+    const value = f.discountValue.trim();
+    if (!DECIMAL.test(value) || Number(value) <= 0) put("discountValue", E.decimal);
+    else if (f.discountType === "percentage" && Number(value) > 100) put("discountValue", E.percentMax);
+  }
 
   for (const k of ["maxDiscountCap", "minPurchaseAmount", "maxPurchaseAmount"] as const) {
     if (!blank(f[k]) && !DECIMAL.test(f[k].trim())) put(k, E.decimal);
@@ -325,8 +339,9 @@ function wire(f: CouponForm): Required<UpdateCouponBody> {
   return {
     code: f.code.trim().toUpperCase(),
     discountType: f.discountType,
-    discountValue: f.discountValue.trim(),
+    discountValue: f.discountType === "free_grant" ? "0" : f.discountValue.trim(),
     maxDiscountCap: f.discountType === "percentage" ? orNull(f.maxDiscountCap) : null,
+    grantVariantId: f.discountType === "free_grant" ? orNull(f.grantVariantId) : null,
     minPurchaseAmount: orNull(f.minPurchaseAmount),
     maxPurchaseAmount: orNull(f.maxPurchaseAmount),
     totalUsageLimit: intOrNull(f.totalUsageLimit),

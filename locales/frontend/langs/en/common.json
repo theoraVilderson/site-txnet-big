@@ -315,7 +315,14 @@
       "successTitle": "Gift code redeemed",
       "credited": "{{amount}} was added to your wallet.",
       "newBalance": "New balance: {{balance}}",
-      "done": "Close"
+      "done": "Close",
+      "serviceTitle": "Your service is active",
+      "serviceUntil": "Active until {{until}}.",
+      "servicePermanent": "Active with no end date.",
+      "keyLabel": "Subscription key",
+      "keyOnce": "Copy it now — it is shown only this once.",
+      "copy": "Copy",
+      "copied": "Copied"
     }
   },
   "deposit": {
@@ -876,7 +883,10 @@
       "save": "Save",
       "saving": "Saving…",
       "cancel": "Cancel",
-      "confirmClose": "You have unsaved changes. Leave without saving?"
+      "confirmClose": "You have unsaved changes. Leave without saving?",
+      "freeService": "Free service",
+      "grantVariantId": "Catalog variant ID",
+      "grantVariantHint": "Copy it from the catalog page. The code gives a Grant of this variant, not money."
     },
     "errors": {
       "required": "Required",
@@ -890,7 +900,8 @@
       "dates": "The end must be after the start",
       "uuid": "Enter valid IDs, one per line",
       "targetedNeedsUsers": "Name at least one user",
-      "capacityBelowUsed": "Cannot be below what is already used or on hold"
+      "capacityBelowUsed": "Cannot be below what is already used or on hold",
+      "notForFreeService": "A free-service code takes no purchase, period or time limit"
     },
     "refusals": {
       "not_platform_owner": "Only the platform owner can manage platform coupons or another tenant's.",
@@ -988,7 +999,12 @@
         "tenantIdsHint": "Platform batches only. One per line; empty = the platform's own users.",
         "submit": "Generate",
         "submitting": "Generating…",
-        "cancel": "Cancel"
+        "cancel": "Cancel",
+        "kind": "Each code gives",
+        "kindCredit": "Wallet credit",
+        "kindService": "A free service",
+        "grantVariantId": "Catalog variant ID",
+        "grantVariantHint": "Copy it from the catalog page."
       },
       "errors": {
         "label": "Name the batch",

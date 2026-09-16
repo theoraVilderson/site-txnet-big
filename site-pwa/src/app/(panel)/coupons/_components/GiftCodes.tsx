@@ -297,7 +297,22 @@ function GiftBatchSheet({ me, onClose, onCreated }: { me: Me | null; onClose: ()
           {field("label", t("common", F.label), text("label"))}
           <div className="grid gap-3 sm:grid-cols-2">
             {field("count", t("common", F.count), text("count", { ltr: true }), t("common", F.countHint))}
-            {field("value", t("common", F.value), text("value", { ltr: true }))}
+            {field(
+              "kind",
+              t("common", F.kind),
+              <Select
+                id="gb-kind"
+                value={form.kind}
+                onChange={(v) => set("kind", v as typeof form.kind)}
+                options={[
+                  { value: "credit", label: t("common", F.kindCredit) },
+                  { value: "service", label: t("common", F.kindService) },
+                ]}
+              />,
+            )}
+            {form.kind === "service"
+              ? field("grantVariantId", t("common", F.grantVariantId), text("grantVariantId", { ltr: true }), t("common", F.grantVariantHint))
+              : field("value", t("common", F.value), text("value", { ltr: true }))}
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             {field("prefix", t("common", F.prefix), text("prefix", { ltr: true }), t("common", F.prefixHint))}
