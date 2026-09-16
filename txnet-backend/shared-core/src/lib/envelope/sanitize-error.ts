@@ -135,9 +135,9 @@ function fromPrisma(e: unknown): { status: number; msgKey: string } | null {
   return null;
 }
 
-/** A reason is a bare identifier: nothing a thrown message could smuggle out. */
+/** A reason is a bare identifier (camelCase or snake_case): nothing a thrown message could smuggle out. */
 function isSafeReason(value: unknown): value is string {
-  return typeof value === 'string' && /^[a-z][A-Za-z0-9]{0,63}$/.test(value);
+  return typeof value === 'string' && /^[a-z][A-Za-z0-9_]{0,63}$/.test(value);
 }
 
 export function sanitizeError(exception: unknown): SanitizedError {

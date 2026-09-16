@@ -220,10 +220,17 @@ describe('sanitizeError', () => {
       expect(out.reason).toBe('permissionsChanged');
     });
 
+    it('passes a snake_case reason — the refusal unions of catalog and coupons are spelled that way', () => {
+      const out = sanitizeError(new NotFoundException({ reason: 'product_not_found', message: 'catalog refused: product_not_found' }));
+      expect(out.reason).toBe('product_not_found');
+    });
+
     it.each([
       ['a sentence', 'the role table changed at 10:42'],
       ['a dotted key', 'auth.permissionsChanged'],
       ['a Prisma code', 'P2002 on identity.role_permission'],
+      ['a path', '../etc/passwd'],
+      ['led by an underscore', '_private'],
       ['not a string', 42],
     ])('drops a reason that is %s', (_label, reason) => {
       const out = sanitizeError(
