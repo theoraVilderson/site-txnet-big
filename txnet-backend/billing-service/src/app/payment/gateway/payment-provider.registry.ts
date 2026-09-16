@@ -13,7 +13,8 @@ import { ZarinpalProvider } from './zarinpal.provider';
  * from `GatewayMerchant` per call.
  *
  * `PaymentProviderName` has members with no driver yet (`idpay`,
- * `nowpayments`, `stripe`); asking for one is `ProviderNotSupported`, never a
+ * `nowpayments`, `stripe`, and D-32's `oxapay`, `airwallex`, `telegram_stars`,
+ * `bale`); asking for one is `ProviderNotSupported`, never a
  * fallback to another gateway.
  */
 @Injectable()

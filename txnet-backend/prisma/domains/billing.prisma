@@ -60,6 +60,10 @@ enum PaymentProviderName {
   idpay
   nowpayments
   stripe
+  oxapay
+  airwallex
+  telegram_stars // paid in the tenant's own bot or Mini App (D-32)
+  bale // in-chat, like telegram_stars
 
   @@schema("billing")
 }
@@ -68,6 +72,7 @@ enum GatewayCategory {
   domestic_rial
   international_card
   crypto
+  in_chat // settled inside a messenger chat, never in a browser (D-32)
 
   @@schema("billing")
 }
@@ -477,6 +482,13 @@ model PaymentTransaction {
   // so the rate alone does not say which reading priced this payment. NULL on a
   // gateway that priced from its own `staticRate`, and before F-092-c.
   exchangeRateSnapshotId String?            @db.Uuid
+  /// What the gateway reports actually arrived (D-32, F-104-a): its receipt,
+  /// never money of record — `amountCredited` is. In `receivedCurrency`'s own
+  /// minor unit; a crypto payer may settle in another asset than invoiced.
+  /// Both set or both NULL, amount >= 0, code `^[A-Z0-9]{2,20}$` — CHECKs in
+  /// 20260916000200_payment_d32_providers_and_receipt.
+  amountReceivedMinor    BigInt?
+  receivedCurrency       String?
   status                PaymentStatus       @default(pending)
   gatewayTrackingCode   String? // the id a duplicate callback shares — Zarinpal `authority` (ADR-0028)
   /// Authorities **offered** for a payment that has none, and not yet proven

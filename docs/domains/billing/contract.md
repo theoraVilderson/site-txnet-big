@@ -137,6 +137,7 @@ numbers are `gateway-pricing.golden.json` (F-0611).
 | A payment's coupons are its `coupon_redemption` rows; there is no `couponId` column | codes stack, applied in order, each on what the previous left (D-21) |
 | `perUserUsageLimit` may exceed 1 and is **not** enforced by an index — the redemption transaction counts it | D-21; F-092-h |
 | Amounts are base currency; `chargedAmountMinor` + `exchangeRateSnapshot` are what the gateway was asked for, frozen at intent | ADR-0019 |
+| `amountReceivedMinor` + `receivedCurrency` are what the gateway reports **arrived** — a receipt, never money of record: both or neither (CHECK), amount `>= 0`, code `^[A-Z0-9]{2,20}$`, in that currency's minor unit. Migration `20260916000200_payment_d32_providers_and_receipt` also adds D-32's providers and `GatewayCategory.in_chat` | D-32; C-02's one exception (F-104-a) |
 | `exchangeRateSnapshotId` says **which** reading that rate was — a FK to `currency.currency_exchange_rate`, `RESTRICT`, null on a `staticRate` gateway. The FX worker appends a row per accepted poll, so the number alone identifies nothing | F-0606-b |
 | `displayName` and gateway pricing (fee / min / max, and F-0609's rate columns; no tax rate since v3, ADR-0038) have the same columns on `payment_gateway` and `tenant.tenant_gateway_config` | one calculator reads both (F-092-e) |
 

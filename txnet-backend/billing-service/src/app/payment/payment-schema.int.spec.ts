@@ -17,6 +17,9 @@
  *     `@@unique([couponId, userId])` is gone and the per-user limit is counted
  *     in the redemption transaction instead (F-092-h).
  *   * D-20 — a reseller may run several gateways, one per provider.
+ *   * D-32 — what a gateway reports actually arrived is a receipt, not money of
+ *     record: the amount and its currency are set together or not at all, and
+ *     the D-32 providers are enum members a gateway row may name (F-104-a).
  *
  * Written through the owner role on purpose: these are constraints, and RLS
  * already covers both tables (`20260909001500_row_level_security_all_tables`).
@@ -100,6 +103,7 @@ function insertPayment(gateway: {
   tenantGatewayConfigId?: string;
   authority?: string;
   rateSnapshotId?: string;
+  received?: { minor: string; currency: string | null } | { minor: null; currency: string };
 }) {
   paymentSeq += 1;
   const id = `aaaaaaaa-0000-4000-8000-${String(paymentSeq).padStart(12, '0')}`;
@@ -108,11 +112,13 @@ function insertPayment(gateway: {
     INSERT INTO billing.payment_transaction
       (id, "tenantId", "userId", "gatewayId", "tenantGatewayConfigId", "gatewayTrackingCode",
        "amountRequested", "feeApplied", "discountApplied", "amountCredited",
-       "chargedAmountMinor", "exchangeRateSnapshot", "exchangeRateSnapshotId")
+       "chargedAmountMinor", "exchangeRateSnapshot", "exchangeRateSnapshotId",
+       "amountReceivedMinor", "receivedCurrency")
     VALUES ('${id}', '${TENANT}', '${USER}', ${uuidOrNull(gateway.gatewayId)},
             ${uuidOrNull(gateway.tenantGatewayConfigId)}, ${gateway.authority ? `'${gateway.authority}'` : 'NULL'},
             10.00, 0.20, 0.00, 10.00, 10404000, 1020000.00000000,
-            ${uuidOrNull(gateway.rateSnapshotId)})
+            ${uuidOrNull(gateway.rateSnapshotId)},
+            ${gateway.received?.minor ?? 'NULL'}, ${gateway.received?.currency ? `'${gateway.received.currency}'` : 'NULL'})
   `);
 }
 
@@ -219,5 +225,53 @@ describe('D-20: a reseller runs several gateways, one per provider', () => {
     expect(
       await sqlstate(insertResellerGateway('66666666-6666-4666-8666-666666666668', 'zarinpal')),
     ).toBe(UNIQUE_VIOLATION);
+  });
+});
+
+describe('D-32: what actually arrived, beside what was asked (F-104-a)', () => {
+  it('accepts a payment with no receipt yet, and one whose amount and currency arrived together', async () => {
+    expect(await sqlstate(insertPayment({ gatewayId: PLATFORM_GATEWAY, authority: 'R2001' }))).toBeNull();
+    expect(
+      await sqlstate(
+        insertPayment({ gatewayId: PLATFORM_GATEWAY, authority: 'R2002', received: { minor: '9500000', currency: 'USDTTRC20' } }),
+      ),
+    ).toBeNull();
+  });
+
+  it('refuses an amount without its currency, and a currency without its amount', async () => {
+    expect(
+      await sqlstate(insertPayment({ gatewayId: PLATFORM_GATEWAY, authority: 'R2003', received: { minor: '100', currency: null } })),
+    ).toBe(CHECK_VIOLATION);
+    expect(
+      await sqlstate(insertPayment({ gatewayId: PLATFORM_GATEWAY, authority: 'R2004', received: { minor: null, currency: 'XTR' } })),
+    ).toBe(CHECK_VIOLATION);
+  });
+
+  it('refuses a negative amount and a currency that is not an upper-case code', async () => {
+    expect(
+      await sqlstate(insertPayment({ gatewayId: PLATFORM_GATEWAY, authority: 'R2005', received: { minor: '-1', currency: 'USD' } })),
+    ).toBe(CHECK_VIOLATION);
+    expect(
+      await sqlstate(insertPayment({ gatewayId: PLATFORM_GATEWAY, authority: 'R2006', received: { minor: '1', currency: 'usd' } })),
+    ).toBe(CHECK_VIOLATION);
+  });
+
+  it('lets a reseller gateway name each D-32 provider, and the in_chat category', async () => {
+    const providers = ['oxapay', 'airwallex', 'telegram_stars', 'bale'];
+    for (const [i, provider] of providers.entries()) {
+      const id = `66666666-6666-4666-8666-00000000010${i}`;
+      const category = provider === 'telegram_stars' || provider === 'bale' ? 'in_chat' : 'crypto';
+      expect(
+        await sqlstate(
+          owner.$executeRawUnsafe(`
+            INSERT INTO tenant.tenant_gateway_config
+              (id, "tenantId", "displayName", "providerName", "gatewayCategory",
+               "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt")
+            VALUES ('${id}', '${TENANT}', '${provider}', '${provider}', '${category}',
+                    1.00, 500.00, 'manual', 'fixed', 0.5000, now())
+          `),
+        ),
+      ).toBeNull();
+    }
   });
 });

@@ -33,7 +33,7 @@ needs to move up that table.
 | id | rule | enforced by |
 |---|---|---|
 | C-01 | Technical docs, code, commit messages and logs are in English. Existing Persian inline comments may stay; do not add new ones. | review |
-| C-02 | Money is base-currency `Decimal` only — never a second currency column, never written as a float. Balances are ledger-derived; never write a balance field directly outside a ledger-append transaction. See ADR-0002. | review |
+| C-02 | Money is base-currency `Decimal` only — never a second currency column, never written as a float. One exception: a payment's gateway receipt, `amountReceivedMinor` + `receivedCurrency` (D-32). Balances are ledger-derived; never write a balance field directly outside a ledger-append transaction. See ADR-0002. | review |
 | C-10 | A panel route is a constant in `site-pwa/src/lib/routes.ts`. A path literal in `href=`, `redirect(` or `router.push/replace(` is a violation. | check |
 | C-09 | A closed set of wire values is declared once — a Prisma enum (`z.nativeEnum`) or an `as const` tuple beside its type — and a zod schema derives from it. A hand-written `z.enum([...])` is a violation (env validation excepted). | check |
 | C-08 | A broker routing key or outbox event type is imported from `shared-core/src/lib/automation/routing-keys.ts` (or `bot-update.ts` / `outbox.ts`). Nothing else spells one. | check |
@@ -95,7 +95,7 @@ message: build the key through cache.SessionKey (internal/cache/keys.go) — nev
 ## C-02 — money is base-currency `Decimal`, balances are ledger-derived
 
 **Rule.** A monetary value is stored once, as `Decimal`, in the system's single
-base currency. No monetary table gets its own currency column. A wallet-style
+base currency. No monetary table gets its own currency column. The one exception is `payment_transaction`'s gateway receipt (`amountReceivedMinor` + `receivedCurrency`, D-32): evidence of what arrived, never credited as is — `amountCredited` stays base. A wallet-style
 `cachedBalance` is never written outside the same transaction that appends the
 proving ledger row.
 
