@@ -45,6 +45,23 @@ export interface UpdateEvent {
   full_snapshot: SnapshotResponse;
 }
 
+/** Target of a runtime write: "backend" | "frontend" | "shareds" (not the client's read scope). */
+export interface EntryTarget {
+  scope: string;
+  lang: string;
+  namespace: string;
+}
+export interface DraftEntry extends EntryTarget {
+  key: string;
+  text: string;
+}
+export interface DraftFilter {
+  scope?: string;
+  lang?: string;
+  namespace?: string;
+  keyPrefix?: string;
+}
+
 export interface LocaleClientConfig {
   /** locale-service gRPC address, e.g. "localhost:50051". */
   addr: string;
@@ -82,6 +99,17 @@ export interface LocaleClient {
   resolveLanguage(acceptLanguage?: string): string;
   availableLocales(): Promise<LocaleMeta[]>;
   snapshot(lang: string): Promise<SnapshotResponse>;
+  /**
+   * Runtime writes (F-1533-b, ADR-0050) — straight to locale-service, the cache
+   * is untouched (a published write comes back over Watch). `draft: true` holds
+   * the text for review, never served. An empty value deletes that key.
+   * Resolves to the number of non-empty entries written.
+   */
+  setEntries(target: EntryTarget & { entries: Record<string, string>; draft?: boolean }): Promise<number>;
+  /** Drafts held for review; every omitted filter matches all. */
+  listDrafts(filter?: DraftFilter): Promise<DraftEntry[]>;
+  /** Moves the named drafts to published, as they are. Resolves to how many moved. */
+  publishDrafts(target: EntryTarget & { keys: string[] }): Promise<number>;
   close(): void;
 }
 
@@ -148,6 +176,12 @@ export function createLocaleClient(config: LocaleClientConfig): LocaleClient {
       stub.GetAvailableLocales({}, (err: unknown, res: { locales?: LocaleMeta[] }) =>
         err ? reject(err) : resolve(res.locales ?? []),
       );
+    });
+
+  const unary = <T>(method: string, req: object): Promise<T> =>
+    new Promise((resolve, reject) => {
+      const deadline = new Date(Date.now() + 5_000);
+      stub[method](req, { deadline }, (err: unknown, res: T) => (err ? reject(err) : resolve(res)));
     });
 
   /** Languages to (pre)load: the configured list, or every advertised locale. */
@@ -287,6 +321,27 @@ export function createLocaleClient(config: LocaleClientConfig): LocaleClient {
 
     snapshot(lang) {
       return fetchSnapshot(lang);
+    },
+
+    async setEntries({ scope, lang, namespace, entries, draft }) {
+      const state = draft ? "ENTRY_STATE_DRAFT" : "ENTRY_STATE_PUBLISHED";
+      const res = await unary<{ written: number }>("SetEntries", { scope, lang, namespace, entries, state });
+      return res.written;
+    },
+
+    async listDrafts(filter = {}) {
+      const res = await unary<{ drafts?: DraftEntry[] }>("ListDrafts", {
+        scope: filter.scope ?? "",
+        lang: filter.lang ?? "",
+        namespace: filter.namespace ?? "",
+        key_prefix: filter.keyPrefix ?? "",
+      });
+      return res.drafts ?? [];
+    },
+
+    async publishDrafts({ scope, lang, namespace, keys }) {
+      const res = await unary<{ published: number }>("PublishDrafts", { scope, lang, namespace, keys });
+      return res.published;
     },
 
     close() {

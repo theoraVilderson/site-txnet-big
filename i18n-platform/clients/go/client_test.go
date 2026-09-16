@@ -102,6 +102,23 @@ func (f *fakeService) GetSnapshot(_ context.Context, req *localev1.SnapshotReque
 	return snap, nil
 }
 
+func (f *fakeService) SetEntries(_ context.Context, req *localev1.SetEntriesRequest) (*localev1.SetEntriesResponse, error) {
+	f.record("SetEntries:" + req.GetLang() + ":" + req.GetState().String())
+	return &localev1.SetEntriesResponse{Written: int32(len(req.GetEntries()))}, nil
+}
+
+func (f *fakeService) ListDrafts(_ context.Context, req *localev1.ListDraftsRequest) (*localev1.ListDraftsResponse, error) {
+	f.record("ListDrafts:" + req.GetKeyPrefix())
+	return &localev1.ListDraftsResponse{Drafts: []*localev1.DraftEntry{
+		{Scope: "shareds", Lang: "de", Namespace: "catalog", Key: "product.vpn.name", Text: "VPN"},
+	}}, nil
+}
+
+func (f *fakeService) PublishDrafts(_ context.Context, req *localev1.PublishDraftsRequest) (*localev1.PublishDraftsResponse, error) {
+	f.record("PublishDrafts:" + req.GetLang())
+	return &localev1.PublishDraftsResponse{Published: int32(len(req.GetKeys()))}, nil
+}
+
 func (f *fakeService) GetAvailableLocales(context.Context, *localev1.Empty) (*localev1.AvailableLocalesResponse, error) {
 	f.record("GetAvailableLocales")
 	f.mu.Lock()
@@ -624,5 +641,33 @@ func TestSnapshotOfAnUnknownLanguageIsAnError(t *testing.T) {
 
 	if _, err := c.Snapshot(context.Background(), "de"); status.Code(err) != codes.NotFound {
 		t.Errorf("Snapshot(de) error code = %v, want NotFound", status.Code(err))
+	}
+}
+
+// Runtime writes (F-1533-b) pass straight through: the state flag maps to the
+// enum, nothing is read from or written to the cache.
+func TestRuntimeWritesGoToTheService(t *testing.T) {
+	svc := twoLanguageService()
+	c := newClient(t, serve(t, svc), Config{Scope: "backend", PreloadLangs: []string{"en"}})
+	ctx := context.Background()
+
+	if n, err := c.SetEntries(ctx, "shareds", "de", "catalog", map[string]string{"product.vpn.name": "VPN"}, true); err != nil || n != 1 {
+		t.Fatalf("SetEntries(draft) = %d, %v", n, err)
+	}
+	if n, err := c.SetEntries(ctx, "shareds", "en", "catalog", map[string]string{"product.vpn.name": "VPN"}, false); err != nil || n != 1 {
+		t.Fatalf("SetEntries(published) = %d, %v", n, err)
+	}
+	drafts, err := c.ListDrafts(ctx, "shareds", "", "catalog", "product.")
+	if err != nil || len(drafts) != 1 || drafts[0].GetText() != "VPN" {
+		t.Fatalf("ListDrafts = %v, %v", drafts, err)
+	}
+	if n, err := c.PublishDrafts(ctx, "shareds", "de", "catalog", []string{"product.vpn.name"}); err != nil || n != 1 {
+		t.Fatalf("PublishDrafts = %d, %v", n, err)
+	}
+
+	calls := svc.served()
+	want := []string{"SetEntries:de:ENTRY_STATE_DRAFT", "SetEntries:en:ENTRY_STATE_PUBLISHED", "ListDrafts:product.", "PublishDrafts:de"}
+	if got := calls[len(calls)-4:]; !reflect.DeepEqual(got, want) {
+		t.Errorf("served = %v, want %v", got, want)
 	}
 }

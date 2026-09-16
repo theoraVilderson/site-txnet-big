@@ -13,6 +13,9 @@ service LocaleService {
   rpc GetSnapshot(SnapshotRequest) returns (SnapshotResponse);
   rpc GetAvailableLocales(Empty) returns (AvailableLocalesResponse);
   rpc Watch(WatchRequest) returns (stream UpdateEvent);
+  rpc SetEntries(SetEntriesRequest) returns (SetEntriesResponse);
+  rpc ListDrafts(ListDraftsRequest) returns (ListDraftsResponse);
+  rpc PublishDrafts(PublishDraftsRequest) returns (PublishDraftsResponse);
 }
 
 message SnapshotRequest {
@@ -54,6 +57,54 @@ message LocaleMeta {
   string native_name = 4;
   string dir = 5;
   string locale = 6;
+}
+
+enum EntryState {
+  ENTRY_STATE_UNSPECIFIED = 0;
+  ENTRY_STATE_PUBLISHED = 1;
+  ENTRY_STATE_DRAFT = 2;
+}
+
+message SetEntriesRequest {
+  string scope = 1;
+  string lang = 2;
+  string namespace = 3;
+  map<string, string> entries = 4;
+  EntryState state = 5;
+}
+
+message SetEntriesResponse {
+  int32 written = 1;
+}
+
+message ListDraftsRequest {
+  string scope = 1;
+  string lang = 2;
+  string namespace = 3;
+  string key_prefix = 4;
+}
+
+message DraftEntry {
+  string scope = 1;
+  string lang = 2;
+  string namespace = 3;
+  string key = 4;
+  string text = 5;
+}
+
+message ListDraftsResponse {
+  repeated DraftEntry drafts = 1;
+}
+
+message PublishDraftsRequest {
+  string scope = 1;
+  string lang = 2;
+  string namespace = 3;
+  repeated string keys = 4;
+}
+
+message PublishDraftsResponse {
+  int32 published = 1;
 }
 
 message Empty {}

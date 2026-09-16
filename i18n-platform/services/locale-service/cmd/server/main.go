@@ -4,6 +4,10 @@
 //
 //	LOCALES_DIR=../../locales GRPC_ADDR=:50051 go run ./cmd/server
 //
+// LOCALES_RUNTIME_DIR (optional, a volume — never git) enables the runtime
+// write RPCs: entries written there are merged over LOCALES_DIR per key
+// (F-1533-b, ADR-0050). Unset, the service is read-only.
+//
 // `locale-service -healthcheck` dials its own gRPC health endpoint and exits
 // 0/1 — used as the container HEALTHCHECK (no extra probe binary needed).
 package main
@@ -82,7 +86,8 @@ func main() {
 
 	localesDir := envOr("LOCALES_DIR", "./locales")
 
-	st := store.New(localesDir)
+	runtimeDir := os.Getenv("LOCALES_RUNTIME_DIR")
+	st := store.NewWithRuntime(localesDir, runtimeDir)
 	srv := server.New(st)
 
 	stopWatch, err := watcher.Watch(st, srv.OnStoreChange)
@@ -106,7 +111,7 @@ func main() {
 	reflection.Register(grpcServer)
 
 	go func() {
-		log.Printf("[locale-service] gRPC listening on %s, locales dir: %s", addr, localesDir)
+		log.Printf("[locale-service] gRPC listening on %s, locales dir: %s, runtime dir: %q", addr, localesDir, runtimeDir)
 		if err := grpcServer.Serve(lis); err != nil {
 			log.Fatalf("[locale-service] serve: %v", err)
 		}

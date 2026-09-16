@@ -3,7 +3,7 @@ id: i18n
 layer: platform
 status: active
 version: 1
-updated: 2026-09-04
+updated: 2026-09-16
 ---
 
 # Contract — i18n
@@ -25,6 +25,9 @@ copies.
 | `GetSnapshot(lang, scope)` | unary | blocking boot; returns flat dot-notation entries per namespace + a `version` (sha1) |
 | `GetAvailableLocales()` | unary | language list + metadata (dir, native name, BCP-47) |
 | `Watch(langs, scope)` | server-stream | one full snapshot per change for each matching (lang, scope) |
+| `SetEntries(scope, lang, namespace, entries, state)` | unary | runtime write, `PUBLISHED` or `DRAFT` (F-1533-b) |
+| `ListDrafts(scope?, lang?, namespace?, key_prefix?)` | unary | drafts held for review |
+| `PublishDrafts(scope, lang, namespace, keys)` | unary | move drafts to published as they are |
 
 `scope` = `backend` \| `frontend` \| `""`. A named scope is always returned
 merged with the `shareds` namespaces; `""` returns every scope with namespace
@@ -64,7 +67,8 @@ frontend = `auth`, `common`, `validations` (`metadata.json` is reserved, not a n
 
 - Proto change: `cd i18n-platform && make proto` (regenerates Go stubs in
   `services/locale-service` + `clients/go`), then hand-edit
-  `clients/node/proto.ts`, then `make sync-node`.
+  `clients/node/proto.ts`, then `make sync-node`. The tarball's hash is pinned
+  in each consumer's `package-lock.json` (`integrity`) — update it with the tarball.
 - Node client change: `make sync-node` -> copies `vendor/locale-client.tgz` to
   every consumer; then `npm install` in each.
 - **Any key added, renamed or removed in `locales/`:** `make -C i18n-platform
@@ -94,6 +98,29 @@ the CI check into a false green: generation **never keeps stale output** when
 its source is unreadable (`--dir` always fails; `--strict` does the same for
 the gRPC path), and output is **deterministic** — sorted keys, no timestamp,
 no snapshot version in the header.
+
+## Runtime overlay (F-1533-b, ADR-0050)
+
+`LOCALES_RUNTIME_DIR` (a volume, never git; `/locales-runtime` in dev-docker)
+has the layout of `locales/` and is merged over it **per key**. Drafts live
+under `<runtime>/drafts/` with the same layout. Unset → the service is
+read-only and every write answers `FAILED_PRECONDITION`. Clients: Go
+`SetEntries` / `ListDrafts` / `PublishDrafts`, Node `setEntries` /
+`listDrafts` / `publishDrafts` — straight to the service, cache untouched.
+
+| Rule | Held by |
+|---|---|
+| A draft is never in a snapshot, never moves a `version`, never wakes `Watch` | `store/overlay_test.go`, `server_test.go` |
+| A published write (or `PublishDrafts`) reaches `Watch` like a file edit; publishing a key drops its draft | same |
+| An empty value deletes that key from that state (the `locales/` value shows again) | `store/overlay_test.go` |
+| The overlay adds text, never a language: an unknown `lang` is `NOT_FOUND`, a language only in the overlay is not advertised | same |
+| `scope` ∈ `backend`/`frontend`/`shareds`, namespace `[A-Za-z0-9_-]+` and not `metadata`, `state` not `UNSPECIFIED` → else `INVALID_ARGUMENT` | same |
+| Writes are atomic (temp + rename), serialised, and survive a restart | same |
+| Catalog text: scope `shareds`, namespace `catalog`, keys `product.<key>.name` / `.description`, `category.<key>.name` | ADR-0050 decision 2 |
+
+The runtime dir is state: back it up with the database. The write RPCs are
+unauthenticated — acceptable only while locale-service stays on the private
+network (open question 2026-09-04).
 
 ## Machine translation (`Translator`, F-1533-a, ADR-0050)
 

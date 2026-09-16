@@ -109,6 +109,10 @@ function createLocaleClient(config) {
     const fetchLocaleMetas = () => new Promise((resolve, reject) => {
         stub.GetAvailableLocales({}, (err, res) => err ? reject(err) : resolve(res.locales ?? []));
     });
+    const unary = (method, req) => new Promise((resolve, reject) => {
+        const deadline = new Date(Date.now() + 5_000);
+        stub[method](req, { deadline }, (err, res) => (err ? reject(err) : resolve(res)));
+    });
     /** Languages to (pre)load: the configured list, or every advertised locale. */
     async function targetLangs() {
         if (!preloadAll)
@@ -249,6 +253,24 @@ function createLocaleClient(config) {
         },
         snapshot(lang) {
             return fetchSnapshot(lang);
+        },
+        async setEntries({ scope, lang, namespace, entries, draft }) {
+            const state = draft ? "ENTRY_STATE_DRAFT" : "ENTRY_STATE_PUBLISHED";
+            const res = await unary("SetEntries", { scope, lang, namespace, entries, state });
+            return res.written;
+        },
+        async listDrafts(filter = {}) {
+            const res = await unary("ListDrafts", {
+                scope: filter.scope ?? "",
+                lang: filter.lang ?? "",
+                namespace: filter.namespace ?? "",
+                key_prefix: filter.keyPrefix ?? "",
+            });
+            return res.drafts ?? [];
+        },
+        async publishDrafts({ scope, lang, namespace, keys }) {
+            const res = await unary("PublishDrafts", { scope, lang, namespace, keys });
+            return res.published;
         },
         close() {
             closed = true;

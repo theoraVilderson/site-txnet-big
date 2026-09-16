@@ -22,6 +22,9 @@ const (
 	LocaleService_GetSnapshot_FullMethodName         = "/locale.v1.LocaleService/GetSnapshot"
 	LocaleService_GetAvailableLocales_FullMethodName = "/locale.v1.LocaleService/GetAvailableLocales"
 	LocaleService_Watch_FullMethodName               = "/locale.v1.LocaleService/Watch"
+	LocaleService_SetEntries_FullMethodName          = "/locale.v1.LocaleService/SetEntries"
+	LocaleService_ListDrafts_FullMethodName          = "/locale.v1.LocaleService/ListDrafts"
+	LocaleService_PublishDrafts_FullMethodName       = "/locale.v1.LocaleService/PublishDrafts"
 )
 
 // LocaleServiceClient is the client API for LocaleService service.
@@ -40,6 +43,16 @@ type LocaleServiceClient interface {
 	// Live stream — the consumer stays connected and every change is pushed as a
 	// full snapshot for the affected (lang, scope).
 	Watch(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[UpdateEvent], error)
+	// Runtime writes (F-1533-b, ADR-0050). They land in LOCALES_RUNTIME_DIR,
+	// merged over locales/ per key; FAILED_PRECONDITION when it is not set.
+	// A published write enters snapshots and Watch; a draft is held for review
+	// and is never served. An empty value deletes that key from that state.
+	SetEntries(ctx context.Context, in *SetEntriesRequest, opts ...grpc.CallOption) (*SetEntriesResponse, error)
+	// Drafts held for review; every empty filter matches all.
+	ListDrafts(ctx context.Context, in *ListDraftsRequest, opts ...grpc.CallOption) (*ListDraftsResponse, error)
+	// Moves the named drafts to published as they are (a key with no draft is
+	// skipped). To publish an edited text, SetEntries it as PUBLISHED instead.
+	PublishDrafts(ctx context.Context, in *PublishDraftsRequest, opts ...grpc.CallOption) (*PublishDraftsResponse, error)
 }
 
 type localeServiceClient struct {
@@ -89,6 +102,36 @@ func (c *localeServiceClient) Watch(ctx context.Context, in *WatchRequest, opts 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type LocaleService_WatchClient = grpc.ServerStreamingClient[UpdateEvent]
 
+func (c *localeServiceClient) SetEntries(ctx context.Context, in *SetEntriesRequest, opts ...grpc.CallOption) (*SetEntriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetEntriesResponse)
+	err := c.cc.Invoke(ctx, LocaleService_SetEntries_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *localeServiceClient) ListDrafts(ctx context.Context, in *ListDraftsRequest, opts ...grpc.CallOption) (*ListDraftsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListDraftsResponse)
+	err := c.cc.Invoke(ctx, LocaleService_ListDrafts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *localeServiceClient) PublishDrafts(ctx context.Context, in *PublishDraftsRequest, opts ...grpc.CallOption) (*PublishDraftsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishDraftsResponse)
+	err := c.cc.Invoke(ctx, LocaleService_PublishDrafts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // LocaleServiceServer is the server API for LocaleService service.
 // All implementations must embed UnimplementedLocaleServiceServer
 // for forward compatibility.
@@ -105,6 +148,16 @@ type LocaleServiceServer interface {
 	// Live stream — the consumer stays connected and every change is pushed as a
 	// full snapshot for the affected (lang, scope).
 	Watch(*WatchRequest, grpc.ServerStreamingServer[UpdateEvent]) error
+	// Runtime writes (F-1533-b, ADR-0050). They land in LOCALES_RUNTIME_DIR,
+	// merged over locales/ per key; FAILED_PRECONDITION when it is not set.
+	// A published write enters snapshots and Watch; a draft is held for review
+	// and is never served. An empty value deletes that key from that state.
+	SetEntries(context.Context, *SetEntriesRequest) (*SetEntriesResponse, error)
+	// Drafts held for review; every empty filter matches all.
+	ListDrafts(context.Context, *ListDraftsRequest) (*ListDraftsResponse, error)
+	// Moves the named drafts to published as they are (a key with no draft is
+	// skipped). To publish an edited text, SetEntries it as PUBLISHED instead.
+	PublishDrafts(context.Context, *PublishDraftsRequest) (*PublishDraftsResponse, error)
 	mustEmbedUnimplementedLocaleServiceServer()
 }
 
@@ -123,6 +176,15 @@ func (UnimplementedLocaleServiceServer) GetAvailableLocales(context.Context, *Em
 }
 func (UnimplementedLocaleServiceServer) Watch(*WatchRequest, grpc.ServerStreamingServer[UpdateEvent]) error {
 	return status.Error(codes.Unimplemented, "method Watch not implemented")
+}
+func (UnimplementedLocaleServiceServer) SetEntries(context.Context, *SetEntriesRequest) (*SetEntriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetEntries not implemented")
+}
+func (UnimplementedLocaleServiceServer) ListDrafts(context.Context, *ListDraftsRequest) (*ListDraftsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListDrafts not implemented")
+}
+func (UnimplementedLocaleServiceServer) PublishDrafts(context.Context, *PublishDraftsRequest) (*PublishDraftsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishDrafts not implemented")
 }
 func (UnimplementedLocaleServiceServer) mustEmbedUnimplementedLocaleServiceServer() {}
 func (UnimplementedLocaleServiceServer) testEmbeddedByValue()                       {}
@@ -192,6 +254,60 @@ func _LocaleService_Watch_Handler(srv interface{}, stream grpc.ServerStream) err
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type LocaleService_WatchServer = grpc.ServerStreamingServer[UpdateEvent]
 
+func _LocaleService_SetEntries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetEntriesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LocaleServiceServer).SetEntries(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LocaleService_SetEntries_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LocaleServiceServer).SetEntries(ctx, req.(*SetEntriesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LocaleService_ListDrafts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDraftsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LocaleServiceServer).ListDrafts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LocaleService_ListDrafts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LocaleServiceServer).ListDrafts(ctx, req.(*ListDraftsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LocaleService_PublishDrafts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishDraftsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LocaleServiceServer).PublishDrafts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LocaleService_PublishDrafts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LocaleServiceServer).PublishDrafts(ctx, req.(*PublishDraftsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // LocaleService_ServiceDesc is the grpc.ServiceDesc for LocaleService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -206,6 +322,18 @@ var LocaleService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAvailableLocales",
 			Handler:    _LocaleService_GetAvailableLocales_Handler,
+		},
+		{
+			MethodName: "SetEntries",
+			Handler:    _LocaleService_SetEntries_Handler,
+		},
+		{
+			MethodName: "ListDrafts",
+			Handler:    _LocaleService_ListDrafts_Handler,
+		},
+		{
+			MethodName: "PublishDrafts",
+			Handler:    _LocaleService_PublishDrafts_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

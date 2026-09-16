@@ -6,4 +6,7 @@ export type {
   NamespaceData,
   LocaleMeta,
   UpdateEvent,
+  EntryTarget,
+  DraftEntry,
+  DraftFilter,
 } from "./client";

@@ -61,11 +61,15 @@ type Loaded struct {
 	byScope map[string]map[string]map[string]Namespace
 	// lang -> metadata
 	meta map[string]LocaleMeta
+	// runtime drafts, same shape as byScope — never served (overlay.go)
+	drafts map[string]map[string]map[string]Namespace
 }
 
 // Store holds the current Loaded tree behind a mutex and reloads it on demand.
 type Store struct {
-	root string
+	root    string
+	runtime string // writable overlay dir; "" = read-only (overlay.go)
+	writeMu sync.Mutex
 
 	mu     sync.RWMutex
 	loaded Loaded
@@ -89,6 +93,11 @@ func (s *Store) Reload() error {
 	loaded, err := loadAll(s.root)
 	if err != nil {
 		return err
+	}
+	if s.runtime != "" {
+		if err := loadOverlay(&loaded, s.runtime); err != nil {
+			return err
+		}
 	}
 	s.mu.Lock()
 	s.loaded = loaded

@@ -22,6 +22,19 @@ service LocaleService {
   // Live stream — the consumer stays connected and every change is pushed as a
   // full snapshot for the affected (lang, scope).
   rpc Watch(WatchRequest) returns (stream UpdateEvent);
+
+  // Runtime writes (F-1533-b, ADR-0050). They land in LOCALES_RUNTIME_DIR,
+  // merged over locales/ per key; FAILED_PRECONDITION when it is not set.
+  // A published write enters snapshots and Watch; a draft is held for review
+  // and is never served. An empty value deletes that key from that state.
+  rpc SetEntries(SetEntriesRequest) returns (SetEntriesResponse);
+
+  // Drafts held for review; every empty filter matches all.
+  rpc ListDrafts(ListDraftsRequest) returns (ListDraftsResponse);
+
+  // Moves the named drafts to published as they are (a key with no draft is
+  // skipped). To publish an edited text, SetEntries it as PUBLISHED instead.
+  rpc PublishDrafts(PublishDraftsRequest) returns (PublishDraftsResponse);
 }
 
 message SnapshotRequest {
@@ -72,6 +85,54 @@ message LocaleMeta {
   string native_name = 4; // "فارسی"
   string dir = 5;         // "rtl" | "ltr"
   string locale = 6;      // BCP-47, e.g. "fa-IR"
+}
+
+enum EntryState {
+  ENTRY_STATE_UNSPECIFIED = 0; // rejected: a write says what it is
+  ENTRY_STATE_PUBLISHED = 1;
+  ENTRY_STATE_DRAFT = 2;
+}
+
+message SetEntriesRequest {
+  string scope = 1;     // "backend" | "frontend" | "shareds"
+  string lang = 2;      // must exist in locales/
+  string namespace = 3; // e.g. "catalog"
+  map<string, string> entries = 4;
+  EntryState state = 5;
+}
+
+message SetEntriesResponse {
+  int32 written = 1; // non-empty entries written
+}
+
+message ListDraftsRequest {
+  string scope = 1;
+  string lang = 2;
+  string namespace = 3;
+  string key_prefix = 4;
+}
+
+message DraftEntry {
+  string scope = 1;
+  string lang = 2;
+  string namespace = 3;
+  string key = 4;
+  string text = 5;
+}
+
+message ListDraftsResponse {
+  repeated DraftEntry drafts = 1;
+}
+
+message PublishDraftsRequest {
+  string scope = 1;
+  string lang = 2;
+  string namespace = 3;
+  repeated string keys = 4;
+}
+
+message PublishDraftsResponse {
+  int32 published = 1;
 }
 
 message Empty {}

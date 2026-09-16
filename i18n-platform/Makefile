@@ -21,8 +21,8 @@ proto: proto-go proto-fanout ## regenerate the gRPC stubs
 
 proto-go:
 	protoc --proto_path=proto \
-	  --go_out=. --go_opt=module=github.com/txnet/i18n-platform/services/locale-service \
-	  --go-grpc_out=. --go-grpc_opt=module=github.com/txnet/i18n-platform/services/locale-service \
+	  --go_out=services/locale-service --go_opt=module=github.com/txnet/i18n-platform/services/locale-service \
+	  --go-grpc_out=services/locale-service --go-grpc_opt=module=github.com/txnet/i18n-platform/services/locale-service \
 	  $(PROTO)
 	gofmt -w $(SVC_PBDIR)
 

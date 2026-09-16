@@ -1,2 +1,2 @@
 export { createLocaleClient } from "./client";
-export type { LocaleClient, LocaleClientConfig, SnapshotResponse, NamespaceData, LocaleMeta, UpdateEvent, } from "./client";
+export type { LocaleClient, LocaleClientConfig, SnapshotResponse, NamespaceData, LocaleMeta, UpdateEvent, EntryTarget, DraftEntry, DraftFilter, } from "./client";

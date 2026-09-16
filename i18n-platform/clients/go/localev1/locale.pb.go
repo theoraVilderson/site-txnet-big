@@ -21,6 +21,55 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type EntryState int32
+
+const (
+	EntryState_ENTRY_STATE_UNSPECIFIED EntryState = 0 // rejected: a write says what it is
+	EntryState_ENTRY_STATE_PUBLISHED   EntryState = 1
+	EntryState_ENTRY_STATE_DRAFT       EntryState = 2
+)
+
+// Enum value maps for EntryState.
+var (
+	EntryState_name = map[int32]string{
+		0: "ENTRY_STATE_UNSPECIFIED",
+		1: "ENTRY_STATE_PUBLISHED",
+		2: "ENTRY_STATE_DRAFT",
+	}
+	EntryState_value = map[string]int32{
+		"ENTRY_STATE_UNSPECIFIED": 0,
+		"ENTRY_STATE_PUBLISHED":   1,
+		"ENTRY_STATE_DRAFT":       2,
+	}
+)
+
+func (x EntryState) Enum() *EntryState {
+	p := new(EntryState)
+	*p = x
+	return p
+}
+
+func (x EntryState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (EntryState) Descriptor() protoreflect.EnumDescriptor {
+	return file_locale_v1_locale_proto_enumTypes[0].Descriptor()
+}
+
+func (EntryState) Type() protoreflect.EnumType {
+	return &file_locale_v1_locale_proto_enumTypes[0]
+}
+
+func (x EntryState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use EntryState.Descriptor instead.
+func (EntryState) EnumDescriptor() ([]byte, []int) {
+	return file_locale_v1_locale_proto_rawDescGZIP(), []int{0}
+}
+
 type SnapshotRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Lang  string                 `protobuf:"bytes,1,opt,name=lang,proto3" json:"lang,omitempty"`
@@ -442,6 +491,426 @@ func (x *LocaleMeta) GetLocale() string {
 	return ""
 }
 
+type SetEntriesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Scope         string                 `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`         // "backend" | "frontend" | "shareds"
+	Lang          string                 `protobuf:"bytes,2,opt,name=lang,proto3" json:"lang,omitempty"`           // must exist in locales/
+	Namespace     string                 `protobuf:"bytes,3,opt,name=namespace,proto3" json:"namespace,omitempty"` // e.g. "catalog"
+	Entries       map[string]string      `protobuf:"bytes,4,rep,name=entries,proto3" json:"entries,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	State         EntryState             `protobuf:"varint,5,opt,name=state,proto3,enum=locale.v1.EntryState" json:"state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetEntriesRequest) Reset() {
+	*x = SetEntriesRequest{}
+	mi := &file_locale_v1_locale_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetEntriesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetEntriesRequest) ProtoMessage() {}
+
+func (x *SetEntriesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_locale_v1_locale_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetEntriesRequest.ProtoReflect.Descriptor instead.
+func (*SetEntriesRequest) Descriptor() ([]byte, []int) {
+	return file_locale_v1_locale_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *SetEntriesRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+func (x *SetEntriesRequest) GetLang() string {
+	if x != nil {
+		return x.Lang
+	}
+	return ""
+}
+
+func (x *SetEntriesRequest) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
+	}
+	return ""
+}
+
+func (x *SetEntriesRequest) GetEntries() map[string]string {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+func (x *SetEntriesRequest) GetState() EntryState {
+	if x != nil {
+		return x.State
+	}
+	return EntryState_ENTRY_STATE_UNSPECIFIED
+}
+
+type SetEntriesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Written       int32                  `protobuf:"varint,1,opt,name=written,proto3" json:"written,omitempty"` // non-empty entries written
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetEntriesResponse) Reset() {
+	*x = SetEntriesResponse{}
+	mi := &file_locale_v1_locale_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetEntriesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetEntriesResponse) ProtoMessage() {}
+
+func (x *SetEntriesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_locale_v1_locale_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetEntriesResponse.ProtoReflect.Descriptor instead.
+func (*SetEntriesResponse) Descriptor() ([]byte, []int) {
+	return file_locale_v1_locale_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *SetEntriesResponse) GetWritten() int32 {
+	if x != nil {
+		return x.Written
+	}
+	return 0
+}
+
+type ListDraftsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Scope         string                 `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
+	Lang          string                 `protobuf:"bytes,2,opt,name=lang,proto3" json:"lang,omitempty"`
+	Namespace     string                 `protobuf:"bytes,3,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	KeyPrefix     string                 `protobuf:"bytes,4,opt,name=key_prefix,json=keyPrefix,proto3" json:"key_prefix,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDraftsRequest) Reset() {
+	*x = ListDraftsRequest{}
+	mi := &file_locale_v1_locale_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDraftsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDraftsRequest) ProtoMessage() {}
+
+func (x *ListDraftsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_locale_v1_locale_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDraftsRequest.ProtoReflect.Descriptor instead.
+func (*ListDraftsRequest) Descriptor() ([]byte, []int) {
+	return file_locale_v1_locale_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ListDraftsRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+func (x *ListDraftsRequest) GetLang() string {
+	if x != nil {
+		return x.Lang
+	}
+	return ""
+}
+
+func (x *ListDraftsRequest) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
+	}
+	return ""
+}
+
+func (x *ListDraftsRequest) GetKeyPrefix() string {
+	if x != nil {
+		return x.KeyPrefix
+	}
+	return ""
+}
+
+type DraftEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Scope         string                 `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
+	Lang          string                 `protobuf:"bytes,2,opt,name=lang,proto3" json:"lang,omitempty"`
+	Namespace     string                 `protobuf:"bytes,3,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Key           string                 `protobuf:"bytes,4,opt,name=key,proto3" json:"key,omitempty"`
+	Text          string                 `protobuf:"bytes,5,opt,name=text,proto3" json:"text,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DraftEntry) Reset() {
+	*x = DraftEntry{}
+	mi := &file_locale_v1_locale_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DraftEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DraftEntry) ProtoMessage() {}
+
+func (x *DraftEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_locale_v1_locale_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DraftEntry.ProtoReflect.Descriptor instead.
+func (*DraftEntry) Descriptor() ([]byte, []int) {
+	return file_locale_v1_locale_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *DraftEntry) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+func (x *DraftEntry) GetLang() string {
+	if x != nil {
+		return x.Lang
+	}
+	return ""
+}
+
+func (x *DraftEntry) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
+	}
+	return ""
+}
+
+func (x *DraftEntry) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *DraftEntry) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+type ListDraftsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Drafts        []*DraftEntry          `protobuf:"bytes,1,rep,name=drafts,proto3" json:"drafts,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDraftsResponse) Reset() {
+	*x = ListDraftsResponse{}
+	mi := &file_locale_v1_locale_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDraftsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDraftsResponse) ProtoMessage() {}
+
+func (x *ListDraftsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_locale_v1_locale_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDraftsResponse.ProtoReflect.Descriptor instead.
+func (*ListDraftsResponse) Descriptor() ([]byte, []int) {
+	return file_locale_v1_locale_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ListDraftsResponse) GetDrafts() []*DraftEntry {
+	if x != nil {
+		return x.Drafts
+	}
+	return nil
+}
+
+type PublishDraftsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Scope         string                 `protobuf:"bytes,1,opt,name=scope,proto3" json:"scope,omitempty"`
+	Lang          string                 `protobuf:"bytes,2,opt,name=lang,proto3" json:"lang,omitempty"`
+	Namespace     string                 `protobuf:"bytes,3,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Keys          []string               `protobuf:"bytes,4,rep,name=keys,proto3" json:"keys,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PublishDraftsRequest) Reset() {
+	*x = PublishDraftsRequest{}
+	mi := &file_locale_v1_locale_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PublishDraftsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PublishDraftsRequest) ProtoMessage() {}
+
+func (x *PublishDraftsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_locale_v1_locale_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PublishDraftsRequest.ProtoReflect.Descriptor instead.
+func (*PublishDraftsRequest) Descriptor() ([]byte, []int) {
+	return file_locale_v1_locale_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *PublishDraftsRequest) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+func (x *PublishDraftsRequest) GetLang() string {
+	if x != nil {
+		return x.Lang
+	}
+	return ""
+}
+
+func (x *PublishDraftsRequest) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
+	}
+	return ""
+}
+
+func (x *PublishDraftsRequest) GetKeys() []string {
+	if x != nil {
+		return x.Keys
+	}
+	return nil
+}
+
+type PublishDraftsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Published     int32                  `protobuf:"varint,1,opt,name=published,proto3" json:"published,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PublishDraftsResponse) Reset() {
+	*x = PublishDraftsResponse{}
+	mi := &file_locale_v1_locale_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PublishDraftsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PublishDraftsResponse) ProtoMessage() {}
+
+func (x *PublishDraftsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_locale_v1_locale_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PublishDraftsResponse.ProtoReflect.Descriptor instead.
+func (*PublishDraftsResponse) Descriptor() ([]byte, []int) {
+	return file_locale_v1_locale_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *PublishDraftsResponse) GetPublished() int32 {
+	if x != nil {
+		return x.Published
+	}
+	return 0
+}
+
 type Empty struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -450,7 +919,7 @@ type Empty struct {
 
 func (x *Empty) Reset() {
 	*x = Empty{}
-	mi := &file_locale_v1_locale_proto_msgTypes[7]
+	mi := &file_locale_v1_locale_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -462,7 +931,7 @@ func (x *Empty) String() string {
 func (*Empty) ProtoMessage() {}
 
 func (x *Empty) ProtoReflect() protoreflect.Message {
-	mi := &file_locale_v1_locale_proto_msgTypes[7]
+	mi := &file_locale_v1_locale_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -475,7 +944,7 @@ func (x *Empty) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Empty.ProtoReflect.Descriptor instead.
 func (*Empty) Descriptor() ([]byte, []int) {
-	return file_locale_v1_locale_proto_rawDescGZIP(), []int{7}
+	return file_locale_v1_locale_proto_rawDescGZIP(), []int{14}
 }
 
 var File_locale_v1_locale_proto protoreflect.FileDescriptor
@@ -521,12 +990,55 @@ const file_locale_v1_locale_proto_rawDesc = "" +
 	"\vnative_name\x18\x04 \x01(\tR\n" +
 	"nativeName\x12\x10\n" +
 	"\x03dir\x18\x05 \x01(\tR\x03dir\x12\x16\n" +
-	"\x06locale\x18\x06 \x01(\tR\x06locale\"\a\n" +
-	"\x05Empty2\xe1\x01\n" +
+	"\x06locale\x18\x06 \x01(\tR\x06locale\"\x89\x02\n" +
+	"\x11SetEntriesRequest\x12\x14\n" +
+	"\x05scope\x18\x01 \x01(\tR\x05scope\x12\x12\n" +
+	"\x04lang\x18\x02 \x01(\tR\x04lang\x12\x1c\n" +
+	"\tnamespace\x18\x03 \x01(\tR\tnamespace\x12C\n" +
+	"\aentries\x18\x04 \x03(\v2).locale.v1.SetEntriesRequest.EntriesEntryR\aentries\x12+\n" +
+	"\x05state\x18\x05 \x01(\x0e2\x15.locale.v1.EntryStateR\x05state\x1a:\n" +
+	"\fEntriesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\".\n" +
+	"\x12SetEntriesResponse\x12\x18\n" +
+	"\awritten\x18\x01 \x01(\x05R\awritten\"z\n" +
+	"\x11ListDraftsRequest\x12\x14\n" +
+	"\x05scope\x18\x01 \x01(\tR\x05scope\x12\x12\n" +
+	"\x04lang\x18\x02 \x01(\tR\x04lang\x12\x1c\n" +
+	"\tnamespace\x18\x03 \x01(\tR\tnamespace\x12\x1d\n" +
+	"\n" +
+	"key_prefix\x18\x04 \x01(\tR\tkeyPrefix\"z\n" +
+	"\n" +
+	"DraftEntry\x12\x14\n" +
+	"\x05scope\x18\x01 \x01(\tR\x05scope\x12\x12\n" +
+	"\x04lang\x18\x02 \x01(\tR\x04lang\x12\x1c\n" +
+	"\tnamespace\x18\x03 \x01(\tR\tnamespace\x12\x10\n" +
+	"\x03key\x18\x04 \x01(\tR\x03key\x12\x12\n" +
+	"\x04text\x18\x05 \x01(\tR\x04text\"C\n" +
+	"\x12ListDraftsResponse\x12-\n" +
+	"\x06drafts\x18\x01 \x03(\v2\x15.locale.v1.DraftEntryR\x06drafts\"r\n" +
+	"\x14PublishDraftsRequest\x12\x14\n" +
+	"\x05scope\x18\x01 \x01(\tR\x05scope\x12\x12\n" +
+	"\x04lang\x18\x02 \x01(\tR\x04lang\x12\x1c\n" +
+	"\tnamespace\x18\x03 \x01(\tR\tnamespace\x12\x12\n" +
+	"\x04keys\x18\x04 \x03(\tR\x04keys\"5\n" +
+	"\x15PublishDraftsResponse\x12\x1c\n" +
+	"\tpublished\x18\x01 \x01(\x05R\tpublished\"\a\n" +
+	"\x05Empty*[\n" +
+	"\n" +
+	"EntryState\x12\x1b\n" +
+	"\x17ENTRY_STATE_UNSPECIFIED\x10\x00\x12\x19\n" +
+	"\x15ENTRY_STATE_PUBLISHED\x10\x01\x12\x15\n" +
+	"\x11ENTRY_STATE_DRAFT\x10\x022\xcb\x03\n" +
 	"\rLocaleService\x12F\n" +
 	"\vGetSnapshot\x12\x1a.locale.v1.SnapshotRequest\x1a\x1b.locale.v1.SnapshotResponse\x12L\n" +
 	"\x13GetAvailableLocales\x12\x10.locale.v1.Empty\x1a#.locale.v1.AvailableLocalesResponse\x12:\n" +
-	"\x05Watch\x12\x17.locale.v1.WatchRequest\x1a\x16.locale.v1.UpdateEvent0\x01BSZQgithub.com/txnet/i18n-platform/services/locale-service/internal/localev1;localev1b\x06proto3"
+	"\x05Watch\x12\x17.locale.v1.WatchRequest\x1a\x16.locale.v1.UpdateEvent0\x01\x12I\n" +
+	"\n" +
+	"SetEntries\x12\x1c.locale.v1.SetEntriesRequest\x1a\x1d.locale.v1.SetEntriesResponse\x12I\n" +
+	"\n" +
+	"ListDrafts\x12\x1c.locale.v1.ListDraftsRequest\x1a\x1d.locale.v1.ListDraftsResponse\x12R\n" +
+	"\rPublishDrafts\x12\x1f.locale.v1.PublishDraftsRequest\x1a .locale.v1.PublishDraftsResponseBSZQgithub.com/txnet/i18n-platform/services/locale-service/internal/localev1;localev1b\x06proto3"
 
 var (
 	file_locale_v1_locale_proto_rawDescOnce sync.Once
@@ -540,36 +1052,55 @@ func file_locale_v1_locale_proto_rawDescGZIP() []byte {
 	return file_locale_v1_locale_proto_rawDescData
 }
 
-var file_locale_v1_locale_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_locale_v1_locale_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_locale_v1_locale_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_locale_v1_locale_proto_goTypes = []any{
-	(*SnapshotRequest)(nil),          // 0: locale.v1.SnapshotRequest
-	(*SnapshotResponse)(nil),         // 1: locale.v1.SnapshotResponse
-	(*NamespaceData)(nil),            // 2: locale.v1.NamespaceData
-	(*WatchRequest)(nil),             // 3: locale.v1.WatchRequest
-	(*UpdateEvent)(nil),              // 4: locale.v1.UpdateEvent
-	(*AvailableLocalesResponse)(nil), // 5: locale.v1.AvailableLocalesResponse
-	(*LocaleMeta)(nil),               // 6: locale.v1.LocaleMeta
-	(*Empty)(nil),                    // 7: locale.v1.Empty
-	nil,                              // 8: locale.v1.SnapshotResponse.NamespacesEntry
-	nil,                              // 9: locale.v1.NamespaceData.EntriesEntry
+	(EntryState)(0),                  // 0: locale.v1.EntryState
+	(*SnapshotRequest)(nil),          // 1: locale.v1.SnapshotRequest
+	(*SnapshotResponse)(nil),         // 2: locale.v1.SnapshotResponse
+	(*NamespaceData)(nil),            // 3: locale.v1.NamespaceData
+	(*WatchRequest)(nil),             // 4: locale.v1.WatchRequest
+	(*UpdateEvent)(nil),              // 5: locale.v1.UpdateEvent
+	(*AvailableLocalesResponse)(nil), // 6: locale.v1.AvailableLocalesResponse
+	(*LocaleMeta)(nil),               // 7: locale.v1.LocaleMeta
+	(*SetEntriesRequest)(nil),        // 8: locale.v1.SetEntriesRequest
+	(*SetEntriesResponse)(nil),       // 9: locale.v1.SetEntriesResponse
+	(*ListDraftsRequest)(nil),        // 10: locale.v1.ListDraftsRequest
+	(*DraftEntry)(nil),               // 11: locale.v1.DraftEntry
+	(*ListDraftsResponse)(nil),       // 12: locale.v1.ListDraftsResponse
+	(*PublishDraftsRequest)(nil),     // 13: locale.v1.PublishDraftsRequest
+	(*PublishDraftsResponse)(nil),    // 14: locale.v1.PublishDraftsResponse
+	(*Empty)(nil),                    // 15: locale.v1.Empty
+	nil,                              // 16: locale.v1.SnapshotResponse.NamespacesEntry
+	nil,                              // 17: locale.v1.NamespaceData.EntriesEntry
+	nil,                              // 18: locale.v1.SetEntriesRequest.EntriesEntry
 }
 var file_locale_v1_locale_proto_depIdxs = []int32{
-	8, // 0: locale.v1.SnapshotResponse.namespaces:type_name -> locale.v1.SnapshotResponse.NamespacesEntry
-	9, // 1: locale.v1.NamespaceData.entries:type_name -> locale.v1.NamespaceData.EntriesEntry
-	1, // 2: locale.v1.UpdateEvent.full_snapshot:type_name -> locale.v1.SnapshotResponse
-	6, // 3: locale.v1.AvailableLocalesResponse.locales:type_name -> locale.v1.LocaleMeta
-	2, // 4: locale.v1.SnapshotResponse.NamespacesEntry.value:type_name -> locale.v1.NamespaceData
-	0, // 5: locale.v1.LocaleService.GetSnapshot:input_type -> locale.v1.SnapshotRequest
-	7, // 6: locale.v1.LocaleService.GetAvailableLocales:input_type -> locale.v1.Empty
-	3, // 7: locale.v1.LocaleService.Watch:input_type -> locale.v1.WatchRequest
-	1, // 8: locale.v1.LocaleService.GetSnapshot:output_type -> locale.v1.SnapshotResponse
-	5, // 9: locale.v1.LocaleService.GetAvailableLocales:output_type -> locale.v1.AvailableLocalesResponse
-	4, // 10: locale.v1.LocaleService.Watch:output_type -> locale.v1.UpdateEvent
-	8, // [8:11] is the sub-list for method output_type
-	5, // [5:8] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	16, // 0: locale.v1.SnapshotResponse.namespaces:type_name -> locale.v1.SnapshotResponse.NamespacesEntry
+	17, // 1: locale.v1.NamespaceData.entries:type_name -> locale.v1.NamespaceData.EntriesEntry
+	2,  // 2: locale.v1.UpdateEvent.full_snapshot:type_name -> locale.v1.SnapshotResponse
+	7,  // 3: locale.v1.AvailableLocalesResponse.locales:type_name -> locale.v1.LocaleMeta
+	18, // 4: locale.v1.SetEntriesRequest.entries:type_name -> locale.v1.SetEntriesRequest.EntriesEntry
+	0,  // 5: locale.v1.SetEntriesRequest.state:type_name -> locale.v1.EntryState
+	11, // 6: locale.v1.ListDraftsResponse.drafts:type_name -> locale.v1.DraftEntry
+	3,  // 7: locale.v1.SnapshotResponse.NamespacesEntry.value:type_name -> locale.v1.NamespaceData
+	1,  // 8: locale.v1.LocaleService.GetSnapshot:input_type -> locale.v1.SnapshotRequest
+	15, // 9: locale.v1.LocaleService.GetAvailableLocales:input_type -> locale.v1.Empty
+	4,  // 10: locale.v1.LocaleService.Watch:input_type -> locale.v1.WatchRequest
+	8,  // 11: locale.v1.LocaleService.SetEntries:input_type -> locale.v1.SetEntriesRequest
+	10, // 12: locale.v1.LocaleService.ListDrafts:input_type -> locale.v1.ListDraftsRequest
+	13, // 13: locale.v1.LocaleService.PublishDrafts:input_type -> locale.v1.PublishDraftsRequest
+	2,  // 14: locale.v1.LocaleService.GetSnapshot:output_type -> locale.v1.SnapshotResponse
+	6,  // 15: locale.v1.LocaleService.GetAvailableLocales:output_type -> locale.v1.AvailableLocalesResponse
+	5,  // 16: locale.v1.LocaleService.Watch:output_type -> locale.v1.UpdateEvent
+	9,  // 17: locale.v1.LocaleService.SetEntries:output_type -> locale.v1.SetEntriesResponse
+	12, // 18: locale.v1.LocaleService.ListDrafts:output_type -> locale.v1.ListDraftsResponse
+	14, // 19: locale.v1.LocaleService.PublishDrafts:output_type -> locale.v1.PublishDraftsResponse
+	14, // [14:20] is the sub-list for method output_type
+	8,  // [8:14] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_locale_v1_locale_proto_init() }
@@ -582,13 +1113,14 @@ func file_locale_v1_locale_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_locale_v1_locale_proto_rawDesc), len(file_locale_v1_locale_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   10,
+			NumEnums:      1,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_locale_v1_locale_proto_goTypes,
 		DependencyIndexes: file_locale_v1_locale_proto_depIdxs,
+		EnumInfos:         file_locale_v1_locale_proto_enumTypes,
 		MessageInfos:      file_locale_v1_locale_proto_msgTypes,
 	}.Build()
 	File_locale_v1_locale_proto = out.File

@@ -362,3 +362,77 @@ func langsOf(events []*localev1.UpdateEvent) []string {
 	sort.Strings(out)
 	return out
 }
+
+// --- runtime writes (F-1533-b) ------------------------------------------
+
+func newWritableServer(t *testing.T) *Server {
+	t.Helper()
+	srv, root := newServer(t)
+	s := store.NewWithRuntime(root, t.TempDir())
+	if err := s.Reload(); err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+	srv.store = s
+	return srv
+}
+
+// A published write reaches Watch subscribers; a draft wakes nobody, and
+// publishing it does.
+func TestRuntimeWritesBroadcastOnlyWhatIsServed(t *testing.T) {
+	srv := newWritableServer(t)
+	stream, _ := subscribe(t, srv, &localev1.WatchRequest{Scope: "backend", Langs: []string{"en"}})
+	srv.OnStoreChange()
+	stream.waitFor(t, 1)
+
+	ctx := context.Background()
+	if _, err := srv.SetEntries(ctx, &localev1.SetEntriesRequest{
+		Scope: "shareds", Lang: "en", Namespace: "catalog",
+		Entries: map[string]string{"product.vpn.name": "VPN"},
+		State:   localev1.EntryState_ENTRY_STATE_DRAFT,
+	}); err != nil {
+		t.Fatalf("SetEntries(draft): %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if n := len(stream.events()); n != 1 {
+		t.Fatalf("a draft sent %d events, want none after boot", n-1)
+	}
+
+	drafts, err := srv.ListDrafts(ctx, &localev1.ListDraftsRequest{Namespace: "catalog"})
+	if err != nil || len(drafts.Drafts) != 1 || drafts.Drafts[0].Text != "VPN" {
+		t.Fatalf("ListDrafts = %v, %v", drafts, err)
+	}
+
+	pub, err := srv.PublishDrafts(ctx, &localev1.PublishDraftsRequest{
+		Scope: "shareds", Lang: "en", Namespace: "catalog", Keys: []string{"product.vpn.name"},
+	})
+	if err != nil || pub.Published != 1 {
+		t.Fatalf("PublishDrafts = %v, %v", pub, err)
+	}
+	stream.waitFor(t, 1)
+	last := stream.events()[1]
+	if got := last.FullSnapshot.Namespaces["catalog"].GetEntries()["product.vpn.name"]; got != "VPN" {
+		t.Errorf("pushed snapshot catalog entry = %q", got)
+	}
+}
+
+func TestRuntimeWriteErrorsMapToCodes(t *testing.T) {
+	ctx := context.Background()
+	readOnly, _ := newServer(t)
+	req := &localev1.SetEntriesRequest{
+		Scope: "shareds", Lang: "en", Namespace: "catalog",
+		Entries: map[string]string{"a": "A"}, State: localev1.EntryState_ENTRY_STATE_PUBLISHED,
+	}
+	if _, err := readOnly.SetEntries(ctx, req); status.Code(err) != codes.FailedPrecondition {
+		t.Errorf("read-only: code = %v, want FailedPrecondition", status.Code(err))
+	}
+
+	srv := newWritableServer(t)
+	unspecified := &localev1.SetEntriesRequest{Scope: "shareds", Lang: "en", Namespace: "catalog", Entries: map[string]string{"a": "A"}}
+	if _, err := srv.SetEntries(ctx, unspecified); status.Code(err) != codes.InvalidArgument {
+		t.Errorf("no state: code = %v, want InvalidArgument", status.Code(err))
+	}
+	unknown := &localev1.SetEntriesRequest{Scope: "shareds", Lang: "de", Namespace: "catalog", Entries: map[string]string{"a": "A"}, State: localev1.EntryState_ENTRY_STATE_DRAFT}
+	if _, err := srv.SetEntries(ctx, unknown); status.Code(err) != codes.NotFound {
+		t.Errorf("unknown lang: code = %v, want NotFound", status.Code(err))
+	}
+}

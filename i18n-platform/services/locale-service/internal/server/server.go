@@ -3,6 +3,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"log"
 	"sync"
 
@@ -187,4 +188,62 @@ func (s *Server) buildSnapshotLocked(lang, scope string) (*localev1.SnapshotResp
 		out.Namespaces[ns] = &localev1.NamespaceData{Entries: data.Entries}
 	}
 	return out, true
+}
+
+// SetEntries writes runtime entries (F-1533-b) and, when anything served may
+// have changed, pushes the new snapshots to Watch subscribers.
+func (s *Server) SetEntries(_ context.Context, req *localev1.SetEntriesRequest) (*localev1.SetEntriesResponse, error) {
+	var state store.EntryState
+	switch req.GetState() {
+	case localev1.EntryState_ENTRY_STATE_PUBLISHED:
+		state = store.Published
+	case localev1.EntryState_ENTRY_STATE_DRAFT:
+		state = store.Draft
+	}
+	n, err := s.store.SetEntries(req.GetScope(), req.GetLang(), req.GetNamespace(), req.GetEntries(), state)
+	if err != nil {
+		return nil, writeError(err)
+	}
+	if state == store.Published {
+		s.OnStoreChange()
+	}
+	return &localev1.SetEntriesResponse{Written: int32(n)}, nil
+}
+
+// ListDrafts returns the drafts held for review.
+func (s *Server) ListDrafts(_ context.Context, req *localev1.ListDraftsRequest) (*localev1.ListDraftsResponse, error) {
+	drafts := s.store.Drafts(req.GetScope(), req.GetLang(), req.GetNamespace(), req.GetKeyPrefix())
+	out := &localev1.ListDraftsResponse{Drafts: make([]*localev1.DraftEntry, 0, len(drafts))}
+	for _, d := range drafts {
+		out.Drafts = append(out.Drafts, &localev1.DraftEntry{
+			Scope: d.Scope, Lang: d.Lang, Namespace: d.Namespace, Key: d.Key, Text: d.Text,
+		})
+	}
+	return out, nil
+}
+
+// PublishDrafts moves drafts to published and pushes the new snapshots.
+func (s *Server) PublishDrafts(_ context.Context, req *localev1.PublishDraftsRequest) (*localev1.PublishDraftsResponse, error) {
+	n, err := s.store.PublishDrafts(req.GetScope(), req.GetLang(), req.GetNamespace(), req.GetKeys())
+	if err != nil {
+		return nil, writeError(err)
+	}
+	if n > 0 {
+		s.OnStoreChange()
+	}
+	return &localev1.PublishDraftsResponse{Published: int32(n)}, nil
+}
+
+func writeError(err error) error {
+	switch {
+	case errors.Is(err, store.ErrReadOnly):
+		return status.Error(codes.FailedPrecondition, err.Error())
+	case errors.Is(err, store.ErrUnknownLang):
+		return status.Error(codes.NotFound, err.Error())
+	case errors.Is(err, store.ErrInvalid):
+		return status.Error(codes.InvalidArgument, err.Error())
+	default:
+		log.Printf("[grpc] runtime write failed: %v", err)
+		return status.Error(codes.Internal, "runtime write failed")
+	}
 }

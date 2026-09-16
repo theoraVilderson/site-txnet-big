@@ -24,6 +24,7 @@ volumes:
   postgres_data:
   rabbitmq_data:
   translator_models:
+  locales_runtime:
 
 services:
   # ===========================================================================
@@ -81,9 +82,13 @@ services:
     restart: unless-stopped
     volumes:
       - ../locales:/locales:ro
+      # Runtime-written text (catalog names, drafts) — state, back it up like
+      # the database (ADR-0050).
+      - locales_runtime:/locales-runtime
     environment:
       - GRPC_ADDR=:${LOCALE_SERVICE_HOST_PORT:-50051}
       - LOCALES_DIR=/locales
+      - LOCALES_RUNTIME_DIR=/locales-runtime
     healthcheck:
       test: ["CMD", "/usr/local/bin/locale-service", "-healthcheck"]
       interval: 5s

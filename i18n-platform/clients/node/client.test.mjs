@@ -84,6 +84,20 @@ async function startFakeService({ snapshots = {}, locales = [], failSnapshots = 
       if (!snap) return callback({ code: grpc.status.NOT_FOUND, message: "unknown lang" });
       callback(null, snap);
     },
+    SetEntries(call, callback) {
+      state.calls.push(`SetEntries:${call.request.lang}:${call.request.state}`);
+      callback(null, { written: Object.keys(call.request.entries).length });
+    },
+    ListDrafts(call, callback) {
+      state.calls.push(`ListDrafts:${call.request.key_prefix}`);
+      callback(null, {
+        drafts: [{ scope: "shareds", lang: "de", namespace: "catalog", key: "product.vpn.name", text: "VPN" }],
+      });
+    },
+    PublishDrafts(call, callback) {
+      state.calls.push(`PublishDrafts:${call.request.lang}`);
+      callback(null, { published: call.request.keys.length });
+    },
     GetAvailableLocales(_call, callback) {
       state.calls.push("GetAvailableLocales");
       callback(null, { locales: state.locales });
@@ -500,6 +514,35 @@ test("snapshot of an unknown language rejects", async () => {
   await client.ready();
 
   await assert.rejects(() => client.snapshot("de"));
+
+  client.close();
+  await svc.stop();
+});
+
+// Runtime writes (F-1533-b) pass straight through: the draft flag maps to the
+// enum, nothing is read from or written to the cache.
+test("runtime writes go to the service", async () => {
+  const svc = await startFakeService(twoLanguages());
+  const client = createLocaleClient({ addr: svc.addr, scope: "backend", preloadLangs: ["en"], logger: quiet });
+  await client.ready();
+  const entries = { "product.vpn.name": "VPN" };
+
+  assert.equal(await client.setEntries({ scope: "shareds", lang: "de", namespace: "catalog", entries, draft: true }), 1);
+  assert.equal(await client.setEntries({ scope: "shareds", lang: "en", namespace: "catalog", entries }), 1);
+  const drafts = await client.listDrafts({ scope: "shareds", namespace: "catalog", keyPrefix: "product." });
+  assert.equal(drafts.length, 1);
+  assert.equal(drafts[0].text, "VPN");
+  assert.equal(
+    await client.publishDrafts({ scope: "shareds", lang: "de", namespace: "catalog", keys: ["product.vpn.name"] }),
+    1,
+  );
+
+  assert.deepEqual(svc.state.calls.slice(-4), [
+    "SetEntries:de:ENTRY_STATE_DRAFT",
+    "SetEntries:en:ENTRY_STATE_PUBLISHED",
+    "ListDrafts:product.",
+    "PublishDrafts:de",
+  ]);
 
   client.close();
   await svc.stop();
