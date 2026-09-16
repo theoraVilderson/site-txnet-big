@@ -46,9 +46,10 @@ export interface DepositStarted extends DepositQuote {
   /**
    * What the chat's invoice carries, for a gateway paid inside the chat (F-104-k):
    * the payload comes back with the payment's events, `amountMinor` is whole
-   * units of `currency` (Stars). `null` for every other gateway.
+   * units of `currency` (Stars, rials), `providerToken` the gateway's own (Bale's
+   * wallet, F-104-n) or `null`. `null` for every other gateway.
    */
-  invoice: { payload: string; currency: string; amountMinor: string } | null;
+  invoice: { payload: string; currency: string; amountMinor: string; providerToken: string | null } | null;
 }
 
 /** A messenger's payment event as billing takes it back (F-104-k); the amount as a string. */

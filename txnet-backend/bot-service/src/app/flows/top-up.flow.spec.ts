@@ -116,7 +116,7 @@ describe('TopUpFlow', () => {
     const { flow } = harness({
       billing: {
         start: vi.fn().mockResolvedValue(
-          ok({ paymentId: 'p-3', free: false, redirectUrl: null, invoice: { payload: 'p-3', currency: 'XTR', amountMinor: '770' }, amount: '10.00', discount: '0.00', fee: '0.00', payable: '10.00', credited: '10.00', balance: null }),
+          ok({ paymentId: 'p-3', free: false, redirectUrl: null, invoice: { payload: 'p-3', currency: 'XTR', amountMinor: '770', providerToken: null }, amount: '10.00', discount: '0.00', fee: '0.00', payable: '10.00', credited: '10.00', balance: null }),
         ),
       },
     });
@@ -126,6 +126,20 @@ describe('TopUpFlow', () => {
     expect(result.view.id).toBe('topUp.payInChat');
     expect(result.invoice).toMatchObject({ payload: 'p-3', currency: 'XTR', amount: 770, description: { values: { credited: '10.00' } } });
     expect(result.nextState).toBeNull();
+  });
+
+  it('passes a Bale invoice’s wallet token on to the dispatcher, as billing answered it (F-104-n)', async () => {
+    const { flow } = harness({
+      billing: {
+        start: vi.fn().mockResolvedValue(
+          ok({ paymentId: 'p-4', free: false, redirectUrl: null, invoice: { payload: 'p-4', currency: 'IRR', amountMinor: '20200000', providerToken: 'wallet-token' }, amount: '20.00', discount: '0.00', fee: '0.20', payable: '20.20', credited: '20.00', balance: null }),
+        ),
+      },
+    });
+
+    const result = await flow.handle(ctx, onConfirm, 'topup:pay');
+
+    expect(result.invoice).toMatchObject({ payload: 'p-4', currency: 'IRR', amount: 20_200_000, providerToken: 'wallet-token' });
   });
 
   it('says the wallet was credited on a free top-up, with nowhere to send the user', async () => {

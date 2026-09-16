@@ -84,8 +84,8 @@ type Setup = {
   requestFails?: Error;
   /** The driver settles by webhook (F-104-h): it is told where to post. */
   webhook?: boolean;
-  /** The driver settles in a Telegram chat (F-104-k): nothing is minted. */
-  inChat?: boolean;
+  /** The driver settles in a chat (F-104-k): `true` is Telegram Stars, `'bale'` Bale's wallet (F-104-n). */
+  inChat?: boolean | 'bale';
   domains?: Array<{ domainValue: string; domainType: string; verificationStatus: string }>;
   callbackOrigin?: string;
   /** `FRONTEND_ORIGIN`, comma-separated like CORS reads it. */
@@ -148,10 +148,10 @@ function build(setup: Setup = {}) {
 
   const zarinpal = {
     name: 'zarinpal',
-    chargeCurrency: inChat ? 'XTR' : 'IRR',
+    chargeCurrency: inChat === true ? 'XTR' : 'IRR',
     chargeDecimals: 0,
     settlement: inChat ? 'in_chat' : webhook ? 'webhook' : 'return',
-    chatPlatform: inChat ? 'telegram' : undefined,
+    chatPlatform: inChat === 'bale' ? 'bale' : inChat ? 'telegram' : undefined,
     quoteFee: async () => {
       throw new Error('a manual-fee gateway must not be asked for a fee');
     },
@@ -163,7 +163,8 @@ function build(setup: Setup = {}) {
   };
   const registry = { has: () => true, get: () => zarinpal };
   const merchant = {
-    credentialsFor: async () => ({ merchantId: 'merchant' }),
+    credentialsFor: async () =>
+      inChat === 'bale' ? { secretKey: 'bale-wallet-token' } : inChat ? {} : { merchantId: 'merchant' },
     requireConfigured: async () => undefined,
     configuredSecrets: async () => new Map([[`gateway:tenant:${GATEWAY}`, new Set(['merchantId'] as const)]]),
   };
@@ -227,12 +228,31 @@ describe('DepositStartService.start', () => {
       payload: started.paymentId,
       currency: 'XTR',
       amountMinor: (calls.created[0]['chargedAmountMinor'] as bigint).toString(),
+      providerToken: null,
     });
     expect(calls.requested).toEqual([]);
     expect(calls.updated).toEqual([]);
 
     await expect(asTenant(() => service.start(request))).rejects.toBeInstanceOf(DepositGatewayNotFound);
     await expect(asTenant(() => service.start({ ...request, chatPlatform: 'bale' }))).rejects.toBeInstanceOf(DepositGatewayNotFound);
+  });
+
+  it('answers a Bale gateway with a rial invoice at the gateway rate and its wallet token from the vault (F-104-n)', async () => {
+    const { service, calls } = build({ inChat: 'bale', domains: [] });
+    const request = { userId: USER, gatewayId: GATEWAY, source: 'tenant' as const, amount: d('20.00'), couponCodes: [] };
+
+    const started = await asTenant(() => service.start({ ...request, chatPlatform: 'bale' }));
+    // 20.00 + 1% fee at the gateway's 1,000,000 rial rate, as a Zarinpal payment is priced.
+    expect(calls.created[0]['chargedAmountMinor']).toBe(BigInt(20_200_000));
+    expect(started.invoice).toEqual({
+      payload: started.paymentId,
+      currency: 'IRR',
+      amountMinor: '20200000',
+      providerToken: 'bale-wallet-token',
+    });
+    expect(calls.requested).toEqual([]);
+
+    await expect(asTenant(() => service.start({ ...request, chatPlatform: 'telegram' }))).rejects.toBeInstanceOf(DepositGatewayNotFound);
   });
 
   it('holds the coupons and persists the payment before the gateway is asked to mint', async () => {

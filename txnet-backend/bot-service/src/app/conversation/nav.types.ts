@@ -93,6 +93,8 @@ export interface FlowInvoice {
   currency: string;
   /** Whole units of `currency`, as billing answered it. */
   amount: number;
+  /** The payment provider token billing read from the gateway's vault (Bale's wallet, F-104-n); `null` when it takes none. Never logged. */
+  providerToken: string | null;
 }
 
 /**

@@ -96,13 +96,15 @@ export class BotDispatcher {
 
       // The invoice goes after the screen that explains it (F-104-m).
       if (result.invoice) {
-        const { title, description, label, payload, currency, amount } = result.invoice;
+        const { title, description, label, payload, currency, amount, providerToken } = result.invoice;
         const sent = await client.sendInvoice(ctx.chatId, {
           title: t(title),
           description: t(description),
           payload,
           currency,
           prices: [{ label: t(label), amount }],
+          // Whether a platform needs one is messenger's call (F-104-l), not this one's.
+          ...(providerToken ? { providerToken } : {}),
         });
         if ('reason' in sent) {
           this.logger.error(`${ctx.platform}: invoice for payment ${payload} not sent: ${sent.reason}`);

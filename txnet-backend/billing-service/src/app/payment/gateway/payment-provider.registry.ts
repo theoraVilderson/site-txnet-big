@@ -4,6 +4,7 @@ import { PaymentProviderName } from '@prisma/client';
 
 import type { EnvConfig } from '../../config/env.validation';
 import { AirwallexProvider } from './airwallex.provider';
+import { BaleProvider } from './bale.provider';
 import { PaymentProvider, ProviderNotSupported } from './payment-provider';
 import { NowPaymentsProvider } from './nowpayments.provider';
 import { OxaPayProvider } from './oxapay.provider';
@@ -17,8 +18,7 @@ import { ZarinpalProvider } from './zarinpal.provider';
  * merchant id: here a driver is chosen by name only, and the merchant comes
  * from `GatewayMerchant` per call.
  *
- * `PaymentProviderName` has members with no driver yet (`idpay`, and
- * D-32's `bale`); asking for one is `ProviderNotSupported`, never a
+ * `PaymentProviderName` has members with no driver yet (`idpay`); asking for one is `ProviderNotSupported`, never a
  * fallback to another gateway.
  */
 @Injectable()
@@ -36,6 +36,7 @@ export class PaymentProviderRegistry {
       [PaymentProviderName.airwallex, new AirwallexProvider({ sandbox })],
       // Settled in the chat (F-104-k): nothing to sandbox, nothing it calls.
       [PaymentProviderName.telegram_stars, new TelegramStarsProvider()],
+      [PaymentProviderName.bale, new BaleProvider()],
     ]);
     // A webhook driver that cannot check a signature would make the webhook
     // door answer 404 for a gateway that is supposed to settle there (ADR-0051).

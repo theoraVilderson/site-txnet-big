@@ -156,6 +156,7 @@ describe('BotDispatcher', () => {
         payload: 'p-3',
         currency: 'XTR',
         amount: 770,
+        providerToken: null,
       },
     });
 
@@ -169,6 +170,26 @@ describe('BotDispatcher', () => {
       currency: 'XTR',
       prices: [{ label: 'bot.topUp.invoiceLabel', amount: 770 }],
     });
+  });
+
+  it('sends an invoice’s provider token with it, and none when billing answered none (F-104-n)', async () => {
+    const { dispatcher, client } = harness({
+      view: { id: 'topUp.payInChat', body: { key: 'bot.topUp.payInChat' } },
+      nextState: null,
+      invoice: {
+        title: { key: 'bot.topUp.invoiceTitle' },
+        description: { key: 'bot.topUp.invoiceDescription' },
+        label: { key: 'bot.topUp.invoiceLabel' },
+        payload: 'p-4',
+        currency: 'IRR',
+        amount: 20_200_000,
+        providerToken: 'wallet-token',
+      },
+    });
+
+    await dispatcher.handle({ ...ctx, platform: 'bale', text: undefined, messageId: undefined });
+
+    expect(client.sendInvoice).toHaveBeenCalledWith('5501', expect.objectContaining({ currency: 'IRR', providerToken: 'wallet-token' }));
   });
 
   it('relays a payment event without routing it or touching the conversation (F-104-m)', async () => {

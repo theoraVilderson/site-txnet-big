@@ -19,7 +19,7 @@ import { WalletLedgerService } from '../../wallet/wallet-ledger.service';
 import { CouponReservationService } from '../coupon/coupon-reservation';
 import { CouponValidationService } from '../coupon/coupon-validation';
 import { GatewayMerchant, GatewaySource, MerchantGatewayRef } from '../gateway/gateway-merchant';
-import { GatewayFailure } from '../gateway/payment-provider';
+import { GatewayCredentials, GatewayFailure } from '../gateway/payment-provider';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { FxRateReader } from '../pricing/fx-rate.reader';
 import { offeredInThisChat, priceDeposit, selectGateway } from './deposit-pricing';
@@ -88,9 +88,12 @@ export type DepositStarted = {
   /**
    * What the bot puts in the invoice it sends (F-104-k), for an in-chat gateway
    * only: `payload` comes back in `pre_checkout_query` and `successful_payment`,
-   * `amountMinor` is in `currency`'s smallest unit (whole Stars). `null` otherwise.
+   * `amountMinor` is in `currency`'s smallest unit (whole Stars, rials).
+   * `providerToken` is the gateway's `secretKey` — Bale's wallet token (F-104-n),
+   * answered only to the bot that proved it is this gateway's messenger;
+   * `null` for a provider that takes none (Stars). `null` otherwise.
    */
-  invoice: { payload: string; currency: string; amountMinor: string } | null;
+  invoice: { payload: string; currency: string; amountMinor: string; providerToken: string | null } | null;
   amount: string;
   discount: string;
   fee: string;
@@ -259,10 +262,24 @@ export class DepositStartService {
 
     // In chat, nothing is minted: the bot sends the invoice with its own token,
     // and `pre-checkout` gives the row its authority (`DepositInChatService`).
+    // A provider token (Bale's wallet, F-104-n) goes to the bot in the answer; a
+    // vault miss fails the payment the way a bank that will not mint does.
     if (inChat) {
+      let credentials: GatewayCredentials;
+      try {
+        credentials = await this.merchant.credentialsFor(ref, userId);
+      } catch (e) {
+        await this.abandon(paymentId, e);
+        throw e;
+      }
       return {
         ...answer,
-        invoice: { payload: paymentId, currency: provider.chargeCurrency, amountMinor: (price.chargedAmountMinor as bigint).toString() },
+        invoice: {
+          payload: paymentId,
+          currency: provider.chargeCurrency,
+          amountMinor: (price.chargedAmountMinor as bigint).toString(),
+          providerToken: credentials.secretKey ?? null,
+        },
       };
     }
 

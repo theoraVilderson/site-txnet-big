@@ -151,6 +151,7 @@ export class TopUpFlow {
           payload: s.invoice.payload,
           currency: s.invoice.currency,
           amount: Number(s.invoice.amountMinor),
+          providerToken: s.invoice.providerToken,
         },
       };
     }

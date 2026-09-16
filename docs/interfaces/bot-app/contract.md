@@ -144,7 +144,7 @@ URL carries are in [contract.mini-app.md](contract.mini-app.md).
 
 ## Top-up (`F-306-a`, `F-104-m`)
 
-Gateway → amount → billing's quote → `start` → a bank `url` button, the credit (free), or an **invoice** (in-chat gateway: `FlowResult.invoice`, sent after the screen).
+Gateway → amount → billing's quote → `start` → a bank `url` button, the credit (free), or an **invoice** (in-chat gateway: `FlowResult.invoice`, sent after the screen, with the `providerToken` billing answered — Bale's wallet, F-104-n).
 Billing's deposit routes **through the gate** (`BILLING_API_BASE_URL`), chat access token as Bearer; `X-Service-Token` records the `bot` channel,
 and `X-Bot-Platform` (believed only beside it) is what offers an in-chat gateway of this messenger. Every number is billing's; it ends at `start`.
 A payment event (`ChatContext.payment`) never reaches a flow: `InChatPayment` relays it to `deposit/in-chat/*` as the payer. Every
