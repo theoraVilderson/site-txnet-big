@@ -13,13 +13,18 @@
  *    a price effective in the past is refused, because it would reprice an
  *    invoice already issued; a price is switched off, never deleted;
  *  - **a SKU is unique in its tenant**, and a second one is its own refusal;
- *  - **audit.** Every write leaves a row naming the actor and what changed.
+ *  - **audit.** Every write leaves a row naming the actor and what changed;
+ *  - **names are the server's keys** (F-1533-d): a tenant's item is named under
+ *    its own `t_<tenant>.` prefix, and a translation is reviewed only by
+ *    whoever manages the item it names — the rules of the text itself are
+ *    `catalog-texts.spec.ts`.
  *
  * What the database holds for every writer is `catalog-schema.int.spec.ts`.
  */
 import { FulfilmentKind, Prisma, TenantType, VariantBillingMode, VariantVisibility } from '@prisma/client';
 
 import { CatalogAdminRefused, CatalogAdminService } from './catalog-admin.service';
+import { CatalogTextService, catalogTextKey } from './catalog-texts';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const RESELLER = '22222222-2222-4222-8222-222222222222';
@@ -121,7 +126,31 @@ function build() {
   };
   const all = { ...db, $transaction: async <T>(fn: (tx: typeof db) => Promise<T>) => fn(db) };
   const app = { tenant: { findUnique: async ({ where }: { where: Row }) => (types[where['id'] as string] ? { tenantType: types[where['id'] as string] } : null) } };
-  return { service: new CatalogAdminService(app as never, all as never), db, writes, audit };
+  // What reached locale-service, in order. The text rules themselves are catalog-texts.spec.ts.
+  const texts: string[] = [];
+  const textService = {
+    publishSources: async (t: { key: string; text: { fa: string; en: string } }[]) => {
+      writes.push('texts.publish');
+      texts.push(...t.map((x) => `publish ${x.key} ${x.text.en}`));
+    },
+    draftOthers: async (t: { key: string }[]) => {
+      texts.push(...t.map((x) => `draft ${x.key}`));
+      return t.length;
+    },
+    reviewList: async (allow: (key: string) => boolean) =>
+      [catalogTextKey(null, 'product', 'vpn_basic', 'name'), catalogTextKey(RESELLER, 'product', 'vpn_alpha', 'name')]
+        .filter(allow)
+        .map((key) => ({ lang: 'de', key, draft: 'x', published: null, source: { fa: null, en: null } })),
+    publishDrafts: async (lang: string, keys: string[]) => {
+      texts.push(...keys.map((k) => `publish-draft ${lang} ${k}`));
+      return keys.length;
+    },
+    publishEdited: async (lang: string, t: Record<string, string>) => {
+      texts.push(...Object.keys(t).map((k) => `publish-edited ${lang} ${k}`));
+      return Object.keys(t).length;
+    },
+  };
+  return { service: new CatalogAdminService(app as never, all as never, textService as unknown as CatalogTextService), db, writes, audit, texts };
 }
 
 async function refusal(run: () => Promise<unknown>): Promise<CatalogAdminRefused> {
@@ -134,7 +163,7 @@ async function refusal(run: () => Promise<unknown>): Promise<CatalogAdminRefused
   throw new Error('expected a refusal');
 }
 
-const NEW_PRODUCT = { categoryId: PLATFORM_CATEGORY, key: 'vpn_pro', nameKey: 'catalog.product.vpn_pro.name', fulfilmentKind: FulfilmentKind.network_access };
+const NEW_PRODUCT = { categoryId: PLATFORM_CATEGORY, key: 'vpn_pro', name: { fa: 'وی‌پی‌ان پرو', en: 'VPN Pro' }, fulfilmentKind: FulfilmentKind.network_access };
 const NEW_VARIANT = { sku: 'VPN-90', billingMode: VariantBillingMode.prepaid, visibility: VariantVisibility.public, durationDays: 90, price: '12.00' };
 
 describe('CatalogAdminService — who manages which item', () => {
@@ -220,5 +249,70 @@ describe('CatalogAdminService — variants and prices', () => {
     const { service } = build();
     expect((await refusal(() => service.setPrice(actor(OTHER), RESELLER_VARIANT, { amount: '1.00' }))).reason).toBe('variant_not_found');
     expect((await refusal(() => service.updateVariant(actor(OTHER), RESELLER_VARIANT, { isActive: false }))).reason).toBe('variant_not_found');
+  });
+});
+
+describe('CatalogAdminService — names (F-1533-d)', () => {
+  it("names a tenant's product under its own prefix and the platform's without one", async () => {
+    const { service, texts } = build();
+    const mine = await service.createProduct(actor(RESELLER), NEW_PRODUCT);
+    const platform = await service.createProduct(actor(OWNER), { ...NEW_PRODUCT, tenantId: null });
+
+    expect(mine.nameKey).toBe(catalogTextKey(RESELLER, 'product', 'vpn_pro', 'name'));
+    expect(platform.nameKey).toBe('catalog.product.vpn_pro.name');
+    expect(mine.descriptionKey).toBeNull();
+    // Published inside the write, drafted after it.
+    expect(texts).toEqual([
+      `publish ${mine.nameKey} VPN Pro`,
+      `draft ${mine.nameKey}`,
+      `publish ${platform.nameKey} VPN Pro`,
+      `draft ${platform.nameKey}`,
+    ]);
+  });
+
+  it('writes the name inside the transaction, after the row and its audit', async () => {
+    const { service, writes } = build();
+    await service.createCategory(actor(RESELLER), { key: 'games', name: { fa: 'بازی', en: 'Games' } });
+    expect(writes).toEqual(['productCategory.create', 'audit', 'texts.publish']);
+  });
+
+  it('re-keys an edited name to the derived key, and removes a description set to null', async () => {
+    const { service, db, texts } = build();
+    db.product.rows[1]['nameKey'] = 'catalog.product.hand_typed.name';
+    db.product.rows[1]['descriptionKey'] = 'catalog.product.hand_typed.description';
+
+    const view = await service.updateProduct(actor(RESELLER), RESELLER_PRODUCT, { name: { fa: 'آلفا', en: 'Alpha' }, description: null });
+
+    expect(view.nameKey).toBe(catalogTextKey(RESELLER, 'product', 'vpn_alpha', 'name'));
+    expect(view.descriptionKey).toBeNull();
+    expect(texts).toContain(`publish ${catalogTextKey(RESELLER, 'product', 'vpn_alpha', 'description')} `);
+  });
+
+  it("shows a reseller only its own drafts, and the platform owner every one", async () => {
+    const { service } = build();
+    expect((await service.listTextDrafts(actor(RESELLER))).map((d) => d.key)).toEqual([catalogTextKey(RESELLER, 'product', 'vpn_alpha', 'name')]);
+    expect(await service.listTextDrafts(actor(OWNER))).toHaveLength(2);
+  });
+
+  it("refuses to publish a translation of an item the caller does not manage, and writes nothing", async () => {
+    const { service, audit, texts } = build();
+    const platformName = catalogTextKey(null, 'product', 'vpn_basic', 'name');
+    const othersName = catalogTextKey(OTHER, 'product', 'followers_1k', 'name');
+
+    expect((await refusal(() => service.publishTextDrafts(actor(RESELLER), { lang: 'de', keys: [platformName] }))).reason).toBe('product_not_found');
+    expect((await refusal(() => service.editTexts(actor(RESELLER), { lang: 'de', texts: { [othersName]: 'x' } }))).reason).toBe('product_not_found');
+    expect((await refusal(() => service.publishTextDrafts(actor(RESELLER), { lang: 'de', keys: ['errors.auth.x'] }))).reason).toBe('text_key_invalid');
+    expect(audit).toHaveLength(0);
+    expect(texts).toEqual([]);
+  });
+
+  it('publishes a translation of its own item, audited on that item', async () => {
+    const { service, audit, texts } = build();
+    const key = catalogTextKey(RESELLER, 'product', 'vpn_alpha', 'name');
+    await expect(service.editTexts(actor(RESELLER), { lang: 'de', texts: { [key]: 'Alpha' } })).resolves.toEqual({ published: 1 });
+    expect(texts).toEqual([`publish-edited de ${key}`]);
+    expect(audit).toEqual([
+      expect.objectContaining({ tenantId: RESELLER, action: 'catalog_product_update', targetEntityId: RESELLER_PRODUCT, newValue: { texts: { lang: 'de', edited: { [key]: 'Alpha' } } } }),
+    ]);
   });
 });

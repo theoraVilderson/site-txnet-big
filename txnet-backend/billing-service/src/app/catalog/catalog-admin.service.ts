@@ -3,6 +3,7 @@ import { FulfilmentKind, Prisma, QualityTier, TenantType, VariantBillingMode, Va
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { Bilingual, CatalogTextKind, CatalogTextService, ReviewItem, catalogTextKey, parseCatalogTextKey } from './catalog-texts';
 
 /**
  * Catalog management (F-026-d; D-34, ADR-0049): categories, products, variants
@@ -18,6 +19,12 @@ import { PrismaService } from '../prisma/prisma.service';
  * history** (F-0602): a change is a new row, and a row effective in the past is
  * refused, because it would reprice an invoice already issued. The database
  * holds both for every writer (`catalog-schema.int.spec.ts`).
+ *
+ * **Names are text, not keys** (F-1533-d, ADR-0050): a category or product is
+ * written with its `fa` and `en` name, and the server derives the i18n key
+ * (`catalog-texts.ts`). The two texts are published inside the transaction, so
+ * a locale-service that does not answer rolls the row back; the other
+ * languages are drafted after it commits and never fail it.
  */
 
 export type CatalogActor = { adminId: string; tenantId: string; ip: string };
@@ -32,7 +39,9 @@ export type CatalogAdminRejection =
   | 'price_not_found'
   | 'key_taken'
   | 'sku_taken'
-  | 'price_in_the_past';
+  | 'price_in_the_past'
+  | 'text_key_invalid'
+  | 'texts_unavailable';
 
 export class CatalogAdminRefused extends Error {
   constructor(
@@ -44,21 +53,23 @@ export class CatalogAdminRefused extends Error {
   }
 }
 
-export type CreateCategoryInput = { tenantId?: string | null; key: string; nameKey: string };
-export type UpdateCategoryInput = { nameKey?: string; isActive?: boolean };
+export type CreateCategoryInput = { tenantId?: string | null; key: string; name: Bilingual };
+export type UpdateCategoryInput = { name?: Bilingual; isActive?: boolean };
 export type CreateProductInput = {
   tenantId?: string | null;
   categoryId: string;
   key: string;
-  nameKey: string;
-  descriptionKey?: string | null;
+  name: Bilingual;
+  /** `null` or absent: no description. */
+  description?: Bilingual | null;
   fulfilmentKind: FulfilmentKind;
   featureKeys?: string[];
   defaultQuotas?: Record<string, unknown>;
 };
 export type UpdateProductInput = {
-  nameKey?: string;
-  descriptionKey?: string | null;
+  name?: Bilingual;
+  /** `null` removes the description. */
+  description?: Bilingual | null;
   featureKeys?: string[];
   defaultQuotas?: Record<string, unknown>;
   isActive?: boolean;
@@ -82,6 +93,8 @@ export type CreateVariantInput = VariantFields & {
 export type UpdateVariantInput = VariantFields & { isActive?: boolean };
 export type SetPriceInput = { amount: string; effectiveFrom?: string };
 export type ListProductsFilter = { categoryId?: string; tenantId?: string };
+export type PublishTextsInput = { lang: string; keys: string[] };
+export type EditTextsInput = { lang: string; texts: Record<string, string> };
 
 export type PriceView = { id: string; variantId: string; amount: string; effectiveFrom: Date; isActive: boolean };
 export type CategoryView = { id: string; tenantId: string | null; key: string; nameKey: string; isActive: boolean };
@@ -177,6 +190,8 @@ export class CatalogAdminService {
     private readonly prisma: PrismaService,
     /** Every tenant's catalog rows, by policy. See the class comment. */
     private readonly all: CrossTenantPrismaService,
+    /** fa/en publish and the drafts of every other language (F-1533-d). */
+    private readonly texts: CatalogTextService,
   ) {}
 
   /** Whether the caller is the platform owner. */
@@ -211,25 +226,34 @@ export class CatalogAdminService {
 
   async createCategory(actor: CatalogActor, input: CreateCategoryInput): Promise<CategoryView> {
     const tenantId = await this.ownerOfNew(actor, input.tenantId);
-    return this.all.$transaction(async (tx) => {
+    const nameKey = catalogTextKey(tenantId, 'category', input.key, 'name');
+    const view = await this.all.$transaction(async (tx) => {
       const row = (await this.refuseDuplicate('key_taken', input.key, () =>
-        tx.productCategory.create({ data: { tenantId, key: input.key, nameKey: input.nameKey } }),
+        tx.productCategory.create({ data: { tenantId, key: input.key, nameKey } }),
       )) as unknown as Row;
-      const view = categoryView(row);
-      await this.audit(tx, actor, tenantId, 'catalog_category_create', 'product_category', view.id, null, view);
-      return view;
+      const created = categoryView(row);
+      await this.audit(tx, actor, tenantId, 'catalog_category_create', 'product_category', created.id, null, { ...created, name: input.name });
+      await this.texts.publishSources([{ key: nameKey, text: input.name }]);
+      return created;
     });
+    void this.texts.draftOthers([{ key: nameKey, en: input.name.en }]);
+    return view;
   }
 
   async updateCategory(actor: CatalogActor, id: string, patch: UpdateCategoryInput): Promise<CategoryView> {
     const { owner } = await this.access(actor);
     const before = await this.managed('productCategory', 'category_not_found', actor, id, owner);
-    return this.all.$transaction(async (tx) => {
-      const row = (await tx.productCategory.update({ where: { id }, data: patch })) as unknown as Row;
-      const view = categoryView(row);
-      await this.audit(tx, actor, view.tenantId, 'catalog_category_update', 'product_category', id, categoryView(before), view);
-      return view;
+    const nameKey = catalogTextKey((before['tenantId'] as string | null) ?? null, 'category', before['key'] as string, 'name');
+    const view = await this.all.$transaction(async (tx) => {
+      const data = { ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}), ...(patch.name ? { nameKey } : {}) };
+      const row = (await tx.productCategory.update({ where: { id }, data })) as unknown as Row;
+      const updated = categoryView(row);
+      await this.audit(tx, actor, updated.tenantId, 'catalog_category_update', 'product_category', id, categoryView(before), { ...updated, name: patch.name });
+      if (patch.name) await this.texts.publishSources([{ key: nameKey, text: patch.name }]);
+      return updated;
     });
+    if (patch.name) void this.texts.draftOthers([{ key: nameKey, en: patch.name.en }]);
+    return view;
   }
 
   // ------------------------------------------------------------------ products
@@ -264,43 +288,83 @@ export class CatalogAdminService {
     if (!category || (category['tenantId'] !== null && category['tenantId'] !== tenantId)) {
       throw new CatalogAdminRefused('category_not_found', input.categoryId);
     }
-    return this.all.$transaction(async (tx) => {
+    const texts = this.productTexts(tenantId, input.key, input.name, input.description);
+    const view = await this.all.$transaction(async (tx) => {
       const row = (await this.refuseDuplicate('key_taken', input.key, () =>
         tx.product.create({
           data: {
             tenantId,
             categoryId: input.categoryId,
             key: input.key,
-            nameKey: input.nameKey,
-            descriptionKey: input.descriptionKey ?? null,
+            nameKey: texts.nameKey,
+            descriptionKey: input.description ? texts.descriptionKey : null,
             fulfilmentKind: input.fulfilmentKind,
             featureKeys: input.featureKeys ?? [],
             defaultQuotas: (input.defaultQuotas ?? {}) as Prisma.InputJsonValue,
           },
         }),
       )) as unknown as Row;
-      const view = productView(row);
-      await this.audit(tx, actor, tenantId, 'catalog_product_create', 'product', view.id, null, view);
-      return view;
+      const created = productView(row);
+      await this.audit(tx, actor, tenantId, 'catalog_product_create', 'product', created.id, null, {
+        ...created,
+        name: input.name,
+        description: input.description ?? null,
+      });
+      await this.texts.publishSources(texts.publish);
+      return created;
     });
+    void this.texts.draftOthers(texts.draft);
+    return view;
   }
 
   /** The key and fulfilment kind stay: a key is referenced by string, and a Grant's handler by its kind. */
   async updateProduct(actor: CatalogActor, id: string, patch: UpdateProductInput): Promise<ProductView> {
     const { owner } = await this.access(actor);
     const before = await this.managed('product', 'product_not_found', actor, id, owner);
-    return this.all.$transaction(async (tx) => {
+    const texts = this.productTexts((before['tenantId'] as string | null) ?? null, before['key'] as string, patch.name, patch.description);
+    const view = await this.all.$transaction(async (tx) => {
       const data: Prisma.ProductUpdateInput = {
-        ...(patch.nameKey !== undefined ? { nameKey: patch.nameKey } : {}),
-        ...(patch.descriptionKey !== undefined ? { descriptionKey: patch.descriptionKey } : {}),
+        ...(patch.name !== undefined ? { nameKey: texts.nameKey } : {}),
+        ...(patch.description !== undefined ? { descriptionKey: patch.description ? texts.descriptionKey : null } : {}),
         ...(patch.featureKeys !== undefined ? { featureKeys: patch.featureKeys } : {}),
         ...(patch.defaultQuotas !== undefined ? { defaultQuotas: patch.defaultQuotas as Prisma.InputJsonValue } : {}),
         ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
       };
-      const view = productView((await tx.product.update({ where: { id }, data })) as unknown as Row);
-      await this.audit(tx, actor, view.tenantId, 'catalog_product_update', 'product', id, productView(before), view);
-      return view;
+      const updated = productView((await tx.product.update({ where: { id }, data })) as unknown as Row);
+      await this.audit(tx, actor, updated.tenantId, 'catalog_product_update', 'product', id, productView(before), {
+        ...updated,
+        name: patch.name,
+        description: patch.description,
+      });
+      await this.texts.publishSources(texts.publish);
+      return updated;
     });
+    void this.texts.draftOthers(texts.draft);
+    return view;
+  }
+
+  // -------------------------------------------------------------- translations
+
+  /** Drafts waiting for review — every key for the platform owner, a tenant's own otherwise. */
+  async listTextDrafts(actor: CatalogActor, lang?: string): Promise<ReviewItem[]> {
+    return this.texts.reviewList(await this.textsOf(actor), lang);
+  }
+
+  /** "Translate missing": drafts the caller's text into every language that has neither text nor a draft. */
+  async draftMissingTexts(actor: CatalogActor): Promise<{ drafted: number }> {
+    return { drafted: await this.texts.draftMissing(await this.textsOf(actor)) };
+  }
+
+  /** Publishes drafts as they are. Audited on each item whose text it is. */
+  async publishTextDrafts(actor: CatalogActor, input: PublishTextsInput): Promise<{ published: number }> {
+    return this.publishingTexts(actor, input.lang, input.keys, { published: input.keys }, () => this.texts.publishDrafts(input.lang, input.keys));
+  }
+
+  /** Publishes a reviewer's own text for a language, in place of any draft. */
+  async editTexts(actor: CatalogActor, input: EditTextsInput): Promise<{ published: number }> {
+    return this.publishingTexts(actor, input.lang, Object.keys(input.texts), { edited: input.texts }, () =>
+      this.texts.publishEdited(input.lang, input.texts),
+    );
   }
 
   // ------------------------------------------------------------------ variants
@@ -396,6 +460,67 @@ export class CatalogAdminService {
   }
 
   // ------------------------------------------------------------------- helpers
+
+  /** A product's derived keys, the fa/en writes a patch or a create makes, and what to draft after. */
+  private productTexts(tenantId: string | null, key: string, name: Bilingual | undefined, description: Bilingual | null | undefined) {
+    const nameKey = catalogTextKey(tenantId, 'product', key, 'name');
+    const descriptionKey = catalogTextKey(tenantId, 'product', key, 'description');
+    const publish: { key: string; text: Bilingual }[] = [];
+    const draft: { key: string; en: string }[] = [];
+    if (name) {
+      publish.push({ key: nameKey, text: name });
+      draft.push({ key: nameKey, en: name.en });
+    }
+    if (description) {
+      publish.push({ key: descriptionKey, text: description });
+      draft.push({ key: descriptionKey, en: description.en });
+    } else if (description === null) {
+      publish.push({ key: descriptionKey, text: { fa: '', en: '' } });
+    }
+    return { nameKey, descriptionKey, publish, draft };
+  }
+
+  /** Which text keys the caller may review: all for the platform owner, its own tenant's otherwise. */
+  private async textsOf(actor: CatalogActor): Promise<(key: string) => boolean> {
+    const { owner } = await this.access(actor);
+    return owner ? () => true : (key) => parseCatalogTextKey(key)?.tenantId === actor.tenantId;
+  }
+
+  /**
+   * A review write: every key must be the text of an item the caller manages
+   * (else that item's *not found*), each item gets an audit row, and the
+   * locale-service write runs last inside the transaction.
+   */
+  private async publishingTexts(
+    actor: CatalogActor,
+    lang: string,
+    keys: string[],
+    change: Record<string, unknown>,
+    write: () => Promise<number>,
+  ): Promise<{ published: number }> {
+    const { owner } = await this.access(actor);
+    const items = new Map<string, { kind: CatalogTextKind; row: Row }>();
+    for (const key of keys) {
+      const parsed = parseCatalogTextKey(key);
+      if (!parsed) throw new CatalogAdminRefused('text_key_invalid', key);
+      const missing: CatalogAdminRejection = parsed.kind === 'product' ? 'product_not_found' : 'category_not_found';
+      const delegate = (parsed.kind === 'product' ? this.all.product : this.all.productCategory) as unknown as {
+        findFirst(args: { where: Row }): Promise<Row | null>;
+      };
+      const row = await delegate.findFirst({ where: { tenantId: parsed.tenantId, key: parsed.key } });
+      if (!row || (!owner && row['tenantId'] !== actor.tenantId)) throw new CatalogAdminRefused(missing, key);
+      items.set(row['id'] as string, { kind: parsed.kind, row });
+    }
+    return this.all.$transaction(async (tx) => {
+      for (const [id, { kind, row }] of items) {
+        const tenantId = (row['tenantId'] as string | null) ?? null;
+        const texts = { lang, ...change };
+        if (kind === 'product') await this.audit(tx, actor, tenantId, 'catalog_product_update', 'product', id, null, { texts });
+        else await this.audit(tx, actor, tenantId, 'catalog_category_update', 'product_category', id, null, { texts });
+      }
+      return { published: await write() };
+    });
+  }
 
   /** A row the caller may manage, or the table's own *not found* — another tenant's and the platform's alike. */
   private async managed(

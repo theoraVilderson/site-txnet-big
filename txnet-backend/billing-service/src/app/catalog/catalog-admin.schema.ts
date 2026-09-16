@@ -31,6 +31,17 @@ const decimal = (what: string) => z.string({ message: `${what} must be a decimal
 const uuid = (what: string) => z.string({ message: `${what} must be a uuid` }).uuid({ message: `${what} must be a uuid` });
 const instant = (what: string) => z.string().datetime({ offset: true, message: `${what} must be an ISO instant` });
 const i18nKey = (what: string) => z.string().regex(I18N_KEY, { message: `${what} must be an i18n key` });
+/** A language code as locale-service names it: `fa`, `de`, `pt-BR`. Which exist is locale-service's answer, not a list here (§1.1). */
+const LANG = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/;
+const lang = z.string().regex(LANG, { message: 'lang must be a language code' });
+const text = (max: number) => z.string().trim().min(1, { message: 'text is required' }).max(max);
+/**
+ * The two languages an admin writes (F-1533-d, ADR-0050). The i18n key is the
+ * server's: a category or product body carries text, never `nameKey`.
+ */
+const bilingual = (max: number) => z.object({ fa: text(max), en: text(max) }).strict();
+const NAME_MAX = 200;
+const DESCRIPTION_MAX = 2000;
 
 /** Quota per metric (§4.5). A metric absent from the map has no quota. */
 const quotas = z.record(
@@ -41,10 +52,10 @@ const quotas = z.record(
 const featureKeys = z.array(z.string().regex(FEATURE_KEY, { message: 'a feature key looks like vpn.access' })).max(50);
 
 export const createCategorySchema = z
-  .object({ tenantId: uuid('tenantId').nullable().optional(), key: z.string().regex(KEY), nameKey: i18nKey('nameKey') })
+  .object({ tenantId: uuid('tenantId').nullable().optional(), key: z.string().regex(KEY), name: bilingual(NAME_MAX) })
   .strict();
 
-export const updateCategorySchema = z.object({ nameKey: i18nKey('nameKey').optional(), isActive: z.boolean().optional() }).strict();
+export const updateCategorySchema = z.object({ name: bilingual(NAME_MAX).optional(), isActive: z.boolean().optional() }).strict();
 
 export const listProductsSchema = z.object({
   categoryId: uuid('categoryId').optional(),
@@ -57,8 +68,8 @@ export const createProductSchema = z
     tenantId: uuid('tenantId').nullable().optional(),
     categoryId: uuid('categoryId'),
     key: z.string().regex(KEY),
-    nameKey: i18nKey('nameKey'),
-    descriptionKey: i18nKey('descriptionKey').nullable().optional(),
+    name: bilingual(NAME_MAX),
+    description: bilingual(DESCRIPTION_MAX).nullable().optional(),
     fulfilmentKind: z.nativeEnum(FulfilmentKind),
     featureKeys: featureKeys.optional(),
     defaultQuotas: quotas.optional(),
@@ -67,8 +78,8 @@ export const createProductSchema = z
 
 export const updateProductSchema = z
   .object({
-    nameKey: i18nKey('nameKey').optional(),
-    descriptionKey: i18nKey('descriptionKey').nullable().optional(),
+    name: bilingual(NAME_MAX).optional(),
+    description: bilingual(DESCRIPTION_MAX).nullable().optional(),
     featureKeys: featureKeys.optional(),
     defaultQuotas: quotas.optional(),
     isActive: z.boolean().optional(),
@@ -100,6 +111,14 @@ export const updateVariantSchema = z.object({ ...variantFields, isActive: z.bool
 
 export const setPriceSchema = z.object({ amount: decimal('amount'), effectiveFrom: instant('effectiveFrom').optional() }).strict();
 
+/** Translation review (F-1533-d). Keys are full catalog text keys; the service checks each is the caller's. */
+export const listTextDraftsSchema = z.object({ lang: lang.optional() });
+export const publishTextsSchema = z.object({ lang, keys: z.array(z.string().max(200)).min(1).max(200) }).strict();
+export const editTextsSchema = z
+  .object({ lang, texts: z.record(z.string().max(200), text(DESCRIPTION_MAX)) })
+  .strict()
+  .refine((b) => Object.keys(b.texts).length > 0 && Object.keys(b.texts).length <= 200, { message: 'texts holds 1-200 entries', path: ['texts'] });
+
 export type CreateCategoryBody = z.infer<typeof createCategorySchema>;
 export type UpdateCategoryBody = z.infer<typeof updateCategorySchema>;
 export type ListProductsQuery = z.infer<typeof listProductsSchema>;
@@ -108,3 +127,6 @@ export type UpdateProductBody = z.infer<typeof updateProductSchema>;
 export type CreateVariantBody = z.infer<typeof createVariantSchema>;
 export type UpdateVariantBody = z.infer<typeof updateVariantSchema>;
 export type SetPriceBody = z.infer<typeof setPriceSchema>;
+export type ListTextDraftsQuery = z.infer<typeof listTextDraftsSchema>;
+export type PublishTextsBody = z.infer<typeof publishTextsSchema>;
+export type EditTextsBody = z.infer<typeof editTextsSchema>;

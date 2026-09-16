@@ -47,6 +47,20 @@ and portable.
 5. **Fallback at read:** requested language → `en` → `fa` → the key itself. A
    language with no published text still reads a meaningful name.
 
+## Amendment 2026-09-16 — keys are tenant-scoped and the server's (F-1533-d)
+
+Found while building F-1533-d: a product or category key is unique only
+**inside a tenant**, and `nameKey` was free input. Decision 2's
+`catalog.product.<key>.name` would let two resellers with the same key share
+one name, and a reseller naming a platform product's key would rewrite the
+platform's text for everyone. The user's call: **the server derives every key,
+tenant-scoped** — `catalog.<kind>.<key>.<field>` for platform rows,
+`catalog.t_<tenant id, no dashes>.<kind>.<key>.<field>` for a tenant's. A
+category or product body carries text, never a key; a review write is allowed
+only on a key naming an item the caller manages. Rejected: one shared key per
+item key (the collision stays); client-sent keys validated by prefix (the same
+safety, more input to get wrong).
+
 ## Consequences
 
 - locale-service stops being read-only; a write RPC on an unauthenticated

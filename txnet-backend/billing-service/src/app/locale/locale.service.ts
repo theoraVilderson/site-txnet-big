@@ -8,6 +8,8 @@ import { ConfigService } from '@nestjs/config';
 import type { EnvelopeTranslator } from '@txnet-backend/shared-core';
 import { createLocaleClient, type LocaleClient } from '@txnet/locale-client';
 
+import type { CatalogTextStore } from '../catalog/catalog-texts';
+
 import type { EnvConfig } from '../config/env.validation';
 
 /**
@@ -15,13 +17,14 @@ import type { EnvConfig } from '../config/env.validation';
  * `shared-core` envelope asks for (`EnvelopeTranslator`). `locale-service` is
  * the source of truth; nothing here reads a file.
  *
- * Only what the envelope and the language middleware call. `bot-service`'s
+ * What the envelope and the language middleware call, plus the catalog's
+ * runtime text writes (`CatalogTextStore`, F-1533-d). `bot-service`'s
  * adapter is the model; the two stay per app because `shared-core` holds no
  * gRPC client.
  */
 @Injectable()
 export class LocaleService
-  implements EnvelopeTranslator, OnModuleInit, OnModuleDestroy
+  implements EnvelopeTranslator, CatalogTextStore, OnModuleInit, OnModuleDestroy
 {
   private readonly logger = new Logger(LocaleService.name);
   private readonly client: LocaleClient;
@@ -63,5 +66,27 @@ export class LocaleService
 
   resolveLanguage(acceptLanguage?: string): string {
     return this.client.resolveLanguage(acceptLanguage);
+  }
+
+  // Catalog text (F-1533-d): the runtime overlay's calls, as the client has them.
+
+  languages(): string[] {
+    return this.client.languages();
+  }
+
+  namespace(lang: string, namespace: string): Record<string, string> | undefined {
+    return this.client.namespace(lang, namespace);
+  }
+
+  setEntries(target: Parameters<LocaleClient['setEntries']>[0]): Promise<number> {
+    return this.client.setEntries(target);
+  }
+
+  listDrafts(filter?: Parameters<LocaleClient['listDrafts']>[0]) {
+    return this.client.listDrafts(filter);
+  }
+
+  publishDrafts(target: Parameters<LocaleClient['publishDrafts']>[0]): Promise<number> {
+    return this.client.publishDrafts(target);
   }
 }

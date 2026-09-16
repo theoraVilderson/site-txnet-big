@@ -53,6 +53,7 @@ exponential backoff and re-fetches on recovery.
 | `auth-handler` (Go) | `github.com/txnet/i18n-platform/clients/go` via `go.work` / `replace` | backend |
 | `txnet-backend/auth-service` (Node) | `@txnet/locale-client` from `vendor/locale-client.tgz` | backend |
 | `site-pwa` (Node, server only) | `@txnet/locale-client` from `vendor/locale-client.tgz` | frontend |
+| `txnet-backend/billing-service` (Node) | same; the only caller of the write RPCs — catalog names, `shareds/catalog` (F-1533-d) | backend |
 
 ## On-disk layout it reads (`locales/`)
 

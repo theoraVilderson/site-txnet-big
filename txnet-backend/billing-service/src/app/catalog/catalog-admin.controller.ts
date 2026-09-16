@@ -15,6 +15,7 @@ import {
   Post,
   Query,
   Req,
+  ServiceUnavailableException,
   UseGuards,
 } from '@nestjs/common';
 import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
@@ -27,7 +28,10 @@ import {
   CreateCategoryBody,
   CreateProductBody,
   CreateVariantBody,
+  EditTextsBody,
   ListProductsQuery,
+  ListTextDraftsQuery,
+  PublishTextsBody,
   SetPriceBody,
   UpdateCategoryBody,
   UpdateProductBody,
@@ -35,7 +39,10 @@ import {
   createCategorySchema,
   createProductSchema,
   createVariantSchema,
+  editTextsSchema,
   listProductsSchema,
+  listTextDraftsSchema,
+  publishTextsSchema,
   setPriceSchema,
   updateCategorySchema,
   updateProductSchema,
@@ -49,12 +56,16 @@ import {
   CreateCategoryInput,
   CreateProductInput,
   CreateVariantInput,
+  EditTextsInput,
+  PublishTextsInput,
   SetPriceInput,
+  UpdateCategoryInput,
+  UpdateProductInput,
 } from './catalog-admin.service';
 import { CatalogPermissionGuard } from './catalog-permission.guard';
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
-export const CATALOG_REFUSAL_STATUS: Record<CatalogAdminRejection, 400 | 403 | 404 | 409> = {
+export const CATALOG_REFUSAL_STATUS: Record<CatalogAdminRejection, 400 | 403 | 404 | 409 | 503> = {
   not_platform_owner: 403,
   tenant_not_found: 404,
   category_not_found: 404,
@@ -64,6 +75,8 @@ export const CATALOG_REFUSAL_STATUS: Record<CatalogAdminRejection, 400 | 403 | 4
   key_taken: 409,
   sku_taken: 409,
   price_in_the_past: 400,
+  text_key_invalid: 400,
+  texts_unavailable: 503,
 };
 
 const READ = {
@@ -118,7 +131,7 @@ export class CatalogAdminController {
     @Req() req: Request,
     @Ip() ip: string,
   ) {
-    return this.refusing(() => this.catalog.updateCategory(this.actor(req, ip), id, body));
+    return this.refusing(() => this.catalog.updateCategory(this.actor(req, ip), id, body as UpdateCategoryInput));
   }
 
   @Get('products')
@@ -148,7 +161,7 @@ export class CatalogAdminController {
     @Req() req: Request,
     @Ip() ip: string,
   ) {
-    return this.refusing(() => this.catalog.updateProduct(this.actor(req, ip), id, body));
+    return this.refusing(() => this.catalog.updateProduct(this.actor(req, ip), id, body as UpdateProductInput));
   }
 
   @Post('products/:id/variants')
@@ -193,6 +206,34 @@ export class CatalogAdminController {
     return this.refusing(() => this.catalog.deactivatePrice(this.actor(req, ip), id));
   }
 
+  // ---------------------------------------------------- translations (F-1533-d)
+
+  @Get('translations')
+  @RateLimit(READ)
+  async listTextDrafts(@Query(new ZodValidationPipe(listTextDraftsSchema)) query: ListTextDraftsQuery, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.catalog.listTextDrafts(this.actor(req, ip), query.lang));
+  }
+
+  @Post('translations/draft-missing')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(WRITE)
+  async draftMissingTexts(@Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.catalog.draftMissingTexts(this.actor(req, ip)));
+  }
+
+  @Post('translations/publish')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(WRITE)
+  async publishTextDrafts(@Body(new ZodValidationPipe(publishTextsSchema)) body: PublishTextsBody, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.catalog.publishTextDrafts(this.actor(req, ip), body as PublishTextsInput));
+  }
+
+  @Patch('translations')
+  @RateLimit(WRITE)
+  async editTexts(@Body(new ZodValidationPipe(editTextsSchema)) body: EditTextsBody, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.catalog.editTexts(this.actor(req, ip), body as EditTextsInput));
+  }
+
   private async refusing<T>(run: () => Promise<T>): Promise<T> {
     try {
       return await run();
@@ -206,6 +247,8 @@ export class CatalogAdminController {
           throw new NotFoundException(payload);
         case 409:
           throw new ConflictException(payload);
+        case 503:
+          throw new ServiceUnavailableException(payload);
         default:
           throw new BadRequestException(payload);
       }
