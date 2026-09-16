@@ -32,7 +32,7 @@ whose contract states it. The cost is the one exception below.
 | Operation | Input | Output | Errors |
 |---|---|---|---|
 | list grants | `?tenantId` (optional) | up to 200 grants, newest first, live and withdrawn | — |
-| create a grant | borrowing `tenantId` + **exactly one** of `gatewayId` / `tenantGatewayConfigId`, `note?` | the grant | `gateway_not_found`, `tenant_not_found`, `grant_to_owner`, `already_granted` |
+| create a grant | borrowing `tenantId` + **exactly one** of `gatewayId` / `tenantGatewayConfigId`, `note?` | the grant | `gateway_not_found`, `tenant_not_found`, `gateway_not_grantable`, `grant_to_owner`, `already_granted` |
 | withdraw a grant | grant id | the grant, inactive, with `withdrawnAt` | `grant_not_found`, `already_withdrawn` |
 | what is owed | — | per tenant: `accrued`, `paidOut`, `outstanding` — decimal **strings** (C-02), most owed first | — |
 | record a payout | `tenantId`, `amount`, `method?`, `reference?`, `proofAttachmentKey?`, `notes?` | the payout | `amount_not_positive`, `exceeds_outstanding` |
@@ -87,6 +87,13 @@ decision of its own and has not been taken.
   groups, so it would appear twice on the top-up screen — and a payment through
   it would accrue a settlement debt from a tenant to itself, money the platform
   never held.
+- **An in-chat gateway is never granted** (D-32, F-104-p): `telegram_stars`
+  and `bale` answer `gateway_not_grantable` (409), platform or reseller-owned.
+  Their money lands in the owning tenant's own bot, which the borrower's user
+  never talks to. Every other provider stays grantable; `GRANTABLE` in
+  `settlement.service.ts` is exhaustive over `PaymentProviderName`, so a new
+  provider does not compile until it is decided. A grant made before this row
+  is not withdrawn by it.
 - **One live grant per (tenant, gateway).** Nothing downstream picks between
   two, so withdrawing one would leave the gateway working with no visible reason
   why. A withdrawn grant is no obstacle to a new one.

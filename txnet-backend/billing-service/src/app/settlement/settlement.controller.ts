@@ -40,6 +40,7 @@ const STATUS: Record<SettlementRejection, 403 | 404 | 409> = {
   tenant_not_found: 404,
   grant_not_found: 404,
   grant_to_owner: 409,
+  gateway_not_grantable: 409,
   already_granted: 409,
   already_withdrawn: 409,
   amount_not_positive: 409,

@@ -30,7 +30,7 @@
  * accrual: an audit row that commits separately from the act it records is a
  * grant with nobody's name on it the first time a transaction rolls back.
  */
-import { Prisma, TenantType } from '@prisma/client';
+import { PaymentProviderName, Prisma, TenantType } from '@prisma/client';
 
 import { SettlementRefused, SettlementService } from './settlement.service';
 
@@ -58,6 +58,8 @@ type Seed = {
   configs?: Record<string, string>;
   /** `payment_gateway` rows that exist. */
   gateways?: string[];
+  /** Gateway or config id -> its provider. Absent = `stripe`. */
+  providers?: Record<string, PaymentProviderName>;
   /**
    * Another operator withdraws the grant between this call's read and its
    * update — the race `updateMany`'s `isActive` filter exists for.
@@ -79,6 +81,7 @@ function build(seed: Seed = {}) {
   const grants = seed.grants ?? [];
   const configs = seed.configs ?? { [RESELLER_GATEWAY]: OTHER_TENANT };
   const gateways = new Set(seed.gateways ?? [PLATFORM_GATEWAY]);
+  const providerOf = (id: string) => seed.providers?.[id] ?? PaymentProviderName.stripe;
   const accrued = seed.accrued ?? {};
   const paidOut = seed.paidOut ?? {};
 
@@ -144,11 +147,11 @@ function build(seed: Seed = {}) {
     },
     paymentGateway: {
       findUnique: async ({ where }: { where: { id: string } }) =>
-        gateways.has(where.id) ? { id: where.id } : null,
+        gateways.has(where.id) ? { id: where.id, providerName: providerOf(where.id) } : null,
     },
     tenantGatewayConfig: {
       findUnique: async ({ where }: { where: { id: string } }) =>
-        configs[where.id] ? { tenantId: configs[where.id] } : null,
+        configs[where.id] ? { tenantId: configs[where.id], providerName: providerOf(where.id) } : null,
     },
     paymentGatewayGrant: {
       ...tx.paymentGatewayGrant,
@@ -315,6 +318,41 @@ describe('the settlement operator surface', () => {
         grants: [
           { id: GRANT, tenantId: BORROWER, gatewayId: PLATFORM_GATEWAY, tenantGatewayConfigId: null, isActive: false },
         ],
+      });
+
+      await service.createGrant({ tenantId: BORROWER, gatewayId: PLATFORM_GATEWAY }, operator());
+      expect(calls.writes).toEqual(['grant', 'audit']);
+    });
+
+    // D-32: an in-chat payment lands in the owning tenant's own bot, which the
+    // borrowing tenant's user never talks to — so the gateway cannot be lent.
+    it.each([PaymentProviderName.telegram_stars, PaymentProviderName.bale])(
+      'refuses granting a %s gateway, platform or reseller-owned, and writes nothing',
+      async (provider) => {
+        const { service, calls } = build({
+          tenants: { [OWNER_TENANT]: TenantType.platform_owner, [BORROWER]: TenantType.reseller },
+          providers: { [PLATFORM_GATEWAY]: provider, [RESELLER_GATEWAY]: provider },
+        });
+
+        await expect(
+          service.createGrant({ tenantId: BORROWER, gatewayId: PLATFORM_GATEWAY }, operator()),
+        ).rejects.toMatchObject({ reason: 'gateway_not_grantable' });
+        await expect(
+          service.createGrant({ tenantId: BORROWER, tenantGatewayConfigId: RESELLER_GATEWAY }, operator()),
+        ).rejects.toMatchObject({ reason: 'gateway_not_grantable' });
+        expect(calls.writes).toEqual([]);
+      },
+    );
+
+    it.each([
+      PaymentProviderName.stripe,
+      PaymentProviderName.airwallex,
+      PaymentProviderName.nowpayments,
+      PaymentProviderName.oxapay,
+    ])('still grants a %s gateway', async (provider) => {
+      const { service, calls } = build({
+        tenants: { [OWNER_TENANT]: TenantType.platform_owner, [BORROWER]: TenantType.reseller },
+        providers: { [PLATFORM_GATEWAY]: provider },
       });
 
       await service.createGrant({ tenantId: BORROWER, gatewayId: PLATFORM_GATEWAY }, operator());

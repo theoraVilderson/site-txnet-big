@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Prisma, TenantType } from '@prisma/client';
+import { PaymentProviderName, Prisma, TenantType } from '@prisma/client';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -55,6 +55,7 @@ export type SettlementRejection =
   | 'gateway_not_found'
   | 'tenant_not_found'
   | 'grant_to_owner'
+  | 'gateway_not_grantable'
   | 'already_granted'
   | 'grant_not_found'
   | 'already_withdrawn'
@@ -112,6 +113,24 @@ export type OwedRow = {
 
 const ZERO = new Prisma.Decimal(0);
 
+/**
+ * Which providers a grant may lend (D-32, F-104-p). An in-chat payment is made
+ * inside the owning tenant's own bot or Mini App, which the borrowing tenant's
+ * user never talks to — so a lent `telegram_stars` or `bale` gateway could not
+ * be paid at all. Exhaustive, so a new provider does not compile until someone
+ * decides.
+ */
+const GRANTABLE: Record<PaymentProviderName, boolean> = {
+  zarinpal: true,
+  idpay: true,
+  nowpayments: true,
+  stripe: true,
+  oxapay: true,
+  airwallex: true,
+  telegram_stars: false,
+  bale: false,
+};
+
 @Injectable()
 export class SettlementService {
   private readonly logger = new Logger(SettlementService.name);
@@ -150,11 +169,13 @@ export class SettlementService {
    * owner's by definition (it carries no tenant column), and a
    * `tenant_gateway_config` row is its own `tenantId`'s.
    */
-  private async ownerOf(target: GrantTarget): Promise<string> {
+  private async ownerOf(
+    target: GrantTarget,
+  ): Promise<{ ownerTenantId: string; providerName: PaymentProviderName }> {
     if (target.gatewayId) {
       const gateway = await this.all.paymentGateway.findUnique({
         where: { id: target.gatewayId },
-        select: { id: true },
+        select: { id: true, providerName: true },
       });
       if (!gateway) throw new SettlementRefused('gateway_not_found', target.gatewayId);
       const owner = await this.all.tenant.findFirst({
@@ -162,29 +183,31 @@ export class SettlementService {
         select: { id: true },
       });
       if (!owner) throw new SettlementRefused('tenant_not_found', 'platform owner');
-      return owner.id;
+      return { ownerTenantId: owner.id, providerName: gateway.providerName };
     }
 
     const config = await this.all.tenantGatewayConfig.findUnique({
       where: { id: target.tenantGatewayConfigId ?? '' },
-      select: { tenantId: true },
+      select: { tenantId: true, providerName: true },
     });
     if (!config) {
       throw new SettlementRefused('gateway_not_found', target.tenantGatewayConfigId ?? '(none)');
     }
-    return config.tenantId;
+    return { ownerTenantId: config.tenantId, providerName: config.providerName };
   }
 
   /**
    * Grant a gateway to a tenant that does not own it (ADR-0041 §1).
    *
-   * Two refusals carry the rules rather than a database error:
+   * Three refusals carry the rules rather than a database error:
    *
    * - **granting a tenant its own gateway** is refused. It is not harmless:
    *   `deposit-pricing.ts` lists a tenant's own gateways and its granted ones
    *   as two groups, so the gateway would appear twice on the top-up screen —
    *   and worse, a payment through it would accrue a settlement debt from the
    *   tenant to itself, money the platform never held;
+   * - **an in-chat gateway** (`telegram_stars`, `bale`) is refused — see
+   *   {@link GRANTABLE};
    * - **a second live grant of the same gateway to the same tenant** is
    *   refused. Nothing downstream picks between two, and withdrawing one would
    *   leave the gateway working with no visible reason why.
@@ -208,7 +231,10 @@ export class SettlementService {
     });
     if (!borrower) throw new SettlementRefused('tenant_not_found', input.tenantId);
 
-    const ownerTenantId = await this.ownerOf(input);
+    const { ownerTenantId, providerName } = await this.ownerOf(input);
+    if (!GRANTABLE[providerName]) {
+      throw new SettlementRefused('gateway_not_grantable', providerName);
+    }
     if (ownerTenantId === input.tenantId) {
       throw new SettlementRefused('grant_to_owner', input.tenantId);
     }
