@@ -139,13 +139,10 @@ route only names the paths and the codes. Nothing tells the panel a balance
 changed in real time: the outbox event has no consumer, and
 `panel-web/contract.shell.md` still says so.
 
-## Settling by webhook (built — F-104-b, ADR-0051)
+## Settling by webhook
 
-| Rule | Why |
-|---|---|
-| `POST /api/billing/deposit/webhook/:provider/:gatewayId`, public like the callback. `WebhookGatewayMiddleware` finds the gateway across tenants (provider must match) and scopes the **owner** (platform gateway: the `platform_owner` tenant); else a neutral **404**. Limited per gateway (`DEPOSIT_WEBHOOK`, 600/min) | a provider knows no panel host; the owner holds the secret |
-| `verifyWebhook(rawBody, headers, secret)` runs first (`rawBody: true` in `main.ts`). Bad signature or **no secret** = **401**, no payment read. `WebhookSecretSource` reads the gateway's `webhook_secret` through `GatewayMerchant` (F-104-c); missing or revoked is `null`, so an unconfigured gateway's door stays closed. A driver declares `settlement` (Stripe is the first `webhook` one, F-104-g); a `webhook` one without `verifyWebhook` fails boot, and its browser return writes nothing (`inquire` `verified` shows success, else pending) | decisions 2, 5, 6 |
-| The event's code finds the payment by `(gateway column, gatewayTrackingCode)` on the cross-tenant pool (`id`, `tenantId` only); it settles in **that** tenant through `creditVerified` (`webhook_auto`) or `closeFailed`. Unknown code, ignored type, settled row = **200**, nothing changes | decisions 3, 4. A granted gateway's payment settles in the borrower |
+Moved to [contract.webhook.md](contract.webhook.md): the signed door (F-104-b), and a
+payment that arrived for another amount than asked (F-104-d).
 
 ## A gateway somebody else owns (built — F-096-b)
 

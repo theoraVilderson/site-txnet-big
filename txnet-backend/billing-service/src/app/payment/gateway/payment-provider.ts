@@ -98,7 +98,17 @@ export type WebhookInput = {
  * does not act on is `ignored`, and still answered 200 (ADR-0051 decision 4).
  */
 export type WebhookEvent =
-  | { kind: 'paid'; authority: string; referenceId: string }
+  | {
+      kind: 'paid';
+      authority: string;
+      referenceId: string;
+      /**
+       * What the provider reports arrived, when it can say (F-104-d, D-32). In
+       * the driver's `chargeCurrency` and minor unit — a receipt in any other
+       * asset is not valued and settles nothing. Missing = exactly as asked.
+       */
+      received?: { amountMinor: bigint; currency: string };
+    }
   | { kind: 'failed'; authority: string }
   | { kind: 'pending'; authority: string }
   | { kind: 'ignored'; type: string };

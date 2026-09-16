@@ -58,11 +58,12 @@ type Calls = {
   accruals: Array<Record<string, unknown>>;
   flips: Array<Record<string, unknown>>;
   events: Array<Record<string, unknown>>;
+  credits: Array<Record<string, unknown>>;
   committed: boolean;
 };
 
 function build({ lostTheFlip = false, rowIs = PaymentStatus.pending as PaymentStatus } = {}) {
-  const calls: Calls = { writes: [], accruals: [], flips: [], events: [], committed: false };
+  const calls: Calls = { writes: [], accruals: [], flips: [], events: [], credits: [], committed: false };
 
   const tx = {
     $executeRaw: async () => 0,
@@ -127,8 +128,9 @@ function build({ lostTheFlip = false, rowIs = PaymentStatus.pending as PaymentSt
     },
   };
   const ledger = {
-    credit: async () => {
+    credit: async (_tx: unknown, entry: Record<string, unknown>) => {
       calls.writes.push('credit');
+      calls.credits.push(entry);
       return { balanceAfter: d('119.80') };
     },
   };
@@ -236,6 +238,87 @@ describe('DepositSettlementService — the debt a granted gateway leaves', () =>
       await settle(service, paymentRow({ status: PaymentStatus.expired }));
 
       expect(calls.writes).toEqual(['flip', 'credit', 'confirm', 'event']);
+    });
+  });
+
+  describe('a payment that arrived for another amount than asked (F-104-d, D-32)', () => {
+    // 20 000 000 rials asked at 1 000 000 per dollar: 19.80 credited + 0.20 fee.
+    const asked = () =>
+      paymentRow({ amountCredited: d('19.80'), feeApplied: d('0.20'), chargedAmountMinor: BigInt(20_000_000), exchangeRateSnapshot: d('1000000') });
+    const settleReceived = (service: DepositSettlementService, payment: PaymentRow, amountMinor: bigint, decimals = 0) =>
+      runWithTenant({ id: TENANT }, () =>
+        service.creditVerified(
+          payment,
+          { referenceId: 'R-9', cardPan: null, received: { amountMinor, currency: 'IRR', decimals } },
+          ConfirmationSource.webhook_auto,
+        ),
+      );
+
+    it('credits what arrived at the frozen rate when less came, and gives the coupon holds back', async () => {
+      const { service, calls } = build();
+
+      await expect(settleReceived(service, asked(), BigInt(10_000_000))).resolves.toBe(true);
+
+      expect(calls.writes).toEqual(['flip', 'credit', 'release:cancelled', 'event']);
+      expect(calls.credits[0]).toMatchObject({ amount: d('10.00') });
+      expect(calls.flips[0]).toMatchObject({
+        data: { status: PaymentStatus.success, amountCredited: d('10.00'), amountReceivedMinor: BigInt(10_000_000), receivedCurrency: 'IRR' },
+      });
+      expect(calls.events[0]).toMatchObject({
+        payload: {
+          amountCredited: '10.00',
+          amountAsked: '19.80',
+          chargedAmountMinor: '20000000',
+          amountReceivedMinor: '10000000',
+          receivedCurrency: 'IRR',
+        },
+      });
+    });
+
+    it('never credits a fraction of a cent that did not arrive', async () => {
+      const { service, calls } = build();
+
+      await settleReceived(service, asked(), BigInt(10_009_999));
+
+      expect(calls.credits[0]).toMatchObject({ amount: d('10.00') });
+    });
+
+    it('credits the asked amount plus the surplus when more came, and the coupon stays used', async () => {
+      const { service, calls } = build();
+
+      await settleReceived(service, asked(), BigInt(21_000_000));
+
+      expect(calls.writes).toEqual(['flip', 'credit', 'confirm', 'event']);
+      expect(calls.credits[0]).toMatchObject({ amount: d('20.80') });
+      expect(calls.events[0]).toMatchObject({ payload: { amountCredited: '20.80', amountAsked: '19.80', amountReceivedMinor: '21000000' } });
+    });
+
+    it('credits exactly what was asked when exactly that came, and still records the receipt', async () => {
+      const { service, calls } = build();
+
+      await settleReceived(service, asked(), BigInt(20_000_000));
+
+      expect(calls.writes).toEqual(['flip', 'credit', 'confirm', 'event']);
+      expect(calls.credits[0]).toMatchObject({ amount: d('19.80') });
+      expect(calls.flips[0]).toMatchObject({ data: { amountReceivedMinor: BigInt(20_000_000), receivedCurrency: 'IRR' } });
+    });
+
+    it('reads the receipt in the currency’s own minor unit', async () => {
+      const { service, calls } = build();
+      const usd = paymentRow({ amountCredited: d('19.80'), feeApplied: d('0.20'), chargedAmountMinor: BigInt(2000), exchangeRateSnapshot: d('1') });
+
+      await settleReceived(service, usd, BigInt(1234), 2);
+
+      expect(calls.credits[0]).toMatchObject({ amount: d('12.34') });
+    });
+
+    it('closes a payment worth under a cent failed, crediting nothing', async () => {
+      const { service, calls } = build();
+
+      await expect(settleReceived(service, asked(), BigInt(9_999))).resolves.toBe(false);
+
+      expect(calls.writes).toEqual(['flip', 'release:cancelled']);
+      expect(calls.flips[0]).toMatchObject({ data: { status: PaymentStatus.failed, failureCode: 'nothing_received' } });
     });
   });
 

@@ -42,6 +42,7 @@ display-currency conversion (`currency`), plan prices (`catalog`).
 |---|---|
 | [contract.md](contract.md) | using or changing billing from outside |
 | [contract.deposit.md](contract.deposit.md) | one whole top-up: gateway list, quote, start — and the bank's callback that settles it |
+| [contract.webhook.md](contract.webhook.md) | a provider's signed webhook, and a payment that arrived for more or less than asked |
 | [contract.history.md](contract.history.md) | the panel's financial page: the wallet ledger and the top-up attempts |
 | [contract.verify.md](contract.verify.md) | a payment the gateway met with silence: the retry clock, the flag, manual confirmation |
 | [contract.gift.md](contract.gift.md) | the panel's gift-code box: redeeming a wallet-credit coupon |

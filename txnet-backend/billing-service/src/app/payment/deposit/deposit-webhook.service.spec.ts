@@ -74,7 +74,7 @@ function build(setup: Setup = {}) {
     verifiedWith: [] as Array<{ secret: string; body: string }>,
     crossTenantReads: [] as Array<Record<string, unknown>>,
     scopedTenants: [] as string[],
-    credited: [] as Array<{ id: string; referenceId: string; source: string; tenant: string }>,
+    credited: [] as Array<{ id: string; referenceId: string; source: string; tenant: string; received?: unknown }>,
     closed: [] as Array<{ id: string; tenant: string }>,
   };
 
@@ -99,6 +99,8 @@ function build(setup: Setup = {}) {
 
   const driver = {
     name: 'stripe',
+    chargeCurrency: 'USD',
+    chargeDecimals: 2,
     settlement: settlementMode,
     verifyWebhook: ({ rawBody, secret: s }: { rawBody: Buffer; secret: string }) => {
       calls.verifiedWith.push({ secret: s, body: rawBody.toString('utf8') });
@@ -110,8 +112,14 @@ function build(setup: Setup = {}) {
   const secrets = { secretFor: async () => secret };
 
   const settlement = {
-    creditVerified: async (p: { id: string }, verified: { referenceId: string }, source: string) => {
-      calls.credited.push({ id: p.id, referenceId: verified.referenceId, source, tenant: TenantContext.current('spec').id });
+    creditVerified: async (p: { id: string }, verified: { referenceId: string; received?: unknown }, source: string) => {
+      calls.credited.push({
+        id: p.id,
+        referenceId: verified.referenceId,
+        source,
+        tenant: TenantContext.current('spec').id,
+        ...(verified.received ? { received: verified.received } : {}),
+      });
       return true;
     },
     closeFailed: async (_tx: unknown, p: { id: string }) => {
@@ -194,6 +202,27 @@ describe('DepositWebhookService.handle — a signed event (ADR-0051)', () => {
     expect(await post()).toBe('accepted');
     expect(calls.closed).toEqual([{ id: PAYMENT, tenant: PAYER_TENANT }]);
     expect(calls.credited).toEqual([]);
+  });
+
+  it('hands settlement what arrived, in the gateway currency’s own minor unit (F-104-d)', async () => {
+    const { post, calls } = build({
+      event: { kind: 'paid', authority: SESSION, referenceId: 'pi_0001', received: { amountMinor: BigInt(700), currency: 'USD' } },
+    });
+
+    expect(await post()).toBe('accepted');
+    expect(calls.credited).toEqual([
+      expect.objectContaining({ received: { amountMinor: BigInt(700), currency: 'USD', decimals: 2 } }),
+    ]);
+  });
+
+  it('settles nothing on a receipt in another currency than the gateway charges — it cannot be valued (F-104-d)', async () => {
+    const { post, calls } = build({
+      event: { kind: 'paid', authority: SESSION, referenceId: 'pi_0001', received: { amountMinor: BigInt(700), currency: 'BTC' } },
+    });
+
+    expect(await post()).toBe('accepted');
+    expect(calls.credited).toEqual([]);
+    expect(calls.closed).toEqual([]);
   });
 
   it.each([

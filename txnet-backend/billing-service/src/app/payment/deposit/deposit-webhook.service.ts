@@ -82,6 +82,15 @@ export class DepositWebhookService {
       return 'accepted';
     }
     if (event.kind === 'pending') return 'accepted';
+    if (event.kind === 'paid' && event.received && event.received.currency !== provider.chargeCurrency) {
+      // Nothing to value it at: the frozen rate is base -> chargeCurrency. The
+      // row stays open for reconciliation and a person (F-104-d).
+      this.logger.warn(
+        `webhook on gateway ${gateway.gatewayId} reports a receipt in ${event.received.currency}, ` +
+          `not ${provider.chargeCurrency}; left unsettled`,
+      );
+      return 'accepted';
+    }
 
     // 2. Whose payment it is.
     const found = await this.crossTenant.paymentTransaction.findFirst({
@@ -107,7 +116,11 @@ export class DepositWebhookService {
       if (event.kind === 'paid') {
         await this.settlement.creditVerified(
           payment,
-          { referenceId: event.referenceId, cardPan: null },
+          {
+            referenceId: event.referenceId,
+            cardPan: null,
+            ...(event.received ? { received: { ...event.received, decimals: provider.chargeDecimals } } : {}),
+          },
           ConfirmationSource.webhook_auto,
         );
       } else {

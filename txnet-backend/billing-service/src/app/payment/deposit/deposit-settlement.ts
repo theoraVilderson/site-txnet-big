@@ -48,6 +48,8 @@ export const PAYMENT_SELECT = {
   // accrual is net of it (ADR-0041 §4, F-096-d).
   feeApplied: true,
   chargedAmountMinor: true,
+  // The frozen rate a receipt for another amount is valued at (F-104-d).
+  exchangeRateSnapshot: true,
   // The authority. The callback arrives holding one; reconciliation has to read
   // it off the row, because nothing brought it (F-092-l).
   gatewayTrackingCode: true,
@@ -78,7 +80,44 @@ export type VerifiedPayment = {
    * (F-092-ad). The flip is then also guarded `gatewayTrackingCode: null`.
    */
   authority?: string;
+  /**
+   * What the gateway reports arrived, when it reports it (F-104-d, D-32).
+   * `currency` is the gateway's charge currency and `decimals` its minor unit —
+   * a receipt in any other asset cannot be valued at the frozen rate, and the
+   * caller does not bring it here. Missing means exactly what was asked.
+   */
+  received?: GatewayReceipt;
 };
+
+/** An amount the gateway says arrived, in `currency`'s minor unit of `decimals` places. */
+export type GatewayReceipt = { amountMinor: bigint; currency: string; decimals: number };
+
+/**
+ * What a payment is worth in base currency, given what arrived (F-104-d, D-32:
+ * credit what actually arrived). Exactly the asked amount, or no receipt, is
+ * `amountCredited`. Less is the receipt at the frozen rate, and `full` is
+ * false — a coupon applies only to a full payment. More is `amountCredited`
+ * plus the surplus at the frozen rate. Every conversion floors to the cent: a
+ * fraction that did not arrive is never credited. A payment with no rate (the
+ * free path) has nothing to value a receipt at, and credits as asked.
+ */
+export function creditForReceipt(
+  payment: Pick<PaymentRow, 'amountCredited' | 'chargedAmountMinor' | 'exchangeRateSnapshot'>,
+  received: GatewayReceipt | undefined,
+): { credited: Prisma.Decimal; full: boolean } {
+  const asked = payment.chargedAmountMinor;
+  const rate = payment.exchangeRateSnapshot;
+  if (!received || received.amountMinor === asked || !rate || rate.lte(0)) {
+    return { credited: payment.amountCredited, full: true };
+  }
+  const toBase = (minor: bigint) =>
+    new Prisma.Decimal(minor.toString())
+      .div(new Prisma.Decimal(10).pow(received.decimals))
+      .div(rate)
+      .toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
+  if (received.amountMinor < asked) return { credited: toBase(received.amountMinor), full: false };
+  return { credited: payment.amountCredited.plus(toBase(received.amountMinor - asked)), full: true };
+}
 
 /** A person's confirmation (F-092-z): who, why, and from where — the audit row's content. */
 export type ManualConfirmation = { adminId: string; reason: string; ip: string };
@@ -111,9 +150,23 @@ export class DepositSettlementService {
     if ((source === ConfirmationSource.admin_manual) !== (manual !== undefined)) {
       throw new Error('an admin_manual credit needs a ManualConfirmation, and only it may carry one');
     }
+    const { credited, full } = creditForReceipt(payment, verified.received);
     return tenantTransaction(this.prisma, async (tx) => {
+      // Less than a cent arrived: nothing to credit, and nothing will arrive
+      // later under this authority. Closed like a failure (F-104-d).
+      if (credited.lte(0)) {
+        const closed = (await this.closeOpen(tx, payment, 'nothing_received')) !== null;
+        if (closed) this.logger.warn(`payment ${payment.id} closed: the gateway reports under a cent arrived`);
+        return false;
+      }
+      const receipt = verified.received
+        ? { amountReceivedMinor: verified.received.amountMinor, receivedCurrency: verified.received.currency }
+        : {};
       const data = {
         status: PaymentStatus.success,
+        // The money of record, when what arrived differs from what was asked.
+        ...(credited.eq(payment.amountCredited) ? {} : { amountCredited: credited }),
+        ...receipt,
         gatewayReferenceId: verified.referenceId,
         cardPanMasked: verified.cardPan,
         confirmationSource: source,
@@ -142,12 +195,14 @@ export class DepositSettlementService {
           ? PaymentStatus.expired
           : null;
       if (from === null) return false;
+      const settled: PaymentRow = { ...payment, amountCredited: credited };
 
       await this.ledger.credit(tx, {
         userId: payment.userId,
         // `amountCredited`, which already carries the adjustment gap the quote
-        // computed. `amountRequested` is what the user typed.
-        amount: payment.amountCredited,
+        // computed (`amountRequested` is what the user typed) — or
+        // what a receipt for another amount made of it (F-104-d).
+        amount: credited,
         reasonType: WalletReasonType.payment_gateway,
         referenceId: payment.id,
       });
@@ -156,11 +211,17 @@ export class DepositSettlementService {
       // those holds become uses. Any the sweep already gave back are claimed
       // back, past the coupon's limit if they must be — the payer paid the
       // discounted price. Each call moves only its own status, so both run.
-      await this.reservations.confirm(tx, payment.id);
-      if (from === PaymentStatus.expired) await this.reservations.claimExpired(tx, payment.id);
-      await this.accrueSettlement(tx, payment);
-      await this.publishConfirmed(tx, payment, verified.referenceId, source);
-      if (manual) await this.auditManual(tx, payment, verified.referenceId, manual);
+      // A short payment is not the discounted price paid: its holds go back
+      // (F-104-d, D-32).
+      if (!full) {
+        await this.reservations.release(tx, payment.id, RedemptionStatus.cancelled);
+      } else {
+        await this.reservations.confirm(tx, payment.id);
+        if (from === PaymentStatus.expired) await this.reservations.claimExpired(tx, payment.id);
+      }
+      await this.accrueSettlement(tx, settled);
+      await this.publishConfirmed(tx, settled, verified.referenceId, source, payment.amountCredited, verified.received);
+      if (manual) await this.auditManual(tx, settled, verified.referenceId, manual);
       return true;
     });
   }
@@ -369,6 +430,9 @@ export class DepositSettlementService {
     payment: PaymentRow,
     referenceId: string,
     source: ConfirmationSource,
+    /** What the payment was priced to credit, before any receipt changed it. */
+    amountAsked: Prisma.Decimal,
+    received: GatewayReceipt | undefined,
   ): Promise<void> {
     const tenant = TenantContext.current('deposit settlement event');
     const ref = gatewayRefOf(payment);
@@ -382,6 +446,13 @@ export class DepositSettlementService {
           userId: payment.userId,
           paymentId: payment.id,
           amountCredited: payment.amountCredited.toFixed(2),
+          // Both figures (F-104-d): what was asked, and what the gateway says
+          // arrived — in the gateway currency's minor unit, as strings.
+          amountAsked: amountAsked.toFixed(2),
+          chargedAmountMinor: payment.chargedAmountMinor.toString(),
+          ...(received
+            ? { amountReceivedMinor: received.amountMinor.toString(), receivedCurrency: received.currency }
+            : {}),
           gateway: { source: ref.source, id: ref.gatewayId },
           gatewayReferenceId: referenceId,
           confirmationSource: source,
