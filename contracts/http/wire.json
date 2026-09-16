@@ -8,7 +8,8 @@
     "sessionId": "X-Session-Id",
     "permissions": "X-User-Permissions",
     "impersonated": "X-Impersonated",
-    "impersonatedBy": "X-Impersonated-By"
+    "impersonatedBy": "X-Impersonated-By",
+    "chatPlatform": "X-Chat-Platform"
   },
   "alwaysSetIdentityHeaders": [
     "X-User-Id",

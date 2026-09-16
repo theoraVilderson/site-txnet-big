@@ -77,6 +77,7 @@ func TestContractIdentityHeaderNames(t *testing.T) {
 		"permissions":    HeaderUserPermissions,
 		"impersonated":   HeaderImpersonated,
 		"impersonatedBy": HeaderImpersonatedBy,
+		"chatPlatform":   HeaderChatPlatform,
 	}
 
 	got := withoutNote(fixture.IdentityHeaders)

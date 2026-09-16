@@ -34,6 +34,7 @@ and has no toolchain that could consume generated Go or TypeScript.
 | `X-User-Permissions` | claimed permissions, comma-joined | every success |
 | `X-Impersonated` | `true` | only while impersonating |
 | `X-Impersonated-By` | the acting admin | only while impersonating |
+| `X-Chat-Platform` | `telegram` / `bale` | only when the session's `scopeKey` is `bot:<platform>:<chatId>` (F-104-q) |
 | `X-Auth-Anonymous` | `true` | `/validate-optional` only, **instead of** all of the above |
 
 The split between the first five and the impersonation pair is part of the
@@ -55,6 +56,15 @@ header here it must be both forwarded (`authResponseHeaders`) and stripped
 is a header a client must not be able to set. Traefik is configured to forward
 exactly these (`authResponseHeaders`) and to strip every one of them from the
 inbound request (`strip-fake-headers`).
+
+`X-Chat-Platform` (F-104-q, the user's call 2026-09-16) says the session was
+minted in a chat — the bot's own, or its Mini App's (ADR-0032) — and is read
+from the `session:<id>` value the decision already fetched (`{scopeKey}`), so
+it costs no round trip. It is the trusted form of the panel's `?ma=` hint:
+auth-service writes the scope only after verifying the platform's signature, and
+Traefik strips a client's copy. `billing` offers an in-chat gateway on it. A
+scope naming any other platform, a non-chat scope, or an unreadable value
+writes nothing (`TestValidateNamesTheChatPlatformFromTheSessionScope`).
 
 `X-Session-Id` is new with F-067-h and is the only one that names the *grant*
 rather than the person. It exists because a WebSocket outlives by hours the

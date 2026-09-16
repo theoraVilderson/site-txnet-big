@@ -145,8 +145,36 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request) response.Respon
 			w.Header().Set(HeaderImpersonated, "true")
 			w.Header().Set(HeaderImpersonatedBy, claims.ImpersonatedBy)
 		}
+		if platform := chatPlatformOf(values[0]); platform != "" {
+			w.Header().Set(HeaderChatPlatform, platform)
+		}
 		return response.Ok(nil, msgSuccess), nil
 	}, msgSuccess, keyUnexpected)
+}
+
+// chatPlatformOf reads the messenger out of a session value whose scope is a
+// chat's (`{"scopeKey":"bot:<platform>:<chatId>"}`, written by auth-service's
+// SessionStore), or "" (F-104-q). The value is the one the decision already
+// fetched, so the marker costs no round trip, and it is set by the server that
+// verified the platform's signature — which is what makes it trustworthy where
+// the panel's `?ma=` hint is not. Anything unreadable is simply no chat.
+func chatPlatformOf(session string) string {
+	var parsed struct {
+		ScopeKey *string `json:"scopeKey"`
+	}
+	if json.Unmarshal([]byte(session), &parsed) != nil || parsed.ScopeKey == nil {
+		return ""
+	}
+	parts := strings.SplitN(*parsed.ScopeKey, ":", 3)
+	if len(parts) != 3 || parts[0] != "bot" || parts[2] == "" {
+		return ""
+	}
+	for _, known := range ChatPlatforms {
+		if parts[1] == known {
+			return known
+		}
+	}
+	return ""
 }
 
 // finish maps one decision onto the wire.

@@ -981,3 +981,42 @@ func TestValidateNamesAMissingCredential(t *testing.T) {
 		t.Fatalf("status %d error %v, want 401 reason %q", w.Code, detail, reasonAuthorizationRequired)
 	}
 }
+
+// F-104-q: a session minted under a chat's scope (`bot:<platform>:<chatId>`,
+// ADR-0032) is the chat, whether the bot or its Mini App holds it, and billing
+// offers that messenger's in-chat gateway only on this header. It is read from
+// the session value the decision already fetched, never from the request.
+func TestValidateNamesTheChatPlatformFromTheSessionScope(t *testing.T) {
+	cases := []struct {
+		name    string
+		session string
+		want    string
+	}{
+		{"telegram chat", `{"userId":"user-1","revoked":false,"scopeKey":"bot:telegram:42"}`, "telegram"},
+		{"a scope that is not a chat", `{"userId":"user-1","revoked":false,"scopeKey":"bale:x"}`, ""},
+		{"bale scope", `{"userId":"user-1","revoked":false,"scopeKey":"bot:bale:-7"}`, "bale"},
+		{"a browser", `{"userId":"user-1","revoked":false,"scopeKey":"device:abc"}`, ""},
+		{"no scope", `{"userId":"user-1","revoked":false,"scopeKey":null}`, ""},
+		{"a platform nobody built", `{"userId":"user-1","scopeKey":"bot:whatsapp:42"}`, ""},
+		{"not json", "active", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, _ := newHandler(t, redisWith(map[string]string{":session:sess-1": tc.session}), testEngine(t))
+			w := call(t, h, sign(t, validClaims(nil), testSecret))
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200 (body %q)", w.Code, w.Body.String())
+			}
+			got, present := w.Header()["X-Chat-Platform"]
+			if tc.want == "" {
+				if present {
+					t.Errorf("X-Chat-Platform = %q, want absent", got)
+				}
+				return
+			}
+			if w.Header().Get("X-Chat-Platform") != tc.want {
+				t.Errorf("X-Chat-Platform = %q, want %q", w.Header().Get("X-Chat-Platform"), tc.want)
+			}
+		})
+	}
+}

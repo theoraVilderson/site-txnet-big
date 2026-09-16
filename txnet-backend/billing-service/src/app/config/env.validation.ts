@@ -115,6 +115,14 @@ export const envSchema = z.object({
   AUTH_API_BASE_URL: z.string().default(''),
   AUTH_API_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
 
+  /**
+   * `bot-service`'s internal seam, where a Mini App's invoice link is made
+   * (F-104-q). Optional at boot like the one above: unset refuses only an
+   * in-chat top-up started from a Mini App.
+   */
+  BOT_API_BASE_URL: z.string().default(''),
+  BOT_API_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+
   /** The envelope's translator (`locale/locale.service.ts`). */
   LOCALE_SERVICE_ADDR: z.string().min(1).default('localhost:50051'),
   LOCALE_SCOPE: z.string().min(1).default('backend'),

@@ -11,6 +11,7 @@ export const IdentityHeaders = {
   "permissions": "X-User-Permissions",
   "impersonated": "X-Impersonated",
   "impersonatedBy": "X-Impersonated-By",
+  "chatPlatform": "X-Chat-Platform",
 } as const;
 
 /** `contracts/http/wire.json` -> `gateHeaders`. */

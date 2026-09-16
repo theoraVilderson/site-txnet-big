@@ -26,7 +26,8 @@ decision taken by a stranger.
 | `webhook/update.normalizer.ts` | the last place that knows what a Telegram `Update` looks like |
 | `webhook/bot-update.publisher.ts` | the broker connection, and what rides it |
 | `webhook/bot-dispatch.controller.ts` | the way back in: `worker-service` asking for one update to be run |
-| `common/service-only.guard.ts` | the service token on that way back in |
+| `webhook/invoice-link.controller.ts` | `billing` asking for a Mini App's invoice link (F-104-q) |
+| `common/service-only.guard.ts` | the service token on both internal routes |
 
 Three rules the route exists to hold:
 
@@ -112,6 +113,25 @@ Nothing is destroyed on any of those paths: the queues carry
 `x-dead-letter-exchange`, so a rejection is moved and recorded in
 `automation.dead_letter` (invariant #9). That is why F-067-d had to be built
 before this row — an update, unlike a tick, does not recur.
+
+## `POST /api/internal/bots/invoice-link` — a Mini App's invoice (F-104-q)
+
+Service-only and unpublished, like `dispatch`; its one caller is `billing`'s
+`start` for an in-chat gateway opened in a Mini App, which holds no bot token.
+Body `{tenantId, platform, paymentId, currency, amountMinor, providerToken, credited, lang}`.
+The invoice is the chat's (F-104-m): the same three `topUp.invoice*` texts in
+`lang`, payload = the payment id, so its `pre_checkout_query` and
+`successful_payment` reach `InChatPayment` unchanged. Made by the tenant's
+**primary** bot on that platform (`primaryClient`) — the events arrive at the
+bot that made the link. The body is never logged: it carries the provider token.
+
+| answer | means |
+|---|---|
+| `200 {link}` | Telegram's URL or Bale's payment id — what `openInvoice` takes, unchanged |
+| `400` | an unreadable body, or a platform this deployment does not know |
+| `404` | an unrecognised caller |
+| `422` | the tenant has no usable bot on that platform |
+| `502` | the platform made no link (`InvoiceFailure`) |
 
 ## What an operator watches
 

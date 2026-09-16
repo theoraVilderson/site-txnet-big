@@ -243,7 +243,10 @@ services:
       # its middleware. Stripped here because downstream reads it as evidence
       # that the gate ran.
       - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Auth-Anonymous="
-      - "traefik.http.middlewares.my-auth.forwardauth.authResponseHeaders=X-User-Id,X-Tenant-Id,X-Role-Id,X-User-Permissions,X-Impersonated,X-Impersonated-By,X-Session-Id"
+      # F-104-q. The messenger whose chat a session was minted in; billing
+      # offers an in-chat gateway on it, so a browser must not be able to claim it.
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Chat-Platform="
+      - "traefik.http.middlewares.my-auth.forwardauth.authResponseHeaders=X-User-Id,X-Tenant-Id,X-Role-Id,X-User-Permissions,X-Impersonated,X-Impersonated-By,X-Session-Id,X-Chat-Platform"
 
       # The optional gate (ADR-0031): the same decision as `my-auth` for a
       # caller that brought a credential, and a 200 identifying nobody for one
@@ -256,7 +259,7 @@ services:
       # a middleware by name. Every other router keeps `my-auth` and is
       # unaffected.
       - "traefik.http.middlewares.my-auth-optional.forwardauth.address=http://authorization-handler:${INTERAL_BACKEND_PORT:-8080}/validate-optional"
-      - "traefik.http.middlewares.my-auth-optional.forwardauth.authResponseHeaders=X-User-Id,X-Tenant-Id,X-Role-Id,X-User-Permissions,X-Impersonated,X-Impersonated-By,X-Session-Id,X-Auth-Anonymous"
+      - "traefik.http.middlewares.my-auth-optional.forwardauth.authResponseHeaders=X-User-Id,X-Tenant-Id,X-Role-Id,X-User-Permissions,X-Impersonated,X-Impersonated-By,X-Session-Id,X-Chat-Platform,X-Auth-Anonymous"
 
       - "txnet.logging=true"
 
@@ -783,6 +786,8 @@ services:
       # The other direction on the same seam (F-102-c): gateway management
       # relays a gateway's secrets to auth-service, the vault's only writer.
       - AUTH_API_BASE_URL=http://auth-service:${AUTH_PORT}
+      # A Mini App's invoice link is made by the tenant's bot (F-104-q).
+      - BOT_API_BASE_URL=http://bot-service:${BOT_PORT:-3000}
       # The app role, never the owner: RLS does not bind a table's owner
       # (F-066-m-a). Every gated route reads the tenant forward-auth forwards
       # (F-092-a) and uses this pool.

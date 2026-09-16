@@ -35,6 +35,8 @@ export const IdentityHeaders = {
   permissions: 'X-User-Permissions',
   impersonated: 'X-Impersonated',
   impersonatedBy: 'X-Impersonated-By',
+  /** The messenger whose chat the session was minted in — the bot or its Mini App (F-104-q). Conditional. */
+  chatPlatform: 'X-Chat-Platform',
 } as const;
 
 /**

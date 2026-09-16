@@ -17,6 +17,7 @@ import {
   BackendI18nKeys,
   CredentialUnavailable,
   headerValue,
+  IdentityHeaders,
   presentsServiceToken,
   RateLimitBucket,
   RequestHeaders,
@@ -134,13 +135,18 @@ export class DepositController {
   }
 
   /**
-   * The messenger a bot caller is in (F-104-k), or `null`: an in-chat gateway
-   * is offered only there. `X-Bot-Platform` counts only beside a verified
-   * service token, for the same reason `channelOf` does.
+   * The messenger this caller is in, or `null`: an in-chat gateway is offered
+   * only there. The bot says so with `X-Bot-Platform`, which counts only beside
+   * a verified service token, for the same reason `channelOf` does (F-104-k).
+   * A Mini App cannot: the gate says it with `X-Chat-Platform`, read from the
+   * session a verified `initData` minted and stripped from what a browser sends
+   * (F-104-q). The panel's `?ma=` hint is never read here.
    */
   private chatPlatformOf(req: Request): string | null {
-    if (this.channelOf(req) !== CouponChannel.bot) return null;
-    const platform = headerValue(req.headers, RequestHeaders.botPlatform);
+    const platform =
+      this.channelOf(req) === CouponChannel.bot
+        ? headerValue(req.headers, RequestHeaders.botPlatform)
+        : headerValue(req.headers, IdentityHeaders.chatPlatform);
     return platform && (CHAT_PLATFORMS as readonly string[]).includes(platform) ? platform : null;
   }
 
@@ -217,6 +223,7 @@ export class DepositController {
         origin: req.headers.origin ?? null,
         canTest: canTest(req),
         chatPlatform: this.chatPlatformOf(req),
+        lang: (req as { language?: string }).language || this.locale.getDefaultLanguage(),
       });
     } catch (e) {
       throw toHttp(e);

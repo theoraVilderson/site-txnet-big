@@ -31,7 +31,16 @@ const (
 	HeaderImpersonated = "X-Impersonated"
 	// HeaderImpersonatedBy names the admin behind an impersonated request.
 	HeaderImpersonatedBy = "X-Impersonated-By"
+	// HeaderChatPlatform names the messenger whose chat this session was minted
+	// in (`bot:<platform>:<chatId>`, ADR-0032) — the bot or its Mini App. Written
+	// only then; billing offers that messenger's in-chat gateway on it (F-104-q).
+	HeaderChatPlatform = "X-Chat-Platform"
 )
+
+// ChatPlatforms are the messengers a chat scope may name. Anything else in a
+// session's scope is not forwarded: downstream matches the value, so an
+// unknown one is noise at best.
+var ChatPlatforms = []string{"telegram", "bale"}
 
 // HeaderAnonymous marks a 2xx from the optional gate that identified nobody.
 //

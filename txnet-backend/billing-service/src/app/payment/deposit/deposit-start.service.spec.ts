@@ -18,7 +18,7 @@
  * `gateway-pricing.spec.ts`; what a hold re-checks under its row lock is
  * `coupon-reservation.int.spec.ts`.
  */
-import { Prisma } from '@prisma/client';
+import { CouponChannel, Prisma } from '@prisma/client';
 import { runWithTenant } from '@txnet-backend/shared-core';
 
 import type { CouponValidation } from '../coupon/coupon-validation';
@@ -73,6 +73,7 @@ type Calls = {
   settled: Array<{ orderReferenceId: string; outcome: string }>;
   credited: Array<{ amount: string; referenceId?: string }>;
   requested: Array<{ amountMinor: bigint; callbackUrl: string; webhookUrl?: string }>;
+  links: Array<Record<string, unknown>>;
 };
 
 type Setup = {
@@ -86,6 +87,8 @@ type Setup = {
   webhook?: boolean;
   /** The driver settles in a chat (F-104-k): `true` is Telegram Stars, `'bale'` Bale's wallet (F-104-n). */
   inChat?: boolean | 'bale';
+  /** bot-service will not make the Mini App's invoice link (F-104-q). */
+  linkFails?: boolean;
   domains?: Array<{ domainValue: string; domainType: string; verificationStatus: string }>;
   callbackOrigin?: string;
   /** `FRONTEND_ORIGIN`, comma-separated like CORS reads it. */
@@ -100,12 +103,13 @@ function build(setup: Setup = {}) {
     requestFails,
     webhook = false,
     inChat = false,
+    linkFails = false,
     domains = [{ domainValue: 'myvpn.txnet.app', domainType: 'subdomain', verificationStatus: 'pending' }],
     callbackOrigin = '',
     frontendOrigin = '',
   } = setup;
 
-  const calls: Calls = { created: [], updated: [], reserved: [], settled: [], credited: [], requested: [] };
+  const calls: Calls = { created: [], updated: [], reserved: [], settled: [], credited: [], requested: [], links: [] };
   let nextId = 0;
 
   const tx = {
@@ -206,6 +210,12 @@ function build(setup: Setup = {}) {
     { current: async () => null } as never,
     ledger as never,
     config as never,
+    {
+      create: async (request: Record<string, unknown>) => {
+        calls.links.push(request);
+        return linkFails ? null : 'https://t.me/$invoice-1';
+      },
+    } as never,
   );
   return { service, calls };
 }
@@ -222,8 +232,9 @@ describe('DepositStartService.start', () => {
     const { service, calls } = build({ inChat: true, domains: [] });
     const request = { userId: USER, gatewayId: GATEWAY, source: 'tenant' as const, amount: d('20.00'), couponCodes: [] };
 
-    const started = await asTenant(() => service.start({ ...request, chatPlatform: 'telegram' }));
+    const started = await asTenant(() => service.start({ ...request, channel: CouponChannel.bot, chatPlatform: 'telegram' }));
     expect(started.redirectUrl).toBeNull();
+    expect(started.invoiceLink).toBeNull();
     expect(started.invoice).toEqual({
       payload: started.paymentId,
       currency: 'XTR',
@@ -241,7 +252,7 @@ describe('DepositStartService.start', () => {
     const { service, calls } = build({ inChat: 'bale', domains: [] });
     const request = { userId: USER, gatewayId: GATEWAY, source: 'tenant' as const, amount: d('20.00'), couponCodes: [] };
 
-    const started = await asTenant(() => service.start({ ...request, chatPlatform: 'bale' }));
+    const started = await asTenant(() => service.start({ ...request, channel: CouponChannel.bot, chatPlatform: 'bale' }));
     // 20.00 + 1% fee at the gateway's 1,000,000 rial rate, as a Zarinpal payment is priced.
     expect(calls.created[0]['chargedAmountMinor']).toBe(BigInt(20_200_000));
     expect(started.invoice).toEqual({
@@ -253,6 +264,42 @@ describe('DepositStartService.start', () => {
     expect(calls.requested).toEqual([]);
 
     await expect(asTenant(() => service.start({ ...request, chatPlatform: 'telegram' }))).rejects.toBeInstanceOf(DepositGatewayNotFound);
+  });
+
+  it('answers a Mini App an invoice link made by bot-service, and never the provider token (F-104-q)', async () => {
+    const { service, calls } = build({ inChat: 'bale', domains: [] });
+    const request = { userId: USER, gatewayId: GATEWAY, source: 'tenant' as const, amount: d('20.00'), couponCodes: [], lang: 'fa' };
+
+    const started = await asTenant(() => service.start({ ...request, chatPlatform: 'bale' }));
+    expect(started.invoice).toBeNull();
+    expect(started.invoiceLink).toBe('https://t.me/$invoice-1');
+    expect(started.redirectUrl).toBeNull();
+    expect(JSON.stringify(started)).not.toContain('bale-wallet-token');
+    expect(calls.links).toEqual([
+      {
+        tenantId: TENANT,
+        platform: 'bale',
+        paymentId: started.paymentId,
+        currency: 'IRR',
+        amountMinor: '20200000',
+        providerToken: 'bale-wallet-token',
+        credited: started.credited,
+        lang: 'fa',
+      },
+    ]);
+    expect(calls.requested).toEqual([]);
+    // The bot is still answered the invoice it sends itself, and asks for no link.
+    await asTenant(() => service.start({ ...request, channel: CouponChannel.bot, chatPlatform: 'bale' }));
+    expect(calls.links).toHaveLength(1);
+  });
+
+  it('fails the payment and releases its holds when bot-service makes no link (F-104-q)', async () => {
+    const { service, calls } = build({ inChat: true, linkFails: true, domains: [] });
+    const request = { userId: USER, gatewayId: GATEWAY, source: 'tenant' as const, amount: d('20.00'), couponCodes: [] };
+
+    await expect(asTenant(() => service.start({ ...request, chatPlatform: 'telegram' }))).rejects.toBeInstanceOf(GatewayFailure);
+    expect(calls.updated).toEqual([expect.objectContaining({ status: 'failed', failureCode: 'unavailable' })]);
+    expect(calls.settled).toEqual([{ orderReferenceId: expect.any(String), outcome: 'cancelled' }]);
   });
 
   it('holds the coupons and persists the payment before the gateway is asked to mint', async () => {

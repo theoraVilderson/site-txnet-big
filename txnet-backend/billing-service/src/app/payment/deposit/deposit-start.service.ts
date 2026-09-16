@@ -24,6 +24,7 @@ import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { FxRateReader } from '../pricing/fx-rate.reader';
 import { offeredInThisChat, priceDeposit, selectGateway } from './deposit-pricing';
 import { DepositGatewayNotFound, money } from './deposit-quote.service';
+import { InvoiceLinkClient } from './invoice-link.client';
 import { webhookUrlFor, withPaymentId } from './payment-callback-url';
 
 /**
@@ -74,8 +75,13 @@ export type DepositStartRequest = {
   origin?: string | null;
   /** The caller holds `gateway.manage`: its own switched-off gateways may take a test payment. */
   canTest?: boolean;
-  /** The messenger a bot caller proved it is (F-104-k): an in-chat gateway starts only there. */
+  /**
+   * The messenger this caller is in — the bot (F-104-k) or its Mini App, by the
+   * gate's `X-Chat-Platform` (F-104-q): an in-chat gateway starts only there.
+   */
   chatPlatform?: string | null;
+  /** The request's language, for a Mini App's invoice text. */
+  lang?: string;
 };
 
 /** Money as decimal strings in base currency, as the quote answers them. */
@@ -94,6 +100,12 @@ export type DepositStarted = {
    * `null` for a provider that takes none (Stars). `null` otherwise.
    */
   invoice: { payload: string; currency: string; amountMinor: string; providerToken: string | null } | null;
+  /**
+   * For an in-chat gateway started from a Mini App (F-104-q): what the SDK's
+   * `openInvoice` takes, made by the tenant's bot. `invoice` is then `null` —
+   * a provider token is never answered to a browser. `null` otherwise.
+   */
+  invoiceLink: string | null;
   amount: string;
   discount: string;
   fee: string;
@@ -134,6 +146,7 @@ export class DepositStartService {
     private readonly fx: FxRateReader,
     private readonly ledger: WalletLedgerService,
     private readonly config: ConfigService<EnvConfig, true>,
+    private readonly links: InvoiceLinkClient,
   ) {}
 
   async start(request: DepositStartRequest): Promise<DepositStarted> {
@@ -251,6 +264,7 @@ export class DepositStartService {
       free: price.free,
       redirectUrl: null,
       invoice: null,
+      invoiceLink: null,
       amount: money(price.amount),
       discount: money(price.discount),
       fee: money(price.fee),
@@ -272,15 +286,32 @@ export class DepositStartService {
         await this.abandon(paymentId, e);
         throw e;
       }
-      return {
-        ...answer,
-        invoice: {
-          payload: paymentId,
-          currency: provider.chargeCurrency,
-          amountMinor: (price.chargedAmountMinor as bigint).toString(),
-          providerToken: credentials.secretKey ?? null,
-        },
+      const invoice = {
+        payload: paymentId,
+        currency: provider.chargeCurrency,
+        amountMinor: (price.chargedAmountMinor as bigint).toString(),
+        providerToken: credentials.secretKey ?? null,
       };
+      if (request.channel === CouponChannel.bot) return { ...answer, invoice };
+
+      // A Mini App (F-104-q): the tenant's bot makes the link the SDK opens,
+      // and the token stays on the internal hop. No link fails it like no mint.
+      const link = await this.links.create({
+        tenantId: tenant.id,
+        platform: request.chatPlatform as string,
+        paymentId,
+        currency: invoice.currency,
+        amountMinor: invoice.amountMinor,
+        providerToken: invoice.providerToken,
+        credited: answer.credited,
+        lang: request.lang ?? 'en',
+      });
+      if (!link) {
+        const failure = new GatewayFailure(provider.name, 'unavailable', null, 'bot-service made no invoice link');
+        await this.abandon(paymentId, failure);
+        throw failure;
+      }
+      return { ...answer, invoiceLink: link };
     }
 
     // 3. The bank. Outside every transaction, and never retried.
