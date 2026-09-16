@@ -132,14 +132,20 @@ export class GatewayMerchant {
   /**
    * A webhook provider's signing secret for this gateway (F-104-c): kind
    * `webhook_secret` under the same row label as the merchant id, written by
-   * `auth-service` beside it. A `use`, so audited like the merchant id.
+   * `auth-service` beside it — or whichever stored secret the provider signs
+   * with (`webhookSignedWith`: OxaPay's merchant key, F-104-i). A `use`, so
+   * audited like the merchant id.
    * `CredentialUnavailable` passes through; `WebhookSecretSource` decides what
    * a missing one means.
    */
   async webhookSecretFor(gateway: MerchantGatewayRef): Promise<string> {
     return this.whereItLives(gateway, (tenantId) =>
       this.vault.use(
-        { tenantId, kind: SECRET_KIND.webhookSecret, label: merchantLabel(gateway.source, gateway.gatewayId) },
+        {
+          tenantId,
+          kind: SECRET_KIND[PROVIDER_FIELDS[gateway.providerName]?.webhookSignedWith ?? 'webhookSecret'],
+          label: merchantLabel(gateway.source, gateway.gatewayId),
+        },
         { caller: this.caller(gateway), actorId: null },
       ),
     );

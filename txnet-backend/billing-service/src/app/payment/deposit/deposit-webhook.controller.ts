@@ -1,4 +1,4 @@
-import { Controller, HttpCode, NotFoundException, Post, RawBodyRequest, Req, UnauthorizedException } from '@nestjs/common';
+import { Controller, Header, HttpCode, NotFoundException, Post, RawBodyRequest, Req, UnauthorizedException } from '@nestjs/common';
 import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
@@ -26,6 +26,9 @@ export class DepositWebhookController {
 
   @Post(':provider/:gatewayId')
   @HttpCode(200)
+  // Plain `ok`: OxaPay counts a delivery only by that body (F-104-i); a
+  // provider that reads the status alone is indifferent to it.
+  @Header('content-type', 'text/plain; charset=utf-8')
   @RateLimit({
     key: (req) => rateLimitBucketKey(RateLimitBucket.DEPOSIT_WEBHOOK, gatewayIdOf(req) || 'none'),
     configKey: 'DEPOSIT_WEBHOOK_RATE_LIMIT',
@@ -38,7 +41,7 @@ export class DepositWebhookController {
     });
     if (answer === 'not_found') throw new NotFoundException();
     if (answer === 'unauthorized') throw new UnauthorizedException();
-    return { received: true };
+    return 'ok';
   }
 }
 

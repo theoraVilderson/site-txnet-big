@@ -16,6 +16,12 @@ export type ProviderFields = {
   secrets: readonly GatewaySecretName[];
   /** The gateway is priced by its own `staticRate` alone, and the live rate is off (a Star's USD value, D-32). */
   staticRateRequired: boolean;
+  /**
+   * The stored secret a webhook from this provider is signed with — usually
+   * `webhookSecret`, but OxaPay signs with its merchant key (F-104-i). `null`
+   * for a provider that posts no webhook.
+   */
+  webhookSignedWith: GatewaySecretName | null;
 };
 
 /**
@@ -31,12 +37,12 @@ export type ProviderFields = {
  * `secretKey`; what it signs posts with → `webhookSecret`.
  */
 export const PROVIDER_FIELDS: Record<PaymentProviderName, ProviderFields> = {
-  zarinpal: { secrets: ['merchantId'], staticRateRequired: false },
-  idpay: { secrets: ['merchantId'], staticRateRequired: false },
-  stripe: { secrets: ['secretKey', 'webhookSecret'], staticRateRequired: false },
-  nowpayments: { secrets: ['secretKey', 'webhookSecret'], staticRateRequired: false },
-  oxapay: { secrets: ['merchantId'], staticRateRequired: false },
-  airwallex: { secrets: ['merchantId', 'secretKey', 'webhookSecret'], staticRateRequired: false },
-  telegram_stars: { secrets: [], staticRateRequired: true },
-  bale: { secrets: ['secretKey'], staticRateRequired: false },
+  zarinpal: { secrets: ['merchantId'], staticRateRequired: false, webhookSignedWith: null },
+  idpay: { secrets: ['merchantId'], staticRateRequired: false, webhookSignedWith: null },
+  stripe: { secrets: ['secretKey', 'webhookSecret'], staticRateRequired: false, webhookSignedWith: 'webhookSecret' },
+  nowpayments: { secrets: ['secretKey', 'webhookSecret'], staticRateRequired: false, webhookSignedWith: 'webhookSecret' },
+  oxapay: { secrets: ['merchantId'], staticRateRequired: false, webhookSignedWith: 'merchantId' },
+  airwallex: { secrets: ['merchantId', 'secretKey', 'webhookSecret'], staticRateRequired: false, webhookSignedWith: 'webhookSecret' },
+  telegram_stars: { secrets: [], staticRateRequired: true, webhookSignedWith: null },
+  bale: { secrets: ['secretKey'], staticRateRequired: false, webhookSignedWith: null },
 };

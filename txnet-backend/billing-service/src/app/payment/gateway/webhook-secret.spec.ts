@@ -42,6 +42,17 @@ describe('WebhookSecretSource', () => {
     );
   });
 
+  it('reads the secret the provider signs with — OxaPay’s merchant key, not a webhook secret (F-104-i)', async () => {
+    const { source, vault } = build('oxa_merchant_key');
+
+    await expect(source.secretFor({ ...gateway, providerName: 'oxapay' })).resolves.toBe('oxa_merchant_key');
+
+    expect(vault.use).toHaveBeenCalledWith(
+      { tenantId: OWNER, kind: TenantCredentialKind.gateway_merchant_id, label: `gateway:tenant:${GATEWAY}` },
+      { caller: 'billing:oxapay', actorId: null },
+    );
+  });
+
   it('answers null for a gateway with no webhook secret, so the door is a 401 and not a 500', async () => {
     const { source } = build(null);
 
