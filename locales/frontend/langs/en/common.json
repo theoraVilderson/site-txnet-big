@@ -1061,7 +1061,7 @@
       "key": "Key",
       "fulfilmentKind": "Fulfilment",
       "featureKeys": "Feature keys",
-      "featureKeysHint": "What a Grant of it unlocks, e.g. vpn.access — one per line or comma.",
+      "featureKeysHint": "What buying this product unlocks.",
       "category": "Category",
       "owner": "Whose product",
       "ownerOwn": "My own",
@@ -1089,7 +1089,8 @@
       "metric": "Metric",
       "limit": "Limit",
       "resetPolicy": "Resets",
-      "remove": "Remove"
+      "remove": "Remove",
+      "gb": "{{count}} GB"
     },
     "price": {
       "amount": "Price (USD)",
@@ -1121,7 +1122,7 @@
       "premium": "Premium"
     },
     "metric": {
-      "traffic_bytes": "Traffic (bytes)",
+      "traffic_bytes": "Traffic (GB)",
       "concurrent_devices": "Devices at once",
       "order_units": "Order units",
       "feature_items": "Feature items",
@@ -1179,6 +1180,101 @@
       "publishAll": "Publish all shown",
       "published": "{{count}} published.",
       "source": "Source ({{lang}})"
-    }
+    },
+    "tabs": {
+      "products": "Products",
+      "categories": "Categories"
+    },
+    "guide": {
+      "title": "How does the catalog work?",
+      "show": "Guide",
+      "hide": "Hide guide",
+      "category": {
+        "title": "1. Category",
+        "body": "The shelf a product sits on, e.g. “VPN” or “API services”. It only organises and displays."
+      },
+      "product": {
+        "title": "2. Product",
+        "body": "What the customer knows, e.g. “VPN Pro”. It sets how it is delivered and which capabilities a purchase unlocks."
+      },
+      "variant": {
+        "title": "3. Variant",
+        "body": "What is actually sold: duration, quotas (traffic, devices) and visibility. A product with no variant cannot be bought."
+      },
+      "price": {
+        "title": "4. Price",
+        "body": "Each variant keeps a price history. A new price never erases the old one; you can schedule it for a later day."
+      },
+      "translations": {
+        "title": "5. Translations",
+        "body": "Write the name in one language only. Other languages get machine drafts, shown to users only after you publish them under “Translations”."
+      }
+    },
+    "wizard": {
+      "title": "New product",
+      "stepOf": "Step {{current}} of {{total}}",
+      "steps": {
+        "category": "Category",
+        "names": "Name",
+        "access": "Type & capabilities",
+        "variant": "Variant & price",
+        "review": "Review"
+      },
+      "intro": {
+        "category": "Which category does the product go in?",
+        "names": "What name will customers see? Write it in one language only.",
+        "access": "What is delivered after purchase, and which capabilities does it unlock?",
+        "variant": "The first sellable version: duration, price and quotas. You can add more variants later.",
+        "review": "Check everything; “Create” saves it."
+      },
+      "next": "Next",
+      "back": "Back",
+      "create": "Create product",
+      "pickCategory": "Pick a category",
+      "useNewCategory": "Create a new category",
+      "useExistingCategory": "Pick an existing category",
+      "noCategories": "You have no categories yet; create the first one here.",
+      "key": "Internal key: {{key}}",
+      "keyHint": "Made from the name and used in links and reports. Usually nothing to change.",
+      "editKey": "Change key",
+      "withVariant": "Create the first variant now",
+      "skipVariant": "Save without a variant — it cannot be sold until you add one.",
+      "suggestSku": "Suggest",
+      "advanced": "More settings",
+      "none": "—",
+      "partial": "The product was created but the variant was not saved. Add it again from “Variants and prices”.",
+      "done": "Product created. Its name in other languages will appear shortly as drafts under “Translations”.",
+      "edit": "Edit"
+    },
+    "fulfilmentHint": {
+      "network_access": "Internet/VPN subscription: the user gets a connection link with traffic and device quotas.",
+      "external_order": "An order fulfilled outside the platform, e.g. bought from another service.",
+      "feature_access": "Unlocks one capability only, e.g. a dedicated IP or API access.",
+      "wallet_topup": "Tops up the user's wallet."
+    },
+    "capabilities": {
+      "label": "Capabilities",
+      "hint": "What buying this product unlocks. Pick from the list; if it is not there, type a new one.",
+      "search": "Search or type a new one, e.g. vpn.access",
+      "add": "Add “{{key}}”",
+      "remove": "Remove {{key}}",
+      "empty": "None of your products has a capability yet. Type the first one, e.g. vpn.access",
+      "selected": "Selected",
+      "edit": "Edit capabilities",
+      "save": "Save capabilities"
+    },
+    "variantHint": {
+      "billingMode": "Prepaid: paid before use. Metered: charged by usage.",
+      "visibility": "Public shows in the store; unlisted only by direct link; admin only for manual issuing.",
+      "quotas": "This variant's limits, e.g. 50 GB traffic or 2 concurrent devices. None = unlimited."
+    },
+    "categories": {
+      "empty": "No categories yet.",
+      "products": "{{count}} products"
+    },
+    "copyId": "Copy id",
+    "copied": "Copied",
+    "productDetail": "Product details",
+    "translationsPending": "{{count}} translations awaiting review"
   }
 }

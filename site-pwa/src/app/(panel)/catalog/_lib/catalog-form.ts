@@ -63,7 +63,65 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const WHOLE = /^\d{1,19}$/;
 
 const blank = (v: string) => v.trim() === "";
-const list = (text: string) => [...new Set(text.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean))];
+const unique = (items: readonly string[]) => [...new Set(items.map((x) => x.trim()).filter(Boolean))];
+
+export const isFeatureKey = (k: string) => FEATURE_KEY.test(k);
+
+// --------------------------------------------------------------- suggestions
+
+/**
+ * Every capability the caller's products already grant — the picker's list, so
+ * nobody types `vpn.premium_nodes` from memory. No registry exists: a product's
+ * `featureKeys` is the only place these live (ADR-0049).
+ */
+export const featureKeysIn = (products: readonly { featureKeys: readonly string[] }[]) =>
+  unique(products.flatMap((p) => p.featureKeys)).sort();
+
+/** Persian letters in Latin, so a name written in Persian still gives a readable key. */
+const LATIN: Record<string, string> = {
+  ا: "a", آ: "a", أ: "a", إ: "e", ب: "b", پ: "p", ت: "t", ث: "s", ج: "j", چ: "ch", ح: "h", خ: "kh", د: "d", ذ: "z",
+  ر: "r", ز: "z", ژ: "zh", س: "s", ش: "sh", ص: "s", ض: "z", ط: "t", ظ: "z", ع: "a", غ: "gh", ف: "f", ق: "gh",
+  ک: "k", ك: "k", گ: "g", ل: "l", م: "m", ن: "n", و: "v", ه: "h", ة: "h", ی: "i", ي: "i", ئ: "i", ء: "", ؤ: "o",
+};
+const DIGITS = "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩";
+
+/** A key in billing's shape (`^[a-z][a-z0-9_]{1,63}$`) from a name, or `""` when the name gives too little. */
+export function slugKey(text: string): string {
+  const latin = [...text.normalize("NFKD").toLowerCase()]
+    .map((c) => {
+      const d = DIGITS.indexOf(c);
+      if (d >= 0) return String(d % 10);
+      return LATIN[c] ?? c;
+    })
+    .join("");
+  let key = latin.replace(/[^a-z0-9]+/g, "_").replace(/^[_0-9]+|_+$/g, "");
+  if (!key) {
+    const digits = latin.replace(/[^0-9]+/g, "_").replace(/^_+|_+$/g, "");
+    key = digits ? `n_${digits}` : "";
+  }
+  key = key.slice(0, 64).replace(/_+$/, "");
+  return KEY.test(key) ? key : "";
+}
+
+/** The name's key, numbered past every key already taken; `<fallback>_<time>` when the name gives none. */
+export function suggestKey(name: string, taken: Iterable<string>, fallback: string): string {
+  const used = new Set(taken);
+  const root = slugKey(name) || `${fallback}_${Date.now().toString(36)}`;
+  if (!used.has(root)) return root;
+  for (let n = 2; ; n++) {
+    const tail = `_${n}`;
+    const candidate = `${root.slice(0, 64 - tail.length)}${tail}`;
+    if (!used.has(candidate)) return candidate;
+  }
+}
+
+/** `VPN_PRO-30D` / `VPN_PRO-PERM` — a SKU billing accepts, from the product key and the duration. */
+export function suggestSku(productKey: string, durationDays: string): string {
+  const days = durationDays.trim();
+  const tail = /^\d+$/.test(days) ? `-${days}D` : "-PERM";
+  const head = productKey.toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 40 - tail.length) || "ITEM";
+  return `${head}${tail}`;
+}
 
 export type Errors<F> = Partial<Record<keyof F, string>>;
 
@@ -194,8 +252,8 @@ export interface ProductForm {
   /** Blank = none. */
   description: string;
   fulfilmentKind: FulfilmentKind;
-  /** One feature key per line or comma. */
-  featureKeys: string;
+  /** What a Grant of this product unlocks, picked from the ones in use or added. */
+  featureKeys: string[];
 }
 
 export const emptyProductForm = (defaultLang: string): ProductForm => ({
@@ -207,7 +265,7 @@ export const emptyProductForm = (defaultLang: string): ProductForm => ({
   name: "",
   description: "",
   fulfilmentKind: "network_access",
-  featureKeys: "",
+  featureKeys: [],
 });
 
 export function validateProductForm(f: ProductForm, me: Me | null): Errors<ProductForm> {
@@ -217,7 +275,7 @@ export function validateProductForm(f: ProductForm, me: Me | null): Errors<Produ
   if (!KEY.test(f.key.trim())) errors.key = E.key;
   if (blank(f.sourceLang)) errors.sourceLang = E.required;
   if (blank(f.name)) errors.name = E.required;
-  if (list(f.featureKeys).some((k) => !FEATURE_KEY.test(k))) errors.featureKeys = E.featureKey;
+  if (unique(f.featureKeys).some((k) => !FEATURE_KEY.test(k))) errors.featureKeys = E.featureKey;
   return errors;
 }
 
@@ -229,7 +287,7 @@ export function productBody(f: ProductForm, me: Me | null): CreateProductBody {
     sourceLang: f.sourceLang.trim(),
     name: { [f.sourceLang.trim()]: f.name.trim() },
     fulfilmentKind: f.fulfilmentKind,
-    featureKeys: list(f.featureKeys),
+    featureKeys: unique(f.featureKeys),
   };
   if (!blank(f.description)) body.description = { [f.sourceLang.trim()]: f.description.trim() };
   if (isPlatformOwner(me) && f.owner === "platform") body.tenantId = null;
@@ -280,6 +338,20 @@ export function validateVariantForm(f: VariantForm): Errors<VariantForm> {
   return errors;
 }
 
+const GIB = 1024 ** 3;
+
+/** What the admin types for a quota: traffic in whole GB, the rest as is. The form keeps billing's unit. */
+export function quotaFromInput(metric: QuotaMetric, typed: string): string {
+  const v = typed.trim();
+  return metric === "traffic_bytes" && /^\d{1,9}$/.test(v) ? String(Number(v) * GIB) : v;
+}
+
+export function quotaToInput(metric: QuotaMetric, limit: string): string {
+  if (metric !== "traffic_bytes" || !/^\d+$/.test(limit)) return limit;
+  const gb = Number(limit) / GIB;
+  return Number.isInteger(gb) ? String(gb) : limit;
+}
+
 const quotasOf = (rows: QuotaRow[]): Quotas =>
   Object.fromEntries(rows.map((q) => [q.metric, { limit: Number(q.limit.trim()), resetPolicy: q.resetPolicy }]));
 
@@ -294,6 +366,55 @@ export function variantBody(f: VariantForm): CreateVariantBody {
     price: f.price.trim(),
     ...(f.quotas.length ? { quotas: quotasOf(f.quotas) } : {}),
   };
+}
+
+// -------------------------------------------------------------------- wizard
+
+/** A new product, one question at a time: where it goes, what it is called, what it unlocks, how it sells. */
+export const WIZARD_STEPS = ["category", "names", "access", "variant", "review"] as const;
+export type WizardStep = (typeof WIZARD_STEPS)[number];
+
+export interface ProductWizard {
+  categoryMode: "existing" | "new";
+  categoryId: string;
+  newCategory: CategoryForm;
+  product: ProductForm;
+  /** A product with no variant cannot be sold; skipping is allowed, and the list says so. */
+  withVariant: boolean;
+  variant: VariantForm;
+}
+
+export const emptyWizard = (defaultLang: string): ProductWizard => ({
+  categoryMode: "existing",
+  categoryId: "",
+  newCategory: emptyCategoryForm(defaultLang),
+  product: emptyProductForm(defaultLang),
+  withVariant: true,
+  variant: emptyVariantForm(),
+});
+
+const pick = <T extends object>(errors: T, keys: readonly (keyof T)[]) =>
+  Object.fromEntries(Object.entries(errors).filter(([k]) => keys.includes(k as keyof T))) as Partial<T>;
+
+/** One step's errors, keyed by the field of the form that step edits. */
+export function wizardStepErrors(step: WizardStep, w: ProductWizard, me: Me | null): Record<string, string> {
+  switch (step) {
+    case "category":
+      if (w.categoryMode === "new") return validateCategoryForm(w.newCategory) as Record<string, string>;
+      return blank(w.categoryId) ? { categoryId: E.required } : {};
+    case "names":
+      return pick(validateProductForm(w.product, me), ["key", "sourceLang", "name"]) as Record<string, string>;
+    case "access":
+      return pick(validateProductForm(w.product, me), ["tenantId", "featureKeys"]) as Record<string, string>;
+    case "variant":
+      return w.withVariant ? (validateVariantForm(w.variant) as Record<string, string>) : {};
+    case "review":
+      return {};
+  }
+}
+
+export function firstInvalidStep(w: ProductWizard, me: Me | null): WizardStep | null {
+  return WIZARD_STEPS.find((s) => Object.keys(wizardStepErrors(s, w, me)).length > 0) ?? null;
 }
 
 // --------------------------------------------------------------------- price

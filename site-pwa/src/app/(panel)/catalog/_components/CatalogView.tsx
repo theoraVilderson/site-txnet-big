@@ -1,75 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Languages, Loader2, Package, Pencil, Plus, Power, RotateCw, Tags, X } from "lucide-react";
+import { BookOpen, ChevronLeft, Languages, Loader2, Package, Pencil, Plus, Power, RotateCw, Tags } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { useApiErrorMessage } from "@/hooks/useApiError";
-import {
-  catalogApi,
-  type CatalogCategory,
-  type CatalogProduct,
-  type CatalogProductDetail,
-  type CatalogVariant,
-} from "@/lib/catalog-api";
+import { catalogApi, type CatalogCategory, type CatalogProduct } from "@/lib/catalog-api";
 import { PANEL_CATALOG_TRANSLATIONS } from "@/lib/routes";
-import { DEFAULT_LOCALE } from "@/env";
 import { usePanelSession } from "../../_context/PanelSessionContext";
-import { DatePicker } from "../../_components/kit/DatePicker";
 import { Select } from "../../_components/kit/Select";
-import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
-import { formatInstant } from "../../_lib/datetime";
-import {
-  BILLING_MODES,
-  CATALOG_KEYS as K,
-  FULFILMENT_KINDS,
-  QUALITY_TIERS,
-  QUOTA_METRICS,
-  RESET_POLICIES,
-  DESCRIPTION_MAX,
-  NAME_MAX,
-  VISIBILITIES,
-  catalogText,
-  categoryBody,
-  currentPrice,
-  emptyCategoryForm,
-  emptyProductForm,
-  emptyVariantForm,
-  flattenTexts,
-  isPlatformOwner,
-  namesBody,
-  priceBody,
-  productBody,
-  refusalKey,
-  tehranToday,
-  validateCategoryForm,
-  validateNamesForm,
-  validatePriceForm,
-  validateProductForm,
-  validateVariantForm,
-  variantBody,
-  type CatalogTexts,
-  type CategoryForm,
-  type NamesForm,
-  type PriceForm,
-  type ProductForm,
-  type VariantForm,
-} from "../_lib/catalog-form";
-
-const input = "w-full rounded-xl border border-card-border bg-bg-inner px-3 py-2 text-sm text-text-primary outline-none focus:border-primary";
-const primaryButton = "inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white shadow-sm disabled:opacity-50";
-const quietButton = "inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-primary hover:bg-[var(--leaf-bg)]";
-
-/** The refusal's own sentence, else the generic answer for that error. */
-function useMessage() {
-  const { t } = useLocale();
-  const errorMessage = useApiErrorMessage();
-  return (e: unknown) => {
-    const key = refusalKey(e);
-    return key ? t("common", key) : errorMessage(e);
-  };
-}
+import { CATALOG_KEYS as K, catalogText, featureKeysIn, flattenTexts, isPlatformOwner, type CatalogTexts } from "../_lib/catalog-form";
+import { CatalogGuide } from "./CatalogGuide";
+import { CategorySheet, NamesSheet } from "./NameSheets";
+import { ProductDetailSheet } from "./ProductDetailSheet";
+import { ProductWizard } from "./ProductWizard";
+import { Alert, primaryButton, quietButton, useMessage } from "./catalog-ui";
 
 /**
  * The published `catalog` namespace in every language locale-service has —
@@ -81,23 +25,31 @@ async function loadTexts(langs: readonly string[]): Promise<CatalogTexts> {
   return Object.fromEntries(entries);
 }
 
-/** Every language locale-service has, as a picker: the source language of a name. */
-function LanguageSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const { availableLocales } = useLocale();
-  return <Select value={value} onChange={onChange} options={availableLocales.map((l) => ({ value: l.code, label: l.name }))} />;
-}
+/** Whether this viewer closed the guide. Browser storage can be missing or throw: then the guide just shows. */
+const GUIDE_CLOSED = "txnet.catalog.guideClosed";
+const readGuideClosed = () => {
+  try {
+    return localStorage.getItem(GUIDE_CLOSED) === "1";
+  } catch {
+    return false;
+  }
+};
+const writeGuideClosed = (closed: boolean) => {
+  try {
+    if (closed) localStorage.setItem(GUIDE_CLOSED, "1");
+    else localStorage.removeItem(GUIDE_CLOSED);
+  } catch {
+    // a per-viewer convenience only
+  }
+};
 
-/** A language's writing direction, from locale-service's metadata. */
-function useDirOf() {
-  const { availableLocales } = useLocale();
-  return (code: string) => availableLocales.find((l) => l.code === code)?.dir ?? "ltr";
-}
+type Renaming = { kind: "product" | "category"; id: string; nameKey: string; descriptionKey: string | null; sourceLang: string };
 
 /**
- * The catalog page (F-026-f, D-34): categories, products, and for each product
- * its variants with their price history. Items show their name in the viewer's
- * language, then in their own source language, then their key (F-1533-g,
- * ADR-0050 amendment 2).
+ * The catalog page (F-026-f, D-34): products and categories on two tabs, a
+ * guide to what each thing is, and a step-by-step wizard for a new product.
+ * Items show their name in the viewer's language, then in their own source
+ * language, then their key (F-1533-g, ADR-0050 amendment 2).
  *
  * One page for two audiences, and the page decides neither: billing answers
  * the platform owner every item and a tenant its own. Nothing is patched from a
@@ -110,29 +62,34 @@ export function CatalogView() {
   const message = useMessage();
   const { me, isLoading: sessionLoading } = usePanelSession();
   const owner = isPlatformOwner(me);
+  const [tab, setTab] = useState<"products" | "categories">("products");
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
+  // Every product the caller manages: the capability list and the taken keys come from here,
+  // whatever the filters show.
   const [products, setProducts] = useState<CatalogProduct[] | null>(null);
   const [categoryId, setCategoryId] = useState("");
-  const [scope, setScope] = useState("");
+  const [platformOnly, setPlatformOnly] = useState(false);
+  const [pending, setPending] = useState<number | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [creating, setCreating] = useState<"product" | "category" | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [texts, setTexts] = useState<CatalogTexts>({});
-  const [renaming, setRenaming] = useState<{
-    kind: "product" | "category";
-    id: string;
-    nameKey: string;
-    descriptionKey: string | null;
-    sourceLang: string;
-  } | null>(null);
+  const [renaming, setRenaming] = useState<Renaming | null>(null);
+  const [guide, setGuide] = useState(false);
+
+  useEffect(() => {
+    // Storage is only readable in the browser, after the first render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setGuide(!readGuideClosed());
+  }, []);
 
   const load = useCallback(async () => {
     try {
       const [cats, prods, names] = await Promise.all([
         catalogApi.categories(),
-        catalogApi.products({ categoryId: categoryId || undefined, tenantId: scope || undefined }),
+        catalogApi.products(),
         loadTexts(langCodes ? langCodes.split(",") : [lang]),
       ]);
       setCategories(cats);
@@ -142,7 +99,9 @@ export function CatalogView() {
     } catch (e) {
       setError(e);
     }
-  }, [categoryId, scope, lang, langCodes]);
+    // The review count is a hint beside a link: its failure is not the page's.
+    catalogApi.translations().then((d) => setPending(d.length), () => setPending(null));
+  }, [lang, langCodes]);
 
   useEffect(() => {
     // Every setState in load runs after its first await, as in `CouponsView`.
@@ -150,10 +109,10 @@ export function CatalogView() {
     void load();
   }, [load]);
 
-  const toggle = async (p: CatalogProduct) => {
+  const act = async (run: () => Promise<unknown>) => {
     setActionError(null);
     try {
-      await catalogApi.updateProduct(p.id, { isActive: !p.isActive });
+      await run();
       setNotice(t("common", K.saved));
       await load();
     } catch (e) {
@@ -166,15 +125,27 @@ export function CatalogView() {
     const c = categories.find((x) => x.id === id);
     return c ? nameOf(c) : "—";
   };
-  const selectedCategory = categories.find((c) => c.id === categoryId);
+  const knownFeatureKeys = useMemo(() => featureKeysIn(products ?? []), [products]);
+  const shown = (products ?? []).filter((p) => (!categoryId || p.categoryId === categoryId) && (!platformOnly || p.tenantId === null));
+  const countIn = (id: string) => (products ?? []).filter((p) => p.categoryId === id).length;
+  const openProduct = products?.find((p) => p.id === openId) ?? null;
+
+  const closeGuide = () => {
+    setGuide(false);
+    writeGuideClosed(true);
+  };
   const saved = async () => {
+    setCreating(null);
     setRenaming(null);
     setNotice(t("common", K.saved));
     await load();
   };
 
+  const tabClass = (on: boolean) =>
+    `rounded-lg px-3 py-1.5 text-xs font-bold ${on ? "bg-card-bg text-primary shadow-sm" : "text-text-secondary hover:text-text-primary"}`;
+
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 p-4 sm:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-lg font-bold text-text-primary">
@@ -183,15 +154,29 @@ export function CatalogView() {
           </h1>
           <p className="text-xs text-text-secondary">{t("common", K.subtitle)}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {!guide && (
+            <button
+              type="button"
+              className={quietButton}
+              onClick={() => {
+                setGuide(true);
+                writeGuideClosed(false);
+              }}
+            >
+              <BookOpen size={14} aria-hidden />
+              {t("common", K.guide.show)}
+            </button>
+          )}
           <Link href={PANEL_CATALOG_TRANSLATIONS} className={quietButton}>
             <Languages size={14} aria-hidden />
             {t("common", K.translations.open)}
+            {pending ? (
+              <span className="rounded-full bg-primary px-1.5 text-[10px] text-white" title={t("common", K.translationsPending, { count: pending })}>
+                {pending}
+              </span>
+            ) : null}
           </Link>
-          <button type="button" className={quietButton} onClick={() => setCreating("category")}>
-            <Tags size={14} aria-hidden />
-            {t("common", K.newCategory)}
-          </button>
           <button type="button" className={primaryButton} onClick={() => setCreating("product")}>
             <Plus size={14} aria-hidden />
             {t("common", K.newProduct)}
@@ -199,46 +184,49 @@ export function CatalogView() {
         </div>
       </header>
 
-      <div className="flex flex-wrap items-end gap-2">
-        <Select
-          ariaLabel={t("common", K.filters.category)}
-          value={categoryId}
-          onChange={setCategoryId}
-          options={[{ value: "", label: t("common", K.filters.allCategories) }, ...categories.map((c) => ({ value: c.id, label: nameOf(c) }))]}
-          className="w-44"
-        />
-        {selectedCategory && (
-          <button
-            type="button"
-            className={quietButton}
-            onClick={() =>
-              setRenaming({ kind: "category", id: selectedCategory.id, nameKey: selectedCategory.nameKey, descriptionKey: null, sourceLang: selectedCategory.sourceLang })
-            }
-          >
-            <Pencil size={14} aria-hidden />
-            {t("common", K.rename)}
+      {guide && <CatalogGuide onClose={closeGuide} />}
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div role="tablist" className="inline-flex gap-1 rounded-xl bg-bg-inner p-1">
+          <button type="button" role="tab" aria-selected={tab === "products"} className={tabClass(tab === "products")} onClick={() => setTab("products")}>
+            {t("common", K.tabs.products)} {products ? `(${products.length})` : ""}
           </button>
-        )}
-        {owner && (
-          <Select
-            ariaLabel={t("common", K.filters.scope)}
-            value={scope}
-            onChange={setScope}
-            options={[
-              { value: "", label: t("common", K.filters.scopeAll) },
-              { value: "platform", label: t("common", K.filters.scopePlatform) },
-            ]}
-            className="w-40"
-          />
+          <button type="button" role="tab" aria-selected={tab === "categories"} className={tabClass(tab === "categories")} onClick={() => setTab("categories")}>
+            {t("common", K.tabs.categories)} ({categories.length})
+          </button>
+        </div>
+        {tab === "products" ? (
+          <div className="flex flex-wrap gap-2">
+            <Select
+              ariaLabel={t("common", K.filters.category)}
+              value={categoryId}
+              onChange={setCategoryId}
+              options={[{ value: "", label: t("common", K.filters.allCategories) }, ...categories.map((c) => ({ value: c.id, label: nameOf(c) }))]}
+              className="w-44"
+            />
+            {owner && (
+              <Select
+                ariaLabel={t("common", K.filters.scope)}
+                value={platformOnly ? "platform" : ""}
+                onChange={(v) => setPlatformOnly(v === "platform")}
+                options={[
+                  { value: "", label: t("common", K.filters.scopeAll) },
+                  { value: "platform", label: t("common", K.filters.scopePlatform) },
+                ]}
+                className="w-40"
+              />
+            )}
+          </div>
+        ) : (
+          <button type="button" className={quietButton} onClick={() => setCreating("category")}>
+            <Tags size={14} aria-hidden />
+            {t("common", K.newCategory)}
+          </button>
         )}
       </div>
 
       {notice && <p className="text-xs font-bold text-primary">{notice}</p>}
-      {actionError && (
-        <p role="alert" className="text-xs font-bold text-error">
-          {actionError}
-        </p>
-      )}
+      {actionError && <Alert>{actionError}</Alert>}
 
       {sessionLoading || (!products && !error) ? (
         <p className="flex items-center gap-2 text-xs text-text-secondary">
@@ -247,39 +235,103 @@ export function CatalogView() {
         </p>
       ) : error ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p role="alert" className="text-xs font-bold text-error">
-            {message(error)}
-          </p>
+          <Alert>{message(error)}</Alert>
           <button type="button" className={quietButton} onClick={() => void load()}>
             <RotateCw size={14} aria-hidden />
             {t("common", K.retry)}
           </button>
         </div>
-      ) : products!.length === 0 ? (
-        <p className="py-8 text-center text-sm text-text-secondary">{t("common", K.empty)}</p>
+      ) : tab === "products" ? (
+        shown.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-8">
+            <p className="text-sm text-text-secondary">{t("common", K.empty)}</p>
+            <button type="button" className={primaryButton} onClick={() => setCreating("product")}>
+              <Plus size={14} aria-hidden />
+              {t("common", K.newProduct)}
+            </button>
+          </div>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {shown.map((p) => (
+              <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm">
+                <button type="button" className="min-w-0 flex-1 text-start" onClick={() => setOpenId(p.id)}>
+                  <p className="truncate text-sm font-bold text-text-primary">{nameOf(p)}</p>
+                  <p className="text-[11px] text-text-secondary">
+                    {categoryName(p.categoryId)} · {t("common", K.fulfilmentKind[p.fulfilmentKind])}
+                    {p.tenantId === null && ` · ${t("common", K.platform)}`}
+                    {!p.isActive && ` · ${t("common", K.inactive)}`}
+                  </p>
+                  {p.featureKeys.length > 0 && (
+                    <p className="mt-1 flex flex-wrap gap-1" dir="ltr">
+                      {p.featureKeys.map((k) => (
+                        <span key={k} className="rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 font-mono text-[10px] font-bold text-primary">
+                          {k}
+                        </span>
+                      ))}
+                    </p>
+                  )}
+                </button>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    className={quietButton}
+                    onClick={() => setRenaming({ kind: "product", id: p.id, nameKey: p.nameKey, descriptionKey: p.descriptionKey, sourceLang: p.sourceLang })}
+                  >
+                    <Pencil size={14} aria-hidden />
+                    {t("common", K.rename)}
+                  </button>
+                  <button type="button" className={quietButton} onClick={() => void act(() => catalogApi.updateProduct(p.id, { isActive: !p.isActive }))}>
+                    <Power size={14} aria-hidden />
+                    {t("common", p.isActive ? K.deactivate : K.activate)}
+                  </button>
+                  <button type="button" className={quietButton} onClick={() => setOpenId(p.id)}>
+                    {t("common", K.open)}
+                    <ChevronLeft size={14} className="ltr:-scale-x-100" aria-hidden />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : categories.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 py-8">
+          <p className="text-sm text-text-secondary">{t("common", K.categories.empty)}</p>
+          <button type="button" className={primaryButton} onClick={() => setCreating("category")}>
+            <Tags size={14} aria-hidden />
+            {t("common", K.newCategory)}
+          </button>
+        </div>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {products!.map((p) => (
-            <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-bold text-text-primary">{nameOf(p)}</p>
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {categories.map((c) => (
+            <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm">
+              <button
+                type="button"
+                className="min-w-0 flex-1 text-start"
+                onClick={() => {
+                  setCategoryId(c.id);
+                  setTab("products");
+                }}
+              >
+                <p className="truncate text-sm font-bold text-text-primary">{nameOf(c)}</p>
                 <p className="text-[11px] text-text-secondary">
-                  <span dir="ltr">{p.key}</span> · {categoryName(p.categoryId)} · {t("common", K.fulfilmentKind[p.fulfilmentKind])}
-                  {p.tenantId === null && ` · ${t("common", K.platform)}`}
-                  {!p.isActive && ` · ${t("common", K.inactive)}`}
+                  {t("common", K.categories.products, { count: countIn(c.id) })}
+                  {c.tenantId === null && ` · ${t("common", K.platform)}`}
+                  {!c.isActive && ` · ${t("common", K.inactive)}`}
                 </p>
-              </div>
+              </button>
               <div className="flex gap-1">
-                <button type="button" className={quietButton} onClick={() => setRenaming({ kind: "product", id: p.id, nameKey: p.nameKey, descriptionKey: p.descriptionKey, sourceLang: p.sourceLang })}>
+                <button
+                  type="button"
+                  className={quietButton}
+                  onClick={() => setRenaming({ kind: "category", id: c.id, nameKey: c.nameKey, descriptionKey: null, sourceLang: c.sourceLang })}
+                >
                   <Pencil size={14} aria-hidden />
                   {t("common", K.rename)}
                 </button>
-                <button type="button" className={quietButton} onClick={() => setOpenId(p.id)}>
-                  {t("common", K.open)}
-                </button>
-                <button type="button" className={quietButton} onClick={() => void toggle(p)}>
+                <button type="button" className={quietButton} onClick={() => void act(() => catalogApi.updateCategory(c.id, { isActive: !c.isActive }))}>
                   <Power size={14} aria-hidden />
-                  {t("common", p.isActive ? K.deactivate : K.activate)}
+                  {t("common", c.isActive ? K.deactivate : K.activate)}
                 </button>
               </div>
             </li>
@@ -288,29 +340,36 @@ export function CatalogView() {
       )}
 
       {creating === "category" && (
-        <CategorySheet
-          owner={owner}
-          onClose={() => setCreating(null)}
-          onSaved={async () => {
-            setCreating(null);
-            setNotice(t("common", K.saved));
-            await load();
-          }}
-        />
+        <CategorySheet owner={owner} takenKeys={categories.map((c) => c.key)} onClose={() => setCreating(null)} onSaved={saved} />
       )}
       {creating === "product" && (
-        <ProductSheet
+        <ProductWizard
           categories={categories}
           categoryLabel={nameOf}
+          takenProductKeys={(products ?? []).map((p) => p.key)}
+          takenCategoryKeys={categories.map((c) => c.key)}
+          knownFeatureKeys={knownFeatureKeys}
           onClose={() => setCreating(null)}
-          onSaved={async () => {
+          onCreated={async (productId, variantFailed) => {
             setCreating(null);
-            setNotice(t("common", K.saved));
+            setTab("products");
+            setCategoryId("");
             await load();
+            setOpenId(productId);
+            if (variantFailed) setActionError(t("common", K.wizard.partial));
+            else setNotice(t("common", K.wizard.done));
           }}
         />
       )}
-      {openId && <VariantsSheet productId={openId} onClose={() => setOpenId(null)} />}
+      {openProduct && (
+        <ProductDetailSheet
+          product={openProduct}
+          name={nameOf(openProduct)}
+          knownFeatureKeys={knownFeatureKeys}
+          onClose={() => setOpenId(null)}
+          onChanged={load}
+        />
+      )}
       {renaming && (
         <NamesSheet
           kind={renaming.kind}
@@ -324,552 +383,5 @@ export function CatalogView() {
         />
       )}
     </div>
-  );
-}
-
-function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  const { t } = useLocale();
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  if (typeof document === "undefined") return null;
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-6" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-t-3xl border border-card-border bg-card-bg shadow-xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
-        <header className="flex items-center justify-between gap-3 border-b border-card-border p-4">
-          <h2 className="text-sm font-bold text-text-primary">{title}</h2>
-          <button type="button" onClick={onClose} aria-label={t("common", K.close)} className="rounded-lg p-1 text-text-secondary hover:text-text-primary">
-            <X size={18} aria-hidden />
-          </button>
-        </header>
-        <div className="flex flex-col gap-4 overflow-y-auto p-4">{children}</div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
-function Field({ label, error, hint, children }: { label: string; error?: string; hint?: string; children: ReactNode }) {
-  const { t } = useLocale();
-  return (
-    <label className="flex flex-col gap-1 text-xs font-bold text-text-secondary">
-      {label}
-      {children}
-      {hint && !error && <span className="text-[11px] font-normal">{hint}</span>}
-      {error && <span className="text-[11px] text-error">{t("common", error)}</span>}
-    </label>
-  );
-}
-
-function CategorySheet({ owner, onClose, onSaved }: { owner: boolean; onClose: () => void; onSaved: () => Promise<void> }) {
-  const { t } = useLocale();
-  const message = useMessage();
-  const [form, setForm] = useState<CategoryForm>(() => emptyCategoryForm(DEFAULT_LOCALE));
-  const dirOf = useDirOf();
-  const [errors, setErrors] = useState<Partial<Record<keyof CategoryForm, string>>>({});
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const set = <F extends keyof CategoryForm>(k: F, v: CategoryForm[F]) => setForm((f) => ({ ...f, [k]: v }));
-
-  const save = async () => {
-    const found = validateCategoryForm(form);
-    setErrors(found);
-    if (Object.keys(found).length) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await catalogApi.createCategory(categoryBody(form, owner));
-      await onSaved();
-    } catch (e) {
-      setError(message(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Sheet title={t("common", K.newCategory)} onClose={onClose}>
-      <Field label={t("common", K.category.key)} error={errors.key}>
-        <input className={input} dir="ltr" value={form.key} onChange={(e) => set("key", e.target.value)} />
-      </Field>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label={t("common", K.category.sourceLang)} error={errors.sourceLang}>
-          <LanguageSelect value={form.sourceLang} onChange={(v) => set("sourceLang", v)} />
-        </Field>
-        <Field label={t("common", K.category.name)} error={errors.name} hint={t("common", K.product.nameHint)}>
-          <input className={input} dir={dirOf(form.sourceLang)} maxLength={NAME_MAX} value={form.name} onChange={(e) => set("name", e.target.value)} />
-        </Field>
-      </div>
-      {owner && (
-        <label className="flex items-center gap-2 text-xs text-text-primary">
-          <input type="checkbox" checked={form.shared} onChange={(e) => set("shared", e.target.checked)} />
-          {t("common", K.category.shared)}
-        </label>
-      )}
-      {error && (
-        <p role="alert" className="text-xs font-bold text-error">
-          {error}
-        </p>
-      )}
-      <div className="flex justify-end gap-2">
-        <button type="button" className={quietButton} onClick={onClose}>
-          {t("common", K.cancel)}
-        </button>
-        <button type="button" className={primaryButton} disabled={busy} onClick={() => void save()}>
-          {t("common", K.save)}
-        </button>
-      </div>
-    </Sheet>
-  );
-}
-
-/**
- * Renames an existing item in the source language picked (F-1533-g). Picking
- * another language shows its published text, if any; billing re-keys the item
- * and drafts every other language from the new source.
- */
-function NamesSheet({
-  kind,
-  id,
-  nameKey,
-  descriptionKey,
-  texts,
-  initialSource,
-  onClose,
-  onSaved,
-}: {
-  kind: "product" | "category";
-  id: string;
-  nameKey: string;
-  descriptionKey: string | null;
-  texts: CatalogTexts;
-  initialSource: string;
-  onClose: () => void;
-  onSaved: () => Promise<void>;
-}) {
-  const { t } = useLocale();
-  const message = useMessage();
-  const dirOf = useDirOf();
-  const textsIn = (lang: string): NamesForm => ({
-    sourceLang: lang,
-    name: texts[lang]?.[nameKey] ?? "",
-    description: (descriptionKey && texts[lang]?.[descriptionKey]) || "",
-  });
-  const [form, setForm] = useState<NamesForm>(() => textsIn(initialSource));
-  const [errors, setErrors] = useState<Partial<Record<keyof NamesForm, string>>>({});
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const set = (k: keyof NamesForm, v: string) => setForm((f) => ({ ...f, [k]: v }));
-
-  const save = async () => {
-    const found = validateNamesForm(form);
-    setErrors(found);
-    if (Object.keys(found).length) return;
-    setBusy(true);
-    setError(null);
-    try {
-      if (kind === "product") await catalogApi.updateProduct(id, namesBody(form, "product"));
-      else await catalogApi.updateCategory(id, namesBody(form, "category"));
-      await onSaved();
-    } catch (e) {
-      setError(message(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const P = K.product;
-  const dir = dirOf(form.sourceLang);
-  return (
-    <Sheet title={t("common", K.rename)} onClose={onClose}>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label={t("common", P.sourceLang)} error={errors.sourceLang}>
-          <LanguageSelect value={form.sourceLang} onChange={(v) => setForm(textsIn(v))} />
-        </Field>
-        <Field label={t("common", P.name)} error={errors.name} hint={t("common", P.nameHint)}>
-          <input className={input} dir={dir} maxLength={NAME_MAX} value={form.name} onChange={(e) => set("name", e.target.value)} />
-        </Field>
-        {kind === "product" && (
-          <Field label={t("common", P.description)}>
-            <textarea className={input} dir={dir} rows={3} maxLength={DESCRIPTION_MAX} value={form.description} onChange={(e) => set("description", e.target.value)} />
-          </Field>
-        )}
-      </div>
-      {error && (
-        <p role="alert" className="text-xs font-bold text-error">
-          {error}
-        </p>
-      )}
-      <div className="flex justify-end gap-2">
-        <button type="button" className={quietButton} onClick={onClose}>
-          {t("common", K.cancel)}
-        </button>
-        <button type="button" className={primaryButton} disabled={busy} onClick={() => void save()}>
-          {t("common", K.save)}
-        </button>
-      </div>
-    </Sheet>
-  );
-}
-
-function ProductSheet({
-  categories,
-  categoryLabel,
-  onClose,
-  onSaved,
-}: {
-  categories: CatalogCategory[];
-  categoryLabel: (c: CatalogCategory) => string;
-  onClose: () => void;
-  onSaved: () => Promise<void>;
-}) {
-  const { t } = useLocale();
-  const message = useMessage();
-  const { me } = usePanelSession();
-  const owner = isPlatformOwner(me);
-  const [form, setForm] = useState<ProductForm>(() => emptyProductForm(DEFAULT_LOCALE));
-  const dirOf = useDirOf();
-  const [errors, setErrors] = useState<Partial<Record<keyof ProductForm, string>>>({});
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const set = <F extends keyof ProductForm>(k: F, v: ProductForm[F]) => setForm((f) => ({ ...f, [k]: v }));
-
-  const save = async () => {
-    const found = validateProductForm(form, me);
-    setErrors(found);
-    if (Object.keys(found).length) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await catalogApi.createProduct(productBody(form, me));
-      await onSaved();
-    } catch (e) {
-      setError(message(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Sheet title={t("common", K.newProduct)} onClose={onClose}>
-      {owner && (
-        <Field label={t("common", K.product.owner)}>
-          <Select
-            value={form.owner}
-            onChange={(v) => set("owner", v as ProductForm["owner"])}
-            options={[
-              { value: "own", label: t("common", K.product.ownerOwn) },
-              { value: "platform", label: t("common", K.product.ownerPlatform) },
-              { value: "tenant", label: t("common", K.product.ownerTenant) },
-            ]}
-          />
-        </Field>
-      )}
-      {owner && form.owner === "tenant" && (
-        <Field label={t("common", K.product.tenantId)} error={errors.tenantId}>
-          <input className={input} dir="ltr" value={form.tenantId} onChange={(e) => set("tenantId", e.target.value)} />
-        </Field>
-      )}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label={t("common", K.product.category)} error={errors.categoryId}>
-          <Select value={form.categoryId} onChange={(v) => set("categoryId", v)} options={categories.map((c) => ({ value: c.id, label: categoryLabel(c) }))} placeholder="—" />
-        </Field>
-        <Field label={t("common", K.product.fulfilmentKind)}>
-          <Select
-            value={form.fulfilmentKind}
-            onChange={(v) => set("fulfilmentKind", v as ProductForm["fulfilmentKind"])}
-            options={FULFILMENT_KINDS.map((k) => ({ value: k, label: t("common", K.fulfilmentKind[k]) }))}
-          />
-        </Field>
-        <Field label={t("common", K.product.key)} error={errors.key}>
-          <input className={input} dir="ltr" value={form.key} onChange={(e) => set("key", e.target.value)} />
-        </Field>
-        <Field label={t("common", K.product.sourceLang)} error={errors.sourceLang}>
-          <LanguageSelect value={form.sourceLang} onChange={(v) => set("sourceLang", v)} />
-        </Field>
-        <Field label={t("common", K.product.name)} error={errors.name} hint={t("common", K.product.nameHint)}>
-          <input className={input} dir={dirOf(form.sourceLang)} maxLength={NAME_MAX} value={form.name} onChange={(e) => set("name", e.target.value)} />
-        </Field>
-        <Field label={t("common", K.product.description)}>
-          <textarea className={input} dir={dirOf(form.sourceLang)} rows={2} maxLength={DESCRIPTION_MAX} value={form.description} onChange={(e) => set("description", e.target.value)} />
-        </Field>
-        <Field label={t("common", K.product.featureKeys)} error={errors.featureKeys} hint={t("common", K.product.featureKeysHint)}>
-          <textarea className={input} dir="ltr" rows={2} value={form.featureKeys} onChange={(e) => set("featureKeys", e.target.value)} />
-        </Field>
-      </div>
-      {error && (
-        <p role="alert" className="text-xs font-bold text-error">
-          {error}
-        </p>
-      )}
-      <div className="flex justify-end gap-2">
-        <button type="button" className={quietButton} onClick={onClose}>
-          {t("common", K.cancel)}
-        </button>
-        <button type="button" className={primaryButton} disabled={busy} onClick={() => void save()}>
-          {t("common", K.save)}
-        </button>
-      </div>
-    </Sheet>
-  );
-}
-
-function VariantsSheet({ productId, onClose }: { productId: string; onClose: () => void }) {
-  const { t, lang } = useLocale();
-  const message = useMessage();
-  const [detail, setDetail] = useState<CatalogProductDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
-
-  const load = useCallback(async () => {
-    try {
-      setDetail(await catalogApi.product(productId));
-      setError(null);
-    } catch (e) {
-      setError(message(e));
-    }
-    // `message` is rebuilt each render; the product is what decides a reload.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productId]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load();
-  }, [load]);
-
-  const money = (amount: string) => formatMoney(amount, BASE_CURRENCY, { lang, t });
-
-  return (
-    <Sheet title={detail ? `${detail.key} · ${t("common", K.open)}` : t("common", K.open)} onClose={onClose}>
-      {error && (
-        <p role="alert" className="text-xs font-bold text-error">
-          {error}
-        </p>
-      )}
-      {!detail && !error && (
-        <p className="flex items-center gap-2 text-xs text-text-secondary">
-          <Loader2 size={14} className="animate-spin" aria-hidden />
-          {t("common", K.loading)}
-        </p>
-      )}
-      {detail?.variants.map((v) => (
-        <VariantCard key={v.id} variant={v} money={money} onChanged={load} />
-      ))}
-      {detail &&
-        (adding ? (
-          <NewVariant
-            productId={productId}
-            onCancel={() => setAdding(false)}
-            onSaved={async () => {
-              setAdding(false);
-              await load();
-            }}
-          />
-        ) : (
-          <button type="button" className={primaryButton} onClick={() => setAdding(true)}>
-            <Plus size={14} aria-hidden />
-            {t("common", K.newVariant)}
-          </button>
-        ))}
-    </Sheet>
-  );
-}
-
-function VariantCard({ variant: v, money, onChanged }: { variant: CatalogVariant; money: (a: string) => string; onChanged: () => Promise<void> }) {
-  const { t, lang } = useLocale();
-  const message = useMessage();
-  const [form, setForm] = useState<PriceForm>({ amount: "", day: "" });
-  const [errors, setErrors] = useState<Partial<Record<keyof PriceForm, string>>>({});
-  const [error, setError] = useState<string | null>(null);
-  const now = new Date();
-  const current = currentPrice(v.prices, now);
-
-  const act = async (run: () => Promise<unknown>) => {
-    setError(null);
-    try {
-      await run();
-      await onChanged();
-    } catch (e) {
-      setError(message(e));
-    }
-  };
-
-  const newPrice = async () => {
-    const today = tehranToday();
-    const found = validatePriceForm(form, today);
-    setErrors(found);
-    if (Object.keys(found).length) return;
-    await act(() => catalogApi.setPrice(v.id, priceBody(form, today)));
-    setForm({ amount: "", day: "" });
-  };
-
-  return (
-    <section className="flex flex-col gap-3 rounded-2xl border border-card-border p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="font-mono text-sm font-bold text-text-primary" dir="ltr">
-            {v.sku}
-          </p>
-          {/* The id a free-service coupon names (F-502-l-c). */}
-          <p className="select-all font-mono text-[10px] text-text-secondary" dir="ltr">
-            {v.id}
-          </p>
-          <p className="text-[11px] text-text-secondary">
-            {t("common", K.visibility[v.visibility])} · {t("common", K.billingMode[v.billingMode])} ·{" "}
-            {v.durationDays === null ? t("common", K.variant.permanent) : t("common", K.variant.days, { count: v.durationDays })}
-            {!v.isActive && ` · ${t("common", K.inactive)}`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-xs font-bold text-primary">
-            {current ? money(current.amount) : t("common", K.price.noPrice)}
-          </span>
-          <button type="button" className={quietButton} onClick={() => void act(() => catalogApi.updateVariant(v.id, { isActive: !v.isActive }))}>
-            <Power size={14} aria-hidden />
-            {t("common", v.isActive ? K.deactivate : K.activate)}
-          </button>
-        </div>
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full text-start text-xs">
-          <caption className="pb-1 text-start text-[11px] font-bold text-text-secondary">{t("common", K.price.history)}</caption>
-          <tbody className="divide-y divide-card-border text-text-primary">
-            {v.prices.map((p) => (
-              <tr key={p.id}>
-                <td className="px-2 py-1.5">{money(p.amount)}</td>
-                <td className="px-2 py-1.5">{t("common", K.price.effectiveFrom, { time: formatInstant(p.effectiveFrom, lang) ?? "" })}</td>
-                <td className="px-2 py-1.5">
-                  {p.id === current?.id
-                    ? t("common", K.price.current)
-                    : !p.isActive
-                      ? t("common", K.inactive)
-                      : new Date(p.effectiveFrom) > now
-                        ? t("common", K.price.scheduled)
-                        : ""}
-                </td>
-                <td className="px-2 py-1.5 text-end">
-                  {p.isActive && (
-                    <button type="button" className={quietButton} onClick={() => void act(() => catalogApi.deactivatePrice(p.id))}>
-                      {t("common", K.deactivate)}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-        <Field label={t("common", K.price.amount)} error={errors.amount}>
-          <input className={input} dir="ltr" inputMode="decimal" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} />
-        </Field>
-        <Field label={t("common", K.price.day)} error={errors.day} hint={t("common", K.price.dayHint)}>
-          <DatePicker value={form.day || null} onChange={(d) => setForm((f) => ({ ...f, day: d ?? "" }))} />
-        </Field>
-        <button type="button" className={primaryButton} onClick={() => void newPrice()}>
-          {t("common", K.newPrice)}
-        </button>
-      </div>
-      {error && (
-        <p role="alert" className="text-xs font-bold text-error">
-          {error}
-        </p>
-      )}
-    </section>
-  );
-}
-
-function NewVariant({ productId, onCancel, onSaved }: { productId: string; onCancel: () => void; onSaved: () => Promise<void> }) {
-  const { t } = useLocale();
-  const message = useMessage();
-  const [form, setForm] = useState<VariantForm>(emptyVariantForm);
-  const [errors, setErrors] = useState<Partial<Record<keyof VariantForm, string>>>({});
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const set = <F extends keyof VariantForm>(k: F, v: VariantForm[F]) => setForm((f) => ({ ...f, [k]: v }));
-
-  const save = async () => {
-    const found = validateVariantForm(form);
-    setErrors(found);
-    if (Object.keys(found).length) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await catalogApi.createVariant(productId, variantBody(form));
-      await onSaved();
-    } catch (e) {
-      setError(message(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const setQuota = (i: number, patch: Partial<VariantForm["quotas"][number]>) =>
-    set("quotas", form.quotas.map((q, j) => (j === i ? { ...q, ...patch } : q)));
-
-  return (
-    <section className="flex flex-col gap-3 rounded-2xl border border-dashed border-primary p-3">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label={t("common", K.variant.sku)} error={errors.sku} hint={t("common", K.variant.skuHint)}>
-          <input className={input} dir="ltr" value={form.sku} onChange={(e) => set("sku", e.target.value)} />
-        </Field>
-        <Field label={t("common", K.variant.price)} error={errors.price}>
-          <input className={input} dir="ltr" inputMode="decimal" value={form.price} onChange={(e) => set("price", e.target.value)} />
-        </Field>
-        <Field label={t("common", K.variant.billingMode)}>
-          <Select value={form.billingMode} onChange={(v) => set("billingMode", v as VariantForm["billingMode"])} options={BILLING_MODES.map((m) => ({ value: m, label: t("common", K.billingMode[m]) }))} />
-        </Field>
-        <Field label={t("common", K.variant.visibility)}>
-          <Select value={form.visibility} onChange={(v) => set("visibility", v as VariantForm["visibility"])} options={VISIBILITIES.map((m) => ({ value: m, label: t("common", K.visibility[m]) }))} />
-        </Field>
-        <Field label={t("common", K.variant.qualityTier)}>
-          <Select value={form.qualityTier} onChange={(v) => set("qualityTier", v as VariantForm["qualityTier"])} options={QUALITY_TIERS.map((m) => ({ value: m, label: t("common", K.qualityTier[m]) }))} />
-        </Field>
-        <Field label={t("common", K.variant.durationDays)} error={errors.durationDays} hint={t("common", K.variant.durationHint)}>
-          <input className={input} dir="ltr" inputMode="numeric" value={form.durationDays} onChange={(e) => set("durationDays", e.target.value)} />
-        </Field>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <p className="text-xs font-bold text-text-secondary">{t("common", K.variant.quotas)}</p>
-        {form.quotas.map((q, i) => (
-          <div key={i} className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
-            <Select ariaLabel={t("common", K.variant.metric)} value={q.metric} onChange={(v) => setQuota(i, { metric: v as typeof q.metric })} options={QUOTA_METRICS.map((m) => ({ value: m, label: t("common", K.metric[m]) }))} />
-            <input className={input} dir="ltr" inputMode="numeric" aria-label={t("common", K.variant.limit)} value={q.limit} onChange={(e) => setQuota(i, { limit: e.target.value })} />
-            <Select ariaLabel={t("common", K.variant.resetPolicy)} value={q.resetPolicy} onChange={(v) => setQuota(i, { resetPolicy: v as typeof q.resetPolicy })} options={RESET_POLICIES.map((m) => ({ value: m, label: t("common", K.resetPolicy[m]) }))} />
-            <button type="button" className={quietButton} onClick={() => set("quotas", form.quotas.filter((_, j) => j !== i))}>
-              {t("common", K.variant.remove)}
-            </button>
-          </div>
-        ))}
-        {errors.quotas && <p className="text-[11px] text-error">{t("common", errors.quotas)}</p>}
-        <button
-          type="button"
-          className={`${quietButton} self-start`}
-          onClick={() => set("quotas", [...form.quotas, { metric: "traffic_bytes", limit: "", resetPolicy: "none" }])}
-        >
-          <Plus size={14} aria-hidden />
-          {t("common", K.variant.addQuota)}
-        </button>
-      </div>
-
-      {error && (
-        <p role="alert" className="text-xs font-bold text-error">
-          {error}
-        </p>
-      )}
-      <div className="flex justify-end gap-2">
-        <button type="button" className={quietButton} onClick={onCancel}>
-          {t("common", K.cancel)}
-        </button>
-        <button type="button" className={primaryButton} disabled={busy} onClick={() => void save()}>
-          {t("common", K.save)}
-        </button>
-      </div>
-    </section>
   );
 }

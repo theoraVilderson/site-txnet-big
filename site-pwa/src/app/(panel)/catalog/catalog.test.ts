@@ -33,6 +33,17 @@ import {
   validateProductForm,
   validateVariantForm,
   variantBody,
+  emptyWizard,
+  featureKeysIn,
+  firstInvalidStep,
+  isFeatureKey,
+  slugKey,
+  suggestKey,
+  suggestSku,
+  wizardStepErrors,
+  WIZARD_STEPS,
+  quotaFromInput,
+  quotaToInput,
 } from "./_lib/catalog-form";
 
 /**
@@ -109,7 +120,7 @@ describe("what billing can refuse, and what it accepts", () => {
 });
 
 describe("the product form", () => {
-  const valid = () => ({ ...emptyProductForm("fa"), categoryId: UUID, key: "vpn_pro", name: "وی‌پی‌ان پرو", featureKeys: "vpn.access" });
+  const valid = () => ({ ...emptyProductForm("fa"), categoryId: UUID, key: "vpn_pro", name: "وی‌پی‌ان پرو", featureKeys: ["vpn.access"] });
 
   it("accepts a plain product", () => {
     expect(validateProductForm(valid(), RESELLER)).toEqual({});
@@ -119,7 +130,7 @@ describe("the product form", () => {
     [{ key: "Bad Key" }, "key"],
     [{ name: "  " }, "name"],
     [{ sourceLang: "" }, "sourceLang"],
-    [{ featureKeys: "vpn.access, Not-A-Key" }, "featureKeys"],
+    [{ featureKeys: ["vpn.access", "Not-A-Key"] }, "featureKeys"],
     [{ categoryId: "" }, "categoryId"],
   ])("refuses %o on %s", (patch, field) => {
     expect(validateProductForm({ ...valid(), ...patch }, RESELLER)).toHaveProperty(field);
@@ -137,8 +148,8 @@ describe("the product form", () => {
     expect(productBody({ ...valid(), owner: "own" }, OWNER)).not.toHaveProperty("tenantId");
   });
 
-  it("splits feature keys, trims and drops repeats, and leaves out a blank description", () => {
-    const body = productBody({ ...valid(), featureKeys: " vpn.access,\napi.public  vpn.access " }, RESELLER);
+  it("trims feature keys and drops repeats, and leaves out a blank description", () => {
+    const body = productBody({ ...valid(), featureKeys: [" vpn.access", "api.public", "vpn.access "] }, RESELLER);
     expect(body.featureKeys).toEqual(["vpn.access", "api.public"]);
     expect(body).not.toHaveProperty("description");
   });
@@ -149,6 +160,77 @@ describe("the product form", () => {
     expect(body).toMatchObject({ sourceLang: "en", name: { en: "VPN Pro" }, description: { en: "About" } });
     expect(body).not.toHaveProperty("nameKey");
     expect(body).not.toHaveProperty("descriptionKey");
+  });
+});
+
+describe("nothing to remember: keys and capabilities are suggested", () => {
+  it("offers every capability the caller's products already use, once and sorted", () => {
+    const products = [{ featureKeys: ["vpn.access", "vpn.premium_nodes"] }, { featureKeys: [] }, { featureKeys: ["api.public", "vpn.access"] }];
+    expect(featureKeysIn(products)).toEqual(["api.public", "vpn.access", "vpn.premium_nodes"]);
+    expect(isFeatureKey("vpn.access")).toBe(true);
+    expect(isFeatureKey("vpn")).toBe(false);
+    expect(isFeatureKey("VPN.Access")).toBe(false);
+  });
+
+  it("derives a key billing accepts from a name in any script", () => {
+    expect(slugKey("VPN Pro 90 Days!")).toBe("vpn_pro_90_days");
+    expect(slugKey("وی‌پی‌ان ویژه")).toMatch(/^[a-z][a-z0-9_]{1,63}$/);
+    expect(slugKey("۳۰ روزه")).toMatch(/^[a-z][a-z0-9_]{1,63}$/);
+    expect(slugKey("   ")).toBe("");
+    expect(slugKey("x".repeat(100))).toHaveLength(64);
+  });
+
+  it("never suggests a key already taken, and falls back when the name gives nothing", () => {
+    expect(suggestKey("VPN Pro", ["vpn_pro", "vpn_pro_2"], "product")).toBe("vpn_pro_3");
+    expect(suggestKey("!!!", [], "product")).toMatch(/^product_[a-z0-9]+$/);
+  });
+
+  it("suggests a SKU from the product key and the duration", () => {
+    expect(suggestSku("vpn_pro", "30")).toBe("VPN_PRO-30D");
+    expect(suggestSku("vpn_pro", "")).toBe("VPN_PRO-PERM");
+    expect(suggestSku("a".repeat(64), "365")).toMatch(/^[A-Z0-9][A-Z0-9_-]{1,39}$/);
+  });
+});
+
+describe("the new product wizard", () => {
+  const ready = () => {
+    const w = emptyWizard("fa");
+    w.categoryId = UUID;
+    w.product = { ...w.product, key: "vpn_pro", name: "وی‌پی‌ان پرو", featureKeys: ["vpn.access"] };
+    w.variant = { ...w.variant, sku: "VPN_PRO-30D", price: "5", durationDays: "30" };
+    return w;
+  };
+
+  it("walks category, names, access, first variant, review", () => {
+    expect(WIZARD_STEPS).toEqual(["category", "names", "access", "variant", "review"]);
+    expect(firstInvalidStep(ready(), RESELLER)).toBeNull();
+  });
+
+  it("checks each step only for its own fields", () => {
+    const w = ready();
+    w.product.name = "";
+    expect(wizardStepErrors("category", w, RESELLER)).toEqual({});
+    expect(wizardStepErrors("names", w, RESELLER)).toHaveProperty("name");
+    expect(firstInvalidStep(w, RESELLER)).toBe("names");
+  });
+
+  it("needs a picked category, or a new one with a name", () => {
+    const w = ready();
+    w.categoryId = "";
+    expect(wizardStepErrors("category", w, RESELLER)).toHaveProperty("categoryId");
+    w.newCategory = { ...w.newCategory, key: "vpn", name: "" };
+    w.categoryMode = "new";
+    expect(wizardStepErrors("category", w, RESELLER)).toHaveProperty("name");
+    w.newCategory.name = "وی‌پی‌ان";
+    expect(wizardStepErrors("category", w, RESELLER)).toEqual({});
+  });
+
+  it("lets the first variant be skipped, and checks it only when it is not", () => {
+    const w = ready();
+    w.variant.price = "";
+    expect(wizardStepErrors("variant", w, RESELLER)).toHaveProperty("price");
+    w.withVariant = false;
+    expect(wizardStepErrors("variant", w, RESELLER)).toEqual({});
   });
 });
 
@@ -237,6 +319,14 @@ describe("the variant form", () => {
     ],
   ])("refuses %o on %s", (patch, field) => {
     expect(validateVariantForm({ ...valid(), ...patch })).toHaveProperty(field);
+  });
+
+  it("takes traffic in whole GB and stores bytes; every other metric as typed", () => {
+    expect(quotaFromInput("traffic_bytes", "50")).toBe("53687091200");
+    expect(quotaToInput("traffic_bytes", "53687091200")).toBe("50");
+    expect(quotaFromInput("traffic_bytes", "5.5")).toBe("5.5"); // left for the validator to refuse
+    expect(quotaFromInput("concurrent_devices", "2")).toBe("2");
+    expect(quotaToInput("traffic_bytes", "")).toBe("");
   });
 
   it("allows a free variant", () => {
