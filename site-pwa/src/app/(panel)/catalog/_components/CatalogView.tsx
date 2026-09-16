@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Package, Plus, Power, RotateCw, Tags, X } from "lucide-react";
+import Link from "next/link";
+import { Languages, Loader2, Package, Pencil, Plus, Power, RotateCw, Tags, X } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import {
@@ -12,6 +13,7 @@ import {
   type CatalogProductDetail,
   type CatalogVariant,
 } from "@/lib/catalog-api";
+import { PANEL_CATALOG_TRANSLATIONS } from "@/lib/routes";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { DatePicker } from "../../_components/kit/DatePicker";
 import { Select } from "../../_components/kit/Select";
@@ -24,19 +26,32 @@ import {
   QUALITY_TIERS,
   QUOTA_METRICS,
   RESET_POLICIES,
+  DESCRIPTION_MAX,
+  NAME_MAX,
   VISIBILITIES,
+  catalogText,
+  categoryBody,
   currentPrice,
+  emptyCategoryForm,
   emptyProductForm,
   emptyVariantForm,
+  flattenTexts,
   isPlatformOwner,
+  namesBody,
   priceBody,
   productBody,
   refusalKey,
   tehranToday,
+  textLangs,
+  validateCategoryForm,
+  validateNamesForm,
   validatePriceForm,
   validateProductForm,
   validateVariantForm,
   variantBody,
+  type CatalogTexts,
+  type CategoryForm,
+  type NamesForm,
   type PriceForm,
   type ProductForm,
   type VariantForm,
@@ -57,8 +72,20 @@ function useMessage() {
 }
 
 /**
+ * The published `catalog` namespace in the viewer's language and the fallback
+ * ones (F-1533-e). A failure costs the names, never the list: it shows keys.
+ */
+async function loadTexts(lang: string): Promise<CatalogTexts> {
+  const entries = await Promise.all(
+    textLangs(lang).map(async (l) => [l, flattenTexts(await catalogApi.texts(l).catch(() => ({})))] as const),
+  );
+  return Object.fromEntries(entries);
+}
+
+/**
  * The catalog page (F-026-f, D-34): categories, products, and for each product
- * its variants with their price history.
+ * its variants with their price history. Items show their name in the viewer's
+ * language, then en, then fa, then their key (F-1533-e, ADR-0050).
  *
  * One page for two audiences, and the page decides neither: billing answers
  * the platform owner every item and a tenant its own. Nothing is patched from a
@@ -66,7 +93,7 @@ function useMessage() {
  * price is switched off. A price change is always a new row (F-0602).
  */
 export function CatalogView() {
-  const { t } = useLocale();
+  const { t, lang } = useLocale();
   const message = useMessage();
   const { me, isLoading: sessionLoading } = usePanelSession();
   const owner = isPlatformOwner(me);
@@ -79,20 +106,24 @@ export function CatalogView() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [creating, setCreating] = useState<"product" | "category" | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [texts, setTexts] = useState<CatalogTexts>({});
+  const [renaming, setRenaming] = useState<{ kind: "product" | "category"; id: string; nameKey: string; descriptionKey: string | null } | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [cats, prods] = await Promise.all([
+      const [cats, prods, names] = await Promise.all([
         catalogApi.categories(),
         catalogApi.products({ categoryId: categoryId || undefined, tenantId: scope || undefined }),
+        loadTexts(lang),
       ]);
       setCategories(cats);
       setProducts(prods);
+      setTexts(names);
       setError(null);
     } catch (e) {
       setError(e);
     }
-  }, [categoryId, scope]);
+  }, [categoryId, scope, lang]);
 
   useEffect(() => {
     // Every setState in load runs after its first await, as in `CouponsView`.
@@ -111,7 +142,17 @@ export function CatalogView() {
     }
   };
 
-  const categoryKey = (id: string) => categories.find((c) => c.id === id)?.key ?? "—";
+  const nameOf = (item: { key: string; nameKey: string }) => catalogText(texts, lang, item.nameKey) ?? item.key;
+  const categoryName = (id: string) => {
+    const c = categories.find((x) => x.id === id);
+    return c ? nameOf(c) : "—";
+  };
+  const selectedCategory = categories.find((c) => c.id === categoryId);
+  const saved = async () => {
+    setRenaming(null);
+    setNotice(t("common", K.saved));
+    await load();
+  };
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
@@ -124,6 +165,10 @@ export function CatalogView() {
           <p className="text-xs text-text-secondary">{t("common", K.subtitle)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link href={PANEL_CATALOG_TRANSLATIONS} className={quietButton}>
+            <Languages size={14} aria-hidden />
+            {t("common", K.translations.open)}
+          </Link>
           <button type="button" className={quietButton} onClick={() => setCreating("category")}>
             <Tags size={14} aria-hidden />
             {t("common", K.newCategory)}
@@ -140,9 +185,19 @@ export function CatalogView() {
           ariaLabel={t("common", K.filters.category)}
           value={categoryId}
           onChange={setCategoryId}
-          options={[{ value: "", label: t("common", K.filters.allCategories) }, ...categories.map((c) => ({ value: c.id, label: c.key }))]}
+          options={[{ value: "", label: t("common", K.filters.allCategories) }, ...categories.map((c) => ({ value: c.id, label: nameOf(c) }))]}
           className="w-44"
         />
+        {selectedCategory && (
+          <button
+            type="button"
+            className={quietButton}
+            onClick={() => setRenaming({ kind: "category", id: selectedCategory.id, nameKey: selectedCategory.nameKey, descriptionKey: null })}
+          >
+            <Pencil size={14} aria-hidden />
+            {t("common", K.rename)}
+          </button>
+        )}
         {owner && (
           <Select
             ariaLabel={t("common", K.filters.scope)}
@@ -186,16 +241,18 @@ export function CatalogView() {
           {products!.map((p) => (
             <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm">
               <div className="min-w-0">
-                <p className="truncate text-sm font-bold text-text-primary" dir="ltr">
-                  {p.key}
-                </p>
+                <p className="truncate text-sm font-bold text-text-primary">{nameOf(p)}</p>
                 <p className="text-[11px] text-text-secondary">
-                  {categoryKey(p.categoryId)} · {t("common", K.fulfilmentKind[p.fulfilmentKind])}
+                  <span dir="ltr">{p.key}</span> · {categoryName(p.categoryId)} · {t("common", K.fulfilmentKind[p.fulfilmentKind])}
                   {p.tenantId === null && ` · ${t("common", K.platform)}`}
                   {!p.isActive && ` · ${t("common", K.inactive)}`}
                 </p>
               </div>
               <div className="flex gap-1">
+                <button type="button" className={quietButton} onClick={() => setRenaming({ kind: "product", id: p.id, nameKey: p.nameKey, descriptionKey: p.descriptionKey })}>
+                  <Pencil size={14} aria-hidden />
+                  {t("common", K.rename)}
+                </button>
                 <button type="button" className={quietButton} onClick={() => setOpenId(p.id)}>
                   {t("common", K.open)}
                 </button>
@@ -223,6 +280,7 @@ export function CatalogView() {
       {creating === "product" && (
         <ProductSheet
           categories={categories}
+          categoryLabel={nameOf}
           onClose={() => setCreating(null)}
           onSaved={async () => {
             setCreating(null);
@@ -232,6 +290,19 @@ export function CatalogView() {
         />
       )}
       {openId && <VariantsSheet productId={openId} onClose={() => setOpenId(null)} />}
+      {renaming && (
+        <NamesSheet
+          {...renaming}
+          initial={{
+            fa: texts.fa?.[renaming.nameKey] ?? "",
+            en: texts.en?.[renaming.nameKey] ?? "",
+            descriptionFa: (renaming.descriptionKey && texts.fa?.[renaming.descriptionKey]) || "",
+            descriptionEn: (renaming.descriptionKey && texts.en?.[renaming.descriptionKey]) || "",
+          }}
+          onClose={() => setRenaming(null)}
+          onSaved={saved}
+        />
+      )}
     </div>
   );
 }
@@ -275,17 +346,20 @@ function Field({ label, error, hint, children }: { label: string; error?: string
 function CategorySheet({ owner, onClose, onSaved }: { owner: boolean; onClose: () => void; onSaved: () => Promise<void> }) {
   const { t } = useLocale();
   const message = useMessage();
-  const [key, setKey] = useState("");
-  const [nameKey, setNameKey] = useState("");
-  const [shared, setShared] = useState(false);
+  const [form, setForm] = useState<CategoryForm>(emptyCategoryForm);
+  const [errors, setErrors] = useState<Partial<Record<keyof CategoryForm, string>>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const set = <F extends keyof CategoryForm>(k: F, v: CategoryForm[F]) => setForm((f) => ({ ...f, [k]: v }));
 
   const save = async () => {
+    const found = validateCategoryForm(form);
+    setErrors(found);
+    if (Object.keys(found).length) return;
     setBusy(true);
     setError(null);
     try {
-      await catalogApi.createCategory({ key: key.trim(), nameKey: nameKey.trim(), ...(owner && shared ? { tenantId: null } : {}) });
+      await catalogApi.createCategory(categoryBody(form, owner));
       await onSaved();
     } catch (e) {
       setError(message(e));
@@ -296,15 +370,20 @@ function CategorySheet({ owner, onClose, onSaved }: { owner: boolean; onClose: (
 
   return (
     <Sheet title={t("common", K.newCategory)} onClose={onClose}>
-      <Field label={t("common", K.category.key)}>
-        <input className={input} dir="ltr" value={key} onChange={(e) => setKey(e.target.value)} />
+      <Field label={t("common", K.category.key)} error={errors.key}>
+        <input className={input} dir="ltr" value={form.key} onChange={(e) => set("key", e.target.value)} />
       </Field>
-      <Field label={t("common", K.category.nameKey)} hint={t("common", K.product.nameHint)}>
-        <input className={input} dir="ltr" value={nameKey} onChange={(e) => setNameKey(e.target.value)} />
-      </Field>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label={t("common", K.category.nameFa)} error={errors.nameFa}>
+          <input className={input} dir="rtl" maxLength={NAME_MAX} value={form.nameFa} onChange={(e) => set("nameFa", e.target.value)} />
+        </Field>
+        <Field label={t("common", K.category.nameEn)} error={errors.nameEn} hint={t("common", K.product.nameHint)}>
+          <input className={input} dir="ltr" maxLength={NAME_MAX} value={form.nameEn} onChange={(e) => set("nameEn", e.target.value)} />
+        </Field>
+      </div>
       {owner && (
         <label className="flex items-center gap-2 text-xs text-text-primary">
-          <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} />
+          <input type="checkbox" checked={form.shared} onChange={(e) => set("shared", e.target.checked)} />
           {t("common", K.category.shared)}
         </label>
       )}
@@ -325,7 +404,94 @@ function CategorySheet({ owner, onClose, onSaved }: { owner: boolean; onClose: (
   );
 }
 
-function ProductSheet({ categories, onClose, onSaved }: { categories: CatalogCategory[]; onClose: () => void; onSaved: () => Promise<void> }) {
+/** Renames an existing item in fa and en (F-1533-e). Billing re-keys it and drafts the other languages again. */
+function NamesSheet({
+  kind,
+  id,
+  initial,
+  onClose,
+  onSaved,
+}: {
+  kind: "product" | "category";
+  id: string;
+  initial: NamesForm;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const { t } = useLocale();
+  const message = useMessage();
+  const [form, setForm] = useState<NamesForm>(initial);
+  const [errors, setErrors] = useState<Partial<Record<keyof NamesForm, string>>>({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const set = (k: keyof NamesForm, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const save = async () => {
+    const found = validateNamesForm(form, kind);
+    setErrors(found);
+    if (Object.keys(found).length) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (kind === "product") await catalogApi.updateProduct(id, namesBody(form, "product"));
+      else await catalogApi.updateCategory(id, namesBody(form, "category"));
+      await onSaved();
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const P = K.product;
+  return (
+    <Sheet title={t("common", K.rename)} onClose={onClose}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label={t("common", P.nameFa)} error={errors.fa}>
+          <input className={input} dir="rtl" maxLength={NAME_MAX} value={form.fa} onChange={(e) => set("fa", e.target.value)} />
+        </Field>
+        <Field label={t("common", P.nameEn)} error={errors.en} hint={t("common", P.nameHint)}>
+          <input className={input} dir="ltr" maxLength={NAME_MAX} value={form.en} onChange={(e) => set("en", e.target.value)} />
+        </Field>
+        {kind === "product" && (
+          <>
+            <Field label={t("common", P.descriptionFa)} error={errors.descriptionFa}>
+              <textarea className={input} dir="rtl" rows={3} maxLength={DESCRIPTION_MAX} value={form.descriptionFa} onChange={(e) => set("descriptionFa", e.target.value)} />
+            </Field>
+            <Field label={t("common", P.descriptionEn)} error={errors.descriptionEn}>
+              <textarea className={input} dir="ltr" rows={3} maxLength={DESCRIPTION_MAX} value={form.descriptionEn} onChange={(e) => set("descriptionEn", e.target.value)} />
+            </Field>
+          </>
+        )}
+      </div>
+      {error && (
+        <p role="alert" className="text-xs font-bold text-error">
+          {error}
+        </p>
+      )}
+      <div className="flex justify-end gap-2">
+        <button type="button" className={quietButton} onClick={onClose}>
+          {t("common", K.cancel)}
+        </button>
+        <button type="button" className={primaryButton} disabled={busy} onClick={() => void save()}>
+          {t("common", K.save)}
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
+function ProductSheet({
+  categories,
+  categoryLabel,
+  onClose,
+  onSaved,
+}: {
+  categories: CatalogCategory[];
+  categoryLabel: (c: CatalogCategory) => string;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
   const { t } = useLocale();
   const message = useMessage();
   const { me } = usePanelSession();
@@ -374,7 +540,7 @@ function ProductSheet({ categories, onClose, onSaved }: { categories: CatalogCat
       )}
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label={t("common", K.product.category)} error={errors.categoryId}>
-          <Select value={form.categoryId} onChange={(v) => set("categoryId", v)} options={categories.map((c) => ({ value: c.id, label: c.key }))} placeholder="—" />
+          <Select value={form.categoryId} onChange={(v) => set("categoryId", v)} options={categories.map((c) => ({ value: c.id, label: categoryLabel(c) }))} placeholder="—" />
         </Field>
         <Field label={t("common", K.product.fulfilmentKind)}>
           <Select
@@ -386,11 +552,17 @@ function ProductSheet({ categories, onClose, onSaved }: { categories: CatalogCat
         <Field label={t("common", K.product.key)} error={errors.key}>
           <input className={input} dir="ltr" value={form.key} onChange={(e) => set("key", e.target.value)} />
         </Field>
-        <Field label={t("common", K.product.nameKey)} error={errors.nameKey} hint={t("common", K.product.nameHint)}>
-          <input className={input} dir="ltr" value={form.nameKey} onChange={(e) => set("nameKey", e.target.value)} />
+        <Field label={t("common", K.product.nameFa)} error={errors.nameFa}>
+          <input className={input} dir="rtl" maxLength={NAME_MAX} value={form.nameFa} onChange={(e) => set("nameFa", e.target.value)} />
         </Field>
-        <Field label={t("common", K.product.descriptionKey)} error={errors.descriptionKey}>
-          <input className={input} dir="ltr" value={form.descriptionKey} onChange={(e) => set("descriptionKey", e.target.value)} />
+        <Field label={t("common", K.product.nameEn)} error={errors.nameEn} hint={t("common", K.product.nameHint)}>
+          <input className={input} dir="ltr" maxLength={NAME_MAX} value={form.nameEn} onChange={(e) => set("nameEn", e.target.value)} />
+        </Field>
+        <Field label={t("common", K.product.descriptionFa)} error={errors.descriptionFa}>
+          <textarea className={input} dir="rtl" rows={2} maxLength={DESCRIPTION_MAX} value={form.descriptionFa} onChange={(e) => set("descriptionFa", e.target.value)} />
+        </Field>
+        <Field label={t("common", K.product.descriptionEn)} error={errors.descriptionEn}>
+          <textarea className={input} dir="ltr" rows={2} maxLength={DESCRIPTION_MAX} value={form.descriptionEn} onChange={(e) => set("descriptionEn", e.target.value)} />
         </Field>
         <Field label={t("common", K.product.featureKeys)} error={errors.featureKeys} hint={t("common", K.product.featureKeysHint)}>
           <textarea className={input} dir="ltr" rows={2} value={form.featureKeys} onChange={(e) => set("featureKeys", e.target.value)} />

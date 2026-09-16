@@ -46,7 +46,31 @@ export type CatalogRejection =
   | "price_not_found"
   | "key_taken"
   | "sku_taken"
-  | "price_in_the_past";
+  | "price_in_the_past"
+  | "text_key_invalid"
+  | "texts_unavailable";
+
+/** Text in the two languages an admin writes (F-1533-d); the key is billing's. */
+export interface Bilingual {
+  fa: string;
+  en: string;
+}
+
+/** One machine draft waiting for review, beside its source (`GET /translations`). */
+export interface TranslationDraft {
+  lang: string;
+  /** The full i18n key the item row holds. */
+  key: string;
+  draft: string;
+  published: string | null;
+  source: { fa: string | null; en: string | null };
+}
+
+export interface CreateCategoryBody {
+  tenantId?: string | null;
+  key: string;
+  name: Bilingual;
+}
 
 export interface CatalogCategory {
   id: string;
@@ -104,13 +128,13 @@ export interface CreateProductBody {
   tenantId?: string | null;
   categoryId: string;
   key: string;
-  nameKey: string;
-  descriptionKey?: string | null;
+  name: Bilingual;
+  description?: Bilingual | null;
   fulfilmentKind: FulfilmentKind;
   featureKeys?: string[];
   defaultQuotas?: Quotas;
 }
-export type UpdateProductBody = Partial<Pick<CreateProductBody, "nameKey" | "descriptionKey" | "featureKeys" | "defaultQuotas">> & { isActive?: boolean };
+export type UpdateProductBody = Partial<Pick<CreateProductBody, "name" | "description" | "featureKeys" | "defaultQuotas">> & { isActive?: boolean };
 
 export interface CreateVariantBody {
   sku: string;
@@ -140,11 +164,11 @@ export const catalogApi = {
     return call<CatalogCategory[]>("/categories", { method: "GET" });
   },
 
-  async createCategory(body: { tenantId?: string | null; key: string; nameKey: string }): Promise<CatalogCategory> {
+  async createCategory(body: CreateCategoryBody): Promise<CatalogCategory> {
     return call<CatalogCategory>("/categories", { method: "POST", ...json(body) });
   },
 
-  async updateCategory(categoryId: string, body: { nameKey?: string; isActive?: boolean }): Promise<CatalogCategory> {
+  async updateCategory(categoryId: string, body: { name?: Bilingual; isActive?: boolean }): Promise<CatalogCategory> {
     return call<CatalogCategory>(`/categories/${id(categoryId)}`, { method: "PATCH", ...json(body) });
   },
 
@@ -184,5 +208,36 @@ export const catalogApi = {
 
   async deactivatePrice(priceId: string): Promise<CatalogPrice> {
     return call<CatalogPrice>(`/prices/${id(priceId)}/deactivate`, { method: "POST" });
+  },
+
+  // Translation review (F-1533-d/e): billing limits each call to the caller's items.
+
+  async translations(lang?: string): Promise<TranslationDraft[]> {
+    return call<TranslationDraft[]>(`/translations${lang ? `?lang=${encodeURIComponent(lang)}` : ""}`, { method: "GET" });
+  },
+
+  /** Drafts every language that has neither text nor a draft yet. */
+  async draftMissing(): Promise<{ drafted: number }> {
+    return call<{ drafted: number }>("/translations/draft-missing", { method: "POST" });
+  },
+
+  async publishTranslations(lang: string, keys: string[]): Promise<{ published: number }> {
+    return call<{ published: number }>("/translations/publish", { method: "POST", ...json({ lang, keys }) });
+  },
+
+  async editTranslations(lang: string, texts: Record<string, string>): Promise<{ published: number }> {
+    return call<{ published: number }>("/translations", { method: "PATCH", ...json({ lang, texts }) });
+  },
+
+  /**
+   * The published `catalog` namespace in one language, flat by full key — from
+   * the panel's own i18n route (same origin, what the rest of the panel reads).
+   * A language with no catalog text yet answers 404: that is `{}`, not an error.
+   */
+  async texts(lang: string): Promise<unknown> {
+    const res = await fetch(`/api/i18n/${encodeURIComponent(lang)}/catalog`, { cache: "no-store" });
+    if (res.status === 404) return {};
+    if (!res.ok) throw new Error(`catalog texts ${lang}: ${res.status}`);
+    return res.json();
   },
 };

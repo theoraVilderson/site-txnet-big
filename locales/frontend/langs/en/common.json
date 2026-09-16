@@ -1053,13 +1053,12 @@
     },
     "category": {
       "key": "Key",
-      "nameKey": "Name key",
-      "shared": "Shared with every tenant"
+      "shared": "Shared with every tenant",
+      "nameFa": "Name (Persian)",
+      "nameEn": "Name (English)"
     },
     "product": {
       "key": "Key",
-      "nameKey": "Name key",
-      "descriptionKey": "Description key",
       "fulfilmentKind": "Fulfilment",
       "featureKeys": "Feature keys",
       "featureKeysHint": "What a Grant of it unlocks, e.g. vpn.access — one per line or comma.",
@@ -1069,7 +1068,11 @@
       "ownerPlatform": "The platform's",
       "ownerTenant": "Another tenant's",
       "tenantId": "Tenant ID",
-      "nameHint": "Names are translation keys, not text."
+      "nameHint": "Other languages are drafted by machine and published after review.",
+      "nameFa": "Name (Persian)",
+      "nameEn": "Name (English)",
+      "descriptionFa": "Description (Persian)",
+      "descriptionEn": "Description (English)"
     },
     "variant": {
       "sku": "SKU",
@@ -1134,14 +1137,14 @@
       "required": "Required",
       "uuid": "Enter a valid ID",
       "key": "Lower-case letters, digits and _, starting with a letter",
-      "i18nKey": "A translation key, like catalog.product.vpn.name",
       "featureKey": "Each feature key looks like vpn.access",
       "sku": "2–40 upper-case letters, digits, _ or -",
       "decimal": "A price like 12 or 12.50",
       "duration": "A whole number of days from 1 to 3650",
       "quota": "Each limit is a whole number",
       "quotaRepeat": "Each metric once",
-      "pastDay": "A price cannot start on a day already past"
+      "pastDay": "A price cannot start on a day already past",
+      "bothLanguages": "Write it in both languages, or leave both blank."
     },
     "refusals": {
       "not_platform_owner": "Only the platform owner manages the platform's or another tenant's catalog.",
@@ -1152,7 +1155,30 @@
       "price_not_found": "That price was not found.",
       "key_taken": "This key is already used here.",
       "sku_taken": "This SKU is already sold here.",
-      "price_in_the_past": "A price cannot start in the past: it would change invoices already issued."
+      "price_in_the_past": "A price cannot start in the past: it would change invoices already issued.",
+      "text_key_invalid": "That is not the text of a catalog item.",
+      "texts_unavailable": "The names could not be saved right now. Nothing was changed; try again."
+    },
+    "rename": "Edit names",
+    "translations": {
+      "title": "Catalog translations",
+      "subtitle": "Machine drafts of names and descriptions. Nothing is shown to users until it is published.",
+      "open": "Translations",
+      "back": "Back to the catalog",
+      "language": "Language",
+      "allLanguages": "All languages",
+      "draftMissing": "Translate missing",
+      "drafted": "{{count}} drafts made.",
+      "noneMissing": "Nothing was missing.",
+      "empty": "No drafts waiting for review.",
+      "source": "Source",
+      "current": "Published now",
+      "none": "—",
+      "draft": "Draft",
+      "publish": "Publish",
+      "publishEdited": "Publish edited",
+      "publishAll": "Publish all shown",
+      "published": "{{count}} published."
     }
   }
 }

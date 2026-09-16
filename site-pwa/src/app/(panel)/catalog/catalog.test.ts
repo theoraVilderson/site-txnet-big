@@ -15,8 +15,19 @@ import {
   REFUSAL_KEYS,
   RESET_POLICIES,
   VISIBILITIES,
+  catalogText,
+  categoryBody,
   currentPrice,
+  emptyCategoryForm,
   emptyProductForm,
+  flattenTexts,
+  editId,
+  namesBody,
+  reviewLanguages,
+  reviewWrites,
+  textLangs,
+  validateCategoryForm,
+  validateNamesForm,
   emptyVariantForm,
   priceBody,
   productBody,
@@ -39,7 +50,11 @@ import {
  *    first instant in Tehran, an earlier day is refused here as billing would;
  *  - **the wrong "current" price** shown beside the history — the rule is
  *    billing's `priceAt`: the newest active row already in effect;
- *  - **the menu entry** shown without `catalog.manage`.
+ *  - **the menu entry** shown without `catalog.manage`;
+ *  - **a name that is not what billing takes** (F-1533-d): text in `fa` and
+ *    `en`, never a key; a description in both or neither;
+ *  - **a list showing a raw key** where a name exists: the requested language,
+ *    then `en`, then `fa` (ADR-0050 decision 5), as the clients read it.
  */
 const REPO = join(__dirname, "../../../../..");
 const BACKEND = join(REPO, "txnet-backend");
@@ -96,7 +111,7 @@ describe("what billing can refuse, and what it accepts", () => {
 });
 
 describe("the product form", () => {
-  const valid = () => ({ ...emptyProductForm(), categoryId: UUID, key: "vpn_pro", nameKey: "catalog.product.vpn_pro.name", featureKeys: "vpn.access" });
+  const valid = () => ({ ...emptyProductForm(), categoryId: UUID, key: "vpn_pro", nameFa: "وی‌پی‌ان پرو", nameEn: "VPN Pro", featureKeys: "vpn.access" });
 
   it("accepts a plain product", () => {
     expect(validateProductForm(valid(), RESELLER)).toEqual({});
@@ -104,8 +119,10 @@ describe("the product form", () => {
 
   it.each([
     [{ key: "Bad Key" }, "key"],
-    [{ nameKey: "no dots here" }, "nameKey"],
-    [{ descriptionKey: "not a key" }, "descriptionKey"],
+    [{ nameFa: "  " }, "nameFa"],
+    [{ nameEn: "" }, "nameEn"],
+    [{ descriptionFa: "فقط فارسی" }, "descriptionEn"],
+    [{ descriptionEn: "English only" }, "descriptionFa"],
     [{ featureKeys: "vpn.access, Not-A-Key" }, "featureKeys"],
     [{ categoryId: "" }, "categoryId"],
   ])("refuses %o on %s", (patch, field) => {
@@ -127,7 +144,58 @@ describe("the product form", () => {
   it("splits feature keys, trims and drops repeats, and leaves out a blank description", () => {
     const body = productBody({ ...valid(), featureKeys: " vpn.access,\napi.public  vpn.access " }, RESELLER);
     expect(body.featureKeys).toEqual(["vpn.access", "api.public"]);
+    expect(body).not.toHaveProperty("description");
+  });
+
+  it("sends names as text in fa and en, never a key", () => {
+    const body = productBody({ ...valid(), nameEn: "  VPN Pro ", descriptionFa: "توضیح", descriptionEn: "About" }, RESELLER);
+    expect(body).toMatchObject({ name: { fa: "وی‌پی‌ان پرو", en: "VPN Pro" }, description: { fa: "توضیح", en: "About" } });
+    expect(body).not.toHaveProperty("nameKey");
     expect(body).not.toHaveProperty("descriptionKey");
+  });
+});
+
+describe("the category form and renaming", () => {
+  it("needs a key and both names, and shares only the owner's category when asked", () => {
+    const valid = { ...emptyCategoryForm(), key: "games", nameFa: "بازی", nameEn: "Games" };
+    expect(validateCategoryForm(valid)).toEqual({});
+    expect(validateCategoryForm({ ...valid, nameEn: " " })).toHaveProperty("nameEn");
+    expect(validateCategoryForm({ ...valid, key: "Games" })).toHaveProperty("key");
+    expect(categoryBody({ ...valid, shared: true }, true)).toEqual({ key: "games", name: { fa: "بازی", en: "Games" }, tenantId: null });
+    expect(categoryBody({ ...valid, shared: true }, false)).toEqual({ key: "games", name: { fa: "بازی", en: "Games" } });
+  });
+
+  it("renames a product with its description, and clears a description left blank in both", () => {
+    const names = { fa: "آلفا", en: "Alpha", descriptionFa: "", descriptionEn: "" };
+    expect(validateNamesForm(names, "product")).toEqual({});
+    expect(namesBody(names, "product")).toEqual({ name: { fa: "آلفا", en: "Alpha" }, description: null });
+    expect(namesBody(names, "category")).toEqual({ name: { fa: "آلفا", en: "Alpha" } });
+    expect(validateNamesForm({ ...names, descriptionEn: "About" }, "product")).toHaveProperty("descriptionFa");
+  });
+});
+
+describe("names in the list", () => {
+  const texts = {
+    fa: flattenTexts({ product: { vpn: { name: "وی‌پی‌ان" }, only_fa: { name: "فقط فارسی" } } }),
+    en: flattenTexts({ product: { vpn: { name: "VPN" } }, t_22222222222242228222222222222222: { product: { vpn: { name: "My VPN" } } } }),
+    de: flattenTexts({ product: { de_only: { name: "Nur Deutsch" } } }),
+  };
+
+  it("flattens the i18n route's nested answer back to full keys", () => {
+    expect(texts.en).toEqual({ "catalog.product.vpn.name": "VPN", "catalog.t_22222222222242228222222222222222.product.vpn.name": "My VPN" });
+  });
+
+  it("reads the asked language, then en, then fa, then nothing", () => {
+    expect(catalogText(texts, "de", "catalog.product.de_only.name")).toBe("Nur Deutsch");
+    expect(catalogText(texts, "de", "catalog.product.vpn.name")).toBe("VPN");
+    expect(catalogText(texts, "de", "catalog.product.only_fa.name")).toBe("فقط فارسی");
+    expect(catalogText(texts, "fa", "catalog.product.nowhere.name")).toBeNull();
+    expect(catalogText(texts, "fa", null)).toBeNull();
+  });
+
+  it("fetches each of those languages once", () => {
+    expect(textLangs("de")).toEqual(["de", "en", "fa"]);
+    expect(textLangs("en")).toEqual(["en", "fa"]);
   });
 });
 
@@ -212,6 +280,32 @@ describe("currentPrice", () => {
     ];
     expect(currentPrice(history, NOW)?.id).toBe("p2");
     expect(currentPrice([price("p4", "2026-12-01T00:00:00.000Z")], NOW)).toBeNull();
+  });
+});
+
+describe("the translation review", () => {
+  const draft = (lang: string, key: string, text: string) => ({ lang, key, draft: text });
+
+  it("offers every language but the two an admin writes, from what locale-service has", () => {
+    expect(reviewLanguages(["de", "en", "fa", "tr"])).toEqual(["de", "tr"]);
+  });
+
+  it("publishes an untouched draft as it is and an edited one as the reviewer's text, per language", () => {
+    const items = [draft("de", "catalog.product.a.name", "A"), draft("de", "catalog.product.b.name", "B"), draft("tr", "catalog.product.a.name", "A-tr")];
+    const edits = {
+      [editId(items[1])]: "  Bee ",
+      [editId(items[2])]: "A-tr", // typed back to the draft: still a plain publish
+    };
+    expect(reviewWrites(items, edits)).toEqual([
+      { lang: "de", keys: ["catalog.product.a.name"] },
+      { lang: "de", keys: ["catalog.product.b.name"], texts: { "catalog.product.b.name": "Bee" } },
+      { lang: "tr", keys: ["catalog.product.a.name"] },
+    ]);
+  });
+
+  it("never sends a draft cleared to blank", () => {
+    const item = draft("de", "catalog.product.a.name", "A");
+    expect(reviewWrites([item], { [editId(item)]: "   " })).toEqual([]);
   });
 });
 

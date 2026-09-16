@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 18
-updated: 2026-09-14
+updated: 2026-09-16
 ---
 
 # Contract — panel-web: catalog (F-026-f)
@@ -27,7 +27,7 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    `catalog-api.ts` are test-checked against the Prisma enums and the schema's
    `RESET_POLICIES`.
 4. **The forms mirror billing's schema** (`validateProductForm`,
-   `validateVariantForm`): key, i18n name keys, feature keys, SKU (sent
+   `validateVariantForm`): key, names, feature keys, SKU (sent
    upper-cased), a price of at most 2 places and never negative, a duration of
    1..3650 days or blank for permanent, a whole-number limit once per metric.
 5. **A price is history.** A new price is a new row. Today or blank means from
@@ -38,6 +38,21 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
 6. **Nothing is patched from an answer, and nothing is deleted.** Every write
    re-reads; products, variants and prices are switched off.
 7. **Buttons stay on the green tokens** (`bg-primary`, `--leaf-bg`).
+8. **Names are text, never keys** (F-1533-e, ADR-0050). A category or product
+   is created and renamed with `fa` and `en` (`validateCategoryForm`,
+   `validateNamesForm`); a product's description is in both or neither, and
+   blank in both on a rename removes it. Billing derives the key.
+9. **A list shows the name, not the key.** The page fetches the published
+   `catalog` namespace from the panel's own `/api/i18n/<lang>/catalog` in the
+   viewer's language, `en` and `fa` (`textLangs`), and reads it with the
+   clients' fallback: that language → `en` → `fa` → the item's key
+   (`catalogText`). A failed fetch costs the names, never the list.
+10. **Review is `/catalog/translations`** (`PANEL_CATALOG_TRANSLATIONS`, linked
+   from the catalog header). Each draft sits beside its fa/en source and what
+   is published now; an untouched draft is published as it is, an edited one
+   as the reviewer's text, a blank one never (`reviewWrites`). Languages offered
+   are locale-service's minus `fa`/`en` (`reviewLanguages`) — no list in code.
+   "Translate missing" is billing's `draft-missing`. Billing scopes every call.
 
 ## Proof
 
@@ -45,4 +60,7 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
 backend source, `validateProductForm` / `productBody` (reseller vs owner,
 feature keys), `validateVariantForm` / `variantBody` (SKU, price, duration,
 quotas), `validatePriceForm` / `priceBody` (today, future, past),
-`currentPrice`, the menu permission, every key in `en` and `fa`.
+`currentPrice`, the menu permission, every key in `en` and `fa`; names
+(`validateCategoryForm` / `categoryBody`, `validateNamesForm` / `namesBody`,
+`productBody` never sends a key), `flattenTexts` / `catalogText` fallback,
+`reviewLanguages` / `reviewWrites`.

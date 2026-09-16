@@ -42,6 +42,11 @@ export const PANEL_COUPONS = "/coupons";
  * the platform owner every item, a tenant its own (D-34).
  */
 export const PANEL_CATALOG = "/catalog";
+/**
+ * Catalog translation review (F-1533-e, ADR-0050): machine drafts of item
+ * names beside their fa/en source, published by a person. Same audience rule.
+ */
+export const PANEL_CATALOG_TRANSLATIONS = "/catalog/translations";
 /** Payments the gateway has not confirmed, for a person to settle (F-093-n). */
 export const PANEL_MANUAL_PAYMENTS = "/payments/manual";
 /**
