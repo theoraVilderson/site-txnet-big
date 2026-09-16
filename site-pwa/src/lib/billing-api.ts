@@ -730,6 +730,9 @@ export interface ManualAnswer {
   referenceId: string | null;
 }
 
+/** The secrets a gateway can carry (F-102-a, F-104-c) — billing's `GATEWAY_SECRET_NAMES`. */
+export type GatewaySecretName = "merchantId" | "secretKey" | "webhookSecret";
+
 /** Whether one secret is stored. There is no field that could carry its value. */
 export interface GatewaySecretState {
   configured: boolean;
@@ -772,7 +775,9 @@ export interface AdminGateway {
   /** The callback address sent to the provider; `null` = the tenant's panel domain (F-092-w). */
   callbackUrl: string | null;
   /** `null` when billing could not ask the vault; the row is still manageable. */
-  credentials: { merchantId: GatewaySecretState; secretKey: GatewaySecretState } | null;
+  credentials: Record<GatewaySecretName, GatewaySecretState> | null;
+  /** The secrets its provider needs that are not stored: saved, maybe active, and cannot take a payment yet (F-104-e). `null` with `credentials`. */
+  missingSecrets: GatewaySecretName[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -792,9 +797,13 @@ type GatewayFieldsBody = {
   verificationStatus?: string;
   depositPresets?: string[];
   callbackUrl?: string | null;
+  /** A Telegram Stars gateway's USD value per Star, with the live rate off (F-104-e). */
+  staticRate?: string | null;
+  useLiveRate?: boolean;
   /** Write-only. Sent when typed, never read back. */
   merchantId?: string;
   secretKey?: string;
+  webhookSecret?: string;
 };
 
 export type CreateGatewayBody = GatewayFieldsBody & { source: GatewaySource; tenantId?: string };

@@ -1,4 +1,5 @@
-import { PROVIDERS, validateForm, type FormErrors, type GatewayForm } from "./gateway-form";
+import { validateForm, type FormErrors, type GatewayForm } from "./gateway-form";
+import type { Provider } from "./provider-fields";
 
 /**
  * The add-gateway wizard (F-102-e): the same {@link GatewayForm} the edit modal
@@ -12,11 +13,11 @@ export const WIZARD_STEPS: readonly { id: WizardStepId; fields: readonly (keyof 
   { id: "provider", fields: ["source", "tenantId", "providerName"] },
   { id: "details", fields: ["displayName", "gatewayCategory", "minAcceptAmount", "maxAcceptAmount", "isActive"] },
   { id: "fee", fields: ["feeCalculationMode", "feeType", "feeValue", "feeFloor", "feeCeiling"] },
-  { id: "secrets", fields: ["merchantId", "secretKey", "callbackUrl", "verificationStatus"] },
+  { id: "secrets", fields: ["merchantId", "secretKey", "webhookSecret", "staticRate", "callbackUrl", "verificationStatus"] },
   { id: "review", fields: [] },
 ];
 
-export type Provider = (typeof PROVIDERS)[number];
+export type { Provider } from "./provider-fields";
 
 /** What a provider implies: the category billing files it under, and a name to start from. */
 export const PROVIDER_DEFAULTS: Record<Provider, { category: string; name: string }> = {
@@ -24,6 +25,10 @@ export const PROVIDER_DEFAULTS: Record<Provider, { category: string; name: strin
   idpay: { category: "domestic_rial", name: "IDPay" },
   nowpayments: { category: "crypto", name: "NOWPayments" },
   stripe: { category: "international_card", name: "Stripe" },
+  oxapay: { category: "crypto", name: "OxaPay" },
+  airwallex: { category: "international_card", name: "Airwallex" },
+  telegram_stars: { category: "in_chat", name: "Telegram Stars" },
+  bale: { category: "in_chat", name: "Bale" },
 };
 
 const SUGGESTED_NAMES = new Set(Object.values(PROVIDER_DEFAULTS).map((d) => d.name));

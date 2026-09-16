@@ -11,6 +11,8 @@ import {
   validateForm,
 } from "./_lib/gateway-form";
 import { MAX_PRESETS, addPreset } from "./_lib/presets";
+import { PROVIDER_FIELDS, providerFields } from "./_lib/provider-fields";
+import { PROVIDERS as WIZARD_PROVIDERS } from "./_lib/gateway-form";
 
 /**
  * The gateways page (F-102-d), and the part of it that has to be true without
@@ -71,7 +73,9 @@ const GATEWAY: AdminGateway = {
   credentials: {
     merchantId: { configured: true, version: 3, rotatedAt: "2026-09-13T10:00:00.000Z" },
     secretKey: { configured: false, version: null, rotatedAt: null },
+    webhookSecret: { configured: false, version: null, rotatedAt: null },
   },
+  missingSecrets: [],
   createdAt: "2026-09-13T09:00:00.000Z",
   updatedAt: "2026-09-13T09:00:00.000Z",
 };
@@ -90,8 +94,8 @@ describe("gateway form — secrets", () => {
 
     expect(createBody(form, RESELLER_ME)).not.toHaveProperty("merchantId");
     expect(createBody(form, RESELLER_ME)).not.toHaveProperty("secretKey");
-    expect(createBody({ ...form, merchantId: "  m-123 \n" }, RESELLER_ME).merchantId).toBe("m-123");
-    expect(updateBody(GATEWAY, { ...formFromGateway(GATEWAY), secretKey: " sk " }, OWNER_ME)).toEqual({ secretKey: "sk" });
+    expect(createBody({ ...form, secretKey: "  sk-123 \n" }, RESELLER_ME).secretKey).toBe("sk-123");
+    expect(updateBody(GATEWAY, { ...formFromGateway(GATEWAY), merchantId: " m " }, OWNER_ME)).toEqual({ merchantId: "m" });
   });
 });
 
@@ -157,10 +161,10 @@ describe("gateway form — what changed", () => {
   it("names the changed fields, a typed secret among them, and nothing for an untouched form", () => {
     const form = formFromGateway(GATEWAY);
     expect(changedFields(GATEWAY, form, OWNER_ME)).toEqual([]);
-    expect(changedFields(GATEWAY, { ...form, feeValue: "2", secretKey: "sk", depositPresets: [] }, OWNER_ME)).toEqual([
+    expect(changedFields(GATEWAY, { ...form, feeValue: "2", merchantId: "m", depositPresets: [] }, OWNER_ME)).toEqual([
       "feeValue",
       "depositPresets",
-      "secretKey",
+      "merchantId",
     ]);
   });
 });
@@ -244,5 +248,53 @@ describe("gateway form — callback address", () => {
     expect(form.callbackUrl).toBe("https://pay.example.org/cb");
     expect(updateBody(withUrl, form, OWNER_ME)).toEqual({});
     expect(updateBody(withUrl, { ...form, callbackUrl: "" }, OWNER_ME)).toEqual({ callbackUrl: null });
+  });
+});
+
+/**
+ * Each provider's own fields (F-104-f, D-32): one map drives the wizard, the
+ * edit screen and the list, so a driver row never touches this app. What has
+ * to hold is what gets *sent*: a key typed for one provider and left behind by
+ * a switch to another must not be stored behind the new one.
+ */
+describe("gateway form — each provider's own fields", () => {
+  it("asks every provider for exactly its own fields", () => {
+    const slots = (p: string) => providerFields(p).map((f) => `${f.slot}:${f.label}`);
+    expect(slots("stripe")).toEqual(["secretKey:secretKey", "webhookSecret:webhookSecret"]);
+    expect(slots("nowpayments")).toEqual(["secretKey:apiKey", "webhookSecret:ipnSecret"]);
+    expect(slots("oxapay")).toEqual(["merchantId:merchantKey"]);
+    expect(slots("airwallex")).toEqual(["merchantId:clientId", "secretKey:apiKey", "webhookSecret:webhookSecret"]);
+    expect(slots("telegram_stars")).toEqual(["staticRate:starRate"]);
+    expect(slots("bale")).toEqual(["secretKey:providerToken"]);
+    expect(slots("zarinpal")).toEqual(["merchantId:merchantId"]);
+    expect(Object.keys(PROVIDER_FIELDS).sort()).toEqual([...WIZARD_PROVIDERS].sort());
+  });
+
+  it("sends only the secrets the chosen provider takes, including a webhook secret", () => {
+    const form = { ...emptyForm("tenant"), displayName: "Stripe", providerName: "stripe", gatewayCategory: "international_card" };
+    const body = createBody({ ...form, merchantId: "left-over", secretKey: " sk_test ", webhookSecret: " whsec_1 " }, RESELLER_ME);
+    expect(body).toMatchObject({ secretKey: "sk_test", webhookSecret: "whsec_1" });
+    expect(body).not.toHaveProperty("merchantId");
+    expect(body).not.toHaveProperty("staticRate");
+
+    const stripe = { ...GATEWAY, providerName: "stripe", gatewayCategory: "international_card" };
+    expect(updateBody(stripe, { ...formFromGateway(stripe), merchantId: "x", webhookSecret: "whsec_2" }, RESELLER_ME)).toEqual({ webhookSecret: "whsec_2" });
+  });
+
+  it("sends a Star's USD value as the static rate with the live rate off, and no secret", () => {
+    const form = { ...emptyForm("tenant"), displayName: "Stars", providerName: "telegram_stars", gatewayCategory: "in_chat", secretKey: "stale" };
+    expect(validateForm(form).staticRate).toBe("required");
+    expect(validateForm({ ...form, staticRate: "abc" }).staticRate).toBe("decimal");
+    expect(validateForm({ ...form, staticRate: "0" }).staticRate).toBe("required");
+
+    const body = createBody({ ...form, staticRate: " 0.013 " }, RESELLER_ME);
+    expect(body).toMatchObject({ staticRate: "0.013", useLiveRate: false });
+    expect(body).not.toHaveProperty("secretKey");
+
+    const stars = { ...GATEWAY, providerName: "telegram_stars", gatewayCategory: "in_chat", useLiveRate: false, staticRate: "0.013" };
+    expect(formFromGateway(stars).staticRate).toBe("0.013");
+    expect(updateBody(stars, { ...formFromGateway(stars), staticRate: "0.015" }, RESELLER_ME)).toEqual({ staticRate: "0.015" });
+    // A rate is never required of, nor sent for, a provider that does not take one.
+    expect(validateForm({ ...formFromGateway(GATEWAY) }).staticRate).toBeUndefined();
   });
 });

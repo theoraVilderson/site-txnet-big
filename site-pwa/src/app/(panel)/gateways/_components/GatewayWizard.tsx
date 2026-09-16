@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
@@ -24,7 +24,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import type { Me } from "@/lib/auth-api";
-import { billingApi } from "@/lib/billing-api";
+import { billingApi, type GatewaySecretName } from "@/lib/billing-api";
 import { Select } from "../../_components/kit/Select";
 import { PresetsEditor } from "./PresetsEditor";
 import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
@@ -46,6 +46,7 @@ import {
   type Provider,
   type WizardStepId,
 } from "../_lib/gateway-wizard";
+import { providerFields, secretFields } from "../_lib/provider-fields";
 import { ChoiceCards, FeeFields, PROVIDER_ICONS, SecretInput, Toggle, useRangeText } from "./gateway-fields";
 
 const G = FrontendI18nKeys.common.gateways;
@@ -223,7 +224,7 @@ export function GatewayWizard({ me, onClose, onCreated }: GatewayWizardProps) {
     onPick: (v: V) => void,
   ) => <ChoiceCards name={name} value={value} options={options} onPick={onPick} />;
 
-  const secretInput = (k: "merchantId" | "secretKey") => <SecretInput id={`gw-${k}`} value={form[k]} onChange={(v) => set(k, v)} showLabel={t("common", W.secrets.show)} hideLabel={t("common", W.secrets.hide)} />;
+  const secretInput = (k: GatewaySecretName) => <SecretInput id={`gw-${k}`} value={form[k]} onChange={(v) => set(k, v)} showLabel={t("common", W.secrets.show)} hideLabel={t("common", W.secrets.hide)} />;
 
   const provider = form.providerName as Provider | "";
 
@@ -356,13 +357,23 @@ export function GatewayWizard({ me, onClose, onCreated }: GatewayWizardProps) {
           </div>
         )}
         <div className="grid gap-4 sm:grid-cols-2">
-          {labeled("merchantId", t("common", G.merchantId), secretInput("merchantId"), undefined, true)}
-          {labeled("secretKey", t("common", G.secretKey), secretInput("secretKey"), undefined, true)}
+          {/* The chosen provider's own fields, from the one map (F-104-f). */}
+          {providerFields(provider).map((f) =>
+            f.slot === "staticRate" ? (
+              <div key={f.slot} className="sm:col-span-2">
+                {labeled("staticRate", t("common", G.fields[f.label]), textInput("staticRate", { ltr: true, decimal: true, suffix: "USD" }), t("common", G.fields.starRateHint))}
+              </div>
+            ) : (
+              <Fragment key={f.slot}>{labeled(f.slot, t("common", G.fields[f.label]), secretInput(f.slot), undefined, true)}</Fragment>
+            ),
+          )}
         </div>
-        <p className="flex items-center gap-1.5 text-[11px] font-bold text-success">
-          <ShieldCheck size={14} aria-hidden />
-          {t("common", W.secrets.safe)}
-        </p>
+        {secretFields(provider).length > 0 && (
+          <p className="flex items-center gap-1.5 text-[11px] font-bold text-success">
+            <ShieldCheck size={14} aria-hidden />
+            {t("common", W.secrets.safe)}
+          </p>
+        )}
         {labeled(
           "callbackUrl",
           t("common", G.callback.label),
@@ -587,7 +598,8 @@ function ReviewStep({ form, owner, money, onEdit }: { form: GatewayForm; owner: 
     ) : (
       <span className="text-text-secondary">{t("common", W.secrets.notEntered)}</span>
     );
-  const missingSecrets = !form.merchantId.trim() && !form.secretKey.trim();
+  // A heads-up, not a block: the gateway saves and may go live without its keys (F-104-e).
+  const missingSecrets = secretFields(form.providerName).some((f) => !form[f.slot].trim());
 
   const section = (id: WizardStepId, rows: [string, ReactNode][]) => (
     <section className="rounded-2xl border border-card-border bg-[var(--bg-inner)] p-4">
@@ -649,8 +661,18 @@ function ReviewStep({ form, owner, money, onEdit }: { form: GatewayForm; owner: 
         [t("common", W.review.ceiling), form.feeCeiling ? <span dir="ltr">{money(form.feeCeiling)}</span> : none],
       ])}
       {section("secrets", [
-        [t("common", G.merchantId), secretState(form.merchantId)],
-        [t("common", G.secretKey), secretState(form.secretKey)],
+        ...providerFields(form.providerName).map(
+          (f): [string, ReactNode] => [
+            t("common", G.fields[f.label]),
+            f.slot === "staticRate" ? (
+              <span key="rate" dir="ltr">
+                {form.staticRate.trim()} USD
+              </span>
+            ) : (
+              secretState(form[f.slot])
+            ),
+          ],
+        ),
         [
           t("common", G.callback.label),
           form.callbackUrl.trim() ? (

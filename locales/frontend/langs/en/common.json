@@ -195,13 +195,30 @@
         },
         "stripe": {
           "desc": "International Visa and Mastercard",
-          "where": "In the Stripe dashboard, take the keys from Developers › API keys."
+          "where": "In the Stripe dashboard, take the secret key from Developers › API keys, and the signing secret from the webhook endpoint you add under Developers › Webhooks."
+        },
+        "oxapay": {
+          "desc": "Crypto payments on OxaPay's invoice page",
+          "where": "In the OxaPay dashboard, create a merchant API key under Merchant service."
+        },
+        "airwallex": {
+          "desc": "International cards through Airwallex",
+          "where": "In the Airwallex web app, take the client ID and API key from Developer › API keys, and the webhook secret from Developer › Webhooks."
+        },
+        "telegram_stars": {
+          "desc": "Paid with Stars inside your Telegram bot",
+          "where": "Stars need no key: they are paid inside your own bot. Set what one Star is worth in USD."
+        },
+        "bale": {
+          "desc": "Paid inside your Bale bot",
+          "where": "Take the payment provider token from Bale's payment settings for your bot."
         }
       },
       "categories": {
         "domestic_rial": "Domestic rial",
         "international_card": "International card",
-        "crypto": "Crypto"
+        "crypto": "Crypto",
+        "in_chat": "In-chat payment"
       },
       "feeModes": {
         "manual": {
@@ -290,7 +307,20 @@
       "hint": "The address given to the gateway to send the user back to after paying. It must be on the domain the terminal is registered on in the provider's dashboard and reach this system's /api/billing/deposit/callback. Empty = the panel domain.",
       "placeholder": "https://example.com/api/billing/deposit/callback",
       "default": "The panel domain (default)"
-    }
+    },
+    "fields": {
+      "merchantId": "Merchant ID",
+      "merchantKey": "Merchant key",
+      "clientId": "Client ID",
+      "apiKey": "API key",
+      "secretKey": "Secret key",
+      "webhookSecret": "Webhook signing secret",
+      "ipnSecret": "IPN secret",
+      "providerToken": "Payment provider token",
+      "starRate": "USD value of one Star",
+      "starRateHint": "What one Telegram Star is worth in USD for your users. There is no live rate for Stars."
+    },
+    "missingSecrets": "Cannot take payments yet — missing: {{fields}}"
   },
   "wallet": {
     "label": "Wallet balance",

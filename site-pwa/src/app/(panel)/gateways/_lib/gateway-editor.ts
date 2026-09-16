@@ -13,7 +13,7 @@ export const EDITOR_SECTIONS: readonly { id: EditorSectionId; fields: readonly (
   { id: "general", fields: ["displayName", "providerName", "gatewayCategory", "isActive", "verificationStatus"] },
   { id: "amounts", fields: ["minAcceptAmount", "maxAcceptAmount", "depositPresets"] },
   { id: "fee", fields: ["feeCalculationMode", "feeType", "feeValue", "feeFloor", "feeCeiling"] },
-  { id: "connection", fields: ["merchantId", "secretKey", "callbackUrl"] },
+  { id: "connection", fields: ["merchantId", "secretKey", "webhookSecret", "staticRate", "callbackUrl"] },
 ];
 
 export function sectionOf(field: keyof GatewayForm): EditorSectionId | null {

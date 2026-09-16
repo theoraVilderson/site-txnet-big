@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { Bitcoin, Check, ChevronDown, CircleCheckBig, CreditCard, Eye, EyeOff, Landmark, Percent, type LucideIcon } from "lucide-react";
+import { Bitcoin, Check, ChevronDown, CircleCheckBig, CreditCard, Eye, EyeOff, Globe, Landmark, MessageCircle, Percent, Star, type LucideIcon } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { BASE_CURRENCY } from "../../_lib/money";
@@ -25,6 +25,10 @@ export const PROVIDER_ICONS: Record<Provider, LucideIcon> = {
   idpay: Landmark,
   nowpayments: Bitcoin,
   stripe: CreditCard,
+  oxapay: Bitcoin,
+  airwallex: Globe,
+  telegram_stars: Star,
+  bale: MessageCircle,
 };
 
 /** The same field look as the kit's `Select`, so a row of mixed controls reads as one form. */

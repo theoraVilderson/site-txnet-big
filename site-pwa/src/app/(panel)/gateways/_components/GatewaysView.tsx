@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { KeyRound, Landmark, Loader2, Pencil, Plus, RotateCw, Trash2 } from "lucide-react";
+import { KeyRound, Landmark, Loader2, Pencil, Plus, RotateCw, Trash2, TriangleAlert } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
@@ -11,6 +11,7 @@ import { usePanelSession } from "../../_context/PanelSessionContext";
 import { Skeleton } from "../../_components/kit/Skeleton";
 import { useGateways } from "../_hooks/useGateways";
 import { canManageLinks } from "../_lib/gateway-form";
+import { secretFields } from "../_lib/provider-fields";
 import { GatewayEditor } from "./GatewayEditor";
 import { DepositPresetsCard } from "./DepositPresetsCard";
 import { GatewayLinks } from "./GatewayLinks";
@@ -189,9 +190,22 @@ export function GatewaysView() {
                           {owner && g.tenantId ? ` · ${g.tenantId}` : ""}
                         </span>
                         <span className="flex flex-wrap gap-3">
-                          {secret(t("common", G.merchantId), g.credentials?.merchantId)}
-                          {secret(t("common", G.secretKey), g.credentials?.secretKey)}
+                          {secretFields(g.providerName).map((f) => (
+                            <span key={f.slot}>{secret(t("common", G.fields[f.label]), g.credentials?.[f.slot])}</span>
+                          ))}
                         </span>
+                        {g.missingSecrets && g.missingSecrets.length > 0 && (
+                          // The heads-up for a gateway saved without its keys (F-104-e): it may be on, and cannot take a payment.
+                          <span role="status" className="inline-flex items-center gap-1 text-xs font-bold text-error">
+                            <TriangleAlert size={12} aria-hidden />
+                            {t("common", G.missingSecrets, {
+                              fields: secretFields(g.providerName)
+                                .filter((f) => g.missingSecrets!.includes(f.slot))
+                                .map((f) => t("common", G.fields[f.label]))
+                                .join(" · "),
+                            })}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <button

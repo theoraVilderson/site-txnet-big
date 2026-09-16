@@ -29,6 +29,7 @@ import { billingApi, type AdminGateway, type GatewaySecretState } from "@/lib/bi
 import { Select } from "../../_components/kit/Select";
 import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
 import { PresetsEditor } from "./PresetsEditor";
+import { secretFields, takesStaticRate } from "../_lib/provider-fields";
 import { FeeFields, Field, PROVIDER_ICONS, SecretInput, TextInput, Toggle, useRangeText, type SetField } from "./gateway-fields";
 import { EDITOR_SECTIONS, firstInvalidSection, sectionOf, type EditorSectionId } from "../_lib/gateway-editor";
 import {
@@ -74,6 +75,8 @@ const FIELD_LABELS: Partial<Record<keyof GatewayForm, string>> = {
   feeCeiling: F.feeCeiling,
   merchantId: G.merchantId,
   secretKey: G.secretKey,
+  webhookSecret: G.fields.webhookSecret,
+  staticRate: G.fields.starRate,
   callbackUrl: G.callback.label,
 };
 
@@ -358,14 +361,20 @@ export function GatewayEditor({ gateway, me, onClose, onSaved }: GatewayEditorPr
             <p className="text-xs leading-6 text-text-primary">{t("common", W.providers[provider].where)}</p>
           </div>
         )}
+        {takesStaticRate(form.providerName) && (
+          <Field id="gw-staticRate" label={t("common", G.fields.starRate)} error={errors.staticRate} hint={t("common", G.fields.starRateHint)}>
+            <TextInput id="gw-staticRate" value={form.staticRate} onChange={(v) => set("staticRate", v)} invalid={Boolean(errors.staticRate)} ltr decimal suffix="USD" />
+          </Field>
+        )}
         <div className="grid gap-3 sm:grid-cols-2">
-          {(["merchantId", "secretKey"] as const).map((k) => {
+          {/* The provider's own secrets, from the one map (F-104-f). */}
+          {secretFields(form.providerName).map(({ slot: k, label }) => {
             const state = gateway.credentials?.[k];
             return (
               <div key={k} className="flex flex-col gap-2 rounded-2xl border border-card-border bg-[var(--bg-inner)] p-3">
                 <div className="flex items-center justify-between gap-2">
                   <label htmlFor={`gw-${k}`} className="text-xs font-bold text-text-primary">
-                    {t("common", G[k])}
+                    {t("common", G.fields[label])}
                   </label>
                   <SecretBadge state={state} />
                 </div>

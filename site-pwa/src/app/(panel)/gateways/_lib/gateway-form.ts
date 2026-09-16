@@ -1,10 +1,11 @@
 import type { Me } from "@/lib/auth-api";
 import type { AdminGateway, CreateGatewayBody, GatewaySource, UpdateGatewayBody } from "@/lib/billing-api";
 import { samePresets } from "./presets";
+import { PROVIDER_FIELDS, secretFields, takesStaticRate, type Provider } from "./provider-fields";
 
 /** The values billing's enums accept. Shown as they are: a provider name is a logo, not a sentence. */
-export const PROVIDERS = ["zarinpal", "idpay", "nowpayments", "stripe"] as const;
-export const CATEGORIES = ["domestic_rial", "international_card", "crypto"] as const;
+export const PROVIDERS = Object.keys(PROVIDER_FIELDS) as Provider[];
+export const CATEGORIES = ["domestic_rial", "international_card", "crypto", "in_chat"] as const;
 export const FEE_MODES = ["manual", "automatic"] as const;
 export const FEE_TYPES = ["percentage", "fixed"] as const;
 export const VERIFICATION = ["pending_test_transaction", "verified", "failed"] as const;
@@ -13,7 +14,7 @@ export const VERIFICATION = ["pending_test_transaction", "verified", "failed"] a
  * What the form holds: every field a string (or a boolean), exactly as typed.
  * Conversion happens once, in {@link createBody} / {@link updateBody}.
  *
- * `merchantId` and `secretKey` are the only place a secret exists in this app,
+ * `merchantId`, `secretKey` and `webhookSecret` are the only place a secret exists in this app,
  * and only between a keystroke and a save. Nothing ever fills them.
  */
 export interface GatewayForm {
@@ -35,6 +36,9 @@ export interface GatewayForm {
   verificationStatus: string;
   merchantId: string;
   secretKey: string;
+  webhookSecret: string;
+  /** A Telegram Stars gateway's USD value per Star (F-104-f); ignored for any other provider. */
+  staticRate: string;
   /** This gateway's own quick amounts, as `addPreset` keeps them; empty inherits the tenant's default. */
   depositPresets: string[];
   /** The callback address sent to the provider; empty = the tenant's panel domain (F-092-w). */
@@ -98,6 +102,8 @@ export function emptyForm(source: GatewaySource): GatewayForm {
     verificationStatus: "",
     merchantId: "",
     secretKey: "",
+    webhookSecret: "",
+    staticRate: "",
     depositPresets: [],
     callbackUrl: "",
   };
@@ -126,6 +132,8 @@ export function formFromGateway(g: AdminGateway): GatewayForm {
     verificationStatus: g.verificationStatus ?? "",
     merchantId: "",
     secretKey: "",
+    webhookSecret: "",
+    staticRate: g.staticRate ?? "",
     depositPresets: [...(g.depositPresets ?? [])],
     callbackUrl: g.callbackUrl ?? "",
   };
@@ -151,6 +159,11 @@ export function validateForm(form: GatewayForm): FormErrors {
   // operator believed the gateway was ready. An empty box keeps the stored id.
   const merchantId = form.merchantId.trim();
   if (form.providerName === "zarinpal" && merchantId && !UUID.test(merchantId)) errors.merchantId = "merchantFormat";
+  if (takesStaticRate(form.providerName)) {
+    const rate = form.staticRate.trim();
+    if (rate === "" || (DECIMAL.test(rate) && Number(rate) <= 0)) errors.staticRate = "required";
+    else if (!DECIMAL.test(rate)) errors.staticRate = "decimal";
+  }
   if (form.callbackUrl.trim() && !isWebAddress(form.callbackUrl.trim())) errors.callbackUrl = "url";
   return errors;
 }
@@ -162,12 +175,13 @@ function value(form: GatewayForm, k: (typeof EDITABLE)[number]): string | boolea
   return NULLABLE.has(k) && trimmed === "" ? null : trimmed;
 }
 
-function secrets(form: GatewayForm): Pick<UpdateGatewayBody, "merchantId" | "secretKey"> {
-  const out: Pick<UpdateGatewayBody, "merchantId" | "secretKey"> = {};
-  const merchantId = form.merchantId.trim();
-  const secretKey = form.secretKey.trim();
-  if (merchantId) out.merchantId = merchantId;
-  if (secretKey) out.secretKey = secretKey;
+/** The secrets typed for the chosen provider's own fields. A box another provider left filled is not sent. */
+function secrets(form: GatewayForm): Pick<UpdateGatewayBody, "merchantId" | "secretKey" | "webhookSecret"> {
+  const out: Pick<UpdateGatewayBody, "merchantId" | "secretKey" | "webhookSecret"> = {};
+  for (const { slot } of secretFields(form.providerName)) {
+    const v = form[slot].trim();
+    if (v) out[slot] = v;
+  }
   return out;
 }
 
@@ -185,6 +199,8 @@ export function createBody(form: GatewayForm, me: Me | null): CreateGatewayBody 
   if (body.feeValue === undefined || body.feeValue === "") body.feeValue = "0";
   if (form.depositPresets.length > 0) body.depositPresets = form.depositPresets;
   if (form.callbackUrl.trim()) body.callbackUrl = form.callbackUrl.trim();
+  // A Star has no live rate: its value is the operator's (D-32).
+  if (takesStaticRate(form.providerName)) Object.assign(body, { staticRate: form.staticRate.trim(), useLiveRate: false });
   return { ...(body as unknown as CreateGatewayBody), ...secrets(form) };
 }
 
@@ -207,6 +223,10 @@ export function updateBody(original: AdminGateway, form: GatewayForm, me: Me | n
   }
   if (!samePresets(form.depositPresets, before.depositPresets)) body.depositPresets = form.depositPresets;
   if (form.callbackUrl.trim() !== before.callbackUrl.trim()) body.callbackUrl = form.callbackUrl.trim() || null;
+  if (takesStaticRate(form.providerName)) {
+    if (form.staticRate.trim() !== before.staticRate.trim()) body.staticRate = form.staticRate.trim();
+    if (original.useLiveRate !== false) body.useLiveRate = false;
+  }
   return { ...(body as UpdateGatewayBody), ...secrets(form) };
 }
 

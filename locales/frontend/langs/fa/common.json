@@ -195,13 +195,30 @@
         },
         "stripe": {
           "desc": "کارت‌های بین‌المللی ویزا و مستر",
-          "where": "در داشبورد Stripe، از Developers › API keys کلیدها را بردارید."
+          "where": "در داشبورد Stripe، کلید محرمانه را از Developers › API keys و کلید امضا را از webhookی که در Developers › Webhooks می‌سازید بردارید."
+        },
+        "oxapay": {
+          "desc": "پرداخت رمزارز در صفحه‌ی فاکتور OxaPay",
+          "where": "در داشبورد OxaPay، از بخش Merchant service یک کلید API مرچنت بسازید."
+        },
+        "airwallex": {
+          "desc": "کارت‌های بین‌المللی با Airwallex",
+          "where": "در Airwallex، شناسه‌ی کلاینت و کلید API را از Developer › API keys و کلید وب‌هوک را از Developer › Webhooks بردارید."
+        },
+        "telegram_stars": {
+          "desc": "پرداخت با Star داخل ربات تلگرام شما",
+          "where": "Star کلید لازم ندارد: داخل ربات خودتان پرداخت می‌شود. فقط ارزش هر Star به دلار را تعیین کنید."
+        },
+        "bale": {
+          "desc": "پرداخت داخل ربات بله شما",
+          "where": "توکن ارائه‌دهنده‌ی پرداخت را از تنظیمات پرداخت ربات در بله بردارید."
         }
       },
       "categories": {
         "domestic_rial": "ریالی داخلی",
         "international_card": "کارت بین‌المللی",
-        "crypto": "رمزارز"
+        "crypto": "رمزارز",
+        "in_chat": "پرداخت داخل چت"
       },
       "feeModes": {
         "manual": {
@@ -290,7 +307,20 @@
       "hint": "آدرسی که به درگاه داده می‌شود تا کاربر بعد از پرداخت به آن برگردد. باید روی همان دامنه‌ای باشد که ترمینال در پنل درگاه ثبت شده و به مسیر /api/billing/deposit/callback همین سیستم برسد. خالی = دامنهٔ پنل.",
       "placeholder": "https://example.com/api/billing/deposit/callback",
       "default": "دامنهٔ پنل (پیش‌فرض)"
-    }
+    },
+    "fields": {
+      "merchantId": "کد مرچنت",
+      "merchantKey": "کلید مرچنت",
+      "clientId": "شناسه‌ی کلاینت (Client ID)",
+      "apiKey": "کلید API",
+      "secretKey": "کلید محرمانه",
+      "webhookSecret": "کلید امضای وب‌هوک",
+      "ipnSecret": "کلید IPN",
+      "providerToken": "توکن ارائه‌دهنده‌ی پرداخت",
+      "starRate": "ارزش هر Star به دلار",
+      "starRateHint": "هر Star تلگرام برای کاربران شما چند دلار حساب شود. Star نرخ زنده ندارد."
+    },
+    "missingSecrets": "هنوز نمی‌تواند پرداخت بگیرد — این‌ها وارد نشده: {{fields}}"
   },
   "wallet": {
     "label": "موجودی کیف پول",
