@@ -116,7 +116,7 @@ function build({ rows = [gatewayRow()], coupons = noCoupons('20.00'), quoteFee, 
       if (!quoteFee) throw new Error('the vault must not be read here');
       return { merchantId: 'merchant' };
     },
-    configuredLabels: async () => new Set(withMerchant.map((id) => `gateway:tenant:${id}`)),
+    configuredSecrets: async () => new Map(withMerchant.map((id) => [`gateway:tenant:${id}`, new Set(['merchantId'] as const)])),
     requireConfigured: async ({ gatewayId }: { gatewayId: string }) => {
       if (!withMerchant.includes(gatewayId)) {
         throw Object.assign(new Error('no merchant id'), { name: 'CredentialUnavailable', reason: 'missing' });

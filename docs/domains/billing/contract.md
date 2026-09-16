@@ -89,7 +89,7 @@ in `billing-service/src/app/payment/gateway/`; the deposit quote (F-092-o), `dep
 | Rule | Why |
 |---|---|
 | A driver answers `request` → `{authority, redirectUrl}`, `verify` → `{referenceId, cardPan, alreadyVerified}` (optional `deadlineAt`, F-092-ab), `inquire` → `{status}`, `quoteFee` → `{feeMinor}`, and — when its gateway can list them — `listUnverified` → `[{authority, amountMinor, callbackUrl}]` (F-092-ad) | legacy `IPaymentStrategy`, minus its settings row |
-| A driver names `chargeCurrency` and `chargeDecimals` — Zarinpal `IRR`, `0` — which the caller hands the calculator | the minor unit is the wire's, not a money rule |
+| A driver names `chargeCurrency` and `chargeDecimals` — Zarinpal `IRR`, `0`; Stripe `USD`, `2` — which the caller hands the calculator | the minor unit is the wire's, not a money rule |
 | Amounts cross the port as `bigint` in the gateway currency's minor unit — `chargedAmountMinor`; Zarinpal is sent `IRR`. `feeMinor` is converted to base currency by the caller, with the rate, before it is `quotedFee` | a driver holds no rate and no money rule |
 | `request` is **never retried**; `verify`, `inquire`, `quoteFee` are retried on a transport failure only (timeout, network, 5xx), 3 attempts | each `request` mints an authority; an answer does not change on a retry |
 | Zarinpal `verify`: `100` and `101` are both success, `101` is `alreadyVerified` | the legacy bug on the row |
@@ -99,7 +99,8 @@ in `billing-service/src/app/payment/gateway/`; the deposit quote (F-092-o), `dep
 | **Every gateway has its own merchant account** (changed in v4): the vault's `gateway_merchant_id` of the gateway's tenant, `label` = `gateway:<source>:<gatewayId>` (`tenant` for a `tenant_gateway_config` row, `platform` for a `payment_gateway` row), read by `vault.use` with `caller: billing:<provider>` on every call and kept by nobody. No fallback to a provider-wide label; a recreated gateway row stores its merchant id again | D-26; ADR-0026, ADR-0039; `gateway-merchant.int.spec.ts` |
 | The vault reads run on the app pool bound to the request's tenant — a config of another tenant is `CredentialUnavailable('missing')` | ADR-0039; `gateway-merchant.int.spec.ts` |
 | A platform-brand `payment_gateway`'s merchant id is in the `platform_owner` tenant's vault under its own `gateway:platform:<id>` label; the plaintext `merchantId` column is deprecated and never read | D-25, D-26 |
-| A gateway with no usable merchant id can take no payment, so it is not offered at all (`configuredLabels` / `requireConfigured`, F-092-u) | a gateway a user can pick and not pay at is worse than one they cannot see |
+| A gateway missing any secret its provider declares (`provider-fields.ts`) can take no payment, so it is not offered (`configuredSecrets` + `hasEverySecret` / `requireConfigured`, F-092-u). `credentialsFor` reads the provider's own secrets — Zarinpal a merchant id, Stripe a secret key — never the webhook secret (F-104-g) | a gateway a user can pick and not pay at is worse than one they cannot see; a Stripe gateway has no merchant id |
+| **Stripe** (F-104-g, `stripe.provider.ts`, official SDK): Checkout Session per `request`, client built per call from the gateway's key; `constructEvent` checks the post. `checkout.session.completed` + `paid` = paid, `.expired` = failed, **`payment_intent.payment_failed` ignored**; `inquire`/`verify` retrieve the session; `quoteFee` refused (`invalid_request`) — price it with a manual fee | Checkout retries a declined card on the same page: failing the row on the first decline would leave the paying retry nothing to credit |
 
 ## Gateway pricing (built — F-092-e)
 
@@ -121,7 +122,7 @@ numbers are `gateway-pricing.golden.json` (F-0611).
 | A `discount` above `amount` is `InvalidPricingInput`, not a free deposit | the coupon engine (F-092-g) caps stacking |
 | `feeFloor` / `feeCeiling` bind a quoted fee exactly as they bind a manual one | the legacy bug named on the row |
 | Cents round **up**; the rate rounds to `roundingStep` up or nearest (half up); `chargedAmountMinor` rounds up | F-0609 — never down |
-| Rate = (`liveRate` if `useLiveRate`, else or if absent `staticRate`) × (1 + `percentageModifier`/100) + `fixedAmountModifier`, then rounded; a missing or non-positive source is `RateUnavailable` | F-0607's last rung disables the gateway |
+| Rate = (`liveRate` if `useLiveRate`, else or if absent `staticRate`) × (1 + `percentageModifier`/100) + `fixedAmountModifier`, then rounded; a missing or non-positive source is `RateUnavailable`. A driver charging the base currency (`USD`: Stripe) prices at **exactly 1**, no rate column applied (`chargesInBaseCurrency`, F-104-g, the user's call) | F-0607's last rung disables the gateway |
 | A rounded rate outside `[minRate, maxRate]` is `RateOutOfRange` — refused, never clamped | F-0607: a wrong rate costs an unbounded amount |
 | Errors are plain classes with English messages (C-01); the route that first exposes one maps it to an i18n key | as for the ledger |
 

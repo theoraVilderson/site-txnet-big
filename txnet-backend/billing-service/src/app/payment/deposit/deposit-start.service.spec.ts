@@ -157,7 +157,7 @@ function build(setup: Setup = {}) {
   const merchant = {
     credentialsFor: async () => ({ merchantId: 'merchant' }),
     requireConfigured: async () => undefined,
-    configuredLabels: async () => new Set([`gateway:tenant:${GATEWAY}`]),
+    configuredSecrets: async () => new Map([[`gateway:tenant:${GATEWAY}`, new Set(['merchantId'] as const)]]),
   };
   const reservations = {
     reserve: async (_tx: unknown, r: { orderReferenceId: string }) => {

@@ -11,7 +11,7 @@
 import { TenantCredentialKind } from '@prisma/client';
 import { CredentialUnavailable } from '@txnet-backend/shared-core';
 
-import { GatewayMerchant, type MerchantGatewayRef } from './gateway-merchant';
+import { GatewayMerchant, hasEverySecret, type MerchantGatewayRef } from './gateway-merchant';
 import { WebhookSecretSource } from './webhook-secret';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
@@ -53,5 +53,57 @@ describe('WebhookSecretSource', () => {
     const source = new WebhookSecretSource(new GatewayMerchant(vault as never, {} as never));
 
     await expect(source.secretFor(gateway)).rejects.toThrow('decrypt failed');
+  });
+});
+
+/**
+ * Each provider's own secrets (F-104-g). Until Stripe, a gateway was "a merchant
+ * id": the payment read only that, and the top-up page kept only a gateway that
+ * had one. A Stripe gateway has none, so it would have been hidden for ever and
+ * charged with nothing. What decides now is `provider-fields.ts`.
+ */
+describe('GatewayMerchant — the secrets a provider declares', () => {
+  it('hands a Stripe payment its secret key, and neither a merchant id nor the webhook secret', async () => {
+    const { vault } = build('sk_test_1');
+    const merchant = new GatewayMerchant(vault as never, {} as never);
+
+    await expect(merchant.credentialsFor(gateway, 'actor-1')).resolves.toEqual({ secretKey: 'sk_test_1' });
+    expect(vault.use).toHaveBeenCalledTimes(1);
+    expect(vault.use).toHaveBeenCalledWith(
+      { tenantId: OWNER, kind: TenantCredentialKind.gateway_secret_key, label: `gateway:tenant:${GATEWAY}` },
+      { caller: 'billing:stripe', actorId: 'actor-1' },
+    );
+  });
+
+  it('still hands Zarinpal its merchant id alone', async () => {
+    const { vault } = build('zp-merchant');
+    const merchant = new GatewayMerchant(vault as never, {} as never);
+
+    await expect(merchant.credentialsFor({ ...gateway, providerName: 'zarinpal' })).resolves.toEqual({ merchantId: 'zp-merchant' });
+    expect(vault.use.mock.calls[0][0].kind).toBe(TenantCredentialKind.gateway_merchant_id);
+  });
+
+  it('keeps a gateway on the top-up page only when every secret its provider declares is stored', () => {
+    const label = `gateway:tenant:${GATEWAY}`;
+    const held = (...names: Array<'merchantId' | 'secretKey' | 'webhookSecret'>) => new Map([[label, new Set(names)]]);
+    const stripe = { source: 'tenant' as const, gatewayId: GATEWAY, providerName: 'stripe' as const };
+
+    expect(hasEverySecret(held('merchantId'), stripe)).toBe(false);
+    expect(hasEverySecret(held('secretKey'), stripe)).toBe(false);
+    expect(hasEverySecret(held('secretKey', 'webhookSecret'), stripe)).toBe(true);
+    expect(hasEverySecret(held('merchantId'), { ...stripe, providerName: 'zarinpal' })).toBe(true);
+    expect(hasEverySecret(undefined, { ...stripe, providerName: 'zarinpal' })).toBe(false);
+  });
+
+  it('refuses a manual-fee Stripe payment whose webhook secret is missing, without decrypting anything', async () => {
+    const summaries: Record<string, { configured: boolean; status: string } | null> = {
+      [TenantCredentialKind.gateway_secret_key]: { configured: true, status: 'active' },
+      [TenantCredentialKind.webhook_secret]: null,
+    };
+    const vault = { use: vi.fn(), summary: vi.fn(async (ref: { kind: string }) => summaries[ref.kind] ?? null) };
+    const merchant = new GatewayMerchant(vault as never, {} as never);
+
+    await expect(merchant.requireConfigured(gateway)).rejects.toBeInstanceOf(CredentialUnavailable);
+    expect(vault.use).not.toHaveBeenCalled();
   });
 });

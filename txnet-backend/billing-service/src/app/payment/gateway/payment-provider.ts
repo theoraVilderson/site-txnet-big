@@ -16,8 +16,13 @@ import type { PaymentProviderName } from '@prisma/client';
  * with the rate snapshot, and never inside a driver.
  */
 
-/** The secret half of a gateway, for exactly one call. Never logged (billing invariant 8). */
-export type GatewayCredentials = { merchantId: string };
+/**
+ * The secret half of a gateway, for exactly one call. Never logged (billing
+ * invariant 8). Carries the secrets its provider declares in
+ * `provider-fields.ts` — Zarinpal a merchant id, Stripe a secret key (F-104-g).
+ * The webhook secret is not here: it is only ever handed to `verifyWebhook`.
+ */
+export type GatewayCredentials = { merchantId?: string; secretKey?: string };
 
 export type PaymentRequestInput = {
   credentials: GatewayCredentials;

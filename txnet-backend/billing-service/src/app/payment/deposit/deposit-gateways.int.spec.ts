@@ -115,8 +115,9 @@ beforeAll(async () => {
     // Keyed by the **owning** tenant since F-096-b: a granted gateway's
     // merchant id is in the lender's vault, so a fake that answered the same
     // set for everybody would hide the bug it exists to catch.
-    configuredLabels: async (tenantId: string) =>
-      new Set([
+    configuredSecrets: async (tenantId: string) =>
+      new Map(
+        [
         ...({
           [TENANT_A]: [A_ZARINPAL, A_PENDING, A_INACTIVE],
           [TENANT_B]: [B_ZARINPAL],
@@ -126,7 +127,8 @@ beforeAll(async () => {
         ...(tenantId === PLATFORM
           ? [PLATFORM_ZARINPAL, PLATFORM_INACTIVE].map((id) => `gateway:platform:${id}`)
           : []),
-      ]),
+        ].map((label) => [label, new Set(['merchantId'] as const)]),
+      ),
     requireConfigured: async () => undefined,
   };
   // No FX rate published in this fixture: these cases are about which gateway

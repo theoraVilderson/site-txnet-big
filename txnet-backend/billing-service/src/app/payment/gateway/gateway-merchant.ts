@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PaymentProviderName, TenantCredentialKind, TenantCredentialStatus } from '@prisma/client';
+import { PaymentProviderName, TenantCredentialStatus } from '@prisma/client';
 import {
   CredentialUnavailable,
   CredentialVaultService,
@@ -9,6 +9,7 @@ import {
 
 import { GrantedVaultAccess } from './granted-vault-access';
 import type { GatewayCredentials } from './payment-provider';
+import { GATEWAY_SECRET_NAMES, type GatewaySecretName, PROVIDER_FIELDS, SECRET_KIND } from './provider-fields';
 
 /** Which table a gateway row is in: a tenant's `tenant_gateway_config`, or the platform brand's `payment_gateway`. */
 export type GatewaySource = GatewayCredentialSource;
@@ -35,8 +36,25 @@ export type MerchantGatewayRef = {
  */
 export const merchantLabel = (source: GatewaySource, gatewayId: string) => gatewayCredentialLabel(source, gatewayId);
 
+/** The secrets a payment call needs: the provider's own, minus the webhook secret. */
+const paymentSecretsOf = (provider: PaymentProviderName) =>
+  (PROVIDER_FIELDS[provider]?.secrets ?? []).filter((n): n is Exclude<GatewaySecretName, 'webhookSecret'> => n !== 'webhookSecret');
+
 /**
- * A gateway's merchant id, from its tenant's vault (F-092-f, ADR-0006,
+ * Whether a gateway holds every secret its provider declares — what keeps it on
+ * the top-up page (F-092-u). A Stripe gateway has no merchant id, so the old
+ * "has a merchant id" test would have hidden it for ever (F-104-g).
+ */
+export function hasEverySecret(
+  configured: ReadonlyMap<string, ReadonlySet<GatewaySecretName>> | undefined,
+  gateway: { source: GatewaySource; gatewayId: string; providerName: PaymentProviderName },
+): boolean {
+  const held = configured?.get(merchantLabel(gateway.source, gateway.gatewayId));
+  return (PROVIDER_FIELDS[gateway.providerName]?.secrets ?? []).every((n) => held?.has(n) ?? false);
+}
+
+/**
+ * A gateway's secrets, from its tenant's vault (F-092-f, ADR-0006,
  * ADR-0026, ADR-0039) — never from `tenant_gateway_config.merchantIdEncrypted`
  * or `payment_gateway.merchantId`, which are deprecated and never read.
  *
@@ -55,7 +73,7 @@ export const merchantLabel = (source: GatewaySource, gatewayId: string) => gatew
  * `CredentialUnavailable` passes through: a gateway with no merchant id in the
  * vault cannot take a payment, and the route decides what the user is told.
  * Such a gateway is also kept off the top-up page, which is what
- * `configuredLabels` and `requireConfigured` are for (F-092-u): offering one
+ * `configuredSecrets` and `requireConfigured` are for (F-092-u): offering one
  * means the user picks it and the payment fails after they have chosen.
  */
 /**
@@ -92,18 +110,23 @@ export class GatewayMerchant {
     return gateway.grantId ? `${base}:grant:${gateway.grantId}` : base;
   }
 
+  /**
+   * The secrets this gateway's provider declares (`provider-fields.ts`) —
+   * Zarinpal's merchant id, Stripe's secret key (F-104-g) — each a `use`, so
+   * each writes its own access row. The webhook secret is never among them:
+   * only `webhookSecretFor` reads it, for `verifyWebhook`.
+   */
   async credentialsFor(gateway: MerchantGatewayRef, actorId: string | null = null): Promise<GatewayCredentials> {
-    const merchantId = await this.whereItLives(gateway, (tenantId) =>
-      this.vault.use(
-        {
-          tenantId,
-          kind: TenantCredentialKind.gateway_merchant_id,
-          label: merchantLabel(gateway.source, gateway.gatewayId),
-        },
-        { caller: this.caller(gateway), actorId },
-      ),
-    );
-    return { merchantId };
+    const credentials: GatewayCredentials = {};
+    for (const name of paymentSecretsOf(gateway.providerName)) {
+      credentials[name] = await this.whereItLives(gateway, (tenantId) =>
+        this.vault.use(
+          { tenantId, kind: SECRET_KIND[name], label: merchantLabel(gateway.source, gateway.gatewayId) },
+          { caller: this.caller(gateway), actorId },
+        ),
+      );
+    }
+    return credentials;
   }
 
   /**
@@ -116,43 +139,49 @@ export class GatewayMerchant {
   async webhookSecretFor(gateway: MerchantGatewayRef): Promise<string> {
     return this.whereItLives(gateway, (tenantId) =>
       this.vault.use(
-        { tenantId, kind: TenantCredentialKind.webhook_secret, label: merchantLabel(gateway.source, gateway.gatewayId) },
+        { tenantId, kind: SECRET_KIND.webhookSecret, label: merchantLabel(gateway.source, gateway.gatewayId) },
         { caller: this.caller(gateway), actorId: null },
       ),
     );
   }
 
   /**
-   * The vault labels this tenant holds a merchant id under — one read, no
+   * Which secrets this tenant holds, per gateway label — one read, no
    * `tenant_credential_access` row, because nothing is decrypted. The list
-   * filters on `merchantLabel(...)` of each gateway (F-092-u).
+   * keeps a gateway only when {@link hasEverySecret} (F-092-u, F-104-g).
    */
-  async configuredLabels(tenantId: string, grantId?: string | null, gateway?: { source: GatewaySource; gatewayId: string }): Promise<Set<string>> {
+  async configuredSecrets(
+    tenantId: string,
+    grantId?: string | null,
+    gateway?: { source: GatewaySource; gatewayId: string },
+  ): Promise<Map<string, Set<GatewaySecretName>>> {
     const credentials = await (grantId && gateway
       ? this.granted.along({ grantId, ...gateway }, (owner) => this.vault.list(owner))
       : this.vault.list(tenantId));
-    return new Set(
-      credentials
-        .filter((c) => c.kind === TenantCredentialKind.gateway_merchant_id && c.configured)
-        .map((c) => c.label),
-    );
+    const nameOf = new Map(GATEWAY_SECRET_NAMES.map((n) => [SECRET_KIND[n], n] as const));
+    const out = new Map<string, Set<GatewaySecretName>>();
+    for (const c of credentials) {
+      const name = nameOf.get(c.kind);
+      if (!name || !c.configured) continue;
+      if (!out.has(c.label)) out.set(c.label, new Set());
+      out.get(c.label)!.add(name);
+    }
+    return out;
   }
 
   /**
-   * Refuses a gateway that has no usable merchant id, without decrypting one —
-   * for the manual-fee path, which otherwise asks the vault nothing until the
-   * payment itself (F-092-u).
+   * Refuses a gateway missing any secret its provider declares, without
+   * decrypting one — for the manual-fee path, which otherwise asks the vault
+   * nothing until the payment itself (F-092-u, F-104-g).
    */
   async requireConfigured(gateway: MerchantGatewayRef): Promise<void> {
     await this.whereItLives(gateway, async (tenantId) => {
-      const ref = {
-        tenantId,
-        kind: TenantCredentialKind.gateway_merchant_id,
-        label: merchantLabel(gateway.source, gateway.gatewayId),
-      };
-      const summary = await this.vault.summary(ref);
-      if (!summary?.configured || summary.status !== TenantCredentialStatus.active) {
-        throw new CredentialUnavailable(ref, summary ? 'revoked' : 'missing');
+      for (const name of PROVIDER_FIELDS[gateway.providerName]?.secrets ?? []) {
+        const ref = { tenantId, kind: SECRET_KIND[name], label: merchantLabel(gateway.source, gateway.gatewayId) };
+        const summary = await this.vault.summary(ref);
+        if (!summary?.configured || summary.status !== TenantCredentialStatus.active) {
+          throw new CredentialUnavailable(ref, summary ? 'revoked' : 'missing');
+        }
       }
     });
   }

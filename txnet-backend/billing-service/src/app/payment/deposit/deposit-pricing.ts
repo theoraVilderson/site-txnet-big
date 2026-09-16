@@ -6,6 +6,7 @@ import type { PaymentProvider } from '../gateway/payment-provider';
 import type { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import type { FxRateReader } from '../pricing/fx-rate.reader';
 import {
+  BASE_CURRENCY_CODE,
   feeBasis,
   feeQuoteAmountMinor,
   GatewayPrice,
@@ -320,12 +321,15 @@ export async function priceDeposit(
 ): Promise<DepositPricing> {
   const { gateway, ref, amount, discount, actorId } = input;
   const provider = deps.providers.get(gateway.providerName);
+  // A gateway charging the base currency prices at 1: the live rate is rial per dollar (F-104-g).
+  const chargesInBaseCurrency = provider.chargeCurrency === BASE_CURRENCY_CODE;
   const request: PriceRequest = {
     pricing: gateway,
     amount,
     discount,
-    liveRate: gateway.useLiveRate ? await deps.fx.current() : null,
+    liveRate: gateway.useLiveRate && !chargesInBaseCurrency ? await deps.fx.current() : null,
     chargeDecimals: provider.chargeDecimals,
+    chargesInBaseCurrency,
   };
 
   if (gateway.feeCalculationMode === FeeCalcMode.automatic) {

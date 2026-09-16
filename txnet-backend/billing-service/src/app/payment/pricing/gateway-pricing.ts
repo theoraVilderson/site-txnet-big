@@ -88,7 +88,17 @@ export type PriceRequest = {
   liveRate?: FxRateSnapshot | null;
   /** Decimal places of the gateway currency's minor unit: Zarinpal's rial is 0, a USD card is 2. */
   chargeDecimals: number;
+  /**
+   * The gateway charges in the base currency itself (Stripe's USD, ADR-0019):
+   * the rate is exactly 1, and no live rate, static rate, modifier, bound or
+   * rounding applies. The live rate is rial per dollar, so applying it here
+   * would multiply the charge by it (F-104-g, the user's call 2026-09-16).
+   */
+  chargesInBaseCurrency?: boolean;
 };
+
+/** The base currency (ADR-0019): what `amount` is in, and what a gateway charging it prices at 1. */
+export const BASE_CURRENCY_CODE = 'USD';
 
 export type GatewayPrice = {
   amount: Prisma.Decimal;
@@ -247,7 +257,9 @@ function feeOf(p: GatewayPricing, basis: Dec, quotedFee: Prisma.Decimal | null |
 
 type RateUsed = { rate: Dec; snapshotId: string | null };
 
-function rateOf(p: GatewayPricing, liveRate: FxRateSnapshot | null | undefined): RateUsed {
+function rateOf(request: PriceRequest): RateUsed {
+  if (request.chargesInBaseCurrency) return { rate: new Dec(1), snapshotId: null };
+  const { pricing: p, liveRate } = request;
   const usable = (v: Prisma.Decimal | null | undefined): Dec | null => {
     const d = decOrNull(v);
     return d && d.gt(0) ? d : null;
@@ -302,7 +314,7 @@ export function feeQuoteAmountMinor(request: PriceRequest): bigint | null {
   checkChargeDecimals(request.chargeDecimals);
   const { basis } = settle(request);
   if (basis.isZero()) return null;
-  const { rate } = rateOf(request.pricing, request.liveRate);
+  const { rate } = rateOf(request);
   const minor = basis.mul(rate).mul(new Dec(10).pow(request.chargeDecimals)).toDecimalPlaces(0, Dec.ROUND_CEIL);
   return BigInt(minor.toFixed(0));
 }
@@ -315,7 +327,7 @@ export function feeQuoteAmountMinor(request: PriceRequest): bigint | null {
 export function quotedFeeFromMinor(request: PriceRequest, feeMinor: bigint): Prisma.Decimal {
   checkChargeDecimals(request.chargeDecimals);
   if (feeMinor < BigInt(0)) throw new InvalidPricingInput('feeMinor is negative');
-  const { rate } = rateOf(request.pricing, request.liveRate);
+  const { rate } = rateOf(request);
   const fee = new Dec(feeMinor.toString()).div(new Dec(10).pow(request.chargeDecimals)).div(rate);
   return out(centsUp(fee), MONEY_SCALE);
 }
@@ -344,7 +356,7 @@ export function priceAtGateway(request: PriceRequest): GatewayPrice {
 
   const fee = feeOf(pricing, basis, request.quotedFee);
   const payable = basis.plus(fee);
-  const { rate, snapshotId } = rateOf(pricing, request.liveRate);
+  const { rate, snapshotId } = rateOf(request);
   const charged = payable
     .mul(rate)
     .mul(new Dec(10).pow(chargeDecimals))

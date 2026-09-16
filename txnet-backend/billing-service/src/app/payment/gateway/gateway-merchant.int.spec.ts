@@ -181,8 +181,8 @@ it('refuses a gateway with no merchant id of its own, though a provider-wide one
   ).rejects.toMatchObject({ name: 'CredentialUnavailable', reason: 'missing' });
 });
 
-it('lists the gateway labels this tenant has a merchant id for, and no other kind', async () => {
-  const labels = await runWithTenant({ id: TENANT_A }, () => merchant.configuredLabels(TENANT_A));
+it('lists the gateway labels this tenant holds secrets for, and no other tenant\'s', async () => {
+  const labels = new Set((await runWithTenant({ id: TENANT_A }, () => merchant.configuredSecrets(TENANT_A))).keys());
 
   // The provider-wide `zarinpal` row is a `gateway_merchant_id` too, so it is
   // listed; what matters is that no gateway label of another tenant is.
@@ -253,9 +253,9 @@ describe('a granted gateway is charged with its owner\'s merchant id', () => {
 
   it("lists the lender's labels along the grant, which is what keeps it on the top-up page", async () => {
     const labels = await runWithTenant({ id: TENANT_A }, () =>
-      merchant.configuredLabels(TENANT_B, GRANT, { source: 'tenant', gatewayId: B_OWN }),
+      merchant.configuredSecrets(TENANT_B, GRANT, { source: 'tenant', gatewayId: B_OWN }),
     );
 
-    expect([...labels]).toContain(`gateway:tenant:${B_OWN}`);
+    expect([...labels.keys()]).toContain(`gateway:tenant:${B_OWN}`);
   });
 });

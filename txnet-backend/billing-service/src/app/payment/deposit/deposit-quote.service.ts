@@ -5,7 +5,7 @@ import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CouponValidationService, RejectedCoupon } from '../coupon/coupon-validation';
-import { GatewayMerchant, GatewaySource, merchantLabel } from '../gateway/gateway-merchant';
+import { GatewayMerchant, GatewaySource, hasEverySecret } from '../gateway/gateway-merchant';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { FxRateReader } from '../pricing/fx-rate.reader';
 import { priceDeposit, selectableGateways, selectGateway, type SelectOptions } from './deposit-pricing';
@@ -146,7 +146,7 @@ export class DepositQuoteService {
           async (g) =>
             [
               g.ownerTenantId,
-              await this.merchant.configuredLabels(g.ownerTenantId, g.grantId, {
+              await this.merchant.configuredSecrets(g.ownerTenantId, g.grantId, {
                 source: g.source,
                 gatewayId: g.id,
               }),
@@ -156,7 +156,7 @@ export class DepositQuoteService {
     );
     return rows
       .filter((g) => this.providers.has(g.providerName))
-      .filter((g) => configured.get(g.ownerTenantId)?.has(merchantLabel(g.source, g.id)) ?? false)
+      .filter((g) => hasEverySecret(configured.get(g.ownerTenantId), { source: g.source, gatewayId: g.id, providerName: g.providerName }))
       .map((g) => ({
         id: g.id,
         source: g.source,

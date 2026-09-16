@@ -4,6 +4,7 @@ import { PaymentProviderName } from '@prisma/client';
 
 import type { EnvConfig } from '../../config/env.validation';
 import { PaymentProvider, ProviderNotSupported } from './payment-provider';
+import { StripeProvider } from './stripe.provider';
 import { ZarinpalProvider } from './zarinpal.provider';
 
 /**
@@ -13,7 +14,7 @@ import { ZarinpalProvider } from './zarinpal.provider';
  * from `GatewayMerchant` per call.
  *
  * `PaymentProviderName` has members with no driver yet (`idpay`,
- * `nowpayments`, `stripe`, and D-32's `oxapay`, `airwallex`, `telegram_stars`,
+ * `nowpayments`, and D-32's `oxapay`, `airwallex`, `telegram_stars`,
  * `bale`); asking for one is `ProviderNotSupported`, never a
  * fallback to another gateway.
  */
@@ -25,6 +26,8 @@ export class PaymentProviderRegistry {
     const sandbox = config.get('PAYMENT_GATEWAY_SANDBOX', { infer: true });
     this.providers = new Map<PaymentProviderName, PaymentProvider>([
       [PaymentProviderName.zarinpal, new ZarinpalProvider({ sandbox })],
+      // Test or live is the key's own prefix at Stripe, so the sandbox flag has nothing to switch (F-104-g).
+      [PaymentProviderName.stripe, new StripeProvider()],
     ]);
     // A webhook driver that cannot check a signature would make the webhook
     // door answer 404 for a gateway that is supposed to settle there (ADR-0051).

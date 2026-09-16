@@ -1,8 +1,15 @@
-import { PaymentProviderName } from '@prisma/client';
+import { PaymentProviderName, TenantCredentialKind } from '@prisma/client';
 
 /** The secrets a gateway can carry, each its own vault kind under the gateway row's label (F-102-a, F-104-c). */
 export const GATEWAY_SECRET_NAMES = ['merchantId', 'secretKey', 'webhookSecret'] as const;
 export type GatewaySecretName = (typeof GATEWAY_SECRET_NAMES)[number];
+
+/** The vault kind each secret is stored under — `auth-service` writes by the same names (F-102-a). */
+export const SECRET_KIND: Record<GatewaySecretName, TenantCredentialKind> = {
+  merchantId: TenantCredentialKind.gateway_merchant_id,
+  secretKey: TenantCredentialKind.gateway_secret_key,
+  webhookSecret: TenantCredentialKind.webhook_secret,
+};
 
 export type ProviderFields = {
   /** The secrets a gateway of this provider needs to take a payment, in `GATEWAY_SECRET_NAMES` order. */
