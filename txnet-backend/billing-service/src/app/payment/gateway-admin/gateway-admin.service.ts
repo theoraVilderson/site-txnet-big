@@ -15,12 +15,13 @@ import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.servi
 import { PrismaService } from '../../prisma/prisma.service';
 import { InvalidDepositPresets, normalizePresets } from '../deposit/deposit-presets';
 import type { GatewaySource } from '../gateway/gateway-merchant';
+import { GATEWAY_SECRET_NAMES, type GatewaySecretName, PROVIDER_FIELDS } from '../gateway/provider-fields';
 
 /** What the vault writer says about one secret. Never a value. */
 export type GatewaySecretState = { configured: boolean; version: number | null; rotatedAt: Date | string | null };
-export type GatewaySecretsState = { merchantId: GatewaySecretState; secretKey: GatewaySecretState };
+export type GatewaySecretsState = Record<GatewaySecretName, GatewaySecretState>;
 export type GatewaySecretTarget = { tenantId: string; source: GatewaySource; gatewayId: string };
-export type GatewaySecretValues = { merchantId?: string; secretKey?: string };
+export type GatewaySecretValues = Partial<Record<GatewaySecretName, string>>;
 
 /**
  * The write side of a gateway's secrets, which is `auth-service`'s (F-102-a):
@@ -109,6 +110,12 @@ export type GatewayView = {
   callbackUrl: string | null;
   /** `null` when the vault writer could not be asked; the list still renders. */
   credentials: GatewaySecretsState | null;
+  /**
+   * The secrets this gateway's provider needs that are not stored — the
+   * heads-up for a gateway that is saved, maybe active, and cannot take a
+   * payment yet (F-104-e). `null` when `credentials` is.
+   */
+  missingSecrets: GatewaySecretName[] | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -149,11 +156,12 @@ const PLAIN_COLUMNS = ['displayName', 'isActive', 'useLiveRate'] as const;
 const ENUM_COLUMNS = { providerName: PaymentProviderName, gatewayCategory: GatewayCategory, feeCalculationMode: FeeCalcMode, feeType: FeeType, roundingMode: RateRoundingMode } as const;
 const PLATFORM_ONLY = ['description', 'supportedCurrencies', 'confirmationMode'] as const;
 const REQUIRED_ON_CREATE = ['displayName', 'providerName', 'gatewayCategory', 'feeCalculationMode', 'feeType', 'feeValue'] as const;
-const SECRET_KEYS = ['merchantId', 'secretKey'] as const;
+const SECRET_KEYS = GATEWAY_SECRET_NAMES;
 
 const NOT_CONFIGURED: GatewaySecretsState = {
   merchantId: { configured: false, version: null, rotatedAt: null },
   secretKey: { configured: false, version: null, rotatedAt: null },
+  webhookSecret: { configured: false, version: null, rotatedAt: null },
 };
 
 type Row = Record<string, unknown>;
@@ -202,7 +210,7 @@ const dec = (v: unknown): Prisma.Decimal | null => (v === null || v === undefine
  *
  * **Secrets never pass through a column, an answer or an audit row.** They are
  * relayed to {@link GatewaySecretWriter} and the audit row records only which
- * of the two changed. The deprecated `merchantId` / `*Encrypted` columns are
+ * of them changed. The deprecated `merchantId` / `*Encrypted` columns are
  * never selected and never written with a value (invariant 8).
  *
  * **Verification is the platform owner's.** A tenant gateway is offered to
@@ -299,6 +307,7 @@ export class GatewayAdminService {
     }
     if (input.verificationStatus !== undefined && !owner) throw new GatewayAdminRefused('verification_is_platform_owners');
     this.assertRanges(input);
+    const providerColumns = this.providerRules(input);
 
     if (tenantId) {
       const duplicate = await this.all.tenantGatewayConfig.findFirst({
@@ -308,7 +317,7 @@ export class GatewayAdminService {
       if (duplicate) throw new GatewayAdminRefused('provider_already_configured', input.providerName);
     }
 
-    const data = this.columns(input, input.source);
+    const data = { ...this.columns(input, input.source), ...providerColumns };
     data['isActive'] ??= false;
     if (input.source === 'platform') {
       data['supportedCurrencies'] ??= [];
@@ -352,6 +361,7 @@ export class GatewayAdminService {
       throw new GatewayAdminRefused('verification_is_platform_owners');
     }
     this.assertRanges({ ...this.snapshot(row), ...patch });
+    const providerColumns = this.providerRules({ ...this.snapshot(row), ...patch });
 
     if (ref.source === 'tenant' && patch.providerName !== undefined && patch.providerName !== row['providerName']) {
       const duplicate = await this.all.tenantGatewayConfig.findFirst({
@@ -361,7 +371,7 @@ export class GatewayAdminService {
       if (duplicate && duplicate.id !== ref.id) throw new GatewayAdminRefused('provider_already_configured', patch.providerName);
     }
 
-    const data = this.columns(patch, ref.source);
+    const data = { ...this.columns(patch, ref.source), ...providerColumns };
     const secretsChanged = this.secretsNamed(patch);
     if (ref.source === 'tenant') {
       if (patch.verificationStatus !== undefined) Object.assign(data, this.verification(patch.verificationStatus, actor));
@@ -556,6 +566,20 @@ export class GatewayAdminService {
     }
   }
 
+  /**
+   * What the gateway's provider requires of its settings (F-104-e), checked on
+   * the row as it will be. A `telegram_stars` gateway is priced by its own USD
+   * value per Star: a positive `staticRate`, and the live rate forced off.
+   * Answers the columns that rule sets. Secrets are not checked here.
+   */
+  private providerRules(v: GatewayFields): Row {
+    const fields = PROVIDER_FIELDS[v.providerName as PaymentProviderName];
+    if (!fields?.staticRateRequired) return {};
+    const rate = dec(v.staticRate);
+    if (!rate || !rate.greaterThan(0)) throw new GatewayAdminRefused('missing_field', 'staticRate');
+    return v.useLiveRate === false ? {} : { useLiveRate: false };
+  }
+
   private assertRanges(v: GatewayFields | Record<string, unknown>): void {
     const pairs: Array<[string, string]> = [
       ['minAcceptAmount', 'maxAcceptAmount'],
@@ -606,6 +630,9 @@ export class GatewayAdminService {
       depositPresets: presetStrings(row['depositPresets']),
       callbackUrl: str(row['callbackUrl']),
       credentials,
+      missingSecrets: credentials
+        ? (PROVIDER_FIELDS[row['providerName'] as PaymentProviderName]?.secrets ?? []).filter((k) => !credentials[k].configured)
+        : null,
       createdAt: row['createdAt'] as Date,
       updatedAt: row['updatedAt'] as Date,
     };

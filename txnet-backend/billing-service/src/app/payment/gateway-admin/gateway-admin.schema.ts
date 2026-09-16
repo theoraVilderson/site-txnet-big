@@ -19,7 +19,7 @@ import { z } from 'zod';
  * them to land, and silently ignoring one is a secret the operator believes is
  * stored somewhere it is not.
  *
- * Decimals are strings (C-02). The two secrets are bounded strings and nothing
+ * Decimals are strings (C-02). The three secrets are bounded strings and nothing
  * else — never echoed, never logged, relayed once to `auth-service` (F-102-a).
  */
 
@@ -60,6 +60,7 @@ const fields = {
   callbackUrl: z.string().max(600).nullable(),
   merchantId: secret('merchantId'),
   secretKey: secret('secretKey'),
+  webhookSecret: secret('webhookSecret'),
 };
 
 const optional = Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v.optional()])) as {

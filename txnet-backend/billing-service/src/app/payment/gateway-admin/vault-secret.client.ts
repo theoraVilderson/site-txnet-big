@@ -33,7 +33,7 @@ const REFUSALS = new Set([400, 403, 404]);
 
 /**
  * `GatewaySecretWriter` over HTTP (F-102-c, D-31): the one place in
- * `billing-service` a merchant id or secret key exists, and only for the length
+ * `billing-service` a gateway's secret exists, and only for the length
  * of one `fetch`.
  *
  * The shape of `worker-service`'s jobs on the same seam (`AUTH_API_BASE_URL`,
@@ -106,7 +106,11 @@ export class VaultSecretClient implements GatewaySecretWriter {
 
     // auth-service wraps answers in the shared envelope; accept both shapes.
     const data = (answer && typeof answer === 'object' && 'data' in answer ? answer['data'] : answer) as Record<string, unknown> | null;
-    return { merchantId: this.pick(data?.['merchantId']), secretKey: this.pick(data?.['secretKey']) };
+    return {
+      merchantId: this.pick(data?.['merchantId']),
+      secretKey: this.pick(data?.['secretKey']),
+      webhookSecret: this.pick(data?.['webhookSecret']),
+    };
   }
 
   private pick(raw: unknown): GatewaySecretState {

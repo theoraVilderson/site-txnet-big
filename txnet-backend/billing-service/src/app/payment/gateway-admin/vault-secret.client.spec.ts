@@ -61,6 +61,7 @@ describe('VaultSecretClient', () => {
       reply(200, {
         merchantId: { configured: true, version: 2, rotatedAt: '2026-09-13T10:00:00.000Z', fingerprint: 'fp-abc', value: MERCHANT },
         secretKey: { configured: false, version: null, rotatedAt: null },
+        webhookSecret: { configured: true, version: 1, rotatedAt: null, value: 'whsec_x' },
         extra: SECRET,
       }),
     );
@@ -70,6 +71,7 @@ describe('VaultSecretClient', () => {
     expect(state).toEqual({
       merchantId: { configured: true, version: 2, rotatedAt: '2026-09-13T10:00:00.000Z' },
       secretKey: { configured: false, version: null, rotatedAt: null },
+      webhookSecret: { configured: true, version: 1, rotatedAt: null },
     });
     expect(fetchMock.mock.calls[0][0]).toBe('http://auth-service:3000/api/internal/vault/gateway-credential/state');
   });

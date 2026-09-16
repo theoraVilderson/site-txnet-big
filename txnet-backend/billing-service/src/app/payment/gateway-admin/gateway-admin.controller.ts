@@ -81,10 +81,11 @@ const WRITE = {
  * `GatewayAdminService` the real one. Linking a gateway to another tenant is
  * not here; it is `/api/billing/settlement/grants` (ADR-0041).
  *
- * **A secret goes in and never comes out.** `merchantId` and `secretKey` are
- * accepted on create and update and relayed to `auth-service` (F-102-a); every
- * answer carries `credentials: {merchantId, secretKey}` as
- * `{configured, version, rotatedAt}` and nothing more. There is no route that
+ * **A secret goes in and never comes out.** `merchantId`, `secretKey` and
+ * `webhookSecret` are accepted on create and update and relayed to
+ * `auth-service` (F-102-a, F-104-c); every answer carries `credentials` as
+ * `{configured, version, rotatedAt}` per secret, and `missingSecrets` naming
+ * what the provider still needs (F-104-e), and nothing more. There is no route that
  * reads one back — to change a secret is to send a new one.
  *
  * A gateway is addressed as `:source/:id` because the two tables can share an

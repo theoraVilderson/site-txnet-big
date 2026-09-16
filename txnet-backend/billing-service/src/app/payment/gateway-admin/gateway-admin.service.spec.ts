@@ -35,6 +35,7 @@ const OTHER_GW = '77777777-7777-4777-8777-777777777777';
 
 const MERCHANT = 'zp-merchant-9f3c1e';
 const SECRET = 'sk_live_very_secret_value';
+const WEBHOOK = 'whsec_signing_secret_value';
 
 const actor = (tenantId: string) => ({ adminId: ADMIN, tenantId, ip: '10.0.0.9' });
 
@@ -152,13 +153,17 @@ function build(seed: { payments?: Row[]; grants?: Row[]; verified?: boolean } = 
     set: vi.fn(async (target, values, actorId) => {
       writes.push('secrets.set');
       secrets.calls.push({ op: 'set', target, values, actorId });
-      return { merchantId: values.merchantId ? configured : none, secretKey: values.secretKey ? configured : none };
+      return {
+        merchantId: values.merchantId ? configured : none,
+        secretKey: values.secretKey ? configured : none,
+        webhookSecret: values.webhookSecret ? configured : none,
+      };
     }),
-    state: vi.fn(async () => ({ merchantId: none, secretKey: none })),
+    state: vi.fn(async () => ({ merchantId: none, secretKey: none, webhookSecret: none })),
     revoke: vi.fn(async (target) => {
       writes.push('secrets.revoke');
       secrets.calls.push({ op: 'revoke', target });
-      return { merchantId: none, secretKey: none };
+      return { merchantId: none, secretKey: none, webhookSecret: none };
     }),
   };
 
@@ -377,6 +382,93 @@ describe('GatewayAdminService — callback address (F-092-w)', () => {
     for (const callbackUrl of ['pay.example.org/cb', 'javascript:alert(1)', 'ftp://x.example/cb']) {
       expect((await refusal(() => service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { callbackUrl }))).reason).toBe('invalid_callback');
     }
+    expect(writes).toEqual([]);
+  });
+});
+
+describe('GatewayAdminService — the D-32 providers (F-104-e)', () => {
+  it('relays a webhook secret like the other two: to the writer, named in the audit row, never in an answer', async () => {
+    const { service, audit, secrets } = build();
+
+    const created = await service.create(actor(RESELLER), { source: 'tenant', ...FIELDS, providerName: 'stripe', secretKey: SECRET, webhookSecret: WEBHOOK });
+
+    expect(secrets.calls).toEqual([
+      { op: 'set', target: { tenantId: RESELLER, source: 'tenant', gatewayId: created.id }, values: { secretKey: SECRET, webhookSecret: WEBHOOK }, actorId: ADMIN },
+    ]);
+    expect(audit.at(-1)?.['newValue']).toEqual(expect.objectContaining({ secretsChanged: ['secretKey', 'webhookSecret'] }));
+    expect(created.credentials?.webhookSecret.configured).toBe(true);
+    expect(JSON.stringify({ created, audit })).not.toContain(WEBHOOK);
+  });
+
+  it("creates and activates a gateway missing its provider's secrets, and says which are missing (the user's call)", async () => {
+    const { service } = build();
+
+    const bare = await service.create(actor(RESELLER), { source: 'tenant', ...FIELDS, providerName: 'airwallex', isActive: true });
+    expect(bare.isActive).toBe(true);
+    expect(bare.missingSecrets).toEqual(['merchantId', 'secretKey', 'webhookSecret']);
+
+    const half = await service.create(actor(OWNER), { source: 'platform', ...FIELDS, providerName: 'stripe', secretKey: SECRET });
+    expect(half.missingSecrets).toEqual(['webhookSecret']);
+
+    const listed = await service.list(actor(RESELLER));
+    expect(listed.find((g) => g.id === RESELLER_GW)?.missingSecrets).toEqual(['merchantId']);
+  });
+
+  it('says nothing about missing secrets when the vault writer could not be asked', async () => {
+    const { service, secrets } = build();
+    secrets.state = vi.fn(async () => {
+      throw new Error('unreachable');
+    });
+
+    const listed = await service.list(actor(RESELLER));
+
+    expect(listed[0].credentials).toBeNull();
+    expect(listed[0].missingSecrets).toBeNull();
+  });
+
+  it('refuses a telegram_stars gateway with no USD value per Star, and writes nothing', async () => {
+    const { service, writes } = build();
+    const stars = { ...FIELDS, providerName: 'telegram_stars', gatewayCategory: 'in_chat' } as const;
+
+    for (const staticRate of [undefined, null, '0']) {
+      const e = await refusal(() => service.create(actor(RESELLER), { source: 'tenant', ...stars, staticRate }));
+      expect([e.reason, e.message]).toEqual(['missing_field', 'missing_field: staticRate']);
+    }
+    expect(writes).toEqual([]);
+  });
+
+  it("stores a Star's value as the static rate with the live rate off, whatever was sent, and needs no secret", async () => {
+    const { service, db } = build();
+
+    const created = await service.create(actor(RESELLER), {
+      source: 'tenant',
+      ...FIELDS,
+      providerName: 'telegram_stars',
+      gatewayCategory: 'in_chat',
+      staticRate: '0.013',
+      useLiveRate: true,
+    });
+
+    expect(created.staticRate).toBe('0.013');
+    expect(created.useLiveRate).toBe(false);
+    expect(db.tenantGatewayConfig.rows.find((r) => r['id'] === created.id)?.['useLiveRate']).toBe(false);
+    expect(created.missingSecrets).toEqual([]);
+  });
+
+  it('refuses an edit that leaves a telegram_stars gateway without its rate, including switching a gateway to it', async () => {
+    const { service, writes } = build();
+
+    const switched = await refusal(() =>
+      service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { providerName: 'telegram_stars' }),
+    );
+    expect(switched.reason).toBe('missing_field');
+
+    const withRate = await service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { providerName: 'telegram_stars', staticRate: '0.013' });
+    expect(withRate.useLiveRate).toBe(false);
+
+    writes.length = 0;
+    const cleared = await refusal(() => service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { staticRate: null }));
+    expect(cleared.reason).toBe('missing_field');
     expect(writes).toEqual([]);
   });
 });
