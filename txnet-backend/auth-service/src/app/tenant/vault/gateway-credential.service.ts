@@ -11,10 +11,14 @@ export type GatewayCredentialTarget = {
   gatewayId: string;
 };
 
-/** The two secrets a gateway carries. Either may be sent alone; absent means "leave it". */
+/**
+ * The secrets a gateway carries. Any may be sent alone; absent means "leave it".
+ * `webhookSecret` is what a webhook provider signs its posts with (F-104-c).
+ */
 export type GatewaySecrets = {
   merchantId?: string;
   secretKey?: string;
+  webhookSecret?: string;
 };
 
 /** What a caller is told about one secret. Deliberately no value and no fingerprint. */
@@ -24,10 +28,7 @@ export type SecretState = {
   rotatedAt: Date | null;
 };
 
-export type GatewayCredentialState = {
-  merchantId: SecretState;
-  secretKey: SecretState;
-};
+export type GatewayCredentialState = Record<keyof GatewaySecrets, SecretState>;
 
 export type GatewayCredentialRejection = 'gateway_not_found' | 'not_owner' | 'empty_value' | 'nothing_to_set';
 
@@ -42,6 +43,7 @@ export class GatewayCredentialRefused extends Error {
 const KINDS = {
   merchantId: TenantCredentialKind.gateway_merchant_id,
   secretKey: TenantCredentialKind.gateway_secret_key,
+  webhookSecret: TenantCredentialKind.webhook_secret,
 } as const satisfies Record<keyof GatewaySecrets, TenantCredentialKind>;
 
 const NOT_CONFIGURED: SecretState = { configured: false, version: null, rotatedAt: null };
@@ -51,7 +53,8 @@ const NOT_CONFIGURED: SecretState = { configured: false, version: null, rotatedA
  *
  * `billing-service` owns the gateway rows but loads the vault read-only
  * (ADR-0039: its vault connection refuses `$transaction`, so it has no `put`).
- * Its management surface relays the merchant id and secret key here over
+ * Its management surface relays the merchant id, secret key and webhook
+ * signing secret here over
  * `POST /internal/vault/gateway-credential` and keeps nothing.
  *
  * **The vault a secret lands in is re-derived, never trusted.** A caller names
@@ -102,7 +105,7 @@ export class GatewayCredentialService {
     return this.read(target);
   }
 
-  /** Revoke both secrets — the gateway is being deactivated or deleted (ADR-0041 §6). */
+  /** Revoke every secret — the gateway is being deactivated or deleted (ADR-0041 §6). */
   async revoke(target: GatewayCredentialTarget): Promise<GatewayCredentialState> {
     await this.assertOwner(target);
     const label = gatewayCredentialLabel(target.source, target.gatewayId);
@@ -121,7 +124,11 @@ export class GatewayCredentialService {
       // fingerprint, and a spread is how it would reach a wire.
       return s?.configured ? { configured: true, version: s.version, rotatedAt: s.rotatedAt } : NOT_CONFIGURED;
     };
-    return { merchantId: await one(KINDS.merchantId), secretKey: await one(KINDS.secretKey) };
+    return {
+      merchantId: await one(KINDS.merchantId),
+      secretKey: await one(KINDS.secretKey),
+      webhookSecret: await one(KINDS.webhookSecret),
+    };
   }
 
   private async assertOwner(target: GatewayCredentialTarget): Promise<void> {

@@ -1,19 +1,28 @@
 import { Injectable } from '@nestjs/common';
+import { CredentialUnavailable } from '@txnet-backend/shared-core';
 
-import type { MerchantGatewayRef } from './gateway-merchant';
+import { GatewayMerchant, type MerchantGatewayRef } from './gateway-merchant';
 
 /**
  * A gateway's webhook signing secret, for one `verifyWebhook` call (F-104-b,
- * ADR-0051 decision 6).
+ * ADR-0051 decision 6; served since F-104-c).
  *
- * **Closed until F-104-c.** The vault kind exists, but nothing stores a gateway's
- * secret under it yet, so this answers `null` for every gateway and the webhook
- * door refuses every post as unsigned. F-104-c replaces the body with a
- * `GatewayMerchant` read; the port stays, so the door does not change.
+ * Read through `GatewayMerchant`, the one door to a gateway's credentials.
+ * A gateway with no secret stored — missing, expired or revoked — answers
+ * `null`, which the webhook door turns into a 401: an unconfigured gateway is a
+ * closed door, never a 500 the provider keeps retrying. Any other vault failure
+ * passes through.
  */
 @Injectable()
 export class WebhookSecretSource {
-  async secretFor(_gateway: MerchantGatewayRef): Promise<string | null> {
-    return null;
+  constructor(private readonly merchant: GatewayMerchant) {}
+
+  async secretFor(gateway: MerchantGatewayRef): Promise<string | null> {
+    try {
+      return await this.merchant.webhookSecretFor(gateway);
+    } catch (e) {
+      if (e instanceof CredentialUnavailable) return null;
+      throw e;
+    }
   }
 }

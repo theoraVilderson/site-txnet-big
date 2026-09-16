@@ -107,6 +107,22 @@ export class GatewayMerchant {
   }
 
   /**
+   * A webhook provider's signing secret for this gateway (F-104-c): kind
+   * `webhook_secret` under the same row label as the merchant id, written by
+   * `auth-service` beside it. A `use`, so audited like the merchant id.
+   * `CredentialUnavailable` passes through; `WebhookSecretSource` decides what
+   * a missing one means.
+   */
+  async webhookSecretFor(gateway: MerchantGatewayRef): Promise<string> {
+    return this.whereItLives(gateway, (tenantId) =>
+      this.vault.use(
+        { tenantId, kind: TenantCredentialKind.webhook_secret, label: merchantLabel(gateway.source, gateway.gatewayId) },
+        { caller: this.caller(gateway), actorId: null },
+      ),
+    );
+  }
+
+  /**
    * The vault labels this tenant holds a merchant id under — one read, no
    * `tenant_credential_access` row, because nothing is decrypted. The list
    * filters on `merchantLabel(...)` of each gateway (F-092-u).

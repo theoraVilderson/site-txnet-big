@@ -22,11 +22,13 @@ the why, and this file does not restate it.
 | Service | `VAULT_DB` binds | Uses |
 |---|---|---|
 | `auth-service` (`app/tenant/vault/vault.module.ts`) | the cross-tenant pool — its readers resolve a tenant through the vault | every operation, the internal destroy route, and **the only writer of a gateway's secrets** (F-102-a, below) |
-| `billing-service` (`payment/gateway/gateway.module.ts`) | the app pool, each vault query bound to the request's tenant — **except inside a proved grant**, below; `$transaction` refused, so no `put` | `use` of `gateway_merchant_id` |
+| `billing-service` (`payment/gateway/gateway.module.ts`) | the app pool, each vault query bound to the request's tenant — **except inside a proved grant**, below; `$transaction` refused, so no `put` | `use` of `gateway_merchant_id` and `webhook_secret` |
 
 **Gateway secrets are written over a seam, not by `billing` (D-31).**
 `POST /internal/vault/gateway-credential` (+ `/state`, `/revoke`,
 `GatewayCredentialService`) stores `gateway_merchant_id` / `gateway_secret_key`
+/ `webhook_secret` (F-104-c: what a webhook provider signs with, served to
+`verifyWebhook` by `GatewayMerchant.webhookSecretFor`, missing = `null` = 401)
 under `gatewayCredentialLabel(source, gatewayId)` — the one spelling, in
 `shared-core`, that `billing`'s `merchantLabel` delegates to. The vault is the
 one re-derived from the gateway row (a `tenant_gateway_config`'s `tenantId`; the

@@ -23,7 +23,7 @@ import {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type TargetBody = { tenantId?: unknown; source?: unknown; gatewayId?: unknown };
-type SetBody = TargetBody & { merchantId?: unknown; secretKey?: unknown; actorId?: unknown };
+type SetBody = TargetBody & { merchantId?: unknown; secretKey?: unknown; webhookSecret?: unknown; actorId?: unknown };
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
 const STATUS: Record<GatewayCredentialRejection, 400 | 403 | 404> = {
@@ -38,7 +38,8 @@ const STATUS: Record<GatewayCredentialRejection, 400 | 403 | 404> = {
  * (F-102-a, D-31): `/api/internal/vault/gateway-credential*`.
  *
  * A third internal route family on the vault, and the first that **writes a
- * value**. What it hands back is still no value: `{merchantId, secretKey}` each
+ * value**. What it hands back is still no value: `{merchantId, secretKey,
+ * webhookSecret}` each
  * as `{configured, version, rotatedAt}`. `billing` needs to know a gateway can
  * take a payment, never what it is charged with — that is read at payment time
  * through `GatewayMerchant`, audited per use.
@@ -73,7 +74,11 @@ export class GatewayCredentialController {
     return this.refusing(() =>
       this.credentials.set(
         target,
-        { merchantId: secret(body.merchantId, 'merchantId'), secretKey: secret(body.secretKey, 'secretKey') },
+        {
+          merchantId: secret(body.merchantId, 'merchantId'),
+          secretKey: secret(body.secretKey, 'secretKey'),
+          webhookSecret: secret(body.webhookSecret, 'webhookSecret'),
+        },
         actorId,
       ),
     );
@@ -87,7 +92,7 @@ export class GatewayCredentialController {
     return this.refusing(() => this.credentials.state(target));
   }
 
-  /** Revoke both — the gateway is being deactivated or deleted. */
+  /** Revoke all three — the gateway is being deactivated or deleted. */
   @Post('revoke')
   @HttpCode(HttpStatus.OK)
   async revoke(@Body() body: TargetBody): Promise<GatewayCredentialState> {

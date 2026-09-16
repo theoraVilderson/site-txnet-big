@@ -29,6 +29,7 @@ const ACTOR = '66666666-6666-4666-8666-666666666666';
 
 const MERCHANT = 'zp-merchant-9f3c1e';
 const SECRET = 'sk_live_very_secret_value';
+const WEBHOOK = 'whsec_signing_secret_value';
 
 type Stored = { kind: TenantCredentialKind; label: string; tenantId: string; plaintext: string; version: number; revoked: boolean; createdBy?: string };
 
@@ -135,10 +136,27 @@ describe('GatewayCredentialService', () => {
     expect(state).toEqual({
       merchantId: { configured: true, version: 1, rotatedAt: expect.any(Date) },
       secretKey: { configured: false, version: null, rotatedAt: null },
+      webhookSecret: { configured: false, version: null, rotatedAt: null },
     });
     const wire = JSON.stringify(state);
     expect(wire).not.toContain(MERCHANT);
     expect(wire).not.toContain('fp-');
+  });
+
+  it("stores a webhook signing secret beside the other two, under kind webhook_secret and the same label (F-104-c)", async () => {
+    const { service, stored } = build();
+
+    const state = await service.set(
+      { tenantId: RESELLER, source: 'tenant', gatewayId: RESELLER_GATEWAY },
+      { webhookSecret: WEBHOOK },
+      ACTOR,
+    );
+
+    expect(stored).toEqual([
+      expect.objectContaining({ tenantId: RESELLER, kind: TenantCredentialKind.webhook_secret, label: `gateway:tenant:${RESELLER_GATEWAY}`, plaintext: WEBHOOK }),
+    ]);
+    expect(state.webhookSecret).toEqual({ configured: true, version: 1, rotatedAt: expect.any(Date) });
+    expect(JSON.stringify(state)).not.toContain(WEBHOOK);
   });
 
   it('refuses a tenant gateway that belongs to a different tenant than the one named, and writes nothing', async () => {
@@ -192,15 +210,16 @@ describe('GatewayCredentialService', () => {
     expect(refusedWithValue.message).not.toContain(MERCHANT);
   });
 
-  it("revokes both of a gateway's secrets, and the state then says neither is configured", async () => {
+  it("revokes every one of a gateway's secrets, and the state then says none is configured", async () => {
     const { service, vault } = build();
     const target = { tenantId: RESELLER, source: 'tenant' as const, gatewayId: RESELLER_GATEWAY };
-    await service.set(target, { merchantId: MERCHANT, secretKey: SECRET }, ACTOR);
+    await service.set(target, { merchantId: MERCHANT, secretKey: SECRET, webhookSecret: WEBHOOK }, ACTOR);
 
     const state = await service.revoke(target);
 
-    expect(vault.revoke).toHaveBeenCalledTimes(2);
+    expect(vault.revoke).toHaveBeenCalledTimes(3);
     expect(state.merchantId.configured).toBe(false);
     expect(state.secretKey.configured).toBe(false);
+    expect(state.webhookSecret.configured).toBe(false);
   });
 });

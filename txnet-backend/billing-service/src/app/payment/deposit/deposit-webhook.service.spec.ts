@@ -4,8 +4,8 @@
  * What would break silently here, and nowhere else:
  *  - **nothing is read past the gateway row before the signature holds**: no
  *    payment lookup, no flip. A forged post is a 401 that cost one vault read;
- *  - **no secret is a 401, not a pass**: until F-104-c serves the secret, the
- *    door is closed (ADR-0051 decision 6);
+ *  - **no secret is a 401, not a pass**: a gateway with no stored webhook
+ *    secret is a closed door (ADR-0051 decision 6);
  *  - **the payment settles in its own tenant**, not the gateway owner's: a
  *    platform gateway serves many tenants' users (decision 3);
  *  - **a signed event we cannot act on is `accepted`** — an unknown code, an
