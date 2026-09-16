@@ -13,8 +13,10 @@ import { Select } from "../../_components/kit/Select";
 import { formatInstant } from "../../_lib/datetime";
 import { COUPON_KEYS, refusalKey } from "../_lib/coupon-form";
 import { GIFT_KEYS as G, downloadText, emptyGiftBatchForm, giftBatchBody, validateGiftBatch, type GiftBatchErrors, type GiftBatchForm } from "../_lib/gift-batch";
+import { variantOwnerTenant } from "../_lib/variant-choices";
 import { CouponUsage } from "./CouponUsage";
 import { ListSkeleton } from "./ListSkeleton";
+import { VariantPicker } from "./VariantPicker";
 
 const PAGE_SIZE = 20;
 const input =
@@ -311,7 +313,18 @@ function GiftBatchSheet({ me, onClose, onCreated }: { me: Me | null; onClose: ()
               />,
             )}
             {form.kind === "service"
-              ? field("grantVariantId", t("common", F.grantVariantId), text("grantVariantId", { ltr: true }), t("common", F.grantVariantHint))
+              ? field(
+                  "grantVariantId",
+                  t("common", F.grantVariantId),
+                  <VariantPicker
+                    id="gb-grantVariantId"
+                    value={form.grantVariantId}
+                    onChange={(v) => set("grantVariantId", v)}
+                    ownerTenant={variantOwnerTenant(form.owner, form.tenantId, me)}
+                    invalid={Boolean(errors.grantVariantId)}
+                  />,
+                  t("common", F.grantVariantHint),
+                )
               : field("value", t("common", F.value), text("value", { ltr: true }))}
           </div>
           <div className="grid gap-3 sm:grid-cols-2">

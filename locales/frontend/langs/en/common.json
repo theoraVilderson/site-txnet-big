@@ -885,8 +885,17 @@
       "cancel": "Cancel",
       "confirmClose": "You have unsaved changes. Leave without saving?",
       "freeService": "Free service",
-      "grantVariantId": "Catalog variant ID",
-      "grantVariantHint": "Copy it from the catalog page. The code gives a Grant of this variant, not money."
+      "grantVariantId": "Catalog variant",
+      "grantVariantHint": "The code gives a Grant of this variant, not money.",
+      "variantPicker": {
+        "placeholder": "Choose a variant",
+        "loading": "Loading the catalog…",
+        "empty": "No live variant this coupon's owner may give.",
+        "manual": "Enter an ID by hand",
+        "pick": "Choose from the catalog",
+        "days": "{n} days",
+        "permanent": "permanent"
+      }
     },
     "errors": {
       "required": "Required",
@@ -1003,8 +1012,8 @@
         "kind": "Each code gives",
         "kindCredit": "Wallet credit",
         "kindService": "A free service",
-        "grantVariantId": "Catalog variant ID",
-        "grantVariantHint": "Copy it from the catalog page."
+        "grantVariantId": "Catalog variant",
+        "grantVariantHint": "The code gives a Grant of this variant."
       },
       "errors": {
         "label": "Name the batch",

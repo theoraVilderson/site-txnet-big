@@ -23,6 +23,8 @@ import {
   validateCouponForm,
   validateUsageFilter,
 } from "./_lib/coupon-form";
+import { variantChoices, variantOwnerTenant } from "./_lib/variant-choices";
+import type { CatalogProductDetail, CatalogVariant } from "@/lib/catalog-api";
 
 /**
  * The coupons page, tab 1 — discount coupons (F-502-g, D-33). What breaks
@@ -270,6 +272,60 @@ describe("a free-service coupon", () => {
   it("keeps the type and the variant when an existing one is edited", () => {
     const form = formFromCoupon({ ...COUPON, discountType: "free_grant", discountValue: "0.00", maxDiscountCap: null, grantVariantId: UUID });
     expect(form).toMatchObject({ discountType: "free_grant", grantVariantId: UUID });
+  });
+});
+
+describe("the variant picker", () => {
+  const variant = (patch: Partial<CatalogVariant>): CatalogVariant => ({
+    id: "v",
+    tenantId: null,
+    productId: "p",
+    sku: "SKU",
+    nameKey: null,
+    quotas: {},
+    durationDays: 30,
+    billingMode: "prepaid",
+    visibility: "public",
+    panelGroupId: null,
+    qualityTier: "standard",
+    isActive: true,
+    prices: [],
+    ...patch,
+  });
+  const product = (patch: Partial<CatalogProductDetail>): CatalogProductDetail => ({
+    id: "p",
+    tenantId: null,
+    categoryId: "c",
+    key: "vpn",
+    nameKey: "k",
+    descriptionKey: null,
+    fulfilmentKind: "network_access",
+    featureKeys: [],
+    defaultQuotas: {},
+    isActive: true,
+    variants: [],
+    ...patch,
+  });
+
+  it("offers the platform's and the owner's live variants, whatever their visibility", () => {
+    const catalog = [
+      product({ key: "vpn", variants: [variant({ id: "a", sku: "M1" }), variant({ id: "b", sku: "HIDDEN", visibility: "admin_only" }), variant({ id: "c", isActive: false })] }),
+      product({ id: "p2", key: "res", tenantId: "t-res", variants: [variant({ id: "d", tenantId: "t-res", sku: "R1", durationDays: null })] }),
+      product({ id: "p3", key: "other", tenantId: "t-x", variants: [variant({ id: "e", tenantId: "t-x" })] }),
+      product({ id: "p4", key: "off", isActive: false, variants: [variant({ id: "f" })] }),
+    ];
+    expect(variantChoices(catalog, "t-res").map((c) => c.value)).toEqual(["a", "b", "d"]);
+    expect(variantChoices(catalog, null).map((c) => c.value)).toEqual(["a", "b"]);
+    const d = variantChoices(catalog, "t-res").find((c) => c.value === "d")!;
+    expect(d).toMatchObject({ product: "res", sku: "R1", durationDays: null });
+  });
+
+  it("asks billing's question: whose coupon is it", () => {
+    expect(variantOwnerTenant("own", "", RESELLER)).toBe("t-res");
+    expect(variantOwnerTenant("platform", "", OWNER)).toBeNull();
+    expect(variantOwnerTenant("tenant", " t-9 ", OWNER)).toBe("t-9");
+    // Only the platform owner chooses; anyone else's coupon is its own.
+    expect(variantOwnerTenant("platform", "", RESELLER)).toBe("t-res");
   });
 });
 

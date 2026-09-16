@@ -26,6 +26,8 @@ import {
   type CouponForm as Form,
   type CouponFormErrors,
 } from "../_lib/coupon-form";
+import { variantOwnerTenant } from "../_lib/variant-choices";
+import { VariantPicker } from "./VariantPicker";
 
 const F = K.form;
 
@@ -237,7 +239,19 @@ export function CouponForm({
                   />,
                 )}
                 {form.discountType === "free_grant"
-                  ? field("grantVariantId", t("common", F.grantVariantId), text("grantVariantId", { ltr: true, disabled: frozen }), t("common", F.grantVariantHint))
+                  ? field(
+                      "grantVariantId",
+                      t("common", F.grantVariantId),
+                      <VariantPicker
+                        id="cp-grantVariantId"
+                        value={form.grantVariantId}
+                        onChange={(v) => set("grantVariantId", v)}
+                        ownerTenant={coupon ? coupon.tenantId : variantOwnerTenant(form.owner, form.tenantId, me)}
+                        invalid={Boolean(errors.grantVariantId)}
+                        disabled={frozen}
+                      />,
+                      t("common", F.grantVariantHint),
+                    )
                   : field("discountValue", t("common", F.value), text("discountValue", { ltr: true, decimal: true, disabled: frozen }))}
                 {form.discountType === "percentage" && field("maxDiscountCap", t("common", F.cap), text("maxDiscountCap", { ltr: true, decimal: true }))}
               </div>

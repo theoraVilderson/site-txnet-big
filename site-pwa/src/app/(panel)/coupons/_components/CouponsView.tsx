@@ -133,7 +133,9 @@ function DiscountCoupons({ owner }: { owner: boolean }) {
 
   const money = (amount: string) => formatMoney(amount, BASE_CURRENCY, { lang, t });
   const discountText = (c: AdminCoupon) =>
-    c.discountType === "percentage"
+    c.discountType === "free_grant"
+      ? t("common", K.form.freeService)
+      : c.discountType === "percentage"
       ? `${t("common", K.list.percentOff, { value: Number(c.discountValue).toString() })}${c.maxDiscountCap ? ` · ${t("common", K.list.cap, { amount: money(c.maxDiscountCap) })}` : ""}`
       : t("common", K.list.amountOff, { amount: money(c.discountValue) });
   const hasLimits = (c: AdminCoupon) =>

@@ -69,8 +69,9 @@ The routes, the scope and every rule are
     the same report view as a coupon's, with the batch's totals.
 
 12. **A free service (F-502-l-c, D-35)** is a third type in the coupon form
-    and a kind of gift-code batch. It names a catalog variant id (shown on the
-    catalog page's variant card) and no value — `discountValue` goes as `"0"`,
+    and a kind of gift-code batch. It names a catalog variant, picked from a
+    list of live variants the platform's or the owner's (`variant-choices.ts`;
+    typed by id when `/api/catalog` cannot be read or lists none) and no value — `discountValue` goes as `"0"`,
     no cap, and a batch sends `value: "0"` with `grantVariantId`. As billing
     refuses them, it takes no purchase, period, hour, start-date or new-user
     limit (`notForFreeService`). Billing's `variant_not_found` has its sentence.
