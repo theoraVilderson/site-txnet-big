@@ -15,6 +15,7 @@ export * from './lib/redis/keys';
 export * from './lib/redis/ttl';
 export * from './lib/redis/rate-limit-buckets';
 export * from './lib/i18n/keys.backend.generated';
+export * from './lib/i18n/translator/translator';
 export * from './lib/tenant-context/tenant-context';
 export * from './lib/tenant-context/with-tenant';
 export * from './lib/tenant/host';

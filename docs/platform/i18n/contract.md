@@ -95,6 +95,21 @@ its source is unreadable (`--dir` always fails; `--strict` does the same for
 the gRPC path), and output is **deterministic** — sorted keys, no timestamp,
 no snapshot version in the header.
 
+## Machine translation (`Translator`, F-1533-a, ADR-0050)
+
+`shared-core` exports `Translator` (`translate(text, from, to)`, `languages()`)
+and `TRANSLATOR`, the Nest token. `translatorFromEnv()` builds the driver:
+`TRANSLATOR_URL` set → `LibreTranslateTranslator` (the self-hosted `translator`
+container, `TRANSLATOR_API_KEY` / `TRANSLATOR_TIMEOUT_MS` optional); unset →
+`NullTranslator`.
+
+| Rule | Held by |
+|---|---|
+| Never throws: engine down, timeout, non-2xx, unsupported pair, empty or malformed answer → `null` (`languages()` → `[]`) | `translator.spec.ts` |
+| `from === to` returns the text without a call; blank text returns `null` | `translator.spec.ts` |
+| Output is a **draft** only — nothing publishes it but a human (ADR-0050 decision 3) | callers (F-1533-d) |
+| No language list in code: pairs come from the engine, languages from locale-service; which models load is `TRANSLATOR_LANGUAGES` | §1.1 |
+
 ## Guarantees
 
 - Boot dependency: a consumer that cannot reach `locale-service` within its boot
