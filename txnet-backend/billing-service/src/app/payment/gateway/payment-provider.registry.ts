@@ -4,6 +4,7 @@ import { PaymentProviderName } from '@prisma/client';
 
 import type { EnvConfig } from '../../config/env.validation';
 import { PaymentProvider, ProviderNotSupported } from './payment-provider';
+import { NowPaymentsProvider } from './nowpayments.provider';
 import { StripeProvider } from './stripe.provider';
 import { ZarinpalProvider } from './zarinpal.provider';
 
@@ -13,9 +14,8 @@ import { ZarinpalProvider } from './zarinpal.provider';
  * merchant id: here a driver is chosen by name only, and the merchant comes
  * from `GatewayMerchant` per call.
  *
- * `PaymentProviderName` has members with no driver yet (`idpay`,
- * `nowpayments`, and D-32's `oxapay`, `airwallex`, `telegram_stars`,
- * `bale`); asking for one is `ProviderNotSupported`, never a
+ * `PaymentProviderName` has members with no driver yet (`idpay`, and
+ * D-32's `oxapay`, `airwallex`, `telegram_stars`, `bale`); asking for one is `ProviderNotSupported`, never a
  * fallback to another gateway.
  */
 @Injectable()
@@ -28,6 +28,7 @@ export class PaymentProviderRegistry {
       [PaymentProviderName.zarinpal, new ZarinpalProvider({ sandbox })],
       // Test or live is the key's own prefix at Stripe, so the sandbox flag has nothing to switch (F-104-g).
       [PaymentProviderName.stripe, new StripeProvider()],
+      [PaymentProviderName.nowpayments, new NowPaymentsProvider({ sandbox })],
     ]);
     // A webhook driver that cannot check a signature would make the webhook
     // door answer 404 for a gateway that is supposed to settle there (ADR-0051).

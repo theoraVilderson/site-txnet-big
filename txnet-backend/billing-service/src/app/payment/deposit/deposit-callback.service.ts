@@ -135,6 +135,7 @@ export class DepositCallbackService {
   ): Promise<CallbackOutcome> {
     const tenant = TenantContext.current('deposit callback');
     const { authority } = request;
+    if (!authority && request.paymentId) return this.returnByPaymentId(request.paymentId, foundOrigin);
     if (!authority) return { kind: 'failed', code: 'INVALID_PARAMS' };
 
     try {
@@ -279,6 +280,35 @@ export class DepositCallbackService {
    * when the money is there, pending otherwise. Writes nothing — no credit, no
    * close, no retry clock; the webhook and F-092-l's sweep own those.
    */
+  /**
+   * A return that names the payment and no authority (F-104-h): NOWPayments and
+   * OxaPay take a fixed return url, with no placeholder for the invoice they
+   * are about to mint. Only a **webhook** payment is answered this way — its
+   * return never credits or closes, so a url's word shows a status and nothing
+   * more. A return-settled gateway still needs its authority.
+   */
+  private async returnByPaymentId(paymentId: string, foundOrigin: (origin: string | null) => void): Promise<CallbackOutcome> {
+    try {
+      const payment = await tenantTransaction(this.prisma, (tx) =>
+        tx.paymentTransaction.findFirst({ where: { id: paymentId }, select: { ...PAYMENT_SELECT, returnOrigin: true } }),
+      );
+      if (!payment || this.providers.get(gatewayRefOf(payment).providerName).settlement !== 'webhook') {
+        return { kind: 'failed', code: 'INVALID_PARAMS' };
+      }
+      foundOrigin(payment.returnOrigin ?? null);
+      if (payment.status === PaymentStatus.success) {
+        return { kind: 'success', paymentId: payment.id, referenceId: payment.gatewayReferenceId, alreadyPaid: true };
+      }
+      if (payment.status === PaymentStatus.failed) return { kind: 'failed', code: 'VERIFICATION_FAILED' };
+      return payment.gatewayTrackingCode
+        ? await this.showOnly(payment, payment.gatewayTrackingCode)
+        : { kind: 'verifying', paymentId: payment.id };
+    } catch (e) {
+      this.logger.error(`deposit return failed for payment ${paymentId}`, e instanceof Error ? e.stack : String(e));
+      return { kind: 'failed', code: 'SYSTEM_ERROR' };
+    }
+  }
+
   private async showOnly(payment: PaymentRow, authority: string): Promise<CallbackOutcome> {
     const ref = gatewayRefOf(payment);
     try {

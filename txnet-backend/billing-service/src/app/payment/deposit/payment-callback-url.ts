@@ -25,6 +25,20 @@ export function withPaymentId(callbackUrl: string, paymentId: string): string {
   return url.toString();
 }
 
+/**
+ * Where a webhook provider posts for this gateway (F-104-b), on the same origin
+ * the callback is — a host Traefik routes to billing. The route itself matches
+ * no Host, so any of the tenant's panel hosts reaches it (F-104-h).
+ */
+export function webhookUrlFor(
+  callbackUrl: string,
+  globalPrefix: string,
+  gateway: { providerName: string; gatewayId: string },
+): string {
+  const path = `/${globalPrefix}/billing/deposit/webhook/${gateway.providerName}/${gateway.gatewayId}`;
+  return new URL(path, new URL(callbackUrl).origin).toString();
+}
+
 /** The payment id a value names, or `null` for anything that is not one. */
 export function paymentIdOf(value: string | null | undefined): string | null {
   return value && UUID.test(value) ? value.toLowerCase() : null;

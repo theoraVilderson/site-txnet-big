@@ -87,6 +87,8 @@ function build(setup: Setup = {}) {
       findFirst: async ({ where }: { where: Record<string, unknown> }) => {
         if (where['gatewayTrackingCode'] === AUTHORITY) return row;
         if (lost && where['id'] === lost.id && where['gatewayTrackingCode'] === null) return lost;
+        // A webhook payment's return found by `?p=` alone (F-104-h): no authority in the where.
+        if (!('gatewayTrackingCode' in where) && where['id'] === row?.id) return row;
         return null;
       },
       updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
@@ -490,5 +492,39 @@ describe('DepositCallbackService.settle — a gateway that settles by webhook (F
     expect(await settle(service, { gatewayStatus: 'NOK' })).toEqual({ kind: 'verifying', paymentId: PAYMENT });
     expect(calls.updated).toEqual([]);
     expect(calls.settled).toEqual([]);
+  });
+
+  it('shows a return that names only the payment (a provider with no id placeholder, F-104-h), and credits nothing', async () => {
+    const { service, calls } = build({ webhook: { inquiry: 'verified' }, row: paymentRow({ gatewayTrackingCode: '4522625843' }) });
+
+    expect(await settle(service, { authority: '', paymentId: PAYMENT })).toEqual({
+      kind: 'success',
+      paymentId: PAYMENT,
+      referenceId: null,
+      alreadyPaid: false,
+    });
+    expect(calls.inquired).toBe(1);
+    expect(calls.updated).toEqual([]);
+    expect(calls.credited).toEqual([]);
+  });
+
+  it('answers a settled or refused one by its status, without asking', async () => {
+    const paid = build({ webhook: { inquiry: 'failed' }, row: paymentRow({ status: 'success', gatewayReferenceId: '42' }) });
+    expect(await settle(paid.service, { authority: '', paymentId: PAYMENT })).toEqual({
+      kind: 'success',
+      paymentId: PAYMENT,
+      referenceId: '42',
+      alreadyPaid: true,
+    });
+    const refused = build({ webhook: { inquiry: 'verified' }, row: paymentRow({ status: 'failed' }) });
+    expect(await settle(refused.service, { authority: '', paymentId: PAYMENT })).toEqual({ kind: 'failed', code: 'VERIFICATION_FAILED' });
+    expect(paid.calls.inquired + refused.calls.inquired).toBe(0);
+  });
+
+  it('still refuses a return-settled gateway’s callback that names no authority', async () => {
+    const { service, calls } = build();
+
+    expect(await settle(service, { authority: '', paymentId: PAYMENT })).toEqual({ kind: 'failed', code: 'INVALID_PARAMS' });
+    expect(calls.verified).toEqual([]);
   });
 });

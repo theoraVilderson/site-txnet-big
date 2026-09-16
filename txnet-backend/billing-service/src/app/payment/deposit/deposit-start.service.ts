@@ -24,7 +24,7 @@ import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { FxRateReader } from '../pricing/fx-rate.reader';
 import { priceDeposit, selectGateway } from './deposit-pricing';
 import { DepositGatewayNotFound, money } from './deposit-quote.service';
-import { withPaymentId } from './payment-callback-url';
+import { webhookUrlFor, withPaymentId } from './payment-callback-url';
 
 /**
  * Starting a top-up (F-092-i) — the first billing route that writes money.
@@ -249,6 +249,10 @@ export class DepositStartService {
         amountMinor: price.chargedAmountMinor as bigint,
         // Names the payment, so a lost authority write can be found again (F-092-ad).
         callbackUrl: withPaymentId(callbackUrl as string, paymentId),
+        // A webhook provider told per payment where to post (NOWPayments, OxaPay).
+        ...(provider.settlement === 'webhook'
+          ? { webhookUrl: webhookUrlFor(callbackUrl as string, this.config.get('GLOBAL_PREFIX', { infer: true }), ref) }
+          : {}),
         description: description(paymentId),
       });
     } catch (e) {

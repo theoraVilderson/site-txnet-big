@@ -161,7 +161,9 @@ by three tests instead: `wire.contract.spec.ts`, `headers_contract_test.go` and
 `broker.service.ts` spells `x-attempts`, an AMQP message header on a different
 transport entirely; `webhook.controller.ts` spells
 `x-telegram-bot-api-secret-token`, which is Telegram's name and not ours to
-declare. Neither crosses a boundary this contract owns. `site-pwa` is not in
+declare. Neither crosses a boundary this contract owns. The payment drivers
+(`payment/gateway/*.provider.ts`) are the same case: `x-nowpayments-sig` and
+`x-api-key` are a provider's names on its own wire (F-104-h). `site-pwa` is not in
 the Nx workspace and cannot import `shared-core`; it imports the same names
 from `@/generated/wire`, which `tools/wire-gen.py` writes from `contracts/` and
 `tools/contracts.py` fails on when stale (ADR-0036 amendment 2026-09-14). The
@@ -170,7 +172,7 @@ second check block below holds it to that.
 ```check C-04
 forbid: ['"]x-[a-z0-9]+(-[a-z0-9]+)+['"]
 in: txnet-backend/**/*.ts
-except: txnet-backend/shared-core/src/lib/http/**, txnet-backend/**/*.spec.ts, txnet-backend/worker-service/src/app/broker/broker.service.ts, txnet-backend/bot-service/src/app/webhook/webhook.controller.ts
+except: txnet-backend/shared-core/src/lib/http/**, txnet-backend/**/*.spec.ts, txnet-backend/worker-service/src/app/broker/broker.service.ts, txnet-backend/bot-service/src/app/webhook/webhook.controller.ts, txnet-backend/billing-service/src/app/payment/gateway/*.provider.ts
 message: import the name from shared-core/src/lib/http (C-04) — a header spelled twice is the drift ADR-0036 exists to stop
 ```
 

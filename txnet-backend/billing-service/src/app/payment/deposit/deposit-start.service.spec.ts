@@ -72,7 +72,7 @@ type Calls = {
   reserved: Array<{ orderReferenceId: string }>;
   settled: Array<{ orderReferenceId: string; outcome: string }>;
   credited: Array<{ amount: string; referenceId?: string }>;
-  requested: Array<{ amountMinor: bigint; callbackUrl: string }>;
+  requested: Array<{ amountMinor: bigint; callbackUrl: string; webhookUrl?: string }>;
 };
 
 type Setup = {
@@ -82,6 +82,8 @@ type Setup = {
   reserveRefuses?: CouponReservationRefused;
   /** The gateway refuses to mint an authority. */
   requestFails?: Error;
+  /** The driver settles by webhook (F-104-h): it is told where to post. */
+  webhook?: boolean;
   domains?: Array<{ domainValue: string; domainType: string; verificationStatus: string }>;
   callbackOrigin?: string;
   /** `FRONTEND_ORIGIN`, comma-separated like CORS reads it. */
@@ -94,6 +96,7 @@ function build(setup: Setup = {}) {
     coupons = noCoupons('20.00'),
     reserveRefuses,
     requestFails,
+    webhook = false,
     domains = [{ domainValue: 'myvpn.txnet.app', domainType: 'subdomain', verificationStatus: 'pending' }],
     callbackOrigin = '',
     frontendOrigin = '',
@@ -144,11 +147,12 @@ function build(setup: Setup = {}) {
     name: 'zarinpal',
     chargeCurrency: 'IRR',
     chargeDecimals: 0,
+    settlement: webhook ? 'webhook' : 'return',
     quoteFee: async () => {
       throw new Error('a manual-fee gateway must not be asked for a fee');
     },
-    request: async ({ amountMinor, callbackUrl }: { amountMinor: bigint; callbackUrl: string }) => {
-      calls.requested.push({ amountMinor, callbackUrl });
+    request: async ({ amountMinor, callbackUrl, webhookUrl }: { amountMinor: bigint; callbackUrl: string; webhookUrl?: string }) => {
+      calls.requested.push({ amountMinor, callbackUrl, ...(webhookUrl ? { webhookUrl } : {}) });
       if (requestFails) throw requestFails;
       return { authority: 'A0000000000000000000000000000001', redirectUrl: 'https://zarinpal/StartPay/A000…01' };
     },
@@ -262,6 +266,16 @@ describe('DepositStartService.start', () => {
     // customer must come back to the brand they paid on. It names the payment
     // (F-092-ad), so an authority whose write was lost can be found again.
     expect(calls.requested[0].callbackUrl).toBe(`https://myvpn.com/api/billing/deposit/callback?p=${started.paymentId}`);
+  });
+
+  it('tells a webhook driver its gateway’s webhook door, on the callback’s origin, and a return driver nothing (F-104-h)', async () => {
+    const hook = build({ webhook: true, domains: [{ domainValue: 'myvpn.com', domainType: 'custom_domain', verificationStatus: 'verified' }] });
+    await start(hook.service);
+    expect(hook.calls.requested[0].webhookUrl).toBe(`https://myvpn.com/api/billing/deposit/webhook/zarinpal/${GATEWAY}`);
+
+    const plain = build();
+    await start(plain.service);
+    expect(plain.calls.requested[0]).not.toHaveProperty('webhookUrl');
   });
 
   // F-092-w: an operator whose Zarinpal terminal is registered on another domain

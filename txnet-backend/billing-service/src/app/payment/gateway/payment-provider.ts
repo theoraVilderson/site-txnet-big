@@ -28,6 +28,12 @@ export type PaymentRequestInput = {
   credentials: GatewayCredentials;
   amountMinor: bigint;
   callbackUrl: string;
+  /**
+   * Where this gateway's provider posts its signed result — the webhook door
+   * for this gateway (F-104-b). Set for a `webhook` driver; one whose provider
+   * takes the url per payment (NOWPayments, OxaPay) refuses without it.
+   */
+  webhookUrl?: string;
   description: string;
   mobile?: string;
   email?: string;
@@ -110,6 +116,8 @@ export type WebhookEvent =
       received?: { amountMinor: bigint; currency: string };
     }
   | { kind: 'failed'; authority: string }
+  /** The provider returned the money to the payer (F-092-ae): an open payment closes `reversed`. */
+  | { kind: 'reversed'; authority: string }
   | { kind: 'pending'; authority: string }
   | { kind: 'ignored'; type: string };
 

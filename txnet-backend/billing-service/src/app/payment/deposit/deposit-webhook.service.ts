@@ -123,6 +123,8 @@ export class DepositWebhookService {
           },
           ConfirmationSource.webhook_auto,
         );
+      } else if (event.kind === 'reversed') {
+        await tenantTransaction(this.prisma, (tx) => this.settlement.closeReversed(tx, payment));
       } else {
         await tenantTransaction(this.prisma, (tx) => this.settlement.closeFailed(tx, payment));
       }

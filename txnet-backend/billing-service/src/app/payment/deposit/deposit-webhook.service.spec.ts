@@ -76,6 +76,7 @@ function build(setup: Setup = {}) {
     scopedTenants: [] as string[],
     credited: [] as Array<{ id: string; referenceId: string; source: string; tenant: string; received?: unknown }>,
     closed: [] as Array<{ id: string; tenant: string }>,
+    reversed: [] as Array<{ id: string; tenant: string }>,
   };
 
   const crossTenant = {
@@ -120,6 +121,10 @@ function build(setup: Setup = {}) {
         tenant: TenantContext.current('spec').id,
         ...(verified.received ? { received: verified.received } : {}),
       });
+      return true;
+    },
+    closeReversed: async (_tx: unknown, p: { id: string }) => {
+      calls.reversed.push({ id: p.id, tenant: TenantContext.current('spec').id });
       return true;
     },
     closeFailed: async (_tx: unknown, p: { id: string }) => {
@@ -202,6 +207,14 @@ describe('DepositWebhookService.handle — a signed event (ADR-0051)', () => {
     expect(await post()).toBe('accepted');
     expect(calls.closed).toEqual([{ id: PAYMENT, tenant: PAYER_TENANT }]);
     expect(calls.credited).toEqual([]);
+  });
+
+  it('closes a payment the provider refunded as reversed, not failed (F-092-ae, F-104-h)', async () => {
+    const { post, calls } = build({ event: { kind: 'reversed', authority: SESSION } });
+
+    expect(await post()).toBe('accepted');
+    expect(calls.reversed).toEqual([{ id: PAYMENT, tenant: PAYER_TENANT }]);
+    expect(calls.closed).toEqual([]);
   });
 
   it('hands settlement what arrived, in the gateway currency’s own minor unit (F-104-d)', async () => {

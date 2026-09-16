@@ -34,3 +34,19 @@ browser-return path stays there.
 | `billing.payment.confirmed` adds `amountAsked`, `chargedAmountMinor` and, when reported, `amountReceivedMinor` + `receivedCurrency` (strings). Additive | both figures reach consumers |
 | A receipt worth **under a cent** credits nothing: the row closes `failed` / `nothing_received`, holds released | a zero ledger row is not money; nothing more arrives under that authority |
 | A payment with no rate (free path) values no receipt and credits as asked. A driver that cannot report a receipt throws `amount_mismatch` from `verify`, which stays F-092-l's `flagged_mismatch` | row note |
+
+## Telling the provider, and the payer's return (built — F-104-h)
+
+| Rule | Why |
+|---|---|
+| `start` hands a `webhook` driver `webhookUrl` = the callback's origin + `/<prefix>/billing/deposit/webhook/<provider>/<gatewayId>` (`webhookUrlFor`). A driver whose provider takes it per payment refuses without it (`invalid_request`) | one provider account can serve several gateways; no dashboard setting per gateway |
+| A callback with **no authority** but a valid `?p=` answers a **webhook** payment by its row: `success` / `failed` from its status, else `inquire` on the row's own authority (or `verifying`). A return-settled gateway still gets `INVALID_PARAMS` | NOWPayments and OxaPay have no placeholder for the invoice id; the return only shows, never credits |
+| A signed `reversed` event closes an open payment through `closeReversed` (F-092-ae) | a refund is not a failure: the payer is told |
+
+## Drivers settled here
+
+| Driver | Rule | Why |
+|---|---|---|
+| **NOWPayments** (F-104-h, `nowpayments.provider.ts`; docs checked 2026-09-16) | `POST /v1/invoice` in USD with `x-api-key` (`secretKey`), never retried; authority = invoice id, reference = `payment_id`. IPN `x-nowpayments-sig` = HMAC-SHA512 hex with the IPN secret over the body **recursively** key-sorted, compact. `finished` paid (surplus reported as a receipt), `partially_paid` paid for `price_amount × actually_paid / pay_amount` in USD cents (pending if not computable), `refunded` reversed, no `invoice_id` ignored. Host `api-sandbox.nowpayments.io` under `PAYMENT_GATEWAY_SANDBOX` | the docs' own Node and Python examples |
+| NOWPayments `waiting`/`confirming`/`confirmed`/`sending` **and `failed`/`expired`** are pending | one invoice holds several payments (coin switched, re-deposit); closing on one would refuse the one that pays. Our clock expires the row; credit accepts expired |
+| NOWPayments `inquire` = `in_bank` with no call; `verify` = `unavailable`; `quoteFee` refused | finding a payment by invoice id needs a login JWT a gateway does not hold. The IPN, which NOWPayments repeats, is the only settlement |
