@@ -9,6 +9,8 @@ import { DepositCallbackController } from './deposit-callback.controller';
 import { DepositCallbackService } from './deposit-callback.service';
 import { DepositController } from './deposit.controller';
 import { DepositExpiryService } from './deposit-expiry.service';
+import { DepositInChatController } from './deposit-in-chat.controller';
+import { DepositInChatService } from './deposit-in-chat.service';
 import { DepositReconciliationService } from './deposit-reconciliation.service';
 import { DepositSettlementService } from './deposit-settlement';
 import { DepositInternalController } from './deposit-internal.controller';
@@ -38,11 +40,14 @@ import { ManualConfirmService } from './manual-confirm.service';
  * the only **service-to-service** one, reached by `worker-service`'s expiry
  * tick (F-092-k) and its reconciliation tick (F-092-l), and by nothing from
  * the edge at all.
+ *
+ * `DepositInChatController` is behind the gate **and** service-only (F-104-k):
+ * the bot relays a messenger's payment as the payer.
  */
 @Module({
   imports: [LocaleModule, CouponModule, GatewayModule, WalletModule],
-  controllers: [DepositController, DepositCallbackController, DepositWebhookController, DepositInternalController, ManualConfirmController],
-  providers: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositSettlementService, DepositExpiryService, DepositReconciliationService, ManualConfirmService, DepositWebhookService, FxRateReader],
+  controllers: [DepositController, DepositInChatController, DepositCallbackController, DepositWebhookController, DepositInternalController, ManualConfirmController],
+  providers: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositSettlementService, DepositExpiryService, DepositReconciliationService, ManualConfirmService, DepositWebhookService, DepositInChatService, FxRateReader],
   exports: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositExpiryService, DepositReconciliationService],
 })
 export class DepositModule {}

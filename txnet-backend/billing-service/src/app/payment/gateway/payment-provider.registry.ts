@@ -8,6 +8,7 @@ import { PaymentProvider, ProviderNotSupported } from './payment-provider';
 import { NowPaymentsProvider } from './nowpayments.provider';
 import { OxaPayProvider } from './oxapay.provider';
 import { StripeProvider } from './stripe.provider';
+import { TelegramStarsProvider } from './telegram-stars.provider';
 import { ZarinpalProvider } from './zarinpal.provider';
 
 /**
@@ -17,7 +18,7 @@ import { ZarinpalProvider } from './zarinpal.provider';
  * from `GatewayMerchant` per call.
  *
  * `PaymentProviderName` has members with no driver yet (`idpay`, and
- * D-32's `telegram_stars`, `bale`); asking for one is `ProviderNotSupported`, never a
+ * D-32's `bale`); asking for one is `ProviderNotSupported`, never a
  * fallback to another gateway.
  */
 @Injectable()
@@ -33,12 +34,18 @@ export class PaymentProviderRegistry {
       [PaymentProviderName.nowpayments, new NowPaymentsProvider({ sandbox })],
       [PaymentProviderName.oxapay, new OxaPayProvider({ sandbox })],
       [PaymentProviderName.airwallex, new AirwallexProvider({ sandbox })],
+      // Settled in the chat (F-104-k): nothing to sandbox, nothing it calls.
+      [PaymentProviderName.telegram_stars, new TelegramStarsProvider()],
     ]);
     // A webhook driver that cannot check a signature would make the webhook
     // door answer 404 for a gateway that is supposed to settle there (ADR-0051).
     for (const provider of this.providers.values()) {
       if (provider.settlement === 'webhook' && !provider.verifyWebhook) {
         throw new Error(`payment provider '${provider.name}' settles by webhook but has no verifyWebhook`);
+      }
+      // An in-chat gateway with no messenger would be offered in no chat, silently (F-104-k).
+      if (provider.settlement === 'in_chat' && !provider.chatPlatform) {
+        throw new Error(`payment provider '${provider.name}' settles in chat but names no chatPlatform`);
       }
     }
   }

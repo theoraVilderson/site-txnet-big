@@ -823,6 +823,7 @@ services:
       - DEPOSIT_GATEWAYS_RATE_LIMIT=${DEPOSIT_GATEWAYS_RATE_LIMIT:-}
       - DEPOSIT_QUOTE_RATE_LIMIT=${DEPOSIT_QUOTE_RATE_LIMIT:-}
       - DEPOSIT_START_RATE_LIMIT=${DEPOSIT_START_RATE_LIMIT:-}
+      - DEPOSIT_IN_CHAT_RATE_LIMIT=${DEPOSIT_IN_CHAT_RATE_LIMIT:-}
       # The callback's budget is per authority, not per user: it is public.
       - DEPOSIT_CALLBACK_RATE_LIMIT=${DEPOSIT_CALLBACK_RATE_LIMIT:-}
       # Per gateway per minute: the webhook is public too (F-104-b).

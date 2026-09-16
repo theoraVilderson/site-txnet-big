@@ -25,7 +25,7 @@ come from its headers, never from the body.
 |---|---|---|
 | `GET /api/billing/deposit/gateways` | — | `[{id, source, displayName, providerName, category, minAmount, maxAmount, presets}]` — platform gateways first, each table oldest first. `minAmount` / `maxAmount` may be `null`: no limit on that side. `presets` (F-092-v): the gateway's own list, else the caller tenant's default, only amounts inside the range; empty = the panel's ladder |
 | `POST /api/billing/deposit/quote` | `{gatewayId, source?, amount, couponCodes?}` — `source` `tenant` (default) or `platform`, as the list answered it; `amount` a decimal string, ≤ 2 places, > 0; ≤ 10 codes of ≤ 64 chars | `{gatewayId, source, amount, coupons[{code, discount}], rejected[{code, reason, message}], discount, gap, fee, payable, credited, free, charge}` |
-| `POST /api/billing/deposit/start` (F-092-i) | the quote's body, exactly | `{paymentId, free, redirectUrl, amount, discount, fee, payable, credited, balance}` |
+| `POST /api/billing/deposit/start` (F-092-i) | the quote's body, exactly | `{paymentId, free, redirectUrl, invoice, amount, discount, fee, payable, credited, balance}` — `invoice` `{payload, currency, amountMinor}` only for an in-chat gateway, whose `redirectUrl` is `null` (F-104-k, `contract.webhook.md`) |
 
 ## Rules
 

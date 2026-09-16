@@ -42,7 +42,28 @@ const PLATFORM_SELECTABLE = { isActive: true };
  * verified, each marked `testing`. A granted gateway is somebody else's and is
  * never offered this way.
  */
-export type SelectOptions = { canTest?: boolean };
+export type SelectOptions = {
+  canTest?: boolean;
+  /** The messenger a bot caller proved it is (F-104-k); `null`/absent is not a bot. See {@link offeredInThisChat}. */
+  chatPlatform?: string | null;
+};
+
+/**
+ * Whether this gateway may be offered to this caller (F-104-k). Every gateway
+ * that settles outside a chat is, as before. An `in_chat` one is offered only
+ * inside a bot — `chatPlatform` is set only when the service token checked out
+ * (`DepositController.chatPlatformOf`) — on the messenger its invoice is paid
+ * in, and only when the gateway is the request tenant's own: a granted gateway
+ * is paid in its lender's bot, which is not this chat.
+ */
+export function offeredInThisChat(
+  provider: Pick<PaymentProvider, 'settlement' | 'chatPlatform'>,
+  gateway: { grantId: string | null },
+  chatPlatform: string | null | undefined,
+): boolean {
+  if (provider.settlement !== 'in_chat') return true;
+  return !!chatPlatform && provider.chatPlatform === chatPlatform && gateway.grantId === null;
+}
 
 const testingOf = (row: { isActive: boolean; verificationStatus?: string | null }): boolean =>
   !row.isActive || (row.verificationStatus != null && row.verificationStatus !== TenantGatewayVerificationStatus.verified);
@@ -323,11 +344,21 @@ export async function priceDeposit(
   const provider = deps.providers.get(gateway.providerName);
   // A gateway charging the base currency prices at 1: the live rate is rial per dollar (F-104-g).
   const chargesInBaseCurrency = provider.chargeCurrency === BASE_CURRENCY_CODE;
+  // A Star's `staticRate` is its USD value; the calculator wants Stars per USD,
+  // and a Star has no live rate (F-104-e, F-104-k). Not positive stays unusable.
+  const perUnit = provider.staticRateIsChargeUnitValue;
+  const pricing: SelectedGateway = perUnit
+    ? {
+        ...gateway,
+        useLiveRate: false,
+        staticRate: gateway.staticRate?.gt(0) ? new Prisma.Decimal(1).div(gateway.staticRate) : null,
+      }
+    : gateway;
   const request: PriceRequest = {
-    pricing: gateway,
+    pricing,
     amount,
     discount,
-    liveRate: gateway.useLiveRate && !chargesInBaseCurrency ? await deps.fx.current() : null,
+    liveRate: pricing.useLiveRate && !chargesInBaseCurrency ? await deps.fx.current() : null,
     chargeDecimals: provider.chargeDecimals,
     chargesInBaseCurrency,
   };

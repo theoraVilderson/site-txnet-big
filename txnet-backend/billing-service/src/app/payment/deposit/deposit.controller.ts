@@ -16,8 +16,10 @@ import { ConfigService } from '@nestjs/config';
 import {
   BackendI18nKeys,
   CredentialUnavailable,
+  headerValue,
   presentsServiceToken,
   RateLimitBucket,
+  RequestHeaders,
   holdsPermission,
   rateLimitBucketKey,
 } from '@txnet-backend/shared-core';
@@ -36,6 +38,9 @@ import { DepositCallbackUnavailable, DepositStartService } from './deposit-start
 import { DepositQuoteBody, depositQuoteSchema, DepositStartBody, depositStartSchema } from './deposit.schema';
 
 const E = BackendI18nKeys.errors.billing;
+
+/** The messengers an in-chat driver can name (`PaymentProvider.chatPlatform`). */
+const CHAT_PLATFORMS = ['telegram', 'bale'] as const;
 
 /**
  * Test mode: whoever may manage gateways is also offered its own switched-off
@@ -128,6 +133,17 @@ export class DepositController {
       : CouponChannel.panel;
   }
 
+  /**
+   * The messenger a bot caller is in (F-104-k), or `null`: an in-chat gateway
+   * is offered only there. `X-Bot-Platform` counts only beside a verified
+   * service token, for the same reason `channelOf` does.
+   */
+  private chatPlatformOf(req: Request): string | null {
+    if (this.channelOf(req) !== CouponChannel.bot) return null;
+    const platform = headerValue(req.headers, RequestHeaders.botPlatform);
+    return platform && (CHAT_PLATFORMS as readonly string[]).includes(platform) ? platform : null;
+  }
+
   @Get('gateways')
   @RateLimit({
     key: (req) => rateLimitBucketKey(RateLimitBucket.DEPOSIT_GATEWAYS, identityOf(req).userId),
@@ -135,7 +151,7 @@ export class DepositController {
     windowSec: 900,
   })
   gateways(@Req() req: Request) {
-    return this.deposits.listGateways({ canTest: canTest(req) });
+    return this.deposits.listGateways({ canTest: canTest(req), chatPlatform: this.chatPlatformOf(req) });
   }
 
   @Post('quote')
@@ -158,6 +174,7 @@ export class DepositController {
         couponCodes: body.couponCodes,
         channel: this.channelOf(req),
         canTest: canTest(req),
+        chatPlatform: this.chatPlatformOf(req),
       });
       return {
         ...quote,
@@ -199,6 +216,7 @@ export class DepositController {
         channel: this.channelOf(req),
         origin: req.headers.origin ?? null,
         canTest: canTest(req),
+        chatPlatform: this.chatPlatformOf(req),
       });
     } catch (e) {
       throw toHttp(e);

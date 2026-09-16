@@ -104,6 +104,14 @@ export const RateLimitBucket = {
   DEPOSIT_START: 'deposit:start',
 
   /**
+   * The bot relaying an in-chat payment's `pre_checkout_query` or
+   * `successful_payment` to `billing-service` (F-104-k), per **user** — the
+   * payer the gate names. Generous: a `paid` refused here is money the
+   * platform took and the wallet did not see until a person looks.
+   */
+  DEPOSIT_IN_CHAT: 'deposit:in-chat',
+
+  /**
    * Settling a top-up in `billing-service` (F-092-j), per **authority** — the
    * one bucket on this list whose subject is not a caller, because the caller
    * is a bank redirecting a browser and carries no identity at all. One

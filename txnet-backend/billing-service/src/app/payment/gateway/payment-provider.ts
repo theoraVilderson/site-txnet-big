@@ -137,6 +137,18 @@ export interface PaymentProvider {
   /** How this gateway's result arrives. Required: the webhook door and the browser return both branch on it. */
   readonly settlement: SettlementMode;
   /**
+   * The messenger an `in_chat` driver's invoice is paid in (F-104-k). Required
+   * for `in_chat` — the registry refuses to boot one without it — because a
+   * bot on another messenger cannot send this invoice at all.
+   */
+  readonly chatPlatform?: 'telegram' | 'bale';
+  /**
+   * The gateway's `staticRate` is the base-currency value of **one charge
+   * unit** (a Star's USD value, F-104-e) rather than charge units per base
+   * unit, and the gateway has no live rate. `priceDeposit` inverts it.
+   */
+  readonly staticRateIsChargeUnitValue?: boolean;
+  /**
    * Check a webhook's signature with `secret` and translate it (ADR-0051
    * decision 2). Throws `WebhookSignatureInvalid` on any doubt — before a
    * single field of the body is trusted. Required when `settlement` is

@@ -8,7 +8,7 @@ import { CouponValidationService, RejectedCoupon } from '../coupon/coupon-valida
 import { GatewayMerchant, GatewaySource, hasEverySecret } from '../gateway/gateway-merchant';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { FxRateReader } from '../pricing/fx-rate.reader';
-import { priceDeposit, selectableGateways, selectGateway, type SelectOptions } from './deposit-pricing';
+import { type GatewayOffer, offeredInThisChat, priceDeposit, selectableGateways, selectGateway, type SelectOptions } from './deposit-pricing';
 import { resolvePresets } from './deposit-presets';
 
 /**
@@ -77,6 +77,8 @@ export type DepositQuoteRequest = {
   channel?: CouponChannel;
   /** The caller holds `gateway.manage`: its own switched-off gateways may be priced too. */
   canTest?: boolean;
+  /** The messenger a bot caller proved it is (F-104-k): an in-chat gateway is quoted only there. */
+  chatPlatform?: string | null;
 };
 
 /** Money as decimal strings in base currency; `amountMinor` as a string, since JSON has no bigint. */
@@ -156,6 +158,7 @@ export class DepositQuoteService {
     );
     return rows
       .filter((g) => this.providers.has(g.providerName))
+      .filter((g) => offeredInThisChat(this.providers.get(g.providerName), g, options.chatPlatform))
       .filter((g) => hasEverySecret(configured.get(g.ownerTenantId), { source: g.source, gatewayId: g.id, providerName: g.providerName }))
       .map((g) => ({
         id: g.id,
@@ -170,13 +173,18 @@ export class DepositQuoteService {
       }));
   }
 
+  /** An in-chat gateway outside its own bot is not refused differently from one that does not exist (F-104-k). */
+  private offeredHere(gateway: GatewayOffer, chatPlatform?: string | null): boolean {
+    return !this.providers.has(gateway.providerName) || offeredInThisChat(this.providers.get(gateway.providerName), gateway, chatPlatform);
+  }
+
   async quote(request: DepositQuoteRequest): Promise<DepositQuote> {
     const tenant = TenantContext.current('deposit quote');
     const { userId, gatewayId, amount } = request;
 
     const { gateway, coupons } = await tenantTransaction(this.prisma, async (tx) => {
       const gateway = await selectGateway(tx, this.crossTenant, tenant.id, gatewayId, request.source, { canTest: request.canTest });
-      if (!gateway) throw new DepositGatewayNotFound(gatewayId, request.source);
+      if (!gateway || !this.offeredHere(gateway, request.chatPlatform)) throw new DepositGatewayNotFound(gatewayId, request.source);
       const coupons = await this.coupons.validate(tx, {
         codes: request.couponCodes,
         amount,

@@ -33,3 +33,26 @@ export type DepositQuoteBody = z.infer<typeof depositQuoteSchema>;
 export const depositStartSchema = depositQuoteSchema;
 
 export type DepositStartBody = z.infer<typeof depositStartSchema>;
+
+/** A messenger's amount: a positive integer in the currency's smallest unit, as a string (JSON has no bigint). */
+const MINOR = /^[1-9]\d{0,18}$/;
+
+/**
+ * What the bot relays from `pre_checkout_query` (F-104-k): the invoice payload
+ * is the payment id `start` answered. A malformed relay is the bot's bug, so
+ * the keys are the generic ones.
+ */
+export const inChatPreCheckoutSchema = z.object({
+  paymentId: z.string({ message: E.gatewayInvalid }).uuid({ message: E.gatewayInvalid }),
+  currency: z.string({ message: E.amountInvalid }).regex(/^[A-Z0-9]{2,20}$/, { message: E.amountInvalid }),
+  totalAmount: z.string({ message: E.amountInvalid }).regex(MINOR, { message: E.amountInvalid }),
+});
+
+export type InChatPreCheckoutBody = z.infer<typeof inChatPreCheckoutSchema>;
+
+/** `successful_payment`, plus the platform's charge id — the settlement reference. */
+export const inChatPaidSchema = inChatPreCheckoutSchema.extend({
+  chargeId: z.string({ message: E.gatewayInvalid }).min(1, { message: E.gatewayInvalid }).max(255, { message: E.gatewayInvalid }),
+});
+
+export type InChatPaidBody = z.infer<typeof inChatPaidSchema>;

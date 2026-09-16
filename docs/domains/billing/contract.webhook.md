@@ -9,8 +9,8 @@ updated: 2026-09-16
 # Contract — billing / webhook settlement
 
 A topic file of `contract.md` (§10): how a provider's own server settles a
-payment (D-32), and what it is worth when the amount that arrived is not the
-amount asked. Split out of `contract.deposit.md` when it ran out of room. The
+payment (D-32), how a messenger does (F-104-k), and what it is worth when the
+amount that arrived is not the amount asked. Split out of `contract.deposit.md` when it ran out of room. The
 browser-return path stays there.
 
 ## Settling by webhook (built — F-104-b, ADR-0051)
@@ -56,3 +56,16 @@ browser-return path stays there.
 | **Airwallex** (F-104-j, `airwallex.provider.ts`; docs checked 2026-09-16) | Client id in `merchantId`, API key in `secretKey`. `POST /api/v1/authentication/login` bearer token cached in-process under a SHA-256 of the pair until a minute before `expires_at`; a 401 on a cached token logs in once more with the same `request_id`. `POST /api/v1/pa/payment_intents/create` in USD, `merchant_order_id` = payment id, never retried on silence; authority = intent id, reference = latest attempt id. Hosts `api.sandbox` / `checkout.sandbox.airwallex.com` under `PAYMENT_GATEWAY_SANDBOX` | a token serves only the keys that could mint it, so no other gateway or tenant; no key is kept |
 | Airwallex's hosted page is `<checkout>/#/standalone/checkout?intent_id&client_secret&currency&successUrl&failUrl`, both urls = the callback | the docs name no server-side URL, only the browser SDK's `redirectToCheckout`; this is the URL that SDK builds (its bundle, 2026-09-16), pinned by the spec |
 | Airwallex webhook: `x-signature` = HMAC-SHA256 hex over `x-timestamp` + **raw** body with the subscription's secret; a timestamp beyond ±5 min is 401. `payment_intent.succeeded` paid, `.cancelled` failed, other `payment_intent.*` (incl. `payment_failed`) pending, `refund.*` and the rest ignored. `inquire`/`verify` read `GET /api/v1/pa/payment_intents/{id}` (`SUCCEEDED` / `CANCELLED`) | one failed attempt is not a failed payment on the hosted page; a refund event does not say the whole payment went back. The webhook URL is the gateway's door, entered once in Airwallex's dashboard |
+
+## Settling in the chat (built — F-104-k, D-32)
+
+`DepositInChatService` + `DepositInChatController`, `gateway/telegram-stars.provider.ts`. `billing` never holds a bot token: `bot-service` sends the invoice through `messenger` (F-104-l) and relays the two events here.
+
+| Rule | Why |
+|---|---|
+| A driver with `settlement: in_chat` names its `chatPlatform` (boot fails without it). The list, the quote and `start` offer it only when the caller is the bot — verified `X-Service-Token` **and** `X-Bot-Platform` equal to that platform — and the gateway is the tenant's own (`grantId` null); otherwise hidden, or **404** `gatewayNotFound` (`offeredInThisChat`) | a granted gateway is paid in its lender's bot; a header without the token is anyone's. **Not yet:** the Mini App, which has no trusted marker |
+| `start` at an in-chat gateway writes the payment as usual, mints nothing, needs no callback host, and answers `invoice {payload = paymentId, currency, amountMinor}` | the bot sends the invoice with its own token |
+| `POST /api/billing/deposit/in-chat/pre-checkout` `{paymentId, currency, totalAmount}` — behind the gate (the payer) **and** `ServiceOnlyGuard`; `DEPOSIT_IN_CHAT` per user, 120/900s. Answers `{ok}` or `{ok:false, reason}`: `not_found` (not this payer's, or not in-chat), `not_payable` (not `pending`, or past `expiresAt` and never approved), `amount_mismatch` (currency ≠ `chargeCurrency` or total ≠ `chargedAmountMinor`) | the last moment the payer can be refused; a panel user's own token cannot say "paid" |
+| Approval writes `gatewayTrackingCode = paymentId` and starts the verify clock (`scheduleVerifyRetry`) in one transaction; a repeat approves again without climbing | the sweep skips a verifying row, and a `paid` that never arrives climbs the ladder — the driver's `inquire` is always `unavailable` — to F-092-y's flag for a person |
+| `POST .../in-chat/paid` `{…, chargeId}` settles through `creditVerified`, `webhook_auto`, reference = the platform's charge id; a total ≠ the charge is a receipt (F-104-d). Answers `{status: credited / already_settled / unsettled / not_found, credited}`. Another currency settles nothing (`unsettled`, logged) | the platform took the money; the guard makes a repeated relay harmless |
+| **Telegram Stars**: `XTR`, 0 decimals, no window. `staticRate` is a Star's USD value (F-104-e), so `priceDeposit` prices at 1/`staticRate` with the live rate off (`staticRateIsChargeUnitValue`); the charge rounds up to a whole Star | 10 USD at 0.013 = 770 Stars |

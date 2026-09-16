@@ -22,7 +22,7 @@ import { GatewayMerchant, GatewaySource, MerchantGatewayRef } from '../gateway/g
 import { GatewayFailure } from '../gateway/payment-provider';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { FxRateReader } from '../pricing/fx-rate.reader';
-import { priceDeposit, selectGateway } from './deposit-pricing';
+import { offeredInThisChat, priceDeposit, selectGateway } from './deposit-pricing';
 import { DepositGatewayNotFound, money } from './deposit-quote.service';
 import { webhookUrlFor, withPaymentId } from './payment-callback-url';
 
@@ -74,6 +74,8 @@ export type DepositStartRequest = {
   origin?: string | null;
   /** The caller holds `gateway.manage`: its own switched-off gateways may take a test payment. */
   canTest?: boolean;
+  /** The messenger a bot caller proved it is (F-104-k): an in-chat gateway starts only there. */
+  chatPlatform?: string | null;
 };
 
 /** Money as decimal strings in base currency, as the quote answers them. */
@@ -81,8 +83,14 @@ export type DepositStarted = {
   paymentId: string;
   /** Nothing was charged: the wallet is already credited and there is nowhere to send the user. */
   free: boolean;
-  /** The gateway's own page. `null` on the free path. */
+  /** The gateway's own page. `null` on the free path and for an in-chat gateway. */
   redirectUrl: string | null;
+  /**
+   * What the bot puts in the invoice it sends (F-104-k), for an in-chat gateway
+   * only: `payload` comes back in `pre_checkout_query` and `successful_payment`,
+   * `amountMinor` is in `currency`'s smallest unit (whole Stars). `null` otherwise.
+   */
+  invoice: { payload: string; currency: string; amountMinor: string } | null;
   amount: string;
   discount: string;
   fee: string;
@@ -134,6 +142,9 @@ export class DepositStartService {
     const { gateway, coupons, callbackUrl, returnOrigin } = await tenantTransaction(this.prisma, async (tx) => {
       const gateway = await selectGateway(tx, this.crossTenant, tenant.id, gatewayId, source, { canTest: request.canTest });
       if (!gateway) throw new DepositGatewayNotFound(gatewayId, source);
+      if (this.providers.has(gateway.providerName) && !offeredInThisChat(this.providers.get(gateway.providerName), gateway, request.chatPlatform)) {
+        throw new DepositGatewayNotFound(gatewayId, source);
+      }
       const coupons = await this.coupons.validate(tx, {
         codes: request.couponCodes,
         amount,
@@ -168,7 +179,9 @@ export class DepositStartService {
 
     // A gateway that will be paid needs somewhere to answer; a free top-up does
     // not, so it is never refused for a domain it will not use.
-    if (!price.free && !callbackUrl) throw new DepositCallbackUnavailable(tenant.id);
+    // An in-chat payment has no bank to send anyone back: the bot relays its result (F-104-k).
+    const inChat = provider.settlement === 'in_chat';
+    if (!price.free && !inChat && !callbackUrl) throw new DepositCallbackUnavailable(tenant.id);
 
     // The id is minted here because the holds name it: `reserve` takes the
     // order reference, and for a top-up that reference is the payment itself,
@@ -234,6 +247,7 @@ export class DepositStartService {
       paymentId,
       free: price.free,
       redirectUrl: null,
+      invoice: null,
       amount: money(price.amount),
       discount: money(price.discount),
       fee: money(price.fee),
@@ -242,6 +256,15 @@ export class DepositStartService {
       balance: balance ? money(balance) : null,
     };
     if (price.free) return answer;
+
+    // In chat, nothing is minted: the bot sends the invoice with its own token,
+    // and `pre-checkout` gives the row its authority (`DepositInChatService`).
+    if (inChat) {
+      return {
+        ...answer,
+        invoice: { payload: paymentId, currency: provider.chargeCurrency, amountMinor: (price.chargedAmountMinor as bigint).toString() },
+      };
+    }
 
     // 3. The bank. Outside every transaction, and never retried.
     const credentials = await this.merchant.credentialsFor(ref, userId);

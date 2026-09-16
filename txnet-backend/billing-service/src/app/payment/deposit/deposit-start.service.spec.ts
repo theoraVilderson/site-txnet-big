@@ -84,6 +84,8 @@ type Setup = {
   requestFails?: Error;
   /** The driver settles by webhook (F-104-h): it is told where to post. */
   webhook?: boolean;
+  /** The driver settles in a Telegram chat (F-104-k): nothing is minted. */
+  inChat?: boolean;
   domains?: Array<{ domainValue: string; domainType: string; verificationStatus: string }>;
   callbackOrigin?: string;
   /** `FRONTEND_ORIGIN`, comma-separated like CORS reads it. */
@@ -97,6 +99,7 @@ function build(setup: Setup = {}) {
     reserveRefuses,
     requestFails,
     webhook = false,
+    inChat = false,
     domains = [{ domainValue: 'myvpn.txnet.app', domainType: 'subdomain', verificationStatus: 'pending' }],
     callbackOrigin = '',
     frontendOrigin = '',
@@ -145,9 +148,10 @@ function build(setup: Setup = {}) {
 
   const zarinpal = {
     name: 'zarinpal',
-    chargeCurrency: 'IRR',
+    chargeCurrency: inChat ? 'XTR' : 'IRR',
     chargeDecimals: 0,
-    settlement: webhook ? 'webhook' : 'return',
+    settlement: inChat ? 'in_chat' : webhook ? 'webhook' : 'return',
+    chatPlatform: inChat ? 'telegram' : undefined,
     quoteFee: async () => {
       throw new Error('a manual-fee gateway must not be asked for a fee');
     },
@@ -213,6 +217,24 @@ const start = (service: DepositStartService, couponCodes: string[] = [], origin?
   );
 
 describe('DepositStartService.start', () => {
+  it('answers an in-chat gateway with the invoice, mints nothing, and starts it only in its own bot (F-104-k)', async () => {
+    const { service, calls } = build({ inChat: true, domains: [] });
+    const request = { userId: USER, gatewayId: GATEWAY, source: 'tenant' as const, amount: d('20.00'), couponCodes: [] };
+
+    const started = await asTenant(() => service.start({ ...request, chatPlatform: 'telegram' }));
+    expect(started.redirectUrl).toBeNull();
+    expect(started.invoice).toEqual({
+      payload: started.paymentId,
+      currency: 'XTR',
+      amountMinor: (calls.created[0]['chargedAmountMinor'] as bigint).toString(),
+    });
+    expect(calls.requested).toEqual([]);
+    expect(calls.updated).toEqual([]);
+
+    await expect(asTenant(() => service.start(request))).rejects.toBeInstanceOf(DepositGatewayNotFound);
+    await expect(asTenant(() => service.start({ ...request, chatPlatform: 'bale' }))).rejects.toBeInstanceOf(DepositGatewayNotFound);
+  });
+
   it('holds the coupons and persists the payment before the gateway is asked to mint', async () => {
     const { service, calls } = build({
       coupons: {
