@@ -38,21 +38,24 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
 6. **Nothing is patched from an answer, and nothing is deleted.** Every write
    re-reads; products, variants and prices are switched off.
 7. **Buttons stay on the green tokens** (`bg-primary`, `--leaf-bg`).
-8. **Names are text, never keys** (F-1533-e, ADR-0050). A category or product
-   is created and renamed with `fa` and `en` (`validateCategoryForm`,
-   `validateNamesForm`); a product's description is in both or neither, and
-   blank in both on a rename removes it. Billing derives the key.
+8. **Names are text, never keys** (F-1533-e/g, ADR-0050 amendments). A
+   category or product is created and renamed with a **source language**
+   (`LanguageSelect`: every language locale-service has; default
+   `DEFAULT_LOCALE`) and one name — and a product's description — in it
+   (`validateCategoryForm`, `validateNamesForm`). Picking another language in a
+   rename shows its published text. A blank description on a rename removes
+   it. Billing derives the key and drafts every other language from the source.
 9. **A list shows the name, not the key.** The page fetches the published
-   `catalog` namespace from the panel's own `/api/i18n/<lang>/catalog` in the
-   viewer's language, `en` and `fa` (`textLangs`), and reads it with the
-   clients' fallback: that language → `en` → `fa` → the item's key
-   (`catalogText`). A failed fetch costs the names, never the list.
+   `catalog` namespace from the panel's own `/api/i18n/<lang>/catalog` for every
+   available language and reads the viewer's language, then the item's
+   `sourceLang`, then its key (`catalogText`). A failed fetch costs the names,
+   never the list.
 10. **Review is `/catalog/translations`** (`PANEL_CATALOG_TRANSLATIONS`, linked
-   from the catalog header). Each draft sits beside its fa/en source and what
-   is published now; an untouched draft is published as it is, an edited one
-   as the reviewer's text, a blank one never (`reviewWrites`). Languages offered
-   are locale-service's minus `fa`/`en` (`reviewLanguages`) — no list in code.
-   "Translate missing" is billing's `draft-missing`. Billing scopes every call.
+   from the catalog header). Each draft sits beside its item's source text and
+   what is published now; an untouched draft is published as it is, an edited
+   one as the reviewer's text, a blank one never (`reviewWrites`). Languages
+   offered are locale-service's — no list in code. "Translate missing" is
+   billing's `draft-missing`. Billing scopes every call.
 
 ## Proof
 
@@ -61,6 +64,6 @@ backend source, `validateProductForm` / `productBody` (reseller vs owner,
 feature keys), `validateVariantForm` / `variantBody` (SKU, price, duration,
 quotas), `validatePriceForm` / `priceBody` (today, future, past),
 `currentPrice`, the menu permission, every key in `en` and `fa`; names
-(`validateCategoryForm` / `categoryBody`, `validateNamesForm` / `namesBody`,
-`productBody` never sends a key), `flattenTexts` / `catalogText` fallback,
-`reviewLanguages` / `reviewWrites`.
+in a source language (`validateCategoryForm` / `categoryBody`,
+`validateNamesForm` / `namesBody`, `productBody` never sends a key),
+`flattenTexts` / `catalogText` fallback to the source, `reviewWrites`.

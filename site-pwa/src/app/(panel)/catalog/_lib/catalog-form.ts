@@ -42,6 +42,8 @@ export const REFUSAL_KEYS: Record<CatalogRejection, string> = {
   price_in_the_past: CATALOG_KEYS.refusals.price_in_the_past,
   text_key_invalid: CATALOG_KEYS.refusals.text_key_invalid,
   texts_unavailable: CATALOG_KEYS.refusals.texts_unavailable,
+  lang_unknown: CATALOG_KEYS.refusals.lang_unknown,
+  source_text_missing: CATALOG_KEYS.refusals.source_text_missing,
 };
 
 /** The refusal's own sentence key, when billing named one this page knows. */
@@ -71,14 +73,8 @@ export type Errors<F> = Partial<Record<keyof F, string>>;
 export const NAME_MAX = 200;
 export const DESCRIPTION_MAX = 2000;
 
-/** Full catalog text key → text, for one language. */
+/** Language → full catalog text key → text. */
 export type CatalogTexts = Record<string, Record<string, string>>;
-
-/** The read fallback after the asked language (ADR-0050 decision 5), as the locale clients have it. */
-const FALLBACK_LANGS = ["en", "fa"] as const;
-
-/** The languages a list fetches the `catalog` namespace in: the viewer's, then the fallback. */
-export const textLangs = (lang: string) => [...new Set([lang, ...FALLBACK_LANGS])];
 
 /** `/api/i18n/<lang>/catalog` answers nested JSON; this is its full keys again (`catalog.product.vpn.name`). */
 export function flattenTexts(nested: unknown, prefix = "catalog"): Record<string, string> {
@@ -92,43 +88,40 @@ export function flattenTexts(nested: unknown, prefix = "catalog"): Record<string
   return out;
 }
 
-/** An item's text: the asked language, then en, then fa; `null` when none has it (the list then shows the key). */
-export function catalogText(texts: CatalogTexts, lang: string, key: string | null): string | null {
+/**
+ * An item's text: the asked language, then the item's source language
+ * (ADR-0050 amendment 2); `null` when neither has it (the list then shows the key).
+ */
+export function catalogText(texts: CatalogTexts, lang: string, key: string | null, sourceLang: string): string | null {
   if (!key) return null;
-  for (const l of textLangs(lang)) {
+  for (const l of [lang, sourceLang]) {
     const v = texts[l]?.[key];
     if (v !== undefined && v !== "") return v;
   }
   return null;
 }
 
-/** Names as an admin types them: both languages required; a product's description in both or neither. */
+/** A rename as an admin types it: one name (and a product's description) in the source language picked. */
 export interface NamesForm {
-  fa: string;
-  en: string;
-  descriptionFa: string;
-  descriptionEn: string;
+  sourceLang: string;
+  name: string;
+  description: string;
 }
 
-export function validateNamesForm(f: NamesForm, kind: "product" | "category"): Errors<NamesForm> {
+export function validateNamesForm(f: NamesForm): Errors<NamesForm> {
   const errors: Errors<NamesForm> = {};
-  if (blank(f.fa)) errors.fa = E.required;
-  if (blank(f.en)) errors.en = E.required;
-  if (kind === "product" && blank(f.descriptionFa) !== blank(f.descriptionEn)) {
-    errors[blank(f.descriptionFa) ? "descriptionFa" : "descriptionEn"] = E.bothLanguages;
-  }
+  if (blank(f.sourceLang)) errors.sourceLang = E.required;
+  if (blank(f.name)) errors.name = E.required;
   return errors;
 }
 
-/** A rename in billing's shape. A product's description blank in both is removed. */
+/** A rename in billing's shape. Every other language is billing's to draft; a product's blank description is removed. */
 export function namesBody(f: NamesForm, kind: "product" | "category") {
-  const name = { fa: f.fa.trim(), en: f.en.trim() };
-  if (kind === "category") return { name };
-  return { name, description: blank(f.descriptionFa) ? null : { fa: f.descriptionFa.trim(), en: f.descriptionEn.trim() } };
+  const sourceLang = f.sourceLang.trim();
+  const name = { [sourceLang]: f.name.trim() };
+  if (kind === "category") return { sourceLang, name };
+  return { sourceLang, name, description: blank(f.description) ? null : { [sourceLang]: f.description.trim() } };
 }
-
-/** Languages a reviewer picks from: every language locale-service has but the two an admin writes. */
-export const reviewLanguages = (available: readonly string[]) => available.filter((l) => !(FALLBACK_LANGS as readonly string[]).includes(l));
 
 /** A review edit's id: one draft is one (language, key). A key never holds `|`. */
 export const editId = (d: { lang: string; key: string }) => `${d.lang}|${d.key}`;
@@ -162,24 +155,27 @@ export function reviewWrites(
 
 export interface CategoryForm {
   key: string;
-  nameFa: string;
-  nameEn: string;
+  /** The language the name is written in; drafts come from it, readers fall back to it. */
+  sourceLang: string;
+  name: string;
   /** The platform owner only: a category every tenant files products in. */
   shared: boolean;
 }
 
-export const emptyCategoryForm = (): CategoryForm => ({ key: "", nameFa: "", nameEn: "", shared: false });
+/** `defaultLang` is the deployment's `DEFAULT_LOCALE`: billing's default source language too. */
+export const emptyCategoryForm = (defaultLang: string): CategoryForm => ({ key: "", sourceLang: defaultLang, name: "", shared: false });
 
 export function validateCategoryForm(f: CategoryForm): Errors<CategoryForm> {
   const errors: Errors<CategoryForm> = {};
   if (!KEY.test(f.key.trim())) errors.key = E.key;
-  if (blank(f.nameFa)) errors.nameFa = E.required;
-  if (blank(f.nameEn)) errors.nameEn = E.required;
+  if (blank(f.sourceLang)) errors.sourceLang = E.required;
+  if (blank(f.name)) errors.name = E.required;
   return errors;
 }
 
 export function categoryBody(f: CategoryForm, owner: boolean): CreateCategoryBody {
-  return { key: f.key.trim(), name: { fa: f.nameFa.trim(), en: f.nameEn.trim() }, ...(owner && f.shared ? { tenantId: null } : {}) };
+  const sourceLang = f.sourceLang.trim();
+  return { key: f.key.trim(), sourceLang, name: { [sourceLang]: f.name.trim() }, ...(owner && f.shared ? { tenantId: null } : {}) };
 }
 
 // ------------------------------------------------------------------- product
@@ -193,25 +189,23 @@ export interface ProductForm {
   tenantId: string;
   categoryId: string;
   key: string;
-  nameFa: string;
-  nameEn: string;
-  /** Both or neither. */
-  descriptionFa: string;
-  descriptionEn: string;
+  sourceLang: string;
+  name: string;
+  /** Blank = none. */
+  description: string;
   fulfilmentKind: FulfilmentKind;
   /** One feature key per line or comma. */
   featureKeys: string;
 }
 
-export const emptyProductForm = (): ProductForm => ({
+export const emptyProductForm = (defaultLang: string): ProductForm => ({
   owner: "own",
   tenantId: "",
   categoryId: "",
   key: "",
-  nameFa: "",
-  nameEn: "",
-  descriptionFa: "",
-  descriptionEn: "",
+  sourceLang: defaultLang,
+  name: "",
+  description: "",
   fulfilmentKind: "network_access",
   featureKeys: "",
 });
@@ -221,9 +215,8 @@ export function validateProductForm(f: ProductForm, me: Me | null): Errors<Produ
   if (isPlatformOwner(me) && f.owner === "tenant" && !UUID.test(f.tenantId.trim())) errors.tenantId = E.uuid;
   if (blank(f.categoryId)) errors.categoryId = E.required;
   if (!KEY.test(f.key.trim())) errors.key = E.key;
-  if (blank(f.nameFa)) errors.nameFa = E.required;
-  if (blank(f.nameEn)) errors.nameEn = E.required;
-  if (blank(f.descriptionFa) !== blank(f.descriptionEn)) errors[blank(f.descriptionFa) ? "descriptionFa" : "descriptionEn"] = E.bothLanguages;
+  if (blank(f.sourceLang)) errors.sourceLang = E.required;
+  if (blank(f.name)) errors.name = E.required;
   if (list(f.featureKeys).some((k) => !FEATURE_KEY.test(k))) errors.featureKeys = E.featureKey;
   return errors;
 }
@@ -233,11 +226,12 @@ export function productBody(f: ProductForm, me: Me | null): CreateProductBody {
   const body: CreateProductBody = {
     categoryId: f.categoryId.trim(),
     key: f.key.trim(),
-    name: { fa: f.nameFa.trim(), en: f.nameEn.trim() },
+    sourceLang: f.sourceLang.trim(),
+    name: { [f.sourceLang.trim()]: f.name.trim() },
     fulfilmentKind: f.fulfilmentKind,
     featureKeys: list(f.featureKeys),
   };
-  if (!blank(f.descriptionFa)) body.description = { fa: f.descriptionFa.trim(), en: f.descriptionEn.trim() };
+  if (!blank(f.description)) body.description = { [f.sourceLang.trim()]: f.description.trim() };
   if (isPlatformOwner(me) && f.owner === "platform") body.tenantId = null;
   if (isPlatformOwner(me) && f.owner === "tenant") body.tenantId = f.tenantId.trim();
   return body;

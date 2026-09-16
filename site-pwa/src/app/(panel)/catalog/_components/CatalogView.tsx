@@ -14,6 +14,7 @@ import {
   type CatalogVariant,
 } from "@/lib/catalog-api";
 import { PANEL_CATALOG_TRANSLATIONS } from "@/lib/routes";
+import { DEFAULT_LOCALE } from "@/env";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { DatePicker } from "../../_components/kit/DatePicker";
 import { Select } from "../../_components/kit/Select";
@@ -42,7 +43,6 @@ import {
   productBody,
   refusalKey,
   tehranToday,
-  textLangs,
   validateCategoryForm,
   validateNamesForm,
   validatePriceForm,
@@ -72,20 +72,32 @@ function useMessage() {
 }
 
 /**
- * The published `catalog` namespace in the viewer's language and the fallback
- * ones (F-1533-e). A failure costs the names, never the list: it shows keys.
+ * The published `catalog` namespace in every language locale-service has —
+ * an item falls back to its own source language, which may be any of them
+ * (F-1533-g). A failure costs the names, never the list: it shows keys.
  */
-async function loadTexts(lang: string): Promise<CatalogTexts> {
-  const entries = await Promise.all(
-    textLangs(lang).map(async (l) => [l, flattenTexts(await catalogApi.texts(l).catch(() => ({})))] as const),
-  );
+async function loadTexts(langs: readonly string[]): Promise<CatalogTexts> {
+  const entries = await Promise.all(langs.map(async (l) => [l, flattenTexts(await catalogApi.texts(l).catch(() => ({})))] as const));
   return Object.fromEntries(entries);
+}
+
+/** Every language locale-service has, as a picker: the source language of a name. */
+function LanguageSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { availableLocales } = useLocale();
+  return <Select value={value} onChange={onChange} options={availableLocales.map((l) => ({ value: l.code, label: l.name }))} />;
+}
+
+/** A language's writing direction, from locale-service's metadata. */
+function useDirOf() {
+  const { availableLocales } = useLocale();
+  return (code: string) => availableLocales.find((l) => l.code === code)?.dir ?? "ltr";
 }
 
 /**
  * The catalog page (F-026-f, D-34): categories, products, and for each product
  * its variants with their price history. Items show their name in the viewer's
- * language, then en, then fa, then their key (F-1533-e, ADR-0050).
+ * language, then in their own source language, then their key (F-1533-g,
+ * ADR-0050 amendment 2).
  *
  * One page for two audiences, and the page decides neither: billing answers
  * the platform owner every item and a tenant its own. Nothing is patched from a
@@ -93,7 +105,8 @@ async function loadTexts(lang: string): Promise<CatalogTexts> {
  * price is switched off. A price change is always a new row (F-0602).
  */
 export function CatalogView() {
-  const { t, lang } = useLocale();
+  const { t, lang, availableLocales } = useLocale();
+  const langCodes = availableLocales.map((l) => l.code).join(",");
   const message = useMessage();
   const { me, isLoading: sessionLoading } = usePanelSession();
   const owner = isPlatformOwner(me);
@@ -107,14 +120,20 @@ export function CatalogView() {
   const [creating, setCreating] = useState<"product" | "category" | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [texts, setTexts] = useState<CatalogTexts>({});
-  const [renaming, setRenaming] = useState<{ kind: "product" | "category"; id: string; nameKey: string; descriptionKey: string | null } | null>(null);
+  const [renaming, setRenaming] = useState<{
+    kind: "product" | "category";
+    id: string;
+    nameKey: string;
+    descriptionKey: string | null;
+    sourceLang: string;
+  } | null>(null);
 
   const load = useCallback(async () => {
     try {
       const [cats, prods, names] = await Promise.all([
         catalogApi.categories(),
         catalogApi.products({ categoryId: categoryId || undefined, tenantId: scope || undefined }),
-        loadTexts(lang),
+        loadTexts(langCodes ? langCodes.split(",") : [lang]),
       ]);
       setCategories(cats);
       setProducts(prods);
@@ -123,7 +142,7 @@ export function CatalogView() {
     } catch (e) {
       setError(e);
     }
-  }, [categoryId, scope, lang]);
+  }, [categoryId, scope, lang, langCodes]);
 
   useEffect(() => {
     // Every setState in load runs after its first await, as in `CouponsView`.
@@ -142,7 +161,7 @@ export function CatalogView() {
     }
   };
 
-  const nameOf = (item: { key: string; nameKey: string }) => catalogText(texts, lang, item.nameKey) ?? item.key;
+  const nameOf = (item: { key: string; nameKey: string; sourceLang: string }) => catalogText(texts, lang, item.nameKey, item.sourceLang) ?? item.key;
   const categoryName = (id: string) => {
     const c = categories.find((x) => x.id === id);
     return c ? nameOf(c) : "—";
@@ -192,7 +211,9 @@ export function CatalogView() {
           <button
             type="button"
             className={quietButton}
-            onClick={() => setRenaming({ kind: "category", id: selectedCategory.id, nameKey: selectedCategory.nameKey, descriptionKey: null })}
+            onClick={() =>
+              setRenaming({ kind: "category", id: selectedCategory.id, nameKey: selectedCategory.nameKey, descriptionKey: null, sourceLang: selectedCategory.sourceLang })
+            }
           >
             <Pencil size={14} aria-hidden />
             {t("common", K.rename)}
@@ -249,7 +270,7 @@ export function CatalogView() {
                 </p>
               </div>
               <div className="flex gap-1">
-                <button type="button" className={quietButton} onClick={() => setRenaming({ kind: "product", id: p.id, nameKey: p.nameKey, descriptionKey: p.descriptionKey })}>
+                <button type="button" className={quietButton} onClick={() => setRenaming({ kind: "product", id: p.id, nameKey: p.nameKey, descriptionKey: p.descriptionKey, sourceLang: p.sourceLang })}>
                   <Pencil size={14} aria-hidden />
                   {t("common", K.rename)}
                 </button>
@@ -292,13 +313,12 @@ export function CatalogView() {
       {openId && <VariantsSheet productId={openId} onClose={() => setOpenId(null)} />}
       {renaming && (
         <NamesSheet
-          {...renaming}
-          initial={{
-            fa: texts.fa?.[renaming.nameKey] ?? "",
-            en: texts.en?.[renaming.nameKey] ?? "",
-            descriptionFa: (renaming.descriptionKey && texts.fa?.[renaming.descriptionKey]) || "",
-            descriptionEn: (renaming.descriptionKey && texts.en?.[renaming.descriptionKey]) || "",
-          }}
+          kind={renaming.kind}
+          id={renaming.id}
+          nameKey={renaming.nameKey}
+          descriptionKey={renaming.descriptionKey}
+          texts={texts}
+          initialSource={renaming.sourceLang}
           onClose={() => setRenaming(null)}
           onSaved={saved}
         />
@@ -346,7 +366,8 @@ function Field({ label, error, hint, children }: { label: string; error?: string
 function CategorySheet({ owner, onClose, onSaved }: { owner: boolean; onClose: () => void; onSaved: () => Promise<void> }) {
   const { t } = useLocale();
   const message = useMessage();
-  const [form, setForm] = useState<CategoryForm>(emptyCategoryForm);
+  const [form, setForm] = useState<CategoryForm>(() => emptyCategoryForm(DEFAULT_LOCALE));
+  const dirOf = useDirOf();
   const [errors, setErrors] = useState<Partial<Record<keyof CategoryForm, string>>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -374,11 +395,11 @@ function CategorySheet({ owner, onClose, onSaved }: { owner: boolean; onClose: (
         <input className={input} dir="ltr" value={form.key} onChange={(e) => set("key", e.target.value)} />
       </Field>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label={t("common", K.category.nameFa)} error={errors.nameFa}>
-          <input className={input} dir="rtl" maxLength={NAME_MAX} value={form.nameFa} onChange={(e) => set("nameFa", e.target.value)} />
+        <Field label={t("common", K.category.sourceLang)} error={errors.sourceLang}>
+          <LanguageSelect value={form.sourceLang} onChange={(v) => set("sourceLang", v)} />
         </Field>
-        <Field label={t("common", K.category.nameEn)} error={errors.nameEn} hint={t("common", K.product.nameHint)}>
-          <input className={input} dir="ltr" maxLength={NAME_MAX} value={form.nameEn} onChange={(e) => set("nameEn", e.target.value)} />
+        <Field label={t("common", K.category.name)} error={errors.name} hint={t("common", K.product.nameHint)}>
+          <input className={input} dir={dirOf(form.sourceLang)} maxLength={NAME_MAX} value={form.name} onChange={(e) => set("name", e.target.value)} />
         </Field>
       </div>
       {owner && (
@@ -404,30 +425,46 @@ function CategorySheet({ owner, onClose, onSaved }: { owner: boolean; onClose: (
   );
 }
 
-/** Renames an existing item in fa and en (F-1533-e). Billing re-keys it and drafts the other languages again. */
+/**
+ * Renames an existing item in the source language picked (F-1533-g). Picking
+ * another language shows its published text, if any; billing re-keys the item
+ * and drafts every other language from the new source.
+ */
 function NamesSheet({
   kind,
   id,
-  initial,
+  nameKey,
+  descriptionKey,
+  texts,
+  initialSource,
   onClose,
   onSaved,
 }: {
   kind: "product" | "category";
   id: string;
-  initial: NamesForm;
+  nameKey: string;
+  descriptionKey: string | null;
+  texts: CatalogTexts;
+  initialSource: string;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
   const { t } = useLocale();
   const message = useMessage();
-  const [form, setForm] = useState<NamesForm>(initial);
+  const dirOf = useDirOf();
+  const textsIn = (lang: string): NamesForm => ({
+    sourceLang: lang,
+    name: texts[lang]?.[nameKey] ?? "",
+    description: (descriptionKey && texts[lang]?.[descriptionKey]) || "",
+  });
+  const [form, setForm] = useState<NamesForm>(() => textsIn(initialSource));
   const [errors, setErrors] = useState<Partial<Record<keyof NamesForm, string>>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = (k: keyof NamesForm, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const save = async () => {
-    const found = validateNamesForm(form, kind);
+    const found = validateNamesForm(form);
     setErrors(found);
     if (Object.keys(found).length) return;
     setBusy(true);
@@ -444,24 +481,20 @@ function NamesSheet({
   };
 
   const P = K.product;
+  const dir = dirOf(form.sourceLang);
   return (
     <Sheet title={t("common", K.rename)} onClose={onClose}>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label={t("common", P.nameFa)} error={errors.fa}>
-          <input className={input} dir="rtl" maxLength={NAME_MAX} value={form.fa} onChange={(e) => set("fa", e.target.value)} />
+        <Field label={t("common", P.sourceLang)} error={errors.sourceLang}>
+          <LanguageSelect value={form.sourceLang} onChange={(v) => setForm(textsIn(v))} />
         </Field>
-        <Field label={t("common", P.nameEn)} error={errors.en} hint={t("common", P.nameHint)}>
-          <input className={input} dir="ltr" maxLength={NAME_MAX} value={form.en} onChange={(e) => set("en", e.target.value)} />
+        <Field label={t("common", P.name)} error={errors.name} hint={t("common", P.nameHint)}>
+          <input className={input} dir={dir} maxLength={NAME_MAX} value={form.name} onChange={(e) => set("name", e.target.value)} />
         </Field>
         {kind === "product" && (
-          <>
-            <Field label={t("common", P.descriptionFa)} error={errors.descriptionFa}>
-              <textarea className={input} dir="rtl" rows={3} maxLength={DESCRIPTION_MAX} value={form.descriptionFa} onChange={(e) => set("descriptionFa", e.target.value)} />
-            </Field>
-            <Field label={t("common", P.descriptionEn)} error={errors.descriptionEn}>
-              <textarea className={input} dir="ltr" rows={3} maxLength={DESCRIPTION_MAX} value={form.descriptionEn} onChange={(e) => set("descriptionEn", e.target.value)} />
-            </Field>
-          </>
+          <Field label={t("common", P.description)}>
+            <textarea className={input} dir={dir} rows={3} maxLength={DESCRIPTION_MAX} value={form.description} onChange={(e) => set("description", e.target.value)} />
+          </Field>
         )}
       </div>
       {error && (
@@ -496,7 +529,8 @@ function ProductSheet({
   const message = useMessage();
   const { me } = usePanelSession();
   const owner = isPlatformOwner(me);
-  const [form, setForm] = useState<ProductForm>(emptyProductForm);
+  const [form, setForm] = useState<ProductForm>(() => emptyProductForm(DEFAULT_LOCALE));
+  const dirOf = useDirOf();
   const [errors, setErrors] = useState<Partial<Record<keyof ProductForm, string>>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -552,17 +586,14 @@ function ProductSheet({
         <Field label={t("common", K.product.key)} error={errors.key}>
           <input className={input} dir="ltr" value={form.key} onChange={(e) => set("key", e.target.value)} />
         </Field>
-        <Field label={t("common", K.product.nameFa)} error={errors.nameFa}>
-          <input className={input} dir="rtl" maxLength={NAME_MAX} value={form.nameFa} onChange={(e) => set("nameFa", e.target.value)} />
+        <Field label={t("common", K.product.sourceLang)} error={errors.sourceLang}>
+          <LanguageSelect value={form.sourceLang} onChange={(v) => set("sourceLang", v)} />
         </Field>
-        <Field label={t("common", K.product.nameEn)} error={errors.nameEn} hint={t("common", K.product.nameHint)}>
-          <input className={input} dir="ltr" maxLength={NAME_MAX} value={form.nameEn} onChange={(e) => set("nameEn", e.target.value)} />
+        <Field label={t("common", K.product.name)} error={errors.name} hint={t("common", K.product.nameHint)}>
+          <input className={input} dir={dirOf(form.sourceLang)} maxLength={NAME_MAX} value={form.name} onChange={(e) => set("name", e.target.value)} />
         </Field>
-        <Field label={t("common", K.product.descriptionFa)} error={errors.descriptionFa}>
-          <textarea className={input} dir="rtl" rows={2} maxLength={DESCRIPTION_MAX} value={form.descriptionFa} onChange={(e) => set("descriptionFa", e.target.value)} />
-        </Field>
-        <Field label={t("common", K.product.descriptionEn)} error={errors.descriptionEn}>
-          <textarea className={input} dir="ltr" rows={2} maxLength={DESCRIPTION_MAX} value={form.descriptionEn} onChange={(e) => set("descriptionEn", e.target.value)} />
+        <Field label={t("common", K.product.description)}>
+          <textarea className={input} dir={dirOf(form.sourceLang)} rows={2} maxLength={DESCRIPTION_MAX} value={form.description} onChange={(e) => set("description", e.target.value)} />
         </Field>
         <Field label={t("common", K.product.featureKeys)} error={errors.featureKeys} hint={t("common", K.product.featureKeysHint)}>
           <textarea className={input} dir="ltr" rows={2} value={form.featureKeys} onChange={(e) => set("featureKeys", e.target.value)} />

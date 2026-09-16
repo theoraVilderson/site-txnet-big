@@ -298,6 +298,7 @@ describe("the variant picker", () => {
     categoryId: "c",
     key: "vpn",
     nameKey: "k",
+    sourceLang: "fa",
     descriptionKey: null,
     fulfilmentKind: "network_access",
     featureKeys: [],

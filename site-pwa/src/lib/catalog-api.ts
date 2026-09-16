@@ -48,13 +48,12 @@ export type CatalogRejection =
   | "sku_taken"
   | "price_in_the_past"
   | "text_key_invalid"
-  | "texts_unavailable";
+  | "texts_unavailable"
+  | "lang_unknown"
+  | "source_text_missing";
 
-/** Text in the two languages an admin writes (F-1533-d); the key is billing's. */
-export interface Bilingual {
-  fa: string;
-  en: string;
-}
+/** Text by language code (F-1533-d/f); at least the item's source language. The key is billing's. */
+export type Texts = Record<string, string>;
 
 /** One machine draft waiting for review, beside its source (`GET /translations`). */
 export interface TranslationDraft {
@@ -63,13 +62,16 @@ export interface TranslationDraft {
   key: string;
   draft: string;
   published: string | null;
-  source: { fa: string | null; en: string | null };
+  /** The item's source language and its published text there. */
+  source: { lang: string; text: string | null };
 }
 
 export interface CreateCategoryBody {
   tenantId?: string | null;
   key: string;
-  name: Bilingual;
+  /** Absent = billing's `DEFAULT_LANGUAGE`. */
+  sourceLang?: string;
+  name: Texts;
 }
 
 export interface CatalogCategory {
@@ -78,6 +80,8 @@ export interface CatalogCategory {
   tenantId: string | null;
   key: string;
   nameKey: string;
+  /** The language its name was written in; the list falls back to it. */
+  sourceLang: string;
   isActive: boolean;
 }
 
@@ -88,6 +92,7 @@ export interface CatalogProduct {
   key: string;
   nameKey: string;
   descriptionKey: string | null;
+  sourceLang: string;
   fulfilmentKind: FulfilmentKind;
   featureKeys: string[];
   defaultQuotas: Quotas;
@@ -128,13 +133,14 @@ export interface CreateProductBody {
   tenantId?: string | null;
   categoryId: string;
   key: string;
-  name: Bilingual;
-  description?: Bilingual | null;
+  sourceLang?: string;
+  name: Texts;
+  description?: Texts | null;
   fulfilmentKind: FulfilmentKind;
   featureKeys?: string[];
   defaultQuotas?: Quotas;
 }
-export type UpdateProductBody = Partial<Pick<CreateProductBody, "name" | "description" | "featureKeys" | "defaultQuotas">> & { isActive?: boolean };
+export type UpdateProductBody = Partial<Pick<CreateProductBody, "sourceLang" | "name" | "description" | "featureKeys" | "defaultQuotas">> & { isActive?: boolean };
 
 export interface CreateVariantBody {
   sku: string;
@@ -168,7 +174,7 @@ export const catalogApi = {
     return call<CatalogCategory>("/categories", { method: "POST", ...json(body) });
   },
 
-  async updateCategory(categoryId: string, body: { name?: Bilingual; isActive?: boolean }): Promise<CatalogCategory> {
+  async updateCategory(categoryId: string, body: { sourceLang?: string; name?: Texts; isActive?: boolean }): Promise<CatalogCategory> {
     return call<CatalogCategory>(`/categories/${id(categoryId)}`, { method: "PATCH", ...json(body) });
   },
 

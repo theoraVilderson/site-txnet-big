@@ -1054,8 +1054,8 @@
     "category": {
       "key": "Key",
       "shared": "Shared with every tenant",
-      "nameFa": "Name (Persian)",
-      "nameEn": "Name (English)"
+      "sourceLang": "Source language",
+      "name": "Name"
     },
     "product": {
       "key": "Key",
@@ -1068,11 +1068,10 @@
       "ownerPlatform": "The platform's",
       "ownerTenant": "Another tenant's",
       "tenantId": "Tenant ID",
-      "nameHint": "Other languages are drafted by machine and published after review.",
-      "nameFa": "Name (Persian)",
-      "nameEn": "Name (English)",
-      "descriptionFa": "Description (Persian)",
-      "descriptionEn": "Description (English)"
+      "nameHint": "Written in the source language. Other languages are drafted by machine from it and published after review; a language with no text shows this one.",
+      "sourceLang": "Source language",
+      "name": "Name",
+      "description": "Description"
     },
     "variant": {
       "sku": "SKU",
@@ -1143,8 +1142,7 @@
       "duration": "A whole number of days from 1 to 3650",
       "quota": "Each limit is a whole number",
       "quotaRepeat": "Each metric once",
-      "pastDay": "A price cannot start on a day already past",
-      "bothLanguages": "Write it in both languages, or leave both blank."
+      "pastDay": "A price cannot start on a day already past"
     },
     "refusals": {
       "not_platform_owner": "Only the platform owner manages the platform's or another tenant's catalog.",
@@ -1157,7 +1155,9 @@
       "sku_taken": "This SKU is already sold here.",
       "price_in_the_past": "A price cannot start in the past: it would change invoices already issued.",
       "text_key_invalid": "That is not the text of a catalog item.",
-      "texts_unavailable": "The names could not be saved right now. Nothing was changed; try again."
+      "texts_unavailable": "The names could not be saved right now. Nothing was changed; try again.",
+      "lang_unknown": "That language is not available on this platform.",
+      "source_text_missing": "Write the text in the source language."
     },
     "rename": "Edit names",
     "translations": {
@@ -1171,14 +1171,14 @@
       "drafted": "{{count}} drafts made.",
       "noneMissing": "Nothing was missing.",
       "empty": "No drafts waiting for review.",
-      "source": "Source",
       "current": "Published now",
       "none": "—",
       "draft": "Draft",
       "publish": "Publish",
       "publishEdited": "Publish edited",
       "publishAll": "Publish all shown",
-      "published": "{{count}} published."
+      "published": "{{count}} published.",
+      "source": "Source ({{lang}})"
     }
   }
 }

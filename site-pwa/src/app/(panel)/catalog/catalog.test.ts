@@ -23,9 +23,7 @@ import {
   flattenTexts,
   editId,
   namesBody,
-  reviewLanguages,
   reviewWrites,
-  textLangs,
   validateCategoryForm,
   validateNamesForm,
   emptyVariantForm,
@@ -51,10 +49,10 @@ import {
  *  - **the wrong "current" price** shown beside the history — the rule is
  *    billing's `priceAt`: the newest active row already in effect;
  *  - **the menu entry** shown without `catalog.manage`;
- *  - **a name that is not what billing takes** (F-1533-d): text in `fa` and
- *    `en`, never a key; a description in both or neither;
+ *  - **a name that is not what billing takes** (F-1533-d/g): text in the
+ *    item's source language (default `DEFAULT_LANGUAGE`), never a key;
  *  - **a list showing a raw key** where a name exists: the requested language,
- *    then `en`, then `fa` (ADR-0050 decision 5), as the clients read it.
+ *    then the item's source language (ADR-0050 amendment 2).
  */
 const REPO = join(__dirname, "../../../../..");
 const BACKEND = join(REPO, "txnet-backend");
@@ -111,7 +109,7 @@ describe("what billing can refuse, and what it accepts", () => {
 });
 
 describe("the product form", () => {
-  const valid = () => ({ ...emptyProductForm(), categoryId: UUID, key: "vpn_pro", nameFa: "وی‌پی‌ان پرو", nameEn: "VPN Pro", featureKeys: "vpn.access" });
+  const valid = () => ({ ...emptyProductForm("fa"), categoryId: UUID, key: "vpn_pro", name: "وی‌پی‌ان پرو", featureKeys: "vpn.access" });
 
   it("accepts a plain product", () => {
     expect(validateProductForm(valid(), RESELLER)).toEqual({});
@@ -119,10 +117,8 @@ describe("the product form", () => {
 
   it.each([
     [{ key: "Bad Key" }, "key"],
-    [{ nameFa: "  " }, "nameFa"],
-    [{ nameEn: "" }, "nameEn"],
-    [{ descriptionFa: "فقط فارسی" }, "descriptionEn"],
-    [{ descriptionEn: "English only" }, "descriptionFa"],
+    [{ name: "  " }, "name"],
+    [{ sourceLang: "" }, "sourceLang"],
     [{ featureKeys: "vpn.access, Not-A-Key" }, "featureKeys"],
     [{ categoryId: "" }, "categoryId"],
   ])("refuses %o on %s", (patch, field) => {
@@ -147,30 +143,32 @@ describe("the product form", () => {
     expect(body).not.toHaveProperty("description");
   });
 
-  it("sends names as text in fa and en, never a key", () => {
-    const body = productBody({ ...valid(), nameEn: "  VPN Pro ", descriptionFa: "توضیح", descriptionEn: "About" }, RESELLER);
-    expect(body).toMatchObject({ name: { fa: "وی‌پی‌ان پرو", en: "VPN Pro" }, description: { fa: "توضیح", en: "About" } });
+  it("starts in the deployment's language, and sends text in the source language picked, never a key", () => {
+    expect(emptyProductForm("de").sourceLang).toBe("de");
+    const body = productBody({ ...valid(), sourceLang: "en", name: "  VPN Pro ", description: "About" }, RESELLER);
+    expect(body).toMatchObject({ sourceLang: "en", name: { en: "VPN Pro" }, description: { en: "About" } });
     expect(body).not.toHaveProperty("nameKey");
     expect(body).not.toHaveProperty("descriptionKey");
   });
 });
 
 describe("the category form and renaming", () => {
-  it("needs a key and both names, and shares only the owner's category when asked", () => {
-    const valid = { ...emptyCategoryForm(), key: "games", nameFa: "بازی", nameEn: "Games" };
+  it("needs a key and a name in its source language, and shares only the owner's category when asked", () => {
+    const valid = { ...emptyCategoryForm("fa"), key: "games", name: "بازی" };
     expect(validateCategoryForm(valid)).toEqual({});
-    expect(validateCategoryForm({ ...valid, nameEn: " " })).toHaveProperty("nameEn");
+    expect(validateCategoryForm({ ...valid, name: " " })).toHaveProperty("name");
     expect(validateCategoryForm({ ...valid, key: "Games" })).toHaveProperty("key");
-    expect(categoryBody({ ...valid, shared: true }, true)).toEqual({ key: "games", name: { fa: "بازی", en: "Games" }, tenantId: null });
-    expect(categoryBody({ ...valid, shared: true }, false)).toEqual({ key: "games", name: { fa: "بازی", en: "Games" } });
+    expect(categoryBody({ ...valid, shared: true }, true)).toEqual({ key: "games", sourceLang: "fa", name: { fa: "بازی" }, tenantId: null });
+    expect(categoryBody({ ...valid, shared: true }, false)).toEqual({ key: "games", sourceLang: "fa", name: { fa: "بازی" } });
   });
 
-  it("renames a product with its description, and clears a description left blank in both", () => {
-    const names = { fa: "آلفا", en: "Alpha", descriptionFa: "", descriptionEn: "" };
-    expect(validateNamesForm(names, "product")).toEqual({});
-    expect(namesBody(names, "product")).toEqual({ name: { fa: "آلفا", en: "Alpha" }, description: null });
-    expect(namesBody(names, "category")).toEqual({ name: { fa: "آلفا", en: "Alpha" } });
-    expect(validateNamesForm({ ...names, descriptionEn: "About" }, "product")).toHaveProperty("descriptionFa");
+  it("renames in the source language picked, and clears a description left blank", () => {
+    const names = { sourceLang: "en", name: "Alpha", description: "" };
+    expect(validateNamesForm(names)).toEqual({});
+    expect(namesBody(names, "product")).toEqual({ sourceLang: "en", name: { en: "Alpha" }, description: null });
+    expect(namesBody({ ...names, description: " About " }, "product")).toEqual({ sourceLang: "en", name: { en: "Alpha" }, description: { en: "About" } });
+    expect(namesBody(names, "category")).toEqual({ sourceLang: "en", name: { en: "Alpha" } });
+    expect(validateNamesForm({ ...names, name: "" })).toHaveProperty("name");
   });
 });
 
@@ -185,17 +183,12 @@ describe("names in the list", () => {
     expect(texts.en).toEqual({ "catalog.product.vpn.name": "VPN", "catalog.t_22222222222242228222222222222222.product.vpn.name": "My VPN" });
   });
 
-  it("reads the asked language, then en, then fa, then nothing", () => {
-    expect(catalogText(texts, "de", "catalog.product.de_only.name")).toBe("Nur Deutsch");
-    expect(catalogText(texts, "de", "catalog.product.vpn.name")).toBe("VPN");
-    expect(catalogText(texts, "de", "catalog.product.only_fa.name")).toBe("فقط فارسی");
-    expect(catalogText(texts, "fa", "catalog.product.nowhere.name")).toBeNull();
-    expect(catalogText(texts, "fa", null)).toBeNull();
-  });
-
-  it("fetches each of those languages once", () => {
-    expect(textLangs("de")).toEqual(["de", "en", "fa"]);
-    expect(textLangs("en")).toEqual(["en", "fa"]);
+  it("reads the asked language, then the item's source language, then nothing — never another language", () => {
+    expect(catalogText(texts, "de", "catalog.product.de_only.name", "fa")).toBe("Nur Deutsch");
+    expect(catalogText(texts, "de", "catalog.product.vpn.name", "en")).toBe("VPN");
+    expect(catalogText(texts, "de", "catalog.product.vpn.name", "fa")).toBe("وی‌پی‌ان");
+    expect(catalogText(texts, "en", "catalog.product.only_fa.name", "de")).toBeNull();
+    expect(catalogText(texts, "fa", null, "fa")).toBeNull();
   });
 });
 
@@ -285,10 +278,6 @@ describe("currentPrice", () => {
 
 describe("the translation review", () => {
   const draft = (lang: string, key: string, text: string) => ({ lang, key, draft: text });
-
-  it("offers every language but the two an admin writes, from what locale-service has", () => {
-    expect(reviewLanguages(["de", "en", "fa", "tr"])).toEqual(["de", "tr"]);
-  });
 
   it("publishes an untouched draft as it is and an edited one as the reviewer's text, per language", () => {
     const items = [draft("de", "catalog.product.a.name", "A"), draft("de", "catalog.product.b.name", "B"), draft("tr", "catalog.product.a.name", "A-tr")];

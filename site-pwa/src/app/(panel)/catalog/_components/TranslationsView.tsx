@@ -8,7 +8,7 @@ import { useApiErrorMessage } from "@/hooks/useApiError";
 import { catalogApi, type TranslationDraft } from "@/lib/catalog-api";
 import { PANEL_CATALOG } from "@/lib/routes";
 import { Select } from "../../_components/kit/Select";
-import { CATALOG_KEYS, DESCRIPTION_MAX, editId, refusalKey, reviewLanguages, reviewWrites } from "../_lib/catalog-form";
+import { CATALOG_KEYS, DESCRIPTION_MAX, editId, refusalKey, reviewWrites } from "../_lib/catalog-form";
 
 const K = CATALOG_KEYS.translations;
 const input = "w-full rounded-xl border border-card-border bg-bg-inner px-3 py-2 text-sm text-text-primary outline-none focus:border-primary";
@@ -19,8 +19,9 @@ const quietButton = "inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs
  * Catalog translation review (F-1533-e; ADR-0050 decisions 3-4).
  *
  * A draft is a machine's text and is never shown to a user until a person
- * publishes it here: as it is, or edited. Each draft sits beside the fa and en
- * text it came from and what is published now. "Translate missing" drafts a
+ * publishes it here: as it is, or edited. Each draft sits beside the text in
+ * its item's source language, which it was translated from, and what is
+ * published now. "Translate missing" drafts a
  * language added after the item was written. Billing limits every call to the
  * caller's own items (the platform owner: all), so this page filters nothing.
  */
@@ -112,7 +113,7 @@ export function TranslationsView() {
           onChange={setLang}
           options={[
             { value: "", label: t("common", K.allLanguages) },
-            ...reviewLanguages(availableLocales.map((l) => l.code)).map((code) => ({ value: code, label: nameOf(code) })),
+            ...availableLocales.map((l) => ({ value: l.code, label: l.name })),
           ]}
           className="w-44"
         />
@@ -163,24 +164,18 @@ export function TranslationsView() {
               <li key={id} className="flex flex-col gap-3 rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-bold text-text-primary">
-                    {d.source.fa ?? d.source.en ?? d.key}
+                    {d.source.text ?? d.key}
                     <span className="ms-2 rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-[11px] text-primary">{nameOf(d.lang)}</span>
                   </p>
                   <p className="font-mono text-[10px] text-text-secondary" dir="ltr">
                     {d.key}
                   </p>
                 </div>
-                <dl className="grid gap-2 text-xs sm:grid-cols-3">
+                <dl className="grid gap-2 text-xs sm:grid-cols-2">
                   <div>
-                    <dt className="font-bold text-text-secondary">{t("common", K.source)} · FA</dt>
-                    <dd dir="rtl" className="text-text-primary">
-                      {d.source.fa ?? t("common", K.none)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="font-bold text-text-secondary">{t("common", K.source)} · EN</dt>
-                    <dd dir="ltr" className="text-text-primary">
-                      {d.source.en ?? t("common", K.none)}
+                    <dt className="font-bold text-text-secondary">{t("common", K.source, { lang: nameOf(d.source.lang) })}</dt>
+                    <dd dir={dirOf(d.source.lang)} className="text-text-primary">
+                      {d.source.text ?? t("common", K.none)}
                     </dd>
                   </div>
                   <div>
