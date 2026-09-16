@@ -18,14 +18,15 @@ below into code, import `capabilitiesOf(platform)`.
 |---|---|
 | `bot-integration.ts` | the `BotIntegration` shape and the `BotIntegrationDirectory` port — where integrations and their credentials come from |
 | `bot-client.registry.ts` | one client per `BotIntegration`, tokens from the vault through that port |
-| `telegram-like-bot.client.ts` | the driver: `sendMessage`, `requestContact`, `deleteMessage`, `answerCallbackQuery`, webhook get/set |
+| `telegram-like-bot.client.ts` | the driver: `sendMessage`, `requestContact`, `deleteMessage`, `answerCallbackQuery`, webhook get/set, and the invoice calls |
+| `payment.ts` | the invoice rail (F-104-l): one `Invoice` shaped per platform, `pre_checkout_query` / `successful_payment` read into `PaymentEvent` |
 | `capabilities.ts` | the table below, in code, each entry carrying `verifiedOn` + `source` |
 | `bot-view.ts` | the `BotView` types (owned by `bot-app`, declared here so both can import them) |
 | `renderer.ts` | `BotView` -> payload, with the degradation policy and its log line |
 | `deep-link.ts` | the per-platform link shape and the `?start=` payload parser |
 
-Not built yet: media sending (`F-308`), payments (`F-304`) and per-tenant
-branding (`F-317`).
+Not built yet: media sending (`F-308`), the bot's payment screens (`F-104-m`)
+and per-tenant branding (`F-317`).
 
 ## TL;DR
 
@@ -82,7 +83,7 @@ Verified against [docs.bale.ai](https://docs.bale.ai/),
 | Mini App / WebApp | `window.Telegram.WebApp` | `window.Bale.WebApp` | **name only** |
 | Mini App SDK the page must load | `https://telegram.org/js/telegram-web-app.js?63` | `https://tapi.bale.ai/miniapp.js?3` | **yes — different URL** (verified 2026-09-10) |
 | Mini App identity proof | HMAC-SHA-256 over the sorted data-check-string, secret = HMAC(bot token, `"WebAppData"`) | **the same scheme** | no |
-| in-chat payment | provider tokens / Stars | own wallet: `sendInvoice`, `answerPreCheckoutQuery`, `inquireTransaction` | **yes — different rails** |
+| in-chat payment | provider tokens / Stars | own wallet: `sendInvoice`, `answerPreCheckoutQuery`, `inquireTransaction` | **yes — different rails** (fields re-read 2026-09-16, below) |
 | API base URL | `api.telegram.org/bot<token>` | `tapi.bale.ai/bot<token>` | **yes** |
 | deep link | `t.me/<bot>?start=<payload>` | `ble.ir/<bot>?startapp` | **yes** |
 | Bale-only | — | `askReview`, `inquireTransaction`, `showScanQrPopup`, `addToHomeScreen`, a `/business/` path with higher rate limits | n/a |
@@ -112,6 +113,36 @@ That changes what this unit is mostly for. Ranked by real risk:
 **Rule:** every row above carries the date it was verified. A flag with no date
 is not a flag. Re-read both platforms' docs before adding an axis, and record
 the date in the same change.
+
+### The invoice rail (`F-104-l`, D-32)
+
+A caller builds one `Invoice` (title, description, payload, currency, prices in
+the currency's smallest unit, optional provider token) and calls
+`sendInvoice(chatId, invoice)` or `createInvoiceLink(invoice)`; it answers a
+payer with `answerPreCheckoutQuery(queryId, {ok} | {ok:false, errorMessage})`.
+None of the three throws. Fields read 2026-09-16 from both vendors' docs:
+
+| | Telegram (`provider-tokens`) | Bale (`wallet`) |
+|---|---|---|
+| `currency` parameter | required; `XTR` = Stars | **none** — Rials implied; only `IRR` is accepted |
+| `provider_token` | forbidden for `XTR`, required otherwise | always required (the wallet token) |
+| prices | one item for `XTR` | one or more |
+| `createInvoiceLink` answers | a link | a payment id for the Mini App SDK |
+
+Both: title 1-32 chars, description 1-255, payload 1-128 bytes, positive integer
+amounts. A refusal (`InvoiceRefusal`) is decided **before** any call and names
+the fault, not the platform; a platform failure is `platform_error`.
+
+**Events.** `parsePaymentEvent(update)` answers `pre_checkout` (query id, payer,
+currency, total, payload) or `payment_succeeded` (chat, payer, currency, total,
+payload, `platformChargeId` = `telegram_payment_charge_id` — the settlement
+reference on both platforms — and `providerChargeId`, `''` read as `null`), or
+`null`. A payment missing any of those fields is `null`, never half an event.
+
+**Registration.** `pre_checkout_query` is in `WEBHOOK_ALLOWED_UPDATES`: it is not
+a message, and a bot that never receives it lets every payment time out. A bot
+registered before it was added is rewritten once by the registrar's existing
+too-narrow check.
 
 ### Degradation policy (`F-302`)
 

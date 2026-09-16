@@ -10,6 +10,8 @@ export interface BotUpdate {
   update_id?: number;
   message?: BotMessage;
   callback_query?: BotCallbackQuery;
+  /** Read through `parsePaymentEvent` (`payment.ts`), never directly. */
+  pre_checkout_query?: BotPreCheckoutQuery;
 }
 
 export interface BotMessage {
@@ -18,6 +20,24 @@ export interface BotMessage {
   chat?: { id: number | string };
   text?: string;
   contact?: BotContact;
+  successful_payment?: BotSuccessfulPayment;
+}
+
+/** Same field names on Telegram and Bale (read 2026-09-16). */
+export interface BotPreCheckoutQuery {
+  id: string;
+  from?: { id: number | string };
+  currency: string;
+  total_amount: number;
+  invoice_payload: string;
+}
+
+export interface BotSuccessfulPayment {
+  currency: string;
+  total_amount: number;
+  invoice_payload: string;
+  telegram_payment_charge_id: string;
+  provider_payment_charge_id?: string;
 }
 
 export interface BotCallbackQuery {

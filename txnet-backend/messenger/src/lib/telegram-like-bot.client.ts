@@ -1,4 +1,6 @@
 import { InternalServerErrorException, Logger } from '@nestjs/common';
+import { BotPlatform } from './bot-platform';
+import { Invoice, invoiceParams, InvoiceRefusal } from './payment';
 
 export interface TelegramLikeSendResult {
   ok: boolean;
@@ -31,8 +33,20 @@ export type ReplyMarkup =
  * webhook registered without it delivers messages and silently swallows every
  * button tap. Registering `['message']` alone is what made login, register and
  * forgot-password unreachable by tapping.
+ *
+ * `pre_checkout_query` is not optional either (F-104-l): it is not a message,
+ * so a registration without it never delivers the question, the bot never
+ * answers it, and every in-chat payment times out. A bot registered before it
+ * was added is rewritten once, on the next boot, by the same check.
  */
-export const WEBHOOK_ALLOWED_UPDATES = ['message', 'callback_query'] as const;
+export const WEBHOOK_ALLOWED_UPDATES = [
+  'message',
+  'callback_query',
+  'pre_checkout_query',
+] as const;
+
+/** Why an invoice was not sent: the rail's own refusal, or the platform said no. */
+export type InvoiceFailure = InvoiceRefusal | 'platform_error';
 
 /** What `getWebhookInfo` answers. */
 export interface WebhookInfo {
@@ -52,7 +66,7 @@ export class TelegramLikeBotClient {
   private readonly logger: Logger;
 
   constructor(
-    private readonly platformLabel: string, // for logs only: 'telegram' | 'bale'
+    private readonly platformLabel: BotPlatform, // logs, and the invoice shape
     private readonly apiBase: string,
     private readonly botToken: string,
     private readonly timeoutMs: number,
@@ -130,6 +144,78 @@ export class TelegramLikeBotClient {
       callback_query_id: callbackQueryId,
       ...(text ? { text } : {}),
     });
+  }
+
+  /**
+   * Sends an invoice to the chat (F-104-l). The invoice is checked and shaped
+   * for this platform first (`payment.ts`); a refusal calls nothing. Never
+   * throws — a caller turns either failure into its own message.
+   */
+  async sendInvoice(
+    chatId: string,
+    invoice: Invoice,
+  ): Promise<{ ok: true; messageId: number | null } | { ok: false; reason: InvoiceFailure }> {
+    const shaped = invoiceParams(this.platformLabel, invoice);
+    if ('reason' in shaped) return { ok: false, reason: shaped.reason };
+    const result = await this.call<TelegramLikeSendResult>('sendInvoice', {
+      chat_id: chatId,
+      ...shaped.params,
+    });
+    if (!result.ok) {
+      this.logInvoiceFailure('sendInvoice', result);
+      return { ok: false, reason: 'platform_error' };
+    }
+    return { ok: true, messageId: result.body?.result?.message_id ?? null };
+  }
+
+  /**
+   * An invoice a Mini App opens (F-104-l). On Telegram the result is a link;
+   * on Bale it is the payment id its Mini App SDK takes. Either way the caller
+   * hands it to the page as is.
+   */
+  async createInvoiceLink(
+    invoice: Invoice,
+  ): Promise<{ ok: true; link: string } | { ok: false; reason: InvoiceFailure }> {
+    const shaped = invoiceParams(this.platformLabel, invoice);
+    if ('reason' in shaped) return { ok: false, reason: shaped.reason };
+    const result = await this.call<{ ok?: boolean; description?: string; result?: unknown }>(
+      'createInvoiceLink',
+      shaped.params,
+    );
+    const link = result.body?.result;
+    if (!result.ok || typeof link !== 'string' || !link) {
+      this.logInvoiceFailure('createInvoiceLink', result);
+      return { ok: false, reason: 'platform_error' };
+    }
+    return { ok: true, link };
+  }
+
+  /**
+   * Answers a `pre_checkout_query`. Both platforms allow 10 seconds, and a
+   * refusal must carry the reason the payer reads. `false` means the answer
+   * did not arrive — the platform then cancels the payment on its own.
+   */
+  async answerPreCheckoutQuery(
+    queryId: string,
+    verdict: { ok: true } | { ok: false; errorMessage: string },
+  ): Promise<boolean> {
+    const result = await this.call<TelegramLikeSendResult>('answerPreCheckoutQuery', {
+      pre_checkout_query_id: queryId,
+      ok: verdict.ok,
+      ...('errorMessage' in verdict ? { error_message: verdict.errorMessage } : {}),
+    });
+    if (!result.ok) this.logInvoiceFailure('answerPreCheckoutQuery', result);
+    return result.ok;
+  }
+
+  private logInvoiceFailure(
+    method: string,
+    result: { status: number; networkError?: string; body?: { description?: string } },
+  ): void {
+    this.logger.error(
+      `${this.platformLabel} ${method} failed: status=${result.status} ` +
+        `error=${result.networkError ?? result.body?.description ?? 'n/a'}`,
+    );
   }
 
   /**
