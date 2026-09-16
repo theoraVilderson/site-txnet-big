@@ -52,7 +52,7 @@ export const STATUS_TONES: Record<PaymentStatus, Tone> = {
   },
   expired: {
     icon: TimerOff,
-    className: "border-card-border bg-bg-inner text-text-secondary",
+    className: "border-gold/20 bg-gold-bg text-gold",
     labelKey: F.status.expired,
   },
 };
