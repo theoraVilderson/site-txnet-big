@@ -210,7 +210,8 @@ None planned yet (no bus). Payment confirmation is expected to drive
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
 | identity | `ownerUserId`, transfer sender/receiver, OTP for transfer confirm | transfer/credit blocked |
-| catalog | `servicePlanId` / `categoryId` for coupon scope + order pricing | coupon scope check fails |
+| catalog | a coupon scope's `productId` / `variantId`, and a `free_grant` coupon's `grantVariantId` (F-026-a, D-35); the variant's price for order pricing (F-026-c, not yet used by a purchase) | coupon scope check fails; a free-service code is refused `variant_not_found` |
+| entitlement | `GrantService.issue` inside the gift redemption's transaction, `source = coupon` (F-502-l-b, ADR-0049) | the redemption rolls back; the code stays unused |
 | currency | base-currency amounts only in; display conversion is currency's job | — |
 | tenant | `tenantId` denormalized on `wallet_transaction` / `payment_transaction` for reporting | — |
 | tenant | the request tenant's `tenant_domain` rows — the `panel` host a gateway callback comes back to, proven custom domain first (F-092-i, ADR-0020). Read under RLS in its `tenantTransaction`; never a request header | no host to answer on: starting a payment is refused 503 |

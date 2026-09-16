@@ -23,7 +23,7 @@ Source of truth: `txnet-backend/prisma/domains/network.prisma` (Postgres schema
 | This table | -> | Other unit's table | Why it is allowed |
 |---|---|---|---|
 | config.userId | -> | identity.user.id | a config belongs to a user |
-| config.servicePlanId | -> | catalog.service_plan.id | the plan it was bought under |
+| config.grantId | -> | entitlement.grant.id | the Grant it was provisioned for (F-026-b; was `servicePlanId`) |
 | config.tenantId, panel.tenantId | -> | tenant.tenant.id | dedicated pools / per-tenant scoping |
 | config (referenced) | <- | billing.sub_account.configId | sub-account funds a config |
 

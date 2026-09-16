@@ -31,7 +31,8 @@ Source of truth: `txnet-backend/prisma/domains/billing.prisma` (Postgres schema
 |---|---|---|---|
 | wallet.ownerUserId | -> | identity.user.id | one wallet per user |
 | sub_account.configId | -> | network.config.id | a sub-account funds one VPN config |
-| coupon_service_scope.servicePlanId / categoryId | -> | catalog.service_plan / product_category | coupon targeting |
+| coupon_service_scope.productId / variantId (exactly one) | -> | catalog.product / product_variant | coupon targeting (F-026-a) |
+| coupon.grantVariantId | -> | catalog.product_variant | what a `free_grant` coupon gives (D-35); `Restrict`, a variant is never deleted |
 | affiliate_commission.payoutWalletTransactionId | -> | billing.wallet_transaction | payout is itself a ledger entry |
 | payment_gateway_grant.tenantGatewayConfigId | -> | tenant.tenant_gateway_config | a grant may lend one reseller's gateway to another (ADR-0041 §2); the owner is unchanged by it |
 

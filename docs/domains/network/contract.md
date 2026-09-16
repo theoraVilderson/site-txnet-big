@@ -21,7 +21,7 @@ composite index) so a tenant's User panel can query its configs without a join.
 
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
-| provision config | userId, servicePlanId, panelId?, protocol | `config` (`active`) + Xray uuid pushed to the Panel API | sync + Panel API call | panel down, plan inactive |
+| provision config | userId, grantId, panelId?, protocol | `config` (`active`) + Xray uuid pushed to the Panel API | sync + Panel API call | panel down, Grant not active |
 | regenerate config | configId | new `uuid`, `regenerateUsedCount++` | sync | over `maxRegenerateCount` |
 | set config status | configId, status, reason, actor | `config` + `config_action_log` row | sync | — |
 | ingest traffic | panel -> {configId, up, down, at} | `traffic_raw_log` (partitioned) | async, high volume | — |
@@ -38,7 +38,7 @@ by the provisioning service directly.
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
 | identity | `userId` owner of a config | provisioning blocked |
-| catalog | `servicePlanId` for the config | provisioning blocked |
+| entitlement | the `grant` a config is provisioned for — its status, quotas and `panelGroupId` via its variant (ADR-0049; F-027) | provisioning blocked |
 | tenant | `tenantId` denormalized onto panel/config; dedicated Panel pools | shared pool still usable |
 | billing | `sub_account` draws down `config` byte caps | metering stops |
 

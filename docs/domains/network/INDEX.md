@@ -6,7 +6,7 @@ version: 2
 keywords: [vpn, panel, xray, config, subscription link, traffic, ip access]
 source: []
 owns_tables: [panel, config, config_action_log, traffic_raw_log, traffic_daily_aggregate, ip_access_rule]
-depends_on: [identity, catalog, tenant, billing]
+depends_on: [identity, entitlement, tenant, billing]
 updated: 2026-09-06
 ---
 
@@ -16,8 +16,8 @@ updated: 2026-09-06
 installs running x-ui/Xray), per-user Configs on those Panels, raw +
 daily-aggregated traffic accounting, and durable IP access rules.
 **Explicitly NOT responsible for:** charging for traffic (`billing` sub-account),
-real-time rate limiting (Redis, deliberately no table), plan definitions
-(`catalog`).
+real-time rate limiting (Redis, deliberately no table), product definitions
+(`catalog`), who holds a service (`entitlement` Grant).
 
 ## Files
 | File | Read it when |
