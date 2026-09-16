@@ -74,7 +74,17 @@ function controllerFiles(dir: string): string[] {
 
 type Route = { name: string; options: RateLimitOptions | undefined };
 
-async function routes(): Promise<Route[]> {
+/**
+ * Every controller module, imported once. The first import transforms most of
+ * the app through SWC — ~4s alone, and past a test's 30s budget when the
+ * workspace's `tsc` runs beside it (measured 2026-09-16, twice). So it is a
+ * `beforeAll` with its own budget, and the tests share the result.
+ */
+let loaded: Promise<Route[]> | undefined;
+const routes = () => (loaded ??= loadRoutes());
+beforeAll(() => routes(), 180_000);
+
+async function loadRoutes(): Promise<Route[]> {
   const found: Route[] = [];
   for (const file of controllerFiles(APP)) {
     const mod = (await import(file)) as Record<string, unknown>;

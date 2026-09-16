@@ -33,6 +33,12 @@ const HANDLES = {
  *    fails, so a broker that refused the message does not also make the caller
  *    wait 60s before retrying it.
  */
+// Each delivery test runs a real argon2id hash — the invariant is that what is
+// stored *is* one — and argon2id is slow and memory-hard by design. Alone that
+// is well inside 5s; beside the workspace's `tsc` it was not (timed out
+// 2026-09-16), so these tests get a budget that says why.
+vi.setConfig({ testTimeout: 30_000 });
+
 describe('OtpService — delivery leaves the request path', () => {
   const sender = { send: vi.fn() };
   let store: Mocked<Pick<OtpStore, 'acquireLock' | 'releaseLock' | 'isCoolingDown' | 'startCooldown' | 'save'>>;
