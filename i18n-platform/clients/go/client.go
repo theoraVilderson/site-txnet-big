@@ -11,7 +11,8 @@
 //   - A background Watch stream keeps the cache fresh; on disconnect it
 //     reconnects with exponential backoff (1s→2s→…→MaxBackoff) and re-fetches a
 //     fresh snapshot for every preload language.
-//   - A missing key returns the key itself; translation never panics.
+//   - A missing key falls back to en, then fa (FallbackLangs), then returns the
+//     key itself; translation never panics.
 package localeclient
 
 import (
@@ -43,8 +44,8 @@ type Config struct {
 	// Leave it nil/empty to load EVERY language locale-service advertises
 	// (languages added later are picked up automatically over the Watch stream).
 	PreloadLangs []string
-	// DefaultLang is used as the fallback language by Translate. Defaults to the
-	// first preload language.
+	// DefaultLang is what ResolveLanguage answers when nothing matches. Defaults
+	// to the first preload language. Lookup fallback is FallbackLangs, not this.
 	DefaultLang string
 	// BootTimeout caps the blocking boot. Default 10s.
 	BootTimeout time.Duration
@@ -287,19 +288,25 @@ func (c *Client) Close() error {
 	return c.conn.Close()
 }
 
-// T translates a key and interpolates {{var}} placeholders. Unknown key → key.
+// FallbackLangs is the read fallback after the asked language, in order
+// (ADR-0050 decision 5). DefaultLang is not part of it.
+var FallbackLangs = []string{"en", "fa"}
+
+// T translates a key and interpolates {{var}} placeholders. Lookup order: the
+// asked language, then FallbackLangs, then the key itself.
 func (c *Client) T(lang, namespace, key string, vars map[string]string) string {
-	raw, ok := c.lookup(lang, namespace, key)
-	if !ok {
-		if lang != c.cfg.DefaultLang {
-			if raw, ok = c.lookup(c.cfg.DefaultLang, namespace, key); !ok {
-				return key
-			}
-		} else {
-			return key
+	if raw, ok := c.lookup(lang, namespace, key); ok {
+		return render(raw, vars)
+	}
+	for _, fb := range FallbackLangs {
+		if fb == lang {
+			continue
+		}
+		if raw, ok := c.lookup(fb, namespace, key); ok {
+			return render(raw, vars)
 		}
 	}
-	return render(raw, vars)
+	return key
 }
 
 // Translate is T without interpolation.

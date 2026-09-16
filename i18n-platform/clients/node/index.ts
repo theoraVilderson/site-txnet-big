@@ -1,4 +1,4 @@
-export { createLocaleClient } from "./client";
+export { createLocaleClient, FALLBACK_LANGS } from "./client";
 export type {
   LocaleClient,
   LocaleClientConfig,

@@ -2,7 +2,7 @@
  * The Node twin of i18n-platform/clients/go/client_test.go, and the same
  * contract: a blocking boot that fails fast rather than serving an empty
  * string table, a cache replaced per language rather than merged, and a
- * lookup that falls back — default language, then the key itself — instead of
+ * lookup that falls back — en, then fa, then the key itself (ADR-0050) — instead of
  * ever returning empty or throwing. Every Node service depends on those four
  * behaviours, and the two clients are only "identical" for as long as
  * something checks.
@@ -318,11 +318,11 @@ describe("lookup", () => {
   // Returning "" anywhere in it would put blank text in front of a user.
   const fallbackCases = [
     ["present in the asked language", "fa", "errors", "auth.unauthorized", "دسترسی ندارید"],
-    ["missing key falls back to the default language", "fa", "errors", "auth.only_in_en", "English only"],
+    ["missing key falls back to en", "fa", "errors", "auth.only_in_en", "English only"],
     ["missing namespace falls back too", "fa", "messages", "greeting", "Hello {{name}}"],
     ["missing everywhere returns the key", "fa", "errors", "auth.nowhere", "auth.nowhere"],
-    ["missing in the default language returns the key", "en", "errors", "auth.nowhere", "auth.nowhere"],
-    ["unknown language falls back to the default", "de", "errors", "auth.unauthorized", "Unauthorized"],
+    ["missing in en returns the key", "en", "errors", "auth.nowhere", "auth.nowhere"],
+    ["unknown language falls back to en", "de", "errors", "auth.unauthorized", "Unauthorized"],
     ["unknown language and unknown key returns the key", "de", "errors", "nope", "nope"],
     ["unknown namespace returns the key", "en", "nope", "auth.unauthorized", "auth.unauthorized"],
   ];
@@ -546,4 +546,42 @@ test("runtime writes go to the service", async () => {
 
   client.close();
   await svc.stop();
+});
+
+// ADR-0050 decision 5: after the asked language comes en, then fa — never the
+// configured defaultLang first. A language a machine has not drafted yet still
+// reads a meaningful name.
+describe("fallback is en then fa whatever the default", () => {
+  let svc;
+  let client;
+  before(async () => {
+    const fixture = twoLanguages();
+    fixture.locales.push({ code: "de", name: "German", short_name: "DE", native_name: "Deutsch", dir: "ltr", locale: "de-DE" });
+    fixture.snapshots.fa = snapshot("fa", "v1", {
+      catalog: { "product.vpn.name": "وی‌پی‌ان", "product.only_fa.name": "فقط فارسی" },
+    });
+    fixture.snapshots.en = snapshot("en", "v1", { catalog: { "product.vpn.name": "VPN" } });
+    fixture.snapshots.de = snapshot("de", "v1", { catalog: { "product.de.name": "Nur Deutsch" } });
+    svc = await startFakeService(fixture);
+    client = createLocaleClient({ addr: svc.addr, scope: "backend", defaultLang: "fa", logger: quiet });
+    await client.ready();
+  });
+  after(async () => {
+    client.close();
+    await svc.stop();
+  });
+
+  const cases = [
+    ["the asked language wins", "de", "product.de.name", "Nur Deutsch"],
+    ["en before fa, even with defaultLang fa", "de", "product.vpn.name", "VPN"],
+    ["fa when en has none", "de", "product.only_fa.name", "فقط فارسی"],
+    ["en itself falls back to fa", "en", "product.only_fa.name", "فقط فارسی"],
+    ["fa does not fall back to another language", "fa", "product.de.name", "product.de.name"],
+    ["nowhere returns the key", "de", "product.none.name", "product.none.name"],
+  ];
+  for (const [name, lang, key, want] of cases) {
+    test(name, () => {
+      assert.equal(client.translate(lang, "catalog", key), want);
+    });
+  }
 });

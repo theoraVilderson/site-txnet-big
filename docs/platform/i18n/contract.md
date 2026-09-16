@@ -39,7 +39,10 @@ picked up automatically).
 `ready()`/`New()` blocks until first snapshot or boot timeout (then fails fast);
 `t/T(lang, ns, key, vars)` with `{{var}}` interpolation; `translate` without;
 `namespace(lang, ns)`; `resolveLanguage(acceptLanguage)`; `languages()`;
-`resync()`; `close()`. Missing key -> the key itself (never throws/panics).
+`resync()`; `close()`. Lookup falls back: the asked language → `en` → `fa`
+→ the key itself (never throws/panics; ADR-0050 decision 5, F-1533-c). The
+chain is `FallbackLangs` (Go) / `FALLBACK_LANGS` (Node); `defaultLang` is only
+what `resolveLanguage` answers when nothing matches.
 Cache is replaced atomically per language, never merged. Reconnect uses
 exponential backoff and re-fetches on recovery.
 

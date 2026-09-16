@@ -49,7 +49,7 @@ export interface LocaleClientConfig {
      * up automatically over the Watch stream).
      */
     preloadLangs?: string[];
-    /** Fallback language for translate(). Defaults to the first loaded language. */
+    /** What resolveLanguage() answers when nothing matches. Defaults to the first loaded language. Lookup fallback is FALLBACK_LANGS, not this. */
     defaultLang?: string;
     /** Caps the blocking boot. Default 10_000. */
     bootTimeoutMs?: number;
@@ -92,4 +92,6 @@ export interface LocaleClient {
     }): Promise<number>;
     close(): void;
 }
+/** The read fallback after the asked language, in order (ADR-0050 decision 5). defaultLang is not part of it. */
+export declare const FALLBACK_LANGS: readonly string[];
 export declare function createLocaleClient(config: LocaleClientConfig): LocaleClient;

@@ -10,7 +10,8 @@
  *   - The in-memory cache is replaced atomically per language — never merged.
  *   - A background Watch stream keeps the cache fresh; on disconnect it
  *     reconnects with exponential backoff and re-fetches a fresh snapshot.
- *   - A missing key returns the key itself; translation never throws.
+ *   - A missing key falls back to en, then fa (FALLBACK_LANGS), then returns
+ *     the key itself; translation never throws.
  *
  * Requires: @grpc/grpc-js, @grpc/proto-loader  (server-side only).
  */
@@ -73,7 +74,7 @@ export interface LocaleClientConfig {
    * up automatically over the Watch stream).
    */
   preloadLangs?: string[];
-  /** Fallback language for translate(). Defaults to the first loaded language. */
+  /** What resolveLanguage() answers when nothing matches. Defaults to the first loaded language. Lookup fallback is FALLBACK_LANGS, not this. */
   defaultLang?: string;
   /** Caps the blocking boot. Default 10_000. */
   bootTimeoutMs?: number;
@@ -112,6 +113,9 @@ export interface LocaleClient {
   publishDrafts(target: EntryTarget & { keys: string[] }): Promise<number>;
   close(): void;
 }
+
+/** The read fallback after the asked language, in order (ADR-0050 decision 5). defaultLang is not part of it. */
+export const FALLBACK_LANGS: readonly string[] = ["en", "fa"];
 
 const VAR_RE = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
 
@@ -263,11 +267,9 @@ export function createLocaleClient(config: LocaleClientConfig): LocaleClient {
     },
 
     t(lang, ns, key, vars) {
-      const raw = cache.get(lang)?.namespaces?.[ns]?.entries?.[key];
-      if (raw !== undefined) return render(raw, vars);
-      if (lang !== defaultLang) {
-        const fb = cache.get(defaultLang)?.namespaces?.[ns]?.entries?.[key];
-        if (fb !== undefined) return render(fb, vars);
+      for (const l of [lang, ...FALLBACK_LANGS.filter((fb) => fb !== lang)]) {
+        const raw = cache.get(l)?.namespaces?.[ns]?.entries?.[key];
+        if (raw !== undefined) return render(raw, vars);
       }
       return key;
     },

@@ -18,8 +18,8 @@ import (
 // This client is the copy every Go service vendors, so its contract is the
 // contract for the whole platform: a blocking boot that fails fast rather than
 // serving an empty string table, a cache replaced per language rather than
-// merged, and a lookup that falls back — default language, then the key
-// itself — instead of ever returning empty or panicking. Those are the four
+// merged, and a lookup that falls back — en, then fa, then the key itself
+// (ADR-0050) — instead of ever returning empty or panicking. Those are the four
 // behaviours a vendored copy must not drift on. They are exercised against a
 // real gRPC server over a loopback socket, because half of them only exist in
 // the interaction with the stream.
@@ -342,11 +342,11 @@ func TestTranslateFallbackChain(t *testing.T) {
 		want          string
 	}{
 		{"present in the asked language", "fa", "errors", "auth.unauthorized", "دسترسی ندارید"},
-		{"missing key falls back to the default language", "fa", "errors", "auth.only_in_en", "English only"},
+		{"missing key falls back to en", "fa", "errors", "auth.only_in_en", "English only"},
 		{"missing namespace falls back too", "fa", "messages", "greeting", "Hello {{name}}"},
 		{"missing everywhere returns the key", "fa", "errors", "auth.nowhere", "auth.nowhere"},
-		{"missing in the default language returns the key", "en", "errors", "auth.nowhere", "auth.nowhere"},
-		{"unknown language falls back to the default", "de", "errors", "auth.unauthorized", "Unauthorized"},
+		{"missing in en returns the key", "en", "errors", "auth.nowhere", "auth.nowhere"},
+		{"unknown language falls back to en", "de", "errors", "auth.unauthorized", "Unauthorized"},
 		{"unknown language and unknown key returns the key", "de", "errors", "nope", "nope"},
 		{"unknown namespace returns the key", "en", "nope", "auth.unauthorized", "auth.unauthorized"},
 	}
@@ -354,6 +354,40 @@ func TestTranslateFallbackChain(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := c.Translate(tc.lang, tc.ns, tc.key); got != tc.want {
 				t.Errorf("Translate(%q,%q,%q) = %q, want %q", tc.lang, tc.ns, tc.key, got, tc.want)
+			}
+		})
+	}
+}
+
+// ADR-0050 decision 5: after the asked language comes en, then fa — never the
+// configured DefaultLang first. A language a machine has not drafted yet still
+// reads a meaningful name.
+func TestFallbackIsEnThenFaWhateverTheDefault(t *testing.T) {
+	svc := twoLanguageService()
+	svc.locales = append(svc.locales, &localev1.LocaleMeta{Code: "de", Name: "German", Dir: "ltr"})
+	svc.setSnapshot(snapshot("fa", "v1", map[string]map[string]string{
+		"catalog": {"product.vpn.name": "وی‌پی‌ان", "product.only_fa.name": "فقط فارسی"},
+	}))
+	svc.setSnapshot(snapshot("en", "v1", map[string]map[string]string{
+		"catalog": {"product.vpn.name": "VPN"},
+	}))
+	svc.setSnapshot(snapshot("de", "v1", map[string]map[string]string{
+		"catalog": {"product.de.name": "Nur Deutsch"},
+	}))
+	c := newClient(t, serve(t, svc), Config{Scope: "backend", DefaultLang: "fa"})
+
+	tests := []struct{ name, lang, key, want string }{
+		{"the asked language wins", "de", "product.de.name", "Nur Deutsch"},
+		{"en before fa, even with DefaultLang fa", "de", "product.vpn.name", "VPN"},
+		{"fa when en has none", "de", "product.only_fa.name", "فقط فارسی"},
+		{"en itself falls back to fa", "en", "product.only_fa.name", "فقط فارسی"},
+		{"fa does not fall back to another language", "fa", "product.de.name", "product.de.name"},
+		{"nowhere returns the key", "de", "product.none.name", "product.none.name"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := c.Translate(tc.lang, "catalog", tc.key); got != tc.want {
+				t.Errorf("Translate(%q, %q) = %q, want %q", tc.lang, tc.key, got, tc.want)
 			}
 		})
 	}
