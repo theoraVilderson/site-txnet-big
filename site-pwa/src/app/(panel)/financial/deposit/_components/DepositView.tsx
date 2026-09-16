@@ -6,7 +6,9 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { billingApi, type DepositGateway, type DepositStarted } from "@/lib/billing-api";
+import { openMiniAppInvoice } from "@/lib/mini-app";
 import { useWalletBalance } from "../../../_hooks/useWalletBalance";
+import { PaymentPendingView } from "../../../payment/_components/PaymentPendingView";
 import { BASE_CURRENCY, formatMoney } from "../../../_lib/money";
 import { useDepositQuote } from "../_hooks/useDepositQuote";
 import { useVerifyingGuard } from "../_hooks/useVerifyingGuard";
@@ -38,6 +40,11 @@ const D = FrontendI18nKeys.common.deposit;
  * gateway, and the free path — a fully discounted top-up is credited by `start`
  * itself and there is nowhere to send anyone, so the result is shown here
  * rather than on F-093-f's return pages.
+ *
+ * Inside a Mini App there is a third (F-104-o): an in-chat gateway answers an
+ * invoice link, the messenger's own sheet takes the payment, and the page then
+ * waits on the row exactly as `/payment/pending` does (F-093-l) — the sheet's
+ * "paid" is the host's word, and only the bot's relay credits the wallet.
  */
 export function DepositView() {
   const { lang, t } = useLocale();
@@ -61,6 +68,8 @@ export function DepositView() {
   const [startError, setStartError] = useState<string | null>(null);
   /** Set only on the free path, where there is no gateway to be sent to. */
   const [credited, setCredited] = useState<DepositStarted | null>(null);
+  /** A payment the messenger's sheet took, or may still be taking (F-104-o). */
+  const [awaiting, setAwaiting] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -120,6 +129,21 @@ export function DepositView() {
         window.location.assign(started.redirectUrl);
         return;
       }
+      if (started.invoiceLink) {
+        const closed = await openMiniAppInvoice(started.invoiceLink);
+        if (closed === "paid" || closed === "pending") {
+          // Whatever the sheet said, the row is what credits: watch it.
+          setAwaiting(started.paymentId);
+        } else if (closed === "failed") {
+          setStartError(t("common", D.summary.inChatFailed));
+        } else if (closed === "unavailable") {
+          setStartError(t("common", D.summary.inChatUnavailable));
+        }
+        // Cancelled is the payer's own choice and needs no sentence. The
+        // unpaid row is billing's to expire; the next pay starts a new one.
+        setStarting(false);
+        return;
+      }
       // The free path: `start` credited the wallet inside its own transaction
       // and minted nothing. The balance shown is billing's answer to that call.
       setCredited(started);
@@ -140,6 +164,8 @@ export function DepositView() {
     setCodes([]);
     setStartError(null);
   }
+
+  if (awaiting) return <PaymentPendingView paymentId={awaiting} />;
 
   if (credited) {
     const money = (value: string) => formatMoney(value, BASE_CURRENCY, { lang, t });

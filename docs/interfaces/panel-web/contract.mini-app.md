@@ -75,3 +75,23 @@ App is not empty for someone who has only ever used the bot.
 
 The user's own browser is still a separate group, and that is intended: the
 Mini App is the chat, and a laptop is not.
+
+## Paying inside the Mini App (F-104-o)
+
+`openMiniAppInvoice(link)` is the second and last thing this file does for a
+page. It opens the invoice link `POST /deposit/start` answered in the
+messenger's own payment sheet — `WebApp.openInvoice(url, callback)`, the same
+call on Telegram and Bale (Bale checked 2026-09-16) — and resolves with how the
+sheet closed: `paid`, `pending`, `cancelled`, `failed` (any status it does not
+know), or `unavailable` (no marker, the SDK never arrived, no `openInvoice`, or
+it threw). It loads the SDK itself when the session came from a cookie and never
+needed one, and it needs no `initData`: the link is already this payment's.
+
+**The marker outlives its URL.** `?ma=` is on the URL the bot handed over and
+on no other — a client-side navigation drops it, and the top-up page is never
+that URL. So `miniAppPlatform()` keeps a marker it reads in `sessionStorage`
+(`txnet.miniApp`) and falls back to it. One tab is the webview; an ordinary
+browser that never carried the marker still loads nothing, and storage that is
+blocked leaves the URL as the only source. It stays a hint, never a credential.
+
+Proof: `lib/mini-app.test.ts`.

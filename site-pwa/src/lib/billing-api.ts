@@ -236,6 +236,12 @@ export interface DepositStarted {
   free: boolean;
   /** Where to send the browser. `null` on the free path, where nothing was minted. */
   redirectUrl: string | null;
+  /**
+   * An in-chat gateway started inside a Mini App (F-104-q): the link the
+   * messenger's `openInvoice` takes. `null` everywhere else — a browser is
+   * never offered such a gateway.
+   */
+  invoiceLink: string | null;
   amount: string;
   discount: string;
   fee: string;

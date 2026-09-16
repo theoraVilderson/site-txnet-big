@@ -421,7 +421,9 @@
       "again": "Top up again",
       "chargeTitle": "What you pay at the gateway",
       "chargeWords": "In words",
-      "chargeRial": "That is {{amount}} rial"
+      "chargeRial": "That is {{amount}} rial",
+      "inChatFailed": "The payment did not go through. Try again.",
+      "inChatUnavailable": "This payment opens only inside the messenger. Open the panel from the bot to pay with it."
     },
     "verifying": {
       "notice": {

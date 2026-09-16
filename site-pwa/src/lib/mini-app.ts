@@ -28,6 +28,7 @@ type WebAppGlobal = {
   initData?: string;
   ready?: () => void;
   expand?: () => void;
+  openInvoice?: (url: string, done?: (status: string) => void) => void;
 };
 
 /** The query parameter the bot's `web_app` row puts on `PANEL_BASE_URL`. */
@@ -58,21 +59,46 @@ export type MiniAppHost = {
   ready: () => void;
 };
 
+/** Where the marker is kept for the rest of the tab's life (F-104-o). */
+const MARKER_STORAGE_KEY = "txnet.miniApp";
+
 /**
  * Which messenger opened this page, according to the URL the bot handed over.
  *
  * `null` for an ordinary browser — and also for a marker naming a platform
  * this app has no SDK for, because a value we cannot act on and a value that
  * is not there are the same answer.
+ *
+ * The marker is on the **first** URL only: a client-side route change drops
+ * the query, and the top-up page that opens an invoice (F-104-o) is never the
+ * URL the bot handed over. So a marker that is read is kept in
+ * `sessionStorage` — one tab, which in a webview is the Mini App — and read
+ * back when the URL has none. It is still only a hint about which script to
+ * fetch; storage that is blocked just means the URL is the only source.
  */
 export function miniAppPlatform(): MiniAppPlatform | null {
   if (typeof window === "undefined") return null;
   const marker = new URLSearchParams(window.location.search).get(
     MINI_APP_PARAM,
   );
-  return marker && marker in MINI_APP_SDK
-    ? (marker as MiniAppPlatform)
-    : null;
+  if (isPlatform(marker)) {
+    try {
+      window.sessionStorage.setItem(MARKER_STORAGE_KEY, marker);
+    } catch {
+      // Blocked storage: this URL still carries the marker.
+    }
+    return marker;
+  }
+  try {
+    const kept = window.sessionStorage.getItem(MARKER_STORAGE_KEY);
+    return isPlatform(kept) ? kept : null;
+  } catch {
+    return null;
+  }
+}
+
+function isPlatform(value: string | null): value is MiniAppPlatform {
+  return !!value && Object.hasOwn(MINI_APP_SDK, value);
 }
 
 /** One load per page, however many callers ask. */
@@ -138,4 +164,53 @@ export async function miniAppHost(): Promise<MiniAppHost | null> {
       }
     },
   };
+}
+
+/**
+ * How an invoice the host opened was closed (F-104-o). `paid` and `pending`
+ * are the host's word, not billing's: the payment is credited only when the
+ * bot's relay says so, and the page waits on the row either way.
+ * `unavailable` is a page that could not open one at all — no messenger, no
+ * SDK, or an SDK without the method.
+ */
+export type MiniAppInvoiceStatus =
+  | "paid"
+  | "pending"
+  | "cancelled"
+  | "failed"
+  | "unavailable";
+
+/**
+ * Open the invoice link `POST /deposit/start` answered, in the messenger's own
+ * payment sheet, and resolve when the sheet closes.
+ *
+ * Telegram's and Bale's `openInvoice(url, callback)` take the same arguments
+ * (Bale checked 2026-09-16). The SDK is loaded here if the session came from a
+ * cookie and never needed it; `initData` is not required, because paying
+ * needs no proof of who is looking — the link is already this payment's.
+ */
+export async function openMiniAppInvoice(
+  link: string,
+): Promise<MiniAppInvoiceStatus> {
+  const platform = miniAppPlatform();
+  if (!platform) return "unavailable";
+  if (!(await loadSdk(platform))) return "unavailable";
+
+  const app = readGlobal(platform);
+  if (typeof app?.openInvoice !== "function") return "unavailable";
+
+  return new Promise<MiniAppInvoiceStatus>((resolve) => {
+    try {
+      app.openInvoice!(link, (status) =>
+        resolve(
+          status === "paid" || status === "pending" || status === "cancelled"
+            ? status
+            : "failed",
+        ),
+      );
+    } catch {
+      // An SDK too old for payments throws rather than opening.
+      resolve("unavailable");
+    }
+  });
 }

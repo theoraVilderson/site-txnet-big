@@ -55,6 +55,7 @@ beforeEach(() => {
   visit("");
   delete (window as any).Telegram;
   delete (window as any).Bale;
+  window.sessionStorage.clear();
   for (const script of Array.from(document.querySelectorAll("script"))) {
     script.remove();
   }
@@ -83,6 +84,73 @@ describe("miniAppPlatform", () => {
   it("survives the other query the page already carries", async () => {
     visit(`?next=%2Fplans&${MINI_APP_PARAM}=telegram`);
     expect((await load()).miniAppPlatform()).toBe("telegram");
+  });
+
+  it("remembers the marker after the panel navigates away from that URL", async () => {
+    // A client-side route change drops the query; the top-up page is never the
+    // URL the bot handed over (F-104-o).
+    visit(`?${MINI_APP_PARAM}=bale`);
+    (await load()).miniAppPlatform();
+    visit("");
+    expect((await load()).miniAppPlatform()).toBe("bale");
+  });
+});
+
+describe("openMiniAppInvoice (F-104-o)", () => {
+  function hostWith(openInvoice: unknown) {
+    visit(`?${MINI_APP_PARAM}=telegram`);
+    return serveSdk(() => {
+      (window as any).Telegram = { WebApp: { initData: "", openInvoice } };
+    });
+  }
+
+  it("hands the link to the SDK verbatim and answers the status it closed with", async () => {
+    const openInvoice = vi.fn((_url: string, done: (s: string) => void) => done("paid"));
+    hostWith(openInvoice);
+
+    // A Mini App signed in by its cookie carries no initData and still pays.
+    expect(await (await load()).openMiniAppInvoice("https://t.me/$abc")).toBe("paid");
+    expect(openInvoice.mock.calls[0][0]).toBe("https://t.me/$abc");
+  });
+
+  it("uses Bale's own global on Bale", async () => {
+    visit(`?${MINI_APP_PARAM}=bale`);
+    const openInvoice = vi.fn((_url: string, done: (s: string) => void) => done("cancelled"));
+    serveSdk(() => {
+      (window as any).Bale = { WebApp: { openInvoice } };
+    });
+
+    expect(await (await load()).openMiniAppInvoice("https://ble.ir/x")).toBe("cancelled");
+  });
+
+  it("reads pending and failed as themselves, and anything else as failed", async () => {
+    for (const [said, answer] of [["pending", "pending"], ["failed", "failed"], ["weird", "failed"]]) {
+      hostWith((_url: string, done: (s: string) => void) => done(said));
+      expect(await (await load()).openMiniAppInvoice("l")).toBe(answer);
+    }
+  });
+
+  it("is unavailable in an ordinary browser, and loads nothing", async () => {
+    visit("");
+    const append = serveSdk(() => undefined);
+    expect(await (await load()).openMiniAppInvoice("l")).toBe("unavailable");
+    expect(append).not.toHaveBeenCalled();
+  });
+
+  it("is unavailable when the SDK never arrives or has no openInvoice", async () => {
+    visit(`?${MINI_APP_PARAM}=telegram`);
+    serveSdk(() => undefined, { fail: true });
+    expect(await (await load()).openMiniAppInvoice("l")).toBe("unavailable");
+
+    hostWith(undefined);
+    expect(await (await load()).openMiniAppInvoice("l")).toBe("unavailable");
+  });
+
+  it("is unavailable when the SDK throws instead of opening", async () => {
+    hostWith(() => {
+      throw new Error("WebAppMethodUnsupported");
+    });
+    expect(await (await load()).openMiniAppInvoice("l")).toBe("unavailable");
   });
 });
 

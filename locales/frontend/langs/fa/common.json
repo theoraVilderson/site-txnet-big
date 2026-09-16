@@ -421,7 +421,9 @@
       "again": "شارژ دوباره",
       "chargeTitle": "مبلغی که در درگاه پرداخت می‌کنید",
       "chargeWords": "به حروف",
-      "chargeRial": "معادل {{amount}} ریال"
+      "chargeRial": "معادل {{amount}} ریال",
+      "inChatFailed": "پرداخت انجام نشد. دوباره تلاش کنید.",
+      "inChatUnavailable": "این پرداخت فقط داخل پیام‌رسان باز می‌شود. برای پرداخت با آن، پنل را از ربات باز کنید."
     },
     "verifying": {
       "notice": {

@@ -110,6 +110,17 @@ route returns the whole breakdown instead of the pieces of one.
     is the prominent, focused answer, "pay anyway" always pays. A check that
     fails pays: a courtesy must not become a gate. Proof:
     `deposit/verifying-guard.test.ts`.
+14. **An in-chat gateway pays in the messenger's sheet, then waits on the row
+    (F-104-o, D-32).** The page never decides who sees one: `billing` lists it
+    only for a Mini App session of that messenger (F-104-q,
+    `domains/billing/contract.webhook.md` "Settling in the chat"), so a browser
+    never has it to pick. `start` answers `invoiceLink`; `openMiniAppInvoice`
+    ([contract.mini-app.md](contract.mini-app.md)) opens it. `paid` or
+    `pending` renders F-093-l's `PaymentPendingView` for that payment id — the
+    sheet's word is not a credit, the bot's relay is — and it turns into the
+    success card when the row does. `cancelled` returns to the form silently;
+    `failed` and `unavailable` (no SDK, no method) are a sentence of this
+    page's own. The unpaid row is billing's to expire.
 
 ## What this page does not do
 
