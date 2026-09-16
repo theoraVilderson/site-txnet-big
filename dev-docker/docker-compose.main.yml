@@ -24,6 +24,7 @@ volumes:
   postgres_data:
   rabbitmq_data:
   translator_models:
+  translator_llm_models:
   locales_runtime:
 
 services:
@@ -123,6 +124,41 @@ services:
       interval: 15s
       timeout: 5s
       start_period: 600s
+      retries: 5
+    networks:
+      - private_backend_network
+    labels:
+      - "txnet.logging=true"
+
+  # ===========================================================================
+  # translator-llm — a local LLM (Ollama) that drafts catalog text before
+  # LibreTranslate is asked (ADR-0050 amendment 3). Free and offline: the model
+  # is pulled once into the volume (on first start, if missing) and nothing
+  # leaves the deployment after that. qwen2.5:3b is ~2 GB on disk and needs
+  # ~3-4 GB RAM; no GPU required. No route to ollama.com (offline, national
+  # internet): download the GGUF anywhere and run scripts/translator-llm-import.sh.
+  # ===========================================================================
+  translator-llm:
+    image: ${DOCKER_REGISTRY}/ollama/ollama:0.6.8
+    container_name: ${STACK_NAME:-txnet}-translator-llm
+    restart: unless-stopped
+    volumes:
+      - translator_llm_models:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=${TRANSLATOR_LLM_KEEP_ALIVE:-30m}
+      - TRANSLATOR_LLM_MODEL=${TRANSLATOR_LLM_MODEL:-qwen2.5:3b}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        ollama serve & pid=$$!;
+        sleep 5;
+        ollama show "$$TRANSLATOR_LLM_MODEL" >/dev/null 2>&1 || ollama pull "$$TRANSLATOR_LLM_MODEL" || echo "model pull failed: drafts fall back to LibreTranslate";
+        wait $$pid
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
       retries: 5
     networks:
       - private_backend_network
@@ -749,9 +785,13 @@ services:
       # The response envelope translates through locale-service (F-094).
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
       - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
-      # Drafts catalog names in every language but fa/en (F-1533-d, ADR-0050).
+      # Drafts catalog names in every language but the item's source (F-1533-d, ADR-0050).
       # Unset = no drafts; names still publish and read with the en -> fa fallback.
       - TRANSLATOR_URL=${TRANSLATOR_URL:-}
+      # A local LLM first, LibreTranslate behind it (ADR-0050 amendment 3).
+      # Unset TRANSLATOR_LLM_URL = LibreTranslate alone.
+      - TRANSLATOR_LLM_URL=${TRANSLATOR_LLM_URL:-}
+      - TRANSLATOR_LLM_MODEL=${TRANSLATOR_LLM_MODEL:-qwen2.5:3b}
       # A PATH, never the key (ADR-0026).
       - VAULT_KEK_FILE=${VAULT_KEK_FILE:-/run/secrets/vault-kek}
       # Refused when NODE_ENV=production.

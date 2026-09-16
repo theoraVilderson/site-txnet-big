@@ -78,6 +78,24 @@ only**, decision 5's en → fa chain:
 - The clients' generic en → fa chain (F-1533-c) stays for every other
   namespace; a catalog reader passes the item's source language instead.
 
+## Amendment 2026-09-16 (3) — a local LLM drafts first (F-1533-h)
+
+Argos drafts of short Persian names were too weak to review. The user's call:
+the engine stays **free and local** — it must run offline or on the national
+internet — but a **local LLM is allowed**. Decision 1 now reads:
+
+- `OpenAiCompatibleTranslator` speaks the OpenAI chat API to a model on the
+  deployment (`TRANSLATOR_LLM_URL`, `TRANSLATOR_LLM_MODEL`); dev-docker runs
+  Ollama as `translator-llm` with `qwen2.5:3b` (~2 GB, ~3-4 GB RAM, no GPU).
+  The prompt says what the text is (a store name) and asks for the translation
+  alone; quotes, labels and a stray note are stripped, and an answer in a CJK
+  script neither language uses is no draft.
+- `FallbackTranslator` asks the LLM, then LibreTranslate. Either unset is
+  skipped; both unset is `NullTranslator`. Drafts stay drafts: a human publishes.
+- A hosted API stays refused. ollama.com's blob store is unreachable from some
+  networks: `scripts/translator-llm-import.sh` loads the same model from a GGUF
+  file downloaded anywhere.
+
 ## Consequences
 
 - locale-service stops being read-only; a write RPC on an unauthenticated
@@ -96,4 +114,5 @@ only**, decision 5's en → fa chain:
   need a second mechanism.
 - **Commit translations into `locales/`** — a runtime admin action cannot
   commit, and a swarm deploy does not mount the repo.
-- **An LLM or a hosted translation API** — refused by the user: not local.
+- **A hosted translation API** — refused by the user: not local. (A local LLM
+  was refused too, then allowed by amendment 3.)
