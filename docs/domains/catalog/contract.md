@@ -25,13 +25,13 @@ own — another tenant's item, or the platform's, answers 404.
 | Route | Body / query | Answer | Refusals |
 |---|---|---|---|
 | `GET /categories` | — | the platform's and the caller's own (owner: all) | — |
-| `POST /categories`, `PATCH /categories/:id` | `tenantId?` (absent / `null` / uuid), `key`, `name: {fa, en}`; patch `name`, `isActive` | category | `not_platform_owner` 403, `category_not_found` 404, `key_taken` 409, `texts_unavailable` 503 |
+| `POST /categories`, `PATCH /categories/:id` | `tenantId?` (absent / `null` / uuid), `key`, `sourceLang?`, `name: {lang: text}`; patch `sourceLang`, `name`, `isActive` | category | `not_platform_owner` 403, `category_not_found` 404, `key_taken` 409, `lang_unknown` / `source_text_missing` 400, `texts_unavailable` 503 |
 | `GET /products` | `categoryId?`, `tenantId?` (owner: uuid or `platform`) | products | — |
-| `POST /products`, `GET\|PATCH /products/:id` | `categoryId`, `key`, `name: {fa, en}`, `description?: {fa, en} \| null`, `fulfilmentKind`, `featureKeys?`, `defaultQuotas?`; patch has no key or kind | product; `GET` with variants and each price history | `category_not_found` (another tenant's category), `product_not_found`, `key_taken`, `texts_unavailable` |
+| `POST /products`, `GET\|PATCH /products/:id` | `categoryId`, `key`, `sourceLang?`, `name: {lang: text}`, `description?: {lang: text} \| null`, `fulfilmentKind`, `featureKeys?`, `defaultQuotas?`; patch has no key or kind | product; `GET` with variants and each price history | `category_not_found` (another tenant's category), `product_not_found`, `key_taken`, `lang_unknown`, `source_text_missing`, `texts_unavailable` |
 | `POST /products/:id/variants`, `PATCH /variants/:id` | `sku`, `billingMode`, `visibility`, `quotas?`, `durationDays?`, `panelGroupId?`, `qualityTier?`, first `price`; patch has no SKU or billing mode | variant with prices | `variant_not_found`, `sku_taken`, `price_in_the_past` |
 | `POST /variants/:id/prices` | `amount`, `effectiveFrom?` (default now; never in the past) | a **new** price row | `variant_not_found`, `price_in_the_past` 400 |
 | `POST /prices/:id/deactivate` | — | the price, switched off | `price_not_found` |
-| `GET /translations` | `lang?` | drafts: `{lang, key, draft, published, source: {fa, en}}` — the caller's items' (owner: all) | — |
+| `GET /translations` | `lang?` | drafts: `{lang, key, draft, published, source: {lang, text}}` — the caller's items' (owner: all) | — |
 | `POST /translations/draft-missing` | — | `{drafted}` | `texts_unavailable` |
 | `POST /translations/publish` | `lang`, `keys[]` (1-200) | `{published}` — drafts as they are | `text_key_invalid` 400, `product_not_found` / `category_not_found` (not the caller's item) |
 | `PATCH /translations` | `lang`, `texts: {key: text}` | `{published}` — the reviewer's text, draft dropped | same |
@@ -40,7 +40,7 @@ Every write leaves an `admin_audit_log` row (`catalog_*` actions). Nothing is de
 A translation publish is audited as `catalog_product_update` / `catalog_category_update`
 on the item it names, `newValue.texts`.
 
-## Names (F-1533-d, ADR-0050)
+## Names (F-1533-d/f, ADR-0050 and its amendments)
 
 A category or product body carries **text, never a key**; `nameKey` /
 `descriptionKey` are derived and returned (`catalog/catalog-texts.ts`, proved by
@@ -49,11 +49,13 @@ A category or product body carries **text, never a key**; `nameKey` /
 | Rule | Held by |
 |---|---|
 | Key = `catalog.[t_<tenant hex>.]<category\|product>.<key>.<name\|description>` — a tenant's under its own prefix, the platform's plain | `catalogTextKey` |
-| `fa` and `en` are published inside the write's transaction: locale-service down → `texts_unavailable` 503, row rolled back | `publishSources` |
-| Every other locale-service language gets a draft from `en` after commit; a failing engine or store costs the draft, never the write | `draftOthers` |
-| "Translate missing" drafts only a language with neither published text nor a pending draft | `draftMissing` |
+| An item has a `sourceLang` (column, nullable = `DEFAULT_LANGUAGE`; the view always resolves it): absent on a create → `DEFAULT_LANGUAGE`; any language locale-service has, else `lang_unknown`; `name` (and a `description`) must hold its text, else `source_text_missing`; a new `sourceLang` on a patch needs `name` | `sourceLang` |
+| Every language written is published inside the write's transaction: locale-service down → `texts_unavailable` 503, row rolled back | `publishSources` |
+| Every language not written gets a draft **from the source language** after commit; a failing engine or store costs the draft, never the write | `draftOthers` |
+| A catalog reader falls back: requested language → the item's `sourceLang` → key (not the clients' en → fa) | readers (panel F-1533-g) |
+| "Translate missing" drafts from each item's source, only a language with neither published text nor a pending draft; the review list is the caller's items' keys (owner: all) | `draftMissing`, `textSourcesOf` |
 | A draft is published, or edited and published, only by whoever manages the item its key names | `publishingTexts` |
-| An edited name re-keys the row to the derived key; `description: null` clears the key and the fa/en text | `updateProduct` |
+| An edited name re-keys the row to the derived key; `description: null` clears the key and its text in every language | `updateProduct`, `clear` |
 | Variant `nameKey` is still free input and writes no text | — (not in F-1533) |
 
 ## TL;DR

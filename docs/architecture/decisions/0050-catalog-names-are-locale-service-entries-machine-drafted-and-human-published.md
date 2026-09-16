@@ -61,6 +61,23 @@ only on a key naming an item the caller manages. Rejected: one shared key per
 item key (the collision stays); client-sent keys validated by prefix (the same
 safety, more input to get wrong).
 
+## Amendment 2026-09-16 (2) — each item has a source language (F-1533-f/g)
+
+The user's call, replacing decision 4's fixed fa+en and, **for catalog text
+only**, decision 5's en → fa chain:
+
+- The admin picks an item's **source language** (any language locale-service
+  has); the form defaults to `DEFAULT_LANGUAGE`. Only the source text is
+  required; any other language written in the same form is published as
+  written. Every language not written is drafted **from the source**.
+- Reading catalog text: requested language → **the item's source language** →
+  the key. The fallback is the admin's choice through the source language;
+  no viewer or tenant setting.
+- `sourceLang` is a nullable column on `product_category` and `product`; a row
+  from before this amendment reads as `DEFAULT_LANGUAGE`.
+- The clients' generic en → fa chain (F-1533-c) stays for every other
+  namespace; a catalog reader passes the item's source language instead.
+
 ## Consequences
 
 - locale-service stops being read-only; a write RPC on an unauthenticated

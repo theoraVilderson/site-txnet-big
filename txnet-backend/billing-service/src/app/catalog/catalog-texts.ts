@@ -4,13 +4,16 @@ import { TRANSLATOR, type Translator } from '@txnet-backend/shared-core';
 import { CatalogAdminRefused } from './catalog-admin.service';
 
 /**
- * Catalog names and descriptions in every language (F-1533-d; ADR-0050).
+ * Catalog names and descriptions in every language (F-1533-d/f; ADR-0050 and
+ * its amendments of 2026-09-16).
  *
  * The text is locale-service entries in the `catalog` namespace under
- * `shareds`, so the panel, the bot and every backend read it the same way. The
- * admin writes `fa` and `en`, published as written; every other language
- * locale-service has gets a machine draft from the English text, which a human
- * publishes. A draft is never served.
+ * `shareds`, so the panel, the bot and every backend read it the same way.
+ * Each item has a **source language** the admin picks (default
+ * `DEFAULT_LANGUAGE`); the languages the admin writes are published as
+ * written, and every other language locale-service has gets a machine draft
+ * from the source, which a human publishes. A draft is never served. A reader
+ * falls back from the requested language to the item's source language.
  *
  * **The key is the server's** (the user's call, 2026-09-16): a product key is
  * unique only inside a tenant, so a tenant's text sits under `t_<tenant>.` and
@@ -19,18 +22,17 @@ import { CatalogAdminRefused } from './catalog-admin.service';
 
 export const CATALOG_NAMESPACE = 'catalog';
 const WRITE_SCOPE = 'shareds';
-/** The languages an admin writes. Everything else is drafted (ADR-0050 decision 4). */
-export const SOURCE_LANGS = ['fa', 'en'] as const;
-/** The language drafts are translated from. */
-const DRAFT_FROM = 'en';
 
 export type CatalogTextKind = 'category' | 'product';
 export type CatalogTextField = 'name' | 'description';
-export type Bilingual = { fa: string; en: string };
+/** Text by language code, e.g. `{ fa: 'وی‌پی‌ان' }`. */
+export type Texts = Record<string, string>;
 
 /** What CatalogTextService needs from locale-service — `LocaleService` in production. */
 export interface CatalogTextStore {
   languages(): string[];
+  /** `DEFAULT_LANGUAGE`: an item's source language when none was chosen. */
+  getDefaultLanguage(): string;
   /** Published entries of one language's namespace, without fallback. */
   namespace(lang: string, namespace: string): Record<string, string> | undefined;
   setEntries(target: { scope: string; lang: string; namespace: string; entries: Record<string, string>; draft?: boolean }): Promise<number>;
@@ -45,11 +47,12 @@ export const CATALOG_TEXT_STORE = Symbol('CATALOG_TEXT_STORE');
 /** One draft waiting for review, beside what a reviewer compares it with. */
 export type ReviewItem = {
   lang: string;
-  /** The full i18n key, as the product row holds it. */
+  /** The full i18n key, as the item row holds it. */
   key: string;
   draft: string;
   published: string | null;
-  source: { fa: string | null; en: string | null };
+  /** The item's source language and its published text there. */
+  source: { lang: string; text: string | null };
 };
 
 const KEY_RE = /^catalog\.(?:t_([0-9a-f]{32})\.)?(category|product)\.([a-z][a-z0-9_]{1,63})\.(name|description)$/;
@@ -83,26 +86,51 @@ export class CatalogTextService {
     @Inject(TRANSLATOR) private readonly translator: Translator,
   ) {}
 
-  /** Publishes the admin's fa and en text; an empty string removes it. Refuses with `texts_unavailable` when locale-service does not answer. */
-  async publishSources(texts: { key: string; text: Bilingual }[]): Promise<void> {
-    if (texts.length === 0) return;
-    for (const lang of SOURCE_LANGS) {
-      const entries = Object.fromEntries(texts.map((t) => [entryKey(this.valid(t.key)), t.text[lang]]));
+  /** Languages locale-service has — the only ones a text may be written in (§1.1). */
+  languages(): string[] {
+    return this.store.languages();
+  }
+
+  defaultLanguage(): string {
+    return this.store.getDefaultLanguage();
+  }
+
+  /** Publishes the admin's text in each language given; an empty string removes it. Refuses with `texts_unavailable` when locale-service does not answer. */
+  async publishSources(texts: { key: string; text: Texts }[]): Promise<void> {
+    const byLang = new Map<string, Record<string, string>>();
+    for (const t of texts) {
+      const entry = entryKey(this.valid(t.key));
+      for (const [lang, text] of Object.entries(t.text)) {
+        byLang.set(lang, { ...(byLang.get(lang) ?? {}), [entry]: text });
+      }
+    }
+    for (const [lang, entries] of byLang) {
+      await this.write(() => this.store.setEntries({ scope: WRITE_SCOPE, lang, namespace: CATALOG_NAMESPACE, entries }));
+    }
+  }
+
+  /** Removes a text's published value in every language (a description set to none). */
+  async clear(keys: string[]): Promise<void> {
+    if (keys.length === 0) return;
+    const entries = Object.fromEntries(keys.map((k) => [entryKey(this.valid(k)), '']));
+    for (const lang of this.store.languages()) {
       await this.write(() => this.store.setEntries({ scope: WRITE_SCOPE, lang, namespace: CATALOG_NAMESPACE, entries }));
     }
   }
 
   /**
-   * Drafts every non-source language from the English text. Never throws: it
-   * runs after the catalog write has committed, and a draft is all it can lose.
+   * Drafts, from the source text, every language the admin did not write.
+   * Never throws: it runs after the catalog write has committed, and a draft is
+   * all it can lose.
    */
-  async draftOthers(texts: { key: string; en: string }[]): Promise<number> {
+  async draftOthers(texts: { key: string; from: string; text: string; written: string[] }[]): Promise<number> {
     try {
       let drafted = 0;
-      for (const lang of this.targetLangs()) {
+      for (const lang of this.store.languages()) {
         const entries: Record<string, string> = {};
         for (const t of texts) {
-          const draft = await this.translate(t.en, lang);
+          if (t.written.includes(lang) || lang === t.from) continue;
+          const draft = await this.translate(t.text, t.from, lang);
           if (draft) entries[entryKey(t.key)] = draft;
         }
         if (Object.keys(entries).length === 0) continue;
@@ -116,22 +144,23 @@ export class CatalogTextService {
   }
 
   /**
-   * "Translate missing": drafts, for every non-source language, each key the
-   * filter allows that has English text but neither published text nor a
-   * draft in that language — for a language added after the item was written.
+   * "Translate missing": for each item, drafts from its source text every
+   * language that has neither published text nor a draft — for a language
+   * added after the item was written. An item with no source text is skipped.
    */
-  async draftMissing(allow: (key: string) => boolean): Promise<number> {
-    const english = this.store.namespace(DRAFT_FROM, CATALOG_NAMESPACE) ?? {};
+  async draftMissing(items: { key: string; from: string }[]): Promise<number> {
     const pending = await this.write(() => this.store.listDrafts({ scope: WRITE_SCOPE, namespace: CATALOG_NAMESPACE }));
+    const waiting = new Set(pending.map((d) => `${d.lang}|${d.key}`));
     let drafted = 0;
-    for (const lang of this.targetLangs()) {
+    for (const lang of this.store.languages()) {
       const published = this.store.namespace(lang, CATALOG_NAMESPACE) ?? {};
-      const waiting = new Set(pending.filter((d) => d.lang === lang).map((d) => d.key));
       const entries: Record<string, string> = {};
-      for (const [key, en] of Object.entries(english)) {
-        const full = fullKey(key);
-        if (!parseCatalogTextKey(full) || !allow(full) || published[key] !== undefined || waiting.has(key)) continue;
-        const draft = await this.translate(en, lang);
+      for (const item of items) {
+        const key = entryKey(this.valid(item.key));
+        if (lang === item.from || published[key] !== undefined || waiting.has(`${lang}|${key}`)) continue;
+        const source = this.store.namespace(item.from, CATALOG_NAMESPACE)?.[key];
+        if (!source) continue;
+        const draft = await this.translate(source, item.from, lang);
         if (draft) entries[key] = draft;
       }
       if (Object.keys(entries).length === 0) continue;
@@ -142,20 +171,21 @@ export class CatalogTextService {
     return drafted;
   }
 
-  /** Drafts the filter allows, each beside its fa/en source and the text published now. */
-  async reviewList(allow: (key: string) => boolean, lang?: string): Promise<ReviewItem[]> {
+  /** Drafts of the given keys (full key → source language), each beside its source text and the text published now. */
+  async reviewList(sources: ReadonlyMap<string, string>, lang?: string): Promise<ReviewItem[]> {
     const drafts = await this.write(() => this.store.listDrafts({ scope: WRITE_SCOPE, namespace: CATALOG_NAMESPACE, lang }));
-    const fa = this.store.namespace('fa', CATALOG_NAMESPACE) ?? {};
-    const en = this.store.namespace('en', CATALOG_NAMESPACE) ?? {};
     return drafts
-      .filter((d) => parseCatalogTextKey(fullKey(d.key)) && allow(fullKey(d.key)))
-      .map((d) => ({
-        lang: d.lang,
-        key: fullKey(d.key),
-        draft: d.text,
-        published: this.store.namespace(d.lang, CATALOG_NAMESPACE)?.[d.key] ?? null,
-        source: { fa: fa[d.key] ?? null, en: en[d.key] ?? null },
-      }))
+      .filter((d) => sources.has(fullKey(d.key)))
+      .map((d) => {
+        const from = sources.get(fullKey(d.key)) as string;
+        return {
+          lang: d.lang,
+          key: fullKey(d.key),
+          draft: d.text,
+          published: this.store.namespace(d.lang, CATALOG_NAMESPACE)?.[d.key] ?? null,
+          source: { lang: from, text: this.store.namespace(from, CATALOG_NAMESPACE)?.[d.key] ?? null },
+        };
+      })
       .sort((a, b) => a.key.localeCompare(b.key) || a.lang.localeCompare(b.lang));
   }
 
@@ -171,13 +201,9 @@ export class CatalogTextService {
     return this.write(() => this.store.setEntries({ scope: WRITE_SCOPE, lang, namespace: CATALOG_NAMESPACE, entries }));
   }
 
-  private targetLangs(): string[] {
-    return this.store.languages().filter((l) => !(SOURCE_LANGS as readonly string[]).includes(l));
-  }
-
-  private async translate(text: string, to: string): Promise<string | null> {
+  private async translate(text: string, from: string, to: string): Promise<string | null> {
     try {
-      return await this.translator.translate(text, DRAFT_FROM, to);
+      return await this.translator.translate(text, from, to);
     } catch {
       return null; // the port promises never to throw; a driver that does costs one draft
     }

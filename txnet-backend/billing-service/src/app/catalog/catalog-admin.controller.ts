@@ -77,6 +77,8 @@ export const CATALOG_REFUSAL_STATUS: Record<CatalogAdminRejection, 400 | 403 | 4
   price_in_the_past: 400,
   text_key_invalid: 400,
   texts_unavailable: 503,
+  lang_unknown: 400,
+  source_text_missing: 400,
 };
 
 const READ = {

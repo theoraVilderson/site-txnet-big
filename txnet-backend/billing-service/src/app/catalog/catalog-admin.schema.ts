@@ -36,10 +36,13 @@ const LANG = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/;
 const lang = z.string().regex(LANG, { message: 'lang must be a language code' });
 const text = (max: number) => z.string().trim().min(1, { message: 'text is required' }).max(max);
 /**
- * The two languages an admin writes (F-1533-d, ADR-0050). The i18n key is the
- * server's: a category or product body carries text, never `nameKey`.
+ * Text by language (F-1533-d/f, ADR-0050 amendments): at least the item's
+ * source language, which the service checks along with every language being
+ * one locale-service has. The i18n key is the server's: a category or product
+ * body carries text, never `nameKey`.
  */
-const bilingual = (max: number) => z.object({ fa: text(max), en: text(max) }).strict();
+const texts = (max: number) =>
+  z.record(lang, text(max)).refine((o) => Object.keys(o).length > 0 && Object.keys(o).length <= 50, { message: 'text in 1-50 languages' });
 const NAME_MAX = 200;
 const DESCRIPTION_MAX = 2000;
 
@@ -52,10 +55,12 @@ const quotas = z.record(
 const featureKeys = z.array(z.string().regex(FEATURE_KEY, { message: 'a feature key looks like vpn.access' })).max(50);
 
 export const createCategorySchema = z
-  .object({ tenantId: uuid('tenantId').nullable().optional(), key: z.string().regex(KEY), name: bilingual(NAME_MAX) })
+  .object({ tenantId: uuid('tenantId').nullable().optional(), key: z.string().regex(KEY), sourceLang: lang.optional(), name: texts(NAME_MAX) })
   .strict();
 
-export const updateCategorySchema = z.object({ name: bilingual(NAME_MAX).optional(), isActive: z.boolean().optional() }).strict();
+export const updateCategorySchema = z
+  .object({ sourceLang: lang.optional(), name: texts(NAME_MAX).optional(), isActive: z.boolean().optional() })
+  .strict();
 
 export const listProductsSchema = z.object({
   categoryId: uuid('categoryId').optional(),
@@ -68,8 +73,9 @@ export const createProductSchema = z
     tenantId: uuid('tenantId').nullable().optional(),
     categoryId: uuid('categoryId'),
     key: z.string().regex(KEY),
-    name: bilingual(NAME_MAX),
-    description: bilingual(DESCRIPTION_MAX).nullable().optional(),
+    sourceLang: lang.optional(),
+    name: texts(NAME_MAX),
+    description: texts(DESCRIPTION_MAX).nullable().optional(),
     fulfilmentKind: z.nativeEnum(FulfilmentKind),
     featureKeys: featureKeys.optional(),
     defaultQuotas: quotas.optional(),
@@ -78,8 +84,9 @@ export const createProductSchema = z
 
 export const updateProductSchema = z
   .object({
-    name: bilingual(NAME_MAX).optional(),
-    description: bilingual(DESCRIPTION_MAX).nullable().optional(),
+    sourceLang: lang.optional(),
+    name: texts(NAME_MAX).optional(),
+    description: texts(DESCRIPTION_MAX).nullable().optional(),
     featureKeys: featureKeys.optional(),
     defaultQuotas: quotas.optional(),
     isActive: z.boolean().optional(),

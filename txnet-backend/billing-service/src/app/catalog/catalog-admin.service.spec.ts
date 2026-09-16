@@ -129,18 +129,22 @@ function build() {
   // What reached locale-service, in order. The text rules themselves are catalog-texts.spec.ts.
   const texts: string[] = [];
   const textService = {
-    publishSources: async (t: { key: string; text: { fa: string; en: string } }[]) => {
+    languages: () => ['de', 'en', 'fa'],
+    defaultLanguage: () => 'fa',
+    publishSources: async (t: { key: string; text: Record<string, string> }[]) => {
       writes.push('texts.publish');
-      texts.push(...t.map((x) => `publish ${x.key} ${x.text.en}`));
+      texts.push(...t.map((x) => `publish ${x.key} ${Object.entries(x.text).map(([l, v]) => `${l}=${v}`).join(' ')}`));
     },
-    draftOthers: async (t: { key: string }[]) => {
-      texts.push(...t.map((x) => `draft ${x.key}`));
+    clear: async (keys: string[]) => {
+      texts.push(...keys.map((k) => `clear ${k}`));
+    },
+    draftOthers: async (t: { key: string; from: string; written: string[] }[]) => {
+      texts.push(...t.map((x) => `draft ${x.key} from ${x.from} skipping ${x.written.join(',')}`));
       return t.length;
     },
-    reviewList: async (allow: (key: string) => boolean) =>
-      [catalogTextKey(null, 'product', 'vpn_basic', 'name'), catalogTextKey(RESELLER, 'product', 'vpn_alpha', 'name')]
-        .filter(allow)
-        .map((key) => ({ lang: 'de', key, draft: 'x', published: null, source: { fa: null, en: null } })),
+    reviewList: async (sources: Map<string, string>) =>
+      [...sources].map(([key, from]) => ({ lang: 'de', key, draft: 'x', published: null, source: { lang: from, text: null } })),
+    draftMissing: async (items: { key: string; from: string }[]) => items.length,
     publishDrafts: async (lang: string, keys: string[]) => {
       texts.push(...keys.map((k) => `publish-draft ${lang} ${k}`));
       return keys.length;
@@ -261,18 +265,19 @@ describe('CatalogAdminService — names (F-1533-d)', () => {
     expect(mine.nameKey).toBe(catalogTextKey(RESELLER, 'product', 'vpn_pro', 'name'));
     expect(platform.nameKey).toBe('catalog.product.vpn_pro.name');
     expect(mine.descriptionKey).toBeNull();
+    expect(mine.sourceLang).toBe('fa'); // DEFAULT_LANGUAGE when none was picked
     // Published inside the write, drafted after it.
     expect(texts).toEqual([
-      `publish ${mine.nameKey} VPN Pro`,
-      `draft ${mine.nameKey}`,
-      `publish ${platform.nameKey} VPN Pro`,
-      `draft ${platform.nameKey}`,
+      `publish ${mine.nameKey} fa=وی‌پی‌ان پرو en=VPN Pro`,
+      `draft ${mine.nameKey} from fa skipping fa,en`,
+      `publish ${platform.nameKey} fa=وی‌پی‌ان پرو en=VPN Pro`,
+      `draft ${platform.nameKey} from fa skipping fa,en`,
     ]);
   });
 
   it('writes the name inside the transaction, after the row and its audit', async () => {
     const { service, writes } = build();
-    await service.createCategory(actor(RESELLER), { key: 'games', name: { fa: 'بازی', en: 'Games' } });
+    await service.createCategory(actor(RESELLER), { key: 'games', name: { fa: 'بازی' } });
     expect(writes).toEqual(['productCategory.create', 'audit', 'texts.publish']);
   });
 
@@ -285,13 +290,37 @@ describe('CatalogAdminService — names (F-1533-d)', () => {
 
     expect(view.nameKey).toBe(catalogTextKey(RESELLER, 'product', 'vpn_alpha', 'name'));
     expect(view.descriptionKey).toBeNull();
-    expect(texts).toContain(`publish ${catalogTextKey(RESELLER, 'product', 'vpn_alpha', 'description')} `);
+    expect(texts).toContain(`clear ${catalogTextKey(RESELLER, 'product', 'vpn_alpha', 'description')}`);
   });
 
-  it("shows a reseller only its own drafts, and the platform owner every one", async () => {
-    const { service } = build();
-    expect((await service.listTextDrafts(actor(RESELLER))).map((d) => d.key)).toEqual([catalogTextKey(RESELLER, 'product', 'vpn_alpha', 'name')]);
-    expect(await service.listTextDrafts(actor(OWNER))).toHaveLength(2);
+  it("shows a reseller only its own items' drafts, each with its item's source language, and the owner every one", async () => {
+    const { service, db } = build();
+    db.product.rows[1]['sourceLang'] = 'en';
+    const mine = await service.listTextDrafts(actor(RESELLER));
+    expect(mine.map((d) => [d.key, d.source.lang])).toEqual([
+      [catalogTextKey(RESELLER, 'product', 'vpn_alpha', 'name'), 'en'],
+      [catalogTextKey(RESELLER, 'product', 'vpn_alpha', 'description'), 'en'],
+    ]);
+    // 2 categories + 3 products × (name, description)
+    expect(await service.listTextDrafts(actor(OWNER))).toHaveLength(8);
+    await expect(service.draftMissingTexts(actor(RESELLER))).resolves.toEqual({ drafted: 2 });
+  });
+
+  it('writes in the source language the admin picks, and drafts every other language from it', async () => {
+    const { service, db, texts } = build();
+    const view = await service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, sourceLang: 'en', name: { en: 'VPN Pro' } });
+    expect(view.sourceLang).toBe('en');
+    expect(db.product.rows.at(-1)).toMatchObject({ sourceLang: 'en' });
+    expect(texts).toEqual([`publish ${view.nameKey} en=VPN Pro`, `draft ${view.nameKey} from en skipping en`]);
+  });
+
+  it('refuses a language locale-service does not have, or text that leaves out the source language', async () => {
+    const { service, writes } = build();
+    expect((await refusal(() => service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, sourceLang: 'xx', name: { xx: 'x' } }))).reason).toBe('lang_unknown');
+    expect((await refusal(() => service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, name: { en: 'only English' } }))).reason).toBe('source_text_missing');
+    expect((await refusal(() => service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, description: { en: 'About' } }))).reason).toBe('source_text_missing');
+    expect((await refusal(() => service.updateCategory(actor(OWNER), PLATFORM_CATEGORY, { sourceLang: 'en' }))).reason).toBe('source_text_missing');
+    expect(writes).toEqual([]);
   });
 
   it("refuses to publish a translation of an item the caller does not manage, and writes nothing", async () => {

@@ -57,6 +57,9 @@ model ProductCategory {
   key       String
   /// An i18n key, not text (§4.3).
   nameKey   String
+  /// The language the admin wrote the name in, and a reader's fallback
+  /// (F-1533-f, ADR-0050 amendment 2). Null = DEFAULT_LANGUAGE (older rows).
+  sourceLang String?
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -76,6 +79,9 @@ model Product {
   key            String
   nameKey        String
   descriptionKey String?
+  /// The language name and description were written in; a reader's fallback
+  /// (F-1533-f). Null = DEFAULT_LANGUAGE (older rows).
+  sourceLang     String?
   fulfilmentKind FulfilmentKind
   /// What a Grant of this product unlocks (§4.4).
   featureKeys    String[]       @default([])
