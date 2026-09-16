@@ -26,6 +26,13 @@ export class PaymentProviderRegistry {
     this.providers = new Map<PaymentProviderName, PaymentProvider>([
       [PaymentProviderName.zarinpal, new ZarinpalProvider({ sandbox })],
     ]);
+    // A webhook driver that cannot check a signature would make the webhook
+    // door answer 404 for a gateway that is supposed to settle there (ADR-0051).
+    for (const provider of this.providers.values()) {
+      if (provider.settlement === 'webhook' && !provider.verifyWebhook) {
+        throw new Error(`payment provider '${provider.name}' settles by webhook but has no verifyWebhook`);
+      }
+    }
   }
 
   /** A gateway whose provider has no driver cannot take a payment, so a selector hides it. */

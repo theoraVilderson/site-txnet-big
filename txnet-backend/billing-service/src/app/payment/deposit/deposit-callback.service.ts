@@ -191,6 +191,14 @@ export class DepositCallbackService {
       // have the money all the same. It is verified like a pending one, and the
       // settlement claims back the holds the clock released (ADR-0046 decision 1).
 
+      // A gateway that settles by webhook is settled by its signed post, never
+      // by a browser (ADR-0051 decision 5): this return only shows the payer
+      // where it stands. A recovered payment's authority is only a URL's word,
+      // so it is not even asked about.
+      if (this.providers.get(gatewayRefOf(payment).providerName).settlement === 'webhook') {
+        return recovered ? { kind: 'verifying', paymentId: payment.id } : await this.showOnly(payment, authority);
+      }
+
       // 3. The gateway's own verdict, before we spend a vault read on it. A
       //    payer who pressed cancel is a settled answer — the bank is not going
       //    to say anything else — so the holds go back now rather than at the
@@ -264,6 +272,23 @@ export class DepositCallbackService {
       // either — the user paid, and the payment is settled.
       alreadyPaid: !credited,
     };
+  }
+
+  /**
+   * A webhook gateway's browser return (F-104-b): `inquire`, and show success
+   * when the money is there, pending otherwise. Writes nothing — no credit, no
+   * close, no retry clock; the webhook and F-092-l's sweep own those.
+   */
+  private async showOnly(payment: PaymentRow, authority: string): Promise<CallbackOutcome> {
+    const ref = gatewayRefOf(payment);
+    try {
+      const credentials = await this.merchant.credentialsFor(ref, payment.userId);
+      const { status } = await this.providers.get(ref.providerName).inquire({ credentials, authority });
+      if (status === 'verified') return { kind: 'success', paymentId: payment.id, referenceId: null, alreadyPaid: false };
+    } catch (e) {
+      this.logger.warn(`payment ${payment.id}: inquire on return failed, shown as pending: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    return { kind: 'verifying', paymentId: payment.id };
   }
 
   /**

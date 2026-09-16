@@ -61,8 +61,20 @@ const EXEMPT = new Set(['HealthController', 'DepositInternalController']);
  * `payment/deposit/deposit-callback.controller.ts`'s own reading and cannot be
  * asserted here, because the fake request this file builds is an identity and
  * nothing else.
+ *
+ * `DepositWebhookController` is a provider's server (F-104-b, ADR-0051): its
+ * budget is per **gateway**, the id in its path.
  */
-const PUBLIC = new Set(['DepositCallbackController']);
+const PUBLIC = new Map<string, { subject: string; one: object; another: object }>([
+  [
+    'DepositCallbackController',
+    { subject: 'A0001', one: { query: { Authority: 'A0001', Status: 'OK' } }, another: { query: { Authority: 'A0002', Status: 'OK' } } },
+  ],
+  [
+    'DepositWebhookController',
+    { subject: 'g-0001', one: { params: { provider: 'stripe', gatewayId: 'g-0001' } }, another: { params: { provider: 'stripe', gatewayId: 'g-0002' } } },
+  ],
+]);
 
 function controllerFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
@@ -134,16 +146,15 @@ describe('billing rate limits', () => {
 
   it('counts a public route on its own subject, since it has no caller', async () => {
     const found = (await routes()).filter((r) => PUBLIC.has(r.name.split('.')[0]));
-    expect(found.length, 'the public list names a controller that no longer exists').toBeGreaterThan(0);
+    expect(new Set(found.map((r) => r.name.split('.')[0])).size, 'the public list names a controller that no longer exists').toBe(PUBLIC.size);
 
     for (const { name, options } of found) {
-      const bank = { query: { Authority: 'A0001', Status: 'OK' } };
-      const other = { query: { Authority: 'A0002', Status: 'OK' } };
-      expect(options!.key(bank), `${name} does not count the authority`).toContain('A0001');
-      expect(options!.key(other), `${name} gives two payments one budget`).not.toBe(options!.key(bank));
+      const { subject, one, another } = PUBLIC.get(name.split('.')[0])!;
+      expect(options!.key(one), `${name} does not count its subject`).toContain(subject);
+      expect(options!.key(another), `${name} gives two subjects one budget`).not.toBe(options!.key(one));
       // No identity anywhere on the request: a public route that read one would
       // be reading a header nothing strips.
-      expect(options!.key({ query: {} })).toBeTruthy();
+      expect(options!.key({ query: {}, params: {} })).toBeTruthy();
     }
   });
 

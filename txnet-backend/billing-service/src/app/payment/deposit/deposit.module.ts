@@ -14,6 +14,8 @@ import { DepositSettlementService } from './deposit-settlement';
 import { DepositInternalController } from './deposit-internal.controller';
 import { DepositQuoteService } from './deposit-quote.service';
 import { DepositStartService } from './deposit-start.service';
+import { DepositWebhookController } from './deposit-webhook.controller';
+import { DepositWebhookService } from './deposit-webhook.service';
 import { ManualConfirmController } from './manual-confirm.controller';
 import { ManualConfirmService } from './manual-confirm.service';
 
@@ -29,6 +31,9 @@ import { ManualConfirmService } from './manual-confirm.service';
  * doc comment, and `app.module.ts` for the middleware that stands in for the
  * gate on it.
  *
+ * `DepositWebhookController` is the second public one (F-104-b, ADR-0051): a
+ * provider's server, not a browser, with the gateway in the path.
+ *
  * `DepositInternalController` is a third, for the mirror-image reason: it is
  * the only **service-to-service** one, reached by `worker-service`'s expiry
  * tick (F-092-k) and its reconciliation tick (F-092-l), and by nothing from
@@ -36,8 +41,8 @@ import { ManualConfirmService } from './manual-confirm.service';
  */
 @Module({
   imports: [LocaleModule, CouponModule, GatewayModule, WalletModule],
-  controllers: [DepositController, DepositCallbackController, DepositInternalController, ManualConfirmController],
-  providers: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositSettlementService, DepositExpiryService, DepositReconciliationService, ManualConfirmService, FxRateReader],
+  controllers: [DepositController, DepositCallbackController, DepositWebhookController, DepositInternalController, ManualConfirmController],
+  providers: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositSettlementService, DepositExpiryService, DepositReconciliationService, ManualConfirmService, DepositWebhookService, FxRateReader],
   exports: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositExpiryService, DepositReconciliationService],
 })
 export class DepositModule {}

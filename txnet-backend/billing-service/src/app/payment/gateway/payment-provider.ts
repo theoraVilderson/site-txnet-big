@@ -72,6 +72,32 @@ export type FeeQuoteInput = { credentials: GatewayCredentials; amountMinor: bigi
 /** The provider's fee for `amountMinor`, in the same unit. The caller converts it for `quotedFee`. */
 export type FeeQuote = { feeMinor: bigint };
 
+/**
+ * How a driver learns a payment's result (D-32, ADR-0051 decision 5):
+ * `return` — the payer's browser comes back and we verify (Zarinpal);
+ * `webhook` — the provider's server posts it, signed, and the browser return
+ * only shows it; `in_chat` — a messenger delivers it (F-104-k).
+ */
+export type SettlementMode = 'return' | 'webhook' | 'in_chat';
+
+/** One webhook post, exactly as it arrived. `rawBody` is the signed bytes — never re-serialized JSON. */
+export type WebhookInput = {
+  rawBody: Buffer;
+  headers: Readonly<Record<string, string | string[] | undefined>>;
+  secret: string;
+};
+
+/**
+ * What a **signed** post says, in the port's terms. `authority` is the code the
+ * payment row carries as `gatewayTrackingCode` (ADR-0028). An event this system
+ * does not act on is `ignored`, and still answered 200 (ADR-0051 decision 4).
+ */
+export type WebhookEvent =
+  | { kind: 'paid'; authority: string; referenceId: string }
+  | { kind: 'failed'; authority: string }
+  | { kind: 'pending'; authority: string }
+  | { kind: 'ignored'; type: string };
+
 export interface PaymentProvider {
   readonly name: PaymentProviderName;
   /** The currency this gateway charges in, ISO 4217 — Zarinpal `IRR`. */
@@ -85,6 +111,15 @@ export interface PaymentProvider {
    * it. Required, so a new driver cannot forget to say.
    */
   readonly verifyWindowSec: number | null;
+  /** How this gateway's result arrives. Required: the webhook door and the browser return both branch on it. */
+  readonly settlement: SettlementMode;
+  /**
+   * Check a webhook's signature with `secret` and translate it (ADR-0051
+   * decision 2). Throws `WebhookSignatureInvalid` on any doubt — before a
+   * single field of the body is trusted. Required when `settlement` is
+   * `webhook`; the registry refuses to boot a driver that omits it.
+   */
+  verifyWebhook?(input: WebhookInput): WebhookEvent | Promise<WebhookEvent>;
   /** Mint a payment intent. **Never retried**: every attempt mints a new authority. */
   request(input: PaymentRequestInput): Promise<PaymentRequestResult>;
   /** Confirm a payment. Retried on transport failure; "already verified" is success. */
@@ -145,5 +180,16 @@ export class ProviderNotSupported extends Error {
   constructor(readonly provider: string) {
     super(`no payment provider driver is registered for '${provider}'`);
     this.name = 'ProviderNotSupported';
+  }
+}
+
+/** A webhook whose signature did not hold. The door answers 401 and reads nothing more. */
+export class WebhookSignatureInvalid extends Error {
+  constructor(
+    readonly provider: PaymentProviderName,
+    detail: string,
+  ) {
+    super(`${provider}: webhook signature invalid — ${detail}`);
+    this.name = 'WebhookSignatureInvalid';
   }
 }

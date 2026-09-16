@@ -131,13 +131,21 @@ page rather than the envelope every other route answers.
 |---|---|
 | The tenant is `tenant_domain` for the normalized Host: a `panel` row that is a platform subdomain, or a custom domain that is **verified**. The same rows `start` mints a callback URL from | they must agree, or a tenant mints callbacks to a host this refuses (ADR-0020) |
 | Anything else — unknown host, unproven domain, no Host at all — is a **neutral 404** | ADR-0025 decision 3. There is no fallback tenant: a callback absorbed into the wrong tenant credits the wrong wallet |
-| That read holds `CrossTenantPrismaService` (`DATABASE_CROSS_TENANT_URL`, policy `USING (true)`, no `BYPASSRLS`), and is the only one in this service | the read is what *produces* the scope, so it cannot run inside one; on the app pool RLS shows it no rows and every callback 404s. `grep -rn CrossTenantPrismaService` is the audit |
+| That read holds `CrossTenantPrismaService` (`DATABASE_CROSS_TENANT_URL`, policy `USING (true)`, no `BYPASSRLS`), and is one of two in this service — the other is the webhook's (ADR-0051) | the read is what *produces* the scope, so it cannot run inside one; on the app pool RLS shows it no rows and every callback 404s. `grep -rn CrossTenantPrismaService` is the audit |
 | A **middleware**, not a guard, and uncached | `RateLimiter.hit` keys on the tenant in context and guards run after middleware. `auth-service` caches the same lookup because it is on every request; this one is on a payment, and the cache's invalidation rules are `tenant`'s to own (F-018) |
 
 **Not covered:** the panel pages the redirect lands on are F-093-f's — this
 route only names the paths and the codes. Nothing tells the panel a balance
 changed in real time: the outbox event has no consumer, and
 `panel-web/contract.shell.md` still says so.
+
+## Settling by webhook (built — F-104-b, ADR-0051)
+
+| Rule | Why |
+|---|---|
+| `POST /api/billing/deposit/webhook/:provider/:gatewayId`, public like the callback. `WebhookGatewayMiddleware` finds the gateway across tenants (provider must match) and scopes the **owner** (platform gateway: the `platform_owner` tenant); else a neutral **404**. Limited per gateway (`DEPOSIT_WEBHOOK`, 600/min) | a provider knows no panel host; the owner holds the secret |
+| `verifyWebhook(rawBody, headers, secret)` runs first (`rawBody: true` in `main.ts`). Bad signature or **no secret** = **401**, no payment read. `WebhookSecretSource` answers `null` until F-104-c: the door is closed. A driver declares `settlement`; a `webhook` one without `verifyWebhook` fails boot, and its browser return writes nothing (`inquire` `verified` shows success, else pending) | decisions 2, 5, 6 |
+| The event's code finds the payment by `(gateway column, gatewayTrackingCode)` on the cross-tenant pool (`id`, `tenantId` only); it settles in **that** tenant through `creditVerified` (`webhook_auto`) or `closeFailed`. Unknown code, ignored type, settled row = **200**, nothing changes | decisions 3, 4. A granted gateway's payment settles in the borrower |
 
 ## A gateway somebody else owns (built — F-096-b)
 

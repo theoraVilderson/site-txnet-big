@@ -145,7 +145,7 @@ numbers are `gateway-pricing.golden.json` (F-0611).
 
 | What | Where |
 |---|---|
-| Every route is under `/api/billing/*`, published by Traefik behind `strip-fake-headers,my-auth` — the required gate. **One exception:** `deposit/callback` is published with `strip-fake-headers` alone, on a higher-priority router with no `Host(...)`, because a bank redirects a browser to whichever tenant's panel domain it was minted on (F-092-j) | `dev-docker/docker-compose.main.yml` |
+| Every route is under `/api/billing/*`, published by Traefik behind `strip-fake-headers,my-auth` — the required gate. **Two exceptions:** `deposit/webhook/*` (F-104-b, ADR-0051, same shape) and `deposit/callback`, published with `strip-fake-headers` alone, on a higher-priority router with no `Host(...)`, because a bank redirects a browser to whichever tenant's panel domain it was minted on (F-092-j) | `dev-docker/docker-compose.main.yml` |
 | A request without `X-User-Id`, `X-Tenant-Id`, `X-Role-Id` and `X-Session-Id` is refused **401** — never served with no tenant, never with half a set. `X-User-Permissions` may be empty or absent: an empty list | `billing-service/src/app/request/identity.middleware.ts` |
 | The handler runs inside `runWithTenant({ id: X-Tenant-Id })`; `identityOf(req)` returns the rest | same file |
 | On the public callback there are no headers to read, so `CallbackTenantMiddleware` resolves the tenant from the **Host** against `tenant_domain` and opens the scope itself; an unknown or unproven host is a neutral **404** (ADR-0025). A middleware and not a guard — the rate limiter counts on the tenant in context | `billing-service/src/app/request/callback-tenant.middleware.ts` |

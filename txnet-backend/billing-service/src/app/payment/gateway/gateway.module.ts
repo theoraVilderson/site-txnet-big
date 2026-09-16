@@ -11,6 +11,7 @@ import { GatewayMerchant } from './gateway-merchant';
 import { GrantedVaultAccess } from './granted-vault-access';
 import { PaymentProviderRegistry } from './payment-provider.registry';
 import { tenantBoundVaultDb } from './tenant-bound-vault-db';
+import { WebhookSecretSource } from './webhook-secret';
 
 /**
  * Payment gateways (F-092-f): the driver registry and the merchant id each call
@@ -33,7 +34,8 @@ import { tenantBoundVaultDb } from './tenant-bound-vault-db';
     PaymentProviderRegistry,
     GrantedVaultAccess,
     GatewayMerchant,
+    WebhookSecretSource,
   ],
-  exports: [PaymentProviderRegistry, GatewayMerchant, GrantedVaultAccess],
+  exports: [PaymentProviderRegistry, GatewayMerchant, GrantedVaultAccess, WebhookSecretSource],
 })
 export class GatewayModule {}

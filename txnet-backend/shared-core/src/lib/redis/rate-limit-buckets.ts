@@ -115,6 +115,13 @@ export const RateLimitBucket = {
   DEPOSIT_CALLBACK: 'deposit:callback',
 
   /**
+   * A provider's signed posts to `billing-service` (F-104-b, ADR-0051), per
+   * **gateway** — public like the callback, with no caller to count. One
+   * gateway's whole event stream shares it, so it is sized above a retry burst.
+   */
+  DEPOSIT_WEBHOOK: 'deposit:webhook',
+
+  /**
    * The financial page's two read routes in `billing-service` (F-092-n), per
    * user. Cheaper per call than a quote — neither leaves the database — but the
    * page refetches on every filter change, so the budget is the panel's own

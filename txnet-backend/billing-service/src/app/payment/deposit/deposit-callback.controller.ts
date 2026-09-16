@@ -12,7 +12,7 @@ import { signResultToken } from './payment-result-token';
 /**
  * Where a bank sends the payer back (F-092-j).
  *
- * **The only public route in `billing-service`**, and a controller of its own
+ * **A public route in `billing-service`** (the other is the webhook, ADR-0051), and a controller of its own
  * for exactly that reason: everything in `DepositController` sits behind the
  * gate and reads its user from a header, and a public handler beside them is
  * one refactor away from someone assuming an identity that is not there. Here

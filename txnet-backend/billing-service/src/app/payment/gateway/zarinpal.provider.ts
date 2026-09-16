@@ -114,6 +114,8 @@ export class ZarinpalProvider implements PaymentProvider {
   readonly chargeDecimals = 0;
   /** A paid Zarinpal payment is not returned for want of a verify (checked by the user, 2026-09-14). */
   readonly verifyWindowSec = null;
+  /** The payer's browser brings the authority back, and we verify it (F-092-j). */
+  readonly settlement = 'return' as const;
 
   private readonly host: string;
   private readonly fetchImpl: typeof fetch;

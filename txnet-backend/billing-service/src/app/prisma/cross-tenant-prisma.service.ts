@@ -24,7 +24,9 @@ import { PrismaService } from './prisma.service';
  *
  * **Injecting it is the audit.** `grep -rn CrossTenantPrismaService` lists
  * every reader on this platform that can see across tenants, and in this
- * service the list is one: `CallbackTenantMiddleware`. Widen that list only
+ * service the list is `CallbackTenantMiddleware`, and — for the webhook door,
+ * whose read finds a gateway's owner and a payment's tenant (ADR-0051) —
+ * `WebhookGatewayMiddleware` and `DepositWebhookService`. Widen that list only
  * with a reason in a doc comment saying why the read cannot be scoped.
  */
 @Injectable()

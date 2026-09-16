@@ -60,6 +60,7 @@ type Calls = {
   credited: Array<{ amount: string; referenceId?: string; reasonType: string }>;
   verified: Array<{ authority: string; amountMinor: bigint; deadlineAt?: number }>;
   events: Array<Record<string, unknown>>;
+  inquired: number;
 };
 
 type Setup = {
@@ -72,11 +73,13 @@ type Setup = {
   credentialsFail?: Error;
   /** A payment of this tenant whose authority write was lost: found only by id with no code (F-092-ad). */
   lost?: ReturnType<typeof paymentRow>;
+  /** The driver settles by webhook (F-104-b); `inquire` answers this. */
+  webhook?: { inquiry: string } | { inquiryFails: Error };
 };
 
 function build(setup: Setup = {}) {
-  const { row = paymentRow(), verifyFails, lostTheFlip = false, credentialsFail, lost } = setup;
-  const calls: Calls = { updated: [], settled: [], credited: [], verified: [], events: [] };
+  const { row = paymentRow(), verifyFails, lostTheFlip = false, credentialsFail, lost, webhook } = setup;
+  const calls: Calls = { updated: [], settled: [], credited: [], verified: [], events: [], inquired: 0 };
 
   const tx = {
     $executeRaw: async () => 0,
@@ -108,6 +111,12 @@ function build(setup: Setup = {}) {
 
   const zarinpal = {
     name: 'zarinpal',
+    settlement: webhook ? 'webhook' : 'return',
+    inquire: async () => {
+      calls.inquired += 1;
+      if (webhook && 'inquiryFails' in webhook) throw webhook.inquiryFails;
+      return { status: webhook && 'inquiry' in webhook ? webhook.inquiry : 'verified' };
+    },
     chargeCurrency: 'IRR',
     chargeDecimals: 0,
     verify: async ({ authority, amountMinor, deadlineAt }: { authority: string; amountMinor: bigint; deadlineAt?: number }) => {
@@ -462,3 +471,24 @@ describe('DepositCallbackService.settle — an authority whose write was lost (F
   });
 });
 
+describe('DepositCallbackService.settle — a gateway that settles by webhook (F-104-b, ADR-0051 decision 5)', () => {
+  it('shows success when inquire finds the money, and credits nothing', async () => {
+    const { service, calls } = build({ webhook: { inquiry: 'verified' } });
+
+    expect(await settle(service)).toEqual({ kind: 'success', paymentId: PAYMENT, referenceId: null, alreadyPaid: false });
+    expect(calls.verified).toEqual([]);
+    expect(calls.updated).toEqual([]);
+    expect(calls.credited).toEqual([]);
+  });
+
+  it.each([
+    ['inquire says anything else', { inquiry: 'failed' }],
+    ['inquire cannot answer', { inquiryFails: new GatewayFailure('zarinpal', 'unavailable', null, 'timeout') }],
+  ])('shows pending when %s, and closes nothing', async (_label, webhook) => {
+    const { service, calls } = build({ webhook });
+
+    expect(await settle(service, { gatewayStatus: 'NOK' })).toEqual({ kind: 'verifying', paymentId: PAYMENT });
+    expect(calls.updated).toEqual([]);
+    expect(calls.settled).toEqual([]);
+  });
+});

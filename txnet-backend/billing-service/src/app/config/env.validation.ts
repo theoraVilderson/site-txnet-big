@@ -269,6 +269,8 @@ export const envSchema = z.object({
    * costs to make a second authority.
    */
   DEPOSIT_CALLBACK_RATE_LIMIT: rateLimit(30),
+  // Per gateway per minute, public (F-104-b): one gateway's whole event stream.
+  DEPOSIT_WEBHOOK_RATE_LIMIT: rateLimit(600),
   WALLET_HISTORY_RATE_LIMIT: rateLimit(180),
   WALLET_PAYMENTS_RATE_LIMIT: rateLimit(120),
   /** One payment, polled by the pending page every 10 s (F-093-l). */

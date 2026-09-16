@@ -27,7 +27,9 @@ import { LocaleService } from './app/locale/locale.service';
  * that had already been retired, and the first caller is what found it.
  */
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // `rawBody`: a webhook's signature is over the bytes sent (F-104-b, ADR-0051).
+  // JSON is still parsed for every route; the raw copy rides beside it.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   app.enableShutdownHooks();
 
   // The `shared-core` envelope, the same pair `auth-service` installs (F-094):

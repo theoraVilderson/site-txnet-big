@@ -816,6 +816,8 @@ services:
       - DEPOSIT_START_RATE_LIMIT=${DEPOSIT_START_RATE_LIMIT:-}
       # The callback's budget is per authority, not per user: it is public.
       - DEPOSIT_CALLBACK_RATE_LIMIT=${DEPOSIT_CALLBACK_RATE_LIMIT:-}
+      # Per gateway per minute: the webhook is public too (F-104-b).
+      - DEPOSIT_WEBHOOK_RATE_LIMIT=${DEPOSIT_WEBHOOK_RATE_LIMIT:-}
       - WALLET_HISTORY_RATE_LIMIT=${WALLET_HISTORY_RATE_LIMIT:-}
       - WALLET_PAYMENTS_RATE_LIMIT=${WALLET_PAYMENTS_RATE_LIMIT:-}
       - GIFT_REDEEM_RATE_LIMIT=${GIFT_REDEEM_RATE_LIMIT:-}
@@ -932,6 +934,24 @@ services:
       - "traefik.http.routers.billing-callback.tls.certresolver=myresolver"
       - "traefik.http.routers.billing-callback.middlewares=strip-fake-headers"
       - "traefik.http.routers.billing-callback.service=billing-service"
+
+      # The second public door (F-104-b, ADR-0051): a provider's server posts a
+      # signed result. Same shape as the callback — no `my-auth`, no `Host(...)`
+      # — because a provider calls one URL per gateway on whatever host it was
+      # given; the gateway id in the path is resolved by the service, and an
+      # unknown one is a neutral 404 there.
+      - "traefik.http.routers.billing-webhook-http.rule=PathPrefix(`/api/billing/deposit/webhook/`)"
+      - "traefik.http.routers.billing-webhook-http.entrypoints=web"
+      - "traefik.http.routers.billing-webhook-http.priority=200"
+      - "traefik.http.routers.billing-webhook-http.middlewares=strip-fake-headers"
+      - "traefik.http.routers.billing-webhook-http.service=billing-service"
+
+      - "traefik.http.routers.billing-webhook.rule=PathPrefix(`/api/billing/deposit/webhook/`)"
+      - "traefik.http.routers.billing-webhook.entrypoints=websecure"
+      - "traefik.http.routers.billing-webhook.priority=200"
+      - "traefik.http.routers.billing-webhook.tls.certresolver=myresolver"
+      - "traefik.http.routers.billing-webhook.middlewares=strip-fake-headers"
+      - "traefik.http.routers.billing-webhook.service=billing-service"
       - "txnet.logging=true"
     depends_on:
       main-db:
