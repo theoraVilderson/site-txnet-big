@@ -18,9 +18,7 @@ const rateLimit = (fallback: number) =>
  * `notification-service`'s environment, validated at boot (F-089, ADR-0036).
  *
  * `billing-service`'s schema with everything billing-specific left out: no
- * cross-tenant pool, because this service never resolves a tenant (the gate
- * forwards one, and `notification` has no tenant-scoped table yet), and no
- * vault. Each variable says why it is required or why an empty value is safe.
+ * vault, and no resolving a tenant (the gate forwards one). Each variable says why it is required or why an empty value is safe.
  */
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -34,6 +32,13 @@ export const envSchema = z.object({
    * `billing-service` gives. Required, with no fallback to `DATABASE_URL`.
    */
   DATABASE_APP_URL: z.string().min(1, 'DATABASE_APP_URL is required'),
+
+  /**
+   * The cross-tenant role (F-035-c): a platform-wide campaign cannot be
+   * written on the app pool (`prisma/cross-tenant-prisma.service.ts`).
+   * Required, as in `billing-service`.
+   */
+  DATABASE_CROSS_TENANT_URL: z.string().min(1, 'DATABASE_CROSS_TENANT_URL is required'),
 
   /** The panel's origin, for CORS with credentials; required in production (`main.ts`). */
   FRONTEND_ORIGIN: z.string().default(''),
@@ -68,6 +73,9 @@ export const envSchema = z.object({
   // until F-035-b pushes instead, so the read budget is a polling budget.
   NOTIFICATION_READ_RATE_LIMIT: rateLimit(300),
   NOTIFICATION_WRITE_RATE_LIMIT: rateLimit(120),
+  // Campaign management (F-035-c): an admin's form, not a poll.
+  NOTIFICATION_CAMPAIGN_READ_RATE_LIMIT: rateLimit(300),
+  NOTIFICATION_CAMPAIGN_WRITE_RATE_LIMIT: rateLimit(60),
 }).refine((env) => !(env.NODE_ENV === 'production' && !env.SERVICE_AUTH_TOKEN), {
   message: 'SERVICE_AUTH_TOKEN is required when NODE_ENV=production: without it no other unit can create a notification',
   path: ['SERVICE_AUTH_TOKEN'],

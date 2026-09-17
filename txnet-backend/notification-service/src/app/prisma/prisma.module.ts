@@ -3,13 +3,14 @@ import { ConfigService } from '@nestjs/config';
 import { withTenant } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../config/env.validation';
+import { CrossTenantPrismaService } from './cross-tenant-prisma.service';
 import { PrismaService } from './prisma.service';
 
 /**
- * One pool, extended with `withTenant` like every service's (F-094). No
- * `notification` model is tenant-scoped today, so the extension binds nothing
- * here yet; it is applied anyway so that `notification_campaign` (F-035-c)
- * is scoped the day it is queried, with no call site opting in.
+ * Two pools. `PrismaService`, extended with `withTenant` like every service's
+ * (F-094); no `notification` model is in `TENANT_SCOPED_MODELS`, so it binds
+ * nothing here. `CrossTenantPrismaService`, held by campaign management alone
+ * (F-035-c) for the reason that class gives, and not extended.
  */
 @Global()
 @Module({
@@ -24,7 +25,13 @@ import { PrismaService } from './prisma.service';
         return base.$extends(withTenant(base)) as unknown as PrismaService;
       },
     },
+    {
+      provide: CrossTenantPrismaService,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<EnvConfig, true>) =>
+        new CrossTenantPrismaService(config.get('DATABASE_CROSS_TENANT_URL', { infer: true })),
+    },
   ],
-  exports: [PrismaService],
+  exports: [PrismaService, CrossTenantPrismaService],
 })
 export class PrismaModule {}

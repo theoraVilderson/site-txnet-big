@@ -1003,6 +1003,9 @@ services:
       - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
       # The app role, never the owner (F-066-m-a).
       - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      # Campaign management only (F-035-c): a platform-wide campaign is
+      # refused on the app role by RLS. A policy, not a bypass.
+      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
       - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
       - REDIS_URL=${REDIS_URL}

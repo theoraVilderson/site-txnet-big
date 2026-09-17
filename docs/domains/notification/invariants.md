@@ -8,7 +8,7 @@ updated: 2026-09-17
 # Invariants — notification
 
 #1–#4 were extracted from schema comments and stay unenforced until their rows
-(F-035-c/d/e) build campaigns. #5–#6 are enforced since F-035-a.
+(F-035-d/e/f) send campaigns. #5–#6 are enforced since F-035-a, #7–#8 since F-035-c.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -18,8 +18,11 @@ updated: 2026-09-17
 | 4 | A recipient row moves `queued -> sent \| failed` and is not re-queued silently | planned — F-035-d | double delivery |
 | 5 | Every inbox read and write is filtered by the gate's `userId`, never an id from the request. `notification` has no `tenantId`, so no RLS stands behind this | `notification-inbox.service.ts` | a user reads or clears another's inbox |
 | 6 | `readAt` is set only on rows still `null` | `markRead`'s `where` | "first seen" is rewritten |
+| 7 | A caller who is not the platform owner reads, writes and lists only campaigns whose `tenantId` is their own. Campaigns are on the cross-tenant pool, so no RLS stands behind this | `campaign-admin.service.ts` | a reseller reads or edits another's, or the platform's, campaign |
+| 8 | `filterCriteria` is written only through the strict `audienceFilterSchema`, and changes only while `status = draft` | `campaign-admin.schema.ts`; `update`'s `where` | an ignored key widens an audience; recipients chosen by a filter that no longer exists |
 
 ## How to test
 
 `notification-service/src/app/notifications/notification-inbox.spec.ts`
-asserts #5 and #6 on the queries built.
+asserts #5 and #6 on the queries built;
+`notification-service/src/app/campaigns/campaign-admin.spec.ts` asserts #7 and #8.

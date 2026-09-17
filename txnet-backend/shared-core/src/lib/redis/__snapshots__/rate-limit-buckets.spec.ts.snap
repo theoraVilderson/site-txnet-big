@@ -48,5 +48,7 @@ exports[`RateLimitBucket > records the whole rate-limited surface in one place 1
   "WALLET_PAYMENT = wallet:payment",
   "NOTIFICATION_READ = notification:read",
   "NOTIFICATION_WRITE = notification:write",
+  "NOTIFICATION_CAMPAIGN_READ = notification:campaign:read",
+  "NOTIFICATION_CAMPAIGN_WRITE = notification:campaign:write",
 ]
 `;

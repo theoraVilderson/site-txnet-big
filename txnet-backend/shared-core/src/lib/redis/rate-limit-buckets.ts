@@ -209,6 +209,10 @@ export const RateLimitBucket = {
    */
   NOTIFICATION_READ: 'notification:read',
   NOTIFICATION_WRITE: 'notification:write',
+
+  /** Campaign management in `notification-service` (F-035-c), per admin. */
+  NOTIFICATION_CAMPAIGN_READ: 'notification:campaign:read',
+  NOTIFICATION_CAMPAIGN_WRITE: 'notification:campaign:write',
 } as const;
 
 export type RateLimitBucket =

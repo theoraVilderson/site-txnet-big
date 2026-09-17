@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { RateLimitGuard } from '@txnet-backend/shared-core';
 
+import { CampaignsModule } from './campaigns/campaigns.module';
 import { envConfigOptions } from './config/env.validation';
 import { HealthController } from './health.controller';
 import { LanguageMiddleware } from './locale/language.middleware';
@@ -22,6 +23,7 @@ const INTERNAL_ROUTES = 'internal/*';
     RedisModule,
     LocaleModule,
     NotificationsModule,
+    CampaignsModule,
   ],
   controllers: [HealthController],
   // Per-user limits, opted into per route with `@RateLimit` (F-092-r).

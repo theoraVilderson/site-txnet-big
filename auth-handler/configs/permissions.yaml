@@ -62,6 +62,9 @@ roles:
       # Catalog management (F-026-d, D-34). A tenant's Admin manages its own
       # catalog; the service keeps platform items for the platform owner.
       - catalog.manage
+      # Campaign drafts (F-035-c). A tenant's Admin drafts its own tenant's
+      # campaigns; the service keeps platform-wide ones for the platform owner.
+      - campaign.manage
   Support:
     permissions:
       - user.read
