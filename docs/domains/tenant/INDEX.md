@@ -7,6 +7,7 @@ keywords: [tenant, reseller, subscription renewal, renew a reseller, charge a re
 source:
   - txnet-backend/prisma/domains/tenant.prisma
   - txnet-backend/auth-service/src/app/tenant/**
+  - txnet-backend/tenant-service/**
   - txnet-backend/shared-core/src/lib/tenant/vault/**
   - txnet-backend/prisma/domains/migrations/20260909000000_credential_vault/**
   - txnet-backend/prisma/domains/migrations/20260909000100_credential_access_audit/**

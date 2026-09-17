@@ -4,7 +4,7 @@
 # so nothing here reaches it.
 # =============================================================================
 #
-# Every NestJS service (auth, bot, worker, gateway, billing, notification) runs straight from
+# Every NestJS service (auth, bot, worker, gateway, billing, notification, tenant) runs straight from
 # the host checkout: no image is built and no `npm ci` runs in a container.
 #
 #   - `node_modules` is the host's own (`txnet-backend/node_modules`, bind
@@ -77,6 +77,14 @@ services:
       # Repeated for billing's reason: the campaign SMS line is read from the
       # vault (F-018-a), and `!override` drops main.yml's KEK mount.
       - ./secrets/vault-kek:/run/secrets/vault-kek:ro
+
+  tenant-service:
+    <<: *host-node
+    build: !reset null
+    environment:
+      - APP_NAME=tenant-service
+    volumes: !override
+      - ../txnet-backend:/app:delegated
 
   billing-service:
     <<: *host-node

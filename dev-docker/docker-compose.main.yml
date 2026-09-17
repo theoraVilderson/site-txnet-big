@@ -1098,6 +1098,83 @@ services:
       locale-service:
         condition: service_healthy
 
+  tenant-service:
+    build:
+      context: ../txnet-backend
+      dockerfile: Dockerfile
+      target: ${ENVIRONMENT}
+      extra_hosts:
+        - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
+      args:
+        - APP_NAME=tenant-service
+        - DOCKER_REGISTRY=${DOCKER_REGISTRY}
+    container_name: ${STACK_NAME:-txnet}-tenant-service
+    restart: unless-stopped
+    volumes:
+      - ../txnet-backend:/app:delegated
+      - /app/node_modules
+    environment:
+      # Tenant administration, out of auth-service (F-018-t, ADR-0058).
+      # Validated at boot by `app/config/env.validation.ts`.
+      - PORT=3000
+      - NODE_ENV=${NODE_ENV:-development}
+      - GLOBAL_PREFIX=${TENANT_GLOBAL_PREFIX:-api}
+      - PUBLIC_HOST=tenant-service
+      - FRONTEND_ORIGIN=https://panel.${DOMAIN_NAME}
+      # `worker-service`'s renewal reaches `/api/internal/*` once F-018-v moves
+      # it here; Traefik does not route it. Refused empty in production.
+      - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
+      # The app role, never the owner (F-066-m-a).
+      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      # The platform owner administers every reseller: a policy, not a bypass (ADR-0053).
+      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+      - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
+      - REDIS_URL=${REDIS_URL}
+      - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      # Per-user limits; empty means the schema default (F-087).
+      - PLATFORM_RATE_LIMIT_FACTOR=${PLATFORM_RATE_LIMIT_FACTOR:-}
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.tenant-service.loadbalancer.server.port=3000"
+
+      # The required gate, as for billing: every route needs a signed-in caller.
+      # No business route answers yet (F-018-t); the routes move in from F-018-u.
+      - "traefik.http.routers.tenant-service-http.rule=Host(`api.${DOMAIN_NAME}`) && (PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`))"
+      - "traefik.http.routers.tenant-service-http.entrypoints=web"
+      - "traefik.http.routers.tenant-service-http.middlewares=strip-fake-headers,my-auth"
+      - "traefik.http.routers.tenant-service-http.service=tenant-service"
+
+      - "traefik.http.routers.tenant-service.rule=Host(`api.${DOMAIN_NAME}`) && (PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`))"
+      - "traefik.http.routers.tenant-service.entrypoints=websecure"
+      - "traefik.http.routers.tenant-service.tls.certresolver=myresolver"
+      - "traefik.http.routers.tenant-service.middlewares=strip-fake-headers,my-auth"
+      - "traefik.http.routers.tenant-service.service=tenant-service"
+
+      # The CORS preflight carries no Authorization header by specification;
+      # billing's labels say why it must skip `my-auth` and why nothing weakens.
+      - "traefik.http.routers.tenant-preflight-http.rule=Host(`api.${DOMAIN_NAME}`) && (PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`)) && Method(`OPTIONS`)"
+      - "traefik.http.routers.tenant-preflight-http.entrypoints=web"
+      - "traefik.http.routers.tenant-preflight-http.priority=150"
+      - "traefik.http.routers.tenant-preflight-http.middlewares=strip-fake-headers"
+      - "traefik.http.routers.tenant-preflight-http.service=tenant-service"
+
+      - "traefik.http.routers.tenant-preflight.rule=Host(`api.${DOMAIN_NAME}`) && (PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`)) && Method(`OPTIONS`)"
+      - "traefik.http.routers.tenant-preflight.entrypoints=websecure"
+      - "traefik.http.routers.tenant-preflight.priority=150"
+      - "traefik.http.routers.tenant-preflight.tls.certresolver=myresolver"
+      - "traefik.http.routers.tenant-preflight.middlewares=strip-fake-headers"
+      - "traefik.http.routers.tenant-preflight.service=tenant-service"
+      - "txnet.logging=true"
+    depends_on:
+      main-db:
+        condition: service_healthy
+      locale-service:
+        condition: service_healthy
+
   # ===========================================================================
   # Next.js PWA — Main Frontend Application
   # ===========================================================================
