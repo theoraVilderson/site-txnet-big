@@ -7,6 +7,7 @@ import { envConfigOptions } from './config/env.validation';
 import { HealthController } from './health.controller';
 import { LanguageMiddleware } from './locale/language.middleware';
 import { LocaleModule } from './locale/locale.module';
+import { PackagesModule } from './packages/packages.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 import { IdentityMiddleware } from './request/identity.middleware';
@@ -16,8 +17,8 @@ const INTERNAL_ROUTES = 'internal/*';
 
 /**
  * `tenant-service` (F-018-t, ADR-0058): tenant administration, out of
- * `auth-service`. No business routes yet — packages, subscription, status and
- * resellers move in with F-018-u … F-018-y, and inherit this wiring.
+ * `auth-service`. Packages arrived with F-018-u; subscription, status and
+ * resellers move in with F-018-v … F-018-y, and inherit this wiring.
  */
 @Module({
   imports: [
@@ -25,6 +26,7 @@ const INTERNAL_ROUTES = 'internal/*';
     PrismaModule,
     RedisModule,
     LocaleModule,
+    PackagesModule,
   ],
   controllers: [HealthController],
   providers: [

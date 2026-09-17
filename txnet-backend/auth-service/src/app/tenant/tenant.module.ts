@@ -9,8 +9,6 @@ import { TenantResolverService } from './tenant-resolver.service';
 import { TenantGuard } from './tenant.guard';
 import { TenantAdminController } from './admin/tenant-admin.controller';
 import { TenantAdminService } from './admin/tenant-admin.service';
-import { TenantPackageController } from './packages/tenant-package.controller';
-import { TenantPackageService } from './packages/tenant-package.service';
 import { TenantSubscriptionController } from './subscription/tenant-subscription.controller';
 import { TenantSubscriptionService } from './subscription/tenant-subscription.service';
 import { TenantStatusController } from './status/tenant-status.controller';
@@ -21,7 +19,8 @@ import { TenantRenewalService } from './renewal/tenant-renewal.service';
 
 /**
  * `tenant`'s first module. Its controllers are the platform owner's reseller
- * administration (F-018-c) the packages it sells them (F-018-d) and which one each reseller is on (F-018-e); the resolver is consumed by the edge middleware
+ * administration (F-018-c) and which package each reseller is on (F-018-e) — the
+ * packages themselves are `tenant-service`'s since F-018-u (ADR-0058); the resolver is consumed by the edge middleware
  * and, from F-061-b, by `register`.
  *
  * `TenantGuard` is global rather than a route decorator: a request that
@@ -43,10 +42,9 @@ import { TenantRenewalService } from './renewal/tenant-renewal.service';
  * here.
  */
 @Module({
-  controllers: [TenantAdminController, TenantPackageController, TenantSubscriptionController, TenantStatusController, TenantRenewalInternalController],
+  controllers: [TenantAdminController, TenantSubscriptionController, TenantStatusController, TenantRenewalInternalController],
   providers: [
     TenantAdminService,
-    TenantPackageService,
     TenantSubscriptionService,
     TenantStatusService,
     TenantStatusListener,

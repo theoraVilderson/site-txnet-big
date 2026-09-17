@@ -27,6 +27,14 @@ roles:
   SuperAdmin:
     permissions:
       - *
+      # Tenant administration — resellers, the packages sold to them, their
+      # subscription and status (F-018, ADR-0058). Listed although `*` already
+      # allows it, because it is the one permission **no named role holds**:
+      # the platform owner's own staff reach reseller administration as
+      # SuperAdmin and nobody else (user, 2026-09-17). `TenantPackageService`
+      # and its siblings still refuse any tenant but the platform owner's, so
+      # this line is the outer door, never the boundary.
+      - tenant.manage
   Admin:
     permissions:
       - user.read

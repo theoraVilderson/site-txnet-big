@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AdminAction, AuditTargetType, Prisma, TenantBillingModel, TenantStatus, TenantType } from '@prisma/client';
-import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
-import { PrismaService } from '../../prisma/prisma.service';
-import { addPackageEntitlements, lockPackage, lockSubscribers, replacePackageEntitlements } from '../subscription/package-entitlements';
+import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { addPackageEntitlements, lockPackage, lockSubscribers, replacePackageEntitlements } from './package-entitlements';
 import type { CreatePackageInput, ListPackagesInput, UpdatePackageInput } from './tenant-package.schema';
 
 /**

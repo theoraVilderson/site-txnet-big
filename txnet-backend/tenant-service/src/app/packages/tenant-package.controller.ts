@@ -17,10 +17,11 @@ import {
   UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
-import { AuthGuard } from '../../auth/auth.guard';
-import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
-import { PermissionsGuard } from '../../impersonation/guards/permissions.guard';
-import { TENANT_MANAGE } from '../admin/tenant-admin.controller';
+import type { Request } from 'express';
+
+import { identityOf } from '../request/identity.middleware';
+import { TenantPermissionGuard } from '../request/tenant-permission.guard';
+import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import {
   CreatePackageInput,
   ListPackagesInput,
@@ -47,23 +48,25 @@ const STATUS: Record<TenantPackageRejection, 403 | 404 | 409 | 422> = {
   package_price_in_use: 409,
 };
 
-type ClaimsRequest = { user: { sub: string; tenantId: string } };
-
 /**
  * The packages the platform sells resellers (F-018-d):
- * `POST|GET /api/auth/tenant-packages`, `GET|PATCH /api/auth/tenant-packages/:id`,
- * and `POST /api/auth/tenant-packages/:id/apply` (F-018-o).
+ * `POST|GET /api/tenant-packages`, `GET|PATCH /api/tenant-packages/:id`,
+ * and `POST /api/tenant-packages/:id/apply` (F-018-o).
  * No DELETE — a package is deactivated with `PATCH {isActive: false}`.
+ *
+ * Moved out of `auth-service` with F-018-u (ADR-0058), behaviour unchanged:
+ * the path lost its `/auth` prefix, and the caller is whoever `forward-auth`
+ * proved, not a token this service reads.
  */
-@Controller('auth/tenant-packages')
-@UseGuards(AuthGuard, new PermissionsGuard([TENANT_MANAGE]))
+@Controller('tenant-packages')
+@UseGuards(TenantPermissionGuard)
 export class TenantPackageController {
   constructor(private readonly packages: TenantPackageService) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(
-    @Req() req: ClaimsRequest,
+    @Req() req: Request,
     @Body(new ZodValidationPipe(createPackageSchema)) body: CreatePackageInput,
     @Ip() ip: string,
   ): Promise<PackageView> {
@@ -72,7 +75,7 @@ export class TenantPackageController {
 
   @Get()
   async list(
-    @Req() req: ClaimsRequest,
+    @Req() req: Request,
     @Query(new ZodValidationPipe(listPackagesSchema)) query: ListPackagesInput,
     @Ip() ip: string,
   ): Promise<PackageView[]> {
@@ -80,20 +83,20 @@ export class TenantPackageController {
   }
 
   @Get(':id')
-  async read(@Req() req: ClaimsRequest, @Param('id', new ParseUUIDPipe()) id: string, @Ip() ip: string): Promise<PackageView> {
+  async read(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string, @Ip() ip: string): Promise<PackageView> {
     return this.refusing(() => this.packages.read(actorOf(req, ip), id));
   }
 
   /** Forces the package's feature list onto every current subscriber now, removals included (F-018-o). */
   @Post(':id/apply')
   @HttpCode(HttpStatus.OK)
-  async apply(@Req() req: ClaimsRequest, @Param('id', new ParseUUIDPipe()) id: string, @Ip() ip: string): Promise<PackageApplyView> {
+  async apply(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string, @Ip() ip: string): Promise<PackageApplyView> {
     return this.refusing(() => this.packages.apply(actorOf(req, ip), id));
   }
 
   @Patch(':id')
   async update(
-    @Req() req: ClaimsRequest,
+    @Req() req: Request,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(updatePackageSchema)) body: UpdatePackageInput,
     @Ip() ip: string,
@@ -121,6 +124,7 @@ export class TenantPackageController {
   }
 }
 
-function actorOf(req: ClaimsRequest, ip: string): TenantPackageActor {
-  return { adminId: req.user.sub, tenantId: req.user.tenantId, ip };
+function actorOf(req: Request, ip: string): TenantPackageActor {
+  const identity = identityOf(req);
+  return { adminId: identity.userId, tenantId: identity.tenantId, ip };
 }
