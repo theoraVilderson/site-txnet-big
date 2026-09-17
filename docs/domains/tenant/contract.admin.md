@@ -2,14 +2,14 @@
 id: tenant
 layer: domain
 status: active
-version: 11
+version: 12
 updated: 2026-09-17
 ---
 
 # Contract — tenant / reseller administration
 
 A topic file of `contract.md` (§10). The platform owner creates, lists and
-reads resellers (F-018-c). Before it, a tenant existed only through
+reads resellers (F-018-c), and the packages it sells them (F-018-d). Before it, a tenant existed only through
 `prisma/seed.js`. What a reseller does to itself is not here (F-018-h..l); a
 reseller's status changes are F-018-f, its package and period F-018-e.
 
@@ -55,10 +55,38 @@ password.containsProfileData`.
 | The password is the platform owner's choice, checked by `strongPasswordSchema`, stored as argon2id and never echoed — not in the answer, not in the audit row | a plaintext in a response is what invariant 8's spirit refuses |
 | A slug or host already present is `slug_taken` before the transaction; a race past that check meets the unique index (`P2002`) and gets the same refusal | one reseller per slug; a double submit cannot create two |
 
+## Packages the platform sells (F-018-d)
+
+Code: `auth-service/src/app/tenant/packages/`. The same guard and owner check as
+the routes above. `tenant_feature_package` has no `tenantId` and no RLS, so the
+app pool serves it; the audit row carries the platform owner's tenant.
+
+| Route | Body / query | Answer |
+|---|---|---|
+| `POST /api/auth/tenant-packages` | `{name, monthlyPrice?, yearlyPrice?, includedFeatureKeys}`, `.strict()` | `201` a package view |
+| `GET /api/auth/tenant-packages` | `active` `true`/`false` (absent: all) | packages by name |
+| `GET /api/auth/tenant-packages/:id` | — | one package view |
+| `PATCH /api/auth/tenant-packages/:id` | any of the create fields, a price may be `null`, `isActive` | the package view after |
+
+A package view: `id, name, monthlyPrice, yearlyPrice` (decimal strings or
+`null`, C-02), `includedFeatureKeys, isActive`. Refusals: `not_platform_owner`
+403, `package_not_found` 404, `package_name_taken` 409, `package_unpriced` 422.
+
+| Rule | Why |
+|---|---|
+| A price is a base-currency decimal string, at most two places, positive; a number is refused | C-02; `DECIMAL(18,2)`; a free package is not a price |
+| At least one of `monthlyPrice` / `yearlyPrice`: the schema on create, the service on an edit that clears one, and CHECK `tenant_feature_package_priced` | a package sold for one period only is allowed; one sold for none is not |
+| `includedFeatureKeys` are members of `TENANT_FEATURE_KEYS` (shared-core), none repeated | the same set F-018-e turns into entitlements (C-09) |
+| `usageIncludedJson` / `overageRuleJson` are not accepted and stay `{}` | D-41: no metering |
+| `name` is unique; a taken name is `package_name_taken` before the transaction and on the unique index (`P2002`) | the platform owner picks a package by name |
+| **No delete.** `isActive: false` deactivates and writes nothing else; `true` offers it again | a deactivated package keeps its current subscribers until their next renewal (F-019-c) |
+| Each write and its audit row (`tenant_package_create` / `tenant_package_update`, target `tenant_feature_package`) are one transaction; an update audits only the fields it changed, before and after | the trail says who re-priced or withdrew a package |
+
 ## Not built here
 
 - The panel screen: F-018-k.
-- Staff, branding, custom domains, status, package: F-018-j / h / i / f / e.
+- Staff, branding, custom domains, status, a tenant's package: F-018-j / h / i / f / e.
+- A reseller seeing the packages it can buy: F-018-e.
 - A platform-staff `X-Tenant-Id` (open question 2026-09-09): the platform
   owner reaches another tenant's rows through this service's cross-tenant
   reads, not by switching its session's tenant.

@@ -64,6 +64,9 @@ enum AdminAction {
   tenant_billing_adjust
   // F-018-c. The platform owner creates a reseller.
   tenant_create
+  // F-018-d. A package the platform sells resellers. Never deleted; deactivation is an update.
+  tenant_package_create
+  tenant_package_update
 
   @@schema("audit")
 }
@@ -96,6 +99,8 @@ enum AuditTargetType {
   tenant_billing_wallet
   // F-018-c. A tenant itself.
   tenant
+  // F-018-d. A package the platform sells resellers.
+  tenant_feature_package
 
   @@schema("audit")
 }

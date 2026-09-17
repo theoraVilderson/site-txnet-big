@@ -198,11 +198,17 @@ model TenantDomain {
 /// ۴. پلن‌هایی که شما (پلتفرم) به Reseller می‌فروشید.
 model TenantFeaturePackage {
   id                  String   @id @default(uuid()) @db.Uuid
-  name                String // «Starter»، «Growth»، «Enterprise»
-  monthlyPrice        Decimal? @db.Decimal(18, 2) // ارز پایه؛ null یعنی خالص Pay-as-you-go
-  includedFeatureKeys Json // Array — مثلاً ["spin_wheel","coupon_engine"]
-  usageIncludedJson   Json // سقف رایگان، مثلاً {"sms_sent": 1000, "active_configs": 500}
-  overageRuleJson     Json // نرخ هر واحد اضافه بعد از سقف رایگان
+  name                String   @unique // «Starter»، «Growth»، «Enterprise»
+  // F-018-d: base currency (C-02). Either may be null — a package sold for one
+  // period only — but not both, and neither is zero (CHECKs in migration
+  // 20260917001200_tenant_feature_package).
+  monthlyPrice        Decimal? @db.Decimal(18, 2)
+  yearlyPrice         Decimal? @db.Decimal(18, 2)
+  includedFeatureKeys Json // Array of TENANT_FEATURE_KEYS (shared-core)
+  // D-41: no metering, so the two below stay `{}` and unused.
+  usageIncludedJson   Json     @default("{}")
+  overageRuleJson     Json     @default("{}")
+  // Deactivated: not offered any more; its subscribers keep it until renewal.
   isActive            Boolean  @default(true)
 
   @@map("tenant_feature_package")

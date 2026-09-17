@@ -24,6 +24,7 @@ export * from './lib/tenant/vault/credential-vault.service';
 export * from './lib/tenant/vault/credential-env';
 export * from './lib/tenant/vault/sms-line-credentials';
 export * from './lib/tenant/billing/tenant-billing-ledger';
+export * from './lib/tenant/feature-keys';
 export * from './lib/sms/sms-provider.service';
 export * from './lib/mail/mail-provider.service';
 export * from './lib/envelope/response';
