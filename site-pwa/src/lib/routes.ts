@@ -14,6 +14,8 @@ export const AUTH_FORGOT_PASSWORD = "/auth/forgot-password";
 export const AUTH_REGISTER = "/auth/register";
 /** Adding another account to the switch group (F-0205 / F-0209). */
 export const PANEL_ACCOUNTS_ADD = "/accounts/add";
+/** The user's own settings; first section: their email address (F-035-j). */
+export const PANEL_SETTINGS = "/settings";
 /**
  * The financial history page (F-093-d) — the wallet ledger and the top-up
  * attempts, as two lists. The sidebar's `financial-history` entry and the

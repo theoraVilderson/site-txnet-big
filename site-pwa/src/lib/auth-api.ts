@@ -230,6 +230,8 @@ export type Me = {
   role: { id: string; name: string };
   permissions: string[];
   tenant: { id: string; type: "platform_owner" | "reseller" };
+  /** Always verified when present: only *confirm email* writes it (F-035-g). */
+  email: string | null;
   isImpersonated: boolean;
   impersonatedBy?: string;
 };
@@ -334,6 +336,9 @@ export const authApi = {
   async listAccounts() { return request<SwitchGroup>("/auth/accounts", { method: "GET" }); },
   /** The caller's own identity and authority (F-097). */
   async me() { return request<Me>("/auth/me", { method: "GET" }); },
+  /** Mails a code to `email` (F-035-g); nothing is written until `confirmEmail`. */
+  async requestEmailCode(email: string) { return request<OtpQueued>("/auth/me/email", { method: "POST", body: JSON.stringify({ email }) }); },
+  async confirmEmail(email: string, otpCode: string) { return request<{ email: string; emailVerifiedAt: string }>("/auth/me/email/verify", { method: "POST", body: JSON.stringify({ email, otpCode }) }); },
   /** The one refresh every client and the socket run (see `credentialRefresh`). */
   refreshCredential,
   /** Resolves once no credential is being established; a call with none waits on it. */

@@ -94,6 +94,7 @@ const OWNER: Me = {
   role: { id: "r1", name: "SuperAdmin" },
   permissions: ["*"],
   tenant: { id: "t-owner", type: "platform_owner" },
+  email: null,
   isImpersonated: false,
 };
 const RESELLER: Me = { ...OWNER, role: { id: "r2", name: "Admin" }, permissions: ["catalog.manage"], tenant: { id: "t-res", type: "reseller" } };

@@ -1308,5 +1308,25 @@
     "copied": "Copied",
     "productDetail": "Product details",
     "translationsPending": "{{count}} translations awaiting review"
+  },
+  "settings": {
+    "title": "Settings",
+    "email": {
+      "title": "Email address",
+      "subtitle": "Add an address to your account. It is saved only after you enter the code we email to it.",
+      "address": "Email address",
+      "none": "No email address yet.",
+      "verified": "Verified",
+      "replace": "To use a different address, confirm the new one below.",
+      "sendCode": "Send the code",
+      "codeHint": "Enter the six-digit code sent to {{email}}.",
+      "confirm": "Confirm",
+      "resend": "Send it again",
+      "changeAddress": "Use a different address",
+      "sending": "Sending the email…",
+      "sent": "Email sent",
+      "failed": "We could not send the email. Try again in a moment.",
+      "saved": "Your email address is saved."
+    }
   }
 }

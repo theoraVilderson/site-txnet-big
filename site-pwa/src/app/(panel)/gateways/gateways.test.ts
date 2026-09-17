@@ -37,6 +37,7 @@ const OWNER_ME: Me = {
   role: { id: "r1", name: "SuperAdmin" },
   permissions: ["*"],
   tenant: { id: "t-owner", type: "platform_owner" },
+  email: null,
   isImpersonated: false,
 };
 const RESELLER_ME: Me = { ...OWNER_ME, role: { id: "r2", name: "Admin" }, permissions: ["gateway.manage", "settlement.manage"], tenant: { id: "t-res", type: "reseller" } };

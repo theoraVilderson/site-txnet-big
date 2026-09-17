@@ -92,6 +92,19 @@ answer with `deliveryId`, `channel` and `channelToken` (`auth-api` v14).
 `_hooks/useOtpDelivery.ts` turns those three into one state the OTP screen
 renders, and it is the only thing in this app that subscribes an `otp:` channel.
 
+**One signed-in screen uses it too (F-035-j).** `/settings` adds an email
+address through `POST /auth/me/email`, whose 202 carries the same three handles
+(`identity` v14), and `settings/_components/EmailSection.tsx` feeds them to the
+same hook rather than holding a second socket: the delivery is watched for the
+life of one code, the page's session socket (F-070-c) plays no part, and every
+rule below holds unchanged. Two things differ, both on the screen's side. A
+failed send is one line whatever the `failureKey` — the address is the user's
+own and "try again" is all there is to say. And **the code confirms the address
+it was mailed to**: the field locks while a code is out, confirm sends that
+address and not the field, and "use a different address" drops the delivery.
+Only confirm writes `user.email`, so the address shown as the account's is
+`GET /auth/me`'s after a reload, never the one typed.
+
 The socket it opens carries **no credential**: those routes have no session by
 definition, so the channel is authorized by the token the 202 handed over and
 not by who is asking (ADR-0031). It is opened when the step is entered and

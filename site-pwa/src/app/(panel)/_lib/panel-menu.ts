@@ -14,7 +14,7 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME, PANEL_MANUAL_PAYMENTS } from "@/lib/routes";
+import { PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME, PANEL_MANUAL_PAYMENTS, PANEL_SETTINGS } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 /** The shell's menu labels as generated constants (C-06). */
@@ -105,7 +105,7 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
   },
   { id: "tutorials", label: M.tutorials, icon: BookOpen, href: null },
   { id: "support", label: M.support, icon: Headphones, href: null },
-  { id: "settings", label: M.settings, icon: Settings, href: null },
+  { id: "settings", label: M.settings, icon: Settings, href: PANEL_SETTINGS },
 ];
 
 export function isMenuGroup<T extends PanelMenuEntry | VisibleMenuEntry>(
