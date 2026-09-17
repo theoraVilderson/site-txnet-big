@@ -202,6 +202,39 @@ describe("visibleMenu, by tenant type", () => {
   });
 });
 
+describe("visibleMenu, for the tenant's owner", () => {
+  // F-019-f. The billing service admits a reseller's owner without the key, so
+  // the menu has to as well, or the owner reaches the page only by URL.
+  const billing: PanelMenuEntry = {
+    id: "billing",
+    label: "billing",
+    icon: Wallet,
+    href: "/financial/billing",
+    requires: ["tenant_billing.topup"],
+    tenantTypes: ["reseller"],
+    ownerSuffices: true,
+  };
+  const other: PanelMenuEntry = { ...billing, id: "other", ownerSuffices: undefined };
+
+  it("lets the owner stand in for `requires` on an entry that says so, and only there", () => {
+    expect(visibleMenu([billing, other], [], "reseller", true).map((e) => e.id)).toEqual(["billing"]);
+    expect(visibleMenu([billing, other], [], "reseller", false)).toEqual([]);
+    expect(visibleMenu([billing, other], [], "reseller")).toEqual([]);
+  });
+
+  it("does not let the owner past `tenantTypes`", () => {
+    expect(visibleMenu([billing], [], "platform_owner", true)).toEqual([]);
+    expect(visibleMenu([billing], [], null, true)).toEqual([]);
+  });
+
+  it("shows PANEL_MENU's billing entry to a reseller's owner holding nothing", () => {
+    const hrefs = visibleMenu(PANEL_MENU, [], "reseller", true).flatMap((e) =>
+      "children" in e ? e.children.map((c) => c.href) : [e.href],
+    );
+    expect(hrefs).toContain("/financial/billing");
+  });
+});
+
 describe("activeHref", () => {
   const hrefs = ["/", "/financial", "/financial/deposit", "/accounts/add"];
 

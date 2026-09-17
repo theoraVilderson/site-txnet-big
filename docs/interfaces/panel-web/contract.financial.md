@@ -105,9 +105,8 @@ It is not the user's wallet and shares no list with the two tabs above.
 - Reason labels live in `common.tenantBilling.reason`, the tenant ledger's own
   set; an unknown value renders as itself.
 - **The menu decides nothing about access.** The entry needs
-  `tenant_billing.topup` *and* a reseller (`contract.shell.md` rule 2); the
-  route also admits the reseller's owner without that key, who then reaches the
-  page by URL. A refusal is rendered as rule 7's failed read.
+  `tenant_billing.topup` — or being the tenant's owner, as the route admits
+  (F-019-f) — *and* a reseller (`contract.shell.md` rule 2). A refusal is rendered as rule 7's failed read.
 - **Top up** (beside the balance, only once the read landed) opens
   `/financial/billing/topup` (F-019-e).
 
@@ -133,7 +132,7 @@ half of `POST /api/billing/tenant-wallet/topup` and its `/gateways` list
    platform is the merchant (ADR-0056's accepted cost). F-093-f's pages show
    the outcome there; nothing here listens for it.
 5. The menu entry is the billing page's: `activeHref`'s longest prefix lights
-   it, and F-019-f's owner gap applies here unchanged.
+   it, and shows it to the reseller's owner as well (F-019-f).
 
 ## Not covered
 

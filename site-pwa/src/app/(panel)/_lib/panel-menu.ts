@@ -47,6 +47,13 @@ type PermissionGated = {
    * `me.tenant.type`; while that is unknown, such an entry is hidden.
    */
   tenantTypes?: readonly TenantType[];
+  /**
+   * The tenant's owner stands in for `requires` (F-019-f) — for an entry whose
+   * service admits the owner without the permission, so the menu does not hide
+   * a page the owner may open. `tenantTypes` still applies. Compared against
+   * `me.tenant.isOwner`.
+   */
+  ownerSuffices?: boolean;
 };
 
 export type TenantType = "platform_owner" | "reseller";
@@ -114,7 +121,7 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
       // F-026-f. Like coupons: the permission hides it, billing scopes what it lists (D-34).
       { id: "catalog", label: M.catalog, icon: Package, href: PANEL_CATALOG, requires: ["catalog.manage"] },
       // F-019-d. A reseller's own balance with the platform; the service admits
-      // its owner too, who may hold no role that grants the permission.
+      // its owner too, who may hold no role that grants the permission (F-019-f).
       {
         id: "tenant-billing",
         label: M.tenantBilling,
@@ -122,6 +129,7 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
         href: PANEL_TENANT_BILLING,
         requires: ["tenant_billing.topup"],
         tenantTypes: ["reseller"],
+        ownerSuffices: true,
       },
     ],
   },
@@ -150,15 +158,20 @@ export function isMenuGroup<T extends PanelMenuEntry | VisibleMenuEntry>(
  * that names `tenantTypes` is hidden — the safe direction, as for `held`. `*`
  * does not stand in for it: a SuperAdmin of the platform owner has no reseller
  * wallet either.
+ *
+ * `isOwner` is `me.tenant.isOwner`, and counts only on an entry marked
+ * `ownerSuffices`. Absent means not the owner — the safe direction again.
  */
 export function visibleMenu(
   entries: readonly PanelMenuEntry[],
   held: readonly string[],
   tenantType: TenantType | null = null,
+  isOwner = false,
 ): VisibleMenuEntry[] {
   const permitted = (e: PermissionGated) =>
     (!e.tenantTypes || (tenantType !== null && e.tenantTypes.includes(tenantType))) &&
-    (held.includes(ALL_PERMISSIONS) ||
+    ((isOwner && e.ownerSuffices === true) ||
+      held.includes(ALL_PERMISSIONS) ||
       (e.requires ?? []).every((key) => held.includes(key)));
   const hasPage = (l: PanelMenuLink): l is VisibleMenuLink => l.href !== null;
   const out: VisibleMenuEntry[] = [];

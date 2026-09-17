@@ -60,7 +60,11 @@ export function PanelSidebar() {
   const { me } = usePanelSession();
   const held = me?.permissions;
   const tenantType = me?.tenant.type ?? null;
-  const menu = useMemo(() => visibleMenu(PANEL_MENU, held ?? [], tenantType), [held, tenantType]);
+  const isOwner = me?.tenant.isOwner ?? false;
+  const menu = useMemo(
+    () => visibleMenu(PANEL_MENU, held ?? [], tenantType, isOwner),
+    [held, tenantType, isOwner],
+  );
   const active = activeHref(menuHrefs(menu), pathname);
 
   // A navigation closes the drawer, and opens the group the new page is in —

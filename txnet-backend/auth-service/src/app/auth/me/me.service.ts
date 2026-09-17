@@ -12,7 +12,12 @@ export type Me = {
   role: { id: string; name: string };
   /** Exactly the list in the access token — see the note on `describe`. */
   permissions: string[];
-  tenant: { id: string; type: TenantType };
+  /**
+   * `isOwner`: the caller is the tenant's `ownerUserId` (F-019-f). A service
+   * that admits a tenant's owner without a permission (a reseller's billing,
+   * `admitResellerBilling`) needs a surface that can show it the same page.
+   */
+  tenant: { id: string; type: TenantType; isOwner: boolean };
   isImpersonated: boolean;
   impersonatedBy?: string;
 };
@@ -62,7 +67,7 @@ export class MeService {
         email: true,
         status: true,
         deletedAt: true,
-        tenant: { select: { id: true, tenantType: true } },
+        tenant: { select: { id: true, tenantType: true, ownerUserId: true } },
       },
     });
 
@@ -78,7 +83,11 @@ export class MeService {
       // Copied, so the caller cannot mutate the verified claims object the
       // guard left on the request.
       permissions: [...claims.permissions],
-      tenant: { id: user.tenant.id, type: user.tenant.tenantType },
+      tenant: {
+        id: user.tenant.id,
+        type: user.tenant.tenantType,
+        isOwner: user.tenant.ownerUserId === user.id,
+      },
       isImpersonated: claims.isImpersonated === true,
     };
     if (claims.impersonatedBy) me.impersonatedBy = claims.impersonatedBy;

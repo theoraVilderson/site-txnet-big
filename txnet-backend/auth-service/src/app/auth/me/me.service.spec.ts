@@ -41,7 +41,7 @@ function harness() {
         status: 'active',
         deletedAt: null,
         tenantId: 'tenant-1',
-        tenant: { id: 'tenant-1', tenantType: 'reseller' },
+        tenant: { id: 'tenant-1', tenantType: 'reseller', ownerUserId: 'user-9' },
         // Present on purpose, and holding something else entirely: nothing in
         // the answer may come from here.
         role: {
@@ -93,7 +93,19 @@ describe('MeService.describe', () => {
 
     expect(res.ok).toBe(true);
     if (!res.ok) return;
-    expect(res.data.tenant).toEqual({ id: 'tenant-1', type: 'reseller' });
+    expect(res.data.tenant).toEqual({ id: 'tenant-1', type: 'reseller', isOwner: false });
+  });
+
+  it("says whether the caller is its tenant's owner, who may hold no role that shows the owner's pages (F-019-f)", async () => {
+    const { prisma, service } = harness();
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user-1', fullName: 'Sara', status: 'active', deletedAt: null, tenantId: 'tenant-1',
+      tenant: { id: 'tenant-1', tenantType: 'reseller', ownerUserId: 'user-1' },
+    });
+
+    const res = await service.describe(CLAIMS);
+
+    expect(res.ok && res.data.tenant.isOwner).toBe(true);
   });
 
   it('says nothing about a user the row no longer allows', async () => {

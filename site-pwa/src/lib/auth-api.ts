@@ -229,7 +229,8 @@ export type Me = {
   fullName: string;
   role: { id: string; name: string };
   permissions: string[];
-  tenant: { id: string; type: "platform_owner" | "reseller" };
+  /** `isOwner`: the caller is the tenant's owner (F-019-f). */
+  tenant: { id: string; type: "platform_owner" | "reseller"; isOwner: boolean };
   /** Always verified when present: only *confirm email* writes it (F-035-g). */
   email: string | null;
   isImpersonated: boolean;

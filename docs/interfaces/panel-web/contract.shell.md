@@ -28,7 +28,8 @@ under `(panel)` renders in: `_components/PanelShell.tsx` = `PanelSidebar` +
    gated entry. An operator-only page also checks `me.tenant.type` — the key
    alone is not the boundary. An entry only one kind of tenant has names
    `tenantTypes` (F-019-d: `tenant-billing`, reseller only); `*` does not stand
-   in for it, and no `me` hides it. Never a role word in a route (D-28, F-098).
+   in for it, and no `me` hides it. `ownerSuffices` lets `me.tenant.isOwner` stand in for
+   `requires`, never for `tenantTypes` (F-019-f: `tenant-billing`). Never a role word in a route (D-28, F-098).
 3. **One entry is highlighted:** the longest href that is the path or a
    whole-segment prefix of it (`activeHref`). A detail page under
    `/financial/…` lights its parent without a second rule.
