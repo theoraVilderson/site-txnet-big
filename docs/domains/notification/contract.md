@@ -92,8 +92,8 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
   and the matching counter moves in that transaction; an already-moved row is
   `changed: false` and counts nothing. `sending -> completed` once `fannedOutAt`
   is set and no row is `queued` — at once for an empty audience.
-- The job is registered, not scheduled: nothing fans out until an operator sets
-  its `bot_schedule`.
+- The seed schedules the job `always_on` (user, 2026-09-17); an install that
+  skips the seed fans out nothing until an operator sets its `bot_schedule`.
 
 ## Emits (events)
 

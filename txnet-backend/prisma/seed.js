@@ -150,6 +150,10 @@ const SEEDED_SCHEDULES = [
   // payment writes — a late credit, a reversal — is never published, and the
   // payer is never told. Every tick, so a notice waits a minute at most.
   { key: 'outbox_relay', scheduleType: 'always_on', cronExpression: null },
+  // Campaign fan-out (F-035-d, decided 2026-09-17): unscheduled, a started send
+  // stays `sending` with no recipients and no error. Every tick; an idle one is
+  // one query, and a run writes at most FAN_OUT_BUDGET rows.
+  { key: 'notification_campaign_fan_out', scheduleType: 'always_on', cronExpression: null },
 ];
 
 async function seedWorkerSchedules(adminId) {

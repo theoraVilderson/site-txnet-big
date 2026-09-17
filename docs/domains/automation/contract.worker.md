@@ -102,7 +102,7 @@ default for a sweep that writes, and the first thing to check when one appears
 to do nothing. **Three exceptions are seeded** by `prisma/seed.js`
 (`SEEDED_SCHEDULES`): `fx_rate_refresh`, and — decided by the user 2026-09-14
 — `deposit_pending_expiry` (`always_on`) and `deposit_reconciliation` (`*/5`); since
-F-092-ac also `deposit_verify_retry` (`always_on`).
+F-092-ac also `deposit_verify_retry` (`always_on`), since F-035-d `notification_campaign_fan_out` (`always_on`).
 Left unscheduled, a payment the bank took but never called back about is never
 credited, which is the manual top-up legacy needed. The seed never touches a
 job that already has a schedule.
