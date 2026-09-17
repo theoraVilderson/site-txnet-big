@@ -183,3 +183,92 @@ it('refuses to read outside a tenantTransaction', async () => {
     app.$transaction((tx) => validator.validate(tx, { ...topUp(['ALPHA10']), userId: USER })),
   ).rejects.toBeInstanceOf(TenantContextMissing);
 });
+
+/**
+ * A coupon never follows a lent gateway (F-102-f-e). Lending moves a gateway,
+ * not the lender's coupons: the borrower's payer is validated in the
+ * borrower's tenant, so RLS hides the lender's coupon however well it matches
+ * the gateway, and a platform coupon still asks `platform_coupon_serves` about
+ * the borrower. Validation never reads a grant — that is the property.
+ */
+describe('a coupon on a lent gateway', () => {
+  const TENANT_GATEWAY = '99999999-9999-4999-8999-999999999991';
+  const PLATFORM_GATEWAY = '99999999-9999-4999-8999-999999999992';
+
+  beforeAll(async () => {
+    await owner.$executeRawUnsafe(`
+      INSERT INTO billing.payment_gateway
+        (id, "displayName", "providerName", "gatewayCategory", "supportedCurrencies", "merchantId",
+         "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt")
+      VALUES ('${PLATFORM_GATEWAY}', 'platform', 'zarinpal', 'domestic_rial', '["IRR"]', 'm', 1.00, 500.00, 'manual', 'percentage', 1.0000, now())
+    `);
+    await owner.$executeRawUnsafe(`
+      INSERT INTO tenant.tenant_gateway_config
+        (id, "tenantId", "displayName", "providerName", "gatewayCategory",
+         "minAcceptAmount", "maxAcceptAmount", "feeCalculationMode", "feeType", "feeValue", "updatedAt")
+      VALUES ('${TENANT_GATEWAY}', '${TENANT_A}', 'alpha gateway', 'zarinpal', 'domestic_rial',
+              1.00, 500.00, 'manual', 'percentage', 1.0000, now())
+    `);
+    // Both gateways are lent to B, actively.
+    for (const [gatewayId, configId] of [[PLATFORM_GATEWAY, null], [null, TENANT_GATEWAY]]) {
+      await owner.$executeRawUnsafe(`
+        INSERT INTO billing.payment_gateway_grant (id, "tenantId", "gatewayId", "tenantGatewayConfigId", "grantedByAdminId")
+        VALUES (gen_random_uuid(), '${TENANT_B}', ${gatewayId ? `'${gatewayId}'` : 'NULL'},
+                ${configId ? `'${configId}'` : 'NULL'}, '${ADMIN}')
+      `);
+    }
+
+    const coupons: Array<[string, string | null, string, string, string, string | null]> = [
+      // id suffix, tenant, code, coupon_gateway column, the gateway, tenant it names (platform coupons only)
+      ['b1', TENANT_A, 'LENT10', '"tenantGatewayConfigId"', TENANT_GATEWAY, null],
+      ['b2', null, 'PLATLENT10', '"gatewayId"', PLATFORM_GATEWAY, TENANT_A],
+      ['b3', null, 'PLATBETA10', '"gatewayId"', PLATFORM_GATEWAY, TENANT_B],
+    ];
+    for (const [suffix, tenantId, code, column, gateway, names] of coupons) {
+      await owner.$executeRawUnsafe(`
+        INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "perUserUsageLimit", "createdByAdminId")
+        VALUES ('${couponId(suffix)}', ${tenantId ? `'${tenantId}'` : 'NULL'}, '${code}', 'percentage', 10.00, 1, '${ADMIN}')
+      `);
+      await owner.$executeRawUnsafe(`
+        INSERT INTO billing.coupon_gateway (id, "couponId", ${column}) VALUES (gen_random_uuid(), '${couponId(suffix)}', '${gateway}')
+      `);
+      if (names) {
+        await owner.$executeRawUnsafe(`
+          INSERT INTO billing.coupon_tenant (id, "couponId", "tenantId") VALUES (gen_random_uuid(), '${couponId(suffix)}', '${names}')
+        `);
+      }
+    }
+  });
+
+  const on = (gatewaySource: 'platform' | 'tenant', gatewayId: string, codes: string[]) => ({
+    ...topUp(codes),
+    gatewaySource,
+    gatewayId,
+    userId: USER,
+  });
+
+  it("refuses the lender's coupon to the borrower's payer on the lent gateway", async () => {
+    const borrower = await asTenant(TENANT_B, (tx) => validator.validate(tx, on('tenant', TENANT_GATEWAY, ['LENT10'])));
+    expect(borrower.applied).toEqual([]);
+    expect(borrower.rejected).toEqual([{ code: 'LENT10', reason: 'not_found' }]);
+
+    // The control: the same code on the same gateway is good for the lender's own payer.
+    const lender = await asTenant(TENANT_A, (tx) => validator.validate(tx, on('tenant', TENANT_GATEWAY, ['LENT10'])));
+    expect(lender.applied.map((a) => [a.code, a.discount.toFixed(2)])).toEqual([['LENT10', '2.00']]);
+  });
+
+  it('serves a platform coupon on a lent platform gateway to the borrower only if it names the borrower', async () => {
+    const borrower = await asTenant(TENANT_B, (tx) =>
+      validator.validate(tx, on('platform', PLATFORM_GATEWAY, ['PLATLENT10', 'PLATBETA10'])),
+    );
+    expect(borrower.applied.map((a) => [a.code, a.discount.toFixed(2)])).toEqual([['PLATBETA10', '2.00']]);
+    expect(borrower.rejected).toEqual([{ code: 'PLATLENT10', reason: 'not_found' }]);
+
+    // The control: PLATLENT10 is live on that gateway, for the tenant it names.
+    const named = await asTenant(TENANT_A, (tx) =>
+      validator.validate(tx, on('platform', PLATFORM_GATEWAY, ['PLATLENT10', 'PLATBETA10'])),
+    );
+    expect(named.applied.map((a) => a.code)).toEqual(['PLATLENT10']);
+    expect(named.rejected).toEqual([{ code: 'PLATBETA10', reason: 'not_found' }]);
+  });
+});

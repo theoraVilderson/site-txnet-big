@@ -39,6 +39,7 @@ Proved by `coupon-validation.spec.ts` and the reservation, gift and scope int sp
 | `settle_coupon_redemptions` / `claim_expired_coupon_redemptions` keep the old scope | a hold already taken must still give its slot back |
 | Two live coupons sharing a code: the tenant's own wins (validation's `rank`; the gift function's `ORDER BY`) | ADR-0048 decision 5 |
 | A platform coupon on a `tenant` gateway is `platform_coupon_needs_platform_gateway`; a granted platform gateway is `platform`. Quote and start pass `gatewaySource` | ADR-0048 decision 4 |
+| A coupon never follows a lent gateway: the borrower's payer is validated in the borrower's tenant, so the lender's coupon is `not_found` there, and a platform coupon on a lent platform gateway serves the borrower only if it names it. Validation reads no grant. Proved by `coupon-validation.int.spec.ts` (F-102-f-e) | lending moves a gateway, not the lender's discounts; ADR-0041, ADR-0048 decision 2 |
 | A coupon for a reseller's own account is a `targeted` coupon of whichever tenant that account lives in — F-502-c refuses any other as `user_out_of_scope` | ADR-0048 consequences |
 
 ## Limits storage (built — F-502-j)
