@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-version: 13
+version: 14
 updated: 2026-09-17
 ---
 
@@ -68,6 +68,7 @@ app pool serves it; the audit row carries the platform owner's tenant.
 | `GET /api/auth/tenant-packages` | `active` `true`/`false` (absent: all) | packages by name |
 | `GET /api/auth/tenant-packages/:id` | — | one package view |
 | `PATCH /api/auth/tenant-packages/:id` | any of the create fields, a price may be `null`, `isActive` | the package view after |
+| `POST /api/auth/tenant-packages/:id/apply` | — | `200 {packageId, includedFeatureKeys, subscribers}` |
 
 A package view: `id, name, monthlyPrice, yearlyPrice` (decimal strings or
 `null`, C-02), `includedFeatureKeys, isActive`. Refusals: `not_platform_owner`
@@ -82,6 +83,9 @@ A package view: `id, name, monthlyPrice, yearlyPrice` (decimal strings or
 | `name` is unique; a taken name is `package_name_taken` before the transaction and on the unique index (`P2002`) | the platform owner picks a package by name |
 | **No delete.** `isActive: false` deactivates and writes nothing else; `true` offers it again | a deactivated package keeps its current subscribers until their next renewal (F-019-c) |
 | Each write and its audit row (`tenant_package_create` / `tenant_package_update`, target `tenant_feature_package`) are one transaction; an update audits only the fields it changed, before and after | the trail says who re-priced or withdrew a package |
+| **A key added to `includedFeatureKeys` reaches every current subscriber in the edit's transaction** (a `package_included` entitlement, unless held); **a removed key stays until the subscriber's renewal** (F-019-c re-copies the package) | a subscriber gets a new feature at once and never loses one mid-period it paid for (user, 2026-09-17, F-018-o) |
+| **`apply` forces the list now:** every subscriber's `package_included` entitlements are replaced by the package's, removals included; one audit row `tenant_package_apply` with the keys and the tenant ids. An inactive package may be applied | sometimes a removal must be immediate (user, 2026-09-17) |
+| Lock order everywhere (edit, `apply`, subscription `PUT`): the package row, then subscription / tenant rows (`subscription/package-entitlements.ts`) | an edit and a subscription change on one package serialise, never deadlock, and a tenant that just left a package is not granted its keys |
 
 ## A reseller's subscription (F-018-e)
 
@@ -110,7 +114,7 @@ currentPeriodEnd, startedAt, includedFeatureKeys`. Refusals:
 | An inactive package is refused unless the tenant is already on it | a deactivated package keeps its subscribers and takes no new ones |
 | A `terminated` reseller is refused; `trial`, `active`, `suspended` are not | what each status blocks is F-018-f |
 | **One transaction, the tenant row locked `FOR UPDATE`:** the subscription, `billingModel` if changed, the tenant's `package_included` entitlements deleted and one per `includedFeatureKeys` written (`isEnabled`, no `expiresAt`), and an audit row (`tenant_subscription_set`, target `tenant`, the reseller's tenant) | two concurrent `PUT`s cannot interleave the replace; entitlements from `addon_purchased` / `admin_granted` are never touched |
-| Entitlements are copied at the `PUT`. Editing a package's keys later reaches its subscribers at their next `PUT` | invariant 16; renewal re-copying them is F-019-c's call |
+| The keys are read under a shared lock on the package | a concurrent package edit is wholly before or after the `PUT` (F-018-o) |
 | `trialDays` is the platform's one `tenant_subscription_setting` row (`id = 1`, CHECK 0..365, default 14), edited with an audit row (`tenant_subscription_setting_update`); it applies to trials started after the edit | a setting the platform owner changes without a deploy (user, 2026-09-17) |
 
 ## Not built here

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { AdminAction, AuditTargetType, EntitlementSource, Prisma, TenantBillingModel, TenantStatus, TenantType } from '@prisma/client';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { lockPackage, replacePackageEntitlements } from './package-entitlements';
 import type { PutSubscriptionInput, UpdateSubscriptionSettingsInput } from './tenant-subscription.schema';
 
 /**
@@ -16,10 +17,12 @@ import type { PutSubscriptionInput, UpdateSubscriptionSettingsInput } from './te
  * `trialDays`. A later package or period change keeps `currentPeriodEnd`; the
  * new price is charged at that renewal (F-019-c). Nothing is charged here.
  *
- * **Entitlements follow the package.** In the same transaction, under a lock
- * on the tenant row so two puts cannot interleave, the tenant's
+ * **Entitlements follow the package.** In the same transaction, under locks
+ * on the package (shared) and then the tenant row, the tenant's
  * `package_included` entitlements are replaced by the package's
- * `includedFeatureKeys`. Entitlements from any other source are untouched.
+ * `includedFeatureKeys` as read under that lock — so a concurrent package edit
+ * (F-018-o) is either fully before or fully after. Entitlements from any other
+ * source are untouched (`package-entitlements.ts`).
  */
 
 export type TenantSubscriptionActor = { adminId: string; tenantId: string; ip: string };
@@ -86,9 +89,11 @@ export class TenantSubscriptionService {
     if (pkg[PRICE_OF[input.billingModel]] === null) {
       throw new TenantSubscriptionRefused('package_not_sold_for_period', `${pkg.name} ${input.billingModel}`);
     }
-    const keys = pkg.includedFeatureKeys as string[];
 
     const view = await this.all.$transaction(async (tx) => {
+      await lockPackage(tx, pkg.id, 'share');
+      const locked = await tx.tenantFeaturePackage.findUnique({ where: { id: pkg.id }, select: { includedFeatureKeys: true } });
+      const keys = (locked?.includedFeatureKeys ?? pkg.includedFeatureKeys) as string[];
       await tx.$queryRaw`SELECT id FROM "tenant"."tenant" WHERE id = ${tenantId}::uuid FOR UPDATE`;
       const current = await tx.tenantSubscription.findUnique({
         where: { tenantId },
@@ -107,20 +112,7 @@ export class TenantSubscriptionService {
       if (reseller.billingModel !== input.billingModel) {
         await tx.tenant.update({ where: { id: tenantId }, data: { billingModel: input.billingModel } });
       }
-      await tx.tenantFeatureEntitlement.deleteMany({ where: { tenantId, source: EntitlementSource.package_included } });
-      if (keys.length > 0) {
-        await tx.tenantFeatureEntitlement.createMany({
-          data: keys.map(
-            (featureKey): Prisma.TenantFeatureEntitlementCreateManyInput => ({
-              tenantId,
-              featureKey,
-              isEnabled: true,
-              source: EntitlementSource.package_included,
-              expiresAt: null,
-            }),
-          ),
-        });
-      }
+      await replacePackageEntitlements(tx, [tenantId], keys);
       const after: SubscriptionView = {
         tenantId,
         packageId: pkg.id,

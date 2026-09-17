@@ -30,6 +30,7 @@ import {
   updatePackageSchema,
 } from './tenant-package.schema';
 import {
+  PackageApplyView,
   PackageView,
   TenantPackageActor,
   TenantPackageRefused,
@@ -49,7 +50,8 @@ type ClaimsRequest = { user: { sub: string; tenantId: string } };
 
 /**
  * The packages the platform sells resellers (F-018-d):
- * `POST|GET /api/auth/tenant-packages`, `GET|PATCH /api/auth/tenant-packages/:id`.
+ * `POST|GET /api/auth/tenant-packages`, `GET|PATCH /api/auth/tenant-packages/:id`,
+ * and `POST /api/auth/tenant-packages/:id/apply` (F-018-o).
  * No DELETE — a package is deactivated with `PATCH {isActive: false}`.
  */
 @Controller('auth/tenant-packages')
@@ -79,6 +81,13 @@ export class TenantPackageController {
   @Get(':id')
   async read(@Req() req: ClaimsRequest, @Param('id', new ParseUUIDPipe()) id: string, @Ip() ip: string): Promise<PackageView> {
     return this.refusing(() => this.packages.read(actorOf(req, ip), id));
+  }
+
+  /** Forces the package's feature list onto every current subscriber now, removals included (F-018-o). */
+  @Post(':id/apply')
+  @HttpCode(HttpStatus.OK)
+  async apply(@Req() req: ClaimsRequest, @Param('id', new ParseUUIDPipe()) id: string, @Ip() ip: string): Promise<PackageApplyView> {
+    return this.refusing(() => this.packages.apply(actorOf(req, ip), id));
   }
 
   @Patch(':id')

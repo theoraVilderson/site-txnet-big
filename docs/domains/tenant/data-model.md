@@ -18,7 +18,7 @@ Source of truth: `txnet-backend/prisma/domains/tenant.prisma` (Postgres schema
 | tenant_feature_package | plans the platform sells to resellers: unique `name`, `monthlyPrice` / `yearlyPrice` (CHECK: positive, at least one), `includedFeatureKeys`, `isActive`; no RLS (F-018-d) | no (catalog of packages) | permanent, deactivated not deleted |
 | tenant_subscription | one per reseller: `packageId` (RESTRICT) and `currentPeriodEnd`; the period is `tenant.billingModel` (F-018-e) | yes | with tenant |
 | tenant_subscription_setting | the platform's one row (`id = 1` CHECK): `trialDays` 0..365, default 14; no RLS (F-018-e) | no | permanent |
-| tenant_feature_entitlement | which feature keys are on for a tenant; `package_included` rows are replaced by each subscription `PUT` (F-018-e) | yes | until revoked/expired |
+| tenant_feature_entitlement | which feature keys are on for a tenant; `package_included` rows are replaced by a subscription `PUT` or a package `apply`, and added to by a package edit (F-018-e, F-018-o) | yes | until revoked/expired |
 | tenant_staff_member | reseller's internal team (own RBAC, separate from identity.role) | yes | — |
 | tenant_billing_wallet | a reseller's prepaid balance with the platform (cache, `>= 0`; D-41) | yes | with tenant |
 | tenant_billing_transaction | append-only ledger of tenant<->platform charges | yes | permanent |

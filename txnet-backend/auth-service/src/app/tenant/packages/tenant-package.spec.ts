@@ -33,7 +33,9 @@ describe('TenantPackageService', () => {
   const build = (opts: { callerType?: string; existing?: ReturnType<typeof stored> | null; nameTaken?: boolean } = {}) => {
     const writes: string[] = [];
     const tx = {
+      $queryRaw: vi.fn(async () => []),
       tenantFeaturePackage: {
+        findUnique: vi.fn(async () => opts.existing ?? null),
         create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => (writes.push('create'), stored({ ...data, id: PKG }))),
         update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => (writes.push('update'), stored({ ...opts.existing, ...data }))),
       },
@@ -49,7 +51,7 @@ describe('TenantPackageService', () => {
       },
       $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
     };
-    return { service: new TenantPackageService(prisma as never), prisma, tx, writes };
+    return { service: new TenantPackageService(prisma as never, prisma as never), prisma, tx, writes };
   };
 
   it('refuses a caller who is not the platform owner before a package is touched', async () => {

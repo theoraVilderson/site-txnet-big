@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AdminAction, AuditTargetType, Prisma, TenantType } from '@prisma/client';
+import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { addPackageEntitlements, lockPackage, lockSubscribers, replacePackageEntitlements } from '../subscription/package-entitlements';
 import type { CreatePackageInput, ListPackagesInput, UpdatePackageInput } from './tenant-package.schema';
 
 /**
@@ -15,9 +17,18 @@ import type { CreatePackageInput, ListPackagesInput, UpdatePackageInput } from '
  * a package's current subscribers keep it until their next renewal (F-019-c
  * decides what a renewal on an inactive package does). Prices are
  * base-currency decimals (C-02); a package keeps at least one of its two.
+ *
+ * **Subscribers follow a feature change halfway (F-018-o).** A key added to
+ * `includedFeatureKeys` is granted to every current subscriber in the edit's
+ * transaction; a removed key stays until that subscriber's renewal (F-019-c),
+ * because the period was paid for with it. {@link apply} forces the full list,
+ * removals included, onto every subscriber at once. Both run on the
+ * cross-tenant pool — the entitlements are the subscribers' rows.
  */
 
 export type TenantPackageActor = { adminId: string; tenantId: string; ip: string };
+
+export type PackageApplyView = { packageId: string; includedFeatureKeys: string[]; subscribers: number };
 
 export type PackageView = {
   id: string;
@@ -55,7 +66,10 @@ type PackageRow = Prisma.TenantFeaturePackageGetPayload<{ select: typeof PACKAGE
 export class TenantPackageService {
   private readonly logger = new Logger(TenantPackageService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly all: CrossTenantPrismaService,
+  ) {}
 
   async create(actor: TenantPackageActor, input: CreatePackageInput): Promise<PackageView> {
     await this.access(actor);
@@ -96,8 +110,15 @@ export class TenantPackageService {
     if (patch.isActive !== undefined) data.isActive = patch.isActive;
 
     return this.writing(patch.name ?? before.name, () =>
-      this.prisma.$transaction(async (tx) => {
+      this.all.$transaction(async (tx) => {
+        await lockPackage(tx, id, 'update');
+        const held = patch.includedFeatureKeys === undefined ? null : await tx.tenantFeaturePackage.findUnique({ where: { id }, select: { includedFeatureKeys: true } });
         const after = toView(await tx.tenantFeaturePackage.update({ where: { id }, data, select: PACKAGE_SELECT }));
+        if (held) {
+          const had = new Set(held.includedFeatureKeys as string[]);
+          const added = after.includedFeatureKeys.filter((k) => !had.has(k));
+          if (added.length > 0) await addPackageEntitlements(tx, await lockSubscribers(tx, id), added);
+        }
         const changed = Object.keys(data) as (keyof PackageView)[];
         await tx.adminAuditLog.create({
           data: this.audit(actor, AdminAction.tenant_package_update, id, pick(before, changed), pick(after, changed)),
@@ -105,6 +126,27 @@ export class TenantPackageService {
         return after;
       }),
     );
+  }
+
+  /** Every subscriber's `package_included` entitlements become the package's list now, removals included. */
+  async apply(actor: TenantPackageActor, id: string): Promise<PackageApplyView> {
+    await this.access(actor);
+    await this.find(id);
+    const view = await this.all.$transaction(async (tx) => {
+      await lockPackage(tx, id, 'share');
+      const row = await tx.tenantFeaturePackage.findUnique({ where: { id }, select: { includedFeatureKeys: true } });
+      if (!row) throw new TenantPackageRefused('package_not_found', id);
+      const includedFeatureKeys = row.includedFeatureKeys as string[];
+      const subscribers = await lockSubscribers(tx, id);
+      await replacePackageEntitlements(tx, subscribers, includedFeatureKeys);
+      const result = { packageId: id, includedFeatureKeys, subscribers: subscribers.length };
+      await tx.adminAuditLog.create({
+        data: this.audit(actor, AdminAction.tenant_package_apply, id, null, { includedFeatureKeys, subscribers: subscribers.length, tenantIds: subscribers }),
+      });
+      return result;
+    });
+    this.logger.log(`package ${id} forced onto ${view.subscribers} subscriber(s) by ${actor.adminId}`);
+    return view;
   }
 
   async list(actor: TenantPackageActor, query: ListPackagesInput): Promise<PackageView[]> {

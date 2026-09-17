@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-version: 13
+version: 14
 updated: 2026-09-17
 ---
 
@@ -27,7 +27,7 @@ the rest are `reseller`. The platform bills tenants from a prepaid wallet
 |---|---|---|---|---|
 | **resolve tenant by claim** — implemented | `{host?, session?, bot?}` | `{id, slug, via, surfacePurpose?}` or `null` — `null` means *no tenant*, never a fallback | sync | `TenantClaimConflict` when a claim and its surface disagree |
 | **create / list / read a reseller** — implemented, [contract.admin.md](contract.admin.md) | slug, billingModel, owner | reseller view | sync tx | `not_platform_owner` / `slug_taken` / `reseller_not_found` |
-| **create / edit / deactivate a package** — implemented, [contract.admin.md](contract.admin.md) | name, monthly/yearly price, includedFeatureKeys, isActive | package view | sync tx | `not_platform_owner` / `package_not_found` / `package_name_taken` / `package_unpriced` |
+| **create / edit / deactivate a package; force its keys onto subscribers** — implemented, [contract.admin.md](contract.admin.md) | name, monthly/yearly price, includedFeatureKeys, isActive | package view (an added key granted to subscribers in the edit) | sync tx | `not_platform_owner` / `package_not_found` / `package_name_taken` / `package_unpriced` |
 | **put a reseller on a package and period** — implemented, [contract.admin.md](contract.admin.md) | tenantId, packageId, billingModel | subscription view; `package_included` entitlements replaced | sync tx | `reseller_not_found` / `reseller_terminated` / `package_not_found` / `package_inactive` / `package_not_sold_for_period` |
 | check entitlement | tenantId, featureKey | allowed / denied (+ source, expiry) | sync | — |
 | verify custom domain | tenantId, domainValue | verification status | async (DNS TXT / ArvanCloud) | token mismatch |

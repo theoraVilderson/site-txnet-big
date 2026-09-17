@@ -70,6 +70,8 @@ enum AdminAction {
   // F-018-e. A reseller's package and period, and the platform's trial length.
   tenant_subscription_set
   tenant_subscription_setting_update
+  // F-018-o. A package's feature list forced onto every current subscriber.
+  tenant_package_apply
 
   @@schema("audit")
 }

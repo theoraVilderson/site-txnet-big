@@ -11,7 +11,7 @@ import { putSubscriptionSchema, updateSubscriptionSettingsSchema } from './tenan
  *   `currentPeriodEnd` — the new price is F-019-c's at the next renewal.
  * - The package's `includedFeatureKeys` replace the tenant's
  *   `package_included` entitlements in the same transaction, under a lock on
- *   the tenant row; entitlements from any other source are untouched.
+ *   the package and then the tenant row; entitlements from any other source are untouched.
  * - A package must be sold for the period asked, and an inactive package
  *   is not offered to a tenant not already on it.
  * - No charge is written here.
@@ -42,6 +42,7 @@ describe('TenantSubscriptionService', () => {
         : opts.pkg;
     const tx = {
       $queryRaw: vi.fn(async () => (writes.push('lock'), [{ id: RESELLER }])),
+      tenantFeaturePackage: { findUnique: vi.fn(async () => pkg) },
       tenantSubscription: {
         findUnique: vi.fn(async () => opts.current ?? null),
         upsert: vi.fn(async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
@@ -83,11 +84,11 @@ describe('TenantSubscriptionService', () => {
     const before = Date.now();
     const view = await service.put(actor, RESELLER, put);
 
-    expect(writes).toEqual(['lock', 'subscription', 'entitlements.delete', 'entitlements.create', 'audit']);
+    expect(writes).toEqual(['lock', 'lock', 'subscription', 'entitlements.delete', 'entitlements.create', 'audit']);
     const end = view.currentPeriodEnd.getTime();
     expect(end).toBeGreaterThanOrEqual(before + 10 * DAY);
     expect(end).toBeLessThanOrEqual(Date.now() + 10 * DAY);
-    expect(tx.tenantFeatureEntitlement.deleteMany).toHaveBeenCalledWith({ where: { tenantId: RESELLER, source: 'package_included' } });
+    expect(tx.tenantFeatureEntitlement.deleteMany).toHaveBeenCalledWith({ where: { tenantId: { in: [RESELLER] }, source: 'package_included' } });
     expect(tx.tenantFeatureEntitlement.createMany).toHaveBeenCalledWith({
       data: [
         { tenantId: RESELLER, featureKey: 'spin_wheel', isEnabled: true, source: 'package_included', expiresAt: null },
