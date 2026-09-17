@@ -9,6 +9,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { WorkerRegistryService } from './worker-registry.service';
 import { TenantConcurrencyGate } from './tenant-concurrency.gate';
+import { TenantStatusGate } from './tenant-status.gate';
 import { JobResult } from './job';
 
 /**
@@ -32,6 +33,7 @@ export class TickConsumer implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly registry: WorkerRegistryService,
     private readonly gate: TenantConcurrencyGate,
+    private readonly status: TenantStatusGate,
     config: ConfigService,
   ) {
     this.runTimeoutMs = config.getOrThrow<number>('AUTOMATION_RUN_TIMEOUT_MS');
@@ -53,6 +55,14 @@ export class TickConsumer implements OnModuleInit {
       // across a rename — but it is worth one line, because a key that nothing
       // anywhere implements would otherwise be invisible.
       this.logger.warn(`no job registered for '${tick.key}' — ignoring the tick`);
+      return;
+    }
+
+    // What the tenant's status allows (F-018-p), before the cap: a refused
+    // tick takes no slot. Like a deferral it is not a run and opens no
+    // `bot_execution_log`; it is acked, and the next scheduled tick asks again.
+    if (!(await this.status.allows(tick, job))) {
+      this.logger.log(`${tick.key} not run: tenant ${tick.tenantId}'s status does not allow it`);
       return;
     }
 

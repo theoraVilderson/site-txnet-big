@@ -1,4 +1,5 @@
 import { BotWorkerCategory } from '@prisma/client';
+import { TenantCapabilityName } from '@txnet-backend/shared-core';
 
 /** What a run reports back, and what lands in `bot_execution_log`. */
 export interface JobResult {
@@ -26,6 +27,12 @@ export interface Job {
   readonly name: string;
   readonly description?: string;
   readonly category: BotWorkerCategory;
+  /**
+   * What a run does for the tenant its tick names, judged by `TenantStatusGate`
+   * (F-018-p). Unset is `staffWrite`: closed for a suspended tenant. A platform
+   * tick (no `tenantId`) is never judged.
+   */
+  readonly tenantCapability?: TenantCapabilityName;
   run(): Promise<JobResult>;
 }
 

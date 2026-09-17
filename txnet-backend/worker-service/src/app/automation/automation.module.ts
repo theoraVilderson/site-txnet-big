@@ -3,6 +3,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { WorkerRegistryService } from './worker-registry.service';
 import { TickPublisher } from './tick.publisher';
 import { TickConsumer } from './tick.consumer';
+import { TenantStatusGate } from './tenant-status.gate';
 import { DeadLetterDrain } from './dead-letter.drain';
 import { TenantConcurrencyGate } from './tenant-concurrency.gate';
 import { TenantRunLeases } from './tenant-run.leases';
@@ -52,6 +53,7 @@ import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
     TickPublisher,
     TenantRunLeases,
     TenantConcurrencyGate,
+    TenantStatusGate,
     TickConsumer,
     DeadLetterDrain,
   ],

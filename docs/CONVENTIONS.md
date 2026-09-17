@@ -34,6 +34,7 @@ needs to move up that table.
 |---|---|---|
 | C-01 | Technical docs, code, commit messages and logs are in English. Existing Persian inline comments may stay; do not add new ones. | review |
 | C-02 | Money is base-currency `Decimal` only — never a second currency column, never written as a float. One exception: a payment's gateway receipt, `amountReceivedMinor` + `receivedCurrency` (D-32). Balances are ledger-derived; never write a balance field directly outside a ledger-append transaction. See ADR-0002. | review |
+| C-11 | A backend app that opens a tenant scope (`runWithTenant(...)`) registers `TenantStatusGuard` as an `APP_GUARD`, so every route it serves obeys `TenantStatusPolicy`. See `docs/domains/tenant/rules.md`. | check |
 | C-10 | A panel route is a constant in `site-pwa/src/lib/routes.ts`. A path literal in `href=`, `redirect(` or `router.push/replace(` is a violation. | check |
 | C-09 | A closed set of wire values is declared once — a Prisma enum (`z.nativeEnum`) or an `as const` tuple beside its type — and a zod schema derives from it. A hand-written `z.enum([...])` is a violation (env validation excepted). | check |
 | C-08 | A broker routing key or outbox event type is imported from `shared-core/src/lib/automation/routing-keys.ts` (or `bot-update.ts` / `outbox.ts`). Nothing else spells one. | check |
@@ -383,4 +384,26 @@ forbid: (href=|redirect\(|router\.(push|replace)\()\s*\{?\s*["'`]/[a-z]
 in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx
 except: site-pwa/src/**/*.test.ts, site-pwa/src/**/*.test.tsx
 message: import the path from @/lib/routes (C-10) — a route spelled at the call site is missed by the next rename
+```
+
+## C-11 — an app with a tenant registers `TenantStatusGuard`
+
+**Rule.** A Nest app under `txnet-backend/` that calls `runWithTenant(...)`
+anywhere registers `{ provide: APP_GUARD, useClass: TenantStatusGuard }` and
+binds `TENANT_STATUS_STORE`. A route then labels what it does with
+`@TenantCapability`; a mutating route that labels nothing is `staffWrite`.
+
+**Why.** The guard is opt-in per app. F-018-f registered it in `auth-service`
+and `billing-service`, and `notification-service`'s campaign admin stayed open
+to a suspended reseller until F-018-p — nobody forgot a rule, the rule simply
+had no place to fail. Background work is not an HTTP route: a tick that names a
+tenant is judged by `worker-service`'s `TenantStatusGate` instead.
+
+```check C-11
+require: provide:\s*APP_GUARD,\s*useClass:\s*TenantStatusGuard\b
+per: txnet-backend/*
+when: \brunWithTenant\([^)]
+in: txnet-backend/*/src/**/*.ts
+except: txnet-backend/shared-core/**, txnet-backend/**/*.spec.ts
+message: register TenantStatusGuard as an APP_GUARD in this app (C-11) — a route here serves a tenant and no status judges it
 ```

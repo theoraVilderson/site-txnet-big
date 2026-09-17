@@ -2,7 +2,7 @@
 id: notification
 layer: domain
 status: active
-version: 2
+version: 3
 updated: 2026-09-17
 ---
 
@@ -51,6 +51,12 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 - `title`/`body` are stored text: the caller renders the user's language first.
 - Rate limits, per user, 15 min: `NOTIFICATION_READ` (300), `NOTIFICATION_WRITE`
   (120). The internal seam is not limited.
+- **Tenant status** (F-018-p, `tenant/rules.md`). `TenantStatusGuard` judges every
+  gated route: a `GET` is `read`, `POST notifications/read` is `account`, every
+  campaign write (draft, edit, texts, `send`) is `staffWrite` — `403
+  tenant.suspended` for a suspended reseller, `tenant.terminated` for a
+  terminated one. `internal/*` has no tenant and is not judged; a campaign
+  already `sending` finishes whatever the status (`system`, user 2026-09-17).
 
 ### Campaigns (F-035-c)
 

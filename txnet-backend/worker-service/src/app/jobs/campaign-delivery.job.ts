@@ -29,6 +29,12 @@ export class CampaignDeliveryJob implements Job {
   readonly description =
     'Sends queued campaign recipients through their tenant\'s Telegram or Bale bot, in bounded runs (F-035-e).';
   readonly category = BotWorkerCategory.campaign;
+  /**
+   * A started campaign finishes whatever its tenant's status (F-018-p, user
+   * 2026-09-17): only starting one is a `staffWrite`. Declared for the day a
+   * tick names the tenant; today's ticks are platform sweeps.
+   */
+  readonly tenantCapability = 'system' as const;
 
   private readonly logger = new Logger(CampaignDeliveryJob.name);
   private readonly baseUrl: string;

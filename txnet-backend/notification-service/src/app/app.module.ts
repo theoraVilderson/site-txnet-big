@@ -1,7 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { RateLimitGuard } from '@txnet-backend/shared-core';
+import { RateLimitGuard, TenantStatusGuard } from '@txnet-backend/shared-core';
 
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { envConfigOptions } from './config/env.validation';
@@ -27,7 +27,13 @@ const INTERNAL_ROUTES = 'internal/*';
   ],
   controllers: [HealthController],
   // Per-user limits, opted into per route with `@RateLimit` (F-092-r).
-  providers: [{ provide: APP_GUARD, useClass: RateLimitGuard }],
+  providers: [
+    { provide: APP_GUARD, useClass: RateLimitGuard },
+    // What the tenant's status allows (F-018-f, F-018-p): campaign admin is a
+    // staff write, closed for a suspended reseller. The tenant is the scope
+    // IdentityMiddleware opened; `internal/*` has none and is not judged.
+    { provide: APP_GUARD, useClass: TenantStatusGuard },
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Post, Query, Req } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, TenantCapability, rateLimitBucketKey } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
@@ -29,6 +29,8 @@ export class NotificationInboxController {
 
   @Post('read')
   @HttpCode(200)
+  // A user's own inbox, not the reseller's panel: open while suspended (F-018-p).
+  @TenantCapability('account')
   @RateLimit({
     key: (req) => rateLimitBucketKey(RateLimitBucket.NOTIFICATION_WRITE, identityOf(req).userId),
     configKey: 'NOTIFICATION_WRITE_RATE_LIMIT',

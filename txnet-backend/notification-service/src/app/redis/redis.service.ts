@@ -58,4 +58,9 @@ export class RedisService implements RateLimitStore, OnModuleInit, OnModuleDestr
     await this.client.del(key);
   }
 
+  /** One read, for `TenantStatusGuard`'s `tenant:status:<id>` (F-018-p); the key is built by the caller. */
+  get(key: string): Promise<string | null> {
+    return this.client.get(key);
+  }
+
 }

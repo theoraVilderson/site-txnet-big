@@ -32,6 +32,12 @@ export class CampaignFanOutJob implements Job {
   readonly description =
     'Writes one queued recipient row per user of every started campaign, in resumable batches (F-035-d).';
   readonly category = BotWorkerCategory.campaign;
+  /**
+   * A started campaign finishes whatever its tenant's status (F-018-p, user
+   * 2026-09-17): only starting one is a `staffWrite`. Declared for the day a
+   * tick names the tenant; today's ticks are platform sweeps.
+   */
+  readonly tenantCapability = 'system' as const;
 
   private readonly logger = new Logger(CampaignFanOutJob.name);
   private readonly baseUrl: string;

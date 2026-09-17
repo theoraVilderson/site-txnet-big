@@ -25,6 +25,13 @@ hold. A tick that names no tenant is never gated — the heartbeat and the vault
 retention sweep are platform work, and charging them to a tenant would let the
 platform exhaust a reseller's budget.
 
+**Before the cap, the tenant's status** (F-018-p, `tenant/rules.md` #9). A
+tick with `tenantId` runs only if `tenantAllows(status, job.tenantCapability ??
+'staffWrite')` — `TenantStatusGate`, reading `tenant:status:<id>`. A refused
+tick is acked with one log line: not a run (no `bot_execution_log`), no slot,
+no dead letter; the next scheduled tick asks again. A missing or unreachable
+key runs it. The campaign jobs declare `system`.
+
 **Nothing publishes a tenant-scoped tick yet.** `TickMessage.tenantId` is
 optional and neither publisher sets it, so the cap binds on no traffic today. It
 is built first on purpose: the alternative is that the first per-tenant job

@@ -20,6 +20,11 @@ Keys:
     in       comma-separated globs. required.
     except   comma-separated globs to skip
     message  what to do instead. required — a violation with no remedy is noise.
+    per      (with `require`) a directory glob, e.g. `txnet-backend/*`: the
+             pattern must appear in at least one file of each such directory,
+             not in every file. Reported per directory.
+    when     (with `per`) only directories where some file matches this regex
+             are held to `require`.
 
 usage:
     python3 tools/conventions.py            check everything
@@ -61,9 +66,9 @@ def parse():
                          re.S | re.M):
         cid, body = m.group(1), m.group(2)
         c = {"id": cid, "forbid": None, "require": None, "in": [],
-             "except": [], "message": ""}
+             "except": [], "message": "", "per": None, "when": None}
         for ln in body.splitlines():
-            km = re.match(r"^\s*(forbid|require|in|except|message)\s*:\s*(.*)$", ln)
+            km = re.match(r"^\s*(forbid|require|in|except|message|per|when)\s*:\s*(.*)$", ln)
             if not km:
                 continue
             k, v = km.group(1), km.group(2).strip()
@@ -120,6 +125,8 @@ def run(c):
         rx = re.compile(c["forbid"] or c["require"])
     except re.error as e:
         return [f"(bad regex in {c['id']}: {e})"], 0
+    if c["per"]:
+        return run_per(c, rx)
     hits, n = [], 0
     for p, rel in files_for(c):
         try:
@@ -135,6 +142,31 @@ def run(c):
             if not any(rx.search(ln) for ln in lines):
                 hits.append(f"{rel}  (missing)")
     return hits, n
+
+
+def run_per(c, rx):
+    """`per`: one match anywhere in each directory, where `when` holds."""
+    try:
+        when = re.compile(c["when"]) if c["when"] else None
+    except re.error as e:
+        return [f"(bad `when` regex in {c['id']}: {e})"], 0
+    depth = len(c["per"].strip("/").split("/"))
+    per_rx = glob_re(c["per"].strip("/"))
+    groups = {}
+    for p, rel in files_for(c):
+        key = "/".join(rel.split("/")[:depth])
+        if not per_rx.match(key):
+            continue
+        try:
+            text = p.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        g = groups.setdefault(key, {"when": when is None, "found": False})
+        g["when"] = g["when"] or bool(when.search(text))
+        g["found"] = g["found"] or bool(rx.search(text))
+    hits = [f"{key}/  (missing)" for key, g in sorted(groups.items())
+            if g["when"] and not g["found"]]
+    return hits, len(groups)
 
 
 def main() -> int:
