@@ -268,6 +268,29 @@ is yours.
   `docs/CODE-LAYOUT.md` ("Order of work" and "Running them without burning the
   session") — read them there before writing an item's first line.
 
+## Asking the user a question
+
+**Standing instruction from the user (2026-09-17), for every session and every
+agent.** Whenever you ask the user anything — a `needs-decision`, a
+clarification, a "which one" — do it this way:
+
+- **In Persian.** The question and its options are written in Persian. Ids,
+  paths, code and commands stay as they are. (Docs, code and commits stay in
+  English — C-01; only what you ask the user changes.)
+- **Unambiguous.** One question per decision, the choices named explicitly,
+  and what changes with each answer. No question the user has to decode.
+- **With an example when the user asks for one** — a concrete case from this
+  repo (a tenant, a request, a row), not an abstract restatement.
+- **Always with your own recommendation**, first, and why.
+- **The recommendation is judged over the long run.** Prefer the option that
+  will not have to be rebuilt as the platform grows (more tenants, reseller
+  tiers, services, languages) over the one that is fastest today; say what the
+  cheaper option would cost later.
+- **Say when the existing architecture is the problem.** If the question only
+  exists because a current design will break further on, name that design,
+  what will break and when, and recommend fixing it — as its own decision, per
+  "Decide once" below — rather than answering around it.
+
 ## Decide once
 
 §6b.3 asks for an announcement before working and §6.2 for five lines of plan.
