@@ -74,6 +74,8 @@ enum AdminAction {
   tenant_package_apply
   // F-018-f. A reseller suspended, reactivated or terminated.
   tenant_status_change
+  // F-019-g. The platform owner gives a reseller more time to pay its renewal.
+  tenant_subscription_grace
 
   @@schema("audit")
 }

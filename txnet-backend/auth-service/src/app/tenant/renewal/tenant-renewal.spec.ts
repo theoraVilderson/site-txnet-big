@@ -32,6 +32,7 @@ describe('TenantRenewalService', () => {
     balance?: string | null;
     periodEnd?: Date;
     warnedAt?: Date | null;
+    graceUntil?: Date | null;
     billingModel?: string;
     graceDays?: number;
   };
@@ -44,6 +45,7 @@ describe('TenantRenewalService', () => {
       packageId: PKG,
       currentPeriodEnd: periodEnd,
       renewalWarnedAt: opts.warnedAt ?? null,
+      graceUntil: opts.graceUntil ?? null,
       package: { monthlyPrice: new Prisma.Decimal('1500000'), yearlyPrice: null, includedFeatureKeys: ['spin_wheel'] },
     };
     const tenantRow = {
@@ -104,7 +106,7 @@ describe('TenantRenewalService', () => {
     expect(entry.amount.toString()).toBe('1500000');
     expect(tx.tenantSubscription.update).toHaveBeenCalledWith({
       where: { tenantId: TENANT },
-      data: { currentPeriodEnd: new Date('2026-11-03T00:00:00.000Z'), renewalWarnedAt: null },
+      data: { currentPeriodEnd: new Date('2026-11-03T00:00:00.000Z'), renewalWarnedAt: null, graceUntil: null },
     });
     expect(tx.tenantFeatureEntitlement.deleteMany).toHaveBeenCalledWith({ where: { tenantId: { in: [TENANT] }, source: 'package_included' } });
     expect(tx.tenant.update.mock.calls[0][0].data).toMatchObject({ status: 'active', suspensionCause: null, suspendedAt: null, graceEndsAt: null });
@@ -164,6 +166,17 @@ describe('TenantRenewalService', () => {
     expect(tx.outboxEvent.create.mock.calls[0][0].data.type).toBe(OutboxEventType.TENANT_SUBSCRIPTION_SUSPENDED);
     expect(tx.tenantFeatureEntitlement.deleteMany).not.toHaveBeenCalled();
     expect(writes.some((w) => w.includes('delete'))).toBe(false);
+  });
+
+  it('past the setting\'s grace but inside the platform owner\'s graceUntil: warned with that date, not suspended (F-019-g)', async () => {
+    const graceUntil = new Date(NOW.getTime() + 4 * DAY);
+    const { service, tx } = build({ balance: '0', periodEnd: new Date(NOW.getTime() - 5 * DAY), graceUntil });
+    await expect(service.renew(TENANT, NOW)).resolves.toBe('warned');
+    expect(tx.tenant.update).not.toHaveBeenCalled();
+    expect(tx.outboxEvent.create.mock.calls[0][0].data.payload).toMatchObject({ suspendsAt: graceUntil.toISOString() });
+
+    const over = build({ balance: '0', periodEnd: new Date(NOW.getTime() - 5 * DAY), graceUntil: new Date(NOW.getTime() - 1) });
+    await expect(over.service.renew(TENANT, NOW)).resolves.toBe('suspended');
   });
 
   it('already suspended and still short: nothing is written', async () => {

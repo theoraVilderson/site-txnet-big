@@ -1,9 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { AdminAction, AuditTargetType, EntitlementSource, Prisma, TenantBillingModel, TenantStatus, TenantType } from '@prisma/client';
+import { AdminAction, AuditTargetType, EntitlementSource, Prisma, TenantBillingModel, TenantStatus, TenantSuspensionCause, TenantType } from '@prisma/client';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { renewalDeadline } from '../renewal/tenant-renewal.service';
+import { applyTenantStatus } from '../status/tenant-status.transition';
 import { lockPackage, replacePackageEntitlements } from './package-entitlements';
-import type { PutSubscriptionInput, UpdateSubscriptionSettingsInput } from './tenant-subscription.schema';
+import type { GrantGraceInput, PutSubscriptionInput, UpdateSubscriptionSettingsInput } from './tenant-subscription.schema';
 
 /**
  * The platform owner puts a reseller on a package and period, and sets the
@@ -23,6 +25,10 @@ import type { PutSubscriptionInput, UpdateSubscriptionSettingsInput } from './te
  * `includedFeatureKeys` as read under that lock — so a concurrent package edit
  * (F-018-o) is either fully before or fully after. Entitlements from any other
  * source are untouched (`package-entitlements.ts`).
+ *
+ * **More time to pay** (F-019-g): `graceUntil` moves the renewal's suspension
+ * deadline later and lifts a `non_payment` suspension at once. No money moves
+ * and the period does not change — the reseller still owes it.
  */
 
 export type TenantSubscriptionActor = { adminId: string; tenantId: string; ip: string };
@@ -35,6 +41,15 @@ export type SubscriptionView = {
   currentPeriodEnd: Date;
   startedAt: Date;
   includedFeatureKeys: string[];
+};
+
+export type GraceView = {
+  tenantId: string;
+  currentPeriodEnd: Date;
+  /** The renewal does not suspend before this. */
+  graceUntil: Date;
+  status: TenantStatus;
+  suspensionCause: TenantSuspensionCause | null;
 };
 
 export type SubscriptionSettingsView = { trialDays: number; suspensionHoldDays: number; renewalGraceDays: number };
@@ -164,6 +179,66 @@ export class TenantSubscriptionService {
       startedAt: row.createdAt,
       includedFeatureKeys: entitlements.map((e) => e.featureKey),
     };
+  }
+
+  /**
+   * `graceUntil` = the latest of now, the renewal's own deadline and an earlier
+   * `graceUntil`, plus `days` — so a grant never shortens the time already
+   * given. One transaction under the tenant row's lock; a `non_payment`
+   * suspension becomes `active` (a `manual` one is lifted only by hand); one
+   * audit row; no ledger entry.
+   */
+  async grantGrace(actor: TenantSubscriptionActor, tenantId: string, input: GrantGraceInput, now = new Date()): Promise<GraceView> {
+    await this.access(actor);
+    const settings = await this.all.tenantSubscriptionSetting.findUnique({ where: { id: SETTINGS_ID }, select: { renewalGraceDays: true } });
+    if (!settings) throw new Error('tenant_subscription_setting row is missing — run the migrations');
+
+    const view = await this.all.$transaction(async (tx) => {
+      const [tenant] = await tx.$queryRaw<{ id: string; tenantType: TenantType; status: TenantStatus; suspensionCause: TenantSuspensionCause | null }[]>`
+        SELECT id, "tenantType", status, "suspensionCause"
+        FROM "tenant"."tenant"
+        WHERE id = ${tenantId}::uuid AND "deletedAt" IS NULL
+        FOR UPDATE`;
+      if (!tenant || tenant.tenantType !== TenantType.reseller) throw new TenantSubscriptionRefused('reseller_not_found', tenantId);
+      if (tenant.status === TenantStatus.terminated) throw new TenantSubscriptionRefused('reseller_terminated', tenantId);
+      const sub = await tx.tenantSubscription.findUnique({ where: { tenantId }, select: { currentPeriodEnd: true, graceUntil: true } });
+      if (!sub) throw new TenantSubscriptionRefused('subscription_not_found', tenantId);
+
+      const deadline = renewalDeadline(sub.currentPeriodEnd, settings.renewalGraceDays, sub.graceUntil);
+      const base = deadline > now ? deadline : now;
+      const after = await tx.tenantSubscription.update({
+        where: { tenantId },
+        data: { graceUntil: new Date(base.getTime() + input.days * DAY_MS) },
+        select: { currentPeriodEnd: true, graceUntil: true },
+      });
+      let status: TenantStatus = tenant.status;
+      let suspensionCause = tenant.suspensionCause;
+      if (status === TenantStatus.suspended && suspensionCause === TenantSuspensionCause.non_payment) {
+        ({ status, suspensionCause } = await applyTenantStatus(tx, tenantId, {
+          from: status,
+          to: TenantStatus.active,
+          reason: input.reason,
+          actorUserId: actor.adminId,
+          now,
+        }));
+      }
+      const result: GraceView = { tenantId, currentPeriodEnd: after.currentPeriodEnd, graceUntil: after.graceUntil as Date, status, suspensionCause };
+      await tx.adminAuditLog.create({
+        data: {
+          tenantId,
+          adminId: actor.adminId,
+          action: AdminAction.tenant_subscription_grace,
+          targetEntityType: AuditTargetType.tenant,
+          targetEntityId: tenantId,
+          oldValue: JSON.parse(JSON.stringify({ graceUntil: sub.graceUntil, status: tenant.status, suspensionCause: tenant.suspensionCause })) as Prisma.InputJsonValue,
+          newValue: JSON.parse(JSON.stringify({ ...result, days: input.days, reason: input.reason })) as Prisma.InputJsonValue,
+          adminIpAddress: actor.ip,
+        },
+      });
+      return result;
+    });
+    this.logger.log(`reseller ${tenantId} given grace until ${view.graceUntil.toISOString()} by ${actor.adminId}`);
+    return view;
   }
 
   async readSettings(actor: TenantSubscriptionActor): Promise<SubscriptionSettingsView> {

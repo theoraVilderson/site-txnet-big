@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-version: 17
+version: 18
 updated: 2026-09-17
 ---
 

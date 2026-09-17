@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-version: 17
+version: 18
 updated: 2026-09-17
 ---
 
@@ -97,6 +97,7 @@ check; every read and write after it is on the cross-tenant pool.
 |---|---|---|
 | `PUT /api/auth/tenants/:id/subscription` | `{packageId, billingModel}`, `.strict()` | a subscription view |
 | `GET /api/auth/tenants/:id/subscription` | — | a subscription view |
+| `POST /api/auth/tenants/:id/subscription/grace` | `{days, reason}` — integer 1..90, 1..500 chars, `.strict()` | `200 {tenantId, currentPeriodEnd, graceUntil, status, suspensionCause}` |
 | `GET /api/auth/tenant-subscription-settings` | — | `{trialDays, suspensionHoldDays, renewalGraceDays}` |
 | `PATCH /api/auth/tenant-subscription-settings` | `{trialDays?, suspensionHoldDays?, renewalGraceDays?}` — integers 0..365 / 0..90 / 0..30, at least one, `.strict()` | `{trialDays, suspensionHoldDays, renewalGraceDays}` |
 
@@ -117,6 +118,16 @@ currentPeriodEnd, startedAt, includedFeatureKeys`. Refusals:
 | **One transaction, the tenant row locked `FOR UPDATE`:** the subscription, `billingModel` if changed, the tenant's `package_included` entitlements deleted and one per `includedFeatureKeys` written (`isEnabled`, no `expiresAt`), and an audit row (`tenant_subscription_set`, target `tenant`, the reseller's tenant) | two concurrent `PUT`s cannot interleave the replace; entitlements from `addon_purchased` / `admin_granted` are never touched |
 | The keys are read under a shared lock on the package | a concurrent package edit is wholly before or after the `PUT` (F-018-o) |
 | `trialDays` is the platform's one `tenant_subscription_setting` row (`id = 1`, CHECK 0..365, default 14), edited with an audit row (`tenant_subscription_setting_update`); it applies to trials started after the edit. `renewalGraceDays` (CHECK 0..30, default 3) is on the same row and read by each renewal | a setting the platform owner changes without a deploy (user, 2026-09-17) |
+
+### More time to pay (F-019-g)
+
+| Rule | Why |
+|---|---|
+| `graceUntil` = the latest of now, the renewal's deadline (`currentPeriodEnd` + `renewalGraceDays`) and an earlier `graceUntil`, plus `days`; the renewal suspends at the later of the two (`renewalDeadline`) | a grant never shortens time already given, and a second grant adds to the first |
+| **No money moves:** no ledger entry, `currentPeriodEnd` unchanged; a paid renewal clears `graceUntil` | a manual credit would record money that never arrived; the period is still owed (user, 2026-09-17) |
+| A `non_payment` suspension is lifted at once (`rules.md` #15; history reason = the given reason, actor the admin); a `manual` one stays; `trial` / `active` keep their status | reactivating by hand was undone by the next sweep |
+| One transaction, the tenant row `FOR UPDATE`: the subscription, the status change if any, one audit row (`tenant_subscription_grace`, target `tenant`, before/after with `days` and `reason`) | the renewal holds the same lock, so a sweep sees the grant wholly or not at all |
+| `terminated` is `reseller_terminated` 409; no subscription is `subscription_not_found` 404 | there is no renewal to postpone |
 
 ## A reseller's status (F-018-f)
 

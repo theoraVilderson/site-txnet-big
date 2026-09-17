@@ -26,7 +26,8 @@ import { lockPackage, replacePackageEntitlements } from '../subscription/package
  *   2026-09-17) — the package's keys replace the `package_included`
  *   entitlements (F-018-o's removals take effect here), and `trial` or a
  *   `non_payment` suspension becomes `active`. A manual suspension stays.
- * - **Short:** until `currentPeriodEnd` + `renewalGraceDays` the owner is
+ * - **Short:** until `currentPeriodEnd` + `renewalGraceDays` — or the platform
+ *   owner's later `graceUntil` (F-019-g) — the owner is
  *   warned at most once a day; after it the tenant is suspended as
  *   `non_payment`. Each notice is an outbox row in the transaction. Nothing is
  *   deleted.
@@ -66,6 +67,15 @@ export function addBillingPeriod(from: Date, model: TenantBillingModel): Date {
   const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
   target.setUTCDate(Math.min(day, lastDay));
   return target;
+}
+
+/**
+ * When an unpaid renewal suspends the reseller: `renewalGraceDays` after the
+ * period end, or the platform owner's `graceUntil` if that is later (F-019-g).
+ */
+export function renewalDeadline(periodEnd: Date, renewalGraceDays: number, graceUntil: Date | null): Date {
+  const byGrace = new Date(periodEnd.getTime() + renewalGraceDays * DAY_MS);
+  return graceUntil && graceUntil > byGrace ? graceUntil : byGrace;
 }
 
 /** The charge's `referenceId`: a name-based UUID of the tenant and the period end it pays for, so a period is charged once. */
@@ -134,6 +144,7 @@ export class TenantRenewalService {
           packageId: true,
           currentPeriodEnd: true,
           renewalWarnedAt: true,
+          graceUntil: true,
           package: { select: { monthlyPrice: true, yearlyPrice: true, includedFeatureKeys: true } },
         },
       });
@@ -159,7 +170,7 @@ export class TenantRenewalService {
         let next = addBillingPeriod(unpaidSuspension ? now : current.currentPeriodEnd, tenant.billingModel);
         // A sweep that did not run for a whole period does not charge the missed ones back to back.
         if (next <= now) next = addBillingPeriod(now, tenant.billingModel);
-        await tx.tenantSubscription.update({ where: { tenantId }, data: { currentPeriodEnd: next, renewalWarnedAt: null } });
+        await tx.tenantSubscription.update({ where: { tenantId }, data: { currentPeriodEnd: next, renewalWarnedAt: null, graceUntil: null } });
         await replacePackageEntitlements(tx, [tenantId], current.package.includedFeatureKeys as string[]);
         if (tenant.status === TenantStatus.trial || unpaidSuspension) {
           await applyTenantStatus(tx, tenantId, { from: tenant.status, to: TenantStatus.active, reason: 'subscription_renewed', actorUserId: null, now });
@@ -168,7 +179,7 @@ export class TenantRenewalService {
       }
 
       if (tenant.status === TenantStatus.suspended) return 'waiting';
-      const suspendsAt = new Date(current.currentPeriodEnd.getTime() + settings.renewalGraceDays * DAY_MS);
+      const suspendsAt = renewalDeadline(current.currentPeriodEnd, settings.renewalGraceDays, current.graceUntil);
       const notice = { tenantId, ownerUserId: tenant.ownerUserId, amount: price.toFixed(2), balance: balance.toFixed(2) };
 
       if (now >= suspendsAt) {

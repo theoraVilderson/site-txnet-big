@@ -8,7 +8,9 @@ import {
   NotFoundException,
   Param,
   ParseUUIDPipe,
+  HttpCode,
   Patch,
+  Post,
   Put,
   Req,
   UnprocessableEntityException,
@@ -19,12 +21,15 @@ import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { PermissionsGuard } from '../../impersonation/guards/permissions.guard';
 import { TENANT_MANAGE } from '../admin/tenant-admin.controller';
 import {
+  GrantGraceInput,
   PutSubscriptionInput,
   UpdateSubscriptionSettingsInput,
+  grantGraceSchema,
   putSubscriptionSchema,
   updateSubscriptionSettingsSchema,
 } from './tenant-subscription.schema';
 import {
+  GraceView,
   SubscriptionSettingsView,
   SubscriptionView,
   TenantSubscriptionActor,
@@ -49,6 +54,7 @@ type ClaimsRequest = { user: { sub: string; tenantId: string } };
 /**
  * A reseller's package and period, and the platform's trial length (F-018-e):
  * `GET|PUT /api/auth/tenants/:id/subscription`,
+ * `POST /api/auth/tenants/:id/subscription/grace` (F-019-g),
  * `GET|PATCH /api/auth/tenant-subscription-settings`.
  */
 @Controller('auth')
@@ -69,6 +75,17 @@ export class TenantSubscriptionController {
   @Get('tenants/:id/subscription')
   async read(@Req() req: ClaimsRequest, @Param('id', new ParseUUIDPipe()) id: string, @Ip() ip: string): Promise<SubscriptionView> {
     return this.refusing(() => this.subscriptions.read(actorOf(req, ip), id));
+  }
+
+  @Post('tenants/:id/subscription/grace')
+  @HttpCode(200)
+  async grace(
+    @Req() req: ClaimsRequest,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(grantGraceSchema)) body: GrantGraceInput,
+    @Ip() ip: string,
+  ): Promise<GraceView> {
+    return this.refusing(() => this.subscriptions.grantGrace(actorOf(req, ip), id, body));
   }
 
   @Get('tenant-subscription-settings')

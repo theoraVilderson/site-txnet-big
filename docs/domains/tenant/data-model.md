@@ -16,7 +16,7 @@ Source of truth: `txnet-backend/prisma/domains/tenant.prisma` (Postgres schema
 | tenant_branding | logo, colours, support contacts, default language | yes | with tenant (cascade) |
 | tenant_domain | subdomain / custom domain + verification | yes | with tenant |
 | tenant_feature_package | plans the platform sells to resellers: unique `name`, `monthlyPrice` / `yearlyPrice` (CHECK: positive, at least one), `includedFeatureKeys`, `isActive`; no RLS (F-018-d) | no (catalog of packages) | permanent, deactivated not deleted |
-| tenant_subscription | one per reseller: `packageId` (RESTRICT), `currentPeriodEnd`, `renewalWarnedAt` (last unpaid-renewal warning, F-019-c); the period is `tenant.billingModel` (F-018-e) | yes | with tenant |
+| tenant_subscription | one per reseller: `packageId` (RESTRICT), `currentPeriodEnd`, `renewalWarnedAt` (last unpaid-renewal warning, F-019-c), `graceUntil` (the platform owner's extra time to pay, F-019-g); the period is `tenant.billingModel` (F-018-e) | yes | with tenant |
 | tenant_subscription_setting | the platform's one row (`id = 1` CHECK): `trialDays` 0..365, default 14; `suspensionHoldDays` 0..90, default 7 (F-018-f); `renewalGraceDays` 0..30, default 3 (F-019-c); no RLS (F-018-e) | no | permanent |
 | tenant_status_history | every status change: `fromStatus`, `toStatus`, `reason`, `actorUserId` (null = the platform); append-only (trigger), FK RESTRICT (F-018-f) | yes | permanent |
 | tenant_feature_entitlement | which feature keys are on for a tenant; `package_included` rows are replaced by a subscription `PUT` or a package `apply`, and added to by a package edit (F-018-e, F-018-o) | yes | until revoked/expired |
@@ -53,6 +53,9 @@ RLS on `tenant_subscription`, the settings row and its CHECKs.
 `20260917001500_tenant_status` (F-018-f) adds the two tenant columns, `tenant_status_history`
 with strict RLS and its append-only trigger, `suspensionHoldDays` and its CHECK,
 and the `tenant_status_changed` NOTIFY trigger on `tenant.tenant`.
+
+`20260917001700_tenant_subscription_grace` (F-019-g) adds `tenant_subscription.graceUntil` and the audit value
+`tenant_subscription_grace`.
 
 `20260917001600_tenant_subscription_renewal` (F-019-c) adds `TenantSuspensionCause` and `tenant.suspensionCause`
 (existing suspensions become `manual`), `tenant_subscription.renewalWarnedAt`, and

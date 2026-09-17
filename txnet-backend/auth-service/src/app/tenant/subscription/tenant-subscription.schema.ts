@@ -34,3 +34,17 @@ export const updateSubscriptionSettingsSchema = z
   .refine((v) => v.trialDays !== undefined || v.suspensionHoldDays !== undefined || v.renewalGraceDays !== undefined, { message: 'at least one setting' });
 
 export type UpdateSubscriptionSettingsInput = z.infer<typeof updateSubscriptionSettingsSchema>;
+
+/**
+ * More time for an unpaid reseller (F-019-g): whole days added to the later of
+ * now and the time it already had, and why. `.strict()`: the deadline is the
+ * service's to compute, never the caller's.
+ */
+export const grantGraceSchema = z
+  .object({
+    days: z.number().int().min(1).max(90),
+    reason: z.string().trim().min(1).max(500),
+  })
+  .strict();
+
+export type GrantGraceInput = z.infer<typeof grantGraceSchema>;
