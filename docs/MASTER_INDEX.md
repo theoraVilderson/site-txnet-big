@@ -26,7 +26,7 @@ no service yet. A unit that is `active` with an empty `source:` is a lie and
 | automation | definition + scheduling + run logs of background workers | active | [->](domains/automation/INDEX.md) |
 | engagement | daily spin wheel with hard financial cap + strict eligibility | draft | [->](domains/engagement/INDEX.md) |
 | support | tickets, ticket messages/attachments, live chat | draft | [->](domains/support/INDEX.md) |
-| notification | notification hub + campaigns + per-recipient delivery state | draft | [->](domains/notification/INDEX.md) |
+| notification | notification hub + campaigns + per-recipient delivery state | active | [->](domains/notification/INDEX.md) |
 | fraud | device fingerprints, central fraud flags + automatic actions | draft | [->](domains/fraud/INDEX.md) |
 | audit | append-only admin audit log, impersonation sessions, account-switch groups | draft | [->](domains/audit/INDEX.md) |
 | ai | recommendation engine with financial guardrails | draft | [->](domains/ai/INDEX.md) |

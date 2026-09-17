@@ -4,7 +4,7 @@
 # so nothing here reaches it.
 # =============================================================================
 #
-# Every NestJS service (auth, bot, worker, gateway, billing) runs straight from
+# Every NestJS service (auth, bot, worker, gateway, billing, notification) runs straight from
 # the host checkout: no image is built and no `npm ci` runs in a container.
 #
 #   - `node_modules` is the host's own (`txnet-backend/node_modules`, bind
@@ -64,6 +64,14 @@ services:
     build: !reset null
     environment:
       - APP_NAME=gateway-service
+    volumes: !override
+      - ../txnet-backend:/app:delegated
+
+  notification-service:
+    <<: *host-node
+    build: !reset null
+    environment:
+      - APP_NAME=notification-service
     volumes: !override
       - ../txnet-backend:/app:delegated
 

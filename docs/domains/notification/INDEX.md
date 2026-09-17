@@ -1,19 +1,21 @@
 ---
 id: notification
 layer: domain
-status: draft
-version: 1
+status: active
+version: 2
 keywords: [notification, campaign, delivery, push, sms, email]
-source: []
+source:
+  - txnet-backend/notification-service/**
+  - txnet-backend/prisma/domains/notification.prisma
 owns_tables: [notification, notification_campaign, notification_campaign_recipient]
 depends_on: [identity, tenant, automation]
-updated: 2026-09-04
+updated: 2026-09-17
 ---
 
 # Notification
 
 **Responsibility (one sentence):** the notification hub: per-user in-app notifications, admin broadcast campaigns with audience filters, and per-recipient delivery state across push/SMS/bot channels.
-**Explicitly NOT responsible for:** actually sending SMS/bot messages (delivery adapters), authoring the events that trigger notifications.
+**Explicitly NOT responsible for:** Telegram/Bale drivers (`messenger`, D-10), authoring the events that trigger notifications. Runs in `notification-service` (ADR-0052).
 
 ## Files
 | File | Read it when |
@@ -27,5 +29,6 @@ updated: 2026-09-04
 | Date | Change |
 |---|---|
 | 2026-09-04 | Documented from schema during onboarding — no service yet |
+| 2026-09-17 | `draft` -> `active`, v2: `notification-service` and the inbox (F-035-a, ADR-0052) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

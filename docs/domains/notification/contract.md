@@ -1,44 +1,56 @@
 ---
 id: notification
 layer: domain
-status: draft
-version: 1
-updated: 2026-09-04
+status: active
+version: 2
+updated: 2026-09-17
 ---
 
 # Contract — notification
 
-**DRAFT — schema only, no service implements this yet.** Intent derived from
-`txnet-backend/prisma/domains/notification.prisma`.
+Runs in `notification-service` (ADR-0052). **Live since F-035-a:** a user's
+in-app inbox. Campaigns (F-035-c/d) and delivery (F-035-e/f) are not built —
+their tables exist, nothing reads or writes them.
 
 ## TL;DR
 
-Per-user in-app `notification` rows (type, title, body, `readAt`). Admin `notification_campaign` with a JSON audience filter, executed by an `automation` worker, fanning out to `notification_campaign_recipient` rows with a per-recipient `deliveryStatus`. `tenantId = null` = platform-wide campaign.
+A user reads a page of their own `notification` rows with the unread count,
+and marks some or all read. Another unit puts a row in a user's inbox through
+the internal seam. Whose inbox is always the gate's `X-User-Id`.
 
-## Provides (intended)
+## Provides
 
-| Operation | Input | Output | Sync/Async | Errors |
+All routes under `/api`. Envelope, errors and 429 as every service (F-094).
+
+| Operation | Route | Input | Output | Errors |
 |---|---|---|---|---|
-| create notification | userId, type, title, body | `notification` | sync | — |
-| mark read | userId, notificationId(s) | updated `readAt` | sync | — |
-| create campaign | adminId, channel, filter, body | `notification_campaign` (`draft`) | sync | — |
-| execute campaign | campaignId | recipients + `sending` -> `completed` | async (worker) | filter invalid |
+| read the inbox | `GET notifications` (gated) | `page`, `pageSize` (≤100, default 1/20), `unreadOnly=true\|false` | `{ items[], page, pageSize, total, unreadCount }`; item = `id, type, title, body, readAt, createdAt` (ISO), newest first | 400 `validation.failed`, 401 |
+| mark read | `POST notifications/read` (gated) | `{ ids?: uuid[1..100] }` — absent = all | `{ marked, unreadCount }` | 400, 401 |
+| create | `POST internal/notifications` (`SERVICE_AUTH_TOKEN`) | `{ userId, type, title ≤200, body ≤2000 }` | the item, 201 | 400; 404 on a missing or wrong token |
+
+- `unreadCount` is over the whole inbox, whatever the page or filter.
+- `marked` counts rows that changed. An id that is read already, does not exist
+  or is another user's all count 0 alike — no route reveals another inbox.
+- `title`/`body` are stored text: the caller renders the user's language first.
+- Rate limits, per user, 15 min: `NOTIFICATION_READ` (300), `NOTIFICATION_WRITE`
+  (120). The internal seam is not limited.
 
 ## Emits (events)
 
-None planned yet — no message bus is wired up.
+None yet. F-035-b pushes a new row to an open panel (outbox, ADR-0021).
 
 ## Consumes
 
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
-| identity | `userId`, audience resolution | fan-out blocked |
-| tenant | scope a campaign to one tenant's users | platform-wide only |
-| automation | the worker that executes the campaign | campaign stuck in `draft`/`sending` |
+| forward-auth | identity headers on gated routes | 401 |
+| identity | `userId` (no FK across schemas; a caller names a real user) | — |
+| automation | the worker for campaign fan-out (F-035-d, not built) | — |
 
-## Guarantees (intended)
+## Guarantees
 
-- Campaign execution is idempotent per recipient (one row per `(campaignId, userId)`).
+- `readAt` is written once, by the first mark-read (invariant 5).
+- Campaign execution will be idempotent per `(campaignId, userId)` (F-035-d).
 
 ## Deprecations
 

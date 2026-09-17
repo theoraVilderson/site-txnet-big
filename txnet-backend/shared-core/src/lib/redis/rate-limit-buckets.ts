@@ -200,6 +200,15 @@ export const RateLimitBucket = {
    * verifying payment must not use up the financial page's list budget.
    */
   WALLET_PAYMENT: 'wallet:payment',
+
+  /**
+   * A user's notification inbox in `notification-service` (F-035-a), per user.
+   * The read budget is a polling budget — the panel's dropdown asks for the
+   * unread count until F-035-b pushes it — and marking read is its own bucket
+   * so a user clearing their inbox never uses up the badge's refreshes.
+   */
+  NOTIFICATION_READ: 'notification:read',
+  NOTIFICATION_WRITE: 'notification:write',
 } as const;
 
 export type RateLimitBucket =

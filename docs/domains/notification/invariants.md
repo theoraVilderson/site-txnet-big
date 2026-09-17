@@ -1,21 +1,25 @@
 ---
 id: notification
 layer: domain
-status: draft
-updated: 2026-09-04
+status: active
+updated: 2026-09-17
 ---
 
 # Invariants — notification
 
-**DRAFT** — extracted from schema comments; none are enforced in code yet.
+#1–#4 were extracted from schema comments and stay unenforced until their rows
+(F-035-c/d/e) build campaigns. #5–#6 are enforced since F-035-a.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
-| 1 | A campaign with `tenantId` set only ever creates recipients whose user belongs to that tenant | planned service layer / schema | see contract | 
-| 2 | `sentCount` + `failedCount` reconcile with `notification_campaign_recipient` rows | planned service layer / schema | see contract | 
-| 3 | Delivery adapters (SMS/bot/push) are outside this unit — it owns *state*, not transport | planned service layer / schema | see contract | 
-| 4 | A recipient row moves `queued -> sent | failed` and is not re-queued silently | planned service layer / schema | see contract | 
+| 1 | A campaign with `tenantId` set only ever creates recipients whose user belongs to that tenant | planned — F-035-d | one tenant messages another's users |
+| 2 | `sentCount` + `failedCount` reconcile with `notification_campaign_recipient` rows | planned — F-035-d | reports lie |
+| 3 | Telegram/Bale drivers stay in `messenger`; email/SMS adapters live here (D-10) — this unit owns *state* | planned — F-035-e/f | duplicated driver logic |
+| 4 | A recipient row moves `queued -> sent \| failed` and is not re-queued silently | planned — F-035-d | double delivery |
+| 5 | Every inbox read and write is filtered by the gate's `userId`, never an id from the request. `notification` has no `tenantId`, so no RLS stands behind this | `notification-inbox.service.ts` | a user reads or clears another's inbox |
+| 6 | `readAt` is set only on rows still `null` | `markRead`'s `where` | "first seen" is rewritten |
 
 ## How to test
 
-To be written when a service exists.
+`notification-service/src/app/notifications/notification-inbox.spec.ts`
+asserts #5 and #6 on the queries built.
