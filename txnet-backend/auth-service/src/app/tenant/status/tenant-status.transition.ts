@@ -13,6 +13,7 @@ import { Prisma, TenantStatus, TenantSuspensionCause } from '@prisma/client';
  */
 
 const DAY_MS = 86_400_000;
+const STATUS_SELECT = { id: true, status: true, suspensionCause: true, suspendedAt: true, graceEndsAt: true, suspendedReason: true } as const;
 
 export type TenantStatusChange = {
   from: TenantStatus;
@@ -29,6 +30,7 @@ export type TenantStatusChange = {
 export type TenantStatusRow = {
   id: string;
   status: TenantStatus;
+  suspensionCause: TenantSuspensionCause | null;
   suspendedAt: Date | null;
   graceEndsAt: Date | null;
   suspendedReason: string | null;
@@ -52,10 +54,30 @@ export async function applyTenantStatus(tx: Prisma.TransactionClient, tenantId: 
   const after = await tx.tenant.update({
     where: { id: tenantId },
     data,
-    select: { id: true, status: true, suspendedAt: true, graceEndsAt: true, suspendedReason: true },
+    select: STATUS_SELECT,
   });
   await tx.tenantStatusHistory.create({
     data: { tenantId, fromStatus: change.from, toStatus: to, reason, actorUserId: change.actorUserId },
+  });
+  return after;
+}
+
+/**
+ * A reseller suspended for non-payment is suspended again by hand (F-018-s):
+ * the status stays, the cause becomes `manual` so a payment no longer lifts it,
+ * and `suspendedAt` / `graceEndsAt` are kept — `/sub`'s hold does not restart.
+ * One `suspended -> suspended` history row. A reason given replaces the old one.
+ */
+export async function makeSuspensionManual(
+  tx: Prisma.TransactionClient,
+  tenantId: string,
+  change: { reason: string | null; actorUserId: string },
+): Promise<TenantStatusRow> {
+  const data: Prisma.TenantUpdateInput = { suspensionCause: TenantSuspensionCause.manual };
+  if (change.reason !== null) data.suspendedReason = change.reason;
+  const after = await tx.tenant.update({ where: { id: tenantId }, data, select: STATUS_SELECT });
+  await tx.tenantStatusHistory.create({
+    data: { tenantId, fromStatus: TenantStatus.suspended, toStatus: TenantStatus.suspended, reason: change.reason, actorUserId: change.actorUserId },
   });
   return after;
 }

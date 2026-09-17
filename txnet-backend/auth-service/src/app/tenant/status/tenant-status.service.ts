@@ -3,7 +3,7 @@ import { AdminAction, AuditTargetType, Prisma, TenantStatus, TenantSuspensionCau
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { ChangeTenantStatusInput } from './tenant-status.schema';
-import { applyTenantStatus } from './tenant-status.transition';
+import { applyTenantStatus, makeSuspensionManual } from './tenant-status.transition';
 
 /**
  * The platform owner suspends, reactivates and terminates a reseller (F-018-f,
@@ -19,6 +19,10 @@ import { applyTenantStatus } from './tenant-status.transition';
  * `suspensionHoldDays`, cause `manual`; reactivating clears them
  * (`tenant-status.transition.ts`, shared with the renewal). `terminated` is
  * final. Nothing is deleted by any of it.
+ *
+ * Suspending a reseller already suspended **for non-payment** is not
+ * `status_unchanged`: it makes the cause `manual`, so a later payment renews
+ * the subscription but does not reopen the panel (F-018-s).
  */
 
 export type TenantStatusActor = { adminId: string; tenantId: string; ip: string };
@@ -26,6 +30,8 @@ export type TenantStatusActor = { adminId: string; tenantId: string; ip: string 
 export type TenantStatusView = {
   tenantId: string;
   status: TenantStatus;
+  /** Why it is suspended: `manual` or `non_payment` (a payment lifts only that); null unless suspended. */
+  suspensionCause: TenantSuspensionCause | null;
   suspendedAt: Date | null;
   graceEndsAt: Date | null;
   suspendedReason: string | null;
@@ -59,6 +65,7 @@ type LockedTenant = {
   id: string;
   tenantType: TenantType;
   status: TenantStatus;
+  suspensionCause: TenantSuspensionCause | null;
   suspendedAt: Date | null;
   graceEndsAt: Date | null;
 };
@@ -77,27 +84,32 @@ export class TenantStatusService {
     const holdDays = input.status === TenantStatus.suspended ? await this.holdDays() : 0;
     const view = await this.all.$transaction(async (tx) => {
       const [row] = await tx.$queryRaw<LockedTenant[]>`
-        SELECT id, "tenantType", status, "suspendedAt", "graceEndsAt"
+        SELECT id, "tenantType", status, "suspensionCause", "suspendedAt", "graceEndsAt"
         FROM "tenant"."tenant"
         WHERE id = ${tenantId}::uuid AND "deletedAt" IS NULL
         FOR UPDATE`;
       if (!row || row.tenantType !== TenantType.reseller) throw new TenantStatusRefused('reseller_not_found', tenantId);
       if (row.status === TenantStatus.terminated) throw new TenantStatusRefused('reseller_terminated', tenantId);
-      if (row.status === input.status) throw new TenantStatusRefused('status_unchanged', input.status);
-
       const reason = input.reason ?? null;
-      const after = await applyTenantStatus(tx, tenantId, {
-        from: row.status,
-        to: input.status,
-        reason,
-        actorUserId: actor.adminId,
-        cause: TenantSuspensionCause.manual,
-        holdDays,
-        now: new Date(),
-      });
+      const toManual =
+        row.status === TenantStatus.suspended && input.status === TenantStatus.suspended && row.suspensionCause === TenantSuspensionCause.non_payment;
+      if (row.status === input.status && !toManual) throw new TenantStatusRefused('status_unchanged', input.status);
+
+      const after = toManual
+        ? await makeSuspensionManual(tx, tenantId, { reason, actorUserId: actor.adminId })
+        : await applyTenantStatus(tx, tenantId, {
+            from: row.status,
+            to: input.status,
+            reason,
+            actorUserId: actor.adminId,
+            cause: TenantSuspensionCause.manual,
+            holdDays,
+            now: new Date(),
+          });
       const result: TenantStatusView = {
         tenantId: after.id,
         status: after.status,
+        suspensionCause: after.suspensionCause,
         suspendedAt: after.suspendedAt,
         graceEndsAt: after.graceEndsAt,
         suspendedReason: after.suspendedReason,
@@ -109,7 +121,7 @@ export class TenantStatusService {
           action: AdminAction.tenant_status_change,
           targetEntityType: AuditTargetType.tenant,
           targetEntityId: tenantId,
-          oldValue: JSON.parse(JSON.stringify({ status: row.status, suspendedAt: row.suspendedAt, graceEndsAt: row.graceEndsAt })) as Prisma.InputJsonValue,
+          oldValue: JSON.parse(JSON.stringify({ status: row.status, suspensionCause: row.suspensionCause, suspendedAt: row.suspendedAt, graceEndsAt: row.graceEndsAt })) as Prisma.InputJsonValue,
           newValue: JSON.parse(JSON.stringify(result)) as Prisma.InputJsonValue,
           adminIpAddress: actor.ip,
         },

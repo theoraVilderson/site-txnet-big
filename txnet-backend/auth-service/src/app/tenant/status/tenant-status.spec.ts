@@ -127,13 +127,13 @@ describe('TenantStatusService', () => {
   const DAY = 86_400_000;
   const actor = { adminId: ADMIN, tenantId: OWNER_TENANT, ip: '127.0.0.1' };
 
-  const build = (opts: { callerType?: string; status?: string; tenantType?: string; holdDays?: number; found?: boolean } = {}) => {
+  const build = (opts: { callerType?: string; status?: string; cause?: string | null; tenantType?: string; holdDays?: number; found?: boolean } = {}) => {
     const writes: string[] = [];
-    const row = { id: RESELLER, tenantType: opts.tenantType ?? 'reseller', status: opts.status ?? 'active', suspendedAt: null, graceEndsAt: null };
+    const row = { id: RESELLER, tenantType: opts.tenantType ?? 'reseller', status: opts.status ?? 'active', suspensionCause: opts.cause ?? null, suspendedAt: null, graceEndsAt: null, suspendedReason: null };
     const tx = {
       $queryRaw: vi.fn(async () => (writes.push('lock'), opts.found === false ? [] : [row])),
       tenant: { update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => (writes.push('tenant'), { ...row, ...data })) },
-      tenantStatusHistory: { create: vi.fn(async () => (writes.push('history'), {})) },
+      tenantStatusHistory: { create: vi.fn(async (_: { data: Record<string, unknown> }) => (writes.push('history'), {})) },
       adminAuditLog: { create: vi.fn(async (_: { data: Record<string, unknown> }) => (writes.push('audit'), {})) },
     };
     const prisma = { tenant: { findUnique: vi.fn(async () => ({ tenantType: opts.callerType ?? 'platform_owner' })) } };
@@ -181,9 +181,20 @@ describe('TenantStatusService', () => {
     expect(tx.tenant.update.mock.calls[0][0].data).toMatchObject({ status: 'active', suspendedAt: null, graceEndsAt: null, suspendedReason: null });
   });
 
+  it('suspending a reseller suspended for non-payment makes the cause manual, keeping its stamps (F-018-s)', async () => {
+    const { service, tx, writes } = build({ status: 'suspended', cause: 'non_payment' });
+    const view = await service.change(actor, RESELLER, { status: 'suspended', reason: 'spam' });
+
+    expect(writes).toEqual(['lock', 'tenant', 'history', 'audit']);
+    expect(tx.tenant.update.mock.calls[0][0].data).toEqual({ suspensionCause: 'manual', suspendedReason: 'spam' });
+    expect(tx.tenantStatusHistory.create.mock.calls[0][0].data).toMatchObject({ fromStatus: 'suspended', toStatus: 'suspended', reason: 'spam', actorUserId: ADMIN });
+    expect(tx.adminAuditLog.create.mock.calls[0][0].data).toMatchObject({ oldValue: { suspensionCause: 'non_payment' }, newValue: { suspensionCause: 'manual' } });
+    expect(view).toMatchObject({ status: 'suspended', suspensionCause: 'manual' });
+  });
+
   it('terminated is final, an unchanged status is refused, and the platform owner is never a reseller', async () => {
     await expect(build({ status: 'terminated' }).service.change(actor, RESELLER, { status: 'active' })).rejects.toMatchObject({ reason: 'reseller_terminated' });
-    const same = build({ status: 'suspended' });
+    const same = build({ status: 'suspended', cause: 'manual' });
     await expect(same.service.change(actor, RESELLER, { status: 'suspended' })).rejects.toMatchObject({ reason: 'status_unchanged' });
     expect(same.writes).toEqual(['lock']);
     await expect(build({ tenantType: 'platform_owner' }).service.change(actor, OWNER_TENANT, { status: 'suspended' })).rejects.toMatchObject({ reason: 'reseller_not_found' });
