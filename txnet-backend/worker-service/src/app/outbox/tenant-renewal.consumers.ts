@@ -14,8 +14,8 @@ const str = (p: Record<string, unknown>, k: string) => (typeof p[k] === 'string'
 
 /**
  * A credited billing wallet renews its reseller at once (F-019-c, user
- * 2026-09-17): `tenant.billing.credited` -> auth-service's
- * `POST /api/internal/tenant-subscriptions/:tenantId/renew`. The renewal
+ * 2026-09-17): `tenant.billing.credited` -> tenant-service's
+ * `POST /api/internal/tenant-subscriptions/:tenantId/renew` (F-018-v). The renewal
  * repeats safely, so there is no marker; a refusal throws and the event
  * dead-letters, and the `tenant_subscription_renewal` sweep stands behind it.
  */
@@ -30,7 +30,7 @@ export class TenantBillingCreditedConsumer implements OnApplicationBootstrap {
     private readonly broker: BrokerService,
     config: ConfigService,
   ) {
-    this.baseUrl = config.get<string>('AUTH_API_BASE_URL', '').replace(/\/+$/, '');
+    this.baseUrl = config.get<string>('TENANT_API_BASE_URL', '').replace(/\/+$/, '');
     this.serviceToken = config.get<string>('SERVICE_AUTH_TOKEN', '');
     this.timeoutMs = config.get<number>('AUTH_API_TIMEOUT_MS', 30_000);
   }
@@ -43,7 +43,7 @@ export class TenantBillingCreditedConsumer implements OnApplicationBootstrap {
   async handle(event: OutboxMessage): Promise<void> {
     const tenantId = str((event.payload ?? {}) as Record<string, unknown>, 'tenantId');
     if (!tenantId) throw new Error(`outbox event ${event.id} has a payload without its tenant`);
-    if (!this.baseUrl) throw new Error('AUTH_API_BASE_URL is not set');
+    if (!this.baseUrl) throw new Error('TENANT_API_BASE_URL is not set');
     if (!this.serviceToken) throw new Error('SERVICE_AUTH_TOKEN is not set');
 
     const path = `/api/internal/tenant-subscriptions/${encodeURIComponent(tenantId)}/renew`;
@@ -56,9 +56,9 @@ export class TenantBillingCreditedConsumer implements OnApplicationBootstrap {
         body: '{}',
         signal: controller.signal,
       });
-      if (!response.ok) throw new Error(`auth-api answered ${response.status} to ${path}`);
+      if (!response.ok) throw new Error(`tenant-api answered ${response.status} to ${path}`);
       const outcome = envelopeData(await response.json())?.outcome;
-      if (typeof outcome !== 'string') throw new Error(`auth-api answered ${path} without an 'outcome'`);
+      if (typeof outcome !== 'string') throw new Error(`tenant-api answered ${path} without an 'outcome'`);
       if (outcome === 'renewed') this.logger.log(`tenant ${tenantId} renewed on its credit`);
     } finally {
       clearTimeout(timer);

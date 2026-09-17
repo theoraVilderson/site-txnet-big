@@ -16,10 +16,11 @@ import {
   UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
-import { AuthGuard } from '../../auth/auth.guard';
-import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
-import { PermissionsGuard } from '../../impersonation/guards/permissions.guard';
-import { TENANT_MANAGE } from '../admin/tenant-admin.controller';
+import type { Request } from 'express';
+
+import { identityOf } from '../request/identity.middleware';
+import { TenantPermissionGuard } from '../request/tenant-permission.guard';
+import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import {
   GrantGraceInput,
   PutSubscriptionInput,
@@ -49,22 +50,24 @@ const STATUS: Record<TenantSubscriptionRejection, 403 | 404 | 409 | 422> = {
   package_not_sold_for_period: 422,
 };
 
-type ClaimsRequest = { user: { sub: string; tenantId: string } };
-
 /**
  * A reseller's package and period, and the platform's trial length (F-018-e):
- * `GET|PUT /api/auth/tenants/:id/subscription`,
- * `POST /api/auth/tenants/:id/subscription/grace` (F-019-g),
- * `GET|PATCH /api/auth/tenant-subscription-settings`.
+ * `GET|PUT /api/tenants/:id/subscription`,
+ * `POST /api/tenants/:id/subscription/grace` (F-019-g),
+ * `GET|PATCH /api/tenant-subscription-settings`.
+ *
+ * Moved out of `auth-service` with F-018-v (ADR-0058), behaviour unchanged:
+ * the paths lost their `/auth` prefix, and the caller is whoever
+ * `forward-auth` proved, as on the package routes.
  */
-@Controller('auth')
-@UseGuards(AuthGuard, new PermissionsGuard([TENANT_MANAGE]))
+@Controller()
+@UseGuards(TenantPermissionGuard)
 export class TenantSubscriptionController {
   constructor(private readonly subscriptions: TenantSubscriptionService) {}
 
   @Put('tenants/:id/subscription')
   async put(
-    @Req() req: ClaimsRequest,
+    @Req() req: Request,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(putSubscriptionSchema)) body: PutSubscriptionInput,
     @Ip() ip: string,
@@ -73,14 +76,14 @@ export class TenantSubscriptionController {
   }
 
   @Get('tenants/:id/subscription')
-  async read(@Req() req: ClaimsRequest, @Param('id', new ParseUUIDPipe()) id: string, @Ip() ip: string): Promise<SubscriptionView> {
+  async read(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string, @Ip() ip: string): Promise<SubscriptionView> {
     return this.refusing(() => this.subscriptions.read(actorOf(req, ip), id));
   }
 
   @Post('tenants/:id/subscription/grace')
   @HttpCode(200)
   async grace(
-    @Req() req: ClaimsRequest,
+    @Req() req: Request,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(grantGraceSchema)) body: GrantGraceInput,
     @Ip() ip: string,
@@ -89,13 +92,13 @@ export class TenantSubscriptionController {
   }
 
   @Get('tenant-subscription-settings')
-  async readSettings(@Req() req: ClaimsRequest, @Ip() ip: string): Promise<SubscriptionSettingsView> {
+  async readSettings(@Req() req: Request, @Ip() ip: string): Promise<SubscriptionSettingsView> {
     return this.refusing(() => this.subscriptions.readSettings(actorOf(req, ip)));
   }
 
   @Patch('tenant-subscription-settings')
   async updateSettings(
-    @Req() req: ClaimsRequest,
+    @Req() req: Request,
     @Body(new ZodValidationPipe(updateSubscriptionSettingsSchema)) body: UpdateSubscriptionSettingsInput,
     @Ip() ip: string,
   ): Promise<SubscriptionSettingsView> {
@@ -122,6 +125,7 @@ export class TenantSubscriptionController {
   }
 }
 
-function actorOf(req: ClaimsRequest, ip: string): TenantSubscriptionActor {
-  return { adminId: req.user.sub, tenantId: req.user.tenantId, ip };
+function actorOf(req: Request, ip: string): TenantSubscriptionActor {
+  const identity = identityOf(req);
+  return { adminId: identity.userId, tenantId: identity.tenantId, ip };
 }

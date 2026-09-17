@@ -113,7 +113,8 @@ an adjustment's is the platform owner's request id.
 
 ## Subscription renewal — the platform charges (F-019-c)
 
-`TenantRenewalService` in `auth-service/src/app/tenant/renewal/`. What the
+`TenantRenewalService` in `tenant-service/src/app/renewal/` (moved with
+F-018-v, ADR-0058; the worker reaches it at `TENANT_API_BASE_URL`). What the
 renewal does to a reseller's status is [rules.md](rules.md) #10-#13; the
 invariant is 19.
 
@@ -135,7 +136,7 @@ invariant is 19.
 | Every notice is an outbox row in the renewal's transaction: `tenant.subscription.payment_due` `{tenantId, ownerUserId, amount, balance, suspendsAt}`, `tenant.subscription.suspended` `{tenantId, ownerUserId, amount, balance}` | a warning is owed exactly when the state that caused it committed (ADR-0021) |
 | The worker's `TenantSubscriptionNoticeConsumer` sends them to the owner through `POST /api/internal/notify/user` (`subscriptionPaymentDue` / `subscriptionSuspended`): the panel inbox always, the owner's linked bots best effort, in the owner's language | an owner may have no linked bot; the inbox copy is the one that must land |
 
-**Proof:** `tenant/renewal/tenant-renewal.spec.ts`.
+**Proof:** `tenant-service` `renewal/tenant-renewal.spec.ts`.
 
 ## Not built
 

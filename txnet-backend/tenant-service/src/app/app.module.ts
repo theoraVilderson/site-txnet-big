@@ -10,6 +10,7 @@ import { LocaleModule } from './locale/locale.module';
 import { PackagesModule } from './packages/packages.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
+import { SubscriptionModule } from './subscription/subscription.module';
 import { IdentityMiddleware } from './request/identity.middleware';
 
 /** The service-to-service seam: reached by the platform's processes, never through Traefik. */
@@ -17,8 +18,9 @@ const INTERNAL_ROUTES = 'internal/*';
 
 /**
  * `tenant-service` (F-018-t, ADR-0058): tenant administration, out of
- * `auth-service`. Packages arrived with F-018-u; subscription, status and
- * resellers move in with F-018-v … F-018-y, and inherit this wiring.
+ * `auth-service`. Packages arrived with F-018-u, subscription, grace and
+ * renewal with F-018-v; status and resellers move in with F-018-w … F-018-y,
+ * and inherit this wiring.
  */
 @Module({
   imports: [
@@ -27,6 +29,7 @@ const INTERNAL_ROUTES = 'internal/*';
     RedisModule,
     LocaleModule,
     PackagesModule,
+    SubscriptionModule,
   ],
   controllers: [HealthController],
   providers: [

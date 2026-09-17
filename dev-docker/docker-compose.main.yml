@@ -636,6 +636,11 @@ services:
       # says which process is calling and never which user.
       - BILLING_API_BASE_URL=http://billing-service:3000
       - BILLING_API_TIMEOUT_MS=${BILLING_API_TIMEOUT_MS:-30000}
+      # The fourth end of it: tenant-service owns a reseller's subscription and
+      # its renewal since F-018-v (ADR-0058). The sweep job and the
+      # credited-wallet consumer call it; `AUTH_API_TIMEOUT_MS` is the budget
+      # for both seams.
+      - TENANT_API_BASE_URL=http://tenant-service:3000
       # Reconciliation's own budget (F-092-l): a batch there is one call to a
       # bank per payment, and the bank is the slow part.
       - BILLING_RECONCILE_TIMEOUT_MS=${BILLING_RECONCILE_TIMEOUT_MS:-120000}

@@ -1,5 +1,5 @@
+import { TenantBillingModel } from '@prisma/client';
 import { z } from 'zod';
-import { BILLING_MODELS } from '../admin/tenant-admin.schema';
 
 /**
  * The wire shape of a reseller's subscription (F-018-e).
@@ -7,6 +7,13 @@ import { BILLING_MODELS } from '../admin/tenant-admin.schema';
  * `.strict()`: `currentPeriodEnd` is the service's to set — the trial on the
  * first package, F-019-c's renewals after — never the caller's.
  */
+
+/**
+ * D-41: subscription only, no metering. `auth-service`'s reseller schema holds
+ * the twin until F-018-y moves it here, for the reason the zod pipe gives — an
+ * Nx app cannot import an Nx app.
+ */
+export const BILLING_MODELS = [TenantBillingModel.subscription_monthly, TenantBillingModel.subscription_yearly] as const;
 
 export const putSubscriptionSchema = z
   .object({

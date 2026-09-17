@@ -256,6 +256,13 @@ export const envSchema = z.object({
    * missing.
    */
   AUTH_API_BASE_URL: optional(z.string()),
+  /**
+   * The same seam, at `tenant-service`: a reseller's subscription and its
+   * renewal moved there with F-018-v (ADR-0058), so the sweep job and the
+   * credited-wallet consumer call this base URL and not `AUTH_API_BASE_URL`.
+   * Optional for the reason above — an unset seam fails that job's own run.
+   */
+  TENANT_API_BASE_URL: optional(z.string()),
   SERVICE_AUTH_TOKEN: optional(z.string()),
   /**
    * How long a job waits on that seam. It matters more here than in a request

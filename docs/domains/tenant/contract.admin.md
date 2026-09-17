@@ -58,17 +58,19 @@ password.containsProfileData`.
 
 ## Packages the platform sells (F-018-d)
 
-Code: `auth-service/src/app/tenant/packages/`. The same guard and owner check as
-the routes above. `tenant_feature_package` has no `tenantId` and no RLS, so the
-app pool serves it; the audit row carries the platform owner's tenant.
+Code: `tenant-service/src/app/packages/` (moved out of `auth-service` with
+F-018-u, ADR-0058). The caller is the identity `forward-auth` forwarded, holding
+`tenant.manage`, and the owner check is the service's own, as above.
+`tenant_feature_package` has no `tenantId` and no RLS, so the app pool serves
+it; the audit row carries the platform owner's tenant.
 
 | Route | Body / query | Answer |
 |---|---|---|
-| `POST /api/auth/tenant-packages` | `{name, monthlyPrice?, yearlyPrice?, includedFeatureKeys}`, `.strict()` | `201` a package view |
-| `GET /api/auth/tenant-packages` | `active` `true`/`false` (absent: all) | packages by name |
-| `GET /api/auth/tenant-packages/:id` | — | one package view |
-| `PATCH /api/auth/tenant-packages/:id` | any of the create fields, a price may be `null`, `isActive` | the package view after |
-| `POST /api/auth/tenant-packages/:id/apply` | — | `200 {packageId, includedFeatureKeys, subscribers}` |
+| `POST /api/tenant-packages` | `{name, monthlyPrice?, yearlyPrice?, includedFeatureKeys}`, `.strict()` | `201` a package view |
+| `GET /api/tenant-packages` | `active` `true`/`false` (absent: all) | packages by name |
+| `GET /api/tenant-packages/:id` | — | one package view |
+| `PATCH /api/tenant-packages/:id` | any of the create fields, a price may be `null`, `isActive` | the package view after |
+| `POST /api/tenant-packages/:id/apply` | — | `200 {packageId, includedFeatureKeys, subscribers}` |
 
 A package view: `id, name, monthlyPrice, yearlyPrice` (decimal strings or
 `null`, C-02), `includedFeatureKeys, isActive`. Refusals: `not_platform_owner`
@@ -86,20 +88,21 @@ A package view: `id, name, monthlyPrice, yearlyPrice` (decimal strings or
 | Each write and its audit row (`tenant_package_create` / `tenant_package_update`, target `tenant_feature_package`) are one transaction; an update audits only the fields it changed, before and after | the trail says who re-priced or withdrew a package |
 | **A key added to `includedFeatureKeys` reaches every current subscriber in the edit's transaction** (a `package_included` entitlement, unless held); **a removed key stays until the subscriber's renewal** (F-019-c re-copies the package) | a subscriber gets a new feature at once and never loses one mid-period it paid for (user, 2026-09-17, F-018-o) |
 | **`apply` forces the list now:** every subscriber's `package_included` entitlements are replaced by the package's, removals included; one audit row `tenant_package_apply` with the keys and the tenant ids. An inactive package may be applied | sometimes a removal must be immediate (user, 2026-09-17) |
-| Lock order everywhere (edit, `apply`, subscription `PUT`): the package row, then subscription / tenant rows (`subscription/package-entitlements.ts`) | an edit and a subscription change on one package serialise, never deadlock, and a tenant that just left a package is not granted its keys |
+| Lock order everywhere (edit, `apply`, subscription `PUT`): the package row, then subscription / tenant rows (`package-entitlements.ts`) | an edit and a subscription change on one package serialise, never deadlock, and a tenant that just left a package is not granted its keys |
 
 ## A reseller's subscription (F-018-e)
 
-Code: `auth-service/src/app/tenant/subscription/`. The same guard and owner
-check; every read and write after it is on the cross-tenant pool.
+Code: `tenant-service/src/app/subscription/` (moved with F-018-v, ADR-0058).
+The same permission and owner check as the package routes; every read and write
+after it is on the cross-tenant pool.
 
 | Route | Body | Answer |
 |---|---|---|
-| `PUT /api/auth/tenants/:id/subscription` | `{packageId, billingModel}`, `.strict()` | a subscription view |
-| `GET /api/auth/tenants/:id/subscription` | — | a subscription view |
-| `POST /api/auth/tenants/:id/subscription/grace` | `{days, reason}` — integer 1..90, 1..500 chars, `.strict()` | `200 {tenantId, currentPeriodEnd, graceUntil, status, suspensionCause}` |
-| `GET /api/auth/tenant-subscription-settings` | — | `{trialDays, suspensionHoldDays, renewalGraceDays}` |
-| `PATCH /api/auth/tenant-subscription-settings` | `{trialDays?, suspensionHoldDays?, renewalGraceDays?}` — integers 0..365 / 0..90 / 0..30, at least one, `.strict()` | `{trialDays, suspensionHoldDays, renewalGraceDays}` |
+| `PUT /api/tenants/:id/subscription` | `{packageId, billingModel}`, `.strict()` | a subscription view |
+| `GET /api/tenants/:id/subscription` | — | a subscription view |
+| `POST /api/tenants/:id/subscription/grace` | `{days, reason}` — integer 1..90, 1..500 chars, `.strict()` | `200 {tenantId, currentPeriodEnd, graceUntil, status, suspensionCause}` |
+| `GET /api/tenant-subscription-settings` | — | `{trialDays, suspensionHoldDays, renewalGraceDays}` |
+| `PATCH /api/tenant-subscription-settings` | `{trialDays?, suspensionHoldDays?, renewalGraceDays?}` — integers 0..365 / 0..90 / 0..30, at least one, `.strict()` | `{trialDays, suspensionHoldDays, renewalGraceDays}` |
 
 A subscription view: `tenantId, packageId, packageName, billingModel,
 currentPeriodEnd, startedAt, includedFeatureKeys`. Refusals:

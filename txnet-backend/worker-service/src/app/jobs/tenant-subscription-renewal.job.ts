@@ -35,13 +35,13 @@ export class TenantSubscriptionRenewalJob implements Job {
   private readonly timeoutMs: number;
 
   constructor(config: ConfigService) {
-    this.baseUrl = config.get<string>('AUTH_API_BASE_URL', '').replace(/\/+$/, '');
+    this.baseUrl = config.get<string>('TENANT_API_BASE_URL', '').replace(/\/+$/, '');
     this.serviceToken = config.get<string>('SERVICE_AUTH_TOKEN', '');
     this.timeoutMs = config.get<number>('AUTH_API_TIMEOUT_MS', 30_000);
   }
 
   async run(): Promise<JobResult> {
-    if (!this.baseUrl) throw new Error('AUTH_API_BASE_URL is not set');
+    if (!this.baseUrl) throw new Error('TENANT_API_BASE_URL is not set');
     if (!this.serviceToken) throw new Error('SERVICE_AUTH_TOKEN is not set');
 
     const controller = new AbortController();
@@ -53,11 +53,11 @@ export class TenantSubscriptionRenewalJob implements Job {
         body: '{}',
         signal: controller.signal,
       });
-      if (!response.ok) throw new Error(`auth-api answered ${response.status} to ${RENEW_DUE_PATH}`);
+      if (!response.ok) throw new Error(`tenant-api answered ${response.status} to ${RENEW_DUE_PATH}`);
       const data = envelopeData(await response.json());
       const counts = [...OUTCOMES, 'due', 'failed'].map((k) => [k, data?.[k]] as const);
       if (counts.some(([, v]) => typeof v !== 'number')) {
-        throw new Error(`auth-api answered ${RENEW_DUE_PATH} without its outcome counts`);
+        throw new Error(`tenant-api answered ${RENEW_DUE_PATH} without its outcome counts`);
       }
       const metrics = Object.fromEntries(counts) as Record<string, number>;
       if (metrics.renewed || metrics.suspended) {

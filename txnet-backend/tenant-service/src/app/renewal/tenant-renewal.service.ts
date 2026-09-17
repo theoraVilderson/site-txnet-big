@@ -2,9 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, TenantBillingModel, TenantBillingReasonType, TenantStatus, TenantSuspensionCause, TenantType } from '@prisma/client';
 import { OutboxEventType, TenantBillingLedger } from '@txnet-backend/shared-core';
 import { createHash } from 'node:crypto';
-import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
+import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { applyTenantStatus } from '../status/tenant-status.transition';
-import { lockPackage, replacePackageEntitlements } from '../subscription/package-entitlements';
+import { lockPackage, replacePackageEntitlements } from '../packages/package-entitlements';
 
 /**
  * A reseller's subscription renewed from its billing wallet (F-019-c, D-41;
@@ -18,7 +18,7 @@ import { lockPackage, replacePackageEntitlements } from '../subscription/package
  *
  * **One transaction on the cross-tenant pool, the package locked (shared) and
  * then the tenant row** — the lock order of every subscription write
- * (`package-entitlements.ts`).
+ * (`packages/package-entitlements.ts`).
  *
  * - **Paid:** the package's price for the tenant's period is debited
  *   (`subscription_charge`), `currentPeriodEnd` moves one calendar period on —

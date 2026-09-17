@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { TENANT_STATUS_STORE, TenantBillingLedger, TenantStatusGuard } from '@txnet-backend/shared-core';
+import { TENANT_STATUS_STORE, TenantStatusGuard } from '@txnet-backend/shared-core';
 import { Client } from 'pg';
 import { RedisService } from '../redis/redis.service';
 import { TenantCacheService } from './tenant-cache.service';
@@ -9,18 +9,15 @@ import { TenantResolverService } from './tenant-resolver.service';
 import { TenantGuard } from './tenant.guard';
 import { TenantAdminController } from './admin/tenant-admin.controller';
 import { TenantAdminService } from './admin/tenant-admin.service';
-import { TenantSubscriptionController } from './subscription/tenant-subscription.controller';
-import { TenantSubscriptionService } from './subscription/tenant-subscription.service';
 import { TenantStatusController } from './status/tenant-status.controller';
 import { TenantStatusService } from './status/tenant-status.service';
 import { TENANT_STATUS_LISTEN_CLIENT, TenantStatusListener } from './status/tenant-status.listener';
-import { TenantRenewalInternalController } from './renewal/tenant-renewal-internal.controller';
-import { TenantRenewalService } from './renewal/tenant-renewal.service';
 
 /**
  * `tenant`'s first module. Its controllers are the platform owner's reseller
- * administration (F-018-c) and which package each reseller is on (F-018-e) — the
- * packages themselves are `tenant-service`'s since F-018-u (ADR-0058); the resolver is consumed by the edge middleware
+ * administration (F-018-c) and its status (F-018-f) — the packages, the
+ * subscription and the renewal are `tenant-service`'s since F-018-u and
+ * F-018-v (ADR-0058); the resolver is consumed by the edge middleware
  * and, from F-061-b, by `register`.
  *
  * `TenantGuard` is global rather than a route decorator: a request that
@@ -42,14 +39,11 @@ import { TenantRenewalService } from './renewal/tenant-renewal.service';
  * here.
  */
 @Module({
-  controllers: [TenantAdminController, TenantSubscriptionController, TenantStatusController, TenantRenewalInternalController],
+  controllers: [TenantAdminController, TenantStatusController],
   providers: [
     TenantAdminService,
-    TenantSubscriptionService,
     TenantStatusService,
     TenantStatusListener,
-    TenantRenewalService,
-    TenantBillingLedger,
     {
       provide: TENANT_STATUS_LISTEN_CLIENT,
       useFactory: (config: ConfigService) => () =>

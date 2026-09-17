@@ -1,7 +1,6 @@
 import { Controller, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
-import { TenantCapability } from '@txnet-backend/shared-core';
-import { ServiceOnlyGuard } from '../../common/guards/service-only.guard';
-import { TenantAgnostic } from '../tenant-agnostic.decorator';
+import { ServiceOnlyGuard } from '@txnet-backend/shared-core';
+
 import { RenewalOutcome, RenewalSweep, TenantRenewalService } from './tenant-renewal.service';
 
 /**
@@ -13,13 +12,14 @@ import { RenewalOutcome, RenewalSweep, TenantRenewalService } from './tenant-ren
  * `:tenantId/renew` is what a `tenant.billing.credited` event asks for, so a
  * payment is charged at once rather than at the next tick. Both repeat safely.
  *
- * `@TenantAgnostic` and `system`: the sweep spans every reseller, and the one
- * it names is exactly the suspended one a payment must reach.
+ * No tenant is in scope here: `internal/*` is outside `IdentityMiddleware`
+ * (F-018-t), so `TenantStatusGuard` does not judge these routes — which is
+ * what the sweep needs, since the tenants it must reach are the suspended
+ * ones. `auth-service` said the same with `@TenantAgnostic` and
+ * `@TenantCapability('system')`, against guards this app does not run.
  */
-@TenantCapability('system')
 @Controller('internal/tenant-subscriptions')
 @UseGuards(ServiceOnlyGuard)
-@TenantAgnostic()
 export class TenantRenewalInternalController {
   constructor(private readonly renewal: TenantRenewalService) {}
 

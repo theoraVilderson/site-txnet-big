@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AdminAction, AuditTargetType, EntitlementSource, Prisma, TenantBillingModel, TenantStatus, TenantSuspensionCause, TenantType } from '@prisma/client';
-import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
-import { PrismaService } from '../../prisma/prisma.service';
+import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { renewalDeadline } from '../renewal/tenant-renewal.service';
 import { applyTenantStatus } from '../status/tenant-status.transition';
-import { lockPackage, replacePackageEntitlements } from './package-entitlements';
+import { lockPackage, replacePackageEntitlements } from '../packages/package-entitlements';
 import type { GrantGraceInput, PutSubscriptionInput, UpdateSubscriptionSettingsInput } from './tenant-subscription.schema';
 
 /**
