@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   ConfirmationMode,
   FeeCalcMode,
@@ -10,7 +11,9 @@ import {
   TenantGatewayVerificationStatus,
   TenantType,
 } from '@prisma/client';
+import { tenantTransaction } from '@txnet-backend/shared-core';
 
+import type { EnvConfig } from '../../config/env.validation';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { InvalidDepositPresets, normalizePresets } from '../deposit/deposit-presets';
@@ -129,7 +132,8 @@ export type GatewayAdminRejection =
   | 'invalid_range'
   | 'missing_field'
   | 'invalid_presets'
-  | 'invalid_callback';
+  | 'invalid_callback'
+  | 'gateway_has_open_payments';
 
 /** A refusal. Its message names the rule and a row id, never a value. */
 export class GatewayAdminRefused extends Error {
@@ -165,6 +169,9 @@ const NOT_CONFIGURED: GatewaySecretsState = {
 };
 
 type Row = Record<string, unknown>;
+type Tx = Prisma.TransactionClient;
+/** `billing.gateway_usage`: every payment and grant that names the gateway, in any tenant. */
+type GatewayUsage = { payments: number; open_payments: number; grants: number };
 
 const str = (v: unknown): string | null => (v === null || v === undefined ? null : String(v));
 /**
@@ -202,11 +209,15 @@ const dec = (v: unknown): Prisma.Decimal | null => (v === null || v === undefine
  * reach is answered as `gateway_not_found`, so the surface never confirms that a
  * competitor's gateway exists.
  *
- * **Why the cross-tenant pool, and what stands in for RLS.** The platform owner
- * works across tenants, which its own `app.tenant_id` cannot see — the same
- * reason and the same pool as `SettlementService`. So the boundary is this
- * file: {@link isOwner} is read on the application pool inside the caller's own
- * scope, and every method decides from it before it reads or writes a row.
+ * **The pool follows the caller (ADR-0053, F-102-f-b).** The platform owner
+ * works across tenants, which its own `app.tenant_id` cannot see, so only it is
+ * served on the cross-tenant pool; any other tenant runs in a
+ * `tenantTransaction` on the app pool, where strict RLS stands behind this
+ * file's own checks. {@link isOwner} decides, {@link within} hands out the pool.
+ * The one thing a tenant admin needs from other tenants — the payments and
+ * grants that name its lent gateway, on delete — goes through two SECURITY
+ * DEFINER functions that check the gateway is the caller's own
+ * (`20260917000200_gateway_release`), never through the cross-tenant pool.
  *
  * **Secrets never pass through a column, an answer or an audit row.** They are
  * relayed to {@link GatewaySecretWriter} and the audit row records only which
@@ -224,12 +235,18 @@ export class GatewayAdminService {
   private readonly logger = new Logger(GatewayAdminService.name);
 
   constructor(
-    /** The caller's own tenant, bound by RLS — used for one read: who is asking. */
+    /** The caller's own tenant, bound by RLS: who is asking, and every tenant admin's work. */
     private readonly prisma: PrismaService,
-    /** Every tenant's gateway rows, by policy. See the class comment. */
+    /** Every tenant's gateway rows, by policy — the platform owner's only. See the class comment. */
     private readonly all: CrossTenantPrismaService,
     @Inject(GATEWAY_SECRET_WRITER) private readonly secrets: GatewaySecretWriter,
+    private readonly config: ConfigService<EnvConfig, true>,
   ) {}
+
+  /** The pool for this caller: the cross-tenant one for the platform owner, a `tenantTransaction` for anyone else. */
+  private within<T>(owner: boolean, fn: (db: Tx) => Promise<T>): Promise<T> {
+    return owner ? this.all.$transaction(fn) : tenantTransaction(this.prisma, fn);
+  }
 
   /**
    * The caller's own default quick amounts (F-092-v) — a gateway with a list of
@@ -237,14 +254,14 @@ export class GatewayAdminService {
    * is its own business, the platform owner's included.
    */
   async presets(actor: GatewayActor): Promise<string[]> {
-    const row = await this.all.depositSetting.findUnique({ where: { tenantId: actor.tenantId } });
+    const row = await tenantTransaction(this.prisma, (db) => db.depositSetting.findUnique({ where: { tenantId: actor.tenantId } }));
     return presetStrings(row?.presets);
   }
 
   async setPresets(actor: GatewayActor, values: string[]): Promise<string[]> {
     const presets = this.presetDecimals(values);
-    const before = await this.presets(actor);
-    await this.all.$transaction(async (tx) => {
+    await tenantTransaction(this.prisma, async (tx) => {
+      const before = presetStrings((await tx.depositSetting.findUnique({ where: { tenantId: actor.tenantId } }))?.presets);
       await tx.depositSetting.upsert({
         where: { tenantId: actor.tenantId },
         create: { tenantId: actor.tenantId, presets, updatedByUserId: actor.adminId },
@@ -269,13 +286,15 @@ export class GatewayAdminService {
   /** Every gateway the caller may manage, platform rows first. */
   async list(actor: GatewayActor, filter: { tenantId?: string } = {}): Promise<GatewayView[]> {
     const owner = await this.isOwner(actor);
-    const platform = owner && !filter.tenantId ? await this.all.paymentGateway.findMany({ orderBy: { createdAt: 'asc' }, take: 200 }) : [];
-    const tenant = await this.all.tenantGatewayConfig.findMany({
-      // A tenant's filter is ignored rather than refused: it can only ever mean its own rows.
-      where: { tenantId: owner ? filter.tenantId : actor.tenantId },
-      orderBy: { createdAt: 'asc' },
-      take: 200,
-    });
+    const [platform, tenant] = await this.within(owner, async (db) => [
+      owner && !filter.tenantId ? await db.paymentGateway.findMany({ orderBy: { createdAt: 'asc' }, take: 200 }) : [],
+      await db.tenantGatewayConfig.findMany({
+        // A tenant's filter is ignored rather than refused: it can only ever mean its own rows.
+        where: { tenantId: owner ? filter.tenantId : actor.tenantId },
+        orderBy: { createdAt: 'asc' },
+        take: 200,
+      }),
+    ]);
 
     const out: GatewayView[] = [];
     for (const row of platform as Row[]) {
@@ -295,11 +314,7 @@ export class GatewayAdminService {
       if (!owner) throw new GatewayAdminRefused('not_platform_owner', 'a platform gateway');
     } else {
       tenantId = input.tenantId ?? actor.tenantId;
-      if (tenantId !== actor.tenantId) {
-        if (!owner) throw new GatewayAdminRefused('not_platform_owner', "another tenant's gateway");
-        const exists = await this.all.tenant.findUnique({ where: { id: tenantId }, select: { id: true } });
-        if (!exists) throw new GatewayAdminRefused('tenant_not_found', tenantId);
-      }
+      if (tenantId !== actor.tenantId && !owner) throw new GatewayAdminRefused('not_platform_owner', "another tenant's gateway");
     }
 
     for (const field of REQUIRED_ON_CREATE) {
@@ -308,14 +323,6 @@ export class GatewayAdminService {
     if (input.verificationStatus !== undefined && !owner) throw new GatewayAdminRefused('verification_is_platform_owners');
     this.assertRanges(input);
     const providerColumns = this.providerRules(input);
-
-    if (tenantId) {
-      const duplicate = await this.all.tenantGatewayConfig.findFirst({
-        where: { tenantId, providerName: input.providerName as PaymentProviderName },
-        select: { id: true },
-      });
-      if (duplicate) throw new GatewayAdminRefused('provider_already_configured', input.providerName);
-    }
 
     const data = { ...this.columns(input, input.source), ...providerColumns };
     data['isActive'] ??= false;
@@ -328,7 +335,18 @@ export class GatewayAdminService {
       Object.assign(data, this.verification(input.verificationStatus, actor));
     }
 
-    const created = await this.all.$transaction(async (tx) => {
+    const created = await this.within(owner, async (tx) => {
+      if (tenantId && tenantId !== actor.tenantId) {
+        const exists = await tx.tenant.findUnique({ where: { id: tenantId }, select: { id: true } });
+        if (!exists) throw new GatewayAdminRefused('tenant_not_found', tenantId);
+      }
+      if (tenantId) {
+        const duplicate = await tx.tenantGatewayConfig.findFirst({
+          where: { tenantId, providerName: input.providerName as PaymentProviderName },
+          select: { id: true },
+        });
+        if (duplicate) throw new GatewayAdminRefused('provider_already_configured', input.providerName);
+      }
       const row = (input.source === 'platform'
         ? await tx.paymentGateway.create({ data: data as Prisma.PaymentGatewayUncheckedCreateInput })
         : await tx.tenantGatewayConfig.create({ data: data as Prisma.TenantGatewayConfigUncheckedCreateInput })) as unknown as Row;
@@ -355,34 +373,35 @@ export class GatewayAdminService {
 
   async update(actor: GatewayActor, ref: GatewayRef, patch: UpdateGatewayInput): Promise<GatewayView> {
     const owner = await this.isOwner(actor);
-    const row = await this.load(ref, actor, owner);
-
-    if (patch.verificationStatus !== undefined && (!owner || ref.source === 'platform')) {
-      throw new GatewayAdminRefused('verification_is_platform_owners');
-    }
-    this.assertRanges({ ...this.snapshot(row), ...patch });
-    const providerColumns = this.providerRules({ ...this.snapshot(row), ...patch });
-
-    if (ref.source === 'tenant' && patch.providerName !== undefined && patch.providerName !== row['providerName']) {
-      const duplicate = await this.all.tenantGatewayConfig.findFirst({
-        where: { tenantId: row['tenantId'] as string, providerName: patch.providerName as PaymentProviderName },
-        select: { id: true },
-      });
-      if (duplicate && duplicate.id !== ref.id) throw new GatewayAdminRefused('provider_already_configured', patch.providerName);
-    }
-
-    const data = { ...this.columns(patch, ref.source), ...providerColumns };
     const secretsChanged = this.secretsNamed(patch);
-    if (ref.source === 'tenant') {
-      if (patch.verificationStatus !== undefined) Object.assign(data, this.verification(patch.verificationStatus, actor));
-      if (!owner && secretsChanged.length > 0 && row['verificationStatus'] === TenantGatewayVerificationStatus.verified) {
-        data['verificationStatus'] = TenantGatewayVerificationStatus.pending_test_transaction;
-        data['verifiedByAdminId'] = null;
-      }
-    }
 
-    const before = this.snapshot(row);
-    const updated = await this.all.$transaction(async (tx) => {
+    const updated = await this.within(owner, async (tx) => {
+      const row = await this.load(tx, ref, actor, owner);
+
+      if (patch.verificationStatus !== undefined && (!owner || ref.source === 'platform')) {
+        throw new GatewayAdminRefused('verification_is_platform_owners');
+      }
+      this.assertRanges({ ...this.snapshot(row), ...patch });
+      const providerColumns = this.providerRules({ ...this.snapshot(row), ...patch });
+
+      if (ref.source === 'tenant' && patch.providerName !== undefined && patch.providerName !== row['providerName']) {
+        const duplicate = await tx.tenantGatewayConfig.findFirst({
+          where: { tenantId: row['tenantId'] as string, providerName: patch.providerName as PaymentProviderName },
+          select: { id: true },
+        });
+        if (duplicate && duplicate.id !== ref.id) throw new GatewayAdminRefused('provider_already_configured', patch.providerName);
+      }
+
+      const data = { ...this.columns(patch, ref.source), ...providerColumns };
+      if (ref.source === 'tenant') {
+        if (patch.verificationStatus !== undefined) Object.assign(data, this.verification(patch.verificationStatus, actor));
+        if (!owner && secretsChanged.length > 0 && row['verificationStatus'] === TenantGatewayVerificationStatus.verified) {
+          data['verificationStatus'] = TenantGatewayVerificationStatus.pending_test_transaction;
+          data['verifiedByAdminId'] = null;
+        }
+      }
+
+      const before = this.snapshot(row);
       let next: Row = row;
       if (Object.keys(data).length > 0) {
         next = (ref.source === 'platform'
@@ -414,32 +433,40 @@ export class GatewayAdminService {
 
   /**
    * Delete a gateway (ADR-0041 §6). A row nothing points at is deleted; one a
-   * payment or a grant points at is deactivated, and its live grants withdrawn,
-   * because the payments taken through it must stay explicable. Either way the
-   * secrets are revoked **first**: a failure after that leaves a gateway that
-   * cannot charge, never one that can.
+   * payment or a grant points at is deactivated, and its live grants withdrawn
+   * — with an audit row in each borrower's tenant — because the payments taken
+   * through it must stay explicable. A gateway with a payment still open, in any
+   * tenant, is not deleted at all: deactivate it first (the user's call,
+   * 2026-09-17). Otherwise the secrets are revoked **first**: a failure after
+   * that leaves a gateway that cannot charge, never one that can.
+   *
+   * Other tenants' payments and grants are reached through
+   * `billing.gateway_usage` / `billing.withdraw_gateway_grants`, on whichever
+   * pool serves the caller; both refuse a gateway that is not the caller's.
    */
   async remove(actor: GatewayActor, ref: GatewayRef): Promise<{ id: string; source: GatewaySource; mode: 'deleted' | 'deactivated'; grantsWithdrawn: number }> {
     const owner = await this.isOwner(actor);
-    const row = await this.load(ref, actor, owner);
-    const pointing = ref.source === 'platform' ? { gatewayId: ref.id } : { tenantGatewayConfigId: ref.id };
+    const lookbackSec = this.config.get('RECONCILIATION_LOOKBACK_SEC', { infer: true });
 
-    const payments = await this.all.paymentTransaction.count({ where: pointing });
-    const grants = await this.all.paymentGatewayGrant.count({ where: pointing });
+    const { row, usage } = await this.within(owner, async (db) => {
+      const row = await this.load(db, ref, actor, owner);
+      const [usage] = await db.$queryRaw<GatewayUsage[]>`
+        SELECT payments, open_payments, grants
+          FROM billing.gateway_usage(${ref.source}::text, ${ref.id}::uuid, ${lookbackSec}::integer)`;
+      return { row, usage };
+    });
+    if (usage.open_payments > 0) throw new GatewayAdminRefused('gateway_has_open_payments', `${ref.id}: ${usage.open_payments} open`);
 
     await this.secrets.revoke(this.target(ref, row, actor));
 
-    const used = payments > 0 || grants > 0;
-    const withdrawnAt = new Date();
-    const grantsWithdrawn = await this.all.$transaction(async (tx) => {
+    const used = usage.payments > 0 || usage.grants > 0;
+    const grantsWithdrawn = await this.within(owner, async (tx) => {
       let withdrawn = 0;
       if (used) {
         if (ref.source === 'platform') await tx.paymentGateway.update({ where: { id: ref.id }, data: { isActive: false } });
         else await tx.tenantGatewayConfig.update({ where: { id: ref.id }, data: { isActive: false } });
-        ({ count: withdrawn } = await tx.paymentGatewayGrant.updateMany({
-          where: { ...pointing, isActive: true },
-          data: { isActive: false, withdrawnAt, withdrawnByAdminId: actor.adminId },
-        }));
+        [{ withdrawn }] = await tx.$queryRaw<Array<{ withdrawn: number }>>`
+          SELECT billing.withdraw_gateway_grants(${ref.source}::text, ${ref.id}::uuid, ${actor.adminId}::uuid, ${actor.ip}::text) AS withdrawn`;
       } else if (ref.source === 'platform') {
         await tx.paymentGateway.delete({ where: { id: ref.id } });
       } else {
@@ -453,7 +480,7 @@ export class GatewayAdminService {
           targetEntityType: 'gateway',
           targetEntityId: ref.id,
           oldValue: { source: ref.source, ...this.snapshot(row) },
-          newValue: { mode: used ? 'deactivated' : 'deleted', payments, grantsWithdrawn: withdrawn },
+          newValue: { mode: used ? 'deactivated' : 'deleted', payments: usage.payments, grantsWithdrawn: withdrawn },
           adminIpAddress: actor.ip,
         },
       });
@@ -476,14 +503,14 @@ export class GatewayAdminService {
   }
 
   /** The row, if the caller may manage it. Anything else is not found — including before the read, for a platform row. */
-  private async load(ref: GatewayRef, actor: GatewayActor, owner: boolean): Promise<Row> {
+  private async load(db: Tx, ref: GatewayRef, actor: GatewayActor, owner: boolean): Promise<Row> {
     if (ref.source === 'platform') {
       if (!owner) throw new GatewayAdminRefused('gateway_not_found', ref.id);
-      const row = await this.all.paymentGateway.findUnique({ where: { id: ref.id } });
+      const row = await db.paymentGateway.findUnique({ where: { id: ref.id } });
       if (!row) throw new GatewayAdminRefused('gateway_not_found', ref.id);
       return row as unknown as Row;
     }
-    const row = (await this.all.tenantGatewayConfig.findUnique({ where: { id: ref.id } })) as unknown as Row | null;
+    const row = (await db.tenantGatewayConfig.findUnique({ where: { id: ref.id } })) as unknown as Row | null;
     if (!row || (!owner && row['tenantId'] !== actor.tenantId)) throw new GatewayAdminRefused('gateway_not_found', ref.id);
     return row;
   }

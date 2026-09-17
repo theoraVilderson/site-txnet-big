@@ -55,6 +55,7 @@ const STATUS: Record<GatewayAdminRejection, 400 | 403 | 404 | 409> = {
   gateway_not_found: 404,
   tenant_not_found: 404,
   provider_already_configured: 409,
+  gateway_has_open_payments: 409,
   invalid_range: 400,
   missing_field: 400,
   invalid_presets: 400,

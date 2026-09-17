@@ -278,3 +278,68 @@ describe('the three tables are isolated on the borrowing tenant', () => {
     ).rejects.toThrow();
   });
 });
+
+/**
+ * F-102-f-b (ADR-0053 amendment): a tenant admin deletes its own lent gateway
+ * on the app pool, where the borrowers' payments and grants are invisible. The
+ * two SECURITY DEFINER functions see them for it — for its own gateway only.
+ */
+describe("releasing a lent gateway: the lender's functions, and nobody else's", () => {
+  const OPEN = uuid(200);
+  let crossTenant: PrismaClient;
+
+  beforeAll(async () => {
+    crossTenant = new PrismaClient({ datasourceUrl: pg.crossTenantUrl });
+    await owner.$executeRawUnsafe(`
+      INSERT INTO billing.payment_transaction
+        (id, "tenantId", "userId", "tenantGatewayConfigId", "amountRequested", "feeApplied",
+         "amountCredited", "chargedAmountMinor", status, "grantId")
+      VALUES ('${OPEN}', '${BORROWER}', '${USER}', '${RESELLER_GATEWAY}', 10.00, 0.00,
+              10.00, 100000, 'pending', '${uuid(4)}')
+    `);
+  });
+  afterAll(async () => crossTenant?.$disconnect());
+
+  async function asTenant<T>(tenantId: string, sql: string): Promise<T> {
+    return app.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`SELECT set_config('app.tenant_id', '${tenantId}', true)`);
+      return (await tx.$queryRawUnsafe(sql)) as T;
+    });
+  }
+  const usage = (source: string, id: string) => `SELECT * FROM billing.gateway_usage('${source}', '${id}'::uuid, 86400)`;
+  const release = (source: string, id: string) =>
+    `SELECT billing.withdraw_gateway_grants('${source}', '${id}'::uuid, '${ADMIN}'::uuid, '10.0.0.9') AS n`;
+
+  it("answers the lender the borrowers' usage of its gateway: payments, open payments, grants", async () => {
+    const [row] = await asTenant<Array<Record<string, number>>>(OWNER_TENANT, usage('tenant', RESELLER_GATEWAY));
+
+    expect(row).toEqual({ payments: 1, open_payments: 1, grants: 1 });
+  });
+
+  it('refuses a borrower, and any tenant a platform gateway', async () => {
+    await expect(asTenant(BORROWER, usage('tenant', RESELLER_GATEWAY))).rejects.toThrow(/gateway_not_callers/);
+    await expect(asTenant(BORROWER, release('tenant', RESELLER_GATEWAY))).rejects.toThrow(/gateway_not_callers/);
+    await expect(asTenant(OWNER_TENANT, usage('platform', PLATFORM_GATEWAY))).rejects.toThrow(/gateway_not_callers/);
+  });
+
+  it("withdraws the lender's grants and writes the audit row in the borrower's tenant", async () => {
+    const [{ n }] = await asTenant<Array<{ n: number }>>(OWNER_TENANT, release('tenant', RESELLER_GATEWAY));
+    expect(n).toBe(1);
+
+    const [grant] = await owner.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      `SELECT "isActive", "withdrawnByAdminId", "withdrawnAt" IS NOT NULL AS dated FROM billing.payment_gateway_grant WHERE id = '${uuid(4)}'`,
+    );
+    expect(grant).toEqual({ isActive: false, withdrawnByAdminId: ADMIN, dated: true });
+
+    const audit = await owner.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      `SELECT "tenantId", action::text, "targetEntityId" FROM audit.admin_audit_log WHERE "targetEntityId" = '${uuid(4)}'`,
+    );
+    expect(audit).toEqual([{ tenantId: BORROWER, action: 'gateway_grant_withdraw', targetEntityId: uuid(4) }]);
+  });
+
+  it('serves the platform owner on the cross-tenant pool, platform gateways included', async () => {
+    const [row] = await crossTenant.$queryRawUnsafe<Array<Record<string, number>>>(usage('platform', PLATFORM_GATEWAY));
+
+    expect(row).toEqual({ payments: 1, open_payments: 0, grants: 3 });
+  });
+});

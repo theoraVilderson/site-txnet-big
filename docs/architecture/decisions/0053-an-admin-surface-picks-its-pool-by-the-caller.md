@@ -49,6 +49,16 @@ the write.
   method per service. The tenant admin's own rows are never read or written
   there, and a spec asserts no write reaches that pool for a non-owner.
   The user's call over "strict C", which would have broken lent gateways.
+- **Write-side counterpart: a tenant admin releases its own lent gateway
+  through the database, not the pool** (F-102-f-b). Deleting a gateway must
+  count and withdraw grants and payments that live in borrowers' tenants.
+  `billing.gateway_usage` and `billing.withdraw_gateway_grants` are SECURITY
+  DEFINER functions (the ADR-0040 precedent) that refuse unless the gateway's
+  `tenantId` is `current_tenant_id()`, or the session is the cross-tenant role;
+  they answer counts and write only the withdrawal and one audit row per
+  borrower's tenant. The user's calls, 2026-09-17: delete withdraws grants;
+  deactivating does not; delete is refused while a payment on the gateway is
+  open in any tenant; a borrower's coupons are left alone.
 
 ## Consequences
 

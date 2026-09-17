@@ -2,8 +2,10 @@
  * Gateway management (F-102-b, D-31): who may create, change and delete which
  * payment gateway, and what may never leave the service.
  *
- * The class reads and writes on the cross-tenant pool, so the boundary is
- * entirely in its own checks, and every way it breaks is silent:
+ * The platform owner is served on the cross-tenant pool, any other tenant on
+ * the app pool inside a `tenantTransaction` (ADR-0053, F-102-f-b) — so for the
+ * owner the boundary is the class's own checks, and every way it breaks is
+ * silent:
  *
  *  - **ownership.** The platform owner manages the platform's gateways and
  *    every tenant's; any other tenant manages only its own. A reseller who can
@@ -19,9 +21,15 @@
  *  - **delete** (ADR-0041 §6). A row nothing points at is deleted. A row a
  *    payment or a grant points at is deactivated instead, its live grants
  *    withdrawn and its secrets revoked — and the secrets go first, so a failure
- *    part-way leaves a gateway that cannot charge rather than one that can.
+ *    part-way leaves a gateway that cannot charge rather than one that can. A
+ *    gateway with an open payment is not deleted at all (the user's call,
+ *    2026-09-17): a borrower's payer is still waiting on it;
+ *  - **the pool.** A tenant admin's call never reaches the cross-tenant pool;
+ *    a lent gateway's borrowers are counted and released through two database
+ *    functions that check the gateway is the caller's own.
  */
 import { Prisma, TenantGatewayVerificationStatus, TenantType } from '@prisma/client';
+import { runWithTenant } from '@txnet-backend/shared-core';
 
 import { GatewayAdminRefused, GatewayAdminService, GatewaySecretWriter } from './gateway-admin.service';
 
@@ -99,9 +107,12 @@ function table(rows: Row[], name: string, writes: string[]) {
   };
 }
 
+const LOOKBACK_SEC = 86_400;
+
 function build(seed: { payments?: Row[]; grants?: Row[]; verified?: boolean } = {}) {
   const writes: string[] = [];
   const audit: Row[] = [];
+  const calls: string[] = [];
   const types: Record<string, TenantType> = { [OWNER]: TenantType.platform_owner, [RESELLER]: TenantType.reseller, [OTHER]: TenantType.reseller };
 
   const tenants = table(Object.entries(types).map(([id, tenantType]) => ({ id, tenantType })), 'tenant', writes);
@@ -118,13 +129,15 @@ function build(seed: { payments?: Row[]; grants?: Row[]; verified?: boolean } = 
     'tenantGatewayConfig',
     writes,
   );
+  const paymentTransaction = table(seed.payments ?? [], 'paymentTransaction', writes);
+  const paymentGatewayGrant = table(seed.grants ?? [], 'paymentGatewayGrant', writes);
 
   const db = {
     tenant: tenants,
     paymentGateway,
     tenantGatewayConfig,
-    paymentTransaction: table(seed.payments ?? [], 'paymentTransaction', writes),
-    paymentGatewayGrant: table(seed.grants ?? [], 'paymentGatewayGrant', writes),
+    paymentTransaction,
+    paymentGatewayGrant,
     depositSetting: table([], 'depositSetting', writes),
     adminAuditLog: {
       create: async ({ data }: { data: Row }) => {
@@ -134,17 +147,57 @@ function build(seed: { payments?: Row[]; grants?: Row[]; verified?: boolean } = 
       },
     },
   };
-  let committed = 0;
-  const all = {
-    ...db,
-    $transaction: async <T>(fn: (tx: typeof db) => Promise<T>) => {
-      const out = await fn(db);
-      committed++;
-      writes.push('commit');
-      return out;
+
+  /** `billing.gateway_usage` / `billing.withdraw_gateway_grants`, over the same rows. */
+  const pointsAt = (source: unknown, id: unknown) => (r: Row) => (source === 'platform' ? r['gatewayId'] : r['tenantGatewayConfigId']) === id;
+  const functions: Record<string, (v: unknown[]) => Row[]> = {
+    gateway_usage: ([source, id, within]) => {
+      const mine = paymentTransaction.rows.filter(pointsAt(source, id));
+      const since = Date.now() - (within as number) * 1000;
+      return [{
+        payments: mine.length,
+        open_payments: mine.filter((r) => ['pending', 'expired'].includes(r['status'] as string) && ((r['createdAt'] as Date | undefined)?.getTime() ?? Date.now()) >= since).length,
+        grants: paymentGatewayGrant.rows.filter(pointsAt(source, id)).length,
+      }];
+    },
+    withdraw_gateway_grants: ([source, id, adminId, ip]) => {
+      const live = paymentGatewayGrant.rows.filter((r) => pointsAt(source, id)(r) && r['isActive']);
+      writes.push('withdraw_gateway_grants');
+      for (const g of live) {
+        Object.assign(g, { isActive: false, withdrawnAt: new Date(), withdrawnByAdminId: adminId });
+        audit.push({ tenantId: g['tenantId'], adminId, action: 'gateway_grant_withdraw', targetEntityId: g['id'], adminIpAddress: ip });
+      }
+      return [{ withdrawn: live.length }];
     },
   };
-  const app = { tenant: { findUnique: async ({ where }: { where: Row }) => (types[where['id'] as string] ? { tenantType: types[where['id'] as string] } : null) } };
+
+  /** Both pools over the same rows, every call logged as `app:` or `all:` (ADR-0053). */
+  const pool = (name: string) => {
+    const client: Record<string, unknown> = { $executeRaw: async () => 0 };
+    for (const [model, delegate] of Object.entries(db)) {
+      client[model] = Object.fromEntries(
+        Object.entries(delegate as Row)
+          .filter(([, fn]) => typeof fn === 'function')
+          .map(([op, fn]) => [op, (...args: unknown[]) => (calls.push(`${name}:${model}.${op}`), (fn as (...a: unknown[]) => unknown)(...args))]),
+      );
+    }
+    client['$queryRaw'] = async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      const fn = Object.keys(functions).find((f) => strings.join('?').includes(`billing.${f}(`));
+      if (!fn) throw new Error(`unexpected raw query: ${strings.join('?')}`);
+      calls.push(`${name}:${fn}`);
+      return functions[fn](values);
+    };
+    // A transaction commits only what it wrote; a read-only one leaves no trace in `writes`.
+    client['$transaction'] = async <T>(fn: (tx: unknown) => Promise<T>) => {
+      const before = writes.length;
+      const out = await fn(client);
+      if (writes.length > before) writes.push('commit');
+      return out;
+    };
+    return client;
+  };
+  const app = pool('app');
+  const all = pool('all');
 
   const configured = { configured: true, version: 1, rotatedAt: new Date() };
   const none = { configured: false, version: null, rotatedAt: null };
@@ -167,8 +220,20 @@ function build(seed: { payments?: Row[]; grants?: Row[]; verified?: boolean } = 
     }),
   };
 
-  const service = new GatewayAdminService(app as never, all as never, secrets);
-  return { service, db, writes, audit, secrets, committed: () => committed };
+  const config = { get: () => LOOKBACK_SEC };
+  const service = inTenant(new GatewayAdminService(app as never, all as never, secrets, config as never));
+  return { service, db, writes, audit, secrets, calls };
+}
+
+/** Every service call runs in the actor's tenant, as `identity.middleware.ts` runs it. */
+function inTenant<T extends object>(service: T): T {
+  return new Proxy(service, {
+    get: (target, key) => {
+      const v = Reflect.get(target, key) as unknown;
+      if (typeof v !== 'function') return v;
+      return (actor: { tenantId: string }, ...rest: unknown[]) => runWithTenant({ id: actor.tenantId }, () => v.call(target, actor, ...rest));
+    },
+  });
 }
 
 async function refusal(run: () => Promise<unknown>): Promise<GatewayAdminRefused> {
@@ -322,6 +387,79 @@ describe('GatewayAdminService — delete (ADR-0041 §6)', () => {
 
     expect(db.tenantGatewayConfig.rows.some((r) => r['id'] === RESELLER_GW)).toBe(true);
     expect(writes.filter((w) => w !== 'secrets.revoke')).toEqual([]);
+  });
+
+  it("refuses to delete a gateway a payment is still open on — a borrower's included — and revokes nothing", async () => {
+    const { service, db, writes } = build({
+      payments: [
+        { id: 'p1', tenantGatewayConfigId: RESELLER_GW, tenantId: OTHER, status: 'pending', createdAt: new Date() },
+        { id: 'p2', tenantGatewayConfigId: RESELLER_GW, tenantId: RESELLER, status: 'expired', createdAt: new Date(Date.now() - 2 * LOOKBACK_SEC * 1000) },
+      ],
+      grants: [{ id: 'g1', tenantGatewayConfigId: RESELLER_GW, tenantId: OTHER, isActive: true }],
+    });
+
+    const e = await refusal(() => service.remove(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }));
+
+    expect(e.reason).toBe('gateway_has_open_payments');
+    expect(writes).toEqual([]);
+    expect(db.tenantGatewayConfig.rows.find((r) => r['id'] === RESELLER_GW)?.['isActive']).toBe(true);
+  });
+
+  it("deletes once the only open payment is past the lookback, and withdraws a borrower's grant with an audit row in the borrower's tenant", async () => {
+    const { service, db, audit } = build({
+      payments: [{ id: 'p2', tenantGatewayConfigId: RESELLER_GW, tenantId: OTHER, status: 'expired', createdAt: new Date(Date.now() - 2 * LOOKBACK_SEC * 1000) }],
+      grants: [
+        { id: 'g1', tenantGatewayConfigId: RESELLER_GW, tenantId: OTHER, isActive: true },
+        { id: 'g0', tenantGatewayConfigId: RESELLER_GW, tenantId: OWNER, isActive: false },
+      ],
+    });
+
+    const out = await service.remove(actor(RESELLER), { source: 'tenant', id: RESELLER_GW });
+
+    expect(out).toEqual({ id: RESELLER_GW, source: 'tenant', mode: 'deactivated', grantsWithdrawn: 1 });
+    expect(db.paymentGatewayGrant.rows.find((r) => r['id'] === 'g1')).toEqual(expect.objectContaining({ isActive: false, withdrawnByAdminId: ADMIN }));
+    expect(audit.filter((a) => a['action'] === 'gateway_grant_withdraw')).toEqual([expect.objectContaining({ tenantId: OTHER, targetEntityId: 'g1' })]);
+    expect(audit.at(-1)).toMatchObject({ tenantId: RESELLER, action: 'gateway_delete' });
+  });
+
+  it('never hard-deletes a gateway whose grants were all withdrawn already', async () => {
+    const { service, writes } = build({ grants: [{ id: 'g0', tenantGatewayConfigId: RESELLER_GW, tenantId: OTHER, isActive: false }] });
+
+    const out = await service.remove(actor(RESELLER), { source: 'tenant', id: RESELLER_GW });
+
+    expect(out.mode).toBe('deactivated');
+    expect(writes).not.toContain('tenantGatewayConfig.delete');
+  });
+});
+
+describe('GatewayAdminService — which pool serves whom (ADR-0053, F-102-f-b)', () => {
+  it("serves a tenant admin on the app pool only: no read and no write of theirs reaches the cross-tenant pool", async () => {
+    const { service, calls } = build({ grants: [{ id: 'g1', tenantGatewayConfigId: RESELLER_GW, tenantId: OTHER, isActive: true }] });
+    const mine = { source: 'tenant', id: RESELLER_GW } as const;
+
+    await service.list(actor(RESELLER));
+    const created = await service.create(actor(RESELLER), { source: 'tenant', ...FIELDS, providerName: 'stripe' });
+    await service.update(actor(RESELLER), mine, { displayName: 'Renamed' });
+    await service.setPresets(actor(RESELLER), ['5']);
+    await service.presets(actor(RESELLER));
+    await service.remove(actor(RESELLER), { source: 'tenant', id: created.id });
+    await service.remove(actor(RESELLER), mine);
+    await refusal(() => service.remove(actor(RESELLER), { source: 'tenant', id: OTHER_GW }));
+
+    expect(calls.filter((c) => c.startsWith('all:'))).toEqual([]);
+    expect(calls).toEqual(expect.arrayContaining(['app:gateway_usage', 'app:withdraw_gateway_grants', 'app:tenantGatewayConfig.delete']));
+  });
+
+  it("serves the platform owner's gateway work on the cross-tenant pool, reading only who is asking on the app pool", async () => {
+    const { service, calls } = build({ grants: [{ id: 'g1', gatewayId: PLATFORM_GW, tenantId: RESELLER, isActive: true }] });
+
+    await service.list(actor(OWNER));
+    await service.create(actor(OWNER), { source: 'tenant', tenantId: OTHER, ...FIELDS, providerName: 'stripe' });
+    await service.update(actor(OWNER), { source: 'tenant', id: OTHER_GW }, { verificationStatus: 'verified' });
+    await service.remove(actor(OWNER), { source: 'platform', id: PLATFORM_GW });
+
+    expect(new Set(calls.filter((c) => c.startsWith('app:')))).toEqual(new Set(['app:tenant.findUnique']));
+    expect(calls).toEqual(expect.arrayContaining(['all:gateway_usage', 'all:withdraw_gateway_grants']));
   });
 });
 
