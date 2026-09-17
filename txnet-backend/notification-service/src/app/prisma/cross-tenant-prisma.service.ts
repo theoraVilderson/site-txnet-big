@@ -14,8 +14,10 @@ import { PrismaService } from './prisma.service';
  * `USING (true)`, no `BYPASSRLS`) and is not extended with `withTenant`.
  *
  * **Injecting it is the audit.** `grep -rn CrossTenantPrismaService` in this
- * service lists `CampaignAdminService` and nothing else; its `access()` is the
- * one place that decides a caller is the platform owner. Widen the list only with a reason in a doc comment.
+ * service lists `CampaignAdminService`, whose `access()` is the one place that
+ * decides a caller is the platform owner, and `CampaignFanOutService` (F-035-d),
+ * which has no caller: it serves the service-only fan-out, and a platform-wide
+ * audience is every tenant's users, which no tenant binding can read. Widen the list only with a reason in a doc comment.
  */
 @Injectable()
 export class CrossTenantPrismaService extends PrismaService {}

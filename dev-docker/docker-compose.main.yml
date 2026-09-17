@@ -625,6 +625,10 @@ services:
       # Reconciliation's own budget (F-092-l): a batch there is one call to a
       # bank per payment, and the bank is the slow part.
       - BILLING_RECONCILE_TIMEOUT_MS=${BILLING_RECONCILE_TIMEOUT_MS:-120000}
+      # The campaign fan-out's end of the seam (F-035-d): notification-service
+      # owns the rows and the audience query (ADR-0052).
+      - NOTIFICATION_API_BASE_URL=http://notification-service:3000
+      - NOTIFICATION_API_TIMEOUT_MS=${NOTIFICATION_API_TIMEOUT_MS:-60000}
       # The FX worker's sources and its per-source deadline (F-0603, D-22).
       # A list rather than a constant because three of the four exchanges are
       # on the US OFAC list since June 2026 and dropping one must be config.

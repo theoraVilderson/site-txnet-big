@@ -62,6 +62,12 @@ model NotificationCampaign {
   failedCount           Int                 @default(0)
   executedByBotWorkerId String?             @db.Uuid
   createdAt             DateTime            @default(now())
+  /// F-035-d: set when an admin starts the send; users registered later are not in the audience.
+  sendStartedAt         DateTime?
+  /// F-035-d: the last `user.id` a committed fan-out batch covered.
+  fanOutCursor          String?             @db.Uuid
+  /// F-035-d: every recipient row is written.
+  fannedOutAt           DateTime?
 
   recipients NotificationCampaignRecipient[]
 
@@ -78,6 +84,7 @@ model NotificationCampaignRecipient {
 
   campaign NotificationCampaign @relation(fields: [campaignId], references: [id])
 
+  @@unique([campaignId, userId])
   @@index([campaignId, deliveryStatus])
   @@map("notification_campaign_recipient")
   @@schema("notification")

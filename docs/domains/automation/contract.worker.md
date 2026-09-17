@@ -3,7 +3,7 @@ id: automation
 layer: domain
 status: active
 version: 7
-updated: 2026-09-13
+updated: 2026-09-17
 ---
 
 # Contract — automation: the worker half
@@ -69,6 +69,7 @@ Why each of those is the answer — and what a Redis that cannot be reached does
 | `deposit_pending_expiry` | expires `pending` top-ups past their `expiresAt` and gives the coupon holds they took back (F-092-k, `domains/billing/contract.deposit.md`) | `BILLING_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 | `deposit_reconciliation` | asks the gateway about pending and expired top-ups nobody came back for, and about a verifying one only when its retry is 10 min overdue (the next job is not running): credits what it confirms, flags a differing amount (F-092-l; `domains/billing/contract.verify.md`) | the same two |
 | `deposit_verify_retry` | asks again about verifying top-ups whose retry is due, every tick: credits, re-schedules silence, flags one still verifying after a day (F-092-y, F-092-ac) | the same two |
+| `notification_campaign_fan_out` | writes recipient rows for started campaigns in resumable batches (F-035-d, `domains/notification/contract.md` "Sending") | `NOTIFICATION_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 
 The retention job is the first job that does real work, and what it settled is
 how a job reaches code it cannot import.

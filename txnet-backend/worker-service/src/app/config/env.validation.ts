@@ -292,6 +292,13 @@ export const envSchema = z.object({
    * the bank is the slow part (F-092-l).
    */
   BILLING_RECONCILE_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+  /**
+   * The fan-out's seam (F-035-d): `notification-service` owns the campaign rows
+   * and the audience query (ADR-0052). Optional for the same reason as billing's.
+   */
+  NOTIFICATION_API_BASE_URL: optional(z.string()),
+  /** One bounded pass: at most `FAN_OUT_BUDGET` rows, in batches. */
+  NOTIFICATION_API_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
 
   /**
    * Which USDT/IRT order books the FX worker polls (F-0603), by `FxSource.key`

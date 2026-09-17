@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { CampaignStatus, NotificationChannel, Prisma, TenantType } from '@prisma/client';
+import { AdminAction, AuditTargetType, CampaignStatus, NotificationChannel, Prisma, TenantType } from '@prisma/client';
 import { tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
@@ -174,6 +174,41 @@ export class CampaignAdminService {
     });
     if (count === 0) throw new CampaignAdminRefused('campaign_not_draft', id);
     return toView(await this.loadManaged(actor, owner, db, id));
+  }
+
+  /**
+   * Starts sending (F-035-d): `draft -> sending` and `sendStartedAt`, which fixes
+   * the audience in time, with the audit row in the same transaction. The
+   * fan-out on `worker-service` picks it up on its next tick. Checked in the
+   * write's own `where`, as `update` is, so two clicks start one send.
+   */
+  async send(actor: CampaignActor, id: string, ip: string): Promise<CampaignView> {
+    const { owner, db } = await this.access(actor);
+    const before = await this.loadManaged(actor, owner, db, id);
+
+    const run = async (tx: Prisma.TransactionClient) => {
+      const { count } = await tx.notificationCampaign.updateMany({
+        where: { id, status: CampaignStatus.draft },
+        data: { status: CampaignStatus.sending, sendStartedAt: new Date() },
+      });
+      if (count === 0) throw new CampaignAdminRefused('campaign_not_draft', id);
+      const after = await tx.notificationCampaign.findUnique({ where: { id } });
+      await tx.adminAuditLog.create({
+        data: {
+          tenantId: before.tenantId ?? actor.tenantId,
+          adminId: actor.adminId,
+          action: AdminAction.campaign_send,
+          targetEntityType: AuditTargetType.notification_campaign,
+          targetEntityId: id,
+          oldValue: { status: before.status },
+          newValue: JSON.parse(JSON.stringify(toView(after))) as Prisma.InputJsonValue,
+          adminIpAddress: ip,
+        },
+      });
+      return after;
+    };
+    const row = owner ? await this.all.$transaction(run) : await tenantTransaction(this.prisma, run);
+    return toView(row);
   }
 
   /**

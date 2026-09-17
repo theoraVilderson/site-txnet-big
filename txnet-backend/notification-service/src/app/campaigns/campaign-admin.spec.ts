@@ -64,14 +64,16 @@ function transactionOf(client: Record<string, unknown>) {
 }
 
 function fakes(callerType: TenantType = TenantType.reseller) {
-  const prisma: Record<string, unknown> & { notificationCampaign: ReturnType<typeof campaignDelegate> } = {
+  const prisma: Record<string, unknown> & { notificationCampaign: ReturnType<typeof campaignDelegate>; adminAuditLog: { create: ReturnType<typeof vi.fn> } } = {
     tenant: { findUnique: vi.fn().mockResolvedValue({ tenantType: callerType }) },
     notificationCampaign: campaignDelegate(),
+    adminAuditLog: { create: vi.fn().mockResolvedValue({}) },
   };
   prisma['$transaction'] = transactionOf(prisma);
-  const all: Record<string, unknown> & { notificationCampaign: ReturnType<typeof campaignDelegate> } = {
+  const all: Record<string, unknown> & { notificationCampaign: ReturnType<typeof campaignDelegate>; adminAuditLog: { create: ReturnType<typeof vi.fn> } } = {
     tenant: { findUnique: vi.fn().mockResolvedValue({ id: OTHER_TENANT }) },
     notificationCampaign: campaignDelegate(),
+    adminAuditLog: { create: vi.fn().mockResolvedValue({}) },
   };
   all['$transaction'] = transactionOf(all);
   return { prisma, all, service: new CampaignAdminService(prisma as never, all as never) };
@@ -196,6 +198,45 @@ describe('CampaignAdminService', () => {
     await expect(as(TENANT, () => service.update(tenantAdmin, CAMPAIGN, { messageBody: 'Late' }))).rejects.toMatchObject({
       reason: 'campaign_not_draft',
     });
+    expectPoolUntouched(all);
+  });
+
+  it('starts a send once: draft -> sending in the write\'s own where, audited in the same transaction (F-035-d)', async () => {
+    const { prisma, all, service } = fakes();
+    await as(TENANT, () => service.send(tenantAdmin, CAMPAIGN, '10.0.0.1'));
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.notificationCampaign.updateMany).toHaveBeenCalledWith({
+      where: { id: CAMPAIGN, status: CampaignStatus.draft },
+      data: { status: CampaignStatus.sending, sendStartedAt: expect.any(Date) },
+    });
+    expect(prisma.adminAuditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        tenantId: TENANT,
+        adminId: ADMIN,
+        action: 'campaign_send',
+        targetEntityType: 'notification_campaign',
+        targetEntityId: CAMPAIGN,
+        adminIpAddress: '10.0.0.1',
+      }),
+    });
+    expectPoolUntouched(all);
+
+    prisma.notificationCampaign.updateMany.mockResolvedValue({ count: 0 });
+    prisma.adminAuditLog.create.mockClear();
+    await expect(as(TENANT, () => service.send(tenantAdmin, CAMPAIGN, '10.0.0.1'))).rejects.toMatchObject({
+      reason: 'campaign_not_draft',
+    });
+    expect(prisma.adminAuditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('never lets a tenant admin send the platform\'s campaign', async () => {
+    const { prisma, all, service } = fakes();
+    prisma.notificationCampaign.findUnique.mockResolvedValue(campaignRow({ tenantId: null }));
+    await expect(as(TENANT, () => service.send(tenantAdmin, CAMPAIGN, '10.0.0.1'))).rejects.toMatchObject({
+      reason: 'campaign_not_found',
+    });
+    expect(prisma.notificationCampaign.updateMany).not.toHaveBeenCalled();
     expectPoolUntouched(all);
   });
 });

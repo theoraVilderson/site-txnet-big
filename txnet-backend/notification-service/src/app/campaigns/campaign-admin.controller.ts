@@ -7,6 +7,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Ip,
   NotFoundException,
   Param,
   ParseUUIDPipe,
@@ -97,6 +98,14 @@ export class CampaignAdminController {
     @Req() req: Request,
   ) {
     return this.refusing(() => this.campaigns.update(this.actor(req), id, body));
+  }
+
+  /** Starts the send (F-035-d); audited. The fan-out runs on `worker-service`. */
+  @Post(':id/send')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(WRITE)
+  send(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.campaigns.send(this.actor(req), id, ip));
   }
 
   /** One place that turns a refusal into a status; the reason travels in the body for the panel to translate. */

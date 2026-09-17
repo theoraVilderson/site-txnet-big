@@ -9,9 +9,9 @@ updated: 2026-09-17
 # Contract — notification
 
 Runs in `notification-service` (ADR-0052). **Live:** a user's in-app inbox
-(F-035-a/b) and campaign drafts (F-035-c). Sending a campaign (F-035-d) and
-delivery (F-035-e/f) are not built — nothing moves a draft on or writes
-`notification_campaign_recipient`.
+(F-035-a/b), campaign drafts (F-035-c) and sending them: one recipient row per
+user, written on the worker (F-035-d). Delivery adapters (F-035-e/f) are not
+built — recipient rows stay `queued` until one reports an outcome.
 
 ## TL;DR
 
@@ -34,6 +34,9 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 | list campaigns | `GET notifications/campaigns` | `page`, `pageSize` ≤100, `status?`, `tenantId?: uuid\|platform` (owner only) | `{ items[], page, pageSize, total }`, newest first | 400, 403 |
 | read one | `GET notifications/campaigns/:id` | — | the campaign | 403; 404 `campaign_not_found` |
 | edit a draft | `PATCH notifications/campaigns/:id` | any of `channel`, `messageBody`, `audience` (≥1) | the campaign | 400, 403, 404; 409 `campaign_not_draft` |
+| start a send | `POST notifications/campaigns/:id/send` | — | the campaign, `status: sending`, 200 | 403, 404; 409 `campaign_not_draft` |
+| fan out | `POST internal/notifications/campaigns/fan-out` (`SERVICE_AUTH_TOKEN`) | — | `{ campaigns, recipients, finished, unreadable }` | 404 on a wrong token |
+| record an outcome | `POST internal/notifications/campaigns/recipients/:id/outcome` (token) | `{ outcome: sent\|failed }` | `{ changed }` | 400; 404 `recipient_not_found` |
 
 - `unreadCount` is over the whole inbox, whatever the page or filter.
 - `marked` counts rows that changed. An id that is read already, does not exist
@@ -69,6 +72,29 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
   and other tenants' writes to every tenant's connection. No audit row yet —
   a draft reaches nobody; starting a send (F-035-d) is the audited act.
 
+### Sending (F-035-d)
+
+- **Start.** `send` flips `draft -> sending` and sets `sendStartedAt` in the
+  write's own `where`, with an `admin_audit_log` row (`campaign_send`) in the
+  same transaction. The pool follows the caller, as for drafts.
+- **Fan-out.** `worker-service`'s `notification_campaign_fan_out` job calls the
+  internal route each tick (`automation/contract.worker.md`). It runs on the
+  cross-tenant pool — no tenant binding reads a platform-wide audience — so the
+  user query's `tenantId` is invariant 1's whole guard. The audience is the
+  stored filter parsed again, plus `deletedAt` null and `createdAt ≤
+  sendStartedAt`; a filter that no longer parses sends to nobody and counts as
+  `unreadable`.
+- **Resumable.** Keyset batches over `user.id` (500), at most 5000 rows a call.
+  A batch's rows and `fanOutCursor` commit together; the unique
+  `(campaignId, userId)` index and `skipDuplicates` make a replay write nothing.
+  The last batch sets `fannedOutAt`.
+- **Outcome.** `queued -> sent|failed` only (`where deliveryStatus = queued`),
+  and the matching counter moves in that transaction; an already-moved row is
+  `changed: false` and counts nothing. `sending -> completed` once `fannedOutAt`
+  is set and no row is `queued` — at once for an empty audience.
+- The job is registered, not scheduled: nothing fans out until an operator sets
+  its `bot_schedule`.
+
 ## Emits (events)
 
 | Event | When | Payload | Consumer |
@@ -86,14 +112,14 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 |---|---|---|
 | forward-auth | identity headers on gated routes | 401 |
 | identity | `userId` (no FK across schemas; a caller names a real user) | — |
-| automation | the worker for campaign fan-out (F-035-d, not built) | — |
+| automation | `worker-service` ticks the fan-out (F-035-d) | a started campaign stays `sending` with no rows until the next run |
 | tenant | the caller's `tenantType` (platform owner or not); a named tenant exists | 404 `tenant_not_found` |
 | identity | `campaign.manage` in the gate's permissions (migration `20260917000100`) | 403 |
 
 ## Guarantees
 
 - `readAt` is written once, by the first mark-read (invariant 5).
-- Campaign execution will be idempotent per `(campaignId, userId)` (F-035-d).
+- Campaign execution is idempotent per `(campaignId, userId)`: one row, one counted outcome (F-035-d).
 
 ## Deprecations
 

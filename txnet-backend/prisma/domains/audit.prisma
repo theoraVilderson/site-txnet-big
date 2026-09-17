@@ -59,6 +59,7 @@ enum AdminAction {
   catalog_price_set
   catalog_price_deactivate
   coupon_batch_deactivate
+  campaign_send
 
   @@schema("audit")
 }
@@ -86,6 +87,7 @@ enum AuditTargetType {
   product
   product_variant
   price
+  notification_campaign
 
   @@schema("audit")
 }
