@@ -3,11 +3,13 @@ import { APP_GUARD } from '@nestjs/core';
 import { TenantCacheService } from './tenant-cache.service';
 import { TenantResolverService } from './tenant-resolver.service';
 import { TenantGuard } from './tenant.guard';
+import { TenantAdminController } from './admin/tenant-admin.controller';
+import { TenantAdminService } from './admin/tenant-admin.service';
 
 /**
- * `tenant`'s first module. It has no controller: nothing outside this process
- * asks for a tenant by name yet — the resolver is consumed by the edge
- * middleware and, from F-061-b, by `register`.
+ * `tenant`'s first module. Its one controller is the platform owner's reseller
+ * administration (F-018-c); the resolver is consumed by the edge middleware
+ * and, from F-061-b, by `register`.
  *
  * `TenantGuard` is global rather than a route decorator: a request that
  * resolves to no tenant, or whose session and surface disagree, must be
@@ -24,7 +26,9 @@ import { TenantGuard } from './tenant.guard';
  * here.
  */
 @Module({
+  controllers: [TenantAdminController],
   providers: [
+    TenantAdminService,
     TenantCacheService,
     TenantResolverService,
     { provide: APP_GUARD, useClass: TenantGuard },

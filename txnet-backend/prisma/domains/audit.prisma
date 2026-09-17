@@ -62,6 +62,8 @@ enum AdminAction {
   campaign_send
   // F-019-a (D-41) — the platform owner credits or debits a reseller's billing wallet by hand.
   tenant_billing_adjust
+  // F-018-c. The platform owner creates a reseller.
+  tenant_create
 
   @@schema("audit")
 }
@@ -92,6 +94,8 @@ enum AuditTargetType {
   notification_campaign
   // F-019-a. A reseller's billing wallet with the platform, not a user's `wallet`.
   tenant_billing_wallet
+  // F-018-c. A tenant itself.
+  tenant
 
   @@schema("audit")
 }

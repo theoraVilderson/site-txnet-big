@@ -43,3 +43,6 @@ branding/entitlements through a resolver, never the raw tables.
 `20260917000900_tenant_billing_wallet` (F-019-a) adds what Prisma cannot model:
 non-negative `cachedBalance` / `balanceAfter`, positive `amount`, and a partial
 unique `(reasonType, referenceId)` on `tenant_billing_transaction`.
+
+`20260917001100_tenant_create` (F-018-c) adds the audit values `tenant_create` /
+`tenant` and the `tenant.manage` permission — no tenant table changes.

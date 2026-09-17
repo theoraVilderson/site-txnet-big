@@ -2,13 +2,13 @@
 id: tenant
 layer: domain
 status: active
-version: 10
+version: 11
 updated: 2026-09-17
 ---
 
 # Contract — tenant
 
-**Resolution, the vault and the billing wallet are implemented; the rest are intended.** *Resolve tenant by
+**Resolution, the vault, the billing wallet and reseller creation are implemented; the rest are intended.** *Resolve tenant by
 claim* is real code (`app/tenant/`, F-061-a, F-066-c, F-066-d). Every other row in *Provides* is
 still a shape derived from `txnet-backend/prisma/domains/tenant.prisma`, with no
 service behind it — the `(intended)` marker on that table is what tells them
@@ -26,6 +26,7 @@ the rest are `reseller`. The platform bills tenants from a prepaid wallet
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
 | **resolve tenant by claim** — implemented | `{host?, session?, bot?}` | `{id, slug, via, surfacePurpose?}` or `null` — `null` means *no tenant*, never a fallback | sync | `TenantClaimConflict` when a claim and its surface disagree |
+| **create / list / read a reseller** — implemented, [contract.admin.md](contract.admin.md) | slug, billingModel, owner | reseller view | sync tx | `not_platform_owner` / `slug_taken` / `reseller_not_found` |
 | check entitlement | tenantId, featureKey | allowed / denied (+ source, expiry) | sync | — |
 | verify custom domain | tenantId, domainValue | verification status | async (DNS TXT / ArvanCloud) | token mismatch |
 | **credit / debit the billing wallet** — implemented, [contract.billing.md](contract.billing.md) | tenantId, reason, amount, reference | `tenant_billing_transaction` (append-only) | sync tx | insufficient / duplicate / version conflict |
@@ -129,12 +130,9 @@ every request. An `invalidate*` that cannot reach Redis **throws**, so the
 caller refuses the domain change rather than completing it on top of a mapping
 it failed to retract.
 
-**No caller invalidates anything yet, because no code writes a `tenant_domain`
-row** — domain administration is F-018, and `prisma/seed.js` and the e2e
-harness write rows directly for bootstrapping. The obligation above is on
-F-018, F-102 and F-113 when they land; until then the backstop TTL is the only
-thing in play, which is the same position ADR-0025 accepted for the Redis round
-trip.
+**The first caller is reseller creation** (F-018-c, `contract.admin.md`), which
+retracts the new subdomain inside its transaction. `prisma/seed.js` and the e2e
+harness still write rows directly; the obligation stays on F-018-i, F-102 and F-113.
 
 **A request from another service has no host worth resolving, so it names its
 tenant instead.** `bot-service` calls this API at `http://auth-service:3001` —
