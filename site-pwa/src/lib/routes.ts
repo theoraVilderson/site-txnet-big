@@ -31,6 +31,11 @@ export const PANEL_DEPOSIT = "/financial/deposit";
 /** A reseller's billing wallet with the platform (F-019-d). */
 export const PANEL_TENANT_BILLING = "/financial/billing";
 /**
+ * A reseller tops up that wallet (F-019-e). Under the billing page, so
+ * `activeHref` lights its menu entry without a rule of its own.
+ */
+export const PANEL_TENANT_BILLING_TOPUP = "/financial/billing/topup";
+/**
  * Payment gateway management (F-102-d). One route for every audience: the
  * platform owner sees every gateway and the links, a tenant its own (D-31).
  * No role word in it (F-098).

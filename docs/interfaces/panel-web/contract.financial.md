@@ -108,7 +108,32 @@ It is not the user's wallet and shares no list with the two tabs above.
   `tenant_billing.topup` *and* a reseller (`contract.shell.md` rule 2); the
   route also admits the reseller's owner without that key, who then reaches the
   page by URL. A refusal is rendered as rule 7's failed read.
-- No top-up form yet: `POST /tenant-wallet/topup` has no page.
+- **Top up** (beside the balance, only once the read landed) opens
+  `/financial/billing/topup` (F-019-e).
+
+## The reseller's billing top-up — `/financial/billing/topup` (F-019-e)
+
+`PANEL_TENANT_BILLING_TOPUP`, files under `financial/billing/topup/`. The panel
+half of `POST /api/billing/tenant-wallet/topup` and its `/gateways` list
+(`domains/tenant/contract.billing.md`, ADR-0056).
+
+1. **It borrows the deposit page's `AmountInput` and `GatewaySelector`, and
+   none of its bill.** There is no quote route, no coupon and no test mode, so
+   the page holds two inputs and a button; the only figures on it are the
+   typed amount and the gateway's range (`contract.deposit.md` rules 7–9).
+2. **The body is `{gatewayId, amount}` and nothing else** (`_lib/topup.ts`).
+   The route is `.strict()`: the deposit's `source` or `couponCodes` is a 400.
+   Pay stays disabled until the amount is one, inside the side of the range the
+   gateway set — a courtesy; the service decides.
+3. **Pay goes to the bank or says why not.** `redirectUrl` is followed and the
+   button stays busy; an answer without one is this page's own sentence, since
+   a billing top-up is never free and never in chat. Every refusal (403 at the
+   door, 503, 429) is the server's translated line.
+4. **The bank returns to the platform's panel host**, not the reseller's — the
+   platform is the merchant (ADR-0056's accepted cost). F-093-f's pages show
+   the outcome there; nothing here listens for it.
+5. The menu entry is the billing page's: `activeHref`'s longest prefix lights
+   it, and F-019-f's owner gap applies here unchanged.
 
 ## Not covered
 
@@ -124,6 +149,9 @@ It is not the user's wallet and shares no list with the two tabs above.
   these tables; a payment landing while the page is open is one refresh away.
 
 ## Proof
+
+`billing/topup/topup.test.ts` — the top-up body: its two keys, the
+two-place amount, and no body for a non-amount or one outside the range.
 
 `_lib/filters.test.ts` — the day-to-instant resolution, the two queries staying
 apart, an absent filter staying out of the query, and the URL round-trip.

@@ -1,10 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { HandCoins } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { billingApi, type TenantWalletPage } from "@/lib/billing-api";
+import { PANEL_TENANT_BILLING_TOPUP } from "@/lib/routes";
 import { BASE_CURRENCY, formatMoney } from "../../../_lib/money";
 import { Pagination } from "../../../_components/kit/Pagination";
 import { FinancialTable } from "../../_components/FinancialTable";
@@ -80,11 +83,21 @@ export function TenantBillingView() {
           <p className="mt-1 text-sm text-text-secondary">{t("common", B.subtitle)}</p>
         </div>
         {data && (
-          <div className="rounded-2xl border border-card-border bg-card-bg px-5 py-3">
-            <p className="text-[11px] text-text-secondary">{t("common", B.balance)}</p>
-            <p dir="ltr" className="text-lg font-bold text-gold">
-              {formatMoney(data.balance, BASE_CURRENCY, { lang, t })}
-            </p>
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl border border-card-border bg-card-bg px-5 py-3">
+              <p className="text-[11px] text-text-secondary">{t("common", B.balance)}</p>
+              <p dir="ltr" className="text-lg font-bold text-gold">
+                {formatMoney(data.balance, BASE_CURRENCY, { lang, t })}
+              </p>
+            </div>
+            {/* Only once the wallet read succeeded: a refused reader would be refused there too (F-019-e). */}
+            <Link
+              href={PANEL_TENANT_BILLING_TOPUP}
+              className="inline-flex items-center gap-2 rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-white hover:brightness-110"
+            >
+              <HandCoins size={16} aria-hidden />
+              {t("common", B.topup)}
+            </Link>
           </div>
         )}
       </header>

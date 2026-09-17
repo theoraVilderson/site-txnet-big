@@ -112,5 +112,5 @@ an adjustment's is the platform owner's request id.
 
 ## Not built
 
-No quote route for a top-up (start answers the breakdown), and no top-up page
-in the panel. No charge (F-019-c).
+No quote route for a top-up (start answers the breakdown); the panel page
+(F-019-e) sends the start and follows the bank. No charge (F-019-c).

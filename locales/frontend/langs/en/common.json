@@ -1345,6 +1345,16 @@
       "topup_payment": "Online top-up",
       "admin_manual_adjust": "Adjustment by the platform",
       "subscription_charge": "Subscription renewal"
+    },
+    "topup": "Top up",
+    "topupPage": {
+      "title": "Top up platform billing",
+      "subtitle": "Pay the platform through its gateways; the amount lands in your reseller's billing balance.",
+      "back": "Back to platform billing",
+      "pay": "Continue to the bank",
+      "paying": "Sending you to the bank…",
+      "noGateway": "The platform has no gateway to pay through right now.",
+      "noRedirect": "The bank did not answer with a page to pay on. Try again, or pick another gateway."
     }
   }
 }

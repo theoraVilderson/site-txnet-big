@@ -265,6 +265,12 @@ export interface TenantWalletRow {
   createdAt: string;
 }
 
+/** `POST /tenant-wallet/topup`'s body. The route is `.strict()`: no `source`, no coupons (F-019-e). */
+export interface TenantTopupBody {
+  gatewayId: string;
+  amount: string;
+}
+
 /** `GET /tenant-wallet`: one page, and the wallet's own balance — never a sum of the page. */
 export type TenantWalletPage = Paged<TenantWalletRow> & { balance: string };
 
@@ -298,16 +304,34 @@ export const billingApi = {
     return call<WalletHistoryPage>(`/wallet/history?${query}`, { method: "GET" });
   },
 
-  /**
-   * A page of top-up attempts (F-093-d) — the list the ledger deliberately
-   * does not carry. A separate call to a separate route, so a status filter
-   * meant for attempts can never narrow the ledger.
-   */
   /** A reseller's billing wallet (F-019-d). Its owner or `tenant_billing.topup`, else a translated 403. */
   async tenantWallet(page: number, pageSize: number): Promise<TenantWalletPage> {
     return call<TenantWalletPage>(`/tenant-wallet?page=${page}&pageSize=${pageSize}`, { method: "GET" });
   },
 
+  /**
+   * The platform owner's gateways a reseller tops up its billing wallet through
+   * (F-019-e, ADR-0056) — the deposit list's shape, `platform` rows only. The
+   * same door as `tenantWallet`: a refusal is a translated 403.
+   */
+  async tenantTopupGateways(): Promise<DepositGateway[]> {
+    return call<DepositGateway[]>("/tenant-wallet/topup/gateways", { method: "GET" });
+  },
+
+  /**
+   * Start a billing top-up (F-019-e). The platform is the merchant, so the
+   * answer's `redirectUrl` is a bank that returns to the platform's panel host.
+   * No quote route: the breakdown arrives with the start.
+   */
+  async tenantTopup(body: TenantTopupBody): Promise<DepositStarted> {
+    return call<DepositStarted>("/tenant-wallet/topup", { method: "POST", body: JSON.stringify(body) });
+  },
+
+  /**
+   * A page of top-up attempts (F-093-d) — the list the ledger deliberately
+   * does not carry. A separate call to a separate route, so a status filter
+   * meant for attempts can never narrow the ledger.
+   */
   async walletPayments(query: string): Promise<WalletPaymentsPage> {
     return call<WalletPaymentsPage>(`/wallet/payments?${query}`, { method: "GET" });
   },
