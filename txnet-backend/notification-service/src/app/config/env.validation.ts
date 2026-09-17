@@ -65,13 +65,21 @@ export const envSchema = z.object({
   OTP_BOT_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
 
   /**
-   * The platform's SMS line (F-035-f, D-38): the OTP gateway's, the same names
-   * as `auth-service` (graced in `credential-env.ts` until F-018). Empty boots,
-   * and every SMS row stays `queued` and counted as stalled until both are set.
+   * The platform's SMS line (F-035-f, D-38): the OTP gateway's URL. Its key and
+   * sender are the platform owner's vault values (F-018-a); `SMS_API_KEY` /
+   * `SMS_SENDER` refuse the boot. Empty boots, and every SMS row stays `queued`
+   * and counted as stalled until the URL and the key are both there.
    */
   SMS_API_URL: z.string().default(''),
-  SMS_API_KEY: z.string().default(''),
-  SMS_SENDER: z.string().default(''),
+
+  /**
+   * The Credential Vault's KEK — a **path to a mounted secret**, never the key
+   * (ADR-0026). The same file `auth-service` mounts: this service reads the
+   * platform's SMS line itself (ADR-0039, F-018-a). Unset boots, and SMS rows
+   * stall. Compose passes an unset variable as `''`, which `KekService` reads
+   * as unset.
+   */
+  VAULT_KEK_FILE: z.string().default(''),
 
   /**
    * The platform's mail server (F-035-h, D-38 as for SMS): `auth-service`'s

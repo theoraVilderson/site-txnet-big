@@ -36,6 +36,7 @@ import { RedisService } from '../redis/redis.service';
 import { LocaleModule } from '../locale/locale.module';
 import { MessengerModule } from '@txnet-backend/messenger';
 import { AutomationModule } from '../automation/automation.module';
+import { VaultModule } from '../tenant/vault/vault.module';
 import { CaptchaController } from './captcha/captcha.controller';
 import { CaptchaService } from './captcha/captcha.service';
 import { MeController } from './me/me.controller';
@@ -61,6 +62,8 @@ import { ConfigService } from '@nestjs/config';
   // service seam `bot-service` has to use (F-320).
   imports: [
     LocaleModule,
+    // SmsOtpSender reads the platform owner's SMS line from the vault (F-018-a).
+    VaultModule,
     // `forwardRef` on both sides: this module needs `AuthBrokerPublisher`
     // (F-067-a) and `AutomationModule` needs `AuthGuard`'s dependencies for
     // its admin controller (F-031-b).

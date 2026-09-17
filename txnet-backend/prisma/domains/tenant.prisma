@@ -354,13 +354,14 @@ model TenantGatewayConfig {
 
 /// TenantSmsConfig — use_platform_sms یعنی متری‌شدن با TenantUsageMeter،
 /// own_credentials یعنی مستقیم از پنل خودش بدون کسر از پلتفرم.
+/// One per tenant. The line's key and sender are vault values (`sms_api_key`,
+/// `sms_sender_line`) since F-018-a, never a column (ADR-0026).
 model TenantSmsConfig {
-  id                 String        @id @default(uuid()) @db.Uuid
-  tenantId           String        @db.Uuid
-  mode               TenantSmsMode
-  ownProviderName    String?
-  ownApiKeyEncrypted String? // SENSITIVE — never default-select
-  isActive           Boolean       @default(true)
+  id              String        @id @default(uuid()) @db.Uuid
+  tenantId        String        @unique @db.Uuid
+  mode            TenantSmsMode
+  ownProviderName String?
+  isActive        Boolean       @default(true)
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 

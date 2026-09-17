@@ -22,6 +22,7 @@ the why, and this file does not restate it.
 | Service | `VAULT_DB` binds | Uses |
 |---|---|---|
 | `auth-service` (`app/tenant/vault/vault.module.ts`) | the cross-tenant pool — its readers resolve a tenant through the vault | every operation, the internal destroy route, and **the only writer of a gateway's secrets** (F-102-a, below) |
+| `notification-service` (`campaigns/campaigns.module.ts`, F-018-a) | the cross-tenant pool — a delivery run has no request tenant; no `put` | `use` of the platform owner's `sms_api_key` / `sms_sender_line` |
 | `billing-service` (`payment/gateway/gateway.module.ts`) | the app pool, each vault query bound to the request's tenant — **except inside a proved grant**, below; `$transaction` refused, so no `put` | `use` of `gateway_merchant_id` and `webhook_secret` |
 
 **Gateway secrets are written over a seam, not by `billing` (D-31).**
@@ -127,14 +128,20 @@ SMS sender line, a second bot) and defaults to the singular `''`.
    `TELEGRAM_API_BASE` — is not a credential and is not listed. An empty value
    is not set: compose passes an unfilled `FOO=` through as `''`.
 
-   **`GRACED_ENV_VARS` is the exception list, and it is wider than ADR-0026
-   predicted.** The ADR sequenced the refusal with F-066-i for
-   `TELEGRAM_BOT_TOKEN` / `BALE_BOT_TOKEN`; `SmsOtpSender` turns out to read
-   `SMS_API_KEY` and `SMS_SENDER` from config in exactly the same way, and
-   those have no vault row to move to until **F-018**. Six names are graced,
-   each naming the row that removes it, and every other listed variable
-   refuses the boot today. Emptying an entry is part of the row it names, not
-   a follow-up to it.
+   **`GRACED_ENV_VARS` is empty** since F-018-a. It carried `SMS_API_KEY` /
+   `SMS_SENDER` until an SMS line had a vault row to live in; emptying an
+   entry was part of the row that gave it one, not a follow-up.
+8. **An SMS line is `sms_api_key` + `sms_sender_line`, singular label**
+   (F-018-a), read through `shared-core`'s `smsLineCredentials(vault,
+   tenantId, caller)` — `null` when there is no usable key, a missing sender
+   `''`, anything else thrown. `smsLineConfigured` answers from the summary and
+   audits nothing. Today both readers (`SmsOtpSender`, the campaign
+   `SmsLineSource`) read **the platform owner's** line: the platform's own
+   gateway account is that tenant's credential like any reseller's. The
+   gateway's URL is a location and stays `SMS_API_URL`. `seed-sms-line`
+   (`scripts/seed-sms-line.sh`, the `seed-bot-integration` shape) writes one;
+   for a tenant other than the owner it also records `tenant_sms_config` as
+   `own_credentials`, one row per tenant.
 
 ## Consumes
 
@@ -187,13 +194,14 @@ somehow escaped its tenant returns ciphertext it cannot open.
 
 | Item | Deprecated since | Removal after | Replacement |
 |---|---|---|---|
-| `tenant_gateway_config.merchantIdEncrypted` / `.apiKeyEncrypted`, `tenant_sms_config.ownApiKeyEncrypted` | 2026-09-09 | F-018 | a `tenant_credential` row of the matching `kind` |
+| `tenant_gateway_config.merchantIdEncrypted` / `.apiKeyEncrypted` | 2026-09-09 | F-018 |
+| `tenant_sms_config.ownApiKeyEncrypted` | 2026-09-09 | **removed 2026-09-17** (F-018-a, `20260917000800_tenant_sms_config_vault`) | a `tenant_credential` row of the matching `kind` |
 | `tenant_bot_integration.botTokenEncrypted` | 2026-09-09 | **removed 2026-09-09** | `automation.bot_integration.credentialRef`, naming a `telegram_bot_token` / `bale_bot_token` row |
 
 Those four columns have **never been written** — no code has ever read or set
 them — so nothing is migrated and none was dropped here. F-066-h has since
 dropped `tenant_bot_integration` outright, in
-`20260909000200_bot_integration`; F-018 owns the other two.
+`20260909000200_bot_integration`, and F-018-a the SMS one; F-018 owns the gateway two.
 
 The bot is therefore the vault's first real consumer, and it uses the label as
 the join: `automation.bot_integration.credentialRef` is the `label` half of a

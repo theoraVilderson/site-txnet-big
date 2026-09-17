@@ -74,10 +74,10 @@ export const CREDENTIAL_ENV_VARS: Record<TenantCredentialKind, string[]> = {
  *
  * The four bot variables left it with F-066-i: `BotClientRegistry` now reads
  * every token and webhook secret from a tenant's `BotIntegration` and the
- * vault, so a deployment still setting one is refused rather than graced. What
- * remains is `SmsOtpSender`, which reads `SMS_API_KEY` and `SMS_SENDER` from
- * config the way the registry used to read the tokens — tenant property under
- * catalog 20.4, with no vault row to move to until F-018.
+ * vault. `SMS_API_KEY` and `SMS_SENDER` left it with F-018-a: the OTP sender
+ * and the campaign line read the platform owner's `sms_api_key` /
+ * `sms_sender_line` (`sms-line-credentials.ts`). The table is empty, and a
+ * deployment still setting any listed variable is refused.
  *
  * **Emptying an entry is part of the row it names**, not a follow-up to it: the
  * row that gives a credential somewhere to live is the row that takes away its
@@ -87,10 +87,7 @@ export const CREDENTIAL_ENV_VARS: Record<TenantCredentialKind, string[]> = {
  * here refuses the boot from the moment it is set, which is this guard's real
  * job — by the time a leftover is load-bearing it is too late to refuse it.
  */
-export const GRACED_ENV_VARS: Readonly<Record<string, string>> = {
-  SMS_API_KEY: 'F-018 — the tenant SMS integration moves into the vault',
-  SMS_SENDER: 'F-018 — the tenant SMS integration moves into the vault',
-};
+export const GRACED_ENV_VARS: Readonly<Record<string, string>> = {};
 
 /** One environment variable found holding a tenant credential. */
 export interface CredentialEnvFinding {

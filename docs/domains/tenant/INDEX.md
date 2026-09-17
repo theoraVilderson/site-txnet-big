@@ -3,7 +3,7 @@ id: tenant
 layer: domain
 status: active
 version: 8
-keywords: [tenant, reseller, white-label, branding, domain, entitlements, tenant billing, subscription domain, domain purpose, panel domain, assets domain, path allowlist, my subscription domain shows the login page, the panel loads on the wrong domain, sub domain serves the panel, host, hostname, custom domain, which tenant, tenant resolution, default tenant, tenant claim, wrong tenant, logged in on the wrong site, session does not belong to this address, X-Tenant-Id, unknown host, unknown domain, my domain returns 404, the api answers 404 on my domain, no fallback tenant, neutral 404, credential vault, vault, audit a decryption, who read the token, credential access log, refuses to boot, bot token in env, leftover env var, bot token, gateway key, api key, secret, encryption, encrypted credential, DEK, KEK, rotate a credential, fingerprint, where do tenant secrets live, تنانت اشتباه, این نشست به این آدرس تعلق ندارد, دامنه ناشناخته, دامنه من ۴۰۴ می‌دهد, رمزنگاری اعتبارنامه, توکن ربات]
+keywords: [tenant, reseller, white-label, branding, domain, entitlements, tenant billing, subscription domain, domain purpose, panel domain, assets domain, path allowlist, my subscription domain shows the login page, the panel loads on the wrong domain, sub domain serves the panel, host, hostname, custom domain, which tenant, tenant resolution, default tenant, tenant claim, wrong tenant, logged in on the wrong site, session does not belong to this address, X-Tenant-Id, unknown host, unknown domain, my domain returns 404, the api answers 404 on my domain, no fallback tenant, neutral 404, credential vault, vault, audit a decryption, who read the token, credential access log, refuses to boot, bot token in env, leftover env var, bot token, gateway key, api key, sms api key, sms line in the vault, SMS_API_KEY refuses to boot, secret, encryption, encrypted credential, DEK, KEK, rotate a credential, fingerprint, where do tenant secrets live, تنانت اشتباه, این نشست به این آدرس تعلق ندارد, دامنه ناشناخته, دامنه من ۴۰۴ می‌دهد, رمزنگاری اعتبارنامه, توکن ربات]
 source:
   - txnet-backend/prisma/domains/tenant.prisma
   - txnet-backend/auth-service/src/app/tenant/**
@@ -11,6 +11,8 @@ source:
   - txnet-backend/prisma/domains/migrations/20260909000000_credential_vault/**
   - txnet-backend/prisma/domains/migrations/20260909000100_credential_access_audit/**
   - txnet-backend/prisma/domains/migrations/20260909002000_tenant_domain_purpose/**
+  - txnet-backend/prisma/domains/migrations/20260917000800_tenant_sms_config_vault/**
+  - txnet-backend/auth-service/src/seed-sms-line.ts
 owns_tables: [tenant, tenant_branding, tenant_domain, tenant_feature_package, tenant_feature_entitlement, tenant_staff_member, tenant_billing_wallet, tenant_billing_transaction, tenant_usage_meter, tenant_gateway_config, tenant_sms_config, tenant_restriction, tenant_credential, tenant_dek, tenant_credential_access]
 depends_on: [identity, billing, redis-keyspace]
 updated: 2026-09-09

@@ -27,7 +27,8 @@ import { DeliveryStatus, NotificationChannel } from '@prisma/client';
 
 import { CHANNEL_PLATFORM, CampaignDeliveryService, DELIVERY_CALLER } from './campaign-delivery.service';
 import { MailLineResolver, platformMailLine } from './mail-line';
-import { SmsLineResolver, platformSmsLine } from './sms-line';
+import { CredentialUnavailable } from '@txnet-backend/shared-core';
+import { SmsLineResolver, SmsLineSource, platformSmsLine } from './sms-line';
 
 const OWNER_TENANT = '11111111-1111-4111-8111-111111111111';
 const TENANT = '22222222-2222-4222-8222-222222222222';
@@ -85,13 +86,13 @@ function fakes({
     client: vi.fn().mockResolvedValue(client ? { sendText } : null),
   };
   const outcomes = { recordOutcome: vi.fn().mockResolvedValue({ changed: true }) };
-  const sms = new SmsLineResolver(smsLine ? ({ send: smsSend } as never) : null);
+  const sms = { resolverFor: vi.fn(async () => new SmsLineResolver(smsLine ? ({ send: smsSend } as never) : null)) };
   const mail = new MailLineResolver(mailLine ? ({ send: mailSend } as never) : null);
   const locale = {
     getDefaultLanguage: () => 'fa',
     getKey: (lang: string, _ns: string, key: string) => (key === 'campaign.emailSubject' ? `subject:${lang}` : undefined),
   };
-  const service = new CampaignDeliveryService(db as never, bots as never, outcomes as never, sms, mail, locale as never, { now: () => NOW });
+  const service = new CampaignDeliveryService(db as never, bots as never, outcomes as never, sms as never, mail, locale as never, { now: () => NOW });
   return { db, bots, outcomes, sendText, smsSend, mailSend, service };
 }
 
@@ -441,5 +442,41 @@ describe('platformSmsLine', () => {
     expect(await line({ ok: false, msg: 'UserNameOrPasswordIsWrong', error: null }).line.send('1', 'x')).toMatchObject({
       status: 'line_down',
     });
+  });
+});
+
+describe('SmsLineSource (F-018-a)', () => {
+  const config = (url = 'https://sms.example/api') => ({ get: (_k: string, fallback: unknown) => url || fallback }) as never;
+  const vault = (use = vi.fn(async (ref: { kind: string }) => (ref.kind === 'sms_api_key' ? 'user@pass' : '3000'))) =>
+    ({ available: true, use }) as { available: boolean; use: ReturnType<typeof vi.fn> };
+  const provider = { sendSMS: vi.fn().mockResolvedValue({ ok: true, msg: 'sent', data: true }) };
+
+  it("opens the platform line from the owner's vault, once per run", async () => {
+    const v = vault();
+    const factory = vi.fn(() => provider);
+    const resolver = await new SmsLineSource(config(), v as never, factory).resolverFor(OWNER_TENANT);
+
+    const answer = resolver.lineFor(OWNER_TENANT, OWNER_TENANT, OWNER_TENANT);
+    expect(answer.kind).toBe('ready');
+    expect(factory).toHaveBeenCalledWith('https://sms.example/api', 'user@pass');
+    expect(v.use).toHaveBeenCalledWith({ tenantId: OWNER_TENANT, kind: 'sms_api_key' }, { caller: 'notification:SmsLineSource' });
+    if (answer.kind === 'ready') await answer.line.send('+98912', 'hi');
+    expect(provider.sendSMS).toHaveBeenCalledWith({ msg: 'hi', to: '+98912' }, '3000');
+  });
+
+  it('stalls without a URL, an owner, a key, or a readable vault — and still refuses a reseller', async () => {
+    const stalled = async (source: SmsLineSource, owner: string | null = OWNER_TENANT) =>
+      (await source.resolverFor(owner)).lineFor(OWNER_TENANT, OWNER_TENANT, OWNER_TENANT).kind;
+
+    expect(await stalled(new SmsLineSource(config(''), vault() as never))).toBe('stalled');
+    expect(await stalled(new SmsLineSource(config(), vault() as never), null)).toBe('stalled');
+    expect(await stalled(new SmsLineSource(config(), { ...vault(), available: false } as never))).toBe('stalled');
+    const missing = vault(vi.fn(async (ref) => { throw new CredentialUnavailable(ref as never, 'missing'); }));
+    expect(await stalled(new SmsLineSource(config(), missing as never))).toBe('stalled');
+    const broken = vault(vi.fn(async () => { throw new Error('connection reset'); }));
+    expect(await stalled(new SmsLineSource(config(), broken as never))).toBe('stalled');
+
+    const resolver = await new SmsLineSource(config(), vault() as never, () => provider).resolverFor(OWNER_TENANT);
+    expect(resolver.lineFor(TENANT, TENANT, OWNER_TENANT).kind).toBe('none');
   });
 });

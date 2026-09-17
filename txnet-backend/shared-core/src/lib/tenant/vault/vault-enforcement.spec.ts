@@ -55,20 +55,16 @@ describe('F-1216 — no tenant credential comes from an environment variable', (
     expect(known).toEqual(expect.arrayContaining(graced));
     // The list is pinned so emptying it is a deliberate edit with a diff, not
     // something a later session widens by one variable at a time.
-    // The four bot variables left with F-066-i, which gave their values a
-    // vault row to live in. What is left is SMS, until F-018.
-    expect(graced.sort()).toEqual(['SMS_API_KEY', 'SMS_SENDER']);
+    // The four bot variables left with F-066-i, the two SMS ones with F-018-a.
+    expect(graced).toEqual([]);
     // Every graced name says which row removes it.
     for (const name of graced) expect(GRACED_ENV_VARS[name]).toMatch(/^F-\d/);
   });
 
-  it('boots on a graced variable and refuses on any other', () => {
+  it('refuses on a listed variable', () => {
     const guard = new CredentialEnvGuard();
     const saved = { ...process.env };
     try {
-      process.env['SMS_API_KEY'] = 'sms-key';
-      expect(() => guard.onModuleInit()).not.toThrow();
-
       process.env['GATEWAY_SECRET_KEY'] = 'live-key';
       expect(() => guard.onModuleInit()).toThrow(/GATEWAY_SECRET_KEY/);
       // The names reach a log; the values must not.

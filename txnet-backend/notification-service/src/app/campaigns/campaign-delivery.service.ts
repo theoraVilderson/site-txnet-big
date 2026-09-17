@@ -8,7 +8,7 @@ import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service'
 import { CampaignFanOutService } from './campaign-fan-out.service';
 import { PickedText, textFor } from './campaign-texts';
 import { MailLine, MailLineResolver, MailSend } from './mail-line';
-import { SmsLine, SmsLineResolver } from './sms-line';
+import { SmsLine, SmsLineSource } from './sms-line';
 
 /** Rows one run claims. Sends are sequential, so this bounds a run's length with the deadline. */
 export const DELIVERY_BUDGET = 100;
@@ -110,7 +110,7 @@ export class CampaignDeliveryService {
     private readonly db: CrossTenantPrismaService,
     private readonly bots: BotClientRegistry,
     private readonly outcomes: CampaignFanOutService,
-    private readonly sms: SmsLineResolver,
+    private readonly smsLines: SmsLineSource,
     private readonly mail: MailLineResolver,
     private readonly locale: LocaleService,
     @Optional() @Inject(DELIVERY_OPTIONS) options?: DeliveryOptions,
@@ -165,6 +165,7 @@ export class CampaignDeliveryService {
     const ownerTenantId = campaigns.some((c) => isLineChannel(c.channel))
       ? ((await this.db.tenant.findFirst({ where: { tenantType: TenantType.platform_owner }, select: { id: true } }))?.id ?? null)
       : null;
+    const sms = await this.smsLines.resolverFor(campaigns.some((c) => c.channel === NotificationChannel.sms) ? ownerTenantId : null);
     /** A line that answered for its account, not a recipient: nothing more goes out on it this run. */
     const linesDown = new Set<LineChannel>();
     /** Rows handed back still `queued`, keyed by when they may be claimed again ('' = at once). */
@@ -180,7 +181,7 @@ export class CampaignDeliveryService {
         const channel = campaign.channel;
         // Invariant 10: which line, and whether this row may use one, is the resolver's call.
         const user = userById.get(row.userId);
-        const resolver = channel === NotificationChannel.sms ? this.sms : this.mail;
+        const resolver = channel === NotificationChannel.sms ? sms : this.mail;
         const answer = user ? resolver.lineFor(campaign.tenantId, user.tenantId, ownerTenantId) : ({ kind: 'none' } as const);
         const address = !user
           ? null

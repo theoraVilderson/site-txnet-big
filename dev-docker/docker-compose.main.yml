@@ -370,9 +370,10 @@ services:
       # Shared secret bot-service presents as X-Service-Token: it waives the
       # captcha and re-buckets the rate limit, and authenticates no user.
       - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
+      # The SMS gateway's URL. Its key and sender line are the platform owner's
+      # vault values (F-018-a): `scripts/seed-sms-line.sh` puts them there, and
+      # SMS_API_KEY / SMS_SENDER here would refuse the boot.
       - SMS_API_URL=${SMS_API_URL:-}
-      - SMS_API_KEY=${SMS_API_KEY:-}
-      - SMS_SENDER=${SMS_SENDER_PRIVATE:-}
       # Mail (D-39): plain SMTP. The dev default is the mailpit container
       # below, which accepts anything and delivers nothing — read the mail at
       # https://mail.${DOMAIN_NAME}. Point these at a real relay elsewhere.
@@ -1006,6 +1007,9 @@ services:
     volumes:
       - ../txnet-backend:/app:delegated
       - /app/node_modules
+      # The vault KEK, read-only, as auth-service mounts it (ADR-0026): the
+      # campaign SMS line is read from the platform owner's vault (F-018-a).
+      - ./secrets/vault-kek:/run/secrets/vault-kek:ro
     environment:
       # Validated at boot by `app/config/env.validation.ts`.
       - PORT=3000
@@ -1022,10 +1026,10 @@ services:
       - TELEGRAM_API_BASE=${TELEGRAM_API_BASE:-https://api.telegram.org}
       - BALE_API_BASE=${BALE_API_BASE:-https://tapi.bale.ai}
       # Campaign SMS (F-035-f, D-38): the platform's line, the OTP gateway's.
-      # Empty boots; SMS rows then stay queued as stalled.
+      # Its key and sender are the owner's vault values (F-018-a), read with the
+      # KEK below. Empty boots; SMS rows then stay queued as stalled.
       - SMS_API_URL=${SMS_API_URL:-}
-      - SMS_API_KEY=${SMS_API_KEY:-}
-      - SMS_SENDER=${SMS_SENDER_PRIVATE:-}
+      - VAULT_KEK_FILE=${VAULT_KEK_FILE:-/run/secrets/vault-kek}
       # Campaign email (F-035-h, D-38): the platform's SMTP, auth-service's (D-39).
       # Unset host or sender boots; email rows then stay queued as stalled.
       - SMTP_HOST=${SMTP_HOST:-mailpit}

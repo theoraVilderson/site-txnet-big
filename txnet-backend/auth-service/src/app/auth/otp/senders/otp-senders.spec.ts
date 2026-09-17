@@ -2,6 +2,7 @@ import type { Mock } from 'vitest';
 import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotClientRegistry } from '@txnet-backend/messenger';
+import { CredentialUnavailable } from '@txnet-backend/shared-core';
 import { runWithTenant } from '../../../tenant-context/tenant-context';
 import { LocaleService } from '../../../locale/locale.service';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -270,48 +271,76 @@ describe.each(messengerSenders)('$platform OTP sender', (sender) => {
 
 describe('SMS OTP sender', () => {
   const env = (over: Record<string, string> = {}) => {
-    const values: Record<string, string> = {
-      SMS_API_URL: 'https://sms.example/api',
-      SMS_API_KEY: 'user@pass',
-      SMS_SENDER: '3000',
-      ...over,
-    };
+    const values: Record<string, string> = { SMS_API_URL: 'https://sms.example/api', ...over };
     return {
       get: <T>(key: string, fallback?: T) => (values[key] as unknown as T) ?? fallback,
     } as unknown as ConfigService;
   };
 
-  /** Replaces the private provider with a stub; the provider has its own spec. */
+  /** The platform owner's vault (F-018-a): the line is two credentials, not two variables. */
+  const vault = (values: Record<string, string> = { sms_api_key: 'user@pass', sms_sender_line: '3000' }) => ({
+    available: true,
+    use: vi.fn(async (ref: { tenantId: string; kind: string }) => {
+      if (!(ref.kind in values)) throw new CredentialUnavailable(ref as never, 'missing');
+      return values[ref.kind]!;
+    }),
+    summary: vi.fn(async (ref: { kind: string }) =>
+      ref.kind in values ? { status: 'active', expiresAt: null } : null,
+    ),
+  });
+  const owner = (id: string | null = 'owner-1') => ({ tenant: { findFirst: vi.fn(async () => (id ? { id } : null)) } });
+
+  const build = (
+    { config = env(), v = vault(), db = owner(), loc = localeService() } = {} as {
+      config?: ConfigService;
+      v?: ReturnType<typeof vault>;
+      db?: ReturnType<typeof owner>;
+      loc?: LocaleService;
+    },
+  ) => new SmsOtpSender(config, loc, v as never, db as never);
+
+  /** Replaces the provider factory with a stub; the provider has its own spec. */
   function withProvider(
     sender: SmsOtpSender,
     sendSMS: ReturnType<typeof smsProvider>,
   ) {
-    (sender as unknown as { provider: unknown }).provider = { sendSMS };
+    const factory = vi.fn(() => ({ sendSMS }));
+    (sender as unknown as { providerFor: unknown }).providerFor = factory;
     return sender;
   }
 
   it('needs no linked account — a phone number is the whole address', () => {
-    const s = new SmsOtpSender(env(), localeService());
+    const s = build();
     expect(s.requiresLinkedAccount).toBe(false);
     expect(s.channel).toBe(OtpChannel.sms);
   });
 
-  it('is unconfigured without both a URL and a key', () => {
-    expect(new SmsOtpSender(env(), localeService()).isConfigured()).toBe(true);
-    expect(
-      new SmsOtpSender(env({ SMS_API_KEY: '' }), localeService()).isConfigured(),
-    ).toBe(false);
-    expect(
-      new SmsOtpSender(env({ SMS_API_URL: '' }), localeService()).isConfigured(),
-    ).toBe(false);
+  it("is unconfigured without a URL, the owner's key, or a vault", async () => {
+    expect(await build().isConfigured()).toBe(true);
+    expect(await build({ v: vault({ sms_sender_line: '3000' }) }).isConfigured()).toBe(false);
+    expect(await build({ config: env({ SMS_API_URL: '' }) }).isConfigured()).toBe(false);
+    expect(await build({ db: owner(null) }).isConfigured()).toBe(false);
+    expect(await build({ v: { ...vault(), available: false } }).isConfigured()).toBe(false);
   });
 
   it('refuses clearly instead of failing silently when unconfigured', async () => {
-    const s = new SmsOtpSender(env({ SMS_API_KEY: '' }), localeService());
+    const s = build({ v: vault({}) });
 
     await expect(inTenant(() => s.send('09121112233', CODE, OtpPurpose.login, 'en'))).rejects.toBeInstanceOf(
       BadRequestException,
     );
+  });
+
+  it("sends with the platform owner's vault key and sender line, audited as this sender (F-018-a)", async () => {
+    const sendSMS = smsProvider({ ok: true, msg: 'sent' });
+    const v = vault();
+    const s = withProvider(build({ v }), sendSMS);
+
+    await inTenant(() => s.send('09121112233', CODE, OtpPurpose.login, 'en'));
+
+    expect((s as unknown as { providerFor: Mock }).providerFor).toHaveBeenCalledWith('https://sms.example/api', 'user@pass');
+    expect(v.use).toHaveBeenCalledWith({ tenantId: 'owner-1', kind: 'sms_api_key' }, { caller: 'auth:SmsOtpSender' });
+    expect(sendSMS.mock.calls[0]![1]).toBe('3000');
   });
 
   it('hands the provider a template with {{code}} still in it', async () => {
@@ -319,7 +348,7 @@ describe('SMS OTP sender', () => {
     // as well would either double-substitute or put the code in the URL
     // twice over.
     const sendSMS = smsProvider({ ok: true, msg: 'sent' });
-    const s = withProvider(new SmsOtpSender(env(), localeService()), sendSMS);
+    const s = withProvider(build(), sendSMS);
 
     await inTenant(() => s.send('09121112233', CODE, OtpPurpose.login, 'en'));
 
@@ -332,7 +361,7 @@ describe('SMS OTP sender', () => {
 
   it('turns a provider rejection into a business error', async () => {
     const sendSMS = smsProvider({ ok: false, msg: 'InvalidNumber' });
-    const s = withProvider(new SmsOtpSender(env(), localeService()), sendSMS);
+    const s = withProvider(build(), sendSMS);
 
     await expect(inTenant(() => s.send('09121112233', CODE, OtpPurpose.login, 'en'))).rejects.toMatchObject({
       message: 'otp.smsSendFailed',
@@ -342,7 +371,7 @@ describe('SMS OTP sender', () => {
   it('resolves the title in the requested language', async () => {
     const sendSMS = smsProvider({ ok: true, msg: 'sent' });
     const loc = localeService({ otp: { title: { [OtpPurpose.login]: 'کد ورود' } } });
-    const s = withProvider(new SmsOtpSender(env(), loc), sendSMS);
+    const s = withProvider(build({ loc }), sendSMS);
 
     await inTenant(() => s.send('09121112233', CODE, OtpPurpose.login, 'fa'));
 

@@ -20,6 +20,8 @@ module.exports = {
   entry: {
     main: './src/main.ts',
     'seed-bot-integration': './src/seed-bot-integration.ts',
+    // F-018-a: the same shape for an SMS line (`scripts/seed-sms-line.sh`).
+    'seed-sms-line': './src/seed-sms-line.ts',
   },
   output: {
     path: path.resolve(__dirname, '../dist/auth-service'),

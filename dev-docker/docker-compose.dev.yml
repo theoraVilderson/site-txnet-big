@@ -74,6 +74,9 @@ services:
       - APP_NAME=notification-service
     volumes: !override
       - ../txnet-backend:/app:delegated
+      # Repeated for billing's reason: the campaign SMS line is read from the
+      # vault (F-018-a), and `!override` drops main.yml's KEK mount.
+      - ./secrets/vault-kek:/run/secrets/vault-kek:ro
 
   billing-service:
     <<: *host-node
