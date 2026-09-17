@@ -318,12 +318,14 @@ model CouponGateway {
   id                    String  @id @default(uuid()) @db.Uuid
   couponId              String  @db.Uuid
   gatewayId             String? @db.Uuid
-  // A FK to `tenant.tenant_gateway_config` in the migration only, so the tenant
-  // schema file carries no back-relation for a billing-side limit.
   tenantGatewayConfigId String? @db.Uuid
 
-  coupon  Coupon          @relation(fields: [couponId], references: [id])
-  gateway PaymentGateway? @relation(fields: [gatewayId], references: [id])
+  // Both RESTRICT, as migration 20260914001100_coupon_limits built them: a
+  // gateway a coupon names cannot be deleted from under it, and SET NULL would
+  // break CHECK `coupon_gateway_names_one` anyway.
+  coupon              Coupon               @relation(fields: [couponId], references: [id])
+  gateway             PaymentGateway?      @relation(fields: [gatewayId], references: [id], onDelete: Restrict)
+  tenantGatewayConfig TenantGatewayConfig? @relation(fields: [tenantGatewayConfigId], references: [id], onDelete: Restrict)
 
   @@index([couponId])
   @@map("coupon_gateway")
@@ -550,6 +552,7 @@ model PaymentTransaction {
   @@index([tenantId])
   @@index([status, expiresAt])
   @@index([status, nextVerifyAt])
+  @@index([grantId])
   @@map("payment_transaction")
   @@schema("billing")
 }
@@ -632,7 +635,7 @@ model AffiliateCommission {
 /// and `withTenant` key on, and a grant is exactly the borrower's to see.
 /// Which tenant *owns* the gateway is the gateway row's business, not this one's.
 model PaymentGatewayGrant {
-  id                    String    @id @default(uuid()) @db.Uuid
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId              String    @db.Uuid
   // Exactly one of the two, like `payment_transaction`: the platform's own
   // gateway or another reseller's. A CHECK enforces it (Prisma cannot).
@@ -663,7 +666,7 @@ model PaymentGatewayGrant {
 /// اعطاشده، مبلغ واریزشده (منهای کارمزد درگاه) را اینجا انباشته می‌کند.
 /// Append-only, one row per payment, written inside the crediting transaction.
 model GatewaySettlementEntry {
-  id                   String   @id @default(uuid()) @db.Uuid
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   grantId              String   @db.Uuid
   /// The tenant that is **owed** — the borrower whose user was credited.
   tenantId             String   @db.Uuid
@@ -684,7 +687,7 @@ model GatewaySettlementEntry {
 /// ADR-0041 §5 — تسویه، یک پرداخت دستیِ ثبت‌شده است؛ هرگز خودکار نیست.
 /// اپراتور پول را بیرون از سیستم منتقل می‌کند و اینجا با سند و هویت خودش ثبت.
 model GatewaySettlementPayout {
-  id                String   @id @default(uuid()) @db.Uuid
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   /// The tenant that was paid.
   tenantId          String   @db.Uuid
   /// Base currency (ADR-0019, C-02). What is still owed is the accruals minus these.

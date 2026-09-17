@@ -356,6 +356,8 @@ model TenantGatewayConfig {
   /// Grants of this gateway to other tenants (ADR-0041, F-096-a). The owner is
   /// unchanged by a grant; this is only who else may use it.
   grants   PaymentGatewayGrant[]
+  /// Coupons limited to this gateway (`billing.coupon_gateway`, migration 20260914001100_coupon_limits).
+  couponLimits CouponGateway[]
 
   @@unique([tenantId, providerName])
   @@map("tenant_gateway_config")
