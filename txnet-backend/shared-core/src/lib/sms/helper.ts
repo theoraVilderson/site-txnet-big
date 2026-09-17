@@ -1,5 +1,3 @@
-import type { ResponseType } from '../../../../common/response/response.util';
-
 /**
  * Replaces {{key}} placeholders inside an SMS template with given values.
  * Example: replaceVar("Your code: {{code}}", { code: "123456" })

@@ -64,6 +64,15 @@ export const envSchema = z.object({
   /** Per send, as for the OTP senders (`messenger`'s registry reads it). */
   OTP_BOT_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
 
+  /**
+   * The platform's SMS line (F-035-f, D-38): the OTP gateway's, the same names
+   * as `auth-service` (graced in `credential-env.ts` until F-018). Empty boots,
+   * and every SMS row stays `queued` and counted as stalled until both are set.
+   */
+  SMS_API_URL: z.string().default(''),
+  SMS_API_KEY: z.string().default(''),
+  SMS_SENDER: z.string().default(''),
+
   /** The envelope's translator (`locale/locale.service.ts`). */
   LOCALE_SERVICE_ADDR: z.string().min(1).default('localhost:50051'),
   LOCALE_SCOPE: z.string().min(1).default('backend'),

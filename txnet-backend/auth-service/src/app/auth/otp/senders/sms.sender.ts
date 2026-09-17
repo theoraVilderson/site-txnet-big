@@ -2,10 +2,9 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { IOtpSender } from './otp-sender.interface';
 import { OtpChannel, OtpPurpose } from '../otp.interface';
-import { SmsProviderService } from './sms-provider/sms-provider.service';
 import { LocaleService } from '../../../locale/locale.service';
 import { buildOtpSmsTemplate } from './otp-message.util';
-import { BackendI18nKeys } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, SmsProviderService } from '@txnet-backend/shared-core';
 
 @Injectable()
 export class SmsOtpSender implements IOtpSender {

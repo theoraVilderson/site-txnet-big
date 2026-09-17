@@ -159,7 +159,7 @@ describe('CampaignAdminService', () => {
   it('serves the platform owner on the cross-tenant pool, where a platform-wide row can be written', async () => {
     const { prisma, all, service } = fakes(TenantType.platform_owner);
     await as(OWNER_TENANT, () =>
-      service.create(owner, { channel: NotificationChannel.sms, messageBody: 'x', audience: {}, tenantId: null }),
+      service.create(owner, { channel: NotificationChannel.telegram_bot, messageBody: 'x', audience: {}, tenantId: null }),
     );
     expect(all.notificationCampaign.create).toHaveBeenCalledWith({ data: expect.objectContaining({ tenantId: null }) });
     expectPoolUntouched(prisma);
@@ -183,6 +183,52 @@ describe('CampaignAdminService', () => {
     prisma.notificationCampaign.findUnique.mockResolvedValue(campaignRow({ tenantId: null }));
     await expect(as(TENANT, () => service.get(tenantAdmin, CAMPAIGN))).rejects.toBeInstanceOf(CampaignAdminRefused);
     expectPoolUntouched(all);
+  });
+
+  it('drafts an SMS campaign only for the platform owner\'s own users (D-38): no other tenant has a line yet', async () => {
+    const reseller = fakes();
+    await expect(
+      as(TENANT, () => reseller.service.create(tenantAdmin, { channel: NotificationChannel.sms, messageBody: 'x', audience: {} })),
+    ).rejects.toMatchObject({ reason: 'sms_not_available' });
+    expect(reseller.prisma.notificationCampaign.create).not.toHaveBeenCalled();
+    expectPoolUntouched(reseller.all);
+
+    for (const tenantId of [null, OTHER_TENANT]) {
+      const { all, service } = fakes(TenantType.platform_owner);
+      await expect(
+        as(OWNER_TENANT, () => service.create(owner, { channel: NotificationChannel.sms, messageBody: 'x', audience: {}, tenantId })),
+      ).rejects.toMatchObject({ reason: 'sms_not_available' });
+      expect(all.notificationCampaign.create).not.toHaveBeenCalled();
+    }
+
+    const own = fakes(TenantType.platform_owner);
+    await as(OWNER_TENANT, () => own.service.create(owner, { channel: NotificationChannel.sms, messageBody: 'x', audience: {} }));
+    expect(own.all.notificationCampaign.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tenantId: OWNER_TENANT, channel: NotificationChannel.sms }),
+    });
+  });
+
+  it('refuses switching a draft to SMS unless it is the platform owner\'s own campaign', async () => {
+    const reseller = fakes();
+    await expect(
+      as(TENANT, () => reseller.service.update(tenantAdmin, CAMPAIGN, { channel: NotificationChannel.sms })),
+    ).rejects.toMatchObject({ reason: 'sms_not_available' });
+    expect(reseller.prisma.notificationCampaign.updateMany).not.toHaveBeenCalled();
+
+    const platformWide = fakes(TenantType.platform_owner);
+    platformWide.all.notificationCampaign.findUnique.mockResolvedValue(campaignRow({ tenantId: null }));
+    await expect(
+      as(OWNER_TENANT, () => platformWide.service.update(owner, CAMPAIGN, { channel: NotificationChannel.sms })),
+    ).rejects.toMatchObject({ reason: 'sms_not_available' });
+    expect(platformWide.all.notificationCampaign.updateMany).not.toHaveBeenCalled();
+
+    const own = fakes(TenantType.platform_owner);
+    own.all.notificationCampaign.findUnique.mockResolvedValue(campaignRow({ tenantId: OWNER_TENANT }));
+    await as(OWNER_TENANT, () => own.service.update(owner, CAMPAIGN, { channel: NotificationChannel.sms }));
+    expect(own.all.notificationCampaign.updateMany).toHaveBeenCalledWith({
+      where: { id: CAMPAIGN, status: CampaignStatus.draft },
+      data: { channel: NotificationChannel.sms },
+    });
   });
 
   it('edits only while the row is still a draft, checked in the write itself', async () => {

@@ -11,8 +11,8 @@ updated: 2026-09-17
 Runs in `notification-service` (ADR-0052). **Live:** a user's in-app inbox
 (F-035-a/b), campaign drafts (F-035-c) and sending them: one recipient row per
 user, written on the worker (F-035-d), and delivered to Telegram and Bale
-(F-035-e). Email/SMS adapters (F-035-f) are not built — rows of those channels
-stay `queued`.
+(F-035-e), and by SMS on the platform's line (F-035-f). Email is not built
+(F-035-g/h); a reseller's own SMS line waits for F-035-i.
 
 ## TL;DR
 
@@ -31,10 +31,10 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 | read the inbox | `GET notifications` (gated) | `page`, `pageSize` (≤100, default 1/20), `unreadOnly=true\|false` | `{ items[], page, pageSize, total, unreadCount }`; item = `id, type, title, body, readAt, createdAt` (ISO), newest first | 400 `validation.failed`, 401 |
 | mark read | `POST notifications/read` (gated) | `{ ids?: uuid[1..100] }` — absent = all | `{ marked, unreadCount }` | 400, 401 |
 | create | `POST internal/notifications` (`SERVICE_AUTH_TOKEN`) | `{ userId, type, title ≤200, body ≤2000 }` | the item, 201 | 400; 404 on a missing or wrong token |
-| draft a campaign | `POST notifications/campaigns` (gated, `campaign.manage`) | `{ channel, messageBody ≤4000, audience, tenantId?: uuid\|null }` | the campaign, 201 | 400; 403 no permission or `not_platform_owner`; 404 `tenant_not_found` |
+| draft a campaign | `POST notifications/campaigns` (gated, `campaign.manage`) | `{ channel, messageBody ≤4000, audience, tenantId?: uuid\|null }` | the campaign, 201 | 400; 403 no permission or `not_platform_owner`; 404 `tenant_not_found`; 409 `sms_not_available` |
 | list campaigns | `GET notifications/campaigns` | `page`, `pageSize` ≤100, `status?`, `tenantId?: uuid\|platform` (owner only) | `{ items[], page, pageSize, total }`, newest first | 400, 403 |
 | read one | `GET notifications/campaigns/:id` | — | the campaign | 403; 404 `campaign_not_found` |
-| edit a draft | `PATCH notifications/campaigns/:id` | any of `channel`, `messageBody`, `audience` (≥1) | the campaign | 400, 403, 404; 409 `campaign_not_draft` |
+| edit a draft | `PATCH notifications/campaigns/:id` | any of `channel`, `messageBody`, `audience` (≥1) | the campaign | 400, 403, 404; 409 `campaign_not_draft`, `sms_not_available` |
 | start a send | `POST notifications/campaigns/:id/send` | — | the campaign, `status: sending`, 200 | 403, 404; 409 `campaign_not_draft` |
 | fan out | `POST internal/notifications/campaigns/fan-out` (`SERVICE_AUTH_TOKEN`) | — | `{ campaigns, recipients, finished, unreadable }` | 404 on a wrong token |
 | deliver | `POST internal/notifications/campaigns/deliver` (token) | — | `{ claimed, sent, failed, deferred, stalled }` | 404 on a wrong token |
@@ -123,6 +123,26 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
   stays `sending` while any row is queued.
 - Needs `AUTH_API_BASE_URL` on `notification-service`; unset, every row stalls.
 
+### Delivering by SMS (F-035-f, D-38)
+
+- **One line, unmetered.** The platform's gateway (`SMS_API_URL`/`SMS_API_KEY`/
+  `SMS_SENDER`, the OTP one; the driver is `shared-core`'s `SmsProviderService`).
+  Nothing bills it yet, so it carries only **the platform owner's own campaign
+  to the platform owner's own users** (invariant 10): a reseller's would cost
+  the platform, a platform-wide one would show a reseller's customer the
+  platform's number. `sms-line.ts` `SmsLineResolver.lineFor` is the one place
+  that decides; F-035-i (a reseller's line, metering on `sms_sent`) changes it.
+- **Refused at the draft.** `channel: sms` on create, or a patch to it, is 409
+  `sms_not_available` unless the caller is the platform owner and the campaign
+  is their own tenant's. Delivery checks the same rule again (cross-tenant pool).
+- **Who receives.** `user.phoneNumber` with `phoneVerifiedAt` set; otherwise `failed`.
+  The text goes as stored, no placeholder substitution.
+- **Outcomes**, claimed and leased with the bot rows (same job, same budget):
+  `sent`; `failed` for an ineligible row or `InvalidReceiverNumber`. **Left
+  `queued`:** a transport failure or the time limit (`deferred`); an unset line,
+  or any other gateway refusal — credentials, credit — (`stalled`), and after
+  such a refusal no further SMS is tried that run.
+
 ## Emits (events)
 
 | Event | When | Payload | Consumer |
@@ -143,6 +163,7 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 | automation | `worker-service` ticks the fan-out (F-035-d) and delivery (F-035-e) | a started campaign stays `sending`, its rows unwritten or `queued`, until the next run |
 | messenger | `BotClientRegistry`, `TelegramLikeBotClient.sendText` (F-035-e) | — (a library) |
 | auth-api | `internal/bot-integrations/primary` and `/token` (ADR-0054) | rows stay `queued`, counted `stalled` |
+| SMS gateway (external) | `SendSms`, through `shared-core` `SmsProviderService` (F-035-f) | SMS rows stay `queued`, `deferred` or `stalled` |
 | tenant | the caller's `tenantType` (platform owner or not); a named tenant exists | 404 `tenant_not_found` |
 | identity | `campaign.manage` in the gate's permissions (migration `20260917000100`) | 403 |
 

@@ -47,7 +47,12 @@ export type CampaignView = {
   createdAt: string;
 };
 
-export type CampaignAdminRejection = 'not_platform_owner' | 'tenant_not_found' | 'campaign_not_found' | 'campaign_not_draft';
+export type CampaignAdminRejection =
+  | 'not_platform_owner'
+  | 'tenant_not_found'
+  | 'campaign_not_found'
+  | 'campaign_not_draft'
+  | 'sms_not_available';
 
 export class CampaignAdminRefused extends Error {
   constructor(readonly reason: CampaignAdminRejection, detail: string) {
@@ -106,6 +111,7 @@ export class CampaignAdminService {
   async create(actor: CampaignActor, input: CreateCampaignInput): Promise<CampaignView> {
     const { owner, db } = await this.access(actor);
     const tenantId = await this.ownerOfNew(actor, owner, input.tenantId);
+    if (input.channel === NotificationChannel.sms) this.assertSmsLine(actor, owner, tenantId);
     const row = await db.notificationCampaign.create({
       data: {
         tenantId,
@@ -159,7 +165,8 @@ export class CampaignAdminService {
 
   async update(actor: CampaignActor, id: string, patch: UpdateCampaignInput): Promise<CampaignView> {
     const { owner, db } = await this.access(actor);
-    await this.loadManaged(actor, owner, db, id);
+    const current = await this.loadManaged(actor, owner, db, id);
+    if (patch.channel === NotificationChannel.sms) this.assertSmsLine(actor, owner, current.tenantId);
 
     const data: Prisma.NotificationCampaignUpdateManyMutationInput = {};
     if (patch.channel !== undefined) data.channel = patch.channel;
@@ -231,6 +238,17 @@ export class CampaignAdminService {
       throw new CampaignAdminRefused('tenant_not_found', tenantId);
     }
     return tenantId;
+  }
+
+  /**
+   * D-38 (invariant 10): the only SMS line is the platform's, unmetered, so an
+   * SMS campaign is the platform owner's own, to its own users. Refused at the
+   * draft so an admin hears it now, not as a campaign of `failed` rows.
+   */
+  private assertSmsLine(actor: CampaignActor, owner: boolean, tenantId: string | null): void {
+    if (!owner || tenantId !== actor.tenantId) {
+      throw new CampaignAdminRefused('sms_not_available', 'only the platform owner has an SMS line, for its own users');
+    }
   }
 
   /** On the app pool `withTenant` already confined the read; the check repeats it for the owner's pool's sake. */

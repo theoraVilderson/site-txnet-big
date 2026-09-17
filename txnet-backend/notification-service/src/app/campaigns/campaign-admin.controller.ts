@@ -40,6 +40,7 @@ export const CAMPAIGN_REFUSAL_STATUS: Record<CampaignAdminRejection, 400 | 403 |
   tenant_not_found: 404,
   campaign_not_found: 404,
   campaign_not_draft: 409,
+  sms_not_available: 409,
 };
 
 const READ = {

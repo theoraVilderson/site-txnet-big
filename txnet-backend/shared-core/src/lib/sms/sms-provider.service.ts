@@ -1,11 +1,15 @@
 import axios, { type AxiosInstance } from 'axios';
 import { replaceVar } from './helper';
-import {
-  err,
-  ok,
-  type ResponseType,
-} from '../../../../common/response/response.util';
+import { err, ok, type ResponseType } from '../envelope/response';
 
+/** The failure `msg` when the gateway was not reached at all, as opposed to one it answered. */
+export const SMS_TRANSPORT_FAILURE = 'SMS failed to sent';
+
+/**
+ * The platform's SMS gateway. Moved here from `auth-service` (F-035-f) so
+ * that OTP codes and `notification-service`'s campaigns share one driver;
+ * the gateway answers 200 with `SendWasSuccessful` or with an error string.
+ */
 export class SmsProviderService {
   private apiBaseURL: string;
   private apiKey: string;
@@ -66,7 +70,7 @@ export class SmsProviderService {
 
       return err(resultData, null);
     } catch (e) {
-      return err('SMS failed to sent', e);
+      return err(SMS_TRANSPORT_FAILURE, e);
     }
   }
 }

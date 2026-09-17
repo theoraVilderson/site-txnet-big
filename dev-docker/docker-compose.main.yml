@@ -1010,6 +1010,11 @@ services:
       - AUTH_API_BASE_URL=http://auth-service:${AUTH_PORT}
       - TELEGRAM_API_BASE=${TELEGRAM_API_BASE:-https://api.telegram.org}
       - BALE_API_BASE=${BALE_API_BASE:-https://tapi.bale.ai}
+      # Campaign SMS (F-035-f, D-38): the platform's line, the OTP gateway's.
+      # Empty boots; SMS rows then stay queued as stalled.
+      - SMS_API_URL=${SMS_API_URL:-}
+      - SMS_API_KEY=${SMS_API_KEY:-}
+      - SMS_SENDER=${SMS_SENDER_PRIVATE:-}
       # The app role, never the owner (F-066-m-a).
       - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
       # Campaign management only (F-035-c): a platform-wide campaign is

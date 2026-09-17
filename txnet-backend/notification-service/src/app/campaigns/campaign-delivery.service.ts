@@ -1,9 +1,10 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { DeliveryStatus, NotificationChannel, Prisma } from '@prisma/client';
+import { DeliveryStatus, NotificationChannel, Prisma, TenantType } from '@prisma/client';
 import { BotClientRegistry, BotPlatform, TelegramLikeBotClient } from '@txnet-backend/messenger';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { CampaignFanOutService } from './campaign-fan-out.service';
+import { SmsLineResolver } from './sms-line';
 
 /** Rows one run claims. Sends are sequential, so this bounds a run's length with the deadline. */
 export const DELIVERY_BUDGET = 100;
@@ -15,8 +16,8 @@ export const DELIVERY_LEASE_SEC = 300;
 export const DELIVERY_CALLER = 'notification:CampaignDelivery';
 
 /**
- * Which channel `messenger` delivers (D-10). `null` is not this row's: email and
- * SMS are `notification`'s own adapters (F-035-f), `push` has none yet.
+ * Which channel `messenger` delivers (D-10). `null` is not `messenger`'s: SMS is
+ * this unit's own line (F-035-f, `sms-line.ts`), `push` has no adapter yet.
  * Exhaustive, so a new channel does not compile until someone says where it goes.
  */
 export const CHANNEL_PLATFORM: Record<NotificationChannel, BotPlatform | null> = {
@@ -26,6 +27,12 @@ export const CHANNEL_PLATFORM: Record<NotificationChannel, BotPlatform | null> =
   sms: null,
 };
 
+/** Every channel a run claims rows for: the bot channels and SMS. */
+export const DELIVERED_CHANNELS: NotificationChannel[] = [
+  ...(Object.keys(CHANNEL_PLATFORM) as NotificationChannel[]).filter((c) => CHANNEL_PLATFORM[c] !== null),
+  NotificationChannel.sms,
+];
+
 export const DELIVERY_OPTIONS = Symbol('DELIVERY_OPTIONS');
 export type DeliveryOptions = { budget?: number; deadlineMs?: number; now?: () => Date };
 
@@ -33,11 +40,11 @@ export type DeliveryResult = {
   /** Rows this run took. */
   claimed: number;
   sent: number;
-  /** Final refusals: no verified chat, no bot, a blocked bot, a chat that is gone. */
+  /** Final refusals: no verified chat or phone, no bot or line, a blocked bot, a chat or number that is gone. */
   failed: number;
   /** Still `queued`: the platform asked to wait, or the run ran out of time. */
   deferred: number;
-  /** Still `queued` because a bot could not be resolved or its token read — an operator's problem. */
+  /** Still `queued` because a bot could not be resolved or its token read, or the SMS line is unset or refused — an operator's problem. */
   stalled: number;
 };
 
@@ -51,7 +58,7 @@ type Bot =
   | { kind: 'throttled'; until: Date };
 
 /**
- * Delivering a campaign to Telegram and Bale (F-035-e). `worker-service`'s
+ * Delivering a campaign to Telegram and Bale (F-035-e) and by SMS (F-035-f). `worker-service`'s
  * `notification_campaign_delivery` job drives {@link deliver} over
  * `internal/notifications/campaigns/deliver`.
  *
@@ -90,6 +97,7 @@ export class CampaignDeliveryService {
     private readonly db: CrossTenantPrismaService,
     private readonly bots: BotClientRegistry,
     private readonly outcomes: CampaignFanOutService,
+    private readonly sms: SmsLineResolver,
     @Optional() @Inject(DELIVERY_OPTIONS) options?: DeliveryOptions,
   ) {
     this.budget = options?.budget ?? DELIVERY_BUDGET;
@@ -107,11 +115,11 @@ export class CampaignDeliveryService {
     const [campaigns, users, links] = await Promise.all([
       this.db.notificationCampaign.findMany({
         where: { id: { in: [...new Set(rows.map((r) => r.campaignId))] } },
-        select: { id: true, channel: true, messageBody: true },
+        select: { id: true, tenantId: true, channel: true, messageBody: true },
       }),
       this.db.user.findMany({
         where: { id: { in: rows.map((r) => r.userId) } },
-        select: { id: true, tenantId: true },
+        select: { id: true, tenantId: true, phoneNumber: true, phoneVerifiedAt: true },
       }),
       this.db.linkedBotAccount.findMany({
         where: { userId: { in: rows.map((r) => r.userId) }, contactVerifiedAt: { not: null } },
@@ -119,8 +127,14 @@ export class CampaignDeliveryService {
       }),
     ]);
     const campaignById = new Map(campaigns.map((c) => [c.id, c]));
+    const userById = new Map(users.map((u) => [u.id, u]));
     const tenantOf = new Map(users.map((u) => [u.id, u.tenantId]));
     const bots = new Map<string, Bot>();
+    const ownerTenantId = campaigns.some((c) => c.channel === NotificationChannel.sms)
+      ? ((await this.db.tenant.findFirst({ where: { tenantType: TenantType.platform_owner }, select: { id: true } }))?.id ?? null)
+      : null;
+    /** Set once the SMS line answered for its account, not a number: no more SMS this run. */
+    let smsLineDown = false;
     /** Rows handed back still `queued`, keyed by when they may be claimed again ('' = at once). */
     const released = new Map<string, string[]>();
     const release = (until: Date | null, rowId: string) => {
@@ -130,6 +144,38 @@ export class CampaignDeliveryService {
 
     for (const row of rows) {
       const campaign = campaignById.get(row.campaignId);
+      if (campaign?.channel === NotificationChannel.sms) {
+        // Invariant 10: which line, and whether this row may use one, is the resolver's call.
+        const user = userById.get(row.userId);
+        const answer = user ? this.sms.lineFor(campaign.tenantId, user.tenantId, ownerTenantId) : ({ kind: 'none' } as const);
+        if (!user || answer.kind === 'none' || !user.phoneNumber || !user.phoneVerifiedAt) {
+          await this.record(row.id, DeliveryStatus.failed, result);
+          continue;
+        }
+        if (answer.kind === 'stalled' || smsLineDown) {
+          release(null, row.id);
+          result.stalled++;
+          continue;
+        }
+        if (this.now().getTime() - started >= this.deadlineMs) {
+          release(null, row.id);
+          result.deferred++;
+          continue;
+        }
+        const sent = await answer.line.send(user.phoneNumber, campaign.messageBody);
+        if (sent.status === 'sent') {
+          await this.record(row.id, DeliveryStatus.sent, result);
+        } else if (sent.status === 'refused') {
+          this.logger.warn(`campaign ${row.campaignId}: recipient ${row.id} refused by the SMS gateway: ${sent.description}`);
+          await this.record(row.id, DeliveryStatus.failed, result);
+        } else {
+          if (sent.status === 'line_down') smsLineDown = true;
+          this.logger.warn(`campaign ${row.campaignId}: SMS send ${sent.status}: ${sent.description}`);
+          release(null, row.id);
+          result[sent.status === 'retry' ? 'deferred' : 'stalled']++;
+        }
+        continue;
+      }
       const platform = campaign ? CHANNEL_PLATFORM[campaign.channel] : null;
       const tenantId = tenantOf.get(row.userId);
       // The claim only takes bot channels of existing campaigns; a miss is a row
@@ -186,14 +232,14 @@ export class CampaignDeliveryService {
       });
     }
     if (result.stalled > 0) {
-      this.logger.error(`${result.stalled} recipient(s) left queued: their tenant's bot could not be resolved or its token read`);
+      this.logger.error(`${result.stalled} recipient(s) left queued: a bot could not be resolved or its token read, or the SMS line is unset or refused`);
     }
     return result;
   }
 
-  /** Queued rows of `sending` bot campaigns that no run holds, leased to this one. */
+  /** Queued rows of `sending` bot and SMS campaigns that no run holds, leased to this one. */
   private claim(): Promise<Claimed[]> {
-    const channels = (Object.keys(CHANNEL_PLATFORM) as NotificationChannel[]).filter((c) => CHANNEL_PLATFORM[c] !== null);
+    const channels = DELIVERED_CHANNELS;
     return this.db.$queryRaw<Claimed[]>(Prisma.sql`
       UPDATE "notification"."notification_campaign_recipient" AS t
       SET "claimedUntil" = (now() AT TIME ZONE 'UTC') + make_interval(secs => ${DELIVERY_LEASE_SEC})
