@@ -1,10 +1,11 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { TenantType } from '@prisma/client';
+import { TenantSmsMode, TenantType } from '@prisma/client';
 import { IOtpSender } from './otp-sender.interface';
 import { OtpChannel, OtpPurpose } from '../otp.interface';
 import { LocaleService } from '../../../locale/locale.service';
 import { CrossTenantPrismaService } from '../../../prisma/cross-tenant-prisma.service';
+import { TenantContext } from '../../../tenant-context/tenant-context';
 import { buildOtpSmsTemplate } from './otp-message.util';
 import {
   BackendI18nKeys,
@@ -15,13 +16,13 @@ import {
 } from '@txnet-backend/shared-core';
 
 /**
- * OTP by SMS, on the platform's line.
+ * OTP by SMS, on the line that belongs to who receives it (F-018-b, D-41).
  *
  * The gateway's URL is a location and stays in `SMS_API_URL`; the account and
- * the sender line are the platform owner's `sms_api_key` / `sms_sender_line`
- * vault values (F-018-a, ADR-0026 rule 6), read on every send so a rotation
- * takes effect on the next code. Each send therefore writes the vault's audit
- * rows (F-1215).
+ * the sender line are a tenant's `sms_api_key` / `sms_sender_line` vault values
+ * (F-018-a, ADR-0026 rule 6), read on every send so a rotation takes effect on
+ * the next code. Each send therefore writes the vault's audit rows (F-1215).
+ * Whose vault is {@link SmsOtpSender.lineTenant}'s call.
  */
 @Injectable()
 export class SmsOtpSender implements IOtpSender {
@@ -41,10 +42,10 @@ export class SmsOtpSender implements IOtpSender {
     this.apiUrl = config.get<string>('SMS_API_URL', '');
   }
 
-  async isConfigured(): Promise<boolean> {
+  async isConfigured(to?: string): Promise<boolean> {
     if (!this.apiUrl || !this.vault.available) return false;
-    const owner = await this.ownerTenantId();
-    return !!owner && smsLineConfigured(this.vault, owner);
+    const line = await this.lineTenant(to);
+    return !!line && smsLineConfigured(this.vault, line);
   }
 
   async send(
@@ -53,12 +54,13 @@ export class SmsOtpSender implements IOtpSender {
     purpose: OtpPurpose,
     lang: string,
   ): Promise<void> {
-    const owner = this.apiUrl && this.vault.available ? await this.ownerTenantId() : null;
-    const line = owner ? await smsLineCredentials(this.vault, owner, 'auth:SmsOtpSender') : null;
+    const lineTenant = this.apiUrl && this.vault.available ? await this.lineTenant(phoneNumber) : null;
+    const line = lineTenant ? await smsLineCredentials(this.vault, lineTenant, 'auth:SmsOtpSender') : null;
     if (!line) {
-      // Not configured (e.g. a dev stack without an SMS contract): a clear
-      // otp.smsNotConfigured instead of failing silently.
-      this.logger.error("SMS_API_URL or the platform owner's sms_api_key is not configured");
+      // Not configured (a dev stack without an SMS contract, or a reseller
+      // without its own line): a clear otp.smsNotConfigured, never the
+      // platform's number in its place.
+      this.logger.error('SMS_API_URL or the sms_api_key of the line this recipient is on is not configured');
       throw new BadRequestException(BackendI18nKeys.errors.otp.smsNotConfigured);
     }
 
@@ -77,11 +79,49 @@ export class SmsOtpSender implements IOtpSender {
     }
   }
 
-  private async ownerTenantId(): Promise<string | null> {
-    const owner = await this.db.tenant.findFirst({
-      where: { tenantType: TenantType.platform_owner },
-      select: { id: true },
+  /**
+   * **Whose vault an OTP SMS to `to` goes out on** (F-018-b, D-41) — the one
+   * place that decides, for the tenant in scope:
+   * - the platform owner's users: the platform's line;
+   * - a reseller's **owner** (`tenant.ownerUserId`, matched on `to`): the
+   *   platform's line too. The owner is the platform's customer and must be
+   *   able to sign in before its own line exists;
+   * - anyone else under a reseller — its staff, its users, a number not yet
+   *   registered: the reseller's own line (`tenant_sms_config`
+   *   `own_credentials`, active), or `null`. Never the platform's number.
+   *
+   * `to` absent (the anonymous channel list) is "anyone else". No tenant in
+   * scope is `null`. Read on the cross-tenant pool: the platform owner's row is
+   * another tenant's, and the delivery seam's scope is only the id.
+   */
+  private async lineTenant(to?: string): Promise<string | null> {
+    const scoped = TenantContext.currentOrNull()?.id;
+    if (!scoped) return null;
+    const tenant = await this.db.tenant.findFirst({
+      where: { id: scoped },
+      select: { id: true, tenantType: true, ownerUserId: true },
     });
-    return owner?.id ?? null;
+    if (!tenant) return null;
+    if (tenant.tenantType === TenantType.platform_owner) return tenant.id;
+
+    const isOwner =
+      !!to &&
+      !!(await this.db.user.findFirst({
+        where: { id: tenant.ownerUserId, tenantId: tenant.id, phoneNumber: to },
+        select: { id: true },
+      }));
+    if (isOwner) {
+      const platform = await this.db.tenant.findFirst({
+        where: { tenantType: TenantType.platform_owner },
+        select: { id: true },
+      });
+      return platform?.id ?? null;
+    }
+
+    const own = await this.db.tenantSmsConfig.findFirst({
+      where: { tenantId: tenant.id, mode: TenantSmsMode.own_credentials, isActive: true },
+      select: { tenantId: true },
+    });
+    return own ? tenant.id : null;
   }
 }

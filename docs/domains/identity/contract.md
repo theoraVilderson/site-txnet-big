@@ -92,6 +92,14 @@ No message bus. Impersonation start/end write an `audit.admin_audit_log` row
 - OTP channels are per-environment (`OTP_ALLOWED_CHANNELS` + whether each
   sender is configured). A channel that is off is never offered and is refused
   if named; it is never silently substituted.
+- **SMS follows who receives it** (F-018-b, D-41, invariant #16). Under the
+  platform owner: the platform's line. Under a reseller: its **owner**
+  (`tenant.ownerUserId`, matched on the destination phone) on the platform's
+  line; everyone else on the reseller's own (`tenant_sms_config`
+  `own_credentials`, active) or not at all. `GET /auth/otp/channels` is
+  anonymous, so a reseller without its own line omits `sms`; the owner still
+  gets it by name, by saved preference or as the fallback, and anyone else is
+  refused `otp.channelNotConfigured` and picks Telegram, Bale or email.
 - A messenger channel delivers only to a `linked_bot_account` with
   `contactVerifiedAt` set **in the requesting tenant**. Otherwise the caller
   gets a bot deep link, for any phone number alike — see invariants #12.

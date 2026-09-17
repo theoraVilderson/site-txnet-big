@@ -261,3 +261,42 @@ describe('OtpChannelRegistry — a channel reserved to one purpose', () => {
     ).rejects.toThrow(new BadRequestException('otp.channelNotConfigured'));
   });
 });
+
+/**
+ * Whether SMS can reach someone depends on who they are under a reseller
+ * (F-018-b, D-41): the owner is on the platform's line, everyone else on the
+ * reseller's own or on none. The registry does not decide that; it hands the
+ * sender the destination on every question that has one, and none to the
+ * anonymous channel list.
+ */
+describe('OtpChannelRegistry — the destination reaches the sender (F-018-b)', () => {
+  const OWNER = '+989120000002';
+
+  function ownerOnlySms() {
+    const sms = { ...sender(OtpChannel.sms, false, false), isConfigured: vi.fn((to?: string) => to === OWNER) };
+    const r = new OtpChannelRegistry(
+      { get: vi.fn((key: string, fallback?: unknown) => (key === 'OTP_ALLOWED_CHANNELS' ? 'sms,telegram' : fallback)) } as never,
+      [sms, sender(OtpChannel.telegram, true, true)] as never,
+    );
+    return { r, sms };
+  }
+
+  it('leaves SMS out of the anonymous list and the anonymous default', async () => {
+    const { r, sms } = ownerOnlySms();
+
+    expect((await r.describe()).map((d) => d.channel)).toEqual([OtpChannel.telegram]);
+    expect(await r.defaultChannel()).toBe(OtpChannel.telegram);
+    expect(sms.isConfigured).toHaveBeenCalledWith(undefined);
+  });
+
+  it('offers and accepts SMS for the destination the sender can reach, and refuses it for anyone else', async () => {
+    const { r } = ownerOnlySms();
+
+    expect(await r.isAvailable(OtpChannel.sms, OWNER)).toBe(true);
+    expect(await r.defaultChannel(OWNER)).toBe(OtpChannel.sms);
+    expect(await r.assertUsable(OtpChannel.sms, OtpPurpose.login, OWNER)).toBe(r.sender(OtpChannel.sms));
+    await expect(r.assertUsable(OtpChannel.sms, OtpPurpose.login, '+989121112233')).rejects.toThrow(
+      new BadRequestException('otp.channelNotConfigured'),
+    );
+  });
+});

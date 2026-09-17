@@ -24,8 +24,12 @@ export interface IOtpSender {
    *
    * Asynchronous because answering it can mean a vault read. A sender whose
    * answer is a config lookup may still return a plain boolean.
+   *
+   * `to` is the destination when there is one. Only SMS reads it: under a
+   * reseller, whose line a code goes out on depends on who receives it
+   * (F-018-b, D-41). Absent — the anonymous channel list — means "anyone".
    */
-  isConfigured(): boolean | Promise<boolean>;
+  isConfigured(to?: string): boolean | Promise<boolean>;
   /**
    * True for the messenger channels: they can only deliver to a chat id, so
    * the user must have linked (and contact-verified) that messenger first.

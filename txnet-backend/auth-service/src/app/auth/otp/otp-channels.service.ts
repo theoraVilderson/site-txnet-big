@@ -91,21 +91,26 @@ export class OtpChannelRegistry {
     return this.allowedChannels.includes(channel);
   }
 
-  async isAvailable(channel: OtpChannel): Promise<boolean> {
+  /**
+   * @param to the destination, when the question is about one. SMS under a
+   * reseller depends on it (F-018-b, D-41); with none, the answer is the one
+   * an anonymous caller gets.
+   */
+  async isAvailable(channel: OtpChannel, to?: string): Promise<boolean> {
     if (!this.isAllowed(channel)) return false;
     if (this.consoleOnly) return true;
-    return (await this.senders.get(channel)?.isConfigured()) ?? false;
+    return (await this.senders.get(channel)?.isConfigured(to)) ?? false;
   }
 
   requiresLink(channel: OtpChannel): boolean {
     return this.senders.get(channel)?.requiresLinkedAccount ?? false;
   }
 
-  /** Every channel a client may ask for right now, for the tenant in scope. */
-  async available(): Promise<OtpChannel[]> {
+  /** Every channel a client may ask for right now, for the tenant in scope (and `to`, if known). */
+  async available(to?: string): Promise<OtpChannel[]> {
     const usable = await Promise.all(
       this.allowedChannels.map(async (c) =>
-        (await this.isAvailable(c)) ? c : null,
+        (await this.isAvailable(c, to)) ? c : null,
       ),
     );
     return usable.filter((c): c is OtpChannel => c !== null);
@@ -124,8 +129,8 @@ export class OtpChannelRegistry {
    * With SMS switched off, that is whichever messenger the operator listed
    * first — the flow then continues into linking rather than dead-ending.
    */
-  async defaultChannel(): Promise<OtpChannel | null> {
-    return (await this.available())[0] ?? null;
+  async defaultChannel(to?: string): Promise<OtpChannel | null> {
+    return (await this.available(to))[0] ?? null;
   }
 
   /**
@@ -139,6 +144,7 @@ export class OtpChannelRegistry {
   async assertUsable(
     channel: OtpChannel,
     purpose?: OtpPurpose,
+    to?: string,
   ): Promise<IOtpSender> {
     const sender = this.senders.get(channel);
     if (!sender) throw new BadRequestException(BackendI18nKeys.errors.otp.channelNotSupported);
@@ -149,7 +155,7 @@ export class OtpChannelRegistry {
       if (sender.onlyFor !== purpose) {
         throw new BadRequestException(BackendI18nKeys.errors.otp.channelNotSupported);
       }
-      if (!this.consoleOnly && !(await sender.isConfigured())) {
+      if (!this.consoleOnly && !(await sender.isConfigured(to))) {
         throw new BadRequestException(BackendI18nKeys.errors.otp.channelNotConfigured);
       }
       return sender;
@@ -157,7 +163,7 @@ export class OtpChannelRegistry {
     if (!this.isAllowed(channel)) {
       throw new BadRequestException(BackendI18nKeys.errors.otp.channelNotAllowed);
     }
-    if (!(await this.isAvailable(channel))) {
+    if (!(await this.isAvailable(channel, to))) {
       throw new BadRequestException(BackendI18nKeys.errors.otp.channelNotConfigured);
     }
     return sender;

@@ -200,7 +200,7 @@ export class AuthService {
       }
 
       if (user.twoFactorEnabled) {
-        const channel = await this.resolveOtpChannel(user);
+        const channel = await this.resolveOtpChannel(user.phoneNumber!, user);
         const delivery = await this.deliveries.mintHandles();
         await this.otp.issueOtp(
           user.phoneNumber!,
@@ -238,7 +238,7 @@ export class AuthService {
           preferredOtpChannel: true,
         },
       });
-      const resolvedChannel = await this.resolveOtpChannel(user ?? {}, channel);
+      const resolvedChannel = await this.resolveOtpChannel(phoneNumber, user ?? {}, channel);
 
       const link = await this.linkIfNeeded(
         resolvedChannel,
@@ -641,7 +641,7 @@ export class AuthService {
         where: { phoneNumber: input.phoneNumber },
         select: { id: true, status: true, preferredOtpChannel: true },
       });
-      const channel = await this.resolveOtpChannel(user ?? {}, input.channel);
+      const channel = await this.resolveOtpChannel(input.phoneNumber, user ?? {}, input.channel);
 
       const link = await this.linkIfNeeded(
         channel,
@@ -834,7 +834,7 @@ export class AuthService {
       where: { phoneNumber },
       select: { status: true, phoneVerifiedAt: true, preferredOtpChannel: true },
     });
-    const resolvedChannel = await this.resolveOtpChannel(user ?? {}, channel);
+    const resolvedChannel = await this.resolveOtpChannel(phoneNumber, user ?? {}, channel);
 
     const link = await this.linkIfNeeded(
       resolvedChannel,
@@ -1041,12 +1041,18 @@ export class AuthService {
    * ignored rather than fatal, so turning a channel off never strands the
    * users who had chosen it.
    *
+   * Both of the last two ask about `to`: under a reseller, SMS reaches its
+   * owner on the platform's line even when the reseller has none (F-018-b,
+   * D-41), so the owner's preference and fallback may be SMS where nobody
+   * else's is.
+   *
    * Note: `preferredOtpChannel` here must stay typed as the real
    * `OtpChannel` enum from Prisma (not `string`), because Prisma returns
    * enum fields typed as the enum, and using `string` here would make TS
    * see it as incompatible with the actual user object.
    */
   private async resolveOtpChannel(
+    to: string,
     user: { preferredOtpChannel?: OtpChannel | null },
     explicitChannel?: OtpChannel,
   ): Promise<OtpChannel> {
@@ -1055,11 +1061,11 @@ export class AuthService {
     if (explicitChannel) return explicitChannel;
     if (
       user.preferredOtpChannel &&
-      (await this.channels.isAvailable(user.preferredOtpChannel))
+      (await this.channels.isAvailable(user.preferredOtpChannel, to))
     ) {
       return user.preferredOtpChannel;
     }
-    const fallback = await this.channels.defaultChannel();
+    const fallback = await this.channels.defaultChannel(to);
     if (!fallback) throw new BadRequestException(BackendI18nKeys.errors.otp.noChannelAvailable);
     return fallback;
   }

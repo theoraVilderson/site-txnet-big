@@ -277,24 +277,74 @@ describe('SMS OTP sender', () => {
     } as unknown as ConfigService;
   };
 
-  /** The platform owner's vault (F-018-a): the line is two credentials, not two variables. */
-  const vault = (values: Record<string, string> = { sms_api_key: 'user@pass', sms_sender_line: '3000' }) => ({
+  /**
+   * Two vaults (F-018-a): the platform owner's line and reseller-1's own. The
+   * line is two credentials per tenant, not two variables.
+   */
+  const LINES: Record<string, Record<string, string>> = {
+    'owner-1': { sms_api_key: 'user@pass', sms_sender_line: '3000' },
+    'reseller-1': { sms_api_key: 'reseller@pass', sms_sender_line: '5000' },
+  };
+  const vault = (lines: Record<string, Record<string, string>> = LINES) => ({
     available: true,
     use: vi.fn(async (ref: { tenantId: string; kind: string }) => {
-      if (!(ref.kind in values)) throw new CredentialUnavailable(ref as never, 'missing');
-      return values[ref.kind]!;
+      const value = lines[ref.tenantId]?.[ref.kind];
+      if (value === undefined) throw new CredentialUnavailable(ref as never, 'missing');
+      return value;
     }),
-    summary: vi.fn(async (ref: { kind: string }) =>
-      ref.kind in values ? { status: 'active', expiresAt: null } : null,
+    summary: vi.fn(async (ref: { tenantId: string; kind: string }) =>
+      lines[ref.tenantId]?.[ref.kind] !== undefined ? { status: 'active', expiresAt: null } : null,
     ),
   });
-  const owner = (id: string | null = 'owner-1') => ({ tenant: { findFirst: vi.fn(async () => (id ? { id } : null)) } });
+
+  const OWNER_PHONE = '+989120000001';
+  const RESELLER_OWNER_PHONE = '+989120000002';
+  const USER_PHONE = '+989121112233';
+
+  /**
+   * The platform owner `owner-1` and one reseller `reseller-1`, owned by user
+   * `r-owner`. `ownLine` is the reseller's `tenant_sms_config` row: own
+   * credentials and active, or absent.
+   */
+  const tenants = ({ platformOwner = true, ownLine = true } = {}) => {
+    const rows = [
+      { id: 'owner-1', tenantType: 'platform_owner', ownerUserId: 'p-owner' },
+      { id: 'reseller-1', tenantType: 'reseller', ownerUserId: 'r-owner' },
+    ].filter((t) => platformOwner || t.id !== 'owner-1');
+    const users = [
+      { id: 'p-owner', tenantId: 'owner-1', phoneNumber: OWNER_PHONE },
+      { id: 'r-owner', tenantId: 'reseller-1', phoneNumber: RESELLER_OWNER_PHONE },
+      { id: 'r-user', tenantId: 'reseller-1', phoneNumber: USER_PHONE },
+    ];
+    return {
+      tenant: {
+        findFirst: vi.fn(async ({ where }: { where: { id?: string; tenantType?: string } }) =>
+          rows.find((t) => (where.id === undefined || t.id === where.id) && (where.tenantType === undefined || t.tenantType === where.tenantType)) ?? null,
+        ),
+      },
+      user: {
+        findFirst: vi.fn(async ({ where }: { where: { id: string; tenantId: string; phoneNumber: string } }) =>
+          users.find((u) => u.id === where.id && u.tenantId === where.tenantId && u.phoneNumber === where.phoneNumber) ?? null,
+        ),
+      },
+      tenantSmsConfig: {
+        findFirst: vi.fn(async ({ where }: { where: { tenantId: string; mode: string; isActive: boolean } }) =>
+          ownLine && where.tenantId === 'reseller-1' && where.mode === 'own_credentials' && where.isActive
+            ? { tenantId: 'reseller-1' }
+            : null,
+        ),
+      },
+    };
+  };
+
+  const inOwner = <T>(fn: () => Promise<T> | T) => runWithTenant({ id: 'owner-1', slug: 'platform', via: 'domain' }, fn);
+  const inReseller = <T>(fn: () => Promise<T> | T) => runWithTenant({ id: 'reseller-1', slug: 'reseller-a', via: 'domain' }, fn);
 
   const build = (
-    { config = env(), v = vault(), db = owner(), loc = localeService() } = {} as {
+    { config = env(), v = vault(), db = tenants(), loc = localeService() } = {} as {
       config?: ConfigService;
       v?: ReturnType<typeof vault>;
-      db?: ReturnType<typeof owner>;
+      db?: ReturnType<typeof tenants>;
       loc?: LocaleService;
     },
   ) => new SmsOtpSender(config, loc, v as never, db as never);
@@ -316,31 +366,85 @@ describe('SMS OTP sender', () => {
   });
 
   it("is unconfigured without a URL, the owner's key, or a vault", async () => {
-    expect(await build().isConfigured()).toBe(true);
-    expect(await build({ v: vault({ sms_sender_line: '3000' }) }).isConfigured()).toBe(false);
-    expect(await build({ config: env({ SMS_API_URL: '' }) }).isConfigured()).toBe(false);
-    expect(await build({ db: owner(null) }).isConfigured()).toBe(false);
-    expect(await build({ v: { ...vault(), available: false } }).isConfigured()).toBe(false);
+    expect(await inOwner(() => build().isConfigured(USER_PHONE))).toBe(true);
+    expect(await inOwner(() => build({ v: vault({ 'owner-1': { sms_sender_line: '3000' } }) }).isConfigured(USER_PHONE))).toBe(false);
+    expect(await inOwner(() => build({ config: env({ SMS_API_URL: '' }) }).isConfigured(USER_PHONE))).toBe(false);
+    expect(await inOwner(() => build({ v: { ...vault(), available: false } }).isConfigured(USER_PHONE))).toBe(false);
+    // No tenant in scope is nobody's line: the platform's number is never the default.
+    expect(await build().isConfigured(USER_PHONE)).toBe(false);
   });
 
   it('refuses clearly instead of failing silently when unconfigured', async () => {
     const s = build({ v: vault({}) });
 
-    await expect(inTenant(() => s.send('09121112233', CODE, OtpPurpose.login, 'en'))).rejects.toBeInstanceOf(
+    await expect(inOwner(() => s.send(USER_PHONE, CODE, OtpPurpose.login, 'en'))).rejects.toBeInstanceOf(
       BadRequestException,
     );
   });
 
-  it("sends with the platform owner's vault key and sender line, audited as this sender (F-018-a)", async () => {
+  it("sends the platform owner's users on the platform's vault key and sender line, audited as this sender (F-018-a)", async () => {
     const sendSMS = smsProvider({ ok: true, msg: 'sent' });
     const v = vault();
     const s = withProvider(build({ v }), sendSMS);
 
-    await inTenant(() => s.send('09121112233', CODE, OtpPurpose.login, 'en'));
+    await inOwner(() => s.send(USER_PHONE, CODE, OtpPurpose.login, 'en'));
 
     expect((s as unknown as { providerFor: Mock }).providerFor).toHaveBeenCalledWith('https://sms.example/api', 'user@pass');
     expect(v.use).toHaveBeenCalledWith({ tenantId: 'owner-1', kind: 'sms_api_key' }, { caller: 'auth:SmsOtpSender' });
     expect(sendSMS.mock.calls[0]![1]).toBe('3000');
+  });
+
+  describe("under a reseller, the line follows who the recipient is (F-018-b, D-41)", () => {
+    it("sends the reseller's owner on the platform's line, whether or not the reseller has its own", async () => {
+      for (const ownLine of [true, false]) {
+        const sendSMS = smsProvider({ ok: true, msg: 'sent' });
+        const s = withProvider(build({ db: tenants({ ownLine }) }), sendSMS);
+
+        expect(await inReseller(() => s.isConfigured(RESELLER_OWNER_PHONE))).toBe(true);
+        await inReseller(() => s.send(RESELLER_OWNER_PHONE, CODE, OtpPurpose.login, 'en'));
+
+        expect((s as unknown as { providerFor: Mock }).providerFor).toHaveBeenCalledWith('https://sms.example/api', 'user@pass');
+        expect(sendSMS.mock.calls[0]![1]).toBe('3000');
+      }
+    });
+
+    it("sends its staff and users on the reseller's own line and number", async () => {
+      const sendSMS = smsProvider({ ok: true, msg: 'sent' });
+      const v = vault();
+      const s = withProvider(build({ v }), sendSMS);
+
+      await inReseller(() => s.send(USER_PHONE, CODE, OtpPurpose.login, 'en'));
+
+      expect((s as unknown as { providerFor: Mock }).providerFor).toHaveBeenCalledWith('https://sms.example/api', 'reseller@pass');
+      expect(sendSMS.mock.calls[0]![1]).toBe('5000');
+      expect(v.use).not.toHaveBeenCalledWith(expect.objectContaining({ tenantId: 'owner-1' }), expect.anything());
+    });
+
+    it("never falls back to the platform's line for anyone but the owner", async () => {
+      // No `tenant_sms_config` row; or a row whose key is not in the vault.
+      const cases = [
+        { db: tenants({ ownLine: false }), lines: LINES },
+        { db: tenants(), lines: { 'owner-1': LINES['owner-1']! } },
+      ];
+      for (const { db, lines } of cases) {
+        const sendSMS = smsProvider({ ok: true, msg: 'sent' });
+        const v = vault(lines);
+        const s = withProvider(build({ db, v }), sendSMS);
+
+        expect(await inReseller(() => s.isConfigured(USER_PHONE))).toBe(false);
+        expect(await inReseller(() => s.isConfigured())).toBe(false);
+        await expect(inReseller(() => s.send(USER_PHONE, CODE, OtpPurpose.login, 'en'))).rejects.toMatchObject({
+          message: 'otp.smsNotConfigured',
+        });
+        expect(sendSMS).not.toHaveBeenCalled();
+        expect(v.use).not.toHaveBeenCalledWith(expect.objectContaining({ tenantId: 'owner-1' }), expect.anything());
+      }
+    });
+
+    it('offers the anonymous list SMS only when the reseller has its own line', async () => {
+      expect(await inReseller(() => build().isConfigured())).toBe(true);
+      expect(await inReseller(() => build({ db: tenants({ ownLine: false }) }).isConfigured())).toBe(false);
+    });
   });
 
   it('hands the provider a template with {{code}} still in it', async () => {
@@ -350,7 +454,7 @@ describe('SMS OTP sender', () => {
     const sendSMS = smsProvider({ ok: true, msg: 'sent' });
     const s = withProvider(build(), sendSMS);
 
-    await inTenant(() => s.send('09121112233', CODE, OtpPurpose.login, 'en'));
+    await inOwner(() => s.send('09121112233', CODE, OtpPurpose.login, 'en'));
 
     const [payload, sender] = sendSMS.mock.calls[0]!;
     expect(payload.msg).toContain('{{code}}');
@@ -363,7 +467,7 @@ describe('SMS OTP sender', () => {
     const sendSMS = smsProvider({ ok: false, msg: 'InvalidNumber' });
     const s = withProvider(build(), sendSMS);
 
-    await expect(inTenant(() => s.send('09121112233', CODE, OtpPurpose.login, 'en'))).rejects.toMatchObject({
+    await expect(inOwner(() => s.send('09121112233', CODE, OtpPurpose.login, 'en'))).rejects.toMatchObject({
       message: 'otp.smsSendFailed',
     });
   });
@@ -373,7 +477,7 @@ describe('SMS OTP sender', () => {
     const loc = localeService({ otp: { title: { [OtpPurpose.login]: 'کد ورود' } } });
     const s = withProvider(build({ loc }), sendSMS);
 
-    await inTenant(() => s.send('09121112233', CODE, OtpPurpose.login, 'fa'));
+    await inOwner(() => s.send('09121112233', CODE, OtpPurpose.login, 'fa'));
 
     expect(loc.getNamespace).toHaveBeenCalledWith('fa', 'notifications');
     expect(sendSMS.mock.calls[0]![0].msg).toContain('کد ورود');

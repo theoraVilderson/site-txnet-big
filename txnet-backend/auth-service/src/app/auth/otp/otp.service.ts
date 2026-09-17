@@ -89,7 +89,7 @@ export class OtpService implements IOtpService {
     // Allowed by env *and* actually configured, or this request stops here.
     // Checked again on the delivery side, because a tenant can turn a channel
     // off in between; checked here because only here can the answer be a 400.
-    await this.channels.assertUsable(channel, purpose);
+    await this.channels.assertUsable(channel, purpose, phoneNumber);
 
     // Distributed lock for idempotency
     if (!(await this.store.acquireLock(phoneNumber, purpose))) {
@@ -162,7 +162,7 @@ export class OtpService implements IOtpService {
   async deliverOtp(request: OtpDeliveryRequest): Promise<OtpDeliveryResult> {
     const { phoneNumber, purpose, channel, requestIp, lang, deliveryId, channelId } =
       request;
-    const sender = await this.channels.assertUsable(channel, purpose);
+    const sender = await this.channels.assertUsable(channel, purpose, phoneNumber);
     const code = await this.mint(phoneNumber, purpose, channel, requestIp);
 
     try {

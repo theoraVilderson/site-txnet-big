@@ -135,10 +135,12 @@ SMS sender line, a second bot) and defaults to the singular `''`.
    (F-018-a), read through `shared-core`'s `smsLineCredentials(vault,
    tenantId, caller)` — `null` when there is no usable key, a missing sender
    `''`, anything else thrown. `smsLineConfigured` answers from the summary and
-   audits nothing. `SmsOtpSender` reads **the platform owner's** line — the
-   platform's own gateway account is that tenant's credential like any
-   reseller's; the campaign `SmsLineSource` reads it and, since F-035-i-a, a
-   reseller's own (`tenant_sms_config` `own_credentials`, active). The
+   audits nothing. The platform's own gateway account is the owner tenant's
+   credential like any reseller's. `SmsOtpSender` reads it for the owner's
+   users and a reseller's owner, and since F-018-b a reseller's own
+   (`tenant_sms_config` `own_credentials`, active) for everyone else under it
+   (`identity` invariant 16); the campaign `SmsLineSource` reads both since
+   F-035-i-a. The
    gateway's URL is a location and stays `SMS_API_URL`. `seed-sms-line`
    (`scripts/seed-sms-line.sh`, the `seed-bot-integration` shape) writes one;
    for a tenant other than the owner it also records `tenant_sms_config` as
