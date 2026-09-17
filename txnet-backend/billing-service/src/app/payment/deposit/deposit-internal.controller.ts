@@ -1,5 +1,5 @@
 import { Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
-import { ServiceOnlyGuard } from '@txnet-backend/shared-core';
+import { ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
 
 import { DepositExpiryResult, DepositExpiryService } from './deposit-expiry.service';
 import {
@@ -28,6 +28,7 @@ import {
  * flip is guarded by the row's own status, so a second call inside the same
  * minute expires nothing and answers zero.
  */
+@TenantCapability('system')
 @Controller('internal/billing/deposit')
 @UseGuards(ServiceOnlyGuard)
 export class DepositInternalController {

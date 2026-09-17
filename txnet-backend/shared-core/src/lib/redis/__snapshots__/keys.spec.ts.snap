@@ -37,6 +37,7 @@ exports[`the key catalogue > builds every unscoped family 1`] = `
   "tenantByHost": "tenant:host:myvpn.com",
   "tenantById": "tenant:id:tenant-1",
   "tenantRuns": "automation:tenant-runs:tenant-1",
+  "tenantStatus": "tenant:status:tenant-1",
   "userRole": "user:user-1:role",
   "userSessions": "user:user-1:sessions",
 }
@@ -69,6 +70,7 @@ exports[`the key catalogue > leaves nothing in the catalogue unexercised 1`] = `
   "tenantByHost",
   "tenantById",
   "tenantRuns",
+  "tenantStatus",
   "userRole",
   "userSessions",
 ]

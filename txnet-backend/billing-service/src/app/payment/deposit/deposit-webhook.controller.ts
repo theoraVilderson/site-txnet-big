@@ -1,5 +1,5 @@
 import { Controller, Header, HttpCode, NotFoundException, Post, RawBodyRequest, Req, UnauthorizedException } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, TenantCapability } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { RateLimit } from '../../request/rate-limit';
@@ -20,6 +20,7 @@ import { DepositWebhookService } from './deposit-webhook.service';
  * Limited per **gateway**, not per caller — there is none. One gateway's whole
  * event stream shares a budget, sized well above a provider's retry burst.
  */
+@TenantCapability('system')
 @Controller('billing/deposit/webhook')
 export class DepositWebhookController {
   constructor(private readonly webhooks: DepositWebhookService) {}

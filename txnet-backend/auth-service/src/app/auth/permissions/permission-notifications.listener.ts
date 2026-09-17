@@ -1,31 +1,18 @@
-import {
-  Inject,
-  Injectable,
-  Logger,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import {
+  NotificationClientFactory,
+  PgNotificationListener,
+} from '../../prisma/pg-notification-listener';
 import { permissionFingerprint } from './permission-fingerprint';
 import { PermissionStateStore } from './permission-state.store';
+
+export type { NotificationClient, NotificationClientFactory } from '../../prisma/pg-notification-listener';
 
 /** The channel `20260913000000_identity_permissions_notify` writes to. */
 export const PERMISSIONS_CHANNEL = 'identity_permissions_changed';
 
-/** The part of a `pg.Client` this needs — so a spec can stand in for Postgres. */
-export interface NotificationClient {
-  connect(): Promise<unknown>;
-  query(sql: string): Promise<unknown>;
-  on(event: 'notification', listener: (message: { payload?: string }) => void): unknown;
-  on(event: 'error' | 'end', listener: (error?: Error) => void): unknown;
-  end(): Promise<void>;
-}
-
-/** Builds a fresh, unconnected client. A new one per attempt: a `pg.Client` cannot reconnect. */
 export const PERMISSIONS_LISTEN_CLIENT = Symbol('PERMISSIONS_LISTEN_CLIENT');
-export type NotificationClientFactory = () => NotificationClient;
-
-const MAX_BACKOFF_MS = 30_000;
 
 /** Exactly the relation `TokenService` mints `permHash` from, so the two cannot disagree. */
 const ROLE_PERMISSIONS = {
@@ -52,60 +39,17 @@ type RoleRow = { id: string; rolePermissions: { permission: { key: string } }[] 
  * absent key refuses nobody.
  */
 @Injectable()
-export class PermissionNotificationsListener implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(PermissionNotificationsListener.name);
-  private client: NotificationClient | null = null;
-  private retry: ReturnType<typeof setTimeout> | null = null;
-  private backoffMs = 1_000;
-  private stopped = false;
+export class PermissionNotificationsListener extends PgNotificationListener {
+  protected readonly channel = PERMISSIONS_CHANNEL;
+  protected readonly logger = new Logger(PermissionNotificationsListener.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly store: PermissionStateStore,
     @Inject(PERMISSIONS_LISTEN_CLIENT)
-    private readonly newClient: NotificationClientFactory,
-  ) {}
-
-  onModuleInit(): void {
-    void this.start();
-  }
-
-  async onModuleDestroy(): Promise<void> {
-    this.stopped = true;
-    if (this.retry) clearTimeout(this.retry);
-    const client = this.client;
-    this.client = null;
-    await client?.end().catch((): void => undefined);
-  }
-
-  /** Connect, LISTEN, then recompute everything. Resolves whether or not it connected. */
-  async start(): Promise<void> {
-    if (this.stopped) return;
-    const client = this.newClient();
-    this.client = client;
-    client.on('notification', (message): void => {
-      void this.handle(message.payload);
-    });
-    client.on('error', (error) => {
-      this.logger.warn(`permission listener connection failed: ${error?.message ?? 'unknown'}`);
-    });
-    client.on('end', () => this.reconnectLater(client));
-
-    try {
-      await client.connect();
-      // LISTEN first: a change committed between the two steps is then caught
-      // by the notification or by the recompute, never by neither.
-      await client.query(`LISTEN ${PERMISSIONS_CHANNEL}`);
-      this.backoffMs = 1_000;
-      await this.recomputeAll();
-      this.logger.log('listening for permission changes');
-    } catch (error) {
-      this.logger.warn(
-        `permission listener could not start, retrying in ${this.backoffMs}ms: ${(error as Error).message}`,
-      );
-      await client.end().catch((): void => undefined);
-      this.reconnectLater(client);
-    }
+    newClient: NotificationClientFactory,
+  ) {
+    super(newClient);
   }
 
   /** What one notification means. An unreadable one is logged and dropped, never thrown. */
@@ -147,16 +91,6 @@ export class PermissionNotificationsListener implements OnModuleInit, OnModuleDe
     const role = await this.prisma.role.findUnique({ where: { id: roleId }, select: ROLE_PERMISSIONS });
     // A role deleted in the same transaction has no users left to hold a token.
     if (role) await this.store.writeRole(role.id, fingerprintOf(role));
-  }
-
-  private reconnectLater(client: NotificationClient): void {
-    if (this.stopped || this.client !== client || this.retry) return;
-    const delay = this.backoffMs;
-    this.backoffMs = Math.min(this.backoffMs * 2, MAX_BACKOFF_MS);
-    this.retry = setTimeout(() => {
-      this.retry = null;
-      void this.start();
-    }, delay);
   }
 }
 

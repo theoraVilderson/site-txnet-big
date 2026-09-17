@@ -7,6 +7,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { TenantCapability } from '@txnet-backend/shared-core';
 import { ImpersonationService } from './impersonation.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { PermissionsGuard } from './guards/permissions.guard';
@@ -39,6 +40,7 @@ export class ImpersonationController {
     );
   }
 
+  @TenantCapability('signOut')
   @Post('impersonate/end')
   @UseGuards(AuthGuard)
   async end(@Req() req: any, @Ip() ip: string) {

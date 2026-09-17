@@ -9,7 +9,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, TenantCapability } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 import { AuthGuard } from '../auth.guard';
 import { RateLimit } from '../decorators/rate-limit.decorator';
@@ -55,6 +55,7 @@ export class MeController {
    * 202 with delivery handles, as every code is (F-067-a); the address is not
    * written until `me/email/verify`.
    */
+  @TenantCapability('account')
   @Post('me/email')
   @HttpCode(HttpStatus.ACCEPTED)
   @UseGuards(AuthGuard)
@@ -72,6 +73,7 @@ export class MeController {
   }
 
   /** Confirm the code; only now does `user.email` change. */
+  @TenantCapability('account')
   @Post('me/email/verify')
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)

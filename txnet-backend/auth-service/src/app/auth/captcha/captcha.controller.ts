@@ -1,6 +1,7 @@
 import {
   RateLimitBucket,
   rateLimitBucketKey,
+  TenantCapability,
 } from '@txnet-backend/shared-core';
 import { Body, Controller, HttpCode, HttpStatus, Post, UsePipes } from '@nestjs/common';
 import { CaptchaService } from './captcha.service';
@@ -9,6 +10,7 @@ import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { ok, err } from '../../common/response/response.util';
 import { RateLimit } from '../decorators/rate-limit.decorator';
 
+@TenantCapability('signIn')
 @Controller('auth/captcha')
 export class CaptchaController {
   constructor(private readonly captcha: CaptchaService) {}

@@ -1,6 +1,7 @@
 import {
   RateLimitBucket,
   rateLimitBucketKey,
+  TenantCapability,
 } from '@txnet-backend/shared-core';
 import {
   Body,
@@ -43,6 +44,7 @@ import {
 import { readCookie } from '../common/http/cookies';
 import { resolveSwitchScope } from '../common/security/switch-scope';
 
+@TenantCapability('signIn')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
@@ -185,6 +187,7 @@ export class AuthController {
    * session — the cookie is replaced rather than cleared. Signing out of the
    * place entirely is `logout/all`, deliberately a different route.
    */
+  @TenantCapability('signOut')
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @UsePipes(new ZodValidationPipe(logoutSchema))
@@ -215,6 +218,7 @@ export class AuthController {
    * done with this account", this is "I am handing this device over". Every
    * surface puts it somewhere deliberate — never next to the ordinary one.
    */
+  @TenantCapability('signOut')
   @Post('logout/all')
   @HttpCode(HttpStatus.OK)
   @UsePipes(new ZodValidationPipe(logoutSchema))

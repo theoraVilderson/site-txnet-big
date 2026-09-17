@@ -1,4 +1,5 @@
 import { Body, Controller, Inject, Post, UseGuards } from '@nestjs/common';
+import { TenantCapability } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 import { ServiceOnlyGuard } from '../../common/guards/service-only.guard';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
@@ -51,6 +52,7 @@ export const otpDeliverSchema = z.object({
  * Guarded by `ServiceOnlyGuard`, so an unrecognised caller gets a 404 that is
  * indistinguishable from a route that does not exist.
  */
+@TenantCapability('signIn')
 @Controller('internal/otp')
 @UseGuards(ServiceOnlyGuard)
 export class OtpInternalController {

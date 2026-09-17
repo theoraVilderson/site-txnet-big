@@ -72,6 +72,8 @@ enum AdminAction {
   tenant_subscription_setting_update
   // F-018-o. A package's feature list forced onto every current subscriber.
   tenant_package_apply
+  // F-018-f. A reseller suspended, reactivated or terminated.
+  tenant_status_change
 
   @@schema("audit")
 }

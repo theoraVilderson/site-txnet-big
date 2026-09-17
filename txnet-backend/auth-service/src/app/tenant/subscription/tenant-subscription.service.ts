@@ -37,7 +37,7 @@ export type SubscriptionView = {
   includedFeatureKeys: string[];
 };
 
-export type SubscriptionSettingsView = { trialDays: number };
+export type SubscriptionSettingsView = { trialDays: number; suspensionHoldDays: number };
 
 export type TenantSubscriptionRejection =
   | 'not_platform_owner'
@@ -61,6 +61,7 @@ export class TenantSubscriptionRefused extends Error {
 /** The platform's one settings row (CHECK `id = 1`, migration `20260917001300_tenant_subscription`). */
 const SETTINGS_ID = 1;
 const DAY_MS = 86_400_000;
+const SETTINGS = { trialDays: true, suspensionHoldDays: true } as const;
 
 const PRICE_OF: Record<PutSubscriptionInput['billingModel'], 'monthlyPrice' | 'yearlyPrice'> = {
   subscription_monthly: 'monthlyPrice',
@@ -167,18 +168,20 @@ export class TenantSubscriptionService {
 
   async readSettings(actor: TenantSubscriptionActor): Promise<SubscriptionSettingsView> {
     await this.access(actor);
-    return { trialDays: await this.trialDays() };
+    const row = await this.all.tenantSubscriptionSetting.findUnique({ where: { id: SETTINGS_ID }, select: SETTINGS });
+    if (!row) throw new Error('tenant_subscription_setting row is missing — run the migrations');
+    return row;
   }
 
   async updateSettings(actor: TenantSubscriptionActor, input: UpdateSubscriptionSettingsInput): Promise<SubscriptionSettingsView> {
     await this.access(actor);
     return this.all.$transaction(async (tx) => {
-      const before = await tx.tenantSubscriptionSetting.findUnique({ where: { id: SETTINGS_ID }, select: { trialDays: true } });
+      const before = await tx.tenantSubscriptionSetting.findUnique({ where: { id: SETTINGS_ID }, select: SETTINGS });
       if (!before) throw new Error('tenant_subscription_setting row is missing — run the migrations');
       const after = await tx.tenantSubscriptionSetting.update({
         where: { id: SETTINGS_ID },
-        data: { trialDays: input.trialDays, updatedByUserId: actor.adminId },
-        select: { trialDays: true },
+        data: { trialDays: input.trialDays, suspensionHoldDays: input.suspensionHoldDays, updatedByUserId: actor.adminId },
+        select: SETTINGS,
       });
       await tx.adminAuditLog.create({
         data: {

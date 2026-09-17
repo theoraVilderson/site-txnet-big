@@ -1,6 +1,6 @@
 import { Controller, Get, Query, Req, Res } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, TenantCapability } from '@txnet-backend/shared-core';
 import type { Request, Response } from 'express';
 
 import type { EnvConfig } from '../../config/env.validation';
@@ -51,6 +51,7 @@ function resultUrl(outcome: SettledCallback, secret: string): string {
   return `${origin}${path}?t=${encodeURIComponent(signResultToken(outcome, secret))}`;
 }
 
+@TenantCapability('system')
 @Controller('billing/deposit')
 export class DepositCallbackController {
   constructor(

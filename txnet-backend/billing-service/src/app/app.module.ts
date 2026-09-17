@@ -1,7 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { RateLimitGuard } from '@txnet-backend/shared-core';
+import { RateLimitGuard, TenantStatusGuard } from '@txnet-backend/shared-core';
 
 import { CatalogModule } from './catalog/catalog.module';
 import { EntitlementModule } from './entitlement/entitlement.module';
@@ -69,6 +69,9 @@ const INTERNAL_ROUTES = 'internal/*';
     // that did not. Guards run after the middleware below, so the identity a
     // bucket is built from is already there.
     { provide: APP_GUARD, useClass: RateLimitGuard },
+    // What the tenant's status allows (F-018-f); the tenant is the scope the
+    // middleware above opened, and a route with none is not judged.
+    { provide: APP_GUARD, useClass: TenantStatusGuard },
   ],
 })
 export class AppModule implements NestModule {

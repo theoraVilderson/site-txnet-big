@@ -1,6 +1,7 @@
 import {
   RateLimitBucket,
   rateLimitBucketKey,
+  TenantCapability,
 } from '@txnet-backend/shared-core';
 import {
   Body,
@@ -28,6 +29,7 @@ import { rateLimitSubject } from '../../common/security/service-caller';
 import { resolveSwitchScope } from '../../common/security/switch-scope';
 import { NoActiveSessionGuard } from '../guards/no-active-session.guard';
 
+@TenantCapability('register')
 @Controller('auth')
 export class RegisterController {
   constructor(

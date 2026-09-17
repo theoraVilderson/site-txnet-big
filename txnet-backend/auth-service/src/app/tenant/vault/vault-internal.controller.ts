@@ -1,7 +1,7 @@
 import { Controller, Post, UseGuards } from '@nestjs/common';
 import { ServiceOnlyGuard } from '../../common/guards/service-only.guard';
 import { TenantAgnostic } from '../tenant-agnostic.decorator';
-import { CredentialVaultService } from '@txnet-backend/shared-core';
+import { CredentialVaultService, TenantCapability } from '@txnet-backend/shared-core';
 
 /**
  * The vault's one internal route (F-031-c), and the reason it now has a
@@ -28,6 +28,7 @@ import { CredentialVaultService } from '@txnet-backend/shared-core';
  * `ServiceOnlyGuard`, so an unrecognised caller gets a 404 that is
  * indistinguishable from a route that does not exist.
  */
+@TenantCapability('system')
 @Controller('internal/vault')
 @UseGuards(ServiceOnlyGuard)
 @TenantAgnostic()

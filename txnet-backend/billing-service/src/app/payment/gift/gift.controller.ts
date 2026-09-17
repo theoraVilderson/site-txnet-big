@@ -1,5 +1,5 @@
 import { Body, ConflictException, Controller, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
-import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, TenantCapability } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../../request/identity.middleware';
@@ -38,6 +38,7 @@ const GIFT_REJECTION_KEY: Record<GiftRejection, string> = {
 export class GiftController {
   constructor(private readonly gifts: GiftRedemptionService) {}
 
+  @TenantCapability('endUserDeposit')
   @Post('redeem')
   @HttpCode(HttpStatus.OK)
   @RateLimit({

@@ -1,6 +1,7 @@
 import {
   RateLimitBucket,
   rateLimitBucketKey,
+  TenantCapability,
 } from '@txnet-backend/shared-core';
 import {
   Body,
@@ -39,6 +40,7 @@ import { withRefreshCookie } from '../../common/http/refresh-cookie';
  * one. An unauthenticated or unknown call is a 404: a webhook URL that
  * answers differently for a wrong secret is a webhook URL that can be probed.
  */
+@TenantCapability('signIn')
 @Controller('auth/bots')
 export class BotLinkController {
   constructor(

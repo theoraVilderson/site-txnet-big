@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { TENANT_STATUS_STORE, TenantStatusGuard } from '@txnet-backend/shared-core';
+import { Client } from 'pg';
+import { RedisService } from '../redis/redis.service';
 import { TenantCacheService } from './tenant-cache.service';
 import { TenantResolverService } from './tenant-resolver.service';
 import { TenantGuard } from './tenant.guard';
@@ -9,6 +13,9 @@ import { TenantPackageController } from './packages/tenant-package.controller';
 import { TenantPackageService } from './packages/tenant-package.service';
 import { TenantSubscriptionController } from './subscription/tenant-subscription.controller';
 import { TenantSubscriptionService } from './subscription/tenant-subscription.service';
+import { TenantStatusController } from './status/tenant-status.controller';
+import { TenantStatusService } from './status/tenant-status.service';
+import { TENANT_STATUS_LISTEN_CLIENT, TenantStatusListener } from './status/tenant-status.listener';
 
 /**
  * `tenant`'s first module. Its controllers are the platform owner's reseller
@@ -26,18 +33,32 @@ import { TenantSubscriptionService } from './subscription/tenant-subscription.se
  * `tenant_domain` rows, and each of those must retract the mapping without
  * needing the resolver at all (ADR-0025).
  *
+ * `TenantStatusGuard` runs after it (F-018-f): once the tenant is known, its
+ * status decides what the route may do, from the key `TenantStatusListener`
+ * writes.
+ *
  * `PrismaModule` and `RedisModule` are both `@Global`, so neither is imported
  * here.
  */
 @Module({
-  controllers: [TenantAdminController, TenantPackageController, TenantSubscriptionController],
+  controllers: [TenantAdminController, TenantPackageController, TenantSubscriptionController, TenantStatusController],
   providers: [
     TenantAdminService,
     TenantPackageService,
     TenantSubscriptionService,
+    TenantStatusService,
+    TenantStatusListener,
+    {
+      provide: TENANT_STATUS_LISTEN_CLIENT,
+      useFactory: (config: ConfigService) => () =>
+        new Client({ connectionString: config.get<string>('DATABASE_APP_URL') }),
+      inject: [ConfigService],
+    },
     TenantCacheService,
     TenantResolverService,
     { provide: APP_GUARD, useClass: TenantGuard },
+    { provide: TENANT_STATUS_STORE, useExisting: RedisService },
+    { provide: APP_GUARD, useClass: TenantStatusGuard },
   ],
   exports: [TenantResolverService, TenantCacheService],
 })

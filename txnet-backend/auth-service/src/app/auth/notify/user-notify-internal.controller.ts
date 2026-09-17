@@ -1,4 +1,5 @@
 import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import { TenantCapability } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 import { ServiceOnlyGuard } from '../../common/guards/service-only.guard';
@@ -19,6 +20,7 @@ const notifySchema = z
  * only (a neutral 404 otherwise); the tenant is `X-Tenant-Id`, bound like the
  * OTP delivery seam's (F-067-a).
  */
+@TenantCapability('system')
 @Controller('internal/notify')
 @UseGuards(ServiceOnlyGuard)
 export class UserNotifyInternalController {

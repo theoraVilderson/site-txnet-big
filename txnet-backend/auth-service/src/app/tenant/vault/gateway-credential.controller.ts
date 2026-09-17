@@ -9,6 +9,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { TenantCapability } from '@txnet-backend/shared-core';
 
 import { ServiceOnlyGuard } from '../../common/guards/service-only.guard';
 import { TenantAgnostic } from '../tenant-agnostic.decorator';
@@ -85,6 +86,7 @@ export class GatewayCredentialController {
   }
 
   /** Whether each secret is configured. */
+  @TenantCapability('read')
   @Post('state')
   @HttpCode(HttpStatus.OK)
   async state(@Body() body: TargetBody): Promise<GatewayCredentialState> {

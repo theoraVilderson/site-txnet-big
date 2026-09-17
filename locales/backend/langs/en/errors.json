@@ -132,7 +132,9 @@
     "phoneVerified": "Your phone number is verified"
   },
   "tenant": {
-    "claimMismatch": "This session does not belong to this address. Sign in again."
+    "claimMismatch": "This session does not belong to this address. Sign in again.",
+    "suspended": "This service is suspended. You can sign in and view your account, but this action is unavailable until it is reactivated.",
+    "terminated": "This service has been closed."
   },
   "automation": {
     "invalidSchedule": "That schedule could never run — see the reason.",

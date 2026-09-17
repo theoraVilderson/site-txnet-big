@@ -9,7 +9,7 @@ import {
   Req,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, TenantCapability } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { toHttp } from '../payment/deposit/deposit.controller';
@@ -41,6 +41,7 @@ export function refusal(e: unknown): unknown {
  * reseller come from its headers. Limited in the deposit routes' own buckets,
  * per user — the same act, one payment at a bank.
  */
+@TenantCapability('tenantBilling')
 @Controller('billing/tenant-wallet/topup')
 export class TenantTopupController {
   constructor(private readonly topups: TenantTopupService) {}

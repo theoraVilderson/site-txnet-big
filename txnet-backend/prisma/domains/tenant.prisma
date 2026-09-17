@@ -128,6 +128,10 @@ model Tenant {
   status          TenantStatus       @default(trial)
   billingModel    TenantBillingModel
   suspendedReason String?
+  /// F-018-f. When the tenant was last suspended; null unless `suspended` (or terminated from it).
+  suspendedAt     DateTime?
+  /// F-018-f. `/sub` is served until this instant while suspended (`suspensionHoldDays` after `suspendedAt`).
+  graceEndsAt     DateTime?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -146,6 +150,7 @@ model Tenant {
   deks                TenantDek[]
   credentials         TenantCredential[]
   subscription        TenantSubscription?
+  statusHistory       TenantStatusHistory[]
 
   @@map("tenant")
   @@schema("tenant")
@@ -243,12 +248,33 @@ model TenantSubscription {
 /// F-018-e — the platform's subscription settings: one row (`id = 1`, CHECK),
 /// edited by the platform owner. `trialDays` is 0..365 (CHECK).
 model TenantSubscriptionSetting {
-  id              Int      @id @default(1)
-  trialDays       Int      @default(14)
-  updatedByUserId String?  @db.Uuid
-  updatedAt       DateTime @updatedAt
+  id                 Int      @id @default(1)
+  trialDays          Int      @default(14)
+  /// F-018-f. Days a suspended tenant's `/sub` links are still served (CHECK 0..90).
+  suspensionHoldDays Int      @default(7)
+  updatedByUserId    String?  @db.Uuid
+  updatedAt          DateTime @updatedAt
 
   @@map("tenant_subscription_setting")
+  @@schema("tenant")
+}
+
+/// F-018-f. Every change of a tenant's status, append-only (a trigger refuses
+/// UPDATE and DELETE). `actorUserId` is null for a change the platform made
+/// itself (F-019-c's renewal).
+model TenantStatusHistory {
+  id          String       @id @default(uuid()) @db.Uuid
+  tenantId    String       @db.Uuid
+  fromStatus  TenantStatus
+  toStatus    TenantStatus
+  reason      String?
+  actorUserId String?      @db.Uuid
+  createdAt   DateTime     @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@map("tenant_status_history")
   @@schema("tenant")
 }
 

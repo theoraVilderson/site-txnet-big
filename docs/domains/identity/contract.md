@@ -75,6 +75,7 @@ No message bus. Impersonation start/end write an `audit.admin_audit_log` row
 | i18n | OTP message text + error strings for the request language | English fallback strings; delivery still attempted |
 | redis-keyspace | session markers, OTP state, rate-limit + login-failure counters, pending-registration payloads | auth fails closed (cannot create/verify sessions or OTP); a pending registration lost before verify forces the user to register again |
 | audit | `admin_audit_log`, `impersonation_session` rows on impersonation | impersonation transaction aborts |
+| tenant | `TenantStatusGuard` (F-018-f): a suspended tenant refuses `register` and staff writes, keeps sign-in; a terminated one refuses all but sign-out — `tenant/rules.md` | a missing `tenant:status` key refuses nobody |
 
 ## Guarantees
 

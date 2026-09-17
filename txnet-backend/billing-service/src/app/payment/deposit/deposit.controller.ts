@@ -23,6 +23,7 @@ import {
   RequestHeaders,
   holdsPermission,
   rateLimitBucketKey,
+  TenantCapability,
 } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
@@ -160,6 +161,7 @@ export class DepositController {
     return this.deposits.listGateways({ canTest: canTest(req), chatPlatform: this.chatPlatformOf(req) });
   }
 
+  @TenantCapability('endUserDeposit')
   @Post('quote')
   @HttpCode(HttpStatus.OK)
   @RateLimit({
@@ -203,6 +205,7 @@ export class DepositController {
    * discounted top-up, `free: true` with the wallet already credited and nowhere
    * to go.
    */
+  @TenantCapability('endUserDeposit')
   @Post('start')
   @HttpCode(HttpStatus.OK)
   @RateLimit({

@@ -1,5 +1,5 @@
 import { Body, Controller, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey, ServiceOnlyGuard } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../../request/identity.middleware';
@@ -35,6 +35,7 @@ const refOf = (body: InChatPreCheckoutBody, req: Request): InChatPaymentRef => (
 export class DepositInChatController {
   constructor(private readonly inChat: DepositInChatService) {}
 
+  @TenantCapability('endUserDeposit')
   @Post('pre-checkout')
   @HttpCode(HttpStatus.OK)
   @RateLimit({
@@ -49,6 +50,7 @@ export class DepositInChatController {
     return this.inChat.preCheckout(refOf(body, req));
   }
 
+  @TenantCapability('system')
   @Post('paid')
   @HttpCode(HttpStatus.OK)
   @RateLimit({

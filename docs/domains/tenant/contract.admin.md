@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-version: 14
+version: 15
 updated: 2026-09-17
 ---
 
@@ -10,9 +10,9 @@ updated: 2026-09-17
 
 A topic file of `contract.md` (§10). The platform owner creates, lists and
 reads resellers (F-018-c), the packages it sells them (F-018-d), and which package
-and period each reseller is on (F-018-e). Before it, a tenant existed only through
-`prisma/seed.js`. What a reseller does to itself is not here (F-018-h..l); a
-reseller's status changes are F-018-f.
+and period each reseller is on (F-018-e), and its status (F-018-f). Before it, a tenant existed only through
+`prisma/seed.js`. What a reseller does to itself is not here (F-018-h..l); what each
+status allows is [rules.md](rules.md).
 
 Code: `auth-service/src/app/tenant/admin/`.
 
@@ -96,8 +96,8 @@ check; every read and write after it is on the cross-tenant pool.
 |---|---|---|
 | `PUT /api/auth/tenants/:id/subscription` | `{packageId, billingModel}`, `.strict()` | a subscription view |
 | `GET /api/auth/tenants/:id/subscription` | — | a subscription view |
-| `GET /api/auth/tenant-subscription-settings` | — | `{trialDays}` |
-| `PATCH /api/auth/tenant-subscription-settings` | `{trialDays}` — an integer 0..365, `.strict()` | `{trialDays}` |
+| `GET /api/auth/tenant-subscription-settings` | — | `{trialDays, suspensionHoldDays}` |
+| `PATCH /api/auth/tenant-subscription-settings` | `{trialDays?, suspensionHoldDays?}` — integers 0..365 / 0..90, at least one, `.strict()` | `{trialDays, suspensionHoldDays}` |
 
 A subscription view: `tenantId, packageId, packageName, billingModel,
 currentPeriodEnd, startedAt, includedFeatureKeys`. Refusals:
@@ -117,12 +117,34 @@ currentPeriodEnd, startedAt, includedFeatureKeys`. Refusals:
 | The keys are read under a shared lock on the package | a concurrent package edit is wholly before or after the `PUT` (F-018-o) |
 | `trialDays` is the platform's one `tenant_subscription_setting` row (`id = 1`, CHECK 0..365, default 14), edited with an audit row (`tenant_subscription_setting_update`); it applies to trials started after the edit | a setting the platform owner changes without a deploy (user, 2026-09-17) |
 
+## A reseller's status (F-018-f)
+
+Code: `auth-service/src/app/tenant/status/`. The same guard and owner check;
+the change runs on the cross-tenant pool. What each status allows, and how it is
+enforced, is [rules.md](rules.md) (ADR-0057).
+
+| Route | Body | Answer |
+|---|---|---|
+| `PUT /api/auth/tenants/:id/status` | `{status: active\|suspended\|terminated, reason?}` (1..500 chars), `.strict()` | `{tenantId, status, suspendedAt, graceEndsAt, suspendedReason}` |
+| `GET /api/auth/tenants/:id/status-history` | — | the newest 100 `{fromStatus, toStatus, reason, actorUserId, createdAt}` |
+
+Refusals: `not_platform_owner` 403; `reseller_not_found` 404 (also the
+platform owner's own tenant); `reseller_terminated`, `status_unchanged` 409.
+
+| Rule | Why |
+|---|---|
+| **One transaction, the tenant row locked `FOR UPDATE`:** the status is read under the lock, the tenant updated, one `tenant_status_history` row and one audit row (`tenant_status_change`, target `tenant`, before/after) | two concurrent changes cannot both read the old status; the trail is never half-written |
+| `suspended` stamps `suspendedAt` = now and `graceEndsAt` = now + `suspensionHoldDays` (read before the transaction); `active` clears both and the reason; `terminated` keeps them | `/sub` is served until `graceEndsAt` (D-42 (1)) |
+| `terminated` is final; `trial` cannot be set | termination is by hand and not undone; a tenant only starts in `trial` |
+| Enforcement follows the commit: the `tenant.tenant` trigger notifies, `TenantStatusListener` rewrites `tenant:status:<id>` | a rolled-back change is never enforced |
+| `suspensionHoldDays` is on the platform's settings row (default 7, CHECK 0..90), edited with the same audit row as `trialDays`; it applies to suspensions started after the edit | a setting, not a deploy (D-42 (1)) |
+
 ## Not built here
 
 - The panel screen: F-018-k.
-- Staff, branding, custom domains, status: F-018-j / h / i / f.
+- Staff, branding, custom domains: F-018-j / h / i. The `/sub` refusal: `network`'s service (F-027), with `tenantAllows(state, 'subscriptionLink')`.
 - A reseller seeing its own subscription or the packages it can buy: not yet a row.
-- Charging, renewing and suspending: F-019-c. Checking an entitlement: F-018-g.
+- Charging and renewing, and suspending on a failed renewal (through `TenantStatusService`): F-019-c. Checking an entitlement: F-018-g.
 - A platform-staff `X-Tenant-Id` (open question 2026-09-09): the platform
   owner reaches another tenant's rows through this service's cross-tenant
   reads, not by switching its session's tenant.

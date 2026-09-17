@@ -6,6 +6,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { TenantCapability } from '@txnet-backend/shared-core';
 import {
   BOT_DIRECTORY_SEAM_SERVICES,
   BotIntegration,
@@ -46,6 +47,7 @@ type BotIntegrationView = BotIntegration;
  * `@TenantAgnostic` because resolving the tenant is what these routes are
  * *for*: `bot-service` cannot name a tenant it is asking to be told.
  */
+@TenantCapability('read')
 @Controller('internal/bot-integrations')
 @UseGuards(ServiceOnlyGuard)
 @TenantAgnostic()

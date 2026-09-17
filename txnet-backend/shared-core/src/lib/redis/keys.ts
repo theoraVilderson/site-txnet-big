@@ -158,6 +158,13 @@ export const UnscopedRedisKeys = {
    * answering a still-signed token's claim without waiting for a TTL.
    */
   tenantById: (tenantId: string) => `tenant:id:${tenantId}`,
+  /**
+   * A tenant's status and `graceEndsAt`, as `TenantStatusGuard` reads it
+   * (F-018-f). No TTL: written by `auth-service`'s `TenantStatusListener` on a
+   * Postgres notification and recomputed for every tenant on each connect, the
+   * same lifetime as `rolePermissions`. A missing key refuses nobody.
+   */
+  tenantStatus: (tenantId: string) => `tenant:status:${tenantId}`,
 
   /**
    * The leases one tenant's background runs currently hold, across every

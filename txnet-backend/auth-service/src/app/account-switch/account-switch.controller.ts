@@ -1,6 +1,7 @@
 import {
   RateLimitBucket,
   rateLimitBucketKey,
+  TenantCapability,
 } from '@txnet-backend/shared-core';
 import {
   Body,
@@ -49,6 +50,7 @@ import { resolveSwitchScope } from '../common/security/switch-scope';
  * from the `device_id` cookie or, for `bot-service`, from the verified service
  * token plus the platform and chat headers — all of them set below the route.
  */
+@TenantCapability('account')
 @Controller('auth/accounts')
 export class AccountSwitchController {
   constructor(private readonly accounts: AccountSwitchService) {}
@@ -70,6 +72,7 @@ export class AccountSwitchController {
     return req.get('user-agent') ?? 'unknown';
   }
 
+  @TenantCapability('signIn')
   @Post('add/otp/request')
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)
@@ -89,6 +92,7 @@ export class AccountSwitchController {
     );
   }
 
+  @TenantCapability('signIn')
   @Post('add/otp/verify')
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)
@@ -106,6 +110,7 @@ export class AccountSwitchController {
     );
   }
 
+  @TenantCapability('signIn')
   @Post('add/password')
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)
