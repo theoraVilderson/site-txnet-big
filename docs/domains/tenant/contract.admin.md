@@ -137,7 +137,7 @@ enforced, is [rules.md](rules.md) (ADR-0057).
 
 | Route | Body | Answer |
 |---|---|---|
-| `PUT /api/auth/tenants/:id/status` | `{status: active\|suspended\|terminated, reason?}` (1..500 chars), `.strict()` | `{tenantId, status, suspensionCause, suspendedAt, graceEndsAt, suspendedReason}` |
+| `PUT /api/auth/tenants/:id/status` | `{status: active\|suspended\|terminated, reason?, stopCampaigns?: boolean}` (reason 1..500 chars; `stopCampaigns` 400 with `active`), `.strict()` | `{tenantId, status, suspensionCause, suspendedAt, graceEndsAt, suspendedReason, stopCampaigns}` |
 | `GET /api/auth/tenants/:id/status-history` | — | the newest 100 `{fromStatus, toStatus, reason, actorUserId, createdAt}` |
 
 Refusals: `not_platform_owner` 403; `reseller_not_found` 404 (also the
@@ -149,6 +149,7 @@ platform owner's own tenant); `reseller_terminated`, `status_unchanged` 409.
 | `suspended` stamps `suspendedAt` = now, `graceEndsAt` = now + `suspensionHoldDays` (read before the transaction) and `suspensionCause = manual`; `active` clears them and the reason; `terminated` keeps them. The renewal moves a tenant through the same `tenant-status.transition.ts` | `/sub` is served until `graceEndsAt` (D-42 (1)); a payment lifts only a `non_payment` suspension |
 | `terminated` is final; `trial` cannot be set | termination is by hand and not undone; a tenant only starts in `trial` |
 | **`suspended` on a reseller suspended for `non_payment` is not `status_unchanged`:** the cause becomes `manual`, `suspendedAt` / `graceEndsAt` are kept, a given reason replaces the old one, and one `suspended -> suspended` history row and the audit row are written. Suspended again when already `manual` is `status_unchanged` | a payment renews but no longer reopens a reseller closed for abuse (F-018-s, user 2026-09-17) |
+| **`stopCampaigns: true`** adds one `outbox_event` (`tenant.campaigns.stop_requested`, `{tenantId}`) in the same transaction, and `stopCampaigns` to the audit row; `worker-service` carries it to notification-service's internal `stop` (automation `contract.outbox.md`). Absent, the reseller's `sending` campaigns finish. The heads-up to show first is notification's `GET notifications/campaigns/sending-summary/:tenantId` | campaigns are notification's to stop (user, 2026-09-17, F-018-q); a committed ask cannot be lost, a rolled-back one asks nothing |
 | Enforcement follows the commit: the `tenant.tenant` trigger notifies, `TenantStatusListener` rewrites `tenant:status:<id>` | a rolled-back change is never enforced |
 | `suspensionHoldDays` is on the platform's settings row (default 7, CHECK 0..90), edited with the same audit row as `trialDays`; it applies to suspensions started after the edit | a setting, not a deploy (D-42 (1)) |
 

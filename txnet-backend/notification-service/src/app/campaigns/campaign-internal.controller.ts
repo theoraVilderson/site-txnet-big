@@ -38,6 +38,13 @@ export class CampaignInternalController {
     return this.delivery.deliver();
   }
 
+  /** Every `sending` campaign of one tenant -> `stopped` (F-018-q), from the status change's outbox event; `{ stopped }`. */
+  @Post('tenants/:tenantId/stop')
+  @HttpCode(HttpStatus.OK)
+  stop(@Param('tenantId', new ParseUUIDPipe()) tenantId: string) {
+    return this.fanOut.stopForTenant(tenantId);
+  }
+
   /** `queued -> sent | failed` with its counter; `{ changed: false }` when it had moved already. */
   @Post('recipients/:id/outcome')
   @HttpCode(HttpStatus.OK)

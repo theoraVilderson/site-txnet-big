@@ -31,6 +31,8 @@ export const OutboxEventType = {
   TENANT_SUBSCRIPTION_PAYMENT_DUE: 'tenant.subscription.payment_due',
   /** F-019-c: grace ran out and the reseller was suspended for non-payment. */
   TENANT_SUBSCRIPTION_SUSPENDED: 'tenant.subscription.suspended',
+  /** F-018-q: the platform owner suspended or terminated a reseller and chose to stop its sending campaigns too. */
+  TENANT_CAMPAIGNS_STOP_REQUESTED: 'tenant.campaigns.stop_requested',
 } as const;
 export type OutboxEventType = (typeof OutboxEventType)[keyof typeof OutboxEventType];
 

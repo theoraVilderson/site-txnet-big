@@ -25,6 +25,7 @@ F-035-f (email since F-035-h, a reseller's own SMS line since F-035-i-a), #11 si
 | 9 | A campaign message goes out only as the recipient's own tenant's primary bot, to a contact-verified chat that user linked in that same tenant — for a platform-wide campaign too | `campaign-delivery.service.ts` (`link.tenantId === user.tenantId`, `contactVerifiedAt` not null; cross-tenant pool, no RLS behind it) | one reseller's bot messages another's user, or a chat nobody proved |
 | 10 | An SMS or email goes out only on a line of the campaign's own tenant, to a user of that tenant with a verified phone or address (D-38): the platform's line for the platform owner's campaign; a reseller's own SMS line (`own_credentials`, active) for its campaign (F-035-i-a). A platform-wide campaign has none; reseller email waits on F-112 | `platformOwnersOwn` and the own-line branch of `SmsLineResolver`/`MailLineResolver.lineFor`; `phoneVerifiedAt`/`emailVerifiedAt` in `campaign-delivery.service.ts`; `assertLine` in `campaign-admin.service.ts` | a reseller's campaign costs the platform, or a user is shown another tenant's number or domain |
 | 11 | A recipient receives only a `published` text in their language, else the source; a text exists only while its source is unchanged — `messageBody`, `subject` or `sourceLang` changing deletes them all in that transaction | `textFor` + the `state: published` read in `campaign-delivery.service.ts`; `update` in `campaign-admin.service.ts`; texts written only through `CampaignAdminService.managed({ draft: true })` | an unreviewed machine translation, or a translation of an older message, reaches users |
+| 12 | A campaign leaves `sending` for `stopped` only through `stopForTenant`, and returns only through `resume`, never while its tenant is suspended or terminated; stopping touches no recipient row (F-018-q) | `campaign-fan-out.service.ts` `stopForTenant`; `resume`'s `where` + tenant check in `campaign-admin.service.ts` | a stop fails or loses who was never reached; a suspension's stop reopened beside it |
 
 ## How to test
 
@@ -34,4 +35,5 @@ asserts #5 and #6 on the queries built;
 `notification-service/src/app/campaigns/campaign-fan-out.spec.ts` asserts #1, #2 and #4;
 `notification-service/src/app/campaigns/campaign-delivery.spec.ts` asserts #9, #10 and the claim half of #4;
 `notification-service/src/app/campaigns/campaign-texts.spec.ts` asserts #11;
+`notification-service/src/app/campaigns/campaign-stop.spec.ts` asserts #12;
 `notification-service/src/app/campaigns/sms-line.spec.ts` asserts #10 for a reseller's own line (F-035-i-a).

@@ -41,9 +41,12 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 | write one | `PUT notifications/campaigns/:id/texts/:lang` | `{ subject?: ≤200\|null, body ≤4000 }` | the text, `published` | 400 (`text_is_source` too), 403, 404; 409 `campaign_not_draft` |
 | publish a draft | `POST notifications/campaigns/:id/texts/:lang/publish` | — | the text, `published`, 200 | 400 `text_is_source`, 403; 404 `campaign_not_found`, `text_not_found`; 409 |
 | start a send | `POST notifications/campaigns/:id/send` | — | the campaign, `status: sending`, 200 | 403, 404; 409 `campaign_not_draft` |
+| resume a stopped send | `POST notifications/campaigns/:id/resume` | — | the campaign, `status: sending` (or `completed`), 200 | 403, 404; 409 `campaign_not_stopped`, `tenant_not_open` |
+| heads-up before a suspension | `GET notifications/campaigns/sending-summary/:tenantId` (owner only) | — | `{ tenantId, campaigns, recipientsQueued, campaignsStillFanningOut }` | 403 `not_platform_owner` |
 | fan out | `POST internal/notifications/campaigns/fan-out` (`SERVICE_AUTH_TOKEN`) | — | `{ campaigns, recipients, finished, unreadable }` | 404 on a wrong token |
 | deliver | `POST internal/notifications/campaigns/deliver` (token) | — | `{ claimed, sent, failed, deferred, stalled }` | 404 on a wrong token |
 | record an outcome | `POST internal/notifications/campaigns/recipients/:id/outcome` (token) | `{ outcome: sent\|failed }` | `{ changed }` | 400; 404 `recipient_not_found` |
+| stop a tenant's sends | `POST internal/notifications/campaigns/tenants/:tenantId/stop` (token) | — | `{ stopped }` | 400; 404 on a wrong token |
 
 - `unreadCount` is over the whole inbox, whatever the page or filter.
 - `marked` counts rows that changed. An id that is read already, does not exist
@@ -56,7 +59,13 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
   campaign write (draft, edit, texts, `send`) is `staffWrite` — `403
   tenant.suspended` for a suspended reseller, `tenant.terminated` for a
   terminated one. `internal/*` has no tenant and is not judged; a campaign
-  already `sending` finishes whatever the status (`system`, user 2026-09-17).
+  already `sending` finishes whatever the status (`system`, user 2026-09-17),
+  **unless** the platform owner chose `stopCampaigns` with the change (F-018-q):
+  every `sending` campaign of that tenant -> `stopped`, its rows left `queued`
+  (nothing failed or deleted). Fan-out and delivery select only `sending`, so a
+  run already holding rows sends those (≤100) and the next claims none. `resume`
+  (`staffWrite`, audited `campaign_resume`) is `stopped -> sending` only, refused
+  while the campaign's tenant is suspended or terminated.
 
 ### Campaigns (F-035-c)
 
@@ -104,7 +113,7 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 - **Outcome.** `queued -> sent|failed` only (`where deliveryStatus = queued`),
   and the matching counter moves in that transaction; an already-moved row is
   `changed: false` and counts nothing. `sending -> completed` once `fannedOutAt`
-  is set and no row is `queued` — at once for an empty audience.
+  is set and no row is `queued` — at once for an empty audience, or on `resume`.
 - The seed schedules the job `always_on` (user, 2026-09-17); an install that
   skips the seed fans out nothing until an operator sets its `bot_schedule`.
 

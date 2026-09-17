@@ -161,10 +161,26 @@ export class CampaignFanOutService {
       return { changed: true };
     });
   }
+
+  /**
+   * Stops every `sending` campaign of one tenant (F-018-q): `sending -> stopped`,
+   * nothing else. Recipient rows stay `queued` — none is failed or deleted — and
+   * the fan-out and delivery select only `sending` campaigns, so both halt at
+   * their next run; a delivery run already holding rows sends those. Safe to
+   * replay: a second call stops nothing.
+   */
+  async stopForTenant(tenantId: string): Promise<{ stopped: number }> {
+    const { count } = await this.db.notificationCampaign.updateMany({
+      where: { tenantId, status: CampaignStatus.sending },
+      data: { status: CampaignStatus.stopped, stoppedAt: new Date() },
+    });
+    if (count > 0) this.logger.log(`stopped ${count} sending campaign(s) of tenant ${tenantId}`);
+    return { stopped: count };
+  }
 }
 
 /** `sending -> completed` once the audience is written and nothing is left `queued`. */
-async function completeIfSettled(tx: Tx, campaignId: string): Promise<void> {
+export async function completeIfSettled(tx: Tx, campaignId: string): Promise<void> {
   const queued = await tx.notificationCampaignRecipient.count({
     where: { campaignId, deliveryStatus: DeliveryStatus.queued },
   });

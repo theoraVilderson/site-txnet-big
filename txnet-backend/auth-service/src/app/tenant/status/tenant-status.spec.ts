@@ -135,6 +135,7 @@ describe('TenantStatusService', () => {
       tenant: { update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => (writes.push('tenant'), { ...row, ...data })) },
       tenantStatusHistory: { create: vi.fn(async (_: { data: Record<string, unknown> }) => (writes.push('history'), {})) },
       adminAuditLog: { create: vi.fn(async (_: { data: Record<string, unknown> }) => (writes.push('audit'), {})) },
+      outboxEvent: { create: vi.fn(async (_: { data: Record<string, unknown> }) => (writes.push('outbox'), { id: 'e1' })) },
     };
     const prisma = { tenant: { findUnique: vi.fn(async () => ({ tenantType: opts.callerType ?? 'platform_owner' })) } };
     const all = {
@@ -192,7 +193,32 @@ describe('TenantStatusService', () => {
     expect(view).toMatchObject({ status: 'suspended', suspensionCause: 'manual' });
   });
 
-  it('terminated is final, an unchanged status is refused, and the platform owner is never a reseller', async () => {
+  it('stopCampaigns rides only with a suspension or termination (F-018-q)', () => {
+    expect(changeTenantStatusSchema.safeParse({ status: 'suspended', stopCampaigns: true }).success).toBe(true);
+    expect(changeTenantStatusSchema.safeParse({ status: 'terminated', stopCampaigns: false }).success).toBe(true);
+    expect(changeTenantStatusSchema.safeParse({ status: 'active', stopCampaigns: true }).success).toBe(false);
+  });
+
+  it('stopCampaigns asks notification-service to stop through the outbox, in the change\'s own transaction (F-018-q)', async () => {
+    const { service, tx, writes } = build();
+    const view = await service.change(actor, RESELLER, { status: 'suspended', stopCampaigns: true });
+
+    expect(writes).toEqual(['lock', 'tenant', 'history', 'audit', 'outbox']);
+    expect(tx.outboxEvent.create.mock.calls[0][0].data).toEqual({
+      aggregate: 'tenant',
+      aggregateId: RESELLER,
+      type: 'tenant.campaigns.stop_requested',
+      payload: { tenantId: RESELLER },
+    });
+    expect(tx.adminAuditLog.create.mock.calls[0][0].data).toMatchObject({ newValue: { stopCampaigns: true } });
+    expect(view.stopCampaigns).toBe(true);
+
+    const plain = build();
+    expect((await plain.service.change(actor, RESELLER, { status: 'terminated' })).stopCampaigns).toBe(false);
+    expect(plain.tx.outboxEvent.create).not.toHaveBeenCalled();
+  });
+
+    it('terminated is final, an unchanged status is refused, and the platform owner is never a reseller', async () => {
     await expect(build({ status: 'terminated' }).service.change(actor, RESELLER, { status: 'active' })).rejects.toMatchObject({ reason: 'reseller_terminated' });
     const same = build({ status: 'suspended', cause: 'manual' });
     await expect(same.service.change(actor, RESELLER, { status: 'suspended' })).rejects.toMatchObject({ reason: 'status_unchanged' });

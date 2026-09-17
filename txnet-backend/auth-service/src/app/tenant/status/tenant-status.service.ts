@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AdminAction, AuditTargetType, Prisma, TenantStatus, TenantSuspensionCause, TenantType } from '@prisma/client';
+import { OutboxEventType } from '@txnet-backend/shared-core';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { ChangeTenantStatusInput } from './tenant-status.schema';
@@ -23,6 +24,11 @@ import { applyTenantStatus, makeSuspensionManual } from './tenant-status.transit
  * Suspending a reseller already suspended **for non-payment** is not
  * `status_unchanged`: it makes the cause `manual`, so a later payment renews
  * the subscription but does not reopen the panel (F-018-s).
+ *
+ * `stopCampaigns` (F-018-q) writes a `tenant.campaigns.stop_requested` outbox
+ * event in the same transaction: notification-service owns campaigns and stops
+ * them when `worker-service` delivers it, retried until it lands. A change that
+ * rolls back asks for nothing; one that commits cannot lose the ask.
  */
 
 export type TenantStatusActor = { adminId: string; tenantId: string; ip: string };
@@ -35,6 +41,8 @@ export type TenantStatusView = {
   suspendedAt: Date | null;
   graceEndsAt: Date | null;
   suspendedReason: string | null;
+  /** F-018-q: whether this change asked for the reseller's sending campaigns to stop. */
+  stopCampaigns: boolean;
 };
 
 export type TenantStatusHistoryView = {
@@ -113,6 +121,7 @@ export class TenantStatusService {
         suspendedAt: after.suspendedAt,
         graceEndsAt: after.graceEndsAt,
         suspendedReason: after.suspendedReason,
+        stopCampaigns: input.stopCampaigns === true,
       };
       await tx.adminAuditLog.create({
         data: {
@@ -126,6 +135,12 @@ export class TenantStatusService {
           adminIpAddress: actor.ip,
         },
       });
+      if (result.stopCampaigns) {
+        await tx.outboxEvent.create({
+          data: { aggregate: 'tenant', aggregateId: tenantId, type: OutboxEventType.TENANT_CAMPAIGNS_STOP_REQUESTED, payload: { tenantId } },
+          select: { id: true },
+        });
+      }
       return result;
     });
     this.logger.log(`reseller ${tenantId} -> ${input.status} by ${actor.adminId}`);

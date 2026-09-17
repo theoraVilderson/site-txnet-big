@@ -54,6 +54,8 @@ export const CAMPAIGN_REFUSAL_STATUS: Record<CampaignAdminRejection, 400 | 403 |
   email_not_available: 409,
   text_is_source: 400,
   text_not_found: 404,
+  campaign_not_stopped: 409,
+  tenant_not_open: 409,
 };
 
 const READ = {
@@ -94,6 +96,13 @@ export class CampaignAdminController {
     return this.refusing(() => this.campaigns.list(this.actor(req), query));
   }
 
+  /** F-018-q: a reseller's sending campaigns, before the platform owner suspends or terminates it. Before `:id`, which it would match. */
+  @Get('sending-summary/:tenantId')
+  @RateLimit(READ)
+  sendingSummary(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request) {
+    return this.refusing(() => this.campaigns.sendingSummary(this.actor(req), tenantId));
+  }
+
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @RateLimit(WRITE)
@@ -125,7 +134,15 @@ export class CampaignAdminController {
     return this.refusing(() => this.campaigns.send(this.actor(req), id, ip));
   }
 
-  /** The campaign in every language (F-035-h): the source, each text, and the languages with none. */
+  /** F-018-q: a stopped campaign sends again; audited. Refused while its tenant is suspended or terminated. */
+  @Post(':id/resume')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(WRITE)
+  resume(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.campaigns.resume(this.actor(req), id, ip));
+  }
+
+    /** The campaign in every language (F-035-h): the source, each text, and the languages with none. */
   @Get(':id/texts')
   @RateLimit(READ)
   listTexts(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {

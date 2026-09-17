@@ -32,7 +32,8 @@ Enums: `NotificationType`, `NotificationChannel` (`push`, `sms`, `telegram_bot`,
 
 ## Access rules
 
-No unit outside `notification` writes these tables. Other units create an inbox
+No unit outside `notification` writes these tables — a reseller's suspension
+stops its campaigns through `internal/.../tenants/:tenantId/stop`, not a write (F-018-q). Other units create an inbox
 item through `POST internal/notifications`. Campaign rows: a tenant admin on the
 app pool (RLS behind the filter), the platform owner and the worker-driven
 fan-out and delivery on the cross-tenant pool (ADR-0053). Texts and recipient
@@ -47,5 +48,6 @@ Committed under `txnet-backend/prisma/domains/migrations/`: RLS for
 `20260917000400_drop_campaign_executed_by_worker`,
 `20260917000500_campaign_delivery_claim`,
 `20260917000700_campaign_email_texts` (the `email` channel, `subject`,
-`sourceLang`, `notification_campaign_text`). Enum values added with
+`sourceLang`, `notification_campaign_text`), `20260917001800_campaign_stop`
+(`CampaignStatus.stopped`, `stoppedAt`, F-018-q). Enum values added with
 `ADD VALUE` cannot be rolled back.

@@ -24,6 +24,8 @@ enum CampaignStatus {
   draft
   sending
   completed
+  /// F-018-q: halted with its reseller's suspension or termination; its rows stay `queued`. Only `sending` again, by hand.
+  stopped
 
   @@schema("notification")
 }
@@ -81,6 +83,8 @@ model NotificationCampaign {
   fanOutCursor          String?             @db.Uuid
   /// F-035-d: every recipient row is written.
   fannedOutAt           DateTime?
+  /// F-018-q: when the send was stopped; null unless `stopped`.
+  stoppedAt             DateTime?
 
   recipients NotificationCampaignRecipient[]
   texts      NotificationCampaignText[]

@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { AdminAction, AuditTargetType, CampaignStatus, Language, NotificationChannel, Prisma, TenantType } from '@prisma/client';
+import { AdminAction, AuditTargetType, CampaignStatus, DeliveryStatus, Language, NotificationChannel, Prisma, TenantStatus, TenantType } from '@prisma/client';
 import { tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AudienceFilter } from './campaign-admin.schema';
+import { completeIfSettled } from './campaign-fan-out.service';
 import { SmsLineSource } from './sms-line';
 
 export const DEFAULT_PAGE = 1;
@@ -56,6 +57,17 @@ export type CampaignView = {
   createdAt: string;
 };
 
+/** The heads-up before a reseller is suspended or terminated (F-018-q). */
+export type SendingSummary = {
+  tenantId: string;
+  /** Campaigns `sending` now. */
+  campaigns: number;
+  /** Their recipient rows not yet sent or failed. */
+  recipientsQueued: number;
+  /** Of those campaigns, the ones whose audience is still being written — `recipientsQueued` can still grow. */
+  campaignsStillFanningOut: number;
+};
+
 export type CampaignAdminRejection =
   | 'not_platform_owner'
   | 'tenant_not_found'
@@ -64,7 +76,9 @@ export type CampaignAdminRejection =
   | 'sms_not_available'
   | 'email_not_available'
   | 'text_is_source'
-  | 'text_not_found';
+  | 'text_not_found'
+  | 'campaign_not_stopped'
+  | 'tenant_not_open';
 
 export class CampaignAdminRefused extends Error {
   constructor(readonly reason: CampaignAdminRejection, detail: string) {
@@ -257,6 +271,68 @@ export class CampaignAdminService {
     };
     const row = owner ? await this.all.$transaction(run) : await tenantTransaction(this.prisma, run);
     return toView(row);
+  }
+
+  /**
+   * Sends a stopped campaign again (F-018-q): `stopped -> sending`, audited
+   * (`campaign_resume`), checked in the write's own `where` as `send` is. Its
+   * queued rows go out on the next delivery run and the fan-out carries on from
+   * its cursor. Refused while the campaign's tenant is suspended or terminated,
+   * so the send stopped with a suspension is not reopened beside it; a campaign
+   * with nothing left is completed at once.
+   */
+  async resume(actor: CampaignActor, id: string, ip: string): Promise<CampaignView> {
+    const { owner, db } = await this.access(actor);
+    const before = await this.loadManaged(actor, owner, db, id);
+    if (before.status !== CampaignStatus.stopped) throw new CampaignAdminRefused('campaign_not_stopped', id);
+    if (before.tenantId !== null) {
+      const tenant = await (owner ? this.all : this.prisma).tenant.findUnique({ where: { id: before.tenantId }, select: { status: true } });
+      if (tenant?.status === TenantStatus.suspended || tenant?.status === TenantStatus.terminated) {
+        throw new CampaignAdminRefused('tenant_not_open', before.tenantId);
+      }
+    }
+
+    const run = async (tx: Prisma.TransactionClient) => {
+      const { count } = await tx.notificationCampaign.updateMany({
+        where: { id, status: CampaignStatus.stopped },
+        data: { status: CampaignStatus.sending, stoppedAt: null },
+      });
+      if (count === 0) throw new CampaignAdminRefused('campaign_not_stopped', id);
+      await completeIfSettled(tx, id);
+      const after = await tx.notificationCampaign.findUnique({ where: { id } });
+      await tx.adminAuditLog.create({
+        data: {
+          tenantId: before.tenantId ?? actor.tenantId,
+          adminId: actor.adminId,
+          action: AdminAction.campaign_resume,
+          targetEntityType: AuditTargetType.notification_campaign,
+          targetEntityId: id,
+          oldValue: { status: before.status },
+          newValue: JSON.parse(JSON.stringify(toView(after))) as Prisma.InputJsonValue,
+          adminIpAddress: ip,
+        },
+      });
+      return after;
+    };
+    const row = owner ? await this.all.$transaction(run) : await tenantTransaction(this.prisma, run);
+    return toView(row);
+  }
+
+  /**
+   * How much of a reseller's sending is still to go (F-018-q) — what the
+   * platform owner is told before suspending or terminating it. Owner only, on
+   * the cross-tenant pool.
+   */
+  async sendingSummary(actor: CampaignActor, tenantId: string): Promise<SendingSummary> {
+    const { owner } = await this.access(actor);
+    if (!owner) throw new CampaignAdminRefused('not_platform_owner', 'the sending summary of a tenant');
+    const sending = { tenantId, status: CampaignStatus.sending };
+    const campaigns = await this.all.notificationCampaign.count({ where: sending });
+    const campaignsStillFanningOut = await this.all.notificationCampaign.count({ where: { ...sending, fannedOutAt: null } });
+    const recipientsQueued = await this.all.notificationCampaignRecipient.count({
+      where: { deliveryStatus: DeliveryStatus.queued, campaign: sending },
+    });
+    return { tenantId, campaigns, recipientsQueued, campaignsStillFanningOut };
   }
 
   /**
