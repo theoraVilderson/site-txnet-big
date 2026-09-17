@@ -5,7 +5,8 @@
       "register_phone_verify": "Your login code",
       "password_reset": "Your password reset code",
       "account_link": "Your account linking code",
-      "account_switch_link": "Your code to add this account"
+      "account_switch_link": "Your code to add this account",
+      "email_verify": "Your email verification code"
     },
     "chatBody": "{{title}}:\n<code>{{code}}</code>\n\nThis code is valid for 5 minutes and do not share it with anyone.",
     "smsBody": "{{title}}: {{code}}\nThis code is valid for 5 minutes.",
@@ -20,7 +21,9 @@
       "linked": "Your number is confirmed. Your code is on its way.",
       "linkedNoCode": "Your number is confirmed. You can request your code now.",
       "unknownCommand": "Open the link from the site to connect this messenger to your account."
-    }
+    },
+    "emailSubject": "{{title}}",
+    "emailBody": "{{title}}: {{code}}\n\nThis code is valid for 5 minutes. If you did not ask for it, ignore this email."
   },
   "payment": {
     "credited": "✅ Your payment was confirmed and {{amount}} was added to your wallet. Reference: {{reference}}",

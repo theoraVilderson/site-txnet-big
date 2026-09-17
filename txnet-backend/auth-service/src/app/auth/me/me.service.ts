@@ -7,6 +7,8 @@ import type { AuthClaims } from '../token.service';
 export type Me = {
   userId: string;
   fullName: string;
+  /** Verified by construction (F-035-g): null until a code was confirmed. */
+  email: string | null;
   role: { id: string; name: string };
   /** Exactly the list in the access token — see the note on `describe`. */
   permissions: string[];
@@ -57,6 +59,7 @@ export class MeService {
       select: {
         id: true,
         fullName: true,
+        email: true,
         status: true,
         deletedAt: true,
         tenant: { select: { id: true, tenantType: true } },
@@ -70,6 +73,7 @@ export class MeService {
     const me: Me = {
       userId: user.id,
       fullName: user.fullName,
+      email: user.email,
       role: { id: claims.roleId, name: claims.roleName },
       // Copied, so the caller cannot mutate the verified claims object the
       // guard left on the request.

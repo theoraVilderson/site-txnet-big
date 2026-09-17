@@ -23,6 +23,7 @@ export * from './lib/tenant/vault/kek.service';
 export * from './lib/tenant/vault/credential-vault.service';
 export * from './lib/tenant/vault/credential-env';
 export * from './lib/sms/sms-provider.service';
+export * from './lib/mail/mail-provider.service';
 export * from './lib/envelope/response';
 export * from './lib/envelope/sanitize-error';
 export * from './lib/envelope/response.interceptor';

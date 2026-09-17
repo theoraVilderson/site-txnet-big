@@ -24,6 +24,8 @@ exports[`RateLimitBucket > records the whole rate-limited surface in one place 1
   "ACCOUNTS_ADD_PASSWORD = accounts:add:pwd",
   "ACCOUNTS_LIST = accounts:list",
   "ME = me",
+  "ME_EMAIL_REQUEST = me:email:req",
+  "ME_EMAIL_VERIFY = me:email:verify",
   "ACCOUNTS_SWITCH = accounts:switch",
   "ACCOUNTS_REMOVE = accounts:remove",
   "DEPOSIT_GATEWAYS = deposit:gateways",

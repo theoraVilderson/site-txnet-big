@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { OtpChannel } from '@prisma/client';
+import { OtpChannel, OtpPurpose } from '@prisma/client';
 import { OtpChannelRegistry } from './otp-channels.service';
 
 /**
@@ -12,10 +12,16 @@ import { OtpChannelRegistry } from './otp-channels.service';
 
 type Env = Record<string, unknown>;
 
-const sender = (channel: OtpChannel, configured: boolean, requiresLink: boolean) => ({
+const sender = (
+  channel: OtpChannel,
+  configured: boolean,
+  requiresLink: boolean,
+  onlyFor?: OtpPurpose,
+) => ({
   channel,
   isConfigured: () => configured,
   requiresLinkedAccount: requiresLink,
+  onlyFor,
   send: vi.fn(),
 });
 
@@ -35,6 +41,7 @@ function registry(
     sender(OtpChannel.sms, configured.sms ?? true, false),
     sender(OtpChannel.bale, configured.bale ?? true, true),
     sender(OtpChannel.telegram, configured.telegram ?? true, true),
+    sender(OtpChannel.email, configured.email ?? true, false, OtpPurpose.email_verify),
   ] as never);
 }
 
@@ -205,5 +212,52 @@ describe('OtpChannelRegistry.assertUsable — one key per reason', () => {
     expect(await r.assertUsable(OtpChannel.telegram)).toBe(
       r.sender(OtpChannel.telegram),
     );
+  });
+});
+
+/**
+ * `email` is a channel for one purpose only (F-035-g, D-39): it proves a user
+ * reads an address, and nothing else. A login code mailed to an address would
+ * turn the email into a second, weaker password; an `email_verify` code sent
+ * by SMS would prove nothing about the address. The pairing is the registry's
+ * to refuse, because it is the one place every issue and every send asks.
+ */
+describe('OtpChannelRegistry — a channel reserved to one purpose', () => {
+  it('is never offered as a login channel, even when the operator lists it', async () => {
+    const r = registry({ OTP_ALLOWED_CHANNELS: 'sms,email' });
+
+    expect(r.isAllowed(OtpChannel.email)).toBe(false);
+    expect(await r.available()).toEqual([OtpChannel.sms]);
+  });
+
+  it('refuses email for any purpose but email_verify', async () => {
+    const r = registry({});
+
+    await expect(r.assertUsable(OtpChannel.email)).rejects.toThrow(
+      new BadRequestException('otp.channelNotSupported'),
+    );
+    await expect(
+      r.assertUsable(OtpChannel.email, OtpPurpose.login),
+    ).rejects.toThrow(new BadRequestException('otp.channelNotSupported'));
+  });
+
+  it('refuses email_verify on any channel but email', async () => {
+    const r = registry({ OTP_ALLOWED_CHANNELS: 'sms' });
+
+    await expect(
+      r.assertUsable(OtpChannel.sms, OtpPurpose.email_verify),
+    ).rejects.toThrow(new BadRequestException('otp.channelNotSupported'));
+  });
+
+  it('gates email_verify on the mail driver being configured, not on OTP_ALLOWED_CHANNELS', async () => {
+    const r = registry({ OTP_ALLOWED_CHANNELS: 'sms' });
+    expect(
+      await r.assertUsable(OtpChannel.email, OtpPurpose.email_verify),
+    ).toBe(r.sender(OtpChannel.email));
+
+    const off = registry({ OTP_ALLOWED_CHANNELS: 'sms' }, { email: false });
+    await expect(
+      off.assertUsable(OtpChannel.email, OtpPurpose.email_verify),
+    ).rejects.toThrow(new BadRequestException('otp.channelNotConfigured'));
   });
 });

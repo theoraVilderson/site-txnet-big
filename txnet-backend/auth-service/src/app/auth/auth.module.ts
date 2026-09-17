@@ -16,6 +16,7 @@ import { BotLinkStore } from './bot-link/bot-link.store';
 import { SmsOtpSender } from './otp/senders/sms.sender';
 import { BaleOtpSender } from './otp/senders/bale.sender';
 import { TelegramOtpSender } from './otp/senders/telegram.sender';
+import { EmailOtpSender } from './otp/senders/email.sender';
 import { TokenService } from './token.service';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -39,6 +40,7 @@ import { CaptchaController } from './captcha/captcha.controller';
 import { CaptchaService } from './captcha/captcha.service';
 import { MeController } from './me/me.controller';
 import { MeService } from './me/me.service';
+import { MeEmailService } from './me/me-email.service';
 import { PermissionStateStore } from './permissions/permission-state.store';
 import {
   PERMISSIONS_LISTEN_CLIENT,
@@ -79,6 +81,7 @@ import { ConfigService } from '@nestjs/config';
     RegisterService,
     TokenService,
     MeService,
+    MeEmailService,
     AuthService,
     AuthGuard,
     PermissionStateStore,
@@ -106,6 +109,7 @@ import { ConfigService } from '@nestjs/config';
     SmsOtpSender,
     BaleOtpSender,
     TelegramOtpSender,
+    EmailOtpSender,
     // The one place the concrete senders are named. `OtpChannelRegistry` takes
     // the array and keys it by each sender's own `channel`, so a new messenger
     // is a class plus a line here (plus the `OtpChannel` enum migration).
@@ -115,8 +119,9 @@ import { ConfigService } from '@nestjs/config';
         sms: SmsOtpSender,
         bale: BaleOtpSender,
         telegram: TelegramOtpSender,
-      ) => [sms, bale, telegram],
-      inject: [SmsOtpSender, BaleOtpSender, TelegramOtpSender],
+        email: EmailOtpSender,
+      ) => [sms, bale, telegram, email],
+      inject: [SmsOtpSender, BaleOtpSender, TelegramOtpSender, EmailOtpSender],
     },
     OtpChannelRegistry,
     BotLinkService,

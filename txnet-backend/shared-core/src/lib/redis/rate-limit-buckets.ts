@@ -81,6 +81,12 @@ export const RateLimitBucket = {
    * rather than a person.
    */
   ME: 'me',
+  /**
+   * `POST /auth/me/email` and `.../verify` (F-035-g), per caller. The request
+   * sends a real mail, so its budget is a person pressing "resend", not a loop.
+   */
+  ME_EMAIL_REQUEST: 'me:email:req',
+  ME_EMAIL_VERIFY: 'me:email:verify',
 
   ACCOUNTS_SWITCH: 'accounts:switch',
   ACCOUNTS_REMOVE: 'accounts:remove',

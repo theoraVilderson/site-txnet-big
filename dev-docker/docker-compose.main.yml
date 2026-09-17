@@ -346,6 +346,8 @@ services:
       - ACCOUNTS_LIST_RATE_LIMIT=${ACCOUNTS_LIST_RATE_LIMIT:-}
       - ACCOUNTS_SWITCH_RATE_LIMIT=${ACCOUNTS_SWITCH_RATE_LIMIT:-}
       - ACCOUNTS_REMOVE_RATE_LIMIT=${ACCOUNTS_REMOVE_RATE_LIMIT:-}
+      - ME_EMAIL_REQUEST_RATE_LIMIT=${ME_EMAIL_REQUEST_RATE_LIMIT:-}
+      - ME_EMAIL_VERIFY_RATE_LIMIT=${ME_EMAIL_VERIFY_RATE_LIMIT:-}
       # The platform-wide ceiling over every guarded route, as a multiple of
       # that route's own per-tenant limit (F-066-s). 0 switches it off.
       - PLATFORM_RATE_LIMIT_FACTOR=${PLATFORM_RATE_LIMIT_FACTOR:-10}
@@ -371,6 +373,15 @@ services:
       - SMS_API_URL=${SMS_API_URL:-}
       - SMS_API_KEY=${SMS_API_KEY:-}
       - SMS_SENDER=${SMS_SENDER_PRIVATE:-}
+      # Mail (D-39): plain SMTP. The dev default is the mailpit container
+      # below, which accepts anything and delivers nothing — read the mail at
+      # https://mail.${DOMAIN_NAME}. Point these at a real relay elsewhere.
+      - SMTP_HOST=${SMTP_HOST:-mailpit}
+      - SMTP_PORT=${SMTP_PORT:-1025}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - MAIL_FROM=${MAIL_FROM:-TXNet <no-reply@${DOMAIN_NAME}>}
       - DOMAIN_NAME=${DOMAIN_NAME}
       - FRONTEND_ORIGIN=https://panel.${DOMAIN_NAME}
       - COOKIE_SECURE=${COOKIE_SECURE:-true}
@@ -1264,6 +1275,23 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+  # ===========================================================================
+  # Mailpit — dev SMTP sink (D-39). Catches every mail auth-service sends; the
+  # inbox is at mail.${DOMAIN_NAME}. Not a relay: nothing leaves the machine.
+  # ===========================================================================
+  mailpit:
+    image: ${DOCKER_REGISTRY}/axllent/mailpit:v1.27
+    container_name: ${STACK_NAME:-txnet}-mailpit
+    restart: unless-stopped
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mailpit.rule=Host(`mail.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.mailpit.entrypoints=websecure"
+      - "traefik.http.routers.mailpit.tls.certresolver=myresolver"
+      - "traefik.http.services.mailpit.loadbalancer.server.port=8025"
 
   # ===========================================================================
   # RabbitMQ — Message Broker

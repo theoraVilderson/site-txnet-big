@@ -36,6 +36,18 @@ export const forgotPasswordSchema = z.object({
   channel: z.nativeEnum(OtpChannel).optional(),
 });
 
+// F-035-g. 254 is the longest address SMTP will carry (RFC 5321).
+const emailAddressSchema = z.string().trim().max(254).email();
+
+export const meEmailRequestSchema = z.object({
+  email: emailAddressSchema,
+});
+
+export const meEmailVerifySchema = z.object({
+  email: emailAddressSchema,
+  otpCode: z.string().length(6).regex(/^\d+$/),
+});
+
 export const forgotVerifySchema = z.object({
   phoneNumber: phoneSchema,
   otpCode: z.string().length(6).regex(/^\d+$/),

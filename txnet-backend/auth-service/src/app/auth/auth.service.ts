@@ -79,7 +79,7 @@ const LOGIN_FAILURE_WINDOW_SEC = RedisTtl.loginFailureWindow;
  * a field added to two of them and forgotten in the third is the kind of drift
  * only a client discovers.
  */
-function deliveryHandles(delivery: OtpDeliveryHandles) {
+export function deliveryHandles(delivery: OtpDeliveryHandles) {
   return {
     deliveryId: delivery.deliveryId,
     channel: otpRealtimeChannel(delivery.channelId),

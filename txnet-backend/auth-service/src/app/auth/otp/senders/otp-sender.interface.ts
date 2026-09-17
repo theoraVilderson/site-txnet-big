@@ -32,6 +32,16 @@ export interface IOtpSender {
    * SMS needs nothing beyond the phone number.
    */
   readonly requiresLinkedAccount: boolean;
+  /**
+   * The one purpose this channel may carry, when it is reserved to one. `email`
+   * is (F-035-g, D-39): it proves a user reads an address and nothing more, so
+   * it is never a login channel and `email_verify` is never sent any other
+   * way. A reserved channel is outside `OTP_ALLOWED_CHANNELS` altogether — its
+   * only gate is being configured. `OtpChannelRegistry.assertUsable` enforces
+   * the pairing in both directions.
+   */
+  readonly onlyFor?: OtpPurpose;
+  /** `phoneNumber` is the destination: for `email_verify`, an email address. */
   send(
     phoneNumber: string,
     code: string,

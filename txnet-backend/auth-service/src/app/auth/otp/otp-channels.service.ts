@@ -1,6 +1,6 @@
 import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { OtpChannel } from './otp.interface';
+import { OtpChannel, OtpPurpose } from './otp.interface';
 import { IOtpSender, OTP_SENDERS } from './senders/otp-sender.interface';
 import { BackendI18nKeys } from '@txnet-backend/shared-core';
 
@@ -50,8 +50,12 @@ export class OtpChannelRegistry {
       Array.isArray(raw) ? raw : String(raw).split(',')
     ).map((c) => c.trim());
 
-    this.allowedChannels = names.filter((name): name is OtpChannel =>
-      this.senders.has(name as OtpChannel),
+    // A channel reserved to one purpose is never a login channel, so listing
+    // it here allows nothing (F-035-g).
+    this.allowedChannels = names.filter(
+      (name): name is OtpChannel =>
+        this.senders.has(name as OtpChannel) &&
+        !this.senders.get(name as OtpChannel)!.onlyFor,
     );
     const unknown = names.filter(
       (name) => name && !this.senders.has(name as OtpChannel),
@@ -124,10 +128,32 @@ export class OtpChannelRegistry {
     return (await this.available())[0] ?? null;
   }
 
-  /** Throws the right i18n key if `channel` cannot be used at all. */
-  async assertUsable(channel: OtpChannel): Promise<IOtpSender> {
+  /**
+   * Throws the right i18n key if `channel` cannot be used at all — or not for
+   * `purpose`. A channel reserved to one purpose (`IOtpSender.onlyFor`) and
+   * that purpose go together or not at all: `email` carries only
+   * `email_verify`, `email_verify` travels only by `email` (F-035-g). Callers
+   * that do not name a purpose are the login and register flows, which may
+   * never use a reserved channel.
+   */
+  async assertUsable(
+    channel: OtpChannel,
+    purpose?: OtpPurpose,
+  ): Promise<IOtpSender> {
     const sender = this.senders.get(channel);
     if (!sender) throw new BadRequestException(BackendI18nKeys.errors.otp.channelNotSupported);
+    const reserved = [...this.senders.values()].some(
+      (s) => s.onlyFor !== undefined && s.onlyFor === purpose,
+    );
+    if (sender.onlyFor !== undefined || reserved) {
+      if (sender.onlyFor !== purpose) {
+        throw new BadRequestException(BackendI18nKeys.errors.otp.channelNotSupported);
+      }
+      if (!this.consoleOnly && !(await sender.isConfigured())) {
+        throw new BadRequestException(BackendI18nKeys.errors.otp.channelNotConfigured);
+      }
+      return sender;
+    }
     if (!this.isAllowed(channel)) {
       throw new BadRequestException(BackendI18nKeys.errors.otp.channelNotAllowed);
     }

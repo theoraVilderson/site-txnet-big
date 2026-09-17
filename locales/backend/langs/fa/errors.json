@@ -27,7 +27,8 @@
     "baleNotLinked": "حساب بله شما متصل نیست",
     "deliveryFailed": "کد تایید ارسال نشد. لطفاً دوباره تلاش کنید.",
     "invalidLength": "کد تایید شش رقم است",
-    "mustBeNumeric": "کد تایید فقط عدد است"
+    "mustBeNumeric": "کد تایید فقط عدد است",
+    "emailSendFailed": "ارسال ایمیل انجام نشد"
   },
   "auth": {
     "alreadyAuthenticated": "شما در حال حاضر وارد شده‌اید. برای ورود یا ثبت‌نام مجدد ابتدا خارج شوید.",
@@ -64,7 +65,11 @@
     "refreshSuccess": "وارد شدید",
     "sessionActive": "نشست شما فعال است",
     "botLinkResolved": "وضعیت اتصال",
-    "botLinkContact": "شماره دریافت شد"
+    "botLinkContact": "شماره دریافت شد",
+    "emailCodeSent": "کد تأیید به این نشانی ارسال شد",
+    "emailAlreadyVerified": "این نشانی ایمیل از قبل روی حساب شماست",
+    "emailTaken": "این نشانی ایمیل متعلق به حساب دیگری است",
+    "emailVerified": "نشانی ایمیل شما تأیید شد"
   },
   "impersonation": {
     "notImpersonated": "این نشست از نوع جایگزینی کاربر نیست",

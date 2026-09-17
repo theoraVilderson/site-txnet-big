@@ -14,6 +14,8 @@ export interface OtpNamespace {
     title?: Partial<Record<OtpPurpose, string>>;
     chatBody?: string;
     smsBody?: string;
+    emailSubject?: string;
+    emailBody?: string;
   };
 }
 
@@ -34,6 +36,7 @@ export const OTP_TITLE_KEY: Record<OtpPurpose, string> = {
   [OtpPurpose.password_reset]: T.password_reset,
   [OtpPurpose.account_link]: T.account_link,
   [OtpPurpose.account_switch_link]: T.account_switch_link,
+  [OtpPurpose.email_verify]: T.email_verify,
 };
 
 // English fallbacks used when a locale namespace/key is missing, so OTP
@@ -44,11 +47,15 @@ const FALLBACK_TITLES: Record<OtpPurpose, string> = {
   [OtpPurpose.password_reset]: 'Your password reset code',
   [OtpPurpose.account_link]: 'Your account linking code',
   [OtpPurpose.account_switch_link]: 'Your code to add this account',
+  [OtpPurpose.email_verify]: 'Your email verification code',
 };
 
 const FALLBACK_CHAT_BODY =
   '{{title}}:\n<code>{{code}}</code>\n\nThis code is valid for 5 minutes. Do not share it with anyone.';
 const FALLBACK_SMS_BODY = '{{title}}: {{code}}\nValid for 5 minutes.';
+const FALLBACK_EMAIL_SUBJECT = '{{title}}';
+const FALLBACK_EMAIL_BODY =
+  '{{title}}: {{code}}\n\nThis code is valid for 5 minutes. If you did not ask for it, ignore this email.';
 
 function interpolate(template: string, vars: Record<string, string>): string {
   return Object.entries(vars).reduce(
@@ -94,4 +101,21 @@ export function buildOtpSmsTemplate(
   const title = resolveTitle(ns, purpose);
   const template = ns?.otp?.smsBody ?? FALLBACK_SMS_BODY;
   return interpolate(template, { title });
+}
+
+/**
+ * Builds the subject and plain-text body of an emailed code (F-035-g). Plain
+ * text on purpose: a code needs no markup, and a text-only mail is the one a
+ * spam filter has least to object to.
+ */
+export function buildOtpEmail(
+  ns: OtpNamespace | undefined,
+  code: string,
+  purpose: OtpPurpose,
+): { subject: string; text: string } {
+  const title = resolveTitle(ns, purpose);
+  return {
+    subject: interpolate(ns?.otp?.emailSubject ?? FALLBACK_EMAIL_SUBJECT, { title }),
+    text: interpolate(ns?.otp?.emailBody ?? FALLBACK_EMAIL_BODY, { title, code }),
+  };
 }

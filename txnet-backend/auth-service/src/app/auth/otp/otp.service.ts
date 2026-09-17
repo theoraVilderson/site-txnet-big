@@ -28,6 +28,18 @@ import {
 import { OtpChannelRegistry } from './otp-channels.service';
 
 /**
+ * The `otp_code` column a destination belongs in. Everything upstream of the
+ * row — the Redis keys, the wire, the senders — carries one destination string
+ * under the name `phoneNumber`; for `email_verify` it is an email address
+ * (F-035-g), and the row records it as one (`otp_code_one_destination`).
+ */
+function destination(value: string, purpose: OtpPurpose) {
+  return purpose === OtpPurpose.email_verify
+    ? { email: value }
+    : { phoneNumber: value };
+}
+
+/**
  * OTP service implementation using Redis as the source of truth.
  * The delivery channel (sms/bale/telegram) is chosen by the user or env;
  * it is not fixed. Which channels exist at all is `OtpChannelRegistry`'s
@@ -77,7 +89,7 @@ export class OtpService implements IOtpService {
     // Allowed by env *and* actually configured, or this request stops here.
     // Checked again on the delivery side, because a tenant can turn a channel
     // off in between; checked here because only here can the answer be a 400.
-    await this.channels.assertUsable(channel);
+    await this.channels.assertUsable(channel, purpose);
 
     // Distributed lock for idempotency
     if (!(await this.store.acquireLock(phoneNumber, purpose))) {
@@ -150,7 +162,7 @@ export class OtpService implements IOtpService {
   async deliverOtp(request: OtpDeliveryRequest): Promise<OtpDeliveryResult> {
     const { phoneNumber, purpose, channel, requestIp, lang, deliveryId, channelId } =
       request;
-    const sender = await this.channels.assertUsable(channel);
+    const sender = await this.channels.assertUsable(channel, purpose);
     const code = await this.mint(phoneNumber, purpose, channel, requestIp);
 
     try {
@@ -198,7 +210,7 @@ export class OtpService implements IOtpService {
     // Persist audit record in PostgreSQL (best effort)
     await this.prisma.otpCode.create({
       data: {
-        phoneNumber,
+        ...destination(phoneNumber, purpose),
         codeHash,
         purpose,
         channel,
@@ -231,7 +243,7 @@ export class OtpService implements IOtpService {
 
     await this.store.clear(phoneNumber, purpose);
     await this.prisma.otpCode.updateMany({
-      where: { phoneNumber, purpose, consumedAt: null },
+      where: { ...destination(phoneNumber, purpose), purpose, consumedAt: null },
       data: { consumedAt: new Date() },
     });
 

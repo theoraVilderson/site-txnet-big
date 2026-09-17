@@ -103,6 +103,18 @@ export const envSchema = z.object({
   // own way in overrides this with `<PLATFORM>_WEBHOOK_PUBLIC_BASE`.
   BOT_WEBHOOK_PUBLIC_BASE: optional(z.string().url()),
 
+  // --- Mail (D-39) ---
+  // Plain SMTP: any relay, a self-hosted MTA, or Mailpit in dev. Unset host
+  // means the `email` OTP channel is not configured, so `POST auth/me/email`
+  // is refused with `otp.channelNotConfigured` rather than accepted and lost.
+  SMTP_HOST: optional(z.string().min(1)),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  // Implicit TLS (465). `false` still upgrades with STARTTLS when offered.
+  SMTP_SECURE: z.enum(['true', 'false']).default('false'),
+  SMTP_USER: optional(z.string().min(1)),
+  SMTP_PASS: optional(z.string().min(1)),
+  MAIL_FROM: optional(z.string().min(3)),
+
   // --- Telegram Bot ---
   TELEGRAM_API_BASE: z.string().url().default('https://api.telegram.org'),
   // The deep-link host. The bot's username comes from its `BotIntegration`
@@ -184,6 +196,9 @@ export const envSchema = z.object({
   ACCOUNTS_SWITCH_RATE_LIMIT: rateLimit(30),
   ACCOUNTS_REMOVE_RATE_LIMIT: rateLimit(30),
   ME_RATE_LIMIT: rateLimit(120),
+  // Emailed codes asked for per user per window — each one is a mail sent.
+  ME_EMAIL_REQUEST_RATE_LIMIT: rateLimit(5),
+  ME_EMAIL_VERIFY_RATE_LIMIT: rateLimit(20),
   // The platform-wide ceiling over every guarded route's bucket, as a
   // multiple of that route's own per-tenant limit (F-066-s). Per-tenant
   // buckets hand one IP a fresh budget for every tenant it can name, so this

@@ -19,6 +19,11 @@ export const OTP_SERVICE = Symbol('OTP_SERVICE');
  */
 export interface OtpDeliveryRequest {
   tenantId: string;
+  /**
+   * The destination. An E.164 phone — or, for `email_verify`, an email address
+   * (F-035-g). Kept under its old name so a message queued before that change
+   * still validates at the seam.
+   */
   phoneNumber: string;
   purpose: OtpPurpose;
   channel: OtpChannel;

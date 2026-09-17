@@ -55,6 +55,7 @@ enum OtpPurpose {
   password_reset
   account_link // linking a Telegram/Bale account to a User (see LinkedBotAccount)
   account_switch_link // proving a second account before it joins an account-switch group (F-0205)
+  email_verify // proving the user reads an email address before it is written to User.email (F-035-g)
 
   @@schema("identity")
 }
@@ -63,6 +64,9 @@ enum OtpChannel {
   sms
   bale     // از طریق ربات بله، نیازمند LinkedBotAccount از پیش تایید‌شده
   telegram // از طریق ربات تلگرام، نیازمند LinkedBotAccount از پیش تایید‌شده
+  /// Only for `email_verify`, and never a login channel — the pairing is
+  /// `OtpChannelRegistry.assertUsable`'s to refuse (F-035-g, D-39).
+  email
 
   @@schema("identity")
 }
@@ -77,6 +81,11 @@ model User {
   /// phone column in this schema; see ADR-0018.
   phoneNumber            String?
   phoneVerifiedAt        DateTime? // تا زمانی که null است، حساب نیمه‌فعال محسوب می‌شود
+  /// Lower-cased and trimmed. Written only after an emailed `email_verify`
+  /// code was confirmed (F-035-g), so a non-null `email` is a verified one;
+  /// `emailVerifiedAt` records when.
+  email                  String?
+  emailVerifiedAt        DateTime?
   passwordHash           String // SENSITIVE — never default-select
   roleId                 String     @db.Uuid
   status                 UserStatus @default(active)
@@ -117,6 +126,7 @@ model User {
   /// (`withTenant`, ADR-0024), so the composite is the shape the query has.
   @@unique([tenantId, username])
   @@unique([tenantId, phoneNumber])
+  @@unique([tenantId, email])
   @@index([tenantId])
   @@map("user")
   @@schema("identity")
@@ -219,8 +229,10 @@ model OtpCode {
   id          String     @id @default(uuid()) @db.Uuid
   userId      String?    @db.Uuid // در register_phone_verify ممکن است هنوز User نهایی نشده باشد
   /// E.164 (ADR-0018). Indexed below, so a second spelling of one number
-  /// would read as a second number.
-  phoneNumber String
+  /// would read as a second number. Null exactly when `email` is set.
+  phoneNumber String?
+  /// The address an `email_verify` code went to (F-035-g); null otherwise.
+  email       String?
   codeHash    String // خود کد هرگز plain ذخیره نمی‌شود، فقط هش (مثل رمز عبور)
   purpose     OtpPurpose
   channel     OtpChannel @default(sms)
@@ -235,6 +247,7 @@ model OtpCode {
 
   // برای پیدا کردن سریع "آخرین OTP فعال" یک شماره برای یک هدف خاص
   @@index([phoneNumber, purpose, consumedAt])
+  @@index([email, purpose, consumedAt])
   @@map("otp_code")
   @@schema("identity")
 }

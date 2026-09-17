@@ -2,8 +2,8 @@
 id: identity
 layer: domain
 status: active
-version: 13
-updated: 2026-09-13
+version: 14
+updated: 2026-09-17
 ---
 
 # Contract — identity
@@ -39,6 +39,8 @@ Surfaced over HTTP by the `auth-api` interface — see
 | forgot password | phone, optional channel | `{accepted:true, deliveryId, channel, channelToken}`, or the same `linkRequired` shape as login OTP | **async send** (v11) | channel not allowed / not configured; broker unreachable |
 | verify forgot OTP | phone, code | `resetToken` | sync | invalid OTP |
 | reset password | resetToken, new password | `{success:true}` + **session tokens for this device**; revokes every pre-existing session | sync | invalid token, profile-data password |
+| request email code (v14) | the caller's session, an address | `{accepted:true, deliveryId, channel, channelToken}`; nothing written | **async send** | `auth.emailAlreadyVerified` (the caller's own address); `otp.channelNotConfigured` (no SMTP) |
+| confirm email (v14) | the caller's session, address, 6-digit code | `{email, emailVerifiedAt}` — the only write of `user.email` | sync | invalid/expired OTP; `auth.emailTaken` (held in the tenant) |
 | prove account by password | identifier (phone or username), password | the account, or **null** for every failure alike | sync | `auth.temporarilyLocked` (shares login's 10/900s bucket) |
 | issue account-proof OTP | phone, optional channel | nothing, or the same `linkRequired` deep-link shape as login OTP | sync | channel not allowed / not configured |
 | prove account by OTP | phone, code | the account, or **null** | sync | — |
@@ -93,6 +95,10 @@ No message bus. Impersonation start/end write an `audit.admin_audit_log` row
 - A messenger channel delivers only to a `linked_bot_account` with
   `contactVerifiedAt` set **in the requesting tenant**. Otherwise the caller
   gets a bot deep link, for any phone number alike — see invariants #12.
+- **Email (v14, D-39).** A non-null `user.email` is verified: it is written
+  only by *confirm email*, after a code mailed to it. The request reads no
+  other account; "taken" is answered after the code. `email` is an OTP channel
+  reserved to `email_verify` and never a login channel (invariant #15).
 - OTP: one active code per (phone, purpose); 5 attempts; 60s request cooldown;
   300s code TTL. Redis is the source of truth (ADR-0007).
 - **The send is not in the request (v11).** Asking for a code takes the lock,

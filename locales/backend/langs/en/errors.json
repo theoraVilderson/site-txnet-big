@@ -27,7 +27,8 @@
     "baleNotLinked": "Your Bale account is not linked",
     "deliveryFailed": "The code could not be sent. Please try again.",
     "invalidLength": "The verification code is six digits",
-    "mustBeNumeric": "The verification code is digits only"
+    "mustBeNumeric": "The verification code is digits only",
+    "emailSendFailed": "Sending the email did not go through"
   },
   "auth": {
     "alreadyAuthenticated": "You are already signed in. Log out before signing in or registering again.",
@@ -64,7 +65,11 @@
     "refreshSuccess": "Signed in",
     "sessionActive": "Your session is active",
     "botLinkResolved": "Link status",
-    "botLinkContact": "Number received"
+    "botLinkContact": "Number received",
+    "emailCodeSent": "A verification code is on its way to that address",
+    "emailAlreadyVerified": "That address is already on your account",
+    "emailTaken": "That address belongs to another account",
+    "emailVerified": "Your email address is confirmed"
   },
   "impersonation": {
     "notImpersonated": "This session is not impersonated",
