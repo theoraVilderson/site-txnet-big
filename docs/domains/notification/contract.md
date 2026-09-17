@@ -47,7 +47,6 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 | fan out | `POST internal/notifications/campaigns/fan-out` (`SERVICE_AUTH_TOKEN`) | — | `{ campaigns, recipients, finished, unreadable }` | 404 on a wrong token |
 | deliver | `POST internal/notifications/campaigns/deliver` (token) | — | `{ claimed, sent, failed, deferred, stalled }` | 404 on a wrong token |
 | record an outcome | `POST internal/notifications/campaigns/recipients/:id/outcome` (token) | `{ outcome: sent\|failed }` | `{ changed }` | 400; 404 `recipient_not_found` |
-| stop a tenant's sends | `POST internal/notifications/campaigns/tenants/:tenantId/stop` (token) | — | `{ stopped }` | 400; 404 on a wrong token |
 
 - `unreadCount` is over the whole inbox, whatever the page or filter.
 - `marked` counts rows that changed. An id that is read already, does not exist
@@ -60,14 +59,15 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
   campaign write (draft, edit, texts, `send`) is `staffWrite` — `403
   tenant.suspended` for a suspended reseller, `tenant.terminated` for a
   terminated one. `internal/*` has no tenant and is not judged; a campaign
-  already `sending` finishes whatever the status (`system`, user 2026-09-17),
-  **unless** the platform owner chose `stopCampaigns` with the change (F-018-q):
-  every `sending` campaign of that tenant -> `stopped`, its rows left `queued`
-  (nothing failed or deleted). Fan-out and delivery select only `sending`, so a
-  run already holding rows sends those (≤100) and the next claims none. `resume`
-  (`staffWrite`, audited `campaign_resume`) is `stopped -> sending` only, refused
-  while the campaign's tenant is suspended or terminated. The owner can also stop
-  them at any time by hand (F-018-x), the same write, retried by asking again.
+  already `sending` finishes whatever the status (`system`, user 2026-09-17).
+  Stopping those sends is the platform owner's own call, `POST
+  campaigns/tenants/:tenantId/stop` (F-018-x) — tenant administration does not
+  reach campaigns (ADR-0058 (5), F-018-w): every `sending` campaign of that
+  tenant -> `stopped`, its rows left `queued` (nothing failed or deleted).
+  Fan-out and delivery select only `sending`, so a run already holding rows sends
+  those (≤100) and the next claims none. `resume` (`staffWrite`, audited
+  `campaign_resume`) is `stopped -> sending` only, refused while the campaign's
+  tenant is suspended or terminated. A failed stop is retried by asking again.
 
 ### Campaigns (F-035-c)
 

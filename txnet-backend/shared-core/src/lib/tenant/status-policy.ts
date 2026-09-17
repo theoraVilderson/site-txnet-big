@@ -176,7 +176,7 @@ const REFUSAL: Record<Exclude<TenantStatusValue, 'trial' | 'active'>, { i18nKey:
  * Refuses a request its tenant's status does not allow (F-018-f). Registered
  * as an `APP_GUARD` by `auth-service` and `billing-service`.
  *
- * The state is the one `auth-service`'s `TenantStatusListener` writes on a
+ * The state is the one `tenant-service`'s `TenantStatusListener` writes on a
  * Postgres notification. **A missing or unreadable key refuses nobody** — the
  * same trade F-101-b made: the listener recomputes every tenant on each
  * connect, so the window is a boot, and refusing on a missing key would take

@@ -1,13 +1,10 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import {
-  NotificationClientFactory,
-  PgNotificationListener,
-} from '../../prisma/pg-notification-listener';
+import { NotificationClientFactory, PgNotificationListener } from '@txnet-backend/shared-core';
 import { permissionFingerprint } from './permission-fingerprint';
 import { PermissionStateStore } from './permission-state.store';
 
-export type { NotificationClient, NotificationClientFactory } from '../../prisma/pg-notification-listener';
+export type { NotificationClient, NotificationClientFactory } from '@txnet-backend/shared-core';
 
 /** The channel `20260913000000_identity_permissions_notify` writes to. */
 export const PERMISSIONS_CHANNEL = 'identity_permissions_changed';

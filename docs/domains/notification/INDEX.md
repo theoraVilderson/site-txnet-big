@@ -2,7 +2,7 @@
 id: notification
 layer: domain
 status: active
-version: 4
+version: 5
 keywords: [notification, campaign, delivery, push, sms, email, stop a reseller's campaigns, stop sending campaigns, توقف ارسال کمپین‌های نماینده]
 source:
   - txnet-backend/notification-service/**
@@ -32,5 +32,6 @@ updated: 2026-09-17
 | 2026-09-17 | `draft` -> `active`, v2: `notification-service` and the inbox (F-035-a, ADR-0052) |
 | 2026-09-17 | v2 -> **v3**: `TenantStatusGuard` judges every gated route — campaign writes `403 tenant.suspended`/`tenant.terminated` for a closed reseller (F-018-p) |
 | 2026-09-17 | v3 -> **v4**: `CampaignStatus.stopped` — a reseller's sends stop with its suspension; `resume`, `sending-summary`, internal `stop` (F-018-q) |
+| 2026-09-17 | v4 -> **v5** (**break**): the internal `tenants/:tenantId/stop` route is gone — the platform owner's own `campaigns/tenants/:tenantId/stop` is the only way in (F-018-w, ADR-0058 (5)) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

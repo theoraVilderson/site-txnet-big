@@ -12,10 +12,7 @@ export const changeTenantStatusSchema = z
   .object({
     status: z.enum(CHANGEABLE_STATUSES),
     reason: z.string().trim().min(1).max(500).optional(),
-    /** F-018-q: stop the reseller's `sending` campaigns too. Absent = they finish. Meaningless when reactivating, so refused there. */
-    stopCampaigns: z.boolean().optional(),
   })
-  .strict()
-  .refine((b) => b.stopCampaigns === undefined || b.status !== 'active', { path: ['stopCampaigns'], message: 'only with suspended or terminated' });
+  .strict();
 
 export type ChangeTenantStatusInput = z.infer<typeof changeTenantStatusSchema>;

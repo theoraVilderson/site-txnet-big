@@ -321,9 +321,11 @@ export class CampaignAdminService {
   /**
    * The platform owner stops every `sending` campaign of one tenant (F-018-x,
    * ADR-0058 (5)) — after a suspension, or for a reseller suspended earlier.
-   * The same write as the internal `stopForTenant` (invariant 12: status only,
-   * recipients left `queued`), on the cross-tenant pool, so a failure reaches
-   * the owner at once and is retried by asking again. Audited against the
+   * `sending -> stopped` and nothing else (invariant 12): recipient rows stay
+   * `queued`, none failed or deleted, and fan-out and delivery select only
+   * `sending`, so both halt at their next run. On the cross-tenant pool, and the
+   * only way in since F-018-w retired the outbox path — a failure reaches the
+   * owner at once and is retried by asking again. Audited against the
    * tenant (`campaign_stop`) only when something stopped: a repeat is a no-op.
    */
   async stopTenant(actor: CampaignActor, tenantId: string, ip: string): Promise<{ stopped: number }> {

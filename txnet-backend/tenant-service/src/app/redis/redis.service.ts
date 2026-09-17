@@ -63,4 +63,13 @@ export class RedisService implements RateLimitStore, OnModuleInit, OnModuleDestr
     return this.client.get(key);
   }
 
+  /**
+   * One write, no TTL: `TenantStatusListener` owns `tenant:status:<id>` and
+   * rewrites it on every change and on each connect (F-018-w). A TTL would let
+   * the key expire into "unknown", which refuses nobody — every service would
+   * stop enforcing a suspension until the next notification.
+   */
+  async set(key: string, value: string): Promise<void> {
+    await this.client.set(key, value);
+  }
 }

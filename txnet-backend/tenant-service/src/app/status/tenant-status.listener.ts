@@ -1,8 +1,14 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { TenantStatusValue, UnscopedRedisKeys, serializeTenantStatusState } from '@txnet-backend/shared-core';
-import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
-import { NotificationClientFactory, PgNotificationListener } from '../../prisma/pg-notification-listener';
-import { RedisService } from '../../redis/redis.service';
+import {
+  NotificationClientFactory,
+  PgNotificationListener,
+  TenantStatusValue,
+  UnscopedRedisKeys,
+  serializeTenantStatusState,
+} from '@txnet-backend/shared-core';
+
+import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
+import { RedisService } from '../redis/redis.service';
 
 /** The channel `20260917001500_tenant_status` writes to. */
 export const TENANT_STATUS_CHANNEL = 'tenant_status_changed';
@@ -14,10 +20,12 @@ type StateRow = { id: string; status: TenantStatusValue; graceEndsAt: Date | nul
 
 /**
  * Keeps `tenant:status:<id>` — what `TenantStatusGuard` reads in every service —
- * in step with `tenant.tenant` (F-018-f, F-101-b's pattern).
+ * in step with `tenant.tenant` (F-018-f, F-101-b's pattern). It moved here with
+ * the status routes it follows (F-018-w, ADR-0058); every other service only
+ * reads that key.
  *
  * The trigger fires on any change of `status` or `graceEndsAt`, by this
- * service's route, by F-019-c's renewal or by hand in SQL. Tenants are read on
+ * service's status route, by its renewal or by hand in SQL. Tenants are read on
  * the cross-tenant pool: the rows are every tenant's. A soft-deleted tenant's
  * key is written like any other; it resolves nowhere anyway.
  */

@@ -182,7 +182,6 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   private readonly notificationCreatedQueue: string;
   private readonly tenantBillingCreditedQueue: string;
   private readonly tenantSubscriptionNoticeQueue: string;
-  private readonly tenantCampaignStopQueue: string;
   private readonly botUpdatePrefix: string;
   private readonly botUpdateQueues: number;
   private readonly confirmMs: number;
@@ -202,7 +201,6 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     this.notificationCreatedQueue = config.getOrThrow<string>('AUTOMATION_NOTIFICATION_CREATED_QUEUE');
     this.tenantBillingCreditedQueue = config.getOrThrow<string>('AUTOMATION_TENANT_BILLING_CREDITED_QUEUE');
     this.tenantSubscriptionNoticeQueue = config.getOrThrow<string>('AUTOMATION_TENANT_SUBSCRIPTION_NOTICE_QUEUE');
-    this.tenantCampaignStopQueue = config.getOrThrow<string>('AUTOMATION_TENANT_CAMPAIGN_STOP_QUEUE');
     this.botUpdatePrefix = config.getOrThrow<string>('BOT_UPDATE_QUEUE_PREFIX');
     this.botUpdateQueues = config.getOrThrow<number>('BOT_UPDATE_QUEUES');
     this.confirmMs = config.getOrThrow<number>('AUTOMATION_PUBLISH_CONFIRM_MS');
@@ -289,13 +287,6 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     for (const type of [OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE, OutboxEventType.TENANT_SUBSCRIPTION_SUSPENDED]) {
       await this.channel.bindQueue(this.tenantSubscriptionNoticeQueue, this.exchange, outboxRoutingKey(type));
     }
-    // F-018-q: a reseller's campaigns stopped with its suspension, on notification-service.
-    await this.channel.assertQueue(this.tenantCampaignStopQueue, {
-      durable: true,
-      arguments: { 'x-dead-letter-exchange': this.deadExchange },
-    });
-    await this.channel.bindQueue(this.tenantCampaignStopQueue, this.exchange, outboxRoutingKey(OutboxEventType.TENANT_CAMPAIGNS_STOP_REQUESTED));
-
     // The bot-update set (F-067-b, D-16). One queue per slot, each bound to
     // exactly its own routing key — not one queue on `bot.update.#`, which
     // would put every chat back in a single line and lose the whole point.
@@ -496,11 +487,6 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   /** Start consuming a reseller's renewal notices (F-019-c), by the same rules. */
   async consumeTenantSubscriptionNotices(handle: OutboxHandler): Promise<void> {
     await this.consumeOutbox(this.tenantSubscriptionNoticeQueue, handle);
-  }
-
-  /** Start consuming a reseller's campaign stop requests (F-018-q), by the same rules. */
-  async consumeTenantCampaignStops(handle: OutboxHandler): Promise<void> {
-    await this.consumeOutbox(this.tenantCampaignStopQueue, handle);
   }
 
     private async consumeOutbox(queue: string, handle: OutboxHandler): Promise<void> {

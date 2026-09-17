@@ -1,23 +1,18 @@
 import { Module } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { TENANT_STATUS_STORE, TenantStatusGuard } from '@txnet-backend/shared-core';
-import { Client } from 'pg';
 import { RedisService } from '../redis/redis.service';
 import { TenantCacheService } from './tenant-cache.service';
 import { TenantResolverService } from './tenant-resolver.service';
 import { TenantGuard } from './tenant.guard';
 import { TenantAdminController } from './admin/tenant-admin.controller';
 import { TenantAdminService } from './admin/tenant-admin.service';
-import { TenantStatusController } from './status/tenant-status.controller';
-import { TenantStatusService } from './status/tenant-status.service';
-import { TENANT_STATUS_LISTEN_CLIENT, TenantStatusListener } from './status/tenant-status.listener';
 
 /**
- * `tenant`'s first module. Its controllers are the platform owner's reseller
- * administration (F-018-c) and its status (F-018-f) — the packages, the
- * subscription and the renewal are `tenant-service`'s since F-018-u and
- * F-018-v (ADR-0058); the resolver is consumed by the edge middleware
+ * `tenant`'s first module. Its one controller is the platform owner's reseller
+ * administration (F-018-c) — the packages, the subscription, the renewal and
+ * the status are `tenant-service`'s since F-018-u … F-018-w (ADR-0058), and
+ * F-018-y takes the rest; the resolver is consumed by the edge middleware
  * and, from F-061-b, by `register`.
  *
  * `TenantGuard` is global rather than a route decorator: a request that
@@ -32,24 +27,16 @@ import { TENANT_STATUS_LISTEN_CLIENT, TenantStatusListener } from './status/tena
  * needing the resolver at all (ADR-0025).
  *
  * `TenantStatusGuard` runs after it (F-018-f): once the tenant is known, its
- * status decides what the route may do, from the key `TenantStatusListener`
- * writes.
+ * status decides what the route may do, from the key `tenant-service`'s
+ * `TenantStatusListener` writes. This service only reads it, like every other.
  *
  * `PrismaModule` and `RedisModule` are both `@Global`, so neither is imported
  * here.
  */
 @Module({
-  controllers: [TenantAdminController, TenantStatusController],
+  controllers: [TenantAdminController],
   providers: [
     TenantAdminService,
-    TenantStatusService,
-    TenantStatusListener,
-    {
-      provide: TENANT_STATUS_LISTEN_CLIENT,
-      useFactory: (config: ConfigService) => () =>
-        new Client({ connectionString: config.get<string>('DATABASE_APP_URL') }),
-      inject: [ConfigService],
-    },
     TenantCacheService,
     TenantResolverService,
     { provide: APP_GUARD, useClass: TenantGuard },

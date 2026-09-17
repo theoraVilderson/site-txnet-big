@@ -12,10 +12,11 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { AuthGuard } from '../../auth/auth.guard';
-import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
-import { PermissionsGuard } from '../../impersonation/guards/permissions.guard';
-import { TENANT_MANAGE } from '../admin/tenant-admin.controller';
+import type { Request } from 'express';
+
+import { identityOf } from '../request/identity.middleware';
+import { TenantPermissionGuard } from '../request/tenant-permission.guard';
+import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { ChangeTenantStatusInput, changeTenantStatusSchema } from './tenant-status.schema';
 import {
   TenantStatusActor,
@@ -34,20 +35,23 @@ const STATUS: Record<TenantStatusRejection, 403 | 404 | 409> = {
   status_unchanged: 409,
 };
 
-type ClaimsRequest = { user: { sub: string; tenantId: string } };
-
 /**
- * A reseller's status (F-018-f): `PUT /api/auth/tenants/:id/status`,
- * `GET /api/auth/tenants/:id/status-history`.
+ * A reseller's status (F-018-f): `PUT /api/tenants/:id/status`,
+ * `GET /api/tenants/:id/status-history`.
+ *
+ * Moved out of `auth-service` with F-018-w (ADR-0058), behaviour unchanged but
+ * for `stopCampaigns`, which left with the outbox path it wrote: the paths lost
+ * their `/auth` prefix, and the caller is whoever `forward-auth` proved, as on
+ * the subscription routes.
  */
-@Controller('auth/tenants')
-@UseGuards(AuthGuard, new PermissionsGuard([TENANT_MANAGE]))
+@Controller()
+@UseGuards(TenantPermissionGuard)
 export class TenantStatusController {
   constructor(private readonly statuses: TenantStatusService) {}
 
-  @Put(':id/status')
+  @Put('tenants/:id/status')
   async change(
-    @Req() req: ClaimsRequest,
+    @Req() req: Request,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(changeTenantStatusSchema)) body: ChangeTenantStatusInput,
     @Ip() ip: string,
@@ -55,8 +59,8 @@ export class TenantStatusController {
     return this.refusing(() => this.statuses.change(actorOf(req, ip), id, body));
   }
 
-  @Get(':id/status-history')
-  async history(@Req() req: ClaimsRequest, @Param('id', new ParseUUIDPipe()) id: string, @Ip() ip: string): Promise<TenantStatusHistoryView[]> {
+  @Get('tenants/:id/status-history')
+  async history(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string, @Ip() ip: string): Promise<TenantStatusHistoryView[]> {
     return this.refusing(() => this.statuses.history(actorOf(req, ip), id));
   }
 
@@ -78,6 +82,7 @@ export class TenantStatusController {
   }
 }
 
-function actorOf(req: ClaimsRequest, ip: string): TenantStatusActor {
-  return { adminId: req.user.sub, tenantId: req.user.tenantId, ip };
+function actorOf(req: Request, ip: string): TenantStatusActor {
+  const identity = identityOf(req);
+  return { adminId: identity.userId, tenantId: identity.tenantId, ip };
 }

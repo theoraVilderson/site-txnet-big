@@ -18,6 +18,11 @@ const MAX_BACKOFF_MS = 30_000;
  * One `LISTEN` connection that keeps a Redis view in step with Postgres
  * (F-101-b's pattern, shared by F-018-f).
  *
+ * In `shared-core` since F-018-w (user, 2026-09-17): `auth-service` follows
+ * permission changes and `tenant-service` tenant status, and the reconnect
+ * backoff and the recompute-on-connect rule below are the same contract for
+ * both — two copies would drift on the first fix to either.
+ *
  * **It never fails the boot.** A Postgres that is not there yet is retried with
  * a backoff. What is lost while disconnected is recovered by
  * {@link recomputeAll} on each connect — notifications are not queued for a

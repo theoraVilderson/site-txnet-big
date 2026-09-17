@@ -10,6 +10,7 @@ import { LocaleModule } from './locale/locale.module';
 import { PackagesModule } from './packages/packages.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
+import { StatusModule } from './status/status.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 import { IdentityMiddleware } from './request/identity.middleware';
 
@@ -19,8 +20,8 @@ const INTERNAL_ROUTES = 'internal/*';
 /**
  * `tenant-service` (F-018-t, ADR-0058): tenant administration, out of
  * `auth-service`. Packages arrived with F-018-u, subscription, grace and
- * renewal with F-018-v; status and resellers move in with F-018-w … F-018-y,
- * and inherit this wiring.
+ * renewal with F-018-v, status with F-018-w; the resellers themselves move in
+ * with F-018-y and inherit this wiring.
  */
 @Module({
   imports: [
@@ -30,6 +31,7 @@ const INTERNAL_ROUTES = 'internal/*';
     LocaleModule,
     PackagesModule,
     SubscriptionModule,
+    StatusModule,
   ],
   controllers: [HealthController],
   providers: [

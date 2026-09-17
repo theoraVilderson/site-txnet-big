@@ -1,6 +1,6 @@
 /**
- * Stopping a reseller's sending campaigns with its suspension, and resuming one
- * (F-018-q).
+ * Stopping a reseller's sending campaigns after its suspension, and resuming one
+ * (F-018-q, F-018-x).
  *
  * What would break silently here, and nowhere else:
  *  - **a stop is a status, never a row.** Recipients stay `queued` and nothing
@@ -13,15 +13,15 @@
  *    is closed** — otherwise the platform owner reopens with one click the send
  *    it just stopped with the suspension;
  *  - **the heads-up is the platform owner's**, as the status change is;
- *  - **the owner's own stop (F-018-x) is the same write**, on the cross-tenant
- *    pool, refused to anyone else and for a tenant that does not exist, and
- *    audited only when it stopped something — a repeated click changes nothing.
+ *  - **the owner's stop is the only way in** since F-018-w retired the outbox
+ *    path: on the cross-tenant pool, refused to anyone else and for a tenant
+ *    that does not exist, and audited only when it stopped something — a
+ *    repeated click changes nothing.
  */
 import { AdminAction, AuditTargetType, CampaignStatus, DeliveryStatus, NotificationChannel, TenantStatus, TenantType } from '@prisma/client';
 import { runWithTenant } from '@txnet-backend/shared-core';
 
 import { CampaignAdminService } from './campaign-admin.service';
-import { CampaignFanOutService } from './campaign-fan-out.service';
 
 const OWNER_TENANT = '11111111-1111-4111-8111-111111111111';
 const TENANT = '22222222-2222-4222-8222-222222222222';
@@ -76,28 +76,6 @@ function adminService(callerType: TenantType, campaignTenantStatus?: TenantStatu
 
 const owner = { adminId: ADMIN, tenantId: OWNER_TENANT };
 const reseller = { adminId: ADMIN, tenantId: TENANT };
-
-describe('CampaignFanOutService.stopForTenant', () => {
-  it("moves only that tenant's sending campaigns to stopped, and touches no recipient row", async () => {
-    const db = pool(TenantType.platform_owner);
-    db.notificationCampaign.updateMany.mockResolvedValue({ count: 2 });
-    const service = new CampaignFanOutService(db as never);
-
-    await expect(service.stopForTenant(TENANT)).resolves.toEqual({ stopped: 2 });
-
-    expect(db.notificationCampaign.updateMany).toHaveBeenCalledWith({
-      where: { tenantId: TENANT, status: CampaignStatus.sending },
-      data: { status: CampaignStatus.stopped, stoppedAt: expect.any(Date) },
-    });
-    expect(db.notificationCampaignRecipient.updateMany).not.toHaveBeenCalled();
-  });
-
-  it('stops nothing on a replay', async () => {
-    const db = pool(TenantType.platform_owner);
-    db.notificationCampaign.updateMany.mockResolvedValue({ count: 0 });
-    await expect(new CampaignFanOutService(db as never).stopForTenant(TENANT)).resolves.toEqual({ stopped: 0 });
-  });
-});
 
 describe('CampaignAdminService.resume', () => {
   it('moves a stopped campaign back to sending, audited, and settles one with nothing left queued', async () => {

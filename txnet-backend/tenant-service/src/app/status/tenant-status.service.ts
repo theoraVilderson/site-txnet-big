@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AdminAction, AuditTargetType, Prisma, TenantStatus, TenantSuspensionCause, TenantType } from '@prisma/client';
-import { OutboxEventType } from '@txnet-backend/shared-core';
-import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
-import { PrismaService } from '../../prisma/prisma.service';
+
+import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import type { ChangeTenantStatusInput } from './tenant-status.schema';
 import { applyTenantStatus, makeSuspensionManual } from './tenant-status.transition';
 
@@ -25,10 +25,14 @@ import { applyTenantStatus, makeSuspensionManual } from './tenant-status.transit
  * `status_unchanged`: it makes the cause `manual`, so a later payment renews
  * the subscription but does not reopen the panel (F-018-s).
  *
- * `stopCampaigns` (F-018-q) writes a `tenant.campaigns.stop_requested` outbox
- * event in the same transaction: notification-service owns campaigns and stops
- * them when `worker-service` delivers it, retried until it lands. A change that
- * rolls back asks for nothing; one that commits cannot lose the ask.
+ * **This service does not know campaigns exist** (ADR-0058 (5), F-018-w). A
+ * suspension that should stop the reseller's sends is two calls by the panel:
+ * this one, then notification-service's own
+ * `POST /api/notifications/campaigns/tenants/:tenantId/stop` (F-018-x), whose
+ * failure is shown at once instead of dead-lettering out of sight.
+ *
+ * Moved out of `auth-service` with F-018-w: the path lost its `/auth` prefix and
+ * the caller is whoever `forward-auth` proved, as on the subscription routes.
  */
 
 export type TenantStatusActor = { adminId: string; tenantId: string; ip: string };
@@ -41,8 +45,6 @@ export type TenantStatusView = {
   suspendedAt: Date | null;
   graceEndsAt: Date | null;
   suspendedReason: string | null;
-  /** F-018-q: whether this change asked for the reseller's sending campaigns to stop. */
-  stopCampaigns: boolean;
 };
 
 export type TenantStatusHistoryView = {
@@ -121,7 +123,6 @@ export class TenantStatusService {
         suspendedAt: after.suspendedAt,
         graceEndsAt: after.graceEndsAt,
         suspendedReason: after.suspendedReason,
-        stopCampaigns: input.stopCampaigns === true,
       };
       await tx.adminAuditLog.create({
         data: {
@@ -135,12 +136,6 @@ export class TenantStatusService {
           adminIpAddress: actor.ip,
         },
       });
-      if (result.stopCampaigns) {
-        await tx.outboxEvent.create({
-          data: { aggregate: 'tenant', aggregateId: tenantId, type: OutboxEventType.TENANT_CAMPAIGNS_STOP_REQUESTED, payload: { tenantId } },
-          select: { id: true },
-        });
-      }
       return result;
     });
     this.logger.log(`reseller ${tenantId} -> ${input.status} by ${actor.adminId}`);

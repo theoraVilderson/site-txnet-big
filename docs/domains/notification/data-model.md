@@ -33,7 +33,7 @@ Enums: `NotificationType`, `NotificationChannel` (`push`, `sms`, `telegram_bot`,
 ## Access rules
 
 No unit outside `notification` writes these tables — a reseller's suspension
-stops its campaigns through `internal/.../tenants/:tenantId/stop` (F-018-q) or the owner's `tenants/:tenantId/stop` (F-018-x), not a write. Other units create an inbox
+stops its campaigns through the owner's `tenants/:tenantId/stop` (F-018-x), not a write. Other units create an inbox
 item through `POST internal/notifications`. Campaign rows: a tenant admin on the
 app pool (RLS behind the filter), the platform owner and the worker-driven
 fan-out and delivery on the cross-tenant pool (ADR-0053). Texts and recipient

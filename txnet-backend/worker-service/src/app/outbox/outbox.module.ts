@@ -3,7 +3,6 @@ import { Module } from '@nestjs/common';
 import { NotificationCreatedConsumer } from './notification-created.consumer';
 import { PaymentConfirmedConsumer } from './payment-confirmed.consumer';
 import { PaymentReversedConsumer } from './payment-reversed.consumer';
-import { TenantCampaignStopConsumer } from './tenant-campaign-stop.consumer';
 import { TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer } from './tenant-renewal.consumers';
 
 /**
@@ -14,5 +13,5 @@ import { TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer } from 
  * and a reseller's campaigns stopped with its suspension (F-018-q). `BrokerService`, `RedisService` and `RealtimePublisher` are
  * global modules.
  */
-@Module({ providers: [PaymentConfirmedConsumer, PaymentReversedConsumer, NotificationCreatedConsumer, TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer, TenantCampaignStopConsumer] })
+@Module({ providers: [PaymentConfirmedConsumer, PaymentReversedConsumer, NotificationCreatedConsumer, TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer] })
 export class OutboxModule {}

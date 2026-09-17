@@ -2,7 +2,7 @@
 id: automation
 layer: domain
 status: active
-version: 6
+version: 7
 keywords: [automation, worker, scheduler, cron, background job, bot integration, tenant bot, webhook path, bot role, provision a bot, seed a bot, ربات ثبت نمیشه, روبات ها کار نمیکنن, outbox, outbox event, transactional outbox, relay]
 source:
   - txnet-backend/auth-service/src/app/automation/**
@@ -12,7 +12,7 @@ source:
   - txnet-backend/prisma/domains/automation.prisma
 owns_tables: [bot_worker, bot_schedule, bot_execution_log, bot_integration, dead_letter, outbox_event]
 depends_on: [tenant, bot-app]
-updated: 2026-09-13
+updated: 2026-09-17
 ---
 
 # Automation
@@ -44,10 +44,10 @@ F-067-c the outbox ADR-0021 decided exists too — the table and its relay job.
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-17 | v6 -> **v7** (**break**): the `tenant.campaigns.stop_requested` event, `TenantCampaignStopConsumer` and its queue are gone — the platform owner stops a reseller's campaigns by calling notification-service (F-018-w, ADR-0058 (5)) |
 | 2026-09-10 | F-069: `seed-bot-integration` provisions a `bot_integration` and its two vault credentials, so a deployment can put a bot back after a `migrate reset` empties the table. Additive — no version bump; nothing that reads the table changed shape. It is a **dev provisioning path**, and F-018 is what replaces it |
 | 2026-09-10 | `version` 5 -> 6: a rejected message is dead-lettered and recorded instead of destroyed — invariant #9, the `dead_letter` table, `GET /admin/workers/dead-letters` (F-067-d) |
 | 2026-09-09 | `version` 4 -> 5: an admin can write what the runtime reads — `/admin/workers` in `auth-service`, invariant #2 enforced at write time, `admin_manual` runs (F-031-b) |
 | 2026-09-09 | `version` 3 -> 4: the worker half gets a runtime — `worker-service`, a deployable that serves no requests (ADR-0027). Invariants #1-#3 stop being planned (F-031-a) |
-| 2026-09-09 | `draft -> active`, `version` 2 -> 3: `bot_integration` gets its first service — the directory `platform/messenger` resolves a webhook path through, plus the internal seam `bot-service` asks over (F-066-i, spec: F-320 F-321 F-323) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->
