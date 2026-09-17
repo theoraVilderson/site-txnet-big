@@ -16,7 +16,7 @@ their tables exist, nothing reads or writes them.
 
 A user reads a page of their own `notification` rows with the unread count,
 and marks some or all read. Another unit puts a row in a user's inbox through
-the internal seam. Whose inbox is always the gate's `X-User-Id`.
+the internal seam, and the row reaches the user's open panel over the socket. Whose inbox is always the gate's `X-User-Id`.
 
 ## Provides
 
@@ -37,7 +37,14 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 
 ## Emits (events)
 
-None yet. F-035-b pushes a new row to an open panel (outbox, ADR-0021).
+| Event | When | Payload | Consumer |
+|---|---|---|---|
+| outbox `notification.created` | in the transaction of every `create` (ADR-0021) | `{ userId, notification: <the item> }` | `worker-service` republishes `{type:'notification.created', notification}` on `user:<userId>` (F-035-b, `automation/contract.outbox.md`) |
+
+- The live push is at most once per event id and reaches only an open panel;
+  the inbox route is the truth, so a panel reads the page on load and adds
+  pushed items on top (F-093-h).
+- Latency is the relay's tick — up to `AUTOMATION_TICK_INTERVAL_MS` (60s).
 
 ## Consumes
 

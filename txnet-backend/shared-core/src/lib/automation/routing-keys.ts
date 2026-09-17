@@ -16,6 +16,7 @@
 export const OutboxEventType = {
   PAYMENT_CONFIRMED: 'billing.payment.confirmed',
   PAYMENT_REVERSED: 'billing.payment.reversed',
+  NOTIFICATION_CREATED: 'notification.created',
 } as const;
 export type OutboxEventType = (typeof OutboxEventType)[keyof typeof OutboxEventType];
 

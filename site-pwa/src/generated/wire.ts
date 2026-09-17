@@ -47,4 +47,5 @@ export const Cookies = {
 export const RealtimeEvents = {
   "paymentConfirmed": "billing.payment.confirmed",
   "paymentReversed": "billing.payment.reversed",
+  "notificationCreated": "notification.created",
 } as const;

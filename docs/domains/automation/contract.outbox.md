@@ -166,9 +166,23 @@ bound to exactly `outbox.billing.payment.reversed`. Both consumers send through
 | `{type:'billing.payment.reversed', paymentId, amountCredited}` on `user:<userId>`, then template `paymentReversed` with `{amount}` | the panel toast and the bot message; the words are auth-service's, in the user's language |
 | Otherwise the first consumer's rules: dedupe before any side effect, marker given back on a throw, a payload without tenant, user, payment or amount throws | ADR-0045 |
 
+## The third consumer: a new inbox row (F-035-b)
+
+`NotificationCreatedConsumer`, on its own queue
+`AUTOMATION_NOTIFICATION_CREATED_QUEUE` bound to exactly
+`outbox.notification.created`. `notification-service` writes the event in the
+transaction that writes the row (`notification/contract.md` "Emits").
+
+| Rule | Why |
+|---|---|
+| Marker `outboxProcessed('notification-created-live', <event id>)` first; already set is an ack | a redelivery must not add the item to the dropdown twice |
+| `{type:'notification.created', notification}` on `user:<userId>`, and nothing else — no bot message | the row is already in the inbox; this only spares an open panel a reload |
+| No marker to give back: `RealtimePublisher` never throws | a closed panel reads the row on its next load, so at most once is enough |
+| A payload without `userId` or `notification.id` throws | whose row it is is never guessed |
+
 ## What is not built
 
-- Two payer notices only; no Postgres idempotency store — ADR-0045 chose
+- Two payer notices and one live push only; no Postgres idempotency store — ADR-0045 chose
   Redis for the first, and a consumer that moves money must choose again.
 - No retention or archive of published rows. ADR-0021 makes the table an audit
   trail; when that stops being worth keeping needs a producer with an opinion.

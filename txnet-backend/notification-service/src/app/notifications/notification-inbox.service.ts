@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { NotificationType, Prisma } from '@prisma/client';
+import { OutboxEventType } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -13,6 +14,10 @@ import { PrismaService } from '../prisma/prisma.service';
  * tenant — so it is not a `TENANT_SCOPED_MODELS` entry and no RLS policy binds
  * it. Every read and write below is filtered by the caller's id from the gate
  * (`request/identity.middleware.ts`), never by an id from the body or query.
+ *
+ * **A new row is announced in the transaction that writes it** (F-035-b,
+ * ADR-0021): the outbox event is what reaches the owner's open panel, and
+ * written after the commit a crash between the two loses it silently.
  *
  * **`readAt` is written once.** It is when the user first saw the row, so a
  * mark-read only ever touches rows still `null` — a repeated press, or "mark
@@ -108,10 +113,22 @@ export class NotificationInboxService {
   }
 
   async create(input: CreateNotification): Promise<InboxItem> {
-    const row = await this.prisma.notification.create({
-      data: { userId: input.userId, type: input.type, title: input.title, body: input.body },
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.notification.create({
+        data: { userId: input.userId, type: input.type, title: input.title, body: input.body },
+      });
+      const item = toItem(row);
+      await tx.outboxEvent.create({
+        data: {
+          aggregate: 'notification.notification',
+          aggregateId: row.id,
+          type: OutboxEventType.NOTIFICATION_CREATED,
+          payload: { userId: input.userId, notification: item },
+        },
+        select: { id: true },
+      });
+      return item;
     });
-    return toItem(row);
   }
 
   private unread(userId: string) {

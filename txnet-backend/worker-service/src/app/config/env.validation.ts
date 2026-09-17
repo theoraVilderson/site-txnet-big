@@ -119,6 +119,8 @@ export const envSchema = z.object({
   AUTOMATION_PAYMENT_CONFIRMED_QUEUE: z.string().min(1).default('txnet.automation.outbox.payment-confirmed'),
   /** The queue `billing.payment.reversed` outbox events land in for the payer notice (F-067-m, ADR-0046). */
   AUTOMATION_PAYMENT_REVERSED_QUEUE: z.string().min(1).default('txnet.automation.outbox.payment-reversed'),
+  /** The queue `notification.created` outbox events land in for the live inbox push (F-035-b). */
+  AUTOMATION_NOTIFICATION_CREATED_QUEUE: z.string().min(1).default('txnet.automation.outbox.notification-created'),
   /**
    * The bot-update queue set (F-067-b): `<prefix>.0` … `<prefix>.N-1`, each
    * bound to its own `bot.update.<slot>` on the same exchange and

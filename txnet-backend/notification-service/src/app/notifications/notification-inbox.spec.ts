@@ -13,8 +13,13 @@
  *    confirms it exists;
  *  - **the unread count is the user's, not the page's.** The badge shows it,
  *    and a count taken from the filtered page would read zero on page two.
+ *  - **a new row is announced with it (F-035-b, ADR-0021).** The outbox event
+ *    that reaches an open panel is written in the transaction that writes the
+ *    row: outside it, a crash between the two leaves a row no socket hears of,
+ *    or an event for a row that never committed.
  */
 import { NotificationType } from '@prisma/client';
+import { OutboxEventType } from '@txnet-backend/shared-core';
 
 import { NotificationInboxService } from './notification-inbox.service';
 
@@ -42,7 +47,11 @@ function fakePrisma() {
     updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     create: vi.fn().mockImplementation(({ data }) => Promise.resolve(row(data))),
   };
-  return { notification, $transaction: (ops: Promise<unknown>[]) => Promise.all(ops) };
+  const outboxEvent = { create: vi.fn().mockResolvedValue({ id: 'evt' }) };
+  const $transaction = vi.fn((arg: unknown) =>
+    typeof arg === 'function' ? arg({ notification, outboxEvent }) : Promise.all(arg as Promise<unknown>[]),
+  );
+  return { notification, outboxEvent, $transaction };
 }
 
 describe('NotificationInboxService', () => {
@@ -128,5 +137,28 @@ describe('NotificationInboxService', () => {
       data: { userId: USER, type: 'system_alert', title: 'Maintenance', body: 'Tonight 02:00–03:00' },
     });
     expect(created).toMatchObject({ type: 'system_alert', readAt: null });
+  });
+
+  it('announces the new row to its owner in the same transaction that writes it', async () => {
+    const prisma = fakePrisma();
+    const inbox = new NotificationInboxService(prisma as never);
+
+    const created = await inbox.create({
+      userId: USER,
+      type: NotificationType.system_alert,
+      title: 'Maintenance',
+      body: 'Tonight 02:00–03:00',
+    });
+
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function));
+    expect(prisma.outboxEvent.create).toHaveBeenCalledWith({
+      data: {
+        aggregate: 'notification.notification',
+        aggregateId: N1,
+        type: OutboxEventType.NOTIFICATION_CREATED,
+        payload: { userId: USER, notification: created },
+      },
+      select: { id: true },
+    });
   });
 });

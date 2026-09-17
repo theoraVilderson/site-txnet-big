@@ -179,6 +179,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   private readonly otpQueue: string;
   private readonly paymentConfirmedQueue: string;
   private readonly paymentReversedQueue: string;
+  private readonly notificationCreatedQueue: string;
   private readonly botUpdatePrefix: string;
   private readonly botUpdateQueues: number;
   private readonly confirmMs: number;
@@ -195,6 +196,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     this.otpQueue = config.getOrThrow<string>('AUTOMATION_OTP_QUEUE');
     this.paymentConfirmedQueue = config.getOrThrow<string>('AUTOMATION_PAYMENT_CONFIRMED_QUEUE');
     this.paymentReversedQueue = config.getOrThrow<string>('AUTOMATION_PAYMENT_REVERSED_QUEUE');
+    this.notificationCreatedQueue = config.getOrThrow<string>('AUTOMATION_NOTIFICATION_CREATED_QUEUE');
     this.botUpdatePrefix = config.getOrThrow<string>('BOT_UPDATE_QUEUE_PREFIX');
     this.botUpdateQueues = config.getOrThrow<number>('BOT_UPDATE_QUEUES');
     this.confirmMs = config.getOrThrow<number>('AUTOMATION_PUBLISH_CONFIRM_MS');
@@ -257,6 +259,16 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       arguments: { 'x-dead-letter-exchange': this.deadExchange },
     });
     await this.channel.bindQueue(this.paymentReversedQueue, this.exchange, outboxRoutingKey(OutboxEventType.PAYMENT_REVERSED));
+    // The third (F-035-b): a new inbox row pushed to an open panel.
+    await this.channel.assertQueue(this.notificationCreatedQueue, {
+      durable: true,
+      arguments: { 'x-dead-letter-exchange': this.deadExchange },
+    });
+    await this.channel.bindQueue(
+      this.notificationCreatedQueue,
+      this.exchange,
+      outboxRoutingKey(OutboxEventType.NOTIFICATION_CREATED),
+    );
 
     // The bot-update set (F-067-b, D-16). One queue per slot, each bound to
     // exactly its own routing key — not one queue on `bot.update.#`, which
@@ -443,6 +455,11 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   /** Start consuming `billing.payment.reversed` outbox events (F-067-m), by the same rules. */
   async consumePaymentReversed(handle: OutboxHandler): Promise<void> {
     await this.consumeOutbox(this.paymentReversedQueue, handle);
+  }
+
+  /** Start consuming `notification.created` outbox events (F-035-b), by the same rules. */
+  async consumeNotificationCreated(handle: OutboxHandler): Promise<void> {
+    await this.consumeOutbox(this.notificationCreatedQueue, handle);
   }
 
   private async consumeOutbox(queue: string, handle: OutboxHandler): Promise<void> {
