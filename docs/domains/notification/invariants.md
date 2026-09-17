@@ -10,7 +10,7 @@ updated: 2026-09-17
 #1–#4 were extracted from schema comments. #1, #2 and #4 are enforced since
 F-035-d, #3 since F-035-e for Telegram/Bale, F-035-f for SMS and F-035-h for
 email. #5–#6 since F-035-a, #7–#8 since F-035-c, #9 since F-035-e, #10 since
-F-035-f (email since F-035-h), #11 since F-035-h.
+F-035-f (email since F-035-h, a reseller's own SMS line since F-035-i-a), #11 since F-035-h.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -23,7 +23,7 @@ F-035-f (email since F-035-h), #11 since F-035-h.
 | 7 | A caller who is not the platform owner reads, writes and lists only campaigns whose `tenantId` is their own. Such a caller is served on the app pool only, so RLS stands behind the filter (ADR-0053) | `campaign-admin.service.ts` `access()`; RLS on `notification_campaign` | a reseller reads or edits another's, or the platform's, campaign |
 | 8 | `filterCriteria` is written only through the strict `audienceFilterSchema`, and changes only while `status = draft` | `campaign-admin.schema.ts`; `update`'s `where` | an ignored key widens an audience; recipients chosen by a filter that no longer exists |
 | 9 | A campaign message goes out only as the recipient's own tenant's primary bot, to a contact-verified chat that user linked in that same tenant — for a platform-wide campaign too | `campaign-delivery.service.ts` (`link.tenantId === user.tenantId`, `contactVerifiedAt` not null; cross-tenant pool, no RLS behind it) | one reseller's bot messages another's user, or a chat nobody proved |
-| 10 | An SMS or email goes out on the platform's line only from a campaign of the platform owner's tenant to a user of that tenant with a verified phone or address (D-38) — until F-035-i / F-112 give resellers their own | `platformOwnersOwn` behind `SmsLineResolver`/`MailLineResolver.lineFor`; `phoneVerifiedAt`/`emailVerifiedAt` in `campaign-delivery.service.ts`; `assertPlatformLine` in `campaign-admin.service.ts` | a reseller's campaign costs the platform, or shows a reseller's customer the platform's number or domain |
+| 10 | An SMS or email goes out only on a line of the campaign's own tenant, to a user of that tenant with a verified phone or address (D-38): the platform's line for the platform owner's campaign; a reseller's own SMS line (`own_credentials`, active) for its campaign (F-035-i-a). A platform-wide campaign has none; reseller email waits on F-112 | `platformOwnersOwn` and the own-line branch of `SmsLineResolver`/`MailLineResolver.lineFor`; `phoneVerifiedAt`/`emailVerifiedAt` in `campaign-delivery.service.ts`; `assertLine` in `campaign-admin.service.ts` | a reseller's campaign costs the platform, or a user is shown another tenant's number or domain |
 | 11 | A recipient receives only a `published` text in their language, else the source; a text exists only while its source is unchanged — `messageBody`, `subject` or `sourceLang` changing deletes them all in that transaction | `textFor` + the `state: published` read in `campaign-delivery.service.ts`; `update` in `campaign-admin.service.ts`; texts written only through `CampaignAdminService.managed({ draft: true })` | an unreviewed machine translation, or a translation of an older message, reaches users |
 
 ## How to test
@@ -33,4 +33,5 @@ asserts #5 and #6 on the queries built;
 `notification-service/src/app/campaigns/campaign-admin.spec.ts` asserts #7 and #8;
 `notification-service/src/app/campaigns/campaign-fan-out.spec.ts` asserts #1, #2 and #4;
 `notification-service/src/app/campaigns/campaign-delivery.spec.ts` asserts #9, #10 and the claim half of #4;
-`notification-service/src/app/campaigns/campaign-texts.spec.ts` asserts #11.
+`notification-service/src/app/campaigns/campaign-texts.spec.ts` asserts #11;
+`notification-service/src/app/campaigns/sms-line.spec.ts` asserts #10 for a reseller's own line (F-035-i-a).

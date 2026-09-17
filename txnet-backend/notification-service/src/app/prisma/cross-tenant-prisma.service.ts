@@ -17,7 +17,10 @@ import { PrismaService } from './prisma.service';
  * service lists `CampaignAdminService`, whose `access()` is the one place that
  * decides a caller is the platform owner, and `CampaignFanOutService` (F-035-d),
  * which has no caller: it serves the service-only fan-out, and a platform-wide
- * audience is every tenant's users, which no tenant binding can read. Widen the list only with a reason in a doc comment.
+ * audience is every tenant's users, which no tenant binding can read, and
+ * `SmsLineSource` (F-035-i-a), which reads `tenant_sms_config` beside the vault
+ * that already runs here — a delivery run's tenants, or a draft's own tenant,
+ * never a value. Widen the list only with a reason in a doc comment.
  */
 @Injectable()
 export class CrossTenantPrismaService extends PrismaService {}

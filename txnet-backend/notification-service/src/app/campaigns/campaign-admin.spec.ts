@@ -64,7 +64,7 @@ function transactionOf(client: Record<string, unknown>) {
   );
 }
 
-function fakes(callerType: TenantType = TenantType.reseller) {
+function fakes(callerType: TenantType = TenantType.reseller, ownSmsLine = false) {
   const prisma: Record<string, unknown> & { notificationCampaign: ReturnType<typeof campaignDelegate>; adminAuditLog: { create: ReturnType<typeof vi.fn> } } = {
     tenant: { findUnique: vi.fn().mockResolvedValue({ tenantType: callerType }) },
     notificationCampaign: campaignDelegate(),
@@ -79,7 +79,8 @@ function fakes(callerType: TenantType = TenantType.reseller) {
     adminAuditLog: { create: vi.fn().mockResolvedValue({}) },
   };
   all['$transaction'] = transactionOf(all);
-  return { prisma, all, service: new CampaignAdminService(prisma as never, all as never) };
+  const smsLines = { ownLineAvailable: vi.fn(async () => ownSmsLine) };
+  return { prisma, all, smsLines, service: new CampaignAdminService(prisma as never, all as never, smsLines as never) };
 }
 
 /** Every call as a request makes it: inside the tenant scope `IdentityMiddleware` opens. */
@@ -191,7 +192,7 @@ describe('CampaignAdminService', () => {
     expectPoolUntouched(all);
   });
 
-  it('drafts an SMS campaign only for the platform owner\'s own users (D-38): no other tenant has a line yet', async () => {
+  it('drafts an SMS campaign only for the platform owner\'s own users (D-38), or a reseller\'s with its own line', async () => {
     const reseller = fakes();
     await expect(
       as(TENANT, () => reseller.service.create(tenantAdmin, { channel: NotificationChannel.sms, messageBody: 'x', audience: {} })),
@@ -212,6 +213,24 @@ describe('CampaignAdminService', () => {
     expect(own.all.notificationCampaign.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ tenantId: OWNER_TENANT, channel: NotificationChannel.sms }),
     });
+
+    // F-035-i-a: a reseller with its own line drafts SMS on the app pool — for its own tenant only.
+    const lined = fakes(TenantType.reseller, true);
+    await as(TENANT, () => lined.service.create(tenantAdmin, { channel: NotificationChannel.sms, messageBody: 'x', audience: {} }));
+    expect(lined.smsLines.ownLineAvailable).toHaveBeenCalledWith(TENANT);
+    expect(lined.prisma.notificationCampaign.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tenantId: TENANT, channel: NotificationChannel.sms }),
+    });
+    expectPoolUntouched(lined.all);
+    await expect(
+      as(TENANT, () => lined.service.create(tenantAdmin, { channel: NotificationChannel.email, messageBody: 'x', audience: {} })),
+    ).rejects.toMatchObject({ reason: 'email_not_available' });
+
+    // The owner's draft for a reseller with a line is still refused: the line is the reseller's to use.
+    const forReseller = fakes(TenantType.platform_owner, true);
+    await expect(
+      as(OWNER_TENANT, () => forReseller.service.create(owner, { channel: NotificationChannel.sms, messageBody: 'x', audience: {}, tenantId: OTHER_TENANT })),
+    ).rejects.toMatchObject({ reason: 'sms_not_available' });
   });
 
   it('drafts or switches to email only for the platform owner\'s own users (F-035-h, D-38): the mail server is the platform\'s', async () => {
@@ -241,7 +260,7 @@ describe('CampaignAdminService', () => {
     });
   });
 
-  it('refuses switching a draft to SMS unless it is the platform owner\'s own campaign', async () => {
+  it('refuses switching a draft to SMS unless it is the platform owner\'s own campaign, or a reseller\'s with its own line', async () => {
     const reseller = fakes();
     await expect(
       as(TENANT, () => reseller.service.update(tenantAdmin, CAMPAIGN, { channel: NotificationChannel.sms })),
@@ -262,6 +281,10 @@ describe('CampaignAdminService', () => {
       where: { id: CAMPAIGN, status: CampaignStatus.draft },
       data: { channel: NotificationChannel.sms },
     });
+
+    const lined = fakes(TenantType.reseller, true);
+    await as(TENANT, () => lined.service.update(tenantAdmin, CAMPAIGN, { channel: NotificationChannel.sms }));
+    expect(lined.prisma.notificationCampaign.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { channel: NotificationChannel.sms } }));
   });
 
   it('edits only while the row is still a draft, checked in the write itself', async () => {

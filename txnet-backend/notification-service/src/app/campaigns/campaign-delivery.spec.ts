@@ -63,6 +63,7 @@ function fakes({
   owner = { id: OWNER_TENANT } as { id: string } | null,
   smsSend = vi.fn().mockResolvedValue({ status: 'sent' }) as ReturnType<typeof vi.fn>,
   smsLine = true,
+  ownLines = new Map() as Map<string, unknown>,
   mailSend = vi.fn().mockResolvedValue({ status: 'sent' }) as ReturnType<typeof vi.fn>,
   mailLine = true,
   texts = [] as unknown[],
@@ -86,14 +87,14 @@ function fakes({
     client: vi.fn().mockResolvedValue(client ? { sendText } : null),
   };
   const outcomes = { recordOutcome: vi.fn().mockResolvedValue({ changed: true }) };
-  const sms = { resolverFor: vi.fn(async () => new SmsLineResolver(smsLine ? ({ send: smsSend } as never) : null)) };
+  const sms = { resolverFor: vi.fn(async () => new SmsLineResolver(smsLine ? ({ send: smsSend } as never) : null, ownLines as never)) };
   const mail = new MailLineResolver(mailLine ? ({ send: mailSend } as never) : null);
   const locale = {
     getDefaultLanguage: () => 'fa',
     getKey: (lang: string, _ns: string, key: string) => (key === 'campaign.emailSubject' ? `subject:${lang}` : undefined),
   };
   const service = new CampaignDeliveryService(db as never, bots as never, outcomes as never, sms as never, mail, locale as never, { now: () => NOW });
-  return { db, bots, outcomes, sendText, smsSend, mailSend, service };
+  return { db, bots, outcomes, sendText, smsSend, mailSend, service, sms };
 }
 
 describe('CHANNEL_PLATFORM', () => {
@@ -317,6 +318,31 @@ describe('CampaignDeliveryService.deliver — SMS (F-035-f, D-38)', () => {
     expect(smsSend).toHaveBeenCalledTimes(1);
     expect(down.outcomes.recordOutcome).not.toHaveBeenCalled();
   });
+
+  it("sends a reseller's campaign on its own line to its own users, and a line down stops only that line (F-035-i-a)", async () => {
+    const OTHER_CAMPAIGN = id(902);
+    const resellerSend = vi.fn().mockResolvedValue({ status: 'line_down', description: 'NotEnoughCredit' });
+    const run = smsFakes({
+      rows: [
+        { id: id(101), campaignId: CAMPAIGN, userId: id(1) },
+        { id: id(102), campaignId: CAMPAIGN, userId: id(2) },
+        { id: id(103), campaignId: OTHER_CAMPAIGN, userId: id(3) },
+      ],
+      users: [ownUser({ tenantId: TENANT }), ownUser({ id: id(2), tenantId: TENANT }), ownUser({ id: id(3) })] as never,
+      ownLines: new Map([[TENANT, { send: resellerSend }]]),
+    });
+    run.db.notificationCampaign.findMany.mockResolvedValue([
+      { id: CAMPAIGN, tenantId: TENANT, channel: NotificationChannel.sms, messageBody: 'Hi', subject: null, sourceLang: null },
+      { id: OTHER_CAMPAIGN, tenantId: OWNER_TENANT, channel: NotificationChannel.sms, messageBody: 'Hi', subject: null, sourceLang: null },
+    ]);
+
+    expect(await run.service.deliver()).toEqual({ claimed: 3, sent: 1, failed: 0, deferred: 0, stalled: 2 });
+    expect(run.sms.resolverFor).toHaveBeenCalledWith(OWNER_TENANT, [TENANT]);
+    expect(resellerSend).toHaveBeenCalledTimes(1);
+    expect(resellerSend).toHaveBeenCalledWith(PHONE, 'Hi');
+    expect(run.smsSend).toHaveBeenCalledTimes(1);
+    expect(run.outcomes.recordOutcome).toHaveBeenCalledWith(id(103), DeliveryStatus.sent);
+  });
 });
 
 describe('CampaignDeliveryService.deliver — the recipient\'s language (F-035-h)', () => {
@@ -450,11 +476,12 @@ describe('SmsLineSource (F-018-a)', () => {
   const vault = (use = vi.fn(async (ref: { kind: string }) => (ref.kind === 'sms_api_key' ? 'user@pass' : '3000'))) =>
     ({ available: true, use }) as { available: boolean; use: ReturnType<typeof vi.fn> };
   const provider = { sendSMS: vi.fn().mockResolvedValue({ ok: true, msg: 'sent', data: true }) };
+  const noConfig = { tenantSmsConfig: { findMany: vi.fn(async () => []), findFirst: vi.fn(async () => null) } } as never;
 
   it("opens the platform line from the owner's vault, once per run", async () => {
     const v = vault();
     const factory = vi.fn(() => provider);
-    const resolver = await new SmsLineSource(config(), v as never, factory).resolverFor(OWNER_TENANT);
+    const resolver = await new SmsLineSource(config(), v as never, noConfig, factory).resolverFor(OWNER_TENANT);
 
     const answer = resolver.lineFor(OWNER_TENANT, OWNER_TENANT, OWNER_TENANT);
     expect(answer.kind).toBe('ready');
@@ -468,15 +495,15 @@ describe('SmsLineSource (F-018-a)', () => {
     const stalled = async (source: SmsLineSource, owner: string | null = OWNER_TENANT) =>
       (await source.resolverFor(owner)).lineFor(OWNER_TENANT, OWNER_TENANT, OWNER_TENANT).kind;
 
-    expect(await stalled(new SmsLineSource(config(''), vault() as never))).toBe('stalled');
-    expect(await stalled(new SmsLineSource(config(), vault() as never), null)).toBe('stalled');
-    expect(await stalled(new SmsLineSource(config(), { ...vault(), available: false } as never))).toBe('stalled');
+    expect(await stalled(new SmsLineSource(config(''), vault() as never, noConfig))).toBe('stalled');
+    expect(await stalled(new SmsLineSource(config(), vault() as never, noConfig), null)).toBe('stalled');
+    expect(await stalled(new SmsLineSource(config(), { ...vault(), available: false } as never, noConfig))).toBe('stalled');
     const missing = vault(vi.fn(async (ref) => { throw new CredentialUnavailable(ref as never, 'missing'); }));
-    expect(await stalled(new SmsLineSource(config(), missing as never))).toBe('stalled');
+    expect(await stalled(new SmsLineSource(config(), missing as never, noConfig))).toBe('stalled');
     const broken = vault(vi.fn(async () => { throw new Error('connection reset'); }));
-    expect(await stalled(new SmsLineSource(config(), broken as never))).toBe('stalled');
+    expect(await stalled(new SmsLineSource(config(), broken as never, noConfig))).toBe('stalled');
 
-    const resolver = await new SmsLineSource(config(), vault() as never, () => provider).resolverFor(OWNER_TENANT);
+    const resolver = await new SmsLineSource(config(), vault() as never, noConfig, () => provider).resolverFor(OWNER_TENANT);
     expect(resolver.lineFor(TENANT, TENANT, OWNER_TENANT).kind).toBe('none');
   });
 });

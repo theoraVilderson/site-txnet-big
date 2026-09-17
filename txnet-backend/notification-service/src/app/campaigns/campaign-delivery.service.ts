@@ -165,9 +165,14 @@ export class CampaignDeliveryService {
     const ownerTenantId = campaigns.some((c) => isLineChannel(c.channel))
       ? ((await this.db.tenant.findFirst({ where: { tenantType: TenantType.platform_owner }, select: { id: true } }))?.id ?? null)
       : null;
-    const sms = await this.smsLines.resolverFor(campaigns.some((c) => c.channel === NotificationChannel.sms) ? ownerTenantId : null);
-    /** A line that answered for its account, not a recipient: nothing more goes out on it this run. */
-    const linesDown = new Set<LineChannel>();
+    // Only the tenants whose SMS campaigns this run holds: one vault read each (F-035-i-a).
+    const smsTenants = campaigns.filter((c) => c.channel === NotificationChannel.sms).map((c) => c.tenantId);
+    const sms = await this.smsLines.resolverFor(
+      ownerTenantId && smsTenants.includes(ownerTenantId) ? ownerTenantId : null,
+      smsTenants.filter((id): id is string => id !== null && id !== ownerTenantId),
+    );
+    /** A line that answered for its account, not a recipient: nothing more goes out on it this run — one tenant's, not the channel's (F-035-i-a). */
+    const linesDown = new Set<SmsLine | MailLine>();
     /** Rows handed back still `queued`, keyed by when they may be claimed again ('' = at once). */
     const released = new Map<string, string[]>();
     const release = (until: Date | null, rowId: string) => {
@@ -192,7 +197,7 @@ export class CampaignDeliveryService {
           await this.record(row.id, DeliveryStatus.failed, result);
           continue;
         }
-        if (answer.kind === 'stalled' || linesDown.has(channel)) {
+        if (answer.kind === 'stalled' || linesDown.has(answer.line)) {
           release(null, row.id);
           result.stalled++;
           continue;
@@ -213,7 +218,7 @@ export class CampaignDeliveryService {
           this.logger.warn(`campaign ${row.campaignId}: recipient ${row.id} refused on the ${channel} line: ${sent.description}`);
           await this.record(row.id, DeliveryStatus.failed, result);
         } else {
-          if (sent.status === 'line_down') linesDown.add(channel);
+          if (sent.status === 'line_down') linesDown.add(answer.line);
           this.logger.warn(`campaign ${row.campaignId}: ${channel} send ${sent.status}: ${sent.description}`);
           release(null, row.id);
           result[sent.status === 'retry' ? 'deferred' : 'stalled']++;

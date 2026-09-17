@@ -13,7 +13,7 @@ Runs in `notification-service` (ADR-0052). **Live:** a user's in-app inbox
 user, written on the worker (F-035-d), and delivered to Telegram and Bale
 (F-035-e), by SMS on the platform's line (F-035-f) and by email on the
 platform's mail server (F-035-h), each recipient in their own language when an
-admin published one. A reseller's own SMS line waits for F-035-i.
+admin published one. A reseller with its own SMS line sends on it (F-035-i-a).
 
 ## TL;DR
 
@@ -128,28 +128,33 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
   stays `sending` while any row is queued.
 - Needs `AUTH_API_BASE_URL` on `notification-service`; unset, every row stalls.
 
-### Delivering by SMS (F-035-f, D-38)
+### Delivering by SMS (F-035-f, F-035-i-a, D-38)
 
-- **One line, unmetered.** The platform's gateway, the OTP one: `SMS_API_URL`
-  and the platform owner's `sms_api_key` / `sms_sender_line` vault values
-  (F-018-a), read once per delivery run by `SmsLineSource` with this service's
-  own KEK (`tenant/contract.vault.md`); the driver is `shared-core`'s
-  `SmsProviderService`. No URL, key or KEK, or an unreadable vault: SMS rows stall.
-  Nothing bills it yet, so it carries only **the platform owner's own campaign
-  to the platform owner's own users** (invariant 10): a reseller's would cost
-  the platform, a platform-wide one would show a reseller's customer the
-  platform's number. `sms-line.ts` `SmsLineResolver.lineFor` is the one place
-  that decides; F-035-i (a reseller's line, metering on `sms_sent`) changes it.
+- **Two lines, both unmetered, one gateway.** `SMS_API_URL` (one driver,
+  `shared-core`'s `SmsProviderService`; `ownProviderName` is unread) with a
+  tenant's `sms_api_key` / `sms_sender_line` vault values (F-018-a), read with
+  this service's own KEK (`tenant/contract.vault.md`) once per tenant per
+  delivery run by `SmsLineSource`:
+  - **the platform's** — the owner's values, the OTP line — carries only **the
+    platform owner's own campaign to its own users**;
+  - **a reseller's own** — `tenant_sms_config` `own_credentials` and `isActive`
+    — carries only **that reseller's campaign to its own users**.
+  Anything else fails the row (invariant 10): a platform-wide campaign, or the
+  owner's for a reseller's users, has no line. No URL, key or KEK, or an
+  unreadable vault, stalls that tenant's rows only. `sms-line.ts`
+  `SmsLineResolver.lineFor` is the one place that decides; F-035-i-b (the
+  platform's line for a reseller, metered on `sms_sent`) changes it.
 - **Refused at the draft.** `channel: sms` on create, or a patch to it, is 409
-  `sms_not_available` unless the caller is the platform owner and the campaign
-  is their own tenant's. Delivery checks the same rule again (cross-tenant pool).
+  `sms_not_available` unless the campaign is the caller's own tenant's and that
+  tenant is the platform owner, or `SmsLineSource.ownLineAvailable` (the config
+  above plus an active key's summary, nothing decrypted). Delivery checks again.
 - **Who receives.** `user.phoneNumber` with `phoneVerifiedAt` set; otherwise `failed`.
   The text goes as stored, no placeholder substitution.
 - **Outcomes**, claimed and leased with the bot rows (same job, same budget):
   `sent`; `failed` for an ineligible row or `InvalidReceiverNumber`. **Left
   `queued`:** a transport failure or the time limit (`deferred`); an unset line,
   or any other gateway refusal — credentials, credit — (`stalled`), and after
-  such a refusal no further SMS is tried that run.
+  such a refusal no further SMS is tried **on that line** that run.
 
 ### Delivering by email, and in each language (F-035-h)
 
@@ -200,7 +205,7 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 | messenger | `BotClientRegistry`, `TelegramLikeBotClient.sendText` (F-035-e) | — (a library) |
 | auth-api | `internal/bot-integrations/primary` and `/token` (ADR-0054) | rows stay `queued`, counted `stalled` |
 | SMS gateway (external) | `SendSms`, through `shared-core` `SmsProviderService` (F-035-f) | SMS rows stay `queued`, `deferred` or `stalled` |
-| tenant | the vault: `use` of the owner's `sms_api_key` / `sms_sender_line` (F-018-a) | SMS rows stay `queued`, counted `stalled` |
+| tenant | the vault: `use` of a sending tenant's `sms_api_key` / `sms_sender_line` (F-018-a); `tenant_sms_config` read (F-035-i-a) | that tenant's SMS rows stay `queued`, counted `stalled` |
 | SMTP server (external) | through `shared-core` `MailProviderService` (F-035-h) | email rows stay `queued`, `deferred` or `stalled` |
 | i18n | `Translator` (`translatorFromEnv`); `notifications` namespace for the default subject | no drafts; a subject-less email has an empty subject if locale-service never loaded |
 | tenant | the caller's `tenantType` (platform owner or not); a named tenant exists | 404 `tenant_not_found` |

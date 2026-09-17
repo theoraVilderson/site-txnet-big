@@ -79,7 +79,7 @@ function fakes({ callerType = TenantType.reseller as TenantType, texts = [] as u
   const prisma = pool(texts);
   prisma.tenant.findUnique.mockResolvedValue({ tenantType: callerType });
   const all = pool(texts);
-  const campaigns = new CampaignAdminService(prisma as never, all as never);
+  const campaigns = new CampaignAdminService(prisma as never, all as never, {} as never);
   const translator = { translate, languages: vi.fn().mockResolvedValue([]) };
   const locale = { getDefaultLanguage: () => 'fa' };
   return { prisma, all, translate, service: new CampaignTextService(campaigns, translator as never, locale as never) };
@@ -194,12 +194,12 @@ describe('CampaignAdminService.update — the source changes', () => {
   it('drops every translation when the body, subject or source language changes, and keeps them otherwise', async () => {
     for (const patch of [{ messageBody: 'new' }, { subject: 'new' }, { sourceLang: Language.en }]) {
       const { prisma, all } = fakes();
-      await as(TENANT, () => new CampaignAdminService(prisma as never, all as never).update(tenantAdmin, CAMPAIGN, patch));
+      await as(TENANT, () => new CampaignAdminService(prisma as never, all as never, {} as never).update(tenantAdmin, CAMPAIGN, patch));
       expect(prisma.notificationCampaignText.deleteMany).toHaveBeenCalledWith({ where: { campaignId: CAMPAIGN } });
     }
 
     const { prisma, all } = fakes();
-    await as(TENANT, () => new CampaignAdminService(prisma as never, all as never).update(tenantAdmin, CAMPAIGN, { audience: {} }));
+    await as(TENANT, () => new CampaignAdminService(prisma as never, all as never, {} as never).update(tenantAdmin, CAMPAIGN, { audience: {} }));
     expect(prisma.notificationCampaignText.deleteMany).not.toHaveBeenCalled();
   });
 });

@@ -50,14 +50,18 @@ class BotDirectoryModule {}
     CampaignFanOutService,
     CampaignDeliveryService,
     CampaignTextService,
-    // The platform's SMS line is the owner's vault values (F-018-a, ADR-0039):
-    // read-only, on the cross-tenant pool delivery already runs on, since a
-    // run has no request tenant. `CredentialEnvGuard` comes with the vault.
+    // An SMS line is a tenant's vault values — the owner's (F-018-a, ADR-0039)
+    // or a reseller's own (F-035-i-a): read-only, on the cross-tenant pool
+    // delivery already runs on, since a run has no request tenant. `CredentialEnvGuard` comes with the vault.
     KekService,
     CredentialVaultService,
     CredentialEnvGuard,
     { provide: VAULT_DB, useExisting: CrossTenantPrismaService },
-    { provide: SmsLineSource, useFactory: (config: ConfigService, vault: CredentialVaultService) => new SmsLineSource(config, vault), inject: [ConfigService, CredentialVaultService] },
+    {
+      provide: SmsLineSource,
+      useFactory: (config: ConfigService, vault: CredentialVaultService, db: CrossTenantPrismaService) => new SmsLineSource(config, vault, db),
+      inject: [ConfigService, CredentialVaultService, CrossTenantPrismaService],
+    },
     { provide: MailLineResolver, useFactory: MailLineResolver.fromConfig, inject: [ConfigService] },
     // Drafts campaign texts (F-035-h), as billing's catalog does (ADR-0050).
     { provide: TRANSLATOR, useFactory: () => translatorFromEnv() },

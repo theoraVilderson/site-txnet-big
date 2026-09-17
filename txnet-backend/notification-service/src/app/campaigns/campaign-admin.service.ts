@@ -5,6 +5,7 @@ import { tenantTransaction } from '@txnet-backend/shared-core';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AudienceFilter } from './campaign-admin.schema';
+import { SmsLineSource } from './sms-line';
 
 export const DEFAULT_PAGE = 1;
 export const DEFAULT_PAGE_SIZE = 20;
@@ -119,12 +120,14 @@ export class CampaignAdminService {
     private readonly prisma: PrismaService,
     /** Every tenant's campaign rows, by policy. See the class comment. */
     private readonly all: CrossTenantPrismaService,
+    /** Whether a reseller has its own SMS line (F-035-i-a). */
+    private readonly smsLines: SmsLineSource,
   ) {}
 
   async create(actor: CampaignActor, input: CreateCampaignInput): Promise<CampaignView> {
     const { owner, db } = await this.access(actor);
     const tenantId = await this.ownerOfNew(actor, owner, input.tenantId);
-    this.assertPlatformLine(input.channel, actor, owner, tenantId);
+    await this.assertLine(input.channel, actor, owner, tenantId);
     const row = await db.notificationCampaign.create({
       data: {
         tenantId,
@@ -181,7 +184,7 @@ export class CampaignAdminService {
   async update(actor: CampaignActor, id: string, patch: UpdateCampaignInput): Promise<CampaignView> {
     const { owner, db } = await this.access(actor);
     const current = await this.loadManaged(actor, owner, db, id);
-    if (patch.channel !== undefined) this.assertPlatformLine(patch.channel, actor, owner, current.tenantId);
+    if (patch.channel !== undefined) await this.assertLine(patch.channel, actor, owner, current.tenantId);
 
     const data: Prisma.NotificationCampaignUpdateManyMutationInput = {};
     if (patch.channel !== undefined) data.channel = patch.channel;
@@ -279,17 +282,21 @@ export class CampaignAdminService {
   }
 
   /**
-   * D-38 (invariant 10): the only SMS line and the only mail server are the
-   * platform's, so an SMS or email campaign is the platform owner's own, to its
-   * own users (F-035-f, F-035-h). Refused at the draft so an admin hears it
-   * now, not as a campaign of `failed` rows.
+   * D-38 (invariant 10): an SMS or email campaign goes to the campaign tenant's
+   * own users on a line that tenant sends on — the platform owner's for its own
+   * (F-035-f, F-035-h), a reseller's own SMS line for its own (F-035-i-a). A
+   * platform-wide campaign, or the owner's draft for another tenant, has none.
+   * Refused at the draft so an admin hears it now, not as a campaign of
+   * `failed` rows. Delivery asks the same of `SmsLineResolver` again.
    */
-  private assertPlatformLine(channel: NotificationChannel, actor: CampaignActor, owner: boolean, tenantId: string | null): void {
+  private async assertLine(channel: NotificationChannel, actor: CampaignActor, owner: boolean, tenantId: string | null): Promise<void> {
     if (channel !== NotificationChannel.sms && channel !== NotificationChannel.email) return;
-    if (!owner || tenantId !== actor.tenantId) {
-      const reason = channel === NotificationChannel.sms ? 'sms_not_available' : 'email_not_available';
-      throw new CampaignAdminRefused(reason, `only the platform owner has a ${channel} line, for its own users`);
+    if (tenantId !== null && tenantId === actor.tenantId) {
+      if (owner) return;
+      if (channel === NotificationChannel.sms && (await this.smsLines.ownLineAvailable(tenantId))) return;
     }
+    const reason = channel === NotificationChannel.sms ? 'sms_not_available' : 'email_not_available';
+    throw new CampaignAdminRefused(reason, `no ${channel} line for this tenant's campaign to its own users`);
   }
 
   /** On the app pool `withTenant` already confined the read; the check repeats it for the owner's pool's sake. */
