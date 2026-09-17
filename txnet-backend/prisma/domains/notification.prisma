@@ -60,7 +60,6 @@ model NotificationCampaign {
   status                CampaignStatus      @default(draft)
   sentCount             Int                 @default(0)
   failedCount           Int                 @default(0)
-  executedByBotWorkerId String?             @db.Uuid
   createdAt             DateTime            @default(now())
   /// F-035-d: set when an admin starts the send; users registered later are not in the audience.
   sendStartedAt         DateTime?

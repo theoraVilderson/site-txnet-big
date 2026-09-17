@@ -40,7 +40,6 @@ function campaignRow(overrides: Record<string, unknown> = {}) {
     status: CampaignStatus.draft,
     sentCount: 0,
     failedCount: 0,
-    executedByBotWorkerId: null,
     createdAt: new Date('2026-09-17T10:00:00Z'),
     ...overrides,
   };

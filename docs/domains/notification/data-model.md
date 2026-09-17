@@ -14,7 +14,7 @@ Source of truth: `txnet-backend/prisma/domains/notification.prisma` (Postgres sc
 | Table | Purpose | Tenant-scoped? | Retention |
 |---|---|---|---|
 | notification | one user-facing notification; `readAt` nullable | via user | rolling |
-| notification_campaign | broadcast: channel, `filterCriteria` JSON, body, counts, executing worker | `tenantId` nullable | long |
+| notification_campaign | broadcast: channel, `filterCriteria` JSON, body, counts, send progress (`sendStartedAt`, `fanOutCursor`, `fannedOutAt`) | `tenantId` nullable | long |
 | notification_campaign_recipient | per-user delivery record (`queued`/`sent`/`failed`) | via campaign | long |
 
 ## Relationships crossing unit boundaries
@@ -22,7 +22,6 @@ Source of truth: `txnet-backend/prisma/domains/notification.prisma` (Postgres sc
 |---|---|---|---|
 | notification.userId, notification_campaign_recipient.userId | -> | identity.user.id | notifications target users |
 | notification_campaign.tenantId | -> | tenant.tenant.id | campaign scoped to a reseller's users |
-| notification_campaign.executedByBotWorkerId | -> | automation.bot_worker.id | the worker that ran the fan-out |
 
 ## Access rules
 

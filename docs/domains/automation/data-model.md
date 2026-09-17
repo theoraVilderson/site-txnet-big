@@ -23,7 +23,7 @@ Source of truth: `txnet-backend/prisma/domains/automation.prisma` (Postgres sche
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |
 |---|---|---|---|
-| bot_execution_log (referenced) | -> | notification.notification_campaign.executedByBotWorkerId, ai.ai_recommendation.generatedByBotWorkerId | other domains record which worker acted |
+| bot_execution_log (referenced) | -> | ai.ai_recommendation.generatedByBotWorkerId | other domains record which worker acted |
 | bot_integration.tenantId | -> | tenant.tenant.id | **no foreign key** — the pattern every schema outside `tenant` uses for a `tenantId` |
 | bot_integration.credentialRef | -> | tenant.tenant_credential.label | not a foreign key either: the vault is reached through `tenant`'s contract, never by joining to its tables (§8) |
 
