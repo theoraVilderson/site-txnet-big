@@ -37,6 +37,19 @@ touches the cross-tenant pool. A model served this way is listed in
 `TENANT_SCOPED_MODELS`; without it the app pool binds no tenant and RLS refuses
 the write.
 
+### Amendment 2026-09-17 — billing (D-37, rows F-102-f-a..d)
+
+- **Binding.** A billing surface binds a tenant admin with `tenantTransaction`,
+  not by adding models to `TENANT_SCOPED_MODELS`: the registry is global, and
+  scoping `coupon` or `product` there would hide platform rows from every
+  app-pool reader (redemption, deposit). Campaigns keep the registry.
+- **Read-only exception.** A lookup that must see *another* tenant's row to
+  validate a tenant admin's write — a lent gateway, whether a named tenant or
+  user exists — may run on the cross-tenant pool, **read only**, from one named
+  method per service. The tenant admin's own rows are never read or written
+  there, and a spec asserts no write reaches that pool for a non-owner.
+  The user's call over "strict C", which would have broken lent gateways.
+
 ## Consequences
 
 - Positive: resellers, who are many and less trusted, keep two layers — the

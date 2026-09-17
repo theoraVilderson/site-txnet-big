@@ -3,7 +3,6 @@ import { randomInt } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { CouponVisibility, DiscountType, Prisma } from '@prisma/client';
 
-import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { CouponActor, CouponAdminRefused, CouponAdminService, statusOf } from './coupon-admin.service';
 
 /** No 0/O, no 1/I/L: a code is read off a card and typed by a person. */
@@ -61,12 +60,11 @@ type Row = Record<string, unknown>;
 export class CouponBatchService {
   private readonly logger = new Logger(CouponBatchService.name);
 
-  constructor(
-    private readonly coupons: CouponAdminService,
-    private readonly all: CrossTenantPrismaService,
-  ) {}
+  /** Every read and write goes through `coupons.within`, on the pool that serves the caller (ADR-0053). */
+  constructor(private readonly coupons: CouponAdminService) {}
 
   async generate(actor: CouponActor, input: GenerateBatchInput): Promise<BatchView> {
+    const { owner } = await this.coupons.access(actor);
     const tenantId = await this.coupons.ownerOfNew(actor, input.tenantId);
     const count = input.count;
     if (!Number.isInteger(count) || count < 1 || count > GIFT_BATCH_MAX) throw new CouponAdminRefused('invalid_batch', `count 1..${GIFT_BATCH_MAX}`);
@@ -84,7 +82,6 @@ export class CouponBatchService {
     if (grantVariantId) {
       // A free-service batch gives a Grant, never money.
       if (!value.isZero()) throw new CouponAdminRefused('invalid_value', 'value');
-      await this.coupons.assertGrantVariant(tenantId, grantVariantId);
     } else if (!value.isPositive() || value.isZero() || value.decimalPlaces() > 2) {
       throw new CouponAdminRefused('invalid_value', 'value');
     }
@@ -92,14 +89,17 @@ export class CouponBatchService {
     if (expiresAt && Number.isNaN(expiresAt.getTime())) throw new CouponAdminRefused('invalid_limit', 'expiresAt');
     const tenantIds = [...new Set(input.tenantIds ?? [])];
     if (tenantId !== null && tenantIds.length > 0) throw new CouponAdminRefused('tenants_are_platform_coupons');
-    if (tenantIds.length > 0) {
-      const found = await this.all.tenant.findMany({ where: { id: { in: tenantIds } }, select: { id: true } });
-      const missing = tenantIds.find((t) => !found.some((f) => f.id === t));
-      if (missing) throw new CouponAdminRefused('tenant_not_found', missing);
-    }
 
-    const batch = await this.all.$transaction(
+    const batch = await this.coupons.within(
+      owner,
       async (tx) => {
+        if (grantVariantId) await this.coupons.assertGrantVariant(tx, tenantId, grantVariantId);
+        if (tenantIds.length > 0) {
+          // Reached by the platform owner alone: a tenant batch names no tenants.
+          const found = await tx.tenant.findMany({ where: { id: { in: tenantIds } }, select: { id: true } });
+          const missing = tenantIds.find((t) => !found.some((f) => f.id === t));
+          if (missing) throw new CouponAdminRefused('tenant_not_found', missing);
+        }
         const codes = await this.draw(tx, tenantId, prefix, count);
         const row = await tx.couponBatch.create({ data: { tenantId, label, note: input.note?.trim() || null, createdByAdminId: actor.adminId } });
         for (let i = 0; i < codes.length; i += CHUNK) {
@@ -158,52 +158,58 @@ export class CouponBatchService {
         : filter.tenantId
           ? { tenantId: filter.tenantId }
           : {};
-    const [rows, total] = await Promise.all([
-      this.all.couponBatch.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),
-      this.all.couponBatch.count({ where }),
-    ]);
-    const counts = await this.counts(rows.map((r) => r.id));
-    return { items: rows.map((r) => this.view(r as unknown as Row, counts.get(r.id))), total, page, pageSize };
+    return this.coupons.within(owner, async (db) => {
+      const [rows, total] = await Promise.all([
+        db.couponBatch.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),
+        db.couponBatch.count({ where }),
+      ]);
+      const counts = await this.counts(db, rows.map((r) => r.id));
+      return { items: rows.map((r) => this.view(r as unknown as Row, counts.get(r.id))), total, page, pageSize };
+    });
   }
 
   async get(actor: CouponActor, id: string): Promise<BatchView> {
-    const row = await this.load(actor, id);
-    return this.view(row, (await this.counts([id])).get(id));
+    const { owner } = await this.coupons.access(actor);
+    return this.coupons.within(owner, async (db) => this.view(await this.load(db, actor, id, owner), (await this.counts(db, [id])).get(id)));
   }
 
   /** The batch's codes as CSV (RFC 4180 line ends). Audited: whoever holds this file holds the credit. */
   async exportCsv(actor: CouponActor, id: string): Promise<string> {
-    const batch = await this.load(actor, id);
-    const rows = (await this.all.coupon.findMany({
-      where: { batchId: id, deletedAt: null },
-      orderBy: { code: 'asc' },
-      select: { code: true, discountValue: true, expiresAt: true, isActive: true, usedCount: true, reservedCount: true, totalUsageLimit: true, validFrom: true, deletedAt: true },
-    })) as unknown as Row[];
-    const now = Date.now();
-    const lines = ['code,value,expires_at,status,used'];
-    for (const r of rows) {
-      const expires = r['expiresAt'] ? new Date(r['expiresAt'] as Date).toISOString() : '';
-      lines.push([r['code'], new Prisma.Decimal(String(r['discountValue'])).toFixed(2), expires, statusOf(r, now), Number(r['usedCount'] ?? 0)].join(','));
-    }
-    await this.all.adminAuditLog.create({
-      data: {
-        tenantId: (batch['tenantId'] as string | null) ?? actor.tenantId,
-        adminId: actor.adminId,
-        action: 'coupon_batch_export',
-        targetEntityType: 'coupon_batch',
-        targetEntityId: id,
-        oldValue: Prisma.DbNull,
-        newValue: { codes: rows.length },
-        adminIpAddress: actor.ip,
-      },
+    const { owner } = await this.coupons.access(actor);
+    return this.coupons.within(owner, async (db) => {
+      const batch = await this.load(db, actor, id, owner);
+      const rows = (await db.coupon.findMany({
+        where: { batchId: id, deletedAt: null },
+        orderBy: { code: 'asc' },
+        select: { code: true, discountValue: true, expiresAt: true, isActive: true, usedCount: true, reservedCount: true, totalUsageLimit: true, validFrom: true, deletedAt: true },
+      })) as unknown as Row[];
+      const now = Date.now();
+      const lines = ['code,value,expires_at,status,used'];
+      for (const r of rows) {
+        const expires = r['expiresAt'] ? new Date(r['expiresAt'] as Date).toISOString() : '';
+        lines.push([r['code'], new Prisma.Decimal(String(r['discountValue'])).toFixed(2), expires, statusOf(r, now), Number(r['usedCount'] ?? 0)].join(','));
+      }
+      await db.adminAuditLog.create({
+        data: {
+          tenantId: (batch['tenantId'] as string | null) ?? actor.tenantId,
+          adminId: actor.adminId,
+          action: 'coupon_batch_export',
+          targetEntityType: 'coupon_batch',
+          targetEntityId: id,
+          oldValue: Prisma.DbNull,
+          newValue: { codes: rows.length },
+          adminIpAddress: actor.ip,
+        },
+      });
+      return lines.join('\r\n') + '\r\n';
     });
-    return lines.join('\r\n') + '\r\n';
   }
 
   /** Switch the whole batch off: every live code, and the batch's own mark. Repeating it is harmless. */
   async deactivate(actor: CouponActor, id: string): Promise<{ id: string; deactivated: number }> {
-    const batch = await this.load(actor, id);
-    const deactivated = await this.all.$transaction(async (tx) => {
+    const { owner } = await this.coupons.access(actor);
+    const deactivated = await this.coupons.within(owner, async (tx) => {
+      const batch = await this.load(tx, actor, id, owner);
       const { count } = await tx.coupon.updateMany({ where: { batchId: id, deletedAt: null, isActive: true }, data: { isActive: false } });
       if (!batch['deactivatedAt']) await tx.couponBatch.update({ where: { id }, data: { deactivatedAt: new Date() } });
       await tx.adminAuditLog.create({
@@ -225,9 +231,8 @@ export class CouponBatchService {
   }
 
   /** The batch, if the caller may manage it. */
-  async load(actor: CouponActor, id: string): Promise<Row> {
-    const { owner } = await this.coupons.access(actor);
-    const row = (await this.all.couponBatch.findUnique({ where: { id } })) as unknown as Row | null;
+  async load(db: Prisma.TransactionClient, actor: CouponActor, id: string, owner: boolean): Promise<Row> {
+    const row = (await db.couponBatch.findUnique({ where: { id } })) as unknown as Row | null;
     if (!row || (!owner && row['tenantId'] !== actor.tenantId)) throw new CouponAdminRefused('batch_not_found', id);
     return row;
   }
@@ -260,10 +265,10 @@ export class CouponBatchService {
     return [...chosen];
   }
 
-  private async counts(ids: string[]): Promise<Map<string, { codes: number; used: number; reserved: number }>> {
+  private async counts(db: Prisma.TransactionClient, ids: string[]): Promise<Map<string, { codes: number; used: number; reserved: number }>> {
     const out = new Map<string, { codes: number; used: number; reserved: number }>();
     if (ids.length === 0) return out;
-    const groups = await this.all.coupon.groupBy({
+    const groups = await db.coupon.groupBy({
       by: ['batchId'],
       where: { batchId: { in: ids }, deletedAt: null },
       _count: { _all: true },

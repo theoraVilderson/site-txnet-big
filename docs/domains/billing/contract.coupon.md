@@ -77,9 +77,14 @@ facts); `reserve_coupon` in `20260914001200_coupon_limit_gates`. Proved by
 
 ## Management (built — F-502-c)
 
-`billing-service/src/app/payment/coupon-admin/coupon-admin.service.ts`, on the
-cross-tenant pool; audit values in `20260914001300_coupon_admin_actions`. Proved
-by `coupon-admin.service.spec.ts`. Refusals are `CouponAdminRefused.reason`.
+`billing-service/src/app/payment/coupon-admin/coupon-admin.service.ts`; audit
+values in `20260914001300_coupon_admin_actions`. Proved by
+`coupon-admin.service.spec.ts`. Refusals are `CouponAdminRefused.reason`.
+**The pool follows the caller (ADR-0053, F-102-f-a):** the platform owner on the
+cross-tenant pool; any other tenant in a `tenantTransaction` on the app pool, so
+RLS stands behind every rule below. Batches and the usage report enter through
+the same `within`. A tenant admin's one cross-tenant read is a lent gateway
+config's owner (`gatewayConfigOwner`, read only).
 
 | Rule | Why |
 |---|---|

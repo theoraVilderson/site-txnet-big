@@ -20,6 +20,7 @@
  *  - **audit.** Every write leaves a row naming the actor and what changed.
  */
 import { DiscountType, TenantType } from '@prisma/client';
+import { runWithTenant } from '@txnet-backend/shared-core';
 
 import { CouponAdminRefused, CouponAdminService } from './coupon-admin.service';
 
@@ -57,6 +58,37 @@ function matches(row: Row, where: Row = {}): boolean {
     if (v === undefined) return true;
     if (v !== null && typeof v === 'object' && 'in' in (v as Row)) return ((v as { in: unknown[] }).in).includes(row[k]);
     return (row[k] ?? null) === v;
+  });
+}
+
+/**
+ * Both pools over the same rows, every call logged as `app:` or `all:` (ADR-0053),
+ * and every service call run in the actor's tenant, as `identity.middleware.ts` runs it.
+ */
+function pools(db: object) {
+  const calls: string[] = [];
+  const pool = (name: string) => {
+    const client: Record<string, unknown> = { $executeRaw: async () => 0 };
+    for (const [model, delegate] of Object.entries(db)) {
+      client[model] = Object.fromEntries(
+        Object.entries(delegate as Row)
+          .filter(([, fn]) => typeof fn === 'function')
+          .map(([op, fn]) => [op, (...args: unknown[]) => (calls.push(`${name}:${model}.${op}`), (fn as (...a: unknown[]) => unknown)(...args))]),
+      );
+    }
+    client['$transaction'] = async (fn: (tx: unknown) => unknown) => fn(client);
+    return client;
+  };
+  return { app: pool('app'), all: pool('all'), calls };
+}
+
+function inTenant<T extends object>(service: T): T {
+  return new Proxy(service, {
+    get: (target, key) => {
+      const v = Reflect.get(target, key) as unknown;
+      if (typeof v !== 'function') return v;
+      return (actor: { tenantId: string }, ...rest: unknown[]) => runWithTenant({ id: actor.tenantId }, () => v.call(target, actor, ...rest));
+    },
   });
 }
 
@@ -135,7 +167,7 @@ const coupon = (over: Row): Row => ({
   ...over,
 });
 
-function build(seed: { redemptions?: Row[]; coupons?: Row[] } = {}) {
+function build(seed: { redemptions?: Row[]; coupons?: Row[]; grants?: Row[] } = {}) {
   const writes: string[] = [];
   const audit: Row[] = [];
   const types: Record<string, TenantType> = { [OWNER]: TenantType.platform_owner, [RESELLER]: TenantType.reseller, [OTHER]: TenantType.reseller };
@@ -158,7 +190,7 @@ function build(seed: { redemptions?: Row[]; coupons?: Row[] } = {}) {
     couponRedemption: table(seed.redemptions ?? [], 'couponRedemption', writes),
     paymentGateway: table([{ id: PLATFORM_GW }], 'paymentGateway', writes),
     tenantGatewayConfig: table([{ id: RESELLER_GW, tenantId: RESELLER }, { id: OTHER_GW, tenantId: OTHER }], 'tenantGatewayConfig', writes),
-    paymentGatewayGrant: table([], 'paymentGatewayGrant', writes),
+    paymentGatewayGrant: table(seed.grants ?? [], 'paymentGatewayGrant', writes),
     product: table([], 'product', writes),
     productVariant: table(VARIANTS.map((v) => ({ ...v })), 'productVariant', writes),
     adminAuditLog: {
@@ -169,9 +201,8 @@ function build(seed: { redemptions?: Row[]; coupons?: Row[] } = {}) {
       },
     },
   };
-  const all = { ...db, $transaction: async <T>(fn: (tx: typeof db) => Promise<T>) => fn(db) };
-  const app = { tenant: { findUnique: async ({ where }: { where: Row }) => (types[where['id'] as string] ? { tenantType: types[where['id'] as string] } : null) } };
-  return { service: new CouponAdminService(app as never, all as never), db, writes, audit };
+  const { app, all, calls } = pools(db);
+  return { service: inTenant(new CouponAdminService(app as never, all as never)), db, writes, audit, calls };
 }
 
 async function refusal(run: () => Promise<unknown>): Promise<CouponAdminRefused> {
@@ -372,5 +403,36 @@ describe('CouponAdminService — a free_grant coupon', () => {
       coupons: [coupon({ id: RESELLER_COUPON, tenantId: RESELLER, discountType: 'free_grant', discountValue: '0', grantVariantId: RESELLER_VARIANT, usedCount: 1 })],
     });
     expect((await refusal(() => service.update(actor(RESELLER), RESELLER_COUPON, { grantVariantId: PLATFORM_VARIANT }))).reason).toBe('used_coupon_frozen');
+  });
+});
+
+describe('CouponAdminService — the pool follows the caller (ADR-0053)', () => {
+  const onAll = (calls: string[]) => calls.filter((c) => c.startsWith('all:'));
+
+  it("serves a reseller's every coupon read and write on the app pool", async () => {
+    const { service, calls } = build();
+    const view = await service.create(actor(RESELLER), { ...DISCOUNT, allowedUserIds: [RESELLER_USER], visibility: 'targeted' });
+    await service.list(actor(RESELLER), {});
+    await service.get(actor(RESELLER), view.id);
+    await service.update(actor(RESELLER), view.id, { isActive: false, serviceScopes: [{ variantId: RESELLER_VARIANT }] });
+    await service.remove(actor(RESELLER), view.id);
+    expect(onAll(calls)).toEqual([]);
+    expect(calls).toContain('app:coupon.create');
+    expect(calls).toContain('app:adminAuditLog.create');
+  });
+
+  it("reads a lent gateway's owner on the cross-tenant pool — that one read, and no write", async () => {
+    const { service, calls } = build({ grants: [{ id: 'g1', tenantId: RESELLER, tenantGatewayConfigId: OTHER_GW, isActive: true }] });
+    await expect(service.create(actor(RESELLER), { ...DISCOUNT, gateways: [{ source: 'tenant', id: OTHER_GW }] })).resolves.toMatchObject({ gateways: [{ source: 'tenant', id: OTHER_GW }] });
+    expect(onAll(calls)).toEqual(['all:tenantGatewayConfig.findUnique']);
+  });
+
+  it('serves the platform owner on the cross-tenant pool, where a platform coupon can be written', async () => {
+    const { service, calls } = build();
+    const view = await service.create(actor(OWNER), { ...DISCOUNT, tenantId: null });
+    await service.list(actor(OWNER), {});
+    await service.update(actor(OWNER), view.id, { isActive: false });
+    expect(calls.filter((c) => c.startsWith('app:'))).toEqual(['app:tenant.findUnique', 'app:tenant.findUnique', 'app:tenant.findUnique', 'app:tenant.findUnique']);
+    expect(calls).toContain('all:coupon.create');
   });
 });

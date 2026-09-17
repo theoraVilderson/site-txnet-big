@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, RedemptionStatus } from '@prisma/client';
 
-import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { CouponActor, CouponAdminService } from './coupon-admin.service';
 import { CouponBatchService } from './coupon-batch.service';
 
@@ -59,22 +58,26 @@ export class CouponUsageService {
   constructor(
     private readonly coupons: CouponAdminService,
     private readonly batches: CouponBatchService,
-    private readonly all: CrossTenantPrismaService,
   ) {}
 
   async forCoupon(actor: CouponActor, couponId: string, filter: UsageFilter): Promise<UsageReport> {
     const { owner } = await this.coupons.access(actor);
-    const row = await this.coupons.loadManaged(actor, couponId, owner, { includeDeleted: true });
-    return this.report(new Map([[couponId, row['code'] as string]]), filter);
+    return this.coupons.within(owner, async (db) => {
+      const row = await this.coupons.loadManaged(db, actor, couponId, owner, { includeDeleted: true });
+      return this.report(db, new Map([[couponId, row['code'] as string]]), filter);
+    });
   }
 
   async forBatch(actor: CouponActor, batchId: string, filter: UsageFilter): Promise<UsageReport> {
-    await this.batches.load(actor, batchId);
-    const codes = await this.all.coupon.findMany({ where: { batchId }, select: { id: true, code: true } });
-    return this.report(new Map(codes.map((c) => [c.id, c.code])), filter);
+    const { owner } = await this.coupons.access(actor);
+    return this.coupons.within(owner, async (db) => {
+      await this.batches.load(db, actor, batchId, owner);
+      const codes = await db.coupon.findMany({ where: { batchId }, select: { id: true, code: true } });
+      return this.report(db, new Map(codes.map((c) => [c.id, c.code])), filter);
+    });
   }
 
-  private async report(codes: Map<string, string>, filter: UsageFilter): Promise<UsageReport> {
+  private async report(db: Prisma.TransactionClient, codes: Map<string, string>, filter: UsageFilter): Promise<UsageReport> {
     const page = Math.max(1, Math.floor(filter.page ?? 1));
     const pageSize = Math.min(100, Math.max(1, Math.floor(filter.pageSize ?? 20)));
     const range: Prisma.CouponRedemptionWhereInput = { couponId: { in: [...codes.keys()] } };
@@ -84,17 +87,17 @@ export class CouponUsageService {
     const where: Prisma.CouponRedemptionWhereInput = filter.status ? { ...range, status: filter.status } : range;
 
     const [rows, total, groups] = await Promise.all([
-      this.all.couponRedemption.findMany({ where, orderBy: { redeemedAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),
-      this.all.couponRedemption.count({ where }),
-      this.all.couponRedemption.groupBy({ by: ['status'], where: range, _count: { _all: true }, _sum: { discountAppliedAmount: true } }),
+      db.couponRedemption.findMany({ where, orderBy: { redeemedAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),
+      db.couponRedemption.count({ where }),
+      db.couponRedemption.groupBy({ by: ['status'], where: range, _count: { _all: true }, _sum: { discountAppliedAmount: true } }),
     ]);
 
     const list = rows as unknown as Row[];
     const userIds = [...new Set(list.map((r) => r['userId'] as string))];
     const paymentIds = [...new Set(list.map((r) => r['paymentTransactionId'] as string | null).filter((x): x is string => !!x))];
     const [users, payments] = await Promise.all([
-      userIds.length ? this.all.user.findMany({ where: { id: { in: userIds } }, select: { id: true, fullName: true, username: true } }) : [],
-      paymentIds.length ? this.all.paymentTransaction.findMany({ where: { id: { in: paymentIds } }, select: { id: true, status: true } }) : [],
+      userIds.length ? db.user.findMany({ where: { id: { in: userIds } }, select: { id: true, fullName: true, username: true } }) : [],
+      paymentIds.length ? db.paymentTransaction.findMany({ where: { id: { in: paymentIds } }, select: { id: true, status: true } }) : [],
     ]);
 
     const items = list.map((r): UsageItem => {

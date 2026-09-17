@@ -13,6 +13,7 @@
  *    found.
  */
 import { TenantType } from '@prisma/client';
+import { runWithTenant } from '@txnet-backend/shared-core';
 
 import { CouponAdminRefused, CouponAdminService } from './coupon-admin.service';
 import { CouponBatchService } from './coupon-batch.service';
@@ -37,6 +38,37 @@ function matches(row: Row, where: Row = {}): boolean {
     if (v === undefined) return true;
     if (v !== null && typeof v === 'object' && 'in' in (v as Row)) return (v as { in: unknown[] }).in.includes(row[k]);
     return (row[k] ?? null) === v;
+  });
+}
+
+/**
+ * Both pools over the same rows, every call logged as `app:` or `all:` (ADR-0053),
+ * and every service call run in the actor's tenant, as `identity.middleware.ts` runs it.
+ */
+function pools(db: object) {
+  const calls: string[] = [];
+  const pool = (name: string) => {
+    const client: Record<string, unknown> = { $executeRaw: async () => 0 };
+    for (const [model, delegate] of Object.entries(db)) {
+      client[model] = Object.fromEntries(
+        Object.entries(delegate as Row)
+          .filter(([, fn]) => typeof fn === 'function')
+          .map(([op, fn]) => [op, (...args: unknown[]) => (calls.push(`${name}:${model}.${op}`), (fn as (...a: unknown[]) => unknown)(...args))]),
+      );
+    }
+    client['$transaction'] = async (fn: (tx: unknown) => unknown) => fn(client);
+    return client;
+  };
+  return { app: pool('app'), all: pool('all'), calls };
+}
+
+function inTenant<T extends object>(service: T): T {
+  return new Proxy(service, {
+    get: (target, key) => {
+      const v = Reflect.get(target, key) as unknown;
+      if (typeof v !== 'function') return v;
+      return (actor: { tenantId: string }, ...rest: unknown[]) => runWithTenant({ id: actor.tenantId }, () => v.call(target, actor, ...rest));
+    },
   });
 }
 
@@ -97,10 +129,9 @@ function build() {
     ]),
     paymentTransaction: table([{ id: PAY_1, status: 'success' }]),
   };
-  const app = { tenant: { findUnique: async ({ where }: { where: Row }) => (types[where['id'] as string] ? { tenantType: types[where['id'] as string] } : null) } };
-  const coupons = new CouponAdminService(app as never, db as never);
-  const batches = new CouponBatchService(coupons, db as never);
-  return new CouponUsageService(coupons, batches, db as never);
+  const { app, all, calls } = pools(db);
+  const coupons = new CouponAdminService(app as never, all as never);
+  return Object.assign(inTenant(new CouponUsageService(coupons, new CouponBatchService(coupons))), { calls });
 }
 
 async function refusal(run: () => Promise<unknown>): Promise<CouponAdminRefused> {
@@ -147,6 +178,7 @@ describe('CouponUsageService', () => {
     const service = build();
     expect((await refusal(() => service.forCoupon(actor(RESELLER), 'c-other', {}))).reason).toBe('coupon_not_found');
     expect((await refusal(() => service.forBatch(actor(RESELLER), OTHER_BATCH, {}))).reason).toBe('batch_not_found');
+    expect(service.calls.filter((c) => c.startsWith('all:'))).toEqual([]);
     await expect(service.forBatch(actor(OWNER), OTHER_BATCH, {})).resolves.toMatchObject({ total: 1 });
   });
 });

@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { CouponChannel, CouponVisibility, DiscountType, Prisma, TenantType } from '@prisma/client';
 
+import { tenantTransaction, type TenantTransactionOptions } from '@txnet-backend/shared-core';
+
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { GatewaySource } from '../gateway/gateway-merchant';
@@ -180,12 +182,18 @@ const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInt
  * tenant's. Any other tenant: its own. A coupon outside a caller's reach, or
  * soft-deleted, is `coupon_not_found`.
  *
- * **Why the cross-tenant pool.** `coupon`'s `WITH CHECK` is strict, so even the
- * platform owner's connection cannot write a platform coupon, and
- * `coupon_tenant` is written on this pool by design (ADR-0048 decision 3). As in
- * `GatewayAdminService`, the boundary is this file: {@link access} is read on
- * the application pool inside the caller's own scope, and every method decides
- * from it before it reads or writes a row.
+ * **The pool follows the caller (ADR-0053, D-37).** `coupon`'s `WITH CHECK` is
+ * strict, so even the platform owner's connection cannot write a platform
+ * coupon, and `coupon_tenant` is written on the cross-tenant pool by design
+ * (ADR-0048 decision 3). So:
+ * - the **platform owner** is served on {@link CrossTenantPrismaService};
+ * - **any other tenant** in a {@link tenantTransaction} on the app pool, where
+ *   RLS stands behind the ownership checks below.
+ *
+ * {@link access} decides, {@link within} hands out the pool, and batches and the
+ * usage report enter through both. The one read a tenant admin makes on the
+ * cross-tenant pool is {@link gatewayConfigOwner}: a lent gateway belongs to
+ * another tenant, which RLS hides (ADR-0053 amendment, read only).
  *
  * **A used coupon** (a counter above zero, or any redemption row) keeps its type
  * and value — a receipt already says what it took — and its `totalUsageLimit`
@@ -197,9 +205,9 @@ export class CouponAdminService {
   private readonly logger = new Logger(CouponAdminService.name);
 
   constructor(
-    /** The caller's own tenant, bound by RLS — used for one read: who is asking. */
+    /** Who is asking, and a tenant admin's every coupon query. */
     private readonly prisma: PrismaService,
-    /** Every tenant's coupon rows, by policy. See the class comment. */
+    /** The platform owner's pool. See the class comment. */
     private readonly all: CrossTenantPrismaService,
   ) {}
 
@@ -207,6 +215,16 @@ export class CouponAdminService {
   async access(actor: CouponActor): Promise<{ owner: boolean }> {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
     return { owner: tenant?.tenantType === TenantType.platform_owner };
+  }
+
+  /**
+   * Run `fn` in one transaction on the pool that serves this caller (ADR-0053):
+   * the cross-tenant pool for the platform owner, a `tenantTransaction` on the
+   * app pool for anyone else. The only place that hands out `this.all` as a
+   * place to write.
+   */
+  within<T>(owner: boolean, fn: (db: Tx) => Promise<T>, options?: TenantTransactionOptions): Promise<T> {
+    return owner ? this.all.$transaction(fn, options) : tenantTransaction(this.prisma, fn, options);
   }
 
   /**
@@ -225,8 +243,8 @@ export class CouponAdminService {
   }
 
   /** The coupon row, if the caller may manage it. Deleted and out-of-reach rows are not found. */
-  async loadManaged(actor: CouponActor, id: string, owner: boolean, opts: { includeDeleted?: boolean } = {}): Promise<Row> {
-    const row = (await this.all.coupon.findUnique({ where: { id } })) as unknown as Row | null;
+  async loadManaged(db: Tx, actor: CouponActor, id: string, owner: boolean, opts: { includeDeleted?: boolean } = {}): Promise<Row> {
+    const row = (await db.coupon.findUnique({ where: { id } })) as unknown as Row | null;
     if (!row || (!opts.includeDeleted && row['deletedAt'] != null)) throw new CouponAdminRefused('coupon_not_found', id);
     if (!owner && row['tenantId'] !== actor.tenantId) throw new CouponAdminRefused('coupon_not_found', id);
     return row;
@@ -237,33 +255,35 @@ export class CouponAdminService {
     const page = Math.max(1, Math.floor(filter.page ?? 1));
     const pageSize = Math.min(PAGE_MAX, Math.max(1, Math.floor(filter.pageSize ?? 20)));
     const where = this.listWhere(actor, owner, filter);
-    const [rows, total] = await Promise.all([
-      this.all.coupon.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),
-      this.all.coupon.count({ where }),
-    ]);
-    return { items: await this.views(rows as unknown as Row[]), total, page, pageSize };
+    return this.within(owner, async (db) => {
+      const [rows, total] = await Promise.all([
+        db.coupon.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),
+        db.coupon.count({ where }),
+      ]);
+      return { items: await this.views(db, rows as unknown as Row[]), total, page, pageSize };
+    });
   }
 
   async get(actor: CouponActor, id: string): Promise<CouponView> {
     const { owner } = await this.access(actor);
-    const row = await this.loadManaged(actor, id, owner);
-    return (await this.views([row]))[0];
+    return this.within(owner, async (db) => (await this.views(db, [await this.loadManaged(db, actor, id, owner)]))[0]);
   }
 
   async create(actor: CouponActor, input: CreateCouponInput): Promise<CouponView> {
+    const { owner } = await this.access(actor);
     const tenantId = await this.ownerOfNew(actor, input.tenantId);
 
     const next = this.merged(null, input);
     next['tenantId'] = tenantId;
-    const relations = await this.checkRelations(actor, tenantId, next, input, { tenantIds: [], allowedUserIds: [], gateways: [], serviceScopes: [] });
 
-    const created = await this.all.$transaction(async (tx) => {
+    const created = await this.within(owner, async (tx) => {
+      const relations = await this.checkRelations(tx, actor, tenantId, next, input, { tenantIds: [], allowedUserIds: [], gateways: [], serviceScopes: [] });
       await this.assertCodeFree(tx, tenantId, next['code'] as string, null);
       const row = (await tx.coupon.create({
         data: { ...this.columns(next), tenantId, createdByAdminId: actor.adminId } as Prisma.CouponUncheckedCreateInput,
       })) as unknown as Row;
       await this.writeRelations(tx, row['id'] as string, relations, input);
-      const [view] = await this.views([row], tx);
+      const [view] = await this.views(tx, [row]);
       await tx.adminAuditLog.create({
         data: {
           tenantId: tenantId ?? actor.tenantId,
@@ -284,14 +304,14 @@ export class CouponAdminService {
 
   async update(actor: CouponActor, id: string, patch: UpdateCouponInput): Promise<CouponView> {
     const { owner } = await this.access(actor);
-    const row = await this.loadManaged(actor, id, owner);
-    const [before] = await this.views([row]);
-    const tenantId = row['tenantId'] as string | null;
 
-    const next = this.merged(row, patch);
-    const relations = await this.checkRelations(actor, tenantId, next, patch, before);
+    const updated = await this.within(owner, async (tx) => {
+      const row = await this.loadManaged(tx, actor, id, owner);
+      const [before] = await this.views(tx, [row]);
+      const tenantId = row['tenantId'] as string | null;
+      const next = this.merged(row, patch);
+      const relations = await this.checkRelations(tx, actor, tenantId, next, patch, before);
 
-    const updated = await this.all.$transaction(async (tx) => {
       const fresh = (await tx.coupon.findUnique({ where: { id } })) as unknown as Row;
       const redemptions = await tx.couponRedemption.count({ where: { couponId: id } });
       const used = Number(fresh['usedCount']) > 0 || Number(fresh['reservedCount']) > 0 || redemptions > 0;
@@ -310,7 +330,7 @@ export class CouponAdminService {
       const data = this.columns(next);
       const saved = (await tx.coupon.update({ where: { id }, data: data as Prisma.CouponUncheckedUpdateInput })) as unknown as Row;
       await this.writeRelations(tx, id, relations, patch, true);
-      const [after] = await this.views([saved], tx);
+      const [after] = await this.views(tx, [saved]);
 
       const a = this.snapshot(after);
       const b = this.snapshot(before);
@@ -340,10 +360,10 @@ export class CouponAdminService {
    */
   async remove(actor: CouponActor, id: string): Promise<{ id: string; mode: 'deleted' | 'soft_deleted' }> {
     const { owner } = await this.access(actor);
-    const row = await this.loadManaged(actor, id, owner);
-    const [before] = await this.views([row]);
 
-    const mode = await this.all.$transaction(async (tx) => {
+    const mode = await this.within(owner, async (tx) => {
+      const row = await this.loadManaged(tx, actor, id, owner);
+      const [before] = await this.views(tx, [row]);
       const redemptions = await tx.couponRedemption.count({ where: { couponId: id } });
       const soft = redemptions > 0;
       if (soft) {
@@ -374,9 +394,8 @@ export class CouponAdminService {
   }
 
   /** Views of coupon rows with their child rows, in the order given. */
-  async views(rows: Row[], tx?: Tx): Promise<CouponView[]> {
+  async views(db: Tx, rows: Row[]): Promise<CouponView[]> {
     if (rows.length === 0) return [];
-    const db = (tx ?? this.all) as Tx;
     const ids = rows.map((r) => r['id'] as string);
     const where = { couponId: { in: ids } };
     const [users, tenants, gateways, scopes] = await Promise.all([
@@ -545,6 +564,7 @@ export class CouponAdminService {
    * depends on moves.
    */
   private async checkRelations(
+    db: Tx,
     actor: CouponActor,
     tenantId: string | null,
     next: Row,
@@ -558,7 +578,8 @@ export class CouponAdminService {
 
     if (tenantId !== null && tenantIds.length > 0) throw new CouponAdminRefused('tenants_are_platform_coupons');
     if (patch.tenantIds !== undefined && tenantIds.length > 0) {
-      const found = await this.all.tenant.findMany({ where: { id: { in: tenantIds } }, select: { id: true } });
+      // Reached by the platform owner alone: a tenant coupon names no tenants.
+      const found = await db.tenant.findMany({ where: { id: { in: tenantIds } }, select: { id: true } });
       const missing = tenantIds.find((t) => !found.some((f) => f.id === t));
       if (missing) throw new CouponAdminRefused('tenant_not_found', missing);
     }
@@ -568,7 +589,7 @@ export class CouponAdminService {
       // ADR-0048: a platform coupon naming no tenant serves the platform owner's
       // users — the caller, since only the platform owner writes one.
       const served = tenantId !== null ? [tenantId] : tenantIds.length > 0 ? tenantIds : [actor.tenantId];
-      const users = await this.all.user.findMany({ where: { id: { in: allowedUserIds } }, select: { id: true, tenantId: true } });
+      const users = await db.user.findMany({ where: { id: { in: allowedUserIds } }, select: { id: true, tenantId: true } });
       for (const id of allowedUserIds) {
         const u = users.find((x) => x.id === id);
         if (!u || !served.includes(u.tenantId)) throw new CouponAdminRefused('user_out_of_scope', id);
@@ -581,7 +602,7 @@ export class CouponAdminService {
         const key = `${g.source}:${g.id}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        await this.assertGateway(tenantId, g);
+        await this.assertGateway(db, tenantId, g);
       }
     }
 
@@ -591,15 +612,15 @@ export class CouponAdminService {
         const variant = s.variantId ?? null;
         if ((product === null) === (variant === null)) throw new CouponAdminRefused('scope_not_found', 'a scope names one product or one variant');
         const found = variant
-          ? await this.all.productVariant.findUnique({ where: { id: variant }, select: { tenantId: true } })
-          : await this.all.product.findUnique({ where: { id: product as string }, select: { tenantId: true } });
+          ? await db.productVariant.findUnique({ where: { id: variant }, select: { tenantId: true } })
+          : await db.product.findUnique({ where: { id: product as string }, select: { tenantId: true } });
         if (!found || (found.tenantId !== null && found.tenantId !== tenantId)) throw new CouponAdminRefused('scope_not_found', variant ?? product ?? '');
       }
     }
 
     const grantVariantId = next['grantVariantId'] as string | null;
     if (grantVariantId && (patch.grantVariantId !== undefined || patch.discountType !== undefined)) {
-      await this.assertGrantVariant(tenantId, grantVariantId);
+      await this.assertGrantVariant(db, tenantId, grantVariantId);
     }
     return { tenantIds, allowedUserIds, gateways, serviceScopes };
   }
@@ -609,8 +630,8 @@ export class CouponAdminService {
    * platform's or the coupon owner's. A platform coupon grants only a platform
    * variant, as it pays only through a platform gateway (ADR-0048).
    */
-  async assertGrantVariant(tenantId: string | null, variantId: string): Promise<void> {
-    const v = await this.all.productVariant.findUnique({
+  async assertGrantVariant(db: Tx, tenantId: string | null, variantId: string): Promise<void> {
+    const v = await db.productVariant.findUnique({
       where: { id: variantId },
       select: { tenantId: true, isActive: true, product: { select: { isActive: true, category: { select: { isActive: true } } } } },
     });
@@ -623,20 +644,30 @@ export class CouponAdminService {
    * gateway (ADR-0048 decision 4). A tenant coupon: its own gateway, or one
    * granted to it (ADR-0041).
    */
-  private async assertGateway(tenantId: string | null, g: CouponGatewayRef): Promise<void> {
+  private async assertGateway(db: Tx, tenantId: string | null, g: CouponGatewayRef): Promise<void> {
     if (tenantId === null) {
       if (g.source !== 'platform') throw new CouponAdminRefused('platform_coupon_needs_platform_gateway', g.id);
-      if (!(await this.all.paymentGateway.findUnique({ where: { id: g.id }, select: { id: true } }))) throw new CouponAdminRefused('gateway_not_found', g.id);
+      if (!(await db.paymentGateway.findUnique({ where: { id: g.id }, select: { id: true } }))) throw new CouponAdminRefused('gateway_not_found', g.id);
       return;
     }
     if (g.source === 'tenant') {
-      const own = await this.all.tenantGatewayConfig.findUnique({ where: { id: g.id }, select: { tenantId: true } });
+      const own = await this.gatewayConfigOwner(g.id);
       if (own?.tenantId === tenantId) return;
-      if (own && (await this.all.paymentGatewayGrant.findFirst({ where: { tenantId, tenantGatewayConfigId: g.id, isActive: true }, select: { id: true } }))) return;
+      if (own && (await db.paymentGatewayGrant.findFirst({ where: { tenantId, tenantGatewayConfigId: g.id, isActive: true }, select: { id: true } }))) return;
       throw new CouponAdminRefused('gateway_not_found', g.id);
     }
-    const grant = await this.all.paymentGatewayGrant.findFirst({ where: { tenantId, gatewayId: g.id, isActive: true }, select: { id: true } });
+    const grant = await db.paymentGatewayGrant.findFirst({ where: { tenantId, gatewayId: g.id, isActive: true }, select: { id: true } });
     if (!grant) throw new CouponAdminRefused('gateway_not_found', g.id);
+  }
+
+  /**
+   * Whose a tenant gateway config is. The one read a tenant admin makes on the
+   * cross-tenant pool (ADR-0053 amendment): a gateway lent to them belongs to
+   * the lender, and `tenant_gateway_config`'s RLS hides it on the app pool.
+   * Read only, one column.
+   */
+  private gatewayConfigOwner(id: string): Promise<{ tenantId: string } | null> {
+    return this.all.tenantGatewayConfig.findUnique({ where: { id }, select: { tenantId: true } });
   }
 
   /** The partial unique indexes, answered as a reason. The index still decides a race. */

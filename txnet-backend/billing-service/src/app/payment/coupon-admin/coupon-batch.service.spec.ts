@@ -13,6 +13,7 @@
  *  - **deactivating a batch** switches every live code in it off at once.
  */
 import { DiscountType, TenantType } from '@prisma/client';
+import { runWithTenant } from '@txnet-backend/shared-core';
 
 import { CouponAdminRefused, CouponAdminService } from './coupon-admin.service';
 import { CouponBatchService, GIFT_CODE_ALPHABET } from './coupon-batch.service';
@@ -33,6 +34,37 @@ function matches(row: Row, where: Row = {}): boolean {
     if (v === undefined) return true;
     if (v !== null && typeof v === 'object' && 'in' in (v as Row)) return (v as { in: unknown[] }).in.includes(row[k]);
     return (row[k] ?? null) === v;
+  });
+}
+
+/**
+ * Both pools over the same rows, every call logged as `app:` or `all:` (ADR-0053),
+ * and every service call run in the actor's tenant, as `identity.middleware.ts` runs it.
+ */
+function pools(db: object) {
+  const calls: string[] = [];
+  const pool = (name: string) => {
+    const client: Record<string, unknown> = { $executeRaw: async () => 0 };
+    for (const [model, delegate] of Object.entries(db)) {
+      client[model] = Object.fromEntries(
+        Object.entries(delegate as Row)
+          .filter(([, fn]) => typeof fn === 'function')
+          .map(([op, fn]) => [op, (...args: unknown[]) => (calls.push(`${name}:${model}.${op}`), (fn as (...a: unknown[]) => unknown)(...args))]),
+      );
+    }
+    client['$transaction'] = async (fn: (tx: unknown) => unknown) => fn(client);
+    return client;
+  };
+  return { app: pool('app'), all: pool('all'), calls };
+}
+
+function inTenant<T extends object>(service: T): T {
+  return new Proxy(service, {
+    get: (target, key) => {
+      const v = Reflect.get(target, key) as unknown;
+      if (typeof v !== 'function') return v;
+      return (actor: { tenantId: string }, ...rest: unknown[]) => runWithTenant({ id: actor.tenantId }, () => v.call(target, actor, ...rest));
+    },
   });
 }
 
@@ -94,10 +126,9 @@ function build() {
       },
     },
   };
-  const all = { ...db, $transaction: async <T>(fn: (tx: typeof db) => Promise<T>) => fn(db) };
-  const app = { tenant: { findUnique: async ({ where }: { where: Row }) => (types[where['id'] as string] ? { tenantType: types[where['id'] as string] } : null) } };
+  const { app, all, calls } = pools(db);
   const coupons = new CouponAdminService(app as never, all as never);
-  return { service: new CouponBatchService(coupons, all as never), db, writes, audit };
+  return { service: inTenant(new CouponBatchService(coupons)), db, writes, audit, calls };
 }
 
 async function refusal(run: () => Promise<unknown>): Promise<CouponAdminRefused> {
@@ -165,11 +196,13 @@ describe('CouponBatchService — generate', () => {
 
 describe('CouponBatchService — list, export, deactivate', () => {
   it('lists only the caller’s batches with their counts', async () => {
-    const { service, db } = build();
+    const { service, db, calls } = build();
     const batch = await service.generate(actor(RESELLER), { ...BATCH, count: 3 });
     db.coupon.rows.find((r) => r['batchId'] === batch.id)!['usedCount'] = 1;
     const page = await service.list(actor(RESELLER), {});
     expect(page.items).toEqual([expect.objectContaining({ id: batch.id, codes: 3, used: 1, reserved: 0 })]);
+    // ADR-0053: a reseller's batch is made and listed on the app pool alone.
+    expect(calls.filter((c) => c.startsWith('all:'))).toEqual([]);
   });
 
   it('exports a batch as CSV, audited, and never another tenant’s', async () => {
