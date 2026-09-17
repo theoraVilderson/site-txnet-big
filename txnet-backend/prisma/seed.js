@@ -95,10 +95,11 @@ async function grantAllPermissionsToSuperAdmin() {
 // on those gateways by hand — migration 20260914000300's grant, for a fresh
 // database.
 // F-502-a (D-33): the same Admin manages its own tenant's coupons — migration
-// 20260914000900's grant, for a fresh database. `campaign.manage` (F-035-c) likewise.
+// 20260914000900's grant, for a fresh database. `campaign.manage` (F-035-c) and
+// `tenant_billing.adjust` (F-019-a) likewise.
 async function grantGatewayManageToAdmin() {
   const role = await prisma.role.findUniqueOrThrow({ where: { name: 'Admin' } });
-  for (const key of ['gateway.manage', 'payment.confirm_manual', 'coupon.manage', 'catalog.manage', 'campaign.manage']) {
+  for (const key of ['gateway.manage', 'payment.confirm_manual', 'coupon.manage', 'catalog.manage', 'campaign.manage', 'tenant_billing.adjust']) {
     const permission = await prisma.permission.upsert({ where: { key }, update: {}, create: { key } });
     await prisma.rolePermission.upsert({
       where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } },

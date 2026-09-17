@@ -2,13 +2,13 @@
 id: tenant
 layer: domain
 status: active
-version: 8
-updated: 2026-09-13
+version: 9
+updated: 2026-09-17
 ---
 
 # Contract — tenant
 
-**One operation is implemented; the rest are intended.** *Resolve tenant by
+**Resolution, the vault and the billing wallet are implemented; the rest are intended.** *Resolve tenant by
 claim* is real code (`app/tenant/`, F-061-a, F-066-c, F-066-d). Every other row in *Provides* is
 still a shape derived from `txnet-backend/prisma/domains/tenant.prisma`, with no
 service behind it — the `(intended)` marker on that table is what tells them
@@ -17,8 +17,8 @@ apart, and it is the thing to check before calling one.
 ## TL;DR
 
 A Tenant is an isolation + branding boundary. Exactly one is `platform_owner`;
-the rest are `reseller`. The platform bills tenants (subscription or metered
-usage); tenants collect from their own end users through their own gateway
+the rest are `reseller`. The platform bills tenants from a prepaid wallet
+(D-41: subscription, no metering); tenants collect from their own end users through their own gateway
 (ADR-0006). A central entitlement check gates every feature per tenant.
 
 ## Provides (intended)
@@ -28,7 +28,7 @@ usage); tenants collect from their own end users through their own gateway
 | **resolve tenant by claim** — implemented | `{host?, session?, bot?}` | `{id, slug, via, surfacePurpose?}` or `null` — `null` means *no tenant*, never a fallback | sync | `TenantClaimConflict` when a claim and its surface disagree |
 | check entitlement | tenantId, featureKey | allowed / denied (+ source, expiry) | sync | — |
 | verify custom domain | tenantId, domainValue | verification status | async (DNS TXT / ArvanCloud) | token mismatch |
-| charge tenant | tenantId, reason, amount | `tenant_billing_transaction` (append-only) | sync tx | insufficient / wallet missing |
+| **credit / debit the billing wallet** — implemented, [contract.billing.md](contract.billing.md) | tenantId, reason, amount, reference | `tenant_billing_transaction` (append-only) | sync tx | insufficient / duplicate / version conflict |
 | meter usage | tenantId, meterKey, quantity, period | `tenant_usage_meter` row | async (worker) | — |
 | set BYO gateway/SMS/bot config | tenantId, encrypted credentials | config row, `pending` verification | sync | — |
 | **store / use a tenant credential** — implemented | see [contract.vault.md](contract.vault.md) | | | |

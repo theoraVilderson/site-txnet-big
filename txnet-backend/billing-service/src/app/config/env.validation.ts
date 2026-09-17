@@ -308,6 +308,8 @@ export const envSchema = z.object({
   /** Catalog management (`catalog/catalog-admin.controller.ts`, F-026-d), per user. */
   CATALOG_ADMIN_READ_RATE_LIMIT: rateLimit(120),
   CATALOG_ADMIN_WRITE_RATE_LIMIT: rateLimit(30),
+  /** Manual billing-wallet adjustment (`tenant-billing/tenant-billing-admin.controller.ts`, F-019-a), per user. */
+  TENANT_BILLING_ADMIN_WRITE_RATE_LIMIT: rateLimit(30),
 }).refine((env) => !(env.NODE_ENV === 'production' && env.PAYMENT_GATEWAY_SANDBOX), {
   message: 'PAYMENT_GATEWAY_SANDBOX=true is refused when NODE_ENV=production',
   path: ['PAYMENT_GATEWAY_SANDBOX'],

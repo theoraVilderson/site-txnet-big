@@ -60,6 +60,8 @@ enum AdminAction {
   catalog_price_deactivate
   coupon_batch_deactivate
   campaign_send
+  // F-019-a (D-41) — the platform owner credits or debits a reseller's billing wallet by hand.
+  tenant_billing_adjust
 
   @@schema("audit")
 }
@@ -88,6 +90,8 @@ enum AuditTargetType {
   product_variant
   price
   notification_campaign
+  // F-019-a. A reseller's billing wallet with the platform, not a user's `wallet`.
+  tenant_billing_wallet
 
   @@schema("audit")
 }

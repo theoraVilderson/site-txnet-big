@@ -247,7 +247,8 @@ model TenantStaffMember {
 
 // ── بیلینگ Tenant↔پلتفرم — تنها جریان مالی مجاز بین شما و Tenant ───────────
 
-/// ب-۱. TenantBillingWallet — Tenant به شما بدهکار است.
+/// ب-۱. TenantBillingWallet — a reseller's prepaid balance with the platform (D-41);
+/// `cachedBalance >= 0` is a CHECK (migration 20260917000900), never a debt.
 model TenantBillingWallet {
   id            String  @id @default(uuid()) @db.Uuid
   tenantId      String  @unique @db.Uuid
@@ -262,6 +263,9 @@ model TenantBillingWallet {
 }
 
 /// TenantBillingTransaction — Append-only، همان الگوی Ledger سند اصلی.
+/// F-019-a: written only by `TenantBillingLedger` (shared-core). Migration
+/// 20260917000900 adds what Prisma cannot model: `amount > 0`, `balanceAfter >= 0`,
+/// and a partial unique (reasonType, referenceId) where the reference is set.
 model TenantBillingTransaction {
   id           String                  @id @default(uuid()) @db.Uuid
   walletId     String                  @db.Uuid

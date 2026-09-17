@@ -201,6 +201,12 @@ export const RateLimitBucket = {
   CATALOG_ADMIN_WRITE: 'catalog:admin:write',
 
   /**
+   * The platform owner adjusting a reseller's billing wallet by hand in
+   * `billing-service` (F-019-a), per user. Moving money by hand is rare.
+   */
+  TENANT_BILLING_ADMIN_WRITE: 'tenant-billing:admin:write',
+
+  /**
    * One of the caller's own payments (F-093-l), per user. Its own bucket, not
    * `WALLET_PAYMENTS`: the pending page polls it, and a payer watching a
    * verifying payment must not use up the financial page's list budget.

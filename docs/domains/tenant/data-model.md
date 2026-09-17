@@ -1,7 +1,7 @@
 ---
 id: tenant
 layer: domain
-updated: 2026-09-04
+updated: 2026-09-17
 ---
 
 # Data model — tenant
@@ -18,7 +18,7 @@ Source of truth: `txnet-backend/prisma/domains/tenant.prisma` (Postgres schema
 | tenant_feature_package | plans the platform sells to resellers | no (catalog of packages) | permanent |
 | tenant_feature_entitlement | which feature keys are on for a tenant | yes | until revoked/expired |
 | tenant_staff_member | reseller's internal team (own RBAC, separate from identity.role) | yes | — |
-| tenant_billing_wallet | what the tenant owes the platform (cache) | yes | with tenant |
+| tenant_billing_wallet | a reseller's prepaid balance with the platform (cache, `>= 0`; D-41) | yes | with tenant |
 | tenant_billing_transaction | append-only ledger of tenant<->platform charges | yes | permanent |
 | tenant_usage_meter | metered usage rollups for pay-as-you-go | yes | permanent |
 | tenant_gateway_config / tenant_sms_config | BYO integration settings; the secrets are vault rows (`tenant_sms_config`: one per tenant, no secret column since F-018-a) | yes | with tenant |
@@ -39,3 +39,7 @@ branding/entitlements through a resolver, never the raw tables.
 
 `platform_owner` uniqueness, partial unique indexes on domains, and RLS are
 "section 99" manual SQL — not applied.
+
+`20260917000900_tenant_billing_wallet` (F-019-a) adds what Prisma cannot model:
+non-negative `cachedBalance` / `balanceAfter`, positive `amount`, and a partial
+unique `(reasonType, referenceId)` on `tenant_billing_transaction`.

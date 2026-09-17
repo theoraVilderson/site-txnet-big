@@ -2,13 +2,13 @@
 id: tenant
 layer: domain
 status: active
-updated: 2026-09-09
+updated: 2026-09-17
 ---
 
 # Invariants — tenant
 
-Rows 1-7 were extracted from schema comments during onboarding and none of them
-is enforced in code yet. **Rows 8-13 are** — 8-12 are the Credential Vault's
+Rows 1-7 were extracted from schema comments during onboarding; of them only 3
+is enforced (F-019-a), with 14-15 beside it. **Rows 8-13 are** — 8-12 are the Credential Vault's
 (F-066-f and F-066-g, ADR-0026) and 13 is Row-Level Security (F-066-m-a,
 completed by F-066-m-b). The
 `Enforced by` column names what holds each one; row 13 is the first whose
@@ -18,7 +18,7 @@ enforcer is not application code at all.
 |---|---|---|---|
 | 1 | Exactly one `tenant` row has `tenantType = platform_owner` | planned CHECK/trigger (schema "section 99") — NOT applied | ambiguous platform identity, billing routing errors |
 | 2 | Tenant end-user money never enters a platform wallet; there is no platform->tenant settlement wallet (ADR-0006) | design / absence of such a table | platform becomes a money transmitter |
-| 3 | `tenant_billing_wallet` balance is never written directly — only via append-only `tenant_billing_transaction` + `balanceAfter` (ADR-0002) | planned service layer | silent money drift |
+| 3 | `tenant_billing_wallet` balance is never written directly — only via append-only `tenant_billing_transaction` + `balanceAfter` (ADR-0002) | `TenantBillingLedger` (shared-core) — the only writer of `cachedBalance`, under its `version` (F-019-a) | silent money drift |
 | 4 | Encrypted credential fields (`merchantIdEncrypted`, `apiKeyEncrypted`, `ownApiKeyEncrypted`) are never default-selected or logged | planned service `select`/`omit` | tenant gateway/bot takeover |
 | 5 | A `custom_domain` only routes after `verificationStatus = verified` | planned domain-verifier worker | domain hijack / cert misissue |
 | 6 | A feature runs for a tenant only if `tenant_feature_entitlement.isEnabled` (and not expired) for that `featureKey` | planned central guard | unpaid feature usage |
@@ -29,10 +29,16 @@ enforcer is not application code at all.
 | 11 | **Every decryption of a credential is recorded before its plaintext is returned** | `CredentialVaultService.use()` awaits the `tenant_credential_access` insert and does not catch it, so an unaudited decryption throws instead of handing a value back (F-1215) | a trail that is complete only in appearance is worse than none: the one decryption nobody can explain is the one that was not written |
 | 12 | **No tenant-owned credential is read from an environment variable; a service holding one refuses to start** | `CredentialEnvGuard.onModuleInit` against the total `CREDENTIAL_ENV_VARS` map, minus the dated `GRACED_ENV_VARS` exceptions (F-1216, ADR-0026 rule 6) | a leftover `TELEGRAM_BOT_TOKEN` keeps one tenant's bot working after multi-bot ships, so nobody notices the vault was never wired up. By the time it is load-bearing it is too late to refuse it |
 | 13 | **A tenant-scoped row is invisible to a connection that has not said which tenant it is acting for, and no application mistake can make it visible** | Postgres, not code. Every one of the 25 tables with a `tenantId` column carries `ENABLE`/`FORCE ROW LEVEL SECURITY`, a `tenant_isolation` policy for `txnet_app` reading `public.current_tenant_id()`, and a `cross_tenant` policy for `txnet_cross_tenant` — migrations `20260909000500_row_level_security` (2 tables) and `20260909001500_row_level_security_all_tables` (the other 23, in three shapes the second file explains). The service connects as `DATABASE_APP_URL`, a login role that owns no table and carries `NOBYPASSRLS`, so the policy binds it; `withTenant` sets `app.tenant_id` in each query's own transaction (`platform/tenant-context/contract.md` rule 5). The reads that *produce* a tenant — host, vault, webhook path — use `DATABASE_CROSS_TENANT_URL`, a second role whose policy is `USING (true)`: **a policy, never a bypass**, so no connection string in this system turns the rules off | every layer above this is application code, and ADR-0024 accepts that raw SQL, nested writes and a queue consumer written next year all sit outside it. This row is what is left when one of them is wrong. Unbound, `current_tenant_id()` is NULL and `"tenantId" = NULL` is never true — so the failure is **no rows**, never another tenant's |
+| 14 | **A reseller's billing balance is never negative** — prepaid only, no credit line, no debt (D-01, D-41) | `TenantBillingLedger` refuses first; CHECKs on `cachedBalance`, `balanceAfter` and `amount > 0` for every other writer (migration `20260917000900_tenant_billing_wallet`) | the platform extends credit it never decided to |
+| 15 | **At most one billing entry per `(reasonType, referenceId)`** | partial unique index `tenant_billing_transaction_reason_reference_key`; the ledger checks first to name the refusal | a payment, renewal or admin request moves the balance twice |
 
 ## How to test
 
-Rows 1-7: to be written when the service exists. Minimum: a test that a second
+Rows 3, 14, 15 and the owner-only surface: `billing-service/src/app/tenant-billing/tenant-billing-admin.spec.ts`
+(version race, below-zero debit, repeated request, non-owner never on the
+cross-tenant pool). The CHECKs and the index are the migration's; no int spec.
+
+Rows 1-2, 4-7: to be written when the service exists. Minimum: a test that a second
 `platform_owner` insert fails, and that the entitlement guard denies a disabled
 feature key.
 
