@@ -1,8 +1,22 @@
 import { createTransport, type Transporter } from 'nodemailer';
 import { err, ok, type ResponseType } from '../envelope/response';
 
-/** The failure `msg` when the SMTP server was not reached or refused the message. */
+/** The failure `msg` when the SMTP server was not reached or refused the message for a reason not named below. */
 export const MAIL_TRANSPORT_FAILURE = 'mail failed to send';
+/** The failure `msg` when the server refused this recipient for good (550/551/553, a malformed address). */
+export const MAIL_RECIPIENT_REFUSED = 'mail recipient refused';
+/** The failure `msg` when the server refused the account (credentials) or any other permanent 5xx. */
+export const MAIL_ACCOUNT_REFUSED = 'mail account refused';
+
+const RECIPIENT_CODES = new Set([550, 551, 553]);
+
+/** Which of the three a nodemailer error is; a 4xx or a connection error is the transport, worth another try. */
+function failureOf(e: unknown): string {
+  const { code, responseCode } = (e ?? {}) as { code?: string; responseCode?: number };
+  if (code === 'EENVELOPE' || (responseCode !== undefined && RECIPIENT_CODES.has(responseCode))) return MAIL_RECIPIENT_REFUSED;
+  if (code === 'EAUTH' || (responseCode !== undefined && responseCode >= 500)) return MAIL_ACCOUNT_REFUSED;
+  return MAIL_TRANSPORT_FAILURE;
+}
 
 export interface MailProviderOptions {
   host: string;
@@ -60,7 +74,7 @@ export class MailProviderService {
       await this.transport.sendMail({ from: this.from, ...message });
       return ok(true, 'mail sent');
     } catch (e) {
-      return err(MAIL_TRANSPORT_FAILURE, e instanceof Error ? e.message : String(e));
+      return err(failureOf(e), e instanceof Error ? e.message : String(e));
     }
   }
 }

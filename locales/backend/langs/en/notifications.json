@@ -28,5 +28,8 @@
   "payment": {
     "credited": "✅ Your payment was confirmed and {{amount}} was added to your wallet. Reference: {{reference}}",
     "reversed": "↩️ Your payment of {{amount}} was reversed by the gateway and was not added to your wallet. The bank is returning it to your card; if it has not arrived within 72 hours, contact support."
+  },
+  "campaign": {
+    "emailSubject": "A new message for you"
   }
 }

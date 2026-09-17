@@ -7,7 +7,7 @@ keywords: [notification, campaign, delivery, push, sms, email]
 source:
   - txnet-backend/notification-service/**
   - txnet-backend/prisma/domains/notification.prisma
-owns_tables: [notification, notification_campaign, notification_campaign_recipient]
+owns_tables: [notification, notification_campaign, notification_campaign_recipient, notification_campaign_text]
 depends_on: [identity, tenant, automation]
 updated: 2026-09-17
 ---

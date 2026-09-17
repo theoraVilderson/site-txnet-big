@@ -18,9 +18,15 @@ export interface TranslatorLanguage {
   targets: string[];
 }
 
+/**
+ * What the text is, for an engine that is told (the LLM): a catalog item's name
+ * or description (the default), or a message an admin sends users (F-035-h).
+ */
+export type TranslationKind = 'catalog' | 'message';
+
 export interface Translator {
   /** The translation, the text itself when `from === to`, or `null`. */
-  translate(text: string, from: string, to: string): Promise<string | null>;
+  translate(text: string, from: string, to: string, kind?: TranslationKind): Promise<string | null>;
   languages(): Promise<TranslatorLanguage[]>;
 }
 
@@ -138,11 +144,15 @@ export class OpenAiCompatibleTranslator implements Translator {
     this.fetchFn = options.fetch ?? fetch;
   }
 
-  async translate(text: string, from: string, to: string): Promise<string | null> {
+  async translate(text: string, from: string, to: string, kind: TranslationKind = 'catalog'): Promise<string | null> {
     if (!text.trim()) return null;
     if (from === to) return text;
+    const what =
+      kind === 'message'
+        ? `You translate messages that an online store selling VPN and internet services sends to its customers. Keep the tone, line breaks, emoji and links. `
+        : `You translate the names and descriptions of products and categories in an online store that sells VPN and internet services. `;
     const system =
-      `You translate the names and descriptions of products and categories in an online store that sells VPN and internet services. ` +
+      what +
       `Translate the user's message from ${languageName(from)} to ${languageName(to)}. ` +
       `Keep brand names, numbers, units (GB, Mbps, days) and Latin product codes unchanged. ` +
       `Reply with the translation only: no quotes, no explanation, no notes.`;
@@ -212,9 +222,9 @@ function clean(content: string, multiline: boolean): string {
 export class FallbackTranslator implements Translator {
   constructor(readonly engines: readonly Translator[]) {}
 
-  async translate(text: string, from: string, to: string): Promise<string | null> {
+  async translate(text: string, from: string, to: string, kind?: TranslationKind): Promise<string | null> {
     for (const engine of this.engines) {
-      const draft = await engine.translate(text, from, to);
+      const draft = await engine.translate(text, from, to, kind);
       if (draft) return draft;
     }
     return null;

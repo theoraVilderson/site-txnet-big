@@ -33,6 +33,15 @@ export function platformSmsLine(provider: Pick<SmsProviderService, 'sendSMS'>, s
 }
 
 /**
+ * D-38 (invariant 10): a line the platform pays for and signs as the platform
+ * carries only the platform owner's own campaign to the platform owner's own
+ * users. The SMS line and the mail server (F-035-h) both ask this.
+ */
+export function platformOwnersOwn(campaignTenantId: string | null, recipientTenantId: string, ownerTenantId: string | null): boolean {
+  return !!ownerTenantId && campaignTenantId === ownerTenantId && recipientTenantId === ownerTenantId;
+}
+
+/**
  * **Which SMS line a campaign row goes out on, and who pays for it** (F-035-f,
  * D-38, invariant 10) — the one place that decides.
  *
@@ -58,9 +67,7 @@ export class SmsLineResolver {
   }
 
   lineFor(campaignTenantId: string | null, recipientTenantId: string, ownerTenantId: string | null): SmsLineAnswer {
-    if (!ownerTenantId || campaignTenantId !== ownerTenantId || recipientTenantId !== ownerTenantId) {
-      return { kind: 'none' };
-    }
+    if (!platformOwnersOwn(campaignTenantId, recipientTenantId, ownerTenantId)) return { kind: 'none' };
     return this.platform ? { kind: 'ready', line: this.platform } : { kind: 'stalled' };
   }
 }

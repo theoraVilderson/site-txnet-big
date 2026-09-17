@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { AdminAction, AuditTargetType, CampaignStatus, NotificationChannel, Prisma, TenantType } from '@prisma/client';
+import { AdminAction, AuditTargetType, CampaignStatus, Language, NotificationChannel, Prisma, TenantType } from '@prisma/client';
 import { tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
@@ -15,6 +15,10 @@ export type CampaignActor = { adminId: string; tenantId: string };
 export type CreateCampaignInput = {
   channel: NotificationChannel;
   messageBody: string;
+  /** The email subject in `sourceLang`; absent or null = the translated default (F-035-h). */
+  subject?: string | null;
+  /** The language `messageBody` and `subject` are written in; absent or null = `DEFAULT_LANGUAGE`. */
+  sourceLang?: Language | null;
   audience: AudienceFilter;
   /** Absent = the caller's tenant; `null` = platform-wide; another id = the platform owner's alone. */
   tenantId?: string | null;
@@ -23,6 +27,8 @@ export type CreateCampaignInput = {
 export type UpdateCampaignInput = {
   channel?: NotificationChannel;
   messageBody?: string;
+  subject?: string | null;
+  sourceLang?: Language | null;
   audience?: AudienceFilter;
 };
 
@@ -41,6 +47,8 @@ export type CampaignView = {
   channel: NotificationChannel;
   audience: AudienceFilter;
   messageBody: string;
+  subject: string | null;
+  sourceLang: Language | null;
   status: CampaignStatus;
   sentCount: number;
   failedCount: number;
@@ -52,7 +60,10 @@ export type CampaignAdminRejection =
   | 'tenant_not_found'
   | 'campaign_not_found'
   | 'campaign_not_draft'
-  | 'sms_not_available';
+  | 'sms_not_available'
+  | 'email_not_available'
+  | 'text_is_source'
+  | 'text_not_found';
 
 export class CampaignAdminRefused extends Error {
   constructor(readonly reason: CampaignAdminRejection, detail: string) {
@@ -60,8 +71,8 @@ export class CampaignAdminRefused extends Error {
   }
 }
 
-/** Either pool, as far as campaign rows go. */
-type CampaignDb = Pick<PrismaService, 'notificationCampaign'>;
+/** Either pool, as far as campaign rows and their texts go. */
+export type CampaignDb = Pick<PrismaService, 'notificationCampaign' | 'notificationCampaignText'>;
 
 type CampaignRow = {
   id: string;
@@ -70,6 +81,8 @@ type CampaignRow = {
   channel: NotificationChannel;
   filterCriteria: Prisma.JsonValue;
   messageBody: string;
+  subject: string | null;
+  sourceLang: Language | null;
   status: CampaignStatus;
   sentCount: number;
   failedCount: number;
@@ -111,13 +124,15 @@ export class CampaignAdminService {
   async create(actor: CampaignActor, input: CreateCampaignInput): Promise<CampaignView> {
     const { owner, db } = await this.access(actor);
     const tenantId = await this.ownerOfNew(actor, owner, input.tenantId);
-    if (input.channel === NotificationChannel.sms) this.assertSmsLine(actor, owner, tenantId);
+    this.assertPlatformLine(input.channel, actor, owner, tenantId);
     const row = await db.notificationCampaign.create({
       data: {
         tenantId,
         createdByAdminId: actor.adminId,
         channel: input.channel,
         messageBody: input.messageBody,
+        subject: input.subject ?? null,
+        sourceLang: input.sourceLang ?? null,
         filterCriteria: input.audience as Prisma.InputJsonObject,
         status: CampaignStatus.draft,
       },
@@ -166,21 +181,44 @@ export class CampaignAdminService {
   async update(actor: CampaignActor, id: string, patch: UpdateCampaignInput): Promise<CampaignView> {
     const { owner, db } = await this.access(actor);
     const current = await this.loadManaged(actor, owner, db, id);
-    if (patch.channel === NotificationChannel.sms) this.assertSmsLine(actor, owner, current.tenantId);
+    if (patch.channel !== undefined) this.assertPlatformLine(patch.channel, actor, owner, current.tenantId);
 
     const data: Prisma.NotificationCampaignUpdateManyMutationInput = {};
     if (patch.channel !== undefined) data.channel = patch.channel;
     if (patch.messageBody !== undefined) data.messageBody = patch.messageBody;
+    if (patch.subject !== undefined) data.subject = patch.subject;
+    if (patch.sourceLang !== undefined) data.sourceLang = patch.sourceLang;
     if (patch.audience !== undefined) data.filterCriteria = patch.audience as Prisma.InputJsonObject;
+    const sourceChanged = patch.messageBody !== undefined || patch.subject !== undefined || patch.sourceLang !== undefined;
 
-    // `status` is in the write's own `where`, not a check before it: a fan-out
-    // starting between the read and the write must not see its audience change.
-    const { count } = await db.notificationCampaign.updateMany({
-      where: { id, status: CampaignStatus.draft },
-      data,
-    });
-    if (count === 0) throw new CampaignAdminRefused('campaign_not_draft', id);
+    const write = async (tx: CampaignDb) => {
+      // `status` is in the write's own `where`, not a check before it: a fan-out
+      // starting between the read and the write must not see its audience change.
+      const { count } = await tx.notificationCampaign.updateMany({
+        where: { id, status: CampaignStatus.draft },
+        data,
+      });
+      if (count === 0) throw new CampaignAdminRefused('campaign_not_draft', id);
+      // F-035-h: a translation of the old source must not go out beside the new
+      // one. Same transaction, so a send cannot start between the two writes.
+      if (sourceChanged) await tx.notificationCampaignText.deleteMany({ where: { campaignId: id } });
+    };
+    if (!sourceChanged) await write(db);
+    else if (owner) await this.all.$transaction((tx) => write(tx));
+    else await tenantTransaction(this.prisma, (tx) => write(tx));
     return toView(await this.loadManaged(actor, owner, db, id));
+  }
+
+  /**
+   * A campaign the caller manages, with the pool that serves them — for the
+   * campaign's texts (F-035-h), which have no access rule of their own.
+   * `draft: true` refuses anything past a draft (invariant 8).
+   */
+  async managed(actor: CampaignActor, id: string, options: { draft?: boolean } = {}) {
+    const { owner, db } = await this.access(actor);
+    const row = await this.loadManaged(actor, owner, db, id);
+    if (options.draft && row.status !== CampaignStatus.draft) throw new CampaignAdminRefused('campaign_not_draft', id);
+    return { db, campaign: toView(row) };
   }
 
   /**
@@ -241,13 +279,16 @@ export class CampaignAdminService {
   }
 
   /**
-   * D-38 (invariant 10): the only SMS line is the platform's, unmetered, so an
-   * SMS campaign is the platform owner's own, to its own users. Refused at the
-   * draft so an admin hears it now, not as a campaign of `failed` rows.
+   * D-38 (invariant 10): the only SMS line and the only mail server are the
+   * platform's, so an SMS or email campaign is the platform owner's own, to its
+   * own users (F-035-f, F-035-h). Refused at the draft so an admin hears it
+   * now, not as a campaign of `failed` rows.
    */
-  private assertSmsLine(actor: CampaignActor, owner: boolean, tenantId: string | null): void {
+  private assertPlatformLine(channel: NotificationChannel, actor: CampaignActor, owner: boolean, tenantId: string | null): void {
+    if (channel !== NotificationChannel.sms && channel !== NotificationChannel.email) return;
     if (!owner || tenantId !== actor.tenantId) {
-      throw new CampaignAdminRefused('sms_not_available', 'only the platform owner has an SMS line, for its own users');
+      const reason = channel === NotificationChannel.sms ? 'sms_not_available' : 'email_not_available';
+      throw new CampaignAdminRefused(reason, `only the platform owner has a ${channel} line, for its own users`);
     }
   }
 
@@ -271,6 +312,8 @@ function toView(row: CampaignRow): CampaignView {
     // Written only through `audienceFilterSchema`; F-035-d parses it again before it trusts it.
     audience: row.filterCriteria as AudienceFilter,
     messageBody: row.messageBody,
+    subject: row.subject,
+    sourceLang: row.sourceLang,
     status: row.status,
     sentCount: row.sentCount,
     failedCount: row.failedCount,

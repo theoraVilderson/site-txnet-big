@@ -1026,6 +1026,19 @@ services:
       - SMS_API_URL=${SMS_API_URL:-}
       - SMS_API_KEY=${SMS_API_KEY:-}
       - SMS_SENDER=${SMS_SENDER_PRIVATE:-}
+      # Campaign email (F-035-h, D-38): the platform's SMTP, auth-service's (D-39).
+      # Unset host or sender boots; email rows then stay queued as stalled.
+      - SMTP_HOST=${SMTP_HOST:-mailpit}
+      - SMTP_PORT=${SMTP_PORT:-1025}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - MAIL_FROM=${MAIL_FROM:-TXNet <no-reply@${DOMAIN_NAME}>}
+      # Drafts a campaign in every language but its source (F-035-h, ADR-0050's engines).
+      # Unset = no drafts; recipients get the source text.
+      - TRANSLATOR_URL=${TRANSLATOR_URL:-}
+      - TRANSLATOR_LLM_URL=${TRANSLATOR_LLM_URL:-}
+      - TRANSLATOR_LLM_MODEL=${TRANSLATOR_LLM_MODEL:-qwen2.5:3b}
       # The app role, never the owner (F-066-m-a).
       - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
       # Campaign management only (F-035-c): a platform-wide campaign is

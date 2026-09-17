@@ -59,20 +59,36 @@ export type AudienceFilter = z.infer<typeof audienceFilterSchema>;
 /** Telegram's limit is 4096; SMS splits long before that. The adapters (F-035-e/f) cut further. */
 const messageBody = z.string({ message: invalid }).trim().min(1, { message: invalid }).max(4000, { message: invalid });
 const channel = z.nativeEnum(NotificationChannel, { message: invalid });
+/** An email subject (F-035-h); null = the translated default. Other channels store it and send none. */
+const subject = z.string({ message: invalid }).trim().min(1, { message: invalid }).max(200, { message: invalid }).nullable();
+/** The language the admin writes in; null = `DEFAULT_LANGUAGE`. */
+const sourceLang = z.nativeEnum(Language, { message: invalid }).nullable();
 
 /** `tenantId`: absent = the caller's tenant; `null` = platform-wide; another id = the platform owner's alone. */
 export const createCampaignSchema = z.object({
   channel,
   messageBody,
+  subject: subject.optional(),
+  sourceLang: sourceLang.optional(),
   audience: audienceFilterSchema,
   tenantId: z.string({ message: invalid }).uuid({ message: invalid }).nullable().optional(),
 });
 
 /** The scope is fixed at creation: moving a draft between tenants is a new draft. */
 export const updateCampaignSchema = z
-  .object({ channel: channel.optional(), messageBody: messageBody.optional(), audience: audienceFilterSchema.optional() })
+  .object({
+    channel: channel.optional(),
+    messageBody: messageBody.optional(),
+    subject: subject.optional(),
+    sourceLang: sourceLang.optional(),
+    audience: audienceFilterSchema.optional(),
+  })
   .strict(invalid)
   .refine((b) => Object.keys(b).length > 0, { message: invalid });
+
+/** One language of a campaign (F-035-h): an admin's own text, published as written. */
+export const campaignTextSchema = z.object({ subject: subject.optional(), body: messageBody }).strict(invalid);
+export const campaignTextLangSchema = z.nativeEnum(Language, { message: invalid });
 
 export const listCampaignsSchema = z.object({
   page: z.coerce.number({ message: invalid }).int({ message: invalid }).positive({ message: invalid }).optional(),

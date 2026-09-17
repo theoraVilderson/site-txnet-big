@@ -123,6 +123,17 @@ describe('OpenAiCompatibleTranslator (a local LLM: Ollama, llama.cpp, vLLM)', ()
     expect(body.messages.at(-1)).toEqual({ role: 'user', content: 'وی‌پی‌ان ویژه' });
   });
 
+  it('tells the model a campaign message is a message to customers, not a store name (F-035-h)', async () => {
+    const { f, t } = llm(() => reply('A 20% discount'));
+    const fallback = new FallbackTranslator([t]);
+
+    await expect(fallback.translate('تخفیف ۲۰٪', 'fa', 'en', 'message')).resolves.toBe('A 20% discount');
+
+    const system = JSON.parse(String(f.calls[0].init?.body)).messages[0].content;
+    expect(system).toContain('messages');
+    expect(system).not.toContain('names and descriptions');
+  });
+
   it('keeps only the translation when a small model wraps it in quotes or adds a note', async () => {
     for (const content of ['"Premium VPN"', '«Premium VPN»', 'Premium VPN\n\nNote: kept the brand.', '  Translation: Premium VPN ']) {
       await expect(llm(() => reply(content)).t.translate('وی‌پی‌ان ویژه', 'fa', 'en')).resolves.toBe('Premium VPN');

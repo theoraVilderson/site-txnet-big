@@ -13,17 +13,26 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { Language } from '@prisma/client';
 import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
-import { ListCampaignsQuery, createCampaignSchema, listCampaignsSchema, updateCampaignSchema } from './campaign-admin.schema';
+import {
+  ListCampaignsQuery,
+  campaignTextLangSchema,
+  campaignTextSchema,
+  createCampaignSchema,
+  listCampaignsSchema,
+  updateCampaignSchema,
+} from './campaign-admin.schema';
 import {
   CampaignActor,
   CampaignAdminRefused,
@@ -33,6 +42,7 @@ import {
   UpdateCampaignInput,
 } from './campaign-admin.service';
 import { CampaignPermissionGuard } from './campaign-permission.guard';
+import { CampaignTextService } from './campaign-texts';
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
 export const CAMPAIGN_REFUSAL_STATUS: Record<CampaignAdminRejection, 400 | 403 | 404 | 409> = {
@@ -41,6 +51,9 @@ export const CAMPAIGN_REFUSAL_STATUS: Record<CampaignAdminRejection, 400 | 403 |
   campaign_not_found: 404,
   campaign_not_draft: 409,
   sms_not_available: 409,
+  email_not_available: 409,
+  text_is_source: 400,
+  text_not_found: 404,
 };
 
 const READ = {
@@ -65,7 +78,10 @@ const WRITE = {
 @Controller('notifications/campaigns')
 @UseGuards(CampaignPermissionGuard)
 export class CampaignAdminController {
-  constructor(private readonly campaigns: CampaignAdminService) {}
+  constructor(
+    private readonly campaigns: CampaignAdminService,
+    private readonly texts: CampaignTextService,
+  ) {}
 
   private actor(req: Request): CampaignActor {
     const { userId, tenantId } = identityOf(req);
@@ -107,6 +123,43 @@ export class CampaignAdminController {
   @RateLimit(WRITE)
   send(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request, @Ip() ip: string) {
     return this.refusing(() => this.campaigns.send(this.actor(req), id, ip));
+  }
+
+  /** The campaign in every language (F-035-h): the source, each text, and the languages with none. */
+  @Get(':id/texts')
+  @RateLimit(READ)
+  listTexts(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
+    return this.refusing(() => this.texts.list(this.actor(req), id));
+  }
+
+  /** Machine drafts for every language with no text; published by an admin, never sent as drafts. */
+  @Post(':id/texts/draft')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(WRITE)
+  draftTexts(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
+    return this.refusing(() => this.texts.draftMissing(this.actor(req), id));
+  }
+
+  @Put(':id/texts/:lang')
+  @RateLimit(WRITE)
+  writeText(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('lang', new ZodValidationPipe(campaignTextLangSchema)) lang: Language,
+    @Body(new ZodValidationPipe(campaignTextSchema)) body: { subject?: string | null; body: string },
+    @Req() req: Request,
+  ) {
+    return this.refusing(() => this.texts.write(this.actor(req), id, lang, body));
+  }
+
+  @Post(':id/texts/:lang/publish')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(WRITE)
+  publishText(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('lang', new ZodValidationPipe(campaignTextLangSchema)) lang: Language,
+    @Req() req: Request,
+  ) {
+    return this.refusing(() => this.texts.publish(this.actor(req), id, lang));
   }
 
   /** One place that turns a refusal into a status; the reason travels in the body for the panel to translate. */

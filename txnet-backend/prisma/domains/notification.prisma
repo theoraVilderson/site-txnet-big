@@ -14,6 +14,8 @@ enum NotificationChannel {
   sms
   telegram_bot
   bale_bot
+  /// F-035-h: the platform's SMTP, on the same terms as `sms` (D-38).
+  email
 
   @@schema("notification")
 }
@@ -22,6 +24,14 @@ enum CampaignStatus {
   draft
   sending
   completed
+
+  @@schema("notification")
+}
+
+/// F-035-h: a machine draft is never sent; a published text is.
+enum CampaignTextState {
+  draft
+  published
 
   @@schema("notification")
 }
@@ -57,6 +67,10 @@ model NotificationCampaign {
   channel               NotificationChannel
   filterCriteria        Json // {"lastConfigDays": {"gt": 30}, "minBalance": 0}
   messageBody           String
+  /// F-035-h: the email subject in the source language; null = the translated default.
+  subject               String?
+  /// F-035-h: the language `messageBody` and `subject` are written in; null = DEFAULT_LANGUAGE.
+  sourceLang            Language?
   status                CampaignStatus      @default(draft)
   sentCount             Int                 @default(0)
   failedCount           Int                 @default(0)
@@ -69,9 +83,30 @@ model NotificationCampaign {
   fannedOutAt           DateTime?
 
   recipients NotificationCampaignRecipient[]
+  texts      NotificationCampaignText[]
 
   @@index([tenantId])
   @@map("notification_campaign")
+  @@schema("notification")
+}
+
+/// F-035-h: the campaign in one language other than its source — a machine
+/// draft or a published text. A recipient gets the published text in their
+/// language, else the source. Reached only through its campaign (no RLS of its
+/// own, as the recipient rows); dropped whenever the source text changes.
+model NotificationCampaignText {
+  id         String            @id @default(uuid()) @db.Uuid
+  campaignId String            @db.Uuid
+  lang       Language
+  subject    String?
+  body       String
+  state      CampaignTextState @default(draft)
+  updatedAt  DateTime          @updatedAt
+
+  campaign NotificationCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, lang])
+  @@map("notification_campaign_text")
   @@schema("notification")
 }
 

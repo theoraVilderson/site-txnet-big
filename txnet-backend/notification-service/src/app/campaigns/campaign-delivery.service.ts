@@ -1,10 +1,14 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { DeliveryStatus, NotificationChannel, Prisma, TenantType } from '@prisma/client';
+import { CampaignTextState, DeliveryStatus, NotificationChannel, Prisma, TenantType } from '@prisma/client';
 import { BotClientRegistry, BotPlatform, TelegramLikeBotClient } from '@txnet-backend/messenger';
+import { BackendI18nKeys } from '@txnet-backend/shared-core';
 
+import { LocaleService } from '../locale/locale.service';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { CampaignFanOutService } from './campaign-fan-out.service';
-import { SmsLineResolver } from './sms-line';
+import { PickedText, textFor } from './campaign-texts';
+import { MailLine, MailLineResolver, MailSend } from './mail-line';
+import { SmsLine, SmsLineResolver } from './sms-line';
 
 /** Rows one run claims. Sends are sequential, so this bounds a run's length with the deadline. */
 export const DELIVERY_BUDGET = 100;
@@ -16,8 +20,9 @@ export const DELIVERY_LEASE_SEC = 300;
 export const DELIVERY_CALLER = 'notification:CampaignDelivery';
 
 /**
- * Which channel `messenger` delivers (D-10). `null` is not `messenger`'s: SMS is
- * this unit's own line (F-035-f, `sms-line.ts`), `push` has no adapter yet.
+ * Which channel `messenger` delivers (D-10). `null` is not `messenger`'s: SMS and
+ * email are this unit's own lines (F-035-f `sms-line.ts`, F-035-h `mail-line.ts`),
+ * `push` has no adapter yet.
  * Exhaustive, so a new channel does not compile until someone says where it goes.
  */
 export const CHANNEL_PLATFORM: Record<NotificationChannel, BotPlatform | null> = {
@@ -25,12 +30,18 @@ export const CHANNEL_PLATFORM: Record<NotificationChannel, BotPlatform | null> =
   bale_bot: 'bale',
   push: null,
   sms: null,
+  email: null,
 };
 
-/** Every channel a run claims rows for: the bot channels and SMS. */
+/** The channels this unit sends on its own line, under D-38's rule (invariant 10). */
+type LineChannel = typeof NotificationChannel.sms | typeof NotificationChannel.email;
+const isLineChannel = (c: NotificationChannel): c is LineChannel => c === NotificationChannel.sms || c === NotificationChannel.email;
+
+/** Every channel a run claims rows for: the bot channels, SMS and email. */
 export const DELIVERED_CHANNELS: NotificationChannel[] = [
   ...(Object.keys(CHANNEL_PLATFORM) as NotificationChannel[]).filter((c) => CHANNEL_PLATFORM[c] !== null),
   NotificationChannel.sms,
+  NotificationChannel.email,
 ];
 
 export const DELIVERY_OPTIONS = Symbol('DELIVERY_OPTIONS');
@@ -40,11 +51,11 @@ export type DeliveryResult = {
   /** Rows this run took. */
   claimed: number;
   sent: number;
-  /** Final refusals: no verified chat or phone, no bot or line, a blocked bot, a chat or number that is gone. */
+  /** Final refusals: no verified chat, phone or email, no bot or line, a blocked bot, a chat, number or mailbox that is gone. */
   failed: number;
   /** Still `queued`: the platform asked to wait, or the run ran out of time. */
   deferred: number;
-  /** Still `queued` because a bot could not be resolved or its token read, or the SMS line is unset or refused — an operator's problem. */
+  /** Still `queued` because a bot could not be resolved or its token read, or the SMS line or mail server is unset or refused — an operator's problem. */
   stalled: number;
 };
 
@@ -58,7 +69,9 @@ type Bot =
   | { kind: 'throttled'; until: Date };
 
 /**
- * Delivering a campaign to Telegram and Bale (F-035-e) and by SMS (F-035-f). `worker-service`'s
+ * Delivering a campaign to Telegram and Bale (F-035-e), by SMS (F-035-f) and by
+ * email (F-035-h), each recipient in their own language: the published text in
+ * `languagePreference`, else the source (`campaign-texts.ts`). `worker-service`'s
  * `notification_campaign_delivery` job drives {@link deliver} over
  * `internal/notifications/campaigns/deliver`.
  *
@@ -98,6 +111,8 @@ export class CampaignDeliveryService {
     private readonly bots: BotClientRegistry,
     private readonly outcomes: CampaignFanOutService,
     private readonly sms: SmsLineResolver,
+    private readonly mail: MailLineResolver,
+    private readonly locale: LocaleService,
     @Optional() @Inject(DELIVERY_OPTIONS) options?: DeliveryOptions,
   ) {
     this.budget = options?.budget ?? DELIVERY_BUDGET;
@@ -112,29 +127,46 @@ export class CampaignDeliveryService {
     result.claimed = rows.length;
     if (rows.length === 0) return result;
 
-    const [campaigns, users, links] = await Promise.all([
+    const campaignIds = [...new Set(rows.map((r) => r.campaignId))];
+    const [campaigns, users, links, texts] = await Promise.all([
       this.db.notificationCampaign.findMany({
-        where: { id: { in: [...new Set(rows.map((r) => r.campaignId))] } },
-        select: { id: true, tenantId: true, channel: true, messageBody: true },
+        where: { id: { in: campaignIds } },
+        select: { id: true, tenantId: true, channel: true, messageBody: true, subject: true, sourceLang: true },
       }),
       this.db.user.findMany({
         where: { id: { in: rows.map((r) => r.userId) } },
-        select: { id: true, tenantId: true, phoneNumber: true, phoneVerifiedAt: true },
+        select: {
+          id: true,
+          tenantId: true,
+          languagePreference: true,
+          phoneNumber: true,
+          phoneVerifiedAt: true,
+          email: true,
+          emailVerifiedAt: true,
+        },
       }),
       this.db.linkedBotAccount.findMany({
         where: { userId: { in: rows.map((r) => r.userId) }, contactVerifiedAt: { not: null } },
         select: { userId: true, tenantId: true, platform: true, platformUserId: true },
       }),
+      // A draft is never sent: only what an admin published (F-035-h).
+      this.db.notificationCampaignText.findMany({
+        where: { campaignId: { in: campaignIds }, state: CampaignTextState.published },
+        select: { campaignId: true, lang: true, subject: true, body: true },
+      }),
     ]);
+    const defaultLang = this.locale.getDefaultLanguage();
+    const textOf = (campaign: (typeof campaigns)[number], userLang: string | undefined): PickedText =>
+      textFor(campaign, texts.filter((t) => t.campaignId === campaign.id), userLang ?? defaultLang, defaultLang);
     const campaignById = new Map(campaigns.map((c) => [c.id, c]));
     const userById = new Map(users.map((u) => [u.id, u]));
     const tenantOf = new Map(users.map((u) => [u.id, u.tenantId]));
     const bots = new Map<string, Bot>();
-    const ownerTenantId = campaigns.some((c) => c.channel === NotificationChannel.sms)
+    const ownerTenantId = campaigns.some((c) => isLineChannel(c.channel))
       ? ((await this.db.tenant.findFirst({ where: { tenantType: TenantType.platform_owner }, select: { id: true } }))?.id ?? null)
       : null;
-    /** Set once the SMS line answered for its account, not a number: no more SMS this run. */
-    let smsLineDown = false;
+    /** A line that answered for its account, not a recipient: nothing more goes out on it this run. */
+    const linesDown = new Set<LineChannel>();
     /** Rows handed back still `queued`, keyed by when they may be claimed again ('' = at once). */
     const released = new Map<string, string[]>();
     const release = (until: Date | null, rowId: string) => {
@@ -144,15 +176,22 @@ export class CampaignDeliveryService {
 
     for (const row of rows) {
       const campaign = campaignById.get(row.campaignId);
-      if (campaign?.channel === NotificationChannel.sms) {
+      if (campaign && isLineChannel(campaign.channel)) {
+        const channel = campaign.channel;
         // Invariant 10: which line, and whether this row may use one, is the resolver's call.
         const user = userById.get(row.userId);
-        const answer = user ? this.sms.lineFor(campaign.tenantId, user.tenantId, ownerTenantId) : ({ kind: 'none' } as const);
-        if (!user || answer.kind === 'none' || !user.phoneNumber || !user.phoneVerifiedAt) {
+        const resolver = channel === NotificationChannel.sms ? this.sms : this.mail;
+        const answer = user ? resolver.lineFor(campaign.tenantId, user.tenantId, ownerTenantId) : ({ kind: 'none' } as const);
+        const address = !user
+          ? null
+          : channel === NotificationChannel.sms
+            ? user.phoneVerifiedAt && user.phoneNumber
+            : user.emailVerifiedAt && user.email;
+        if (!user || answer.kind === 'none' || !address) {
           await this.record(row.id, DeliveryStatus.failed, result);
           continue;
         }
-        if (answer.kind === 'stalled' || smsLineDown) {
+        if (answer.kind === 'stalled' || linesDown.has(channel)) {
           release(null, row.id);
           result.stalled++;
           continue;
@@ -162,15 +201,19 @@ export class CampaignDeliveryService {
           result.deferred++;
           continue;
         }
-        const sent = await answer.line.send(user.phoneNumber, campaign.messageBody);
+        const text = textOf(campaign, user.languagePreference);
+        const sent: MailSend =
+          channel === NotificationChannel.sms
+            ? await (answer.line as SmsLine).send(address, text.body)
+            : await (answer.line as MailLine).send(address, { subject: text.subject ?? this.defaultSubject(text.lang), body: text.body });
         if (sent.status === 'sent') {
           await this.record(row.id, DeliveryStatus.sent, result);
         } else if (sent.status === 'refused') {
-          this.logger.warn(`campaign ${row.campaignId}: recipient ${row.id} refused by the SMS gateway: ${sent.description}`);
+          this.logger.warn(`campaign ${row.campaignId}: recipient ${row.id} refused on the ${channel} line: ${sent.description}`);
           await this.record(row.id, DeliveryStatus.failed, result);
         } else {
-          if (sent.status === 'line_down') smsLineDown = true;
-          this.logger.warn(`campaign ${row.campaignId}: SMS send ${sent.status}: ${sent.description}`);
+          if (sent.status === 'line_down') linesDown.add(channel);
+          this.logger.warn(`campaign ${row.campaignId}: ${channel} send ${sent.status}: ${sent.description}`);
           release(null, row.id);
           result[sent.status === 'retry' ? 'deferred' : 'stalled']++;
         }
@@ -207,7 +250,7 @@ export class CampaignDeliveryService {
         continue;
       }
 
-      const sent = await bot.client.sendText(link.platformUserId, campaign.messageBody);
+      const sent = await bot.client.sendText(link.platformUserId, textOf(campaign, userById.get(row.userId)?.languagePreference).body);
       // `in`, not `ok`: this project does not narrow a union on a boolean literal.
       if (!('permanent' in sent)) {
         await this.record(row.id, DeliveryStatus.sent, result);
@@ -232,12 +275,20 @@ export class CampaignDeliveryService {
       });
     }
     if (result.stalled > 0) {
-      this.logger.error(`${result.stalled} recipient(s) left queued: a bot could not be resolved or its token read, or the SMS line is unset or refused`);
+      this.logger.error(
+        `${result.stalled} recipient(s) left queued: a bot could not be resolved or its token read, or the SMS line or mail server is unset or refused`,
+      );
     }
     return result;
   }
 
-  /** Queued rows of `sending` bot and SMS campaigns that no run holds, leased to this one. */
+  /** A text with no subject: the translated default in the body's own language, then the deployment's. */
+  private defaultSubject(lang: string): string {
+    const key = BackendI18nKeys.notifications.campaign.emailSubject;
+    return this.locale.getKey(lang, 'notifications', key) ?? this.locale.getKey(this.locale.getDefaultLanguage(), 'notifications', key) ?? '';
+  }
+
+  /** Queued rows of `sending` bot, SMS and email campaigns that no run holds, leased to this one. */
   private claim(): Promise<Claimed[]> {
     const channels = DELIVERED_CHANNELS;
     return this.db.$queryRaw<Claimed[]>(Prisma.sql`

@@ -18,11 +18,15 @@
  *    own campaign, to its own users' verified phones** (F-035-f, D-38,
  *    invariant 10). Nothing meters or bills that line yet, so a reseller's
  *    campaign — or a platform-wide one reaching a reseller's user — would cost
- *    the platform and show a reseller's customer the platform's number.
+ *    the platform and show a reseller's customer the platform's number;
+ *  - **email goes out on the same terms, to a verified address** (F-035-h), and
+ *  - **every channel sends the recipient's own language when an admin
+ *    published it**, the source otherwise — never a machine draft.
  */
 import { DeliveryStatus, NotificationChannel } from '@prisma/client';
 
 import { CHANNEL_PLATFORM, CampaignDeliveryService, DELIVERY_CALLER } from './campaign-delivery.service';
+import { MailLineResolver, platformMailLine } from './mail-line';
 import { SmsLineResolver, platformSmsLine } from './sms-line';
 
 const OWNER_TENANT = '11111111-1111-4111-8111-111111111111';
@@ -58,12 +62,19 @@ function fakes({
   owner = { id: OWNER_TENANT } as { id: string } | null,
   smsSend = vi.fn().mockResolvedValue({ status: 'sent' }) as ReturnType<typeof vi.fn>,
   smsLine = true,
+  mailSend = vi.fn().mockResolvedValue({ status: 'sent' }) as ReturnType<typeof vi.fn>,
+  mailLine = true,
+  texts = [] as unknown[],
+  subject = null as string | null,
 } = {}) {
   const db = {
     $queryRaw: vi.fn().mockResolvedValue(rows),
     notificationCampaign: {
-      findMany: vi.fn().mockResolvedValue([{ id: CAMPAIGN, tenantId: campaignTenant, channel, messageBody: 'Hello <b>you</b>' }]),
+      findMany: vi
+        .fn()
+        .mockResolvedValue([{ id: CAMPAIGN, tenantId: campaignTenant, channel, messageBody: 'Hello <b>you</b>', subject, sourceLang: null }]),
     },
+    notificationCampaignText: { findMany: vi.fn().mockResolvedValue(texts) },
     tenant: { findFirst: vi.fn().mockResolvedValue(owner) },
     user: { findMany: vi.fn().mockResolvedValue(users) },
     linkedBotAccount: { findMany: vi.fn().mockResolvedValue(links) },
@@ -75,13 +86,18 @@ function fakes({
   };
   const outcomes = { recordOutcome: vi.fn().mockResolvedValue({ changed: true }) };
   const sms = new SmsLineResolver(smsLine ? ({ send: smsSend } as never) : null);
-  const service = new CampaignDeliveryService(db as never, bots as never, outcomes as never, sms, { now: () => NOW });
-  return { db, bots, outcomes, sendText, smsSend, service };
+  const mail = new MailLineResolver(mailLine ? ({ send: mailSend } as never) : null);
+  const locale = {
+    getDefaultLanguage: () => 'fa',
+    getKey: (lang: string, _ns: string, key: string) => (key === 'campaign.emailSubject' ? `subject:${lang}` : undefined),
+  };
+  const service = new CampaignDeliveryService(db as never, bots as never, outcomes as never, sms, mail, locale as never, { now: () => NOW });
+  return { db, bots, outcomes, sendText, smsSend, mailSend, service };
 }
 
 describe('CHANNEL_PLATFORM', () => {
   it('sends the two bot channels through messenger; SMS is this unit\'s own line (F-035-f)', () => {
-    expect(CHANNEL_PLATFORM).toEqual({ telegram_bot: 'telegram', bale_bot: 'bale', push: null, sms: null });
+    expect(CHANNEL_PLATFORM).toEqual({ telegram_bot: 'telegram', bale_bot: 'bale', push: null, sms: null, email: null });
   });
 });
 
@@ -97,7 +113,7 @@ describe('CampaignDeliveryService.deliver', () => {
     expect(text).toContain('"claimedUntil" IS NULL OR r."claimedUntil" <');
     expect(text).toContain(`"deliveryStatus" = 'queued'`);
     expect(text).toContain(`c."status" = 'sending'`);
-    expect(sql.values).toEqual(expect.arrayContaining(['telegram_bot', 'bale_bot', 'sms']));
+    expect(sql.values).toEqual(expect.arrayContaining(['telegram_bot', 'bale_bot', 'sms', 'email']));
     expect(sql.values).not.toContain('push');
   });
 
@@ -299,6 +315,109 @@ describe('CampaignDeliveryService.deliver — SMS (F-035-f, D-38)', () => {
     expect(await down.service.deliver()).toEqual({ claimed: 2, sent: 0, failed: 0, deferred: 0, stalled: 2 });
     expect(smsSend).toHaveBeenCalledTimes(1);
     expect(down.outcomes.recordOutcome).not.toHaveBeenCalled();
+  });
+});
+
+describe('CampaignDeliveryService.deliver — the recipient\'s language (F-035-h)', () => {
+  it("sends the text published in the user's language, and the source to anyone else — never a draft", async () => {
+    const texts = [{ campaignId: CAMPAIGN, lang: 'en', subject: null, body: 'Hi in English' }];
+    const english = fakes({ users: [{ id: id(1), tenantId: TENANT, languagePreference: 'en' }] as never, texts });
+    await english.service.deliver();
+    expect(english.sendText).toHaveBeenCalledWith('9001', 'Hi in English');
+    expect(english.db.notificationCampaignText.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { campaignId: { in: [CAMPAIGN] }, state: 'published' } }),
+    );
+
+    const persian = fakes({ users: [{ id: id(1), tenantId: TENANT, languagePreference: 'fa' }] as never, texts });
+    await persian.service.deliver();
+    expect(persian.sendText).toHaveBeenCalledWith('9001', 'Hello <b>you</b>');
+  });
+});
+
+describe('CampaignDeliveryService.deliver — email (F-035-h, D-38)', () => {
+  const ADDRESS = 'user@example.com';
+  const ownUser = (overrides: Record<string, unknown> = {}) => ({
+    id: id(1),
+    tenantId: OWNER_TENANT,
+    languagePreference: 'fa',
+    email: ADDRESS,
+    emailVerifiedAt: new Date('2026-01-01T00:00:00Z'),
+    ...overrides,
+  });
+  const mailFakes = (overrides: Parameters<typeof fakes>[0] = {}) =>
+    fakes({ channel: NotificationChannel.email, campaignTenant: OWNER_TENANT, users: [ownUser()] as never, links: [], ...overrides });
+
+  it("mails the platform owner's own campaign to its user's verified address, with the stored subject (invariant 10)", async () => {
+    const { mailSend, smsSend, outcomes, service } = mailFakes({ subject: 'Sale' });
+
+    expect(await service.deliver()).toEqual({ claimed: 1, sent: 1, failed: 0, deferred: 0, stalled: 0 });
+    expect(mailSend).toHaveBeenCalledWith(ADDRESS, { subject: 'Sale', body: 'Hello <b>you</b>' });
+    expect(smsSend).not.toHaveBeenCalled();
+    expect(outcomes.recordOutcome).toHaveBeenCalledWith(id(101), DeliveryStatus.sent);
+  });
+
+  it("uses the translated default subject in the language of the body it sends", async () => {
+    const texts = [{ campaignId: CAMPAIGN, lang: 'en', subject: null, body: 'Hi' }];
+    const { mailSend, service } = mailFakes({ subject: 'فروش ویژه', users: [ownUser({ languagePreference: 'en' })] as never, texts });
+    await service.deliver();
+    expect(mailSend).toHaveBeenCalledWith(ADDRESS, { subject: 'subject:en', body: 'Hi' });
+
+    const source = mailFakes();
+    await source.service.deliver();
+    expect(source.mailSend).toHaveBeenCalledWith(ADDRESS, { subject: 'subject:fa', body: 'Hello <b>you</b>' });
+  });
+
+  it.each([
+    ["a reseller's campaign", { campaignTenant: TENANT, users: [ownUser({ tenantId: TENANT })] }],
+    ['a platform-wide campaign', { campaignTenant: null }],
+    ['an address never verified', { users: [ownUser({ emailVerifiedAt: null })] }],
+    ['no address at all', { users: [ownUser({ email: null })] }],
+  ])('fails, and mails nothing for, %s', async (_why, overrides) => {
+    const { outcomes, mailSend, service } = mailFakes(overrides as never);
+
+    expect((await service.deliver()).failed).toBe(1);
+    expect(mailSend).not.toHaveBeenCalled();
+    expect(outcomes.recordOutcome).toHaveBeenCalledWith(id(101), DeliveryStatus.failed);
+  });
+
+  it('stalls every email row when the server is unset or refuses the account, and leaves a transport error queued', async () => {
+    expect((await mailFakes({ mailLine: false }).service.deliver()).stalled).toBe(1);
+
+    const mailSend = vi.fn().mockResolvedValue({ status: 'line_down', description: '535 auth' });
+    const down = mailFakes({
+      rows: [
+        { id: id(101), campaignId: CAMPAIGN, userId: id(1) },
+        { id: id(102), campaignId: CAMPAIGN, userId: id(2) },
+      ],
+      users: [ownUser(), ownUser({ id: id(2) })] as never,
+      mailSend,
+    });
+    expect(await down.service.deliver()).toEqual({ claimed: 2, sent: 0, failed: 0, deferred: 0, stalled: 2 });
+    expect(mailSend).toHaveBeenCalledTimes(1);
+
+    const flaky = mailFakes({ mailSend: vi.fn().mockResolvedValue({ status: 'retry', description: 'ETIMEDOUT' }) });
+    expect((await flaky.service.deliver()).deferred).toBe(1);
+    expect(flaky.outcomes.recordOutcome).not.toHaveBeenCalled();
+  });
+});
+
+describe('platformMailLine', () => {
+  const line = (answer: unknown) => {
+    const provider = { sendMail: vi.fn().mockResolvedValue(answer) };
+    return { provider, line: platformMailLine(provider as never) };
+  };
+
+  it('sends the subject and the body as plain text', async () => {
+    const { provider, line: mail } = line({ ok: true, msg: 'mail sent', data: true });
+    expect(await mail.send('a@b.c', { subject: 'S', body: 'B' })).toEqual({ status: 'sent' });
+    expect(provider.sendMail).toHaveBeenCalledWith({ to: 'a@b.c', subject: 'S', text: 'B' });
+  });
+
+  it("reads a refused mailbox as final, the account refused as the line down, and anything else as retry", async () => {
+    const m = { subject: 'S', body: 'B' };
+    expect(await line({ ok: false, msg: 'mail recipient refused', error: '550' }).line.send('a', m)).toMatchObject({ status: 'refused' });
+    expect(await line({ ok: false, msg: 'mail account refused', error: '535' }).line.send('a', m)).toMatchObject({ status: 'line_down' });
+    expect(await line({ ok: false, msg: 'mail failed to send', error: 'ECONNRESET' }).line.send('a', m)).toMatchObject({ status: 'retry' });
   });
 });
 

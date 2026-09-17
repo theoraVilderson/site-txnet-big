@@ -37,6 +37,8 @@ function campaignRow(overrides: Record<string, unknown> = {}) {
     channel: NotificationChannel.telegram_bot,
     filterCriteria: {},
     messageBody: 'Hello',
+    subject: null,
+    sourceLang: null,
     status: CampaignStatus.draft,
     sentCount: 0,
     failedCount: 0,
@@ -66,12 +68,14 @@ function fakes(callerType: TenantType = TenantType.reseller) {
   const prisma: Record<string, unknown> & { notificationCampaign: ReturnType<typeof campaignDelegate>; adminAuditLog: { create: ReturnType<typeof vi.fn> } } = {
     tenant: { findUnique: vi.fn().mockResolvedValue({ tenantType: callerType }) },
     notificationCampaign: campaignDelegate(),
+    notificationCampaignText: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     adminAuditLog: { create: vi.fn().mockResolvedValue({}) },
   };
   prisma['$transaction'] = transactionOf(prisma);
   const all: Record<string, unknown> & { notificationCampaign: ReturnType<typeof campaignDelegate>; adminAuditLog: { create: ReturnType<typeof vi.fn> } } = {
     tenant: { findUnique: vi.fn().mockResolvedValue({ id: OTHER_TENANT }) },
     notificationCampaign: campaignDelegate(),
+    notificationCampaignText: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     adminAuditLog: { create: vi.fn().mockResolvedValue({}) },
   };
   all['$transaction'] = transactionOf(all);
@@ -137,6 +141,8 @@ describe('CampaignAdminService', () => {
         createdByAdminId: ADMIN,
         channel: NotificationChannel.telegram_bot,
         messageBody: 'Hello',
+        subject: null,
+        sourceLang: null,
         filterCriteria: { languages: ['fa'] },
         status: CampaignStatus.draft,
       },
@@ -205,6 +211,33 @@ describe('CampaignAdminService', () => {
     await as(OWNER_TENANT, () => own.service.create(owner, { channel: NotificationChannel.sms, messageBody: 'x', audience: {} }));
     expect(own.all.notificationCampaign.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ tenantId: OWNER_TENANT, channel: NotificationChannel.sms }),
+    });
+  });
+
+  it('drafts or switches to email only for the platform owner\'s own users (F-035-h, D-38): the mail server is the platform\'s', async () => {
+    const reseller = fakes();
+    await expect(
+      as(TENANT, () => reseller.service.create(tenantAdmin, { channel: NotificationChannel.email, messageBody: 'x', audience: {} })),
+    ).rejects.toMatchObject({ reason: 'email_not_available' });
+    await expect(
+      as(TENANT, () => reseller.service.update(tenantAdmin, CAMPAIGN, { channel: NotificationChannel.email })),
+    ).rejects.toMatchObject({ reason: 'email_not_available' });
+    expect(reseller.prisma.notificationCampaign.create).not.toHaveBeenCalled();
+    expect(reseller.prisma.notificationCampaign.updateMany).not.toHaveBeenCalled();
+
+    const platformWide = fakes(TenantType.platform_owner);
+    await expect(
+      as(OWNER_TENANT, () =>
+        platformWide.service.create(owner, { channel: NotificationChannel.email, messageBody: 'x', audience: {}, tenantId: null }),
+      ),
+    ).rejects.toMatchObject({ reason: 'email_not_available' });
+
+    const own = fakes(TenantType.platform_owner);
+    await as(OWNER_TENANT, () =>
+      own.service.create(owner, { channel: NotificationChannel.email, messageBody: 'x', subject: 'Hi', sourceLang: 'en', audience: {} }),
+    );
+    expect(own.all.notificationCampaign.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tenantId: OWNER_TENANT, channel: NotificationChannel.email, subject: 'Hi', sourceLang: 'en' }),
     });
   });
 

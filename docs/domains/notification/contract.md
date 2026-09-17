@@ -11,8 +11,9 @@ updated: 2026-09-17
 Runs in `notification-service` (ADR-0052). **Live:** a user's in-app inbox
 (F-035-a/b), campaign drafts (F-035-c) and sending them: one recipient row per
 user, written on the worker (F-035-d), and delivered to Telegram and Bale
-(F-035-e), and by SMS on the platform's line (F-035-f). Email is not built
-(F-035-g/h); a reseller's own SMS line waits for F-035-i.
+(F-035-e), by SMS on the platform's line (F-035-f) and by email on the
+platform's mail server (F-035-h), each recipient in their own language when an
+admin published one. A reseller's own SMS line waits for F-035-i.
 
 ## TL;DR
 
@@ -31,10 +32,14 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 | read the inbox | `GET notifications` (gated) | `page`, `pageSize` (≤100, default 1/20), `unreadOnly=true\|false` | `{ items[], page, pageSize, total, unreadCount }`; item = `id, type, title, body, readAt, createdAt` (ISO), newest first | 400 `validation.failed`, 401 |
 | mark read | `POST notifications/read` (gated) | `{ ids?: uuid[1..100] }` — absent = all | `{ marked, unreadCount }` | 400, 401 |
 | create | `POST internal/notifications` (`SERVICE_AUTH_TOKEN`) | `{ userId, type, title ≤200, body ≤2000 }` | the item, 201 | 400; 404 on a missing or wrong token |
-| draft a campaign | `POST notifications/campaigns` (gated, `campaign.manage`) | `{ channel, messageBody ≤4000, audience, tenantId?: uuid\|null }` | the campaign, 201 | 400; 403 no permission or `not_platform_owner`; 404 `tenant_not_found`; 409 `sms_not_available` |
+| draft a campaign | `POST notifications/campaigns` (gated, `campaign.manage`) | `{ channel, messageBody ≤4000, subject?: ≤200\|null, sourceLang?: Language\|null, audience, tenantId?: uuid\|null }` | the campaign, 201 | 400; 403 no permission or `not_platform_owner`; 404 `tenant_not_found`; 409 `sms_not_available`, `email_not_available` |
 | list campaigns | `GET notifications/campaigns` | `page`, `pageSize` ≤100, `status?`, `tenantId?: uuid\|platform` (owner only) | `{ items[], page, pageSize, total }`, newest first | 400, 403 |
 | read one | `GET notifications/campaigns/:id` | — | the campaign | 403; 404 `campaign_not_found` |
-| edit a draft | `PATCH notifications/campaigns/:id` | any of `channel`, `messageBody`, `audience` (≥1) | the campaign | 400, 403, 404; 409 `campaign_not_draft`, `sms_not_available` |
+| edit a draft | `PATCH notifications/campaigns/:id` | any of `channel`, `messageBody`, `subject`, `sourceLang`, `audience` (≥1) | the campaign | 400, 403, 404; 409 `campaign_not_draft`, `sms_not_available`, `email_not_available` |
+| read its languages | `GET notifications/campaigns/:id/texts` | — | `{ sourceLang, subject, messageBody, texts[], missing[] }`; text = `lang, subject, body, state, updatedAt` | 403; 404 |
+| draft the missing ones | `POST notifications/campaigns/:id/texts/draft` | — | the same, plus `drafted`, 200 | 403, 404; 409 `campaign_not_draft` |
+| write one | `PUT notifications/campaigns/:id/texts/:lang` | `{ subject?: ≤200\|null, body ≤4000 }` | the text, `published` | 400 (`text_is_source` too), 403, 404; 409 `campaign_not_draft` |
+| publish a draft | `POST notifications/campaigns/:id/texts/:lang/publish` | — | the text, `published`, 200 | 400 `text_is_source`, 403; 404 `campaign_not_found`, `text_not_found`; 409 |
 | start a send | `POST notifications/campaigns/:id/send` | — | the campaign, `status: sending`, 200 | 403, 404; 409 `campaign_not_draft` |
 | fan out | `POST internal/notifications/campaigns/fan-out` (`SERVICE_AUTH_TOKEN`) | — | `{ campaigns, recipients, finished, unreadable }` | 404 on a wrong token |
 | deliver | `POST internal/notifications/campaigns/deliver` (token) | — | `{ claimed, sent, failed, deferred, stalled }` | 404 on a wrong token |
@@ -50,7 +55,7 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 ### Campaigns (F-035-c)
 
 - A campaign = `id, tenantId (null = platform-wide), createdByAdminId, channel,
-  audience, messageBody, status, sentCount, failedCount, createdAt`.
+  audience, messageBody, subject, sourceLang, status, sentCount, failedCount, createdAt`.
   Refusals carry `{ reason }` for the panel to translate, as billing's coupons.
 - **Scope.** `tenantId` absent = the caller's tenant. `null` or another tenant
   is the platform owner's alone, and fixed at creation. A tenant admin lists and
@@ -143,6 +148,34 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
   or any other gateway refusal — credentials, credit — (`stalled`), and after
   such a refusal no further SMS is tried that run.
 
+### Delivering by email, and in each language (F-035-h)
+
+- **Email: D-38's terms.** The platform's SMTP (`SMTP_*`, `MAIL_FROM`, the OTP
+  one, D-39; `shared-core` `MailProviderService`) signs as the platform, so it
+  carries only the platform owner's own campaign to its own users
+  (invariant 10). `mail-line.ts` `MailLineResolver.lineFor` decides, through
+  the same `platformOwnersOwn` as SMS; a reseller's sending domain (F-112)
+  changes that function. Refused at the draft: 409 `email_not_available`.
+- **Who receives.** `user.email` with `emailVerifiedAt` set; otherwise `failed`.
+  Plain text; the subject is the text's, else `notifications.campaign.emailSubject`
+  in the body's language.
+- **Outcomes**, in the same claim as SMS: `sent`; `failed` for an ineligible row
+  or a refused mailbox (550/551/553, a bad address). **Left `queued`:** a 4xx or
+  connection error (`deferred`); an unset server, refused credentials or another
+  5xx (`stalled`), after which no more email is tried that run.
+- **Languages** (every channel, the user's call 2026-09-17, ADR-0055). `sourceLang`
+  (null = `DEFAULT_LANGUAGE`) is what `messageBody`/`subject` are written in.
+  `notification_campaign_text` holds each other `Language`: a `draft` from the
+  `Translator` (`kind: message`), or `published` — by an admin's `PUT`, or
+  by publishing a draft. A recipient gets the published text in
+  `languagePreference`, else the source; **a draft is never sent**.
+  A language the engine cannot translate whole (body, and subject when there is
+  one) gets no draft; an unset engine drafts nothing.
+- **Only while a draft**, through the campaign's own access (invariants 7, 8).
+  Changing `messageBody`, `subject` or `sourceLang` deletes every text in the
+  same transaction — a translation never outlives its source. `:lang` equal to
+  the source is 400 `text_is_source`: edit the campaign instead.
+
 ## Emits (events)
 
 | Event | When | Payload | Consumer |
@@ -164,6 +197,8 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 | messenger | `BotClientRegistry`, `TelegramLikeBotClient.sendText` (F-035-e) | — (a library) |
 | auth-api | `internal/bot-integrations/primary` and `/token` (ADR-0054) | rows stay `queued`, counted `stalled` |
 | SMS gateway (external) | `SendSms`, through `shared-core` `SmsProviderService` (F-035-f) | SMS rows stay `queued`, `deferred` or `stalled` |
+| SMTP server (external) | through `shared-core` `MailProviderService` (F-035-h) | email rows stay `queued`, `deferred` or `stalled` |
+| i18n | `Translator` (`translatorFromEnv`); `notifications` namespace for the default subject | no drafts; a subject-less email has an empty subject if locale-service never loaded |
 | tenant | the caller's `tenantType` (platform owner or not); a named tenant exists | 404 `tenant_not_found` |
 | identity | `campaign.manage` in the gate's permissions (migration `20260917000100`) | 403 |
 

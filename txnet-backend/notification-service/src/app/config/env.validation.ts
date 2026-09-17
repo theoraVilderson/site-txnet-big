@@ -73,6 +73,18 @@ export const envSchema = z.object({
   SMS_API_KEY: z.string().default(''),
   SMS_SENDER: z.string().default(''),
 
+  /**
+   * The platform's mail server (F-035-h, D-38 as for SMS): `auth-service`'s
+   * names (D-39). Unset `SMTP_HOST` or `MAIL_FROM` boots, and every email row
+   * stays `queued` and counted as stalled until both are set.
+   */
+  SMTP_HOST: z.string().default(''),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_SECURE: z.enum(['true', 'false']).default('false'),
+  SMTP_USER: z.string().default(''),
+  SMTP_PASS: z.string().default(''),
+  MAIL_FROM: z.string().default(''),
+
   /** The envelope's translator (`locale/locale.service.ts`). */
   LOCALE_SERVICE_ADDR: z.string().min(1).default('localhost:50051'),
   LOCALE_SCOPE: z.string().min(1).default('backend'),
