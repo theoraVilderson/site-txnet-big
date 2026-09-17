@@ -15,7 +15,7 @@
  *  - only a `pending` payment that is verifying or flagged is eligible.
  */
 import { ConfirmationSource, PaymentStatus, Prisma, TenantType } from '@prisma/client';
-import { TenantContext } from '@txnet-backend/shared-core';
+import { TenantContext, runWithTenant } from '@txnet-backend/shared-core';
 
 import type { AskAnswer } from './deposit-reconciliation.service';
 import { ManualConfirmRefused, ManualConfirmService } from './manual-confirm.service';
@@ -82,7 +82,17 @@ function build(setup: Setup = {}) {
     listed: [] as Array<Record<string, unknown>>,
     attached: [] as Array<Record<string, unknown>>,
     rejects: [] as Array<{ manual: Record<string, unknown>; tenantInScope: string | null }>,
+    /** Which pool served each read of the payment or the list (ADR-0053). */
+    pools: [] as string[],
   };
+  const reads = (pool: string) => ({
+    findUnique: async () => (calls.pools.push(`${pool}:findUnique`), row),
+    findMany: async (args: Record<string, unknown>) => {
+      calls.pools.push(`${pool}:findMany`);
+      calls.listed.push(args);
+      return [];
+    },
+  });
 
   const prisma = {
     tenant: {
@@ -94,6 +104,7 @@ function build(setup: Setup = {}) {
       fn({
         $executeRaw: async () => 0,
         paymentTransaction: {
+          ...reads('app'),
           findFirst: async () => paymentRow(),
           updateMany: async (args: Record<string, unknown>) => {
             calls.attached.push({ ...args, tenantInScope: TenantContext.currentOrNull()?.id ?? null });
@@ -104,13 +115,8 @@ function build(setup: Setup = {}) {
       }),
   };
   const crossTenant = {
-    paymentTransaction: {
-      findUnique: async () => row,
-      findMany: async (args: Record<string, unknown>) => {
-        calls.listed.push(args);
-        return [];
-      },
-    },
+    paymentTransaction: reads('all'),
+    $transaction: (fn: (t: unknown) => unknown) => fn(crossTenant),
   };
   const reconciliation = {
     askOnce: async (paymentId: string) => {
@@ -130,13 +136,21 @@ function build(setup: Setup = {}) {
   };
 
   const config = { get: (key: string) => (key === 'RECONCILIATION_LOOKBACK_SEC' ? 7 * 86_400 : undefined) };
-  const service = new ManualConfirmService(
+  const inner = new ManualConfirmService(
     prisma as never,
     crossTenant as never,
     reconciliation as never,
     settlement as never,
     config as never,
   );
+  // Every call in the caller's tenant, as `identity.middleware.ts` runs it.
+  const service = new Proxy(inner, {
+    get: (target, key) => {
+      const v = Reflect.get(target, key) as unknown;
+      if (typeof v !== 'function') return v;
+      return (a: { tenantId: string }, ...rest: unknown[]) => runWithTenant({ id: a.tenantId }, () => v.call(target, a, ...rest));
+    },
+  });
   const actor = { adminId: ADMIN, tenantId: callerTenant, ip: '10.0.0.9' };
   return { service, calls, actor };
 }
@@ -179,6 +193,18 @@ describe('ManualConfirmService scope', () => {
       grantId: null,
       tenantGatewayConfig: { tenantId: RESELLER },
     });
+  });
+
+  it("reads a tenant's payment and list on the app pool, and only the platform owner's on the cross-tenant pool", async () => {
+    const tenant = build();
+    await tenant.service.inquire(tenant.actor, PAYMENT);
+    await tenant.service.list(tenant.actor);
+    expect(tenant.calls.pools).toEqual(['app:findUnique', 'app:findMany']);
+
+    const owner = build({ callerTenant: OWNER, row: scopeRow({ tenantId: OTHER, tenantGatewayConfig: { tenantId: OTHER } }) });
+    await owner.service.inquire(owner.actor, PAYMENT);
+    await owner.service.list(owner.actor);
+    expect(owner.calls.pools).toEqual(['all:findUnique', 'all:findMany']);
   });
 
   // F-092-af (ADR-0046 decision 7): a payer in a hurry messages the operator;

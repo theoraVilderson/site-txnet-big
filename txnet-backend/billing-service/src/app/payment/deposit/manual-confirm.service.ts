@@ -24,6 +24,12 @@ import { attachAuthority } from './payment-callback-url';
  * grant (it is in the lender's). Everything else is `payment_not_found`, so a
  * refusal says nothing about whether the row exists.
  *
+ * **The pool follows the caller (ADR-0053, D-37).** Finding the payment and the
+ * list run on the cross-tenant pool for the platform owner only; any other
+ * tenant reads in a `tenantTransaction` on the app pool, where RLS on
+ * `payment_transaction` stands behind the scope rule. Every write already runs
+ * in the payment's own tenant.
+ *
  * **The gateway first, every time.** `confirm` asks once, by exactly the rules
  * reconciliation follows (`askOnce`). A gateway that confirmed, refused or
  * reported another amount has decided, and the person has not. Only silence or
@@ -136,9 +142,9 @@ export class ManualConfirmService {
   private readonly logger = new Logger(ManualConfirmService.name);
 
   constructor(
-    /** The caller's own scope — used for one read: who is asking. */
+    /** Who is asking; a tenant admin's reads; every write, in the payment's tenant. */
     private readonly prisma: PrismaService,
-    /** Finding the payment, and the list, across tenants; the scope rule below is the boundary. */
+    /** The platform owner's reads, across tenants. See the class comment. */
     private readonly crossTenant: CrossTenantPrismaService,
     private readonly reconciliation: DepositReconciliationService,
     private readonly settlement: DepositSettlementService,
@@ -154,16 +160,18 @@ export class ManualConfirmService {
   async list(actor: ManualActor): Promise<VerifyingPaymentView[]> {
     const owner = await this.isOwner(actor);
     const lookbackSec = this.config.get('RECONCILIATION_LOOKBACK_SEC', { infer: true });
-    const rows = await this.crossTenant.paymentTransaction.findMany({
-      where: {
-        status: { in: [PaymentStatus.pending, PaymentStatus.expired] },
-        createdAt: { gte: new Date(Date.now() - lookbackSec * 1000) },
-        ...(owner ? {} : this.tenantScope(actor)),
-      },
-      select: VIEW_SELECT,
-      orderBy: { createdAt: 'asc' },
-      take: 200,
-    });
+    const rows = await this.read(owner, (db) =>
+      db.paymentTransaction.findMany({
+        where: {
+          status: { in: [PaymentStatus.pending, PaymentStatus.expired] },
+          createdAt: { gte: new Date(Date.now() - lookbackSec * 1000) },
+          ...(owner ? {} : this.tenantScope(actor)),
+        },
+        select: VIEW_SELECT,
+        orderBy: { createdAt: 'asc' },
+        take: 200,
+      }),
+    );
     return rows.map((r) => {
       const gw = r.gateway ?? r.tenantGatewayConfig;
       return {
@@ -299,10 +307,8 @@ export class ManualConfirmService {
   }
 
   private async eligibleRow(actor: ManualActor, paymentId: string): Promise<{ tenantId: string; hasAuthority: boolean }> {
-    const [owner, row] = await Promise.all([
-      this.isOwner(actor),
-      this.crossTenant.paymentTransaction.findUnique({ where: { id: paymentId }, select: SCOPE_SELECT }),
-    ]);
+    const owner = await this.isOwner(actor);
+    const row = await this.read(owner, (db) => db.paymentTransaction.findUnique({ where: { id: paymentId }, select: SCOPE_SELECT }));
     const inScope =
       row !== null &&
       row.tenantId !== null &&
@@ -318,6 +324,11 @@ export class ManualConfirmService {
       throw new ManualConfirmRefused('not_open', paymentId);
     }
     return { tenantId: row.tenantId, hasAuthority: row.gatewayTrackingCode !== null };
+  }
+
+  /** A read on the pool that serves this caller (ADR-0053): the owner's across tenants, anyone else's in their own. */
+  private read<T>(owner: boolean, fn: (db: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+    return owner ? this.crossTenant.$transaction(fn) : tenantTransaction(this.prisma, fn);
   }
 
   private tenantScope(actor: ManualActor): Prisma.PaymentTransactionWhereInput {
