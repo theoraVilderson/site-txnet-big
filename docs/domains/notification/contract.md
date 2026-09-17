@@ -43,6 +43,7 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 | start a send | `POST notifications/campaigns/:id/send` | — | the campaign, `status: sending`, 200 | 403, 404; 409 `campaign_not_draft` |
 | resume a stopped send | `POST notifications/campaigns/:id/resume` | — | the campaign, `status: sending` (or `completed`), 200 | 403, 404; 409 `campaign_not_stopped`, `tenant_not_open` |
 | heads-up before a suspension | `GET notifications/campaigns/sending-summary/:tenantId` (owner only) | — | `{ tenantId, campaigns, recipientsQueued, campaignsStillFanningOut }` | 403 `not_platform_owner` |
+| stop a tenant's sends by hand | `POST notifications/campaigns/tenants/:tenantId/stop` (owner only, F-018-x) | — | `{ stopped }`, 200; audited `campaign_stop` when >0 | 400; 403 `not_platform_owner`; 404 `tenant_not_found` |
 | fan out | `POST internal/notifications/campaigns/fan-out` (`SERVICE_AUTH_TOKEN`) | — | `{ campaigns, recipients, finished, unreadable }` | 404 on a wrong token |
 | deliver | `POST internal/notifications/campaigns/deliver` (token) | — | `{ claimed, sent, failed, deferred, stalled }` | 404 on a wrong token |
 | record an outcome | `POST internal/notifications/campaigns/recipients/:id/outcome` (token) | `{ outcome: sent\|failed }` | `{ changed }` | 400; 404 `recipient_not_found` |
@@ -65,7 +66,8 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
   (nothing failed or deleted). Fan-out and delivery select only `sending`, so a
   run already holding rows sends those (≤100) and the next claims none. `resume`
   (`staffWrite`, audited `campaign_resume`) is `stopped -> sending` only, refused
-  while the campaign's tenant is suspended or terminated.
+  while the campaign's tenant is suspended or terminated. The owner can also stop
+  them at any time by hand (F-018-x), the same write, retried by asking again.
 
 ### Campaigns (F-035-c)
 

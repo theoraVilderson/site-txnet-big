@@ -62,6 +62,8 @@ enum AdminAction {
   campaign_send
   // F-018-q. A stopped campaign is sent again by hand.
   campaign_resume
+  // F-018-x. The platform owner stops every sending campaign of a tenant by hand.
+  campaign_stop
   // F-019-a (D-41) — the platform owner credits or debits a reseller's billing wallet by hand.
   tenant_billing_adjust
   // F-018-c. The platform owner creates a reseller.

@@ -319,6 +319,42 @@ export class CampaignAdminService {
   }
 
   /**
+   * The platform owner stops every `sending` campaign of one tenant (F-018-x,
+   * ADR-0058 (5)) — after a suspension, or for a reseller suspended earlier.
+   * The same write as the internal `stopForTenant` (invariant 12: status only,
+   * recipients left `queued`), on the cross-tenant pool, so a failure reaches
+   * the owner at once and is retried by asking again. Audited against the
+   * tenant (`campaign_stop`) only when something stopped: a repeat is a no-op.
+   */
+  async stopTenant(actor: CampaignActor, tenantId: string, ip: string): Promise<{ stopped: number }> {
+    const { owner } = await this.access(actor);
+    if (!owner) throw new CampaignAdminRefused('not_platform_owner', "stopping a tenant's campaigns");
+    if (!(await this.all.tenant.findUnique({ where: { id: tenantId }, select: { id: true } }))) {
+      throw new CampaignAdminRefused('tenant_not_found', tenantId);
+    }
+    return this.all.$transaction(async (tx) => {
+      const { count } = await tx.notificationCampaign.updateMany({
+        where: { tenantId, status: CampaignStatus.sending },
+        data: { status: CampaignStatus.stopped, stoppedAt: new Date() },
+      });
+      if (count > 0) {
+        await tx.adminAuditLog.create({
+          data: {
+            tenantId,
+            adminId: actor.adminId,
+            action: AdminAction.campaign_stop,
+            targetEntityType: AuditTargetType.tenant,
+            targetEntityId: tenantId,
+            newValue: { stopped: count },
+            adminIpAddress: ip,
+          },
+        });
+      }
+      return { stopped: count };
+    });
+  }
+
+  /**
    * How much of a reseller's sending is still to go (F-018-q) — what the
    * platform owner is told before suspending or terminating it. Owner only, on
    * the cross-tenant pool.

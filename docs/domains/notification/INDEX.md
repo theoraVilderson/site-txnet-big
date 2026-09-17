@@ -3,7 +3,7 @@ id: notification
 layer: domain
 status: active
 version: 4
-keywords: [notification, campaign, delivery, push, sms, email]
+keywords: [notification, campaign, delivery, push, sms, email, stop a reseller's campaigns, stop sending campaigns, توقف ارسال کمپین‌های نماینده]
 source:
   - txnet-backend/notification-service/**
   - txnet-backend/prisma/domains/notification.prisma

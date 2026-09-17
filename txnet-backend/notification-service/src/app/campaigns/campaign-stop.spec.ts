@@ -12,9 +12,12 @@
  *  - **resume is `stopped -> sending` only, and not while the campaign's tenant
  *    is closed** — otherwise the platform owner reopens with one click the send
  *    it just stopped with the suspension;
- *  - **the heads-up is the platform owner's**, as the status change is.
+ *  - **the heads-up is the platform owner's**, as the status change is;
+ *  - **the owner's own stop (F-018-x) is the same write**, on the cross-tenant
+ *    pool, refused to anyone else and for a tenant that does not exist, and
+ *    audited only when it stopped something — a repeated click changes nothing.
  */
-import { AdminAction, CampaignStatus, DeliveryStatus, NotificationChannel, TenantStatus, TenantType } from '@prisma/client';
+import { AdminAction, AuditTargetType, CampaignStatus, DeliveryStatus, NotificationChannel, TenantStatus, TenantType } from '@prisma/client';
 import { runWithTenant } from '@txnet-backend/shared-core';
 
 import { CampaignAdminService } from './campaign-admin.service';
@@ -151,5 +154,56 @@ describe('CampaignAdminService.sendingSummary', () => {
     await expect(runWithTenant({ id: TENANT }, () => service.sendingSummary(reseller, TENANT))).rejects.toMatchObject({ reason: 'not_platform_owner' });
     expect(all.notificationCampaign.count).not.toHaveBeenCalled();
     expect(prisma.notificationCampaign.count).not.toHaveBeenCalled();
+  });
+});
+
+describe('CampaignAdminService.stopTenant', () => {
+  it("stops that tenant's sending campaigns on the cross-tenant pool, audited against the tenant", async () => {
+    const { all, prisma, service } = adminService(TenantType.platform_owner);
+    all.notificationCampaign.updateMany.mockResolvedValue({ count: 2 });
+
+    await expect(runWithTenant({ id: OWNER_TENANT }, () => service.stopTenant(owner, TENANT, '10.0.0.1'))).resolves.toEqual({ stopped: 2 });
+
+    expect(all.notificationCampaign.updateMany).toHaveBeenCalledWith({
+      where: { tenantId: TENANT, status: CampaignStatus.sending },
+      data: { status: CampaignStatus.stopped, stoppedAt: expect.any(Date) },
+    });
+    expect(all.adminAuditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        tenantId: TENANT,
+        adminId: ADMIN,
+        action: AdminAction.campaign_stop,
+        targetEntityType: AuditTargetType.tenant,
+        targetEntityId: TENANT,
+        newValue: { stopped: 2 },
+        adminIpAddress: '10.0.0.1',
+      }),
+    });
+    expect(all.notificationCampaignRecipient.updateMany).not.toHaveBeenCalled();
+    expect(prisma.notificationCampaign.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('writes no audit row when nothing was sending', async () => {
+    const { all, service } = adminService(TenantType.platform_owner);
+    all.notificationCampaign.updateMany.mockResolvedValue({ count: 0 });
+    await expect(runWithTenant({ id: OWNER_TENANT }, () => service.stopTenant(owner, TENANT, 'ip'))).resolves.toEqual({ stopped: 0 });
+    expect(all.adminAuditLog.create).not.toHaveBeenCalled();
+  });
+
+  it("is the platform owner's alone", async () => {
+    const { all, prisma, service } = adminService(TenantType.reseller);
+    await expect(runWithTenant({ id: TENANT }, () => service.stopTenant(reseller, TENANT, 'ip'))).rejects.toMatchObject({ reason: 'not_platform_owner' });
+    expect(all.notificationCampaign.updateMany).not.toHaveBeenCalled();
+    expect(prisma.notificationCampaign.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('refuses a tenant that does not exist', async () => {
+    const { all, service } = adminService(TenantType.platform_owner);
+    const missing = '66666666-6666-4666-8666-666666666666';
+    all.tenant.findUnique.mockImplementation(({ where }: { where: { id: string } }) =>
+      Promise.resolve(where.id === missing ? null : { tenantType: TenantType.platform_owner, status: TenantStatus.active }),
+    );
+    await expect(runWithTenant({ id: OWNER_TENANT }, () => service.stopTenant(owner, missing, 'ip'))).rejects.toMatchObject({ reason: 'tenant_not_found' });
+    expect(all.notificationCampaign.updateMany).not.toHaveBeenCalled();
   });
 });

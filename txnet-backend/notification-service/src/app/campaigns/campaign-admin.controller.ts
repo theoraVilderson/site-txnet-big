@@ -103,6 +103,14 @@ export class CampaignAdminController {
     return this.refusing(() => this.campaigns.sendingSummary(this.actor(req), tenantId));
   }
 
+  /** F-018-x: the platform owner stops every sending campaign of a tenant; `{ stopped }`, audited. Before `:id`, as above. */
+  @Post('tenants/:tenantId/stop')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(WRITE)
+  stopTenant(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.campaigns.stopTenant(this.actor(req), tenantId, ip));
+  }
+
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @RateLimit(WRITE)
