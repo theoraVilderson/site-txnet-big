@@ -16,7 +16,9 @@ Source of truth: `txnet-backend/prisma/domains/tenant.prisma` (Postgres schema
 | tenant_branding | logo, colours, support contacts, default language | yes | with tenant (cascade) |
 | tenant_domain | subdomain / custom domain + verification | yes | with tenant |
 | tenant_feature_package | plans the platform sells to resellers: unique `name`, `monthlyPrice` / `yearlyPrice` (CHECK: positive, at least one), `includedFeatureKeys`, `isActive`; no RLS (F-018-d) | no (catalog of packages) | permanent, deactivated not deleted |
-| tenant_feature_entitlement | which feature keys are on for a tenant | yes | until revoked/expired |
+| tenant_subscription | one per reseller: `packageId` (RESTRICT) and `currentPeriodEnd`; the period is `tenant.billingModel` (F-018-e) | yes | with tenant |
+| tenant_subscription_setting | the platform's one row (`id = 1` CHECK): `trialDays` 0..365, default 14; no RLS (F-018-e) | no | permanent |
+| tenant_feature_entitlement | which feature keys are on for a tenant; `package_included` rows are replaced by each subscription `PUT` (F-018-e) | yes | until revoked/expired |
 | tenant_staff_member | reseller's internal team (own RBAC, separate from identity.role) | yes | — |
 | tenant_billing_wallet | a reseller's prepaid balance with the platform (cache, `>= 0`; D-41) | yes | with tenant |
 | tenant_billing_transaction | append-only ledger of tenant<->platform charges | yes | permanent |
@@ -43,6 +45,9 @@ branding/entitlements through a resolver, never the raw tables.
 `20260917000900_tenant_billing_wallet` (F-019-a) adds what Prisma cannot model:
 non-negative `cachedBalance` / `balanceAfter`, positive `amount`, and a partial
 unique `(reasonType, referenceId)` on `tenant_billing_transaction`.
+
+`20260917001300_tenant_subscription` (F-018-e) adds both subscription tables, strict
+RLS on `tenant_subscription`, the settings row and its CHECKs.
 
 `20260917001100_tenant_create` (F-018-c) adds the audit values `tenant_create` /
 `tenant` and the `tenant.manage` permission — no tenant table changes.

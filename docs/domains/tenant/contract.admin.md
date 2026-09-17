@@ -2,16 +2,17 @@
 id: tenant
 layer: domain
 status: active
-version: 12
+version: 13
 updated: 2026-09-17
 ---
 
 # Contract — tenant / reseller administration
 
 A topic file of `contract.md` (§10). The platform owner creates, lists and
-reads resellers (F-018-c), and the packages it sells them (F-018-d). Before it, a tenant existed only through
+reads resellers (F-018-c), the packages it sells them (F-018-d), and which package
+and period each reseller is on (F-018-e). Before it, a tenant existed only through
 `prisma/seed.js`. What a reseller does to itself is not here (F-018-h..l); a
-reseller's status changes are F-018-f, its package and period F-018-e.
+reseller's status changes are F-018-f.
 
 Code: `auth-service/src/app/tenant/admin/`.
 
@@ -82,11 +83,42 @@ A package view: `id, name, monthlyPrice, yearlyPrice` (decimal strings or
 | **No delete.** `isActive: false` deactivates and writes nothing else; `true` offers it again | a deactivated package keeps its current subscribers until their next renewal (F-019-c) |
 | Each write and its audit row (`tenant_package_create` / `tenant_package_update`, target `tenant_feature_package`) are one transaction; an update audits only the fields it changed, before and after | the trail says who re-priced or withdrew a package |
 
+## A reseller's subscription (F-018-e)
+
+Code: `auth-service/src/app/tenant/subscription/`. The same guard and owner
+check; every read and write after it is on the cross-tenant pool.
+
+| Route | Body | Answer |
+|---|---|---|
+| `PUT /api/auth/tenants/:id/subscription` | `{packageId, billingModel}`, `.strict()` | a subscription view |
+| `GET /api/auth/tenants/:id/subscription` | — | a subscription view |
+| `GET /api/auth/tenant-subscription-settings` | — | `{trialDays}` |
+| `PATCH /api/auth/tenant-subscription-settings` | `{trialDays}` — an integer 0..365, `.strict()` | `{trialDays}` |
+
+A subscription view: `tenantId, packageId, packageName, billingModel,
+currentPeriodEnd, startedAt, includedFeatureKeys`. Refusals:
+`not_platform_owner` 403; `reseller_not_found`, `subscription_not_found`,
+`package_not_found` 404; `reseller_terminated` 409; `package_inactive`,
+`package_not_sold_for_period` 422.
+
+| Rule | Why |
+|---|---|
+| One `tenant_subscription` row per tenant: the package and `currentPeriodEnd`. The period is `tenant.billingModel`, which a `PUT` sets | one place for the period; F-018-c already writes it |
+| **The first package starts the trial:** `currentPeriodEnd` = now + `trialDays`. Creating a reseller starts nothing | without a package there is nothing to try (user, 2026-09-17) |
+| **A later `PUT` keeps `currentPeriodEnd`** — a new package or period is charged at that renewal. No proration | no charge here; the first charge and every renewal are F-019-c's (user, 2026-09-17) |
+| The package must have a price for the period asked | a package may be sold for one period only (F-018-d) |
+| An inactive package is refused unless the tenant is already on it | a deactivated package keeps its subscribers and takes no new ones |
+| A `terminated` reseller is refused; `trial`, `active`, `suspended` are not | what each status blocks is F-018-f |
+| **One transaction, the tenant row locked `FOR UPDATE`:** the subscription, `billingModel` if changed, the tenant's `package_included` entitlements deleted and one per `includedFeatureKeys` written (`isEnabled`, no `expiresAt`), and an audit row (`tenant_subscription_set`, target `tenant`, the reseller's tenant) | two concurrent `PUT`s cannot interleave the replace; entitlements from `addon_purchased` / `admin_granted` are never touched |
+| Entitlements are copied at the `PUT`. Editing a package's keys later reaches its subscribers at their next `PUT` | invariant 16; renewal re-copying them is F-019-c's call |
+| `trialDays` is the platform's one `tenant_subscription_setting` row (`id = 1`, CHECK 0..365, default 14), edited with an audit row (`tenant_subscription_setting_update`); it applies to trials started after the edit | a setting the platform owner changes without a deploy (user, 2026-09-17) |
+
 ## Not built here
 
 - The panel screen: F-018-k.
-- Staff, branding, custom domains, status, a tenant's package: F-018-j / h / i / f / e.
-- A reseller seeing the packages it can buy: F-018-e.
+- Staff, branding, custom domains, status: F-018-j / h / i / f.
+- A reseller seeing its own subscription or the packages it can buy: not yet a row.
+- Charging, renewing and suspending: F-019-c. Checking an entitlement: F-018-g.
 - A platform-staff `X-Tenant-Id` (open question 2026-09-09): the platform
   owner reaches another tenant's rows through this service's cross-tenant
   reads, not by switching its session's tenant.

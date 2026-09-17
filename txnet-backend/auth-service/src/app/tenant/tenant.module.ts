@@ -7,10 +7,12 @@ import { TenantAdminController } from './admin/tenant-admin.controller';
 import { TenantAdminService } from './admin/tenant-admin.service';
 import { TenantPackageController } from './packages/tenant-package.controller';
 import { TenantPackageService } from './packages/tenant-package.service';
+import { TenantSubscriptionController } from './subscription/tenant-subscription.controller';
+import { TenantSubscriptionService } from './subscription/tenant-subscription.service';
 
 /**
  * `tenant`'s first module. Its controllers are the platform owner's reseller
- * administration (F-018-c) and the packages it sells them (F-018-d); the resolver is consumed by the edge middleware
+ * administration (F-018-c) the packages it sells them (F-018-d) and which one each reseller is on (F-018-e); the resolver is consumed by the edge middleware
  * and, from F-061-b, by `register`.
  *
  * `TenantGuard` is global rather than a route decorator: a request that
@@ -28,10 +30,11 @@ import { TenantPackageService } from './packages/tenant-package.service';
  * here.
  */
 @Module({
-  controllers: [TenantAdminController, TenantPackageController],
+  controllers: [TenantAdminController, TenantPackageController, TenantSubscriptionController],
   providers: [
     TenantAdminService,
     TenantPackageService,
+    TenantSubscriptionService,
     TenantCacheService,
     TenantResolverService,
     { provide: APP_GUARD, useClass: TenantGuard },

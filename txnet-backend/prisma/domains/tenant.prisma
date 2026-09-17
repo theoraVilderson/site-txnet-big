@@ -145,6 +145,7 @@ model Tenant {
   restrictions        TenantRestriction[]
   deks                TenantDek[]
   credentials         TenantCredential[]
+  subscription        TenantSubscription?
 
   @@map("tenant")
   @@schema("tenant")
@@ -211,7 +212,43 @@ model TenantFeaturePackage {
   // Deactivated: not offered any more; its subscribers keep it until renewal.
   isActive            Boolean  @default(true)
 
+  subscriptions TenantSubscription[]
+
   @@map("tenant_feature_package")
+  @@schema("tenant")
+}
+
+/// F-018-e — a reseller's subscription: which package it is on and when the
+/// current period ends. The period itself (monthly / yearly) is
+/// `Tenant.billingModel`, not repeated here. The first package starts the trial
+/// (`currentPeriodEnd` = now + `TenantSubscriptionSetting.trialDays`); a later
+/// package or period change keeps `currentPeriodEnd`. Renewal and every charge
+/// are F-019-c's, which reads `currentPeriodEnd`.
+model TenantSubscription {
+  tenantId         String   @id @db.Uuid
+  packageId        String   @db.Uuid
+  currentPeriodEnd DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  tenant  Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  package TenantFeaturePackage @relation(fields: [packageId], references: [id], onDelete: Restrict)
+
+  @@index([packageId])
+  @@index([currentPeriodEnd])
+  @@map("tenant_subscription")
+  @@schema("tenant")
+}
+
+/// F-018-e — the platform's subscription settings: one row (`id = 1`, CHECK),
+/// edited by the platform owner. `trialDays` is 0..365 (CHECK).
+model TenantSubscriptionSetting {
+  id              Int      @id @default(1)
+  trialDays       Int      @default(14)
+  updatedByUserId String?  @db.Uuid
+  updatedAt       DateTime @updatedAt
+
+  @@map("tenant_subscription_setting")
   @@schema("tenant")
 }
 

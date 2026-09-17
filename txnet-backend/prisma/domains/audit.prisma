@@ -67,6 +67,9 @@ enum AdminAction {
   // F-018-d. A package the platform sells resellers. Never deleted; deactivation is an update.
   tenant_package_create
   tenant_package_update
+  // F-018-e. A reseller's package and period, and the platform's trial length.
+  tenant_subscription_set
+  tenant_subscription_setting_update
 
   @@schema("audit")
 }
@@ -101,6 +104,8 @@ enum AuditTargetType {
   tenant
   // F-018-d. A package the platform sells resellers.
   tenant_feature_package
+  // F-018-e. The platform's one row of subscription settings.
+  tenant_subscription_setting
 
   @@schema("audit")
 }

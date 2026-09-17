@@ -21,7 +21,7 @@ const DNS_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 export const RESERVED_SLUGS = ['api', 'panel', 'www', 'admin', 'app', 'mail', 'sub', 'assets', 'static', 'cdn'] as const;
 
 /** D-41: subscription only, no metering. */
-const BILLING_MODELS = [TenantBillingModel.subscription_monthly, TenantBillingModel.subscription_yearly] as const;
+export const BILLING_MODELS = [TenantBillingModel.subscription_monthly, TenantBillingModel.subscription_yearly] as const;
 
 export const createResellerSchema = z
   .object({
