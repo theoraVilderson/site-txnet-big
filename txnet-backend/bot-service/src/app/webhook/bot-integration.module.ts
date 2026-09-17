@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BOT_INTEGRATION_DIRECTORY } from '@txnet-backend/messenger';
-import { AuthApiBotIntegrationDirectory } from './bot-integration.directory';
+import { WebhookBotIntegrationDirectory } from './bot-integration.directory';
 
 /**
  * The seam `messenger` resolves bots through in this service (F-320).
@@ -12,12 +12,12 @@ import { AuthApiBotIntegrationDirectory } from './bot-integration.directory';
  */
 @Module({
   providers: [
-    AuthApiBotIntegrationDirectory,
+    WebhookBotIntegrationDirectory,
     {
       provide: BOT_INTEGRATION_DIRECTORY,
-      useExisting: AuthApiBotIntegrationDirectory,
+      useExisting: WebhookBotIntegrationDirectory,
     },
   ],
-  exports: [AuthApiBotIntegrationDirectory, BOT_INTEGRATION_DIRECTORY],
+  exports: [WebhookBotIntegrationDirectory, BOT_INTEGRATION_DIRECTORY],
 })
 export class BotIntegrationModule {}

@@ -1005,6 +1005,11 @@ services:
       # Other units create a notification on `/api/internal/notifications`,
       # which Traefik does not route. Refused empty in production.
       - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
+      # Campaign delivery (F-035-e): each tenant's primary bot and its token come
+      # from auth-service's internal seam; the sends go to the bot APIs.
+      - AUTH_API_BASE_URL=http://auth-service:${AUTH_PORT}
+      - TELEGRAM_API_BASE=${TELEGRAM_API_BASE:-https://api.telegram.org}
+      - BALE_API_BASE=${BALE_API_BASE:-https://tapi.bale.ai}
       # The app role, never the owner (F-066-m-a).
       - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
       # Campaign management only (F-035-c): a platform-wide campaign is

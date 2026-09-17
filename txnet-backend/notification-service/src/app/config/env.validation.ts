@@ -50,6 +50,20 @@ export const envSchema = z.object({
    */
   SERVICE_AUTH_TOKEN: z.string().default(''),
 
+  /**
+   * Where a campaign's bot is resolved and its token read (F-035-e): the
+   * `internal/bot-integrations` seam, with `SERVICE_AUTH_TOKEN`. Empty boots —
+   * inbox and drafts need nothing from it — and every Telegram/Bale send stays
+   * `queued` and counted as stalled until it is set.
+   */
+  AUTH_API_BASE_URL: z.string().default(''),
+  AUTH_API_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
+  /** The bot API bases `messenger` sends to; unset is the public ones (`bot-client.registry.ts`). */
+  TELEGRAM_API_BASE: z.string().url().optional(),
+  BALE_API_BASE: z.string().url().optional(),
+  /** Per send, as for the OTP senders (`messenger`'s registry reads it). */
+  OTP_BOT_HTTP_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+
   /** The envelope's translator (`locale/locale.service.ts`). */
   LOCALE_SERVICE_ADDR: z.string().min(1).default('localhost:50051'),
   LOCALE_SCOPE: z.string().min(1).default('backend'),

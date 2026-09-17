@@ -80,6 +80,8 @@ model NotificationCampaignRecipient {
   campaignId     String         @db.Uuid
   userId         String         @db.Uuid
   deliveryStatus DeliveryStatus @default(queued)
+  /// F-035-e: a delivery run holds this row until then; null or past = free to claim.
+  claimedUntil   DateTime?
 
   campaign NotificationCampaign @relation(fields: [campaignId], references: [id])
 

@@ -10,7 +10,7 @@ import {
   WebhookInfo,
 } from '@txnet-backend/messenger';
 import { BotCopy } from '../locale/bot-copy';
-import { AuthApiBotIntegrationDirectory } from './bot-integration.directory';
+import { WebhookBotIntegrationDirectory } from './bot-integration.directory';
 import { BotWebhookRegistrar } from './bot-webhook.registrar';
 
 /**
@@ -105,7 +105,7 @@ function build({
     registrable: vi.fn(async () => BOT_PLATFORMS.map((p) => INTEGRATIONS[p])),
     webhookSecret: vi.fn(async (i: BotIntegration) => secrets[i.platform] ?? null),
     recordRegistration,
-  } as unknown as AuthApiBotIntegrationDirectory;
+  } as unknown as WebhookBotIntegrationDirectory;
 
   // The language argument is what a wrong command menu turns on, so make it
   // visible in the assertion instead of translating anything.

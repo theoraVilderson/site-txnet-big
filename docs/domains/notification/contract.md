@@ -10,8 +10,9 @@ updated: 2026-09-17
 
 Runs in `notification-service` (ADR-0052). **Live:** a user's in-app inbox
 (F-035-a/b), campaign drafts (F-035-c) and sending them: one recipient row per
-user, written on the worker (F-035-d). Delivery adapters (F-035-e/f) are not
-built — recipient rows stay `queued` until one reports an outcome.
+user, written on the worker (F-035-d), and delivered to Telegram and Bale
+(F-035-e). Email/SMS adapters (F-035-f) are not built — rows of those channels
+stay `queued`.
 
 ## TL;DR
 
@@ -36,6 +37,7 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 | edit a draft | `PATCH notifications/campaigns/:id` | any of `channel`, `messageBody`, `audience` (≥1) | the campaign | 400, 403, 404; 409 `campaign_not_draft` |
 | start a send | `POST notifications/campaigns/:id/send` | — | the campaign, `status: sending`, 200 | 403, 404; 409 `campaign_not_draft` |
 | fan out | `POST internal/notifications/campaigns/fan-out` (`SERVICE_AUTH_TOKEN`) | — | `{ campaigns, recipients, finished, unreadable }` | 404 on a wrong token |
+| deliver | `POST internal/notifications/campaigns/deliver` (token) | — | `{ claimed, sent, failed, deferred, stalled }` | 404 on a wrong token |
 | record an outcome | `POST internal/notifications/campaigns/recipients/:id/outcome` (token) | `{ outcome: sent\|failed }` | `{ changed }` | 400; 404 `recipient_not_found` |
 
 - `unreadCount` is over the whole inbox, whatever the page or filter.
@@ -95,6 +97,32 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 - The seed schedules the job `always_on` (user, 2026-09-17); an install that
   skips the seed fans out nothing until an operator sets its `bot_schedule`.
 
+### Delivering to Telegram and Bale (F-035-e, ADR-0054)
+
+- **Who drives.** `worker-service`'s `notification_campaign_delivery` job
+  (seeded `always_on`, as the fan-out) calls `deliver` each tick. One call
+  claims at most 100 `queued` rows of `sending` campaigns whose channel is
+  `telegram_bot`/`bale_bot`, sends one at a time, stops sending after 40s.
+- **The claim** (invariant 4). `FOR UPDATE SKIP LOCKED` plus a 300s
+  `claimedUntil` lease: an overlapping run takes other rows, and a run that
+  died frees its rows when the lease ends — a row it had sent but not recorded
+  may then go twice (ADR-0027's at-least-once).
+- **Whose bot, which chat** (invariant 9). The recipient's own tenant's primary
+  bot on the campaign's platform, to the chat that user linked in that tenant
+  with `contactVerifiedAt` set. The bot and its token come from `messenger`'s
+  registry, answered by `auth-service` over `internal/bot-integrations`
+  (`primary`, then `token` — audited as `notification-service:notification:CampaignDelivery`).
+  `messageBody` goes as plain text, no `parse_mode`.
+- **Outcomes.** `failed` — the final ones: no verified chat on that platform,
+  no primary bot or a `disabled` one, a 400/403 from the platform (chat gone,
+  bot blocked). `sent` on success. Both through `recordOutcome` (invariant 2).
+  **Left `queued`**, released for a later run: a 429 (every row of that bot
+  waits until `retry_after`; `deferred`), a 5xx or network error or the time
+  limit (`deferred`), and an `auth-service` that did not answer or a token that
+  could not be read (`stalled` — the job counts these as errors). A campaign
+  stays `sending` while any row is queued.
+- Needs `AUTH_API_BASE_URL` on `notification-service`; unset, every row stalls.
+
 ## Emits (events)
 
 | Event | When | Payload | Consumer |
@@ -112,14 +140,16 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 |---|---|---|
 | forward-auth | identity headers on gated routes | 401 |
 | identity | `userId` (no FK across schemas; a caller names a real user) | — |
-| automation | `worker-service` ticks the fan-out (F-035-d) | a started campaign stays `sending` with no rows until the next run |
+| automation | `worker-service` ticks the fan-out (F-035-d) and delivery (F-035-e) | a started campaign stays `sending`, its rows unwritten or `queued`, until the next run |
+| messenger | `BotClientRegistry`, `TelegramLikeBotClient.sendText` (F-035-e) | — (a library) |
+| auth-api | `internal/bot-integrations/primary` and `/token` (ADR-0054) | rows stay `queued`, counted `stalled` |
 | tenant | the caller's `tenantType` (platform owner or not); a named tenant exists | 404 `tenant_not_found` |
 | identity | `campaign.manage` in the gate's permissions (migration `20260917000100`) | 403 |
 
 ## Guarantees
 
 - `readAt` is written once, by the first mark-read (invariant 5).
-- Campaign execution is idempotent per `(campaignId, userId)`: one row, one counted outcome (F-035-d).
+- Campaign execution is idempotent per `(campaignId, userId)`: one row, one counted outcome (F-035-d); one run holds a row while it sends (F-035-e).
 
 ## Deprecations
 

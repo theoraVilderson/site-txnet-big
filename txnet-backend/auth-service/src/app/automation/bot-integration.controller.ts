@@ -6,10 +6,17 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { BotIntegration, isBotPlatform } from '@txnet-backend/messenger';
+import {
+  BOT_DIRECTORY_SEAM_SERVICES,
+  BotIntegration,
+  isBotPlatform,
+} from '@txnet-backend/messenger';
 import { ServiceOnlyGuard } from '../common/guards/service-only.guard';
 import { TenantAgnostic } from '../tenant/tenant-agnostic.decorator';
 import { PrismaBotIntegrationDirectory } from './bot-integration.directory';
+
+/** A tenant id as the column stores it; anything else is a 404, not a database error. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** What an integration looks like on the internal seam. Never a credential. */
 type BotIntegrationView = BotIntegration;
@@ -18,9 +25,10 @@ type BotIntegrationView = BotIntegration;
  * The internal seam `bot-service` resolves its bots through (F-320, ADR-0011).
  *
  * `bot-service` serves the webhook but owns no schema and no vault, so it asks
- * here. Three questions, and no fourth: which integration is this path, is
- * this its secret token, and — for the one process that has to *send* as that
- * bot — what is its token.
+ * here; since F-035-e so does `notification-service`, which sends campaigns as
+ * a tenant's primary bot. The questions: which integration is this path (or
+ * this tenant's primary), is this its secret token, and — for a process that
+ * has to *send* as that bot — what is its token.
  *
  * **Why a token crosses this seam at all.** F-323 says a bot token is never
  * returned by any API, and that rule is about the tenant and admin surfaces:
@@ -77,6 +85,32 @@ export class BotIntegrationController {
   }
 
   /**
+   * A tenant's primary bot on one platform, for a process that sends as it
+   * (F-035-e: `notification-service` delivering a campaign). No credential;
+   * the token is fetched by the path this answers, through the route below.
+   * 404 when the tenant has none, as for an unknown path.
+   */
+  @Post('primary')
+  async primary(
+    @Body() body: { tenantId?: string; platform?: string },
+  ): Promise<BotIntegrationView> {
+    if (
+      !body.tenantId ||
+      !UUID.test(body.tenantId) ||
+      !body.platform ||
+      !isBotPlatform(body.platform)
+    ) {
+      throw new NotFoundException();
+    }
+    const integration = await this.directory.primaryFor(
+      body.tenantId,
+      body.platform,
+    );
+    if (!integration) throw new NotFoundException();
+    return integration;
+  }
+
+  /**
    * The webhook secret, for the process registering this bot upstream (F-321).
    *
    * Same seam and same reasoning as the token route below: the value goes to
@@ -124,15 +158,29 @@ export class BotIntegrationController {
    */
   @Post('token')
   async token(
-    @Body() body: { platform?: string; webhookPath?: string; caller?: string },
+    @Body()
+    body: {
+      platform?: string;
+      webhookPath?: string;
+      caller?: string;
+      service?: string;
+    },
   ): Promise<{ token: string | null }> {
     const integration = await this.mustResolve(body.platform, body.webhookPath);
-    // The caller the audit row records is the *remote* code path, prefixed so
-    // a trail reader can tell a decryption performed in this process from one
-    // performed on behalf of another (F-1215).
+    // The caller the audit row records is the *remote* code path, prefixed
+    // with the process that asked, so a trail reader can tell a decryption
+    // performed in this process from one performed on behalf of another
+    // (F-1215). Absent is `bot-service`, the seam's first caller; a name off
+    // the closed list is recorded as unknown, never as given.
+    const service =
+      body.service === undefined
+        ? 'bot-service'
+        : (BOT_DIRECTORY_SEAM_SERVICES as readonly string[]).includes(body.service)
+          ? body.service
+          : 'unknown-service';
     const token = await this.directory.token(
       integration,
-      `bot-service:${body.caller ?? 'unknown'}`,
+      `${service}:${body.caller ?? 'unknown'}`,
     );
     return { token };
   }

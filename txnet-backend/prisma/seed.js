@@ -154,6 +154,9 @@ const SEEDED_SCHEDULES = [
   // stays `sending` with no recipients and no error. Every tick; an idle one is
   // one query, and a run writes at most FAN_OUT_BUDGET rows.
   { key: 'notification_campaign_fan_out', scheduleType: 'always_on', cronExpression: null },
+  // Campaign delivery (F-035-e), the fan-out's twin: unscheduled, recipients stay
+  // `queued` forever. Every tick; an idle run is one claim query.
+  { key: 'notification_campaign_delivery', scheduleType: 'always_on', cronExpression: null },
 ];
 
 async function seedWorkerSchedules(adminId) {

@@ -8,6 +8,7 @@ export * from './lib/renderer';
 export * from './lib/payment';
 export * from './lib/telegram-like-bot.client';
 export * from './lib/bot-integration';
+export * from './lib/auth-api-bot-integration.directory';
 export * from './lib/webhook-address';
 export * from './lib/bot-integration.fixture';
 export * from './lib/bot-client.registry';

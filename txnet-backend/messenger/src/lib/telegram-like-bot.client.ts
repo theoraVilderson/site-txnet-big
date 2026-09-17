@@ -9,6 +9,11 @@ export interface TelegramLikeSendResult {
   result?: { message_id?: number };
 }
 
+/** {@link TelegramLikeBotClient.sendText}'s answer: sent, or why not and whether to try again. */
+export type SendTextResult =
+  | { ok: true; messageId: number | null }
+  | { ok: false; permanent: boolean; retryAfterSec: number | null; description: string };
+
 /** One button on an inline keyboard, in the two shapes both platforms take. */
 export type InlineButton =
   | { text: string; callback_data: string }
@@ -107,6 +112,36 @@ export class TelegramLikeBotClient {
     }
 
     return result.body?.result?.message_id ?? null;
+  }
+
+  /**
+   * Sends plain text and says how it went, never throwing (F-035-e).
+   *
+   * {@link sendMessage} throws one error for every failure, which is right for
+   * a flow answering a user and wrong for a bulk sender that must tell *this
+   * chat will never take it* from *try later*. Both platforms answer 400 for a
+   * chat that does not exist and 403 for a bot the user blocked; those are
+   * `permanent`. A 429 carries `parameters.retry_after`; everything else — 5xx,
+   * a network error, a 401/404 for a token that stopped working — is worth
+   * another attempt. No `parse_mode`: the text is sent as written.
+   */
+  async sendText(chatId: string, text: string): Promise<SendTextResult> {
+    const result = await this.call<
+      TelegramLikeSendResult & { parameters?: { retry_after?: number } }
+    >('sendMessage', { chat_id: chatId, text });
+    if (result.ok) {
+      return { ok: true, messageId: result.body?.result?.message_id ?? null };
+    }
+    const description =
+      result.networkError ?? result.body?.description ?? `status ${result.status}`;
+    const retryAfter = result.body?.parameters?.retry_after;
+    return {
+      ok: false,
+      permanent: result.status === 400 || result.status === 403,
+      retryAfterSec:
+        result.status === 429 && typeof retryAfter === 'number' ? retryAfter : null,
+      description,
+    };
   }
 
   /**

@@ -9,7 +9,7 @@ import {
   TelegramLikeBotClient,
   webhookUrl,
 } from '@txnet-backend/messenger';
-import { AuthApiBotIntegrationDirectory } from './bot-integration.directory';
+import { WebhookBotIntegrationDirectory } from './bot-integration.directory';
 import { BotKeys } from '../locale/bot-keys';
 
 /**
@@ -41,7 +41,7 @@ export class BotWebhookRegistrar implements OnApplicationBootstrap {
   constructor(
     private readonly config: ConfigService,
     private readonly bots: BotClientRegistry,
-    private readonly directory: AuthApiBotIntegrationDirectory,
+    private readonly directory: WebhookBotIntegrationDirectory,
     private readonly copy: BotCopy,
   ) {}
 

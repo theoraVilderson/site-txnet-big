@@ -11,6 +11,7 @@ import { HeartbeatJob } from '../jobs/heartbeat.job';
 import { VaultRetentionJob } from '../jobs/vault-retention.job';
 import { DepositExpiryJob } from '../jobs/deposit-expiry.job';
 import { CampaignFanOutJob } from '../jobs/campaign-fan-out.job';
+import { CampaignDeliveryJob } from '../jobs/campaign-delivery.job';
 import { DepositReconciliationJob, DepositVerifyRetryJob } from '../jobs/deposit-reconciliation.job';
 import { OutboxRelayJob } from '../jobs/outbox-relay.job';
 import { FxRateJob } from '../jobs/fx-rate.job';
@@ -35,6 +36,7 @@ import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
     VaultRetentionJob,
     DepositExpiryJob,
     CampaignFanOutJob,
+    CampaignDeliveryJob,
     DepositReconciliationJob,
     DepositVerifyRetryJob,
     OutboxRelayJob,
@@ -43,7 +45,7 @@ import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
     FxRateJob,
     {
       provide: JOBS,
-      inject: [HeartbeatJob, VaultRetentionJob, DepositExpiryJob, DepositReconciliationJob, DepositVerifyRetryJob, OutboxRelayJob, FxRateJob, CampaignFanOutJob],
+      inject: [HeartbeatJob, VaultRetentionJob, DepositExpiryJob, DepositReconciliationJob, DepositVerifyRetryJob, OutboxRelayJob, FxRateJob, CampaignFanOutJob, CampaignDeliveryJob],
       useFactory: (...jobs: Job[]) => jobs,
     },
     WorkerRegistryService,
