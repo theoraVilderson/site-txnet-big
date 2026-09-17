@@ -666,15 +666,18 @@ invalid. Entries older than 30 days must be raised proactively.
 - Never leave an open entry in `.where-misses` behind. `where.py --check` fails
   on one, and that is deliberate: the alias is the entire maintenance cost of
   the addressing layer.
-- **Never write more than 3 unit doc files for one backlog item.** If a change
-  genuinely touches more units, the extra ones get their front-matter `source:`
-  and `status` updated and nothing else — their contract prose waits for the
-  session that changes their *behaviour*. §3's 8-file read ceiling never had a
-  write counterpart; this is it. A consumer's `contract.md` lagging its producer
-  by one session is visible (§8 still requires the consumer list to be said out
-  loud) and cheap; rewriting five contracts per feature is neither.
-  When the cap binds, choose by §0's authority order: invariants.md first,
-  then contract.md / rules.md, then data-model.md last.
+- **Write the docs of the behaviour you changed — all of them, and no others.**
+  Every doc file that describes what this item changed (its contract,
+  invariants, data model, INDEX front matter, even in more than one unit) is
+  updated in the same item; there is no count. A unit whose *behaviour* did not
+  change — a consumer, a unit whose file was only touched — gets its
+  front-matter `source:` and `status` updated and nothing else; its prose waits
+  for the session that changes its behaviour. A consumer's `contract.md`
+  lagging its producer by one session is visible (§8 still requires the
+  consumer list to be said out loud) and cheap; a doc that is wrong about the
+  unit it documents is neither. (Until 2026-09-17 this was a cap of 3 files per
+  item; it left the changed unit's own `data-model.md` stale, and was removed
+  at the user's request.)
 - **One decision is written once.** An ADR is the home of a *why*; every other
   file cites it by id and adds nothing. A `note` that restates a sentence
   already in an ADR or a contract is a deletion, not an edit. §0's rule against

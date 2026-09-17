@@ -422,7 +422,7 @@ def main():
     print("  files that pass on their own — the contention CODE-LAYOUT.md warns")
     print("  about, arriving as a wall of red that looks like a real regression.")
     print("  Do not substitute one project for the workspace in the run that says done.")
-    print("\n  §11: at most 3 unit doc files for this row. A changelog row only for")
+    print("\n  §11: update every doc of the behaviour this row changes, and no other unit's prose. A changelog row only for")
     print("  a version bump, a status flip or a contract break. A BACKLOG note is 3 lines.")
 
     # --- the mode -----------------------------------------------------------

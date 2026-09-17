@@ -288,11 +288,13 @@ same session rather than raised.
 ## What v2.8 caps, and why you will notice
 
 `00-PROTOCOL.md` v2.8 added ceilings on **writing** to match the ones that
-already existed on reading. Four of them change how a normal session ends:
+already existed on reading. Four rules change how a normal session ends:
 
-- **At most 3 unit doc files per backlog item** (§11). Further units get
-  `source:`/`status` updated and nothing else. §8 still requires the consumer
-  list out loud, so a lagging contract is visible, not silent.
+- **Docs of the behaviour you changed, all of them, and no others** (§11). No
+  file count: every doc describing what the item changed is updated in it. A
+  unit whose behaviour did not change gets `source:`/`status` only. §8 still
+  requires the consumer list out loud, so a lagging consumer is visible. (Was a
+  cap of 3 files; removed 2026-09-17 — it left a changed unit's own docs stale.)
 - **A changelog row only for a version bump, a status flip or a contract break**
   (§5.4, §6b.6). Routine work gets none; `git log --follow docs/<layer>/<unit>/`
   has it.
