@@ -57,4 +57,4 @@ is `read` for `GET`/`HEAD`/`OPTIONS` and **`staffWrite` for anything else**.
 | A mutating route nobody labelled | closed for a suspended tenant (`staffWrite`) — fail closed (user, F-018-f) | 2026-09-17 |
 | One row, one session | the user chose not to split enforcement per service | 2026-09-17 |
 | A terminated tenant's in-flight payment | settles (`system`); a card-to-card confirmation by staff does not (`staffWrite`) | 2026-09-17 |
-| `gateway-service`, `bot-service`, `worker-service` | not guarded here: the first holds sockets, the others call auth-/billing-service, which refuse | 2026-09-17 |
+| Services other than auth-/billing-service | **not yet covered**: `notification-service` serves its own campaign routes unguarded, worker jobs run outside HTTP, `gateway-service` holds sockets. `bot-service` calls auth-/billing-service, which refuse. Closed by F-018-p | 2026-09-17 |
