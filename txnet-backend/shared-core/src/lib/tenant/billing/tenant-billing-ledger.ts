@@ -5,6 +5,7 @@ import {
   TenantBillingTransaction,
   TenantLedgerDirection,
 } from '@prisma/client';
+import { OutboxEventType } from '../../automation/routing-keys';
 
 /**
  * The one place a reseller's billing balance changes (F-019-a, D-41; tenant
@@ -32,6 +33,11 @@ import {
  * named refusal, and held by the unique index for two writers racing.
  * A lost version race is thrown, not retried: only restarting the caller's
  * whole transaction reads the row fresh.
+ *
+ * **Every credit announces itself** (F-019-c): a `tenant.billing.credited`
+ * outbox row in the same transaction, so a reseller whose renewal is unpaid is
+ * charged as soon as money lands — whichever writer credited it, including
+ * ones not written yet. The renewal sweep stands behind a lost event.
  */
 export type TenantBillingEntry = {
   tenantId: string;
@@ -82,8 +88,18 @@ export class TenantBillingDuplicateEntry extends Error {
 
 @Injectable()
 export class TenantBillingLedger {
-  credit(tx: Prisma.TransactionClient, entry: TenantBillingEntry): Promise<TenantBillingTransaction> {
-    return this.move(tx, entry, TenantLedgerDirection.credit);
+  async credit(tx: Prisma.TransactionClient, entry: TenantBillingEntry): Promise<TenantBillingTransaction> {
+    const moved = await this.move(tx, entry, TenantLedgerDirection.credit);
+    await tx.outboxEvent.create({
+      data: {
+        aggregate: 'tenant.billing_wallet',
+        aggregateId: moved.walletId,
+        type: OutboxEventType.TENANT_BILLING_CREDITED,
+        payload: { tenantId: entry.tenantId, transactionId: moved.id, balanceAfter: moved.balanceAfter.toFixed(2) },
+      },
+      select: { id: true },
+    });
+    return moved;
   }
 
   debit(tx: Prisma.TransactionClient, entry: TenantBillingEntry): Promise<TenantBillingTransaction> {

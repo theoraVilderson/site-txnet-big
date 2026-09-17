@@ -370,6 +370,8 @@ services:
       # Shared secret bot-service presents as X-Service-Token: it waives the
       # captcha and re-buckets the rate limit, and authenticates no user.
       - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
+      # A reseller owner's renewal notices also land in the panel inbox (F-019-c).
+      - NOTIFICATION_API_BASE_URL=http://notification-service:3000
       # The SMS gateway's URL. Its key and sender line are the platform owner's
       # vault values (F-018-a): `scripts/seed-sms-line.sh` puts them there, and
       # SMS_API_KEY / SMS_SENDER here would refuse the boot.

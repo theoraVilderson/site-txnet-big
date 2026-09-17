@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-version: 15
+version: 16
 updated: 2026-09-17
 ---
 
@@ -27,12 +27,13 @@ the rest are `reseller`. The platform bills tenants from a prepaid wallet
 |---|---|---|---|---|
 | **resolve tenant by claim** — implemented | `{host?, session?, bot?}` | `{id, slug, via, surfacePurpose?}` or `null` — `null` means *no tenant*, never a fallback | sync | `TenantClaimConflict` when a claim and its surface disagree |
 | **create / list / read a reseller** — implemented, [contract.admin.md](contract.admin.md) | slug, billingModel, owner | reseller view | sync tx | `not_platform_owner` / `slug_taken` / `reseller_not_found` |
-| **create / edit / deactivate a package; force its keys onto subscribers** — implemented, [contract.admin.md](contract.admin.md) | name, monthly/yearly price, includedFeatureKeys, isActive | package view (an added key granted to subscribers in the edit) | sync tx | `not_platform_owner` / `package_not_found` / `package_name_taken` / `package_unpriced` |
+| **create / edit / deactivate a package; force its keys onto subscribers** — implemented, [contract.admin.md](contract.admin.md) | name, monthly/yearly price, includedFeatureKeys, isActive | package view (an added key granted to subscribers in the edit) | sync tx | `not_platform_owner` / `package_not_found` / `package_name_taken` / `package_price_in_use` / `package_unpriced` |
 | **put a reseller on a package and period** — implemented, [contract.admin.md](contract.admin.md) | tenantId, packageId, billingModel | subscription view; `package_included` entitlements replaced | sync tx | `reseller_not_found` / `reseller_terminated` / `package_not_found` / `package_inactive` / `package_not_sold_for_period` |
 | **suspend / reactivate / terminate a reseller; what each status allows** — implemented, [contract.admin.md](contract.admin.md), [rules.md](rules.md) | tenantId, status, reason | status view; Redis `tenant:status:<id>` rewritten; `TenantStatusGuard` (shared-core) refuses per capability | sync tx | `reseller_not_found` / `reseller_terminated` / `status_unchanged`; `403 tenant.suspended` / `tenant.terminated` |
 | check entitlement | tenantId, featureKey | allowed / denied (+ source, expiry) | sync | — |
 | verify custom domain | tenantId, domainValue | verification status | async (DNS TXT / ArvanCloud) | token mismatch |
-| **credit / debit the billing wallet** — implemented, [contract.billing.md](contract.billing.md) | tenantId, reason, amount, reference | `tenant_billing_transaction` (append-only) | sync tx | insufficient / duplicate / version conflict |
+| **credit / debit the billing wallet** — implemented, [contract.billing.md](contract.billing.md) | tenantId, reason, amount, reference | `tenant_billing_transaction` (append-only); a credit also writes `tenant.billing.credited` | sync tx | insufficient / duplicate / version conflict |
+| **renew a reseller's subscription** — implemented, [contract.billing.md](contract.billing.md), [rules.md](rules.md) #10-#13 | tenantId, or every due one | charged + period moved on, or warned, or suspended as `non_payment`; outbox notices | async (worker sweep + `tenant.billing.credited`) | a failing tenant is `failed` in the sweep |
 | meter usage | tenantId, meterKey, quantity, period | `tenant_usage_meter` row | async (worker) | — |
 | set BYO gateway/SMS/bot config | tenantId, encrypted credentials | config row, `pending` verification | sync | — |
 | **store / use a tenant credential** — implemented | see [contract.vault.md](contract.vault.md) | | | |

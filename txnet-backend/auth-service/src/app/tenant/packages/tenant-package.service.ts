@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { AdminAction, AuditTargetType, Prisma, TenantType } from '@prisma/client';
+import { AdminAction, AuditTargetType, Prisma, TenantBillingModel, TenantStatus, TenantType } from '@prisma/client';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { addPackageEntitlements, lockPackage, lockSubscribers, replacePackageEntitlements } from '../subscription/package-entitlements';
@@ -39,7 +39,7 @@ export type PackageView = {
   isActive: boolean;
 };
 
-export type TenantPackageRejection = 'not_platform_owner' | 'package_not_found' | 'package_name_taken' | 'package_unpriced';
+export type TenantPackageRejection = 'not_platform_owner' | 'package_not_found' | 'package_name_taken' | 'package_unpriced' | 'package_price_in_use';
 
 export class TenantPackageRefused extends Error {
   constructor(
@@ -94,6 +94,23 @@ export class TenantPackageService {
     return view;
   }
 
+  /**
+   * A price cleared while a subscriber that is not terminated renews on that
+   * period is `package_price_in_use` (F-019-c): the renewal would have nothing
+   * to charge. Checked under the package's `FOR UPDATE`, which a subscription
+   * `PUT` waits on.
+   */
+  private async pricesStillSold(tx: Prisma.TransactionClient, id: string, before: PackageView, patch: UpdatePackageInput): Promise<void> {
+    const cleared: TenantBillingModel[] = [];
+    if (patch.monthlyPrice === null && before.monthlyPrice !== null) cleared.push(TenantBillingModel.subscription_monthly);
+    if (patch.yearlyPrice === null && before.yearlyPrice !== null) cleared.push(TenantBillingModel.subscription_yearly);
+    if (cleared.length === 0) return;
+    const inUse = await tx.tenantSubscription.count({
+      where: { packageId: id, tenant: { billingModel: { in: cleared }, status: { not: TenantStatus.terminated } } },
+    });
+    if (inUse > 0) throw new TenantPackageRefused('package_price_in_use', `${inUse} subscriber(s) on ${cleared.join(', ')}`);
+  }
+
   async update(actor: TenantPackageActor, id: string, patch: UpdatePackageInput): Promise<PackageView> {
     await this.access(actor);
     const before = toView(await this.find(id));
@@ -112,6 +129,7 @@ export class TenantPackageService {
     return this.writing(patch.name ?? before.name, () =>
       this.all.$transaction(async (tx) => {
         await lockPackage(tx, id, 'update');
+        await this.pricesStillSold(tx, id, before, patch);
         const held = patch.includedFeatureKeys === undefined ? null : await tx.tenantFeaturePackage.findUnique({ where: { id }, select: { includedFeatureKeys: true } });
         const after = toView(await tx.tenantFeaturePackage.update({ where: { id }, data, select: PACKAGE_SELECT }));
         if (held) {

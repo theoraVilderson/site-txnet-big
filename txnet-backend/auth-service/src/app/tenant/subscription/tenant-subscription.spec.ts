@@ -154,5 +154,7 @@ describe('TenantSubscriptionService', () => {
     expect(updateSubscriptionSettingsSchema.safeParse({ trialDays: -1 }).success).toBe(false);
     expect(updateSubscriptionSettingsSchema.safeParse({ trialDays: 366 }).success).toBe(false);
     expect(updateSubscriptionSettingsSchema.safeParse({ trialDays: 1.5 }).success).toBe(false);
+    expect(updateSubscriptionSettingsSchema.safeParse({ renewalGraceDays: 3 }).success).toBe(true);
+    expect(updateSubscriptionSettingsSchema.safeParse({ renewalGraceDays: 31 }).success).toBe(false);
   });
 });

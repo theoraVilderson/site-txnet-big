@@ -180,9 +180,22 @@ transaction that writes the row (`notification/contract.md` "Emits").
 | No marker to give back: `RealtimePublisher` never throws | a closed panel reads the row on its next load, so at most once is enough |
 | A payload without `userId` or `notification.id` throws | whose row it is is never guessed |
 
+## The tenant consumers: a reseller's renewal (F-019-c)
+
+Both in `outbox/tenant-renewal.consumers.ts`. The producers are tenant's:
+`TenantBillingLedger.credit` and `TenantRenewalService`
+(`domains/tenant/contract.billing.md` "Subscription renewal").
+
+| Rule | Why |
+|---|---|
+| `TenantBillingCreditedConsumer`, queue `AUTOMATION_TENANT_BILLING_CREDITED_QUEUE` on `outbox.tenant.billing.credited`: `POST /api/internal/tenant-subscriptions/:tenantId/renew`; **no marker** | the renewal repeats safely; a paid reseller is charged and reactivated at once (user, 2026-09-17) |
+| A refusal, an unset seam or an answer without `outcome` throws and dead-letters | the `tenant_subscription_renewal` sweep stands behind a lost event |
+| `TenantSubscriptionNoticeConsumer`, queue `AUTOMATION_TENANT_SUBSCRIPTION_NOTICE_QUEUE` on `outbox.tenant.subscription.payment_due` and `.suspended`: template `subscriptionPaymentDue` / `subscriptionSuspended` to `ownerUserId`, marker `outboxProcessed('tenant-subscription-notice', <event id>)`, given back on a throw | the payer notices' rules (ADR-0045); one queue, because both are the same owner's same story |
+| `OutboxEventType` is not all realtime: only `RealtimeEventType` is held to `contracts/realtime/events.json` | a tenant event is never pushed to a browser |
+
 ## What is not built
 
-- Two payer notices and one live push only; no Postgres idempotency store — ADR-0045 chose
+- Payer notices, one live push and the tenant renewal only; no Postgres idempotency store — ADR-0045 chose
   Redis for the first, and a consumer that moves money must choose again.
 - No retention or archive of published rows. ADR-0021 makes the table an audit
   trail; when that stops being worth keeping needs a producer with an opinion.

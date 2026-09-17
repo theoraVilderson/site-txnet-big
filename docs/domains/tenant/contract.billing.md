@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-version: 10
+version: 11
 updated: 2026-09-17
 ---
 
@@ -31,9 +31,10 @@ of `tenant_billing_wallet.cachedBalance` (invariant 3). The same shape as
 | `cachedBalance` is written with `where { id, version }` **before** the row is appended; `count = 0` is `TenantBillingVersionConflict` — thrown, not retried | a loser appends nothing; only restarting the caller's transaction reads the row fresh |
 | A first credit opens the wallet (`createMany … skipDuplicates`) | two first credits meet at the version guard |
 | Returns the appended `tenant_billing_transaction`, whose `balanceAfter` is the new balance | — |
+| **Every credit writes a `tenant.billing.credited` outbox row** (`{tenantId, transactionId, balanceAfter}`) in the caller's `tx` | an unpaid renewal is charged as soon as money lands, whichever writer credited it (F-019-c) |
 
-`reasonType` in use: `admin_manual_adjust` (F-019-a), `topup_payment` (F-019-b).
-`subscription_charge` is F-019-c. `metered_usage_charge` and
+`reasonType` in use: `admin_manual_adjust` (F-019-a), `topup_payment` (F-019-b),
+`subscription_charge` (F-019-c). `metered_usage_charge` and
 `sms_usage_charge` stay in the enum unused (D-41: no metering).
 
 ## Manual adjustment — the HTTP surface
@@ -110,7 +111,33 @@ an adjustment's is the platform owner's request id.
 
 **Proof:** `tenant-billing/tenant-wallet.spec.ts`.
 
+## Subscription renewal — the platform charges (F-019-c)
+
+`TenantRenewalService` in `auth-service/src/app/tenant/renewal/`. What the
+renewal does to a reseller's status is [rules.md](rules.md) #10-#13; the
+invariant is 19.
+
+| Trigger | Route (`ServiceOnlyGuard`, `system`, no tenant) |
+|---|---|
+| `tenant_subscription_renewal` job, seeded every 5 min | `POST /api/internal/tenant-subscriptions/renew-due` -> `{due, renewed, warned, suspended, waiting, not_due, skipped, failed}` |
+| `tenant.billing.credited` (worker `TenantBillingCreditedConsumer`) | `POST /api/internal/tenant-subscriptions/:tenantId/renew` -> `{outcome}` |
+
+| Rule | Why |
+|---|---|
+| Due = `currentPeriodEnd <= now`, reseller, not deleted, not `terminated`; the sweep takes 500 oldest first, one transaction each, and one failing tenant is `failed` without stopping the rest | a broken row never blocks every other reseller's renewal |
+| **One transaction on the cross-tenant pool: the package `FOR SHARE`, then the tenant `FOR UPDATE`**, the subscription re-read under both | the lock order of every subscription write (`package-entitlements.ts`); two renewals of one tenant serialise |
+| The price is the package's **current** price for `tenant.billingModel`; a package is renewed on even when inactive | deactivating stops new sales, not renewals (user, 2026-09-17) |
+| **Paid** (`cachedBalance >= price`): one `subscription_charge` debit, `referenceId` = a name-based UUID of (tenant, the `currentPeriodEnd` it pays for) | a period is charged once; invariant 15 stands behind the lock |
+| The new `currentPeriodEnd` = one calendar month / year (UTC, clamped to the month end) from the old end — or **from now** after a `non_payment` suspension; if that is still not in the future, from now | paid in grace, the grace days were used; paid after suspension, those days were not served (user, 2026-09-17); a stopped sweep never charges missed periods back to back |
+| The same transaction clears `renewalWarnedAt` and replaces the tenant's `package_included` entitlements with the package's keys | F-018-o: a key removed from the package goes at renewal |
+| **Short:** nothing is debited — prepaid only (invariant 14) | D-01 |
+| Every notice is an outbox row in the renewal's transaction: `tenant.subscription.payment_due` `{tenantId, ownerUserId, amount, balance, suspendsAt}`, `tenant.subscription.suspended` `{tenantId, ownerUserId, amount, balance}` | a warning is owed exactly when the state that caused it committed (ADR-0021) |
+| The worker's `TenantSubscriptionNoticeConsumer` sends them to the owner through `POST /api/internal/notify/user` (`subscriptionPaymentDue` / `subscriptionSuspended`): the panel inbox always, the owner's linked bots best effort, in the owner's language | an owner may have no linked bot; the inbox copy is the one that must land |
+
+**Proof:** `tenant/renewal/tenant-renewal.spec.ts`.
+
 ## Not built
 
 No quote route for a top-up (start answers the breakdown); the panel page
-(F-019-e) sends the start and follows the bank. No charge (F-019-c).
+(F-019-e) sends the start and follows the bank. A reseller does not yet see
+its next renewal date or price in the panel.

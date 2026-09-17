@@ -30,7 +30,7 @@ describe('TenantPackageService', () => {
     ...over,
   });
 
-  const build = (opts: { callerType?: string; existing?: ReturnType<typeof stored> | null; nameTaken?: boolean } = {}) => {
+  const build = (opts: { callerType?: string; existing?: ReturnType<typeof stored> | null; nameTaken?: boolean; subscribersOnPeriod?: number } = {}) => {
     const writes: string[] = [];
     const tx = {
       $queryRaw: vi.fn(async () => []),
@@ -40,6 +40,7 @@ describe('TenantPackageService', () => {
         update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => (writes.push('update'), stored({ ...opts.existing, ...data }))),
       },
       adminAuditLog: { create: vi.fn(async () => (writes.push('audit'), {})) },
+      tenantSubscription: { count: vi.fn(async () => opts.subscribersOnPeriod ?? 0) },
     };
     const prisma = {
       tenant: { findUnique: vi.fn(async () => ({ tenantType: opts.callerType ?? 'platform_owner' })) },
@@ -104,6 +105,19 @@ describe('TenantPackageService', () => {
     const { service, prisma } = build({ existing: stored() });
     await expect(service.update(actor, PKG, { monthlyPrice: null })).rejects.toMatchObject({ reason: 'package_unpriced' });
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('refuses clearing a price a subscriber renews on, under the package lock; with none it is cleared (F-019-c)', async () => {
+    const both = stored({ yearlyPrice: { toString: () => '15000000' } });
+    const busy = build({ existing: both, subscribersOnPeriod: 2 });
+    await expect(busy.service.update(actor, PKG, { monthlyPrice: null })).rejects.toMatchObject({ reason: 'package_price_in_use' });
+    expect(busy.tx.tenantSubscription.count).toHaveBeenCalledWith({
+      where: { packageId: PKG, tenant: { billingModel: { in: ['subscription_monthly'] }, status: { not: 'terminated' } } },
+    });
+    expect(busy.writes).not.toContain('update');
+
+    const free = build({ existing: both });
+    await expect(free.service.update(actor, PKG, { monthlyPrice: null })).resolves.toMatchObject({ monthlyPrice: null });
   });
 
   it('answers package_not_found for an unknown id', async () => {

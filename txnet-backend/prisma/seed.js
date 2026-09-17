@@ -158,6 +158,10 @@ const SEEDED_SCHEDULES = [
   // Campaign delivery (F-035-e), the fan-out's twin: unscheduled, recipients stay
   // `queued` forever. Every tick; an idle run is one claim query.
   { key: 'notification_campaign_delivery', scheduleType: 'always_on', cronExpression: null },
+  // Reseller subscription renewal (F-019-c, decided 2026-09-17): unscheduled, no
+  // period is ever charged and an unpaid reseller is never suspended. A credit
+  // renews its payer at once through the outbox; this is the sweep behind it.
+  { key: 'tenant_subscription_renewal', scheduleType: 'cron_expression', cronExpression: '*/5 * * * *' },
 ];
 
 async function seedWorkerSchedules(adminId) {

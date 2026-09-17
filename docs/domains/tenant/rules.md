@@ -16,8 +16,9 @@ the two must say the same thing.
 `trial` -> `active` | `suspended` | `terminated`;
 `active` -> `suspended` | `terminated`; `suspended` -> `active` | `terminated`.
 `terminated` is final. Only the platform owner moves a reseller by hand
-(`PUT /api/auth/tenants/:id/status`, `contract.admin.md`); F-019-c's renewal
-will call the same service. The platform owner's own tenant is never moved.
+(`PUT /api/auth/tenants/:id/status`, `contract.admin.md`); the subscription
+renewal moves one too (#10-#13), through the same transition. The platform
+owner's own tenant is never moved.
 
 ## The matrix
 
@@ -50,6 +51,10 @@ is `read` for `GET`/`HEAD`/`OPTIONS` and **`staffWrite` for anything else**.
 | 6 | Redis follows Postgres at once: a trigger on `tenant.status`/`graceEndsAt` notifies `tenant_status_changed`, `TenantStatusListener` rewrites the key, and recomputes every tenant on each connect | commit | **a missing key refuses nobody** (F-101-b's trade) |
 | 7 | `system` is never closed | — | a payment already taken still settles, or the record of money that moved is lost |
 | 8 | A refusal is `403` `{i18nKey: tenant.suspended \| tenant.terminated, reason: tenantSuspended \| tenantTerminated}` | — | — |
+| 10 | A due renewal the billing wallet covers is charged, and takes `trial` -> `active` (history `subscription_renewed`, actor null) | `currentPeriodEnd` passed (`contract.billing.md` "Subscription renewal") | a manual suspension stays |
+| 11 | A short renewal warns the owner at most once a day until `currentPeriodEnd` + `renewalGraceDays` (default 3) | the renewal finds the wallet short | an already suspended tenant is not warned |
+| 12 | Grace over and still short: `suspended`, `suspensionCause = non_payment`, reason `subscription_unpaid`, #1's stamps, the owner told; nothing deleted (#4) | renewal after the grace | a tenant already suspended is left as it is |
+| 13 | A payment lifts **only** a `non_payment` suspension: the charge is taken at once and the tenant is `active`, its new period starting now | a credit to the billing wallet, or the next sweep | a `manual` suspension is charged and renewed and stays suspended (user, 2026-09-17) |
 
 ## Edge cases decided
 | Case | Decision | Date |
@@ -59,4 +64,6 @@ is `read` for `GET`/`HEAD`/`OPTIONS` and **`staffWrite` for anything else**.
 | One row, one session | the user chose not to split enforcement per service | 2026-09-17 |
 | A terminated tenant's in-flight payment | settles (`system`); a card-to-card confirmation by staff does not (`staffWrite`) | 2026-09-17 |
 | Services other than auth-/billing-service | `notification-service` registers the guard; ticks are judged by `TenantStatusGate` (F-018-p). `bot-service` calls auth-/billing-service, which refuse. `gateway-service` sockets stay out (row note): a client frame only subscribes to a channel, a `read`, so suspension closes nothing there — but a **terminated** tenant's open socket still receives pushes, an unenforced `read: no` | 2026-09-17 |
+| The platform owner reactivates a `non_payment`-suspended reseller without a payment | allowed; the period is still unpaid and past grace, so the next sweep suspends it again. To give time, credit the wallet by hand (F-019-c) | 2026-09-17 |
+| The platform owner suspends by hand a reseller already suspended for non-payment | `status_unchanged`; the cause stays `non_payment`, so a payment lifts it. Terminate, or reactivate and then suspend (F-019-c) | 2026-09-17 |
 | A campaign already `sending` when its reseller is suspended or terminated | it finishes — `system`, like a payment already taken; only starting one is `staffWrite`. A heads-up and a "suspend and stop sending" option are F-018-q (user, F-018-p) | 2026-09-17 |

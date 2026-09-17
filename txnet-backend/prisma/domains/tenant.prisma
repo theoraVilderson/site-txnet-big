@@ -20,6 +20,15 @@ enum TenantStatus {
   @@schema("tenant")
 }
 
+/// F-019-c. Why a tenant is `suspended`: by the platform owner's hand, or by a
+/// renewal its billing wallet could not pay. Only `non_payment` is lifted by a payment.
+enum TenantSuspensionCause {
+  manual
+  non_payment
+
+  @@schema("tenant")
+}
+
 enum TenantBillingModel {
   subscription_monthly
   subscription_yearly
@@ -132,6 +141,8 @@ model Tenant {
   suspendedAt     DateTime?
   /// F-018-f. `/sub` is served until this instant while suspended (`suspensionHoldDays` after `suspendedAt`).
   graceEndsAt     DateTime?
+  /// F-019-c. Set while `suspended`; null otherwise. A payment lifts only `non_payment`.
+  suspensionCause TenantSuspensionCause?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -230,9 +241,11 @@ model TenantFeaturePackage {
 /// package or period change keeps `currentPeriodEnd`. Renewal and every charge
 /// are F-019-c's, which reads `currentPeriodEnd`.
 model TenantSubscription {
-  tenantId         String   @id @db.Uuid
-  packageId        String   @db.Uuid
+  tenantId         String    @id @db.Uuid
+  packageId        String    @db.Uuid
   currentPeriodEnd DateTime
+  /// F-019-c. When the owner was last warned that the renewal is unpaid; cleared by a renewal.
+  renewalWarnedAt  DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -252,6 +265,8 @@ model TenantSubscriptionSetting {
   trialDays          Int      @default(14)
   /// F-018-f. Days a suspended tenant's `/sub` links are still served (CHECK 0..90).
   suspensionHoldDays Int      @default(7)
+  /// F-019-c. Days an unpaid renewal is waited for before the tenant is suspended (CHECK 0..30).
+  renewalGraceDays   Int      @default(3)
   updatedByUserId    String?  @db.Uuid
   updatedAt          DateTime @updatedAt
 

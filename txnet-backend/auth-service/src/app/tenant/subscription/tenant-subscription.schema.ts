@@ -21,14 +21,16 @@ export type PutSubscriptionInput = z.infer<typeof putSubscriptionSchema>;
  * Whole days, at least one field. `trialDays`: 0 means the first period ends,
  * and is charged, at once (F-019-c). `suspensionHoldDays`: how long a
  * suspended tenant's `/sub` links are still served (F-018-f); 0 refuses them
- * at once.
+ * at once. `renewalGraceDays`: how long an unpaid renewal is waited for before
+ * the reseller is suspended (F-019-c).
  */
 export const updateSubscriptionSettingsSchema = z
   .object({
     trialDays: z.number().int().min(0).max(365).optional(),
     suspensionHoldDays: z.number().int().min(0).max(90).optional(),
+    renewalGraceDays: z.number().int().min(0).max(30).optional(),
   })
   .strict()
-  .refine((v) => v.trialDays !== undefined || v.suspensionHoldDays !== undefined, { message: 'at least one setting' });
+  .refine((v) => v.trialDays !== undefined || v.suspensionHoldDays !== undefined || v.renewalGraceDays !== undefined, { message: 'at least one setting' });
 
 export type UpdateSubscriptionSettingsInput = z.infer<typeof updateSubscriptionSettingsSchema>;

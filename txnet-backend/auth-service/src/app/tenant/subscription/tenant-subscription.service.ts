@@ -37,7 +37,7 @@ export type SubscriptionView = {
   includedFeatureKeys: string[];
 };
 
-export type SubscriptionSettingsView = { trialDays: number; suspensionHoldDays: number };
+export type SubscriptionSettingsView = { trialDays: number; suspensionHoldDays: number; renewalGraceDays: number };
 
 export type TenantSubscriptionRejection =
   | 'not_platform_owner'
@@ -61,7 +61,7 @@ export class TenantSubscriptionRefused extends Error {
 /** The platform's one settings row (CHECK `id = 1`, migration `20260917001300_tenant_subscription`). */
 const SETTINGS_ID = 1;
 const DAY_MS = 86_400_000;
-const SETTINGS = { trialDays: true, suspensionHoldDays: true } as const;
+const SETTINGS = { trialDays: true, suspensionHoldDays: true, renewalGraceDays: true } as const;
 
 const PRICE_OF: Record<PutSubscriptionInput['billingModel'], 'monthlyPrice' | 'yearlyPrice'> = {
   subscription_monthly: 'monthlyPrice',
@@ -180,7 +180,7 @@ export class TenantSubscriptionService {
       if (!before) throw new Error('tenant_subscription_setting row is missing — run the migrations');
       const after = await tx.tenantSubscriptionSetting.update({
         where: { id: SETTINGS_ID },
-        data: { trialDays: input.trialDays, suspensionHoldDays: input.suspensionHoldDays, updatedByUserId: actor.adminId },
+        data: { trialDays: input.trialDays, suspensionHoldDays: input.suspensionHoldDays, renewalGraceDays: input.renewalGraceDays, updatedByUserId: actor.adminId },
         select: SETTINGS,
       });
       await tx.adminAuditLog.create({

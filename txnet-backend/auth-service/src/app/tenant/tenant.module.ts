@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { TENANT_STATUS_STORE, TenantStatusGuard } from '@txnet-backend/shared-core';
+import { TENANT_STATUS_STORE, TenantBillingLedger, TenantStatusGuard } from '@txnet-backend/shared-core';
 import { Client } from 'pg';
 import { RedisService } from '../redis/redis.service';
 import { TenantCacheService } from './tenant-cache.service';
@@ -16,6 +16,8 @@ import { TenantSubscriptionService } from './subscription/tenant-subscription.se
 import { TenantStatusController } from './status/tenant-status.controller';
 import { TenantStatusService } from './status/tenant-status.service';
 import { TENANT_STATUS_LISTEN_CLIENT, TenantStatusListener } from './status/tenant-status.listener';
+import { TenantRenewalInternalController } from './renewal/tenant-renewal-internal.controller';
+import { TenantRenewalService } from './renewal/tenant-renewal.service';
 
 /**
  * `tenant`'s first module. Its controllers are the platform owner's reseller
@@ -41,13 +43,15 @@ import { TENANT_STATUS_LISTEN_CLIENT, TenantStatusListener } from './status/tena
  * here.
  */
 @Module({
-  controllers: [TenantAdminController, TenantPackageController, TenantSubscriptionController, TenantStatusController],
+  controllers: [TenantAdminController, TenantPackageController, TenantSubscriptionController, TenantStatusController, TenantRenewalInternalController],
   providers: [
     TenantAdminService,
     TenantPackageService,
     TenantSubscriptionService,
     TenantStatusService,
     TenantStatusListener,
+    TenantRenewalService,
+    TenantBillingLedger,
     {
       provide: TENANT_STATUS_LISTEN_CLIENT,
       useFactory: (config: ConfigService) => () =>

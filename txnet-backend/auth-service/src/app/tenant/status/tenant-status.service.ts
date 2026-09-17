@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { AdminAction, AuditTargetType, Prisma, TenantStatus, TenantType } from '@prisma/client';
+import { AdminAction, AuditTargetType, Prisma, TenantStatus, TenantSuspensionCause, TenantType } from '@prisma/client';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { ChangeTenantStatusInput } from './tenant-status.schema';
+import { applyTenantStatus } from './tenant-status.transition';
 
 /**
  * The platform owner suspends, reactivates and terminates a reseller (F-018-f,
@@ -15,8 +16,9 @@ import type { ChangeTenantStatusInput } from './tenant-status.schema';
  * Redis — after commit, so a rolled-back change is never enforced.
  *
  * Suspending stamps `suspendedAt` = now and `graceEndsAt` = now +
- * `suspensionHoldDays`; reactivating clears both. `terminated` is final.
- * Nothing is deleted by any of it.
+ * `suspensionHoldDays`, cause `manual`; reactivating clears them
+ * (`tenant-status.transition.ts`, shared with the renewal). `terminated` is
+ * final. Nothing is deleted by any of it.
  */
 
 export type TenantStatusActor = { adminId: string; tenantId: string; ip: string };
@@ -51,7 +53,6 @@ export class TenantStatusRefused extends Error {
 
 /** The platform's one settings row (migration `20260917001300_tenant_subscription`). */
 const SETTINGS_ID = 1;
-const DAY_MS = 86_400_000;
 const HISTORY_LIMIT = 100;
 
 type LockedTenant = {
@@ -84,22 +85,15 @@ export class TenantStatusService {
       if (row.status === TenantStatus.terminated) throw new TenantStatusRefused('reseller_terminated', tenantId);
       if (row.status === input.status) throw new TenantStatusRefused('status_unchanged', input.status);
 
-      const now = new Date();
       const reason = input.reason ?? null;
-      const data: Prisma.TenantUpdateInput =
-        input.status === TenantStatus.suspended
-          ? { status: input.status, suspendedAt: now, graceEndsAt: new Date(now.getTime() + holdDays * DAY_MS), suspendedReason: reason }
-          : input.status === TenantStatus.active
-            ? { status: input.status, suspendedAt: null, graceEndsAt: null, suspendedReason: null }
-            : // Terminated keeps when it was suspended, for the record; the policy closes /sub regardless.
-              { status: input.status, suspendedReason: reason };
-      const after = await tx.tenant.update({
-        where: { id: tenantId },
-        data,
-        select: { id: true, status: true, suspendedAt: true, graceEndsAt: true, suspendedReason: true },
-      });
-      await tx.tenantStatusHistory.create({
-        data: { tenantId, fromStatus: row.status, toStatus: input.status, reason, actorUserId: actor.adminId },
+      const after = await applyTenantStatus(tx, tenantId, {
+        from: row.status,
+        to: input.status,
+        reason,
+        actorUserId: actor.adminId,
+        cause: TenantSuspensionCause.manual,
+        holdDays,
+        now: new Date(),
       });
       const result: TenantStatusView = {
         tenantId: after.id,

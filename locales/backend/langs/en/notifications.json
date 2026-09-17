@@ -31,5 +31,11 @@
   },
   "campaign": {
     "emailSubject": "A new message for you"
+  },
+  "subscription": {
+    "paymentDueTitle": "Subscription payment due",
+    "paymentDue": "⚠️ Your subscription renewal of {{amount}} could not be charged: your billing balance is {{balance}}. Top up before {{suspendsAt}} or your panel will be suspended.",
+    "suspendedTitle": "Panel suspended for non-payment",
+    "suspended": "⛔ Your panel was suspended because the subscription renewal of {{amount}} was not paid. Nothing was deleted: top up your billing balance and it is charged and reactivated at once."
   }
 }

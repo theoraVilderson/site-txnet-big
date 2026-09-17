@@ -325,9 +325,9 @@ one side still publishes — to no queue — and the only signal is an
 `unroutable` confirm. Before this, billing, the worker's binding and both
 consumers each spelled the event type by hand.
 
-An outbox event type is also the `type` of the realtime event the panel reads.
+Some outbox event types are also the `type` of a realtime event the panel reads.
 `contracts/realtime/events.json` declares those; `routing-keys.contract.spec.ts`
-holds `OutboxEventType` to it and `site-pwa` imports `RealtimeEvents` from the
+holds `RealtimeEventType` (the subset of `OutboxEventType` a browser sees) to it and `site-pwa` imports `RealtimeEvents` from the
 copy generated from it (`@/generated/wire`).
 
 ```check C-08

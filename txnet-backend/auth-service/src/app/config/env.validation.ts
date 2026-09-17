@@ -135,6 +135,12 @@ export const envSchema = z.object({
   // everyone. See ADR-0011.
   SERVICE_AUTH_TOKEN: optional(z.string().min(32)),
 
+  // notification-service, for a notice that also goes to a user's panel inbox
+  // (F-019-c: a reseller's unpaid renewal). Optional: only that notice fails
+  // without it, and its outbox event stays owed.
+  NOTIFICATION_API_BASE_URL: optional(z.string().url()),
+  NOTIFICATION_API_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+
   JWT_ACCESS_SECRET: z
     .string()
     .min(16, 'JWT_ACCESS_SECRET must be at least 16 characters long'),

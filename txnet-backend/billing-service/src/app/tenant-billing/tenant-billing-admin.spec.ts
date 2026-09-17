@@ -42,6 +42,7 @@ function store() {
   const wallets = new Map<string, Wallet>();
   const ledger: Entry[] = [];
   const audit: Array<Record<string, unknown>> = [];
+  const outbox: Array<{ type: string; payload: Record<string, unknown> }> = [];
   /** Resolved once `waiting` wallet reads have happened — forces two debits to read the same version. */
   let barrier: { waiting: number; release: () => void; ready: Promise<void> } | null = null;
 
@@ -99,6 +100,9 @@ function store() {
         return data;
       },
     },
+    outboxEvent: {
+      create: async ({ data }: { data: { type: string; payload: Record<string, unknown> } }) => (outbox.push(data), { id: `evt-${outbox.length}` }),
+    },
   };
 
   /**
@@ -124,6 +128,7 @@ function store() {
     balance: (tenantId: string) => wallets.get(tenantId)?.cachedBalance.toString(),
     ledger: () => ledger,
     audit: () => audit,
+    outbox: () => outbox,
     interleave(readers: number) {
       let release!: () => void;
       const ready = new Promise<void>((r) => (release = r));
@@ -180,6 +185,10 @@ describe('TenantBillingAdminService.adjust', () => {
     });
     expect(s.audit()).toHaveLength(1);
     expect(s.audit()[0]).toMatchObject({ tenantId: RESELLER, adminId: ADMIN, action: 'tenant_billing_adjust' });
+    // Every credit announces itself in its own transaction, so an unpaid renewal is charged at once (F-019-c).
+    expect(s.outbox()).toEqual([
+      expect.objectContaining({ type: 'tenant.billing.credited', payload: { tenantId: RESELLER, transactionId: 'tx-1', balanceAfter: '250.50' } }),
+    ]);
   });
 
   it('refuses a debit below zero and appends nothing (prepaid only, D-01)', async () => {

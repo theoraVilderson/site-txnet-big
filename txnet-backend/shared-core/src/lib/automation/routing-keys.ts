@@ -12,11 +12,25 @@
  * `OUTBOX_ROUTING_PREFIX`, for the reason those already are.
  */
 
-/** Outbox event types (`outbox_event.type`), routed as `outboxRoutingKey(type)`. */
-export const OutboxEventType = {
+/**
+ * The outbox events a browser also reads off a `user:` channel, under the same
+ * name — held to `contracts/realtime/events.json` (C-08).
+ */
+export const RealtimeEventType = {
   PAYMENT_CONFIRMED: 'billing.payment.confirmed',
   PAYMENT_REVERSED: 'billing.payment.reversed',
   NOTIFICATION_CREATED: 'notification.created',
+} as const;
+
+/** Outbox event types (`outbox_event.type`), routed as `outboxRoutingKey(type)`. Only {@link RealtimeEventType} reach a browser. */
+export const OutboxEventType = {
+  ...RealtimeEventType,
+  /** F-019-c: a reseller's billing wallet was credited — its renewal may now be paid (`TenantBillingLedger.credit`). */
+  TENANT_BILLING_CREDITED: 'tenant.billing.credited',
+  /** F-019-c: a renewal is unpaid and in grace; the owner is warned. */
+  TENANT_SUBSCRIPTION_PAYMENT_DUE: 'tenant.subscription.payment_due',
+  /** F-019-c: grace ran out and the reseller was suspended for non-payment. */
+  TENANT_SUBSCRIPTION_SUSPENDED: 'tenant.subscription.suspended',
 } as const;
 export type OutboxEventType = (typeof OutboxEventType)[keyof typeof OutboxEventType];
 

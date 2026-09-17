@@ -180,6 +180,8 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   private readonly paymentConfirmedQueue: string;
   private readonly paymentReversedQueue: string;
   private readonly notificationCreatedQueue: string;
+  private readonly tenantBillingCreditedQueue: string;
+  private readonly tenantSubscriptionNoticeQueue: string;
   private readonly botUpdatePrefix: string;
   private readonly botUpdateQueues: number;
   private readonly confirmMs: number;
@@ -197,6 +199,8 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     this.paymentConfirmedQueue = config.getOrThrow<string>('AUTOMATION_PAYMENT_CONFIRMED_QUEUE');
     this.paymentReversedQueue = config.getOrThrow<string>('AUTOMATION_PAYMENT_REVERSED_QUEUE');
     this.notificationCreatedQueue = config.getOrThrow<string>('AUTOMATION_NOTIFICATION_CREATED_QUEUE');
+    this.tenantBillingCreditedQueue = config.getOrThrow<string>('AUTOMATION_TENANT_BILLING_CREDITED_QUEUE');
+    this.tenantSubscriptionNoticeQueue = config.getOrThrow<string>('AUTOMATION_TENANT_SUBSCRIPTION_NOTICE_QUEUE');
     this.botUpdatePrefix = config.getOrThrow<string>('BOT_UPDATE_QUEUE_PREFIX');
     this.botUpdateQueues = config.getOrThrow<number>('BOT_UPDATE_QUEUES');
     this.confirmMs = config.getOrThrow<number>('AUTOMATION_PUBLISH_CONFIRM_MS');
@@ -269,6 +273,20 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       this.exchange,
       outboxRoutingKey(OutboxEventType.NOTIFICATION_CREATED),
     );
+    // F-019-c: a credited billing wallet asks auth-service to renew at once; the
+    // renewal notices to a reseller's owner have their own queue, both types on it.
+    await this.channel.assertQueue(this.tenantBillingCreditedQueue, {
+      durable: true,
+      arguments: { 'x-dead-letter-exchange': this.deadExchange },
+    });
+    await this.channel.bindQueue(this.tenantBillingCreditedQueue, this.exchange, outboxRoutingKey(OutboxEventType.TENANT_BILLING_CREDITED));
+    await this.channel.assertQueue(this.tenantSubscriptionNoticeQueue, {
+      durable: true,
+      arguments: { 'x-dead-letter-exchange': this.deadExchange },
+    });
+    for (const type of [OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE, OutboxEventType.TENANT_SUBSCRIPTION_SUSPENDED]) {
+      await this.channel.bindQueue(this.tenantSubscriptionNoticeQueue, this.exchange, outboxRoutingKey(type));
+    }
 
     // The bot-update set (F-067-b, D-16). One queue per slot, each bound to
     // exactly its own routing key — not one queue on `bot.update.#`, which
@@ -460,6 +478,16 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   /** Start consuming `notification.created` outbox events (F-035-b), by the same rules. */
   async consumeNotificationCreated(handle: OutboxHandler): Promise<void> {
     await this.consumeOutbox(this.notificationCreatedQueue, handle);
+  }
+
+  /** Start consuming `tenant.billing.credited` outbox events (F-019-c), by the same rules. */
+  async consumeTenantBillingCredited(handle: OutboxHandler): Promise<void> {
+    await this.consumeOutbox(this.tenantBillingCreditedQueue, handle);
+  }
+
+  /** Start consuming a reseller's renewal notices (F-019-c), by the same rules. */
+  async consumeTenantSubscriptionNotices(handle: OutboxHandler): Promise<void> {
+    await this.consumeOutbox(this.tenantSubscriptionNoticeQueue, handle);
   }
 
   private async consumeOutbox(queue: string, handle: OutboxHandler): Promise<void> {
