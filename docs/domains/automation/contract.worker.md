@@ -70,6 +70,7 @@ Why each of those is the answer — and what a Redis that cannot be reached does
 | `deposit_reconciliation` | asks the gateway about pending and expired top-ups nobody came back for, and about a verifying one only when its retry is 10 min overdue (the next job is not running): credits what it confirms, flags a differing amount (F-092-l; `domains/billing/contract.verify.md`) | the same two |
 | `deposit_verify_retry` | asks again about verifying top-ups whose retry is due, every tick: credits, re-schedules silence, flags one still verifying after a day (F-092-y, F-092-ac) | the same two |
 | `notification_campaign_fan_out` | writes recipient rows for started campaigns in resumable batches (F-035-d, `domains/notification/contract.md` "Sending") | `NOTIFICATION_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
+| `notification_campaign_delivery` | sends claimed queued recipients through their tenant's Telegram/Bale bot; `stalled` rows are its errors (F-035-e, same contract, "Delivering") | the same two |
 
 The retention job is the first job that does real work, and what it settled is
 how a job reaches code it cannot import.
@@ -102,7 +103,7 @@ default for a sweep that writes, and the first thing to check when one appears
 to do nothing. **Three exceptions are seeded** by `prisma/seed.js`
 (`SEEDED_SCHEDULES`): `fx_rate_refresh`, and — decided by the user 2026-09-14
 — `deposit_pending_expiry` (`always_on`) and `deposit_reconciliation` (`*/5`); since
-F-092-ac also `deposit_verify_retry` (`always_on`), since F-035-d `notification_campaign_fan_out` (`always_on`).
+F-092-ac also `deposit_verify_retry` (`always_on`), since F-035-d `notification_campaign_fan_out` and F-035-e `notification_campaign_delivery` (both `always_on`).
 Left unscheduled, a payment the bank took but never called back about is never
 credited, which is the manual top-up legacy needed. The seed never touches a
 job that already has a schedule.

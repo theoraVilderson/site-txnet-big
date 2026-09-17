@@ -17,8 +17,9 @@ below into code, import `capabilitiesOf(platform)`.
 | file | holds |
 |---|---|
 | `bot-integration.ts` | the `BotIntegration` shape and the `BotIntegrationDirectory` port — where integrations and their credentials come from |
+| `auth-api-bot-integration.directory.ts` | that port answered over `auth-service`'s seam, for an app with no vault (`contract.integrations.md`) |
 | `bot-client.registry.ts` | one client per `BotIntegration`, tokens from the vault through that port |
-| `telegram-like-bot.client.ts` | the driver: `sendMessage`, `requestContact`, `deleteMessage`, `answerCallbackQuery`, webhook get/set, and the invoice calls |
+| `telegram-like-bot.client.ts` | the driver: `sendMessage`, `sendText`, `requestContact`, `deleteMessage`, `answerCallbackQuery`, webhook get/set, and the invoice calls. `sendText` (F-035-e) never throws: plain text, and a failure says `permanent` (400/403) or `retryAfterSec` (429) — a bulk sender's shape |
 | `payment.ts` | the invoice rail (F-104-l): one `Invoice` shaped per platform, `pre_checkout_query` / `successful_payment` read into `PaymentEvent` |
 | `capabilities.ts` | the table below, in code, each entry carrying `verifiedOn` + `source` |
 | `bot-view.ts` | the `BotView` types (owned by `bot-app`, declared here so both can import them) |

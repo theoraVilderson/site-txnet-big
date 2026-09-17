@@ -51,12 +51,21 @@ site:
 ### The directory port, and why it is a port
 
 `BotIntegrationDirectory` is an interface with two implementations, because the
-two apps that consume this unit are not equal below that seam:
+apps that consume this unit are not equal below that seam:
 
 | app | implementation | how |
 |---|---|---|
 | `auth-service` | `automation`'s `PrismaBotIntegrationDirectory` | the schema and the vault are in reach |
-| `bot-service` | `AuthApiBotIntegrationDirectory` | `POST /api/internal/bot-integrations/*`, proven by `X-Service-Token` (ADR-0011) |
+| `bot-service` | `WebhookBotIntegrationDirectory`, a subclass adding its webhook boot calls (F-321) | `POST /api/internal/bot-integrations/*`, proven by `X-Service-Token` (ADR-0011) |
+| `notification-service` | `AuthApiBotIntegrationDirectory` (F-035-e) | the same seam |
+
+`AuthApiBotIntegrationDirectory` lives in this library since F-035-e (ADR-0054):
+two apps needed it, and a second copy of the class that fetches plaintext
+tokens is the copy that drifts. Each app constructs it with its name from
+`BOT_DIRECTORY_SEAM_SERVICES`, which the token's audit row records. Its
+failures answer `null`/`false`, for the probing reason in its doc comment —
+except `primaryFor`, which **throws** when `auth-service` did not answer: no
+stranger reaches it, and a bulk sender must not read an outage as "no bot".
 
 `MessengerModule.forRoot({ imports })` takes the module that exports
 `BOT_INTEGRATION_DIRECTORY` and binds nothing itself. There is deliberately no
