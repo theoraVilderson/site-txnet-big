@@ -128,7 +128,7 @@ network (open question 2026-09-04).
 
 ## Machine translation (`Translator`, F-1533-a, ADR-0050)
 
-`shared-core` exports `Translator` (`translate(text, from, to)`, `languages()`)
+`shared-core` exports `Translator` (`translate(text, from, to, kind?)`, `languages()`)
 and `TRANSLATOR`, the Nest token. `translatorFromEnv()` builds the driver:
 `TRANSLATOR_LLM_URL` + `TRANSLATOR_LLM_MODEL` → `OpenAiCompatibleTranslator`
 (a local LLM: the `translator-llm` Ollama container, `qwen2.5:3b`;
@@ -138,12 +138,20 @@ and `TRANSLATOR`, the Nest token. `translatorFromEnv()` builds the driver:
 `FallbackTranslator` (LLM, then LibreTranslate); neither → `NullTranslator`
 (ADR-0050 amendment 3, F-1533-h).
 
+`kind` (`TranslationKind`) says what the text is: `catalog` (the default — a
+product or category name or description) or `message` (a campaign an admin
+sends customers, F-035-h, ADR-0055). Only the LLM reads it, to choose its
+prompt; LibreTranslate ignores it and `FallbackTranslator` passes it on.
+Callers: `billing-service` catalog texts (no `kind`), `notification-service`
+campaign texts (`message`).
+
 | Rule | Held by |
 |---|---|
 | Never throws: engine down, timeout, non-2xx, unsupported pair, empty or malformed answer → `null` (`languages()` → `[]`) | `translator.spec.ts` |
 | `from === to` returns the text without a call; blank text returns `null` | `translator.spec.ts` |
 | An LLM answer is the translation alone: wrapping quotes, a `Translation:` label and a note after a one-line source are dropped; a CJK answer neither language uses is `null` | `translator.spec.ts` |
 | The first engine that drafts wins; a stopped LLM falls through to LibreTranslate | `translator.spec.ts` |
+| `kind: 'message'` prompts the LLM for a customer message (tone, line breaks, links kept), never a store name; the chain forwards it | `translator.spec.ts` |
 | Output is a **draft** only — nothing publishes it but a human (ADR-0050 decision 3) | callers (F-1533-d) |
 | No language list in code: pairs come from the engine, languages from locale-service; which models load is `TRANSLATOR_LANGUAGES` | §1.1 |
 
