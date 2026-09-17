@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CampaignStatus, NotificationChannel, Prisma, TenantType } from '@prisma/client';
+import { tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -54,6 +55,9 @@ export class CampaignAdminRefused extends Error {
   }
 }
 
+/** Either pool, as far as campaign rows go. */
+type CampaignDb = Pick<PrismaService, 'notificationCampaign'>;
+
 type CampaignRow = {
   id: string;
   tenantId: string | null;
@@ -77,13 +81,18 @@ type CampaignRow = {
  * its own. A campaign outside a caller's reach is `campaign_not_found`, so the
  * answer never confirms another tenant's id exists.
  *
- * **Why the cross-tenant pool, and what that costs.** `notification_campaign`
- * is RLS shape B: a tenant may read the platform's rows and `WITH CHECK` writes
- * only its own — so no tenant's connection, the owner's included, can write a
- * platform-wide row. Every campaign read and write is therefore on
- * {@link CrossTenantPrismaService}, and **this file is the boundary**: the
- * tenant filter below is the isolation, with no policy behind it (invariant 7).
- * The app pool is used for one read, the caller's own tenant type.
+ * **The pool follows the caller (ADR-0053).** `notification_campaign` is RLS
+ * shape B: a tenant's connection writes only its own rows, so a platform-wide
+ * row — or the owner's draft for another tenant — cannot be written on it.
+ * - a **tenant admin** is served on the app pool. `withTenant` adds their
+ *   tenant to every query and RLS binds it, so the tenant filters below are the
+ *   second guard, not the only one;
+ * - the **platform owner** is served on {@link CrossTenantPrismaService}. The
+ *   owner may manage every campaign, so the policy had nothing to withhold.
+ *
+ * {@link access} is the one place that decides, from the caller's own tenant
+ * row, read on the app pool. `this.all` is otherwise named only on paths that
+ * already hold `owner === true`.
  */
 @Injectable()
 export class CampaignAdminService {
@@ -95,8 +104,9 @@ export class CampaignAdminService {
   ) {}
 
   async create(actor: CampaignActor, input: CreateCampaignInput): Promise<CampaignView> {
-    const tenantId = await this.ownerOfNew(actor, input.tenantId);
-    const row = await this.all.notificationCampaign.create({
+    const { owner, db } = await this.access(actor);
+    const tenantId = await this.ownerOfNew(actor, owner, input.tenantId);
+    const row = await db.notificationCampaign.create({
       data: {
         tenantId,
         createdByAdminId: actor.adminId,
@@ -113,8 +123,9 @@ export class CampaignAdminService {
     const page = filter.page ?? DEFAULT_PAGE;
     const pageSize = filter.pageSize ?? DEFAULT_PAGE_SIZE;
     const where: Prisma.NotificationCampaignWhereInput = {};
+    const { owner, db } = await this.access(actor);
 
-    if (await this.isOwner(actor)) {
+    if (owner) {
       if (filter.tenantId !== undefined) where.tenantId = filter.tenantId === 'platform' ? null : filter.tenantId;
     } else {
       // Not the `NULL OR mine` the policy would allow: a tenant admin manages
@@ -123,24 +134,32 @@ export class CampaignAdminService {
     }
     if (filter.status) where.status = filter.status;
 
-    const [rows, total] = await this.all.$transaction([
-      this.all.notificationCampaign.findMany({
-        where,
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
-      this.all.notificationCampaign.count({ where }),
-    ]);
+    const read = (client: Pick<PrismaService, 'notificationCampaign'>) =>
+      Promise.all([
+        client.notificationCampaign.findMany({
+          where,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        client.notificationCampaign.count({ where }),
+      ]);
+    // The page and its total in one snapshot. On the app pool that transaction
+    // must bind the tenant first, which is what `tenantTransaction` is for.
+    const [rows, total] = owner
+      ? await this.all.$transaction((tx) => read(tx))
+      : await tenantTransaction(this.prisma, (tx) => read(tx));
     return { items: rows.map(toView), page, pageSize, total };
   }
 
   async get(actor: CampaignActor, id: string): Promise<CampaignView> {
-    return toView(await this.loadManaged(actor, id));
+    const { owner, db } = await this.access(actor);
+    return toView(await this.loadManaged(actor, owner, db, id));
   }
 
   async update(actor: CampaignActor, id: string, patch: UpdateCampaignInput): Promise<CampaignView> {
-    await this.loadManaged(actor, id);
+    const { owner, db } = await this.access(actor);
+    await this.loadManaged(actor, owner, db, id);
 
     const data: Prisma.NotificationCampaignUpdateManyMutationInput = {};
     if (patch.channel !== undefined) data.channel = patch.channel;
@@ -149,23 +168,28 @@ export class CampaignAdminService {
 
     // `status` is in the write's own `where`, not a check before it: a fan-out
     // starting between the read and the write must not see its audience change.
-    const { count } = await this.all.notificationCampaign.updateMany({
+    const { count } = await db.notificationCampaign.updateMany({
       where: { id, status: CampaignStatus.draft },
       data,
     });
     if (count === 0) throw new CampaignAdminRefused('campaign_not_draft', id);
-    return this.get(actor, id);
+    return toView(await this.loadManaged(actor, owner, db, id));
   }
 
-  private async isOwner(actor: CampaignActor): Promise<boolean> {
+  /**
+   * Whether the caller is the platform owner, and the pool that serves them.
+   * The only place that hands out {@link CrossTenantPrismaService} (ADR-0053).
+   */
+  private async access(actor: CampaignActor): Promise<{ owner: boolean; db: CampaignDb }> {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
-    return tenant?.tenantType === TenantType.platform_owner;
+    const owner = tenant?.tenantType === TenantType.platform_owner;
+    return { owner, db: owner ? this.all : this.prisma };
   }
 
-  private async ownerOfNew(actor: CampaignActor, requested: string | null | undefined): Promise<string | null> {
+  private async ownerOfNew(actor: CampaignActor, owner: boolean, requested: string | null | undefined): Promise<string | null> {
     const tenantId = requested === undefined ? actor.tenantId : requested;
     if (tenantId === actor.tenantId) return tenantId;
-    if (!(await this.isOwner(actor))) {
+    if (!owner) {
       throw new CampaignAdminRefused('not_platform_owner', tenantId === null ? 'a platform-wide campaign' : "another tenant's campaign");
     }
     if (tenantId !== null && !(await this.all.tenant.findUnique({ where: { id: tenantId }, select: { id: true } }))) {
@@ -174,10 +198,11 @@ export class CampaignAdminService {
     return tenantId;
   }
 
-  private async loadManaged(actor: CampaignActor, id: string): Promise<CampaignRow> {
-    const row = await this.all.notificationCampaign.findUnique({ where: { id } });
+  /** On the app pool `withTenant` already confined the read; the check repeats it for the owner's pool's sake. */
+  private async loadManaged(actor: CampaignActor, owner: boolean, db: CampaignDb, id: string): Promise<CampaignRow> {
+    const row = await db.notificationCampaign.findUnique({ where: { id } });
     if (!row) throw new CampaignAdminRefused('campaign_not_found', id);
-    if (row.tenantId !== actor.tenantId && !(await this.isOwner(actor))) {
+    if (row.tenantId !== actor.tenantId && !owner) {
       throw new CampaignAdminRefused('campaign_not_found', id);
     }
     return row;

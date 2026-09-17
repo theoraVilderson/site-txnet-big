@@ -30,13 +30,16 @@ import {
  * `paymentTransaction` joined with F-092-n, the first row to query it: its
  * history list is filtered by a user id that arrives in a header, so without
  * the scope a page would be one mis-set header away from another tenant's
- * payments.
+ * payments. `notificationCampaign` joined with ADR-0053: a tenant admin's
+ * campaign queries run on the app pool, and this is what binds them. The
+ * platform owner's, and platform-wide rows, are on the cross-tenant pool.
  */
 export const TENANT_SCOPED_MODELS = [
   'user',
   'linkedBotAccount',
   'walletTransaction',
   'paymentTransaction',
+  'notificationCampaign',
 ] as const;
 
 export type TenantScopedModel = (typeof TENANT_SCOPED_MODELS)[number];

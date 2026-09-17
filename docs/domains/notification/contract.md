@@ -62,8 +62,11 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
   in one change.
 - **Only a draft is edited**, checked in the write's own `where` (invariant 8).
 - Limits, per admin, 15 min: `NOTIFICATION_CAMPAIGN_READ` (300), `…_WRITE` (60).
-- Rows are on the cross-tenant pool (`DATABASE_CROSS_TENANT_URL`): shape-B RLS
-  refuses a platform-wide row to every tenant's connection. No audit row yet —
+- **The pool follows the caller (ADR-0053).** A tenant admin runs on the app
+  pool, bound by `withTenant` (`notificationCampaign` is tenant-scoped), so RLS
+  stands behind the filter. Only the platform owner runs on the cross-tenant
+  pool (`DATABASE_CROSS_TENANT_URL`), since shape-B RLS refuses platform-wide
+  and other tenants' writes to every tenant's connection. No audit row yet —
   a draft reaches nobody; starting a send (F-035-d) is the audited act.
 
 ## Emits (events)

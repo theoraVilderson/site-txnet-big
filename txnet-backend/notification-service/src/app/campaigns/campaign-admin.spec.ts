@@ -7,15 +7,18 @@
  *    only the keys `audienceFilterSchema` names. An unknown key accepted here
  *    would be stored, ignored by the worker, and widen the audience to everyone
  *    — so it is refused, as are an empty range and a float balance (C-02);
- *  - **whose campaign.** Rows are read and written on the cross-tenant pool,
- *    because `notification_campaign`'s `WITH CHECK` refuses a platform row to
- *    every tenant's connection. RLS therefore stands behind none of this: a
- *    tenant admin's `where` naming their own tenant is the whole isolation
- *    (invariant 7), and another tenant's id is `campaign_not_found`, not 403;
+ *  - **which pool serves the caller (ADR-0053).** A tenant admin is served on
+ *    the app pool, where `withTenant` and RLS both hold them to their tenant;
+ *    only the platform owner reaches the cross-tenant pool. A reseller's request
+ *    that touched that pool would lose the database's half of the isolation
+ *    with every other test here still green — so each reseller case asserts the
+ *    pool was never touched (invariant 7). Another tenant's id is
+ *    `campaign_not_found`, not 403;
  *  - **only a draft is edited.** Once the fan-out has started the stored
  *    audience is what recipients were chosen by.
  */
 import { CampaignStatus, NotificationChannel, TenantType, UserStatus } from '@prisma/client';
+import { runWithTenant } from '@txnet-backend/shared-core';
 
 import { audienceFilterSchema } from './campaign-admin.schema';
 import { CampaignAdminRefused, CampaignAdminService } from './campaign-admin.service';
@@ -43,22 +46,42 @@ function campaignRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function campaignDelegate() {
+  return {
+    create: vi.fn().mockImplementation(({ data }) => Promise.resolve(campaignRow(data))),
+    findUnique: vi.fn().mockResolvedValue(campaignRow()),
+    findMany: vi.fn().mockResolvedValue([campaignRow()]),
+    count: vi.fn().mockResolvedValue(1),
+    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+  };
+}
+
+/** A `$transaction` that runs a batch or an interactive body the way Prisma does, minus the database. */
+function transactionOf(client: Record<string, unknown>) {
+  return vi.fn((arg: unknown) =>
+    typeof arg === 'function' ? arg({ ...client, $executeRaw: vi.fn() }) : Promise.all(arg as Promise<unknown>[]),
+  );
+}
+
 function fakes(callerType: TenantType = TenantType.reseller) {
-  const prisma = {
+  const prisma: Record<string, unknown> & { notificationCampaign: ReturnType<typeof campaignDelegate> } = {
     tenant: { findUnique: vi.fn().mockResolvedValue({ tenantType: callerType }) },
+    notificationCampaign: campaignDelegate(),
   };
-  const all = {
+  prisma['$transaction'] = transactionOf(prisma);
+  const all: Record<string, unknown> & { notificationCampaign: ReturnType<typeof campaignDelegate> } = {
     tenant: { findUnique: vi.fn().mockResolvedValue({ id: OTHER_TENANT }) },
-    notificationCampaign: {
-      create: vi.fn().mockImplementation(({ data }) => Promise.resolve(campaignRow(data))),
-      findUnique: vi.fn().mockResolvedValue(campaignRow()),
-      findMany: vi.fn().mockResolvedValue([campaignRow()]),
-      count: vi.fn().mockResolvedValue(1),
-      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-    },
-    $transaction: vi.fn((arg: unknown) => Promise.all(arg as Promise<unknown>[])),
+    notificationCampaign: campaignDelegate(),
   };
+  all['$transaction'] = transactionOf(all);
   return { prisma, all, service: new CampaignAdminService(prisma as never, all as never) };
+}
+
+/** Every call as a request makes it: inside the tenant scope `IdentityMiddleware` opens. */
+const as = <T>(tenantId: string, run: () => Promise<T>) => runWithTenant({ id: tenantId }, run);
+
+function expectPoolUntouched(pool: { notificationCampaign: ReturnType<typeof campaignDelegate> }) {
+  for (const fn of Object.values(pool.notificationCampaign)) expect(fn).not.toHaveBeenCalled();
 }
 
 const tenantAdmin = { adminId: ADMIN, tenantId: TENANT };
@@ -96,15 +119,18 @@ describe('audienceFilterSchema', () => {
 
 describe('CampaignAdminService', () => {
   it('drafts a tenant admin\'s campaign in their own tenant, with the parsed audience and no counts', async () => {
-    const { all, service } = fakes();
+    const { prisma, all, service } = fakes();
 
-    const view = await service.create(tenantAdmin, {
-      channel: NotificationChannel.telegram_bot,
-      messageBody: 'Hello',
-      audience: { languages: ['fa'] },
-    });
+    const view = await as(TENANT, () =>
+      service.create(tenantAdmin, {
+        channel: NotificationChannel.telegram_bot,
+        messageBody: 'Hello',
+        audience: { languages: ['fa'] },
+      }),
+    );
 
-    expect(all.notificationCampaign.create).toHaveBeenCalledWith({
+    expectPoolUntouched(all);
+    expect(prisma.notificationCampaign.create).toHaveBeenCalledWith({
       data: {
         tenantId: TENANT,
         createdByAdminId: ADMIN,
@@ -121,46 +147,55 @@ describe('CampaignAdminService', () => {
     ['a platform-wide campaign', null],
     ['another tenant\'s campaign', OTHER_TENANT],
   ])('refuses a tenant admin %s', async (_why, tenantId) => {
-    const { all, service } = fakes();
+    const { prisma, all, service } = fakes();
     await expect(
-      service.create(tenantAdmin, { channel: NotificationChannel.sms, messageBody: 'x', audience: {}, tenantId }),
+      as(TENANT, () => service.create(tenantAdmin, { channel: NotificationChannel.sms, messageBody: 'x', audience: {}, tenantId })),
     ).rejects.toMatchObject({ reason: 'not_platform_owner' });
-    expect(all.notificationCampaign.create).not.toHaveBeenCalled();
+    expect(prisma.notificationCampaign.create).not.toHaveBeenCalled();
+    expectPoolUntouched(all);
   });
 
-  it('lets the platform owner draft a platform-wide campaign', async () => {
-    const { all, service } = fakes(TenantType.platform_owner);
-    await service.create(owner, { channel: NotificationChannel.sms, messageBody: 'x', audience: {}, tenantId: null });
+  it('serves the platform owner on the cross-tenant pool, where a platform-wide row can be written', async () => {
+    const { prisma, all, service } = fakes(TenantType.platform_owner);
+    await as(OWNER_TENANT, () =>
+      service.create(owner, { channel: NotificationChannel.sms, messageBody: 'x', audience: {}, tenantId: null }),
+    );
     expect(all.notificationCampaign.create).toHaveBeenCalledWith({ data: expect.objectContaining({ tenantId: null }) });
+    expectPoolUntouched(prisma);
   });
 
   it('lists only the tenant admin\'s own tenant, whatever tenant they ask for', async () => {
-    const { all, service } = fakes();
-    await service.list(tenantAdmin, { tenantId: OTHER_TENANT });
+    const { prisma, all, service } = fakes();
+    await as(TENANT, () => service.list(tenantAdmin, { tenantId: OTHER_TENANT }));
     const where = { tenantId: TENANT };
-    expect(all.notificationCampaign.findMany).toHaveBeenCalledWith(expect.objectContaining({ where }));
-    expect(all.notificationCampaign.count).toHaveBeenCalledWith({ where });
+    expect(prisma.notificationCampaign.findMany).toHaveBeenCalledWith(expect.objectContaining({ where }));
+    expect(prisma.notificationCampaign.count).toHaveBeenCalledWith({ where });
+    expectPoolUntouched(all);
   });
 
   it('answers another tenant\'s campaign as not found', async () => {
-    const { all, service } = fakes();
-    all.notificationCampaign.findUnique.mockResolvedValue(campaignRow({ tenantId: OTHER_TENANT }));
-    await expect(service.get(tenantAdmin, CAMPAIGN)).rejects.toMatchObject({ reason: 'campaign_not_found' });
-    all.notificationCampaign.findUnique.mockResolvedValue(campaignRow({ tenantId: null }));
-    await expect(service.get(tenantAdmin, CAMPAIGN)).rejects.toBeInstanceOf(CampaignAdminRefused);
+    const { prisma, all, service } = fakes();
+    // On the app pool `withTenant` adds the tenant to the `where`, so another
+    // tenant's row is no row; the service's own check is the second answer.
+    prisma.notificationCampaign.findUnique.mockResolvedValue(null);
+    await expect(as(TENANT, () => service.get(tenantAdmin, CAMPAIGN))).rejects.toMatchObject({ reason: 'campaign_not_found' });
+    prisma.notificationCampaign.findUnique.mockResolvedValue(campaignRow({ tenantId: null }));
+    await expect(as(TENANT, () => service.get(tenantAdmin, CAMPAIGN))).rejects.toBeInstanceOf(CampaignAdminRefused);
+    expectPoolUntouched(all);
   });
 
   it('edits only while the row is still a draft, checked in the write itself', async () => {
-    const { all, service } = fakes();
-    await service.update(tenantAdmin, CAMPAIGN, { messageBody: 'New' });
-    expect(all.notificationCampaign.updateMany).toHaveBeenCalledWith({
+    const { prisma, all, service } = fakes();
+    await as(TENANT, () => service.update(tenantAdmin, CAMPAIGN, { messageBody: 'New' }));
+    expect(prisma.notificationCampaign.updateMany).toHaveBeenCalledWith({
       where: { id: CAMPAIGN, status: CampaignStatus.draft },
       data: { messageBody: 'New' },
     });
 
-    all.notificationCampaign.updateMany.mockResolvedValue({ count: 0 });
-    await expect(service.update(tenantAdmin, CAMPAIGN, { messageBody: 'Late' })).rejects.toMatchObject({
+    prisma.notificationCampaign.updateMany.mockResolvedValue({ count: 0 });
+    await expect(as(TENANT, () => service.update(tenantAdmin, CAMPAIGN, { messageBody: 'Late' }))).rejects.toMatchObject({
       reason: 'campaign_not_draft',
     });
+    expectPoolUntouched(all);
   });
 });

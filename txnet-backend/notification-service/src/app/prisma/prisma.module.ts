@@ -8,9 +8,9 @@ import { PrismaService } from './prisma.service';
 
 /**
  * Two pools. `PrismaService`, extended with `withTenant` like every service's
- * (F-094); no `notification` model is in `TENANT_SCOPED_MODELS`, so it binds
- * nothing here. `CrossTenantPrismaService`, held by campaign management alone
- * (F-035-c) for the reason that class gives, and not extended.
+ * (F-094); `notificationCampaign` is in `TENANT_SCOPED_MODELS`, so a tenant
+ * admin's campaign queries bind their tenant. `CrossTenantPrismaService`, held
+ * by campaign management for the platform owner alone (ADR-0053), not extended.
  */
 @Global()
 @Module({

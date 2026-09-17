@@ -18,7 +18,7 @@ updated: 2026-09-17
 | 4 | A recipient row moves `queued -> sent \| failed` and is not re-queued silently | planned — F-035-d | double delivery |
 | 5 | Every inbox read and write is filtered by the gate's `userId`, never an id from the request. `notification` has no `tenantId`, so no RLS stands behind this | `notification-inbox.service.ts` | a user reads or clears another's inbox |
 | 6 | `readAt` is set only on rows still `null` | `markRead`'s `where` | "first seen" is rewritten |
-| 7 | A caller who is not the platform owner reads, writes and lists only campaigns whose `tenantId` is their own. Campaigns are on the cross-tenant pool, so no RLS stands behind this | `campaign-admin.service.ts` | a reseller reads or edits another's, or the platform's, campaign |
+| 7 | A caller who is not the platform owner reads, writes and lists only campaigns whose `tenantId` is their own. Such a caller is served on the app pool only, so RLS stands behind the filter (ADR-0053) | `campaign-admin.service.ts` `access()`; RLS on `notification_campaign` | a reseller reads or edits another's, or the platform's, campaign |
 | 8 | `filterCriteria` is written only through the strict `audienceFilterSchema`, and changes only while `status = draft` | `campaign-admin.schema.ts`; `update`'s `where` | an ignored key widens an audience; recipients chosen by a filter that no longer exists |
 
 ## How to test
