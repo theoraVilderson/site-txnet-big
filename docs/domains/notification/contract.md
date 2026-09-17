@@ -142,8 +142,8 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
   Anything else fails the row (invariant 10): a platform-wide campaign, or the
   owner's for a reseller's users, has no line. No URL, key or KEK, or an
   unreadable vault, stalls that tenant's rows only. `sms-line.ts`
-  `SmsLineResolver.lineFor` is the one place that decides; F-035-i-b (the
-  platform's line for a reseller, metered on `sms_sent`) changes it.
+  `SmsLineResolver.lineFor` is the one place that decides. The platform's line
+  is never a reseller's, metered or not (D-41).
 - **Refused at the draft.** `channel: sms` on create, or a patch to it, is 409
   `sms_not_available` unless the campaign is the caller's own tenant's and that
   tenant is the platform owner, or `SmsLineSource.ownLineAvailable` (the config
