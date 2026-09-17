@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { TenantBillingLedger } from '@txnet-backend/shared-core';
 
 import { LocaleModule } from '../../locale/locale.module';
 import { WalletModule } from '../../wallet/wallet.module';
@@ -48,7 +49,7 @@ import { ManualConfirmService } from './manual-confirm.service';
 @Module({
   imports: [LocaleModule, CouponModule, GatewayModule, WalletModule],
   controllers: [DepositController, DepositInChatController, DepositCallbackController, DepositWebhookController, DepositInternalController, ManualConfirmController],
-  providers: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositSettlementService, DepositExpiryService, DepositReconciliationService, ManualConfirmService, DepositWebhookService, DepositInChatService, FxRateReader, InvoiceLinkClient],
+  providers: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositSettlementService, DepositExpiryService, DepositReconciliationService, ManualConfirmService, DepositWebhookService, DepositInChatService, FxRateReader, InvoiceLinkClient, TenantBillingLedger],
   exports: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositExpiryService, DepositReconciliationService],
 })
 export class DepositModule {}

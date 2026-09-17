@@ -135,7 +135,7 @@ function build({ lostTheFlip = false, rowIs = PaymentStatus.pending as PaymentSt
     },
   };
 
-  const service = new DepositSettlementService(prisma as never, reservations as never, ledger as never);
+  const service = new DepositSettlementService(prisma as never, reservations as never, ledger as never, {} as never, {} as never);
   return { service, calls, tx };
 }
 

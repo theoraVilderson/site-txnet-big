@@ -82,6 +82,12 @@ export type DepositStartRequest = {
   chatPlatform?: string | null;
   /** The request's language, for a Mini App's invoice text. */
   lang?: string;
+  /**
+   * A reseller's billing top-up (F-019-b, ADR-0056): the reseller whose billing
+   * wallet the settled payment credits. The caller opens the platform owner's
+   * scope, names a platform gateway and applies no coupon.
+   */
+  billingTenantId?: string;
 };
 
 /** Money as decimal strings in base currency, as the quote answers them. */
@@ -132,7 +138,8 @@ export class DepositCallbackUnavailable extends Error {
 }
 
 /** What a driver is told the payment is for. English (C-01); legacy carried the user's phone in a Persian sentence. */
-const description = (paymentId: string) => `Wallet top-up ${paymentId}`;
+const description = (paymentId: string, billing: boolean) =>
+  billing ? `Billing wallet top-up ${paymentId}` : `Wallet top-up ${paymentId}`;
 
 @Injectable()
 export class DepositStartService {
@@ -198,6 +205,11 @@ export class DepositStartService {
     // An in-chat payment has no bank to send anyone back: the bot relays its result (F-104-k).
     const inChat = provider.settlement === 'in_chat';
     if (!price.free && !inChat && !callbackUrl) throw new DepositCallbackUnavailable(tenant.id);
+    // The row's CHECK allows a billing top-up only on a platform gateway with no
+    // discount, so it is never free and never in chat (no coupon, no messenger).
+    if (request.billingTenantId && (price.free || inChat || source !== 'platform' || gateway.grantId)) {
+      throw new DepositGatewayNotFound(gatewayId, source);
+    }
 
     // The id is minted here because the holds name it: `reserve` takes the
     // order reference, and for a top-up that reference is the payment itself,
@@ -219,6 +231,7 @@ export class DepositStartService {
           // platform owes is decided by the grant the payment was *made* under
           // (ADR-0041 §4); F-096-d accrues from this column.
           grantId: gateway.grantId,
+          billingTenantId: request.billingTenantId ?? null,
           amountRequested: price.amount,
           feeApplied: price.fee,
           discountApplied: price.discount,
@@ -327,7 +340,7 @@ export class DepositStartService {
         ...(provider.settlement === 'webhook'
           ? { webhookUrl: webhookUrlFor(callbackUrl as string, this.config.get('GLOBAL_PREFIX', { infer: true }), ref) }
           : {}),
-        description: description(paymentId),
+        description: description(paymentId, Boolean(request.billingTenantId)),
       });
     } catch (e) {
       await this.abandon(paymentId, e);

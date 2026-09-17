@@ -162,7 +162,7 @@ function build(setup: Setup = {}) {
   // The real settlement service over the same fakes (F-092-l extracted it):
   // the flip, the credit, the confirm and the event are asserted below exactly
   // as when this file was written, and a stub here would assert nothing.
-  const settlement = new DepositSettlementService(prisma as never, reservations as never, ledger as never);
+  const settlement = new DepositSettlementService(prisma as never, reservations as never, ledger as never, {} as never, {} as never);
 
   const service = new DepositCallbackService(
     prisma as never,

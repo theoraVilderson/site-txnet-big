@@ -1,7 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfirmationSource, PaymentStatus, Prisma, RedemptionStatus, WalletReasonType } from '@prisma/client';
-import { OutboxEventType, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import {
+  ConfirmationSource,
+  PaymentStatus,
+  Prisma,
+  RedemptionStatus,
+  TenantBillingReasonType,
+  WalletReasonType,
+} from '@prisma/client';
+import { OutboxEventType, TenantBillingLedger, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
+import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WalletLedgerService } from '../../wallet/wallet-ledger.service';
 import { CouponReservationService } from '../coupon/coupon-reservation';
@@ -61,6 +69,9 @@ export const PAYMENT_SELECT = {
   // both charge the same gateway the payment was started at, so both read the
   // credential along the same grant (ADR-0041 §3).
   grantId: true,
+  // A reseller's billing top-up (F-019-b, ADR-0056): the wallet credited is
+  // this tenant's with the platform, not the payer's.
+  billingTenantId: true,
   // The retry clock (F-092-x): the rung a silence climbs from, and whether the
   // row is verifying at all.
   verifyAttempts: true,
@@ -137,6 +148,8 @@ export class DepositSettlementService {
     private readonly prisma: PrismaService,
     private readonly reservations: CouponReservationService,
     private readonly ledger: WalletLedgerService,
+    private readonly all: CrossTenantPrismaService,
+    private readonly tenantLedger: TenantBillingLedger,
   ) {}
 
   /**
@@ -158,7 +171,14 @@ export class DepositSettlementService {
       throw new Error('an admin_manual credit needs a ManualConfirmation, and only it may carry one');
     }
     const { credited, full } = creditForReceipt(payment, verified.received);
-    return tenantTransaction(this.prisma, async (tx) => {
+    // A reseller's billing top-up (F-019-b, ADR-0056) is the platform owner's
+    // payment crediting another tenant's `tenant_billing_wallet`, which strict
+    // RLS hides from the owner-bound app pool — so its whole settlement, flip
+    // and credit together, runs on the cross-tenant pool (ADR-0053: the owner's).
+    const billingTenantId = payment.billingTenantId ?? null;
+    const run = <T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> =>
+      billingTenantId ? this.all.$transaction(fn) : tenantTransaction(this.prisma, fn);
+    return run(async (tx) => {
       // Less than a cent arrived: nothing to credit, and nothing will arrive
       // later under this authority. Closed like a failure (F-104-d).
       if (credited.lte(0)) {
@@ -203,6 +223,21 @@ export class DepositSettlementService {
           : null;
       if (from === null) return false;
       const settled: PaymentRow = { ...payment, amountCredited: credited };
+
+      if (billingTenantId) {
+        // No coupon, no grant (the row's CHECK), and no user was credited: the
+        // `billing.payment.confirmed` event means "this user's wallet grew", so
+        // it is not written. The ledger row is the record (F-019-d reads it).
+        await this.tenantLedger.credit(tx, {
+          tenantId: billingTenantId,
+          amount: credited,
+          reasonType: TenantBillingReasonType.topup_payment,
+          referenceId: payment.id,
+        });
+        if (manual) await this.auditManual(tx, settled, verified.referenceId, manual);
+        this.logger.log(`payment ${payment.id} credited ${credited.toFixed(2)} to tenant ${billingTenantId}'s billing wallet`);
+        return true;
+      }
 
       await this.ledger.credit(tx, {
         userId: payment.userId,

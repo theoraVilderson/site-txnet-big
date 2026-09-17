@@ -506,6 +506,12 @@ model PaymentTransaction {
   /// ordinary case: the tenant used a gateway it owns. Non-null means the money
   /// landed in somebody else's merchant account and this tenant is owed it.
   grantId               String?             @db.Uuid
+  /// The reseller whose **billing wallet** this payment tops up (F-019-b, D-41,
+  /// ADR-0056), or NULL for a user's wallet top-up. Set, the row lives in the
+  /// platform owner's scope — its gateway, its vault, its callback host — and
+  /// settles into `tenant_billing_wallet` instead of a user's wallet. A CHECK in
+  /// 20260917001000_payment_billing_tenant: a platform gateway, no grant, no discount.
+  billingTenantId        String?             @db.Uuid
   manualConfirmReason   String? // اجباری در سطح اپلیکیشن اگر confirmationSource=admin_manual
   createdAt             DateTime            @default(now())
   expiresAt             DateTime? // معمولاً now()+15min

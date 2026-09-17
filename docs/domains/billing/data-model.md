@@ -18,7 +18,7 @@ Source of truth: `txnet-backend/prisma/domains/billing.prisma` (Postgres schema
 | wallet_transfer_request | OTP-confirmed user->user transfer state machine | — | permanent (audit) |
 | coupon + coupon_service_scope + coupon_allowed_user + coupon_redemption + coupon_tenant + coupon_batch + coupon_gateway | coupon engine (reserve/confirm), management | `coupon.tenantId` nullable (null = platform coupon, serving the tenants `coupon_tenant` names, else the platform owner's users — ADR-0048); soft delete | permanent |
 | payment_gateway | platform-brand gateway config (card/rial/crypto) | platform-owner only | permanent |
-| payment_transaction | payment intent + status + confirmation source | denormalized `tenantId` | permanent |
+| payment_transaction | payment intent + status + confirmation source; `billingTenantId` set = a reseller's billing top-up in the platform owner's scope (ADR-0056) | denormalized `tenantId` | permanent |
 | payment_reconciliation_log | inquiry-API cross-check results | via payment | permanent |
 | crypto_payment_detail | asset/network/address/confs/rate snapshot | via payment | permanent |
 | affiliate_referral + affiliate_commission | affiliate payout ledger | — | permanent |

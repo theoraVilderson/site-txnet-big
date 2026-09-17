@@ -91,7 +91,8 @@ shown.
 | `amount` is base currency, as on a quote, and is converted for the gateway exactly once, inside `priceAtGateway` | the legacy `amount * 10` toman→rial step ran in the browser; the display-currency step is F-025's |
 
 **Not covered:** nothing in the panel calls `start` yet (F-093-e). Expiring a
-pending payment is below.
+pending payment is below. A reseller's billing top-up starts here in the owner's
+scope and settles into its billing wallet: `tenant/contract.billing.md` (ADR-0056).
 
 ## Settling the payment (built — F-092-j)
 

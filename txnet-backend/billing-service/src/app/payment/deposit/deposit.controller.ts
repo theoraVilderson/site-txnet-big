@@ -80,7 +80,7 @@ const COUPON_REJECTION_KEY: Record<CouponRejection, string> = {
  * rate (F-0607), a provider failure, no merchant id in the vault, no driver —
  * is one answer: the user's move is the same, pick another gateway.
  */
-function toHttp(e: unknown): unknown {
+export function toHttp(e: unknown): unknown {
   const message = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
   if (e instanceof DepositGatewayNotFound) return new NotFoundException({ i18nKey: E.gatewayNotFound, message });
   if (e instanceof AmountOutOfGatewayRange) return new BadRequestException({ i18nKey: E.amountOutOfRange, message });

@@ -68,6 +68,9 @@ roles:
       # Manual billing-wallet adjustment (F-019-a, D-41). Only the platform
       # owner's Admin gets through: the service refuses every other tenant.
       - tenant_billing.adjust
+      # A reseller's billing top-up (F-019-b, ADR-0056). The service admits it
+      # only inside a reseller; its owner needs no permission.
+      - tenant_billing.topup
   Support:
     permissions:
       - user.read

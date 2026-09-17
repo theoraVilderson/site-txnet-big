@@ -139,7 +139,7 @@ export async function isPlatformOwner(tx: Prisma.TransactionClient, tenantId: st
  * `tenantId` column and so no RLS policy, which is what lets any tenant's
  * connection answer this at all.
  */
-async function platformOwnerTenantId(tx: Prisma.TransactionClient): Promise<string | null> {
+export async function platformOwnerTenantId(tx: Prisma.TransactionClient): Promise<string | null> {
   const row = await tx.tenant.findFirst({
     where: { tenantType: TenantType.platform_owner },
     select: { id: true },

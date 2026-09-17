@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-version: 9
+version: 10
 updated: 2026-09-17
 ---
 
@@ -32,8 +32,8 @@ of `tenant_billing_wallet.cachedBalance` (invariant 3). The same shape as
 | A first credit opens the wallet (`createMany … skipDuplicates`) | two first credits meet at the version guard |
 | Returns the appended `tenant_billing_transaction`, whose `balanceAfter` is the new balance | — |
 
-`reasonType` in use: `admin_manual_adjust` (F-019-a). `topup_payment` and
-`subscription_charge` are F-019-b / F-019-c. `metered_usage_charge` and
+`reasonType` in use: `admin_manual_adjust` (F-019-a), `topup_payment` (F-019-b).
+`subscription_charge` is F-019-c. `metered_usage_charge` and
 `sms_usage_charge` stay in the enum unused (D-41: no metering).
 
 ## Manual adjustment — the HTTP surface
@@ -68,7 +68,29 @@ Migration `20260917000900_tenant_billing_wallet`: `cachedBalance >= 0`,
 `balanceAfter >= 0`, `amount > 0` (CHECKs), and a partial unique index on
 `(reasonType, referenceId)` where the reference is set.
 
+## Top-up — the reseller pays the platform (F-019-b, ADR-0056)
+
+`TenantTopupController` + `TenantTopupService` in `app/tenant-billing/`, over
+billing's deposit start and settlement (`billing/contract.deposit.md`).
+
+| Route | Body | Answers `data` |
+|---|---|---|
+| `GET /api/billing/tenant-wallet/topup/gateways` | — | the deposit list's shape, the platform owner's `platform` gateways only |
+| `POST /api/billing/tenant-wallet/topup` | `{gatewayId, amount}`, `.strict()`, the deposit start's rules | the deposit start's answer: `{paymentId, redirectUrl, amount, fee, payable, credited, …}` |
+
+| Rule | Why |
+|---|---|
+| Inside a **reseller** only; its `ownerUserId`, or a staff member holding `tenant_billing.topup` (granted to `Admin`). Else **403** `not_a_reseller` / `not_permitted`, before any gateway is read | the platform owner has no billing wallet; the permission header is the caller's own tenant's roles |
+| The payment is started in the **platform owner's** scope: `source: platform`, no coupon, no test mode, and `billingTenantId` = the reseller | the platform is the merchant: its gateway, vault, callback host and webhook scope, unchanged |
+| A billing top-up that would be free, in chat, granted or on a tenant gateway is **404** `gatewayNotFound` | the row's CHECK: platform gateway, no grant, no discount |
+| Settling credits **this** wallet, `topup_payment`, `referenceId` = the payment id, and no user wallet; on every settling path (callback, webhook, reconciliation, manual confirm); flip and credit in one transaction on the cross-tenant pool | invariant 15 makes a second credit impossible; strict RLS hides the wallet from the owner-bound app pool |
+| No `billing.payment.confirmed` event, no coupon use, no settlement accrual | that event means "a user's wallet grew" |
+| Rate limits: the deposit buckets, per user (`DEPOSIT_GATEWAYS`, `DEPOSIT_START`) | the same act at the same bank |
+| The bank returns to the **platform's** panel host; the result redirect is relative unless the owner vouches for the origin | ADR-0056's accepted cost |
+
+**Proof:** `tenant-billing/tenant-topup.spec.ts`.
+
 ## Not built
 
-No read route: the reseller's balance and history are F-019-d. No top-up
-(F-019-b), no charge (F-019-c).
+No read route: the reseller's balance and history are F-019-d. No quote route
+for a top-up (start answers the breakdown). No charge (F-019-c).
