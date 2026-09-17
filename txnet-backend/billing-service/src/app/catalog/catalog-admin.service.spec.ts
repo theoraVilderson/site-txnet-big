@@ -22,6 +22,7 @@
  * What the database holds for every writer is `catalog-schema.int.spec.ts`.
  */
 import { FulfilmentKind, Prisma, TenantType, VariantBillingMode, VariantVisibility } from '@prisma/client';
+import { runWithTenant } from '@txnet-backend/shared-core';
 
 import { CatalogAdminRefused, CatalogAdminService } from './catalog-admin.service';
 import { CatalogTextService, catalogTextKey } from './catalog-texts';
@@ -47,6 +48,37 @@ const matches = (row: Row, where: Row = {}) =>
 
 const unique = (message: string) =>
   new Prisma.PrismaClientKnownRequestError(message, { code: 'P2002', clientVersion: 'test' });
+
+/**
+ * Both pools over the same rows, every call logged as `app:` or `all:` (ADR-0053),
+ * and every service call run in the actor's tenant, as `identity.middleware.ts` runs it.
+ */
+function pools(db: object) {
+  const calls: string[] = [];
+  const pool = (name: string) => {
+    const client: Record<string, unknown> = { $executeRaw: async () => 0 };
+    for (const [model, delegate] of Object.entries(db)) {
+      client[model] = Object.fromEntries(
+        Object.entries(delegate as Row)
+          .filter(([, fn]) => typeof fn === 'function')
+          .map(([op, fn]) => [op, (...args: unknown[]) => (calls.push(`${name}:${model}.${op}`), (fn as (...a: unknown[]) => unknown)(...args))]),
+      );
+    }
+    client['$transaction'] = async (fn: (tx: unknown) => unknown) => fn(client);
+    return client;
+  };
+  return { app: pool('app'), all: pool('all'), calls };
+}
+
+function inTenant<T extends object>(service: T): T {
+  return new Proxy(service, {
+    get: (target, key) => {
+      const v = Reflect.get(target, key) as unknown;
+      if (typeof v !== 'function') return v;
+      return (actor: { tenantId: string }, ...rest: unknown[]) => runWithTenant({ id: actor.tenantId }, () => v.call(target, actor, ...rest));
+    },
+  });
+}
 
 function table(rows: Row[], name: string, writes: string[], uniqueOn: string[] = []) {
   let next = 0;
@@ -124,8 +156,7 @@ function build() {
       },
     },
   };
-  const all = { ...db, $transaction: async <T>(fn: (tx: typeof db) => Promise<T>) => fn(db) };
-  const app = { tenant: { findUnique: async ({ where }: { where: Row }) => (types[where['id'] as string] ? { tenantType: types[where['id'] as string] } : null) } };
+  const { app, all, calls } = pools(db);
   // What reached locale-service, in order. The text rules themselves are catalog-texts.spec.ts.
   const texts: string[] = [];
   const textService = {
@@ -154,7 +185,7 @@ function build() {
       return Object.keys(t).length;
     },
   };
-  return { service: new CatalogAdminService(app as never, all as never, textService as unknown as CatalogTextService), db, writes, audit, texts };
+  return { service: inTenant(new CatalogAdminService(app as never, all as never, textService as unknown as CatalogTextService)), db, writes, audit, texts, calls };
 }
 
 async function refusal(run: () => Promise<unknown>): Promise<CatalogAdminRefused> {
@@ -343,5 +374,32 @@ describe('CatalogAdminService — names (F-1533-d)', () => {
     expect(audit).toEqual([
       expect.objectContaining({ tenantId: RESELLER, action: 'catalog_product_update', targetEntityId: RESELLER_PRODUCT, newValue: { texts: { lang: 'de', edited: { [key]: 'Alpha' } } } }),
     ]);
+  });
+});
+
+describe('CatalogAdminService — the pool follows the caller (ADR-0053)', () => {
+  it("serves a reseller's every catalog read and write on the app pool", async () => {
+    const { service, calls } = build();
+    const product = await service.createProduct(actor(RESELLER), NEW_PRODUCT);
+    await service.updateProduct(actor(RESELLER), product.id, { isActive: false });
+    const variant = await service.createVariant(actor(RESELLER), product.id, NEW_VARIANT);
+    await service.updateVariant(actor(RESELLER), variant.id, { isActive: false });
+    await service.setPrice(actor(RESELLER), variant.id, { amount: '13.00' });
+    await service.deactivatePrice(actor(RESELLER), RESELLER_PRICE);
+    await service.getProduct(actor(RESELLER), RESELLER_PRODUCT);
+    await service.listProducts(actor(RESELLER));
+    await service.listTextDrafts(actor(RESELLER));
+    expect(calls.filter((c) => c.startsWith('all:'))).toEqual([]);
+    expect(calls).toContain('app:product.create');
+    expect(calls).toContain('app:adminAuditLog.create');
+  });
+
+  it('serves the platform owner on the cross-tenant pool, where a platform item can be written', async () => {
+    const { service, calls } = build();
+    await service.createProduct(actor(OWNER), { ...NEW_PRODUCT, tenantId: null });
+    await service.getProduct(actor(OWNER), OTHER_PRODUCT);
+    // Only "who is asking" is read on the app pool.
+    expect(new Set(calls.filter((c) => c.startsWith('app:')))).toEqual(new Set(['app:tenant.findUnique']));
+    expect(calls).toContain('all:product.create');
   });
 });

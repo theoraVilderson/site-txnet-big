@@ -20,7 +20,11 @@ user's call, 2026-09-14), behind `my-auth`, `catalog.manage`
 (`CatalogPermissionGuard`, first door only) and per-user budgets
 `CATALOG_ADMIN_READ` / `CATALOG_ADMIN_WRITE` (120 / 30 per 15 min). The
 platform owner manages platform items and any tenant's; any other tenant its
-own — another tenant's item, or the platform's, answers 404.
+own — another tenant's item, or the platform's, answers 404. **The pool
+follows the caller (ADR-0053, F-102-f-c):** the platform owner on the
+cross-tenant pool; any other tenant in a `tenantTransaction` on the app pool,
+so RLS stands behind that rule. A tenant admin reads nothing on the
+cross-tenant pool.
 
 | Route | Body / query | Answer | Refusals |
 |---|---|---|---|
