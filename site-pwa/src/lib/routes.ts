@@ -28,6 +28,8 @@ export const PANEL_FINANCIAL = "/financial";
  * (`panel-web/contract.shell.md` rule 3).
  */
 export const PANEL_DEPOSIT = "/financial/deposit";
+/** A reseller's billing wallet with the platform (F-019-d). */
+export const PANEL_TENANT_BILLING = "/financial/billing";
 /**
  * Payment gateway management (F-102-d). One route for every audience: the
  * platform owner sees every gateway and the links, a tenant its own (D-31).

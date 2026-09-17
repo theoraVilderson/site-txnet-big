@@ -2,6 +2,7 @@ import {
   BookOpen,
   CreditCard,
   Globe,
+  HandCoins,
   Headphones,
   Home,
   Landmark,
@@ -14,7 +15,7 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME, PANEL_MANUAL_PAYMENTS, PANEL_SETTINGS } from "@/lib/routes";
+import { PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME, PANEL_MANUAL_PAYMENTS, PANEL_SETTINGS, PANEL_TENANT_BILLING } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 /** The shell's menu labels as generated constants (C-06). */
@@ -37,7 +38,18 @@ const M = FrontendI18nKeys.common.shell.menu;
  * administers its own roles and can grant itself the key
  * (`docs/domains/audit/contract.settlement.md`, invariant #9).
  */
-type PermissionGated = { requires?: readonly string[] };
+type PermissionGated = {
+  requires?: readonly string[];
+  /**
+   * The tenant types the entry exists in, when not all of them (F-019-d). A
+   * permission a role holds in every tenant can still name a surface only one
+   * kind of tenant has — a reseller's billing wallet. Compared against
+   * `me.tenant.type`; while that is unknown, such an entry is hidden.
+   */
+  tenantTypes?: readonly TenantType[];
+};
+
+export type TenantType = "platform_owner" | "reseller";
 
 /**
  * The permission that stands for every other one — `SuperAdmin` holds it
@@ -101,6 +113,16 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
       { id: "coupons", label: M.coupons, icon: TicketPercent, href: PANEL_COUPONS, requires: ["coupon.manage"] },
       // F-026-f. Like coupons: the permission hides it, billing scopes what it lists (D-34).
       { id: "catalog", label: M.catalog, icon: Package, href: PANEL_CATALOG, requires: ["catalog.manage"] },
+      // F-019-d. A reseller's own balance with the platform; the service admits
+      // its owner too, who may hold no role that grants the permission.
+      {
+        id: "tenant-billing",
+        label: M.tenantBilling,
+        icon: HandCoins,
+        href: PANEL_TENANT_BILLING,
+        requires: ["tenant_billing.topup"],
+        tenantTypes: ["reseller"],
+      },
     ],
   },
   { id: "tutorials", label: M.tutorials, icon: BookOpen, href: null },
@@ -123,14 +145,21 @@ export function isMenuGroup<T extends PanelMenuEntry | VisibleMenuEntry>(
  * would make a forgotten call site render an operator's menu silently, and a
  * default of `[]` would hide a real entry just as silently. Passing it is one
  * line at the single call site (`PanelSidebar`), and the compiler asks for it.
+ *
+ * `tenantType` is `me.tenant.type`. It may be left out, and then every entry
+ * that names `tenantTypes` is hidden — the safe direction, as for `held`. `*`
+ * does not stand in for it: a SuperAdmin of the platform owner has no reseller
+ * wallet either.
  */
 export function visibleMenu(
   entries: readonly PanelMenuEntry[],
   held: readonly string[],
+  tenantType: TenantType | null = null,
 ): VisibleMenuEntry[] {
   const permitted = (e: PermissionGated) =>
-    held.includes(ALL_PERMISSIONS) ||
-    (e.requires ?? []).every((key) => held.includes(key));
+    (!e.tenantTypes || (tenantType !== null && e.tenantTypes.includes(tenantType))) &&
+    (held.includes(ALL_PERMISSIONS) ||
+      (e.requires ?? []).every((key) => held.includes(key)));
   const hasPage = (l: PanelMenuLink): l is VisibleMenuLink => l.href !== null;
   const out: VisibleMenuEntry[] = [];
   for (const entry of entries) {

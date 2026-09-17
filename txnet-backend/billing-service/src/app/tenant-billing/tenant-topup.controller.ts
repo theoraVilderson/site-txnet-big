@@ -26,7 +26,7 @@ export const TENANT_TOPUP_REFUSAL_STATUS: Record<TenantTopupRejection, 403 | 503
   platform_unavailable: 503,
 };
 
-function refusal(e: unknown): unknown {
+export function refusal(e: unknown): unknown {
   if (!(e instanceof TenantTopupRefused)) return toHttp(e);
   const payload = { reason: e.reason, message: e.message };
   return TENANT_TOPUP_REFUSAL_STATUS[e.reason] === 403

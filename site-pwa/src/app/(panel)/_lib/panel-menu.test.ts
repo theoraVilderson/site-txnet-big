@@ -167,6 +167,41 @@ describe("visibleMenu", () => {
   });
 });
 
+describe("visibleMenu, by tenant type", () => {
+  // F-019-d. `tenant_billing.topup` is granted to `Admin` in every tenant, the
+  // platform owner's too — which has no billing wallet, so the permission alone
+  // would show it a page that can only answer 403.
+  const billing: PanelMenuEntry = {
+    id: "billing",
+    label: "billing",
+    icon: Wallet,
+    href: "/financial/billing",
+    requires: ["tenant_billing.topup"],
+    tenantTypes: ["reseller"],
+  };
+  const held = ["tenant_billing.topup"];
+
+  it("shows an entry only inside a tenant type it names", () => {
+    expect(visibleMenu([billing], held, "reseller").map((e) => e.id)).toEqual(["billing"]);
+    expect(visibleMenu([billing], held, "platform_owner")).toEqual([]);
+    expect(visibleMenu([billing], ["*"], "platform_owner")).toEqual([]);
+  });
+
+  it("hides it while the tenant type is unknown, and still needs the permission", () => {
+    expect(visibleMenu([billing], held, null)).toEqual([]);
+    expect(visibleMenu([billing], [], "reseller")).toEqual([]);
+  });
+
+  it("is in PANEL_MENU for a reseller holding the permission, and not for the platform owner", () => {
+    const hrefs = (type: "reseller" | "platform_owner") =>
+      visibleMenu(PANEL_MENU, held, type).flatMap((e) =>
+        "children" in e ? e.children.map((c) => c.href) : [e.href],
+      );
+    expect(hrefs("reseller")).toContain("/financial/billing");
+    expect(hrefs("platform_owner")).not.toContain("/financial/billing");
+  });
+});
+
 describe("activeHref", () => {
   const hrefs = ["/", "/financial", "/financial/deposit", "/accounts/add"];
 

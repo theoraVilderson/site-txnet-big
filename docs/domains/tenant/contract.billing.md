@@ -90,7 +90,27 @@ billing's deposit start and settlement (`billing/contract.deposit.md`).
 
 **Proof:** `tenant-billing/tenant-topup.spec.ts`.
 
+## The reseller's read (F-019-d)
+
+`GET /api/billing/tenant-wallet?page&pageSize` — `TenantWalletController` +
+`TenantWalletService` in `app/tenant-billing/`; the panel page is
+`panel-web/contract.financial.md`.
+
+| Rule | Why |
+|---|---|
+| The top-up's door (`admitResellerBilling`): inside a reseller, its owner or `tenant_billing.topup`; else **403** `not_a_reseller` / `not_permitted`, before the wallet is read | the same people who pay are the ones who see what they paid |
+| Read in the caller's own scope on the **app pool**: the wallet by `tenantId` under strict RLS, the rows by that wallet's id | the cross-tenant pool would answer any reseller's wallet for a wrong id |
+| `balance` is `cachedBalance`; rows newest first, `id` breaks a tie; no wallet is `balance: "0.00"` and no rows | invariant 3 — never a sum; a wallet opens on the first credit |
+| `page` / `pageSize` optional (1 / 20), `pageSize ≤ 100`, `.strict()`; a bad one is 400 `billing.pageInvalid` | the wallet history's paging |
+| Rate limit: `WALLET_HISTORY`, per user | the same act: reading a money list |
+
+`200`: `{balance, total, page, pageSize, rows: [{id, direction, reasonType,
+amount, balanceAfter, createdAt}]}` — decimals as strings. No `referenceId`:
+an adjustment's is the platform owner's request id.
+
+**Proof:** `tenant-billing/tenant-wallet.spec.ts`.
+
 ## Not built
 
-No read route: the reseller's balance and history are F-019-d. No quote route
-for a top-up (start answers the breakdown). No charge (F-019-c).
+No quote route for a top-up (start answers the breakdown), and no top-up page
+in the panel. No charge (F-019-c).

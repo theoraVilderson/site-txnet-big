@@ -46,6 +46,23 @@ export class TenantTopupRefused extends Error {
   }
 }
 
+/**
+ * Who may act on a reseller's billing wallet from inside it — top it up
+ * (F-019-b) or read it (F-019-d): its owner, or a staff member holding
+ * `tenant_billing.topup`, and only inside a reseller. `tenant.tenant` has no
+ * RLS policy, so the reseller's own connection can answer this.
+ */
+export async function admitResellerBilling(prisma: PrismaService, actor: TopupActor): Promise<void> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: actor.tenantId },
+    select: { tenantType: true, ownerUserId: true },
+  });
+  if (tenant?.tenantType !== TenantType.reseller) throw new TenantTopupRefused('not_a_reseller');
+  if (tenant.ownerUserId !== actor.userId && !holdsPermission(actor.permissions, TENANT_BILLING_TOPUP)) {
+    throw new TenantTopupRefused('not_permitted');
+  }
+}
+
 @Injectable()
 export class TenantTopupService {
   constructor(
@@ -88,15 +105,7 @@ export class TenantTopupService {
 
   /** The one door. Answers the platform owner's tenant id, whose scope the payment is made in. */
   private async access(actor: TopupActor): Promise<string> {
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: actor.tenantId },
-      select: { tenantType: true, ownerUserId: true },
-    });
-    if (tenant?.tenantType !== TenantType.reseller) throw new TenantTopupRefused('not_a_reseller');
-    if (tenant.ownerUserId !== actor.userId && !holdsPermission(actor.permissions, TENANT_BILLING_TOPUP)) {
-      throw new TenantTopupRefused('not_permitted');
-    }
-    // `tenant.tenant` has no RLS policy, so the reseller's connection can answer this.
+    await admitResellerBilling(this.prisma, actor);
     const owner = await platformOwnerTenantId(this.prisma as unknown as Prisma.TransactionClient);
     if (!owner) throw new TenantTopupRefused('platform_unavailable');
     return owner;

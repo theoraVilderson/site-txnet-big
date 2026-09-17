@@ -59,7 +59,8 @@ export function PanelSidebar() {
   // answers, nothing gated is shown.
   const { me } = usePanelSession();
   const held = me?.permissions;
-  const menu = useMemo(() => visibleMenu(PANEL_MENU, held ?? []), [held]);
+  const tenantType = me?.tenant.type ?? null;
+  const menu = useMemo(() => visibleMenu(PANEL_MENU, held ?? [], tenantType), [held, tenantType]);
   const active = activeHref(menuHrefs(menu), pathname);
 
   // A navigation closes the drawer, and opens the group the new page is in —

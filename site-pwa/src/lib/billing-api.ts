@@ -251,6 +251,23 @@ export interface DepositStarted {
   balance: string | null;
 }
 
+/**
+ * A movement of a reseller's billing wallet with the platform (F-019-d) — not
+ * a user's wallet. `reasonType` is the tenant ledger's own set
+ * (`tenant/contract.billing.md`); a value added later renders as itself.
+ */
+export interface TenantWalletRow {
+  id: string;
+  direction: "credit" | "debit";
+  reasonType: string;
+  amount: string;
+  balanceAfter: string;
+  createdAt: string;
+}
+
+/** `GET /tenant-wallet`: one page, and the wallet's own balance — never a sum of the page. */
+export type TenantWalletPage = Paged<TenantWalletRow> & { balance: string };
+
 export const billingApi = {
   /**
    * The wallet's balance, and nothing else.
@@ -286,6 +303,11 @@ export const billingApi = {
    * does not carry. A separate call to a separate route, so a status filter
    * meant for attempts can never narrow the ledger.
    */
+  /** A reseller's billing wallet (F-019-d). Its owner or `tenant_billing.topup`, else a translated 403. */
+  async tenantWallet(page: number, pageSize: number): Promise<TenantWalletPage> {
+    return call<TenantWalletPage>(`/tenant-wallet?page=${page}&pageSize=${pageSize}`, { method: "GET" });
+  },
+
   async walletPayments(query: string): Promise<WalletPaymentsPage> {
     return call<WalletPaymentsPage>(`/wallet/payments?${query}`, { method: "GET" });
   },

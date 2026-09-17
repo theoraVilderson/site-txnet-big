@@ -21,7 +21,8 @@
       "support": "Support",
       "settings": "Settings",
       "coupons": "Coupons and gift codes",
-      "catalog": "Catalog"
+      "catalog": "Catalog",
+      "tenantBilling": "Platform billing"
     },
     "paymentCredited": {
       "title": "Payment confirmed",
@@ -1327,6 +1328,23 @@
       "sent": "Email sent",
       "failed": "We could not send the email. Try again in a moment.",
       "saved": "Your email address is saved."
+    }
+  },
+  "tenantBilling": {
+    "title": "Platform billing",
+    "subtitle": "Your reseller's prepaid balance with the platform, and every movement of it",
+    "balance": "Billing balance",
+    "columns": {
+      "type": "Type",
+      "amount": "Amount",
+      "date": "Date",
+      "balanceAfter": "Balance after"
+    },
+    "empty": "No movements yet. The balance changes when you top up or the platform adjusts it.",
+    "reason": {
+      "topup_payment": "Online top-up",
+      "admin_manual_adjust": "Adjustment by the platform",
+      "subscription_charge": "Subscription renewal"
     }
   }
 }

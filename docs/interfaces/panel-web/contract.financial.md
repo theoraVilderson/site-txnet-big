@@ -92,6 +92,24 @@ balance column of every row above it — permanently, and invisibly.
    no status filter for it: it is a `pending` attempt, and filtering `pending`
    finds it.
 
+## The reseller's billing page — `/financial/billing` (F-019-d)
+
+`PANEL_TENANT_BILLING`, files under `financial/billing/`. A reseller's prepaid
+balance **with the platform** and its movements, read from
+`GET /api/billing/tenant-wallet` (producer: `domains/tenant/contract.billing.md`).
+It is not the user's wallet and shares no list with the two tabs above.
+
+- Rules 1, 6, 7 and 8 above hold unchanged: `?page=` is the state, the header
+  is the route's `balance`, a failure is the server's line and a retry, loading
+  is derived. There are no filters (the route takes none).
+- Reason labels live in `common.tenantBilling.reason`, the tenant ledger's own
+  set; an unknown value renders as itself.
+- **The menu decides nothing about access.** The entry needs
+  `tenant_billing.topup` *and* a reseller (`contract.shell.md` rule 2); the
+  route also admits the reseller's owner without that key, who then reaches the
+  page by URL. A refusal is rendered as rule 7's failed read.
+- No top-up form yet: `POST /tenant-wallet/topup` has no page.
+
 ## Not covered
 
 - **The individual gift codes of a discounted payment.** Legacy's expanded row
