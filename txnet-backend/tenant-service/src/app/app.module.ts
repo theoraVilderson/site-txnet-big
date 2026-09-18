@@ -24,7 +24,7 @@ import { IdentityMiddleware } from './request/identity.middleware';
 const INTERNAL_ROUTES = 'internal/*';
 
 /** The file route: public, its tenant from the Host (F-018-m). */
-const FILE_ROUTES = `${FILES_PATH}/*`;
+const FILE_ROUTES = `${FILES_PATH}/*path`;
 
 /**
  * `tenant-service` (F-018-t, ADR-0058): tenant administration, out of
