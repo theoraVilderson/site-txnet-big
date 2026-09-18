@@ -177,3 +177,11 @@ out everywhere, including on the device in front of them. It now also returns
 (`lib/auth-api.ts` stores the token; the forgot-password screen goes to the
 panel instead of the login form). A client that ignores the extra fields keeps
 working; one that assumed "reset always means signed out" does not.
+
+## v11 — OTP delivery leaves the request path (2026-09-10, breaking, F-067-a)
+
+The three issuing operations answer **202** with a `deliveryId` and gained
+*read OTP delivery status* beside them; the code is drawn by whoever sends it,
+so nothing plaintext rides the queue (invariant #2). The broker becomes a
+dependency of OTP login — console delivery still runs inline. Moved here from
+the INDEX changelog when F-061-e displaced it.

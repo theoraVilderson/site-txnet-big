@@ -1117,6 +1117,120 @@ describe('AuthService.resetPassword — every session dies', () => {
   });
 });
 
+describe("AuthService password reset — a reseller's owner on its domain (F-061-e, ADR-0059)", () => {
+  let h: Harness;
+  const PLATFORM_SCOPE = {
+    id: 'tenant-platform',
+    slug: 'platform_owner',
+    via: 'session',
+    surfacePurpose: 'panel',
+    brand: { id: 'tenant-reseller', slug: 'arian-vpn' },
+  };
+  const ali = () => activeUser({ id: 'user-ali', tenantId: 'tenant-platform' });
+  const owner = () => ({ user: ali(), scope: PLATFORM_SCOPE });
+  const scopeOf = (m: Mock, value?: unknown) => {
+    const seen: (string | undefined)[] = [];
+    m.mockImplementation(async () => {
+      seen.push(TenantContext.currentOrNull()?.id);
+      return value;
+    });
+    return seen;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    h = harness();
+    argon2.hash.mockResolvedValue('new-argon2-hash');
+    // RLS stand-in: the owner's row is visible only inside the owner's tenant.
+    const inOwnerTenant = async () =>
+      TenantContext.currentOrNull()?.id === 'tenant-platform' ? ali() : null;
+    h.prisma.user.findFirst.mockImplementation(inOwnerTenant);
+    h.prisma.user.findUnique.mockImplementation(inOwnerTenant);
+  });
+
+  it("issues the owner's reset code inside the owner's tenant", async () => {
+    h.surfaceOwners.ownerMatching.mockResolvedValue(owner());
+    const issuedIn = scopeOf(h.otp.issueOtp);
+
+    const res = await h.service.forgotPassword(
+      { phoneNumber: '09123456789' } as never,
+      '1.2.3.4',
+      'fa',
+    );
+
+    expect(h.surfaceOwners.ownerMatching).toHaveBeenCalledWith(
+      { phoneNumber: '09123456789' },
+      expect.anything(),
+    );
+    expect(issuedIn).toEqual(['tenant-platform']);
+    expect(res).toMatchObject({ ok: true, data: { accepted: true } });
+  });
+
+  it('answers the same when neither the domain nor its owner holds the number', async () => {
+    const forgot = () =>
+      h.service.forgotPassword({ phoneNumber: '09123456789' } as never, '1.2.3.4', 'fa');
+    const res = await forgot();
+    h.surfaceOwners.ownerMatching.mockResolvedValue(owner());
+    const owned = await forgot();
+
+    expect(h.otp.issueOtp).toHaveBeenCalledTimes(1);
+    expect(res).toEqual(owned);
+  });
+
+  it("checks the owner's reset code in the owner's tenant and names the owner in the token", async () => {
+    h.surfaceOwners.ownerMatching.mockResolvedValue(owner());
+    const verifiedIn = scopeOf(h.otp.verifyOtp, true);
+
+    const res = await h.service.verifyForgotPassword({
+      phoneNumber: '09123456789',
+      otpCode: '123456',
+    } as never);
+
+    expect(verifiedIn).toEqual(['tenant-platform']);
+    expect(h.tokens.signResetToken).toHaveBeenCalledWith('09123456789', 'user-ali');
+    expect(res).toMatchObject({ ok: true, data: { resetToken: 'reset-token' } });
+  });
+
+  it("changes the owner's one password, revokes and re-signs in, all in the owner's tenant", async () => {
+    h.tokens.verify.mockReturnValue({ sub: 'user-ali', purpose: 'password_reset' });
+    h.surfaceOwners.ownerMatching.mockResolvedValue(owner());
+    const txIn = scopeOf(h.prisma.$transaction);
+    const droppedIn = scopeOf(h.sessions.dropAllForUser);
+    const sessionIn = scopeOf(h.sessionService.createSession, {
+      session: { id: 'session-new' },
+      refreshToken: 'refresh-new',
+    });
+
+    const res = await h.service.resetPassword(
+      { resetToken: 'reset-token', newPassword: 'Fresh!Passw0rd' } as never,
+      '1.2.3.4',
+      'jest-ua',
+    );
+
+    expect(res).toMatchObject({ ok: true, msg: 'auth.passwordResetSuccess' });
+    expect(txIn).toEqual(['tenant-platform']);
+    expect(droppedIn).toEqual(['tenant-platform']);
+    expect(sessionIn).toEqual(['tenant-platform']);
+    expect(h.prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'user-ali' } }),
+    );
+  });
+
+  it("refuses a reset token whose subject is not the domain's owner", async () => {
+    h.tokens.verify.mockReturnValue({ sub: 'user-other', purpose: 'password_reset' });
+    h.surfaceOwners.ownerMatching.mockResolvedValue(owner());
+
+    const res = await h.service.resetPassword(
+      { resetToken: 'reset-token', newPassword: 'Fresh!Passw0rd' } as never,
+      '1.2.3.4',
+      'jest-ua',
+    );
+
+    expect(res).toEqual({ ok: false, msg: 'auth.invalidResetToken', error: null });
+    expect(h.prisma.$transaction).not.toHaveBeenCalled();
+  });
+});
+
 /**
  * ADR-0033. Signing out is a statement about the **place**, not about the one
  * token that happened to carry the request: the bot chat and its Mini App are

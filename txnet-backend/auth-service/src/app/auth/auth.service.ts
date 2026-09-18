@@ -719,54 +719,92 @@ export class AuthService {
 
   async forgotPassword(input: ForgotPasswordInput, ip: string, lang: string) {
     return safeExecute(async () => {
-      const user = await this.prisma.user.findFirst({
-        where: { phoneNumber: input.phoneNumber },
-        select: { id: true, status: true, preferredOtpChannel: true },
-      });
-      const channel = await this.resolveOtpChannel(input.phoneNumber, user ?? {}, input.channel);
+      const where = { phoneNumber: input.phoneNumber };
+      const select = { id: true, status: true, preferredOtpChannel: true };
+      const user = await this.prisma.user.findFirst({ where, select });
 
-      const link = await this.linkIfNeeded(
-        channel,
+      // ADR-0059 (4): on a reseller's domain, a number none of its own
+      // accounts holds may be its owner's. The reset code is then issued in
+      // the owner's tenant, where verify looks for it. The 202 is the same.
+      if (!user) {
+        const owner = await this.surfaceOwners.ownerMatching(where, {});
+        if (owner) {
+          return runWithTenant(owner.scope, () =>
+            this.sendResetOtp(owner.user, input, ip, lang),
+          );
+        }
+      }
+      return this.sendResetOtp(user, input, ip, lang);
+    });
+  }
+
+  /** Everything a reset-code request does once the account is found (or not). */
+  private async sendResetOtp(
+    user: any,
+    input: ForgotPasswordInput,
+    ip: string,
+    lang: string,
+  ) {
+    const channel = await this.resolveOtpChannel(input.phoneNumber, user ?? {}, input.channel);
+
+    const link = await this.linkIfNeeded(
+      channel,
+      input.phoneNumber,
+      OtpPurpose.password_reset,
+      ip,
+      lang,
+    );
+    if (link) return link;
+
+    const delivery = await this.deliveries.mintHandles();
+    if (user?.status === 'active') {
+      await this.otp.issueOtp(
         input.phoneNumber,
         OtpPurpose.password_reset,
+        channel,
         ip,
         lang,
+        delivery,
       );
-      if (link) return link;
-
-      const delivery = await this.deliveries.mintHandles();
-      if (user?.status === 'active') {
-        await this.otp.issueOtp(
-          input.phoneNumber,
-          OtpPurpose.password_reset,
-          channel,
-          ip,
-          lang,
-          delivery,
-        );
-      }
-      return ok(
-        { accepted: true, ...deliveryHandles(delivery) },
-        'auth.resetOtpSent',
-      );
-    });
+    }
+    return ok(
+      { accepted: true, ...deliveryHandles(delivery) },
+      'auth.resetOtpSent',
+    );
   }
 
   async verifyForgotPassword(input: ForgotVerifyInput) {
     return safeExecute(async () => {
-      await this.otp.verifyOtp(
-        input.phoneNumber,
-        OtpPurpose.password_reset,
-        input.otpCode,
-      );
-      const user = await this.prisma.user.findFirst({
-        where: { phoneNumber: input.phoneNumber },
-        select: { id: true },
-      });
-      if (!user) return err('auth.invalidResetRequest');
-      const resetToken = this.tokens.signResetToken(input.phoneNumber, user.id);
-      return ok({ resetToken }, 'auth.resetTokenGenerated');
+      const where = { phoneNumber: input.phoneNumber };
+      const user = await this.prisma.user.findFirst({ where, select: { id: true } });
+      // ADR-0059 (4): the owner's reset code lives in their own tenant.
+      if (!user) {
+        const owner = await this.surfaceOwners.ownerMatching(where, {});
+        if (owner) {
+          return runWithTenant(owner.scope, () =>
+            this.completeForgotVerify(owner.user, input),
+          );
+        }
+      }
+      return this.completeForgotVerify(user, input);
     });
+  }
+
+  /** Checks the reset code, then names the account in a reset token. */
+  private async completeForgotVerify(
+    user: { id: string } | null,
+    input: ForgotVerifyInput,
+  ) {
+    // The code is checked before the account's absence is answered, as it
+    // always was: a number without an account has no code, so it fails here.
+    await this.otp.verifyOtp(
+      input.phoneNumber,
+      OtpPurpose.password_reset,
+      input.otpCode,
+    );
+    if (!user) return err('auth.invalidResetRequest');
+    const resetToken = this.tokens.signResetToken(input.phoneNumber, user.id);
+    return ok({ resetToken }, 'auth.resetTokenGenerated');
   }
 
   async resetPassword(
@@ -783,49 +821,70 @@ export class AuthService {
         where: { id: claims.sub },
         select: { id: true, username: true, fullName: true, phoneNumber: true },
       });
-      if (!user) return err('auth.invalidResetToken');
-
-      try {
-        assertPasswordNotContainingProfile(input.newPassword, user);
-      } catch (e) {
-        if (e instanceof PasswordContainsProfileDataError) {
-          return err('password.containsProfileData');
+      // ADR-0059 (4): the owner resets the one password of their own
+      // account, in their own tenant — where its sessions are revoked and the
+      // new one is opened. Only when the token names the owner.
+      if (!user) {
+        const owner = await this.surfaceOwners.ownerMatching({}, {});
+        if (owner?.user.id === claims.sub) {
+          return runWithTenant(owner.scope, () =>
+            this.completeReset(owner.user as any, input.newPassword, ip, userAgent, scopeKey),
+          );
         }
-        throw e;
+        return err('auth.invalidResetToken');
       }
-
-      const passwordHash = await argon2.hash(input.newPassword, {
-        type: argon2.argon2id,
-      });
-
-      await this.prisma.$transaction([
-        this.prisma.user.update({
-          where: { id: user.id },
-          data: { passwordHash },
-        }),
-        this.prisma.session.updateMany({
-          where: { userId: user.id, revokedAt: null },
-          data: { revokedAt: new Date(), revokedReason: 'password_change' },
-        }),
-      ]);
-
-      // Drop every cached session for this user so the new password takes
-      // effect on all devices immediately.
-      await this.sessions.dropAllForUser(user.id);
-
-      // Every session is gone, including any the person resetting was holding
-      // — so this device is signed back in here, on a session minted after the
-      // revocation. The net effect is the requested "everything except the
-      // one in front of me", without weakening identity/invariants.md #3: the
-      // revocation is still total, and no pre-reset session survives it.
-      const full = await this.findUserForSession(user.id);
-      const sessionData = await this.issueSession(full, ip, userAgent, scopeKey);
-
-      return ok(
-        { success: true, ...sessionData },
-        'auth.passwordResetSuccess',
-      );
+      return this.completeReset(user, input.newPassword, ip, userAgent, scopeKey);
     });
+  }
+
+  /** Rewrites the password, revokes every session and signs this device back in. */
+  private async completeReset(
+    user: { id: string; username: string | null; fullName: string | null; phoneNumber: string | null },
+    newPassword: string,
+    ip: string,
+    userAgent: string,
+    scopeKey?: string | null,
+  ) {
+    try {
+      assertPasswordNotContainingProfile(newPassword, user);
+    } catch (e) {
+      if (e instanceof PasswordContainsProfileDataError) {
+        return err('password.containsProfileData');
+      }
+      throw e;
+    }
+
+    const passwordHash = await argon2.hash(newPassword, {
+      type: argon2.argon2id,
+    });
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash },
+      }),
+      this.prisma.session.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt: new Date(), revokedReason: 'password_change' },
+      }),
+    ]);
+
+    // Drop every cached session for this user so the new password takes
+    // effect on all devices immediately.
+    await this.sessions.dropAllForUser(user.id);
+
+    // Every session is gone, including any the person resetting was holding
+    // — so this device is signed back in here, on a session minted after the
+    // revocation. The net effect is the requested "everything except the
+    // one in front of me", without weakening identity/invariants.md #3: the
+    // revocation is still total, and no pre-reset session survives it.
+    const full = await this.findUserForSession(user.id);
+    const sessionData = await this.issueSession(full, ip, userAgent, scopeKey);
+
+    return ok(
+      { success: true, ...sessionData },
+      'auth.passwordResetSuccess',
+    );
   }
 
   async findUserForSession(userId: string) {
