@@ -44,6 +44,8 @@ import { CaptchaService } from './captcha/captcha.service';
 import { MeController } from './me/me.controller';
 import { HandoffController } from './handoff/handoff.controller';
 import { HandoffService } from './handoff/handoff.service';
+import { UserSearchController } from './users/user-search.controller';
+import { UserSearchService } from './users/user-search.service';
 import { MeService } from './me/me.service';
 import { MeEmailService } from './me/me-email.service';
 import { PermissionStateStore } from './permissions/permission-state.store';
@@ -83,6 +85,7 @@ import { ConfigService } from '@nestjs/config';
     UserNotifyInternalController,
     MeController,
     HandoffController,
+    UserSearchController,
   ],
   providers: [
     UserNotifier,
@@ -91,6 +94,7 @@ import { ConfigService } from '@nestjs/config';
     TokenService,
     MeService,
     HandoffService,
+    UserSearchService,
     MeEmailService,
     AuthService,
     SurfaceOwnerService,

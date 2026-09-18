@@ -6,6 +6,7 @@ import { SessionService } from '../auth/session/session.service';
 import { OtpChannel } from '../auth/otp/otp.interface';
 import { err, ok, safeExecute } from '../common/response/response.util';
 import { SwitchScope } from '../common/security/switch-scope';
+import { maskPhone } from '../common/validation/phone.schema';
 import { SurfaceOwnerService } from '../auth/surface-owner/surface-owner.service';
 import { runWithTenant } from '../tenant-context/tenant-context';
 import {
@@ -23,13 +24,6 @@ export type SwitchGroupMember = {
   fullName: string;
   phoneMasked: string | null;
 };
-
-/** `09123456789` -> `0912***6789`. Null stays null — some accounts have none. */
-function maskPhone(phoneNumber: string | null): string | null {
-  if (!phoneNumber) return null;
-  if (phoneNumber.length <= 8) return '***';
-  return `${phoneNumber.slice(0, 4)}***${phoneNumber.slice(-4)}`;
-}
 
 /**
  * The user's own set of accounts **on one surface**, and the rules for getting

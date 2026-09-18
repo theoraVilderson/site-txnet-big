@@ -2,7 +2,7 @@
 id: auth-api
 layer: interface
 status: active
-version: 23
+version: 24
 updated: 2026-09-18
 ---
 
@@ -127,6 +127,7 @@ cookies and rate limits. Field-level schemas live in code — link, do not copy:
 | GET  `/auth/handoff` | — | 200 `{resellers:[{id,slug}]}`: the resellers the caller owns (F-061-f). **Bearer required** | 120 / 900s per caller | — |
 | POST `/auth/handoff` | tenantId | 200 `{origin, code, expiresIn:60}` — a single-use code for that reseller, spent at `<origin>/auth/handoff#<code>`; `auth.handoffRefused` when the caller is not its owner, is impersonated, or it has no panel host (identity invariant 17). **Bearer required** | 30 / 900s per caller | — |
 | POST `/auth/handoff/redeem` | code | on the code's own reseller panel domain: 200 tokens + sets `refresh_token` cookie, as `login/password`; anything else `auth.handoffInvalid`. Behind `NoActiveSessionGuard` | 30 / 900s per subject | — |
+| GET  `/auth/users` | `q` 3-64, `limit` 1-20 (10) | 200 `{users:[{id, fullName, username, phoneMasked, status}]}` (F-018-ad; semantics `identity/contract.md` "find a user"). 403 without `user.search` or outside the platform owner (`auth.userSearchRefused`). **Bearer required** | 60 / 900s per caller (`USER_SEARCH_RATE_LIMIT`) | — |
 | POST `/auth/accounts/switch` | userId | 200 tokens + `{userId, fullName}` + sets `refresh_token` cookie. **The whole place switches** (ADR-0034): every live session the outgoing account holds in this scope is revoked `account_switched`, and the scope's group records the target as what it is now acting as — so a switch made in the Mini App is followed by the bot chat and vice versa, instead of leaving the other surface on the outgoing account. **No credential in the body** — that is the point of the group. Not a member, another group, another tenant, deleted or suspended all answer the one business rejection `accountSwitch.notAMember` | 30 / 900s per caller | — |
 | POST `/auth/accounts/remove` | userId | 200 `{userId, removed}` (F-0208). Removes that member from the group **on this surface only**, and revokes that account's sessions in this scope alone (`account_unlinked`) — its sessions elsewhere are untouched. Works from either side: `userId` may be the caller's own, which is how an account leaves. Mints nothing and sets no cookie, so a self-removal is a sign-out. Every refusal is `accountSwitch.notAMember` | 30 / 900s per caller | — |
 | POST `/auth/captcha/challenge` | — | 200 `{challengeId}`, 60s to complete the slide | 30 / 900s (default — `CAPTCHA_RATE_LIMIT`) | — |

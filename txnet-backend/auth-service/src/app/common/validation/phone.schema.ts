@@ -148,6 +148,17 @@ export function phoneVariants(raw: string): string[] {
   return [...forms].filter((form) => form.length >= 3);
 }
 
+/**
+ * `09123456789` -> `0912***6789`. Null stays null — some accounts have none.
+ * For a list read by someone other than the number's owner (F-0206, F-018-ad):
+ * four digits either side tell people apart without handing the number out.
+ */
+export function maskPhone(phoneNumber: string | null): string | null {
+  if (!phoneNumber) return null;
+  if (phoneNumber.length <= 8) return '***';
+  return `${phoneNumber.slice(0, 4)}***${phoneNumber.slice(-4)}`;
+}
+
 export function isPhoneNumber(value: string): boolean {
   return parsePhone(value) !== undefined;
 }

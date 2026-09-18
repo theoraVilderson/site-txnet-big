@@ -96,6 +96,13 @@ export const RateLimitBucket = {
   HANDOFF_ISSUE: 'handoff:issue',
   HANDOFF_REDEEM: 'handoff:redeem',
 
+  /**
+   * `GET /auth/users?q=` (F-018-ad), per caller. The platform owner finds a
+   * user as it types into a picker, so the budget is keystrokes — and a cap on
+   * walking the user table a few characters at a time.
+   */
+  USER_SEARCH: 'users:search',
+
   ACCOUNTS_SWITCH: 'accounts:switch',
   ACCOUNTS_REMOVE: 'accounts:remove',
 

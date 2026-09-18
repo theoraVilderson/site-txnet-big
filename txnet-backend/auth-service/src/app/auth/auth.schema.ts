@@ -89,3 +89,14 @@ export const handoffIssueSchema = z.object({
 export const handoffRedeemSchema = z.object({
   code: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
 });
+
+/**
+ * `GET /auth/users?q=` (F-018-ad): a phone (any spelling), a username or an
+ * email, or part of one. Three characters so a single letter is not a dump of
+ * the tenant; one short page, no offset — refine the query instead.
+ */
+export const userSearchSchema = z.object({
+  q: z.string().trim().min(3).max(64),
+  limit: z.coerce.number().int().min(1).max(20).default(10),
+});
+export type UserSearchInput = z.infer<typeof userSearchSchema>;
