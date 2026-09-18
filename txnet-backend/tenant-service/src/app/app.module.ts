@@ -21,7 +21,7 @@ import { SubscriptionModule } from './subscription/subscription.module';
 import { IdentityMiddleware } from './request/identity.middleware';
 
 /** The service-to-service seam: reached by the platform's processes, never through Traefik. */
-const INTERNAL_ROUTES = 'internal/*';
+const INTERNAL_ROUTES = 'internal/*path';
 
 /** The file route: public, its tenant from the Host (F-018-m). */
 const FILE_ROUTES = `${FILES_PATH}/*path`;
@@ -57,7 +57,7 @@ const FILE_ROUTES = `${FILES_PATH}/*path`;
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     // Language first, so the 401 IdentityMiddleware throws is translated.
-    consumer.apply(LanguageMiddleware).forRoutes('*');
+    consumer.apply(LanguageMiddleware).forRoutes('{*path}');
     // Every route but the health check, the internal seam, the domain
     // probe (public: the sweep's own request, F-018-i) and the file route
     // needs the gate's identity — a moved controller is covered without
@@ -65,7 +65,7 @@ export class AppModule implements NestModule {
     consumer
       .apply(IdentityMiddleware)
       .exclude('health', INTERNAL_ROUTES, PROBE_PATH, FILE_ROUTES)
-      .forRoutes('*');
+      .forRoutes('{*path}');
     // The file route's tenant is its Host's, not a header's (F-018-m).
     consumer.apply(FileHostMiddleware).forRoutes(FILE_ROUTES);
   }
