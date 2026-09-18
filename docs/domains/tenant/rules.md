@@ -55,6 +55,7 @@ is `read` for `GET`/`HEAD`/`OPTIONS` and **`staffWrite` for anything else**.
 | 11 | A short renewal warns the owner at most once a day until `currentPeriodEnd` + `renewalGraceDays` (default 3) | the renewal finds the wallet short | an already suspended tenant is not warned |
 | 12 | Grace over and still short: `suspended`, `suspensionCause = non_payment`, reason `subscription_unpaid`, #1's stamps, the owner told; nothing deleted (#4) | renewal after the grace | a tenant already suspended is left as it is |
 | 13 | A payment lifts **only** a `non_payment` suspension: the charge is taken at once and the tenant is `active`, its new period starting now | a credit to the billing wallet, or the next sweep | a `manual` suspension is charged and renewed and stays suspended (user, 2026-09-17) |
+| 16 | A purchase opens the reseller `active`: created `trial` and moved in the same transaction once the first period is charged (history `reseller_purchased`, actor the buyer) | `POST /api/tenants/purchase` (F-019-h) | — |
 | 15 | The platform owner gives more time: the renewal does not suspend before `graceUntil`, and a `non_payment` suspension becomes `active` at once; nothing is credited (F-019-g) | `POST .../subscription/grace` | a `manual` suspension stays |
 | 14 | The platform owner suspending a `non_payment`-suspended reseller makes the cause `manual`; the suspension's stamps are kept (F-018-s) | `PUT .../status` `suspended` | already `manual` is `status_unchanged` |
 

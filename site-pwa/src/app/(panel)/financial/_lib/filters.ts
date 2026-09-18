@@ -37,6 +37,7 @@ export const REASON_TYPES = [
   "sub_account_charge",
   "wallet_transfer_in",
   "wallet_transfer_out",
+  "reseller_purchase",
 ] as const;
 export type ReasonType = (typeof REASON_TYPES)[number];
 

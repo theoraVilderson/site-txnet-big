@@ -18,6 +18,8 @@ enum WalletReasonType {
   sub_account_charge
   wallet_transfer_in
   wallet_transfer_out
+  /// F-019-h: the buyer pays for a reseller package; `referenceId` = the reseller's tenant id.
+  reseller_purchase
 
   @@schema("billing")
 }

@@ -41,7 +41,8 @@ const DAY_MS = 86_400_000;
 /** Due subscriptions taken per sweep, oldest first; the rest wait one tick. */
 const SWEEP_BATCH = 500;
 
-const PRICE_OF: Partial<Record<TenantBillingModel, 'monthlyPrice' | 'yearlyPrice'>> = {
+/** Which package price a billing model pays. */
+export const PRICE_OF: Partial<Record<TenantBillingModel, 'monthlyPrice' | 'yearlyPrice'>> = {
   subscription_monthly: 'monthlyPrice',
   subscription_yearly: 'yearlyPrice',
 };

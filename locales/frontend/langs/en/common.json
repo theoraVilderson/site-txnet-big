@@ -494,7 +494,8 @@
       "affiliate_commission": "Affiliate commission",
       "sub_account_charge": "Sub-account top-up",
       "wallet_transfer_in": "Transfer received",
-      "wallet_transfer_out": "Transfer sent"
+      "wallet_transfer_out": "Transfer sent",
+      "reseller_purchase": "Reseller purchase"
     },
     "status": {
       "pending": "Pending",
@@ -1344,7 +1345,8 @@
     "reason": {
       "topup_payment": "Online top-up",
       "admin_manual_adjust": "Adjustment by the platform",
-      "subscription_charge": "Subscription renewal"
+      "subscription_charge": "Subscription renewal",
+      "reseller_purchase": "Package purchase (first period)"
     },
     "topup": "Top up",
     "topupPage": {

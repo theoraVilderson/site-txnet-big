@@ -23,12 +23,19 @@ export const RESERVED_SLUGS = ['api', 'panel', 'www', 'admin', 'app', 'mail', 's
 /** D-41: subscription only, no metering. */
 export const BILLING_MODELS = [TenantBillingModel.subscription_monthly, TenantBillingModel.subscription_yearly] as const;
 
+/** A slug as either door takes it: the platform owner's create and a buyer's own choice (F-019-h). */
+export const slugSchema = z
+  .string()
+  .regex(DNS_LABEL, { message: 'slug must be a lower-case DNS label' })
+  .refine((s) => !isReservedSlug(s), { message: 'slug is reserved' });
+
+export function isReservedSlug(slug: string): boolean {
+  return (RESERVED_SLUGS as readonly string[]).includes(slug);
+}
+
 export const createResellerSchema = z
   .object({
-    slug: z
-      .string()
-      .regex(DNS_LABEL, { message: 'slug must be a lower-case DNS label' })
-      .refine((s) => !(RESERVED_SLUGS as readonly string[]).includes(s), { message: 'slug is reserved' }),
+    slug: slugSchema,
     billingModel: z.enum(BILLING_MODELS),
     /** An existing user of the platform owner's tenant — the person who bought, or is given, the reseller. */
     ownerUserId: z.string().uuid(),

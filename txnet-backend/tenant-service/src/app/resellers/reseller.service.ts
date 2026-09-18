@@ -1,20 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  AdminAction,
-  AuditTargetType,
-  Prisma,
-  TenantDomainPurpose,
-  TenantDomainType,
-  TenantStatus,
-  TenantType,
-  UserStatus,
-} from '@prisma/client';
-import { cnameTargetHost, invalidateTenantOwner } from '@txnet-backend/shared-core';
+import { Prisma, TenantType, UserStatus } from '@prisma/client';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
+import { OwnerView, ResellerView, resellerHosts, slugInUse, writeReseller } from './reseller-rows';
 import type { CreateResellerInput, ListResellersInput } from './reseller.schema';
 
 /**
@@ -44,18 +35,7 @@ import type { CreateResellerInput, ListResellersInput } from './reseller.schema'
 
 export type ResellerActor = { adminId: string; tenantId: string; ip: string };
 
-type OwnerView = { id: string; fullName: string; username: string | null; phoneNumber: string | null };
-
-export type ResellerView = {
-  id: string;
-  slug: string;
-  status: TenantStatus;
-  billingModel: string;
-  createdAt: Date;
-  owner: OwnerView | null;
-  domains: { domainValue: string; domainType: TenantDomainType; purpose: TenantDomainPurpose; verificationStatus: string }[];
-  billingBalance: string;
-};
+export type { ResellerView } from './reseller-rows';
 
 export type ResellerRejection = 'not_platform_owner' | 'slug_taken' | 'reseller_not_found' | 'owner_not_found' | 'owner_inactive';
 
@@ -99,83 +79,24 @@ export class ResellerService {
     await this.access(actor);
 
     const slug = input.slug;
-    const base = this.config.get<string>('DOMAIN_NAME');
-    const domainValue = `${slug}.${base}`.toLowerCase();
-    // The reseller's own CNAME target (ADR-0060 (6)): its custom domain points
-    // here, so a CDN that replaces the visitor's host with the target still
-    // sends a host that names this tenant. Unique because the slug is.
-    const cnameTarget = cnameTargetHost(slug, base);
-    const [bySlug, byHost, person] = await Promise.all([
-      this.all.tenant.findUnique({ where: { slug }, select: { id: true } }),
-      this.all.tenantDomain.findUnique({ where: { domainValue }, select: { id: true } }),
+    const hosts = resellerHosts(slug, this.config.get<string>('DOMAIN_NAME') as string);
+    const [taken, person] = await Promise.all([
+      slugInUse(this.all, slug, hosts[0]),
       // The platform owner's tenant is the caller's: `access` just proved it.
       this.all.user.findFirst({
         where: { id: input.ownerUserId, tenantId: actor.tenantId, deletedAt: null },
         select: { ...OWNER_SELECT, status: true },
       }),
     ]);
-    if (bySlug || byHost) throw new ResellerRefused('slug_taken', slug);
+    if (taken) throw new ResellerRefused('slug_taken', slug);
     if (!person) throw new ResellerRefused('owner_not_found', input.ownerUserId);
     if (person.status !== UserStatus.active) throw new ResellerRefused('owner_inactive', input.ownerUserId);
     const owner: OwnerView = { id: person.id, fullName: person.fullName, username: person.username, phoneNumber: person.phoneNumber };
 
     try {
-      const view = await this.all.$transaction(async (tx) => {
-        const tenant = await tx.tenant.create({
-          data: {
-            tenantType: TenantType.reseller,
-            ownerUserId: owner.id,
-            slug,
-            status: TenantStatus.trial,
-            billingModel: input.billingModel,
-          },
-        });
-        // Empty: no balance is written here (tenant invariant 3).
-        await tx.tenantBillingWallet.create({ data: { tenantId: tenant.id } });
-        // A subdomain routes as it stands — the platform issued it (tenant invariant 5 is for custom domains).
-        const domains = [];
-        for (const host of [domainValue, cnameTarget]) {
-          domains.push(
-            await tx.tenantDomain.create({
-              data: {
-                tenantId: tenant.id,
-                domainType: TenantDomainType.subdomain,
-                domainValue: host,
-                purpose: TenantDomainPurpose.panel,
-              },
-            }),
-          );
-        }
-        const result: ResellerView = {
-          id: tenant.id,
-          slug: tenant.slug,
-          status: tenant.status,
-          billingModel: tenant.billingModel,
-          createdAt: tenant.createdAt,
-          owner,
-          domains: domains.map((domain) => ({
-            domainValue: domain.domainValue,
-            domainType: domain.domainType,
-            purpose: domain.purpose,
-            verificationStatus: domain.verificationStatus,
-          })),
-          billingBalance: '0',
-        };
-        await tx.adminAuditLog.create({
-          data: {
-            tenantId: tenant.id,
-            adminId: actor.adminId,
-            action: AdminAction.tenant_create,
-            targetEntityType: AuditTargetType.tenant,
-            targetEntityId: tenant.id,
-            newValue: JSON.parse(JSON.stringify(result)) as Prisma.InputJsonValue,
-            adminIpAddress: actor.ip,
-          },
-        });
-        // `auth-service`'s resolver re-reads the rows: every entry naming this tenant's owner goes (F-061-k).
-        await invalidateTenantOwner(tx, this.redis, tenant.id);
-        return result;
-      });
+      const view = await this.all.$transaction((tx) =>
+        writeReseller(tx, this.redis, { slug, hosts, billingModel: input.billingModel, owner, actorId: actor.adminId, ip: actor.ip }),
+      );
       this.logger.log(`reseller ${view.id} (${slug}) created by ${actor.adminId}, owned by ${owner.id}`);
       return view;
     } catch (e) {

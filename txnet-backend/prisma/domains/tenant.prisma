@@ -101,6 +101,8 @@ enum TenantBillingReasonType {
   metered_usage_charge
   sms_usage_charge
   admin_manual_adjust
+  /// F-019-h: the buyer's payment for the first period lands here before it is charged; `referenceId` = the tenant id.
+  reseller_purchase
 
   @@schema("tenant")
 }

@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-version: 19
+version: 20
 updated: 2026-09-18
 ---
 
@@ -12,7 +12,8 @@ A topic file of `contract.md` (§10). The platform owner creates, lists and
 reads resellers (F-018-c), the packages it sells them (F-018-d), and which package
 and period each reseller is on (F-018-e), and its status (F-018-f). Before it, a tenant existed only through
 `prisma/seed.js`. What a reseller does to itself is not here (F-018-h..l); what each
-status allows is [rules.md](rules.md).
+status allows is [rules.md](rules.md). A platform user buying a reseller
+(F-019-h) is below, after creation: it creates through the same rows.
 
 Code: `tenant-service/src/app/resellers/` (moved out of `auth-service` with
 F-018-y, ADR-0058).
@@ -49,12 +50,36 @@ fails the schema is `400 validation.failed`.
 | `billingModel` is `subscription_monthly` or `subscription_yearly` | D-41: no metering |
 | `tenantType = reseller`, `status = trial` are set by the service; the body cannot name them | the platform owner is created by the seed only (invariant 1) |
 | **The owner is an existing user** — `ownerUserId` names a user of the platform owner's tenant, not soft-deleted (else `owner_not_found`), `active` (else `owner_inactive`). No `identity.user` row is written or changed, and the owner's role is untouched | a person signs up on the platform and becomes a reseller while staying its customer (ADR-0058 (4)); what the owner may do is ADR-0059 and `ResellerAccess` (F-061-h, invariant 21), not a role here |
-| The same path serves a reseller made by hand and F-019-h's purchase | one way to create a reseller (user, 2026-09-18) |
+| The same rows serve a reseller made by hand and F-019-h's purchase (`resellers/reseller-rows.ts` `writeReseller`) | one way to create a reseller (user, 2026-09-18) |
 | **One transaction:** `tenant`, an empty `tenant_billing_wallet`, two `tenant_domain` rows (`subdomain`, `purpose = panel`): `<slug>.$DOMAIN_NAME` and the reseller's own CNAME target `<slug>.edge.$DOMAIN_NAME` (ADR-0060 (6)) — and an `admin_audit_log` row (`tenant_create`, target `tenant`) | a half-created reseller — a tenant with no wallet, or a host with no tenant — is never visible |
 | `invalidateTenantOwner` (shared-core) runs **inside** the transaction — the new tenant's `tenant:id:*` and both hosts' `tenant:host:*` entries; if Redis cannot be reached the creation is refused | contract.md "Resolve tenant by claim": a cached *no tenant* on the new host would 404 it until the backstop TTL. The entry carries `ownerUserId` (ADR-0059), so **every write of `ownerUserId` calls the same function** (invariant 20, F-061-k) |
 | The wallet is created with its defaults and no ledger entry | invariant 3: no balance is written outside `TenantBillingLedger` |
 | The subdomain is not marked `verified` and routes anyway | the resolver trusts a `subdomain` as the platform issued it; invariant 5 is for `custom_domain` |
 | A slug or host already present is `slug_taken` before the transaction; a race past that check meets the unique index (`P2002`) and gets the same refusal | one reseller per slug; a double submit cannot create two |
+
+## A platform user buys a reseller (F-019-h, ADR-0061)
+
+Code: `tenant-service/src/app/purchase/`. No permission key: any signed-in
+user of the platform owner's tenant; anyone else is `403 not_platform_user`,
+read on the app pool before the cross-tenant pool is touched.
+
+| Route | Body / query | Answer |
+|---|---|---|
+| `GET /api/tenants/purchase/packages` | — | active packages by name: `id, name, monthlyPrice, yearlyPrice, includedFeatureKeys` |
+| `GET /api/tenants/purchase/slug` | `name` 1..100, `.strict()` | `{slug}` — a suggestion, checked again by the purchase |
+| `POST /api/tenants/purchase` | `{packageId, billingModel, name, slug?}`, `.strict()` | `201` a reseller view + `packageId, currentPeriodEnd, charged, walletBalance` |
+
+Refusals: `not_platform_user` 403; `package_not_found` 404; `buyer_inactive`,
+`already_reseller`, `slug_taken`, `insufficient_balance`, `wallet_changed` 409;
+`package_inactive`, `package_not_sold_for_period` 422.
+
+| Rule | Why |
+|---|---|
+| **Paid from the buyer's wallet; the first period is paid and the reseller `active` at once**; `trial` stays the platform owner's hand-made path | a free purchase lets one account hold many slugs (user, 2026-09-18) |
+| **One transaction on the cross-tenant pool**, the package `FOR SHARE` first: `writeReseller`'s rows, the buyer's `wallet` debit (`reseller_purchase`, `referenceId` = the new tenant, `tenantId` = the platform owner), the price credited to the reseller's billing wallet (`reseller_purchase`) and charged from it (`subscription_charge`, the renewal's reference for the period starting now), the subscription ending one period on (`addBillingPeriod`), the package's `package_included` keys, and `trial` -> `active` (history `reseller_purchased`, actor the buyer) | money never leaves a wallet without a reseller; a short wallet throws inside the transaction, so nothing is refunded (ADR-0061) |
+| **One live reseller per user**: one they own that is not `terminated` or deleted is `already_reseller`, checked before and again inside the transaction; two purchases racing meet at the wallet's version guard (`wallet_changed`) | `GET /auth/me` and the panel assume one tenant per owner (user, 2026-09-18) |
+| **The slug:** sent, it is the buyer's own (`slugSchema`, the create's rules) and a held one is `slug_taken`; absent, the one `name` suggests. A suggestion transliterates Persian to Latin, becomes one DNS label of at most 50 characters (`reseller` when nothing is left), then takes the first of `base`, `base-2` … `base-20` neither reserved nor held, else a random suffix. Fixed after creation | close to the name and editable before buying; renaming would move both hosts and break a CNAME to `<slug>.edge` (user, 2026-09-18) |
+| The package must be active and priced for the period, read again under its lock | a deactivated package takes no new subscriber (F-018-d) |
 
 ## Packages the platform sells (F-018-d)
 

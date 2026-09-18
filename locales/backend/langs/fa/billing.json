@@ -7,6 +7,7 @@
     "affiliate_commission": "پورسانت معرفی دوستان",
     "sub_account_charge": "شارژ اکانت فرعی",
     "wallet_transfer_in": "انتقال دریافتی از کیف پول دیگر",
-    "wallet_transfer_out": "انتقال به کیف پول دیگر"
+    "wallet_transfer_out": "انتقال به کیف پول دیگر",
+    "reseller_purchase": "خرید پکیج نمایندگی"
   }
 }

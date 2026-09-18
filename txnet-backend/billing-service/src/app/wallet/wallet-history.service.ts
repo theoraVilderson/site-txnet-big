@@ -49,6 +49,7 @@ const LABEL_KEYS: Record<WalletReasonType, string> = {
   [WalletReasonType.sub_account_charge]: REASON_LABEL_KEY.sub_account_charge,
   [WalletReasonType.wallet_transfer_in]: REASON_LABEL_KEY.wallet_transfer_in,
   [WalletReasonType.wallet_transfer_out]: REASON_LABEL_KEY.wallet_transfer_out,
+  [WalletReasonType.reseller_purchase]: REASON_LABEL_KEY.reseller_purchase,
 };
 
 /** The declaration order, which is the order a filter is answered in. */

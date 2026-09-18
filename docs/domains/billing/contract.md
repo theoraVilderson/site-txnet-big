@@ -160,14 +160,14 @@ numbers are `gateway-pricing.golden.json` (F-0611).
 
 ## Wallet ledger (built — F-092-b)
 
-`WalletLedgerService.credit(tx, entry)` / `.debit(tx, entry)` in
-`billing-service/src/app/wallet/wallet-ledger.service.ts`; the gift box calls it
-(F-092-m), a fully discounted top-up (F-092-i), and the gateway callback that
-settles every other one (F-092-j).
+`WalletLedgerService.credit(tx, entry)` / `.debit(tx, entry)` in shared-core
+`lib/billing/wallet-ledger.ts` (ADR-0061; billing's old path re-exports it); the gift box
+(F-092-m), a fully discounted top-up (F-092-i), the gateway callback (F-092-j), and
+`tenant-service`'s reseller purchase (F-019-h, `reseller_purchase`) call it.
 
 | Rule | Why |
 |---|---|
-| Takes the caller's `tx`, which must come from `tenantTransaction(prisma, fn)`; `walletTransaction` is a registered model, so any other transaction is refused | the balance and the reason it moved commit together (`tenant-context` rule 5) |
+| Takes the caller's `tx`, which must come from `tenantTransaction(prisma, fn)`; `walletTransaction` is a registered model, so any other transaction is refused — except a cross-tenant pool's, whose caller names `entry.tenantId` | the balance and the reason it moved commit together (`tenant-context` rule 5) |
 | `entry.userId` must come from a tenant-scoped source — `X-User-Id`, or a row read under the scope | `wallet` has no `tenantId`; the ledger row is stamped with the tenant in scope |
 | `amount` is base currency, `> 0`, at most 2 decimal places; anything else is `InvalidLedgerAmount`, never rounded | invariant 2; `Decimal(18, 2)` would round the amount but not `balanceAfter` |
 | `cachedBalance` is updated with `where { id, version }` **before** the row is appended; `count = 0` is `WalletVersionConflict` | invariants 1, 4 — a loser appends nothing |

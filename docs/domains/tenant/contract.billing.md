@@ -2,8 +2,8 @@
 id: tenant
 layer: domain
 status: active
-version: 11
-updated: 2026-09-17
+version: 12
+updated: 2026-09-18
 ---
 
 # Contract — tenant / the billing wallet
@@ -34,7 +34,9 @@ of `tenant_billing_wallet.cachedBalance` (invariant 3). The same shape as
 | **Every credit writes a `tenant.billing.credited` outbox row** (`{tenantId, transactionId, balanceAfter}`) in the caller's `tx` | an unpaid renewal is charged as soon as money lands, whichever writer credited it (F-019-c) |
 
 `reasonType` in use: `admin_manual_adjust` (F-019-a), `topup_payment` (F-019-b),
-`subscription_charge` (F-019-c). `metered_usage_charge` and
+`subscription_charge` (F-019-c), `reseller_purchase` (F-019-h: the buyer's
+payment for the first period, credited and charged in the purchase's
+transaction, `contract.admin.md`). `metered_usage_charge` and
 `sms_usage_charge` stay in the enum unused (D-41: no metering).
 
 ## Manual adjustment — the HTTP surface

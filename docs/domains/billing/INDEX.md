@@ -6,6 +6,7 @@ version: 17
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
+  - txnet-backend/shared-core/src/lib/billing/**
   - txnet-backend/billing-service/src/app/payment/**
   - txnet-backend/billing-service/src/app/request/**
   - txnet-backend/billing-service/src/app/prisma/**

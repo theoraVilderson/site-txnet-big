@@ -494,7 +494,8 @@
       "affiliate_commission": "پورسانت همکاری",
       "sub_account_charge": "شارژ زیرمجموعه",
       "wallet_transfer_in": "انتقال دریافتی",
-      "wallet_transfer_out": "انتقال ارسالی"
+      "wallet_transfer_out": "انتقال ارسالی",
+      "reseller_purchase": "خرید نمایندگی"
     },
     "status": {
       "pending": "در انتظار",
@@ -1344,7 +1345,8 @@
     "reason": {
       "topup_payment": "شارژ آنلاین",
       "admin_manual_adjust": "اصلاح توسط پلتفرم",
-      "subscription_charge": "تمدید اشتراک"
+      "subscription_charge": "تمدید اشتراک",
+      "reseller_purchase": "خرید پکیج (دوره اول)"
     },
     "topup": "افزایش موجودی",
     "topupPage": {
