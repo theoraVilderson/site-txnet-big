@@ -121,7 +121,7 @@ Postgres and Redis (`fileParallelism: false`).
 vitest transpiles through SWC (`txnet-backend/vitest.shared.mts`) and does
 **not** type-check. SWC rather than vite's default transformer, because Nest's
 injection needs `emitDecoratorMetadata`. The type check is not gone, it moved —
-**`npm run typecheck`**, once, before an item is declared done (`AGENTS.md`).
+**`npm run typecheck:affected`**, once, before an item is declared done (`AGENTS.md`).
 
 That script (`txnet-backend/scripts/typecheck.sh`) runs `tsc --noEmit` over
 every `tsconfig.{app,lib,spec}.json` it can glob — 16 of them, eight at a time,
@@ -132,14 +132,17 @@ statically `import` and nothing else, so **no project sees the workspace**.
 
 While iterating, check the one project you are editing —
 `npx tsc -p billing-service/tsconfig.app.json --noEmit`, ~20s — and run the
-whole thing at the end. A dynamic `import()` with a computed path is invisible
+affected projects at the end (`--affected`: the projects Nx's import graph says
+the change reaches). A dynamic `import()` with a computed path is invisible
 to all of it: that is why `billing-service` shipped two type errors in a
 controller no spec imported.
 
-**The two end-of-item commands run in parallel, and only those two.** `npm test`
-and `npm run typecheck` cost ~80s and ~120s; one is vitest and one is `tsc`, so
-together they are **132s** measured, against ~200s in sequence (`AGENTS.md` has the exact line,
-including the shell trap in it). Adding `site-pwa`'s vitest to that pair is where
+**The two end-of-item commands run in parallel, and only those two:**
+`npm run test:affected` and `npm run typecheck:affected` (user, 2026-09-18). One
+is vitest and one is `tsc`. For a change inside one service they are **60s**
+measured, against ~180s for the whole workspace (`npm test` + `npm run
+typecheck`, kept for a change the graph cannot see). `AGENTS.md` has the exact
+line, including the shell trap in it. Adding `site-pwa`'s vitest to that pair is where
 it stops working: ~130 files then fail that pass on their own, which is this
 section's own contention warning arriving as something that looks like a
 regression. One suite at a time per runner.
@@ -180,7 +183,7 @@ project you were editing, which is exactly why narrowing misses them.
 file and *then* filters, so `-t Foo` costs a full run. Narrow by **path, inside
 one project**: `npx vitest run -c billing-service/vitest.config.mts <path>` is
 ~10s for one unit's folder. Run the paths you touched while iterating, and
-`npm test` once at the end.
+`npm run test:affected` once at the end.
 
 **Narrow the e2e run the same way — by path, to the files the change can
 reach.** `npm run test:e2e` is ~250s: ~31s of Docker start-up, then six files

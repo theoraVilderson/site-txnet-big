@@ -352,52 +352,48 @@ python3 tools/contracts.py
 ```
 
 All six must pass. For a change that touched TypeScript, so must these two,
-from `txnet-backend/`:
+from `txnet-backend/` — **over the projects the change reaches, not the whole
+workspace** (user, 2026-09-18):
 
 ```bash
-npm test          # nx run-many -t test — all 7 unit projects, ~80s
-npm run typecheck # tsc --noEmit over all 16 tsconfigs, ~2m
+npm run test:affected      # nx affected -t test — only the projects Nx says the change reaches
+npm run typecheck:affected # tsc --noEmit over only those projects' tsconfigs
 ```
 
-**Start those two together — they are ~80s and ~120s, and one is vitest while
-the other is `tsc`. Measured 2026-09-12: **132s** for the pair, both fully
-green, against ~200s one after the other.**
+**Start those two together.** One is vitest, the other `tsc`, so they do not
+compete. Measured 2026-09-18 on a change inside `tenant-service`: **60s** for the
+pair, one project's 148 tests and 2 tsconfigs, against ~180s for the whole
+workspace.
 
 ```bash
-cd txnet-backend && { npm test > /tmp/test.log 2>&1 & \
-                      npm run typecheck > /tmp/tc.log 2>&1 & wait; }
+cd txnet-backend && { npm run test:affected > /tmp/test.log 2>&1 & \
+                      npm run typecheck:affected > /tmp/tc.log 2>&1 & wait; }
 ```
 
 Note the braces. `cd X && (A) & (B) &` binds the `cd` to the **first** subshell
 only, and the second command then runs in the wrong directory and reports
 `Missing script` — which reads exactly like a repo problem and is not one.
 
-**Spend 50 seconds before that pair, not 180 after it.** Narrowing while
-iterating only covers the project you are editing, so a shared file's blast
-radius arrives in the end-of-item run — and a failed pair costs ~180s to learn
-one thing. `grep -rln "toMatchSnapshot"` over the directories your change
-reaches is **0.01s** and names every other project that enumerates what you
-touched; running those specs and one `tsc -p <project>/tsconfig.spec.json` is
-~40s. Measured 2026-09-12 (F-0606-a: one key added to `shared-core`, two red
-snapshots in two projects that were never edited, plus a type error in the new
-spec — all three found by the wasted pair). The table is in
-`docs/CODE-LAYOUT.md` "Running them without burning the session".
+**The set is computed, not chosen.** Nx reads the import graph from every change
+since `HEAD` (uncommitted and untracked included; `BASE=<ref>` to widen). A
+change inside one service runs that service. A change to `shared-core`, the
+Prisma schema or the root `package.json` runs every project, because every
+project depends on them. That is how the old failure is still caught: a
+`shared-core` bucket added without its snapshot updated in another project
+(F-0606-a, 2026-09-12). What hand-narrowing missed on 2026-09-12 — 49 spec
+files and two type errors in a controller no spec imported — was a person
+picking the set. Do not replace these commands with a project you picked
+yourself.
+
+**Run the whole pair (`npm test`, `npm run typecheck`) only when the graph cannot
+see the change**: a dynamic `import()` with a computed path, a file outside
+every project, or a change to `nx.json` / the vitest or tsconfig bases.
 
 **Do not add a third suite to that pair.** `site-pwa`'s vitest alongside the
-workspace's seven projects oversubscribes the machine: ~130 files fail that pass
-on their own, arriving as a wall of red that looks like a real regression. It is
+workspace's projects oversubscribes the machine: ~130 files fail that pass on
+their own, arriving as a wall of red that looks like a real regression. It is
 the contention `docs/CODE-LAYOUT.md` warns about for the integration tier, and
 the cheap way to tell the two apart is to re-run the suite on its own.
-
-**Run both whole; do not substitute one project for the workspace.** vitest
-transpiles through SWC without type-checking (`docs/CODE-LAYOUT.md`), so
-`typecheck` is the only thing that checks types at all — and a
-`tsconfig.spec.json` sees its spec files plus what they statically `import`,
-nothing more. Until 2026-09-12 this line named one project's tsconfig and `npm
-test` ran one project's specs; between them they missed 49 spec files and two
-type errors that broke `billing-service`'s build. Narrow **while iterating** by
-all means (`docs/CODE-LAYOUT.md` says how) — just not for the run that says
-done.
 
 `done` in the backlog means **code exists and is
 reachable** — not documented, not planned. Half-finished work stays `doing`

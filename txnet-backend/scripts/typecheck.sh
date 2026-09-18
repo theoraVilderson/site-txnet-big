@@ -20,6 +20,12 @@
 # e2e tier still runs only when asked (`AGENTS.md`), and its specs are code that
 # rots like any other.
 #
+# `--affected` narrows it to the projects Nx says the change reaches (changes
+# since `$BASE`, default `HEAD`, including uncommitted and untracked files):
+# a change inside one service checks that service; a change to `shared-core`
+# still checks everyone, because everyone imports it. This is the default
+# check (user, 2026-09-18) — the whole run is for when the graph is in doubt.
+#
 # Run in parallel, because serially this is five minutes and a five-minute gate
 # is one that gets skipped. Each run's output is captured and replayed whole
 # afterwards, so parallelism never interleaves two compilers' errors into
@@ -37,6 +43,20 @@ mapfile -t CONFIGS < <(printf '%s\n' */tsconfig.app.json */tsconfig.lib.json */t
 if [ ${#CONFIGS[@]} -eq 0 ]; then
   echo "typecheck: no tsconfig found — is this the workspace root?" >&2
   exit 1
+fi
+
+if [ "${1:-}" = "--affected" ]; then
+  # `nx show projects` answers a JSON array when not on a terminal; a project's name is its directory.
+  AFFECTED=" $(node_modules/.bin/nx show projects --affected --base="${BASE:-HEAD}" --json | tr -d '[]"' | tr ',' ' ') "
+  KEPT=()
+  for config in "${CONFIGS[@]}"; do
+    [[ "$AFFECTED" == *" ${config%%/*} "* ]] && KEPT+=("$config")
+  done
+  CONFIGS=("${KEPT[@]}")
+  if [ ${#CONFIGS[@]} -eq 0 ]; then
+    echo "type-check: no project affected since ${BASE:-HEAD}"
+    exit 0
+  fi
 fi
 
 printf 'type-checking %d project(s), %s at a time\n' "${#CONFIGS[@]}" "$JOBS"
