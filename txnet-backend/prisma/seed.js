@@ -166,6 +166,9 @@ const SEEDED_SCHEDULES = [
   // period is ever charged and an unpaid reseller is never suspended. A credit
   // renews its payer at once through the outbox; this is the sweep behind it.
   { key: 'tenant_subscription_renewal', scheduleType: 'cron_expression', cronExpression: '*/5 * * * *' },
+  // Custom-domain verification (F-018-i): unscheduled, no custom domain ever
+  // becomes `verified` and a lost record never stops routing. An idle run is one query.
+  { key: 'tenant_domain_verification', scheduleType: 'cron_expression', cronExpression: '*/5 * * * *' },
 ];
 
 async function seedWorkerSchedules(adminId) {

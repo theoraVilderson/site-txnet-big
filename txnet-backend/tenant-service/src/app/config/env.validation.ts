@@ -38,6 +38,17 @@ export const envSchema = z.object({
    */
   DOMAIN_NAME: z.string().min(1, 'DOMAIN_NAME is required'),
 
+  /**
+   * Custom-domain proof (F-018-i, catalog 13.2): how long a `verifying` domain
+   * is retried before it is `failed`; how often a `verified` one's TXT record
+   * is re-checked; how long a missing record keeps routing before the domain
+   * drops to `pending`; and the ceiling on one http/https probe.
+   */
+  DOMAIN_VERIFY_WINDOW_HOURS: z.coerce.number().positive().default(72),
+  DOMAIN_REVALIDATE_EVERY_HOURS: z.coerce.number().positive().default(6),
+  DOMAIN_REVALIDATION_GRACE_HOURS: z.coerce.number().positive().default(72),
+  DOMAIN_PROBE_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+
   /** The panel's origin, for CORS with credentials; required in production (`main.ts`). */
   FRONTEND_ORIGIN: z.string().default(''),
 

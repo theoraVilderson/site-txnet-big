@@ -1,0 +1,92 @@
+---
+id: tenant
+layer: domain
+status: active
+version: 1
+updated: 2026-09-18
+---
+
+# Contract — tenant / custom domains
+
+A topic file of `contract.md` (§10). A reseller adds a custom domain and
+proves it (F-018-i, catalog 13.2 steps 1-3 and 6). Code:
+`txnet-backend/tenant-service/src/app/domains/`. Roles (`primary` / `standby`),
+the `/sub` domain, TLS and the CDN setup are other ids of area 13, not here.
+
+## The routes
+
+| Route | Who | Answer |
+|---|---|---|
+| `POST /api/tenants/:id/domains` `{domainValue, purpose?}` | the reseller's owner, or platform staff with `tenant.manage` | `201` the domain, `pending`, with its TXT record and CNAME target |
+| `GET /api/tenants/:id/domains` | same | the reseller's custom domains, each with its last check |
+| `POST /api/tenants/:id/domains/:domainId/check` | same | `pending` / `failed` -> `verifying`; any other status is returned as is |
+| `POST /api/internal/tenant-domains/check-due` | `worker-service` (`ServiceOnlyGuard`) | `{due, verified, waiting, failed, revalidated, revalidating, dropped, errors}` |
+| `GET /api/tenant-domain-probe?n=<hex nonce>` | public, no `my-auth` (Traefik priority 130) | `{host, nonce}` on a host with a `tenant_domain` row; the neutral 404 elsewhere (F-1210) |
+
+The domain view: `{id, domainValue, purpose, status, record: {type: 'TXT',
+name, value}, cnameTarget, verifiedAt, lastCheckedAt, lastCheck}`.
+`record.name` is `_domain-verification.<host>` — a neutral label, since a
+reseller's DNS zone is public and must not name the platform (catalog 13.4).
+`cnameTarget` is the reseller's own `<slug>.edge.<domain>` (ADR-0060 (6)).
+
+Refusals: `not_allowed` 403 (neither the owner nor staff — including when the
+reseller does not exist, which only staff learn: `reseller_not_found` 404),
+`domain_not_found` 404, `reseller_terminated` / `domain_taken` /
+`domain_reserved` (a host inside `$DOMAIN_NAME`) 409. A host with a port, an IP
+or one label is a 400 at the schema.
+
+## The states
+
+| status (view) | stored as | routes? | leaves by |
+|---|---|---|---|
+| `pending` | `pending` | no | the tenant asks for a check |
+| `verifying` | `verifying` | no | a passing check -> `verified`; `DOMAIN_VERIFY_WINDOW_HOURS` (72) after the request -> `failed` |
+| `verified` | `verified` | **yes** | a re-validation missing the TXT record -> `revalidating` |
+| `revalidating` | `verified` + `revalidatingSince` | **yes** | the record back -> `verified`; `DOMAIN_REVALIDATION_GRACE_HOURS` (72) -> `pending`, token kept |
+| `failed` | `failed` | no | the tenant asks for a check again |
+
+**`revalidating` is a column, not a status**, so every routing reader —
+`auth-service`'s resolver, `billing-service`'s callback and return address —
+keeps checking `verified` alone, and a new reader cannot forget a second value.
+
+## What a check is
+
+A `verifying` domain passes when all four lines pass; each line stores what it
+expected and what it found (catalog 13.2 step 3 — the support ticket this row
+exists to prevent):
+
+| line | expected | passes when |
+|---|---|---|
+| `txt` | `_domain-verification.<host> TXT <token>` | the token is among the TXT strings there |
+| `cname` | `<slug>.edge.<domain>` | the CNAME names **no other** reseller's target. A CDN in front answers DNS with its own name; the target is then its origin, visible only to the probe lines |
+| `http`, `https` | `200 as <host> or <target>` | the platform answered the probe with the nonce this check sent (redirects followed), and the request arrived as the domain or the reseller's own target — never another reseller's, which would serve that reseller's panel here |
+
+A `verified` domain is re-validated on its **TXT record only**, every
+`DOMAIN_REVALIDATE_EVERY_HOURS` (6), and every tick while `revalidating`:
+catalog 13.2 step 6 is about a lost record, and a CDN outage is not one. A DNS
+lookup that errors (not "no record") is a sweep `error` and changes nothing.
+
+## Rules
+
+1. **Only `verified` routes** (invariant 5). A new custom domain, a
+   `verifying` one and a `failed` one resolve as unknown hosts.
+2. **A change of what routes deletes `tenant:host:<host>` in its own
+   transaction** — `verified`, the drop to `pending`, and adding a domain (a
+   cached *no tenant* goes with it). A Redis that cannot be reached rolls the
+   change back and the sweep counts an `error`.
+3. **Proven first wins.** A host held as a `subdomain`, or `verified` by any
+   tenant, is `domain_taken`. Another tenant's unproven claim (`pending`,
+   `verifying`, `failed`) is replaced by the new one, with a new token — a
+   squatter cannot hold a domain by never proving it.
+4. **A sweep write is guarded on the status it read.** A row claimed or
+   re-requested meanwhile is left alone, so two sweeps are safe.
+5. **The platform never registers, buys or controls a tenant's DNS** (catalog
+   13.2). It only reads public DNS and requests the domain from outside.
+
+## Consumers
+
+| Consumer | Uses |
+|---|---|
+| `automation` (`tenant_domain_verification` job, seeded `*/5`) | `check-due` |
+| panel-web | none yet — the onboarding console is F-018-l |
+| `auth-api` resolver, `billing` callback / return address | read `verified` only; unchanged |

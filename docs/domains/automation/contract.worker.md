@@ -72,6 +72,7 @@ Why each of those is the answer — and what a Redis that cannot be reached does
 | `notification_campaign_fan_out` | writes recipient rows for started campaigns in resumable batches (F-035-d, `domains/notification/contract.md` "Sending") | `NOTIFICATION_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 | `notification_campaign_delivery` | sends claimed queued recipients through their tenant's Telegram/Bale bot; `stalled` rows are its errors (F-035-e, same contract, "Delivering") | the same two |
 | `tenant_subscription_renewal` | renews due reseller subscriptions from their billing wallet, warns or suspends the unpaid; a platform tick, seeded `*/5`; `failed` renewals are its errors (F-019-c, `domains/tenant/contract.billing.md`) | `TENANT_API_BASE_URL` + `SERVICE_AUTH_TOKEN` (F-018-v) |
+| `tenant_domain_verification` | proves `verifying` custom domains and re-validates `verified` ones' TXT records; a platform tick, seeded `*/5`; a domain whose check threw is an error (F-018-i, `domains/tenant/contract.domains.md`) | `TENANT_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 
 The retention job is the first job that does real work, and what it settled is
 how a job reaches code it cannot import.

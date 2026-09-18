@@ -8,7 +8,7 @@ updated: 2026-09-18
 # Invariants — tenant
 
 Rows 1-7 were extracted from schema comments during onboarding; of them only 3
-is enforced (F-019-a), with 14-15 beside it. **Rows 8-13 are** — 8-12 are the Credential Vault's
+(F-019-a) and 5 (F-018-i) are enforced, with 14-15 beside it. **Rows 8-13 are** — 8-12 are the Credential Vault's
 (F-066-f and F-066-g, ADR-0026) and 13 is Row-Level Security (F-066-m-a,
 completed by F-066-m-b). The
 `Enforced by` column names what holds each one; row 13 is the first whose
@@ -20,7 +20,7 @@ enforcer is not application code at all.
 | 2 | Tenant end-user money never enters a platform wallet; there is no platform->tenant settlement wallet (ADR-0006) | design / absence of such a table | platform becomes a money transmitter |
 | 3 | `tenant_billing_wallet` balance is never written directly — only via append-only `tenant_billing_transaction` + `balanceAfter` (ADR-0002) | `TenantBillingLedger` (shared-core) — the only writer of `cachedBalance`, under its `version` (F-019-a) | silent money drift |
 | 4 | Encrypted credential fields (`merchantIdEncrypted`, `apiKeyEncrypted`, `ownApiKeyEncrypted`) are never default-selected or logged | planned service `select`/`omit` | tenant gateway/bot takeover |
-| 5 | A `custom_domain` only routes after `verificationStatus = verified` | planned domain-verifier worker | domain hijack / cert misissue |
+| 5 | A `custom_domain` only routes after `verificationStatus = verified` — and becomes `verified` only when its TXT record holds its token, its CNAME names no other reseller's target, and an http and an https request reach the platform through it ([contract.domains.md](contract.domains.md)) | `TenantResolverService` routes `verified` only; `TenantDomainService` is the only writer of `verified`, and drops a lost record to `pending` after the grace (F-018-i) | domain hijack / cert misissue |
 | 6 | A feature runs for a tenant only if `tenant_feature_entitlement.isEnabled` (and not expired) for that `featureKey` | planned central guard | unpaid feature usage |
 | 7 | `tenant_usage_meter` rows are billed exactly once (`isBilled` + `billedTransactionId`) | planned metering worker | double / missed charges |
 | 8 | **No vault plaintext ever reaches a user-facing API response, a log line or an audit row — at any role, including the highest.** One exception, below | `CredentialVaultService`: `use()` is the only method returning one, and it takes the single credential the caller will use. Everything else returns `CredentialSummary`. `tenant_credential_access` has no column a value could be written into | one leaked response or log line is a takeover of that tenant's payment account or bot. The strongest role is the one most likely to have a debugging surface pointed at it |
@@ -39,6 +39,8 @@ enforcer is not application code at all.
 
 ## How to test
 
+Row 5: `tenant-service` `domains/tenant-domain.spec.ts` (the four check lines, the window, the grace, the host entry retracted inside the transaction, proven first wins, who may call).
+
 Row 19: `tenant-service` `renewal/tenant-renewal.spec.ts` (paid, grace, suspension, a manual suspension kept, lock order, the period arithmetic). The `package_price_in_use` guard: `tenant/packages/tenant-package.spec.ts`.
 
 Rows 17-18: `tenant/status/tenant-status.spec.ts` (the matrix, the guard's default and missing key, the transaction, the listener's key). Row 18's trigger: the migration's dry-run; no int spec.
@@ -49,7 +51,7 @@ Rows 3, 14, 15 and the owner-only surface: `billing-service/src/app/tenant-billi
 (version race, below-zero debit, repeated request, non-owner never on the
 cross-tenant pool). The CHECKs and the index are the migration's; no int spec.
 
-Rows 1-2, 4-7: to be written when the service exists. Minimum: a test that a second
+Rows 1-2, 4, 6-7: to be written when the service exists. Minimum: a test that a second
 `platform_owner` insert fails, and that the entitlement guard denies a disabled
 feature key.
 

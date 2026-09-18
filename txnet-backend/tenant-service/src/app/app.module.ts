@@ -4,6 +4,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { RateLimitGuard, TenantStatusGuard } from '@txnet-backend/shared-core';
 
 import { envConfigOptions } from './config/env.validation';
+import { DomainsModule } from './domains/domains.module';
+import { PROBE_PATH } from './domains/domain-check';
 import { HealthController } from './health.controller';
 import { LanguageMiddleware } from './locale/language.middleware';
 import { LocaleModule } from './locale/locale.module';
@@ -22,7 +24,7 @@ const INTERNAL_ROUTES = 'internal/*';
  * `tenant-service` (F-018-t, ADR-0058): tenant administration, out of
  * `auth-service`. Packages arrived with F-018-u, subscription, grace and
  * renewal with F-018-v, status with F-018-w, the resellers themselves with
- * F-018-y.
+ * F-018-y, their custom domains with F-018-i.
  */
 @Module({
   imports: [
@@ -34,6 +36,7 @@ const INTERNAL_ROUTES = 'internal/*';
     SubscriptionModule,
     StatusModule,
     ResellersModule,
+    DomainsModule,
   ],
   controllers: [HealthController],
   providers: [
@@ -48,11 +51,12 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     // Language first, so the 401 IdentityMiddleware throws is translated.
     consumer.apply(LanguageMiddleware).forRoutes('*');
-    // Every route but the health check and the internal seam needs the gate's
+    // Every route but the health check, the internal seam and the domain
+    // probe (public: the sweep's own request, F-018-i) needs the gate's
     // identity — a moved controller is covered without opting in.
     consumer
       .apply(IdentityMiddleware)
-      .exclude('health', INTERNAL_ROUTES)
+      .exclude('health', INTERNAL_ROUTES, PROBE_PATH)
       .forRoutes('*');
   }
 }

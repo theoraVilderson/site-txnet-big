@@ -1,7 +1,7 @@
 ---
 id: tenant
 layer: domain
-updated: 2026-09-17
+updated: 2026-09-18
 ---
 
 # Data model — tenant
@@ -14,7 +14,7 @@ Source of truth: `txnet-backend/prisma/domains/tenant.prisma` (Postgres schema
 |---|---|---|---|
 | tenant | reseller/platform-owner record; `status`, and `suspendedAt` / `graceEndsAt` / `suspensionCause` (`manual` \| `non_payment`) while suspended (F-018-f, F-019-c) | self | soft-delete |
 | tenant_branding | logo, colours, support contacts, default language | yes | with tenant (cascade) |
-| tenant_domain | subdomain / custom domain + verification | yes | with tenant |
+| tenant_domain | subdomain / custom domain; `verificationStatus` (`pending` \| `verifying` \| `verified` \| `failed`), `verificationToken`, `statusChangedAt`, `lastCheckedAt` / `lastCheck` (what was expected and found), `lastRevalidatedAt`, `revalidatingSince` (F-018-i, [contract.domains.md](contract.domains.md)) | yes | with tenant |
 | tenant_feature_package | plans the platform sells to resellers: unique `name`, `monthlyPrice` / `yearlyPrice` (CHECK: positive, at least one), `includedFeatureKeys`, `isActive`; no RLS (F-018-d) | no (catalog of packages) | permanent, deactivated not deleted |
 | tenant_subscription | one per reseller: `packageId` (RESTRICT), `currentPeriodEnd`, `renewalWarnedAt` (last unpaid-renewal warning, F-019-c), `graceUntil` (the platform owner's extra time to pay, F-019-g); the period is `tenant.billingModel` (F-018-e) | yes | with tenant |
 | tenant_subscription_setting | the platform's one row (`id = 1` CHECK): `trialDays` 0..365, default 14; `suspensionHoldDays` 0..90, default 7 (F-018-f); `renewalGraceDays` 0..30, default 3 (F-019-c); no RLS (F-018-e) | no | permanent |
@@ -60,6 +60,9 @@ and the `tenant_status_changed` NOTIFY trigger on `tenant.tenant`.
 `20260917001600_tenant_subscription_renewal` (F-019-c) adds `TenantSuspensionCause` and `tenant.suspensionCause`
 (existing suspensions become `manual`), `tenant_subscription.renewalWarnedAt`, and
 `renewalGraceDays` with its CHECK.
+
+`20260918000100_tenant_domain_verification` (F-018-i) adds the status `verifying` and the five check columns of
+`tenant_domain`.
 
 `20260917001100_tenant_create` (F-018-c) adds the audit values `tenant_create` /
 `tenant` and the `tenant.manage` permission — no tenant table changes.

@@ -62,6 +62,9 @@ enum TenantDomainPurpose {
 
 enum DomainVerificationStatus {
   pending
+  /// The tenant says its TXT record is in place; the sweep checks it until it
+  /// passes or the window closes (F-018-i). Does not route.
+  verifying
   verified
   failed
 
@@ -204,6 +207,17 @@ model TenantDomain {
   verificationToken  String? // برای رکورد TXT اثبات مالکیت
   verifiedAt         DateTime?
   arvanRegisteredAt  DateTime? // فیلد پیشنهادی بخش ح-۱: زمان ثبت در آروان‌کلاد
+  /// When `verificationStatus` last changed: where a `verifying` window starts (F-018-i).
+  statusChangedAt    DateTime?
+  /// The last check of a custom domain, and what it expected and found (`DomainCheck`).
+  lastCheckedAt      DateTime?
+  lastCheck          Json?
+  /// The last re-validation that found the TXT record (catalog 13.2 step 6).
+  lastRevalidatedAt  DateTime?
+  /// Set while a `verified` domain's record is missing: still routed until the
+  /// grace ends, then `pending`. The catalog's `revalidating` is this, not a status,
+  /// so every routing reader keeps checking `verified` alone.
+  revalidatingSince  DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 

@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-version: 18
+version: 19
 updated: 2026-09-18
 ---
 
@@ -31,7 +31,7 @@ the rest are `reseller`. The platform bills tenants from a prepaid wallet
 | **put a reseller on a package and period** — implemented, [contract.admin.md](contract.admin.md) | tenantId, packageId, billingModel | subscription view; `package_included` entitlements replaced | sync tx | `reseller_not_found` / `reseller_terminated` / `package_not_found` / `package_inactive` / `package_not_sold_for_period` |
 | **suspend / reactivate / terminate a reseller; what each status allows** — implemented, [contract.admin.md](contract.admin.md), [rules.md](rules.md) | tenantId, status, reason | status view; Redis `tenant:status:<id>` rewritten; `TenantStatusGuard` (shared-core) refuses per capability | sync tx | `reseller_not_found` / `reseller_terminated` / `status_unchanged`; `403 tenant.suspended` / `tenant.terminated` |
 | check entitlement | tenantId, featureKey | allowed / denied (+ source, expiry) | sync | — |
-| verify custom domain | tenantId, domainValue | verification status | async (DNS TXT / ArvanCloud) | token mismatch |
+| **add and prove a custom domain** — implemented, [contract.domains.md](contract.domains.md) | tenantId, domainValue, purpose | domain view with TXT record, CNAME target, last check | sync add; async check (worker sweep) | `not_allowed` / `domain_taken` / `domain_reserved` |
 | **credit / debit the billing wallet** — implemented, [contract.billing.md](contract.billing.md) | tenantId, reason, amount, reference | `tenant_billing_transaction` (append-only); a credit also writes `tenant.billing.credited` | sync tx | insufficient / duplicate / version conflict |
 | **renew a reseller's subscription** — implemented, [contract.billing.md](contract.billing.md), [rules.md](rules.md) #10-#13 | tenantId, or every due one | charged + period moved on, or warned, or suspended as `non_payment`; outbox notices | async (worker sweep + `tenant.billing.credited`) | a failing tenant is `failed` in the sweep |
 | meter usage | tenantId, meterKey, quantity, period | `tenant_usage_meter` row | async (worker) | — |
@@ -137,7 +137,7 @@ it failed to retract.
 **The first caller is reseller creation** (F-018-c, `contract.admin.md`), which
 retracts the new subdomain inside its transaction — from `tenant-service` since
 F-018-y, by deleting `tenant:host:<host>` directly. `prisma/seed.js` and the e2e
-harness still write rows directly; the obligation stays on F-018-i, F-102 and F-113.
+harness still write rows directly. F-018-i's domain proof is the second (`contract.domains.md`); F-102 and F-113 inherit it.
 
 **A request from another service has no host worth resolving, so it names its
 tenant instead.** `bot-service` calls this API at `http://auth-service:3001` —
