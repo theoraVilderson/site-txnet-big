@@ -14,8 +14,9 @@ return current
 `;
 
 /**
- * `tenant-service`'s Redis: the rate limiter's counters and the tenant status key, nothing
- * else (F-092-r, D-24, F-018-p). Under the platform's one keyspace prefix, so a
+ * `tenant-service`'s Redis: the rate limiter's counters, the tenant status key,
+ * and deleting a new reseller's `tenant:host:*` entry (F-092-r, D-24, F-018-p,
+ * F-018-y) — nothing else. Under the platform's one keyspace prefix, so a
  * `REDIS_KEYSPACE_VERSION` bump abandons these keys with every other
  * (ADR-0005). Keys are built by `shared-core`'s `RateLimiter`, never here
  * (C-03).

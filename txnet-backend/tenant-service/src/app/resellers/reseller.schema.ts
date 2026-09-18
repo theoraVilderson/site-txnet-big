@@ -1,13 +1,12 @@
 import { TenantBillingModel } from '@prisma/client';
 import { z } from 'zod';
-import { phoneSchema } from '../../common/validation/phone.schema';
-import { strongPasswordSchema } from '../../common/validation/strong-password.schema';
 
 /**
- * The wire shape of creating a reseller (F-018-c).
+ * The wire shape of creating a reseller (F-018-c, owner by id since F-018-y).
  *
  * `.strict()`: an unknown key is refused, not dropped — `status` and
- * `tenantType` are the service's to set, never the caller's.
+ * `tenantType` are the service's to set, never the caller's, and the owner is
+ * named by id: this service never creates a user (ADR-0058 (4)).
  */
 
 /** One DNS label, lower case: the slug is the platform-issued subdomain `<slug>.$DOMAIN_NAME`. */
@@ -30,14 +29,8 @@ export const createResellerSchema = z
       .regex(DNS_LABEL, { message: 'slug must be a lower-case DNS label' })
       .refine((s) => !(RESERVED_SLUGS as readonly string[]).includes(s), { message: 'slug is reserved' }),
     billingModel: z.enum(BILLING_MODELS),
-    owner: z
-      .object({
-        fullName: z.string().trim().min(1).max(120),
-        username: z.string().trim().min(3).max(64),
-        phoneNumber: phoneSchema,
-        password: strongPasswordSchema,
-      })
-      .strict(),
+    /** An existing user of the platform owner's tenant — the person who bought, or is given, the reseller. */
+    ownerUserId: z.string().uuid(),
   })
   .strict();
 

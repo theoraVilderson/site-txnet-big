@@ -1125,6 +1125,8 @@ services:
       - NODE_ENV=${NODE_ENV:-development}
       - GLOBAL_PREFIX=${TENANT_GLOBAL_PREFIX:-api}
       - PUBLIC_HOST=tenant-service
+      # A new reseller's host is `<slug>.${DOMAIN_NAME}` (F-018-y).
+      - DOMAIN_NAME=${DOMAIN_NAME}
       - FRONTEND_ORIGIN=https://panel.${DOMAIN_NAME}
       # `worker-service`'s renewal reaches `/api/internal/*` once F-018-v moves
       # it here; Traefik does not route it. Refused empty in production.

@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -9,36 +8,43 @@ import {
   TenantDomainType,
   TenantStatus,
   TenantType,
+  UserStatus,
 } from '@prisma/client';
-import * as argon2 from 'argon2';
-import { assertPasswordNotContainingProfile } from '../../common/validation/strong-password.schema';
-import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
-import { PrismaService } from '../../prisma/prisma.service';
-import { TenantCacheService } from '../tenant-cache.service';
-import type { CreateResellerInput, ListResellersInput } from './tenant-admin.schema';
+import { UnscopedRedisKeys } from '@txnet-backend/shared-core';
+
+import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
+import type { CreateResellerInput, ListResellersInput } from './reseller.schema';
 
 /**
- * The platform owner creates, lists and reads resellers (F-018-c).
+ * The platform owner creates, lists and reads resellers (F-018-c), moved out
+ * of `auth-service` with F-018-y (ADR-0058).
+ *
+ * **A reseller names an existing user as its owner.** A person signs up on the
+ * platform's own site and becomes a reseller; they stay the platform's customer
+ * (ADR-0058 (4)). So `ownerUserId` must be a live, `active` user of the
+ * platform owner's tenant, and this service never writes `identity.user` — it
+ * would have to know how passwords are stored. The same path serves a
+ * hand-made reseller and F-019-h's purchase.
  *
  * **Only the platform owner.** A reseller's rows are another tenant's, which
  * RLS refuses on the app pool, so the work runs on the cross-tenant pool and
  * {@link access} — on the app pool — refuses a non-owner before that pool is
- * touched (ADR-0053, the same order as `TenantBillingAdminService`).
+ * touched (ADR-0053).
  *
- * **One transaction.** The `tenant` row, its owner `user` (system role
- * `Admin` until tenant-scoped roles, F-018-n), an empty
- * `tenant_billing_wallet`, the platform-issued `subdomain` `tenant_domain`
- * and the audit row commit together. The subdomain's cached resolution is
- * retracted inside the transaction, so a Redis that cannot be reached refuses
- * the creation rather than leaving a cached *no tenant* on the new host
- * (tenant contract, ADR-0025 decision 4).
- *
- * The owner's phone is not marked verified: the platform owner types it, the
- * reseller's owner proves it on first sign-in (identity invariant 6). The
- * password is chosen by the platform owner and never echoed back.
+ * **One transaction.** The `tenant` row, an empty `tenant_billing_wallet`, the
+ * platform-issued `subdomain` `tenant_domain` and the audit row commit
+ * together. The subdomain's `tenant:host:*` entry — which carries
+ * `ownerUserId` since ADR-0059 — is deleted inside the transaction, so a Redis
+ * that cannot be reached refuses the creation rather than leaving a cached
+ * *no tenant* on the new host. Any later write of `ownerUserId` must delete the
+ * entry of every one of the tenant's hosts the same way.
  */
 
-export type TenantAdminActor = { adminId: string; tenantId: string; ip: string };
+export type ResellerActor = { adminId: string; tenantId: string; ip: string };
+
+type OwnerView = { id: string; fullName: string; username: string | null; phoneNumber: string | null };
 
 export type ResellerView = {
   id: string;
@@ -46,25 +52,24 @@ export type ResellerView = {
   status: TenantStatus;
   billingModel: string;
   createdAt: Date;
-  owner: { id: string; fullName: string; username: string | null; phoneNumber: string | null } | null;
+  owner: OwnerView | null;
   domains: { domainValue: string; domainType: TenantDomainType; purpose: TenantDomainPurpose; verificationStatus: string }[];
   billingBalance: string;
 };
 
-export type TenantAdminRejection = 'not_platform_owner' | 'slug_taken' | 'reseller_not_found';
+export type ResellerRejection = 'not_platform_owner' | 'slug_taken' | 'reseller_not_found' | 'owner_not_found' | 'owner_inactive';
 
-export class TenantAdminRefused extends Error {
+export class ResellerRefused extends Error {
   constructor(
-    readonly reason: TenantAdminRejection,
+    readonly reason: ResellerRejection,
     detail = '',
   ) {
-    super(`tenant admin refused: ${reason}${detail ? ` (${detail})` : ''}`);
-    this.name = 'TenantAdminRefused';
+    super(`reseller refused: ${reason}${detail ? ` (${detail})` : ''}`);
+    this.name = 'ResellerRefused';
   }
 }
 
-/** The system role a reseller's owner holds until roles are per tenant (F-018-n). */
-const OWNER_ROLE = 'Admin';
+const OWNER_SELECT = { id: true, fullName: true, username: true, phoneNumber: true } satisfies Prisma.UserSelect;
 
 const RESELLER_SELECT = {
   id: true,
@@ -80,54 +85,44 @@ const RESELLER_SELECT = {
 type ResellerRow = Prisma.TenantGetPayload<{ select: typeof RESELLER_SELECT }>;
 
 @Injectable()
-export class TenantAdminService {
-  private readonly logger = new Logger(TenantAdminService.name);
+export class ResellerService {
+  private readonly logger = new Logger(ResellerService.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly all: CrossTenantPrismaService,
-    private readonly cache: TenantCacheService,
+    private readonly redis: RedisService,
     private readonly config: ConfigService,
   ) {}
 
-  async create(actor: TenantAdminActor, input: CreateResellerInput): Promise<ResellerView> {
+  async create(actor: ResellerActor, input: CreateResellerInput): Promise<ResellerView> {
     await this.access(actor);
 
     const slug = input.slug;
     const domainValue = `${slug}.${this.config.get<string>('DOMAIN_NAME')}`.toLowerCase();
-    const [bySlug, byHost] = await Promise.all([
+    const [bySlug, byHost, person] = await Promise.all([
       this.all.tenant.findUnique({ where: { slug }, select: { id: true } }),
       this.all.tenantDomain.findUnique({ where: { domainValue }, select: { id: true } }),
+      // The platform owner's tenant is the caller's: `access` just proved it.
+      this.all.user.findFirst({
+        where: { id: input.ownerUserId, tenantId: actor.tenantId, deletedAt: null },
+        select: { ...OWNER_SELECT, status: true },
+      }),
     ]);
-    if (bySlug || byHost) throw new TenantAdminRefused('slug_taken', slug);
-
-    const { owner } = input;
-    assertPasswordNotContainingProfile(owner.password, owner);
-    const role = await this.all.role.findUnique({ where: { name: OWNER_ROLE }, select: { id: true } });
-    if (!role) throw new Error(`system role ${OWNER_ROLE} is missing — run the seed`);
-    const passwordHash = await argon2.hash(owner.password, { type: argon2.argon2id });
+    if (bySlug || byHost) throw new ResellerRefused('slug_taken', slug);
+    if (!person) throw new ResellerRefused('owner_not_found', input.ownerUserId);
+    if (person.status !== UserStatus.active) throw new ResellerRefused('owner_inactive', input.ownerUserId);
+    const owner: OwnerView = { id: person.id, fullName: person.fullName, username: person.username, phoneNumber: person.phoneNumber };
 
     try {
       const view = await this.all.$transaction(async (tx) => {
-        const ownerId = randomUUID();
         const tenant = await tx.tenant.create({
           data: {
             tenantType: TenantType.reseller,
-            ownerUserId: ownerId,
+            ownerUserId: owner.id,
             slug,
             status: TenantStatus.trial,
             billingModel: input.billingModel,
-          },
-        });
-        await tx.user.create({
-          data: {
-            id: ownerId,
-            tenantId: tenant.id,
-            fullName: owner.fullName,
-            username: owner.username,
-            phoneNumber: owner.phoneNumber,
-            passwordHash,
-            roleId: role.id,
           },
         });
         // Empty: no balance is written here (tenant invariant 3).
@@ -147,7 +142,7 @@ export class TenantAdminService {
           status: tenant.status,
           billingModel: tenant.billingModel,
           createdAt: tenant.createdAt,
-          owner: { id: ownerId, fullName: owner.fullName, username: owner.username, phoneNumber: owner.phoneNumber },
+          owner,
           domains: [
             {
               domainValue: domain.domainValue,
@@ -169,19 +164,20 @@ export class TenantAdminService {
             adminIpAddress: actor.ip,
           },
         });
-        await this.cache.invalidateDomain(domainValue);
+        // `auth-service`'s resolver re-reads the row; `domainValue` is already normalized (lower case, no port).
+        await this.redis.del(UnscopedRedisKeys.tenantByHost(domainValue));
         return result;
       });
-      this.logger.log(`reseller ${view.id} (${slug}) created by ${actor.adminId}`);
+      this.logger.log(`reseller ${view.id} (${slug}) created by ${actor.adminId}, owned by ${owner.id}`);
       return view;
     } catch (e) {
-      // Lost a race on `tenant.slug` or `tenant_domain.domainValue` (the owner's username is unique per tenant, and this tenant is new).
-      if ((e as { code?: string })?.code === 'P2002') throw new TenantAdminRefused('slug_taken', slug);
+      // Lost a race on `tenant.slug` or `tenant_domain.domainValue`.
+      if ((e as { code?: string })?.code === 'P2002') throw new ResellerRefused('slug_taken', slug);
       throw e;
     }
   }
 
-  async list(actor: TenantAdminActor, page: ListResellersInput): Promise<ResellerView[]> {
+  async list(actor: ResellerActor, page: ListResellersInput): Promise<ResellerView[]> {
     await this.access(actor);
     const rows = await this.all.tenant.findMany({
       where: { tenantType: TenantType.reseller, deletedAt: null },
@@ -193,29 +189,29 @@ export class TenantAdminService {
     return this.withOwners(rows);
   }
 
-  async read(actor: TenantAdminActor, id: string): Promise<ResellerView> {
+  async read(actor: ResellerActor, id: string): Promise<ResellerView> {
     await this.access(actor);
     const row = await this.all.tenant.findFirst({
       where: { id, tenantType: TenantType.reseller, deletedAt: null },
       select: RESELLER_SELECT,
     });
-    if (!row) throw new TenantAdminRefused('reseller_not_found', id);
+    if (!row) throw new ResellerRefused('reseller_not_found', id);
     const [view] = await this.withOwners([row]);
     return view;
   }
 
   /** The one owner check; a non-owner is refused before the cross-tenant pool is touched (ADR-0053). */
-  private async access(actor: TenantAdminActor): Promise<void> {
+  private async access(actor: ResellerActor): Promise<void> {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
     if (tenant?.tenantType !== TenantType.platform_owner) {
-      throw new TenantAdminRefused('not_platform_owner', 'reseller administration');
+      throw new ResellerRefused('not_platform_owner', 'reseller administration');
     }
   }
 
   private async withOwners(rows: ResellerRow[]): Promise<ResellerView[]> {
     const owners = await this.all.user.findMany({
       where: { id: { in: rows.map((r) => r.ownerUserId) } },
-      select: { id: true, fullName: true, username: true, phoneNumber: true },
+      select: OWNER_SELECT,
     });
     const byId = new Map(owners.map((o) => [o.id, o]));
     return rows.map((r) => ({

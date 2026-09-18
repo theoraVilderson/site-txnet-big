@@ -47,6 +47,7 @@ const env = {
   DATABASE_APP_URL: 'postgresql://app',
   DATABASE_CROSS_TENANT_URL: 'postgresql://cross',
   REDIS_URL: 'redis://redis:6379',
+  DOMAIN_NAME: 'txnet.app',
 };
 
 describe('AppModule', () => {
@@ -85,7 +86,7 @@ describe('envSchema', () => {
     expect(envSchema.safeParse(env).success).toBe(true);
   });
 
-  it.each(['DATABASE_APP_URL', 'DATABASE_CROSS_TENANT_URL', 'REDIS_URL'])('refuses to boot without %s', (name) => {
+  it.each(['DATABASE_APP_URL', 'DATABASE_CROSS_TENANT_URL', 'REDIS_URL', 'DOMAIN_NAME'])('refuses to boot without %s', (name) => {
     const { [name as keyof typeof env]: _missing, ...rest } = env;
     expect(envSchema.safeParse(rest).success).toBe(false);
   });

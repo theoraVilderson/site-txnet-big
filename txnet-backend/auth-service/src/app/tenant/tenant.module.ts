@@ -5,15 +5,12 @@ import { RedisService } from '../redis/redis.service';
 import { TenantCacheService } from './tenant-cache.service';
 import { TenantResolverService } from './tenant-resolver.service';
 import { TenantGuard } from './tenant.guard';
-import { TenantAdminController } from './admin/tenant-admin.controller';
-import { TenantAdminService } from './admin/tenant-admin.service';
 
 /**
- * `tenant`'s first module. Its one controller is the platform owner's reseller
- * administration (F-018-c) — the packages, the subscription, the renewal and
- * the status are `tenant-service`'s since F-018-u … F-018-w (ADR-0058), and
- * F-018-y takes the rest; the resolver is consumed by the edge middleware
- * and, from F-061-b, by `register`.
+ * Request-tenant resolution, which is authentication (ADR-0058 (2)). Tenant
+ * administration — resellers, packages, subscription, renewal, status — is
+ * `tenant-service`'s since F-018-u … F-018-y; the resolver is consumed by the
+ * edge middleware and, from F-061-b, by `register`.
  *
  * `TenantGuard` is global rather than a route decorator: a request that
  * resolves to no tenant, or whose session and surface disagree, must be
@@ -34,9 +31,7 @@ import { TenantAdminService } from './admin/tenant-admin.service';
  * here.
  */
 @Module({
-  controllers: [TenantAdminController],
   providers: [
-    TenantAdminService,
     TenantCacheService,
     TenantResolverService,
     { provide: APP_GUARD, useClass: TenantGuard },

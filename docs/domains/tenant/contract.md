@@ -135,7 +135,8 @@ caller refuses the domain change rather than completing it on top of a mapping
 it failed to retract.
 
 **The first caller is reseller creation** (F-018-c, `contract.admin.md`), which
-retracts the new subdomain inside its transaction. `prisma/seed.js` and the e2e
+retracts the new subdomain inside its transaction — from `tenant-service` since
+F-018-y, by deleting `tenant:host:<host>` directly. `prisma/seed.js` and the e2e
 harness still write rows directly; the obligation stays on F-018-i, F-102 and F-113.
 
 **A request from another service has no host worth resolving, so it names its

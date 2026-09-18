@@ -16,7 +16,7 @@ the two must say the same thing.
 `trial` -> `active` | `suspended` | `terminated`;
 `active` -> `suspended` | `terminated`; `suspended` -> `active` | `terminated`.
 `terminated` is final. Only the platform owner moves a reseller by hand
-(`PUT /api/auth/tenants/:id/status`, `contract.admin.md`); the subscription
+(`PUT /api/tenants/:id/status`, `contract.admin.md`); the subscription
 renewal moves one too (#10-#13), through the same transition. The platform
 owner's own tenant is never moved.
 

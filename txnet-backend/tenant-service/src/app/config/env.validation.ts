@@ -32,6 +32,12 @@ export const envSchema = z.object({
    */
   DATABASE_CROSS_TENANT_URL: z.string().min(1, 'DATABASE_CROSS_TENANT_URL is required'),
 
+  /**
+   * The platform's base domain: a new reseller's host is `<slug>.$DOMAIN_NAME`
+   * (F-018-y). Required — an empty one would issue a host nobody can reach.
+   */
+  DOMAIN_NAME: z.string().min(1, 'DOMAIN_NAME is required'),
+
   /** The panel's origin, for CORS with credentials; required in production (`main.ts`). */
   FRONTEND_ORIGIN: z.string().default(''),
 
