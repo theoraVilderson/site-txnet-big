@@ -17,7 +17,7 @@
  * `configuredLabels` is what keeps such a gateway off the top-up page at all
  * (F-092-u), so it must see this tenant's gateway labels and nothing else.
  *
- * The credentials are written the way `auth-service` writes them: its vault,
+ * The credentials are written the way `tenant-service` writes them: its vault,
  * on the cross-tenant pool, under the same KEK file.
  *
  *   npm run test:int

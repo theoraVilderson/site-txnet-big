@@ -23,7 +23,8 @@ const DESTROY_EXPIRED_PATH = '/api/internal/vault/destroy-expired';
  * **Why this is an HTTP call and not a method call.** The vault has been a
  * `shared-core` library since F-092-f (ADR-0039), but loading it means holding
  * the KEK and a pool that can see every tenant's credential rows — a sweep that
- * decrypts nothing needs neither. So it stays the seam: the same
+ * decrypts nothing needs neither. So it stays the seam — on `tenant-service`
+ * since F-018-ab (ADR-0058), the same
  * `ServiceOnlyGuard` + `SERVICE_AUTH_TOKEN` door F-066-i built for
  * `bot-service` (`interfaces/auth-api/contract.md`). The vault's own contract
  * says the obligation to *schedule* this belongs to `automation` — not that
@@ -55,7 +56,7 @@ export class VaultRetentionJob implements Job {
 
   constructor(config: ConfigService) {
     this.baseUrl = config
-      .get<string>('AUTH_API_BASE_URL', '')
+      .get<string>('TENANT_API_BASE_URL', '')
       .replace(/\/+$/, '');
     this.serviceToken = config.get<string>('SERVICE_AUTH_TOKEN', '');
     this.timeoutMs = config.get<number>('AUTH_API_TIMEOUT_MS', 30_000);
@@ -66,7 +67,7 @@ export class VaultRetentionJob implements Job {
     // service's schema on purpose: `worker-service` holds no credential of its
     // own and must boot without one, so a missing seam fails *this job's run*
     // and leaves every other job running.
-    if (!this.baseUrl) throw new Error('AUTH_API_BASE_URL is not set');
+    if (!this.baseUrl) throw new Error('TENANT_API_BASE_URL is not set');
     if (!this.serviceToken) throw new Error('SERVICE_AUTH_TOKEN is not set');
 
     const destroyed = await this.destroyExpired();
@@ -101,15 +102,15 @@ export class VaultRetentionJob implements Job {
         // see `ServiceOnlyGuard` — so the message says what was asked, not why
         // it was refused.
         throw new Error(
-          `auth-api answered ${response.status} to ${DESTROY_EXPIRED_PATH}`,
+          `tenant-service answered ${response.status} to ${DESTROY_EXPIRED_PATH}`,
         );
       }
 
-      // auth-service answers `{ ok, msg, data }` (`envelopeData`).
+      // tenant-service answers `{ ok, msg, data }` (`envelopeData`).
       const destroyed = envelopeData(await response.json())?.destroyed;
       if (typeof destroyed !== 'number') {
         throw new Error(
-          `auth-api answered ${DESTROY_EXPIRED_PATH} without a numeric 'destroyed'`,
+          `tenant-service answered ${DESTROY_EXPIRED_PATH} without a numeric 'destroyed'`,
         );
       }
       return destroyed;

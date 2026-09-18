@@ -9,10 +9,8 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { TenantCapability } from '@txnet-backend/shared-core';
+import { ServiceOnlyGuard } from '@txnet-backend/shared-core';
 
-import { ServiceOnlyGuard } from '../../common/guards/service-only.guard';
-import { TenantAgnostic } from '../tenant-agnostic.decorator';
 import {
   GatewayCredentialRefused,
   GatewayCredentialRejection,
@@ -45,7 +43,8 @@ const STATUS: Record<GatewayCredentialRejection, 400 | 403 | 404> = {
  * take a payment, never what it is charged with — that is read at payment time
  * through `GatewayMerchant`, audited per use.
  *
- * `@TenantAgnostic` and `ServiceOnlyGuard`, like `VaultInternalController`: the
+ * Outside any tenant scope and behind `ServiceOnlyGuard`, like
+ * `VaultInternalController` (moved out of `auth-service` together, F-018-ab): the
  * caller is a process, the tenant is a field it names, and
  * `GatewayCredentialService` re-derives whether that tenant really owns the
  * gateway before anything is stored. An unrecognised caller gets a 404 that is
@@ -57,7 +56,6 @@ const STATUS: Record<GatewayCredentialRejection, 400 | 403 | 404> = {
  */
 @Controller('internal/vault/gateway-credential')
 @UseGuards(ServiceOnlyGuard)
-@TenantAgnostic()
 export class GatewayCredentialController {
   constructor(private readonly credentials: GatewayCredentialService) {}
 
@@ -86,7 +84,6 @@ export class GatewayCredentialController {
   }
 
   /** Whether each secret is configured. */
-  @TenantCapability('read')
   @Post('state')
   @HttpCode(HttpStatus.OK)
   async state(@Body() body: TargetBody): Promise<GatewayCredentialState> {

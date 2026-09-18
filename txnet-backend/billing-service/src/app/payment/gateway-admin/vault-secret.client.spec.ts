@@ -2,16 +2,16 @@
  * The billing side of the gateway-secret seam (F-102-c, D-31).
  *
  * `billing-service` holds a merchant id and secret key for exactly as long as
- * it takes to hand them to `auth-service`, the vault's only writer. What can go
+ * it takes to hand them to `tenant-service`, the vault's only writer. What can go
  * wrong silently is all on the edges of that one call:
  *
- *  - the answer is **picked**, never passed through. If `auth-service` ever
+ *  - the answer is **picked**, never passed through. If `tenant-service` ever
  *    added a fingerprint or a value to its reply, a spread here would carry it
  *    to the panel;
  *  - a failure throws, and **its message carries no secret** — a failed call is
  *    exactly what gets logged, and the request body is the natural thing to put
  *    in the message;
- *  - an unset seam (`AUTH_API_BASE_URL` / `SERVICE_AUTH_TOKEN`) is a refusal,
+ *  - an unset seam (`TENANT_API_BASE_URL` / `SERVICE_AUTH_TOKEN`) is a refusal,
  *    not a quiet "not configured" answer, which would read as a gateway with no
  *    secrets rather than a secret that was never stored;
  *  - an ownership refusal from the other side arrives as its reason, so the
@@ -29,7 +29,7 @@ const TOKEN = 'service-token-for-tests';
 const target = { tenantId: TENANT, source: 'tenant' as const, gatewayId: GATEWAY };
 
 const config = (values: Record<string, unknown>) => ({ get: (k: string, d?: unknown) => (k in values ? values[k] : d) });
-const client = (values: Record<string, unknown> = { AUTH_API_BASE_URL: 'http://auth-service:3000/', SERVICE_AUTH_TOKEN: TOKEN }) =>
+const client = (values: Record<string, unknown> = { TENANT_API_BASE_URL: 'http://tenant-service:3000/', SERVICE_AUTH_TOKEN: TOKEN }) =>
   new VaultSecretClient(config(values) as never);
 
 const reply = (status: number, body: unknown) =>
@@ -50,7 +50,7 @@ describe('VaultSecretClient', () => {
     await client().set(target, { merchantId: MERCHANT, secretKey: SECRET }, ADMIN);
 
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('http://auth-service:3000/api/internal/vault/gateway-credential');
+    expect(url).toBe('http://tenant-service:3000/api/internal/vault/gateway-credential');
     expect(init.method).toBe('POST');
     expect(init.headers['x-service-token']).toBe(TOKEN);
     expect(JSON.parse(init.body)).toEqual({ ...target, merchantId: MERCHANT, secretKey: SECRET, actorId: ADMIN });
@@ -73,7 +73,7 @@ describe('VaultSecretClient', () => {
       secretKey: { configured: false, version: null, rotatedAt: null },
       webhookSecret: { configured: true, version: 1, rotatedAt: null },
     });
-    expect(fetchMock.mock.calls[0][0]).toBe('http://auth-service:3000/api/internal/vault/gateway-credential/state');
+    expect(fetchMock.mock.calls[0][0]).toBe('http://tenant-service:3000/api/internal/vault/gateway-credential/state');
   });
 
   it('throws on a failed call without the secret in the message', async () => {
@@ -95,7 +95,7 @@ describe('VaultSecretClient', () => {
   });
 
   it('refuses before calling anything when the seam is not configured', async () => {
-    const error = await client({ AUTH_API_BASE_URL: 'http://auth-service:3000' }).state(target).catch((e: unknown) => e);
+    const error = await client({ TENANT_API_BASE_URL: 'http://tenant-service:3000' }).state(target).catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(GatewaySecretsUnavailable);
     expect(fetchMock).not.toHaveBeenCalled();

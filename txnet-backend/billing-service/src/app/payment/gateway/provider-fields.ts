@@ -4,7 +4,7 @@ import { PaymentProviderName, TenantCredentialKind } from '@prisma/client';
 export const GATEWAY_SECRET_NAMES = ['merchantId', 'secretKey', 'webhookSecret'] as const;
 export type GatewaySecretName = (typeof GATEWAY_SECRET_NAMES)[number];
 
-/** The vault kind each secret is stored under — `auth-service` writes by the same names (F-102-a). */
+/** The vault kind each secret is stored under — `tenant-service` writes by the same names (F-102-a, F-018-ab). */
 export const SECRET_KIND: Record<GatewaySecretName, TenantCredentialKind> = {
   merchantId: TenantCredentialKind.gateway_merchant_id,
   secretKey: TenantCredentialKind.gateway_secret_key,

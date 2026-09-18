@@ -827,8 +827,9 @@ services:
       # panel shows a result only under it. Same value on site-pwa below.
       - PAYMENT_RESULT_SECRET=${PAYMENT_RESULT_SECRET:-}
       # The other direction on the same seam (F-102-c): gateway management
-      # relays a gateway's secrets to auth-service, the vault's only writer.
-      - AUTH_API_BASE_URL=http://auth-service:${AUTH_PORT}
+      # relays a gateway's secrets to tenant-service, the vault's only writer
+      # (F-018-ab).
+      - TENANT_API_BASE_URL=http://tenant-service:3000
       # A Mini App's invoice link is made by the tenant's bot (F-104-q).
       - BOT_API_BASE_URL=http://bot-service:${BOT_PORT:-3000}
       # The app role, never the owner: RLS does not bind a table's owner
@@ -1147,6 +1148,9 @@ services:
       # The object-storage `local` driver's root (F-018-m). One node or one
       # shared volume: a replica on another disk would hold other files.
       - object_storage:/data/objects
+      # The Credential Vault's KEK (ADR-0026): the vault's internal seams —
+      # the gateway-secret writer and the retention sweep — live here (F-018-ab).
+      - ./secrets/vault-kek:/run/secrets/vault-kek:ro
     environment:
       # Tenant administration, out of auth-service (F-018-t, ADR-0058).
       # Validated at boot by `app/config/env.validation.ts`.
@@ -1174,6 +1178,8 @@ services:
       # Object storage (F-018-m): only `local` is built; its root is the volume above.
       - OBJECT_STORAGE_DRIVER=${OBJECT_STORAGE_DRIVER:-local}
       - OBJECT_STORAGE_LOCAL_ROOT=/data/objects
+      # A PATH, never the key (ADR-0026). Unset = every vault operation refused.
+      - VAULT_KEK_FILE=${VAULT_KEK_FILE:-/run/secrets/vault-kek}
     networks:
       - private_backend_network
     labels:

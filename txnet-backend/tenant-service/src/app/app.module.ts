@@ -21,6 +21,7 @@ import { ResellersModule } from './resellers/resellers.module';
 import { StatusModule } from './status/status.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 import { IdentityMiddleware } from './request/identity.middleware';
+import { VaultModule } from './vault/vault.module';
 
 /** The service-to-service seam: reached by the platform's processes, never through Traefik. */
 const INTERNAL_ROUTES = 'internal/*path';
@@ -33,7 +34,7 @@ const FILE_ROUTES = `${FILES_PATH}/*path`;
  * `auth-service`. Packages arrived with F-018-u, subscription, grace and
  * renewal with F-018-v, status with F-018-w, the resellers themselves with
  * F-018-y, their custom domains with F-018-i, the file route with F-018-m,
- * their branding with F-018-h.
+ * their branding with F-018-h, the vault's internal seams with F-018-ab.
  */
 @Module({
   imports: [
@@ -48,6 +49,7 @@ const FILE_ROUTES = `${FILES_PATH}/*path`;
     DomainsModule,
     FilesModule,
     BrandingModule,
+    VaultModule,
   ],
   controllers: [HealthController],
   providers: [

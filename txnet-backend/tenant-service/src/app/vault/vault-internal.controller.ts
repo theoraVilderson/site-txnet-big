@@ -1,7 +1,5 @@
 import { Controller, Post, UseGuards } from '@nestjs/common';
-import { ServiceOnlyGuard } from '../../common/guards/service-only.guard';
-import { TenantAgnostic } from '../tenant-agnostic.decorator';
-import { CredentialVaultService, TenantCapability } from '@txnet-backend/shared-core';
+import { CredentialVaultService, ServiceOnlyGuard } from '@txnet-backend/shared-core';
 
 /**
  * The vault's one internal route (F-031-c), and the reason it now has a
@@ -22,16 +20,16 @@ import { CredentialVaultService, TenantCapability } from '@txnet-backend/shared-
  * plaintext (`automation`'s `BotIntegrationController`): those had to argue
  * their way past F-323, and this one has nothing to argue about.
  *
- * `@TenantAgnostic` because the sweep is platform-wide by construction: it
- * looks for rows whose grace window has passed, in every tenant, and there is
- * no tenant a caller could name that would make it correct. Guarded by
- * `ServiceOnlyGuard`, so an unrecognised caller gets a 404 that is
+ * No tenant is in scope, because the sweep is platform-wide by construction:
+ * it looks for rows whose grace window has passed, in every tenant. In
+ * `tenant-service` (since F-018-ab, ADR-0058) `internal/*` is outside
+ * `IdentityMiddleware`, so `TenantStatusGuard` does not judge it — what
+ * `auth-service` said with `@TenantAgnostic` and `@TenantCapability('system')`.
+ * Guarded by `ServiceOnlyGuard`, so an unrecognised caller gets a 404 that is
  * indistinguishable from a route that does not exist.
  */
-@TenantCapability('system')
 @Controller('internal/vault')
 @UseGuards(ServiceOnlyGuard)
-@TenantAgnostic()
 export class VaultInternalController {
   constructor(private readonly vault: CredentialVaultService) {}
 

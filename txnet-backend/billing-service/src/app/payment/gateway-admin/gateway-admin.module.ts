@@ -10,7 +10,7 @@ import { VaultSecretClient } from './vault-secret.client';
  * No imports: `PrismaModule` is `@Global()` and `ConfigModule` is global. It
  * does not import `GatewayModule` on purpose — that module loads the vault to
  * **read** a merchant id at payment time, and nothing here reads one. The write
- * side is `VaultSecretClient`, a call to `auth-service` (F-102-a).
+ * side is `VaultSecretClient`, a call to `tenant-service` (F-102-a, F-018-ab).
  */
 @Module({
   controllers: [GatewayAdminController],

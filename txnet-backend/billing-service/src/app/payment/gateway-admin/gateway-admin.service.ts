@@ -27,7 +27,7 @@ export type GatewaySecretTarget = { tenantId: string; source: GatewaySource; gat
 export type GatewaySecretValues = Partial<Record<GatewaySecretName, string>>;
 
 /**
- * The write side of a gateway's secrets, which is `auth-service`'s (F-102-a):
+ * The write side of a gateway's secrets, which is `tenant-service`'s (F-102-a, F-018-ab):
  * `billing` loads the vault read-only (ADR-0039). An interface so the rules
  * here are provable without a process on the other end; `VaultSecretClient` is
  * the implementation.

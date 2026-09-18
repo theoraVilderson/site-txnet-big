@@ -31,7 +31,7 @@ import { vaultTenantOverride } from './granted-vault-access';
  * **Reads only.** `$transaction` is refused: `put` rotates inside an
  * interactive transaction, where a per-query bind would run beside it rather
  * than in it (`with-tenant.ts`). Billing writes no credential — configuring
- * one is F-018, in `auth-service`.
+ * one is F-018, in `tenant-service` (F-018-ab).
  */
 export function tenantBoundVaultDb(prisma: PrismaService): VaultDb {
   const bind = bindTenantThroughTransaction(prisma);
@@ -67,7 +67,7 @@ export function tenantBoundVaultDb(prisma: PrismaService): VaultDb {
     $transaction: (() => {
       throw new Error(
         'billing-service reads tenant credentials and never writes them; ' +
-          'store or rotate one through auth-service (ADR-0039)',
+          'store or rotate one through tenant-service (ADR-0039)',
       );
     }) as VaultDb['$transaction'],
   };

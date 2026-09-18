@@ -2,8 +2,8 @@
 id: tenant
 layer: domain
 status: active
-version: 8
-updated: 2026-09-12
+version: 9
+updated: 2026-09-18
 ---
 
 # Contract — tenant / the Credential Vault
@@ -21,12 +21,13 @@ the why, and this file does not restate it.
 
 | Service | `VAULT_DB` binds | Uses |
 |---|---|---|
-| `auth-service` (`app/tenant/vault/vault.module.ts`) | the cross-tenant pool — its readers resolve a tenant through the vault | every operation, the internal destroy route, and **the only writer of a gateway's secrets** (F-102-a, below) |
+| `tenant-service` (`app/vault/vault.module.ts`, F-018-ab) | the cross-tenant pool — the sweep spans every tenant; the writer re-derives the owner first | the two internal routes below: the retention sweep and **the only writer of a gateway's secrets** (F-102-a) |
+| `auth-service` (`app/tenant/vault/vault.module.ts`) | the cross-tenant pool — its readers resolve a tenant through the vault | the bot directory and the SMS sender; **no route** (ADR-0058 (2)) |
 | `notification-service` (`campaigns/campaigns.module.ts`, F-018-a, F-035-i-a) | the cross-tenant pool — a delivery run has no request tenant; no `put` | `use` of the `sms_api_key` / `sms_sender_line` of the owner and of each `own_credentials` reseller; `summary` of a reseller's key at the draft |
 | `billing-service` (`payment/gateway/gateway.module.ts`) | the app pool, each vault query bound to the request's tenant — **except inside a proved grant**, below; `$transaction` refused, so no `put` | `use` of `gateway_merchant_id` and `webhook_secret` |
 
 **Gateway secrets are written over a seam, not by `billing` (D-31).**
-`POST /internal/vault/gateway-credential` (+ `/state`, `/revoke`,
+`tenant-service`'s `POST /internal/vault/gateway-credential` (+ `/state`, `/revoke`,
 `GatewayCredentialService`) stores `gateway_merchant_id` / `gateway_secret_key`
 / `webhook_secret` (F-104-c: what a webhook provider signs with, served to
 `verifyWebhook` by `GatewayMerchant.webhookSecretFor`, missing = `null` = 401)
@@ -36,6 +37,13 @@ one re-derived from the gateway row (a `tenant_gateway_config`'s `tenantId`; the
 platform owner for a `payment_gateway`), never the caller's. It answers
 `{configured, version, rotatedAt}` per secret: no value, no fingerprint, and no
 value in a refusal.
+
+### The internal routes (`tenant-service`, `ServiceOnlyGuard`, no tenant; else 404)
+
+| Route | Answers |
+|---|---|
+| `POST /api/internal/vault/destroy-expired` | `{destroyed}` — a count, nothing naming what went; idempotent. Caller: worker's `vault_credential_retention` |
+| `POST /api/internal/vault/gateway-credential` (+ `/state`, `/revoke`) | `{merchantId, secretKey, webhookSecret}` each `{configured, version, rotatedAt}`; 400 blank / nothing to set, 403 `not_owner`, 404 `gateway_not_found`. Caller: `billing` gateway management |
 
 A loader mounts the same `VAULT_KEK_FILE` and gets `CredentialEnvGuard` with
 it. Every rule below holds in either process.
@@ -104,7 +112,7 @@ SMS sender line, a second bot) and defaults to the singular `''`.
    schedule. The obligation was always the scheduler's, and the shape it took
    is a **seam, not a method call** — the job runs in `worker-service`, which
    cannot import this code, so it asks over
-   `POST /api/internal/vault/destroy-expired` (`interfaces/auth-api/contract.md`),
+   `tenant-service`'s `POST /api/internal/vault/destroy-expired` (below),
    guarded by `ServiceOnlyGuard`. What crosses is a count and never a
    credential. The sweep is the only caller of `destroyExpiredVersions`; how
    long a version actually survives is therefore the grace window plus one

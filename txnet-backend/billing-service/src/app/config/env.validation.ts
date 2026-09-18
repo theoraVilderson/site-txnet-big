@@ -107,13 +107,13 @@ export const envSchema = z.object({
   SERVICE_AUTH_TOKEN: z.string().default(''),
 
   /**
-   * `auth-service`'s internal seam, where a gateway's secrets are written
-   * (F-102-c → F-102-a, D-31). Optional at boot on purpose: payments never use
+   * `tenant-service`'s internal seam, where a gateway's secrets are written
+   * (F-102-c → F-102-a, D-31; moved out of `auth-service` by F-018-ab). Optional at boot on purpose: payments never use
    * it, so an unset value refuses only the gateway management writes, at call
    * time, rather than the whole service.
    */
-  AUTH_API_BASE_URL: z.string().default(''),
-  AUTH_API_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+  TENANT_API_BASE_URL: z.string().default(''),
+  TENANT_API_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
 
   /**
    * `bot-service`'s internal seam, where a Mini App's invoice link is made

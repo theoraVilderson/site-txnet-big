@@ -88,6 +88,8 @@ services:
       # `!override` replaces main.yml's list, so the object-storage volume it
       # mounts must be repeated here, or uploads land in the container (F-018-m).
       - object_storage:/data/objects
+      # And the vault KEK, for the vault's internal seams (F-018-ab).
+      - ./secrets/vault-kek:/run/secrets/vault-kek:ro
 
   billing-service:
     <<: *host-node

@@ -10,7 +10,7 @@ import type {
   GatewaySecretsState,
 } from './gateway-admin.service';
 
-/** The seam on `auth-service` (F-102-a). Service callers only; 404 otherwise. */
+/** The seam on `tenant-service` (F-102-a, moved by F-018-ab). Service callers only; 404 otherwise. */
 const SEAM = '/api/internal/vault/gateway-credential';
 
 /** The seam could not answer: unset, unreachable, or a status it should never give. The message names no value. */
@@ -21,7 +21,7 @@ export class GatewaySecretsUnavailable extends Error {
   }
 }
 
-/** `auth-service` refused on a rule of its own — the owner it re-derived is not the one named, or the row is gone. */
+/** `tenant-service` refused on a rule of its own — the owner it re-derived is not the one named, or the row is gone. */
 export class GatewaySecretsRefused extends Error {
   constructor(readonly status: 400 | 403 | 404, readonly reason: string) {
     super(`gateway secrets refused: ${reason}`);
@@ -36,7 +36,7 @@ const REFUSALS = new Set([400, 403, 404]);
  * `billing-service` a gateway's secret exists, and only for the length
  * of one `fetch`.
  *
- * The shape of `worker-service`'s jobs on the same seam (`AUTH_API_BASE_URL`,
+ * The shape of `worker-service`'s jobs on the same seam (`TENANT_API_BASE_URL`,
  * `SERVICE_AUTH_TOKEN`, an abort timer) with two differences that are the point
  * of this class:
  *
@@ -57,9 +57,9 @@ export class VaultSecretClient implements GatewaySecretWriter {
   private readonly timeoutMs: number;
 
   constructor(config: ConfigService) {
-    this.baseUrl = String(config.get<string>('AUTH_API_BASE_URL', '') ?? '').replace(/\/+$/, '');
+    this.baseUrl = String(config.get<string>('TENANT_API_BASE_URL', '') ?? '').replace(/\/+$/, '');
     this.token = String(config.get<string>('SERVICE_AUTH_TOKEN', '') ?? '');
-    this.timeoutMs = Number(config.get<number>('AUTH_API_TIMEOUT_MS', 10_000));
+    this.timeoutMs = Number(config.get<number>('TENANT_API_TIMEOUT_MS', 10_000));
   }
 
   set(target: GatewaySecretTarget, values: GatewaySecretValues, actorId: string): Promise<GatewaySecretsState> {
@@ -75,7 +75,7 @@ export class VaultSecretClient implements GatewaySecretWriter {
   }
 
   private async post(path: string, body: object): Promise<GatewaySecretsState> {
-    if (!this.baseUrl) throw new GatewaySecretsUnavailable('AUTH_API_BASE_URL is not set');
+    if (!this.baseUrl) throw new GatewaySecretsUnavailable('TENANT_API_BASE_URL is not set');
     if (!this.token) throw new GatewaySecretsUnavailable('SERVICE_AUTH_TOKEN is not set');
 
     const controller = new AbortController();
@@ -104,7 +104,7 @@ export class VaultSecretClient implements GatewaySecretWriter {
       throw new GatewaySecretsUnavailable(`${SEAM}${path} answered ${response.status}`);
     }
 
-    // auth-service wraps answers in the shared envelope; accept both shapes.
+    // tenant-service wraps answers in the shared envelope; accept both shapes.
     const data = (answer && typeof answer === 'object' && 'data' in answer ? answer['data'] : answer) as Record<string, unknown> | null;
     return {
       merchantId: this.pick(data?.['merchantId']),

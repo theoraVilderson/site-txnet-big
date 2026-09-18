@@ -13,7 +13,7 @@ import { VaultRetentionJob } from './vault-retention.job';
  * would say the sweep was healthy the whole time (ADR-0026 rule 4).
  *
  * So the invariant stated here is: **the only run this job reports as a
- * success is one where auth-api answered with a count.** Everything else
+ * success is one where tenant-service answered with a count.** Everything else
  * throws, which `TickConsumer` records as `failed` (automation invariant #3).
  */
 describe('VaultRetentionJob', () => {
@@ -24,12 +24,12 @@ describe('VaultRetentionJob', () => {
     }) as unknown as ConfigService;
 
   const configured = {
-    AUTH_API_BASE_URL: 'http://auth-service:3001',
+    TENANT_API_BASE_URL: 'http://tenant-service:3000',
     SERVICE_AUTH_TOKEN: 'service-token',
     AUTH_API_TIMEOUT_MS: 30_000,
   };
 
-  // auth-service answers every route through shared-core's `ResponseInterceptor`,
+  // tenant-service answers every route through shared-core's `ResponseInterceptor`,
   // so a real success is `{ ok, msg, data }` — the internal seam included.
   const enveloped = (data: unknown) => ({ ok: true, msg: 'successful', data });
 
@@ -47,7 +47,7 @@ describe('VaultRetentionJob', () => {
     global.fetch = fetchMock as unknown as typeof fetch;
   });
 
-  it('reports the count auth-api destroyed', async () => {
+  it('reports the count tenant-service destroyed', async () => {
     fetchMock.mockResolvedValue(answer(200, enveloped({ destroyed: 3 })));
 
     const result = await new VaultRetentionJob(configWith(configured)).run();
@@ -65,7 +65,7 @@ describe('VaultRetentionJob', () => {
     await new VaultRetentionJob(configWith(configured)).run();
 
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('http://auth-service:3001/api/internal/vault/destroy-expired');
+    expect(url).toBe('http://tenant-service:3000/api/internal/vault/destroy-expired');
     expect(init.method).toBe('POST');
     expect(init.headers['x-service-token']).toBe('service-token');
     // No tenant header: the sweep is platform-wide and the route is
@@ -91,7 +91,7 @@ describe('VaultRetentionJob', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('fails the run when auth-api refuses the call', async () => {
+  it('fails the run when tenant-service refuses the call', async () => {
     // 404 is what `ServiceOnlyGuard` answers a caller without the token, so
     // this is the shape a rotated-away service token actually takes.
     fetchMock.mockResolvedValue(answer(404, {}));
@@ -108,7 +108,7 @@ describe('VaultRetentionJob', () => {
       new VaultRetentionJob(configWith(configured)).run(),
     ).rejects.toThrow(/destroyed/);
 
-    // A bare body is not what auth-service sends; reading one as a count is how
+    // A bare body is not what tenant-service sends; reading one as a count is how
     // this job reported every real answer as a failure until 2026-09-14.
     fetchMock.mockResolvedValue(answer(200, { destroyed: 2 }));
     await expect(
@@ -116,7 +116,7 @@ describe('VaultRetentionJob', () => {
     ).rejects.toThrow(/destroyed/);
   });
 
-  it('fails the run when auth-api cannot be reached', async () => {
+  it('fails the run when tenant-service cannot be reached', async () => {
     fetchMock.mockRejectedValue(new Error('ECONNREFUSED'));
 
     await expect(

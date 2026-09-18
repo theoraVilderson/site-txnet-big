@@ -59,4 +59,4 @@ The user (2026-09-17): "it must be separate".
 - Accepted when F-018-t shipped (2026-09-17): `tenant-service` runs with no business routes; the moves are F-018-u … F-018-z.
 - Complete with F-018-z (2026-09-18): `auth-service/src/app/tenant/` holds the resolver, its cache and
   the guards, plus `vault/`. The vault's internal seams (`/internal/vault/*`, ADR-0026, ADR-0039) were
-  not among (1)'s moves and stay; whether they follow is open (`docs/domains/tenant/open-questions.md`).
+  not among (1)'s moves; the user decided (2026-09-18) they follow, and F-018-ab moved them.

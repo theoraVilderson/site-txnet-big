@@ -65,7 +65,7 @@ Why each of those is the answer — and what a Redis that cannot be reached does
 | key | what it does | needs |
 |---|---|---|
 | `worker_heartbeat` | nothing, and records that it did — the proof the tick path is alive | — |
-| `vault_credential_retention` | destroys superseded credential versions past their rotation grace window (ADR-0026 rule 4) | `AUTH_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
+| `vault_credential_retention` | destroys superseded credential versions past their rotation grace window (ADR-0026 rule 4) | `TENANT_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 | `deposit_pending_expiry` | expires `pending` top-ups past their `expiresAt` and gives the coupon holds they took back (F-092-k, `domains/billing/contract.deposit.md`) | `BILLING_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 | `deposit_reconciliation` | asks the gateway about pending and expired top-ups nobody came back for, and about a verifying one only when its retry is 10 min overdue (the next job is not running): credits what it confirms, flags a differing amount (F-092-l; `domains/billing/contract.verify.md`) | the same two |
 | `deposit_verify_retry` | asks again about verifying top-ups whose retry is due, every tick: credits, re-schedules silence, flags one still verifying after a day (F-092-y, F-092-ac) | the same two |
@@ -78,7 +78,7 @@ The retention job is the first job that does real work, and what it settled is
 how a job reaches code it cannot import.
 
 **A job calls another service over the internal seam.** The Credential Vault is
-`tenant`'s code inside `auth-service`; an Nx application cannot import another
+`tenant`'s code, its seams in `tenant-service` (F-018-ab); an Nx application cannot import another
 Nx application. So the job asks over
 `POST /api/internal/vault/destroy-expired` behind `ServiceOnlyGuard` — the door
 F-066-i built — rather than the vault moving into a workspace library, which

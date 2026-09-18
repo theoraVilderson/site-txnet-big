@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { TenantCredentialKind, TenantType } from '@prisma/client';
 import { CredentialVaultService, gatewayCredentialLabel, type GatewayCredentialSource } from '@txnet-backend/shared-core';
 
-import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
+import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 
 /** One gateway row, named the way `billing` names it: which table, which id, whose vault. */
 export type GatewayCredentialTarget = {

@@ -69,6 +69,14 @@ export const envSchema = z.object({
    */
   SERVICE_AUTH_TOKEN: z.string().default(''),
 
+  /**
+   * The Credential Vault's KEK (ADR-0026) — a **path to a mounted secret**,
+   * never the key: a value here would be visible in `docker inspect`. The
+   * vault's internal seams live here since F-018-ab; unset boots the service
+   * and refuses every vault operation, as in every other loader.
+   */
+  VAULT_KEK_FILE: z.string().min(1).optional(),
+
   /** The envelope's translator (`locale/locale.service.ts`). */
   LOCALE_SERVICE_ADDR: z.string().min(1).default('localhost:50051'),
   LOCALE_SCOPE: z.string().min(1).default('backend'),
