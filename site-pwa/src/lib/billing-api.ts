@@ -274,6 +274,26 @@ export interface TenantTopupBody {
 /** `GET /tenant-wallet`: one page, and the wallet's own balance — never a sum of the page. */
 export type TenantWalletPage = Paged<TenantWalletRow> & { balance: string };
 
+/** Prisma's `TenantLedgerDirection`. */
+export type TenantLedgerDirection = "credit" | "debit";
+
+export interface TenantWalletAdjustBody {
+  direction: TenantLedgerDirection;
+  /** A decimal string, positive, at most two places (C-02). */
+  amount: string;
+  requestId: string;
+  note?: string;
+}
+
+export interface TenantWalletAdjusted {
+  transactionId: string;
+  tenantId: string;
+  direction: TenantLedgerDirection;
+  amount: string;
+  balanceAfter: string;
+  createdAt: string;
+}
+
 export const billingApi = {
   /**
    * The wallet's balance, and nothing else.
@@ -325,6 +345,19 @@ export const billingApi = {
    */
   async tenantTopup(body: TenantTopupBody): Promise<DepositStarted> {
     return call<DepositStarted>("/tenant-wallet/topup", { method: "POST", body: JSON.stringify(body) });
+  },
+
+  /**
+   * The platform owner credits or debits a reseller's billing wallet by hand
+   * (F-019-a, `tenant/contract.billing.md` "Manual adjustment"). `requestId` is
+   * the entry's reference: the same one sent again is `duplicate_request`, so a
+   * caller mints it once per form, not once per click.
+   */
+  async adjustTenantWallet(tenantId: string, body: TenantWalletAdjustBody): Promise<TenantWalletAdjusted> {
+    return call<TenantWalletAdjusted>(`/tenant-wallets/${encodeURIComponent(tenantId)}/adjustments`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
   },
 
   /**

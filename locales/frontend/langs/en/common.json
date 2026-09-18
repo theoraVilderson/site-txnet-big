@@ -22,7 +22,8 @@
       "settings": "Settings",
       "coupons": "Coupons and gift codes",
       "catalog": "Catalog",
-      "tenantBilling": "Platform billing"
+      "tenantBilling": "Platform billing",
+      "resellers": "Resellers"
     },
     "paymentCredited": {
       "title": "Payment confirmed",
@@ -1365,5 +1366,109 @@
   },
   "resellerPanel": "My reseller panel: {{slug}}",
   "openingResellerPanel": "Opening your reseller panel…",
-  "handoffFailed": "This link has expired or was already used. Sign in to continue."
+  "handoffFailed": "This link has expired or was already used. Sign in to continue.",
+  "resellers": {
+    "title": "Resellers",
+    "subtitle": "Every reseller on the platform — create one, put it on a package, change its status, adjust its billing balance",
+    "new": "New reseller",
+    "empty": "No resellers yet.",
+    "prev": "Newer",
+    "next": "Older",
+    "columns": {
+      "slug": "Reseller",
+      "owner": "Owner",
+      "status": "Status",
+      "period": "Period",
+      "balance": "Billing balance",
+      "created": "Created"
+    },
+    "status": {
+      "trial": "Trial",
+      "active": "Active",
+      "suspended": "Suspended",
+      "terminated": "Terminated"
+    },
+    "period": {
+      "subscription_monthly": "Monthly",
+      "subscription_yearly": "Yearly",
+      "pay_as_you_go_metered": "Metered"
+    },
+    "create": {
+      "title": "New reseller",
+      "slug": "Subdomain",
+      "slugHint": "Lower-case letters, digits and hyphens; it becomes the reseller's first address.",
+      "owner": "Owner's user id",
+      "ownerHint": "An existing user of the platform. They become the reseller's owner.",
+      "period": "Billing period",
+      "submit": "Create reseller",
+      "done": "Reseller {{slug}} created."
+    },
+    "detail": {
+      "domains": "Addresses",
+      "noDomains": "No address yet.",
+      "open": "Open"
+    },
+    "subscription": {
+      "title": "Package and period",
+      "none": "Not on a package yet. The first package starts the trial.",
+      "current": "{{package}}, {{period}} — period ends {{date}}",
+      "package": "Package",
+      "period": "Period",
+      "noPackage": "No package is sold for this period.",
+      "submit": "Save package",
+      "keepsPeriodEnd": "A change keeps the current period's end; the new price is charged at the next renewal.",
+      "done": "Package saved."
+    },
+    "statusChange": {
+      "title": "Status",
+      "to": "New status",
+      "reason": "Reason (optional)",
+      "terminateWarning": "Terminating is final and cannot be undone.",
+      "confirmTerminate": "I understand, terminate this reseller",
+      "submit": "Change status",
+      "final": "This reseller is terminated. Nothing can be changed.",
+      "done": "Status changed."
+    },
+    "adjust": {
+      "title": "Adjust billing balance",
+      "direction": "Direction",
+      "credit": "Credit",
+      "debit": "Debit",
+      "amount": "Amount",
+      "note": "Note (optional)",
+      "submit": "Record adjustment",
+      "done": "Adjusted. Balance now {{balance}}."
+    },
+    "errors": {
+      "slug": "Use lower-case letters, digits and hyphens, not starting or ending with a hyphen, and not a name the platform keeps.",
+      "ownerUserId": "Paste the user's id.",
+      "billingModel": "Pick a period.",
+      "packageId": "Pick a package.",
+      "status": "Pick a status.",
+      "reason": "At most 500 characters.",
+      "amount": "A positive amount with at most two decimals.",
+      "note": "At most 500 characters.",
+      "confirm": "Confirm the termination first."
+    },
+    "refusals": {
+      "not_platform_owner": "Only the platform owner can administer resellers.",
+      "reseller_not_found": "This reseller no longer exists.",
+      "owner_not_found": "No user of the platform has that id.",
+      "owner_inactive": "That user is not active.",
+      "slug_taken": "That subdomain is taken.",
+      "reseller_terminated": "This reseller is terminated.",
+      "subscription_not_found": "This reseller is not on a package yet.",
+      "package_not_found": "That package no longer exists.",
+      "package_inactive": "That package is no longer sold.",
+      "package_not_sold_for_period": "That package is not sold for this period.",
+      "status_unchanged": "The reseller already has that status.",
+      "tenant_not_found": "This reseller no longer exists.",
+      "not_a_reseller": "Only a reseller's balance can be adjusted.",
+      "invalid_amount": "The amount is not valid.",
+      "insufficient_balance": "The balance is too low for that debit.",
+      "duplicate_request": "This adjustment was already recorded.",
+      "wallet_changed": "The balance moved meanwhile. Send it again."
+    },
+    "retry": "Retry"
+  }
 }

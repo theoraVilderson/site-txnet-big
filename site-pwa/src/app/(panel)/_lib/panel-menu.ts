@@ -10,12 +10,13 @@ import {
   ShieldCheck,
   ReceiptText,
   Settings,
+  Store,
   ShoppingCart,
   TicketPercent,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME, PANEL_MANUAL_PAYMENTS, PANEL_SETTINGS, PANEL_TENANT_BILLING } from "@/lib/routes";
+import { PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME, PANEL_MANUAL_PAYMENTS, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_TENANT_BILLING } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 /** The shell's menu labels as generated constants (C-06). */
@@ -132,6 +133,16 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
         ownerSuffices: true,
       },
     ],
+  },
+  // F-018-k. Administration of other tenants is the platform owner's alone: a
+  // reseller can grant itself `tenant.manage`, so the tenant type gates it too.
+  {
+    id: "resellers",
+    label: M.resellers,
+    icon: Store,
+    href: PANEL_RESELLERS,
+    requires: ["tenant.manage"],
+    tenantTypes: ["platform_owner"],
   },
   { id: "tutorials", label: M.tutorials, icon: BookOpen, href: null },
   { id: "support", label: M.support, icon: Headphones, href: null },

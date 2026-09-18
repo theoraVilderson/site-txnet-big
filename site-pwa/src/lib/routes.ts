@@ -61,6 +61,12 @@ export const PANEL_CATALOG = "/catalog";
  * names beside their fa/en source, published by a person. Same audience rule.
  */
 export const PANEL_CATALOG_TRANSLATIONS = "/catalog/translations";
+/**
+ * The platform owner's reseller administration (F-018-k): list, create, package
+ * and period, status, billing adjustment. No role word in it (F-098); the menu
+ * and tenant-service both admit the platform owner alone.
+ */
+export const PANEL_RESELLERS = "/resellers";
 /** Payments the gateway has not confirmed, for a person to settle (F-093-n). */
 export const PANEL_MANUAL_PAYMENTS = "/payments/manual";
 /**

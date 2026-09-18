@@ -34,6 +34,7 @@ to `auth-api`), translation content (`i18n`).
 | [contract.manual-payments.md](contract.manual-payments.md) | a person confirms a payment the gateway would not — the list, inquire-then-confirm, or an outcome that reads wrong (F-093-n) |
 | [contract.coupons.md](contract.coupons.md) | the coupons page — the discount list, the coupon form, gift-code batches, a usage report, or a refusal that reads wrong (F-502-g/h) |
 | [contract.catalog.md](contract.catalog.md) | the catalog page — categories, products, variants, a new price or price history, or a refusal that reads wrong (F-026-f) |
+| [contract.resellers.md](contract.resellers.md) | the platform owner's resellers page — list, create, package and period, status, a billing adjustment, or a refusal that reads wrong (F-018-k) |
 | [contract.payment-result.md](contract.payment-result.md) | a bank returns a payer to `/payment/success` or `/payment/failed` — a reference, an "already paid", or an error code that reads wrong (F-093-f) |
 | [contract.financial.md](contract.financial.md) | the financial page's two lists, its filters, or a date range that returns the wrong day (F-093-d) |
 | [contract.session-guard.md](contract.session-guard.md) | a signed-in visitor is not redirected off an auth screen (F-0101) |
