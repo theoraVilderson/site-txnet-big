@@ -23,6 +23,7 @@ import { DomainActor, DomainRefused, DomainRejection, DomainView, TenantDomainSe
 const STATUS: Record<DomainRejection, 403 | 404 | 409> = {
   not_allowed: 403,
   reseller_not_found: 404,
+  reseller_suspended: 403,
   domain_not_found: 404,
   reseller_terminated: 409,
   domain_taken: 409,
@@ -34,7 +35,7 @@ const STATUS: Record<DomainRejection, 403 | 404 | 409> = {
  * and `POST /api/tenants/:id/domains/:domainId/check`.
  *
  * No `TenantPermissionGuard`: the reseller's owner holds no `tenant.manage`,
- * and is let in by the service's own check, as the platform owner's staff are.
+ * and is let in by `ResellerAccess` (F-061-h), as the platform owner's staff are.
  */
 @Controller('tenants/:id/domains')
 export class TenantDomainController {

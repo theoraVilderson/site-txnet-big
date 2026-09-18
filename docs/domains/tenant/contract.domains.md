@@ -29,8 +29,15 @@ name, value}, cnameTarget, verifiedAt, lastCheckedAt, lastCheck}`.
 reseller's DNS zone is public and must not name the platform (catalog 13.4).
 `cnameTarget` is the reseller's own `<slug>.edge.<domain>` (ADR-0060 (6)).
 
+**Who** is `ResellerAccess` (F-061-h, invariant 21): the path's reseller, never
+the caller's tenant — so the owner reaches it with the same session on the
+platform's domain and on their own. The owner is held to that reseller's status
+matrix ([rules.md](rules.md)): a suspended reseller's owner lists (`read`) but
+cannot add or check (`staffWrite`); platform staff can.
+
 Refusals: `not_allowed` 403 (neither the owner nor staff — including when the
 reseller does not exist, which only staff learn: `reseller_not_found` 404),
+`reseller_suspended` 403 (the owner, a write),
 `domain_not_found` 404, `reseller_terminated` / `domain_taken` /
 `domain_reserved` (a host inside `$DOMAIN_NAME`) 409. A host with a port, an IP
 or one label is a 400 at the schema.

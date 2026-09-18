@@ -5,15 +5,13 @@ import {
   Prisma,
   TenantDomainPurpose,
   TenantDomainType,
-  TenantStatus,
-  TenantType,
 } from '@prisma/client';
-import { UnscopedRedisKeys, cnameTargetHost, holdsPermission, normalizeHost } from '@txnet-backend/shared-core';
+import { TenantCapabilityName, UnscopedRedisKeys, cnameTargetHost, normalizeHost } from '@txnet-backend/shared-core';
 import { randomBytes } from 'node:crypto';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
-import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
+import { ResellerAccess, ResellerAccessRefused, ResellerAccessRejection, ResellerActor } from '../request/reseller-access';
 import { CheckLine, DomainCheck, PROBE_PATH, cnameLine, probeLine, txtLine, verifyRecordName } from './domain-check';
 import { DOMAIN_LOOKUP, DomainLookup } from './domain-lookup';
 import type { AddDomainInput } from './tenant-domain.schema';
@@ -39,13 +37,12 @@ import type { AddDomainInput } from './tenant-domain.schema';
  * Redis that cannot be reached refuses the change rather than leaving the old
  * answer cached.
  *
- * **Who.** The reseller's owner, or the platform owner's staff holding
- * `tenant.manage`. Both facts are read on the app pool — `tenant.tenant` has
- * no RLS — and only then is the cross-tenant pool touched (ADR-0053's order):
- * a reseller's `tenant_domain` rows are not the caller's tenant's.
+ * **Who.** {@link ResellerAccess}: the reseller the path names, reached by its
+ * owner or the platform owner's staff (F-061-h). Only then is the cross-tenant
+ * pool touched — a reseller's `tenant_domain` rows are not the caller's tenant's.
  */
 
-export type DomainActor = { userId: string; tenantId: string; permissions: string[] };
+export type DomainActor = ResellerActor;
 
 /** The catalog's statuses as the tenant sees them; `revalidating` is `verified` inside its grace. */
 export type DomainStatus = 'pending' | 'verifying' | 'verified' | 'revalidating' | 'failed';
@@ -77,7 +74,7 @@ export type DomainSweep = {
 
 type SweepOutcome = Exclude<keyof DomainSweep, 'due' | 'errors'>;
 
-export type DomainRejection = 'not_allowed' | 'reseller_not_found' | 'reseller_terminated' | 'domain_not_found' | 'domain_taken' | 'domain_reserved';
+export type DomainRejection = ResellerAccessRejection | 'domain_not_found' | 'domain_taken' | 'domain_reserved';
 
 export class DomainRefused extends Error {
   constructor(
@@ -120,7 +117,7 @@ export class TenantDomainService {
   private readonly logger = new Logger(TenantDomainService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly resellerAccess: ResellerAccess,
     private readonly all: CrossTenantPrismaService,
     private readonly redis: RedisService,
     private readonly config: ConfigService,
@@ -128,7 +125,7 @@ export class TenantDomainService {
   ) {}
 
   async add(actor: DomainActor, tenantId: string, input: AddDomainInput, now = new Date()): Promise<DomainView> {
-    const reseller = await this.access(actor, tenantId);
+    const reseller = await this.access(actor, tenantId, 'staffWrite');
     const host = input.domainValue;
     const base = this.base();
     if (host === base || host.endsWith(`.${base}`)) throw new DomainRefused('domain_reserved', host);
@@ -170,7 +167,7 @@ export class TenantDomainService {
   }
 
   async list(actor: DomainActor, tenantId: string): Promise<DomainView[]> {
-    const reseller = await this.access(actor, tenantId);
+    const reseller = await this.access(actor, tenantId, 'read');
     const rows = await this.all.tenantDomain.findMany({
       where: { tenantId: reseller.id, domainType: TenantDomainType.custom_domain },
       orderBy: { domainValue: 'asc' },
@@ -181,7 +178,7 @@ export class TenantDomainService {
 
   /** Step 2: the tenant says the record is in place. Repeats safely. */
   async requestCheck(actor: DomainActor, tenantId: string, domainId: string, now = new Date()): Promise<DomainView> {
-    const reseller = await this.access(actor, tenantId);
+    const reseller = await this.access(actor, tenantId, 'staffWrite');
     const where = { id: domainId, tenantId: reseller.id, domainType: TenantDomainType.custom_domain };
     const row = await this.all.tenantDomain.findFirst({ where, select: DOMAIN_SELECT });
     if (!row) throw new DomainRefused('domain_not_found', domainId);
@@ -321,22 +318,14 @@ export class TenantDomainService {
     });
   }
 
-  /** The one access check; nothing on the cross-tenant pool is read before it. */
-  private async access(actor: DomainActor, tenantId: string): Promise<{ id: string; slug: string }> {
-    const [caller, tenant] = await Promise.all([
-      this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } }),
-      this.prisma.tenant.findFirst({
-        where: { id: tenantId, tenantType: TenantType.reseller, deletedAt: null },
-        select: { id: true, slug: true, tenantType: true, ownerUserId: true, status: true },
-      }),
-    ]);
-    const staff = caller?.tenantType === TenantType.platform_owner && holdsPermission(actor.permissions, 'tenant.manage');
-    const reseller = tenant?.tenantType === TenantType.reseller ? tenant : null;
-    // Only staff learns whether a reseller exists.
-    if (!reseller) throw new DomainRefused(staff ? 'reseller_not_found' : 'not_allowed', tenantId);
-    if (!staff && reseller.ownerUserId !== actor.userId) throw new DomainRefused('not_allowed', tenantId);
-    if (reseller.status === TenantStatus.terminated) throw new DomainRefused('reseller_terminated', tenantId);
-    return { id: reseller.id, slug: reseller.slug };
+  /** The one access check (F-061-h); nothing on the cross-tenant pool is read before it. */
+  private async access(actor: DomainActor, tenantId: string, capability: TenantCapabilityName): Promise<{ id: string; slug: string }> {
+    try {
+      return await this.resellerAccess.admit(actor, tenantId, capability);
+    } catch (e) {
+      if (e instanceof ResellerAccessRefused) throw new DomainRefused(e.reason, tenantId);
+      throw e;
+    }
   }
 
   private view(row: DomainRow): DomainView {

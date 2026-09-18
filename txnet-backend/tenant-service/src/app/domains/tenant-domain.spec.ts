@@ -1,5 +1,6 @@
 import { UnscopedRedisKeys } from '@txnet-backend/shared-core';
 
+import { ResellerAccess } from '../request/reseller-access';
 import { verifyRecordName } from './domain-check';
 import type { DomainLookup, ProbeAnswer } from './domain-lookup';
 import { addDomainSchema } from './tenant-domain.schema';
@@ -139,7 +140,7 @@ describe('TenantDomainService', () => {
         return { status: 200, body: { ok: true, data: { host: as, nonce: u.searchParams.get('n') } } };
       }),
     };
-    const service = new TenantDomainService(appPrisma as never, all as never, redis as never, config as never, lookup);
+    const service = new TenantDomainService(new ResellerAccess(appPrisma as never), all as never, redis as never, config as never, lookup);
     return { service, rows, writes, world, all, lookup };
   };
 
