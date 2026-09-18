@@ -91,12 +91,13 @@ driver. No row changes.
 
 - No private files: everything served is public by Host. Ticket attachments
   (`support`) need an owner check and a column saying so, as their own row.
-- No upload route: a consumer receives the bytes and calls `put` (F-018-h).
+- No upload route of its own: a consumer receives the bytes and calls `put`
+  (tenant's branding, F-018-h).
 - No rate limit on the file route; the ETag keeps repeat views to a 304.
 
 ## Consumers
 
 | unit | uses |
 |---|---|
-| tenant | branding assets (F-018-h) |
+| tenant | branding images, `put` in the reseller's scope at `branding/<slot>` (F-018-h, [contract.branding.md](../../domains/tenant/contract.branding.md)) |
 | support | ticket attachments (not yet in the backlog) |

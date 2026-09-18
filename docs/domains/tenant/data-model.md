@@ -13,7 +13,7 @@ Source of truth: `txnet-backend/prisma/domains/tenant.prisma` (Postgres schema
 | Table | Purpose | Tenant-scoped? | Retention |
 |---|---|---|---|
 | tenant | reseller/platform-owner record; `status`, and `suspendedAt` / `graceEndsAt` / `suspensionCause` (`manual` \| `non_payment`) while suspended (F-018-f, F-019-c) | self | soft-delete |
-| tenant_branding | logo, colours, support contacts, default language | yes | with tenant (cascade) |
+| tenant_branding | brand name, four image **keys** (light/dark logo, favicon, OG image; CHECK: own tenant, own slot), colours (CHECK `#rrggbb`), support contacts, `socials` JSONB, default language (F-018-h, [contract.branding.md](contract.branding.md)) | yes | with tenant (cascade) |
 | tenant_domain | subdomain / custom domain; `verificationStatus` (`pending` \| `verifying` \| `verified` \| `failed`), `verificationToken`, `statusChangedAt`, `lastCheckedAt` / `lastCheck` (what was expected and found), `lastRevalidatedAt`, `revalidatingSince` (F-018-i, [contract.domains.md](contract.domains.md)) | yes | with tenant |
 | tenant_feature_package | plans the platform sells to resellers: unique `name`, `monthlyPrice` / `yearlyPrice` (CHECK: positive, at least one), `includedFeatureKeys`, `isActive`; no RLS (F-018-d) | no (catalog of packages) | permanent, deactivated not deleted |
 | tenant_subscription | one per reseller: `packageId` (RESTRICT), `currentPeriodEnd`, `renewalWarnedAt` (last unpaid-renewal warning, F-019-c), `graceUntil` (the platform owner's extra time to pay, F-019-g); the period is `tenant.billingModel` (F-018-e) | yes | with tenant |

@@ -1241,6 +1241,22 @@ services:
       - "traefik.http.routers.tenant-files.tls.certresolver=myresolver"
       - "traefik.http.routers.tenant-files.middlewares=strip-fake-headers"
       - "traefik.http.routers.tenant-files.service=tenant-service"
+
+      # The public branding read (F-018-h): a stranger's first page load has no
+      # session. The service answers the Host's own tenant over the file
+      # route's doors, and the neutral 404 for any other host.
+      - "traefik.http.routers.tenant-branding-http.rule=Path(`/api/branding`)"
+      - "traefik.http.routers.tenant-branding-http.entrypoints=web"
+      - "traefik.http.routers.tenant-branding-http.priority=130"
+      - "traefik.http.routers.tenant-branding-http.middlewares=strip-fake-headers"
+      - "traefik.http.routers.tenant-branding-http.service=tenant-service"
+
+      - "traefik.http.routers.tenant-branding.rule=Path(`/api/branding`)"
+      - "traefik.http.routers.tenant-branding.entrypoints=websecure"
+      - "traefik.http.routers.tenant-branding.priority=130"
+      - "traefik.http.routers.tenant-branding.tls.certresolver=myresolver"
+      - "traefik.http.routers.tenant-branding.middlewares=strip-fake-headers"
+      - "traefik.http.routers.tenant-branding.service=tenant-service"
       - "txnet.logging=true"
     depends_on:
       main-db:

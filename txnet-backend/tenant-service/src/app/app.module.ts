@@ -3,6 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { RateLimitGuard, TenantStatusGuard } from '@txnet-backend/shared-core';
 
+import { BrandingModule } from './branding/branding.module';
+import { BRANDING_PATH } from './branding/tenant-branding.controller';
 import { envConfigOptions } from './config/env.validation';
 import { DomainsModule } from './domains/domains.module';
 import { FileHostMiddleware } from './files/file-host.middleware';
@@ -30,7 +32,8 @@ const FILE_ROUTES = `${FILES_PATH}/*path`;
  * `tenant-service` (F-018-t, ADR-0058): tenant administration, out of
  * `auth-service`. Packages arrived with F-018-u, subscription, grace and
  * renewal with F-018-v, status with F-018-w, the resellers themselves with
- * F-018-y, their custom domains with F-018-i, the file route with F-018-m.
+ * F-018-y, their custom domains with F-018-i, the file route with F-018-m,
+ * their branding with F-018-h.
  */
 @Module({
   imports: [
@@ -44,6 +47,7 @@ const FILE_ROUTES = `${FILES_PATH}/*path`;
     ResellersModule,
     DomainsModule,
     FilesModule,
+    BrandingModule,
   ],
   controllers: [HealthController],
   providers: [
@@ -59,14 +63,16 @@ export class AppModule implements NestModule {
     // Language first, so the 401 IdentityMiddleware throws is translated.
     consumer.apply(LanguageMiddleware).forRoutes('{*path}');
     // Every route but the health check, the internal seam, the domain
-    // probe (public: the sweep's own request, F-018-i) and the file route
-    // needs the gate's identity — a moved controller is covered without
+    // probe (public: the sweep's own request, F-018-i), the file route and
+    // the public branding read (F-018-h) needs the gate's identity — a moved controller is covered without
     // opting in.
     consumer
       .apply(IdentityMiddleware)
-      .exclude('health', INTERNAL_ROUTES, PROBE_PATH, FILE_ROUTES)
+      .exclude('health', INTERNAL_ROUTES, PROBE_PATH, FILE_ROUTES, BRANDING_PATH)
       .forRoutes('{*path}');
-    // The file route's tenant is its Host's, not a header's (F-018-m).
-    consumer.apply(FileHostMiddleware).forRoutes(FILE_ROUTES);
+    // The file route's tenant is its Host's, not a header's (F-018-m); so is
+    // the public branding read's, over the same doors, so every image URL it
+    // hands out is one the file route will serve (F-018-h).
+    consumer.apply(FileHostMiddleware).forRoutes(FILE_ROUTES, BRANDING_PATH);
   }
 }

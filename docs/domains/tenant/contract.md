@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-version: 19
+version: 20
 updated: 2026-09-18
 ---
 
@@ -32,6 +32,7 @@ the rest are `reseller`. The platform bills tenants from a prepaid wallet
 | **suspend / reactivate / terminate a reseller; what each status allows** — implemented, [contract.admin.md](contract.admin.md), [rules.md](rules.md) | tenantId, status, reason | status view; Redis `tenant:status:<id>` rewritten; `TenantStatusGuard` (shared-core) refuses per capability | sync tx | `reseller_not_found` / `reseller_terminated` / `status_unchanged`; `403 tenant.suspended` / `tenant.terminated` |
 | check entitlement | tenantId, featureKey | allowed / denied (+ source, expiry) | sync | — |
 | **add and prove a custom domain** — implemented, [contract.domains.md](contract.domains.md) | tenantId, domainValue, purpose | domain view with TXT record, CNAME target, last check | sync add; async check (worker sweep) | `not_allowed` / `domain_taken` / `domain_reserved` |
+| **edit a reseller's branding; read it by Host** — implemented, [contract.branding.md](contract.branding.md) | tenantId, text, one image per slot | branding view with image URLs on the tenant's own door | sync | `not_allowed` / `reseller_suspended` / `too_large` / `type_not_allowed` |
 | **credit / debit the billing wallet** — implemented, [contract.billing.md](contract.billing.md) | tenantId, reason, amount, reference | `tenant_billing_transaction` (append-only); a credit also writes `tenant.billing.credited` | sync tx | insufficient / duplicate / version conflict |
 | **renew a reseller's subscription** — implemented, [contract.billing.md](contract.billing.md), [rules.md](rules.md) #10-#13 | tenantId, or every due one | charged + period moved on, or warned, or suspended as `non_payment`; outbox notices | async (worker sweep + `tenant.billing.credited`) | a failing tenant is `failed` in the sweep |
 | meter usage | tenantId, meterKey, quantity, period | `tenant_usage_meter` row | async (worker) | — |

@@ -9,7 +9,8 @@ import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service'
 const FILE_DOORS = [TenantDomainPurpose.panel, TenantDomainPurpose.assets] as const;
 
 /**
- * The tenant of a file request, from the Host it arrived on (F-018-m).
+ * The tenant of a file request, from the Host it arrived on (F-018-m) — and
+ * of the public branding read (F-018-h), so the two agree on every door.
  *
  * The file route is public — an `<img>` on the landing site carries no
  * session — so the Host is the claim and `tenant_domain` the proof, as for

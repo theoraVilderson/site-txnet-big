@@ -172,16 +172,26 @@ model Tenant {
 }
 
 /// ۲. برندینگ اختصاصی هر Tenant.
+/// A reseller's own brand (F-018-h, catalog 13.8). Every image is a **key** in
+/// object storage (`tenants/<tenantId>/branding/<slot>`, a CHECK holds it to the
+/// row's own tenant), never a URL: the URL is built at read time from the
+/// tenant's current `assets` or `panel` domain, because domains rotate.
 model TenantBranding {
   id                String   @id @default(uuid()) @db.Uuid
   tenantId          String   @unique @db.Uuid
   brandName         String
-  logoUrl           String? // Object Storage (ArvanCloud)
-  faviconUrl        String?
+  logoLightKey      String?
+  logoDarkKey       String?
+  faviconKey        String?
+  ogImageKey        String?
   primaryColorHex   String?
   secondaryColorHex String?
   supportEmail      String?
   supportPhone      String?
+  /// An `https` link to where support answers — a Telegram account, a help page.
+  supportUrl        String?
+  /// `{ <network>: <https link> }`, the networks `tenant-branding.schema.ts` names.
+  socials           Json     @default("{}")
   aboutText         String?
   termsUrl          String?
   privacyUrl        String?

@@ -31,7 +31,7 @@ cite a key.
 
 `active`. Built by F-018-m: the port and the `local` driver in `shared-core`,
 `stored_object` in its own `storage` schema, and the public serving route in
-`tenant-service`. First consumer F-018-h (not yet built).
+`tenant-service`. First consumer: tenant's branding (F-018-h).
 
 ## Changelog
 | Date | Change |

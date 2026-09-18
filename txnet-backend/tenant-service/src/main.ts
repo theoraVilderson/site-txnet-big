@@ -15,8 +15,8 @@ import { LocaleService } from './app/locale/locale.service';
  *
  * Every route but `/health` and `internal/*` sits behind `forward-auth`. The
  * panel calls it cross-origin with a bearer token, as it calls notifications
- * (F-093-c), so CORS follows `notification-service/src/main.ts` — plus `PUT` and
- * `PATCH`, which the status and package routes use — including
+ * (F-093-c), so CORS follows `notification-service/src/main.ts` — plus `PUT`,
+ * `PATCH` and `DELETE`, which the status, package and branding routes use — including
  * refusing to boot without an origin in production.
  */
 async function bootstrap() {
@@ -43,7 +43,7 @@ async function bootstrap() {
       ? frontendOrigin.split(',').map((origin) => origin.trim())
       : /^https?:\/\/localhost(:\d+)?$/, // dev only, localhost only
     credentials: true,
-    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'OPTIONS'],
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     optionsSuccessStatus: 204,
   });
