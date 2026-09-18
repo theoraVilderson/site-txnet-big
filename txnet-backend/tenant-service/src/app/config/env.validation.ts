@@ -5,12 +5,22 @@ import {
 import { z } from 'zod';
 
 /**
+ * A per-route request limit: a positive whole number with a default, and `''`
+ * (compose's `VAR=${VAR:-}`) read as unset — `auth-service`'s rule (F-087).
+ */
+const rateLimit = (fallback: number) =>
+  z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().positive().default(fallback),
+  );
+
+/**
  * `tenant-service`'s environment, validated at boot (F-089, ADR-0036).
  *
  * `notification-service`'s schema with every delivery line left out: tenant
  * administration sends nothing (ADR-0058). Each variable says why it is
  * required or why an empty value is safe. Per-route rate limits arrive with the
- * routes that use them (F-018-u onwards), named `<ROUTE>_RATE_LIMIT`.
+ * routes that use them (the first with F-019-h), named `<ROUTE>_RATE_LIMIT`.
  */
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -95,12 +105,21 @@ export const envSchema = z.object({
     (v) => (v === '' ? undefined : v),
     z.coerce.number().int().nonnegative().default(10),
   ),
+
+  // Requests per user per the route's window (F-019-h). The read budget is the
+  // package list plus the slug suggestion the purchase form asks as the name
+  // is typed; the write budget is purchases, each of which moves money.
+  RESELLER_PURCHASE_READ_RATE_LIMIT: rateLimit(120),
+  RESELLER_PURCHASE_WRITE_RATE_LIMIT: rateLimit(10),
 }).refine((env) => !(env.NODE_ENV === 'production' && !env.SERVICE_AUTH_TOKEN), {
   message: 'SERVICE_AUTH_TOKEN is required when NODE_ENV=production: without it no process can reach internal/*',
   path: ['SERVICE_AUTH_TOKEN'],
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;
+
+/** The variables a route may name as its `configKey`; a misspelled one does not compile (F-087). */
+export type RateLimitConfigKey = Extract<keyof EnvConfig, `${string}_RATE_LIMIT`>;
 
 export function validateEnv(raw: Record<string, unknown>): EnvConfig {
   const parsed = envSchema.safeParse(raw);

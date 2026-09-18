@@ -1,6 +1,14 @@
-import { InsufficientFunds, UnscopedRedisKeys } from '@txnet-backend/shared-core';
+import {
+  InsufficientFunds,
+  RATE_LIMIT_KEY,
+  RateLimitBucket,
+  RateLimitOptions,
+  UnscopedRedisKeys,
+  rateLimitBucketKey,
+} from '@txnet-backend/shared-core';
 
 import { addBillingPeriod, periodChargeReference } from '../renewal/tenant-renewal.service';
+import { ResellerPurchaseController } from './reseller-purchase.controller';
 import { ResellerPurchaseService } from './reseller-purchase.service';
 import { slugFromName } from './slug-suggestion';
 
@@ -200,5 +208,22 @@ describe('ResellerPurchaseService', () => {
 
   it('refuses a buyer who is not active', async () => {
     await expect(build({ status: 'banned' }).service.purchase(buyer, input, NOW)).rejects.toMatchObject({ reason: 'buyer_inactive' });
+  });
+});
+
+describe('ResellerPurchaseController', () => {
+  const limitOf = (route: keyof ResellerPurchaseController) =>
+    Reflect.getMetadata(RATE_LIMIT_KEY, ResellerPurchaseController.prototype[route]) as RateLimitOptions | undefined;
+
+  it('limits every route per user: reads share one budget, a purchase has its own', () => {
+    const req = { identity: { userId: 'u-1', tenantId: 't-1' } };
+    expect(limitOf('packages')?.configKey).toBe('RESELLER_PURCHASE_READ_RATE_LIMIT');
+    expect(limitOf('slug')?.configKey).toBe('RESELLER_PURCHASE_READ_RATE_LIMIT');
+    expect(limitOf('purchase')?.configKey).toBe('RESELLER_PURCHASE_WRITE_RATE_LIMIT');
+    // Built from the caller, so one user never spends another's allowance.
+    expect(limitOf('packages')?.key(req)).toBe(rateLimitBucketKey(RateLimitBucket.RESELLER_PURCHASE_READ, 'u-1'));
+    expect(limitOf('slug')?.key(req)).toBe(rateLimitBucketKey(RateLimitBucket.RESELLER_PURCHASE_READ, 'u-1'));
+    expect(limitOf('purchase')?.key(req)).toBe(rateLimitBucketKey(RateLimitBucket.RESELLER_PURCHASE_WRITE, 'u-1'));
+    expect(limitOf('purchase')?.windowSec).toBe(900);
   });
 });

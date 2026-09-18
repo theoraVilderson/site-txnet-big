@@ -215,6 +215,14 @@ export const RateLimitBucket = {
   TENANT_BILLING_ADMIN_WRITE: 'tenant-billing:admin:write',
 
   /**
+   * A platform user buying a reseller in `tenant-service` (F-019-h), per user.
+   * The read budget covers the package list and the slug suggestion, which the
+   * form asks again as the name is typed; a purchase moves money and is rare.
+   */
+  RESELLER_PURCHASE_READ: 'reseller-purchase:read',
+  RESELLER_PURCHASE_WRITE: 'reseller-purchase:write',
+
+  /**
    * One of the caller's own payments (F-093-l), per user. Its own bucket, not
    * `WALLET_PAYMENTS`: the pending page polls it, and a payer watching a
    * verifying payment must not use up the financial page's list budget.

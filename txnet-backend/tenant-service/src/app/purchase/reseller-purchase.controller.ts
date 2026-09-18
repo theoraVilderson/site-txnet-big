@@ -13,9 +13,11 @@ import {
   Req,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
+import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { PurchaseInput, SuggestSlugInput, purchaseSchema, suggestSlugSchema } from './reseller-purchase.schema';
 import {
@@ -40,6 +42,18 @@ const STATUS: Record<PurchaseRejection, 403 | 404 | 409 | 422> = {
   package_not_sold_for_period: 422,
 };
 
+/** Per user: the package list and the slug suggestion share one budget, a purchase has its own (15 minutes each). */
+const READ = {
+  key: (req: Request) => rateLimitBucketKey(RateLimitBucket.RESELLER_PURCHASE_READ, identityOf(req).userId),
+  configKey: 'RESELLER_PURCHASE_READ_RATE_LIMIT' as const,
+  windowSec: 900,
+};
+const WRITE = {
+  key: (req: Request) => rateLimitBucketKey(RateLimitBucket.RESELLER_PURCHASE_WRITE, identityOf(req).userId),
+  configKey: 'RESELLER_PURCHASE_WRITE_RATE_LIMIT' as const,
+  windowSec: 900,
+};
+
 /**
  * A platform user buys a reseller (F-019-h, ADR-0061):
  * `GET /api/tenants/purchase/packages`, `GET /api/tenants/purchase/slug?name=`,
@@ -53,17 +67,20 @@ export class ResellerPurchaseController {
   constructor(private readonly purchases: ResellerPurchaseService) {}
 
   @Get('packages')
+  @RateLimit(READ)
   async packages(@Req() req: Request, @Ip() ip: string): Promise<PackageOffer[]> {
     return this.refusing(() => this.purchases.packages(buyerOf(req, ip)));
   }
 
   @Get('slug')
+  @RateLimit(READ)
   async slug(@Req() req: Request, @Query(new ZodValidationPipe(suggestSlugSchema)) query: SuggestSlugInput, @Ip() ip: string): Promise<{ slug: string }> {
     return this.refusing(() => this.purchases.suggestSlug(buyerOf(req, ip), query.name));
   }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @RateLimit(WRITE)
   async purchase(@Req() req: Request, @Body(new ZodValidationPipe(purchaseSchema)) body: PurchaseInput, @Ip() ip: string): Promise<PurchaseView> {
     return this.refusing(() => this.purchases.purchase(buyerOf(req, ip), body));
   }

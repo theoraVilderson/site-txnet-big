@@ -80,6 +80,7 @@ Refusals: `not_platform_user` 403; `package_not_found` 404; `buyer_inactive`,
 | **One live reseller per user**: one they own that is not `terminated` or deleted is `already_reseller`, checked before and again inside the transaction; two purchases racing meet at the wallet's version guard (`wallet_changed`) | `GET /auth/me` and the panel assume one tenant per owner (user, 2026-09-18) |
 | **The slug:** sent, it is the buyer's own (`slugSchema`, the create's rules) and a held one is `slug_taken`; absent, the one `name` suggests. A suggestion transliterates Persian to Latin, becomes one DNS label of at most 50 characters (`reseller` when nothing is left), then takes the first of `base`, `base-2` … `base-20` neither reserved nor held, else a random suffix. Fixed after creation | close to the name and editable before buying; renaming would move both hosts and break a CNAME to `<slug>.edge` (user, 2026-09-18) |
 | The package must be active and priced for the period, read again under its lock | a deactivated package takes no new subscriber (F-018-d) |
+| Rate limits per user over 15 minutes: `RESELLER_PURCHASE_READ` for the package list and the suggestion together (`RESELLER_PURCHASE_READ_RATE_LIMIT`, default 120), `RESELLER_PURCHASE_WRITE` for the purchase (`RESELLER_PURCHASE_WRITE_RATE_LIMIT`, default 10); over it is `429` | the suggestion is asked as the name is typed; a purchase moves money. Tunable without a rebuild (F-087) |
 
 ## Packages the platform sells (F-018-d)
 

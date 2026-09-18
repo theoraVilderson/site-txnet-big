@@ -51,6 +51,8 @@ exports[`RateLimitBucket > records the whole rate-limited surface in one place 1
   "CATALOG_ADMIN_READ = catalog:admin:read",
   "CATALOG_ADMIN_WRITE = catalog:admin:write",
   "TENANT_BILLING_ADMIN_WRITE = tenant-billing:admin:write",
+  "RESELLER_PURCHASE_READ = reseller-purchase:read",
+  "RESELLER_PURCHASE_WRITE = reseller-purchase:write",
   "WALLET_PAYMENT = wallet:payment",
   "NOTIFICATION_READ = notification:read",
   "NOTIFICATION_WRITE = notification:write",
