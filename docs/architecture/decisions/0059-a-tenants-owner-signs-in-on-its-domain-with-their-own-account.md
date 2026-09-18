@@ -42,8 +42,10 @@ auth-service's resolver.
    accounts first; if none matches, it tries the owner's account alone, by id,
    and completes the sign-in in the owner's tenant. No other cross-tenant
    account is ever looked up.
-4. **Not in this decision:** OTP sign-in and 2FA for the owner on the surface
-   (F-061-d), and the owner's administration routes (`tenant-service`, F-018-y).
+4. **OTP sign-in and 2FA follow (3)** (F-061-d): the code is requested,
+   issued, checked and the session opened in the owner's tenant, and the
+   request's 202 does not change with a match. **Not in this decision:** the
+   owner's administration routes (`tenant-service`, F-018-y).
 
 ## Alternatives
 

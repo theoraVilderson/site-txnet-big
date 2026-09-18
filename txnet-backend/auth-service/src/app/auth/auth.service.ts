@@ -255,8 +255,9 @@ export class AuthService {
     lang: string,
   ) {
     return safeExecute(async () => {
+      const where = { phoneNumber };
       const user = await this.prisma.user.findFirst({
-        where: { phoneNumber },
+        where,
         select: {
           id: true,
           status: true,
@@ -264,37 +265,61 @@ export class AuthService {
           preferredOtpChannel: true,
         },
       });
-      const resolvedChannel = await this.resolveOtpChannel(phoneNumber, user ?? {}, channel);
 
-      const link = await this.linkIfNeeded(
-        resolvedChannel,
+      // ADR-0059 (4): on a reseller's domain, a number none of its own
+      // accounts holds may be its owner's. The code is then issued in the
+      // owner's tenant — its key is scoped there, and that is where verify
+      // will look. Either way the answer below is the same 202.
+      if (!user) {
+        const owner = await this.surfaceOwners.ownerMatching(where, {});
+        if (owner) {
+          return runWithTenant(owner.scope, () =>
+            this.sendLoginOtp(owner.user, phoneNumber, channel, ip, lang),
+          );
+        }
+      }
+      return this.sendLoginOtp(user, phoneNumber, channel, ip, lang);
+    });
+  }
+
+  /** Everything a login-code request does once the account is found (or not). */
+  private async sendLoginOtp(
+    user: any,
+    phoneNumber: string,
+    channel: OtpChannel | undefined,
+    ip: string,
+    lang: string,
+  ) {
+    const resolvedChannel = await this.resolveOtpChannel(phoneNumber, user ?? {}, channel);
+
+    const link = await this.linkIfNeeded(
+      resolvedChannel,
+      phoneNumber,
+      OtpPurpose.login,
+      ip,
+      lang,
+    );
+    if (link) return link;
+
+    // Minted whether or not a code is issued: handles handed out only for a
+    // real account would answer the question `{accepted:true}` exists to
+    // refuse, and the channel would answer it a second time by accepting or
+    // refusing a subscription (`OtpDeliveryStore.mintHandles`).
+    const delivery = await this.deliveries.mintHandles();
+    if (user?.status === 'active' && user.phoneVerifiedAt) {
+      await this.otp.issueOtp(
         phoneNumber,
         OtpPurpose.login,
+        resolvedChannel,
         ip,
         lang,
+        delivery,
       );
-      if (link) return link;
-
-      // Minted whether or not a code is issued: handles handed out only for a
-      // real account would answer the question `{accepted:true}` exists to
-      // refuse, and the channel would answer it a second time by accepting or
-      // refusing a subscription (`OtpDeliveryStore.mintHandles`).
-      const delivery = await this.deliveries.mintHandles();
-      if (user?.status === 'active' && user.phoneVerifiedAt) {
-        await this.otp.issueOtp(
-          phoneNumber,
-          OtpPurpose.login,
-          resolvedChannel,
-          ip,
-          lang,
-          delivery,
-        );
-      }
-      return ok(
-        { accepted: true, ...deliveryHandles(delivery) },
-        'auth.otpSent',
-      );
-    });
+    }
+    return ok(
+      { accepted: true, ...deliveryHandles(delivery) },
+      'auth.otpSent',
+    );
   }
 
   async verifyLoginOtp(
@@ -304,6 +329,12 @@ export class AuthService {
     scopeKey?: string | null,
   ) {
     return safeExecute(async () => {
+      const include = {
+        role: {
+          include: { rolePermissions: { include: { permission: true } } },
+        },
+      };
+
       if (input.otpToken) {
         const claims = this.tokens.verify(input.otpToken);
         if (!claims?.sub || claims.purpose !== 'otp_login') {
@@ -311,44 +342,69 @@ export class AuthService {
         }
         const user = await this.prisma.user.findUnique({
           where: { id: claims.sub },
-          include: {
-            role: {
-              include: { rolePermissions: { include: { permission: true } } },
-            },
-          },
+          include,
         });
-        if (!user || user.status !== 'active') {
-          return err('auth.invalidOtpToken');
+        // ADR-0059 (4): the owner's two-factor code was issued in their own
+        // tenant by the password step, so it is checked — and the session
+        // opened — there. Only when the token names the owner.
+        if (!user) {
+          const owner = await this.surfaceOwners.ownerMatching({}, include);
+          if (owner?.user.id === claims.sub) {
+            return runWithTenant(owner.scope, () =>
+              this.completeTwoFactorLogin(owner.user, input.otpCode, ip, userAgent, scopeKey),
+            );
+          }
         }
-        await this.otp.verifyOtp(
-          user.phoneNumber!,
-          OtpPurpose.login,
-          input.otpCode,
-        );
-        const sessionData = await this.issueSession(user, ip, userAgent, scopeKey);
-        return ok(sessionData, 'auth.loginSuccess');
+        return this.completeTwoFactorLogin(user, input.otpCode, ip, userAgent, scopeKey);
       }
 
       if (!input.phoneNumber) return err('auth.phoneNumberRequired');
-      const user = await this.prisma.user.findFirst({
-        where: { phoneNumber: input.phoneNumber },
-        include: {
-          role: {
-            include: { rolePermissions: { include: { permission: true } } },
-          },
-        },
-      });
-      if (!user || user.status !== 'active' || !user.phoneVerifiedAt) {
-        return err('auth.invalidOtp');
+      const where = { phoneNumber: input.phoneNumber };
+      const user = await this.prisma.user.findFirst({ where, include });
+      // ADR-0059 (4): the owner's login code lives in their own tenant.
+      if (!user) {
+        const owner = await this.surfaceOwners.ownerMatching(where, include);
+        if (owner) {
+          return runWithTenant(owner.scope, () =>
+            this.completeOtpLogin(owner.user, input.phoneNumber!, input.otpCode, ip, userAgent, scopeKey),
+          );
+        }
       }
-      await this.otp.verifyOtp(
-        input.phoneNumber,
-        OtpPurpose.login,
-        input.otpCode,
-      );
-      const sessionData = await this.issueSession(user, ip, userAgent, scopeKey);
-      return ok(sessionData, 'auth.loginSuccess');
+      return this.completeOtpLogin(user, input.phoneNumber, input.otpCode, ip, userAgent, scopeKey);
     });
+  }
+
+  /** The second step of a password sign-in, once the token's account is found (or not). */
+  private async completeTwoFactorLogin(
+    user: any,
+    otpCode: string,
+    ip: string,
+    userAgent: string,
+    scopeKey?: string | null,
+  ) {
+    if (!user || user.status !== 'active') {
+      return err('auth.invalidOtpToken');
+    }
+    await this.otp.verifyOtp(user.phoneNumber!, OtpPurpose.login, otpCode);
+    const sessionData = await this.issueSession(user, ip, userAgent, scopeKey);
+    return ok(sessionData, 'auth.loginSuccess');
+  }
+
+  /** A code-only sign-in, once the number's account is found (or not). */
+  private async completeOtpLogin(
+    user: any,
+    phoneNumber: string,
+    otpCode: string,
+    ip: string,
+    userAgent: string,
+    scopeKey?: string | null,
+  ) {
+    if (!user || user.status !== 'active' || !user.phoneVerifiedAt) {
+      return err('auth.invalidOtp');
+    }
+    await this.otp.verifyOtp(phoneNumber, OtpPurpose.login, otpCode);
+    const sessionData = await this.issueSession(user, ip, userAgent, scopeKey);
+    return ok(sessionData, 'auth.loginSuccess');
   }
 
   /**

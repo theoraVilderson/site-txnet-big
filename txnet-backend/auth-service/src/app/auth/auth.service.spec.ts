@@ -631,6 +631,124 @@ describe('AuthService.verifyLoginOtp — the token purpose is load-bearing', () 
   });
 });
 
+describe("AuthService OTP login — a reseller's owner on its domain (F-061-d, ADR-0059)", () => {
+  let h: Harness;
+  const PLATFORM_SCOPE = {
+    id: 'tenant-platform',
+    slug: 'platform_owner',
+    via: 'session',
+    surfacePurpose: 'panel',
+    brand: { id: 'tenant-reseller', slug: 'arian-vpn' },
+  };
+  const owner = () => ({
+    user: activeUser({ id: 'user-ali', tenantId: 'tenant-platform' }),
+    scope: PLATFORM_SCOPE,
+  });
+  const scopeOf = (m: Mock) => {
+    const seen: (string | undefined)[] = [];
+    m.mockImplementation(async () => {
+      seen.push(TenantContext.currentOrNull()?.id);
+      return m === h.sessionService.createSession
+        ? { session: { id: 'session-new' }, refreshToken: 'refresh-new' }
+        : undefined;
+    });
+    return seen;
+  };
+  const request = () =>
+    h.service.requestLoginOtp('09123456789', undefined, '1.2.3.4', 'fa');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    h = harness();
+    h.prisma.user.findFirst.mockResolvedValue(null);
+    h.prisma.user.findUnique.mockResolvedValue(null);
+  });
+
+  it("issues the owner's code inside the owner's tenant, where verify looks for it", async () => {
+    h.surfaceOwners.ownerMatching.mockResolvedValue(owner());
+    const issuedIn = scopeOf(h.otp.issueOtp);
+
+    const res = await request();
+
+    expect(h.surfaceOwners.ownerMatching).toHaveBeenCalledWith(
+      { phoneNumber: '09123456789' },
+      expect.anything(),
+    );
+    expect(issuedIn).toEqual(['tenant-platform']);
+    expect(res).toMatchObject({ ok: true, data: { accepted: true } });
+  });
+
+  it('answers the same when neither the domain nor its owner holds the number', async () => {
+    const res = await request();
+    h.surfaceOwners.ownerMatching.mockResolvedValue(owner());
+    const owned = await request();
+
+    expect(h.otp.issueOtp).toHaveBeenCalledTimes(1);
+    expect(res).toEqual(owned);
+  });
+
+  it("does not look for the owner when the domain's own tenant has the number", async () => {
+    h.prisma.user.findFirst.mockResolvedValue(activeUser());
+
+    await request();
+
+    expect(h.surfaceOwners.ownerMatching).not.toHaveBeenCalled();
+  });
+
+  it("verifies the owner's code and opens the session in the owner's tenant", async () => {
+    h.surfaceOwners.ownerMatching.mockResolvedValue(owner());
+    const verifiedIn = scopeOf(h.otp.verifyOtp);
+    const sessionIn = scopeOf(h.sessionService.createSession);
+
+    const res = await h.service.verifyLoginOtp(
+      { phoneNumber: '09123456789', otpCode: '123456' } as never,
+      '1.2.3.4',
+      'jest-ua',
+    );
+
+    expect(res).toMatchObject({ ok: true, msg: 'auth.loginSuccess' });
+    expect(verifiedIn).toEqual(['tenant-platform']);
+    expect(sessionIn).toEqual(['tenant-platform']);
+    expect(h.sessionService.createSession).toHaveBeenCalledWith(
+      'user-ali',
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it("finishes the owner's two-factor sign-in in the owner's tenant", async () => {
+    h.tokens.verify.mockReturnValue({ sub: 'user-ali', purpose: 'otp_login' });
+    h.surfaceOwners.ownerMatching.mockResolvedValue(owner());
+    const verifiedIn = scopeOf(h.otp.verifyOtp);
+    const sessionIn = scopeOf(h.sessionService.createSession);
+
+    const res = await h.service.verifyLoginOtp(
+      { otpToken: 'tok', otpCode: '123456' } as never,
+      '1.2.3.4',
+      'jest-ua',
+    );
+
+    expect(res).toMatchObject({ ok: true, msg: 'auth.loginSuccess' });
+    expect(verifiedIn).toEqual(['tenant-platform']);
+    expect(sessionIn).toEqual(['tenant-platform']);
+  });
+
+  it("refuses a two-factor token whose subject is not the domain's owner", async () => {
+    h.tokens.verify.mockReturnValue({ sub: 'user-other', purpose: 'otp_login' });
+    h.surfaceOwners.ownerMatching.mockResolvedValue(owner());
+
+    const res = await h.service.verifyLoginOtp(
+      { otpToken: 'tok', otpCode: '123456' } as never,
+      '1.2.3.4',
+      'jest-ua',
+    );
+
+    expect(res).toEqual({ ok: false, msg: 'auth.invalidOtpToken', error: null });
+    expect(h.otp.verifyOtp).not.toHaveBeenCalled();
+  });
+});
+
 describe('AuthService.sessionStatus — the read-only half', () => {
   let h: Harness;
 

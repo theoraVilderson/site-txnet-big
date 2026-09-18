@@ -2,7 +2,7 @@
 id: identity
 layer: domain
 status: active
-version: 15
+version: 16
 updated: 2026-09-18
 ---
 
@@ -79,10 +79,11 @@ No message bus. Impersonation start/end write an `audit.admin_audit_log` row
 
 ## Guarantees
 
-- **On a reseller's domain, password login also accepts its owner's own account**
-  (ADR-0059 (3), v15): only when none of that tenant's accounts matches, only
-  the account `tenant.ownerUserId` names, and the sign-in completes in the
-  owner's tenant — their session, their data. OTP login and 2FA there: F-061-d.
+- **On a reseller's domain, login also accepts its owner's own account**
+  (ADR-0059 (3), password v15, OTP and 2FA v16): only when none of that
+  tenant's accounts matches, only the account `tenant.ownerUserId` names, and
+  the sign-in completes in the owner's tenant — their code key, their session,
+  their data. The OTP request's 202 is the same whether or not anyone matched.
 - Access JWT TTL `JWT_ACCESS_TTL_SEC` (default 900s); impersonation token 1800s.
 - Refresh is single-use: `refresh` revokes the old session and issues a new one.
   The replacement **inherits the old row's `scopeKey`** — a refresh is the same
