@@ -262,6 +262,20 @@ describe("reconnecting", () => {
     expect(FakeSocket.live).toHaveLength(1);
   });
 
+  it("treats 4403 as a closed tenant: stops for good and says so, without signing out (F-018-ac)", () => {
+    const sessionLost = vi.fn();
+    const tenantClosed = vi.fn();
+    const { socket } = connected({ onSessionLost: sessionLost, onTenantClosed: tenantClosed });
+
+    socket.drop(4403);
+    vi.advanceTimersByTime(600_000);
+
+    expect(tenantClosed).toHaveBeenCalledTimes(1);
+    expect(sessionLost).not.toHaveBeenCalled();
+    // No reconnect: the gateway would refuse the upgrade `403`, every 30s, forever.
+    expect(FakeSocket.live).toHaveLength(1);
+  });
+
   it("stops reconnecting once the caller closes it", () => {
     const { client, socket } = connected();
 

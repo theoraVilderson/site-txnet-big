@@ -1,5 +1,6 @@
 import { PanelShell } from "./_components/PanelShell";
 import { PaymentCreditedToast } from "./_components/PaymentCreditedToast";
+import { TenantClosedBanner } from "./_components/TenantClosedBanner";
 import { PanelRealtimeProvider } from "./_context/PanelRealtimeContext";
 import { PanelSessionProvider } from "./_context/PanelSessionContext";
 
@@ -22,6 +23,8 @@ export default function PanelLayout({
         <PanelShell>{children}</PanelShell>
         {/* F-067-l: a late credit is announced on any screen (ADR-0045). */}
         <PaymentCreditedToast />
+        {/* F-018-ac: the gateway closed the socket because the tenant is terminated. */}
+        <TenantClosedBanner />
       </PanelRealtimeProvider>
     </PanelSessionProvider>
   );

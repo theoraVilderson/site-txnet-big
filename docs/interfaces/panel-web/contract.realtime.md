@@ -67,7 +67,9 @@ result simply stops arriving, on a screen showing no error.
 marker every 60s and closes with `4401` when it is gone. The client stops for
 good and calls `onSessionLost`, which is the page's own no-session redirect.
 Reconnecting instead asks the same question forever and turns one revocation
-into a loop.
+into a loop. **`4403` stops it too** — the tenant was terminated (F-018-r) — and
+calls `onTenantClosed`, not `onSessionLost`: a reconnect would be refused `403`,
+which a browser sees as a drop, so backoff would run for as long as the tab.
 
 **4. The page keeps its own heartbeat.** The server's is a WebSocket ping, and
 a browser answers it without telling the page — so a peer that vanished leaves
@@ -173,6 +175,13 @@ here rather than asking again forever.
 which is a sign-out that happened somewhere else — another tab, another device,
 an admin. The client stops for good on that code and this provider routes it to
 the login screen, the same answer `PanelSessionContext` gives a missing cookie.
+
+**`4403` is a closed service, not a sign-out (F-018-ac).** The provider sets
+`tenantClosed` (`usePanelTenantClosed()`), and `_components/TenantClosedBanner.tsx`
+at the layout shows `common.shell.tenantClosed` on every screen, not
+dismissable: nothing reconnects, so live updates stay stopped. The sentence is
+the panel's own — a close code does not pass through `locale-service`. The
+session is left alone; the next REST call answers `403 tenant.terminated`.
 
 **A switch is a close-and-reopen.** The socket is keyed to the current
 account's `userId`, so a change of identity tears the connection down and

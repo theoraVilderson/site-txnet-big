@@ -24,6 +24,12 @@ type PanelRealtime = {
    * re-run when it changes.
    */
   client: RealtimeClient | null;
+  /**
+   * The gateway closed this session's socket with `4403`: the tenant is
+   * terminated (F-018-ac). The client has stopped for good; the layout says
+   * the service is closed.
+   */
+  tenantClosed: boolean;
 };
 
 const PanelRealtimeContext = createContext<PanelRealtime | null>(null);
@@ -57,13 +63,16 @@ const PanelRealtimeContext = createContext<PanelRealtime | null>(null);
  *    not a rule, and this keying is what makes it one.
  * 3. **`4401` is this panel's no-session redirect**, and never a reconnect.
  *    The gateway re-reads `session:<id>` on an interval and closes with it when
- *    the marker is gone, which is a sign-out that happened elsewhere.
+ *    the marker is gone, which is a sign-out that happened elsewhere. `4403` —
+ *    the tenant was terminated — is not a sign-out either: it raises
+ *    `tenantClosed` and nothing reconnects (F-018-ac).
  */
 export function PanelRealtimeProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { group } = usePanelSession();
   const userId = group?.current.userId ?? null;
   const [client, setClient] = useState<RealtimeClient | null>(null);
+  const [tenantClosed, setTenantClosed] = useState(false);
 
   // The socket's lifetime is keyed to the account and to nothing else, so the
   // effect below must not list anything that changes per render — `useRouter()`
@@ -87,6 +96,9 @@ export function PanelRealtimeProvider({ children }: { children: ReactNode }) {
         // remembers the page it interrupted (F-093-i).
         rememberReturnTo(currentReturnPath());
         routerRef.current.replace(AUTH_LOGIN);
+      },
+      onTenantClosed: () => {
+        if (alive) setTenantClosed(true);
       },
       onCredentialRejected: () => {
         // The upgrade was refused before a socket existed. The client has
@@ -114,13 +126,23 @@ export function PanelRealtimeProvider({ children }: { children: ReactNode }) {
     };
   }, [userId]);
 
-  const value = useMemo(() => ({ client }), [client]);
+  const value = useMemo(() => ({ client, tenantClosed }), [client, tenantClosed]);
 
   return (
     <PanelRealtimeContext.Provider value={value}>
       {children}
     </PanelRealtimeContext.Provider>
   );
+}
+
+/** Whether the gateway closed this panel's socket because the tenant is terminated (F-018-ac). */
+export function usePanelTenantClosed(): boolean {
+  const ctx = useContext(PanelRealtimeContext);
+  if (!ctx)
+    throw new Error(
+      "usePanelTenantClosed must be used within PanelRealtimeProvider",
+    );
+  return ctx.tenantClosed;
 }
 
 /**

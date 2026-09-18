@@ -33,6 +33,10 @@
       "title": "Payment reversed",
       "body": "Your payment of {{amount}} was reversed by the gateway; the bank is returning it to your card.",
       "dismiss": "Dismiss"
+    },
+    "tenantClosed": {
+      "title": "This service has been closed",
+      "body": "Live updates have stopped. Contact your provider for more information."
     }
   },
   "gateways": {

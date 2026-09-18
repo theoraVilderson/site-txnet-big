@@ -42,6 +42,8 @@ const BACKOFF_ATTEMPTS_AT_CAPACITY = 5;
 
 /** Application close codes. 4000+ is the application range. */
 export const CLOSE_SESSION_GONE = 4401;
+/** The tenant's status no longer allows reading — terminated (F-018-r). */
+export const CLOSE_TENANT_CLOSED = 4403;
 export const CLOSE_HEARTBEAT = 4408;
 export const CLOSE_TOO_MANY = 4429;
 export const CLOSE_SHUTTING_DOWN = 4503;
@@ -105,6 +107,12 @@ export type RealtimeClientOptions = {
   credential?: () => string | null | undefined;
   /** The gateway closed with `4401`: the session is gone. Sign out. */
   onSessionLost?: () => void;
+  /**
+   * The gateway closed with `4403`: this tenant is terminated (F-018-ac). The
+   * client has stopped for good — a reconnect is refused `403` — and the page
+   * says the service is closed. Not a sign-out: the session may still be live.
+   */
+  onTenantClosed?: () => void;
   /**
    * The socket closed before it was welcomed while a credential was offered.
    * A browser cannot see the `401` the gate answered — it sees a close with no
@@ -365,6 +373,15 @@ export class RealtimeClient {
       // asks the same question and gets the same answer, forever.
       this.stopped = true;
       this.options.onSessionLost?.();
+      return;
+    }
+
+    if (code === CLOSE_TENANT_CLOSED) {
+      // The tenant stopped reading. Every reconnect would be refused `403`
+      // before a socket exists, which a browser reports as a drop — so the
+      // backoff would run for as long as the tab is open.
+      this.stopped = true;
+      this.options.onTenantClosed?.();
       return;
     }
 
