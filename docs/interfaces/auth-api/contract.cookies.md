@@ -2,8 +2,8 @@
 id: auth-api
 layer: interface
 status: active
-version: 18
-updated: 2026-09-11
+version: 21
+updated: 2026-09-18
 ---
 
 # auth-api — the refresh cookie
@@ -19,11 +19,23 @@ service to both.
 | attribute | value | why |
 |---|---|---|
 | `httpOnly` | always | no script on any subdomain can read the token |
-| `path` | `/` | with `Domain`, this is what makes a second `Set-Cookie` overwrite the first rather than sit beside it |
-| `Domain` | `.<DOMAIN_NAME>` | the cookie must reach `panel.<domain>`, where `panel-web`'s proxy reads it server-side to keep a signed-in visitor off the auth screens (F-0101). Narrowing it to `api.<domain>` breaks that check. Decided 2026-09-05 |
+| `path` | `/` | with no `Domain`, this is what makes a second `Set-Cookie` overwrite the first rather than sit beside it |
+| `Domain` | **none — host-only** | the panel calls `/api/auth` on its own domain (ADR-0060), so the host that sets the cookie is the host `panel-web`'s proxy reads it on (F-0101). `.<DOMAIN_NAME>` (2026-09-05 .. 2026-09-18) is refused by a browser on a reseller's own domain and reaches every `<slug>.<domain>` |
 | `SameSite` | `Lax` | |
 | `Secure` | set unless `COOKIE_SECURE=false` | the switch exists for local HTTP dev only. Anything other than a deliberate `"false"` keeps the cookie on TLS |
 | `Max-Age` | 30 days | the same value as the refresh token's own TTL — see below |
+
+## The domain-wide cookie it replaced is expired, every time (ADR-0060)
+
+A browser that held the `Domain=.<DOMAIN_NAME>` cookie and is then given the
+host-only one holds **two** — `Domain` is part of a cookie's identity — and
+sends the older first: the session the write just rotated away, so the next
+refresh signs the user out. `setRefreshCookie` and `clearRefreshCookie`
+therefore also expire the domain-wide one in the same response, **after** the
+real `Set-Cookie`: a browser ignores the order, but a client reading the first
+`refresh_token` line (the e2e jar) then reads the right one. On a host outside
+`DOMAIN_NAME` the browser discards that expiry, which is harmless. Nobody is
+signed out by the switch.
 
 ## Every route that mints a session writes the identical cookie
 

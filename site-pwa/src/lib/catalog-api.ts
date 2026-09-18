@@ -1,11 +1,12 @@
 // Catalog management (F-026-d) is served by billing-service on its own public
-// path, `api.${DOMAIN_NAME}/api/catalog` (ADR-0049; the user's call, 2026-09-14).
-// Cross-origin with the access token as a Bearer header, exactly as
-// `billing-api.ts` calls billing: the same gate, the same credential.
+// path, `/api/catalog` on the page's own domain (ADR-0049, ADR-0060). The
+// access token as a Bearer header, exactly as `billing-api.ts` calls billing:
+// the same gate, the same credential.
+import { API_BASE } from "./api-origin";
 import { createApiClient } from "./api-request";
 import { authApi } from "./auth-api";
 
-const API_URL = `${process.env.NEXT_PUBLIC_API_ORIGIN}/api/catalog`;
+const API_URL = `${API_BASE}/catalog`;
 
 const call = createApiClient({
   baseUrl: API_URL,

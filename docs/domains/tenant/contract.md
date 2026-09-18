@@ -158,11 +158,12 @@ neutral 404 — the same answer a stranger's host gets. There is no
 service-caller exemption: a verified service token says *who* is calling, never
 *for whom*.
 
-**Known limit:** the host is the one the *API* was called on. The panel calls
-the API cross-origin (`site-pwa/src/lib/auth-api.ts`) at `api.<domain>`, so a
-reseller needs a `tenant_domain` row for their API host; the panel's own domain
-arrives as `Origin`, which nothing consults — and never will (ADR-0025). Once
-the panel holds a session, the session claim answers regardless of host.
+**The host is the panel's own.** Since ADR-0060 the panel calls `/api/*` on the
+domain it was loaded from, and Traefik routes it on every host, so the host a
+call resolves from is the reseller's panel domain (or `panel.<domain>`, seeded
+for the platform) — one `tenant_domain` row per panel domain, no separate API
+host. `Origin` is still never consulted (ADR-0025). Once the panel holds a
+session, the session claim answers regardless of host.
 
 **Not built yet:** C-01's `X-Tenant-Id` on a *platform-staff* token. What ships
 here is the same header restricted to a verified service caller — see

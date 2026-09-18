@@ -1,7 +1,7 @@
 ---
 id: ops-environments
 status: active
-updated: 2026-09-05
+updated: 2026-09-18
 ---
 
 # Environments
@@ -61,9 +61,10 @@ Traefik in the main stack can route to the other stacks).
 |---|---|
 | `<domain>` / `www.<domain>` | coinsite (marketing-web) |
 | `panel.<domain>` | site-pwa (panel-web) |
-| `api.<domain>/api/auth` | auth-service |
-| `api.<domain>/api/bot` | bot-service (the Telegram/Bale webhook; router priority 100, because auth-service's https router also matches the bare host) |
-| `api.<domain>/api/billing` | billing-service (behind `strip-fake-headers` + `my-auth` ForwardAuth) |
+| any other host | site-pwa, priority 1, no certresolver — a reseller's CDN holds its certificate (ADR-0060) |
+| *any host*`/api/auth` | auth-service (priority 120, no `Host` — the panel calls it on its own domain, ADR-0060) |
+| *any host*`/api/billing`, `/api/catalog`, `/api/notifications`, `/api/tenants*`, `REALTIME_PATH` | their services, same shape (billing behind `strip-fake-headers` + `my-auth`) |
+| `api.<domain>/api/bot` | bot-service (the Telegram/Bale webhook; router priority 100) |
 | `monitor.<domain>` | Traefik dashboard (basic-auth) |
 | `mq.<domain>` | RabbitMQ management |
 

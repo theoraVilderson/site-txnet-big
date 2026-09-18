@@ -35,42 +35,46 @@ const RENAMED_PATH = "/auth/signup";
 /**
  * auth-service, server-to-server. `AUTH_SERVICE_ORIGIN` keeps this hop inside
  * `private_backend_network` (`http://auth-service:${AUTH_PORT}`), which is the
- * whole point of doing the check here — the public origin would send it back
- * out through DNS + Traefik + TLS, the ~0.5-2s the panel-web contract's TL;DR
- * budgets for browser calls. ASSUMED(2026-09-05): falling back to the public
- * origin is correct when the internal one is unset (local `next dev` outside
- * compose); see open-questions.
+ * whole point of doing the check here — the public route would send it back
+ * out through DNS + Traefik + TLS before the login page can render.
+ * ASSUMED(2026-09-05): falling back to the public route is correct when the
+ * internal one is unset (local `next dev` outside compose); see open-questions.
+ * The public route is this page's own origin, where Traefik serves `/api/auth`
+ * on every panel domain (ADR-0060).
  */
-function authServiceOrigin(): string {
-  return (
-    process.env.AUTH_SERVICE_ORIGIN ?? process.env.NEXT_PUBLIC_API_ORIGIN ?? ""
-  );
+function authServiceOrigin(request: NextRequest): string {
+  return process.env.AUTH_SERVICE_ORIGIN || request.nextUrl.origin;
 }
 
 /**
- * The host this deployment's API is reached at publicly, or `null`.
+ * The host the visitor is on — the panel domain whose tenant this check is
+ * about — or `null`.
  *
  * auth-service resolves a request's tenant from the host it was called on
- * (ADR-0020), and `req.hostname` there reads `X-Forwarded-Host` because that is
- * what Traefik forwards. The hop below skips Traefik on purpose, so without
- * this the host auth-service sees is the container name — which matches no
- * `tenant_domain` row, and since F-066-d removed the fallback tenant an
- * unresolved host is a neutral 404. The visitor stayed on the login form.
+ * (ADR-0025), and `req.hostname` there reads `X-Forwarded-Host` because that is
+ * what Traefik forwards. The internal hop skips Traefik, so without this the
+ * host auth-service sees is the container name, which matches no
+ * `tenant_domain` row: a neutral 404, and the visitor stays on the login form
+ * (F-066-r).
  *
- * So the panel states the host it belongs to. It states a *host*, not a tenant
- * id: the id would need the service token `bot-service` carries, and that token
- * also satisfies the captcha gate and moves the rate-limit subject — more than
- * a session check should hold. A host is checked against verified domains and
- * grants nothing else (`domains/tenant/contract.md`).
+ * It is the page's own host, not one fixed at build time (F-066-u): a
+ * reseller's customer on their domain is that reseller's, and a fixed host
+ * would ask about the platform's session instead. Traefik set `X-Forwarded-Host`
+ * on the way in; `Host` is the fallback for a request that did not pass it.
+ *
+ * It states a *host*, not a tenant id: the id would need the service token
+ * `bot-service` carries, and that token also satisfies the captcha gate and
+ * moves the rate-limit subject — more than a session check should hold. A host
+ * is checked against verified domains and grants nothing else
+ * (`domains/tenant/contract.md`).
  */
-function publicApiHost(): string | null {
-  const origin = process.env.NEXT_PUBLIC_API_ORIGIN;
-  if (!origin) return null;
-  try {
-    return new URL(origin).host;
-  } catch {
-    return null;
-  }
+function visitorHost(request: NextRequest): string | null {
+  const forwarded = request.headers.get(ProxyHeaders.forwardedHost);
+  const host =
+    forwarded?.split(",")[0]?.trim() ||
+    request.headers.get("host") ||
+    request.nextUrl.host;
+  return host || null;
 }
 
 function isGuarded(pathname: string): boolean {
@@ -128,17 +132,17 @@ export async function proxy(request: NextRequest) {
   const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value;
   if (!refreshToken) return null;
 
-  const origin = authServiceOrigin();
+  const origin = authServiceOrigin(request);
   const headers: Record<string, string> = {
     cookie: `${REFRESH_COOKIE}=${refreshToken}`,
   };
 
-  // Only on the internal hop. When the call already goes to the public origin
-  // the real `Host` is the right one, and a second answer that can disagree
-  // with the URL is worth avoiding.
-  const apiHost = publicApiHost();
-  if (apiHost && origin !== process.env.NEXT_PUBLIC_API_ORIGIN) {
-    headers[ProxyHeaders.forwardedHost] = apiHost;
+  // Only on the internal hop. When the call goes back out through the page's
+  // own origin, Traefik forwards the real host itself, and a second answer that
+  // can disagree with the URL is worth avoiding.
+  const host = visitorHost(request);
+  if (host && origin !== request.nextUrl.origin) {
+    headers[ProxyHeaders.forwardedHost] = host;
   }
 
   const upstream = await fetch(`${origin}/api/auth/session`, {

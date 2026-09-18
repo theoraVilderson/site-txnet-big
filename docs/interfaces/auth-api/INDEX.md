@@ -34,7 +34,7 @@ source:
   - txnet-backend/auth-service-e2e/**
 owns_tables: []
 depends_on: [identity, i18n, redis-keyspace, tenant, automation]
-updated: 2026-09-13
+updated: 2026-09-18
 ---
 # auth-api
 **Responsibility:** NestJS `auth-service` HTTP surface (`/api/auth/*`, impersonation and worker administration included), translating HTTP <-> `identity`. **Not:** identity rules (`identity`), other services' edge check (`forward-auth`).
@@ -42,9 +42,9 @@ See [contract.md](contract.md) (HTTP API), [contract.switch-scope.md](contract.s
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-18 | Contract v20 -> **v21** (breaking, F-066-u, ADR-0060): the refresh and `device_id` cookies are host-only, and every refresh-cookie write or clear also expires the old `Domain=.<DOMAIN_NAME>` one; `/api/auth` is routed on every host. Consumer `panel-web` moved in the same change (v19); `bot-app` sends no cookie. [contract.cookies.md](contract.cookies.md) |
 | 2026-09-13 | Contract v19 -> **v20** (breaking, F-099): the `/admin/*` aliases are removed ahead of their date, on the user's call; no consumer called them |
 | 2026-09-13 | Contract v18 -> **v19** (breaking, F-098): the `/admin/*` routes answer under `/auth/*`; `/admin` stays a deprecated alias until 2026-10-13. Consumers `panel-web`, `bot-app` call none of them. Also additive: `GET /auth/me` (F-097) |
 | 2026-09-10 | Contract v17 -> **v18** (ADR-0035): `/auth/logout` now falls back onto the place's group and may answer with another member's session (`switchedTo` + tokens, cookie replaced); new `/auth/logout/all` ends the place deliberately. **Consumers `panel-web` and `bot-app` both had to change** and did — one stays on the panel instead of routing to login, the other keeps the handed-back refresh token |
 | 2026-09-10 | Contract v16 -> **v17** (ADR-0034): `/auth/accounts/switch` moves the whole place — it sweeps the outgoing account's other sessions in that scope and records the target on the scope's group, so the bot and its Mini App no longer disagree about who is signed in. An implicit sign-in (`bots/session`, `bots/webapp/session`) follows that pointer. Consumers: `panel-web`, `bot-app` — no call changes |
-| 2026-09-10 | Contract v15 -> **v16** (ADR-0033): `POST /auth/logout` revokes every live session that account holds in the signing-out session's scope, not only the token's own — so a Mini App logout ends the bot chat's session too. Consumers: `panel-web`, `bot-app`; neither changes a call, both change what a logout means |
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

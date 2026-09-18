@@ -3,7 +3,11 @@ import {
   REFRESH_TOKEN_LIFETIME_SEC,
 } from '@txnet-backend/shared-core';
 
-import { refreshCookieOptions, withRefreshCookie } from './refresh-cookie';
+import {
+  clearRefreshCookie,
+  refreshCookieOptions,
+  withRefreshCookie,
+} from './refresh-cookie';
 
 /**
  * One cookie, one options block, one lifetime (F-073, ADR-0036).
@@ -44,12 +48,13 @@ afterEach(() => {
 });
 
 describe('refreshCookieOptions', () => {
-  it('is domain-wide, so one route cannot shadow another route’s cookie', () => {
-    const options = refreshCookieOptions();
-    // `.txnet.test` and `/` together are what make a second Set-Cookie from
-    // any route overwrite the first rather than sit beside it.
-    expect(options.domain).toBe('.txnet.test');
-    expect(options.path).toBe('/');
+  it('is host-only, so it belongs to the domain the panel was loaded from', () => {
+    // F-066-u, ADR-0060. The panel calls `/api/auth` on its own domain, so the
+    // host that sets the cookie reads it. A `Domain=.txnet.test` cookie is
+    // refused on a reseller's own domain and leaks to every `<slug>.txnet.test`.
+    const options = refreshCookieOptions() as Record<string, unknown>;
+    expect(options['domain']).toBeUndefined();
+    expect(options['path']).toBe('/');
   });
 
   it('keeps the token out of reach of a script and off plaintext by default', () => {
@@ -96,9 +101,45 @@ describe('withRefreshCookie', () => {
     expect(options).toEqual(refreshCookieOptions());
   });
 
+  it('expires the domain-wide cookie it replaces, in the same response', () => {
+    // A browser holding both sends the older first — the session this write
+    // just rotated away — and the next refresh would sign the user out.
+    const res = response();
+    withRefreshCookie(res as never, { ok: true, data: { refreshToken: 'rt-1' } });
+
+    expect(res.cleared).toHaveLength(1);
+    const [name, options] = res.cleared[0];
+    expect(name).toBe(REFRESH_TOKEN_COOKIE);
+    expect(options['domain']).toBe('.txnet.test');
+    expect(options['path']).toBe('/');
+  });
+
   it('writes nothing when the result carries no refresh token', () => {
     const res = response();
     withRefreshCookie(res as never, { ok: false, data: undefined });
     expect(res.cookies).toHaveLength(0);
+  });
+});
+
+describe('clearRefreshCookie', () => {
+  it('clears the host-only cookie and the domain-wide one', () => {
+    const res = response();
+    clearRefreshCookie(res as never);
+
+    const domains = res.cleared.map(([, options]) => options['domain']);
+    // The real one first: a client reading the first line gets it.
+    expect(domains).toEqual([undefined, '.txnet.test']);
+    for (const [name, options] of res.cleared) {
+      expect(name).toBe(REFRESH_TOKEN_COOKIE);
+      expect(options['path']).toBe('/');
+    }
+  });
+
+  it('names no domain at all when the deployment has none', () => {
+    delete process.env['DOMAIN_NAME'];
+    const res = response();
+    clearRefreshCookie(res as never);
+    expect(res.cleared).toHaveLength(1);
+    expect(res.cleared[0][1]['domain']).toBeUndefined();
   });
 });

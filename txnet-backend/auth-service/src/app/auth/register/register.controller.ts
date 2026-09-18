@@ -15,14 +15,13 @@ import {
   UseGuards,
   UsePipes,
 } from '@nestjs/common';
-import { REFRESH_TOKEN_COOKIE } from '@txnet-backend/shared-core';
 import { Request, Response } from 'express';
 import { RegisterService } from './register.service';
 import { AuthService } from '../auth.service';
 import { registerSchema, verifyPhoneSchema } from './register.schema';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { ResponseType } from '../../common/response/response.util';
-import { refreshCookieOptions } from '../../common/http/refresh-cookie';
+import { setRefreshCookie } from '../../common/http/refresh-cookie';
 import { RateLimit } from '../decorators/rate-limit.decorator';
 import { RequireCaptcha } from '../decorators/require-captcha.decorator';
 import { rateLimitSubject } from '../../common/security/service-caller';
@@ -95,7 +94,7 @@ export class RegisterController {
       // `auth` writes would not overwrite it, the browser would hold two
       // `refresh_token` cookies, and the user would land in whichever session
       // it chose to send.
-      res.cookie(REFRESH_TOKEN_COOKIE, refreshToken, refreshCookieOptions());
+      setRefreshCookie(res, refreshToken);
       result.data = { ...result.data, ...safeTokens };
     }
     return result;

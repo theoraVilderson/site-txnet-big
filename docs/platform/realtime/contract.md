@@ -3,7 +3,7 @@ id: realtime
 layer: platform
 status: active
 version: 2
-updated: 2026-09-10
+updated: 2026-09-18
 ---
 
 # Contract — realtime
@@ -13,7 +13,7 @@ One WebSocket per client, multiplexed into channels. Deployed as
 
 ## TL;DR
 
-The browser opens `wss://api.<domain>/realtime`, with the access JWT as a
+The browser opens `wss://<the panel's own host>/realtime` (ADR-0060), with the access JWT as a
 second subprotocol if it has one. Traefik runs the upgrade through
 `my-auth-optional` like every other request, so `forward-auth` makes the one
 decision: identity headers for a signed-in caller, `X-Auth-Anonymous` for a

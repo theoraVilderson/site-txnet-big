@@ -1,10 +1,11 @@
-// Browser calls api.${DOMAIN_NAME} directly (cross-origin, cookie-bearing) —
-// no Next.js proxy hop. Backend CORS (main.ts) allows this origin with
-// credentials; see docs/interfaces/auth-api/contract.md.
+// Browser calls auth-service at `/api/auth` on the page's own domain, which
+// Traefik routes to the service — no Next.js proxy hop, and no CORS: the
+// refresh cookie is first-party to whichever domain the panel is on (ADR-0060).
 import { RequestHeaders } from "@/generated/wire";
+import { API_BASE } from "./api-origin";
 import { createApiClient } from "./api-request";
 
-const API_URL = `${process.env.NEXT_PUBLIC_API_ORIGIN}/api`;
+const API_URL = API_BASE;
 let accessToken: string | null = null;
 
 /**

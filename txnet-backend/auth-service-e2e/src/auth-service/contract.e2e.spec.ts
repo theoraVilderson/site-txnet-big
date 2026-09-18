@@ -12,7 +12,6 @@ import request from 'supertest';
 import { createE2eApp, E2eApp } from '../support/app';
 import { AuthApi, parseSetCookie } from '../support/api';
 import {
-  COOKIE_DOMAIN,
   REFRESH_COOKIE,
   REFRESH_MAX_AGE_SEC,
 } from '../support/env';
@@ -174,7 +173,7 @@ describe('auth-api — wire contract', () => {
   });
 
   describe('the refresh cookie', () => {
-    it('is httpOnly, domain-wide, lax, and 30 days long', async () => {
+    it('is httpOnly, host-only, lax, and 30 days long', async () => {
       const account = newAccount();
       await api.register(account);
       const res = await api.verifyPhone({
@@ -188,10 +187,11 @@ describe('auth-api — wire contract', () => {
       expect(cookie?.attributes).toMatchObject({
         httponly: true,
         path: '/',
-        domain: COOKIE_DOMAIN,
         samesite: 'Lax',
         'max-age': String(REFRESH_MAX_AGE_SEC),
       });
+      // Host-only (ADR-0060): the domain the panel was loaded from, and no other.
+      expect(cookie?.attributes.domain).toBeUndefined();
       // COOKIE_SECURE=false in this environment; anywhere else it is set.
       expect(cookie?.attributes.secure).toBeUndefined();
     });

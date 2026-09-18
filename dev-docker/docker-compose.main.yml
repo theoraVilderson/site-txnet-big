@@ -68,11 +68,15 @@ services:
       - "traefik.http.routers.dashboard-http.entrypoints=web"
       - "traefik.http.routers.dashboard-http.service=api@internal"
       - "traefik.http.routers.dashboard-http.middlewares=auth-dashboard"
+      # Above the host-less `/api/<service>` routers (priority 120, ADR-0060),
+      # whose paths sit under the dashboard's `/api` on this host too.
+      - "traefik.http.routers.dashboard-http.priority=1000"
       - "traefik.http.routers.dashboard-https.rule=Host(`monitor.${DOMAIN_NAME}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
       - "traefik.http.routers.dashboard-https.entrypoints=websecure"
       - "traefik.http.routers.dashboard-https.tls.certresolver=myresolver"
       - "traefik.http.routers.dashboard-https.service=api@internal"
       - "traefik.http.routers.dashboard-https.middlewares=auth-dashboard"
+      - "traefik.http.routers.dashboard-https.priority=1000"
       - "traefik.http.middlewares.auth-dashboard.basicauth.users=${TRAEFIK_PANEL_USERNAME}:${TRAEFIK_PANEL_PASSWORD}"
       - "txnet.logging=true"
 
@@ -419,16 +423,22 @@ services:
       - "traefik.http.middlewares.auth-rate-limit.ratelimit.burst=50"
       - "traefik.http.services.auth-service.loadbalancer.server.port=${AUTH_PORT}"
 
-        # http router for auth-service (with TLS)
-
-      - "traefik.http.routers.auth-service-http.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/auth`)"
-      # - "traefik.http.routers.auth-service-http.rule=Host(`api.${DOMAIN_NAME}`)"
+      # **No `Host(...)` on any router the panel calls** (F-066-u, ADR-0060).
+      # The panel calls `/api/<service>` and the realtime path on the domain it
+      # was loaded from — the platform's panel or any reseller's — so these
+      # match on the path alone. Which tenant a host belongs to is decided by
+      # the service (a neutral 404 for an unknown one), as for the callback.
+      # Priority 120 puts them above the panel's own routers, which would
+      # otherwise win by rule length and serve `/api/auth` from Next.js.
+      - "traefik.http.routers.auth-service-http.rule=PathPrefix(`/api/auth`)"
+      - "traefik.http.routers.auth-service-http.priority=120"
       - "traefik.http.routers.auth-service-http.entrypoints=web"
       - "traefik.http.routers.auth-service-http.middlewares=auth-rate-limit"
       - "traefik.http.routers.auth-service-http.service=auth-service"
 
       # https router for auth-service (with TLS)
-      - "traefik.http.routers.auth-service-https.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/auth`)"
+      - "traefik.http.routers.auth-service-https.rule=PathPrefix(`/api/auth`)"
+      - "traefik.http.routers.auth-service-https.priority=120"
       - "traefik.http.routers.auth-service-https.entrypoints=websecure"
       - "traefik.http.routers.auth-service-https.tls.certresolver=myresolver"
       - "traefik.http.routers.auth-service-https.middlewares=auth-rate-limit"
@@ -746,12 +756,14 @@ services:
       # instead (REALTIME_MAX_CONNECTIONS_PER_USER, and
       # REALTIME_MAX_CONNECTIONS_PER_IP for anonymous sockets, which have no
       # user to be counted against).
-      - "traefik.http.routers.gateway-service-http.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`${REALTIME_PATH:-/realtime}`)"
+      - "traefik.http.routers.gateway-service-http.rule=PathPrefix(`${REALTIME_PATH:-/realtime}`)"
+      - "traefik.http.routers.gateway-service-http.priority=120"
       - "traefik.http.routers.gateway-service-http.entrypoints=web"
       - "traefik.http.routers.gateway-service-http.middlewares=strip-fake-headers,my-auth-optional"
       - "traefik.http.routers.gateway-service-http.service=gateway-service"
 
-      - "traefik.http.routers.gateway-service-https.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`${REALTIME_PATH:-/realtime}`)"
+      - "traefik.http.routers.gateway-service-https.rule=PathPrefix(`${REALTIME_PATH:-/realtime}`)"
+      - "traefik.http.routers.gateway-service-https.priority=120"
       - "traefik.http.routers.gateway-service-https.entrypoints=websecure"
       - "traefik.http.routers.gateway-service-https.tls.certresolver=myresolver"
       - "traefik.http.routers.gateway-service-https.middlewares=strip-fake-headers,my-auth-optional"
@@ -870,12 +882,14 @@ services:
       # the optional one — every billing route needs a signed-in caller, and the
       # service refuses a request that arrives without the identity headers
       # (`app/request/identity.middleware.ts`). `/api/health` is not published.
-      - "traefik.http.routers.billing-service-http.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/billing`)"
+      - "traefik.http.routers.billing-service-http.rule=PathPrefix(`/api/billing`)"
+      - "traefik.http.routers.billing-service-http.priority=120"
       - "traefik.http.routers.billing-service-http.entrypoints=web"
       - "traefik.http.routers.billing-service-http.middlewares=strip-fake-headers,my-auth"
       - "traefik.http.routers.billing-service-http.service=billing-service"
 
-      - "traefik.http.routers.billing-service.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/billing`)"
+      - "traefik.http.routers.billing-service.rule=PathPrefix(`/api/billing`)"
+      - "traefik.http.routers.billing-service.priority=120"
       - "traefik.http.routers.billing-service.entrypoints=websecure"
       - "traefik.http.routers.billing-service.tls.certresolver=myresolver"
       - "traefik.http.routers.billing-service.middlewares=strip-fake-headers,my-auth"
@@ -900,13 +914,13 @@ services:
       #
       # Priority beats the two gated routers above and stays under the
       # callback's 200, which is Host-less and must keep winning on its path.
-      - "traefik.http.routers.billing-preflight-http.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/billing`) && Method(`OPTIONS`)"
+      - "traefik.http.routers.billing-preflight-http.rule=PathPrefix(`/api/billing`) && Method(`OPTIONS`)"
       - "traefik.http.routers.billing-preflight-http.entrypoints=web"
       - "traefik.http.routers.billing-preflight-http.priority=150"
       - "traefik.http.routers.billing-preflight-http.middlewares=strip-fake-headers"
       - "traefik.http.routers.billing-preflight-http.service=billing-service"
 
-      - "traefik.http.routers.billing-preflight.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/billing`) && Method(`OPTIONS`)"
+      - "traefik.http.routers.billing-preflight.rule=PathPrefix(`/api/billing`) && Method(`OPTIONS`)"
       - "traefik.http.routers.billing-preflight.entrypoints=websecure"
       - "traefik.http.routers.billing-preflight.priority=150"
       - "traefik.http.routers.billing-preflight.tls.certresolver=myresolver"
@@ -917,24 +931,26 @@ services:
       # is published on its own path, `/api/catalog` — the user's call,
       # 2026-09-14, over `/api/billing/catalog`. The same gate and the same
       # preflight exemption as billing above, for the same reasons.
-      - "traefik.http.routers.catalog-http.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/catalog`)"
+      - "traefik.http.routers.catalog-http.rule=PathPrefix(`/api/catalog`)"
+      - "traefik.http.routers.catalog-http.priority=120"
       - "traefik.http.routers.catalog-http.entrypoints=web"
       - "traefik.http.routers.catalog-http.middlewares=strip-fake-headers,my-auth"
       - "traefik.http.routers.catalog-http.service=billing-service"
 
-      - "traefik.http.routers.catalog.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/catalog`)"
+      - "traefik.http.routers.catalog.rule=PathPrefix(`/api/catalog`)"
+      - "traefik.http.routers.catalog.priority=120"
       - "traefik.http.routers.catalog.entrypoints=websecure"
       - "traefik.http.routers.catalog.tls.certresolver=myresolver"
       - "traefik.http.routers.catalog.middlewares=strip-fake-headers,my-auth"
       - "traefik.http.routers.catalog.service=billing-service"
 
-      - "traefik.http.routers.catalog-preflight-http.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/catalog`) && Method(`OPTIONS`)"
+      - "traefik.http.routers.catalog-preflight-http.rule=PathPrefix(`/api/catalog`) && Method(`OPTIONS`)"
       - "traefik.http.routers.catalog-preflight-http.entrypoints=web"
       - "traefik.http.routers.catalog-preflight-http.priority=150"
       - "traefik.http.routers.catalog-preflight-http.middlewares=strip-fake-headers"
       - "traefik.http.routers.catalog-preflight-http.service=billing-service"
 
-      - "traefik.http.routers.catalog-preflight.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/catalog`) && Method(`OPTIONS`)"
+      - "traefik.http.routers.catalog-preflight.rule=PathPrefix(`/api/catalog`) && Method(`OPTIONS`)"
       - "traefik.http.routers.catalog-preflight.entrypoints=websecure"
       - "traefik.http.routers.catalog-preflight.priority=150"
       - "traefik.http.routers.catalog-preflight.tls.certresolver=myresolver"
@@ -1071,12 +1087,14 @@ services:
       - "traefik.http.services.notification-service.loadbalancer.server.port=3000"
 
       # The required gate, as for billing: every route needs a signed-in caller.
-      - "traefik.http.routers.notification-service-http.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/notifications`)"
+      - "traefik.http.routers.notification-service-http.rule=PathPrefix(`/api/notifications`)"
+      - "traefik.http.routers.notification-service-http.priority=120"
       - "traefik.http.routers.notification-service-http.entrypoints=web"
       - "traefik.http.routers.notification-service-http.middlewares=strip-fake-headers,my-auth"
       - "traefik.http.routers.notification-service-http.service=notification-service"
 
-      - "traefik.http.routers.notification-service.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/notifications`)"
+      - "traefik.http.routers.notification-service.rule=PathPrefix(`/api/notifications`)"
+      - "traefik.http.routers.notification-service.priority=120"
       - "traefik.http.routers.notification-service.entrypoints=websecure"
       - "traefik.http.routers.notification-service.tls.certresolver=myresolver"
       - "traefik.http.routers.notification-service.middlewares=strip-fake-headers,my-auth"
@@ -1084,13 +1102,13 @@ services:
 
       # The CORS preflight carries no Authorization header by specification;
       # billing's labels say why it must skip `my-auth` and why nothing weakens.
-      - "traefik.http.routers.notification-preflight-http.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/notifications`) && Method(`OPTIONS`)"
+      - "traefik.http.routers.notification-preflight-http.rule=PathPrefix(`/api/notifications`) && Method(`OPTIONS`)"
       - "traefik.http.routers.notification-preflight-http.entrypoints=web"
       - "traefik.http.routers.notification-preflight-http.priority=150"
       - "traefik.http.routers.notification-preflight-http.middlewares=strip-fake-headers"
       - "traefik.http.routers.notification-preflight-http.service=notification-service"
 
-      - "traefik.http.routers.notification-preflight.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/notifications`) && Method(`OPTIONS`)"
+      - "traefik.http.routers.notification-preflight.rule=PathPrefix(`/api/notifications`) && Method(`OPTIONS`)"
       - "traefik.http.routers.notification-preflight.entrypoints=websecure"
       - "traefik.http.routers.notification-preflight.priority=150"
       - "traefik.http.routers.notification-preflight.tls.certresolver=myresolver"
@@ -1150,12 +1168,14 @@ services:
 
       # The required gate, as for billing: every route needs a signed-in caller.
       # No business route answers yet (F-018-t); the routes move in from F-018-u.
-      - "traefik.http.routers.tenant-service-http.rule=Host(`api.${DOMAIN_NAME}`) && (PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`))"
+      - "traefik.http.routers.tenant-service-http.rule=(PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`))"
+      - "traefik.http.routers.tenant-service-http.priority=120"
       - "traefik.http.routers.tenant-service-http.entrypoints=web"
       - "traefik.http.routers.tenant-service-http.middlewares=strip-fake-headers,my-auth"
       - "traefik.http.routers.tenant-service-http.service=tenant-service"
 
-      - "traefik.http.routers.tenant-service.rule=Host(`api.${DOMAIN_NAME}`) && (PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`))"
+      - "traefik.http.routers.tenant-service.rule=(PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`))"
+      - "traefik.http.routers.tenant-service.priority=120"
       - "traefik.http.routers.tenant-service.entrypoints=websecure"
       - "traefik.http.routers.tenant-service.tls.certresolver=myresolver"
       - "traefik.http.routers.tenant-service.middlewares=strip-fake-headers,my-auth"
@@ -1163,13 +1183,13 @@ services:
 
       # The CORS preflight carries no Authorization header by specification;
       # billing's labels say why it must skip `my-auth` and why nothing weakens.
-      - "traefik.http.routers.tenant-preflight-http.rule=Host(`api.${DOMAIN_NAME}`) && (PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`)) && Method(`OPTIONS`)"
+      - "traefik.http.routers.tenant-preflight-http.rule=(PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`)) && Method(`OPTIONS`)"
       - "traefik.http.routers.tenant-preflight-http.entrypoints=web"
       - "traefik.http.routers.tenant-preflight-http.priority=150"
       - "traefik.http.routers.tenant-preflight-http.middlewares=strip-fake-headers"
       - "traefik.http.routers.tenant-preflight-http.service=tenant-service"
 
-      - "traefik.http.routers.tenant-preflight.rule=Host(`api.${DOMAIN_NAME}`) && (PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`)) && Method(`OPTIONS`)"
+      - "traefik.http.routers.tenant-preflight.rule=(PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`)) && Method(`OPTIONS`)"
       - "traefik.http.routers.tenant-preflight.entrypoints=websecure"
       - "traefik.http.routers.tenant-preflight.priority=150"
       - "traefik.http.routers.tenant-preflight.tls.certresolver=myresolver"
@@ -1222,17 +1242,13 @@ services:
       - JWT_SECRET_CAPTCHA=${JWT_SECRET_CAPTCHA}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - NEXT_PUBLIC_PAYMENT_URL=${NEXT_PUBLIC_PAYMENT_URL}
-      # Browser talks to auth-service directly at api.${DOMAIN_NAME}, cross-origin,
-      # cookie-bearing (backend CORS in main.ts allows FRONTEND_ORIGIN with
-      # credentials). Deliberate tradeoff vs. the old same-origin proxy hop:
-      # this leaves private_backend_network for public DNS + Traefik + TLS and
-      # back on every auth call (~0.5-2s), which previously surfaced as an
-      # intermittent 502 on login/register — accepted so cookies land without
-      # the proxy rewriting anything.
       # Server only: verifies billing's signed payment result (?t=), so a
       # hand-typed /payment/success?ref=… shows nothing. Same value as billing.
       - PAYMENT_RESULT_SECRET=${PAYMENT_RESULT_SECRET:-}
-      - NEXT_PUBLIC_API_ORIGIN=https://api.${DOMAIN_NAME}
+      # No API origin (F-066-u, ADR-0060): the browser calls `/api/<service>`
+      # and the realtime path on the domain the panel was loaded from, and
+      # Traefik routes them to the services on every host. A build-time origin
+      # made every reseller's panel talk as the platform's host.
       # Server-to-server only, for the auth-screen session check in src/proxy.ts:
       # that one stays on private_backend_network, since it runs before the login
       # page renders and the public hop above would be the whole delay the check
@@ -1246,8 +1262,8 @@ services:
       # region (src/env.ts).
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
       - NEXT_PUBLIC_DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
-      # The realtime gateway answers on api.${DOMAIN_NAME} at the same path the
-      # Traefik router rule below carries my-auth-optional on. NEXT_PUBLIC_ is
+      # The realtime gateway answers on the page's own host at the same path
+      # its Traefik router rule carries my-auth-optional on. NEXT_PUBLIC_ is
       # the only prefix Next inlines into the browser bundle, and the socket is
       # opened only there (src/env.ts). One value, from the same REALTIME_PATH
       # gateway-service reads, so the two cannot drift apart.
@@ -1282,6 +1298,23 @@ services:
       - "traefik.http.middlewares.pwa-security.headers.stsIncludeSubdomains=true"
       # Service Worker cache control
       - "traefik.http.middlewares.sw-cache-control.headers.customResponseHeaders.Cache-Control=no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
+      # Every other host (F-066-u, ADR-0060): a reseller's domain reaches the
+      # panel here. The reseller's CDN holds its certificate and points a CNAME
+      # at this gateway (user, 2026-09-18), so no certresolver — TLS here is
+      # the CDN-to-origin hop. Priority 1: every named host above wins. Which
+      # hosts actually *work* is the tenant resolver's call — an unregistered
+      # one gets the page, and a neutral 404 from every service it calls.
+      - "traefik.http.routers.nextjs-any-http.rule=HostRegexp(`.+`)"
+      - "traefik.http.routers.nextjs-any-http.priority=1"
+      - "traefik.http.routers.nextjs-any-http.entrypoints=web"
+      - "traefik.http.routers.nextjs-any-http.middlewares=nextjs-compress,pwa-security,sw-cache-control"
+      - "traefik.http.routers.nextjs-any-http.service=nextjs"
+      - "traefik.http.routers.nextjs-any.rule=HostRegexp(`.+`)"
+      - "traefik.http.routers.nextjs-any.priority=1"
+      - "traefik.http.routers.nextjs-any.entrypoints=websecure"
+      - "traefik.http.routers.nextjs-any.tls=true"
+      - "traefik.http.routers.nextjs-any.middlewares=nextjs-compress,pwa-security,sw-cache-control"
+      - "traefik.http.routers.nextjs-any.service=nextjs"
       # Backend port
       - "traefik.http.services.nextjs.loadbalancer.server.port=8181"
       - "txnet.logging=true"

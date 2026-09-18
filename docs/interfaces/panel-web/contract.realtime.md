@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 12
-updated: 2026-09-10
+version: 19
+updated: 2026-09-18
 ---
 
 # Contract — the panel's WebSocket client
@@ -201,7 +201,7 @@ authenticating past the gate.
 
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
-| realtime | the socket at `wss://api.<domain><REALTIME_PATH>`, its frames, its refusal codes and its close codes | no live updates, and no screen breaks: every consumer keeps the durable answer its producing domain stored (D-15), so the socket is how a page hears sooner, never the only way it hears |
+| realtime | the socket at `wss://<page host><REALTIME_PATH>` (ADR-0060), its frames, its refusal codes and its close codes | no live updates, and no screen breaks: every consumer keeps the durable answer its producing domain stored (D-15), so the socket is how a page hears sooner, never the only way it hears |
 
 This row belongs here rather than in [contract.md](contract.md), which is at
 §10's hard 250-line ceiling — the language section is the split that would buy
@@ -210,12 +210,12 @@ it room back, and that is a row of its own.
 ## Config
 
 `NEXT_PUBLIC_REALTIME_PATH` (from the one `REALTIME_PATH` in `.env`, the same
-value `gateway-service` and the Traefik router rule read) and, optionally,
-`NEXT_PUBLIC_REALTIME_ORIGIN` for a deployment that does not serve the socket
-from `NEXT_PUBLIC_API_ORIGIN`. `src/env.ts` builds `REALTIME_URL` from the two,
-turning `https` into `wss`. Both names carry `NEXT_PUBLIC_` because only those
-reach the browser bundle and the socket is opened nowhere else (F-068's lesson,
-in the other direction).
+value `gateway-service` and the Traefik router rule read). The host is the
+page's own (F-066-u, ADR-0060): `realtimeUrl()` in `lib/api-origin.ts` turns
+`https` into `wss` on `location.host`, so a reseller's customer opens the socket
+on the reseller's domain. `NEXT_PUBLIC_` because only that prefix reaches the
+browser bundle and the socket is opened nowhere else (F-068's lesson, in the
+other direction).
 
-An unset origin yields an empty URL and `connect()` does nothing — a deployment
-with no gateway is quiet, not broken.
+With no page — server rendering — the URL is empty and `connect()` does nothing:
+no socket rather than one to a guessed host.

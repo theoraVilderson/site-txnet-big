@@ -47,30 +47,14 @@ export const DEFAULT_THEME: ThemeName = "dark";
 export const THEME_COOKIE = "NEXT_THEME";
 
 /**
- * Where the WebSocket gateway answers (`platform/realtime`). Only
- * `NEXT_PUBLIC_`-prefixed variables are inlined into the browser bundle, and a
- * socket is opened nowhere else — so both names here carry that prefix, and
- * compose feeds them from the same `REALTIME_PATH` the gateway and the Traefik
- * router rule already read. A path that disagrees with that rule reaches a
- * route the auth gate does not cover, which is the one way to get an
- * unauthenticated socket (`realtime/contract.md`).
- *
- * The origin defaults to the API's, because the gateway is routed on
- * `Host(api.<domain>)`; the override exists for a deployment that splits them.
+ * The path the WebSocket gateway answers on (`platform/realtime`), on the
+ * page's own host (`lib/api-origin.ts`, ADR-0060). `NEXT_PUBLIC_` because the
+ * socket is opened only in the browser, and compose feeds it from the same
+ * `REALTIME_PATH` the gateway and the Traefik router rule read. A path that
+ * disagrees with that rule reaches a route the auth gate does not cover, which
+ * is the one way to get an unauthenticated socket (`realtime/contract.md`).
  */
 export const REALTIME_PATH = process.env.NEXT_PUBLIC_REALTIME_PATH || "/realtime";
-
-/** `https` -> `wss`, `http` -> `ws`. Anything else is left as it was given. */
-export function toSocketUrl(origin: string, path: string): string {
-  if (!origin) return "";
-  const scheme = origin.replace(/^http(s?):/, "ws$1:");
-  return `${scheme.replace(/\/+$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
-}
-
-export const REALTIME_URL: string = toSocketUrl(
-  process.env.NEXT_PUBLIC_REALTIME_ORIGIN || process.env.NEXT_PUBLIC_API_ORIGIN || "",
-  REALTIME_PATH,
-);
 
 /**
  * The HMAC key `billing`'s deposit callback signs the payment result with

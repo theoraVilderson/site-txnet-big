@@ -47,7 +47,11 @@ describe('auth-api — a second deployment', () => {
     api = new AuthApi(e2e.server);
   });
 
-  it('sets the refresh cookie on its own domain, not the first deployment’s', async () => {
+  it('expires the old domain-wide cookie on its own domain, not the first deployment’s', async () => {
+    // The cookie itself is host-only (ADR-0060), so no domain is written for
+    // it at all. The one place a deployment's domain still reaches a
+    // `Set-Cookie` is the expiry of the domain-wide cookie it replaced — and
+    // that must name this deployment's domain, or it retires nothing.
     const { account } = await signUp(api, e2e.otp);
     api.clearCookies();
     const res = await api.login({
@@ -55,10 +59,16 @@ describe('auth-api — a second deployment', () => {
       password: account.password,
     });
 
-    const cookie = parseSetCookie(res.headers['set-cookie'], REFRESH_COOKIE);
+    const lines = ([] as string[]).concat(res.headers['set-cookie'] ?? []);
+    const cookie = parseSetCookie(lines, REFRESH_COOKIE);
+    const legacy = parseSetCookie(
+      lines.filter((line) => /;\s*domain=/i.test(line)),
+      REFRESH_COOKIE,
+    );
 
-    expect(cookie?.attributes.domain).toBe(cookieDomainOf(SECONDARY_DEPLOYMENT));
-    expect(cookie?.attributes.domain).not.toBe(
+    expect(cookie?.attributes.domain).toBeUndefined();
+    expect(legacy?.attributes.domain).toBe(cookieDomainOf(SECONDARY_DEPLOYMENT));
+    expect(legacy?.attributes.domain).not.toBe(
       cookieDomainOf(PRIMARY_DEPLOYMENT),
     );
   });

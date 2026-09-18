@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 7
-updated: 2026-09-12
+updated: 2026-09-18
 ---
 
 # Contract — billing
@@ -154,7 +154,7 @@ numbers are `gateway-pricing.golden.json` (F-0611).
 | On the public callback there are no headers to read, so `CallbackTenantMiddleware` resolves the tenant from the **Host** against `tenant_domain` and opens the scope itself; an unknown or unproven host is a neutral **404** (ADR-0025). A middleware and not a guard — the rate limiter counts on the tenant in context | `billing-service/src/app/request/callback-tenant.middleware.ts` |
 | Queries go through `PrismaService` on `DATABASE_APP_URL` with `withTenant` applied. Since F-092-j there is a **second** pool, `CrossTenantPrismaService` on `DATABASE_CROSS_TENANT_URL`, held by the callback middleware alone: that read is what *produces* a tenant, so it cannot run inside one. It is a policy (`USING (true)`), never a bypass — neither role holds `BYPASSRLS` — and `grep -rn CrossTenantPrismaService` is the audit | `billing-service/src/app/prisma/prisma.module.ts` |
 | Success and errors use the `shared-core` envelope, translated per `Accept-Language` | `billing-service/src/main.ts` |
-| **CORS is on for `FRONTEND_ORIGIN`, with credentials** (added F-093-c): the panel calls these routes from the browser, cross-origin at `api.<domain>`, with the access token as a Bearer header. A missing origin is a refusal to boot when `NODE_ENV=production` — never "allow any origin"; the permissive fallback is dev-and-localhost only. This service was built asserting the panel used a same-origin proxy, which `panel-web` had already deprecated (`panel-web/contract.md`), and no caller existed to make that wrong visible | `billing-service/src/main.ts` |
+| **CORS is on for `FRONTEND_ORIGIN`, with credentials** (added F-093-c): since ADR-0060 the panel calls these routes same-origin, at `/api/billing` on its own domain, so CORS now serves only a caller that is really cross-origin. A missing origin is a refusal to boot when `NODE_ENV=production` — never "allow any origin"; the permissive fallback is dev-and-localhost only. This service was built asserting the panel used a same-origin proxy, which `panel-web` had already deprecated (`panel-web/contract.md`), and no caller existed to make that wrong visible | `billing-service/src/main.ts` |
 | Every route but `health` carries `@RateLimit`, enforced by the global `RateLimitGuard` (the `shared-core` limiter, counted in Redis, F-092-r), bucketed on the caller's `userId` — except the public callback, which has no caller and counts the **authority**. A new route without one, or a gated one bucketed on anything but its caller, fails `request/rate-limit-coverage.spec.ts`; over the limit is **429** `system.rateLimit` | `billing-service/src/app/app.module.ts` |
 | `GET /api/health` bypasses the identity check and is not published by Traefik | `billing-service/src/app/health.controller.ts` |
 

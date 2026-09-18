@@ -3,7 +3,7 @@
 // docs/interfaces/panel-web/contract.realtime.md; the frames it speaks are in
 // docs/platform/realtime/contract.md. This module is the transport and nothing
 // else: it knows no screen, no payload shape and no route.
-import { REALTIME_URL } from "../env";
+import { realtimeUrl } from "./api-origin";
 
 /**
  * The token rides in `Sec-WebSocket-Protocol` because it is the only header a
@@ -165,7 +165,7 @@ export class RealtimeClient {
     this.stopped = false;
     if (this.socket) return;
 
-    const url = this.options.url ?? REALTIME_URL;
+    const url = this.options.url ?? realtimeUrl();
     if (!url) return; // No socket configured for this deployment.
 
     const credential = this.options.credential?.() ?? null;

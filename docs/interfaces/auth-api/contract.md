@@ -2,8 +2,8 @@
 id: auth-api
 layer: interface
 status: active
-version: 20
-updated: 2026-09-13
+version: 21
+updated: 2026-09-18
 ---
 
 # Contract — auth-api
@@ -16,7 +16,7 @@ cookies and rate limits. Field-level schemas live in code — link, do not copy:
 
 ## Conventions
 
-- Base path: routed by Traefik as `Host(api.<domain>) && PathPrefix(/api/auth)`.
+- Base path: routed by Traefik as `PathPrefix(/api/auth)` on **every** host (ADR-0060) — the panel calls it on its own domain.
   Controllers are mounted at `/auth` — never at a role word (F-098) — and `/api` is a **Nest
   global prefix** (`main.ts`, `app.setGlobalPrefix('api')`) — Traefik matches on
   it but does not strip it, so the full path is `/api/auth/...` in-network as

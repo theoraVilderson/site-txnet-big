@@ -38,7 +38,7 @@ import { ConfigService } from '@nestjs/config';
 import { NoActiveSessionGuard } from './guards/no-active-session.guard';
 import { rateLimitSubject } from '../common/security/service-caller';
 import {
-  refreshCookieOptions,
+  clearRefreshCookie,
   withRefreshCookie,
 } from '../common/http/refresh-cookie';
 import { readCookie } from '../common/http/cookies';
@@ -150,7 +150,7 @@ export class AuthController {
     const result = await this.auth.sessionStatus(token);
     const active = result.ok && result.data.active;
     if (token && !active) {
-      res.clearCookie(REFRESH_TOKEN_COOKIE, this.cookieOptions());
+      clearRefreshCookie(res);
     }
     return result;
   }
@@ -175,7 +175,7 @@ export class AuthController {
     // it can never succeed again (revoked, expired, or unknown), and leaving it
     // in the browser makes every later page load pay for the same answer —
     // panel-web's auth-screen check reads exactly this cookie. Drop it.
-    if (!result?.ok) res.clearCookie(REFRESH_TOKEN_COOKIE, this.cookieOptions());
+    if (!result?.ok) clearRefreshCookie(res);
     return this.withRefreshCookie(res, result);
   }
 
@@ -207,7 +207,7 @@ export class AuthController {
     if (result?.ok && result.data?.switchedTo) {
       return this.withRefreshCookie(res, result);
     }
-    res.clearCookie(REFRESH_TOKEN_COOKIE, this.cookieOptions());
+    clearRefreshCookie(res);
     return result;
   }
 
@@ -230,7 +230,7 @@ export class AuthController {
     const token =
       body.refreshToken ?? readCookie(req.headers.cookie, REFRESH_TOKEN_COOKIE);
     const result = await this.auth.logoutEverywhere({ refreshToken: token });
-    res.clearCookie(REFRESH_TOKEN_COOKIE, this.cookieOptions());
+    clearRefreshCookie(res);
     return result;
   }
 
@@ -324,9 +324,5 @@ export class AuthController {
   // cookies in the browser.
   private withRefreshCookie(res: Response, result: any) {
     return withRefreshCookie(res, result);
-  }
-
-  private cookieOptions() {
-    return refreshCookieOptions();
   }
 }

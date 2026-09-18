@@ -2,8 +2,8 @@
 id: auth-api
 layer: interface
 status: active
-version: 18
-updated: 2026-09-10
+version: 21
+updated: 2026-09-18
 ---
 
 # auth-api — switch scope
@@ -27,8 +27,9 @@ one, and the scope is never in a request body. These routes are all
 authenticated, so it is **the scope stamped on the caller's session**, not
 one re-derived per request (2026-09-10; unstamped falls back to the request).
 The routes that *mint* sessions still read it from the request: a browser's
-httpOnly `device_id` cookie (domain-wide, one year, minted on the first
-response that lacks it), or `bot-service`'s `x-service-token` plus
+httpOnly `device_id` cookie (host-only since ADR-0060 — an older domain-wide
+one is read until it lapses; one year, minted on the first response that
+lacks it), or `bot-service`'s `x-service-token` plus
 `x-bot-chat-id` **and** `x-bot-platform` — a chat id with no platform gets no
 scope and is refused (`accountSwitch.noScope` on the adds, `notAMember`
 elsewhere). Consequence: a Mini App session's scope is the **chat's**.

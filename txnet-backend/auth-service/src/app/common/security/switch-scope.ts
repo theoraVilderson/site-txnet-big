@@ -47,10 +47,12 @@ export function deviceScopeKey(deviceId: string): SwitchScope {
 /**
  * The `device_id` cookie, in the same shape as `refresh_token`.
  *
- * Domain-wide for the same reason (`common/http/refresh-cookie.ts`): the panel
- * is served from `panel.<domain>` and calls `api.<domain>`, so a host-only
- * cookie would be minted fresh on every call and every browser would look like
- * a new device forever.
+ * Host-only for the same reason (`common/http/refresh-cookie.ts`, ADR-0060):
+ * the panel calls `/api/auth` on its own domain, so the host that mints it is
+ * the host that reads it, and one reseller's domain never sees another's. A
+ * browser still holding the domain-wide one minted before that keeps it until
+ * it lapses: it is a partition key, not a credential, and expiring it would
+ * forget every account the browser had added.
  *
  * It outlives the refresh token on purpose. A session ends often — logging out
  * is normal — but the *browser* is the same browser afterwards, and its group

@@ -2,7 +2,8 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import type { authApi as AuthApi } from './auth-api';
 import type { ApiError } from './api-error';
 
-const ORIGIN = 'https://api.example.com';
+// Same-origin (ADR-0060): every call is a path on the page's own domain.
+const ORIGIN = '';
 
 let fetchMock: ReturnType<typeof vi.fn>;
 let authApi: typeof AuthApi;
@@ -24,7 +25,6 @@ beforeEach(async () => {
   // `API_URL` and the in-memory access token are module-level, so every test
   // gets a fresh module rather than the previous test's leftovers.
   vi.resetModules();
-  vi.stubEnv('NEXT_PUBLIC_API_ORIGIN', ORIGIN);
   fetchMock = vi.fn();
   vi.stubGlobal('fetch', fetchMock);
   ({ authApi } = await import('./auth-api'));

@@ -153,65 +153,44 @@ describe('the session check', () => {
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
-  it('names the tenant it belongs to, by the public API host', async () => {
-    // F-066-r. The internal hop reaches auth-service as `auth-service:3000`,
-    // which matches no `tenant_domain` row — and since F-066-d removed the
-    // fallback tenant, an unresolved host is a 404, so the signed-in visitor
-    // was never redirected. The resolver's primary input is the host
-    // (ADR-0020), so the panel states the public one it actually belongs to.
-    vi.stubEnv('NEXT_PUBLIC_API_ORIGIN', 'https://api.example.com');
+  it('names the tenant by the host the visitor is on', async () => {
+    // F-066-r, F-066-u. The internal hop reaches auth-service as
+    // `auth-service:3000`, which matches no `tenant_domain` row, so the panel
+    // states the host the page was served on — a reseller's domain for that
+    // reseller's customer, never one fixed at build time.
     fetchMock.mockResolvedValue(upstream(200, { ok: true, data: { active: true } }));
 
-    await proxy(requestFor('/auth/login', SIGNED_IN));
-
-    const [, init] = fetchMock.mock.calls[0];
-    expect(init.headers[ProxyHeaders.forwardedHost]).toBe('api.example.com');
-  });
-
-  it('names no host when it is already calling the public origin', async () => {
-    // There the real `Host` is already the right one; overriding it would be
-    // one more place that can disagree with the URL.
-    vi.stubEnv('AUTH_SERVICE_ORIGIN', undefined);
-    vi.stubEnv('NEXT_PUBLIC_API_ORIGIN', 'https://api.example.com');
-    fetchMock.mockResolvedValue(upstream(200, { ok: true, data: { active: true } }));
-
-    await proxy(requestFor('/auth/login', SIGNED_IN));
-
-    const [, init] = fetchMock.mock.calls[0];
-    expect(init.headers[ProxyHeaders.forwardedHost]).toBeUndefined();
-  });
-
-  it('names no host when the public origin is unset, rather than an empty one', async () => {
-    vi.stubEnv('NEXT_PUBLIC_API_ORIGIN', undefined);
-    fetchMock.mockResolvedValue(upstream(200, { ok: true, data: { active: true } }));
-
-    await proxy(requestFor('/auth/login', SIGNED_IN));
-
-    const [, init] = fetchMock.mock.calls[0];
-    expect(init.headers[ProxyHeaders.forwardedHost]).toBeUndefined();
-  });
-
-  it('falls back to the public origin when the internal one is unset', async () => {
-    vi.stubEnv('AUTH_SERVICE_ORIGIN', undefined);
-    vi.stubEnv('NEXT_PUBLIC_API_ORIGIN', 'https://api.example.com');
-    fetchMock.mockResolvedValue(upstream(200, { ok: true, data: { active: true } }));
-
-    await proxy(requestFor('/auth/login', SIGNED_IN));
-
-    expect(fetchMock.mock.calls[0][0]).toBe(
-      'https://api.example.com/api/auth/session',
+    await proxy(
+      new NextRequest('https://ali.example.com/auth/login', {
+        headers: { cookie: SIGNED_IN, 'x-forwarded-host': 'ali.example.com' },
+      }),
     );
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.headers[ProxyHeaders.forwardedHost]).toBe('ali.example.com');
   });
 
-  it('fails open when neither origin is set — the URL is relative and fetch cannot send it', async () => {
-    vi.stubEnv('AUTH_SERVICE_ORIGIN', undefined);
-    vi.stubEnv('NEXT_PUBLIC_API_ORIGIN', undefined);
-    fetchMock.mockRejectedValue(new TypeError('Failed to parse URL'));
+  it('falls back to the Host header when nothing forwarded one', async () => {
+    fetchMock.mockResolvedValue(upstream(200, { ok: true, data: { active: true } }));
 
-    expect(
-      await proxy(requestFor('/auth/login', SIGNED_IN)),
-    ).toBeNull();
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/auth/session');
+    await proxy(requestFor('/auth/login', SIGNED_IN));
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.headers[ProxyHeaders.forwardedHost]).toBe('panel.example.com');
+  });
+
+  it('goes out through the page’s own origin when the internal one is unset', async () => {
+    // Traefik serves `/api/auth` on every panel domain (ADR-0060), so the
+    // public route is the page's own origin — and there the real host arrives
+    // on its own, so no second answer is added.
+    vi.stubEnv('AUTH_SERVICE_ORIGIN', undefined);
+    fetchMock.mockResolvedValue(upstream(200, { ok: true, data: { active: true } }));
+
+    await proxy(requestFor('/auth/login', SIGNED_IN));
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://panel.example.com/api/auth/session');
+    expect(init.headers[ProxyHeaders.forwardedHost]).toBeUndefined();
   });
 });
 

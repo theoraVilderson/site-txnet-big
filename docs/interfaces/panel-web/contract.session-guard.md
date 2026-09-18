@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 10
-updated: 2026-09-13
+version: 19
+updated: 2026-09-18
 ---
 
 # panel-web — the auth-screen session guard (F-0101)
@@ -52,11 +52,10 @@ seeing the login form is a slightly stale screen; a signed-out one redirected
 into the panel would be a bug.
 
 `AUTH_SERVICE_ORIGIN` keeps this hop inside `private_backend_network`. It exists
-because the public origin used for browser calls would send it back out through
-DNS + Traefik + TLS — the ~0.5-2s the TL;DR above accepts for the browser, but
+because the public route would send it back out through DNS + Traefik + TLS,
 paid before first byte here, which is exactly what this check exists to avoid.
-It falls back to `NEXT_PUBLIC_API_ORIGIN` when unset (`next dev` outside
-compose).
+Unset (`next dev` outside compose), it goes out through the page's own origin,
+where Traefik serves `/api/auth` on every panel domain (ADR-0060).
 
 Every post-auth destination is `PANEL_HOME` from `lib/routes.ts` — `/`, the
 panel root at `panel.<domain>`. Relative on purpose: each tenant is served on
@@ -73,14 +72,17 @@ what Traefik forwards. Over the internal hop that host is the container's own
 name, which matches no `tenant_domain` row. While a fallback tenant existed
 this went unnoticed; F-066-d removed it, so an unresolved host became a neutral
 404 and this guard silently stopped redirecting anyone. Login itself was never
-affected — it goes to `api.<domain>`, which has a row.
+affected — it goes through Traefik, which forwards the real host.
 
-So the proxy sets `X-Forwarded-Host` to the host of
-`NEXT_PUBLIC_API_ORIGIN` — the public API host this deployment belongs to —
-and only when it is actually using the internal origin. On the public origin
-the real `Host` is already right, and a second answer that can disagree with
-the URL is worth not having. Unset or unparseable: no header, and the guard
-fails open to the form as it does for every other failure.
+So the proxy sets `X-Forwarded-Host` to **the host the visitor is on** — the one
+Traefik forwarded to this app, else `Host` — and only when it is actually using
+the internal origin. Through the public route the real host already arrives,
+and a second answer that can disagree with the URL is worth not having.
+
+It is the visitor's host and not one fixed at build time (F-066-u): until
+2026-09-18 it was the host of `NEXT_PUBLIC_API_ORIGIN`, so a reseller's customer
+was asked about as the platform's. Now `panel.<domain>` is itself a
+`tenant_domain` row (seeded), and a reseller's domain is its own.
 
 ### The header only counts if Express trusts it (fixed 2026-09-12)
 

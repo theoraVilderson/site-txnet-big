@@ -26,48 +26,52 @@ const prisma = new PrismaClient();
 
 const ROLE_NAMES = ['user', 'Support', 'Admin', 'SuperAdmin'];
 
-// The host `auth-service` is actually reached on: Traefik routes
-// `api.${DOMAIN_NAME}` to it (dev-docker/docker-compose.main.yml), and
-// `TenantResolverService` matches `tenant_domain.domainValue` against exactly
-// that. `subdomain` rather than `custom_domain` because the platform issued it
-// — a custom domain would need verifying before it routed (tenant invariant 5).
-function apiHost() {
+// The hosts `auth-service` is actually reached on, and `TenantResolverService`
+// matches `tenant_domain.domainValue` against exactly those. `panel.<domain>`
+// is where the platform's own panel calls `/api/*` on its own origin (F-066-u,
+// ADR-0060); `api.<domain>` is still where bot-service and other callers reach
+// the gate (dev-docker/docker-compose.main.yml). `subdomain` rather than
+// `custom_domain` because the platform issued them — a custom domain would need
+// verifying before it routed (tenant invariant 5).
+function platformHosts() {
   const domain = (process.env.DOMAIN_NAME || '').trim().toLowerCase();
-  return domain ? `api.${domain}` : null;
+  return domain ? [`api.${domain}`, `panel.${domain}`] : [];
 }
 
 // Idempotent, and never re-points an existing row: `domainValue` is unique, so
 // a row already claimed by another tenant is that tenant's — a seed run must
 // not move a host between tenants.
-async function seedApiDomain(tenantId) {
-  const host = apiHost();
-  if (!host) {
+async function seedPlatformDomains(tenantId) {
+  const hosts = platformHosts();
+  if (hosts.length === 0) {
     console.log('[seed] DOMAIN_NAME is unset — no tenant_domain row created.');
     console.log('[seed]   the API will answer 404 until one exists (ADR-0025).');
     return;
   }
 
-  const existing = await prisma.tenantDomain.findUnique({
-    where: { domainValue: host },
-  });
-  if (existing) {
-    console.log(`[seed] tenant_domain '${host}' already exists, skipping.`);
-    return;
-  }
+  for (const host of hosts) {
+    const existing = await prisma.tenantDomain.findUnique({
+      where: { domainValue: host },
+    });
+    if (existing) {
+      console.log(`[seed] tenant_domain '${host}' already exists, skipping.`);
+      continue;
+    }
 
-  await prisma.tenantDomain.create({
-    data: {
-      tenantId,
-      domainType: 'subdomain',
-      domainValue: host,
-      // The platform owner's API host serves the panel routes; `subscription`
-      // and `assets` doors serve none of them (F-066-q).
-      purpose: 'panel',
-      verificationStatus: 'verified',
-      verifiedAt: new Date(),
-    },
-  });
-  console.log(`[seed] created tenant_domain '${host}' -> platform_owner.`);
+    await prisma.tenantDomain.create({
+      data: {
+        tenantId,
+        domainType: 'subdomain',
+        domainValue: host,
+        // The platform owner's hosts serve the panel routes; `subscription`
+        // and `assets` doors serve none of them (F-066-q).
+        purpose: 'panel',
+        verificationStatus: 'verified',
+        verifiedAt: new Date(),
+      },
+    });
+    console.log(`[seed] created tenant_domain '${host}' -> platform_owner.`);
+  }
 }
 
 // F-101-d (ADR-0043 as amended): SuperAdmin holds the one permission `*`, which
@@ -205,7 +209,7 @@ async function main() {
     console.log('[seed] platform_owner tenant already exists, skipping.');
     // Not `return`: an install seeded before ADR-0025 has the tenant but no
     // domain row, and that install now answers 404 until it gets one.
-    await seedApiDomain(existingTenant.id);
+    await seedPlatformDomains(existingTenant.id);
     await seedWorkerSchedules(existingTenant.ownerUserId);
     return;
   }
@@ -244,7 +248,7 @@ async function main() {
     },
   });
 
-  await seedApiDomain(tenant.id);
+  await seedPlatformDomains(tenant.id);
   await seedWorkerSchedules(ownerId);
 
   console.log('[seed] created platform_owner tenant + roles + owner user.');

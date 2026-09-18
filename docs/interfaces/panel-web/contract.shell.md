@@ -123,7 +123,8 @@ about the data path rather than the bar.
 
 `lib/billing-api.ts` is the client, and `lib/api-request.ts` is the envelope
 both it and `auth-api` read. See [contract.md](contract.md) "Client API surface"
-for why the browser calls `api.<domain>` directly rather than through a proxy.
+and [contract.origin.md](contract.origin.md) for why the browser calls `/api` on
+its own domain, routed by Traefik rather than a proxy in this app.
 
 ## The gift-code modal (F-093-g)
 

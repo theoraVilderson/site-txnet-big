@@ -1,15 +1,15 @@
-// Browser calls api.${DOMAIN_NAME}/api/billing directly, the same way it calls
-// auth-service — cross-origin, with the access token as a Bearer header, and
+// Browser calls `/api/billing` on the page's own domain, the same way it calls
+// auth-service (ADR-0060) — with the access token as a Bearer header, and
 // `forward-auth` turning that into the `X-User-Id` every billing route reads.
 // There is no Next.js proxy hop: the panel removed its one on 2026-09-05 and
 // lists it under Deprecations (`panel-web/contract.md`), because
-// server-to-server was the source of an intermittent 502. `billing-service`'s
-// `main.ts` had assumed the opposite and shipped with CORS off; F-093-c is the
-// first call from this app and the decision was settled with the user then.
+// server-to-server was the source of an intermittent 502. Traefik, not this
+// app, routes the path to the service.
+import { API_BASE } from "./api-origin";
 import { createApiClient } from "./api-request";
 import { authApi } from "./auth-api";
 
-const API_URL = `${process.env.NEXT_PUBLIC_API_ORIGIN}/api/billing`;
+const API_URL = `${API_BASE}/billing`;
 
 /**
  * The token is `auth-api`'s, read per call. Billing mints no credential of its
