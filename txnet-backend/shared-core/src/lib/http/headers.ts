@@ -87,6 +87,7 @@ export const RequestHeaders = {
   captchaToken: 'x-captcha-token',
   botChatId: 'x-bot-chat-id',
   botPlatform: 'x-bot-platform',
+  botTenantId: 'x-bot-tenant-id',
 } as const;
 
 /**

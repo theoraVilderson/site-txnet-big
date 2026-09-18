@@ -66,7 +66,7 @@ function harness(over: { billing?: Partial<BillingApiClient>; session?: unknown 
   return { billing, client, handler: new InChatPayment(billing, new ChatAccess(auth, sessions), copy) };
 }
 
-const call = { lang: 'fa', accessToken: 'access-1', platform: 'telegram' };
+const call = { lang: 'fa', accessToken: 'access-1', platform: 'telegram', botTenantId: base.integration.tenantId };
 
 describe('InChatPayment', () => {
   it('approves the query billing approves, relaying exactly what the platform reported', async () => {

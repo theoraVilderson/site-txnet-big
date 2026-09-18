@@ -76,6 +76,12 @@ export interface BillingCallContext {
    * inside this messenger's chat (F-104-k) and no other.
    */
   platform: BotPlatform;
+  /**
+   * The tenant of the bot the update arrived at, sent as `X-Bot-Tenant-Id`
+   * beside the service token. Billing offers this chat an in-chat gateway only
+   * for a payment of that tenant: the invoice is paid to this bot (F-061-j).
+   */
+  botTenantId: string;
 }
 
 /**
@@ -149,6 +155,7 @@ export class BillingApiClient {
           authorization: `Bearer ${ctx.accessToken}`,
           [RequestHeaders.serviceToken]: this.serviceToken,
           [RequestHeaders.botPlatform]: ctx.platform,
+          [RequestHeaders.botTenantId]: ctx.botTenantId,
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         signal: controller.signal,

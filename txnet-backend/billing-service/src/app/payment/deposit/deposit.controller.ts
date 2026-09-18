@@ -38,11 +38,9 @@ import { AmountOutOfGatewayRange, RateOutOfRange, RateUnavailable } from '../pri
 import { DepositGatewayNotFound, DepositQuoteService } from './deposit-quote.service';
 import { DepositCallbackUnavailable, DepositStartService } from './deposit-start.service';
 import { DepositQuoteBody, depositQuoteSchema, DepositStartBody, depositStartSchema } from './deposit.schema';
+import { chatPlatformOf } from './chat-platform';
 
 const E = BackendI18nKeys.errors.billing;
-
-/** The messengers an in-chat driver can name (`PaymentProvider.chatPlatform`). */
-const CHAT_PLATFORMS = ['telegram', 'bale'] as const;
 
 /**
  * Test mode: whoever may manage gateways is also offered its own switched-off
@@ -136,19 +134,19 @@ export class DepositController {
   }
 
   /**
-   * The messenger this caller is in, or `null`: an in-chat gateway is offered
-   * only there. The bot says so with `X-Bot-Platform`, which counts only beside
-   * a verified service token, for the same reason `channelOf` does (F-104-k).
-   * A Mini App cannot: the gate says it with `X-Chat-Platform`, read from the
-   * session a verified `initData` minted and stripped from what a browser sends
-   * (F-104-q). The panel's `?ma=` hint is never read here.
+   * The messenger this caller is in, or `null` (`chat-platform.ts`). The bot's
+   * two headers count only beside a verified service token, for the same reason
+   * `channelOf` does (F-104-k), and only when its tenant is the request's
+   * (F-061-j). The panel's `?ma=` hint is never read here.
    */
   private chatPlatformOf(req: Request): string | null {
-    const platform =
-      this.channelOf(req) === CouponChannel.bot
-        ? headerValue(req.headers, RequestHeaders.botPlatform)
-        : headerValue(req.headers, IdentityHeaders.chatPlatform);
-    return platform && (CHAT_PLATFORMS as readonly string[]).includes(platform) ? platform : null;
+    return chatPlatformOf({
+      isBot: this.channelOf(req) === CouponChannel.bot,
+      botPlatform: headerValue(req.headers, RequestHeaders.botPlatform) ?? null,
+      botTenantId: headerValue(req.headers, RequestHeaders.botTenantId) ?? null,
+      gatePlatform: headerValue(req.headers, IdentityHeaders.chatPlatform) ?? null,
+      tenantId: identityOf(req).tenantId,
+    });
   }
 
   @Get('gateways')

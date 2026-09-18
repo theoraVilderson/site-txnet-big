@@ -31,7 +31,8 @@
     "serviceToken": "x-service-token",
     "captchaToken": "x-captcha-token",
     "botChatId": "x-bot-chat-id",
-    "botPlatform": "x-bot-platform"
+    "botPlatform": "x-bot-platform",
+    "botTenantId": "x-bot-tenant-id"
   },
   "proxyHeaders": {
     "note": "Set by Traefik, not by anything in this repo, so there is no drift to prevent — recorded only so the codebase spells each one in exactly one place (C-04).",

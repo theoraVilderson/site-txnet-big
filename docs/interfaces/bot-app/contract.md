@@ -146,7 +146,7 @@ URL carries are in [contract.mini-app.md](contract.mini-app.md).
 
 Gateway → amount → billing's quote → `start` → a bank `url` button, the credit (free), or an **invoice** (in-chat gateway: `FlowResult.invoice`, sent after the screen, with the `providerToken` billing answered — Bale's wallet, F-104-n).
 Billing's deposit routes **through the gate** (`BILLING_API_BASE_URL`), chat access token as Bearer; `X-Service-Token` records the `bot` channel,
-and `X-Bot-Platform` (believed only beside it) is what offers an in-chat gateway of this messenger. Every number is billing's; it ends at `start`.
+`X-Bot-Platform` + `X-Bot-Tenant-Id` (believed only beside it) offer an in-chat gateway only for **this bot's tenant's** payment — the owner in their reseller's bot pays the platform, and the Stars would reach the reseller's bot (F-061-j). Every number is billing's; it ends at `start`.
 A payment event (`ChatContext.payment`) never reaches a flow: `InChatPayment` relays it to `deposit/in-chat/*` as the payer. Every
 `pre_checkout_query` is answered — refusals as `topUp.refused*`, signed-out and billing-down included — since an unanswered one is cancelled in 10 s.
 `successful_payment` → `paidCredited`, or `paidPending` if nothing credited; billing marks that credit `shownInChat`, so the payer notice stays silent.

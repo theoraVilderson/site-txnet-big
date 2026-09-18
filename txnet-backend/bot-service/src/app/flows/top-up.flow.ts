@@ -168,7 +168,7 @@ export class TopUpFlow {
 
   private async callContext(ctx: ChatContext): Promise<BillingCallContext | null> {
     const accessToken = await this.access.token(ctx);
-    return accessToken ? { lang: ctx.lang, accessToken, platform: ctx.platform } : null;
+    return accessToken ? { lang: ctx.lang, accessToken, platform: ctx.platform, botTenantId: ctx.integration.tenantId } : null;
   }
 
   private signedOut(): FlowResult {

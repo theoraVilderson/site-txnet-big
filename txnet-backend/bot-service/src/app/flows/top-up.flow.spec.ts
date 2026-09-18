@@ -47,7 +47,7 @@ describe('TopUpFlow', () => {
 
     const result = await flow.start(ctx);
 
-    expect(billing.listGateways).toHaveBeenCalledWith({ lang: 'fa', accessToken: 'access-1', platform: 'telegram' });
+    expect(billing.listGateways).toHaveBeenCalledWith({ lang: 'fa', accessToken: 'access-1', platform: 'telegram', botTenantId: ctx.integration.tenantId });
     expect(ids(result)).toContain(`topup:g:tenant:${GW}`);
     expect(result.nextState?.step).toBe('topUp.gateway');
   });
@@ -85,7 +85,7 @@ describe('TopUpFlow', () => {
 
     const result = await flow.handle({ ...ctx, text: '۱۰۰' }, onAmount, null);
 
-    expect(billing.quote).toHaveBeenCalledWith({ gatewayId: GW, source: 'tenant', amount: '100' }, { lang: 'fa', accessToken: 'access-1', platform: 'telegram' });
+    expect(billing.quote).toHaveBeenCalledWith({ gatewayId: GW, source: 'tenant', amount: '100' }, { lang: 'fa', accessToken: 'access-1', platform: 'telegram', botTenantId: ctx.integration.tenantId });
     expect(result.view.body).toMatchObject({ values: { payable: '102.00', fee: '2.00', credited: '100.00' } });
     expect(ids(result)).toContain('topup:pay');
     expect(result.nextState).toMatchObject({ step: 'topUp.confirm', data: { amount: '100' } });
@@ -105,7 +105,7 @@ describe('TopUpFlow', () => {
 
     const result = await flow.handle(ctx, onConfirm, 'topup:pay');
 
-    expect(billing.start).toHaveBeenCalledWith({ gatewayId: GW, source: 'tenant', amount: '100.00' }, { lang: 'fa', accessToken: 'access-1', platform: 'telegram' });
+    expect(billing.start).toHaveBeenCalledWith({ gatewayId: GW, source: 'tenant', amount: '100.00' }, { lang: 'fa', accessToken: 'access-1', platform: 'telegram', botTenantId: ctx.integration.tenantId });
     const pay = (result.view.actions ?? []).flat().find((a) => a.kind === 'url');
     expect(pay?.url).toBe('https://pay.example/StartPay/A1');
     // Started is a commitment billing holds now (ADR-0010): nothing here may start it twice.
