@@ -1,13 +1,16 @@
 ---
 id: object-storage
 layer: platform
-status: draft
-version: 1
+status: active
+version: 2
 keywords: [object storage, file storage, upload, uploaded file, attachment storage, logo upload, asset storage, storage driver, local storage, s3, bucket, stored object, serve a file, آپلود فایل, ذخیره فایل, فضای ذخیره‌سازی, لوگو آپلود, اس۳]
-source: []
-owns_tables: []
+source:
+  - txnet-backend/shared-core/src/lib/object-storage/**
+  - txnet-backend/tenant-service/src/app/files/**
+  - txnet-backend/prisma/domains/storage.prisma
+owns_tables: [storage.stored_object]
 depends_on: [tenant-context]
-updated: 2026-09-17
+updated: 2026-09-18
 ---
 
 # object-storage
@@ -26,10 +29,12 @@ cite a key.
 
 ## Status
 
-`draft`, no code. Opened by D-42 (3), 2026-09-17; first built by F-018-m, first
-consumer F-018-h.
+`active`. Built by F-018-m: the port and the `local` driver in `shared-core`,
+`stored_object` in its own `storage` schema, and the public serving route in
+`tenant-service`. First consumer F-018-h (not yet built).
 
 ## Changelog
 | Date | Change |
 |---|---|
 | 2026-09-17 | Unit opened by D-42 — no code yet |
+| 2026-09-18 | draft -> **active**, v1 -> v2 (F-018-m): the port, the `local` driver, `stored_object`, `GET /api/files/<key>` |

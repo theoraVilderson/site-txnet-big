@@ -1,0 +1,24 @@
+// =============================================================================
+// Schema `storage` — uploaded files behind one port (`platform/object-storage`,
+// F-018-m, D-42 (3))
+// =============================================================================
+
+/// One stored file. The bytes are wherever the driver keeps them; this row is
+/// what they are, so a move to a bucket is copied by key and verified by hash.
+model StoredObject {
+  /// `tenants/<tenantId>/<logical path>` — a path on the local volume and an
+  /// object key in a bucket alike. A caller stores this, never a URL.
+  key         String   @id
+  tenantId    String   @db.Uuid
+  contentType String
+  size        Int
+  sha256      String   @db.Char(64)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("stored_object")
+  @@schema("storage")
+}

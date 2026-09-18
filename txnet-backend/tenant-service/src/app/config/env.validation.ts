@@ -49,6 +49,16 @@ export const envSchema = z.object({
   DOMAIN_REVALIDATION_GRACE_HOURS: z.coerce.number().positive().default(72),
   DOMAIN_PROBE_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
 
+  /**
+   * Object storage (F-018-m, `platform/object-storage`): which driver holds the
+   * bytes, and for `local` the mounted volume. Only `local` is built; an
+   * S3-compatible driver arrives behind the same port. **One node, or a volume
+   * every replica shares** — replicas on separate disks each hold a different
+   * subset of the files.
+   */
+  OBJECT_STORAGE_DRIVER: z.enum(['local']).default('local'),
+  OBJECT_STORAGE_LOCAL_ROOT: z.string().min(1).default('/data/objects'),
+
   /** The panel's origin, for CORS with credentials; required in production (`main.ts`). */
   FRONTEND_ORIGIN: z.string().default(''),
 

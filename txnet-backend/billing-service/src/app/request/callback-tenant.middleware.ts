@@ -1,6 +1,6 @@
 import { Injectable, NestMiddleware, NotFoundException } from '@nestjs/common';
-import { DomainVerificationStatus, TenantDomainPurpose, TenantDomainType } from '@prisma/client';
-import { normalizeHost, runWithTenant } from '@txnet-backend/shared-core';
+import { TenantDomainPurpose } from '@prisma/client';
+import { normalizeHost, runWithTenant, tenantOfHost } from '@txnet-backend/shared-core';
 import type { NextFunction, Request, Response } from 'express';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
@@ -56,17 +56,7 @@ export class CallbackTenantMiddleware implements NestMiddleware {
    * not worth a second copy of a cache whose invalidation rules (ADR-0025
    * decision 4) are `tenant`'s to own and F-018's to write.
    */
-  private async tenantOf(host: string): Promise<string | null> {
-    const row = await this.prisma.tenantDomain.findUnique({
-      where: { domainValue: host },
-      select: { tenantId: true, domainType: true, purpose: true, verificationStatus: true },
-    });
-    if (!row || row.purpose !== TenantDomainPurpose.panel) return null;
-    // A subdomain is issued by the platform, so matching the row is the whole
-    // proof; a custom domain is the tenant's only once ownership has been shown.
-    const proven =
-      row.domainType === TenantDomainType.subdomain ||
-      row.verificationStatus === DomainVerificationStatus.verified;
-    return proven ? row.tenantId : null;
+  private tenantOf(host: string): Promise<string | null> {
+    return tenantOfHost(this.prisma, host, [TenantDomainPurpose.panel]);
   }
 }

@@ -33,6 +33,9 @@ import {
  * payments. `notificationCampaign` joined with ADR-0053: a tenant admin's
  * campaign queries run on the app pool, and this is what binds them. The
  * platform owner's, and platform-wide rows, are on the cross-tenant pool.
+ * `storedObject` joined with F-018-m: its serving route is public, and the
+ * scope its Host opens is the only thing between a key in a URL and another
+ * tenant's file.
  */
 export const TENANT_SCOPED_MODELS = [
   'user',
@@ -40,6 +43,7 @@ export const TENANT_SCOPED_MODELS = [
   'walletTransaction',
   'paymentTransaction',
   'notificationCampaign',
+  'storedObject',
 ] as const;
 
 export type TenantScopedModel = (typeof TENANT_SCOPED_MODELS)[number];

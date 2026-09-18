@@ -165,6 +165,7 @@ model Tenant {
   credentials         TenantCredential[]
   subscription        TenantSubscription?
   statusHistory       TenantStatusHistory[]
+  storedObjects       StoredObject[]
 
   @@map("tenant")
   @@schema("tenant")

@@ -26,6 +26,8 @@ volumes:
   translator_models:
   translator_llm_models:
   locales_runtime:
+  # Uploaded files (F-018-m): the object-storage `local` driver's volume.
+  object_storage:
 
 services:
   # ===========================================================================
@@ -1142,6 +1144,9 @@ services:
     volumes:
       - ../txnet-backend:/app:delegated
       - /app/node_modules
+      # The object-storage `local` driver's root (F-018-m). One node or one
+      # shared volume: a replica on another disk would hold other files.
+      - object_storage:/data/objects
     environment:
       # Tenant administration, out of auth-service (F-018-t, ADR-0058).
       # Validated at boot by `app/config/env.validation.ts`.
@@ -1166,6 +1171,9 @@ services:
       - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
       # Per-user limits; empty means the schema default (F-087).
       - PLATFORM_RATE_LIMIT_FACTOR=${PLATFORM_RATE_LIMIT_FACTOR:-}
+      # Object storage (F-018-m): only `local` is built; its root is the volume above.
+      - OBJECT_STORAGE_DRIVER=${OBJECT_STORAGE_DRIVER:-local}
+      - OBJECT_STORAGE_LOCAL_ROOT=/data/objects
     networks:
       - private_backend_network
     labels:
@@ -1217,6 +1225,22 @@ services:
       - "traefik.http.routers.tenant-domain-probe.tls.certresolver=myresolver"
       - "traefik.http.routers.tenant-domain-probe.middlewares=strip-fake-headers"
       - "traefik.http.routers.tenant-domain-probe.service=tenant-service"
+
+      # The file route (F-018-m): an <img> on a panel or landing page carries no
+      # session, so no gate. The service answers only a key in the Host's own
+      # tenant, and the neutral 404 for every other host and key.
+      - "traefik.http.routers.tenant-files-http.rule=PathPrefix(`/api/files/`)"
+      - "traefik.http.routers.tenant-files-http.entrypoints=web"
+      - "traefik.http.routers.tenant-files-http.priority=130"
+      - "traefik.http.routers.tenant-files-http.middlewares=strip-fake-headers"
+      - "traefik.http.routers.tenant-files-http.service=tenant-service"
+
+      - "traefik.http.routers.tenant-files.rule=PathPrefix(`/api/files/`)"
+      - "traefik.http.routers.tenant-files.entrypoints=websecure"
+      - "traefik.http.routers.tenant-files.priority=130"
+      - "traefik.http.routers.tenant-files.tls.certresolver=myresolver"
+      - "traefik.http.routers.tenant-files.middlewares=strip-fake-headers"
+      - "traefik.http.routers.tenant-files.service=tenant-service"
       - "txnet.logging=true"
     depends_on:
       main-db:
