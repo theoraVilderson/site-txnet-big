@@ -178,6 +178,16 @@ export const UnscopedRedisKeys = {
   tenantStatus: (tenantId: string) => `tenant:status:${tenantId}`,
 
   /**
+   * **A pub/sub channel, not a key** (F-018-r). `TenantStatusListener` publishes
+   * a tenant id on it after rewriting that tenant's `tenantStatus`, and
+   * `gateway-service` closes the tenant's sockets if the new status no longer
+   * allows `read`. The body names a tenant and nothing else: the gateway
+   * re-reads the key, so a message carries no authority of its own. The prefix
+   * is applied by hand on both sides, as for `realtimeFanout`.
+   */
+  tenantStatusChanged: () => 'tenant:status-changed',
+
+  /**
    * The leases one tenant's background runs currently hold, across every
    * `worker-service` replica (F-067-e, catalog 20.2 layer 4).
    *

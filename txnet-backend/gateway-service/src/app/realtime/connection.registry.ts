@@ -146,6 +146,20 @@ export class ConnectionRegistry {
     );
   }
 
+  /** Every signed-in connection of `tenantId` — used when its status closes it (F-018-r). */
+  byTenant(tenantId: string): Connection[] {
+    return [...this.byId.values()].filter(
+      (c) => c.identity && c.identity.tenantId === tenantId,
+    );
+  }
+
+  /** The distinct tenants of this replica's signed-in connections. Anonymous ones have none. */
+  tenants(): string[] {
+    const ids = new Set<string>();
+    for (const c of this.byId.values()) if (c.identity) ids.add(c.identity.tenantId);
+    return [...ids];
+  }
+
   get size(): number {
     return this.byId.size;
   }

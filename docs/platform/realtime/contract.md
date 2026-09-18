@@ -51,6 +51,7 @@ session exists.
 | `101` + `Sec-WebSocket-Protocol: txnet.v1` | connected — signed in or anonymous; the `welcome` frame says which |
 | `401` | a token was presented and failed, or the gate said nothing at all. Refresh the access token and retry **once**. Retrying *without* the token connects anonymously, which is the right move only if the page can work that way |
 | `429` | at `REALTIME_MAX_CONNECTIONS_PER_USER` for this user, or `REALTIME_MAX_CONNECTIONS_PER_IP` for anonymous sockets from this address, on this replica. Back off; do not retry immediately |
+| `403` | the caller's tenant no longer allows `read` — terminated (F-018-r). Do not retry |
 | `404` | the path is not the realtime path |
 
 A `401` here is answered as a plain HTTP response, before any WebSocket exists,
@@ -115,6 +116,7 @@ differently.
 | Code | Meaning | What a client should do |
 |---|---|---|
 | `4401` | the session behind this connection is no longer live | sign in again. Do not reconnect with the same token |
+| `4403` | the tenant's status no longer allows `read` (terminated, F-018-r) | stop. A reconnect is refused `403` |
 | `4408` | the heartbeat went unanswered | reconnect |
 | `4429` | too many sockets for this user | back off |
 | `4503` | the server is shutting down | reconnect after a backoff |
@@ -170,6 +172,16 @@ A Redis that is unreachable leaves connections **open**, not closed: a store
 outage is not evidence that every session was revoked, and treating it as such
 would sign every user out at once. The next tick asks again.
 
+## The tenant's status closes a socket too (F-018-r)
+
+A socket is only reading, so of `TenantStatusPolicy` it can break one cell:
+`read`, closed for a **terminated** tenant (`tenant/rules.md`). A suspended one
+keeps its sockets. `TenantSocketWatch` reads `tenant:status:<tenantId>` at the
+upgrade (`403`), on each `tenant:status-changed` message tenant-service
+publishes (closes with `4403` at once — terminating revokes no session, so the
+session re-check never would), and every re-check tick, the backstop for a lost
+message. Missing, unreadable or unreachable state refuses nobody (F-101-b).
+
 ## Consumes
 
 | From unit | What | Failure behaviour if unavailable |
@@ -179,6 +191,7 @@ would sign every user out at once. The next tick asks again.
 | redis-keyspace | `otp:channel:<channelId>` must be the key `auth-service` writes | a mismatch reads as "never minted" and refuses every `otp:` subscription, with no error on either side |
 | redis-keyspace | pub/sub on `realtime:<channel>`, on a second connection ([contract.fanout.md](contract.fanout.md)) | no events arrive. Sockets stay open and correct; the platform is silent, and the client falls back to whatever the producing domain stored |
 | identity | what a live session means, and who revokes one | — |
+| tenant | `tenant:status:<tenantId>` + the `tenant:status-changed` channel, judged by `tenantAllows(…, 'read')` | no state: nobody refused. No message: closed at the next re-check (60s) |
 
 ## Config
 

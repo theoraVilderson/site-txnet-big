@@ -37,8 +37,9 @@ export interface FanoutSubscriberClient {
  * marker still exists (F-067-h), reading the token that authorizes an `otp:`
  * subscription (F-067-j), and hearing the events a producer fanned out to the
  * replica holding a socket (F-067-i). The last needs a connection of its
- * own — see {@link subscriber}. **All three are reads**: nothing in this
- * process writes a key.
+ * own — see {@link subscriber}. Since F-018-r it also reads
+ * `tenant:status:<id>` and hears `tenant:status-changed` on that connection.
+ * **All of it is reads**: nothing in this process writes a key.
  */
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {

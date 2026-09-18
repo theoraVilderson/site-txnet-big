@@ -109,6 +109,8 @@ export type RefusalCode =
 export const CloseCode = {
   /** The session behind this connection is gone — sign in again. */
   SessionRevoked: 4401,
+  /** The tenant's status no longer allows reading (terminated, F-018-r). Do not reconnect. */
+  TenantClosed: 4403,
   /** The heartbeat went unanswered. Reconnect. */
   HeartbeatTimeout: 4408,
   /** Too many sockets for one user. Do not immediately retry. */

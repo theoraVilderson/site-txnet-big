@@ -56,7 +56,12 @@ export class TenantStatusListener extends PgNotificationListener {
     }
     try {
       const row = await this.all.tenant.findUnique({ where: { id: tenantId }, select: STATE });
-      if (row) await this.write(row);
+      if (!row) return;
+      await this.write(row);
+      // After the key: `gateway-service` re-reads it on this message and closes
+      // the tenant's sockets if it no longer reads (F-018-r). Only a change is
+      // announced — its re-check tick covers `recomputeAll` and a lost message.
+      await this.redis.publish(UnscopedRedisKeys.tenantStatusChanged(), row.id);
     } catch (error) {
       // The old key stays — the state before this change. The next connect recomputes it.
       this.logger.error(`tenant status notification not applied: ${(error as Error).message}`);

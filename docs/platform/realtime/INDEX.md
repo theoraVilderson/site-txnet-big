@@ -3,13 +3,13 @@ id: realtime
 layer: platform
 status: active
 version: 2
-keywords: [websocket, socket, realtime, ws, gateway, live updates, push, channel, subscribe, heartbeat, reconnect, live chat transport, gateway-service, txnet.v1, Sec-WebSocket-Protocol, fan-out, fanout, pub/sub, replica, events not arriving, anonymous socket, before login, pre-login, otp channel, channel token, proof, socket without signing in]
+keywords: [websocket, socket, realtime, ws, gateway, live updates, push, channel, subscribe, heartbeat, reconnect, live chat transport, gateway-service, txnet.v1, Sec-WebSocket-Protocol, fan-out, fanout, pub/sub, replica, events not arriving, anonymous socket, before login, pre-login, otp channel, channel token, proof, socket without signing in, terminated tenant socket, 4403]
 source:
   - txnet-backend/gateway-service/**
   - txnet-backend/shared-core/src/lib/realtime/**
 owns_tables: []
-depends_on: [identity, forward-auth, redis-keyspace]
-updated: 2026-09-10
+depends_on: [identity, forward-auth, redis-keyspace, tenant]
+updated: 2026-09-18
 ---
 
 # realtime

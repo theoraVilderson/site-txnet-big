@@ -66,6 +66,7 @@ describe('the key catalogue', () => {
       tenantByHost: UnscopedRedisKeys.tenantByHost('myvpn.com'),
       tenantById: UnscopedRedisKeys.tenantById('tenant-1'),
       tenantStatus: UnscopedRedisKeys.tenantStatus('tenant-1'),
+      tenantStatusChanged: UnscopedRedisKeys.tenantStatusChanged(),
       tenantRuns: UnscopedRedisKeys.tenantRuns('tenant-1'),
       fxRate: UnscopedRedisKeys.fxRate('IRR'),
       outboxProcessed: UnscopedRedisKeys.outboxProcessed('payment-credited-notify', 'evt-1'),

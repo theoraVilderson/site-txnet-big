@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-updated: 2026-09-17
+updated: 2026-09-18
 ---
 
 # Business rules — tenant status
@@ -46,7 +46,7 @@ is `read` for `GET`/`HEAD`/`OPTIONS` and **`staffWrite` for anything else**.
 | 2 | Reactivating clears `suspendedAt`, `graceEndsAt`, `suspendedReason` | `suspended`/`trial` -> `active` | — |
 | 3 | Every change appends one `tenant_status_history` row and one `tenant_status_change` audit row, in the change's transaction under the tenant row's lock | any change | an unchanged status is refused, writing nothing |
 | 4 | **Nothing is deleted** by any status: users, wallets, configs and history stay | any change | — |
-| 5 | Enforcement is in the services (`TenantStatusGuard`, `APP_GUARD` in auth-, billing- and notification-service — C-11 fails an app that opens a tenant scope without it), from `tenant:status:<id>` in Redis — forward-auth has no tenant (ADR-0024) | every request with a tenant in scope | a request with no tenant is not judged |
+| 5 | Enforcement is in the services (`TenantStatusGuard`, `APP_GUARD` in auth-, billing- and notification-service; `TenantSocketWatch` for gateway-service sockets — C-11 fails an app that opens a tenant scope without it), from `tenant:status:<id>` in Redis — forward-auth has no tenant (ADR-0024) | every request with a tenant in scope | a request with no tenant is not judged |
 | 9 | A background tick that names a tenant runs only if the status allows its job's `tenantCapability` (unset = `staffWrite`); a refused tick is acked, is no run and takes no slot (`worker-service` `TenantStatusGate`, F-018-p) | every tick with `tenantId` | a platform tick is not judged; a missing key refuses nobody |
 | 6 | Redis follows Postgres at once: a trigger on `tenant.status`/`graceEndsAt` notifies `tenant_status_changed`, `TenantStatusListener` rewrites the key, and recomputes every tenant on each connect | commit | **a missing key refuses nobody** (F-101-b's trade) |
 | 7 | `system` is never closed | — | a payment already taken still settles, or the record of money that moved is lost |
@@ -66,7 +66,7 @@ is `read` for `GET`/`HEAD`/`OPTIONS` and **`staffWrite` for anything else**.
 | A mutating route nobody labelled | closed for a suspended tenant (`staffWrite`) — fail closed (user, F-018-f) | 2026-09-17 |
 | One row, one session | the user chose not to split enforcement per service | 2026-09-17 |
 | A terminated tenant's in-flight payment | settles (`system`); a card-to-card confirmation by staff does not (`staffWrite`) | 2026-09-17 |
-| Services other than auth-/billing-service | `notification-service` registers the guard; ticks are judged by `TenantStatusGate` (F-018-p). `bot-service` calls auth-/billing-service, which refuse. `gateway-service` sockets stay out (row note): a client frame only subscribes to a channel, a `read`, so suspension closes nothing there — but a **terminated** tenant's open socket still receives pushes, an unenforced `read: no` | 2026-09-17 |
+| Services other than auth-/billing-service | `notification-service` registers the guard; ticks are judged by `TenantStatusGate` (F-018-p). `bot-service` calls auth-/billing-service, which refuse. `gateway-service` judges only `read`, since a client frame only subscribes: a suspended tenant keeps its sockets; a **terminated** one is refused `403` at the upgrade and its open sockets close `4403` at once on the listener's `tenant:status-changed`, backstopped by the 60s re-check. Terminating revokes no session, so without this the socket lived as long as the session (F-018-r, `realtime/contract.md`) | 2026-09-18 |
 | The platform owner reactivates a `non_payment`-suspended reseller without a payment | allowed; the period is still unpaid and past grace, so the next sweep suspends it again. To give time, grant grace (#15) — never a manual credit, which records money that never arrived | 2026-09-17 |
 | A campaign already `sending` when its reseller is suspended or terminated | it finishes — `system`, like a payment already taken; only starting one is `staffWrite` (user, F-018-p) | 2026-09-17 |
 | The reseller's owner, whose session is their platform tenant's (ADR-0059 (1)) | `TenantStatusGuard` would judge that always-active tenant, so a reseller self-service route judges the path's reseller with `tenantAllows` in `ResellerAccess` (invariant 21, F-061-h); the owner of a suspended reseller reads but does not write, as its staff would not. The platform owner's staff are not held to the reseller's matrix, except `terminated` | 2026-09-18 |

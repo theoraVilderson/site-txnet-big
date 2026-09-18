@@ -207,7 +207,7 @@ describe('TenantStatusListener', () => {
 
   it('writes the state a notification names, in the shape the guard reads', async () => {
     const graceEndsAt = new Date('2026-09-24T12:00:00Z');
-    const redis = { set: vi.fn(async () => undefined) };
+    const redis = { set: vi.fn(async () => undefined), publish: vi.fn(async () => undefined) };
     const all = { tenant: { findUnique: vi.fn(async () => ({ id: RESELLER, status: 'suspended', graceEndsAt })), findMany: vi.fn(async () => []) } };
     const listener = new TenantStatusListener(all as never, redis as never, (() => ({})) as never);
 
@@ -217,7 +217,12 @@ describe('TenantStatusListener', () => {
       serializeTenantStatusState({ status: 'suspended', graceEndsAt: graceEndsAt.toISOString() }),
     );
 
+    // …and then tells the gateway which tenant changed, so a terminated one's sockets close at once (F-018-r).
+    expect(redis.publish).toHaveBeenCalledWith(UnscopedRedisKeys.tenantStatusChanged(), RESELLER);
+    expect(redis.set.mock.invocationCallOrder[0]).toBeLessThan(redis.publish.mock.invocationCallOrder[0]);
+
     await listener.handle('not json');
     expect(redis.set).toHaveBeenCalledTimes(1);
+    expect(redis.publish).toHaveBeenCalledTimes(1);
   });
 });

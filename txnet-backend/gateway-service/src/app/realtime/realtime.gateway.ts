@@ -13,6 +13,7 @@ import { RedisKeys } from '../redis/redis.keys';
 import { channelRefusal, type ChannelProofs } from './channel';
 import { RealtimeFanout } from './fanout';
 import { admissionFrom, clientAddressOf, type Admission } from './identity';
+import { TenantSocketWatch } from './tenant-status';
 import {
   CloseCode,
   parseClientFrame,
@@ -75,6 +76,7 @@ export class RealtimeGateway implements OnApplicationShutdown {
     private readonly registry: ConnectionRegistry,
     private readonly fanout: RealtimeFanout,
     private readonly redis: RedisService,
+    private readonly tenants: TenantSocketWatch,
     config: ConfigService,
   ) {
     this.path = config.get<string>('REALTIME_PATH')!;
@@ -117,11 +119,14 @@ export class RealtimeGateway implements OnApplicationShutdown {
    * service definition for something that is one deployable.
    */
   attach(server: HttpServer): void {
-    server.on('upgrade', (req, socket, head) => this.upgrade(req, socket, head));
+    server.on('upgrade', (req, socket, head) => void this.upgrade(req, socket, head));
 
     // Start hearing what other processes fanned out (F-067-i) at the same
     // moment this replica starts accepting sockets.
     this.fanout.listen();
+    // And every tenant status change, so a terminated tenant's sockets close
+    // the moment it happens rather than at the next re-check (F-018-r).
+    void this.tenants.listen((closing) => this.closeTenant(closing));
 
     this.heartbeatTimer = setInterval(() => this.beat(), this.heartbeatMs);
     this.recheckTimer = setInterval(
@@ -136,7 +141,7 @@ export class RealtimeGateway implements OnApplicationShutdown {
     );
   }
 
-  private upgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
+  private async upgrade(req: IncomingMessage, socket: Duplex, head: Buffer): Promise<void> {
     if (new URL(req.url ?? '/', 'http://localhost').pathname !== this.path) {
       return refuse(socket, 404, 'Not Found');
     }
@@ -150,6 +155,15 @@ export class RealtimeGateway implements OnApplicationShutdown {
       // (`identity.ts`).
       this.logger.warn('upgrade with no answer from the gate — refusing');
       return refuse(socket, 401, 'Unauthorized');
+    }
+
+    // The tenant's status, before the cap and the handshake (F-018-r): a
+    // terminated tenant does not read, and a socket is nothing but reading.
+    // An anonymous caller has no tenant to judge — a request with none is not
+    // `TenantStatusGuard`'s to judge either. Read before the cap so the cap and
+    // the handshake below stay one synchronous step.
+    if (admitted.identity && !(await this.tenants.admits(admitted.identity.tenantId))) {
+      return refuse(socket, 403, 'Forbidden');
     }
 
     const address = clientAddressOf(req);
@@ -364,6 +378,9 @@ export class RealtimeGateway implements OnApplicationShutdown {
     );
     if (sessions.size === 0) return;
 
+    // The backstop for a tenant status change pub/sub dropped (F-018-r).
+    this.closeTenant(await this.tenants.sweep());
+
     for (const sessionId of sessions) {
       let live: boolean;
       try {
@@ -383,6 +400,17 @@ export class RealtimeGateway implements OnApplicationShutdown {
         connection.socket.close(CloseCode.SessionRevoked, 'session revoked');
         this.drop(connection);
       }
+    }
+  }
+
+  /** Close every connection whose tenant no longer allows `read` (F-018-r). */
+  private closeTenant(closing: Connection[]): void {
+    for (const connection of closing) {
+      this.logger.log(
+        `closing ${connection.id}: tenant ${connection.identity.tenantId} no longer reads`,
+      );
+      connection.socket.close(CloseCode.TenantClosed, 'tenant closed');
+      this.drop(connection);
     }
   }
 

@@ -73,4 +73,18 @@ export class RedisService implements RateLimitStore, OnModuleInit, OnModuleDestr
   async set(key: string, value: string): Promise<void> {
     await this.client.set(key, value);
   }
+
+  /**
+   * One pub/sub message, never thrown: the key it announces is already written,
+   * and `gateway-service`'s re-check tick reads that key anyway (F-018-r). The
+   * prefix by hand: ioredis applies `keyPrefix` to keys, and a channel is not
+   * one — unprefixed, the message reaches nobody and reports success.
+   */
+  async publish(channel: string, body: string): Promise<void> {
+    try {
+      await this.client.publish(`${this.keyPrefix}${channel}`, body);
+    } catch (err) {
+      this.logger.error(`could not publish on ${channel}: ${(err as Error).message}`);
+    }
+  }
 }
