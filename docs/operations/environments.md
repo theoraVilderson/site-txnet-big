@@ -83,6 +83,11 @@ Traefik in the main stack can route to the other stacks).
   the public DNS + Traefik + TLS path. Unset falls back to the public origin
   (`next dev` outside compose); a wrong value shows the login form to everyone,
   it never lets anyone in.
+- `TENANT_SERVICE_ORIGIN` (site-pwa) = `http://tenant-service:3000` — server-side
+  only: the root layout reads the domain's brand from `GET /api/branding` there,
+  with the visitor's host as `Host` (`src/lib/branding.ts`, F-066-v). Unset goes
+  out through `https://<visitor host>`; a wrong value renders every domain in
+  the neutral look (its host as the name, the default colours).
 
 ## OTP delivery + bot config (auth-service + bot-service)
 

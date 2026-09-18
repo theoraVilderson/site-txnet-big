@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { ChevronDown, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { LangDropdown } from "@auth/auth/_components/LangDropdown";
+import { BrandMark } from "@/components/BrandMark";
 import { CollapsedTooltip } from "./CollapsedTooltip";
 import { LogoutButton } from "./LogoutButton";
 import { ResellerPanelButton } from "./ResellerPanelButton";
@@ -184,12 +185,7 @@ export function PanelSidebar() {
           className={`flex h-20 shrink-0 items-center justify-between gap-2 border-b border-card-border px-5 ${whenCollapsed("lg:justify-center lg:px-0")}`}
         >
           <div className={`flex items-center gap-3 overflow-hidden ${whenCollapsed("lg:hidden")}`}>
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-xl font-bold text-white shadow-lg shadow-primary-glow">
-              T
-            </div>
-            <span className="truncate text-xl font-bold tracking-tight text-text-primary">
-              TXNet
-            </span>
+            <BrandMark nameClassName="truncate text-xl font-bold tracking-tight text-text-primary" />
           </div>
           <button
             type="button"

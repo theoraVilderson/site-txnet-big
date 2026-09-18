@@ -1316,6 +1316,11 @@ services:
       # page renders and the public hop above would be the whole delay the check
       # exists to avoid. A failure here just shows the login form.
       - AUTH_SERVICE_ORIGIN=http://auth-service:${AUTH_PORT}
+      # Server-to-server only, for the domain's brand in the root layout
+      # (src/lib/branding.ts, F-066-v): GET /api/branding with the visitor's
+      # host as Host, on every page render (cached 60s per host). A failure
+      # renders the neutral look, never another tenant's brand.
+      - TENANT_SERVICE_ORIGIN=http://tenant-service:3000
       - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
       - LOCALE_SCOPE=frontend
       # The language a stranger is answered in, same variable the backend reads.

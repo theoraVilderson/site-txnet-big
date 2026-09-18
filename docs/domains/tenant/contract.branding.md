@@ -57,5 +57,5 @@ five minutes (`Cache-Control: max-age=300` on the file route).
 
 | unit | uses |
 |---|---|
-| panel-web | `GET /api/branding` (F-066-v, not yet built) |
+| panel-web | `GET /api/branding` server-side, by the visitor's host (F-066-v, `interfaces/panel-web/contract.branding.md`) |
 | marketing-web | `GET /api/branding` (F-040, not yet built) |

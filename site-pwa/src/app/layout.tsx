@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import "./globals.css";
 import "./fonts.css";
 import { getUserLocale } from "@/services/locale";
@@ -15,11 +16,32 @@ import { startWatching } from "@/lib/locale-watcher";
 import { LocaleShell } from "@/context/LocaleShell";
 import { ThemeShell } from "@/context/ThemeShell";
 import { THEME_SCRIPT } from "@/lib/theme-script";
+import { BrandProvider } from "@/context/BrandContext";
+import { brandStyle, fetchBranding } from "@/lib/branding";
+import { visitorHost } from "@/lib/visitor-host";
 
-export const metadata: Metadata = {
-  title: "تکسنت - txnet",
-  description: "پنل کاربری تکسنت",
-};
+/**
+ * The domain's brand (F-066-v): read by the host the visitor is on, never by
+ * session, so a reseller's owner signed in on the reseller's domain sees the
+ * reseller's brand (ADR-0059). `fetchBranding` caches per host.
+ */
+async function domainBrand() {
+  const host = visitorHost(await headers());
+  const brand = host ? await fetchBranding(host) : null;
+  return { brand, fallbackName: host ?? "" };
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { brand, fallbackName } = await domainBrand();
+  const name = brand?.brandName || fallbackName;
+  return {
+    title: name,
+    ...(brand?.faviconUrl ? { icons: { icon: brand.faviconUrl } } : {}),
+    ...(brand?.ogImageUrl
+      ? { openGraph: { title: name, images: [brand.ogImageUrl] } }
+      : {}),
+  };
+}
 
 export default async function RootLayout({
   children,
@@ -33,6 +55,7 @@ export default async function RootLayout({
   const locale = await getUserLocale();
   const dir = getDir(locale);
   const { theme, isResolved, choice } = await getServerTheme();
+  const brand = await domainBrand();
 
   // ۳. جمع‌آوری متادیتای تمام زبان‌ها برای استفاده در منوی Dropdown
   const available = getAvailableLocales();
@@ -64,6 +87,7 @@ export default async function RootLayout({
       data-theme={theme}
       {...(isResolved ? { "data-theme-resolved": "true" } : {})}
       className={theme === "dark" ? "dark" : undefined}
+      style={brandStyle(brand.brand)}
       suppressHydrationWarning
     >
       <head>
@@ -71,14 +95,16 @@ export default async function RootLayout({
       </head>
       <body className="transition-colors duration-300">
         <ThemeShell initialTheme={theme} initialChoice={choice}>
-          <LocaleShell
-            initialLang={locale}
-            initialDir={dir}
-            initialNamespaces={initialNamespaces} // ارسال دیتاهای عمومی به کلاینت
-            initialAvailable={metaList}
-          >
-            {children}
-          </LocaleShell>
+          <BrandProvider value={brand}>
+            <LocaleShell
+              initialLang={locale}
+              initialDir={dir}
+              initialNamespaces={initialNamespaces} // ارسال دیتاهای عمومی به کلاینت
+              initialAvailable={metaList}
+            >
+              {children}
+            </LocaleShell>
+          </BrandProvider>
         </ThemeShell>
       </body>
     </html>

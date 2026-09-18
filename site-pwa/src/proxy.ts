@@ -2,6 +2,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { Cookies, ProxyHeaders } from "@/generated/wire";
 import { AUTH_LOGIN, AUTH_REGISTER, PANEL_HOME } from "@/lib/routes";
+import { visitorHost as hostOfVisitor } from "@/lib/visitor-host";
 
 /**
  * Auth screens a signed-in visitor has no business seeing. `forgot-password` is
@@ -69,12 +70,7 @@ function authServiceOrigin(request: NextRequest): string {
  * (`domains/tenant/contract.md`).
  */
 function visitorHost(request: NextRequest): string | null {
-  const forwarded = request.headers.get(ProxyHeaders.forwardedHost);
-  const host =
-    forwarded?.split(",")[0]?.trim() ||
-    request.headers.get("host") ||
-    request.nextUrl.host;
-  return host || null;
+  return hostOfVisitor(request.headers, request.nextUrl.host);
 }
 
 function isGuarded(pathname: string): boolean {

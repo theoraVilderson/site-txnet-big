@@ -2,7 +2,7 @@
 id: panel-web
 layer: interface
 status: active
-version: 19
+version: 20
 updated: 2026-09-18
 ---
 
