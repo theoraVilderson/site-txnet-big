@@ -14,7 +14,7 @@ import { RedisModule } from './redis/redis.module';
 import { IdentityMiddleware } from './request/identity.middleware';
 
 /** The service-to-service seam: reached by the platform's processes, never through Traefik. */
-const INTERNAL_ROUTES = 'internal/*';
+const INTERNAL_ROUTES = 'internal/*path';
 
 @Module({
   imports: [
@@ -38,13 +38,13 @@ const INTERNAL_ROUTES = 'internal/*';
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     // Language first, so the 401 IdentityMiddleware throws is translated.
-    consumer.apply(LanguageMiddleware).forRoutes('*');
+    consumer.apply(LanguageMiddleware).forRoutes('{*path}');
     // Every route but the health check and the internal seam needs the gate's
     // identity — a new controller is covered without opting in, billing's rule.
     // `ServiceOnlyGuard` is the whole door on `internal/*`.
     consumer
       .apply(IdentityMiddleware)
       .exclude('health', INTERNAL_ROUTES)
-      .forRoutes('*');
+      .forRoutes('{*path}');
   }
 }

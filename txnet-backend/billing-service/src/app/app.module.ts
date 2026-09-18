@@ -42,7 +42,7 @@ const WEBHOOK_ROUTE = 'billing/deposit/webhook/:provider/:gatewayId';
  * another of this platform's processes holding `SERVICE_AUTH_TOKEN`, never from
  * the edge — Traefik routes `/api/billing`, and this is not under it.
  */
-const INTERNAL_ROUTES = 'internal/*';
+const INTERNAL_ROUTES = 'internal/*path';
 
 @Module({
   imports: [
@@ -77,7 +77,7 @@ const INTERNAL_ROUTES = 'internal/*';
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     // Language first, so the 401 IdentityMiddleware throws is translated.
-    consumer.apply(LanguageMiddleware).forRoutes('*');
+    consumer.apply(LanguageMiddleware).forRoutes('{*path}');
     // Every route but the container health check, the gateway callback and the
     // internal seam requires the gate's identity and runs inside its tenant
     // (F-092-a). A new controller is covered without opting in; leaving one out
@@ -86,7 +86,7 @@ export class AppModule implements NestModule {
     consumer
       .apply(IdentityMiddleware)
       .exclude('health', CALLBACK_ROUTE, WEBHOOK_ROUTE, INTERNAL_ROUTES)
-      .forRoutes('*');
+      .forRoutes('{*path}');
     // The callback is public because a bank redirects a browser to it, so there
     // is no identity to read and the Host is the only claim it carries
     // (F-092-j, ADR-0025). This resolves that Host to a tenant or answers a

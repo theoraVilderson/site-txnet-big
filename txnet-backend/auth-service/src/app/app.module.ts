@@ -49,6 +49,6 @@ export class AppModule implements NestModule {
         TenantContextMiddleware,
         LanguageMiddleware,
       )
-      .forRoutes('*');
+      .forRoutes('{*path}');
   }
 }
