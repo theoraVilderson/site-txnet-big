@@ -3,6 +3,7 @@ import * as argon2Module from 'argon2';
 import { OtpChannel, OtpPurpose } from '@prisma/client';
 import { AuthService } from './auth.service';
 import { normalizePhone } from '../common/validation/phone.schema';
+import { TenantContext } from '../tenant-context/tenant-context';
 
 /**
  * The canonical stored form is whatever `phone.schema` says it is (E.164 —
@@ -116,6 +117,9 @@ function harness() {
     }),
   };
 
+  // ADR-0059 (3): no domain owner unless a case says so.
+  const surfaceOwners = { ownerMatching: vi.fn().mockResolvedValue(null) };
+
   const service = new AuthService(
     prisma as never,
     rateLimiter as never,
@@ -127,11 +131,13 @@ function harness() {
     sessionService as never,
     sessions as never,
     deliveries as never,
+    surfaceOwners as never,
   );
 
   return {
     service,
     prisma,
+    surfaceOwners,
     rateLimiter,
     tokens,
     config,
@@ -250,6 +256,67 @@ describe('AuthService.loginWithPassword — one answer for every bad credential'
     expect(h.sessionService.createSession).not.toHaveBeenCalled();
     expect(h.tokens.signAccessToken).not.toHaveBeenCalled();
     expect(h.otp.issueOtp).not.toHaveBeenCalled();
+  });
+});
+
+describe("AuthService.loginWithPassword — a reseller's owner on its domain (ADR-0059)", () => {
+  let h: Harness;
+  const PLATFORM_SCOPE = {
+    id: 'tenant-platform',
+    slug: 'platform_owner',
+    via: 'session',
+    surfacePurpose: 'panel',
+    brand: { id: 'tenant-reseller', slug: 'arian-vpn' },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    h = harness();
+    h.prisma.user.findFirst.mockResolvedValue(null);
+  });
+
+  it("signs the owner in with their own account, inside their own tenant", async () => {
+    h.surfaceOwners.ownerMatching.mockResolvedValue({
+      user: activeUser({ id: 'user-ali', tenantId: 'tenant-platform' }),
+      scope: PLATFORM_SCOPE,
+    });
+    argon2.verify.mockResolvedValue(true);
+    let scopedTo: string | undefined;
+    h.sessionService.createSession.mockImplementation(async () => {
+      scopedTo = TenantContext.currentOrNull()?.id;
+      return { session: { id: 'session-new' }, refreshToken: 'refresh-new' };
+    });
+
+    const res = await login(h);
+
+    expect(res).toMatchObject({ ok: true, msg: 'auth.loginSuccess' });
+    expect(h.sessionService.createSession).toHaveBeenCalledWith(
+      'user-ali',
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(scopedTo).toBe('tenant-platform');
+  });
+
+  it("does not look for the owner when the domain's own tenant has the account", async () => {
+    h.prisma.user.findFirst.mockResolvedValue(activeUser());
+    argon2.verify.mockResolvedValue(true);
+
+    await login(h);
+
+    expect(h.surfaceOwners.ownerMatching).not.toHaveBeenCalled();
+  });
+
+  it('answers the owner a wrong password exactly as anyone else', async () => {
+    h.surfaceOwners.ownerMatching.mockResolvedValue({
+      user: activeUser({ id: 'user-ali', tenantId: 'tenant-platform' }),
+      scope: PLATFORM_SCOPE,
+    });
+    argon2.verify.mockResolvedValue(false);
+
+    expect(await login(h)).toEqual({ ok: false, msg: 'auth.invalidCredentials', error: null });
+    expect(h.sessionService.createSession).not.toHaveBeenCalled();
   });
 });
 

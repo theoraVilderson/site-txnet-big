@@ -16,7 +16,12 @@ import { TenantCacheService } from './tenant-cache.service';
 
 // A host entry is a *surface*: the tenant plus what that door is for
 // (F-066-q). `byId` ignores the extra field, so one fixture serves both.
-const TENANT = { id: 'tenant-reseller', slug: 'reseller', purpose: 'panel' as const };
+const TENANT = {
+  id: 'tenant-reseller',
+  slug: 'reseller',
+  purpose: 'panel' as const,
+  ownerUserId: 'user-owner',
+};
 
 function cacheOver(redis: Partial<Record<'get' | 'set' | 'del', Mock>>) {
   const store = new Map<string, string>();

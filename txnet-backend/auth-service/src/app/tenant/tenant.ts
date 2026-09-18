@@ -96,6 +96,13 @@ export interface ResolvedTenant {
    * through the door it is meant to close.
    */
   surfacePurpose?: TenantSurfacePurpose;
+  /**
+   * The surface's tenant, when it is **not** the one this request is scoped to
+   * — present only when that tenant's owner arrived on it with their own
+   * account (ADR-0059). Everything is read in `id`'s tenant; `brand` is whose
+   * domain it is, and nothing else.
+   */
+  brand?: { id: string; slug: string };
 }
 
 /**
@@ -123,6 +130,19 @@ export type TenantClaim = {
    * filling this in otherwise, so the resolver never has to ask who is asking.
    */
   bot?: string | null;
+  /**
+   * The user of the verified access token (`sub`) whose tenant is `session`.
+   * Consulted only when `session` disagrees with the surface: the one account
+   * admitted then is the surface tenant's owner (ADR-0059).
+   */
+  sessionUser?: string | null;
+  /**
+   * The live session a refresh cookie names, for a request that carries no
+   * access token (refresh, logout, session status). Called only when there is
+   * a surface and no token claim, and only ever **admits** the surface's owner
+   * — any other answer is ignored and the host decides alone (ADR-0059 (2)).
+   */
+  cookieSession?: () => Promise<{ tenantId: string; userId: string } | null>;
 };
 
 /** Which tenant a service caller is acting for. Honoured only from a verified

@@ -58,12 +58,22 @@ export class TenantResolverService {
     const surface = await this.fromHost(claim.host);
     const claimed = claim.session ?? claim.bot ?? null;
     if (!claimed) {
-      return surface ? this.answer(surface, 'domain') : null;
+      if (!surface) return null;
+      const cookie = claim.cookieSession ? await claim.cookieSession() : null;
+      if (cookie && cookie.tenantId !== surface.id) {
+        const owner = await this.asOwner(surface, cookie.tenantId, cookie.userId);
+        if (owner) return owner;
+      }
+      return this.answer(surface, 'domain');
     }
 
     const via = claim.session ? 'session' : 'bot';
     if (surface) {
       if (surface.id !== claimed) {
+        const owner = claim.session
+          ? await this.asOwner(surface, claim.session, claim.sessionUser)
+          : null;
+        if (owner) return owner;
         throw new TenantClaimConflict(claimed, this.answer(surface, 'domain'));
       }
       // The claim answered, and the surface's purpose still travels with it: a
@@ -85,6 +95,29 @@ export class TenantResolverService {
    * different states — the second is a `panel` row, the first is the absence
    * of the field, and only the first is unrestricted by default.
    */
+  /**
+   * The one exception to ADR-0024 (4): the surface tenant's owner, on a panel
+   * surface, with their own session (ADR-0059). The request is scoped to the
+   * owner's tenant and the surface only brands it. `null` = not the owner.
+   */
+  private async asOwner(
+    surface: Surface,
+    tenantId: string,
+    userId: string | null | undefined,
+  ): Promise<ResolvedTenant | null> {
+    if (!userId || surface.purpose !== 'panel' || surface.ownerUserId !== userId) {
+      return null;
+    }
+    const own = await this.byId(tenantId);
+    if (!own) return null;
+    return {
+      ...own,
+      via: 'session',
+      surfacePurpose: surface.purpose,
+      brand: { id: surface.id, slug: surface.slug },
+    };
+  }
+
   private answer(surface: Surface, via: 'domain' | 'session' | 'bot'): ResolvedTenant {
     return { id: surface.id, slug: surface.slug, via, surfacePurpose: surface.purpose };
   }
@@ -107,7 +140,7 @@ export class TenantResolverService {
         domainType: true,
         purpose: true,
         verificationStatus: true,
-        tenant: { select: { id: true, slug: true } },
+        tenant: { select: { id: true, slug: true, ownerUserId: true } },
       },
     });
 

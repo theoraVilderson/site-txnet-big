@@ -12,7 +12,11 @@ export type CachedTenant = { id: string; slug: string };
  * host lookup and never with {@link TenantCacheService.byId} — a claim names a
  * tenant, and a tenant has no single purpose.
  */
-export type CachedSurface = CachedTenant & { purpose: TenantSurfacePurpose };
+export type CachedSurface = CachedTenant & {
+  purpose: TenantSurfacePurpose;
+  /** `tenant.ownerUserId` — the one account admitted from another tenant (ADR-0059). */
+  ownerUserId: string;
+};
 
 const PURPOSES: readonly string[] = ['panel', 'subscription', 'assets'];
 
@@ -39,7 +43,11 @@ function isTenant(value: unknown): value is CachedTenant {
 /** …and, for a host entry, a purpose this code still recognises. */
 function isSurface(value: unknown): value is CachedSurface {
   return (
-    isTenant(value) && PURPOSES.includes((value as CachedSurface).purpose as string)
+    isTenant(value) &&
+    PURPOSES.includes((value as CachedSurface).purpose as string) &&
+    // An entry written before ADR-0059 lacks the owner; it re-reads, as a
+    // purpose-less one did (F-066-q).
+    typeof (value as CachedSurface).ownerUserId === 'string'
   );
 }
 

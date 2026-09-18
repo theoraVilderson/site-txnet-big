@@ -40,6 +40,8 @@ import { BotLinkService } from './bot-link/bot-link.service';
 import { TokenService } from './token.service';
 import { SessionService } from './session/session.service';
 import { SessionStore } from './session/session.store';
+import { SurfaceOwnerService } from './surface-owner/surface-owner.service';
+import { runWithTenant } from '../tenant-context/tenant-context';
 import { Inject } from '@nestjs/common';
 import {
   ok,
@@ -102,6 +104,7 @@ export class AuthService {
     private readonly sessionService: SessionService,
     private readonly sessions: SessionStore,
     private readonly deliveries: OtpDeliveryStore,
+    private readonly surfaceOwners: SurfaceOwnerService,
   ) {}
 
   /**
@@ -157,69 +160,92 @@ export class AuthService {
       const where =
         type === 'phone' ? { phoneNumber: identity } : { username: identity };
 
-      const user = await this.prisma.user.findFirst({
-        where,
-        include: {
-          role: {
-            include: { rolePermissions: { include: { permission: true } } },
-          },
+      const include = {
+        role: {
+          include: { rolePermissions: { include: { permission: true } } },
         },
-      });
+      };
+      const user = await this.prisma.user.findFirst({ where, include });
 
-      if (!user || user.deletedAt || user.status !== 'active') {
-        return err('auth.invalidCredentials');
+      // ADR-0059 (3): on a reseller's domain, an identifier none of its own
+      // accounts holds may be its owner's own account, from another tenant.
+      // The rest of the sign-in then runs in that tenant, where the account,
+      // its rate-limit bucket and its new session belong.
+      if (!user) {
+        const owner = await this.surfaceOwners.ownerMatching(where, include);
+        if (owner) {
+          return runWithTenant(owner.scope, () =>
+            this.completePasswordLogin(owner.user, identity, input.password, ip, userAgent, lang, scopeKey),
+          );
+        }
       }
-
-      const failureBucket = rateLimitBucketKey(
-      RateLimitBucket.LOGIN_FAILURES,
-      identity,
-    );
-      const attempt = await this.rateLimiter.hit(
-        failureBucket,
-        this.loginFailureLockThreshold,
-        LOGIN_FAILURE_WINDOW_SEC,
-      );
-      if (!attempt.allowed) {
-        return err('auth.temporarilyLocked');
-      }
-
-      if (!(await argon2.verify(user.passwordHash, input.password))) {
-        return err('auth.invalidCredentials');
-      }
-
-      await this.rateLimiter.reset(failureBucket);
-
-      // Invariant #6 (an unverified phone cannot complete password login) is
-      // enforced here rather than before the password check: answered any
-      // earlier, this key tells an anonymous caller that the account exists,
-      // which is the account-existence oracle the single `invalidCredentials`
-      // answer above exists to avoid. After a proven password it reveals
-      // nothing the caller did not already know.
-      if (!user.phoneVerifiedAt) {
-        return err('auth.phoneVerificationRequired');
-      }
-
-      if (user.twoFactorEnabled) {
-        const channel = await this.resolveOtpChannel(user.phoneNumber!, user);
-        const delivery = await this.deliveries.mintHandles();
-        await this.otp.issueOtp(
-          user.phoneNumber!,
-          OtpPurpose.login,
-          channel,
-          ip,
-          lang,
-          delivery,
-        );
-        const otpToken = this.tokens.signOtpToken(user.id);
-        return ok(
-          { requiresOtp: true, otpToken, ...deliveryHandles(delivery) },
-          'auth.otpSent',
-        );
-      }
-
-      const sessionData = await this.issueSession(user, ip, userAgent, scopeKey);
-      return ok(sessionData, 'auth.loginSuccess');
+      return this.completePasswordLogin(user, identity, input.password, ip, userAgent, lang, scopeKey);
     });
+  }
+
+  /** Everything a password sign-in does once the account is found (or not). */
+  private async completePasswordLogin(
+    user: any,
+    identity: string,
+    password: string,
+    ip: string,
+    userAgent: string,
+    lang: string,
+    scopeKey?: string | null,
+  ) {
+    if (!user || user.deletedAt || user.status !== 'active') {
+      return err('auth.invalidCredentials');
+    }
+
+    const failureBucket = rateLimitBucketKey(
+    RateLimitBucket.LOGIN_FAILURES,
+    identity,
+    );
+    const attempt = await this.rateLimiter.hit(
+      failureBucket,
+      this.loginFailureLockThreshold,
+      LOGIN_FAILURE_WINDOW_SEC,
+    );
+    if (!attempt.allowed) {
+      return err('auth.temporarilyLocked');
+    }
+
+    if (!(await argon2.verify(user.passwordHash, password))) {
+      return err('auth.invalidCredentials');
+    }
+
+    await this.rateLimiter.reset(failureBucket);
+
+    // Invariant #6 (an unverified phone cannot complete password login) is
+    // enforced here rather than before the password check: answered any
+    // earlier, this key tells an anonymous caller that the account exists,
+    // which is the account-existence oracle the single `invalidCredentials`
+    // answer above exists to avoid. After a proven password it reveals
+    // nothing the caller did not already know.
+    if (!user.phoneVerifiedAt) {
+      return err('auth.phoneVerificationRequired');
+    }
+
+    if (user.twoFactorEnabled) {
+      const channel = await this.resolveOtpChannel(user.phoneNumber!, user);
+      const delivery = await this.deliveries.mintHandles();
+      await this.otp.issueOtp(
+        user.phoneNumber!,
+        OtpPurpose.login,
+        channel,
+        ip,
+        lang,
+        delivery,
+      );
+      const otpToken = this.tokens.signOtpToken(user.id);
+      return ok(
+        { requiresOtp: true, otpToken, ...deliveryHandles(delivery) },
+        'auth.otpSent',
+      );
+    }
+
+    const sessionData = await this.issueSession(user, ip, userAgent, scopeKey);
+    return ok(sessionData, 'auth.loginSuccess');
   }
 
   async requestLoginOtp(

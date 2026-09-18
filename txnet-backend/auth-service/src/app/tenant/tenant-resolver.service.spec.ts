@@ -16,14 +16,18 @@ import { TenantClaimConflict, normalizeHost } from './tenant';
 
 const DOMAIN_TENANT = { id: 'tenant-reseller', slug: 'reseller' };
 const OTHER_TENANT = { id: 'tenant-other', slug: 'other-reseller' };
-const KNOWN = [DOMAIN_TENANT, OTHER_TENANT];
+/** Where the reseller's owner has their account (ADR-0059). */
+const PLATFORM_TENANT = { id: 'tenant-platform', slug: 'platform_owner' };
+const KNOWN = [DOMAIN_TENANT, OTHER_TENANT, PLATFORM_TENANT];
+/** `tenant.ownerUserId` of DOMAIN_TENANT: an account of PLATFORM_TENANT. */
+const OWNER = 'user-ali';
 
 type DomainRow = {
   domainType: 'subdomain' | 'custom_domain';
   /** What the door is for (F-066-q). Every fixture here is a panel domain. */
   purpose: 'panel' | 'subscription' | 'assets';
   verificationStatus: 'pending' | 'verified' | 'failed';
-  tenant: { id: string; slug: string };
+  tenant: { id: string; slug: string; ownerUserId: string };
 };
 
 /**
@@ -73,7 +77,7 @@ const subdomain = (purpose: DomainRow['purpose'] = 'panel'): DomainRow => ({
   domainType: 'subdomain',
   purpose,
   verificationStatus: 'pending',
-  tenant: DOMAIN_TENANT,
+  tenant: { ...DOMAIN_TENANT, ownerUserId: OWNER },
 });
 
 const customDomain = (
@@ -82,7 +86,7 @@ const customDomain = (
   domainType: 'custom_domain',
   purpose: 'panel',
   verificationStatus,
-  tenant: DOMAIN_TENANT,
+  tenant: { ...DOMAIN_TENANT, ownerUserId: OWNER },
 });
 
 describe('normalizeHost', () => {
@@ -267,5 +271,76 @@ describe('TenantResolverService — the claim chain', () => {
       // arrived at, and F-066-q turns on the second, not the first.
     ).resolves.toEqual({ ...DOMAIN_TENANT, via: 'session', surfacePurpose: 'panel' });
     expect(tenantById).not.toHaveBeenCalled();
+  });
+});
+
+describe("TenantResolverService — the surface tenant's owner (ADR-0059)", () => {
+  const OWNER_ANSWER = {
+    ...PLATFORM_TENANT,
+    via: 'session',
+    surfacePurpose: 'panel',
+    brand: DOMAIN_TENANT,
+  };
+
+  it("admits the owner's own session on their domain, scoped to their own tenant", async () => {
+    const { service } = resolver({ 'myvpn.com': customDomain('verified') });
+
+    await expect(
+      service.resolve({ host: 'myvpn.com', session: PLATFORM_TENANT.id, sessionUser: OWNER }),
+    ).resolves.toEqual(OWNER_ANSWER);
+  });
+
+  it('still refuses any other account of that tenant', async () => {
+    const { service } = resolver({ 'myvpn.com': customDomain('verified') });
+
+    await expect(
+      service.resolve({ host: 'myvpn.com', session: PLATFORM_TENANT.id, sessionUser: 'user-bob' }),
+    ).rejects.toBeInstanceOf(TenantClaimConflict);
+  });
+
+  it('refuses the owner on a surface that is not a panel', async () => {
+    const { service } = resolver({ 'sub.myvpn.com': subdomain('subscription') });
+
+    await expect(
+      service.resolve({ host: 'sub.myvpn.com', session: PLATFORM_TENANT.id, sessionUser: OWNER }),
+    ).rejects.toBeInstanceOf(TenantClaimConflict);
+  });
+
+  it('never extends the exception to a bot claim', async () => {
+    const { service } = resolver({ 'myvpn.com': customDomain('verified') });
+
+    await expect(
+      service.resolve({ host: 'myvpn.com', bot: PLATFORM_TENANT.id, sessionUser: OWNER }),
+    ).rejects.toBeInstanceOf(TenantClaimConflict);
+  });
+
+  it("answers a cookie-only request carrying the owner's session the same way", async () => {
+    const { service } = resolver({ 'myvpn.com': customDomain('verified') });
+    const cookieSession = vi.fn(async () => ({ tenantId: PLATFORM_TENANT.id, userId: OWNER }));
+
+    await expect(service.resolve({ host: 'myvpn.com', cookieSession })).resolves.toEqual(
+      OWNER_ANSWER,
+    );
+  });
+
+  it("ignores a cookie that is not the owner's, and the host decides as before", async () => {
+    const { service } = resolver({ 'myvpn.com': customDomain('verified') });
+    const cookieSession = vi.fn(async () => ({ tenantId: OTHER_TENANT.id, userId: 'user-bob' }));
+
+    await expect(service.resolve({ host: 'myvpn.com', cookieSession })).resolves.toEqual({
+      ...DOMAIN_TENANT,
+      via: 'domain',
+      surfacePurpose: 'panel',
+    });
+  });
+
+  it('does not read the cookie when a token already answered, or when there is no surface', async () => {
+    const { service } = resolver({ 'myvpn.com': customDomain('verified') });
+    const cookieSession = vi.fn(async () => null);
+
+    await service.resolve({ host: 'myvpn.com', session: DOMAIN_TENANT.id, cookieSession });
+    await service.resolve({ host: 'stranger.example', cookieSession });
+
+    expect(cookieSession).not.toHaveBeenCalled();
   });
 });

@@ -3,7 +3,7 @@ id: tenant
 layer: domain
 status: active
 version: 18
-updated: 2026-09-17
+updated: 2026-09-18
 ---
 
 # Contract — tenant
@@ -84,7 +84,7 @@ tenant on the request and the order is what keeps the two cases apart:
 
 | the request | answer | what the client can tell |
 |---|---|---|
-| claim disagrees with surface | `403 tenant.claimMismatch` | that this session does not belong here — never which tenant does |
+| claim disagrees with surface | `403 tenant.claimMismatch` — **except** the surface tenant's owner on a `panel` surface with their own session (ADR-0059): scoped to the session's tenant, `brand` = the surface | that this session does not belong here — never which tenant does |
 | resolved to no tenant | **neutral `404`** | nothing. `system.notFound`, byte-identical to an unmatched route |
 
 The 404 is neutral by construction rather than by wording: the guard throws a

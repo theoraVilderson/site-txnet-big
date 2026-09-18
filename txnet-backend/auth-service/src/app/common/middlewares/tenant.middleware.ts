@@ -1,4 +1,4 @@
-import { headerValue } from '@txnet-backend/shared-core';
+import { REFRESH_TOKEN_COOKIE, headerValue } from '@txnet-backend/shared-core';
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { NextFunction, Request, Response } from 'express';
 import { TenantResolverService } from '../../tenant/tenant-resolver.service';
@@ -10,6 +10,8 @@ import {
 } from '../../tenant/tenant';
 import { TokenService } from '../../auth/token.service';
 import { isServiceCaller } from '../security/service-caller';
+import { readCookie } from '../http/cookies';
+import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 
 /**
  * Assembles the request's tenant claim and attaches what it resolved to, once,
@@ -40,6 +42,9 @@ export class TenantMiddleware implements NestMiddleware {
   constructor(
     private readonly tenants: TenantResolverService,
     private readonly tokens: TokenService,
+    // The session a refresh cookie names is read before any tenant is in
+    // scope — which tenant it is, is the question (ADR-0059 (2)).
+    private readonly all: CrossTenantPrismaService,
   ) {}
 
   async use(req: Request, res: Response, next: NextFunction) {
@@ -61,11 +66,38 @@ export class TenantMiddleware implements NestMiddleware {
   }
 
   private claim(req: Request): TenantClaim {
+    const session = this.sessionClaim(req);
     return {
       host: req.hostname,
-      session: this.sessionClaim(req),
+      session: session?.tenantId ?? null,
+      sessionUser: session?.userId ?? null,
       bot: this.botClaim(req),
+      cookieSession: () => this.cookieSession(req),
     };
+  }
+
+  /**
+   * The live session this request's refresh cookie names. A cookie is not a
+   * claim the way a signed token is: it only ever admits the surface's owner
+   * (the resolver ignores any other answer), and it resolves to nothing unless
+   * its hash names a session that is neither revoked nor expired.
+   */
+  private async cookieSession(
+    req: Request,
+  ): Promise<{ tenantId: string; userId: string } | null> {
+    const token = readCookie(req.headers.cookie, REFRESH_TOKEN_COOKIE);
+    if (!token) return null;
+    const row = await this.all.session.findUnique({
+      where: { refreshTokenHash: this.tokens.refreshHash(token) },
+      select: {
+        userId: true,
+        revokedAt: true,
+        expiresAt: true,
+        user: { select: { tenantId: true } },
+      },
+    });
+    if (!row || row.revokedAt || row.expiresAt <= new Date()) return null;
+    return { tenantId: row.user.tenantId, userId: row.userId };
   }
 
   /**
@@ -77,7 +109,7 @@ export class TenantMiddleware implements NestMiddleware {
    * `AuthGuard` is still the one that decides whether the route may run. A
    * middleware that answered 401 would do it for `/auth/login` too.
    */
-  private sessionClaim(req: Request): string | null {
+  private sessionClaim(req: Request): { tenantId: string; userId: string } | null {
     const header = req.get('authorization') ?? '';
     if (!header.startsWith('Bearer ')) return null;
 
@@ -86,7 +118,8 @@ export class TenantMiddleware implements NestMiddleware {
       // An OTP or reset token carries `tenantId: ''` and names no session; it
       // is a step in a login, not a session that belongs to a tenant.
       if (claims.purpose || !claims.sessionId) return null;
-      return claims.tenantId || null;
+      if (!claims.tenantId || !claims.sub) return null;
+      return { tenantId: claims.tenantId, userId: claims.sub };
     } catch {
       return null;
     }
