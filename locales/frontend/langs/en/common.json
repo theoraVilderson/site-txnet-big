@@ -1356,5 +1356,8 @@
       "noGateway": "The platform has no gateway to pay through right now.",
       "noRedirect": "The bank did not answer with a page to pay on. Try again, or pick another gateway."
     }
-  }
+  },
+  "resellerPanel": "My reseller panel: {{slug}}",
+  "openingResellerPanel": "Opening your reseller panel…",
+  "handoffFailed": "This link has expired or was already used. Sign in to continue."
 }

@@ -57,6 +57,40 @@ export class SurfaceOwnerService {
     };
   }
 
+  /**
+   * The panel door's owner by id, when `userId` is still that owner — the
+   * handoff from the platform panel (F-061-f), which names the account instead
+   * of an identifier. Judged on the door rather than on "nobody signed in yet",
+   * because a browser that already holds a session on this domain is still
+   * standing on this door. `null` off a panel, or once ownership has moved.
+   */
+  async ownerById(
+    userId: string,
+    include: Prisma.UserInclude,
+  ): Promise<{ user: { id: string; tenantId: string }; scope: ResolvedTenant } | null> {
+    const door = this.surface();
+    if (!door || door.surfacePurpose !== 'panel') return null;
+    if ((await this.ownerOf(door)) !== userId) return null;
+
+    const user = await this.all.user.findFirst({
+      where: { id: userId, tenantId: { not: door.id } },
+      include: { ...include, tenant: { select: { slug: true } } },
+    });
+    if (!user) return null;
+
+    const { slug } = (user as unknown as { tenant: { slug: string } }).tenant;
+    return {
+      user,
+      scope: {
+        id: user.tenantId,
+        slug,
+        via: 'session',
+        surfacePurpose: 'panel',
+        brand: { id: door.id, slug: door.slug },
+      },
+    };
+  }
+
   // --- who may hold a session on this door (F-061-g) ------------------------
 
   /**

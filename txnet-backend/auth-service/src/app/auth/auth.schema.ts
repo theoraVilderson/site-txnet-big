@@ -79,3 +79,13 @@ export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ForgotVerifyInput = z.infer<typeof forgotVerifySchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type LogoutInput = z.infer<typeof logoutSchema>;
+
+/** `POST /auth/handoff` (F-061-f): which of the caller's resellers to open. */
+export const handoffIssueSchema = z.object({
+  tenantId: z.string().uuid(),
+});
+
+/** `POST /auth/handoff/redeem`: the code, exactly as minted (32 bytes, base64url). */
+export const handoffRedeemSchema = z.object({
+  code: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+});

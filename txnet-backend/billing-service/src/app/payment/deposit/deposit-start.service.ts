@@ -9,7 +9,7 @@ import {
   TenantDomainType,
   WalletReasonType,
 } from '@prisma/client';
-import { TenantContext, isCnameTarget, tenantTransaction } from '@txnet-backend/shared-core';
+import { TenantContext, panelHostOf, tenantTransaction } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
 import type { EnvConfig } from '../../config/env.validation';
@@ -461,7 +461,7 @@ export class DepositStartService {
     });
     // A CNAME target serves the panel only for a CDN that forwards it instead
     // of the visitor's host (ADR-0060 (6)); no browser holds a cookie there.
-    const host = rows.find((r) => !isCnameTarget(r.domainValue, r.domainType))?.domainValue;
+    const host = panelHostOf(rows);
     return host ? `https://${host}${path}` : null;
   }
 }

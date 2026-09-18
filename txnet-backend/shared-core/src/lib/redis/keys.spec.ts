@@ -62,6 +62,7 @@ describe('the key catalogue', () => {
       botLinkToken: UnscopedRedisKeys.botLinkToken('tok-1'),
       captchaChallenge: UnscopedRedisKeys.captchaChallenge('chal-1'),
       captchaVerified: UnscopedRedisKeys.captchaVerified('pass-1'),
+      handoff: UnscopedRedisKeys.handoff('code-1'),
       tenantByHost: UnscopedRedisKeys.tenantByHost('myvpn.com'),
       tenantById: UnscopedRedisKeys.tenantById('tenant-1'),
       tenantStatus: UnscopedRedisKeys.tenantStatus('tenant-1'),

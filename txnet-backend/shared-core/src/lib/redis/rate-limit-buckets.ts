@@ -88,6 +88,14 @@ export const RateLimitBucket = {
   ME_EMAIL_REQUEST: 'me:email:req',
   ME_EMAIL_VERIFY: 'me:email:verify',
 
+  /**
+   * The handoff to a reseller's own panel (F-061-f): the list and the mint per
+   * caller, the redeem per `rateLimitSubject` — it runs before any session.
+   */
+  HANDOFF_LIST: 'handoff:list',
+  HANDOFF_ISSUE: 'handoff:issue',
+  HANDOFF_REDEEM: 'handoff:redeem',
+
   ACCOUNTS_SWITCH: 'accounts:switch',
   ACCOUNTS_REMOVE: 'accounts:remove',
 

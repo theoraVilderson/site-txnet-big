@@ -46,6 +46,12 @@ export const RedisTtl = {
   /** How long a completed captcha pass stays usable before it must be redone. */
   captchaVerified: 120,
   /**
+   * A handoff code (F-061-f) is spent by a redirect the browser makes at once;
+   * the window only has to cover that hop, and it is a whole session's worth
+   * of credential while it lasts.
+   */
+  handoff: 60,
+  /**
    * Fallback lifetime of a pending bot link and of the chat->token pointer.
    * `BOT_LINK_TOKEN_TTL_SEC` overrides it; kept here so the key catalogue still
    * states a TTL for every key.

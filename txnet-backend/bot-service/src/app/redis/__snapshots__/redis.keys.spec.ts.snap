@@ -24,6 +24,7 @@ exports[`RedisKeys — bot key catalogue > keeps the canonical TTLs stable 1`] =
   "botSession": 2592000,
   "captchaChallenge": 60,
   "captchaVerified": 120,
+  "handoff": 60,
   "impersonation": 1800,
   "loginFailureWindow": 900,
   "otpChannel": 300,

@@ -63,3 +63,20 @@ export function cnameTargetHost(slug: string, domain: string): string {
 export function isCnameTarget(domainValue: string, domainType: 'subdomain' | 'custom_domain'): boolean {
   return domainType === 'subdomain' && domainValue.split('.')[1] === CNAME_TARGET_ZONE;
 }
+
+/**
+ * The one panel host a person is sent to for a tenant, of the rows it has:
+ * a proven custom domain first, then a platform subdomain, each alphabetically
+ * so two callers never disagree — and never a CNAME target. Billing's return
+ * address (F-104) and the handoff to a reseller's panel (F-061-f) both ask it.
+ * The caller filters to `panel` rows that are subdomains or verified.
+ */
+export function panelHostOf(
+  rows: ReadonlyArray<{ domainValue: string; domainType: 'subdomain' | 'custom_domain' }>,
+): string | null {
+  const rank = (t: string) => (t === 'custom_domain' ? 0 : 1);
+  const best = rows
+    .filter((r) => !isCnameTarget(r.domainValue, r.domainType))
+    .sort((a, b) => rank(a.domainType) - rank(b.domainType) || a.domainValue.localeCompare(b.domainValue))[0];
+  return best?.domainValue ?? null;
+}

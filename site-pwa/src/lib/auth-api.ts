@@ -336,6 +336,12 @@ export const authApi = {
   },
   /** The caller's own account plus the accounts they may switch to (F-0206). */
   async listAccounts() { return request<SwitchGroup>("/auth/accounts", { method: "GET" }); },
+  /** The resellers the caller owns — one "my reseller panel" entry each (F-061-f). */
+  async ownedResellers() { return request<{ resellers: { id: string; slug: string }[] }>("/auth/handoff", { method: "GET" }); },
+  /** A single-use code for one of them, and the origin of its panel to spend it on. */
+  async issueHandoff(tenantId: string) { return request<{ origin: string; code: string; expiresIn: number }>("/auth/handoff", { method: "POST", body: JSON.stringify({ tenantId }) }); },
+  /** Spend that code on the reseller's own domain: the same session a password sign-in opens. */
+  async redeemHandoff(code: string) { const result = await request<AuthResult>("/auth/handoff/redeem", { method: "POST", body: JSON.stringify({ code }) }); accessToken = result.accessToken; sessionBootstrap = Promise.resolve(result); return result; },
   /** The caller's own identity and authority (F-097). */
   async me() { return request<Me>("/auth/me", { method: "GET" }); },
   /** Mails a code to `email` (F-035-g); nothing is written until `confirmEmail`. */

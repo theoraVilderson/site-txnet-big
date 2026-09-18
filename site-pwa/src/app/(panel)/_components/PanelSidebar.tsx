@@ -8,6 +8,7 @@ import { useShallow } from "zustand/react/shallow";
 import { LangDropdown } from "@auth/auth/_components/LangDropdown";
 import { CollapsedTooltip } from "./CollapsedTooltip";
 import { LogoutButton } from "./LogoutButton";
+import { ResellerPanelButton } from "./ResellerPanelButton";
 import { ThemeDropdown } from "@auth/auth/_components/ThemeDropdown";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
@@ -250,6 +251,7 @@ export function PanelSidebar() {
           over budget at 360px **and** at 700px.
         */}
         <div className="shrink-0 border-t border-card-border px-3 py-4">
+          <ResellerPanelButton collapsed={collapsed} />
           <LogoutButton collapsed={collapsed} />
         </div>
       </aside>

@@ -42,6 +42,8 @@ import { VaultModule } from '../tenant/vault/vault.module';
 import { CaptchaController } from './captcha/captcha.controller';
 import { CaptchaService } from './captcha/captcha.service';
 import { MeController } from './me/me.controller';
+import { HandoffController } from './handoff/handoff.controller';
+import { HandoffService } from './handoff/handoff.service';
 import { MeService } from './me/me.service';
 import { MeEmailService } from './me/me-email.service';
 import { PermissionStateStore } from './permissions/permission-state.store';
@@ -80,6 +82,7 @@ import { ConfigService } from '@nestjs/config';
     OtpInternalController,
     UserNotifyInternalController,
     MeController,
+    HandoffController,
   ],
   providers: [
     UserNotifier,
@@ -87,6 +90,7 @@ import { ConfigService } from '@nestjs/config';
     RegisterService,
     TokenService,
     MeService,
+    HandoffService,
     MeEmailService,
     AuthService,
     SurfaceOwnerService,

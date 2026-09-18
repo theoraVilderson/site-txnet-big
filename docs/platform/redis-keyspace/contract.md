@@ -3,7 +3,7 @@ id: redis-keyspace
 layer: platform
 status: active
 version: 5
-updated: 2026-09-13
+updated: 2026-09-18
 ---
 
 # Contract — redis-keyspace
@@ -135,6 +135,7 @@ open for an event that can never come.
 | `botlink:chat:<tenantId>:<platform>:<chatId>` | string (the token this chat is answering) | = above | `BotLinkStore.bindChat` on `/start <token>` | `BotLinkStore.byChat` when the contact arrives — the contact update carries no token of its own. Tenant-scoped since F-066-l: the chat id is the messenger's, so the same person is the same id in every reseller's bot and the second `/start` used to overwrite the first's pointer. The **tenant**, not the bot, is the segment — catalog 10.5 links a person per tenant, so two `/start`s in one reseller's bots are one conversation |
 | `captcha:challenge:<challengeId>` | string (issue timestamp, ms) | 60s | auth-service `CaptchaService.issueChallenge` | auth-service `CaptchaService.verifyChallenge` (deletes on first check — single-use) |
 | `captcha:verified:<token>` | string (`"1"`) | 120s | auth-service `CaptchaService.verifyChallenge` | auth-service `CaptchaService.consumePass` (deletes on first check — single-use) |
+| `handoff:<code>` | string (JSON `{userId,tenantId}`) | 60s | auth-service `HandoffService.issue`, on the platform's host (F-061-f) | `HandoffService.redeem` on the named tenant's panel domain (`GET`, then `DEL` — single-use). Unscoped like `otp:channel`: written and spent under two tenants; the value names the one that may spend it |
 | `tenant:host:<normalizedHost>` | string (JSON `{id,slug,purpose,ownerUserId}` — an entry missing a field re-reads (ADR-0059) — or `-` for *no tenant*) | 600s resolved / 60s miss — a **backstop**, not the mechanism | auth-service `TenantCacheService.byHost` | auth-service `TenantResolverService`; deleted by `invalidateDomain` on every domain create/verify/switchover/delete (ADR-0025) |
 | `tenant:id:<tenantId>` | string (JSON `{id,slug,ownerUserId}` — an entry without the owner re-reads (F-061-k) — or `-` for *no tenant*) | = above | auth-service `TenantCacheService.byId` | auth-service `TenantResolverService` (the owner check through a bot, ADR-0059 (6)); deleted by `invalidateTenant`, and with the host entries by shared-core `invalidateTenantOwner` on every write of `ownerUserId` |
 | `tenant:status:<tenantId>` | string (JSON `{status, graceEndsAt}`) | none | tenant-service `TenantStatusListener`, on a Postgres notification and for every tenant on connect (F-018-f, moved F-018-w) | `TenantStatusGuard` (shared-core) in auth-, billing- and notification-service; worker-service `TenantStatusGate` (F-018-p) — **missing means unknown, refuses nobody** |

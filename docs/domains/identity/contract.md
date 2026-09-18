@@ -2,7 +2,7 @@
 id: identity
 layer: domain
 status: active
-version: 18
+version: 20
 updated: 2026-09-18
 ---
 
@@ -44,6 +44,7 @@ Surfaced over HTTP by the `auth-api` interface — see
 | prove account by password | identifier (phone or username), password | the account, or **null** for every failure alike | sync | `auth.temporarilyLocked` (shares login's 10/900s bucket) |
 | issue account-proof OTP | phone, optional channel | nothing, or the same `linkRequired` deep-link shape as login OTP | sync | channel not allowed / not configured |
 | prove account by OTP | phone, code | the account, or **null** | sync | — |
+| hand off to a reseller's panel (F-061-f, ADR-0059 (7)) | the caller's session + a reseller they own; then, on that reseller's panel domain, the code | a 60s single-use code + the panel's origin; then the same session tokens a password login opens there, in the owner's own tenant | sync | `auth.handoffRefused` (not the owner, impersonated, no panel host); `auth.handoffInvalid` for every redeem failure alike |
 | hand over a session | outgoing sessionId + userId, the target user, ip, user-agent, **switch scope** | the target's `{accessToken, refreshToken, expiresIn}`, stamped with that scope; the outgoing session revoked `account_switched` | sync tx | (the caller has already decided the switch is allowed) |
 | revoke a user's sessions **in one scope** | userId, scopeKey, reason | the count revoked; only sessions minted in that scope, markers dropped one by one | sync | — |
 | start impersonation | targetUserId, reasonNote (>=10 chars) | impersonated access token (30 min) | sync | target not lower-ranked, target inactive |

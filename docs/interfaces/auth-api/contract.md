@@ -2,7 +2,7 @@
 id: auth-api
 layer: interface
 status: active
-version: 21
+version: 22
 updated: 2026-09-18
 ---
 
@@ -127,6 +127,9 @@ cookies and rate limits. Field-level schemas live in code — link, do not copy:
 | POST `/auth/accounts/add/password` | identifier, password | 200 `{groupId, added, userId}`, `userId` as above. Consumes the same per-account `login-failures` bucket as a password login | 20 / 900s per caller | — |
 | GET  `/auth/accounts` | — | 200 `{groupId, current, members}` — `{userId, fullName, phoneMasked}` each, `current` being the caller. Members are only accounts **this domain admits** — its tenant's, and on a reseller's domain its owner (C-22, ADR-0059 (5)); no group yet answers `members: []` | 120 / 900s per caller | — |
 | GET  `/auth/me` | — | 200 `{userId, fullName, role:{id,name}, permissions[], tenant:{id,type,isOwner}, isImpersonated, impersonatedBy?}` (F-097; `isOwner` = the caller is the tenant's `ownerUserId`, F-019-f). `role` and `permissions` are **copied from the access token, never re-read** — the list `forward-auth` enforces, so a surface gating on it cannot offer what the edge refuses; a role change shows on the next refresh. `tenant.type` is the one read, because a permission is not the operator boundary (audit invariant #9). A suspended or deleted account answers `auth.invalidCredentials`. **Bearer required** | 120 / 900s per caller | — |
+| GET  `/auth/handoff` | — | 200 `{resellers:[{id,slug}]}`: the resellers the caller owns (F-061-f). **Bearer required** | 120 / 900s per caller | — |
+| POST `/auth/handoff` | tenantId | 200 `{origin, code, expiresIn:60}` — a single-use code for that reseller, spent at `<origin>/auth/handoff#<code>`; `auth.handoffRefused` when the caller is not its owner, is impersonated, or it has no panel host (identity invariant 17). **Bearer required** | 30 / 900s per caller | — |
+| POST `/auth/handoff/redeem` | code | on the code's own reseller panel domain: 200 tokens + sets `refresh_token` cookie, as `login/password`; anything else `auth.handoffInvalid`. Behind `NoActiveSessionGuard` | 30 / 900s per subject | — |
 | POST `/auth/accounts/switch` | userId | 200 tokens + `{userId, fullName}` + sets `refresh_token` cookie. **The whole place switches** (ADR-0034): every live session the outgoing account holds in this scope is revoked `account_switched`, and the scope's group records the target as what it is now acting as — so a switch made in the Mini App is followed by the bot chat and vice versa, instead of leaving the other surface on the outgoing account. **No credential in the body** — that is the point of the group. Not a member, another group, another tenant, deleted or suspended all answer the one business rejection `accountSwitch.notAMember` | 30 / 900s per caller | — |
 | POST `/auth/accounts/remove` | userId | 200 `{userId, removed}` (F-0208). Removes that member from the group **on this surface only**, and revokes that account's sessions in this scope alone (`account_unlinked`) — its sessions elsewhere are untouched. Works from either side: `userId` may be the caller's own, which is how an account leaves. Mints nothing and sets no cookie, so a self-removal is a sign-out. Every refusal is `accountSwitch.notAMember` | 30 / 900s per caller | — |
 | POST `/auth/captcha/challenge` | — | 200 `{challengeId}`, 60s to complete the slide | 30 / 900s (default — `CAPTCHA_RATE_LIMIT`) | — |

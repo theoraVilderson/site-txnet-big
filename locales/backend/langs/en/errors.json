@@ -69,7 +69,11 @@
     "emailCodeSent": "A verification code is on its way to that address",
     "emailAlreadyVerified": "That address is already on your account",
     "emailTaken": "That address belongs to another account",
-    "emailVerified": "Your email address is confirmed"
+    "emailVerified": "Your email address is confirmed",
+    "handoffResellers": "Your resellers",
+    "handoffIssued": "Opening your reseller panel",
+    "handoffRefused": "This reseller panel cannot be opened from your account",
+    "handoffInvalid": "This link has expired or was already used. Sign in again."
   },
   "impersonation": {
     "notImpersonated": "This session is not impersonated",

@@ -144,6 +144,17 @@ export const UnscopedRedisKeys = {
   captchaVerified: (token: string) => `captcha:verified:${token}`,
 
   /**
+   * A single-use code that carries a signed-in platform user to the panel of a
+   * reseller they own (F-061-f, ADR-0059). Value `{userId, tenantId}`.
+   *
+   * **Unscoped, like `otpChannel`, and for the same reason.** It is written on
+   * the platform's host and spent on the reseller's, so no one tenant segment
+   * is right on both sides; the value names the tenant instead, and only that
+   * tenant's panel domain accepts it. The code is 256 random bits.
+   */
+  handoff: (code: string) => `handoff:${code}`,
+
+  /**
    * Which tenant a normalized host resolves to, or a marker that it resolves to
    * none. Shared rather than in-process because it is invalidated *explicitly*
    * — creating, verifying, switching or deleting a `tenant_domain` row deletes
