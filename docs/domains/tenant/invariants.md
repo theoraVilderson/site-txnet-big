@@ -21,7 +21,7 @@ enforcer is not application code at all.
 | 3 | `tenant_billing_wallet` balance is never written directly — only via append-only `tenant_billing_transaction` + `balanceAfter` (ADR-0002) | `TenantBillingLedger` (shared-core) — the only writer of `cachedBalance`, under its `version` (F-019-a) | silent money drift |
 | 4 | Encrypted credential fields (`merchantIdEncrypted`, `apiKeyEncrypted`, `ownApiKeyEncrypted`) are never default-selected or logged | planned service `select`/`omit` | tenant gateway/bot takeover |
 | 5 | A `custom_domain` only routes after `verificationStatus = verified` — and becomes `verified` only when its TXT record holds its token, its CNAME names no other reseller's target, and an http and an https request reach the platform through it ([contract.domains.md](contract.domains.md)) | `TenantResolverService` routes `verified` only; `TenantDomainService` is the only writer of `verified`, and drops a lost record to `pending` after the grace (F-018-i) | domain hijack / cert misissue |
-| 6 | A feature runs for a tenant only if `tenant_feature_entitlement.isEnabled` (and not expired) for that `featureKey` | planned central guard | unpaid feature usage |
+| 6 | A feature runs for a tenant only if `tenant_feature_entitlement.isEnabled` (and not expired) for that `featureKey` — the platform owner holds every key | `TenantEntitlements` + `@RequiresFeature` (shared-core, F-018-g); a feature is covered once its route carries the key | unpaid feature usage |
 | 7 | `tenant_usage_meter` rows are billed exactly once (`isBilled` + `billedTransactionId`) | planned metering worker | double / missed charges |
 | 8 | **No vault plaintext ever reaches a user-facing API response, a log line or an audit row — at any role, including the highest.** One exception, below | `CredentialVaultService`: `use()` is the only method returning one, and it takes the single credential the caller will use. Everything else returns `CredentialSummary`. `tenant_credential_access` has no column a value could be written into | one leaked response or log line is a takeover of that tenant's payment account or bot. The strongest role is the one most likely to have a debugging surface pointed at it |
 | 9 | **A credential is encrypted under its own tenant's DEK, never a platform-wide key** | `CredentialVaultService.activeDek` — one `tenant_dek` row per tenant, wrapped by the KEK; `tenantId` is a required argument on every method | catalog 20.2's layer 5 collapses: one leaked ciphertext plus the key becomes every reseller's credentials at once (ADR-0026) |
@@ -55,9 +55,10 @@ Rows 3, 14, 15 and the owner-only surface: `billing-service/src/app/tenant-billi
 (version race, below-zero debit, repeated request, non-owner never on the
 cross-tenant pool). The CHECKs and the index are the migration's; no int spec.
 
-Rows 1-2, 4, 6-7: to be written when the service exists. Minimum: a test that a second
-`platform_owner` insert fails, and that the entitlement guard denies a disabled
-feature key.
+Row 6: `shared-core/src/lib/tenant/entitlements.spec.ts` (disabled, expired, any source, platform owner, no tenant in scope).
+
+Rows 1-2, 4, 7: to be written when the service exists. Minimum: a test that a second
+`platform_owner` insert fails.
 
 Rows 8-10 are held by `vault.crypto.spec.ts` for the cryptographic half — a
 fresh IV per record, a tampered ciphertext refused, a fingerprint that is

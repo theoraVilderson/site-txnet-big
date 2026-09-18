@@ -27,6 +27,7 @@ export * from './lib/tenant/vault/sms-line-credentials';
 export * from './lib/billing/wallet-ledger';
 export * from './lib/tenant/billing/tenant-billing-ledger';
 export * from './lib/tenant/feature-keys';
+export * from './lib/tenant/entitlements';
 export * from './lib/tenant/status-policy';
 export * from './lib/tenant/owner-cache';
 export * from './lib/object-storage/object-key';
