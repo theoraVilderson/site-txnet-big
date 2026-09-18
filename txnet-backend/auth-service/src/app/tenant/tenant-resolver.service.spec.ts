@@ -58,7 +58,7 @@ function resolver(rows: Record<string, DomainRow>) {
   const tenantById = vi.fn(async ({ where, select }: any) => {
     const tenant = KNOWN.find((t) => t.id === where.id);
     if (!tenant || !select?.ownerUserId) return tenant ?? null;
-    return { ...tenant, ownerUserId: tenant.id === DOMAIN_TENANT.id ? OWNER : null };
+    return { ...tenant, ownerUserId: tenant.id === DOMAIN_TENANT.id ? OWNER : `owner-of-${tenant.id}` };
   });
   const prisma = {
     tenantDomain: { findUnique },
@@ -333,6 +333,20 @@ describe("TenantResolverService — the surface tenant's owner (ADR-0059)", () =
     await expect(
       service.resolve({ session: PLATFORM_TENANT.id, bot: DOMAIN_TENANT.id, sessionUser: OWNER }),
     ).resolves.toEqual({ ...PLATFORM_TENANT, via: 'session', brand: DOMAIN_TENANT });
+  });
+
+  it("serves the owner's next chat message from the cache, and re-reads once the owner is invalidated (F-061-k)", async () => {
+    const { service, tenantById, cache } = resolver({});
+    const claim = { session: PLATFORM_TENANT.id, bot: DOMAIN_TENANT.id, sessionUser: OWNER };
+
+    await service.resolve(claim);
+    const reads = tenantById.mock.calls.length;
+    await expect(service.resolve(claim)).resolves.toMatchObject({ id: PLATFORM_TENANT.id, brand: DOMAIN_TENANT });
+    expect(tenantById).toHaveBeenCalledTimes(reads);
+
+    await cache.invalidateTenant(DOMAIN_TENANT.id);
+    await service.resolve(claim);
+    expect(tenantById).toHaveBeenCalledTimes(reads + 1);
   });
 
   it('refuses any other account through that bot', async () => {

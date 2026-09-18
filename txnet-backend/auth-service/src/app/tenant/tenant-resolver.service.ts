@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
-import { CachedSurface, TenantCacheService } from './tenant-cache.service';
+import { CachedSurface, CachedTenant, TenantCacheService } from './tenant-cache.service';
 import {
   ResolvedTenant,
   TenantClaim,
@@ -133,18 +133,15 @@ export class TenantResolverService {
   /**
    * ADR-0059 (6): the bot's tenant's owner, chatting with that tenant's bot in
    * their own session — scoped to their own tenant, branded by the bot's. Any
-   * other session is a conflict. Read uncached: it runs only on a mismatch,
-   * and `ownerUserId` is not what the id cache holds.
+   * other session is a conflict. The owner comes from the id cache, so an
+   * owner's chat message reads no row (F-061-k).
    */
   private async throughBot(
     botTenantId: string,
     sessionTenantId: string,
     userId: string | null | undefined,
   ): Promise<ResolvedTenant> {
-    const door = await this.prisma.tenant.findUnique({
-      where: { id: botTenantId },
-      select: { id: true, slug: true, ownerUserId: true },
-    });
+    const door = await this.tenantRow(botTenantId);
     const own =
       door && userId && door.ownerUserId === userId ? await this.byId(sessionTenantId) : null;
     if (!door || !own) {
@@ -199,12 +196,18 @@ export class TenantResolverService {
     return null;
   }
 
-  /** The tenant a claim names, proven against a real row. */
+  /** The tenant a claim names, proven against a real row. The owner stays out of the answer. */
   private async byId(id: string): Promise<Identified | null> {
+    const row = await this.tenantRow(id);
+    return row ? { id: row.id, slug: row.slug } : null;
+  }
+
+  /** The cached row, owner included (F-061-k). */
+  private tenantRow(id: string): Promise<CachedTenant | null> {
     return this.cache.byId(id, () =>
       this.prisma.tenant.findUnique({
         where: { id },
-        select: { id: true, slug: true },
+        select: { id: true, slug: true, ownerUserId: true },
       }),
     );
   }

@@ -30,13 +30,15 @@ describe('ResellerService', () => {
       tenant: { findUnique: vi.fn(async () => ({ tenantType: opts.callerType ?? 'platform_owner' })) },
     };
     const writes: string[] = [];
+    const created: string[] = [];
     const tx = {
       tenant: {
         create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => (writes.push('tenant'), { id: 'new-tenant', ...data, createdAt: new Date() })),
       },
       tenantBillingWallet: { create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => (writes.push('wallet'), data)) },
       tenantDomain: {
-        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => (writes.push('domain'), { verificationStatus: 'pending', ...data })),
+        create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => (writes.push('domain'), created.push(data.domainValue as string), { verificationStatus: 'pending', ...data })),
+        findMany: vi.fn(async () => created.map((domainValue) => ({ domainValue }))),
       },
       adminAuditLog: { create: vi.fn(async () => (writes.push('audit'), {})) },
     };
@@ -65,7 +67,7 @@ describe('ResellerService', () => {
     expect(all.$transaction).not.toHaveBeenCalled();
   });
 
-  it('names the existing user as owner, writes no user, and deletes the new host entry inside the transaction', async () => {
+  it('names the existing user as owner, writes no user, and drops every entry naming the owner inside the transaction', async () => {
     const { service, all, tx, writes } = build();
     const view = await service.create(actor, input);
 
@@ -77,6 +79,7 @@ describe('ResellerService', () => {
       'domain',
       'domain',
       'audit',
+      `del ${UnscopedRedisKeys.tenantById('new-tenant')}`,
       `del ${UnscopedRedisKeys.tenantByHost('myvpn.txnet.app')}`,
       `del ${UnscopedRedisKeys.tenantByHost('myvpn.edge.txnet.app')}`,
     ]);

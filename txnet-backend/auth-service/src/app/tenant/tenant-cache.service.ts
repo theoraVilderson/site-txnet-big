@@ -3,8 +3,13 @@ import { RedisKeys, RedisTtl } from '../redis/redis.keys';
 import { RedisService } from '../redis/redis.service';
 import { TenantSurfacePurpose, normalizeHost } from './tenant';
 
-/** A tenant reduced to what resolution answers with — see {@link ResolvedTenant}. */
-export type CachedTenant = { id: string; slug: string };
+/**
+ * A tenant reduced to what resolution needs — see {@link ResolvedTenant} — plus
+ * `tenant.ownerUserId`, the one account admitted from another tenant
+ * (ADR-0059): cached so the owner check through a bot reads no row (F-061-k).
+ * Every write of the owner drops these entries (`invalidateTenantOwner`).
+ */
+export type CachedTenant = { id: string; slug: string; ownerUserId: string };
 
 /**
  * What a host resolves to: the tenant, plus what that domain is *for*
@@ -12,11 +17,7 @@ export type CachedTenant = { id: string; slug: string };
  * host lookup and never with {@link TenantCacheService.byId} — a claim names a
  * tenant, and a tenant has no single purpose.
  */
-export type CachedSurface = CachedTenant & {
-  purpose: TenantSurfacePurpose;
-  /** `tenant.ownerUserId` — the one account admitted from another tenant (ADR-0059). */
-  ownerUserId: string;
-};
+export type CachedSurface = CachedTenant & { purpose: TenantSurfacePurpose };
 
 const PURPOSES: readonly string[] = ['panel', 'subscription', 'assets'];
 
@@ -29,26 +30,25 @@ const PURPOSES: readonly string[] = ['panel', 'subscription', 'assets'];
  */
 const MISS = '-';
 
-/** A cached value carries a tenant at all. */
+/**
+ * A cached value carries a tenant at all. An entry written before its owner was
+ * cached — a host entry before ADR-0059, an id entry before F-061-k — lacks
+ * `ownerUserId` and re-reads, as a purpose-less one did (F-066-q).
+ */
 function isTenant(value: unknown): value is CachedTenant {
   const row = value as CachedTenant | null;
   return (
     typeof row === 'object' &&
     row !== null &&
     typeof row.id === 'string' &&
-    typeof row.slug === 'string'
+    typeof row.slug === 'string' &&
+    typeof row.ownerUserId === 'string'
   );
 }
 
 /** …and, for a host entry, a purpose this code still recognises. */
 function isSurface(value: unknown): value is CachedSurface {
-  return (
-    isTenant(value) &&
-    PURPOSES.includes((value as CachedSurface).purpose as string) &&
-    // An entry written before ADR-0059 lacks the owner; it re-reads, as a
-    // purpose-less one did (F-066-q).
-    typeof (value as CachedSurface).ownerUserId === 'string'
-  );
+  return isTenant(value) && PURPOSES.includes((value as CachedSurface).purpose as string);
 }
 
 /**
@@ -118,7 +118,9 @@ export class TenantCacheService {
   /**
    * Forget what this tenant id proved to. Call it when a tenant stops existing
    * or stops being resolvable, so a token that outlives it stops answering its
-   * own claim without waiting out the backstop.
+   * own claim without waiting out the backstop. A change of owner is not this:
+   * it goes through `invalidateTenantOwner` (shared-core), which drops the
+   * host entries too.
    */
   async invalidateTenant(tenantId: string): Promise<void> {
     await this.redis.del(RedisKeys.tenantById(tenantId));

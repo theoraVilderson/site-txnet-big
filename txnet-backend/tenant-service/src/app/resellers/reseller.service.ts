@@ -10,7 +10,7 @@ import {
   TenantType,
   UserStatus,
 } from '@prisma/client';
-import { UnscopedRedisKeys, cnameTargetHost } from '@txnet-backend/shared-core';
+import { cnameTargetHost, invalidateTenantOwner } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -38,8 +38,8 @@ import type { CreateResellerInput, ListResellersInput } from './reseller.schema'
  * together. The subdomain's `tenant:host:*` entry — which carries
  * `ownerUserId` since ADR-0059 — is deleted inside the transaction, so a Redis
  * that cannot be reached refuses the creation rather than leaving a cached
- * *no tenant* on the new host. Any later write of `ownerUserId` must delete the
- * entry of every one of the tenant's hosts the same way.
+ * *no tenant* on the new host. Every write of `ownerUserId` goes through
+ * `invalidateTenantOwner` (shared-core, F-061-k) the same way.
  */
 
 export type ResellerActor = { adminId: string; tenantId: string; ip: string };
@@ -172,10 +172,8 @@ export class ResellerService {
             adminIpAddress: actor.ip,
           },
         });
-        // `auth-service`'s resolver re-reads the row; `domainValue` is already normalized (lower case, no port).
-        for (const host of [domainValue, cnameTarget]) {
-          await this.redis.del(UnscopedRedisKeys.tenantByHost(host));
-        }
+        // `auth-service`'s resolver re-reads the rows: every entry naming this tenant's owner goes (F-061-k).
+        await invalidateTenantOwner(tx, this.redis, tenant.id);
         return result;
       });
       this.logger.log(`reseller ${view.id} (${slug}) created by ${actor.adminId}, owned by ${owner.id}`);

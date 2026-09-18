@@ -23,6 +23,7 @@ source:
   - txnet-backend/prisma/domains/migrations/20260917001400_tenant_package_apply/**
   - txnet-backend/shared-core/src/lib/tenant/feature-keys.ts
   - txnet-backend/shared-core/src/lib/tenant/status-policy.ts
+  - txnet-backend/shared-core/src/lib/tenant/owner-cache.ts
   - txnet-backend/prisma/domains/migrations/20260917001500_tenant_status/**
   - txnet-backend/prisma/domains/migrations/20260917001600_tenant_subscription_renewal/**
   - txnet-backend/prisma/domains/migrations/20260917001700_tenant_subscription_grace/**
