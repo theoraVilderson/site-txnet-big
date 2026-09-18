@@ -40,7 +40,6 @@ import { BotLinkService } from './bot-link/bot-link.service';
 import { TokenService } from './token.service';
 import { SessionService } from './session/session.service';
 import { SessionStore } from './session/session.store';
-import { LinkedAccountService } from './linked-account/linked-account.service';
 import { Inject } from '@nestjs/common';
 import {
   ok,
@@ -103,7 +102,6 @@ export class AuthService {
     private readonly sessionService: SessionService,
     private readonly sessions: SessionStore,
     private readonly deliveries: OtpDeliveryStore,
-    private readonly linkedAccounts: LinkedAccountService,
   ) {}
 
   /**
@@ -185,13 +183,7 @@ export class AuthService {
         return err('auth.temporarilyLocked');
       }
 
-      // A reseller owner's account answers with its platform account's
-      // password (ADR-0059); `null` is the same answer as a wrong one.
-      const credentials = await this.linkedAccounts.credentialsOf(user);
-      if (
-        !credentials ||
-        !(await argon2.verify(credentials.passwordHash, input.password))
-      ) {
+      if (!(await argon2.verify(user.passwordHash, input.password))) {
         return err('auth.invalidCredentials');
       }
 
@@ -207,7 +199,7 @@ export class AuthService {
         return err('auth.phoneVerificationRequired');
       }
 
-      if (credentials.twoFactorEnabled) {
+      if (user.twoFactorEnabled) {
         const channel = await this.resolveOtpChannel(user.phoneNumber!, user);
         const delivery = await this.deliveries.mintHandles();
         await this.otp.issueOtp(
@@ -707,18 +699,9 @@ export class AuthService {
         return err('auth.invalidResetToken');
       const user = await this.prisma.user.findUnique({
         where: { id: claims.sub },
-        select: {
-          id: true,
-          username: true,
-          fullName: true,
-          phoneNumber: true,
-          credentialUserId: true,
-        },
+        select: { id: true, username: true, fullName: true, phoneNumber: true },
       });
       if (!user) return err('auth.invalidResetToken');
-      // The password lives on the linked account and is changed there only:
-      // this account's phone is a copy that can fall behind it (ADR-0059 (4)).
-      if (user.credentialUserId) return err('auth.credentialManagedElsewhere');
 
       try {
         assertPasswordNotContainingProfile(input.newPassword, user);
@@ -825,10 +808,7 @@ export class AuthService {
     );
     if (!attempt.allowed) throw new BadRequestException(BackendI18nKeys.errors.auth.temporarilyLocked);
 
-    const credentials = await this.linkedAccounts.credentialsOf(user);
-    if (!credentials || !(await argon2.verify(credentials.passwordHash, password))) {
-      return null;
-    }
+    if (!(await argon2.verify(user.passwordHash, password))) return null;
     await this.rateLimiter.reset(failureBucket);
 
     if (!user.phoneVerifiedAt) return null;

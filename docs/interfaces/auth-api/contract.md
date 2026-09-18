@@ -2,8 +2,8 @@
 id: auth-api
 layer: interface
 status: active
-version: 21
-updated: 2026-09-18
+version: 20
+updated: 2026-09-13
 ---
 
 # Contract — auth-api
@@ -103,7 +103,7 @@ cookies and rate limits. Field-level schemas live in code — link, do not copy:
 | POST `/auth/logout/all` | refreshToken? (else cookie) | 200 `{success:true}`; clears cookie. Signs out of **every** account this place holds and clears the group's `actingAsUserId`, so the next implicit sign-in does not resume as whoever it was acting as (`F-0211`, ADR-0035). It signs out; it does not un-prove — the membership rows stand and `F-0208` is still how an account leaves. Its own route rather than a flag, because it is its own intention; every surface places it away from the ordinary sign-out and behind a confirmation | — | — |
 | POST `/auth/password/forgot` | phoneNumber, channel? | **202** `{accepted:true, deliveryId, channel, channelToken}`, or the same `linkRequired` shape as `login/otp/request` | 10 / 900s | required |
 | POST `/auth/password/forgot/verify-otp` | phoneNumber, otpCode(6) | 200 `{resetToken}` | 20 / 900s (default — `FORGOT_VERIFY_RATE_LIMIT`) | — |
-| POST `/auth/password/reset` | resetToken, newPassword | 200 `{success:true}` + tokens + sets `refresh_token` cookie. Every session the account had is revoked first; the returned one is minted after that revocation, so this device stays signed in and no other does. A linked account (ADR-0059) gets 400 `auth.credentialManagedElsewhere` | — | — |
+| POST `/auth/password/reset` | resetToken, newPassword | 200 `{success:true}` + tokens + sets `refresh_token` cookie. Every session the account had is revoked first; the returned one is minted after that revocation, so this device stays signed in and no other does | — | — |
 | POST `/auth/bots/link/status` | linkToken | 200 `{state:"pending"\|"linked"\|"failed", otpSent, failureKey?}` — polled by the screen showing the deep link | 120 / 900s | — |
 | POST `/auth/bots/link/resolve` | platform, chatId, startToken?, languageCode? | 200 `{state, needsContact, otpSent, messageKey, failureKey?, lang}` — what a `/start` means for this chat. **Service callers only**; anyone else gets 404 | 30 / 60s per chat | — |
 | POST `/auth/bots/link/contact` | platform, chatId, senderId, contact | 200, same outcome shape — the shared contact, checked against its sender (invariant #12). **Service callers only**; 404 otherwise | 10 / 300s per chat | — |
@@ -118,7 +118,6 @@ cookies and rate limits. Field-level schemas live in code — link, do not copy:
 | POST `/internal/bot-integrations/primary` | tenantId, platform | 200 that tenant's `role: primary` `BotIntegration`, as `resolve` — for a process sending as it (F-035-e, ADR-0054). **Never a credential.** 404 when there is none. **Service callers only** | — | — |
 | POST `/internal/bot-integrations/token` | platform, webhookPath, caller?, service? | 200 `{token}` — a **plaintext** bot token, for the process that is about to send as that bot. Every call writes a vault audit row naming `<service>:<caller>` (F-1215); `service` is `bot-service` (absent) or `notification-service`, anything else `unknown-service`. **Service callers only** | — | — |
 | POST `/internal/vault/destroy-expired` | — | 200 `{destroyed}` — how many superseded credential versions were past their rotation grace window and are now gone (ADR-0026 rule 4). A **count**, and nothing that names what was destroyed. Idempotent: a second call inside the same window answers 0. Called by `worker-service`'s `vault_credential_retention` job (F-031-c). **Service callers only**; anyone else gets 404 | — | — |
-| POST `/internal/owner-accounts` | credentialUserId (uuid); the reseller in `X-Tenant-Id` | 200 `{userId}`, `tenant.ownerAccountReady` — the reseller owner's linked account, created or already there (ADR-0059). 400 `tenant.ownerAccountInvalid` / `tenant.ownerPhoneTaken`. **Service callers only** (`tenant-service`, F-018-y) | — | — |
 | POST `/internal/vault/gateway-credential` (+ `/state`, `/revoke`) | tenantId, source, gatewayId, merchantId?, secretKey?, webhookSecret?, actorId? | 200 `{merchantId, secretKey, webhookSecret}` each `{configured, version, rotatedAt}` — **never a value or fingerprint** (F-102-a; `webhookSecret` F-104-c, kind `webhook_secret`, same label; `/revoke` revokes all three). The owner is re-derived from the gateway row. 400 blank / nothing to set, 403 `not_owner`, 404 `gateway_not_found`. Called by `billing-service`'s gateway management (D-31). **Service callers only** | — | — |
 | POST `/internal/otp/deliver` | tenantId, phoneNumber, purpose, channel, requestIp, lang, deliveryId, channelId | 200 `{delivered, failureKey?}` — draws the code, stores its hash and sends it (F-067-a). The request carries **no code**: it is drawn here, in the one process that sends it (identity/invariants.md #2). `delivered:false` is a refusal the channel can state and the caller acks it; anything else is a 5xx the caller dead-letters. Scoped by `X-Tenant-Id`, honoured because the service token verified. Called by `worker-service`'s OTP delivery consumer. **Service callers only**; anyone else gets 404 | — | — |
 | POST `/internal/tenant-subscriptions/renew-due`, `/:tenantId/renew` | — | 200 the sweep's counts / `{outcome}` — renews reseller subscriptions from their billing wallet (F-019-c, `domains/tenant/contract.billing.md`). `@TenantAgnostic`, `system`. **Service callers only**; anyone else gets 404 | — | — |

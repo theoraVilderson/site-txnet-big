@@ -11,7 +11,6 @@ import {
   TenantType,
 } from '@prisma/client';
 import * as argon2 from 'argon2';
-import { RESELLER_OWNER_ROLE } from '../../auth/linked-account/linked-account.service';
 import { assertPasswordNotContainingProfile } from '../../common/validation/strong-password.schema';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -64,6 +63,8 @@ export class TenantAdminRefused extends Error {
   }
 }
 
+/** The system role a reseller's owner holds until roles are per tenant (F-018-n). */
+const OWNER_ROLE = 'Admin';
 
 const RESELLER_SELECT = {
   id: true,
@@ -102,8 +103,8 @@ export class TenantAdminService {
 
     const { owner } = input;
     assertPasswordNotContainingProfile(owner.password, owner);
-    const role = await this.all.role.findUnique({ where: { name: RESELLER_OWNER_ROLE }, select: { id: true } });
-    if (!role) throw new Error(`system role ${RESELLER_OWNER_ROLE} is missing — run the seed`);
+    const role = await this.all.role.findUnique({ where: { name: OWNER_ROLE }, select: { id: true } });
+    if (!role) throw new Error(`system role ${OWNER_ROLE} is missing — run the seed`);
     const passwordHash = await argon2.hash(owner.password, { type: argon2.argon2id });
 
     try {

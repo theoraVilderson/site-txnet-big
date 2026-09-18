@@ -1,7 +1,7 @@
 ---
 id: identity
 layer: domain
-updated: 2026-09-18
+updated: 2026-09-09
 ---
 
 # Data model — identity
@@ -42,7 +42,6 @@ many users with no username.
 | user.tenantId | -> | tenant.tenant.id | every identity belongs to one tenant (ADR-0001) |
 | session.impersonationSessionId | -> | audit.impersonation_session.id | audit owns the impersonation record |
 | user.referredByUserId | -> | user.id (self) | referral chain; affiliate payouts live in `billing` |
-| user.credentialUserId | -> | user.id (self, **another tenant**) | the account whose password and 2FA a linked account signs in with — a reseller owner's platform account (ADR-0059). `ON DELETE SET NULL`; unique per `(tenantId, credentialUserId)` |
 
 ## Access rules
 
@@ -96,9 +95,6 @@ hash are cached in Redis only (`register:pending:<phone>`, 600s TTL, see
 
 ## Migration notes
 
-- 2026-09-18 (F-061-c, `20260918000000_user_credential_link`):
-  `user.credentialUserId` added, and `user.passwordHash` is nullable — null
-  only on a linked account. Widening only; no existing row changes.
 - The "section 99" manual SQL in the schema (RLS, partial unique indexes,
   `platform_owner` CHECK) is **not yet applied**.
 - Migration history lives in `prisma/domains/migrations/` — hand-written SQL,

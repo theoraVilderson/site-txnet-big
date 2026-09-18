@@ -2,7 +2,6 @@ import type { Mock } from 'vitest';
 import * as argon2Module from 'argon2';
 import { OtpChannel, OtpPurpose } from '@prisma/client';
 import { AuthService } from './auth.service';
-import { LinkedAccountService } from './linked-account/linked-account.service';
 import { normalizePhone } from '../common/validation/phone.schema';
 
 /**
@@ -117,14 +116,6 @@ function harness() {
     }),
   };
 
-  // The real link resolver over a fake cross-tenant pool: an account with no
-  // `credentialUserId` never reaches it (ADR-0059).
-  const crossTenant = { user: { findUnique: vi.fn().mockResolvedValue(null) } };
-  const linkedAccounts = new LinkedAccountService(
-    prisma as never,
-    crossTenant as never,
-  );
-
   const service = new AuthService(
     prisma as never,
     rateLimiter as never,
@@ -136,13 +127,11 @@ function harness() {
     sessionService as never,
     sessions as never,
     deliveries as never,
-    linkedAccounts,
   );
 
   return {
     service,
     prisma,
-    crossTenant,
     rateLimiter,
     tokens,
     config,
@@ -949,75 +938,6 @@ describe('AuthService.resetPassword — every session dies', () => {
  * one place (ADR-0032) and hold two sessions, so revoking only the caller's
  * left the chat signed in after a Mini App logout.
  */
-describe("AuthService — a reseller owner's linked account (ADR-0059)", () => {
-  let h: Harness;
-
-  const linked = () =>
-    activeUser({
-      id: 'user-reseller-ali',
-      passwordHash: null,
-      credentialUserId: 'user-platform-ali',
-    });
-  const platformAccount = (over: Record<string, unknown> = {}) => ({
-    passwordHash: 'platform-hash',
-    twoFactorEnabled: false,
-    status: 'active',
-    deletedAt: null,
-    credentialUserId: null,
-    ...over,
-  });
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    h = harness();
-    h.prisma.user.findFirst.mockResolvedValue(linked());
-  });
-
-  it("checks the password against the platform account's hash", async () => {
-    h.crossTenant.user.findUnique.mockResolvedValue(platformAccount());
-    argon2.verify.mockResolvedValue(true);
-
-    const res = await login(h);
-
-    expect(argon2.verify).toHaveBeenCalledWith('platform-hash', 'Correct!Passw0rd');
-    expect(res).toMatchObject({ ok: true, msg: 'auth.loginSuccess' });
-    expect(h.sessionService.createSession).toHaveBeenCalled();
-  });
-
-  it("applies the platform account's 2FA, not the linked row's", async () => {
-    h.crossTenant.user.findUnique.mockResolvedValue(
-      platformAccount({ twoFactorEnabled: true }),
-    );
-    argon2.verify.mockResolvedValue(true);
-
-    const res = await login(h);
-
-    expect(res).toMatchObject({ ok: true, data: { requiresOtp: true } });
-    expect(h.sessionService.createSession).not.toHaveBeenCalled();
-  });
-
-  it('answers invalidCredentials, unchecked, when the platform account is gone', async () => {
-    const res = await login(h);
-
-    expect(res).toEqual({ ok: false, msg: 'auth.invalidCredentials', error: null });
-    expect(argon2.verify).not.toHaveBeenCalled();
-  });
-
-  it('refuses a password reset on the linked account, changing nothing', async () => {
-    h.tokens.verify.mockReturnValue({ sub: 'user-reseller-ali', purpose: 'password_reset' });
-    h.prisma.user.findUnique.mockResolvedValue(linked());
-
-    const res = await h.service.resetPassword(
-      { resetToken: 'reset-token', newPassword: 'Fresh!Passw0rd' } as never,
-      '1.2.3.4',
-      'jest-ua',
-    );
-
-    expect(res).toEqual({ ok: false, msg: 'auth.credentialManagedElsewhere', error: null });
-    expect(h.prisma.$transaction).not.toHaveBeenCalled();
-  });
-});
-
 describe('AuthService.logout — the scope signs out, not just the token', () => {
   let h: ReturnType<typeof harness>;
 
