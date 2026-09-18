@@ -2,8 +2,8 @@
 id: audit
 layer: domain
 status: active
-version: 2
-updated: 2026-09-06
+version: 3
+updated: 2026-09-18
 ---
 
 # Contract — audit
@@ -35,7 +35,7 @@ The privileged-action trail. `admin_audit_log` is absolutely append-only (not ev
 | read audit trail *(intent)* | target ref / admin / date range | rows (read-only) | sync | — |
 | record impersonation start/end *(written by identity today)* | adminId, targetUserId, reason, ticket? | `impersonation_session` (+ audit row) | sync tx | (see identity invariants) |
 | add an account to a switch group **(live, F-0205)** | caller's session, **caller's scope**, target phone/username + an OTP to that account **or** its password | `linked_account_member` row carrying that scope, `verifiedViaOtp` set accordingly | sync | proof failed, already in a group *on this surface*, no resolvable scope (`accountSwitch.noScope`), rate-limited |
-| list the caller's switch group **(live, F-0206)** | caller's session, **caller's scope** | the caller, plus the members of the caller's own tenant they may switch to **in this scope**; phone masked | sync | — (no scope and no group both answer `members: []`) |
+| list the caller's switch group **(live, F-0206)** | caller's session, **caller's scope** | the caller, plus the members **the door admits** they may switch to **in this scope** — the door's tenant's accounts and, on a reseller's panel, its owner (ADR-0059 (5)); phone masked | sync | — (no scope and no group both answer `members: []`) |
 | switch to a member **(live, F-0207)** | caller's session, **caller's scope**, target member | the target's token pair + `refresh_token` cookie, the new session stamped with the same scope; the caller's session revoked `account_switched` | sync tx | not a member *of this scope's group*, another group, cross-tenant, target deleted/suspended, no scope — all one answer, `accountSwitch.notAMember` |
 | remove an account from the group **(live, F-0208)** | caller's session, **caller's scope**, target member — which may be the caller itself | that scope's member row gone; the removed account's sessions **in that scope** revoked `account_unlinked`; the group deleted if one member would be left | sync tx | not a member, no scope — both `accountSwitch.notAMember` |
 
@@ -56,6 +56,8 @@ None planned yet — no message bus is wired up.
 - At no instant does a switching browser hold two live sessions, or a live session for an account it has not proved. See invariants #6 and #7.
 - **No operation reaches outside the caller's scope.** Adding, listing, switching and removing all read `(scopeKey, userId)`, so a group built in a browser is invisible and unreachable from a chat and vice versa — including the removal's session revoke, which is narrowed to that scope (ADR-0015, invariant #8).
 - The scope is never taken from a request body. It comes from the `device_id` cookie or from the verified service token plus the bot headers, so a caller cannot name the surface it is acting for.
+- **A chat's scope names its bot's tenant** — `bot:<tenantId>:<platform>:<chatId>` (v3, F-061-g). A private chat id is the person's own id with every bot, so without it a reseller's owner met their platform chat's group in their reseller's Mini App. `forward-auth` reads the platform out of it (`contract.headers.md`) and accepts both shapes while pre-v3 sessions live.
+- **Who the door admits is the whole tenant rule** (invariant #6). An add proves the account in the door's tenant (falling back to its owner, identity invariant #16), even when the owner's own request runs in their tenant.
 
 ## Deprecations
 

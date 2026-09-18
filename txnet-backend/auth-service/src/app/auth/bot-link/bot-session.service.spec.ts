@@ -1,5 +1,5 @@
 import { aBotIntegration } from '@txnet-backend/messenger';
-import { runWithTenant } from '../../tenant-context/tenant-context';
+import { TenantContext, runWithTenant } from '../../tenant-context/tenant-context';
 import { BotSessionService } from './bot-session.service';
 
 /**
@@ -64,11 +64,24 @@ function harness(over: {
       data: { platform: 'telegram', user: { id: '5501' }, authDate: 1 },
     }),
   };
+  // The door and who it admits (ADR-0059). By default the door is the tenant
+  // in scope, it has no owner, and a member is read as the real lookup reads.
+  const surfaceOwners = {
+    surface: vi.fn(() => TenantContext.currentOrNull()),
+    ownerMatching: vi.fn().mockResolvedValue(null),
+    admissibleUser: vi.fn((id: string) => prisma.user.findUnique({ where: { id } })),
+  };
   return {
     prisma,
     auth,
     bots,
-    service: new BotSessionService(prisma as any, auth as any, bots as any),
+    surfaceOwners,
+    service: new BotSessionService(
+      prisma as any,
+      auth as any,
+      bots as any,
+      surfaceOwners as any,
+    ),
   };
 }
 
@@ -78,7 +91,7 @@ describe('BotSessionService', () => {
   it('signs in a chat that already holds a contact-verified link', async () => {
     const { service, auth } = harness({ link: { userId: 'u-1' } });
 
-    const outcome = await service.authenticate(ctx, null);
+    const outcome = await inTenant(() => service.authenticate(ctx, null));
 
     expect(outcome).toEqual({
       state: 'authenticated',
@@ -100,7 +113,7 @@ describe('BotSessionService', () => {
     async (platform, label) => {
       const { service, auth } = harness({ link: { userId: 'u-1' } });
 
-      await service.authenticate({ ...ctx, platform }, null);
+      await inTenant(() => service.authenticate({ ...ctx, platform }, null));
 
       expect(auth.createSessionForUser).toHaveBeenCalledWith(
         expect.anything(),
@@ -115,7 +128,7 @@ describe('BotSessionService', () => {
   it('asks for the contact card when the chat has no link yet', async () => {
     const { service } = harness();
 
-    expect(await service.authenticate(ctx, null)).toEqual({
+    expect(await inTenant(() => service.authenticate(ctx, null))).toEqual({
       state: 'needsContact',
     });
   });
@@ -164,7 +177,7 @@ describe('BotSessionService', () => {
       user: { ...linkedUser, role: { name: 'Admin' } },
     });
 
-    expect(await service.authenticate(ctx, null)).toEqual({
+    expect(await inTenant(() => service.authenticate(ctx, null))).toEqual({
       state: 'refused',
       key: 'auth.botFactorNotAllowed',
     });
@@ -177,7 +190,7 @@ describe('BotSessionService', () => {
       user: { ...linkedUser, status: 'suspended' },
     });
 
-    expect(await service.authenticate(ctx, null)).toEqual({
+    expect(await inTenant(() => service.authenticate(ctx, null))).toEqual({
       state: 'refused',
       key: 'auth.invalidCredentials',
     });
@@ -213,7 +226,7 @@ describe('BotSessionService.authenticateWebApp', () => {
       'Mozilla/5.0',
       // The chat named by the signature — the same key `/auth/bots/session`
       // uses from the chat itself, so the two share one switch group.
-      'bot:telegram:5501',
+      'bot:tenant-1:telegram:5501',
       'Telegram',
     );
   });
@@ -236,7 +249,7 @@ describe('BotSessionService.authenticateWebApp', () => {
       expect.anything(),
       '1.2.3.4',
       'Mozilla/5.0',
-      'bot:bale:5501',
+      'bot:tenant-1:bale:5501',
       expect.anything(),
     );
   });
@@ -257,6 +270,87 @@ describe('BotSessionService.authenticateWebApp', () => {
       ),
     ).toEqual({ state: 'refused', key: 'auth.invalidCredentials' });
     expect(prisma.linkedBotAccount.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * F-061-g: the owner opens their reseller's Mini App. Their account and its
+ * messenger link live in the platform's tenant (ADR-0059), and the door is the
+ * reseller's — its bot signed `initData`, and its place is a place of its own.
+ */
+describe("BotSessionService.authenticateWebApp — the reseller's owner", () => {
+  const webApp = { platform: 'telegram' as const, initData: 'signed' };
+  const DOOR = { id: 'tenant-reseller', slug: 'arian-vpn', via: 'domain', surfacePurpose: 'panel' } as const;
+  const OWNER_SCOPE = {
+    id: 'tenant-platform',
+    slug: 'platform_owner',
+    via: 'session',
+    surfacePurpose: 'panel',
+    brand: { id: DOOR.id, slug: DOOR.slug },
+  } as const;
+  const owner = { ...linkedUser, id: 'u-owner', tenantId: 'tenant-platform' };
+
+  it("signs in the owner through their own link when the door's tenant has none", async () => {
+    const { service, auth, surfaceOwners } = harness();
+    surfaceOwners.ownerMatching.mockResolvedValue({ user: owner, scope: OWNER_SCOPE });
+    let mintedIn: unknown;
+    auth.createSessionForUser.mockImplementation(async () => {
+      mintedIn = TenantContext.currentOrNull();
+      return { accessToken: 'a', refreshToken: 'r', expiresIn: 900 };
+    });
+
+    const outcome = await runWithTenant(DOOR, () =>
+      service.authenticateWebApp(webApp, { ip: '', userAgent: 'Mozilla/5.0' }),
+    );
+
+    expect(outcome).toMatchObject({ state: 'authenticated' });
+    // Only a contact-verified link of the same messenger account proves them.
+    expect(surfaceOwners.ownerMatching).toHaveBeenCalledWith(
+      {
+        linkedBotAccounts: {
+          some: { platform: 'telegram', platformUserId: '5501', contactVerifiedAt: { not: null } },
+        },
+      },
+      expect.anything(),
+    );
+    expect(auth.createSessionForUser).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'u-owner' }),
+      '',
+      'Mozilla/5.0',
+      'bot:tenant-reseller:telegram:5501',
+      'Telegram',
+    );
+    expect(mintedIn).toEqual(OWNER_SCOPE);
+  });
+
+  it("verifies with the door's bot and looks in the door's tenant, whatever session is already on it", async () => {
+    // The owner's refresh cookie already scopes this request to their tenant.
+    const { service, auth, bots, prisma, surfaceOwners } = harness({ link: { userId: 'u-1' } });
+    surfaceOwners.surface.mockReturnValue(DOOR as never);
+    let lookedIn: unknown;
+    prisma.linkedBotAccount.findFirst.mockReset().mockImplementation(async () => {
+      lookedIn = TenantContext.currentOrNull();
+      return { userId: 'u-1' };
+    });
+
+    await runWithTenant(OWNER_SCOPE, () =>
+      service.authenticateWebApp(webApp, { ip: '', userAgent: 'Mozilla/5.0' }),
+    );
+
+    expect(bots.primaryFor).toHaveBeenCalledWith(DOOR.id, 'telegram');
+    expect(lookedIn).toEqual(DOOR);
+    expect(auth.createSessionForUser.mock.calls[0][3]).toBe('bot:tenant-reseller:telegram:5501');
+  });
+
+  it('still asks for the contact card when neither the door nor its owner holds the link', async () => {
+    const { service, auth } = harness();
+
+    expect(
+      await runWithTenant(DOOR, () =>
+        service.authenticateWebApp(webApp, { ip: '', userAgent: 'Mozilla/5.0' }),
+      ),
+    ).toEqual({ state: 'needsContact' });
+    expect(auth.createSessionForUser).not.toHaveBeenCalled();
   });
 });
 

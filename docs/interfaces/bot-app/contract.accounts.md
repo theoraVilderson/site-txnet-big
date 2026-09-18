@@ -42,7 +42,8 @@ their browser, and neither is visible from the other.
 Two consequences an edit must not undo:
 
 - **Every account call carries `x-bot-platform` beside `x-bot-chat-id`.**
-  `auth-api` names the scope `bot:<platform>:<chatId>` and refuses outright
+  `auth-api` names the scope `bot:<tenantId>:<platform>:<chatId>` — the tenant
+  is the bot's own, resolved from the service call — and refuses outright
   when the platform is missing — Telegram and Bale number their chats
   independently, so a chat id alone can name two different chats.
 - **Removing an account (`F-0208`) removes it here only**, and revokes only the

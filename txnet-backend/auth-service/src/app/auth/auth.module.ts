@@ -150,6 +150,6 @@ import { ConfigService } from '@nestjs/config';
   // PermissionStateStore is exported with AuthGuard for the reason TokenService
   // and SessionStore are: a module that puts AuthGuard on a controller has to
   // be able to resolve every one of its dependencies (F-031-b).
-  exports: [AuthGuard, TokenService, SessionService, SessionStore, PermissionStateStore, AuthService],
+  exports: [AuthGuard, TokenService, SessionService, SessionStore, PermissionStateStore, AuthService, SurfaceOwnerService],
 })
 export class AuthModule {}

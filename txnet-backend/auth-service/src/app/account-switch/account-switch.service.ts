@@ -6,6 +6,8 @@ import { SessionService } from '../auth/session/session.service';
 import { OtpChannel } from '../auth/otp/otp.interface';
 import { err, ok, safeExecute } from '../common/response/response.util';
 import { SwitchScope } from '../common/security/switch-scope';
+import { SurfaceOwnerService } from '../auth/surface-owner/surface-owner.service';
+import { runWithTenant } from '../tenant-context/tenant-context';
 import {
   AddByOtpVerifyInput,
   AddByPasswordInput,
@@ -67,7 +69,18 @@ export class AccountSwitchService {
     private readonly prisma: PrismaService,
     private readonly auth: AuthService,
     private readonly sessionService: SessionService,
+    private readonly surfaceOwners: SurfaceOwnerService,
   ) {}
+
+  /**
+   * Run a proof in the door's tenant (F-061-g). The accounts a place may add
+   * are the ones its door admits, and on a reseller's domain the owner's own
+   * requests run in the owner's tenant, not the door's (ADR-0059 (1)).
+   */
+  private onSurface<T>(fn: () => Promise<T>): Promise<T> {
+    const door = this.surfaceOwners.surface();
+    return door ? runWithTenant(door, fn) : fn();
+  }
 
   /**
    * Send a proof code to the phone of the account being added.
@@ -96,11 +109,8 @@ export class AccountSwitchService {
         return err('accountSwitch.sameAccount');
       }
 
-      const link = await this.auth.issueAccountProofOtp(
-        phoneNumber,
-        channel,
-        ip,
-        lang,
+      const link = await this.onSurface(() =>
+        this.auth.issueAccountProofOtp(phoneNumber, channel, ip, lang),
       );
       if (link) return link;
       return ok({ accepted: true }, 'accountSwitch.otpSent');
@@ -118,9 +128,8 @@ export class AccountSwitchService {
       const caller = await this.activeCaller(callerUserId);
       if (!caller) return err('auth.invalidCredentials');
 
-      const target = await this.auth.proveAccountByOtp(
-        input.phoneNumber,
-        input.otpCode,
+      const target = await this.onSurface(() =>
+        this.auth.proveAccountByOtp(input.phoneNumber, input.otpCode),
       );
       if (!target) return err('accountSwitch.proofFailed');
 
@@ -139,9 +148,8 @@ export class AccountSwitchService {
       const caller = await this.activeCaller(callerUserId);
       if (!caller) return err('auth.invalidCredentials');
 
-      const target = await this.auth.proveAccountByPassword(
-        input.identifier,
-        input.password,
+      const target = await this.onSurface(() =>
+        this.auth.proveAccountByPassword(input.identifier, input.password),
       );
       if (!target) return err('accountSwitch.proofFailed');
 
@@ -157,11 +165,13 @@ export class AccountSwitchService {
    * Two filters, and the second one is the load-bearing one:
    *
    * - the caller is never in `members` — you do not switch to where you are;
-   * - a member of another tenant is dropped. Membership records a *human* and
-   *   may legitimately span tenants; the list may not (C-22, audit invariant
-   *   #6). Each tenant is a separate white-label brand, so offering a
-   *   cross-tenant member here would end with brand B's session live on brand
-   *   A's domain.
+   * - a member this door does not admit is dropped. Membership records a
+   *   *human* and may legitimately span tenants; the list may not (C-22, audit
+   *   invariant #6). Each tenant is a separate white-label brand, so offering
+   *   another brand's member here would end with brand B's session live on
+   *   brand A's domain. The door admits its own tenant's accounts and, on a
+   *   reseller's domain, its owner's (ADR-0059 (1), F-061-g) — so the owner
+   *   and their reseller's accounts share a switcher there.
    *
    * No group yet is a success, not an error: `members` is empty and the panel
    * renders "add an account". Since ADR-0015 that is also the *normal* answer
@@ -201,15 +211,10 @@ export class AccountSwitchService {
         select: { userId: true },
       });
 
-      const users = await this.prisma.user.findMany({
-        where: {
-          id: { in: rows.map((row) => row.userId) },
-          tenantId: caller.tenantId,
-          status: 'active',
-          deletedAt: null,
-        },
-        select: { id: true, fullName: true, phoneNumber: true },
-      });
+      const users = await this.surfaceOwners.admissibleUsers(
+        rows.map((row) => row.userId),
+        { id: true, fullName: true, phoneNumber: true },
+      );
 
       // Ordered by when each account joined, which is the order the user built
       // the group in — `findMany` above answers in whatever order it likes.
@@ -274,15 +279,20 @@ export class AccountSwitchService {
       // The role and its permissions are what the new access token is signed
       // from, so the target is loaded the same way a login loads it. Nothing
       // is inherited from the outgoing account (F-0205's "the group is not a
-      // shared identity").
-      const target = await this.auth.findUserForSession(targetUserId);
-      if (!target || target.deletedAt || target.status !== 'active') {
+      // shared identity"). Only an account this door admits loads at all
+      // (C-22, ADR-0059 (1)): any other would be refused on its next request.
+      const target = await this.surfaceOwners.admissibleUser(targetUserId, {
+        role: {
+          include: { rolePermissions: { include: { permission: true } } },
+        },
+      });
+      if (!target) {
+        this.logger.warn(
+          `account-switch: switch to an account this door does not admit refused, caller=${callerUserId} target=${targetUserId}`,
+        );
         return err('accountSwitch.notAMember');
       }
-      if (target.tenantId !== caller.tenantId) {
-        this.logger.warn(
-          `account-switch: cross-tenant switch refused, caller=${callerUserId} target=${targetUserId}`,
-        );
+      if (target.deletedAt || target.status !== 'active') {
         return err('accountSwitch.notAMember');
       }
 
@@ -532,10 +542,8 @@ export class AccountSwitchService {
         id: true,
         fullName: true,
         phoneNumber: true,
-        // C-22: every list and every switch is filtered by this. It is
-        // selected here rather than looked up again so there is one place the
-        // caller's tenant comes from.
-        tenantId: true,
+        // No tenantId: C-22 filters by the door the request came through, not
+        // by the caller's own tenant (`SurfaceOwnerService.admissibleUsers`).
         status: true,
         deletedAt: true,
       },

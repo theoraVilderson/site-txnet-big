@@ -153,8 +153,10 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request) response.Respon
 }
 
 // chatPlatformOf reads the messenger out of a session value whose scope is a
-// chat's (`{"scopeKey":"bot:<platform>:<chatId>"}`, written by auth-service's
-// SessionStore), or "" (F-104-q). The value is the one the decision already
+// chat's (`{"scopeKey":"bot:<tenantId>:<platform>:<chatId>"}`, written by
+// auth-service's SessionStore), or "" (F-104-q). A key minted before F-061-g
+// has no tenant (`bot:<platform>:<chatId>`) and lives until its session's next
+// refresh, so both shapes are read. The value is the one the decision already
 // fetched, so the marker costs no round trip, and it is set by the server that
 // verified the platform's signature — which is what makes it trustworthy where
 // the panel's `?ma=` hint is not. Anything unreadable is simply no chat.
@@ -165,12 +167,13 @@ func chatPlatformOf(session string) string {
 	if json.Unmarshal([]byte(session), &parsed) != nil || parsed.ScopeKey == nil {
 		return ""
 	}
-	parts := strings.SplitN(*parsed.ScopeKey, ":", 3)
-	if len(parts) != 3 || parts[0] != "bot" || parts[2] == "" {
+	parts := strings.Split(*parsed.ScopeKey, ":")
+	if parts[0] != "bot" || (len(parts) != 3 && len(parts) != 4) || parts[len(parts)-1] == "" {
 		return ""
 	}
+	platform := parts[len(parts)-2]
 	for _, known := range ChatPlatforms {
-		if parts[1] == known {
+		if platform == known {
 			return known
 		}
 	}

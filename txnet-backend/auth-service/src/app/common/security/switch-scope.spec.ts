@@ -9,6 +9,8 @@ import { botScopeOf, DEVICE_COOKIE } from './switch-scope';
  * platform silently defaulting, and a browser being handed a fresh identity on
  * every request.
  */
+const BOT_TENANT = { id: 'tenant-a', slug: 'reseller-a', via: 'bot' };
+
 describe('SwitchScopeMiddleware', () => {
   const run = (req: any) => {
     const res: any = { cookie: vi.fn() };
@@ -37,13 +39,14 @@ describe('SwitchScopeMiddleware', () => {
     expect(options.httpOnly).toBe(true);
   });
 
-  it('keys a verified bot call on platform AND chat', () => {
+  it("keys a verified bot call on the bot's tenant, platform AND chat", () => {
     const { scope, res } = run({
       serviceCaller: true,
+      tenant: BOT_TENANT,
       headers: { 'x-bot-platform': 'telegram', 'x-bot-chat-id': '900' },
     });
 
-    expect(scope).toBe('bot:telegram:900');
+    expect(scope).toBe('bot:tenant-a:telegram:900');
     // A chat is not a browser: no cookie is minted for one.
     expect(res.cookie).not.toHaveBeenCalled();
   });
@@ -51,16 +54,33 @@ describe('SwitchScopeMiddleware', () => {
   it('keeps the same chat id on two platforms apart', () => {
     const telegram = run({
       serviceCaller: true,
+      tenant: BOT_TENANT,
       headers: { 'x-bot-platform': 'telegram', 'x-bot-chat-id': '900' },
     }).scope;
     const bale = run({
       serviceCaller: true,
+      tenant: BOT_TENANT,
       headers: { 'x-bot-platform': 'bale', 'x-bot-chat-id': '900' },
     }).scope;
 
     // The two platforms number their chats independently, so without the
     // platform in the key these two strangers would share one group.
     expect(telegram).not.toBe(bale);
+  });
+
+  it('keeps the same chat apart on two tenants’ bots (F-061-g)', () => {
+    // A Telegram private chat id is the user's own id, the same on every bot.
+    // Without the tenant, the owner's chat with the platform bot and their
+    // reseller's Mini App were one place, and the platform's group leaked in.
+    const call = (tenant: unknown) =>
+      run({
+        serviceCaller: true,
+        tenant,
+        headers: { 'x-bot-platform': 'telegram', 'x-bot-chat-id': '900' },
+      }).scope;
+
+    expect(call(BOT_TENANT)).not.toBe(call({ ...BOT_TENANT, id: 'tenant-b' }));
+    expect(call(null)).toBeNull();
   });
 
   it('gives a service caller with no platform header NO scope', () => {

@@ -34,7 +34,7 @@ and has no toolchain that could consume generated Go or TypeScript.
 | `X-User-Permissions` | claimed permissions, comma-joined | every success |
 | `X-Impersonated` | `true` | only while impersonating |
 | `X-Impersonated-By` | the acting admin | only while impersonating |
-| `X-Chat-Platform` | `telegram` / `bale` | only when the session's `scopeKey` is `bot:<platform>:<chatId>` (F-104-q) |
+| `X-Chat-Platform` | `telegram` / `bale` | only when the session's `scopeKey` is a chat's: `bot:<tenantId>:<platform>:<chatId>` (F-061-g), or `bot:<platform>:<chatId>` minted before it (F-104-q) |
 | `X-Auth-Anonymous` | `true` | `/validate-optional` only, **instead of** all of the above |
 
 The split between the first five and the impersonation pair is part of the

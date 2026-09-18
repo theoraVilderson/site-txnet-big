@@ -982,8 +982,8 @@ func TestValidateNamesAMissingCredential(t *testing.T) {
 	}
 }
 
-// F-104-q: a session minted under a chat's scope (`bot:<platform>:<chatId>`,
-// ADR-0032) is the chat, whether the bot or its Mini App holds it, and billing
+// F-104-q: a session minted under a chat's scope (`bot:<tenantId>:<platform>:<chatId>`
+// since F-061-g, `bot:<platform>:<chatId>` before it; ADR-0032) is the chat, whether the bot or its Mini App holds it, and billing
 // offers that messenger's in-chat gateway only on this header. It is read from
 // the session value the decision already fetched, never from the request.
 func TestValidateNamesTheChatPlatformFromTheSessionScope(t *testing.T) {
@@ -992,7 +992,11 @@ func TestValidateNamesTheChatPlatformFromTheSessionScope(t *testing.T) {
 		session string
 		want    string
 	}{
-		{"telegram chat", `{"userId":"user-1","revoked":false,"scopeKey":"bot:telegram:42"}`, "telegram"},
+		{"telegram chat", `{"userId":"user-1","revoked":false,"scopeKey":"bot:tenant-1:telegram:42"}`, "telegram"},
+		{"bale chat", `{"userId":"user-1","revoked":false,"scopeKey":"bot:tenant-1:bale:-7"}`, "bale"},
+		{"a chat key minted before F-061-g", `{"userId":"user-1","revoked":false,"scopeKey":"bot:telegram:42"}`, "telegram"},
+		{"a tenant but no chat", `{"userId":"user-1","scopeKey":"bot:tenant-1:telegram:"}`, ""},
+		{"a tenant and an unknown platform", `{"userId":"user-1","scopeKey":"bot:tenant-1:whatsapp:42"}`, ""},
 		{"a scope that is not a chat", `{"userId":"user-1","revoked":false,"scopeKey":"bale:x"}`, ""},
 		{"bale scope", `{"userId":"user-1","revoked":false,"scopeKey":"bot:bale:-7"}`, "bale"},
 		{"a browser", `{"userId":"user-1","revoked":false,"scopeKey":"device:abc"}`, ""},

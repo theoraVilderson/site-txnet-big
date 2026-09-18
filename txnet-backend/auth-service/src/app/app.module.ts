@@ -34,18 +34,18 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     // ServiceCallerMiddleware runs on every route: the guards and the
     // rate-limit keys below read what it decided, so it cannot be optional.
-    // SwitchScopeMiddleware follows it — it reads that decision to tell a bot
-    // chat from a browser, and mints the browser's `device_id` (ADR-0015).
-    // TenantMiddleware depends on nothing the others decide; it is in the same
-    // chain because every route needs the tenant already resolved (ADR-0020).
-    // TenantContextMiddleware follows it directly and opens the ambient scope
-    // that resolution feeds, so everything downstream — including the guards
-    // and pipes on a route — can read it without being handed it (ADR-0024).
+    // TenantMiddleware reads it for a bot's claim; every route needs the
+    // tenant already resolved (ADR-0020). SwitchScopeMiddleware follows both —
+    // it tells a bot chat from a browser, mints the browser's `device_id`
+    // (ADR-0015) and keys a chat by its bot's tenant (F-061-g).
+    // TenantContextMiddleware then opens the ambient scope that resolution
+    // feeds, so everything downstream — including the guards and pipes on a
+    // route — can read it without being handed it (ADR-0024).
     consumer
       .apply(
         ServiceCallerMiddleware,
-        SwitchScopeMiddleware,
         TenantMiddleware,
+        SwitchScopeMiddleware,
         TenantContextMiddleware,
         LanguageMiddleware,
       )

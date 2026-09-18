@@ -2,7 +2,7 @@
 id: identity
 layer: domain
 status: active
-version: 17
+version: 18
 keywords: [users, reseller owner login, owner on own domain, login, auth, rbac, roles, permissions, sessions, otp, otp channel, otp delivery push, channel token, delivery result, delivery method, telegram, bale, bot account, bot link, share contact, forgot password, password reset, phone number, e164, phone format, country, email, email address, verify email, email verification, smtp, ایمیل, تایید ایمیل, شماره موبایل, فرمت شماره]
 source:
   - txnet-backend/prisma/domains/identity.prisma
@@ -38,9 +38,9 @@ See [contract.md](contract.md), [contract.versions.md](contract.versions.md) (wh
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-18 | Contract v17 -> **v18** (additive, F-061-g, ADR-0059 (5)): the three prove-account operations and the Mini App session on a reseller's domain also accept its owner's own account and run in the owner's tenant. A Mini App verifies with the door's bot and looks in the door's tenant first, whatever session is already on the request; its scope key names that tenant (`bot:<tenantId>:<platform>:<chatId>`) |
 | 2026-09-18 | Contract v16 -> **v17** (additive, F-061-e, ADR-0059): `password/forgot`, `forgot/verify-otp` and `password/reset` on a reseller's domain also accept its owner's own account; the code, the revocation and the new session are in the owner's tenant. No shape changed. Consumers: panel-web (none needed) |
 | 2026-09-18 | Contract v15 -> **v16** (additive, F-061-d, ADR-0059): OTP login and the 2FA step on a reseller's domain also accept its owner's own account; the code is issued, checked and the session opened in the owner's tenant. No shape changed. Consumers: panel-web (none needed) |
 | 2026-09-18 | Contract v14 -> **v15** (additive, F-061-c, ADR-0059): password login on a reseller's domain also accepts its owner's own account, and completes in the owner's tenant. No shape changed. Consumers: panel-web (none needed) |
 | 2026-09-17 | Contract v13 -> **v14** (additive, F-035-g, D-39): *request email code* (202, the OTP worker path) and *confirm email*, the only write of `user.email`; `email` is an OTP channel reserved to `email_verify` (invariant #15). Migration `20260917000600_user_email`. spec: F-035-g |
-| 2026-09-10 | Contract v11 -> **v12** (additive, F-067-j): the OTP delivery result is **pushed**. The three issuing operations also hand back `channel` + `channelToken`, the realtime channel that carries the result (ADR-0031); the Redis status stays as the record a client that missed the event reads (D-15). Recording a state and publishing it are one operation, so console mode pushes too. spec: F-067-j |
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

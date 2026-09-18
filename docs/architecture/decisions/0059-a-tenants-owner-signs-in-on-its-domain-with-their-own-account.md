@@ -8,8 +8,8 @@ updated: 2026-09-18
 
 - **Status:** accepted 2026-09-18 with F-061-c (user)
 - **Date:** 2026-09-18
-- **Affects units:** identity, tenant, auth-api
-- **Amends:** ADR-0024 decision 4
+- **Affects units:** identity, tenant, auth-api, audit, forward-auth
+- **Amends:** ADR-0024 decision 4; ADR-0015's bot key (by (5), F-061-g)
 
 ## Context
 
@@ -47,6 +47,17 @@ auth-service's resolver.
    tenant, and the request's 202 does not change with a match. A reset changes
    the owner's one password and revokes their sessions everywhere. **Not in this decision:** the
    owner's administration routes (`tenant-service`, F-018-y).
+5. **Account switching and the Mini App follow the door** (F-061-g, user
+   2026-09-18). A switch group on the owner's domain holds only accounts that
+   domain admits — its tenant's own and the owner — so the owner switches
+   between their account and their reseller's accounts there, never to their
+   other platform accounts (which (1) would refuse). Proofs run in the door's
+   tenant and fall back to the owner as in (3). The Mini App verifies with the
+   door's bot and signs the owner in through their own contact-verified
+   messenger link. A chat's switch scope names its bot's tenant,
+   `bot:<tenantId>:<platform>:<chatId>`: a private chat id is the person's id
+   with every bot, so the platform chat's group and acting-as pointer would
+   otherwise follow the owner into their reseller's Mini App.
 
 ## Alternatives
 

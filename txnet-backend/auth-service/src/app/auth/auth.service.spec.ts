@@ -1237,6 +1237,58 @@ describe("AuthService password reset — a reseller's owner on its domain (F-061
  * one place (ADR-0032) and hold two sessions, so revoking only the caller's
  * left the chat signed in after a Mini App logout.
  */
+describe("AuthService account proofs — the door's owner (F-061-g, ADR-0059)", () => {
+  let h: Harness;
+  const owner = () => ({
+    user: activeUser({ id: 'user-ali', tenantId: 'tenant-platform' }),
+    scope: {
+      id: 'tenant-platform',
+      slug: 'platform_owner',
+      via: 'session',
+      surfacePurpose: 'panel',
+      brand: { id: 'tenant-reseller', slug: 'arian-vpn' },
+    },
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    h = harness();
+    h.prisma.user.findFirst.mockResolvedValue(null);
+    argon2.verify.mockResolvedValue(true);
+  });
+
+  it("proves the owner by their password when the door's tenant has no such account", async () => {
+    h.surfaceOwners.ownerMatching.mockResolvedValue(owner());
+
+    const proved = await h.service.proveAccountByPassword('09123456789', 'pw');
+
+    expect(h.surfaceOwners.ownerMatching).toHaveBeenCalledWith({ phoneNumber: '+989123456789' }, {});
+    expect(proved).toMatchObject({ id: 'user-ali' });
+  });
+
+  it("issues and checks the owner's proof code in the owner's tenant", async () => {
+    h.surfaceOwners.ownerMatching.mockResolvedValue(owner());
+    const seen: (string | undefined)[] = [];
+    const record = async () => {
+      seen.push(TenantContext.currentOrNull()?.id);
+      return true;
+    };
+    h.otp.issueOtp.mockImplementation(record);
+    h.otp.verifyOtp.mockImplementation(record);
+
+    await h.service.issueAccountProofOtp('09123456789', undefined, '', 'fa');
+    const proved = await h.service.proveAccountByOtp('09123456789', '123456');
+
+    expect(seen).toEqual(['tenant-platform', 'tenant-platform']);
+    expect(proved).toMatchObject({ id: 'user-ali' });
+  });
+
+  it('proves nobody when neither the door nor its owner holds the identifier', async () => {
+    expect(await h.service.proveAccountByPassword('09123456789', 'pw')).toBeNull();
+    expect(await h.service.proveAccountByOtp('09123456789', '123456')).toBeNull();
+  });
+});
+
 describe('AuthService.logout — the scope signs out, not just the token', () => {
   let h: ReturnType<typeof harness>;
 
@@ -1248,14 +1300,14 @@ describe('AuthService.logout — the scope signs out, not just the token', () =>
     h.prisma.session.findUnique.mockResolvedValue({
       id: 'session-mini-app',
       userId: 'user-1',
-      scopeKey: 'bot:telegram:5501',
+      scopeKey: 'bot:tenant-1:telegram:5501',
     });
 
     const res = await h.service.logout({ refreshToken: 'a-refresh-token' });
 
     expect(h.sessionService.revokeSessionsForUserInScope).toHaveBeenCalledWith(
       'user-1',
-      'bot:telegram:5501',
+      'bot:tenant-1:telegram:5501',
       'user_logout',
     );
     expect(res).toMatchObject({ ok: true, msg: 'auth.logoutSuccess' });
@@ -1325,7 +1377,7 @@ describe('AuthService.logout — falls back onto the group', () => {
   const inScope = {
     id: 'session-a',
     userId: 'user-a',
-    scopeKey: 'bot:telegram:5501',
+    scopeKey: 'bot:tenant-1:telegram:5501',
   };
 
   beforeEach(() => {
@@ -1458,11 +1510,11 @@ describe('AuthService.logoutEverywhere', () => {
     h.prisma.session.findUnique.mockResolvedValue({
       id: 'session-a',
       userId: 'user-a',
-      scopeKey: 'bot:telegram:5501',
+      scopeKey: 'bot:tenant-1:telegram:5501',
     });
     h.prisma.linkedAccountMember.findUnique.mockResolvedValue({
       groupId: 'g1',
-      scopeKey: 'bot:telegram:5501',
+      scopeKey: 'bot:tenant-1:telegram:5501',
     });
     h.prisma.linkedAccountMember.findMany.mockResolvedValue([
       { userId: 'user-a', addedAt: new Date(1), groupId: 'g1' },
@@ -1475,12 +1527,12 @@ describe('AuthService.logoutEverywhere', () => {
 
     expect(h.sessionService.revokeSessionsForUserInScope).toHaveBeenCalledWith(
       'user-a',
-      'bot:telegram:5501',
+      'bot:tenant-1:telegram:5501',
       'user_logout',
     );
     expect(h.sessionService.revokeSessionsForUserInScope).toHaveBeenCalledWith(
       'user-b',
-      'bot:telegram:5501',
+      'bot:tenant-1:telegram:5501',
       'user_logout',
     );
     expect(res.data.success).toBe(true);

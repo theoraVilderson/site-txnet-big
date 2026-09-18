@@ -4,6 +4,7 @@ import { isBotPlatform } from '@txnet-backend/messenger';
 import { refreshCookieOptions } from '../http/refresh-cookie';
 import { readCookie } from '../http/cookies';
 import { BOT_CHAT_HEADER, isServiceCaller } from './service-caller';
+import { resolveTenant } from '../../tenant/tenant';
 
 /** Which messenger a bot-originated call is acting for. Name from the wire
  * contract, not a second spelling of it (C-04). */
@@ -21,12 +22,16 @@ export const DEVICE_COOKIE = 'device_id';
  * up inside a chat and two different ones in a browser stay strictly apart.
  * The key is what makes "this place" a value the database can hold:
  *
- *   `bot:telegram:12345`   one chat, on one platform
- *   `device:<uuid>`        one browser
+ *   `bot:<tenantId>:telegram:12345`   one chat, with one tenant's bot
+ *   `device:<uuid>`                   one browser
  *
  * The platform is part of the bot key because a Telegram chat id and a Bale
  * chat id are integers from unrelated namespaces: without it, chat 12345 on
- * Telegram and chat 12345 on Bale would share a group.
+ * Telegram and chat 12345 on Bale would share a group. The tenant is part of
+ * it because a private chat id is the person's own id, the same with every
+ * bot: without it, a reseller's owner (ADR-0059) would find the group and the
+ * acting-as pointer they built with the platform's bot in their reseller's
+ * Mini App (F-061-g). A browser needs no tenant — its cookie is host-only.
  *
  * **It is a partition key, not a credential.** Forging a `device_id` from a
  * browser buys nothing — membership still has to exist under the key, and
@@ -36,8 +41,12 @@ export const DEVICE_COOKIE = 'device_id';
  */
 export type SwitchScope = string;
 
-export function botScopeKey(platform: string, chatId: string): SwitchScope {
-  return `bot:${platform}:${chatId}`;
+export function botScopeKey(
+  tenantId: string,
+  platform: string,
+  chatId: string,
+): SwitchScope {
+  return `bot:${tenantId}:${platform}:${chatId}`;
 }
 
 export function deviceScopeKey(deviceId: string): SwitchScope {
@@ -85,7 +94,8 @@ export function resolveSwitchScope(req: Request): SwitchScope | null {
  * — pure, so the middleware and its spec share one definition of the rule.
  *
  * Returns `null` for a service caller whose headers do not name both a platform
- * and a chat. Browser scope is not decided here: it needs a cookie that may
+ * and a chat, or whose bot resolved to no tenant — which is why
+ * `SwitchScopeMiddleware` runs after `TenantMiddleware`. Browser scope is not decided here: it needs a cookie that may
  * have to be minted, which is a side effect and belongs in the middleware.
  */
 export function botScopeOf(req: Request): SwitchScope | null {
@@ -96,5 +106,7 @@ export function botScopeOf(req: Request): SwitchScope | null {
   if (typeof platform !== 'string' || typeof chatId !== 'string') return null;
   if (!chatId || !isBotPlatform(platform)) return null;
 
-  return botScopeKey(platform, chatId);
+  const tenant = resolveTenant(req);
+  if (!tenant) return null;
+  return botScopeKey(tenant.brand?.id ?? tenant.id, platform, chatId);
 }

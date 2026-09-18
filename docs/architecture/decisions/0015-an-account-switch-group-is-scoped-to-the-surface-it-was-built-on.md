@@ -39,7 +39,7 @@ pair:
 
 | scope | key | derived from |
 |---|---|---|
-| a bot chat | `bot:<platform>:<chatId>` | a verified `x-service-token` + `x-bot-chat-id` + `x-bot-platform` |
+| a bot chat | `bot:<tenantId>:<platform>:<chatId>` — the tenant added by ADR-0059 (5), 2026-09-18 | a verified `x-service-token` + `x-bot-chat-id` + `x-bot-platform` |
 | a browser | `device:<uuid>` | a server-minted, httpOnly `device_id` cookie |
 
 `userId @unique` → `@@unique([scopeKey, userId])`. The caller's group *in this

@@ -233,7 +233,7 @@ describe('AuthGuard — the switch scope of an authenticated call', () => {
   it("replaces the request's scope with the session's own", async () => {
     sessions.read.mockResolvedValue({
       userId: 'user-1',
-      scopeKey: 'bot:telegram:5501',
+      scopeKey: 'bot:tenant-1:telegram:5501',
     });
     const { context, request } = contextWith(
       `Bearer ${tokens.sign(accessClaims)}`,
@@ -241,7 +241,7 @@ describe('AuthGuard — the switch scope of an authenticated call', () => {
     );
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
-    expect(request.switchScope).toBe('bot:telegram:5501');
+    expect(request.switchScope).toBe('bot:tenant-1:telegram:5501');
   });
 
   it('leaves the request alone for a session minted before this shipped', async () => {

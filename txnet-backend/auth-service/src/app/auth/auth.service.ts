@@ -910,6 +910,10 @@ export class AuthService {
   //
   // Unlike login they mint nothing: no session, no token, no cookie. The caller
   // gets a user row or null, and decides what that is worth.
+  //
+  // Each looks in the tenant in scope — `audit` runs them in the door's — and,
+  // as login does, falls back to the door's owner (ADR-0059 (3), F-061-g), so
+  // a reseller's customer can add the owner's account on the owner's domain.
 
   /**
    * Does `identifier` + `password` name a live, phone-verified account?
@@ -928,6 +932,19 @@ export class AuthService {
       type === 'phone' ? { phoneNumber: identity } : { username: identity };
 
     const user = await this.prisma.user.findFirst({ where });
+    if (!user) {
+      const owner = await this.surfaceOwners.ownerMatching(where, {});
+      if (owner) {
+        return runWithTenant(owner.scope, () =>
+          this.checkAccountPassword(owner.user, identity, password),
+        );
+      }
+    }
+    return this.checkAccountPassword(user, identity, password);
+  }
+
+  /** The rest of `proveAccountByPassword`, in the found account's tenant. */
+  private async checkAccountPassword(user: any, identity: string, password: string) {
     if (!user || user.deletedAt || user.status !== 'active') return null;
 
     // The same bucket login uses, on purpose: this route is another way to
@@ -975,6 +992,26 @@ export class AuthService {
       where: { phoneNumber },
       select: { status: true, phoneVerifiedAt: true, preferredOtpChannel: true },
     });
+    if (!user) {
+      // The code lives where verify will look for it: the owner's tenant.
+      const owner = await this.surfaceOwners.ownerMatching({ phoneNumber }, {});
+      if (owner) {
+        return runWithTenant(owner.scope, () =>
+          this.sendAccountProofOtp(owner.user, phoneNumber, channel, ip, lang),
+        );
+      }
+    }
+    return this.sendAccountProofOtp(user, phoneNumber, channel, ip, lang);
+  }
+
+  /** The rest of `issueAccountProofOtp`, in the found account's tenant. */
+  private async sendAccountProofOtp(
+    user: any,
+    phoneNumber: string,
+    channel: OtpChannel | undefined,
+    ip: string,
+    lang: string,
+  ) {
     const resolvedChannel = await this.resolveOtpChannel(phoneNumber, user ?? {}, channel);
 
     const link = await this.linkIfNeeded(
@@ -1015,6 +1052,19 @@ export class AuthService {
    */
   async proveAccountByOtp(phoneNumber: string, otpCode: string) {
     const user = await this.prisma.user.findFirst({ where: { phoneNumber } });
+    if (!user) {
+      const owner = await this.surfaceOwners.ownerMatching({ phoneNumber }, {});
+      if (owner) {
+        return runWithTenant(owner.scope, () =>
+          this.checkAccountProofOtp(owner.user, phoneNumber, otpCode),
+        );
+      }
+    }
+    return this.checkAccountProofOtp(user, phoneNumber, otpCode);
+  }
+
+  /** The rest of `proveAccountByOtp`, in the found account's tenant. */
+  private async checkAccountProofOtp(user: any, phoneNumber: string, otpCode: string) {
     if (!user || user.deletedAt || user.status !== 'active') return null;
     if (!user.phoneVerifiedAt) return null;
     if (

@@ -1,9 +1,10 @@
 import type { Mock } from 'vitest';
 import { AccountSwitchService } from './account-switch.service';
+import { TenantContext } from '../tenant-context/tenant-context';
 
 /** The two surfaces every test below keeps apart (ADR-0015). */
 const BROWSER = 'device:browser-a';
-const CHAT = 'bot:telegram:900';
+const CHAT = 'bot:tenant-a:telegram:900';
 
 /** Member rows are addressed by the pair now, so the fake store is keyed by it. */
 const rowKey = (scopeKey: string, userId: string) => `${scopeKey}|${userId}`;
@@ -23,6 +24,7 @@ describe('AccountSwitchService.addByPassword', () => {
   let createdMany: any[];
   let service: AccountSwitchService;
   let proveByPassword: Mock;
+  let door: unknown;
 
   const input = { identifier: '09123456789', password: 'pw' };
 
@@ -31,6 +33,7 @@ describe('AccountSwitchService.addByPassword', () => {
     created = [];
     createdMany = [];
     proveByPassword = vi.fn().mockResolvedValue({ id: TARGET });
+    door = null;
 
     const memberDelegate = {
       findUnique: vi.fn(({ where }: any) => {
@@ -74,7 +77,24 @@ describe('AccountSwitchService.addByPassword', () => {
       prisma,
       { proveAccountByPassword: proveByPassword } as any,
       {} as any,
+      { surface: () => door } as any,
     );
+  });
+
+  it("proves the account in the surface's tenant, not the caller's (F-061-g)", async () => {
+    // The owner on their reseller's domain runs in their own (platform) tenant;
+    // the accounts they may add there are the reseller's, so the proof looks
+    // there — and falls back to the owner inside identity (ADR-0059 (3)).
+    door = { id: 'tenant-reseller', slug: 'arian-vpn', via: 'domain', surfacePurpose: 'panel' };
+    let seen: unknown;
+    proveByPassword.mockImplementation(async () => {
+      seen = TenantContext.currentOrNull();
+      return { id: TARGET };
+    });
+
+    await service.addByPassword(BROWSER, CALLER, input);
+
+    expect(seen).toEqual(door);
   });
 
   it('creates the group with BOTH the founder and the joiner', async () => {
@@ -249,6 +269,8 @@ describe('AccountSwitchService.list / switchTo / remove', () => {
   const OTHER_TENANT = 'other-tenant-id';
   const TENANT = 'tenant-a';
   const SESSION = 'session-1';
+  /** Owns `tenant-a`; their own account is in `tenant-b`, as OTHER_TENANT's is. */
+  const OWNER = 'owner-id';
 
   const USERS: Record<string, any> = {
     [CALLER]: {
@@ -275,7 +297,19 @@ describe('AccountSwitchService.list / switchTo / remove', () => {
       status: 'active',
       deletedAt: null,
     },
+    [OWNER]: {
+      id: OWNER,
+      fullName: 'Owner',
+      phoneNumber: '09120000004',
+      tenantId: 'tenant-b',
+      status: 'active',
+      deletedAt: null,
+    },
   };
+
+  /** The door's own tenant and its owner (ADR-0059 (1)); no owner by default. */
+  let surfaceOwner: string | null;
+  const admits = (u: any) => !!u && (u.tenantId === TENANT || u.id === surfaceOwner);
 
   let members: Record<
     string,
@@ -299,6 +333,7 @@ describe('AccountSwitchService.list / switchTo / remove', () => {
   beforeEach(() => {
     members = {};
     deletedGroups = [];
+    surfaceOwner = null;
     put(BROWSER, CALLER, 'g1');
     put(BROWSER, SAME_TENANT, 'g1');
     put(BROWSER, OTHER_TENANT, 'g1');
@@ -342,11 +377,6 @@ describe('AccountSwitchService.list / switchTo / remove', () => {
     const prisma: any = {
       user: {
         findUnique: vi.fn(({ where }: any) => USERS[where.id] ?? null),
-        findMany: vi.fn(({ where }: any) =>
-          where.id.in
-            .map((id: string) => USERS[id])
-            .filter((u: any) => u && u.tenantId === where.tenantId),
-        ),
       },
       linkedAccountMember: memberDelegate,
       linkedAccountGroup: {
@@ -372,12 +402,55 @@ describe('AccountSwitchService.list / switchTo / remove', () => {
 
     service = new AccountSwitchService(
       prisma,
-      {
-        findUserForSession: vi.fn(async (id: string) => USERS[id] ?? null),
-        switchSession,
-      } as any,
+      { switchSession } as any,
       { revokeSessionsForUserInScope: revokeInScope } as any,
+      {
+        surface: () => null,
+        admissibleUsers: vi.fn(async (ids: string[]) =>
+          ids.map((id) => USERS[id]).filter(admits),
+        ),
+        admissibleUser: vi.fn(async (id: string) => (admits(USERS[id]) ? USERS[id] : null)),
+      } as any,
     );
+  });
+
+  describe("on a reseller's domain, for its owner (F-061-g)", () => {
+    beforeEach(() => {
+      surfaceOwner = OWNER;
+      put(BROWSER, OWNER, 'g1');
+    });
+
+    it("lists the reseller's accounts, never the owner's other platform ones", async () => {
+      const res: any = await service.list(BROWSER, OWNER);
+
+      expect(res.data.current.userId).toBe(OWNER);
+      // OTHER_TENANT is in the owner's own tenant, but this door would refuse
+      // it on the next request (ADR-0059 (1)), so it is not offered here.
+      expect(res.data.members.map((m: any) => m.userId)).toEqual([CALLER, SAME_TENANT]);
+    });
+
+    it('switches the owner to a reseller account, and back', async () => {
+      const there: any = await service.switchTo(BROWSER, OWNER, SESSION, CALLER, '', 'ua');
+      const back: any = await service.switchTo(BROWSER, CALLER, SESSION, OWNER, '', 'ua');
+
+      expect(there.ok).toBe(true);
+      expect(back.ok).toBe(true);
+      expect(switchSession).toHaveBeenLastCalledWith(
+        SESSION,
+        CALLER,
+        expect.objectContaining({ id: OWNER }),
+        '',
+        'ua',
+        BROWSER,
+      );
+    });
+
+    it("refuses the owner's switch to another platform account here", async () => {
+      const res: any = await service.switchTo(BROWSER, OWNER, SESSION, OTHER_TENANT, '', 'ua');
+
+      expect(res.msg).toBe('accountSwitch.notAMember');
+      expect(switchSession).not.toHaveBeenCalled();
+    });
   });
 
   it('lists the caller apart from the members, phone masked', async () => {

@@ -8,8 +8,16 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { normalizeMessengerPhone } from './bot-link.service';
 import { AuthService } from '../auth.service';
 import { botScopeKey, SwitchScope } from '../../common/security/switch-scope';
-import { TenantContext } from '../../tenant-context/tenant-context';
+import { TenantContext, runWithTenant } from '../../tenant-context/tenant-context';
 import { BackendI18nKeys } from '@txnet-backend/shared-core';
+import { SurfaceOwnerService } from '../surface-owner/surface-owner.service';
+
+/** What a session's access token is signed from: the role and its permissions. */
+const WITH_ROLE = {
+  role: {
+    include: { rolePermissions: { include: { permission: true } } },
+  },
+} as const;
 
 /**
  * Signing in with the messenger account itself (ADR-0012).
@@ -84,6 +92,7 @@ export class BotSessionService {
     private readonly prisma: PrismaService,
     private readonly auth: AuthService,
     private readonly bots: BotClientRegistry,
+    private readonly surfaceOwners: SurfaceOwnerService,
   ) {}
 
   /**
@@ -103,6 +112,12 @@ export class BotSessionService {
    * - **No contact card.** A Mini App has no way to ask for one, so a chat
    *   that has never shared its number gets `needsContact` and is sent back to
    *   the conversation, where that question already has a screen.
+   * - **The door decides, not the ambient tenant** (F-061-g). A reseller's
+   *   owner may already hold a session on their domain, which scopes the
+   *   request to their own tenant (ADR-0059); the bot that signed `initData`
+   *   and the links to look in are still the door's. When the door's tenant
+   *   holds no link for this messenger account, its owner's own
+   *   contact-verified link is the proof, and they sign in in their tenant.
    * - **The scope is the chat's** (ADR-0032), taken from the same verified
    *   `initData` and never from the webview's `device_id` cookie. The Mini App
    *   is not another place with another audience: it is the chat, opened as a
@@ -114,10 +129,9 @@ export class BotSessionService {
     input: { platform: BotPlatform; initData: string },
     observed: ObservedDevice,
   ): Promise<BotSessionOutcome> {
-    const integration = await this.bots.primaryFor(
-      TenantContext.current('a mini app session').id,
-      input.platform,
-    );
+    const door =
+      this.surfaceOwners.surface() ?? TenantContext.current('a mini app session');
+    const integration = await this.bots.primaryFor(door.id, input.platform);
     const verified = integration
       ? await this.bots.verifyWebAppInitData(integration, input.initData)
       : ({ ok: false, reason: 'malformed' } as const);
@@ -131,12 +145,31 @@ export class BotSessionService {
       return { state: 'refused', key: BackendI18nKeys.errors.auth.invalidCredentials };
     }
 
-    const chatId = verified.data.user.id;
-    return this.authenticate(
-      { platform: input.platform, chatId },
-      observed,
-      botScopeKey(input.platform, chatId),
-    );
+    const chat = { platform: input.platform, chatId: verified.data.user.id };
+    const scope = botScopeKey(door.id, chat.platform, chat.chatId);
+    return runWithTenant(door, async () => {
+      const linked = await this.linkedUser(chat.platform, chat.chatId);
+      if (linked) return this.signIn(linked, chat, observed, scope);
+
+      const owner = await this.surfaceOwners.ownerMatching(
+        {
+          linkedBotAccounts: {
+            some: {
+              platform: chat.platform,
+              platformUserId: chat.chatId,
+              contactVerifiedAt: { not: null },
+            },
+          },
+        },
+        WITH_ROLE,
+      );
+      if (owner) {
+        return runWithTenant(owner.scope, () =>
+          this.signIn(owner.user, chat, observed, scope),
+        );
+      }
+      return { state: 'needsContact' } as const;
+    });
   }
 
   /**
@@ -164,6 +197,31 @@ export class BotSessionService {
     if (user === 'needsContact') return { state: 'needsContact' };
     if (typeof user === 'string') return { state: 'refused', key: user };
 
+    // The scope is derived from the input rather than from the request
+    // headers (ADR-0015): this call already names the chat it is signing in,
+    // and that is exactly the switch scope. Reading `x-bot-platform` here
+    // instead would make a one-tap sign-in depend on a header that says the
+    // same thing the body already does. `authenticateWebApp` lands on the
+    // same key for the chat its signature names (ADR-0032), so the Mini App
+    // and the chat share one group.
+    const door =
+      this.surfaceOwners.surface() ?? TenantContext.current('a bot session');
+    return this.signIn(
+      user,
+      input,
+      observed,
+      scope ?? botScopeKey(door.id, input.platform, input.chatId),
+    );
+  }
+
+  /** A proven account's own conditions, then the session — in its tenant. */
+  private async signIn(
+    user: any,
+    input: { platform: BotPlatform; chatId: string },
+    observed: ObservedDevice,
+    scope: SwitchScope,
+  ): Promise<BotSessionOutcome> {
+
     // The same order password login answers in (invariant #12): nothing about
     // an account is said before the caller has proven anything. Here the proof
     // came first, so these are simply the account's own conditions.
@@ -184,23 +242,13 @@ export class BotSessionService {
     // Only an *implicit* sign-in consults it — here, where the messenger link
     // is the credential (ADR-0012) and the caller named no account. A password
     // login names its account and is never redirected.
-    const acting = await this.actingAs(
-      scope ?? botScopeKey(input.platform, input.chatId),
-      user.id,
-    );
+    const acting = await this.actingAs(scope, user.id);
 
-    // The scope is derived from the input rather than from the request
-    // headers (ADR-0015): this call already names the chat it is signing in,
-    // and that is exactly the switch scope. Reading `x-bot-platform` here
-    // instead would make a one-tap sign-in depend on a header that says the
-    // same thing the body already does. Both callers land on the same key —
-    // `authenticateWebApp` passes the chat named by the signature it just
-    // verified (ADR-0032), so the Mini App and the chat share one group.
     const tokens = await this.auth.createSessionForUser(
       acting ?? user,
       observed?.ip ?? null,
       observed?.userAgent ?? null,
-      scope ?? botScopeKey(input.platform, input.chatId),
+      scope,
       MESSENGER_DEVICE_LABEL[input.platform],
     );
     return { state: 'authenticated', tokens };
@@ -217,7 +265,9 @@ export class BotSessionService {
    * - the pointer must name someone still in that same group here — an
    *   `F-0208` removal leaves the pointer behind on purpose (it is not a
    *   membership record), so a stale one must resolve to nothing;
-   * - the target must load and pass the same conditions any sign-in applies.
+   * - the target must load and pass the same conditions any sign-in applies,
+   *   and be an account this door admits — on a reseller's Mini App that is
+   *   its own accounts and its owner (ADR-0059 (1), F-061-g).
    *
    * Any of them failing falls back to the linked account, which is exactly
    * ADR-0014's behaviour and never an error: "this place has not switched, or
@@ -237,14 +287,7 @@ export class BotSessionService {
     });
     if (!stillAMember) return null;
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: target },
-      include: {
-        role: {
-          include: { rolePermissions: { include: { permission: true } } },
-        },
-      },
-    });
+    const user = await this.surfaceOwners.admissibleUser(target, WITH_ROLE);
     if (!user || user.deletedAt || user.status !== 'active') return null;
     if (!user.phoneVerifiedAt) return null;
     if (!BOT_SESSION_ROLES.includes(user.role?.name)) return null;

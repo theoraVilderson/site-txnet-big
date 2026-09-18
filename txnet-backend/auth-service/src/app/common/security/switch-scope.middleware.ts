@@ -25,8 +25,9 @@ import { readCookie } from '../http/cookies';
  * A bot call gets no cookie: the chat is already a durable identifier, and
  * `bot-service` speaks for many chats over one connection.
  *
- * Ordering: this reads what `ServiceCallerMiddleware` decided, so it is
- * registered after it in `app.module.ts`.
+ * Ordering: this reads what `ServiceCallerMiddleware` decided and, for a chat,
+ * the tenant `TenantMiddleware` resolved (F-061-g), so it is registered after
+ * both in `app.module.ts`.
  */
 @Injectable()
 export class SwitchScopeMiddleware implements NestMiddleware {

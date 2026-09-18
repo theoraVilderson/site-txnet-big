@@ -62,7 +62,7 @@ export class AuthGuard implements CanActivate {
 
     // ADR-0032: for an authenticated call the scope is the one stamped on the
     // session, not the one `SwitchScopeMiddleware` re-derived from the request.
-    // That is what lets a Mini App session minted under `bot:<platform>:<chat>`
+    // That is what lets a Mini App session minted under `bot:<tenantId>:<platform>:<chat>`
     // still see the chat's group when it calls `/auth/accounts` carrying only a
     // `device_id` cookie. A session with no stamp keeps the request's answer,
     // so nothing minted before this shipped changes behaviour.
