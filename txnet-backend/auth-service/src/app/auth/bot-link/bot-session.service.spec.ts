@@ -159,9 +159,11 @@ describe('BotSessionService', () => {
     // not a `user_id` other than its owner's.
     const { service, prisma } = harness({ byPhone: linkedUser });
 
-    const outcome = await service.authenticate(
-      { ...ctx, contact: { phone_number: '+989121112233', user_id: 99 } },
-      null,
+    const outcome = await inTenant(() =>
+      service.authenticate(
+        { ...ctx, contact: { phone_number: '+989121112233', user_id: 99 } },
+        null,
+      ),
     );
 
     expect(outcome).toEqual({
@@ -350,6 +352,97 @@ describe("BotSessionService.authenticateWebApp — the reseller's owner", () => 
         service.authenticateWebApp(webApp, { ip: '', userAgent: 'Mozilla/5.0' }),
       ),
     ).toEqual({ state: 'needsContact' });
+    expect(auth.createSessionForUser).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * F-061-i, ADR-0059 (6): the reseller's own bot chat is a door like its
+ * domain. The owner's account and link live in their own tenant, so without
+ * this the chat answered `needsContact` and then `noAccount` — the dead end a
+ * Mini App's `needsContact` sent them to.
+ */
+describe("BotSessionService.authenticate — the reseller's owner in their bot's chat", () => {
+  const DOOR = { id: 'tenant-reseller', slug: 'arian-vpn', via: 'bot' } as const;
+  const OWNER_SCOPE = {
+    id: 'tenant-platform',
+    slug: 'platform_owner',
+    via: 'session',
+    brand: { id: DOOR.id, slug: DOOR.slug },
+  } as const;
+  const owner = { ...linkedUser, id: 'u-owner', tenantId: 'tenant-platform' };
+  const card = { user_id: 42, phone_number: '+989121234567' };
+
+  function mintedIn(auth: any) {
+    const seen: unknown[] = [];
+    auth.createSessionForUser.mockImplementation(async () => {
+      seen.push(TenantContext.currentOrNull());
+      return { accessToken: 'a', refreshToken: 'r', expiresIn: 900 };
+    });
+    return seen;
+  }
+
+  it("signs in the owner through their own link when the bot's tenant has none", async () => {
+    const { service, auth, surfaceOwners } = harness();
+    surfaceOwners.ownerMatching.mockResolvedValue({ user: owner, scope: OWNER_SCOPE });
+    const seen = mintedIn(auth);
+
+    const outcome = await runWithTenant(DOOR, () => service.authenticate(ctx, null));
+
+    expect(outcome).toMatchObject({ state: 'authenticated' });
+    expect(surfaceOwners.ownerMatching).toHaveBeenCalledWith(
+      {
+        linkedBotAccounts: {
+          some: { platform: 'telegram', platformUserId: '5501', contactVerifiedAt: { not: null } },
+        },
+      },
+      expect.anything(),
+    );
+    expect(auth.createSessionForUser.mock.calls[0][3]).toBe('bot:tenant-reseller:telegram:5501');
+    expect(seen).toEqual([OWNER_SCOPE]);
+  });
+
+  it("links the owner's card in their own tenant, then signs them in", async () => {
+    const { service, auth, prisma, surfaceOwners } = harness();
+    surfaceOwners.ownerMatching
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ user: owner, scope: OWNER_SCOPE });
+    let linkedIn: unknown;
+    prisma.linkedBotAccount.upsert.mockImplementation(async () => {
+      linkedIn = TenantContext.currentOrNull();
+    });
+    const seen = mintedIn(auth);
+
+    const outcome = await runWithTenant(DOOR, () =>
+      service.authenticate({ ...ctx, contact: card }, null),
+    );
+
+    expect(outcome).toMatchObject({ state: 'authenticated' });
+    // The reseller's own accounts are asked first; only then the owner, by number.
+    expect(prisma.user.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { phoneNumber: '+989121234567', deletedAt: null } }),
+    );
+    expect(surfaceOwners.ownerMatching).toHaveBeenLastCalledWith(
+      { phoneNumber: '+989121234567', deletedAt: null },
+      expect.anything(),
+    );
+    expect(linkedIn).toEqual(OWNER_SCOPE);
+    expect(prisma.linkedBotAccount.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId_platform: { userId: 'u-owner', platform: 'telegram' } },
+        create: expect.objectContaining({ tenantId: 'tenant-platform', platformUserId: '5501' }),
+      }),
+    );
+    expect(seen).toEqual([OWNER_SCOPE]);
+  });
+
+  it('still answers noAccount for a card that is neither theirs nor the owner\'s', async () => {
+    const { service, auth, prisma } = harness();
+
+    expect(
+      await runWithTenant(DOOR, () => service.authenticate({ ...ctx, contact: card }, null)),
+    ).toEqual({ state: 'refused', key: expect.stringContaining('noAccount') });
+    expect(prisma.linkedBotAccount.upsert).not.toHaveBeenCalled();
     expect(auth.createSessionForUser).not.toHaveBeenCalled();
   });
 });

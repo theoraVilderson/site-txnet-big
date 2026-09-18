@@ -151,18 +151,7 @@ export class BotSessionService {
       const linked = await this.linkedUser(chat.platform, chat.chatId);
       if (linked) return this.signIn(linked, chat, observed, scope);
 
-      const owner = await this.surfaceOwners.ownerMatching(
-        {
-          linkedBotAccounts: {
-            some: {
-              platform: chat.platform,
-              platformUserId: chat.chatId,
-              contactVerifiedAt: { not: null },
-            },
-          },
-        },
-        WITH_ROLE,
-      );
+      const owner = await this.ownerLinkedTo(chat.platform, chat.chatId);
       if (owner) {
         return runWithTenant(owner.scope, () =>
           this.signIn(owner.user, chat, observed, scope),
@@ -180,6 +169,10 @@ export class BotSessionService {
    * App, where the caller actually is a browser (F-048). Either way the
    * session is labelled with the messenger it came from, because that is the
    * one true thing about the device on both paths.
+   *
+   * A reseller's bot is a door like its domain (ADR-0059 (6), F-061-i): when
+   * its tenant holds no account for this chat, its owner's own link — or
+   * their contact card, linked in their own tenant — signs them in there.
    */
   async authenticate(
     input: {
@@ -191,12 +184,6 @@ export class BotSessionService {
     observed: ObservedDevice,
     scope?: SwitchScope | null,
   ): Promise<BotSessionOutcome> {
-    const linked = await this.linkedUser(input.platform, input.chatId);
-    const user = linked ?? (await this.linkNow(input));
-
-    if (user === 'needsContact') return { state: 'needsContact' };
-    if (typeof user === 'string') return { state: 'refused', key: user };
-
     // The scope is derived from the input rather than from the request
     // headers (ADR-0015): this call already names the chat it is signing in,
     // and that is exactly the switch scope. Reading `x-bot-platform` here
@@ -206,11 +193,31 @@ export class BotSessionService {
     // and the chat share one group.
     const door =
       this.surfaceOwners.surface() ?? TenantContext.current('a bot session');
-    return this.signIn(
-      user,
-      input,
-      observed,
-      scope ?? botScopeKey(door.id, input.platform, input.chatId),
+    const place = scope ?? botScopeKey(door.id, input.platform, input.chatId);
+    return runWithTenant(door, async () => {
+      const linked = await this.linkedUser(input.platform, input.chatId);
+      if (linked) return this.signIn(linked, input, observed, place);
+
+      const proven =
+        (await this.ownerLinkedTo(input.platform, input.chatId)) ??
+        (await this.linkNow(input));
+      if (proven === 'needsContact') return { state: 'needsContact' } as const;
+      if (typeof proven === 'string') return { state: 'refused', key: proven } as const;
+      return runWithTenant(proven.scope, () =>
+        this.signIn(proven.user, input, observed, place),
+      );
+    });
+  }
+
+  /** The door's owner, when this messenger account is their proven link. */
+  private ownerLinkedTo(platform: BotPlatform, chatId: string) {
+    return this.surfaceOwners.ownerMatching(
+      {
+        linkedBotAccounts: {
+          some: { platform, platformUserId: chatId, contactVerifiedAt: { not: null } },
+        },
+      },
+      WITH_ROLE,
     );
   }
 
@@ -343,19 +350,31 @@ export class BotSessionService {
     const phoneNumber = normalizeMessengerPhone(contact.phone_number);
     if (!phoneNumber) return BackendI18nKeys.errors.otp.botLink.phoneMismatch;
 
-    const user = await this.prisma.user.findFirst({
+    // The door's own accounts first; then its owner, whose link is written in
+    // their own tenant — one link per person per messenger (ADR-0059 (6)).
+    const own = await this.prisma.user.findFirst({
       where: { phoneNumber, deletedAt: null },
-      include: {
-        role: {
-          include: { rolePermissions: { include: { permission: true } } },
-        },
-      },
+      include: WITH_ROLE,
     });
+    const found = own
+      ? { user: own, scope: TenantContext.current('a bot link') }
+      : await this.surfaceOwners.ownerMatching({ phoneNumber, deletedAt: null }, WITH_ROLE);
     // Saying "no account" here reveals nothing: the sender has just proven
     // this number is theirs, so they could establish the same by trying to
     // register with it. `BotLinkService.handleContact` answers the same way
     // for the same reason.
-    if (!user) return BackendI18nKeys.errors.otp.botLink.noAccount;
+    if (!found) return BackendI18nKeys.errors.otp.botLink.noAccount;
+    return runWithTenant(found.scope, () =>
+      this.writeLink(found.user as any, platform, chatId, phoneNumber),
+    );
+  }
+
+  private async writeLink(
+    user: { id: string },
+    platform: BotPlatform,
+    chatId: string,
+    phoneNumber: string,
+  ) {
 
     // One messenger account, one platform account.
     const takenBySomeoneElse = await this.prisma.linkedBotAccount.findFirst({
@@ -380,6 +399,6 @@ export class BotSessionService {
         contactVerifiedAt: new Date(),
       },
     });
-    return user;
+    return { user, scope: TenantContext.current('a bot link') };
   }
 }

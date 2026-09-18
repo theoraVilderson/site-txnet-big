@@ -55,9 +55,11 @@ function memoryCache() {
 
 function resolver(rows: Record<string, DomainRow>) {
   const findUnique = vi.fn(async ({ where }: any) => rows[where.domainValue] ?? null);
-  const tenantById = vi.fn(
-    async ({ where }: any) => KNOWN.find((t) => t.id === where.id) ?? null,
-  );
+  const tenantById = vi.fn(async ({ where, select }: any) => {
+    const tenant = KNOWN.find((t) => t.id === where.id);
+    if (!tenant || !select?.ownerUserId) return tenant ?? null;
+    return { ...tenant, ownerUserId: tenant.id === DOMAIN_TENANT.id ? OWNER : null };
+  });
   const prisma = {
     tenantDomain: { findUnique },
     tenant: { findUnique: tenantById },
@@ -229,11 +231,22 @@ describe('TenantResolverService — the claim chain', () => {
     ).resolves.toEqual({ ...OTHER_TENANT, via: 'bot' });
   });
 
-  it('prefers the session claim to the bot claim', async () => {
+  it('refuses a session whose tenant is not the bot it came through', async () => {
+    // A bot claim is a door like a host (ADR-0059 (6)): it used to be ignored
+    // whenever a session claim was present, which served the session's tenant
+    // through another tenant's bot without anyone deciding to.
     const { service } = resolver({});
 
     await expect(
-      service.resolve({ session: DOMAIN_TENANT.id, bot: OTHER_TENANT.id }),
+      service.resolve({ session: DOMAIN_TENANT.id, bot: OTHER_TENANT.id, sessionUser: 'user-bob' }),
+    ).rejects.toBeInstanceOf(TenantClaimConflict);
+  });
+
+  it('lets a session answer through its own tenant\'s bot', async () => {
+    const { service } = resolver({});
+
+    await expect(
+      service.resolve({ session: DOMAIN_TENANT.id, bot: DOMAIN_TENANT.id }),
     ).resolves.toEqual({ ...DOMAIN_TENANT, via: 'session' });
   });
 
@@ -311,6 +324,22 @@ describe("TenantResolverService — the surface tenant's owner (ADR-0059)", () =
 
     await expect(
       service.resolve({ host: 'myvpn.com', bot: PLATFORM_TENANT.id, sessionUser: OWNER }),
+    ).rejects.toBeInstanceOf(TenantClaimConflict);
+  });
+
+  it("admits the owner's own session through their reseller's bot, branded by it (ADR-0059 (6))", async () => {
+    const { service } = resolver({});
+
+    await expect(
+      service.resolve({ session: PLATFORM_TENANT.id, bot: DOMAIN_TENANT.id, sessionUser: OWNER }),
+    ).resolves.toEqual({ ...PLATFORM_TENANT, via: 'session', brand: DOMAIN_TENANT });
+  });
+
+  it('refuses any other account through that bot', async () => {
+    const { service } = resolver({});
+
+    await expect(
+      service.resolve({ session: PLATFORM_TENANT.id, bot: DOMAIN_TENANT.id, sessionUser: 'user-bob' }),
     ).rejects.toBeInstanceOf(TenantClaimConflict);
   });
 

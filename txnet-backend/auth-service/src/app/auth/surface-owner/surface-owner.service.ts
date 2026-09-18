@@ -23,7 +23,7 @@ export class SurfaceOwnerService {
   /**
    * The surface tenant's owner, when `where` names them, together with the
    * scope the rest of the sign-in runs in: the owner's own tenant, branded by
-   * the surface. `null` when there is no panel surface, no owner, or the
+   * the surface. `null` when there is no panel or bot door, no owner, or the
    * identifier is someone else's.
    */
   async ownerMatching(
@@ -31,9 +31,10 @@ export class SurfaceOwnerService {
     include: Prisma.UserInclude,
   ): Promise<{ user: { id: string; tenantId: string }; scope: ResolvedTenant } | null> {
     const surface = TenantContext.currentOrNull();
-    if (!surface || surface.via !== 'domain' || surface.surfacePurpose !== 'panel') {
-      return null;
-    }
+    // Only before anyone has signed in: the door's own host or bot claim
+    // answered, not a session (which would already be in its own tenant).
+    const unsigned = surface?.via === 'domain' || surface?.via === 'bot';
+    if (!surface || !unsigned || !isDoor(surface)) return null;
     const ownerUserId = await this.ownerOf(surface);
     if (!ownerUserId) return null;
 
@@ -50,7 +51,7 @@ export class SurfaceOwnerService {
         id: user.tenantId,
         slug,
         via: 'session',
-        surfacePurpose: surface.surfacePurpose,
+        ...(surface.surfacePurpose && { surfacePurpose: surface.surfacePurpose }),
         brand: { id: surface.id, slug: surface.slug },
       },
     };
@@ -60,22 +61,28 @@ export class SurfaceOwnerService {
 
   /**
    * The door this request came through, as a scope of its own: the tenant
-   * whose domain or bot it is. On a `panel` surface that is the brand when the
-   * request runs in its owner's tenant, and always `via: 'domain'`, so a
-   * lookup run inside it may still fall back to the owner (`ownerMatching`).
-   * Anything that is not a panel door — a bot call, no surface — is the
+   * whose domain or bot it is — the brand when the request runs in its
+   * owner's tenant, so a lookup run inside it may still fall back to the owner
+   * (`ownerMatching`). A panel door is `via: 'domain'`; a bot's, reached with
+   * the owner's session (ADR-0059 (6)), is `via: 'bot'`. Anything else is the
    * ambient tenant unchanged.
    */
   surface(): ResolvedTenant | null {
     const current = TenantContext.currentOrNull();
-    if (!current || current.surfacePurpose !== 'panel') return current;
-    const door = current.brand ?? current;
-    return { id: door.id, slug: door.slug, via: 'domain', surfacePurpose: 'panel' };
+    if (!current) return null;
+    if (current.surfacePurpose === 'panel') {
+      const door = current.brand ?? current;
+      return { id: door.id, slug: door.slug, via: 'domain', surfacePurpose: 'panel' };
+    }
+    if (current.brand && !current.surfacePurpose) {
+      return { id: current.brand.id, slug: current.brand.slug, via: 'bot' };
+    }
+    return current;
   }
 
   /**
-   * The live accounts among `ids` that this door admits (ADR-0059 (1)): its
-   * own tenant's, and on a panel its owner. What account switching may list —
+   * The live accounts among `ids` that this door admits (ADR-0059 (1), (6)):
+   * its own tenant's, and on a panel or a bot its owner. What account switching may list —
    * a member outside this set would be refused on its first request here.
    */
   async admissibleUsers<S extends Prisma.UserSelect>(ids: string[], select: S) {
@@ -102,13 +109,23 @@ export class SurfaceOwnerService {
     return [{ tenantId: door.id }, ...(owner ? [{ id: owner }] : [])];
   }
 
-  /** The owner a panel door admits besides its own tenant; none elsewhere. */
+  /** The owner a panel or bot door admits besides its own tenant; none elsewhere. */
   private async ownerOf(door: ResolvedTenant): Promise<string | null> {
-    if (door.surfacePurpose !== 'panel') return null;
+    if (!isDoor(door)) return null;
     const tenant = await this.all.tenant.findUnique({
       where: { id: door.id },
       select: { ownerUserId: true },
     });
     return tenant?.ownerUserId ?? null;
   }
+}
+
+/**
+ * A door that admits its tenant's owner: a `panel` surface, or a bot's chat —
+ * a verified service caller's claim with no host row behind it (ADR-0059 (6)).
+ * A subscription or assets host is neither.
+ */
+function isDoor(tenant: ResolvedTenant): boolean {
+  if (tenant.surfacePurpose) return tenant.surfacePurpose === 'panel';
+  return tenant.via === 'bot';
 }

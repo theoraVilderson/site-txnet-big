@@ -6,7 +6,7 @@ updated: 2026-09-18
 
 # ADR 0059 — A tenant's owner signs in on its domain with their own account
 
-- **Status:** accepted 2026-09-18 with F-061-c (user)
+- **Status:** accepted 2026-09-18 with F-061-c (user); (6) added with F-061-i (user, 2026-09-18)
 - **Date:** 2026-09-18
 - **Affects units:** identity, tenant, auth-api, audit, forward-auth
 - **Amends:** ADR-0024 decision 4; ADR-0015's bot key (by (5), F-061-g)
@@ -58,6 +58,17 @@ auth-service's resolver.
    `bot:<tenantId>:<platform>:<chatId>`: a private chat id is the person's id
    with every bot, so the platform chat's group and acting-as pointer would
    otherwise follow the owner into their reseller's Mini App.
+6. **A reseller's bot is a door like its domain** (F-061-i, user 2026-09-18).
+   The chat session (`/auth/bots/session`) admits the bot tenant's owner as (1)
+   does: when the bot's tenant holds no account for the chat, the owner's own
+   contact-verified link — or their contact card, looked up by number after
+   the tenant's own accounts — signs them in, in their own tenant. The link is
+   written there: one `linked_bot_account` per person per messenger, so linking
+   in the reseller's bot links the platform's too. On later calls the resolver
+   treats the bot claim as it treats a host: a session that disagrees with it
+   is `403 tenant.claimMismatch` unless it is that tenant's owner's, scoped to
+   their own tenant with `brand` = the bot's. It used to prefer the session
+   silently, which is ADR-0024 (4)'s leak through a different door.
 
 ## Alternatives
 

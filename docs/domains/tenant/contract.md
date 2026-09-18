@@ -65,7 +65,8 @@ The chain, in order:
 2. **A claim outranks the surface**, and `via` says which answered — `session`,
    `bot`, or `domain` when there was no claim. A claim is still proven against a
    real `tenant` row, so a token outliving its tenant resolves to `null` rather
-   than to an id nobody owns.
+   than to an id nobody owns. A session and a bot claim that disagree are never
+   resolved by preferring the session: the bot is a door (ADR-0059 (6), F-061-i).
 3. **A claim and a surface that disagree are refused**, not reconciled:
    `TenantClaimConflict` (ADR-0024 decision 4). This closes the leak ADR-0024
    records — a tenant-A session presented on tenant-B's host used to resolve to
@@ -84,7 +85,7 @@ tenant on the request and the order is what keeps the two cases apart:
 
 | the request | answer | what the client can tell |
 |---|---|---|
-| claim disagrees with surface | `403 tenant.claimMismatch` — **except** the surface tenant's owner on a `panel` surface with their own session (ADR-0059): scoped to the session's tenant, `brand` = the surface | that this session does not belong here — never which tenant does |
+| claim disagrees with surface, or a session with the bot it came through | `403 tenant.claimMismatch` — **except** the surface's (or bot's) tenant's owner on a `panel` surface or through its bot, with their own session (ADR-0059 (1), (6)): scoped to the session's tenant, `brand` = the surface or bot | that this session does not belong here — never which tenant does |
 | resolved to no tenant | **neutral `404`** | nothing. `system.notFound`, byte-identical to an unmatched route |
 
 The 404 is neutral by construction rather than by wording: the guard throws a

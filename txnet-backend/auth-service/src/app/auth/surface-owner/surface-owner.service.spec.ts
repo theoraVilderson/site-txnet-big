@@ -64,6 +64,20 @@ describe('SurfaceOwnerService.ownerMatching', () => {
     ).toBeNull();
   });
 
+  it("finds the bot tenant's owner on a chat's door too (ADR-0059 (6))", async () => {
+    const { service } = harness();
+    const bot = { id: RESELLER.id, slug: RESELLER.slug, via: 'bot' } as const;
+
+    const found = await runWithTenant(bot as never, () => service.ownerMatching(WHERE, INCLUDE));
+
+    expect(found?.scope).toEqual({
+      id: 'tenant-platform',
+      slug: 'platform_owner',
+      via: 'session',
+      brand: { id: RESELLER.id, slug: RESELLER.slug },
+    });
+  });
+
   it('answers null outside a resolved surface, reading nothing', async () => {
     const { service, all } = harness();
 
@@ -115,6 +129,17 @@ describe('SurfaceOwnerService — the surface and who it admits', () => {
     });
   });
 
+  it("is the bot's door when the owner's session came through it", () => {
+    const { service } = readHarness();
+    const throughBot = { ...OWNER_SCOPE, surfacePurpose: undefined };
+
+    expect(runWithTenant(throughBot as never, () => service.surface())).toEqual({
+      id: RESELLER.id,
+      slug: RESELLER.slug,
+      via: 'bot',
+    });
+  });
+
   it('is the tenant itself for a customer of the surface, and for a bot', () => {
     const { service } = readHarness();
     const customer = { ...RESELLER, via: 'session' } as const;
@@ -143,11 +168,23 @@ describe('SurfaceOwnerService — the surface and who it admits', () => {
     });
   });
 
-  it('admits only its own accounts on a door that is not a panel', async () => {
+  it("admits a bot's own accounts and its owner (ADR-0059 (6))", async () => {
     const { service, all } = readHarness();
     const bot = { id: 'tenant-reseller', slug: 'arian-vpn', via: 'bot' } as const;
 
     await runWithTenant(bot as never, () => service.admissibleUser('a', { role: true }));
+
+    expect(all.user.findFirst).toHaveBeenCalledWith({
+      where: { id: 'a', OR: [{ tenantId: 'tenant-reseller' }, { id: 'user-ali' }] },
+      include: { role: true },
+    });
+  });
+
+  it('admits only its own accounts on a door that is neither a panel nor a bot', async () => {
+    const { service, all } = readHarness();
+    const sub = { ...RESELLER, surfacePurpose: 'subscription' } as const;
+
+    await runWithTenant(sub as never, () => service.admissibleUser('a', { role: true }));
 
     expect(all.tenant.findUnique).not.toHaveBeenCalled();
     expect(all.user.findFirst).toHaveBeenCalledWith({

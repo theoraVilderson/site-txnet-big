@@ -67,6 +67,18 @@ export class TenantResolverService {
       return this.answer(surface, 'domain');
     }
 
+    // A bot claim is a door too (ADR-0059 (6)): a session presented through
+    // another tenant's bot is refused unless it is that tenant's owner's, and
+    // is never simply preferred to it.
+    if (claim.session && claim.bot && claim.session !== claim.bot) {
+      const owner = await this.throughBot(claim.bot, claim.session, claim.sessionUser);
+      if (!surface) return owner;
+      if (surface.id !== claim.bot) {
+        throw new TenantClaimConflict(claim.bot, this.answer(surface, 'domain'));
+      }
+      // The host is the bot's own tenant's: it decides as for any session.
+    }
+
     const via = claim.session ? 'session' : 'bot';
     if (surface) {
       if (surface.id !== claimed) {
@@ -116,6 +128,33 @@ export class TenantResolverService {
       surfacePurpose: surface.purpose,
       brand: { id: surface.id, slug: surface.slug },
     };
+  }
+
+  /**
+   * ADR-0059 (6): the bot's tenant's owner, chatting with that tenant's bot in
+   * their own session — scoped to their own tenant, branded by the bot's. Any
+   * other session is a conflict. Read uncached: it runs only on a mismatch,
+   * and `ownerUserId` is not what the id cache holds.
+   */
+  private async throughBot(
+    botTenantId: string,
+    sessionTenantId: string,
+    userId: string | null | undefined,
+  ): Promise<ResolvedTenant> {
+    const door = await this.prisma.tenant.findUnique({
+      where: { id: botTenantId },
+      select: { id: true, slug: true, ownerUserId: true },
+    });
+    const own =
+      door && userId && door.ownerUserId === userId ? await this.byId(sessionTenantId) : null;
+    if (!door || !own) {
+      throw new TenantClaimConflict(sessionTenantId, {
+        id: botTenantId,
+        slug: door?.slug ?? '',
+        via: 'bot',
+      });
+    }
+    return { ...own, via: 'session', brand: { id: door.id, slug: door.slug } };
   }
 
   private answer(surface: Surface, via: 'domain' | 'session' | 'bot'): ResolvedTenant {
