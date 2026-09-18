@@ -34,6 +34,7 @@ needs to move up that table.
 |---|---|---|
 | C-01 | Technical docs, code, commit messages and logs are in English. Existing Persian inline comments may stay; do not add new ones. | review |
 | C-02 | Money is base-currency `Decimal` only — never a second currency column, never written as a float. One exception: a payment's gateway receipt, `amountReceivedMinor` + `receivedCurrency` (D-32). Balances are ledger-derived; never write a balance field directly outside a ledger-append transaction. See ADR-0002. | review |
+| C-12 | A Nest route or middleware path names its wildcard: `'{*path}'`, `'internal/*path'`, `@Get('*key')`. A bare `*` — `forRoutes('*')`, `'internal/*'` — is a violation. | check |
 | C-11 | A backend app that opens a tenant scope (`runWithTenant(...)`) registers `TenantStatusGuard` as an `APP_GUARD`, so every route it serves obeys `TenantStatusPolicy`. See `docs/domains/tenant/rules.md`. | check |
 | C-10 | A panel route is a constant in `site-pwa/src/lib/routes.ts`. A path literal in `href=`, `redirect(` or `router.push/replace(` is a violation. | check |
 | C-09 | A closed set of wire values is declared once — a Prisma enum (`z.nativeEnum`) or an `as const` tuple beside its type — and a zod schema derives from it. A hand-written `z.enum([...])` is a violation (env validation excepted). | check |
@@ -406,4 +407,26 @@ when: \brunWithTenant\([^)]
 in: txnet-backend/*/src/**/*.ts
 except: txnet-backend/shared-core/**, txnet-backend/**/*.spec.ts
 message: register TenantStatusGuard as an APP_GUARD in this app (C-11) — a route here serves a tenant and no status judges it
+```
+
+## C-12 — a route wildcard has a name
+
+**Rule.** In `forRoutes(...)`, `exclude(...)`, a route decorator, or a
+`*_ROUTE(S)` / `*_PATH` constant, a wildcard is written the way
+path-to-regexp 8 (Express 5, Nest 11) reads it: `*name` for one or more
+segments, `{*name}` for zero or more. `forRoutes('{*path}')` is "every route".
+
+**Why.** Nest 11 still accepts the old bare `*`, but only by rewriting it at
+boot, with a `LegacyRouteConverter` warning. These patterns are where the
+identity, language and tenant middleware attach. If a release drops the
+rewrite, a bare `*` matches nothing, and the middleware stops running without
+an error: routes lose their identity check or their tenant scope. On
+2026-09-18, four services carried seven of them (fixed in `d621388` and
+`d9c917d`).
+
+```check C-12
+forbid: (?:\b(?:forRoutes|exclude)\(|@(?:Get|Post|Put|Patch|Delete|All|Options|Head|Controller)\(|\b[A-Z_]*(?:ROUTE|ROUTES|PATH)\s*=\s*)[^;]*['"`][^'"`\s]*(?<!\{)\*(?=['"`/])
+in: txnet-backend/*/src/**/*.ts
+except: txnet-backend/**/*.spec.ts
+message: name the wildcard (C-12) — `'{*path}'` for every route, `'prefix/*path'` under a prefix; a bare `*` is only auto-converted by Nest 11 and matches nothing once that stops
 ```
