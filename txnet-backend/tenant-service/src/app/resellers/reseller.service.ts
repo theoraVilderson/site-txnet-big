@@ -10,7 +10,7 @@ import {
   TenantType,
   UserStatus,
 } from '@prisma/client';
-import { UnscopedRedisKeys } from '@txnet-backend/shared-core';
+import { UnscopedRedisKeys, cnameTargetHost } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -99,7 +99,12 @@ export class ResellerService {
     await this.access(actor);
 
     const slug = input.slug;
-    const domainValue = `${slug}.${this.config.get<string>('DOMAIN_NAME')}`.toLowerCase();
+    const base = this.config.get<string>('DOMAIN_NAME');
+    const domainValue = `${slug}.${base}`.toLowerCase();
+    // The reseller's own CNAME target (ADR-0060 (6)): its custom domain points
+    // here, so a CDN that replaces the visitor's host with the target still
+    // sends a host that names this tenant. Unique because the slug is.
+    const cnameTarget = cnameTargetHost(slug, base);
     const [bySlug, byHost, person] = await Promise.all([
       this.all.tenant.findUnique({ where: { slug }, select: { id: true } }),
       this.all.tenantDomain.findUnique({ where: { domainValue }, select: { id: true } }),
@@ -128,14 +133,19 @@ export class ResellerService {
         // Empty: no balance is written here (tenant invariant 3).
         await tx.tenantBillingWallet.create({ data: { tenantId: tenant.id } });
         // A subdomain routes as it stands — the platform issued it (tenant invariant 5 is for custom domains).
-        const domain = await tx.tenantDomain.create({
-          data: {
-            tenantId: tenant.id,
-            domainType: TenantDomainType.subdomain,
-            domainValue,
-            purpose: TenantDomainPurpose.panel,
-          },
-        });
+        const domains = [];
+        for (const host of [domainValue, cnameTarget]) {
+          domains.push(
+            await tx.tenantDomain.create({
+              data: {
+                tenantId: tenant.id,
+                domainType: TenantDomainType.subdomain,
+                domainValue: host,
+                purpose: TenantDomainPurpose.panel,
+              },
+            }),
+          );
+        }
         const result: ResellerView = {
           id: tenant.id,
           slug: tenant.slug,
@@ -143,14 +153,12 @@ export class ResellerService {
           billingModel: tenant.billingModel,
           createdAt: tenant.createdAt,
           owner,
-          domains: [
-            {
-              domainValue: domain.domainValue,
-              domainType: domain.domainType,
-              purpose: domain.purpose,
-              verificationStatus: domain.verificationStatus,
-            },
-          ],
+          domains: domains.map((domain) => ({
+            domainValue: domain.domainValue,
+            domainType: domain.domainType,
+            purpose: domain.purpose,
+            verificationStatus: domain.verificationStatus,
+          })),
           billingBalance: '0',
         };
         await tx.adminAuditLog.create({
@@ -165,7 +173,9 @@ export class ResellerService {
           },
         });
         // `auth-service`'s resolver re-reads the row; `domainValue` is already normalized (lower case, no port).
-        await this.redis.del(UnscopedRedisKeys.tenantByHost(domainValue));
+        for (const host of [domainValue, cnameTarget]) {
+          await this.redis.del(UnscopedRedisKeys.tenantByHost(host));
+        }
         return result;
       });
       this.logger.log(`reseller ${view.id} (${slug}) created by ${actor.adminId}, owned by ${owner.id}`);

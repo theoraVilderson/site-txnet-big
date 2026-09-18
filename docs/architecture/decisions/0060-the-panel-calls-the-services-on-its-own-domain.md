@@ -44,6 +44,13 @@ domain, reaches every reseller's `<slug>.<domain>` panel as well.
    is left to lapse — a partition key, not a credential.
 5. **The platform's panel host is a `tenant_domain` row** (`panel.<domain>`,
    seeded next to `api.<domain>`).
+6. **Each reseller gets its own CNAME target, `<slug>.edge.<domain>`** (user,
+   2026-09-18), created with the reseller as a `panel` subdomain row. The
+   reseller CNAMEs its custom domain there. A CDN that keeps the visitor's host
+   resolves by the custom domain; one that forwards the target instead still
+   sends a host that names the tenant — a single shared target would name
+   none. `edge` is a reserved slug. A target is never a place a person is sent
+   (`isCnameTarget`, shared-core): billing's return address skips it.
 
 ## Alternatives
 
@@ -61,8 +68,9 @@ domain, reaches every reseller's `<slug>.<domain>` panel as well.
   Traefik change. How it becomes verified (a TXT record, then an http + https
   request answered through the CDN) is F-018-i.
 - Behind a CDN the client address is the CDN's; `trust proxy` and IP rate
-  limits read `X-Forwarded-For` as before. ASSUMED(2026-09-18): the CDN keeps
-  the visitor's `Host` — one that rewrites it resolves no tenant.
+  limits read `X-Forwarded-For` as before. A CDN that rewrites `Host` to the
+  CNAME target still resolves, by (6).
+- DNS: one wildcard record, `*.edge.<domain>`, pointing at the gateway.
 - Nobody is signed out by the switch: the old domain-wide cookie still reaches
   `panel.<domain>`, its first refresh answers with the host-only replacement,
   and the same response expires the old one.

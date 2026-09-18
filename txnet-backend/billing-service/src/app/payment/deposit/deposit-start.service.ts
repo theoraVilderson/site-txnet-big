@@ -9,7 +9,7 @@ import {
   TenantDomainType,
   WalletReasonType,
 } from '@prisma/client';
-import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import { TenantContext, isCnameTarget, tenantTransaction } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
 import type { EnvConfig } from '../../config/env.validation';
@@ -454,7 +454,9 @@ export class DepositStartService {
       // host: proven custom domains first, then alphabetically.
       orderBy: [{ domainType: 'desc' }, { domainValue: 'asc' }],
     });
-    const host = rows[0]?.domainValue;
+    // A CNAME target serves the panel only for a CDN that forwards it instead
+    // of the visitor's host (ADR-0060 (6)); no browser holds a cookie there.
+    const host = rows.find((r) => !isCnameTarget(r.domainValue, r.domainType))?.domainValue;
     return host ? `https://${host}${path}` : null;
   }
 }

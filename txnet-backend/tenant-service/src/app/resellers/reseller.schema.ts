@@ -14,10 +14,11 @@ const DNS_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
 /**
  * Labels the platform's own hosts use or will use (`api.$DOMAIN_NAME`,
- * `panel.$DOMAIN_NAME` — dev-docker Traefik rules). A reseller holding one
- * would own a host the platform serves.
+ * `panel.$DOMAIN_NAME` — dev-docker Traefik rules; `edge.$DOMAIN_NAME`, the
+ * zone every reseller's CNAME target lives in, ADR-0060). A reseller holding
+ * one would own a host the platform serves.
  */
-export const RESERVED_SLUGS = ['api', 'panel', 'www', 'admin', 'app', 'mail', 'sub', 'assets', 'static', 'cdn'] as const;
+export const RESERVED_SLUGS = ['api', 'panel', 'www', 'admin', 'app', 'mail', 'sub', 'assets', 'static', 'cdn', 'edge'] as const;
 
 /** D-41: subscription only, no metering. */
 export const BILLING_MODELS = [TenantBillingModel.subscription_monthly, TenantBillingModel.subscription_yearly] as const;

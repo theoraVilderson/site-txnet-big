@@ -34,3 +34,32 @@ export function normalizeHost(raw: string | undefined | null): string | null {
   host = host.replace(/\.+$/, '');
   return host || null;
 }
+
+/**
+ * The label of the zone every reseller's CNAME target lives in (ADR-0060 (6)).
+ * Reserved as a slug in `tenant-service`, so `edge.<domain>` is never a
+ * reseller's own host.
+ */
+export const CNAME_TARGET_ZONE = 'edge';
+
+/**
+ * The host a reseller points its custom domain at: `<slug>.edge.<domain>`.
+ *
+ * One per reseller, not one shared by all: a CDN that forwards the CNAME
+ * target instead of the visitor's host then still sends a host that names the
+ * tenant. A shared target would name none.
+ */
+export function cnameTargetHost(slug: string, domain: string): string {
+  return `${slug}.${CNAME_TARGET_ZONE}.${domain}`.toLowerCase();
+}
+
+/**
+ * Is this platform-issued subdomain a CNAME target rather than a place a person
+ * is sent? It serves the panel like any panel host — a CDN may deliver
+ * requests there — but no browser ever holds a cookie for it, so nothing
+ * sends a payer or a link to it. Only a `subdomain` row is ours to judge: a
+ * custom domain with `edge` as its second label is the tenant's own name.
+ */
+export function isCnameTarget(domainValue: string, domainType: 'subdomain' | 'custom_domain'): boolean {
+  return domainType === 'subdomain' && domainValue.split('.')[1] === CNAME_TARGET_ZONE;
+}

@@ -218,7 +218,7 @@ None planned yet (no bus). Payment confirmation is expected to drive
 | entitlement | `GrantService.issue` inside the gift redemption's transaction, `source = coupon` (F-502-l-b, ADR-0049) | the redemption rolls back; the code stays unused |
 | currency | base-currency amounts only in; display conversion is currency's job | — |
 | tenant | `tenantId` denormalized on `wallet_transaction` / `payment_transaction` for reporting | — |
-| tenant | the request tenant's `tenant_domain` rows — the `panel` host a gateway callback comes back to, proven custom domain first (F-092-i, ADR-0020). Read under RLS in its `tenantTransaction`; never a request header | no host to answer on: starting a payment is refused 503 |
+| tenant | the request tenant's `tenant_domain` rows — the `panel` host a gateway callback comes back to, proven custom domain first, never a CNAME target (`isCnameTarget`, ADR-0060 (6)) (F-092-i, ADR-0020). Read under RLS in its `tenantTransaction`; never a request header | no host to answer on: starting a payment is refused 503 |
 | tenant | the request tenant's `tenant_gateway_config` rows — pricing and provider, never the secret columns — read under RLS in its `tenantTransaction` (F-092-o); `tenant.tenantType`, to offer `payment_gateway` to the `platform_owner` alone (F-092-s) | no gateway to offer: the list is empty |
 
 ## Guarantees (intended)

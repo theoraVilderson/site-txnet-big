@@ -71,7 +71,15 @@ describe('ResellerService', () => {
 
     expect(all.$transaction).toHaveBeenCalledTimes(1);
     expect('user' in tx).toBe(false);
-    expect(writes).toEqual(['tenant', 'wallet', 'domain', 'audit', `del ${UnscopedRedisKeys.tenantByHost('myvpn.txnet.app')}`]);
+    expect(writes).toEqual([
+      'tenant',
+      'wallet',
+      'domain',
+      'domain',
+      'audit',
+      `del ${UnscopedRedisKeys.tenantByHost('myvpn.txnet.app')}`,
+      `del ${UnscopedRedisKeys.tenantByHost('myvpn.edge.txnet.app')}`,
+    ]);
     expect(tx.tenant.create.mock.calls[0][0].data).toEqual({
       tenantType: 'reseller',
       ownerUserId: USER,
@@ -88,6 +96,23 @@ describe('ResellerService', () => {
       purpose: 'panel',
     });
     expect(view.owner).toEqual({ id: USER, fullName: 'Reseller Owner', username: 'owner', phoneNumber: '+989123456789' });
+  });
+
+  it('issues the reseller its own CNAME target, so a CDN that rewrites the host still names this tenant', async () => {
+    // ADR-0060 (6): `ali-vpn.ir` is CNAMEd to `<slug>.edge.<domain>`. A CDN that
+    // keeps the visitor's host resolves by the custom domain; one that sends
+    // the CNAME target instead resolves by this row. A shared target would
+    // name no tenant at all.
+    const { service, tx } = build();
+    const view = await service.create(actor, input);
+
+    expect(tx.tenantDomain.create.mock.calls[1][0].data).toMatchObject({
+      tenantId: 'new-tenant',
+      domainType: 'subdomain',
+      domainValue: 'myvpn.edge.txnet.app',
+      purpose: 'panel',
+    });
+    expect(view.domains.map((d) => d.domainValue)).toEqual(['myvpn.txnet.app', 'myvpn.edge.txnet.app']);
   });
 
   it('looks the owner up among the platform owner tenant’s live users only', async () => {
@@ -127,7 +152,7 @@ describe('ResellerService', () => {
     expect(e.reason).toBe('slug_taken');
   });
 
-  it.each(['-bad', 'bad-', 'Bad', 'has_underscore', 'a'.repeat(64), 'api', 'panel', 'www'])('refuses %s as a slug', (slug) => {
+  it.each(['-bad', 'bad-', 'Bad', 'has_underscore', 'a'.repeat(64), 'api', 'panel', 'www', 'edge'])('refuses %s as a slug', (slug) => {
     expect(createResellerSchema.safeParse({ ...input, slug }).success).toBe(false);
   });
 

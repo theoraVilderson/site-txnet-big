@@ -357,6 +357,24 @@ describe('DepositStartService.start', () => {
     expect(calls.requested[0].callbackUrl).toBe(`https://myvpn.com/api/billing/deposit/callback?p=${started.paymentId}`);
   });
 
+  it('never sends the bank to the reseller’s CNAME target, though it sorts first', async () => {
+    // ADR-0060 (6): `myvpn.edge.txnet.app` serves the panel only for a CDN that
+    // forwards the target instead of the visitor's host. No browser holds a
+    // cookie there, so a payer returned to it would look signed out.
+    const { service, calls } = build({
+      domains: [
+        { domainValue: 'myvpn.edge.txnet.app', domainType: 'subdomain', verificationStatus: 'pending' },
+        { domainValue: 'myvpn.txnet.app', domainType: 'subdomain', verificationStatus: 'pending' },
+      ],
+    });
+
+    const started = await start(service);
+
+    expect(calls.requested[0].callbackUrl).toBe(
+      `https://myvpn.txnet.app/api/billing/deposit/callback?p=${started.paymentId}`,
+    );
+  });
+
   it('tells a webhook driver its gateway’s webhook door, on the callback’s origin, and a return driver nothing (F-104-h)', async () => {
     const hook = build({ webhook: true, domains: [{ domainValue: 'myvpn.com', domainType: 'custom_domain', verificationStatus: 'verified' }] });
     await start(hook.service);
