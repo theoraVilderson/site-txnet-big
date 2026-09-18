@@ -86,7 +86,9 @@ model User {
   /// `emailVerifiedAt` records when.
   email                  String?
   emailVerifiedAt        DateTime?
-  passwordHash           String // SENSITIVE — never default-select
+  /// SENSITIVE — never default-select. Null only on a linked account
+  /// (`credentialUserId`), which signs in with that account's (ADR-0059).
+  passwordHash           String?
   roleId                 String     @db.Uuid
   status                 UserStatus @default(active)
   theme                  ThemePreference @default(system)
@@ -100,6 +102,10 @@ model User {
   // (این اعتبارسنجی در سطح سرویس انجام می‌شود، نه در schema).
   preferredOtpChannel    OtpChannel? 
   referredByUserId       String?    @db.Uuid
+  /// ADR-0059: the account whose password and 2FA this one signs in with — a
+  /// reseller owner's account in the reseller's tenant names their platform
+  /// account. Null = its own. One level: the named account is never linked.
+  credentialUserId       String?    @db.Uuid
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -110,6 +116,8 @@ model User {
   role         Role    @relation(fields: [roleId], references: [id])
   referredBy   User?   @relation("UserReferrals", fields: [referredByUserId], references: [id])
   referrals    User[]  @relation("UserReferrals")
+  credentialUser   User?  @relation("UserCredentials", fields: [credentialUserId], references: [id], onDelete: SetNull)
+  linkedAccounts   User[] @relation("UserCredentials")
 
   sessions             Session[]             @relation("SessionOwner")
   sessionsSwitchedFrom Session[]             @relation("SessionSwitchedFrom")
@@ -127,6 +135,7 @@ model User {
   @@unique([tenantId, username])
   @@unique([tenantId, phoneNumber])
   @@unique([tenantId, email])
+  @@unique([tenantId, credentialUserId])
   @@index([tenantId])
   @@map("user")
   @@schema("identity")

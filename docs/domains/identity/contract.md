@@ -2,8 +2,8 @@
 id: identity
 layer: domain
 status: active
-version: 14
-updated: 2026-09-17
+version: 15
+updated: 2026-09-18
 ---
 
 # Contract — identity
@@ -28,6 +28,7 @@ Surfaced over HTTP by the `auth-api` interface — see
 | register | fullName, username, phone, strong password. The tenant is **ambient**, not an input (v8) | phoneNumber, `requiresPhoneVerification`, `deliveryId`, `channel`, `channelToken` | **async send** (v11) | duplicate, weak/profile password, no resolved tenant; broker unreachable |
 | verify phone (register) | phoneNumber, 6-digit OTP | session tokens | sync | invalid/expired OTP, pending registration expired |
 | login (password) | identifier (phone or username), password | session tokens, or `requiresOtp` + `otpToken` | sync | invalid creds, phone-unverified, temporarily locked |
+| create owner account (internal, v15) | `credentialUserId` (an account in **another** tenant); the reseller is ambient | `userId` of the linked account, created or already there | sync, idempotent | `tenant.ownerAccountInvalid`, `tenant.ownerPhoneTaken` |
 | list OTP channels | — | `{channels:[{channel, requiresLink}]}` — what this environment offers | sync | — |
 | request login OTP | phone, optional channel | `{accepted:true, deliveryId, channel, channelToken}`, **or** `{accepted:true, linkRequired:true, platform, linkToken, deepLink, expiresIn}` when the chosen messenger is not connected yet | **async send** (v11) | channel not allowed / not configured / none available; broker unreachable |
 | poll bot link | linkToken | `{state:'pending'\|'linked'\|'failed', otpSent, failureKey?}` | sync | — |
@@ -79,6 +80,11 @@ No message bus. Impersonation start/end write an `audit.admin_audit_log` row
 
 ## Guarantees
 
+- **A linked account signs in with the credentials of the account it names**
+  (`credentialUserId`, ADR-0059, v15): password and 2FA are that account's, and
+  a password reset on the linked account is refused
+  (`auth.credentialManagedElsewhere`). One level only; the session is the
+  linked account's own, in its own tenant.
 - Access JWT TTL `JWT_ACCESS_TTL_SEC` (default 900s); impersonation token 1800s.
 - Refresh is single-use: `refresh` revokes the old session and issues a new one.
   The replacement **inherits the old row's `scopeKey`** — a refresh is the same

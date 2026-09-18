@@ -28,6 +28,8 @@ import { OtpStore } from './otp/otp.store';
 import { OtpDeliveryStore } from './otp/otp-delivery.store';
 import { OtpDeliveryPublisher } from './otp/otp-delivery.publisher';
 import { OtpInternalController } from './otp/otp-internal.controller';
+import { LinkedAccountService } from './linked-account/linked-account.service';
+import { OwnerAccountInternalController } from './linked-account/owner-account-internal.controller';
 import { UserNotifyInternalController } from './notify/user-notify-internal.controller';
 import { NotificationInboxClient } from './notify/notification-inbox.client';
 import { UserNotifier } from './notify/user-notifier';
@@ -77,6 +79,7 @@ import { ConfigService } from '@nestjs/config';
     CaptchaController,
     BotLinkController,
     OtpInternalController,
+    OwnerAccountInternalController,
     UserNotifyInternalController,
     MeController,
   ],
@@ -88,6 +91,7 @@ import { ConfigService } from '@nestjs/config';
     MeService,
     MeEmailService,
     AuthService,
+    LinkedAccountService,
     AuthGuard,
     PermissionStateStore,
     PermissionNotificationsListener,

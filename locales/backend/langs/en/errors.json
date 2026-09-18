@@ -69,7 +69,8 @@
     "emailCodeSent": "A verification code is on its way to that address",
     "emailAlreadyVerified": "That address is already on your account",
     "emailTaken": "That address belongs to another account",
-    "emailVerified": "Your email address is confirmed"
+    "emailVerified": "Your email address is confirmed",
+    "credentialManagedElsewhere": "This account signs in with your platform account's password. Change it on the platform site."
   },
   "impersonation": {
     "notImpersonated": "This session is not impersonated",
@@ -134,7 +135,10 @@
   "tenant": {
     "claimMismatch": "This session does not belong to this address. Sign in again.",
     "suspended": "This service is suspended. You can sign in and view your account, but this action is unavailable until it is reactivated.",
-    "terminated": "This service has been closed."
+    "terminated": "This service has been closed.",
+    "ownerAccountInvalid": "That account cannot be made the owner of this reseller",
+    "ownerPhoneTaken": "That phone number already belongs to another account of this reseller",
+    "ownerAccountReady": "The owner's account is ready"
   },
   "automation": {
     "invalidSchedule": "That schedule could never run — see the reason.",
