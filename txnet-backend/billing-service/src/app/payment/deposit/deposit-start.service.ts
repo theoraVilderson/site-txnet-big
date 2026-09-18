@@ -22,6 +22,7 @@ import { GatewayMerchant, GatewaySource, MerchantGatewayRef } from '../gateway/g
 import { GatewayCredentials, GatewayFailure } from '../gateway/payment-provider';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { FxRateReader } from '../pricing/fx-rate.reader';
+import { Chat } from './chat-platform';
 import { offeredInThisChat, priceDeposit, selectGateway } from './deposit-pricing';
 import { DepositGatewayNotFound, money } from './deposit-quote.service';
 import { InvoiceLinkClient } from './invoice-link.client';
@@ -77,9 +78,10 @@ export type DepositStartRequest = {
   canTest?: boolean;
   /**
    * The messenger this caller is in — the bot (F-104-k) or its Mini App, by the
-   * gate's `X-Chat-Platform` (F-104-q): an in-chat gateway starts only there.
+   * gate's `X-Chat-Platform` (F-104-q): an in-chat gateway starts only there —
+   * and the payer's id in it, which an in-chat payment records (F-104-ab).
    */
-  chatPlatform?: string | null;
+  chat?: Chat | null;
   /** The request's language, for a Mini App's invoice text. */
   lang?: string;
   /**
@@ -165,7 +167,7 @@ export class DepositStartService {
     const { gateway, coupons, callbackUrl, returnOrigin } = await tenantTransaction(this.prisma, async (tx) => {
       const gateway = await selectGateway(tx, this.crossTenant, tenant.id, gatewayId, source, { canTest: request.canTest });
       if (!gateway) throw new DepositGatewayNotFound(gatewayId, source);
-      if (this.providers.has(gateway.providerName) && !offeredInThisChat(this.providers.get(gateway.providerName), gateway, request.chatPlatform)) {
+      if (this.providers.has(gateway.providerName) && !offeredInThisChat(this.providers.get(gateway.providerName), gateway, request.chat?.platform ?? null)) {
         throw new DepositGatewayNotFound(gatewayId, source);
       }
       const coupons = await this.coupons.validate(tx, {
@@ -250,6 +252,9 @@ export class DepositStartService {
           // Where it was started (F-306-a): the payer notice tells a bot payer
           // even about a webhook credit, since no success page is in front of them.
           channel: request.channel ?? CouponChannel.panel,
+          // Whose messenger events may settle it (F-104-ab): the relay is
+          // admitted only from this sender. An in-chat start always has one.
+          ...(inChat && request.chat ? { payerChatPlatform: request.chat.platform, payerChatId: request.chat.payerId } : {}),
         },
         select: { id: true },
       });
@@ -311,7 +316,7 @@ export class DepositStartService {
       // and the token stays on the internal hop. No link fails it like no mint.
       const link = await this.links.create({
         tenantId: tenant.id,
-        platform: request.chatPlatform as string,
+        platform: (request.chat as Chat).platform,
         paymentId,
         currency: invoice.currency,
         amountMinor: invoice.amountMinor,

@@ -12,6 +12,7 @@ export const IdentityHeaders = {
   "impersonated": "X-Impersonated",
   "impersonatedBy": "X-Impersonated-By",
   "chatPlatform": "X-Chat-Platform",
+  "chatUserId": "X-Chat-User-Id",
 } as const;
 
 /** `contracts/http/wire.json` -> `gateHeaders`. */

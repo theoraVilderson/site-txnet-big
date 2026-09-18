@@ -9,7 +9,8 @@
     "permissions": "X-User-Permissions",
     "impersonated": "X-Impersonated",
     "impersonatedBy": "X-Impersonated-By",
-    "chatPlatform": "X-Chat-Platform"
+    "chatPlatform": "X-Chat-Platform",
+    "chatUserId": "X-Chat-User-Id"
   },
   "alwaysSetIdentityHeaders": [
     "X-User-Id",

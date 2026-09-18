@@ -43,8 +43,9 @@ import { ManualConfirmService } from './manual-confirm.service';
  * tick (F-092-k) and its reconciliation tick (F-092-l), and by nothing from
  * the edge at all.
  *
- * `DepositInChatController` is behind the gate **and** service-only (F-104-k):
- * the bot relays a messenger's payment as the payer.
+ * `DepositInChatController` is service-to-service too (F-104-k, F-104-ab):
+ * the bot relays a messenger's payment with the sender's id, and the payment,
+ * not a chat session, says whose it is.
  */
 @Module({
   imports: [LocaleModule, CouponModule, GatewayModule, WalletModule],

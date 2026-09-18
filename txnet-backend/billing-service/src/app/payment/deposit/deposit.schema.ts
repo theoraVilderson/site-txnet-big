@@ -1,6 +1,8 @@
 import { BackendI18nKeys, GATEWAY_CREDENTIAL_SOURCES } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
+import { CHAT_PLATFORMS } from './chat-platform';
+
 const E = BackendI18nKeys.errors.billing;
 
 /** Base currency, a decimal string with at most 2 places — never a JSON number (C-02). `Decimal(18, 2)` bounds the digits. */
@@ -39,10 +41,14 @@ const MINOR = /^[1-9]\d{0,18}$/;
 
 /**
  * What the bot relays from `pre_checkout_query` (F-104-k): the invoice payload
- * is the payment id `start` answered. A malformed relay is the bot's bug, so
- * the keys are the generic ones.
+ * is the payment id `start` answered; the sender's messenger id and the bot's
+ * tenant are what the payment's payer is matched on (F-104-ab). A malformed
+ * relay is the bot's bug, so the keys are the generic ones.
  */
 export const inChatPreCheckoutSchema = z.object({
+  platform: z.enum(CHAT_PLATFORMS, { message: E.gatewayInvalid }),
+  senderId: z.string({ message: E.gatewayInvalid }).regex(/^-?\d{1,20}$/, { message: E.gatewayInvalid }),
+  botTenantId: z.string({ message: E.gatewayInvalid }).uuid({ message: E.gatewayInvalid }),
   paymentId: z.string({ message: E.gatewayInvalid }).uuid({ message: E.gatewayInvalid }),
   currency: z.string({ message: E.amountInvalid }).regex(/^[A-Z0-9]{2,20}$/, { message: E.amountInvalid }),
   totalAmount: z.string({ message: E.amountInvalid }).regex(MINOR, { message: E.amountInvalid }),

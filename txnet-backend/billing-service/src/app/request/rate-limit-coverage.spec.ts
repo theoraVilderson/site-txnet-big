@@ -64,6 +64,10 @@ const EXEMPT = new Set(['HealthController', 'DepositInternalController']);
  *
  * `DepositWebhookController` is a provider's server (F-104-b, ADR-0051): its
  * budget is per **gateway**, the id in its path.
+ *
+ * `DepositInChatController` is the bot relaying a messenger's payment
+ * (F-104-ab): no session, and its budget is per **sender** — the messenger id
+ * of whoever is paying, whichever bot relays them.
  */
 const PUBLIC = new Map<string, { subject: string; one: object; another: object }>([
   [
@@ -73,6 +77,10 @@ const PUBLIC = new Map<string, { subject: string; one: object; another: object }
   [
     'DepositWebhookController',
     { subject: 'g-0001', one: { params: { provider: 'stripe', gatewayId: 'g-0001' } }, another: { params: { provider: 'stripe', gatewayId: 'g-0002' } } },
+  ],
+  [
+    'DepositInChatController',
+    { subject: 'telegram:42', one: { body: { platform: 'telegram', senderId: '42' } }, another: { body: { platform: 'telegram', senderId: '43' } } },
   ],
 ]);
 

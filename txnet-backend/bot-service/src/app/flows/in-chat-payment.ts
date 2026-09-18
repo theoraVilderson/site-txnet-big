@@ -1,10 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { BotText, PaymentEvent, TelegramLikeBotClient } from '@txnet-backend/messenger';
-import { BillingApiClient, BillingCallContext, InChatPaymentBody, PreCheckoutVerdict } from '../billing-api/billing-api.client';
+import { BillingApiClient, InChatPaymentBody, PreCheckoutVerdict } from '../billing-api/billing-api.client';
 import { ChatContext } from '../conversation/nav.types';
 import { BotCopy } from '../locale/bot-copy';
 import { BotKeys } from '../locale/bot-keys';
-import { ChatAccess } from '../session/chat-access';
 
 type Refusal = Extract<PreCheckoutVerdict, { approved: false }>['reason'];
 
@@ -17,7 +16,11 @@ const REFUSAL_KEY: Record<Refusal, string> = {
 
 /**
  * The bot's half of an in-chat payment (F-104-m, D-32): the two events the
- * messenger reports (F-104-l), relayed to billing (F-104-k) as the payer.
+ * messenger reports (F-104-l), relayed to billing (F-104-k) with the sender the
+ * platform named and this bot's tenant. **No chat session is read (F-104-ab):**
+ * the events are the payment's, and billing admits them only from the payer
+ * `start` recorded — so a Mini App payer who never signed in here, or whose
+ * chat session expired, pays all the same.
  *
  * Not a flow. Neither event is an answer to a screen — the conversation ended
  * when `start` answered — so nothing here reads or writes navigation, and
@@ -25,8 +28,8 @@ const REFUSAL_KEY: Record<Refusal, string> = {
  *
  * **A pre-checkout query is always answered.** The platform waits 10 seconds
  * and then cancels the payment, so a refusal nobody sends is still a refusal,
- * only one the payer cannot read. Whatever goes wrong on the way — a signed-out
- * chat, billing unreachable — becomes `ok: false` with a sentence.
+ * only one the payer cannot read. Whatever goes wrong on the way — billing
+ * unreachable — becomes `ok: false` with a sentence.
  *
  * **A successful payment is said in the chat**, which is why billing marks that
  * credit `shownInChat` and the payer notice stays silent. Money that did not
@@ -39,7 +42,6 @@ export class InChatPayment {
 
   constructor(
     private readonly billing: BillingApiClient,
-    private readonly access: ChatAccess,
     private readonly copy: BotCopy,
   ) {}
 
@@ -58,12 +60,7 @@ export class InChatPayment {
     const refuse = (text: BotText) =>
       client.answerPreCheckoutQuery(event.queryId, { ok: false, errorMessage: this.copy.text(ctx.lang, text) });
 
-    const call = await this.callContext(ctx);
-    if (!call) {
-      await refuse({ key: BotKeys.common.notSignedIn });
-      return;
-    }
-    const answer = await this.billing.preCheckout(bodyOf(event), call);
+    const answer = await this.billing.preCheckout(bodyOf(ctx, event), ctx.lang);
     if (!answer.ok || !answer.data) {
       await refuse({ key: BotKeys.common.tryAgain });
       return;
@@ -81,11 +78,8 @@ export class InChatPayment {
     event: Extract<PaymentEvent, { kind: 'payment_succeeded' }>,
     client: TelegramLikeBotClient,
   ): Promise<void> {
-    const call = await this.callContext(ctx);
-    const answer = call
-      ? await this.billing.paid({ ...bodyOf(event), chargeId: event.platformChargeId }, call)
-      : null;
-    const settled = answer?.ok && answer.data && answer.data.credited !== null
+    const answer = await this.billing.paid({ ...bodyOf(ctx, event), chargeId: event.platformChargeId }, ctx.lang);
+    const settled = answer.ok && answer.data && answer.data.credited !== null
       && (answer.data.status === 'credited' || answer.data.status === 'already_settled');
 
     if (!settled) {
@@ -93,7 +87,7 @@ export class InChatPayment {
       // keeps it verifying for a person. Logged here too, with the charge id.
       this.logger.error(
         `${ctx.platform}: payment ${event.payload} charge ${event.platformChargeId} not credited: ` +
-          (answer ? `${answer.ok ? answer.data?.status : answer.msg}` : 'chat signed out'),
+          `${answer.ok ? answer.data?.status : answer.msg}`,
       );
     }
     const text: BotText = settled
@@ -102,12 +96,15 @@ export class InChatPayment {
     await client.sendMessage(ctx.chatId, this.copy.text(ctx.lang, text));
   }
 
-  private async callContext(ctx: ChatContext): Promise<BillingCallContext | null> {
-    const accessToken = await this.access.token(ctx);
-    return accessToken ? { lang: ctx.lang, accessToken, platform: ctx.platform, botTenantId: ctx.integration.tenantId } : null;
-  }
 }
 
-function bodyOf(event: PaymentEvent): InChatPaymentBody {
-  return { paymentId: event.payload, currency: event.currency, totalAmount: String(event.totalAmount) };
+function bodyOf(ctx: ChatContext, event: PaymentEvent): InChatPaymentBody {
+  return {
+    paymentId: event.payload,
+    currency: event.currency,
+    totalAmount: String(event.totalAmount),
+    platform: ctx.platform,
+    senderId: event.fromId,
+    botTenantId: ctx.integration.tenantId,
+  };
 }

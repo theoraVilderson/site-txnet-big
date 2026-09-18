@@ -1,7 +1,16 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfirmationSource, PaymentStatus } from '@prisma/client';
-import { tenantTransaction } from '@txnet-backend/shared-core';
+import {
+  parseTenantStatusState,
+  runWithTenant,
+  TENANT_STATUS_STORE,
+  tenantAllows,
+  TenantStatusStore,
+  tenantTransaction,
+  UnscopedRedisKeys,
+} from '@txnet-backend/shared-core';
 
+import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { PaymentProvider } from '../gateway/payment-provider';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
@@ -14,11 +23,20 @@ import { scheduleVerifyRetry } from './verify-retry';
  *
  * `billing` never holds a bot token, so it never talks to the messenger: the
  * bot receives `pre_checkout_query` and `successful_payment` (F-104-l's neutral
- * events) and relays each here, through the gate, as the payer, with the
- * service token (`DepositInChatController`). The invoice's payload is the
+ * events) and relays each here with the service token and the sender's
+ * messenger id (`DepositInChatController`). The invoice's payload is the
  * payment id `start` answered.
  *
- * **Pre-checkout is the last moment to refuse.** It approves only this payer's
+ * **The event is the payment's, not the chat's (F-104-ab).** The relay carries
+ * no user and no tenant — the chat that pays need not hold a session, and a
+ * Mini App payer usually does not. The payment names both: it is found outside
+ * every tenant, then admitted only when the sender is the payer `start`
+ * recorded, on the gateway's messenger, through the payment tenant's own bot
+ * (the one whose invoice it is). Anything else is `not_found` at pre-checkout;
+ * at `paid` the platform already took the money, so it is `unsettled` and the
+ * row stays verifying for a person (F-092-y). The rest runs in that tenant.
+ *
+ * **Pre-checkout is the last moment to refuse.** It approves only the payer's
  * open payment at an in-chat gateway, for exactly the charge `start` wrote.
  * Approving writes the payment id as the row's authority and starts the verify
  * clock (F-092-x) in the same transaction: from then on the platform may take
@@ -34,8 +52,17 @@ import { scheduleVerifyRetry } from './verify-retry';
  * stays verifying for a person.
  */
 
+/** Who relayed the event, as the bot saw it. Believed only beside the service token. */
+export type InChatSender = {
+  platform: string;
+  /** The messenger id of whoever the platform says is paying. */
+  senderId: string;
+  /** The tenant of the bot the event arrived at. */
+  botTenantId: string;
+};
+
 export type InChatPaymentRef = {
-  userId: string;
+  sender: InChatSender;
   /** The invoice payload. */
   paymentId: string;
   currency: string;
@@ -66,11 +93,22 @@ export class DepositInChatService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly crossTenant: CrossTenantPrismaService,
     private readonly providers: PaymentProviderRegistry,
     private readonly settlement: DepositSettlementService,
+    @Inject(TENANT_STATUS_STORE) private readonly tenantStatus: TenantStatusStore,
   ) {}
 
   async preCheckout(ref: InChatPaymentRef, now = new Date()): Promise<PreCheckoutVerdict> {
+    const tenantId = await this.tenantOf(ref);
+    if (!tenantId) return { approved: false, reason: 'not_found' };
+    // D-42 (1): a closed tenant's users buy nothing. `TenantStatusGuard` cannot
+    // say so here — the relay carries no tenant — so the payment's is asked.
+    if (!(await this.takesDeposits(tenantId, now))) return { approved: false, reason: 'not_payable' };
+    return runWithTenant({ id: tenantId }, () => this.approve(ref, now));
+  }
+
+  private async approve(ref: InChatPaymentRef, now: Date): Promise<PreCheckoutVerdict> {
     const found = await this.find(ref);
     if (!found) return { approved: false, reason: 'not_found' };
     const { payment, provider } = found;
@@ -101,10 +139,28 @@ export class DepositInChatService {
   }
 
   async paid(ref: InChatPaymentRef & { chargeId: string }): Promise<InChatPaidResult> {
+    const tenantId = await this.tenantOf(ref);
+    if (tenantId === undefined) {
+      // The platform took money for a payment nobody here has.
+      this.logger.error(`in-chat paid for unknown payment ${ref.paymentId} (charge ${ref.chargeId})`);
+      return { status: 'not_found', credited: null };
+    }
+    if (tenantId === null) {
+      // Pre-checkout would have refused this sender. Money taken, nothing credited:
+      // an approved row is already on the verify clock, and a person sees it.
+      this.logger.error(
+        `in-chat paid for payment ${ref.paymentId} (charge ${ref.chargeId}) from ${ref.sender.platform}:${ref.sender.senderId} ` +
+          `via tenant ${ref.sender.botTenantId}'s bot, not its payer's: not settled`,
+      );
+      return { status: 'unsettled', credited: null };
+    }
+    return runWithTenant({ id: tenantId }, () => this.settle(ref));
+  }
+
+  private async settle(ref: InChatPaymentRef & { chargeId: string }): Promise<InChatPaidResult> {
     const found = await this.find(ref);
     if (!found) {
-      // The platform took money for a payment this payer does not have here.
-      this.logger.error(`in-chat paid for unknown payment ${ref.paymentId} (charge ${ref.chargeId})`);
+      this.logger.error(`in-chat paid for payment ${ref.paymentId} at a gateway that does not settle in chat (charge ${ref.chargeId})`);
       return { status: 'not_found', credited: null };
     }
     const { payment, provider } = found;
@@ -132,19 +188,45 @@ export class DepositInChatService {
     };
   }
 
-  /** This payer's payment, at a gateway that settles in chat — or `null`, never a hint which. */
+  /** As the guard reads it: a missing or unreadable state refuses nobody. */
+  private async takesDeposits(tenantId: string, now: Date): Promise<boolean> {
+    const state = parseTenantStatusState(await this.tenantStatus.get(UnscopedRedisKeys.tenantStatus(tenantId)));
+    return !state || tenantAllows(state, 'endUserDeposit', now);
+  }
+
+  /**
+   * The payment's tenant when the sender is its payer, through its own tenant's
+   * bot — `null` when it is someone else (or a payment that recorded nobody),
+   * `undefined` when there is no such payment.
+   */
+  private async tenantOf(ref: InChatPaymentRef): Promise<string | null | undefined> {
+    const row = await this.crossTenant.paymentTransaction.findFirst({
+      where: { id: ref.paymentId },
+      select: { tenantId: true, payerChatPlatform: true, payerChatId: true },
+    });
+    if (!row?.tenantId) return undefined;
+    const { sender } = ref;
+    const isPayer =
+      row.payerChatId !== null &&
+      row.payerChatPlatform === sender.platform &&
+      row.payerChatId === sender.senderId &&
+      row.tenantId === sender.botTenantId;
+    return isPayer ? row.tenantId : null;
+  }
+
+  /** The payment, in its tenant, at a gateway that settles in this messenger — or `null`, never a hint which. */
   private async find(ref: InChatPaymentRef): Promise<{ payment: InChatRow; provider: PaymentProvider } | null> {
     const payment = await this.read(ref);
     if (!payment) return null;
     const { providerName } = gatewayRefOf(payment);
     if (!this.providers.has(providerName)) return null;
     const provider = this.providers.get(providerName);
-    return provider.settlement === 'in_chat' ? { payment, provider } : null;
+    return provider.settlement === 'in_chat' && provider.chatPlatform === ref.sender.platform ? { payment, provider } : null;
   }
 
   private read(ref: InChatPaymentRef): Promise<InChatRow | null> {
     return tenantTransaction(this.prisma, (tx) =>
-      tx.paymentTransaction.findFirst({ where: { id: ref.paymentId, userId: ref.userId }, select: IN_CHAT_SELECT }),
+      tx.paymentTransaction.findFirst({ where: { id: ref.paymentId }, select: IN_CHAT_SELECT }),
     );
   }
 }

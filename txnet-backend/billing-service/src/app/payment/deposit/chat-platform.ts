@@ -9,10 +9,19 @@ export interface ChatCaller {
   botPlatform: string | null;
   /** `X-Bot-Tenant-Id`, the tenant of the bot the update arrived at — believed only when `isBot`. */
   botTenantId: string | null;
-  /** The gate's `X-Chat-Platform`, from a Mini App session a verified `initData` minted (F-104-q). */
+  /** The gate's `X-Chat-Platform`, from a chat session — the bot's or a Mini App's a verified `initData` minted (F-104-q). */
   gatePlatform: string | null;
+  /** The gate's `X-Chat-User-Id`, that session's chat id — a private chat's is the person's messenger id (F-104-ab). */
+  gateChatId: string | null;
   /** The request's tenant — the payment's. */
   tenantId: string;
+}
+
+/** The messenger this caller is in, and the id its events will come from. */
+export interface Chat {
+  platform: string;
+  /** Recorded on an in-chat payment as its payer's; the relay is admitted only from it (F-104-ab). */
+  payerId: string;
 }
 
 /**
@@ -24,14 +33,21 @@ export interface ChatCaller {
  * is paid to that bot, so a payment of another tenant — the owner topping up
  * their platform wallet from their reseller's bot chat (ADR-0059 (6)) — would
  * put the Stars in the reseller's bot and the credit in the platform's wallet.
- * An invoice made by the payment tenant's bot instead reports its events to a
- * bot where this chat holds no session, so the gateway is simply not offered.
+ * Paying there through the payment tenant's bot is F-104-ac's.
+ *
+ * **And only with a payer the gate named in that messenger (F-104-ab).** The
+ * platform's events are matched to the payment by the sender's messenger id,
+ * which only the gate can vouch for — from the session's own chat scope. A
+ * chat session that names none, or another messenger's, could never be matched,
+ * so its gateway is not offered rather than refused at pre-checkout.
  */
-export function chatPlatformOf(caller: ChatCaller): string | null {
+export function chatOf(caller: ChatCaller): Chat | null {
   const platform = caller.isBot
     ? caller.botTenantId === caller.tenantId
       ? caller.botPlatform
       : null
     : caller.gatePlatform;
-  return platform && (CHAT_PLATFORMS as readonly string[]).includes(platform) ? platform : null;
+  if (!platform || !(CHAT_PLATFORMS as readonly string[]).includes(platform)) return null;
+  if (caller.gatePlatform !== platform || !caller.gateChatId) return null;
+  return { platform, payerId: caller.gateChatId };
 }

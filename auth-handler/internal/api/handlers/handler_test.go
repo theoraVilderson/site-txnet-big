@@ -991,18 +991,19 @@ func TestValidateNamesTheChatPlatformFromTheSessionScope(t *testing.T) {
 		name    string
 		session string
 		want    string
+		chatID  string
 	}{
-		{"telegram chat", `{"userId":"user-1","revoked":false,"scopeKey":"bot:tenant-1:telegram:42"}`, "telegram"},
-		{"bale chat", `{"userId":"user-1","revoked":false,"scopeKey":"bot:tenant-1:bale:-7"}`, "bale"},
-		{"a chat key minted before F-061-g", `{"userId":"user-1","revoked":false,"scopeKey":"bot:telegram:42"}`, "telegram"},
-		{"a tenant but no chat", `{"userId":"user-1","scopeKey":"bot:tenant-1:telegram:"}`, ""},
-		{"a tenant and an unknown platform", `{"userId":"user-1","scopeKey":"bot:tenant-1:whatsapp:42"}`, ""},
-		{"a scope that is not a chat", `{"userId":"user-1","revoked":false,"scopeKey":"bale:x"}`, ""},
-		{"bale scope", `{"userId":"user-1","revoked":false,"scopeKey":"bot:bale:-7"}`, "bale"},
-		{"a browser", `{"userId":"user-1","revoked":false,"scopeKey":"device:abc"}`, ""},
-		{"no scope", `{"userId":"user-1","revoked":false,"scopeKey":null}`, ""},
-		{"a platform nobody built", `{"userId":"user-1","scopeKey":"bot:whatsapp:42"}`, ""},
-		{"not json", "active", ""},
+		{"telegram chat", `{"userId":"user-1","revoked":false,"scopeKey":"bot:tenant-1:telegram:42"}`, "telegram", "42"},
+		{"bale chat", `{"userId":"user-1","revoked":false,"scopeKey":"bot:tenant-1:bale:-7"}`, "bale", "-7"},
+		{"a chat key minted before F-061-g", `{"userId":"user-1","revoked":false,"scopeKey":"bot:telegram:42"}`, "telegram", "42"},
+		{"a tenant but no chat", `{"userId":"user-1","scopeKey":"bot:tenant-1:telegram:"}`, "", ""},
+		{"a tenant and an unknown platform", `{"userId":"user-1","scopeKey":"bot:tenant-1:whatsapp:42"}`, "", ""},
+		{"a scope that is not a chat", `{"userId":"user-1","revoked":false,"scopeKey":"bale:x"}`, "", ""},
+		{"bale scope", `{"userId":"user-1","revoked":false,"scopeKey":"bot:bale:-7"}`, "bale", "-7"},
+		{"a browser", `{"userId":"user-1","revoked":false,"scopeKey":"device:abc"}`, "", ""},
+		{"no scope", `{"userId":"user-1","revoked":false,"scopeKey":null}`, "", ""},
+		{"a platform nobody built", `{"userId":"user-1","scopeKey":"bot:whatsapp:42"}`, "", ""},
+		{"not json", "active", "", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1012,11 +1013,16 @@ func TestValidateNamesTheChatPlatformFromTheSessionScope(t *testing.T) {
 				t.Fatalf("status = %d, want 200 (body %q)", w.Code, w.Body.String())
 			}
 			got, present := w.Header()["X-Chat-Platform"]
+			id, idPresent := w.Header()["X-Chat-User-Id"]
 			if tc.want == "" {
-				if present {
-					t.Errorf("X-Chat-Platform = %q, want absent", got)
+				if present || idPresent {
+					t.Errorf("X-Chat-Platform = %q, X-Chat-User-Id = %q, want both absent", got, id)
 				}
 				return
+			}
+			// F-104-ab: the payer's messenger id is the same scope's chat id.
+			if w.Header().Get("X-Chat-User-Id") != tc.chatID {
+				t.Errorf("X-Chat-User-Id = %q, want %q", w.Header().Get("X-Chat-User-Id"), tc.chatID)
 			}
 			if w.Header().Get("X-Chat-Platform") != tc.want {
 				t.Errorf("X-Chat-Platform = %q, want %q", w.Header().Get("X-Chat-Platform"), tc.want)

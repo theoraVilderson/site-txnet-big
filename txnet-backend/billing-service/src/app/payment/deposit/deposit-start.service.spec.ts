@@ -232,7 +232,7 @@ describe('DepositStartService.start', () => {
     const { service, calls } = build({ inChat: true, domains: [] });
     const request = { userId: USER, gatewayId: GATEWAY, source: 'tenant' as const, amount: d('20.00'), couponCodes: [] };
 
-    const started = await asTenant(() => service.start({ ...request, channel: CouponChannel.bot, chatPlatform: 'telegram' }));
+    const started = await asTenant(() => service.start({ ...request, channel: CouponChannel.bot, chat: { platform: 'telegram', payerId: '42' } }));
     expect(started.redirectUrl).toBeNull();
     expect(started.invoiceLink).toBeNull();
     expect(started.invoice).toEqual({
@@ -243,16 +243,18 @@ describe('DepositStartService.start', () => {
     });
     expect(calls.requested).toEqual([]);
     expect(calls.updated).toEqual([]);
+    // Its events are admitted only from this sender (F-104-ab).
+    expect(calls.created[0]).toMatchObject({ payerChatPlatform: 'telegram', payerChatId: '42' });
 
     await expect(asTenant(() => service.start(request))).rejects.toBeInstanceOf(DepositGatewayNotFound);
-    await expect(asTenant(() => service.start({ ...request, chatPlatform: 'bale' }))).rejects.toBeInstanceOf(DepositGatewayNotFound);
+    await expect(asTenant(() => service.start({ ...request, chat: { platform: 'bale', payerId: '42' } }))).rejects.toBeInstanceOf(DepositGatewayNotFound);
   });
 
   it('answers a Bale gateway with a rial invoice at the gateway rate and its wallet token from the vault (F-104-n)', async () => {
     const { service, calls } = build({ inChat: 'bale', domains: [] });
     const request = { userId: USER, gatewayId: GATEWAY, source: 'tenant' as const, amount: d('20.00'), couponCodes: [] };
 
-    const started = await asTenant(() => service.start({ ...request, channel: CouponChannel.bot, chatPlatform: 'bale' }));
+    const started = await asTenant(() => service.start({ ...request, channel: CouponChannel.bot, chat: { platform: 'bale', payerId: '42' } }));
     // 20.00 + 1% fee at the gateway's 1,000,000 rial rate, as a Zarinpal payment is priced.
     expect(calls.created[0]['chargedAmountMinor']).toBe(BigInt(20_200_000));
     expect(started.invoice).toEqual({
@@ -263,14 +265,14 @@ describe('DepositStartService.start', () => {
     });
     expect(calls.requested).toEqual([]);
 
-    await expect(asTenant(() => service.start({ ...request, chatPlatform: 'telegram' }))).rejects.toBeInstanceOf(DepositGatewayNotFound);
+    await expect(asTenant(() => service.start({ ...request, chat: { platform: 'telegram', payerId: '42' } }))).rejects.toBeInstanceOf(DepositGatewayNotFound);
   });
 
   it('answers a Mini App an invoice link made by bot-service, and never the provider token (F-104-q)', async () => {
     const { service, calls } = build({ inChat: 'bale', domains: [] });
     const request = { userId: USER, gatewayId: GATEWAY, source: 'tenant' as const, amount: d('20.00'), couponCodes: [], lang: 'fa' };
 
-    const started = await asTenant(() => service.start({ ...request, chatPlatform: 'bale' }));
+    const started = await asTenant(() => service.start({ ...request, chat: { platform: 'bale', payerId: '42' } }));
     expect(started.invoice).toBeNull();
     expect(started.invoiceLink).toBe('https://t.me/$invoice-1');
     expect(started.redirectUrl).toBeNull();
@@ -289,7 +291,7 @@ describe('DepositStartService.start', () => {
     ]);
     expect(calls.requested).toEqual([]);
     // The bot is still answered the invoice it sends itself, and asks for no link.
-    await asTenant(() => service.start({ ...request, channel: CouponChannel.bot, chatPlatform: 'bale' }));
+    await asTenant(() => service.start({ ...request, channel: CouponChannel.bot, chat: { platform: 'bale', payerId: '42' } }));
     expect(calls.links).toHaveLength(1);
   });
 
@@ -297,7 +299,7 @@ describe('DepositStartService.start', () => {
     const { service, calls } = build({ inChat: true, linkFails: true, domains: [] });
     const request = { userId: USER, gatewayId: GATEWAY, source: 'tenant' as const, amount: d('20.00'), couponCodes: [] };
 
-    await expect(asTenant(() => service.start({ ...request, chatPlatform: 'telegram' }))).rejects.toBeInstanceOf(GatewayFailure);
+    await expect(asTenant(() => service.start({ ...request, chat: { platform: 'telegram', payerId: '42' } }))).rejects.toBeInstanceOf(GatewayFailure);
     expect(calls.updated).toEqual([expect.objectContaining({ status: 'failed', failureCode: 'unavailable' })]);
     expect(calls.settled).toEqual([{ orderReferenceId: expect.any(String), outcome: 'cancelled' }]);
   });

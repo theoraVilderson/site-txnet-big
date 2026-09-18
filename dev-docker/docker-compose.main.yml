@@ -250,7 +250,9 @@ services:
       # F-104-q. The messenger whose chat a session was minted in; billing
       # offers an in-chat gateway on it, so a browser must not be able to claim it.
       - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Chat-Platform="
-      - "traefik.http.middlewares.my-auth.forwardauth.authResponseHeaders=X-User-Id,X-Tenant-Id,X-Role-Id,X-User-Permissions,X-Impersonated,X-Impersonated-By,X-Session-Id,X-Chat-Platform"
+      # F-104-ab. That chat's id: billing records it as an in-chat payer's.
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Chat-User-Id="
+      - "traefik.http.middlewares.my-auth.forwardauth.authResponseHeaders=X-User-Id,X-Tenant-Id,X-Role-Id,X-User-Permissions,X-Impersonated,X-Impersonated-By,X-Session-Id,X-Chat-Platform,X-Chat-User-Id"
 
       # The optional gate (ADR-0031): the same decision as `my-auth` for a
       # caller that brought a credential, and a 200 identifying nobody for one
@@ -263,7 +265,7 @@ services:
       # a middleware by name. Every other router keeps `my-auth` and is
       # unaffected.
       - "traefik.http.middlewares.my-auth-optional.forwardauth.address=http://authorization-handler:${INTERAL_BACKEND_PORT:-8080}/validate-optional"
-      - "traefik.http.middlewares.my-auth-optional.forwardauth.authResponseHeaders=X-User-Id,X-Tenant-Id,X-Role-Id,X-User-Permissions,X-Impersonated,X-Impersonated-By,X-Session-Id,X-Chat-Platform,X-Auth-Anonymous"
+      - "traefik.http.middlewares.my-auth-optional.forwardauth.authResponseHeaders=X-User-Id,X-Tenant-Id,X-Role-Id,X-User-Permissions,X-Impersonated,X-Impersonated-By,X-Session-Id,X-Chat-Platform,X-Chat-User-Id,X-Auth-Anonymous"
 
       - "txnet.logging=true"
 
@@ -489,6 +491,10 @@ services:
       # routes trust only what `my-auth` writes. The chat's access token is the
       # Bearer; Traefik's network alias keeps it in-network.
       - BILLING_API_BASE_URL=http://api.${DOMAIN_NAME}
+      # The one exception (F-104-ab): the in-chat payment relay goes to
+      # billing's `/api/internal/*` directly, with the service token and the
+      # sender — a payment's events need no chat session.
+      - BILLING_INTERNAL_BASE_URL=http://billing-service:3000
       # A bot chat has no host to resolve a tenant from, and there is no
       # fallback tenant (ADR-0025). Since F-066-i an update names its own
       # tenant — the one its webhook path resolved to — so this is only the

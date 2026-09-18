@@ -97,7 +97,7 @@ export class TenantTopupService {
         // platform's host the bank returned to.
         origin,
         canTest: false,
-        chatPlatform: null,
+        chat: null,
         billingTenantId: actor.tenantId,
       }),
     );

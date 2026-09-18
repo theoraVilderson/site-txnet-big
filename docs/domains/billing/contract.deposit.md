@@ -31,7 +31,7 @@ come from its headers, never from the body.
 
 | Rule | Why |
 |---|---|
-| A suspended or terminated tenant's `quote`, `start`, in-chat `pre-checkout` and gift `redeem` are `403 tenant.suspended`/`tenant.terminated`; callback, webhook, `paid`, expiry and reconcile are never refused (`TenantStatusGuard`, `tenant/rules.md`) | D-42 (1): end users buy nothing; money already taken still settles |
+| A suspended or terminated tenant's `quote`, `start` and gift `redeem` are `403 tenant.suspended`/`tenant.terminated`, and its in-chat `pre-checkout` is `not_payable` (the relay has no tenant for the guard; the service asks, F-104-ab); callback, webhook, `paid`, expiry and reconcile are never refused (`TenantStatusGuard`, `tenant/rules.md`) | D-42 (1): end users buy nothing; money already taken still settles |
 | Every number in a quote is `priceAtGateway`'s, and the panel does no arithmetic of its own | F-0612: legacy computed the price in `Deposit.tsx` and on the server, and the two drifted |
 | Money is a base-currency decimal string (ADR-0019); `charge` is `{currency, decimals, amountMinor}` as the gateway will be asked, `amountMinor` a string, or `null` on the free path | JSON has no bigint and no exact decimal |
 | A `tenant` gateway is the request tenant's own `tenant_gateway_config`, `isActive` **and** `verified`; a `platform` gateway is an active `payment_gateway`, offered **only** when the request tenant is `platform_owner`, which is offered both (D-25). Either needs a driver. Anything else — another tenant's, a reseller asking for a platform one, an id named with the wrong `source` — is **404** `billing.gatewayNotFound` | ADR-0006: no shared gateway for resellers (`deposit-gateways.int.spec.ts`) |

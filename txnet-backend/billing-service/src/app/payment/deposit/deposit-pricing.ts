@@ -52,7 +52,7 @@ export type SelectOptions = {
  * Whether this gateway may be offered to this caller (F-104-k). Every gateway
  * that settles outside a chat is, as before. An `in_chat` one is offered only
  * inside a bot — `chatPlatform` is set only when the service token checked out
- * (`DepositController.chatPlatformOf`) — on the messenger its invoice is paid
+ * (`DepositController.chatOf`) — on the messenger its invoice is paid
  * in, and only when the gateway is the request tenant's own: a granted gateway
  * is paid in its lender's bot, which is not this chat.
  */

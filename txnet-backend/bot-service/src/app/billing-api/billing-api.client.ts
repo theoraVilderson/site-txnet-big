@@ -52,11 +52,20 @@ export interface DepositStarted extends DepositQuote {
   invoice: { payload: string; currency: string; amountMinor: string; providerToken: string | null } | null;
 }
 
-/** A messenger's payment event as billing takes it back (F-104-k); the amount as a string. */
+/**
+ * A messenger's payment event as billing takes it back (F-104-k); the amount as
+ * a string. The sender and this bot's tenant are what billing matches the
+ * payment's payer on (F-104-ab) — no chat session is involved.
+ */
 export interface InChatPaymentBody {
   paymentId: string;
   currency: string;
   totalAmount: string;
+  platform: BotPlatform;
+  /** The messenger id of whoever the platform says is paying. */
+  senderId: string;
+  /** The tenant of the bot the event arrived at. */
+  botTenantId: string;
 }
 
 export type PreCheckoutVerdict = { approved: true } | { approved: false; reason: 'not_found' | 'not_payable' | 'amount_mismatch' };
@@ -97,11 +106,19 @@ export interface BillingCallContext {
  *
  * `BILLING_API_BASE_URL` is optional: unset, the member menu offers no top-up
  * rather than a button that fails (`isConfigured`).
+ *
+ * **The in-chat relay is the exception (F-104-ab).** A payment's events are
+ * the payment's, not the chat's: the payer may never have signed in here. So
+ * `preCheckout` / `paid` go to billing directly at `BILLING_INTERNAL_BASE_URL`
+ * (`/api/internal/*`, not routed by Traefik) with the service token alone and
+ * the sender in the body. Unset, they answer "try again" — the platform then
+ * cancels the query, and a `paid` stays verifying for a person.
  */
 @Injectable()
 export class BillingApiClient {
   private readonly logger = new Logger(BillingApiClient.name);
   private readonly baseUrl: string;
+  private readonly internalBaseUrl: string;
   private readonly serviceToken: string;
   private readonly timeoutMs: number;
 
@@ -110,6 +127,7 @@ export class BillingApiClient {
     private readonly copy: BotCopy,
   ) {
     this.baseUrl = (config.get<string>('BILLING_API_BASE_URL') ?? '').replace(/\/+$/, '');
+    this.internalBaseUrl = (config.get<string>('BILLING_INTERNAL_BASE_URL') ?? '').replace(/\/+$/, '');
     this.serviceToken = config.get<string>('SERVICE_AUTH_TOKEN', '');
     this.timeoutMs = config.get<number>('AUTH_API_TIMEOUT_MS', 8000);
   }
@@ -130,39 +148,56 @@ export class BillingApiClient {
     return this.call('POST', '/api/billing/deposit/start', body, ctx);
   }
 
-  /** Relay a `pre_checkout_query` (F-104-m). */
-  preCheckout(body: InChatPaymentBody, ctx: BillingCallContext): Promise<ApiResult<PreCheckoutVerdict>> {
-    return this.call('POST', '/api/billing/deposit/in-chat/pre-checkout', body, ctx);
+  /** Relay a `pre_checkout_query` (F-104-m, F-104-ab). */
+  preCheckout(body: InChatPaymentBody, lang: string): Promise<ApiResult<PreCheckoutVerdict>> {
+    return this.relay('/api/internal/billing/deposit/in-chat/pre-checkout', body, lang);
   }
 
-  /** Relay a `successful_payment`, with the platform's charge id (F-104-m). */
-  paid(body: InChatPaymentBody & { chargeId: string }, ctx: BillingCallContext): Promise<ApiResult<InChatPaid>> {
-    return this.call('POST', '/api/billing/deposit/in-chat/paid', body, ctx);
+  /** Relay a `successful_payment`, with the platform's charge id (F-104-m, F-104-ab). */
+  paid(body: InChatPaymentBody & { chargeId: string }, lang: string): Promise<ApiResult<InChatPaid>> {
+    return this.relay('/api/internal/billing/deposit/in-chat/paid', body, lang);
   }
 
-  private async call<T>(method: 'GET' | 'POST', path: string, body: unknown, ctx: BillingCallContext): Promise<ApiResult<T>> {
-    if (!this.isConfigured) return this.unreachable(ctx.lang);
+  private call<T>(method: 'GET' | 'POST', path: string, body: unknown, ctx: BillingCallContext): Promise<ApiResult<T>> {
+    if (!this.isConfigured) return Promise.resolve(this.unreachable(ctx.lang));
+    return this.send(method, `${this.baseUrl}${path}`, body, ctx.lang, {
+      authorization: `Bearer ${ctx.accessToken}`,
+      [RequestHeaders.serviceToken]: this.serviceToken,
+      [RequestHeaders.botPlatform]: ctx.platform,
+      [RequestHeaders.botTenantId]: ctx.botTenantId,
+    });
+  }
+
+  private relay<T>(path: string, body: InChatPaymentBody, lang: string): Promise<ApiResult<T>> {
+    if (!this.internalBaseUrl) {
+      this.logger.error(`billing relay ${path}: BILLING_INTERNAL_BASE_URL is unset`);
+      return Promise.resolve(this.unreachable(lang));
+    }
+    return this.send('POST', `${this.internalBaseUrl}${path}`, body, lang, { [RequestHeaders.serviceToken]: this.serviceToken });
+  }
+
+  private async send<T>(
+    method: 'GET' | 'POST',
+    url: string,
+    body: unknown,
+    lang: string,
+    auth: Record<string, string>,
+  ): Promise<ApiResult<T>> {
+    const path = new URL(url).pathname;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     let response: Response;
     try {
-      response = await fetch(`${this.baseUrl}${path}`, {
+      response = await fetch(url, {
         method,
-        headers: {
-          'content-type': 'application/json',
-          'accept-language': ctx.lang,
-          authorization: `Bearer ${ctx.accessToken}`,
-          [RequestHeaders.serviceToken]: this.serviceToken,
-          [RequestHeaders.botPlatform]: ctx.platform,
-          [RequestHeaders.botTenantId]: ctx.botTenantId,
-        },
+        headers: { 'content-type': 'application/json', 'accept-language': lang, ...auth },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         signal: controller.signal,
       });
     } catch (e: unknown) {
       this.logger.error(`billing ${method} ${path} failed: ${e instanceof Error ? e.message : String(e)}`);
-      return this.unreachable(ctx.lang);
+      return this.unreachable(lang);
     } finally {
       clearTimeout(timer);
     }
@@ -172,13 +207,13 @@ export class BillingApiClient {
       envelope = (await response.json()) as ApiResult<T>;
     } catch {
       this.logger.error(`billing ${method} ${path} answered ${response.status} with a non-JSON body`);
-      return this.unreachable(ctx.lang);
+      return this.unreachable(lang);
     }
     // A refusal the gate wrote rather than billing (a 401, a 403 from the
     // policy file) carries no translated `msg`; every caller renders `msg` raw.
     if (typeof envelope?.ok !== 'boolean' || (!envelope.ok && !envelope.msg)) {
       this.logger.error(`billing ${method} ${path} answered ${response.status} with no envelope`);
-      return this.unreachable(ctx.lang);
+      return this.unreachable(lang);
     }
     return envelope;
   }

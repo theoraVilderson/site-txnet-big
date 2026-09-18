@@ -3,8 +3,14 @@
  * billing never holds the bot's token.
  *
  * What would break silently here, and nowhere else:
- *  - **pre-checkout approves only what `start` wrote**: this payer's own open
- *    payment, at an in-chat gateway, for exactly the charge in its currency;
+ *  - **an event is the payment's, not the chat session's (F-104-ab)**: billing
+ *    admits it only from the messenger id `start` recorded as the payer's, on
+ *    that messenger, through the payment tenant's own bot — a mismatch is
+ *    refused at pre-checkout and never credited at paid;
+ *  - **a suspended tenant's payment is not approved** (D-42 (1)): the relay
+ *    carries no tenant for `TenantStatusGuard`, so the service asks itself;
+ *  - **pre-checkout approves only what `start` wrote**: the open payment, at an
+ *    in-chat gateway, for exactly the charge in its currency;
  *  - **an approval starts the verify clock**: a `paid` that never arrives
  *    leaves a verifying row the retry ladder flags for a person (F-092-y), not
  *    one the expiry sweep quietly closes over money the platform took;
@@ -16,7 +22,7 @@
  *  - **a Star is priced by its USD value**, whole Stars rounded up.
  */
 import { Prisma } from '@prisma/client';
-import { runWithTenant } from '@txnet-backend/shared-core';
+import { serializeTenantStatusState, TenantContext } from '@txnet-backend/shared-core';
 
 import { TelegramStarsProvider } from '../gateway/telegram-stars.provider';
 import { offeredInThisChat, priceDeposit } from './deposit-pricing';
@@ -26,12 +32,16 @@ const TENANT = '22222222-2222-4222-8222-222222222222';
 const USER = '44444444-4444-4444-8444-444444444444';
 const GATEWAY = '55555555-5555-4555-8555-555555555555';
 const PAYMENT = '77777777-7777-4777-8777-777777777777';
+const RESELLER = '33333333-3333-4333-8333-333333333333';
 const d = (v: string) => new Prisma.Decimal(v);
 
 function paymentRow(overrides: Record<string, unknown> = {}) {
   return {
     id: PAYMENT,
+    tenantId: TENANT,
     userId: USER,
+    payerChatPlatform: 'telegram' as string | null,
+    payerChatId: '42' as string | null,
     status: 'pending',
     gatewayId: null,
     tenantGatewayConfigId: GATEWAY,
@@ -53,10 +63,14 @@ function paymentRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function build(row: ReturnType<typeof paymentRow> | null = paymentRow(), opts: { creditWins?: boolean } = {}) {
-  const { creditWins = true } = opts;
+function build(
+  row: ReturnType<typeof paymentRow> | null = paymentRow(),
+  opts: { creditWins?: boolean; tenantStatus?: string } = {},
+) {
+  const { creditWins = true, tenantStatus } = opts;
   const calls = {
     reads: [] as Array<Record<string, unknown>>,
+    tenants: [] as Array<string | undefined>,
     updates: [] as Array<{ where: Record<string, unknown>; data: Record<string, unknown> }>,
     credited: [] as Array<{ referenceId: string; source: string; received?: unknown }>,
   };
@@ -66,7 +80,8 @@ function build(row: ReturnType<typeof paymentRow> | null = paymentRow(), opts: {
     paymentTransaction: {
       findFirst: async ({ where }: { where: Record<string, unknown> }) => {
         calls.reads.push(where);
-        return current && where['id'] === current.id && where['userId'] === current.userId ? current : null;
+        calls.tenants.push(TenantContext.currentOrNull()?.id);
+        return current && where['id'] === current.id ? current : null;
       },
       updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
         calls.updates.push({ where, data });
@@ -75,6 +90,15 @@ function build(row: ReturnType<typeof paymentRow> | null = paymentRow(), opts: {
     },
   };
   const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
+  // Outside every tenant: the relay arrives with none, and the row names its own.
+  const crossTenant = {
+    paymentTransaction: {
+      findFirst: async ({ where }: { where: Record<string, unknown> }) =>
+        current && where['id'] === current.id
+          ? { id: current.id, tenantId: current.tenantId, payerChatPlatform: current.payerChatPlatform, payerChatId: current.payerChatId }
+          : null,
+    },
+  };
   const stars = new TelegramStarsProvider();
   const zarinpal = { name: 'zarinpal', settlement: 'return', chargeCurrency: 'IRR', chargeDecimals: 0 };
   const registry = {
@@ -88,25 +112,39 @@ function build(row: ReturnType<typeof paymentRow> | null = paymentRow(), opts: {
       return creditWins;
     },
   };
-  const service = new DepositInChatService(prisma as never, registry as never, settlement as never);
+  const service = new DepositInChatService(prisma as never, crossTenant as never, registry as never, settlement as never, {
+    get: async () => (tenantStatus ? serializeTenantStatusState({ status: tenantStatus as never, graceEndsAt: null }) : null),
+  });
   return { service, calls, setRow: (r: typeof row) => (current = r) };
 }
 
-const asTenant = <T>(fn: () => Promise<T>) => runWithTenant({ id: TENANT }, fn);
-const ref = (overrides: Partial<{ currency: string; totalAmount: bigint; userId: string }> = {}) => ({
-  userId: USER,
-  paymentId: PAYMENT,
-  currency: 'XTR',
-  totalAmount: BigInt(770),
-  ...overrides,
-});
+type Sender = { platform: string; senderId: string; botTenantId: string };
+const ref = (overrides: Partial<{ currency: string; totalAmount: bigint; paymentId: string } & Sender> = {}) => {
+  const { platform = 'telegram', senderId = '42', botTenantId = TENANT, ...rest } = overrides;
+  return {
+    paymentId: PAYMENT,
+    currency: 'XTR',
+    totalAmount: BigInt(770),
+    ...rest,
+    sender: { platform, senderId, botTenantId },
+  };
+};
+/** Everything the payer's messenger identity can get wrong (F-104-ab). */
+const NOT_THE_PAYER: Array<[string, ReturnType<typeof paymentRow>, ReturnType<typeof ref>]> = [
+  ['another sender', paymentRow(), ref({ senderId: '43' })],
+  ['another messenger', paymentRow(), ref({ platform: 'bale' })],
+  ["another tenant's bot", paymentRow(), ref({ botTenantId: RESELLER })],
+  ['a payment that recorded no payer', paymentRow({ payerChatPlatform: null, payerChatId: null }), ref()],
+];
 
 describe('DepositInChatService.preCheckout', () => {
   it('approves the open payment, takes the payment id as its authority and starts the verify clock', async () => {
     const { service, calls } = build();
-    await expect(asTenant(() => service.preCheckout(ref()))).resolves.toEqual({ approved: true });
+    await expect(service.preCheckout(ref())).resolves.toEqual({ approved: true });
 
-    expect(calls.reads[0]).toEqual({ id: PAYMENT, userId: USER });
+    // Read inside the payment's own tenant, which the relay never named.
+    expect(calls.reads[0]).toEqual({ id: PAYMENT });
+    expect(calls.tenants[0]).toBe(TENANT);
     const [authority, clock] = calls.updates;
     expect(authority.where).toMatchObject({ id: PAYMENT, status: 'pending' });
     expect(authority.data).toEqual({ gatewayTrackingCode: PAYMENT });
@@ -118,29 +156,45 @@ describe('DepositInChatService.preCheckout', () => {
     const { service, calls } = build(
       paymentRow({ gatewayTrackingCode: PAYMENT, nextVerifyAt: new Date(), verifyAttempts: 1, expiresAt: new Date(0) }),
     );
-    await expect(asTenant(() => service.preCheckout(ref()))).resolves.toEqual({ approved: true });
+    await expect(service.preCheckout(ref())).resolves.toEqual({ approved: true });
     expect(calls.updates).toHaveLength(1);
   });
 
-  it('refuses another amount, another currency, a closed or timed-out payment, and another payer', async () => {
+  it('refuses another amount, another currency, and a closed or timed-out payment', async () => {
     const cases: Array<[ReturnType<typeof paymentRow> | null, ReturnType<typeof ref>, string]> = [
       [paymentRow(), ref({ totalAmount: BigInt(769) }), 'amount_mismatch'],
       [paymentRow(), ref({ currency: 'USD' }), 'amount_mismatch'],
       [paymentRow({ status: 'success' }), ref(), 'not_payable'],
       [paymentRow({ status: 'expired' }), ref(), 'not_payable'],
       [paymentRow({ expiresAt: new Date(Date.now() - 1000) }), ref(), 'not_payable'],
-      [paymentRow(), ref({ userId: '99999999-9999-4999-8999-999999999999' }), 'not_found'],
+      [paymentRow(), ref({ paymentId: '99999999-9999-4999-8999-999999999999' }), 'not_found'],
     ];
     for (const [row, r, reason] of cases) {
       const { service, calls } = build(row);
-      await expect(asTenant(() => service.preCheckout(r))).resolves.toEqual({ approved: false, reason });
+      await expect(service.preCheckout(r)).resolves.toEqual({ approved: false, reason });
       expect(calls.updates).toEqual([]);
     }
   });
 
+  it.each(NOT_THE_PAYER)('refuses %s as not_found, and approves nothing', async (_name, row, r) => {
+    const { service, calls } = build(row);
+    await expect(service.preCheckout(r)).resolves.toEqual({ approved: false, reason: 'not_found' });
+    expect(calls.updates).toEqual([]);
+  });
+
+  it('refuses a suspended or terminated tenant’s payment, but still settles one already approved', async () => {
+    for (const status of ['suspended', 'terminated']) {
+      const { service, calls } = build(paymentRow(), { tenantStatus: status });
+      await expect(service.preCheckout(ref())).resolves.toEqual({ approved: false, reason: 'not_payable' });
+      expect(calls.updates).toEqual([]);
+    }
+    const settled = build(paymentRow({ gatewayTrackingCode: PAYMENT }), { tenantStatus: 'suspended' });
+    await expect(settled.service.paid({ ...ref(), chargeId: 'tg-charge-1' })).resolves.toMatchObject({ status: 'credited' });
+  });
+
   it('refuses a payment at a gateway that does not settle in chat', async () => {
     const { service } = build(paymentRow({ tenantGatewayConfig: { providerName: 'zarinpal' } }));
-    await expect(asTenant(() => service.preCheckout(ref()))).resolves.toEqual({ approved: false, reason: 'not_found' });
+    await expect(service.preCheckout(ref())).resolves.toEqual({ approved: false, reason: 'not_found' });
   });
 });
 
@@ -149,36 +203,43 @@ describe('DepositInChatService.paid', () => {
 
   it('credits through the guarded settlement with the platform charge id', async () => {
     const { service, calls } = build(paymentRow({ gatewayTrackingCode: PAYMENT }));
-    await expect(asTenant(() => service.paid(paid()))).resolves.toEqual({ status: 'credited', credited: '10.00' });
+    await expect(service.paid(paid())).resolves.toEqual({ status: 'credited', credited: '10.00' });
     expect(calls.credited).toEqual([{ referenceId: 'tg-charge-1', source: 'webhook_auto' }]);
   });
 
   it('reports what arrived only when it differs from the charge', async () => {
     const { service, calls } = build();
-    await asTenant(() => service.paid(paid({ totalAmount: BigInt(700) })));
+    await service.paid(paid({ totalAmount: BigInt(700) }));
     expect(calls.credited[0].received).toEqual({ amountMinor: BigInt(700), currency: 'XTR', decimals: 0 });
   });
 
   it('answers a repeat as already settled, and settles nothing in another currency', async () => {
     const repeat = build(paymentRow({ status: 'success' }), { creditWins: false });
-    await expect(asTenant(() => repeat.service.paid(paid()))).resolves.toEqual({
+    await expect(repeat.service.paid(paid())).resolves.toEqual({
       status: 'already_settled',
       credited: '10.00',
     });
 
     const other = build();
-    await expect(asTenant(() => other.service.paid(paid({ currency: 'USD' })))).resolves.toEqual({
+    await expect(other.service.paid(paid({ currency: 'USD' }))).resolves.toEqual({
       status: 'unsettled',
       credited: null,
     });
     expect(other.calls.credited).toEqual([]);
   });
 
-  it('answers not_found for a payment that is not this payer’s', async () => {
+  it('answers not_found for a payment nobody here has', async () => {
     const { service, calls } = build();
-    await expect(
-      asTenant(() => service.paid(paid({ userId: '99999999-9999-4999-8999-999999999999' }))),
-    ).resolves.toEqual({ status: 'not_found', credited: null });
+    await expect(service.paid(paid({ paymentId: '99999999-9999-4999-8999-999999999999' }))).resolves.toEqual({
+      status: 'not_found',
+      credited: null,
+    });
+    expect(calls.credited).toEqual([]);
+  });
+
+  it.each(NOT_THE_PAYER)('credits nothing for %s: the row stays verifying for a person', async (_name, row, r) => {
+    const { service, calls } = build(row);
+    await expect(service.paid({ ...r, chargeId: 'tg-charge-1' })).resolves.toEqual({ status: 'unsettled', credited: null });
     expect(calls.credited).toEqual([]);
   });
 });

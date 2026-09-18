@@ -35,6 +35,7 @@ and has no toolchain that could consume generated Go or TypeScript.
 | `X-Impersonated` | `true` | only while impersonating |
 | `X-Impersonated-By` | the acting admin | only while impersonating |
 | `X-Chat-Platform` | `telegram` / `bale` | only when the session's `scopeKey` is a chat's: `bot:<tenantId>:<platform>:<chatId>` (F-061-g), or `bot:<platform>:<chatId>` minted before it (F-104-q) |
+| `X-Chat-User-Id` | that scope's `<chatId>` — a private chat's is the person's messenger id | beside `X-Chat-Platform` only, never alone (F-104-ab) |
 | `X-Auth-Anonymous` | `true` | `/validate-optional` only, **instead of** all of the above |
 
 The split between the first five and the impersonation pair is part of the
@@ -65,6 +66,13 @@ auth-service writes the scope only after verifying the platform's signature, and
 Traefik strips a client's copy. `billing` offers an in-chat gateway on it. A
 scope naming any other platform, a non-chat scope, or an unreadable value
 writes nothing (`TestValidateNamesTheChatPlatformFromTheSessionScope`).
+
+`X-Chat-User-Id` (F-104-ab, the user's call 2026-09-18) is the same scope's
+chat id, written with `X-Chat-Platform` and never without it. A Mini App's is
+the `initData` user id auth-service verified; a bot chat's is its private chat,
+the same person. `billing` records it on an in-chat payment as the payer, and
+admits the platform's events for that payment only from that sender — so the
+relay needs no chat session. Traefik forwards and strips it like the rest.
 
 `X-Session-Id` is new with F-067-h and is the only one that names the *grant*
 rather than the person. It exists because a WebSocket outlives by hours the

@@ -38,7 +38,7 @@ import { AmountOutOfGatewayRange, RateOutOfRange, RateUnavailable } from '../pri
 import { DepositGatewayNotFound, DepositQuoteService } from './deposit-quote.service';
 import { DepositCallbackUnavailable, DepositStartService } from './deposit-start.service';
 import { DepositQuoteBody, depositQuoteSchema, DepositStartBody, depositStartSchema } from './deposit.schema';
-import { chatPlatformOf } from './chat-platform';
+import { Chat, chatOf } from './chat-platform';
 
 const E = BackendI18nKeys.errors.billing;
 
@@ -134,17 +134,19 @@ export class DepositController {
   }
 
   /**
-   * The messenger this caller is in, or `null` (`chat-platform.ts`). The bot's
-   * two headers count only beside a verified service token, for the same reason
-   * `channelOf` does (F-104-k), and only when its tenant is the request's
-   * (F-061-j). The panel's `?ma=` hint is never read here.
+   * The messenger this caller is in and its payer there, or `null`
+   * (`chat-platform.ts`). The bot's two headers count only beside a verified
+   * service token, for the same reason `channelOf` does (F-104-k), and only when
+   * its tenant is the request's (F-061-j); the payer is the gate's (F-104-ab).
+   * The panel's `?ma=` hint is never read here.
    */
-  private chatPlatformOf(req: Request): string | null {
-    return chatPlatformOf({
+  private chatOf(req: Request): Chat | null {
+    return chatOf({
       isBot: this.channelOf(req) === CouponChannel.bot,
       botPlatform: headerValue(req.headers, RequestHeaders.botPlatform) ?? null,
       botTenantId: headerValue(req.headers, RequestHeaders.botTenantId) ?? null,
       gatePlatform: headerValue(req.headers, IdentityHeaders.chatPlatform) ?? null,
+      gateChatId: headerValue(req.headers, IdentityHeaders.chatUserId) ?? null,
       tenantId: identityOf(req).tenantId,
     });
   }
@@ -156,7 +158,7 @@ export class DepositController {
     windowSec: 900,
   })
   gateways(@Req() req: Request) {
-    return this.deposits.listGateways({ canTest: canTest(req), chatPlatform: this.chatPlatformOf(req) });
+    return this.deposits.listGateways({ canTest: canTest(req), chatPlatform: this.chatOf(req)?.platform ?? null });
   }
 
   @TenantCapability('endUserDeposit')
@@ -180,7 +182,7 @@ export class DepositController {
         couponCodes: body.couponCodes,
         channel: this.channelOf(req),
         canTest: canTest(req),
-        chatPlatform: this.chatPlatformOf(req),
+        chatPlatform: this.chatOf(req)?.platform ?? null,
       });
       return {
         ...quote,
@@ -223,7 +225,7 @@ export class DepositController {
         channel: this.channelOf(req),
         origin: req.headers.origin ?? null,
         canTest: canTest(req),
-        chatPlatform: this.chatPlatformOf(req),
+        chat: this.chatOf(req),
         lang: (req as { language?: string }).language || this.locale.getDefaultLanguage(),
       });
     } catch (e) {

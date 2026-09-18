@@ -35,6 +35,12 @@ const (
 	// in (`bot:<platform>:<chatId>`, ADR-0032) — the bot or its Mini App. Written
 	// only then; billing offers that messenger's in-chat gateway on it (F-104-q).
 	HeaderChatPlatform = "X-Chat-Platform"
+	// HeaderChatUserID is that chat's id in the same scope — a private chat's id
+	// is the person's own messenger id, which the Mini App's verified initData
+	// named (ADR-0032). Written only beside HeaderChatPlatform; billing records
+	// it on an in-chat payment as the payer's, and admits the platform's
+	// events for that payment only from that sender (F-104-ab).
+	HeaderChatUserID = "X-Chat-User-Id"
 )
 
 // ChatPlatforms are the messengers a chat scope may name. Anything else in a

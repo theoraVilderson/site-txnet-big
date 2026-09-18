@@ -145,39 +145,39 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request) response.Respon
 			w.Header().Set(HeaderImpersonated, "true")
 			w.Header().Set(HeaderImpersonatedBy, claims.ImpersonatedBy)
 		}
-		if platform := chatPlatformOf(values[0]); platform != "" {
+		if platform, chatID := chatOf(values[0]); platform != "" {
 			w.Header().Set(HeaderChatPlatform, platform)
+			w.Header().Set(HeaderChatUserID, chatID)
 		}
 		return response.Ok(nil, msgSuccess), nil
 	}, msgSuccess, keyUnexpected)
 }
 
-// chatPlatformOf reads the messenger out of a session value whose scope is a
+// chatOf reads the messenger and the chat id out of a session value whose scope is a
 // chat's (`{"scopeKey":"bot:<tenantId>:<platform>:<chatId>"}`, written by
 // auth-service's SessionStore), or "" (F-104-q). A key minted before F-061-g
 // has no tenant (`bot:<platform>:<chatId>`) and lives until its session's next
-// refresh, so both shapes are read. The value is the one the decision already
+// refresh, so both shapes are read. The chat id is F-104-ab's payer id. The value is the one the decision already
 // fetched, so the marker costs no round trip, and it is set by the server that
 // verified the platform's signature — which is what makes it trustworthy where
 // the panel's `?ma=` hint is not. Anything unreadable is simply no chat.
-func chatPlatformOf(session string) string {
+func chatOf(session string) (platform, chatID string) {
 	var parsed struct {
 		ScopeKey *string `json:"scopeKey"`
 	}
 	if json.Unmarshal([]byte(session), &parsed) != nil || parsed.ScopeKey == nil {
-		return ""
+		return "", ""
 	}
 	parts := strings.Split(*parsed.ScopeKey, ":")
 	if parts[0] != "bot" || (len(parts) != 3 && len(parts) != 4) || parts[len(parts)-1] == "" {
-		return ""
+		return "", ""
 	}
-	platform := parts[len(parts)-2]
 	for _, known := range ChatPlatforms {
-		if platform == known {
-			return known
+		if parts[len(parts)-2] == known {
+			return known, parts[len(parts)-1]
 		}
 	}
-	return ""
+	return "", ""
 }
 
 // finish maps one decision onto the wire.

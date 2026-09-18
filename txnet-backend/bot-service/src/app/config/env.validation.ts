@@ -65,6 +65,12 @@ export const envSchema = z.object({
    * `my-auth` writes. Unset, the member menu has no top-up row.
    */
   BILLING_API_BASE_URL: optional(z.string().url()),
+  /**
+   * billing-service **directly**, for the in-chat payment relay only (F-104-ab):
+   * `/api/internal/*`, which Traefik does not route, with the service token and
+   * no user. Unset, a pre-checkout query is refused with "try again".
+   */
+  BILLING_INTERNAL_BASE_URL: optional(z.string().url()),
   AUTH_API_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
 
   /** How long a chat stays signed in without touching the bot. */

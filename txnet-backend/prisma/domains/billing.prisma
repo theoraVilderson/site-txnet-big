@@ -530,6 +530,12 @@ model PaymentTransaction {
   /// after it was made: a person should look (F-092-y, ADR-0044 decision 5).
   /// Retries go on; it is history, never cleared.
   verifyFlaggedAt        DateTime?
+  /// An in-chat payment's payer in their messenger (F-104-ab): the platform
+  /// and the id the gate read from the starting session's chat scope. The
+  /// bot's relay of `pre_checkout_query` / `successful_payment` is admitted only
+  /// from this sender. Both or neither — a CHECK in 20260918000300_payment_in_chat_payer.
+  payerChatPlatform      String?
+  payerChatId            String?
 
   // Restrict, not the optional-relation default SetNull: a payment is a
   // permanent record, and nulling its gateway would also break the CHECK.
