@@ -11,10 +11,12 @@ updated: 2026-09-18
 A topic file of [contract.md](contract.md) (§10). One page, `/resellers`
 (`PANEL_RESELLERS`), under `(panel)/resellers/`: `page.tsx` a server shell,
 `_components/ResellersView.tsx` the list, `CreateResellerSheet.tsx` and
-`ResellerSheet.tsx` the two sheets, `_lib/resellers.ts` the rules. The API is
+`ResellerSheet.tsx` the two sheets, `OwnerPicker.tsx` the create sheet's owner
+field, `_lib/resellers.ts` the rules. The API is
 `lib/tenant-api.ts` over `/api/tenants` and `/api/tenant-packages`
 (tenant-service), plus `billingApi.adjustTenantWallet` over
-`/api/billing/tenant-wallets/:tenantId/adjustments`. The routes and every rule
+`/api/billing/tenant-wallets/:tenantId/adjustments`, and `authApi.searchUsers`
+over `GET /api/auth/users` (F-018-ad, [auth-api](../auth-api/contract.md)). The routes and every rule
 behind them are [tenant/contract.admin.md](../../domains/tenant/contract.admin.md)'s
 (F-018-c/d/e/f) and [tenant/contract.billing.md](../../domains/tenant/contract.billing.md)
 "Manual adjustment" (F-019-a).
@@ -51,5 +53,11 @@ behind them are [tenant/contract.admin.md](../../domains/tenant/contract.admin.m
    `subscription_not_found` read is "not on a package yet", not a failure.
 8. **Paging is newer/older.** `GET /api/tenants` answers a page with no total;
    "older" is offered while a page comes back full. The page is `?page=`.
-9. **The owner is named by user id.** tenant-service never creates a user
-   (ADR-0058 (4)); there is no user search behind this page yet.
+9. **The owner is found, not typed** (F-018-ae). With `user.search` on the
+   platform owner's tenant (`canSearchUsers`) the sheet searches by phone,
+   username or email once the query is 3-64 characters (`userQuery`, test-held
+   to `userSearchSchema`), 300ms after typing stops, and shows name, username
+   and the masked phone. Only an `active` user can be picked
+   (`ownerSelectable`) — the create refuses anyone else as `owner_inactive`.
+   The body still sends `ownerUserId`; tenant-service never creates a user
+   (ADR-0058 (4)). Without the key the sheet takes a user id, as before.

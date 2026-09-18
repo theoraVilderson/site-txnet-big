@@ -13,7 +13,10 @@ import {
   adjustBody,
   canAdjustWallet,
   canAdministerResellers,
+  canSearchUsers,
   createBody,
+  ownerSelectable,
+  userQuery,
   packageChoices,
   statusChoices,
   validateAdjust,
@@ -165,5 +168,30 @@ describe("adjusting the billing wallet", () => {
   it("sends the request id it was given, and no empty note", () => {
     expect(adjustBody({ direction: "debit", amount: " 5 ", note: "  " }, UUID)).toEqual({ direction: "debit", amount: "5", requestId: UUID });
     expect(adjustBody({ direction: "credit", amount: "5", note: " refund " }, UUID)).toEqual({ direction: "credit", amount: "5", requestId: UUID, note: "refund" });
+  });
+});
+
+describe("picking the owner (F-018-ae)", () => {
+  const service = () => read("auth-service/src/app/auth/users/user-search.service.ts");
+
+  it("gates the search on the key auth-service checks, on the platform owner's tenant only", () => {
+    expect(service()).toContain("export const USER_SEARCH = 'user.search'");
+    expect(canSearchUsers(OWNER)).toBe(true);
+    expect(canSearchUsers(OWNER_STAFF)).toBe(false);
+    expect(canSearchUsers({ ...RESELLER, permissions: ["user.search"] })).toBe(false);
+  });
+
+  it("asks only a query the schema takes: 3 to 64 characters, trimmed", () => {
+    const schema = read("auth-service/src/app/auth/auth.schema.ts");
+    expect(schema).toMatch(/q: z\.string\(\)\.trim\(\)\.min\(3\)\.max\(64\)/);
+    expect(userQuery("  ab ")).toBeNull();
+    expect(userQuery(" 0912 ")).toBe("0912");
+    expect(userQuery("x".repeat(65))).toBeNull();
+  });
+
+  it("offers only an active user — the create refuses anyone else as owner_inactive", () => {
+    const hit = { id: UUID, fullName: "Sara", username: "sara", phoneMasked: "+989***6789", status: "active" as const };
+    expect(ownerSelectable(hit)).toBe(true);
+    expect(ownerSelectable({ ...hit, status: "suspended" as const })).toBe(false);
   });
 });

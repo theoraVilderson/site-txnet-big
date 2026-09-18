@@ -238,6 +238,18 @@ export type Me = {
   impersonatedBy?: string;
 };
 
+/**
+ * One user as `GET /auth/users` answers (F-018-ad): enough to tell two people
+ * apart and to see one is suspended — never the number, never an email.
+ */
+export type UserSearchHit = {
+  id: string;
+  fullName: string;
+  username: string | null;
+  phoneMasked: string | null;
+  status: "active" | "suspended" | "banned";
+};
+
 export type BotLinkStatus = {
   state: "pending" | "linked" | "failed";
   otpSent: boolean;
@@ -344,6 +356,8 @@ export const authApi = {
   async redeemHandoff(code: string) { const result = await request<AuthResult>("/auth/handoff/redeem", { method: "POST", body: JSON.stringify({ code }) }); accessToken = result.accessToken; sessionBootstrap = Promise.resolve(result); return result; },
   /** The caller's own identity and authority (F-097). */
   async me() { return request<Me>("/auth/me", { method: "GET" }); },
+  /** The platform owner finds a user by phone, username or email (F-018-ad): `user.search` on the platform's tenant. */
+  async searchUsers(q: string) { return request<{ users: UserSearchHit[] }>(`/auth/users?q=${encodeURIComponent(q)}`, { method: "GET" }); },
   /** Mails a code to `email` (F-035-g); nothing is written until `confirmEmail`. */
   async requestEmailCode(email: string) { return request<OtpQueued>("/auth/me/email", { method: "POST", body: JSON.stringify({ email }) }); },
   async confirmEmail(email: string, otpCode: string) { return request<{ email: string; emailVerifiedAt: string }>("/auth/me/email/verify", { method: "POST", body: JSON.stringify({ email, otpCode }) }); },

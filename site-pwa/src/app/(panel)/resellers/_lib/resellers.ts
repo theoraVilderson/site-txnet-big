@@ -1,4 +1,4 @@
-import type { Me } from "@/lib/auth-api";
+import type { Me, UserSearchHit } from "@/lib/auth-api";
 import type { TenantLedgerDirection, TenantWalletAdjustBody } from "@/lib/billing-api";
 import type {
   CreateResellerBody,
@@ -15,6 +15,8 @@ const K = RESELLER_KEYS;
 
 /** The key tenant-service's reseller, subscription and status routes gate on. */
 export const RESELLERS_MANAGE = "tenant.manage";
+/** The key auth-service's user search gates on (F-018-ad); the spec reads it from the service. */
+export const USER_SEARCH = "user.search";
 /** The key billing's manual adjustment gates on (F-019-a). */
 export const WALLET_ADJUST = "tenant_billing.adjust";
 const ALL_PERMISSIONS = "*";
@@ -71,6 +73,8 @@ const onPlatform = (me: Me | null) => me?.tenant?.type === "platform_owner";
  */
 export const canAdministerResellers = (me: Me | null) => onPlatform(me) && holds(me, RESELLERS_MANAGE);
 export const canAdjustWallet = (me: Me | null) => onPlatform(me) && holds(me, WALLET_ADJUST);
+/** Whether the create sheet can search for the owner; without it the sheet takes a user id. */
+export const canSearchUsers = (me: Me | null) => onPlatform(me) && holds(me, USER_SEARCH);
 
 // Each service's own shapes, so a refusal is caught before the call.
 const DNS_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -100,6 +104,19 @@ export function validateCreate(form: CreateForm): Errors<CreateForm> {
   if (!UUID.test(form.ownerUserId.trim())) errors.ownerUserId = K.errors.ownerUserId;
   return errors;
 }
+
+/** `userSearchSchema`'s bounds (auth-service); the spec holds the two together. */
+const USER_QUERY_MIN = 3;
+const USER_QUERY_MAX = 64;
+
+/** The query worth sending, or null while it is too short (or too long) for the service to take. */
+export function userQuery(raw: string): string | null {
+  const q = raw.trim();
+  return q.length >= USER_QUERY_MIN && q.length <= USER_QUERY_MAX ? q : null;
+}
+
+/** Only an active user can own a reseller; tenant-service answers anyone else `owner_inactive`. */
+export const ownerSelectable = (hit: UserSearchHit) => hit.status === "active";
 
 /** The three fields the `.strict()` schema takes; call after {@link validateCreate}. */
 export function createBody(form: CreateForm): CreateResellerBody {
