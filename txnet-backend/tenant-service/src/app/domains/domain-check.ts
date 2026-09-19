@@ -1,4 +1,4 @@
-import { CNAME_TARGET_ZONE } from '@txnet-backend/shared-core';
+import { CNAME_TARGET_ZONE, publicPath } from '@txnet-backend/shared-core';
 
 import type { ProbeAnswer } from './domain-lookup';
 
@@ -16,7 +16,10 @@ import type { ProbeAnswer } from './domain-lookup';
 export const VERIFY_RECORD_LABEL = '_domain-verification';
 
 /** The public path the http and https checks request, served by `DomainProbeController`. */
-export const PROBE_PATH = 'tenant-domain-probe';
+export const PROBE_PATH = publicPath('tenant', 'domain-probe');
+
+/** @deprecated since 2026-09-19, remove after the next release: the probe's path before ADR-0065 (F-018-ak). */
+export const LEGACY_PROBE_PATH = 'tenant-domain-probe';
 
 export const verifyRecordName = (host: string): string => `${VERIFY_RECORD_LABEL}.${host}`;
 

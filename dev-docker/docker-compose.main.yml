@@ -1218,6 +1218,29 @@ services:
       - "traefik.http.routers.tenant-preflight.middlewares=strip-fake-headers"
       - "traefik.http.routers.tenant-preflight.service=tenant-service"
 
+      # Every public route of this service (F-018-ak, ADR-0065): one router
+      # pair for the prefix, never one per route. No `my-auth` — nobody signs
+      # in to these; the service names the tenant from the Host and holds each
+      # route to the doors its `@PublicRoute` declares (the neutral 404 on any
+      # other). A new public route is a controller under `public/tenant/` and
+      # nothing here. Another service joins with a pair like this one, once.
+      - "traefik.http.routers.tenant-public-http.rule=PathPrefix(`/api/public/tenant`)"
+      - "traefik.http.routers.tenant-public-http.entrypoints=web"
+      - "traefik.http.routers.tenant-public-http.priority=130"
+      - "traefik.http.routers.tenant-public-http.middlewares=strip-fake-headers"
+      - "traefik.http.routers.tenant-public-http.service=tenant-service"
+
+      - "traefik.http.routers.tenant-public.rule=PathPrefix(`/api/public/tenant`)"
+      - "traefik.http.routers.tenant-public.entrypoints=websecure"
+      - "traefik.http.routers.tenant-public.priority=130"
+      - "traefik.http.routers.tenant-public.tls.certresolver=myresolver"
+      - "traefik.http.routers.tenant-public.middlewares=strip-fake-headers"
+      - "traefik.http.routers.tenant-public.service=tenant-service"
+
+      # @deprecated since 2026-09-19, remove after the next release (F-018-ak):
+      # the three routers below are the paths before ADR-0065, kept so a page
+      # or a cached image URL from the last build still answers. They reach the
+      # same controllers as `/api/public/tenant/*`.
       # The custom-domain probe (F-018-i): the sweep's own request, arriving
       # through a reseller's CDN, so no caller is signed in. It answers only a
       # host with a tenant_domain row, and the neutral 404 anywhere else.

@@ -2,8 +2,8 @@
 id: tenant
 layer: domain
 status: active
-version: 1
-updated: 2026-09-18
+version: 2
+updated: 2026-09-19
 ---
 
 # Contract — tenant / custom domains
@@ -21,7 +21,7 @@ the `/sub` domain, TLS and the CDN setup are other ids of area 13, not here.
 | `GET /api/tenants/:id/domains` | same | the reseller's custom domains, each with its last check |
 | `POST /api/tenants/:id/domains/:domainId/check` | same | `pending` / `failed` -> `verifying`; any other status is returned as is |
 | `POST /api/internal/tenant-domains/check-due` | `worker-service` (`ServiceOnlyGuard`) | `{due, verified, waiting, failed, revalidated, revalidating, dropped, errors}` |
-| `GET /api/tenant-domain-probe?n=<hex nonce>` | public, no `my-auth` (Traefik priority 130) | `{host, nonce}` on a host with a `tenant_domain` row; the neutral 404 elsewhere (F-1210) |
+| `GET /api/public/tenant/domain-probe?n=<hex nonce>` | public (ADR-0065, `@PublicRoute` doors `'none'`: an unverified domain has no surface yet, so the handler checks the row; `system`, so no status refuses it). `GET /api/tenant-domain-probe` is **@deprecated since 2026-09-19**, remove after the next release | `{host, nonce}` on a host with a `tenant_domain` row; the neutral 404 elsewhere (F-1210) |
 
 The domain view: `{id, domainValue, purpose, status, record: {type: 'TXT',
 name, value}, cnameTarget, verifiedAt, lastCheckedAt, lastCheck}`.

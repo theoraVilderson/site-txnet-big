@@ -347,22 +347,19 @@ describe('a host that serves no panel (F-066-x)', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("asks about the visitor's host, on the internal hop", async () => {
+  it("asks tenant-service about the visitor's host, on the internal hop", async () => {
+    vi.stubEnv('TENANT_SERVICE_ORIGIN', 'http://tenant-service:3000');
     await proxy(
       new NextRequest('https://panel.example.com/wallet', {
         headers: { [ProxyHeaders.forwardedHost]: 'acme.txnet.example' },
       }),
     );
-    expect(doorMock).toHaveBeenCalledWith('acme.txnet.example', ORIGIN, true);
+    expect(doorMock).toHaveBeenCalledWith('acme.txnet.example', 'http://tenant-service:3000');
   });
 
   it('asks through the page origin when no internal one is set', async () => {
-    vi.stubEnv('AUTH_SERVICE_ORIGIN', '');
+    vi.stubEnv('TENANT_SERVICE_ORIGIN', '');
     await proxy(requestFor('/wallet'));
-    expect(doorMock).toHaveBeenCalledWith(
-      'panel.example.com',
-      'https://panel.example.com',
-      false,
-    );
+    expect(doorMock).toHaveBeenCalledWith('panel.example.com', 'https://panel.example.com');
   });
 });

@@ -161,11 +161,11 @@ describe('TenantBrandingService', () => {
       ];
       const one = build({ domains: base });
       const panel = await one.service.upload(owner, RESELLER, 'favicon', { buffer: WEBP, mimetype: 'image/webp' });
-      expect(panel.faviconUrl).toMatch(/^https:\/\/panel\.ali\.ir\/api\/files\//);
+      expect(panel.faviconUrl).toMatch(/^https:\/\/panel\.ali\.ir\/api\/public\/tenant\/files\//);
 
       const two = build({ domains: [...base.slice(0, 2), { ...base[2], verificationStatus: 'verified' }] });
       const assets = await two.service.upload(owner, RESELLER, 'favicon', { buffer: WEBP, mimetype: 'image/webp' });
-      expect(assets.faviconUrl).toMatch(/^https:\/\/cdn\.ali\.ir\/api\/files\//);
+      expect(assets.faviconUrl).toMatch(/^https:\/\/cdn\.ali\.ir\/api\/public\/tenant\/files\//);
     });
 
     it.each([

@@ -1,6 +1,6 @@
 // The brand the panel wears: the domain's (F-066-v, ADR-0059).
 //
-// `GET /api/branding` answers for the tenant whose *Host* asked (tenant
+// `GET /api/public/tenant/branding` answers for the tenant whose *Host* asked (tenant
 // `contract.branding.md` rule 6), and no session is sent with it. That is the
 // whole of "`ResolvedTenant.brand ?? current`" on this side: on a reseller's
 // domain its owner is signed in to their own platform tenant, and the page is
@@ -10,11 +10,10 @@
 // title, favicon, colours and logo — a white-label page that flashes the
 // platform's name before its own is the leak this row exists to close.
 //
-// Server-only: it opens a socket with `node:http`. Client components import
-// its `Branding` type alone.
-import http from "node:http";
-import https from "node:https";
+// Server-only: it opens a socket with `node:http` (`host-get.ts`). Client
+// components import its `Branding` type alone.
 import type { CSSProperties } from "react";
+import { TENANT_PUBLIC, getJsonAsHost } from "./host-get";
 
 /** The fields of tenant's branding view the panel renders. */
 export interface Branding {
@@ -90,42 +89,6 @@ export function brandStyle(brand: Branding | null): CSSProperties {
 }
 
 /**
- * GET `<origin>/api/branding` with `Host: <host>`. Not `fetch`: it drops a
- * `Host` header, and on the internal hop the host is the only thing that says
- * which tenant is asking (tenant-service reads `Host`, not `X-Forwarded-Host`).
- */
-function getJson(origin: string, host: string): Promise<unknown> {
-  return new Promise((resolve) => {
-    let url: URL;
-    try {
-      url = new URL("/api/branding", origin);
-    } catch {
-      return resolve(null);
-    }
-    const client = url.protocol === "https:" ? https : http;
-    const req = client.get(
-      url,
-      { headers: { host, accept: "application/json" }, timeout: TIMEOUT_MS },
-      (res) => {
-        let raw = "";
-        res.setEncoding("utf8");
-        res.on("data", (chunk: string) => (raw += chunk));
-        res.on("end", () => {
-          try {
-            resolve(res.statusCode === 200 ? JSON.parse(raw) : null);
-          } catch {
-            resolve(null);
-          }
-        });
-        res.on("error", () => resolve(null));
-      },
-    );
-    req.on("timeout", () => req.destroy());
-    req.on("error", () => resolve(null));
-  });
-}
-
-/**
  * Keyed by a host the visitor chose — every host reaches this app — so it is
  * bounded: past the cap it starts over rather than growing with a scan.
  */
@@ -144,7 +107,7 @@ export function clearBrandingCache() {
  *
  * `origin` is `TENANT_SERVICE_ORIGIN` (the internal hop, as the session guard's
  * `AUTH_SERVICE_ORIGIN`), else the visitor's own `https://<host>`, where
- * Traefik routes `/api/branding` on every host.
+ * Traefik routes `/api/public/tenant` on every host.
  */
 export async function fetchBranding(
   host: string,
@@ -152,7 +115,7 @@ export async function fetchBranding(
 ): Promise<Branding | null> {
   const hit = cache.get(host);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.brand;
-  const brand = parseBranding(await getJson(origin, host));
+  const brand = parseBranding(await getJsonAsHost(origin, `${TENANT_PUBLIC}/branding`, host, TIMEOUT_MS));
   if (cache.size >= CACHE_MAX) cache.clear();
   cache.set(host, { at: Date.now(), brand });
   return brand;

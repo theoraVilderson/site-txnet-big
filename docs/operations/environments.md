@@ -84,7 +84,8 @@ Traefik in the main stack can route to the other stacks).
   (`next dev` outside compose); a wrong value shows the login form to everyone,
   it never lets anyone in.
 - `TENANT_SERVICE_ORIGIN` (site-pwa) = `http://tenant-service:3000` — server-side
-  only: the root layout reads the domain's brand from `GET /api/branding` there,
+  only: the root layout reads the domain's brand from `GET /api/public/tenant/branding`
+  there, and `proxy.ts` asks `GET /api/public/tenant/serves-panel` (ADR-0065),
   with the visitor's host as `Host` (`src/lib/branding.ts`, F-066-v). Unset goes
   out through `https://<visitor host>`; a wrong value renders every domain in
   the neutral look (its host as the name, the default colours).

@@ -120,9 +120,8 @@ export async function proxy(request: NextRequest) {
   // like no door.
   const host = visitorHost(request);
   if (host) {
-    const origin = authServiceOrigin(request);
-    const internal = origin !== request.nextUrl.origin;
-    if (!(await doorServes(host, origin, internal))) {
+    const origin = process.env.TENANT_SERVICE_ORIGIN || request.nextUrl.origin;
+    if (!(await doorServes(host, origin))) {
       return new NextResponse("Not Found", {
         status: 404,
         headers: { "content-type": "text/plain; charset=utf-8" },

@@ -2,8 +2,8 @@
 id: tenant
 layer: domain
 status: active
-version: 1
-updated: 2026-09-18
+version: 2
+updated: 2026-09-19
 ---
 
 # Contract — tenant / branding
@@ -21,7 +21,7 @@ rows. Rendering it: the panel is F-066-v, the landing site F-040.
 | `PUT /api/tenants/:id/branding` | same, `staffWrite` | the text, **whole**: a field left out is cleared; the images are untouched |
 | `PUT /api/tenants/:id/branding/assets/:slot` | same | multipart, one field `file`; stores the image and points the slot at it |
 | `DELETE /api/tenants/:id/branding/assets/:slot` | same | clears the slot, then deletes the file; repeats safely |
-| `GET /api/branding` | public, no `my-auth` (Traefik `tenant-branding`, priority 130) | the branding of the tenant whose Host asked |
+| `GET /api/public/tenant/branding` | public (ADR-0065: Traefik `tenant-public`, no `my-auth`; `@PublicRoute` doors `panel`, `assets`). `GET /api/branding` is **@deprecated since 2026-09-19**, same controller, remove after the next release | the branding of the tenant whose Host asked |
 
 Slots: `logo-light`, `logo-dark`, `favicon`, `og-image`. The body of the text
 `PUT`: `brandName` (required, 1-64), `primaryColorHex`, `secondaryColorHex`,
@@ -44,11 +44,11 @@ only), `reseller_terminated` 409, `too_large` 413, `type_not_allowed` /
 | Rule | Why |
 |---|---|
 | 1. The row stores **keys** (`tenants/<tenantId>/branding/<slot>`), never URLs; a CHECK per column holds each key to the row's own tenant and its own slot | domains rotate (object-storage rule 2); no row can point at another reseller's logo |
-| 2. A URL is built on every read: `https://<host>/api/files/<key>` on the tenant's proven `assets` door, else its proven `panel` door — custom domain first, never a CNAME target, and for a reseller never any platform subdomain (`panelHostOf`, F-018-aj: it serves nothing, ADR-0063); none is a `null` URL, not a 404 | the file route serves exactly those doors, so every URL handed out is one it answers |
+| 2. A URL is built on every read: `https://<host>/api/public/tenant/files/<key>` on the tenant's proven `assets` door, else its proven `panel` door — custom domain first, never a CNAME target, and for a reseller never any platform subdomain (`panelHostOf`, F-018-aj: it serves nothing, ADR-0063); none is a `null` URL, not a 404 | the file route serves exactly those doors, so every URL handed out is one it answers |
 | 3. **Every string is data to the renderer, which escapes it** (catalog 13.8). The schema is a second wall, not the first: links are `https` only, colours `#rrggbb` (CHECK too), text has no control or bidi-override characters, and no field outside the schema is accepted | a `javascript:` link or a `</title>` in a brand name reaches every visitor of the reseller's pages |
 | 4. An image is PNG or WebP — never SVG, and not JPEG (a logo needs transparency) — sniffed by the port. Caps: logos 512 KB, favicon 128 KB, OG image 1 MB; the multipart parser is capped at the largest | an SVG runs script; a type is served as stored |
 | 5. Bytes are written in the **reseller's** scope (`runWithTenant`), then the key; a clear removes the key, then the bytes | the object-storage port's own order: an orphan file, never a key with no file |
-| 6. `GET /api/branding` resolves its tenant with `FileHostMiddleware` — the file route's doors (`panel`, `assets`; a subdomain or a verified custom domain). Any other Host is the neutral 404 | a host never answers with another tenant's brand, nor says which tenants exist |
+| 6. `GET /api/public/tenant/branding` resolves its tenant with `PublicHostMiddleware` and the file route's doors (`panel`, `assets`; a subdomain or a verified custom domain; never a closed door, ADR-0063). Any other Host is the neutral 404 | a host never answers with another tenant's brand, nor says which tenants exist |
 
 A replaced image keeps its key, so a browser may show the old one for up to
 five minutes (`Cache-Control: max-age=300` on the file route).
@@ -57,5 +57,5 @@ five minutes (`Cache-Control: max-age=300` on the file route).
 
 | unit | uses |
 |---|---|
-| panel-web | `GET /api/branding` server-side, by the visitor's host (F-066-v, `interfaces/panel-web/contract.branding.md`) |
-| marketing-web | `GET /api/branding` (F-040, not yet built) |
+| panel-web | `GET /api/public/tenant/branding` server-side, by the visitor's host (F-066-v, `interfaces/panel-web/contract.branding.md`) |
+| marketing-web | `GET /api/public/tenant/branding` (F-040, not yet built) |

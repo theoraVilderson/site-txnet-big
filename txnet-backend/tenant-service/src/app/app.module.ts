@@ -1,20 +1,20 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { RateLimitGuard, TenantStatusGuard } from '@txnet-backend/shared-core';
+import { PUBLIC_PREFIX, PublicRouteGuard, RateLimitGuard, TenantStatusGuard } from '@txnet-backend/shared-core';
 
 import { BrandingModule } from './branding/branding.module';
-import { BRANDING_PATH } from './branding/tenant-branding.controller';
+import { LEGACY_BRANDING_PATH } from './branding/tenant-branding.controller';
 import { envConfigOptions } from './config/env.validation';
 import { DomainsModule } from './domains/domains.module';
-import { FileHostMiddleware } from './files/file-host.middleware';
-import { FILES_PATH } from './files/files.controller';
+import { LEGACY_FILES_PATH } from './files/files.controller';
 import { FilesModule } from './files/files.module';
-import { PROBE_PATH } from './domains/domain-check';
+import { LEGACY_PROBE_PATH } from './domains/domain-check';
 import { HealthController } from './health.controller';
 import { LanguageMiddleware } from './locale/language.middleware';
 import { LocaleModule } from './locale/locale.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
+import { PublicHostMiddleware } from './public/public-host.middleware';
 import { PackagesModule } from './packages/packages.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { PurchaseModule } from './purchase/purchase.module';
@@ -29,8 +29,15 @@ import { VaultModule } from './vault/vault.module';
 /** The service-to-service seam: reached by the platform's processes, never through Traefik. */
 const INTERNAL_ROUTES = 'internal/*path';
 
-/** The file route: public, its tenant from the Host (F-018-m). */
-const FILE_ROUTES = `${FILES_PATH}/*path`;
+/**
+ * Every public route (F-018-ak, ADR-0065): no session, the tenant from the Host,
+ * each route's doors its own `@PublicRoute`. A controller added under
+ * `public/tenant/` is covered here and by Traefik without opting in.
+ */
+const PUBLIC_ROUTES = `${PUBLIC_PREFIX}/*path`;
+
+/** @deprecated since 2026-09-19, remove after the next release: the public paths before ADR-0065. */
+const LEGACY_PUBLIC_ROUTES = [`${LEGACY_FILES_PATH}/*path`, LEGACY_BRANDING_PATH, LEGACY_PROBE_PATH];
 
 /**
  * `tenant-service` (F-018-t, ADR-0058): tenant administration, out of
@@ -61,6 +68,9 @@ const FILE_ROUTES = `${FILES_PATH}/*path`;
   ],
   controllers: [HealthController],
   providers: [
+    // First, so a public route on a door it does not serve is the neutral 404
+    // before anything judges its tenant (F-018-ak).
+    { provide: APP_GUARD, useClass: PublicRouteGuard },
     // Per-user limits, opted into per route with `@RateLimit` (F-092-r).
     { provide: APP_GUARD, useClass: RateLimitGuard },
     // What the tenant's status allows (C-11): the tenant is the scope
@@ -72,17 +82,14 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     // Language first, so the 401 IdentityMiddleware throws is translated.
     consumer.apply(LanguageMiddleware).forRoutes('{*path}');
-    // Every route but the health check, the internal seam, the domain
-    // probe (public: the sweep's own request, F-018-i), the file route and
-    // the public branding read (F-018-h) needs the gate's identity — a moved controller is covered without
+    // Every route but the health check, the internal seam and the public
+    // routes needs the gate's identity — a moved controller is covered without
     // opting in.
     consumer
       .apply(IdentityMiddleware)
-      .exclude('health', INTERNAL_ROUTES, PROBE_PATH, FILE_ROUTES, BRANDING_PATH)
+      .exclude('health', INTERNAL_ROUTES, PUBLIC_ROUTES, ...LEGACY_PUBLIC_ROUTES)
       .forRoutes('{*path}');
-    // The file route's tenant is its Host's, not a header's (F-018-m); so is
-    // the public branding read's, over the same doors, so every image URL it
-    // hands out is one the file route will serve (F-018-h).
-    consumer.apply(FileHostMiddleware).forRoutes(FILE_ROUTES, BRANDING_PATH);
+    // A public route's tenant is its Host's, not a header's (ADR-0065).
+    consumer.apply(PublicHostMiddleware).forRoutes(PUBLIC_ROUTES, ...LEGACY_PUBLIC_ROUTES);
   }
 }

@@ -68,10 +68,11 @@ calls refused. D-01 is about what a platform host *serves*, so the page was the
 violation.
 
 `proxy.ts` now asks first, before the rename redirect and the session check:
-`lib/door.ts` calls auth-service's `GET /api/auth/door` for the visitor's host
-(the internal hop with `X-Forwarded-Host`, as the session check does) and, on
+`lib/door.ts` calls tenant-service's `GET /api/public/tenant/serves-panel` for
+the visitor's host (`TENANT_SERVICE_ORIGIN` with `Host: <visitor host>` through
+`lib/host-get.ts`, as the brand read does; ADR-0065) and, on
 `serves: false`, answers a bare `404 Not Found` in plain text — no panel HTML,
-no brand, no redirect. The rule itself is auth-service's
+no brand, no redirect. The rule itself is shared-core's `doorServesPanel`
 (`tenant/contract.onboarding.md` "The panel asks before it renders"); nothing
 here restates it.
 

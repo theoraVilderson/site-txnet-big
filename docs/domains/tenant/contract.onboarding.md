@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-version: 5
+version: 6
 updated: 2026-09-19
 ---
 
@@ -119,13 +119,15 @@ address (F-1210).
 
 `site-pwa` is a separate deployable that every host reaches (F-066-u), so the
 same rule has to hold for the page. It is not restated there:
-`GET /api/auth/door` answers `{ serves: boolean }` for the host that asked,
-from the same resolution and the same `doorClosed` rule (`door.controller.ts`).
+`GET /api/public/tenant/serves-panel` answers `{ serves: boolean }` for the
+host that asked, from the same `doorClosed` rule `TenantGuard` refuses on
+(`doorServesPanel`, shared-core; `serves-panel.controller.ts`, ADR-0065).
+`GET /api/auth/door` gave the same answer until 2026-09-19 and is deprecated.
 `false` on a reseller's platform subdomain and a `subscription` / `assets`
 domain; `true` otherwise.
 
-- It is the one route `TenantGuard` exempts from refusals (3) and (4)
-  (`@DoorProbe`) — it must answer on exactly the doors they close. An
+- Its doors are `'any'` (`@PublicRoute`), so it answers on exactly the doors
+  every other route refuses. An
   unregistered host is still the neutral 404, which the panel reads as "render"
   (F-066-u's own call).
 - `@TenantCapability('system')`: no status refuses the question.
@@ -178,4 +180,4 @@ Refusals are `ResellerAccess`'s: `not_allowed` 403, `reseller_not_found` 404,
 |---|---|
 | auth-, billing-, notification-service | `TenantStatusGuard` — inherit the column through `tenantAllows`, unchanged |
 | worker-service `TenantStatusGate`, gateway-service `TenantSocketWatch` | the same state; a gated tenant's ticks and sockets follow their capability |
-| panel-web | the checklist, on `/my-resellers/:id` (F-066-w, `resellerOnboardingApi`); the door rule through `GET /api/auth/door` (F-066-x) |
+| panel-web | the checklist, on `/my-resellers/:id` (F-066-w, `resellerOnboardingApi`); the door rule through `GET /api/public/tenant/serves-panel` (F-066-x, F-018-ak) |

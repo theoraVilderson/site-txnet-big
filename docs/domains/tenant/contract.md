@@ -209,7 +209,7 @@ yet; its prefix goes into `SERVED_PATHS` (`app/tenant/tenant.ts`) with it. The
 gate is the same seam's third input ([contract.onboarding.md](contract.onboarding.md), F-018-ag).
 
 **Every host reaches the panel now** (F-066-u), so the panel mirrors this rule
-(F-066-x): `site-pwa` asks `GET /api/auth/door` before it renders and returns
+(F-066-x): `site-pwa` asks `GET /api/public/tenant/serves-panel` before it renders and returns
 a bare 404 on `serves: false`. A reseller's CNAME target serves nothing at all,
 on any path (ADR-0063). Both are in
 [contract.onboarding.md](contract.onboarding.md) "The door a gated reseller is served on".

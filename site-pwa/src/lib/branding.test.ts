@@ -106,10 +106,10 @@ describe('fetchBranding — the host names the brand, never the session', () => 
     reply = (res) => res.end(JSON.stringify({ ok: true, data: VIEW }));
   });
 
-  it('asks /api/branding on the internal origin with the visitor host as Host, and no cookie', async () => {
+  it('asks /api/public/tenant/branding on the internal origin with the visitor host as Host, and no cookie', async () => {
     const b = await fetchBranding('panel.acme.test', origin);
     expect(b?.brandName).toBe('Acme VPN');
-    expect(seen).toEqual([{ host: 'panel.acme.test', path: '/api/branding', cookie: undefined }]);
+    expect(seen).toEqual([{ host: 'panel.acme.test', path: '/api/public/tenant/branding', cookie: undefined }]);
   });
 
   it('answers a second render for the same host from its cache, another host fresh', async () => {

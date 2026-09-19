@@ -10,7 +10,7 @@ updated: 2026-09-18
 
 A topic file of `contract.md` (§10). The panel wears the brand of **the domain
 it was loaded on** — name, light/dark logo, favicon, OG image, colours — from
-tenant's public `GET /api/branding` (`domains/tenant/contract.branding.md`).
+tenant's public `GET /api/public/tenant/branding` (`domains/tenant/contract.branding.md`).
 
 ## The rule
 
@@ -27,8 +27,8 @@ domain. So the read carries the visitor's host and no cookie.
 |---|---|
 | who | the root layout (`app/layout.tsx`), on the server, before first byte |
 | code | `lib/branding.ts` (`fetchBranding`, `parseBranding`, `brandStyle`); the host is `lib/visitor-host.ts`, shared with the session guard |
-| hop | `TENANT_SERVICE_ORIGIN` (internal, `http://tenant-service:3000`) with `Host: <visitor host>`; unset -> `https://<visitor host>`, where Traefik routes `/api/branding` on every host |
-| transport | `node:http`, not `fetch`: `fetch` drops a `Host` header, and tenant-service resolves `/api/branding` from `Host` alone (tenant rule 6) |
+| hop | `TENANT_SERVICE_ORIGIN` (internal, `http://tenant-service:3000`) with `Host: <visitor host>`; unset -> `https://<visitor host>`, where Traefik routes `/api/public/tenant` on every host (ADR-0065) |
+| transport | `node:http` (`lib/host-get.ts`, shared with `lib/door.ts`), not `fetch`: `fetch` drops a `Host` header, and tenant-service resolves a public route from `Host` alone (tenant rule 6) |
 | cache | per host, 60s, in process; capped at 500 hosts, then cleared — every host reaches this app, so the key is the visitor's choice |
 | timeout | 2s |
 

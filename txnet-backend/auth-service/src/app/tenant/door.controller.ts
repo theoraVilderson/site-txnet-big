@@ -8,6 +8,11 @@ import { resolveTenant } from './tenant';
 /**
  * `GET /api/auth/door` — may the host that asked serve the panel? (F-066-x.)
  *
+ * @deprecated since 2026-09-19, remove after the next release (F-018-ak). The
+ * question is the tenant's, not auth's: it is answered at
+ * `GET /api/public/tenant/serves-panel` (ADR-0065), and the panel asks there.
+ * Kept one release for a panel build that still calls this path.
+ *
  * `{ serves: boolean }` and nothing else: no purpose, no gate, no tenant. The
  * panel needs a yes or a no, and a stranger learns no more from this than from
  * the page the panel then does or does not render.

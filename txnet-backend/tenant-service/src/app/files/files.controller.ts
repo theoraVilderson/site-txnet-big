@@ -2,13 +2,18 @@ import { Controller, Get, NotFoundException, Req, Res } from '@nestjs/common';
 import {
   ObjectNotFound,
   ObjectStorage,
+  PublicRoute,
   TenantContext,
   parseObjectKey,
+  publicPath,
 } from '@txnet-backend/shared-core';
 import type { Request, Response } from 'express';
 
-/** The one serving route (F-018-m): `GET /api/files/<key>`. */
-export const FILES_PATH = 'files';
+/** The one serving route (F-018-m): `GET /api/public/tenant/files/<key>` (F-018-ak). */
+export const FILES_PATH = publicPath('tenant', 'files');
+
+/** @deprecated since 2026-09-19, remove after the next release: `GET /api/files/<key>`, before ADR-0065. */
+export const LEGACY_FILES_PATH = 'files';
 
 /**
  * Short enough that a replaced logo shows within minutes; the ETag makes every
@@ -18,17 +23,18 @@ const CACHE_CONTROL = 'public, max-age=300';
 
 /**
  * Serves a stored file by its key, to the tenant whose Host asked
- * (`FileHostMiddleware`). Never a path, never a bucket URL: the key is the
+ * (`PublicHostMiddleware`), on its panel or its assets domain. Never a path, never a bucket URL: the key is the
  * whole address, and the driver behind it can change without this route
  * noticing.
  *
  * Answers with `@Res()`, outside the envelope — the body is the file.
  */
-@Controller(FILES_PATH)
+@Controller([FILES_PATH, LEGACY_FILES_PATH])
 export class FilesController {
   constructor(private readonly storage: ObjectStorage) {}
 
   @Get('*key')
+  @PublicRoute({ doors: ['panel', 'assets'] })
   async serve(@Req() req: Request, @Res() res: Response): Promise<void> {
     const raw = (req.params as Record<string, string | string[]>)['key'];
     const key = Array.isArray(raw) ? raw.join('/') : raw ?? '';

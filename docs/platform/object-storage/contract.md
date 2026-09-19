@@ -2,8 +2,8 @@
 id: object-storage
 layer: platform
 status: active
-version: 2
-updated: 2026-09-18
+version: 3
+updated: 2026-09-19
 ---
 
 # Contract — object-storage
@@ -25,7 +25,7 @@ no row. One public route serves a key to the tenant whose Host asked.
 | `ObjectStorage.stat(key)` | key | the row, or `null` | `TenantScopeConflict` for another tenant's key |
 | `ObjectStorage.get(key)` | key | the row + bytes | `ObjectNotFound`; `TenantScopeConflict` |
 | `ObjectStorage.delete(key)` | key | — | `ObjectNotFound`; `TenantScopeConflict` |
-| `GET /api/files/<key>` (tenant-service) | the Host, the key | the file | a neutral 404 for everything else |
+| `GET /api/public/tenant/files/<key>` (tenant-service; `/api/files/<key>` **@deprecated since 2026-09-19**, remove after the next release) | the Host, the key | the file | a neutral 404 for everything else |
 | `objectKey` / `parseObjectKey` | tenant id + path / key | key / `{ tenantId, path }` or `null` | — |
 | `objectDriverFromEnv(env)` | `OBJECT_STORAGE_DRIVER`, `OBJECT_STORAGE_LOCAL_ROOT` | the driver | an unbuilt driver or no root throws at boot |
 
@@ -61,12 +61,13 @@ does not own, which is a bug to surface.
 
 ## The serving route
 
-`GET /api/files/<key>` on `tenant-service` — public, because an `<img>` carries
-no session (Traefik router `tenant-files`, no `my-auth`).
+`GET /api/public/tenant/files/<key>` on `tenant-service` — public, because an
+`<img>` carries no session (ADR-0065: Traefik router `tenant-public`, no `my-auth`).
 
-- `FileHostMiddleware` resolves the Host with `tenantOfHost` (`shared-core`,
-  the same rule `billing-service`'s callback uses) over `panel` and `assets`
-  rows: a subdomain, or a **verified** custom domain. That tenant is the scope.
+- `PublicHostMiddleware` resolves the Host with `surfaceOfHost` (`shared-core`)
+  and `@PublicRoute({ doors: ['panel', 'assets'] })` holds the route to `panel`
+  and `assets` rows: a subdomain, or a **verified** custom domain, never a
+  closed door (ADR-0063). That tenant is the scope.
 - A key outside that tenant's prefix, a key with no row, a row with no bytes,
   an unknown Host and an unproven domain are **one neutral 404** — a reseller's
   domain never says that another reseller's file exists.

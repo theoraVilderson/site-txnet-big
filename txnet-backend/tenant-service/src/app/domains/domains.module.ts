@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ResellerAccess } from '@txnet-backend/shared-core';
 
 import { DOMAIN_LOOKUP, NodeDomainLookup } from './domain-lookup';
+import { ServesPanelController } from './serves-panel.controller';
 import { TenantDomainController } from './tenant-domain.controller';
 import { DomainProbeController, TenantDomainInternalController } from './tenant-domain-internal.controller';
 import { TenantDomainService } from './tenant-domain.service';
@@ -12,7 +13,7 @@ import { TenantDomainService } from './tenant-domain.service';
  * `PrismaModule` and `RedisModule` are `@Global`, so neither is imported here.
  */
 @Module({
-  controllers: [TenantDomainController, TenantDomainInternalController, DomainProbeController],
+  controllers: [TenantDomainController, TenantDomainInternalController, DomainProbeController, ServesPanelController],
   providers: [TenantDomainService, ResellerAccess, { provide: DOMAIN_LOOKUP, useClass: NodeDomainLookup }],
 })
 export class DomainsModule {}

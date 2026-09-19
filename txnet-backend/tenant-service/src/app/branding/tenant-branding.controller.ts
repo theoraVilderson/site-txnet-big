@@ -16,7 +16,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { TenantContext } from '@txnet-backend/shared-core';
+import { PublicRoute, TenantContext, publicPath } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
@@ -32,8 +32,11 @@ import {
   UploadedAsset,
 } from './tenant-branding.service';
 
-/** The public read (F-018-h): `GET /api/branding`, its tenant from the Host. */
-export const BRANDING_PATH = 'branding';
+/** The public read (F-018-h): `GET /api/public/tenant/branding`, its tenant from the Host (F-018-ak). */
+export const BRANDING_PATH = publicPath('tenant', 'branding');
+
+/** @deprecated since 2026-09-19, remove after the next release: `GET /api/branding`, before ADR-0065. */
+export const LEGACY_BRANDING_PATH = 'branding';
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
 const STATUS: Record<BrandingRejection, 403 | 404 | 409 | 413 | 415> = {
@@ -99,14 +102,16 @@ export class TenantBrandingController {
 /**
  * What the panel and the landing site render (F-018-h): the brand of the
  * tenant whose Host asked. Public — a stranger's first page load has no
- * session — and behind `FileHostMiddleware`, so an unknown or unproven host is
- * the neutral 404 and a host never answers with another tenant's brand.
+ * session — on the same doors as the file route, so an unknown or unproven host
+ * is the neutral 404, a host never answers with another tenant's brand, and
+ * every image URL it hands out is one the file route will serve.
  */
-@Controller(BRANDING_PATH)
+@Controller([BRANDING_PATH, LEGACY_BRANDING_PATH])
 export class BrandingPublicController {
   constructor(private readonly branding: TenantBrandingService) {}
 
   @Get()
+  @PublicRoute({ doors: ['panel', 'assets'] })
   read(): Promise<BrandingView> {
     return this.branding.ofTenant(TenantContext.current('branding by host').id);
   }
