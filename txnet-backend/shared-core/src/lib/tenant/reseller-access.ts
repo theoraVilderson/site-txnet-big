@@ -1,10 +1,17 @@
-import { Injectable } from '@nestjs/common';
-import { TenantStatus, TenantType } from '@prisma/client';
-import { TenantCapabilityName, holdsPermission, tenantAllows } from '@txnet-backend/shared-core';
+import { Inject, Injectable } from '@nestjs/common';
+import { TenantStatus, TenantType, type PrismaClient } from '@prisma/client';
 
-import { PrismaService } from '../prisma/prisma.service';
+import { holdsPermission } from '../http/permissions';
+import { runWithTenant } from '../tenant-context/tenant-context';
+import { TenantCapabilityName, tenantAllows } from './status-policy';
 
-/** Who is on the other end, as `IdentityMiddleware` read it from `forward-auth`. */
+/** The reads the rule needs. An app binds its app pool (`PrismaService`): `tenant.tenant` has no RLS, and a member's seat is their own tenant's row. */
+export type ResellerAccessReader = Pick<PrismaClient, 'tenant' | 'tenantStaffMember'>;
+
+/** The DI token an app binds its {@link ResellerAccessReader} to, once, beside its Prisma pools. */
+export const RESELLER_ACCESS_READER = Symbol('RESELLER_ACCESS_READER');
+
+/** Who is on the other end, as the service read it from `forward-auth`. */
 export type ResellerActor = { userId: string; tenantId: string; permissions: string[] };
 
 /** How the caller got in: the reseller's `ownerUserId`, one of its staff, or the platform owner's staff. */
@@ -23,8 +30,10 @@ export class ResellerAccessRefused extends Error {
 }
 
 /**
- * The one door on a reseller's self-service routes (F-061-h, ADR-0059 (1)):
- * `/api/tenants/:id/...`, reached by that reseller's owner.
+ * The one door on every route that configures a named reseller (F-061-h,
+ * ADR-0059 (1)): `/api/tenants/:id/...`, and since F-066-w1 any service's
+ * `/api/<service>/tenants/:tenantId/...` (ADR-0064 (1)-(2)). Tenant invariant
+ * 21 lives here and nowhere else; a service calls it, never copies it.
  *
  * **The reseller is the path's, never the ambient tenant.** The owner is a user
  * of the platform owner's tenant, so their session — on the platform's domain
@@ -50,10 +59,14 @@ export class ResellerAccessRefused extends Error {
  * Every fact is read on the app pool — `tenant.tenant` has no RLS, and a
  * member's seat is their own tenant's row — before a caller touches the
  * cross-tenant pool (ADR-0053's order).
+ *
+ * {@link run} is the admission plus the scope (ADR-0064 (3)): the work runs
+ * with the **reseller** as the tenant, so the app pool's RLS sees its rows and
+ * not the caller's.
  */
 @Injectable()
 export class ResellerAccess {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(RESELLER_ACCESS_READER) private readonly prisma: ResellerAccessReader) {}
 
   async admit(actor: ResellerActor, tenantId: string, capability: TenantCapabilityName, now = new Date()): Promise<AdmittedReseller> {
     const [caller, tenant] = await Promise.all([
@@ -77,6 +90,23 @@ export class ResellerAccess {
       if (!tenantAllows(state, capability, now)) throw new ResellerAccessRefused('reseller_suspended', tenantId);
     }
     return { id: reseller.id, slug: reseller.slug, as: staff ? 'staff' : owner ? 'owner' : 'member' };
+  }
+
+  /**
+   * {@link admit}, then `work` with the admitted reseller in scope. A refusal
+   * throws before `work` starts. `work` must `await` its queries inside itself
+   * (`runWithTenant`'s rule): a Prisma promise returned unawaited runs after
+   * the scope has closed.
+   */
+  async run<T>(
+    actor: ResellerActor,
+    tenantId: string,
+    capability: TenantCapabilityName,
+    work: (reseller: AdmittedReseller) => Promise<T>,
+    now = new Date(),
+  ): Promise<T> {
+    const reseller = await this.admit(actor, tenantId, capability, now);
+    return runWithTenant({ id: reseller.id }, () => work(reseller));
   }
 
   /**

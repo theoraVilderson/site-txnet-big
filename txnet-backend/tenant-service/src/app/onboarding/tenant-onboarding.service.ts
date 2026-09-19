@@ -6,10 +6,9 @@ import {
   TenantDomainType,
   TenantGatewayVerificationStatus,
 } from '@prisma/client';
-import { TenantOnboardingPolicy, TENANT_CAPABILITIES, TenantCapabilityName, offeredToTenant } from '@txnet-backend/shared-core';
+import { TenantOnboardingPolicy, TENANT_CAPABILITIES, TenantCapabilityName, offeredToTenant, ResellerAccess, ResellerAccessRejection, ResellerActor } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
-import { ResellerAccess, ResellerAccessRejection, ResellerActor } from '../request/reseller-access';
 
 /**
  * What a reseller still has to do before it can open (F-018-l, catalog F-213).

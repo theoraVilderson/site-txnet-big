@@ -25,6 +25,7 @@ source:
   - txnet-backend/shared-core/src/lib/tenant/status-policy.ts
   - txnet-backend/shared-core/src/lib/tenant/entitlements.ts
   - txnet-backend/shared-core/src/lib/tenant/owner-cache.ts
+  - txnet-backend/shared-core/src/lib/tenant/reseller-access.ts
   - txnet-backend/prisma/domains/migrations/20260917001500_tenant_status/**
   - txnet-backend/prisma/domains/migrations/20260917001600_tenant_subscription_renewal/**
   - txnet-backend/prisma/domains/migrations/20260917001700_tenant_subscription_grace/**
@@ -58,7 +59,7 @@ end-user RBAC (`identity`), product pricing (`catalog`).
 | [contract.onboarding.md](contract.onboarding.md) | asking why a reseller cannot sell yet, or what it still has to set up |
 | [contract.staff.md](contract.staff.md) | putting someone on a reseller's team, or taking them off |
 | [contract.branding.md](contract.branding.md) | editing or rendering a reseller's brand |
-| [contract.entitlements.md](contract.entitlements.md) | gating a route on a feature key, or asking if a tenant has one |
+| [contract.entitlements.md](contract.entitlements.md) | gating a route on a feature key, or asking if a tenant has one; admitting a caller to a route that names a reseller |
 | [rules.md](rules.md) | what a suspended or terminated tenant may do |
 | [invariants.md](invariants.md) | writing any code that touches it |
 | [data-model.md](data-model.md) | changing storage |

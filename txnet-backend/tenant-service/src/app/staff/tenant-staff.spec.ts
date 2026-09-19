@@ -1,4 +1,4 @@
-import { ResellerAccess } from '../request/reseller-access';
+import { ResellerAccess } from '@txnet-backend/shared-core';
 import { inviteStaffSchema } from './tenant-staff.schema';
 import { StaffRefused, TenantStaffService } from './tenant-staff.service';
 

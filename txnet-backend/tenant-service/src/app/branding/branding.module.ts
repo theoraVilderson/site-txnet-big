@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
+import { ResellerAccess } from '@txnet-backend/shared-core';
 
 import { FilesModule } from '../files/files.module';
-import { ResellerAccess } from '../request/reseller-access';
 import { BrandingPublicController, TenantBrandingController } from './tenant-branding.controller';
 import { TenantBrandingService } from './tenant-branding.service';
 

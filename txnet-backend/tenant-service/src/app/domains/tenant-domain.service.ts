@@ -6,12 +6,11 @@ import {
   TenantDomainPurpose,
   TenantDomainType,
 } from '@prisma/client';
-import { TenantCapabilityName, UnscopedRedisKeys, cnameTargetHost, normalizeHost } from '@txnet-backend/shared-core';
+import { TenantCapabilityName, UnscopedRedisKeys, cnameTargetHost, normalizeHost, ResellerAccess, ResellerAccessRefused, ResellerAccessRejection, ResellerActor } from '@txnet-backend/shared-core';
 import { randomBytes } from 'node:crypto';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { RedisService } from '../redis/redis.service';
-import { ResellerAccess, ResellerAccessRefused, ResellerAccessRejection, ResellerActor } from '../request/reseller-access';
 import { CheckLine, DomainCheck, PROBE_PATH, cnameLine, probeLine, txtLine, verifyRecordName } from './domain-check';
 import { DOMAIN_LOOKUP, DomainLookup } from './domain-lookup';
 import type { AddDomainInput } from './tenant-domain.schema';

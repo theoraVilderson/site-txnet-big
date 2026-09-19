@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
+import { ResellerAccess } from '@txnet-backend/shared-core';
 
-import { ResellerAccess } from '../request/reseller-access';
 import { DOMAIN_LOOKUP, NodeDomainLookup } from './domain-lookup';
 import { TenantDomainController } from './tenant-domain.controller';
 import { DomainProbeController, TenantDomainInternalController } from './tenant-domain-internal.controller';

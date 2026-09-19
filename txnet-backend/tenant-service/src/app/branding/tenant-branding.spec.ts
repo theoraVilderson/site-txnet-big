@@ -1,6 +1,5 @@
-import { ObjectStorage, TenantContext, type ObjectDriver, type StoredObjectRow, type StoredObjectStore } from '@txnet-backend/shared-core';
+import { ObjectStorage, TenantContext, type ObjectDriver, type StoredObjectRow, type StoredObjectStore, ResellerAccess } from '@txnet-backend/shared-core';
 
-import { ResellerAccess } from '../request/reseller-access';
 import { updateBrandingSchema } from './tenant-branding.schema';
 import { BrandingRefused, TenantBrandingService } from './tenant-branding.service';
 

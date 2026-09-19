@@ -1,8 +1,8 @@
 import { Controller, ConflictException, ForbiddenException, Get, NotFoundException, Param, ParseUUIDPipe, Req } from '@nestjs/common';
 import type { Request } from 'express';
+import { ResellerAccessRefused } from '@txnet-backend/shared-core';
 
 import { identityOf } from '../request/identity.middleware';
-import { ResellerAccessRefused } from '../request/reseller-access';
 import { OnboardingActor, OnboardingRejection, OnboardingView, TenantOnboardingService } from './tenant-onboarding.service';
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */

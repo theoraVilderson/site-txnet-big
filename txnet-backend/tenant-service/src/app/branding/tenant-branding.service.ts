@@ -11,12 +11,15 @@ import {
   objectKey,
   panelHostOf,
   runWithTenant,
+  ResellerAccess,
+  ResellerAccessRefused,
+  ResellerAccessRejection,
+  ResellerActor,
 } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../config/env.validation';
 import { FILES_PATH } from '../files/files.controller';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
-import { ResellerAccess, ResellerAccessRefused, ResellerAccessRejection, ResellerActor } from '../request/reseller-access';
 import type { BrandingSlot, UpdateBrandingInput } from './tenant-branding.schema';
 
 /**

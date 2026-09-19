@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, UserStatus } from '@prisma/client';
+import { ResellerAccess, ResellerAccessRefused, ResellerAccessRejection, ResellerActor } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { ResellerAccess, ResellerAccessRefused, ResellerAccessRejection, ResellerActor } from '../request/reseller-access';
 import type { InviteStaffInput } from './tenant-staff.schema';
 
 /**

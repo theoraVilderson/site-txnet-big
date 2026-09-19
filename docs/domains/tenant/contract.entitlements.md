@@ -3,7 +3,7 @@ id: tenant
 layer: domain
 status: active
 version: 1
-updated: 2026-09-18
+updated: 2026-09-19
 ---
 
 # Contract — tenant / feature entitlements
@@ -48,6 +48,33 @@ route cannot declare a key and go unchecked. The guard answers one error:
 The app that gates a route provides `TenantEntitlements` and binds
 `TENANT_ENTITLEMENT_READER` to its Prisma client on the cross-tenant pool
 (`tenant` has no `tenantId`). No app binds it yet; the first gated feature does.
+
+## Admitting a caller to a route that names a reseller (F-066-w1)
+
+Invariant 21, shared by every service (ADR-0064 (1)-(3)). Code:
+`txnet-backend/shared-core/src/lib/tenant/reseller-access.ts`. A route that
+configures a reseller names it — `/api/tenants/:id/...`, or
+`/api/<service>/tenants/:tenantId/...` — and never reads it from the session or
+the host; the ambient routes stay for a tenant configuring itself.
+
+| call | answer |
+|---|---|
+| `ResellerAccess.admit(actor, tenantId, capability)` | `{id, slug, as: 'owner' \| 'member' \| 'staff'}`, or throws `ResellerAccessRefused` with `reason` |
+| `ResellerAccess.run(actor, tenantId, capability, work)` | `admit`, then `work(reseller)` inside `runWithTenant({id})`: the app pool's RLS sees the **reseller's** rows, never the caller's. A refusal throws before `work` starts |
+
+- `actor` is `{userId, tenantId, permissions}` as `forward-auth` sent them;
+  `capability` a `TenantCapabilityName`, judged against the **reseller's**
+  status matrix for the owner and a member, not at all for platform staff.
+- Reasons: `not_allowed` (403; also an unknown reseller, to all but staff),
+  `reseller_not_found` (404, staff only), `reseller_suspended` (403),
+  `reseller_terminated` (409). Each service maps them to its own envelope.
+- **Wiring.** Add `ResellerAccess` to the module's providers, and bind
+  `RESELLER_ACCESS_READER` once to the service's **app pool** (tenant-service:
+  `prisma.module.ts`, `useExisting: PrismaService`). Never the cross-tenant
+  pool: it reads before any cross-tenant access is justified (ADR-0053).
+- `work` awaits its own queries — `runWithTenant`'s rule; a Prisma promise
+  returned unawaited runs after the scope has closed.
+- Tests: `shared-core/src/lib/tenant/reseller-access.spec.ts`.
 
 ## What it does not do
 

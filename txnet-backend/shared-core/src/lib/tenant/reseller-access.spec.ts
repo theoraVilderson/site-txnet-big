@@ -1,3 +1,4 @@
+import { TenantContext } from '../tenant-context/tenant-context';
 import { ResellerAccess } from './reseller-access';
 
 /**
@@ -14,7 +15,12 @@ import { ResellerAccess } from './reseller-access';
  *   (F-018-j), which is the third door and the only one the reseller itself
  *   opens;
  * - what the owner may do is the **reseller's** status matrix (rules.md), not
- *   their own tenant's, which `TenantStatusGuard` judges and is always active.
+ *   their own tenant's, which `TenantStatusGuard` judges and is always active;
+ * - admitted work runs in the **reseller's** scope, never the caller's
+ *   (ADR-0064 (3)), and refused work does not run at all.
+ *
+ * Lives in `shared-core` since F-066-w1 (ADR-0064 (2)): every service's
+ * `/tenants/:tenantId/...` route calls this one rule.
  */
 describe('ResellerAccess', () => {
   const PLATFORM = '11111111-1111-1111-1111-111111111111';
@@ -121,5 +127,17 @@ describe('ResellerAccess', () => {
     const access = build('terminated');
     await expect(access.admit(owner, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'reseller_terminated' });
     await expect(access.admit(staff, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'reseller_terminated' });
+  });
+
+  it("runs admitted work in the reseller's scope, and refused work not at all (ADR-0064 (3))", async () => {
+    const access = build('suspended');
+    const seen = await access.run(owner, RESELLER, 'read', async (reseller) => ({ reseller, scope: TenantContext.current().id }), T0);
+    // The owner's session is the platform's; the work is the reseller's.
+    expect(seen).toEqual({ reseller: { id: RESELLER, slug: 'ali', as: 'owner' }, scope: RESELLER });
+
+    const work = vi.fn();
+    await expect(access.run(owner, RESELLER, 'staffWrite', work, T0)).rejects.toMatchObject({ reason: 'reseller_suspended' });
+    await expect(access.run(owner, OTHER, 'read', work, T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+    expect(work).not.toHaveBeenCalled();
   });
 });

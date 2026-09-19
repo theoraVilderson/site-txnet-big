@@ -31,6 +31,7 @@ export * from './lib/tenant/feature-keys';
 export * from './lib/tenant/entitlements';
 export * from './lib/tenant/status-policy';
 export * from './lib/tenant/owner-cache';
+export * from './lib/tenant/reseller-access';
 export * from './lib/object-storage/object-key';
 export * from './lib/object-storage/object-storage';
 export * from './lib/prisma/pg-notification-listener';

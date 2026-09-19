@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
+import { ResellerAccess } from '@txnet-backend/shared-core';
 
-import { ResellerAccess } from '../request/reseller-access';
 import { TenantStaffController } from './tenant-staff.controller';
 import { TenantStaffService } from './tenant-staff.service';
 
