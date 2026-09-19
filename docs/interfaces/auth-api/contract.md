@@ -2,8 +2,8 @@
 id: auth-api
 layer: interface
 status: active
-version: 24
-updated: 2026-09-18
+version: 25
+updated: 2026-09-19
 ---
 
 # Contract — auth-api
@@ -12,7 +12,8 @@ The HTTP wire contract for `auth-service`. Business semantics and guarantees are
 in `domains/identity/contract.md`; this file is shapes, status codes, headers,
 cookies and rate limits. Field-level schemas live in code — link, do not copy:
 `txnet-backend/auth-service/src/app/auth/auth.schema.ts`,
-`.../auth/register/register.schema.ts`.
+`.../auth/register/register.schema.ts`. `/auth/roles` is a topic file:
+[contract.roles.md](contract.roles.md) (v25, F-018-n).
 
 ## Conventions
 

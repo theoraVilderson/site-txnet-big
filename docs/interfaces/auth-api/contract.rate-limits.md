@@ -43,7 +43,12 @@ an allowance it never spent.
   most sharply through `login-failures`, where ten bad passwords against one
   reseller's `admin` locked every reseller's. A request that resolved to no
   tenant is still counted, under a segment no tenant id can equal. The rule and
-  what it costs are in `redis-keyspace/contract.md`.
+  what it costs are in `redis-keyspace/contract.md`. One bucket names the
+  **tenant itself** as its subject rather than the caller — `ROLE_WRITE`, the
+  writes of `/auth/roles` (F-018-n). That reads as a tautology beside the
+  prefix and is not one: it collapses every admin of a tenant onto one budget,
+  so a reseller cannot widen its share of the permission listener's work by
+  adding admins.
 - **A platform-wide ceiling sits over the same bucket** (F-066-s). Per-tenant
   buckets hand one caller a fresh budget for every tenant it can name, since
   the segment is chosen by picking a hostname. So every limit in the table

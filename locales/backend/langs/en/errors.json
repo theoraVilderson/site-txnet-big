@@ -199,5 +199,16 @@
       "perUserLimitReached": "You have already used this gift code.",
       "capacityReached": "This gift code has been used up."
     }
+  },
+  "role": {
+    "list": "Roles",
+    "created": "Role created",
+    "updated": "Role updated",
+    "deleted": "Role deleted",
+    "notFound": "No such role in your account",
+    "nameTaken": "A role with that name already exists here",
+    "permissionUnknown": "That permission does not exist",
+    "permissionNotHeld": "You cannot grant a permission you do not hold yourself",
+    "inUse": "This role is still held by a user"
   }
 }

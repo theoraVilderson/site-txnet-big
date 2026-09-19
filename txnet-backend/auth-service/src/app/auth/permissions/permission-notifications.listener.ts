@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { NotificationClientFactory, PgNotificationListener } from '@txnet-backend/shared-core';
 import { permissionFingerprint } from './permission-fingerprint';
 import { PermissionStateStore } from './permission-state.store';
@@ -29,6 +29,15 @@ type RoleRow = { id: string; rolePermissions: { permission: { key: string } }[] 
  * notification names; every replica does the same, and every write is
  * idempotent.
  *
+ * **Why the cross-tenant pool.** Since F-018-n a role may belong to a tenant,
+ * and `identity.role` is policied shared-read: on the app pool a connection
+ * with no ambient tenant sees the system templates and nothing else. This
+ * listener has no tenant by construction — a `LISTEN` callback is not a
+ * request — and its job is every tenant's roles, so it reads through
+ * `CrossTenantPrismaService`, whose `cross_tenant` policy is `USING (true)`.
+ * A policy, never a bypass: neither login role holds `BYPASSRLS`. It reads
+ * `role` and writes Redis; it writes no row.
+ *
  * **It never fails the boot.** A Postgres that is not there yet is retried with
  * a backoff. What is lost while disconnected is recovered by recomputing every
  * role on each connect — notifications are not queued for a listener that was
@@ -41,7 +50,7 @@ export class PermissionNotificationsListener extends PgNotificationListener {
   protected readonly logger = new Logger(PermissionNotificationsListener.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma: CrossTenantPrismaService,
     private readonly store: PermissionStateStore,
     @Inject(PERMISSIONS_LISTEN_CLIENT)
     newClient: NotificationClientFactory,

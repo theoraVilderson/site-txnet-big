@@ -1,7 +1,7 @@
 ---
 id: identity
 layer: domain
-updated: 2026-09-09
+updated: 2026-09-19
 ---
 
 # Data model — identity
@@ -30,16 +30,54 @@ many users with no username.
 |---|---|---|---|
 | user | core identity, auth secrets, prefs | yes (`tenantId`) | soft-delete (`deletedAt`) |
 | session | active logins, refresh-token hash, impersonation link | via user | prune on expiry/revoke |
-| role | dynamic RBAC role | no (global) | permanent; `isSystemRole` protected |
+| role | dynamic RBAC role | **yes, or not at all** (`tenantId` nullable — null = a system template every tenant reads, F-018-n) | permanent; `isSystemRole` protected |
 | permission | permission key (`wallet.manual_adjust`, ...) | no | permanent |
 | role_permission | role<->permission join | no | — |
 | otp_code | OTP audit/history + fallback | no (has `phoneNumber`) | expire; Redis is truth (ADR-0007) |
 | linked_bot_account | user <-> Telegram/Bale chat id (OTP delivery source), plus the messenger-verified phone (`phoneNumber`) and the moment that proof succeeded (`contactVerifiedAt`) | yes (`tenantId`, F-066-l) | until unlinked |
 
+## A role belongs to a tenant, or to no one (F-018-n, ADR-0062)
+
+`role.tenantId` is nullable and means two things. Non-null: the row is that
+tenant's, and only that tenant edits it. Null: a **system template**, read by
+every tenant and written by none — which is what the pre-F-018-n rows (`user`,
+`Admin`, `SuperAdmin`) already were, so they are left null and nothing that
+reads a role by id changed.
+
+`role` is **not** in `TENANT_SCOPED_MODELS`, deliberately: the ambient scope
+(ADR-0024) would hide the templates, which belong to no tenant. `RolesService`
+is the one place that applies the scope instead — `{OR: [own, template]}` to
+read, the caller's own tenant to write.
+
+The column is plain, with no Prisma relation and no FK, like
+`LinkedBotAccount.tenantId`: a unique index cannot span a join, and the
+structural SQL is collected in F-041 / F-066-m.
+
+**Row-Level Security, shape B (shared-read).** A table with a `tenantId` must
+be policied — `rls-coverage.spec.ts` reads that rule off the schema, and it is
+the failure that is otherwise silent. `role`'s policy is `USING ("tenantId" IS
+NULL OR mine)` with a strict `WITH CHECK`, so a tenant sees its own roles and
+the templates, and can never *write* into the shared set. `DELETE` has no
+`WITH CHECK`, so a template is kept out of one by `RolesService.ownRole`, not
+by the policy (invariants.md #9).
+
+That policy is why `PermissionNotificationsListener` moved to
+`CrossTenantPrismaService`: it recomputes every tenant's roles from a `LISTEN`
+callback, which has no ambient tenant, and on the app pool would now see the
+templates alone.
+
+**Two indexes, not one.** `@@unique([tenantId, name])` gives each tenant its own
+namespace, but NULLs are distinct in Postgres, so it would let two templates
+share a name. `20260919000200_identity_role_tenant` adds the second by hand —
+`role_system_name_key ON role(name) WHERE "tenantId" IS NULL` — which is exactly
+what the old global `@unique` meant. Prisma cannot express a partial unique
+index, so it is in the migration and not in the schema.
+
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |
 |---|---|---|---|
 | user.tenantId | -> | tenant.tenant.id | every identity belongs to one tenant (ADR-0001) |
+| role.tenantId | -> | tenant.tenant.id | a tenant composes its own roles (F-018-n, ADR-0062); null = a template owned by no tenant |
 | session.impersonationSessionId | -> | audit.impersonation_session.id | audit owns the impersonation record |
 | user.referredByUserId | -> | user.id (self) | referral chain; affiliate payouts live in `billing` |
 
@@ -95,6 +133,12 @@ hash are cached in Redis only (`register:pending:<phone>`, 600s TTL, see
 
 ## Migration notes
 
+- 2026-09-19, F-018-n (`20260919000200_identity_role_tenant`): `role.tenantId`
+  added nullable and never backfilled; `role_name_key` replaced by
+  `(tenantId, name)` plus the partial index above, and the table policied
+  shared-read in the same file. Rollback re-creates the
+  global unique on `name`, which succeeds only while no two tenants hold the
+  same role name.
 - The "section 99" manual SQL in the schema (RLS, partial unique indexes,
   `platform_owner` CHECK) is **not yet applied**.
 - Migration history lives in `prisma/domains/migrations/` — hand-written SQL,

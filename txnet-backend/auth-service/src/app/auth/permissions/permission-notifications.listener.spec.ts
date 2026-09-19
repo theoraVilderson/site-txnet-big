@@ -6,7 +6,7 @@ import {
   PermissionNotificationsListener,
 } from './permission-notifications.listener';
 import type { PermissionStateStore } from './permission-state.store';
-import type { PrismaService } from '../../prisma/prisma.service';
+import type { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { TokenService } from '../token.service';
 
 /**
@@ -69,7 +69,7 @@ function harness(clients: FakeClient[] = [new FakeClient()]) {
     return client;
   });
   const listener = new PermissionNotificationsListener(
-    prisma as unknown as PrismaService,
+    prisma as unknown as CrossTenantPrismaService,
     store as unknown as PermissionStateStore,
     factory,
   );

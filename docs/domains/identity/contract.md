@@ -2,14 +2,15 @@
 id: identity
 layer: domain
 status: active
-version: 21
-updated: 2026-09-18
+version: 22
+updated: 2026-09-19
 ---
 
 # Contract — identity
 
 The **only** legal way other units interact with identity. If it is not here, it
-is private.
+is private. Roles — a tenant's own, and the system templates — are a topic file
+of this one: [contract.roles.md](contract.roles.md) (v22, F-018-n).
 
 ## TL;DR
 

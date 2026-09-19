@@ -212,6 +212,9 @@ export const envSchema = z.object({
   HANDOFF_REDEEM_RATE_LIMIT: rateLimit(30),
   // The platform owner's user picker (F-018-ad), per caller: asked as it types.
   USER_SEARCH_RATE_LIMIT: rateLimit(60),
+  // A tenant editing its own roles (F-018-n), per tenant: role administration
+  // is occasional, and every write here wakes the permission listener.
+  ROLE_WRITE_RATE_LIMIT: rateLimit(60),
   // The platform-wide ceiling over every guarded route's bucket, as a
   // multiple of that route's own per-tenant limit (F-066-s). Per-tenant
   // buckets hand one IP a fresh budget for every tenant it can name, so this

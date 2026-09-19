@@ -103,6 +103,13 @@ export const RateLimitBucket = {
    */
   USER_SEARCH: 'users:search',
 
+  /**
+   * The writes of `/auth/roles` (F-018-n), per **tenant** rather than per
+   * caller: a role is the tenant's, so two admins of one reseller share the
+   * budget, and a reseller cannot widen it by adding admins.
+   */
+  ROLE_WRITE: 'roles:write',
+
   ACCOUNTS_SWITCH: 'accounts:switch',
   ACCOUNTS_REMOVE: 'accounts:remove',
 

@@ -30,6 +30,7 @@ exports[`RateLimitBucket > records the whole rate-limited surface in one place 1
   "HANDOFF_ISSUE = handoff:issue",
   "HANDOFF_REDEEM = handoff:redeem",
   "USER_SEARCH = users:search",
+  "ROLE_WRITE = roles:write",
   "ACCOUNTS_SWITCH = accounts:switch",
   "ACCOUNTS_REMOVE = accounts:remove",
   "DEPOSIT_GATEWAYS = deposit:gateways",
