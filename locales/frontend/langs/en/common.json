@@ -1396,8 +1396,8 @@
     },
     "create": {
       "title": "New reseller",
-      "slug": "Subdomain",
-      "slugHint": "Lower-case letters, digits and hyphens; it becomes the reseller's first address.",
+      "slug": "Name",
+      "slugHint": "Lower-case letters, digits and hyphens. It names the reseller's connection address — its customers never see it.",
       "owner": "Owner",
       "ownerHint": "An existing user of the platform. They become the reseller's owner.",
       "ownerSearch": "Phone, username or email",
@@ -1414,6 +1414,7 @@
     "detail": {
       "domains": "Addresses",
       "noDomains": "No address yet.",
+      "cnameTarget": "connection address — the reseller's domain points here (CNAME); it opens nothing itself",
       "open": "Open",
       "back": "All resellers",
       "tabs": {
@@ -1499,8 +1500,8 @@
     "price": "Price",
     "name": "Brand name",
     "nameHint": "What your panel is called. It suggests the address below.",
-    "slug": "Address",
-    "slugHint": "Your panel's first address. Edit it before buying — it cannot be changed afterwards.",
+    "slug": "Name",
+    "slugHint": "It names your connection address. Edit it before buying — it cannot be changed afterwards.",
     "slugSuggesting": "Suggesting…",
     "balance": "Your wallet",
     "topup": "Top up",
@@ -1510,7 +1511,7 @@
       "title": "Your reseller is ready",
       "body": "{{slug}} is active. {{charged}} was taken from your wallet; the period ends {{date}}.",
       "balance": "Wallet balance is now {{balance}}.",
-      "open": "Open your panel"
+      "next": "Next: add your own domain and point it (CNAME) at {{target}}. Until it is verified, your customers cannot reach you."
     },
     "errors": {
       "packageId": "Pick a package.",

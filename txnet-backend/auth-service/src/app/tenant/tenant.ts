@@ -118,6 +118,14 @@ export interface ResolvedTenant {
    */
   surfaceDomainType?: TenantSurfaceDomainType;
   /**
+   * The host is a reseller's CNAME target, `<slug>.edge.<domain>` (ADR-0063).
+   * It only connects the reseller's own domain and serves nothing, so
+   * `TenantGuard` refuses every path on it. Computed from the host on every
+   * request, never cached — the cache is keyed by host already, and a fact
+   * that follows from the host's spelling cannot go stale.
+   */
+  surfaceIsTarget?: true;
+  /**
    * The surface's tenant, when it is **not** the one this request is scoped to
    * — present only when that tenant's owner arrived on it with their own
    * account (ADR-0059). Everything is read in `id`'s tenant; `brand` is whose

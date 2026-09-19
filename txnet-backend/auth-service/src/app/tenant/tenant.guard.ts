@@ -10,7 +10,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { resolveTenant, surfaceServesPath, tenantConflict } from './tenant';
-import { DOOR_PROBE, gatedDoor } from './door';
+import { DOOR_PROBE, doorClosed } from './door';
 import { TENANT_AGNOSTIC } from './tenant-agnostic.decorator';
 import {
   BackendI18nKeys,
@@ -38,8 +38,9 @@ import {
  *    domain resolves its tenant perfectly well and still serves no panel route
  *    (F-066-q). It is the same neutral 404 as (1), and on purpose: a
  *    subscription host must not tell a stranger that a panel lives elsewhere.
- * 4. **A gated reseller's platform subdomain** — the same rule as (3) with the
- *    onboarding gate as a third input instead of the purpose. It serves
+ * 4. **A closed platform host** — a reseller's CNAME target, always
+ *    (ADR-0063), or a gated reseller's other platform subdomain: the same rule
+ *    as (3) with the onboarding gate as a third input instead of the purpose. It serves
  *    nothing, to anyone: its end users (F-018-ag, D-01) and, since F-066-x,
  *    the reseller itself, which configures from the platform's own panel
  *    (user, 2026-09-19). Also the neutral 404 — on the platform's own domain,
@@ -107,11 +108,13 @@ export class TenantGuard implements CanActivate {
       throw new NotFoundException();
     }
 
-    if (!probe && tenant && (await gatedDoor(tenant, this.store))) {
+    if (!probe && tenant && (await doorClosed(tenant, this.store))) {
       this.logger.warn(
         `${request.method} ${request.originalUrl} refused: host ` +
-          `'${request.hostname}' is a platform subdomain of a reseller that ` +
-          `has proved no domain, and serves nothing (F-066-x)`,
+          `'${request.hostname}' is ` +
+          (tenant.surfaceIsTarget
+            ? `a reseller's CNAME target, which serves nothing (ADR-0063)`
+            : `a platform subdomain of a reseller that has proved no domain, and serves nothing (F-066-x)`),
       );
       throw new NotFoundException();
     }

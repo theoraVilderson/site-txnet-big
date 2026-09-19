@@ -55,10 +55,12 @@ export function cnameTargetHost(slug: string, domain: string): string {
 
 /**
  * Is this platform-issued subdomain a CNAME target rather than a place a person
- * is sent? It serves the panel like any panel host — a CDN may deliver
- * requests there — but no browser ever holds a cookie for it, so nothing
- * sends a payer or a link to it. Only a `subdomain` row is ours to judge: a
- * custom domain with `edge` as its second label is the tenant's own name.
+ * is sent? It only connects the reseller's own domain to the gateway and
+ * **serves nothing itself** (ADR-0063): a request that arrives as it — opened
+ * directly, or from a CDN that rewrites the host — is refused, so the
+ * reseller's CDN must keep the visitor's host. Only a `subdomain` row is ours
+ * to judge: a custom domain with `edge` as its second label is the tenant's
+ * own name.
  */
 export function isCnameTarget(domainValue: string, domainType: 'subdomain' | 'custom_domain'): boolean {
   return domainType === 'subdomain' && domainValue.split('.')[1] === CNAME_TARGET_ZONE;

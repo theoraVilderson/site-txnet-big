@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
+import { isCnameTarget } from '@txnet-backend/shared-core';
 import { CachedSurface, CachedTenant, TenantCacheService } from './tenant-cache.service';
 import {
   ResolvedTenant,
@@ -11,7 +12,8 @@ import {
 type Identified = { id: string; slug: string };
 
 /** A host that matched a row: the tenant it names, and what the door is for. */
-type Surface = CachedSurface;
+/** `target`: the host is a reseller's CNAME target (ADR-0063) — from the host, not the cache. */
+type Surface = CachedSurface & { target?: true };
 
 /**
  * Resolves a request's tenant from the claims it carries (ADR-0020, ADR-0025).
@@ -127,6 +129,7 @@ export class TenantResolverService {
       via: 'session',
       surfacePurpose: surface.purpose,
       surfaceDomainType: surface.domainType,
+      ...(surface.target && { surfaceIsTarget: true as const }),
       brand: { id: surface.id, slug: surface.slug },
     };
   }
@@ -162,6 +165,7 @@ export class TenantResolverService {
       via,
       surfacePurpose: surface.purpose,
       surfaceDomainType: surface.domainType,
+      ...(surface.target && { surfaceIsTarget: true as const }),
     };
   }
 
@@ -173,7 +177,8 @@ export class TenantResolverService {
     // row.
     if (!host) return null;
 
-    return this.cache.byHost(host, () => this.lookupHost(host));
+    const surface = await this.cache.byHost(host, () => this.lookupHost(host));
+    return surface && isCnameTarget(host, surface.domainType) ? { ...surface, target: true } : surface;
   }
 
   private async lookupHost(host: string): Promise<Surface | null> {

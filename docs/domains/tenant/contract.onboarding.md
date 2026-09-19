@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-version: 3
+version: 4
 updated: 2026-09-19
 ---
 
@@ -79,9 +79,16 @@ rule can say *platform host* at all:
 | the surface | while the tenant is onboarding |
 |---|---|
 | `panel` + `subdomain` — a platform-issued host | **nothing** — every path is the neutral 404 |
+| a reseller's CNAME target `<slug>.edge.<domain>` | **nothing, gated or not** (ADR-0063) |
 | `panel` + `custom_domain` — the reseller's own, proved | everything, unfiltered |
 | `subscription` / `assets` | unchanged: that purpose's (empty) allowlist |
 | no surface at all — an internal caller on a container name | everything |
+
+**A reseller's only platform host is now its CNAME target** (ADR-0063, F-018-ai):
+no `<slug>.<domain>` is created, and the target serves nothing even once the
+gate lifts — `surfaceIsTarget` on the resolved tenant, from the host's
+spelling, never cached. `gatedDoor` still holds for any other reseller
+subdomain; none is written any more.
 
 **Why the console left the subdomain too** (user, 2026-09-19). F-018-ag kept
 it open for the reseller's own staff. A platform host a reseller can use is a
@@ -113,8 +120,8 @@ address (F-1210).
 same rule has to hold for the page. It is not restated there:
 `GET /api/auth/door` answers `{ serves: boolean }` for the host that asked,
 from the same resolution and the same `gatedDoor` read (`door.controller.ts`).
-`false` on a gated reseller's platform subdomain and on a `subscription` /
-`assets` domain; `true` otherwise.
+`false` on a reseller's CNAME target, a gated reseller's platform subdomain
+and a `subscription` / `assets` domain; `true` otherwise.
 
 - It is the one route `TenantGuard` exempts from refusals (3) and (4)
   (`@DoorProbe`) — it must answer on exactly the doors they close. An

@@ -31,16 +31,21 @@ export type ResellerView = {
   billingBalance: string;
 };
 
-/** The two platform-issued hosts of a slug: its panel host and its own CNAME target (ADR-0060 (6)), unique because the slug is. */
+/**
+ * The one platform-issued host of a slug: its own CNAME target (ADR-0060 (6)),
+ * unique because the slug is. There is no `<slug>.<domain>` panel host
+ * (ADR-0063): the reseller's customers reach it only on a domain of its own,
+ * and the target serves nothing itself.
+ */
 export function resellerHosts(slug: string, base: string): string[] {
-  return [`${slug}.${base}`.toLowerCase(), cnameTargetHost(slug, base)];
+  return [cnameTargetHost(slug, base)];
 }
 
-/** A slug or its panel host already held. The unique indexes stand behind this for a race (`P2002`). */
-export async function slugInUse(db: Prisma.TransactionClient, slug: string, panelHost: string): Promise<boolean> {
+/** A slug or its CNAME target already held. The unique indexes stand behind this for a race (`P2002`). */
+export async function slugInUse(db: Prisma.TransactionClient, slug: string, targetHost: string): Promise<boolean> {
   const [bySlug, byHost] = await Promise.all([
     db.tenant.findUnique({ where: { slug }, select: { id: true } }),
-    db.tenantDomain.findUnique({ where: { domainValue: panelHost }, select: { id: true } }),
+    db.tenantDomain.findUnique({ where: { domainValue: targetHost }, select: { id: true } }),
   ]);
   return Boolean(bySlug || byHost);
 }
@@ -57,7 +62,7 @@ export type NewReseller = {
 
 /**
  * The `tenant` row (`reseller`, `trial`), an empty `tenant_billing_wallet`,
- * the platform-issued `subdomain` rows and the `tenant_create` audit row, in
+ * the platform-issued `subdomain` row (its CNAME target) and the `tenant_create` audit row, in
  * the caller's cross-tenant transaction. Every entry naming the new tenant's
  * owner is dropped inside it, so a Redis that cannot be reached refuses the
  * whole creation rather than leave a cached *no tenant* on the new host.

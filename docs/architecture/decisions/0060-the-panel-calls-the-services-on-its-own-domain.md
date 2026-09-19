@@ -44,7 +44,9 @@ domain, reaches every reseller's `<slug>.<domain>` panel as well.
    is left to lapse — a partition key, not a credential.
 5. **The platform's panel host is a `tenant_domain` row** (`panel.<domain>`,
    seeded next to `api.<domain>`).
-6. **Each reseller gets its own CNAME target, `<slug>.edge.<domain>`** (user,
+6. **Each reseller gets its own CNAME target, `<slug>.edge.<domain>`** — *amended
+   by ADR-0063: it is the reseller's only platform host and serves nothing; a CDN
+   must keep the visitor's host* (user,
    2026-09-18), created with the reseller as a `panel` subdomain row. The
    reseller CNAMEs its custom domain there. A CDN that keeps the visitor's host
    resolves by the custom domain; one that forwards the target instead still

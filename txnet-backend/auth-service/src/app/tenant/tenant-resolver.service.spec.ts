@@ -122,6 +122,28 @@ describe('TenantResolverService — which tenant a host resolves to', () => {
     });
   });
 
+  it("marks a reseller's CNAME target, which serves nothing (ADR-0063)", async () => {
+    const { service } = resolver({ 'reseller.edge.txnet.app': subdomain() });
+
+    await expect(service.resolve({ host: 'reseller.edge.txnet.app' })).resolves.toEqual({
+      ...DOMAIN_TENANT,
+      via: 'domain',
+      surfacePurpose: 'panel',
+      surfaceDomainType: 'subdomain',
+      surfaceIsTarget: true,
+    });
+  });
+
+  it('marks the target however the host was sent, and from the cache too', async () => {
+    const { service, findUnique } = resolver({ 'reseller.edge.txnet.app': subdomain() });
+
+    await service.resolve({ host: 'reseller.edge.txnet.app' });
+    await expect(service.resolve({ host: 'Reseller.EDGE.txnet.app:443' })).resolves.toMatchObject({
+      surfaceIsTarget: true,
+    });
+    expect(findUnique).toHaveBeenCalledTimes(1);
+  });
+
   it('resolves a verified custom domain', async () => {
     const { service } = resolver({ 'myvpn.com': customDomain('verified') });
 

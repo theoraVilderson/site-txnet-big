@@ -54,11 +54,24 @@ export async function gatedDoor(
 }
 
 /**
+ * Is this door closed to every path? A reseller's CNAME target always is — it
+ * only connects the reseller's own domain (ADR-0063) — and a gated reseller's
+ * other platform subdomain is while the gate is on.
+ */
+export async function doorClosed(
+  tenant: ResolvedTenant,
+  store: TenantStatusStore,
+): Promise<boolean> {
+  return tenant.surfaceIsTarget === true || (await gatedDoor(tenant, store));
+}
+
+/**
  * Does this host serve the panel at all? The panel's half of the door rules
  * (F-066-x): `site-pwa` is a separate deployable and asks before it renders.
  *
  * No: a `subscription` or `assets` domain (F-066-q — it serves no panel page,
- * as it serves no panel route), and a gated reseller's platform subdomain.
+ * as it serves no panel route), a reseller's CNAME target (ADR-0063), and a
+ * gated reseller's platform subdomain.
  * Yes: everything else, including a request with no surface at all.
  */
 export async function doorServes(
@@ -66,5 +79,5 @@ export async function doorServes(
   store: TenantStatusStore,
 ): Promise<boolean> {
   if (tenant.surfacePurpose && tenant.surfacePurpose !== 'panel') return false;
-  return !(await gatedDoor(tenant, store));
+  return !(await doorClosed(tenant, store));
 }

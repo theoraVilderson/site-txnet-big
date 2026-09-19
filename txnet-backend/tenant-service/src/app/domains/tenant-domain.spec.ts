@@ -165,7 +165,7 @@ describe('TenantDomainService', () => {
     world.txt[verifyRecordName('ali-vpn.ir')] = ['tok-1'];
     world.cname['ali-vpn.ir'] = ['ali.edge.txnet.app'];
     world.arrivesAs['http://ali-vpn.ir'] = 'ali-vpn.ir';
-    world.arrivesAs['https://ali-vpn.ir'] = 'ali.edge.txnet.app';
+    world.arrivesAs['https://ali-vpn.ir'] = 'ali-vpn.ir';
   };
 
   describe('adding', () => {
@@ -288,6 +288,19 @@ describe('TenantDomainService', () => {
       cdn.world.cname['ali-vpn.ir'] = ['ali-vpn.ir.cdn.example'];
       await cdn.service.checkDue(at(1));
       expect(cdn.rows[0]['verificationStatus']).toBe('verified');
+    });
+
+    it('refuses a CDN that forwards the CNAME target instead of the domain', async () => {
+      // ADR-0063: the target serves nothing, so a request that arrives as it
+      // would be refused on every page. Refusing here says so at setup time,
+      // with the host the CDN sent, instead of to the reseller's customers.
+      const { service, rows, world } = build({ rows: [pendingRow({ verificationStatus: 'verifying' })] });
+      healthy(world);
+      world.arrivesAs['https://ali-vpn.ir'] = 'ali.edge.txnet.app';
+      await service.checkDue(at(1));
+      const https = (rows[0]['lastCheck'] as { lines: { check: string; found: string[]; ok: boolean }[] }).lines.find((l) => l.check === 'https')!;
+      expect(https).toMatchObject({ ok: false, found: ['200 as ali.edge.txnet.app'] });
+      expect(rows[0]['verificationStatus']).toBe('verifying');
     });
 
     it('refuses to verify when the host entry cannot be retracted', async () => {

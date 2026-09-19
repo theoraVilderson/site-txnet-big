@@ -208,11 +208,11 @@ The `/sub` link catalog 13.1 names belongs to `network`, which has no service
 yet; its prefix goes into `SERVED_PATHS` (`app/tenant/tenant.ts`) with it. The
 gate is the same seam's third input ([contract.onboarding.md](contract.onboarding.md), F-018-ag).
 
-**What this row does not do.** Traefik still routes by fixed host
-(`panel.$DOMAIN`, `api.$DOMAIN`), so a tenant's own domains reach nothing yet
-and the panel deployable has no host-purpose check of its own. Per-tenant edge
-routing is F-018 / F-102; when it lands, `panel-web` needs the mirror of this
-rule or a subscription domain will render the panel from the other side.
+**Every host reaches the panel now** (F-066-u), so the panel mirrors this rule
+(F-066-x): `site-pwa` asks `GET /api/auth/door` before it renders and returns
+a bare 404 on `serves: false`. A reseller's CNAME target serves nothing at all,
+on any path (ADR-0063). Both are in
+[contract.onboarding.md](contract.onboarding.md) "The door a gated reseller is served on".
 
 ## The Credential Vault (implemented — ADR-0026)
 

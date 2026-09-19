@@ -211,11 +211,12 @@ export class ResellerPurchaseService {
   private async freeSlug(base: string): Promise<string> {
     const domain = this.domain();
     const candidates = slugCandidates(base).filter((s) => !isReservedSlug(s));
+    const hostOf = new Map(candidates.map((s) => [resellerHosts(s, domain)[0], s]));
     const [bySlug, byHost] = await Promise.all([
       this.all.tenant.findMany({ where: { slug: { in: candidates } }, select: { slug: true } }),
-      this.all.tenantDomain.findMany({ where: { domainValue: { in: candidates.map((s) => resellerHosts(s, domain)[0]) } }, select: { domainValue: true } }),
+      this.all.tenantDomain.findMany({ where: { domainValue: { in: [...hostOf.keys()] } }, select: { domainValue: true } }),
     ]);
-    const held = new Set([...bySlug.map((t) => t.slug), ...byHost.map((d) => d.domainValue.slice(0, -(domain.length + 1)))]);
+    const held = new Set([...bySlug.map((t) => t.slug), ...byHost.map((d) => hostOf.get(d.domainValue))]);
     return candidates.find((s) => !held.has(s)) ?? `${base}-${randomBytes(3).toString('hex')}`;
   }
 

@@ -77,10 +77,8 @@ describe('ResellerService', () => {
       'tenant',
       'wallet',
       'domain',
-      'domain',
       'audit',
       `del ${UnscopedRedisKeys.tenantById('new-tenant')}`,
-      `del ${UnscopedRedisKeys.tenantByHost('myvpn.txnet.app')}`,
       `del ${UnscopedRedisKeys.tenantByHost('myvpn.edge.txnet.app')}`,
     ]);
     expect(tx.tenant.create.mock.calls[0][0].data).toEqual({
@@ -92,30 +90,24 @@ describe('ResellerService', () => {
     });
     // An empty wallet: no balance is written (tenant invariant 3).
     expect(tx.tenantBillingWallet.create.mock.calls[0][0].data).toEqual({ tenantId: 'new-tenant' });
-    expect(tx.tenantDomain.create.mock.calls[0][0].data).toMatchObject({
-      tenantId: 'new-tenant',
-      domainType: 'subdomain',
-      domainValue: 'myvpn.txnet.app',
-      purpose: 'panel',
-    });
     expect(view.owner).toEqual({ id: USER, fullName: 'Reseller Owner', username: 'owner', phoneNumber: '+989123456789' });
   });
 
-  it('issues the reseller its own CNAME target, so a CDN that rewrites the host still names this tenant', async () => {
-    // ADR-0060 (6): `ali-vpn.ir` is CNAMEd to `<slug>.edge.<domain>`. A CDN that
-    // keeps the visitor's host resolves by the custom domain; one that sends
-    // the CNAME target instead resolves by this row. A shared target would
-    // name no tenant at all.
+  it('issues the reseller one platform host, its own CNAME target, and no panel subdomain', async () => {
+    // ADR-0063: `ali-vpn.ir` is CNAMEd to `<slug>.edge.<domain>`, which only
+    // connects the reseller's domain and serves nothing itself. There is no
+    // `<slug>.<domain>` — a platform name a reseller could hand its customers.
     const { service, tx } = build();
     const view = await service.create(actor, input);
 
-    expect(tx.tenantDomain.create.mock.calls[1][0].data).toMatchObject({
+    expect(tx.tenantDomain.create).toHaveBeenCalledTimes(1);
+    expect(tx.tenantDomain.create.mock.calls[0][0].data).toMatchObject({
       tenantId: 'new-tenant',
       domainType: 'subdomain',
       domainValue: 'myvpn.edge.txnet.app',
       purpose: 'panel',
     });
-    expect(view.domains.map((d) => d.domainValue)).toEqual(['myvpn.txnet.app', 'myvpn.edge.txnet.app']);
+    expect(view.domains.map((d) => d.domainValue)).toEqual(['myvpn.edge.txnet.app']);
   });
 
   it('looks the owner up among the platform owner tenant’s live users only', async () => {

@@ -54,7 +54,7 @@ describe('ResellerPurchaseService', () => {
   const person = { id: BUYER, fullName: 'Ali', username: 'ali', phoneNumber: '+989123456789', status: 'active' };
 
   const build = (
-    opts: { callerType?: string; taken?: string[]; owns?: boolean; short?: boolean; status?: string; package?: Partial<typeof pkg> | null } = {},
+    opts: { callerType?: string; taken?: string[]; heldHosts?: string[]; owns?: boolean; short?: boolean; status?: string; package?: Partial<typeof pkg> | null } = {},
   ) => {
     const writes: string[] = [];
     const hosts: string[] = [];
@@ -94,7 +94,14 @@ describe('ResellerPurchaseService', () => {
         ),
         findUnique: vi.fn(async ({ where }: { where: { slug: string } }) => ((opts.taken ?? []).includes(where.slug) ? { id: 'x' } : null)),
       },
-      tenantDomain: { findUnique: vi.fn(async () => null), findMany: vi.fn(async () => []) },
+      tenantDomain: {
+        findUnique: vi.fn(async ({ where }: { where: { domainValue: string } }) =>
+          (opts.heldHosts ?? []).includes(where.domainValue) ? { id: 'h' } : null,
+        ),
+        findMany: vi.fn(async ({ where }: { where: { domainValue: { in: string[] } } }) =>
+          where.domainValue.in.filter((h) => (opts.heldHosts ?? []).includes(h)).map((domainValue) => ({ domainValue })),
+        ),
+      },
       tenantFeaturePackage: {
         findUnique: vi.fn(async () => (opts.package === null ? null : { ...pkg, ...opts.package })),
         findMany: vi.fn(async () => [pkg]),
@@ -130,6 +137,11 @@ describe('ResellerPurchaseService', () => {
   it('suggests the name’s slug, or the next free one beside it', async () => {
     expect(await build().service.suggestSlug(buyer, 'Ali VPN')).toEqual({ slug: 'ali-vpn' });
     expect(await build({ taken: ['ali-vpn', 'ali-vpn-2'] }).service.suggestSlug(buyer, 'Ali VPN')).toEqual({ slug: 'ali-vpn-3' });
+    // A slug whose CNAME target is already held is taken too, with no tenant row
+    // naming it — the host is what the unique index stands behind (ADR-0063).
+    expect(
+      await build({ heldHosts: ['ali-vpn.edge.txnet.app'] }).service.suggestSlug(buyer, 'Ali VPN'),
+    ).toEqual({ slug: 'ali-vpn-2' });
     // A reserved label is never suggested: `admin.txnet.app` is the platform's.
     expect(await build().service.suggestSlug(buyer, 'Admin')).toEqual({ slug: 'admin-2' });
   });
@@ -143,11 +155,9 @@ describe('ResellerPurchaseService', () => {
       'lock package',
       'tenant',
       'billing wallet',
-      'domain ali-vpn.txnet.app',
       'domain ali-vpn.edge.txnet.app',
       'audit',
       `del ${UnscopedRedisKeys.tenantById(NEW_TENANT)}`,
-      `del ${UnscopedRedisKeys.tenantByHost('ali-vpn.txnet.app')}`,
       `del ${UnscopedRedisKeys.tenantByHost('ali-vpn.edge.txnet.app')}`,
       'user wallet debit',
       'billing credit',

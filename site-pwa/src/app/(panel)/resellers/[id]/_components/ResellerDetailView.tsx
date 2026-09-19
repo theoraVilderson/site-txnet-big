@@ -173,19 +173,32 @@ export function ResellerDetailView({ id }: { id: string }) {
                 <Fact label={t("common", K.detail.domains)}>
                   {r.domains.length === 0
                     ? t("common", K.detail.noDomains)
-                    : r.domains.map((d) => (
-                        <a
-                          key={d.domainValue}
-                          href={`https://${d.domainValue}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          dir="ltr"
-                          className="flex items-center gap-1 text-primary hover:underline"
-                        >
-                          {d.domainValue}
-                          <ExternalLink size={11} aria-label={t("common", K.detail.open)} />
-                        </a>
-                      ))}
+                    : r.domains.map((d) =>
+                        // A reseller's only subdomain is its CNAME target,
+                        // which opens nothing (ADR-0063) — shown, not linked.
+                        d.domainType === "subdomain" ? (
+                          <span key={d.domainValue} className="flex flex-col">
+                            <span dir="ltr" className="text-text-primary">
+                              {d.domainValue}
+                            </span>
+                            <span className="text-[11px] text-text-secondary">
+                              {t("common", K.detail.cnameTarget)}
+                            </span>
+                          </span>
+                        ) : (
+                          <a
+                            key={d.domainValue}
+                            href={`https://${d.domainValue}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            dir="ltr"
+                            className="flex items-center gap-1 text-primary hover:underline"
+                          >
+                            {d.domainValue}
+                            <ExternalLink size={11} aria-label={t("common", K.detail.open)} />
+                          </a>
+                        ),
+                      )}
                 </Fact>
               </dl>
 

@@ -27,7 +27,8 @@ The domain view: `{id, domainValue, purpose, status, record: {type: 'TXT',
 name, value}, cnameTarget, verifiedAt, lastCheckedAt, lastCheck}`.
 `record.name` is `_domain-verification.<host>` — a neutral label, since a
 reseller's DNS zone is public and must not name the platform (catalog 13.4).
-`cnameTarget` is the reseller's own `<slug>.edge.<domain>` (ADR-0060 (6)).
+`cnameTarget` is the reseller's own `<slug>.edge.<domain>` (ADR-0060 (6)) —
+its only platform host, which serves nothing itself (ADR-0063).
 
 **Who** is `ResellerAccess` (F-061-h, invariant 21): the path's reseller, never
 the caller's tenant — so the owner reaches it with the same session on the
@@ -66,7 +67,7 @@ exists to prevent):
 |---|---|---|
 | `txt` | `_domain-verification.<host> TXT <token>` | the token is among the TXT strings there |
 | `cname` | `<slug>.edge.<domain>` | the CNAME names **no other** reseller's target. A CDN in front answers DNS with its own name; the target is then its origin, visible only to the probe lines |
-| `http`, `https` | `200 as <host> or <target>` | the platform answered the probe with the nonce this check sent (redirects followed), and the request arrived as the domain or the reseller's own target — never another reseller's, which would serve that reseller's panel here |
+| `http`, `https` | `200 as <host>` | the platform answered the probe with the nonce this check sent (redirects followed), and the request arrived **as the domain itself**. Arriving as the reseller's own target fails too (ADR-0063): the target serves nothing, so a CDN that forwards it would break every page — the line names the host the CDN sent |
 
 A `verified` domain is re-validated on its **TXT record only**, every
 `DOMAIN_REVALIDATE_EVERY_HOURS` (6), and every tick while `revalidating`:
@@ -103,3 +104,24 @@ lookup that errors (not "no record") is a sweep `error` and changes nothing.
 | `automation` (`tenant_domain_verification` job, seeded `*/5`) | `check-due` |
 | panel-web | the onboarding console's checklist is `GET /api/tenants/:id/onboarding` (F-018-l), on the platform's own panel — a gated reseller's platform subdomain serves nothing (F-066-x) |
 | `auth-api` resolver, `billing` callback / return address | read `verified` only; unchanged |
+
+## Setting up the CDN (ArvanCloud)
+
+The platform and its resellers use ArvanCloud (user, 2026-09-19). Two zones
+take part, and the gateway's address must appear in neither:
+
+| zone | record | CDN proxy | why |
+|---|---|---|---|
+| the platform's | `*.edge.<domain>` -> the gateway | **on** | a lookup of any target answers Arvan's addresses, never the gateway's |
+| the reseller's | its domain, CNAME -> `<slug>.edge.<domain>` | **on** | the reseller's certificate and address are Arvan's |
+
+- **Keep the visitor's host.** At the reseller's zone, the origin must receive
+  `Host: <the reseller's domain>`, not the target's name. A zone that sends the
+  target fails the `https` line with `200 as <slug>.edge.<domain>` — that line
+  is the test, and ADR-0063 is why nothing else will work.
+- **Untested:** whether Arvan proxies a record whose origin is a name Arvan
+  itself proxies in another account. Prove it with one reseller before
+  onboarding more; the domain check's `https` line says whether it arrived.
+- **Nothing here is code.** The gateway accepts any host (ADR-0060 (3)); which
+  host is served is `TenantGuard`'s call. Limiting the gateway to Arvan's
+  address ranges, so it cannot be reached around the CDN, is a firewall rule.

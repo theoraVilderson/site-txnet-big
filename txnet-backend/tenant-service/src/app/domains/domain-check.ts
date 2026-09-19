@@ -59,14 +59,17 @@ export function probeLine(
   nonce: string,
   answer: ProbeAnswer,
 ): CheckLine {
-  const expected = [`200 as ${host} or ${target}`];
+  // As the domain only (ADR-0063): the target serves nothing, so a CDN that
+  // forwards it instead of the visitor's host would break every page. `target`
+  // stays in the signature so the refusal can name what the CDN must change.
+  const expected = [`200 as ${host} (not ${target} — keep the visitor's host at the CDN)`];
   if ('error' in answer) return { check: scheme, expected, found: [answer.error], ok: false };
   const data = envelopeData(answer.body);
   if (answer.status !== 200 || !data || data['nonce'] !== nonce) {
     return { check: scheme, expected, found: [String(answer.status)], ok: false };
   }
   const as = String(data['host']);
-  return { check: scheme, expected, found: [`200 as ${as}`], ok: as === host || as === target };
+  return { check: scheme, expected, found: [`200 as ${as}`], ok: as === host };
 }
 
 function envelopeData(body: unknown): Record<string, unknown> | null {

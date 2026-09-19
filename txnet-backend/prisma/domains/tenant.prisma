@@ -129,7 +129,7 @@ model Tenant {
   id              String             @id @default(uuid()) @db.Uuid
   tenantType      TenantType
   ownerUserId     String             @db.Uuid
-  slug            String             @unique // برای subdomain پیش‌فرض
+  slug            String             @unique // names the CNAME target `<slug>.edge.<domain>` (ADR-0063)
   status          TenantStatus       @default(trial)
   billingModel    TenantBillingModel
   suspendedReason String?

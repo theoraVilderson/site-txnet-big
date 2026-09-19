@@ -12,9 +12,9 @@ import { OwnerPicker } from "./OwnerPicker";
 import { Alert, Field, Sheet, input, primaryButton, useMessage } from "./resellers-ui";
 
 /**
- * Creating a reseller (F-018-c): a subdomain, a period and an existing user as
+ * Creating a reseller (F-018-c): a slug (its CNAME target, ADR-0063), a period and an existing user as
  * its owner, found by searching (F-018-ae) — or by id for a caller without
- * `user.search`. The tenant, its empty billing wallet and its subdomain address are
+ * `user.search`. The tenant, its empty billing wallet and its CNAME target row are
  * one transaction in tenant-service; nothing is charged and no trial starts
  * until the first package (`tenant/contract.admin.md`).
  */

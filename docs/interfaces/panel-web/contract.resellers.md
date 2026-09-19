@@ -134,3 +134,12 @@ rule behind them is [tenant/contract.admin.md](../../domains/tenant/contract.adm
 17. **No figure is computed here** (rule 7 again, and it moves real money). The
     price is the offer's, the balance `billingApi.walletBalance()`, and what was
     charged is the answer's `charged` — never the price the page showed.
+
+## A reseller's platform host is not a link (F-018-ai, ADR-0063)
+
+A reseller's only `subdomain` row is its CNAME target, which opens nothing. So
+`ResellerDetailView` shows it as text labelled "connection address", and links
+custom domains only; `BuyResellerView`, after a purchase, names the target in a
+next step — add your own domain and CNAME it there — instead of an "open your
+panel" button that led to a page that serves nothing. The panel reads the row's
+`domainType`; it does not parse the host.

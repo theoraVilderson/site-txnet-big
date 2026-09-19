@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, HandCoins, Loader2, Rocket } from "lucide-react";
+import { CheckCircle2, HandCoins, Loader2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { billingApi } from "@/lib/billing-api";
@@ -154,7 +154,9 @@ export function BuyResellerView() {
   }
 
   if (bought) {
-    const address = bought.domains[0]?.domainValue ?? bought.slug;
+    // The reseller's only platform host is its CNAME target, which opens
+    // nothing (ADR-0063): the next step is a domain of its own, not a link.
+    const target = bought.domains.find((d) => d.domainType === "subdomain")?.domainValue;
     return (
       <Shell title={t("common", K.title)} subtitle={t("common", K.subtitle)}>
         <div className="rounded-2xl border border-card-border bg-card-bg p-6 text-center">
@@ -162,7 +164,7 @@ export function BuyResellerView() {
           <h2 className="mt-3 text-lg font-bold text-text-primary">{t("common", K.done.title)}</h2>
           <p className="mt-2 text-sm text-text-secondary">
             {t("common", K.done.body, {
-              slug: address,
+              slug: bought.slug,
               charged: money(bought.charged),
               date: formatInstant(bought.currentPeriodEnd, lang, { withTime: false }) ?? bought.currentPeriodEnd,
             })}
@@ -170,13 +172,11 @@ export function BuyResellerView() {
           <p className="mt-1 text-sm text-text-secondary">
             {t("common", K.done.balance, { balance: money(bought.walletBalance) })}
           </p>
-          <a
-            href={`https://${address}`}
-            className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-white hover:brightness-110"
-          >
-            <Rocket size={16} aria-hidden />
-            {t("common", K.done.open)}
-          </a>
+          {target && (
+            <p className="mt-4 text-sm text-text-primary">
+              {t("common", K.done.next, { target })}
+            </p>
+          )}
         </div>
       </Shell>
     );

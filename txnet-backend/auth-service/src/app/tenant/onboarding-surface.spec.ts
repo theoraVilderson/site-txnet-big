@@ -205,6 +205,19 @@ describe("a gated reseller's platform subdomain serves nothing", () => {
       ).rejects.toThrow(NotFoundException);
     });
 
+    it('refuses every path on a CNAME target, gated or not (ADR-0063)', async () => {
+      // It only connects the reseller's domain; nobody is ever served on it.
+      for (const url of ['/api/auth/login/password', '/api/auth/me', '/api/auth/register']) {
+        const { context } = fakeExecutionContext({
+          extra: { tenant: on({ surfaceIsTarget: true }) },
+          url,
+        });
+        await expect(
+          guardWith({ [UnscopedRedisKeys.tenantStatus('reseller-b')]: false }).canActivate(context),
+        ).rejects.toThrow(NotFoundException);
+      }
+    });
+
     it('lets the door question through on the door it reports closed', async () => {
       const { context } = fakeExecutionContext({
         extra: { tenant: on() },
@@ -270,6 +283,12 @@ describe("a gated reseller's platform subdomain serves nothing", () => {
       await expect(
         ask(on({ surfaceDomainType: 'custom_domain' }), gated('reseller-b')),
       ).resolves.toMatchObject({ data: { serves: true } });
+    });
+
+    it('answers closed on a CNAME target even once the reseller is open', async () => {
+      await expect(
+        ask(on({ surfaceIsTarget: true }), { [UnscopedRedisKeys.tenantStatus('reseller-b')]: false }),
+      ).resolves.toMatchObject({ data: { serves: false } });
     });
 
     it('answers open when the gate state is missing', async () => {

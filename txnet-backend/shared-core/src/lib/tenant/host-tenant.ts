@@ -4,6 +4,7 @@ import {
   type PrismaClient,
   type TenantDomainPurpose,
 } from '@prisma/client';
+import { isCnameTarget } from './host';
 
 /**
  * The tenant a **public** request's Host proves, for a route with no session to
@@ -34,6 +35,9 @@ export async function tenantOfHost(
     select: { tenantId: true, domainType: true, purpose: true, verificationStatus: true },
   });
   if (!row || !purposes.includes(row.purpose)) return null;
+  // A reseller's CNAME target only connects its domain; it is never a door
+  // (ADR-0063), so it names no tenant here, like an unknown host.
+  if (isCnameTarget(host, row.domainType)) return null;
   // A subdomain is issued by the platform, so matching the row is the whole
   // proof; a custom domain is the tenant's only once ownership has been shown.
   const proven =
