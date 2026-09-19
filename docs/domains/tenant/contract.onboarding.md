@@ -33,6 +33,17 @@ registers, buys, deposits, or is served a `/sub` link. The refusal is `403`
 `trial` or `active` tenant can get, and the reason a consumer tells it apart
 from a suspension by. The platform owner is never gated.
 
+**What it deliberately does not close.** `signIn`, `read` and `account` stay
+open, because they are the console's own and the reseller's staff sign in to
+that tenant — closing them by capability would lock a reseller out of the one
+screen that lifts the gate. So a gated reseller's `subdomain` on the platform's
+domain still answers those, which D-01 (no platform host is ever served to an
+end user) wants closed as well. That is a question of *what a host serves*, not
+of what a status allows: it belongs to `surfacePurpose`'s path allowlist
+(F-066-q) and has a row of its own, **F-018-ag** — the platform's main domain
+must not be filtered because a reseller parked its users on it (user,
+2026-09-19; `open-questions.md`).
+
 **It is left by proving a domain, never by paying.** One `verified`,
 `panel`, `custom_domain` row lifts it (`contract.domains.md`); a
 `revalidating` one still routes, so it still lifts it.
