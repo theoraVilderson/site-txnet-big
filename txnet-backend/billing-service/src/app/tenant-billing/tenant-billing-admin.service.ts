@@ -34,9 +34,21 @@ import { PrismaService } from '../prisma/prisma.service';
  * so a double submit cannot move the balance twice.
  *
  * The ledger entry and its `admin_audit_log` row commit together.
+ *
+ * The same owner check and the same pool serve {@link TenantBillingAdminService.history},
+ * the owner's read of one reseller's ledger (F-019-j).
  */
 
+const DEFAULT_PAGE = 1;
+const DEFAULT_PAGE_SIZE = 20;
+
+/** Base currency as the wire carries it: two decimals, as a string (C-02). */
+const money = (v: Prisma.Decimal) => v.toFixed(2);
+
 export type TenantBillingActor = { adminId: string; tenantId: string; ip: string };
+
+/** What the owner check needs. A read has no audit row, so it carries no `ip`. */
+export type TenantBillingReader = Omit<TenantBillingActor, 'ip'>;
 
 export type AdjustInput = {
   direction: 'credit' | 'debit';
@@ -55,6 +67,29 @@ export type AdjustmentView = {
   amount: string;
   balanceAfter: string;
   createdAt: Date;
+};
+
+export type TenantLedgerQuery = { page?: number; pageSize?: number };
+
+export type TenantLedgerRow = {
+  id: string;
+  direction: TenantLedgerDirection;
+  reasonType: TenantBillingReasonType;
+  /** The mover's own id for the entry — a request id, a payment, a charged period. */
+  referenceId: string | null;
+  /** Base currency (C-02), two decimals, as a string. */
+  amount: string;
+  balanceAfter: string;
+  createdAt: Date;
+};
+
+export type TenantLedgerPage = {
+  tenantId: string;
+  balance: string;
+  total: number;
+  page: number;
+  pageSize: number;
+  rows: TenantLedgerRow[];
 };
 
 /** Why an adjustment was refused. Closed — the controller gives each a status. */
@@ -89,10 +124,7 @@ export class TenantBillingAdminService {
 
   async adjust(actor: TenantBillingActor, tenantId: string, input: AdjustInput): Promise<AdjustmentView> {
     await this.access(actor);
-
-    const target = await this.all.tenant.findUnique({ where: { id: tenantId }, select: { tenantType: true } });
-    if (!target) throw new TenantBillingAdminRefused('tenant_not_found', tenantId);
-    if (target.tenantType !== TenantType.reseller) throw new TenantBillingAdminRefused('not_a_reseller', tenantId);
+    await this.reseller(tenantId);
 
     const amount = parseAmount(input.amount);
     const entry = { tenantId, amount, reasonType: TenantBillingReasonType.admin_manual_adjust, referenceId: input.requestId };
@@ -122,8 +154,79 @@ export class TenantBillingAdminService {
     }
   }
 
+  /**
+   * The platform owner reads one reseller's ledger (F-019-j): the balance and
+   * its movements, newest first, for that reseller's page.
+   *
+   * The adjustment's door and the adjustment's pool — the caller is read on the
+   * app pool and a non-owner refused before the cross-tenant pool is touched
+   * (ADR-0053), because a reseller's own wallet is hidden from it by strict RLS
+   * and every other reseller's is not.
+   */
+  async history(actor: TenantBillingReader, tenantId: string, query: TenantLedgerQuery): Promise<TenantLedgerPage> {
+    await this.access(actor);
+    await this.reseller(tenantId);
+
+    const page = query.page ?? DEFAULT_PAGE;
+    const pageSize = query.pageSize ?? DEFAULT_PAGE_SIZE;
+    const empty = { tenantId, balance: '0.00', total: 0, page, pageSize, rows: [] };
+
+    const wallet = await this.all.tenantBillingWallet.findUnique({
+      where: { tenantId },
+      select: { id: true, cachedBalance: true },
+    });
+    // A reseller that has never been credited has no wallet yet: a zero balance, as the ledger reads it.
+    if (!wallet) return empty;
+
+    const where = { walletId: wallet.id };
+    const [rows, total] = await Promise.all([
+      this.all.tenantBillingTransaction.findMany({
+        where,
+        // `id` breaks a timestamp tie, so a page never repeats or skips a row.
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          amount: true,
+          direction: true,
+          reasonType: true,
+          referenceId: true,
+          balanceAfter: true,
+          createdAt: true,
+        },
+      }),
+      this.all.tenantBillingTransaction.count({ where }),
+    ]);
+
+    return {
+      tenantId,
+      // The wallet's own figure (invariant 3), never a sum of the rows on the page.
+      balance: money(wallet.cachedBalance),
+      total,
+      page,
+      pageSize,
+      rows: rows.map((r) => ({
+        id: r.id,
+        direction: r.direction,
+        reasonType: r.reasonType,
+        referenceId: r.referenceId,
+        amount: money(r.amount),
+        balanceAfter: money(r.balanceAfter),
+        createdAt: r.createdAt,
+      })),
+    };
+  }
+
+  /** The target of every surface here: a reseller that exists, never the platform owner itself. */
+  private async reseller(tenantId: string): Promise<void> {
+    const target = await this.all.tenant.findUnique({ where: { id: tenantId }, select: { tenantType: true } });
+    if (!target) throw new TenantBillingAdminRefused('tenant_not_found', tenantId);
+    if (target.tenantType !== TenantType.reseller) throw new TenantBillingAdminRefused('not_a_reseller', tenantId);
+  }
+
   /** The one owner check; a non-owner is refused before the cross-tenant pool is touched (ADR-0053). */
-  private async access(actor: TenantBillingActor): Promise<void> {
+  private async access(actor: TenantBillingReader): Promise<void> {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
     if (tenant?.tenantType !== TenantType.platform_owner) {
       throw new TenantBillingAdminRefused('not_platform_owner', "another tenant's billing wallet");

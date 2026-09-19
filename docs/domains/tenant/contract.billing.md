@@ -2,8 +2,8 @@
 id: tenant
 layer: domain
 status: active
-version: 12
-updated: 2026-09-18
+version: 13
+updated: 2026-09-19
 ---
 
 # Contract — tenant / the billing wallet
@@ -112,6 +112,31 @@ amount, balanceAfter, createdAt}]}` — decimals as strings. No `referenceId`:
 an adjustment's is the platform owner's request id.
 
 **Proof:** `tenant-billing/tenant-wallet.spec.ts`.
+
+## The platform owner's read of one reseller (F-019-j)
+
+`GET /api/billing/tenant-wallets/:tenantId/transactions?page&pageSize`, served
+by `TenantBillingAdminService.history` beside the adjustment — the same
+controller, so one reseller's wallet has one door.
+
+| | |
+|---|---|
+| Door | permission `tenant_billing.read`, granted to `Admin` beside `tenant_billing.adjust`; then the service's owner check, which is the boundary |
+| Why a second key | reading what the platform charged a reseller is not moving its balance, so a support role may hold this one alone. Today the two travel together, because the reseller's page shows the ledger and the adjustment (F-019-k) |
+| Pool | ADR-0053, as the adjustment: the caller is read on the app pool, a non-owner refused before `CrossTenantPrismaService` is touched. A reseller's own wallet is hidden from that pool by strict RLS; every other reseller's is not |
+| Target | a reseller that exists — `tenant_not_found` (404) and `not_a_reseller` (400) are the adjustment's, so an unknown id is never an empty page |
+| Paging | the reseller read's rules (`tenantWalletSchema`): `page` / `pageSize` (1 / 20), `pageSize ≤ 100`, `.strict()`, a bad one 400 `billing.pageInvalid` |
+| Rate limit | `WALLET_HISTORY`, per user — the same act as the reseller's own read |
+
+`200`: `{tenantId, balance, total, page, pageSize, rows: [{id, direction,
+reasonType, referenceId, amount, balanceAfter, createdAt}]}` — decimals as
+strings, rows newest first with `id` breaking a tie. `balance` is
+`cachedBalance` (invariant 3); a reseller never credited has no wallet and
+answers `"0.00"` with no rows. Unlike the reseller's own read this **does**
+carry `referenceId`: the reference of an adjustment is the owner's own request
+id, and of a charge the period it paid for.
+
+**Proof:** `tenant-billing/tenant-billing-ledger-read.spec.ts`.
 
 ## Subscription renewal — the platform charges (F-019-c)
 

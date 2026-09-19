@@ -1,7 +1,11 @@
 import { Module } from '@nestjs/common';
 import { TenantBillingLedger } from '@txnet-backend/shared-core';
 
-import { TenantBillingAdminController, TenantBillingPermissionGuard } from './tenant-billing-admin.controller';
+import {
+  TenantBillingAdminController,
+  TenantBillingPermissionGuard,
+  TenantBillingReadGuard,
+} from './tenant-billing-admin.controller';
 import { TenantBillingAdminService } from './tenant-billing-admin.service';
 import { DepositModule } from '../payment/deposit/deposit.module';
 import { TenantTopupController } from './tenant-topup.controller';
@@ -14,12 +18,13 @@ import { TenantWalletService } from './tenant-wallet.service';
  * unit's ledger, served by billing-service beside the other money surfaces.
  * `PrismaModule` is `@Global()`. A reseller's top-up (F-019-b) starts through
  * `DepositModule`, which settles it with its own `TenantBillingLedger`; the
- * reseller reads its balance and history through `TenantWalletService` (F-019-d).
+ * reseller reads its balance and history through `TenantWalletService` (F-019-d),
+ * and the platform owner reads one reseller's through the admin service (F-019-j).
  */
 @Module({
   imports: [DepositModule],
   controllers: [TenantBillingAdminController, TenantTopupController, TenantWalletController],
-  providers: [TenantBillingLedger, TenantBillingAdminService, TenantBillingPermissionGuard, TenantTopupService, TenantWalletService],
+  providers: [TenantBillingLedger, TenantBillingAdminService, TenantBillingPermissionGuard, TenantBillingReadGuard, TenantTopupService, TenantWalletService],
   exports: [TenantBillingLedger],
 })
 export class TenantBillingModule {}

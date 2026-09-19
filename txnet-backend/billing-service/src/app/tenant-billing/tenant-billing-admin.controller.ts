@@ -6,6 +6,7 @@ import {
   Controller,
   ExecutionContext,
   ForbiddenException,
+  Get,
   HttpCode,
   HttpStatus,
   Injectable,
@@ -14,6 +15,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -30,6 +32,7 @@ import {
   TenantBillingAdminRejection,
   TenantBillingAdminService,
 } from './tenant-billing-admin.service';
+import { TenantWalletQueryBody, tenantWalletSchema } from './tenant-wallet.schema';
 
 /**
  * The permission a manual adjustment needs (F-019-a). Granted to `Admin`, as
@@ -37,15 +40,34 @@ import {
  */
 export const TENANT_BILLING_ADJUST = 'tenant_billing.adjust';
 
-/** The first door; the platform-owner check in the service is the real one. */
+/**
+ * The permission the owner's read of a reseller's ledger needs (F-019-j).
+ * Separate from {@link TENANT_BILLING_ADJUST}, and granted to `Admin` beside
+ * it: seeing what the platform charged a reseller is not moving its balance,
+ * so a role may later hold one without the other. Either way the service's
+ * owner check is the boundary.
+ */
+export const TENANT_BILLING_READ = 'tenant_billing.read';
+
+/** The first door of either route; the platform-owner check in the service is the real one. */
+function demand(req: Request, permission: string): boolean {
+  if (!holdsPermission(identityOf(req).permissions, permission)) {
+    throw new ForbiddenException(`${permission} is required`);
+  }
+  return true;
+}
+
 @Injectable()
 export class TenantBillingPermissionGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
-    const req = context.switchToHttp().getRequest<Request>();
-    if (!holdsPermission(identityOf(req).permissions, TENANT_BILLING_ADJUST)) {
-      throw new ForbiddenException(`${TENANT_BILLING_ADJUST} is required`);
-    }
-    return true;
+    return demand(context.switchToHttp().getRequest<Request>(), TENANT_BILLING_ADJUST);
+  }
+}
+
+@Injectable()
+export class TenantBillingReadGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    return demand(context.switchToHttp().getRequest<Request>(), TENANT_BILLING_READ);
   }
 }
 
@@ -60,6 +82,12 @@ export const TENANT_BILLING_REFUSAL_STATUS: Record<TenantBillingAdminRejection, 
   wallet_changed: 409,
 };
 
+const READ = {
+  key: (req: Request) => rateLimitBucketKey(RateLimitBucket.WALLET_HISTORY, identityOf(req).userId),
+  configKey: 'WALLET_HISTORY_RATE_LIMIT' as const,
+  windowSec: 900,
+};
+
 const WRITE = {
   key: (req: Request) => rateLimitBucketKey(RateLimitBucket.TENANT_BILLING_ADMIN_WRITE, identityOf(req).userId),
   configKey: 'TENANT_BILLING_ADMIN_WRITE_RATE_LIMIT' as const,
@@ -67,15 +95,35 @@ const WRITE = {
 };
 
 /**
- * A reseller's billing wallet, adjusted by the platform owner (F-019-a, D-41):
- * `POST /api/billing/tenant-wallets/:tenantId/adjustments`.
+ * One reseller's billing wallet, in the platform owner's hands (D-41):
+ * adjusted at `POST /api/billing/tenant-wallets/:tenantId/adjustments`
+ * (F-019-a) and read at `GET /api/billing/tenant-wallets/:tenantId/transactions`
+ * (F-019-j). Each route carries its own permission, so the guard is on the
+ * method rather than the class.
  */
 @Controller('billing/tenant-wallets')
-@UseGuards(TenantBillingPermissionGuard)
 export class TenantBillingAdminController {
   constructor(private readonly billing: TenantBillingAdminService) {}
 
+  /** The owner's page of one reseller's ledger: the balance and its movements, newest first. */
+  @Get(':tenantId/transactions')
+  @UseGuards(TenantBillingReadGuard)
+  @RateLimit(READ)
+  async transactions(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Query(new ZodValidationPipe(tenantWalletSchema)) query: TenantWalletQueryBody,
+    @Req() req: Request,
+  ) {
+    const { userId, tenantId: callerTenant } = identityOf(req);
+    try {
+      return await this.billing.history({ adminId: userId, tenantId: callerTenant }, tenantId, query);
+    } catch (e) {
+      throw refusalOf(e);
+    }
+  }
+
   @Post(':tenantId/adjustments')
+  @UseGuards(TenantBillingPermissionGuard)
   @HttpCode(HttpStatus.CREATED)
   @RateLimit(WRITE)
   async adjust(
@@ -89,18 +137,23 @@ export class TenantBillingAdminController {
       // The cast is for this project's non-strict tsconfig, under which zod infers every key as optional.
       return await this.billing.adjust({ adminId: userId, tenantId: callerTenant, ip }, tenantId, body as AdjustInput);
     } catch (e) {
-      if (!(e instanceof TenantBillingAdminRefused)) throw e;
-      const payload = { reason: e.reason, message: e.message };
-      switch (TENANT_BILLING_REFUSAL_STATUS[e.reason]) {
-        case 403:
-          throw new ForbiddenException(payload);
-        case 404:
-          throw new NotFoundException(payload);
-        case 409:
-          throw new ConflictException(payload);
-        default:
-          throw new BadRequestException(payload);
-      }
+      throw refusalOf(e);
     }
+  }
+}
+
+/** A refusal becomes its status; anything else is left alone. */
+function refusalOf(e: unknown): unknown {
+  if (!(e instanceof TenantBillingAdminRefused)) return e;
+  const payload = { reason: e.reason, message: e.message };
+  switch (TENANT_BILLING_REFUSAL_STATUS[e.reason]) {
+    case 403:
+      return new ForbiddenException(payload);
+    case 404:
+      return new NotFoundException(payload);
+    case 409:
+      return new ConflictException(payload);
+    default:
+      return new BadRequestException(payload);
   }
 }
