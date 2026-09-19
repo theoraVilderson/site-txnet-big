@@ -6,17 +6,23 @@ version: 20
 updated: 2026-09-19
 ---
 
-# Contract — panel-web: resellers (F-018-k, F-019-k)
+# Contract — panel-web: resellers (F-018-k, F-019-k, F-019-i)
 
-A topic file of [contract.md](contract.md) (§10). Two pages under
+A topic file of [contract.md](contract.md) (§10). Three pages under
 `(panel)/resellers/`, each a server shell over a client view:
 
 | page | route | files |
 |---|---|---|
 | the list | `/resellers` (`PANEL_RESELLERS`) | `_components/ResellersView.tsx`, `CreateResellerSheet.tsx` with `OwnerPicker.tsx` |
 | one reseller | `/resellers/[id]` (`panelResellerPath`) | `[id]/_components/ResellerDetailView.tsx`, `ResellerLedger.tsx` |
+| buying one | `/resellers/buy` (`PANEL_RESELLER_PURCHASE`) | `buy/_components/BuyResellerView.tsx`, rules `_lib/purchase.ts` |
 
-`_lib/resellers.ts` holds the rules of both, `_components/resellers-ui.tsx`
+**The first two are the platform owner's; the third is not.** They share a
+route prefix and nothing else, so **no `layout.tsx` may be added under
+`(panel)/resellers/` that gates on `canAdministerResellers`** — it would lock
+out exactly the visitors `/resellers/buy` exists for.
+
+`_lib/resellers.ts` holds the rules of the owner's two, `_components/resellers-ui.tsx`
 what they share (`StatusBadge`, the refusal sentence). The API is
 `lib/tenant-api.ts` over `/api/tenants` and `/api/tenant-packages`
 (tenant-service), `billingApi.adjustTenantWallet` and
@@ -84,3 +90,47 @@ behind them are [tenant/contract.admin.md](../../domains/tenant/contract.admin.m
     moves the balance, so the ledger re-reads with the page's write counter.
     A failed read is the server's translated sentence and a retry, not the
     empty state (`contract.financial.md`).
+
+## Buying one (F-019-i)
+
+`/resellers/buy`: a platform user buys a reseller of their own, paid from their
+wallet. `_lib/purchase.ts` holds its rules, `resellerPurchaseApi`
+(`lib/tenant-api.ts`) its three calls — `GET /api/tenants/purchase/packages`,
+`GET /api/tenants/purchase/slug?name=`, `POST /api/tenants/purchase`. Every
+rule behind them is [tenant/contract.admin.md](../../domains/tenant/contract.admin.md)
+"A platform user buys a reseller" (F-019-h, ADR-0061).
+
+12. **A different audience, and no permission key.** `canBuyReseller` is
+    `me.tenant.type === "platform_owner"` and nothing else: the routes admit
+    any signed-in user of the platform owner's tenant, so a key would hide the
+    page from the people it is for. The menu entry (`buy-reseller`) names
+    `tenantTypes` alone for the same reason. `not_platform_user` stays the
+    boundary, and the page shows that sentence rather than a form it knows will
+    be refused.
+13. **Its own refusal sentences** (`PURCHASE_REFUSAL_KEYS`, namespace
+    `common.resellerPurchase`), read from `PurchaseRejection`'s own source by
+    the spec. Not `REFUSAL_KEYS`: the same word means something else here —
+    `insufficient_balance` is the **buyer's** wallet, not a reseller's balance
+    with the platform — and `already_reseller` and `buyer_inactive` have no
+    sentence in that set at all. `resellers-ui`'s `useMessage` is the
+    administration's, so this page has `usePurchaseMessage`.
+14. **`insufficient_balance` is shown with the top-up beside it.** It is the one
+    refusal the buyer can act on, and a sentence alone leaves them on a page
+    they cannot finish; the link is `PANEL_DEPOSIT`.
+15. **The address is a suggestion until the buyer edits it.** `name` asks
+    `GET /purchase/slug` 300ms after typing stops (`suggestibleName` keeps a
+    name the route would refuse off the wire — the read budget is shared with
+    the package list); the first keystroke in the address field stops the
+    suggestion overwriting it for good. Left empty, `purchaseBody` **omits**
+    `slug` rather than sending `""`, which the `.strict()` schema refuses, and
+    the purchase takes the name's own. A failed suggestion is silent: the buyer
+    can type one.
+16. **A choice the service takes.** Periods are `BILLING_MODELS`; a package is
+    offered for a period only when priced for it (`offerChoices` — the route
+    lists active packages only, so there is no `isActive` filter here), and
+    changing the period drops a pick that period does not sell. The service
+    reads both again under the package's lock, so this saves a round trip and
+    is never the check.
+17. **No figure is computed here** (rule 7 again, and it moves real money). The
+    price is the offer's, the balance `billingApi.walletBalance()`, and what was
+    charged is the answer's `charged` — never the price the page showed.

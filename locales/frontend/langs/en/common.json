@@ -23,7 +23,8 @@
       "coupons": "Coupons and gift codes",
       "catalog": "Catalog",
       "tenantBilling": "Platform billing",
-      "resellers": "Resellers"
+      "resellers": "Resellers",
+      "buyReseller": "Become a reseller"
     },
     "paymentCredited": {
       "title": "Payment confirmed",
@@ -1487,5 +1488,45 @@
       "wallet_changed": "The balance moved meanwhile. Send it again."
     },
     "retry": "Retry"
+  },
+  "resellerPurchase": {
+    "title": "Become a reseller",
+    "subtitle": "Buy your own white-label panel — pick a package and a period, name it, and pay from your wallet.",
+    "period": "Billing period",
+    "package": "Package",
+    "noPackages": "No package is on sale for this period.",
+    "included": "Included",
+    "price": "Price",
+    "name": "Brand name",
+    "nameHint": "What your panel is called. It suggests the address below.",
+    "slug": "Address",
+    "slugHint": "Your panel's first address. Edit it before buying — it cannot be changed afterwards.",
+    "slugSuggesting": "Suggesting…",
+    "balance": "Your wallet",
+    "topup": "Top up",
+    "submit": "Buy for {{price}}",
+    "reload": "Try again",
+    "done": {
+      "title": "Your reseller is ready",
+      "body": "{{slug}} is active. {{charged}} was taken from your wallet; the period ends {{date}}.",
+      "balance": "Wallet balance is now {{balance}}.",
+      "open": "Open your panel"
+    },
+    "errors": {
+      "packageId": "Pick a package.",
+      "name": "Enter a name of at most 100 characters.",
+      "slug": "Use lower-case letters, digits and hyphens, not starting or ending with a hyphen, and not a name the platform keeps."
+    },
+    "refusals": {
+      "not_platform_user": "Only a user of the platform can buy a reseller.",
+      "package_not_found": "That package no longer exists.",
+      "buyer_inactive": "Your account is not active.",
+      "already_reseller": "You already have a reseller.",
+      "slug_taken": "That address is taken. Pick another one.",
+      "insufficient_balance": "Your wallet does not hold enough. Top it up and buy again.",
+      "wallet_changed": "Your wallet changed while this was going through. Check the balance and try again.",
+      "package_inactive": "That package is no longer on sale.",
+      "package_not_sold_for_period": "That package is not sold for this period."
+    }
   }
 }

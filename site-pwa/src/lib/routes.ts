@@ -73,6 +73,13 @@ export const PANEL_RESELLERS = "/resellers";
  * spells the path (C-10).
  */
 export const panelResellerPath = (id: string) => `${PANEL_RESELLERS}/${encodeURIComponent(id)}`;
+/**
+ * Where a platform user buys a reseller of their own (F-019-i). A sibling of
+ * the owner's administration on purpose: `activeHref` takes the longest match,
+ * so this lights its own menu entry and not `PANEL_RESELLERS`, and the static
+ * segment wins over `[id]`, which is always a uuid.
+ */
+export const PANEL_RESELLER_PURCHASE = `${PANEL_RESELLERS}/buy`;
 /** Payments the gateway has not confirmed, for a person to settle (F-093-n). */
 export const PANEL_MANUAL_PAYMENTS = "/payments/manual";
 /**

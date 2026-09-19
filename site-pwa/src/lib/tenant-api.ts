@@ -61,6 +61,37 @@ export interface TenantSubscription {
   includedFeatureKeys: string[];
 }
 
+/**
+ * A package as the purchase offers it (F-019-i). Not {@link TenantPackage}:
+ * `GET /tenants/purchase/packages` answers a buyer, so it lists the active
+ * ones only and carries no `isActive`.
+ */
+export interface PackageOffer {
+  id: string;
+  name: string;
+  monthlyPrice: string | null;
+  yearlyPrice: string | null;
+  includedFeatureKeys: string[];
+}
+
+/** `POST /tenants/purchase`'s body. The route is `.strict()`: `slug` is sent only when the buyer kept one. */
+export interface PurchaseBody {
+  packageId: string;
+  billingModel: ResellerBillingModel;
+  name: string;
+  slug?: string;
+}
+
+/** What the purchase answers: the new reseller, plus what it cost and what is left. */
+export type Purchased = Reseller & {
+  packageId: string;
+  currentPeriodEnd: string;
+  /** What was taken from the buyer's wallet, a decimal string (C-02). */
+  charged: string;
+  /** The buyer's wallet balance after the charge. */
+  walletBalance: string;
+};
+
 export interface StatusChange {
   tenantId: string;
   status: TenantStatus;
@@ -94,5 +125,27 @@ export const tenantApi = {
   /** Every package, active or not: a reseller may stay on a deactivated one. */
   async packages(): Promise<TenantPackage[]> {
     return call<TenantPackage[]>("/tenant-packages", { method: "GET" });
+  },
+};
+
+/**
+ * A platform user buying a reseller of their own (F-019-i,
+ * `tenant/contract.admin.md` "A platform user buys a reseller"). Its own
+ * object, not a member of {@link tenantApi}: these three routes take no
+ * permission key and admit any user of the platform owner's tenant, where
+ * every route above wants `tenant.manage`.
+ */
+export const resellerPurchaseApi = {
+  /** The packages on sale, by name. Shares a rate-limit budget with {@link suggestSlug}. */
+  async packages(): Promise<PackageOffer[]> {
+    return call<PackageOffer[]>("/tenants/purchase/packages", { method: "GET" });
+  },
+  /** The address `name` suggests. A suggestion only: the purchase checks it again. */
+  async suggestSlug(name: string): Promise<{ slug: string }> {
+    return call<{ slug: string }>(`/tenants/purchase/slug?name=${encodeURIComponent(name)}`, { method: "GET" });
+  },
+  /** Pays the first period from the buyer's wallet and opens the reseller `active` (ADR-0061). */
+  async purchase(body: PurchaseBody): Promise<Purchased> {
+    return call<Purchased>("/tenants/purchase", { method: "POST", body: JSON.stringify(body) });
   },
 };
