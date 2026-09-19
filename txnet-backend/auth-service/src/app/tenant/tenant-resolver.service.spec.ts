@@ -27,7 +27,7 @@ type DomainRow = {
   /** What the door is for (F-066-q). Every fixture here is a panel domain. */
   purpose: 'panel' | 'subscription' | 'assets';
   verificationStatus: 'pending' | 'verified' | 'failed';
-  tenant: { id: string; slug: string; ownerUserId: string };
+  tenant: { id: string; slug: string; ownerUserId: string; tenantType: 'platform_owner' | 'reseller' };
 };
 
 /**
@@ -79,7 +79,7 @@ const subdomain = (purpose: DomainRow['purpose'] = 'panel'): DomainRow => ({
   domainType: 'subdomain',
   purpose,
   verificationStatus: 'pending',
-  tenant: { ...DOMAIN_TENANT, ownerUserId: OWNER },
+  tenant: { ...DOMAIN_TENANT, ownerUserId: OWNER, tenantType: 'reseller' },
 });
 
 const customDomain = (
@@ -88,7 +88,7 @@ const customDomain = (
   domainType: 'custom_domain',
   purpose: 'panel',
   verificationStatus,
-  tenant: { ...DOMAIN_TENANT, ownerUserId: OWNER },
+  tenant: { ...DOMAIN_TENANT, ownerUserId: OWNER, tenantType: 'reseller' },
 });
 
 describe('normalizeHost', () => {
@@ -119,29 +119,23 @@ describe('TenantResolverService — which tenant a host resolves to', () => {
       via: 'domain',
       surfacePurpose: 'panel',
       surfaceDomainType: 'subdomain',
+      surfaceTenantType: 'reseller',
     });
   });
 
-  it("marks a reseller's CNAME target, which serves nothing (ADR-0063)", async () => {
-    const { service } = resolver({ 'reseller.edge.txnet.app': subdomain() });
+  it("says who issued the surface's tenant: a reseller or the platform (ADR-0063)", async () => {
+    const platformHost: DomainRow = {
+      ...subdomain(),
+      tenant: { ...PLATFORM_TENANT, ownerUserId: 'owner-p', tenantType: 'platform_owner' },
+    };
+    const { service } = resolver({ 'panel.txnet.app': platformHost, 'reseller.edge.txnet.app': subdomain() });
 
-    await expect(service.resolve({ host: 'reseller.edge.txnet.app' })).resolves.toEqual({
-      ...DOMAIN_TENANT,
-      via: 'domain',
-      surfacePurpose: 'panel',
-      surfaceDomainType: 'subdomain',
-      surfaceIsTarget: true,
+    await expect(service.resolve({ host: 'panel.txnet.app' })).resolves.toMatchObject({
+      surfaceTenantType: 'platform_owner',
     });
-  });
-
-  it('marks the target however the host was sent, and from the cache too', async () => {
-    const { service, findUnique } = resolver({ 'reseller.edge.txnet.app': subdomain() });
-
-    await service.resolve({ host: 'reseller.edge.txnet.app' });
-    await expect(service.resolve({ host: 'Reseller.EDGE.txnet.app:443' })).resolves.toMatchObject({
-      surfaceIsTarget: true,
+    await expect(service.resolve({ host: 'reseller.edge.txnet.app' })).resolves.toMatchObject({
+      surfaceTenantType: 'reseller',
     });
-    expect(findUnique).toHaveBeenCalledTimes(1);
   });
 
   it('resolves a verified custom domain', async () => {
@@ -152,6 +146,7 @@ describe('TenantResolverService — which tenant a host resolves to', () => {
       via: 'domain',
       surfacePurpose: 'panel',
       surfaceDomainType: 'custom_domain',
+      surfaceTenantType: 'reseller',
     });
   });
 
@@ -187,6 +182,7 @@ describe('TenantResolverService — which tenant a host resolves to', () => {
       via: 'domain',
       surfacePurpose: 'panel',
       surfaceDomainType: 'custom_domain',
+      surfaceTenantType: 'reseller',
     });
     expect(findUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { domainValue: 'myvpn.com' } }),
@@ -230,6 +226,7 @@ describe('TenantResolverService — the cache', () => {
       via: 'domain',
       surfacePurpose: 'panel',
       surfaceDomainType: 'custom_domain',
+      surfaceTenantType: 'reseller',
     });
   });
 });
@@ -313,6 +310,7 @@ describe('TenantResolverService — the claim chain', () => {
       via: 'session',
       surfacePurpose: 'panel',
       surfaceDomainType: 'custom_domain',
+      surfaceTenantType: 'reseller',
     });
     expect(tenantById).not.toHaveBeenCalled();
   });
@@ -324,6 +322,7 @@ describe("TenantResolverService — the surface tenant's owner (ADR-0059)", () =
     via: 'session',
     surfacePurpose: 'panel',
     surfaceDomainType: 'custom_domain',
+    surfaceTenantType: 'reseller',
     brand: DOMAIN_TENANT,
   };
 
@@ -407,6 +406,7 @@ describe("TenantResolverService — the surface tenant's owner (ADR-0059)", () =
       via: 'domain',
       surfacePurpose: 'panel',
       surfaceDomainType: 'custom_domain',
+      surfaceTenantType: 'reseller',
     });
   });
 

@@ -33,7 +33,8 @@ exists to remove, and a host that opens after verification keeps it.
 2. **The target serves nothing, ever.** It exists so the reseller's domain can
    point at the gateway (CNAME) and so the domain check can name it. A request
    that arrives *as* it — opened directly, or from a CDN that rewrites the host
-   — is refused: `TenantGuard` 404s every path (`surfaceIsTarget`), the door
+   — is refused: `TenantGuard` 404s every path on a reseller's platform
+   subdomain (`surfaceTenantType`, no gate read), the door
    answers `serves: false` so the panel renders nothing, and `tenantOfHost`
    (files, branding, the bank callback) names no tenant.
 3. **The reseller's CDN must keep the visitor's host.** The domain check's
@@ -54,7 +55,10 @@ exists to remove, and a host that opens after verification keeps it.
 - `panelHostOf` returns no host for a reseller without a verified domain, so a
   handoff to its panel is refused and a payer's return address is the
   platform's, as the callers already handle.
-- `gatedDoor` (F-066-x) stays for a reseller's non-target platform subdomain.
-  None is written any more; it holds for a row written by hand.
-- A deleted host keeps resolving from `tenant:host:<host>` until
-  `RedisTtl.tenantResolution` (600 s) — the migration cannot reach Redis.
+- The door rule no longer reads the onboarding gate: a reseller has no
+  platform subdomain that could open, so every one is closed, including an old
+  `<slug>.<domain>` row.
+- No deleted host lingers in `tenant:host:<host>`, although the migration
+  cannot reach Redis: the cached surface gained `tenantType`, so every entry
+  from before the deploy fails the cache's shape check and re-reads, and an
+  entry written since says `reseller`, which the rule closes.

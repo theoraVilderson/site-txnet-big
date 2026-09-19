@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-version: 4
+version: 5
 updated: 2026-09-19
 ---
 
@@ -63,32 +63,43 @@ this row, or a reader that never learned about it, behaves exactly as before.
 
 ## The door a gated reseller is served on
 
-**While the gate is on, the reseller's platform `subdomain` serves nothing, to
-anyone** — not its end users (F-018-ag, D-01: no platform domain or subdomain
-is ever served to an end user) and not the reseller itself (F-066-x, user
-2026-09-19). The reseller configures from the platform's own panel, where its
-owner's account already lives (ADR-0059), until a domain of its own is proved;
-if that domain later drops back to `pending`, the subdomain closes again with
-it. Code: `auth-service/src/app/tenant/door.ts` (`gatedDoor`), enforced by
+**A reseller's platform `subdomain` serves nothing, to anyone, gated or not**
+(ADR-0063; F-018-ag and F-066-x before it; D-01: no platform domain or
+subdomain is ever served to an end user). A reseller's only one is its CNAME
+target `<slug>.edge.<domain>`, which connects its own domain and is never a
+door; a `<slug>.<domain>` row from before ADR-0063 is closed the same way. The
+reseller configures from the platform's own panel, where its owner's account
+already lives (ADR-0059); its customers reach it only on a domain of its own.
+Code: `auth-service/src/app/tenant/door.ts` (`doorClosed`), enforced by
 `TenantGuard` as the fourth of its refusals.
 
-It is the seam F-066-q built, with the gate as a third input beside the
-surface's `purpose`. Resolution answers `surfaceDomainType` as well, so the
-rule can say *platform host* at all:
+It is the seam F-066-q built, with **who owns the host** as the third input
+beside the surface's `purpose`. Resolution answers `surfaceDomainType` and
+`surfaceTenantType`, so the rule can say *a reseller's platform host* at all:
 
-| the surface | while the tenant is onboarding |
+| the surface | serves |
 |---|---|
-| `panel` + `subdomain` — a platform-issued host | **nothing** — every path is the neutral 404 |
-| a reseller's CNAME target `<slug>.edge.<domain>` | **nothing, gated or not** (ADR-0063) |
+| `panel` + `subdomain` of a **reseller** — its CNAME target, or an old row | **nothing** — every path is the neutral 404 |
+| `panel` + `subdomain` of the **platform owner** — `panel.<domain>`, `api.<domain>` | everything, unfiltered |
 | `panel` + `custom_domain` — the reseller's own, proved | everything, unfiltered |
 | `subscription` / `assets` | unchanged: that purpose's (empty) allowlist |
 | no surface at all — an internal caller on a container name | everything |
 
-**A reseller's only platform host is now its CNAME target** (ADR-0063, F-018-ai):
-no `<slug>.<domain>` is created, and the target serves nothing even once the
-gate lifts — `surfaceIsTarget` on the resolved tenant, from the host's
-spelling, never cached. `gatedDoor` still holds for any other reseller
-subdomain; none is written any more.
+**The gate is not read.** Whether the reseller is onboarding no longer
+matters to the door: it has no platform subdomain that could open. So the rule
+is a fact about the host, costs no Redis read, and cannot be opened by a state
+that is missing.
+
+**The owner that is judged is the host's**, `brand` when the request is scoped
+to the reseller owner's own tenant (ADR-0059) — `surfaceTenantType` is always
+the surface's. Judging the scoped tenant would open the door for exactly the
+account most likely to be standing at it.
+
+**No stale cache entry can reopen a deleted row.** `tenantType` is part of
+the cached surface and required by the cache's shape check, so every entry
+written before it re-read at the deploy that added it — including those for
+the rows ADR-0063's migration deleted in SQL, where Redis cannot be reached.
+And an entry written since says `reseller`, which this rule closes anyway.
 
 **Why the console left the subdomain too** (user, 2026-09-19). F-018-ag kept
 it open for the reseller's own staff. A platform host a reseller can use is a
@@ -97,18 +108,8 @@ then takes every reseller's users down together. Its cost: a reseller's staff
 whose accounts live in the reseller's tenant have no door until the domain is
 proved — only the owner, signed in on the platform's panel, configures.
 
-**The gate that is read belongs to the tenant that owns the host**, which is
-`brand` when the surface's tenant is not the scoped one (ADR-0059's
-reseller-owner case) and the resolved tenant otherwise. Reading the scoped
-tenant instead would open the door for exactly the account most likely to be
-standing at it. The Redis read is `tenant:status:<surface tenant>` and is paid
-only on a `panel` `subdomain`; a missing or unparseable state closes nothing,
-the same trade `TenantStatusGuard` makes.
-
-**The platform's own main domain is never filtered** (user, 2026-09-19). It
-belongs to the platform owner, and the platform owner is never onboarding — so
-a reseller parking its end users on the platform's domain cannot cause the
-platform's own host to serve less.
+**The platform's own main domain is never filtered** (user, 2026-09-19): it is
+the platform owner's, not a reseller's.
 
 The refusal is the **neutral 404**, not the gate's 403: on the platform's own
 domain a stranger must not learn that a particular reseller lives at this
@@ -119,9 +120,9 @@ address (F-1210).
 `site-pwa` is a separate deployable that every host reaches (F-066-u), so the
 same rule has to hold for the page. It is not restated there:
 `GET /api/auth/door` answers `{ serves: boolean }` for the host that asked,
-from the same resolution and the same `gatedDoor` read (`door.controller.ts`).
-`false` on a reseller's CNAME target, a gated reseller's platform subdomain
-and a `subscription` / `assets` domain; `true` otherwise.
+from the same resolution and the same `doorClosed` rule (`door.controller.ts`).
+`false` on a reseller's platform subdomain and a `subscription` / `assets`
+domain; `true` otherwise.
 
 - It is the one route `TenantGuard` exempts from refusals (3) and (4)
   (`@DoorProbe`) — it must answer on exactly the doors they close. An

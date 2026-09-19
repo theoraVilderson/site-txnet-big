@@ -62,8 +62,8 @@ a deployment still setting them sets nothing. `NEXT_PUBLIC_REALTIME_PATH` stays
 ## A host that serves no panel (F-066-x)
 
 Every host reaches this app, so a host that must serve nothing — a
-`subscription` / `assets` domain (F-066-q), a gated reseller's platform
-subdomain (F-018-ag, F-066-x), a reseller's CNAME target (ADR-0063) — used to render the login page with only its API
+`subscription` / `assets` domain (F-066-q), a reseller's platform subdomain
+— its CNAME target, closed gated or not (F-066-x, ADR-0063) — used to render the login page with only its API
 calls refused. D-01 is about what a platform host *serves*, so the page was the
 violation.
 

@@ -49,11 +49,8 @@ describe('a non-panel surface serves no panel route', () => {
     });
 
     beforeEach(() => {
-      // F-018-ag gave the guard a status store. Nothing in this file is a
-      // platform subdomain, so it is never read — `never` proves that.
       guard = new TenantGuard(
         { getAllAndOverride: () => undefined } as unknown as Reflector,
-        { get: () => Promise.reject(new Error('no state should be read here')) },
       );
       warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     });
@@ -123,7 +120,6 @@ describe('a non-panel surface serves no panel route', () => {
       // serves no route of this process at all.
       const agnostic = new TenantGuard(
         { getAllAndOverride: (key: string) => key === TENANT_AGNOSTIC || undefined } as unknown as Reflector,
-        { get: () => Promise.reject(new Error('no state should be read here')) },
       );
       const { context } = fakeExecutionContext({
         extra: { tenant: on('subscription', 'domain') },

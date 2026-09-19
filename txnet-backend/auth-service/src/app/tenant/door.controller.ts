@@ -1,9 +1,5 @@
-import { Controller, Get, HttpCode, HttpStatus, Inject, Req } from '@nestjs/common';
-import {
-  TENANT_STATUS_STORE,
-  TenantCapability,
-  TenantStatusStore,
-} from '@txnet-backend/shared-core';
+import { Controller, Get, HttpCode, HttpStatus, Req } from '@nestjs/common';
+import { TenantCapability } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 import { ok } from '../common/response/response.util';
 import { DoorProbe, doorServes } from './door';
@@ -29,12 +25,10 @@ import { resolveTenant } from './tenant';
 @DoorProbe()
 @Controller('auth/door')
 export class DoorController {
-  constructor(@Inject(TENANT_STATUS_STORE) private readonly store: TenantStatusStore) {}
-
   @Get()
   @HttpCode(HttpStatus.OK)
   async door(@Req() req: Request) {
     const tenant = resolveTenant(req);
-    return ok({ serves: tenant ? await doorServes(tenant, this.store) : true });
+    return ok({ serves: tenant ? doorServes(tenant) : true });
   }
 }

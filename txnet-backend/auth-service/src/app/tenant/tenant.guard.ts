@@ -2,7 +2,6 @@ import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
-  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -12,11 +11,7 @@ import { Request } from 'express';
 import { resolveTenant, surfaceServesPath, tenantConflict } from './tenant';
 import { DOOR_PROBE, doorClosed } from './door';
 import { TENANT_AGNOSTIC } from './tenant-agnostic.decorator';
-import {
-  BackendI18nKeys,
-  TENANT_STATUS_STORE,
-  TenantStatusStore,
-} from '@txnet-backend/shared-core';
+import { BackendI18nKeys } from '@txnet-backend/shared-core';
 
 /**
  * The four ways a request's tenancy can be refused, in the one place a refusal
@@ -38,10 +33,10 @@ import {
  *    domain resolves its tenant perfectly well and still serves no panel route
  *    (F-066-q). It is the same neutral 404 as (1), and on purpose: a
  *    subscription host must not tell a stranger that a panel lives elsewhere.
- * 4. **A closed platform host** — a reseller's CNAME target, always
- *    (ADR-0063), or a gated reseller's other platform subdomain: the same rule
- *    as (3) with the onboarding gate as a third input instead of the purpose. It serves
- *    nothing, to anyone: its end users (F-018-ag, D-01) and, since F-066-x,
+ * 4. **A reseller's platform subdomain** — its CNAME target, or a row from
+ *    before ADR-0063: the same rule as (3), keyed on who owns the host
+ *    instead of the purpose (F-066-x, ADR-0063). It serves nothing, to
+ *    anyone: its end users (F-018-ag, D-01) and, since F-066-x,
  *    the reseller itself, which configures from the platform's own panel
  *    (user, 2026-09-19). Also the neutral 404 — on the platform's own domain,
  *    a stranger must not learn that a particular reseller lives at this
@@ -74,10 +69,7 @@ import {
 export class TenantGuard implements CanActivate {
   private readonly logger = new Logger(TenantGuard.name);
 
-  constructor(
-    private readonly reflector: Reflector,
-    @Inject(TENANT_STATUS_STORE) private readonly store: TenantStatusStore,
-  ) {}
+  constructor(private readonly reflector: Reflector) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
@@ -108,13 +100,11 @@ export class TenantGuard implements CanActivate {
       throw new NotFoundException();
     }
 
-    if (!probe && tenant && (await doorClosed(tenant, this.store))) {
+    if (!probe && tenant && doorClosed(tenant)) {
       this.logger.warn(
         `${request.method} ${request.originalUrl} refused: host ` +
-          `'${request.hostname}' is ` +
-          (tenant.surfaceIsTarget
-            ? `a reseller's CNAME target, which serves nothing (ADR-0063)`
-            : `a platform subdomain of a reseller that has proved no domain, and serves nothing (F-066-x)`),
+          `'${request.hostname}' is a reseller's platform subdomain, which ` +
+          `serves nothing (ADR-0063)`,
       );
       throw new NotFoundException();
     }

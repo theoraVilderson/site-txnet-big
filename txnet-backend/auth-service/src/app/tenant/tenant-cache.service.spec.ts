@@ -22,6 +22,7 @@ const TENANT = {
   slug: 'reseller',
   purpose: 'panel' as const,
   domainType: 'custom_domain' as const,
+  tenantType: 'reseller' as const,
   ownerUserId: 'user-owner',
 };
 
@@ -182,6 +183,10 @@ describe('TenantCacheService — a Redis outage slows resolution, it does not re
       'before `domainType` existed',
       { id: TENANT.id, slug: TENANT.slug, ownerUserId: TENANT.ownerUserId, purpose: 'panel' },
     ],
+    [
+      'before `tenantType` existed',
+      { ...TENANT, tenantType: undefined },
+    ],
   ])('re-reads a host entry written %s', async (_case, old) => {
     // This is how a column of the surface crosses a deploy — F-066-q's
     // `purpose`, and F-018-ag's `domainType` the same way. An entry from the
@@ -201,5 +206,19 @@ describe('TenantCacheService — a Redis outage slows resolution, it does not re
     expect(store.get(RedisKeys.tenantByHost('myvpn.com'))).toBe(
       JSON.stringify(TENANT),
     );
+  });
+
+  it('answers nothing for a host whose row was deleted behind the cache, once the new shape deploys', async () => {
+    // ADR-0063's migration deletes `<slug>.<domain>` rows in SQL, where Redis
+    // cannot be reached. Every entry for them was written by the old shape,
+    // so the first request after the deploy re-reads — and finds no row.
+    // This is what closes the TTL window rather than waiting it out.
+    const { cache, store } = cacheOver({});
+    const { tenantType: _dropped, ...old } = TENANT;
+    store.set(RedisKeys.tenantByHost('acme.txnet.app'), JSON.stringify({ ...old, domainType: 'subdomain' }));
+
+    const lookup = vi.fn(async () => null);
+    await expect(cache.byHost('acme.txnet.app', lookup)).resolves.toBeNull();
+    expect(lookup).toHaveBeenCalledTimes(1);
   });
 });

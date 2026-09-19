@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
-import { isCnameTarget } from '@txnet-backend/shared-core';
 import { CachedSurface, CachedTenant, TenantCacheService } from './tenant-cache.service';
 import {
   ResolvedTenant,
@@ -12,8 +11,7 @@ import {
 type Identified = { id: string; slug: string };
 
 /** A host that matched a row: the tenant it names, and what the door is for. */
-/** `target`: the host is a reseller's CNAME target (ADR-0063) — from the host, not the cache. */
-type Surface = CachedSurface & { target?: true };
+type Surface = CachedSurface;
 
 /**
  * Resolves a request's tenant from the claims it carries (ADR-0020, ADR-0025).
@@ -129,7 +127,7 @@ export class TenantResolverService {
       via: 'session',
       surfacePurpose: surface.purpose,
       surfaceDomainType: surface.domainType,
-      ...(surface.target && { surfaceIsTarget: true as const }),
+      surfaceTenantType: surface.tenantType,
       brand: { id: surface.id, slug: surface.slug },
     };
   }
@@ -165,7 +163,7 @@ export class TenantResolverService {
       via,
       surfacePurpose: surface.purpose,
       surfaceDomainType: surface.domainType,
-      ...(surface.target && { surfaceIsTarget: true as const }),
+      surfaceTenantType: surface.tenantType,
     };
   }
 
@@ -177,8 +175,7 @@ export class TenantResolverService {
     // row.
     if (!host) return null;
 
-    const surface = await this.cache.byHost(host, () => this.lookupHost(host));
-    return surface && isCnameTarget(host, surface.domainType) ? { ...surface, target: true } : surface;
+    return this.cache.byHost(host, () => this.lookupHost(host));
   }
 
   private async lookupHost(host: string): Promise<Surface | null> {
@@ -188,7 +185,7 @@ export class TenantResolverService {
         domainType: true,
         purpose: true,
         verificationStatus: true,
-        tenant: { select: { id: true, slug: true, ownerUserId: true } },
+        tenant: { select: { id: true, slug: true, ownerUserId: true, tenantType: true } },
       },
     });
 

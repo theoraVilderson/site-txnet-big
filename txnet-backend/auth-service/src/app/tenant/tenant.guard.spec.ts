@@ -28,11 +28,8 @@ describe('TenantGuard', () => {
   beforeEach(() => {
     // A reflector that finds no metadata: the routes under test carry no
     // `@TenantAgnostic`, which is the case every assertion here is about.
-    // F-018-ag gave the guard a status store. No assertion here arrives on a
-    // platform subdomain, so it is never read — rejecting proves that.
     guard = new TenantGuard(
       { getAllAndOverride: () => undefined } as unknown as Reflector,
-      { get: () => Promise.reject(new Error('no state should be read here')) },
     );
     warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
   });

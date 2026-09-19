@@ -34,6 +34,9 @@ export type TenantSurfacePurpose = 'panel' | 'subscription' | 'assets';
  */
 export type TenantSurfaceDomainType = 'subdomain' | 'custom_domain';
 
+/** Who owns the surface's tenant — the platform, or a reseller (ADR-0063). */
+export type TenantSurfaceTenantType = 'platform_owner' | 'reseller';
+
 /**
  * The paths each non-panel surface serves, as path prefixes.
  *
@@ -118,13 +121,13 @@ export interface ResolvedTenant {
    */
   surfaceDomainType?: TenantSurfaceDomainType;
   /**
-   * The host is a reseller's CNAME target, `<slug>.edge.<domain>` (ADR-0063).
-   * It only connects the reseller's own domain and serves nothing, so
-   * `TenantGuard` refuses every path on it. Computed from the host on every
-   * request, never cached — the cache is keyed by host already, and a fact
-   * that follows from the host's spelling cannot go stale.
+   * Whether the surface's tenant — the one that owns the *host*, `brand` in
+   * ADR-0059's case — is the platform or a reseller (ADR-0063). With
+   * `surfaceDomainType` it is what closes a reseller's platform subdomain:
+   * its CNAME target, or a `<slug>.<domain>` row from before ADR-0063, serves
+   * nothing. Absent for the same reason `surfacePurpose` is.
    */
-  surfaceIsTarget?: true;
+  surfaceTenantType?: TenantSurfaceTenantType;
   /**
    * The surface's tenant, when it is **not** the one this request is scoped to
    * — present only when that tenant's owner arrived on it with their own
