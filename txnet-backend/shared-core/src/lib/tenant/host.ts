@@ -70,15 +70,24 @@ export function isCnameTarget(domainValue: string, domainType: 'subdomain' | 'cu
  * The one panel host a person is sent to for a tenant, of the rows it has:
  * a proven custom domain first, then a platform subdomain, each alphabetically
  * so two callers never disagree — and never a CNAME target. Billing's return
- * address (F-104) and the handoff to a reseller's panel (F-061-f) both ask it.
- * The caller filters to `panel` rows that are subdomains or verified.
+ * address (F-104), the handoff to a reseller's panel (F-061-f) and a branding
+ * URL (F-018-h) all ask it. The caller filters to rows that are subdomains or
+ * verified.
+ *
+ * `ownerType` is the tenant the rows belong to (F-018-aj). A **reseller's**
+ * platform subdomain serves nothing (ADR-0063, auth-service `doorClosed`), so
+ * for a reseller only its own custom domain is an answer, and `null` — which
+ * every caller turns into a refusal or a fallback — beats sending a person to
+ * a 404. The platform owner's own subdomains (`panel.<domain>`) are its doors.
  */
 export function panelHostOf(
   rows: ReadonlyArray<{ domainValue: string; domainType: 'subdomain' | 'custom_domain' }>,
+  ownerType: 'platform_owner' | 'reseller',
 ): string | null {
   const rank = (t: string) => (t === 'custom_domain' ? 0 : 1);
   const best = rows
     .filter((r) => !isCnameTarget(r.domainValue, r.domainType))
+    .filter((r) => ownerType !== 'reseller' || r.domainType === 'custom_domain')
     .sort((a, b) => rank(a.domainType) - rank(b.domainType) || a.domainValue.localeCompare(b.domainValue))[0];
   return best?.domainValue ?? null;
 }

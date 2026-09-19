@@ -459,9 +459,12 @@ export class DepositStartService {
       // host: proven custom domains first, then alphabetically.
       orderBy: [{ domainType: 'desc' }, { domainValue: 'asc' }],
     });
-    // A CNAME target serves the panel only for a CDN that forwards it instead
-    // of the visitor's host (ADR-0060 (6)); no browser holds a cookie there.
-    const host = panelHostOf(rows);
+    // A reseller's platform subdomain serves nothing (ADR-0063), so a payer is
+    // returned only to its own domain; with none, the deposit is refused before
+    // a payment exists (F-018-aj).
+    const owner = await tx.tenant.findUnique({ where: { id: tenantId }, select: { tenantType: true } });
+    if (!owner) return null;
+    const host = panelHostOf(rows, owner.tenantType);
     return host ? `https://${host}${path}` : null;
   }
 }

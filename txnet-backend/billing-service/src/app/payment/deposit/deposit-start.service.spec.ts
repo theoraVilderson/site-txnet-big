@@ -90,6 +90,7 @@ type Setup = {
   /** bot-service will not make the Mini App's invoice link (F-104-q). */
   linkFails?: boolean;
   domains?: Array<{ domainValue: string; domainType: string; verificationStatus: string }>;
+  tenantType?: 'platform_owner' | 'reseller';
   callbackOrigin?: string;
   /** `FRONTEND_ORIGIN`, comma-separated like CORS reads it. */
   frontendOrigin?: string;
@@ -104,7 +105,8 @@ function build(setup: Setup = {}) {
     webhook = false,
     inChat = false,
     linkFails = false,
-    domains = [{ domainValue: 'myvpn.txnet.app', domainType: 'subdomain', verificationStatus: 'pending' }],
+    domains = [{ domainValue: 'myvpn.com', domainType: 'custom_domain', verificationStatus: 'verified' }],
+    tenantType = 'reseller',
     callbackOrigin = '',
     frontendOrigin = '',
   } = setup;
@@ -114,7 +116,7 @@ function build(setup: Setup = {}) {
 
   const tx = {
     $executeRaw: async () => 0,
-    tenant: { findUnique: async () => ({ tenantType: 'reseller' }) },
+    tenant: { findUnique: async () => ({ tenantType }) },
     // No grant: `selectGateway` looks for one only after the tenant's own row
     // misses, and `selectableGateways` always asks (F-096-b).
     paymentGatewayGrant: { findMany: async () => [] },
@@ -359,10 +361,10 @@ describe('DepositStartService.start', () => {
     expect(calls.requested[0].callbackUrl).toBe(`https://myvpn.com/api/billing/deposit/callback?p=${started.paymentId}`);
   });
 
-  it('never sends the bank to the reseller’s CNAME target, though it sorts first', async () => {
-    // ADR-0060 (6): `myvpn.edge.txnet.app` serves the panel only for a CDN that
-    // forwards the target instead of the visitor's host. No browser holds a
-    // cookie there, so a payer returned to it would look signed out.
+  it('never sends the bank to a reseller’s platform subdomain: with no own domain the deposit is refused (F-018-aj)', async () => {
+    // ADR-0063: a reseller's platform subdomain serves nothing — its CNAME
+    // target and a pre-ADR-0063 `<slug>.<domain>` alike — so a payer returned
+    // there would land on a 404 after paying.
     const { service, calls } = build({
       domains: [
         { domainValue: 'myvpn.edge.txnet.app', domainType: 'subdomain', verificationStatus: 'pending' },
@@ -370,11 +372,19 @@ describe('DepositStartService.start', () => {
       ],
     });
 
+    await expect(start(service)).rejects.toBeInstanceOf(DepositCallbackUnavailable);
+    expect(calls.requested).toEqual([]);
+  });
+
+  it("returns a platform user to the platform's own panel subdomain", async () => {
+    const { service, calls } = build({
+      tenantType: 'platform_owner',
+      domains: [{ domainValue: 'panel.txnet.app', domainType: 'subdomain', verificationStatus: 'verified' }],
+    });
+
     const started = await start(service);
 
-    expect(calls.requested[0].callbackUrl).toBe(
-      `https://myvpn.txnet.app/api/billing/deposit/callback?p=${started.paymentId}`,
-    );
+    expect(calls.requested[0].callbackUrl).toBe(`https://panel.txnet.app/api/billing/deposit/callback?p=${started.paymentId}`);
   });
 
   it('tells a webhook driver its gateway’s webhook door, on the callback’s origin, and a return driver nothing (F-104-h)', async () => {
@@ -492,8 +502,8 @@ describe('DepositStartService.start — where the payer is sent back to', () => 
 
   it('stores an Origin on one of the tenant’s own panel hosts', async () => {
     const { service, calls } = build();
-    await start(service, [], 'https://myvpn.txnet.app');
-    expect(calls.created[0]).toMatchObject({ returnOrigin: 'https://myvpn.txnet.app' });
+    await start(service, [], 'https://myvpn.com');
+    expect(calls.created[0]).toMatchObject({ returnOrigin: 'https://myvpn.com' });
   });
 
   it('records where the top-up was started — the panel unless the bot said so (F-306-a)', async () => {

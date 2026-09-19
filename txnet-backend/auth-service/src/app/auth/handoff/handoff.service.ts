@@ -86,7 +86,7 @@ export class HandoffService {
           },
         },
       });
-      const host = reseller ? panelHostOf(reseller.domains) : null;
+      const host = reseller ? panelHostOf(reseller.domains, TenantType.reseller) : null;
       if (!reseller || !host) return err('auth.handoffRefused');
 
       const code = randomBytes(32).toString('base64url');

@@ -146,8 +146,10 @@ describe('TenantBrandingService', () => {
       expect(branding.get(RESELLER)?.['logoLightKey']).toBe(key);
       // Scoped to the path's reseller, not the owner's platform tenant.
       expect(scopes).toEqual([RESELLER]);
-      // Its public panel subdomain, never the CNAME target.
-      expect(view.logoLightUrl).toBe(`https://ali.txnet.app/api/files/${key}`);
+      // Its platform subdomains serve nothing (ADR-0063) — the target nor a
+      // pre-ADR-0063 `ali.txnet.app` — so with no own domain there is no URL
+      // yet, rather than one that 404s (F-018-aj).
+      expect(view.logoLightUrl).toBeNull();
       expect(view.brandName).toBe('ali');
     });
 

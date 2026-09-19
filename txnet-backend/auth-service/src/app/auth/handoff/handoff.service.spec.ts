@@ -91,22 +91,25 @@ describe('HandoffService.issue', () => {
     expect(ttl).toBeLessThanOrEqual(60);
   });
 
-  it("sends them to the reseller's own domain first, and never to a CNAME target", async () => {
+  it("sends them to the reseller's own domain, and refuses when it has only platform subdomains", async () => {
     const issued = await mint(harness());
     expect(issued.data.origin).toBe('https://arianvpn.ir');
 
-    const onlySubdomains = await mint(
-      harness({
-        reseller: {
-          id: RESELLER_DOOR.id,
-          domains: [
-            { domainValue: 'arian-vpn.edge.txnet.test', domainType: 'subdomain' },
-            { domainValue: 'arian-vpn.txnet.test', domainType: 'subdomain' },
-          ],
-        },
-      }),
-    );
-    expect(onlySubdomains.data.origin).toBe('https://arian-vpn.txnet.test');
+    // A reseller's platform subdomain serves nothing (ADR-0063): the target and
+    // a pre-ADR-0063 `<slug>.<domain>` alike. Refused, so the sidebar opens the
+    // console instead of a 404 (F-018-aj).
+    const h = harness({
+      reseller: {
+        id: RESELLER_DOOR.id,
+        domains: [
+          { domainValue: 'arian-vpn.edge.txnet.test', domainType: 'subdomain' },
+          { domainValue: 'arian-vpn.txnet.test', domainType: 'subdomain' },
+        ],
+      },
+    });
+    const onlySubdomains = await mint(h);
+    expect(onlySubdomains).toMatchObject({ ok: false, msg: 'auth.handoffRefused' });
+    expect(h.redis.set).not.toHaveBeenCalled();
   });
 
   it('refuses, and writes nothing, for a reseller the caller does not own', async () => {

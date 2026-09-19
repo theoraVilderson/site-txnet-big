@@ -28,9 +28,10 @@ import type { BrandingSlot, UpdateBrandingInput } from './tenant-branding.schema
  * **Keys, not URLs.** Each image is stored through the object-storage port at
  * `branding/<slot>` in the reseller's own prefix, and the row keeps the key. A
  * URL is built on every read from the reseller's current domain (object-storage
- * rule 2): a proven `assets` domain, else a proven `panel` domain — custom
- * first, never a CNAME target (`panelHostOf`). A domain that rotates moves every
- * logo with it and rewrites no row.
+ * rule 2): a proven `assets` domain, else a proven `panel` domain — for a
+ * reseller only its own custom domain, since its platform subdomain serves
+ * nothing (`panelHostOf`, F-018-aj). A domain that rotates moves every logo with
+ * it and rewrites no row.
  *
  * **Who.** {@link ResellerAccess}, as for its domains (F-061-h): the path's
  * reseller, by its owner — judged by that reseller's status — or the platform
@@ -216,8 +217,10 @@ export class TenantBrandingService {
     const proven = rows.filter(
       (r) => r.domainType === TenantDomainType.subdomain || r.verificationStatus === DomainVerificationStatus.verified,
     );
+    const owner = await this.all.tenant.findUnique({ where: { id: tenantId }, select: { tenantType: true } });
+    if (!owner) return null;
     for (const door of ASSET_DOORS) {
-      const host = panelHostOf(proven.filter((r) => r.purpose === door));
+      const host = panelHostOf(proven.filter((r) => r.purpose === door), owner.tenantType);
       if (host) return host;
     }
     return null;

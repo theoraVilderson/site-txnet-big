@@ -26,6 +26,7 @@ source:
   - txnet-backend/shared-core/src/lib/tenant/entitlements.ts
   - txnet-backend/shared-core/src/lib/tenant/owner-cache.ts
   - txnet-backend/shared-core/src/lib/tenant/reseller-access.ts
+  - txnet-backend/shared-core/src/lib/tenant/host.ts
   - txnet-backend/prisma/domains/migrations/20260917001500_tenant_status/**
   - txnet-backend/prisma/domains/migrations/20260917001600_tenant_subscription_renewal/**
   - txnet-backend/prisma/domains/migrations/20260917001700_tenant_subscription_grace/**
