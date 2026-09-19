@@ -1,7 +1,7 @@
 ---
 id: tenant
 layer: domain
-updated: 2026-09-18
+updated: 2026-09-19
 ---
 
 # Data model — tenant
@@ -20,7 +20,7 @@ Source of truth: `txnet-backend/prisma/domains/tenant.prisma` (Postgres schema
 | tenant_subscription_setting | the platform's one row (`id = 1` CHECK): `trialDays` 0..365, default 14; `suspensionHoldDays` 0..90, default 7 (F-018-f); `renewalGraceDays` 0..30, default 3 (F-019-c); no RLS (F-018-e) | no | permanent |
 | tenant_status_history | every status change: `fromStatus`, `toStatus`, `reason`, `actorUserId` (null = the platform); append-only (trigger), FK RESTRICT (F-018-f) | yes | permanent |
 | tenant_feature_entitlement | which feature keys are on for a tenant; `package_included` rows are replaced by a subscription `PUT` or a package `apply`, and added to by a package edit (F-018-e, F-018-o) | yes | until revoked/expired |
-| tenant_staff_member | reseller's internal team (own RBAC, separate from identity.role) | yes | — |
+| tenant_staff_member | reseller's internal team — **membership only**: `invitedByUserId`, `invitedAt`, `joinedAt`, `accessExpiresAt`, `revokedAt`, unique `(tenantId, userId)`. What a member may do is their `identity.user.roleId` (F-018-j, [contract.staff.md](contract.staff.md)) | yes | with tenant (cascade); a removed member is `revokedAt`, never deleted |
 | tenant_billing_wallet | a reseller's prepaid balance with the platform (cache, `>= 0`; D-41) | yes | with tenant |
 | tenant_billing_transaction | append-only ledger of tenant<->platform charges | yes | permanent |
 | tenant_usage_meter | metered usage rollups for pay-as-you-go | yes | permanent |
@@ -30,7 +30,8 @@ Source of truth: `txnet-backend/prisma/domains/tenant.prisma` (Postgres schema
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |
 |---|---|---|---|
-| tenant.ownerUserId, tenant_staff_member.userId | -> | identity.user.id | a tenant is owned/staffed by identities |
+| tenant.ownerUserId, tenant_staff_member.userId / .invitedByUserId | -> | identity.user.id | a tenant is owned/staffed by identities. No FK, as `role.tenantId`: the cross-schema SQL is F-041 / F-066-m's, and both columns are written in one place from a user row just read |
+| tenant_staff_member.userId | -> | identity.user.roleId -> identity.role | a member's powers are a role **of that tenant** (F-018-n); this table holds no role of its own (D-42 (2)) |
 | tenant_gateway_config.providerName / gatewayCategory | -> | billing enums | reuse of the payment-provider taxonomy |
 
 ## Access rules
@@ -53,6 +54,11 @@ RLS on `tenant_subscription`, the settings row and its CHECKs.
 `20260917001500_tenant_status` (F-018-f) adds the two tenant columns, `tenant_status_history`
 with strict RLS and its append-only trigger, `suspensionHoldDays` and its CHECK,
 and the `tenant_status_changed` NOTIFY trigger on `tenant.tenant`.
+
+`20260919000300_tenant_staff_member` (F-018-j) drops `roleWithinTenant`, the
+`TenantStaffRole` enum and `isActive`, adds `invitedByUserId` / `accessExpiresAt`
+/ `revokedAt` and the unique `(tenantId, userId)`. The table was never written by
+any service, so nothing is backfilled; RLS is untouched (its `tenantId` did not move).
 
 `20260917001700_tenant_subscription_grace` (F-019-g) adds `tenant_subscription.graceUntil` and the audit value
 `tenant_subscription_grace`.

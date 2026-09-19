@@ -10,7 +10,9 @@ import { ResellerAccess } from './reseller-access';
  *
  * - the owner is admitted from either domain with the same session;
  * - a user of the reseller's own tenant is not its owner by being there, even
- *   holding `tenant.manage` in that tenant;
+ *   holding `tenant.manage` in that tenant — they need a live staff seat
+ *   (F-018-j), which is the third door and the only one the reseller itself
+ *   opens;
  * - what the owner may do is the **reseller's** status matrix (rules.md), not
  *   their own tenant's, which `TenantStatusGuard` judges and is always active.
  */
@@ -22,11 +24,23 @@ describe('ResellerAccess', () => {
   const STAFF = '55555555-5555-5555-5555-555555555555';
   const CUSTOMER = '66666666-6666-6666-6666-666666666666';
   const T0 = new Date('2026-09-18T10:00:00Z');
+  const LONG_AGO = new Date('2026-09-01T10:00:00Z');
 
   const owner = { userId: OWNER, tenantId: PLATFORM, permissions: [] as string[] };
   const staff = { userId: STAFF, tenantId: PLATFORM, permissions: ['tenant.manage'] };
 
-  const build = (status = 'active') => {
+  /** A member of the reseller: their session is the reseller's, unlike the owner's. */
+  type Seat = { tenantId: string; userId: string; joinedAt: Date | null; accessExpiresAt: Date | null; revokedAt: Date | null };
+  const seat = (over: Partial<Seat> = {}): Seat => ({
+    tenantId: RESELLER,
+    userId: CUSTOMER,
+    joinedAt: LONG_AGO,
+    accessExpiresAt: null,
+    revokedAt: null,
+    ...over,
+  });
+
+  const build = (status = 'active', seats: Seat[] = []) => {
     const tenants: Record<string, Record<string, unknown>> = {
       [PLATFORM]: { id: PLATFORM, tenantType: 'platform_owner', slug: 'platform_owner', ownerUserId: STAFF, status: 'active' },
       [RESELLER]: { id: RESELLER, tenantType: 'reseller', slug: 'ali', ownerUserId: OWNER, status, graceEndsAt: null },
@@ -36,6 +50,11 @@ describe('ResellerAccess', () => {
       tenant: {
         findUnique: vi.fn(async ({ where }: { where: { id: string } }) => tenants[where.id] ?? null),
         findFirst: vi.fn(async ({ where }: { where: { id: string } }) => tenants[where.id] ?? null),
+      },
+      tenantStaffMember: {
+        findFirst: vi.fn(async ({ where }: { where: { tenantId: string; userId: string } }) =>
+          seats.find((s) => s.tenantId === where.tenantId && s.userId === where.userId && s.revokedAt === null && s.joinedAt !== null) ?? null,
+        ),
       },
     };
     return new ResellerAccess(prisma as never);
@@ -52,6 +71,33 @@ describe('ResellerAccess', () => {
     const access = build();
     const insider = { userId: CUSTOMER, tenantId: RESELLER, permissions: ['*', 'tenant.manage'] };
     await expect(access.admit(insider, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+  });
+
+  it('admits a live staff seat with `tenant.manage`, and nothing less (F-018-j)', async () => {
+    const member = { userId: CUSTOMER, tenantId: RESELLER, permissions: ['tenant.manage'] };
+    await expect(build('active', [seat()]).admit(member, RESELLER, 'staffWrite', T0)).resolves.toEqual({
+      id: RESELLER,
+      slug: 'ali',
+      as: 'member',
+    });
+
+    // The seat is the membership; the permission is what administers. Neither alone.
+    const noPermission = { ...member, permissions: ['user.read'] };
+    await expect(build('active', [seat()]).admit(noPermission, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+
+    // Invited and not yet accepted, expired, and removed: three seats that admit nobody.
+    for (const dead of [seat({ joinedAt: null }), seat({ accessExpiresAt: LONG_AGO }), seat({ revokedAt: LONG_AGO })]) {
+      await expect(build('active', [dead]).admit(member, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+    }
+
+    // A seat on one reseller is not a seat on another.
+    await expect(build('active', [seat()]).admit({ ...member, tenantId: OTHER }, OTHER, 'read', T0)).rejects.toMatchObject({
+      reason: 'not_allowed',
+    });
+
+    // And a member is held to their reseller's matrix, as the owner is.
+    await expect(build('suspended', [seat()]).admit(member, RESELLER, 'read', T0)).resolves.toMatchObject({ as: 'member' });
+    await expect(build('suspended', [seat()]).admit(member, RESELLER, 'staffWrite', T0)).rejects.toMatchObject({ reason: 'reseller_suspended' });
   });
 
   it('admits platform staff, and tells only them that a reseller does not exist', async () => {

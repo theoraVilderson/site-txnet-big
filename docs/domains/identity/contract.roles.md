@@ -72,5 +72,9 @@ platform role, not a role of the tenant they own — F-018-c's note still stands
 Moving an owner's account into the tenant it owns is a decision of its own; see
 ADR-0062 "Consequences" and F-018-j.
 
-Staff membership is `tenant.tenant_staff_member` (F-018-j), which names one of
-these roles and holds nothing about permissions itself.
+Staff membership is `tenant.tenant_staff_member` (F-018-j,
+[tenant/contract.staff.md](../tenant/contract.staff.md)): who is on a reseller's
+team, from when and until when. It names **no** role — a member's role is their
+`user.roleId`, one of these — and holds nothing about permissions itself. That
+is D-42 (2): the seat says they are on the team, a role of that tenant says what
+they may do, and `tenant.manage` in it is what administers the reseller.

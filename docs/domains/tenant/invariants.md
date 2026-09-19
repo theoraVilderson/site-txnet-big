@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-updated: 2026-09-18
+updated: 2026-09-19
 ---
 
 # Invariants — tenant
@@ -35,13 +35,18 @@ enforcer is not application code at all.
 | 17 | **What a tenant may do is decided by its status through `TenantStatusPolicy` alone, and a mutating route that declares no capability is closed for a suspended tenant** ([rules.md](rules.md)) | `TenantStatusGuard` (shared-core), an `APP_GUARD` in auth-, billing- and notification-service (C-11 fails an app with a tenant scope and no guard) and `TenantStatusGate` for a tick that names a tenant (F-018-p), reading `tenant:status:<id>` written by `TenantStatusListener` from the `tenant_status_changed` trigger (migration `20260917001500_tenant_status`, F-018-f). A missing key refuses nobody | a suspended reseller keeps selling, or a terminated one keeps serving users; a new route forgets the rule |
 | 19 | **A reseller's subscription period is charged at most once, only from what its billing wallet holds, and a renewal lifts only a suspension the renewal made** | `TenantRenewalService`: the debit and the new `currentPeriodEnd` in one transaction under the package and tenant locks, the charge's `referenceId` fixed by the period (row 15's index), `suspensionCause` read under the lock (F-019-c). More time (F-019-g) moves the deadline to `graceUntil` and writes no ledger entry | a reseller pays twice for a month, runs on credit, or a payment undoes the platform owner's suspension for abuse |
 | 20 | **A session from another tenant is admitted on a surface only when its user is that surface tenant's `ownerUserId`, on a `panel` surface** (ADR-0059). The request is scoped to the session's own tenant; `ResolvedTenant.brand` names the surface, and a branding read uses `brand ?? current`. A refresh cookie can only admit the owner — any other cookie is ignored, never refused. Every write of `ownerUserId` calls `invalidateTenantOwner` (shared-core) in its transaction: the tenant's `tenant:id:*` entry and every `tenant:host:*` entry, hosts read from its rows (F-061-k) | `TenantResolverService.asOwner` / `throughBot`, `TenantMiddleware.cookieSession`, `invalidateTenantOwner`; `tenant-resolver.service.spec.ts`, `owner-cache.spec.ts` | one tenant's data under another's brand for anyone but its owner; a former owner still admitted until the cache TTL |
-| 21 | **A reseller self-service route admits by the reseller its path names — its `ownerUserId`, or the platform owner's staff with `tenant.manage` — never by the ambient tenant; the owner is judged by that reseller's status matrix** (F-061-h, ADR-0059 (1)). The owner's session carries their platform tenant on either domain, and a user of the reseller's own tenant is not its owner by being there | `ResellerAccess.admit` (`tenant-service/src/app/request/`), the one check every `/api/tenants/:id/...` self-service route calls; `reseller-access.spec.ts` | anyone signed in to a reseller administers it; a suspended reseller's owner keeps writing, because `TenantStatusGuard` sees their always-active platform tenant |
+| 21 | **A reseller self-service route admits by the reseller its path names — its `ownerUserId`, a live staff seat of that reseller held with `tenant.manage`, or the platform owner's staff with `tenant.manage` — never by the ambient tenant; the owner and the member are judged by that reseller's status matrix** (F-061-h, F-018-j, ADR-0059 (1)). The owner's session carries their platform tenant on either domain, and a user of the reseller's own tenant is not its owner by being there: a seat (`tenant_staff_member`, accepted, unexpired, unrevoked — [contract.staff.md](contract.staff.md)) plus `tenant.manage` in a role of that tenant is what admits them, and neither half alone | `ResellerAccess.admit` (`tenant-service/src/app/request/`), the one check every `/api/tenants/:id/...` self-service route calls; `reseller-access.spec.ts` | anyone signed in to a reseller administers it; a removed or expired member keeps administering it; a suspended reseller's owner keeps writing, because `TenantStatusGuard` sees their always-active platform tenant |
 | 18 | **`tenant_status_history` is append-only, and nothing a status change does deletes a row** | trigger `tenant_status_history_append_only` refuses UPDATE/DELETE; FK `RESTRICT` | the trail of who suspended a reseller and why is rewritable |
 | 22 | **A `tenant_branding` image column holds a key, never a URL, and only its own tenant's key for its own slot** (`tenants/<tenantId>/branding/<slot>`, F-018-h) | CHECKs `tenant_branding_{logo_light,logo_dark,favicon,og_image}_key` (migration `20260918000500_tenant_branding`); `TenantBrandingService` writes the bytes in the reseller's scope before the key; `tenant-branding.spec.ts` | one reseller's pages show another's logo, or a stored URL outlives the domain it named |
 
 ## How to test
 
 Row 5: `tenant-service` `domains/tenant-domain.spec.ts` (the four check lines, the window, the grace, the host entry retracted inside the transaction, proven first wins, who may call).
+
+Row 21's third door and the seats behind it: `tenant-service`
+`request/reseller-access.spec.ts` (the four seat states, the permission, one
+reseller's seat on another) and `staff/tenant-staff.spec.ts` (who may seat whom,
+one row per person, acceptance, the states, a suspended reseller).
 
 Row 22: `tenant-service` `branding/tenant-branding.spec.ts` (keys in the reseller's prefix, the URL's door, PNG/WebP only, a refused upload writes nothing, who may write).
 

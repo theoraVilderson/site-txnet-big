@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-updated: 2026-09-18
+updated: 2026-09-19
 ---
 
 # Business rules — tenant status
@@ -70,4 +70,5 @@ is `read` for `GET`/`HEAD`/`OPTIONS` and **`staffWrite` for anything else**.
 | The platform owner reactivates a `non_payment`-suspended reseller without a payment | allowed; the period is still unpaid and past grace, so the next sweep suspends it again. To give time, grant grace (#15) — never a manual credit, which records money that never arrived | 2026-09-17 |
 | A campaign already `sending` when its reseller is suspended or terminated | it finishes — `system`, like a payment already taken; only starting one is `staffWrite` (user, F-018-p) | 2026-09-17 |
 | The reseller's owner, whose session is their platform tenant's (ADR-0059 (1)) | `TenantStatusGuard` would judge that always-active tenant, so a reseller self-service route judges the path's reseller with `tenantAllows` in `ResellerAccess` (invariant 21, F-061-h); the owner of a suspended reseller reads but does not write, as its staff would not. The platform owner's staff are not held to the reseller's matrix, except `terminated` | 2026-09-18 |
+| The reseller's own staff (F-018-j), whose session **is** the reseller's | judged twice, and by the same matrix both times: `TenantStatusGuard` on their ambient tenant and `ResellerAccess` on the path's, which are the same tenant. So a suspended reseller's member lists its team (`read`) and seats nobody (`staffWrite`), exactly as its owner | 2026-09-19 |
 | The platform owner wants those sends stopped too | a second call, notification's owner-only `POST .../campaigns/tenants/:tenantId/stop` (F-018-x), after the `sending-summary` heads-up: the campaigns move to `stopped` at the next delivery run's boundary, rows kept `queued`. A stopped campaign stays stopped on reactivation and is resumed by hand, never while the tenant is closed (user, F-018-q). Tenant administration itself does not reach campaigns (ADR-0058 (5), F-018-w) | 2026-09-17 |

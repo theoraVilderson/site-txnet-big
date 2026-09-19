@@ -19,6 +19,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { PurchaseModule } from './purchase/purchase.module';
 import { RedisModule } from './redis/redis.module';
 import { ResellersModule } from './resellers/resellers.module';
+import { StaffModule } from './staff/staff.module';
 import { StatusModule } from './status/status.module';
 import { SubscriptionModule } from './subscription/subscription.module';
 import { IdentityMiddleware } from './request/identity.middleware';
@@ -36,7 +37,7 @@ const FILE_ROUTES = `${FILES_PATH}/*path`;
  * renewal with F-018-v, status with F-018-w, the resellers themselves with
  * F-018-y, their custom domains with F-018-i, the file route with F-018-m,
  * their branding with F-018-h, the vault's internal seams with F-018-ab,
- * a platform user's reseller purchase with F-019-h.
+ * a platform user's reseller purchase with F-019-h, their staff seats with F-018-j.
  */
 @Module({
   imports: [
@@ -50,6 +51,7 @@ const FILE_ROUTES = `${FILES_PATH}/*path`;
     ResellersModule,
     PurchaseModule,
     DomainsModule,
+    StaffModule,
     FilesModule,
     BrandingModule,
     VaultModule,
