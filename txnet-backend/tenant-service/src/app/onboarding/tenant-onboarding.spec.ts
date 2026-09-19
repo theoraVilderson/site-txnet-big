@@ -1,6 +1,9 @@
 import {
   TENANT_CAPABILITIES,
   TenantOnboardingPolicy,
+  listedVariantWhere,
+  offeredToTenant,
+  pricesInEffect,
   parseTenantStatusState,
   serializeTenantStatusState,
   tenantAllows,
@@ -113,7 +116,7 @@ describe('TenantOnboardingService', () => {
       tenantDomain: { findFirst: first(rows.domain) },
       tenantGatewayConfig: { findFirst: first(rows.gateway) },
       botIntegration: { findFirst: first(rows.bot) },
-      price: { findFirst: first(rows.price) },
+      productVariant: { findFirst: first(rows.price) },
     };
     const access = { admit: vi.fn(async () => ({ id: RESELLER, slug: 'r', as: 'owner' as const })) };
     return { service: new TenantOnboardingService(access as never, all as never), all, access };
@@ -156,6 +159,36 @@ describe('TenantOnboardingService', () => {
     });
     expect(all.tenantGatewayConfig.findFirst.mock.calls[0]![0].where).toMatchObject({ isActive: true, verificationStatus: 'verified' });
     expect(all.botIntegration.findFirst.mock.calls[0]![0].where).toMatchObject({ status: 'active' });
-    expect(all.price.findFirst.mock.calls[0]![0].where).toMatchObject({ isActive: true, variant: { isActive: true } });
+  });
+
+  describe('pricing — "there is something to sell", the catalog\'s own rule (F-018-ah)', () => {
+    const now = new Date('2026-09-19T12:00:00Z');
+    beforeEach(() => vi.useFakeTimers({ now }));
+    afterEach(() => vi.useRealTimers());
+
+    const pricingWhere = async () => {
+      const { service, all } = build({});
+      await service.checklist(actor, RESELLER);
+      return all.productVariant.findFirst.mock.calls[0]![0].where;
+    };
+
+    it('asks the catalog\'s predicate, not a copy of it', async () => {
+      expect(await pricingWhere()).toEqual(offeredToTenant(RESELLER, now));
+    });
+
+    it('counts the platform\'s offers the reseller inherits as well as its own', async () => {
+      const where = await pricingWhere();
+      expect(where.OR).toEqual([{ tenantId: RESELLER }, { tenantId: null }]);
+      // A platform variant priced by the platform is on sale to this reseller too.
+      expect((where.prices as { some: { OR: unknown } }).some.OR).toEqual([{ tenantId: RESELLER }, { tenantId: null }]);
+    });
+
+    it('counts only what listOffers would list: public, live, priced now', async () => {
+      const where = await pricingWhere();
+      expect(where).toMatchObject(listedVariantWhere);
+      expect(where).toMatchObject({ visibility: 'public', isActive: true, product: { isActive: true, category: { isActive: true } } });
+      expect(where.prices).toMatchObject({ some: pricesInEffect(now) });
+      expect(pricesInEffect(now)).toEqual({ isActive: true, effectiveFrom: { lte: now } });
+    });
   });
 });

@@ -4,7 +4,7 @@ layer: domain
 status: draft
 version: 2
 keywords: [catalog, product, category, variant, sku, price, price history, visibility, fulfilment kind, product model]
-source: [txnet-backend/prisma/domains/catalog.prisma, txnet-backend/prisma/domains/migrations/20260914001500_catalog_product_model/**, txnet-backend/billing-service/src/app/catalog/**]
+source: [txnet-backend/prisma/domains/catalog.prisma, txnet-backend/prisma/domains/migrations/20260914001500_catalog_product_model/**, txnet-backend/billing-service/src/app/catalog/**, txnet-backend/shared-core/src/lib/catalog/**]
 owns_tables: [product_category, product, product_variant, price]
 depends_on: [tenant]
 updated: 2026-09-14

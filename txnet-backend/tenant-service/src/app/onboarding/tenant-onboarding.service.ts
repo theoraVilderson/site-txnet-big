@@ -6,7 +6,7 @@ import {
   TenantDomainType,
   TenantGatewayVerificationStatus,
 } from '@prisma/client';
-import { TenantOnboardingPolicy, TENANT_CAPABILITIES, TenantCapabilityName } from '@txnet-backend/shared-core';
+import { TenantOnboardingPolicy, TENANT_CAPABILITIES, TenantCapabilityName, offeredToTenant } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { ResellerAccess, ResellerAccessRejection, ResellerActor } from '../request/reseller-access';
@@ -27,7 +27,9 @@ import { ResellerAccess, ResellerAccessRejection, ResellerActor } from '../reque
  * `tenant:status:<id>` and `TenantStatusGuard` reads. The other three steps are
  * what the console asks for next; they refuse nothing on their own, because a
  * reseller may sell through a bot it has not connected yet, or price its
- * products the day after it opens.
+ * products the day after it opens. `pricing` means "the catalog offers this
+ * reseller something", its own or the platform's — asked through shared-core's
+ * `offeredToTenant`, the predicate `listOffers` answers with, never a copy.
  *
  * Read on the cross-tenant pool, after {@link ResellerAccess} — a reseller's
  * domains, gateways, bots and prices are not the caller's tenant's rows, and
@@ -84,10 +86,9 @@ export class TenantOnboardingService {
         where: { tenantId: reseller.id, status: BotIntegrationStatus.active },
         select: { id: true },
       }),
-      this.all.price.findFirst({
-        where: { tenantId: reseller.id, isActive: true, variant: { isActive: true } },
-        select: { id: true },
-      }),
+      // Something to sell, by the catalog's own rule (F-018-ah): the platform's
+      // offers the reseller inherits count as well as its own prices.
+      this.all.productVariant.findFirst({ where: offeredToTenant(reseller.id, new Date()), select: { id: true } }),
     ]);
     const steps: OnboardingStep[] = [
       { key: 'domain', done: domain, gate: true },

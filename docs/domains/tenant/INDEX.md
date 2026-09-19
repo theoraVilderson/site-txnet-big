@@ -35,7 +35,7 @@ source:
   - txnet-backend/prisma/domains/migrations/20260919000300_tenant_staff_member/**
   - txnet-backend/prisma/domains/migrations/20260919000400_tenant_onboarding_gate/**
 owns_tables: [tenant, tenant_branding, tenant_domain, tenant_feature_package, tenant_subscription, tenant_subscription_setting, tenant_feature_entitlement, tenant_staff_member, tenant_billing_wallet, tenant_billing_transaction, tenant_usage_meter, tenant_gateway_config, tenant_sms_config, tenant_restriction, tenant_credential, tenant_dek, tenant_credential_access]
-depends_on: [identity, billing, redis-keyspace]
+depends_on: [identity, billing, catalog, redis-keyspace]
 updated: 2026-09-19
 ---
 

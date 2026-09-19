@@ -1,6 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { FulfilmentKind, Prisma, QualityTier, VariantBillingMode, VariantVisibility } from '@prisma/client';
-import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import {
+  TenantContext,
+  isListed,
+  isSellableBySku,
+  listedVariantWhere,
+  pickBySku,
+  priceAt,
+  pricesInEffect,
+  tenantTransaction,
+  type OfferFacts,
+  type PriceRow,
+} from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -9,54 +20,18 @@ import { PrismaService } from '../prisma/prisma.service';
  *
  * Which rows a tenant may read is RLS's (shared-read: the platform's and its
  * own, `catalog-schema.int.spec.ts`). What is **offered** among them, and the
- * price in effect at an instant, are the pure rules below — the ones
- * `catalog-reads.spec.ts` holds — so a purchase, a coupon quote and the panel
- * all ask the same question the same way.
+ * price in effect at an instant, are the pure rules in shared-core's
+ * `catalog/offers.ts` — the ones `catalog-reads.spec.ts` holds — so a
+ * purchase, a coupon quote, the panel and tenant-service's onboarding
+ * checklist all ask the same question the same way.
  *
  * In-process only: routes land with F-026-d, and the Grant issue (F-026-e)
  * reads a variant through here.
  */
 
-export type PriceRow = { id: string; amount: Prisma.Decimal; effectiveFrom: Date; isActive: boolean };
-
-/**
- * The price in effect at `at` (F-0602): the newest **active** row whose
- * `effectiveFrom` is at or before it. A row written later never reaches back,
- * so an invoice is recomputed at the price it was issued at. On a tie the
- * first row wins — the query orders by `createdAt` too.
- */
-export function priceAt<T extends PriceRow>(prices: readonly T[], at: Date): T | null {
-  let best: T | null = null;
-  for (const p of prices) {
-    if (!p.isActive || p.effectiveFrom.getTime() > at.getTime()) continue;
-    if (!best || p.effectiveFrom.getTime() > best.effectiveFrom.getTime()) best = p;
-  }
-  return best;
-}
-
-export type OfferFacts = {
-  visibility: VariantVisibility;
-  isActive: boolean;
-  productActive: boolean;
-  categoryActive: boolean;
-};
-
-const live = (v: OfferFacts) => v.isActive && v.productActive && v.categoryActive;
-
-/** Shown in the catalog: `public`, and nothing above it switched off. */
-export const isListed = (v: OfferFacts) => live(v) && v.visibility === VariantVisibility.public;
-
-/** Sold through a direct link: `public` or `unlisted`. `admin_only` is only ever assigned (F-506). */
-export const isSellableBySku = (v: OfferFacts) => live(v) && v.visibility !== VariantVisibility.admin_only;
-
-/**
- * A SKU is unique inside a tenant, so a tenant and the platform may both sell
- * `VPN-30`. The caller's own row wins, then the platform's; another tenant's
- * row is never an answer, even if one were passed in.
- */
-export function pickBySku<T extends { tenantId: string | null }>(rows: readonly T[], tenantId: string): T | null {
-  return rows.find((r) => r.tenantId === tenantId) ?? rows.find((r) => r.tenantId === null) ?? null;
-}
+// The rules moved to shared-core (F-018-ah) so every service asks the same
+// question; re-exported so this unit's callers keep their import.
+export { isListed, isSellableBySku, pickBySku, priceAt, type OfferFacts, type PriceRow };
 
 /** One sellable variant with its price, as a caller reads it. Money is a decimal string (C-02). */
 export type CatalogOffer = {
@@ -88,7 +63,7 @@ const withPrices = (at: Date) =>
   ({
     product: { include: { category: true } },
     prices: {
-      where: { isActive: true, effectiveFrom: { lte: at } },
+      where: pricesInEffect(at),
       orderBy: [{ effectiveFrom: 'desc' }, { createdAt: 'desc' }],
     },
   }) satisfies Prisma.ProductVariantInclude;
@@ -132,7 +107,7 @@ export class CatalogReadService {
   listOffers(at: Date = new Date()): Promise<CatalogOffer[]> {
     return tenantTransaction(this.prisma, async (tx) => {
       const rows = await tx.productVariant.findMany({
-        where: { isActive: true, visibility: VariantVisibility.public, product: { isActive: true, category: { isActive: true } } },
+        where: listedVariantWhere,
         include: withPrices(at),
         orderBy: [{ sku: 'asc' }],
       });
@@ -154,7 +129,7 @@ export class CatalogReadService {
   priceAt(variantId: string, at: Date): Promise<PriceRow | null> {
     return tenantTransaction(this.prisma, async (tx) => {
       const prices = await tx.price.findMany({
-        where: { variantId, isActive: true, effectiveFrom: { lte: at } },
+        where: { variantId, ...pricesInEffect(at) },
         orderBy: [{ effectiveFrom: 'desc' }, { createdAt: 'desc' }],
         take: 1,
       });

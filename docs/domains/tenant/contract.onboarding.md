@@ -147,8 +147,16 @@ The panel's side — the cache, and why every doubt renders — is
 
 **Every step is computed from live rows, never stored** — a `verified` panel
 domain, an `isActive` + `verified` `tenant_gateway_config`, an `active`
-`bot_integration`, an `isActive` `price` on an `isActive` variant. A reseller
+`bot_integration`, and something the catalog offers the reseller. A reseller
 that deletes its last gateway is back on that step.
+
+**`pricing` means "there is something to sell"** (F-018-ah): one variant
+`listOffers` would return to the reseller now — `public`, product and category
+active, a price in effect — **its own or the platform's** (`tenantId IS NULL`,
+which every tenant inherits). A reseller selling only the platform's catalog
+has done it. The predicate is the catalog's, `offeredToTenant` in
+`shared-core/src/lib/catalog/offers.ts`, which `CatalogReadService` asks too;
+tenant-service holds no copy of the visibility rules.
 
 **Only `domain` is the gate** (`gate: true`); the other three are what the
 console asks for next and refuse nothing, because a reseller may sell without a
@@ -157,6 +165,12 @@ bot and price its products the day after it opens. `complete` is all four;
 
 Refusals are `ResellerAccess`'s: `not_allowed` 403, `reseller_not_found` 404,
 `reseller_suspended` 403, `reseller_terminated` 409.
+
+## Consumes
+
+| From unit | What | Failure behaviour if unavailable |
+|---|---|---|
+| catalog | `offeredToTenant` (shared-core): the `pricing` step, own or platform offers (F-018-ah) | the step reads `done: false`; nothing is gated on it |
 
 ## Consumers
 

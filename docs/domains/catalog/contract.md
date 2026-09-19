@@ -9,7 +9,9 @@ updated: 2026-09-16
 # Contract — catalog
 
 **Storage built (F-026-a); reads built (F-026-c), in-process —
-`catalog/catalog-reads.ts`, proved by `catalog-reads.spec.ts`; management built
+`catalog/catalog-reads.ts`, proved by `catalog-reads.spec.ts`; the offer rules
+and their `where` fragments live in `shared-core/src/lib/catalog/offers.ts` so
+another service asks the same question (F-018-ah); management built
 (F-026-d) at `/api/catalog` — `catalog/catalog-admin.*`, proved by
 `catalog-admin.service.spec.ts`.** Decision: ADR-0049.
 
@@ -77,6 +79,7 @@ platform's row, readable by every tenant. Names are i18n keys (§4.3).
 |---|---|---|---|---|
 | `listOffers(at?)` — built | tenant (ambient), instant (default now) | every `public` variant under an active product and category, with the price in effect; a variant with no price is not offered | sync | — |
 | `offerBySku(sku, at?)` — built | sku | the offer, `public` or `unlisted`; the caller's own SKU over the platform's | sync | `null`: unknown, `admin_only`, switched off, or no price |
+| `offeredToTenant(tenantId, at)` — built | tenant id, instant | a Prisma `where` for a variant `listOffers` would return to that tenant: `listedVariantWhere`, own or platform row, a price in effect — for a reader on the cross-tenant pool, where RLS does not narrow (F-018-ah) | sync | — |
 | `priceAt(variantId, at)` — built | variantId, instant | the newest active price row with `effectiveFrom <= at` (F-0602) | sync | `null` |
 | manage category / product / variant, write a new price | admin payload, `catalog.manage` | row (F-026-d) | sync | — |
 
@@ -99,6 +102,7 @@ None.
 | billing | `coupon_service_scope.productId` / `variantId`: a purchase matches a row naming its variant or its product |
 | entitlement | a variant's quotas, duration, billing mode and its product's feature keys, copied into a Grant (F-026-b, F-026-e) |
 | network | a variant's `panelGroupId` and `qualityTier` (F-027) |
+| tenant | `offeredToTenant`: the onboarding checklist's `pricing` step (F-018-ah) |
 
 ## Guarantees (built — `catalog-schema.int.spec.ts`)
 
