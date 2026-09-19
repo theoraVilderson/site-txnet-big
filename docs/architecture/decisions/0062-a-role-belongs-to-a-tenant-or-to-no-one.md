@@ -6,7 +6,7 @@ updated: 2026-09-19
 
 # ADR 0062 — A role belongs to a tenant, or to no one
 
-- **Status:** accepted 2026-09-19 with F-018-n (D-42 (2), user 2026-09-17)
+- **Status:** accepted 2026-09-19 with F-018-n (D-42 (2), user 2026-09-17); the owner's account question closed with F-018-j (user, 2026-09-19)
 - **Date:** 2026-09-19
 - **Affects units:** identity, tenant, forward-auth
 - **Amends:** `identity/data-model.md` ("role — tenant-scoped? no"),
@@ -90,9 +90,37 @@ cheap: nothing in it has to learn about tenants.
 - A role still held by a user cannot be deleted. `user.roleId` is a NOT NULL FK
   (invariant #5) and there is no role the endpoint could reassign those users
   to on the caller's behalf, so it refuses with `role.inUse`.
-- **Left open, deliberately:** a reseller's *owner* still holds their platform
-  role, because they are a user of the platform's tenant and sign in on the
-  reseller's domain as themselves (ADR-0059). Giving the owner a role of the
-  tenant they own is a different decision — it moves an account across tenants
-  — and belongs with F-018-j, not here. Until then F-018-c's note stands: the
-  owner's role is whatever their platform account holds.
+- **Decided with F-018-j (user, 2026-09-19): the owner's account never moves.**
+  A reseller's owner holds their platform role, is a user of the platform's
+  tenant, and reaches the reseller they own through `ownerUserId` in
+  `ResellerAccess` (tenant invariant 21) — never through a role of that tenant.
+  This was left open here to be answered by F-018-j, and the answer is "no",
+  not "later". Three reasons, in order of weight:
+  1. **The money.** The owner is the platform's customer: their wallet, their
+     purchase of the reseller (F-019-h, charged to that wallet) and their
+     payment history are rows of the platform's tenant. Moving `user.tenantId`
+     moves the identity and none of those rows, leaving one person's money in
+     one tenant and their account in another — which ADR-0006 and tenant
+     invariant 2 do not allow.
+  2. **ADR-0059 (3)-(7) exist because the owner is elsewhere.** The password
+     fallback, OTP and recovery, account switching and the Mini App, the bot
+     door and the 60s hand-across code are all consequences of the owner being
+     a user of another tenant. Removing the cause does not remove those seven
+     decisions; it rewrites them.
+  3. **Ownership is a relationship, not a role.** With more resellers per
+     person, and reseller tiers (F-901's `resellerPath`), "which tenant is this
+     person in" stops having one answer. `ownerUserId` + `ResellerAccess`
+     scales to many; a `user.tenantId` column does not.
+
+  What this costs, stated plainly: the owner's authority over their reseller is
+  not expressible in RBAC, so a rule like "this owner may not terminate their
+  own subscription" would be a capability list on the owner door, not a role.
+  That is a small, local change if it is ever wanted.
+
+- **Still open, and a different question:** `tenant.ownerUserId` is one column,
+  so a reseller has exactly one owner. Two people sharing a reseller, or a
+  reseller owned by a reseller (F-901), has no representation — and the
+  work-around of a staff seat with `tenant.manage` only reaches someone who has
+  an account *inside* that reseller, which a co-owning platform customer does
+  not. Deliberately not built with F-018-j: a backlog row of its own, to be
+  designed when co-ownership or F-901 is actually wanted (user, 2026-09-19).

@@ -66,11 +66,14 @@ app pool, which would show it the templates alone. A policy, not a bypass:
 
 ## Not here
 
-The reseller **owner's** role. They are a user of the platform's tenant who
-signs in on the reseller's domain as themselves (ADR-0059), so they hold their
-platform role, not a role of the tenant they own — F-018-c's note still stands.
-Moving an owner's account into the tenant it owns is a decision of its own; see
-ADR-0062 "Consequences" and F-018-j.
+The reseller **owner's** role, and there will never be one. They are a user of
+the platform's tenant who signs in on the reseller's domain as themselves
+(ADR-0059), so they hold their platform role and reach the reseller they own
+through `ownerUserId` (tenant invariant 21), not through a role of it. Decided
+with F-018-j (user, 2026-09-19) and written up in ADR-0062 "Consequences": the
+owner is the platform's customer, their wallet and their purchase of the
+reseller are the platform tenant's rows, and moving the account would move the
+identity and none of them.
 
 Staff membership is `tenant.tenant_staff_member` (F-018-j,
 [tenant/contract.staff.md](../tenant/contract.staff.md)): who is on a reseller's

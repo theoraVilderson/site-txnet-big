@@ -1,7 +1,7 @@
 ---
 id: tenant
 layer: domain
-updated: 2026-09-18
+updated: 2026-09-19
 ---
 
 # Open questions — tenant
@@ -19,3 +19,4 @@ updated: 2026-09-18
 | 2026-09-09 | F-1212 names only `subscription` as the purpose that serves no panel route. Catalog 13.1 defines a third, `assets`. Does an assets domain serve anything from `auth-service`? | no | ASSUMED(2026-09-09): no — it gets the same empty allowlist as `subscription` (F-066-q). An assets host answering `/auth/login` is the same bug under a different name, and denying is the side that fails safe. Nothing is served on either today, so the assumption is currently free | -> becomes a rule when `network` builds `/sub` and the asset host has a real consumer |
 | 2026-09-09 | F-066-q enforces the path allowlist in `auth-service` only. The panel is a separate Next.js deployable, and Traefik still routes by fixed host (`panel.$DOMAIN_NAME`), so a tenant's `subscription` domain reaches no panel today. Who enforces the rule once per-tenant edge routing exists? | no | ASSUMED(2026-09-09): `panel-web` needs the mirror of this rule, and the row that builds per-tenant routing is where it belongs — F-018 / F-102. Enforcing it now would be a check on a path nothing can reach | -> a backlog row when per-tenant edge routing lands |
 | 2026-09-18 | ADR-0058 (2) says `auth-service` keeps only tenant resolution, but the vault's internal seams (`/internal/vault/destroy-expired`, `/internal/vault/gateway-credential*`, the only writer of a gateway's secret) still live in `auth-service/src/app/tenant/vault/`. ADR-0058 (1) never listed them. Do they move to `tenant-service`? | resolved | **Answered 2026-09-18 (user): they move** — backlog F-018-ab | — |
+| 2026-09-19 | `tenant.ownerUserId` is a single column, so a reseller has exactly one owner. Two people sharing one, or a reseller owned by a reseller (F-901's `resellerPath`), has no representation — and a staff seat with `tenant.manage` (F-018-j) only reaches someone with an account *inside* that reseller, which a co-owning platform customer does not have | no | DECIDED(2026-09-19, user): not now. The owner's own account never moves (ADR-0062 "Consequences"), and multi-ownership waits for co-ownership or F-901 to be actually wanted rather than being designed against a guess | -> backlog F-018-af, an ADR when it is picked up |

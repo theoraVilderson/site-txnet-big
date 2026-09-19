@@ -58,7 +58,7 @@ door can never disagree — one function, `staffState`.
 | # | Rule | Why |
 |---|---|---|
 | 1 | A seat is granted to a live `active` user **of that reseller's tenant** | this service never writes `identity.user`, as reseller creation does not for an owner. Someone with no account yet needs an emailed invitation and a registration, neither of which this table holds — a row of its own |
-| 2 | The reseller's **owner** cannot be seated | they are a user of the platform's tenant (ADR-0059), so they are not found here at all; giving them a role of the tenant they own is the account move ADR-0062 left open |
+| 2 | The reseller's **owner** cannot be seated, and never will be | they are a user of the platform's tenant (ADR-0059), so they are not found here at all, and they need no seat: `ownerUserId` is their door (invariant 21). The account move is decided, not deferred — ADR-0062 "Consequences", user 2026-09-19 |
 | 3 | One row per person per reseller (`(tenantId, userId)` unique). Re-inviting a removed member **reuses the row** | the alternative is not a second row but a lost history: who was on this team last month is a question an audit asks |
 | 4 | Removing sets `revokedAt`; nothing is deleted | as rules.md #4 for a tenant: the trail outlives the membership |
 | 5 | Acceptance is the invitee's own call, on their own session, once | a seat nobody accepted is not access, and `accept` is therefore the one route `ResellerAccess` cannot guard — an unaccepted member is exactly who it refuses |
