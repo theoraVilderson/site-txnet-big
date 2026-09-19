@@ -25,19 +25,24 @@ owner's own tenant is never moved.
 A route declares one capability (`@TenantCapability`); one that declares none
 is `read` for `GET`/`HEAD`/`OPTIONS` and **`staffWrite` for anything else**.
 
-| Capability | trial / active | suspended | terminated |
-|---|---|---|---|
-| `signIn` — sign in, refresh, captcha, OTP, recovery, bot sign-in | yes | yes | no |
-| `signOut` | yes | yes | yes |
-| `read` — any `GET`; the bot serving a user | yes | yes | no |
-| `account` — a user's own email, switching accounts | yes | yes | no |
-| `staffWrite` — the reseller panel changing anything (the default) | yes | **no** | no |
-| `tenantBilling` — the reseller topping up its billing wallet | yes | yes | no |
-| `register` | yes | **no** | no |
-| `sell` — an end user buying a service (no route yet) | yes | **no** | no |
-| `endUserDeposit` — deposit quote/start, in-chat pre-checkout, gift redeem | yes | **no** | no |
-| `system` — gateway webhook and callback, in-chat `paid`, expiry, reconcile, notifications, vault maintenance | yes | yes | yes |
-| `subscriptionLink` — `/sub` | yes | until `graceEndsAt` | no |
+The last column is not a status: **onboarding** is applied on top of whichever
+status column is in play, while the reseller has proved no custom domain
+(F-018-l, [contract.onboarding.md](contract.onboarding.md)). The stricter of
+the two answers wins, and the platform owner is never in it.
+
+| Capability | trial / active | suspended | terminated | + onboarding |
+|---|---|---|---|---|
+| `signIn` — sign in, refresh, captcha, OTP, recovery, bot sign-in | yes | yes | no | yes |
+| `signOut` | yes | yes | yes | yes |
+| `read` — any `GET`; the bot serving a user | yes | yes | no | yes |
+| `account` — a user's own email, switching accounts | yes | yes | no | yes |
+| `staffWrite` — the reseller panel changing anything (the default) | yes | **no** | no | yes |
+| `tenantBilling` — the reseller topping up its billing wallet | yes | yes | no | yes |
+| `register` | yes | **no** | no | **no** |
+| `sell` — an end user buying a service (no route yet) | yes | **no** | no | **no** |
+| `endUserDeposit` — deposit quote/start, in-chat pre-checkout, gift redeem | yes | **no** | no | **no** |
+| `system` — gateway webhook and callback, in-chat `paid`, expiry, reconcile, notifications, vault maintenance | yes | yes | yes | yes |
+| `subscriptionLink` — `/sub` | yes | until `graceEndsAt` | no | **no** |
 
 ## Rules
 | # | Rule | Trigger | Exception |
@@ -50,13 +55,14 @@ is `read` for `GET`/`HEAD`/`OPTIONS` and **`staffWrite` for anything else**.
 | 9 | A background tick that names a tenant runs only if the status allows its job's `tenantCapability` (unset = `staffWrite`); a refused tick is acked, is no run and takes no slot (`worker-service` `TenantStatusGate`, F-018-p) | every tick with `tenantId` | a platform tick is not judged; a missing key refuses nobody |
 | 6 | Redis follows Postgres at once: a trigger on `tenant.status`/`graceEndsAt` notifies `tenant_status_changed`, `TenantStatusListener` rewrites the key, and recomputes every tenant on each connect | commit | **a missing key refuses nobody** (F-101-b's trade) |
 | 7 | `system` is never closed | — | a payment already taken still settles, or the record of money that moved is lost |
-| 8 | A refusal is `403` `{i18nKey: tenant.suspended \| tenant.terminated, reason: tenantSuspended \| tenantTerminated}` | — | — |
+| 8 | A refusal is `403` `{i18nKey: tenant.suspended \| tenant.terminated \| tenant.onboarding, reason: tenantSuspended \| tenantTerminated \| tenantOnboarding}` | — | a `trial` or `active` tenant only ever gets the onboarding one |
 | 10 | A due renewal the billing wallet covers is charged, and takes `trial` -> `active` (history `subscription_renewed`, actor null) | `currentPeriodEnd` passed (`contract.billing.md` "Subscription renewal") | a manual suspension stays |
 | 11 | A short renewal warns the owner at most once a day until `currentPeriodEnd` + `renewalGraceDays` (default 3) | the renewal finds the wallet short | an already suspended tenant is not warned |
 | 12 | Grace over and still short: `suspended`, `suspensionCause = non_payment`, reason `subscription_unpaid`, #1's stamps, the owner told; nothing deleted (#4) | renewal after the grace | a tenant already suspended is left as it is |
 | 13 | A payment lifts **only** a `non_payment` suspension: the charge is taken at once and the tenant is `active`, its new period starting now | a credit to the billing wallet, or the next sweep | a `manual` suspension is charged and renewed and stays suspended (user, 2026-09-17) |
 | 16 | A purchase opens the reseller `active`: created `trial` and moved in the same transaction once the first period is charged (history `reseller_purchased`, actor the buyer) | `POST /api/tenants/purchase` (F-019-h) | — |
 | 15 | The platform owner gives more time: the renewal does not suspend before `graceUntil`, and a `non_payment` suspension becomes `active` at once; nothing is credited (F-019-g) | `POST .../subscription/grace` | a `manual` suspension stays |
+| 17 | A reseller with no `verified` `panel` `custom_domain` is judged by the onboarding column too, and leaves it by proving one — never by paying. The flag is computed by `TenantStatusListener` into `tenant:status:<id>`, on a domain change as much as a status one (migration `20260919000400_tenant_onboarding_gate`); a state without it is not onboarding | every request with a tenant in scope | the platform owner |
 | 14 | The platform owner suspending a `non_payment`-suspended reseller makes the cause `manual`; the suspension's stamps are kept (F-018-s) | `PUT .../status` `suspended` | already `manual` is `status_unchanged` |
 
 ## Edge cases decided
@@ -70,5 +76,6 @@ is `read` for `GET`/`HEAD`/`OPTIONS` and **`staffWrite` for anything else**.
 | The platform owner reactivates a `non_payment`-suspended reseller without a payment | allowed; the period is still unpaid and past grace, so the next sweep suspends it again. To give time, grant grace (#15) — never a manual credit, which records money that never arrived | 2026-09-17 |
 | A campaign already `sending` when its reseller is suspended or terminated | it finishes — `system`, like a payment already taken; only starting one is `staffWrite` (user, F-018-p) | 2026-09-17 |
 | The reseller's owner, whose session is their platform tenant's (ADR-0059 (1)) | `TenantStatusGuard` would judge that always-active tenant, so a reseller self-service route judges the path's reseller with `tenantAllows` in `ResellerAccess` (invariant 21, F-061-h); the owner of a suspended reseller reads but does not write, as its staff would not. The platform owner's staff are not held to the reseller's matrix, except `terminated` | 2026-09-18 |
+| A reseller that has not opened yet | closed for its users, open for its owner: the onboarding column, whose checklist (domain, gateway, bot, pricing) is computed from live rows and stored nowhere. Only the domain step gates — a reseller may sell before it connects a bot (F-018-l) | 2026-09-19 |
 | The reseller's own staff (F-018-j), whose session **is** the reseller's | judged twice, and by the same matrix both times: `TenantStatusGuard` on their ambient tenant and `ResellerAccess` on the path's, which are the same tenant. So a suspended reseller's member lists its team (`read`) and seats nobody (`staffWrite`), exactly as its owner | 2026-09-19 |
 | The platform owner wants those sends stopped too | a second call, notification's owner-only `POST .../campaigns/tenants/:tenantId/stop` (F-018-x), after the `sending-summary` heads-up: the campaigns move to `stopped` at the next delivery run's boundary, rows kept `queued`. A stopped campaign stays stopped on reactivation and is resumed by hand, never while the tenant is closed (user, F-018-q). Tenant administration itself does not reach campaigns (ADR-0058 (5), F-018-w) | 2026-09-17 |

@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { DomainVerificationStatus, TenantDomainPurpose, TenantDomainType, TenantType } from '@prisma/client';
 import {
   NotificationClientFactory,
   PgNotificationListener,
@@ -15,8 +16,30 @@ export const TENANT_STATUS_CHANNEL = 'tenant_status_changed';
 
 export const TENANT_STATUS_LISTEN_CLIENT = Symbol('TENANT_STATUS_LISTEN_CLIENT');
 
-const STATE = { id: true, status: true, graceEndsAt: true } as const;
-type StateRow = { id: string; status: TenantStatusValue; graceEndsAt: Date | null };
+/**
+ * The reseller's own door: one `verified` `panel` `custom_domain` is enough,
+ * so this asks for at most one row (F-018-l). `revalidating` is `verified`
+ * plus a column (`contract.domains.md`), so a domain inside its grace still
+ * routes and still lifts the gate.
+ */
+const DOOR = {
+  where: {
+    domainType: TenantDomainType.custom_domain,
+    purpose: TenantDomainPurpose.panel,
+    verificationStatus: DomainVerificationStatus.verified,
+  },
+  select: { id: true },
+  take: 1,
+} as const;
+
+const STATE = { id: true, status: true, graceEndsAt: true, tenantType: true, domains: DOOR } as const;
+type StateRow = {
+  id: string;
+  status: TenantStatusValue;
+  graceEndsAt: Date | null;
+  tenantType: TenantType;
+  domains: { id: string }[];
+};
 
 /**
  * Keeps `tenant:status:<id>` — what `TenantStatusGuard` reads in every service —
@@ -25,9 +48,12 @@ type StateRow = { id: string; status: TenantStatusValue; graceEndsAt: Date | nul
  * reads that key.
  *
  * The trigger fires on any change of `status` or `graceEndsAt`, by this
- * service's status route, by its renewal or by hand in SQL. Tenants are read on
- * the cross-tenant pool: the rows are every tenant's. A soft-deleted tenant's
- * key is written like any other; it resolves nowhere anyway.
+ * service's status route, by its renewal or by hand in SQL — and, since
+ * F-018-l, on any change to a tenant's domains, because the onboarding column
+ * of the same key is computed from them (migration
+ * `20260919000400_tenant_onboarding_gate`). Tenants are read on the
+ * cross-tenant pool: the rows are every tenant's. A soft-deleted tenant's key
+ * is written like any other; it resolves nowhere anyway.
  */
 @Injectable()
 export class TenantStatusListener extends PgNotificationListener {
@@ -79,6 +105,9 @@ export class TenantStatusListener extends PgNotificationListener {
       serializeTenantStatusState({
         status: row.status,
         graceEndsAt: row.graceEndsAt ? row.graceEndsAt.toISOString() : null,
+        // The platform owner is never onboarding: it is the platform's own
+        // domain, and it sells there (F-018-l).
+        onboarding: row.tenantType !== TenantType.platform_owner && row.domains.length === 0,
       }),
     );
   }

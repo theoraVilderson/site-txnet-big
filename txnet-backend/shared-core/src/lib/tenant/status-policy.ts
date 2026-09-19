@@ -110,35 +110,86 @@ export const TenantStatusPolicy: Readonly<
   },
 };
 
+/**
+ * The onboarding gate (F-018-l, catalog F-213): **a fifth column of the matrix
+ * above**, applied on top of a reseller's status while it has no `verified`
+ * custom domain of its own.
+ *
+ * Such a reseller has nowhere to serve its users — the platform's domain is
+ * not its shop — so it reaches only the configuration console: it signs in,
+ * reads, configures (`staffWrite`) and tops its billing wallet up, and it
+ * registers nobody, sells nothing, takes no end-user money and serves no
+ * `/sub`. The column closes exactly the four capabilities that need a door of
+ * the reseller's own, which is why it is a column and not a status: a tenant
+ * is `trial` or `active` *and* onboarding, and both are judged
+ * ({@link tenantAllows} takes the stricter answer).
+ *
+ * The checklist the console shows (domain, gateway, bot, pricing) is computed
+ * from live state by `tenant-service`'s onboarding route and stored nowhere;
+ * only the domain half is this gate — `contract.onboarding.md`.
+ */
+export const TenantOnboardingPolicy: Readonly<Record<TenantCapabilityName, TenantStatusRule>> = {
+  signIn: true,
+  signOut: true,
+  read: true,
+  account: true,
+  staffWrite: true,
+  tenantBilling: true,
+  register: false,
+  sell: false,
+  endUserDeposit: false,
+  system: true,
+  subscriptionLink: false,
+};
+
 /** What Redis holds per tenant, under `UnscopedRedisKeys.tenantStatus`. */
 export interface TenantStatusState {
   status: TenantStatusValue;
   /** ISO timestamp; set while suspended. */
   graceEndsAt: string | null;
+  /**
+   * F-018-l: the reseller holds no `verified` custom domain, so
+   * {@link TenantOnboardingPolicy} applies too. Absent is not onboarding —
+   * a reader written before this column keeps the behaviour it had.
+   */
+  onboarding?: boolean;
 }
 
+/** Both columns in play have to allow it: the status's, and onboarding's while it is on. */
 export function tenantAllows(
   state: TenantStatusState,
   capability: TenantCapabilityName,
   now: Date = new Date(),
 ): boolean {
-  const rule = TenantStatusPolicy[state.status][capability];
+  if (!applies(TenantStatusPolicy[state.status][capability], state, now)) return false;
+  return !state.onboarding || applies(TenantOnboardingPolicy[capability], state, now);
+}
+
+function applies(rule: TenantStatusRule, state: TenantStatusState, now: Date): boolean {
   if (rule !== 'hold') return rule;
   return state.graceEndsAt !== null && now.getTime() <= Date.parse(state.graceEndsAt);
 }
 
 export function serializeTenantStatusState(state: TenantStatusState): string {
-  return JSON.stringify({ status: state.status, graceEndsAt: state.graceEndsAt });
+  return JSON.stringify({
+    status: state.status,
+    graceEndsAt: state.graceEndsAt,
+    onboarding: state.onboarding ?? false,
+  });
 }
 
 /** `null` for anything that is not a state this file wrote — which the guard treats as unknown. */
 export function parseTenantStatusState(raw: string | null): TenantStatusState | null {
   if (!raw) return null;
   try {
-    const value = JSON.parse(raw) as { status?: unknown; graceEndsAt?: unknown };
+    const value = JSON.parse(raw) as { status?: unknown; graceEndsAt?: unknown; onboarding?: unknown };
     if (!TENANT_STATUSES.includes(value.status as TenantStatusValue)) return null;
     const grace = typeof value.graceEndsAt === 'string' ? value.graceEndsAt : null;
-    return { status: value.status as TenantStatusValue, graceEndsAt: grace };
+    return {
+      status: value.status as TenantStatusValue,
+      graceEndsAt: grace,
+      onboarding: value.onboarding === true,
+    };
   } catch {
     return null;
   }
@@ -167,10 +218,24 @@ export interface TenantStatusStore {
   get(key: string): Promise<string | null>;
 }
 
-const REFUSAL: Record<Exclude<TenantStatusValue, 'trial' | 'active'>, { i18nKey: string; reason: string }> = {
+type Refusal = { i18nKey: string; reason: string };
+
+const REFUSAL: Record<Exclude<TenantStatusValue, 'trial' | 'active'>, Refusal> = {
   suspended: { i18nKey: BackendI18nKeys.errors.tenant.suspended, reason: 'tenantSuspended' },
   terminated: { i18nKey: BackendI18nKeys.errors.tenant.terminated, reason: 'tenantTerminated' },
 };
+
+/** The gate a reseller leaves by proving a domain, not by paying (F-018-l). */
+const ONBOARDING_REFUSAL: Refusal = {
+  i18nKey: BackendI18nKeys.errors.tenant.onboarding,
+  reason: 'tenantOnboarding',
+};
+
+/** Why this request was refused: the status closed it, or the onboarding gate did. */
+export function tenantRefusal(state: TenantStatusState): Refusal {
+  const byStatus = REFUSAL[state.status as keyof typeof REFUSAL];
+  return byStatus ?? ONBOARDING_REFUSAL;
+}
 
 /**
  * Refuses a request its tenant's status does not allow (F-018-f). Registered
@@ -204,7 +269,8 @@ export class TenantStatusGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<{ method: string }>();
     if (tenantAllows(state, capabilityOf(request.method, declared))) return true;
 
-    // trial and active allow everything, so only the two closing statuses reach here.
-    throw new ForbiddenException(REFUSAL[state.status as keyof typeof REFUSAL]);
+    // A `trial` or `active` tenant only ever reaches here through the
+    // onboarding column, which is what {@link tenantRefusal} falls back to.
+    throw new ForbiddenException(tenantRefusal(state));
   }
 }

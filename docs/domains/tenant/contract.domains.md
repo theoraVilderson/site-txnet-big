@@ -89,11 +89,17 @@ lookup that errors (not "no record") is a sweep `error` and changes nothing.
    re-requested meanwhile is left alone, so two sweeps are safe.
 5. **The platform never registers, buys or controls a tenant's DNS** (catalog
    13.2). It only reads public DNS and requests the domain from outside.
+6. **`verified` is what opens the reseller too.** Until one `panel`
+   `custom_domain` is `verified`, the onboarding column closes registration,
+   sales, end-user deposits and `/sub`
+   ([contract.onboarding.md](contract.onboarding.md), F-018-l). A change of
+   verification status notifies `tenant_status_changed` as a status change
+   does, so the gate follows the sweep at once.
 
 ## Consumers
 
 | Consumer | Uses |
 |---|---|
 | `automation` (`tenant_domain_verification` job, seeded `*/5`) | `check-due` |
-| panel-web | none yet — the onboarding console is F-018-l |
+| panel-web | none yet — the onboarding console's checklist is `GET /api/tenants/:id/onboarding` (F-018-l) |
 | `auth-api` resolver, `billing` callback / return address | read `verified` only; unchanged |

@@ -208,13 +208,16 @@ describe('TenantStatusListener', () => {
   it('writes the state a notification names, in the shape the guard reads', async () => {
     const graceEndsAt = new Date('2026-09-24T12:00:00Z');
     const redis = { set: vi.fn(async () => undefined), publish: vi.fn(async () => undefined) };
-    const all = { tenant: { findUnique: vi.fn(async () => ({ id: RESELLER, status: 'suspended', graceEndsAt })), findMany: vi.fn(async () => []) } };
+    // `tenantType` and `domains` are the onboarding column's inputs (F-018-l);
+    // this reseller has proved a domain, so only its status is in play here.
+    const row = { id: RESELLER, status: 'suspended', graceEndsAt, tenantType: 'reseller', domains: [{ id: 'd1' }] };
+    const all = { tenant: { findUnique: vi.fn(async () => row), findMany: vi.fn(async () => []) } };
     const listener = new TenantStatusListener(all as never, redis as never, (() => ({})) as never);
 
     await listener.handle(JSON.stringify({ tenantId: RESELLER }));
     expect(redis.set).toHaveBeenCalledWith(
       UnscopedRedisKeys.tenantStatus(RESELLER),
-      serializeTenantStatusState({ status: 'suspended', graceEndsAt: graceEndsAt.toISOString() }),
+      serializeTenantStatusState({ status: 'suspended', graceEndsAt: graceEndsAt.toISOString(), onboarding: false }),
     );
 
     // …and then tells the gateway which tenant changed, so a terminated one's sockets close at once (F-018-r).

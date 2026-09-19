@@ -140,6 +140,7 @@
   "tenant": {
     "claimMismatch": "This session does not belong to this address. Sign in again.",
     "featureNotEntitled": "This feature is not part of this service’s plan.",
+    "onboarding": "This service is not open yet: its operator is still setting it up and has not connected its own address.",
     "suspended": "This service is suspended. You can sign in and view your account, but this action is unavailable until it is reactivated.",
     "terminated": "This service has been closed."
   },

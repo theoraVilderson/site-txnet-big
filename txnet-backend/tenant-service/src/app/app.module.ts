@@ -14,6 +14,7 @@ import { PROBE_PATH } from './domains/domain-check';
 import { HealthController } from './health.controller';
 import { LanguageMiddleware } from './locale/language.middleware';
 import { LocaleModule } from './locale/locale.module';
+import { OnboardingModule } from './onboarding/onboarding.module';
 import { PackagesModule } from './packages/packages.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { PurchaseModule } from './purchase/purchase.module';
@@ -37,7 +38,8 @@ const FILE_ROUTES = `${FILES_PATH}/*path`;
  * renewal with F-018-v, status with F-018-w, the resellers themselves with
  * F-018-y, their custom domains with F-018-i, the file route with F-018-m,
  * their branding with F-018-h, the vault's internal seams with F-018-ab,
- * a platform user's reseller purchase with F-019-h, their staff seats with F-018-j.
+ * a platform user's reseller purchase with F-019-h, their staff seats with F-018-j,
+ * the onboarding console's checklist with F-018-l.
  */
 @Module({
   imports: [
@@ -52,6 +54,7 @@ const FILE_ROUTES = `${FILES_PATH}/*path`;
     PurchaseModule,
     DomainsModule,
     StaffModule,
+    OnboardingModule,
     FilesModule,
     BrandingModule,
     VaultModule,
