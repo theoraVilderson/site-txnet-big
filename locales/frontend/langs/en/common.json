@@ -1511,7 +1511,8 @@
       "title": "Your reseller is ready",
       "body": "{{slug}} is active. {{charged}} was taken from your wallet; the period ends {{date}}.",
       "balance": "Wallet balance is now {{balance}}.",
-      "next": "Next: add your own domain and point it (CNAME) at {{target}}. Until it is verified, your customers cannot reach you."
+      "next": "Next: add your own domain and point it (CNAME) at {{target}}. Until it is verified, your customers cannot reach you.",
+      "addDomain": "Add your domain"
     },
     "errors": {
       "packageId": "Pick a package.",
@@ -1528,6 +1529,77 @@
       "wallet_changed": "Your wallet changed while this was going through. Check the balance and try again.",
       "package_inactive": "That package is no longer on sale.",
       "package_not_sold_for_period": "That package is not sold for this period."
+    }
+  },
+  "resellerDomains": {
+    "title": "Domains of {{slug}}",
+    "titlePlain": "Your reseller's domains",
+    "subtitle": "Add your own domain, publish the two records below at your DNS provider, then ask for a check. Until a panel domain is verified, your customers cannot register or buy.",
+    "reload": "Try again",
+    "empty": "No domain yet. Add the one your customers will open.",
+    "add": {
+      "title": "Add a domain",
+      "domain": "Domain",
+      "domainHint": "The address your customers will open, e.g. panel.example.com — not the platform's.",
+      "purpose": "Used for",
+      "submit": "Add domain",
+      "adding": "Adding…"
+    },
+    "purposes": {
+      "panel": "Panel",
+      "subscription": "Subscription links",
+      "assets": "Files and images"
+    },
+    "status": {
+      "pending": "Waiting for records",
+      "verifying": "Checking",
+      "verified": "Verified",
+      "revalidating": "Record missing",
+      "failed": "Failed"
+    },
+    "statusHint": {
+      "pending": "Publish both records, then press “Check now”.",
+      "verifying": "We check every few minutes for up to 72 hours. This page shows the result once it is in.",
+      "verified": "This domain is live.",
+      "revalidating": "The TXT record is gone. The domain still works, but it stops within 72 hours unless the record is back.",
+      "failed": "The records were not found in time. Fix them and press “Check now” again."
+    },
+    "records": {
+      "title": "Records to publish at your DNS provider",
+      "type": "Type",
+      "name": "Name",
+      "value": "Value"
+    },
+    "copy": "Copy",
+    "copied": "Copied",
+    "checkNow": "Check now",
+    "refresh": "Refresh",
+    "verifiedAt": "Verified {{date}}",
+    "lastCheckedAt": "Last checked {{date}}",
+    "neverChecked": "Not checked yet",
+    "lastCheck": {
+      "title": "Last check",
+      "expected": "Expected",
+      "found": "Found",
+      "nothing": "nothing"
+    },
+    "lines": {
+      "txt": "TXT record",
+      "cname": "CNAME",
+      "http": "HTTP",
+      "https": "HTTPS"
+    },
+    "errors": {
+      "domain": "Enter a host name such as panel.example.com — no port, no IP address."
+    },
+    "refusals": {
+      "not_allowed": "You cannot manage this reseller's domains.",
+      "reseller_not_found": "This reseller does not exist.",
+      "reseller_suspended": "This reseller is suspended: its domains can be seen, not changed.",
+      "reseller_terminated": "This reseller is terminated.",
+      "domain_not_found": "That domain no longer exists. Reload the list.",
+      "domain_taken": "That domain is already in use.",
+      "domain_reserved": "That is one of the platform's own addresses. Use a domain of your own."
     }
   }
 }

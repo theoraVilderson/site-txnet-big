@@ -80,6 +80,15 @@ export const panelResellerPath = (id: string) => `${PANEL_RESELLERS}/${encodeURI
  * segment wins over `[id]`, which is always a uuid.
  */
 export const PANEL_RESELLER_PURCHASE = `${PANEL_RESELLERS}/buy`;
+/**
+ * A reseller's own workspace on the platform panel (ADR-0064 (4)): its owner,
+ * its staff and platform support configure it here by the path's id, never by
+ * the session's tenant. Not under `PANEL_RESELLERS`, which is the platform
+ * owner's administration.
+ */
+export const PANEL_MY_RESELLERS = "/my-resellers";
+/** A reseller's custom domains: add one, the records to publish, "check now" (F-066-w2). */
+export const myResellerDomainsPath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}/domains`;
 /** Payments the gateway has not confirmed, for a person to settle (F-093-n). */
 export const PANEL_MANUAL_PAYMENTS = "/payments/manual";
 /**

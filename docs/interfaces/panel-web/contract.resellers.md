@@ -6,7 +6,7 @@ version: 20
 updated: 2026-09-19
 ---
 
-# Contract — panel-web: resellers (F-018-k, F-019-k, F-019-i)
+# Contract — panel-web: resellers (F-018-k, F-019-k, F-019-i, F-066-w2)
 
 A topic file of [contract.md](contract.md) (§10). Three pages under
 `(panel)/resellers/`, each a server shell over a client view:
@@ -143,3 +143,43 @@ custom domains only; `BuyResellerView`, after a purchase, names the target in a
 next step — add your own domain and CNAME it there — instead of an "open your
 panel" button that led to a page that serves nothing. The panel reads the row's
 `domainType`; it does not parse the host.
+
+## A reseller's workspace (F-066-w2, ADR-0064 (4))
+
+`/my-resellers/[id]/…` (`PANEL_MY_RESELLERS`) is where a reseller is
+configured from the platform's panel — by its owner before it has a domain,
+by a staff seat of it, or by platform support. Not under `/resellers`: that is
+the platform owner's administration, and this is the reseller's own. Each
+screen calls a route that names the reseller (`/api/tenants/:id/...`,
+`/api/<service>/tenants/:id/...`), never an ambient one. Today it has one
+screen; the console (F-066-w) and the gateway, bot and catalog screens
+(w4, w6, w8) join it.
+
+| page | route | files |
+|---|---|---|
+| its domains | `/my-resellers/[id]/domains` (`myResellerDomainsPath`) | `my-resellers/[id]/domains/_components/ResellerDomainsView.tsx`, rules `my-resellers/_lib/domains.ts` |
+
+Its calls are `resellerDomainsApi` (`lib/tenant-api.ts`): list, add, check —
+every rule behind them is [tenant/contract.domains.md](../../domains/tenant/contract.domains.md).
+A purchase's last step links here (`BuyResellerView`, "add your domain").
+
+18. **No permission is judged by the page.** tenant-service admits the owner,
+    a staff seat with `tenant.manage` or platform support (invariant 21); the
+    page makes its calls and shows the refusal's sentence. It has no menu
+    entry of its own until the console (F-066-w) gives the workspace one.
+19. **One sentence per refusal** (`DOMAIN_REFUSAL_KEYS`, namespace
+    `common.resellerDomains`): shared-core's `ResellerAccessRejection` plus
+    tenant-service's `DomainRejection`, both read from source by the spec, as
+    are `DomainStatus`, the check lines (`CheckName`) and Prisma's
+    `TenantDomainPurpose` — each has its label.
+20. **The host is sent the way the schema takes it** (`domainHost`): lower
+    case, a trailing dot dropped, a pasted scheme and path stripped; a port, an
+    IP or a single label is refused before the call, as `addDomainSchema` would.
+21. **"Check now" only where the route moves the domain** (`canRequestCheck`:
+    `pending`, `failed`). The check itself is the sweep's, every five minutes,
+    so a `verifying` domain offers a re-read ("refresh"), never a second
+    request.
+22. **Printed, never inferred.** The status, the TXT record and the CNAME
+    target, the last check's lines — expected and found — are the view's, as
+    they came. Each record's name and value has a copy button; the CNAME's name
+    is the domain itself.

@@ -6,7 +6,7 @@ import { CheckCircle2, HandCoins, Loader2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { billingApi } from "@/lib/billing-api";
-import { PANEL_DEPOSIT } from "@/lib/routes";
+import { PANEL_DEPOSIT, myResellerDomainsPath } from "@/lib/routes";
 import { resellerPurchaseApi, type PackageOffer, type Purchased, type ResellerBillingModel } from "@/lib/tenant-api";
 import { Select } from "../../../_components/kit/Select";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
@@ -155,7 +155,8 @@ export function BuyResellerView() {
 
   if (bought) {
     // The reseller's only platform host is its CNAME target, which opens
-    // nothing (ADR-0063): the next step is a domain of its own, not a link.
+    // nothing (ADR-0063): the next step is a domain of its own, added on its
+    // workspace's domains page (F-066-w2) — not a link to the target.
     const target = bought.domains.find((d) => d.domainType === "subdomain")?.domainValue;
     return (
       <Shell title={t("common", K.title)} subtitle={t("common", K.subtitle)}>
@@ -177,6 +178,9 @@ export function BuyResellerView() {
               {t("common", K.done.next, { target })}
             </p>
           )}
+          <Link href={myResellerDomainsPath(bought.id)} className={`${primaryButton} mt-4`}>
+            {t("common", K.done.addDomain)}
+          </Link>
         </div>
       </Shell>
     );
