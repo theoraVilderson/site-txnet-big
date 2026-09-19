@@ -24,6 +24,17 @@ export type TenantVia = 'session' | 'bot' | 'domain';
 export type TenantSurfacePurpose = 'panel' | 'subscription' | 'assets';
 
 /**
+ * How the tenant got the host (mirrors `tenant.TenantDomainType`).
+ *
+ * A `subdomain` is issued by the platform and lives under the platform's own
+ * domain; a `custom_domain` is the reseller's own, proved by verification.
+ * Resolution has always needed the distinction to decide whether a row is
+ * proof at all — F-018-ag is the first rule that needs it *afterwards*, because
+ * D-01 is about platform hosts and says nothing about a reseller's own.
+ */
+export type TenantSurfaceDomainType = 'subdomain' | 'custom_domain';
+
+/**
  * The paths each non-panel surface serves, as path prefixes.
  *
  * **Both lists are empty, and that is the answer rather than a gap** (F-066-q).
@@ -64,6 +75,81 @@ export function surfaceServesPath(
 }
 
 /**
+ * The paths a **gated** reseller's platform subdomain serves: its
+ * configuration console, and nothing an end user would use (F-018-ag, D-01).
+ *
+ * The third input to the same seam F-066-q built. F-018-l closes `register` /
+ * `sell` / `endUserDeposit` / `subscriptionLink` by capability and leaves
+ * `signIn` / `read` / `account` open on purpose — a reseller's staff have to
+ * get in to configure the thing that lifts the gate, so closing those would
+ * lock them out of it. What is left of D-01 is therefore not a question about
+ * what a *status* allows but about what a *door* serves, and a door is what
+ * this file already knows how to answer.
+ *
+ * **Deny by default, and that is the side to fail on.** A route added later is
+ * not here and so is closed — on a gated reseller's platform subdomain only,
+ * which is the narrowest blast radius this rule has: a reseller that has
+ * proved no domain, on a host that is the platform's and not its own. The
+ * opposite default would serve every new end-user route on a platform host
+ * until someone remembered, which is the failure D-01 exists to prevent.
+ */
+const CONSOLE_PATHS: readonly string[] = [
+  // The console's own door. Sign-in, refresh, sign-out, captcha, recovery,
+  // OTP channels: the reseller's staff arrive through all of them.
+  '/api/auth/login',
+  '/api/auth/logout',
+  '/api/auth/refresh',
+  '/api/auth/session',
+  '/api/auth/captcha',
+  '/api/auth/password',
+  '/api/auth/otp',
+  // The signed-in staff account, and ending an operator's impersonation —
+  // never refused, for the same reason `signOut` never is.
+  '/api/auth/me',
+  '/api/auth/accounts',
+  '/api/auth/impersonate',
+  // The console's own screens: the team, its roles, the automation it runs,
+  // and the bot secret it rotates.
+  '/api/auth/users',
+  '/api/auth/roles',
+  '/api/auth/workers',
+  '/api/auth/bots',
+];
+
+/**
+ * The end-user doors that sit *below* an allowed prefix, and so need naming.
+ *
+ * `/api/auth/bots` is both at once: the console rotates a webhook secret under
+ * it and an end user signs in through the reseller's bot under it. Splitting
+ * the prefix would close the console's route as well, so the narrower list
+ * carves the end user's out instead. Every other end-user path — `register`,
+ * `handoff` — is simply absent from {@link CONSOLE_PATHS} and closed by the
+ * default.
+ */
+const END_USER_PATHS: readonly string[] = [
+  '/api/auth/bots/link',
+  '/api/auth/bots/session',
+  '/api/auth/bots/webapp',
+];
+
+/** A prefix matches the path itself or one below it, never a longer sibling. */
+function under(prefixes: readonly string[], path: string): boolean {
+  return prefixes.some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+  );
+}
+
+/**
+ * May a gated reseller's platform subdomain serve this path? (F-018-ag.)
+ *
+ * Pure, and asked only for a `panel` `subdomain` surface whose tenant is
+ * onboarding — see `TenantGuard`, which is where the gate is read.
+ */
+export function gatedConsoleServesPath(path: string): boolean {
+  return under(CONSOLE_PATHS, path) && !under(END_USER_PATHS, path);
+}
+
+/**
  * The tenant a request belongs to (ADR-0020, ADR-0025).
  *
  * A **resolved** tenant, not the whole row: the id is what every scoped query
@@ -96,6 +182,16 @@ export interface ResolvedTenant {
    * through the door it is meant to close.
    */
   surfacePurpose?: TenantSurfacePurpose;
+  /**
+   * Whether that row is a platform-issued subdomain or the reseller's own
+   * proved domain (F-018-ag). Absent for the same reason `surfacePurpose` is:
+   * there was no surface at all.
+   *
+   * It is what makes D-01 expressible here. The onboarding gate closes an
+   * end-user door on a *platform* host; a reseller's own `custom_domain` is
+   * its shop and is filtered by nothing.
+   */
+  surfaceDomainType?: TenantSurfaceDomainType;
   /**
    * The surface's tenant, when it is **not** the one this request is scoped to
    * — present only when that tenant's owner arrived on it with their own

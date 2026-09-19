@@ -14,12 +14,14 @@ import { TenantCacheService } from './tenant-cache.service';
  * about not failing a request when Redis is unavailable.
  */
 
-// A host entry is a *surface*: the tenant plus what that door is for
-// (F-066-q). `byId` ignores the extra field, so one fixture serves both.
+// A host entry is a *surface*: the tenant, what that door is for (F-066-q)
+// and who issued it (F-018-ag). `byId` ignores the extra fields, so one
+// fixture serves both.
 const TENANT = {
   id: 'tenant-reseller',
   slug: 'reseller',
   purpose: 'panel' as const,
+  domainType: 'custom_domain' as const,
   ownerUserId: 'user-owner',
 };
 
@@ -174,14 +176,22 @@ describe('TenantCacheService — a Redis outage slows resolution, it does not re
     );
   });
 
-  it('re-reads a host entry written before `purpose` existed', async () => {
-    // This is how F-066-q's column crosses a deploy. An entry from the old
-    // shape parses perfectly and simply lacks the field, and a surface whose
-    // purpose is unknown must not be served as a panel one — so the shape is
-    // checked rather than asserted, and the stale entry drains itself within
-    // one lookup per host instead of needing a keyspace version bump.
+  it.each([
+    ['before `purpose` existed', { id: TENANT.id, slug: TENANT.slug }],
+    [
+      'before `domainType` existed',
+      { id: TENANT.id, slug: TENANT.slug, ownerUserId: TENANT.ownerUserId, purpose: 'panel' },
+    ],
+  ])('re-reads a host entry written %s', async (_case, old) => {
+    // This is how a column of the surface crosses a deploy — F-066-q's
+    // `purpose`, and F-018-ag's `domainType` the same way. An entry from the
+    // old shape parses perfectly and simply lacks the field, and a surface
+    // whose purpose is unknown must not be served as a panel one, nor one
+    // whose issuer is unknown be filtered as a platform subdomain — so the
+    // shape is checked rather than asserted, and the stale entry drains
+    // itself within one lookup per host instead of needing a keyspace
+    // version bump.
     const { cache, store } = cacheOver({});
-    const old = { id: TENANT.id, slug: TENANT.slug };
     store.set(RedisKeys.tenantByHost('myvpn.com'), JSON.stringify(old));
 
     const lookup = vi.fn(async () => TENANT);

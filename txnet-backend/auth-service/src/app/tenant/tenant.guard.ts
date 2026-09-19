@@ -2,19 +2,31 @@ import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
-import { resolveTenant, surfaceServesPath, tenantConflict } from './tenant';
+import {
+  gatedConsoleServesPath,
+  resolveTenant,
+  surfaceServesPath,
+  tenantConflict,
+} from './tenant';
 import { TENANT_AGNOSTIC } from './tenant-agnostic.decorator';
-import { BackendI18nKeys } from '@txnet-backend/shared-core';
+import {
+  BackendI18nKeys,
+  TENANT_STATUS_STORE,
+  TenantStatusStore,
+  UnscopedRedisKeys,
+  parseTenantStatusState,
+} from '@txnet-backend/shared-core';
 
 /**
- * The three ways a request's tenancy can be refused, in the one place a refusal
- * is observable (ADR-0024 decision 4, ADR-0025, catalog F-1212).
+ * The four ways a request's tenancy can be refused, in the one place a refusal
+ * is observable (ADR-0024 decision 4, ADR-0025, catalog F-1212, F-018-ag).
  *
  * Global, and deliberately not per-route: the routes that would remember to
  * opt in are the ones that already think about tenancy, and the leak is in the
@@ -32,6 +44,14 @@ import { BackendI18nKeys } from '@txnet-backend/shared-core';
  *    domain resolves its tenant perfectly well and still serves no panel route
  *    (F-066-q). It is the same neutral 404 as (1), and on purpose: a
  *    subscription host must not tell a stranger that a panel lives elsewhere.
+ * 4. **A gated reseller's platform subdomain, asked for something that is not
+ *    its console** — the same rule as (3) with the onboarding gate as a third
+ *    input instead of the purpose (F-018-ag). D-01 says no platform host is
+ *    ever served to an end user; F-018-l closes what a capability can close
+ *    and leaves `signIn` / `read` / `account` open so the reseller's staff can
+ *    reach the console at all, and this closes the rest by path. Also the
+ *    neutral 404 — on the platform's own domain, a stranger must not learn
+ *    that a particular reseller lives at this address.
  *
  * The 404 is **neutral**: a bare `NotFoundException`, whose message is not an
  * i18n key, so `sanitizeError` replaces it with the generic `system.notFound`
@@ -42,22 +62,26 @@ import { BackendI18nKeys } from '@txnet-backend/shared-core';
  *
  * Order matters: a refused claim leaves no tenant on the request, so checking
  * the conflict first is what keeps that case a 403 instead of collapsing into
- * the 404. (3) then runs before (1) for the opposite reason — a wrong-purpose
- * host *did* resolve, so it would otherwise be waved through.
+ * the 404. (3) and (4) then run before (1) for the opposite reason — a
+ * wrong-purpose or closed host *did* resolve, so it would otherwise be waved
+ * through.
  *
  * One kind of route is exempt from (1), and only from it: a route whose job is
  * to *resolve* a tenant cannot be made to have one first
- * ({@link TenantAgnostic}). Neither of the other two is waived there — being
+ * ({@link TenantAgnostic}). None of the other three is waived there — being
  * tenant-agnostic is not permission to carry someone else's session, nor to be
- * served on a door this process serves nothing on.
+ * served on a door this process, or this tenant, serves nothing on.
  */
 @Injectable()
 export class TenantGuard implements CanActivate {
   private readonly logger = new Logger(TenantGuard.name);
 
-  constructor(private readonly reflector: Reflector) {}
+  constructor(
+    private readonly reflector: Reflector,
+    @Inject(TENANT_STATUS_STORE) private readonly store: TenantStatusStore,
+  ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
 
     const conflict = tenantConflict(request);
@@ -82,6 +106,15 @@ export class TenantGuard implements CanActivate {
       throw new NotFoundException();
     }
 
+    if (tenant && (await this.gatedOffTheConsole(tenant, request.path))) {
+      this.logger.warn(
+        `${request.method} ${request.originalUrl} refused: host ` +
+          `'${request.hostname}' is a platform subdomain of a reseller that ` +
+          `has proved no domain, and serves its console only (F-018-ag)`,
+      );
+      throw new NotFoundException();
+    }
+
     const agnostic = this.reflector.getAllAndOverride<boolean>(
       TENANT_AGNOSTIC,
       [context.getHandler(), context.getClass()],
@@ -97,5 +130,40 @@ export class TenantGuard implements CanActivate {
     }
 
     return true;
+  }
+
+  /**
+   * Is this a gated reseller's platform host, asked for something outside its
+   * console? (F-018-ag.)
+   *
+   * **The gate that is read is the one belonging to the tenant that owns the
+   * host** — `brand` when the surface's tenant is not the scoped one, which is
+   * the reseller-owner case of ADR-0059. Reading the scoped tenant instead
+   * would open the door for precisely the account most likely to be standing
+   * at it.
+   *
+   * The Redis read is paid only on a `panel` `subdomain` surface: a custom
+   * domain is the reseller's own shop and D-01 says nothing about it, and a
+   * request with no surface has no door to judge.
+   *
+   * A missing or unparseable state filters nothing — the same trade
+   * `TenantStatusGuard` makes and for the same reason: `TenantStatusListener`
+   * recomputes every tenant on each connect, so the window is a boot, and
+   * 404ing a reseller's console because Redis blinked is the worse failure.
+   */
+  private async gatedOffTheConsole(
+    tenant: NonNullable<ReturnType<typeof resolveTenant>>,
+    path: string,
+  ): Promise<boolean> {
+    if (tenant.surfacePurpose !== 'panel' || tenant.surfaceDomainType !== 'subdomain') {
+      return false;
+    }
+    if (gatedConsoleServesPath(path)) return false;
+
+    const surfaceTenantId = tenant.brand?.id ?? tenant.id;
+    const state = parseTenantStatusState(
+      await this.store.get(UnscopedRedisKeys.tenantStatus(surfaceTenantId)),
+    );
+    return state?.onboarding === true;
   }
 }

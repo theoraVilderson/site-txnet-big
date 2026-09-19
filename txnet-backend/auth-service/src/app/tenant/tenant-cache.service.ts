@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RedisKeys, RedisTtl } from '../redis/redis.keys';
 import { RedisService } from '../redis/redis.service';
-import { TenantSurfacePurpose, normalizeHost } from './tenant';
+import { TenantSurfaceDomainType, TenantSurfacePurpose, normalizeHost } from './tenant';
 
 /**
  * A tenant reduced to what resolution needs — see {@link ResolvedTenant} — plus
@@ -17,9 +17,18 @@ export type CachedTenant = { id: string; slug: string; ownerUserId: string };
  * host lookup and never with {@link TenantCacheService.byId} — a claim names a
  * tenant, and a tenant has no single purpose.
  */
-export type CachedSurface = CachedTenant & { purpose: TenantSurfacePurpose };
+export type CachedSurface = CachedTenant & {
+  purpose: TenantSurfacePurpose;
+  /**
+   * Whether the platform issued the host or the reseller proved it (F-018-ag).
+   * Cached with the purpose and for the same reason: both are facts about the
+   * door, and `byId` has no door to describe.
+   */
+  domainType: TenantSurfaceDomainType;
+};
 
 const PURPOSES: readonly string[] = ['panel', 'subscription', 'assets'];
+const DOMAIN_TYPES: readonly string[] = ['subdomain', 'custom_domain'];
 
 /**
  * The marker for "this was looked up and there is nothing", stored so a
@@ -46,9 +55,20 @@ function isTenant(value: unknown): value is CachedTenant {
   );
 }
 
-/** …and, for a host entry, a purpose this code still recognises. */
+/**
+ * …and, for a host entry, a purpose *and* a domain type this code still
+ * recognises. An entry written before F-018-ag added the second one fails the
+ * check and re-reads, exactly as a purpose-less one did — which is what
+ * carries the new field across a deploy without a filter deciding from a field
+ * that is not there.
+ */
 function isSurface(value: unknown): value is CachedSurface {
-  return isTenant(value) && PURPOSES.includes((value as CachedSurface).purpose as string);
+  const surface = value as CachedSurface;
+  return (
+    isTenant(value) &&
+    PURPOSES.includes(surface.purpose as string) &&
+    DOMAIN_TYPES.includes(surface.domainType as string)
+  );
 }
 
 /**

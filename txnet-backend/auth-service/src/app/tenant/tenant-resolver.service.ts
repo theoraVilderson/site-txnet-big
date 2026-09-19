@@ -126,6 +126,7 @@ export class TenantResolverService {
       ...own,
       via: 'session',
       surfacePurpose: surface.purpose,
+      surfaceDomainType: surface.domainType,
       brand: { id: surface.id, slug: surface.slug },
     };
   }
@@ -155,7 +156,13 @@ export class TenantResolverService {
   }
 
   private answer(surface: Surface, via: 'domain' | 'session' | 'bot'): ResolvedTenant {
-    return { id: surface.id, slug: surface.slug, via, surfacePurpose: surface.purpose };
+    return {
+      id: surface.id,
+      slug: surface.slug,
+      via,
+      surfacePurpose: surface.purpose,
+      surfaceDomainType: surface.domainType,
+    };
   }
 
   /** The tenant a `tenant_domain` row maps this host to, or `null`. */
@@ -191,7 +198,7 @@ export class TenantResolverService {
     // still resolves. What such a tenant may then *do* is a product rule and
     // belongs to F-018 — see docs/domains/tenant/open-questions.md.
     if (row && (row.domainType === 'subdomain' || row.verificationStatus === 'verified')) {
-      return { ...row.tenant, purpose: row.purpose };
+      return { ...row.tenant, purpose: row.purpose, domainType: row.domainType };
     }
     return null;
   }

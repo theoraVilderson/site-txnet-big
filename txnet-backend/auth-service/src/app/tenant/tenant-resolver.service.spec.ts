@@ -118,6 +118,7 @@ describe('TenantResolverService — which tenant a host resolves to', () => {
       ...DOMAIN_TENANT,
       via: 'domain',
       surfacePurpose: 'panel',
+      surfaceDomainType: 'subdomain',
     });
   });
 
@@ -128,6 +129,7 @@ describe('TenantResolverService — which tenant a host resolves to', () => {
       ...DOMAIN_TENANT,
       via: 'domain',
       surfacePurpose: 'panel',
+      surfaceDomainType: 'custom_domain',
     });
   });
 
@@ -162,6 +164,7 @@ describe('TenantResolverService — which tenant a host resolves to', () => {
       ...DOMAIN_TENANT,
       via: 'domain',
       surfacePurpose: 'panel',
+      surfaceDomainType: 'custom_domain',
     });
     expect(findUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { domainValue: 'myvpn.com' } }),
@@ -204,6 +207,7 @@ describe('TenantResolverService — the cache', () => {
       ...DOMAIN_TENANT,
       via: 'domain',
       surfacePurpose: 'panel',
+      surfaceDomainType: 'custom_domain',
     });
   });
 });
@@ -282,7 +286,12 @@ describe('TenantResolverService — the claim chain', () => {
       // The claim answered and the surface's purpose still travels with it:
       // `via` says which proof was used, `surfacePurpose` says which door it
       // arrived at, and F-066-q turns on the second, not the first.
-    ).resolves.toEqual({ ...DOMAIN_TENANT, via: 'session', surfacePurpose: 'panel' });
+    ).resolves.toEqual({
+      ...DOMAIN_TENANT,
+      via: 'session',
+      surfacePurpose: 'panel',
+      surfaceDomainType: 'custom_domain',
+    });
     expect(tenantById).not.toHaveBeenCalled();
   });
 });
@@ -292,6 +301,7 @@ describe("TenantResolverService — the surface tenant's owner (ADR-0059)", () =
     ...PLATFORM_TENANT,
     via: 'session',
     surfacePurpose: 'panel',
+    surfaceDomainType: 'custom_domain',
     brand: DOMAIN_TENANT,
   };
 
@@ -374,6 +384,7 @@ describe("TenantResolverService — the surface tenant's owner (ADR-0059)", () =
       ...DOMAIN_TENANT,
       via: 'domain',
       surfacePurpose: 'panel',
+      surfaceDomainType: 'custom_domain',
     });
   });
 

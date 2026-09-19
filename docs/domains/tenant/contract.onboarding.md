@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-version: 1
+version: 2
 updated: 2026-09-19
 ---
 
@@ -36,13 +36,9 @@ from a suspension by. The platform owner is never gated.
 **What it deliberately does not close.** `signIn`, `read` and `account` stay
 open, because they are the console's own and the reseller's staff sign in to
 that tenant — closing them by capability would lock a reseller out of the one
-screen that lifts the gate. So a gated reseller's `subdomain` on the platform's
-domain still answers those, which D-01 (no platform host is ever served to an
-end user) wants closed as well. That is a question of *what a host serves*, not
-of what a status allows: it belongs to `surfacePurpose`'s path allowlist
-(F-066-q) and has a row of its own, **F-018-ag** — the platform's main domain
-must not be filtered because a reseller parked its users on it (user,
-2026-09-19; `open-questions.md`).
+screen that lifts the gate. What D-01 still wants closed on a platform host is
+therefore a question of *what a host serves*, not of what a status allows, and
+it is answered below.
 
 **It is left by proving a domain, never by paying.** One `verified`,
 `panel`, `custom_domain` row lifts it (`contract.domains.md`); a
@@ -64,6 +60,54 @@ shut in Redis until the next connect.
 
 A state with no `onboarding` key is **not** onboarding: a key written before
 this row, or a reader that never learned about it, behaves exactly as before.
+
+## The door a gated reseller is served on
+
+**While the gate is on, the reseller's platform `subdomain` answers its
+configuration console and nothing else** (F-018-ag, D-01: no platform domain or
+subdomain is ever served to an end user). Code:
+`auth-service/src/app/tenant/tenant.ts` (`gatedConsoleServesPath`), enforced by
+`TenantGuard` as the fourth of its refusals.
+
+It is the seam F-066-q built, with the gate as a third input beside the
+surface's `purpose`. Resolution now answers `surfaceDomainType` as well, so the
+rule can say *platform host* at all:
+
+| the surface | while the tenant is onboarding |
+|---|---|
+| `panel` + `subdomain` — a platform-issued host | the console's paths only |
+| `panel` + `custom_domain` — the reseller's own, proved | everything, unfiltered |
+| `subscription` / `assets` | unchanged: that purpose's (empty) allowlist |
+| no surface at all — an internal caller on a container name | everything |
+
+**The gate that is read belongs to the tenant that owns the host**, which is
+`brand` when the surface's tenant is not the scoped one (ADR-0059's
+reseller-owner case) and the resolved tenant otherwise. Reading the scoped
+tenant instead would open the door for exactly the account most likely to be
+standing at it. The Redis read is `tenant:status:<surface tenant>` and is paid
+only on a `panel` `subdomain`; a missing or unparseable state filters nothing,
+the same trade `TenantStatusGuard` makes.
+
+**The platform's own main domain is never filtered** (user, 2026-09-19). It
+belongs to the platform owner, and the platform owner is never onboarding — so
+a reseller parking its end users on the platform's domain cannot cause the
+platform's own host to serve less.
+
+**What "the console's paths" means, and how it fails.** An allowlist of path
+prefixes: sign-in and recovery (`/api/auth/login|logout|refresh|session|`
+`captcha|password|otp`), the signed-in staff account (`me`, `accounts`,
+`impersonate`) and the console's own screens (`users`, `roles`, `workers`,
+`bots`). Under `bots` a narrower deny list carves out the end user's doors —
+`bots/link`, `bots/session`, `bots/webapp` — because the console rotates a
+webhook secret under the same prefix. `register` and `handoff` are simply
+absent. **A path not on the list is closed**, so a route added later is refused
+on a gated reseller's platform host until someone classifies it; that is the
+narrowest blast radius available and the side D-01 wants to fail on.
+
+The refusal is the **neutral 404**, not the gate's 403: on the platform's own
+domain a stranger must not learn that a particular reseller lives at this
+address (F-1210). `panel-web` needs the mirror of this rule and does not have
+it — the same gap F-066-q left, tracked in `open-questions.md`.
 
 ## The checklist
 
@@ -94,4 +138,4 @@ Refusals are `ResellerAccess`'s: `not_allowed` 403, `reseller_not_found` 404,
 |---|---|
 | auth-, billing-, notification-service | `TenantStatusGuard` — inherit the column through `tenantAllows`, unchanged |
 | worker-service `TenantStatusGate`, gateway-service `TenantSocketWatch` | the same state; a gated tenant's ticks and sockets follow their capability |
-| panel-web | the console itself — not built yet (F-066-*) |
+| panel-web | the console itself — not built yet (F-066-*); the door rule above has no `panel-web` mirror yet either |

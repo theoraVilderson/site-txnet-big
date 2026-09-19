@@ -25,7 +25,7 @@ the rest are `reseller`. The platform bills tenants from a prepaid wallet
 
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
-| **resolve tenant by claim** — implemented | `{host?, session?, bot?}` | `{id, slug, via, surfacePurpose?}` or `null` — `null` means *no tenant*, never a fallback | sync | `TenantClaimConflict` when a claim and its surface disagree |
+| **resolve tenant by claim** — implemented | `{host?, session?, bot?}` | `{id, slug, via, surfacePurpose?, surfaceDomainType?}` or `null` — `null` means *no tenant*, never a fallback | sync | `TenantClaimConflict` when a claim and its surface disagree |
 | **create / list / read a reseller** — implemented, [contract.admin.md](contract.admin.md) | slug, billingModel, owner | reseller view | sync tx | `not_platform_owner` / `slug_taken` / `reseller_not_found` |
 | **a platform user buys a reseller** (F-019-h) — implemented, [contract.admin.md](contract.admin.md) | packageId, billingModel, name, slug? | reseller view, `active`, first period charged from the buyer's wallet | sync tx | `already_reseller` / `insufficient_balance` / `slug_taken` |
 | **create / edit / deactivate a package; force its keys onto subscribers** — implemented, [contract.admin.md](contract.admin.md) | name, monthly/yearly price, includedFeatureKeys, isActive | package view (an added key granted to subscribers in the edit) | sync tx | `not_platform_owner` / `package_not_found` / `package_name_taken` / `package_price_in_use` / `package_unpriced` |
@@ -202,11 +202,11 @@ lives elsewhere any more than a stranger's host may (F-1210). It runs before the
 the route.
 
 **The allowlist for `subscription` and `assets` is empty in `auth-service`, and
-that is the answer rather than a gap.** Every controller this process holds is
-`/auth/*` or `/internal/*` — panel, operator and service-caller routes
-without exception. The `/sub` link catalog 13.1 names belongs to `network`,
-which has no service yet; its prefix goes into `SERVED_PATHS`
-(`app/tenant/tenant.ts`) in the same change that builds it.
+that is the answer rather than a gap.** Every controller here is `/auth/*` or
+`/internal/*` — panel, operator and service-caller routes without exception.
+The `/sub` link catalog 13.1 names belongs to `network`, which has no service
+yet; its prefix goes into `SERVED_PATHS` (`app/tenant/tenant.ts`) with it. The
+gate is the same seam's third input ([contract.onboarding.md](contract.onboarding.md), F-018-ag).
 
 **What this row does not do.** Traefik still routes by fixed host
 (`panel.$DOMAIN`, `api.$DOMAIN`), so a tenant's own domains reach nothing yet

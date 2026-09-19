@@ -18,12 +18,12 @@ import { fakeExecutionContext } from '../../test-support/execution-context';
  */
 describe('a non-panel surface serves no panel route', () => {
   describe('surfaceServesPath', () => {
-    it('serves every path on a panel surface', () => {
+    it('serves every path on a panel surface', async () => {
       expect(surfaceServesPath('panel', '/api/auth/login')).toBe(true);
       expect(surfaceServesPath('panel', '/api/auth/workers')).toBe(true);
     });
 
-    it('serves no auth-service path on a subscription surface', () => {
+    it('serves no auth-service path on a subscription surface', async () => {
       // This process has no subscription route to allow: `/sub` belongs to
       // `network`, which has no service yet. An empty allowlist is the honest
       // statement of that, not an unfinished one.
@@ -31,7 +31,7 @@ describe('a non-panel surface serves no panel route', () => {
       expect(surfaceServesPath('subscription', '/api/auth/accounts')).toBe(false);
     });
 
-    it('serves no auth-service path on an assets surface either', () => {
+    it('serves no auth-service path on an assets surface either', async () => {
       expect(surfaceServesPath('assets', '/api/auth/login')).toBe(false);
     });
   });
@@ -48,33 +48,36 @@ describe('a non-panel surface serves no panel route', () => {
     });
 
     beforeEach(() => {
-      guard = new TenantGuard({
-        getAllAndOverride: () => undefined,
-      } as unknown as Reflector);
+      // F-018-ag gave the guard a status store. Nothing in this file is a
+      // platform subdomain, so it is never read — `never` proves that.
+      guard = new TenantGuard(
+        { getAllAndOverride: () => undefined } as unknown as Reflector,
+        { get: () => Promise.reject(new Error('no state should be read here')) },
+      );
       warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     });
 
     afterEach(() => vi.restoreAllMocks());
 
-    it('lets a panel surface through', () => {
+    it('lets a panel surface through', async () => {
       const { context } = fakeExecutionContext({
         extra: { tenant: on('panel', 'domain') },
         url: '/api/auth/login',
       });
 
-      expect(guard.canActivate(context)).toBe(true);
+      await expect(guard.canActivate(context)).resolves.toBe(true);
     });
 
-    it('refuses a panel route on a subscription surface', () => {
+    it('refuses a panel route on a subscription surface', async () => {
       const { context } = fakeExecutionContext({
         extra: { tenant: on('subscription', 'domain') },
         url: '/api/auth/login',
       });
 
-      expect(() => guard.canActivate(context)).toThrow(NotFoundException);
+      await expect(guard.canActivate(context)).rejects.toThrow(NotFoundException);
     });
 
-    it('refuses it just the same when a session resolved the tenant', () => {
+    it('refuses it just the same when a session resolved the tenant', async () => {
       // The restriction is the surface's, not the claim's. A resolved session
       // on its own tenant's subscription domain is the case that reading `via`
       // would wave through.
@@ -83,10 +86,10 @@ describe('a non-panel surface serves no panel route', () => {
         url: '/api/auth/accounts',
       });
 
-      expect(() => guard.canActivate(context)).toThrow(NotFoundException);
+      await expect(guard.canActivate(context)).rejects.toThrow(NotFoundException);
     });
 
-    it('keeps that 404 as neutral as the unknown-host one', () => {
+    it('keeps that 404 as neutral as the unknown-host one', async () => {
       // Same bare NotFoundException, so `sanitizeError` lands it as the
       // generic `system.notFound`. A subscription domain must not tell a
       // stranger that a panel exists elsewhere (F-1210).
@@ -95,15 +98,12 @@ describe('a non-panel surface serves no panel route', () => {
         url: '/api/auth/login',
       });
 
-      try {
-        guard.canActivate(context);
-        expect.unreachable('expected a refusal');
-      } catch (error) {
-        expect((error as NotFoundException).message).toBe('Not Found');
-      }
+      await expect(guard.canActivate(context)).rejects.toMatchObject({
+        message: 'Not Found',
+      });
     });
 
-    it('leaves a request with no surface alone', () => {
+    it('leaves a request with no surface alone', async () => {
       // An internal caller reaches `auth-service:3001`, which no
       // `tenant_domain` row names: there is no surface, so there is no
       // purpose to enforce and the claim answers on its own.
@@ -112,23 +112,24 @@ describe('a non-panel surface serves no panel route', () => {
         url: '/api/internal/vault/use',
       });
 
-      expect(guard.canActivate(context)).toBe(true);
+      await expect(guard.canActivate(context)).resolves.toBe(true);
       expect(warn).not.toHaveBeenCalled();
     });
 
-    it('refuses a tenant-agnostic route on a subscription surface', () => {
+    it('refuses a tenant-agnostic route on a subscription surface', async () => {
       // Being tenant-agnostic says the route resolves a tenant rather than
       // requiring one. It is not permission to be served on a door that
       // serves no route of this process at all.
-      const agnostic = new TenantGuard({
-        getAllAndOverride: () => true,
-      } as unknown as Reflector);
+      const agnostic = new TenantGuard(
+        { getAllAndOverride: () => true } as unknown as Reflector,
+        { get: () => Promise.reject(new Error('no state should be read here')) },
+      );
       const { context } = fakeExecutionContext({
         extra: { tenant: on('subscription', 'domain') },
         url: '/api/internal/bot-integrations/token',
       });
 
-      expect(() => agnostic.canActivate(context)).toThrow(NotFoundException);
+      await expect(agnostic.canActivate(context)).rejects.toThrow(NotFoundException);
     });
   });
 });
