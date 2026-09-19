@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, Check, CheckCircle2, Clock, Copy, Loader2, RefreshCw, XCircle, type LucideIcon } from "lucide-react";
+import Link from "next/link";
+import { AlertCircle, ArrowRight, Check, CheckCircle2, Clock, Copy, Loader2, RefreshCw, XCircle, type LucideIcon } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { authApi } from "@/lib/auth-api";
+import { myResellerConsolePath } from "@/lib/routes";
 import { resellerDomainsApi, type DomainPurpose, type DomainStatus, type ResellerDomain } from "@/lib/tenant-api";
 import { Select } from "../../../../_components/kit/Select";
 import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
@@ -95,6 +97,10 @@ export function ResellerDomainsView({ id }: { id: string }) {
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
       <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
+          <Link href={myResellerConsolePath(id)} className={`${quietButton} mb-2 -ms-2`}>
+            <ArrowRight size={12} className="ltr:rotate-180" aria-hidden />
+            {t("common", K.backToConsole)}
+          </Link>
           <h1 className="text-2xl font-bold text-text-primary md:text-3xl">
             {slug ? t("common", K.title, { slug }) : t("common", K.titlePlain)}
           </h1>

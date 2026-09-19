@@ -178,4 +178,4 @@ Refusals are `ResellerAccess`'s: `not_allowed` 403, `reseller_not_found` 404,
 |---|---|
 | auth-, billing-, notification-service | `TenantStatusGuard` — inherit the column through `tenantAllows`, unchanged |
 | worker-service `TenantStatusGate`, gateway-service `TenantSocketWatch` | the same state; a gated tenant's ticks and sockets follow their capability |
-| panel-web | the console itself — not built yet (F-066-*); the door rule above has no `panel-web` mirror yet either |
+| panel-web | the checklist, on `/my-resellers/:id` (F-066-w, `resellerOnboardingApi`); the door rule through `GET /api/auth/door` (F-066-x) |

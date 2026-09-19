@@ -6,7 +6,7 @@ version: 20
 updated: 2026-09-19
 ---
 
-# Contract — panel-web: resellers (F-018-k, F-019-k, F-019-i, F-066-w2)
+# Contract — panel-web: resellers (F-018-k, F-019-k, F-019-i, F-066-w2, F-066-w)
 
 A topic file of [contract.md](contract.md) (§10). Three pages under
 `(panel)/resellers/`, each a server shell over a client view:
@@ -151,12 +151,12 @@ configured from the platform's panel — by its owner before it has a domain,
 by a staff seat of it, or by platform support. Not under `/resellers`: that is
 the platform owner's administration, and this is the reseller's own. Each
 screen calls a route that names the reseller (`/api/tenants/:id/...`,
-`/api/<service>/tenants/:id/...`), never an ambient one. Today it has one
-screen; the console (F-066-w) and the gateway, bot and catalog screens
-(w4, w6, w8) join it.
+`/api/<service>/tenants/:id/...`), never an ambient one. The console is its
+front page; the gateway, bot and catalog screens (w4, w6, w8) join it.
 
 | page | route | files |
 |---|---|---|
+| its console | `/my-resellers/[id]` (`myResellerConsolePath`) | `my-resellers/[id]/_components/OnboardingConsoleView.tsx`, rules `my-resellers/_lib/onboarding.ts` |
 | its domains | `/my-resellers/[id]/domains` (`myResellerDomainsPath`) | `my-resellers/[id]/domains/_components/ResellerDomainsView.tsx`, rules `my-resellers/_lib/domains.ts` |
 
 Its calls are `resellerDomainsApi` (`lib/tenant-api.ts`): list, add, check —
@@ -165,8 +165,8 @@ A purchase's last step links here (`BuyResellerView`, "add your domain").
 
 18. **No permission is judged by the page.** tenant-service admits the owner,
     a staff seat with `tenant.manage` or platform support (invariant 21); the
-    page makes its calls and shows the refusal's sentence. It has no menu
-    entry of its own until the console (F-066-w) gives the workspace one.
+    page makes its calls and shows the refusal's sentence. The domains screen
+    links back to the console.
 19. **One sentence per refusal** (`DOMAIN_REFUSAL_KEYS`, namespace
     `common.resellerDomains`): shared-core's `ResellerAccessRejection` plus
     tenant-service's `DomainRejection`, both read from source by the spec, as
@@ -183,3 +183,27 @@ A purchase's last step links here (`BuyResellerView`, "add your domain").
     target, the last check's lines — expected and found — are the view's, as
     they came. Each record's name and value has a copy button; the CNAME's name
     is the domain itself.
+
+### The console (F-066-w)
+
+`resellerOnboardingApi.get` over `GET /api/tenants/:id/onboarding` — every rule
+behind it is [tenant/contract.onboarding.md](../../domains/tenant/contract.onboarding.md)
+"The checklist".
+
+23. **The gate is said, not one step of four** (`splitSteps`, `consoleState`).
+    The step the route marks `gate: true` stands alone under "required to
+    open"; the rest are "recommended" and say they block nothing — a reseller
+    opens with no bot. Closed/open is read from `onboarding`, never from
+    `complete`.
+24. **Not a suspension.** While gated, the page lists the route's `closed`
+    capabilities (`CLOSED_CAPABILITY_KEYS`, test-held to shared-core's
+    `TenantOnboardingPolicy`) in the gate's own tone, and says it is not a
+    suspension — it is the `tenantOnboarding` refusal the reseller's users get.
+25. **A step links only to its workspace screen** (`stepHref`). Never the
+    ambient `/gateways` or `/catalog`: they configure the session's tenant, the
+    platform's (ADR-0064). Until w4, w6, w8 ship, those steps link nothing.
+26. **Reached from the sidebar.** "My reseller panel" (`ResellerPanelButton`)
+    tries the handoff; an answered refusal — the reseller has no panel host —
+    opens the console instead. Only an unreachable service leaves the visitor
+    where they were. Refusals: `ONBOARDING_REFUSAL_KEYS`, namespace
+    `common.resellerOnboarding`, read from `ResellerAccessRejection`.

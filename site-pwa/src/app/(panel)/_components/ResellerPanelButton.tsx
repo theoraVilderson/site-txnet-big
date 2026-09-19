@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Store } from "lucide-react";
 import { CollapsedTooltip } from "./CollapsedTooltip";
 import { authApi } from "@/lib/auth-api";
 import { useLocale } from "@/context/LocaleContext";
-import { AUTH_HANDOFF } from "@/lib/routes";
+import { ApiError } from "@/lib/api-error";
+import { AUTH_HANDOFF, myResellerConsolePath } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 /** The `common` namespace as generated constants (F-083, C-06). */
@@ -22,11 +24,18 @@ type Reseller = { id: string; slug: string };
  * domain spends it at `AUTH_HANDOFF`. The code rides in the fragment, which no
  * request, log line or `Referer` carries.
  *
+ * A reseller with no panel domain of its own has nowhere to be handed to, and
+ * the handoff refuses it (`auth.handoffRefused`). The entry then opens its
+ * onboarding console on this panel instead (F-066-w, ADR-0064 (4)) — which is
+ * where such a reseller is configured. Only an answer that never arrived
+ * leaves the visitor where they were.
+ *
  * Renders nothing for a caller who owns no reseller, and nothing if the list
  * cannot be read: it is a shortcut, never a reason to break the sidebar.
  */
 export function ResellerPanelButton({ collapsed = false }: { collapsed?: boolean }) {
   const { t } = useLocale();
+  const router = useRouter();
   const [resellers, setResellers] = useState<Reseller[]>([]);
   const [pending, setPending] = useState<string | null>(null);
 
@@ -46,8 +55,9 @@ export function ResellerPanelButton({ collapsed = false }: { collapsed?: boolean
     try {
       const { origin, code } = await authApi.issueHandoff(reseller.id);
       window.location.assign(`${origin}${AUTH_HANDOFF}#${code}`);
-    } catch {
+    } catch (e) {
       setPending(null);
+      if (e instanceof ApiError && !e.unreachable) router.push(myResellerConsolePath(reseller.id));
     }
   };
 

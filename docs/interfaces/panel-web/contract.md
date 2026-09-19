@@ -87,7 +87,8 @@ account this browser is, plus the group). `/accounts/add` — adding an account
 to the switch group, its two tabs being the two proofs `auth-api` accepts.
 `/auth/handoff` (F-061-f) — a reseller's domain spends the single-use code in
 the fragment (`POST /auth/handoff/redeem`), then goes to `PANEL_HOME`; the
-sidebar footer's `ResellerPanelButton` mints it, one entry per owned reseller.
+sidebar footer's `ResellerPanelButton` mints it, one entry per owned reseller;
+a refused handoff (no panel domain yet) opens that reseller's console instead (F-066-w).
 
 The account-creation screen is `/auth/register`. It was `/auth/signup` until
 2026-09-07, and it is the only place the platform ever called it that —

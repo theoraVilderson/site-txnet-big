@@ -1600,6 +1600,65 @@
       "domain_not_found": "That domain no longer exists. Reload the list.",
       "domain_taken": "That domain is already in use.",
       "domain_reserved": "That is one of the platform's own addresses. Use a domain of your own."
+    },
+    "backToConsole": "Back to setup"
+  },
+  "resellerOnboarding": {
+    "title": "Set up {{slug}}",
+    "titlePlain": "Set up your reseller",
+    "subtitle": "What your reseller still needs, and the screen that finishes each step.",
+    "refresh": "Refresh",
+    "reload": "Try again",
+    "state": {
+      "closed": {
+        "title": "Your reseller is not open to customers yet",
+        "body": "Until a domain of your own is verified, your customers cannot:",
+        "note": "This is not a suspension. Your account is fine, and you can set everything up here; only the domain decides when customers get in."
+      },
+      "open": {
+        "title": "Your reseller is open",
+        "body": "Customers can sign up and buy on your domain. The steps below are recommended — none of them closes anything."
+      },
+      "complete": {
+        "title": "Everything is set up",
+        "body": "Your domain, payment gateway, bot and prices are all in place."
+      }
+    },
+    "closed": {
+      "register": "sign up",
+      "sell": "buy a service",
+      "endUserDeposit": "top up their wallet",
+      "subscriptionLink": "open their subscription links"
+    },
+    "required": "Required to open",
+    "recommended": "Recommended next — these do not block opening",
+    "steps": {
+      "domain": {
+        "title": "Connect your own domain",
+        "hint": "Add a panel domain and publish its two DNS records. Once it is verified, your reseller opens."
+      },
+      "gateway": {
+        "title": "Connect a payment gateway",
+        "hint": "So customers can pay you directly."
+      },
+      "bot": {
+        "title": "Connect your bot",
+        "hint": "A Telegram or Bale bot under your own brand."
+      },
+      "pricing": {
+        "title": "Have something to sell",
+        "hint": "A priced product of your own, or one from the platform's catalog."
+      }
+    },
+    "done": "Done",
+    "todo": "Not done yet",
+    "open": "Go to this step",
+    "notYet": "The screen for this step is on its way.",
+    "refusals": {
+      "not_allowed": "You are not allowed to set up this reseller.",
+      "reseller_not_found": "This reseller does not exist.",
+      "reseller_suspended": "This reseller is suspended.",
+      "reseller_terminated": "This reseller has been terminated."
     }
   }
 }

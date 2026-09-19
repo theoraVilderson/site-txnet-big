@@ -87,6 +87,12 @@ export const PANEL_RESELLER_PURCHASE = `${PANEL_RESELLERS}/buy`;
  * owner's administration.
  */
 export const PANEL_MY_RESELLERS = "/my-resellers";
+/**
+ * A reseller's onboarding console (F-066-w): the checklist, and what stays
+ * closed until a domain is proved. The workspace's first screen — the
+ * sidebar's "my reseller panel" opens it for a reseller with no panel domain.
+ */
+export const myResellerConsolePath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}`;
 /** A reseller's custom domains: add one, the records to publish, "check now" (F-066-w2). */
 export const myResellerDomainsPath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}/domains`;
 /** Payments the gateway has not confirmed, for a person to settle (F-093-n). */
