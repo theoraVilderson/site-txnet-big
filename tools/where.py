@@ -655,13 +655,29 @@ def fmt(c: dict, q_toks) -> list[str]:
             L.append(f"    code    … {len(found) - 4} more under {c['source'][0]}")
         for m in missing:
             L.append(f"    code    {m}   (!! nothing matches)")
-    if c.get("spec"):
+    if has_spec(c):
         L.append(f"    spec    {c['spec']}   ->  python3 tools/spec.py {c['spec']}")
     if c.get("text"):
         L.append(f"    what    {c['text'][:96]}")
     if c.get("note"):
         L.append(f"    note    {c['note'][:96]}")
     return L
+
+
+NO_SPEC = {"", "—", "-", "–", "n/a"}
+
+
+def has_spec(c: dict) -> bool:
+    """
+    Whether this row names a catalog id worth resolving.
+
+    A `spec` column is a dash when the row has no catalog feature behind it —
+    F-019-h/i are the platform's own, decided in ADR-0061 rather than written
+    in the catalog. Printing `python3 tools/spec.py —` for those invites a
+    session to run it, get nothing, and go looking for the id in the catalog
+    itself, which is the one file it must never open.
+    """
+    return str(c.get("spec") or "").strip().lower() not in NO_SPEC
 
 
 def next_steps(top: dict) -> list[str]:
@@ -676,7 +692,7 @@ def next_steps(top: dict) -> list[str]:
                         doc = str(cand.relative_to(ROOT))
         if doc:
             out.append(f"  1. read {doc}  (tier 1), then its contract.md + invariants.md")
-    if top.get("spec"):
+    if has_spec(top):
         out.append(f"  2. python3 tools/spec.py {top['spec']}")
     out.append("  3. edit only the code paths above. Do not open docs/features/App-Features.md.")
     return out
