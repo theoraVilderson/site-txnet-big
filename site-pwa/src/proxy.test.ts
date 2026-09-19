@@ -7,6 +7,11 @@ import { NextRequest } from 'next/server';
 import { proxy, REFRESH_COOKIE } from './proxy';
 import { PANEL_HOME } from '@/lib/routes';
 import { ProxyHeaders } from '@/generated/wire';
+import { doorServes } from '@/lib/door';
+
+// The door is `door.test.ts`'s subject; here it is open unless a test closes it.
+vi.mock('@/lib/door', () => ({ doorServes: vi.fn() }));
+const doorMock = vi.mocked(doorServes);
 
 const ORIGIN = 'http://auth-service:3000';
 
@@ -39,6 +44,7 @@ beforeEach(() => {
   vi.stubEnv('AUTH_SERVICE_ORIGIN', ORIGIN);
   fetchMock = vi.fn();
   vi.stubGlobal('fetch', fetchMock);
+  doorMock.mockReset().mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -323,5 +329,40 @@ describe('set-cookie forwarding', () => {
     const response = await proxy(requestFor('/auth/login', SIGNED_IN));
 
     expect(response?.headers.getSetCookie()).toHaveLength(2);
+  });
+});
+
+describe('a host that serves no panel (F-066-x)', () => {
+  it.each([
+    ['the login form', '/auth/login', SIGNED_IN],
+    ['the panel home', '/', undefined],
+    ['the old signup path, before its redirect', '/auth/signup', undefined],
+  ])('renders nothing for %s', async (_label, path, cookie) => {
+    doorMock.mockResolvedValue(false);
+    const response = await proxy(requestFor(path, cookie));
+
+    expect(response?.status).toBe(404);
+    expect(await response?.text()).toBe('Not Found');
+    expect(response?.headers.get('location')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("asks about the visitor's host, on the internal hop", async () => {
+    await proxy(
+      new NextRequest('https://panel.example.com/wallet', {
+        headers: { [ProxyHeaders.forwardedHost]: 'acme.txnet.example' },
+      }),
+    );
+    expect(doorMock).toHaveBeenCalledWith('acme.txnet.example', ORIGIN, true);
+  });
+
+  it('asks through the page origin when no internal one is set', async () => {
+    vi.stubEnv('AUTH_SERVICE_ORIGIN', '');
+    await proxy(requestFor('/wallet'));
+    expect(doorMock).toHaveBeenCalledWith(
+      'panel.example.com',
+      'https://panel.example.com',
+      false,
+    );
   });
 });

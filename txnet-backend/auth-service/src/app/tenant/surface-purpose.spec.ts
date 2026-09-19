@@ -3,6 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { Logger, NotFoundException } from '@nestjs/common';
 import { TenantGuard } from './tenant.guard';
 import { surfaceServesPath } from './tenant';
+import { TENANT_AGNOSTIC } from './tenant-agnostic.decorator';
 import { fakeExecutionContext } from '../../test-support/execution-context';
 
 /**
@@ -121,7 +122,7 @@ describe('a non-panel surface serves no panel route', () => {
       // requiring one. It is not permission to be served on a door that
       // serves no route of this process at all.
       const agnostic = new TenantGuard(
-        { getAllAndOverride: () => true } as unknown as Reflector,
+        { getAllAndOverride: (key: string) => key === TENANT_AGNOSTIC || undefined } as unknown as Reflector,
         { get: () => Promise.reject(new Error('no state should be read here')) },
       );
       const { context } = fakeExecutionContext({

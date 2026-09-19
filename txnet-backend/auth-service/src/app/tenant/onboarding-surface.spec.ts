@@ -7,18 +7,21 @@ import {
   type TenantStatusStore,
 } from '@txnet-backend/shared-core';
 import { TenantGuard } from './tenant.guard';
-import { gatedConsoleServesPath } from './tenant';
+import { DoorController } from './door.controller';
+import { DOOR_PROBE } from './door';
+import { TENANT_AGNOSTIC } from './tenant-agnostic.decorator';
 import { fakeExecutionContext } from '../../test-support/execution-context';
 
 /**
- * A gated reseller's platform subdomain serves its configuration console and
- * nothing an end user would use (F-018-ag, D-01).
+ * A gated reseller's platform subdomain serves **nothing, to anyone** — its end
+ * users and the reseller itself alike (F-066-x, user 2026-09-19; D-01). The
+ * reseller configures from the platform's own panel, where its owner's account
+ * already lives (ADR-0059), until a domain of its own is proved.
  *
- * F-018-l closes `register` / `sell` / `endUserDeposit` / `subscriptionLink`
- * by capability, and deliberately leaves `signIn` / `read` / `account` open —
- * closing those would lock the reseller's own staff out of the one screen that
- * lifts the gate. So the remainder of D-01 is a question about the *door*, and
- * it is answered where F-066-q already answers one: the surface.
+ * F-018-ag served the reseller's console there and closed only the end user's
+ * paths. The user closed the rest: a platform host a reseller can use is a
+ * platform host it can hand its customers, and a filter on the platform's name
+ * then takes them all down together.
  *
  * The two things that would break silently:
  *
@@ -32,99 +35,56 @@ import { fakeExecutionContext } from '../../test-support/execution-context';
  *    because the platform owner is never onboarding — so this asserts the
  *    filter is off for an un-gated tenant on the same kind of door, which is
  *    the only thing this layer can assert.
+ *
+ * `GET /api/auth/door` is the panel's half of the same rule (F-066-x): the page
+ * is served by another deployable, which asks here before it renders. It must
+ * *answer* on the doors it reports closed, so it is the one route those
+ * refusals skip.
  */
-describe("a gated reseller's platform subdomain serves only its console", () => {
-  describe('gatedConsoleServesPath', () => {
-    it("serves the console's own door", () => {
-      // Sign-in stays open: the gate is left by configuring, and the staff
-      // have to get in to configure. This is the case a capability could not
-      // express, which is why the rule is a path one.
-      expect(gatedConsoleServesPath('/api/auth/login/password')).toBe(true);
-      expect(gatedConsoleServesPath('/api/auth/refresh')).toBe(true);
-      expect(gatedConsoleServesPath('/api/auth/captcha/challenge')).toBe(true);
-      expect(gatedConsoleServesPath('/api/auth/password/forgot')).toBe(true);
-    });
+describe("a gated reseller's platform subdomain serves nothing", () => {
+  const store = (state: Record<string, boolean>): TenantStatusStore => ({
+    get: (key: string) =>
+      Promise.resolve(
+        key in state
+          ? serializeTenantStatusState({
+              status: 'trial',
+              graceEndsAt: null,
+              onboarding: state[key],
+            })
+          : null,
+      ),
+  });
 
-    it("serves the console's own screens", () => {
-      expect(gatedConsoleServesPath('/api/auth/roles')).toBe(true);
-      expect(gatedConsoleServesPath('/api/auth/users')).toBe(true);
-      expect(gatedConsoleServesPath('/api/auth/workers/dead-letters')).toBe(true);
-      expect(gatedConsoleServesPath('/api/auth/me')).toBe(true);
-    });
+  const gated = (tenantId: string) => ({
+    [UnscopedRedisKeys.tenantStatus(tenantId)]: true,
+  });
 
-    it('serves no end-user door', () => {
-      // A bot-link session minted on the platform's own subdomain is D-01
-      // happening, spelled in full: an end user served a platform host.
-      expect(gatedConsoleServesPath('/api/auth/bots/link/resolve')).toBe(false);
-      expect(gatedConsoleServesPath('/api/auth/bots/session')).toBe(false);
-      expect(gatedConsoleServesPath('/api/auth/bots/webapp/session')).toBe(false);
-      expect(gatedConsoleServesPath('/api/auth/handoff')).toBe(false);
-    });
-
-    it("still serves the console's own route under the same prefix", () => {
-      // `/api/auth/bots` is both: the console rotates a webhook secret there
-      // and an end user signs in there. The narrower deny list is what keeps
-      // one from closing the other.
-      expect(
-        gatedConsoleServesPath('/api/auth/bots/telegram/shopbot/webhook/rotate'),
-      ).toBe(true);
-    });
-
-    it('closes a path it has never heard of', () => {
-      // Deny by default, and that is the side to fail on: a route added next
-      // year is closed on a gated reseller's platform host — the narrowest
-      // blast radius there is — until someone classifies it.
-      expect(gatedConsoleServesPath('/api/auth/something-new')).toBe(false);
-      expect(gatedConsoleServesPath('/api/internal/otp/deliver')).toBe(false);
-    });
-
-    it('never matches a longer sibling of an allowed prefix', () => {
-      expect(gatedConsoleServesPath('/api/auth/sessions-of-everyone')).toBe(false);
-      expect(gatedConsoleServesPath('/api/auth/registered-users')).toBe(false);
-    });
-
-    it('closes registration here too, as a 404 rather than the 403', () => {
-      // F-018-l already refuses it by capability. On a platform host the
-      // neutral 404 is the better answer: a stranger is not told that a
-      // reseller lives at this address at all (F-1210).
-      expect(gatedConsoleServesPath('/api/auth/register')).toBe(false);
-    });
+  const on = (extra: Record<string, unknown> = {}) => ({
+    id: 'reseller-b',
+    slug: 'reseller-b',
+    via: 'domain',
+    surfacePurpose: 'panel',
+    surfaceDomainType: 'subdomain',
+    ...extra,
   });
 
   describe('TenantGuard', () => {
     let warn: MockInstance;
 
-    const store = (state: Record<string, boolean>): TenantStatusStore => ({
-      get: (key: string) =>
-        Promise.resolve(
-          key in state
-            ? serializeTenantStatusState({
-                status: 'trial',
-                graceEndsAt: null,
-                onboarding: state[key],
-              })
-            : null,
-        ),
-    });
-
-    const guardWith = (state: Record<string, boolean>, agnostic = false) =>
+    /** A reflector that answers only for the metadata keys it is given. */
+    const guardWith = (
+      state: Record<string, boolean>,
+      marks: { agnostic?: boolean; probe?: boolean } = {},
+    ) =>
       new TenantGuard(
-        { getAllAndOverride: () => (agnostic ? true : undefined) } as unknown as Reflector,
+        {
+          getAllAndOverride: (key: string) =>
+            (key === TENANT_AGNOSTIC && marks.agnostic) ||
+            (key === DOOR_PROBE && marks.probe) ||
+            undefined,
+        } as unknown as Reflector,
         store(state),
       );
-
-    const gated = (tenantId: string) => ({
-      [UnscopedRedisKeys.tenantStatus(tenantId)]: true,
-    });
-
-    const on = (extra: Record<string, unknown> = {}) => ({
-      id: 'reseller-b',
-      slug: 'reseller-b',
-      via: 'domain',
-      surfacePurpose: 'panel',
-      surfaceDomainType: 'subdomain',
-      ...extra,
-    });
 
     beforeEach(() => {
       warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
@@ -132,20 +92,18 @@ describe("a gated reseller's platform subdomain serves only its console", () => 
 
     afterEach(() => vi.restoreAllMocks());
 
-    it("serves the console on a gated reseller's subdomain", async () => {
-      const { context } = fakeExecutionContext({
-        extra: { tenant: on() },
-        url: '/api/auth/login/password',
-      });
-
-      await expect(guardWith(gated('reseller-b')).canActivate(context)).resolves.toBe(true);
-    });
-
-    it('refuses an end-user door on it', async () => {
-      const { context } = fakeExecutionContext({
-        extra: { tenant: on() },
-        url: '/api/auth/bots/webapp/session',
-      });
+    it.each([
+      // The console's own door and screens: closed now too (F-066-x).
+      ['/api/auth/login/password'],
+      ['/api/auth/refresh'],
+      ['/api/auth/roles'],
+      ['/api/auth/me'],
+      // The end user's doors, as before.
+      ['/api/auth/register'],
+      ['/api/auth/bots/webapp/session'],
+      ['/api/auth/handoff'],
+    ])("refuses %s on a gated reseller's subdomain", async (url) => {
+      const { context } = fakeExecutionContext({ extra: { tenant: on() }, url });
 
       await expect(guardWith(gated('reseller-b')).canActivate(context)).rejects.toThrow(
         NotFoundException,
@@ -155,7 +113,7 @@ describe("a gated reseller's platform subdomain serves only its console", () => 
     it('keeps that refusal as neutral as the unknown-host one', async () => {
       const { context } = fakeExecutionContext({
         extra: { tenant: on() },
-        url: '/api/auth/bots/webapp/session',
+        url: '/api/auth/login/password',
       });
 
       await expect(
@@ -169,7 +127,7 @@ describe("a gated reseller's platform subdomain serves only its console", () => 
       // reseller's, so the reseller's gate decides.
       const { context } = fakeExecutionContext({
         extra: { tenant: on({ id: 'owner-own', brand: { id: 'reseller-b', slug: 'reseller-b' } }) },
-        url: '/api/auth/bots/link/resolve',
+        url: '/api/auth/me',
       });
 
       await expect(guardWith(gated('reseller-b')).canActivate(context)).rejects.toThrow(
@@ -225,7 +183,7 @@ describe("a gated reseller's platform subdomain serves only its console", () => 
     it('filters nothing when the state is missing or unreadable', async () => {
       // The same trade `TenantStatusGuard` makes: the listener recomputes
       // every tenant on each connect, so a missing key is a boot window and
-      // not a reason to 404 a reseller's console.
+      // not a reason to 404 a reseller's door.
       const { context } = fakeExecutionContext({
         extra: { tenant: on() },
         url: '/api/auth/bots/webapp/session',
@@ -243,8 +201,79 @@ describe("a gated reseller's platform subdomain serves only its console", () => 
       });
 
       await expect(
-        guardWith(gated('reseller-b'), true).canActivate(context),
+        guardWith(gated('reseller-b'), { agnostic: true }).canActivate(context),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('lets the door question through on the door it reports closed', async () => {
+      const { context } = fakeExecutionContext({
+        extra: { tenant: on() },
+        url: '/api/auth/door',
+      });
+
+      await expect(
+        guardWith(gated('reseller-b'), { probe: true }).canActivate(context),
+      ).resolves.toBe(true);
+    });
+
+    it('lets it through on a subscription domain too', async () => {
+      const { context } = fakeExecutionContext({
+        extra: { tenant: on({ surfacePurpose: 'subscription' }) },
+        url: '/api/auth/door',
+      });
+
+      await expect(guardWith({}, { probe: true }).canActivate(context)).resolves.toBe(true);
+    });
+
+    it('still refuses the door question on a host that resolves to no tenant', async () => {
+      // An unregistered host keeps F-066-u's answer — the neutral 404 — and
+      // the panel reads that 404 as "nothing to mirror".
+      const { context } = fakeExecutionContext({ url: '/api/auth/door' });
+
+      await expect(guardWith({}, { probe: true }).canActivate(context)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('GET /api/auth/door', () => {
+    const ask = (tenant: Record<string, unknown>, state: Record<string, boolean> = {}) =>
+      new DoorController(store(state)).door({ tenant } as never);
+
+    it("answers closed on a gated reseller's platform subdomain", async () => {
+      await expect(ask(on(), gated('reseller-b'))).resolves.toMatchObject({
+        ok: true,
+        data: { serves: false },
+      });
+    });
+
+    it('reads the gate of the tenant that owns the host', async () => {
+      const owner = on({ id: 'owner-own', brand: { id: 'reseller-b', slug: 'reseller-b' } });
+      await expect(ask(owner, gated('reseller-b'))).resolves.toMatchObject({
+        data: { serves: false },
+      });
+    });
+
+    it.each([['subscription'], ['assets']])('answers closed on a %s domain', async (purpose) => {
+      await expect(ask(on({ surfacePurpose: purpose }))).resolves.toMatchObject({
+        data: { serves: false },
+      });
+    });
+
+    it('answers open once the reseller is no longer gated', async () => {
+      await expect(
+        ask(on(), { [UnscopedRedisKeys.tenantStatus('reseller-b')]: false }),
+      ).resolves.toMatchObject({ data: { serves: true } });
+    });
+
+    it("answers open on a reseller's own custom domain", async () => {
+      await expect(
+        ask(on({ surfaceDomainType: 'custom_domain' }), gated('reseller-b')),
+      ).resolves.toMatchObject({ data: { serves: true } });
+    });
+
+    it('answers open when the gate state is missing', async () => {
+      await expect(ask(on())).resolves.toMatchObject({ data: { serves: true } });
     });
   });
 });

@@ -101,5 +101,5 @@ lookup that errors (not "no record") is a sweep `error` and changes nothing.
 | Consumer | Uses |
 |---|---|
 | `automation` (`tenant_domain_verification` job, seeded `*/5`) | `check-due` |
-| panel-web | none yet — the onboarding console's checklist is `GET /api/tenants/:id/onboarding` (F-018-l) |
+| panel-web | the onboarding console's checklist is `GET /api/tenants/:id/onboarding` (F-018-l), on the platform's own panel — a gated reseller's platform subdomain serves nothing (F-066-x) |
 | `auth-api` resolver, `billing` callback / return address | read `verified` only; unchanged |

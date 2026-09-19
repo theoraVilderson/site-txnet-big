@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { Cookies, ProxyHeaders } from "@/generated/wire";
 import { AUTH_LOGIN, AUTH_REGISTER, PANEL_HOME } from "@/lib/routes";
 import { visitorHost as hostOfVisitor } from "@/lib/visitor-host";
+import { doorServes } from "@/lib/door";
 
 /**
  * Auth screens a signed-in visitor has no business seeing. `forgot-password` is
@@ -113,6 +114,22 @@ function isGuarded(pathname: string): boolean {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // First, before any other answer: a host that serves no panel gets nothing
+  // from this app — not a redirect, not the login form (F-066-x, D-01). The
+  // body is as bare as auth-service's own neutral 404, so a closed door looks
+  // like no door.
+  const host = visitorHost(request);
+  if (host) {
+    const origin = authServiceOrigin(request);
+    const internal = origin !== request.nextUrl.origin;
+    if (!(await doorServes(host, origin, internal))) {
+      return new NextResponse("Not Found", {
+        status: 404,
+        headers: { "content-type": "text/plain; charset=utf-8" },
+      });
+    }
+  }
+
   // Before the session check, not after: this is a rename, not an auth
   // question. A signed-in visitor is redirected here and then guarded on
   // `/auth/register`, so asking auth-service first would be a wasted round
@@ -136,7 +153,6 @@ export async function proxy(request: NextRequest) {
   // Only on the internal hop. When the call goes back out through the page's
   // own origin, Traefik forwards the real host itself, and a second answer that
   // can disagree with the URL is worth avoiding.
-  const host = visitorHost(request);
   if (host && origin !== request.nextUrl.origin) {
     headers[ProxyHeaders.forwardedHost] = host;
   }

@@ -5,6 +5,7 @@ import { RedisService } from '../redis/redis.service';
 import { TenantCacheService } from './tenant-cache.service';
 import { TenantResolverService } from './tenant-resolver.service';
 import { TenantGuard } from './tenant.guard';
+import { DoorController } from './door.controller';
 
 /**
  * Request-tenant resolution, which is authentication (ADR-0058 (2)). Tenant
@@ -27,10 +28,15 @@ import { TenantGuard } from './tenant.guard';
  * status decides what the route may do, from the key `tenant-service`'s
  * `TenantStatusListener` writes. This service only reads it, like every other.
  *
+ * `DoorController` is the panel's half of the door rules (F-066-x): it lives
+ * here because it answers from the same resolution and the same gate read as
+ * `TenantGuard`.
+ *
  * `PrismaModule` and `RedisModule` are both `@Global`, so neither is imported
  * here.
  */
 @Module({
+  controllers: [DoorController],
   providers: [
     TenantCacheService,
     TenantResolverService,

@@ -9,19 +9,13 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
-import {
-  gatedConsoleServesPath,
-  resolveTenant,
-  surfaceServesPath,
-  tenantConflict,
-} from './tenant';
+import { resolveTenant, surfaceServesPath, tenantConflict } from './tenant';
+import { DOOR_PROBE, gatedDoor } from './door';
 import { TENANT_AGNOSTIC } from './tenant-agnostic.decorator';
 import {
   BackendI18nKeys,
   TENANT_STATUS_STORE,
   TenantStatusStore,
-  UnscopedRedisKeys,
-  parseTenantStatusState,
 } from '@txnet-backend/shared-core';
 
 /**
@@ -44,14 +38,13 @@ import {
  *    domain resolves its tenant perfectly well and still serves no panel route
  *    (F-066-q). It is the same neutral 404 as (1), and on purpose: a
  *    subscription host must not tell a stranger that a panel lives elsewhere.
- * 4. **A gated reseller's platform subdomain, asked for something that is not
- *    its console** — the same rule as (3) with the onboarding gate as a third
- *    input instead of the purpose (F-018-ag). D-01 says no platform host is
- *    ever served to an end user; F-018-l closes what a capability can close
- *    and leaves `signIn` / `read` / `account` open so the reseller's staff can
- *    reach the console at all, and this closes the rest by path. Also the
- *    neutral 404 — on the platform's own domain, a stranger must not learn
- *    that a particular reseller lives at this address.
+ * 4. **A gated reseller's platform subdomain** — the same rule as (3) with the
+ *    onboarding gate as a third input instead of the purpose. It serves
+ *    nothing, to anyone: its end users (F-018-ag, D-01) and, since F-066-x,
+ *    the reseller itself, which configures from the platform's own panel
+ *    (user, 2026-09-19). Also the neutral 404 — on the platform's own domain,
+ *    a stranger must not learn that a particular reseller lives at this
+ *    address.
  *
  * The 404 is **neutral**: a bare `NotFoundException`, whose message is not an
  * i18n key, so `sanitizeError` replaces it with the generic `system.notFound`
@@ -71,6 +64,10 @@ import {
  * ({@link TenantAgnostic}). None of the other three is waived there — being
  * tenant-agnostic is not permission to carry someone else's session, nor to be
  * served on a door this process, or this tenant, serves nothing on.
+ *
+ * One route is exempt from (3) and (4), and only from them: the one that asks
+ * whether the door is open ({@link DoorProbe}, F-066-x). It has to answer on
+ * exactly the doors those two close.
  */
 @Injectable()
 export class TenantGuard implements CanActivate {
@@ -96,8 +93,12 @@ export class TenantGuard implements CanActivate {
     // about the route: a surface that serves no path of this process serves
     // none of its tenant-agnostic ones either.
     const tenant = resolveTenant(request);
+    const probe = this.reflector.getAllAndOverride<boolean>(DOOR_PROBE, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
     const purpose = tenant?.surfacePurpose;
-    if (purpose && !surfaceServesPath(purpose, request.path)) {
+    if (!probe && purpose && !surfaceServesPath(purpose, request.path)) {
       this.logger.warn(
         `${request.method} ${request.originalUrl} refused: host ` +
           `'${request.hostname}' is a '${purpose}' domain and serves no such ` +
@@ -106,11 +107,11 @@ export class TenantGuard implements CanActivate {
       throw new NotFoundException();
     }
 
-    if (tenant && (await this.gatedOffTheConsole(tenant, request.path))) {
+    if (!probe && tenant && (await gatedDoor(tenant, this.store))) {
       this.logger.warn(
         `${request.method} ${request.originalUrl} refused: host ` +
           `'${request.hostname}' is a platform subdomain of a reseller that ` +
-          `has proved no domain, and serves its console only (F-018-ag)`,
+          `has proved no domain, and serves nothing (F-066-x)`,
       );
       throw new NotFoundException();
     }
@@ -130,40 +131,5 @@ export class TenantGuard implements CanActivate {
     }
 
     return true;
-  }
-
-  /**
-   * Is this a gated reseller's platform host, asked for something outside its
-   * console? (F-018-ag.)
-   *
-   * **The gate that is read is the one belonging to the tenant that owns the
-   * host** — `brand` when the surface's tenant is not the scoped one, which is
-   * the reseller-owner case of ADR-0059. Reading the scoped tenant instead
-   * would open the door for precisely the account most likely to be standing
-   * at it.
-   *
-   * The Redis read is paid only on a `panel` `subdomain` surface: a custom
-   * domain is the reseller's own shop and D-01 says nothing about it, and a
-   * request with no surface has no door to judge.
-   *
-   * A missing or unparseable state filters nothing — the same trade
-   * `TenantStatusGuard` makes and for the same reason: `TenantStatusListener`
-   * recomputes every tenant on each connect, so the window is a boot, and
-   * 404ing a reseller's console because Redis blinked is the worse failure.
-   */
-  private async gatedOffTheConsole(
-    tenant: NonNullable<ReturnType<typeof resolveTenant>>,
-    path: string,
-  ): Promise<boolean> {
-    if (tenant.surfacePurpose !== 'panel' || tenant.surfaceDomainType !== 'subdomain') {
-      return false;
-    }
-    if (gatedConsoleServesPath(path)) return false;
-
-    const surfaceTenantId = tenant.brand?.id ?? tenant.id;
-    const state = parseTenantStatusState(
-      await this.store.get(UnscopedRedisKeys.tenantStatus(surfaceTenantId)),
-    );
-    return state?.onboarding === true;
   }
 }

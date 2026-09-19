@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 19
-updated: 2026-09-18
+version: 20
+updated: 2026-09-19
 ---
 
 # panel-web — where the browser reaches the services (F-066-u, ADR-0060)
@@ -58,3 +58,35 @@ and it keeps a deliberately cross-origin build working.
 `NEXT_PUBLIC_API_ORIGIN` and `NEXT_PUBLIC_REALTIME_ORIGIN`. Nothing reads them;
 a deployment still setting them sets nothing. `NEXT_PUBLIC_REALTIME_PATH` stays
 — it must equal the gateway's router rule.
+
+## A host that serves no panel (F-066-x)
+
+Every host reaches this app, so a host that must serve nothing — a
+`subscription` / `assets` domain (F-066-q), a gated reseller's platform
+subdomain (F-018-ag, F-066-x) — used to render the login page with only its API
+calls refused. D-01 is about what a platform host *serves*, so the page was the
+violation.
+
+`proxy.ts` now asks first, before the rename redirect and the session check:
+`lib/door.ts` calls auth-service's `GET /api/auth/door` for the visitor's host
+(the internal hop with `X-Forwarded-Host`, as the session check does) and, on
+`serves: false`, answers a bare `404 Not Found` in plain text — no panel HTML,
+no brand, no redirect. The rule itself is auth-service's
+(`tenant/contract.onboarding.md` "The panel asks before it renders"); nothing
+here restates it.
+
+| the answer | the page |
+|---|---|
+| `200 {serves: false}` | bare 404 |
+| `200 {serves: true}` | renders |
+| 404 — an unregistered host | renders (F-066-u's own call) |
+| timeout, unreachable, unparseable | renders |
+
+**Every doubt renders.** The guard still refuses every API call on a closed
+door, so failing open costs an empty shell; failing closed would take every
+tenant's panel down with auth-service.
+
+**Cached per host for 30 s**, bounded at 500 hosts like the brand cache: the
+proxy runs on every non-static path, prefetches included. A domain verifying
+or dropping back to `pending` reaches the page within that window; the API
+refuses from the moment the gate flips.

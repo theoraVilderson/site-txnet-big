@@ -45,9 +45,9 @@ See [contract.md](contract.md) (HTTP API), [contract.roles.md](contract.roles.md
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-19 | Contract v25 -> **v26** (additive, F-066-x): `GET /auth/door` — `{serves}` for the host that asked, exempt from `TenantGuard`'s surface refusals. Consumer `panel-web` (same item) |
 | 2026-09-19 | Contract v24 -> **v25** (additive, F-018-n, ADR-0062): `GET/POST /auth/roles`, `PATCH`/`DELETE /auth/roles/:id` — a tenant's own roles. [contract.roles.md](contract.roles.md). Consumer `panel-web` in F-018-j |
 | 2026-09-18 | Contract v23 -> **v24** (additive, F-018-ad): `GET /auth/users?q=`. Consumer `panel-web` in F-018-ae |
 | 2026-09-18 | Contract v22 -> **v23** (breaking, F-018-ab, ADR-0058 (2)): `/internal/vault/destroy-expired` and `/internal/vault/gateway-credential*` are `tenant-service`'s (`domains/tenant/contract.vault.md`); the stale `/internal/tenant-subscriptions/*` row (moved by F-018-v) is dropped. Consumers `automation` (worker) and `billing` moved in the same change |
 | 2026-09-18 | Contract v21 -> **v22** (additive, F-061-f): `GET`/`POST /auth/handoff` and `POST /auth/handoff/redeem`. Consumer `panel-web` in the same change |
-| 2026-09-18 | Contract v20 -> **v21** (breaking, F-066-u, ADR-0060): the refresh and `device_id` cookies are host-only, and every refresh-cookie write or clear also expires the old `Domain=.<DOMAIN_NAME>` one; `/api/auth` is routed on every host. Consumer `panel-web` moved in the same change (v19); `bot-app` sends no cookie. [contract.cookies.md](contract.cookies.md) |
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->
