@@ -19,6 +19,12 @@ export const RESELLERS_MANAGE = "tenant.manage";
 export const USER_SEARCH = "user.search";
 /** The key billing's manual adjustment gates on (F-019-a). */
 export const WALLET_ADJUST = "tenant_billing.adjust";
+/**
+ * The key billing's read of one reseller's ledger gates on (F-019-j). Its own
+ * key, not the adjustment's: reading what the platform charged a reseller is
+ * not moving its balance, so a support role may hold this one alone.
+ */
+export const WALLET_READ = "tenant_billing.read";
 const ALL_PERMISSIONS = "*";
 
 /** tenant-service's `BILLING_MODELS` (`reseller.schema.ts`); the spec holds the two together. */
@@ -75,6 +81,31 @@ export const canAdministerResellers = (me: Me | null) => onPlatform(me) && holds
 export const canAdjustWallet = (me: Me | null) => onPlatform(me) && holds(me, WALLET_ADJUST);
 /** Whether the create sheet can search for the owner; without it the sheet takes a user id. */
 export const canSearchUsers = (me: Me | null) => onPlatform(me) && holds(me, USER_SEARCH);
+/** Whether one reseller's billing ledger can be read (F-019-j). */
+export const canReadTenantLedger = (me: Me | null) => onPlatform(me) && holds(me, WALLET_READ);
+
+/**
+ * The reseller page's tabs (F-019-k), in the order they are shown. `overview`
+ * is the facts, the package and the status; `billing` the ledger and the
+ * adjustment. A later section of its own (F-018-h/i/j) is another tab here,
+ * not another sheet.
+ */
+export const RESELLER_TABS = ["overview", "billing"] as const;
+export type ResellerTab = (typeof RESELLER_TABS)[number];
+
+/**
+ * The tabs this visitor is offered. `billing` needs one of the two billing
+ * keys — the ledger's or the adjustment's — because the tab holds both and
+ * each section asks for its own inside it.
+ */
+export function resellerTabs(me: Me | null): ResellerTab[] {
+  return RESELLER_TABS.filter((tab) => tab !== "billing" || canReadTenantLedger(me) || canAdjustWallet(me));
+}
+
+/** `?tab=` as a tab this visitor may open; anything else is the first one they may. */
+export function resellerTab(raw: string | null, tabs: readonly ResellerTab[]): ResellerTab {
+  return tabs.find((tab) => tab === raw) ?? tabs[0];
+}
 
 // Each service's own shapes, so a refusal is caught before the call.
 const DNS_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;

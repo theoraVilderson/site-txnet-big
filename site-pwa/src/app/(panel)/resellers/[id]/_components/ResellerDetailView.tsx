@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ExternalLink, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type TenantLedgerDirection } from "@/lib/billing-api";
 import {
@@ -12,19 +14,24 @@ import {
   type TenantPackage,
   type TenantSubscription,
 } from "@/lib/tenant-api";
-import { Select } from "../../_components/kit/Select";
-import { usePanelSession } from "../../_context/PanelSessionContext";
-import { formatInstant } from "../../_lib/datetime";
-import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
+import { PANEL_RESELLERS } from "@/lib/routes";
+import { Select } from "../../../_components/kit/Select";
+import { usePanelSession } from "../../../_context/PanelSessionContext";
+import { formatInstant } from "../../../_lib/datetime";
+import { BASE_CURRENCY, formatMoney } from "../../../_lib/money";
 import {
   BILLING_MODELS,
   RESELLER_KEYS as K,
   adjustBody,
   canAdjustWallet,
+  canAdministerResellers,
+  canReadTenantLedger,
   emptyAdjustForm,
   isNoSubscription,
   packageChoices,
   priceFor,
+  resellerTab,
+  resellerTabs,
   statusBody,
   statusChoices,
   validateAdjust,
@@ -32,28 +39,41 @@ import {
   type AdjustForm,
   type Errors,
   type StatusForm,
-} from "../_lib/resellers";
-import { Alert, Field, Sheet, input, primaryButton, useMessage } from "./resellers-ui";
-import { StatusBadge } from "./ResellersView";
+} from "../../_lib/resellers";
+import { Alert, Field, StatusBadge, input, primaryButton, useMessage } from "../../_components/resellers-ui";
+import { ResellerLedger } from "./ResellerLedger";
 
 type Loaded = { reseller: Reseller; subscription: TenantSubscription | null; packages: TenantPackage[] };
 
 /**
- * One reseller (F-018-k): who owns it and where it is served, then the three
- * things the platform owner changes — package and period (F-018-e), status
- * (F-018-f) and, with `tenant_billing.adjust`, its billing balance (F-019-a).
- * Each section re-reads the reseller after it writes: every figure shown is the
- * services' answer, never one computed here.
+ * One reseller's page (F-019-k): who owns it and where it is served, then what
+ * the platform owner changes — package and period (F-018-e), status (F-018-f)
+ * and, on the billing tab, its ledger (F-019-j) and a manual adjustment of its
+ * balance (F-019-a).
+ *
+ * Every section re-reads the reseller after it writes: each figure shown is
+ * the services' answer, never one computed here. Who may open the page is
+ * tenant-service's to decide; the check here only spares a reseller who typed
+ * the path a refused read, exactly as the list does.
  */
-export function ResellerSheet({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
+export function ResellerDetailView({ id }: { id: string }) {
   const { lang, t } = useLocale();
-  const { me } = usePanelSession();
+  const { me, isLoading: sessionLoading } = usePanelSession();
   const message = useMessage();
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const allowed = canAdministerResellers(me);
+
+  const tabs = useMemo(() => resellerTabs(me), [me]);
+  const tab = resellerTab(params.get("tab"), tabs);
+
   const [data, setData] = useState<Loaded | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [asked, setAsked] = useState(0);
 
   useEffect(() => {
+    if (!allowed) return;
     let alive = true;
     (async () => {
       try {
@@ -76,76 +96,111 @@ export function ResellerSheet({ id, onClose, onChanged }: { id: string; onClose:
     return () => {
       alive = false;
     };
-  }, [id, asked]);
+  }, [allowed, id, asked]);
 
-  const changed = useCallback(() => {
-    setAsked((n) => n + 1);
-    onChanged();
-  }, [onChanged]);
+  // A write changed a figure this page shows: read the reseller again. The
+  // ledger reads itself, keyed to the same counter.
+  const changed = useCallback(() => setAsked((n) => n + 1), []);
+  // The tab is in the URL so a reload stays on it; changing tab drops the
+  // ledger's `?page=`, which belongs to the tab that was showing.
+  const goTab = (next: string) => router.push(next === tabs[0] ? pathname : `${pathname}?tab=${next}`, { scroll: false });
+
+  if (sessionLoading) return null;
+
+  const shell = (children: ReactNode) => <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-8">{children}</div>;
+  if (!allowed) return shell(<Alert>{t("common", K.refusals.not_platform_owner)}</Alert>);
 
   const r = data?.reseller;
-  return (
-    <Sheet
-      title={
-        r ? (
-          <span className="flex items-center gap-2">
-            <span dir="ltr">{r.slug}</span>
-            <StatusBadge status={r.status} />
-          </span>
-        ) : (
-          t("common", K.title)
-        )
-      }
-      onClose={onClose}
-    >
+  const tabClass = (on: boolean) =>
+    `rounded-lg px-3 py-1.5 text-xs font-bold ${on ? "bg-card-bg text-text-primary shadow-sm" : "text-text-secondary"}`;
+
+  return shell(
+    <>
+      <Link href={PANEL_RESELLERS} className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline">
+        <ArrowLeft size={14} aria-hidden />
+        {t("common", K.detail.back)}
+      </Link>
+
       {error && !data ? (
         <Alert>{message(error)}</Alert>
       ) : !data || !r ? (
         <Loader2 size={18} className="mx-auto animate-spin text-text-secondary" aria-hidden />
       ) : (
         <>
-          <dl className="grid gap-3 text-xs sm:grid-cols-2">
-            <Fact label={t("common", K.columns.owner)}>
-              {r.owner ? (
-                <>
-                  {r.owner.fullName || r.owner.username}
-                  <span dir="ltr" className="block text-[11px] text-text-secondary">
-                    {r.owner.phoneNumber ?? r.owner.username}
-                  </span>
-                </>
-              ) : (
-                "—"
-              )}
-            </Fact>
-            <Fact label={t("common", K.columns.balance)}>
-              <span dir="ltr">{formatMoney(r.billingBalance, BASE_CURRENCY, { lang, t })}</span>
-            </Fact>
-            <Fact label={t("common", K.columns.created)}>{formatInstant(r.createdAt, lang)}</Fact>
-            <Fact label={t("common", K.detail.domains)}>
-              {r.domains.length === 0
-                ? t("common", K.detail.noDomains)
-                : r.domains.map((d) => (
-                    <a
-                      key={d.domainValue}
-                      href={`https://${d.domainValue}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      dir="ltr"
-                      className="flex items-center gap-1 text-primary hover:underline"
-                    >
-                      {d.domainValue}
-                      <ExternalLink size={11} aria-label={t("common", K.detail.open)} />
-                    </a>
-                  ))}
-            </Fact>
-          </dl>
+          <header className="flex flex-wrap items-center gap-3">
+            <h1 dir="ltr" className="text-2xl font-bold text-text-primary md:text-3xl">
+              {r.slug}
+            </h1>
+            <StatusBadge status={r.status} />
+          </header>
 
-          <SubscriptionSection loaded={data} onSaved={changed} />
-          <StatusSection reseller={r} onSaved={changed} />
-          {canAdjustWallet(me) && r.status !== "terminated" && <AdjustSection reseller={r} onSaved={changed} />}
+          {tabs.length > 1 && (
+            <div role="tablist" className="inline-flex gap-1 rounded-xl bg-bg-inner p-1">
+              {tabs.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === name}
+                  className={tabClass(tab === name)}
+                  onClick={() => goTab(name)}
+                >
+                  {t("common", K.detail.tabs[name])}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {tab === "overview" ? (
+            <div className="space-y-6">
+              <dl className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                <Fact label={t("common", K.columns.owner)}>
+                  {r.owner ? (
+                    <>
+                      {r.owner.fullName || r.owner.username}
+                      <span dir="ltr" className="block text-[11px] text-text-secondary">
+                        {r.owner.phoneNumber ?? r.owner.username}
+                      </span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </Fact>
+                <Fact label={t("common", K.columns.balance)}>
+                  <span dir="ltr">{formatMoney(r.billingBalance, BASE_CURRENCY, { lang, t })}</span>
+                </Fact>
+                <Fact label={t("common", K.columns.created)}>{formatInstant(r.createdAt, lang)}</Fact>
+                <Fact label={t("common", K.detail.domains)}>
+                  {r.domains.length === 0
+                    ? t("common", K.detail.noDomains)
+                    : r.domains.map((d) => (
+                        <a
+                          key={d.domainValue}
+                          href={`https://${d.domainValue}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          dir="ltr"
+                          className="flex items-center gap-1 text-primary hover:underline"
+                        >
+                          {d.domainValue}
+                          <ExternalLink size={11} aria-label={t("common", K.detail.open)} />
+                        </a>
+                      ))}
+                </Fact>
+              </dl>
+
+              <SubscriptionSection loaded={data} onSaved={changed} />
+              <StatusSection reseller={r} onSaved={changed} />
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {canAdjustWallet(me) && r.status !== "terminated" && <AdjustSection reseller={r} onSaved={changed} />}
+              {canReadTenantLedger(me) && <ResellerLedger tenantId={r.id} reloadKey={asked} />}
+            </div>
+          )}
         </>
       )}
-    </Sheet>
+    </>,
   );
 }
 
@@ -161,7 +216,7 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="flex flex-col gap-3 rounded-2xl border border-card-border p-4">
-      <h3 className="text-sm font-bold text-text-primary">{title}</h3>
+      <h2 className="text-sm font-bold text-text-primary">{title}</h2>
       {children}
     </section>
   );

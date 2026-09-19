@@ -262,7 +262,11 @@ def resolve_paths(patterns):
         p = (p or "").strip()
         if not p:
             continue
-        if any(c in p for c in "*?["):
+        # A Next dynamic segment (`[id]`) is a real folder, not a character
+        # class: a path that exists as written is never globbed.
+        if (ROOT / p).exists():
+            hits = [p]
+        elif any(c in p for c in "*?["):
             pats = [p, p[:-2] + "**/*"] if p.endswith("/**") else [p]
             raw = []
             for pat in pats:                  # `dir/**` yields folders only
@@ -273,7 +277,7 @@ def resolve_paths(patterns):
             if not hits:                      # a glob that only matched folders
                 hits = [str(h.relative_to(ROOT)) + "/" for h in raw if h.is_dir()]
         else:
-            hits = [p] if (ROOT / p).exists() else []
+            hits = []
         if hits:
             found.extend(hits[:8])
         else:

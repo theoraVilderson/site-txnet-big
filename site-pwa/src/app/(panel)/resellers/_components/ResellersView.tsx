@@ -2,32 +2,20 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, CheckCircle2, Clock, Plus, RotateCw, Store, XCircle, type LucideIcon } from "lucide-react";
+import Link from "next/link";
+import { Plus, RotateCw, Store } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { tenantApi, type Reseller, type TenantStatus } from "@/lib/tenant-api";
+import { tenantApi, type Reseller } from "@/lib/tenant-api";
+import { panelResellerPath } from "@/lib/routes";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { formatInstant } from "../../_lib/datetime";
 import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
-import { Badge } from "../../financial/_components/Badge";
-import { Alert, primaryButton, quietButton, useMessage } from "./resellers-ui";
+import { Alert, StatusBadge, primaryButton, quietButton, useMessage } from "./resellers-ui";
 import { RESELLER_KEYS as K, canAdministerResellers } from "../_lib/resellers";
 import { CreateResellerSheet } from "./CreateResellerSheet";
-import { ResellerSheet } from "./ResellerSheet";
 
 const PAGE_SIZE = 20;
-
-const STATUS_TONE: Record<TenantStatus, { icon: LucideIcon; className: string }> = {
-  trial: { icon: Clock, className: "border-gold/20 bg-gold-bg text-gold" },
-  active: { icon: CheckCircle2, className: "border-primary/20 bg-leaf-bg text-primary" },
-  suspended: { icon: AlertCircle, className: "border-gold/20 bg-gold-bg text-gold" },
-  terminated: { icon: XCircle, className: "border-error-border bg-error-bg text-error" },
-};
-
-export function StatusBadge({ status }: { status: TenantStatus }) {
-  const { t } = useLocale();
-  return <Badge {...STATUS_TONE[status]} label={t("common", K.status[status])} />;
-}
 
 /** `?page=` as a positive whole number; anything else is the first page. */
 function pageOf(raw: string | null): number {
@@ -39,6 +27,9 @@ function pageOf(raw: string | null): number {
  * The platform owner's resellers (F-018-k), newest first. The route answers a
  * page with no total, so paging is newer/older: "older" exists while a page
  * comes back full. The page number is in the URL, as on `/financial`.
+ *
+ * A row opens the reseller's own page (F-019-k) — a link, not a sheet, so it
+ * can be sent to someone and reloaded on the tab it was left on.
  *
  * Who may see it is tenant-service's to decide; the check here only spares a
  * reseller who typed the path a refused read.
@@ -57,7 +48,6 @@ export function ResellersView() {
   const [asked, setAsked] = useState(0);
   const reload = useCallback(() => setAsked((n) => n + 1), []);
   const [creating, setCreating] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const key = `${page}|${asked}`;
@@ -143,15 +133,11 @@ export function ResellersView() {
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr
-                  key={r.id}
-                  className="cursor-pointer border-t border-card-border hover:bg-bg-inner"
-                  onClick={() => setOpenId(r.id)}
-                >
+                <tr key={r.id} className="border-t border-card-border hover:bg-bg-inner">
                   <td className={cell}>
-                    <button type="button" className="font-bold text-text-primary" dir="ltr" onClick={() => setOpenId(r.id)}>
+                    <Link href={panelResellerPath(r.id)} className="font-bold text-primary hover:underline" dir="ltr">
                       {r.slug}
-                    </button>
+                    </Link>
                   </td>
                   <td className={`${cell} text-text-secondary`}>{r.owner?.fullName || r.owner?.username || "—"}</td>
                   <td className={cell}>
@@ -191,7 +177,6 @@ export function ResellersView() {
           }}
         />
       )}
-      {openId && <ResellerSheet id={openId} onClose={() => setOpenId(null)} onChanged={reload} />}
     </div>
   );
 }

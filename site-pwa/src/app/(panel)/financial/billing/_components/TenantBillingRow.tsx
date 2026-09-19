@@ -18,8 +18,18 @@ function reasonLabelKey(reasonType: string): string | null {
 /**
  * One movement of a reseller's billing wallet (F-019-d). `balanceAfter` is
  * printed as the ledger wrote it — nothing here adds an amount to a balance.
+ *
+ * The platform owner's read of the same wallet (F-019-j) also carries the
+ * movement's `referenceId`; it is shown only when that read hands it over,
+ * with its own label, so the reseller's own list is unchanged.
  */
-export function TenantBillingRow({ row }: { row: TenantWalletRow }) {
+export function TenantBillingRow({
+  row,
+  referenceLabel,
+}: {
+  row: TenantWalletRow & { referenceId?: string | null };
+  referenceLabel?: string;
+}) {
   const { lang, t } = useLocale();
   const tone = DIRECTION_TONES[row.direction];
   const Icon = tone.icon;
@@ -43,6 +53,11 @@ export function TenantBillingRow({ row }: { row: TenantWalletRow }) {
         <p className="mt-0.5 truncate font-mono text-[10px] text-text-secondary" dir="ltr">
           {row.id}
         </p>
+        {referenceLabel && row.referenceId && (
+          <p className="mt-0.5 truncate text-[10px] text-text-secondary">
+            {referenceLabel}: <span dir="ltr" className="font-mono">{row.referenceId}</span>
+          </p>
+        )}
       </div>
 
       <div className="col-span-6 flex flex-col md:col-span-2 md:items-start">

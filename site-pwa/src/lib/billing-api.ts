@@ -285,6 +285,19 @@ export interface TenantWalletAdjustBody {
   note?: string;
 }
 
+/**
+ * A movement of one reseller's wallet as the **platform owner** reads it
+ * (F-019-j). The reseller's own read carries no `referenceId`; this one does —
+ * an adjustment's reference is the owner's own request id, a charge's the
+ * period it paid for (`tenant/contract.billing.md`).
+ */
+export interface TenantWalletAdminRow extends TenantWalletRow {
+  referenceId: string | null;
+}
+
+/** `GET /tenant-wallets/:tenantId/transactions`: one page, and the wallet's own balance. */
+export type TenantWalletAdminPage = Paged<TenantWalletAdminRow> & { tenantId: string; balance: string };
+
 export interface TenantWalletAdjusted {
   transactionId: string;
   tenantId: string;
@@ -345,6 +358,20 @@ export const billingApi = {
    */
   async tenantTopup(body: TenantTopupBody): Promise<DepositStarted> {
     return call<DepositStarted>("/tenant-wallet/topup", { method: "POST", body: JSON.stringify(body) });
+  },
+
+  /**
+   * One reseller's billing ledger, read by the platform owner (F-019-j).
+   * Permission `tenant_billing.read`, then the service's owner check; a
+   * reseller that was never credited answers `"0.00"` with no rows, so there
+   * is no first-credit special case here. `balance` is the wallet's own
+   * figure, never a sum of the page.
+   */
+  async tenantWalletTransactions(tenantId: string, page: number, pageSize: number): Promise<TenantWalletAdminPage> {
+    return call<TenantWalletAdminPage>(
+      `/tenant-wallets/${encodeURIComponent(tenantId)}/transactions?page=${page}&pageSize=${pageSize}`,
+      { method: "GET" },
+    );
   },
 
   /**

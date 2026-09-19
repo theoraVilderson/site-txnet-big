@@ -1413,7 +1413,16 @@
     "detail": {
       "domains": "Addresses",
       "noDomains": "No address yet.",
-      "open": "Open"
+      "open": "Open",
+      "back": "All resellers",
+      "tabs": {
+        "overview": "Overview",
+        "billing": "Billing"
+      },
+      "ledgerTitle": "Billing ledger",
+      "ledgerSubtitle": "Every movement of this reseller's balance with the platform, newest first.",
+      "ledgerEmpty": "No movement yet.",
+      "reference": "Reference"
     },
     "subscription": {
       "title": "Package and period",

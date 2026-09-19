@@ -67,6 +67,12 @@ export const PANEL_CATALOG_TRANSLATIONS = "/catalog/translations";
  * and tenant-service both admit the platform owner alone.
  */
 export const PANEL_RESELLERS = "/resellers";
+/**
+ * One reseller's page (F-019-k): its facts, package and status, its billing
+ * ledger and the balance adjustment. The list opens this; nothing else
+ * spells the path (C-10).
+ */
+export const panelResellerPath = (id: string) => `${PANEL_RESELLERS}/${encodeURIComponent(id)}`;
 /** Payments the gateway has not confirmed, for a person to settle (F-093-n). */
 export const PANEL_MANUAL_PAYMENTS = "/payments/manual";
 /**
