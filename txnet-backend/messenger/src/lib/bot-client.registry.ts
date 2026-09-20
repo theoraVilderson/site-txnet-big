@@ -1,9 +1,10 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TelegramLikeBotClient } from './telegram-like-bot.client';
 import { BotPlatform } from './bot-platform';
 import { buildDeepLink, DEEP_LINK_BASE } from './deep-link';
 import { capabilitiesOf, MessengerCapabilities } from './capabilities';
+import { BotSendPacer } from './send-rate';
 import {
   BOT_INTEGRATION_DIRECTORY,
   BotIntegration,
@@ -52,6 +53,13 @@ export class BotClientRegistry {
     private readonly config: ConfigService,
     @Inject(BOT_INTEGRATION_DIRECTORY)
     private readonly directory: BotIntegrationDirectory,
+    /**
+     * The outbound ceiling every client this registry builds sends under
+     * (F-313-a, ADR-0066). Optional, and absent it the clients are unpaced —
+     * `MessengerModule` always provides one, so what is really optional is the
+     * Redis store behind it.
+     */
+    @Optional() private readonly pacer?: BotSendPacer,
   ) {
     const base = (key: string, fallback: string) =>
       // A trailing slash would build `…//bot<token>/…`, which some API hosts
@@ -115,6 +123,9 @@ export class BotClientRegistry {
       this.shapes[integration.platform].apiBase,
       token,
       this.config.get<number>('OTP_BOT_HTTP_TIMEOUT_MS', 5000),
+      this.pacer
+        ? () => this.pacer!.take(integration.tenantId, integration.platform)
+        : null,
     );
   }
 

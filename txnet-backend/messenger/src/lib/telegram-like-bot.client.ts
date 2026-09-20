@@ -75,6 +75,17 @@ export class TelegramLikeBotClient {
     private readonly apiBase: string,
     private readonly botToken: string,
     private readonly timeoutMs: number,
+    /**
+     * Spends one of this bot's outbound budget, and says how long to wait if
+     * there is none left (F-313-a, ADR-0066). `null` — the default — is a
+     * client nobody paces, which is how every caller behaved before this
+     * existed and how the apps that bind no store still behave.
+     *
+     * A closure rather than the pacer itself: the client knows a token and a
+     * platform, never a tenant, and keeping it that way is what stops a driver
+     * from growing an opinion about whose bot it is.
+     */
+    private readonly pace: (() => Promise<number | null>) | null = null,
   ) {
     this.logger = new Logger(`${TelegramLikeBotClient.name}:${platformLabel}`);
   }
@@ -126,6 +137,19 @@ export class TelegramLikeBotClient {
    * another attempt. No `parse_mode`: the text is sent as written.
    */
   async sendText(chatId: string, text: string): Promise<SendTextResult> {
+    // The ceiling, before the send rather than after it (ADR-0066). Answered in
+    // the shape the platform's own 429 uses, so this needs no branch of its own
+    // at any call site: a bulk sender defers the row, a flow logs and moves on.
+    const wait = await this.pace?.();
+    if (wait != null) {
+      return {
+        ok: false,
+        permanent: false,
+        retryAfterSec: wait,
+        description: `${this.platformLabel} send budget spent for this bot`,
+      };
+    }
+
     const result = await this.call<
       TelegramLikeSendResult & { parameters?: { retry_after?: number } }
     >('sendMessage', { chat_id: chatId, text });

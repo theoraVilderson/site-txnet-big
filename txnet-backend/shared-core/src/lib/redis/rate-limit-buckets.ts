@@ -289,6 +289,23 @@ export const RateLimitBucket = {
    * instead of every visitor to the reseller they aimed at.
    */
   PUBLIC_ROUTE: 'public:route',
+
+  /**
+   * What one tenant's bot may **send** on one platform, per second
+   * (F-313-a, ADR-0066). Subject: `<tenantId>:<platform>`.
+   *
+   * **The one bucket in this registry that counts outbound traffic**, and so
+   * the one whose key is not `ratelimit:<tenantId>:…`: it is spent on a worker
+   * that has no request and walks many tenants in a single run, so the tenant
+   * is in the subject and the prefix is `UnscopedRedisKeys.outboundRate`. It
+   * lives here anyway, because this file is meant to be the whole rate-limit
+   * surface of the platform in one screen, and a ceiling nobody can find is a
+   * ceiling a second sender will re-invent.
+   *
+   * Over budget is not a rejection: the caller is told how long to wait, in the
+   * shape a platform's own 429 uses.
+   */
+  BOT_SEND: 'bot:send',
 } as const;
 
 export type RateLimitBucket =

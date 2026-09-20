@@ -138,8 +138,10 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 - **Outcomes.** `failed` — the final ones: no verified chat on that platform,
   no primary bot or a `disabled` one, a 400/403 from the platform (chat gone,
   bot blocked). `sent` on success. Both through `recordOutcome` (invariant 2).
-  **Left `queued`**, released for a later run: a 429 (every row of that bot
-  waits until `retry_after`; `deferred`), a 5xx or network error or the time
+  **Left `queued`**, released for a later run: a 429 — or `messenger`'s own
+  ceiling refusing in the same shape before the send goes out (F-313-a,
+  ADR-0066) — after which every row of that bot waits until `retry_after`
+  (`deferred`); a 5xx or network error or the time
   limit (`deferred`), and an `auth-service` that did not answer or a token that
   could not be read (`stalled` — the job counts these as errors). A campaign
   stays `sending` while any row is queued.
@@ -219,7 +221,7 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 | forward-auth | identity headers on gated routes | 401 |
 | identity | `userId` (no FK across schemas; a caller names a real user) | — |
 | automation | `worker-service` ticks the fan-out (F-035-d) and delivery (F-035-e) | a started campaign stays `sending`, its rows unwritten or `queued`, until the next run |
-| messenger | `BotClientRegistry`, `TelegramLikeBotClient.sendText` (F-035-e) | — (a library) |
+| messenger | `BotClientRegistry`, `TelegramLikeBotClient.sendText` (F-035-e); its outbound ceiling, which this service binds a Redis store for (F-313-a) | — (a library); over budget defers rows, it does not fail them |
 | auth-api | `internal/bot-integrations/primary` and `/token` (ADR-0054) | rows stay `queued`, counted `stalled` |
 | SMS gateway (external) | `SendSms`, through `shared-core` `SmsProviderService` (F-035-f) | SMS rows stay `queued`, `deferred` or `stalled` |
 | tenant | the vault: `use` of a sending tenant's `sms_api_key` / `sms_sender_line` (F-018-a); `tenant_sms_config` read (F-035-i-a) | that tenant's SMS rows stay `queued`, counted `stalled` |

@@ -63,6 +63,7 @@ exports[`the key catalogue > leaves nothing in the catalogue unexercised 1`] = `
   "otpCooldown",
   "otpDelivery",
   "otpLock",
+  "outboundRate",
   "outboxProcessed",
   "rateLimit",
   "rateLimitPlatform",

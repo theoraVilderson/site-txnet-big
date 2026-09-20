@@ -1,6 +1,7 @@
 import { DynamicModule, Module, ModuleMetadata } from '@nestjs/common';
 import { BotClientRegistry } from './bot-client.registry';
 import { BotViewRenderer } from './renderer';
+import { BotSendPacer } from './send-rate';
 
 /**
  * The messenger platform unit, as a Nest module. Two consumers import it:
@@ -28,8 +29,8 @@ export class MessengerModule {
     return {
       module: MessengerModule,
       imports: options.imports,
-      providers: [BotClientRegistry, BotViewRenderer],
-      exports: [BotClientRegistry, BotViewRenderer],
+      providers: [BotClientRegistry, BotViewRenderer, BotSendPacer],
+      exports: [BotClientRegistry, BotViewRenderer, BotSendPacer],
     };
   }
 }

@@ -57,7 +57,7 @@ reached from another surface:
 | `F-306` wallet, history, invoices | billing |
 | `F-309` two-way tickets | support |
 | `F-311`/`F-312` reseller + sub-reseller management | tenant |
-| `F-313` bulk sending | notification (queue) + messenger (limits) |
+| `F-313-b` bulk sending | notification (queue, F-035-d/e) + messenger (the ceiling, F-313-a/ADR-0066); the bot owns the flow only |
 | `F-318` channel-membership trial gate | engagement/governance decides eligibility; bot only asks the platform for membership |
 | `F-319` per-user notification settings | governance |
 | `F-1531` reseller business summary | tenant reporting |

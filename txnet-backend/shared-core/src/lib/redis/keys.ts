@@ -123,6 +123,21 @@ export const UnscopedRedisKeys = {
   rateLimitPlatform: (bucket: string) => `ratelimit:platform:${bucket}`,
 
   /**
+   * An **outbound** budget: what this platform may send, rather than what it
+   * will accept (F-313-a, ADR-0066). Today that is one tenant's bot on one
+   * messenger platform, counted per second.
+   *
+   * Its own prefix, not `ratelimit:`, for two reasons that both matter when
+   * reading a live keyspace: the counters answer opposite questions, and this
+   * one carries no tenant segment of its own — it is spent on a worker with no
+   * `TenantContext`, so the tenant is inside the bucket's subject instead.
+   * Sharing the prefix would put a key shaped `ratelimit:<bucket>` beside keys
+   * shaped `ratelimit:<tenantId>:<bucket>`, where the second segment means a
+   * different thing in each.
+   */
+  outboundRate: (bucket: string) => `outbound:${bucket}`,
+
+  /**
    * A pending bot link: the deep-link token handed to the client, holding the
    * platform, the phone number it was asked for, what to do once the link
    * succeeds, and the current state. Read by the bot webhook and by the

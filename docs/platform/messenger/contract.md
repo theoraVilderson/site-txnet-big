@@ -208,12 +208,34 @@ stop delivering before the token is revoked.
 |---|---|
 | bot-app | render a `BotView`; read `capabilities` before offering an affordance |
 | identity | outgoing OTP delivery to a proven `LinkedBotAccount` (`F-0202`) |
-| notification | campaign + retention sends, rate-limited (`F-313`, §9.8) |
+| notification | campaign + retention sends, paced by this unit (`F-313-a`, §9.8) — the one consumer that binds `SEND_RATE_STORE` |
 | automation | prove a pasted token (`getMe`), register and withdraw a webhook — `auth-service`'s reseller bot surface (F-066-w5) |
 
 `identity` is already a consumer in code today, through
 `otp/senders/bot-client.registry.ts`. That is the second consumer that makes this
 a `platform/` unit rather than part of `bot-app` (§1 placement test).
+
+## The outbound ceiling
+
+**A bot's send limit is this unit's, not the sender's** — why, and what was
+rejected, is ADR-0066.
+
+- **One budget per `(tenant x platform)`** — per bot, which is what a platform
+  throttles and bans. Counted in Redis on a fixed one-second window;
+  `RateLimitBucket.BOT_SEND` (C-05), key `UnscopedRedisKeys.outboundRate`
+  (C-03), so the platform's whole rate-limit surface stays in one file.
+- **Spent inside the driver**, in `sendText`, not at the call site. A limiter a
+  caller must remember to call is one a caller will forget.
+- **Over budget answers as the platform does**: `{ permanent: false,
+  retryAfterSec }`, a real 429's shape — so no caller grew a branch.
+- **Ceilings are dated, per platform, env-overridable** (`send-rate.ts`): a
+  number with no source is not a ceiling, as with a capability flag. Telegram
+  30/s is documented; Bale's 20/s is **not confirmed** and takes the lower value
+  until `docs.bale.ai` is read — see [open-questions.md](open-questions.md).
+- **Unbound is unpaced.** The store is bound only by `notification-service`;
+  `bot-service` and `auth-service` send one at a time, spending the same real
+  allowance uncounted — a known gap, not a default to lean on. `clientForToken`
+  is unpaced too: no tenant yet (F-066-w5).
 
 ## Webhook addressing
 

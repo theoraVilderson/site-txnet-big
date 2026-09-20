@@ -36,6 +36,7 @@ exports[`RedisKeys — key catalogue > exposes a builder for every key family, a
   "otpCooldown",
   "otpDelivery",
   "otpLock",
+  "outboundRate",
   "outboxProcessed",
   "rateLimit",
   "rateLimitPlatform",
