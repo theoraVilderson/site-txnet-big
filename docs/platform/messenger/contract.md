@@ -2,8 +2,8 @@
 id: messenger
 layer: platform
 status: active
-version: 4
-updated: 2026-09-10
+version: 5
+updated: 2026-09-20
 ---
 
 # messenger — contract
@@ -193,6 +193,15 @@ tables directly (§8), and it never logs or returns a token.
 The role matters to a caller: C-05 puts OTP and transactional alerts on the
 `primary` bot, and exactly one row per `(tenantId, platform)` may hold it.
 
+**A token that is not in the vault yet** is the one exception, and it lasts one
+call: `BotClientRegistry.clientForToken(platform, token)` builds a driver from a
+plaintext a caller supplies, so a reseller pasting a token can have it proved
+with `getMe()` before anything is written (F-066-w5). It decrypts nothing and so
+writes no audit row; the trail for that moment is the `bot_integration` row the
+caller goes on to create. `deleteWebhook()` is the withdrawal half of
+`setWebhook` and belongs to the same item — a retirement tells the platform to
+stop delivering before the token is revoked.
+
 ## Consumers
 
 | consumer | what it needs |
@@ -200,6 +209,7 @@ The role matters to a caller: C-05 puts OTP and transactional alerts on the
 | bot-app | render a `BotView`; read `capabilities` before offering an affordance |
 | identity | outgoing OTP delivery to a proven `LinkedBotAccount` (`F-0202`) |
 | notification | campaign + retention sends, rate-limited (`F-313`, §9.8) |
+| automation | prove a pasted token (`getMe`), register and withdraw a webhook — `auth-service`'s reseller bot surface (F-066-w5) |
 
 `identity` is already a consumer in code today, through
 `otp/senders/bot-client.registry.ts`. That is the second consumer that makes this

@@ -118,6 +118,33 @@ export class BotClientRegistry {
     );
   }
 
+  /**
+   * A driver for a token that is **not in the vault yet** (F-066-w5).
+   *
+   * The one entry point here that takes a plaintext token from its caller, and
+   * it exists for exactly one moment: a reseller has pasted a token and nothing
+   * may be written until the platform confirms it is a bot token and says whose
+   * (`getMe`). There is no integration to look up, so there is nothing for
+   * {@link client} to resolve — and storing the value first in order to be able
+   * to check it would mean a vault row for every typo.
+   *
+   * It writes no vault audit row because it decrypts nothing; the trail for
+   * this moment is the `bot_integration` row the caller goes on to create, and
+   * the audited reads start with the next call. Synchronous for the same
+   * reason: it asks nobody anything.
+   *
+   * The token is neither logged nor retained — it lives in the returned
+   * client, which the caller drops.
+   */
+  clientForToken(platform: BotPlatform, token: string): TelegramLikeBotClient {
+    return new TelegramLikeBotClient(
+      platform,
+      this.shapes[platform].apiBase,
+      token,
+      this.config.get<number>('OTP_BOT_HTTP_TIMEOUT_MS', 5000),
+    );
+  }
+
   /** The tenant's primary bot on this platform, as a driver. */
   async primaryClient(
     tenantId: string,

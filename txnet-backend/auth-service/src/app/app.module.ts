@@ -9,6 +9,7 @@ import { LocaleModule } from './locale/locale.module';
 import { TenantModule } from './tenant/tenant.module';
 import { AutomationModule } from './automation/automation.module';
 import { WebhookRotationModule } from './automation/webhook-rotation.module';
+import { ResellerBotModule } from './automation/reseller-bot.module';
 import { VaultModule } from './tenant/vault/vault.module';
 import { LanguageMiddleware } from './common/middlewares/language.middleware';
 import { ServiceCallerMiddleware } from './common/security/service-caller';
@@ -28,6 +29,7 @@ import { TenantContextMiddleware } from './tenant-context/tenant-context.middlew
     VaultModule,
     AutomationModule,
     WebhookRotationModule,
+    ResellerBotModule,
   ],
 })
 export class AppModule implements NestModule {

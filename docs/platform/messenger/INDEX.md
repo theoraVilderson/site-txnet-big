@@ -2,13 +2,13 @@
 id: messenger
 layer: platform
 status: active
-version: 4
+version: 5
 keywords: [telegram, bale, messenger, bot client, capability flag, degradation, inline keyboard, webapp, sendMessage, ربات, تلگرام, بله, قابلیت, افت قابلیت]
 source:
   - txnet-backend/messenger/src/**
 owns_tables: []
 depends_on: [tenant, automation]
-updated: 2026-09-09
+updated: 2026-09-20
 ---
 
 # messenger
@@ -41,10 +41,10 @@ and per-tenant branding do not.
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-20 | v4 -> **v5** (additive, F-066-w5): `getMe()` and `deleteWebhook()` on the client, and `clientForToken()` — a driver for a token that is not in the vault yet, so a pasted one can be proved before it is stored. New consumer: `automation` |
 | 2026-09-05 | Created by ADR-0009 as the single home for messenger differences |
 | 2026-09-05 | Webhook addressing settled: one unguessable path per bot, not one shared door |
 | 2026-09-05 | Capability table verified against docs.bale.ai. The catalog's "Bale is a subset" premise does not hold: the divergence is **shape** (base URL, deep link, global name, payment rails), not missing capability. See ADR-0009's amendment |
 | 2026-09-06 | `draft -> active`: the unit ships as the Nx library `@txnet-backend/messenger`. The ADR-0009 seed moved out of `identity`, and `capabilities.ts` / `renderer.ts` / `deep-link.ts` are new. spec: F-301 F-302 |
-| 2026-09-09 | contract **v1 -> v4**, breaking: one client per `BotIntegration` instead of one per platform, tokens from the Credential Vault through a `BotIntegrationDirectory` port. Every registry method is keyed by an integration and most are now async. spec: F-320 F-321 F-323 |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

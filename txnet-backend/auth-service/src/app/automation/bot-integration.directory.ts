@@ -20,7 +20,7 @@ import {
  * platform is a type error here instead of a `CredentialUnavailable` at
  * runtime.
  */
-const TOKEN_KIND: Record<BotPlatform, TenantCredentialKind> = {
+export const BOT_TOKEN_KIND: Record<BotPlatform, TenantCredentialKind> = {
   telegram: TenantCredentialKind.telegram_bot_token,
   bale: TenantCredentialKind.bale_bot_token,
 };
@@ -114,6 +114,77 @@ export class PrismaBotIntegrationDirectory implements BotIntegrationDirectory {
       },
     });
     return row ? this.project(row) : null;
+  }
+
+  /**
+   * Every bot one tenant has, for that tenant's own screen (F-066-w5).
+   *
+   * Addressed by `tenantId` and read on the cross-tenant pool like everything
+   * else here, so the filter in the `where` is the whole confinement — which is
+   * safe only because the caller has already been admitted to *that* reseller
+   * by `ResellerAccess` and hands the id it was admitted to, never one off the
+   * request.
+   */
+  async listForTenant(tenantId: string): Promise<BotIntegration[]> {
+    const rows = await this.prisma.botIntegration.findMany({
+      where: { tenantId },
+      orderBy: [{ platform: 'asc' }, { botUsername: 'asc' }],
+    });
+    return rows.map((row) => this.project(row));
+  }
+
+  /**
+   * Add a bot a tenant has just connected (F-066-w5).
+   *
+   * The `webhookPath` is minted here rather than by the caller, for the reason
+   * `webhook-address.ts` gives: the address is a credential and whoever builds
+   * one builds all of them. A `P2002` is left to propagate — `(tenantId,
+   * platform, botUsername)` is a real unique key and the caller's answer for a
+   * duplicate is not this class's to choose.
+   */
+  async create(input: {
+    tenantId: string;
+    platform: BotPlatform;
+    botUsername: string;
+    credentialRef: string;
+    role?: BotIntegration['role'];
+  }): Promise<BotIntegration> {
+    const row = await this.prisma.botIntegration.create({
+      data: {
+        tenantId: input.tenantId,
+        platform: input.platform,
+        botUsername: input.botUsername,
+        credentialRef: input.credentialRef,
+        role: input.role ?? 'primary',
+        webhookPath: newWebhookPath(),
+        // `pending` and not `active`: the row exists, the platform has not been
+        // told yet, and claiming otherwise is the one thing `recordRegistration`
+        // is there to decide.
+        status: 'pending',
+      },
+    });
+    return this.project(row);
+  }
+
+  /**
+   * Retire a bot: the row goes (F-066-w5, user's call 2026-09-20).
+   *
+   * Deleted rather than flipped to `disabled`, because `disabled` already means
+   * "a human switched it off" — a reversible pause — and a state that means both
+   * cannot answer which one happened. Its credentials are revoked by the caller
+   * **before** this runs, so the failure this order allows is a revoked bot
+   * whose row survives: visible, harmless and re-runnable. The other order
+   * would leave a live token nothing points at.
+   *
+   * Addressed by id, and by the `tenantId` the caller was admitted to as well:
+   * the pool here can see every tenant, so the scoping has to be in the `where`
+   * — a delete that matches nothing is not an error, it is a row somebody else
+   * already retired.
+   */
+  async remove(integration: BotIntegration): Promise<void> {
+    await this.prisma.botIntegration.deleteMany({
+      where: { id: integration.id, tenantId: integration.tenantId },
+    });
   }
 
   /**
@@ -277,7 +348,7 @@ export class PrismaBotIntegrationDirectory implements BotIntegrationDirectory {
   private tokenRef(integration: BotIntegration): CredentialRef {
     return {
       tenantId: integration.tenantId,
-      kind: TOKEN_KIND[integration.platform],
+      kind: BOT_TOKEN_KIND[integration.platform],
       label: this.label(integration),
     };
   }

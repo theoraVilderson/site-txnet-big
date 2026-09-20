@@ -294,6 +294,57 @@ export class TelegramLikeBotClient {
   }
 
   /**
+   * Who this token belongs to, or `null` if the platform does not know it
+   * (F-066-w5).
+   *
+   * The one call made with a token that is **not yet** in the vault: a reseller
+   * pastes a string and the platform has to find out whether it is a bot token
+   * at all, whose bot it is, and what its `@handle` is — the handle is not
+   * something the reseller can be asked for, because a wrong answer would file
+   * the row under a name no deep link resolves to.
+   *
+   * `null` covers every failure, and deliberately: a revoked token, a typo and
+   * a messenger that is down are one answer to the caller — *this token cannot
+   * be used* — and the three are told apart in this log alone. Nothing about
+   * the value is ever logged.
+   */
+  async getMe(): Promise<{ id: number; username: string } | null> {
+    const result = await this.call<
+      TelegramLikeSendResult & { result?: { id?: number; username?: string } }
+    >('getMe');
+    const me = result.body?.result;
+    if (!result.ok || !me?.username) {
+      this.logger.warn(
+        `${this.platformLabel} getMe failed: status=${result.status} ` +
+          `error=${result.networkError ?? result.body?.description ?? 'n/a'}`,
+      );
+      return null;
+    }
+    return { id: me.id ?? 0, username: me.username };
+  }
+
+  /**
+   * Stop the platform delivering to this bot at all (F-066-w5).
+   *
+   * The withdrawal half of {@link setWebhook}, and the first thing a retirement
+   * does. `false` is not fatal for that caller — revoking the token is what
+   * actually ends the bot — but it is the difference between a messenger that
+   * has been told and one that will keep posting to a path that has stopped
+   * resolving, so it is reported rather than swallowed.
+   */
+  async deleteWebhook(): Promise<boolean> {
+    const result = await this.call<TelegramLikeSendResult>('deleteWebhook');
+    if (!result.ok) {
+      this.logger.error(
+        `${this.platformLabel} deleteWebhook failed: status=${result.status} ` +
+          `error=${result.networkError ?? result.body?.description ?? 'n/a'}`,
+      );
+      return false;
+    }
+    return true;
+  }
+
+  /**
    * Points the bot's updates at `url`. `secretToken` is a Telegram-only extra
    * header check; Bale ignores the field and is guarded by the secret in the
    * path alone. It is optional because a tenant may have none — the 32-byte

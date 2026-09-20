@@ -2,8 +2,8 @@
 id: automation
 layer: domain
 status: active
-version: 5
-updated: 2026-09-13
+version: 8
+updated: 2026-09-20
 ---
 
 # Contract — automation
@@ -37,7 +37,7 @@ Separately, every bot a tenant owns is a `bot_integration` row — the registry
 | list dead letters | limit | `dead_letter` rows, newest first — routing key, worker key, reason, attempts, body | sync | — |
 | resolve webhook path | webhookPath | `BotIntegration` (tenant + platform + role + `credentialRef`) | sync | unknown path — a 404, never a hint |
 | list a tenant's bots | tenantId | `BotIntegration[]`, never a credential | sync | — |
-| register / retire a bot | tenantId, platform, botUsername, role | `BotIntegration` | sync | duplicate `(tenant, platform, username)`; second `primary` |
+| register / retire a bot | tenantId, platform, token | `BotIntegration` | sync | a token the messenger refuses; duplicate `(tenant, platform, username)`; second `primary` |
 | record a registration outcome | integrationId, ok | `status` + `lastErrorAt` | sync | — |
 
 ## BotIntegration — several bots per tenant (F-315, F-316)
@@ -98,6 +98,15 @@ first. Two of those routes hand back a plaintext credential, which F-323 forbids
 admin surfaces, and that this seam already carries a strictly larger power
 (captcha bypass for every chat, ADR-0011). Every such call writes a vault audit
 row naming `bot-service` as the caller, so F-1215's trail is unbroken.
+
+## Connecting a reseller's bot
+
+`/api/auth/tenants/:tenantId/bots` — list, connect, retire, for the reseller the
+path names (F-066-w5, ADR-0064). **[contract.bots.md](contract.bots.md)**: the
+order a connect runs in, what a retire revokes, and why this surface is in
+`auth-service`. It is what makes "register / retire a bot" above real; until it
+shipped, only `bot-service`'s internal seam and the F-069 seeder could put a row
+in this table.
 
 ## The worker runtime, the jobs and the admin surface
 

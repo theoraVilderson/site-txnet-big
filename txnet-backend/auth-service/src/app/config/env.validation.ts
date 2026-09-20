@@ -215,6 +215,11 @@ export const envSchema = z.object({
   // A tenant editing its own roles (F-018-n), per tenant: role administration
   // is occasional, and every write here wakes the permission listener.
   ROLE_WRITE_RATE_LIMIT: rateLimit(60),
+  // A named reseller's bots (F-066-w5), per caller. The list is read on every
+  // visit to the console's bot step; a connect is a person pasting a token,
+  // and each one is a call to the messenger with a caller-supplied value.
+  RESELLER_BOT_READ_RATE_LIMIT: rateLimit(60),
+  RESELLER_BOT_WRITE_RATE_LIMIT: rateLimit(10),
   // The platform-wide ceiling over every guarded route's bucket, as a
   // multiple of that route's own per-tenant limit (F-066-s). Per-tenant
   // buckets hand one IP a fresh budget for every tenant it can name, so this

@@ -1,5 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { RESELLER_ACCESS_READER } from '@txnet-backend/shared-core';
 import { PrismaService } from './prisma.service';
 import { CrossTenantPrismaService } from './cross-tenant-prisma.service';
 import { withTenant } from '../tenant-context/with-tenant';
@@ -48,6 +49,11 @@ import { withTenant } from '../tenant-context/with-tenant';
         return base.$extends(withTenant(base)) as unknown as PrismaService;
       },
     },
+    // `ResellerAccess` (F-066-w1) reads `tenant.tenant` and a staff seat on the
+    // **app** pool, before any cross-tenant access is justified (ADR-0053).
+    // Bound here rather than beside the one surface that uses it (F-066-w5), so
+    // the next `/tenants/:tenantId/...` route in this service binds nothing.
+    { provide: RESELLER_ACCESS_READER, useExisting: PrismaService },
     {
       provide: CrossTenantPrismaService,
       inject: [ConfigService],
@@ -57,6 +63,6 @@ import { withTenant } from '../tenant-context/with-tenant';
         ),
     },
   ],
-  exports: [PrismaService, CrossTenantPrismaService],
+  exports: [PrismaService, CrossTenantPrismaService, RESELLER_ACCESS_READER],
 })
 export class PrismaModule {}

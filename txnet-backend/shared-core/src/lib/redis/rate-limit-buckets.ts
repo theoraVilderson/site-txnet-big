@@ -257,6 +257,20 @@ export const RateLimitBucket = {
   NOTIFICATION_CAMPAIGN_WRITE: 'notification:campaign:write',
 
   /**
+   * A named reseller's bots in `auth-service` (F-066-w5), per caller. Two
+   * buckets for the gateway surface's reason: the list is read on every visit
+   * to the console's bot step, while connecting one is a person pasting a
+   * token.
+   *
+   * The write budget is the tighter of the two and is a security control as
+   * well as a cost one: a connect calls the messenger with a value the caller
+   * supplied, so an unbounded one is a way to test tokens through this platform
+   * — and each accepted one writes two vault versions.
+   */
+  RESELLER_BOT_READ: 'reseller-bot:read',
+  RESELLER_BOT_WRITE: 'reseller-bot:write',
+
+  /**
    * Everything under `/api/public/<service>/` — the routes nobody signs in to
    * (F-018-al, ADR-0065), per visitor IP.
    *
