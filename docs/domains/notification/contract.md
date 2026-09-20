@@ -221,7 +221,7 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
 | forward-auth | identity headers on gated routes | 401 |
 | identity | `userId` (no FK across schemas; a caller names a real user) | — |
 | automation | `worker-service` ticks the fan-out (F-035-d) and delivery (F-035-e) | a started campaign stays `sending`, its rows unwritten or `queued`, until the next run |
-| messenger | `BotClientRegistry`, `TelegramLikeBotClient.sendText` (F-035-e); its outbound ceiling, which this service binds a Redis store for (F-313-a) | — (a library); over budget defers rows, it does not fail them |
+| messenger | `BotClientRegistry`, `TelegramLikeBotClient.sendText` (F-035-e); its outbound ceiling, which this service binds a Redis store for — shared with the bot's and auth's own sends (F-313-a/c) | — (a library); over budget defers rows, it does not fail them |
 | auth-api | `internal/bot-integrations/primary` and `/token` (ADR-0054) | rows stay `queued`, counted `stalled` |
 | SMS gateway (external) | `SendSms`, through `shared-core` `SmsProviderService` (F-035-f) | SMS rows stay `queued`, `deferred` or `stalled` |
 | tenant | the vault: `use` of a sending tenant's `sms_api_key` / `sms_sender_line` (F-018-a); `tenant_sms_config` read (F-035-i-a) | that tenant's SMS rows stay `queued`, counted `stalled` |

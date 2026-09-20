@@ -124,7 +124,10 @@ export class BotClientRegistry {
       token,
       this.config.get<number>('OTP_BOT_HTTP_TIMEOUT_MS', 5000),
       this.pacer
-        ? () => this.pacer!.take(integration.tenantId, integration.platform)
+        ? {
+            take: () => this.pacer!.take(integration.tenantId, integration.platform),
+            spend: () => this.pacer!.spend(integration.tenantId, integration.platform),
+          }
         : null,
     );
   }

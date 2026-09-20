@@ -9,6 +9,18 @@ export interface TelegramLikeSendResult {
   result?: { message_id?: number };
 }
 
+/**
+ * This bot's share of its platform's send allowance, as the driver sees it
+ * (F-313-a, ADR-0066). `BotClientRegistry` binds it to the integration's
+ * tenant; the client never learns whose bot it is.
+ */
+export interface BotSendBudget {
+  /** A send that can wait: `null` to go now, else seconds to wait. */
+  take(): Promise<number | null>;
+  /** A send a person is waiting on: counts, never refuses. */
+  spend(): Promise<void>;
+}
+
 /** {@link TelegramLikeBotClient.sendText}'s answer: sent, or why not and whether to try again. */
 export type SendTextResult =
   | { ok: true; messageId: number | null }
@@ -76,16 +88,15 @@ export class TelegramLikeBotClient {
     private readonly botToken: string,
     private readonly timeoutMs: number,
     /**
-     * Spends one of this bot's outbound budget, and says how long to wait if
-     * there is none left (F-313-a, ADR-0066). `null` — the default — is a
-     * client nobody paces, which is how every caller behaved before this
-     * existed and how the apps that bind no store still behave.
+     * This bot's outbound budget (F-313-a/F-313-c, ADR-0066). `null` — the
+     * default — is a client nobody paces, which is how every caller behaved
+     * before this existed and how `clientForToken` still behaves.
      *
-     * A closure rather than the pacer itself: the client knows a token and a
+     * Closures rather than the pacer itself: the client knows a token and a
      * platform, never a tenant, and keeping it that way is what stops a driver
      * from growing an opinion about whose bot it is.
      */
-    private readonly pace: (() => Promise<number | null>) | null = null,
+    private readonly budget: BotSendBudget | null = null,
   ) {
     this.logger = new Logger(`${TelegramLikeBotClient.name}:${platformLabel}`);
   }
@@ -96,6 +107,11 @@ export class TelegramLikeBotClient {
     text: string,
     replyMarkup?: ReplyMarkup,
   ): Promise<number | null> {
+    // Counted, never refused (F-313-c): a person is waiting on this one, and
+    // every failure below is thrown — so a spent budget must not become a
+    // failed login. The campaign is the caller that yields, in `sendText`.
+    await this.budget?.spend();
+
     const result = await this.call<TelegramLikeSendResult>('sendMessage', {
       chat_id: chatId,
       text,
@@ -140,7 +156,7 @@ export class TelegramLikeBotClient {
     // The ceiling, before the send rather than after it (ADR-0066). Answered in
     // the shape the platform's own 429 uses, so this needs no branch of its own
     // at any call site: a bulk sender defers the row, a flow logs and moves on.
-    const wait = await this.pace?.();
+    const wait = await this.budget?.take();
     if (wait != null) {
       return {
         ok: false,
@@ -216,6 +232,9 @@ export class TelegramLikeBotClient {
   ): Promise<{ ok: true; messageId: number | null } | { ok: false; reason: InvoiceFailure }> {
     const shaped = invoiceParams(this.platformLabel, invoice);
     if ('reason' in shaped) return { ok: false, reason: shaped.reason };
+    // Counted after the shaping refusal, which sends nothing, and never
+    // refused: a buyer is waiting on this one (F-313-c).
+    await this.budget?.spend();
     const result = await this.call<TelegramLikeSendResult>('sendInvoice', {
       chat_id: chatId,
       ...shaped.params,

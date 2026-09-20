@@ -8,7 +8,7 @@ import {
   VAULT_DB,
   translatorFromEnv,
 } from '@txnet-backend/shared-core';
-import { AuthApiBotIntegrationDirectory, BOT_INTEGRATION_DIRECTORY, MessengerModule, SEND_RATE_STORE } from '@txnet-backend/messenger';
+import { AuthApiBotIntegrationDirectory, BOT_INTEGRATION_DIRECTORY, MessengerModule } from '@txnet-backend/messenger';
 
 import { LocaleModule } from '../locale/locale.module';
 import { CampaignAdminController } from './campaign-admin.controller';
@@ -19,7 +19,6 @@ import { CampaignInternalController } from './campaign-internal.controller';
 import { CampaignTextService } from './campaign-texts';
 import { MailLineResolver } from './mail-line';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
-import { RedisService } from '../redis/redis.service';
 import { SmsLineSource } from './sms-line';
 
 /**
@@ -39,27 +38,12 @@ import { SmsLineSource } from './sms-line';
 class BotDirectoryModule {}
 
 /**
- * The Redis the outbound pacer counts in (F-313-a, ADR-0066).
- *
- * This is the one app that binds it, because it is the one that sends in bulk.
- * `messenger` cannot hold a client of its own — four apps import it, each with
- * its own connection and keyspace prefix — so it takes this seam instead, the
- * same way `RateLimitStore` does. `RedisService` already has the one method it
- * asks for, and `RedisModule` is global, so this is a binding and not a wiring.
- */
-@Module({
-  providers: [{ provide: SEND_RATE_STORE, useExisting: RedisService }],
-  exports: [SEND_RATE_STORE],
-})
-class SendRateModule {}
-
-/**
  * Campaign drafts (F-035-c), sending them (F-035-d) and delivering to Telegram
  * and Bale (F-035-e), by SMS (F-035-f) and by email in each recipient's language
  * (F-035-h); the ticks that drive the last two are `worker-service`'s.
  */
 @Module({
-  imports: [MessengerModule.forRoot({ imports: [BotDirectoryModule, SendRateModule] }), LocaleModule],
+  imports: [MessengerModule.forRoot({ imports: [BotDirectoryModule] }), LocaleModule],
   controllers: [CampaignAdminController, CampaignInternalController],
   providers: [
     CampaignAdminService,

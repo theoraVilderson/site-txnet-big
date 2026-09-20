@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   RateLimitBucket,
@@ -63,19 +63,22 @@ const CEILING_ENV: Record<BotPlatform, string> = {
  * bucket is declared in the same registry, so the platform's whole rate-limit
  * surface stays readable in one file (C-05).
  *
- * **A refusal is not a failure.** Over budget answers with a number of seconds
- * to wait, which callers already know how to handle: it is the same thing a
- * platform's own 429 carries, so `sendText` can return it unchanged and no
- * call site has to learn a new shape.
+ * **Two ways to spend it, because there are two kinds of send** (F-313-c).
+ * {@link take} is for a send that can wait — the bulk one — and over budget it
+ * answers with seconds to wait, in the shape a platform's own 429 carries, so
+ * no call site had to learn anything new. {@link spend} is for a send a person
+ * is waiting on, which counts and goes regardless. Both hit the same counter,
+ * and that is what makes the bulk sender's budget true: the one caller that
+ * *can* yield is the one that does.
  *
  * **Unbound is unpaced.** With no store the pacer lets everything through, as
- * before it existed. An app that sends interactively — `bot-service`,
- * `auth-service` — binds nothing today and is not paced; it still spends the
- * same real allowance without counting it. That gap is named in ADR-0066 and
- * is a row of its own, not something to rely on.
+ * before it existed. Every app that sends binds one today; an app that forgets
+ * loses its counting, not its sends.
  */
 @Injectable()
 export class BotSendPacer {
+  private readonly logger = new Logger(BotSendPacer.name);
+
   constructor(
     @Optional() @Inject(SEND_RATE_STORE) private readonly store: SendRateStore | null,
     @Optional() private readonly config?: ConfigService,
@@ -89,16 +92,59 @@ export class BotSendPacer {
    * "no wait given" as "go ahead" is the one mistake this API can invite.
    */
   async take(tenantId: string, platform: BotPlatform): Promise<number | null> {
-    if (!this.store) return null;
-
     const limit = this.ceilingOf(platform);
     if (limit <= 0) return null;
+
+    const current = await this.count(tenantId, platform);
+    if (current === null) return null;
+    return current <= limit ? null : SEND_RATE_WINDOW_SEC;
+  }
+
+  /**
+   * Spend one of this bot's budget for a send that **cannot** be deferred
+   * (F-313-c).
+   *
+   * `sendMessage` and `sendInvoice` are answers to a person who is waiting,
+   * and `sendMessage` throws on failure — so refusing one would turn a spent
+   * budget into a failed login or a screen that never arrives. They count and
+   * go anyway.
+   *
+   * Counting them is the point, not a formality: a ceiling only means anything
+   * if everyone spends from it. Without this, a campaign would pace itself
+   * against a budget that interactive traffic was quietly draining, and the
+   * two would race each other into the ban the pacer exists to avoid. With it,
+   * the bulk sender is the one that yields — which is the right way round,
+   * since it is the only one that can wait.
+   */
+  async spend(tenantId: string, platform: BotPlatform): Promise<void> {
+    if (this.ceilingOf(platform) <= 0) return;
+    await this.count(tenantId, platform);
+  }
+
+  /**
+   * One hit on this bot's counter, or `null` when there is nothing to count
+   * in — no store bound, or a Redis that did not answer.
+   *
+   * **Fail open, deliberately.** A counter that cannot be reached is a reason
+   * to stop counting, not a reason to stop sending: the alternative is a Redis
+   * outage that silently takes every tenant's OTP delivery down with it. The
+   * cost is that sends during an outage are unpaced, which is what they were
+   * before this existed.
+   */
+  private async count(tenantId: string, platform: BotPlatform): Promise<number | null> {
+    if (!this.store) return null;
 
     const key = UnscopedRedisKeys.outboundRate(
       rateLimitBucketKey(RateLimitBucket.BOT_SEND, `${tenantId}:${platform}`),
     );
-    const current = await this.store.incrementWithTtl(key, SEND_RATE_WINDOW_SEC);
-    return current <= limit ? null : SEND_RATE_WINDOW_SEC;
+    try {
+      return await this.store.incrementWithTtl(key, SEND_RATE_WINDOW_SEC);
+    } catch (err) {
+      this.logger.warn(
+        `send budget for ${tenantId} on ${platform} not counted, sending unpaced: ${(err as Error).message}`,
+      );
+      return null;
+    }
   }
 
   /** The deployment's ceiling for a platform, else the documented default. */

@@ -71,6 +71,41 @@ describe('BotSendPacer', () => {
     expect(new Set(store.keys).size).toBe(3);
   });
 
+  it('counts an interactive send without ever refusing it', async () => {
+    const p = pacer(countingStore(), { telegram: 1 });
+
+    // A person is waiting on `sendMessage`, and it throws on failure — so a
+    // spent budget must never become a failed login (F-313-c).
+    await p.spend('t1', 'telegram');
+    await expect(p.spend('t1', 'telegram')).resolves.toBeUndefined();
+    await expect(p.spend('t1', 'telegram')).resolves.toBeUndefined();
+  });
+
+  it('spends the same counter a deferrable send takes from', async () => {
+    const p = pacer(countingStore(), { telegram: 2 });
+
+    // This is the whole point of counting interactive traffic: the bulk
+    // sender's budget is only true if everyone spends from it.
+    await p.spend('t1', 'telegram');
+    await p.spend('t1', 'telegram');
+
+    expect(await p.take('t1', 'telegram')).toBe(1);
+  });
+
+  it('lets the send through when Redis is down, rather than holding the platform hostage', async () => {
+    const broken: SendRateStore = {
+      incrementWithTtl: async () => {
+        throw new Error('connection refused');
+      },
+    };
+    const p = pacer(broken, { telegram: 1 });
+
+    // Fail open, both ways: a counter that cannot be read is a reason to stop
+    // counting, not a reason to stop sending OTPs.
+    expect(await p.take('t1', 'telegram')).toBeNull();
+    await expect(p.spend('t1', 'telegram')).resolves.toBeUndefined();
+  });
+
   it('builds the key through the registry, so the counter is readable in the keyspace', async () => {
     const store = countingStore();
     await pacer(store).take('t1', 'telegram');

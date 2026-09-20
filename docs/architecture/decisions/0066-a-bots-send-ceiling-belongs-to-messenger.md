@@ -6,7 +6,7 @@ updated: 2026-09-20
 
 # ADR 0066 — A bot's send ceiling belongs to messenger, not to the sender
 
-- **Status:** accepted 2026-09-20 with F-313-a (user)
+- **Status:** accepted 2026-09-20 with F-313-a (user); amended the same day by F-313-c
 - **Date:** 2026-09-20
 - **Affects units:** messenger, notification, bot-app
 
@@ -56,23 +56,31 @@ queue: it owns the audience, the recipient rows and the claim.
 
 ## Consequences
 - The pacer is a `messenger` service bound by whoever imports `MessengerModule`.
-  **Only `notification-service` binds it in F-313-a** — it is the one bulk
-  sender, and the one the row is about. `bot-service` and `auth-service` send
-  interactively, at human pace, and stay unpaced for now; they still spend the
-  same real allowance without counting it. Wiring them is a row of its own, and
-  until it exists the budget is a floor on what a bulk run consumes, not a
-  guarantee of what the bot's allowance has left.
-- A store is optional: an app that binds none sends unpaced, exactly as today.
-  This is deliberate — the alternative is four apps that cannot boot until they
-  each grow a Redis binding — and it is the gap named above, not a default to
-  rely on.
+  **F-313-a bound only `notification-service`**, the one bulk sender; that left
+  the budget a floor on what a bulk run consumes rather than a statement about
+  the bot's real allowance. **Amended 2026-09-20 by F-313-c** (user), which
+  closed it: all three sending apps bind the store in their own `RedisModule`,
+  beside `RATE_LIMIT_STORE`.
+- **An interactive send counts but is never refused.** `sendMessage` and
+  `sendInvoice` answer a person who is waiting, and `sendMessage` throws on
+  every failure, so refusing one for budget would turn a spent counter into a
+  failed login. They spend and go; `sendText`, the bulk path, is the one that
+  yields. That asymmetry is the decision, not a compromise: the only caller
+  that *can* wait is the one that should, and counting the rest is what makes
+  its budget true.
+- A store is still optional, and the counter fails open: an app that binds none,
+  or a Redis that does not answer, loses the counting and not the sends. The
+  alternative is a Redis outage that silently takes every tenant's OTP delivery
+  with it.
 - Telegram's 30/s is documented; Bale's is not confirmed against `docs.bale.ai`,
   so it takes the lower default and keeps a dated open question. The
   `/business/` path stays unmodelled: one ceiling per platform, not per path.
 - The window is fixed, not a token bucket, so a burst may land at the seam of
-  two windows. At the sizes here (a run sends at most 100 rows over 40s) that
-  is far under either ceiling; a bucket is worth building when a second sender
-  is paced, not before.
+  two windows — at worst twice the ceiling across two adjacent windows. At the
+  sizes here (a run sends at most 100 rows over 40s, and interactive traffic is
+  a person typing) that stays far under either platform's real limit. A token
+  bucket is the upgrade if a burst ever reaches one, and nothing above it has
+  to change: both callers already ask this object rather than compute a rate.
 
 ## Alternatives considered
 - **The queue and the ceiling both in `notification`.** Cheaper today: every
