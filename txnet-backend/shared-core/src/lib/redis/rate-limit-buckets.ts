@@ -255,6 +255,26 @@ export const RateLimitBucket = {
   /** Campaign management in `notification-service` (F-035-c), per admin. */
   NOTIFICATION_CAMPAIGN_READ: 'notification:campaign:read',
   NOTIFICATION_CAMPAIGN_WRITE: 'notification:campaign:write',
+
+  /**
+   * Everything under `/api/public/<service>/` — the routes nobody signs in to
+   * (F-018-al, ADR-0065), per visitor IP.
+   *
+   * **One bucket for the whole prefix, spent in the middleware and not by a
+   * `@RateLimit` per route.** A public route is meant to be a controller and a
+   * decorator; a limit each route opts into is a limit a new one silently does
+   * without, and an unauthenticated route without one is exactly what this row
+   * closed. The middleware runs before every guard, so it also counts the
+   * requests `PublicRouteGuard` answers with the neutral 404 — a flood on a
+   * host that matches no `tenant_domain` row is still a flood, and
+   * `RedisKeys.rateLimit` puts it under `none` rather than throwing.
+   *
+   * **Per IP, not per host** (user, 2026-09-20). The tenant segment
+   * `RedisKeys.rateLimit` adds is already the host's tenant, so the budget is
+   * per reseller; the subject is the visitor, so one attacker is cut off
+   * instead of every visitor to the reseller they aimed at.
+   */
+  PUBLIC_ROUTE: 'public:route',
 } as const;
 
 export type RateLimitBucket =

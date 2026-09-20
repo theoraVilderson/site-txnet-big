@@ -1,90 +1,31 @@
 import { Injectable, Logger } from '@nestjs/common';
+import {
+  type CachedTenantRow,
+  HOST_SURFACE_MISS,
+  type HostSurface,
+  isCachedTenantRow,
+  isHostSurface,
+} from '@txnet-backend/shared-core';
+
 import { RedisKeys, RedisTtl } from '../redis/redis.keys';
 import { RedisService } from '../redis/redis.service';
-import {
-  TenantSurfaceDomainType,
-  TenantSurfacePurpose,
-  TenantSurfaceTenantType,
-  normalizeHost,
-} from './tenant';
+import { normalizeHost } from './tenant';
 
 /**
- * A tenant reduced to what resolution needs — see {@link ResolvedTenant} — plus
- * `tenant.ownerUserId`, the one account admitted from another tenant
- * (ADR-0059): cached so the owner check through a bot reads no row (F-061-k).
- * Every write of the owner drops these entries (`invalidateTenantOwner`).
+ * The shape stored under `tenant:host:<host>` and `tenant:id:<id>`, **defined
+ * in `shared-core`** (`tenant/host-surface.ts`, F-018-al) because
+ * `tenant-service` writes the host entry too: its public routes read the same
+ * question, and a second key under a second name is a second thing to delete
+ * at every domain write — the one missed outliving a change of owner is the
+ * cross-tenant leak this service exists to prevent.
+ *
+ * The names stay as this service's call sites already read them.
  */
-export type CachedTenant = { id: string; slug: string; ownerUserId: string };
+export type CachedTenant = CachedTenantRow;
+export type CachedSurface = HostSurface;
 
-/**
- * What a host resolves to: the tenant, plus what that domain is *for*
- * (F-066-q). The purpose belongs to the surface, so it is cached with the
- * host lookup and never with {@link TenantCacheService.byId} — a claim names a
- * tenant, and a tenant has no single purpose.
- */
-export type CachedSurface = CachedTenant & {
-  purpose: TenantSurfacePurpose;
-  /**
-   * Whether the platform issued the host or the reseller proved it (F-018-ag).
-   * Cached with the purpose and for the same reason: both are facts about the
-   * door, and `byId` has no door to describe.
-   */
-  domainType: TenantSurfaceDomainType;
-  /**
-   * Who owns the host's tenant (ADR-0063). Cached with the door for the same
-   * reason, and required by {@link isSurface} — which is what drained, at the
-   * deploy that added it, every entry for a `<slug>.<domain>` row the
-   * ADR-0063 migration deleted in SQL, where Redis cannot be reached.
-   */
-  tenantType: TenantSurfaceTenantType;
-};
-
-const PURPOSES: readonly string[] = ['panel', 'subscription', 'assets'];
-const DOMAIN_TYPES: readonly string[] = ['subdomain', 'custom_domain'];
-const TENANT_TYPES: readonly string[] = ['platform_owner', 'reseller'];
-
-/**
- * The marker for "this was looked up and there is nothing", stored so a
- * stranger's host costs one Redis read rather than one database read. It has
- * to be a value Redis can hold and JSON cannot produce, because a missing key
- * and a cached `null` mean opposite things: *not looked up yet* and *looked up,
- * answers nothing*. Collapsing them would send every unknown host to Postgres.
- */
-const MISS = '-';
-
-/**
- * A cached value carries a tenant at all. An entry written before its owner was
- * cached — a host entry before ADR-0059, an id entry before F-061-k — lacks
- * `ownerUserId` and re-reads, as a purpose-less one did (F-066-q).
- */
-function isTenant(value: unknown): value is CachedTenant {
-  const row = value as CachedTenant | null;
-  return (
-    typeof row === 'object' &&
-    row !== null &&
-    typeof row.id === 'string' &&
-    typeof row.slug === 'string' &&
-    typeof row.ownerUserId === 'string'
-  );
-}
-
-/**
- * …and, for a host entry, a purpose, a domain type *and* a tenant type this
- * code still recognises. An entry written before F-018-ag added the second one
- * — or ADR-0063 the third — fails the
- * check and re-reads, exactly as a purpose-less one did — which is what
- * carries the new field across a deploy without a filter deciding from a field
- * that is not there.
- */
-function isSurface(value: unknown): value is CachedSurface {
-  const surface = value as CachedSurface;
-  return (
-    isTenant(value) &&
-    PURPOSES.includes(surface.purpose as string) &&
-    DOMAIN_TYPES.includes(surface.domainType as string) &&
-    TENANT_TYPES.includes(surface.tenantType as string)
-  );
-}
+/** @see HOST_SURFACE_MISS — the marker both services must spell alike. */
+const MISS = HOST_SURFACE_MISS;
 
 /**
  * The `host -> tenant` cache, invalidated explicitly rather than by TTL
@@ -123,7 +64,7 @@ export class TenantCacheService {
     host: string,
     lookup: () => Promise<CachedSurface | null>,
   ): Promise<CachedSurface | null> {
-    return this.through(RedisKeys.tenantByHost(host), lookup, isSurface);
+    return this.through(RedisKeys.tenantByHost(host), lookup, isHostSurface);
   }
 
   /** The tenant this claimed id proves to, looked up at most once per TTL. */
@@ -131,7 +72,7 @@ export class TenantCacheService {
     tenantId: string,
     lookup: () => Promise<CachedTenant | null>,
   ): Promise<CachedTenant | null> {
-    return this.through(RedisKeys.tenantById(tenantId), lookup, isTenant);
+    return this.through(RedisKeys.tenantById(tenantId), lookup, isCachedTenantRow);
   }
 
   /**

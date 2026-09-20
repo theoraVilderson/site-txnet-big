@@ -26,15 +26,15 @@ describe('surfaceOfHost', () => {
   const rows: Record<string, Record<string, unknown>> = {
     'panel.txnet.app': {
       domainType: 'subdomain', purpose: 'panel', verificationStatus: 'verified',
-      tenant: { id: 'platform', tenantType: 'platform_owner' },
+      tenant: { id: 'platform', slug: 'platform', ownerUserId: 'u-0', tenantType: 'platform_owner' },
     },
     'shop-acme.com': {
       domainType: 'custom_domain', purpose: 'panel', verificationStatus: 'verified',
-      tenant: { id: 'acme', tenantType: 'reseller' },
+      tenant: { id: 'acme', slug: 'acme', ownerUserId: 'u-1', tenantType: 'reseller' },
     },
     'new-acme.com': {
       domainType: 'custom_domain', purpose: 'panel', verificationStatus: 'pending',
-      tenant: { id: 'acme', tenantType: 'reseller' },
+      tenant: { id: 'acme', slug: 'acme', ownerUserId: 'u-1', tenantType: 'reseller' },
     },
   };
   const db = {
@@ -45,9 +45,10 @@ describe('surfaceOfHost', () => {
 
   it('names the surface of a platform subdomain and a proved custom domain', async () => {
     await expect(surfaceOfHost(db, 'panel.txnet.app')).resolves.toEqual({
-      tenantId: 'platform', purpose: 'panel', domainType: 'subdomain', tenantType: 'platform_owner',
+      id: 'platform', slug: 'platform', ownerUserId: 'u-0',
+      purpose: 'panel', domainType: 'subdomain', tenantType: 'platform_owner',
     });
-    await expect(surfaceOfHost(db, 'shop-acme.com')).resolves.toMatchObject({ tenantId: 'acme' });
+    await expect(surfaceOfHost(db, 'shop-acme.com')).resolves.toMatchObject({ id: 'acme' });
   });
 
   it('has no surface for an unproved custom domain, an unknown host, or none', async () => {
@@ -59,7 +60,7 @@ describe('surfaceOfHost', () => {
 
 describe('PublicRouteGuard', () => {
   const guard = new PublicRouteGuard(new Reflector());
-  const panel: HostSurface = { tenantId: 't', purpose: 'panel', domainType: 'custom_domain', tenantType: 'reseller' };
+  const panel: HostSurface = { id: 't', slug: 't', ownerUserId: 'u-1', purpose: 'panel', domainType: 'custom_domain', tenantType: 'reseller' };
   const assets: HostSurface = { ...panel, purpose: 'assets' };
   const closed: HostSurface = { ...panel, domainType: 'subdomain' };
 

@@ -1177,6 +1177,12 @@ services:
       - PLATFORM_RATE_LIMIT_FACTOR=${PLATFORM_RATE_LIMIT_FACTOR:-}
       - RESELLER_PURCHASE_READ_RATE_LIMIT=${RESELLER_PURCHASE_READ_RATE_LIMIT:-}
       - RESELLER_PURCHASE_WRITE_RATE_LIMIT=${RESELLER_PURCHASE_WRITE_RATE_LIMIT:-}
+      # The whole `public/` prefix, per visitor IP per minute (F-018-al) — the
+      # routes nobody signs in to, spent in `PublicHostMiddleware`.
+      - PUBLIC_ROUTE_RATE_LIMIT=${PUBLIC_ROUTE_RATE_LIMIT:-}
+      # `req.ip` is Traefik's without it, so every visitor would share one
+      # bucket (F-018-al). One hop: Traefik, then this service.
+      - TRUST_PROXY=${TRUST_PROXY}
       # Object storage (F-018-m): only `local` is built; its root is the volume above.
       - OBJECT_STORAGE_DRIVER=${OBJECT_STORAGE_DRIVER:-local}
       - OBJECT_STORAGE_LOCAL_ROOT=/data/objects

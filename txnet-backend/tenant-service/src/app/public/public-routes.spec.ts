@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { ServesPanelController } from '../domains/serves-panel.controller';
+import { HostSurfaceCache } from './host-surface-cache.service';
 import { PublicHostMiddleware } from './public-host.middleware';
 
 /** Every controller of this service, found on disk so a new one cannot be left out. */
@@ -20,13 +21,19 @@ describe('tenant-service public routes', () => {
   type Ctor = new (...a: never[]) => object;
   let classes: Ctor[] = [];
 
+  // 60s, not the 10s default: this hook imports *every* controller in the
+  // service, so its cost grows with the service and is paid against whatever
+  // else vitest is transforming in parallel. Measured 2026-09-20 — 8.2s alone,
+  // over 10s once the suite gained a sixteenth file — so the default was
+  // already marginal and failed as a timeout, which reads like a regression and
+  // is not one. The budget is generous on purpose: a real hang still fails.
   beforeAll(async () => {
     const files = readdirSync(APP, { recursive: true, encoding: 'utf8' }).filter((f) => f.endsWith('.controller.ts'));
     const modules = (await Promise.all(files.map((f) => import(join(APP, f))))) as Record<string, unknown>[];
     classes = modules
       .flatMap((m) => Object.values(m))
       .filter((v): v is Ctor => typeof v === 'function' && Reflect.hasMetadata(PATH_METADATA, v));
-  });
+  }, 60_000);
   const pathsOf = (cls: object): string[] => [Reflect.getMetadata(PATH_METADATA, cls)].flat();
   const handlersOf = (cls: Ctor) =>
     Object.getOwnPropertyNames(cls.prototype)
@@ -57,13 +64,25 @@ describe('tenant-service public routes', () => {
     const rows: Record<string, Record<string, unknown>> = {
       'shop-acme.com': {
         domainType: 'custom_domain', purpose: 'panel', verificationStatus: 'verified',
-        tenant: { id: 'acme', tenantType: 'reseller' },
+        tenant: { id: 'acme', slug: 'acme', ownerUserId: 'u-1', tenantType: 'reseller' },
       },
     };
     const prisma = {
       tenantDomain: { findUnique: vi.fn(async ({ where }: { where: { domainValue: string } }) => rows[where.domainValue] ?? null) },
     };
-    const middleware = new PublicHostMiddleware(prisma as never);
+    // Redis absent on purpose: the cache fails open to the database, which is
+    // what keeps this test about the Host and not about the cache
+    // (`host-surface-cache.spec.ts` covers that).
+    const redis = { get: vi.fn(async () => null), setWithTtl: vi.fn(async () => undefined) };
+    const rateLimiter = {
+      hit: vi.fn(async () => ({ allowed: true, current: 1, limit: 300 })),
+      hitPlatform: vi.fn(async () => ({ allowed: true, current: 1, limit: 3000 })),
+    };
+    const middleware = new PublicHostMiddleware(
+      new HostSurfaceCache(redis as never, prisma as never),
+      rateLimiter as never,
+      { get: () => 300 } as never,
+    );
 
     it("puts the Host's surface on the request and opens its tenant's scope", async () => {
       const req: Record<string | symbol, unknown> = { headers: { host: 'Shop-Acme.com:443' } };
@@ -71,7 +90,7 @@ describe('tenant-service public routes', () => {
       await middleware.use(req as never, {} as never, () => {
         scoped = TenantContext.current('spec').id;
       });
-      expect(req[PUBLIC_SURFACE]).toMatchObject({ tenantId: 'acme', purpose: 'panel' });
+      expect(req[PUBLIC_SURFACE]).toMatchObject({ id: 'acme', purpose: 'panel' });
       expect(scoped).toBe('acme');
     });
 

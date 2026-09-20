@@ -14,6 +14,7 @@ import { HealthController } from './health.controller';
 import { LanguageMiddleware } from './locale/language.middleware';
 import { LocaleModule } from './locale/locale.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
+import { HostSurfaceCache } from './public/host-surface-cache.service';
 import { PublicHostMiddleware } from './public/public-host.middleware';
 import { PackagesModule } from './packages/packages.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -68,6 +69,10 @@ const LEGACY_PUBLIC_ROUTES = [`${LEGACY_FILES_PATH}/*path`, LEGACY_BRANDING_PATH
   ],
   controllers: [HealthController],
   providers: [
+    // The public prefix's Host lookup, read through `tenant:host:<host>`
+    // (F-018-al). A provider of the app module because its only consumer is
+    // the middleware configured below, which is the app module's too.
+    HostSurfaceCache,
     // First, so a public route on a door it does not serve is the neutral 404
     // before anything judges its tenant (F-018-ak).
     { provide: APP_GUARD, useClass: PublicRouteGuard },

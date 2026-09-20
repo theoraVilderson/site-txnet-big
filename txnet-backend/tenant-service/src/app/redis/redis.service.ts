@@ -75,6 +75,16 @@ export class RedisService implements RateLimitStore, OnModuleInit, OnModuleDestr
   }
 
   /**
+   * One write with an expiry, for `tenant:host:<host>` (F-018-al). The TTL is a
+   * **backstop**, not the lifetime: the entry is deleted explicitly when a
+   * domain is created, verified, switched or removed, and what the expiry
+   * bounds is the damage from a writer that forgot to (ADR-0025).
+   */
+  async setWithTtl(key: string, value: string, ttlSec: number): Promise<void> {
+    await this.client.set(key, value, 'EX', ttlSec);
+  }
+
+  /**
    * One pub/sub message, never thrown: the key it announces is already written,
    * and `gateway-service`'s re-check tick reads that key anyway (F-018-r). The
    * prefix by hand: ioredis applies `keyPrefix` to keys, and a channel is not

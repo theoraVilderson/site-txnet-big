@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import {
   I18nExceptionFilter,
   ResponseInterceptor,
+  trustProxySetting,
 } from '@txnet-backend/shared-core';
 
 import { AppModule } from './app/app.module';
@@ -28,6 +29,17 @@ async function bootstrap() {
   app.useGlobalInterceptors(new ResponseInterceptor(locale));
 
   const config = app.get(ConfigService<EnvConfig, true>);
+
+  // The public prefix counts its rate limit per visitor IP (F-018-al), and
+  // behind Traefik the socket's address is Traefik's — untrusted, `req.ip` is
+  // the proxy and every visitor shares one bucket. `trustProxySetting` because
+  // Express reads this setting by *type*: `'1'` is an address list, `1` is a
+  // hop count (shared-core, `trust-proxy.ts`).
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .set('trust proxy', trustProxySetting(config.get('TRUST_PROXY', { infer: true })));
+
   const globalPrefix = config.get('GLOBAL_PREFIX', { infer: true });
   const port = config.get('PORT', { infer: true });
   const host = config.get('PUBLIC_HOST', { infer: true });

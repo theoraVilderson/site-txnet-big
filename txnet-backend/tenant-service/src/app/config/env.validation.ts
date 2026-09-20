@@ -111,6 +111,28 @@ export const envSchema = z.object({
   // is typed; the write budget is purchases, each of which moves money.
   RESELLER_PURCHASE_READ_RATE_LIMIT: rateLimit(120),
   RESELLER_PURCHASE_WRITE_RATE_LIMIT: rateLimit(10),
+
+  /**
+   * Requests per visitor IP per minute over the *whole* `public/` prefix
+   * (F-018-al) — the routes nobody signs in to, spent in
+   * `PublicHostMiddleware` rather than per route.
+   *
+   * The budget is a page-load budget, and `files/<key>` is what spends it: one
+   * request per image, so a branded panel's first paint is several at once, and
+   * a visitor reloading is several more. 300/min leaves that far behind while
+   * still being two orders of magnitude below what one client can cost the
+   * database — and it is env config precisely so tightening it under attack is
+   * a restart, not a release (F-087).
+   */
+  PUBLIC_ROUTE_RATE_LIMIT: rateLimit(300),
+
+  /**
+   * How many proxy hops to trust for `req.ip` (`trustProxySetting`, F-018-al).
+   * The public prefix counts per visitor IP, and behind Traefik the socket's
+   * address is Traefik's — untrusted, every visitor shares one bucket. One hop
+   * is this platform's deployment: Traefik, then the service.
+   */
+  TRUST_PROXY: z.string().default(''),
 }).refine((env) => !(env.NODE_ENV === 'production' && !env.SERVICE_AUTH_TOKEN), {
   message: 'SERVICE_AUTH_TOKEN is required when NODE_ENV=production: without it no process can reach internal/*',
   path: ['SERVICE_AUTH_TOKEN'],

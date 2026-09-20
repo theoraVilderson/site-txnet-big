@@ -6,9 +6,10 @@ import {
   SetMetadata,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import type { PrismaClient, TenantDomainPurpose, TenantDomainType, TenantType } from '@prisma/client';
+import type { PrismaClient, TenantDomainPurpose } from '@prisma/client';
 
 import { doorClosed } from './door';
+import type { HostSurface } from './host-surface';
 
 /**
  * **The one way to add a route nobody signs in to** (F-018-ak, ADR-0065).
@@ -40,18 +41,18 @@ export function publicPath(service: string, route: string): string {
 /** The surface a public request's Host proves, or `null` for none (set by the host middleware). */
 export const PUBLIC_SURFACE = Symbol('publicSurface');
 
-export interface HostSurface {
-  tenantId: string;
-  purpose: TenantDomainPurpose;
-  domainType: TenantDomainType;
-  tenantType: TenantType;
-}
-
 /**
  * The surface a Host proves: its `tenant_domain` row, if that row is proof. A
  * subdomain is issued by the platform, so matching it is the whole proof; a
  * custom domain is the tenant's only once ownership has been shown. The same
  * rule as `auth-service`'s resolver and {@link tenantOfHost}.
+ *
+ * **It selects `slug` and `ownerUserId` although no public route reads them**
+ * (F-018-al): the answer is cached under `tenant:host:<host>`, the key
+ * `auth-service` shares, and a value missing a field that service requires is a
+ * permanent miss for it. {@link HostSurface} is that shared shape; this query
+ * is what fills it, and it is deliberately the same select as
+ * `TenantResolverService.lookupHost`.
  *
  * `db` must be the **cross-tenant** client: the tenant this returns is what the
  * request is then scoped by, and `tenant_domain`'s RLS shows an unscoped
@@ -68,17 +69,12 @@ export async function surfaceOfHost(
       domainType: true,
       purpose: true,
       verificationStatus: true,
-      tenant: { select: { id: true, tenantType: true } },
+      tenant: { select: { id: true, slug: true, ownerUserId: true, tenantType: true } },
     },
   });
   if (!row) return null;
   if (row.domainType !== 'subdomain' && row.verificationStatus !== 'verified') return null;
-  return {
-    tenantId: row.tenant.id,
-    purpose: row.purpose,
-    domainType: row.domainType,
-    tenantType: row.tenant.tenantType,
-  };
+  return { ...row.tenant, purpose: row.purpose, domainType: row.domainType };
 }
 
 /**
