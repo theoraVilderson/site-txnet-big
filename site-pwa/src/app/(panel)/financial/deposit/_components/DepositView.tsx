@@ -5,6 +5,7 @@ import { CheckCircle2, Sparkles } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
+import { ApiError } from "@/lib/api-error";
 import { billingApi, type DepositGateway, type DepositStarted } from "@/lib/billing-api";
 import { openMiniAppInvoice } from "@/lib/mini-app";
 import { useWalletBalance } from "../../../_hooks/useWalletBalance";
@@ -176,9 +177,15 @@ export function DepositView() {
       refresh();
       release();
     } catch (e) {
-      // A coupon that can no longer be held is a 409 and nothing was written;
-      // the quote below is re-asked on the next change and comes back without
-      // it. The sentence is billing's, already translated.
+      // A coupon that can no longer be held is a 409 and nothing was written
+      // (`billing/contract.deposit.md`), so the same inputs priced again come
+      // back with the code in `rejected` and the breakdown without it — which
+      // is the only way the bill on screen stops being one the payer cannot
+      // have. Nothing else re-prices: a 400 on the range, a 503 at the gateway
+      // and a 429 from the limiter would all get the same answer back, and the
+      // quote route has a budget of its own to spend (F-093-s).
+      if (e instanceof ApiError && e.status === 409) quote.retry();
+      // The sentence is billing's, already translated.
       setStartError(messageFor(e));
       release();
     }

@@ -59,7 +59,13 @@ route returns the whole breakdown instead of the pieces of one.
 5. **The only refusal this page owns is "that code is already in the list".**
    Every other verdict — the range, the gateway, the limiter, a hold that can
    no longer be taken — arrives translated and is shown as it came. A 409 on
-   `start` wrote nothing, so the next quote simply comes back without the code.
+   `start` wrote nothing, and it is the one refusal that also **re-prices the
+   page** (F-093-s): the same inputs are asked again on the spot, so the code
+   comes back in `rejected` and the bill without it. Until that happened the
+   payer read a discount they could not have and a payable nobody would charge,
+   and pressing Pay again repeated the same 409. No other status re-quotes —
+   the range, the gateway and the limiter all answer the same bill back, and
+   the quote route has a budget of its own (60 per 900s) to spend.
 6. **The wallet card shows two figures and never their sum.** The balance
    `billing` last answered, and the quote's `credited` beside it. Legacy printed
    `balance + charge` as "your balance after topping up"; that is client
@@ -145,6 +151,10 @@ staleness on the rate — that ladder is F-0607-a's.
 `financial/deposit/pay-once.test.tsx` — two clicks inside the verifying check
 send one `start`, the button goes dead on the click, a dismissed warning gives
 it back, and "pay anyway" still pays once.
+
+`financial/deposit/requote-on-refusal.test.tsx` — a 409 on `start` asks the
+same body again and the discount line goes, with the code still listed and
+marked; a 400 spends no quote.
 
 `financial/deposit/deposit.test.ts` — the quote hook (nothing is derived, a
 changed input drops the old bill at once, one call per burst, a slow answer to
