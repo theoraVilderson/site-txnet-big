@@ -38,6 +38,20 @@ NOTE_CAP = 240
 EMPTY = "—"
 
 
+def split_cells(line):
+    """A table row's cells, honouring markdown's `\\|` escape.
+
+    A naive `.split("|")` breaks any row whose prose contains a pipe — a shell
+    pipeline in a note, an `a || b` in a code span — and it breaks it
+    *silently*: the row gains cells, every column after the stray pipe shifts,
+    and the row disappears from the loader's `len(cells) < 6` filter or lands
+    in the wrong column. `F-064` has written `\\|\\|` correctly since
+    2026-09-09 and was invisible to this file for exactly that long. The escape
+    is left in the text: what is read is what will be written back.
+    """
+    return [c.strip() for c in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
+
+
 def rows():
     if not BACKLOG.exists():
         print("no docs/BACKLOG.md", file=sys.stderr)
@@ -46,7 +60,7 @@ def rows():
     for line in BACKLOG.read_text(encoding="utf-8").splitlines():
         if not line.startswith("|"):
             continue
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        cells = split_cells(line)
         if len(cells) < 6 or cells[0].startswith("-") or cells[0].lower() == "id":
             continue
         # `F-303-a` is a legal id: §6d.5 splits a catalog feature too large for
@@ -117,9 +131,9 @@ def set_row(argv):
             return _fail(f"no column '{col}'. The columns are: {', '.join(SETTABLE)}")
         if col in edits:
             return _fail(f"'{col}' is assigned twice in one call — say what it should end as")
-        if "|" in val:
-            return _fail(f"'{col}' value contains a '|', which would open a new cell. "
-                         f"Write it another way — the table has no escape this parser reads")
+        if re.search(r"(?<!\\)\|", val):
+            return _fail(f"'{col}' value contains a bare '|', which opens a new cell. "
+                         f"Write it '\\|' — markdown's escape, which split_cells() reads")
         if "\n" in val:
             return _fail(f"'{col}' value contains a newline; a row is one line")
         edits[col] = (op, val)
@@ -127,7 +141,7 @@ def set_row(argv):
     text = BACKLOG.read_text(encoding="utf-8")
     lines = text.splitlines(keepends=True)
     hits = [i for i, ln in enumerate(lines)
-            if ln.startswith("|") and ln.strip().strip("|").split("|")[0].strip() == rid]
+            if ln.startswith("|") and split_cells(ln)[0] == rid]
     if not hits:
         return _fail(f"no row {rid} in docs/BACKLOG.md")
     if len(hits) > 1:
@@ -135,13 +149,15 @@ def set_row(argv):
 
     i = hits[0]
     keep_nl = lines[i][len(lines[i].rstrip("\n")):]
-    cells = [c.strip() for c in lines[i].strip().strip("|").split("|")]
+    cells = split_cells(lines[i])
     if len(cells) != len(COLS):
-        # A row with the wrong cell count is almost always a `|` inside a value
-        # (a code span, an `a || b`). Splicing it would move every cell after
-        # the stray one, so this is where it stops.
+        # With `\|` honoured by split_cells(), a wrong count means a *bare*
+        # pipe in a value — one that opens a real cell on GitHub too, so the
+        # row is already rendering wrong. Splicing it would move every column
+        # after the stray pipe, so this is where it stops.
         return _fail(f"{rid} has {len(cells)} cells, not {len(COLS)} — it does not match the "
-                     f"table's columns ({', '.join(COLS)}). Repair the row by hand")
+                     f"table's columns ({', '.join(COLS)}). A bare '|' in one of its "
+                     f"values is the usual cause — escape it as '\\|'")
 
     before = dict(zip(COLS, cells))
     after = dict(before)
