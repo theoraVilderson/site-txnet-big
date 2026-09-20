@@ -749,6 +749,8 @@ export interface AdminCoupon {
   perUserUsageLimit: number;
   usedCount: number;
   reservedCount: number;
+  /** Billing keeps this coupon's type, value and grant variant; a released redemption freezes it too (F-502-o). */
+  frozen: boolean;
   expiresAt: string | null;
   validFrom: string | null;
   isActive: boolean;

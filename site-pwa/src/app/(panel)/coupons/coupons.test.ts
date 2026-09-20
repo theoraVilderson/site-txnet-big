@@ -17,7 +17,7 @@ import {
   emptyUsageFilter,
   formFromCoupon,
   instantToDay,
-  isUsed,
+  isFrozen,
   updateBody,
   usageQuery,
   validateCouponForm,
@@ -69,6 +69,7 @@ const COUPON: AdminCoupon = {
   perUserUsageLimit: 1,
   usedCount: 3,
   reservedCount: 2,
+  frozen: true,
   expiresAt: "2026-03-20T20:30:00.000Z",
   validFrom: null,
   isActive: true,
@@ -187,9 +188,12 @@ describe("updateBody", () => {
     expect(updateBody({ ...formFromCoupon(COUPON), maxDiscountCap: "" }, COUPON)).toEqual({ maxDiscountCap: null });
   });
 
-  it("knows a coupon with a hold or a use is used", () => {
-    expect(isUsed(COUPON)).toBe(true);
-    expect(isUsed({ ...COUPON, usedCount: 0, reservedCount: 0 })).toBe(false);
+  it("freezes on billing's own flag, not on the counters it can see", () => {
+    expect(isFrozen(COUPON)).toBe(true);
+    // A coupon whose redemptions were all released: no counter, still frozen (F-502-o).
+    const released: AdminCoupon = { ...COUPON, usedCount: 0, reservedCount: 0 };
+    expect(isFrozen(released)).toBe(true);
+    expect(isFrozen({ ...COUPON, frozen: false })).toBe(false);
   });
 });
 

@@ -156,8 +156,12 @@ export function emptyCouponForm(): CouponForm {
 
 export const isPlatformOwner = (me: Me | null) => me?.tenant?.type === "platform_owner";
 
-/** A coupon with a use or a hold: billing freezes its type and value (F-502-c). */
-export const isUsed = (c: Pick<AdminCoupon, "usedCount" | "reservedCount">) => c.usedCount + c.reservedCount > 0;
+/**
+ * Billing froze this coupon's type, value and grant variant. The counters are
+ * not the rule — a released redemption leaves none and still freezes it — so
+ * the view says it and the form only reads it (F-502-c, F-502-o).
+ */
+export const isFrozen = (c: Pick<AdminCoupon, "frozen">) => c.frozen;
 
 /** Tehran has kept +03:30 all year since 2022; the coupon's weekday and hour gates read the same clock. */
 const TEHRAN_OFFSET = "+03:30";

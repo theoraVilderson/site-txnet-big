@@ -19,7 +19,7 @@ import {
   emptyCouponForm,
   formFromCoupon,
   isPlatformOwner,
-  isUsed,
+  isFrozen,
   refusalKey,
   updateBody,
   validateCouponForm,
@@ -57,7 +57,7 @@ export function CouponForm({
   const { t } = useLocale();
   const errorMessage = useApiErrorMessage();
   const owner = isPlatformOwner(me);
-  const frozen = coupon ? isUsed(coupon) : false;
+  const frozen = coupon ? isFrozen(coupon) : false;
   const [form, setForm] = useState<Form>(() => (coupon ? formFromCoupon(coupon) : emptyCouponForm()));
   const [errors, setErrors] = useState<CouponFormErrors>({});
   const [touched, setTouched] = useState(false);

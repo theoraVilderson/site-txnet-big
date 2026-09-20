@@ -2,8 +2,8 @@
 id: billing
 layer: domain
 status: active
-version: 1
-updated: 2026-09-16
+version: 2
+updated: 2026-09-20
 ---
 
 # Contract — billing / coupon ownership and management
@@ -100,6 +100,7 @@ config's owner (`gatewayConfigOwner`, read only).
 | A gift code (`wallet_credit`) takes no purchase, window, channel, gateway, scope or period limit (`limits_not_for_gift_codes`); expiry, per-user and total limits and targeting it keeps | `redeem_gift_coupon` reads only those |
 | Those limits are read off the coupon **as it will be**, gateway and scope sets included (F-502-n): turning a discount coupon into a gift code is refused while either set stands, unless the same patch empties it | a patch carries only what the form changed, so the rows would survive the type change unseen |
 | A used coupon (a counter above zero or any redemption row) keeps `discountType` and `discountValue` (`used_coupon_frozen`); `totalUsageLimit` never below `usedCount + reservedCount` (`capacity_below_used`) | a receipt already says what it took |
+| The view says which one that is: `frozen` (`frozenBy`, the same rule), so a caller never re-derives it from the counters and offers an edit the service refuses (F-502-o). It is a counter, not a column — the audit snapshot drops it | a released redemption leaves no counter and still freezes |
 | A child set given in a patch replaces the whole set; one not given is kept | one form, one answer |
 | Delete: no redemption row in any status = hard delete with child rows; otherwise `isActive=false`, `deletedAt`, `deletedByAdminId` (`mode: soft_deleted`) | ADR-0048 decision 6 |
 | Every write is one `admin_audit_log` row in the same transaction: `coupon_create` (full snapshot), `coupon_update` (only changed fields, old and new), `coupon_delete` (`mode`, `redemptions`); `tenantId` is the coupon's, or the caller's for a platform coupon | D-33 |

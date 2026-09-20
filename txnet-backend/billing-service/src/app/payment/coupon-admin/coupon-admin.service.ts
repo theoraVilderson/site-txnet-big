@@ -68,6 +68,8 @@ export type CouponView = {
   perUserUsageLimit: number;
   usedCount: number;
   reservedCount: number;
+  /** Billing keeps this coupon's type, value and grant variant (`used_coupon_frozen`): `frozenBy`. */
+  frozen: boolean;
   expiresAt: Date | null;
   validFrom: Date | null;
   isActive: boolean;
@@ -314,8 +316,7 @@ export class CouponAdminService {
 
       const fresh = (await tx.coupon.findUnique({ where: { id } })) as unknown as Row;
       const redemptions = await tx.couponRedemption.count({ where: { couponId: id } });
-      const used = Number(fresh['usedCount']) > 0 || Number(fresh['reservedCount']) > 0 || redemptions > 0;
-      if (used) {
+      if (frozenBy(fresh, redemptions > 0)) {
         if (next['discountType'] !== fresh['discountType']) throw new CouponAdminRefused('used_coupon_frozen', 'discountType');
         if (!dec(next['discountValue'])!.equals(dec(fresh['discountValue'])!)) throw new CouponAdminRefused('used_coupon_frozen', 'discountValue');
         // A redemption already issued a Grant of this variant: the receipt names it.
@@ -398,12 +399,14 @@ export class CouponAdminService {
     if (rows.length === 0) return [];
     const ids = rows.map((r) => r['id'] as string);
     const where = { couponId: { in: ids } };
-    const [users, tenants, gateways, scopes] = await Promise.all([
+    const [users, tenants, gateways, scopes, redemptions] = await Promise.all([
       db.couponAllowedUser.findMany({ where }),
       db.couponTenant.findMany({ where }),
       db.couponGateway.findMany({ where }),
       db.couponServiceScope.findMany({ where }),
+      db.couponRedemption.findMany({ where, select: { couponId: true } }),
     ]);
+    const redeemed = new Set(redemptions.map((r) => r.couponId as string));
     const of = <T extends { couponId: string }>(list: T[], id: string) => list.filter((x) => x.couponId === id);
     const now = Date.now();
     return rows.map((row) => {
@@ -421,6 +424,7 @@ export class CouponAdminService {
         perUserUsageLimit: Number(row['perUserUsageLimit'] ?? 1),
         usedCount: Number(row['usedCount'] ?? 0),
         reservedCount: Number(row['reservedCount'] ?? 0),
+        frozen: frozenBy(row, redeemed.has(id)),
         expiresAt: date(row['expiresAt']),
         validFrom: date(row['validFrom']),
         isActive: Boolean(row['isActive']),
@@ -730,12 +734,21 @@ export class CouponAdminService {
   /** A view without its counters and clocks: what an audit row compares. */
   private snapshot(view: CouponView): Record<string, unknown> {
     const out: Record<string, unknown> = { ...view };
-    for (const k of ['id', 'usedCount', 'reservedCount', 'createdAt', 'updatedAt', 'status']) delete out[k];
+    for (const k of ['id', 'usedCount', 'reservedCount', 'frozen', 'createdAt', 'updatedAt', 'status']) delete out[k];
     for (const k of DATE_COLUMNS) out[k] = view[k] ? view[k]!.toISOString() : null;
     for (const k of DECIMAL_COLUMNS) out[k] = view[k] === null ? null : new Prisma.Decimal(view[k]!).toFixed(2);
     out['deletedAt'] = view.deletedAt ? view.deletedAt.toISOString() : null;
     return out;
   }
+}
+
+/**
+ * A coupon whose type, value and grant variant are settled (F-502-c, F-502-o).
+ * A released redemption (`cancelled`/`expired`) leaves no counter behind, so the
+ * row alone freezes the coupon: its receipt already names what it took.
+ */
+export function frozenBy(row: Row, hasRedemption: boolean): boolean {
+  return Number(row['usedCount'] ?? 0) > 0 || Number(row['reservedCount'] ?? 0) > 0 || hasRedemption;
 }
 
 /** What an admin sees at a glance; the first that holds wins. */

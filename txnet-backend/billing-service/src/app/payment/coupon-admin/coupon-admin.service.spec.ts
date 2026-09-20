@@ -317,6 +317,18 @@ describe('CouponAdminService — a coupon that was used', () => {
     await expect(service.update(actor(RESELLER), RESELLER_COUPON, { discountValue: '10.00', label: 'autumn' })).resolves.toMatchObject({ label: 'autumn' });
   });
 
+  it('says so in the view, on any redemption row, not only a counter', async () => {
+    const { service } = build();
+    await expect(service.get(actor(RESELLER), RESELLER_COUPON)).resolves.toMatchObject({ frozen: false });
+
+    const released = build({
+      coupons: [coupon({ id: RESELLER_COUPON, tenantId: RESELLER })],
+      redemptions: [{ id: 'r1', couponId: RESELLER_COUPON, status: 'cancelled' }],
+    });
+    await expect(released.service.get(actor(RESELLER), RESELLER_COUPON)).resolves.toMatchObject({ usedCount: 0, reservedCount: 0, frozen: true });
+    expect((await refusal(() => released.service.update(actor(RESELLER), RESELLER_COUPON, { discountValue: '50' }))).reason).toBe('used_coupon_frozen');
+  });
+
   it('never lets its capacity drop below used + reserved', async () => {
     const { service } = used();
     expect((await refusal(() => service.update(actor(RESELLER), RESELLER_COUPON, { totalUsageLimit: 4 }))).reason).toBe('capacity_below_used');

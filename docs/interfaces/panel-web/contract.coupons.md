@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 18
-updated: 2026-09-14
+version: 19
+updated: 2026-09-20
 ---
 
 # Contract — panel-web: coupons and gift codes (F-502-g, F-502-h)
@@ -37,8 +37,11 @@ The routes, the scope and every rule are
    included (`dayToInstant` / `instantToDay`). The weekday and hour gates read
    the same clock (F-502-k).
 5. **An edit sends only what changed** (`updateBody`), so a used coupon's type
-   and value are never restated; the sheet shows them disabled with a note
-   (`isUsed`). A set sent replaces the whole set, as billing reads it.
+   and value are never restated; the sheet shows them disabled with a note.
+   Which coupon that is, is billing's `frozen` on the view and never the
+   counters (`isFrozen`) — a coupon whose redemptions were all released has no
+   counter and is frozen all the same (F-502-o). A set sent replaces the whole
+   set, as billing reads it.
 6. **Owner-only fields.** The owner picks whose coupon on create (`own`,
    `platform` = `tenantId: null`, another tenant's id); a platform coupon shows
    the served-tenants box and only platform gateways. Nothing owner-only is

@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 25
+version: 26
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -62,10 +62,10 @@ display-currency conversion (`currency`), plan prices (`catalog`).
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-20 | contract v26 (F-502-o): `CouponView` carries `frozen` — billing's own freeze rule (a counter above zero **or** any redemption row, `frozenBy`), so no caller re-derives it from `usedCount + reservedCount` and offers an edit the service refuses. Additive; the audit snapshot drops it. Rules: [contract.coupon.md](contract.coupon.md). Consumer panel-web: F-502-o |
 | 2026-09-20 | contract v25 (F-502-r): `GET /api/billing/gift/grants` — the caller's own Grants, with the variant, the period, the status and the feature keys, paged; never the subscription key or its hash. Its own bucket (120/900s) and the `subscriptionLink` capability. Additive; it is what makes F-502-p's reissue reachable from a row. Rules: [contract.gift.md](contract.gift.md). Consumer panel-web: F-502-s |
 | 2026-09-20 | contract v24 (F-502-p): `POST /api/billing/gift/grants/:id/rotate-token` — the owner of a Grant reissues the subscription key shown once at redemption, on its own bucket (5/900s) and the `subscriptionLink` capability. Additive; another user's Grant is answered as a missing one. Rules: [contract.gift.md](contract.gift.md). Consumer panel-web: F-502-q |
 | 2026-09-20 | contract v23 (F-104-u): the callback's rate limit counts the **payment** — the authority where a gateway mints one, else the `p` the callback URL carries. A provider that mints no authority (NOWPayments, OxaPay) put every return of a tenant in one `none` bucket, so 30 of them per 15 minutes closed the result page for all its payers. No wire change; money was never affected. Rules: [contract.deposit.md](contract.deposit.md). Consumer panel-web: none |
 | 2026-09-20 | contract v22 (F-104-t): deleting a gateway switches it off first and counts the open payments again before revoking any secret — a top-up started in that window used to be stranded by the revoked `webhook_secret`. A delete raced this way is refused `gateway_has_open_payments` with the gateway left deactivated. Rules: [contract.gateways.md](contract.gateways.md). Consumer panel-web: none — the same refusal reason it already shows |
-| 2026-09-20 | contract v21 (F-104-s, ADR-0068): a signed `paid` for an **already settled** row is no longer dropped — one provider invoice holds several payments, so the arrival becomes a payment of its own, credited net of the gateway's cut and carrying the transfer's reference as its code; what cannot be valued is a `flagged_mismatch` log row on the invoice. Additive, no wire change. Rules: [contract.webhook.md](contract.webhook.md). Consumer panel-web: none — a follow-on reads as an ordinary credit on the financial page |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->
