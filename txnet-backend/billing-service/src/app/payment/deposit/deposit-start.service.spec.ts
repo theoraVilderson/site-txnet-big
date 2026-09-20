@@ -83,6 +83,8 @@ type Setup = {
   reserveRefuses?: CouponReservationRefused;
   /** The gateway refuses to mint an authority. */
   requestFails?: Error;
+  /** The vault will not answer the gateway's merchant id — read before minting. */
+  credentialsFail?: Error;
   /** The driver settles by webhook (F-104-h): it is told where to post. */
   webhook?: boolean;
   /** The driver settles in a chat (F-104-k): `true` is Telegram Stars, `'bale'` Bale's wallet (F-104-n). */
@@ -102,6 +104,7 @@ function build(setup: Setup = {}) {
     coupons = noCoupons('20.00'),
     reserveRefuses,
     requestFails,
+    credentialsFail,
     webhook = false,
     inChat = false,
     linkFails = false,
@@ -169,8 +172,10 @@ function build(setup: Setup = {}) {
   };
   const registry = { has: () => true, get: () => zarinpal };
   const merchant = {
-    credentialsFor: async () =>
-      inChat === 'bale' ? { secretKey: 'bale-wallet-token' } : inChat ? {} : { merchantId: 'merchant' },
+    credentialsFor: async () => {
+      if (credentialsFail) throw credentialsFail;
+      return inChat === 'bale' ? { secretKey: 'bale-wallet-token' } : inChat ? {} : { merchantId: 'merchant' };
+    },
     requireConfigured: async () => undefined,
     configuredSecrets: async () => new Map([[`gateway:tenant:${GATEWAY}`, new Set(['merchantId'] as const)]]),
   };
@@ -479,6 +484,27 @@ describe('DepositStartService.start', () => {
 
     const paymentId = calls.created[0]['id'] as string;
     expect(calls.updated).toEqual([{ id: paymentId, status: 'failed', failureCode: 'merchant_rejected' }]);
+    expect(calls.settled).toEqual([{ orderReferenceId: paymentId, outcome: 'cancelled' }]);
+  });
+
+  it('fails the payment and gives the holds back when the vault will not answer before minting', async () => {
+    const { service, calls } = build({
+      coupons: {
+        applied: [{ couponId: 'c1', code: 'SAVE5', discount: d('5.00') }],
+        rejected: [],
+        totalDiscount: d('5.00'),
+        payable: d('15.00'),
+      },
+      credentialsFail: new Error('vault is sealed'),
+    });
+
+    await expect(start(service, ['save5'])).rejects.toThrow('vault is sealed');
+
+    // The bank was never called, so nothing was minted — but the row and its
+    // holds exist by then, and a read that failed must close them all the same.
+    const paymentId = calls.created[0]['id'] as string;
+    expect(calls.requested).toEqual([]);
+    expect(calls.updated).toEqual([{ id: paymentId, status: 'failed', failureCode: 'unavailable' }]);
     expect(calls.settled).toEqual([{ orderReferenceId: paymentId, outcome: 'cancelled' }]);
   });
 

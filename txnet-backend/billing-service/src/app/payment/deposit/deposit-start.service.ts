@@ -333,9 +333,16 @@ export class DepositStartService {
     }
 
     // 3. The bank. Outside every transaction, and never retried.
-    const credentials = await this.merchant.credentialsFor(ref, userId);
+    //
+    // The vault read is inside the try with it, as the in-chat path already had
+    // it: by here the row is `pending` and its coupons are held, so a merchant
+    // id that cannot be read is the same fact as a bank that will not mint —
+    // and left outside, it abandoned nothing and held the codes to the TTL
+    // (F-104-w). `withPaymentId` on a `callbackUrl` a gateway wrote itself
+    // (F-092-w) is covered by the same try for the same reason.
     let minted: { authority: string; redirectUrl: string };
     try {
+      const credentials = await this.merchant.credentialsFor(ref, userId);
       minted = await provider.request({
         credentials,
         amountMinor: price.chargedAmountMinor as bigint,
