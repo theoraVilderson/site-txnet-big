@@ -437,8 +437,20 @@ export class GatewayAdminService {
    * — with an audit row in each borrower's tenant — because the payments taken
    * through it must stay explicable. A gateway with a payment still open, in any
    * tenant, is not deleted at all: deactivate it first (the user's call,
-   * 2026-09-17). Otherwise the secrets are revoked **first**: a failure after
-   * that leaves a gateway that cannot charge, never one that can.
+   * 2026-09-17).
+   *
+   * **The door closes before anything else** (F-104-t). Counting the open
+   * payments and revoking the secrets are two steps, and between them the
+   * gateway was still selectable: a top-up started in that window is paid into a
+   * gateway whose webhook secret is gone a moment later, so the webhook door
+   * answers 401 and reconciliation gets `CredentialUnavailable` — a payer who
+   * has paid, creditable only by a manual confirm. So `isActive` is switched off
+   * and committed in the same transaction as the count, before any secret is
+   * touched; the count is then taken again on a fresh transaction, and a payment
+   * that raced in refuses the delete with the gateway left deactivated and its
+   * secret intact — it can still settle, and the delete can be asked for again
+   * once it has. Only then are the secrets revoked, so a failure part-way still
+   * leaves a gateway that cannot charge, never one that can.
    *
    * Other tenants' payments and grants are reached through
    * `billing.gateway_usage` / `billing.withdraw_gateway_grants`, on whichever
@@ -448,14 +460,28 @@ export class GatewayAdminService {
     const owner = await this.isOwner(actor);
     const lookbackSec = this.config.get('RECONCILIATION_LOOKBACK_SEC', { infer: true });
 
-    const { row, usage } = await this.within(owner, async (db) => {
+    // The count and the switch-off commit together: past here nothing new can be
+    // started on the gateway, whichever way the rest of the call ends.
+    const row = await this.within(owner, async (db) => {
       const row = await this.load(db, ref, actor, owner);
-      const [usage] = await db.$queryRaw<GatewayUsage[]>`
-        SELECT payments, open_payments, grants
-          FROM billing.gateway_usage(${ref.source}::text, ${ref.id}::uuid, ${lookbackSec}::integer)`;
-      return { row, usage };
+      const usage = await this.usage(db, ref, lookbackSec);
+      if (usage.open_payments > 0) throw new GatewayAdminRefused('gateway_has_open_payments', `${ref.id}: ${usage.open_payments} open`);
+      if (ref.source === 'platform') await db.paymentGateway.update({ where: { id: ref.id }, data: { isActive: false } });
+      else await db.tenantGatewayConfig.update({ where: { id: ref.id }, data: { isActive: false } });
+      return row;
     });
-    if (usage.open_payments > 0) throw new GatewayAdminRefused('gateway_has_open_payments', `${ref.id}: ${usage.open_payments} open`);
+
+    // Anything that raced the switch-off is seen now, while the secrets are all
+    // still there: the gateway stays deactivated and that payer can still settle.
+    const usage = await this.within(owner, async (db) => {
+      const usage = await this.usage(db, ref, lookbackSec);
+      if (usage.open_payments > 0) await this.auditRemoval(db, actor, ref, row, { mode: 'deactivated', openPayments: usage.open_payments });
+      return usage;
+    });
+    if (usage.open_payments > 0) {
+      this.logger.log(`gateway ${ref.source}:${ref.id} deactivated, not deleted: ${usage.open_payments} payment(s) started while deleting`);
+      throw new GatewayAdminRefused('gateway_has_open_payments', `${ref.id}: ${usage.open_payments} open`);
+    }
 
     await this.secrets.revoke(this.target(ref, row, actor));
 
@@ -463,8 +489,6 @@ export class GatewayAdminService {
     const grantsWithdrawn = await this.within(owner, async (tx) => {
       let withdrawn = 0;
       if (used) {
-        if (ref.source === 'platform') await tx.paymentGateway.update({ where: { id: ref.id }, data: { isActive: false } });
-        else await tx.tenantGatewayConfig.update({ where: { id: ref.id }, data: { isActive: false } });
         [{ withdrawn }] = await tx.$queryRaw<Array<{ withdrawn: number }>>`
           SELECT billing.withdraw_gateway_grants(${ref.source}::text, ${ref.id}::uuid, ${actor.adminId}::uuid, ${actor.ip}::text) AS withdrawn`;
       } else if (ref.source === 'platform') {
@@ -472,18 +496,7 @@ export class GatewayAdminService {
       } else {
         await tx.tenantGatewayConfig.delete({ where: { id: ref.id } });
       }
-      await tx.adminAuditLog.create({
-        data: {
-          tenantId: (row['tenantId'] as string | undefined) ?? actor.tenantId,
-          adminId: actor.adminId,
-          action: 'gateway_delete',
-          targetEntityType: 'gateway',
-          targetEntityId: ref.id,
-          oldValue: { source: ref.source, ...this.snapshot(row) },
-          newValue: { mode: used ? 'deactivated' : 'deleted', payments: usage.payments, grantsWithdrawn: withdrawn },
-          adminIpAddress: actor.ip,
-        },
-      });
+      await this.auditRemoval(tx, actor, ref, row, { mode: used ? 'deactivated' : 'deleted', payments: usage.payments, grantsWithdrawn: withdrawn });
       return withdrawn;
     });
 
@@ -513,6 +526,30 @@ export class GatewayAdminService {
     const row = (await db.tenantGatewayConfig.findUnique({ where: { id: ref.id } })) as unknown as Row | null;
     if (!row || (!owner && row['tenantId'] !== actor.tenantId)) throw new GatewayAdminRefused('gateway_not_found', ref.id);
     return row;
+  }
+
+  /** Every payment and grant that names the gateway, in any tenant — counts only, and only for the caller's own gateway. */
+  private async usage(db: Tx, ref: GatewayRef, lookbackSec: number): Promise<GatewayUsage> {
+    const [usage] = await db.$queryRaw<GatewayUsage[]>`
+      SELECT payments, open_payments, grants
+        FROM billing.gateway_usage(${ref.source}::text, ${ref.id}::uuid, ${lookbackSec}::integer)`;
+    return usage;
+  }
+
+  /** The one `gateway_delete` row, in the gateway's own tenant — written however the removal ended. */
+  private async auditRemoval(db: Tx, actor: GatewayActor, ref: GatewayRef, row: Row, outcome: Prisma.InputJsonObject): Promise<void> {
+    await db.adminAuditLog.create({
+      data: {
+        tenantId: (row['tenantId'] as string | undefined) ?? actor.tenantId,
+        adminId: actor.adminId,
+        action: 'gateway_delete',
+        targetEntityType: 'gateway',
+        targetEntityId: ref.id,
+        oldValue: { source: ref.source, ...this.snapshot(row) },
+        newValue: outcome,
+        adminIpAddress: actor.ip,
+      },
+    });
   }
 
   /** Whose vault holds this gateway's secrets: the row's tenant, or the platform owner (the caller, proved by `load`). */

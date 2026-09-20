@@ -20,10 +20,11 @@
  *    (F-102-a) and appear in no answer, no audit row, and no gateway column;
  *  - **delete** (ADR-0041 §6). A row nothing points at is deleted. A row a
  *    payment or a grant points at is deactivated instead, its live grants
- *    withdrawn and its secrets revoked — and the secrets go first, so a failure
- *    part-way leaves a gateway that cannot charge rather than one that can. A
- *    gateway with an open payment is not deleted at all (the user's call,
- *    2026-09-17): a borrower's payer is still waiting on it;
+ *    withdrawn and its secrets revoked. A gateway with an open payment is not
+ *    deleted at all (the user's call, 2026-09-17): a borrower's payer is still
+ *    waiting on it — and the switch-off goes first, before any secret is
+ *    touched, so a top-up started while the delete runs is caught by the second
+ *    count instead of being stranded by a revoked webhook secret (F-104-t);
  *  - **the pool.** A tenant admin's call never reaches the cross-tenant pool;
  *    a lent gateway's borrowers are counted and released through two database
  *    functions that check the gateway is the caller's own.
@@ -109,7 +110,7 @@ function table(rows: Row[], name: string, writes: string[]) {
 
 const LOOKBACK_SEC = 86_400;
 
-function build(seed: { payments?: Row[]; grants?: Row[]; verified?: boolean } = {}) {
+function build(seed: { payments?: Row[]; grants?: Row[]; verified?: boolean; onDeactivate?: () => void } = {}) {
   const writes: string[] = [];
   const audit: Row[] = [];
   const calls: string[] = [];
@@ -129,6 +130,15 @@ function build(seed: { payments?: Row[]; grants?: Row[]; verified?: boolean } = 
     'tenantGatewayConfig',
     writes,
   );
+  /** A payment that commits just as the door closes — the race `remove` re-counts for (F-104-t). */
+  for (const t of [paymentGateway, tenantGatewayConfig]) {
+    const update = t.update;
+    t.update = async (args: { where: Row; data: Row }) => {
+      const row = await update(args);
+      if (args.data['isActive'] === false) seed.onDeactivate?.();
+      return row;
+    };
+  }
   const paymentTransaction = table(seed.payments ?? [], 'paymentTransaction', writes);
   const paymentGatewayGrant = table(seed.grants ?? [], 'paymentGatewayGrant', writes);
 
@@ -379,14 +389,41 @@ describe('GatewayAdminService — delete (ADR-0041 §6)', () => {
     expect(writes).not.toContain('paymentGateway.delete');
   });
 
-  it('leaves the gateway untouched when its secrets cannot be revoked', async () => {
+  it('leaves the gateway in place, and switched off, when its secrets cannot be revoked', async () => {
     const { service, db, secrets, writes } = build();
     (secrets.revoke as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('auth-service down'));
 
     await expect(service.remove(actor(RESELLER), { source: 'tenant', id: RESELLER_GW })).rejects.toThrow('auth-service down');
 
     expect(db.tenantGatewayConfig.rows.some((r) => r['id'] === RESELLER_GW)).toBe(true);
-    expect(writes.filter((w) => w !== 'secrets.revoke')).toEqual([]);
+    expect(db.tenantGatewayConfig.rows.find((r) => r['id'] === RESELLER_GW)?.['isActive']).toBe(false);
+    expect(writes).toEqual(['tenantGatewayConfig.update', 'commit']);
+    expect(secrets.revoke).toHaveBeenCalledOnce();
+  });
+
+  it('switches the gateway off before it revokes anything, so nothing new can be started on it', async () => {
+    const { service, writes } = build({ payments: [{ id: 'p1', tenantGatewayConfigId: RESELLER_GW, status: 'settled' }] });
+
+    await service.remove(actor(RESELLER), { source: 'tenant', id: RESELLER_GW });
+
+    expect(writes.indexOf('tenantGatewayConfig.update')).toBeLessThan(writes.indexOf('secrets.revoke'));
+    expect(writes.filter((w) => w === 'tenantGatewayConfig.update')).toHaveLength(1);
+  });
+
+  it('refuses, revoking nothing, when a payment is started while the gateway is being deleted (F-104-t)', async () => {
+    const payments: Row[] = [];
+    const { service, db, secrets, audit } = build({
+      payments,
+      onDeactivate: () => payments.push({ id: 'p9', tenantGatewayConfigId: RESELLER_GW, tenantId: OTHER, status: 'pending', createdAt: new Date() }),
+    });
+
+    const e = await refusal(() => service.remove(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }));
+
+    expect(e.reason).toBe('gateway_has_open_payments');
+    expect(secrets.revoke).not.toHaveBeenCalled();
+    expect(db.tenantGatewayConfig.rows.find((r) => r['id'] === RESELLER_GW)?.['isActive']).toBe(false);
+    expect(audit.at(-1)).toEqual(expect.objectContaining({ action: 'gateway_delete', targetEntityId: RESELLER_GW }));
+    expect(audit.at(-1)?.['newValue']).toEqual(expect.objectContaining({ mode: 'deactivated', openPayments: 1 }));
   });
 
   it("refuses to delete a gateway a payment is still open on — a borrower's included — and revokes nothing", async () => {
