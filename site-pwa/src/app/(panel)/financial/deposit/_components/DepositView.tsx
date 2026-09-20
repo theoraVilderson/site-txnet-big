@@ -11,6 +11,7 @@ import { useWalletBalance } from "../../../_hooks/useWalletBalance";
 import { PaymentPendingView } from "../../../payment/_components/PaymentPendingView";
 import { BASE_CURRENCY, formatMoney } from "../../../_lib/money";
 import { useDepositQuote } from "../_hooks/useDepositQuote";
+import { useStartOnce } from "../_hooks/useStartOnce";
 import { useVerifyingGuard } from "../_hooks/useVerifyingGuard";
 import { AmountInput } from "./AmountInput";
 import { CouponInput } from "./CouponInput";
@@ -68,7 +69,9 @@ export function DepositView() {
   const [amount, setAmount] = useState("");
   const [codes, setCodes] = useState<string[]>([]);
 
-  const [isStarting, setStarting] = useState(false);
+  // One press of Pay starts one payment (F-093-r): the claim is taken on the
+  // click, before the verifying check's network read, not inside `pay()`.
+  const { isStarting, claim, release } = useStartOnce();
   const [startError, setStartError] = useState<string | null>(null);
   /** Set only on the free path, where there is no gateway to be sent to. */
   const [credited, setCredited] = useState<DepositStarted | null>(null);
@@ -107,7 +110,15 @@ export function DepositView() {
   // A payment the gateway met with silence: shown, and asked about before a
   // second one — warn and confirm, never block (F-093-m, ADR-0044 decision 7).
   const verifyingGuard = useVerifyingGuard();
-  const onPay = () => void verifyingGuard.guard(() => void pay());
+  const onPay = () => {
+    if (!claim()) return;
+    void verifyingGuard.guard(() => void pay());
+  };
+  // The payer kept the first payment: back to the form, and the button with it.
+  const onVerifyingCancel = () => {
+    verifyingGuard.cancel();
+    release();
+  };
 
   const addCode = useCallback((code: string) => setCodes((all) => [...all, code]), []);
   const removeCode = useCallback(
@@ -116,8 +127,10 @@ export function DepositView() {
   );
 
   async function pay() {
-    if (!gateway || !quote.quote || isStarting) return;
-    setStarting(true);
+    if (!gateway || !quote.quote) {
+      release();
+      return;
+    }
     setStartError(null);
     try {
       // The quote's body, never its numbers (F-0612).
@@ -154,20 +167,20 @@ export function DepositView() {
           }
           // Cancelled is the payer's own choice and needs no sentence.
         }
-        setStarting(false);
+        release();
         return;
       }
       // The free path: `start` credited the wallet inside its own transaction
       // and minted nothing. The balance shown is billing's answer to that call.
       setCredited(started);
       refresh();
-      setStarting(false);
+      release();
     } catch (e) {
       // A coupon that can no longer be held is a 409 and nothing was written;
       // the quote below is re-asked on the next change and comes back without
       // it. The sentence is billing's, already translated.
       setStartError(messageFor(e));
-      setStarting(false);
+      release();
     }
   }
 
@@ -238,7 +251,7 @@ export function DepositView() {
         <VerifyingConfirm
           payment={verifyingGuard.warning}
           onConfirm={verifyingGuard.confirm}
-          onCancel={verifyingGuard.cancel}
+          onCancel={onVerifyingCancel}
         />
       )}
 

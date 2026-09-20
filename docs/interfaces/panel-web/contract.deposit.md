@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 16
-updated: 2026-09-12
+updated: 2026-09-20
 ---
 
 # Contract — panel-web: the top-up page (F-093-e)
@@ -122,6 +122,16 @@ route returns the whole breakdown instead of the pieces of one.
     `failed` and `unavailable` (no SDK, no method) are a sentence of this
     page's own. The unpaid row is billing's to expire.
 
+15. **One press of Pay starts one payment (F-093-r).** The click claims the
+    start synchronously — `useStartOnce`, a ref — and the button is disabled
+    from that moment, not from when `start` goes out. Rule 13's guard awaits a
+    network read first, and a `useState` set after it is set one read too late:
+    both clicks of a double click found the old `false` and sent their own
+    `start`, which is two payment rows and two sets of coupon holds, the second
+    usually a 409 on a one-use code. The claim is released on every path back
+    to the form — a dismissed warning, a refusal, a sheet closed unpaid — and
+    never on the trip to the gateway, where the page is leaving anyway.
+
 ## What this page does not do
 
 No tax row: tax is already inside the figures `priceAtGateway` answers, and a
@@ -131,6 +141,10 @@ gateway's own figure beside the payable rather than converted here. No live
 staleness on the rate — that ladder is F-0607-a's.
 
 ## Proof
+
+`financial/deposit/pay-once.test.tsx` — two clicks inside the verifying check
+send one `start`, the button goes dead on the click, a dismissed warning gives
+it back, and "pay anyway" still pays once.
 
 `financial/deposit/deposit.test.ts` — the quote hook (nothing is derived, a
 changed input drops the old bill at once, one call per burst, a slow answer to
