@@ -2,8 +2,8 @@
 id: tenant
 layer: domain
 status: active
-version: 21
-updated: 2026-09-18
+version: 22
+updated: 2026-09-20
 ---
 
 # Contract — tenant
@@ -31,7 +31,7 @@ the rest are `reseller`. The platform bills tenants from a prepaid wallet
 | **create / edit / deactivate a package; force its keys onto subscribers** — implemented, [contract.admin.md](contract.admin.md) | name, monthly/yearly price, includedFeatureKeys, isActive | package view (an added key granted to subscribers in the edit) | sync tx | `not_platform_owner` / `package_not_found` / `package_name_taken` / `package_price_in_use` / `package_unpriced` |
 | **put a reseller on a package and period** — implemented, [contract.admin.md](contract.admin.md) | tenantId, packageId, billingModel | subscription view; `package_included` entitlements replaced | sync tx | `reseller_not_found` / `reseller_terminated` / `package_not_found` / `package_inactive` / `package_not_sold_for_period` |
 | **suspend / reactivate / terminate a reseller; what each status allows** — implemented, [contract.admin.md](contract.admin.md), [rules.md](rules.md) | tenantId, status, reason | status view; Redis `tenant:status:<id>` rewritten; `TenantStatusGuard` (shared-core) refuses per capability | sync tx | `reseller_not_found` / `reseller_terminated` / `status_unchanged`; `403 tenant.suspended` / `tenant.terminated` |
-| **check entitlement; gate a route on a feature; admit a caller to a route naming a reseller (invariant 21)** — implemented, [contract.entitlements.md](contract.entitlements.md) | tenantId, featureKey | allowed (+ source, expiry) / denied; `@RequiresFeature(key)` | sync | `403 tenant.featureNotEntitled` |
+| **check entitlement; gate a route on a feature; admit a caller to a route naming a reseller (invariant 21), or answer them whether it would (`GET /api/tenants/:id/access`, F-311-e)** — implemented, [contract.entitlements.md](contract.entitlements.md) | tenantId, featureKey | allowed (+ source, expiry) / denied; `@RequiresFeature(key)`; `{canRead, canWrite, reason}` | sync | `403 tenant.featureNotEntitled`; the access read refuses nobody |
 | **add and prove a custom domain** — implemented, [contract.domains.md](contract.domains.md) | tenantId, domainValue, purpose | domain view with TXT record, CNAME target, last check | sync add; async check (worker sweep) | `not_allowed` / `domain_taken` / `domain_reserved` |
 | **edit a reseller's branding; read it by Host** — implemented, [contract.branding.md](contract.branding.md) | tenantId, text, one image per slot | branding view with image URLs on the tenant's own door | sync | `not_allowed` / `reseller_suspended` / `too_large` / `type_not_allowed` |
 | **credit / debit the billing wallet** — implemented, [contract.billing.md](contract.billing.md) | tenantId, reason, amount, reference | `tenant_billing_transaction` (append-only); a credit also writes `tenant.billing.credited` | sync tx | insufficient / duplicate / version conflict |

@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { PUBLIC_PREFIX, PublicRouteGuard, RateLimitGuard, TenantStatusGuard } from '@txnet-backend/shared-core';
 
+import { AccessModule } from './access/access.module';
 import { BrandingModule } from './branding/branding.module';
 import { LEGACY_BRANDING_PATH } from './branding/tenant-branding.controller';
 import { envConfigOptions } from './config/env.validation';
@@ -47,7 +48,8 @@ const LEGACY_PUBLIC_ROUTES = [`${LEGACY_FILES_PATH}/*path`, LEGACY_BRANDING_PATH
  * F-018-y, their custom domains with F-018-i, the file route with F-018-m,
  * their branding with F-018-h, the vault's internal seams with F-018-ab,
  * a platform user's reseller purchase with F-019-h, their staff seats with F-018-j,
- * the onboarding console's checklist with F-018-l.
+ * the onboarding console's checklist with F-018-l, the door's own verdict with
+ * F-311-e.
  */
 @Module({
   imports: [
@@ -63,6 +65,7 @@ const LEGACY_PUBLIC_ROUTES = [`${LEGACY_FILES_PATH}/*path`, LEGACY_BRANDING_PATH
     DomainsModule,
     StaffModule,
     OnboardingModule,
+    AccessModule,
     FilesModule,
     BrandingModule,
     VaultModule,

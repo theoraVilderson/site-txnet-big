@@ -2,8 +2,8 @@
 id: tenant
 layer: domain
 status: active
-version: 1
-updated: 2026-09-19
+version: 2
+updated: 2026-09-20
 ---
 
 # Contract — tenant / feature entitlements
@@ -75,6 +75,31 @@ the host; the ambient routes stay for a tenant configuring itself.
 - `work` awaits its own queries — `runWithTenant`'s rule; a Prisma promise
   returned unawaited runs after the scope has closed.
 - Tests: `shared-core/src/lib/tenant/reseller-access.spec.ts`.
+
+### Asking the door instead of guessing: `GET /api/tenants/:id/access` (F-311-e)
+
+A *screen* has a question the routes above cannot answer: may I offer myself at
+all? It cannot be derived from the session — the owner signs in in their own
+platform tenant (ADR-0059), and nothing there names the reseller they own — and
+reading it out of a data route's refusal answers "give me", not "may I".
+
+| | |
+|---|---|
+| answer | `200 {tenantId, canRead, canWrite, reason}` — `canRead` is `read` admitted, `canWrite` is `staffWrite` admitted, `reason` one of the door's four and **only** when nothing is allowed |
+| door | `ResellerAccess.admit` twice, one `now` for both. Not `run`: it reads no row of the reseller's and opens no scope |
+| **never refuses** | asking whether you may is not doing it, so a refused caller gets the same 200 with `canRead: false`. Which callers may learn that a reseller exists stays the door's rule — `reason` is relayed, never widened |
+| no cache | the answer is about the caller, and a seat revoked a second ago must stop administering (ADR-0033's reasoning) |
+
+Two verdicts rather than one because the status matrix answers them
+differently: a suspended reseller still reads and no longer writes
+([rules.md](rules.md)), so one boolean would have to lie about one of the two.
+Deciding the second from the first would mean copying the matrix out of
+`ResellerAccess`, which is what invariant 21 exists to prevent.
+
+Code: `tenant-service/src/app/access/` (`tenant-access.service.ts`,
+`tenant-access.controller.ts`); tests `tenant-access.spec.ts`. Consumers:
+`bot-app` (F-311-c, the reseller panel's menu row and its write buttons); a
+panel navigation and F-312 / F-1531 read the same verdict.
 
 ## What it does not do
 
