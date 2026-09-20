@@ -7,6 +7,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { usePanelUiStore } from "../_stores/panel-ui-store";
 import { AccountSwitcher } from "./AccountSwitcher";
+import { NotificationsButton } from "./NotificationsButton";
 import { PANEL_SIDEBAR_ID } from "./PanelSidebar";
 import { WalletButton } from "./WalletButton";
 
@@ -24,10 +25,13 @@ const Divider = ({ className = "" }: { className?: string }) => (
  * switcher is that job (F-0209). Below `sm`, language and theme move into the
  * drawer, because the bar has no room for four controls on a phone.
  *
- * `WalletButton` (F-093-c) sits before the switcher, which is where
- * `contract.shell.md` rule 5 puts a new control; on a phone it is the one thing
- * beside the switcher that the 360px bar still has room for, because its
- * caption collapses to the figure alone.
+ * `WalletButton` (F-093-c) and `NotificationsButton` (F-093-h) sit before the
+ * switcher, which is where `contract.shell.md` rule 5 puts a new control. The
+ * bell is what made the wallet collapse to its icon below `sm`: measured at
+ * 360px the bar has 304px of content box and held ~286px, and a `p-2` bell is
+ * 40px with the row's gap. Moving the balance into the wallet's own dropdown
+ * gives back ~110px, so the phone row is ~220px — with room for the control
+ * after this one, which is the part a shrink of the last control never buys.
  */
 export function PanelTopBar() {
   const { t } = useLocale();
@@ -50,6 +54,7 @@ export function PanelTopBar() {
       </div>
       <div className="flex min-w-0 items-center gap-1 sm:gap-3">
         <WalletButton />
+        <NotificationsButton />
         <Divider className="hidden lg:block" />
         <AccountSwitcher />
         {/* Language and theme return at `lg`, not at `sm`. They belong to the

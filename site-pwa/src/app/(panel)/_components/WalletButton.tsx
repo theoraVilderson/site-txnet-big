@@ -63,9 +63,18 @@ const QUICK_ACTIONS: readonly QuickAction[] = [
  * reach the money pages.
  *
  * It goes **before** `AccountSwitcher` and has to fit a 360px bar
- * (`contract.shell.md` rule 5) — which is why the caption collapses below `sm`
- * and only the figure survives. Sides are logical throughout (`start`/`end`,
- * `ms`/`me`): the same build serves RTL and LTR (rule 4).
+ * (`contract.shell.md` rule 5). **Below `sm` it is the icon alone**: the
+ * caption, the figure and the chevron all move out, and the figure reappears in
+ * the dropdown's own header. That is F-093-h's doing — the bar had 18px of
+ * slack at 360px and the notifications bell needs 40 — but the figure is the
+ * one that left, because rule 5 names it as the bar's only unbounded term: it
+ * has no truncation, so a long enough balance put the row over budget on its
+ * own. Moving it costs one tap and bounds the bar for the control after this
+ * one; truncating it in place would have printed a wrong number, which rule 1
+ * below exists to prevent.
+ *
+ * Sides are logical throughout (`start`/`end`, `ms`/`me`): the same build
+ * serves RTL and LTR (rule 4).
  *
  * The balance itself is `useWalletBalance`'s, and nothing here adjusts it.
  */
@@ -104,6 +113,25 @@ export function WalletButton() {
   // the filter stays, because rule 4 is how the next one is added.
   const visible = QUICK_ACTIONS.filter((a) => a.href !== null || a.modal !== undefined);
 
+  // One figure, two homes: the button from `sm` up, the dropdown's header at
+  // every width. It is `useWalletBalance`'s string formatted — never a sum
+  // worked out here (`contract.shell.md`, the wallet control's rule 1).
+  const figure =
+    isLoading && balance === null ? (
+      <span
+        className="inline-block h-4 w-20 animate-pulse rounded-md bg-bg-inner align-middle"
+        aria-hidden
+      />
+    ) : balance === null ? (
+      <span className={open ? "text-white/80" : "text-text-secondary"}>
+        {t("common", W.unavailable)}
+      </span>
+    ) : (
+      <span className={open ? "text-white" : "text-gold"}>
+        {formatMoney(balance, BASE_CURRENCY, { lang, t })}
+      </span>
+    );
+
   function openModal(modal: NonNullable<QuickAction["modal"]>) {
     setOpen(false);
     if (modal === "gift-code") setGiftOpen(true);
@@ -132,36 +160,22 @@ export function WalletButton() {
           <Wallet size={16} aria-hidden />
         </span>
 
-        <span className="flex min-w-0 flex-col text-start leading-tight">
+        {/* The figure and the chevron are the bar's whole cost below `sm`, and
+            the figure is the unbounded one. They live in the dropdown's header
+            there instead — see the component note. */}
+        <span className="hidden min-w-0 flex-col text-start leading-tight sm:flex">
           <span
-            className={`hidden text-[10px] font-bold sm:block ${
-              open ? "text-white/80" : "text-text-secondary"
-            }`}
+            className={`text-[10px] font-bold ${open ? "text-white/80" : "text-text-secondary"}`}
           >
             {t("common", W.label)}
           </span>
-          <span className="font-mono text-sm font-bold">
-            {isLoading && balance === null ? (
-              <span
-                className="inline-block h-4 w-20 animate-pulse rounded-md bg-bg-inner align-middle"
-                aria-hidden
-              />
-            ) : balance === null ? (
-              <span className={open ? "text-white/80" : "text-text-secondary"}>
-                {t("common", W.unavailable)}
-              </span>
-            ) : (
-              <span className={open ? "text-white" : "text-gold"}>
-                {formatMoney(balance, BASE_CURRENCY, { lang, t })}
-              </span>
-            )}
-          </span>
+          <span className="font-mono text-sm font-bold">{figure}</span>
         </span>
 
         <ChevronDown
           size={14}
           aria-hidden
-          className={`ms-1 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`ms-1 hidden shrink-0 transition-transform sm:block ${open ? "rotate-180" : ""}`}
         />
       </button>
 
@@ -171,8 +185,18 @@ export function WalletButton() {
       {open && (
         <div
           id={menuId}
-          className="absolute end-0 z-30 mt-3 w-72 rounded-2xl border border-card-border bg-card-bg p-3 shadow-xl backdrop-blur-xl"
+          className="absolute end-0 z-30 mt-3 w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-card-border bg-card-bg p-3 shadow-xl backdrop-blur-xl"
         >
+          {/* The figure's home below `sm`, where the button is the icon alone.
+              It is shown at every width rather than only there: a balance that
+              appears and disappears with the viewport is one the user has to
+              hunt for, and this is the panel that every wallet action starts
+              from. */}
+          <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-leaf-bg px-3 py-2 sm:hidden">
+            <span className="text-[10px] font-bold text-text-secondary">{t("common", W.label)}</span>
+            <span className="font-mono text-sm font-bold">{figure}</span>
+          </div>
+
           <div className="mb-3 flex items-center justify-between px-1">
             <span className="text-xs font-bold text-text-secondary">
               {t("common", W.quickActions)}

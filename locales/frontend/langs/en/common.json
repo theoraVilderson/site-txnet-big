@@ -362,6 +362,25 @@
       "copied": "Copied"
     }
   },
+  "notifications": {
+    "label": "Notifications",
+    "open": "Open notifications",
+    "close": "Close notifications",
+    "unread": "{{count}} unread notifications",
+    "new": "{{count}} new",
+    "markAllRead": "Mark all read",
+    "markRead": "Mark as read",
+    "empty": "No notifications yet",
+    "emptyHint": "Anything new will show up here.",
+    "unavailable": "Notifications unavailable",
+    "retry": "Retry",
+    "types": {
+      "systemAlert": "System alert",
+      "adminMessage": "Message from support",
+      "lowBalance": "Low balance",
+      "other": "Notification"
+    }
+  },
   "deposit": {
     "title": "Top up your wallet",
     "subtitle": "Choose an amount and add it to your balance.",

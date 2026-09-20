@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 16
-updated: 2026-09-12
+version: 25
+updated: 2026-09-20
 ---
 
 # Contract — panel-web: the dashboard shell (F-093-a)
@@ -76,12 +76,12 @@ under `(panel)` renders in: `_components/PanelShell.tsx` = `PanelSidebar` +
    ordinary one. Putting logout in that menu would undo the separation; putting
    it in the bar was what broke the bar.
 
-   What remains below `lg` — the menu button, the wallet, the switcher — is
-   ~286px at 360px and ~430px at 700px, and fits both. **The wallet's figure is the one unbounded term left**:
-   it has no truncation, so a long enough balance puts the row back over
-   budget. Bounding it means accepting a truncated balance, which the wallet
-   control's rule 1 has an opinion about, so it is a decision and not a
-   tidy-up.
+   What remained below `lg` — the menu button, the wallet, the switcher — was
+   ~286px at 360px and ~430px at 700px. **F-093-h spent the rest of that**: a
+   `p-2` bell is 40px with the gap, against 18px of slack. So the unbounded
+   term left the bar instead of being truncated — below `sm` the wallet is its
+   icon alone and the figure renders in that control's own dropdown header
+   ([contract.notifications.md](contract.notifications.md)). ~220px at 360px.
 
 ## The wallet control (F-093-c)
 
