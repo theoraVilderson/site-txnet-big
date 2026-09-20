@@ -165,5 +165,6 @@ effect is also what `react-hooks/set-state-in-effect` refuses.
 
 **Not covered:** a key lost after the modal is closed. This panel has no list of
 a user's Grants, so the button is reachable only while the key is up; a Grant
-whose key was lost yesterday still has no way back, and giving it one is a
-surface of its own, not a rule here.
+whose key was lost yesterday still has no way back. That is a surface of its
+own rather than a rule here — F-502-r lists a user's Grants and F-502-s is the
+page that shows them, with this button on every row.

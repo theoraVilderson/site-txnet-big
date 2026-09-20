@@ -71,4 +71,6 @@ to a mis-click was lost for good; this is the way back.
 | The Grant's **status is not a gate** | the row's scope (2026-09-20): a token grants nothing on its own — `/sub` reads the Grant — so rotating a dead one mints a key that opens nothing rather than something it should not |
 
 **Not covered:** a `/sub` link for the key (F-113, F-027); the panel showing it
-(F-502-l-c) and its reissue button (F-502-q).
+(F-502-l-c) and its reissue button (F-502-q, built). Listing a user's own Grants
+is F-502-r: the button above is reachable only while the key is on screen, so a
+key lost after the modal closed has no way back until that route exists.
