@@ -30,7 +30,7 @@ import { Select } from "../../_components/kit/Select";
 import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
 import { PresetsEditor } from "./PresetsEditor";
 import { secretFields, takesStaticRate } from "../_lib/provider-fields";
-import { FeeFields, Field, PROVIDER_ICONS, SecretInput, TextInput, Toggle, useRangeText, type SetField } from "./gateway-fields";
+import { FeeFields, Field, PROVIDER_ICONS, SecretInput, TextInput, Toggle, fieldErrorText, useRangeText, type SetField } from "./gateway-fields";
 import { EDITOR_SECTIONS, firstInvalidSection, sectionOf, type EditorSectionId } from "../_lib/gateway-editor";
 import {
   CATEGORIES,
@@ -388,7 +388,7 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved }: Gatewa
                 />
                 {errors[k] ? (
                   <span role="alert" className="text-[11px] font-bold text-error">
-                    {t("common", G.errors[errors[k]!])}
+                    {fieldErrorText(t, errors[k]!)}
                   </span>
                 ) : (
                   <span className="text-[11px] leading-5 text-text-secondary">{t("common", state?.configured ? E.keepCurrent : E.enterNew)}</span>

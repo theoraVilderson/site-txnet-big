@@ -23,8 +23,20 @@ import { z } from 'zod';
  * else — never echoed, never logged, relayed once to `auth-service` (F-102-a).
  */
 
-const DECIMAL = /^(0|[1-9]\d{0,15})(\.\d{1,8})?$/;
-const decimal = (what: string) => z.string({ message: `${what} must be a decimal string` }).regex(DECIMAL, { message: `${what} must be a decimal string` });
+/**
+ * A decimal string, at its **column's** scale (F-104-ad).
+ *
+ * `numeric(18, 2)` does not refuse a third decimal place, it rounds it away —
+ * so a `feeCeiling` of `0.125` was accepted here, stored as `0.13`, and the
+ * operator was never told. Each field below names the scale of the column it
+ * lands in; anything finer is refused, as a rate outside its range is
+ * (`gateway-pricing.ts`), because money nobody asked for is not ours to round.
+ */
+const decimalAt = (places: number) => new RegExp(`^(0|[1-9]\\d{0,15})(\\.\\d{1,${places}})?$`);
+const decimal = (what: string, places: number) => {
+  const message = `${what} must be a decimal string with at most ${places} places`;
+  return z.string({ message }).regex(decimalAt(places), { message });
+};
 const uuid = (what: string) => z.string({ message: `${what} must be a uuid` }).uuid({ message: `${what} must be a uuid` });
 const secret = (what: string) => z.string({ message: `${what} must be a string` }).min(1, { message: `${what} must not be empty` }).max(512);
 
@@ -34,21 +46,21 @@ const fields = {
   gatewayCategory: z.nativeEnum(GatewayCategory),
   isActive: z.boolean(),
   // Either bound may be null: no limit on that side.
-  minAcceptAmount: decimal('minAcceptAmount').nullable(),
-  maxAcceptAmount: decimal('maxAcceptAmount').nullable(),
+  minAcceptAmount: decimal('minAcceptAmount', 2).nullable(),
+  maxAcceptAmount: decimal('maxAcceptAmount', 2).nullable(),
   feeCalculationMode: z.nativeEnum(FeeCalcMode),
   feeType: z.nativeEnum(FeeType),
-  feeValue: decimal('feeValue'),
-  feeFloor: decimal('feeFloor').nullable(),
-  feeCeiling: decimal('feeCeiling').nullable(),
+  feeValue: decimal('feeValue', 4),
+  feeFloor: decimal('feeFloor', 2).nullable(),
+  feeCeiling: decimal('feeCeiling', 2).nullable(),
   useLiveRate: z.boolean(),
-  staticRate: decimal('staticRate').nullable(),
+  staticRate: decimal('staticRate', 8).nullable(),
   // A modifier may be a markdown, so it takes a sign.
   percentageModifier: z.string().regex(/^-?(0|[1-9]\d{0,4})(\.\d{1,4})?$/, { message: 'percentageModifier must be a decimal string' }),
   fixedAmountModifier: z.string().regex(/^-?(0|[1-9]\d{0,9})(\.\d{1,8})?$/, { message: 'fixedAmountModifier must be a decimal string' }),
-  minRate: decimal('minRate').nullable(),
-  maxRate: decimal('maxRate').nullable(),
-  roundingStep: decimal('roundingStep').nullable(),
+  minRate: decimal('minRate', 8).nullable(),
+  maxRate: decimal('maxRate', 8).nullable(),
+  roundingStep: decimal('roundingStep', 8).nullable(),
   roundingMode: z.nativeEnum(RateRoundingMode),
   description: z.string().trim().max(500).nullable(),
   supportedCurrencies: z.array(z.string().regex(/^[A-Z0-9]{2,10}$/)).max(20),

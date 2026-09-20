@@ -88,6 +88,7 @@
     "errors": {
       "required": "Required",
       "decimal": "Enter a number such as 12.50",
+      "precision": "At most {{places}} decimal places",
       "range": "Must not be above the maximum",
       "merchantFormat": "A Zarinpal merchant id is 36 characters, like xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
       "url": "Enter a full address like https://example.com/..."

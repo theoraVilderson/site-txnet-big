@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 2
+version: 3
 updated: 2026-09-20
 ---
 
@@ -32,6 +32,7 @@ the boundary. Linking a gateway to another tenant is the settlement grant
 | Delete (the user's calls, 2026-09-17): refused `gateway_has_open_payments` while any payment on it is `pending`/`expired` inside `RECONCILIATION_LOOKBACK_SEC`, in any tenant — deactivate first. Otherwise a row nothing ever pointed at is deleted; one a payment or grant (even withdrawn) points at is deactivated and its live grants withdrawn, with a `gateway_grant_withdraw` audit row in each borrower's tenant. Deactivating (`isActive`) leaves grants alone; a borrower's coupons naming the gateway are left as they are | ADR-0041 §6; a borrower's payer still waiting must not lose the gateway |
 | The order inside delete (F-104-t): `isActive` off **first**, committed with the open-payment count, before a secret is touched; the count is then taken again, and a payment that started in between refuses the delete — `gateway_has_open_payments`, gateway left deactivated, secrets untouched, one `gateway_delete` audit row saying `{mode: deactivated, openPayments}`. Secrets are revoked after that second count, before the delete or the grant withdrawal | between count and revoke the gateway was still selectable: that top-up is paid into a gateway whose `webhook_secret` is gone a moment later, so the door answers 401 and reconciliation gets `CredentialUnavailable` — money in, creditable only by hand. Switching off closes the door; a failure part-way still leaves a gateway that cannot charge |
 | Quick amounts (F-092-v): a gateway's `depositPresets` overrides the tenant's `presets` (`billing.deposit_setting`); both written through `deposit-presets.ts` — positive, 2 decimals, unique, ascending, at most 8; empty inherits. A default-list write is audited `deposit_presets_update` | one rule for both lists; the top-up page never judges a list |
+| Every decimal is refused finer than the column that stores it (F-104-ad): 2 places for `minAcceptAmount`, `maxAcceptAmount`, `feeFloor`, `feeCeiling`, 4 for `feeValue`, 8 for `staticRate` / `minRate` / `maxRate` / `roundingStep`. The message names the field and its places; the panel's form refuses the same values before the request | `numeric(18, 2)` rounds a third place away instead of refusing it, so a `feeCeiling` of `0.125` was stored as `0.13` and the operator was told nothing — money nobody asked for is not ours to round (the user's call, 2026-09-20) |
 | Every write lands with its `admin_audit_log` row (`gateway_create` / `_update` / `_delete`) in one transaction | who changed a gateway is the question after money went somewhere unexpected |
 
 Refusals name their `reason`: 403 `not_platform_owner`, `verification_is_platform_owners`;

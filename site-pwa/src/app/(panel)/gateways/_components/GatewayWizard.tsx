@@ -47,7 +47,7 @@ import {
   type WizardStepId,
 } from "../_lib/gateway-wizard";
 import { providerFields, secretFields } from "../_lib/provider-fields";
-import { ChoiceCards, FeeFields, PROVIDER_ICONS, SecretInput, Toggle, useRangeText } from "./gateway-fields";
+import { ChoiceCards, FeeFields, PROVIDER_ICONS, SecretInput, Toggle, fieldErrorText, useRangeText } from "./gateway-fields";
 
 const G = FrontendI18nKeys.common.gateways;
 const F = G.form;
@@ -178,7 +178,7 @@ export function GatewayWizard({ surface, me, onClose, onCreated }: GatewayWizard
   const errorText = (k: keyof GatewayForm) =>
     errors[k] ? (
       <span role="alert" className="text-[11px] font-bold text-error">
-        {t("common", G.errors[errors[k]!])}
+        {fieldErrorText(t, errors[k]!)}
       </span>
     ) : null;
 

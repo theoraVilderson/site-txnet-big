@@ -45,10 +45,37 @@ export interface GatewayForm {
   callbackUrl: string;
 }
 
-export type FormError = "required" | "decimal" | "range" | "merchantFormat" | "url";
+/** More decimal places than the column that stores this field keeps. `places` is that column's. */
+export type PrecisionError = { kind: "precision"; places: number };
+export type FormError = "required" | "decimal" | "range" | "merchantFormat" | "url" | PrecisionError;
 export type FormErrors = Partial<Record<keyof GatewayForm, FormError>>;
 
 const DECIMAL = /^(0|[1-9]\d{0,15})(\.\d{1,8})?$/;
+/**
+ * The scale of the column each decimal lands in (`billing.payment_gateway`,
+ * and the identical columns on `tenant.tenant_gateway_config`).
+ *
+ * `numeric(18, 2)` does not refuse a third place, it rounds it away: a
+ * `feeCeiling` of `0.125` was saved as `0.13` and the operator who typed it was
+ * told nothing. The wire refuses the same values (`gateway-admin.schema.ts`);
+ * this names the field the refusal belongs to before a request is made.
+ */
+const PLACES: Partial<Record<keyof GatewayForm, number>> = {
+  minAcceptAmount: 2,
+  maxAcceptAmount: 2,
+  feeFloor: 2,
+  feeCeiling: 2,
+  feeValue: 4,
+  staticRate: 8,
+};
+
+/** The places after the point in a value `DECIMAL` already accepted. */
+const placesOf = (v: string): number => (v.split(".")[1] ?? "").length;
+
+function tooFine(k: keyof GatewayForm, v: string): PrecisionError | undefined {
+  const places = PLACES[k];
+  return places !== undefined && placesOf(v) > places ? { kind: "precision", places } : undefined;
+}
 /** An absolute http(s) address — what billing stores as a callback. */
 function isWebAddress(value: string): boolean {
   try {
@@ -161,7 +188,12 @@ export function validateForm(form: GatewayForm): FormErrors {
   if (form.feeCalculationMode === "manual" && form.feeValue.trim() === "") errors.feeValue = "required";
   for (const k of DECIMALS) {
     const v = form[k].trim();
-    if (v !== "" && !errors[k] && !DECIMAL.test(v)) errors[k] = "decimal";
+    if (v === "" || errors[k]) continue;
+    if (!DECIMAL.test(v)) errors[k] = "decimal";
+    else {
+      const fine = tooFine(k, v);
+      if (fine) errors[k] = fine;
+    }
   }
   const pair = (lo: "minAcceptAmount" | "feeFloor", hi: "maxAcceptAmount" | "feeCeiling") => {
     if (errors[lo] || errors[hi] || form[lo].trim() === "" || form[hi].trim() === "") return;
@@ -177,6 +209,10 @@ export function validateForm(form: GatewayForm): FormErrors {
     const rate = form.staticRate.trim();
     if (rate === "" || (DECIMAL.test(rate) && Number(rate) <= 0)) errors.staticRate = "required";
     else if (!DECIMAL.test(rate)) errors.staticRate = "decimal";
+    else {
+      const fine = tooFine("staticRate", rate);
+      if (fine) errors.staticRate = fine;
+    }
   }
   if (form.callbackUrl.trim() && !isWebAddress(form.callbackUrl.trim())) errors.callbackUrl = "url";
   return errors;

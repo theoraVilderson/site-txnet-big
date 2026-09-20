@@ -36,6 +36,14 @@ export const inputClass =
   "w-full rounded-xl border border-card-border bg-[var(--bg-inner)] px-3 py-2.5 text-sm text-[var(--text-input)] placeholder:text-[var(--text-label)] transition-colors hover:border-[var(--accent-primary)] focus:border-[var(--accent-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-glow)]";
 const invalidClass = "border-error focus:border-error";
 
+/**
+ * One error's message. A `precision` error carries the column's scale, so it is
+ * the only one with a variable — every other kind is a key on its own.
+ */
+export function fieldErrorText(t: ReturnType<typeof useLocale>["t"], error: FormError): string {
+  return typeof error === "string" ? t("common", G.errors[error]) : t("common", G.errors.precision, { places: String(error.places) });
+}
+
 export function Field({
   id,
   label,
@@ -61,7 +69,7 @@ export function Field({
       {children}
       {error ? (
         <span role="alert" className="text-[11px] font-bold text-error">
-          {t("common", G.errors[error])}
+          {fieldErrorText(t, error)}
         </span>
       ) : (
         hint && <span className="text-[11px] leading-5 text-text-secondary">{hint}</span>

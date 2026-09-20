@@ -131,6 +131,23 @@ describe("gateway form — validation", () => {
     expect(validateForm(formFromGateway(GATEWAY))).toEqual({});
   });
 
+  it("refuses money finer than the column it lands in", () => {
+    const base = formFromGateway(GATEWAY);
+    // `payment_gateway`: the amount bounds and the fee floor/ceiling are numeric(18, 2),
+    // `feeValue` is numeric(18, 4). Postgres rounds a finer value instead of refusing it,
+    // so 0.125 was saved as 0.13 and nobody was told (F-104-ad).
+    for (const k of ["minAcceptAmount", "maxAcceptAmount", "feeFloor", "feeCeiling"] as const) {
+      expect(validateForm({ ...base, [k]: "0.125" })[k]).toEqual({ kind: "precision", places: 2 });
+      expect(validateForm({ ...base, [k]: "0.12" })[k]).toBeUndefined();
+    }
+    expect(validateForm({ ...base, feeValue: "2.34567" }).feeValue).toEqual({ kind: "precision", places: 4 });
+    expect(validateForm({ ...base, feeValue: "2.3456" }).feeValue).toBeUndefined();
+    // A rate keeps its eight places: `staticRate` is numeric(18, 8).
+    expect(validateForm({ ...base, providerName: "telegram_stars", staticRate: "0.00012345" }).staticRate).toBeUndefined();
+    // Still a shape error, not a precision one, when it is not a number at all.
+    expect(validateForm({ ...base, feeFloor: "1,5" }).feeFloor).toBe("decimal");
+  });
+
   it("does not ask an automatic-fee gateway for a fee value it never uses", () => {
     const automatic = { ...formFromGateway(GATEWAY), feeCalculationMode: "automatic", feeValue: "" };
     expect(validateForm(automatic)).toEqual({});
