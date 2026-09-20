@@ -18,12 +18,12 @@ import {
   ServiceUnavailableException,
   UseGuards,
 } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
+import { CATALOG_ADMIN_READ as READ, CATALOG_ADMIN_WRITE as WRITE } from './catalog-admin.rate-limit';
 import {
   CreateCategoryBody,
   CreateProductBody,
@@ -81,16 +81,6 @@ export const CATALOG_REFUSAL_STATUS: Record<CatalogAdminRejection, 400 | 403 | 4
   source_text_missing: 400,
 };
 
-const READ = {
-  key: (req: Request) => rateLimitBucketKey(RateLimitBucket.CATALOG_ADMIN_READ, identityOf(req).userId),
-  configKey: 'CATALOG_ADMIN_READ_RATE_LIMIT' as const,
-  windowSec: 900,
-};
-const WRITE = {
-  key: (req: Request) => rateLimitBucketKey(RateLimitBucket.CATALOG_ADMIN_WRITE, identityOf(req).userId),
-  configKey: 'CATALOG_ADMIN_WRITE_RATE_LIMIT' as const,
-  windowSec: 900,
-};
 
 /**
  * Catalog management (F-026-d, D-34): `/api/catalog`, served by billing-service

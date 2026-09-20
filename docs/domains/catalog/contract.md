@@ -3,7 +3,7 @@ id: catalog
 layer: domain
 status: draft
 version: 2
-updated: 2026-09-16
+updated: 2026-09-20
 ---
 
 # Contract — catalog
@@ -13,7 +13,9 @@ updated: 2026-09-16
 and their `where` fragments live in `shared-core/src/lib/catalog/offers.ts` so
 another service asks the same question (F-018-ah); management built
 (F-026-d) at `/api/catalog` — `catalog/catalog-admin.*`, proved by
-`catalog-admin.service.spec.ts`.** Decision: ADR-0049.
+`catalog-admin.service.spec.ts`; the same management for a **named** reseller
+(F-066-w7) at `/api/catalog/tenants/:tenantId/...` — `catalog/reseller-catalog.*`,
+proved by `reseller-catalog.service.spec.ts`.** Decisions: ADR-0049, ADR-0064.
 
 ## HTTP surface (F-026-d)
 
@@ -45,6 +47,23 @@ cross-tenant pool.
 Every write leaves an `admin_audit_log` row (`catalog_*` actions). Nothing is deleted.
 A translation publish is audited as `catalog_product_update` / `catalog_category_update`
 on the item it names, `newValue.texts`.
+
+## The same management for a reseller a route names (F-066-w7, ADR-0064)
+
+`/api/catalog/tenants/:tenantId/...` — every route above under that prefix,
+`reseller-catalog.*`, proved by `reseller-catalog.service.spec.ts`. The ambient
+surface is untouched and stays what a tenant managing its **own** catalog uses.
+
+| Rule | Held by |
+|---|---|
+| The door is `ResellerAccess` (tenant invariant 21), not `catalog.manage`: a reseller's owner holds no platform permission. `read` for a list, `staffWrite` for a write, judged against the **reseller's** status matrix | `ResellerCatalogService.run` |
+| The work runs in the reseller's tenant scope, as the reseller — so every rule above applies unchanged, and the `admin_audit_log` row lands in the reseller's tenant naming the caller as its admin | `ResellerAccess.run` |
+| **Nothing is elevated.** `access` answers `owner: false` here for everyone, platform staff included: a platform item is `*_not_found`, and writing one is `not_platform_owner`. The platform's own catalog is managed on the ambient route | actor is a tenant |
+| The tenant is the **path's**: `tenantId` is in no body and no query (`.strict()` refuses it), and a create is filed under the admitted reseller | `createResellerCategorySchema`, `createResellerProductSchema`, `listResellerProductsSchema` |
+| Refusals: `not_allowed` 403, `reseller_not_found` 404, `reseller_suspended` 403, `reseller_terminated` 409, then every reason above | `ResellerCatalogRefused` |
+| One rate-limit bucket per caller across both surfaces — the same person doing the same work (`catalog-admin.rate-limit.ts`) | `CATALOG_ADMIN_READ` / `_WRITE` |
+
+The panel screen over it is F-066-w8.
 
 ## Names (F-1533-d/f, ADR-0050 and its amendments)
 

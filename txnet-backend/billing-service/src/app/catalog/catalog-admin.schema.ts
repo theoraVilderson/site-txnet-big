@@ -126,6 +126,16 @@ export const editTextsSchema = z
   .strict()
   .refine((b) => Object.keys(b.texts).length > 0 && Object.keys(b.texts).length <= 200, { message: 'texts holds 1-200 entries', path: ['texts'] });
 
+/**
+ * The same bodies on the named reseller's surface (F-066-w7), without
+ * `tenantId`: there the tenant is the path's, so a body or query naming one is
+ * refused by `.strict()` rather than silently ignored — a client that sent it
+ * expected it to land.
+ */
+export const createResellerCategorySchema = createCategorySchema.omit({ tenantId: true }).strict();
+export const createResellerProductSchema = createProductSchema.omit({ tenantId: true }).strict();
+export const listResellerProductsSchema = listProductsSchema.omit({ tenantId: true }).strict();
+
 export type CreateCategoryBody = z.infer<typeof createCategorySchema>;
 export type UpdateCategoryBody = z.infer<typeof updateCategorySchema>;
 export type ListProductsQuery = z.infer<typeof listProductsSchema>;
@@ -137,3 +147,6 @@ export type SetPriceBody = z.infer<typeof setPriceSchema>;
 export type ListTextDraftsQuery = z.infer<typeof listTextDraftsSchema>;
 export type PublishTextsBody = z.infer<typeof publishTextsSchema>;
 export type EditTextsBody = z.infer<typeof editTextsSchema>;
+export type CreateResellerCategoryBody = z.infer<typeof createResellerCategorySchema>;
+export type CreateResellerProductBody = z.infer<typeof createResellerProductSchema>;
+export type ListResellerProductsQuery = z.infer<typeof listResellerProductsSchema>;
