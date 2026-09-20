@@ -6,6 +6,7 @@ import { WalletModule } from '../../wallet/wallet.module';
 import { CouponModule } from '../coupon/coupon.module';
 import { GatewayModule } from '../gateway/gateway.module';
 import { FxRateReader } from '../pricing/fx-rate.reader';
+import { DepositAbandonService } from './deposit-abandon.service';
 import { DepositCallbackController } from './deposit-callback.controller';
 import { DepositCallbackService } from './deposit-callback.service';
 import { DepositController } from './deposit.controller';
@@ -50,7 +51,7 @@ import { ManualConfirmService } from './manual-confirm.service';
 @Module({
   imports: [LocaleModule, CouponModule, GatewayModule, WalletModule],
   controllers: [DepositController, DepositInChatController, DepositCallbackController, DepositWebhookController, DepositInternalController, ManualConfirmController],
-  providers: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositSettlementService, DepositExpiryService, DepositReconciliationService, ManualConfirmService, DepositWebhookService, DepositInChatService, FxRateReader, InvoiceLinkClient, TenantBillingLedger],
+  providers: [DepositQuoteService, DepositStartService, DepositAbandonService, DepositCallbackService, DepositSettlementService, DepositExpiryService, DepositReconciliationService, ManualConfirmService, DepositWebhookService, DepositInChatService, FxRateReader, InvoiceLinkClient, TenantBillingLedger],
   exports: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositExpiryService, DepositReconciliationService],
 })
 export class DepositModule {}

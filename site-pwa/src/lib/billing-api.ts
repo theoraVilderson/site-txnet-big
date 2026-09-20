@@ -480,6 +480,20 @@ export const billingApi = {
   },
 
   /**
+   * The Mini App's invoice sheet closed without paying (F-093-q): tell billing,
+   * so the payment's coupon holds come back now instead of at the end of its
+   * 15-minute clock and the one-use code still works on the next try.
+   *
+   * Every outcome is a 200 verdict there is nothing to show — billing refuses
+   * a payment pre-checkout has already approved, because the messenger may
+   * hold the money. A network failure here costs only the wait it saved, so
+   * the caller lets it go rather than telling the payer about it.
+   */
+  async depositAbandon(paymentId: string): Promise<{ status: string }> {
+    return call<{ status: string }>(`/deposit/${paymentId}/abandon`, { method: "POST" });
+  },
+
+  /**
    * Redeem a gift code (F-093-g), crediting the wallet in one transaction.
    *
    * Every refusal is a **409** carrying a sentence billing has already

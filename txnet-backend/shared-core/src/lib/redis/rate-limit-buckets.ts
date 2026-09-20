@@ -132,6 +132,14 @@ export const RateLimitBucket = {
   DEPOSIT_START: 'deposit:start',
 
   /**
+   * Giving up a Mini App top-up before paying it (F-093-q), per user. One per
+   * `DEPOSIT_START`, near enough — a sheet the payer closed is followed by
+   * exactly one of these — so it gets a budget of its own rather than eating
+   * the one a payer needs to try again.
+   */
+  DEPOSIT_ABANDON: 'deposit:abandon',
+
+  /**
    * The bot relaying an in-chat payment's `pre_checkout_query` or
    * `successful_payment` to `billing-service` (F-104-k), per **user** — the
    * payer the gate names. Generous: a `paid` refused here is money the

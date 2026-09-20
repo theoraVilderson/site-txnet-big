@@ -44,7 +44,11 @@ const D = FrontendI18nKeys.common.deposit;
  * Inside a Mini App there is a third (F-104-o): an in-chat gateway answers an
  * invoice link, the messenger's own sheet takes the payment, and the page then
  * waits on the row exactly as `/payment/pending` does (F-093-l) — the sheet's
- * "paid" is the host's word, and only the bot's relay credits the wallet.
+ * "paid" is the host's word, and only the bot's relay credits the wallet. A
+ * sheet that closed without paying is the one thing only this page sees, so it
+ * is the one thing it reports: `POST /deposit/:id/abandon` gives the payment's
+ * coupon holds back at once (F-093-q), and the retry the payer makes a second
+ * later is not refused a one-use code the messenger never charged for.
  */
 export function DepositView() {
   const { lang, t } = useLocale();
@@ -134,13 +138,22 @@ export function DepositView() {
         if (closed === "paid" || closed === "pending") {
           // Whatever the sheet said, the row is what credits: watch it.
           setAwaiting(started.paymentId);
-        } else if (closed === "failed") {
-          setStartError(t("common", D.summary.inChatFailed));
-        } else if (closed === "unavailable") {
-          setStartError(t("common", D.summary.inChatUnavailable));
+        } else {
+          // Nothing was paid (F-093-q). `start` already holds this payment's
+          // coupons, and until the row closes a one-use code answers
+          // `per_user_limit_reached` — so the retry the payer is about to make
+          // would be refused for a payment the messenger never charged. Let
+          // billing give the holds back now; it refuses the payment itself if
+          // pre-checkout has already approved it. Nothing waits on the answer
+          // and a failure here only costs the wait it saved.
+          void billingApi.depositAbandon(started.paymentId).catch(() => {});
+          if (closed === "failed") {
+            setStartError(t("common", D.summary.inChatFailed));
+          } else if (closed === "unavailable") {
+            setStartError(t("common", D.summary.inChatUnavailable));
+          }
+          // Cancelled is the payer's own choice and needs no sentence.
         }
-        // Cancelled is the payer's own choice and needs no sentence. The
-        // unpaid row is billing's to expire; the next pay starts a new one.
         setStarting(false);
         return;
       }

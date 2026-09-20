@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 19
+version: 20
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -62,10 +62,10 @@ display-currency conversion (`currency`), plan prices (`catalog`).
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-20 | contract v20 (F-093-q): `POST /api/billing/deposit/:paymentId/abandon` — the payer's own unpaid, never-approved in-chat payment is closed `failed` `abandoned` and its coupon holds released `cancelled`, instead of waiting out `PAYMENT_PENDING_TTL_SEC`. Additive, 200 verdict. A payment pre-checkout approved is refused: ADR-0047 decision 2 keeps its holds. Rules: [contract.webhook.md](contract.webhook.md). Consumer panel-web: the Mini App top-up page, in the same change |
 | 2026-09-20 | contract v19 (F-311-b, ADR-0067): `GET /api/billing/tenants/:tenantId/revenue` — a named reseller's own sales and top-ups over a period, from the wallet and payment ledgers, admitted by `ResellerAccess` and run in that reseller's scope. Two figures, gross, never `settlement`'s number (F-096-e). Additive; `sales` is `0.00` until `entitlement` writes a `traffic_consumption` row. Rules: [contract.revenue.md](contract.revenue.md). Consumer bot-app: F-311-c |
 | 2026-09-20 | contract v18 (F-066-w3, ADR-0064): `/api/billing/tenants/:tenantId/gateways` — gateway management for the reseller the path names, admitted by `ResellerAccess` and run in that reseller's scope, so the ambient surface's rules apply unchanged. Additive; `/api/billing/gateways` untouched. The gateway rules move out of `contract.md` into `contract.gateways.md`. Consumer panel-web: F-066-w4 |
 | 2026-09-18 | contract v17 (F-104-ab), breaking: the in-chat relay moves to `POST /api/internal/billing/deposit/in-chat/{pre-checkout,paid}` — service token only, `{…, platform, senderId, botTenantId}`, admitted only from the payer `start` recorded (`payerChatPlatform`/`payerChatId`, from the gate's new `X-Chat-User-Id`); the gated pair is gone. Consumer bot-app: moved in the same change |
 | 2026-09-14 | contract v16 (F-502-a, ADR-0048): a coupon code is unique per tenant; **a platform coupon serves only the tenants `coupon_tenant` names, else the platform owner's users** — a break for resellers' users of existing platform coupons; soft delete, `coupon_batch`, `coupon.manage`. Consumers panel-web, bot-app: no wire change |
-| 2026-09-14 | contract v15 (F-092-z, ADR-0044 decision 6): `/api/billing/payments/manual` — list, inquire, confirm a verifying or flagged payment, behind the new `payment.confirm_manual` (`Admin` + `*`), scoped like `gateway.manage`. The gateway is asked first; only silence or `in_bank` lets a person credit `admin_manual`, audited in the crediting transaction. Additive. Consumers: panel-web (F-093-n) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

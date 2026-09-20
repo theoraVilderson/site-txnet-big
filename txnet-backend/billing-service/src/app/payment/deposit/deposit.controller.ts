@@ -7,6 +7,8 @@ import {
   HttpCode,
   HttpStatus,
   NotFoundException,
+  Param,
+  ParseUUIDPipe,
   Post,
   Req,
   ServiceUnavailableException,
@@ -35,6 +37,7 @@ import { CouponReservationRefused } from '../coupon/coupon-reservation';
 import type { CouponRejection } from '../coupon/coupon-validation';
 import { GatewayFailure, ProviderNotSupported } from '../gateway/payment-provider';
 import { AmountOutOfGatewayRange, RateOutOfRange, RateUnavailable } from '../pricing/gateway-pricing';
+import { DepositAbandonService } from './deposit-abandon.service';
 import { DepositGatewayNotFound, DepositQuoteService } from './deposit-quote.service';
 import { DepositCallbackUnavailable, DepositStartService } from './deposit-start.service';
 import { DepositQuoteBody, depositQuoteSchema, DepositStartBody, depositStartSchema } from './deposit.schema';
@@ -118,6 +121,7 @@ export class DepositController {
   constructor(
     private readonly deposits: DepositQuoteService,
     private readonly starts: DepositStartService,
+    private readonly abandons: DepositAbandonService,
     private readonly locale: LocaleService,
     private readonly config: ConfigService,
   ) {}
@@ -231,5 +235,27 @@ export class DepositController {
     } catch (e) {
       throw toHttp(e);
     }
+  }
+
+  /**
+   * The Mini App's invoice sheet closed without paying (F-093-q): give the
+   * payment's coupon holds back now rather than at the end of its clock, so
+   * the one-use code the payer applied still works on the next try.
+   *
+   * No `@TenantCapability`: this closes a payment and buys nothing, and a
+   * tenant suspended between `start` and the sheet closing must not be the
+   * reason a payer's coupon stays held (`rules.md`, D-42). Every outcome is a
+   * 200 verdict — the page has nothing to do with a refusal, and a race with
+   * the bot's `paid` relay is ordinary.
+   */
+  @Post(':paymentId/abandon')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.DEPOSIT_ABANDON, identityOf(req).userId),
+    configKey: 'DEPOSIT_ABANDON_RATE_LIMIT',
+    windowSec: 900,
+  })
+  abandon(@Param('paymentId', new ParseUUIDPipe()) paymentId: string, @Req() req: Request) {
+    return this.abandons.abandon({ userId: identityOf(req).userId, paymentId });
   }
 }

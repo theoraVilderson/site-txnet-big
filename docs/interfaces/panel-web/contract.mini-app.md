@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 6
-updated: 2026-09-10
+updated: 2026-09-20
 ---
 
 # panel-web — the same panel, inside a messenger
@@ -86,6 +86,17 @@ sheet closed: `paid`, `pending`, `cancelled`, `failed` (any status it does not
 know), or `unavailable` (no marker, the SDK never arrived, no `openInvoice`, or
 it threw). It loads the SDK itself when the session came from a cookie and never
 needed one, and it needs no `initData`: the link is already this payment's.
+
+**A sheet that closed without paying is reported (F-093-q).** `start` has
+already written the payment and held a slot of every coupon applied to it by
+the time the sheet opens, so until that row closes a one-use code answers
+`per_user_limit_reached` — and the retry the payer makes a second later is
+refused for a payment the messenger never charged. On `cancelled`, `failed` and
+`unavailable` alike the page therefore calls `POST /deposit/:paymentId/abandon`
+and gives those holds back at once. Nothing waits on the answer and a failure
+is swallowed: it costs only the wait it would have saved, and billing refuses
+the call itself for a payment pre-checkout has already approved, where the
+messenger may hold the money (`billing/contract.webhook.md`).
 
 **The marker outlives its URL.** `?ma=` is on the URL the bot handed over and
 on no other — a client-side navigation drops it, and the top-up page is never
