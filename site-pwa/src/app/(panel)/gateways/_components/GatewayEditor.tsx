@@ -23,9 +23,9 @@ import {
 import type { ReactNode } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { useApiErrorMessage } from "@/hooks/useApiError";
+import { useGatewayMessage, type GatewaySurface } from "../_lib/surface";
 import type { Me } from "@/lib/auth-api";
-import { billingApi, type AdminGateway, type GatewaySecretState } from "@/lib/billing-api";
+import type { AdminGateway, GatewaySecretState } from "@/lib/billing-api";
 import { Select } from "../../_components/kit/Select";
 import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
 import { PresetsEditor } from "./PresetsEditor";
@@ -85,6 +85,7 @@ const AMOUNT = /^\s*(\d{1,16}(\.\d{1,8})?)?\s*$/;
 
 interface GatewayEditorProps {
   gateway: AdminGateway;
+  surface: GatewaySurface;
   me: Me | null;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
@@ -103,9 +104,9 @@ interface GatewayEditorProps {
  * - A refused save scrolls to the first section with an error. Closing with
  *   unsaved changes asks first; Ctrl/⌘+S saves.
  */
-export function GatewayEditor({ gateway, me, onClose, onSaved }: GatewayEditorProps) {
+export function GatewayEditor({ gateway, surface, me, onClose, onSaved }: GatewayEditorProps) {
   const { t, lang } = useLocale();
-  const errorMessage = useApiErrorMessage();
+  const errorMessage = useGatewayMessage(surface);
   const reduceMotion = useReducedMotion();
   const owner = isPlatformOwner(me);
 
@@ -158,7 +159,7 @@ export function GatewayEditor({ gateway, me, onClose, onSaved }: GatewayEditorPr
     setSaving(true);
     setFailure(null);
     try {
-      await billingApi.updateGateway(gateway.source, gateway.id, body);
+      await surface.api.update(gateway.source, gateway.id, body);
       await onSaved();
     } catch (e) {
       setFailure(errorMessage(e));

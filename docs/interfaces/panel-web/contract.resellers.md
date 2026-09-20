@@ -6,7 +6,7 @@ version: 20
 updated: 2026-09-19
 ---
 
-# Contract — panel-web: resellers (F-018-k, F-019-k, F-019-i, F-066-w2, F-066-w)
+# Contract — panel-web: resellers (F-018-k, F-019-k, F-019-i, F-066-w2/w4, F-066-w)
 
 A topic file of [contract.md](contract.md) (§10). Three pages under
 `(panel)/resellers/`, each a server shell over a client view:
@@ -152,12 +152,14 @@ by a staff seat of it, or by platform support. Not under `/resellers`: that is
 the platform owner's administration, and this is the reseller's own. Each
 screen calls a route that names the reseller (`/api/tenants/:id/...`,
 `/api/<service>/tenants/:id/...`), never an ambient one. The console is its
-front page; the gateway, bot and catalog screens (w4, w6, w8) join it.
+front page; the gateways screen (w4) is beside it, and the bot and catalog
+screens (w6, w8) join them.
 
 | page | route | files |
 |---|---|---|
 | its console | `/my-resellers/[id]` (`myResellerConsolePath`) | `my-resellers/[id]/_components/OnboardingConsoleView.tsx`, rules `my-resellers/_lib/onboarding.ts` |
 | its domains | `/my-resellers/[id]/domains` (`myResellerDomainsPath`) | `my-resellers/[id]/domains/_components/ResellerDomainsView.tsx`, rules `my-resellers/_lib/domains.ts` |
+| its gateways | `/my-resellers/[id]/gateways` (`myResellerGatewaysPath`) | `my-resellers/[id]/gateways/_components/ResellerGatewaysView.tsx`, rules `my-resellers/_lib/gateways.ts` |
 
 Its calls are `resellerDomainsApi` (`lib/tenant-api.ts`): list, add, check —
 every rule behind them is [tenant/contract.domains.md](../../domains/tenant/contract.domains.md).
@@ -201,9 +203,39 @@ behind it is [tenant/contract.onboarding.md](../../domains/tenant/contract.onboa
     suspension — it is the `tenantOnboarding` refusal the reseller's users get.
 25. **A step links only to its workspace screen** (`stepHref`). Never the
     ambient `/gateways` or `/catalog`: they configure the session's tenant, the
-    platform's (ADR-0064). Until w4, w6, w8 ship, those steps link nothing.
+    platform's (ADR-0064). Domain and gateway have theirs; until w6 and w8 ship,
+    the bot and pricing steps link nothing.
 26. **Reached from the sidebar.** "My reseller panel" (`ResellerPanelButton`)
     tries the handoff; an answered refusal — the reseller has no panel host —
     opens the console instead. Only an unreachable service leaves the visitor
     where they were. Refusals: `ONBOARDING_REFUSAL_KEYS`, namespace
     `common.resellerOnboarding`, read from `ResellerAccessRejection`.
+
+### Its gateways (F-066-w4)
+
+`/my-resellers/[id]/gateways` is the ambient `/gateways` page's own components
+over `/api/billing/tenants/:id/gateways` — the same list, add wizard, editor and
+default quick amounts. Every rule behind the route is
+[billing/contract.gateways.md](../../domains/billing/contract.gateways.md)
+"A named reseller's gateways"; the page's own are
+[contract.deposit.md](contract.deposit.md)'s neighbours and are not restated.
+
+27. **One page, two surfaces, chosen by path and never by session**
+    (`GatewaySurface`, `gateways/_lib/surface.ts`). `gatewayAdminApi(tenantId)`
+    builds `/gateways` or `/tenants/:id/gateways` from the same six calls; the
+    surface also carries what goes above the header and which refusals have a
+    sentence. There is one gateway page, not a second copy that drifts.
+28. **The ambient page is never this screen.** A reseller's owner signs in to
+    the platform owner's tenant (ADR-0059), so `/gateways` would configure the
+    **platform's** gateways and answer 200 doing it. That is why the console's
+    gateway step links here (rule 25) and why the spec holds the prefix.
+29. **Nothing is elevated here** (`surfaceActor`). The actor the form builds a
+    body from is `null` on this surface, whoever is signed in: billing runs the
+    work as the reseller, its `.strict()` schema refuses a `tenantId`, and
+    `verificationStatus` is `verification_is_platform_owners` for platform staff
+    too. The gateway-links panel is the ambient page's alone for the same reason.
+30. **One sentence per refusal, on read and on write alike**
+    (`GATEWAY_REFUSAL_KEYS`, namespace `common.resellerGateways`,
+    `useGatewayMessage`). It covers both doors — `ResellerAccess` and billing's
+    gateway rejections — and the spec reads the union from the controller's own
+    exhaustive status map, so a reason added there has no blank line here.

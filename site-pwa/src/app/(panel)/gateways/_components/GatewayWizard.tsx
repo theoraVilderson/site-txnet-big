@@ -22,9 +22,9 @@ import {
 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { useApiErrorMessage } from "@/hooks/useApiError";
+import { useGatewayMessage, type GatewaySurface } from "../_lib/surface";
 import type { Me } from "@/lib/auth-api";
-import { billingApi, type GatewaySecretName } from "@/lib/billing-api";
+import type { GatewaySecretName } from "@/lib/billing-api";
 import { Select } from "../../_components/kit/Select";
 import { PresetsEditor } from "./PresetsEditor";
 import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
@@ -66,6 +66,7 @@ const input =
 const invalidInput = "border-error focus:border-error";
 
 interface GatewayWizardProps {
+  surface: GatewaySurface;
   me: Me | null;
   onClose: () => void;
   /** A gateway was created. The page re-reads its list; the wizard stays open on its done screen. */
@@ -82,9 +83,9 @@ interface GatewayWizardProps {
  * side on `lg`. Secrets are write-only exactly as in the editor: the review step
  * says whether one was entered, never what it is.
  */
-export function GatewayWizard({ me, onClose, onCreated }: GatewayWizardProps) {
+export function GatewayWizard({ surface, me, onClose, onCreated }: GatewayWizardProps) {
   const { t, lang, isRtl } = useLocale();
-  const errorMessage = useApiErrorMessage();
+  const errorMessage = useGatewayMessage(surface);
   const reduceMotion = useReducedMotion();
   const owner = isPlatformOwner(me);
 
@@ -153,7 +154,7 @@ export function GatewayWizard({ me, onClose, onCreated }: GatewayWizardProps) {
     setSaving(true);
     setFailure(null);
     try {
-      await billingApi.createGateway(createBody(form, me));
+      await surface.api.create(createBody(form, me));
       setCreated(form.displayName.trim());
       await onCreated();
     } catch (e) {

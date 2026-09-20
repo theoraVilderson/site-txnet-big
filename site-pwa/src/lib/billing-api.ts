@@ -307,6 +307,51 @@ export interface TenantWalletAdjusted {
   createdAt: string;
 }
 
+/**
+ * Where a gateway call goes: the ambient surface, which configures the
+ * caller's **own** tenant, or the one that names a reseller in the path
+ * (F-066-w3, `billing/contract.gateways.md`). The two are shaped identically,
+ * `:source/:id` included, so one client serves both.
+ *
+ * The panel's gateway screens pick by surface, never by who is signed in: a
+ * reseller's owner signs in to the platform owner's tenant (ADR-0059), so the
+ * ambient path would configure the platform's gateways while answering 200.
+ */
+export const gatewayApiPrefix = (tenantId: string | null) =>
+  tenantId === null ? "/gateways" : `/tenants/${encodeURIComponent(tenantId)}/gateways`;
+
+/** The six calls both gateway surfaces answer. `GatewaysView` takes one of these, not `billingApi`. */
+export interface GatewayAdminApi {
+  list(): Promise<AdminGateway[]>;
+  create(body: CreateGatewayBody): Promise<AdminGateway>;
+  update(source: GatewaySource, id: string, body: UpdateGatewayBody): Promise<AdminGateway>;
+  remove(source: GatewaySource, id: string): Promise<GatewayRemoved>;
+  presets(): Promise<{ presets: string[] }>;
+  setPresets(presets: string[]): Promise<{ presets: string[] }>;
+}
+
+/**
+ * The gateway calls for one surface: `null` for the caller's own tenant
+ * (F-102-d), a tenant id for the reseller the path names (F-066-w4). Billing
+ * still decides everything — this only chooses which tenant is being asked
+ * about.
+ */
+export function gatewayAdminApi(tenantId: string | null): GatewayAdminApi {
+  const at = gatewayApiPrefix(tenantId);
+  const row = (source: GatewaySource, id: string) => `${at}/${source}/${encodeURIComponent(id)}`;
+  return {
+    list: () => call<AdminGateway[]>(at, { method: "GET" }),
+    create: (body) => call<AdminGateway>(at, { method: "POST", body: JSON.stringify(body) }),
+    update: (source, id, body) => call<AdminGateway>(row(source, id), { method: "PATCH", body: JSON.stringify(body) }),
+    remove: (source, id) => call<GatewayRemoved>(row(source, id), { method: "DELETE" }),
+    presets: () => call<{ presets: string[] }>(`${at}/presets`, { method: "GET" }),
+    setPresets: (presets) => call<{ presets: string[] }>(`${at}/presets`, { method: "PUT", body: JSON.stringify({ presets }) }),
+  };
+}
+
+/** The caller's own gateways — what `billingApi`'s six gateway calls have always been. */
+export const ambientGatewayApi = gatewayAdminApi(null);
+
 export const billingApi = {
   /**
    * The wallet's balance, and nothing else.
@@ -493,33 +538,12 @@ export const billingApi = {
     });
   },
 
+  // The six gateway calls are {@link ambientGatewayApi}'s, kept here under
+  // their old names for the pages that ask about the caller's own tenant and
+  // nothing else (the coupon form's gateway picker). A screen that configures
+  // a named reseller takes a `GatewayAdminApi` instead.
   async adminGateways(): Promise<AdminGateway[]> {
-    return call<AdminGateway[]>("/gateways", { method: "GET" });
-  },
-
-  /** Create a gateway. A secret in the body is relayed to the vault and never answered. */
-  async createGateway(body: CreateGatewayBody): Promise<AdminGateway> {
-    return call<AdminGateway>("/gateways", { method: "POST", body: JSON.stringify(body) });
-  },
-
-  /** Change only what `body` names. An absent secret keeps the stored one. */
-  async updateGateway(source: GatewaySource, id: string, body: UpdateGatewayBody): Promise<AdminGateway> {
-    return call<AdminGateway>(`/gateways/${source}/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
-  },
-
-  /** The caller tenant's default quick amounts on the top-up page (F-092-v). */
-  async gatewayPresets(): Promise<{ presets: string[] }> {
-    return call<{ presets: string[] }>("/gateways/presets", { method: "GET" });
-  },
-
-  /** Replace them; billing answers the list as stored (sorted, two decimals). */
-  async setGatewayPresets(presets: string[]): Promise<{ presets: string[] }> {
-    return call<{ presets: string[] }>("/gateways/presets", { method: "PUT", body: JSON.stringify({ presets }) });
-  },
-
-  /** Delete — or, when a payment or link points at it, deactivate — one gateway (ADR-0041 §6). */
-  async deleteGateway(source: GatewaySource, id: string): Promise<GatewayRemoved> {
-    return call<GatewayRemoved>(`/gateways/${source}/${encodeURIComponent(id)}`, { method: "DELETE" });
+    return ambientGatewayApi.list();
   },
 
   /** One page of coupons the caller may manage (F-502-f). Billing scopes the list; the filters only narrow it. */

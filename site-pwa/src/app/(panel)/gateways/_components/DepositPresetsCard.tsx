@@ -4,8 +4,7 @@ import { useState } from "react";
 import { Check, Loader2, Zap } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { useApiErrorMessage } from "@/hooks/useApiError";
-import { billingApi } from "@/lib/billing-api";
+import { useGatewayMessage, type GatewaySurface } from "../_lib/surface";
 import { samePresets } from "../_lib/presets";
 import { PresetsEditor } from "./PresetsEditor";
 
@@ -16,9 +15,9 @@ const P = FrontendI18nKeys.common.gateways.presets;
  * gateways they apply to — the one place a manager already is when deciding
  * how people pay. A gateway's own list, set in its form, overrides this one.
  */
-export function DepositPresetsCard({ initial }: { initial: string[] }) {
+export function DepositPresetsCard({ surface, initial }: { surface: GatewaySurface; initial: string[] }) {
   const { t } = useLocale();
-  const errorMessage = useApiErrorMessage();
+  const errorMessage = useGatewayMessage(surface);
   const [list, setList] = useState(initial);
   const [saved, setSaved] = useState(initial);
   const [saving, setSaving] = useState(false);
@@ -30,7 +29,7 @@ export function DepositPresetsCard({ initial }: { initial: string[] }) {
     setSaving(true);
     setFailure(null);
     try {
-      const { presets } = await billingApi.setGatewayPresets(list);
+      const { presets } = await surface.api.setPresets(list);
       setList(presets);
       setSaved(presets);
       setDone(true);

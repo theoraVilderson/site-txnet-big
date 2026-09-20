@@ -95,6 +95,12 @@ export const PANEL_MY_RESELLERS = "/my-resellers";
 export const myResellerConsolePath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}`;
 /** A reseller's custom domains: add one, the records to publish, "check now" (F-066-w2). */
 export const myResellerDomainsPath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}/domains`;
+/**
+ * A reseller's payment gateways (F-066-w4): the `/gateways` page's components
+ * over the route that names the reseller, so the owner configures its gateways
+ * and never the session tenant's.
+ */
+export const myResellerGatewaysPath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}/gateways`;
 /** Payments the gateway has not confirmed, for a person to settle (F-093-n). */
 export const PANEL_MANUAL_PAYMENTS = "/payments/manual";
 /**

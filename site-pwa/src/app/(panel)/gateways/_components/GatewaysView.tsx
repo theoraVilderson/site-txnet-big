@@ -5,12 +5,12 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { KeyRound, Landmark, Loader2, Pencil, Plus, RotateCw, Trash2, TriangleAlert } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { useApiErrorMessage } from "@/hooks/useApiError";
-import { billingApi, type AdminGateway, type GatewaySecretState } from "@/lib/billing-api";
+import type { AdminGateway, GatewaySecretState } from "@/lib/billing-api";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { Skeleton } from "../../_components/kit/Skeleton";
 import { useGateways } from "../_hooks/useGateways";
-import { canManageLinks } from "../_lib/gateway-form";
+import { canManageLinks, surfaceActor } from "../_lib/gateway-form";
+import { AMBIENT_GATEWAYS, useGatewayMessage, type GatewaySurface } from "../_lib/surface";
 import { secretFields } from "../_lib/provider-fields";
 import { GatewayEditor } from "./GatewayEditor";
 import { DepositPresetsCard } from "./DepositPresetsCard";
@@ -32,12 +32,15 @@ const G = FrontendI18nKeys.common.gateways;
  * merchant id and secret key are set; there is nothing to reveal and no route
  * that would reveal it.
  */
-export function GatewaysView() {
+export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: GatewaySurface } = {}) {
   const { t } = useLocale();
-  const errorMessage = useApiErrorMessage();
+  const errorMessage = useGatewayMessage(surface);
   const { me, isLoading: sessionLoading } = usePanelSession();
-  const owner = canManageLinks(me);
-  const { gateways, grants, presets, isLoading, isRefreshing, error, reload } = useGateways(owner, !sessionLoading);
+  // Nothing is elevated on a reseller's screen: no links panel, and no owner
+  // power in a body (`surfaceActor`) — the actor billing sees is the reseller.
+  const owner = surface.tenantId === null && canManageLinks(me);
+  const actor = surfaceActor(me, surface.tenantId);
+  const { gateways, grants, presets, isLoading, isRefreshing, error, reload } = useGateways(surface.api, owner, !sessionLoading);
   const reduceMotion = useReducedMotion();
   // One moment for the whole page: the list and the links panel appear together,
   // never the list first and the owner's panel a beat later.
@@ -63,7 +66,7 @@ export function GatewaysView() {
     if (!window.confirm(t("common", G.confirmDelete, { name: g.displayName }))) return;
     setActionError(null);
     try {
-      const out = await billingApi.deleteGateway(g.source, g.id);
+      const out = await surface.api.remove(g.source, g.id);
       setNotice(out.mode === "deleted" ? t("common", G.deleted) : t("common", G.deactivated, { count: String(out.grantsWithdrawn) }));
       await reload();
     } catch (e) {
@@ -83,6 +86,7 @@ export function GatewaysView() {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
+      {surface.chrome}
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-lg font-bold text-text-primary">
@@ -234,7 +238,7 @@ export function GatewaysView() {
 
           {presets && (
             <motion.div {...reveal(1)}>
-              <DepositPresetsCard initial={presets} />
+              <DepositPresetsCard surface={surface} initial={presets} />
             </motion.div>
           )}
 
@@ -248,7 +252,8 @@ export function GatewaysView() {
 
       {editing === "new" && (
         <GatewayWizard
-          me={me}
+          surface={surface}
+          me={actor}
           onClose={() => setEditing(null)}
           onCreated={async () => {
             setNotice(null);
@@ -259,7 +264,8 @@ export function GatewaysView() {
       {editing && editing !== "new" && (
         <GatewayEditor
           gateway={editing}
-          me={me}
+          surface={surface}
+          me={actor}
           onClose={() => setEditing(null)}
           onSaved={async () => {
             setEditing(null);

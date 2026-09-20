@@ -1660,5 +1660,27 @@
       "reseller_suspended": "This reseller is suspended.",
       "reseller_terminated": "This reseller has been terminated."
     }
+  },
+  "resellerGateways": {
+    "title": "{{slug}}'s payment gateways",
+    "titlePlain": "your reseller's payment gateways",
+    "subtitle": "These gateways belong to this reseller, not to the platform. Its customers pay through them.",
+    "backToConsole": "back to the console",
+    "refusals": {
+      "not_allowed": "you may not configure this reseller.",
+      "reseller_not_found": "that reseller was not found.",
+      "reseller_suspended": "this reseller is suspended; its gateways cannot be changed until that is lifted.",
+      "reseller_terminated": "this reseller is closed and takes no further changes.",
+      "not_platform_owner": "a platform gateway is created from the platform owner's own page.",
+      "verification_is_platform_owners": "verifying a gateway is the platform owner's, and is not done from this page.",
+      "gateway_not_found": "that gateway was not found.",
+      "tenant_not_found": "that reseller was not found.",
+      "provider_already_configured": "this reseller already has a gateway with that provider; edit that one.",
+      "gateway_has_open_payments": "there are open payments on this gateway. Deactivate it first, then delete it.",
+      "invalid_range": "the smallest and largest amounts do not agree.",
+      "missing_field": "a field this provider requires is empty.",
+      "invalid_presets": "the quick amounts are not valid: positive, no repeats, ascending, at most eight.",
+      "invalid_callback": "the callback must be a full http or https address."
+    }
   }
 }

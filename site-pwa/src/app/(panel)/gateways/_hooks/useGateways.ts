@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { billingApi, type AdminGateway, type GatewayGrant } from "@/lib/billing-api";
+import { billingApi, type AdminGateway, type GatewayAdminApi, type GatewayGrant } from "@/lib/billing-api";
 
 export interface GatewaysState {
   gateways: AdminGateway[];
@@ -27,7 +27,7 @@ export interface GatewaysState {
  * tenant type, and reading before `me` is known would fetch twice and show the
  * links panel a beat after the list.
  */
-export function useGateways(withLinks: boolean, enabled = true): GatewaysState {
+export function useGateways(api: GatewayAdminApi, withLinks: boolean, enabled = true): GatewaysState {
   const [gateways, setGateways] = useState<AdminGateway[]>([]);
   const [grants, setGrants] = useState<GatewayGrant[] | null>(null);
   const [presets, setPresets] = useState<string[] | null>(null);
@@ -39,11 +39,11 @@ export function useGateways(withLinks: boolean, enabled = true): GatewaysState {
   const fetchAll = useCallback(async () => {
     try {
       const [list, links, defaults] = await Promise.all([
-        billingApi.adminGateways(),
+        api.list(),
         withLinks ? billingApi.gatewayGrants() : Promise.resolve(null),
         // Read with the lists so the card appears with them; a failure here
         // hides the card rather than failing the page.
-        billingApi.gatewayPresets().then(
+        api.presets().then(
           (r) => r.presets,
           () => null,
         ),
@@ -57,7 +57,7 @@ export function useGateways(withLinks: boolean, enabled = true): GatewaysState {
     } finally {
       setLoading(false);
     }
-  }, [withLinks]);
+  }, [api, withLinks]);
 
   const reload = useCallback(async () => {
     setRefreshing(true);

@@ -97,8 +97,8 @@ describe("where a step sends the owner", () => {
     expect(stepHref("domain", "t-1")).toBe(myResellerDomainsPath("t-1"));
   });
 
+  // The gateway step's screen is F-066-w4's, and `gateways.test.ts` holds it there.
   it("links nothing for a step whose workspace screen is not built yet", () => {
-    expect(stepHref("gateway", "t-1")).toBeNull();
     expect(stepHref("bot", "t-1")).toBeNull();
     expect(stepHref("pricing", "t-1")).toBeNull();
   });

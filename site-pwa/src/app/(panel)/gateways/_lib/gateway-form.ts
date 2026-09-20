@@ -84,6 +84,20 @@ const EDITABLE = [
 export const isPlatformOwner = (me: Me | null | undefined) => me?.tenant.type === "platform_owner";
 export const canManageLinks = (me: Me | null | undefined) => isPlatformOwner(me);
 
+/**
+ * The actor the gateway form may build a body from, on this surface.
+ *
+ * On the ambient page it is whoever is signed in: the platform owner names a
+ * tenant and sets `verificationStatus` there. On a reseller's screen the work
+ * runs **as the reseller** (`billing/contract.gateways.md`, "A named
+ * reseller's gateways"), so nothing a platform staff member holds may reach
+ * the body — the route's schema is `.strict()` and would refuse a `tenantId`,
+ * and `verificationStatus` is `verification_is_platform_owners` for everyone
+ * here. One `null` in one place, rather than a rule repeated in the wizard and
+ * the editor.
+ */
+export const surfaceActor = (me: Me | null, tenantId: string | null): Me | null => (tenantId === null ? me : null);
+
 export function emptyForm(source: GatewaySource): GatewayForm {
   return {
     source,
