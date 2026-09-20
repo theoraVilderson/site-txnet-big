@@ -405,3 +405,41 @@ export const authApi = {
   async captchaChallenge() { return request<CaptchaChallenge>("/auth/captcha/challenge", { method: "POST", body: JSON.stringify({}) }); },
   async captchaVerify(challengeId: string) { return request<CaptchaPass>("/auth/captcha/verify", { method: "POST", body: JSON.stringify({ challengeId }) }); },
 };
+
+/**
+ * A reseller's bot as this surface answers it (F-066-w5): no token, no
+ * `webhookPath`, no `credentialRef`. The webhook path is the bot's whole
+ * address and therefore a credential (F-323, ADR-0009), which is also why a
+ * retire names the bot by its `@handle`.
+ */
+export type ResellerBot = {
+  id: string;
+  platform: BotPlatformName;
+  botUsername: string;
+  role: "primary" | "sales" | "support" | "secondary";
+  status: "pending" | "active" | "disabled" | "error";
+};
+
+export type BotPlatformName = "telegram" | "bale";
+
+/**
+ * The reseller's own bot routes, by the **path's** tenant and never the
+ * session's: a reseller's owner signs in to the platform owner's tenant
+ * (ADR-0059), so an ambient path would connect a bot to the platform.
+ */
+export const resellerBotApiPath = (tenantId: string) => `/auth/tenants/${encodeURIComponent(tenantId)}/bots`;
+/** A bot is named by its platform and `@handle` — the webhook path is not on the wire. */
+export const resellerBotRetirePath = (tenantId: string, platform: string, botUsername: string) =>
+  `${resellerBotApiPath(tenantId)}/${encodeURIComponent(platform)}/${encodeURIComponent(botUsername)}`;
+
+/**
+ * `/api/auth/tenants/:tenantId/bots` — list, connect, retire
+ * ([auth-api/contract.reseller-bots.md](../../../docs/interfaces/auth-api/contract.reseller-bots.md)).
+ * `registered: false` on a connect and `webhookRemoved: false` on a retire are
+ * real outcomes the screen renders; neither is retried here.
+ */
+export const resellerBotsApi = {
+  async list(tenantId: string) { return (await request<{ bots: ResellerBot[] }>(resellerBotApiPath(tenantId), { method: "GET" })).bots; },
+  async connect(tenantId: string, body: { platform: BotPlatformName; token: string }) { return request<{ bot: ResellerBot; registered: boolean }>(resellerBotApiPath(tenantId), { method: "POST", body: JSON.stringify(body) }); },
+  async retire(tenantId: string, platform: string, botUsername: string) { return request<{ retired: true; webhookRemoved: boolean }>(resellerBotRetirePath(tenantId, platform, botUsername), { method: "DELETE" }); },
+};

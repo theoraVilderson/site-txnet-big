@@ -1682,5 +1682,70 @@
       "invalid_presets": "the quick amounts are not valid: positive, no repeats, ascending, at most eight.",
       "invalid_callback": "the callback must be a full http or https address."
     }
+  },
+  "resellerBots": {
+    "title": "{{slug}}'s bot",
+    "titlePlain": "your reseller's bot",
+    "subtitle": "A Telegram or Bale bot under your own brand. Your customers talk to this bot, not to the platform's.",
+    "backToConsole": "back to the console",
+    "refresh": "refresh",
+    "reload": "try again",
+    "empty": "no bot is connected yet. Create one with the messenger, then paste its token below.",
+    "connected": "connected bots",
+    "add": {
+      "title": "connect a bot",
+      "platform": "messenger",
+      "token": "bot token",
+      "tokenHint": "the token the messenger gave you when you created the bot. It is stored encrypted and is never shown again.",
+      "submit": "connect",
+      "connecting": "connecting…",
+      "primaryTaken": "this reseller already has a bot on this messenger. Remove it first to connect another."
+    },
+    "hint": {
+      "telegram": "in Telegram, message @BotFather, send /newbot, pick a name and a @handle, and copy the token it answers with.",
+      "bale": "in Bale, message @botfather, send /newbot, pick a name and a @handle, and copy the token it answers with."
+    },
+    "platforms": {
+      "telegram": "Telegram",
+      "bale": "Bale"
+    },
+    "status": {
+      "pending": "waiting for the messenger",
+      "active": "active",
+      "disabled": "paused",
+      "error": "not responding"
+    },
+    "statusHint": {
+      "pending": "connected, but the messenger has not accepted its address yet. It is retried automatically.",
+      "active": "the bot is answering your customers.",
+      "disabled": "this bot is paused and receives nothing.",
+      "error": "the messenger is refusing this bot. Its token may have been revoked; remove it and connect a new one."
+    },
+    "roles": {
+      "primary": "main bot",
+      "sales": "sales",
+      "support": "support",
+      "secondary": "secondary"
+    },
+    "notRegistered": "the bot is connected, but the messenger did not accept its address. It will be registered again shortly — you do not need to do anything.",
+    "remove": "remove",
+    "removing": "removing…",
+    "removeConfirm": "remove this bot? Its token is revoked and your customers stop reaching it.",
+    "removed": "the bot was removed.",
+    "webhookNotRemoved": "the bot was removed and its token revoked, but the messenger could not be told. It may keep trying for a while; nothing reaches you.",
+    "errors": {
+      "token": "paste the token the messenger gave you (up to 200 characters)."
+    },
+    "refusals": {
+      "not_allowed": "you may not configure this reseller.",
+      "reseller_not_found": "that reseller was not found.",
+      "reseller_suspended": "this reseller is suspended; its bots cannot be changed until that is lifted.",
+      "reseller_terminated": "this reseller is closed and takes no further changes.",
+      "invalid_token": "the messenger does not know this token. Copy it again from BotFather.",
+      "bot_already_connected": "this bot is already connected.",
+      "primary_exists": "this reseller already has a bot on this messenger. Remove it first.",
+      "bot_not_found": "that bot was not found.",
+      "vault_unavailable": "bot tokens cannot be stored on this deployment right now. Try again later."
+    }
   }
 }

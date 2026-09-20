@@ -88,6 +88,6 @@ describe("the workspace path", () => {
   it("is where the console's gateway step goes, and the ambient page is not", () => {
     expect(stepHref("gateway", "t-1")).toBe(myResellerGatewaysPath("t-1"));
     expect(stepHref("gateway", "t-1")).not.toBe(PANEL_GATEWAYS);
-    expect(stepHref("bot", "t-1")).toBeNull();
+    expect(stepHref("pricing", "t-1")).toBeNull();
   });
 });

@@ -101,6 +101,12 @@ export const myResellerDomainsPath = (id: string) => `${PANEL_MY_RESELLERS}/${en
  * and never the session tenant's.
  */
 export const myResellerGatewaysPath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}/gateways`;
+/**
+ * A reseller's bot (F-066-w6): connect a Telegram or Bale bot from a pasted
+ * token, and retire one. Singular — a reseller has one bot per messenger
+ * (`primary`, C-05), so the screen is `/bot`, not `/bots`.
+ */
+export const myResellerBotPath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}/bot`;
 /** Payments the gateway has not confirmed, for a person to settle (F-093-n). */
 export const PANEL_MANUAL_PAYMENTS = "/payments/manual";
 /**

@@ -56,6 +56,6 @@ one is a way to test stolen tokens through this platform.
 ## Consumers
 
 `panel-web` — the reseller workspace's bot screen, `/my-resellers/:id/bot`
-(F-066-w6, not built yet). No other client, and no service caller: this is a
+(F-066-w6, [panel-web/contract.reseller-bot.md](../panel-web/contract.reseller-bot.md)). No other client, and no service caller: this is a
 person's surface, and the internal seam over the same table is
 `/internal/bot-integrations/*` in [contract.md](contract.md).
