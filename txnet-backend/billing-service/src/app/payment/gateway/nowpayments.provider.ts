@@ -33,6 +33,11 @@ const SANDBOX_HOST = 'https://api-sandbox.nowpayments.io/v1';
 /** Statuses that are neither money nor a final word (see the class comment for `failed` / `expired`). */
 const PENDING = new Set(['waiting', 'confirming', 'confirmed', 'sending', 'failed', 'expired']);
 
+/** The fields a `Decimal` is built from — read as digits, never through a double. */
+const AMOUNT_KEYS = ['price_amount', 'pay_amount', 'actually_paid'] as const;
+
+type AmountDigits = Partial<Record<(typeof AMOUNT_KEYS)[number], string>>;
+
 type Ipn = {
   payment_id?: unknown;
   invoice_id?: unknown;
@@ -121,18 +126,22 @@ export class NowPaymentsProvider implements PaymentProvider {
     const signature = Array.isArray(header) ? header[0] : header;
     if (!signature) throw new WebhookSignatureInvalid(this.name, 'no x-nowpayments-sig header');
 
-    let body: Ipn;
+    let parsed: { body: Ipn; digits: AmountDigits };
     try {
-      body = JSON.parse(input.rawBody.toString('utf8')) as Ipn;
+      parsed = parseIpn(input.rawBody.toString('utf8'));
     } catch {
       throw new WebhookSignatureInvalid(this.name, 'body is not JSON');
     }
+    const body = parsed.body;
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new WebhookSignatureInvalid(this.name, 'body is not an object');
     const expected = createHmac('sha512', input.secret).update(JSON.stringify(sortedKeys(body))).digest();
     const given = Buffer.from(signature, 'hex');
     if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
       throw new WebhookSignatureInvalid(this.name, 'signature does not match');
     }
+    // Only past the signature: the amounts as the body spelled them. The HMAC
+    // is over the body re-serialized, so these cannot be swapped in before it.
+    const amounts: Ipn = { ...body, ...parsed.digits };
 
     const status = String(body.payment_status ?? '');
     if (body.invoice_id === null || body.invoice_id === undefined) return { kind: 'ignored', type: `payment:${status}` };
@@ -141,15 +150,15 @@ export class NowPaymentsProvider implements PaymentProvider {
 
     switch (status) {
       case 'finished': {
-        const received = this.receivedCents(body);
-        const asked = this.askedCents(body);
+        const received = this.receivedCents(amounts);
+        const asked = this.askedCents(amounts);
         return received !== null && asked !== null && received > asked
           ? { kind: 'paid', authority, referenceId, received: { amountMinor: received, currency: 'USD' } }
           : { kind: 'paid', authority, referenceId };
       }
       case 'partially_paid': {
-        const received = this.receivedCents(body);
-        const asked = this.askedCents(body);
+        const received = this.receivedCents(amounts);
+        const asked = this.askedCents(amounts);
         if (received === null || asked === null) return { kind: 'pending', authority };
         const amountMinor = received < asked ? received : asked;
         return { kind: 'paid', authority, referenceId, received: { amountMinor, currency: 'USD' } };
@@ -225,7 +234,47 @@ function reasonOf(status: number): GatewayFailureReason {
   return 'unexpected';
 }
 
-/** A JSON number or numeric string, exactly as sent. */
+/**
+ * The IPN, and the digits its amount fields were written with.
+ *
+ * `JSON.parse` turns a JSON number into an IEEE-754 double, so an 18-decimal
+ * asset loses everything past ~17 significant digits before `decimalOf` sees
+ * it — a cent on a floored `partially_paid` receipt (F-104-aa). Node's reviver
+ * hands over each number's source text, and the three amount fields **at the
+ * top level** keep theirs.
+ *
+ * The parsed object itself is left exactly as `JSON.parse` built it: the
+ * signature is an HMAC over it re-serialized, and a number turned into a string
+ * there would print with quotes and never match.
+ */
+function parseIpn(raw: string): { body: Ipn; digits: AmountDigits } {
+  const sources = new WeakMap<object, Record<string, string>>();
+  const reviver = function (this: unknown, key: string, value: unknown, context?: { source?: string }) {
+    const source = context?.source;
+    // A runtime without the source text (Node < 21) keeps the double: the same
+    // reading as before, never a wrong one.
+    if (typeof value === 'number' && typeof source === 'string' && this && typeof this === 'object') {
+      const holder = this as object;
+      const at = sources.get(holder) ?? {};
+      at[key] = source;
+      sources.set(holder, at);
+    }
+    return value;
+  } as (key: string, value: unknown) => unknown;
+
+  const body = JSON.parse(raw, reviver) as Ipn;
+  const digits: AmountDigits = {};
+  const atRoot = body && typeof body === 'object' ? sources.get(body as object) : undefined;
+  if (atRoot) {
+    for (const key of AMOUNT_KEYS) {
+      const source = atRoot[key];
+      if (source !== undefined) digits[key] = source;
+    }
+  }
+  return { body, digits };
+}
+
+/** A JSON number, a numeric string, or the digits a number was sent with. */
 function decimalOf(value: unknown): Prisma.Decimal | null {
   if (typeof value !== 'number' && typeof value !== 'string') return null;
   try {
