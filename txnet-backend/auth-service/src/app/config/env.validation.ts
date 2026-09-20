@@ -220,6 +220,11 @@ export const envSchema = z.object({
   // and each one is a call to the messenger with a caller-supplied value.
   RESELLER_BOT_READ_RATE_LIMIT: rateLimit(60),
   RESELLER_BOT_WRITE_RATE_LIMIT: rateLimit(10),
+  // A named reseller's own users (F-311-a), per caller. The list is paged and
+  // searched as the reseller types; a block ends every session of the account
+  // it names, so it is budgeted like the bot connect beside it.
+  RESELLER_USER_READ_RATE_LIMIT: rateLimit(60),
+  RESELLER_USER_WRITE_RATE_LIMIT: rateLimit(20),
   // The platform-wide ceiling over every guarded route's bucket, as a
   // multiple of that route's own per-tenant limit (F-066-s). Per-tenant
   // buckets hand one IP a fresh budget for every tenant it can name, so this

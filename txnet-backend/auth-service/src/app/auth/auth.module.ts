@@ -33,7 +33,7 @@ import { UserNotifyInternalController } from './notify/user-notify-internal.cont
 import { NotificationInboxClient } from './notify/notification-inbox.client';
 import { UserNotifier } from './notify/user-notifier';
 import { RateLimiter } from '../common/rate-limit/rate-limiter';
-import { RATE_LIMIT_STORE } from '@txnet-backend/shared-core';
+import { RATE_LIMIT_STORE, ResellerAccess } from '@txnet-backend/shared-core';
 import { RedisService } from '../redis/redis.service';
 import { LocaleModule } from '../locale/locale.module';
 import { MessengerModule } from '@txnet-backend/messenger';
@@ -47,6 +47,8 @@ import { HandoffService } from './handoff/handoff.service';
 import { RolesController } from './roles/roles.controller';
 import { RolesService } from './roles/roles.service';
 import { UserSearchController } from './users/user-search.controller';
+import { ResellerUsersController } from './users/reseller-users.controller';
+import { ResellerUsersService } from './users/reseller-users.service';
 import { UserSearchService } from './users/user-search.service';
 import { MeService } from './me/me.service';
 import { MeEmailService } from './me/me-email.service';
@@ -89,6 +91,7 @@ import { ConfigService } from '@nestjs/config';
     HandoffController,
     RolesController,
     UserSearchController,
+    ResellerUsersController,
   ],
   providers: [
     UserNotifier,
@@ -99,6 +102,10 @@ import { ConfigService } from '@nestjs/config';
     HandoffService,
     RolesService,
     UserSearchService,
+    ResellerUsersService,
+    // The one door on a route that names a reseller (F-066-w1). `PrismaModule`
+    // binds `RESELLER_ACCESS_READER` to this service's app pool.
+    ResellerAccess,
     MeEmailService,
     AuthService,
     SurfaceOwnerService,

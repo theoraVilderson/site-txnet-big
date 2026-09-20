@@ -30,7 +30,7 @@ describe('validateEnv — an empty var is an unset var', () => {
     it('gives every limit a positive default when nothing is set', () => {
       const found = limits(validateEnv(base));
       // 32 routes, two of which share CAPTCHA_RATE_LIMIT.
-      expect(found).toHaveLength(31);
+      expect(found).toHaveLength(33);
       for (const [name, value] of found) {
         expect(`${name}=${value}`).toMatch(/=[1-9]\d*$/);
       }

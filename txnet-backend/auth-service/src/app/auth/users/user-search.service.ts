@@ -68,8 +68,13 @@ export class UserSearchService {
  * A whole number in any spelling matches its stored E.164 form exactly; a
  * partial one matches on its digits with the trunk zero dropped, so `0912`
  * finds `+98912…`. Username and email match as substrings.
+ *
+ * Exported for `reseller-users.service.ts` (F-311-a): a reseller searching its
+ * own users is the same question asked inside a different scope, and two
+ * spellings of "what counts as a match" would drift apart the first time one
+ * of them learned about a new column.
  */
-function matchers(q: string): Prisma.UserWhereInput[] {
+export function matchers(q: string): Prisma.UserWhereInput[] {
   const or: Prisma.UserWhereInput[] = [
     { username: { contains: q, mode: 'insensitive' } },
     { email: { contains: q, mode: 'insensitive' } },

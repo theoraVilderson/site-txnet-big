@@ -1,0 +1,56 @@
+---
+id: auth-api
+layer: interface
+status: active
+version: 29
+updated: 2026-09-20
+---
+
+# Contract — auth-api / a named reseller's users
+
+A topic file of [contract.md](contract.md) (§10), opened because that file is at
+its 250-line cap. The wire shapes of `/api/auth/tenants/:tenantId/users`, where
+a reseller reads and blocks its own users (F-311-a, ADR-0064). Business
+semantics — what a block means, why `banned` outranks it, what is deliberately
+absent — are
+[identity/contract.reseller-users.md](../../domains/identity/contract.reseller-users.md);
+this file is shapes, codes and limits.
+
+Field schemas live in code:
+`txnet-backend/auth-service/src/app/auth/users/reseller-users.schema.ts`.
+
+## Routes
+
+Every route needs a **Bearer** token and **no permission**: the door is
+`ResellerAccess` (tenant invariant 21) — the reseller's owner, one of its staff
+seats holding `tenant.manage`, or the platform owner's staff — judged against
+the **reseller the path names**, never the session's tenant. A `user` object is
+`{id, fullName, username, phoneMasked, status, createdAt}` and carries no phone
+number and no email.
+
+| Route | Body / query | Answers | Rate limit | Auth |
+|---|---|---|---|---|
+| GET `/auth/tenants/:tenantId/users` | `q?` 3-64, `page` >=1 (1), `pageSize` 1-100 (20) | 200 `{items:[user], total, page, pageSize}`, newest first. Admitted under `read`, so a suspended reseller still sees its customers | 60 / 900s per caller (`RESELLER_USER_READ_RATE_LIMIT`) | Bearer + `ResellerAccess` |
+| POST `/auth/tenants/:tenantId/users/:userId/block` | — | 200 `user` at `suspended`, every session of that account revoked. Blocking an already-blocked user is the same 200 and writes nothing | 20 / 900s per caller (`RESELLER_USER_WRITE_RATE_LIMIT`) | Bearer + `ResellerAccess` (`staffWrite`) |
+| DELETE `/auth/tenants/:tenantId/users/:userId/block` | — | 200 `user` at `active`. **Unblock is the deletion of the block**, not a second verb on the user | 20 / 900s per caller (shared with `POST`) | Bearer + `ResellerAccess` (`staffWrite`) |
+
+Both ids are `ParseUUIDPipe`d, so a malformed one is a 400 before any door runs.
+
+## Refusals
+
+`ResellerAccess`'s four, and this surface's three, each as `{reason}`:
+
+| reason | status | when |
+|---|---|---|
+| `not_allowed` | 403 | not the owner, not a seat with `tenant.manage`, not platform staff — and, to everyone but platform staff, an unknown reseller |
+| `reseller_not_found` | 404 | platform staff only: there is no such reseller |
+| `reseller_suspended` | 403 | the reseller's status closes the capability the route named |
+| `reseller_terminated` | 409 | closed to everyone, staff included |
+| `user_not_found` | 404 | no such user **in that reseller's scope** — another tenant's id gets this answer, not a 403 |
+| `user_banned` | 409 | the platform banned this account; a reseller neither deepens nor lifts that |
+| `cannot_block_self` | 400 | the caller is the user named |
+
+## Consumers
+
+`bot-app` (F-311-c) is the first, and the reason this is data-only. A panel page
+would read the same three routes; none exists yet.

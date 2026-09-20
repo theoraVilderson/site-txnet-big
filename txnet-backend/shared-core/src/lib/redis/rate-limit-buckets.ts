@@ -271,6 +271,19 @@ export const RateLimitBucket = {
   RESELLER_BOT_WRITE: 'reseller-bot:write',
 
   /**
+   * A named reseller's own users in `auth-service` (F-311-a), per caller. The
+   * same two-bucket split the bots surface uses, for the same reason: the list
+   * is paged and searched as the reseller types, while a block is a decision
+   * somebody took.
+   *
+   * The write budget is the tighter of the two because each block ends every
+   * live session of the account it names — an unbounded one is a way to sign a
+   * reseller's customers out in a loop.
+   */
+  RESELLER_USER_READ: 'reseller-user:read',
+  RESELLER_USER_WRITE: 'reseller-user:write',
+
+  /**
    * Everything under `/api/public/<service>/` — the routes nobody signs in to
    * (F-018-al, ADR-0065), per visitor IP.
    *
