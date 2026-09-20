@@ -157,6 +157,21 @@ describe('StripeProvider — verifyWebhook', () => {
     await expect(Promise.resolve(provider.verifyWebhook({ rawBody: Buffer.from(expired), headers: signed(expired), secret: WEBHOOK_SECRET }))).resolves.toEqual({ kind: 'failed', authority: 'cs_test_a1b2c3' });
   });
 
+  it('settles a delayed method: async_payment_succeeded pays, async_payment_failed fails (F-104-y)', async () => {
+    const { provider } = stripe();
+    const paid = event('checkout.session.async_payment_succeeded', session());
+    const failed = event('checkout.session.async_payment_failed', session({ payment_status: 'unpaid', payment_intent: null }));
+    const stillUnpaid = event('checkout.session.async_payment_succeeded', session({ payment_status: 'unpaid' }));
+
+    await expect(Promise.resolve(provider.verifyWebhook({ rawBody: Buffer.from(paid), headers: signed(paid), secret: WEBHOOK_SECRET }))).resolves.toEqual({
+      kind: 'paid',
+      authority: 'cs_test_a1b2c3',
+      referenceId: 'pi_3MtwBwLkdIwHu7ix28a3tqPa',
+    });
+    await expect(Promise.resolve(provider.verifyWebhook({ rawBody: Buffer.from(failed), headers: signed(failed), secret: WEBHOOK_SECRET }))).resolves.toEqual({ kind: 'failed', authority: 'cs_test_a1b2c3' });
+    await expect(Promise.resolve(provider.verifyWebhook({ rawBody: Buffer.from(stillUnpaid), headers: signed(stillUnpaid), secret: WEBHOOK_SECRET }))).resolves.toEqual({ kind: 'pending', authority: 'cs_test_a1b2c3' });
+  });
+
   it('ignores a declined card attempt — the payer may still pay on the same page — and any other event', async () => {
     const { provider } = stripe();
     const declined = event('payment_intent.payment_failed', { id: 'pi_3MtwBwLkdIwHu7ix28a3tqPa', object: 'payment_intent', status: 'requires_payment_method' });

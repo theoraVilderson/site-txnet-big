@@ -51,6 +51,12 @@ const SESSION_PLACEHOLDER = 'authority={CHECKOUT_SESSION_ID}';
  *   card is retried on the same page, so closing the payment on the first
  *   decline would leave the attempt that succeeds nothing to credit. A payment
  *   that is never paid fails when its session expires.
+ * - A **delayed method** (ACH, SEPA debit…) completes the session `unpaid` —
+ *   pending above — and settles days later (F-104-y):
+ *   `checkout.session.async_payment_succeeded` is read like `completed`, and
+ *   `checkout.session.async_payment_failed` fails the payment. Unlike a card
+ *   decline this one is the session's own answer, not one attempt's: the payer
+ *   cannot retry a debit on a page they left, so nothing is waiting to credit.
  * - `inquire` and `verify` retrieve the session, for the sweep (F-092-l) and
  *   the browser return. Stripe has no step that confirms a payment, so
  *   `verify` checks the session is paid at the amount asked.
@@ -110,12 +116,14 @@ export class StripeProvider implements PaymentProvider {
     }
 
     switch (event.type) {
-      case 'checkout.session.completed': {
+      case 'checkout.session.completed':
+      case 'checkout.session.async_payment_succeeded': {
         const s = event.data.object;
         return this.isPaid(s)
           ? { kind: 'paid', authority: s.id, referenceId: this.referenceOf(s) }
           : { kind: 'pending', authority: s.id };
       }
+      case 'checkout.session.async_payment_failed':
       case 'checkout.session.expired':
         return { kind: 'failed', authority: event.data.object.id };
       default:
