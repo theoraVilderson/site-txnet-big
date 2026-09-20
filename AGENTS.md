@@ -106,17 +106,16 @@ The tiered read protocol narrows to a *unit* and stops there. Between "the row
 says `panel-web`" and "these four files govern this row" sits a search that
 every session pays again: open the unit's INDEX router, read its `Files` table,
 guess which `contract.<topic>.md` applies, find the dependency row's contract the
-same way, then look up the legacy files and the conventions. That is eight reads
-to learn something the repo already knows.
+same way, then look up the conventions. That is eight reads to learn something
+the repo already knows.
 
 ```bash
 python3 tools/brief.py <backlog-id>      # or --next for the first eligible row
 ```
 
 It prints, in well under a second: the row and whether it is actually eligible
-(per dependency, so a blocked row names its blocker); the legacy files that row
-is allowed to open; **every doc file that names this row or one of its
-dependencies**, which is how a `contract.<topic>.md` says what it governs; the
+(per dependency, so a blocked row names its blocker); **every doc file that
+names this row or one of its dependencies**, which is how a `contract.<topic>.md` says what it governs; the
 dependency units' contract files for tier 3; the `C-nn` ids that bind this
 unit's code, split by whether anything actually fails on a violation; the test
 budget and the narrowed commands for the right stack; and §6b itself — 25 lines
@@ -290,9 +289,6 @@ is yours.
   has already been run once.
 - Never ingest the whole catalog at once. An area you are not building costs
   nothing; ingesting it early fills the backlog with rows nobody can start.
-- `docs/legacy/txnetsite-perv/` is the previous app, kept only to port from
-  (`F-092-*` / `F-093-*`). Open only the files its `README.md` names for your
-  row — never the folder whole, never `txnetsite-perv.zip`.
 - Tests come before the code they cover, and the e2e tier is never run
   unasked. Both rules live with the rest of the test policy in
   `docs/CODE-LAYOUT.md` ("Order of work" and "Running them without burning the

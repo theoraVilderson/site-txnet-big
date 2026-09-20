@@ -5,8 +5,8 @@ The read protocol (`00-PROTOCOL.md` §3) narrows to a unit and stops. Between
 "the row names unit X" and "these four files govern this row" sits a discovery
 step that every session pays again: open the unit's INDEX router, read the
 `Files` table, guess which `contract.<topic>.md` applies, find the dependency
-row's contract the same way, then look up the legacy files and the conventions.
-That is eight reads to learn something the repo already knows.
+row's contract the same way, then look up the conventions. That is eight reads
+to learn something the repo already knows.
 
 This tool does that lookup. It reads no source, decides nothing, and writes
 nothing — it names the files worth opening and the commands worth running, so a
@@ -35,7 +35,6 @@ DOCS = ROOT / "docs"
 UNIT_LAYERS = ("domains", "interfaces", "platform")
 PROTOCOL = DOCS / "00-PROTOCOL.md"
 CONV = DOCS / "CONVENTIONS.md"
-LEGACY_README = DOCS / "legacy" / "txnetsite-perv" / "README.md"
 
 backlog = import_module("backlog")
 docs_check = import_module("docs-check")
@@ -144,37 +143,6 @@ def docs_naming(ids):
                 rel = str(path.relative_to(ROOT))
                 hits.setdefault(rel, []).append(ln.strip())
     return hits
-
-
-# ----------------------------------------------------------- legacy mapping
-
-def legacy_files(rid):
-    """The files the legacy README's `Row -> files` table allows for this row.
-
-    The README is explicit that the folder is never read whole and never
-    grepped. Printing the row's own cell is how that rule stays cheap to obey.
-    """
-    if not LEGACY_README.exists():
-        return None, []
-    prefixes, cell = {}, None
-    for ln in LEGACY_README.read_text(encoding="utf-8").splitlines():
-        for m in re.finditer(r"`([A-Z])`\s*=\s*`([^`]+)`", ln):
-            prefixes[m.group(1)] = m.group(2)
-        m = re.match(r"^\|\s*(" + re.escape(rid) + r")\s*\|\s*(.*?)\s*\|\s*$", ln)
-        if m:
-            cell = m.group(2)
-    if cell is None:
-        return None, []
-    if cell.strip().startswith("—"):
-        return cell.strip(), []
-    files = [f.strip() for f in re.findall(r"`([^`]+)`", cell)]
-    expanded = []
-    for f in files:
-        head = f.split("/", 1)[0]
-        if head in prefixes:
-            f = prefixes[head] + f[len(head):]
-        expanded.append("src/" + f)
-    return cell, expanded
 
 
 # -------------------------------------------------------------- conventions
@@ -299,21 +267,7 @@ def main():
         print(f"  catalog id {row['spec']} — resolve it, never open the catalog:")
         print(f"      python3 tools/spec.py {row['spec']}")
     else:
-        print("  no catalog id. The spec is this row's `note` and the legacy files below.")
-
-    cell, lfiles = legacy_files(rid)
-    if cell is not None:
-        print(f"\n  legacy (docs/legacy/txnetsite-perv/README.md, row {rid}):")
-        if not lfiles:
-            print(f"      {cell}")
-        for f in lfiles:
-            p = LEGACY_README.parent / f
-            mark = "" if p.exists() else "   [MISSING]"
-            rel = str(p.relative_to(ROOT))
-            paths.append(rel)
-            print(f"      {rel}{mark}")
-        if lfiles and not quiet:
-            print("  Open only these. Never the folder whole, never `grep -r` it.")
+        print("  no catalog id. The spec is this row's `note`.")
 
     # --- the unit -----------------------------------------------------------
     if udir:
