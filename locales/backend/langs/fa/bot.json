@@ -37,7 +37,14 @@
     "resellerUnblock": "رفع مسدودی",
     "resellerAllUsers": "همهٔ کاربران",
     "resellerNextPage": "صفحهٔ بعد",
-    "resellerPrevPage": "صفحهٔ قبل"
+    "resellerPrevPage": "صفحهٔ قبل",
+    "resellerCampaigns": "📣 پیام گروهی",
+    "campaignRecent": "ارسال‌های اخیر",
+    "campaignSegAll": "همهٔ مشتری‌ها",
+    "campaignSegActive": "فقط مشتری‌های فعال",
+    "campaignSegNew": "تازه‌واردهای ۳۰ روز اخیر",
+    "campaignSend": "بله، بفرست",
+    "campaignRefresh": "وضعیت رو تازه کن"
   },
   "common": {
     "cancelled": "لغو شد؛ چیزی ذخیره نشد. هر وقت خواستید از پایین شروع کنید.",
@@ -90,7 +97,8 @@
     "register": "ساخت حساب · قدم {{n}} از {{total}}",
     "forgot": "بازیابی رمز · قدم {{n}} از {{total}}",
     "accountAdd": "افزودن حساب · قدم {{n}} از {{total}}",
-    "topUp": "شارژ کیف پول · قدم {{n}} از {{total}}"
+    "topUp": "شارژ کیف پول · قدم {{n}} از {{total}}",
+    "campaign": "پیام گروهی · قدم {{n}} از {{total}}"
   },
   "field": {
     "phone": "شماره: {{value}} ✅",
@@ -174,5 +182,19 @@
     "blocked": "{{name}} مسدود شد ✅",
     "unblocked": "{{name}} دوباره فعال شد ✅",
     "revenue": "از {{from}} تا {{to}}\nفروش سرویس: {{sales}} ({{salesCount}} مورد)\nواریز کاربران: {{topUps}} ({{topUpsCount}} مورد)"
+  },
+  "campaign": {
+    "pickSegment": "این پیام گروهی به کی برسه؟",
+    "ask": "تقریباً {{count}} نفر این پیام رو می‌گیرن. حالا متن پیام رو بنویسید.",
+    "empty": "الان هیچ مشتری‌ای تو این گروه نیست. یه گروه دیگه انتخاب کنید.",
+    "confirm": "این پیام برای تقریباً {{count}} نفر فرستاده می‌شه:\n\n{{body}}\n\nبفرستم؟",
+    "statusDraft": "این پیام هنوز فرستاده نشده.",
+    "statusSending": "در حال ارسال… تا اینجا {{sent}} نفر گرفتن و {{failed}} تا ناموفق بوده.",
+    "statusCompleted": "ارسال تموم شد ✅ {{sent}} نفر گرفتن و {{failed}} تا ناموفق بود.",
+    "statusStopped": "ارسال متوقف شده. {{sent}} نفر گرفته بودن و {{failed}} تا ناموفق بود.",
+    "list": "ارسال‌های اخیر شما. یکی رو انتخاب کنید تا وضعیتش رو ببینید.",
+    "listEmpty": "هنوز پیام گروهی نفرستادید.",
+    "row": "{{date}} · {{preview}}",
+    "readOnly": "الان نمی‌تونید ارسال تازه‌ای شروع کنید، ولی ارسال‌های قبلی رو می‌بینید."
   }
 }

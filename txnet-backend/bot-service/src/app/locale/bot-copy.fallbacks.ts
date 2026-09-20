@@ -196,6 +196,30 @@ export const BOT_COPY_FALLBACKS: Readonly<Record<string, string>> = {
   [BotKeys.reseller.unblocked]: '{{name}} is active again ✅',
   [BotKeys.reseller.revenue]:
     '{{from}} to {{to}}\nService sales: {{sales}} ({{salesCount}})\nCustomer top-ups: {{topUps}} ({{topUpsCount}})',
+  // The reseller's own bulk message (`F-313-b`). The segments are
+  // compositions of `notification`'s audience filter, so each label names one
+  // group and no screen offers a filter builder; the four status sentences are
+  // whole sentences because a key interpolated into a value renders as itself.
+  [BotKeys.progress.campaign]: 'Bulk message · step {{n}} of {{total}}',
+  [BotKeys.action.resellerCampaigns]: '📣 Bulk message',
+  [BotKeys.action.campaignRecent]: 'Recent broadcasts',
+  [BotKeys.action.campaignSegAll]: 'All customers',
+  [BotKeys.action.campaignSegActive]: 'Active customers only',
+  [BotKeys.action.campaignSegNew]: 'Joined in the last 30 days',
+  [BotKeys.action.campaignSend]: 'Yes, send it',
+  [BotKeys.action.campaignRefresh]: 'Refresh',
+  [BotKeys.campaign.pickSegment]: 'Who should get this message?',
+  [BotKeys.campaign.ask]: 'About {{count}} people will get it. Now write the message.',
+  [BotKeys.campaign.empty]: 'Nobody is in that group right now. Pick another one.',
+  [BotKeys.campaign.confirm]: 'This goes out to about {{count}} people:\n\n{{body}}\n\nShall I send it?',
+  [BotKeys.campaign.statusDraft]: 'This message has not gone out yet.',
+  [BotKeys.campaign.statusSending]: 'Sending… {{sent}} have it so far, {{failed}} did not go through.',
+  [BotKeys.campaign.statusCompleted]: 'Sending finished ✅ {{sent}} got it, {{failed}} did not go through.',
+  [BotKeys.campaign.statusStopped]: 'Sending was stopped. {{sent}} had it, {{failed}} did not go through.',
+  [BotKeys.campaign.list]: 'Your recent broadcasts. Pick one to see where it is.',
+  [BotKeys.campaign.listEmpty]: 'You have not sent a bulk message yet.',
+  [BotKeys.campaign.row]: '{{date}} · {{preview}}',
+  [BotKeys.campaign.readOnly]: 'You cannot start a new broadcast right now, but here is what you have sent.',
   [BotKeys.field.phone]: 'Number: {{value}} ✅',
   [BotKeys.field.identifier]: 'Account: {{value}} ✅',
   [BotKeys.field.name]: 'Name: {{value}} ✅',

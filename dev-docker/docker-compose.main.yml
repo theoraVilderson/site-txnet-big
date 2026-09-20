@@ -498,6 +498,11 @@ services:
       # bot it is (`GET /api/tenants/:id/access`, F-311-e). Unset, the member
       # menu simply has no management row.
       - TENANT_API_BASE_URL=http://api.${DOMAIN_NAME}
+      # And again for the reseller's own campaigns (F-313-b): drafting, sizing
+      # and starting a bulk message go through the gate to notification's
+      # reseller-named routes (F-313-d). Unset, the reseller panel has no
+      # bulk-message row.
+      - NOTIFICATION_API_BASE_URL=http://api.${DOMAIN_NAME}
       # The one exception (F-104-ab): the in-chat payment relay goes to
       # billing's `/api/internal/*` directly, with the service token and the
       # sender — a payment's events need no chat session.

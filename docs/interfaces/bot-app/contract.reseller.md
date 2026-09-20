@@ -2,7 +2,7 @@
 id: bot-app
 layer: interface
 status: active
-version: 12
+version: 13
 updated: 2026-09-20
 ---
 
@@ -10,13 +10,16 @@ updated: 2026-09-20
 
 A topic file of [contract.md](contract.md), opened because that file is at its
 250-line cap. The reseller management panel inside the bot (F-311-c, spec
-F-311): the menu row, the customer list with search, block / unblock, and the
-revenue figure. **Flow only** — every fact on these screens belongs to another
-unit, which is what `contract.md` "the decision belongs to" requires.
+F-311): the menu row, the customer list with search, block / unblock, the
+revenue figure — and the bulk message it sends its customers (F-313-b, spec
+F-313). **Flow only** — every fact on these screens belongs to another unit,
+which is what `contract.md` "the decision belongs to" requires.
 
-Code: `bot-service/src/app/flows/reseller.flow.ts`, the screens in
-`flows/views.ts`, the door in `tenant-api/tenant-api.client.ts`; tests
-`reseller.flow.spec.ts` (the flow) and `conversation/router.spec.ts` (the row).
+Code: `bot-service/src/app/flows/reseller.flow.ts` and
+`flows/reseller-campaign.flow.ts`, the screens in `flows/views.ts`, the two
+doors in `tenant-api/tenant-api.client.ts` and
+`notification-api/notification-api.client.ts`; tests `reseller.flow.spec.ts`,
+`reseller-campaign.flow.spec.ts` and `conversation/router.spec.ts` (the row).
 
 ## Where each fact comes from
 
@@ -25,6 +28,7 @@ Code: `bot-service/src/app/flows/reseller.flow.ts`, the screens in
 | may this chat see the panel at all | tenant, F-311-e | `GET /api/tenants/:id/access` |
 | the customers, and the two writes | auth-api, F-311-a | `GET/POST/DELETE /api/auth/tenants/:tenantId/users…` |
 | what the reseller earned | billing, F-311-b | `GET /api/billing/tenants/:tenantId/revenue` |
+| the bulk message: its audience, its size, its draft and its send | notification, F-313-d | `…/notifications/tenants/:tenantId/campaigns…` |
 
 ## The reseller is the **bot's**, never the session's
 
@@ -82,6 +86,36 @@ broken report, "service sales" beside "customer top-ups" reads as what it is.
 Money is billing's decimal strings, rendered as they arrived — the bot does no
 arithmetic on any of it (C-02). Dates are cut to their day part; that is
 spelling, not formatting, and `i18n` still owns the calendar and the numerals.
+
+## The bulk message (F-313-b)
+
+Pick a segment, see how many it reaches, write it, confirm, watch it go —
+`flows/reseller-campaign.flow.ts`, a flow of its own (`NavState.flow` is
+`campaign`) rather than a step of the panel's, because it is a conversation
+where the panel's other screens each answer one tap.
+
+The queue is `notification`'s (F-035-d/e), the pace is `messenger`'s ceiling
+(F-313-a/c, ADR-0066) and the door is F-313-d. What is decided here is the
+order of the screens, the segments a chat can offer, and the channel.
+
+| rule | why |
+|---|---|
+| The row is drawn where `NOTIFICATION_API_BASE_URL` is set, and `canWrite` is asked by the flow itself, on the screen that offers the write | the panel's row already cost a verdict; a second one to decide whether to draw a row inside it would ask the door twice for one menu. Who may *start* a broadcast is still never the bot's rule |
+| A reseller the door will not let write gets the **list of what it has sent**, not the segments | `tenant/rules.md`: a suspended reseller reads what it did and starts nothing new. Segments it may not use are a refusal wearing a button. An unreachable door is read the same way |
+| The segments are a **closed list of compositions** of `notification`'s audience filter — all customers, active only, joined in the last 30 days | that filter is `strict` and the fan-out reads exactly its keys (F-035-d), so a chat may compose it and never extend it. A new key lands in that schema and the fan-out first, and on a button afterwards |
+| The button carries the segment's **key**; the flow resolves the filter | a payload is input, and an audience that arrived as input is an audience a caller can write — the same reason a customer is opened by re-listing rather than from the button's id |
+| The count is `notification`'s (`POST audience/count`) and the screen calls it *about* | it is counted now and the send starts later: whoever signs up in between is counted by the send and not by the count. That difference is `notification/contract.reseller.md`'s, stated on screen rather than hidden |
+| An empty segment ends there, on the segments screen | writing a message for nobody is work the flow can spare |
+| The channel is **this bot's messenger** (`telegram_bot` / `bale_bot`), from an exhaustive record over the platforms | the reseller is writing inside its Telegram bot, so the broadcast is the Telegram one. SMS and email are the panel's to offer, and a delivery-line question a chat has already answered by existing is a screen for nothing |
+| Free text on the *write your message* screen is the message; anywhere else in the flow it answers a screen that asked nothing | the same rule the customer list applies to its search box |
+| The typed message becomes a **draft row in `notification`** immediately, and this flow keeps only its id | ADR-0010: a commitment is a row in the domain that owns it the moment it becomes one. A chat abandoned on the confirmation leaves a draft the reseller can find again, never lost work or a half-sent broadcast |
+| Nothing about the text is judged here — length, the channel's availability, whether this reseller may draft at all | all of it is already a rule on the other side, and a second copy in the bot is what ADR-0009 forecloses. A refusal renders as `notification`'s own sentence, `raw` |
+| The confirming tap must name the campaign the state does (`csend:<id>`), and `cstat:` / `camp:` are separate prefixes | sending to every customer is the irreversible tap and must not share a payload with looking at one. A stale confirmation from an earlier draft **shows** that campaign instead of starting it |
+| *Watching it go* is the refresh button, re-reading the campaign each time | a chat has no other way to watch anything, and the counts are `notification`'s alone |
+
+Editing a draft, the per-language texts and stopping a send have no screen
+here, because F-313-d has no route for them — stopping stays the platform
+owner's (F-018-x).
 
 ## Not here
 

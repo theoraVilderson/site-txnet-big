@@ -4,6 +4,7 @@ import { ResellerUser, ResellerUserStatus } from '../auth-api/auth-api.types';
 import { BillingApiClient } from '../billing-api/billing-api.client';
 import { ChatContext, FlowResult, NavState } from '../conversation/nav.types';
 import { BotKeys } from '../locale/bot-keys';
+import { ResellerCampaignFlow } from './reseller-campaign.flow';
 import { ChatAccess } from '../session/chat-access';
 import { TenantApiClient } from '../tenant-api/tenant-api.client';
 import {
@@ -65,6 +66,7 @@ export class ResellerFlow {
     private readonly billing: BillingApiClient,
     private readonly tenant: TenantApiClient,
     private readonly access: ChatAccess,
+    private readonly campaigns: ResellerCampaignFlow,
   ) {}
 
   /**
@@ -89,7 +91,10 @@ export class ResellerFlow {
     if (!accessToken) return this.signedOut();
 
     return {
-      view: resellerMenu(),
+      // The bulk-message row waits on `NOTIFICATION_API_BASE_URL` alone: who
+      // may actually start one is the door's answer, asked by that flow on the
+      // screen that offers the write (`F-313-b`), not guessed at here.
+      view: resellerMenu(this.campaigns.isConfigured),
       nextState: { flow: 'reseller', step: 'reseller.home', data: {} },
     };
   }
@@ -98,6 +103,9 @@ export class ResellerFlow {
     if (actionId === ACTIONS.resellerUsers) return this.users(ctx, undefined, 1);
     if (actionId === ACTIONS.resellerAllUsers) return this.users(ctx, undefined, 1);
     if (actionId === ACTIONS.resellerRevenue) return this.revenue(ctx);
+    // The broadcast is a conversation of its own (`F-313-b`): this row opens
+    // it, and the state it hands back is that flow's, not this one's.
+    if (actionId === ACTIONS.resellerCampaigns) return this.campaigns.start(ctx);
 
     if (actionId?.startsWith(RESELLER_PAGE_PREFIX)) {
       const page = Number(actionId.slice(RESELLER_PAGE_PREFIX.length));

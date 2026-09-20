@@ -19,6 +19,7 @@ import { AccountsFlow } from '../flows/accounts.flow';
 import { ForgotFlow } from '../flows/forgot.flow';
 import { LoginFlow } from '../flows/login.flow';
 import { RegisterFlow } from '../flows/register.flow';
+import { ResellerCampaignFlow } from '../flows/reseller-campaign.flow';
 import { ResellerFlow } from '../flows/reseller.flow';
 import { TopUpFlow } from '../flows/top-up.flow';
 import { OtpStep } from '../flows/otp.step';
@@ -81,6 +82,7 @@ export class ConversationRouter {
     private readonly topUp: TopUpFlow,
     private readonly billing: BillingApiClient,
     private readonly reseller: ResellerFlow,
+    private readonly campaigns: ResellerCampaignFlow,
   ) {}
 
   /**
@@ -165,6 +167,11 @@ export class ConversationRouter {
         return this.topUp.handle(ctx, state, actionId);
       case 'reseller':
         return this.reseller.handle(ctx, state, actionId);
+      // Its own flow rather than a step of the panel's (F-313-b): drafting
+      // and sending a broadcast is a conversation, and the panel's screens
+      // answer a tap each.
+      case 'campaign':
+        return this.campaigns.handle(ctx, state, actionId);
       default:
         return { view: say('unknown', { key: BotKeys.common.unknown }), nextState: null };
     }

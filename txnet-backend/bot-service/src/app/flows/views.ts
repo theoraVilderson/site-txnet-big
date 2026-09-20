@@ -43,6 +43,9 @@ export const ACTIONS = {
   resellerRevenue: 'reseller:revenue',
   /** Drop the search and go back to the whole list. */
   resellerAllUsers: 'reseller:users:all',
+  /** The reseller's own bulk message (`F-313-b`) — the way in, and the way back to what it sent. */
+  resellerCampaigns: 'reseller:campaigns',
+  campaignRecent: 'campaign:list',
 } as const;
 
 export const cancel: BotAction = {
@@ -124,6 +127,32 @@ export const RESELLER_PAGE_PREFIX = 'rpage:';
  */
 export const RESELLER_BLOCK_PREFIX = 'rblock:';
 export const RESELLER_UNBLOCK_PREFIX = 'runblock:';
+
+/**
+ * `cseg:<key>` — which segment of its customers a bulk message goes to
+ * (`F-313-b`).
+ *
+ * The key names one of the flow's own segments, and the flow is what turns it
+ * into `notification`'s audience filter. The payload carries the key rather
+ * than the filter because a filter on a button is a filter a caller can write:
+ * the audience of a campaign is `notification`'s closed schema (F-035-d), and
+ * the bot offers a few compositions of it, never a query language.
+ */
+export const CAMPAIGN_SEGMENT_PREFIX = 'cseg:';
+
+/**
+ * `csend:<id>` / `cstat:<id>` / `camp:<id>` — send this draft, refresh where it
+ * has got to, open one from the list.
+ *
+ * Three prefixes for the reason `rblock:` and `runblock:` are two: sending is
+ * the irreversible one and it must never share a payload with looking. The id
+ * is `notification`'s campaign id — a commitment lives as a row there and as
+ * an id here (ADR-0010), and one that is not this reseller's is answered
+ * `campaign_not_found` there, not filtered here.
+ */
+export const CAMPAIGN_SEND_PREFIX = 'csend:';
+export const CAMPAIGN_STATUS_PREFIX = 'cstat:';
+export const CAMPAIGN_OPEN_PREFIX = 'camp:';
 
 export const toMenu: BotAction = {
   id: ACTIONS.menu,
@@ -453,17 +482,22 @@ export function askContact(id: string, body: BotText): BotView {
 }
 
 /**
- * The reseller panel's own menu (`F-311-c`): the two things it can answer.
+ * The reseller panel's own menu (`F-311-c`, `F-313-b`): what it can answer,
+ * and the bulk message it can send.
  *
  * A screen of its own rather than two more rows on the member menu, because
  * this bot serves the reseller's *customers* too — everything below this point
  * is about the business, and a member menu that mixes "top up my wallet" with
  * "block a customer" makes the reseller read their own menu twice.
  */
-export function resellerMenu(): BotView {
+export function resellerMenu(campaigns = false): BotView {
   return view('reseller.home', { key: BotKeys.reseller.home }, [
     [{ id: ACTIONS.resellerUsers, label: { key: BotKeys.action.resellerUsers } }],
     [{ id: ACTIONS.resellerRevenue, label: { key: BotKeys.action.resellerRevenue } }],
+    // F-313-b. Only where `NOTIFICATION_API_BASE_URL` is set, exactly as the
+    // top-up row waits on billing: a deployment that has not published the
+    // notification API shows no row rather than one that fails on its tap.
+    ...(campaigns ? [[{ id: ACTIONS.resellerCampaigns, label: { key: BotKeys.action.resellerCampaigns } }]] : []),
     [toMenu],
   ]);
 }
@@ -633,4 +667,120 @@ export function resellerRevenueView(totals: {
     },
     [[toMenu]],
   );
+}
+
+/**
+ * Who the bulk message goes to (`F-313-b`) — the first screen of the flow.
+ *
+ * A closed list of segments rather than a filter builder: a chat has no form,
+ * and the audience of a campaign is `notification`'s strict schema (F-035-d),
+ * which a screen may compose but not extend. Each button is one composition,
+ * and the flow holds the table.
+ */
+export function campaignSegmentsView(
+  segments: { key: string; label: string }[],
+  bodyKey: string = BotKeys.campaign.pickSegment,
+): BotView {
+  return view('campaign.segment', { key: bodyKey }, [
+    ...segments.map((s) => [{ id: `${CAMPAIGN_SEGMENT_PREFIX}${s.key}`, label: { key: s.label } }]),
+    [{ id: ACTIONS.campaignRecent, label: { key: BotKeys.action.campaignRecent } }],
+    [cancel],
+  ]);
+}
+
+/**
+ * How many people that segment reaches, and the question that follows it.
+ *
+ * The count is `notification`'s (`POST audience/count`, F-313-d) and the
+ * screen calls it an estimate, because it is counted now and the send starts
+ * later: a customer who signs up in between is counted by the send and not
+ * here. The next thing the reseller types is the message — free text on this
+ * screen is the body, which is the same rule the customer list follows for
+ * search.
+ */
+export function campaignAskTextView(count: number): BotView {
+  return view('campaign.text', { key: BotKeys.campaign.ask, values: { count: String(count) } }, [[cancel]]);
+}
+
+/**
+ * "Shall I send it?" (`F-313-b`) — the draft, its size, and the one tap that
+ * makes it leave.
+ *
+ * It exists for the reason the block confirmation does: the tap that sends a
+ * message to every customer must not be the tap that ends writing one. The
+ * draft already exists as a row in `notification` by this point (ADR-0010), so
+ * a chat that is abandoned here has left a draft behind, never a half-sent
+ * broadcast.
+ */
+export function campaignConfirmView(campaign: { id: string; messageBody: string }, count: number): BotView {
+  return view(
+    'campaign.confirm',
+    { key: BotKeys.campaign.confirm, values: { count: String(count), body: campaign.messageBody } },
+    [
+      [{ id: `${CAMPAIGN_SEND_PREFIX}${campaign.id}`, label: { key: BotKeys.action.campaignSend } }],
+      [cancel],
+    ],
+  );
+}
+
+/**
+ * Where a broadcast has got to (`F-313-b`, the *watch it go* half).
+ *
+ * The sentence is picked by status rather than built from one, so no key is
+ * interpolated into another key's value: `statusKey` is a whole sentence with
+ * `{{sent}}` and `{{failed}}` in it. Both counts are `notification`'s, which
+ * is also the only place that knows them — the bot polls with the refresh
+ * button instead, because a chat has no other way to watch anything.
+ */
+export function campaignStatusView(
+  campaign: { id: string; sentCount: number; failedCount: number },
+  statusKey: string,
+): BotView {
+  return view(
+    'campaign.status',
+    { key: statusKey, values: { sent: String(campaign.sentCount), failed: String(campaign.failedCount) } },
+    [
+      [{ id: `${CAMPAIGN_STATUS_PREFIX}${campaign.id}`, label: { key: BotKeys.action.campaignRefresh } }],
+      [toMenu],
+    ],
+  );
+}
+
+/**
+ * The broadcasts this reseller has sent (`F-313-b`), newest first.
+ *
+ * It is a `read`, so it is also what a **suspended** reseller sees instead of
+ * the segment screen: `tenant/rules.md` lets it read what it did and start
+ * nothing new, and a screen that offered the segments anyway would be a
+ * refusal wearing a button.
+ */
+export function campaignListView(
+  items: { id: string; createdAt: string; messageBody: string }[],
+  readOnly: boolean,
+): BotView {
+  if (!items.length) {
+    return view('campaign.list.empty', { key: BotKeys.campaign.listEmpty }, [[toMenu]]);
+  }
+  return view(
+    'campaign.list',
+    { key: readOnly ? BotKeys.campaign.readOnly : BotKeys.campaign.list },
+    [
+      ...items.map((c) => [
+        {
+          id: `${CAMPAIGN_OPEN_PREFIX}${c.id}`,
+          label: {
+            key: BotKeys.campaign.row,
+            values: { date: c.createdAt.slice(0, 10), preview: preview(c.messageBody) },
+          },
+        },
+      ]),
+      [toMenu],
+    ],
+  );
+}
+
+/** The first line of a message, short enough to be a button label on a phone. */
+function preview(body: string): string {
+  const line = body.split('\n')[0].trim();
+  return line.length > 40 ? `${line.slice(0, 40)}…` : line;
 }

@@ -80,6 +80,17 @@ export const envSchema = z.object({
    */
   TENANT_API_BASE_URL: optional(z.string().url()),
   /**
+   * Where `notification-service` answers **through the gate** (F-313-b): the
+   * same Traefik host, for the reseller-named campaign routes alone
+   * (`/api/notifications/tenants/:tenantId/campaigns…`, F-313-d) — the door
+   * that drafts, sizes and starts a reseller's own bulk message.
+   *
+   * Unset, the reseller panel has no bulk-message row, for the reason
+   * `TENANT_API_BASE_URL` has none: a row whose first tap is an error is worse
+   * than a row that is not there.
+   */
+  NOTIFICATION_API_BASE_URL: optional(z.string().url()),
+  /**
    * billing-service **directly**, for the in-chat payment relay only (F-104-ab):
    * `/api/internal/*`, which Traefik does not route, with the service token and
    * no user. Unset, a pre-checkout query is refused with "try again".

@@ -61,6 +61,11 @@ const FLOW_STEPS: Record<Exclude<BotFlow, 'login' | 'accountAdd'>, string[]> = {
   // last step to count towards, so it counts nothing — same as `accounts`.
   reseller: [],
   topUp: ['topUp.gateway', 'topUp.amount', 'topUp.confirm'],
+  // The broadcast *is* a conversation with an end (F-313-b): who it goes to,
+  // what it says, and the tap that sends it. What follows the send — the
+  // status screen and the list of past ones — is not a step towards anything,
+  // and lands outside this list, which `progressOf` reads as nothing to count.
+  campaign: ['campaign.segment', 'campaign.text', 'campaign.confirm'],
 };
 
 /**
@@ -82,6 +87,7 @@ export const PROGRESS_KEY: Record<BotFlow, BotKey | null> = {
   accounts: null,
   reseller: null,
   topUp: BotKeys.progress.topUp,
+  campaign: BotKeys.progress.campaign,
 };
 
 export function progressOf(state: NavState): BotText | undefined {

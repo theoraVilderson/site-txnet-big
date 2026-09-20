@@ -11,6 +11,7 @@ import { AccountsFlow } from '../flows/accounts.flow';
 import { AccountSwitcher } from '../session/account-switcher';
 import { TopUpFlow } from '../flows/top-up.flow';
 import { BillingApiClient } from '../billing-api/billing-api.client';
+import { ResellerCampaignFlow } from '../flows/reseller-campaign.flow';
 import { ResellerFlow } from '../flows/reseller.flow';
 import { ChatAccess } from '../session/chat-access';
 import { ForgotFlow } from '../flows/forgot.flow';
@@ -115,6 +116,7 @@ function makeRouter(over: {
       start: vi.fn(),
       handle: vi.fn(),
     } as unknown as ResellerFlow,
+    { isConfigured: false, start: vi.fn(), handle: vi.fn() } as unknown as ResellerCampaignFlow,
   );
   return { router, nav, sessions, api, otp, langs, locale };
 }

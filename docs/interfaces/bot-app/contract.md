@@ -2,14 +2,14 @@
 id: bot-app
 layer: interface
 status: active
-version: 12
+version: 13
 updated: 2026-09-20
 ---
 
 # bot-app — contract
 
-`F-303` and `F-311-c` are implemented; the rest of §10.4 is intent (§0 level 4),
-from ADR-0009 and the catalog. Resolve an id with `python3 tools/spec.py <F-id>`.
+`F-303`, `F-311-c` and `F-313-b` are implemented; the rest of §10.4 is intent
+(§0 level 4), from ADR-0009. Resolve an id with `python3 tools/spec.py <F-id>`.
 
 ## TL;DR
 
@@ -56,7 +56,7 @@ reached from another surface:
 | `F-306` wallet, history, invoices | billing |
 | `F-309` two-way tickets | support |
 | `F-311`/`F-312` reseller + sub-reseller management | tenant — the users and the two writes `auth-api` (F-311-a), the figures billing (F-311-b), **and whether the chat may see any of it at all** the door (F-311-e). The flow is built: [contract.reseller.md](contract.reseller.md) |
-| `F-313-b` bulk sending | notification (queue, F-035-d/e) + messenger (the ceiling, F-313-a/ADR-0066); the bot owns the flow only |
+| `F-313-b` bulk sending | notification — the audience, the count, the draft and the send (F-313-d over F-035-d/e) + messenger (the ceiling, F-313-a/ADR-0066). The flow is built: [contract.reseller.md](contract.reseller.md) |
 | `F-318` channel-membership trial gate | engagement/governance decides eligibility; bot only asks the platform for membership |
 | `F-319` per-user notification settings | governance |
 | `F-1531` reseller business summary | tenant reporting |
@@ -85,7 +85,7 @@ contract — **not** a rule written in the bot because it is faster there
 | `flows/account-add.flow.ts` | an account joining that group, by one of `F-0205`'s two proofs |
 | `auth-api/auth-api.client.ts` | the only way out — to identity |
 | `flows/top-up.flow.ts`, `billing-api/billing-api.client.ts` | the wallet top-up, and the way out to billing (F-306-a, below) |
-| `flows/reseller.flow.ts`, `tenant-api/tenant-api.client.ts` | the reseller panel — menu row, customers, block, revenue (F-311-c): [contract.reseller.md](contract.reseller.md) |
+| `flows/reseller.flow.ts` + `reseller-campaign.flow.ts`, `tenant-api/` + `notification-api/` clients | the reseller panel — menu row, customers, block, revenue (F-311-c) and its bulk message (F-313-b): [contract.reseller.md](contract.reseller.md) |
 
 **The bot reaches `auth-api` with a service credential** (`X-Service-Token`,
 ADR-0011): it waives the slide captcha — a chat cannot drag one — and moves the

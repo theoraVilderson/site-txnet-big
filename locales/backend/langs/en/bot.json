@@ -37,7 +37,14 @@
     "resellerUnblock": "Unblock",
     "resellerAllUsers": "All customers",
     "resellerNextPage": "Next page",
-    "resellerPrevPage": "Previous page"
+    "resellerPrevPage": "Previous page",
+    "resellerCampaigns": "📣 Bulk message",
+    "campaignRecent": "Recent broadcasts",
+    "campaignSegAll": "All customers",
+    "campaignSegActive": "Active customers only",
+    "campaignSegNew": "Joined in the last 30 days",
+    "campaignSend": "Yes, send it",
+    "campaignRefresh": "Refresh"
   },
   "common": {
     "cancelled": "Cancelled; nothing was saved. Start again below whenever you like.",
@@ -90,7 +97,8 @@
     "register": "Creating your account · step {{n}} of {{total}}",
     "forgot": "Resetting your password · step {{n}} of {{total}}",
     "accountAdd": "Adding an account · step {{n}} of {{total}}",
-    "topUp": "Topping up · step {{n}} of {{total}}"
+    "topUp": "Topping up · step {{n}} of {{total}}",
+    "campaign": "Bulk message · step {{n}} of {{total}}"
   },
   "field": {
     "phone": "Number: {{value}} ✅",
@@ -174,5 +182,19 @@
     "blocked": "{{name}} is blocked ✅",
     "unblocked": "{{name}} is active again ✅",
     "revenue": "{{from}} to {{to}}\nService sales: {{sales}} ({{salesCount}})\nCustomer top-ups: {{topUps}} ({{topUpsCount}})"
+  },
+  "campaign": {
+    "pickSegment": "Who should get this message?",
+    "ask": "About {{count}} people will get it. Now write the message.",
+    "empty": "Nobody is in that group right now. Pick another one.",
+    "confirm": "This goes out to about {{count}} people:\n\n{{body}}\n\nShall I send it?",
+    "statusDraft": "This message has not gone out yet.",
+    "statusSending": "Sending… {{sent}} have it so far, {{failed}} did not go through.",
+    "statusCompleted": "Sending finished ✅ {{sent}} got it, {{failed}} did not go through.",
+    "statusStopped": "Sending was stopped. {{sent}} had it, {{failed}} did not go through.",
+    "list": "Your recent broadcasts. Pick one to see where it is.",
+    "listEmpty": "You have not sent a bulk message yet.",
+    "row": "{{date}} · {{preview}}",
+    "readOnly": "You cannot start a new broadcast right now, but here is what you have sent."
   }
 }

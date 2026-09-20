@@ -11,10 +11,12 @@ import { LoginFlow } from './flows/login.flow';
 import { OtpStep } from './flows/otp.step';
 import { PhoneNumbers } from './flows/phone-number';
 import { RegisterFlow } from './flows/register.flow';
+import { ResellerCampaignFlow } from './flows/reseller-campaign.flow';
 import { ResellerFlow } from './flows/reseller.flow';
 import { TopUpFlow } from './flows/top-up.flow';
 import { InChatPayment } from './flows/in-chat-payment';
 import { BillingApiClient } from './billing-api/billing-api.client';
+import { NotificationApiClient } from './notification-api/notification-api.client';
 import { TenantApiClient } from './tenant-api/tenant-api.client';
 import { AccountSwitcher } from './session/account-switcher';
 import { BotSessionStore } from './session/bot-session.store';
@@ -64,8 +66,10 @@ import { WebhookController } from './webhook/webhook.controller';
     AccountAddFlow,
     BillingApiClient,
     TenantApiClient,
+    NotificationApiClient,
     TopUpFlow,
     ResellerFlow,
+    ResellerCampaignFlow,
     InChatPayment,
     BotWebhookRegistrar,
   ],

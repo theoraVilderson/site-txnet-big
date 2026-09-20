@@ -6,6 +6,7 @@ import { ChatContext, NavState } from '../conversation/nav.types';
 import { BotSessionStore } from '../session/bot-session.store';
 import { ChatAccess } from '../session/chat-access';
 import { TenantApiClient } from '../tenant-api/tenant-api.client';
+import { ResellerCampaignFlow } from './reseller-campaign.flow';
 import { ResellerFlow, USERS_PER_PAGE } from './reseller.flow';
 
 const ctx: ChatContext = { integration: aBotIntegration(), platform: 'telegram', chatId: '5501', senderId: 42, lang: 'fa' };
@@ -24,7 +25,7 @@ const page = (items: unknown[], over: { total?: number; page?: number } = {}) =>
   pageSize: USERS_PER_PAGE,
 });
 
-function harness(over: { verdict?: unknown; users?: unknown; revenue?: unknown; block?: unknown; tenantConfigured?: boolean } = {}) {
+function harness(over: { verdict?: unknown; users?: unknown; revenue?: unknown; block?: unknown; tenantConfigured?: boolean; campaigns?: boolean } = {}) {
   const auth = {
     refresh: vi.fn().mockResolvedValue(ok({ accessToken: 'access-1', expiresIn: 900, refreshToken: 'r-next' })),
     resellerUsers: vi.fn().mockResolvedValue(over.users ?? page([ALICE, BOB])),
@@ -51,7 +52,18 @@ function harness(over: { verdict?: unknown; users?: unknown; revenue?: unknown; 
     save: vi.fn(),
     clear: vi.fn(),
   } as unknown as BotSessionStore;
-  return { auth, billing, tenant, flow: new ResellerFlow(auth, billing, tenant, new ChatAccess(auth, sessions)) };
+  const campaigns = {
+    isConfigured: over.campaigns ?? true,
+    start: vi.fn(),
+    handle: vi.fn(),
+  } as unknown as Mocked<ResellerCampaignFlow>;
+  return {
+    auth,
+    billing,
+    tenant,
+    campaigns,
+    flow: new ResellerFlow(auth, billing, tenant, new ChatAccess(auth, sessions), campaigns),
+  };
 }
 
 const ids = (r: { view: { actions?: { id: string }[][] } }) => (r.view.actions ?? []).flat().map((a) => a.id);
