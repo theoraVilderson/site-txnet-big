@@ -515,6 +515,30 @@ export const billingApi = {
   },
 
   /**
+   * Reissue one Grant's subscription key (F-502-q → F-502-p).
+   *
+   * The key a redemption answers exists in the clear exactly once — billing
+   * keeps only its hash (D-35) — so a copy that did not land used to be final.
+   * This mints a new one, and the old key stops working inside the same
+   * transaction: there is no moment when both open the link, and none when
+   * neither does (`billing/contract.gift.md`).
+   *
+   * **The id is the whole request.** The route takes no body, because the only
+   * thing it protects is that the caller owns the Grant, and a field naming a
+   * user would be a field to lie in. Another user's Grant and one that does not
+   * exist are the same 404, so this client cannot tell them apart either.
+   *
+   * Its own bucket, 5 per 900s: each call destroys a working key, so a caller
+   * that retried on the user's behalf would spend the budget that recovers it.
+   */
+  async rotateGrantToken(grantId: string): Promise<{ grantId: string; subscriptionKey: string }> {
+    return call<{ grantId: string; subscriptionKey: string }>(
+      `/gift/grants/${encodeURIComponent(grantId)}/rotate-token`,
+      { method: "POST" },
+    );
+  },
+
+  /**
    * Every gateway the caller may manage (F-102-d): the platform owner all of
    * them, a tenant its own. Billing decides which; this sends no tenant.
    */

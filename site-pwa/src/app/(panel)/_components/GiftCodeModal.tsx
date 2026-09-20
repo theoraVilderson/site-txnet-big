@@ -124,18 +124,24 @@ function GiftCodeDialog({ onClose, onRedeemed }: Omit<GiftCodeModalProps, "open"
   }, []);
 
   // The subscription key exists in the clear exactly once (F-502-m, D-35):
-  // billing stores only its hash and no route reissues one, so a dismissal the
-  // user did not mean is not a closed modal — it is a Grant they can never use.
-  // While the key is up, the two ways to close a dialog *without deciding to*
-  // stop working: `Escape`, which is muscle memory, and the backdrop, which is
-  // the miss around the card. The X and "done" below still close it — this
-  // withholds the accidents, not the exit. A dialog that ignores `Escape` is a
-  // real departure from the pattern, and the smaller loss of the two.
+  // billing stores only its hash, so a dismissal the user did not mean is a key
+  // they never copied. `Escape` — muscle memory — and the backdrop — the miss
+  // around the card — are the two ways to close a dialog *without deciding to*,
+  // and while the key is up neither closes it.
+  //
+  // Since F-502-p they no longer do *nothing* either: they ask (F-502-q). The
+  // question is worth asking now because it has a real second answer — the key
+  // can be reissued from this screen, so "go back and get a new one" is an
+  // actual way out rather than a door that had to stay shut. The X and "done"
+  // are aimed at, and still close on the first press.
   const keyOnScreen = redeemed?.kind === "free_grant";
+  const [askedToClose, setAskedToClose] = useState(false);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && !keyOnScreen) onClose();
+      if (event.key !== "Escape") return;
+      if (keyOnScreen) setAskedToClose(true);
+      else onClose();
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
@@ -225,7 +231,7 @@ function GiftCodeDialog({ onClose, onRedeemed }: Omit<GiftCodeModalProps, "open"
         animate="shown"
         exit="gone"
         className="fixed inset-0 bg-black/55 backdrop-blur-lg"
-        onClick={keyOnScreen ? undefined : onClose}
+        onClick={keyOnScreen ? () => setAskedToClose(true) : onClose}
         data-testid="gift-backdrop"
         aria-hidden
       />
@@ -280,7 +286,12 @@ function GiftCodeDialog({ onClose, onRedeemed }: Omit<GiftCodeModalProps, "open"
             </div>
 
             {redeemed?.kind === "free_grant" ? (
-              <ServiceGranted redemption={redeemed} onClose={onClose} />
+              <ServiceGranted
+                redemption={redeemed}
+                onClose={onClose}
+                asked={askedToClose}
+                onAnswered={() => setAskedToClose(false)}
+              />
             ) : redeemed ? (
               <Success
                 reduce={!!reduce}
@@ -407,24 +418,76 @@ function GiftCodeDialog({ onClose, onRedeemed }: Omit<GiftCodeModalProps, "open"
 
 /**
  * A free-service code (F-502-l-c, D-35): a Grant instead of money. Billing keeps
- * only the subscription key's hash, so this is the one time the key exists in
- * the clear — it is shown with a copy button and a sentence that says so, and
- * nothing on this screen is a money figure. The frame stays flat: no burst, so
+ * only the subscription key's hash, so the key on screen is the one time it
+ * exists in the clear — shown with a copy button and a sentence that says so,
+ * and nothing here is a money figure. The frame stays flat: no burst, so
  * nothing moves while the user is reading a key.
+ *
+ * **Asking for a new one (F-502-q).** A copy does not always land — the
+ * clipboard write throws on an insecure origin, a selection is half a key, a
+ * paste goes to the wrong window — and until F-502-p that was final. The
+ * button spends one of five attempts per 15 minutes on a key billing mints in a
+ * transaction that kills the old one, and what comes back obeys the same rule
+ * as the first: shown this once. A refusal is billing's own sentence and
+ * changes nothing (`contract.errors.md`); the key already on screen is still
+ * the key, because nothing was minted.
+ *
+ * The close question is the other half of the same row: `Escape` and the
+ * backdrop ask here instead of doing nothing, and "go back" is what makes the
+ * button above reachable rather than a dead end.
  */
-function ServiceGranted({ redemption, onClose }: { redemption: GiftGrant; onClose: () => void }) {
+function ServiceGranted({
+  redemption,
+  onClose,
+  asked,
+  onAnswered,
+}: {
+  redemption: GiftGrant;
+  onClose: () => void;
+  /** `Escape` or the backdrop was hit while the key is up — answer it here. */
+  asked: boolean;
+  onAnswered: () => void;
+}) {
   const { t, lang } = useLocale();
   const [copied, setCopied] = useState(false);
+  // The key billing last answered: the redemption's, until a reissue replaces
+  // it. The old one is dead in billing by then, so it must not stay on screen
+  // to be copied.
+  const [subscriptionKey, setSubscriptionKey] = useState(redemption.subscriptionKey);
+  const [reissued, setReissued] = useState(false);
+  const [isRotating, setIsRotating] = useState(false);
+  const [error, setError] = useState<{ message: string; ref?: string } | null>(null);
+  const toMessage = useApiErrorMessage();
   const until = redemption.grant.endsAt ? formatInstant(redemption.grant.endsAt, lang) : null;
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(redemption.subscriptionKey);
+      await navigator.clipboard.writeText(subscriptionKey);
       setCopied(true);
     } catch {
-      // No clipboard (an old browser, an insecure origin): the key stays selectable.
+      // No clipboard (an old browser, an insecure origin): the key stays
+      // selectable, and the button above is the way out if it was not copied.
     }
   };
+
+  async function askForANewKey() {
+    if (isRotating) return;
+    setError(null);
+    setIsRotating(true);
+    try {
+      const { subscriptionKey: minted } = await billingApi.rotateGrantToken(redemption.grant.id);
+      setSubscriptionKey(minted);
+      setReissued(true);
+      setCopied(false);
+    } catch (e) {
+      // Nothing was minted, so the key on screen is untouched — only the
+      // sentence billing sent is added.
+      console.error(e);
+      setError({ message: toMessage(e), ref: e instanceof ApiError ? e.ref : undefined });
+    } finally {
+      setIsRotating(false);
+    }
+  }
 
   return (
     <div className="py-2 text-center">
@@ -440,7 +503,7 @@ function ServiceGranted({ redemption, onClose }: { redemption: GiftGrant; onClos
         <p className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-text-secondary">{t("common", G.keyLabel)}</p>
         <div className="flex items-center gap-2">
           <code className="min-w-0 flex-1 select-all break-all font-mono text-xs text-text-primary" dir="ltr">
-            {redemption.subscriptionKey}
+            {subscriptionKey}
           </code>
           <button
             type="button"
@@ -451,15 +514,74 @@ function ServiceGranted({ redemption, onClose }: { redemption: GiftGrant; onClos
           </button>
         </div>
         <p className="mt-2 text-[11px] font-bold text-error">{t("common", G.keyOnce)}</p>
+        {reissued && (
+          <p className="mt-1 text-[11px] font-bold text-text-secondary">{t("common", G.keyReplaced)}</p>
+        )}
       </div>
+
+      {/* Billing's sentence, laid out and nothing more — `role="alert"` because
+          it lands after a press the user is waiting on (`contract.errors.md`). */}
+      {error && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="mt-3 flex items-start gap-3 rounded-2xl border border-error-border bg-error-bg px-4 py-3 text-start text-sm font-medium text-error"
+        >
+          <AlertCircle size={18} className="mt-0.5 shrink-0" aria-hidden />
+          <span className="min-w-0">
+            {error.message}
+            {error.ref && (
+              <span className="mt-1 block font-mono text-[0.65rem] opacity-70" dir="ltr">
+                {error.ref}
+              </span>
+            )}
+          </span>
+        </div>
+      )}
 
       <button
         type="button"
-        onClick={onClose}
-        className="mt-6 w-full rounded-2xl bg-leaf-bg py-3.5 text-sm font-bold text-text-primary transition-[background-color] duration-200 hover:bg-card-border"
+        onClick={() => void askForANewKey()}
+        disabled={isRotating}
+        className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-card-border py-3 text-xs font-bold text-text-secondary transition-colors duration-200 hover:bg-leaf-bg hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {t("common", G.done)}
+        {isRotating && <Loader2 size={14} className="animate-spin" aria-hidden />}
+        {t("common", isRotating ? G.newKeySending : G.newKey)}
       </button>
+
+      {asked ? (
+        // The question `Escape` and the backdrop now ask. It is answered here
+        // rather than in a second dialog: the key it is about is on the screen
+        // behind it, and covering that up is the thing to avoid.
+        <div className="mt-6 rounded-2xl border border-error-border bg-error-bg p-3 text-start">
+          <p className="text-[13px] font-bold text-error">{t("common", G.closeAsk)}</p>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={onAnswered}
+              autoFocus
+              className="flex-1 rounded-xl bg-primary py-2.5 text-xs font-bold text-white"
+            >
+              {t("common", G.stay)}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 rounded-xl bg-leaf-bg py-2.5 text-xs font-bold text-text-primary"
+            >
+              {t("common", G.closeAnyway)}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-3 w-full rounded-2xl bg-leaf-bg py-3.5 text-sm font-bold text-text-primary transition-[background-color] duration-200 hover:bg-card-border"
+        >
+          {t("common", G.done)}
+        </button>
+      )}
     </div>
   );
 }

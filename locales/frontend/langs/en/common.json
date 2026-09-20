@@ -360,7 +360,13 @@
       "keyLabel": "Subscription key",
       "keyOnce": "Copy it now — it is shown only this once.",
       "copy": "Copy",
-      "copied": "Copied"
+      "copied": "Copied",
+      "newKey": "Ask for a new key",
+      "newKeySending": "Asking for a new key…",
+      "keyReplaced": "This is the new key. The one before it has stopped working.",
+      "closeAsk": "Close this? The key is shown only once — if you have not copied it, ask for a new one first.",
+      "closeAnyway": "Close anyway",
+      "stay": "Go back"
     }
   },
   "notifications": {
