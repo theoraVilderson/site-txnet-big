@@ -141,7 +141,19 @@
       "unlink": "Unlink",
       "empty": "No links yet.",
       "live": "Linked",
-      "withdrawn": "Unlinked"
+      "withdrawn": "Unlinked",
+      "refusals": {
+        "already_granted": "This gateway is already linked to that tenant.",
+        "already_withdrawn": "This link was already unlinked.",
+        "amount_not_positive": "The payout amount must be greater than zero.",
+        "exceeds_outstanding": "The payout is more than what is owed to that tenant.",
+        "gateway_not_found": "That gateway no longer exists. Reload the page and pick it again.",
+        "gateway_not_grantable": "This gateway's provider cannot be lent: an in-chat gateway takes payments only in its own bot.",
+        "grant_not_found": "This link no longer exists. Reload the page.",
+        "grant_to_owner": "This gateway already belongs to that tenant — it does not need a link.",
+        "not_platform_owner": "Only the platform owner can link gateways.",
+        "tenant_not_found": "No tenant has this ID. Check the ID and try again."
+      }
     },
     "wizard": {
       "stepOf": "Step {{current}} of {{total}}",

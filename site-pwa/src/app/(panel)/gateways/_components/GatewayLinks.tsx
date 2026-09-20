@@ -7,6 +7,7 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { billingApi, type AdminGateway, type GatewayGrant } from "@/lib/billing-api";
 import { Select } from "../../_components/kit/Select";
+import { grantRefusalKey } from "../_lib/grants";
 
 const L = FrontendI18nKeys.common.gateways.links;
 
@@ -24,13 +25,19 @@ const key = (g: { source: "platform" | "tenant"; id: string }) => `${g.source}:$
  *
  * It is the settlement grant under a plainer name, and it adds no rule: a
  * gateway linked to its own tenant, or linked twice, is refused by
- * `SettlementService` and the refusal's sentence is shown as it arrived.
+ * `SettlementService`. What the refusal *says* is this page's, though — a
+ * settlement refusal carries no `i18nKey`, so every one of them arrived as the
+ * generic conflict sentence until `grantRefusalKey` read its `reason` (F-096-f).
  * Unlinking withdraws the grant; the row stays, because the payments taken
  * through it still point at it.
  */
 export function GatewayLinks({ gateways, grants, onChanged }: GatewayLinksProps) {
   const { t } = useLocale();
-  const errorMessage = useApiErrorMessage();
+  const generic = useApiErrorMessage();
+  const errorMessage = (e: unknown) => {
+    const key = grantRefusalKey(e);
+    return key ? t("common", key) : generic(e);
+  };
   const [tenantId, setTenantId] = useState("");
   const [gatewayKey, setGatewayKey] = useState("");
   const [note, setNote] = useState("");

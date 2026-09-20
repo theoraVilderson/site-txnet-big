@@ -47,5 +47,5 @@ to `auth-api`), translation content (`i18n`).
 ## Changelog
 | Date | Change |
 |---|---|
-| 2026-09-20 | v27 -> **v28** (F-502-s): `/services` lists a user's own Grants over `GET /api/billing/gift/grants`, with the reissue button on every row — a key lost after the modal closed now has a way back. [contract.my-services.md](contract.my-services.md) |
+| 2026-09-20 | v28 -> **v29** (F-096-f): a refusal that names a `reason` but no `i18nKey` gets its own sentence — the gateway-links panel maps settlement's union (`gateways/_lib/grants.ts`), as coupons does. [contract.errors.md](contract.errors.md) |
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

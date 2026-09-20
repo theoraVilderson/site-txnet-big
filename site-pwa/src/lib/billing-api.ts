@@ -1039,6 +1039,19 @@ export interface GatewayRemoved {
   grantsWithdrawn: number;
 }
 
+/** Every reason `/settlement/*` can refuse with (`settlement.service.ts` `SettlementRejection`). */
+export type SettlementRejection =
+  | "not_platform_owner"
+  | "gateway_not_found"
+  | "tenant_not_found"
+  | "grant_to_owner"
+  | "gateway_not_grantable"
+  | "already_granted"
+  | "grant_not_found"
+  | "already_withdrawn"
+  | "amount_not_positive"
+  | "exceeds_outstanding";
+
 /** A link of one gateway to one borrowing tenant (`audit/contract.settlement.md`). */
 export interface GatewayGrant {
   id: string;
