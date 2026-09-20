@@ -63,8 +63,11 @@ type Ipn = {
  *   later `finished` still credits an expired one (ADR-0046 decision 1).
  * - **`inquire` cannot see the invoice.** Finding a payment by invoice id is the
  *   payment list, which needs a JWT from the account's email and password —
- *   credentials a gateway does not hold. It answers `in_bank` without a call:
+ *   credentials a gateway does not hold. It answers `unknown` without a call:
  *   the IPN settles, NOWPayments repeats it, and nothing is closed on a guess.
+ *   Not `in_bank` (F-104-v): that is a payer the gateway can see at the bank,
+ *   and it kept an unpaid row on the verify ladder for ever — out of the expiry
+ *   sweep's reach, and past a person's reject, which answered `still_in_bank`.
  * - No fee API; an automatic fee is refused, as Stripe's.
  */
 export class NowPaymentsProvider implements PaymentProvider {
@@ -159,7 +162,7 @@ export class NowPaymentsProvider implements PaymentProvider {
   }
 
   async inquire(_input: PaymentInquiryInput): Promise<PaymentInquiryResult> {
-    return { status: 'in_bank' };
+    return { status: 'unknown' };
   }
 
   async verify(_input: PaymentVerifyInput): Promise<PaymentVerifyResult> {

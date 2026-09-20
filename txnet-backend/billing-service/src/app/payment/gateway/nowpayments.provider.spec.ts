@@ -21,8 +21,8 @@ import { NowPaymentsProvider } from './nowpayments.provider';
  *    payments (the payer switches coin), and a closed row would refuse the one
  *    that succeeds; our own clock ends an unpaid row, and credit still accepts it;
  *  - **`inquire` cannot see an invoice** with the API key alone (the list needs a
- *    login JWT), so it answers `in_bank` and calls nothing — it never credits
- *    or closes on a guess.
+ *    login JWT), so it answers `unknown` and calls nothing — it never credits
+ *    or closes on a guess, and never claims the payer is at the bank (F-104-v).
  */
 
 const API_KEY = 'np_api_key_do_not_log';
@@ -180,10 +180,13 @@ describe('NowPaymentsProvider — calls', () => {
     expect(calls).toEqual([]);
   });
 
-  it('inquires nothing it cannot see: in_bank, and verify is unavailable, with no call made', async () => {
+  // F-104-v: `unknown`, not `in_bank`. `in_bank` is a payer still at the bank —
+  // an answer that kept the row on the verify ladder, out of the expiry sweep's
+  // reach and beyond a person's reject, for ever.
+  it('inquires nothing it cannot see: unknown, and verify is unavailable, with no call made', async () => {
     const { provider, calls } = nowpayments();
 
-    await expect(provider.inquire({ credentials, authority: '4522625843' })).resolves.toEqual({ status: 'in_bank' });
+    await expect(provider.inquire({ credentials, authority: '4522625843' })).resolves.toEqual({ status: 'unknown' });
     await expect(provider.verify({ credentials, authority: '4522625843', amountMinor: BigInt(1250) })).rejects.toMatchObject({ reason: 'unavailable' });
     expect(calls).toEqual([]);
   });

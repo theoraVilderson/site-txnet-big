@@ -78,7 +78,7 @@ type Setup = {
   flagMatches?: number;
   row?: ReturnType<typeof paymentRow> | null;
   /** What `inquire` answers. */
-  inquiry?: 'verified' | 'paid' | 'in_bank' | 'failed' | 'reversed';
+  inquiry?: 'verified' | 'paid' | 'in_bank' | 'failed' | 'reversed' | 'unknown';
   /** `inquire` throws this instead of answering. */
   inquiryFails?: Error;
   /** Per authority, what `inquire` answers or throws — overrides `inquiry` (F-092-ag). */
@@ -299,6 +299,43 @@ describe('DepositReconciliationService', () => {
     expect(calls.verified).toEqual([]);
     expect(calls.logs[0]).toMatchObject({ gatewayReportedStatus: 'in_bank' });
     expect(result).toMatchObject({ unchanged: 1 });
+  });
+
+  // F-104-v: `unknown` is not a state of the payment — it is the driver saying
+  // it has no way to read this payment at all (NOWPayments' invoice needs a
+  // login JWT no gateway holds). Read as `in_bank` it was a payer for ever at
+  // the bank: the ladder re-scheduled, the expiry sweep skipped the row for
+  // having a `nextVerifyAt`, and a person's reject answered `still_in_bank`.
+  it('leaves a payment alone when its gateway cannot be asked about it, and writes nothing', async () => {
+    const { service, calls } = build({ inquiry: 'unknown' });
+
+    const result = await service.reconcile();
+
+    expect(calls.inquired).toHaveLength(1);
+    expect(calls.verified).toEqual([]);
+    expect(calls.credited).toEqual([]);
+    // No log row: nothing was learned, and "checked, nothing to do" would retire the payment.
+    expect(calls.logs).toEqual([]);
+    // No rung climbed: asking again cannot change the answer.
+    expect(calls.updated).toEqual([]);
+    expect(result).toMatchObject({ confirmed: 0, flagged: 0, unchanged: 1, errors: 0 });
+  });
+
+  it('takes a payment off the verify ladder when its gateway cannot be asked, so the clock can close it', async () => {
+    const { service, calls } = build({
+      inquiry: 'unknown',
+      row: paymentRow({ status: PaymentStatus.pending, nextVerifyAt: new Date() }),
+    });
+
+    const answer = await runWithTenant({ id: TENANT }, () => service.askOnce(PAYMENT));
+
+    expect(calls.logs).toEqual([]);
+    // The one write is the clock being cleared — never a new `nextVerifyAt`.
+    expect(calls.updated).toEqual([
+      { where: { id: PAYMENT, nextVerifyAt: { not: null } }, data: { nextVerifyAt: null } },
+    ]);
+    // The answer a person may act on: confirm by hand, or reject with a reason (F-092-ak).
+    expect(answer.kind).toBe('cannot_ask');
   });
 
   it('writes no log row when the gateway did not answer, so the next run asks again', async () => {
@@ -591,6 +628,21 @@ describe('DepositReconciliationService — authorities only offered (F-092-ag, A
     expect(calls.credited).toEqual([]);
     // Nothing left to ask about: a person may confirm it by hand, as with no authority at all.
     expect(answer.kind).toBe('unaskable');
+  });
+
+  // F-104-v: a gateway that cannot be asked cannot disown a candidate either.
+  it('keeps every offered authority when the gateway cannot be asked, and leaves the ladder', async () => {
+    const { service, calls } = build({ ...due, row: offered([AUTHORITY]), inquiry: 'unknown' });
+
+    const answer = await runWithTenant({ id: TENANT }, () => service.askOnce(PAYMENT));
+
+    expect(calls.withdrawn).toEqual([]);
+    expect(calls.credited).toEqual([]);
+    expect(calls.logs).toEqual([]);
+    expect(calls.updated).toEqual([
+      { where: { id: PAYMENT, nextVerifyAt: { not: null } }, data: { nextVerifyAt: null } },
+    ]);
+    expect(answer.kind).toBe('cannot_ask');
   });
 
   it('takes back a candidate the gateway calls failed or reversed, and closes nothing', async () => {

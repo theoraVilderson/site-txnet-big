@@ -292,6 +292,9 @@ describe('ManualConfirmService.reject (F-092-ak)', () => {
     ['the gateway stays silent', { kind: 'unanswered', gatewayStatus: null, referenceId: null }],
     ['there is no authority to ask about', { kind: 'unaskable', gatewayStatus: null, referenceId: null }],
     ['the gateway does not know the authority', { kind: 'refused', gatewayStatus: 'authority_invalid', referenceId: null }],
+    // F-104-v: the gateway has no way to answer about this payment at all
+    // (NOWPayments). Before, it answered `in_bank` and a person could not close it.
+    ['the gateway cannot be asked at all', { kind: 'cannot_ask', gatewayStatus: 'unknown', referenceId: null }],
   ])('closes a payment by hand when %s, with the person and the reason', async (_what, ask) => {
     const { service, calls, actor } = build({ ask });
 

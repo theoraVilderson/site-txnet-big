@@ -135,7 +135,7 @@ const VIEW_SELECT = {
 } satisfies Prisma.PaymentTransactionSelect;
 
 /** Silence and `in_bank`: the only answers that leave the decision to a person. */
-const UNSETTLED: readonly AskAnswer['kind'][] = ['in_bank', 'unanswered', 'unaskable'];
+const UNSETTLED: readonly AskAnswer['kind'][] = ['in_bank', 'unanswered', 'unaskable', 'cannot_ask'];
 
 @Injectable()
 export class ManualConfirmService {

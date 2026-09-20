@@ -102,7 +102,13 @@ export type AskKind =
   /** No answer — a timeout, an unreadable merchant id, anything unexpected. Unsettled. */
   | 'unanswered'
   /** The row carries no authority, or is not readable in its tenant's scope. */
-  | 'unaskable';
+  | 'unaskable'
+  /**
+   * The gateway has no way to answer about this payment at all (F-104-v) — its
+   * `inquire` said `unknown`. Unsettled, and asking again cannot change that,
+   * so the row leaves the retry ladder and its own clock closes it.
+   */
+  | 'cannot_ask';
 
 export type AskAnswer = { kind: AskKind; gatewayStatus: string | null; referenceId: string | null };
 
@@ -116,6 +122,10 @@ const COUNTED_AS: Record<AskKind, Outcome> = {
   in_bank: 'unchanged',
   unanswered: 'errors',
   unaskable: 'errors',
+  // Not an error: a gateway that settles only by webhook is working exactly as
+  // it is meant to. Counting every unpaid crypto invoice as one, on every
+  // sweep of the lookback, would bury the errors that are.
+  cannot_ask: 'unchanged',
 };
 
 const answer = (kind: AskKind, gatewayStatus: string | null = null, referenceId: string | null = null): AskAnswer => ({
@@ -157,6 +167,8 @@ const ASKABLE = [
  */
 type CandidateVerdict =
   | { kind: 'confirmed'; status: PaymentInquiryStatus; verified: { referenceId: string; cardPan: string | null } }
+  /** The gateway cannot be asked about any authority (F-104-v): neither proof nor denial. */
+  | { kind: 'unaskable' }
   | { kind: 'disowned' }
   | { kind: 'silent' };
 
@@ -420,6 +432,10 @@ export class DepositReconciliationService {
       return await this.unanswered(payment, e, onRetry);
     }
 
+    // The gateway cannot read this payment out to us at all (F-104-v). Nothing
+    // was learned, so no log row; asking again cannot change it, so no rung.
+    if (status === 'unknown') return await this.cannotAsk(payment, status);
+
     if (!PAYABLE.includes(status)) {
       // `in_bank` is not finished, `failed` and `reversed` are finished and owe
       // nothing. `in_bank` is not a settled answer, so a pending row keeps
@@ -478,6 +494,9 @@ export class DepositReconciliationService {
     let silent = false;
     for (const candidate of payment.authorityCandidates) {
       const verdict = await this.askCandidate(provider, credentials, payment, candidate);
+      // Every candidate would get the same non-answer, so stop at the first
+      // (F-104-v) — with all of them kept, because none was disowned.
+      if (verdict.kind === 'unaskable') return await this.cannotAsk(payment, 'unknown');
       if (verdict.kind === 'silent') {
         silent = true;
         continue;
@@ -524,6 +543,8 @@ export class DepositReconciliationService {
       return verdictOf(e);
     }
     if (status === 'in_bank') return { kind: 'silent' };
+    // A gateway that cannot be asked cannot disown a candidate either (F-104-v).
+    if (status === 'unknown') return { kind: 'unaskable' };
     if (!PAYABLE.includes(status)) return { kind: 'disowned' };
 
     try {
@@ -635,6 +656,28 @@ export class DepositReconciliationService {
       const scheduled = await scheduleVerifyRetry(tx, payment, now);
       return scheduled !== null && (await flagLongVerifying(tx, payment.id, flagBefore, now));
     });
+  }
+
+  /**
+   * The gateway cannot be asked about this payment at all (F-104-v).
+   *
+   * NOWPayments' invoice is readable only with a login JWT no gateway holds,
+   * so its `inquire` answers `unknown`. Read as `in_bank` that was a payer for
+   * ever at the bank: the ladder re-scheduled, the expiry sweep skipped the row
+   * for carrying a `nextVerifyAt` (F-092-x), and a person's reject answered
+   * `still_in_bank` — a row, and its coupon holds, nothing could close.
+   *
+   * So the row **leaves the ladder**, and nothing else happens: no log row,
+   * because nothing was learned, and no close, because a webhook the provider
+   * repeats may still credit it. Its own clock then expires it as any unpaid
+   * top-up, and a late IPN still credits an expired row (ADR-0046 decision 1).
+   */
+  private async cannotAsk(payment: PaymentRow, reported: string): Promise<AskAnswer> {
+    if (payment.nextVerifyAt) {
+      await tenantTransaction(this.prisma, (tx) => clearVerifyRetry(tx, payment.id));
+      this.logger.warn(`payment ${payment.id} left the verify ladder: its gateway cannot be asked about a payment`);
+    }
+    return answer('cannot_ask', reported);
   }
 
   /**

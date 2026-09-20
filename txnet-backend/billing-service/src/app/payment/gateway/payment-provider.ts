@@ -64,8 +64,17 @@ export type PaymentVerifyResult = {
 
 export type PaymentInquiryInput = { credentials: GatewayCredentials; authority: string };
 
-/** Where the gateway says a payment is. Only `verified` means the money is ours. */
-export type PaymentInquiryStatus = 'verified' | 'paid' | 'in_bank' | 'failed' | 'reversed';
+/**
+ * Where the gateway says a payment is. Only `verified` means the money is ours.
+ *
+ * `unknown` is not a place: it is the driver saying it has no way to read this
+ * payment at all — NOWPayments' invoice needs a login JWT a gateway does not
+ * hold (F-104-v). It is distinct from `in_bank`, which is a payer still at the
+ * bank and so a reason to ask again; asking again about `unknown` can never
+ * answer anything, so the caller stops asking rather than waiting for ever.
+ * A driver that *could* answer but did not throws `unavailable` instead.
+ */
+export type PaymentInquiryStatus = 'verified' | 'paid' | 'in_bank' | 'failed' | 'reversed' | 'unknown';
 
 export type PaymentInquiryResult = { status: PaymentInquiryStatus };
 
