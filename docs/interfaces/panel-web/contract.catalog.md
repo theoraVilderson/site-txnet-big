@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 18
-updated: 2026-09-16
+version: 23
+updated: 2026-09-20
 ---
 
 # Contract — panel-web: catalog (F-026-f)
@@ -57,6 +57,36 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    offered are locale-service's — no list in code. "Translate missing" is
    billing's `draft-missing`. Billing scopes every call.
 
+## The same page for a reseller a route names (F-066-w8, ADR-0064 (4))
+
+`/my-resellers/[id]/catalog` and `.../catalog/translations` are these same
+components over `/api/catalog/tenants/:id/...` (F-066-w7) —
+`my-resellers/[id]/catalog/_components/ResellerCatalogView.tsx`, refusals
+`my-resellers/_lib/catalog.ts`. Every rule above holds there unchanged; what
+the routes do is [catalog/contract.md](../../domains/catalog/contract.md) "The
+same management for a reseller a route names".
+
+11. **One page, two surfaces, chosen by path and never by session**
+    (`CatalogSurface`, `catalog/_lib/surface.ts`): `catalogAdminApi(tenantId)`,
+    this surface's two hrefs, its chrome and its refusals. It travels by
+    **context**, not by prop as the gateway page's does: these calls are made
+    four components deep (`VariantCard`, `NewVariant`, `Capabilities`), and a
+    prop threaded through all of them is a prop somebody forgets to pass.
+12. **The ambient page is never this screen.** A reseller's owner signs in to
+    the platform owner's tenant (ADR-0059), so `/catalog` would price the
+    **platform's** products and answer 200 doing it. That is why the console's
+    pricing step links here (`stepHref`) and why the spec holds the prefix.
+13. **Nothing is elevated here** (`surfaceActor`). The actor the forms build a
+    body from is `null` on this surface, whoever is signed in: billing runs the
+    work as the reseller and its `.strict()` schema refuses a `tenantId`, so
+    the owner's scope filter, a shared category and another tenant's product
+    are not offered — and never sent — even to platform staff.
+14. **One sentence per refusal, on read and on write alike**
+    (`CATALOG_REFUSAL_KEYS`, namespace `common.resellerCatalog`, through
+    `useMessage`). It covers both doors — `ResellerAccess` and billing's
+    catalog rejections — and the spec reads the union from the controller's own
+    exhaustive `STATUS` map, so a reason added there has no blank line here.
+
 ## Proof
 
 `catalog/catalog.test.ts` — the refusal union and each closed set against its
@@ -67,3 +97,9 @@ quotas), `validatePriceForm` / `priceBody` (today, future, past),
 in a source language (`validateCategoryForm` / `categoryBody`,
 `validateNamesForm` / `namesBody`, `productBody` never sends a key),
 `flattenTexts` / `catalogText` fallback to the source, `reviewWrites`.
+
+`my-resellers/catalog.test.ts` (F-066-w8) — `catalogApiPrefix` on both
+surfaces against the controller's own `@Controller`, `surfaceActor` holding a
+platform owner's `productBody` / `categoryBody` to nothing elevated, both
+doors' refusals against the controller's `STATUS` map, the two paths and the
+console's pricing step.

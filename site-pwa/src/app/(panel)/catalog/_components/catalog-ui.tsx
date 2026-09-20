@@ -7,6 +7,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { Select } from "../../_components/kit/Select";
 import { CATALOG_KEYS as K, refusalKey } from "../_lib/catalog-form";
+import { useCatalogSurface } from "../_lib/surface";
 
 /** The pieces every catalog sheet and the wizard share. */
 
@@ -14,12 +15,17 @@ export const input = "w-full rounded-xl border border-card-border bg-bg-inner px
 export const primaryButton = "inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white shadow-sm disabled:opacity-50";
 export const quietButton = "inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-primary hover:bg-[var(--leaf-bg)] disabled:opacity-50";
 
-/** The refusal's own sentence, else the generic answer for that error. */
+/**
+ * The refusal's own sentence, else the generic answer for that error. The
+ * surface answers first: a reseller's screen has its own wording for the same
+ * reasons, and for the two doors the ambient page never meets (F-066-w8).
+ */
 export function useMessage() {
   const { t } = useLocale();
+  const surface = useCatalogSurface();
   const errorMessage = useApiErrorMessage();
   return (e: unknown) => {
-    const key = refusalKey(e);
+    const key = surface.refusalKey?.(e) ?? refusalKey(e);
     return key ? t("common", key) : errorMessage(e);
   };
 }

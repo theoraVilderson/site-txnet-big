@@ -166,85 +166,112 @@ export interface SetPriceBody {
 const json = (body: unknown): RequestInit => ({ body: JSON.stringify(body) });
 const id = (v: string) => encodeURIComponent(v);
 
-export const catalogApi = {
-  async categories(): Promise<CatalogCategory[]> {
-    return call<CatalogCategory[]>("/categories", { method: "GET" });
-  },
+/**
+ * Which tenant's catalog a call is about: `""` for the caller's own
+ * (`/api/catalog/...`), `/tenants/:id` for the reseller a route names
+ * (F-066-w7, ADR-0064). Never read from the session or the host — a reseller's
+ * owner signs in to the platform owner's tenant (ADR-0059), so the ambient
+ * path would manage the **platform's** catalog and answer 200 doing it.
+ */
+export const catalogApiPrefix = (tenantId: string | null) => (tenantId === null ? "" : `/tenants/${id(tenantId)}`);
 
-  async createCategory(body: CreateCategoryBody): Promise<CatalogCategory> {
-    return call<CatalogCategory>("/categories", { method: "POST", ...json(body) });
-  },
+/** The calls both catalog surfaces answer. The page's components take one of these, never `catalogApi` itself. */
+export type CatalogAdminApi = ReturnType<typeof catalogAdminApi>;
 
-  async updateCategory(categoryId: string, body: { sourceLang?: string; name?: Texts; isActive?: boolean }): Promise<CatalogCategory> {
-    return call<CatalogCategory>(`/categories/${id(categoryId)}`, { method: "PATCH", ...json(body) });
-  },
+/**
+ * The catalog calls for one surface: `null` for the caller's own tenant
+ * (F-026-f), a tenant id for the reseller the path names (F-066-w8). Billing
+ * still decides everything — this only chooses which tenant is being asked
+ * about, and `texts` is the panel's own i18n route either way.
+ */
+export function catalogAdminApi(tenantId: string | null) {
+  const at = catalogApiPrefix(tenantId);
+  return {
+    async categories(): Promise<CatalogCategory[]> {
+      return call<CatalogCategory[]>(`${at}/categories`, { method: "GET" });
+    },
 
-  /** The platform owner may narrow by a tenant id or `platform`; a tenant always gets its own. */
-  async products(query: { categoryId?: string; tenantId?: string } = {}): Promise<CatalogProduct[]> {
-    const params = new URLSearchParams();
-    for (const [k, v] of Object.entries(query)) if (v) params.set(k, v);
-    const qs = params.toString();
-    return call<CatalogProduct[]>(`/products${qs ? `?${qs}` : ""}`, { method: "GET" });
-  },
+    async createCategory(body: CreateCategoryBody): Promise<CatalogCategory> {
+      return call<CatalogCategory>(`${at}/categories`, { method: "POST", ...json(body) });
+    },
 
-  /** A product with its variants and each variant's whole price history. */
-  async product(productId: string): Promise<CatalogProductDetail> {
-    return call<CatalogProductDetail>(`/products/${id(productId)}`, { method: "GET" });
-  },
+    async updateCategory(categoryId: string, body: { sourceLang?: string; name?: Texts; isActive?: boolean }): Promise<CatalogCategory> {
+      return call<CatalogCategory>(`${at}/categories/${id(categoryId)}`, { method: "PATCH", ...json(body) });
+    },
 
-  async createProduct(body: CreateProductBody): Promise<CatalogProduct> {
-    return call<CatalogProduct>("/products", { method: "POST", ...json(body) });
-  },
+    /** The platform owner may narrow by a tenant id or `platform`; a tenant always gets its own. */
+    async products(query: { categoryId?: string; tenantId?: string } = {}): Promise<CatalogProduct[]> {
+      const params = new URLSearchParams();
+      for (const [k, v] of Object.entries(query)) if (v) params.set(k, v);
+      const qs = params.toString();
+      return call<CatalogProduct[]>(`${at}/products${qs ? `?${qs}` : ""}`, { method: "GET" });
+    },
 
-  async updateProduct(productId: string, body: UpdateProductBody): Promise<CatalogProduct> {
-    return call<CatalogProduct>(`/products/${id(productId)}`, { method: "PATCH", ...json(body) });
-  },
+    /** A product with its variants and each variant's whole price history. */
+    async product(productId: string): Promise<CatalogProductDetail> {
+      return call<CatalogProductDetail>(`${at}/products/${id(productId)}`, { method: "GET" });
+    },
 
-  async createVariant(productId: string, body: CreateVariantBody): Promise<CatalogVariant> {
-    return call<CatalogVariant>(`/products/${id(productId)}/variants`, { method: "POST", ...json(body) });
-  },
+    async createProduct(body: CreateProductBody): Promise<CatalogProduct> {
+      return call<CatalogProduct>(`${at}/products`, { method: "POST", ...json(body) });
+    },
 
-  async updateVariant(variantId: string, body: UpdateVariantBody): Promise<CatalogVariant> {
-    return call<CatalogVariant>(`/variants/${id(variantId)}`, { method: "PATCH", ...json(body) });
-  },
+    async updateProduct(productId: string, body: UpdateProductBody): Promise<CatalogProduct> {
+      return call<CatalogProduct>(`${at}/products/${id(productId)}`, { method: "PATCH", ...json(body) });
+    },
 
-  /** A new price row; the old one stays as it was. */
-  async setPrice(variantId: string, body: SetPriceBody): Promise<CatalogPrice> {
-    return call<CatalogPrice>(`/variants/${id(variantId)}/prices`, { method: "POST", ...json(body) });
-  },
+    async createVariant(productId: string, body: CreateVariantBody): Promise<CatalogVariant> {
+      return call<CatalogVariant>(`${at}/products/${id(productId)}/variants`, { method: "POST", ...json(body) });
+    },
 
-  async deactivatePrice(priceId: string): Promise<CatalogPrice> {
-    return call<CatalogPrice>(`/prices/${id(priceId)}/deactivate`, { method: "POST" });
-  },
+    async updateVariant(variantId: string, body: UpdateVariantBody): Promise<CatalogVariant> {
+      return call<CatalogVariant>(`${at}/variants/${id(variantId)}`, { method: "PATCH", ...json(body) });
+    },
 
-  // Translation review (F-1533-d/e): billing limits each call to the caller's items.
+    /** A new price row; the old one stays as it was. */
+    async setPrice(variantId: string, body: SetPriceBody): Promise<CatalogPrice> {
+      return call<CatalogPrice>(`${at}/variants/${id(variantId)}/prices`, { method: "POST", ...json(body) });
+    },
 
-  async translations(lang?: string): Promise<TranslationDraft[]> {
-    return call<TranslationDraft[]>(`/translations${lang ? `?lang=${encodeURIComponent(lang)}` : ""}`, { method: "GET" });
-  },
+    async deactivatePrice(priceId: string): Promise<CatalogPrice> {
+      return call<CatalogPrice>(`${at}/prices/${id(priceId)}/deactivate`, { method: "POST" });
+    },
 
-  /** Drafts every language that has neither text nor a draft yet. */
-  async draftMissing(): Promise<{ drafted: number }> {
-    return call<{ drafted: number }>("/translations/draft-missing", { method: "POST" });
-  },
+    // Translation review (F-1533-d/e): billing limits each call to the caller's items.
 
-  async publishTranslations(lang: string, keys: string[]): Promise<{ published: number }> {
-    return call<{ published: number }>("/translations/publish", { method: "POST", ...json({ lang, keys }) });
-  },
+    async translations(lang?: string): Promise<TranslationDraft[]> {
+      return call<TranslationDraft[]>(`${at}/translations${lang ? `?lang=${encodeURIComponent(lang)}` : ""}`, { method: "GET" });
+    },
 
-  async editTranslations(lang: string, texts: Record<string, string>): Promise<{ published: number }> {
-    return call<{ published: number }>("/translations", { method: "PATCH", ...json({ lang, texts }) });
-  },
+    /** Drafts every language that has neither text nor a draft yet. */
+    async draftMissing(): Promise<{ drafted: number }> {
+      return call<{ drafted: number }>(`${at}/translations/draft-missing`, { method: "POST" });
+    },
 
-  /**
-   * The published `catalog` namespace in one language, flat by full key — from
-   * the panel's own i18n route (same origin, what the rest of the panel reads).
-   * A language with no catalog text yet answers 404: that is `{}`, not an error.
-   */
-  async texts(lang: string): Promise<unknown> {
-    const res = await fetch(`/api/i18n/${encodeURIComponent(lang)}/catalog`, { cache: "no-store" });
-    if (res.status === 404) return {};
-    if (!res.ok) throw new Error(`catalog texts ${lang}: ${res.status}`);
-    return res.json();
-  },
-};
+    async publishTranslations(lang: string, keys: string[]): Promise<{ published: number }> {
+      return call<{ published: number }>(`${at}/translations/publish`, { method: "POST", ...json({ lang, keys }) });
+    },
+
+    async editTranslations(lang: string, texts: Record<string, string>): Promise<{ published: number }> {
+      return call<{ published: number }>(`${at}/translations`, { method: "PATCH", ...json({ lang, texts }) });
+    },
+
+    /**
+     * The published `catalog` namespace in one language, flat by full key — from
+     * the panel's own i18n route (same origin, what the rest of the panel reads).
+     * A language with no catalog text yet answers 404: that is `{}`, not an error.
+     *
+     * The same on both surfaces: a reseller's items are named in the same
+     * published namespace, and this route is the panel's, not billing's.
+     */
+    async texts(lang: string): Promise<unknown> {
+      const res = await fetch(`/api/i18n/${encodeURIComponent(lang)}/catalog`, { cache: "no-store" });
+      if (res.status === 404) return {};
+      if (!res.ok) throw new Error(`catalog texts ${lang}: ${res.status}`);
+      return res.json();
+    },
+  };
+}
+
+/** The caller's own catalog — what `catalogApi` has always been (F-026-f). */
+export const catalogApi = catalogAdminApi(null);

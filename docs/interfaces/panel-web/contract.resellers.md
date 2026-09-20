@@ -2,7 +2,7 @@
 id: panel-web
 layer: interface
 status: active
-version: 23
+version: 24
 updated: 2026-09-20
 ---
 
@@ -153,8 +153,8 @@ the platform owner's administration, and this is the reseller's own. Each
 screen calls a route that names the reseller (`/api/tenants/:id/...`,
 `/api/<service>/tenants/:id/...`), never an ambient one. The console is its
 front page; the gateways screen (w4) is beside it, the bot screen (w6) is
-[contract.reseller-bot.md](contract.reseller-bot.md)'s, and the catalog screen
-(w8) joins them.
+[contract.reseller-bot.md](contract.reseller-bot.md)'s and the catalog screen
+(w8) [contract.catalog.md](contract.catalog.md)'s.
 
 | page | route | files |
 |---|---|---|
@@ -162,6 +162,7 @@ front page; the gateways screen (w4) is beside it, the bot screen (w6) is
 | its domains | `/my-resellers/[id]/domains` (`myResellerDomainsPath`) | `my-resellers/[id]/domains/_components/ResellerDomainsView.tsx`, rules `my-resellers/_lib/domains.ts` |
 | its gateways | `/my-resellers/[id]/gateways` (`myResellerGatewaysPath`) | `my-resellers/[id]/gateways/_components/ResellerGatewaysView.tsx`, rules `my-resellers/_lib/gateways.ts` |
 | its bot | `/my-resellers/[id]/bot` (`myResellerBotPath`) | [contract.reseller-bot.md](contract.reseller-bot.md) (F-066-w6) |
+| its catalog | `/my-resellers/[id]/catalog` (`myResellerCatalogPath`) | [contract.catalog.md](contract.catalog.md) "The same page for a reseller a route names" (F-066-w8) |
 
 Its calls are `resellerDomainsApi` (`lib/tenant-api.ts`): list, add, check —
 every rule behind them is [tenant/contract.domains.md](../../domains/tenant/contract.domains.md).

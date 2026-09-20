@@ -1,5 +1,5 @@
 import type { OnboardingStepKey, ResellerOnboarding } from "@/lib/tenant-api";
-import { myResellerBotPath, myResellerDomainsPath, myResellerGatewaysPath } from "@/lib/routes";
+import { myResellerBotPath, myResellerCatalogPath, myResellerDomainsPath, myResellerGatewaysPath } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 /** The console's strings as generated constants (C-06). */
@@ -49,12 +49,13 @@ export function splitSteps(v: ResellerOnboarding) {
 /**
  * The workspace screen that finishes a step, or `null` while it has none.
  * Never the ambient screen (`/gateways`, `/catalog`): those configure the
- * session's tenant — the platform's — not this reseller (ADR-0064). Pricing
- * gains its own with F-066-w8.
+ * session's tenant — the platform's — not this reseller (ADR-0064). Every one
+ * of the four now has its own.
  */
 export function stepHref(key: OnboardingStepKey, id: string): string | null {
   if (key === "domain") return myResellerDomainsPath(id);
   if (key === "gateway") return myResellerGatewaysPath(id);
   if (key === "bot") return myResellerBotPath(id);
+  if (key === "pricing") return myResellerCatalogPath(id);
   return null;
 }

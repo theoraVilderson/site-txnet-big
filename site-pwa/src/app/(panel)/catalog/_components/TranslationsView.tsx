@@ -4,11 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Languages, Loader2, RotateCw, Send, Wand2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { useApiErrorMessage } from "@/hooks/useApiError";
-import { catalogApi, type TranslationDraft } from "@/lib/catalog-api";
-import { PANEL_CATALOG } from "@/lib/routes";
+import { type TranslationDraft } from "@/lib/catalog-api";
+import { useCatalogSurface } from "../_lib/surface";
 import { Select } from "../../_components/kit/Select";
-import { CATALOG_KEYS, DESCRIPTION_MAX, editId, refusalKey, reviewWrites } from "../_lib/catalog-form";
+import { CATALOG_KEYS, DESCRIPTION_MAX, editId, reviewWrites } from "../_lib/catalog-form";
+import { useMessage } from "./catalog-ui";
 
 const K = CATALOG_KEYS.translations;
 const input = "w-full rounded-xl border border-card-border bg-bg-inner px-3 py-2 text-sm text-text-primary outline-none focus:border-primary";
@@ -27,11 +27,8 @@ const quietButton = "inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs
  */
 export function TranslationsView() {
   const { t, availableLocales } = useLocale();
-  const errorMessage = useApiErrorMessage();
-  const message = (e: unknown) => {
-    const key = refusalKey(e);
-    return key ? t("common", key) : errorMessage(e);
-  };
+  const message = useMessage();
+  const { api, catalogHref } = useCatalogSurface();
   const [lang, setLang] = useState("");
   const [drafts, setDrafts] = useState<TranslationDraft[] | null>(null);
   const [edits, setEdits] = useState<Record<string, string>>({});
@@ -42,13 +39,13 @@ export function TranslationsView() {
 
   const load = useCallback(async () => {
     try {
-      setDrafts(await catalogApi.translations(lang || undefined));
+      setDrafts(await api.translations(lang || undefined));
       setEdits({});
       setError(null);
     } catch (e) {
       setError(e);
     }
-  }, [lang]);
+  }, [api, lang]);
 
   useEffect(() => {
     // Every setState in load runs after its first await, as in `CatalogView`.
@@ -75,15 +72,15 @@ export function TranslationsView() {
       let published = 0;
       for (const w of reviewWrites(items, edits)) {
         published += w.texts
-          ? (await catalogApi.editTranslations(w.lang, w.texts)).published
-          : (await catalogApi.publishTranslations(w.lang, w.keys)).published;
+          ? (await api.editTranslations(w.lang, w.texts)).published
+          : (await api.publishTranslations(w.lang, w.keys)).published;
       }
       return t("common", K.published, { count: published });
     });
 
   const draftMissing = () =>
     run(async () => {
-      const { drafted } = await catalogApi.draftMissing();
+      const { drafted } = await api.draftMissing();
       return drafted ? t("common", K.drafted, { count: drafted }) : t("common", K.noneMissing);
     });
 
@@ -100,7 +97,7 @@ export function TranslationsView() {
           </h1>
           <p className="text-xs text-text-secondary">{t("common", K.subtitle)}</p>
         </div>
-        <Link href={PANEL_CATALOG} className={quietButton}>
+        <Link href={catalogHref} className={quietButton}>
           <ArrowRight size={14} className="ltr:rotate-180" aria-hidden />
           {t("common", K.back)}
         </Link>

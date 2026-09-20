@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
-import { catalogApi } from "@/lib/catalog-api";
 import { DEFAULT_LOCALE } from "@/env";
+import { useCatalogSurface } from "../_lib/surface";
 import {
   CATALOG_KEYS as K,
   DESCRIPTION_MAX,
@@ -90,6 +90,7 @@ export function CategorySheet({
 }) {
   const { t } = useLocale();
   const message = useMessage();
+  const { api } = useCatalogSurface();
   const [form, setForm] = useState<CategoryForm>(() => emptyCategoryForm(DEFAULT_LOCALE));
   const [errors, setErrors] = useState<Errors<CategoryForm>>({});
   const [busy, setBusy] = useState(false);
@@ -102,7 +103,7 @@ export function CategorySheet({
     setBusy(true);
     setError(null);
     try {
-      await catalogApi.createCategory(categoryBody(form, owner));
+      await api.createCategory(categoryBody(form, owner));
       await onSaved();
     } catch (e) {
       setError(message(e));
@@ -154,6 +155,7 @@ export function NamesSheet({
 }) {
   const { t } = useLocale();
   const message = useMessage();
+  const { api } = useCatalogSurface();
   const dirOf = useDirOf();
   const textsIn = (lang: string): NamesForm => ({
     sourceLang: lang,
@@ -173,8 +175,8 @@ export function NamesSheet({
     setBusy(true);
     setError(null);
     try {
-      if (kind === "product") await catalogApi.updateProduct(id, namesBody(form, "product"));
-      else await catalogApi.updateCategory(id, namesBody(form, "category"));
+      if (kind === "product") await api.updateProduct(id, namesBody(form, "product"));
+      else await api.updateCategory(id, namesBody(form, "category"));
       await onSaved();
     } catch (e) {
       setError(message(e));

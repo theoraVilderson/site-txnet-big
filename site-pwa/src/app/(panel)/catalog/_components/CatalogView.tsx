@@ -4,11 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { BookOpen, ChevronLeft, Languages, Loader2, Package, Pencil, Plus, Power, RotateCw, Tags } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { catalogApi, type CatalogCategory, type CatalogProduct } from "@/lib/catalog-api";
-import { PANEL_CATALOG_TRANSLATIONS } from "@/lib/routes";
+import { type CatalogAdminApi, type CatalogCategory, type CatalogProduct } from "@/lib/catalog-api";
+import { useCatalogSurface } from "../_lib/surface";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { Select } from "../../_components/kit/Select";
-import { CATALOG_KEYS as K, catalogText, featureKeysIn, flattenTexts, isPlatformOwner, type CatalogTexts } from "../_lib/catalog-form";
+import { CATALOG_KEYS as K, catalogText, featureKeysIn, flattenTexts, isPlatformOwner, surfaceActor, type CatalogTexts } from "../_lib/catalog-form";
 import { CatalogGuide } from "./CatalogGuide";
 import { CategorySheet, NamesSheet } from "./NameSheets";
 import { ProductDetailSheet } from "./ProductDetailSheet";
@@ -20,8 +20,8 @@ import { Alert, primaryButton, quietButton, useMessage } from "./catalog-ui";
  * an item falls back to its own source language, which may be any of them
  * (F-1533-g). A failure costs the names, never the list: it shows keys.
  */
-async function loadTexts(langs: readonly string[]): Promise<CatalogTexts> {
-  const entries = await Promise.all(langs.map(async (l) => [l, flattenTexts(await catalogApi.texts(l).catch(() => ({})))] as const));
+async function loadTexts(api: CatalogAdminApi, langs: readonly string[]): Promise<CatalogTexts> {
+  const entries = await Promise.all(langs.map(async (l) => [l, flattenTexts(await api.texts(l).catch(() => ({})))] as const));
   return Object.fromEntries(entries);
 }
 
@@ -61,7 +61,11 @@ export function CatalogView() {
   const langCodes = availableLocales.map((l) => l.code).join(",");
   const message = useMessage();
   const { me, isLoading: sessionLoading } = usePanelSession();
-  const owner = isPlatformOwner(me);
+  const surface = useCatalogSurface();
+  const { api } = surface;
+  // Nobody is an owner on a reseller's screen: billing runs the work as the
+  // reseller and refuses a platform item there, whoever is signed in (F-066-w8).
+  const owner = isPlatformOwner(surfaceActor(me, surface.tenantId));
   const [tab, setTab] = useState<"products" | "categories">("products");
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   // Every product the caller manages: the capability list and the taken keys come from here,
@@ -88,9 +92,9 @@ export function CatalogView() {
   const load = useCallback(async () => {
     try {
       const [cats, prods, names] = await Promise.all([
-        catalogApi.categories(),
-        catalogApi.products(),
-        loadTexts(langCodes ? langCodes.split(",") : [lang]),
+        api.categories(),
+        api.products(),
+        loadTexts(api, langCodes ? langCodes.split(",") : [lang]),
       ]);
       setCategories(cats);
       setProducts(prods);
@@ -100,8 +104,8 @@ export function CatalogView() {
       setError(e);
     }
     // The review count is a hint beside a link: its failure is not the page's.
-    catalogApi.translations().then((d) => setPending(d.length), () => setPending(null));
-  }, [lang, langCodes]);
+    api.translations().then((d) => setPending(d.length), () => setPending(null));
+  }, [api, lang, langCodes]);
 
   useEffect(() => {
     // Every setState in load runs after its first await, as in `CouponsView`.
@@ -146,6 +150,7 @@ export function CatalogView() {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 p-4 sm:p-6">
+      {surface.chrome}
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-lg font-bold text-text-primary">
@@ -168,7 +173,7 @@ export function CatalogView() {
               {t("common", K.guide.show)}
             </button>
           )}
-          <Link href={PANEL_CATALOG_TRANSLATIONS} className={quietButton}>
+          <Link href={surface.translationsHref} className={quietButton}>
             <Languages size={14} aria-hidden />
             {t("common", K.translations.open)}
             {pending ? (
@@ -280,7 +285,7 @@ export function CatalogView() {
                     <Pencil size={14} aria-hidden />
                     {t("common", K.rename)}
                   </button>
-                  <button type="button" className={quietButton} onClick={() => void act(() => catalogApi.updateProduct(p.id, { isActive: !p.isActive }))}>
+                  <button type="button" className={quietButton} onClick={() => void act(() => api.updateProduct(p.id, { isActive: !p.isActive }))}>
                     <Power size={14} aria-hidden />
                     {t("common", p.isActive ? K.deactivate : K.activate)}
                   </button>
@@ -329,7 +334,7 @@ export function CatalogView() {
                   <Pencil size={14} aria-hidden />
                   {t("common", K.rename)}
                 </button>
-                <button type="button" className={quietButton} onClick={() => void act(() => catalogApi.updateCategory(c.id, { isActive: !c.isActive }))}>
+                <button type="button" className={quietButton} onClick={() => void act(() => api.updateCategory(c.id, { isActive: !c.isActive }))}>
                   <Power size={14} aria-hidden />
                   {t("common", c.isActive ? K.deactivate : K.activate)}
                 </button>

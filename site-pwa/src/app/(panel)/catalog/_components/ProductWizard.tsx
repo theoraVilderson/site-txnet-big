@@ -3,7 +3,8 @@
 import { useState, type ReactNode } from "react";
 import { Check, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { catalogApi, type CatalogCategory } from "@/lib/catalog-api";
+import { type CatalogCategory } from "@/lib/catalog-api";
+import { useCatalogSurface } from "../_lib/surface";
 import { DEFAULT_LOCALE } from "@/env";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { Select } from "../../_components/kit/Select";
@@ -17,6 +18,7 @@ import {
   isPlatformOwner,
   productBody,
   suggestKey,
+  surfaceActor,
   suggestSku,
   variantBody,
   wizardStepErrors,
@@ -71,9 +73,13 @@ export function ProductWizard({
 }) {
   const { t } = useLocale();
   const message = useMessage();
+  const { api, tenantId } = useCatalogSurface();
   const dirOf = useDirOf();
   const { me } = usePanelSession();
-  const owner = isPlatformOwner(me);
+  // On a reseller's screen nobody is an owner: billing runs the work as the
+  // reseller, and its schema refuses the `tenantId` an owner's form would send.
+  const actor = surfaceActor(me, tenantId);
+  const owner = isPlatformOwner(actor);
   const [w, setW] = useState<Wizard>(() => ({
     ...emptyWizard(DEFAULT_LOCALE),
     categoryMode: categories.length ? "existing" : "new",
@@ -96,7 +102,7 @@ export function ProductWizard({
     setReached((r) => Math.max(r, WIZARD_STEPS.indexOf(to)));
   };
   const next = () => {
-    const found = wizardStepErrors(step, w, me);
+    const found = wizardStepErrors(step, w, actor);
     setErrors(found);
     if (Object.keys(found).length) return;
     // The SKU follows the product key and the duration until the admin types one.
@@ -108,10 +114,10 @@ export function ProductWizard({
   const setVariant = (patch: Partial<VariantForm>) => setW((x) => ({ ...x, variant: { ...x.variant, ...patch } }));
 
   const create = async () => {
-    const invalid = firstInvalidStep(w, me);
+    const invalid = firstInvalidStep(w, actor);
     if (invalid) {
       go(invalid);
-      setErrors(wizardStepErrors(invalid, w, me));
+      setErrors(wizardStepErrors(invalid, w, actor));
       return;
     }
     setBusy(true);
@@ -120,19 +126,19 @@ export function ProductWizard({
     let ids = created;
     try {
       if (w.categoryMode === "new" && !ids.categoryId) {
-        const c = await catalogApi.createCategory(categoryBody(w.newCategory, owner));
+        const c = await api.createCategory(categoryBody(w.newCategory, owner));
         ids = { ...ids, categoryId: c.id };
         setCreated(ids);
       }
       stage = "names";
       if (!ids.productId) {
         const categoryId = w.categoryMode === "new" ? ids.categoryId! : w.categoryId;
-        const p = await catalogApi.createProduct(productBody({ ...w.product, categoryId }, me));
+        const p = await api.createProduct(productBody({ ...w.product, categoryId }, actor));
         ids = { ...ids, productId: p.id };
         setCreated(ids);
       }
       stage = "variant";
-      if (w.withVariant) await catalogApi.createVariant(ids.productId!, variantBody(w.variant));
+      if (w.withVariant) await api.createVariant(ids.productId!, variantBody(w.variant));
       await onCreated(ids.productId!, false);
     } catch (e) {
       const reason = (e as { reason?: unknown } | null)?.reason;

@@ -107,6 +107,14 @@ export const myResellerGatewaysPath = (id: string) => `${PANEL_MY_RESELLERS}/${e
  * (`primary`, C-05), so the screen is `/bot`, not `/bots`.
  */
 export const myResellerBotPath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}/bot`;
+/**
+ * A reseller's catalog (F-066-w8): the `/catalog` page's components over the
+ * route that names the reseller, so its owner prices its own products and
+ * never the session tenant's — the platform's, for the visitor this is for.
+ */
+export const myResellerCatalogPath = (id: string) => `${PANEL_MY_RESELLERS}/${encodeURIComponent(id)}/catalog`;
+/** Where that catalog's machine-drafted names are reviewed (F-1533-e on the reseller's surface). */
+export const myResellerCatalogTranslationsPath = (id: string) => `${myResellerCatalogPath(id)}/translations`;
 /** Payments the gateway has not confirmed, for a person to settle (F-093-n). */
 export const PANEL_MANUAL_PAYMENTS = "/payments/manual";
 /**

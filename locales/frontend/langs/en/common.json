@@ -1683,6 +1683,31 @@
       "invalid_callback": "the callback must be a full http or https address."
     }
   },
+  "resellerCatalog": {
+    "title": "{{slug}}'s catalog",
+    "titlePlain": "your reseller's catalog",
+    "subtitle": "These products and prices are this reseller's own. Its customers buy them; the platform's catalog is elsewhere.",
+    "backToConsole": "back to the console",
+    "refusals": {
+      "not_allowed": "you may not configure this reseller.",
+      "reseller_not_found": "that reseller was not found.",
+      "reseller_suspended": "this reseller is suspended; its catalog cannot be changed until that is lifted.",
+      "reseller_terminated": "this reseller is closed and takes no further changes.",
+      "not_platform_owner": "a platform product is created from the platform owner's own catalog page, not here.",
+      "tenant_not_found": "that reseller was not found.",
+      "category_not_found": "that category was not found in this reseller's catalog.",
+      "product_not_found": "that product was not found in this reseller's catalog.",
+      "variant_not_found": "that plan was not found in this reseller's catalog.",
+      "price_not_found": "that price was not found.",
+      "key_taken": "this reseller already has an item with that key.",
+      "sku_taken": "this reseller already has a plan with that SKU.",
+      "price_in_the_past": "a price cannot start on a day that has passed. Pick today or later.",
+      "text_key_invalid": "that name key is not valid.",
+      "texts_unavailable": "the translation service is not answering. The item was not changed; try again shortly.",
+      "lang_unknown": "that language is not one this platform serves.",
+      "source_text_missing": "write the name in its source language first."
+    }
+  },
   "resellerBots": {
     "title": "{{slug}}'s bot",
     "titlePlain": "your reseller's bot",

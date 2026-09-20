@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, Loader2, Plus, Power, Sparkles } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { catalogApi, type CatalogProduct, type CatalogProductDetail, type CatalogVariant, type Quotas } from "@/lib/catalog-api";
+import { type CatalogProduct, type CatalogProductDetail, type CatalogVariant, type Quotas } from "@/lib/catalog-api";
+import { useCatalogSurface } from "../_lib/surface";
 import { DatePicker } from "../../_components/kit/DatePicker";
 import { Select } from "../../_components/kit/Select";
 import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
@@ -52,13 +53,14 @@ export function ProductDetailSheet({
 }) {
   const { t, lang } = useLocale();
   const message = useMessage();
+  const { api } = useCatalogSurface();
   const [detail, setDetail] = useState<CatalogProductDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      setDetail(await catalogApi.product(product.id));
+      setDetail(await api.product(product.id));
       setError(null);
     } catch (e) {
       setError(message(e));
@@ -124,6 +126,7 @@ export function ProductDetailSheet({
 function Capabilities({ product, known, onSaved }: { product: CatalogProduct; known: readonly string[]; onSaved: () => Promise<void> }) {
   const { t } = useLocale();
   const message = useMessage();
+  const { api } = useCatalogSurface();
   const [editing, setEditing] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -156,7 +159,7 @@ function Capabilities({ product, known, onSaved }: { product: CatalogProduct; kn
     setBusy(true);
     setError(null);
     try {
-      await catalogApi.updateProduct(product.id, { featureKeys: editing });
+      await api.updateProduct(product.id, { featureKeys: editing });
       setEditing(null);
       await onSaved();
     } catch (e) {
@@ -196,6 +199,7 @@ function QuotaSummary({ quotas }: { quotas: Quotas }) {
 function VariantCard({ variant: v, money, onChanged }: { variant: CatalogVariant; money: (a: string) => string; onChanged: () => Promise<void> }) {
   const { t, lang } = useLocale();
   const message = useMessage();
+  const { api } = useCatalogSurface();
   const [form, setForm] = useState<PriceForm>({ amount: "", day: "" });
   const [errors, setErrors] = useState<Errors<PriceForm>>({});
   const [error, setError] = useState<string | null>(null);
@@ -218,7 +222,7 @@ function VariantCard({ variant: v, money, onChanged }: { variant: CatalogVariant
     const found = validatePriceForm(form, today);
     setErrors(found);
     if (Object.keys(found).length) return;
-    await act(() => catalogApi.setPrice(v.id, priceBody(form, today)));
+    await act(() => api.setPrice(v.id, priceBody(form, today)));
     setForm({ amount: "", day: "" });
   };
 
@@ -241,7 +245,7 @@ function VariantCard({ variant: v, money, onChanged }: { variant: CatalogVariant
             {current ? money(current.amount) : t("common", K.price.noPrice)}
           </span>
           <CopyId id={v.id} />
-          <button type="button" className={quietButton} onClick={() => void act(() => catalogApi.updateVariant(v.id, { isActive: !v.isActive }))}>
+          <button type="button" className={quietButton} onClick={() => void act(() => api.updateVariant(v.id, { isActive: !v.isActive }))}>
             <Power size={14} aria-hidden />
             {t("common", v.isActive ? K.deactivate : K.activate)}
           </button>
@@ -283,7 +287,7 @@ function VariantCard({ variant: v, money, onChanged }: { variant: CatalogVariant
                   </td>
                   <td className="px-2 py-1.5 text-end">
                     {p.isActive && (
-                      <button type="button" className={quietButton} onClick={() => void act(() => catalogApi.deactivatePrice(p.id))}>
+                      <button type="button" className={quietButton} onClick={() => void act(() => api.deactivatePrice(p.id))}>
                         {t("common", K.deactivate)}
                       </button>
                     )}
@@ -411,6 +415,7 @@ export function VariantFields({
 function NewVariant({ productId, productKey, onCancel, onSaved }: { productId: string; productKey: string; onCancel: () => void; onSaved: () => Promise<void> }) {
   const { t } = useLocale();
   const message = useMessage();
+  const { api } = useCatalogSurface();
   const [form, setForm] = useState<VariantForm>(emptyVariantForm);
   const [errors, setErrors] = useState<Errors<VariantForm>>({});
   const [busy, setBusy] = useState(false);
@@ -426,7 +431,7 @@ function NewVariant({ productId, productKey, onCancel, onSaved }: { productId: s
     setBusy(true);
     setError(null);
     try {
-      await catalogApi.createVariant(productId, variantBody(withSku));
+      await api.createVariant(productId, variantBody(withSku));
       await onSaved();
     } catch (e) {
       setError(message(e));

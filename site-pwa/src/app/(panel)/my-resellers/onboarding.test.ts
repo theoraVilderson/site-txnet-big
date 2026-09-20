@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { PANEL_MY_RESELLERS, myResellerConsolePath, myResellerDomainsPath } from "@/lib/routes";
+import { PANEL_MY_RESELLERS, myResellerCatalogPath, myResellerConsolePath, myResellerDomainsPath } from "@/lib/routes";
 import type { ResellerOnboarding } from "@/lib/tenant-api";
 import {
   CLOSED_CAPABILITY_KEYS,
@@ -97,10 +97,10 @@ describe("where a step sends the owner", () => {
     expect(stepHref("domain", "t-1")).toBe(myResellerDomainsPath("t-1"));
   });
 
-  // The gateway step's screen is F-066-w4's and the bot step's F-066-w6's;
-  // `gateways.test.ts` and `bots.test.ts` hold each there. Pricing is w8's.
-  it("links nothing for a step whose workspace screen is not built yet", () => {
-    expect(stepHref("pricing", "t-1")).toBeNull();
+  // Each other step's screen is held by its own spec: `gateways.test.ts`
+  // (F-066-w4), `bots.test.ts` (F-066-w6) and `catalog.test.ts` (F-066-w8).
+  it("sends the pricing step to the reseller's own catalog", () => {
+    expect(stepHref("pricing", "t-1")).toBe(myResellerCatalogPath("t-1"));
   });
 
   it("builds the path the app actually serves", () => {

@@ -54,6 +54,15 @@ export function refusalKey(e: unknown): string | null {
 
 export const isPlatformOwner = (me: Me | null) => me?.tenant?.type === "platform_owner";
 
+/**
+ * Who the forms may treat as the caller on this surface (F-066-w8). On a
+ * reseller's screen nobody is an owner: billing runs the work **as** the
+ * reseller and its `.strict()` schema refuses a `tenantId`, so platform staff
+ * signed in to the platform owner's tenant must not be offered — or send — a
+ * platform item's powers there.
+ */
+export const surfaceActor = (me: Me | null, tenantId: string | null): Me | null => (tenantId === null ? me : null);
+
 // Billing's own shapes (`catalog-admin.schema.ts`), so a refusal is caught before the call.
 const KEY = /^[a-z][a-z0-9_]{1,63}$/;
 const FEATURE_KEY = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
