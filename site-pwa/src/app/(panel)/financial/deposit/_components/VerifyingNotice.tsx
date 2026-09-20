@@ -56,7 +56,7 @@ export function VerifyingConfirm({
   }, [onCancel]);
 
   return (
-    // Above the sidebar's `z-40`, like the gift modal (`contract.shell.md`).
+    // Above the sidebar's `z-40`, like the gift modal (`contract.gift-code.md`).
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm" onClick={onCancel}>
       <div className="flex min-h-full items-center justify-center p-4">
         <div

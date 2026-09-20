@@ -105,7 +105,7 @@ No amount, no wallet figure, no gateway name: the redirect carries none of
 them, and this app does not fetch a payment to decorate a page it cannot
 change. The financial page is where a top-up attempt is looked at in full
 (F-093-d), and it shows the same reference. No animation library — rule 6 of
-[contract.shell.md](contract.shell.md) earns framer-motion for an exit, an
+[contract.gift-code.md](contract.gift-code.md) earns framer-motion for an exit, an
 `auto` height or an imperative gesture, and a card that mounts once has none.
 
 The motion (2026-09-13) is CSS keyframes in `globals.css` (`pay-*`): ring and

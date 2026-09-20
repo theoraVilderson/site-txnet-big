@@ -36,7 +36,7 @@ import { ApiError } from "@/lib/api-error";
  * file runs beside 19 others and the workspace oversubscribes the box — the
  * same contention `docs/CODE-LAYOUT.md` warns about, which arrives as a
  * *timeout* and reads exactly like a broken assertion. The animation was made
- * cheap first (`contract.shell.md` rule 6 has that measurement); this is the
+ * cheap first (`contract.gift-code.md` rule 6 has that measurement); this is the
  * headroom left over, so a slow machine cannot turn a passing suite red.
  */
 vi.setConfig({ testTimeout: 15_000 });
@@ -72,7 +72,7 @@ const submit = () => screen.getByRole("button", { name: "wallet.gift.submit" });
  * dialog, which is not what any of these cases is about and which cost enough
  * to matter: typing character by character put this file at 4.2s against
  * vitest's 5s ceiling. The one case that *is* about how typing transforms a
- * code still types (`contract.shell.md` rule 6 has the measurement).
+ * code still types (`contract.gift-code.md` rule 6 has the measurement).
  */
 function fillCode(value: string) {
   fireEvent.change(codeBox(), { target: { value } });
@@ -271,5 +271,80 @@ describe("the box itself", () => {
     await waitFor(() => expect(document.body.style.overflow).not.toBe("hidden"), {
       timeout: 5_000,
     });
+  });
+});
+
+/**
+ * The key is shown once and billing keeps only its hash (F-502-m, D-35), so a
+ * dismissal that was not meant is not a closed modal — it is a Grant the user
+ * can never use again. No route reissues one.
+ *
+ * The two ways to close a dialog *without deciding to* are the two that stop
+ * working while the key is up: `Escape` is muscle memory, and the backdrop is
+ * the miss around a card. The two that are aimed at — the X and "done" — still
+ * close it, so this is not a trap. Escape not closing a dialog is a real
+ * departure from the pattern; it is the smaller loss of the two.
+ */
+describe("the key on screen", () => {
+  const grant = {
+    kind: "free_grant" as const,
+    code: "FREEVPN",
+    grant: {
+      id: "g1",
+      variantId: "v1",
+      startsAt: "2026-09-15T00:00:00.000Z",
+      endsAt: "2026-10-15T00:00:00.000Z",
+      featureKeys: ["vpn.access"],
+    },
+    subscriptionKey: "KEY-3kq9-once",
+  };
+
+  async function granted() {
+    const user = userEvent.setup();
+    redeemGift.mockResolvedValue(grant);
+    const opened = open();
+
+    fillCode("FREEVPN");
+    await user.click(submit());
+    await screen.findByText("wallet.gift.serviceTitle");
+
+    return { user, ...opened };
+  }
+
+  it("is not dismissed by Escape", async () => {
+    const { user, onClose } = await granted();
+
+    await user.keyboard("{Escape}");
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByText("KEY-3kq9-once")).toBeInTheDocument();
+  });
+
+  it("is not dismissed by a click on the backdrop", async () => {
+    const { user, onClose } = await granted();
+
+    await user.click(screen.getByTestId("gift-backdrop"));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByText("KEY-3kq9-once")).toBeInTheDocument();
+  });
+
+  it("closes on the two controls the user aims at", async () => {
+    const { user, onClose } = await granted();
+
+    await user.click(screen.getByRole("button", { name: "wallet.gift.done" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", { name: "wallet.gift.close" }));
+    expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it("leaves the empty box dismissible — nothing has been shown to lose yet", async () => {
+    const user = userEvent.setup();
+    const { onClose } = open();
+
+    await user.click(screen.getByTestId("gift-backdrop"));
+
+    expect(onClose).toHaveBeenCalled();
   });
 });

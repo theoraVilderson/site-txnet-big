@@ -123,13 +123,23 @@ function GiftCodeDialog({ onClose, onRedeemed }: Omit<GiftCodeModalProps, "open"
     inputRef.current?.focus();
   }, []);
 
+  // The subscription key exists in the clear exactly once (F-502-m, D-35):
+  // billing stores only its hash and no route reissues one, so a dismissal the
+  // user did not mean is not a closed modal — it is a Grant they can never use.
+  // While the key is up, the two ways to close a dialog *without deciding to*
+  // stop working: `Escape`, which is muscle memory, and the backdrop, which is
+  // the miss around the card. The X and "done" below still close it — this
+  // withholds the accidents, not the exit. A dialog that ignores `Escape` is a
+  // real departure from the pattern, and the smaller loss of the two.
+  const keyOnScreen = redeemed?.kind === "free_grant";
+
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape" && !keyOnScreen) onClose();
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  }, [onClose, keyOnScreen]);
 
   // The page behind a modal should not scroll under it.
   useEffect(() => {
@@ -199,8 +209,9 @@ function GiftCodeDialog({ onClose, onRedeemed }: Omit<GiftCodeModalProps, "open"
       };
 
   return (
-    // Above the sidebar's `z-40` and its `z-30` backdrop (`contract.shell.md`,
-    // "State"): a modal the drawer could cover is a modal the user cannot use.
+    // Above the sidebar's `z-40` and its `z-30` backdrop (`contract.gift-code.md`
+    // rule 8, `contract.shell.md` "State"): a modal the drawer could cover is a
+    // modal the user cannot use.
     // `overflow-y-auto` + `min-h-full` is what keeps the card off the top edge.
     // A centred card in a frame that cannot scroll is clipped at **both** ends
     // once it outgrows the viewport, and the half that goes is the half with
@@ -214,7 +225,8 @@ function GiftCodeDialog({ onClose, onRedeemed }: Omit<GiftCodeModalProps, "open"
         animate="shown"
         exit="gone"
         className="fixed inset-0 bg-black/55 backdrop-blur-lg"
-        onClick={onClose}
+        onClick={keyOnScreen ? undefined : onClose}
+        data-testid="gift-backdrop"
         aria-hidden
       />
 

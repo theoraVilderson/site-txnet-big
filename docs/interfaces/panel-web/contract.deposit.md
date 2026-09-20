@@ -104,7 +104,8 @@ route returns the whole breakdown instead of the pieces of one.
     one of them — so the footer and the card could show different figures.
 12. **No animation library on this page.** Nothing here needs an exit, an `auto`
     height or an imperative gesture, which are the three things
-    [contract.shell.md](contract.shell.md) rule 6 says earn framer-motion. The
+    [contract.gift-code.md](contract.gift-code.md) rule 6 says earn framer-motion.
+    The
     amount box is controlled and re-renders the whole form per keystroke, which
     is exactly the cost that rule was measured on.
 13. **A verifying payment warns; it never blocks (F-093-m, ADR-0044 decision 7 —
