@@ -21,11 +21,17 @@ export class BotCopy {
     return (text: BotText) => this.text(lang, text);
   }
 
-  text(lang: string, text: BotText): string {
+  text(lang: string, text: BotText, depth = 0): string {
+    // A value that is a `BotText` is a word this bot owns — a status, a
+    // channel — and is translated before it is interpolated. The depth limit
+    // is there because `values` is built by a flow: a sentence that nests
+    // itself would otherwise be a stack overflow on one chat message.
+    const values = this.resolve(lang, text.values, depth);
+
     // Already localized by whoever produced it (an `auth-api` `msg`): passing
     // it through is not inlined copy, and re-keying it here would mean
     // translating the same sentence twice, in two services.
-    if (text.raw !== undefined) return interpolate(text.raw, text.values);
+    if (text.raw !== undefined) return interpolate(text.raw, values);
     if (!text.key) return '';
 
     const [head, ...rest] = text.key.split('.');
@@ -38,8 +44,34 @@ export class BotCopy {
         ? value
         : (BOT_COPY_FALLBACKS[text.key] ?? text.key);
 
-    return interpolate(template, text.values);
+    return interpolate(template, values);
   }
+
+  /** Each value as a string: a nested `BotText` translated, everything else left alone. */
+  private resolve(
+    lang: string,
+    values: BotText['values'],
+    depth: number,
+  ): Record<string, string | number> | undefined {
+    if (!values) return undefined;
+    const out: Record<string, string | number> = {};
+    for (const [name, value] of Object.entries(values)) {
+      if (isText(value)) {
+        out[name] = depth < NESTING_LIMIT ? this.text(lang, value, depth + 1) : '';
+      } else {
+        out[name] = value;
+      }
+    }
+    return out;
+  }
+}
+
+/** How deep a sentence may nest. Two is every case there is; the limit is a guard, not a feature. */
+const NESTING_LIMIT = 3;
+
+/** A value that is a sentence of its own, rather than something to print as it stands. */
+function isText(value: string | number | BotText): value is BotText {
+  return typeof value === 'object' && value !== null;
 }
 
 /** `{{name}}` -> the value, leaving an unknown placeholder visible on purpose. */

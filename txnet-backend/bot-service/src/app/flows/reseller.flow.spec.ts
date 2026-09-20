@@ -3,6 +3,7 @@ import { aBotIntegration } from '@txnet-backend/messenger';
 import { AuthApiClient } from '../auth-api/auth-api.client';
 import { BillingApiClient } from '../billing-api/billing-api.client';
 import { ChatContext, NavState } from '../conversation/nav.types';
+import { BotKeys } from '../locale/bot-keys';
 import { BotSessionStore } from '../session/bot-session.store';
 import { ChatAccess } from '../session/chat-access';
 import { TenantApiClient } from '../tenant-api/tenant-api.client';
@@ -162,6 +163,17 @@ describe('ResellerFlow', () => {
       expect(auth.resellerUsers).toHaveBeenCalledWith(TENANT, { q: undefined, page: 1, pageSize: USERS_PER_PAGE }, expect.anything());
       expect(result.view.body).toMatchObject({ values: { name: 'Bob', joined: '2026-05-02' } });
       expect(result.nextState).toMatchObject({ step: 'reseller.user', data: { target: 'u-2' } });
+    });
+
+    // A status is a word this bot owns, so it is a `BotText` and not a string:
+    // a bare key renders as `bot.reseller.statusSuspended` inside the profile,
+    // and nothing fails while it does.
+    it('shows the status as a sentence to translate, never as the key itself', async () => {
+      const { flow } = harness();
+
+      const result = await flow.handle(ctx, onUsers({ page: '1' }), 'ruser:u-2');
+
+      expect(result.view.body.values?.status).toEqual({ key: BotKeys.reseller.statusSuspended });
     });
 
     it('lands back on the list for a row that has since left the page', async () => {

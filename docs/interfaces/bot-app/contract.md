@@ -228,12 +228,12 @@ goes to *that* number because the user goes looking for it, while the old
 discipline: one, at the end, on success.
 
 **Three files, one key set.** A key lives in `fa/bot.json`, `en/bot.json` and
-`bot-copy.fallbacks.ts` (the last-resort English, for a key that ships ahead of
-its translation) — never in two of the three. Values may be rewritten freely;
-**a key may never be renamed**, because the flows, `views.ts` and that table
-cite it by name and a miss renders the raw key instead of failing.
-`bot-service/src/app/locale/bot-copy.spec.ts` holds all three to one key set,
-one `{{placeholder}}` set, and to the keys the code actually asks for.
+`bot-copy.fallbacks.ts` (the last-resort English) — never in two of the three.
+Values may be rewritten freely; **a key may never be renamed**, because the
+flows and `views.ts` cite it by name and a miss renders it raw instead of
+failing. Same trap in a *value*: a word this bot owns (a status, a channel) is
+nested as a `BotText`, `{ key: … }`, or it too is spliced in raw and nothing
+fails. `bot-copy.spec.ts` holds the three files, their placeholders and the keys the code asks for to one set.
 
 **A failure is a sentence, never a key.** An `AuthApiClient` `msg` renders as
 `BotText.raw`, never translated again — so the answers `auth-api` did not

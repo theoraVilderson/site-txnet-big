@@ -611,7 +611,9 @@ export function resellerUserView(
         name: user.fullName,
         username: user.username,
         phone: user.phoneMasked ?? '—',
-        status: statusKey,
+        // A key, nested rather than spliced in: a bare key here renders as
+        // itself in the middle of the profile (`BotText.values`).
+        status: { key: statusKey },
         joined,
       },
     },

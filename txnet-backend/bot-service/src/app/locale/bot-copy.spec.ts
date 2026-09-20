@@ -156,6 +156,29 @@ describe('BotCopy renders what the copy promises', () => {
     expect(text).toBe('step 2 of {{total}}');
   });
 
+  // A value that is itself a word this bot owns — a status, a channel name —
+  // must be translated, not printed. Passed as a bare string it rendered as
+  // the key itself (`bot.reseller.statusActive` in the middle of a sentence),
+  // which is silent at runtime: the screen still answers.
+  it('translates a value that is a key of its own', () => {
+    const text = copy({
+      'reseller.user': 'وضعیت: {{status}}',
+      'reseller.statusActive': 'فعال',
+    }).text('fa', {
+      key: 'bot.reseller.user',
+      values: { status: { key: 'bot.reseller.statusActive' } },
+    });
+    expect(text).toBe('وضعیت: فعال');
+  });
+
+  it('interpolates that nested sentence’s own values too', () => {
+    const text = copy({ 'reseller.user': '{{status}}', 'reseller.statusSuspended': 'مسدود تا {{day}}' }).text('fa', {
+      key: 'bot.reseller.user',
+      values: { status: { key: 'bot.reseller.statusSuspended', values: { day: '۱۴۰۴/۰۷/۰۱' } } },
+    });
+    expect(text).toBe('مسدود تا ۱۴۰۴/۰۷/۰۱');
+  });
+
   it('passes an already-localized `raw` sentence through', () => {
     const text = copy({}).text('fa', { raw: 'کد اشتباه است.' });
     expect(text).toBe('کد اشتباه است.');

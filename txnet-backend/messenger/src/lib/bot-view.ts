@@ -14,7 +14,15 @@
  */
 export interface BotText {
   key?: string;
-  values?: Record<string, string | number>;
+  /**
+   * What fills the `{{placeholders}}`.
+   *
+   * A value may be a `BotText` of its own, and must be one whenever it is a
+   * word this bot owns rather than data it was handed — a user's status, a
+   * channel's name. Passed as a bare string, a key renders as itself in the
+   * middle of the sentence, and nothing fails: the screen still answers.
+   */
+  values?: Record<string, string | number | BotText>;
   /** Already-translated text from another service. Never a literal. */
   raw?: string;
 }
