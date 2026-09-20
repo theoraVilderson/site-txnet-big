@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 17
+version: 21
 updated: 2026-09-20
 ---
 
@@ -34,6 +34,19 @@ browser-return path stays there.
 | `billing.payment.confirmed` adds `amountAsked`, `chargedAmountMinor` and, when reported, `amountReceivedMinor` + `receivedCurrency` (strings). Additive | both figures reach consumers |
 | A receipt worth **under a cent** credits nothing: the row closes `failed` / `nothing_received`, holds released | a zero ledger row is not money; nothing more arrives under that authority |
 | A payment with no rate (free path) values no receipt and credits as asked. A driver that cannot report a receipt throws `amount_mismatch` from `verify`, which stays F-092-l's `flagged_mismatch` | row note |
+
+## Money for an invoice already settled (built — F-104-s, ADR-0068)
+
+`DepositFollowOnService`. An invoice is not a payment: one holds several, which
+is why NOWPayments' `expired` and `failed` are pending above. A signed `paid`
+about a **closed** row used to be dropped where nothing could see it.
+
+| Rule | Why |
+|---|---|
+| A signed `paid` naming a settled, failed or expired-and-closed row becomes **a new payment** — same user, gateway and grant, no coupon, `gatewayTrackingCode` = the **transfer's** reference — credited through `creditVerified` (`webhook_auto`) like any other. The old row is never re-settled. A `failed` or `reversed` about a closed row still changes nothing | a `payment_transaction` holds one settlement; a second one is a second table and a rewritten settlement path, where one more row is read by the ledger, the event, the accrual and the history page as they stand |
+| A delivery whose reference is already the row's `gatewayReferenceId`, or is already some payment's code on this gateway, does nothing. The unique index on (gateway column, code) decides a race | providers repeat deliveries for days; the reference is what tells a second payment from the first one told twice (ADR-0028) |
+| Credited = (the **charge** at the invoice's frozen rate − `feeApplied`) × arrived / `chargedAmountMinor`, floored to the cent; the rest of the arrival is the gateway's cut. An arrival the provider did not report is valued as the invoice's own charge | F-104-r's proportion, applied to the charge and not to `amountCredited`: that figure carries the first payment's discount, and a coupon applies only to a full payment |
+| No usable rate, a fee at or above the whole charge, under a cent arrived, or a credit that did not take: **nothing is written but a `payment_reconciliation_log` row on the invoice**, `flagged_mismatch`. A credited one logs there too, `auto_confirmed`, naming the payment it grew | money is flagged for a person, never guessed at (F-092-l). The invoice is where somebody looks |
 
 ## Telling the provider, and the payer's return (built — F-104-h)
 

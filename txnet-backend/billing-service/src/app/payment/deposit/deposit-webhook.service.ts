@@ -8,6 +8,7 @@ import type { GatewaySource, MerchantGatewayRef } from '../gateway/gateway-merch
 import { WebhookSignatureInvalid } from '../gateway/payment-provider';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { WebhookSecretSource } from '../gateway/webhook-secret';
+import { DepositFollowOnService } from './deposit-follow-on.service';
 import { DepositSettlementService, PAYMENT_SELECT } from './deposit-settlement';
 
 /** A webhook post as the controller hands it over: the bytes that were signed, and the headers. */
@@ -41,7 +42,10 @@ export const gatewayColumnOf = (source: GatewaySource) =>
  *    in scope is not the answer.
  * 3. **The money, in that tenant, through F-092-j's guard.** The row is re-read
  *    on the ordinary pool under RLS, and `DepositSettlementService` flips it by
- *    its own status: a provider retrying a delivered event credits once.
+ *    its own status: a provider retrying a delivered event credits once. A
+ *    `paid` for a row that is **already settled** is not nothing, though — one
+ *    invoice can hold several payments — so it goes to
+ *    `DepositFollowOnService` (F-104-s, ADR-0068) rather than being dropped.
  *
  * **CrossTenantPrismaService, second holder.** Step 2 cannot be scoped: the
  * tenant it returns is the scope. It selects `id` and `tenantId` only.
@@ -56,6 +60,7 @@ export class DepositWebhookService {
     private readonly providers: PaymentProviderRegistry,
     private readonly secrets: WebhookSecretSource,
     private readonly settlement: DepositSettlementService,
+    private readonly followOn: DepositFollowOnService,
   ) {}
 
   async handle(gateway: MerchantGatewayRef, post: WebhookPost): Promise<WebhookAnswer> {
@@ -112,7 +117,21 @@ export class DepositWebhookService {
       );
       if (!payment) return;
       const open = payment.status === PaymentStatus.pending || payment.status === PaymentStatus.expired;
-      if (!open) return;
+      if (!open) {
+        // Money for an invoice already settled (F-104-s). One invoice holds
+        // several payments, so this is the payer covering a short payment or
+        // paying again — not a provider repeating itself, which the reference
+        // tells apart. It becomes a payment of its own, or a flag for a person;
+        // a `failed` or `reversed` about a closed row still changes nothing.
+        if (event.kind === 'paid') {
+          await this.followOn.take(payment, {
+            referenceId: event.referenceId,
+            chargeDecimals: provider.chargeDecimals,
+            ...(event.received ? { received: { ...event.received, decimals: provider.chargeDecimals } } : {}),
+          });
+        }
+        return;
+      }
       if (event.kind === 'paid') {
         await this.settlement.creditVerified(
           payment,

@@ -9,7 +9,10 @@
  *  - **the payment settles in its own tenant**, not the gateway owner's: a
  *    platform gateway serves many tenants' users (decision 3);
  *  - **a signed event we cannot act on is `accepted`** — an unknown code, an
- *    ignored type, a settled row — so the provider stops retrying (decision 4);
+ *    ignored type, a settled row told of a failure — so the provider stops
+ *    retrying (decision 4). A settled row told of **money** is not one of them:
+ *    an invoice holds several payments, and it goes to the follow-on path
+ *    (F-104-s);
  *  - the credit goes through F-092-j's guarded settlement, `webhook_auto`.
  */
 import { Prisma } from '@prisma/client';
@@ -77,6 +80,7 @@ function build(setup: Setup = {}) {
     credited: [] as Array<{ id: string; referenceId: string; source: string; tenant: string; received?: unknown }>,
     closed: [] as Array<{ id: string; tenant: string }>,
     reversed: [] as Array<{ id: string; tenant: string }>,
+    followOn: [] as Array<{ id: string; referenceId: string; tenant: string; received?: unknown }>,
   };
 
   const crossTenant = {
@@ -133,12 +137,25 @@ function build(setup: Setup = {}) {
     },
   } as unknown as DepositSettlementService;
 
+  const followOn = {
+    take: async (p: { id: string }, arrival: { referenceId: string; received?: unknown }) => {
+      calls.followOn.push({
+        id: p.id,
+        referenceId: arrival.referenceId,
+        tenant: TenantContext.current('spec').id,
+        ...(arrival.received ? { received: arrival.received } : {}),
+      });
+      return 'credited' as const;
+    },
+  };
+
   const service = new DepositWebhookService(
     crossTenant as never,
     prisma as never,
     registry as never,
     secrets as never,
     settlement,
+    followOn as never,
   );
   const post = (body = '{"id":"evt_1"}', ref: MerchantGatewayRef = gateway) =>
     runWithTenant({ id: OWNER }, () =>
@@ -238,18 +255,32 @@ describe('DepositWebhookService.handle — a signed event (ADR-0051)', () => {
     expect(calls.closed).toEqual([]);
   });
 
+  it('hands money that arrives for an already settled invoice to the follow-on path (F-104-s)', async () => {
+    const { post, calls } = build({
+      row: paymentRow({ status: 'success', gatewayReferenceId: 'pi_0001' }),
+      event: { kind: 'paid', authority: SESSION, referenceId: 'pi_0002', received: { amountMinor: BigInt(400), currency: 'USD' } },
+    });
+
+    expect(await post()).toBe('accepted');
+    expect(calls.credited).toEqual([]);
+    expect(calls.followOn).toEqual([
+      { id: PAYMENT, referenceId: 'pi_0002', tenant: PAYER_TENANT, received: { amountMinor: BigInt(400), currency: 'USD', decimals: 2 } },
+    ]);
+  });
+
   it.each([
     ['an event type the driver ignores', { event: { kind: 'ignored', type: 'customer.created' } as WebhookEvent }],
     ['a still-pending payment', { event: { kind: 'pending', authority: SESSION } as WebhookEvent }],
     ['a code no payment on this gateway carries', { found: null }],
     ['a payment with no tenant', { found: { id: PAYMENT, tenantId: null } }],
-    ['a payment already credited', { row: paymentRow({ status: 'success' }) }],
-    ['a payment already refused', { row: paymentRow({ status: 'failed' }) }],
+    ['a payment already credited, told of a failure', { row: paymentRow({ status: 'success' }), event: { kind: 'failed', authority: SESSION } as WebhookEvent }],
+    ['a payment already refused, told of a refund', { row: paymentRow({ status: 'failed' }), event: { kind: 'reversed', authority: SESSION } as WebhookEvent }],
   ])('accepts %s and changes nothing', async (_label, setup) => {
     const { post, calls } = build(setup as Setup);
 
     expect(await post()).toBe('accepted');
     expect(calls.credited).toEqual([]);
     expect(calls.closed).toEqual([]);
+    expect(calls.followOn).toEqual([]);
   });
 });

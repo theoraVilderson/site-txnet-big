@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 20
+version: 21
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -48,7 +48,7 @@ display-currency conversion (`currency`), plan prices (`catalog`).
 | [contract.md](contract.md) | using or changing billing from outside |
 | [contract.gateways.md](contract.gateways.md) | creating, changing or deleting a payment gateway — a tenant's own, or a named reseller's |
 | [contract.deposit.md](contract.deposit.md) | one whole top-up: gateway list, quote, start — and the bank's callback that settles it |
-| [contract.webhook.md](contract.webhook.md) | a provider's signed webhook, and a payment that arrived for more or less than asked |
+| [contract.webhook.md](contract.webhook.md) | a provider's signed webhook, and money that arrived for more, for less, or after the row was settled |
 | [contract.history.md](contract.history.md) | the panel's financial page: the wallet ledger and the top-up attempts |
 | [contract.verify.md](contract.verify.md) | a payment the gateway met with silence: the retry clock, the flag, manual confirmation |
 | [contract.gift.md](contract.gift.md) | the panel's gift-code box: redeeming a wallet-credit coupon |
@@ -62,10 +62,10 @@ display-currency conversion (`currency`), plan prices (`catalog`).
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-20 | contract v21 (F-104-s, ADR-0068): a signed `paid` for an **already settled** row is no longer dropped — one provider invoice holds several payments, so the arrival becomes a payment of its own, credited net of the gateway's cut and carrying the transfer's reference as its code; what cannot be valued is a `flagged_mismatch` log row on the invoice. Additive, no wire change. Rules: [contract.webhook.md](contract.webhook.md). Consumer panel-web: none — a follow-on reads as an ordinary credit on the financial page |
 | 2026-09-20 | contract v20 (F-093-q): `POST /api/billing/deposit/:paymentId/abandon` — the payer's own unpaid, never-approved in-chat payment is closed `failed` `abandoned` and its coupon holds released `cancelled`, instead of waiting out `PAYMENT_PENDING_TTL_SEC`. Additive, 200 verdict. A payment pre-checkout approved is refused: ADR-0047 decision 2 keeps its holds. Rules: [contract.webhook.md](contract.webhook.md). Consumer panel-web: the Mini App top-up page, in the same change |
 | 2026-09-20 | contract v19 (F-311-b, ADR-0067): `GET /api/billing/tenants/:tenantId/revenue` — a named reseller's own sales and top-ups over a period, from the wallet and payment ledgers, admitted by `ResellerAccess` and run in that reseller's scope. Two figures, gross, never `settlement`'s number (F-096-e). Additive; `sales` is `0.00` until `entitlement` writes a `traffic_consumption` row. Rules: [contract.revenue.md](contract.revenue.md). Consumer bot-app: F-311-c |
 | 2026-09-20 | contract v18 (F-066-w3, ADR-0064): `/api/billing/tenants/:tenantId/gateways` — gateway management for the reseller the path names, admitted by `ResellerAccess` and run in that reseller's scope, so the ambient surface's rules apply unchanged. Additive; `/api/billing/gateways` untouched. The gateway rules move out of `contract.md` into `contract.gateways.md`. Consumer panel-web: F-066-w4 |
 | 2026-09-18 | contract v17 (F-104-ab), breaking: the in-chat relay moves to `POST /api/internal/billing/deposit/in-chat/{pre-checkout,paid}` — service token only, `{…, platform, senderId, botTenantId}`, admitted only from the payer `start` recorded (`payerChatPlatform`/`payerChatId`, from the gate's new `X-Chat-User-Id`); the gated pair is gone. Consumer bot-app: moved in the same change |
-| 2026-09-14 | contract v16 (F-502-a, ADR-0048): a coupon code is unique per tenant; **a platform coupon serves only the tenants `coupon_tenant` names, else the platform owner's users** — a break for resellers' users of existing platform coupons; soft delete, `coupon_batch`, `coupon.manage`. Consumers panel-web, bot-app: no wire change |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

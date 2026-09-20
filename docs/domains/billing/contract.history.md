@@ -43,6 +43,11 @@ query, so neither route has an id to authorise.
 | Neither route raises a domain error: a filter matching nothing is an empty page. The only failures are a malformed query (**400**) and the limiter (**429**) | so this controller maps no i18n key of its own, unlike the deposit routes |
 | Per user, per 900s: `WALLET_HISTORY_RATE_LIMIT` (default 180), `WALLET_PAYMENTS_RATE_LIMIT` (default 120) | the page refetches on every filter change, so the budget is the user's typing speed, not a bank's limit (F-092-r) |
 
+**A follow-on payment is an ordinary row here** (F-104-s, ADR-0068): money that
+arrived for an invoice already settled is written as a payment of its own, so
+the top-up list shows it, credited, beside the invoice it completed. Nothing on
+this page changed for it, and the payer's `payments` count now includes it.
+
 **Not covered:** amounts are base currency (ADR-0019); the display-currency step
 arrives with F-025. The ledger rows a `success` payment produces are F-092-j's
 to write — until it lands, `payments` is the only list with rows in it.
