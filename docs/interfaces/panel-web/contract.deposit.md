@@ -2,7 +2,7 @@
 id: panel-web
 layer: interface
 status: active
-version: 16
+version: 17
 updated: 2026-09-20
 ---
 
@@ -138,6 +138,18 @@ route returns the whole breakdown instead of the pieces of one.
     to the form — a dismissed warning, a refusal, a sheet closed unpaid — and
     never on the trip to the gateway, where the page is leaving anyway.
 
+16. **A refusal of `start` belongs to the inputs it was refused for (F-093-t),
+    and never speaks over the bill's own verdict.** The sentence is held with
+    the key of the gateway, amount and codes it answered, so changing any of
+    them drops it in that render — rule 1 for the other half of the page. It
+    was plain state cleared only inside `pay()` and `reset()`, so one bank's
+    503 stayed over the next bank's bill; and it was shown *instead of*
+    `quote.error`, so while it was up a new refusal of the quote itself — the
+    range, the gateway, the limiter — had nowhere to go. The quote's error is
+    the current answer about the bill on screen and wins; a start refusal shows
+    while the inputs it belongs to are unchanged. Proof:
+    `deposit/start-error-clears.test.tsx`.
+
 ## What this page does not do
 
 No tax row: tax is already inside the figures `priceAtGateway` answers, and a
@@ -155,6 +167,10 @@ it back, and "pay anyway" still pays once.
 `financial/deposit/requote-on-refusal.test.tsx` — a 409 on `start` asks the
 same body again and the discount line goes, with the code still listed and
 marked; a 400 spends no quote.
+
+`financial/deposit/start-error-clears.test.tsx` — a start refusal clears when
+the gateway, the amount or a code changes, survives a render that changed
+nothing, and does not hide the quote's own refusal.
 
 `financial/deposit/deposit.test.ts` — the quote hook (nothing is derived, a
 changed input drops the old bill at once, one call per burst, a slow answer to

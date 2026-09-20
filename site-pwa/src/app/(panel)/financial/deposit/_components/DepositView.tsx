@@ -73,7 +73,12 @@ export function DepositView() {
   // One press of Pay starts one payment (F-093-r): the claim is taken on the
   // click, before the verifying check's network read, not inside `pay()`.
   const { isStarting, claim, release } = useStartOnce();
-  const [startError, setStartError] = useState<string | null>(null);
+  // A refusal of `start` belongs to the inputs it was refused for (F-093-t),
+  // exactly as a quote belongs to the body it was asked for: it is held with
+  // the key of those inputs, so a changed gateway, amount or code drops it in
+  // the render that changed them — not once a new answer happens to arrive,
+  // and not when the next `pay()` clears it by hand.
+  const [startError, setStartError] = useState<{ key: string; message: string } | null>(null);
   /** Set only on the free path, where there is no gateway to be sent to. */
   const [credited, setCredited] = useState<DepositStarted | null>(null);
   /** A payment the messenger's sheet took, or may still be taking (F-104-o). */
@@ -108,6 +113,8 @@ export function DepositView() {
   }, [asked]);
 
   const quote = useDepositQuote({ gateway, amount, codes });
+  const inputsKey = JSON.stringify([gateway && gatewayKey(gateway), amount, codes]);
+  const startMessage = startError?.key === inputsKey ? startError.message : null;
   // A payment the gateway met with silence: shown, and asked about before a
   // second one — warn and confirm, never block (F-093-m, ADR-0044 decision 7).
   const verifyingGuard = useVerifyingGuard();
@@ -133,6 +140,8 @@ export function DepositView() {
       return;
     }
     setStartError(null);
+    const key = inputsKey;
+    const fail = (message: string) => setStartError({ key, message });
     try {
       // The quote's body, never its numbers (F-0612).
       const started = await billingApi.depositStart({
@@ -162,9 +171,9 @@ export function DepositView() {
           // and a failure here only costs the wait it saved.
           void billingApi.depositAbandon(started.paymentId).catch(() => {});
           if (closed === "failed") {
-            setStartError(t("common", D.summary.inChatFailed));
+            fail(t("common", D.summary.inChatFailed));
           } else if (closed === "unavailable") {
-            setStartError(t("common", D.summary.inChatUnavailable));
+            fail(t("common", D.summary.inChatUnavailable));
           }
           // Cancelled is the payer's own choice and needs no sentence.
         }
@@ -186,7 +195,7 @@ export function DepositView() {
       // quote route has a budget of its own to spend (F-093-s).
       if (e instanceof ApiError && e.status === 409) quote.retry();
       // The sentence is billing's, already translated.
-      setStartError(messageFor(e));
+      fail(messageFor(e));
       release();
     }
   }
@@ -234,7 +243,7 @@ export function DepositView() {
     <PaymentSummary
       quote={quote.quote}
       isQuoting={quote.isQuoting}
-      error={startError ?? (quote.error ? messageFor(quote.error) : null)}
+      error={quote.error ? messageFor(quote.error) : startMessage}
       isStarting={isStarting}
       onPay={onPay}
     />
@@ -307,7 +316,7 @@ export function DepositView() {
         <PaymentSummary
           quote={quote.quote}
           isQuoting={quote.isQuoting}
-          error={startError ?? (quote.error ? messageFor(quote.error) : null)}
+          error={quote.error ? messageFor(quote.error) : startMessage}
           isStarting={isStarting}
           onPay={onPay}
           compact
