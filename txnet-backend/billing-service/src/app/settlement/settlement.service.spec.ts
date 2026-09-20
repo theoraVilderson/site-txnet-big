@@ -65,12 +65,22 @@ type Seed = {
    * update — the race `updateMany`'s `isActive` filter exists for.
    */
   withdrawnBehindTheRead?: boolean;
+  /**
+   * Another operator's payout to the same tenant commits while this call is
+   * waiting for the lock — the double submit F-096-g exists for. The fake
+   * applies it when the transaction opens, whether or not the code locked, so
+   * a version that read the balance outside the transaction still sees the
+   * stale sum and still writes.
+   */
+  paidOutBehindTheLock?: string;
 };
 
 type Calls = {
   /** Everything written, in order, so "inside the transaction" is checkable. */
   writes: string[];
   audit: Array<Record<string, unknown>>;
+  /** Every advisory lock taken, as `(classid, objid)` arguments. */
+  locks: unknown[][];
   grants: Array<Record<string, unknown>>;
   payouts: Array<Record<string, unknown>>;
   committed: boolean;
@@ -85,10 +95,22 @@ function build(seed: Seed = {}) {
   const accrued = seed.accrued ?? {};
   const paidOut = seed.paidOut ?? {};
 
-  const calls: Calls = { writes: [], audit: [], grants: [], payouts: [], committed: false };
+  const calls: Calls = {
+    writes: [],
+    audit: [],
+    grants: [],
+    payouts: [],
+    locks: [],
+    committed: false,
+  };
 
   const sums = (of: Record<string, string>) =>
     Object.entries(of).map(([tenantId, amount]) => ({ tenantId, _sum: { amount: d(amount) } }));
+
+  /** Read at call time, not at build time: a rival payout may have landed. */
+  const sumOf = (of: Record<string, string>) => async ({ where }: { where: { tenantId: string } }) => ({
+    _sum: { amount: of[where.tenantId] ? d(of[where.tenantId]) : null },
+  });
 
   const tx = {
     paymentGatewayGrant: {
@@ -117,6 +139,7 @@ function build(seed: Seed = {}) {
         calls.payouts.push(data);
         return { ...data, id: 'payout-1', paidAt: new Date('2026-09-12T00:00:00Z') };
       },
+      aggregate: sumOf(paidOut),
     },
     adminAuditLog: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
@@ -124,6 +147,12 @@ function build(seed: Seed = {}) {
         calls.audit.push(data);
         return { id: 'audit-1' };
       },
+    },
+    gatewaySettlementEntry: { aggregate: sumOf(accrued) },
+    $executeRaw: async (_sql: TemplateStringsArray, ...values: unknown[]) => {
+      calls.writes.push('lock');
+      calls.locks.push(values);
+      return 1;
     },
   };
 
@@ -178,19 +207,17 @@ function build(seed: Seed = {}) {
         grants.filter((g) => !where['tenantId'] || g['tenantId'] === where['tenantId']),
     },
     gatewaySettlementEntry: {
+      ...tx.gatewaySettlementEntry,
       groupBy: async () => sums(accrued),
-      aggregate: async ({ where }: { where: { tenantId: string } }) => ({
-        _sum: { amount: accrued[where.tenantId] ? d(accrued[where.tenantId]) : null },
-      }),
     },
     gatewaySettlementPayout: {
       ...tx.gatewaySettlementPayout,
       groupBy: async () => sums(paidOut),
-      aggregate: async ({ where }: { where: { tenantId: string } }) => ({
-        _sum: { amount: paidOut[where.tenantId] ? d(paidOut[where.tenantId]) : null },
-      }),
     },
     $transaction: async (fn: (t: typeof tx) => Promise<unknown>) => {
+      if (seed.paidOutBehindTheLock !== undefined) {
+        paidOut[BORROWER] = seed.paidOutBehindTheLock;
+      }
       const out = await fn(tx);
       calls.committed = true;
       return out;
@@ -479,7 +506,7 @@ describe('the settlement operator surface', () => {
         operator(),
       );
 
-      expect(calls.writes).toEqual(['payout', 'audit']);
+      expect(calls.writes).toEqual(['lock', 'payout', 'audit']);
       expect(calls.committed).toBe(true);
       expect(calls.payouts[0]).toMatchObject({
         tenantId: BORROWER,
@@ -512,7 +539,8 @@ describe('the settlement operator surface', () => {
       await expect(
         service.recordPayout({ tenantId: BORROWER, amount: d('60.01') }, operator()),
       ).rejects.toMatchObject({ reason: 'exceeds_outstanding' });
-      expect(calls.writes).toEqual([]);
+      // The lock is taken first, so the balance it read cannot move under it.
+      expect(calls.writes).toEqual(['lock']);
     });
 
     it('refuses zero and refuses a negative, which would be an invoice wearing a payout', async () => {
@@ -522,6 +550,28 @@ describe('the settlement operator surface', () => {
           service.recordPayout({ tenantId: BORROWER, amount: d(amount) }, operator()),
         ).rejects.toMatchObject({ reason: 'amount_not_positive' });
       }
+    });
+
+    it('refuses the second of two payouts recorded at once, together over the balance', async () => {
+      // 60.00 outstanding. Both operators see it; the other one's 40.00 commits
+      // while this call waits on the lock, leaving 20.00 — so this 60.00 is now
+      // over, and only a balance read *after* the lock can say so.
+      const { service, calls } = build({ ...owing, paidOutBehindTheLock: '80.00' });
+
+      await expect(
+        service.recordPayout({ tenantId: BORROWER, amount: d('60.00') }, operator()),
+      ).rejects.toMatchObject({ reason: 'exceeds_outstanding' });
+      expect(calls.payouts).toEqual([]);
+    });
+
+    it('locks the tenant being paid, and nothing else, before it reads the balance', async () => {
+      const { service, calls } = build(owing);
+
+      await service.recordPayout({ tenantId: BORROWER, amount: d('1.00') }, operator());
+
+      expect(calls.locks).toHaveLength(1);
+      expect(calls.locks[0]).toContain(BORROWER);
+      expect(calls.writes.indexOf('lock')).toBe(0);
     });
 
     it('refuses any payout to a tenant that is owed nothing', async () => {

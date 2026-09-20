@@ -114,6 +114,21 @@ export type OwedRow = {
 const ZERO = new Prisma.Decimal(0);
 
 /**
+ * The `classid` half of the payout advisory lock (F-096-g), paired with
+ * `hashtext(tenantId)` as the `objid`. A fixed namespace of our own, so this
+ * lock cannot collide with another feature that locks on the same tenant id:
+ * `pg_advisory_xact_lock(int, int)` shares one global space with every other
+ * advisory lock in the database.
+ */
+const PAYOUT_LOCK = 96_07;
+
+/** Whichever client the two settlement ledgers are being summed on. */
+type LedgerReader = Pick<
+  CrossTenantPrismaService,
+  'gatewaySettlementEntry' | 'gatewaySettlementPayout'
+>;
+
+/**
  * Which providers a grant may lend (D-32, F-104-p). An in-chat payment is made
  * inside the owning tenant's own bot or Mini App, which the borrowing tenant's
  * user never talks to — so a lent `telegram_stars` or `bale` gateway could not
@@ -388,14 +403,22 @@ export class SettlementService {
     return [...rows.values()].sort((a, b) => b.outstanding.comparedTo(a.outstanding));
   }
 
-  /** One tenant's outstanding balance, from the same two ledgers. */
-  private async outstandingFor(tenantId: string): Promise<Prisma.Decimal> {
+  /**
+   * One tenant's outstanding balance, from the same two ledgers.
+   *
+   * `on` is the client to read it with: the payout path passes its own
+   * transaction, so the sum it checks is the one it then writes against.
+   */
+  private async outstandingFor(
+    tenantId: string,
+    on: LedgerReader = this.all,
+  ): Promise<Prisma.Decimal> {
     const [accrued, paidOut] = await Promise.all([
-      this.all.gatewaySettlementEntry.aggregate({
+      on.gatewaySettlementEntry.aggregate({
         where: { tenantId },
         _sum: { amount: true },
       }),
-      this.all.gatewaySettlementPayout.aggregate({
+      on.gatewaySettlementPayout.aggregate({
         where: { tenantId },
         _sum: { amount: true },
       }),
@@ -414,6 +437,18 @@ export class SettlementService {
    * what ADR-0041 §5 makes the authority on what is still owed. An operator who
    * really did over-pay has a true thing to record and no way to record it
    * here; that wants an ADR, not a silently negative balance.
+   *
+   * **The check and the write are one act (F-096-g).** The balance is summed
+   * from two ledgers, so there is no row to lock and no unique constraint to
+   * lean on: a check outside the transaction is a read of a number that any
+   * other payout can move before the insert lands. Two operators on one screen
+   * — or one operator's double submit — would each read 60.00 outstanding and
+   * each write 60.00, and the ledger would end up 60.00 in the borrower's
+   * favour with two audit rows that both look correct. So the transaction opens
+   * by taking a transaction-scoped advisory lock on the tenant being paid, and
+   * only then sums and compares: the second caller waits, re-reads, and is
+   * refused by the rule that already exists. The lock is released by commit or
+   * rollback, never held by application code.
    */
   async recordPayout(input: RecordPayoutInput, operator: Operator) {
     await this.assertOperator(operator);
@@ -422,15 +457,17 @@ export class SettlementService {
       throw new SettlementRefused('amount_not_positive', input.amount.toString());
     }
 
-    const outstanding = await this.outstandingFor(input.tenantId);
-    if (input.amount.greaterThan(outstanding)) {
-      throw new SettlementRefused(
-        'exceeds_outstanding',
-        `${input.amount.toFixed(2)} > ${outstanding.toFixed(2)}`,
-      );
-    }
-
     const payout = await this.all.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${PAYOUT_LOCK}::int, hashtext(${input.tenantId}::text))`;
+
+      const outstanding = await this.outstandingFor(input.tenantId, tx);
+      if (input.amount.greaterThan(outstanding)) {
+        throw new SettlementRefused(
+          'exceeds_outstanding',
+          `${input.amount.toFixed(2)} > ${outstanding.toFixed(2)}`,
+        );
+      }
+
       const created = await tx.gatewaySettlementPayout.create({
         data: {
           tenantId: input.tenantId,

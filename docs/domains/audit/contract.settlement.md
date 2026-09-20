@@ -109,6 +109,14 @@ decision of its own and has not been taken.
   is still owed. An operator who really did over-pay has a true thing to record
   and no way to record it here; that wants an ADR, not a silently negative
   balance.
+- **Two payouts recorded at once cannot together exceed it either** (F-096-g).
+  What is owed is summed, not stored, so there is no row to lock: a balance read
+  before the transaction is a number another payout can move before the insert
+  lands, and a double submit would write both. `recordPayout` takes
+  `pg_advisory_xact_lock` on the tenant being paid as the first statement of its
+  transaction and sums the ledgers after it, so the second caller waits, re-reads
+  and is refused by the rule above. Nothing else locks on that tenant, and the
+  lock ends with the transaction.
 - **What is owed is summed from the two ledgers on every call**, never cached on
   the tenant. A running balance is a second source of truth for money, and the
   first time it disagreed with the rows there would be no way to say which was
