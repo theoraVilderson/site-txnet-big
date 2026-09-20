@@ -436,3 +436,42 @@ describe('CouponAdminService — the pool follows the caller (ADR-0053)', () => 
     expect(calls).toContain('all:coupon.create');
   });
 });
+
+/**
+ * F-502-n: the gift-code limits are read off the coupon as it will be, not off
+ * the patch. The panel sends only what the form changed, so a discount coupon
+ * turned into a gift code says nothing about the `coupon_gateway` and
+ * `coupon_service_scope` rows it already has — and those rows survive the type
+ * change, invisible to the gift box and still shown in the admin list.
+ */
+describe('CouponAdminService — a discount coupon turned into a gift code', () => {
+  const withRelations = async () => {
+    const built = build();
+    const view = await built.service.create(actor(RESELLER), {
+      ...DISCOUNT,
+      gateways: [{ source: 'tenant', id: RESELLER_GW }],
+      serviceScopes: [{ productId: null, variantId: RESELLER_VARIANT }],
+    });
+    return { ...built, id: view.id };
+  };
+
+  it('refuses the type change while gateway or service-scope rows stand', async () => {
+    const { service, id } = await withRelations();
+    expect((await refusal(() => service.update(actor(RESELLER), id, { discountType: 'wallet_credit', discountValue: '5' }))).reason).toBe(
+      'limits_not_for_gift_codes',
+    );
+    expect(
+      (await refusal(() => service.update(actor(RESELLER), id, { discountType: 'free_grant', discountValue: '0', grantVariantId: RESELLER_VARIANT })))
+        .reason,
+    ).toBe('limits_not_for_gift_codes');
+  });
+
+  it('takes the type change when the same patch empties both sets', async () => {
+    const { service, db, id } = await withRelations();
+    await expect(
+      service.update(actor(RESELLER), id, { discountType: 'wallet_credit', discountValue: '5', gateways: [], serviceScopes: [] }),
+    ).resolves.toMatchObject({ discountType: 'wallet_credit', gateways: [], serviceScopes: [] });
+    expect(db.couponGateway.rows.filter((r) => r['couponId'] === id)).toEqual([]);
+    expect(db.couponServiceScope.rows.filter((r) => r['couponId'] === id)).toEqual([]);
+  });
+});

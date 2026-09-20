@@ -98,6 +98,7 @@ config's owner (`gatewayConfigOwner`, read only).
 | A service scope names one product or one variant, the platform's or the coupon's tenant's (`scope_not_found`) | the scope table's shape (F-026-a) |
 | Values: a percentage in (0, 100], a cap on a percentage only, a positive value (`invalid_value`); the limit CHECKs answered first as `invalid_limit` | a reason, not a database error |
 | A gift code (`wallet_credit`) takes no purchase, window, channel, gateway, scope or period limit (`limits_not_for_gift_codes`); expiry, per-user and total limits and targeting it keeps | `redeem_gift_coupon` reads only those |
+| Those limits are read off the coupon **as it will be**, gateway and scope sets included (F-502-n): turning a discount coupon into a gift code is refused while either set stands, unless the same patch empties it | a patch carries only what the form changed, so the rows would survive the type change unseen |
 | A used coupon (a counter above zero or any redemption row) keeps `discountType` and `discountValue` (`used_coupon_frozen`); `totalUsageLimit` never below `usedCount + reservedCount` (`capacity_below_used`) | a receipt already says what it took |
 | A child set given in a patch replaces the whole set; one not given is kept | one form, one answer |
 | Delete: no redemption row in any status = hard delete with child rows; otherwise `isActive=false`, `deletedAt`, `deletedByAdminId` (`mode: soft_deleted`) | ADR-0048 decision 6 |

@@ -521,7 +521,6 @@ export class CouponAdminService {
       if ((next['activeWeekdays'] as unknown[]).length > 0 || (next['allowedChannels'] as unknown[]).length > 0 || next['firstPurchaseOnly'] === true) {
         throw new CouponAdminRefused('limits_not_for_gift_codes');
       }
-      if ((patch.gateways?.length ?? 0) > 0 || (patch.serviceScopes?.length ?? 0) > 0) throw new CouponAdminRefused('limits_not_for_gift_codes');
     }
     this.assertLimits(next);
     return next;
@@ -575,6 +574,15 @@ export class CouponAdminService {
     const allowedUserIds = [...new Set(patch.allowedUserIds ?? current.allowedUserIds)];
     const gateways = patch.gateways ?? current.gateways;
     const serviceScopes = patch.serviceScopes ?? current.serviceScopes;
+
+    // A gift code carries no gateway and no scope. The patch holds only what the
+    // form changed (F-502-n), so the sets are read as they will be: a discount
+    // coupon becoming one empties both in the same patch, or is refused.
+    const type = next['discountType'] as string;
+    if (type === DiscountType.wallet_credit || type === DiscountType.free_grant) {
+      if (gateways.length > 0) throw new CouponAdminRefused('limits_not_for_gift_codes', 'gateways');
+      if (serviceScopes.length > 0) throw new CouponAdminRefused('limits_not_for_gift_codes', 'serviceScopes');
+    }
 
     if (tenantId !== null && tenantIds.length > 0) throw new CouponAdminRefused('tenants_are_platform_coupons');
     if (patch.tenantIds !== undefined && tenantIds.length > 0) {

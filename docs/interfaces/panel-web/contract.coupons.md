@@ -74,7 +74,10 @@ The routes, the scope and every rule are
     typed by id when `/api/catalog` cannot be read or lists none) and no value — `discountValue` goes as `"0"`,
     no cap, and a batch sends `value: "0"` with `grantVariantId`. As billing
     refuses them, it takes no purchase, period, hour, start-date or new-user
-    limit (`notForFreeService`). Billing's `variant_not_found` has its sentence.
+    limit (`notForFreeService`) — and, since an edited coupon keeps the gateway
+    and scope rows the form does not clear, no gateway or service scope either
+    (F-502-n), so the field says so before billing's `limits_not_for_gift_codes`
+    does. Billing's `variant_not_found` has its sentence.
 
 ## Proof
 

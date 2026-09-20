@@ -281,6 +281,10 @@ export function validateCouponForm(f: CouponForm, me: Me | null, original: Admin
       if (!blank(f[k])) put(k, E.notForFreeService);
     }
     if (f.validFrom) put("validFrom", E.notForFreeService);
+    // Nor a gateway or a service scope (F-502-n): the gift box reads none of them,
+    // and an edited coupon keeps the ones it already had unless the form clears them.
+    if (f.gateways.length > 0) put("gateways", E.notForFreeService);
+    for (const k of ["productIds", "variantIds"] as const) if (ids(f[k]).length > 0) put(k, E.notForFreeService);
   } else {
     const value = f.discountValue.trim();
     if (!DECIMAL.test(value) || Number(value) <= 0) put("discountValue", E.decimal);

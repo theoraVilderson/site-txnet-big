@@ -256,6 +256,10 @@ describe("a free-service coupon", () => {
     [{ activeHourFrom: "8", activeHourTo: "20" }, "activeHourFrom"],
     [{ validFrom: "2026-10-01" }, "validFrom"],
     [{ newUserWithinDays: "7" }, "newUserWithinDays"],
+    // F-502-n: a discount coupon edited into a free service keeps these until the form clears them.
+    [{ gateways: ["tenant:" + UUID] }, "gateways"],
+    [{ productIds: UUID }, "productIds"],
+    [{ variantIds: UUID }, "variantIds"],
   ])("refuses %o on %s, as billing does", (patch, field) => {
     expect(validateCouponForm({ ...free(), ...patch }, RESELLER, null)).toMatchObject({ [field]: COUPON_KEYS.errors.notForFreeService });
   });
