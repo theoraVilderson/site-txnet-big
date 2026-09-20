@@ -148,13 +148,14 @@ export const RateLimitBucket = {
   DEPOSIT_IN_CHAT: 'deposit:in-chat',
 
   /**
-   * Settling a top-up in `billing-service` (F-092-j), per **authority** — the
+   * Settling a top-up in `billing-service` (F-092-j), per **payment** — the
    * one bucket on this list whose subject is not a caller, because the caller
-   * is a bank redirecting a browser and carries no identity at all. One
-   * authority is one payment, so the budget is how many times a single payment
-   * may be presented for settlement in a window: a user reloading the result
-   * page costs one each time, and anything beyond that is a replay of a
-   * redirect that has already been answered.
+   * is a bank redirecting a browser and carries no identity at all. The
+   * authority names the payment where a gateway mints one, and the `p` the
+   * callback URL carries where it does not (F-104-u), so the budget is how many
+   * times a single payment may be presented for settlement in a window: a user
+   * reloading the result page costs one each time, and anything beyond that is
+   * a replay of a redirect that has already been answered.
    */
   DEPOSIT_CALLBACK: 'deposit:callback',
 

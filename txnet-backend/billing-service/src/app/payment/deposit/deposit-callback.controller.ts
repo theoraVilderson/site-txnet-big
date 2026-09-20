@@ -65,13 +65,13 @@ export class DepositCallbackController {
    * by whatever sits in front of us, and a casing difference here would be a
    * payment that settles nowhere.
    *
-   * The limit is bucketed on the authority, not on a user: there is no user.
+   * The limit is bucketed on the payment, not on a user: there is no user.
    * `rate-limit-coverage.spec.ts` names this controller as the one place that
    * is allowed, and says why.
    */
   @Get('callback')
   @RateLimit({
-    key: (req) => rateLimitBucketKey(RateLimitBucket.DEPOSIT_CALLBACK, authorityOf(req) || 'none'),
+    key: (req) => rateLimitBucketKey(RateLimitBucket.DEPOSIT_CALLBACK, callbackRateLimitSubject(req)),
     configKey: 'DEPOSIT_CALLBACK_RATE_LIMIT',
     windowSec: 900,
   })
@@ -87,6 +87,26 @@ export class DepositCallbackController {
     });
     res.redirect(resultUrl(outcome, this.config.get('PAYMENT_RESULT_SECRET', { infer: true })));
   }
+}
+
+/**
+ * What the limit counts (F-104-u). One subject is one payment, so the budget is
+ * how many times a single payment may be presented for settlement in a window.
+ *
+ * The authority first, because that is what a gateway that mints one returns
+ * with and what the settlement is keyed on. A provider that mints none —
+ * NOWPayments, OxaPay — returns with the `p` the callback URL was minted with
+ * (F-092-ad), and counting that is what keeps those returns apart: on the
+ * authority alone every one of them fell into a single `none`, and the Redis
+ * key scopes only by tenant, so one tenant's payers shared 30 returns per 15
+ * minutes and 30 empty requests closed the door for all of them.
+ *
+ * `none` survives for a return that names neither. That is not a payment and
+ * there is nothing in it to tell two apart, so sharing one bucket is the point
+ * rather than the bug.
+ */
+export function callbackRateLimitSubject(req: Request): string {
+  return authorityOf(req) || paymentIdOf(paramOf(req, CALLBACK_PAYMENT_PARAM)) || 'none';
 }
 
 /** `Authority`, however the redirect spelled it. */
