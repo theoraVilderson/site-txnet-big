@@ -111,6 +111,7 @@ When it needs something, it asks and you run one command:
 | "where is the profile button?" | `python3 tools/where.py "profile button"` |
 | "what does F-0207 require?" | `python3 tools/spec.py F-0207` |
 | "what is left to build?" | `python3 tools/backlog.py` |
+| "mark F-093-r done" | `python3 tools/backlog.py --set F-093-r status=done proof='…'` |
 | the catalog | **nothing.** Ask which id, then `spec.py` that id |
 
 ### End of session

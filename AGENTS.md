@@ -131,6 +131,36 @@ files whose relevant slice for one row is a few dozen lines out of 1275. Use
 briefing's one-line summaries without opening the contracts will get the rules
 wrong, and the briefing cannot tell you that it did.
 
+## Finishing one — write the row by column name, never by counting
+
+`BACKLOG.md` is 500 KB, so no session reads it whole and no session can edit it
+with a normal read-then-edit either. What every session did instead was splice
+the row with a one-off script and count the columns by hand — eight of them,
+`id | feature | unit | status | depends_on | spec ref | proof | note`. A
+miscount is silent: on 2026-09-20 a proof path went into `spec ref`, and the
+row read as plausible until `backlog.py` said `done with no proof path`, one
+round trip later.
+
+```bash
+python3 tools/backlog.py --set F-093-r status=done \
+    proof='site-pwa/src/…/useStartOnce.ts, …/pay-once.test.tsx' \
+    note+='Fixed 2026-09-20: the click claims the start. contract.deposit.md rule 15'
+```
+
+`=` replaces a cell, `+=` appends to it, `--dry-run` shows the change without
+writing. It refuses, before touching the file, what the checks would only catch
+afterwards: an unknown column, a rewritten `id`, a `|` that would open a new
+cell, `done` with no proof, `blocked` with no blocker, a `depends_on` naming no
+row, and a row whose cell count does not match the table.
+
+**It also holds §11's note cap, as a ratchet.** A note under 240 characters
+(~3 rendered lines, the figure `cost.py` reports) is always fine; over it, only
+an edit that makes the note *shorter* is allowed. A flat wall would block
+ordinary work on the 296 of 432 rows that are already over — F-096 is the row
+that brings those back — and a rule that has to be routed around is worse than
+no rule. This stops the growth today and becomes the flat cap on its own the
+day F-096 lands.
+
 ## The reading pattern — how to read the files, once you know which
 
 `brief.py` answers *which* files. This answers *how*, and it is where a session's

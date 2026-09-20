@@ -1,9 +1,20 @@
 #!/usr/bin/env python3
-"""Read docs/BACKLOG.md and report progress + what is eligible next.
+"""Read docs/BACKLOG.md and report progress + what is eligible next — and
+write one row's cells by name.
 
 usage:
     python3 tools/backlog.py            progress + next eligible items
     python3 tools/backlog.py --next     print only the next item id
+    python3 tools/backlog.py --set <id> <col>=<value> | <col>+=<value> ...
+                                        write that row; --dry-run to preview
+
+`--set` exists because the file is 500 KB and no session may read it whole
+(§3, AGENTS.md "The reading pattern"). What every session did instead was
+splice the row with an ad-hoc script and count the columns by hand — and a
+miscount is silent: `proof` written into `spec ref` reads as a plausible row
+and is caught, if at all, by the `done`-with-no-proof error below. Naming the
+column removes the counting, and every rule this file checks after the fact is
+checked here before the write.
 """
 import re
 import sys
@@ -14,6 +25,17 @@ BACKLOG = ROOT / "docs" / "BACKLOG.md"
 HANDOFF = ROOT / "docs" / "HANDOFF.md"
 VALID = {"todo", "doing", "done", "blocked", "dropped"}
 COLS = ["id", "feature", "unit", "status", "depends_on", "spec", "proof", "note"]
+SETTABLE = [c for c in COLS if c != "id"]
+# The header reads "spec ref" and "proof (code path)"; the keys above are what
+# this file calls them. A refusal over a spelling is a round trip for nothing.
+ALIASES = {"spec_ref": "spec", "specref": "spec", "depends": "depends_on",
+           "deps": "depends_on", "proof_path": "proof", "state": "status"}
+# §11: "a BACKLOG.md note is at most three lines". A cell is one line in the
+# file, so the cap is counted in characters — 240 is ~3 rendered lines at 80
+# columns, the same figure `tools/cost.py` reports the tree against.
+NOTE_CAP = 240
+# The empty cell as this table writes it.
+EMPTY = "—"
 
 
 def rows():
@@ -62,7 +84,135 @@ def handoff_state():
     return status, item
 
 
+def _fail(msg):
+    print(f"REFUSED  {msg}", file=sys.stderr)
+    return 2
+
+
+def set_row(argv):
+    """`--set <id> <col>=<v> <col>+=<v> …` — write one row, by column name.
+
+    Nothing here is new policy. It is the checks in `main()` moved to the
+    moment of the write, where a refusal costs one command instead of a round
+    trip through six tools, plus the two things a hand-spliced row gets wrong:
+    the column count, and a `|` inside a value silently becoming a new cell.
+    """
+    if not argv:
+        return _fail("--set needs a row id, e.g. --set F-093-r status=done")
+    rid, assigns = argv[0], argv[1:]
+    if not assigns:
+        return _fail(f"--set {rid} needs at least one <col>=<value>")
+
+    edits = {}
+    for a in assigns:
+        m = re.match(r"^([a-z_]+)(\+?=)(.*)$", a, re.S)
+        if not m:
+            return _fail(f"cannot read '{a}' — expected <col>=<value> or <col>+=<value>")
+        col, op, val = m.group(1), m.group(2), m.group(3).strip()
+        col = ALIASES.get(col, col)
+        if col == "id":
+            return _fail("an id is never rewritten: it is cited by commits, ADRs and "
+                         "other rows' depends_on (AGENTS.md, the feature catalog)")
+        if col not in SETTABLE:
+            return _fail(f"no column '{col}'. The columns are: {', '.join(SETTABLE)}")
+        if col in edits:
+            return _fail(f"'{col}' is assigned twice in one call — say what it should end as")
+        if "|" in val:
+            return _fail(f"'{col}' value contains a '|', which would open a new cell. "
+                         f"Write it another way — the table has no escape this parser reads")
+        if "\n" in val:
+            return _fail(f"'{col}' value contains a newline; a row is one line")
+        edits[col] = (op, val)
+
+    text = BACKLOG.read_text(encoding="utf-8")
+    lines = text.splitlines(keepends=True)
+    hits = [i for i, ln in enumerate(lines)
+            if ln.startswith("|") and ln.strip().strip("|").split("|")[0].strip() == rid]
+    if not hits:
+        return _fail(f"no row {rid} in docs/BACKLOG.md")
+    if len(hits) > 1:
+        return _fail(f"{rid} appears on {len(hits)} lines; ids are unique — fix that by hand first")
+
+    i = hits[0]
+    keep_nl = lines[i][len(lines[i].rstrip("\n")):]
+    cells = [c.strip() for c in lines[i].strip().strip("|").split("|")]
+    if len(cells) != len(COLS):
+        # A row with the wrong cell count is almost always a `|` inside a value
+        # (a code span, an `a || b`). Splicing it would move every cell after
+        # the stray one, so this is where it stops.
+        return _fail(f"{rid} has {len(cells)} cells, not {len(COLS)} — it does not match the "
+                     f"table's columns ({', '.join(COLS)}). Repair the row by hand")
+
+    before = dict(zip(COLS, cells))
+    after = dict(before)
+    for col, (op, val) in edits.items():
+        if op == "+=":
+            old = "" if before[col] in ("", EMPTY) else before[col]
+            after[col] = f"{old} {val}".strip()
+        else:
+            after[col] = val or EMPTY
+
+    # --- the rules, before the write -------------------------------------
+    if after["status"].lower() not in VALID:
+        return _fail(f"status '{after['status']}' is not one of {', '.join(sorted(VALID))}")
+    after["status"] = after["status"].lower()
+
+    if after["status"] == "done" and after["proof"] in ("", EMPTY):
+        return _fail(f"{rid} cannot be 'done' with no proof path: `done` means the code exists "
+                     f"and is reachable (AGENTS.md). Set proof= in the same call")
+    if after["status"] == "blocked" and after["note"] in ("", EMPTY):
+        return _fail(f"{rid} cannot be 'blocked' with no blocker named in note=")
+
+    known = {r["id"] for r in rows()}
+    unknown = [d for d in re.split(r"[,\s]+", after["depends_on"])
+               if re.match(r"^[A-Z]+-\d+(?:-[a-z0-9]+)*$", d) and d not in known]
+    if unknown:
+        return _fail(f"depends_on names {', '.join(unknown)}, which is not a row here")
+
+    # §11's cap, as a ratchet rather than a wall. 296 of 432 rows were already
+    # over it when this was written, and F-096 is the row that brings them
+    # back; a flat refusal today would block ordinary work on every one of
+    # them, and a rule that has to be routed around is worse than none
+    # (AGENTS.md "House style"). So: under the cap is always fine, and over it
+    # only a note that gets *shorter* is. That is enough to stop the growth,
+    # and it becomes the flat cap on its own the day F-096 lands.
+    note_len = len(after["note"])
+    if note_len > NOTE_CAP and note_len > len(before["note"]):
+        return _fail(
+            f"note would be {note_len} chars, {note_len - NOTE_CAP} over §11's 3-line cap "
+            f"({NOTE_CAP}), and longer than the {len(before['note'])} it is now.\n"
+            f"         §11: a note says what shipped and cites the ADR or contract that says "
+            f"why — the rest is `git log --grep 'spec: {rid}'`. Shorten it, or trim the row "
+            f"first (F-096)")
+
+    line = "| " + " | ".join(after[c] for c in COLS) + " |" + keep_nl
+    changed = [c for c in COLS if after[c] != before[c]]
+    if not changed:
+        print(f"{rid}: nothing to change")
+        return 0
+
+    for c in changed:
+        if before[c] and after[c].startswith(before[c]):
+            print(f"  {c:11} + {after[c][len(before[c]):].strip()[:70]}   (appended)")
+        else:
+            print(f"  {c:11} - {before[c][:70] or EMPTY}")
+            print(f"  {'':11} + {after[c][:70]}")
+    if note_len > NOTE_CAP:
+        print(f"  note is {note_len} chars, still over §11's {NOTE_CAP} (F-096 is the row that trims it)")
+    if "--dry-run" in sys.argv:
+        print("--dry-run: nothing written")
+        return 0
+
+    lines[i] = line
+    BACKLOG.write_text("".join(lines), encoding="utf-8")
+    print(f"{rid}: written. Run `python3 tools/backlog.py` before you commit")
+    return 0
+
+
 def main():
+    if "--set" in sys.argv:
+        argv = [a for a in sys.argv[sys.argv.index("--set") + 1:] if a != "--dry-run"]
+        return set_row(argv)
     items = rows()
     by_id = {r["id"]: r for r in items}
     errors = []

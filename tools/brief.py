@@ -426,6 +426,10 @@ def main():
     print("  the change — a computed import(), a file outside every project, nx.json.")
     print("\n  §11: update every doc of the behaviour this row changes, and no other unit's prose. A changelog row only for")
     print("  a version bump, a status flip or a contract break. A BACKLOG note is 3 lines.")
+    # The row is written by column name. Splicing the line by hand is how a
+    # proof path lands in `spec ref` (2026-09-20) — see AGENTS.md "Finishing one".
+    print(f"\n  Write the row itself — by column name, never by splicing the line:")
+    print(f"      python3 tools/backlog.py --set {rid} status=done proof='<path>' note+='<3 lines, cites the contract>'")
 
     # --- the mode -----------------------------------------------------------
     if not quiet:
