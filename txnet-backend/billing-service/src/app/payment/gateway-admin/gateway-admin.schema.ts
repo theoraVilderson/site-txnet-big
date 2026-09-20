@@ -76,6 +76,16 @@ export const createGatewaySchema = z
   })
   .strict();
 
+/**
+ * Create, on the surface that names the reseller in its path (F-066-w3): the
+ * same body without `tenantId`. Left out rather than ignored, because
+ * `.strict()` then refuses it — a client that sent one meant to configure a
+ * tenant, and the path is the only place this surface reads one from.
+ */
+export const createResellerGatewaySchema = z
+  .object({ source: z.enum(GATEWAY_CREDENTIAL_SOURCES), ...optional })
+  .strict();
+
 export const updateGatewaySchema = z.object(optional).strict();
 
 export const depositPresetsSchema = z.object({ presets: z.array(z.string().max(20)).max(20) }).strict();
@@ -86,3 +96,4 @@ export const listGatewaysSchema = z.object({ tenantId: uuid('tenantId').optional
 export type CreateGatewayBody = z.infer<typeof createGatewaySchema>;
 export type UpdateGatewayBody = z.infer<typeof updateGatewaySchema>;
 export type ListGatewaysQuery = z.infer<typeof listGatewaysSchema>;
+export type CreateResellerGatewayBody = z.infer<typeof createResellerGatewaySchema>;

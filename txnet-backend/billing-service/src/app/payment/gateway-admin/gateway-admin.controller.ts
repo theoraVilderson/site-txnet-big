@@ -21,13 +21,13 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
 import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import type { GatewaySource } from '../gateway/gateway-merchant';
+import { GATEWAY_ADMIN_READ as READ, GATEWAY_ADMIN_WRITE as WRITE } from './gateway-admin.rate-limit';
 import {
   CreateGatewayBody,
   DepositPresetsBody,
@@ -60,17 +60,6 @@ const STATUS: Record<GatewayAdminRejection, 400 | 403 | 404 | 409> = {
   missing_field: 400,
   invalid_presets: 400,
   invalid_callback: 400,
-};
-
-const READ = {
-  key: (req: Request) => rateLimitBucketKey(RateLimitBucket.GATEWAY_ADMIN_READ, identityOf(req).userId),
-  configKey: 'GATEWAY_ADMIN_READ_RATE_LIMIT' as const,
-  windowSec: 900,
-};
-const WRITE = {
-  key: (req: Request) => rateLimitBucketKey(RateLimitBucket.GATEWAY_ADMIN_WRITE, identityOf(req).userId),
-  configKey: 'GATEWAY_ADMIN_WRITE_RATE_LIMIT' as const,
-  windowSec: 900,
 };
 
 /**

@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 17
+version: 18
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -29,7 +29,7 @@ source:
   - txnet-backend/prisma/domains/migrations/20260918000300_payment_in_chat_payer/**
 owns_tables: [wallet, wallet_transaction, sub_account, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_tenant, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout]
 depends_on: [identity, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]
-updated: 2026-09-18
+updated: 2026-09-20
 ---
 
 # Billing
@@ -45,6 +45,7 @@ display-currency conversion (`currency`), plan prices (`catalog`).
 | File | Read it when |
 |---|---|
 | [contract.md](contract.md) | using or changing billing from outside |
+| [contract.gateways.md](contract.gateways.md) | creating, changing or deleting a payment gateway — a tenant's own, or a named reseller's |
 | [contract.deposit.md](contract.deposit.md) | one whole top-up: gateway list, quote, start — and the bank's callback that settles it |
 | [contract.webhook.md](contract.webhook.md) | a provider's signed webhook, and a payment that arrived for more or less than asked |
 | [contract.history.md](contract.history.md) | the panel's financial page: the wallet ledger and the top-up attempts |
@@ -59,10 +60,10 @@ display-currency conversion (`currency`), plan prices (`catalog`).
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-20 | contract v18 (F-066-w3, ADR-0064): `/api/billing/tenants/:tenantId/gateways` — gateway management for the reseller the path names, admitted by `ResellerAccess` and run in that reseller's scope, so the ambient surface's rules apply unchanged. Additive; `/api/billing/gateways` untouched. The gateway rules move out of `contract.md` into `contract.gateways.md`. Consumer panel-web: F-066-w4 |
 | 2026-09-18 | contract v17 (F-104-ab), breaking: the in-chat relay moves to `POST /api/internal/billing/deposit/in-chat/{pre-checkout,paid}` — service token only, `{…, platform, senderId, botTenantId}`, admitted only from the payer `start` recorded (`payerChatPlatform`/`payerChatId`, from the gate's new `X-Chat-User-Id`); the gated pair is gone. Consumer bot-app: moved in the same change |
 | 2026-09-14 | contract v16 (F-502-a, ADR-0048): a coupon code is unique per tenant; **a platform coupon serves only the tenants `coupon_tenant` names, else the platform owner's users** — a break for resellers' users of existing platform coupons; soft delete, `coupon_batch`, `coupon.manage`. Consumers panel-web, bot-app: no wire change |
 | 2026-09-14 | contract v15 (F-092-z, ADR-0044 decision 6): `/api/billing/payments/manual` — list, inquire, confirm a verifying or flagged payment, behind the new `payment.confirm_manual` (`Admin` + `*`), scoped like `gateway.manage`. The gateway is asked first; only silence or `in_bank` lets a person credit `admin_manual`, audited in the crediting transaction. Additive. Consumers: panel-web (F-093-n) |
 | 2026-09-14 | contract v14 (F-092-x, ADR-0044): a **verifying** payment — `payment_transaction.verifyAttempts` + `nextVerifyAt`, still `pending`. Silence at the callback or reconciliation schedules the next ask on a 30s…hourly ladder; a settled answer clears it; **the expiry sweep no longer closes a verifying row**, so its coupon holds stay. Additive for every route; consumers tenant, network, ai, engagement, panel-web: nothing reads the columns yet (F-093-l/m) |
-| 2026-09-12 | contract v13 (F-096-d, ADR-0041 §4): a payment through a granted gateway accrues a debt to the **borrowing** tenant — one `gateway_settlement_entry`, written inside the crediting transaction beside the ledger row and the outbox event, for `amountCredited` net of `feeApplied` and floored at zero. It hangs off the same status guard as the credit, so a retried callback or a reconciliation sweep accrues nothing; the unique key on `paymentTransactionId` is the second line under that. Additive: a payment on a gateway the tenant owns writes nothing new. Consumers tenant, network, ai, engagement, panel-web: nothing reads the ledger yet — F-096-e is the operator surface |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

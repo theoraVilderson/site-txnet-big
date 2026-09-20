@@ -2,8 +2,8 @@
 id: billing
 layer: domain
 status: active
-version: 7
-updated: 2026-09-18
+version: 8
+updated: 2026-09-20
 ---
 
 # Contract — billing
@@ -18,30 +18,12 @@ payment attempt routes (F-092-n) in
 **[contract.history.md](contract.history.md)** (both §10). Every other row in *Provides* is still intent from
 `txnet-backend/prisma/domains/billing.prisma`.
 
-## Gateway management (built — F-102-b/c, F-102-f-b, D-31)
+## Gateway management (built — F-102-b/c, F-102-f-b, F-066-w3, D-31)
 
-`/api/billing/coupons` (`payment/coupon-admin/`): coupons, gift-code batches, usage — `contract.coupon.md`.
-`/api/billing/gateways` (`payment/gateway-admin/`): `GET` list, `POST` create,
-`PATCH` / `DELETE :source/:id`, and `GET` / `PUT presets` — the caller's own
-default quick amounts (F-092-v). Behind `gateway.manage`; the permission is not
-the boundary. Linking a gateway to another tenant is the settlement grant
-(`domains/audit/contract.settlement.md`), not this surface.
-
-| Rule | Why |
-|---|---|
-| The platform owner manages every gateway; any other tenant only its own `tenant_gateway_config` rows. Anything else is `gateway_not_found` | a reseller who could edit another's gateway could point its merchant id at its own account; a 404 does not confirm the row exists |
-| Only the platform owner sets `verificationStatus`; a tenant changing a verified gateway's secret resets it to `pending_test_transaction`, committed **before** the secret is written | a verified gateway is otherwise a place to swap in an unverified account |
-| `merchantId` / `secretKey` / `webhookSecret` are relayed to `tenant-service` (`VaultSecretClient` → F-102-a, F-018-ab) and appear in no answer, audit row or column; answers carry `credentials` as `{configured, version, rotatedAt}` | write-only secrets (ADR-0026 guarantee 1); `billing` still loads the vault read-only |
-| Each provider's secrets and required settings are one exhaustive map, `payment/gateway/provider-fields.ts` (F-104-e, D-32). A missing **secret** is never refused — the gateway may be saved and switched on, and the answer's `missingSecrets` names what is still needed (`null` when the state could not be read). A `telegram_stars` gateway needs a positive `staticRate` (its USD value per Star) or `missing_field`, and is stored with `useLiveRate` off | the user's call, 2026-09-16: a heads-up, not a wall; a Star has no live rate |
-| The pool follows the caller (ADR-0053): the platform owner on the cross-tenant pool, anyone else in a `tenantTransaction` on the app pool. A lent gateway's payments and grants in other tenants are reached only through `billing.gateway_usage` / `billing.withdraw_gateway_grants` (SECURITY DEFINER, `20260917000200_gateway_release`), which refuse a gateway that is not the caller's own; a platform gateway is the cross-tenant role's alone | strict RLS stands behind a reseller's filter; releasing one's own lent gateway needs counts and a withdrawal, not another tenant's rows |
-| Delete (the user's calls, 2026-09-17): refused `gateway_has_open_payments` while any payment on it is `pending`/`expired` inside `RECONCILIATION_LOOKBACK_SEC`, in any tenant — deactivate first. Otherwise a row nothing ever pointed at is deleted; one a payment or grant (even withdrawn) points at is deactivated and its live grants withdrawn, with a `gateway_grant_withdraw` audit row in each borrower's tenant. Secrets are revoked **first**, after the open check. Deactivating (`isActive`) leaves grants alone; a borrower's coupons naming the gateway are left as they are | ADR-0041 §6; a borrower's payer still waiting must not lose the gateway; a failure part-way leaves a gateway that cannot charge |
-| Quick amounts (F-092-v): a gateway's `depositPresets` overrides the tenant's `presets` (`billing.deposit_setting`); both written through `deposit-presets.ts` — positive, 2 decimals, unique, ascending, at most 8; empty inherits. A default-list write is audited `deposit_presets_update` | one rule for both lists; the top-up page never judges a list |
-| Every write lands with its `admin_audit_log` row (`gateway_create` / `_update` / `_delete`) in one transaction | who changed a gateway is the question after money went somewhere unexpected |
-
-Refusals name their `reason`: 403 `not_platform_owner`, `verification_is_platform_owners`;
-404 `gateway_not_found`, `tenant_not_found`; 409 `provider_already_configured`, `gateway_has_open_payments`;
-400 `invalid_range`, `missing_field`, `invalid_presets`, `invalid_callback` (`callbackUrl`, F-092-w: absolute http(s), ≤500, `null` clears); 502 `secrets_unavailable`. Proof:
-`gateway-admin.service.spec.ts`, `deposit-presets.spec.ts`, `vault-secret.client.spec.ts`, `gateway-grant-schema.int.spec.ts` (the two functions).
+Creating, changing and deleting a gateway, and a top-up page's quick amounts:
+`/api/billing/gateways` for a tenant configuring itself, and
+`/api/billing/tenants/:tenantId/gateways` for the reseller a path names.
+One set of rules, in **[contract.gateways.md](contract.gateways.md)** (§10).
 
 ## Coupon reservation (built — F-092-h)
 
