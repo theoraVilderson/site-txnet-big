@@ -22,6 +22,13 @@ export const PANEL_ACCOUNTS_ADD = "/accounts/add";
 /** The user's own settings; first section: their email address (F-035-j). */
 export const PANEL_SETTINGS = "/settings";
 /**
+ * The "my services" page (F-502-s) — the Grants a user holds, and the way back
+ * to a subscription key that did not reach them. `/services` is the path
+ * legacy used and the one the sidebar's `my-services` entry has always meant;
+ * the later home of the `/sub` link (F-113).
+ */
+export const PANEL_MY_SERVICES = "/services";
+/**
  * The financial history page (F-093-d) — the wallet ledger and the top-up
  * attempts, as two lists. The sidebar's `financial-history` entry and the
  * wallet control's `history` quick action both point here.

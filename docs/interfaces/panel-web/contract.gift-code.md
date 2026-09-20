@@ -2,7 +2,7 @@
 id: panel-web
 layer: interface
 status: active
-version: 27
+version: 28
 updated: 2026-09-20
 ---
 
@@ -163,8 +163,10 @@ effect is also what `react-hooks/set-state-in-effect` refuses.
       button is disabled while its ask is in flight and never retries for the
       user.
 
-**Not covered:** a key lost after the modal is closed. This panel has no list of
-a user's Grants, so the button is reachable only while the key is up; a Grant
-whose key was lost yesterday still has no way back. That is a surface of its
-own rather than a rule here — F-502-r lists a user's Grants and F-502-s is the
-page that shows them, with this button on every row.
+**Not covered:** a key lost after the modal is closed. This panel's list of a
+user's Grants is `/services` (F-502-s,
+[contract.my-services.md](contract.my-services.md)), and the button is on every
+row of it — so the modal is now one of two places this key can be asked for,
+and rule 12 is the same rule on both because it follows from the route rather
+than from where the button sits. What is still nobody's row is the `/sub` link
+itself (F-113).

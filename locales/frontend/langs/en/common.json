@@ -1798,5 +1798,25 @@
       "bot_not_found": "that bot was not found.",
       "vault_unavailable": "bot tokens cannot be stored on this deployment right now. Try again later."
     }
+  },
+  "myServices": {
+    "title": "My services",
+    "subtitle": "The services you have — each one's period and status, and the way to its subscription key.",
+    "empty": "You have no services yet.",
+    "unavailable": "The service list is unavailable.",
+    "retry": "Try again",
+    "unnamed": "Unnamed service",
+    "period": "From {{from}} to {{until}}",
+    "periodPermanent": "From {{from}} — no end date",
+    "features": "Features",
+    "keyHint": "If you do not have this service's subscription key, ask for a new one; the previous key stops working.",
+    "status": {
+      "pending": "Pending",
+      "active": "Active",
+      "suspended": "Suspended",
+      "exhausted": "Used up",
+      "expired": "Expired",
+      "cancelled": "Cancelled"
+    }
   }
 }

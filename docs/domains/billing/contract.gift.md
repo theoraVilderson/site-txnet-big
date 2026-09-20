@@ -92,7 +92,8 @@ closed had no way back.
 | Its own bucket, `GRANT_LIST`, default **120** per 900s; the `subscriptionLink` capability, as above | it reads no secret and destroys nothing, so it is no security control — but sharing `GRANT_ROTATE_TOKEN`'s five calls would spend a user's recovery budget on looking at the list that offers the recovery |
 
 **Not covered:** a `/sub` link for the key (F-113, F-027); the panel showing it
-(F-502-l-c) and its reissue button (F-502-q, built). The "my services" page over
-this list, with that button on every row, is F-502-s — until it lands the route
-has no consumer. Filtering or searching the list is nobody's row yet: paging is
-the only knob.
+(F-502-l-c) and its reissue button (F-502-q, built). Its consumer since
+2026-09-20 is the panel's "my services" page (F-502-s,
+`panel-web/contract.my-services.md`), which lists every status this answers and
+puts the reissue button on each row. Filtering or searching the list is nobody's
+row yet: paging is the only knob.

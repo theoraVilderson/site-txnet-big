@@ -1,0 +1,95 @@
+---
+id: panel-web
+layer: interface
+status: active
+version: 28
+updated: 2026-09-20
+---
+
+# Contract — panel-web: the "my services" page (F-502-s)
+
+`/services` (`(panel)/services/`), the sidebar's `my-services` entry. One row
+per Grant the caller holds, over `GET /api/billing/gift/grants`
+([billing/contract.gift.md](../../domains/billing/contract.gift.md)), with
+F-502-q's reissue button on each.
+
+It exists because of the sentence
+[contract.gift-code.md](contract.gift-code.md) used to end with: a free-service
+key is shown once and billing keeps only its hash (D-35), so until this page
+the reissue button was reachable only while the redemption modal was still up.
+A key lost yesterday had no way back. This is that way back, and the later home
+of the `/sub` link (F-113).
+
+Its pieces: `_components/MyServicesView.tsx` (the page), `_components/ServiceRow.tsx`
+(one Grant), `_hooks/useGrantsPage.ts` (the two reads), `_lib/my-services.ts`
+(the status tones and the name rule).
+
+## Rules
+
+1. **Every Grant is listed and nothing is filtered here.** Billing answers the
+   status and never narrows the list, because a key is lost from an expired
+   Grant as easily as from a live one — so the dead statuses are exactly the
+   rows a user arrives looking for. There is no status tab, no "active only"
+   default, and the reissue button is on every row whatever its status; the
+   route does not gate on status either (F-502-p). Paging is the only knob the
+   list has.
+2. **Every status billing can answer has a tone and a sentence**
+   (`_lib/my-services.ts`). A status with no row renders as a blank pill next
+   to a service someone is trying to understand, so the spec reads the union
+   out of `entitlement.prisma` rather than restating it: a seventh status goes
+   red here instead of shipping empty. The colours are theme tokens, never raw
+   palette classes, and gold is a tone and never a control (user, 2026-09-13).
+3. **The list carries no key, and the page never pretends otherwise.** Billing
+   selects its columns explicitly so neither the subscription key nor its hash
+   can leave in a list, so a row shows a key only as the answer to a press on
+   that row. Nothing is cached across a reload: a page that remembered a minted
+   key would be storing a credential billing itself does not keep.
+4. **A reissue replaces what is on screen, and a refusal changes nothing** —
+   rule 12 of [contract.gift-code.md](contract.gift-code.md), unchanged on this
+   surface because it follows from the route and not from where the button is.
+   The old key is dead inside billing's transaction, so leaving it up would
+   offer a credential that opens nothing; a refusal minted nothing, so the key
+   already shown is still the key and only billing's sentence is added,
+   `role="alert"`, with its `ref` ([contract.errors.md](contract.errors.md)).
+   The button is disabled while its ask is in flight and never retries for the
+   user: the bucket is 5 per 900s and each call destroys a working key.
+   "The previous key has stopped working" is shown only when there *was* a key
+   on screen to replace — the first ask on a row replaces nothing the user
+   could have.
+5. **The key panel's sentences are the gift modal's keys**, not a second copy
+   under `myServices`. "Shown only this once" and "the previous key has stopped
+   working" are the same two facts about the same credential; a second set would
+   be a second translation to keep in step, and the two surfaces would drift.
+   What this page does own is its own chrome — title, empty state, periods,
+   statuses (`common.myServices.*`).
+6. **A name is a `nameKey` this page resolves, and a failure costs the names
+   only.** The list answers the variant's key, not its text, so the published
+   `catalog` namespace is read beside it — the same route and the same
+   flattening the catalog page uses. A language with no catalog text answers
+   404, which is `{}`: the rows then read by their SKU. There is no
+   source-language fallback here, unlike `catalogText`, because the list
+   answers no `sourceLang` and a SKU a user can quote to support beats a
+   language they may not read. A Grant with no catalog item (`variant: null`)
+   has neither and shows "unnamed service".
+7. **The URL is the page.** `?page=` is read from and written to the query
+   string, so a page of services survives a reload and can be sent to support;
+   nothing is mirrored into a store beside it. Page 1 writes no parameter.
+   `Pagination` owns no navigation ([contract.kit.md](contract.kit.md) rule 6).
+8. **A failed read is not an empty list.** The rows are dropped on a failure
+   and the page shows billing's sentence with a retry — showing the previous
+   page's services under a failure would be a lie, and an empty state would
+   tell a user with services that they have none. The empty state is for a
+   `total` of zero, which the route answers rather than a 404: the page exists
+   before the first Grant does.
+
+## Proof
+
+`services/my-services.test.tsx` — the status union against
+`entitlement.prisma`, and a row's reissue: the id alone, the replacement, a
+refusal that changes nothing, and one ask at a time.
+
+## Not covered
+
+The `/sub` link itself (F-113, F-027) — this page is where it will go. Filtering
+or searching the list is nobody's row; so is renewing a service from here, which
+needs a checkout the panel does not have yet.

@@ -135,6 +135,42 @@ export interface GiftGrant {
 export type GiftRedemption = GiftCredit | GiftGrant;
 
 /**
+ * The statuses a Grant can be in, as `entitlement.prisma` declares them (C-09).
+ * Declared once here because the panel reads them in two places — the pill and
+ * the page's sentences — and a second spelling is a blank pill in one of them.
+ */
+export const GRANT_STATUSES = ["pending", "active", "suspended", "exhausted", "expired", "cancelled"] as const;
+export type GrantStatus = (typeof GRANT_STATUSES)[number];
+
+/**
+ * One of the caller's own Grants, as `GET /gift/grants` answers it (F-502-r,
+ * `billing/contract.gift.md`).
+ *
+ * **Neither the subscription key nor its hash is in it.** Billing selects its
+ * columns explicitly for that reason (D-35): the key exists in the clear only
+ * in a redemption's answer and in a reissue's, never in a list. So a row is
+ * what a user recognises a service by, and the way back to its key is the
+ * reissue route.
+ *
+ * `nameKey` is the variant's own wording, else its product's — a key, not the
+ * translated text, resolved here through the same published `catalog`
+ * namespace the catalog page reads. `variant` is `null` for a Grant issued
+ * without a catalog item.
+ */
+export interface GrantRow {
+  id: string;
+  /** Answered for every Grant; billing never filters the list by it. */
+  status: GrantStatus;
+  startsAt: string;
+  /** `null` = permanent. */
+  endsAt: string | null;
+  featureKeys: string[];
+  variant: { id: string; sku: string; nameKey: string } | null;
+}
+
+export type GrantsPage = Paged<GrantRow>;
+
+/**
  * One gateway the user may pay through, as `GET /deposit/gateways` answers it
  * (`billing/contract.deposit.md`). Only gateways that are usable are listed —
  * active, verified, with a driver and a merchant id in the vault — so this app
@@ -512,6 +548,19 @@ export const billingApi = {
       method: "POST",
       body: JSON.stringify({ code }),
     });
+  },
+
+  /**
+   * One page of the caller's own Grants (F-502-s → F-502-r), newest period
+   * first.
+   *
+   * **Whose Grants is not a parameter.** The user is the gate's `X-User-Id`,
+   * the same shape as the financial page's lists, so there is nothing here to
+   * pass and nothing to get wrong. A user with no Grants is an empty page, not
+   * a 404; paging is the only knob the route has.
+   */
+  async grants(page: number, pageSize: number): Promise<GrantsPage> {
+    return call<GrantsPage>(`/gift/grants?page=${page}&pageSize=${pageSize}`, { method: "GET" });
   },
 
   /**
