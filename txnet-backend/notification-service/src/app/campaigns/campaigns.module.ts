@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   CredentialEnvGuard,
+  ResellerAccess,
   CredentialVaultService,
   KekService,
   TRANSLATOR,
@@ -18,6 +19,8 @@ import { CampaignFanOutService } from './campaign-fan-out.service';
 import { CampaignInternalController } from './campaign-internal.controller';
 import { CampaignTextService } from './campaign-texts';
 import { MailLineResolver } from './mail-line';
+import { ResellerCampaignController } from './reseller-campaign.controller';
+import { ResellerCampaignService } from './reseller-campaign.service';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { SmsLineSource } from './sms-line';
 
@@ -40,13 +43,18 @@ class BotDirectoryModule {}
 /**
  * Campaign drafts (F-035-c), sending them (F-035-d) and delivering to Telegram
  * and Bale (F-035-e), by SMS (F-035-f) and by email in each recipient's language
- * (F-035-h); the ticks that drive the last two are `worker-service`'s.
+ * (F-035-h); the ticks that drive the last two are `worker-service`'s. A
+ * reseller reaches the same rules for itself through F-313-d's own door.
  */
 @Module({
   imports: [MessengerModule.forRoot({ imports: [BotDirectoryModule] }), LocaleModule],
-  controllers: [CampaignAdminController, CampaignInternalController],
+  controllers: [CampaignAdminController, ResellerCampaignController, CampaignInternalController],
   providers: [
     CampaignAdminService,
+    // A reseller acting for itself (F-313-d): admitted by the door, then served
+    // by `CampaignAdminService` with the reseller as the actor's tenant.
+    ResellerCampaignService,
+    ResellerAccess,
     CampaignFanOutService,
     CampaignDeliveryService,
     CampaignTextService,

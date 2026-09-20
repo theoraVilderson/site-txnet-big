@@ -295,6 +295,23 @@ export const RateLimitBucket = {
   RESELLER_REVENUE_READ: 'reseller-revenue:read',
 
   /**
+   * A named reseller's own campaigns in `notification-service` (F-313-d), per
+   * caller. The two-bucket split the reseller users surface uses, for the same
+   * reason: the list and the audience count are asked repeatedly while a
+   * reseller narrows a segment, and drafting or starting a send is a decision
+   * somebody took.
+   *
+   * The read budget carries the **audience count**, which is the expensive one:
+   * a count over that tenant's users joined to their wallets, for a filter the
+   * caller composes. The write budget is the tighter of the two because each
+   * `send` puts a recipient row in front of every user in the segment — an
+   * unbounded one is a way to broadcast to a reseller's whole customer base in
+   * a loop, and the outbound ceiling (F-313-a) paces delivery, not drafting.
+   */
+  RESELLER_CAMPAIGN_READ: 'reseller-campaign:read',
+  RESELLER_CAMPAIGN_WRITE: 'reseller-campaign:write',
+
+  /**
    * Everything under `/api/public/<service>/` — the routes nobody signs in to
    * (F-018-al, ADR-0065), per visitor IP.
    *

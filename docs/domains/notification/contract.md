@@ -2,8 +2,8 @@
 id: notification
 layer: domain
 status: active
-version: 3
-updated: 2026-09-17
+version: 4
+updated: 2026-09-20
 ---
 
 # Contract — notification
@@ -68,6 +68,11 @@ All routes under `/api`. Envelope, errors and 429 as every service (F-094).
   those (≤100) and the next claims none. `resume` (`staffWrite`, audited
   `campaign_resume`) is `stopped -> sending` only, refused while the campaign's
   tenant is suspended or terminated. A failed stop is retried by asking again.
+
+**A reseller acts for itself through its own door**, not this one:
+`tenants/:tenantId/campaigns…` (F-313-d), admitted by `ResellerAccess` because
+a reseller's owner's session names the platform's tenant, never the reseller's
+— shapes, capabilities and the audience count in [contract.reseller.md](contract.reseller.md).
 
 ### Campaigns (F-035-c)
 

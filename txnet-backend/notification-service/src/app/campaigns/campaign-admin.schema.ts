@@ -64,13 +64,23 @@ const subject = z.string({ message: invalid }).trim().min(1, { message: invalid 
 /** The language the admin writes in; null = `DEFAULT_LANGUAGE`. */
 const sourceLang = z.nativeEnum(Language, { message: invalid }).nullable();
 
-/** `tenantId`: absent = the caller's tenant; `null` = platform-wide; another id = the platform owner's alone. */
-export const createCampaignSchema = z.object({
+/**
+ * What a draft is, apart from whose it is. Shared with the reseller-named
+ * surface (F-313-d), which takes the scope from its path instead of a body:
+ * the two doors differ in the scope and in nothing else, and writing the fields
+ * twice is how they would come to differ in more.
+ */
+export const campaignDraftShape = {
   channel,
   messageBody,
   subject: subject.optional(),
   sourceLang: sourceLang.optional(),
   audience: audienceFilterSchema,
+};
+
+/** `tenantId`: absent = the caller's tenant; `null` = platform-wide; another id = the platform owner's alone. */
+export const createCampaignSchema = z.object({
+  ...campaignDraftShape,
   tenantId: z.string({ message: invalid }).uuid({ message: invalid }).nullable().optional(),
 });
 

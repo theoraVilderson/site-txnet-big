@@ -1,6 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { withTenant } from '@txnet-backend/shared-core';
+import { RESELLER_ACCESS_READER, withTenant } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../config/env.validation';
 import { CrossTenantPrismaService } from './cross-tenant-prisma.service';
@@ -11,6 +11,8 @@ import { PrismaService } from './prisma.service';
  * (F-094); `notificationCampaign` is in `TENANT_SCOPED_MODELS`, so a tenant
  * admin's campaign queries bind their tenant. `CrossTenantPrismaService`, held
  * by campaign management for the platform owner alone (ADR-0053), not extended.
+ * `RESELLER_ACCESS_READER` is the app pool too (F-313-d), so a reseller-named
+ * campaign route is admitted before it reaches either.
  */
 @Global()
 @Module({
@@ -25,6 +27,9 @@ import { PrismaService } from './prisma.service';
         return base.$extends(withTenant(base)) as unknown as PrismaService;
       },
     },
+    // `ResellerAccess` (F-066-w1) reads `tenant.tenant` and a staff seat on the
+    // **app** pool, before any cross-tenant access is justified (ADR-0053).
+    { provide: RESELLER_ACCESS_READER, useExisting: PrismaService },
     {
       provide: CrossTenantPrismaService,
       inject: [ConfigService],
@@ -32,6 +37,6 @@ import { PrismaService } from './prisma.service';
         new CrossTenantPrismaService(config.get('DATABASE_CROSS_TENANT_URL', { infer: true })),
     },
   ],
-  exports: [PrismaService, CrossTenantPrismaService],
+  exports: [PrismaService, CrossTenantPrismaService, RESELLER_ACCESS_READER],
 })
 export class PrismaModule {}

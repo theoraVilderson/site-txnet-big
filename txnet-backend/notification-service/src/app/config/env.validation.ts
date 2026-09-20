@@ -119,6 +119,13 @@ export const envSchema = z.object({
   // Campaign management (F-035-c): an admin's form, not a poll.
   NOTIFICATION_CAMPAIGN_READ_RATE_LIMIT: rateLimit(300),
   NOTIFICATION_CAMPAIGN_WRITE_RATE_LIMIT: rateLimit(60),
+  /**
+   * A reseller acting on its own campaigns (F-313-d), per caller. Reads carry
+   * the audience count a reseller asks for as it narrows a segment; writes are
+   * a draft and a send, and match the admin surface's own write budget.
+   */
+  RESELLER_CAMPAIGN_READ_RATE_LIMIT: rateLimit(300),
+  RESELLER_CAMPAIGN_WRITE_RATE_LIMIT: rateLimit(60),
 }).refine((env) => !(env.NODE_ENV === 'production' && !env.SERVICE_AUTH_TOKEN), {
   message: 'SERVICE_AUTH_TOKEN is required when NODE_ENV=production: without it no other unit can create a notification',
   path: ['SERVICE_AUTH_TOKEN'],
