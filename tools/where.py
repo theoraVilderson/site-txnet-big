@@ -781,6 +781,26 @@ def check() -> int:
             if missing:
                 errs.append(f"flow {f['name']}: file does not exist: {missing[0]}")
 
+    # A row the loader never saw cannot be checked by anything above: every
+    # loop here runs over rows that were loaded. `md_rows` stops at the first
+    # blank line, so one stray newline turns a row into its own detached table
+    # and the tool goes silent about a surface that is sitting right there in
+    # the file — `auth-api-reseller-bots` spent F-066-w5 invisible exactly that
+    # way, with `--check` reporting 0 errors throughout. Compare the raw
+    # table-shaped lines against what was loaded, so the next one is caught.
+    loaded = seen | {f["name"] for f in flows}
+    for ln, raw in enumerate(SURFACES.read_text(encoding="utf-8").splitlines(), 1):
+        line = raw.strip()
+        if not line.startswith("|") or set(line) <= set("|- :"):
+            continue
+        first = clean(strip_link(line.strip("|").split("|")[0]))
+        if not first or first in ("surface", "flow"):   # a header row
+            continue
+        if first not in loaded:
+            errs.append(f"SURFACES.md:{ln}: row '{first}' is not in any section's "
+                        f"table — a blank line above it detaches it, and nothing "
+                        f"can address it until it is moved back")
+
     open_misses = [m for m in load_misses() if m["status"] == "open"]
     for m in open_misses:
         errs.append(f'unresolved miss ({m["date"]}): "{m["query"]}" — add the row, '
@@ -881,8 +901,19 @@ def main() -> int:
     hypothesis = hypothesis_of(q, top)
 
     # ---- walk mode: a symptom was named, or the caller asked for one
-    if want_walk or ((symptom or hypothesis)
-                     and top["kind"] in ("flow", "surface", "unit")):
+    #
+    # A leftover token is NOT a symptom. This used to fire on `hypothesis` as
+    # well — every token the winning row did not explain — so any request
+    # carrying one ordinary word the maps happen not to know became a bug
+    # report. "paste bot token" walked from `redis-keyspace`, and "the register
+    # form on the landing site" — the README's own example of a *normal*
+    # request — walked on the word "form". A walk costs three hops and eight
+    # files and answers a question nobody asked, while the surface row that
+    # names the thing was sitting at the top of the shortlist.
+    #
+    # `hypothesis` keeps the job its own docstring gives it: ordering the
+    # frontier once a walk is under way. It never chooses one.
+    if want_walk or (symptom and top["kind"] in ("flow", "surface", "unit")):
         # A cache hit must be a *repeat*, not a keyword overlap. One shared word
         # ("login") between two unrelated symptoms is not the same bug, and
         # serving a stale path for a new problem is worse than deriving one:
