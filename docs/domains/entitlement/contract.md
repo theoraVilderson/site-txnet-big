@@ -29,6 +29,7 @@ and changes its quota only through `quota_adjustment` rows.
 | `adjustQuota(tx, …)` | grantId, metric, delta, source, capPercent?, expiresAt?, reason? | QuotaAdjustment | caller's transaction | `grant_not_found`, `grant_not_active` |
 | `rotateToken(tx, id, userId)` | grantId, its user | the new token, once | caller's transaction | `grant_not_found` (also for another user's) |
 | `rotateTokenForUser(id, userId)` | grantId, its user | the same, in a transaction of its own | own tenant transaction | the same |
+| `listForUser(userId, {page?, pageSize?})` | the user, paging | one page of that user's Grants — id, status, period, feature keys, variant `{id, sku, nameKey}`; never the token or its hash | own tenant transaction | — |
 
 Issue rules: a `purchase` needs a `public` or `unlisted` variant; any other
 source may assign any live variant, `admin_only` included (F-506). A purchase
@@ -36,9 +37,10 @@ starts `pending`; every other source `active`. Quotas, feature keys, billing
 mode and `endsAt = startsAt + durationDays` are copied at issue.
 
 In-process calls from `billing-service` modules (ADR-0049); HTTP routes are
-added only when a row needs them. One does: `rotateTokenForUser` is reached
-over `POST /api/billing/gift/grants/:id/rotate-token`, which belongs to
-`billing` and is written down in its `contract.gift.md` (F-502-p).
+added only when a row needs them. Two do: `rotateTokenForUser` over `POST
+/api/billing/gift/grants/:id/rotate-token` (F-502-p) and `listForUser` over
+`GET /api/billing/gift/grants` (F-502-r). Both belong to `billing` and are
+written down in its `contract.gift.md`.
 
 ## Emits (events)
 

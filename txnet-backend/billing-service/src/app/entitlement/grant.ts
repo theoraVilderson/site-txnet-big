@@ -122,6 +122,50 @@ export type IssueGrant = {
 /** `token` is set only when this call wrote the Grant; a repeat for the same cause answers `null`. */
 export type IssuedGrant = { grant: Grant; token: string | null };
 
+/** One Grant as its own user reads it (F-502-r). Never the subscription key, never its hash. */
+export type GrantView = {
+  id: string;
+  status: GrantStatus;
+  startsAt: string;
+  /** `null` = permanent. */
+  endsAt: string | null;
+  featureKeys: string[];
+  /** `null` for a Grant issued without a catalog item (`migration`). `nameKey` is the variant's own wording, else its product's (§4.3). */
+  variant: { id: string; sku: string; nameKey: string } | null;
+};
+
+export type GrantPage = { total: number; page: number; pageSize: number; rows: GrantView[] };
+
+/**
+ * The columns a user's own list reads. Explicit, because the row beside them is
+ * `subscriptionTokenHash`: a `select` is what keeps the hash of a live
+ * credential — and whatever the schema grows next — out of a response nobody
+ * re-read (F-502-r).
+ */
+const GRANT_VIEW_COLUMNS = {
+  id: true,
+  status: true,
+  startsAt: true,
+  endsAt: true,
+  featureKeys: true,
+  variant: { select: { id: true, sku: true, nameKey: true, product: { select: { nameKey: true } } } },
+} satisfies Prisma.GrantSelect;
+
+/** What an absent page means, decided here and nowhere else; the schema bounds `pageSize` at 100 when it is sent. */
+const DEFAULT_PAGE = 1;
+const DEFAULT_PAGE_SIZE = 20;
+
+function grantViewOf(r: Prisma.GrantGetPayload<{ select: typeof GRANT_VIEW_COLUMNS }>): GrantView {
+  return {
+    id: r.id,
+    status: r.status,
+    startsAt: r.startsAt.toISOString(),
+    endsAt: r.endsAt?.toISOString() ?? null,
+    featureKeys: r.featureKeys,
+    variant: r.variant ? { id: r.variant.id, sku: r.variant.sku, nameKey: r.variant.nameKey ?? r.variant.product.nameKey } : null,
+  };
+}
+
 export type AdjustQuota = {
   grantId: string;
   metric: QuotaMetric;
@@ -220,6 +264,35 @@ export class GrantService {
   /** The golden rule (§4.4): access is an active Grant with this feature key, and nothing else. */
   async hasActiveGrant(userId: string, featureKey: string, at: Date = new Date()): Promise<boolean> {
     return (await this.activeGrant(userId, featureKey, at)) !== null;
+  }
+
+  /**
+   * One page of a user's own Grants (F-502-r), newest period first — the list
+   * the panel's "my services" page reads.
+   *
+   * **Every Grant, whatever its status.** A key is shown once (D-35) and the
+   * reissue route (F-502-p) is the only way back, so a list that hid an
+   * expired or suspended Grant would hide exactly the row a user came looking
+   * for. The status is answered and the reader decides what to do with it.
+   */
+  listForUser(userId: string, request: { page?: number; pageSize?: number } = {}): Promise<GrantPage> {
+    const page = request.page ?? DEFAULT_PAGE;
+    const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
+    return tenantTransaction(this.prisma, async (tx) => {
+      const [rows, total] = await Promise.all([
+        tx.grant.findMany({
+          where: { userId },
+          select: GRANT_VIEW_COLUMNS,
+          // `id` breaks the tie: two Grants issued in one transaction share an
+          // instant, and an unstable order repeats or skips one across pages.
+          orderBy: [{ startsAt: 'desc' }, { id: 'desc' }],
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+        tx.grant.count({ where: { userId } }),
+      ]);
+      return { total, page, pageSize, rows: rows.map(grantViewOf) };
+    });
   }
 
   /** Adds a signed change to one quota of an active Grant. History: never edited afterwards. */

@@ -201,6 +201,16 @@ export const RateLimitBucket = {
   GRANT_ROTATE_TOKEN: 'grant:rotate-token',
 
   /**
+   * A user's own Grants, listed (F-502-r), per user. Not a security control and
+   * not the reissue budget: this reads no secret and destroys nothing, and it is
+   * the page the panel refetches — sharing `GRANT_ROTATE_TOKEN`'s handful of
+   * calls would spend a user's recovery budget on looking at the list that
+   * offers the recovery. It is here because
+   * `request/rate-limit-coverage.spec.ts` admits no unlimited route.
+   */
+  GRANT_LIST: 'grant:list',
+
+  /**
    * The platform owner's settlement surface in `billing-service` (F-096-e),
    * per operator. Two buckets rather than one because the surface is read far
    * more often than it is written — an operator refreshes what is owed while

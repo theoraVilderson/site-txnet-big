@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 5
+version: 6
 updated: 2026-09-20
 ---
 
@@ -70,7 +70,29 @@ to a mis-click was lost for good; this is the way back.
 | The rotation is one transaction of its own and the old key stops working in it | there is no window in which both keys open the link, and none in which neither does |
 | The Grant's **status is not a gate** | the row's scope (2026-09-20): a token grants nothing on its own — `/sub` reads the Grant — so rotating a dead one mints a key that opens nothing rather than something it should not |
 
+## A user's own Grants, listed (built — F-502-r)
+
+`GrantListController` beside the other two, over `GrantService.listForUser`
+(`entitlement/contract.md`). The reissue route above is reachable only from a
+row, and until this list existed there was no row: a key lost after the modal
+closed had no way back.
+
+| Route | Query | Answers `data` |
+|---|---|---|
+| `GET /api/billing/gift/grants` | `page`, `pageSize` (≤ 100) | `{total, page, pageSize, rows[{id, status, startsAt, endsAt, featureKeys, variant{id, sku, nameKey} \| null}]}` |
+
+| Rule | Why |
+|---|---|
+| Whose Grants is the gate's `X-User-Id`. There is no id in the query, so there is nothing here to authorise | the same shape as the financial page (`contract.history.md`); a user id a client could send is another user's list |
+| The columns are selected explicitly and **neither the subscription key nor its hash is among them** | the hash sits in the same row (D-35). A `select` is what keeps it, and whatever the schema grows next, out of a response nobody re-read |
+| **Every Grant, whatever its status** — the status is answered, never a filter | a key is lost from an expired Grant as easily as a live one, and hiding it would hide exactly the row the user came for. What to do with a dead one is the panel's (F-502-s) |
+| `nameKey` is the variant's own wording, else its product's (§4.3), and a Grant issued without a catalog item answers `variant: null`. The key is answered, not the translated text | the same key the catalog answers (`catalog-reads.ts`), so the panel resolves both through `locale-service` and neither holds a language |
+| Ordered `startsAt` desc, then `id` desc. Absent paging is page 1 of 20 | two Grants issued in one transaction share an instant, and an unstable order repeats or skips one across pages |
+| No domain error: a user with no Grants is an empty page, not a **404**. Only a malformed query (**400**) and the limiter (**429**) fail | the page exists before the first Grant does |
+| Its own bucket, `GRANT_LIST`, default **120** per 900s; the `subscriptionLink` capability, as above | it reads no secret and destroys nothing, so it is no security control — but sharing `GRANT_ROTATE_TOKEN`'s five calls would spend a user's recovery budget on looking at the list that offers the recovery |
+
 **Not covered:** a `/sub` link for the key (F-113, F-027); the panel showing it
-(F-502-l-c) and its reissue button (F-502-q, built). Listing a user's own Grants
-is F-502-r: the button above is reachable only while the key is on screen, so a
-key lost after the modal closed has no way back until that route exists.
+(F-502-l-c) and its reissue button (F-502-q, built). The "my services" page over
+this list, with that button on every row, is F-502-s — until it lands the route
+has no consumer. Filtering or searching the list is nobody's row yet: paging is
+the only knob.

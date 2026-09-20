@@ -291,6 +291,8 @@ export const envSchema = z.object({
   GIFT_REDEEM_RATE_LIMIT: rateLimit(10),
   /** Every call throws a working key away (`payment/gift/grant-token.controller.ts`, F-502-p). */
   GRANT_ROTATE_TOKEN_RATE_LIMIT: rateLimit(5),
+  /** The "my services" page, refetched on every visit (`payment/gift/grant-list.controller.ts`, F-502-r). */
+  GRANT_LIST_RATE_LIMIT: rateLimit(120),
   /**
    * The operator settlement surface (`settlement/settlement.controller.ts`,
    * F-096-e), per operator. The read budget is the admin UI's refresh rate

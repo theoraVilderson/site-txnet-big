@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 24
+version: 25
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -62,10 +62,10 @@ display-currency conversion (`currency`), plan prices (`catalog`).
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-20 | contract v25 (F-502-r): `GET /api/billing/gift/grants` — the caller's own Grants, with the variant, the period, the status and the feature keys, paged; never the subscription key or its hash. Its own bucket (120/900s) and the `subscriptionLink` capability. Additive; it is what makes F-502-p's reissue reachable from a row. Rules: [contract.gift.md](contract.gift.md). Consumer panel-web: F-502-s |
 | 2026-09-20 | contract v24 (F-502-p): `POST /api/billing/gift/grants/:id/rotate-token` — the owner of a Grant reissues the subscription key shown once at redemption, on its own bucket (5/900s) and the `subscriptionLink` capability. Additive; another user's Grant is answered as a missing one. Rules: [contract.gift.md](contract.gift.md). Consumer panel-web: F-502-q |
 | 2026-09-20 | contract v23 (F-104-u): the callback's rate limit counts the **payment** — the authority where a gateway mints one, else the `p` the callback URL carries. A provider that mints no authority (NOWPayments, OxaPay) put every return of a tenant in one `none` bucket, so 30 of them per 15 minutes closed the result page for all its payers. No wire change; money was never affected. Rules: [contract.deposit.md](contract.deposit.md). Consumer panel-web: none |
 | 2026-09-20 | contract v22 (F-104-t): deleting a gateway switches it off first and counts the open payments again before revoking any secret — a top-up started in that window used to be stranded by the revoked `webhook_secret`. A delete raced this way is refused `gateway_has_open_payments` with the gateway left deactivated. Rules: [contract.gateways.md](contract.gateways.md). Consumer panel-web: none — the same refusal reason it already shows |
 | 2026-09-20 | contract v21 (F-104-s, ADR-0068): a signed `paid` for an **already settled** row is no longer dropped — one provider invoice holds several payments, so the arrival becomes a payment of its own, credited net of the gateway's cut and carrying the transfer's reference as its code; what cannot be valued is a `flagged_mismatch` log row on the invoice. Additive, no wire change. Rules: [contract.webhook.md](contract.webhook.md). Consumer panel-web: none — a follow-on reads as an ordinary credit on the financial page |
-| 2026-09-20 | contract v20 (F-093-q): `POST /api/billing/deposit/:paymentId/abandon` — the payer's own unpaid, never-approved in-chat payment is closed `failed` `abandoned` and its coupon holds released `cancelled`, instead of waiting out `PAYMENT_PENDING_TTL_SEC`. Additive, 200 verdict. A payment pre-checkout approved is refused: ADR-0047 decision 2 keeps its holds. Rules: [contract.webhook.md](contract.webhook.md). Consumer panel-web: the Mini App top-up page, in the same change |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->
