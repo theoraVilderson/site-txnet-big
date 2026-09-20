@@ -11,7 +11,8 @@ import { WIZARD_STEPS, applyProvider, feePreview, firstInvalidStep, stepErrors }
  * - **Picking a provider fills what it implies** (category, a display name) but
  *   never overwrites what the operator already typed.
  * - **The fee preview is billing's formula**, in exact decimals: a float preview
- *   that says 1.5% of 0.1 is 0.0015000000000000002 is a preview nobody trusts.
+ *   that says 1.5% of 0.1 is 0.0015000000000000002 is a preview nobody trusts,
+ *   and one that stops at 0.0015 where billing charges 0.01 is no better.
  */
 
 describe("gateway wizard", () => {
@@ -48,12 +49,29 @@ describe("gateway wizard", () => {
 
   it("previews the fee exactly as billing computes it", () => {
     const base = { ...emptyForm("tenant"), feeCalculationMode: "manual" };
-    expect(feePreview({ ...base, feeType: "percentage", feeValue: "1.5" }, "0.1")).toBe("0.0015");
+    expect(feePreview({ ...base, feeType: "percentage", feeValue: "1.5" }, "0.1")).toBe("0.01");
     expect(feePreview({ ...base, feeType: "percentage", feeValue: "2" }, "100")).toBe("2");
     expect(feePreview({ ...base, feeType: "fixed", feeValue: "0.3" }, "100")).toBe("0.3");
     expect(feePreview({ ...base, feeType: "percentage", feeValue: "1", feeFloor: "0.5" }, "10")).toBe("0.5");
     expect(feePreview({ ...base, feeType: "percentage", feeValue: "10", feeCeiling: "3" }, "100")).toBe("3");
     expect(feePreview({ ...base, feeCalculationMode: "automatic" }, "100")).toBeNull();
     expect(feePreview({ ...base, feeValue: "abc" }, "100")).toBeNull();
+  });
+
+  it("rounds the fee up to the cent, as billing's feeOf does", () => {
+    const base = { ...emptyForm("tenant"), feeCalculationMode: "manual", feeType: "percentage" };
+    // `gateway-pricing.ts` rounds the fee up to the cent and *then* clamps it, so a
+    // preview that keeps the tail shows a cent less than the payer is charged.
+    expect(feePreview({ ...base, feeValue: "12.3" }, "1")).toBe("0.13");
+    // A fee under a cent still costs a cent.
+    expect(feePreview({ ...base, feeValue: "0.1" }, "1")).toBe("0.01");
+    // Already whole cents are left alone, and a fixed fee is rounded the same way.
+    expect(feePreview({ ...base, feeValue: "2.5" }, "100")).toBe("2.5");
+    expect(feePreview({ ...base, feeType: "fixed", feeValue: "0.301" }, "100")).toBe("0.31");
+    // The floor and the ceiling bind the rounded fee, not the raw one.
+    expect(feePreview({ ...base, feeValue: "12.3", feeCeiling: "0.12" }, "1")).toBe("0.12");
+    expect(feePreview({ ...base, feeValue: "12.3", feeFloor: "0.5" }, "1")).toBe("0.5");
+    // Zero is not raised to a cent: nothing is charged, so there is nothing to round.
+    expect(feePreview({ ...base, feeValue: "0" }, "100")).toBe("0");
   });
 });

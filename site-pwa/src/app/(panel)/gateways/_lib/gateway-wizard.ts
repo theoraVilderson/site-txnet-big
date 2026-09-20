@@ -62,6 +62,7 @@ export function firstInvalidStep(form: GatewayForm): WizardStepId | null {
 const SCALE = 8;
 const ONE = BigInt(10) ** BigInt(SCALE);
 const HUNDRED = BigInt(100);
+const CENT = ONE / HUNDRED;
 const DECIMAL = /^(\d{1,16})(?:\.(\d{1,8}))?$/;
 
 function toScaled(v: string): bigint | null {
@@ -76,17 +77,24 @@ function fromScaled(n: bigint): string {
   return frac ? `${whole}.${frac}` : String(whole);
 }
 
+/** To the cent, **up** — `gateway-pricing.ts`'s `centsUp`. Never negative here. */
+function centsUp(n: bigint): bigint {
+  return ((n + CENT - BigInt(1)) / CENT) * CENT;
+}
+
 /**
  * The fee billing would charge on `amount` (`gateway-pricing.ts`): fixed, or a
- * percentage, then clamped to floor and ceiling. `null` when it cannot be known
- * here — an automatic fee is quoted by the provider at payment time.
+ * percentage, rounded up to the cent, then clamped to floor and ceiling — that
+ * order is `feeOf`'s, so a 12.3% fee on 1 previews the 0.13 the payer is
+ * charged and not 0.123. `null` when it cannot be known here — an automatic fee
+ * is quoted by the provider at payment time.
  */
 export function feePreview(form: GatewayForm, amount: string): string | null {
   if (form.feeCalculationMode !== "manual") return null;
   const value = toScaled(form.feeValue);
   const basis = toScaled(amount);
   if (value === null || basis === null) return null;
-  let fee = form.feeType === "fixed" ? value : (basis * value) / (HUNDRED * ONE);
+  let fee = centsUp(form.feeType === "fixed" ? value : (basis * value) / (HUNDRED * ONE));
   const floor = form.feeFloor.trim() ? toScaled(form.feeFloor) : null;
   const ceiling = form.feeCeiling.trim() ? toScaled(form.feeCeiling) : null;
   if (floor !== null && fee < floor) fee = floor;
