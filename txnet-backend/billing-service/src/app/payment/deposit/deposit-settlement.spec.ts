@@ -254,19 +254,21 @@ describe('DepositSettlementService — the debt a granted gateway leaves', () =>
         ),
       );
 
-    it('credits what arrived at the frozen rate when less came, and gives the coupon holds back', async () => {
+    it('credits what arrived at the frozen rate, net of the fee, when less came, and gives the coupon holds back', async () => {
       const { service, calls } = build();
 
       await expect(settleReceived(service, asked(), BigInt(10_000_000))).resolves.toBe(true);
 
       expect(calls.writes).toEqual(['flip', 'credit', 'release:cancelled', 'event']);
-      expect(calls.credits[0]).toMatchObject({ amount: d('10.00') });
+      // Half of the 20.00 charge arrived, and the gateway keeps its 0.20 of it
+      // in proportion: 19.80 x 1/2 (F-104-r).
+      expect(calls.credits[0]).toMatchObject({ amount: d('9.90') });
       expect(calls.flips[0]).toMatchObject({
-        data: { status: PaymentStatus.success, amountCredited: d('10.00'), amountReceivedMinor: BigInt(10_000_000), receivedCurrency: 'IRR' },
+        data: { status: PaymentStatus.success, amountCredited: d('9.90'), amountReceivedMinor: BigInt(10_000_000), receivedCurrency: 'IRR' },
       });
       expect(calls.events[0]).toMatchObject({
         payload: {
-          amountCredited: '10.00',
+          amountCredited: '9.90',
           amountAsked: '19.80',
           chargedAmountMinor: '20000000',
           amountReceivedMinor: '10000000',
@@ -280,7 +282,8 @@ describe('DepositSettlementService — the debt a granted gateway leaves', () =>
 
       await settleReceived(service, asked(), BigInt(10_009_999));
 
-      expect(calls.credits[0]).toMatchObject({ amount: d('10.00') });
+      // 19.80 x 10009999/20000000 = 9.909899..., and the fraction is dropped.
+      expect(calls.credits[0]).toMatchObject({ amount: d('9.90') });
     });
 
     it('credits the asked amount plus the surplus when more came, and the coupon stays used', async () => {
@@ -309,7 +312,8 @@ describe('DepositSettlementService — the debt a granted gateway leaves', () =>
 
       await settleReceived(service, usd, BigInt(1234), 2);
 
-      expect(calls.credits[0]).toMatchObject({ amount: d('12.34') });
+      // 12.34 of the 20.00 charge, less the fee's share: 19.80 x 1234/2000.
+      expect(calls.credits[0]).toMatchObject({ amount: d('12.21') });
     });
 
     it('closes a payment worth under a cent failed, crediting nothing', async () => {
@@ -319,6 +323,67 @@ describe('DepositSettlementService — the debt a granted gateway leaves', () =>
 
       expect(calls.writes).toEqual(['flip', 'release:cancelled']);
       expect(calls.flips[0]).toMatchObject({ data: { status: PaymentStatus.failed, failureCode: 'nothing_received' } });
+    });
+
+    // The fee the payer covered is inside `chargedAmountMinor`, so valuing a
+    // short receipt whole credited it too — one cent short of a 5% fee credited
+    // 104.99 where paying in full credited 100.00 (F-104-r).
+    describe('a short receipt never credits more than paying in full (F-104-r)', () => {
+      // 100.00 asked at a 5% manual fee: 105.00 payable, charged in USD cents.
+      const withFee = () =>
+        paymentRow({
+          amountCredited: d('100.00'),
+          feeApplied: d('5.00'),
+          chargedAmountMinor: BigInt(10_500),
+          exchangeRateSnapshot: d('1'),
+        });
+
+      it('credits one cent short of the charge less than the full payment credits', async () => {
+        const { service, calls } = build();
+
+        await settleReceived(service, withFee(), BigInt(10_499), 2);
+
+        // 104.99 of 105.00 arrived, and the gateway keeps its cut of it:
+        // 100.00 x 10499/10500 = 99.990476..., floored.
+        expect(calls.credits[0]).toMatchObject({ amount: d('99.99') });
+      });
+
+      it('takes the fee out in proportion to what arrived', async () => {
+        const { service, calls } = build();
+
+        await settleReceived(service, withFee(), BigInt(5_250), 2);
+
+        expect(calls.credits[0]).toMatchObject({ amount: d('50.00') });
+      });
+
+      it('credits a short receipt on a gateway with no fee at the frozen rate, unchanged', async () => {
+        const { service, calls } = build();
+        const free = paymentRow({
+          amountCredited: d('100.00'),
+          feeApplied: d('0.00'),
+          chargedAmountMinor: BigInt(10_000),
+          exchangeRateSnapshot: d('1'),
+        });
+
+        await settleReceived(service, free, BigInt(9_900), 2);
+
+        expect(calls.credits[0]).toMatchObject({ amount: d('99.00') });
+      });
+
+      it('closes a receipt whose share of the fee leaves nothing, rather than crediting it', async () => {
+        const { service, calls } = build();
+        // The whole charge is the fee: nothing of it is ever the payer's credit.
+        const allFee = paymentRow({
+          amountCredited: d('0.50'),
+          feeApplied: d('10.00'),
+          chargedAmountMinor: BigInt(1_000),
+          exchangeRateSnapshot: d('1'),
+        });
+
+        await expect(settleReceived(service, allFee, BigInt(900), 2)).resolves.toBe(false);
+
+        expect(calls.flips[0]).toMatchObject({ data: { status: PaymentStatus.failed, failureCode: 'nothing_received' } });
+      });
     });
   });
 

@@ -113,14 +113,25 @@ export type GatewayReceipt = { amountMinor: bigint; currency: string; decimals: 
 /**
  * What a payment is worth in base currency, given what arrived (F-104-d, D-32:
  * credit what actually arrived). Exactly the asked amount, or no receipt, is
- * `amountCredited`. Less is the receipt at the frozen rate, and `full` is
- * false — a coupon applies only to a full payment. More is `amountCredited`
- * plus the surplus at the frozen rate. Every conversion floors to the cent: a
- * fraction that did not arrive is never credited. A payment with no rate (the
- * free path) has nothing to value a receipt at, and credits as asked.
+ * `amountCredited`. More is `amountCredited` plus the surplus at the frozen
+ * rate. Every conversion floors to the cent: a fraction that did not arrive is
+ * never credited. A payment with no rate (the free path) has nothing to value a
+ * receipt at, and credits as asked.
+ *
+ * **Less is the payer's share of what the charge was actually for** (F-104-r),
+ * not the receipt valued whole. `chargedAmountMinor` is `amountCredited` *plus*
+ * `feeApplied` at the frozen rate — the gateway's cut, which the payer covered
+ * — so valuing a short receipt whole credited that cut as if it were money the
+ * platform kept. On a 5% gateway, 100.00 asked is charged 105.00, and a receipt
+ * of 104.99 credited 104.99: paying one cent short paid 4.99 more than paying
+ * in full. So the fee comes out in proportion to what arrived — credited =
+ * (charge at the frozen rate - `feeApplied`) x received / asked — which is
+ * exactly `amountCredited` at a full receipt and strictly less below it. `full`
+ * is false either way: a coupon applies only to a full payment, and its
+ * discount is not in this figure.
  */
 export function creditForReceipt(
-  payment: Pick<PaymentRow, 'amountCredited' | 'chargedAmountMinor' | 'exchangeRateSnapshot'>,
+  payment: Pick<PaymentRow, 'amountCredited' | 'feeApplied' | 'chargedAmountMinor' | 'exchangeRateSnapshot'>,
   received: GatewayReceipt | undefined,
 ): { credited: Prisma.Decimal; full: boolean } {
   const asked = payment.chargedAmountMinor;
@@ -129,12 +140,18 @@ export function creditForReceipt(
     return { credited: payment.amountCredited, full: true };
   }
   const toBase = (minor: bigint) =>
-    new Prisma.Decimal(minor.toString())
-      .div(new Prisma.Decimal(10).pow(received.decimals))
-      .div(rate)
-      .toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
-  if (received.amountMinor < asked) return { credited: toBase(received.amountMinor), full: false };
-  return { credited: payment.amountCredited.plus(toBase(received.amountMinor - asked)), full: true };
+    new Prisma.Decimal(minor.toString()).div(new Prisma.Decimal(10).pow(received.decimals)).div(rate);
+  const cents = (v: Prisma.Decimal) => v.toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
+  if (received.amountMinor < asked) {
+    // The charge less the fee: what a full payment would have left the platform
+    // holding. A fee at or above the whole charge leaves nothing to share out,
+    // and the caller closes the row `nothing_received`.
+    const net = toBase(asked).minus(payment.feeApplied);
+    if (net.lte(0)) return { credited: new Prisma.Decimal(0), full: false };
+    const share = new Prisma.Decimal(received.amountMinor.toString()).div(asked.toString());
+    return { credited: cents(net.times(share)), full: false };
+  }
+  return { credited: payment.amountCredited.plus(cents(toBase(received.amountMinor - asked))), full: true };
 }
 
 /** A person's confirmation (F-092-z): who, why, and from where — the audit row's content. */
