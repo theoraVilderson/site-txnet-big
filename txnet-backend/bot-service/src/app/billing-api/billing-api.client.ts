@@ -75,6 +75,29 @@ export interface InChatPaid {
   credited: string | null;
 }
 
+/**
+ * What one reseller earned over a period, as
+ * `GET /api/billing/tenants/:tenantId/revenue` answers it
+ * (`billing/contract.revenue.md`, F-311-b, ADR-0067).
+ *
+ * **Two figures, and neither is the other**: `sales` is what this reseller's
+ * users spent on its services, `topUps` what they paid into their wallets. The
+ * window echoed back is the one billing actually used, so the bot renders the
+ * dates it was given rather than restating the ones it sent. Every amount is a
+ * base-currency decimal string — the bot does no arithmetic on any of them.
+ *
+ * `sales.total` is `0.00` until `entitlement` is built and something writes a
+ * `traffic_consumption` row. That is why this screen labels both figures
+ * rather than adding them: a zero labelled "revenue" reads as a bug, and
+ * "service sales" plus "customer top-ups" reads as what it is.
+ */
+export interface ResellerRevenue {
+  from: string;
+  to: string;
+  sales: { total: string; count: number; byReason: { reasonType: string; total: string; count: number }[] };
+  topUps: { total: string; count: number };
+}
+
 /** Whose call this is: the chat's access token, in the chat's language. */
 export interface BillingCallContext {
   lang: string;
@@ -146,6 +169,18 @@ export class BillingApiClient {
 
   start(body: DepositBody, ctx: BillingCallContext): Promise<ApiResult<DepositStarted>> {
     return this.call('POST', '/api/billing/deposit/start', body, ctx);
+  }
+
+  /**
+   * A named reseller's own takings (F-311-b). The reseller is the **path's**,
+   * never the session's: its owner signs in to the platform owner's tenant
+   * (ADR-0059), so a call that named no reseller would total the wrong one.
+   *
+   * No period is sent — billing's default window is the month a reseller is
+   * asked about most, and the answer says which window it used.
+   */
+  resellerRevenue(tenantId: string, ctx: BillingCallContext): Promise<ApiResult<ResellerRevenue>> {
+    return this.call('GET', `/api/billing/tenants/${tenantId}/revenue`, undefined, ctx);
   }
 
   /** Relay a `pre_checkout_query` (F-104-m, F-104-ab). */

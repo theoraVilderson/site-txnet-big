@@ -19,6 +19,7 @@ import { AccountsFlow } from '../flows/accounts.flow';
 import { ForgotFlow } from '../flows/forgot.flow';
 import { LoginFlow } from '../flows/login.flow';
 import { RegisterFlow } from '../flows/register.flow';
+import { ResellerFlow } from '../flows/reseller.flow';
 import { TopUpFlow } from '../flows/top-up.flow';
 import { OtpStep } from '../flows/otp.step';
 import {
@@ -79,6 +80,7 @@ export class ConversationRouter {
     private readonly access: ChatAccess,
     private readonly topUp: TopUpFlow,
     private readonly billing: BillingApiClient,
+    private readonly reseller: ResellerFlow,
   ) {}
 
   /**
@@ -132,6 +134,7 @@ export class ConversationRouter {
     if (actionId === ACTIONS.accountAdd) return this.accountAdd.start(ctx);
 
     if (actionId === ACTIONS.topUp) return this.topUp.start(ctx);
+    if (actionId === ACTIONS.reseller) return this.reseller.start(ctx);
 
     if (actionId === ACTIONS.login) return this.login.start(ctx);
     if (actionId === ACTIONS.register) return this.register.start();
@@ -160,6 +163,8 @@ export class ConversationRouter {
         return this.accountAdd.handle(ctx, state, actionId);
       case 'topUp':
         return this.topUp.handle(ctx, state, actionId);
+      case 'reseller':
+        return this.reseller.handle(ctx, state, actionId);
       default:
         return { view: say('unknown', { key: BotKeys.common.unknown }), nextState: null };
     }
@@ -476,7 +481,13 @@ export class ConversationRouter {
    */
   private async menu(ctx: ChatContext) {
     const token = await this.access.token(ctx);
-    return token ? memberMenu(this.miniAppUrl(ctx.platform), this.billing.isConfigured) : guestMenu();
+    if (!token) return guestMenu();
+    // F-311-c: the management row exists only for a chat the door admits
+    // (F-311-e). Asked here, on the same token the menu was decided with, and
+    // remembered nowhere — this bot serves the reseller's customers too, and
+    // they are most of the chats that reach this line.
+    const reseller = await this.reseller.canAdminister(ctx, token);
+    return memberMenu(this.miniAppUrl(ctx.platform), this.billing.isConfigured, reseller);
   }
 
   /**

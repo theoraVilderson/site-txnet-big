@@ -37,6 +37,12 @@ export const ACTIONS = {
   miniApp: 'menu:miniapp',
   topUp: 'menu:topup',
   topUpPay: 'topup:pay',
+  /** The reseller management panel (`F-311-c`) — the menu row, and its two screens. */
+  reseller: 'menu:reseller',
+  resellerUsers: 'reseller:users',
+  resellerRevenue: 'reseller:revenue',
+  /** Drop the search and go back to the whole list. */
+  resellerAllUsers: 'reseller:users:all',
 } as const;
 
 export const cancel: BotAction = {
@@ -86,6 +92,38 @@ export const removeAccount: BotAction = {
   id: ACTIONS.accountRemove,
   label: { key: BotKeys.action.removeAccount },
 };
+
+/**
+ * `ruser:<userId>` — which of the reseller's users to open (`F-311-c`).
+ *
+ * A prefix for the same reason the account list has one: the set is built at
+ * render time out of whatever page the reseller is looking at, so no table
+ * could map it. It is not a credential — `auth-api` decides whether this
+ * caller may read or touch that user, and a user id from another tenant is
+ * answered `user_not_found` there (`contract.reseller-users.md`), not here.
+ */
+export const RESELLER_USER_PREFIX = 'ruser:';
+
+/**
+ * `rpage:<n>` — which page of the list to draw.
+ *
+ * The page is on the button rather than in the conversation state because a
+ * chat holds two screens at once routinely: the one just sent and the one
+ * three messages up. A page read from remembered state would mean an older
+ * keyboard pages the newer screen.
+ */
+export const RESELLER_PAGE_PREFIX = 'rpage:';
+
+/**
+ * `rblock:<userId>` / `runblock:<userId>` — the two write buttons.
+ *
+ * Two prefixes rather than one with a mode, exactly as `drop:` is a second
+ * prefix beside `account:`: blocking and unblocking arrive on the same screen
+ * shape, and a payload that has to be read together with remembered state to
+ * tell which is how a stale keyboard blocks someone it meant to unblock.
+ */
+export const RESELLER_BLOCK_PREFIX = 'rblock:';
+export const RESELLER_UNBLOCK_PREFIX = 'runblock:';
 
 export const toMenu: BotAction = {
   id: ACTIONS.menu,
@@ -159,11 +197,16 @@ export function miniApp(url: string): BotAction {
  * not published a panel yet shows a menu without the row, rather than a button
  * that opens nothing.
  */
-export function memberMenu(miniAppUrl?: string, topUp = false): BotView {
+export function memberMenu(miniAppUrl?: string, topUp = false, reseller = false): BotView {
   return view('menu.member', { key: BotKeys.menu.member }, [
     ...(miniAppUrl ? [[miniApp(miniAppUrl)]] : []),
     // F-306-a. Only where billing is reachable (`BillingApiClient.isConfigured`).
     ...(topUp ? [[{ id: ACTIONS.topUp, label: { key: BotKeys.action.topUp } }]] : []),
+    // F-311-c. The row exists only for a chat the **door** says may administer
+    // this bot's reseller (`GET /api/tenants/:id/access`, F-311-e) — never on
+    // a rule of the bot's own, and never for the customers this same bot
+    // serves, who are the majority of the chats that reach this line.
+    ...(reseller ? [[{ id: ACTIONS.reseller, label: { key: BotKeys.action.reseller } }]] : []),
     [{ id: ACTIONS.accounts, label: { key: BotKeys.action.accounts } }],
     [
       { id: ACTIONS.help, label: { key: BotKeys.action.help } },
@@ -407,4 +450,187 @@ export function askContact(id: string, body: BotText): BotView {
     ],
     [cancel],
   ]);
+}
+
+/**
+ * The reseller panel's own menu (`F-311-c`): the two things it can answer.
+ *
+ * A screen of its own rather than two more rows on the member menu, because
+ * this bot serves the reseller's *customers* too — everything below this point
+ * is about the business, and a member menu that mixes "top up my wallet" with
+ * "block a customer" makes the reseller read their own menu twice.
+ */
+export function resellerMenu(): BotView {
+  return view('reseller.home', { key: BotKeys.reseller.home }, [
+    [{ id: ACTIONS.resellerUsers, label: { key: BotKeys.action.resellerUsers } }],
+    [{ id: ACTIONS.resellerRevenue, label: { key: BotKeys.action.resellerRevenue } }],
+    [toMenu],
+  ]);
+}
+
+/** One page of the reseller's users, as `auth-api` answered it. */
+export interface ResellerUserRow {
+  id: string;
+  fullName: string;
+  phoneMasked: string | null;
+}
+
+/**
+ * The customer list (`F-311-c`), with search and paging on the same screen.
+ *
+ * **Typing is the search box.** A chat has no other one, so free text on this
+ * screen is a query and a tap is a customer — which is why the empty-search
+ * and the no-match screens are different sentences: "nobody has signed up" is
+ * a fact about the reseller, "nothing matches" is a fact about what they typed,
+ * and answering the second with the first reads as the list having been lost.
+ *
+ * Paging is `rpage:<n>` buttons rather than a remembered cursor: the page
+ * count comes from `total` and `pageSize`, both of which `auth-api` answered,
+ * so this screen computes no offset of its own.
+ */
+export function resellerUsersView(
+  page: { items: ResellerUserRow[]; total: number; page: number; pageSize: number },
+  q: string | undefined,
+): BotView {
+  if (!page.items.length) {
+    return view(
+      q ? 'reseller.users.noMatch' : 'reseller.users.empty',
+      q
+        ? { key: BotKeys.reseller.usersNoMatch, values: { q } }
+        : { key: BotKeys.reseller.usersEmpty },
+      q ? [[allResellerUsers], [toMenu]] : [[toMenu]],
+    );
+  }
+
+  const pages = Math.ceil(page.total / page.pageSize);
+  const paging: BotAction[] = [
+    ...(page.page > 1
+      ? [{ id: `${RESELLER_PAGE_PREFIX}${page.page - 1}`, label: { key: BotKeys.action.resellerPrevPage } }]
+      : []),
+    ...(page.page < pages
+      ? [{ id: `${RESELLER_PAGE_PREFIX}${page.page + 1}`, label: { key: BotKeys.action.resellerNextPage } }]
+      : []),
+  ];
+
+  return view(
+    'reseller.users',
+    {
+      key: BotKeys.reseller.usersPick,
+      values: { shown: String(page.items.length), total: String(page.total) },
+    },
+    [
+      ...page.items.map((u) => [
+        {
+          id: `${RESELLER_USER_PREFIX}${u.id}`,
+          label: {
+            key: u.phoneMasked ? BotKeys.reseller.userRow : BotKeys.reseller.userRowNoPhone,
+            values: { name: u.fullName, phone: u.phoneMasked ?? '' },
+          },
+        },
+      ]),
+      ...(paging.length ? [paging] : []),
+      // Only where a search narrowed it: on the whole list this button would
+      // say "show me what I am already looking at".
+      ...(q ? [[allResellerUsers]] : []),
+      [cancel],
+    ],
+  );
+}
+
+/** Drop the search term and draw the whole list again. */
+export const allResellerUsers: BotAction = {
+  id: ACTIONS.resellerAllUsers,
+  label: { key: BotKeys.action.resellerAllUsers },
+};
+
+/**
+ * One customer (`F-311-c`), and what may be done to them.
+ *
+ * **`canWrite` decides the buttons and nothing else decides them.** It is the
+ * door's second verdict (`GET /api/tenants/:id/access`, F-311-e), re-read for
+ * this screen rather than carried from the menu: a suspended reseller still
+ * reads its customers and no longer writes, and a seat revoked a minute ago
+ * must stop blocking people. The routes refuse either way — this only keeps
+ * the bot from offering a button whose answer is always no.
+ *
+ * A `banned` user gets no button at all: the platform banned that account, and
+ * a reseller neither deepens nor lifts it (`user_banned`, 409).
+ */
+export function resellerUserView(
+  user: { id: string; fullName: string; username: string; phoneMasked: string | null; status: string; createdAt: string },
+  statusKey: string,
+  joined: string,
+  canWrite: boolean,
+): BotView {
+  const write: BotAction[][] =
+    !canWrite || user.status === 'banned'
+      ? []
+      : user.status === 'suspended'
+        ? [[{ id: `${RESELLER_UNBLOCK_PREFIX}${user.id}`, label: { key: BotKeys.action.resellerUnblock } }]]
+        : [[{ id: `${RESELLER_BLOCK_PREFIX}${user.id}`, label: { key: BotKeys.action.resellerBlock } }]];
+
+  return view(
+    'reseller.user',
+    {
+      key: BotKeys.reseller.user,
+      values: {
+        name: user.fullName,
+        username: user.username,
+        phone: user.phoneMasked ?? '—',
+        status: statusKey,
+        joined,
+      },
+    },
+    [...write, [cancel]],
+  );
+}
+
+/**
+ * "Really block them?" (`F-311-c`).
+ *
+ * Blocking signs that account out of everywhere it is, so it gets the same
+ * confirmation removing an account does — and for the same reason: the tap
+ * that causes it sits on the screen someone opened to *look* at a customer.
+ * Unblocking has none; it gives access back.
+ */
+export function resellerBlockConfirmView(user: { id: string; fullName: string }): BotView {
+  return view(
+    'reseller.block.confirm',
+    { key: BotKeys.reseller.blockAsk, values: { name: user.fullName } },
+    [
+      [{ id: `${RESELLER_BLOCK_PREFIX}${user.id}`, label: { key: BotKeys.action.resellerBlockYes } }],
+      [cancel],
+    ],
+  );
+}
+
+/**
+ * What the reseller earned (`F-311-c`, over F-311-b).
+ *
+ * Two figures, labelled, never added: `sales` is what its customers spent on
+ * its services and `topUps` what they paid in, and ADR-0067 decision 1 is that
+ * neither is the other. Both are billing's strings, rendered as they arrived —
+ * the bot does no arithmetic on money (C-02) and none on the dates either.
+ */
+export function resellerRevenueView(totals: {
+  from: string;
+  to: string;
+  sales: { total: string; count: number };
+  topUps: { total: string; count: number };
+}): BotView {
+  return view(
+    'reseller.revenue',
+    {
+      key: BotKeys.reseller.revenue,
+      values: {
+        from: totals.from,
+        to: totals.to,
+        sales: totals.sales.total,
+        salesCount: String(totals.sales.count),
+        topUps: totals.topUps.total,
+        topUpsCount: String(totals.topUps.count),
+      },
+    },
+    [[toMenu]],
+  );
 }

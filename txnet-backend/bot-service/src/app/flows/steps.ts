@@ -56,6 +56,10 @@ const FLOW_STEPS: Record<Exclude<BotFlow, 'login' | 'accountAdd'>, string[]> = {
   // count and "step 1 of 1" is noise on a screen that is already a list. An
   // empty list makes `progressOf` return nothing, which is the honest answer.
   accounts: [],
+  // The reseller panel is a set of screens a person moves around in, not a
+  // conversation with an end: the list, one customer, the figure. There is no
+  // last step to count towards, so it counts nothing — same as `accounts`.
+  reseller: [],
   topUp: ['topUp.gateway', 'topUp.amount', 'topUp.confirm'],
 };
 
@@ -76,6 +80,7 @@ export const PROGRESS_KEY: Record<BotFlow, BotKey | null> = {
   forgot: BotKeys.progress.forgot,
   accountAdd: BotKeys.progress.accountAdd,
   accounts: null,
+  reseller: null,
   topUp: BotKeys.progress.topUp,
 };
 

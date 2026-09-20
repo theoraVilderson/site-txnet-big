@@ -66,6 +66,20 @@ export const envSchema = z.object({
    */
   BILLING_API_BASE_URL: optional(z.string().url()),
   /**
+   * Where `tenant-service` answers **through the gate** (F-311-c): the same
+   * Traefik host `BILLING_API_BASE_URL` names. One route is read from it —
+   * `GET /api/tenants/:id/access`, the door's verdict on whether this chat may
+   * administer the reseller whose bot it is (F-311-e).
+   *
+   * Never tenant-service directly: that route reads the identity headers
+   * `my-auth` writes, and a call that skipped the gate would carry none.
+   *
+   * Unset, the member menu has no management row. That is the right failure
+   * for a deployment that has not published the tenant API: the alternative is
+   * a row every customer can see whose first tap is an error.
+   */
+  TENANT_API_BASE_URL: optional(z.string().url()),
+  /**
    * billing-service **directly**, for the in-chat payment relay only (F-104-ab):
    * `/api/internal/*`, which Traefik does not route, with the service token and
    * no user. Unset, a pre-checkout query is refused with "try again".

@@ -11,6 +11,7 @@ import { AccountsFlow } from '../flows/accounts.flow';
 import { AccountSwitcher } from '../session/account-switcher';
 import { TopUpFlow } from '../flows/top-up.flow';
 import { BillingApiClient } from '../billing-api/billing-api.client';
+import { ResellerFlow } from '../flows/reseller.flow';
 import { ChatAccess } from '../session/chat-access';
 import { ForgotFlow } from '../flows/forgot.flow';
 import { LoginFlow } from '../flows/login.flow';
@@ -35,6 +36,8 @@ function makeRouter(over: {
   access?: string | null;
   /** Billing is reachable, so the member menu offers a top-up (F-306-a). */
   topUp?: boolean;
+  /** The door's verdict on this bot's reseller — what the management row turns on (F-311-c/e). */
+  reseller?: boolean;
 } = {}) {
   const nav = {
     get: vi.fn().mockResolvedValue(over.state ?? null),
@@ -107,6 +110,11 @@ function makeRouter(over: {
     new ChatAccess(api, sessions),
     { start: vi.fn(), handle: vi.fn() } as unknown as TopUpFlow,
     { isConfigured: over.topUp ?? false } as unknown as BillingApiClient,
+    {
+      canAdminister: vi.fn().mockResolvedValue(over.reseller ?? false),
+      start: vi.fn(),
+      handle: vi.fn(),
+    } as unknown as ResellerFlow,
   );
   return { router, nav, sessions, api, otp, langs, locale };
 }
@@ -135,6 +143,22 @@ describe('ConversationRouter', () => {
       expect((result.view.actions ?? []).flat().map((a) => a.id)).toContain(
         'menu:accounts',
       );
+    });
+
+    it('puts the management row on the menu only where the door admits the chat (F-311-c)', async () => {
+      const { router } = makeRouter({ session: { refreshToken: 'r-1', signedInAt: 1 }, reseller: true });
+
+      const result = await router.route({ ...ctx, text: '/start' });
+
+      expect((result.view.actions ?? []).flat().map((a) => a.id)).toContain('menu:reseller');
+    });
+
+    it('keeps it off the menu of a customer of the same bot', async () => {
+      const { router } = makeRouter({ session: { refreshToken: 'r-1', signedInAt: 1 } });
+
+      const result = await router.route({ ...ctx, text: '/start' });
+
+      expect((result.view.actions ?? []).flat().map((a) => a.id)).not.toContain('menu:reseller');
     });
 
     /**

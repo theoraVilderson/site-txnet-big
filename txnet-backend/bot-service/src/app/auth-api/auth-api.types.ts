@@ -125,3 +125,36 @@ export interface RemoveAccountResult {
   userId: string;
   removed: boolean;
 }
+
+/**
+ * One of a reseller's own users, as `GET /auth/tenants/:tenantId/users` lists
+ * them (`auth-api/contract.reseller-users.md`, F-311-a).
+ *
+ * No phone number and no email: the list is a reseller reading its customers,
+ * not the platform reading an account. `phoneMasked` is what the surface may
+ * show, and it is `null` for an account that has none.
+ */
+export interface ResellerUser {
+  id: string;
+  fullName: string;
+  username: string;
+  phoneMasked: string | null;
+  status: ResellerUserStatus;
+  createdAt: string;
+}
+
+/**
+ * The three states a reseller's user can be in. Spelled here rather than
+ * imported from Prisma — this service holds no schema — and read through an
+ * exhaustive `Record` wherever it becomes copy (C-07), so a fourth state is a
+ * compile error instead of a raw key in a chat.
+ */
+export type ResellerUserStatus = 'active' | 'suspended' | 'banned';
+
+/** One page of them, newest first. */
+export interface ResellerUserPage {
+  items: ResellerUser[];
+  total: number;
+  page: number;
+  pageSize: number;
+}

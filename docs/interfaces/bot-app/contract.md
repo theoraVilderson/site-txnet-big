@@ -2,15 +2,14 @@
 id: bot-app
 layer: interface
 status: active
-version: 11
-updated: 2026-09-16
+version: 12
+updated: 2026-09-20
 ---
 
 # bot-app — contract
 
-`F-303` is implemented (`txnet-backend/bot-service/`); the rest of §10.4 is
-intent (§0 authority level 4), derived from ADR-0009 and the catalog. Resolve
-any feature id with `python3 tools/spec.py <F-id>`.
+`F-303` and `F-311-c` are implemented; the rest of §10.4 is intent (§0 level 4),
+from ADR-0009 and the catalog. Resolve an id with `python3 tools/spec.py <F-id>`.
 
 ## TL;DR
 
@@ -40,8 +39,8 @@ only way to reach a capability, and never a reason a chat flow was skipped. A
 `BotView` whose chat path is empty because `escape` is filled in is a bug.
 
 The Mini App (`F-310`) is `panel-web` with a shared session — never a third UI.
-Both Telegram and Bale have a WebApp surface, so this is a product choice, not a
-platform limit. It is **built** (2026-09-08): see § The Mini App below.
+Both messengers have a WebApp surface, so that is a product choice, not a
+platform limit. **Built** 2026-09-08: see § The Mini App below.
 
 ## The rule that matters more than the rest
 
@@ -56,7 +55,7 @@ reached from another surface:
 | `F-305` one-click renewal/top-up | network + billing |
 | `F-306` wallet, history, invoices | billing |
 | `F-309` two-way tickets | support |
-| `F-311`/`F-312` reseller + sub-reseller management | tenant |
+| `F-311`/`F-312` reseller + sub-reseller management | tenant — the users and the two writes `auth-api` (F-311-a), the figures billing (F-311-b), **and whether the chat may see any of it at all** the door (F-311-e). The flow is built: [contract.reseller.md](contract.reseller.md) |
 | `F-313-b` bulk sending | notification (queue, F-035-d/e) + messenger (the ceiling, F-313-a/ADR-0066); the bot owns the flow only |
 | `F-318` channel-membership trial gate | engagement/governance decides eligibility; bot only asks the platform for membership |
 | `F-319` per-user notification settings | governance |
@@ -86,6 +85,7 @@ contract — **not** a rule written in the bot because it is faster there
 | `flows/account-add.flow.ts` | an account joining that group, by one of `F-0205`'s two proofs |
 | `auth-api/auth-api.client.ts` | the only way out — to identity |
 | `flows/top-up.flow.ts`, `billing-api/billing-api.client.ts` | the wallet top-up, and the way out to billing (F-306-a, below) |
+| `flows/reseller.flow.ts`, `tenant-api/tenant-api.client.ts` | the reseller panel — menu row, customers, block, revenue (F-311-c): [contract.reseller.md](contract.reseller.md) |
 
 **The bot reaches `auth-api` with a service credential** (`X-Service-Token`,
 ADR-0011): it waives the slide captcha — a chat cannot drag one — and moves the

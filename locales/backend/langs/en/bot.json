@@ -28,7 +28,16 @@
     "signOutAllYes": "Yes, sign out of all",
     "topUp": "💳 Top up my wallet",
     "toPayment": "Continue to payment",
-    "payNow": "Pay"
+    "payNow": "Pay",
+    "reseller": "🏪 Manage my reseller",
+    "resellerUsers": "Customers",
+    "resellerRevenue": "Sales report",
+    "resellerBlock": "Block",
+    "resellerBlockYes": "Yes, block them",
+    "resellerUnblock": "Unblock",
+    "resellerAllUsers": "All customers",
+    "resellerNextPage": "Next page",
+    "resellerPrevPage": "Previous page"
   },
   "common": {
     "cancelled": "Cancelled; nothing was saved. Start again below whenever you like.",
@@ -148,5 +157,22 @@
     "refusedNotFound": "This invoice is not yours or no longer exists. Start a new top-up from the menu.",
     "refusedNotPayable": "This invoice has expired or was already paid. Start a new top-up from the menu.",
     "refusedAmount": "This invoice no longer matches its payment. Start a new top-up from the menu."
+  },
+  "reseller": {
+    "home": "Look after your reseller right here.",
+    "usersPick": "{{shown}} of {{total}} customers. Pick one, or type a name, username or number to search.",
+    "usersEmpty": "Nobody has signed up on your reseller yet.",
+    "usersNoMatch": "No customer matches “{{q}}”. Try something else, or see all of them.",
+    "searchTooShort": "Type at least three characters to search.",
+    "userRow": "{{name}} · {{phone}}",
+    "userRowNoPhone": "{{name}}",
+    "user": "{{name}}\nUsername: {{username}}\nNumber: {{phone}}\nStatus: {{status}}\nJoined: {{joined}}",
+    "statusActive": "Active",
+    "statusSuspended": "Blocked",
+    "statusBanned": "Blocked by the platform",
+    "blockAsk": "Block {{name}}? They are signed out everywhere and cannot sign in until you unblock them.",
+    "blocked": "{{name}} is blocked ✅",
+    "unblocked": "{{name}} is active again ✅",
+    "revenue": "{{from}} to {{to}}\nService sales: {{sales}} ({{salesCount}})\nCustomer top-ups: {{topUps}} ({{topUpsCount}})"
   }
 }

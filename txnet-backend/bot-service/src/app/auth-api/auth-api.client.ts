@@ -17,6 +17,8 @@ import {
   OtpRequestResult,
   PasswordLoginResult,
   RemoveAccountResult,
+  ResellerUser,
+  ResellerUserPage,
   SwitchGroup,
   SwitchResult,
   TokenPair,
@@ -284,10 +286,55 @@ export class AuthApiClient {
     return this.call('POST', '/api/auth/bots/link/status', body, ctx);
   }
 
+  // --- a reseller's own users (F-311-a) -----------------------------------
+
+  /**
+   * One page of the users registered on the reseller the path names — never
+   * the session's (`auth-api/contract.reseller-users.md`). The door is
+   * `ResellerAccess` and no permission, so the caller here is the reseller's
+   * owner holding no operator permission at all.
+   *
+   * `q` is omitted rather than sent empty: the schema wants three characters
+   * or nothing, and an empty string is neither.
+   */
+  resellerUsers(
+    tenantId: string,
+    query: { q?: string; page?: number; pageSize?: number },
+    ctx: CallContext,
+  ): Promise<ApiResult<ResellerUserPage>> {
+    const params = new URLSearchParams();
+    if (query.q) params.set('q', query.q);
+    if (query.page) params.set('page', String(query.page));
+    if (query.pageSize) params.set('pageSize', String(query.pageSize));
+    const qs = params.toString();
+    return this.call('GET', `/api/auth/tenants/${tenantId}/users${qs ? `?${qs}` : ''}`, undefined, ctx);
+  }
+
+  /** Block one of them — `staffWrite`, and every session of that account is revoked. */
+  blockResellerUser(
+    tenantId: string,
+    userId: string,
+    ctx: CallContext,
+  ): Promise<ApiResult<ResellerUser>> {
+    return this.call('POST', `/api/auth/tenants/${tenantId}/users/${userId}/block`, undefined, ctx);
+  }
+
+  /**
+   * Lift it. **Unblock is the deletion of the block**, not a second verb on
+   * the user, which is why this is a `DELETE` and not a `POST .../unblock`.
+   */
+  unblockResellerUser(
+    tenantId: string,
+    userId: string,
+    ctx: CallContext,
+  ): Promise<ApiResult<ResellerUser>> {
+    return this.call('DELETE', `/api/auth/tenants/${tenantId}/users/${userId}/block`, undefined, ctx);
+  }
+
   // --- transport ----------------------------------------------------------
 
   private async call<T>(
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'DELETE',
     path: string,
     body: unknown,
     ctx: CallContext,

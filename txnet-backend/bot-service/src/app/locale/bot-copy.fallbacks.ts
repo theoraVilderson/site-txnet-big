@@ -165,6 +165,37 @@ export const BOT_COPY_FALLBACKS: Readonly<Record<string, string>> = {
   [BotKeys.topUp.refusedNotFound]: 'This invoice is not yours or no longer exists. Start a new top-up from the menu.',
   [BotKeys.topUp.refusedNotPayable]: 'This invoice has expired or was already paid. Start a new top-up from the menu.',
   [BotKeys.topUp.refusedAmount]: 'This invoice no longer matches its payment. Start a new top-up from the menu.',
+  // The reseller panel inside the bot (`F-311-c`). The two revenue figures are
+  // labelled and never added: ADR-0067 decision 1, and `sales` is empty until
+  // `entitlement` ships — a zero labelled "revenue" reads as a broken report.
+  [BotKeys.action.reseller]: '🏪 Manage my reseller',
+  [BotKeys.action.resellerUsers]: 'Customers',
+  [BotKeys.action.resellerRevenue]: 'Sales report',
+  [BotKeys.action.resellerBlock]: 'Block',
+  [BotKeys.action.resellerBlockYes]: 'Yes, block them',
+  [BotKeys.action.resellerUnblock]: 'Unblock',
+  [BotKeys.action.resellerAllUsers]: 'All customers',
+  [BotKeys.action.resellerNextPage]: 'Next page',
+  [BotKeys.action.resellerPrevPage]: 'Previous page',
+  [BotKeys.reseller.home]: 'Look after your reseller right here.',
+  [BotKeys.reseller.usersPick]:
+    '{{shown}} of {{total}} customers. Pick one, or type a name, username or number to search.',
+  [BotKeys.reseller.usersEmpty]: 'Nobody has signed up on your reseller yet.',
+  [BotKeys.reseller.usersNoMatch]: 'No customer matches “{{q}}”. Try something else, or see all of them.',
+  [BotKeys.reseller.searchTooShort]: 'Type at least three characters to search.',
+  [BotKeys.reseller.userRow]: '{{name}} · {{phone}}',
+  [BotKeys.reseller.userRowNoPhone]: '{{name}}',
+  [BotKeys.reseller.user]:
+    '{{name}}\nUsername: {{username}}\nNumber: {{phone}}\nStatus: {{status}}\nJoined: {{joined}}',
+  [BotKeys.reseller.statusActive]: 'Active',
+  [BotKeys.reseller.statusSuspended]: 'Blocked',
+  [BotKeys.reseller.statusBanned]: 'Blocked by the platform',
+  [BotKeys.reseller.blockAsk]:
+    'Block {{name}}? They are signed out everywhere and cannot sign in until you unblock them.',
+  [BotKeys.reseller.blocked]: '{{name}} is blocked ✅',
+  [BotKeys.reseller.unblocked]: '{{name}} is active again ✅',
+  [BotKeys.reseller.revenue]:
+    '{{from}} to {{to}}\nService sales: {{sales}} ({{salesCount}})\nCustomer top-ups: {{topUps}} ({{topUpsCount}})',
   [BotKeys.field.phone]: 'Number: {{value}} ✅',
   [BotKeys.field.identifier]: 'Account: {{value}} ✅',
   [BotKeys.field.name]: 'Name: {{value}} ✅',

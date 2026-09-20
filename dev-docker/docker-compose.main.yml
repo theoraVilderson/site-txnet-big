@@ -493,6 +493,11 @@ services:
       # routes trust only what `my-auth` writes. The chat's access token is the
       # Bearer; Traefik's network alias keeps it in-network.
       - BILLING_API_BASE_URL=http://api.${DOMAIN_NAME}
+      # The same gate, for the one tenant route the bot reads (F-311-c): the
+      # door's verdict on whether this chat may administer the reseller whose
+      # bot it is (`GET /api/tenants/:id/access`, F-311-e). Unset, the member
+      # menu simply has no management row.
+      - TENANT_API_BASE_URL=http://api.${DOMAIN_NAME}
       # The one exception (F-104-ab): the in-chat payment relay goes to
       # billing's `/api/internal/*` directly, with the service token and the
       # sender — a payment's events need no chat session.

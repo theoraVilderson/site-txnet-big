@@ -28,7 +28,16 @@
     "signOutAllYes": "بله، از همه خارج شو",
     "topUp": "💳 شارژ کیف پول",
     "toPayment": "ادامه و پرداخت",
-    "payNow": "پرداخت"
+    "payNow": "پرداخت",
+    "reseller": "🏪 مدیریت نمایندگی",
+    "resellerUsers": "کاربران",
+    "resellerRevenue": "گزارش فروش",
+    "resellerBlock": "مسدود کردن",
+    "resellerBlockYes": "بله، مسدودش کن",
+    "resellerUnblock": "رفع مسدودی",
+    "resellerAllUsers": "همهٔ کاربران",
+    "resellerNextPage": "صفحهٔ بعد",
+    "resellerPrevPage": "صفحهٔ قبل"
   },
   "common": {
     "cancelled": "لغو شد؛ چیزی ذخیره نشد. هر وقت خواستید از پایین شروع کنید.",
@@ -148,5 +157,22 @@
     "refusedNotFound": "این صورتحساب مال شما نیست یا دیگه وجود نداره. از منو یک شارژ تازه شروع کنید.",
     "refusedNotPayable": "این صورتحساب منقضی شده یا قبلاً پرداخت شده. از منو یک شارژ تازه شروع کنید.",
     "refusedAmount": "این صورتحساب دیگه با پرداختش جور نیست. از منو یک شارژ تازه شروع کنید."
+  },
+  "reseller": {
+    "home": "نمایندگی خودتون رو از همین‌جا اداره کنید.",
+    "usersPick": "{{shown}} کاربر از {{total}} تا. یکی رو انتخاب کنید، یا برای جستجو اسم، نام کاربری یا شماره رو بنویسید.",
+    "usersEmpty": "هنوز هیچ کاربری روی نمایندگیتون ثبت‌نام نکرده.",
+    "usersNoMatch": "هیچ کاربری با «{{q}}» پیدا نشد. یه چیز دیگه بنویسید یا همهٔ کاربران رو ببینید.",
+    "searchTooShort": "برای جستجو دست‌کم سه حرف بنویسید.",
+    "userRow": "{{name}} · {{phone}}",
+    "userRowNoPhone": "{{name}}",
+    "user": "{{name}}\nنام کاربری: {{username}}\nشماره: {{phone}}\nوضعیت: {{status}}\nعضویت: {{joined}}",
+    "statusActive": "فعال",
+    "statusSuspended": "مسدود",
+    "statusBanned": "مسدود شده توسط پلتفرم",
+    "blockAsk": "{{name}} مسدود بشه؟ از همه‌جا خارج می‌شه و تا وقتی رفع مسدودی نکنید نمی‌تونه وارد بشه.",
+    "blocked": "{{name}} مسدود شد ✅",
+    "unblocked": "{{name}} دوباره فعال شد ✅",
+    "revenue": "از {{from}} تا {{to}}\nفروش سرویس: {{sales}} ({{salesCount}} مورد)\nواریز کاربران: {{topUps}} ({{topUpsCount}} مورد)"
   }
 }
