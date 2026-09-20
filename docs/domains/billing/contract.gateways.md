@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 1
+version: 2
 updated: 2026-09-20
 ---
 
@@ -25,6 +25,7 @@ the boundary. Linking a gateway to another tenant is the settlement grant
 |---|---|
 | The platform owner manages every gateway; any other tenant only its own `tenant_gateway_config` rows. Anything else is `gateway_not_found` | a reseller who could edit another's gateway could point its merchant id at its own account; a 404 does not confirm the row exists |
 | Only the platform owner sets `verificationStatus`; a tenant changing a verified gateway's secret resets it to `pending_test_transaction`, committed **before** the secret is written | a verified gateway is otherwise a place to swap in an unverified account |
+| Changing a verified gateway's `providerName` resets it the same way, whoever makes the change (F-104-x) — unless the patch sets `verificationStatus` itself, which is the platform owner's word and wins. `feeValue`, `callbackUrl` and the other settings leave it `verified` | the test transaction proved one driver; it says nothing about the next one. A fee or a callback address changes nothing it proved |
 | `merchantId` / `secretKey` / `webhookSecret` are relayed to `tenant-service` (`VaultSecretClient` → F-102-a, F-018-ab) and appear in no answer, audit row or column; answers carry `credentials` as `{configured, version, rotatedAt}` | write-only secrets (ADR-0026 guarantee 1); `billing` still loads the vault read-only |
 | Each provider's secrets and required settings are one exhaustive map, `payment/gateway/provider-fields.ts` (F-104-e, D-32). A missing **secret** is never refused — the gateway may be saved and switched on, and the answer's `missingSecrets` names what is still needed (`null` when the state could not be read). A `telegram_stars` gateway needs a positive `staticRate` (its USD value per Star) or `missing_field`, and is stored with `useLiveRate` off | the user's call, 2026-09-16: a heads-up, not a wall; a Star has no live rate |
 | The pool follows the caller (ADR-0053): the platform owner on the cross-tenant pool, anyone else in a `tenantTransaction` on the app pool. A lent gateway's payments and grants in other tenants are reached only through `billing.gateway_usage` / `billing.withdraw_gateway_grants` (SECURITY DEFINER, `20260917000200_gateway_release`), which refuse a gateway that is not the caller's own; a platform gateway is the cross-tenant role's alone | strict RLS stands behind a reseller's filter; releasing one's own lent gateway needs counts and a withdrawal, not another tenant's rows |

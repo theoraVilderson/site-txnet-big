@@ -310,6 +310,28 @@ describe('GatewayAdminService — who may manage which gateway', () => {
     expect(row?.['verifiedByAdminId']).toBe(ADMIN);
   });
 
+  it('sends a verified gateway back to pending when its provider changes, and leaves fee and callback alone (F-104-x)', async () => {
+    const { service, db } = build({ verified: true });
+    const row = () => db.tenantGatewayConfig.rows.find((r) => r['id'] === RESELLER_GW);
+
+    await service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { feeValue: '2.5000', callbackUrl: 'https://pay.example.com/back' });
+    expect(row()?.['verificationStatus']).toBe(TenantGatewayVerificationStatus.verified);
+
+    await service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { providerName: 'zarinpal' });
+    expect(row()?.['verificationStatus']).toBe(TenantGatewayVerificationStatus.verified);
+
+    await service.update(actor(RESELLER), { source: 'tenant', id: RESELLER_GW }, { providerName: 'stripe' });
+    expect(row()?.['verificationStatus']).toBe(TenantGatewayVerificationStatus.pending_test_transaction);
+    expect(row()?.['verifiedByAdminId']).toBeNull();
+
+    await service.update(actor(OWNER), { source: 'tenant', id: RESELLER_GW }, { verificationStatus: 'verified' });
+    await service.update(actor(OWNER), { source: 'tenant', id: RESELLER_GW }, { providerName: 'idpay' });
+    expect(row()?.['verificationStatus']).toBe(TenantGatewayVerificationStatus.pending_test_transaction);
+
+    await service.update(actor(OWNER), { source: 'tenant', id: RESELLER_GW }, { providerName: 'zarinpal', verificationStatus: 'verified' });
+    expect(row()?.['verificationStatus']).toBe(TenantGatewayVerificationStatus.verified);
+  });
+
   it('refuses a second gateway of the same provider for one tenant, and a minimum above the maximum', async () => {
     const { service } = build();
 

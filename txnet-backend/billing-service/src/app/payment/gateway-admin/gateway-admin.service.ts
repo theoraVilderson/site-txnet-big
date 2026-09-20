@@ -228,7 +228,12 @@ const dec = (v: unknown): Prisma.Decimal | null => (v === null || v === undefine
  * payers only once `verified` (`deposit-pricing.ts`). A tenant that changes a
  * verified gateway's secret sends it back to `pending_test_transaction`, and
  * the reset commits *before* the new secret is written, so there is no moment
- * at which a verified gateway charges into an unverified account.
+ * at which a verified gateway charges into an unverified account. So does a
+ * change of `providerName`, whoever makes it (F-104-x): the test transaction
+ * proved the old driver, and nothing about it covers the new one. A patch that
+ * names `verificationStatus` itself is the platform owner saying otherwise,
+ * and wins. `feeValue`, `callbackUrl` and the rest change nothing the test
+ * proved, and leave a verified gateway verified.
  */
 @Injectable()
 export class GatewayAdminService {
@@ -395,7 +400,13 @@ export class GatewayAdminService {
       const data = { ...this.columns(patch, ref.source), ...providerColumns };
       if (ref.source === 'tenant') {
         if (patch.verificationStatus !== undefined) Object.assign(data, this.verification(patch.verificationStatus, actor));
-        if (!owner && secretsChanged.length > 0 && row['verificationStatus'] === TenantGatewayVerificationStatus.verified) {
+        const providerChanged = patch.providerName !== undefined && patch.providerName !== row['providerName'];
+        const secretSwapped = !owner && secretsChanged.length > 0;
+        if (
+          patch.verificationStatus === undefined &&
+          (providerChanged || secretSwapped) &&
+          row['verificationStatus'] === TenantGatewayVerificationStatus.verified
+        ) {
           data['verificationStatus'] = TenantGatewayVerificationStatus.pending_test_transaction;
           data['verifiedByAdminId'] = null;
         }
