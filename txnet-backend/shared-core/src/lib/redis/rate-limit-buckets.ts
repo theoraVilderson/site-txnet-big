@@ -284,6 +284,17 @@ export const RateLimitBucket = {
   RESELLER_USER_WRITE: 'reseller-user:write',
 
   /**
+   * A named reseller's own revenue figure in `billing-service` (F-311-b), per
+   * caller. Read only, so there is one bucket and not the usual pair.
+   *
+   * It is the most expensive read on any reseller-named surface: two aggregates
+   * over that tenant's whole wallet and payment ledgers for the period asked
+   * for, with no index that narrows them further than the window. The schema
+   * caps the window at a year; this caps how often a caller may ask for one.
+   */
+  RESELLER_REVENUE_READ: 'reseller-revenue:read',
+
+  /**
    * Everything under `/api/public/<service>/` — the routes nobody signs in to
    * (F-018-al, ADR-0065), per visitor IP.
    *

@@ -15,6 +15,7 @@ import { GatewayModule } from './payment/gateway/gateway.module';
 import { GiftModule } from './payment/gift/gift.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
+import { RevenueModule } from './revenue/revenue.module';
 import { CallbackTenantMiddleware } from './request/callback-tenant.middleware';
 import { IdentityMiddleware } from './request/identity.middleware';
 import { WebhookGatewayMiddleware } from './request/webhook-gateway.middleware';
@@ -61,6 +62,7 @@ const INTERNAL_ROUTES = 'internal/*path';
     CatalogModule,
     EntitlementModule,
     TenantBillingModule,
+    RevenueModule,
   ],
   controllers: [HealthController],
   providers: [
