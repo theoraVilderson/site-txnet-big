@@ -7,8 +7,10 @@ import {
   PublicRouteGuard,
   publicPath,
   surfaceOfHost,
-  type HostSurface,
 } from './public-route';
+// From its owner, not through `public-route`: the two services share one cache
+// entry and therefore one shape, so it has exactly one home (`contract.public-routes.md`).
+import type { HostSurface } from './host-surface';
 
 /**
  * A public route (F-018-ak, ADR-0065) is a controller under
