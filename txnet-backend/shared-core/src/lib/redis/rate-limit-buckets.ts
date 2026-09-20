@@ -186,6 +186,21 @@ export const RateLimitBucket = {
   GIFT_REDEEM: 'gift:redeem',
 
   /**
+   * Reissuing the subscription key of one Grant in `billing-service`
+   * (F-502-p), per user. Its own bucket and not `GIFT_REDEEM`'s: a user who
+   * lost a key has usually just redeemed a code, and spending the gift box's
+   * deliberately tiny budget on a recovery would lock them out of the box that
+   * gave them the key in the first place.
+   *
+   * A security control like `GIFT_REDEEM`, for the mirror-image reason. The
+   * route is owner-only, so it is no oracle — but every call destroys a working
+   * key, so an unbounded one is a way to make a user's own subscription
+   * unusable in a loop, by that user's own session. The budget is a handful:
+   * a key is lost by accident, not repeatedly.
+   */
+  GRANT_ROTATE_TOKEN: 'grant:rotate-token',
+
+  /**
    * The platform owner's settlement surface in `billing-service` (F-096-e),
    * per operator. Two buckets rather than one because the surface is read far
    * more often than it is written — an operator refreshes what is owed while

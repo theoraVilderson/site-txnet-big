@@ -2,8 +2,8 @@
 id: billing
 layer: domain
 status: active
-version: 4
-updated: 2026-09-12
+version: 5
+updated: 2026-09-20
 ---
 
 # Contract — billing / gift code
@@ -51,4 +51,24 @@ Migration `20260915000200_gift_redeems_free_grant`; `GiftRedemptionService` with
 | The answer is `{kind: "free_grant", code, grant: {id, variantId, startsAt, endsAt, featureKeys}, subscriptionKey}`; the key is shown this once and only its hash is stored. A credit answers `{kind: "wallet_credit", code, credited, balance}` | the user's call, 2026-09-14 |
 | A variant switched off after the coupon was made refuses the issue and rolls the use back (500) | an admin's broken coupon, never a user's mistake |
 
-**Not covered:** a `/sub` link for the key (F-113, F-027); the panel showing it (F-502-l-c).
+## Reissuing a lost key (built — F-502-p)
+
+`GrantTokenController` beside the box, over `GrantService.rotateTokenForUser`
+(`entitlement/contract.md`). A key is shown once and only hashed, so a key lost
+to a mis-click was lost for good; this is the way back.
+
+| Route | Body | Answers `data` |
+|---|---|---|
+| `POST /api/billing/gift/grants/:id/rotate-token` | none — the id is the path, the user is the gate's | `{grantId, subscriptionKey}` — the new key, shown this once |
+
+| Rule | Why |
+|---|---|
+| The owner is the gate's user. There is no body, so there is no field that could name another one | the only thing this route protects |
+| Another user's Grant, and one that does not exist, are one answer: **404**, `i18nKey` `errors.billing.grant.notFound`, `reason: grant_not_found` | told apart, the route answers whether a Grant id exists |
+| Its own bucket, `GRANT_ROTATE_TOKEN`, default **5** per 900s; **429** past it | sharing `GIFT_REDEEM`'s would spend the box's tiny budget recovering the key the box just gave out. Owner-only, so it is no oracle — but each call destroys a working key, so it is still a security limit |
+| Capability `subscriptionLink`, not `endUserDeposit` | it moves no money and what it mints is the `/sub` credential, so it is open exactly when `/sub` is: a suspended tenant's user recovers a key until the grace ends, a terminated tenant's does not mint one for a link that answers nothing |
+| The rotation is one transaction of its own and the old key stops working in it | there is no window in which both keys open the link, and none in which neither does |
+| The Grant's **status is not a gate** | the row's scope (2026-09-20): a token grants nothing on its own — `/sub` reads the Grant — so rotating a dead one mints a key that opens nothing rather than something it should not |
+
+**Not covered:** a `/sub` link for the key (F-113, F-027); the panel showing it
+(F-502-l-c) and its reissue button (F-502-q).

@@ -199,6 +199,9 @@
       "expired": "This gift code has expired.",
       "perUserLimitReached": "You have already used this gift code.",
       "capacityReached": "This gift code has been used up."
+    },
+    "grant": {
+      "notFound": "No such subscription in your account."
     }
   },
   "role": {

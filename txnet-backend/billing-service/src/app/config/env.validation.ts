@@ -289,6 +289,8 @@ export const envSchema = z.object({
   WALLET_PAYMENT_RATE_LIMIT: rateLimit(300),
   /** A code-guessing oracle if it were generous (`payment/gift/gift.controller.ts`). */
   GIFT_REDEEM_RATE_LIMIT: rateLimit(10),
+  /** Every call throws a working key away (`payment/gift/grant-token.controller.ts`, F-502-p). */
+  GRANT_ROTATE_TOKEN_RATE_LIMIT: rateLimit(5),
   /**
    * The operator settlement surface (`settlement/settlement.controller.ts`,
    * F-096-e), per operator. The read budget is the admin UI's refresh rate
