@@ -381,10 +381,20 @@ model ConfigActionLog {
   @@schema("network")
 }
 
-/// 5.4 — داده خام ترافیک؛ حجم بسیار بالا. الزامی: Native Partitioning
-/// ماهانه (`PARTITION BY RANGE (recordedAt)`) — پیاده‌سازی در بخش ۹۹.
+/// 5.4 — the raw traffic log; the highest-volume table in the platform.
+/// **Monthly native range partitioning on `recordedAt`** (F-027-e), so
+/// retention is `DROP PARTITION` and never a row-wise `DELETE` (invariant 2).
+/// Partitioning, its per-month tables and the BRIN index on `recordedAt` are
+/// hand-written SQL — Prisma cannot express any of the three.
 model TrafficRawLog {
-  id            BigInt   @id @default(autoincrement())
+  /// Postgres requires the partition key in every unique constraint, so the
+  /// key is the pair. A bare `BIGSERIAL` id cannot be enforced unique across
+  /// partitions, and Prisma has to agree with that or the next `migrate diff`
+  /// proposes dropping the partitioning.
+  id            BigInt   @default(autoincrement())
+  /// Denormalized as `config.tenantId` is (invariant 6): the reporting read is
+  /// per tenant, and reaching it through `config` is a join against this table.
+  tenantId      String   @db.Uuid
   configId      String   @db.Uuid
   uploadBytes   BigInt
   downloadBytes BigInt
@@ -392,8 +402,9 @@ model TrafficRawLog {
 
   config Config @relation(fields: [configId], references: [id])
 
-  // پیشنهاد بخش ۱۸: BRIN Index به‌جای B-Tree روی recordedAt (SQL بخش ۹۹).
+  @@id([id, recordedAt], map: "traffic_raw_log_pkey")
   @@index([configId, recordedAt])
+  @@index([tenantId, recordedAt])
   @@map("traffic_raw_log")
   @@schema("network")
 }
@@ -410,6 +421,10 @@ model TrafficDailyAggregate {
 
   config Config @relation(fields: [configId], references: [id])
 
+  /// A cron rerun — a retry, an operator re-running last night — wrote a
+  /// second row for the same day and doubled the reported usage, with both
+  /// rows individually correct (F-027-e).
+  @@unique([configId, date], map: "traffic_daily_aggregate_config_date_key")
   @@index([userId])
   @@index([date])
   @@map("traffic_daily_aggregate")

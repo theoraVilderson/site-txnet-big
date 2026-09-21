@@ -15,8 +15,8 @@ Source of truth: `txnet-backend/prisma/domains/network.prisma` (Postgres schema
 | panel | one remote management install, and its **declaration** — driver family, counter semantics, transport, capabilities, review verdict, health and request budget | `tenantId` nullable | permanent |
 | config | user credential on a panel (uuid + protocol + status), and its **desired state** — presence, enablement, drift verdict and ceiling | `tenantId` NOT NULL (denormalized) | soft state via `status`; the row outlives its remote client |
 | config_action_log | who did what to a config | via config | permanent |
-| traffic_raw_log | per-interval up/down bytes; **monthly partitioned**, BigInt PK | via config | drop old partitions |
-| traffic_daily_aggregate | nightly rollup per (user, config, date) | via config | long |
+| traffic_raw_log | per-interval up/down bytes; **monthly partitioned** on `recordedAt`, PK `(id, recordedAt)` | `tenantId` NOT NULL (denormalized) | `DROP PARTITION` by the month |
+| traffic_daily_aggregate | nightly rollup, one row per `(configId, date)` | via config | long |
 | ip_access_rule | durable block / allow / custom-rate-limit by IP or CIDR | no | expires if `expiresAt` set |
 | config_counter_state | the collector's memory of one config's raw counter, and the semantics it was read under | via config | one row per config, forever |
 | usage_delta_seen | every applied delta, keyed by the delta's own id | via config | swept at 48h |
@@ -158,6 +158,42 @@ the bytes are never dropped for want of one.
 The receiver itself is F-027-af; the table lands now so one migration series
 covers the whole network schema.
 
+## Traffic goes by the month (F-027-e)
+
+`traffic_raw_log` is the highest-volume table in the platform, and its
+retention was written as `DROP PARTITION` from the first day — invariant 2 —
+with nothing behind the sentence until now. It is partitioned by range on
+`recordedAt`, one partition per month: the nightly rollup computes
+`traffic_daily_aggregate`, and the month's raw rows then go in one catalogue
+operation rather than a row-wise `DELETE` competing with the collection loop
+for the same pages.
+
+Three consequences are not cosmetic. The primary key is `(id, recordedAt)`,
+because Postgres requires the partition key in every unique constraint — a
+bare `BIGSERIAL` id is the one shape this table cannot have, and
+`network.prisma` has to agree or the next `migrate diff` proposes undoing the
+partitioning. `recordedAt` is indexed with **BRIN**: the table is append-only,
+so its physical order already follows the column, and the summary costs a
+fraction of the B-tree's per-insert price at this volume. `tenantId` is
+denormalized as it is on `config` (invariant 6), because the reporting read is
+per tenant and reaching the tenant through `config` is a join against this
+table.
+
+There is **no `DEFAULT` partition**, deliberately: it is the one partition that
+can never be dropped, so rows for an uncreated month would outlive the
+retention rule in silence. A missing month raises on insert instead — loud, and
+the delta behind it goes to quarantine rather than nowhere (invariant 18). Six
+months ship with the migration and
+`network.ensure_traffic_raw_log_partition(date)` rolls the rest forward,
+idempotent so the nightly job calls it blindly. A table with no partition for
+next month stops accepting traffic at midnight on the 1st, so that call is part
+of the rollup job, not setup.
+
+`traffic_daily_aggregate` gains the unique key it never had, `(configId,
+date)`. Without it a cron rerun — a retry, an operator re-running last night —
+wrote a second row for the same day and doubled the reported usage, with both
+rows individually correct, which is what made it invisible.
+
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |
 |---|---|---|---|
@@ -195,6 +231,11 @@ which is the Gigawords trap arriving a second time in our own storage.
 `radius_session` and one new type. Additive in the same way, with three CHECK
 constraints and the `(nasId, acctSessionId)` unique index.
 
-Native monthly partitioning on `traffic_raw_log` (and BRIN index on
-`recordedAt`), plus RLS, are "section 99" manual SQL — **not applied**. Prisma
-cannot express partitioning; the model must be created by hand-written migration.
+`20260921000500_traffic_is_partitioned_by_month` is the first hand-written
+file in this series: Prisma can express none of partitioning, a BRIN index or a
+per-month table. It drops and recreates `traffic_raw_log` — a table cannot be
+converted to a partitioned one in place — over the same emptiness assertion,
+and adds the unique index to the rollup.
+
+RLS on the traffic tables remains "section 99" manual SQL and is **not
+applied**.

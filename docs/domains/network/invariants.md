@@ -9,13 +9,13 @@ updated: 2026-09-21
 
 **DRAFT** — 1-7 are from schema comments and not enforced in code. 8-12 are
 enforced by the database as of F-027-a, 13-17 as of F-027-b, 19-25 as of
-F-027-c and 26-28 as of F-027-d. 18 and 29 are the promise the rest of them
-serve and are service rules.
+F-027-c, 26-28 as of F-027-d and 2, 30-31 as of F-027-e. 18 and 29 are the
+promise the rest of them serve and are service rules.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
 | 1 | `config.uuid` is unique across the whole system (it is the Xray identity) | schema `@unique` | cross-user traffic attribution, credential clash |
-| 2 | `traffic_raw_log` is only ever appended and dropped by partition — never `DELETE`d row-wise | planned partitioning ("section 99") | vacuum bloat, lost accounting |
+| 2 | `traffic_raw_log` is only ever appended and dropped by partition — never `DELETE`d row-wise | monthly `PARTITION BY RANGE ("recordedAt")` (F-027-e) | vacuum bloat on the largest table in the platform, competing with the collection loop for the same pages |
 | 3 | Daily aggregate is computed before its source raw partition is dropped | planned cron ordering | permanent traffic-data loss |
 | 4 | `regenerateUsedCount` never exceeds `maxRegenerateCount` | planned service check | abuse of free re-issue |
 | 5 | `panelApiCredentials` (encrypted) never default-selected or logged | planned `select`/`omit` | node panel takeover |
@@ -43,6 +43,8 @@ serve and are service rules.
 | 27 | A session publishes no more than it measured | CHECK `radius_session_published_within_high_water` | the extrapolation past a missing `Stop` that ADR-0074 forbids, reaching the user as a charge for traffic nobody watched happen |
 | 28 | A closed session says why it closed | CHECK `radius_session_closed_has_reason` | a stale session's last figure cannot be told from a real `Stop` figure, so the weaker number is billed as the stronger one |
 | 29 | A session past 4 GB whose NAS never sent Gigawords is held, not billed | planned service rule (`radius_session.gigawordsSeen` makes it expressible) | 4 GB per wrap lost in silence — invariant 18's failure on the push side, and the one ADR-0074 names |
+| 30 | One rollup row per `(configId, date)` | UNIQUE `traffic_daily_aggregate_config_date_key` (F-027-e) | a cron rerun doubles a day's reported usage, with both rows individually correct — which is what makes it invisible |
+| 31 | A measured byte lands in a partition that retention will reach, or the insert fails | monthly partitions with **no** `DEFAULT` partition (F-027-e) | the one partition nobody can drop keeps an uncreated month's rows past every retention rule, in silence |
 
 ## How to test
 
@@ -50,8 +52,9 @@ Invariants 8-17 and 19-25 are held by the schema and the migration history,
 and that those two agree is asserted by
 `shared-core/src/lib/prisma/network-panel-declaration.spec.ts` (8-12),
 `network-config-desired-state.spec.ts` (13-17) and
-`network-usage-accounting.spec.ts` (19-25) and
-`network-radius-session.spec.ts` (26-28) — the CI stand-in for the
+`network-usage-accounting.spec.ts` (19-25),
+`network-radius-session.spec.ts` (26-28) and
+`network-traffic-partitioning.spec.ts` (2, 30-31) — the CI stand-in for the
 boot-time column assertion ADR-0071 gives `network-service`.
 
 18 is not a schema rule and cannot become one: it is the collection loop
@@ -59,5 +62,6 @@ boot-time column assertion ADR-0071 gives `network-service`.
 read. It is tested with them.
 29 is the same rule on the push side and belongs to the receiver (F-027-af).
 
-The rest is to be written with the service. Minimum: partition-then-drop
-ordering test; regenerate cap test.
+3 is the other half of 2 and belongs to the rollup job: the partition-drop
+ordering test goes with it. The rest is to be written with the service.
+Minimum: regenerate cap test.
