@@ -379,9 +379,9 @@ export const authApi = {
    * Add another account to the group (F-0205) — proved by a code sent to that
    * account's own phone, or by that account's own password.
    */
-  async addAccountOtpRequest(phoneNumber: string, channel?: OtpChannel) { return request<OtpRequestResult>("/auth/accounts/add/otp/request", { method: "POST", body: JSON.stringify({ phoneNumber, ...(channel ? { channel } : {}) }) }); },
+  async addAccountOtpRequest(phoneNumber: string, captchaToken: string, channel?: OtpChannel) { return request<OtpRequestResult>("/auth/accounts/add/otp/request", { method: "POST", body: JSON.stringify({ phoneNumber, ...(channel ? { channel } : {}) }) }, captchaToken); },
   async addAccountOtpVerify(phoneNumber: string, otpCode: string) { return request<{ groupId: string; added: boolean }>("/auth/accounts/add/otp/verify", { method: "POST", body: JSON.stringify({ phoneNumber, otpCode }) }); },
-  async addAccountPassword(identifier: string, password: string) { return request<{ groupId: string; added: boolean }>("/auth/accounts/add/password", { method: "POST", body: JSON.stringify({ identifier, password }) }); },
+  async addAccountPassword(identifier: string, password: string, captchaToken: string) { return request<{ groupId: string; added: boolean }>("/auth/accounts/add/password", { method: "POST", body: JSON.stringify({ identifier, password }) }, captchaToken); },
   /**
    * Become another member (F-0207). The session this tab is holding is revoked
    * server-side by this call, so the returned token replaces it here — there is

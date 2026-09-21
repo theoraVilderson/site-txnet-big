@@ -612,7 +612,16 @@
     "leaveConfirm": "Remove this account and sign out here?",
     "signOutAll": "Sign out of all accounts",
     "signOutAllConfirm": "You will be signed out of every account on this device. No account is removed.",
-    "signOutAllYes": "Yes, sign out of all"
+    "signOutAllYes": "Yes, sign out of all",
+    "captchaTitle": "Human verification",
+    "captcha": {
+      "verified": "Verified",
+      "swipe": "Swipe to verify",
+      "checking": "Checking..."
+    },
+    "resendCode": "Resend code",
+    "resendCodeIn": "Resend code in",
+    "seconds": "seconds"
   },
   "errors": {
     "unreachable": "Could not reach the server. Check your connection and try again."

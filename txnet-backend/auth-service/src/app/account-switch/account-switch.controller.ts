@@ -20,6 +20,7 @@ import { Request, Response } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { RateLimit } from '../auth/decorators/rate-limit.decorator';
+import { RequireCaptcha } from '../auth/decorators/require-captcha.decorator';
 import { AccountSwitchService } from './account-switch.service';
 import {
   addByOtpRequestSchema,
@@ -43,6 +44,13 @@ import { resolveSwitchScope } from '../common/security/switch-scope';
  * Rate limits are keyed on the caller's own user id rather than on the IP: the
  * caller is known here, and an IP key would let one signed-in account spend a
  * shared NAT's budget for everyone behind it.
+ *
+ * The two **proof** routes are captcha-gated as well (F-0201). F-0205 asks for
+ * both to be metered "exactly like a login", and a login is metered *and* gated
+ * — a signed-in attacker was otherwise offered the cheapest account-existence
+ * oracle on the service, and `add/otp/request` sends a real message to somebody
+ * else's number. The `verify` half is not gated: it spends a code this gate
+ * already paid for, and a second slide mid-flow buys nothing.
  *
  * Every route reads the **switch scope** off the request (ADR-0015). It is not
  * in any body: a caller must not be able to name the surface it is acting for,
@@ -77,6 +85,7 @@ export class AccountSwitchController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)
   @UsePipes(new ZodValidationPipe(addByOtpRequestSchema))
+  @RequireCaptcha()
   @RateLimit({
     key: (req) => rateLimitBucketKey(RateLimitBucket.ACCOUNTS_ADD_OTP_REQUEST, req?.user?.sub ?? req?.ip),
     configKey: 'ACCOUNTS_ADD_OTP_REQUEST_RATE_LIMIT',
@@ -115,6 +124,7 @@ export class AccountSwitchController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)
   @UsePipes(new ZodValidationPipe(addByPasswordSchema))
+  @RequireCaptcha()
   @RateLimit({
     key: (req) => rateLimitBucketKey(RateLimitBucket.ACCOUNTS_ADD_PASSWORD, req?.user?.sub ?? req?.ip),
     configKey: 'ACCOUNTS_ADD_PASSWORD_RATE_LIMIT',

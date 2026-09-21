@@ -224,6 +224,18 @@ answer 404. Removed the same day on the user's call, ahead of the 2026-10-13 dat
 no caller in the repo used them. With them went the https router's host-only rule in
 `docker-compose.main.yml`, which existed only to route `/api/admin/*`.
 
+## Breaking: v30 — the two add-account proofs are captcha-gated (F-0201-a)
+
+`POST /auth/accounts/add/otp/request` and `POST /auth/accounts/add/password` now require a
+verified `X-Captcha-Token` like `login` and `register` do; without one they answer 400
+`captcha.required`. F-0205 asked for both to be metered "exactly like a login" and they were
+metered but not gated, so for a scripted caller a signed-in account-existence oracle — one
+that also sends a real message to somebody else's number — was cheaper than a login.
+`add/otp/verify` is deliberately **not** gated: it spends a code this gate already paid for.
+Consumers: `panel-web` sends the header from the same change (`accounts/add/page.tsx`);
+`bot-app` is unaffected, its `SERVICE_AUTH_TOKEN` satisfies the guard (ADR-0011). No
+deprecation window — the gate is the fix, and the one browser consumer ships with it.
+
 ## Removed shapes
 
 | Item | Deprecated since | Removal after | Replacement |

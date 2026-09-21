@@ -11,7 +11,17 @@ export const NatureCaptchaUI = ({
   isVerified: boolean;
   onVerify: () => void;
   isRtl: boolean;
-  t: AuthTranslations;
+  /**
+   * Only the three strings this widget renders, not the whole auth dictionary.
+   *
+   * The narrowing is what lets the panel mount it: the `auth` namespace is
+   * loaded by `(auth)/layout.tsx` and nothing outside that segment has it, so
+   * demanding the full `AuthTranslations` made the widget unusable exactly
+   * where F-0205's proof screens live. A caller there passes the three strings
+   * from its own namespace — the pattern `PhoneField` already uses on that
+   * same page. The three `(auth)` callers hand over their whole `t` as before.
+   */
+  t: Pick<AuthTranslations, 'captchaVerified' | 'captchaSwipe' | 'captchaChecking'>;
 }) => {
   const sliderRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);

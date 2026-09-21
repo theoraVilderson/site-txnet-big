@@ -220,15 +220,17 @@ export class AuthApi {
 
   // --- the switch group (F-0205 / F-0206 / F-0207) --------------------------
   //
-  // None of these is captcha-gated and every one needs a Bearer: they are the
-  // routes that require a live session rather than refusing one.
+  // Every one needs a Bearer: they are the routes that require a live session
+  // rather than refusing one. The two **proof** routes are captcha-gated on top
+  // of that (F-0201), so they go through `gated` like a login — a live session
+  // is not a bot check. The rest are not.
 
   listAccounts(options: CallOptions = {}) {
     return this.get('/auth/accounts', options);
   }
 
   addAccountOtpRequest(body: unknown, options: CallOptions = {}) {
-    return this.post('/auth/accounts/add/otp/request', body, options);
+    return this.gated('/auth/accounts/add/otp/request', body, options);
   }
 
   addAccountOtpVerify(body: unknown, options: CallOptions = {}) {
@@ -236,7 +238,7 @@ export class AuthApi {
   }
 
   addAccountPassword(body: unknown, options: CallOptions = {}) {
-    return this.post('/auth/accounts/add/password', body, options);
+    return this.gated('/auth/accounts/add/password', body, options);
   }
 
   switchAccount(body: unknown, options: CallOptions = {}) {
