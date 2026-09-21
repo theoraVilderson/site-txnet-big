@@ -64,11 +64,11 @@ function migrationSql(): string {
  */
 function tablesNamedByPolicies(sql: string): Set<string> {
   const named = new Set<string>();
-  for (const m of sql.matchAll(/'([a-z_]+)\.("?)([a-z_]+)\2'/g)) {
+  for (const m of sql.matchAll(/'([a-z_]+)\.("?)([a-z0-9_]+)\2'/g)) {
     named.add(`${m[1]}.${m[3]}`);
   }
   for (const m of sql.matchAll(
-    /ALTER\s+TABLE\s+([a-z_]+)\.("?)([a-z_]+)\2\s+ENABLE\s+ROW\s+LEVEL\s+SECURITY/gi,
+    /ALTER\s+TABLE\s+([a-z_]+)\.("?)([a-z0-9_]+)\2\s+ENABLE\s+ROW\s+LEVEL\s+SECURITY/gi,
   )) {
     named.add(`${m[1]}.${m[3]}`);
   }
@@ -104,5 +104,64 @@ describe('Row-Level Security covers the schema (catalog 20.2 layer 1, F-1202)', 
     // hold `BYPASSRLS`, and prose about an attribute is not the attribute.
     const statements = SQL.replace(/--[^\n]*/g, '');
     expect(statements).not.toMatch(/(?<!NO)BYPASSRLS/);
+  });
+});
+
+/**
+ * `schema.table` for every partition the history creates by hand.
+ *
+ * A partition is not a Prisma model, so the list above cannot see one. It is
+ * a table all the same, and a query naming it directly is judged by *its*
+ * policies, not its parent's — so an unpolicied partition is a readable copy
+ * of a protected table, under a name anyone can guess from the month.
+ */
+function partitionTables(sql: string): string[] {
+  const found = new Set<string>();
+  for (const m of sql.matchAll(
+    /CREATE\s+TABLE\s+"?([a-z_]+)"?\."?([a-z0-9_]+)"?\s+PARTITION\s+OF/gi,
+  )) {
+    found.add(`${m[1]}.${m[2]}`);
+  }
+  return [...found].sort();
+}
+
+/**
+ * The **last** definition of each `schema.function(...)` in the history, since
+ * `CREATE OR REPLACE` means an earlier body is dead text that a later
+ * migration has already overwritten.
+ */
+function latestFunctionBodies(sql: string): Map<string, string> {
+  const latest = new Map<string, string>();
+  for (const m of sql.matchAll(
+    /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+"?([a-z_]+)"?\."?([a-z_]+)"?[\s\S]*?\$\$;/gi,
+  )) {
+    latest.set(`${m[1]}.${m[2]}`, m[0]);
+  }
+  return latest;
+}
+
+describe('Row-Level Security covers the partitions too (F-027-ak)', () => {
+  it('finds the partitions in the history at all', () => {
+    // The same guard as above: if this parse breaks, the assertions below
+    // pass over an empty list and read like proof of something.
+    expect(partitionTables(SQL)).toContain('network.traffic_raw_log_2026_09');
+  });
+
+  it.each(partitionTables(SQL))('%s is policied', (table) => {
+    expect([...NAMED]).toContain(table);
+  });
+
+  it('policies a partition in the same function that creates one', () => {
+    // `ensure_traffic_raw_log_partition` runs every month, forever. A function
+    // that creates a partition and does not policy it re-opens the gap on a
+    // clock, and the month it re-opens in is the month nobody was looking.
+    const creators = [...latestFunctionBodies(SQL)].filter(([, body]) =>
+      /PARTITION\s+OF/i.test(body),
+    );
+    expect(creators.length).toBeGreaterThan(0);
+    for (const [name, body] of creators) {
+      expect(body, `${name} creates a partition`).toMatch(/ENABLE\s+ROW\s+LEVEL\s+SECURITY/i);
+      expect(body, `${name} creates a partition`).toMatch(/CREATE\s+POLICY\s+tenant_isolation/i);
+    }
   });
 });

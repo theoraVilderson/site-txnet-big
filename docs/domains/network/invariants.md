@@ -15,6 +15,7 @@ promise the rest of them serve and are service rules.
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
 | 1 | `config.uuid` is unique across the whole system (it is the Xray identity) | schema `@unique` | cross-user traffic attribution, credential clash |
+| 2b | A tenant reads only its own `traffic_raw_log` rows, through the parent **or** a partition named directly; every month the partition function creates is policied as it is created (F-027-ak) | RLS on the parent and each partition, `ensure_traffic_raw_log_partition()` | one tenant reads another's traffic under a table name derived from the month |
 | 2 | `traffic_raw_log` is only ever appended and dropped by partition — never `DELETE`d row-wise | monthly `PARTITION BY RANGE ("recordedAt")` (F-027-e) | vacuum bloat on the largest table in the platform, competing with the collection loop for the same pages |
 | 3 | Daily aggregate is computed before its source raw partition is dropped | planned cron ordering | permanent traffic-data loss |
 | 4 | `regenerateUsedCount` never exceeds `maxRegenerateCount` | planned service check | abuse of free re-issue |

@@ -237,5 +237,9 @@ per-month table. It drops and recreates `traffic_raw_log` — a table cannot be
 converted to a partitioned one in place — over the same emptiness assertion,
 and adds the unique index to the rollup.
 
-RLS on the traffic tables remains "section 99" manual SQL and is **not
-applied**.
+`20260921000800_traffic_raw_log_is_policied_like_the_rest` (F-027-ak) applies
+RLS to `traffic_raw_log`: the partitioned parent **and** every partition carry
+the strict list-A policies, and `ensure_traffic_raw_log_partition()` policies
+each month it creates, so the gap cannot return on a clock.
+`traffic_daily_aggregate` has no `tenantId` and no policy of its own — it is
+reached through `configId` (open question, 2026-09-21).
