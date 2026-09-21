@@ -87,6 +87,14 @@ signed in.
 | Auto-login any contact-verified chat, no OTP | makes the chat id an authentication, which `bot-app/contract.md` forbids; one hijacked messenger account then owns the panel account |
 | Short bot sessions, OTP on every visit | a reseller opens the bot several times a day; the cost lands on the user this feature was built for |
 
+## Amended by ADR-0069 (2026-09-21)
+
+The waiver stands; what it costs did not. Every limit this ADR leaned on is keyed on
+`bot:<chatId>`, and a chat is a messenger account — so the sentence below about the rate
+limits being "the only thing between an attacker and these routes" was true and cheap to
+defeat by registering more accounts. ADR-0069 adds one budget per **tenant**, spent at
+this exemption and over exactly the routes it waives.
+
 ## Revisit trigger
 
 Either of:

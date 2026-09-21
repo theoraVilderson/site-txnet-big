@@ -197,6 +197,13 @@ export const envSchema = z.object({
   // routes. It gates every guarded route, so it is the ceiling on how fast a
   // client may work at all.
   CAPTCHA_RATE_LIMIT: rateLimit(30),
+  /**
+   * The tenant-wide ceiling on unproven bot traffic over the captcha-gated
+   * routes (F-0201-c), per 900s. Generous on purpose: a signed-in chat never
+   * reaches those routes, so this counts sign-ins, registrations and password
+   * resets started from a reseller's bot — not its customers' ordinary use.
+   */
+  BOT_UNPROVEN_RATE_LIMIT: rateLimit(120),
   BOT_LINK_RESOLVE_RATE_LIMIT: rateLimit(30),
   BOT_LINK_CONTACT_RATE_LIMIT: rateLimit(10),
   BOT_LINK_STATUS_RATE_LIMIT: rateLimit(300),

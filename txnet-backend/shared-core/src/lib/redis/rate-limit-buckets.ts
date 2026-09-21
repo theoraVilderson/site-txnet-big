@@ -73,6 +73,22 @@ export const RateLimitBucket = {
    */
   OTP_PHONE: 'otp:phone',
 
+  /**
+   * The tenant's **unproven** bot traffic over the captcha-gated routes
+   * (F-0201-c) — the ceiling that stands in for the slide a bot cannot drag.
+   *
+   * Like `ROLE_WRITE` it carries **no subject**: the key is the tenant's alone.
+   * That is the point rather than an oversight — every other limit a bot call
+   * meets is per chat, and a chat is a messenger account, so the whole captcha
+   * waiver ADR-0011 granted was priced at whatever a Telegram account costs,
+   * times as many as an attacker cares to register. A subject that can be
+   * multiplied cannot bound that; the tenant cannot be multiplied.
+   *
+   * Never counted platform-wide: one reseller's attacker must not be able to
+   * shut every other reseller's bot sign-in.
+   */
+  BOT_UNPROVEN: 'bot:unproven',
+
   PASSWORD_FORGOT: 'pwd:forgot',
   PASSWORD_FORGOT_VERIFY: 'pwd:forgot:verify',
 
