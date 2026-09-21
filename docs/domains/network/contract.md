@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 3
+version: 4
 updated: 2026-09-21
 ---
 
@@ -62,7 +62,21 @@ their ceiling does not cost a pass over all 5000 (F-027-u).
 
 `GetUsage` returns every client in **one** call, and that is the contract
 rather than an optimisation — catalog 8.4 forbids per-client reads and
-F-027-k asserts the request count.
+F-027-k asserts the request count. `ListClients` is its counterpart for
+state rather than bytes: the ceiling, rate and expiry the panel is
+**enforcing**, never the ones we last asked for. Both comparisons built on it —
+applied against allocated (F-027-t) and the three-key drift match (F-027-aa) —
+are worthless read from our own side of the write.
+
+**Every error a driver returns is a `*driver.Fault`** with one of six kinds
+(v4, F-027-j). A bare error tells the loop nothing it can act on, and the
+distinction that pays for the type is `429` against `5xx`: a rate limit is a
+healthy panel asking for a slower caller, a `5xx` is a panel that is failing.
+Conflating them either quarantines a panel we were rude to or keeps hammering
+one that is down. `rate_limited` and `blocked` (`401`/`403`) together are
+F-027-v's `throttled_or_blocked`; `unavailable` is its `down`; `timeout` is our
+own deadline and implicates the panel in nothing. Classification happens in the
+driver, so nothing above it reads a status code.
 
 Byte figures are raw readings, never deltas: what a `ClientUsage` means
 depends on the panel's declared `counterSemantics`, and turning the three
@@ -98,6 +112,32 @@ the panel's capability matrix and registration refusal in TypeScript
 (F-027-ad). There is no import that could join the two, so their declared home
 is `contracts/network/capabilities.json` with a test on each side, exactly as
 ADR-0036 requires; the Go half is `internal/driver/questionnaire_test.go`.
+
+## The fake panel and the conformance suite (F-027-j)
+
+A wrong declaration is a **silent wrong number**, not a crash. So the pipeline
+above the driver is built and proved against a source that does what real
+panels do, before we own one: `internal/driver/fake` is a behaviour model of a
+far end — it resets its counter, comes back from a backup, stalls past a
+deadline, wraps at 32 bits, omits Gigawords, leaves a session with no `Stop`,
+refuses a ceiling and applies one late. It answers the questionnaire from what
+it will actually do, so switching a row off in `fake.Config` changes behaviour
+where a real family's gap would.
+
+`internal/driver/conformance` is what "conforms" means: eleven scenarios, run
+through the `Driver` interface only. It asserts that a driver **reports what
+the far end said** — a reset arrives as a lower raw figure, an implausible
+figure arrives at full size, an abandoned session never grows — because
+repairing, clamping or extrapolating in a driver destroys the evidence the
+normaliser decides on (F-027-l) and bills the repair instead.
+
+A driver's own test supplies a `conformance.Harness`: the driver, plus its far
+end scripted. The fake is both halves at once; a real family is a driver over a
+scripted HTTP server of its own, and the suite is written to that split. Every
+later driver row — F-027-ae, F-027-ag, F-027-ah, F-027-ai — is an
+implementation plus a call to `conformance.Run`, and nothing else. A family
+that cannot be put into a scenario's shape skips it **by name**, so a gap is
+reported rather than passed.
 
 ## Provides (intended)
 

@@ -22,6 +22,12 @@ import (
 // Every method takes a context and is expected to honour its deadline: the
 // loop's budget is per panel, not per call, and a driver that blocks past its
 // timeout spends another panel's turn.
+//
+// Every error a method returns is a *Fault (fault.go). A bare error tells the
+// loop nothing it can act on, and the difference between a 429 and a 5xx is
+// the difference between backing off and quarantining — so the classification
+// is the driver's job, made here, and the conformance suite refuses a driver
+// that skips it (F-027-j).
 type Driver interface {
 	// Capabilities answers the acceptance questionnaire by connection test.
 	// It is the registration call, and it is re-run when a panel is upgraded
@@ -31,6 +37,14 @@ type Driver interface {
 	HealthCheck(ctx context.Context) error
 
 	ListInbounds(ctx context.Context) ([]Inbound, error)
+
+	// ListClients returns every client the panel holds, with the ceiling,
+	// rate and expiry it is actually enforcing — never what we last asked
+	// for. It is the far-end half of two comparisons: the convergence loop's
+	// applied-against-allocated (F-027-t) and the drift report's
+	// three-key match (F-027-aa), and both are worthless read from our own
+	// side of the write.
+	ListClients(ctx context.Context) ([]RemoteClient, error)
 
 	CreateClient(ctx context.Context, req CreateClientRequest) (RemoteClient, error)
 	UpdateClient(ctx context.Context, req UpdateClientRequest) error

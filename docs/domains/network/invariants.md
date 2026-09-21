@@ -12,6 +12,7 @@ enforced by the database as of F-027-a, 13-17 as of F-027-b, 19-25 as of
 F-027-c, 26-28 as of F-027-d and 2, 30-31 as of F-027-e. 18 and 29 are the
 promise the rest of them serve and are service rules; 32 is a service rule too,
 and is the one rule of this set that runs before a panel has any rows at all.
+33 is a service rule held by the driver conformance suite (F-027-j).
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -48,6 +49,7 @@ and is the one rule of this set that runs before a panel has any rows at all.
 | 30 | One rollup row per `(configId, date)` | UNIQUE `traffic_daily_aggregate_config_date_key` (F-027-e) | a cron rerun doubles a day's reported usage, with both rows individually correct — which is what makes it invisible |
 | 31 | A measured byte lands in a partition that retention will reach, or the insert fails | monthly partitions with **no** `DEFAULT` partition (F-027-e) | the one partition nobody can drop keeps an uncreated month's rows past every retention rule, in silence |
 | 32 | A panel failing a load-bearing acceptance row never carries users, and one that cannot enforce a per-client ceiling never sells metered service | `driver.Capabilities.Verdict` (F-027-i), asserted by `questionnaire_test.go` | a family whose figures we cannot bill is discovered at billing time, with users already on it — and a metered sale with no enforceable ceiling serves bytes nobody paid for (ADR-0072) |
+| 33 | A driver reports what the far end said — it never repairs a reset, clamps an implausible figure, extrapolates past a missing `Stop` or reassembles bits the NAS did not send | the eleven scenarios of `internal/driver/conformance` (F-027-j), run by every driver's own test | the evidence the normaliser decides on is destroyed inside the driver, and the repair is billed as a measurement — a plausible wrong number with nothing red anywhere (ADR-0074) |
 
 ## How to test
 
