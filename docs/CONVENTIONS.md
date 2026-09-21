@@ -316,9 +316,9 @@ message: pick the key from an exhaustive Record over the union, or botLinkMessag
 ## C-08 — a routing key is declared once, in shared-core
 
 **Rule.** `OutboxEventType.*`, `automationTickRoutingKey()`,
-`OTP_DELIVERY_ROUTING_KEY`, `topicBindingAll(PREFIX)` and the existing
-`BOT_UPDATE_ROUTING_PREFIX` / `outboxRoutingKey()` are the only spellings of a
-routing key or outbox event type.
+`OTP_DELIVERY_ROUTING_KEY`, `USAGE_DELTA_ROUTING_KEY`, `topicBindingAll(PREFIX)`
+and the existing `BOT_UPDATE_ROUTING_PREFIX` / `outboxRoutingKey()` are the only
+spellings of a routing key or outbox event type.
 
 **Why.** Publisher and binder are always in different Nx apps (`billing-service`
 writes `billing.payment.confirmed`, `worker-service` binds it). A key renamed on
@@ -326,16 +326,23 @@ one side still publishes — to no queue — and the only signal is an
 `unroutable` confirm. Before this, billing, the worker's binding and both
 consumers each spelled the event type by hand.
 
+`network.usage.delta` is the third publisher-binder pair and the first one
+that crosses a language: `network-service` writes it in Go and
+`billing-service` will bind it (F-027-n). Go cannot import `shared-core`, so
+both spellings are held to `contracts/network/delta.json` by a test on each
+side — the same answer `capabilities.json` gives, for the same reason
+(ADR-0036, C-04).
+
 Some outbox event types are also the `type` of a realtime event the panel reads.
 `contracts/realtime/events.json` declares those; `routing-keys.contract.spec.ts`
 holds `RealtimeEventType` (the subset of `OutboxEventType` a browser sees) to it and `site-pwa` imports `RealtimeEvents` from the
 copy generated from it (`@/generated/wire`).
 
 ```check C-08
-forbid: ['"](automation\.tick\.|otp\.delivery\.|billing\.payment\.)|`(automation\.tick|otp\.delivery|billing\.payment)\.\$\{
+forbid: ['"](automation\.tick\.|otp\.delivery\.|billing\.payment\.|network\.usage\.)|`(automation\.tick|otp\.delivery|billing\.payment|network\.usage)\.\$\{
 in: txnet-backend/**/*.ts
-except: txnet-backend/**/*.spec.ts, txnet-backend/*-e2e/**, txnet-backend/shared-core/src/lib/automation/routing-keys.ts, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**
-message: import the key from shared-core's automation/routing-keys (C-08) — a routing key spelled twice routes to nothing when one side is renamed
+except: txnet-backend/**/*.spec.ts, txnet-backend/*-e2e/**, txnet-backend/shared-core/src/lib/automation/routing-keys.ts, txnet-backend/shared-core/src/lib/automation/usage-delta.ts, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**
+message: import the key from shared-core's automation/routing-keys or usage-delta (C-08) — a routing key spelled twice routes to nothing when one side is renamed
 ```
 
 ```check C-08

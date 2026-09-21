@@ -18,6 +18,7 @@ import (
 	"network-service/internal/config"
 	"network-service/internal/db"
 	"network-service/internal/httpapi"
+	"network-service/internal/publish"
 	"network-service/pkg/logger"
 )
 
@@ -55,6 +56,30 @@ func main() {
 		log.Error("refusing to start", "error", err)
 		os.Exit(1)
 	}
+
+	// The second boot gate, and the same argument as the first: a collector
+	// that cannot publish a pass cannot move a cursor, so it would re-read the
+	// same bytes for ever while looking healthy (invariant 18, F-027-m). The
+	// exchange is asserted here, before anything is collected.
+	broker, err := publish.DialAMQP(publish.AMQPOptions{
+		URL:            cfg.BrokerURL,
+		Exchange:       cfg.BrokerExchange,
+		ConfirmTimeout: cfg.BrokerPublishTimeout,
+	})
+	if err != nil {
+		log.Error("refusing to start", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := broker.Close(); err != nil {
+			log.Error("broker close failed", "error", err)
+		}
+	}()
+	// `publish.Publisher{Transport: broker}` is the collection loop's sink.
+	// The loop is not started here yet: it needs its panels read off
+	// `network.panel` and its cursors in Postgres, and each is a row of its
+	// own. What this gate buys today is that the exchange and the credentials
+	// are wrong at boot, in the log, rather than at 03:00 in a pass.
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", httpapi.New(pool, log).Health)

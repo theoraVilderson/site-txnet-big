@@ -1,0 +1,108 @@
+{
+  "$comment": [
+    "The usage delta wire (F-027-m) — the declared home of the routing key the",
+    "collector publishes a pass under, and of every field in that message.",
+    "",
+    "These names cross a process boundary: network-service writes them in Go",
+    "and billing-service's metering consumer reads them in TypeScript (F-027-n).",
+    "network-service is not in the Nx workspace and cannot import shared-core, so",
+    "this fixture plus a test on each side replaces the import that does not",
+    "exist (ADR-0036, C-04, C-08). The Go half is",
+    "network-service/internal/publish/delta_contract_test.go; the TypeScript half",
+    "is shared-core/src/lib/automation/usage-delta.contract.spec.ts.",
+    "",
+    "Change a value here and both sides go red until they agree.",
+    "",
+    "One message is one pass over one panel. The pass is the unit that has to be",
+    "durable before a cursor moves (invariant 18), and a pass carries three",
+    "streams, not one: what we believe, what we do not, and what we could not",
+    "place. Publishing only the deltas would drop the other two on the floor,",
+    "which is the exact failure the invariant forbids. A pass wider than",
+    "maxDeltasPerMessage is split into chunks; each delta carries its own id, so",
+    "a chunk redelivered or republished is absorbed by `usage_delta_seen`.",
+    "",
+    "Bytes are decimal strings, never JSON numbers: these are BIGINT columns and",
+    "a figure past 2^53 loses precision on the way through JSON.parse long",
+    "before anyone notices it is a wrong bill.",
+    "",
+    "Types: uuid, uuid?, string, string?, bytes (decimal string), timestamp",
+    "(RFC3339, UTC), bool, int, enum:<PrismaEnum>. A `uuid?` is JSON null when",
+    "it is absent — the column it lands in is nullable. A `string?` is the empty",
+    "string, because the column it lands in is not."
+  ],
+  "version": 1,
+  "exchange": {
+    "$comment": [
+      "The exchange every automation message already rides (F-079). Declared in",
+      "shared-core/src/lib/automation/bot-update.ts as AUTOMATION_EXCHANGE_DEFAULT",
+      "and overridden by AUTOMATION_EXCHANGE; repeated here because Go reads this",
+      "file and cannot read that one."
+    ],
+    "default": "txnet.automation"
+  },
+  "routingKeys": {
+    "$comment": [
+      "The prefix is not decoration: `automation.tick.#`, `otp.delivery.#`,",
+      "`bot.update.<slot>` and `outbox.#` are already bound on that exchange, and",
+      "a bare key is a string one domain chooses until two of them choose the",
+      "same one. A consumer binds `network.usage.#`."
+    ],
+    "prefix": "network.usage.",
+    "usageDelta": "network.usage.delta"
+  },
+  "maxDeltasPerMessage": 500,
+  "deltaIdNamespace": {
+    "$comment": [
+      "`usage_delta_seen.deltaId` is the idempotency key of the whole metering",
+      "path, so it cannot be random: a redelivered message must carry the id its",
+      "first delivery carried. It is a UUIDv5 (RFC 4122 §4.3) over this namespace",
+      "and the delta's identity — panelId, remoteId, sessionId, observedAt in",
+      "RFC3339 with nanoseconds, upBytes, downBytes — joined with a single `|`.",
+      "Either side can recompute it from the message alone, which is what makes",
+      "it checkable rather than trusted."
+    ],
+    "uuid": "6b5f2f7a-6a4f-5c1e-9a7b-2f3c4d5e6f70",
+    "fields": ["panelId", "remoteId", "sessionId", "observedAt", "upBytes", "downBytes"],
+    "separator": "|"
+  },
+  "message": {
+    "envelope": [
+      { "name": "version", "type": "int", "note": "This file's `version`. A consumer refuses a version it was not written against rather than guessing at a field." },
+      { "name": "panelId", "type": "uuid", "note": "`network.panel.id` — the panel the bytes were measured on. Carried from day one for F-1002, which attributes bandwidth cost to the panel's owner." },
+      { "name": "ownershipType", "type": "enum:PanelOwnershipType", "note": "Who owns the panel the bytes crossed: `platform` or `tenant`. F-1002 again — the cost lands on the owner, and a consumer that had to join back to `panel` to learn it would be reading a row the collector already had." },
+      { "name": "tenantId", "type": "uuid?", "note": "Set exactly when `ownershipType = tenant` (invariant 9). `traffic_raw_log.tenantId` is NOT NULL and denormalized, so the value rides rather than being joined for." },
+      { "name": "observedAt", "type": "timestamp", "note": "The pass's own clock. A bulk read is one request and therefore one moment (invariant 34)." },
+      { "name": "chunk", "type": "int", "note": "1-based. A pass past `maxDeltasPerMessage` is split; the chunks are one pass and one moment." },
+      { "name": "chunks", "type": "int", "note": "How many chunks this pass became." },
+      { "name": "deltas", "type": "delta[]" },
+      { "name": "quarantines", "type": "quarantine[]" },
+      { "name": "unattributed", "type": "unattributed[]" }
+    ],
+    "delta": [
+      { "name": "deltaId", "type": "uuid", "note": "See `deltaIdNamespace`. `usage_delta_seen.deltaId`." },
+      { "name": "configId", "type": "uuid", "note": "`network.config.id` — the config that owns the remote client." },
+      { "name": "remoteId", "type": "string", "note": "The panel's own id for the client, as reported. Kept beside `configId` so a wrong attribution is visible in the message that made it." },
+      { "name": "protocol", "type": "enum:ConfigProtocol", "note": "The config's protocol. Carried from day one: per-protocol cost is what F-1002 reports on, and adding it later means a migration over a table that is already partitioned by month." },
+      { "name": "upBytes", "type": "bytes" },
+      { "name": "downBytes", "type": "bytes" },
+      { "name": "observedAt", "type": "timestamp", "note": "The end of the interval this delta covers, as the source reported it." },
+      { "name": "sessionId", "type": "string?", "note": "Set under `session` counter semantics, empty otherwise." },
+      { "name": "afterReset", "type": "bool", "note": "The counter this came from had gone backward. The bytes are real; what was lost is whatever ran before the reset, and that is a fact about this delta rather than a footnote (ADR-0074)." }
+    ],
+    "quarantine": [
+      { "name": "deltaId", "type": "uuid" },
+      { "name": "configId", "type": "uuid?", "note": "Nullable because attribution is one of the things that can be what failed." },
+      { "name": "remoteId", "type": "string" },
+      { "name": "upBytes", "type": "bytes" },
+      { "name": "downBytes", "type": "bytes" },
+      { "name": "observedAt", "type": "timestamp" },
+      { "name": "reason", "type": "enum:QuarantineReason" }
+    ],
+    "unattributed": [
+      { "name": "remoteIdentifier", "type": "string", "note": "`unattributed_usage.remoteIdentifier` — the panel's own identifier for a client no config claims." },
+      { "name": "upBytes", "type": "bytes" },
+      { "name": "downBytes", "type": "bytes" },
+      { "name": "observedAt", "type": "timestamp" }
+    ]
+  }
+}

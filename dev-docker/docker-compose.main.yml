@@ -1348,9 +1348,18 @@ services:
       # per-tenant URL here on purpose: it has no use for either, and the
       # absence is what keeps the collector out of a tenant's scope.
       - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      # Where a collection pass goes (F-027-m). One broker and one exchange for
+      # the whole platform: the routing key `network.usage.delta` is what
+      # separates this traffic, not a topology of its own. A collector that
+      # cannot publish cannot move a cursor, so a missing URL is a refusal to
+      # start rather than a degraded mode.
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+      - AUTOMATION_EXCHANGE=${AUTOMATION_EXCHANGE:-txnet.automation}  # default declared in contracts/network/delta.json and shared-core (F-079)
       - LOG_LEVEL=${LOG_LEVEL:-info}
     depends_on:
       main-db:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${NETWORK_SERVICE_PORT:-8090}/health >/dev/null || exit 1"]

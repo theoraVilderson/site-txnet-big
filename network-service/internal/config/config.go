@@ -6,6 +6,8 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"network-service/internal/publish"
 )
 
 // Config holds every runtime setting of the network plane's collector.
@@ -28,23 +30,33 @@ type Config struct {
 	WriteTimeout      time.Duration
 	IdleTimeout       time.Duration
 	ShutdownTimeout   time.Duration
+	// BrokerURL and BrokerExchange are where a collection pass goes
+	// (F-027-m). They are the same `RABBITMQ_URL` and `AUTOMATION_EXCHANGE`
+	// every Nest publisher reads, because it is one broker and one exchange —
+	// the routing key is what separates this traffic, not a second topology.
+	BrokerURL            string
+	BrokerExchange       string
+	BrokerPublishTimeout time.Duration
 }
 
 // Load reads configuration from the environment and validates it.
 func Load() (Config, error) {
 	cfg := Config{
-		Port:              getEnv("NETWORK_SERVICE_PORT", "8090"),
-		DatabaseURL:       os.Getenv("DATABASE_CROSS_TENANT_URL"),
-		PoolMaxConns:      getEnvInt("NETWORK_DB_POOL_MAX_CONNS", 10),
-		PoolMinConns:      getEnvInt("NETWORK_DB_POOL_MIN_CONNS", 2),
-		PoolMaxConnLife:   getEnvDuration("NETWORK_DB_POOL_MAX_CONN_LIFETIME", time.Hour),
-		PoolMaxConnIdle:   getEnvDuration("NETWORK_DB_POOL_MAX_CONN_IDLE", 30*time.Minute),
-		ConnectTimeout:    getEnvDuration("NETWORK_DB_CONNECT_TIMEOUT", 5*time.Second),
-		BootAssertTimeout: getEnvDuration("NETWORK_DB_BOOT_ASSERT_TIMEOUT", 10*time.Second),
-		ReadTimeout:       getEnvDuration("HTTP_READ_TIMEOUT", 5*time.Second),
-		WriteTimeout:      getEnvDuration("HTTP_WRITE_TIMEOUT", 5*time.Second),
-		IdleTimeout:       getEnvDuration("HTTP_IDLE_TIMEOUT", 60*time.Second),
-		ShutdownTimeout:   getEnvDuration("HTTP_SHUTDOWN_TIMEOUT", 10*time.Second),
+		Port:                 getEnv("NETWORK_SERVICE_PORT", "8090"),
+		DatabaseURL:          os.Getenv("DATABASE_CROSS_TENANT_URL"),
+		PoolMaxConns:         getEnvInt("NETWORK_DB_POOL_MAX_CONNS", 10),
+		PoolMinConns:         getEnvInt("NETWORK_DB_POOL_MIN_CONNS", 2),
+		PoolMaxConnLife:      getEnvDuration("NETWORK_DB_POOL_MAX_CONN_LIFETIME", time.Hour),
+		PoolMaxConnIdle:      getEnvDuration("NETWORK_DB_POOL_MAX_CONN_IDLE", 30*time.Minute),
+		ConnectTimeout:       getEnvDuration("NETWORK_DB_CONNECT_TIMEOUT", 5*time.Second),
+		BootAssertTimeout:    getEnvDuration("NETWORK_DB_BOOT_ASSERT_TIMEOUT", 10*time.Second),
+		ReadTimeout:          getEnvDuration("HTTP_READ_TIMEOUT", 5*time.Second),
+		WriteTimeout:         getEnvDuration("HTTP_WRITE_TIMEOUT", 5*time.Second),
+		IdleTimeout:          getEnvDuration("HTTP_IDLE_TIMEOUT", 60*time.Second),
+		ShutdownTimeout:      getEnvDuration("HTTP_SHUTDOWN_TIMEOUT", 10*time.Second),
+		BrokerURL:            os.Getenv("RABBITMQ_URL"),
+		BrokerExchange:       getEnv("AUTOMATION_EXCHANGE", publish.DefaultExchange),
+		BrokerPublishTimeout: getEnvDuration("NETWORK_BROKER_PUBLISH_TIMEOUT", publish.DefaultConfirmTimeout),
 	}
 	if err := cfg.validate(); err != nil {
 		return Config{}, err
@@ -58,6 +70,12 @@ func Load() (Config, error) {
 func (c Config) validate() error {
 	if c.DatabaseURL == "" {
 		return fmt.Errorf("DATABASE_CROSS_TENANT_URL is required")
+	}
+	// A collector that cannot publish cannot move a cursor, so it cannot
+	// collect: every pass it read would be re-read for ever. That is a
+	// refusal to start, not a degraded mode (F-027-m).
+	if c.BrokerURL == "" {
+		return fmt.Errorf("RABBITMQ_URL is required")
 	}
 	if c.Port == "" {
 		return fmt.Errorf("NETWORK_SERVICE_PORT must not be empty")

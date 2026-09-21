@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 4
+version: 5
 updated: 2026-09-21
 ---
 
@@ -170,9 +170,10 @@ every family to it from the first driver on.
 ## The collection loop (F-027-l)
 
 `internal/collect/` is one bulk pass a minute that turns three counter
-arithmetics into one delta stream. Its rules — the maths, reset detection, the
-stretched plausibility cap and where a byte waits — are
-[contract.collection.md](contract.collection.md).
+arithmetics into one delta stream, and `internal/publish` is where that pass
+leaves the process (F-027-m). Their rules — the maths, reset detection, the
+stretched plausibility cap, where a byte waits, and the one message a pass
+becomes — are [contract.collection.md](contract.collection.md).
 
 ## Provides (intended)
 
@@ -187,8 +188,14 @@ stretched plausibility cap and where a byte waits — are
 
 ## Emits (events)
 
-None planned. Config status changes are expected to be pushed to the Panel API
-by the provisioning service directly.
+| Routing key | What | Consumer |
+|---|---|---|
+| `network.usage.delta` | one collection pass over one panel: its deltas, its quarantines and its unattributed rows (F-027-m) | `billing-service` metering (F-027-n) |
+
+Declared in `contracts/network/delta.json` and held to it on both sides; the
+shape and why it is one message per pass are in
+[contract.collection.md](contract.collection.md). Config status changes are
+still pushed to the Panel API by the provisioning service directly.
 
 ## Consumes
 

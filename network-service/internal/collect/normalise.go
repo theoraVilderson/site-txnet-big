@@ -67,10 +67,27 @@ type Panel struct {
 	// quarantines every byte on it in silence.
 	MaxLineRateBps int64
 	Driver         driver.Driver
+	// OwnershipType is `panel.ownershipType` and TenantID its `tenantId`, set
+	// exactly when the ownership is `tenant` (invariant 9). They are carried
+	// through the pass rather than joined for by the consumer, because the
+	// bandwidth a panel served is a cost its owner pays (F-1002) and the
+	// collector is already holding the row that says who that is.
+	OwnershipType string
+	TenantID      string
 	// Configs maps the panel's own client id to the config that owns it. The
 	// three-key matching that fills it is F-027-aa; a reading this map does
 	// not claim becomes an Unattributed row rather than nothing.
-	Configs map[string]string
+	Configs map[string]ConfigRef
+}
+
+// ConfigRef is what the pass knows about the config behind a remote client:
+// which one it is, and what it speaks. The protocol rides with every delta
+// (F-027-m) rather than being looked up downstream — per-protocol cost is what
+// F-1002 reports on, and `traffic_raw_log` is partitioned by month, so adding
+// it later is a migration over every partition.
+type ConfigRef struct {
+	ConfigID string
+	Protocol string
 }
 
 // Delta is one config's measured traffic for one interval — the only shape
@@ -79,6 +96,7 @@ type Delta struct {
 	PanelID   string
 	ConfigID  string
 	RemoteID  string
+	Protocol  string
 	UpBytes   int64
 	DownBytes int64
 	// ObservedAt is the pass's own clock, sampled when the read returned. A
@@ -118,12 +136,17 @@ type Unattributed struct {
 // the three slices, and Advances is what the cursors become **once it has been
 // published** — never before (F-027-n's exactly-once effect starts here).
 type Result struct {
-	PanelID      string
-	ObservedAt   time.Time
-	Deltas       []Delta
-	Quarantines  []Quarantine
-	Unattributed []Unattributed
-	Advances     []Advance
+	PanelID string
+	// OwnershipType and TenantID are the panel's, copied here so the pass is
+	// self-describing on the wire (F-027-m). A Sink is handed a Result and
+	// nothing else.
+	OwnershipType string
+	TenantID      string
+	ObservedAt    time.Time
+	Deltas        []Delta
+	Quarantines   []Quarantine
+	Unattributed  []Unattributed
+	Advances      []Advance
 }
 
 // Advance is one cursor's new value. Session holds the per-session high-water
@@ -175,9 +198,14 @@ type Normaliser struct {
 // Result and only then applies its Advances, so a crash between the two
 // re-reads rather than loses (invariant 18).
 func (n Normaliser) Pass(readings []driver.ClientUsage, at time.Time) Result {
-	res := Result{PanelID: n.Panel.ID, ObservedAt: at}
+	res := Result{
+		PanelID:       n.Panel.ID,
+		OwnershipType: n.Panel.OwnershipType,
+		TenantID:      n.Panel.TenantID,
+		ObservedAt:    at,
+	}
 	for _, reading := range readings {
-		configID, claimed := n.Panel.Configs[reading.RemoteID]
+		ref, claimed := n.Panel.Configs[reading.RemoteID]
 		if !claimed {
 			res.Unattributed = append(res.Unattributed, Unattributed{
 				PanelID:          n.Panel.ID,
@@ -189,10 +217,10 @@ func (n Normaliser) Pass(readings []driver.ClientUsage, at time.Time) Result {
 			continue
 		}
 		if n.Panel.CounterSemantics == driver.CounterSession {
-			n.session(&res, reading, configID, at)
+			n.session(&res, reading, ref, at)
 			continue
 		}
-		n.counter(&res, reading, configID, at)
+		n.counter(&res, reading, ref, at)
 	}
 	return res
 }
@@ -200,14 +228,14 @@ func (n Normaliser) Pass(readings []driver.ClientUsage, at time.Time) Result {
 // counter is the cumulative and reset_on_read arithmetic. They differ in one
 // line — what a reading means — and share everything else, which is the point
 // of having one normaliser.
-func (n Normaliser) counter(res *Result, reading driver.ClientUsage, configID string, at time.Time) {
+func (n Normaliser) counter(res *Result, reading driver.ClientUsage, ref ConfigRef, at time.Time) {
 	cur, seen := n.Cursors.Counter(n.Panel.ID, reading.RemoteID)
 
 	if seen && cur.Semantics != n.Panel.CounterSemantics {
 		// The panel was re-declared. The cursor means nothing under the new
 		// arithmetic, so the reading is parked and the cursor rebuilt from it
 		// — one quarantined figure, not one per pass for ever.
-		n.quarantine(res, configID, reading.RemoteID, reading.UpBytes, reading.DownBytes, at, ReasonSemanticsMismatch)
+		n.quarantine(res, ref.ConfigID, reading.RemoteID, reading.UpBytes, reading.DownBytes, at, ReasonSemanticsMismatch)
 		n.adopt(res, reading, at, nil)
 		return
 	}
@@ -215,7 +243,7 @@ func (n Normaliser) counter(res *Result, reading driver.ClientUsage, configID st
 		// A session id under a non-session declaration is the declaration
 		// being wrong about the source, which is the failure ADR-0074 exists
 		// to catch before it is a plausible wrong number.
-		n.quarantine(res, configID, reading.RemoteID, reading.UpBytes, reading.DownBytes, at, ReasonSemanticsMismatch)
+		n.quarantine(res, ref.ConfigID, reading.RemoteID, reading.UpBytes, reading.DownBytes, at, ReasonSemanticsMismatch)
 		return
 	}
 	if !seen {
@@ -232,7 +260,7 @@ func (n Normaliser) counter(res *Result, reading driver.ClientUsage, configID st
 		// kept whole and parked; the cursor still moves, or the same bytes are
 		// quarantined again on every pass for ever.
 		up, down := n.rise(cur, reading)
-		n.quarantine(res, configID, reading.RemoteID, up, down, at, ReasonClockWentBackward)
+		n.quarantine(res, ref.ConfigID, reading.RemoteID, up, down, at, ReasonClockWentBackward)
 		n.advance(res, reading.RemoteID, "", next, nil)
 		return
 	}
@@ -246,15 +274,16 @@ func (n Normaliser) counter(res *Result, reading driver.ClientUsage, configID st
 	}
 
 	if over, reason := n.overCap(cur.LastObservedAt, at, up, down, afterReset); over {
-		n.quarantine(res, configID, reading.RemoteID, up, down, at, reason)
+		n.quarantine(res, ref.ConfigID, reading.RemoteID, up, down, at, reason)
 		n.advance(res, reading.RemoteID, "", next, nil)
 		return
 	}
 
 	if up > 0 || down > 0 {
 		res.Deltas = append(res.Deltas, Delta{
-			PanelID: n.Panel.ID, ConfigID: configID, RemoteID: reading.RemoteID,
-			UpBytes: up, DownBytes: down, ObservedAt: at, AfterReset: afterReset,
+			PanelID: n.Panel.ID, ConfigID: ref.ConfigID, RemoteID: reading.RemoteID,
+			Protocol: ref.Protocol, UpBytes: up, DownBytes: down,
+			ObservedAt: at, AfterReset: afterReset,
 		})
 		next.LifetimeUpBytes += up
 		next.LifetimeDownBytes += down
@@ -285,17 +314,17 @@ func (n Normaliser) rise(cur Counter, reading driver.ClientUsage) (up, down int6
 // rises, and a session id we have already published against is worth only what
 // it has risen above that mark — which is why a restored backup costs nothing
 // here and thousands of resets on a cumulative panel (ADR-0074).
-func (n Normaliser) session(res *Result, reading driver.ClientUsage, configID string, at time.Time) {
+func (n Normaliser) session(res *Result, reading driver.ClientUsage, ref ConfigRef, at time.Time) {
 	cur, seen := n.Cursors.Counter(n.Panel.ID, reading.RemoteID)
 	if seen && cur.Semantics != n.Panel.CounterSemantics {
-		n.quarantine(res, configID, reading.RemoteID, reading.UpBytes, reading.DownBytes, at, ReasonSemanticsMismatch)
+		n.quarantine(res, ref.ConfigID, reading.RemoteID, reading.UpBytes, reading.DownBytes, at, ReasonSemanticsMismatch)
 		n.adopt(res, reading, at, n.markFor(reading, at))
 		return
 	}
 	if reading.SessionID == "" {
 		// A session panel that reports no session id cannot be told apart from
 		// a restored one, which is the whole protection.
-		n.quarantine(res, configID, reading.RemoteID, reading.UpBytes, reading.DownBytes, at, ReasonSemanticsMismatch)
+		n.quarantine(res, ref.ConfigID, reading.RemoteID, reading.UpBytes, reading.DownBytes, at, ReasonSemanticsMismatch)
 		return
 	}
 	if !seen {
@@ -322,20 +351,21 @@ func (n Normaliser) session(res *Result, reading driver.ClientUsage, configID st
 	}
 
 	if at.Before(cur.LastObservedAt) {
-		n.quarantine(res, configID, reading.RemoteID, up, down, at, ReasonClockWentBackward)
+		n.quarantine(res, ref.ConfigID, reading.RemoteID, up, down, at, ReasonClockWentBackward)
 		n.advance(res, reading.RemoteID, reading.SessionID, next, &nextMark)
 		return
 	}
 	if over, reason := n.overCap(cur.LastObservedAt, at, up, down, false); over {
-		n.quarantine(res, configID, reading.RemoteID, up, down, at, reason)
+		n.quarantine(res, ref.ConfigID, reading.RemoteID, up, down, at, reason)
 		n.advance(res, reading.RemoteID, reading.SessionID, next, &nextMark)
 		return
 	}
 
 	if up > 0 || down > 0 {
 		res.Deltas = append(res.Deltas, Delta{
-			PanelID: n.Panel.ID, ConfigID: configID, RemoteID: reading.RemoteID,
-			UpBytes: up, DownBytes: down, ObservedAt: at, SessionID: reading.SessionID,
+			PanelID: n.Panel.ID, ConfigID: ref.ConfigID, RemoteID: reading.RemoteID,
+			Protocol: ref.Protocol, UpBytes: up, DownBytes: down,
+			ObservedAt: at, SessionID: reading.SessionID,
 		})
 		next.LifetimeUpBytes += up
 		next.LifetimeDownBytes += down

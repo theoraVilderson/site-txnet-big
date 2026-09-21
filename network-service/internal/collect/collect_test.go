@@ -62,10 +62,10 @@ type rig struct {
 func newRig(t *testing.T, semantics driver.CounterSemantics, clients ...string) *rig {
 	t.Helper()
 	p := fake.New(fake.Config{CounterSemantics: semantics})
-	configs := map[string]string{}
+	configs := map[string]collect.ConfigRef{}
 	for _, id := range clients {
 		p.Given(id)
-		configs[id] = "config-" + id
+		configs[id] = collect.ConfigRef{ConfigID: "config-" + id, Protocol: "vless"}
 	}
 	sink := &recorder{}
 	loop := &collect.Loop{
@@ -319,7 +319,7 @@ func TestAPanelWithNoDeclaredLineRateHasNoRateCap(t *testing.T) {
 			return []collect.Panel{{
 				ID: "panel-1", CounterSemantics: driver.CounterCumulative,
 				Transport: driver.TransportPull, Driver: p,
-				Configs: map[string]string{"c1": "config-c1"},
+				Configs: map[string]collect.ConfigRef{"c1": {ConfigID: "config-c1", Protocol: "vless"}},
 			}}, nil
 		}),
 		Sink:    sink,
@@ -367,7 +367,7 @@ func TestARedeclaredPanelInvalidatesItsCursorsRatherThanUsingThem(t *testing.T) 
 		Source: collect.PanelsFunc(func(context.Context) ([]collect.Panel, error) {
 			return []collect.Panel{{
 				ID: "panel-1", CounterSemantics: semantics, Transport: driver.TransportPull,
-				MaxLineRateBps: gigabit, Driver: p, Configs: map[string]string{"c1": "config-c1"},
+				MaxLineRateBps: gigabit, Driver: p, Configs: map[string]collect.ConfigRef{"c1": {ConfigID: "config-c1", Protocol: "vless"}},
 			}}, nil
 		}),
 		Sink:    sink,
@@ -463,9 +463,9 @@ func TestAFailingPanelDoesNotFailThePass(t *testing.T) {
 		Source: collect.PanelsFunc(func(context.Context) ([]collect.Panel, error) {
 			return []collect.Panel{
 				{ID: "down", CounterSemantics: driver.CounterCumulative, Transport: driver.TransportPull,
-					MaxLineRateBps: gigabit, Driver: down, Configs: map[string]string{"d1": "config-d1"}},
+					MaxLineRateBps: gigabit, Driver: down, Configs: map[string]collect.ConfigRef{"d1": {ConfigID: "config-d1", Protocol: "vless"}}},
 				{ID: "up", CounterSemantics: driver.CounterCumulative, Transport: driver.TransportPull,
-					MaxLineRateBps: gigabit, Driver: up, Configs: map[string]string{"u1": "config-u1"}},
+					MaxLineRateBps: gigabit, Driver: up, Configs: map[string]collect.ConfigRef{"u1": {ConfigID: "config-u1", Protocol: "vless"}}},
 			}, nil
 		}),
 		Sink:    sink,
@@ -511,7 +511,7 @@ func TestConcurrencyIsBounded(t *testing.T) {
 				<-release
 				atomic.AddInt64(&live, -1)
 			}},
-			Configs: map[string]string{"c1": "config-c1"},
+			Configs: map[string]collect.ConfigRef{"c1": {ConfigID: "config-c1", Protocol: "vless"}},
 		})
 	}
 	loop := &collect.Loop{
