@@ -2,8 +2,8 @@
 id: network
 layer: domain
 status: draft
-version: 2
-updated: 2026-09-06
+version: 3
+updated: 2026-09-21
 ---
 
 # Contract — network
@@ -15,7 +15,13 @@ updated: 2026-09-06
 A Config is one user's credential (`uuid` + protocol) on one Panel — the x-ui /
 Xray server install. `tenantId` is denormalized onto `config` (first key of a
 composite index) so a tenant's User panel can query its configs without a join.
-`Panel.tenantId = null` = shared pool; set = dedicated to that tenant.
+`Panel.tenantId = null` = shared pool; set = dedicated to that tenant, and
+`ownershipType` says the same thing where the reader does not carry RLS.
+
+A Panel also **declares** how it is driven and how it counts (`driverType`,
+`counterSemantics`, `transport`, `capabilities`) — see `data-model.md`. Those
+answers select behaviour: three delta arithmetics behind one normaliser, and a
+panel refused at registration rather than at billing time (ADR-0074).
 
 ## Provides (intended)
 
@@ -56,7 +62,11 @@ by the provisioning service directly.
 | Item | Deprecated since | Removal after | Replacement |
 |---|---|---|---|
 | model/table `Node` (`node`) | 2026-09-06 | removed in the same change | `Panel` (`panel`) — see `docs/GLOSSARY.md` banned words |
+| `Panel.panelType` + enum `PanelType` | 2026-09-21 | removed in the same change | `Panel.driverType` + enum `DriverType` (13 families) |
+| `Panel.status` + enum `PanelStatus` | 2026-09-21 | removed in the same change | `Panel.panelState` + enum `PanelState`, one value wider |
 
-§8 normally forbids removing a shape in the change that replaces it. It was
-removed outright here because the consumer list is empty: `source: []`, no
-service reads the model, and no migration was ever committed.
+§8 normally forbids removing a shape in the change that replaces it. All three
+were removed outright because the consumer list is empty: no service reads the
+model, and `network.panel` has never held a row —
+`20260921000100_panel_declares_its_driver` asserts that before it starts. The
+`Node` removal additionally had no committed migration.

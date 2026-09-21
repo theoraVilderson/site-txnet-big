@@ -1,9 +1,74 @@
 // بخش شش: Schema `network` — نود، کانفیگ، ترافیک
 // =============================================================================
 
-enum PanelType {
+/// Which side's infrastructure, keys and cost a Panel is — the same
+/// `ownershipType` pattern `ai.AIProvider` will carry (GLOSSARY).
+enum PanelOwnershipType {
+  platform
+  tenant
+
+  @@schema("network")
+}
+
+/// The management-system family one Driver wraps (ADR-0071). Adding one is a
+/// questionnaire plus a conformance run, never a new pipeline; `fake` is the
+/// in-repo driver the conformance suite runs against (F-027-j).
+enum DriverType {
+  marzban
+  marzneshin
+  sanaee
   x_ui
+  three_x_ui
+  s_ui
+  hiddify
   core_xray
+  ibsng
+  cloudius
+  mikrotik_user_manager
+  mikrotik_wireguard
+  fake
+
+  @@schema("network")
+}
+
+/// How the source counts usage (ADR-0074). The delta arithmetic differs per
+/// value and a wrong declaration is a silent wrong number, so it is answered
+/// by the registration connection test, never by hand.
+enum CounterSemantics {
+  cumulative
+  session
+  reset_on_read
+
+  @@schema("network")
+}
+
+/// Who starts the conversation (ADR-0074): we poll it, or it sends us RADIUS
+/// accounting packets.
+enum PanelTransport {
+  pull
+  push
+
+  @@schema("network")
+}
+
+/// The acceptance questionnaire's verdict (ADR-0074). A panel failing a
+/// load-bearing row is refused here, at registration, not at billing time;
+/// `accepted_low_trust` is what a `reset_on_read` source gets.
+enum PanelReviewState {
+  pending
+  accepted
+  accepted_low_trust
+  refused
+
+  @@schema("network")
+}
+
+/// What the convergence loop does with a remote client we did not create
+/// (F-027-aa's `orphan` verdict). The default reports and touches nothing.
+enum OrphanPolicy {
+  report_only
+  adopt
+  delete_remote
 
   @@schema("network")
 }
@@ -15,20 +80,32 @@ enum PanelRole {
   @@schema("network")
 }
 
-enum PanelStatus {
+/// `throttled_or_blocked` is not `down` (ADR-0072): a `429`/`403` means the
+/// panel is answering and refusing us, so it is not retried through and its
+/// owner is alerted instead.
+enum PanelState {
   healthy
   degraded
   maintenance
   down
+  throttled_or_blocked
 
   @@schema("network")
 }
 
+/// Every protocol a driver family can hand us: the Xray set, the two modern
+/// UDP protocols Hiddify/Marzneshin add, WireGuard, and the two an ISP
+/// billing system reports over RADIUS.
 enum ConfigProtocol {
   vmess
   vless
   trojan
   shadowsocks
+  hysteria2
+  tuic
+  wireguard
+  openvpn
+  pppoe
 
   @@schema("network")
 }
@@ -59,17 +136,44 @@ enum IpRuleType {
 }
 
 /// 5.1 — نود؛ tenantId=null یعنی استخر مشترک، پر یعنی نود اختصاصی Tenant.
+/// A Panel *declares* how it counts and how it is reached (ADR-0074); every
+/// column below the credentials changes system behaviour rather than
+/// documenting it.
 model Panel {
-  id                  String      @id @default(uuid()) @db.Uuid
-  tenantId            String?     @db.Uuid
-  name                String
-  ipAddress           String
-  panelType           PanelType
-  panelApiCredentials String // SENSITIVE, encrypted — never default-select
-  role                PanelRole
-  pairedPanelId       String?     @db.Uuid // برای HA
-  status              PanelStatus @default(healthy)
-  region              String
+  id                         String             @id @default(uuid()) @db.Uuid
+  tenantId                   String?            @db.Uuid
+  /// `tenant` exactly when `tenantId` is set (`panel_ownership_matches_tenant`).
+  ownershipType              PanelOwnershipType @default(platform)
+  name                       String
+  ipAddress                  String
+  /// Where the driver talks to it; null for a push source we never call.
+  apiBaseUrl                 String?
+  driverType                 DriverType
+  counterSemantics           CounterSemantics
+  transport                  PanelTransport
+  /// The 16-row acceptance questionnaire as answered by the connection test
+  /// (F-027-i). Validated and versioned on write — the database holds no shape.
+  capabilities               Json?
+  reviewState                PanelReviewState   @default(pending)
+  orphanPolicy               OrphanPolicy       @default(report_only)
+  panelApiCredentials        String // SENSITIVE, encrypted — never default-select
+  role                       PanelRole
+  pairedPanelId              String?            @db.Uuid // برای HA
+  panelState                 PanelState         @default(healthy)
+  /// Set when it first answered `429`/`403`, cleared when it stops.
+  blockedSince               DateTime?
+  region                     String
+  /// The request budget we hold ourselves to on someone else's server.
+  maxRequestsPerMinute       Int                @default(60)
+  /// The first ceiling horizon is time-based and needs a rate before one has
+  /// been observed (ADR-0072, F-027-u).
+  maxLineRateBps             BigInt?
+  /// How long this panel takes to accept a ceiling — the horizon must cover it.
+  observedWriteLatencyMs     Int?
+  lastHealthyAt              DateTime?
+  /// The external watchdog's input (F-027-w): a stalled collector is visible
+  /// here before it is visible as a wrong number.
+  lastSuccessfulCollectionAt DateTime?
 
   pairedPanel Panel?   @relation("PanelHAPair", fields: [pairedPanelId], references: [id])
   pairedWith  Panel[]  @relation("PanelHAPair")
