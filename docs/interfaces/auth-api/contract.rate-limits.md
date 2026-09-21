@@ -2,8 +2,8 @@
 id: auth-api
 layer: interface
 status: active
-version: 12
-updated: 2026-09-11
+version: 13
+updated: 2026-09-21
 ---
 
 # auth-api — rate limits
@@ -80,6 +80,33 @@ an allowance it never spent.
 
   A client must not assume any count: 429 and `auth.temporarilyLocked` are the
   contract, the numbers are not.
+
+## One counter is keyed on the recipient, not the caller
+
+`OTP_PHONE` (catalog 2.6: *OTP request | phone number | 5 | 1 hour*) counts codes sent
+**to** a number, whatever asked for them. Every other limit in front of an OTP counts the
+caller — a per-IP bucket on the route, a per-user one on the account-switch proof, a
+per-chat one for the bot — and each of those is bought again with another address, another
+account or another messenger chat, so none of them bounds what one person's phone can be
+made to receive. This one does, and its subject is the one thing an attacker cannot get
+more of.
+
+It is spent by `OtpService`, not by a route decorator, because the routes are not the whole
+surface: login, register, forgot and the account-switch proof all issue through it, and the
+bot reaches every one of them through this same API. One counter there is what six
+decorators would otherwise have to agree about, and a route added later inherits it.
+
+Two properties it shares with `LOGIN_FAILURES`, for the same reason — the subject is the
+victim, not the attacker:
+
+- it is **never** counted platform-wide, or an attack on one reseller's user would silence
+  that number at every other reseller;
+- it is counted **after** the channel check and the cooldown, so discovering that a
+  messenger is not linked, or pressing the button twice inside a minute, does not spend a
+  person's own hour.
+
+Its window is 3600s, at its call site like every other window. Its default is
+`OTP_PHONE_RATE_LIMIT`, declared once in the env schema like the rest.
 
 ## What a client may rely on
 

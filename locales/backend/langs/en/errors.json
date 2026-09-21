@@ -28,7 +28,8 @@
     "deliveryFailed": "The code could not be sent. Please try again.",
     "invalidLength": "The verification code is six digits",
     "mustBeNumeric": "The verification code is digits only",
-    "emailSendFailed": "Sending the email did not go through"
+    "emailSendFailed": "Sending the email did not go through",
+    "tooManyForNumber": "Too many codes have been sent to this number recently. Try again later."
   },
   "auth": {
     "alreadyAuthenticated": "You are already signed in. Log out before signing in or registering again.",

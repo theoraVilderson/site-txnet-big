@@ -184,6 +184,13 @@ export const envSchema = z.object({
   // Password-reset OTP verifications per subject per window — the budget for
   // guessing a 6-digit reset code.
   FORGOT_VERIFY_RATE_LIMIT: rateLimit(20),
+  /**
+   * Codes sent **to** one number, per hour (catalog 2.6). Its window is 3600s
+   * and lives at the call site like every other window — but unlike the rest
+   * of this list it is not a route's limit: `OtpService` spends it, so every
+   * route that can cause a code to be sent shares the one budget.
+   */
+  OTP_PHONE_RATE_LIMIT: rateLimit(5),
   OTP_DELIVERY_STATUS_RATE_LIMIT: rateLimit(120),
   OTP_CHANNELS_RATE_LIMIT: rateLimit(60),
   // Captcha challenges + verifications per IP per window, one budget for both

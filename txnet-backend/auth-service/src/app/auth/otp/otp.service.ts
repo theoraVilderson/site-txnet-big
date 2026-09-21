@@ -7,6 +7,11 @@ import {
   Logger,
   HttpException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import {
+  RateLimitBucket,
+  rateLimitBucketKey,
+} from '@txnet-backend/shared-core';
 import * as argon2 from 'argon2';
 import { randomInt } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -26,6 +31,15 @@ import {
   OtpPurpose,
 } from './otp.interface';
 import { OtpChannelRegistry } from './otp-channels.service';
+import { RateLimiter } from '../../common/rate-limit/rate-limiter';
+
+/**
+ * One hour, per catalog 2.6. It lives here rather than in `RedisTtl` because a
+ * rate-limit window is part of a published limit, not a property of the
+ * keyspace — the rule `redis/ttl.ts` states and `contract.rate-limits.md`
+ * sanctions.
+ */
+const OTP_PHONE_WINDOW_SEC = 3600;
 
 /**
  * The `otp_code` column a destination belongs in. Everything upstream of the
@@ -64,7 +78,9 @@ function destination(value: string, purpose: OtpPurpose) {
  * What stays in the request is what protects the *system* rather than what
  * carries the code: the channel check (so an unusable channel is still a
  * synchronous refusal and not a 202 that silently never arrives), the
- * idempotency lock, and the cooldown.
+ * idempotency lock, and the cooldown — and, since 2026-09-21, the per-number
+ * ceiling (catalog 2.6), which belongs here for the same reason the cooldown
+ * does: it is a property of the number being written to, not of the route.
  */
 @Injectable()
 export class OtpService implements IOtpService {
@@ -76,7 +92,33 @@ export class OtpService implements IOtpService {
     private readonly channels: OtpChannelRegistry,
     private readonly delivery: OtpDeliveryStore,
     private readonly publisher: OtpDeliveryPublisher,
+    private readonly rateLimiter: RateLimiter,
+    private readonly config: ConfigService,
   ) {}
+
+  /**
+   * **OTP request | phone number | 5 | 1 hour** (catalog 2.6).
+   *
+   * Every other limit on the way here counts the *caller*: a per-IP bucket on
+   * the route, a per-user one on the account-switch proof, a per-chat one for
+   * the bot. Each of those is bought again with another address, another
+   * account or another messenger chat, and the person whose phone rings pays
+   * for all of them at once. This is the only counter keyed on the recipient,
+   * so it is the only one whose price an attacker cannot lower.
+   *
+   * Never counted platform-wide (`hit`, not `hitPlatform`): the subject is the
+   * victim, so a platform-wide counter would let an attack on one reseller's
+   * user silence that number at every other reseller — `LOGIN_FAILURES`'
+   * reason, on `LOGIN_FAILURES`' shape.
+   */
+  private async assertNumberHasRoom(phoneNumber: string): Promise<void> {
+    const { allowed } = await this.rateLimiter.hit(
+      rateLimitBucketKey(RateLimitBucket.OTP_PHONE, phoneNumber),
+      this.config.get<number>('OTP_PHONE_RATE_LIMIT')!,
+      OTP_PHONE_WINDOW_SEC,
+    );
+    if (!allowed) throw new HttpException({ i18nKey: 'otp.tooManyForNumber' }, 429);
+  }
 
   async issueOtp(
     phoneNumber: string,
@@ -104,6 +146,11 @@ export class OtpService implements IOtpService {
           429,
         );
       }
+
+      // After the channel check and the cooldown, before anything is sent: a
+      // user who discovers their messenger is not linked, or who presses the
+      // button twice inside a minute, has not spent their own number's hour.
+      await this.assertNumberHasRoom(phoneNumber);
 
       // Dev/staging escape hatch: skip the real channel entirely and print
       // the code instead, so registration/login work without a configured

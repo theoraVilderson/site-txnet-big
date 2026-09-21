@@ -55,6 +55,24 @@ export const RateLimitBucket = {
   REGISTER: 'register',
   REGISTER_VERIFY: 'register:verify',
 
+  /**
+   * Codes sent **to** one phone number, whatever asked for them (catalog 2.6:
+   * 5 per hour).
+   *
+   * The second bucket keyed on the recipient rather than the caller, and for
+   * the same reason as `LOGIN_FAILURES`: every other limit in front of an OTP
+   * counts an IP, a signed-in caller or a bot chat, and all three are things
+   * an attacker can get more of. The number on the receiving end cannot, so
+   * this is the one counter that bounds what a person's phone can be made to
+   * receive — across login, register, forgot, the account-switch proof, and
+   * across every surface including the bot.
+   *
+   * Never counted platform-wide, for `LOGIN_FAILURES`' reason exactly: the
+   * subject is the victim, so one platform-wide counter would let an attack on
+   * one reseller's user silence that number at every other reseller.
+   */
+  OTP_PHONE: 'otp:phone',
+
   PASSWORD_FORGOT: 'pwd:forgot',
   PASSWORD_FORGOT_VERIFY: 'pwd:forgot:verify',
 

@@ -29,8 +29,11 @@ describe('validateEnv — an empty var is an unset var', () => {
 
     it('gives every limit a positive default when nothing is set', () => {
       const found = limits(validateEnv(base));
-      // 32 routes, two of which share CAPTCHA_RATE_LIMIT.
-      expect(found).toHaveLength(33);
+      // 32 routes, two of which share CAPTCHA_RATE_LIMIT — plus
+      // `OTP_PHONE_RATE_LIMIT`, which is not a route's limit at all and is
+      // counted here for the same reason: `OtpService` spends it, so no route
+      // names it and nothing else would notice a missing default.
+      expect(found).toHaveLength(34);
       for (const [name, value] of found) {
         expect(`${name}=${value}`).toMatch(/=[1-9]\d*$/);
       }
