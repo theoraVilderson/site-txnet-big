@@ -96,7 +96,7 @@ reaches this through `POST /api/internal/bot-integrations/*`
 first. Two of those routes hand back a plaintext credential, which F-323 forbids
 *any API* from returning: the reading taken is that F-323 governs the tenant and
 admin surfaces, and that this seam already carries a strictly larger power
-(captcha bypass for every chat, ADR-0011, bounded per tenant by ADR-0069). Every such call writes a vault audit
+(captcha bypass for every chat, ADR-0011, bounded per chat by ADR-0070). Every such call writes a vault audit
 row naming `bot-service` as the caller, so F-1215's trail is unbroken.
 
 ## Connecting a reseller's bot

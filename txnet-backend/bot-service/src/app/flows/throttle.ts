@@ -7,10 +7,11 @@ import { miniApp, say } from './views';
 /**
  * The tenant's bot ceiling refused this call — and where the user goes instead.
  *
- * ADR-0069 bounds the captcha waiver ADR-0011 granted, with one budget per
- * tenant over the gated routes. That ceiling is shared, so the person it stops
- * is usually **not** the attacker who spent it: it is the next customer to open
- * the bot. A bare "try later" would make them the one who pays for the defence.
+ * `BOT_UNPROVEN` bounds the captcha waiver ADR-0011 granted, across the gated
+ * routes. Since ADR-0070 the budget is the **chat's own**, so the chat this
+ * refusal stops is the one that spent it — no customer is refused for somebody
+ * else's traffic any more. The offer stays anyway: a chat that has honestly run
+ * out of attempts has somewhere better to go than a wait.
  *
  * The Mini App is the answer because of what it *is*, not as a consolation: it
  * is a browser, so it can carry the slide a chat cannot, and it signs itself in

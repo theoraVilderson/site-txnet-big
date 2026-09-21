@@ -87,13 +87,20 @@ signed in.
 | Auto-login any contact-verified chat, no OTP | makes the chat id an authentication, which `bot-app/contract.md` forbids; one hijacked messenger account then owns the panel account |
 | Short bot sessions, OTP on every visit | a reseller opens the bot several times a day; the cost lands on the user this feature was built for |
 
-## Amended by ADR-0069 (2026-09-21)
+## Amended by ADR-0069, then ADR-0070 (2026-09-21)
 
 The waiver stands; what it costs did not. Every limit this ADR leaned on is keyed on
 `bot:<chatId>`, and a chat is a messenger account — so the sentence below about the rate
 limits being "the only thing between an attacker and these routes" was true and cheap to
-defeat by registering more accounts. ADR-0069 adds one budget per **tenant**, spent at
-this exemption and over exactly the routes it waives.
+defeat by registering more accounts. ADR-0069 answered that with one budget per **tenant**,
+spent at this exemption and over exactly the routes it waives.
+
+[ADR-0070](0070-the-bots-ceiling-is-the-chats-and-is-never-shared.md) superseded it the
+same day: a tenant-wide budget is one an attacker can spend, and it then refuses customers
+who spent nothing of it. The budget is the **chat's** — a cross-route aggregate over the
+waived routes, on top of the per-route limits this ADR already leaned on. So the sentence
+below is still the honest statement of what the waiver costs, and ADR-0070 says in its own
+Consequences that the breadth it describes is not bounded here.
 
 ## Revisit trigger
 

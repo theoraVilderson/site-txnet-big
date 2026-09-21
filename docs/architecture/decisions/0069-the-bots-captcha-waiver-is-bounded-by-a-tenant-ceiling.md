@@ -1,14 +1,22 @@
 ---
 id: adr-0069
-status: active
+status: superseded
 updated: 2026-09-21
 ---
 
 # ADR 0069 — the bot's captcha waiver is bounded by a tenant ceiling
 
-- **Status:** accepted
+- **Status:** superseded by [ADR-0070](0070-the-bots-ceiling-is-the-chats-and-is-never-shared.md)
 - **Date:** 2026-09-21
 - **Affects units:** auth-api, bot-app, redis-keyspace
+
+> **Superseded 2026-09-21, the day after it was accepted, by ADR-0070: the user
+rejected the shared budget under "Consequences". `BOT_UNPROVEN` is keyed on the
+acting chat, so no budget in front of the bot is shared. The reading of the
+waiver's cost below still holds and ADR-0070 does not dispute it — what it
+rejects is paying for that cost with refusals that fall on customers who spent
+nothing. The breadth this ADR set out to price is now unbounded, which ADR-0070
+states as an accepted cost of its own.**
 
 ## Context
 

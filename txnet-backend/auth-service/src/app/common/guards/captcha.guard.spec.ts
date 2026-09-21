@@ -127,41 +127,75 @@ describe('CaptchaGuard', () => {
   });
 
   /**
-   * What stands in for the slider the bot cannot drag (F-0201-c).
+   * What stands in for the slider the bot cannot drag (F-0201-c, F-0201-e).
    *
    * ADR-0011 waives the captcha for a proven service caller and says plainly
    * what that leaves: "the rate limits, not the captcha, are then the only
-   * thing between an attacker and these routes". Those limits are per chat, and
-   * a chat is a messenger account — so the whole exemption was priced at
-   * whatever a Telegram account costs, times as many as an attacker cares to
-   * register.
+   * thing between an attacker and these routes". This is the limit that
+   * answers it: one budget for the acting **chat's** unproven traffic, across
+   * exactly the routes the captcha is waived on.
    *
-   * The ceiling closes that: one budget for the **tenant's** unproven bot
-   * traffic, over exactly the routes the captcha is waived on. A chat that is
-   * already signed in never reaches them (the bot's fast path answers from
-   * `bots/session`), so a reseller's real customers do not spend it, and fifty
-   * fresh chats now share one budget instead of bringing fifty of their own.
+   * It is keyed on the chat and not on the tenant. ADR-0069 shipped the tenant
+   * key first, to price an attacker who buys messenger accounts; ADR-0070
+   * reversed it, because a budget shared across a reseller's whole bot is one
+   * an attacker can spend, and then the sign-in it refuses belongs to a
+   * customer who spent nothing. These tests pin the subject, so a return to a
+   * shared budget cannot happen by accident.
    */
   describe('the ceiling that replaces the waived captcha', () => {
-    const botCall = () =>
-      fakeExecutionContext({ extra: { serviceCaller: true, rateSubject: 'bot:55' } })
-        .context;
+    const botCall = (chatId = '55') =>
+      fakeExecutionContext({
+        extra: { serviceCaller: true, rateSubject: `bot:${chatId}` },
+      }).context;
 
-    it('spends one tenant-wide budget, not the per-chat one', async () => {
+    it('spends the acting chat\'s own budget, named by the chat', async () => {
       await expect(guard.canActivate(botCall())).resolves.toBe(true);
 
-      // The bucket names no chat: that is the whole point — the subject must be
-      // something an attacker cannot get more of by opening another chat.
-      expect(limiter.hit).toHaveBeenCalledWith('bot:unproven', 120, 900);
+      expect(limiter.hit).toHaveBeenCalledWith('bot:unproven:bot:55', 120, 900);
     });
 
-    it('refuses with 429 once the tenant has spent it', async () => {
+    // The point of ADR-0070: one chat running out must leave every other chat
+    // of the same reseller untouched, because the customer a shared budget
+    // refuses is never the attacker who spent it.
+    it('gives two chats of one tenant separate budgets', async () => {
+      await guard.canActivate(botCall('55'));
+      await guard.canActivate(botCall('66'));
+
+      const buckets = limiter.hit.mock.calls.map((call) => call[0]);
+      expect(buckets).toEqual(['bot:unproven:bot:55', 'bot:unproven:bot:66']);
+    });
+
+    // The tenant is still in the key — `RedisKeys.rateLimit` prefixes it
+    // (F-1206) — so a chat id, which is the messenger's and identical at two
+    // resellers' front doors, never joins their budgets.
+    it('names no tenant itself, leaving that to the key builder', async () => {
+      await guard.canActivate(botCall());
+
+      expect(limiter.hit.mock.calls[0][0]).toBe('bot:unproven:bot:55');
+    });
+
+    it('refuses with 429 once this chat has spent it', async () => {
       limiter.hit.mockResolvedValue({ allowed: false, current: 121, limit: 120 });
 
       await expect(guard.canActivate(botCall())).rejects.toMatchObject({
         status: 429,
       });
       expect(captcha.consumePass).not.toHaveBeenCalled();
+    });
+
+    // `reason` is what F-0201-d branches on to offer the Mini App instead of a
+    // dead end, and it is read rather than the status code (ADR-0043,
+    // ADR-0009). A refusal that stopped naming it would silently become an
+    // ordinary "try later".
+    it('names the reason the bot recognises', async () => {
+      limiter.hit.mockResolvedValue({ allowed: false, current: 121, limit: 120 });
+
+      await expect(guard.canActivate(botCall())).rejects.toMatchObject({
+        response: {
+          i18nKey: 'auth.temporarilyLocked',
+          reason: 'botTrafficThrottled',
+        },
+      });
     });
 
     it('leaves an ungated route alone, however it arrived', async () => {

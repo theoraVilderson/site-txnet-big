@@ -198,12 +198,20 @@ export const envSchema = z.object({
   // client may work at all.
   CAPTCHA_RATE_LIMIT: rateLimit(30),
   /**
-   * The tenant-wide ceiling on unproven bot traffic over the captcha-gated
-   * routes (F-0201-c), per 900s. Generous on purpose: a signed-in chat never
-   * reaches those routes, so this counts sign-ins, registrations and password
-   * resets started from a reseller's bot — not its customers' ordinary use.
+   * One chat's unproven bot traffic across the captcha-gated routes
+   * (F-0201-c, F-0201-e), per 900s. A signed-in chat never reaches those
+   * routes, so this counts sign-ins, registrations and password resets
+   * *started* in a chat, not a customer's ordinary use — which is one or two
+   * calls, so 30 is an order of magnitude above a real user.
+   *
+   * It is deliberately below the sum of what the gated routes allow one chat
+   * on their own (20 + 10 + 10 + 10 = 50, `contract.rate-limits.md`), because
+   * a ceiling above that sum can never bind and would be a counter that does
+   * nothing. It was 120 while ADR-0069 keyed it on the tenant, where the sum
+   * it had to sit under was every chat's at once; ADR-0070 moved the subject
+   * to the chat, so the number had to move with it.
    */
-  BOT_UNPROVEN_RATE_LIMIT: rateLimit(120),
+  BOT_UNPROVEN_RATE_LIMIT: rateLimit(30),
   BOT_LINK_RESOLVE_RATE_LIMIT: rateLimit(30),
   BOT_LINK_CONTACT_RATE_LIMIT: rateLimit(10),
   BOT_LINK_STATUS_RATE_LIMIT: rateLimit(300),

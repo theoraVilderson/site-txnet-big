@@ -2,7 +2,7 @@
 id: auth-api
 layer: interface
 status: active
-version: 14
+version: 15
 updated: 2026-09-21
 ---
 
@@ -108,22 +108,36 @@ victim, not the attacker:
 Its window is 3600s, at its call site like every other window. Its default is
 `OTP_PHONE_RATE_LIMIT`, declared once in the env schema like the rest.
 
-## The bot's waiver has a ceiling of its own
+## The bot's waiver has a ceiling of its own, and it is never shared
 
 `BOT_UNPROVEN` is spent by `CaptchaGuard` at the moment it lets a proven service caller
-past the bot check (ADR-0011), over exactly the routes carrying `@RequireCaptcha`. Like
-`ROLE_WRITE` it names **no subject**: the key is the tenant's alone. That is the point
-rather than an oversight — every other counter a bot call meets is keyed on `bot:<chatId>`,
-a chat is a messenger account, and an attacker buys more of those. A tenant cannot be
-bought more of (ADR-0069).
+past the bot check (ADR-0011), over exactly the routes carrying `@RequireCaptcha`. Its
+subject is `rateLimitSubject()` — `bot:<chatId>`, the acting chat, like every other counter
+a bot call meets.
+
+**What it adds over the per-route limits is that it is a cross-route aggregate.**
+`LOGIN_PWD`, `LOGIN_OTP_REQUEST`, `PASSWORD_FORGOT` and `REGISTER` each bound one chat on
+one route; this bounds one chat across every route the captcha was waived on, which is the
+gap a chat spreading its attempts between them would otherwise walk through. Its default is
+therefore **below** the sum of those four (20 + 10 + 10 + 10 = 50): a ceiling above that sum
+could never fire, and a counter that cannot fire reads as a control and is not one.
+
+**No budget in front of the bot is shared between chats** (ADR-0070). ADR-0069 shipped this
+one keyed on the tenant, to price an attacker who buys messenger accounts; the trade was
+rejected, because a shared budget is spent by whoever reaches it first and the sign-in it
+then refuses belongs to a customer who spent nothing of it. The cost of the reversal is
+that breadth is unbounded here — N chats is N budgets — and ADR-0070 states it rather than
+leaving it implied. What still bounds an attack on any one *person* is `OTP_PHONE` and
+`LOGIN_FAILURES`, both keyed on the victim.
 
 A signed-in chat never spends it: the bot's fast path answers from `POST /auth/bots/session`
 (ADR-0012), which is not gated. So the budget counts sign-ins, registrations and resets
-*started* in a reseller's bot, not its customers' ordinary use. Window 900s, default
+*started* in a chat, not a customer's ordinary use. Window 900s, default
 `BOT_UNPROVEN_RATE_LIMIT`. Never counted platform-wide, for `LOGIN_FAILURES`' reason.
 
 A client sees a 429 and nothing more — it cannot tell this ceiling from any other, and
-must not try.
+must not try. The bot is the one caller that tells it apart, and by `error.reason` rather
+than the status (ADR-0043, F-0201-d).
 
 ## What a client may rely on
 

@@ -2,7 +2,7 @@
 id: bot-app
 layer: interface
 status: active
-version: 12
+version: 13
 updated: 2026-09-21
 ---
 
@@ -53,10 +53,11 @@ plain link.
 
 ## The second place it is offered: a throttled sign-in
 
-ADR-0069 caps the tenant's unproven bot traffic over the captcha-gated routes, and that
-budget is **shared** — so the person it stops is usually not the attacker who spent it, but
-the next customer to open the bot. Those chats are offered the Mini App instead of a bare
-"try later" (`flows/throttle.ts`).
+`BOT_UNPROVEN` caps a chat's unproven traffic across the captcha-gated routes, and since
+ADR-0070 the budget is the **chat's own** — so the chat this refusal stops is the one that
+spent it, and no customer is ever refused for somebody else's traffic. It is still offered
+the Mini App rather than a bare "try later" (`flows/throttle.ts`): a chat that has honestly
+run out of attempts has somewhere better to go than a wait.
 
 The offer works because of what the Mini App *is*, not as a consolation: it is a browser,
 so it can carry the slide a chat cannot, and it signs itself in from the platform's own

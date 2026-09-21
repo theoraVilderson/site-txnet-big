@@ -74,15 +74,22 @@ export const RateLimitBucket = {
   OTP_PHONE: 'otp:phone',
 
   /**
-   * The tenant's **unproven** bot traffic over the captcha-gated routes
-   * (F-0201-c) — the ceiling that stands in for the slide a bot cannot drag.
+   * A chat's **unproven** bot traffic across the captcha-gated routes
+   * (F-0201-c, F-0201-e) — what stands in for the slide a bot cannot drag.
    *
-   * Like `ROLE_WRITE` it carries **no subject**: the key is the tenant's alone.
-   * That is the point rather than an oversight — every other limit a bot call
-   * meets is per chat, and a chat is a messenger account, so the whole captcha
-   * waiver ADR-0011 granted was priced at whatever a Telegram account costs,
-   * times as many as an attacker cares to register. A subject that can be
-   * multiplied cannot bound that; the tenant cannot be multiplied.
+   * Subject: `bot:<chatId>`, the same `rateLimitSubject()` every other counter
+   * a bot call meets is keyed on. What it adds over those is that it is a
+   * **cross-route aggregate**: `LOGIN_PWD`, `LOGIN_OTP_REQUEST` and
+   * `PASSWORD_FORGOT` each bound one chat on one route, and this bounds one
+   * chat across every route the captcha was waived on.
+   *
+   * It carried **no subject** when ADR-0069 shipped it — the key was the
+   * tenant's alone, the shape `ROLE_WRITE` uses — to price the breadth of an
+   * attacker who buys messenger accounts. ADR-0070 reversed that on the user's
+   * call: a budget shared by a reseller's whole bot is a budget one attacker
+   * can spend to the end of the window, and the sign-in it then refuses belongs
+   * to a customer who spent nothing of it. Breadth is now unbounded here and
+   * ADR-0070 says so plainly rather than leaving it implied.
    *
    * Never counted platform-wide: one reseller's attacker must not be able to
    * shut every other reseller's bot sign-in.

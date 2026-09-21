@@ -93,8 +93,8 @@ export class OtpStep {
     const result = await send(channel);
     if (!result.ok) {
       // Three flows send their code through here — login, forgot and adding an
-      // account — so the tenant's bot ceiling is answered once for all three
-      // (ADR-0069) rather than three times, one of which would be forgotten.
+      // account — so the bot ceiling is answered once for all three
+      // (ADR-0070) rather than three times, one of which would be forgotten.
       const throttled = throttleOf(result, ctx);
       if (throttled) return { view: throttled, nextState: state };
       return { view: say('otp.failed', { raw: result.msg }), nextState: state };

@@ -92,7 +92,7 @@ export class ConversationRouter {
    */
   async route(ctx: ChatContext): Promise<FlowResult> {
     // Worked out once, here, because `PANEL_BASE_URL` is config and a flow
-    // holds none. The menu already asked for it (`menu()`); since ADR-0069 a
+    // holds none. The menu already asked for it (`menu()`); since ADR-0070 a
     // throttled sign-in needs it too, and a screen that has to reach back into
     // the router for it is a screen that will forget to.
     ctx.miniAppUrl = this.miniAppUrl(ctx.platform);

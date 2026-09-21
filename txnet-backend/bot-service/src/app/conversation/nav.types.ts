@@ -91,7 +91,7 @@ export interface ChatContext {
    *
    * Optional for the reason the menu row is: a deployment that has published no
    * panel has no URL, and a screen then drops the button rather than offering
-   * one that opens nothing. Read by `flows/throttle.ts` (ADR-0069).
+   * one that opens nothing. Read by `flows/throttle.ts` (ADR-0070).
    */
   miniAppUrl?: string;
 }

@@ -1,12 +1,13 @@
 /**
- * A chat the tenant's bot ceiling stopped is offered the app, not a dead end
- * (F-0201-d, ADR-0069).
+ * A chat the bot ceiling stopped is offered the app, not a dead end
+ * (F-0201-d, ADR-0070).
  *
- * The ceiling is a **shared** budget, so the person it stops is usually not the
- * attacker who spent it — it is the next customer to open the bot. What this
- * file pins is that such a person is handed the one door that still works,
- * and that nobody else is: an ordinary refusal must keep reading as an ordinary
- * refusal, or the Mini App becomes the answer to a wrong password too.
+ * Since ADR-0070 the budget is the chat's own, so the chat this stops is the
+ * one that spent it. The offer stands anyway: a chat that has honestly run out
+ * of attempts has somewhere better to go than a wait. What this file pins is
+ * that such a chat is handed the one door that still works, and that nobody
+ * else is — an ordinary refusal must keep reading as an ordinary refusal, or
+ * the Mini App becomes the answer to a wrong password too.
  */
 import {
   BOT_THROTTLED_REASON,
