@@ -165,7 +165,9 @@ transport entirely; `webhook.controller.ts` spells
 `x-telegram-bot-api-secret-token`, which is Telegram's name and not ours to
 declare. Neither crosses a boundary this contract owns. The payment drivers
 (`payment/gateway/*.provider.ts`) are the same case: `x-nowpayments-sig` and
-`x-api-key` are a provider's names on its own wire (F-104-h). `site-pwa` is not in
+`x-api-key` are a provider's names on its own wire (F-104-h). The two broker
+classes are that case once more: `x-dead-letter-exchange` is RabbitMQ's own
+queue argument, not a name on a wire this contract owns. `site-pwa` is not in
 the Nx workspace and cannot import `shared-core`; it imports the same names
 from `@/generated/wire`, which `tools/wire-gen.py` writes from `contracts/` and
 `tools/contracts.py` fails on when stale (ADR-0036 amendment 2026-09-14). The
@@ -174,7 +176,7 @@ second check block below holds it to that.
 ```check C-04
 forbid: ['"]x-[a-z0-9]+(-[a-z0-9]+)+['"]
 in: txnet-backend/**/*.ts
-except: txnet-backend/shared-core/src/lib/http/**, txnet-backend/**/*.spec.ts, txnet-backend/worker-service/src/app/broker/broker.service.ts, txnet-backend/bot-service/src/app/webhook/webhook.controller.ts, txnet-backend/billing-service/src/app/payment/gateway/*.provider.ts
+except: txnet-backend/shared-core/src/lib/http/**, txnet-backend/**/*.spec.ts, txnet-backend/worker-service/src/app/broker/broker.service.ts, txnet-backend/metering-service/src/app/broker/broker.service.ts, txnet-backend/bot-service/src/app/webhook/webhook.controller.ts, txnet-backend/billing-service/src/app/payment/gateway/*.provider.ts
 message: import the name from shared-core/src/lib/http (C-04) — a header spelled twice is the drift ADR-0036 exists to stop
 ```
 
@@ -407,12 +409,23 @@ to a suspended reseller until F-018-p — nobody forgot a rule, the rule simply
 had no place to fail. Background work is not an HTTP route: a tick that names a
 tenant is judged by `worker-service`'s `TenantStatusGate` instead.
 
+**`metering-service` is excepted** (F-027-n, user's decision 2026-09-21). It
+serves no route, so there is nothing for the guard to judge, and it opens a
+tenant scope for one purpose: `traffic_raw_log` and `grant` carry RLS policies
+keyed on `app.tenant_id`, so the scope is the label on a row rather than
+permission to write it. Judging a pass by tenant status would mean **not
+recording a suspended reseller's measured traffic**, and that figure is read
+from a panel once: dropping it loses bytes permanently, which is network
+invariant 18 and the failure ADR-0074 exists to prevent. Recording is not
+charging — `consumedBytes` is the measured cursor, not the money one. The day
+this service grows a route, the guard is that row's decision again.
+
 ```check C-11
 require: provide:\s*APP_GUARD,\s*useClass:\s*TenantStatusGuard\b
 per: txnet-backend/*
 when: \brunWithTenant\([^)]
 in: txnet-backend/*/src/**/*.ts
-except: txnet-backend/shared-core/**, txnet-backend/**/*.spec.ts
+except: txnet-backend/shared-core/**, txnet-backend/**/*.spec.ts, txnet-backend/metering-service/**
 message: register TenantStatusGuard as an APP_GUARD in this app (C-11) — a route here serves a tenant and no status judges it
 ```
 

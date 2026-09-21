@@ -74,7 +74,11 @@ reading in exactly one of deltas, quarantine and `unattributed_usage`, moves a
 cursor only after its pass is published, and leaves the cursor alone when a
 panel times out or fails — `collect_test.go` asserts each of those as a
 behaviour, against the fake panel resetting, restoring a backup and stalling.
-The consumer's half is tested with F-027-n.
+The consumer's half exists as of F-027-n: `metering-service` puts every
+figure a pass carries in exactly one of billed, held, quarantined and
+unattributed, and `metering.service.spec.ts` asserts that as a sum over a
+mixed pass — bytes in equals bytes landed. 19 is the same file's other
+assertion: a redelivered pass applies once, with the pre-read defeated.
 29 is the same rule on the push side and belongs to the receiver (F-027-af).
 
 32 is registration-time and is held by `network-service/internal/driver`:

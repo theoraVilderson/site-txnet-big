@@ -59,6 +59,14 @@ services:
     volumes: !override
       - ../txnet-backend:/app:delegated
 
+  metering-service:
+    <<: *host-node
+    build: !reset null
+    environment:
+      - APP_NAME=metering-service
+    volumes: !override
+      - ../txnet-backend:/app:delegated
+
   gateway-service:
     <<: *host-node
     build: !reset null

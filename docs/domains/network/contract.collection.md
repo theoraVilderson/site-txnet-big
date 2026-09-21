@@ -80,6 +80,9 @@ therefore carries the id its first delivery carried, which is what lets
 instead of trusting it.
 
 Every publish is `mandatory` and confirmed, and an unroutable message is an
-error, not a shrug: until F-027-n binds `network.usage.#`, a pass reaches no
-queue, the publish fails, the cursor stays and the bytes are read again.
+error, not a shrug: a pass that reaches no queue fails its publish, the cursor
+stays and the bytes are read again. Since F-027-n the queue exists —
+`metering-service` binds `network.usage.#` (ADR-0077) and turns a pass into
+`traffic_raw_log`, `grant.consumedBytes`, holds, quarantines and unattributed
+rows; `docs/domains/billing/contract.metering.md` is what governs that half.
 

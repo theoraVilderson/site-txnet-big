@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../dist/out-tsc",
+    "module": "commonjs",
+    // es2021 rather than the base's es2015: this project's specs count bytes,
+    // and a byte figure here is a BigInt because it is a BIGINT column.
+    "target": "es2021",
+    "moduleResolution": "node10","types": ["vitest/globals", "node"]
+  },
+  "include": [
+    "src/**/*.test.ts",
+    "src/**/*.spec.ts",
+    "src/**/*.d.ts",
+    "src/test-support/**/*.ts"
+  ]
+}

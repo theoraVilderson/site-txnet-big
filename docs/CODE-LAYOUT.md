@@ -55,6 +55,7 @@ no code exists yet, so there is nothing to mirror until a service is built.
 | `txnet-backend/bot-service/src/app/`                                          | the Telegram/Bale surface: webhook, conversation state, flows                                                                             | `docs/interfaces/bot-app/`                                |
 | `txnet-backend/worker-service/src/app/`                                       | background work: the tick publisher, the tick consumer, the job registry, and `jobs/*.job.ts` — one shell per scheduled job. Serves no HTTP (ADR-0027)                                        | `docs/domains/automation/`                                |
 | `txnet-backend/worker-service/src/app/currency/`                              | the FX worker's own logic — the D-22 source registry and the concurrent poller (F-0603). Its *shell* (`jobs/fx-rate.job.ts`) stays automation's, the same split billing-service's edge takes | `docs/domains/currency/`                                  |
+| `txnet-backend/metering-service/src/app/`                                     | metering service: the delta consumer (F-027-n) — `network.usage.#` becomes `traffic_raw_log`, `grant.consumedBytes`, holds, quarantines and unattributed usage. Serves no HTTP and holds the cross-tenant pool (ADR-0077)                                        | `docs/domains/billing/contract.metering.md`               |
 | `txnet-backend/gateway-service/src/app/`                                      | the WebSocket gateway: the upgrade, the connection registry, the channel rules. Holds sockets and nothing else (ADR-0030)                    | `docs/platform/realtime/`                                 |
 | `txnet-backend/billing-service/src/app/`                                      | billing service: the request edge (F-092-a) — identity, tenant scope, envelope; `wallet/` the credit/debit primitive (F-092-b)          | `docs/domains/billing/`                                   |
 | `txnet-backend/notification-service/src/app/` | notification service: billing's request edge, copied (ADR-0052); `notifications/` the inbox (F-035-a) | `docs/domains/notification/` |
@@ -148,9 +149,11 @@ it stops working: ~130 files then fail that pass on their own, which is this
 section's own contention warning arriving as something that looks like a
 regression. One suite at a time per runner.
 
-**`npm test` is `nx run-many -t test`** — all **seven** unit projects
+**`npm test` is `nx run-many -t test`** — all **ten** unit projects
 (auth-service, billing-service, bot-service, gateway-service, messenger,
-shared-core, worker-service), 93 files, ~1713 tests, ~80s. The project list is
+metering-service, notification-service, shared-core, tenant-service,
+worker-service). The figure measured on 2026-09-12, over the seven that existed
+then, was 93 files / ~1713 tests / ~80s; it has only grown. The project list is
 Nx's, inferred from each `vitest.config.mts` by the `@nx/vitest` plugin in
 `nx.json`, which excludes the two `*-e2e` directories — so a new project joins
 the run the day it gets a config, and the e2e tier still never runs unasked.
