@@ -1,0 +1,134 @@
+{
+  "$comment": [
+    "The acceptance questionnaire (ADR-0074, F-027-i) — the declared home of the",
+    "16 row keys, their scope and what an unmet answer costs.",
+    "",
+    "These strings cross a process boundary: network-service writes them into",
+    "network.panel.capabilities as JSONB, and the panel's systems page reads them",
+    "back to render the capability matrix and the registration refusal (F-027-ad).",
+    "No import joins Go and TypeScript, so this fixture plus a test on each side",
+    "replaces one (ADR-0036, C-04). The Go half is",
+    "network-service/internal/driver/questionnaire_test.go.",
+    "",
+    "severity: required = the panel is refused at registration; metered = accepted",
+    "but may not sell metered service (ADR-0072); degrades = accepted, and the",
+    "system does something else rather than guess.",
+    "scope: which transports answer the row. A row outside a panel's scope is not",
+    "answered at all."
+  ],
+  "version": 1,
+  "rows": [
+    {
+      "key": "per_client_usage",
+      "scope": "any",
+      "severity": "required",
+      "question": "Does it report a usage figure for one named client, rather than only a server total?",
+      "unmet": "Refused: a server total cannot be split between the users on it, so there is nothing to bill (ADR-0074, revisit trigger)."
+    },
+    {
+      "key": "bulk_usage_in_one_call",
+      "scope": "pull",
+      "severity": "required",
+      "question": "Does one call return the usage of every client on the panel?",
+      "unmet": "Refused: 5000 clients would be 5000 requests a pass on someone else's server (catalog 8.4, F-027-k)."
+    },
+    {
+      "key": "usage_for_named_subset",
+      "scope": "pull",
+      "severity": "degrades",
+      "question": "Does one call return the usage of a named subset of clients?",
+      "unmet": "The hot loop re-reads the whole panel each pass, so its interval is bounded by the cost of the bulk call (F-027-u)."
+    },
+    {
+      "key": "usage_reset_supported",
+      "scope": "any",
+      "severity": "degrades",
+      "question": "Can a client's counter be zeroed on request?",
+      "unmet": "Nothing is lost: we only ever read a counter. A reset is something we detect, never something we cause (F-027-l)."
+    },
+    {
+      "key": "counter_survives_client_update",
+      "scope": "any",
+      "severity": "degrades",
+      "question": "Does a client's counter keep its value when the client is updated — a ceiling written, a label changed?",
+      "unmet": "Every ceiling write looks like a reset, so the cursor is re-read in the same pass as the write instead of at the next one (ADR-0072, F-027-t)."
+    },
+    {
+      "key": "gigawords_reported",
+      "scope": "push",
+      "severity": "degrades",
+      "question": "Does the NAS send Acct-Input-Gigawords and Acct-Output-Gigawords beside the 32-bit octet counters?",
+      "unmet": "A session past 4 GB is held rather than billed, and never extrapolated (invariant 29, ADR-0074)."
+    },
+    {
+      "key": "per_client_data_limit",
+      "scope": "any",
+      "severity": "metered",
+      "question": "Can a byte ceiling be written for one client, and does the panel enforce it itself?",
+      "unmet": "No metered sale: the ceiling is the only enforcement point that still works while our service is down, and without it no byte can be paid for before it is served (ADR-0072)."
+    },
+    {
+      "key": "data_limit_counts_the_same_bytes_as_usage",
+      "scope": "any",
+      "severity": "metered",
+      "question": "Does the enforced ceiling count the same bytes the usage figure reports — both directions, same units?",
+      "unmet": "No metered sale: a block bought against the cursor would be spent against a different number, and the gap is free traffic with nothing red anywhere."
+    },
+    {
+      "key": "per_client_rate_limit",
+      "scope": "any",
+      "severity": "degrades",
+      "question": "Can a bandwidth rate be written for one client?",
+      "unmet": "A custom rate rule is recorded and not enforced at the far end; layer-1 limiting stays ours."
+    },
+    {
+      "key": "enable_disable_client",
+      "scope": "any",
+      "severity": "required",
+      "question": "Can one client be disabled and re-enabled without deleting it?",
+      "unmet": "Refused: suspension would have to delete the client, and a top-up could then not restore it (ADR-0075, F-027-x)."
+    },
+    {
+      "key": "client_lifecycle",
+      "scope": "any",
+      "severity": "required",
+      "question": "Can a client be created, updated and deleted through the API?",
+      "unmet": "Refused: nothing can be provisioned or purged, so desired state has nothing to converge on (F-027-z)."
+    },
+    {
+      "key": "stable_remote_id",
+      "scope": "any",
+      "severity": "degrades",
+      "question": "Does a client carry an id that survives being renamed?",
+      "unmet": "Matching falls through to the claim tag and then the uuid, so a rename reads as missing until the second key is tried (F-027-aa)."
+    },
+    {
+      "key": "client_label_storable",
+      "scope": "any",
+      "severity": "degrades",
+      "question": "Can we store our own claim tag on the client — a note, label or remark field we own?",
+      "unmet": "The second matching key does not exist here, so a client rebuilt on the far end reads as an orphan rather than as ours (F-027-aa)."
+    },
+    {
+      "key": "native_subscription_link",
+      "scope": "any",
+      "severity": "degrades",
+      "question": "Does the panel serve a subscription URL for a client?",
+      "unmet": "The link is built from the inbound by BuildLink, so an inbound change reaches the user only when the link is fetched again."
+    },
+    {
+      "key": "server_side_expiry",
+      "scope": "any",
+      "severity": "degrades",
+      "question": "Does the panel enforce an expiry date on a client by itself?",
+      "unmet": "Expiry is ours alone: a Grant that ends while our loop is down leaves the client carrying traffic until the loop returns."
+    },
+    {
+      "key": "internal_credit_disablable",
+      "scope": "any",
+      "severity": "degrades",
+      "question": "Can the panel's own billing or credit be switched off, leaving us the only writer of the quota?",
+      "unmet": "The panel cuts users off on a schedule we do not control, so it is run metering_only and the tenant keeps its own billing (F-027-ag)."
+    }
+  ]
+}

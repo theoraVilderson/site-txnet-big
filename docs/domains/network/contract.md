@@ -46,6 +46,59 @@ the private network — a router in front of it would turn "the collector sees
 every tenant" into "whoever reaches this route sees every tenant". That is a
 consequence of the cross-tenant role, not a preference.
 
+## The driver contract (F-027-i)
+
+`network-service/internal/driver/` is the panel abstraction. One interface
+covers all thirteen families, and nothing outside the package knows what an
+inbound, a UUID or an x-ui session cookie is — which is what keeps a family's
+quirk from reaching the normaliser as a special case (ADR-0074).
+
+`Driver` is catalog 7.1's sketch plus three methods it does not have.
+`SetClientDataLimit` writes the panel's own per-user ceiling and is what makes
+ADR-0072 possible at all: it is the one enforcement point that still works
+while this service is down. `SetClientRateLimit` is the same for bandwidth.
+`GetUsageFor` takes a named subset, so the hot loop over the few configs near
+their ceiling does not cost a pass over all 5000 (F-027-u).
+
+`GetUsage` returns every client in **one** call, and that is the contract
+rather than an optimisation — catalog 8.4 forbids per-client reads and
+F-027-k asserts the request count.
+
+Byte figures are raw readings, never deltas: what a `ClientUsage` means
+depends on the panel's declared `counterSemantics`, and turning the three
+meanings into one delta stream is the normaliser's job (F-027-l). A family
+that reports a single total puts it in `DownBytes` and leaves `UpBytes` zero,
+because a split we invented is a number nobody measured.
+
+## The acceptance questionnaire (F-027-i, ADR-0074)
+
+Sixteen fixed rows, answered by `Driver.Capabilities` as a connection test at
+registration and never by hand, stored as the `panel.capabilities` JSONB
+document and validated on write — the column holds no shape, so
+`driver.Capabilities.Validate` is the shape. It refuses a document that omits
+an in-scope row, answers a row this transport is never asked, invents a row the
+questionnaire does not have, or carries a version this service cannot read.
+
+Every row changes behaviour; a row that changed none would be a comment. Three
+severities say what an unmet answer costs, and `driver.Capabilities.Verdict`
+turns them into the `reviewState` the panel is registered with:
+
+| severity | unmet answer | verdict |
+|---|---|---|
+| `required` | the panel cannot carry users at all — no per-client figure, no bulk endpoint on a `pull` panel, no enable/disable, no client lifecycle | `refused`, at registration rather than at billing time |
+| `metered` | it cannot enforce a ceiling, or its ceiling counts different bytes than its counter | accepted; metered sale withheld. Prepaid or refused outright is the owner's call (F-027-aj) |
+| `degrades` | the system does something else — holds bytes past 4 GB without Gigawords, re-reads a cursor a panel zeroes on update, falls back to the claim tag when a rename moves an id | accepted, and written down |
+
+`counterSemantics = reset_on_read` is accepted only as `accepted_low_trust`:
+a read whose publish fails loses those bytes permanently, so the source is
+marked and its loss window bounded to one interval.
+
+The sixteen row keys cross a process boundary — written here in Go, read by
+the panel's capability matrix and registration refusal in TypeScript
+(F-027-ad). There is no import that could join the two, so their declared home
+is `contracts/network/capabilities.json` with a test on each side, exactly as
+ADR-0036 requires; the Go half is `internal/driver/questionnaire_test.go`.
+
 ## Provides (intended)
 
 | Operation | Input | Output | Sync/Async | Errors |

@@ -10,7 +10,8 @@ updated: 2026-09-21
 **DRAFT** — 1-7 are from schema comments and not enforced in code. 8-12 are
 enforced by the database as of F-027-a, 13-17 as of F-027-b, 19-25 as of
 F-027-c, 26-28 as of F-027-d and 2, 30-31 as of F-027-e. 18 and 29 are the
-promise the rest of them serve and are service rules.
+promise the rest of them serve and are service rules; 32 is a service rule too,
+and is the one rule of this set that runs before a panel has any rows at all.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -46,6 +47,7 @@ promise the rest of them serve and are service rules.
 | 29 | A session past 4 GB whose NAS never sent Gigawords is held, not billed | planned service rule (`radius_session.gigawordsSeen` makes it expressible) | 4 GB per wrap lost in silence — invariant 18's failure on the push side, and the one ADR-0074 names |
 | 30 | One rollup row per `(configId, date)` | UNIQUE `traffic_daily_aggregate_config_date_key` (F-027-e) | a cron rerun doubles a day's reported usage, with both rows individually correct — which is what makes it invisible |
 | 31 | A measured byte lands in a partition that retention will reach, or the insert fails | monthly partitions with **no** `DEFAULT` partition (F-027-e) | the one partition nobody can drop keeps an uncreated month's rows past every retention rule, in silence |
+| 32 | A panel failing a load-bearing acceptance row never carries users, and one that cannot enforce a per-client ceiling never sells metered service | `driver.Capabilities.Verdict` (F-027-i), asserted by `questionnaire_test.go` | a family whose figures we cannot bill is discovered at billing time, with users already on it — and a metered sale with no enforceable ceiling serves bytes nobody paid for (ADR-0072) |
 
 ## How to test
 
@@ -64,6 +66,12 @@ assertion ADR-0071 asked for, and it exists as of F-027-h:
 (F-027-l) and the delta consumer (F-027-n) accounting for every byte they
 read. It is tested with them.
 29 is the same rule on the push side and belongs to the receiver (F-027-af).
+
+32 is registration-time and is held by `network-service/internal/driver`:
+`questionnaire_test.go` asserts the refusal, the withheld metered sale and the
+low-trust verdict against answer sheets, and pins the 16 row keys to
+`contracts/network/capabilities.json` so the TypeScript side reads the same
+questionnaire (ADR-0036).
 
 3 is the other half of 2 and belongs to the rollup job: the partition-drop
 ordering test goes with it. The rest is to be written with the service.
