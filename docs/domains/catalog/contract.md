@@ -3,7 +3,7 @@ id: catalog
 layer: domain
 status: draft
 version: 2
-updated: 2026-09-20
+updated: 2026-09-21
 ---
 
 # Contract — catalog
@@ -15,7 +15,7 @@ another service asks the same question (F-018-ah); management built
 (F-026-d) at `/api/catalog` — `catalog/catalog-admin.*`, proved by
 `catalog-admin.service.spec.ts`; the same management for a **named** reseller
 (F-066-w7) at `/api/catalog/tenants/:tenantId/...` — `catalog/reseller-catalog.*`,
-proved by `reseller-catalog.service.spec.ts`.** Decisions: ADR-0049, ADR-0064.
+proved by `reseller-catalog.service.spec.ts`.** Decisions: ADR-0049, ADR-0064, ADR-0073.
 
 ## HTTP surface (F-026-d)
 
@@ -91,6 +91,12 @@ Grant of it unlocks (`featureKeys`); a **variant** is the SKU that is sold, with
 its quotas, duration and visibility; a **price** is the variant's USD amount
 from `effectiveFrom` on, and a change is a new row. `tenantId IS NULL` is the
 platform's row, readable by every tenant. Names are i18n keys (§4.3).
+A **metered** variant also carries a `metered_rate` history (F-027-g, ADR-0073):
+USD per 2^30 bytes at `Decimal(18,8)`, append-only under
+`metered_rate_is_history` exactly as a price is, and read **once, at the moment
+of sale** — `GrantService.issue` locks it onto `Grant.meteredRate` (F-027-p), so
+a rate written tomorrow never reprices bytes already sold. The unit is
+`METERED_RATE_UNIT_BYTES` (shared-core), spelled nowhere else.
 
 ## Provides (intended)
 
@@ -119,7 +125,7 @@ None.
 | Unit | What it reads |
 |---|---|
 | billing | `coupon_service_scope.productId` / `variantId`: a purchase matches a row naming its variant or its product |
-| entitlement | a variant's quotas, duration, billing mode and its product's feature keys, copied into a Grant (F-026-b, F-026-e) |
+| entitlement | a variant's quotas, duration, billing mode and its product's feature keys, copied into a Grant (F-026-b, F-026-e); the metered rate in effect, locked onto `Grant.meteredRate` at issue (F-027-p, ADR-0073) |
 | network | a variant's `panelGroupId` and `qualityTier` (F-027) |
 | tenant | `offeredToTenant`: the onboarding checklist's `pricing` step (F-018-ah) |
 
