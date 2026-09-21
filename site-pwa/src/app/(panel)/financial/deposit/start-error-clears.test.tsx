@@ -86,6 +86,19 @@ const BASE: DepositQuote = {
 
 const noPending = { total: 0, page: 1, pageSize: 20, rows: [] as WalletPaymentRow[] };
 
+/**
+ * The ceiling on a wait that has the page's quote debounce inside it.
+ *
+ * A ceiling, never a delay: `waitFor` returns the moment its assertion passes,
+ * so this is only how long we wait before calling the page broken. It was
+ * `QUOTE_DEBOUNCE_MS * 4`, which is 2000ms and reads like a safe four times the
+ * debounce — and is not, because the debounce is the smallest part of what has
+ * to happen inside it. The timer has to fire, the quote has to resolve and
+ * React has to render. Measured 2026-09-21: with eight cores busy, this is the
+ * line all three failures in this directory landed on.
+ */
+const debounced = { timeout: QUOTE_DEBOUNCE_MS * 20 };
+
 function payButton() {
   return screen.getAllByRole("button", { name: /^deposit\.summary\.(pay|starting)$/ })[0];
 }
@@ -95,7 +108,7 @@ async function openPageWithAmount() {
   render(<DepositView />);
   await waitFor(() => expect(depositGateways).toHaveBeenCalled());
   fireEvent.change(screen.getByLabelText("deposit.amount.label"), { target: { value: "10.00" } });
-  await waitFor(() => expect(depositQuote).toHaveBeenCalled(), { timeout: QUOTE_DEBOUNCE_MS * 4 });
+  await waitFor(() => expect(depositQuote).toHaveBeenCalled(), debounced);
   await waitFor(() => expect(walletPayments).toHaveBeenCalled());
 }
 
@@ -132,9 +145,7 @@ describe("a start error belongs to the inputs it was refused for", () => {
     fireEvent.change(screen.getByLabelText("deposit.amount.label"), { target: { value: "20.00" } });
     expect(screen.queryByText("out of range")).toBeNull();
 
-    await waitFor(() => expect(screen.getAllByText("deposit.summary.pay").length).toBeGreaterThan(0), {
-      timeout: QUOTE_DEBOUNCE_MS * 4,
-    });
+    await waitFor(() => expect(screen.getAllByText("deposit.summary.pay").length).toBeGreaterThan(0), debounced);
     await payAndFail("out of range");
 
     fireEvent.change(screen.getByLabelText("deposit.coupon.label"), { target: { value: "SAVE2" } });
@@ -153,9 +164,7 @@ describe("a start error belongs to the inputs it was refused for", () => {
     depositQuote.mockRejectedValue(new ApiError("too many quotes", { status: 429 }));
 
     fireEvent.click(payButton());
-    await waitFor(() => expect(depositQuote.mock.calls.length).toBe(quotesBefore + 1), {
-      timeout: QUOTE_DEBOUNCE_MS * 4,
-    });
+    await waitFor(() => expect(depositQuote.mock.calls.length).toBe(quotesBefore + 1), debounced);
 
     await waitFor(() => expect(screen.getAllByText("too many quotes").length).toBeGreaterThan(0));
     expect(screen.queryByText("that code has run out")).toBeNull();

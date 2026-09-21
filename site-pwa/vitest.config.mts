@@ -14,5 +14,15 @@ export default defineConfig({
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['node_modules/**', '.next/**'],
     passWithNoTests: true,
+    /**
+     * Vitest's own default is 5000ms, which no longer clears the `waitFor`
+     * ceiling in `vitest.setup.ts`: a spec whose assertion may poll for 5000ms
+     * cannot live inside a 5000ms test. Measured 2026-09-21 on an idle machine,
+     * the slowest spec in `financial/deposit/` already took 3077ms of that
+     * default, so the budget was thin before anything else was running.
+     *
+     * A ceiling like the other one: a passing test never spends it.
+     */
+    testTimeout: 30_000,
   },
 });

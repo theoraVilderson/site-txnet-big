@@ -95,6 +95,19 @@ const WITHOUT_COUPON: DepositQuote = {
 
 const noPending = { total: 0, page: 1, pageSize: 20, rows: [] as WalletPaymentRow[] };
 
+/**
+ * The ceiling on a wait that has the page's quote debounce inside it.
+ *
+ * A ceiling, never a delay: `waitFor` returns the moment its assertion passes,
+ * so this is only how long we wait before calling the page broken. It was
+ * `QUOTE_DEBOUNCE_MS * 4`, which is 2000ms and reads like a safe four times the
+ * debounce — and is not, because the debounce is the smallest part of what has
+ * to happen inside it. The timer has to fire, the quote has to resolve and
+ * React has to render. Measured 2026-09-21: with eight cores busy, this is the
+ * line all three failures in this directory landed on.
+ */
+const debounced = { timeout: QUOTE_DEBOUNCE_MS * 20 };
+
 function payButton() {
   return screen.getAllByRole("button", { name: /^deposit\.summary\.(pay|starting)$/ })[0];
 }
@@ -108,9 +121,7 @@ async function openPageWithCoupon() {
   fireEvent.change(screen.getByLabelText("deposit.coupon.label"), { target: { value: "SAVE2" } });
   fireEvent.click(screen.getByRole("button", { name: "deposit.coupon.add" }));
 
-  await waitFor(() => expect(screen.getByText("deposit.summary.discount")).toBeInTheDocument(), {
-    timeout: QUOTE_DEBOUNCE_MS * 4,
-  });
+  await waitFor(() => expect(screen.getByText("deposit.summary.discount")).toBeInTheDocument(), debounced);
   await waitFor(() => expect(walletPayments).toHaveBeenCalled());
 }
 
@@ -138,9 +149,7 @@ describe("a refused coupon hold re-prices the page", () => {
 
     // The same body, asked again — not a changed input, and not a retry the
     // payer had to find for themselves.
-    await waitFor(() => expect(depositQuote.mock.calls.length).toBe(quotesBefore + 1), {
-      timeout: QUOTE_DEBOUNCE_MS * 4,
-    });
+    await waitFor(() => expect(depositQuote.mock.calls.length).toBe(quotesBefore + 1), debounced);
     expect(depositQuote).toHaveBeenLastCalledWith({
       gatewayId: GATEWAY.id,
       source: "tenant",
