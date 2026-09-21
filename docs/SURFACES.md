@@ -13,6 +13,7 @@ code_roots:
   - txnet-backend/shared-core/src
   - auth-handler/internal
   - i18n-platform/services/locale-service
+  - network-service/internal
 ---
 
 # Surface map — what the user can point at

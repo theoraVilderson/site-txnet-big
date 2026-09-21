@@ -8,7 +8,10 @@ updated: 2026-09-21
 
 # Contract — network
 
-**DRAFT — schema only.** From `txnet-backend/prisma/domains/network.prisma`.
+**DRAFT — the schema plus a service that does not serve it yet.** The shapes
+below are from `txnet-backend/prisma/domains/network.prisma`; none of the
+operations exist. What exists is the process that will hold them:
+`network-service/`, a Go deployable (ADR-0071, F-027-h).
 
 ## TL;DR
 
@@ -22,6 +25,24 @@ A Panel also **declares** how it is driven and how it counts (`driverType`,
 `counterSemantics`, `transport`, `capabilities`) — see `data-model.md`. Those
 answers select behaviour: three delta arithmetics behind one normaliser, and a
 panel refused at registration rather than at billing time (ADR-0074).
+
+## The service (F-027-h)
+
+`network-service/` is a Go module and a `go.work` member. It connects with one
+`pgx` pool as a member of `txnet_cross_tenant` — the collector spans every
+tenant, so it has no per-tenant scope to fall back on — and it refuses to boot
+against a connection that is not a member of that role.
+
+Prisma owns the schema and this service writes no migrations, so at boot it
+reads `information_schema` and refuses to start naming every `network.*` column
+it depends on that the database does not have
+(`network-service/internal/db/schema.go`, `RequiredColumns`). A row that starts
+reading a new column adds it to that manifest in the same change.
+
+**Nothing here answers a user request.** Its only HTTP surface is `/health`
+(200, or 503 when the database is unreachable), for the container and the
+watchdog; it is not routed through the gateway and holds no gateway route. That
+is a consequence of the cross-tenant role, not a preference.
 
 ## Provides (intended)
 

@@ -55,8 +55,10 @@ and that those two agree is asserted by
 `network-config-desired-state.spec.ts` (13-17) and
 `network-usage-accounting.spec.ts` (19-25),
 `network-radius-session.spec.ts` (26-28) and
-`network-traffic-partitioning.spec.ts` (2, 30-31) — the CI stand-in for the
-boot-time column assertion ADR-0071 gives `network-service`.
+`network-traffic-partitioning.spec.ts` (2, 30-31) — schema and migrations
+agreeing, in CI. That the *running* service agrees with both is the boot
+assertion ADR-0071 asked for, and it exists as of F-027-h:
+`network-service/internal/db/schema.go` refuses to start on a missing column.
 
 18 is not a schema rule and cannot become one: it is the collection loop
 (F-027-l) and the delta consumer (F-027-n) accounting for every byte they

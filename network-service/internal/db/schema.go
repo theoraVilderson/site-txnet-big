@@ -1,0 +1,208 @@
+// Package db holds this service's Postgres access: the pgx pool it connects
+// with and the boot-time assertion that the schema it was pointed at is the
+// one it was written against.
+package db
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"strings"
+)
+
+// Schema is the only Postgres schema this service touches (ADR-0071: Prisma
+// owns every schema; Go reads and writes `network.*` rows and nothing else).
+const Schema = "network"
+
+// ColumnRef is one column of one table in Schema.
+type ColumnRef struct {
+	Table  string
+	Column string
+}
+
+func (c ColumnRef) String() string { return Schema + "." + c.Table + "." + c.Column }
+
+// ColumnSet is what the database actually has, as read at boot.
+type ColumnSet []ColumnRef
+
+// RequiredColumns is every `network.*` column this service depends on.
+//
+// Prisma owns the schema and this service generates no migrations (ADR-0071),
+// so the two can only be kept honest by asserting the overlap at boot: a
+// column renamed on the TypeScript side reaches this service as a query error
+// in a collection loop at 03:00, which is a wrong number long before it is a
+// visible failure. Here it is a refusal to start.
+//
+// A row that begins reading a new column adds it here in the same change.
+var RequiredColumns = map[string][]string{
+	// What a panel declares about itself — the driver contract's input
+	// (F-027-i) and the request budget every loop holds itself to (F-027-v).
+	"panel": {
+		"id", "tenantId", "ownershipType", "apiBaseUrl",
+		"driverType", "counterSemantics", "transport", "capabilities",
+		"reviewState", "orphanPolicy", "panelApiCredentials",
+		"panelState", "blockedSince", "maxRequestsPerMinute",
+		"maxLineRateBps", "observedWriteLatencyMs",
+		"lastHealthyAt", "lastSuccessfulCollectionAt",
+	},
+	// The client we meter, its desired state and its ceiling (ADR-0072).
+	"config": {
+		"id", "tenantId", "userId", "panelId", "grantId", "uuid", "protocol", "status",
+		"remoteId", "claimTag", "credentialGroupId",
+		"desiredEnabled", "desiredRemote", "enforcementState",
+		"driftState", "driftRepairCount", "lastReconciledAt",
+		"allocatedCeilingBytes", "appliedCeilingBytes", "observedRateBps",
+		"ceilingAppliedAt",
+	},
+	// Where the counter was, so that a figure going backward is a reset and
+	// never negative usage (invariant 20, ADR-0074).
+	"config_counter_state": {
+		"id", "configId", "panelId", "counterSemantics",
+		"lastUpBytes", "lastDownBytes", "lifetimeUpBytes", "lifetimeDownBytes",
+		"lastObservedAt", "lastPublishedAt", "resetCount", "lastResetAt", "updatedAt",
+	},
+	// A figure we measured and do not believe (invariant 18: it is held or
+	// quarantined, never dropped).
+	"usage_delta_quarantine": {
+		"id", "deltaId", "configId", "panelId", "upBytes", "downBytes",
+		"observedAt", "reason", "state", "detectedAt", "resolvedAt",
+	},
+	"usage_hold": {
+		"id", "configId", "panelId", "upBytes", "downBytes", "reason",
+		"state", "heldFrom", "heldAt", "resolvedAt",
+	},
+	// The verdict over a whole panel's population, which halts collection
+	// (F-027-ab).
+	"panel_drift_event": {
+		"id", "panelId", "eventType", "affectedConfigCount", "observedConfigCount",
+		"detectedAt", "collectionHalted", "acknowledgedAt",
+	},
+	"unattributed_usage": {
+		"id", "panelId", "remoteIdentifier", "upBytes", "downBytes",
+		"observationCount", "firstSeenAt", "lastSeenAt", "state",
+		"attributedConfigId", "resolvedAt",
+	},
+	// The push side's unit of everything that can go wrong (F-027-af).
+	"radius_session": {
+		"id", "panelId", "nasId", "acctSessionId", "configId", "remoteIdentifier",
+		"highWaterInBytes", "highWaterOutBytes", "publishedInBytes", "publishedOutBytes",
+		"gigawordsSeen", "startedAt", "lastSeenAt", "closedAt", "closeReason",
+		"createdAt", "updatedAt",
+	},
+}
+
+// MissingColumns reports every required column the database does not have,
+// ordered by table then column so the refusal reads the same way twice.
+func MissingColumns(required map[string][]string, present ColumnSet) []ColumnRef {
+	have := make(map[ColumnRef]struct{}, len(present))
+	for _, ref := range present {
+		have[ref] = struct{}{}
+	}
+
+	var missing []ColumnRef
+	for table, columns := range required {
+		for _, column := range columns {
+			ref := ColumnRef{Table: table, Column: column}
+			if _, ok := have[ref]; !ok {
+				missing = append(missing, ref)
+			}
+		}
+	}
+	sort.Slice(missing, func(i, j int) bool {
+		if missing[i].Table != missing[j].Table {
+			return missing[i].Table < missing[j].Table
+		}
+		return missing[i].Column < missing[j].Column
+	})
+	return missing
+}
+
+// Querier is the slice of the pgx pool this package needs, so that the
+// assertion can be exercised against anything that answers a query.
+type Querier interface {
+	Query(ctx context.Context, sql string, args ...any) (Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) Row
+}
+
+// Rows and Row mirror pgx's own, narrowed to what is read here.
+type Rows interface {
+	Next() bool
+	Scan(dest ...any) error
+	Err() error
+	Close()
+}
+
+// Row is one row, scanned or not at all.
+type Row interface {
+	Scan(dest ...any) error
+}
+
+// ReadColumns lists every column the database has in Schema.
+func ReadColumns(ctx context.Context, q Querier) (ColumnSet, error) {
+	rows, err := q.Query(ctx,
+		`SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = $1`,
+		Schema)
+	if err != nil {
+		return nil, fmt.Errorf("read %s columns: %w", Schema, err)
+	}
+	defer rows.Close()
+
+	var present ColumnSet
+	for rows.Next() {
+		var ref ColumnRef
+		if err := rows.Scan(&ref.Table, &ref.Column); err != nil {
+			return nil, fmt.Errorf("scan %s column: %w", Schema, err)
+		}
+		present = append(present, ref)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read %s columns: %w", Schema, err)
+	}
+	return present, nil
+}
+
+// AssertColumns refuses the database if it is missing a column this service
+// depends on. It is called once, at boot, before anything reads a row.
+func AssertColumns(ctx context.Context, q Querier) error {
+	present, err := ReadColumns(ctx, q)
+	if err != nil {
+		return err
+	}
+	missing := MissingColumns(RequiredColumns, present)
+	if len(missing) == 0 {
+		return nil
+	}
+
+	names := make([]string, 0, len(missing))
+	for _, ref := range missing {
+		names = append(names, ref.String())
+	}
+	return fmt.Errorf(
+		"schema is not the one this service was written against: %d column(s) missing (%s). Prisma owns the schema (ADR-0071) — run the migrations, do not add them here",
+		len(missing), strings.Join(names, ", "))
+}
+
+// AssertCrossTenantRole refuses a connection that is not the cross-tenant
+// role. The collector spans every tenant, so it connects as a role whose
+// `cross_tenant` policy is `USING (true)` — never with `BYPASSRLS`, and never
+// as the per-tenant application role, which would show it one tenant's rows
+// and let it report that as the platform's traffic.
+func AssertCrossTenantRole(ctx context.Context, q Querier) error {
+	var currentUser string
+	var isMember bool
+	err := q.QueryRow(ctx,
+		`SELECT current_user, pg_has_role(current_user, $1, 'member')`, CrossTenantRole,
+	).Scan(&currentUser, &isMember)
+	if err != nil {
+		return fmt.Errorf("read connection role: %w", err)
+	}
+	if !isMember {
+		return fmt.Errorf(
+			"connected as %q, which is not a member of %q — this service reads every tenant's rows and has no per-tenant scope to fall back on (ADR-0071)",
+			currentUser, CrossTenantRole)
+	}
+	return nil
+}
+
+// CrossTenantRole is the group role the connection must belong to.
+const CrossTenantRole = "txnet_cross_tenant"

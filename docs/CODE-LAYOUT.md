@@ -63,6 +63,7 @@ no code exists yet, so there is nothing to mirror until a service is built.
 | `txnet-backend/prisma/domains/*.prisma`                                       | one schema file per business domain                                                                                                       | `owns_tables:` in that domain's `INDEX.md`                |
 | `auth-handler/internal/`                                                      | Go Traefik ForwardAuth gateway                                                                                                            | `docs/platform/forward-auth/`                             |
 | `i18n-platform/services/locale-service/` + `i18n-platform/clients/{go,node}/` | gRPC translation source of truth + shared clients                                                                                         | `docs/platform/i18n/`                                     |
+| `network-service/`                                                            | Go collector for the VPN/proxy plane (ADR-0071): `pgx` on `txnet_cross_tenant`, boot-time column assertion, `/health` and nothing else the gateway can reach. Prisma still owns the schema | `docs/domains/network/`                                   |
 | `site-pwa/src/app/`                                                           | Next.js user panel (routes, route handlers, components)                                                                                   | `docs/interfaces/panel-web/`, `docs/SURFACES.md` rows     |
 | `coinsite/src/app/`                                                           | Next.js public landing site                                                                                                               | `docs/interfaces/marketing-web/`, `docs/SURFACES.md` rows |
 
@@ -281,7 +282,7 @@ vitest setup:
 
 | where                                    | runner                       | how                                        |
 | ---------------------------------------- | ---------------------------- | ------------------------------------------ |
-| `auth-handler/`, `i18n-platform/**` (Go) | `go test`                    | `go test ./...` per `go.work` member       |
+| `auth-handler/`, `i18n-platform/**`, `network-service/` (Go) | `go test`        | `go test ./...` per `go.work` member       |
 | `i18n-platform/clients/node`             | `node --test` (no framework) | `npm test` — exercises the shipped `dist/` |
 | `site-pwa/`, `coinsite/`                 | vitest                       | `npm test`                                 |
 
