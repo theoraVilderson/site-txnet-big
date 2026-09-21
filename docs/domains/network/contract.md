@@ -167,6 +167,13 @@ Building the `Budget` from the panel row, recording the observed rate and
 backing off on a `429` are F-027-v's; the layer is here so the suite can hold
 every family to it from the first driver on.
 
+## The collection loop (F-027-l)
+
+`internal/collect/` is one bulk pass a minute that turns three counter
+arithmetics into one delta stream. Its rules — the maths, reset detection, the
+stretched plausibility cap and where a byte waits — are
+[contract.collection.md](contract.collection.md).
+
 ## Provides (intended)
 
 | Operation | Input | Output | Sync/Async | Errors |

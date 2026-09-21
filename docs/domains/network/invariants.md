@@ -13,7 +13,8 @@ F-027-c, 26-28 as of F-027-d and 2, 30-31 as of F-027-e. 18 and 29 are the
 promise the rest of them serve and are service rules; 32 is a service rule too,
 and is the one rule of this set that runs before a panel has any rows at all.
 33 is a service rule held by the driver conformance suite (F-027-j), and 34 is
-its request-volume half (F-027-k).
+its request-volume half (F-027-k). The pull half of 18 is enforced as of
+F-027-l; its push half waits for F-027-af.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -35,7 +36,7 @@ its request-volume half (F-027-k).
 | 15 | A completed purge holds no `remoteId` | CHECK `config_purged_has_no_remote_id` | the loop adopts a panel seat it has just freed, and usage is attributed to a client that is gone |
 | 16 | One remote client belongs to one config | UNIQUE `(panelId, remoteId)` | one client's traffic counted against two configs, or a ceiling written twice with two different numbers |
 | 17 | `claimTag` is unique across the whole system | schema `@unique` | the second matching key matches the wrong row, which is invariant 1's failure reached the long way round |
-| 18 | Every measured byte ends billed, held or quarantined — never dropped | planned service rule (the six F-027-c tables make it expressible) | the thing ADR-0074 exists to prevent: usage lost in silence, which nobody can detect after the fact |
+| 18 | Every measured byte ends billed, held or quarantined — never dropped | `internal/collect` on the pull side (F-027-l), asserted by `collect_test.go`; the push side is F-027-af and the consumer F-027-n | the thing ADR-0074 exists to prevent: usage lost in silence, which nobody can detect after the fact |
 | 19 | One delta is applied at most once | PK `usage_delta_seen.deltaId` | a redelivered message charges the user twice, and at-least-once delivery guarantees a redelivery |
 | 20 | One config has at most one counter cursor | UNIQUE `config_counter_state.configId` | two opinions about where the counter was; the losing one re-counts everything since the last reset |
 | 21 | No byte figure anywhere is negative | CHECKs `*_bytes_not_negative` | a counter going backward is a reset, never negative usage — a negative delta credits traffic nobody bought |
@@ -68,7 +69,12 @@ assertion ADR-0071 asked for, and it exists as of F-027-h:
 
 18 is not a schema rule and cannot become one: it is the collection loop
 (F-027-l) and the delta consumer (F-027-n) accounting for every byte they
-read. It is tested with them.
+read. The pull half exists: `network-service/internal/collect` puts every
+reading in exactly one of deltas, quarantine and `unattributed_usage`, moves a
+cursor only after its pass is published, and leaves the cursor alone when a
+panel times out or fails — `collect_test.go` asserts each of those as a
+behaviour, against the fake panel resetting, restoring a backup and stalling.
+The consumer's half is tested with F-027-n.
 29 is the same rule on the push side and belongs to the receiver (F-027-af).
 
 32 is registration-time and is held by `network-service/internal/driver`:
