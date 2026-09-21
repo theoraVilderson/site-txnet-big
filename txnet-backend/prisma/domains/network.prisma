@@ -110,6 +110,42 @@ enum ConfigProtocol {
   @@schema("network")
 }
 
+/// Whether the remote client should exist at all (ADR-0075). Purge is a
+/// second, timed stage after a suspension, and it is desired state — never a
+/// queued delete, which is why a top-up mid-purge rebuilds instead of racing.
+enum DesiredRemote {
+  present
+  absent
+
+  @@schema("network")
+}
+
+/// How far the convergence loop has got with this config's desired state. A
+/// Grant reports `purged` only once every one of its configs is `complete`.
+enum EnforcementState {
+  pending
+  partial
+  complete
+
+  @@schema("network")
+}
+
+/// The convergence loop's verdict on what the panel reports (F-027-aa), plus
+/// the anti-flap stop (F-027-ab). A config the loop has given up repairing is
+/// `contested`, which is not `synced`.
+enum DriftState {
+  synced
+  reset
+  renamed
+  rebuilt
+  missing
+  orphan
+  limit_overridden
+  contested
+
+  @@schema("network")
+}
+
 enum ConfigStatus {
   active
   frozen
@@ -201,6 +237,33 @@ model Config {
   regenerateUsedCount Int            @default(0)
   createdAt           DateTime       @default(now())
 
+  /// The panel's own id for this client — the first of the three matching
+  /// keys (F-027-aa). Cleared, never the row, when a purge completes.
+  remoteId              String?
+  /// What we write on every client we create, so a rename does not orphan its
+  /// usage. The second matching key; `uuid` is the third.
+  claimTag              String?           @unique
+  /// The configs issued together from one package, sharing one quota (§4.6).
+  credentialGroupId     String?           @db.Uuid
+  /// Desired state, not a command: the loop compares it as it is now and
+  /// never replays an instruction (ADR-0075).
+  desiredEnabled        Boolean           @default(true)
+  desiredRemote         DesiredRemote     @default(present)
+  enforcementState      EnforcementState  @default(pending)
+  driftState            DriftState        @default(synced)
+  /// Two repairs and the loop stops (`contested`) rather than flapping.
+  driftRepairCount      Int               @default(0)
+  lastReconciledAt      DateTime?
+  /// What the allocator decided this config's share of the Grant is.
+  allocatedCeilingBytes BigInt?
+  /// What the panel confirmed it accepted. The gap to `allocated` is the
+  /// loop's remaining work, and what the panel UI shows as `in queue`
+  /// (ADR-0072).
+  appliedCeilingBytes   BigInt?
+  /// The measured rate the time-based horizon is sized from (F-027-u).
+  observedRateBps       BigInt?
+  ceilingAppliedAt      DateTime?
+
   panel Panel @relation(fields: [panelId], references: [id])
   grant Grant @relation(fields: [grantId], references: [id])
 
@@ -209,8 +272,11 @@ model Config {
   trafficDailyAggs TrafficDailyAggregate[]
   subAccount       SubAccount?
 
+  @@unique([panelId, remoteId], map: "config_panel_remote_id_key")
   @@index([tenantId, createdAt(sort: Desc)])
   @@index([userId, status])
+  @@index([credentialGroupId])
+  @@index([panelId, enforcementState])
   @@map("config")
   @@schema("network")
 }

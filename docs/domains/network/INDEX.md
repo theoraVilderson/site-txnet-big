@@ -4,7 +4,7 @@ layer: domain
 status: draft
 version: 3
 keywords: [vpn, panel, xray, config, subscription link, traffic, ip access, driver, metering, counter semantics, radius]
-source: [txnet-backend/prisma/domains/network.prisma, txnet-backend/prisma/domains/migrations/20260921000100_panel_declares_its_driver/**, txnet-backend/shared-core/src/lib/prisma/network-panel-declaration.spec.ts]
+source: [txnet-backend/prisma/domains/network.prisma, txnet-backend/prisma/domains/migrations/20260921000100_panel_declares_its_driver/**, txnet-backend/prisma/domains/migrations/20260921000200_config_carries_its_desired_state/**, txnet-backend/shared-core/src/lib/prisma/network-panel-declaration.spec.ts, txnet-backend/shared-core/src/lib/prisma/network-config-desired-state.spec.ts]
 owns_tables: [panel, config, config_action_log, traffic_raw_log, traffic_daily_aggregate, ip_access_rule]
 depends_on: [identity, entitlement, tenant, billing]
 updated: 2026-09-21
