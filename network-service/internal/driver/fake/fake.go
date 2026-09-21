@@ -247,6 +247,19 @@ func (p *Panel) CallCount(op string) int {
 	return p.calls[op]
 }
 
+// TotalCalls is every request that reached the far end, whichever method made
+// it. It is what the request-volume scenarios count (F-027-k): the driver's
+// own opinion of how often it called is the side under test.
+func (p *Panel) TotalCalls() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	total := 0
+	for _, n := range p.calls {
+		total += n
+	}
+	return total
+}
+
 // gate is every call's far end: it counts the call, serves the scripted stall
 // under the caller's deadline, and turns a scripted status into the Fault a
 // real driver would have classified.

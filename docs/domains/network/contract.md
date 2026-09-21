@@ -124,7 +124,7 @@ refuses a ceiling and applies one late. It answers the questionnaire from what
 it will actually do, so switching a row off in `fake.Config` changes behaviour
 where a real family's gap would.
 
-`internal/driver/conformance` is what "conforms" means: eleven scenarios, run
+`internal/driver/conformance` is what "conforms" means: fifteen scenarios, run
 through the `Driver` interface only. It asserts that a driver **reports what
 the far end said** — a reset arrives as a lower raw figure, an implausible
 figure arrives at full size, an abandoned session never grows — because
@@ -138,6 +138,34 @@ later driver row — F-027-ae, F-027-ag, F-027-ah, F-027-ai — is an
 implementation plus a call to `conformance.Run`, and nothing else. A family
 that cannot be put into a scenario's shape skips it **by name**, so a gap is
 reported rather than passed.
+
+## Request volume, and the pacing every family shares (F-027-k)
+
+Four of the fifteen scenarios count requests instead of reading bytes, at the
+far end rather than inside the driver. A driver can be right about every
+figure and still be a flood on a customer's own server, and that failure has
+no wrong reading to inspect: 5000 clients read one at a time is ~1000 req/s
+against a machine we do not own. Catalog 8.4 forbids it; these assert it. A
+bulk pass over 5000 clients is **one** request, and a hot pass (F-027-u) is one
+per panel whether the family has a subset endpoint or serves the subset from
+its bulk call.
+
+The other two belong to `driver.Pace`, the layer every family is wrapped in
+rather than reimplements. Concurrent whole-panel reads **share one flight** —
+a slow panel is exactly when callers pile up behind it — and it is
+single-flight, not a cache: a caller arriving after the flight lands gets a
+fresh read, because a reading served from memory is a figure nobody measured
+at the moment it was billed. And no panel is asked more often than its own
+`maxRequestsPerMinute`: a call that would cross the budget **waits for its
+slot**, never fails, since a dropped read is a hole in a counter somebody is
+charged from (invariant 18). Writes pay the budget but never share a flight —
+two identical writes are two intentions.
+
+`Pace` panics on a non-positive budget rather than picking a reading of it:
+the figure comes from a column the database CHECKs (invariant 12).
+Building the `Budget` from the panel row, recording the observed rate and
+backing off on a `429` are F-027-v's; the layer is here so the suite can hold
+every family to it from the first driver on.
 
 ## Provides (intended)
 
