@@ -1,12 +1,12 @@
 ---
 id: adr-0038
-status: accepted
-updated: 2026-09-11
+status: superseded
+updated: 2026-09-21
 ---
 
 # ADR 0038 — Tax is charged on a sale, never on a wallet top-up
 
-- **Status:** accepted
+- **Status:** superseded by [ADR-0076](0076-tax-is-charged-on-a-top-up-at-a-rate-a-gateway-may-override.md)
 - **Date:** 2026-09-11
 - **Affects units:** billing, tenant
 
@@ -53,3 +53,13 @@ Decided by the user on 2026-09-11 (D-23), right after F-092-e shipped.
     80 decides whether the ledger must tell paid credit from promotional credit.
 - Reversing this means adding the columns back and taxing a top-up again. That
   is cheap only while no payment has been recorded.
+
+## Superseded, 2026-09-21
+
+Reversed by **ADR-0076**: tax is charged on the top-up after all, at a rate a
+gateway may override. The reasoning above about what a top-up *is* still holds;
+what changed is the sale. ADR-0072 made a metered sale a 4c block bought many
+times a day, so the rounding problem this ADR flagged under Consequences became
+structural rather than hypothetical — the tax on one block is a fraction of a
+cent, which `WalletLedgerService` refuses and never rounds. See ADR-0076 for
+the full argument and for the legal condition the reversal rests on.
