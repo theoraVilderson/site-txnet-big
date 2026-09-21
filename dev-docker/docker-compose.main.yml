@@ -1315,6 +1315,55 @@ services:
         condition: service_healthy
 
   # ===========================================================================
+  # network-service — the VPN/proxy plane's collector (Go, ADR-0071)
+  # ---------------------------------------------------------------------------
+  # Deliberately without a single `traefik.*` label, and that absence is the
+  # design. It connects as `txnet_cross_tenant`, whose policy is `USING (true)`,
+  # so it reads every tenant's rows and has no request-tenant to scope them to.
+  # A router in front of it would turn "the collector sees everything" into
+  # "anyone who reaches this route sees everything". It lives on the private
+  # network and is reached by nothing but the health check.
+  #
+  # It writes no migrations either: Prisma owns the schema. At boot it checks
+  # the role it connected as and every `network.*` column it depends on, and
+  # refuses to start naming what is missing — so `db-login-roles.sh` and a
+  # migrated database are both preconditions, and a missing one is a refusal
+  # in the log rather than a wrong number an hour later.
+  # ===========================================================================
+  network-service:
+    build:
+      context: ../network-service
+      dockerfile: Dockerfile
+      target: ${ENVIRONMENT}
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+    container_name: ${STACK_NAME:-txnet}-network-service
+    restart: unless-stopped
+    working_dir: /src
+    volumes:
+      - ../network-service:/src
+    environment:
+      - NETWORK_SERVICE_PORT=${NETWORK_SERVICE_PORT:-8090}
+      # The only connection this service has. There is no owner URL and no
+      # per-tenant URL here on purpose: it has no use for either, and the
+      # absence is what keeps the collector out of a tenant's scope.
+      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      main-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${NETWORK_SERVICE_PORT:-8090}/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 6
+    networks:
+      - private_backend_network
+    labels:
+      - "txnet.logging=true"
+
+  # ===========================================================================
   # Next.js PWA — Main Frontend Application
   # ===========================================================================
   site-pwa:

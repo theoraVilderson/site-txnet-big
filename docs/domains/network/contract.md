@@ -41,8 +41,10 @@ reading a new column adds it to that manifest in the same change.
 
 **Nothing here answers a user request.** Its only HTTP surface is `/health`
 (200, or 503 when the database is unreachable), for the container and the
-watchdog; it is not routed through the gateway and holds no gateway route. That
-is a consequence of the cross-tenant role, not a preference.
+watchdog. Its compose service carries no `traefik.*` label at all and sits on
+the private network — a router in front of it would turn "the collector sees
+every tenant" into "whoever reaches this route sees every tenant". That is a
+consequence of the cross-tenant role, not a preference.
 
 ## Provides (intended)
 
