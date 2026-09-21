@@ -15,6 +15,16 @@ export interface ApiResult<T> {
   fieldErrors?: { path: string; message: string }[];
   /** Correlation id for a thrown (5xx/4xx) error's server-side log line. */
   ref?: string;
+  /**
+   * A machine-readable cause, when the refusal named one (ADR-0043).
+   *
+   * This is the **only** thing on a refusal a flow may branch on. `msg` is
+   * already translated and matching on it would break in the next language;
+   * the status code is not read here at all, by this client's own rule. A
+   * refusal that names no reason is an ordinary refusal and is rendered as
+   * its `msg`, which is every refusal that existed before this field.
+   */
+  error?: { reason?: string };
 }
 
 export type OtpChannelName = 'sms' | BotPlatform;

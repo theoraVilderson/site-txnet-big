@@ -90,8 +90,10 @@ Either of:
 - A legitimate reseller hits the ceiling in normal use. That is a number
   problem first (`BOT_UNPROVEN_RATE_LIMIT`), and a shape problem only if raising
   it far enough to serve them stops bounding anything.
-- A throttled chat needs somewhere to go. The Mini App is the obvious landing
-  place — it is a browser, so it can carry the slider the chat cannot — but
-  offering it *on a throttle* means the bot telling a 429 apart from any other
-  refusal, and `AuthApiClient` deliberately "never inspects a status code — `ok`
-  is the answer" (ADR-0009). That is its own decision and it is open.
+- The ceiling's refusal stops naming a reason, or a second reason wants the
+  same treatment. **Closed on the day this was written** (F-0201-d, user's
+  call): a throttled chat is offered the Mini App, and the bot tells that
+  refusal from any other by `error.reason === 'botTrafficThrottled'` — the
+  mechanism ADR-0043 already built for exactly this. No status code is read, so
+  ADR-0009's rule that `AuthApiClient` "never inspects a status code — `ok` is
+  the answer" is intact, and `bot-app/contract.mini-app.md` holds the rule.

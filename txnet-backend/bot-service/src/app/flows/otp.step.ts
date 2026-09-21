@@ -15,6 +15,7 @@ import {
   NavState,
 } from '../conversation/nav.types';
 import { ACTIONS, ask, say, view } from './views';
+import { throttleOf } from './throttle';
 import { BotKey, BotKeys, botLinkMessageKey } from '../locale/bot-keys';
 
 export const CHANNEL_ACTION_PREFIX = 'channel:';
@@ -91,6 +92,11 @@ export class OtpStep {
   ): Promise<FlowResult> {
     const result = await send(channel);
     if (!result.ok) {
+      // Three flows send their code through here — login, forgot and adding an
+      // account — so the tenant's bot ceiling is answered once for all three
+      // (ADR-0069) rather than three times, one of which would be forgotten.
+      const throttled = throttleOf(result, ctx);
+      if (throttled) return { view: throttled, nextState: state };
       return { view: say('otp.failed', { raw: result.msg }), nextState: state };
     }
 

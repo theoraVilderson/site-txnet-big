@@ -58,7 +58,15 @@ export class CaptchaGuard implements CanActivate {
       BOT_UNPROVEN_WINDOW_SEC,
     );
     if (!allowed) {
-      throw new HttpException({ i18nKey: 'auth.temporarilyLocked' }, 429);
+      // `reason` is how the bot tells this refusal from a wrong password
+      // without reading a status code (ADR-0043, and ADR-0009's rule that
+      // `AuthApiClient` reads answers rather than HTTP). It is what turns the
+      // refusal into an offer: the Mini App is a browser, so it can carry the
+      // slide this chat cannot.
+      throw new HttpException(
+        { i18nKey: 'auth.temporarilyLocked', reason: 'botTrafficThrottled' },
+        429,
+      );
     }
   }
 

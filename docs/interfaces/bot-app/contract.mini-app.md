@@ -2,8 +2,8 @@
 id: bot-app
 layer: interface
 status: active
-version: 11
-updated: 2026-09-10
+version: 12
+updated: 2026-09-21
 ---
 
 # bot-app — the Mini App
@@ -50,3 +50,31 @@ at all — it hands over a URL, and the credential is the platform's signature,
 never anything this bot passes along. Degradation is the renderer's
 (`messenger`): a platform without the WebApp surface gets the same URL as a
 plain link.
+
+## The second place it is offered: a throttled sign-in
+
+ADR-0069 caps the tenant's unproven bot traffic over the captcha-gated routes, and that
+budget is **shared** — so the person it stops is usually not the attacker who spent it, but
+the next customer to open the bot. Those chats are offered the Mini App instead of a bare
+"try later" (`flows/throttle.ts`).
+
+The offer works because of what the Mini App *is*, not as a consolation: it is a browser,
+so it can carry the slide a chat cannot, and it signs itself in from the platform's own
+signature (ADR-0017) rather than through any gated route. The door the refusal closes is
+the one door the offer does not use.
+
+**The refusal is recognised by `error.reason === 'botTrafficThrottled'` and by nothing
+else** (ADR-0043). `msg` arrives already translated, so matching on it breaks in the next
+language; the HTTP status is not read at all, which is `AuthApiClient`'s own rule
+(ADR-0009). A refusal naming no reason stays an ordinary refusal and renders as its `msg` —
+which is every refusal that existed before this.
+
+The screen carries its own sentence (`bot.common.throttled`), not `auth.temporarilyLocked`:
+that key is written for a screen with nowhere to go, and this one has a button under it. A
+deployment with no `PANEL_BASE_URL` gets the sentence with no button, the same rule as the
+menu row above.
+
+Six call sites reach a gated route, and four of them — login by code, forgot, register and
+adding an account by code — send through `OtpStep.request`, so the branch lives there once
+rather than four times, one of which would have been forgotten. The two password proofs
+(`login`, `accounts/add`) branch at their own call sites.

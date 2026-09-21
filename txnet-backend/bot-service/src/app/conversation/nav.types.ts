@@ -84,6 +84,16 @@ export interface ChatContext {
    * `successful_payment`. Handled by `InChatPayment`, never by a flow.
    */
   payment?: PaymentEvent;
+  /**
+   * Where this chat's Mini App lives, already carrying `?ma=<platform>` — the
+   * router works it out once (`miniAppUrl()`), because `PANEL_BASE_URL` is
+   * config and a flow holds none.
+   *
+   * Optional for the reason the menu row is: a deployment that has published no
+   * panel has no URL, and a screen then drops the button rather than offering
+   * one that opens nothing. Read by `flows/throttle.ts` (ADR-0069).
+   */
+  miniAppUrl?: string;
 }
 
 /** An invoice a flow asks the dispatcher to send after its screen (F-104-m); copy as keys, numbers as billing's. */

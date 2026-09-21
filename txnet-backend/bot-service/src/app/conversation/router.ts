@@ -91,6 +91,11 @@ export class ConversationRouter {
    * from here" — centrally, so a flow cannot ship without it.
    */
   async route(ctx: ChatContext): Promise<FlowResult> {
+    // Worked out once, here, because `PANEL_BASE_URL` is config and a flow
+    // holds none. The menu already asked for it (`menu()`); since ADR-0069 a
+    // throttled sign-in needs it too, and a screen that has to reach back into
+    // the router for it is a screen that will forget to.
+    ctx.miniAppUrl = this.miniAppUrl(ctx.platform);
     const state = await this.nav.get(ctx.integration, ctx.chatId);
     const actionId = this.resolveAction(ctx, state);
     const result = await this.dispatch(ctx, state, actionId);
@@ -494,7 +499,7 @@ export class ConversationRouter {
     // remembered nowhere — this bot serves the reseller's customers too, and
     // they are most of the chats that reach this line.
     const reseller = await this.reseller.canAdminister(ctx, token);
-    return memberMenu(this.miniAppUrl(ctx.platform), this.billing.isConfigured, reseller);
+    return memberMenu(ctx.miniAppUrl, this.billing.isConfigured, reseller);
   }
 
   /**

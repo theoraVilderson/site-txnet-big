@@ -6,6 +6,7 @@ import { ChatAccess } from '../session/chat-access';
 import { OtpStep } from './otp.step';
 import { PhoneNumbers } from './phone-number';
 import { ACTIONS, addProofView, ask, say } from './views';
+import { throttleOf } from './throttle';
 import { BotKeys } from '../locale/bot-keys';
 
 /**
@@ -219,8 +220,9 @@ export class AccountAddFlow {
       { chatId: ctx.chatId, lang: ctx.lang, platform: ctx.platform, accessToken },
     );
     if (!result.ok) {
+      const throttled = throttleOf(result, ctx);
       return {
-        view: ask('accountAdd.retryPassword', { raw: result.msg }),
+        view: throttled ?? ask('accountAdd.retryPassword', { raw: result.msg }),
         nextState: state,
         deleteIncoming: true,
       };

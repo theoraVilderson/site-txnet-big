@@ -57,7 +57,8 @@
     "expired": "This conversation sat idle for a while, so I closed it; nothing was saved. Start again below.",
     "backGone": "There is nothing before this. You can start from here:",
     "signedOutSwitched": "Signed out of that account — you are now “{{name}}”.",
-    "signedOutAll": "Signed out of every account in this chat. None of them was removed."
+    "signedOutAll": "Signed out of every account in this chat. None of them was removed.",
+    "throttled": "Too many sign-ins have been started from this bot just now, so you will need to wait a little. If you are in a hurry, open the app below and sign in there as usual."
   },
   "login": {
     "askPhone": "Send your number with the button below, or type it yourself. A number from any country works — write it with its country code, like +49…",

@@ -10,6 +10,7 @@ import { BotSessionStore } from '../session/bot-session.store';
 import { OtpStep } from './otp.step';
 import { PhoneNumbers } from './phone-number';
 import { ACTIONS, ask, askContact, say } from './views';
+import { throttleOf } from './throttle';
 import { BotKeys } from '../locale/bot-keys';
 
 /**
@@ -253,8 +254,9 @@ export class LoginFlow {
       callContextOf(ctx),
     );
     if (!result.ok) {
+      const throttled = throttleOf(result, ctx);
       return {
-        view: ask('login.retryPassword', { raw: result.msg }),
+        view: throttled ?? ask('login.retryPassword', { raw: result.msg }),
         nextState: state,
         // The password was in the chat either way: take it back out.
         deleteIncoming: true,

@@ -104,6 +104,12 @@ export const BOT_COPY_FALLBACKS: Readonly<Record<string, string>> = {
   [BotKeys.common.signedOutAll]:
     'Signed out of every account in this chat. None of them was removed.',
   [BotKeys.common.notSignedIn]: 'You are not signed in yet.',
+  // ADR-0069: the tenant's bot ceiling refused this, and the Mini App is the
+  // door that still works — it is a browser, so it can carry the slide a chat
+  // cannot. The button under this sentence is why it is not the browser's own
+  // “wait a while”.
+  [BotKeys.common.throttled]:
+    'Too many sign-ins have been started from this bot just now, so you will need to wait a little. If you are in a hurry, open the app below and sign in there as usual.',
   [BotKeys.login.askPhone]:
     'Send your number with the button below, or type it yourself. A number from any country works — write it with its country code, like +49…',
   [BotKeys.login.askIdentifier]: 'Send your username or phone number.',
