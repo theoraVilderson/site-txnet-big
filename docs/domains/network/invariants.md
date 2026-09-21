@@ -9,7 +9,8 @@ updated: 2026-09-21
 
 **DRAFT** — 1-7 are from schema comments and not enforced in code. 8-12 are
 enforced by the database as of F-027-a, 13-17 as of F-027-b, 19-25 as of
-F-027-c. 18 is the promise the rest of them serve and is a service rule.
+F-027-c and 26-28 as of F-027-d. 18 and 29 are the promise the rest of them
+serve and are service rules.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -38,6 +39,10 @@ F-027-c. 18 is the promise the rest of them serve and is a service rule.
 | 23 | A drift event's affected count never exceeds what it observed | CHECK `panel_drift_event_counts_sane` | a ratio above 100% — an arithmetic bug reading as a worse event than happened, on the verdict that halts collection |
 | 24 | One remote client on one panel has one unattributed row | UNIQUE `unattributed_usage_panel_remote_key` | one unclaimed client becomes a row a minute; the report that should name it becomes unreadable |
 | 25 | Unattributed usage called `attributed` names the config it went to | CHECK `unattributed_usage_attributed_has_config` | bytes dropped under a state that says they were not — invariant 18's failure, wearing a resolved label |
+| 26 | One `Acct-Session-Id` on one NAS is one session | UNIQUE `radius_session_nas_acct_key` | two NASes numbering their sessions from 1 collide, and one user's traffic lands on another's session |
+| 27 | A session publishes no more than it measured | CHECK `radius_session_published_within_high_water` | the extrapolation past a missing `Stop` that ADR-0074 forbids, reaching the user as a charge for traffic nobody watched happen |
+| 28 | A closed session says why it closed | CHECK `radius_session_closed_has_reason` | a stale session's last figure cannot be told from a real `Stop` figure, so the weaker number is billed as the stronger one |
+| 29 | A session past 4 GB whose NAS never sent Gigawords is held, not billed | planned service rule (`radius_session.gigawordsSeen` makes it expressible) | 4 GB per wrap lost in silence — invariant 18's failure on the push side, and the one ADR-0074 names |
 
 ## How to test
 
@@ -45,12 +50,14 @@ Invariants 8-17 and 19-25 are held by the schema and the migration history,
 and that those two agree is asserted by
 `shared-core/src/lib/prisma/network-panel-declaration.spec.ts` (8-12),
 `network-config-desired-state.spec.ts` (13-17) and
-`network-usage-accounting.spec.ts` (19-25) — the CI stand-in for the
+`network-usage-accounting.spec.ts` (19-25) and
+`network-radius-session.spec.ts` (26-28) — the CI stand-in for the
 boot-time column assertion ADR-0071 gives `network-service`.
 
 18 is not a schema rule and cannot become one: it is the collection loop
 (F-027-l) and the delta consumer (F-027-n) accounting for every byte they
 read. It is tested with them.
+29 is the same rule on the push side and belongs to the receiver (F-027-af).
 
 The rest is to be written with the service. Minimum: partition-then-drop
 ordering test; regenerate cap test.

@@ -208,6 +208,19 @@ enum UnattributedUsageState {
   @@schema("network")
 }
 
+/// Why a RADIUS session stopped counting (F-027-d). Only `acct_stop` is the
+/// NAS telling us the session ended; the other four are us deciding it did,
+/// and a figure closed under one of them is worth less than a `Stop` figure.
+enum RadiusSessionCloseReason {
+  acct_stop
+  stale_timeout
+  nas_restart
+  superseded
+  administrative
+
+  @@schema("network")
+}
+
 enum ConfigStatus {
   active
   frozen
@@ -280,6 +293,7 @@ model Panel {
   driftEvents       PanelDriftEvent[]
   quarantinedDeltas UsageDeltaQuarantine[]
   unattributedUsage UnattributedUsage[]
+  radiusSessions    RadiusSession[]
 
   @@index([tenantId])
   @@map("panel")
@@ -341,6 +355,7 @@ model Config {
   counterState      ConfigCounterState?
   usageHolds        UsageHold[]
   quarantinedDeltas UsageDeltaQuarantine[]
+  radiusSessions    RadiusSession[]
 
   @@unique([panelId, remoteId], map: "config_panel_remote_id_key")
   @@index([tenantId, createdAt(sort: Desc)])
@@ -564,6 +579,55 @@ model UnattributedUsage {
   @@unique([panelId, remoteIdentifier], map: "unattributed_usage_panel_remote_key")
   @@index([state, lastSeenAt])
   @@map("unattributed_usage")
+  @@schema("network")
+}
+
+/// 5.12 — One RADIUS accounting session (F-027-d). A pull panel hands us a
+/// running total and `ConfigCounterState` remembers where it was; a NAS hands
+/// us packets about a *session*, and the session is the unit of everything
+/// that can go wrong with one. It lands now, ahead of the receiver (F-027-af),
+/// so one migration series covers the whole schema.
+model RadiusSession {
+  id                String                    @id @default(uuid()) @db.Uuid
+  panelId           String                    @db.Uuid
+  /// The NAS that issued the session — `NAS-Identifier`, or its IP.
+  nasId             String
+  /// `Acct-Session-Id`, which is unique only within that NAS.
+  acctSessionId     String
+  /// Null until attribution places it; the bytes have a row either way.
+  configId          String?                   @db.Uuid
+  /// `User-Name` as the NAS reported it — what a later pass matches on.
+  remoteIdentifier  String
+  /// A session counter only rises, so what is stored is a high water mark:
+  /// a lower reading is a NAS restart, never negative usage (ADR-0074).
+  /// 64-bit, because the wire figure is 32 and wraps at 4 GB.
+  highWaterInBytes  BigInt                    @default(0)
+  highWaterOutBytes BigInt                    @default(0)
+  /// How much of the mark above has already been published as a delta. Never
+  /// more than the mark (`radius_session_published_within_high_water`): that
+  /// gap is the extrapolation ADR-0074 forbids, arriving as a charge.
+  publishedInBytes  BigInt                    @default(0)
+  publishedOutBytes BigInt                    @default(0)
+  /// Whether this session's packets ever carried `Acct-*-Gigawords`. False
+  /// past the first wrap is a `gigawords_missing` hold, not a guess.
+  gigawordsSeen     Boolean                   @default(false)
+  startedAt         DateTime
+  /// Last accounting packet seen for it; the stale sweep ranges over this.
+  lastSeenAt        DateTime
+  /// Set exactly with `closeReason` (`radius_session_closed_has_reason`):
+  /// open is the absence of both, never a half-closed row.
+  closedAt          DateTime?
+  closeReason       RadiusSessionCloseReason?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  config Config? @relation(fields: [configId], references: [id])
+  panel  Panel   @relation(fields: [panelId], references: [id])
+
+  @@unique([nasId, acctSessionId], map: "radius_session_nas_acct_key")
+  @@index([closedAt, lastSeenAt])
+  @@index([configId])
+  @@map("radius_session")
   @@schema("network")
 }
 

@@ -24,6 +24,7 @@ Source of truth: `txnet-backend/prisma/domains/network.prisma` (Postgres schema
 | usage_hold | measured bytes we believe and cannot bill yet | via config | same |
 | panel_drift_event | a drift verdict over a whole panel's population | via panel | permanent |
 | unattributed_usage | usage against a remote client that matches no config | via panel | one row per remote client |
+| radius_session | one RADIUS accounting session, its high-water bytes and how it closed | via config (nullable) / panel | permanent |
 
 ## The Panel declaration (F-027-a, ADR-0074)
 
@@ -123,6 +124,40 @@ client**, accumulated — an orphan is re-observed every pass, so per-reading
 rows would be a row a minute per unclaimed client. What happens to the client
 itself is the panel's `orphanPolicy`, not this table's.
 
+## A session is closed, never abandoned (F-027-d, ADR-0074)
+
+`radius_session` is the one table a push source needs and a pull source does
+not. A pull panel hands us a running total and `config_counter_state` remembers
+where the counter was; a NAS hands us packets about a *session*, and the
+session is the unit of everything that can go wrong with one.
+
+`Acct-Input-Octets` is 32 bits and wraps at 4 GB, with the high bits in
+`Acct-Input-Gigawords`. A NAS that omits Gigawords loses 4 GB per wrap in
+silence, and that loss is indistinguishable from a quiet user unless we wrote
+down whether the attribute was ever there — which is what `gigawordsSeen` is
+for: past the first wrap without it, the bytes become a `gigawords_missing`
+hold rather than a guess. Every byte column is `BIGINT`, because the
+reconstructed total in 32 bits would be the same trap in our own storage.
+
+A session counter only rises, so `highWaterInBytes` / `highWaterOutBytes` are a
+high water mark: a lower reading is a NAS restart, never negative usage.
+`publishedInBytes` / `publishedOutBytes` are how much of that mark has already
+left as a delta, and they are bounded by it — a session whose `Stop` never
+arrives closes at its last observed figure and is never extrapolated past it,
+so the extrapolation must not be writable. `closeReason` says which of five
+ways it ended: only `acct_stop` is the NAS telling us, and the other four are
+us deciding, which is a materially weaker figure and has to stay legible as
+one.
+
+The identity is `(nasId, acctSessionId)`, because `Acct-Session-Id` is unique
+only within the NAS that issued it — two NASes numbering from 1 would otherwise
+collide and one user's traffic would land on another's session. `configId` is
+nullable and `remoteIdentifier` is not: an unplaced session still has a row, so
+the bytes are never dropped for want of one.
+
+The receiver itself is F-027-af; the table lands now so one migration series
+covers the whole network schema.
+
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |
 |---|---|---|---|
@@ -155,6 +190,10 @@ enforcementState)` and `credentialGroupId`.
 above with five new types. It is purely additive — nothing existing is altered
 — and every byte column is `BIGINT`, because a 32-bit counter wraps at 4 GB,
 which is the Gigawords trap arriving a second time in our own storage.
+
+`20260921000400_a_radius_session_is_closed_not_abandoned` adds
+`radius_session` and one new type. Additive in the same way, with three CHECK
+constraints and the `(nasId, acctSessionId)` unique index.
 
 Native monthly partitioning on `traffic_raw_log` (and BRIN index on
 `recordedAt`), plus RLS, are "section 99" manual SQL — **not applied**. Prisma
