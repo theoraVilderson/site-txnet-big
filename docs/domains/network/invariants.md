@@ -8,7 +8,8 @@ updated: 2026-09-21
 # Invariants — network
 
 **DRAFT** — 1-7 are from schema comments and not enforced in code. 8-12 are
-enforced by the database as of F-027-a, 13-17 as of F-027-b.
+enforced by the database as of F-027-a, 13-17 as of F-027-b, 19-25 as of
+F-027-c. 18 is the promise the rest of them serve and is a service rule.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -29,14 +30,27 @@ enforced by the database as of F-027-a, 13-17 as of F-027-b.
 | 15 | A completed purge holds no `remoteId` | CHECK `config_purged_has_no_remote_id` | the loop adopts a panel seat it has just freed, and usage is attributed to a client that is gone |
 | 16 | One remote client belongs to one config | UNIQUE `(panelId, remoteId)` | one client's traffic counted against two configs, or a ceiling written twice with two different numbers |
 | 17 | `claimTag` is unique across the whole system | schema `@unique` | the second matching key matches the wrong row, which is invariant 1's failure reached the long way round |
+| 18 | Every measured byte ends billed, held or quarantined — never dropped | planned service rule (the six F-027-c tables make it expressible) | the thing ADR-0074 exists to prevent: usage lost in silence, which nobody can detect after the fact |
+| 19 | One delta is applied at most once | PK `usage_delta_seen.deltaId` | a redelivered message charges the user twice, and at-least-once delivery guarantees a redelivery |
+| 20 | One config has at most one counter cursor | UNIQUE `config_counter_state.configId` | two opinions about where the counter was; the losing one re-counts everything since the last reset |
+| 21 | No byte figure anywhere is negative | CHECKs `*_bytes_not_negative` | a counter going backward is a reset, never negative usage — a negative delta credits traffic nobody bought |
+| 22 | A hold or quarantine carries a resolution time exactly when it is resolved | CHECKs `usage_hold_resolved_has_time`, `usage_delta_quarantine_resolved_has_time` | a row resolved at no time cannot be aged, audited or reported on, and the queue stops being evidence |
+| 23 | A drift event's affected count never exceeds what it observed | CHECK `panel_drift_event_counts_sane` | a ratio above 100% — an arithmetic bug reading as a worse event than happened, on the verdict that halts collection |
+| 24 | One remote client on one panel has one unattributed row | UNIQUE `unattributed_usage_panel_remote_key` | one unclaimed client becomes a row a minute; the report that should name it becomes unreadable |
+| 25 | Unattributed usage called `attributed` names the config it went to | CHECK `unattributed_usage_attributed_has_config` | bytes dropped under a state that says they were not — invariant 18's failure, wearing a resolved label |
 
 ## How to test
 
-Invariants 8-17 are held by the schema and the migration history, and that
-those two agree is asserted by
-`shared-core/src/lib/prisma/network-panel-declaration.spec.ts` (8-12) and
-`network-config-desired-state.spec.ts` (13-17) — the CI stand-in for the
+Invariants 8-17 and 19-25 are held by the schema and the migration history,
+and that those two agree is asserted by
+`shared-core/src/lib/prisma/network-panel-declaration.spec.ts` (8-12),
+`network-config-desired-state.spec.ts` (13-17) and
+`network-usage-accounting.spec.ts` (19-25) — the CI stand-in for the
 boot-time column assertion ADR-0071 gives `network-service`.
+
+18 is not a schema rule and cannot become one: it is the collection loop
+(F-027-l) and the delta consumer (F-027-n) accounting for every byte they
+read. It is tested with them.
 
 The rest is to be written with the service. Minimum: partition-then-drop
 ordering test; regenerate cap test.

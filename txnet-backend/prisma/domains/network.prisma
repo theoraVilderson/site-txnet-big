@@ -146,6 +146,68 @@ enum DriftState {
   @@schema("network")
 }
 
+/// How a byte that was measured but not yet billed ends (ADR-0074, `in doubt,
+/// do not charge`). `pending` is the only open state and there is no
+/// `dropped`: a figure is either billed or written off by someone, on the
+/// record. Shared by `UsageHold` and `UsageDeltaQuarantine` (C-09).
+enum UsageDispositionState {
+  pending
+  released
+  written_off
+
+  @@schema("network")
+}
+
+/// Why bytes we believe are not being billed yet. Every value is a *declared*
+/// incapacity (ADR-0074): the source cannot tell us something, so we hold the
+/// bytes rather than guess at them.
+enum HoldReason {
+  gigawords_missing
+  session_never_closed
+  publish_failed_after_read
+  attribution_ambiguous
+  panel_drift_event
+  low_trust_source
+
+  @@schema("network")
+}
+
+/// Why a figure is not believed at all. A quarantined delta is never applied
+/// to a Grant until someone releases it.
+enum QuarantineReason {
+  implausible_volume
+  implausible_rate
+  reset_with_unmeasured_bytes
+  semantics_mismatch
+  clock_went_backward
+  panel_drift_event
+
+  @@schema("network")
+}
+
+/// What a panel-wide drift verdict saw (F-027-ab). A backup restore reads as
+/// thousands of individually plausible resets, so the population is the unit
+/// of judgement, not the config.
+enum PanelDriftEventType {
+  mass_reset
+  mass_missing
+  mass_rename
+  mass_limit_override
+
+  @@schema("network")
+}
+
+/// What became of usage we measured and could not place. `dismissed` is a
+/// decision someone made, which is the point: the bytes are never dropped by
+/// the absence of one.
+enum UnattributedUsageState {
+  open
+  attributed
+  dismissed
+
+  @@schema("network")
+}
+
 enum ConfigStatus {
   active
   frozen
@@ -215,6 +277,10 @@ model Panel {
   pairedWith  Panel[]  @relation("PanelHAPair")
   configs     Config[]
 
+  driftEvents       PanelDriftEvent[]
+  quarantinedDeltas UsageDeltaQuarantine[]
+  unattributedUsage UnattributedUsage[]
+
   @@index([tenantId])
   @@map("panel")
   @@schema("network")
@@ -242,17 +308,17 @@ model Config {
   remoteId              String?
   /// What we write on every client we create, so a rename does not orphan its
   /// usage. The second matching key; `uuid` is the third.
-  claimTag              String?           @unique
+  claimTag              String?          @unique
   /// The configs issued together from one package, sharing one quota (§4.6).
-  credentialGroupId     String?           @db.Uuid
+  credentialGroupId     String?          @db.Uuid
   /// Desired state, not a command: the loop compares it as it is now and
   /// never replays an instruction (ADR-0075).
-  desiredEnabled        Boolean           @default(true)
-  desiredRemote         DesiredRemote     @default(present)
-  enforcementState      EnforcementState  @default(pending)
-  driftState            DriftState        @default(synced)
+  desiredEnabled        Boolean          @default(true)
+  desiredRemote         DesiredRemote    @default(present)
+  enforcementState      EnforcementState @default(pending)
+  driftState            DriftState       @default(synced)
   /// Two repairs and the loop stops (`contested`) rather than flapping.
-  driftRepairCount      Int               @default(0)
+  driftRepairCount      Int              @default(0)
   lastReconciledAt      DateTime?
   /// What the allocator decided this config's share of the Grant is.
   allocatedCeilingBytes BigInt?
@@ -271,6 +337,10 @@ model Config {
   trafficRawLogs   TrafficRawLog[]
   trafficDailyAggs TrafficDailyAggregate[]
   subAccount       SubAccount?
+
+  counterState      ConfigCounterState?
+  usageHolds        UsageHold[]
+  quarantinedDeltas UsageDeltaQuarantine[]
 
   @@unique([panelId, remoteId], map: "config_panel_remote_id_key")
   @@index([tenantId, createdAt(sort: Desc)])
@@ -328,6 +398,172 @@ model TrafficDailyAggregate {
   @@index([userId])
   @@index([date])
   @@map("traffic_daily_aggregate")
+  @@schema("network")
+}
+
+/// 5.6 — The collector's memory of one config's raw counter (F-027-c). It is
+/// what makes a counter going backward a *reset* rather than negative usage
+/// (ADR-0074), and it is written only after the delta it produced was
+/// published — so a crash between the two re-reads rather than loses.
+model ConfigCounterState {
+  id                String           @id @default(uuid()) @db.Uuid
+  configId          String           @unique @db.Uuid
+  panelId           String           @db.Uuid
+  /// The arithmetic the cursor below was computed under. A panel re-declared
+  /// from `cumulative` to `session` invalidates it; a cursor that does not say
+  /// what it meant cannot be invalidated.
+  counterSemantics  CounterSemantics
+  /// The last raw figures read off the source — not a total.
+  lastUpBytes       BigInt           @default(0)
+  lastDownBytes     BigInt           @default(0)
+  /// What we have published for this config since it existed, across resets.
+  lifetimeUpBytes   BigInt           @default(0)
+  lifetimeDownBytes BigInt           @default(0)
+  lastObservedAt    DateTime?
+  /// Stored only after a successful publish (F-027-n): at-least-once delivery
+  /// plus the dedupe table below is an exactly-once effect.
+  lastPublishedAt   DateTime?
+  resetCount        Int              @default(0)
+  lastResetAt       DateTime?
+  updatedAt         DateTime         @updatedAt
+
+  config Config @relation(fields: [configId], references: [id])
+
+  @@index([panelId])
+  @@map("config_counter_state")
+  @@schema("network")
+}
+
+/// 5.7 — Every delta this consumer has applied, keyed by the delta's own id.
+/// The insert *is* the deduplication: a redelivered message is a primary-key
+/// violation the consumer absorbs, never a second charge (F-027-n). Swept at
+/// 48h, which is why `seenAt` is indexed.
+model UsageDeltaSeen {
+  deltaId    String   @id @db.Uuid
+  configId   String   @db.Uuid
+  panelId    String   @db.Uuid
+  upBytes    BigInt
+  downBytes  BigInt
+  /// The end of the interval the delta covers, as the source reported it.
+  observedAt DateTime
+  seenAt     DateTime @default(now())
+
+  @@index([seenAt], map: "usage_delta_seen_seenAt_idx")
+  @@index([configId, observedAt])
+  @@map("usage_delta_seen")
+  @@schema("network")
+}
+
+/// 5.8 — A figure we measured and do not believe. It is not applied to a
+/// Grant and it is not thrown away: someone releases it or writes it off
+/// (ADR-0074). `configId` is nullable because attribution is one of the
+/// things that can be what failed.
+model UsageDeltaQuarantine {
+  id                String                @id @default(uuid()) @db.Uuid
+  deltaId           String?               @db.Uuid
+  configId          String?               @db.Uuid
+  panelId           String                @db.Uuid
+  upBytes           BigInt
+  downBytes         BigInt
+  observedAt        DateTime
+  reason            QuarantineReason
+  state             UsageDispositionState @default(pending)
+  detectedAt        DateTime              @default(now())
+  /// Set exactly when the state is no longer `pending`
+  /// (`usage_delta_quarantine_resolved_has_time`).
+  resolvedAt        DateTime?
+  resolvedByAdminId String?               @db.Uuid
+  resolutionNote    String?
+
+  config Config? @relation(fields: [configId], references: [id])
+  panel  Panel   @relation(fields: [panelId], references: [id])
+
+  @@index([state, detectedAt])
+  @@map("usage_delta_quarantine")
+  @@schema("network")
+}
+
+/// 5.9 — Bytes we believe and cannot bill yet, because the source declared it
+/// cannot tell us something (ADR-0074). This table is the heart of `in doubt,
+/// do not charge`, and the holds queue (F-027-ad) is its visible face: while
+/// anything sits in it, nobody can claim the system dropped a byte in silence.
+model UsageHold {
+  id                String                @id @default(uuid()) @db.Uuid
+  configId          String                @db.Uuid
+  panelId           String                @db.Uuid
+  upBytes           BigInt
+  downBytes         BigInt
+  reason            HoldReason
+  state             UsageDispositionState @default(pending)
+  /// The start of the window these bytes were measured over.
+  heldFrom          DateTime
+  heldAt            DateTime              @default(now())
+  /// Set exactly when the state is no longer `pending`
+  /// (`usage_hold_resolved_has_time`).
+  resolvedAt        DateTime?
+  resolvedByAdminId String?               @db.Uuid
+  resolutionNote    String?
+
+  config Config @relation(fields: [configId], references: [id])
+
+  @@index([state, heldAt], map: "usage_hold_state_heldAt_idx")
+  @@index([configId])
+  @@map("usage_hold")
+  @@schema("network")
+}
+
+/// 5.10 — A verdict over a whole panel's population (F-027-ab). One config
+/// going backward is a reset; a third of them going backward together is a
+/// backup restore, and carrying on is ~$16k of wrong charges in a minute —
+/// so `collectionHalted` defaults to true and resuming is somebody's decision.
+model PanelDriftEvent {
+  id                    String              @id @default(uuid()) @db.Uuid
+  panelId               String              @db.Uuid
+  eventType             PanelDriftEventType
+  /// Both counts are stored, never the ratio: a percentage cannot be checked
+  /// afterwards (`panel_drift_event_counts_sane`).
+  affectedConfigCount   Int
+  observedConfigCount   Int
+  detectedAt            DateTime            @default(now())
+  collectionHalted      Boolean             @default(true)
+  acknowledgedAt        DateTime?
+  acknowledgedByAdminId String?             @db.Uuid
+  note                  String?
+
+  panel Panel @relation(fields: [panelId], references: [id])
+
+  @@index([panelId, detectedAt(sort: Desc)])
+  @@map("panel_drift_event")
+  @@schema("network")
+}
+
+/// 5.11 — Usage measured against a remote client that matches none of our
+/// configs by any of the three keys (F-027-aa's `orphan`). It has a row so
+/// that the bytes exist somewhere; what happens to the client itself is the
+/// panel's `orphanPolicy`. One row per remote client, accumulated — an orphan
+/// is re-observed every pass, and per-reading rows would be a row a minute.
+model UnattributedUsage {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  panelId            String                 @db.Uuid
+  /// The panel's own identifier for it — id, username or tag, as reported.
+  remoteIdentifier   String
+  upBytes            BigInt                 @default(0)
+  downBytes          BigInt                 @default(0)
+  observationCount   Int                    @default(1)
+  firstSeenAt        DateTime               @default(now())
+  lastSeenAt         DateTime
+  state              UnattributedUsageState @default(open)
+  /// Set exactly when the state is `attributed`
+  /// (`unattributed_usage_attributed_has_config`).
+  attributedConfigId String?                @db.Uuid
+  resolvedAt         DateTime?
+  note               String?
+
+  panel Panel @relation(fields: [panelId], references: [id])
+
+  @@unique([panelId, remoteIdentifier], map: "unattributed_usage_panel_remote_key")
+  @@index([state, lastSeenAt])
+  @@map("unattributed_usage")
   @@schema("network")
 }
 

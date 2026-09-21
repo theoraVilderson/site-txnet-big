@@ -18,6 +18,12 @@ Source of truth: `txnet-backend/prisma/domains/network.prisma` (Postgres schema
 | traffic_raw_log | per-interval up/down bytes; **monthly partitioned**, BigInt PK | via config | drop old partitions |
 | traffic_daily_aggregate | nightly rollup per (user, config, date) | via config | long |
 | ip_access_rule | durable block / allow / custom-rate-limit by IP or CIDR | no | expires if `expiresAt` set |
+| config_counter_state | the collector's memory of one config's raw counter, and the semantics it was read under | via config | one row per config, forever |
+| usage_delta_seen | every applied delta, keyed by the delta's own id | via config | swept at 48h |
+| usage_delta_quarantine | a measured figure we do not believe | via config (nullable) | until released or written off, then audit |
+| usage_hold | measured bytes we believe and cannot bill yet | via config | same |
+| panel_drift_event | a drift verdict over a whole panel's population | via panel | permanent |
+| unattributed_usage | usage against a remote client that matches no config | via panel | one row per remote client |
 
 ## The Panel declaration (F-027-a, ADR-0074)
 
@@ -77,6 +83,46 @@ Five CHECK constraints, for the same reason the Panel has its five:
 clock on the write, as `blockedSince` is the clock on a ban) and
 `config_purged_has_no_remote_id`.
 
+## Where a measured byte waits (F-027-c, ADR-0074)
+
+Six tables, one promise: a measured byte is **billed, held or quarantined**,
+and never silently dropped.
+
+`config_counter_state` is the cursor. It holds the last *raw* figures, not a
+total, which is what makes a counter going backward a reset rather than
+negative usage; `lifetime*Bytes` is the total across resets. It also stores the
+`counterSemantics` the cursor was computed under, because a panel re-declared
+from `cumulative` to `session` invalidates it and a cursor that does not say
+what it meant cannot be invalidated. `lastPublishedAt` is written only after a
+successful publish (F-027-n), so a crash between read and publish re-reads
+rather than loses.
+
+`usage_delta_seen` makes the delta's **own id the primary key**. The insert is
+the deduplication: applying a redelivered message is a constraint violation the
+consumer absorbs, not a second charge. `seenAt` is indexed for the 48h sweep
+and for nothing else.
+
+`usage_delta_quarantine` holds a figure we do not believe — the plausibility
+cap, a reset whose pre-reset bytes were never measured, a clock going
+backward. `usage_hold` holds one we *do* believe but a declared incapacity
+stops us billing: a NAS with no Gigawords past 4 GB, a session with no `Stop`.
+Both end `released` or `written_off` and there is no `dropped`, which is what
+makes the holds queue (F-027-ad) the visible face of the promise — while
+anything sits in it, nobody can claim the system lost a byte in silence. Note
+this is not ADR-0072's rejected *wallet* hold: no money is reserved, only
+bytes are parked.
+
+`panel_drift_event` is the panel-wide stop (F-027-ab): a backup restore reads
+as thousands of individually plausible resets, so the population is the unit of
+judgement. Both counts are stored rather than a ratio, and `collectionHalted`
+defaults to true because carrying on is ~$16k of wrong charges in a minute.
+
+`unattributed_usage` is the byte we measured and could not place. It exists so
+the bytes cannot be dropped for want of a row, and it is **one row per remote
+client**, accumulated — an orphan is re-observed every pass, so per-reading
+rows would be a row a minute per unclaimed client. What happens to the client
+itself is the panel's `orphanPolicy`, not this table's.
+
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |
 |---|---|---|---|
@@ -104,6 +150,11 @@ destructive, and asserts both tables are empty before it starts.
 above. It is additive — every column nullable or defaulted — and adds a unique
 index on `(panelId, remoteId)` plus scan indexes on `(panelId,
 enforcementState)` and `credentialGroupId`.
+
+`20260921000300_usage_is_billed_held_or_quarantined` adds the six tables
+above with five new types. It is purely additive — nothing existing is altered
+— and every byte column is `BIGINT`, because a 32-bit counter wraps at 4 GB,
+which is the Gigawords trap arriving a second time in our own storage.
 
 Native monthly partitioning on `traffic_raw_log` (and BRIN index on
 `recordedAt`), plus RLS, are "section 99" manual SQL — **not applied**. Prisma
