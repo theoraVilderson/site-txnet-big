@@ -74,8 +74,27 @@ model Grant {
   /// once — at issue and on rotation — and never stored (the user's call, 2026-09-14).
   subscriptionTokenHash String             @unique
   tokenRotatedAt        DateTime           @default(now())
-  /// Billing cursor for metered usage.
+  /// Billing cursor for metered usage: how far the money has been taken.
   billedBytes           BigInt             @default(0)
+  /// What the panels have reported (F-027-n). Measured, not paid for: a panel
+  /// whose limit was overridden can report past the ceiling, and that gap is
+  /// what the holds queue exists to settle (ADR-0074).
+  consumedBytes         BigInt             @default(0)
+  /// What has been bought (ADR-0072). `Σ ceilings ≤ purchasedBytes` across
+  /// every config of this Grant — this is the number the allocator is bounded
+  /// by, which is why it is not folded into `billedBytes`.
+  purchasedBytes        BigInt             @default(0)
+  /// Price per 2^30 bytes, copied from the variant's rate history at issue
+  /// (ADR-0073), exactly as `quotas` and `featureKeys` are. Null unless
+  /// `billingMode = metered`. `(18, 8)` because a rate is not an amount: every
+  /// amount derived from it is still whole cents before the ledger (C-02).
+  meteredRate           Decimal?           @db.Decimal(18, 8)
+  /// When the bag ran empty (ADR-0075). Starts the purge clock; cleared when a
+  /// top-up returns the Grant to `active`.
+  suspendedAt           DateTime?
+  /// Per-Grant override of the tenant's purge window. Null = use
+  /// `tenant.purgeAfterDays`; `0` = never purge.
+  purgeAfterDays        Int?
   /// The owning reseller node (C-15). Always null until reseller nodes exist (F-901).
   resellerPath          String?
   issuedByAdminId       String?            @db.Uuid
@@ -89,6 +108,8 @@ model Grant {
 
   @@index([tenantId, userId])
   @@index([userId, status])
+  /// The purge job's only question: which suspended Grants are now due (F-027-y).
+  @@index([status, suspendedAt], map: "grant_status_suspendedAt_idx")
   @@map("grant")
   @@schema("entitlement")
 }

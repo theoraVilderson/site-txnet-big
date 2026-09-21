@@ -139,6 +139,10 @@ model Tenant {
   graceEndsAt     DateTime?
   /// F-019-c. Set while `suspended`; null otherwise. A payment lifts only `non_payment`.
   suspensionCause TenantSuspensionCause?
+  /// F-027-f, ADR-0075. Days a suspended Grant's configs stay on their panels
+  /// before they are purged and the seats released. `0` = never. Read as it is
+  /// now, so shortening it applies to the Grants already waiting.
+  purgeAfterDays  Int                    @default(7)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
