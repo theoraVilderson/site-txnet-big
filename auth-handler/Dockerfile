@@ -9,7 +9,7 @@
 
 # ---------- base: fetch deps ----------
 ARG DOCKER_REGISTRY
-FROM ${DOCKER_REGISTRY}/golang:1.22-alpine AS base
+FROM ${DOCKER_REGISTRY}/golang:1.27-alpine AS base
 ENV GOPROXY="https://goproxy.io,direct" GOSUMDB=off GOWORK=off GOFLAGS=-mod=mod
 WORKDIR /src
 COPY auth-handler/go.mod auth-handler/go.sum ./auth-handler/
