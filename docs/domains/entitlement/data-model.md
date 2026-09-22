@@ -1,7 +1,7 @@
 ---
 id: entitlement
 layer: domain
-updated: 2026-09-21
+updated: 2026-09-22
 ---
 
 # Data model — entitlement
@@ -47,7 +47,8 @@ panel whose limit was overridden serves past the ceiling, and that gap is an
 accounting truth for the holds queue (ADR-0074), not a write to refuse.
 
 `meteredRate` is `Decimal(18, 8)` per 2^30 bytes, copied at issue beside the
-quotas (ADR-0073), and null unless `billingMode = metered`. Amounts derived
+quotas by `GrantService.issue` — the rate in effect at `startsAt` (F-027-p,
+ADR-0073) — and null unless `billingMode = metered`. Amounts derived
 from it are still whole cents before the ledger (`C-02`).
 
 ## The purge clock (F-027-f, ADR-0075)

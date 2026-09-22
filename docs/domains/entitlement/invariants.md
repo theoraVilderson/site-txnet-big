@@ -2,7 +2,7 @@
 id: entitlement
 layer: domain
 status: draft
-updated: 2026-09-21
+updated: 2026-09-22
 ---
 
 # Invariants — entitlement
@@ -10,8 +10,9 @@ updated: 2026-09-21
 Held by the database since F-026-b; proved by
 `billing-service/src/app/entitlement/entitlement-schema.int.spec.ts`. Rule 1 is
 the service's, with F-026-e. Rules 8–12 arrive with F-027-f's columns
-(ADR-0072, ADR-0073, ADR-0075); 8 and 10 are held by the code that will read
-them, the rest by the database — the shapes are proved by
+(ADR-0072, ADR-0073, ADR-0075); rule 10 is held by `GrantService.issue` since
+F-027-p and rule 8 by the code that will read the counters, the rest by the
+database — the shapes are proved by
 `shared-core/src/lib/prisma/entitlement-grant-purchase-and-purge.spec.ts`.
 
 | # | Invariant | Enforced by | Blast if violated |
@@ -25,7 +26,7 @@ them, the rest by the database — the shapes are proved by
 | 7 | One cause issues one Grant | partial unique `(source, sourceReferenceId)` | a retried coupon or payment grants twice |
 | 8 | No byte is served that has not been paid for: `Σ ceilings ≤ purchasedBytes` across every config of a Grant | F-027-s allocator + property test; `purchasedBytes` is its own column | free traffic at the far end of a ceiling nobody bounded |
 | 9 | No byte counter is ever negative — a counter going backward is a reset, never negative usage | CHECK `grant_byte_counters_not_negative` | a reset read as negative usage, and a refund of traffic nobody bought |
-| 10 | A byte is priced by the rate locked at issue, never by the catalog's rate today | `grant.meteredRate` copied by `issue` (F-027-p); CHECK `grant_metered_rate_is_metered` | a price change reprices blocks already bought — ledger and cursor disagree |
+| 10 | A byte is priced by the rate locked at issue, never by the catalog's rate today | `grant.meteredRate` copied by `issue` from the rate in effect at `startsAt`, and a metered variant with none is refused (F-027-p, `grant.spec.ts`); CHECK `grant_metered_rate_is_metered` | a price change reprices blocks already bought — ledger and cursor disagree |
 | 11 | A suspended Grant always carries the clock it will be purged by | CHECK `grant_suspended_has_a_clock` | a panel seat held forever, with nothing red anywhere |
 | 12 | Quota exhaustion is `suspended`, never `exhausted` | trigger `grant_status_one_way` (rule 2) makes `exhausted` terminal | a top-up can never revive the Grant it paid for |
 

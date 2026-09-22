@@ -2,9 +2,9 @@ import { createHash, randomBytes } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
 import { Grant, GrantSource, GrantStatus, Prisma, QuotaAdjustment, QuotaMetric, VariantBillingMode } from '@prisma/client';
-import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import { TenantContext, meteredRatesInEffect, tenantTransaction } from '@txnet-backend/shared-core';
 
-import { isSellableBySku, type OfferFacts } from '../catalog/catalog-reads';
+import { isSellableBySku, meteredRateAt, type MeteredRateRow, type OfferFacts } from '../catalog/catalog-reads';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -32,7 +32,9 @@ export type EntitlementRejection =
   /** Unknown, another tenant's, or — for a token rotation — another user's. Never told apart. */
   | 'grant_not_found'
   | 'illegal_transition'
-  | 'grant_not_active';
+  | 'grant_not_active'
+  /** A `metered` variant with no rate in effect at the sale: nothing would price its bytes (F-027-p). */
+  | 'metered_rate_missing';
 
 export class EntitlementRefused extends Error {
   constructor(
@@ -80,6 +82,8 @@ type VariantShape = {
   billingMode: VariantBillingMode;
   quotas: Prisma.JsonValue;
   durationDays: number | null;
+  /** The variant's rate history — only the rows that could be in effect need be here. */
+  meteredRates: readonly MeteredRateRow[];
   product: { featureKeys: string[] };
 };
 
@@ -87,6 +91,12 @@ type VariantShape = {
  * The part of a Grant copied from its variant at issue, so a later catalog edit
  * never changes what was sold. A purchase is `pending` until it settles; any
  * other source is `active` at once.
+ *
+ * `meteredRate` joins the quotas here (ADR-0073): the rate in effect at
+ * `startsAt`, and `null` for anything not `metered` — `grant_metered_rate_is_metered`
+ * refuses a rate on a prepaid Grant, and a rate nobody reads is a second answer
+ * to what the user owes. A metered variant with no rate at all resolves to
+ * `null` too; `issue` is what refuses that, with the variant in the message.
  */
 export function grantFromVariant(input: { source: GrantSource; startsAt: Date }, v: VariantShape) {
   return {
@@ -96,6 +106,7 @@ export function grantFromVariant(input: { source: GrantSource; startsAt: Date },
     billingMode: v.billingMode,
     quotas: structuredClone(v.quotas),
     featureKeys: [...v.product.featureKeys],
+    meteredRate: v.billingMode === VariantBillingMode.metered ? (meteredRateAt(v.meteredRates, input.startsAt)?.rate ?? null) : null,
   };
 }
 
@@ -196,9 +207,12 @@ export class GrantService {
       if (existing) return { grant: existing, token: null };
     }
 
+    const startsAt = input.startsAt ?? new Date();
     const variant = await tx.productVariant.findUnique({
       where: { id: input.variantId },
-      include: { product: { include: { category: true } } },
+      // The rate history comes back with the variant — one round trip, and the
+      // rows are narrowed to those that could be in effect at the sale.
+      include: { product: { include: { category: true } }, meteredRates: { where: meteredRatesInEffect(startsAt) } },
     });
     if (!variant) throw new EntitlementRefused('variant_not_found', input.variantId);
     const facts: OfferFacts = {
@@ -210,7 +224,12 @@ export class GrantService {
     if (!assignable(input.source, facts)) throw new EntitlementRefused('variant_not_assignable', input.variantId);
 
     const { token, hash } = newSubscriptionToken();
-    const shape = grantFromVariant({ source: input.source, startsAt: input.startsAt ?? new Date() }, variant);
+    const shape = grantFromVariant({ source: input.source, startsAt }, variant);
+    // A metered variant with no rate in effect is not sold — never at zero by
+    // default, exactly as a variant with no price is not for sale (ADR-0073).
+    if (variant.billingMode === VariantBillingMode.metered && shape.meteredRate === null) {
+      throw new EntitlementRefused('metered_rate_missing', input.variantId);
+    }
     try {
       const grant = await tx.grant.create({
         data: {

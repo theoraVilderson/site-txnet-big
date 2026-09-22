@@ -3,13 +3,13 @@ id: entitlement
 layer: domain
 status: draft
 version: 1
-updated: 2026-09-14
+updated: 2026-09-22
 ---
 
 # Contract — entitlement
 
-**Storage built (F-026-b); Grant core built (F-026-e) —
-`entitlement/grant.ts`, proved by `grant.spec.ts`.** In-process only. Spec:
+**Storage built (F-026-b); Grant core built (F-026-e), metered rate locked at
+issue (F-027-p) — `entitlement/grant.ts`, proved by `grant.spec.ts`.** In-process only. Spec:
 catalog §4.4–4.6 (`tools/spec.py --section 4.4`). Decision: ADR-0049.
 
 ## TL;DR
@@ -23,7 +23,7 @@ and changes its quota only through `quota_adjustment` rows.
 
 | Operation | Input | Output | Sync/Async | Errors (`EntitlementRefused.reason`) |
 |---|---|---|---|---|
-| `issue(tx, …)` | userId, variantId, source, sourceReferenceId?, startsAt?, issuedByAdminId? | `{grant, token}` — the token once; a repeat for the same cause answers the first Grant and `token: null` | inside the caller's transaction | `variant_not_found`, `variant_not_assignable`, `already_issued` (a concurrent issue won: retry) |
+| `issue(tx, …)` | userId, variantId, source, sourceReferenceId?, startsAt?, issuedByAdminId? | `{grant, token}` — the token once; a repeat for the same cause answers the first Grant and `token: null` | inside the caller's transaction | `variant_not_found`, `variant_not_assignable`, `metered_rate_missing`, `already_issued` (a concurrent issue won: retry) |
 | `transition(tx, id, to, reason?)` | grantId, status | Grant; staying put is a no-op | caller's transaction | `grant_not_found`, `illegal_transition` |
 | `activeGrant` / `hasActiveGrant` | userId, featureKey, at? | the longest-lasting active Grant / boolean | own tenant transaction | — |
 | `adjustQuota(tx, …)` | grantId, metric, delta, source, capPercent?, expiresAt?, reason? | QuotaAdjustment | caller's transaction | `grant_not_found`, `grant_not_active` |
@@ -35,6 +35,15 @@ Issue rules: a `purchase` needs a `public` or `unlisted` variant; any other
 source may assign any live variant, `admin_only` included (F-506). A purchase
 starts `pending`; every other source `active`. Quotas, feature keys, billing
 mode and `endsAt = startsAt + durationDays` are copied at issue.
+
+A **metered** variant also has its rate copied: the `catalog.metered_rate` row
+in effect at `startsAt` is locked onto `Grant.meteredRate` (F-027-p, ADR-0073),
+and every block bought against that Grant is priced from the Grant's own
+column — a catalog edit tomorrow never reprices what was sold. A metered
+variant with **no** rate in effect is refused (`metered_rate_missing`), never
+issued at zero, exactly as a variant with no price is not for sale. Nothing is
+copied for any other billing mode: `grant_metered_rate_is_metered` refuses a
+rate on a prepaid Grant.
 
 In-process calls from `billing-service` modules (ADR-0049); HTTP routes are
 added only when a row needs them. Two do: `rotateTokenForUser` over `POST
@@ -50,7 +59,7 @@ None yet.
 
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
-| catalog | a variant's quotas, `durationDays`, `billingMode`, its product's feature keys | cannot issue |
+| catalog | a variant's quotas, `durationDays`, `billingMode`, its product's feature keys, and — when metered — its `metered_rate` in effect at the sale (F-027-p) | cannot issue |
 | identity | the user a Grant is issued to | cannot issue |
 | tenant | the ambient tenant (ADR-0024) | refuses |
 

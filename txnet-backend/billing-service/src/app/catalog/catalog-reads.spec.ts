@@ -15,7 +15,7 @@
  */
 import { Prisma, VariantVisibility } from '@prisma/client';
 
-import { isListed, isSellableBySku, pickBySku, priceAt, type PriceRow } from './catalog-reads';
+import { isListed, isSellableBySku, meteredRateAt, pickBySku, priceAt, type MeteredRateRow, type PriceRow } from './catalog-reads';
 
 const d = (v: string) => new Prisma.Decimal(v);
 const at = (iso: string) => new Date(iso);
@@ -59,6 +59,26 @@ describe('priceAt', () => {
 
   it('does not depend on the order the rows arrive in', () => {
     expect(priceAt([...history].reverse(), at('2026-07-15T12:00:00Z'))?.id).toBe('p2');
+  });
+});
+
+describe('meteredRateAt', () => {
+  const rate = (id: string, r: string, effectiveFrom: string, isActive = true): MeteredRateRow => ({
+    id,
+    rate: d(r),
+    effectiveFrom: at(effectiveFrom),
+    isActive,
+  });
+  const history = [rate('r1', '0.40000000', '2026-01-01T00:00:00Z'), rate('r2', '0.25000000', '2026-06-01T00:00:00Z')];
+
+  it('answers the rate in effect at the instant, by the same rule a price is found', () => {
+    expect(meteredRateAt(history, at('2026-03-01T00:00:00Z'))?.id).toBe('r1');
+    expect(meteredRateAt(history, at('2026-06-01T00:00:00Z'))?.id).toBe('r2');
+  });
+
+  it('has no rate before the first row, and skips a switched-off one', () => {
+    expect(meteredRateAt(history, at('2025-12-31T23:59:59Z'))).toBeNull();
+    expect(meteredRateAt([rate('r1', '0.40000000', '2026-01-01T00:00:00Z', false)], at('2026-03-01T00:00:00Z'))).toBeNull();
   });
 });
 

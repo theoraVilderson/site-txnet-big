@@ -11,19 +11,33 @@ import { Prisma, VariantVisibility } from '@prisma/client';
 
 export type PriceRow = { id: string; amount: Prisma.Decimal; effectiveFrom: Date; isActive: boolean };
 
+/** A row of an append-only history: it takes effect at an instant and can be switched off. */
+export type EffectiveRow = { effectiveFrom: Date; isActive: boolean };
+
 /**
- * The price in effect at `at` (F-0602): the newest **active** row whose
- * `effectiveFrom` is at or before it. A row written later never reaches back,
- * so an invoice is recomputed at the price it was issued at. On a tie the
- * first row wins — the query orders by `createdAt` too.
+ * The row in effect at `at`: the newest **active** one whose `effectiveFrom` is
+ * at or before it. A row written later never reaches back. On a tie the first
+ * row wins — the query orders by `createdAt` too.
+ *
+ * Every append-only history in the catalog is read this way — a price (F-0602)
+ * and a metered rate (F-027-g, ADR-0073) — so the rule is spelled once: two
+ * copies of it drift, and the symptom is one of them repricing what was sold.
  */
-export function priceAt<T extends PriceRow>(prices: readonly T[], at: Date): T | null {
+export function effectiveAt<T extends EffectiveRow>(rows: readonly T[], at: Date): T | null {
   let best: T | null = null;
-  for (const p of prices) {
-    if (!p.isActive || p.effectiveFrom.getTime() > at.getTime()) continue;
-    if (!best || p.effectiveFrom.getTime() > best.effectiveFrom.getTime()) best = p;
+  for (const r of rows) {
+    if (!r.isActive || r.effectiveFrom.getTime() > at.getTime()) continue;
+    if (!best || r.effectiveFrom.getTime() > best.effectiveFrom.getTime()) best = r;
   }
   return best;
+}
+
+/**
+ * The price in effect at `at` (F-0602) — {@link effectiveAt} over a variant's
+ * price history, so an invoice is recomputed at the price it was issued at.
+ */
+export function priceAt<T extends PriceRow>(prices: readonly T[], at: Date): T | null {
+  return effectiveAt(prices, at);
 }
 
 export type OfferFacts = {
