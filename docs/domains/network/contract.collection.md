@@ -2,8 +2,8 @@
 id: network
 layer: domain
 status: draft
-version: 5
-updated: 2026-09-21
+version: 9
+updated: 2026-09-22
 ---
 
 # Contract — network / the collection loop
@@ -21,6 +21,12 @@ touches it (F-027-l, ADR-0074).
 `DefaultPanelTimeout` 10s each, because the budget is per panel and one that
 stalls must not spend another's turn. A panel that fails is a row in the
 `PassReport`, never the end of the pass.
+
+One minute is right for almost every user and far too slow for one: a gigabit
+line empties its headroom inside an interval. `internal/hot` reads that few
+sooner, on its own interval and through this same normaliser, sink and cursors
+— `contract.hot-loop.md` (F-027-u). Nothing below this line can tell the two
+passes apart.
 
 One `Normaliser` holds all three arithmetics, and past it nothing knows which
 family a byte came from (ADR-0074):
