@@ -34,7 +34,9 @@ export type EntitlementRejection =
   | 'illegal_transition'
   | 'grant_not_active'
   /** A `metered` variant with no rate in effect at the sale: nothing would price its bytes (F-027-p). */
-  | 'metered_rate_missing';
+  | 'metered_rate_missing'
+  /** The rate in effect is zero: a block priced at nothing cannot be bought, so the Grant would stall (F-027-al). */
+  | 'metered_rate_not_positive';
 
 export class EntitlementRefused extends Error {
   constructor(
@@ -229,6 +231,13 @@ export class GrantService {
     // default, exactly as a variant with no price is not for sale (ADR-0073).
     if (variant.billingMode === VariantBillingMode.metered && shape.meteredRate === null) {
       throw new EntitlementRefused('metered_rate_missing', input.variantId);
+    }
+    // Nor at a rate of zero. `sizeBlock` refuses one too (`rate_not_priceable`,
+    // F-027-q), but there it is a user stalled mid-session far from whoever
+    // priced the variant; the sale is the last point the two are one act
+    // (F-027-al). `metered_rate_is_positive` holds the same line in the column.
+    if (shape.meteredRate !== null && shape.meteredRate.lte(0)) {
+      throw new EntitlementRefused('metered_rate_not_positive', input.variantId);
     }
     try {
       const grant = await tx.grant.create({

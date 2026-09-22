@@ -76,7 +76,18 @@ describe('catalog.MeteredRate — a metered variant carries its own price histor
     // per GiB, far coarser than real pricing needs. The repo already stores
     // rates at (18, 8) — `tenant_usage_meter.unitPrice`, `currency_exchange_rate`.
     expect(rate).toMatch(/^\s*rate\s+Decimal\s+@db\.Decimal\(18, 8\)/m);
-    expect(sql).toContain('metered_rate_not_negative');
+  });
+
+  it('refuses a rate of zero in the column, not only at the first byte (F-027-al)', () => {
+    // A metered variant priced at nothing is not a free variant: nothing
+    // downstream can buy a block from it, so `sizeBlock` refuses it
+    // (`rate_not_priceable`) far from whoever typed the price. The CHECK is
+    // the only place the two are the same act. Free metered service is a
+    // quota with no rate, not a rate of zero.
+    expect(sql).toContain('metered_rate_is_positive');
+    expect(sql).toMatch(/CHECK \("rate" > 0\)/);
+    // The `>= 0` it replaces is dropped, not left beside it.
+    expect(sql).toMatch(/DROP CONSTRAINT[\s\S]{0,60}metered_rate_not_negative/);
   });
 
   it('is history: never deleted, and only isActive changes on it', () => {

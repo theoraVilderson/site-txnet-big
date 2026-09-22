@@ -16,7 +16,7 @@ Source of truth: `txnet-backend/prisma/domains/catalog.prisma` (Postgres schema
 | product | marketing object: `key`, `nameKey`/`descriptionKey`, `fulfilmentKind`, `featureKeys[]`, `defaultQuotas` | `tenantId` nullable, shared-read | permanent (`isActive`) |
 | product_variant | the SKU: `quotas` (JSONB by metric), `durationDays` (null = permanent), `billingMode`, `visibility`, `panelGroupId`, `qualityTier` | `tenantId` = its product's, shared-read | permanent (`isActive`) |
 | price | a variant's USD `amount` from `effectiveFrom`; append-only | `tenantId` = its variant's, shared-read | permanent |
-| metered_rate | a variant's USD `rate` per 2^30 bytes from `effectiveFrom`, `Decimal(18,8)`; append-only (F-027-g) | `tenantId` = its variant's, shared-read | permanent |
+| metered_rate | a variant's USD `rate` per 2^30 bytes from `effectiveFrom`, `Decimal(18,8)`, strictly positive; append-only (F-027-g) | `tenantId` = its variant's, shared-read | permanent |
 
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |
@@ -37,5 +37,7 @@ once at the moment of sale — never at consumption time (ADR-0073).
 ## Migration notes
 
 `20260921000700` added `metered_rate` (additive: one table, nothing reads it
-until F-027-p). `20260914001500` dropped `service_plan` / `service_plan_promotion` and
+until F-027-p); `20260922000100` tightened its CHECK from `>= 0` to `> 0`
+(F-027-al) — free metered service is a quota with no rate, not a rate of zero,
+which no block purchaser can buy from. `20260914001500` dropped `service_plan` / `service_plan_promotion` and
 `product_category.name`, and refuses to run over plan, scope or config rows.

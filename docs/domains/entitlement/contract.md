@@ -23,7 +23,7 @@ and changes its quota only through `quota_adjustment` rows.
 
 | Operation | Input | Output | Sync/Async | Errors (`EntitlementRefused.reason`) |
 |---|---|---|---|---|
-| `issue(tx, …)` | userId, variantId, source, sourceReferenceId?, startsAt?, issuedByAdminId? | `{grant, token}` — the token once; a repeat for the same cause answers the first Grant and `token: null` | inside the caller's transaction | `variant_not_found`, `variant_not_assignable`, `metered_rate_missing`, `already_issued` (a concurrent issue won: retry) |
+| `issue(tx, …)` | userId, variantId, source, sourceReferenceId?, startsAt?, issuedByAdminId? | `{grant, token}` — the token once; a repeat for the same cause answers the first Grant and `token: null` | inside the caller's transaction | `variant_not_found`, `variant_not_assignable`, `metered_rate_missing`, `metered_rate_not_positive`, `already_issued` (a concurrent issue won: retry) |
 | `transition(tx, id, to, reason?)` | grantId, status | Grant; staying put is a no-op | caller's transaction | `grant_not_found`, `illegal_transition` |
 | `activeGrant` / `hasActiveGrant` | userId, featureKey, at? | the longest-lasting active Grant / boolean | own tenant transaction | — |
 | `adjustQuota(tx, …)` | grantId, metric, delta, source, capPercent?, expiresAt?, reason? | QuotaAdjustment | caller's transaction | `grant_not_found`, `grant_not_active` |
@@ -40,8 +40,11 @@ A **metered** variant also has its rate copied: the `catalog.metered_rate` row
 in effect at `startsAt` is locked onto `Grant.meteredRate` (F-027-p, ADR-0073),
 and every block bought against that Grant is priced from the Grant's own
 column — a catalog edit tomorrow never reprices what was sold. A metered
-variant with **no** rate in effect is refused (`metered_rate_missing`), never
-issued at zero, exactly as a variant with no price is not for sale. Nothing is
+variant with **no** rate in effect is refused (`metered_rate_missing`), and one
+whose rate in effect is **zero** with `metered_rate_not_positive` (F-027-al) —
+a block priced at nothing cannot be bought, so such a Grant stalls at its first
+block rather than serving free traffic; the catalog column refuses the same
+value (`metered_rate_is_positive`). Nothing is
 copied for any other billing mode: `grant_metered_rate_is_metered` refuses a
 rate on a prepaid Grant.
 

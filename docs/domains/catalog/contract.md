@@ -96,7 +96,10 @@ USD per 2^30 bytes at `Decimal(18,8)`, append-only under
 `metered_rate_is_history` exactly as a price is, and read **once, at the moment
 of sale** — `GrantService.issue` locks it onto `Grant.meteredRate` (F-027-p), so
 a rate written tomorrow never reprices bytes already sold. The unit is
-`METERED_RATE_UNIT_BYTES` (shared-core), spelled nowhere else.
+`METERED_RATE_UNIT_BYTES` (shared-core), spelled nowhere else. A rate is
+strictly positive (`metered_rate_is_positive`, F-027-al): unlike a price, zero
+is not "free" here — no block can be bought at nothing, so the Grant stalls.
+Free metered service is a quota with no rate.
 
 ## Provides (intended)
 

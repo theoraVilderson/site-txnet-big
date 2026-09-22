@@ -173,7 +173,10 @@ model MeteredRate {
   tenantId         String?  @db.Uuid
   variantId        String   @db.Uuid
   /// Money per `METERED_RATE_UNIT_BYTES` (shared-core). Bytes are the only
-  /// stored unit; "GB" is a rendering concern.
+  /// stored unit; "GB" is a rendering concern. Strictly positive
+  /// (`metered_rate_is_positive`, F-027-al): a block priced at zero cents is
+  /// one nobody can buy, so a rate of zero stalls the user rather than
+  /// serving free traffic. Free metered service is a quota with no rate.
   rate             Decimal  @db.Decimal(18, 8)
   effectiveFrom    DateTime
   isActive         Boolean  @default(true)

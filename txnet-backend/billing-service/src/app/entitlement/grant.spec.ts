@@ -314,4 +314,15 @@ describe('GrantService.issue locks the metered rate (F-027-p, ADR-0073)', () => 
     await expect(issue(tx, at('2026-09-01T10:00:00Z'))).rejects.toMatchObject({ reason: 'metered_rate_missing' });
     expect(grants).toHaveLength(0);
   });
+
+  it('refuses a rate of zero at issue, where the price was typed, not at the first byte (F-027-al)', async () => {
+    // `sizeBlock` already refuses a zero rate (`rate_not_priceable`), but that
+    // is a user stalled mid-session, hours and one service away from whoever
+    // priced the variant at nothing. The Grant is the last place the two are
+    // still in the same transaction.
+    const { tx, grants } = fakeTx(meteredVariant([{ effectiveFrom: '2026-01-01T00:00:00Z', rate: '0.00000000' }]));
+
+    await expect(issue(tx, at('2026-09-01T10:00:00Z'))).rejects.toMatchObject({ reason: 'metered_rate_not_positive' });
+    expect(grants).toHaveLength(0);
+  });
 });

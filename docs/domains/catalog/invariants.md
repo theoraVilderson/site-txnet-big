@@ -19,7 +19,7 @@ Held by the database since F-026-a; proved by
 | 4 | A tenant reads the platform's rows and its own, and writes only its own | RLS shared-read policy | a reseller edits the platform's catalog |
 | 5 | Keys and SKUs are unique inside a tenant | partial unique indexes | a direct link buys the wrong variant |
 | 6 | Nothing referenced is hard-deleted: a variant may back a Grant or a coupon scope | FKs `ON DELETE RESTRICT` | receipts and Grants pointing at nothing |
-| 7 | A metered rate is USD `Decimal(18,8)` and never negative (ADR-0073) | column type, `metered_rate_not_negative` | 1c-per-GiB pricing steps, or a byte that pays the user |
+| 7 | A metered rate is USD `Decimal(18,8)` and strictly positive (ADR-0073, F-027-al) | column type, `metered_rate_is_positive` | 1c-per-GiB pricing steps; a byte that pays the user; or a rate of zero, which stalls its Grant at the first block instead of serving free traffic |
 
 ## How to test
 
