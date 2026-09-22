@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 7
+version: 8
 updated: 2026-09-22
 ---
 
@@ -50,7 +50,7 @@ catalog.
 
 It also never writes to a panel. `allocatedCeilingBytes` is where it stops;
 `SetClientDataLimit`, `appliedCeilingBytes`, and the rewrite in the pass that
-detects a counter reset are the convergence loop's (F-027-t).
+detects a counter reset are the convergence loop's, below.
 
 ## Three passes, in one order
 
@@ -84,8 +84,9 @@ config with no counter row has served nothing.
 
 The panel's own counter is a different number: it starts at zero after a backup
 restore, and turning a lifetime allowance into the figure that counter needs
-today is F-027-t's, in the same pass that sees the reset. ADR-0072 names that
-rewrite as the thing without which a reset button is a way around the decision.
+today is the convergence loop's, in the same pass that sees the reset. ADR-0072
+names that rewrite as the thing without which a reset button is a way around
+the decision.
 
 ## The smaller cap wins
 
@@ -104,3 +105,69 @@ Only configs that can carry traffic: `status = active` with
 `desiredEnabled = true`. A disabled or purged config holding a share would be
 bytes the bag has spent that no panel can serve, and the user would read it as
 a bag emptying while they are offline.
+
+## The convergence loop — carrying the number to the panel (F-027-t)
+
+`network-service/internal/converge` is the other half: the allocator's number
+is ours until a panel is enforcing it, and the panel is the enforcement point
+that keeps working while this service is down. It runs at the end of each
+panel's turn in the collection pass (`collect.PassConverger`), costs **one**
+`ListClients` for the whole population, and writes `SetClientDataLimit` only to
+the configs that disagree.
+
+**`applied` is what the panel confirmed, never what we sent.** Families take a
+ceiling late, so a write that returned `nil` is not a ceiling being enforced,
+and a believed ceiling is worse than a missing one — the traffic past it is
+served with nothing red anywhere. `appliedCeilingBytes` is therefore read back
+off `ListClients` and set with `ceilingAppliedAt` in the same write
+(invariant 14). A panel reporting **zero** confirms nothing: zero read means
+*no limit* there, so it is never recorded as an applied ceiling.
+
+### From a lifetime allowance to the figure that counter needs today
+
+An allocation is counted in lifetime bytes; a panel enforces against its own
+counter, which a restore or an operator can zero. So the panel figure is
+
+```
+offset  = max(0, lifetime bytes served - what the counter reads now)
+ceiling = max(0, allocatedCeilingBytes - offset)
+```
+
+and "what the counter reads now" is the raw figure under `cumulative`, and zero
+under `reset_on_read` (the read spent it) and `session` (the panel counts per
+session, so there is nothing to subtract) — the conservative reading in both.
+
+**The translation only ever lowers** — that is what the two `max`es are for,
+and it is why `Σ ceilings ≤ purchasedBytes` survives it. Bytes the far end's
+counter holds that we never billed — a baseline adopted when we started
+watching, a figure the plausibility cap quarantined — get **no** headroom.
+Covering them would serve traffic against nobody's purchase; refusing to is a
+user who stalls, which is ADR-0072's accepted worst failure in every direction.
+
+### What a write says about itself
+
+Every write is a `Finding` with a reason, because each is a different thing to
+do about it: `counter_reset` (this pass saw the counter go backward, which is
+the reason the loop exists), `above_allocation` (ADR-0072 rule 2 — a money
+hole, overwritten immediately and past the anti-flap stop when F-027-ab lands),
+`below_allocation` (their number only shortens the user's service: rewritten,
+and reported rather than treated as an emergency), `no_limit_on_panel`,
+`allowance_exhausted` and `write_refused`.
+
+The reset is read off the cursor's own reset mark and not off the delta stream:
+a counter zeroed between two reads publishes **no delta at all** — the
+post-reset figure can be zero — and that is exactly the case the rewrite exists
+for.
+
+`allowance_exhausted` is a ceiling of zero, and it is rewritten every pass
+rather than converged, because a panel cannot confirm zero back. Cutting the
+user off for real is the Grant suspension (F-027-x) and `desiredEnabled`
+(F-027-z), not this number.
+
+### What it will not do
+
+It writes one number and reads it back. Sizing a share is the allocator's,
+creating or enabling a client is F-027-z's, deciding which config a remote
+client belongs to is F-027-aa's, and the anti-flap stop that bounds repair
+attempts is F-027-ab's. A config whose `remoteId` names no client on the panel
+is skipped here and gets its verdict there.

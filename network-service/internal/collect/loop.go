@@ -41,12 +41,26 @@ type Sink interface {
 	Publish(ctx context.Context, res Result) error
 }
 
+// PassConverger carries a panel's ceilings on the same pass that read its
+// counters — `converge.Ceilings` (F-027-t). It is an interface here, and the
+// loop calls it after the cursors have moved, because the reset it has to act
+// on is the one this pass just detected: a ceiling left over a counter
+// somebody zeroed is free traffic until the next interval, and ADR-0072 has no
+// room for an interval of it.
+type PassConverger interface {
+	Converge(ctx context.Context, p Panel, res Result) error
+}
+
 // Loop is the bulk collection loop: every panel, once an interval, one request
 // each, with a bound on how many are in flight and a deadline on each.
 type Loop struct {
 	Source  Source
 	Sink    Sink
 	Cursors Cursors
+	// Ceilings converges this panel's ceilings at the end of its turn. Nil
+	// runs the loop as a pure reader, which is what every test of the
+	// normaliser wants.
+	Ceilings PassConverger
 
 	// Interval is the gap between passes (DefaultInterval).
 	Interval time.Duration
@@ -166,6 +180,16 @@ func (l *Loop) collect(ctx context.Context, p Panel) (Result, string, error) {
 		// republishes it. That is the redelivery `usage_delta_seen` absorbs
 		// (F-027-n), which is the safe direction.
 		return Result{}, "Apply", err
+	}
+	if l.Ceilings != nil {
+		if err := l.Ceilings.Converge(ctx, p, res); err != nil {
+			// The bytes are published and the cursors have moved, so this is
+			// not a failed pass: it is a panel whose ceilings are still where
+			// they were. Failing the pass here would re-read and republish
+			// bytes that were already billed, to fix a number that the next
+			// pass will try again anyway.
+			l.log().Error("ceiling convergence failed", "panel", p.ID, "error", err)
+		}
 	}
 	return res, "", nil
 }
