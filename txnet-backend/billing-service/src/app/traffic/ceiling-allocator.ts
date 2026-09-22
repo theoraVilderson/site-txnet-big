@@ -1,0 +1,230 @@
+import { Injectable } from '@nestjs/common';
+import { ConfigStatus, Prisma } from '@prisma/client';
+import { tenantTransaction } from '@txnet-backend/shared-core';
+
+import { PrismaService } from '../prisma/prisma.service';
+
+/**
+ * The ceiling allocator (F-027-s; ADR-0072 rule 1).
+ *
+ * **`Σ ceilings ≤ purchasedBytes`, across every config of a Grant, always.**
+ * One bag spread over five panels needs one ceiling split five ways, not five
+ * full ceilings — five would serve `5 x purchasedBytes` against one purchase,
+ * and each one would look correct on the panel it sits on. That is the hole
+ * ADR-0072 closes, so the split is an invariant with a property test
+ * (`ceiling-allocator.spec.ts`, entitlement invariant 8) and not a tuning.
+ *
+ * It decides; it never buys. `BlockPurchaseService` advances `purchasedBytes`
+ * and this hands out what that bought — the bound and the split move in one
+ * direction only, so a bug here can strand bytes but cannot invent them. The
+ * horizon that decides *how much* to buy is F-027-u's, and it calls the
+ * purchase and this rebalance in one transaction.
+ *
+ * It writes `allocatedCeilingBytes` and nothing else. Getting that number onto
+ * the panel — `SetClientDataLimit`, `appliedCeilingBytes`, and the rewrite in
+ * the pass that detects a counter reset — is the convergence loop's, F-027-t.
+ */
+
+/**
+ * The unit of account is **lifetime bytes for that config**: what the config
+ * has carried since it existed, across panel resets
+ * (`ConfigCounterState.lifetime*`), which is the basis `purchasedBytes` is
+ * counted on. The panel's own counter is not: it starts at zero after a
+ * restore, and translating a lifetime allowance into the figure that panel's
+ * counter needs today is F-027-t's job, in the pass that sees the reset.
+ */
+export type ConfigDemand = {
+  configId: string;
+  /** Lifetime bytes already served on this config. A ceiling is never lowered under it. */
+  servedBytes: bigint;
+  /** `billing.SubAccount.dataCapBytes` (F-608), or null where the config carries no active sub-account. */
+  capBytes: bigint | null;
+};
+
+export type AllocationInput = {
+  /** The bag: what this Grant has bought and not given back. The bound on the whole allocation. */
+  purchasedBytes: bigint;
+  /** Headroom every config keeps above what it has served, before the hot one takes the rest. */
+  floorBytes: bigint;
+  /** The config the hot loop says is consuming (F-027-u). It is first in line for everything. */
+  hotConfigId?: string | null;
+  configs: ConfigDemand[];
+};
+
+export type ConfigCeiling = {
+  configId: string;
+  ceilingBytes: bigint;
+  /** The sub-account was the smaller authority here — the share was cut to its cap. */
+  cappedBySubAccount: boolean;
+};
+
+export type Allocation = {
+  ceilings: ConfigCeiling[];
+  /** Bought, and no config can carry it: every one of them is capped. F-027-u's signal to stop buying. */
+  unallocatedBytes: bigint;
+};
+
+/**
+ * 100 MiB — the headroom a config keeps while another one is hot, so a user's
+ * phone still connects while their desktop runs. It is a floor on the *share*,
+ * never on the purchase: buying is sized by the horizon (F-027-u), and this
+ * hands out only what is already bought.
+ */
+export const DEFAULT_CONFIG_FLOOR_BYTES = BigInt(100 * 1024 * 1024);
+
+/** Why nothing was allocated. Nothing was written. */
+export type CeilingAllocationRejection = 'grant_not_found';
+
+export class CeilingAllocationRefused extends Error {
+  constructor(
+    readonly reason: CeilingAllocationRejection,
+    detail = '',
+  ) {
+    super(`ceiling allocation refused: ${reason}${detail ? ` (${detail})` : ''}`);
+    this.name = 'CeilingAllocationRefused';
+  }
+}
+
+const min = (a: bigint, b: bigint) => (a < b ? a : b);
+
+/** A config's own hard ceiling: its sub-account cap, or nothing but the bag. */
+const capOf = (config: ConfigDemand, bag: bigint) => (config.capBytes === null ? bag : min(config.capBytes, bag));
+
+/**
+ * Splits `purchasedBytes` across a Grant's configs.
+ *
+ * Three passes over the configs, in one order — the hot config first, then the
+ * heaviest, then by id so the result is decided by the input alone:
+ *
+ * 1. **what it has already served.** A ceiling under that is a byte carried
+ *    with no ceiling covering it, which is the guarantee failing after the
+ *    fact rather than a byte saved.
+ * 2. **the floor above it**, so no config is starved to zero headroom while
+ *    another one runs.
+ * 3. **everything left**, to the hot config first. That is the concentration:
+ *    the config actually consuming gets the bag, and the others keep a floor.
+ *
+ * Each pass hands out what is left and no more, so `Σ ceilings ≤ purchasedBytes`
+ * holds by construction rather than by a check at the end. A bag too small for
+ * pass 1 is an overrun the holds queue settles (ADR-0074): the ceilings stop at
+ * the bag, in the order above, and the panels cut the rest off themselves.
+ *
+ * `min(share, sub-account cap)` is applied inside every pass, not over the
+ * result — the smaller cap wins (F-608), and the bytes it refuses stay in the
+ * bag for the next config rather than being stranded on a config that cannot
+ * carry them.
+ */
+export function allocateCeilings(input: AllocationInput): Allocation {
+  const bag = input.purchasedBytes > BigInt(0) ? input.purchasedBytes : BigInt(0);
+  const floorBytes = input.floorBytes > BigInt(0) ? input.floorBytes : BigInt(0);
+
+  const order = [...input.configs].sort((a, b) => {
+    if (a.configId === input.hotConfigId) return -1;
+    if (b.configId === input.hotConfigId) return 1;
+    if (a.servedBytes !== b.servedBytes) return a.servedBytes > b.servedBytes ? -1 : 1;
+    return a.configId < b.configId ? -1 : 1;
+  });
+
+  const given = new Map(order.map((config) => [config.configId, BigInt(0)]));
+  let remaining = bag;
+
+  /** One pass: raise each config towards `target`, out of what is left. */
+  const pass = (target: (config: ConfigDemand) => bigint) => {
+    for (const config of order) {
+      const held = given.get(config.configId) as bigint;
+      const want = min(target(config), capOf(config, bag)) - held;
+      if (want <= BigInt(0)) continue;
+      const grant = min(want, remaining);
+      given.set(config.configId, held + grant);
+      remaining -= grant;
+    }
+  };
+
+  pass((config) => config.servedBytes);
+  pass((config) => config.servedBytes + floorBytes);
+  pass(() => bag);
+
+  return {
+    // In the order they were decided in, hot config first: the same input
+    // gives the same allocation, row for row, whatever order the rows arrived.
+    ceilings: order.map((config) => {
+      const ceilingBytes = given.get(config.configId) as bigint;
+      return { configId: config.configId, ceilingBytes, cappedBySubAccount: config.capBytes !== null && ceilingBytes === config.capBytes };
+    }),
+    unallocatedBytes: remaining,
+  };
+}
+
+export type RebalanceGrant = {
+  grantId: string;
+  /** The config the hot loop says is consuming (F-027-u); null on a bulk pass, where nothing is hotter than the rest. */
+  hotConfigId?: string | null;
+  /** Defaults to `DEFAULT_CONFIG_FLOOR_BYTES`. */
+  floorBytes?: bigint;
+};
+
+export type RebalancedGrant = Allocation & {
+  grantId: string;
+  /** How many configs' `allocatedCeilingBytes` actually moved — the convergence loop's work (F-027-t). */
+  written: number;
+};
+
+@Injectable()
+export class CeilingAllocatorService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  /** One rebalance in a transaction of its own, for a caller with no other work to commit with it. */
+  rebalanceForGrant(input: RebalanceGrant): Promise<RebalancedGrant> {
+    return tenantTransaction(this.prisma, (tx) => this.rebalance(tx, input));
+  }
+
+  /**
+   * Reads the Grant's bag and its configs, splits one across the other, and
+   * writes the shares that moved.
+   *
+   * It runs in the **caller's** transaction, as the purchase does: F-027-u buys
+   * the next block and rebalances in one, so there is no window where
+   * `purchasedBytes` has advanced and no ceiling covers it — nor one where a
+   * ceiling was written against money that failed to leave the wallet.
+   *
+   * Only configs that can carry traffic are in the split. A disabled or purged
+   * one holding a share would be bytes the bag has spent and no panel can
+   * serve, and the user would read it as a bag that empties while they are
+   * offline.
+   */
+  async rebalance(tx: Prisma.TransactionClient, input: RebalanceGrant): Promise<RebalancedGrant> {
+    const grant = await tx.grant.findUnique({ where: { id: input.grantId }, select: { id: true, purchasedBytes: true } });
+    if (!grant) throw new CeilingAllocationRefused('grant_not_found', input.grantId);
+
+    const configs = await tx.config.findMany({
+      where: { grantId: grant.id, status: ConfigStatus.active, desiredEnabled: true },
+      select: {
+        id: true,
+        allocatedCeilingBytes: true,
+        counterState: { select: { lifetimeUpBytes: true, lifetimeDownBytes: true } },
+        subAccount: { select: { dataCapBytes: true, isActive: true } },
+      },
+    });
+
+    const allocation = allocateCeilings({
+      purchasedBytes: grant.purchasedBytes,
+      floorBytes: input.floorBytes ?? DEFAULT_CONFIG_FLOOR_BYTES,
+      hotConfigId: input.hotConfigId ?? null,
+      configs: configs.map((config) => ({
+        configId: config.id,
+        // No counter row yet means no pass has read this config: it has served nothing.
+        servedBytes: config.counterState ? config.counterState.lifetimeUpBytes + config.counterState.lifetimeDownBytes : BigInt(0),
+        // A deactivated sub-account is not a cap of zero — it is no cap at all (F-608).
+        capBytes: config.subAccount?.isActive ? config.subAccount.dataCapBytes : null,
+      })),
+    });
+
+    const current = new Map(configs.map((config) => [config.id, config.allocatedCeilingBytes]));
+    const moved = allocation.ceilings.filter((ceiling) => current.get(ceiling.configId) !== ceiling.ceilingBytes);
+    for (const ceiling of moved) {
+      await tx.config.update({ where: { id: ceiling.configId }, data: { allocatedCeilingBytes: ceiling.ceilingBytes } });
+    }
+
+    return { ...allocation, grantId: grant.id, written: moved.length };
+  }
+}

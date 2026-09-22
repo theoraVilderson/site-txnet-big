@@ -2,8 +2,8 @@
 id: network
 layer: domain
 status: draft
-version: 5
-updated: 2026-09-21
+version: 7
+updated: 2026-09-22
 ---
 
 # Contract — network
@@ -181,6 +181,15 @@ becomes — are [contract.collection.md](contract.collection.md).
 `traffic_daily_aggregate` and drops the raw months it has covered. The
 ordering that makes that safe — the drop refuses a partition the aggregate
 does not match — is [contract.rollup.md](contract.rollup.md).
+
+## The ceiling allocator (F-027-s)
+
+`CeilingAllocatorService` in `billing-service` splits a Grant's
+`purchasedBytes` across the configs that draw on it and writes each share to
+`config.allocatedCeilingBytes` — `Σ ceilings ≤ purchasedBytes`, always
+(ADR-0072 rule 1). How a share is sized, which configs are in the split, and
+why the sub-account cap wins are [contract.ceiling.md](contract.ceiling.md).
+Applying that number to a panel is F-027-t's.
 
 ## Provides (intended)
 
