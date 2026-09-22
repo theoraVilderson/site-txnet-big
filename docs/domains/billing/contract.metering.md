@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 1
-updated: 2026-09-21
+updated: 2026-09-22
 ---
 
 # Metering — a collection pass becomes usage
@@ -14,8 +14,8 @@ a delta does, or before adding a second consumer of the same pipeline.
 
 **Usage is visible here and nobody pays.** `grant.consumedBytes` is the
 measured cursor; `billedBytes` is the money one and belongs to the block
-purchaser (F-027-q, `entitlement/data-model.md`). Nothing in this process reads
-a wallet, a price or a rate.
+purchaser (F-027-q, [contract.traffic-block.md](contract.traffic-block.md)).
+Nothing in this process reads a wallet, a price or a rate.
 
 ## The wire
 
