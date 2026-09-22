@@ -12,6 +12,7 @@ import (
 	"network-service/internal/collect"
 	"network-service/internal/driver"
 	"network-service/internal/driver/fake"
+	"network-service/internal/panelstate"
 )
 
 const (
@@ -593,4 +594,196 @@ type gatedDriver struct {
 func (g *gatedDriver) GetUsage(ctx context.Context) ([]driver.ClientUsage, error) {
 	g.enter()
 	return g.Driver.GetUsage(ctx)
+}
+
+// ---- the request budget the panel row declares (F-027-v) -------------------
+
+// `driver.Pace` holds the budget and shares the flight; what this row adds is
+// the wiring — the figure comes off the panel row rather than a constant in
+// the loop.
+func TestPacedHoldsTheBudgetThePanelRowDeclares(t *testing.T) {
+	p := fake.New(fake.Config{CounterSemantics: driver.CounterCumulative})
+	p.Given("c1")
+	panel := collect.Paced(collect.Panel{
+		ID: "panel-1", CounterSemantics: driver.CounterCumulative, Transport: driver.TransportPull,
+		MaxRequestsPerMinute: 2, Driver: p,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	var served int
+	for i := 0; i < 3; i++ {
+		if _, err := panel.Driver.ListClients(ctx); err != nil {
+			break
+		}
+		served++
+	}
+	if served != 2 {
+		t.Fatalf("served %d calls against a budget of 2", served)
+	}
+	if calls := p.TotalCalls(); calls != 2 {
+		t.Fatalf("the far end saw %d calls; the budget is what the row declares", calls)
+	}
+}
+
+// Invariant 12 CHECKs the column positive, so a zero here is the constraint
+// having been bypassed — and the two readings of it, "ask without limit" and
+// "never ask again", are both worse when discovered later.
+func TestPacedRefusesAPanelRowWithNoBudget(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("a panel declaring no request budget was wired anyway")
+		}
+	}()
+	collect.Paced(collect.Panel{ID: "panel-1", MaxRequestsPerMinute: 0,
+		Driver: fake.New(fake.Config{CounterSemantics: driver.CounterCumulative})})
+}
+
+// ---- the observed rate (F-027-v) -------------------------------------------
+
+// The rate is `config.observedRateBps`: what the hot loop judges membership on
+// and what `horizon.ts` sizes the next block from. It is measured over the gap
+// since this counter was last read, because that is the only window a rate
+// means anything over.
+func TestAPassRecordsTheRateItMeasured(t *testing.T) {
+	r := newRig(t, driver.CounterCumulative, "c1")
+	rates := &rateLog{}
+	r.loop.Rates = rates
+	now := time.Date(2026, 9, 22, 3, 0, 0, 0, time.UTC)
+	r.loop.Clock = func() time.Time { return now }
+
+	r.pass(t) // adoption: a cursor, no delta, and no window to measure over
+	if len(rates.samples) != 0 {
+		t.Fatalf("the adopting pass invented a rate: %+v", rates.samples)
+	}
+
+	now = now.Add(10 * time.Second)
+	r.panel.Serve("c1", 10*gb/8, 0) // 1.25 GB up in 10s = 1 Gbit/s
+	r.pass(t)
+
+	if len(rates.samples) != 1 {
+		t.Fatalf("samples = %+v, want one", rates.samples)
+	}
+	got := rates.samples[0]
+	if got.ConfigID != "config-c1" || got.PanelID != "panel-1" {
+		t.Fatalf("sample names %q on %q", got.ConfigID, got.PanelID)
+	}
+	if want := gb * 10 / 10; got.RateBps != want {
+		t.Fatalf("rate = %d bps, want %d", got.RateBps, want)
+	}
+}
+
+// A counter that went backward makes the window a lie: the bytes are real, but
+// what ran before the reset is not in them, so a rate read off it understates
+// the line — and an understated rate buys a block the user has already outrun.
+// The last rate we did measure is left standing instead.
+func TestARateIsNotReadOffAResetCounter(t *testing.T) {
+	r := newRig(t, driver.CounterCumulative, "c1")
+	rates := &rateLog{}
+	r.loop.Rates = rates
+	now := time.Date(2026, 9, 22, 3, 0, 0, 0, time.UTC)
+	r.loop.Clock = func() time.Time { return now }
+
+	r.panel.Serve("c1", 1000, 0)
+	r.pass(t)
+	now = now.Add(10 * time.Second)
+	r.panel.Serve("c1", 2000, 0)
+	r.pass(t)
+	measured := len(rates.samples)
+
+	now = now.Add(10 * time.Second)
+	r.panel.ZeroCounter("c1")
+	r.panel.Serve("c1", 300, 0)
+	r.pass(t)
+
+	if got := deltaFor(t, r.sink.last(t), "c1"); !got.AfterReset {
+		t.Fatalf("the rig did not produce a reset: %+v", got)
+	}
+	if len(rates.samples) != measured {
+		t.Fatalf("a rate was read off a reset counter: %+v", rates.samples[measured:])
+	}
+}
+
+// Recording a rate is not a condition of the pass: the bytes are published and
+// the cursors have moved by then, and failing here would re-read and republish
+// traffic that was already billed to fix a figure the next pass rewrites.
+func TestAFailedRateWriteDoesNotFailThePass(t *testing.T) {
+	r := newRig(t, driver.CounterCumulative, "c1")
+	r.loop.Rates = &rateLog{err: errors.New("no connection")}
+	now := time.Date(2026, 9, 22, 3, 0, 0, 0, time.UTC)
+	r.loop.Clock = func() time.Time { return now }
+
+	r.pass(t)
+	now = now.Add(10 * time.Second)
+	r.panel.Serve("c1", 1000, 0)
+	report := r.pass(t)
+
+	if len(report.Failed) != 0 {
+		t.Fatalf("failed = %+v, want none", report.Failed)
+	}
+	if report.Deltas != 1 {
+		t.Fatalf("deltas = %d, want the pass to have billed anyway", report.Deltas)
+	}
+}
+
+type rateLog struct {
+	mu      sync.Mutex
+	samples []collect.RateSample
+	err     error
+}
+
+func (r *rateLog) Record(_ context.Context, samples []collect.RateSample) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.err != nil {
+		return r.err
+	}
+	r.samples = append(r.samples, samples...)
+	return nil
+}
+
+// ---- a panel that is refusing us is not asked again (F-027-v) --------------
+
+// The other half of the distinction, at the loop: `down` is read on the next
+// pass and `throttled_or_blocked` is not read at all, because retrying through
+// a ban is what makes the ban permanent.
+func TestABlockedPanelIsNotAskedOnTheNextPass(t *testing.T) {
+	r := newRig(t, driver.CounterCumulative, "c1")
+	tracker := &panelstate.Tracker{Cooloff: time.Hour}
+	r.loop.Health = tracker
+
+	r.panel.FailNextCall(http.StatusForbidden)
+	report := r.pass(t)
+	if len(report.Failed) != 1 || !driver.IsBlocked(report.Failed[0].Err) {
+		t.Fatalf("failed = %+v, want one blocked panel", report.Failed)
+	}
+	if got := tracker.State("panel-1").State; got != panelstate.ThrottledOrBlocked {
+		t.Fatalf("panel state = %q", got)
+	}
+
+	before := r.panel.TotalCalls()
+	report = r.pass(t)
+	if r.panel.TotalCalls() != before {
+		t.Fatal("a blocked panel was called again on the next pass")
+	}
+	if len(report.Failed) != 1 || report.Failed[0].Op != collect.OpSkipped {
+		t.Fatalf("the skipped panel is not in the report: %+v", report.Failed)
+	}
+}
+
+func TestADownPanelIsAskedAgainOnTheNextPass(t *testing.T) {
+	r := newRig(t, driver.CounterCumulative, "c1")
+	r.loop.Health = &panelstate.Tracker{Cooloff: time.Hour}
+
+	r.panel.FailNextCall(http.StatusBadGateway)
+	r.pass(t)
+	before := r.panel.TotalCalls()
+	report := r.pass(t)
+
+	if r.panel.TotalCalls() <= before {
+		t.Fatal("a down panel was held off like a blocked one")
+	}
+	if len(report.Failed) != 0 {
+		t.Fatalf("failed = %+v, want the panel read", report.Failed)
+	}
 }

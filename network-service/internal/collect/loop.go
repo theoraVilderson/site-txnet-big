@@ -2,6 +2,7 @@ package collect
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -51,6 +52,24 @@ type PassConverger interface {
 	Converge(ctx context.Context, p Panel, res Result) error
 }
 
+// PanelHealth is told how each panel's turn went and says whether a panel may
+// be asked at all — `panelstate.Tracker` (F-027-v). It is an interface here so
+// the loop keeps no opinion about a `429`: the distinction between a panel
+// that is refusing us and one that is down belongs in one place, and this loop
+// is not it.
+type PanelHealth interface {
+	Ask(panelID string, at time.Time) bool
+	Observe(ctx context.Context, panelID string, err error, at time.Time) error
+}
+
+// OpSkipped is the `Op` of a panel that was not called at all, so a panel held
+// off by a ban is a row in the report rather than a silent absence.
+const OpSkipped = "skipped"
+
+// ErrRefusingToAsk is why. It is not a `driver.Fault`: nothing was asked, so
+// nothing about the far end was learned, and `Observe` leaves the state alone.
+var ErrRefusingToAsk = errors.New("panel is refusing us; not asked again until its cool-off has run")
+
 // Loop is the bulk collection loop: every panel, once an interval, one request
 // each, with a bound on how many are in flight and a deadline on each.
 type Loop struct {
@@ -61,6 +80,14 @@ type Loop struct {
 	// runs the loop as a pure reader, which is what every test of the
 	// normaliser wants.
 	Ceilings PassConverger
+	// Health gates and records each panel's turn (F-027-v). Nil asks every
+	// panel and records nothing, which is what every test of the normaliser
+	// wants.
+	Health PanelHealth
+	// Rates records the rate each delta was measured at —
+	// `config.observedRateBps`, which is what the hot loop judges membership
+	// on. Nil records nothing.
+	Rates Rates
 
 	// Interval is the gap between passes (DefaultInterval).
 	Interval time.Duration
@@ -160,10 +187,18 @@ func (l *Loop) Pass(ctx context.Context) (PassReport, error) {
 // move the cursor. The order is the invariant — a cursor moved before a
 // successful publish is bytes nobody will read again (invariant 18).
 func (l *Loop) collect(ctx context.Context, p Panel) (Result, string, error) {
+	if l.Health != nil && !l.Health.Ask(p.ID, l.now()) {
+		// A panel that answered `429` or `403` is not asked again inside its
+		// cool-off: retrying through a ban is what makes the ban permanent
+		// (F-027-v). A panel that is merely down is asked on every pass.
+		return Result{}, OpSkipped, ErrRefusingToAsk
+	}
+
 	panelCtx, cancel := context.WithTimeout(ctx, l.panelTimeout())
 	defer cancel()
 
 	readings, err := p.Driver.GetUsage(panelCtx)
+	l.observe(ctx, p.ID, err)
 	if err != nil {
 		// Nothing is billed from a reading that does not exist, and the
 		// cursor is untouched: the next pass reads the same bytes.
@@ -171,6 +206,9 @@ func (l *Loop) collect(ctx context.Context, p Panel) (Result, string, error) {
 	}
 
 	res := Normaliser{Panel: p, Cursors: l.Cursors, MinWindow: l.interval()}.Pass(readings, l.now())
+	// Measured before the cursors move: the window a rate means anything over
+	// starts at the previous reading, and after Apply that figure is gone.
+	rates := ObservedRates(l.Cursors, res)
 
 	if err := l.Sink.Publish(ctx, res); err != nil {
 		return Result{}, "Publish", err
@@ -181,6 +219,7 @@ func (l *Loop) collect(ctx context.Context, p Panel) (Result, string, error) {
 		// (F-027-n), which is the safe direction.
 		return Result{}, "Apply", err
 	}
+	l.record(ctx, rates)
 	if l.Ceilings != nil {
 		if err := l.Ceilings.Converge(ctx, p, res); err != nil {
 			// The bytes are published and the cursors have moved, so this is
@@ -192,6 +231,31 @@ func (l *Loop) collect(ctx context.Context, p Panel) (Result, string, error) {
 		}
 	}
 	return res, "", nil
+}
+
+// observe hands one panel's outcome to the health tracker. A tracker that
+// cannot write is logged and not failed: the pass is about bytes, and a panel
+// whose state did not persist is read again next time.
+func (l *Loop) observe(ctx context.Context, panelID string, err error) {
+	if l.Health == nil {
+		return
+	}
+	if obsErr := l.Health.Observe(ctx, panelID, err, l.now()); obsErr != nil {
+		l.log().Error("panel state write failed", "panel", panelID, "error", obsErr)
+	}
+}
+
+// record writes the rates this pass measured. It runs after the publish and
+// the cursor move, and a failure here is logged rather than failing the pass:
+// the bytes are billed by then, and failing would re-read and republish them
+// to fix a figure the next pass rewrites anyway.
+func (l *Loop) record(ctx context.Context, samples []RateSample) {
+	if l.Rates == nil || len(samples) == 0 {
+		return
+	}
+	if err := l.Rates.Record(ctx, samples); err != nil {
+		l.log().Error("observed rate write failed", "samples", len(samples), "error", err)
+	}
 }
 
 func (l *Loop) interval() time.Duration {

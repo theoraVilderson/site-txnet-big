@@ -2,6 +2,7 @@ package hot_test
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"network-service/internal/driver"
 	"network-service/internal/driver/fake"
 	"network-service/internal/hot"
+	"network-service/internal/panelstate"
 )
 
 const (
@@ -302,3 +304,27 @@ func TestACursorMovesOnlyAfterThePassIsPublished(t *testing.T) {
 type failingSink struct{}
 
 func (failingSink) Publish(context.Context, collect.Result) error { return context.DeadlineExceeded }
+
+// This is the loop the refusal matters most on: it runs every two seconds, so
+// retrying through a ban from here is the fastest way to make the ban
+// permanent (F-027-v). The gate is the bulk pass's, and it holds on both.
+func TestTheHotPassDoesNotRetryThroughABan(t *testing.T) {
+	r := newRig(t, "c1")
+	r.hot("c1", gigabit, 10)
+	r.loop.Health = &panelstate.Tracker{Cooloff: time.Hour}
+
+	r.panel.FailNextCall(http.StatusTooManyRequests)
+	report := r.pass(t)
+	if len(report.Failed) != 1 || !driver.IsRateLimited(report.Failed[0].Err) {
+		t.Fatalf("failed = %+v, want one rate-limited panel", report.Failed)
+	}
+
+	before := r.panel.TotalCalls()
+	report = r.pass(t)
+	if r.panel.TotalCalls() != before {
+		t.Fatal("the hot loop asked a panel that had just told it to stop")
+	}
+	if len(report.Failed) != 1 || report.Failed[0].Op != collect.OpSkipped {
+		t.Fatalf("the skipped panel is not in the report: %+v", report.Failed)
+	}
+}

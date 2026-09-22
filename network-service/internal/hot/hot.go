@@ -182,6 +182,14 @@ type Loop struct {
 	// Ceilings converges a panel's ceilings at the end of its turn, exactly as
 	// it does on the bulk pass (F-027-t). Nil runs the loop as a pure reader.
 	Ceilings collect.PassConverger
+	// Health gates and records each panel's turn, exactly as the bulk pass's
+	// does (F-027-v). A panel refusing us is refusing this loop too, and this
+	// is the loop that would otherwise ask it every two seconds.
+	Health collect.PanelHealth
+	// Rates records what this pass measured. It matters more here than on the
+	// bulk pass: these are its own samples over its own interval, and that
+	// interval is the only window a hot config's rate means anything over.
+	Rates collect.Rates
 
 	// Horizon is how close to its ceiling a config has to be (DefaultHorizon).
 	Horizon time.Duration
@@ -312,10 +320,18 @@ func (l *Loop) collect(ctx context.Context, rows []Candidate) (collect.Result, s
 		remoteIDs = append(remoteIDs, row.RemoteID)
 	}
 
+	if l.Health != nil && !l.Health.Ask(panel.ID, l.now()) {
+		// The same refusal the bulk pass makes, and the one that matters most
+		// here: this loop runs every two seconds, so retrying through a ban
+		// from it is the fastest way to make the ban permanent (F-027-v).
+		return collect.Result{}, collect.OpSkipped, collect.ErrRefusingToAsk
+	}
+
 	panelCtx, cancel := context.WithTimeout(ctx, l.panelTimeout())
 	defer cancel()
 
 	readings, err := panel.Driver.GetUsageFor(panelCtx, remoteIDs)
+	l.observe(ctx, panel.ID, err)
 	if err != nil {
 		return collect.Result{}, "GetUsageFor", err
 	}
@@ -324,6 +340,8 @@ func (l *Loop) collect(ctx context.Context, rows []Candidate) (collect.Result, s
 	// pass's minute: a hot pass two seconds after the last one must be capped
 	// over two seconds, or the cap it applies is thirty times too loose.
 	res := collect.Normaliser{Panel: panel, Cursors: l.Cursors, MinWindow: MinInterval}.Pass(readings, l.now())
+	// Measured before Apply moves the cursors past the window's start.
+	rates := collect.ObservedRates(l.Cursors, res)
 
 	if err := l.Sink.Publish(ctx, res); err != nil {
 		return collect.Result{}, "Publish", err
@@ -331,6 +349,7 @@ func (l *Loop) collect(ctx context.Context, rows []Candidate) (collect.Result, s
 	if err := l.Cursors.Apply(ctx, res); err != nil {
 		return collect.Result{}, "Apply", err
 	}
+	l.record(ctx, rates)
 	if l.Ceilings != nil {
 		if err := l.Ceilings.Converge(ctx, panel, res); err != nil {
 			// Published and the cursors have moved, so this is not a failed
@@ -341,6 +360,27 @@ func (l *Loop) collect(ctx context.Context, rows []Candidate) (collect.Result, s
 		}
 	}
 	return res, "", nil
+}
+
+// observe and record are the bulk pass's, for the same reasons: a panel whose
+// state did not persist is read again next time, and a rate that did not write
+// is rewritten by the next pass — which for a hot config is seconds away.
+func (l *Loop) observe(ctx context.Context, panelID string, err error) {
+	if l.Health == nil {
+		return
+	}
+	if obsErr := l.Health.Observe(ctx, panelID, err, l.now()); obsErr != nil {
+		l.log().Error("panel state write failed", "panel", panelID, "error", obsErr)
+	}
+}
+
+func (l *Loop) record(ctx context.Context, samples []collect.RateSample) {
+	if l.Rates == nil || len(samples) == 0 {
+		return
+	}
+	if err := l.Rates.Record(ctx, samples); err != nil {
+		l.log().Error("observed rate write failed", "samples", len(samples), "error", err)
+	}
 }
 
 func (l *Loop) horizon() time.Duration {

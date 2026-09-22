@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 9
+version: 10
 updated: 2026-09-22
 ---
 
@@ -128,8 +128,8 @@ in. What connects them is a decision, not an oversight, and it is open in
 ## What it will not do
 
 It does not write to a panel — that is the convergence loop's (F-027-t). It
-does not decide a share — that is the allocator's (F-027-s). It does not
-enforce a per-panel request budget, distinguish a `429` from a `down` panel, or
-extend a ceiling on shutdown: those are F-027-v and F-027-w, and they are built
-with this loop rather than after it, because an unbudgeted hot loop is a denial
-of service on a customer's own server.
+does not decide a share — that is the allocator's (F-027-s). The per-panel
+request budget it runs under, and the ban it refuses to retry through, are
+[contract.budget.md](contract.budget.md) (F-027-v) — built with this loop
+rather than after it, because an unbudgeted hot loop is a denial of service on
+a customer's own server. Extending a ceiling on shutdown is still F-027-w.

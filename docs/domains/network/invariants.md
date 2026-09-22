@@ -29,7 +29,7 @@ F-027-l; its push half waits for F-027-af.
 | 8 | Every Panel declares `driverType`, `counterSemantics` and `transport` | schema NOT NULL, no default (F-027-a) | usage counted by the wrong arithmetic — a plausible wrong number, not a crash |
 | 9 | `ownershipType = tenant` exactly when `tenantId` is set | CHECK `panel_ownership_matches_tenant` | an alert routed to the wrong owner, or a tenant's cost billed to the platform |
 | 10 | A `pull` panel has an `apiBaseUrl` | CHECK `panel_pull_has_base_url` | a driver guessing a base URL per family |
-| 11 | `blockedSince` is set exactly while `panelState = throttled_or_blocked` | CHECK `panel_blocked_since_needs_state` | no clock on a ban, so retrying through it makes it permanent |
+| 11 | `blockedSince` is set exactly while `panelState = throttled_or_blocked` | CHECK `panel_blocked_since_needs_state`; set once by `panelstate.Judge` and never restarted by a later refusal (F-027-v) | no clock on a ban, so retrying through it makes it permanent |
 | 12 | `maxRequestsPerMinute` is positive | CHECK `panel_request_budget_positive` | a budget of zero stops collection on that panel silently |
 | 13 | A ceiling, allocated or applied, is never negative | CHECK `config_ceiling_bytes_not_negative` | a limit written to a panel that no traffic fits under — the user is cut off holding paid bytes |
 | 14 | `ceilingAppliedAt` is set exactly when `appliedCeilingBytes` is | CHECK `config_applied_ceiling_needs_time` | no clock on the write, so a stale ceiling reads as a fresh one and is never rewritten |
@@ -92,8 +92,16 @@ questionnaire (ADR-0036).
 34 is held by `internal/driver/pace.go` — single-flight and the per-window
 budget, written once for all thirteen families — and asserted over each of them
 by the four request-volume scenarios, which count at the far end through
-`conformance.Harness.TotalCalls`. Wiring the budget to the panel row is
-F-027-v.
+`conformance.Harness.TotalCalls`. `collect.Paced` is where
+`panel.maxRequestsPerMinute` becomes that budget, and it panics on the
+non-positive figure 12 forbids (F-027-v).
+
+11 is the CHECK plus `internal/panelstate`, which is the only thing that sets
+`panelState`: a `429`/`403` starts the clock and alerts the owner once, a
+successful pass clears both, and a pass that finds the panel still refusing
+leaves the original clock alone — restarting it is a cool-off that can never
+elapse. `panelstate_test.go` asserts the table of kinds and both directions of
+11; `contract.budget.md` is the rest.
 
 3 is the other half of 2 and is no longer the job's to remember: the drop
 function counts the `(configId, date)` groups whose aggregate row is missing or

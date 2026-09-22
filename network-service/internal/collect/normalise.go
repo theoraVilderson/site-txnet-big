@@ -66,7 +66,12 @@ type Panel struct {
 	// rate cap rather than a cap of nothing, because the second reading
 	// quarantines every byte on it in silence.
 	MaxLineRateBps int64
-	Driver         driver.Driver
+	// MaxRequestsPerMinute is `panel.maxRequestsPerMinute`, the budget we hold
+	// ourselves to on somebody else's server. It is carried on the row rather
+	// than fixed in the loop because it is the panel owner's figure, and
+	// `Paced` is what turns it into behaviour (F-027-v, invariant 34).
+	MaxRequestsPerMinute int
+	Driver               driver.Driver
 	// OwnershipType is `panel.ownershipType` and TenantID its `tenantId`, set
 	// exactly when the ownership is `tenant` (invariant 9). They are carried
 	// through the pass rather than joined for by the consumer, because the

@@ -162,10 +162,10 @@ charged from (invariant 18). Writes pay the budget but never share a flight —
 two identical writes are two intentions.
 
 `Pace` panics on a non-positive budget rather than picking a reading of it:
-the figure comes from a column the database CHECKs (invariant 12).
-Building the `Budget` from the panel row, recording the observed rate and
-backing off on a `429` are F-027-v's; the layer is here so the suite can hold
-every family to it from the first driver on.
+the figure comes from a column the database CHECKs (invariant 12). Building
+that `Budget` from the panel row, the states a `429`/`403` and a `5xx` are
+told apart into, and the rate a pass writes back are F-027-v and are
+[contract.budget.md](contract.budget.md).
 
 ## The collection loop (F-027-l)
 
