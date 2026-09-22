@@ -243,3 +243,8 @@ the strict list-A policies, and `ensure_traffic_raw_log_partition()` policies
 each month it creates, so the gap cannot return on a clock.
 `traffic_daily_aggregate` has no `tenantId` and no policy of its own — it is
 reached through `configId` (open question, 2026-09-21).
+
+`20260921000900_the_rollup_commits_before_the_partition_drops` (F-027-o) adds
+the rollup itself: three `SECURITY DEFINER` functions, one of which refuses to
+drop a partition the aggregate does not match. See
+[contract.rollup.md](contract.rollup.md).

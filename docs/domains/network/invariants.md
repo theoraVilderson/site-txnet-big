@@ -21,7 +21,7 @@ F-027-l; its push half waits for F-027-af.
 | 1 | `config.uuid` is unique across the whole system (it is the Xray identity) | schema `@unique` | cross-user traffic attribution, credential clash |
 | 2b | A tenant reads only its own `traffic_raw_log` rows, through the parent **or** a partition named directly; every month the partition function creates is policied as it is created (F-027-ak) | RLS on the parent and each partition, `ensure_traffic_raw_log_partition()` | one tenant reads another's traffic under a table name derived from the month |
 | 2 | `traffic_raw_log` is only ever appended and dropped by partition — never `DELETE`d row-wise | monthly `PARTITION BY RANGE ("recordedAt")` (F-027-e) | vacuum bloat on the largest table in the platform, competing with the collection loop for the same pages |
-| 3 | Daily aggregate is computed before its source raw partition is dropped | planned cron ordering | permanent traffic-data loss |
+| 3 | Daily aggregate is computed before its source raw partition is dropped | `network.drop_traffic_raw_log_partition` refuses a partition the aggregate does not match (F-027-o), asserted by `traffic-rollup.job.spec.ts` | permanent traffic-data loss |
 | 4 | `regenerateUsedCount` never exceeds `maxRegenerateCount` | planned service check | abuse of free re-issue |
 | 5 | `panelApiCredentials` (encrypted) never default-selected or logged | planned `select`/`omit` | node panel takeover |
 | 6 | Every `config` has a non-null `tenantId` (denormalized, must match the owner user's tenant) | schema NOT NULL + planned service check | cross-tenant config listing |
@@ -93,6 +93,9 @@ by the four request-volume scenarios, which count at the far end through
 `conformance.Harness.TotalCalls`. Wiring the budget to the panel row is
 F-027-v.
 
-3 is the other half of 2 and belongs to the rollup job: the partition-drop
-ordering test goes with it. The rest is to be written with the service.
+3 is the other half of 2 and is no longer the job's to remember: the drop
+function counts the `(configId, date)` groups whose aggregate row is missing or
+differs and raises rather than dropping, so getting the order wrong in a caller
+fails loudly instead of losing a month ([contract.rollup.md](contract.rollup.md)).
+The rest is to be written with the service.
 Minimum: regenerate cap test.

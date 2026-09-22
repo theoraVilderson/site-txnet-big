@@ -175,6 +175,13 @@ leaves the process (F-027-m). Their rules — the maths, reset detection, the
 stretched plausibility cap, where a byte waits, and the one message a pass
 becomes — are [contract.collection.md](contract.collection.md).
 
+## The nightly rollup (F-027-o)
+
+`network_traffic_rollup` in `worker-service` turns raw traffic into
+`traffic_daily_aggregate` and drops the raw months it has covered. The
+ordering that makes that safe — the drop refuses a partition the aggregate
+does not match — is [contract.rollup.md](contract.rollup.md).
+
 ## Provides (intended)
 
 | Operation | Input | Output | Sync/Async | Errors |
@@ -183,7 +190,7 @@ becomes — are [contract.collection.md](contract.collection.md).
 | regenerate config | configId | new `uuid`, `regenerateUsedCount++` | sync | over `maxRegenerateCount` |
 | set config status | configId, status, reason, actor | `config` + `config_action_log` row | sync | — |
 | ingest traffic | panel -> {configId, up, down, at} | `traffic_raw_log` (partitioned) | async, high volume | — |
-| nightly aggregate | date | `traffic_daily_aggregate` rows; drop old raw partition | async (cron) | — |
+| nightly aggregate | window | `traffic_daily_aggregate` rows, upserted per `(configId, date)`; the raw months past retention dropped (F-027-o) | async (`network_traffic_rollup`, seeded `15 3 * * *`) | a drop whose aggregate does not match the partition — refused, run fails |
 | add IP rule | cidr, ruleType, limit?, expiry? | `ip_access_rule` | sync | — |
 
 ## Emits (events)

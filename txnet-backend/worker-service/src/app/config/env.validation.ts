@@ -312,6 +312,28 @@ export const envSchema = z.object({
   NOTIFICATION_API_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
 
   /**
+   * How many days back the nightly traffic rollup re-rolls, today included
+   * (F-027-o, `TrafficRollupJob`).
+   *
+   * More than one on purpose: the rollup upserts a day's totals rather than
+   * adding to them, so re-rolling a day already rolled is the same answer, and
+   * a night the job did not run is then repaired by the next one instead of by
+   * an operator. Three covers a weekend outage; the cost is one grouped scan
+   * of the newest partition per run.
+   */
+  TRAFFIC_ROLLUP_LOOKBACK_DAYS: z.coerce.number().int().positive().default(3),
+  /**
+   * How many whole months of `traffic_raw_log` are kept before their partitions
+   * are dropped (network invariant 2). The rollup survives them — a dropped
+   * month is still readable in `traffic_daily_aggregate`, per day and config.
+   *
+   * A drop is refused by the database unless the aggregate already matches the
+   * partition (invariant 3), so lowering this cannot lose traffic data; what it
+   * loses is the per-pass detail a dispute would be settled from.
+   */
+  TRAFFIC_RAW_RETENTION_MONTHS: z.coerce.number().int().positive().default(3),
+
+  /**
    * Which USDT/IRT order books the FX worker polls (F-0603), by `FxSource.key`
    * — `nobitex,tabdeal,wallex,bitpin`.
    *
