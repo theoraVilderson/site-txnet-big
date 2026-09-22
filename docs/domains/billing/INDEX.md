@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 28
+version: 29
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -66,10 +66,10 @@ display-currency conversion (`currency`), plan prices (`catalog`).
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-22 | contract v29 (F-027-am): **breaking on the default** — `GET /wallet/history` leaves `traffic_consumption` out of a page nobody narrowed, the other eight types by name; `types[]` or a matching search term still answers it in full. The ledger keeps every block's row (ADR-0072 admits no roll-up), so the aggregation is on the read side, and the block floor is F-027-u's. ADR-0072 amended with F-027-q's partial-block rule. Rules: [contract.history.md](contract.history.md). Consumer panel-web: F-027-an, F-027-ao |
 | 2026-09-22 | contract v28 (F-027-q): the block purchaser — a metered Grant's bytes are bought at a whole-cent price from `grant.meteredRate` before they are served, and the debit, `purchasedBytes` and `billedBytes` commit in one transaction (ADR-0072). In-process only, no HTTP surface and no wire change. Rules: [contract.traffic-block.md](contract.traffic-block.md). Consumer panel-web: none until F-027-ac |
 | 2026-09-21 | contract v27 (F-027-n): metering is its own app, `metering-service` (ADR-0077) — it consumes `network.usage.#` and writes `traffic_raw_log`, `grant.consumedBytes`, holds, quarantines and unattributed usage. No HTTP surface and no wire change here; `consumedBytes` is measured, never charged. Rules: [contract.metering.md](contract.metering.md). Consumer panel-web: none until F-027-ac |
 | 2026-09-20 | contract v26 (F-502-o): `CouponView` carries `frozen` — billing's own freeze rule (a counter above zero **or** any redemption row, `frozenBy`), so no caller re-derives it from `usedCount + reservedCount` and offers an edit the service refuses. Additive; the audit snapshot drops it. Rules: [contract.coupon.md](contract.coupon.md). Consumer panel-web: F-502-o |
 | 2026-09-20 | contract v25 (F-502-r): `GET /api/billing/gift/grants` — the caller's own Grants, with the variant, the period, the status and the feature keys, paged; never the subscription key or its hash. Its own bucket (120/900s) and the `subscriptionLink` capability. Additive; it is what makes F-502-p's reissue reachable from a row. Rules: [contract.gift.md](contract.gift.md). Consumer panel-web: F-502-s |
-| 2026-09-20 | contract v24 (F-502-p): `POST /api/billing/gift/grants/:id/rotate-token` — the owner of a Grant reissues the subscription key shown once at redemption, on its own bucket (5/900s) and the `subscriptionLink` capability. Additive; another user's Grant is answered as a missing one. Rules: [contract.gift.md](contract.gift.md). Consumer panel-web: F-502-q |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

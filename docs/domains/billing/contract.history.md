@@ -2,8 +2,8 @@
 id: billing
 layer: domain
 status: active
-version: 4
-updated: 2026-09-12
+version: 5
+updated: 2026-09-22
 ---
 
 # Contract — billing / wallet history
@@ -29,6 +29,7 @@ query, so neither route has an id to authorise.
 
 | Rule | Why |
 |---|---|
+| **A page nobody narrowed leaves `traffic_consumption` out** — the filter is the other eight types by name, never a `notIn`, so a reason added to the enum joins the page rather than the exclusion. `types[]` naming traffic, or a term matching its label, answers it in full; a blank term narrows nothing and does not | the block purchaser debits once per block and a block is ~2 minutes of that user's spend (`contract.traffic-block.md`), so a heavy user writes hundreds of rows a day and unfiltered they bury what a person opened this page to read. Rolling the debit up is not available: the money moves before the bytes do (ADR-0072) and `balanceAfter` is the column the debiting transaction wrote, so the ledger keeps every row and the **read** side aggregates. Decided 2026-09-22 with the user (F-027-am), over a minimum block size — which would spend more of the wallet ahead of consumption without bounding the row count |
 | `balanceAfter` is the column the ledger wrote, and `balance` is `wallet.cachedBalance` — written only inside the same balance-changing transaction (invariant 1). Nothing on this page is recomputed from amounts | legacy walked back from the current balance over the rows it had skipped, counting `pending` and `failed` attempts as movements, so one abandoned top-up skewed the column on every row above it |
 | **A payment attempt is not a ledger row**, and the two are separate lists. Only a `success` payment has a ledger row (F-092-j writes it); a `pending` or `failed` one carries a `status` and no balance | they shared one Mongo collection in legacy, which is what let the arithmetic above count a failure as money |
 | A user with no wallet is `balance: "0.00"` and an empty page, not a **404** — as a debit reads a missing wallet as a zero balance ("Wallet ledger" in `contract.md`) | the page exists before the first top-up does |
@@ -47,6 +48,13 @@ query, so neither route has an id to authorise.
 arrived for an invoice already settled is written as a payment of its own, so
 the top-up list shows it, credited, beside the invoice it completed. Nothing on
 this page changed for it, and the payer's `payments` count now includes it.
+
+**The consumer is behind.** `panel-financial` has the type filter that reaches
+these rows (`_lib/filters.ts` lists `traffic_consumption`), so nothing is
+unreachable — but the page does not yet *say* the default hides them, and there
+is no per-day traffic summary to send someone to instead. Both are rows of their
+own (F-027-an, F-027-ao); until they land, a user watching the balance fall with
+no row against it has to know to tick the filter.
 
 **Not covered:** amounts are base currency (ADR-0019); the display-currency step
 arrives with F-025. The ledger rows a `success` payment produces are F-092-j's

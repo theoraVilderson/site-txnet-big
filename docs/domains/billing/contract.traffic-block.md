@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 1
+version: 2
 updated: 2026-09-22
 ---
 
@@ -72,6 +72,28 @@ hold (ADR-0074) moves the money cursor alone.
 A purchase that raced another loses at `WalletLedgerService`'s version guard
 (`WalletVersionConflict`) with nothing written — never with a block granted
 against a balance already spent.
+
+## What a block costs the ledger
+
+Every block is a `traffic_consumption` row in the wallet ledger, and at a
+two-minute horizon that is hundreds of rows a day for a heavy user. Two things
+hold that down, and neither of them is a roll-up — the money has to move before
+the bytes do, so there is no row to defer (ADR-0072).
+
+- **The read side hides them by default.** `/wallet/history` answers the other
+  eight reason types unless the caller names traffic (`contract.history.md`
+  rule 1). The ledger keeps every row; only the unnarrowed page is quieter.
+- **The target carries a floor, and the floor is the caller's.** F-027-u sizes
+  the horizon and is where a minimum block belongs, so the write rate is bounded
+  at the one place that knows the user's line rate. `purchase()` never clamps a
+  target **up**: spending more of a wallet than was asked for is the caller's
+  decision to make and not this service's, and a purchaser that quietly bought
+  a bigger block would move money no ceiling had asked to cover.
+
+Decided 2026-09-22 with the user (F-027-am), against sizing blocks larger here:
+a floor on the price alone would not bound the row count — a 1 Gbit user spends
+just as fast — and it would hold more of the wallet ahead of consumption, which
+is ADR-0072's accepted cost and its revisit trigger.
 
 ## Refusals
 

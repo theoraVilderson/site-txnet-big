@@ -218,6 +218,45 @@ describe('WalletHistoryService.ledger', () => {
     expect(asked.ledger?.reasonType).toEqual({ in: [WalletReasonType.wallet_transfer_out] });
   });
 
+  it('leaves traffic out of a page nobody narrowed (F-027-am)', async () => {
+    const { service, asked } = build();
+    await runWithTenant({ id: TENANT }, () => service.ledger({ userId: USER, lang: 'fa', ...page }));
+
+    // Named, not `notIn`: every other type is listed, so a reason added to the
+    // enum is carried by this page rather than silently joining the excluded.
+    expect(asked.ledger?.reasonType).toEqual({
+      in: [
+        WalletReasonType.payment_gateway,
+        WalletReasonType.coupon_redemption,
+        WalletReasonType.admin_manual_adjust,
+        WalletReasonType.affiliate_commission,
+        WalletReasonType.sub_account_charge,
+        WalletReasonType.wallet_transfer_in,
+        WalletReasonType.wallet_transfer_out,
+        WalletReasonType.reseller_purchase,
+      ],
+    });
+  });
+
+  it('answers traffic rows to a caller that asked for them by type (F-027-am)', async () => {
+    const { service, asked } = build();
+    await runWithTenant({ id: TENANT }, () =>
+      service.ledger({ userId: USER, lang: 'fa', types: [WalletReasonType.traffic_consumption], ...page }),
+    );
+
+    expect(asked.ledger?.reasonType).toEqual({ in: [WalletReasonType.traffic_consumption] });
+  });
+
+  it('answers traffic rows to a term that matched their label, never an empty page (F-027-am)', async () => {
+    const { service, asked } = build();
+    const result = await runWithTenant({ id: TENANT }, () =>
+      service.ledger({ userId: USER, lang: 'fa', search: 'ترافیک', ...page }),
+    );
+
+    expect(asked.ledger?.reasonType).toEqual({ in: [WalletReasonType.traffic_consumption] });
+    expect(result.total).toBe(1);
+  });
+
   it('bounds the page by the wallet and the date range it was given', async () => {
     const { service, asked } = build();
     const from = new Date('2026-09-01T00:00:00Z');

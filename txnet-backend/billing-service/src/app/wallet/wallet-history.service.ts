@@ -55,6 +55,26 @@ const LABEL_KEYS: Record<WalletReasonType, string> = {
 /** The declaration order, which is the order a filter is answered in. */
 const REASON_TYPES = Object.keys(LABEL_KEYS) as WalletReasonType[];
 
+/**
+ * Left out of a page nobody narrowed (F-027-am, ADR-0072).
+ *
+ * The block purchaser debits the wallet once per block, and a block covers
+ * about two minutes of that user's own spend — so a heavy user writes hundreds
+ * of `traffic_consumption` rows a day, and unfiltered they bury the movements a
+ * person came to this page to read. The **ledger** still carries every one of
+ * them: rolling the debit up was the alternative and it is not available, since
+ * the money has to move before the bytes do (ADR-0072) and `balanceAfter` is
+ * the column the debiting transaction wrote (rule 1 in `contract.history.md`).
+ * So the aggregation lives here, on the read side, where it costs a filter.
+ *
+ * It is the **default**, not a rule: any narrowing the caller asked for is
+ * answered as asked — `types[]` naming traffic, or a term that matched its
+ * label. Answering "no results" to a search typed right is the failure this
+ * page already refuses for the Persian fold, and hiding money from someone who
+ * asked for it by name would be a worse version of it.
+ */
+const UNNARROWED_TYPES = REASON_TYPES.filter((t) => t !== WalletReasonType.traffic_consumption);
+
 export type LedgerPageRequest = {
   /** From the gate's `X-User-Id` — the only tenant-scoped source of a user id here. */
   userId: string;
@@ -242,11 +262,11 @@ export class WalletHistoryService {
       // A search that matched no label. Answered here rather than as
       // `reasonType: { in: [] }`, so the filter cannot be dropped on the way to
       // the query and answer the whole ledger instead of none of it.
-      if (reasonType !== undefined && reasonType.in.length === 0) return empty(balance);
+      if (reasonType.in.length === 0) return empty(balance);
 
       const where: Prisma.WalletTransactionWhereInput = {
         walletId: wallet.id,
-        ...(reasonType ? { reasonType } : {}),
+        reasonType,
         ...(request.direction ? { direction: request.direction } : {}),
         ...(between(request.from, request.to) ? { createdAt: between(request.from, request.to) } : {}),
       };
@@ -336,16 +356,19 @@ export class WalletHistoryService {
   }
 
   /**
-   * The `reasonType` filter, or `undefined` for no filter at all.
+   * The `reasonType` filter. Always a filter — a page nobody narrowed is
+   * `UNNARROWED_TYPES`, not the whole enum (F-027-am).
    *
    * A search term narrows to the types whose translated label matches it; an
    * explicit `types` list narrows further, so the two **intersect** — asking for
    * transfers and typing "transfer" must not widen the page back to everything.
+   * Either of them is the caller naming what they want, so either one also
+   * lifts the default exclusion; a blank term narrows nothing and does not.
    */
-  private reasonFilter(request: LedgerPageRequest): { in: WalletReasonType[] } | undefined {
+  private reasonFilter(request: LedgerPageRequest): { in: WalletReasonType[] } {
     const { search, types, lang } = request;
     const searched = search === undefined ? null : this.reasonTypesMatching(search, lang);
-    if (searched === null) return types?.length ? { in: [...types] } : undefined;
+    if (searched === null) return { in: types?.length ? [...types] : [...UNNARROWED_TYPES] };
     return { in: types?.length ? searched.filter((t) => types.includes(t)) : searched };
   }
 

@@ -1,7 +1,7 @@
 ---
 id: adr-0072
 status: active
-updated: 2026-09-21
+updated: 2026-09-22
 ---
 
 # ADR 0072 — traffic is paid for before it is served
@@ -69,6 +69,15 @@ number of cents covering the target headroom, converted to bytes by integer
 division rounding **down**. So every ledger row is a clean two-decimal amount,
 and we always sell less than or equal to what was paid for.
 
+**A balance short of the target buys a smaller block, not nothing.** Amended
+2026-09-22 (F-027-am) to record what F-027-q built: the largest whole-cent block
+the balance can fund is bought, and only a balance under **one cent** is refused.
+Stalling a user who still holds 99c is this decision's worst acceptable failure —
+the ceiling stays put and the panel cuts them off — arriving early and for no
+reason, so a partial block is a purchase and not a refusal. It follows from
+pricing the block rather than its bytes: the target is a request, and the cents
+available are the answer.
+
 Three rules fall out and are part of this decision:
 
 1. **`Σ ceilings ≤ purchasedBytes`, across every config of a Grant, always.**
@@ -107,6 +116,15 @@ service**. Today that is Mikrotik WireGuard alone.
 - Negative / accepted cost: **money leaves the wallet ahead of consumption**, by
   roughly the headroom horizon — on the order of two minutes of that user's own
   spend. It is refunded on close, but it is visibly reserved until then.
+- Negative / accepted cost: **the wallet ledger gets a row per block** — at a
+  two-minute horizon, hundreds a day for a heavy user, in the same list a person
+  reads their top-ups and transfers from. There is no roll-up available, because
+  the money moving before the bytes is the decision itself and `balanceAfter` is
+  written by the debiting transaction. Settled 2026-09-22 with the user
+  (F-027-am) on the read side instead: `/wallet/history` leaves
+  `traffic_consumption` out of a page nobody narrowed, and a floor on the
+  horizon (F-027-u) bounds the write rate. Sizing blocks larger to write fewer
+  rows was rejected — it does not bound the count and it worsens the cost above.
 - Negative / accepted cost: **a panel family is excluded from metered sale.**
   Mikrotik WireGuard has no per-peer quota, and accepting an exception for it
   would reopen exactly the hole this decision closes.
