@@ -20,6 +20,10 @@ enum WalletReasonType {
   wallet_transfer_out
   /// F-019-h: the buyer pays for a reseller package; `referenceId` = the reseller's tenant id.
   reseller_purchase
+  /// F-027-r: purchased bytes a closed Grant never served, given back
+  /// (ADR-0072 rule 3); `referenceId` = the Grant. Always a credit, and the
+  /// counterpart of the `traffic_consumption` debits that bought them.
+  traffic_refund
 
   @@schema("billing")
 }

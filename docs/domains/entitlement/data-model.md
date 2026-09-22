@@ -39,7 +39,7 @@ They are three columns on purpose, and each moves for its own reason:
 | Column | What it counts | Who advances it |
 |---|---|---|
 | `purchasedBytes` | bytes paid for. `Σ ceilings ≤ purchasedBytes` across every config of the Grant (ADR-0072 rule 1) | the block purchaser (F-027-q, `billing/contract.traffic-block.md`) |
-| `billedBytes` | the money cursor — how far the wallet has been debited | the block purchaser, in the same transaction and by the same figure |
+| `billedBytes` | the money cursor — how far the wallet has been debited, **net of what came back** | the block purchaser, in the same transaction and by the same figure; and the remainder credit at close, which brings it down alone (F-027-r) |
 | `consumedBytes` | what the panels reported. **Measured, not paid for** | the delta consumer, F-027-n |
 
 `consumedBytes` is deliberately not constrained against `purchasedBytes`: a

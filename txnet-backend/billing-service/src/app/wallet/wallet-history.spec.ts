@@ -40,6 +40,7 @@ const LABELS: Record<string, string> = {
   'reasonType.sub_account_charge': 'شارژ اکانت فرعی',
   'reasonType.wallet_transfer_in': 'انتقال دریافتی از کیف پول دیگر',
   'reasonType.wallet_transfer_out': 'انتقال به کیف پول دیگر',
+  'reasonType.traffic_refund': 'بازگشت ترافیک مصرف‌نشده',
 };
 
 function ledgerRow(overrides: Record<string, unknown> = {}) {
@@ -234,6 +235,10 @@ describe('WalletHistoryService.ledger', () => {
         WalletReasonType.wallet_transfer_in,
         WalletReasonType.wallet_transfer_out,
         WalletReasonType.reseller_purchase,
+        // Money coming **back** to the user (F-027-r). The default hides the
+        // hundreds of block debits, not the one row that returns their
+        // remainder — which is the rule above working, not an exception to it.
+        WalletReasonType.traffic_refund,
       ],
     });
   });
@@ -253,7 +258,11 @@ describe('WalletHistoryService.ledger', () => {
       service.ledger({ userId: USER, lang: 'fa', search: 'ترافیک', ...page }),
     );
 
-    expect(asked.ledger?.reasonType).toEqual({ in: [WalletReasonType.traffic_consumption] });
+    // Both labels carry the word, so both types are answered: the fold matches
+    // what the user typed, and the refund of traffic is traffic to them.
+    expect(asked.ledger?.reasonType).toEqual({
+      in: [WalletReasonType.traffic_consumption, WalletReasonType.traffic_refund],
+    });
     expect(result.total).toBe(1);
   });
 

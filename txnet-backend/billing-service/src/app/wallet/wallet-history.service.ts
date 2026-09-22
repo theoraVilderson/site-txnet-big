@@ -50,6 +50,9 @@ const LABEL_KEYS: Record<WalletReasonType, string> = {
   [WalletReasonType.wallet_transfer_in]: REASON_LABEL_KEY.wallet_transfer_in,
   [WalletReasonType.wallet_transfer_out]: REASON_LABEL_KEY.wallet_transfer_out,
   [WalletReasonType.reseller_purchase]: REASON_LABEL_KEY.reseller_purchase,
+  // A credit of its own, and **not** hidden with the debits below: money going
+  // back to a user belongs on the page they read without narrowing (F-027-r).
+  [WalletReasonType.traffic_refund]: REASON_LABEL_KEY.traffic_refund,
 };
 
 /** The declaration order, which is the order a filter is answered in. */

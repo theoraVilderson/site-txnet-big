@@ -50,6 +50,7 @@ type Seen = { what: string; args: any; scope: string | undefined };
 function build(
   rows: {
     sales?: { reasonType: WalletReasonType; sum: string; count: number }[];
+    refunds?: { reasonType: WalletReasonType; sum: string }[];
     topUps?: { sum: string | null; count: number };
   } = {},
 ) {
@@ -77,12 +78,20 @@ function build(
     _sum: { amount: dec(r.sum) },
     _count: { _all: r.count },
   }));
+  const refunds = (rows.refunds ?? []).map((r) => ({ reasonType: r.reasonType, _sum: { amount: dec(r.sum) } }));
   const topUps = rows.topUps ?? { sum: null, count: 0 };
 
   const tx = {
     // `tenantTransaction` binds the scope with this as its first statement.
     $executeRaw: async () => 1,
-    walletTransaction: { groupBy: record('sales', sales) },
+    walletTransaction: {
+      // The two reads of this table are told apart by their direction, as the
+      // service asks them: the sale debits, then the credits that undo one.
+      groupBy: async (args: any) => {
+        const debit = args.where.direction === LedgerDirection.debit;
+        return record(debit ? 'sales' : 'refunds', debit ? sales : refunds)(args);
+      },
+    },
     paymentTransaction: {
       aggregate: record('topUps', {
         _sum: { amountCredited: topUps.sum === null ? null : dec(topUps.sum) },
@@ -126,7 +135,7 @@ describe('ResellerRevenueService.totals', () => {
     const { seen, service } = build();
     await service.totals(owner, RESELLER, { from: FROM, to: TO });
 
-    expect(seen.map((s) => s.what)).toEqual(['sales', 'topUps']);
+    expect(seen.map((s) => s.what)).toEqual(['sales', 'refunds', 'topUps']);
     for (const call of seen) {
       // The scope, not a hand-written filter, is what makes these the
       // reseller's rows — and it is the reseller the path named.
@@ -153,12 +162,47 @@ describe('ResellerRevenueService.totals', () => {
     const { seen, service } = build();
     await service.totals(owner, RESELLER, { from: FROM, to: TO });
 
-    const where = seen[1].args.where;
+    const where = seen.find((c) => c.what === 'topUps')!.args.where;
     expect(where.status).toBe(PaymentStatus.success);
     // F-019-b: a row with `billingTenantId` is the reseller topping up its own
     // billing wallet with the platform — money out, and never its revenue.
     expect(where.billingTenantId).toBeNull();
     expect(where.createdAt).toEqual({ gte: FROM, lte: TO });
+  });
+
+  it('takes the traffic refunded back off the sale it came from (F-027-r)', async () => {
+    const { seen, service } = build({
+      sales: [{ reasonType: WalletReasonType.traffic_consumption, sum: '100.00', count: 40 }],
+      refunds: [{ reasonType: WalletReasonType.traffic_refund, sum: '12.50' }],
+    });
+
+    const total = await service.totals(owner, RESELLER, { from: FROM, to: TO });
+
+    // The blocks were bought ahead of consumption (ADR-0072); what the Grant
+    // closed without serving went back, and was never this reseller's revenue.
+    expect(total.sales.total).toBe('87.50');
+    expect(total.sales.byReason).toEqual([
+      { reasonType: WalletReasonType.traffic_consumption, total: '87.50', count: 40 },
+    ]);
+    // The rows still exist and were still sold: it is the money that came back.
+    expect(total.sales.count).toBe(40);
+
+    const where = seen.find((c) => c.what === 'refunds')!.args.where;
+    expect(where.direction).toBe(LedgerDirection.credit);
+    expect(where.reasonType.in).toEqual([WalletReasonType.traffic_refund]);
+  });
+
+  it('reports a close whose blocks were bought before the window, rather than dropping it', async () => {
+    const { service } = build({ refunds: [{ reasonType: WalletReasonType.traffic_refund, sum: '3.00' }] });
+
+    const total = await service.totals(owner, RESELLER, { from: FROM, to: TO });
+
+    // Negative, not clamped: money left in this window and a figure of zero
+    // would be one no rows back.
+    expect(total.sales.total).toBe('-3.00');
+    expect(total.sales.byReason).toEqual([
+      { reasonType: WalletReasonType.traffic_consumption, total: '-3.00', count: 0 },
+    ]);
   });
 
   it('refuses a caller who does not administer that reseller, before reading anything', async () => {

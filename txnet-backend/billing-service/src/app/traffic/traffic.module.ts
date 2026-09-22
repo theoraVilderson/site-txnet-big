@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { WalletModule } from '../wallet/wallet.module';
 import { BlockPurchaseService } from './block-purchase';
+import { RemainderCreditService } from './remainder-credit';
 
 /**
  * Metered traffic's money side (F-027-q, ADR-0072). In-process only: the
@@ -10,7 +11,7 @@ import { BlockPurchaseService } from './block-purchase';
  */
 @Module({
   imports: [WalletModule],
-  providers: [BlockPurchaseService],
-  exports: [BlockPurchaseService],
+  providers: [BlockPurchaseService, RemainderCreditService],
+  exports: [BlockPurchaseService, RemainderCreditService],
 })
 export class TrafficModule {}

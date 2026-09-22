@@ -8,6 +8,7 @@
     "sub_account_charge": "Sub-account charge",
     "wallet_transfer_in": "Transfer received from another wallet",
     "wallet_transfer_out": "Transfer sent to another wallet",
-    "reseller_purchase": "Reseller package purchase"
+    "reseller_purchase": "Reseller package purchase",
+    "traffic_refund": "Unused traffic returned"
   }
 }

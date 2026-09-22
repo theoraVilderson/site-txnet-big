@@ -539,7 +539,8 @@
       "sub_account_charge": "Sub-account top-up",
       "wallet_transfer_in": "Transfer received",
       "wallet_transfer_out": "Transfer sent",
-      "reseller_purchase": "Reseller purchase"
+      "reseller_purchase": "Reseller purchase",
+      "traffic_refund": "Unused traffic returned"
     },
     "status": {
       "pending": "Pending",

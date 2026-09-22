@@ -539,7 +539,8 @@
       "sub_account_charge": "شارژ زیرمجموعه",
       "wallet_transfer_in": "انتقال دریافتی",
       "wallet_transfer_out": "انتقال ارسالی",
-      "reseller_purchase": "خرید نمایندگی"
+      "reseller_purchase": "خرید نمایندگی",
+      "traffic_refund": "بازگشت ترافیک مصرف‌نشده"
     },
     "status": {
       "pending": "در انتظار",

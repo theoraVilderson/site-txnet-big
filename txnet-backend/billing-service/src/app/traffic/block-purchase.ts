@@ -62,6 +62,21 @@ export class BlockPurchaseRefused extends Error {
 /** Integer ceiling division. Both arguments are positive here. */
 const ceilDiv = (a: bigint, b: bigint): bigint => (a + b - BigInt(1)) / b;
 
+/**
+ * `grant.meteredRate` as an integer number of `1e-8` dollars per 2^30 bytes —
+ * the form every price here is computed in, so nothing rounds at `Decimal`'s
+ * precision on the way. Refuses the rates no arithmetic can price: a zero rate
+ * is a catalog decision (F-027-al) and one finer than the column's scale did
+ * not come from it.
+ *
+ * The remainder credit (F-027-r) prices with the same function, so a Grant is
+ * refunded on the rate it was charged on and not on a second reading of it.
+ */
+export function rateUnitsOf(rate: Prisma.Decimal): bigint {
+  if (rate.lte(0) || rate.decimalPlaces() > RATE_SCALE) throw new BlockPurchaseRefused('rate_not_priceable', rate.toString());
+  return BigInt(rate.mul(RATE_UNIT.toString()).toFixed(0));
+}
+
 export type BlockSizing = {
   /** Whole cents, as the ledger takes it: `Decimal` with exactly two places. */
   amount: Prisma.Decimal;
@@ -90,10 +105,7 @@ export type BlockSizing = {
 export function sizeBlock(input: { rate: Prisma.Decimal; targetBytes: bigint; maxSpend: Prisma.Decimal }): BlockSizing {
   const { rate, targetBytes, maxSpend } = input;
   if (targetBytes <= BigInt(0)) throw new BlockPurchaseRefused('target_not_positive', targetBytes.toString());
-  if (rate.lte(0) || rate.decimalPlaces() > RATE_SCALE) throw new BlockPurchaseRefused('rate_not_priceable', rate.toString());
-
-  // The rate as an integer number of 1e-8 dollars per 2^30 bytes.
-  const rateUnits = BigInt(rate.mul(RATE_UNIT.toString()).toFixed(0));
+  const rateUnits = rateUnitsOf(rate);
   // ceil(rate x target x 100 / (1e8 x 2^30)) — the target's price, in cents.
   const wanted = ceilDiv(rateUnits * targetBytes * CENTS, RATE_UNIT * GIB);
   const affordable = BigInt(maxSpend.mul(CENTS.toString()).floor().toFixed(0));

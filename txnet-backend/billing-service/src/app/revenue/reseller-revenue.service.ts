@@ -74,10 +74,43 @@ const IS_SALE: Record<WalletReasonType, boolean> = {
   // The **platform's** revenue from selling a reseller package (F-019-h), paid
   // by a buyer out of a wallet in the platform owner's own tenant.
   [WalletReasonType.reseller_purchase]: false,
+  // A credit: money given back, not a sale. It is subtracted below rather than
+  // counted here, which `UNDOES` is what says.
+  [WalletReasonType.traffic_refund]: false,
 };
 
 /** The reasons that count, derived from the table above rather than listed twice. */
 export const SALE_REASONS = (Object.keys(IS_SALE) as WalletReasonType[]).filter((r) => IS_SALE[r]);
+
+/**
+ * Which sale a credit **undoes**, if any — the second half of `IS_SALE`, and
+ * exhaustive for the same reason.
+ *
+ * A closed metered Grant gives its unconsumed bytes back (F-027-r, ADR-0072
+ * rule 3), and that money was counted as a sale when the block was bought. A
+ * figure that took the debits and ignored the credits would report every
+ * reseller more revenue than it kept, by exactly the headroom this platform
+ * holds ahead of consumption — and it would grow with the number of Grants that
+ * expire, which is all of them.
+ *
+ * Only a refund that undoes a **sale** belongs here. A top-up reversed at the
+ * gateway is money in, not revenue (ADR-0067), and a transfer back is neither.
+ */
+const UNDOES: Record<WalletReasonType, WalletReasonType | null> = {
+  [WalletReasonType.traffic_refund]: WalletReasonType.traffic_consumption,
+  [WalletReasonType.payment_gateway]: null,
+  [WalletReasonType.coupon_redemption]: null,
+  [WalletReasonType.affiliate_commission]: null,
+  [WalletReasonType.wallet_transfer_in]: null,
+  [WalletReasonType.traffic_consumption]: null,
+  [WalletReasonType.sub_account_charge]: null,
+  [WalletReasonType.wallet_transfer_out]: null,
+  [WalletReasonType.admin_manual_adjust]: null,
+  [WalletReasonType.reseller_purchase]: null,
+};
+
+/** The credits that come off a sale, derived from the table above. */
+export const REFUND_REASONS = (Object.keys(UNDOES) as WalletReasonType[]).filter((r) => UNDOES[r] !== null);
 
 const money = (v: Prisma.Decimal | null | undefined) => (v ? v.toFixed(2) : '0.00');
 
@@ -127,12 +160,22 @@ export class ResellerRevenueService {
 
     return this.run(actor, tenantId, async () =>
       tenantTransaction(this.prisma, async (tx) => {
-        const [sales, topUps] = await Promise.all([
+        const [sales, refunds, topUps] = await Promise.all([
           tx.walletTransaction.groupBy({
             by: ['reasonType'],
             where: { direction: LedgerDirection.debit, reasonType: { in: SALE_REASONS }, createdAt },
             _sum: { amount: true },
             _count: { _all: true },
+          }),
+          // The credits that undo one. Read in the same window as the sales: a
+          // refund lands when the Grant closes, so a period can hold a close
+          // whose blocks were bought before it — the figure is the movement in
+          // the window, and a reason can come out negative rather than be
+          // clamped to something no rows back.
+          tx.walletTransaction.groupBy({
+            by: ['reasonType'],
+            where: { direction: LedgerDirection.credit, reasonType: { in: REFUND_REASONS }, createdAt },
+            _sum: { amount: true },
           }),
           tx.paymentTransaction.aggregate({
             // Only a settled payment is money: legacy counted `pending` and
@@ -146,11 +189,29 @@ export class ResellerRevenueService {
           }),
         ]);
 
-        const byReason = sales.map((row) => ({
-          reasonType: row.reasonType,
-          total: money(row._sum.amount),
-          count: row._count._all,
-        }));
+        // What came back, against the sale it came off. `count` is untouched:
+        // the blocks were sold and the rows exist — what changed is how much of
+        // the money the reseller kept.
+        const refunded = new Map<WalletReasonType, Prisma.Decimal>();
+        for (const row of refunds) {
+          const sale = UNDOES[row.reasonType];
+          if (!sale) continue;
+          refunded.set(sale, (refunded.get(sale) ?? new Prisma.Decimal(0)).plus(money(row._sum.amount)));
+        }
+
+        // Every reason either list names, so a window holding a close and none
+        // of the blocks it refunds still reports the money going back out.
+        const sold = new Map(sales.map((row) => [row.reasonType, row]));
+        const reasons = [...new Set([...sold.keys(), ...refunded.keys()])];
+        const byReason = reasons.map((reasonType) => {
+          const row = sold.get(reasonType);
+          const gross = new Prisma.Decimal(money(row?._sum.amount));
+          return {
+            reasonType,
+            total: money(gross.minus(refunded.get(reasonType) ?? 0)),
+            count: row?._count._all ?? 0,
+          };
+        });
 
         return {
           from: period.from.toISOString(),
