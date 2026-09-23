@@ -59,9 +59,11 @@ it. The scan is cross-tenant and each write runs in its tenant
 excluded, so the sweep drains itself and a second call answers zero.
 
 `reviveOnTopUp(tx, grantId)` is the way back, from **either** stage: `active`
-with `statusReason` and `suspendedAt` cleared, and every config `desiredEnabled
-= true`, `desiredRemote = present`, `enforcementState = pending`, so a purged
-Grant is rebuilt from desired state rather than reconstructed. It is guarded on
+with `statusReason` and `suspendedAt` cleared, and every `status = active`
+config `desiredEnabled = true`, `desiredRemote = present`, `enforcementState =
+pending`, so a purged Grant is rebuilt from desired state rather than
+reconstructed. A `retired` config (deleted, or moved away) and one an admin
+disabled stay as they are (`network/contract.provisioning.md`, F-027-z). It is guarded on
 `statusReason = quota_exhausted` in the write's own `where`: `suspended` has
 two meanings and a top-up buys traffic, not an amnesty.
 

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { DesiredRemote, EnforcementState, GrantStatus, Prisma } from '@prisma/client';
+import { ConfigStatus, DesiredRemote, EnforcementState, GrantStatus, Prisma } from '@prisma/client';
 import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../config/env.validation';
@@ -159,7 +159,9 @@ export async function reviveOnTopUp(tx: Prisma.TransactionClient, grantId: strin
   if (moved.count === 0) return { revived: false, configsRestored: 0 };
 
   const restored = await tx.config.updateMany({
-    where: { grantId },
+    // `active` only: a retired config was deleted or moved away and must not
+    // come back, and a disabled one waits for whoever disabled it (F-027-z).
+    where: { grantId, status: ConfigStatus.active },
     data: {
       desiredEnabled: true,
       desiredRemote: DesiredRemote.present,

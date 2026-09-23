@@ -65,3 +65,58 @@ func (m *MemoryAllocations) Applied(configID string) (AppliedCeiling, bool) {
 	row, ok := m.byConfig[configID]
 	return row, ok
 }
+
+// MemoryDesired holds desired state in memory, in the order it was put — the
+// same staging as MemoryAllocations, until `network.config` is read directly.
+type MemoryDesired struct {
+	mu      sync.Mutex
+	byPanel map[string][]string
+	rows    map[string]DesiredConfig
+}
+
+func NewMemoryDesired() *MemoryDesired {
+	return &MemoryDesired{byPanel: map[string][]string{}, rows: map[string]DesiredConfig{}}
+}
+
+// Put is the action writers' side, stubbed: it sets one config's desired
+// state on one panel, replacing an earlier one for the same config.
+func (m *MemoryDesired) Put(panelID string, row DesiredConfig) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, seen := m.rows[row.ConfigID]; !seen {
+		m.byPanel[panelID] = append(m.byPanel[panelID], row.ConfigID)
+	}
+	m.rows[row.ConfigID] = row
+}
+
+func (m *MemoryDesired) For(_ context.Context, panelID string) ([]DesiredConfig, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]DesiredConfig, 0, len(m.byPanel[panelID]))
+	for _, id := range m.byPanel[panelID] {
+		out = append(out, m.rows[id])
+	}
+	return out, nil
+}
+
+func (m *MemoryDesired) Record(_ context.Context, outcomes []Outcome) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, o := range outcomes {
+		row, ok := m.rows[o.ConfigID]
+		if !ok {
+			continue
+		}
+		row.RemoteID, row.State = o.RemoteID, o.State
+		m.rows[o.ConfigID] = row
+	}
+	return nil
+}
+
+// Get is one config's desired state as the pass last left it.
+func (m *MemoryDesired) Get(configID string) (DesiredConfig, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	row, ok := m.rows[configID]
+	return row, ok
+}

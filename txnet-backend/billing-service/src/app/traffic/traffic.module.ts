@@ -5,6 +5,7 @@ import { BlockPurchaseService } from './block-purchase';
 import { CeilingAllocatorService } from './ceiling-allocator';
 import { CollectionHealthController } from './collection-health.controller';
 import { CollectionHealthService } from './collection-health';
+import { ConfigActionsService } from './config-actions';
 import { HotLoopService } from './horizon';
 import { RemainderCreditService } from './remainder-credit';
 
@@ -16,11 +17,14 @@ import { RemainderCreditService } from './remainder-credit';
  *
  * `HotLoopService` is the hot loop's money half: it sizes the next block from
  * the measured rate and calls the other two in one transaction.
+ *
+ * `ConfigActionsService` is every action on a config as a desired-state write
+ * (F-027-z); `network-service` carries it to the panel, nothing here does.
  */
 @Module({
   imports: [WalletModule],
   controllers: [CollectionHealthController],
-  providers: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, CollectionHealthService],
-  exports: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService],
+  providers: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, CollectionHealthService, ConfigActionsService],
+  exports: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, ConfigActionsService],
 })
 export class TrafficModule {}

@@ -13,7 +13,7 @@ Source of truth: `txnet-backend/prisma/domains/network.prisma` (Postgres schema
 | Table | Purpose | Tenant-scoped? | Retention |
 |---|---|---|---|
 | panel | one remote management install, and its **declaration** — driver family, counter semantics, transport, capabilities, review verdict, health and request budget | `tenantId` nullable | permanent |
-| config | user credential on a panel (uuid + protocol + status), and its **desired state** — presence, enablement, drift verdict and ceiling | `tenantId` NOT NULL (denormalized) | soft state via `status`; the row outlives its remote client |
+| config | user credential on a panel (uuid + protocol + status), and its **desired state** — presence, enablement, drift verdict and ceiling | `tenantId` NOT NULL (denormalized) | soft state via `status` — `retired` is deleted or moved away, CHECK `config_retired_is_absent` (F-027-z); the row outlives its remote client |
 | config_action_log | who did what to a config | via config | permanent |
 | traffic_raw_log | per-interval up/down bytes; **monthly partitioned** on `recordedAt`, PK `(id, recordedAt)` | `tenantId` NOT NULL (denormalized) | `DROP PARTITION` by the month |
 | traffic_daily_aggregate | nightly rollup, one row per `(configId, date)` | via config | long |

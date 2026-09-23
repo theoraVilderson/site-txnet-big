@@ -2,15 +2,15 @@
 id: network
 layer: domain
 status: draft
-version: 8
-updated: 2026-09-22
+version: 12
+updated: 2026-09-23
 ---
 
 # Contract — network
 
 **DRAFT — the schema plus a service that does not serve it yet.** The shapes
-below are from `txnet-backend/prisma/domains/network.prisma`; none of the
-operations exist. What exists is the process that will hold them:
+below are from `txnet-backend/prisma/domains/network.prisma`; no route serves
+them. The config actions run in-process (F-027-z) and the panel side runs in
 `network-service/`, a Go deployable (ADR-0071, F-027-h).
 
 ## TL;DR
@@ -198,9 +198,9 @@ the watchdog and the health flag: [contract.resilience.md](contract.resilience.m
 
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
-| provision config | userId, grantId, panelId?, protocol | `config` (`active`) + Xray uuid pushed to the Panel API | sync + Panel API call | panel down, Grant not active |
-| regenerate config | configId | new `uuid`, `regenerateUsedCount++` | sync | over `maxRegenerateCount` |
-| set config status | configId, status, reason, actor | `config` + `config_action_log` row | sync | — |
+| provision / move / retire config (F-027-z) | grantId, panelId, protocol, actor | desired state on `config` + `config_action_log`; **no panel call** — `internal/converge` carries it ([contract.provisioning.md](contract.provisioning.md)) | sync, caller's tx | `grant_not_active`, `panel_not_found`, `config_retired` |
+| regenerate config (F-027-z) | configId, actor | new `uuid`, `regenerateUsedCount++`, held in the write | sync, caller's tx | `regenerate_limit_reached`, `config_changed` |
+| enable / disable config (F-027-z) | configId, reason, actor | `status` + `desiredEnabled` + `config_action_log` row | sync, caller's tx | `actor_not_allowed` for a user |
 | ingest traffic | panel -> {configId, up, down, at} | `traffic_raw_log` (partitioned) | async, high volume | — |
 | nightly aggregate | window | `traffic_daily_aggregate` rows, upserted per `(configId, date)`; the raw months past retention dropped (F-027-o) | async (`network_traffic_rollup`, seeded `15 3 * * *`) | a drop whose aggregate does not match the partition — refused, run fails |
 | add IP rule | cidr, ruleType, limit?, expiry? | `ip_access_rule` | sync | — |
@@ -213,8 +213,8 @@ the watchdog and the health flag: [contract.resilience.md](contract.resilience.m
 
 Declared in `contracts/network/delta.json` and held to it on both sides; the
 shape and why it is one message per pass are in
-[contract.collection.md](contract.collection.md). Config status changes are
-still pushed to the Panel API by the provisioning service directly.
+[contract.collection.md](contract.collection.md). No config action is pushed
+to a panel: each writes desired state, and one pass carries it (F-027-z).
 
 ## Consumes
 

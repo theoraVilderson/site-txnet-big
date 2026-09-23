@@ -2,12 +2,13 @@
 id: network
 layer: domain
 status: draft
-updated: 2026-09-21
+updated: 2026-09-23
 ---
 
 # Invariants — network
 
-**DRAFT** — 1-7 are from schema comments and not enforced in code. 8-12 are
+**DRAFT** — 1-7 are from schema comments and not enforced in code, except 4
+(F-027-z); 39-40 are F-027-z's. 8-12 are
 enforced by the database as of F-027-a, 13-17 as of F-027-b, 19-25 as of
 F-027-c, 26-28 as of F-027-d and 2, 30-31 as of F-027-e. 18 and 29 are the
 promise the rest of them serve and are service rules; 32 is a service rule too,
@@ -22,7 +23,7 @@ F-027-l; its push half waits for F-027-af.
 | 2b | A tenant reads only its own `traffic_raw_log` rows, through the parent **or** a partition named directly; every month the partition function creates is policied as it is created (F-027-ak) | RLS on the parent and each partition, `ensure_traffic_raw_log_partition()` | one tenant reads another's traffic under a table name derived from the month |
 | 2 | `traffic_raw_log` is only ever appended and dropped by partition — never `DELETE`d row-wise | monthly `PARTITION BY RANGE ("recordedAt")` (F-027-e) | vacuum bloat on the largest table in the platform, competing with the collection loop for the same pages |
 | 3 | Daily aggregate is computed before its source raw partition is dropped | `network.drop_traffic_raw_log_partition` refuses a partition the aggregate does not match (F-027-o), asserted by `traffic-rollup.job.spec.ts` | permanent traffic-data loss |
-| 4 | `regenerateUsedCount` never exceeds `maxRegenerateCount` | planned service check | abuse of free re-issue |
+| 4 | `regenerateUsedCount` never exceeds `maxRegenerateCount` | `ConfigActionsService.regenerate`, the count it read in the write's own `where` (F-027-z), asserted by `config-actions.spec.ts` | abuse of free re-issue |
 | 5 | `panelApiCredentials` (encrypted) never default-selected or logged | planned `select`/`omit` | node panel takeover |
 | 6 | Every `config` has a non-null `tenantId` (denormalized, must match the owner user's tenant) | schema NOT NULL + planned service check | cross-tenant config listing |
 | 7 | A panel in `maintenance` / `down` / `throttled_or_blocked` state receives no new configs | planned provisioning check | provisioning onto a dead node |
@@ -57,6 +58,8 @@ F-027-l; its push half waits for F-027-af.
 | 37 | A shutdown raises a ceiling only up to `walletBackedCeilingBytes`, never lowers one, never writes zero, and records nothing as applied | CHECK `config_wallet_backed_ceiling_extends` (≥ the allocation) + `shutdown.Extender` (F-027-w), asserted by `shutdown_test.go` and the allocator's property test | a deploy either cuts off every metered user with money in their wallet, or — removing the ceiling instead — serves traffic nobody bought while nothing is counting (ADR-0078) |
 | 38 | `lastSuccessfulCollectionAt` is stamped only for a panel whose turn published and moved its cursor | `collect.Loop.stamp` (F-027-w), asserted by `collect_test.go` | a watchdog that reports health it never observed: a wedged collector stays green, and users stall before anyone is told |
 | 33 | A driver reports what the far end said — it never repairs a reset, clamps an implausible figure, extrapolates past a missing `Stop` or reassembles bits the NAS did not send | the eleven scenarios of `internal/driver/conformance` (F-027-j), run by every driver's own test | the evidence the normaliser decides on is destroyed inside the driver, and the repair is billed as a measurement — a plausible wrong number with nothing red anywhere (ADR-0074) |
+| 39 | A retired config is never wanted on a panel, and a top-up revives only `active` configs | CHECK `config_retired_is_absent` + `reviveOnTopUp`'s `where` (F-027-z) | a config the user deleted, or the old seat of one that moved, is rebuilt by the next top-up |
+| 40 | Only the convergence pass calls a panel's client-lifecycle methods; a client is created under its ceiling, and `enforcementState = complete` / a cleared `remoteId` come only from a read | `converge.Provisioning` (F-027-z), asserted by `provision_test.go` | a create with no limit is unpaid traffic; a delete believed from our own write frees a seat the panel still holds |
 
 ## How to test
 

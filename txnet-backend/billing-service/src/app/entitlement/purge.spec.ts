@@ -28,7 +28,7 @@
  * What the database holds rather than this file: `grant_suspended_has_a_clock`
  * and `grant_status_one_way` are `entitlement-schema.int.spec.ts`'s.
  */
-import { DesiredRemote, EnforcementState, GrantStatus } from '@prisma/client';
+import { ConfigStatus, DesiredRemote, EnforcementState, GrantStatus } from '@prisma/client';
 import { TenantContext } from '@txnet-backend/shared-core';
 
 import { GrantPurgeService, reviveOnTopUp } from './purge';
@@ -176,6 +176,8 @@ describe('reviveOnTopUp', () => {
       desiredRemote: DesiredRemote.present,
       enforcementState: EnforcementState.pending,
     });
+    // Never a retired config — deleted or moved away — and never one an admin disabled (F-027-z).
+    expect(configWrite?.where).toEqual({ grantId: GRANT_1, status: ConfigStatus.active });
   });
 
   it('will not lift a suspension it did not impose', async () => {

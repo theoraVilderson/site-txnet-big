@@ -226,6 +226,9 @@ enum ConfigStatus {
   frozen
   disabled_by_admin
   disabled_by_system
+  /// Deleted, or the old side of a move (F-027-z). Never on a panel again:
+  /// CHECK `config_retired_is_absent`, and a top-up revives only `active`.
+  retired
 
   @@schema("network")
 }

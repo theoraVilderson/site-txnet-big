@@ -29,7 +29,7 @@
 //     accepted worst failure in every direction.
 //
 // What is deliberately not here: sizing a share (that is the allocator's),
-// creating, enabling or deleting a client (F-027-z), deciding which config a
+// creating, enabling or deleting a client (`provision.go`, F-027-z), deciding which config a
 // remote client belongs to (F-027-aa), and the anti-flap stop that bounds
 // repair attempts (F-027-ab). This package writes one number and reads it
 // back.
@@ -177,6 +177,23 @@ func (c *Ceilings) Converge(ctx context.Context, p collect.Panel, res collect.Re
 // the panel refuses is a finding, because one client must not stop the other
 // five thousand being enforced.
 func (c *Ceilings) Pass(ctx context.Context, p collect.Panel, res collect.Result) (Report, error) {
+	return c.pass(ctx, p, res, nil)
+}
+
+// PassOver is Pass over a population someone else already read — the
+// `Converger`'s, which reads it once for provisioning and ceilings together
+// (F-027-z), because a second `ListClients` per pass would be a second request
+// against the same budget for the same answer (invariant 34).
+func (c *Ceilings) PassOver(ctx context.Context, p collect.Panel, res collect.Result, clients []driver.RemoteClient) (Report, error) {
+	if clients == nil {
+		clients = []driver.RemoteClient{}
+	}
+	return c.pass(ctx, p, res, clients)
+}
+
+// pass reads the population only when it was not handed one, and only when
+// there is an allocation to compare it against.
+func (c *Ceilings) pass(ctx context.Context, p collect.Panel, res collect.Result, clients []driver.RemoteClient) (Report, error) {
 	report := Report{PanelID: p.ID}
 
 	allocations, err := c.Allocations.For(ctx, p.ID)
@@ -187,12 +204,14 @@ func (c *Ceilings) Pass(ctx context.Context, p collect.Panel, res collect.Result
 		return report, nil
 	}
 
-	// One request for the whole population, exactly as the bulk usage read is
-	// (catalog 8.4): 5000 clients read one at a time is a flood on a machine
-	// we do not own.
-	clients, err := p.Driver.ListClients(ctx)
-	if err != nil {
-		return report, err
+	if clients == nil {
+		// One request for the whole population, exactly as the bulk usage read
+		// is (catalog 8.4): 5000 clients read one at a time is a flood on a
+		// machine we do not own.
+		clients, err = p.Driver.ListClients(ctx)
+		if err != nil {
+			return report, err
+		}
 	}
 	enforcing := make(map[string]driver.RemoteClient, len(clients))
 	for _, client := range clients {

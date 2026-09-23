@@ -155,6 +155,14 @@ describe('network.Config carries its desired state, its drift and its ceiling', 
     expect(sql).toContain('config_purged_has_no_remote_id');
   });
 
+  it('cannot hold a retired config that is still wanted on a panel', () => {
+    // F-027-z: a delete and a purge both write `absent`, and `retired` is the
+    // difference a top-up reads. A retired row wanted `present` would rebuild
+    // a client the user deleted, or the old seat of a config that moved.
+    expect(enumValues('ConfigStatus')).toContain('retired');
+    expect(sql).toContain('config_retired_is_absent');
+  });
+
   it('cannot hold a shutdown ceiling below the allocation it extends', () => {
     // F-027-w: the whole meaning of `walletBackedCeilingBytes` is that it is
     // the larger number — what money still backs, over what was bought. A row
