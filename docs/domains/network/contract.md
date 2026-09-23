@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 14
+version: 15
 updated: 2026-09-23
 ---
 

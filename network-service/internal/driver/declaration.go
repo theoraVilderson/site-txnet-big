@@ -53,6 +53,14 @@ const (
 	ReviewRefused          ReviewState = "refused"
 )
 
+// Collectable says whether a panel in this state may be collected or
+// converged at all. Only a verdict of acceptance opens it: a pending panel has
+// not answered the questionnaire and a refused one failed it, and the empty
+// state is a row nobody read — so this fails closed (F-027-aq).
+func (s ReviewState) Collectable() bool {
+	return s == ReviewAccepted || s == ReviewAcceptedLowTrust
+}
+
 // DriverType is the family (`network.DriverType`). It selects the
 // implementation and nothing else: two panels of the same family can still
 // answer the questionnaire differently, because a version or a configuration

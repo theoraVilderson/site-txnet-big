@@ -84,6 +84,7 @@ func newRig(t *testing.T, cfg fake.Config, clients ...string) *rig {
 				CounterSemantics: cfg.CounterSemantics,
 				Transport:        driver.TransportPull,
 				MaxLineRateBps:   gigabit,
+				ReviewState:      driver.ReviewAccepted,
 				Driver:           p,
 				Configs:          configs,
 			}}, nil

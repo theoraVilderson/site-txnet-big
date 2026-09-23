@@ -80,6 +80,7 @@ func newDriftRig(t *testing.T, cfg fake.Config) *driftRig {
 			return []collect.Panel{{
 				ID: "panel-1", CounterSemantics: cfg.CounterSemantics, Transport: driver.TransportPull,
 				MaxLineRateBps: gigabit, Driver: r.panel, Configs: configs,
+				ReviewState: driver.ReviewAccepted,
 			}}, nil
 		}),
 		Sink:     sink{},

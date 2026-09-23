@@ -41,6 +41,8 @@ var RequiredColumns = map[string][]string{
 		"id", "tenantId", "ownershipType", "apiBaseUrl",
 		"driverType", "counterSemantics", "transport", "capabilities",
 		"reviewState", "orphanPolicy", "panelApiCredentials",
+		// Why the connection test gave no verdict (F-027-aq, ADR-0080).
+		"connectionTestedAt", "connectionTestFault", "connectionTestDetail",
 		"panelState", "blockedSince", "maxRequestsPerMinute",
 		"maxLineRateBps", "observedWriteLatencyMs",
 		"lastHealthyAt", "lastSuccessfulCollectionAt",

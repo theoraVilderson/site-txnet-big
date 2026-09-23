@@ -139,7 +139,10 @@ type PassReport struct {
 	Deltas       int
 	Quarantines  int
 	Unattributed int
-	Failed       []PanelFailure
+	// Unreviewed is how many panels the source offered that no verdict of
+	// acceptance has opened. They are skipped, not failed.
+	Unreviewed int
+	Failed     []PanelFailure
 }
 
 // PanelFailure is one panel that did not complete its pass. Its cursor was not
@@ -179,6 +182,19 @@ func (l *Loop) Pass(ctx context.Context) (PassReport, error) {
 	}
 
 	report := PassReport{StartedAt: l.now(), Panels: len(panels)}
+	// Fail closed on the verdict (F-027-aq). The source is expected to offer
+	// only accepted panels, and this is what holds if it does not: a refused
+	// panel converged is a panel provisioned, which is exactly what refusing
+	// it at registration was for.
+	reviewed := panels[:0:0]
+	for _, p := range panels {
+		if !p.ReviewState.Collectable() {
+			report.Unreviewed++
+			continue
+		}
+		reviewed = append(reviewed, p)
+	}
+	panels = reviewed
 	// The panels whose turn completed, stamped together once the pass is over:
 	// one write for a pass over two hundred panels, not two hundred.
 	marks := make([]PanelProgress, 0, len(panels))

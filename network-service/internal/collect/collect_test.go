@@ -77,6 +77,7 @@ func newRig(t *testing.T, semantics driver.CounterSemantics, clients ...string) 
 				Transport:        driver.TransportPull,
 				MaxLineRateBps:   gigabit,
 				Driver:           p,
+				ReviewState:      driver.ReviewAccepted,
 				Configs:          configs,
 			}}, nil
 		}),
@@ -319,7 +320,7 @@ func TestAPanelWithNoDeclaredLineRateHasNoRateCap(t *testing.T) {
 		Source: collect.PanelsFunc(func(context.Context) ([]collect.Panel, error) {
 			return []collect.Panel{{
 				ID: "panel-1", CounterSemantics: driver.CounterCumulative,
-				Transport: driver.TransportPull, Driver: p,
+				Transport: driver.TransportPull, Driver: p, ReviewState: driver.ReviewAccepted,
 				Configs: map[string]collect.ConfigRef{"c1": {ConfigID: "config-c1", Protocol: "vless"}},
 			}}, nil
 		}),
@@ -335,6 +336,35 @@ func TestAPanelWithNoDeclaredLineRateHasNoRateCap(t *testing.T) {
 	}
 	if got := deltaFor(t, sink.last(t), "c1"); got.UpBytes != 900*gb {
 		t.Fatalf("delta = %d, want %d: an undeclared line rate is unknown, not zero", got.UpBytes, 900*gb)
+	}
+}
+
+// A panel is refused at registration so that it never carries users (F-027-aq,
+// ADR-0074): no read and no convergence until a verdict of acceptance, and a
+// panel whose verdict nobody read is treated as having none.
+func TestOnlyAnAcceptedPanelIsCollected(t *testing.T) {
+	for _, state := range []driver.ReviewState{driver.ReviewPending, driver.ReviewRefused, ""} {
+		p := fake.New(fake.Config{CounterSemantics: driver.CounterCumulative})
+		p.Given("c1")
+		sink := &recorder{}
+		loop := &collect.Loop{
+			Source: collect.PanelsFunc(func(context.Context) ([]collect.Panel, error) {
+				return []collect.Panel{{
+					ID: "panel-1", CounterSemantics: driver.CounterCumulative,
+					Transport: driver.TransportPull, Driver: p, ReviewState: state,
+					Configs: map[string]collect.ConfigRef{"c1": {ConfigID: "config-c1", Protocol: "vless"}},
+				}}, nil
+			}),
+			Sink:    sink,
+			Cursors: collect.NewMemoryCursors(),
+		}
+		report, err := loop.Pass(context.Background())
+		if err != nil {
+			t.Fatalf("%q: pass: %v", state, err)
+		}
+		if p.TotalCalls() != 0 || report.Collected != 0 || report.Unreviewed != 1 || len(report.Failed) != 0 {
+			t.Errorf("%q: %d calls reached the panel, report %+v; want none, and one unreviewed", state, p.TotalCalls(), report)
+		}
 	}
 }
 
@@ -368,7 +398,7 @@ func TestARedeclaredPanelInvalidatesItsCursorsRatherThanUsingThem(t *testing.T) 
 		Source: collect.PanelsFunc(func(context.Context) ([]collect.Panel, error) {
 			return []collect.Panel{{
 				ID: "panel-1", CounterSemantics: semantics, Transport: driver.TransportPull,
-				MaxLineRateBps: gigabit, Driver: p, Configs: map[string]collect.ConfigRef{"c1": {ConfigID: "config-c1", Protocol: "vless"}},
+				MaxLineRateBps: gigabit, Driver: p, ReviewState: driver.ReviewAccepted, Configs: map[string]collect.ConfigRef{"c1": {ConfigID: "config-c1", Protocol: "vless"}},
 			}}, nil
 		}),
 		Sink:    sink,
@@ -464,9 +494,9 @@ func TestAFailingPanelDoesNotFailThePass(t *testing.T) {
 		Source: collect.PanelsFunc(func(context.Context) ([]collect.Panel, error) {
 			return []collect.Panel{
 				{ID: "down", CounterSemantics: driver.CounterCumulative, Transport: driver.TransportPull,
-					MaxLineRateBps: gigabit, Driver: down, Configs: map[string]collect.ConfigRef{"d1": {ConfigID: "config-d1", Protocol: "vless"}}},
+					MaxLineRateBps: gigabit, Driver: down, ReviewState: driver.ReviewAccepted, Configs: map[string]collect.ConfigRef{"d1": {ConfigID: "config-d1", Protocol: "vless"}}},
 				{ID: "up", CounterSemantics: driver.CounterCumulative, Transport: driver.TransportPull,
-					MaxLineRateBps: gigabit, Driver: up, Configs: map[string]collect.ConfigRef{"u1": {ConfigID: "config-u1", Protocol: "vless"}}},
+					MaxLineRateBps: gigabit, Driver: up, ReviewState: driver.ReviewAccepted, Configs: map[string]collect.ConfigRef{"u1": {ConfigID: "config-u1", Protocol: "vless"}}},
 			}, nil
 		}),
 		Sink:    sink,
@@ -501,7 +531,7 @@ func TestConcurrencyIsBounded(t *testing.T) {
 		p.Given("c1")
 		built = append(built, collect.Panel{
 			ID: "panel", CounterSemantics: driver.CounterCumulative, Transport: driver.TransportPull,
-			MaxLineRateBps: gigabit,
+			MaxLineRateBps: gigabit, ReviewState: driver.ReviewAccepted,
 			Driver: &gatedDriver{Driver: p, enter: func() {
 				n := atomic.AddInt64(&live, 1)
 				mu.Lock()

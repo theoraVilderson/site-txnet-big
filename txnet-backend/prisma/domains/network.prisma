@@ -80,6 +80,22 @@ enum PanelRole {
   @@schema("network")
 }
 
+/// Why a connection test gave no verdict (F-027-aq, ADR-0080): the driver's six
+/// fault kinds, plus the two that happen on our side of the call. A panel with
+/// one of these was not refused — it did not answer, so it stays `pending`.
+enum ConnectionTestFault {
+  timeout
+  rate_limited
+  blocked
+  unavailable
+  unsupported
+  protocol
+  unopenable
+  invalid_answers
+
+  @@schema("network")
+}
+
 /// `throttled_or_blocked` is not `down` (ADR-0072): a `429`/`403` means the
 /// panel is answering and refusing us, so it is not retried through and its
 /// owner is alerted instead.
@@ -269,6 +285,12 @@ model Panel {
   /// (F-027-i). Validated and versioned on write — the database holds no shape.
   capabilities               Json?
   reviewState                PanelReviewState   @default(pending)
+  /// When `network-service` last ran the connection test (ADR-0080).
+  connectionTestedAt         DateTime?
+  /// Set only while `pending`: why the last test gave no verdict, and the
+  /// driver's own words. Cleared by a verdict, or by re-submitting.
+  connectionTestFault        ConnectionTestFault?
+  connectionTestDetail       String?
   orphanPolicy               OrphanPolicy       @default(report_only)
   panelApiCredentials        String // SENSITIVE, encrypted — never default-select
   role                       PanelRole

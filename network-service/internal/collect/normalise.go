@@ -72,6 +72,10 @@ type Panel struct {
 	// `Paced` is what turns it into behaviour (F-027-v, invariant 34).
 	MaxRequestsPerMinute int
 	Driver               driver.Driver
+	// ReviewState is `panel.reviewState`. Only an accepted panel is read or
+	// converged (F-027-aq): a pending one has not answered the questionnaire
+	// and a refused one failed it, so neither has users to meter.
+	ReviewState driver.ReviewState
 	// OwnershipType is `panel.ownershipType` and TenantID its `tenantId`, set
 	// exactly when the ownership is `tenant` (invariant 9). They are carried
 	// through the pass rather than joined for by the consumer, because the

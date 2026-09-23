@@ -68,6 +68,9 @@ const PANEL_COLUMNS = [
   'transport',
   'capabilities',
   'reviewState',
+  'connectionTestedAt',
+  'connectionTestFault',
+  'connectionTestDetail',
   'orphanPolicy',
   'panelState',
   'blockedSince',
@@ -111,6 +114,17 @@ describe('network.Panel declares its driver, its counter and its transport', () 
     // retrying is what makes a temporary ban permanent (ADR-0072).
     expect(enumValues('PanelState')).toContain('throttled_or_blocked');
     expect(enumValues('PanelState')).toContain('down');
+  });
+
+  it('says why a connection test gave no verdict, and only on a pending panel', () => {
+    // ADR-0080: an unreachable panel did not answer, so it is not `refused`.
+    // The six are `driver.FaultKind`; `network-service/internal/register`
+    // mirrors all eight as `register.FaultKind`.
+    expect(enumValues('ConnectionTestFault')).toEqual([
+      'timeout', 'rate_limited', 'blocked', 'unavailable', 'unsupported', 'protocol',
+      'unopenable', 'invalid_answers',
+    ]);
+    expect(sql).toContain('panel_connection_fault_is_pending_only');
   });
 
   it('carries every protocol a driver family can report', () => {
