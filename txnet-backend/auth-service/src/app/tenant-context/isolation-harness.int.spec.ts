@@ -51,6 +51,7 @@ import { withTenant } from './with-tenant';
 import {
   HARNESS_TIMEOUT_MS,
   PostgresFixture,
+  prismaAt,
   startPostgresFixture,
   tenantScopedTables,
 } from '../../../../test-support/postgres-fixture';
@@ -89,7 +90,7 @@ beforeAll(async () => {
   // probe below.
   appRaw = new PrismaService(`${pg.appUrl}&connection_limit=1`);
   crossTenant = new PrismaService(pg.crossTenantUrl);
-  owner = new PrismaClient({ datasourceUrl: pg.ownerUrl });
+  owner = prismaAt(pg.ownerUrl);
 
   await seed();
 });

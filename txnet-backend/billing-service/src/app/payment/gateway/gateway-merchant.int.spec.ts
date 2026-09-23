@@ -39,6 +39,7 @@ import {
 import {
   HARNESS_TIMEOUT_MS,
   PostgresFixture,
+  prismaAt,
   startPostgresFixture,
 } from '../../../../../test-support/postgres-fixture';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -77,7 +78,7 @@ beforeAll(async () => {
     return kek;
   };
 
-  const owner = new PrismaClient({ datasourceUrl: pg.ownerUrl });
+  const owner = prismaAt(pg.ownerUrl);
   for (const [id, slug] of [[TENANT_A, 'alpha'], [TENANT_B, 'beta']]) {
     await owner.$executeRawUnsafe(`
       INSERT INTO tenant.tenant (id, "tenantType", "ownerUserId", slug, status, "billingModel", "updatedAt")
@@ -100,7 +101,7 @@ beforeAll(async () => {
   await owner.$disconnect();
 
   // auth-service's side: the cross-tenant pool writes both tenants' merchants.
-  crossTenant = new PrismaClient({ datasourceUrl: pg.crossTenantUrl });
+  crossTenant = prismaAt(pg.crossTenantUrl);
   const writer = new CredentialVaultService(crossTenant, kekFor());
   for (const [tenantId, label, value] of [
     [TENANT_A, `gateway:tenant:${A_OWN}`, 'merchant-alpha'],

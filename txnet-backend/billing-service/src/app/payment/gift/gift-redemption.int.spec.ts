@@ -28,6 +28,7 @@ import { runWithTenant, withTenant } from '@txnet-backend/shared-core';
 import {
   HARNESS_TIMEOUT_MS,
   PostgresFixture,
+  prismaAt,
   startPostgresFixture,
 } from '../../../../../test-support/postgres-fixture';
 import { GrantService } from '../../entitlement/grant';
@@ -65,7 +66,7 @@ let gifts: GiftRedemptionService;
 
 beforeAll(async () => {
   pg = await startPostgresFixture();
-  owner = new PrismaClient({ datasourceUrl: pg.ownerUrl });
+  owner = prismaAt(pg.ownerUrl);
 
   for (const [id, slug] of [[TENANT_A, 'alpha'], [TENANT_B, 'beta']]) {
     await owner.$executeRawUnsafe(`

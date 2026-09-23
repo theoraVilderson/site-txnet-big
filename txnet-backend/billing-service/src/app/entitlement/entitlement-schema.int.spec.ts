@@ -16,6 +16,7 @@ import { runWithTenant, tenantTransaction, withTenant } from '@txnet-backend/sha
 import {
   HARNESS_TIMEOUT_MS,
   PostgresFixture,
+  prismaAt,
   startPostgresFixture,
 } from '../../../../test-support/postgres-fixture';
 import { PrismaService } from '../prisma/prisma.service';
@@ -66,8 +67,8 @@ const setStatus = (id: string, status: string) =>
 
 beforeAll(async () => {
   pg = await startPostgresFixture();
-  owner = new PrismaClient({ datasourceUrl: pg.ownerUrl });
-  cross = new PrismaClient({ datasourceUrl: pg.crossTenantUrl });
+  owner = prismaAt(pg.ownerUrl);
+  cross = prismaAt(pg.crossTenantUrl);
 
   await owner.$executeRawUnsafe(`INSERT INTO identity.role (id, name, "isSystemRole") VALUES ('${ROLE}', 'User', true)`);
   for (const [id, type, slug] of [

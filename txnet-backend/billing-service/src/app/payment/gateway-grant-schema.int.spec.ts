@@ -31,6 +31,7 @@ import { PrismaClient } from '@prisma/client';
 import {
   HARNESS_TIMEOUT_MS,
   PostgresFixture,
+  prismaAt,
   startPostgresFixture,
 } from '../../../../test-support/postgres-fixture';
 
@@ -51,8 +52,8 @@ let app: PrismaClient;
 
 beforeAll(async () => {
   pg = await startPostgresFixture();
-  owner = new PrismaClient({ datasourceUrl: pg.ownerUrl });
-  app = new PrismaClient({ datasourceUrl: pg.appUrl });
+  owner = prismaAt(pg.ownerUrl);
+  app = prismaAt(pg.appUrl);
   await seed();
 });
 
@@ -289,7 +290,7 @@ describe("releasing a lent gateway: the lender's functions, and nobody else's", 
   let crossTenant: PrismaClient;
 
   beforeAll(async () => {
-    crossTenant = new PrismaClient({ datasourceUrl: pg.crossTenantUrl });
+    crossTenant = prismaAt(pg.crossTenantUrl);
     await owner.$executeRawUnsafe(`
       INSERT INTO billing.payment_transaction
         (id, "tenantId", "userId", "tenantGatewayConfigId", "amountRequested", "feeApplied",

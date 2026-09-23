@@ -21,6 +21,7 @@ import { runWithTenant, tenantTransaction, withTenant } from '@txnet-backend/sha
 import {
   HARNESS_TIMEOUT_MS,
   PostgresFixture,
+  prismaAt,
   startPostgresFixture,
 } from '../../../../../test-support/postgres-fixture';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -43,7 +44,7 @@ let seq = 0;
 
 beforeAll(async () => {
   pg = await startPostgresFixture();
-  owner = new PrismaClient({ datasourceUrl: pg.ownerUrl });
+  owner = prismaAt(pg.ownerUrl);
   await owner.$executeRawUnsafe(`
     INSERT INTO tenant.tenant (id, "tenantType", "ownerUserId", slug, status, "billingModel", "updatedAt")
     VALUES ('${TENANT}', 'reseller', '${TENANT}', 'alpha', 'active', 'pay_as_you_go_metered', now())

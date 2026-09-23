@@ -31,6 +31,7 @@
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { GenericContainer, StartedTestContainer, Wait } from 'testcontainers';
 
 process.env.TESTCONTAINERS_RYUK_DISABLED ??= 'true';
@@ -210,3 +211,16 @@ export function tenantScopedTables(): string[] {
  * milliseconds.
  */
 export const HARNESS_TIMEOUT_MS = 240_000;
+
+/**
+ * A client for one of the fixture's URLs. Use it instead of
+ * `new PrismaClient({ datasourceUrl })`: that infers
+ * `PrismaClient<{ datasourceUrl: string }>`, and assigning it to a variable
+ * typed `PrismaClient` makes tsc compare the whole generated client —
+ * 22s of billing-service's type-check on 2026-09-23. Options typed as the
+ * default make the two types identical, so there is nothing to compare.
+ */
+export function prismaAt(url: string): PrismaClient {
+  const options: Prisma.PrismaClientOptions = { datasourceUrl: url };
+  return new PrismaClient(options);
+}
