@@ -11,7 +11,12 @@
       "!{projectRoot}/src/test-setup.[jt]s",
       "!{projectRoot}/test-setup.[jt]s"
     ],
-    "sharedGlobals": []
+    "sharedGlobals": [
+      "{workspaceRoot}/prisma/**/*.prisma",
+      "{workspaceRoot}/test-support/**/*",
+      "{workspaceRoot}/tsconfig.base.json",
+      "{workspaceRoot}/vitest.shared.mts"
+    ]
   },
   "plugins": [
     "./scripts/typecheck-plugin.js",

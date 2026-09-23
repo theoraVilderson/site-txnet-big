@@ -10,9 +10,10 @@
 // The configs are globbed per project, not listed, so a project added next
 // month is checked the day it gets a tsconfig.
 //
-// The inputs are the cache key, so they must name everything tsc can see:
-// files outside every project (the Prisma schema that generates the client
-// type, `test-support/`) are not in `default` and are added here by hand.
+// The inputs are the cache key, so they must name everything tsc can see.
+// Files outside every project (the Prisma schema that generates the client
+// type, `test-support/`, the tsconfig base) reach `default` through
+// `sharedGlobals` in nx.json, which `test` shares.
 const { existsSync } = require('node:fs');
 const { dirname, join } = require('node:path');
 
@@ -24,9 +25,6 @@ const typecheck = {
   inputs: [
     'default',
     '^default',
-    '{workspaceRoot}/tsconfig.base.json',
-    '{workspaceRoot}/prisma/**/*.prisma',
-    '{workspaceRoot}/test-support/**/*',
     '{workspaceRoot}/scripts/typecheck.sh',
     { externalDependencies: ['typescript'] },
   ],
