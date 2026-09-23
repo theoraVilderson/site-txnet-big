@@ -25,6 +25,9 @@ import { CeilingAllocatorService, DEFAULT_CONFIG_FLOOR_BYTES, allocateCeilings, 
 
 const MIB = BigInt(1024 * 1024);
 const GRANT = '77777777-7777-4777-8777-777777777777';
+const USER = '88888888-8888-4888-8888-888888888888';
+/** 2^30 — what one unit of `grant.meteredRate` prices (ADR-0073). */
+const GIB_BYTES = BigInt(1024) * MIB;
 
 const demand = (configId: string, servedBytes: bigint, capBytes: bigint | null = null): ConfigDemand => ({ configId, servedBytes, capBytes });
 const sum = (values: bigint[]) => values.reduce((a, b) => a + b, BigInt(0));
@@ -181,6 +184,18 @@ describe('allocateCeilings', () => {
           }
         }
 
+        // F-027-w: the same split over a bigger bag — `purchasedBytes` plus
+        // what the wallet would still buy — is what a graceful shutdown
+        // raises each ceiling to. It has to be larger config by config, or a
+        // shutdown would quietly *lower* one. Monotone in the bag by
+        // construction; asserted here because the whole meaning of the column
+        // rests on it (`config_wallet_backed_ceiling_extends`).
+        const backed = byId(allocateCeilings({ purchasedBytes: purchasedBytes + BigInt(pick(5_000)) * MIB, floorBytes: configFloor, hotConfigId, configs }));
+        for (const config of configs) {
+          const over = backed.get(config.configId) as bigint;
+          expect(over >= (ceilings.get(config.configId) as bigint), `${where} ${config.configId} extends rather than lowers`).toBe(true);
+        }
+
         // A bag big enough for everyone covers everyone: no config is starved
         // below what it has already served while bytes sit unallocated.
         const owed = sum(configs.map((c) => (c.capBytes === null ? c.servedBytes : c.servedBytes < c.capBytes ? c.servedBytes : c.capBytes)));
@@ -195,25 +210,49 @@ describe('allocateCeilings', () => {
   });
 });
 
-type ConfigRow = { id: string; grantId: string; status: string; allocatedCeilingBytes: bigint | null };
+type ConfigRow = { id: string; grantId: string; status: string; allocatedCeilingBytes: bigint | null; walletBackedCeilingBytes?: bigint | null };
 
 /** A store, not a list of expected calls — the shape `block-purchase.spec.ts` uses. */
-function fakeTx(options: { purchasedBytes: bigint; configs: ConfigRow[]; served: Record<string, bigint>; caps?: Record<string, { dataCapBytes: bigint; isActive: boolean }> }) {
+function fakeTx(options: {
+  purchasedBytes: bigint;
+  configs: ConfigRow[];
+  served: Record<string, bigint>;
+  caps?: Record<string, { dataCapBytes: bigint; isActive: boolean }>;
+  /** `grant.meteredRate`; null makes the Grant prepaid, which has no wallet-backed extension. */
+  meteredRate?: string | null;
+  /** `wallet.cachedBalance`, in dollars. Undefined is a user with no wallet row. */
+  balance?: string;
+}) {
   const rows = options.configs.map((c) => ({ ...c }));
+  const metered = options.meteredRate === undefined ? '1.00000000' : options.meteredRate;
   const tx = {
-    grant: { findUnique: async ({ where }: { where: { id: string } }) => (where.id === GRANT ? { id: GRANT, purchasedBytes: options.purchasedBytes } : null) },
+    grant: {
+      findUnique: async ({ where }: { where: { id: string } }) =>
+        where.id === GRANT
+          ? {
+              id: GRANT,
+              userId: USER,
+              purchasedBytes: options.purchasedBytes,
+              billingMode: metered === null ? 'prepaid' : 'metered',
+              meteredRate: metered === null ? null : new Prisma.Decimal(metered),
+            }
+          : null,
+    },
+    wallet: { findUnique: async () => (options.balance === undefined ? null : { cachedBalance: new Prisma.Decimal(options.balance) }) },
     config: {
       findMany: async () =>
         rows.map((row) => ({
           id: row.id,
           allocatedCeilingBytes: row.allocatedCeilingBytes,
+          walletBackedCeilingBytes: row.walletBackedCeilingBytes ?? null,
           counterState: options.served[row.id] === undefined ? null : { lifetimeUpBytes: options.served[row.id], lifetimeDownBytes: BigInt(0) },
           subAccount: options.caps?.[row.id] ?? null,
         })),
-      update: async ({ where, data }: { where: { id: string }; data: { allocatedCeilingBytes: bigint } }) => {
+      update: async ({ where, data }: { where: { id: string }; data: { allocatedCeilingBytes?: bigint; walletBackedCeilingBytes?: bigint } }) => {
         const row = rows.find((r) => r.id === where.id);
         if (!row) throw new Error('no config');
-        row.allocatedCeilingBytes = data.allocatedCeilingBytes;
+        if (data.allocatedCeilingBytes !== undefined) row.allocatedCeilingBytes = data.allocatedCeilingBytes;
+        if (data.walletBackedCeilingBytes !== undefined) row.walletBackedCeilingBytes = data.walletBackedCeilingBytes;
         return row;
       },
     },
@@ -223,7 +262,7 @@ function fakeTx(options: { purchasedBytes: bigint; configs: ConfigRow[]; served:
 
 describe('CeilingAllocatorService.rebalance', () => {
   const service = () => new CeilingAllocatorService({} as never);
-  const config = (id: string): ConfigRow => ({ id, grantId: GRANT, status: 'active', allocatedCeilingBytes: null });
+  const config = (id: string): ConfigRow => ({ id, grantId: GRANT, status: 'active', allocatedCeilingBytes: null, walletBackedCeilingBytes: null });
 
   it('writes each config its share of what the Grant bought', async () => {
     const { tx, rows } = fakeTx({
@@ -276,6 +315,8 @@ describe('CeilingAllocatorService.rebalance', () => {
   it('writes only the configs whose share moved', async () => {
     const { tx, rows } = fakeTx({ purchasedBytes: BigInt(300) * MIB, configs: [config('a')], served: { a: BigInt(0) } });
     rows[0].allocatedCeilingBytes = BigInt(300) * MIB;
+    // Both columns, because either one moving is a write (F-027-w).
+    rows[0].walletBackedCeilingBytes = BigInt(300) * MIB;
 
     const allocation = await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
 
@@ -285,6 +326,113 @@ describe('CeilingAllocatorService.rebalance', () => {
   it('answers a missing Grant as a refusal, not a crash', async () => {
     const { tx } = fakeTx({ purchasedBytes: BigInt(0), configs: [], served: {} });
     await expect(service().rebalance(tx, { grantId: 'other' })).rejects.toMatchObject({ reason: 'grant_not_found' });
+  });
+
+  /**
+   * F-027-w / ADR-0078. The collector is the only thing that reads a counter,
+   * so from the moment it exits no ceiling rises for anyone — and it cannot
+   * ask this service for a figure at that moment, because the deploy taking it
+   * down is usually taking this one down too. So the figure is left in the row
+   * ahead of time, refreshed in the same transaction as the allocation it
+   * extends, and is never more than one pass stale.
+   */
+  describe('the figure a graceful shutdown raises a ceiling to', () => {
+    it('extends the share by what the wallet would still buy', async () => {
+      // 1 dollar per GiB, 4 dollars in the wallet: the bag the shutdown figure
+      // is split over is what was bought plus four more gibibytes.
+      const { tx, rows } = fakeTx({
+        purchasedBytes: BigInt(1000) * MIB,
+        configs: [config('a')],
+        served: { a: BigInt(0) },
+        meteredRate: '1.00000000',
+        balance: '4.00',
+      });
+
+      await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
+
+      expect(rows[0]?.allocatedCeilingBytes).toBe(BigInt(1000) * MIB);
+      expect(rows[0]?.walletBackedCeilingBytes).toBe(BigInt(1000) * MIB + BigInt(4) * GIB_BYTES);
+    });
+
+    it('never writes one below the allocation it extends', async () => {
+      // The database CHECKs this (`config_wallet_backed_ceiling_extends`); a
+      // row that got under it would have a shutdown lowering every ceiling on
+      // its way out.
+      const { tx, rows } = fakeTx({
+        purchasedBytes: BigInt(1000) * MIB,
+        configs: [config('a'), config('b')],
+        served: { a: BigInt(0), b: BigInt(0) },
+        balance: '0.00',
+      });
+
+      await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
+
+      for (const row of rows) {
+        expect(row.walletBackedCeilingBytes).toBe(row.allocatedCeilingBytes);
+      }
+    });
+
+    it('gives a prepaid Grant no extension at all', async () => {
+      // Nothing prices a byte for it (ADR-0073), and nothing tops it up
+      // either: a prepaid ceiling is the quota, and the collector being down
+      // does not shrink it.
+      const { tx, rows } = fakeTx({
+        purchasedBytes: BigInt(500) * MIB,
+        configs: [config('a')],
+        served: { a: BigInt(0) },
+        meteredRate: null,
+        balance: '100.00',
+      });
+
+      await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
+
+      expect(rows[0]?.walletBackedCeilingBytes).toBe(rows[0]?.allocatedCeilingBytes);
+    });
+
+    it('treats a user with no wallet row as a balance of zero', async () => {
+      const { tx, rows } = fakeTx({ purchasedBytes: BigInt(500) * MIB, configs: [config('a')], served: { a: BigInt(0) } });
+
+      await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
+
+      expect(rows[0]?.walletBackedCeilingBytes).toBe(BigInt(500) * MIB);
+    });
+
+    it('keeps the sub-account cap over the larger bag too', async () => {
+      // A cap is a cap. Money the user has does not buy past a limit somebody
+      // set on that config (F-608), and a shutdown is not where that stops
+      // being true.
+      const { tx, rows } = fakeTx({
+        purchasedBytes: BigInt(100) * MIB,
+        configs: [config('capped')],
+        served: { capped: BigInt(0) },
+        caps: { capped: { dataCapBytes: BigInt(150) * MIB, isActive: true } },
+        balance: '50.00',
+      });
+
+      await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'capped' });
+
+      expect(rows[0]?.walletBackedCeilingBytes).toBe(BigInt(150) * MIB);
+    });
+
+    it('writes the row when only the shutdown figure moved', async () => {
+      // The wallet changes far more often than the allocation does — every
+      // top-up moves it while `purchasedBytes` stands still. A write gated on
+      // the allocation alone would leave the shutdown figure at yesterday's
+      // balance.
+      const { tx, rows } = fakeTx({
+        purchasedBytes: BigInt(300) * MIB,
+        configs: [config('a')],
+        served: { a: BigInt(0) },
+        balance: '2.00',
+      });
+      rows[0].allocatedCeilingBytes = BigInt(300) * MIB;
+      rows[0].walletBackedCeilingBytes = BigInt(300) * MIB;
+
+      const allocation = await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
+
+      expect(allocation.written).toBe(1);
+      expect(rows[0]?.walletBackedCeilingBytes).toBe(BigInt(300) * MIB + BigInt(2) * GIB_BYTES);
+    });
   });
 
   it('uses the shipped floor when the caller names none', async () => {

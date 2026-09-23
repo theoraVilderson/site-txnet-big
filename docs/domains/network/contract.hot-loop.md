@@ -148,4 +148,5 @@ does not decide a share — that is the allocator's (F-027-s). The per-panel
 request budget it runs under, and the ban it refuses to retry through, are
 [contract.budget.md](contract.budget.md) (F-027-v) — built with this loop
 rather than after it, because an unbudgeted hot loop is a denial of service on
-a customer's own server. Extending a ceiling on shutdown is still F-027-w.
+a customer's own server. Extending a ceiling on shutdown is
+[contract.resilience.md](contract.resilience.md) (F-027-w).

@@ -26,6 +26,11 @@ configs:
     file: ./config-dev/currency.rules.yml
   billing_rules:
     file: ./config-dev/billing.rules.yml
+  # The collector watchdog (F-027-w). It reads `network_collection` off
+  # postgres-exporter rather than off network-service, because it has to keep
+  # answering while network-service is the thing that is down.
+  network_rules:
+    file: ./config-dev/network.rules.yml
   # The one Postgres-side number the automation alerts need (F-067-c): the age
   # of the oldest unpublished outbox row. A query file rather than an HTTP
   # surface on worker-service, which ADR-0027 says serves no requests.
@@ -68,6 +73,8 @@ services:
         target: /etc/prometheus/currency.rules.yml
       - source: billing_rules
         target: /etc/prometheus/billing.rules.yml
+      - source: network_rules
+        target: /etc/prometheus/network.rules.yml
     volumes:
       - prometheus_data:/prometheus
     networks:

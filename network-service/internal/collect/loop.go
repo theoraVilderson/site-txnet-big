@@ -62,6 +62,27 @@ type PanelHealth interface {
 	Observe(ctx context.Context, panelID string, err error, at time.Time) error
 }
 
+// PanelProgress is one panel's turn having completed — the moment
+// `panel.lastSuccessfulCollectionAt` records (F-027-w).
+//
+// It is the watchdog's whole input, and it is written from **inside** the
+// pass rather than derived from a log line, because the question the watchdog
+// asks is not "is the process alive" but "is this panel still being read".
+// Those differ exactly when it matters: a collector up, healthy on `/health`,
+// and stalled on one panel's credential.
+type PanelProgress struct {
+	PanelID string
+	// At is the pass's clock, which is the moment the counters describe.
+	At time.Time
+}
+
+// Progress is where those marks are written. Nil on a loop records nothing,
+// which is what every test of the normaliser wants, and the Postgres-backed
+// implementation lands with the panel source beside the durable `Cursors`.
+type Progress interface {
+	Collected(ctx context.Context, marks []PanelProgress) error
+}
+
 // OpSkipped is the `Op` of a panel that was not called at all, so a panel held
 // off by a ban is a row in the report rather than a silent absence.
 const OpSkipped = "skipped"
@@ -88,6 +109,10 @@ type Loop struct {
 	// `config.observedRateBps`, which is what the hot loop judges membership
 	// on. Nil records nothing.
 	Rates Rates
+	// Progress stamps `panel.lastSuccessfulCollectionAt` for each panel whose
+	// turn completed — the external watchdog's input (F-027-w). Nil records
+	// nothing.
+	Progress Progress
 
 	// Interval is the gap between passes (DefaultInterval).
 	Interval time.Duration
@@ -150,6 +175,9 @@ func (l *Loop) Pass(ctx context.Context) (PassReport, error) {
 	}
 
 	report := PassReport{StartedAt: l.now(), Panels: len(panels)}
+	// The panels whose turn completed, stamped together once the pass is over:
+	// one write for a pass over two hundred panels, not two hundred.
+	marks := make([]PanelProgress, 0, len(panels))
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	slots := make(chan struct{}, l.concurrency())
@@ -177,9 +205,11 @@ func (l *Loop) Pass(ctx context.Context) (PassReport, error) {
 			report.Deltas += len(res.Deltas)
 			report.Quarantines += len(res.Quarantines)
 			report.Unattributed += len(res.Unattributed)
+			marks = append(marks, PanelProgress{PanelID: p.ID, At: res.ObservedAt})
 		}(panel)
 	}
 	wg.Wait()
+	l.stamp(ctx, marks)
 	return report, nil
 }
 
@@ -255,6 +285,25 @@ func (l *Loop) record(ctx context.Context, samples []RateSample) {
 	}
 	if err := l.Rates.Record(ctx, samples); err != nil {
 		l.log().Error("observed rate write failed", "samples", len(samples), "error", err)
+	}
+}
+
+// stamp records the panels this pass actually read, for the external watchdog
+// (F-027-w). Only a turn that published and moved its cursor is in the list:
+// the value of `lastSuccessfulCollectionAt` is entirely that it is *not*
+// written when nothing was collected, and a stamp on a failed turn is a
+// watchdog that reports health it never observed.
+//
+// A failure here is logged and does not fail the pass, for the same reason the
+// rate write does not: the bytes are billed by then, and failing would re-read
+// and republish them to fix a clock. An unwritten clock ages into an alert,
+// which is the safe direction on its own.
+func (l *Loop) stamp(ctx context.Context, marks []PanelProgress) {
+	if l.Progress == nil || len(marks) == 0 {
+		return
+	}
+	if err := l.Progress.Collected(ctx, marks); err != nil {
+		l.log().Error("collection progress write failed", "panels", len(marks), "error", err)
 	}
 }
 

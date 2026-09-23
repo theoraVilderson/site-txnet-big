@@ -45,10 +45,20 @@ model (`tenant-context/contract.md` rule 5).
 
 `BlockPurchaseService` advances `purchasedBytes` and this hands out what that
 bought. The bound and the split move in one direction only, so a bug here can
-strand bytes but cannot invent them. Nothing here reads a wallet, a rate or the
-catalog.
+strand bytes but cannot invent them. Nothing here reads the catalog, and the
+wallet and the Grant's rate are read for one figure only, below.
 
-It also never writes to a panel. `allocatedCeilingBytes` is where it stops;
+**It also writes the shutdown figure** (F-027-w, ADR-0078):
+`walletBackedCeilingBytes` is the same split, same order, over a bag of
+`purchasedBytes + bytesAffordable(rate, balance)` — zero added for a prepaid
+Grant. It is taken as the larger of it and the allocation, so the CHECK
+`config_wallet_backed_ceiling_extends` never refuses a rebalance, and a row is
+written when **either** column moved: a top-up moves the wallet while
+`purchasedBytes` stands still. Out: `walletBacked` and `walletBackedBytes`,
+beside `ceilings`. What the collector does with it is
+[contract.resilience.md](contract.resilience.md).
+
+It never writes to a panel. These two columns are where it stops;
 `SetClientDataLimit`, `appliedCeilingBytes`, and the rewrite in the pass that
 detects a counter reset are the convergence loop's, below.
 

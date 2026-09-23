@@ -252,6 +252,16 @@ export const RateLimitBucket = {
   GRANT_LIST: 'grant:list',
 
   /**
+   * Whether the collector is still reading the panels a user's configs sit on
+   * (F-027-w), per user. Not a security control: it answers a flag and three
+   * numbers about the user's own service. It is its own bucket because the
+   * service page polls it while metering is down — which is exactly when a
+   * user is also refreshing everything else, and sharing `GRANT_LIST` would
+   * make the page they came to read the one that runs out.
+   */
+  TRAFFIC_COLLECTION_HEALTH: 'traffic:collection-health',
+
+  /**
    * The platform owner's settlement surface in `billing-service` (F-096-e),
    * per operator. Two buckets rather than one because the surface is read far
    * more often than it is written — an operator refreshes what is owed while

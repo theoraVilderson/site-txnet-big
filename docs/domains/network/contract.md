@@ -191,7 +191,8 @@ does not match — is [contract.rollup.md](contract.rollup.md).
 why the sub-account cap wins are [contract.ceiling.md](contract.ceiling.md).
 `internal/converge` carries that number to the panel enforcing it, on the same
 pass that read its counters — so a ceiling the reset invalidated is rewritten
-before another interval runs under it. Same file.
+before another interval runs under it. Same file. Extending it on shutdown,
+the watchdog and the health flag: [contract.resilience.md](contract.resilience.md).
 
 ## Provides (intended)
 

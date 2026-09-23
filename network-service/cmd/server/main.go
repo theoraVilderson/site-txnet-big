@@ -10,6 +10,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -19,6 +20,7 @@ import (
 	"network-service/internal/db"
 	"network-service/internal/httpapi"
 	"network-service/internal/publish"
+	"network-service/internal/shutdown"
 	"network-service/pkg/logger"
 )
 
@@ -107,7 +109,41 @@ func main() {
 	log.Info("shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
+
+	// The exit order is the decision here, and it is the extension first
+	// (F-027-w). This process is the only thing that reads a panel's counters,
+	// so from the moment it stops, no ceiling rises for anyone — and the
+	// ceilings in force are sized at about two minutes of each user's own rate
+	// (`contract.hot-loop.md`). Draining the HTTP server first would spend the
+	// budget on a surface that answers nobody: `/health` is for the container
+	// and the watchdog, and neither of them is a user mid-download.
+	extendCeilings(shutdownCtx, log, ceilingExtender)
+
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error("graceful shutdown failed", "error", err)
+	}
+}
+
+// ceilingExtender is nil until the panel source and the Postgres-backed
+// `shutdown.Reserves` land — the same staging `collect.Loop` is in above.
+// What the wiring buys today is the exit *order*, decided once and in one
+// place, rather than at the moment a stalled deploy makes it urgent.
+var ceilingExtender *shutdown.Extender
+
+// extendCeilings raises every active ceiling to what the user's money still
+// backs, before this process stops being able to raise any of them
+// (ADR-0078).
+//
+// A failure is logged and never fatal. This runs on the way out: the bytes are
+// billed, the cursors are where they should be, and the worst case is the
+// state the system was in before this row existed — some users stalling until
+// the collector is back. Exiting non-zero over it would turn that into a
+// container the orchestrator restarts in a loop.
+func extendCeilings(ctx context.Context, log *slog.Logger, extender *shutdown.Extender) {
+	if extender == nil {
+		return
+	}
+	if _, err := extender.Run(ctx); err != nil {
+		log.Error("extending ceilings for shutdown failed", "error", err)
 	}
 }

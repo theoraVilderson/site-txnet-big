@@ -74,6 +74,7 @@ const CONFIG_COLUMNS = [
   'appliedCeilingBytes',
   'observedRateBps',
   'ceilingAppliedAt',
+  'walletBackedCeilingBytes',
 ];
 
 describe('network.Config carries its desired state, its drift and its ceiling', () => {
@@ -98,7 +99,7 @@ describe('network.Config carries its desired state, its drift and its ceiling', 
   it('counts bytes and bit rates in 64 bits', () => {
     // A 32-bit byte counter wraps at 4 GB — the RADIUS Gigawords trap
     // (ADR-0074) arriving a second time, in our own storage.
-    for (const column of ['allocatedCeilingBytes', 'appliedCeilingBytes', 'observedRateBps']) {
+    for (const column of ['allocatedCeilingBytes', 'appliedCeilingBytes', 'observedRateBps', 'walletBackedCeilingBytes']) {
       expect(config).toMatch(new RegExp(`^\\s*${column}\\s+BigInt`, 'm'));
     }
   });
@@ -152,6 +153,14 @@ describe('network.Config carries its desired state, its drift and its ceiling', 
     // ADR-0075: our rows are never deleted, `remoteId` is. A row that kept it
     // would have the convergence loop adopt a seat that was freed.
     expect(sql).toContain('config_purged_has_no_remote_id');
+  });
+
+  it('cannot hold a shutdown ceiling below the allocation it extends', () => {
+    // F-027-w: the whole meaning of `walletBackedCeilingBytes` is that it is
+    // the larger number — what money still backs, over what was bought. A row
+    // where it is smaller would have a graceful shutdown quietly *lowering*
+    // every ceiling on its way out, which is the cut-off it exists to prevent.
+    expect(sql).toContain('config_wallet_backed_ceiling_extends');
   });
 
   it('refuses a negative ceiling, rate or repair count', () => {

@@ -116,6 +116,7 @@ pass rewrites anyway.
 It does not back off below the panel's declared budget on a `429` — the budget
 is the agreement, and a panel that refuses inside its own figure is one to tell
 its owner about rather than to negotiate with silently. It does not extend a
-ceiling on shutdown or run the collector's watchdog: that is F-027-w. And it
+ceiling on shutdown or run the collector's watchdog: that is
+[contract.resilience.md](contract.resilience.md) (F-027-w). And it
 does not decide the rate the **next block** is sized at, which extrapolates up
 but never down on the money side (`contract.hot-loop.md`).

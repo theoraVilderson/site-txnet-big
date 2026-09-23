@@ -119,6 +119,28 @@ export function sizeBlock(input: { rate: Prisma.Decimal; targetBytes: bigint; ma
   return { amount: new Prisma.Decimal(cents.toString()).div(CENTS.toString()), bytes };
 }
 
+/**
+ * What a balance would buy at this rate, rounded **down** — the headroom side
+ * of `sizeBlock`, with nothing debited and nothing refused (F-027-w).
+ *
+ * It answers a different question from a purchase, so it answers it
+ * differently: a rate no arithmetic can price buys **nothing** here rather
+ * than throwing. The refusal belongs on the path that moves money
+ * (`rate_not_priceable` above); on this one it is a Grant whose ceiling is not
+ * extended, and failing the rebalance over it would leave every config on that
+ * Grant without a share at all.
+ *
+ * The same integer arithmetic as `sizeBlock`, for the same reason: a
+ * `Decimal.div` rounds at its own precision, and this figure bounds a ceiling
+ * that gets written to a panel.
+ */
+export function bytesAffordable(rate: Prisma.Decimal | null, balance: Prisma.Decimal): bigint {
+  if (rate === null || rate.lte(0) || rate.decimalPlaces() > RATE_SCALE || balance.lte(0)) return BigInt(0);
+  const cents = BigInt(balance.mul(CENTS.toString()).floor().toFixed(0));
+  if (cents < BigInt(1)) return BigInt(0);
+  return (cents * RATE_UNIT * GIB) / (CENTS * rateUnitsOf(rate));
+}
+
 export type PurchaseBlock = {
   grantId: string;
   /** The headroom the caller wants covered — the hot loop's horizon (F-027-u), in bytes. */

@@ -114,3 +114,46 @@ currency_fx:
     - max_rejected_deviation_percent_1h:
         usage: "GAUGE"
         description: "The largest move, in percent, that the gate refused in the last hour. Zero when nothing was refused."
+
+# =============================================================================
+# network — is anything still reading the panels? (F-027-w)
+# =============================================================================
+# The collector is the only thing that reads a panel's counters, and a stalled
+# one has no failure to show for it: `/health` on `network-service` answers 200
+# for as long as the process can reach Postgres, which it can while the
+# collection loop is wedged on one panel's credential. So the watchdog cannot
+# be the service's own health endpoint — it has to be something outside the
+# process, reading the mark a completed pass leaves behind
+# (`panel.lastSuccessfulCollectionAt`, written by `collect.Loop.stamp`).
+#
+# That is the same argument the outbox age makes above, one step further: this
+# one has to keep answering **while the collector is dead**, which is exactly
+# when a `/metrics` on it would be unreachable. A `SELECT` against a database
+# nobody has taken down is.
+#
+# WHAT IS IN SCOPE
+#
+# The scope and the arithmetic live in `network.collection_watchdog()`
+# (migration 20260922000400), not here. It is SECURITY DEFINER for the reason
+# `billing_coupon` above is: this connection is `txnet_app_user`, and
+# `network.panel`'s policy shows an unbound connection the platform's panels
+# and none of a tenant's — so a plain `SELECT` would watch only half of them.
+#
+# `-1` means no panel in scope has ever been collected: zero seconds is the
+# healthiest possible reading and must not be what an empty platform reports.
+network_collection:
+  master: true
+  cache_seconds: 30
+  query: >-
+    SELECT stalest_panel_seconds, panels_expected, panels_never_collected
+    FROM network.collection_watchdog()
+  metrics:
+    - stalest_panel_seconds:
+        usage: "GAUGE"
+        description: "Age in seconds of the least recently collected panel's last successful collection pass. -1 means no panel in scope has ever been collected."
+    - panels_expected:
+        usage: "GAUGE"
+        description: "How many panels are accepted and not in maintenance — the population the collector is supposed to be reading."
+    - panels_never_collected:
+        usage: "GAUGE"
+        description: "Accepted panels that have never completed a collection pass. A newly registered panel sits here until its first pass."

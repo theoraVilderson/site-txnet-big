@@ -293,6 +293,8 @@ export const envSchema = z.object({
   GRANT_ROTATE_TOKEN_RATE_LIMIT: rateLimit(5),
   /** The "my services" page, refetched on every visit (`payment/gift/grant-list.controller.ts`, F-502-r). */
   GRANT_LIST_RATE_LIMIT: rateLimit(120),
+  /** Polled by the service page while metering is down (`traffic/collection-health.controller.ts`, F-027-w). */
+  TRAFFIC_COLLECTION_HEALTH_RATE_LIMIT: rateLimit(180),
   /**
    * The operator settlement surface (`settlement/settlement.controller.ts`,
    * F-096-e), per operator. The read budget is the admin UI's refresh rate

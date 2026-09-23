@@ -54,6 +54,12 @@ number of `1e-8` dollars per 2^30 bytes. A `Decimal.div` would round at its own
 precision and a floor taken afterwards could be one byte out, which is one byte
 sold and not paid for.
 
+`bytesAffordable(rate, balance)` is the same conversion with nothing debited:
+what a balance would buy, rounded down. It bounds the ceiling a shutdown raises
+a panel to (network `contract.resilience.md`, ADR-0078), and it answers an
+unpriceable rate with **zero** rather than `rate_not_priceable` — the refusal
+belongs on the path that moves money, and here it would fail the rebalance.
+
 ## Short balance buys a smaller block, not nothing
 
 A balance that cannot fund the target buys the largest whole-cent block it can.

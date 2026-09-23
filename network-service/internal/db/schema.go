@@ -52,7 +52,7 @@ var RequiredColumns = map[string][]string{
 		"desiredEnabled", "desiredRemote", "enforcementState",
 		"driftState", "driftRepairCount", "lastReconciledAt",
 		"allocatedCeilingBytes", "appliedCeilingBytes", "observedRateBps",
-		"ceilingAppliedAt",
+		"ceilingAppliedAt", "walletBackedCeilingBytes",
 	},
 	// Where the counter was, so that a figure going backward is a reset and
 	// never negative usage (invariant 20, ADR-0074).

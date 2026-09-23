@@ -343,6 +343,13 @@ model Config {
   /// The measured rate the time-based horizon is sized from (F-027-u).
   observedRateBps       BigInt?
   ceilingAppliedAt      DateTime?
+  /// What **money** says this config may carry while nobody is metering it
+  /// (F-027-w): its share of a bag of `purchasedBytes` plus what the wallet
+  /// would buy at the Grant's locked rate. The allocator keeps it fresh; the
+  /// collector raises the panel's ceiling to it on a graceful shutdown, and
+  /// the first pass after a restart pulls the panel back to `allocated`.
+  /// Never below `allocatedCeilingBytes` — an extension only ever extends.
+  walletBackedCeilingBytes BigInt?
 
   panel Panel @relation(fields: [panelId], references: [id])
   grant Grant @relation(fields: [grantId], references: [id])

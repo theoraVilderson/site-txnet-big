@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigStatus, Prisma } from '@prisma/client';
+import { ConfigStatus, Prisma, VariantBillingMode } from '@prisma/client';
 import { tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { bytesAffordable } from './block-purchase';
 
 /**
  * The ceiling allocator (F-027-s; ADR-0072 rule 1).
@@ -20,9 +21,11 @@ import { PrismaService } from '../prisma/prisma.service';
  * horizon that decides *how much* to buy is F-027-u's, and it calls the
  * purchase and this rebalance in one transaction.
  *
- * It writes `allocatedCeilingBytes` and nothing else. Getting that number onto
- * the panel — `SetClientDataLimit`, `appliedCeilingBytes`, and the rewrite in
- * the pass that detects a counter reset — is the convergence loop's, F-027-t.
+ * It writes `allocatedCeilingBytes`, and beside it `walletBackedCeilingBytes`
+ * — the same split over the wallet too, which a graceful shutdown raises the
+ * panel to (F-027-w, ADR-0078). Getting either number onto the panel —
+ * `SetClientDataLimit`, `appliedCeilingBytes`, and the rewrite in the pass
+ * that detects a counter reset — is `network-service`'s, never this.
  */
 
 /**
@@ -165,8 +168,15 @@ export type RebalanceGrant = {
 
 export type RebalancedGrant = Allocation & {
   grantId: string;
-  /** How many configs' `allocatedCeilingBytes` actually moved — the convergence loop's work (F-027-t). */
+  /** How many configs had either ceiling column moved — the convergence loop's work (F-027-t). */
   written: number;
+  /**
+   * The same split over the larger bag: what a graceful shutdown raises each
+   * ceiling to (F-027-w). Row for row with `ceilings`.
+   */
+  walletBacked: ConfigCeiling[];
+  /** What the wallet added to the bag at the Grant's locked rate. Zero for a prepaid Grant. */
+  walletBackedBytes: bigint;
 };
 
 @Injectable()
@@ -193,7 +203,10 @@ export class CeilingAllocatorService {
    * offline.
    */
   async rebalance(tx: Prisma.TransactionClient, input: RebalanceGrant): Promise<RebalancedGrant> {
-    const grant = await tx.grant.findUnique({ where: { id: input.grantId }, select: { id: true, purchasedBytes: true } });
+    const grant = await tx.grant.findUnique({
+      where: { id: input.grantId },
+      select: { id: true, userId: true, purchasedBytes: true, billingMode: true, meteredRate: true },
+    });
     if (!grant) throw new CeilingAllocationRefused('grant_not_found', input.grantId);
 
     const configs = await tx.config.findMany({
@@ -201,30 +214,78 @@ export class CeilingAllocatorService {
       select: {
         id: true,
         allocatedCeilingBytes: true,
+        walletBackedCeilingBytes: true,
         counterState: { select: { lifetimeUpBytes: true, lifetimeDownBytes: true } },
         subAccount: { select: { dataCapBytes: true, isActive: true } },
       },
     });
 
-    const allocation = allocateCeilings({
-      purchasedBytes: grant.purchasedBytes,
-      floorBytes: input.floorBytes ?? DEFAULT_CONFIG_FLOOR_BYTES,
-      hotConfigId: input.hotConfigId ?? null,
-      configs: configs.map((config) => ({
-        configId: config.id,
-        // No counter row yet means no pass has read this config: it has served nothing.
-        servedBytes: config.counterState ? config.counterState.lifetimeUpBytes + config.counterState.lifetimeDownBytes : BigInt(0),
-        // A deactivated sub-account is not a cap of zero — it is no cap at all (F-608).
-        capBytes: config.subAccount?.isActive ? config.subAccount.dataCapBytes : null,
-      })),
-    });
+    const demands: ConfigDemand[] = configs.map((config) => ({
+      configId: config.id,
+      // No counter row yet means no pass has read this config: it has served nothing.
+      servedBytes: config.counterState ? config.counterState.lifetimeUpBytes + config.counterState.lifetimeDownBytes : BigInt(0),
+      // A deactivated sub-account is not a cap of zero — it is no cap at all (F-608).
+      capBytes: config.subAccount?.isActive ? config.subAccount.dataCapBytes : null,
+    }));
+    const split = { floorBytes: input.floorBytes ?? DEFAULT_CONFIG_FLOOR_BYTES, hotConfigId: input.hotConfigId ?? null, configs: demands };
 
-    const current = new Map(configs.map((config) => [config.id, config.allocatedCeilingBytes]));
-    const moved = allocation.ceilings.filter((ceiling) => current.get(ceiling.configId) !== ceiling.ceilingBytes);
+    const allocation = allocateCeilings({ purchasedBytes: grant.purchasedBytes, ...split });
+
+    // The shutdown figure: the **same split** over a bag of what was bought
+    // plus what the wallet would still buy (F-027-w, ADR-0078). The same
+    // function and the same order, so the result is larger config by config
+    // rather than a second opinion about the allocation — which is what
+    // `config_wallet_backed_ceiling_extends` refuses to hold otherwise. Every
+    // other rule survives it: a sub-account cap is still a cap, and a config
+    // that cannot carry traffic is still out of the split.
+    const walletBackedBytes = await this.affordableBytes(tx, grant);
+    const backed =
+      walletBackedBytes > BigInt(0) ? allocateCeilings({ purchasedBytes: grant.purchasedBytes + walletBackedBytes, ...split }) : allocation;
+
+    const allocatedById = new Map(allocation.ceilings.map((ceiling) => [ceiling.configId, ceiling.ceilingBytes]));
+    // Never under the allocation. The split is monotone in the bag and the
+    // property test holds it to that; this is the row the CHECK would refuse
+    // if it ever were not, and a refused row here fails the block purchase
+    // committing beside it — a user stalled over a figure only used at exit.
+    const backedById = new Map(
+      backed.ceilings.map((ceiling) => {
+        const floor = allocatedById.get(ceiling.configId) as bigint;
+        return [ceiling.configId, ceiling.ceilingBytes > floor ? ceiling.ceilingBytes : floor];
+      }),
+    );
+    const current = new Map(configs.map((config) => [config.id, config]));
+    // Either column moving is a write. The wallet moves far more often than
+    // `purchasedBytes` does — every top-up changes it — so a write gated on the
+    // allocation alone would leave the collector extending to yesterday's
+    // balance on its way out.
+    const moved = allocation.ceilings.filter((ceiling) => {
+      const row = current.get(ceiling.configId);
+      return row?.allocatedCeilingBytes !== ceiling.ceilingBytes || row?.walletBackedCeilingBytes !== backedById.get(ceiling.configId);
+    });
     for (const ceiling of moved) {
-      await tx.config.update({ where: { id: ceiling.configId }, data: { allocatedCeilingBytes: ceiling.ceilingBytes } });
+      await tx.config.update({
+        where: { id: ceiling.configId },
+        data: { allocatedCeilingBytes: ceiling.ceilingBytes, walletBackedCeilingBytes: backedById.get(ceiling.configId) as bigint },
+      });
     }
 
-    return { ...allocation, grantId: grant.id, written: moved.length };
+    return { ...allocation, grantId: grant.id, written: moved.length, walletBacked: backed.ceilings, walletBackedBytes };
+  }
+
+  /**
+   * What this Grant's owner could still buy right now, in bytes.
+   *
+   * A prepaid Grant gets nothing: no rate prices a byte for it (ADR-0073), and
+   * nothing tops it up either — its ceiling is its quota, and this service
+   * being down does not shrink that. A user with no wallet row is a balance of
+   * zero, which is the same answer as an empty one.
+   */
+  private async affordableBytes(
+    tx: Prisma.TransactionClient,
+    grant: { userId: string; billingMode: VariantBillingMode; meteredRate: Prisma.Decimal | null },
+  ): Promise<bigint> {
+    if (grant.billingMode !== VariantBillingMode.metered || grant.meteredRate === null) return BigInt(0);
+    const wallet = await tx.wallet.findUnique({ where: { ownerUserId: grant.userId }, select: { cachedBalance: true } });
+    return bytesAffordable(grant.meteredRate, wallet?.cachedBalance ?? new Prisma.Decimal(0));
   }
 }

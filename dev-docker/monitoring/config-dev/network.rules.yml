@@ -1,0 +1,117 @@
+# =============================================================================
+# TXNet — alert rules for the traffic collector (F-027-w)
+# =============================================================================
+# The failure these exist for has nothing red in it. `network-service` answers
+# `/health` with 200 for as long as it can reach Postgres, and it can do that
+# while its collection loop is wedged — on one panel's rotated credential, on a
+# broker that stopped confirming, on a deploy that never finished. Nothing is
+# down, nothing is logging an error at the rate anyone would notice, and
+# meanwhile no counter is being read: no traffic is billed, no block is bought
+# and no ceiling rises. The users notice first, one at a time, as a service
+# that stops.
+#
+# So the watchdog is outside the process (ADR-0078). It reads the mark a
+# completed pass leaves in the database — `panel.lastSuccessfulCollectionAt`,
+# stamped by `collect.Loop.stamp` — through the `network_collection` query in
+# `postgres-queries.yaml`. That keeps answering while the collector is dead,
+# which is the one case a `/metrics` on the collector could not cover.
+#
+# The scope is decided in the query, not here: accepted panels that are not in
+# maintenance. A `pending` or `refused` panel has never been asked (ADR-0074
+# refuses at registration), and a panel somebody put into maintenance is not a
+# stall.
+#
+# THE THRESHOLDS ARE MULTIPLES OF THE PASS, NOT ROUND NUMBERS
+#
+# `collect.DefaultInterval` is 60s, so every figure below is a count of missed
+# passes. Change the interval and these move with it; a round five minutes that
+# happened to match is a threshold that stops meaning anything the day the
+# interval changes.
+# =============================================================================
+
+groups:
+  - name: network.collection
+    rules:
+      # Everything below reads off the same target the outbox rules do. A
+      # postgres-exporter that stops answering takes the collector watchdog
+      # with it, and silence is not health — the whole point of this file is
+      # that the quiet failure is the dangerous one.
+      - alert: NetworkCollectionWatchdogBlind
+        expr: up{job="postgres"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          unit: network
+        annotations:
+          summary: "The collector watchdog cannot read its own input"
+          description: >-
+            The postgres scrape target has been down for 5 minutes, so
+            NetworkCollectionStalled cannot fire. A collector that stalls now
+            is invisible: `/health` on network-service stays 200 throughout.
+
+      # Five missed passes. Below that it is a slow pass or a restart, both of
+      # which resolve themselves; at five it is something that is not coming
+      # back on its own. Warning rather than critical because nobody has been
+      # cut off yet — the ceilings in force still cover a couple of minutes of
+      # each user's own traffic (contract.hot-loop.md).
+      #
+      # The -1 the query returns when no panel has been collected is below
+      # every threshold here, so an empty platform stays silent; a panel that
+      # was never collected is NetworkPanelNeverCollected's, below.
+      - alert: NetworkCollectionStalled
+        expr: network_collection_stalest_panel_seconds > 300
+        for: 5m
+        labels:
+          severity: warning
+          unit: network
+        annotations:
+          summary: "A panel has not been collected for five passes"
+          description: >-
+            The least recently collected panel last completed a pass
+            {{ $value | humanizeDuration }} ago, against a 60s bulk interval.
+            Nothing is being billed for it and no ceiling is rising on it.
+            Check network-service's log for the panel it is wedged on;
+            `panel.panelState` says whether that panel is refusing us
+            (F-027-v) rather than unreachable.
+
+      # Fifteen missed passes is where users start stopping. A hot Grant buys
+      # about 120s of its own rate at a time (ADR-0072), so by now every
+      # metered user on that panel has run out of ceiling and is stalled — with
+      # money in their wallet, which is what makes it a support queue rather
+      # than a billing question.
+      - alert: NetworkCollectionStopped
+        expr: network_collection_stalest_panel_seconds > 900
+        for: 5m
+        labels:
+          severity: critical
+          unit: network
+        annotations:
+          summary: "Metering has stopped for at least one panel"
+          description: >-
+            No pass has completed against the stalest panel for
+            {{ $value | humanizeDuration }}. Metered users on it are at their
+            ceiling and stalling. If network-service is being redeployed this
+            is the graceful extension's window (F-027-w) and their ceilings
+            were raised to what their wallets back on the way out; if it is
+            not, this is an outage.
+
+      # A panel accepted at registration and never once collected. Distinct
+      # from the two above on purpose: those are a collector that stopped, this
+      # is one that never started on this panel — a driver that cannot reach
+      # it, or a panel registered into a pool nothing polls. Half an hour,
+      # because a freshly registered panel legitimately sits here until the
+      # next pass picks it up.
+      - alert: NetworkPanelNeverCollected
+        expr: network_collection_panels_never_collected > 0
+        for: 30m
+        labels:
+          severity: warning
+          unit: network
+        annotations:
+          summary: "An accepted panel has never been collected"
+          description: >-
+            {{ $value }} accepted panel(s) have no
+            `lastSuccessfulCollectionAt` at all after half an hour. They were
+            accepted by the questionnaire (ADR-0074) and no pass has ever
+            completed against them, so anything provisioned there is serving
+            traffic nobody is counting.

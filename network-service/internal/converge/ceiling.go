@@ -211,8 +211,8 @@ func (c *Ceilings) Pass(ctx context.Context, p collect.Panel, res collect.Result
 			continue
 		}
 
-		offset := c.offsetBytes(p, allocation.RemoteID)
-		want := panelCeiling(allocation.AllocatedBytes, offset)
+		offset := OffsetBytes(c.Counters, p, allocation.RemoteID)
+		want := PanelCeiling(allocation.AllocatedBytes, offset)
 		have := client.DataLimitBytes
 
 		if have > 0 {
@@ -284,12 +284,17 @@ func (c *Ceilings) sawReset(p collect.Panel, remoteID string, res collect.Result
 	return seen && !counter.LastResetAt.IsZero() && counter.LastResetAt.Equal(res.ObservedAt)
 }
 
-// offsetBytes is what the panel's counter no longer holds: the lifetime bytes
+// OffsetBytes is what the panel's counter no longer holds: the lifetime bytes
 // this config has served, less what the panel is reporting now. It is the
 // whole of the translation, and it is never negative — see the package
 // comment on why unbilled bytes on the far end's counter get no headroom.
-func (c *Ceilings) offsetBytes(p collect.Panel, remoteID string) int64 {
-	counter, seen := c.Counters.Counter(p.ID, remoteID)
+//
+// It is exported because the graceful-shutdown extension (F-027-w) raises the
+// same ceiling on the same panel and therefore needs the same origin. Written
+// twice, the two would drift, and the drift would only be visible as a wrong
+// limit on somebody else's server.
+func OffsetBytes(counters Counters, p collect.Panel, remoteID string) int64 {
+	counter, seen := counters.Counter(p.ID, remoteID)
 	if !seen {
 		return 0
 	}
@@ -316,11 +321,13 @@ func panelCounterBytes(semantics driver.CounterSemantics, counter collect.Counte
 	return counter.LastUpBytes + counter.LastDownBytes
 }
 
-// panelCeiling turns a lifetime allowance into the figure that panel's counter
-// needs today. It cannot exceed the allocation, so `Σ ceilings ≤
-// purchasedBytes` (entitlement invariant 8) survives the translation.
-func panelCeiling(allocated, offset int64) int64 {
-	ceiling := allocated - offset
+// PanelCeiling turns a lifetime allowance into the figure that panel's counter
+// needs today. It cannot exceed the allowance, so `Σ ceilings ≤
+// purchasedBytes` (entitlement invariant 8) survives the translation — and the
+// shutdown extension's own, larger allowance (F-027-w) is bounded the same way
+// by the money behind it.
+func PanelCeiling(allowance, offset int64) int64 {
+	ceiling := allowance - offset
 	if ceiling < 0 {
 		return 0
 	}

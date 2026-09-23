@@ -787,3 +787,84 @@ func TestADownPanelIsAskedAgainOnTheNextPass(t *testing.T) {
 		t.Fatalf("failed = %+v, want the panel read", report.Failed)
 	}
 }
+
+// ---- the watchdog's input (F-027-w) ----------------------------------------
+
+// progressLog is the `Progress` writer, recording what each pass stamped.
+type progressLog struct {
+	mu    sync.Mutex
+	marks []collect.PanelProgress
+	err   error
+}
+
+func (p *progressLog) Collected(_ context.Context, marks []collect.PanelProgress) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.err != nil {
+		return p.err
+	}
+	p.marks = append(p.marks, marks...)
+	return nil
+}
+
+func (p *progressLog) seen() []collect.PanelProgress {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]collect.PanelProgress(nil), p.marks...)
+}
+
+func TestACompletedPassStampsThePanelTheWatchdogReads(t *testing.T) {
+	r := newRig(t, driver.CounterCumulative, "c1")
+	marks := &progressLog{}
+	r.loop.Progress = marks
+	at := time.Date(2026, 9, 22, 3, 0, 0, 0, time.UTC)
+	r.loop.Clock = func() time.Time { return at }
+
+	r.pass(t)
+
+	seen := marks.seen()
+	if len(seen) != 1 {
+		t.Fatalf("stamps = %d, want 1", len(seen))
+	}
+	if seen[0].PanelID != "panel-1" || !seen[0].At.Equal(at) {
+		t.Errorf("stamp = %+v, want panel-1 at %v", seen[0], at)
+	}
+}
+
+func TestAPanelThatFailedItsTurnIsNotStamped(t *testing.T) {
+	// The whole value of `lastSuccessfulCollectionAt` is that it is *not*
+	// written when nothing was collected. A stamp on a failed turn is a
+	// watchdog that can never fire, which is worse than no watchdog: it
+	// reports health it has not observed.
+	r := newRig(t, driver.CounterCumulative, "c1")
+	marks := &progressLog{}
+	r.loop.Progress = marks
+	r.panel.FailNextCall(http.StatusInternalServerError)
+
+	report := r.pass(t)
+
+	if len(report.Failed) != 1 {
+		t.Fatalf("failures = %d, want 1", len(report.Failed))
+	}
+	if seen := marks.seen(); len(seen) != 0 {
+		t.Errorf("stamps = %+v, want none", seen)
+	}
+}
+
+func TestAFailedStampDoesNotFailThePass(t *testing.T) {
+	// The bytes are published and the cursor has moved by then. Failing here
+	// would re-read and republish traffic that was already billed, to fix a
+	// clock — and an unwritten clock ages into an alert, which is the safe
+	// direction on its own.
+	r := newRig(t, driver.CounterCumulative, "c1")
+	r.loop.Progress = &progressLog{err: errors.New("no connection")}
+
+	report := r.pass(t)
+
+	if len(report.Failed) != 0 {
+		t.Fatalf("failures = %+v, want none", report.Failed)
+	}
+	if report.Collected != 1 {
+		t.Errorf("collected = %d, want 1", report.Collected)
+	}
+}
