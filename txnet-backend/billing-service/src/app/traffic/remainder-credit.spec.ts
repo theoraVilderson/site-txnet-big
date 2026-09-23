@@ -20,6 +20,7 @@
  */
 import { GrantStatus, LedgerDirection, Prisma, VariantBillingMode, WalletReasonType } from '@prisma/client';
 
+import { WalletCreditService } from '../wallet/wallet-credit.service';
 import { WalletLedgerService } from '../wallet/wallet-ledger.service';
 import { GIB } from './block-purchase';
 import { RemainderCreditRefused, RemainderCreditService, sizeRemainder } from './remainder-credit';
@@ -89,6 +90,10 @@ function fakeTx(grant: Partial<GrantRow> & { id: string }, balance: Prisma.Decim
   const tx = {
     grant: {
       findUnique: async ({ where }: { where: { id: string } }) => (where.id === row.id ? { ...row } : null),
+      // The credit now also asks what this user's refund revives (F-027-ap,
+      // ADR-0079). This user holds nothing suspended; `revival.spec.ts` owns
+      // the case where they do.
+      findMany: async () => [],
       updateMany: async ({ where, data }: { where: { id: string; billedBytes: bigint }; data: { billedBytes: { decrement: bigint } } }) => {
         if (where.id !== row.id || where.billedBytes !== row.billedBytes) return { count: 0 };
         row.billedBytes -= data.billedBytes.decrement;
@@ -118,7 +123,7 @@ function fakeTx(grant: Partial<GrantRow> & { id: string }, balance: Prisma.Decim
 }
 
 describe('RemainderCreditService.credit', () => {
-  const service = () => new RemainderCreditService({} as never, new WalletLedgerService());
+  const service = () => new RemainderCreditService({} as never, new WalletCreditService(new WalletLedgerService()));
   const close = (tx: Prisma.TransactionClient) => service().credit(tx, { grantId: GRANT });
 
   it('credits the unconsumed bytes back and brings the money cursor down with them', async () => {

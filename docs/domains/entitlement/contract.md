@@ -63,9 +63,17 @@ with `statusReason` and `suspendedAt` cleared, and every config `desiredEnabled
 = true`, `desiredRemote = present`, `enforcementState = pending`, so a purged
 Grant is rebuilt from desired state rather than reconstructed. It is guarded on
 `statusReason = quota_exhausted` in the write's own `where`: `suspended` has
-two meanings and a top-up buys traffic, not an amnesty. **It has no caller
-yet** — which top-up revives is `open-questions.md`, alongside the hot loop's
-channel.
+two meanings and a top-up buys traffic, not an amnesty.
+
+Its caller is the credit itself (F-027-ap, ADR-0079). `reviveFundedGrants(tx,
+userId, balance)` in `entitlement/revival.ts` is called by
+`WalletCreditService` on every credit to a user's wallet, and revives a Grant
+only where `walletCanBuy` — the predicate `suspendIfExhausted` suspended on —
+is true at that Grant's own locked rate. Writing it as a second rule about
+money would let the two drift, and the drift lands on the purge clock. A
+revived Grant is `active` with its configs `present` and enabled, and **no
+ceiling until something buys it a block** — which is the hot loop, still
+without a caller (F-027-u).
 
 The clock is not here. `worker-service` holds it and asks hourly over `POST
 /api/internal/billing/entitlement/purge-due` (`ServiceOnlyGuard`, key

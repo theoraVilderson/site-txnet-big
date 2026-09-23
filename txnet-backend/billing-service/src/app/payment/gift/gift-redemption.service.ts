@@ -4,7 +4,7 @@ import { tenantTransaction } from '@txnet-backend/shared-core';
 
 import { GrantService } from '../../entitlement/grant';
 import { PrismaService } from '../../prisma/prisma.service';
-import { WalletLedgerService } from '../../wallet/wallet-ledger.service';
+import { WalletCreditService } from '../../wallet/wallet-credit.service';
 import { normalizeCouponCodes } from '../coupon/coupon-validation';
 
 /**
@@ -91,7 +91,7 @@ type RedeemRow = { outcome: string; redemption_id: string | null; credited: Pris
 export class GiftRedemptionService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly ledger: WalletLedgerService,
+    private readonly ledger: WalletCreditService,
     private readonly grants: GrantService,
   ) {}
 

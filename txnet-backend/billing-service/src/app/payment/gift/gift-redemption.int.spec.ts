@@ -32,6 +32,7 @@ import {
 } from '../../../../../test-support/postgres-fixture';
 import { GrantService } from '../../entitlement/grant';
 import { PrismaService } from '../../prisma/prisma.service';
+import { WalletCreditService } from '../../wallet/wallet-credit.service';
 import { LedgerEntry, WalletLedgerService } from '../../wallet/wallet-ledger.service';
 import { GiftCodeRefused, GiftRedemptionService } from './gift-redemption.service';
 
@@ -117,7 +118,7 @@ beforeAll(async () => {
 
   const base = new PrismaService(pg.appUrl);
   app = base.$extends(withTenant(base)) as unknown as PrismaService;
-  gifts = new GiftRedemptionService(app, new WalletLedgerService(), new GrantService(app));
+  gifts = new GiftRedemptionService(app, new WalletCreditService(new WalletLedgerService()), new GrantService(app));
 });
 
 const CATEGORY = '99999999-9999-4999-8999-9999999999a1';
@@ -199,12 +200,16 @@ async function raceWhileFirstIsOpen(suffix: string, first: string, second: strin
 
   const stalling = new GiftRedemptionService(
     app,
-    new (class extends WalletLedgerService {
-      override credit(tx: Prisma.TransactionClient, entry: LedgerEntry) {
-        tookSlot();
-        return held.then(() => super.credit(tx, entry));
-      }
-    })(),
+    // The stall goes on the ledger underneath, so the wrapper's revival
+    // (F-027-ap) still runs on the real path this test is racing.
+    new WalletCreditService(
+      new (class extends WalletLedgerService {
+        override credit(tx: Prisma.TransactionClient, entry: LedgerEntry) {
+          tookSlot();
+          return held.then(() => super.credit(tx, entry));
+        }
+      })(),
+    ),
     new GrantService(app),
   );
 

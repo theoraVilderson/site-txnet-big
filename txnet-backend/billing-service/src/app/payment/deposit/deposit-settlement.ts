@@ -11,7 +11,7 @@ import { OutboxEventType, TenantBillingLedger, TenantContext, tenantTransaction 
 
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { WalletLedgerService } from '../../wallet/wallet-ledger.service';
+import { WalletCreditService } from '../../wallet/wallet-credit.service';
 import { CouponReservationService } from '../coupon/coupon-reservation';
 import { GatewaySource, MerchantGatewayRef } from '../gateway/gateway-merchant';
 
@@ -167,7 +167,7 @@ export class DepositSettlementService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly reservations: CouponReservationService,
-    private readonly ledger: WalletLedgerService,
+    private readonly ledger: WalletCreditService,
     private readonly all: CrossTenantPrismaService,
     private readonly tenantLedger: TenantBillingLedger,
   ) {}

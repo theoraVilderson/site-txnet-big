@@ -2,7 +2,7 @@
 id: entitlement
 layer: domain
 status: draft
-version: 2
+version: 3
 keywords: [grant, entitlement, access, quota, quota adjustment, subscription token, free grant, feature key, purge, purge clock, suspended grant, panel seat, revive, top-up restores service]
 source: [txnet-backend/prisma/domains/entitlement.prisma, txnet-backend/prisma/domains/migrations/20260914001600_entitlement_grant/**, txnet-backend/prisma/domains/migrations/20260921000600_a_grant_buys_its_bytes_before_it_serves_them/**, txnet-backend/billing-service/src/app/entitlement/**]
 owns_tables: [grant, quota_adjustment]
@@ -32,6 +32,7 @@ Runs as a module inside `billing-service` (ADR-0049). Spec:
 | Date | Change |
 |---|---|
 | 2026-09-14 | Unit created, draft (D-34, ADR-0049) — no schema or code yet |
+| 2026-09-23 | v2 -> **v3**: a top-up revives what it funds — `reviveFundedGrants`, called by `WalletCreditService` on every user-wallet credit, guarded by `walletCanBuy` (F-027-ap, ADR-0079). See [contract.md](contract.md) |
 | 2026-09-23 | v1 -> **v2**: the purge clock and the way back — `purge-due` over the internal seam, asked hourly by `grant_config_purge`, plus `reviveOnTopUp` (F-027-y, ADR-0075). See [contract.md](contract.md) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

@@ -3,7 +3,7 @@ import { GrantStatus, Prisma, VariantBillingMode, WalletReasonType } from '@pris
 import { tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { WalletLedgerService } from '../wallet/wallet-ledger.service';
+import { WalletCreditService } from '../wallet/wallet-credit.service';
 import { GIB, rateUnitsOf } from './block-purchase';
 
 /**
@@ -116,7 +116,7 @@ export type CreditedRemainder = RemainderSizing & {
 export class RemainderCreditService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly ledger: WalletLedgerService,
+    private readonly ledger: WalletCreditService,
   ) {}
 
   /** One credit in a transaction of its own, for a caller with no other work to commit with it. */

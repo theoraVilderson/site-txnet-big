@@ -15,7 +15,7 @@ import { randomUUID } from 'node:crypto';
 import type { EnvConfig } from '../../config/env.validation';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { WalletLedgerService } from '../../wallet/wallet-ledger.service';
+import { WalletCreditService } from '../../wallet/wallet-credit.service';
 import { CouponReservationService } from '../coupon/coupon-reservation';
 import { CouponValidationService } from '../coupon/coupon-validation';
 import { GatewayMerchant, GatewaySource, MerchantGatewayRef } from '../gateway/gateway-merchant';
@@ -153,7 +153,7 @@ export class DepositStartService {
     private readonly providers: PaymentProviderRegistry,
     private readonly merchant: GatewayMerchant,
     private readonly fx: FxRateReader,
-    private readonly ledger: WalletLedgerService,
+    private readonly ledger: WalletCreditService,
     private readonly config: ConfigService<EnvConfig, true>,
     private readonly links: InvoiceLinkClient,
   ) {}
