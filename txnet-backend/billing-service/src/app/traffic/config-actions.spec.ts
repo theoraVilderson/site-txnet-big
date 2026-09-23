@@ -122,6 +122,10 @@ describe('ConfigActionsService', () => {
       remoteId: null,
     });
     expect(made.uuid).toMatch(/^[0-9a-f-]{36}$/);
+    // The second matching key (F-027-aa): without it a rename on the panel
+    // orphans the usage. Ours, global, and never the credential.
+    expect(configs[0].claimTag).toMatch(/^txn-[0-9a-f]{32}$/);
+    expect(configs[0].claimTag).not.toContain(made.uuid.replace(/-/g, ''));
     expect(rebalanced).toEqual([GRANT]);
     expect(logs).toEqual([expect.objectContaining({ configId: made.configId, action: 'provision', actorType: ActorType.user })]);
   });
@@ -147,11 +151,14 @@ describe('ConfigActionsService', () => {
     const first = await service.regenerate(tx, { configId, actor: OWNER });
     expect(first.uuid).not.toBe(uuid);
     expect(configs[0]).toMatchObject({ uuid: first.uuid, regenerateUsedCount: 1, enforcementState: EnforcementState.pending });
+    // The tag is the config's, not the credential's: a regenerate keeps it.
+    const tag = configs[0].claimTag;
 
     await service.regenerate(tx, { configId, actor: OWNER });
     await service.regenerate(tx, { configId, actor: OWNER });
     await expect(service.regenerate(tx, { configId, actor: OWNER })).rejects.toEqual(refusal('regenerate_limit_reached'));
     expect(configs[0].regenerateUsedCount).toBe(3);
+    expect(configs[0].claimTag).toBe(tag);
   });
 
   it('a regenerate that lost the race to another write is refused, not applied twice', async () => {
@@ -225,6 +232,7 @@ describe('ConfigActionsService', () => {
     expect(configs[1]).toMatchObject({ id: moved.configId, panelId: PANEL_B, grantId: GRANT, protocol: 'vless', desiredRemote: DesiredRemote.present });
     // `uuid` is unique across the system, and the old client holds the old one until it is deleted.
     expect(configs[1].uuid).not.toBe(uuid);
+    expect(configs[1].claimTag).not.toBe(configs[0].claimTag);
 
     await expect(service.move(tx, { configId: moved.configId, toPanelId: PANEL_B, actor: ADMIN })).rejects.toEqual(refusal('same_panel'));
     await expect(service.move(tx, { configId, toPanelId: PANEL_B, actor: ADMIN })).rejects.toEqual(refusal('config_retired'));

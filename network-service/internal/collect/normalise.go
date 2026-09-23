@@ -79,9 +79,10 @@ type Panel struct {
 	// collector is already holding the row that says who that is.
 	OwnershipType string
 	TenantID      string
-	// Configs maps the panel's own client id to the config that owns it. The
-	// three-key matching that fills it is F-027-aa; a reading this map does
-	// not claim becomes an Unattributed row rather than nothing.
+	// Configs maps the panel's own client id to the config that owns it, read
+	// off `config.remoteId`. The convergence pass's three-key match (F-027-aa)
+	// re-keys a renamed or rebuilt client's row, so the pass after it claims
+	// the reading again; until then it is an Unattributed row, never nothing.
 	Configs map[string]ConfigRef
 }
 

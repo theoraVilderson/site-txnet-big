@@ -36,7 +36,7 @@ F-027-l; its push half waits for F-027-af.
 | 14 | `ceilingAppliedAt` is set exactly when `appliedCeilingBytes` is | CHECK `config_applied_ceiling_needs_time` | no clock on the write, so a stale ceiling reads as a fresh one and is never rewritten |
 | 15 | A completed purge holds no `remoteId` | CHECK `config_purged_has_no_remote_id` | the loop adopts a panel seat it has just freed, and usage is attributed to a client that is gone |
 | 16 | One remote client belongs to one config | UNIQUE `(panelId, remoteId)` | one client's traffic counted against two configs, or a ceiling written twice with two different numbers |
-| 17 | `claimTag` is unique across the whole system | schema `@unique` | the second matching key matches the wrong row, which is invariant 1's failure reached the long way round |
+| 17 | Every config has a `claimTag`, unique across the whole system | NOT NULL (`20260923000200`) + schema `@unique`, written by `ConfigActionsService.provision` (F-027-aa) | the second matching key matches the wrong row, which is invariant 1's failure reached the long way round |
 | 18 | Every measured byte ends billed, held or quarantined — never dropped | `internal/collect` on the pull side (F-027-l), asserted by `collect_test.go`; the push side is F-027-af and the consumer F-027-n | the thing ADR-0074 exists to prevent: usage lost in silence, which nobody can detect after the fact |
 | 19 | One delta is applied at most once | PK `usage_delta_seen.deltaId` | a redelivered message charges the user twice, and at-least-once delivery guarantees a redelivery |
 | 20 | One config has at most one counter cursor | UNIQUE `config_counter_state.configId` | two opinions about where the counter was; the losing one re-counts everything since the last reset |
@@ -60,6 +60,7 @@ F-027-l; its push half waits for F-027-af.
 | 33 | A driver reports what the far end said — it never repairs a reset, clamps an implausible figure, extrapolates past a missing `Stop` or reassembles bits the NAS did not send | the eleven scenarios of `internal/driver/conformance` (F-027-j), run by every driver's own test | the evidence the normaliser decides on is destroyed inside the driver, and the repair is billed as a measurement — a plausible wrong number with nothing red anywhere (ADR-0074) |
 | 39 | A retired config is never wanted on a panel, and a top-up revives only `active` configs | CHECK `config_retired_is_absent` + `reviveOnTopUp`'s `where` (F-027-z) | a config the user deleted, or the old seat of one that moved, is rebuilt by the next top-up |
 | 40 | Only the convergence pass calls a panel's client-lifecycle methods; a client is created under its ceiling, and `enforcementState = complete` / a cleared `remoteId` come only from a read | `converge.Provisioning` (F-027-z), asserted by `provision_test.go` | a create with no limit is unpaid traffic; a delete believed from our own write frees a seat the panel still holds |
+| 41 | A remote client is matched to at most one config, by `remoteId`, then `claimTag`, then `uuid`, each key over what the ones before left unclaimed; a client matched by no key is never recreated blind | `converge.MatchClients` (F-027-aa), asserted by `drift_test.go` | a rename is a vanished client: its usage unattributed and the user cut off, or a second seat created beside the renamed one |
 
 ## How to test
 

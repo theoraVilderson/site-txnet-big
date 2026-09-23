@@ -136,6 +136,62 @@ func (p *Panel) Given(remoteID string) {
 	p.order = append(p.order, remoteID)
 }
 
+// Rename is an operator renaming a client on the panel: a new id and the same
+// client — label, credential, counter and ceiling all kept. It is the drift
+// the claim tag exists for (F-027-aa).
+func (p *Panel) Rename(from, to string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	c := p.clients[from]
+	if c == nil {
+		return
+	}
+	delete(p.clients, from)
+	c.remoteID = to
+	p.clients[to] = c
+	for i, id := range p.order {
+		if id == from {
+			p.order[i] = to
+		}
+	}
+}
+
+// Rebuild is a client deleted and made again by hand from its credential: a
+// new id and the same uuid, and nothing else we wrote — no label, no ceiling,
+// a counter from zero.
+func (p *Panel) Rebuild(from, to string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	old := p.clients[from]
+	if old == nil {
+		return
+	}
+	delete(p.clients, from)
+	c := &client{remoteID: to, uuid: old.uuid, inbound: old.inbound, enabled: true}
+	if p.cfg.CounterSemantics == driver.CounterSession {
+		c.sessionID = p.newSessionLocked()
+	}
+	p.clients[to] = c
+	for i, id := range p.order {
+		if id == from {
+			p.order[i] = to
+		}
+	}
+}
+
+// Remove is a client deleted behind our back, by the panel's own operator.
+func (p *Panel) Remove(remoteID string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.clients, remoteID)
+	for i, id := range p.order {
+		if id == remoteID {
+			p.order = append(p.order[:i], p.order[i+1:]...)
+			break
+		}
+	}
+}
+
 // Serve moves bytes at the far end. An abandoned session reports none of them:
 // that is what a missing Stop looks like from here.
 func (p *Panel) Serve(remoteID string, up, down int64) {

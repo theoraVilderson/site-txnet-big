@@ -32,11 +32,12 @@ import (
 //   - **One read per pass.** The `Converger` below reads the population once
 //     and hands it to this pass and to the ceiling pass.
 //
-// What is not here: which config a client belongs to beyond `remoteId`, and
-// what a client that vanished from under a present config means — both are
-// the drift comparison's (F-027-aa). A create is not repeated over a client
-// already holding our `uuid`, because a create whose answer was lost is the
-// commonest way to make one.
+// Which client is which config is the drift comparison's three-key match
+// (drift.go, F-027-aa), and every branch below acts on the client it found,
+// not on the row's `remoteId`: a renamed or rebuilt client is re-keyed and
+// carried on, and a create is not repeated over a client already holding our
+// tag or `uuid`, because a create whose answer was lost is the commonest way
+// to make one.
 
 // EnforcementState is `network.EnforcementState`: how far the loop got.
 type EnforcementState string
@@ -72,6 +73,8 @@ type DesiredConfig struct {
 	AllocatedBytes *int64
 	ServedBytes    int64
 	State          EnforcementState
+	// Drift is `driftState` as the row holds it; empty reads as synced.
+	Drift DriftState
 }
 
 // Outcome is what the pass learned about one row. RemoteID is the value the
@@ -85,9 +88,13 @@ type Outcome struct {
 
 // Desired is `network.config`'s desired state behind an interface, as
 // `Allocations` is.
+// RecordDrift is a method of its own rather than a field of Outcome because two
+// passes supply the verdict: provisioning the identity ones, the ceiling pass
+// `reset` and `limit_overridden` (F-027-aa).
 type Desired interface {
 	For(ctx context.Context, panelID string) ([]DesiredConfig, error)
 	Record(ctx context.Context, rows []Outcome) error
+	RecordDrift(ctx context.Context, rows []Verdict) error
 }
 
 // Action names what the pass did about one config, and each is a different
@@ -101,6 +108,12 @@ const (
 	ActionEnabled           Action = "enabled"
 	ActionDisabled          Action = "disabled"
 	ActionDeleted           Action = "deleted"
+	// ActionRekeyed: a renamed or rebuilt client already holds the desired
+	// state; only the row's `remoteId` moved to it.
+	ActionRekeyed Action = "rekeyed"
+	// ActionRestored: a rebuilt client had our tag and its first block
+	// written back, on the row re-keyed to it.
+	ActionRestored Action = "restored"
 	// ActionAwaitingAllocation: present, no client, and no share yet. Created
 	// on the pass after the allocator writes one.
 	ActionAwaitingAllocation Action = "awaiting_allocation"
@@ -122,7 +135,9 @@ type ProvisionFinding struct {
 }
 
 // ProvisionReport is one panel's provisioning. Removed names the clients this
-// pass deleted, so the ceiling pass after it does not write to them.
+// pass deleted, so the ceiling pass after it does not write to them. Drift is
+// every row's identity verdict, which the `Converger` completes with the
+// ceiling pass's and records; Orphans are the remote ids no config claims.
 type ProvisionReport struct {
 	PanelID  string
 	Checked  int
@@ -132,6 +147,8 @@ type ProvisionReport struct {
 	Failed   int
 	Findings []ProvisionFinding
 	Removed  map[string]bool
+	Drift    map[string]Judgement
+	Orphans  []string
 }
 
 // Provisioning converges one panel's desired state per call. It holds no state
@@ -145,27 +162,25 @@ type Provisioning struct {
 // read. It returns an error only where the rows could not be read or written
 // back; one client the panel refuses is a finding.
 func (v *Provisioning) PassOver(ctx context.Context, p collect.Panel, clients []driver.RemoteClient, at time.Time) (ProvisionReport, error) {
-	report := ProvisionReport{PanelID: p.ID, Removed: map[string]bool{}}
+	report := ProvisionReport{PanelID: p.ID, Removed: map[string]bool{}, Drift: map[string]Judgement{}}
 
 	rows, err := v.Desired.For(ctx, p.ID)
-	if err != nil || len(rows) == 0 {
+	if err != nil {
 		return report, err
 	}
 
-	byRemote := make(map[string]driver.RemoteClient, len(clients))
-	byUUID := make(map[string]driver.RemoteClient, len(clients))
-	for _, c := range clients {
-		byRemote[c.RemoteID] = c
-		if c.UUID != "" {
-			byUUID[c.UUID] = c
-		}
+	matching := MatchClients(rows, clients)
+	for _, orphan := range matching.Orphans {
+		report.Orphans = append(report.Orphans, orphan.RemoteID)
 	}
 
 	inbounds := &inboundCache{driver: p.Driver}
 	var outcomes []Outcome
 	for _, row := range rows {
 		report.Checked++
-		outcome, finding := v.one(ctx, p, row, byRemote, byUUID, inbounds, at, &report)
+		match, matched := matching.ByConfig[row.ConfigID]
+		report.Drift[row.ConfigID] = Judgement{Was: row.Drift, Now: identityVerdict(row, match, matched)}
+		outcome, finding := v.one(ctx, p, row, match, matched, inbounds, at, &report)
 		if finding != nil {
 			report.Findings = append(report.Findings, *finding)
 		}
@@ -184,11 +199,10 @@ func (v *Provisioning) PassOver(ctx context.Context, p collect.Panel, clients []
 
 // one decides a single row. The branches are in the order the desired state
 // is read: whether the client should exist, then which client it is, then
-// what it should carry.
+// what it should carry. Every write goes to the client the match found.
 func (v *Provisioning) one(
-	ctx context.Context, p collect.Panel, row DesiredConfig,
-	byRemote, byUUID map[string]driver.RemoteClient, inbounds *inboundCache,
-	at time.Time, report *ProvisionReport,
+	ctx context.Context, p collect.Panel, row DesiredConfig, match Match, matched bool,
+	inbounds *inboundCache, at time.Time, report *ProvisionReport,
 ) (*Outcome, *ProvisionFinding) {
 	outcome := func(remoteID string, state EnforcementState) *Outcome {
 		return &Outcome{ConfigID: row.ConfigID, RemoteID: remoteID, State: state, At: at}
@@ -200,70 +214,82 @@ func (v *Provisioning) one(
 		report.Failed++
 		return nil, found(ActionRefused, remoteID, err)
 	}
-
-	client, onPanel := byRemote[row.RemoteID]
-	onPanel = onPanel && row.RemoteID != ""
+	client := match.Client
 
 	if !row.Present {
-		if !onPanel {
-			// Gone, by our delete or anyone's. The read is the confirmation,
-			// and it is the only thing that clears the id.
+		if !matched {
+			// Gone, by our delete or anyone's, under every key. The read is
+			// the confirmation, and it is the only thing that clears the id.
 			report.Synced++
 			return outcome("", StateComplete), nil
 		}
-		if err := p.Driver.DeleteClient(ctx, row.RemoteID); err != nil {
-			return refused(row.RemoteID, err)
+		if err := p.Driver.DeleteClient(ctx, client.RemoteID); err != nil {
+			return refused(client.RemoteID, err)
 		}
 		report.Written++
-		report.Removed[row.RemoteID] = true
-		return outcome(row.RemoteID, StatePartial), found(ActionDeleted, row.RemoteID, nil)
+		report.Removed[client.RemoteID] = true
+		return outcome(client.RemoteID, StatePartial), found(ActionDeleted, client.RemoteID, nil)
 	}
 
-	if row.RemoteID != "" && !onPanel {
-		// Ours, and not there. Recreating it blind would double the seat if it
-		// was renamed; the verdict is the drift comparison's (F-027-aa).
-		report.Skipped++
-		return nil, nil
-	}
-
-	if row.RemoteID == "" {
-		if existing, ok := byUUID[row.UUID]; ok && row.UUID != "" {
-			// A create whose answer never reached us. Adopting it is the
-			// difference between one seat and two.
-			report.Written++
-			return outcome(existing.RemoteID, StatePartial), found(ActionAdopted, existing.RemoteID, nil)
+	if !matched {
+		if row.RemoteID != "" {
+			// Ours, and on the panel under no key: `missing`. Recreating it is
+			// a repair, and repairs are behind the anti-flap stop (F-027-ab).
+			report.Skipped++
+			return nil, nil
 		}
 		return v.create(ctx, p, row, inbounds, report, outcome, found, refused)
 	}
 
+	if row.RemoteID == "" {
+		// A create whose answer never reached us. Adopting it is the
+		// difference between one seat and two.
+		report.Written++
+		return outcome(client.RemoteID, StatePartial), found(ActionAdopted, client.RemoteID, nil)
+	}
+
+	rebuilt := match.By == ByUUID && row.ClaimTag != "" && client.Label != row.ClaimTag
 	switch {
-	case client.UUID != row.UUID:
-		// A regenerate. The update carries the whole client as it should now
-		// be; the ceiling is the one the panel holds, because sizing it is the
-		// ceiling pass's and it runs next.
+	case client.UUID != row.UUID || rebuilt:
+		// A regenerate, or a client made again without our tag. The update
+		// carries the whole client as it should now be. The ceiling is the one
+		// the panel holds, because sizing it is the ceiling pass's and it runs
+		// next — except on a rebuilt client, which holds none: that one gets
+		// the first block a create would, in its new counter's origin.
+		limit := client.DataLimitBytes
+		if rebuilt && row.AllocatedBytes != nil {
+			limit = PanelCeiling(*row.AllocatedBytes, row.ServedBytes)
+		}
 		err := p.Driver.UpdateClient(ctx, driver.UpdateClientRequest{
-			RemoteID: row.RemoteID, ClaimTag: row.ClaimTag, UUID: row.UUID,
-			InboundRemoteID: client.InboundRemoteID, DataLimitBytes: client.DataLimitBytes,
+			RemoteID: client.RemoteID, ClaimTag: row.ClaimTag, UUID: row.UUID,
+			InboundRemoteID: client.InboundRemoteID, DataLimitBytes: limit,
 			RateLimitBps: client.RateLimitBps, ExpiresAt: client.ExpiresAt, Enabled: row.Enabled,
 		})
 		if err != nil {
-			return refused(row.RemoteID, err)
+			return refused(client.RemoteID, err)
 		}
 		report.Written++
-		return outcome(row.RemoteID, StatePartial), found(ActionCredentialRotated, row.RemoteID, nil)
+		action := ActionCredentialRotated
+		if client.UUID == row.UUID {
+			action = ActionRestored
+		}
+		return outcome(client.RemoteID, StatePartial), found(action, client.RemoteID, nil)
 	case client.Enabled != row.Enabled:
-		if err := p.Driver.SetClientEnabled(ctx, row.RemoteID, row.Enabled); err != nil {
-			return refused(row.RemoteID, err)
+		if err := p.Driver.SetClientEnabled(ctx, client.RemoteID, row.Enabled); err != nil {
+			return refused(client.RemoteID, err)
 		}
 		report.Written++
 		action := ActionDisabled
 		if row.Enabled {
 			action = ActionEnabled
 		}
-		return outcome(row.RemoteID, StatePartial), found(action, row.RemoteID, nil)
+		return outcome(client.RemoteID, StatePartial), found(action, client.RemoteID, nil)
+	case client.RemoteID != row.RemoteID:
+		report.Synced++
+		return outcome(client.RemoteID, StateComplete), found(ActionRekeyed, client.RemoteID, nil)
 	default:
 		report.Synced++
-		return outcome(row.RemoteID, StateComplete), nil
+		return outcome(client.RemoteID, StateComplete), nil
 	}
 }
 
@@ -354,18 +380,17 @@ func (c *Converger) Converge(ctx context.Context, p collect.Panel, res collect.R
 		return err
 	}
 	prov, ceil := report.Provisioning, report.Ceilings
-	if prov.Written > 0 || prov.Failed > 0 || ceil.Written > 0 || ceil.Failed > 0 {
+	if prov.Written > 0 || prov.Failed > 0 || ceil.Written > 0 || ceil.Failed > 0 || len(prov.Orphans) > 0 {
 		c.log().Info("panel converged",
 			"panel", p.ID, "provisioned", prov.Written, "provision_failed", prov.Failed,
-			"ceilings_written", ceil.Written, "ceilings_failed", ceil.Failed)
+			"ceilings_written", ceil.Written, "ceilings_failed", ceil.Failed, "orphans", len(prov.Orphans))
 	}
 	return nil
 }
 
 // Pass returns an error only where the panel could not be read or the rows
 // could not be recorded.
-func (c *Converger) Pass(ctx context.Context, p collect.Panel, res collect.Result) (ConvergeReport, error) {
-	var report ConvergeReport
+func (c *Converger) Pass(ctx context.Context, p collect.Panel, res collect.Result) (report ConvergeReport, err error) {
 	clients, err := p.Driver.ListClients(ctx)
 	if err != nil {
 		return report, err
@@ -375,6 +400,11 @@ func (c *Converger) Pass(ctx context.Context, p collect.Panel, res collect.Resul
 		if err != nil {
 			return report, err
 		}
+		defer func() {
+			if err == nil {
+				err = c.recordDrift(ctx, report, res.ObservedAt)
+			}
+		}()
 	}
 	if c.Ceilings != nil {
 		remaining := clients
@@ -389,6 +419,17 @@ func (c *Converger) Pass(ctx context.Context, p collect.Panel, res collect.Resul
 		report.Ceilings, err = c.Ceilings.PassOver(ctx, p, res, remaining)
 	}
 	return report, err
+}
+
+// recordDrift completes provisioning's identity verdicts with the ceiling
+// pass's and writes the ones that changed (F-027-aa).
+func (c *Converger) recordDrift(ctx context.Context, report ConvergeReport, at time.Time) error {
+	judge(report.Provisioning.Drift, report.Ceilings)
+	rows := changed(report.Provisioning.Drift, at)
+	if len(rows) == 0 {
+		return nil
+	}
+	return c.Provisioning.Desired.RecordDrift(ctx, rows)
 }
 
 func (c *Converger) log() *slog.Logger {

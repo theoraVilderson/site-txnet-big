@@ -98,6 +98,10 @@ type Allocation struct {
 	// for this config** — the basis `purchasedBytes` is counted on, not the
 	// panel's counter.
 	AllocatedBytes int64
+	// AppliedBytes is `config.appliedCeilingBytes`, in the same basis: what the
+	// panel last confirmed. Nil where no read ever has. It is what tells a
+	// ceiling somebody else wrote from one that is merely ours and stale.
+	AppliedBytes *int64
 }
 
 // AppliedCeiling is what a panel was found to be enforcing, expressed in the
@@ -129,6 +133,10 @@ type Finding struct {
 	HaveBytes int64
 	// Err is set on ReasonRefused and is always a *driver.Fault.
 	Err error
+	// Overridden says the panel's ceiling is neither ours nor the one it last
+	// confirmed: somebody else wrote it (`limit_overridden`, F-027-aa). A top-up
+	// leaves the panel on its old confirmed figure, which is ours and stale.
+	Overridden bool
 }
 
 // Report is one panel's convergence, for the log line and the drift surface
@@ -251,18 +259,19 @@ func (c *Ceilings) pass(ctx context.Context, p collect.Panel, res collect.Result
 		}
 
 		reason := c.reason(p, allocation.RemoteID, res, want, have)
+		overridden := overridden(reason, allocation, have, offset)
 		if err := p.Driver.SetClientDataLimit(ctx, allocation.RemoteID, want); err != nil {
 			report.Failed++
 			report.Findings = append(report.Findings, Finding{
 				ConfigID: allocation.ConfigID, RemoteID: allocation.RemoteID,
-				Reason: ReasonRefused, WantBytes: want, HaveBytes: have, Err: err,
+				Reason: ReasonRefused, WantBytes: want, HaveBytes: have, Err: err, Overridden: overridden,
 			})
 			continue
 		}
 		report.Written++
 		report.Findings = append(report.Findings, Finding{
 			ConfigID: allocation.ConfigID, RemoteID: allocation.RemoteID,
-			Reason: reason, WantBytes: want, HaveBytes: have,
+			Reason: reason, WantBytes: want, HaveBytes: have, Overridden: overridden,
 		})
 	}
 
@@ -291,6 +300,17 @@ func (c *Ceilings) reason(p collect.Panel, remoteID string, res collect.Result, 
 	default:
 		return ReasonBelowAllocation
 	}
+}
+
+// overridden asks whether the ceiling being corrected is somebody else's. Only
+// a drift reason can be: an exhausted allowance and a reset are ours to
+// explain. With no confirmed figure to compare against, nothing is blamed.
+func overridden(reason Reason, allocation Allocation, have, offset int64) bool {
+	switch reason {
+	case ReasonNoLimit, ReasonAboveAllocation, ReasonBelowAllocation:
+		return allocation.AppliedBytes != nil && have+offset != *allocation.AppliedBytes
+	}
+	return false
 }
 
 // sawReset asks whether **this** pass is the one that found the counter going

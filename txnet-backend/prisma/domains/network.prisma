@@ -324,8 +324,9 @@ model Config {
   /// keys (F-027-aa). Cleared, never the row, when a purge completes.
   remoteId              String?
   /// What we write on every client we create, so a rename does not orphan its
-  /// usage. The second matching key; `uuid` is the third.
-  claimTag              String?          @unique
+  /// usage. The second matching key; `uuid` is the third. Required (F-027-aa):
+  /// a key some rows lack is one the match cannot rely on.
+  claimTag              String           @unique
   /// The configs issued together from one package, sharing one quota (§4.6).
   credentialGroupId     String?          @db.Uuid
   /// Desired state, not a command: the loop compares it as it is now and

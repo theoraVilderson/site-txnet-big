@@ -108,7 +108,9 @@ describe('network.Config carries its desired state, its drift and its ceiling', 
     // F-027-aa matches `remoteId` -> `claimTag` -> `uuid`. Without the tag a
     // rename orphans the usage and we cut off a user whose config works.
     expect(config).toMatch(/^\s*remoteId\s+String\?/m);
-    expect(config).toMatch(/^\s*claimTag\s+String\?/m);
+    // Required: a key some rows lack is one the match cannot rely on.
+    expect(config).toMatch(/^\s*claimTag\s+String\s+@unique/m);
+    expect(sql).toMatch(/ALTER COLUMN "claimTag" SET NOT NULL/);
     expect(sql).toContain('config_panel_remote_id_key');
   });
 

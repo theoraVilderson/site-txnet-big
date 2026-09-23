@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 12
+version: 13
 updated: 2026-09-23
 ---
 
@@ -79,15 +79,21 @@ converger: **one** `ListClients` per panel, then provisioning, then the ceiling
 pass over the same read (invariant 34) — minus the clients provisioning just
 deleted, so a stale share is never written to a client that is gone.
 
+"The panel" below is the client the three-key match found (`remoteId` →
+`claimTag` → `uuid`, `contract.drift.md`), and every write goes to that
+client's id — a renamed or rebuilt client is re-keyed and carried on.
+
 | desired | the panel | the pass |
 |---|---|---|
-| `absent` | holds `remoteId` | `DeleteClient` → `partial` |
-| `absent` | does not | clears `remoteId` → `complete` |
-| `present`, no `remoteId` | a client holds our `uuid` | adopts it (a create whose answer was lost) → `partial` |
+| `absent` | holds it | `DeleteClient` → `partial` |
+| `absent` | holds it under no key | clears `remoteId` → `complete` |
+| `present`, no `remoteId` | holds our tag or `uuid` | adopts it (a create whose answer was lost) → `partial` |
 | `present`, no `remoteId` | nothing | `CreateClient` under its ceiling → `partial` |
-| `present`, `remoteId` | does not hold it | skipped — F-027-aa's verdict |
+| `present`, `remoteId` | holds it under no key | skipped — `missing` (`contract.drift.md`) |
+| `present` | rebuilt: our `uuid`, not our tag | `UpdateClient` with the tag and a create's first block → `partial` |
 | `present` | `uuid` differs | `UpdateClient` with the new `uuid`, the panel's own ceiling kept → `partial` |
 | `present` | `enabled` differs | `SetClientEnabled` → `partial` |
+| `present` | matches, under another id | re-keys `remoteId` → `complete` |
 | `present` | matches | `complete` |
 
 **`complete` is a read, never our write** — the rule `appliedCeilingBytes`
@@ -106,5 +112,5 @@ is `allowance_exhausted`; a panel with no enabled inbound for the protocol is
 
 **Staging.** Desired state is read through `converge.Desired`, proved against
 `MemoryDesired` — the same staging `MemoryAllocations` is in until
-`network.config` is read directly. `claimTag` is carried when the row has one;
-writing it on every config is F-027-aa's.
+`network.config` is read directly. Every row has a `claimTag`
+(NOT NULL, F-027-aa), and it goes out with every create and update.

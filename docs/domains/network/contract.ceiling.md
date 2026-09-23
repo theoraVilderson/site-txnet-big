@@ -180,4 +180,9 @@ It writes one number and reads it back. Sizing a share is the allocator's,
 creating or enabling a client is F-027-z's, deciding which config a remote
 client belongs to is F-027-aa's, and the anti-flap stop that bounds repair
 attempts is F-027-ab's. A config whose `remoteId` names no client on the panel
-is skipped here and gets its verdict there.
+is skipped here and gets its verdict there (`contract.drift.md`).
+
+It does flag one verdict: a drift write whose panel figure is neither ours nor
+the `appliedCeilingBytes` it last confirmed (`Allocation.AppliedBytes`) is
+`Finding.Overridden` — `limit_overridden`. A top-up is not: the panel still
+holds its last confirmed figure, which is ours and stale.

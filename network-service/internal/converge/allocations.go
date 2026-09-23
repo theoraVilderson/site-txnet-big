@@ -43,7 +43,13 @@ func (m *MemoryAllocations) For(_ context.Context, panelID string) ([]Allocation
 	defer m.mu.Unlock()
 	rows := m.byPanel[panelID]
 	out := make([]Allocation, len(rows))
-	copy(out, rows)
+	for i, row := range rows {
+		if applied, ok := m.byConfig[row.ConfigID]; ok {
+			bytes := applied.Bytes
+			row.AppliedBytes = &bytes
+		}
+		out[i] = row
+	}
 	return out, nil
 }
 
@@ -109,6 +115,20 @@ func (m *MemoryDesired) Record(_ context.Context, outcomes []Outcome) error {
 		}
 		row.RemoteID, row.State = o.RemoteID, o.State
 		m.rows[o.ConfigID] = row
+	}
+	return nil
+}
+
+func (m *MemoryDesired) RecordDrift(_ context.Context, verdicts []Verdict) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, v := range verdicts {
+		row, ok := m.rows[v.ConfigID]
+		if !ok {
+			continue
+		}
+		row.Drift = v.Drift
+		m.rows[v.ConfigID] = row
 	}
 	return nil
 }

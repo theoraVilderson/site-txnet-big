@@ -5,6 +5,15 @@ import { ActorType, ConfigProtocol, ConfigStatus, DesiredRemote, EnforcementStat
 
 import { CeilingAllocatorService } from './ceiling-allocator';
 
+/**
+ * The second matching key (network F-027-aa): written into the client's label
+ * on every panel family that has one, so a rename on the panel does not orphan
+ * the config's usage. Ours and global (`@unique`, invariant 17), and random
+ * rather than derived from the `uuid`, because a regenerate rotates the
+ * credential and the tag has to survive it. A move is a new row and a new tag.
+ */
+const claimTag = (): string => `txn-${randomUUID().replace(/-/g, '')}`;
+
 /** Who asked. `actorId` is the user, the admin, or the job's own id for `system`. */
 export type ConfigActor = { actorType: ActorType; actorId: string };
 
@@ -88,6 +97,7 @@ export class ConfigActionsService {
         panelId: input.panelId,
         protocol: input.protocol as ConfigProtocol,
         uuid,
+        claimTag: claimTag(),
         desiredRemote: DesiredRemote.present,
         desiredEnabled: true,
         enforcementState: EnforcementState.pending,
