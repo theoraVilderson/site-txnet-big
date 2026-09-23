@@ -1832,6 +1832,78 @@
     "periodPermanent": "From {{from}} — no end date",
     "features": "Features",
     "keyHint": "If you do not have this service's subscription key, ask for a new one; the previous key stops working.",
+    "usage": "{{consumed}} used of {{purchased}} bought",
+    "usageUnmetered": "{{consumed}} used",
+    "purgeIn": "Suspended. Top up within {{days}} days and {{hours}} hours ({{at}}) or this service's configs are removed from the servers. Nothing you bought is lost; a top-up brings them back.",
+    "purgeDue": "Suspended. This service's configs are being removed from the servers. Nothing you bought is lost; a top-up brings them back.",
+    "meteringUnavailable": "Usage is not being measured right now. Your service is not cut off; the numbers catch up once measuring resumes.",
+    "configs": {
+      "show": "Show configs",
+      "hide": "Hide configs",
+      "loading": "Loading configs…",
+      "empty": "This service has no configs.",
+      "selectAll": "Select all",
+      "selected": "{{count}} selected",
+      "bulkRegenerate": "New key for selected",
+      "bulkRetire": "Delete selected",
+      "regenerate": "New key",
+      "regenerateLeft": "{{left}} of {{max}} new keys left",
+      "retire": "Delete",
+      "retireConfirm": "Delete {{count}} config(s)? They stop working and cannot be brought back.",
+      "sending": "Sending…",
+      "done": "Done for {{count}} config(s).",
+      "ceiling": "Limit: {{allocated}}",
+      "ceilingQueued": "Limit: {{allocated}} set, {{applied}} applied on the server so far — the rest is queued.",
+      "ceilingNone": "No limit set yet.",
+      "checkedAt": "Last checked {{at}}",
+      "status": {
+        "active": "Active",
+        "frozen": "Frozen",
+        "disabled_by_admin": "Disabled by support",
+        "disabled_by_system": "Disabled by the system"
+      },
+      "verdict": {
+        "synced": {
+          "label": "In sync"
+        },
+        "reset": {
+          "label": "Counter reset",
+          "why": "The server reset this config's usage counter. We keep counting from what we had already measured, so nothing you used is lost or charged twice."
+        },
+        "renamed": {
+          "label": "Renamed on server",
+          "why": "This config was renamed on the server. We found it again by its tag and kept it as it was."
+        },
+        "rebuilt": {
+          "label": "Rebuilt on server",
+          "why": "This config was deleted and created again on the server with the same key. We matched it by its key and kept it."
+        },
+        "missing": {
+          "label": "Missing on server",
+          "why": "This config is gone from the server. We are creating it again; if it keeps disappearing we stop and support is told."
+        },
+        "orphan": {
+          "label": "Unrecognised on server",
+          "why": "The server has a client we did not create. It is reported to support and left untouched."
+        },
+        "limit_overridden": {
+          "label": "Limit changed on server",
+          "why": "Someone changed this config's limit on the server. We put back the limit you paid for."
+        },
+        "contested": {
+          "label": "Needs support",
+          "why": "This config was repaired twice within a day and changed back each time, so we stopped repairing it. Support has to look at it."
+        }
+      },
+      "refusal": {
+        "config_not_found": "not found — it may already be deleted.",
+        "config_retired": "already deleted.",
+        "grant_not_active": "the service is not active.",
+        "regenerate_limit_reached": "no new keys left for this config.",
+        "config_changed": "it changed while you were acting on it. Try again.",
+        "failed": "could not be done. Try again."
+      }
+    },
     "status": {
       "pending": "Pending",
       "active": "Active",

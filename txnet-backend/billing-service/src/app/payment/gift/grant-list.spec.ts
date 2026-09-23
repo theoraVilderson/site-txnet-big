@@ -18,7 +18,7 @@
  *    on the query rather than on the answer.
  */
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
-import { GrantStatus, Prisma } from '@prisma/client';
+import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 import { RATE_LIMIT_KEY, RateLimitBucket, type RateLimitOptions, runWithTenant } from '@txnet-backend/shared-core';
 
 import { GrantService } from '../../entitlement/grant';
@@ -40,6 +40,11 @@ function grantRow(overrides: Record<string, unknown> = {}) {
     endsAt: new Date('2026-10-14T10:00:00Z'),
     featureKeys: ['vpn.access'],
     variant: { id: VARIANT, sku: 'vpn-30d', nameKey: null, product: { nameKey: 'catalog.product.vpn.name' } },
+    billingMode: VariantBillingMode.metered,
+    consumedBytes: BigInt('1500000000'),
+    purchasedBytes: BigInt('2147483648'),
+    suspendedAt: null,
+    purgeAfterDays: null,
     ...overrides,
   };
 }
@@ -47,9 +52,15 @@ function grantRow(overrides: Record<string, unknown> = {}) {
 type Slice = { skip: number; take: number };
 
 /** Records what the list was actually asked for — the `where`, the slice and the order. */
-function build(rows: ReturnType<typeof grantRow>[] = [grantRow()], total = rows.length) {
-  const asked: { where?: Prisma.GrantWhereInput; slice?: Slice; orderBy?: unknown; select?: unknown } = {};
+function build(rows: ReturnType<typeof grantRow>[] = [grantRow()], total = rows.length, tenantPurgeDays = 7) {
+  const asked: { where?: Prisma.GrantWhereInput; slice?: Slice; orderBy?: unknown; select?: unknown; tenantReads: number } = { tenantReads: 0 };
   const tx = {
+    tenant: {
+      findUnique: async () => {
+        asked.tenantReads += 1;
+        return { purgeAfterDays: tenantPurgeDays };
+      },
+    },
     $executeRaw: async () => 0,
     grant: {
       findMany: async (args: { where: Prisma.GrantWhereInput; orderBy: unknown; select: unknown } & Slice) => {
@@ -87,9 +98,38 @@ describe('GrantService.listForUser', () => {
           endsAt: '2026-10-14T10:00:00.000Z',
           featureKeys: ['vpn.access'],
           variant: { id: VARIANT, sku: 'vpn-30d', nameKey: 'catalog.product.vpn.name' },
+          billingMode: VariantBillingMode.metered,
+          consumedBytes: '1500000000',
+          purchasedBytes: '2147483648',
+          suspendedAt: null,
+          purgeAt: null,
         },
       ],
     });
+    // No suspended row, so the tenant's window is never asked for.
+    expect(asked.tenantReads).toBe(0);
+  });
+
+  it('answers when a suspended Grant is purged — its own window, else the tenant’s, and 0 is never (F-027-ac)', async () => {
+    const suspendedAt = new Date('2026-09-20T00:00:00Z');
+    const { list, asked } = build(
+      [
+        grantRow({ status: GrantStatus.suspended, suspendedAt }),
+        grantRow({ id: 'g-own', status: GrantStatus.suspended, suspendedAt, purgeAfterDays: 2 }),
+        grantRow({ id: 'g-never', status: GrantStatus.suspended, suspendedAt, purgeAfterDays: 0 }),
+        // A stale `suspendedAt` on a Grant that is not suspended starts no clock.
+        grantRow({ id: 'g-live', suspendedAt }),
+      ],
+      4,
+      7,
+    );
+
+    const { rows } = await list();
+
+    expect(asked.tenantReads).toBe(1);
+    expect(rows.map((r) => r.purgeAt)).toEqual(['2026-09-27T00:00:00.000Z', '2026-09-22T00:00:00.000Z', null, null]);
+    expect(rows[0].suspendedAt).toBe('2026-09-20T00:00:00.000Z');
+    expect(rows[3].suspendedAt).toBeNull();
   });
 
   it('never reads the subscription key or its hash, whatever the schema grows', async () => {

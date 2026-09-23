@@ -145,6 +145,15 @@ export type GrantView = {
   featureKeys: string[];
   /** `null` for a Grant issued without a catalog item (`migration`). `nameKey` is the variant's own wording, else its product's (§4.3). */
   variant: { id: string; sku: string; nameKey: string } | null;
+  billingMode: VariantBillingMode;
+  /** What the panels reported, in bytes, as a decimal string (F-027-ac). Measured, not charged. */
+  consumedBytes: string;
+  /** What has been bought, in bytes, as a decimal string: the bound every ceiling shares (ADR-0072). */
+  purchasedBytes: string;
+  /** When the bag ran empty; `null` unless the Grant is suspended (ADR-0075). */
+  suspendedAt: string | null;
+  /** When the purge releases its panel seats; `null` when nothing is due — not suspended, or a window of `0` (never). */
+  purgeAt: string | null;
 };
 
 export type GrantPage = { total: number; page: number; pageSize: number; rows: GrantView[] };
@@ -162,13 +171,31 @@ const GRANT_VIEW_COLUMNS = {
   endsAt: true,
   featureKeys: true,
   variant: { select: { id: true, sku: true, nameKey: true, product: { select: { nameKey: true } } } },
+  billingMode: true,
+  consumedBytes: true,
+  purchasedBytes: true,
+  suspendedAt: true,
+  purgeAfterDays: true,
 } satisfies Prisma.GrantSelect;
 
 /** What an absent page means, decided here and nowhere else; the schema bounds `pageSize` at 100 when it is sent. */
 const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 20;
 
-function grantViewOf(r: Prisma.GrantGetPayload<{ select: typeof GRANT_VIEW_COLUMNS }>): GrantView {
+/**
+ * When a suspended Grant's seats are released (F-027-ac): `suspendedAt` plus
+ * the window, where the window is the Grant's own `purgeAfterDays`, else the
+ * tenant's, and `0` means never. The same resolution `purge.ts` makes in SQL,
+ * so the countdown the panel shows is the instant the hourly job acts after.
+ */
+export function purgeAtOf(suspendedAt: Date | null, grantDays: number | null, tenantDays: number | null): Date | null {
+  const days = grantDays ?? tenantDays;
+  if (!suspendedAt || days === null || days <= 0) return null;
+  return new Date(suspendedAt.getTime() + days * DAY_MS);
+}
+
+function grantViewOf(r: Prisma.GrantGetPayload<{ select: typeof GRANT_VIEW_COLUMNS }>, tenantPurgeDays: number | null): GrantView {
+  const suspended = r.status === GrantStatus.suspended ? r.suspendedAt : null;
   return {
     id: r.id,
     status: r.status,
@@ -176,6 +203,11 @@ function grantViewOf(r: Prisma.GrantGetPayload<{ select: typeof GRANT_VIEW_COLUM
     endsAt: r.endsAt?.toISOString() ?? null,
     featureKeys: r.featureKeys,
     variant: r.variant ? { id: r.variant.id, sku: r.variant.sku, nameKey: r.variant.nameKey ?? r.variant.product.nameKey } : null,
+    billingMode: r.billingMode,
+    consumedBytes: r.consumedBytes.toString(),
+    purchasedBytes: r.purchasedBytes.toString(),
+    suspendedAt: suspended?.toISOString() ?? null,
+    purgeAt: purgeAtOf(suspended, r.purgeAfterDays, tenantPurgeDays)?.toISOString() ?? null,
   };
 }
 
@@ -319,7 +351,13 @@ export class GrantService {
         }),
         tx.grant.count({ where: { userId } }),
       ]);
-      return { total, page, pageSize, rows: rows.map(grantViewOf) };
+      // The tenant's window is read only when a row needs it: a suspended
+      // Grant with no window of its own.
+      const needsTenant = rows.some((r) => r.status === GrantStatus.suspended && r.purgeAfterDays === null);
+      const tenant = needsTenant
+        ? await tx.tenant.findUnique({ where: { id: TenantContext.current('grant list').id }, select: { purgeAfterDays: true } })
+        : null;
+      return { total, page, pageSize, rows: rows.map((r) => grantViewOf(r, tenant?.purgeAfterDays ?? null)) };
     });
   }
 

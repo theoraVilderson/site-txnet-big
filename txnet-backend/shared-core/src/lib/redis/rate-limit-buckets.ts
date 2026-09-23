@@ -262,6 +262,16 @@ export const RateLimitBucket = {
   TRAFFIC_COLLECTION_HEALTH: 'traffic:collection-health',
 
   /**
+   * A user's own configs under one Grant (F-027-ac), per user: the list the
+   * service page opens, and the actions on them. Two buckets because the list
+   * is read on every expand and an action is a deliberate press — sharing
+   * would let looking at the configs spend the budget for acting on them. The
+   * action budget is per request, and one request may name fifty configs.
+   */
+  CONFIG_LIST: 'config:list',
+  CONFIG_ACTION: 'config:action',
+
+  /**
    * The platform owner's settlement surface in `billing-service` (F-096-e),
    * per operator. Two buckets rather than one because the surface is read far
    * more often than it is written — an operator refreshes what is owed while

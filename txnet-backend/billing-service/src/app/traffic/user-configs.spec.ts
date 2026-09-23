@@ -1,0 +1,224 @@
+/**
+ * A user's own configs (F-027-ac): `GET /api/billing/traffic/grants/:grantId/configs`
+ * and `POST /api/billing/traffic/configs/actions`.
+ *
+ * Three things about them fail silently, and each is asserted here:
+ *
+ *  - **a bulk action is per config** (user, 2026-09-23). One refused config —
+ *    at its regenerate limit, retired meanwhile — must not stop the others,
+ *    and every config's outcome is answered, so the page never has to guess
+ *    which one was refused. A throw that is not a refusal is an outcome too:
+ *    the configs before it are committed and have to be reported;
+ *  - **whose configs.** The actor is the gate's user, so another user's
+ *    config reads as `config_not_found` and another user's Grant as a 404;
+ *  - **the credential stays out of the list.** A config's `uuid` is what
+ *    `/sub` hands out (F-113); the list selects its columns and `uuid` is not
+ *    one of them.
+ */
+import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
+import { NotFoundException } from '@nestjs/common';
+import { ActorType, ConfigProtocol, ConfigStatus, DriftState, EnforcementState } from '@prisma/client';
+import { RATE_LIMIT_KEY, RateLimitBucket, type RateLimitOptions, runWithTenant } from '@txnet-backend/shared-core';
+
+import { ConfigActionRefused } from './config-actions';
+import { CONFIG_ACTION_FAILED, MAX_BULK_CONFIGS, UserConfigsService } from './user-configs';
+import { UserConfigsController } from './user-configs.controller';
+import { configActionSchema } from './user-configs.schema';
+
+const TENANT = '11111111-1111-4111-8111-111111111111';
+const USER = '44444444-4444-4444-8444-444444444444';
+const GRANT = '22222222-2222-4222-8222-222222222222';
+const C1 = '55555555-5555-4555-8555-555555555501';
+const C2 = '55555555-5555-4555-8555-555555555502';
+const C3 = '55555555-5555-4555-8555-555555555503';
+
+const req = (userId: string) => ({ identity: { userId, tenantId: TENANT, roleId: 'r', sessionId: 's', permissions: [] } });
+
+function configRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: C1,
+    protocol: ConfigProtocol.vless,
+    status: ConfigStatus.active,
+    allocatedCeilingBytes: BigInt('1073741824'),
+    appliedCeilingBytes: BigInt('536870912'),
+    driftState: DriftState.limit_overridden,
+    enforcementState: EnforcementState.partial,
+    regenerateUsedCount: 1,
+    maxRegenerateCount: 3,
+    lastReconciledAt: new Date('2026-09-23T10:00:00Z'),
+    panel: { region: 'de-fra' },
+    ...overrides,
+  };
+}
+
+function build(opts: { grant?: { id: string } | null; configs?: ReturnType<typeof configRow>[] } = {}) {
+  const asked: { grantWhere?: unknown; configWhere?: unknown; select?: unknown; orderBy?: unknown; transactions: number } = { transactions: 0 };
+  const tx = {
+    $executeRaw: async () => 0,
+    grant: {
+      findFirst: async (args: { where: unknown }) => {
+        asked.grantWhere = args.where;
+        return opts.grant === undefined ? { id: GRANT } : opts.grant;
+      },
+    },
+    config: {
+      findMany: async (args: { where: unknown; select: unknown; orderBy: unknown }) => {
+        asked.configWhere = args.where;
+        asked.select = args.select;
+        asked.orderBy = args.orderBy;
+        return opts.configs ?? [configRow()];
+      },
+    },
+  };
+  const prisma = {
+    $transaction: (fn: (t: typeof tx) => unknown) => {
+      asked.transactions += 1;
+      return fn(tx);
+    },
+  };
+  const actions = {
+    regenerate: vi.fn(async (_tx: unknown, _input: { configId: string }) => ({ uuid: 'u', regenerateUsedCount: 2 })),
+    retire: vi.fn(async (_tx: unknown, _input: { configId: string }): Promise<void> => undefined),
+  };
+  const service = new UserConfigsService(prisma as never, actions as never);
+  const inTenant = <T>(fn: () => Promise<T>) => runWithTenant({ id: TENANT }, fn);
+  return { service, actions, asked, inTenant };
+}
+
+describe('UserConfigsService.listForGrant', () => {
+  it('answers the Grant’s live configs with their ceiling and verdict, oldest first', async () => {
+    const { service, asked, inTenant } = build();
+
+    const rows = await inTenant(() => service.listForGrant(USER, GRANT));
+
+    expect(asked.grantWhere).toEqual({ id: GRANT, userId: USER });
+    // Retired is what the user deleted: gone from their view.
+    expect(asked.configWhere).toEqual({ grantId: GRANT, userId: USER, status: { not: ConfigStatus.retired } });
+    expect(asked.orderBy).toEqual([{ createdAt: 'asc' }, { id: 'asc' }]);
+    expect(rows).toEqual([
+      {
+        id: C1,
+        protocol: ConfigProtocol.vless,
+        status: ConfigStatus.active,
+        region: 'de-fra',
+        allocatedCeilingBytes: '1073741824',
+        appliedCeilingBytes: '536870912',
+        driftState: DriftState.limit_overridden,
+        enforcementState: EnforcementState.partial,
+        regenerateUsedCount: 1,
+        maxRegenerateCount: 3,
+        lastReconciledAt: '2026-09-23T10:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('never reads the credential: a config’s uuid is `/sub`’s to hand out', async () => {
+    const { service, asked, inTenant } = build();
+    await inTenant(() => service.listForGrant(USER, GRANT));
+    expect(Object.keys(asked.select as object)).not.toContain('uuid');
+    expect(JSON.stringify(asked.select)).not.toContain('Credentials');
+  });
+
+  it('refuses another user’s Grant exactly as a missing one', async () => {
+    const { service, inTenant } = build({ grant: null });
+    await expect(inTenant(() => service.listForGrant(USER, GRANT))).rejects.toMatchObject({ reason: 'grant_not_found' });
+  });
+});
+
+describe('UserConfigsService.act', () => {
+  it('runs each config in its own transaction, as the gate’s user', async () => {
+    const { service, actions, asked, inTenant } = build();
+
+    const results = await inTenant(() => service.act(USER, 'retire', [C1, C2]));
+
+    expect(asked.transactions).toBe(2);
+    expect(actions.retire).toHaveBeenCalledWith(expect.anything(), { configId: C1, actor: { actorType: ActorType.user, actorId: USER } });
+    expect(results).toEqual([
+      { configId: C1, ok: true },
+      { configId: C2, ok: true },
+    ]);
+  });
+
+  it('does not let one refusal stop the others, and names every outcome', async () => {
+    const { service, actions, inTenant } = build();
+    actions.regenerate.mockImplementation(async (_tx: unknown, input: { configId: string }) => {
+      if (input.configId === C2) throw new ConfigActionRefused('regenerate_limit_reached', '3/3');
+      return { uuid: 'u', regenerateUsedCount: 1 };
+    });
+
+    const results = await inTenant(() => service.act(USER, 'regenerate', [C1, C2, C3]));
+
+    expect(results).toEqual([
+      { configId: C1, ok: true },
+      { configId: C2, ok: false, reason: 'regenerate_limit_reached' },
+      { configId: C3, ok: true },
+    ]);
+  });
+
+  it('reports a throw that is not a refusal as `failed`, after committing the ones before it', async () => {
+    const { service, actions, inTenant } = build();
+    actions.retire.mockImplementationOnce(async () => undefined).mockImplementationOnce(async () => {
+      throw new Error('connection reset');
+    });
+
+    const results = await inTenant(() => service.act(USER, 'retire', [C1, C2]));
+
+    expect(results).toEqual([
+      { configId: C1, ok: true },
+      { configId: C2, ok: false, reason: CONFIG_ACTION_FAILED },
+    ]);
+  });
+
+  it('acts once on an id named twice — a second regenerate would spend another of three', async () => {
+    const { service, actions, inTenant } = build();
+    const results = await inTenant(() => service.act(USER, 'regenerate', [C1, C1]));
+    expect(actions.regenerate).toHaveBeenCalledTimes(1);
+    expect(results).toHaveLength(1);
+  });
+});
+
+describe('configActionSchema', () => {
+  it('takes the two user actions on one to fifty config ids', () => {
+    expect(configActionSchema.parse({ action: 'retire', configIds: [C1] })).toEqual({ action: 'retire', configIds: [C1] });
+    expect(configActionSchema.safeParse({ action: 'disable', configIds: [C1] }).success).toBe(false);
+    expect(configActionSchema.safeParse({ action: 'move', configIds: [C1] }).success).toBe(false);
+    expect(configActionSchema.safeParse({ action: 'retire', configIds: [] }).success).toBe(false);
+    expect(configActionSchema.safeParse({ action: 'retire', configIds: ['nope'] }).success).toBe(false);
+    const tooMany = Array.from({ length: MAX_BULK_CONFIGS + 1 }, () => C1);
+    expect(configActionSchema.safeParse({ action: 'retire', configIds: tooMany }).success).toBe(false);
+  });
+});
+
+describe('UserConfigsController', () => {
+  it('passes the gate’s user, and answers another user’s Grant as a 404', async () => {
+    const configs = {
+      listForGrant: vi.fn(async () => {
+        throw new ConfigActionRefused('grant_not_found', GRANT);
+      }),
+      act: vi.fn(async () => []),
+    };
+    const controller = new UserConfigsController(configs as never);
+
+    await expect(controller.list(GRANT, req(USER) as never)).rejects.toBeInstanceOf(NotFoundException);
+    expect(configs.listForGrant).toHaveBeenCalledWith(USER, GRANT);
+
+    await controller.act({ action: 'retire', configIds: [C1] }, { ...req(USER), body: { userId: 'someone-else' } } as never);
+    expect(configs.act).toHaveBeenCalledWith(USER, 'retire', [C1]);
+  });
+
+  it('reads and acts under two buckets of their own', () => {
+    expect(Reflect.getMetadata(PATH_METADATA, UserConfigsController)).toBe('billing/traffic');
+    const list = UserConfigsController.prototype.list;
+    const act = UserConfigsController.prototype.act;
+    expect(Reflect.getMetadata(METHOD_METADATA, list)).toBe(0); // GET
+    expect(Reflect.getMetadata(METHOD_METADATA, act)).toBe(1); // POST
+    expect(Reflect.getMetadata(PATH_METADATA, list)).toBe('grants/:grantId/configs');
+    expect(Reflect.getMetadata(PATH_METADATA, act)).toBe('configs/actions');
+
+    const readLimit = Reflect.getMetadata(RATE_LIMIT_KEY, list) as RateLimitOptions;
+    const actLimit = Reflect.getMetadata(RATE_LIMIT_KEY, act) as RateLimitOptions;
+    expect(readLimit.key(req(USER) as never)).toBe(`${RateLimitBucket.CONFIG_LIST}:${USER}`);
+    expect(actLimit.key(req(USER) as never)).toBe(`${RateLimitBucket.CONFIG_ACTION}:${USER}`);
+    expect(actLimit.configKey).toBe('CONFIG_ACTION_RATE_LIMIT');
+  });
+});

@@ -10,6 +10,8 @@ import { billingApi, type GrantRow } from "@/lib/billing-api";
 import { copyText } from "../../_lib/clipboard";
 import { formatInstant } from "../../_lib/datetime";
 import { GRANT_TONES } from "../_lib/my-services";
+import { formatBytes, purgeCountdown } from "../_lib/service-configs";
+import { GrantConfigs } from "./GrantConfigs";
 
 const S = FrontendI18nKeys.common.myServices;
 /**
@@ -56,6 +58,15 @@ export function ServiceRow({ row, name }: { row: GrantRow; name: string | null }
     ? t("common", S.period, { from: from ?? row.startsAt, until })
     : t("common", S.periodPermanent, { from: from ?? row.startsAt });
 
+  // Consumed is measured, purchased is what was bought (ADR-0072); only a
+  // metered Grant buys bytes, so a prepaid one shows what it used alone.
+  const consumed = formatBytes(row.consumedBytes, lang) ?? row.consumedBytes;
+  const usage =
+    row.billingMode === "metered"
+      ? t("common", S.usage, { consumed, purchased: formatBytes(row.purchasedBytes, lang) ?? row.purchasedBytes })
+      : t("common", S.usageUnmetered, { consumed });
+  const countdown = purgeCountdown(row.purgeAt);
+
   async function askForANewKey() {
     if (isRotating) return;
     setError(null);
@@ -90,6 +101,7 @@ export function ServiceRow({ row, name }: { row: GrantRow; name: string | null }
             {name ?? t("common", S.unnamed)}
           </p>
           <p className="mt-1 text-xs text-text-secondary">{period}</p>
+          <p className="mt-1 text-xs text-text-secondary">{usage}</p>
         </div>
         <span
           className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone.className}`}
@@ -98,6 +110,18 @@ export function ServiceRow({ row, name }: { row: GrantRow; name: string | null }
           {t("common", tone.labelKey)}
         </span>
       </div>
+
+      {countdown !== null && (
+        <p role="status" className="mt-3 rounded-2xl border border-gold/20 bg-gold-bg px-3 py-2 text-xs font-medium text-gold">
+          {countdown === "due"
+            ? t("common", S.purgeDue)
+            : t("common", S.purgeIn, {
+                days: countdown.days,
+                hours: countdown.hours,
+                at: formatInstant(row.purgeAt, lang) ?? row.purgeAt ?? "",
+              })}
+        </p>
+      )}
 
       {row.featureKeys.length > 0 && (
         <ul aria-label={t("common", S.features)} className="mt-3 flex flex-wrap gap-1.5">
@@ -153,6 +177,8 @@ export function ServiceRow({ row, name }: { row: GrantRow; name: string | null }
           </span>
         </div>
       )}
+
+      <GrantConfigs grantId={row.id} />
 
       <p className="mt-3 text-[11px] text-text-secondary">{t("common", S.keyHint)}</p>
       <button

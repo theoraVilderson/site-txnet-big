@@ -2,8 +2,8 @@
 id: billing
 layer: domain
 status: active
-version: 6
-updated: 2026-09-20
+version: 7
+updated: 2026-09-23
 ---
 
 # Contract — billing / gift code
@@ -79,7 +79,7 @@ closed had no way back.
 
 | Route | Query | Answers `data` |
 |---|---|---|
-| `GET /api/billing/gift/grants` | `page`, `pageSize` (≤ 100) | `{total, page, pageSize, rows[{id, status, startsAt, endsAt, featureKeys, variant{id, sku, nameKey} \| null}]}` |
+| `GET /api/billing/gift/grants` | `page`, `pageSize` (≤ 100) | `{total, page, pageSize, rows[{id, status, startsAt, endsAt, featureKeys, variant{id, sku, nameKey} \| null, billingMode, consumedBytes, purchasedBytes, suspendedAt, purgeAt}]}` |
 
 | Rule | Why |
 |---|---|
@@ -90,6 +90,7 @@ closed had no way back.
 | Ordered `startsAt` desc, then `id` desc. Absent paging is page 1 of 20 | two Grants issued in one transaction share an instant, and an unstable order repeats or skips one across pages |
 | No domain error: a user with no Grants is an empty page, not a **404**. Only a malformed query (**400**) and the limiter (**429**) fail | the page exists before the first Grant does |
 | Its own bucket, `GRANT_LIST`, default **120** per 900s; the `subscriptionLink` capability, as above | it reads no secret and destroys nothing, so it is no security control — but sharing `GRANT_ROTATE_TOKEN`'s five calls would spend a user's recovery budget on looking at the list that offers the recovery |
+| Bytes are decimal strings. `purgeAt` is `suspendedAt` + `coalesce(grant.purgeAfterDays, tenant.purgeAfterDays)` days, and `null` when the Grant is not suspended or the window is `0` (F-027-ac) | a Grant's bytes pass 2^53; and it is the SQL `entitlement/purge.ts` runs, so the panel's countdown is the instant the hourly job acts after. The tenant is read only when a suspended row has no window of its own |
 
 **Not covered:** a `/sub` link for the key (F-113, F-027); the panel showing it
 (F-502-l-c) and its reissue button (F-502-q, built). Its consumer since
@@ -97,3 +98,27 @@ closed had no way back.
 `panel-web/contract.my-services.md`), which lists every status this answers and
 puts the reissue button on each row. Filtering or searching the list is nobody's
 row yet: paging is the only knob.
+
+## A Grant's configs, and what a user may do to them (built — F-027-ac)
+
+`traffic/user-configs.controller.ts` over `UserConfigsService`, which calls
+`ConfigActionsService` (network `contract.provisioning.md`) — every action is
+still a desired-state write, and nothing here calls a panel.
+
+| Route | In | Answers `data` |
+|---|---|---|
+| `GET /api/billing/traffic/grants/:grantId/configs` | the Grant id | `{grantId, rows[{id, protocol, status, region, allocatedCeilingBytes, appliedCeilingBytes, driftState, enforcementState, regenerateUsedCount, maxRegenerateCount, lastReconciledAt}]}` |
+| `POST /api/billing/traffic/configs/actions` | `{action: regenerate \| retire, configIds[1..50]}` | `{action, results[{configId, ok: true} \| {configId, ok: false, reason}]}` — always **200** |
+
+| Rule | Why |
+|---|---|
+| A user may **regenerate** and **retire**, nothing else (user, 2026-09-23). Enable/disable stay an operator's switch; a move needs a panel list users do not have | `ConfigActionsService.disable` already refuses a user; a move is its own row when a user-facing panel list exists |
+| **A bulk action is one transaction per config**, in the order named, ids deduplicated; every config's outcome is answered (user, 2026-09-23) | one refused config — at its regenerate limit, retired meanwhile — must not stop the others, and the page must not have to guess which one it was. A second regenerate of one id would spend another of three |
+| `reason` is `CONFIG_ACTION_REJECTIONS` (`config-actions.ts`, C-09) or `failed` for a throw that was not a refusal — logged, and still an outcome | the configs before it are committed and must be reported |
+| Whose configs is the gate's `X-User-Id`. Another user's Grant is the same **404** as a missing one; another user's config is `config_not_found` | neither route is a way to ask whether an id exists |
+| Retired configs are not listed, and the list **never answers `uuid`** — columns are selected | retired is what the user deleted; the `uuid` is the credential, `/sub`'s to hand out (F-113) |
+| Buckets `CONFIG_LIST` (**180**/900s) and `CONFIG_ACTION` (**30**/900s, per request); capability `subscriptionLink` | looking must not spend the budget for acting; these are the configs `/sub` serves |
+
+**Not covered:** the new credential a regenerate mints is delivered by `/sub`
+(F-113), not by this answer; move and provision from the panel are nobody's row.
+Its consumer is `panel-web/contract.my-services.md`.

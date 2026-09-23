@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 28
-updated: 2026-09-20
+version: 29
+updated: 2026-09-23
 ---
 
 # Contract — panel-web: the "my services" page (F-502-s)
@@ -21,8 +21,10 @@ A key lost yesterday had no way back. This is that way back, and the later home
 of the `/sub` link (F-113).
 
 Its pieces: `_components/MyServicesView.tsx` (the page), `_components/ServiceRow.tsx`
-(one Grant), `_hooks/useGrantsPage.ts` (the two reads), `_lib/my-services.ts`
-(the status tones and the name rule).
+(one Grant), `_components/GrantConfigs.tsx` (its configs, F-027-ac),
+`_hooks/useGrantsPage.ts` (the two reads), `_lib/my-services.ts` (the status
+tones and the name rule), `_lib/service-configs.ts` (verdicts, refusals, bytes,
+the purge countdown).
 
 ## Rules
 
@@ -82,14 +84,39 @@ Its pieces: `_components/MyServicesView.tsx` (the page), `_components/ServiceRow
    `total` of zero, which the route answers rather than a 404: the page exists
    before the first Grant does.
 
+9. **Consumed against purchased, and the purge clock** (F-027-ac). A metered
+   Grant shows what the panels measured against what was bought; a prepaid one
+   what it used alone. Bytes arrive as decimal strings and stay exact to the
+   formatter. A suspended Grant with a `purgeAt` shows a days-and-hours
+   countdown and says a top-up brings it back; past the instant it says the
+   configs are being removed — the hourly job acts *after* it, never at it.
+10. **Every verdict but `synced` is a button that says why.** Each
+    `DriftState` has a label and — except `synced` — a sentence; the spec reads
+    the enum out of `network.prisma`, so a new verdict is red there, not a
+    blank pill. A ceiling the panel has not fully taken reads as queued.
+11. **An action answers per config** (user, 2026-09-23). New key and delete, on
+    one config or the ticked ones, in one request; delete asks first. The done
+    count and each refused config — by the label it had when pressed, with its
+    reason's sentence — are shown, then the list is read again. A 4xx is the
+    request itself and changes nothing on screen. No new key is offered once a
+    config's allowance is spent. Configs are read only when opened.
+12. **Metering down is not service down.** While `collection-health` answers
+    `unavailable` the page says the service is not cut off; a failed read of
+    that flag shows nothing.
+
 ## Proof
 
 `services/my-services.test.tsx` — the status union against
 `entitlement.prisma`, and a row's reissue: the id alone, the replacement, a
-refusal that changes nothing, and one ask at a time.
+refusal that changes nothing, and one ask at a time. F-027-ac: `DriftState` and
+`ConfigStatus` against `network.prisma` and the refusals against billing's
+tuple; usage, the countdown, the verdict button, the queued ceiling, a bulk
+delete with one refusal, a declined confirm, and a spent allowance.
 
 ## Not covered
 
-The `/sub` link itself (F-113, F-027) — this page is where it will go. Filtering
+The `/sub` link itself (F-113, F-027) — this page is where it will go, and
+where a regenerated config's new credential will be read. Moving a config or
+adding one from here is nobody's row. Filtering
 or searching the list is nobody's row; so is renewing a service from here, which
 needs a checkout the panel does not have yet.

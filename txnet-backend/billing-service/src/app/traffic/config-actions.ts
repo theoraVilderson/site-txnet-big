@@ -17,17 +17,22 @@ const claimTag = (): string => `txn-${randomUUID().replace(/-/g, '')}`;
 /** Who asked. `actorId` is the user, the admin, or the job's own id for `system`. */
 export type ConfigActor = { actorType: ActorType; actorId: string };
 
-/** Why an action wrote nothing. */
-export type ConfigActionRejection =
-  | 'grant_not_found'
-  | 'grant_not_active'
-  | 'panel_not_found'
-  | 'config_not_found'
-  | 'config_retired'
-  | 'regenerate_limit_reached'
-  | 'config_changed'
-  | 'same_panel'
-  | 'actor_not_allowed';
+/**
+ * Why an action wrote nothing — declared once as a tuple (C-09), because the
+ * panel names each to the user (F-027-ac) and its spec reads this list.
+ */
+export const CONFIG_ACTION_REJECTIONS = [
+  'grant_not_found',
+  'grant_not_active',
+  'panel_not_found',
+  'config_not_found',
+  'config_retired',
+  'regenerate_limit_reached',
+  'config_changed',
+  'same_panel',
+  'actor_not_allowed',
+] as const;
+export type ConfigActionRejection = (typeof CONFIG_ACTION_REJECTIONS)[number];
 
 export class ConfigActionRefused extends Error {
   constructor(

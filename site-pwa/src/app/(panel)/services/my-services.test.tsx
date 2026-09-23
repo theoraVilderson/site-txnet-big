@@ -7,7 +7,18 @@ import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type GrantRow } from "@/lib/billing-api";
 import { ApiError } from "@/lib/api-error";
 import { ServiceRow } from "./_components/ServiceRow";
+import { GrantConfigs } from "./_components/GrantConfigs";
 import { GRANT_STATUSES, GRANT_TONES } from "./_lib/my-services";
+import {
+  CONFIG_ACTION_REFUSALS,
+  CONFIG_STATUSES,
+  DRIFT_STATES,
+  DRIFT_VERDICTS,
+  REFUSAL_KEYS,
+  formatBytes,
+  purgeCountdown,
+} from "./_lib/service-configs";
+import type { UserConfigRow } from "@/lib/billing-api";
 
 /**
  * The "my services" page (F-502-s), and the two things about it that break
@@ -34,13 +45,25 @@ import { GRANT_STATUSES, GRANT_TONES } from "./_lib/my-services";
 const REPO = join(__dirname, "../../../../..");
 const ENTITLEMENT_PRISMA = join(REPO, "txnet-backend/prisma/domains/entitlement.prisma");
 
-function statusesBillingCanAnswer(): string[] {
-  const block = /enum GrantStatus \{([\s\S]*?)\}/.exec(readFileSync(ENTITLEMENT_PRISMA, "utf8"));
-  if (!block) throw new Error("GrantStatus is no longer an enum in entitlement.prisma — this test is stale");
+const NETWORK_PRISMA = join(REPO, "txnet-backend/prisma/domains/network.prisma");
+const CONFIG_ACTIONS_TS = join(REPO, "txnet-backend/billing-service/src/app/traffic/config-actions.ts");
+
+function enumOf(file: string, name: string): string[] {
+  const block = new RegExp(`enum ${name} \\{([\\s\\S]*?)\\}`).exec(readFileSync(file, "utf8"));
+  if (!block) throw new Error(`${name} is no longer an enum in ${file} — this test is stale`);
   return block[1]
     .split("\n")
     .map((line) => line.trim())
-    .filter((line) => /^[a-z_]+$/.test(line));
+    .filter((line) => /^[a-z_0-9]+$/.test(line));
+}
+
+const statusesBillingCanAnswer = () => enumOf(ENTITLEMENT_PRISMA, "GrantStatus");
+
+/** Billing's `CONFIG_ACTION_REJECTIONS` tuple, read as it ships. */
+function rejectionsBillingCanAnswer(): string[] {
+  const block = /CONFIG_ACTION_REJECTIONS = \[([\s\S]*?)\] as const/.exec(readFileSync(CONFIG_ACTIONS_TS, "utf8"));
+  if (!block) throw new Error("CONFIG_ACTION_REJECTIONS moved — this test is stale");
+  return [...block[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
 }
 
 vi.mock("@/context/LocaleContext", () => ({ useLocale: vi.fn() }));
@@ -52,10 +75,12 @@ vi.mock("@/context/LocaleContext", () => ({ useLocale: vi.fn() }));
  */
 vi.mock("@/lib/billing-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/billing-api")>()),
-  billingApi: { rotateGrantToken: vi.fn() },
+  billingApi: { rotateGrantToken: vi.fn(), grantConfigs: vi.fn(), configAction: vi.fn() },
 }));
 
 const rotateGrantToken = vi.mocked(billingApi.rotateGrantToken);
+const grantConfigs = vi.mocked(billingApi.grantConfigs);
+const configAction = vi.mocked(billingApi.configAction);
 
 /** The key back, so an assertion names the string the component asked for. */
 const t = (_ns: string, key: string, vars?: Record<string, string | number>) =>
@@ -68,6 +93,25 @@ const GRANT: GrantRow = {
   endsAt: "2026-12-01T00:00:00.000Z",
   featureKeys: ["vpn.pro"],
   variant: { id: "v1", sku: "VPN_PRO-30D", nameKey: "catalog.product.vpn.name" },
+  billingMode: "metered",
+  consumedBytes: "1610612736",
+  purchasedBytes: "2147483648",
+  suspendedAt: null,
+  purgeAt: null,
+};
+
+const CONFIG: UserConfigRow = {
+  id: "c1",
+  protocol: "vless",
+  status: "active",
+  region: "de-fra",
+  allocatedCeilingBytes: "1073741824",
+  appliedCeilingBytes: "1073741824",
+  driftState: "synced",
+  enforcementState: "complete",
+  regenerateUsedCount: 0,
+  maxRegenerateCount: 3,
+  lastReconciledAt: null,
 };
 
 const show = (row: Partial<GrantRow> = {}) =>
@@ -85,6 +129,110 @@ describe("the statuses billing can answer", () => {
   it("each have a sentence and a tone on this page", () => {
     expect([...GRANT_STATUSES].sort()).toEqual(statusesBillingCanAnswer().sort());
     expect(Object.keys(GRANT_TONES).sort()).toEqual([...GRANT_STATUSES].sort());
+  });
+});
+
+describe("the verdicts, config statuses and refusals billing can answer", () => {
+  it("each have a sentence on this page, and every verdict but synced says why", () => {
+    expect([...DRIFT_STATES].sort()).toEqual(enumOf(NETWORK_PRISMA, "DriftState").sort());
+    expect(Object.keys(DRIFT_VERDICTS).sort()).toEqual([...DRIFT_STATES].sort());
+    for (const state of DRIFT_STATES) {
+      expect(DRIFT_VERDICTS[state].whyKey === null).toBe(state === "synced");
+    }
+    // The list never answers a retired config: the user deleted it.
+    expect([...CONFIG_STATUSES, "retired"].sort()).toEqual(enumOf(NETWORK_PRISMA, "ConfigStatus").sort());
+    expect([...CONFIG_ACTION_REFUSALS].sort()).toEqual([...rejectionsBillingCanAnswer(), "failed"].sort());
+    expect(Object.keys(REFUSAL_KEYS).sort()).toEqual([...CONFIG_ACTION_REFUSALS].sort());
+  });
+});
+
+describe("usage and the purge clock", () => {
+  it("shows consumed against purchased for a metered Grant", () => {
+    show();
+    expect(screen.getByText("myServices.usage:1.5 GB,2 GB")).toBeInTheDocument();
+  });
+
+  it("counts down to the purge in days and hours, and says when it is due", () => {
+    const now = new Date("2026-09-23T00:00:00Z");
+    expect(purgeCountdown("2026-09-25T05:30:00Z", now)).toEqual({ days: 2, hours: 5 });
+    expect(purgeCountdown("2026-09-22T00:00:00Z", now)).toBe("due");
+    expect(purgeCountdown(null, now)).toBeNull();
+    expect(formatBytes("0", "en")).toBe("0 B");
+    // Past 2^53: a decimal string, never a float that rounded on the wire.
+    expect(formatBytes("18014398509481984", "en")).toBe("16 PB");
+  });
+
+  it("shows the countdown only when billing answered a purge instant", () => {
+    const { unmount } = show();
+    expect(screen.queryByText(/myServices\.purge/)).not.toBeInTheDocument();
+    unmount();
+    show({ status: "suspended", suspendedAt: "2026-09-20T00:00:00Z", purgeAt: "2020-01-01T00:00:00Z" });
+    expect(screen.getByText("myServices.purgeDue")).toBeInTheDocument();
+  });
+});
+
+describe("a Grant's configs", () => {
+  const open = async (rows: UserConfigRow[]) => {
+    grantConfigs.mockResolvedValue({ grantId: "g1", rows });
+    const user = userEvent.setup();
+    render(<GrantConfigs grantId="g1" />);
+    await user.click(screen.getByRole("button", { name: "myServices.configs.show" }));
+    await screen.findAllByText(/de-fra/);
+    return user;
+  };
+
+  it("reads nothing until opened", () => {
+    render(<GrantConfigs grantId="g1" />);
+    expect(grantConfigs).not.toHaveBeenCalled();
+  });
+
+  it("makes every non-synced verdict a button that says why, and synced not one", async () => {
+    const user = await open([CONFIG, { ...CONFIG, id: "c2", region: "de-fra-2", driftState: "limit_overridden" }]);
+
+    expect(screen.queryByRole("button", { name: "myServices.configs.verdict.synced.label" })).not.toBeInTheDocument();
+    expect(screen.getByText("myServices.configs.verdict.synced.label")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "myServices.configs.verdict.limit_overridden.label" }));
+    expect(screen.getByText("myServices.configs.verdict.limit_overridden.why")).toBeInTheDocument();
+  });
+
+  it("says when the panel has not yet taken the whole ceiling", async () => {
+    await open([{ ...CONFIG, appliedCeilingBytes: "536870912" }]);
+    expect(screen.getByText("myServices.configs.ceilingQueued:1 GB,512 MB")).toBeInTheDocument();
+  });
+
+  it("acts on the ticked configs in one request, names the refused one, and reads the list again", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    configAction.mockResolvedValue({
+      action: "retire",
+      results: [
+        { configId: "c1", ok: true },
+        { configId: "c2", ok: false, reason: "config_changed" },
+      ],
+    });
+    const user = await open([CONFIG, { ...CONFIG, id: "c2", protocol: "trojan" }]);
+
+    await user.click(screen.getByRole("checkbox", { name: "myServices.configs.selectAll" }));
+    await user.click(screen.getByRole("button", { name: "myServices.configs.bulkRetire" }));
+
+    await waitFor(() => expect(configAction).toHaveBeenCalledWith("retire", ["c1", "c2"]));
+    expect(await screen.findByText("myServices.configs.done:1")).toBeInTheDocument();
+    const refused = screen.getByRole("alert");
+    expect(refused).toHaveTextContent("trojan · de-fra");
+    expect(refused).toHaveTextContent("myServices.configs.refusal.config_changed");
+    await waitFor(() => expect(grantConfigs).toHaveBeenCalledTimes(2));
+  });
+
+  it("deletes nothing when the confirmation is declined", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    const user = await open([CONFIG]);
+    await user.click(screen.getByRole("button", { name: "myServices.configs.retire" }));
+    expect(configAction).not.toHaveBeenCalled();
+  });
+
+  it("offers no new key once a config's allowance is spent", async () => {
+    await open([{ ...CONFIG, regenerateUsedCount: 3 }]);
+    expect(screen.getByRole("button", { name: "myServices.configs.regenerate" })).toBeDisabled();
   });
 });
 

@@ -166,9 +166,95 @@ export interface GrantRow {
   endsAt: string | null;
   featureKeys: string[];
   variant: { id: string; sku: string; nameKey: string } | null;
+  /** `metered` Grants buy their bytes in blocks, so `purchasedBytes` is what bounds them (ADR-0072). */
+  billingMode: "prepaid" | "metered";
+  /** Bytes, as a decimal string: what the panels reported. Measured, not charged. */
+  consumedBytes: string;
+  /** Bytes, as a decimal string: what has been bought. */
+  purchasedBytes: string;
+  /** Set only while suspended (ADR-0075). */
+  suspendedAt: string | null;
+  /** When the panel seats are released; `null` when nothing is due (not suspended, or a window of 0). */
+  purgeAt: string | null;
 }
 
 export type GrantsPage = Paged<GrantRow>;
+
+/**
+ * The convergence loop's verdicts on a config (F-027-aa/ab), as `network.prisma`
+ * declares `DriftState` (C-09). Only `synced` is quiet: every other one is a
+ * button on the service page that says why (F-027-ac).
+ */
+export const DRIFT_STATES = [
+  "synced",
+  "reset",
+  "renamed",
+  "rebuilt",
+  "missing",
+  "orphan",
+  "limit_overridden",
+  "contested",
+] as const;
+export type DriftState = (typeof DRIFT_STATES)[number];
+
+/** A config's own status, as `network.prisma` declares `ConfigStatus`, minus `retired` — the list never answers one. */
+export const CONFIG_STATUSES = ["active", "frozen", "disabled_by_admin", "disabled_by_system"] as const;
+export type ConfigStatus = (typeof CONFIG_STATUSES)[number];
+
+/** The two actions a user may take on a config (user, 2026-09-23). */
+export type ConfigAction = "regenerate" | "retire";
+
+/**
+ * Why one config's action wrote nothing: billing's `CONFIG_ACTION_REJECTIONS`
+ * (`traffic/config-actions.ts`) plus `failed` for a throw that was not a
+ * refusal. The page has a sentence for each; the spec reads the tuple.
+ */
+export const CONFIG_ACTION_REFUSALS = [
+  "grant_not_found",
+  "grant_not_active",
+  "panel_not_found",
+  "config_not_found",
+  "config_retired",
+  "regenerate_limit_reached",
+  "config_changed",
+  "same_panel",
+  "actor_not_allowed",
+  "failed",
+] as const;
+export type ConfigActionRefusal = (typeof CONFIG_ACTION_REFUSALS)[number];
+
+/**
+ * One config of a Grant, as `GET /traffic/grants/:id/configs` answers it
+ * (F-027-ac, `billing/contract.gift.md`). Never its `uuid`: that is the
+ * credential, and `/sub` is what hands it out.
+ */
+export interface UserConfigRow {
+  id: string;
+  protocol: string;
+  status: ConfigStatus;
+  region: string;
+  /** Bytes as decimal strings; `null` until the allocator gave it a share. */
+  allocatedCeilingBytes: string | null;
+  /** What the panel confirmed; a gap to `allocated` is work still queued. */
+  appliedCeilingBytes: string | null;
+  driftState: DriftState;
+  enforcementState: "pending" | "partial" | "complete";
+  regenerateUsedCount: number;
+  maxRegenerateCount: number;
+  lastReconciledAt: string | null;
+}
+
+export type ConfigActionOutcome =
+  | { configId: string; ok: true }
+  | { configId: string; ok: false; reason: ConfigActionRefusal };
+
+/** `GET /traffic/collection-health` (F-027-w): whether anything is metering the user's configs right now. */
+export interface CollectionHealth {
+  metering: "healthy" | "unavailable" | "not_metered";
+  lastCollectedAt: string | null;
+  staleForSeconds: number | null;
+  configsAffected: number;
+}
 
 /**
  * One gateway the user may pay through, as `GET /deposit/gateways` answers it
@@ -585,6 +671,35 @@ export const billingApi = {
       `/gift/grants/${encodeURIComponent(grantId)}/rotate-token`,
       { method: "POST" },
     );
+  },
+
+  /**
+   * One Grant's configs, with each one's ceiling and drift verdict (F-027-ac).
+   * Another user's Grant is the same 404 as a missing one.
+   */
+  async grantConfigs(grantId: string): Promise<{ grantId: string; rows: UserConfigRow[] }> {
+    return call<{ grantId: string; rows: UserConfigRow[] }>(
+      `/traffic/grants/${encodeURIComponent(grantId)}/configs`,
+      { method: "GET" },
+    );
+  },
+
+  /**
+   * One action on one config or up to fifty (F-027-ac). **Always an outcome
+   * per config**, never all-or-nothing (user, 2026-09-23): a refused config
+   * does not stop the others, and the answer says which it was. A 4xx here is
+   * the request itself — a bad body or the limiter — not one config.
+   */
+  async configAction(action: ConfigAction, configIds: string[]): Promise<{ action: ConfigAction; results: ConfigActionOutcome[] }> {
+    return call<{ action: ConfigAction; results: ConfigActionOutcome[] }>("/traffic/configs/actions", {
+      method: "POST",
+      body: JSON.stringify({ action, configIds }),
+    });
+  },
+
+  /** Whether the collector is reading the user's panels (F-027-w) — the service page's "not cut off" sentence. */
+  async collectionHealth(): Promise<CollectionHealth> {
+    return call<CollectionHealth>("/traffic/collection-health", { method: "GET" });
   },
 
   /**

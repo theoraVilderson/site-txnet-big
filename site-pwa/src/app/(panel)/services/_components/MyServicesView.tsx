@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, PackageOpen } from "lucide-react";
+import { AlertCircle, Gauge, PackageOpen } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
+import { billingApi } from "@/lib/billing-api";
 import { Pagination } from "../../_components/kit/Pagination";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { useGrantsPage } from "../_hooks/useGrantsPage";
@@ -48,6 +49,21 @@ export function MyServicesView() {
   );
 
   const state = useGrantsPage(page, lang);
+
+  // Whether anything is metering the user's configs (F-027-w). A stalled
+  // collector reads exactly like a broken service, so the page says which it
+  // is. A failure here shows nothing: it is a flag, not the page.
+  const [meteringDown, setMeteringDown] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    billingApi
+      .collectionHealth()
+      .then((h) => alive && setMeteringDown(h.metering === "unavailable"))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
   const totalPages = Math.max(1, Math.ceil(state.total / state.pageSize));
 
   return (
@@ -56,6 +72,13 @@ export function MyServicesView() {
         <h1 className="text-2xl font-bold text-text-primary md:text-3xl">{t("common", S.title)}</h1>
         <p className="mt-1 text-sm text-text-secondary">{t("common", S.subtitle)}</p>
       </header>
+
+      {meteringDown && (
+        <p role="status" className="flex items-start gap-3 rounded-2xl border border-gold/20 bg-gold-bg px-4 py-3 text-sm font-medium text-gold">
+          <Gauge size={18} className="mt-0.5 shrink-0" aria-hidden />
+          {t("common", S.meteringUnavailable)}
+        </p>
+      )}
 
       {state.isLoading && <TableSkeleton rows={3} columns={3} withPagination />}
 

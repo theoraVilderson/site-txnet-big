@@ -8,12 +8,15 @@ import { CollectionHealthService } from './collection-health';
 import { ConfigActionsService } from './config-actions';
 import { HotLoopService } from './horizon';
 import { RemainderCreditService } from './remainder-credit';
+import { UserConfigsController } from './user-configs.controller';
+import { UserConfigsService } from './user-configs';
 
 /**
  * Metered traffic's money side (F-027-q, ADR-0072). In-process only: the hot
  * loop (F-027-u) and the Grant close (F-027-r) call these inside their own
- * transactions. One route: the collection-health flag (F-027-w), which reads
- * the collector's progress mark and moves no money.
+ * transactions. Its routes are the user's: the collection-health flag
+ * (F-027-w), which reads the collector's progress mark, and a Grant's configs
+ * with the two actions a user may take on them (F-027-ac). None moves money.
  *
  * `HotLoopService` is the hot loop's money half: it sizes the next block from
  * the measured rate and calls the other two in one transaction.
@@ -23,8 +26,8 @@ import { RemainderCreditService } from './remainder-credit';
  */
 @Module({
   imports: [WalletModule],
-  controllers: [CollectionHealthController],
-  providers: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, CollectionHealthService, ConfigActionsService],
+  controllers: [CollectionHealthController, UserConfigsController],
+  providers: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, CollectionHealthService, ConfigActionsService, UserConfigsService],
   exports: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, ConfigActionsService],
 })
 export class TrafficModule {}
