@@ -5,6 +5,7 @@ import { tenantTransaction } from '@txnet-backend/shared-core';
 import { PrismaService } from '../prisma/prisma.service';
 import { BlockPurchaseService, type PurchasedBlock } from './block-purchase';
 import { CeilingAllocatorService, type RebalancedGrant } from './ceiling-allocator';
+import { type Exhaustion, isShortOfFunds, suspendIfExhausted } from './exhaustion';
 
 /**
  * The hot loop's horizon — how much to buy next, and when (F-027-u, ADR-0072).
@@ -215,6 +216,11 @@ export type TopUpOutcome = Horizon & {
   /** Null where nothing was bought: the Grant is not near its ceiling, or has no rate to size a block from. */
   bought: PurchasedBlock | null;
   rebalanced: RebalancedGrant | null;
+  /**
+   * Asked only when the bag is spent and nothing was bought (F-027-x): whether
+   * the Grant was suspended for it, or why not. Null on every other pass.
+   */
+  exhausted: Exhaustion | null;
 };
 
 @Injectable()
@@ -301,25 +307,41 @@ export class HotLoopService {
       if (panelRate !== null && (lineRateBps === null || panelRate > lineRateBps)) lineRateBps = panelRate;
     }
 
+    const headroomBytes = grant.purchasedBytes - grant.consumedBytes;
     const horizon = sizeHorizon({
-      headroomBytes: grant.purchasedBytes - grant.consumedBytes,
+      headroomBytes,
       rateBps: grantRateBps,
       previousRateBps: this.lastRate.get(grant.id) ?? null,
       lineRateBps,
     });
     if (grantRateBps !== null) this.lastRate.set(grant.id, grantRateBps);
 
+    const nothingBought = { ...horizon, grantId: grant.id, hotConfigId, bought: null, rebalanced: null };
+    // A spent bag with nothing bought is the one place exhaustion is asked
+    // (F-027-x). A user the panel has already stopped measures no rate, so
+    // this is also the branch a cut-off Grant arrives by, pass after pass.
+    const exhaustion = () => (headroomBytes <= BigInt(0) ? suspendIfExhausted(tx, grant.id, new Date(atMs)) : Promise.resolve(null));
+
     if (!horizon.hot || horizon.targetBytes <= BigInt(0)) {
-      return { ...horizon, grantId: grant.id, hotConfigId, bought: null, rebalanced: null };
+      return { ...nothingBought, exhausted: await exhaustion() };
     }
 
     // One transaction, both halves. A purchase committed without the
     // rebalance that spends it is bytes bought and no ceiling covering them;
     // a rebalance committed without the purchase is a ceiling over money that
     // never left the wallet.
-    const bought = await this.blocks.purchase(tx, { grantId: grant.id, targetBytes: horizon.targetBytes });
+    let bought: PurchasedBlock;
+    try {
+      bought = await this.blocks.purchase(tx, { grantId: grant.id, targetBytes: horizon.targetBytes });
+    } catch (error) {
+      // A short wallet with bytes still in the bag is not exhaustion yet: the
+      // refusal stands, and the pass that finds the bag spent suspends.
+      // `purchase()` refuses before it writes, so the transaction is clean.
+      if (headroomBytes > BigInt(0) || !isShortOfFunds(error)) throw error;
+      return { ...nothingBought, exhausted: await exhaustion() };
+    }
     const rebalanced = await this.ceilings.rebalance(tx, { grantId: grant.id, hotConfigId });
 
-    return { ...horizon, grantId: grant.id, hotConfigId, bought, rebalanced };
+    return { ...horizon, grantId: grant.id, hotConfigId, bought, rebalanced, exhausted: null };
   }
 }

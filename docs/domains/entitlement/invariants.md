@@ -2,7 +2,7 @@
 id: entitlement
 layer: domain
 status: draft
-updated: 2026-09-22
+updated: 2026-09-23
 ---
 
 # Invariants — entitlement
@@ -28,7 +28,7 @@ database — the shapes are proved by
 | 9 | No byte counter is ever negative — a counter going backward is a reset, never negative usage | CHECK `grant_byte_counters_not_negative` | a reset read as negative usage, and a refund of traffic nobody bought |
 | 10 | A byte is priced by the rate locked at issue, never by the catalog's rate today | `grant.meteredRate` copied by `issue` from the rate in effect at `startsAt`, and a metered variant with none is refused (F-027-p, `grant.spec.ts`); CHECK `grant_metered_rate_is_metered` | a price change reprices blocks already bought — ledger and cursor disagree |
 | 11 | A suspended Grant always carries the clock it will be purged by | CHECK `grant_suspended_has_a_clock` | a panel seat held forever, with nothing red anywhere |
-| 12 | Quota exhaustion is `suspended`, never `exhausted` | trigger `grant_status_one_way` (rule 2) makes `exhausted` terminal | a top-up can never revive the Grant it paid for |
+| 12 | Quota exhaustion is `suspended`, never `exhausted` — with `suspendedAt`, and every config of the Grant `desiredEnabled = false` | `suspendForExhaustion` is the only writer of the reason, and suspends only when the bag is spent and the locked wallet funds no block (F-027-x, `traffic/exhaustion.spec.ts`); trigger `grant_status_one_way` (rule 2) makes `exhausted` terminal | a top-up can never revive the Grant it paid for |
 
 ## How to test
 

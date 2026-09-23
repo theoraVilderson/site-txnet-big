@@ -115,6 +115,22 @@ knows the user's rate. `purchase()` never clamps a target **up**: spending more
 of a wallet than was asked for is the caller's decision (F-027-am, decided with
 the user 2026-09-22).
 
+## When the bag is spent and nothing can be bought (F-027-x)
+
+A pass that finds `purchasedBytes - consumedBytes ≤ 0` and buys nothing asks
+`suspendIfExhausted` (`traffic/exhaustion.ts`), in the same transaction. That is
+two branches: no rate to size a block from — which is where a user the panel
+has already stopped arrives, pass after pass — and a purchase refused for money
+(`insufficient_funds`, `block_below_one_byte`), which is then answered as the
+verdict rather than thrown. The same refusal with bytes still in the bag is
+thrown as before: a short wallet is not yet an empty bag.
+
+It locks the wallet row, re-reads the cursors, and suspends only if the bag is
+spent **and** no block is affordable — entitlement's `suspendForExhaustion`,
+which is `suspended` with `statusReason = quota_exhausted`, never `exhausted`
+(ADR-0075). The lock is what keeps a top-up from being undone: it either
+committed first and is seen, or it waits and finds the Grant suspended.
+
 ## Two halves, two processes, no channel between them
 
 The collector is Go and the purchase is in-process in `billing-service`, so

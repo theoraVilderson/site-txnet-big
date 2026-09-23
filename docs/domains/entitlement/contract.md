@@ -3,7 +3,7 @@ id: entitlement
 layer: domain
 status: draft
 version: 1
-updated: 2026-09-22
+updated: 2026-09-23
 ---
 
 # Contract — entitlement
@@ -30,6 +30,19 @@ and changes its quota only through `quota_adjustment` rows.
 | `rotateToken(tx, id, userId)` | grantId, its user | the new token, once | caller's transaction | `grant_not_found` (also for another user's) |
 | `rotateTokenForUser(id, userId)` | grantId, its user | the same, in a transaction of its own | own tenant transaction | the same |
 | `listForUser(userId, {page?, pageSize?})` | the user, paging | one page of that user's Grants — id, status, period, feature keys, variant `{id, sku, nameKey}`; never the token or its hash | own tenant transaction | — |
+
+**Exhaustion suspends (F-027-x, ADR-0075)** — `suspendForExhaustion(tx,
+grantId, at)` in `entitlement/suspension.ts`, a function rather than a
+`GrantService` method so the hot loop calls it without a module import. It
+moves an `active` Grant to `suspended` with `statusReason = 'quota_exhausted'`
+(`QUOTA_EXHAUSTED`) and `suspendedAt = at`, and sets `desiredEnabled = false`
+on **every** config of the Grant — desired state, carried to each panel by the
+convergence loop (F-027-z), never a command. The write is conditional on
+`active`: a Grant that moved on is left alone and a repeat is a no-op
+(`suspended: false`). It does not decide exhaustion — that is money, and
+billing's `traffic/exhaustion.ts` decides it under a wallet lock
+(`network/contract.hot-loop.md`). `transition()` cannot do this: it writes no
+`suspendedAt`, which `grant_suspended_has_a_clock` refuses.
 
 Issue rules: a `purchase` needs a `public` or `unlisted` variant; any other
 source may assign any live variant, `admin_only` included (F-506). A purchase
@@ -71,7 +84,7 @@ None yet.
 | Unit | What it reads |
 |---|---|
 | network | `config.grantId`: a config draws on its Grant's quota (F-027) |
-| billing | issues a Grant for a `free_grant` coupon (F-502-l) and, later, a purchase |
+| billing | issues a Grant for a `free_grant` coupon (F-502-l) and, later, a purchase; the hot loop suspends a spent one (F-027-x) |
 
 ## Guarantees (built — `entitlement-schema.int.spec.ts`)
 

@@ -16,7 +16,9 @@
  *    (`contract.traffic-block.md`), and a horizon with no floor under it buys
  *    one per pass for as long as the user is hot.
  */
-import { Prisma } from '@prisma/client';
+import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
+
+import { BlockPurchaseRefused } from './block-purchase';
 
 import {
   HORIZON_SECONDS,
@@ -159,15 +161,29 @@ describe('nextIntervalMs', () => {
 
 type ConfigRow = { id: string; observedRateBps: bigint | null; served: bigint; panelRateBps: bigint | null };
 
-function fakeTx(input: { purchasedBytes: bigint; consumedBytes: bigint; configs: ConfigRow[] }) {
+function fakeTx(input: { purchasedBytes: bigint; consumedBytes: bigint; configs: ConfigRow[]; balance?: string }) {
   const writes: { id: string; observedRateBps: bigint | null }[] = [];
+  const suspensions: Record<string, unknown>[] = [];
   const tx = {
     grant: {
       findUnique: async () =>
         input.purchasedBytes < BigInt(0)
           ? null
-          : { id: GRANT, purchasedBytes: input.purchasedBytes, consumedBytes: input.consumedBytes },
+          : {
+              id: GRANT,
+              userId: 'u',
+              status: GrantStatus.active,
+              billingMode: VariantBillingMode.metered,
+              meteredRate: new Prisma.Decimal('0.5'),
+              purchasedBytes: input.purchasedBytes,
+              consumedBytes: input.consumedBytes,
+            },
+      updateMany: async ({ data }: { data: Record<string, unknown> }) => {
+        suspensions.push(data);
+        return { count: 1 };
+      },
     },
+    $queryRaw: async () => [{ cachedBalance: new Prisma.Decimal(input.balance ?? '0.00') }],
     config: {
       findMany: async () =>
         input.configs.map((c) => ({
@@ -179,9 +195,10 @@ function fakeTx(input: { purchasedBytes: bigint; consumedBytes: bigint; configs:
       update: async ({ where, data }: { where: { id: string }; data: { observedRateBps: bigint | null } }) => {
         writes.push({ id: where.id, observedRateBps: data.observedRateBps });
       },
+      updateMany: async () => ({ count: input.configs.length }),
     },
   };
-  return { tx: tx as unknown as Prisma.TransactionClient, writes };
+  return { tx: tx as unknown as Prisma.TransactionClient, writes, suspensions };
 }
 
 const config = (id: string, served: bigint, observedRateBps: bigint | null = null, panelRateBps: bigint | null = GIGABIT): ConfigRow => ({
@@ -191,12 +208,13 @@ const config = (id: string, served: bigint, observedRateBps: bigint | null = nul
   panelRateBps,
 });
 
-function service() {
+function service(refuse?: BlockPurchaseRefused) {
   const purchases: { grantId: string; targetBytes: bigint }[] = [];
   const rebalances: { grantId: string; hotConfigId?: string | null }[] = [];
   const blocks = {
     purchase: async (_tx: unknown, input: { grantId: string; targetBytes: bigint }) => {
       purchases.push(input);
+      if (refuse) throw refuse;
       return { grantId: input.grantId, bytes: input.targetBytes, amount: new Prisma.Decimal(1), walletTransactionId: 'w', purchasedBytes: BigInt(0), billedBytes: BigInt(0) };
     },
   };
@@ -264,6 +282,52 @@ describe('HotLoopService.topUpIn', () => {
     expect(outcome.bought).toBeNull();
     expect(purchases).toHaveLength(0);
     expect(rebalances).toHaveLength(0);
+  });
+
+  it('suspends a Grant the panel has already stopped: bag spent, no rate, wallet empty (F-027-x)', async () => {
+    const { tx, suspensions } = fakeTx({
+      purchasedBytes: GB,
+      consumedBytes: GB,
+      // Measured idle, on a panel that declares no line rate: nothing to size a block from.
+      configs: [config('a', GB, BigInt(0), null)],
+    });
+    const { hot, purchases } = service();
+
+    const outcome = await hot.topUpIn(tx, { grantId: GRANT, atMs: 1_000 });
+
+    expect(purchases).toHaveLength(0);
+    expect(outcome.exhausted).toEqual({ grantId: GRANT, verdict: 'suspended', configsDisabled: 1 });
+    expect(suspensions).toEqual([{ status: GrantStatus.suspended, statusReason: 'quota_exhausted', suspendedAt: new Date(1_000) }]);
+  });
+
+  it('suspends, rather than throws, when the bag is spent and the purchase is refused for money', async () => {
+    const { tx } = fakeTx({ purchasedBytes: GB, consumedBytes: GB, configs: [config('a', GB, GIGABIT)] });
+    const { hot, rebalances } = service(new BlockPurchaseRefused('insufficient_funds', '0.00'));
+
+    const outcome = await hot.topUpIn(tx, { grantId: GRANT, atMs: 1_000 });
+
+    expect(outcome.exhausted?.verdict).toBe('suspended');
+    expect(outcome.bought).toBeNull();
+    expect(rebalances).toHaveLength(0);
+  });
+
+  it('keeps the refusal while the bag still holds bytes — a short wallet is not yet an empty bag', async () => {
+    const { tx, suspensions } = fakeTx({ purchasedBytes: secondsOf(GIGABIT, 30), consumedBytes: BigInt(0), configs: [config('a', BigInt(0), GIGABIT)] });
+    const { hot } = service(new BlockPurchaseRefused('insufficient_funds', '0.00'));
+
+    await expect(hot.topUpIn(tx, { grantId: GRANT, atMs: 1_000 })).rejects.toMatchObject({ reason: 'insufficient_funds' });
+    expect(suspensions).toHaveLength(0);
+  });
+
+  it('never asks about exhaustion on a pass that bought a block', async () => {
+    const { tx, suspensions } = fakeTx({ purchasedBytes: GB, consumedBytes: GB, configs: [config('a', GB, GIGABIT)], balance: '5.00' });
+    const { hot } = service();
+
+    const outcome = await hot.topUpIn(tx, { grantId: GRANT, atMs: 1_000 });
+
+    expect(outcome.bought).not.toBeNull();
+    expect(outcome.exhausted).toBeNull();
+    expect(suspensions).toHaveLength(0);
   });
 
   it('answers a missing Grant as a refusal, not a crash', async () => {

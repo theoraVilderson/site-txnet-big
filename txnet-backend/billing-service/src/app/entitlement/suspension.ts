@@ -1,0 +1,49 @@
+import { GrantStatus, Prisma } from '@prisma/client';
+
+/**
+ * `grant.statusReason` for a Grant suspended because its bag is spent and its
+ * wallet cannot buy the next block (F-027-x, ADR-0075). `suspended` has two
+ * meanings — out of quota, and suspended by someone — and this is the value
+ * that tells them apart: the top-up that revives a Grant (F-027-y) revives
+ * only this one.
+ */
+export const QUOTA_EXHAUSTED = 'quota_exhausted';
+
+export type Suspension = {
+  /** False where the Grant was no longer `active` when the write reached it. Nothing was written. */
+  suspended: boolean;
+  configsDisabled: number;
+};
+
+/**
+ * Suspends an `active` Grant for quota exhaustion, in the caller's transaction.
+ *
+ * **`suspended`, never `exhausted`.** `grant_status_one_way` makes `exhausted`
+ * terminal, so a Grant put there could never be revived by the top-up the user
+ * makes next (entitlement invariant 12). `suspendedAt` is written with it —
+ * `grant_suspended_has_a_clock` refuses the row otherwise, and it is what the
+ * purge clock (F-027-y) runs from.
+ *
+ * **Every config of the Grant, on every panel, gets `desiredEnabled = false`.**
+ * It is desired state, not a command: the convergence loop carries it to each
+ * panel when it next compares, and a top-up that sets it back before then is
+ * simply what the loop finds (ADR-0075, no replay).
+ *
+ * It does not decide whether the Grant *is* exhausted — that is a question
+ * about money, and the caller answers it (`traffic/exhaustion.ts`). The write
+ * is conditional on `active`, so a Grant that moved on meanwhile is left
+ * where it is, and a second call is a no-op.
+ */
+export async function suspendForExhaustion(tx: Prisma.TransactionClient, grantId: string, at: Date): Promise<Suspension> {
+  const moved = await tx.grant.updateMany({
+    where: { id: grantId, status: GrantStatus.active },
+    data: { status: GrantStatus.suspended, statusReason: QUOTA_EXHAUSTED, suspendedAt: at },
+  });
+  if (moved.count === 0) return { suspended: false, configsDisabled: 0 };
+
+  const disabled = await tx.config.updateMany({
+    where: { grantId, desiredEnabled: true },
+    data: { desiredEnabled: false },
+  });
+  return { suspended: true, configsDisabled: disabled.count };
+}

@@ -7,7 +7,7 @@ keywords: [grant, entitlement, access, quota, quota adjustment, subscription tok
 source: [txnet-backend/prisma/domains/entitlement.prisma, txnet-backend/prisma/domains/migrations/20260914001600_entitlement_grant/**, txnet-backend/prisma/domains/migrations/20260921000600_a_grant_buys_its_bytes_before_it_serves_them/**, txnet-backend/billing-service/src/app/entitlement/**]
 owns_tables: [grant, quota_adjustment]
 depends_on: [catalog, identity, tenant]
-updated: 2026-09-21
+updated: 2026-09-23
 ---
 
 # Entitlement
