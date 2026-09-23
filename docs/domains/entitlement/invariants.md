@@ -9,7 +9,7 @@ updated: 2026-09-23
 
 Held by the database since F-026-b; proved by
 `billing-service/src/app/entitlement/entitlement-schema.int.spec.ts`. Rule 1 is
-the service's, with F-026-e. Rules 8–12 arrive with F-027-f's columns
+the service's, with F-026-e. Rules 8–13 arrive with F-027-f's columns
 (ADR-0072, ADR-0073, ADR-0075); rule 10 is held by `GrantService.issue` since
 F-027-p and rule 8 by `CeilingAllocatorService` since F-027-s, the rest by the
 database — the shapes are proved by
@@ -29,6 +29,7 @@ database — the shapes are proved by
 | 10 | A byte is priced by the rate locked at issue, never by the catalog's rate today | `grant.meteredRate` copied by `issue` from the rate in effect at `startsAt`, and a metered variant with none is refused (F-027-p, `grant.spec.ts`); CHECK `grant_metered_rate_is_metered` | a price change reprices blocks already bought — ledger and cursor disagree |
 | 11 | A suspended Grant always carries the clock it will be purged by | CHECK `grant_suspended_has_a_clock` | a panel seat held forever, with nothing red anywhere |
 | 12 | Quota exhaustion is `suspended`, never `exhausted` — with `suspendedAt`, and every config of the Grant `desiredEnabled = false` | `suspendForExhaustion` is the only writer of the reason, and suspends only when the bag is spent and the locked wallet funds no block (F-027-x, `traffic/exhaustion.spec.ts`); trigger `grant_status_one_way` (rule 2) makes `exhausted` terminal | a top-up can never revive the Grant it paid for |
+| 13 | A purge never deletes one of our rows — it writes `desiredRemote = absent` and nothing else; `remoteId` is cleared only by the loop that confirmed the delete | `GrantPurgeService.purgeDue` writes that column alone (F-027-y, `purge.spec.ts`, ADR-0075) | a rebuild becomes a reconstruction, and the history of what a user held is gone |
 
 ## How to test
 

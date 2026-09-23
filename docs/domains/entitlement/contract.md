@@ -44,6 +44,34 @@ billing's `traffic/exhaustion.ts` decides it under a wallet lock
 (`network/contract.hot-loop.md`). `transition()` cannot do this: it writes no
 `suspendedAt`, which `grant_suspended_has_a_clock` refuses.
 
+**Purge and restore (F-027-y, ADR-0075)** — `entitlement/purge.ts`. A
+suspension frees nothing: the client still holds a seat and a licence on the
+customer's panel. `GrantPurgeService.purgeDue(now)` is the second stage — for
+every suspended Grant past its window it sets `desiredRemote = absent` and
+`enforcementState = pending` on each config still `present`, and **writes
+nothing else**. The row is not deleted and `remoteId` is not cleared; that is
+the convergence loop's, once the panel confirms the delete (F-027-z). The
+window is `coalesce(grant.purgeAfterDays, tenant.purgeAfterDays)` read live,
+`0` = never, and it is resolved **in the scan** — a never-purge row filtered
+out afterwards would fill every bounded batch and starve the due rows behind
+it. The scan is cross-tenant and each write runs in its tenant
+(`deposit-expiry.service.ts` gives the argument); already-purged Grants are
+excluded, so the sweep drains itself and a second call answers zero.
+
+`reviveOnTopUp(tx, grantId)` is the way back, from **either** stage: `active`
+with `statusReason` and `suspendedAt` cleared, and every config `desiredEnabled
+= true`, `desiredRemote = present`, `enforcementState = pending`, so a purged
+Grant is rebuilt from desired state rather than reconstructed. It is guarded on
+`statusReason = quota_exhausted` in the write's own `where`: `suspended` has
+two meanings and a top-up buys traffic, not an amnesty. **It has no caller
+yet** — which top-up revives is `open-questions.md`, alongside the hot loop's
+channel.
+
+The clock is not here. `worker-service` holds it and asks hourly over `POST
+/api/internal/billing/entitlement/purge-due` (`ServiceOnlyGuard`, key
+`grant_config_purge`), because background work does not run in a
+request-serving process (ADR-0027, `automation/contract.worker.md`).
+
 Issue rules: a `purchase` needs a `public` or `unlisted` variant; any other
 source may assign any live variant, `admin_only` included (F-506). A purchase
 starts `pending`; every other source `active`. Quotas, feature keys, billing
@@ -85,6 +113,7 @@ None yet.
 |---|---|
 | network | `config.grantId`: a config draws on its Grant's quota (F-027) |
 | billing | issues a Grant for a `free_grant` coupon (F-502-l) and, later, a purchase; the hot loop suspends a spent one (F-027-x) |
+| automation | holds the purge clock: `grant_config_purge` asks `purge-due` hourly (F-027-y) |
 
 ## Guarantees (built — `entitlement-schema.int.spec.ts`)
 

@@ -173,6 +173,13 @@ const SEEDED_SCHEDULES = [
   // 03:15 UTC: after midnight, so a whole day is closed, and off the hour that
   // every other cron in the estate wakes on.
   { key: 'network_traffic_rollup', scheduleType: 'cron_expression', cronExpression: '15 3 * * *' },
+  // The suspended-Grant purge (F-027-y, ADR-0075): unscheduled, a spent Grant's
+  // clients sit on their panels for ever, holding seats and licences nobody can
+  // reclaim, and `purgeAfterDays` describes a clock that never runs out. Hourly
+  // is not a compromise: the window is measured in days, so an hour of lateness
+  // costs nothing, and a cross-tenant join every minute for a daily row would.
+  // Twenty past, so it does not wake with every other cron on the hour.
+  { key: 'grant_config_purge', scheduleType: 'cron_expression', cronExpression: '20 * * * *' },
   // Custom-domain verification (F-018-i): unscheduled, no custom domain ever
   // becomes `verified` and a lost record never stops routing. An idle run is one query.
   { key: 'tenant_domain_verification', scheduleType: 'cron_expression', cronExpression: '*/5 * * * *' },

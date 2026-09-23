@@ -72,6 +72,7 @@ Why each of those is the answer — and what a Redis that cannot be reached does
 | `notification_campaign_fan_out` | writes recipient rows for started campaigns in resumable batches (F-035-d, `domains/notification/contract.md` "Sending") | `NOTIFICATION_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 | `notification_campaign_delivery` | sends claimed queued recipients through their tenant's Telegram/Bale bot; `stalled` rows are its errors (F-035-e, same contract, "Delivering") | the same two |
 | `tenant_subscription_renewal` | renews due reseller subscriptions from their billing wallet, warns or suspends the unpaid; a platform tick, seeded `*/5`; `failed` renewals are its errors (F-019-c, `domains/tenant/contract.billing.md`) | `TENANT_API_BASE_URL` + `SERVICE_AUTH_TOKEN` (F-018-v) |
+| `grant_config_purge` | releases the panel seats of suspended Grants past their `purgeAfterDays` — `desiredRemote = absent`, our rows never deleted (F-027-y, `domains/entitlement/contract.md`); a platform tick, seeded `20 * * * *` | `BILLING_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 | `network_traffic_rollup` | rolls raw traffic into `traffic_daily_aggregate` and drops a raw month only once its aggregate matches it (F-027-o, `domains/network/contract.rollup.md`); a platform tick, seeded `15 3 * * *`; a refused drop fails the run | — (it calls `network.*` functions through its own pool) |
 | `tenant_domain_verification` | proves `verifying` custom domains and re-validates `verified` ones' TXT records; a platform tick, seeded `*/5`; a domain whose check threw is an error (F-018-i, `domains/tenant/contract.domains.md`) | `TENANT_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 
@@ -106,7 +107,7 @@ default for a sweep that writes, and the first thing to check when one appears
 to do nothing. **Three exceptions are seeded** by `prisma/seed.js`
 (`SEEDED_SCHEDULES`): `fx_rate_refresh`, and — decided by the user 2026-09-14
 — `deposit_pending_expiry` (`always_on`) and `deposit_reconciliation` (`*/5`); since
-F-092-ac also `deposit_verify_retry` (`always_on`), since F-035-d `notification_campaign_fan_out` and F-035-e `notification_campaign_delivery` (both `always_on`), and since F-027-o `network_traffic_rollup` (`15 3 * * *` — unscheduled, no daily aggregate is ever written and the raw partitions accumulate for ever).
+F-092-ac also `deposit_verify_retry` (`always_on`), since F-035-d `notification_campaign_fan_out` and F-035-e `notification_campaign_delivery` (both `always_on`), since F-027-o `network_traffic_rollup` (`15 3 * * *` — unscheduled, no daily aggregate is ever written and the raw partitions accumulate for ever), and since F-027-y `grant_config_purge` (`20 * * * *` — unscheduled, a spent Grant's clients hold their panel seats for ever).
 Left unscheduled, a payment the bank took but never called back about is never
 credited, which is the manual top-up legacy needed. The seed never touches a
 job that already has a schedule.

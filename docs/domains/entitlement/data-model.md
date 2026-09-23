@@ -57,7 +57,11 @@ from it are still whole cents before the ledger (`C-02`).
 its length, read **as it is now** rather than copied at issue, so a tenant that
 shortens it means it for the Grants already waiting. `grant.purgeAfterDays` is
 an override and is null unless someone set one. Resolution is
-`coalesce(grant.purgeAfterDays, tenant.purgeAfterDays)`.
+`coalesce(grant.purgeAfterDays, tenant.purgeAfterDays)`, and it happens inside
+the purge sweep's scan (F-027-y, `entitlement/purge.ts`) rather than in TypeScript
+after it — `grant_status_suspendedAt_idx` orders that scan oldest-first and it
+takes a bounded batch, so a `0` filtered out afterwards would occupy the batch
+for ever and starve the rows behind it.
 
 ## Migration notes
 

@@ -49,8 +49,12 @@ const APP = join(__dirname, '..');
  * is no user, no tenant and nothing forgeable to build a bucket from — and a
  * limit here would throttle the platform's own sweep, which is a way to leave
  * coupon capacity held rather than a way to protect anything.
+ *
+ * `EntitlementInternalController` is the same seam and the same argument
+ * (F-027-y): one hourly tick, `SERVICE_ONLY` or a 404, and throttling it would
+ * leave panel seats held by Grants whose clock ran out weeks ago.
  */
-const EXEMPT = new Set(['HealthController', 'DepositInternalController']);
+const EXEMPT = new Set(['HealthController', 'DepositInternalController', 'EntitlementInternalController']);
 
 /**
  * Controllers with no identity to bucket on, and what they count instead.

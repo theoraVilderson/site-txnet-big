@@ -194,6 +194,18 @@ export const envSchema = z.object({
   ),
 
   /**
+   * How many suspended Grants one purge sweep takes (F-027-y, ADR-0075). The
+   * same argument as `PAYMENT_EXPIRY_BATCH_SIZE`: a backlog drains in bounded
+   * transactions, oldest suspension first, and the next hourly tick takes the
+   * next batch. The scan excludes Grants already purged, so it drains itself
+   * rather than re-reading the same rows.
+   */
+  GRANT_PURGE_BATCH_SIZE: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().positive().default(200),
+  ),
+
+  /**
    * How long an expired top-up keeps its coupon holds before the sweep gives
    * them back (F-092-ah, ADR-0047 decision 2). The clock closes the payment,
    * not the coupon: a bank may still charge it, and a slot handed to someone

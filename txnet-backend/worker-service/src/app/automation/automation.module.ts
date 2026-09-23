@@ -10,6 +10,7 @@ import { TenantRunLeases } from './tenant-run.leases';
 import { JOBS, Job } from './job';
 import { HeartbeatJob } from '../jobs/heartbeat.job';
 import { VaultRetentionJob } from '../jobs/vault-retention.job';
+import { GrantPurgeJob } from '../jobs/grant-purge.job';
 import { DepositExpiryJob } from '../jobs/deposit-expiry.job';
 import { CampaignFanOutJob } from '../jobs/campaign-fan-out.job';
 import { CampaignDeliveryJob } from '../jobs/campaign-delivery.job';
@@ -38,6 +39,7 @@ import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
   providers: [
     HeartbeatJob,
     VaultRetentionJob,
+    GrantPurgeJob,
     DepositExpiryJob,
     CampaignFanOutJob,
     CampaignDeliveryJob,
@@ -52,7 +54,7 @@ import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
     TenantDomainVerificationJob,
     {
       provide: JOBS,
-      inject: [HeartbeatJob, VaultRetentionJob, DepositExpiryJob, DepositReconciliationJob, DepositVerifyRetryJob, OutboxRelayJob, FxRateJob, TrafficRollupJob, CampaignFanOutJob, CampaignDeliveryJob, TenantSubscriptionRenewalJob, TenantDomainVerificationJob],
+      inject: [HeartbeatJob, VaultRetentionJob, GrantPurgeJob, DepositExpiryJob, DepositReconciliationJob, DepositVerifyRetryJob, OutboxRelayJob, FxRateJob, TrafficRollupJob, CampaignFanOutJob, CampaignDeliveryJob, TenantSubscriptionRenewalJob, TenantDomainVerificationJob],
       useFactory: (...jobs: Job[]) => jobs,
     },
     WorkerRegistryService,
