@@ -2,8 +2,8 @@
 id: network
 layer: domain
 status: draft
-version: 10
-updated: 2026-09-22
+version: 14
+updated: 2026-09-23
 ---
 
 # The hot loop — the few configs near their ceiling, in seconds
@@ -149,4 +149,6 @@ request budget it runs under, and the ban it refuses to retry through, are
 [contract.budget.md](contract.budget.md) (F-027-v) — built with this loop
 rather than after it, because an unbudgeted hot loop is a denial of service on
 a customer's own server. Extending a ceiling on shutdown is
-[contract.resilience.md](contract.resilience.md) (F-027-w).
+[contract.resilience.md](contract.resilience.md) (F-027-w). A panel halted by a
+drift event is not read here either, and a hot subset is contained by the bulk
+pass's thresholds before it publishes (F-027-ab, `contract.drift.md`).

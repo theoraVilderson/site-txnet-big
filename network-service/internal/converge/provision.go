@@ -37,7 +37,10 @@ import (
 // not on the row's `remoteId`: a renamed or rebuilt client is re-keyed and
 // carried on, and a create is not repeated over a client already holding our
 // tag or `uuid`, because a create whose answer was lost is the commonest way
-// to make one.
+// to make one. A `missing` client is recreated and a `rebuilt` one gets its tag
+// back, and both are repairs: bounded by the anti-flap stop (drift.go,
+// F-027-ab), so a config somebody keeps deleting is held `contested` instead
+// of recreated every minute.
 
 // EnforcementState is `network.EnforcementState`: how far the loop got.
 type EnforcementState string
@@ -75,6 +78,10 @@ type DesiredConfig struct {
 	State          EnforcementState
 	// Drift is `driftState` as the row holds it; empty reads as synced.
 	Drift DriftState
+	// RepairCount and RepairedAt are `driftRepairCount` and
+	// `driftRepairedAt`: the anti-flap stop's memory (F-027-ab).
+	RepairCount int
+	RepairedAt  time.Time
 }
 
 // Outcome is what the pass learned about one row. RemoteID is the value the
@@ -90,7 +97,8 @@ type Outcome struct {
 // `Allocations` is.
 // RecordDrift is a method of its own rather than a field of Outcome because two
 // passes supply the verdict: provisioning the identity ones, the ceiling pass
-// `reset` and `limit_overridden` (F-027-aa).
+// `reset` and `limit_overridden` (F-027-aa). It writes the repair count with
+// the verdict (F-027-ab).
 type Desired interface {
 	For(ctx context.Context, panelID string) ([]DesiredConfig, error)
 	Record(ctx context.Context, rows []Outcome) error
@@ -112,8 +120,15 @@ const (
 	// state; only the row's `remoteId` moved to it.
 	ActionRekeyed Action = "rekeyed"
 	// ActionRestored: a rebuilt client had our tag and its first block
-	// written back, on the row re-keyed to it.
+	// written back, on the row re-keyed to it. A repair.
 	ActionRestored Action = "restored"
+	// ActionRecreated: a missing client was created again under the same tag
+	// and credential. A repair.
+	ActionRecreated Action = "recreated"
+	// ActionContested: a repair was due and the stop held it. A rebuilt
+	// client is still re-keyed and still gets a ceiling if it has none or a
+	// higher one — the exception — but not its tag.
+	ActionContested Action = "contested"
 	// ActionAwaitingAllocation: present, no client, and no share yet. Created
 	// on the pass after the allocator writes one.
 	ActionAwaitingAllocation Action = "awaiting_allocation"
@@ -138,6 +153,8 @@ type ProvisionFinding struct {
 // pass deleted, so the ceiling pass after it does not write to them. Drift is
 // every row's identity verdict, which the `Converger` completes with the
 // ceiling pass's and records; Orphans are the remote ids no config claims.
+// Stopped is the rows whose repair budget is spent, with the verdict each
+// holds, so the ceiling pass holds its repairs too.
 type ProvisionReport struct {
 	PanelID  string
 	Checked  int
@@ -149,6 +166,7 @@ type ProvisionReport struct {
 	Removed  map[string]bool
 	Drift    map[string]Judgement
 	Orphans  []string
+	Stopped  map[string]DriftState
 }
 
 // Provisioning converges one panel's desired state per call. It holds no state
@@ -162,7 +180,9 @@ type Provisioning struct {
 // read. It returns an error only where the rows could not be read or written
 // back; one client the panel refuses is a finding.
 func (v *Provisioning) PassOver(ctx context.Context, p collect.Panel, clients []driver.RemoteClient, at time.Time) (ProvisionReport, error) {
-	report := ProvisionReport{PanelID: p.ID, Removed: map[string]bool{}, Drift: map[string]Judgement{}}
+	report := ProvisionReport{
+		PanelID: p.ID, Removed: map[string]bool{}, Drift: map[string]Judgement{}, Stopped: map[string]DriftState{},
+	}
 
 	rows, err := v.Desired.For(ctx, p.ID)
 	if err != nil {
@@ -179,11 +199,25 @@ func (v *Provisioning) PassOver(ctx context.Context, p collect.Panel, clients []
 	for _, row := range rows {
 		report.Checked++
 		match, matched := matching.ByConfig[row.ConfigID]
-		report.Drift[row.ConfigID] = Judgement{Was: row.Drift, Now: identityVerdict(row, match, matched)}
-		outcome, finding := v.one(ctx, p, row, match, matched, inbounds, at, &report)
+		stopped := repairsInWindow(row, at) >= MaxRepairs
+		if stopped {
+			report.Stopped[row.ConfigID] = row.Drift
+		}
+		judgement := Judgement{
+			Was: row.Drift, Now: identityVerdict(row, match, matched),
+			RepairCount: row.RepairCount, RepairedAt: row.RepairedAt,
+		}
+		outcome, finding := v.one(ctx, p, row, match, matched, stopped, inbounds, at, &report)
 		if finding != nil {
 			report.Findings = append(report.Findings, *finding)
+			switch finding.Action {
+			case ActionRecreated, ActionRestored:
+				judgement.Repaired = true
+			case ActionContested:
+				judgement.Held = true
+			}
 		}
+		report.Drift[row.ConfigID] = judgement
 		if outcome != nil && (outcome.State != row.State || outcome.RemoteID != row.RemoteID) {
 			outcomes = append(outcomes, *outcome)
 		}
@@ -201,7 +235,7 @@ func (v *Provisioning) PassOver(ctx context.Context, p collect.Panel, clients []
 // is read: whether the client should exist, then which client it is, then
 // what it should carry. Every write goes to the client the match found.
 func (v *Provisioning) one(
-	ctx context.Context, p collect.Panel, row DesiredConfig, match Match, matched bool,
+	ctx context.Context, p collect.Panel, row DesiredConfig, match Match, matched, stopped bool,
 	inbounds *inboundCache, at time.Time, report *ProvisionReport,
 ) (*Outcome, *ProvisionFinding) {
 	outcome := func(remoteID string, state EnforcementState) *Outcome {
@@ -234,9 +268,18 @@ func (v *Provisioning) one(
 	if !matched {
 		if row.RemoteID != "" {
 			// Ours, and on the panel under no key: `missing`. Recreating it is
-			// a repair, and repairs are behind the anti-flap stop (F-027-ab).
-			report.Skipped++
-			return nil, nil
+			// a repair, so it waits on the stop. The user has paid for a seat
+			// and the tag and credential are ours, so it is otherwise created
+			// exactly as the first time (F-027-ab).
+			if stopped {
+				report.Skipped++
+				return nil, found(ActionContested, row.RemoteID, nil)
+			}
+			o, f := v.create(ctx, p, row, inbounds, report, outcome, found, refused)
+			if f != nil && f.Action == ActionCreated {
+				f.Action = ActionRecreated
+			}
+			return o, f
 		}
 		return v.create(ctx, p, row, inbounds, report, outcome, found, refused)
 	}
@@ -249,6 +292,22 @@ func (v *Provisioning) one(
 	}
 
 	rebuilt := match.By == ByUUID && row.ClaimTag != "" && client.Label != row.ClaimTag
+	if rebuilt && stopped {
+		// The tag is the repair and it is held. The ceiling is not held when
+		// the client allows more than ours, and a client made again by hand
+		// usually has none: that is the exception, written and not counted.
+		// The row still follows its client, because a re-key writes nothing.
+		if row.AllocatedBytes != nil {
+			want := PanelCeiling(*row.AllocatedBytes, row.ServedBytes)
+			if have := client.DataLimitBytes; have == 0 || have > want {
+				if err := p.Driver.SetClientDataLimit(ctx, client.RemoteID, want); err != nil {
+					return refused(client.RemoteID, err)
+				}
+				report.Written++
+			}
+		}
+		return outcome(client.RemoteID, StatePartial), found(ActionContested, client.RemoteID, nil)
+	}
 	switch {
 	case client.UUID != row.UUID || rebuilt:
 		// A regenerate, or a client made again without our tag. The update
@@ -416,13 +475,14 @@ func (c *Converger) Pass(ctx context.Context, p collect.Panel, res collect.Resul
 				}
 			}
 		}
-		report.Ceilings, err = c.Ceilings.PassOver(ctx, p, res, remaining)
+		report.Ceilings, err = c.Ceilings.PassOver(ctx, p, res, remaining, report.Provisioning.Stopped)
 	}
 	return report, err
 }
 
 // recordDrift completes provisioning's identity verdicts with the ceiling
-// pass's and writes the ones that changed (F-027-aa).
+// pass's and writes the ones that changed, and every repair (F-027-aa,
+// F-027-ab).
 func (c *Converger) recordDrift(ctx context.Context, report ConvergeReport, at time.Time) error {
 	judge(report.Provisioning.Drift, report.Ceilings)
 	rows := changed(report.Provisioning.Drift, at)

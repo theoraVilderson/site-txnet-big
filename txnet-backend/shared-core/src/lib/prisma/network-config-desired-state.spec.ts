@@ -69,6 +69,7 @@ const CONFIG_COLUMNS = [
   'enforcementState',
   'driftState',
   'driftRepairCount',
+  'driftRepairedAt',
   'lastReconciledAt',
   'allocatedCeilingBytes',
   'appliedCeilingBytes',
@@ -149,6 +150,12 @@ describe('network.Config carries its desired state, its drift and its ceiling', 
     // (F-027-a). An applied ceiling with no timestamp cannot be aged out, so
     // a stale one is indistinguishable from a fresh one.
     expect(sql).toContain('config_applied_ceiling_needs_time');
+  });
+
+  it('cannot hold a repair count with no time on the last repair', () => {
+    // The anti-flap stop counts repairs inside a 24-hour window (F-027-ab).
+    // A count with no clock is a window nobody can compute.
+    expect(sql).toContain('config_drift_repair_has_a_time');
   });
 
   it('cannot hold a purged config that still claims a remote client', () => {

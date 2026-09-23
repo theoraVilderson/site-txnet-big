@@ -50,7 +50,7 @@ var RequiredColumns = map[string][]string{
 		"id", "tenantId", "userId", "panelId", "grantId", "uuid", "protocol", "status",
 		"remoteId", "claimTag", "credentialGroupId",
 		"desiredEnabled", "desiredRemote", "enforcementState",
-		"driftState", "driftRepairCount", "lastReconciledAt",
+		"driftState", "driftRepairCount", "driftRepairedAt", "lastReconciledAt",
 		"allocatedCeilingBytes", "appliedCeilingBytes", "observedRateBps",
 		"ceilingAppliedAt", "walletBackedCeilingBytes",
 	},

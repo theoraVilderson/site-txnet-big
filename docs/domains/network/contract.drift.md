@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 13
+version: 14
 updated: 2026-09-23
 ---
 
@@ -12,8 +12,8 @@ What governs matching a panel's clients to our configs and the verdict written
 to `config.driftState` (F-027-aa). Read it before changing how a client is
 found, before writing `remoteId` or `driftState` from anywhere, and before
 adding a panel family — the second key only works where the family stores it.
-Containment — the anti-flap stop, the panel-wide event, recreating a
-`missing` client — is F-027-ab's, and lands here.
+Containment — the anti-flap stop, the ceiling exception and the panel-wide
+event — is F-027-ab's, and is the second half of this file.
 
 ## The three keys (`converge.MatchClients`, `internal/converge/drift.go`)
 
@@ -42,10 +42,11 @@ renamed away from us still holds a seat, and the delete follows it.
 | `synced` | by `remoteId`, or a row with no `remoteId` adopting its lost create | carries desired state as `contract.provisioning.md` says |
 | `renamed` | by tag, under another id | re-keys `remoteId` to it; nothing written to the panel |
 | `rebuilt` | by `uuid` only, under another id | re-keys, and writes the tag and a create's first block back (`restored`) |
-| `missing` | by no key, row present with a `remoteId` | nothing: **never recreated blind** — a recreate is a repair (F-027-ab) |
+| `missing` | by no key, row present with a `remoteId` | recreated under the same tag and credential, ceiling first — a **repair** |
 | `reset` | the ceiling pass saw the counter go backward this pass | the ceiling is already rewritten (`contract.ceiling.md`) |
 | `limit_overridden` | the panel's ceiling is neither ours nor the one it last confirmed | the ceiling is already rewritten |
 | `orphan` | a client no config claims by any key | nothing: reported in `ProvisionReport.Orphans` |
+| `contested` | a repair was due and the anti-flap stop held it | nothing but the exception, below |
 
 An identity verdict outranks the ceiling's: a client just re-keyed has its
 ceiling written under its new name for the first time, and that is not
@@ -82,6 +83,63 @@ adopts its counter as a new baseline. The bytes between the last read under
 the old name and that baseline are `unattributed_usage`, never dropped and
 never billed twice. Carrying the old cursor across a rename is not built.
 
+## Containment (F-027-ab)
+
+### The anti-flap stop
+
+A **repair** is undoing somebody else's change on the panel: recreating a
+`missing` client (`recreated`), writing a `rebuilt` client's tag back
+(`restored`), or raising a ceiling somebody else lowered (`below_allocation`
+with `Finding.Overridden`). A re-key writes nothing and is not one; neither is
+our own write — a regenerate, an enable, a top-up.
+
+Only repairs **within 24 hours of the one before** count
+(`converge.RepairWindow`, `config.driftRepairedAt`; user, 2026-09-23). Two
+of them (`MaxRepairs`) and the next is held: nothing written, the row reads
+`contested`, and `ActionContested` / `ReasonContested` is the finding. A
+repair once the window has run starts the count at one — a repair six months
+on is a new dispute, and a count for ever would turn every config `contested`
+given enough years. The budget is read once per pass off the row, so a pass
+counts one repair per config at most, and both passes hold together
+(`ProvisionReport.Stopped`).
+
+### The one exception
+
+A ceiling that allows **more** than ours — higher, or none at all — is a money
+hole, not a dispute (ADR-0072 rule 2). It is rewritten whatever the count
+says, and **not counted**. The stop therefore only ever holds a *raise* of a
+finite ceiling: every reset rewrite and every exhausted allowance is a
+lowering and goes out. A contested `rebuilt` client is still re-keyed and
+still gets a ceiling if it has none, but not its tag; its next rename reads
+`rebuilt` again. A raise is held only when it is somebody else's — overridden
+now, or the row already `contested` — so our own top-up over our own stale
+figure is never held.
+
+### The panel-wide event
+
+One counter going backward is a reset, and its post-reset figure is billed. A
+backup restore is every counter doing it at once, each individually
+plausible, and billing them charges the restored figures a second time. So
+`collect.Containment` judges each normalised pass **before it publishes**:
+more than 20% of the cumulative counters read (`DefaultMassResetPercent`)
+and at least five (`DefaultMassResetFloor`) going backward is `mass_reset`.
+Then:
+
+- the event is raised first (`panel_drift_event`, both counts, halting); if
+  that write fails nothing is published and the next pass judges again;
+- every post-reset delta of the pass is quarantined as `panel_drift_event`
+  and taken out of the lifetime the cursor holds — the cursors still move, so
+  the restored figures are the new baseline and not judged again;
+- the pass converges as usual, so every ceiling is restated over the restored
+  counter in the same pass.
+
+While an unacknowledged event halts the panel, both loops skip its read and
+report it `OpHalted` (it is never stamped, so the watchdog ages it into an
+alert). The bulk pass **still converges it**: a suspension or a delete must
+reach the panel whatever its counters say. Acknowledging is F-027-ad's drift
+report. `mass_missing`, `mass_rename` and `mass_limit_override` are schema
+only; nothing raises them.
+
 ## Proof
 
 `internal/converge/drift_test.go`, through the collection loop so the re-key
@@ -89,3 +147,8 @@ feeds the next pass's attribution: rename, rebuild, missing, orphan, a
 deleted config following its renamed client, reset, an override, and a top-up
 that is not one. `config-actions.spec.ts` asserts the tag's shape, that a
 regenerate keeps it and that a move gets a new one.
+`internal/converge/containment_test.go`, through the loop: a recreate is a
+repair; the third inside the window is held `contested` and the window
+running out starts the count again; a higher ceiling is rewritten on a
+contested config; a restore halts, charges nothing, restates the ceiling and
+resumes on acknowledgement; 20% exactly, and four of four, do not fire.

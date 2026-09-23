@@ -2,8 +2,8 @@
 id: network
 layer: domain
 status: draft
-version: 9
-updated: 2026-09-22
+version: 14
+updated: 2026-09-23
 ---
 
 # Contract — network / the collection loop
@@ -53,6 +53,12 @@ Every byte read is billed, quarantined or written down as `unattributed`
 failed pass re-reads rather than loses, and the repeat is what
 `usage_delta_seen` absorbs (F-027-n). A durable `Cursors` is still to come;
 until then the loop runs against `MemoryCursors`.
+
+**A population going backward together is not a set of resets.** Before the
+publish, `collect.Containment` counts this pass's cumulative resets; past 20%
+and five, every post-reset delta is quarantined as `panel_drift_event`, a
+halting event is raised, and the panel is not read until it is acknowledged
+(F-027-ab, [contract.drift.md](contract.drift.md) "The panel-wide event").
 
 ## Where a pass goes (F-027-m)
 

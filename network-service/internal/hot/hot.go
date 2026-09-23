@@ -190,6 +190,11 @@ type Loop struct {
 	// bulk pass: these are its own samples over its own interval, and that
 	// interval is the only window a hot config's rate means anything over.
 	Rates collect.Rates
+	// Containment is the bulk pass's panel-wide stop (F-027-ab). A halted
+	// panel is halted here too — this loop billing through a halt is the halt
+	// not holding — and a hot subset that goes backward together is judged
+	// by the same thresholds.
+	Containment *collect.Containment
 
 	// Horizon is how close to its ceiling a config has to be (DefaultHorizon).
 	Horizon time.Duration
@@ -326,6 +331,14 @@ func (l *Loop) collect(ctx context.Context, rows []Candidate) (collect.Result, s
 		// from it is the fastest way to make the ban permanent (F-027-v).
 		return collect.Result{}, collect.OpSkipped, collect.ErrRefusingToAsk
 	}
+	if halted, err := l.Containment.Halted(ctx, panel.ID); err != nil || halted {
+		// Not read, and not converged either: the bulk pass converges a
+		// halted panel once a minute, and this loop exists for bytes.
+		if err == nil {
+			err = collect.ErrCollectionHalted
+		}
+		return collect.Result{}, collect.OpHalted, err
+	}
 
 	panelCtx, cancel := context.WithTimeout(ctx, l.panelTimeout())
 	defer cancel()
@@ -343,6 +356,9 @@ func (l *Loop) collect(ctx context.Context, rows []Candidate) (collect.Result, s
 	// Measured before Apply moves the cursors past the window's start.
 	rates := collect.ObservedRates(l.Cursors, res)
 
+	if err := l.Containment.Contain(ctx, &res); err != nil {
+		return collect.Result{}, "Contain", err
+	}
 	if err := l.Sink.Publish(ctx, res); err != nil {
 		return collect.Result{}, "Publish", err
 	}

@@ -337,6 +337,9 @@ model Config {
   driftState            DriftState       @default(synced)
   /// Two repairs and the loop stops (`contested`) rather than flapping.
   driftRepairCount      Int              @default(0)
+  /// The last repair. Only repairs within 24 hours of the one before count
+  /// (F-027-ab), so a repair months later starts the count again.
+  driftRepairedAt       DateTime?
   lastReconciledAt      DateTime?
   /// What the allocator decided this config's share of the Grant is.
   allocatedCeilingBytes BigInt?

@@ -25,9 +25,16 @@ import (
 //
 // A verdict is what the last read found, never a history: a re-keyed identity
 // reads `synced` on the next pass, and the finding and the log line are the
-// record that it happened. What to do about a verdict past the identity repair
-// — the anti-flap stop, recreating a missing client, the panel-wide event — is
-// F-027-ab's.
+// record that it happened.
+//
+// Repairing drift is bounded (F-027-ab). A repair is undoing somebody else's
+// change on the panel: recreating a `missing` client, writing a `rebuilt`
+// client's tag back, raising a ceiling somebody lowered. Two repairs inside
+// RepairWindow of each other and the third is held: the config is
+// `contested`, because a loop that keeps undoing another writer is a flap
+// nobody sees. The one exception is a ceiling that allows more than ours —
+// higher, or none at all — which is a money hole rather than a dispute and is
+// rewritten whatever the count says, without counting (ADR-0072 rule 2).
 
 // DriftState is `network.DriftState`.
 type DriftState string
@@ -59,7 +66,28 @@ const (
 	// nor the one it last confirmed — somebody else wrote it. The ceiling pass
 	// has already rewritten it.
 	DriftLimitOverridden DriftState = "limit_overridden"
+	// DriftContested: the drift needs a third repair inside the window, and
+	// the loop is not making it. Somebody else keeps writing this client.
+	DriftContested DriftState = "contested"
 )
+
+// The anti-flap stop (user, 2026-09-23): MaxRepairs repairs, each inside
+// RepairWindow of the one before, and the next is held. A window rather than
+// a count for ever, so a repair six months on is a new dispute and not the
+// end of an old one — otherwise every config drifts into `contested` given
+// enough years, and the toil grows with the number of tenants.
+const (
+	MaxRepairs   = 2
+	RepairWindow = 24 * time.Hour
+)
+
+// repairsInWindow is how many of the row's repairs still count at `at`.
+func repairsInWindow(row DesiredConfig, at time.Time) int {
+	if row.RepairedAt.IsZero() || at.Sub(row.RepairedAt) >= RepairWindow {
+		return 0
+	}
+	return row.RepairCount
+}
 
 // MatchKey names which of the three keys found a client.
 type MatchKey string
@@ -155,42 +183,61 @@ func identityVerdict(row DesiredConfig, m Match, matched bool) DriftState {
 }
 
 // Judgement is one config's verdict this pass, beside the one its row holds.
+// Repaired and Held are what the pass did about it; at most one is set,
+// because a row whose budget is spent is held by both passes before either
+// writes.
 type Judgement struct {
 	Was DriftState
 	Now DriftState
+	// RepairCount and RepairedAt are the row's, as the pass found them.
+	RepairCount int
+	RepairedAt  time.Time
+	Repaired    bool
+	Held        bool
 }
 
-// Verdict is one `driftState` to write.
+// Verdict is one `driftState` to write, with the repair count it leaves.
 type Verdict struct {
-	ConfigID string
-	Drift    DriftState
-	At       time.Time
+	ConfigID    string
+	Drift       DriftState
+	RepairCount int
+	RepairedAt  time.Time
+	At          time.Time
 }
 
 // judge folds the ceiling pass's findings into provisioning's identity
 // verdicts. An identity verdict outranks both: a client that was just
 // re-keyed has a ceiling written for the first time under its new name, and
-// that is not somebody else's number.
+// that is not somebody else's number. Raising a ceiling somebody else lowered
+// is a repair; the exception — lowering one they raised — is not.
 func judge(judgements map[string]Judgement, ceilings Report) {
 	for _, f := range ceilings.Findings {
 		j, ok := judgements[f.ConfigID]
-		if !ok || j.Now != DriftSynced {
+		if !ok {
 			continue
 		}
 		switch {
-		case f.Reason == ReasonCounterReset:
-			j.Now = DriftReset
-		case f.Overridden:
-			j.Now = DriftLimitOverridden
-		default:
-			continue
+		case f.Reason == ReasonContested:
+			j.Held = true
+		case f.Reason == ReasonBelowAllocation && f.Overridden:
+			j.Repaired = true
+		}
+		if j.Now == DriftSynced {
+			switch {
+			case f.Reason == ReasonCounterReset:
+				j.Now = DriftReset
+			case f.Overridden:
+				j.Now = DriftLimitOverridden
+			}
 		}
 		judgements[f.ConfigID] = j
 	}
 }
 
-// changed is the verdicts that differ from what the rows hold. A row that has
-// never been judged holds nothing, which reads as synced.
+// changed is the verdicts to write: the ones that differ from what the rows
+// hold, and every repair, because the count moves even when the verdict does
+// not. A held row reads `contested` whatever the drift under it was. A row
+// that has never been judged holds nothing, which reads as synced.
 func changed(judgements map[string]Judgement, at time.Time) []Verdict {
 	var out []Verdict
 	for configID, j := range judgements {
@@ -198,8 +245,17 @@ func changed(judgements map[string]Judgement, at time.Time) []Verdict {
 		if was == "" {
 			was = DriftSynced
 		}
-		if j.Now != was {
-			out = append(out, Verdict{ConfigID: configID, Drift: j.Now, At: at})
+		now := j.Now
+		if j.Held {
+			now = DriftContested
+		}
+		count, repairedAt := j.RepairCount, j.RepairedAt
+		if j.Repaired {
+			count = repairsInWindow(DesiredConfig{RepairCount: j.RepairCount, RepairedAt: j.RepairedAt}, at) + 1
+			repairedAt = at
+		}
+		if now != was || j.Repaired {
+			out = append(out, Verdict{ConfigID: configID, Drift: now, RepairCount: count, RepairedAt: repairedAt, At: at})
 		}
 	}
 	return out

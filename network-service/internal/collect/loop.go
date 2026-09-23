@@ -113,6 +113,10 @@ type Loop struct {
 	// turn completed — the external watchdog's input (F-027-w). Nil records
 	// nothing.
 	Progress Progress
+	// Containment is the panel-wide stop (F-027-ab): a pass that looks like a
+	// backup restore is parked before it publishes, and the panel is not read
+	// again until the event is acknowledged. Nil contains nothing.
+	Containment *Containment
 
 	// Interval is the gap between passes (DefaultInterval).
 	Interval time.Duration
@@ -224,6 +228,19 @@ func (l *Loop) collect(ctx context.Context, p Panel) (Result, string, error) {
 		return Result{}, OpSkipped, ErrRefusingToAsk
 	}
 
+	halted, err := l.Containment.Halted(ctx, p.ID)
+	if err != nil {
+		return Result{}, OpHalted, err
+	}
+	if halted {
+		// Not read, because what it reports is what nobody believes yet — but
+		// still converged, because a suspension or a delete has to reach the
+		// panel whatever its counters say, and the ceilings hold over the
+		// cursors the event pass left (F-027-ab).
+		l.converge(ctx, p, Result{PanelID: p.ID, OwnershipType: p.OwnershipType, TenantID: p.TenantID, ObservedAt: l.now()})
+		return Result{}, OpHalted, ErrCollectionHalted
+	}
+
 	panelCtx, cancel := context.WithTimeout(ctx, l.panelTimeout())
 	defer cancel()
 
@@ -240,6 +257,11 @@ func (l *Loop) collect(ctx context.Context, p Panel) (Result, string, error) {
 	// starts at the previous reading, and after Apply that figure is gone.
 	rates := ObservedRates(l.Cursors, res)
 
+	if err := l.Containment.Contain(ctx, &res); err != nil {
+		// The event could not be written, so nothing is published and the
+		// cursors stay: the next pass judges the same restore again.
+		return Result{}, "Contain", err
+	}
 	if err := l.Sink.Publish(ctx, res); err != nil {
 		return Result{}, "Publish", err
 	}
@@ -250,17 +272,22 @@ func (l *Loop) collect(ctx context.Context, p Panel) (Result, string, error) {
 		return Result{}, "Apply", err
 	}
 	l.record(ctx, rates)
-	if l.Ceilings != nil {
-		if err := l.Ceilings.Converge(ctx, p, res); err != nil {
-			// The bytes are published and the cursors have moved, so this is
-			// not a failed pass: it is a panel whose ceilings are still where
-			// they were. Failing the pass here would re-read and republish
-			// bytes that were already billed, to fix a number that the next
-			// pass will try again anyway.
-			l.log().Error("ceiling convergence failed", "panel", p.ID, "error", err)
-		}
-	}
+	l.converge(ctx, p, res)
 	return res, "", nil
+}
+
+// converge carries the panel's desired state at the end of its turn. The
+// bytes are published and the cursors have moved by then, so a failure is not
+// a failed pass: it is a panel whose ceilings are still where they were.
+// Failing the pass here would re-read and republish bytes that were already
+// billed, to fix a number that the next pass will try again anyway.
+func (l *Loop) converge(ctx context.Context, p Panel, res Result) {
+	if l.Ceilings == nil {
+		return
+	}
+	if err := l.Ceilings.Converge(ctx, p, res); err != nil {
+		l.log().Error("ceiling convergence failed", "panel", p.ID, "error", err)
+	}
 }
 
 // observe hands one panel's outcome to the health tracker. A tracker that

@@ -201,7 +201,7 @@ func TestARebuiltClientIsFoundByItsUUIDAndGetsItsTagAndCeilingBack(t *testing.T)
 	}
 }
 
-func TestAClientGoneByEveryKeyIsMissingAndNotRecreatedBlind(t *testing.T) {
+func TestAClientGoneByEveryKeyIsMissingAndRecreatedUnderItsOwnTag(t *testing.T) {
 	r := newDriftRig(t, fake.Config{})
 	r.established(t)
 
@@ -209,12 +209,11 @@ func TestAClientGoneByEveryKeyIsMissingAndNotRecreatedBlind(t *testing.T) {
 	r.pass(t)
 
 	row := r.drift(t, converge.DriftMissing)
-	if row.RemoteID != "remote-1" {
-		t.Fatalf("remoteId = %q, want it kept: only a read of an absent config clears it", row.RemoteID)
+	clients := r.clients(t)
+	if len(clients) != 1 || clients[0].Label != "tag-c1" || clients[0].RemoteID != row.RemoteID {
+		t.Fatalf("panel holds %+v, row %q: want one client recreated under our tag and the row on it", clients, row.RemoteID)
 	}
-	if got := r.panel.CallCount("CreateClient"); got != 1 {
-		t.Fatalf("CreateClient called %d times, want 1: repairing a missing client is behind the anti-flap stop (F-027-ab)", got)
-	}
+	// The anti-flap stop that bounds this repair is containment_test.go's.
 }
 
 func TestAClientNoConfigClaimsIsAnOrphanAndIsLeftAlone(t *testing.T) {

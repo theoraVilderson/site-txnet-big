@@ -29,10 +29,10 @@
 //     accepted worst failure in every direction.
 //
 // What is deliberately not here: sizing a share (that is the allocator's),
-// creating, enabling or deleting a client (`provision.go`, F-027-z), deciding which config a
-// remote client belongs to (F-027-aa), and the anti-flap stop that bounds
-// repair attempts (F-027-ab). This package writes one number and reads it
-// back.
+// creating, enabling or deleting a client (`provision.go`, F-027-z) and
+// deciding which config a remote client belongs to (F-027-aa). This pass writes
+// one number and reads it back — and holds the one write the anti-flap stop
+// bounds (F-027-ab): raising a ceiling somebody else lowered.
 package converge
 
 import (
@@ -64,7 +64,7 @@ const (
 	ReasonNoLimit Reason = "no_limit_on_panel"
 	// ReasonAboveAllocation: the panel's ceiling is higher than the one we
 	// allocated. ADR-0072 rule 2 — overwritten immediately, and past the
-	// anti-flap stop when that lands (F-027-ab).
+	// anti-flap stop (F-027-ab): it is never held and never counted.
 	ReasonAboveAllocation Reason = "above_allocation"
 	// ReasonBelowAllocation: the panel's ceiling is lower than ours. It costs
 	// no money — it shortens the user's service — so it is rewritten and
@@ -84,6 +84,10 @@ const (
 	// ReasonRefused: the panel would not take the ceiling. Nothing is recorded
 	// as applied — the whole point of reading it back.
 	ReasonRefused Reason = "write_refused"
+	// ReasonContested: the panel's ceiling is lower than ours, somebody else
+	// put it there, and the config's repair budget is spent (F-027-ab).
+	// Nothing is written: a lower ceiling only shortens the user's service.
+	ReasonContested Reason = "contested"
 )
 
 // Allocation is one config's share as the allocator left it, plus the panel's
@@ -185,23 +189,29 @@ func (c *Ceilings) Converge(ctx context.Context, p collect.Panel, res collect.Re
 // the panel refuses is a finding, because one client must not stop the other
 // five thousand being enforced.
 func (c *Ceilings) Pass(ctx context.Context, p collect.Panel, res collect.Result) (Report, error) {
-	return c.pass(ctx, p, res, nil)
+	return c.pass(ctx, p, res, nil, nil)
 }
 
 // PassOver is Pass over a population someone else already read — the
 // `Converger`'s, which reads it once for provisioning and ceilings together
 // (F-027-z), because a second `ListClients` per pass would be a second request
-// against the same budget for the same answer (invariant 34).
-func (c *Ceilings) PassOver(ctx context.Context, p collect.Panel, res collect.Result, clients []driver.RemoteClient) (Report, error) {
+// against the same budget for the same answer (invariant 34). Stopped is
+// provisioning's: the configs whose repair budget is spent, with the verdict
+// each holds (F-027-ab).
+func (c *Ceilings) PassOver(
+	ctx context.Context, p collect.Panel, res collect.Result, clients []driver.RemoteClient, stopped map[string]DriftState,
+) (Report, error) {
 	if clients == nil {
 		clients = []driver.RemoteClient{}
 	}
-	return c.pass(ctx, p, res, clients)
+	return c.pass(ctx, p, res, clients, stopped)
 }
 
 // pass reads the population only when it was not handed one, and only when
 // there is an allocation to compare it against.
-func (c *Ceilings) pass(ctx context.Context, p collect.Panel, res collect.Result, clients []driver.RemoteClient) (Report, error) {
+func (c *Ceilings) pass(
+	ctx context.Context, p collect.Panel, res collect.Result, clients []driver.RemoteClient, stopped map[string]DriftState,
+) (Report, error) {
 	report := Report{PanelID: p.ID}
 
 	allocations, err := c.Allocations.For(ctx, p.ID)
@@ -260,6 +270,14 @@ func (c *Ceilings) pass(ctx context.Context, p collect.Panel, res collect.Result
 
 		reason := c.reason(p, allocation.RemoteID, res, want, have)
 		overridden := overridden(reason, allocation, have, offset)
+		if held(stopped, allocation.ConfigID, overridden, want, have) {
+			report.Skipped++
+			report.Findings = append(report.Findings, Finding{
+				ConfigID: allocation.ConfigID, RemoteID: allocation.RemoteID,
+				Reason: ReasonContested, WantBytes: want, HaveBytes: have, Overridden: overridden,
+			})
+			continue
+		}
 		if err := p.Driver.SetClientDataLimit(ctx, allocation.RemoteID, want); err != nil {
 			report.Failed++
 			report.Findings = append(report.Findings, Finding{
@@ -311,6 +329,17 @@ func overridden(reason Reason, allocation Allocation, have, offset int64) bool {
 		return allocation.AppliedBytes != nil && have+offset != *allocation.AppliedBytes
 	}
 	return false
+}
+
+// held asks whether the anti-flap stop holds this write. It only ever holds a
+// raise of a finite ceiling — every lowering is the exception, and so is a
+// client with none — and only one somebody else caused: overridden now, or
+// already contested, because once the held figure has been read back it is
+// the panel's confirmed one and no longer looks foreign. Our own top-up over
+// our own stale figure is never held.
+func held(stopped map[string]DriftState, configID string, overridden bool, want, have int64) bool {
+	was, ok := stopped[configID]
+	return ok && have > 0 && want > have && (overridden || was == DriftContested)
 }
 
 // sawReset asks whether **this** pass is the one that found the counter going

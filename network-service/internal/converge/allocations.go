@@ -127,7 +127,7 @@ func (m *MemoryDesired) RecordDrift(_ context.Context, verdicts []Verdict) error
 		if !ok {
 			continue
 		}
-		row.Drift = v.Drift
+		row.Drift, row.RepairCount, row.RepairedAt = v.Drift, v.RepairCount, v.RepairedAt
 		m.rows[v.ConfigID] = row
 	}
 	return nil

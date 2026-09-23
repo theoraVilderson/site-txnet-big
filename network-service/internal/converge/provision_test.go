@@ -255,16 +255,16 @@ func TestAnAbsentConfigIsDeletedAndItsRemoteIdClearedOnlyOnceTheReadConfirms(t *
 	}
 }
 
-func TestAPresentConfigWhoseClientVanishedIsNotRecreatedBlind(t *testing.T) {
+func TestAPresentConfigWhoseClientVanishedIsRecreatedWithItsCeiling(t *testing.T) {
 	r := newProvRig(t, fake.Config{})
 	row := wanted("c1")
 	row.RemoteID = "remote-gone"
 	r.desired.Put("panel-1", row)
 
-	report := r.pass(t)
-	if report.Skipped != 1 || r.panel.CallCount("CreateClient") != 0 {
-		t.Fatalf("report = %+v, creates = %d: a rename is F-027-aa's verdict, and a second client would double the seat",
-			report, r.panel.CallCount("CreateClient"))
+	finding := onlyAction(t, r.pass(t), converge.ActionRecreated)
+	client, ok := r.client(t, finding.RemoteID)
+	if !ok || client.Label != "tag-c1" || client.DataLimitBytes != 10*gb {
+		t.Fatalf("recreated %+v, want our tag and the 10 GB share: a recreate is a create, ceiling first", client)
 	}
 }
 

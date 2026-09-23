@@ -1,7 +1,7 @@
 ---
 id: network
 layer: domain
-updated: 2026-09-21
+updated: 2026-09-23
 ---
 
 # Data model — network
@@ -73,8 +73,8 @@ deleted** (ADR-0075), because desired state is what makes a rebuild a button.
 confirmed, and the gap is the loop's remaining work — what the panel UI shows
 as `in queue`. Collapsed into one, the system believes a ceiling it never
 wrote, which is free traffic at the far end of it and nothing red anywhere.
-`observedRateBps` sizes the horizon in seconds (F-027-u); `driftState`/
-`driftRepairCount` are the verdict and anti-flap stop (F-027-ab);
+`observedRateBps` sizes the horizon in seconds (F-027-u); `driftState`,
+`driftRepairCount`/`driftRepairedAt` are the verdict and 24 h stop (F-027-ab);
 `credentialGroupId` groups configs over one quota (§4.6); a shutdown raises a
 ceiling to `walletBackedCeilingBytes`, CHECKed ≥ the allocation (ADR-0078).
 

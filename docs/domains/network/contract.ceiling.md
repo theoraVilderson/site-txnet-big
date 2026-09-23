@@ -2,8 +2,8 @@
 id: network
 layer: domain
 status: draft
-version: 8
-updated: 2026-09-22
+version: 14
+updated: 2026-09-23
 ---
 
 # The ceiling — one bag, split across the configs that draw on it
@@ -159,7 +159,7 @@ user who stalls, which is ADR-0072's accepted worst failure in every direction.
 Every write is a `Finding` with a reason, because each is a different thing to
 do about it: `counter_reset` (this pass saw the counter go backward, which is
 the reason the loop exists), `above_allocation` (ADR-0072 rule 2 — a money
-hole, overwritten immediately and past the anti-flap stop when F-027-ab lands),
+hole, overwritten immediately and past the anti-flap stop, `contract.drift.md`),
 `below_allocation` (their number only shortens the user's service: rewritten,
 and reported rather than treated as an emergency), `no_limit_on_panel`,
 `allowance_exhausted` and `write_refused`.
@@ -178,8 +178,9 @@ user off for real is the Grant suspension (F-027-x) and `desiredEnabled`
 
 It writes one number and reads it back. Sizing a share is the allocator's,
 creating or enabling a client is F-027-z's, deciding which config a remote
-client belongs to is F-027-aa's, and the anti-flap stop that bounds repair
-attempts is F-027-ab's. A config whose `remoteId` names no client on the panel
+client belongs to is F-027-aa's. It holds one write the anti-flap stop bounds
+— raising a ceiling somebody else lowered, `ReasonContested` — and never a
+lowering (`contract.drift.md`). A config whose `remoteId` names no client on the panel
 is skipped here and gets its verdict there (`contract.drift.md`).
 
 It does flag one verdict: a drift write whose panel figure is neither ours nor

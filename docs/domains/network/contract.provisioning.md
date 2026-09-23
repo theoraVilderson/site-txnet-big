@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 13
+version: 14
 updated: 2026-09-23
 ---
 
@@ -89,7 +89,7 @@ client's id — a renamed or rebuilt client is re-keyed and carried on.
 | `absent` | holds it under no key | clears `remoteId` → `complete` |
 | `present`, no `remoteId` | holds our tag or `uuid` | adopts it (a create whose answer was lost) → `partial` |
 | `present`, no `remoteId` | nothing | `CreateClient` under its ceiling → `partial` |
-| `present`, `remoteId` | holds it under no key | skipped — `missing` (`contract.drift.md`) |
+| `present`, `remoteId` | holds it under no key | recreated, as a create — `missing`, a repair under the anti-flap stop (`contract.drift.md`) |
 | `present` | rebuilt: our `uuid`, not our tag | `UpdateClient` with the tag and a create's first block → `partial` |
 | `present` | `uuid` differs | `UpdateClient` with the new `uuid`, the panel's own ceiling kept → `partial` |
 | `present` | `enabled` differs | `SetClientEnabled` → `partial` |
