@@ -125,9 +125,11 @@ vitest transpiles through SWC (`txnet-backend/vitest.shared.mts`) and does
 injection needs `emitDecoratorMetadata`. The type check is not gone, it moved —
 **`npm run typecheck:affected`**, once, before an item is declared done (`AGENTS.md`).
 
-That script (`txnet-backend/scripts/typecheck.sh`) runs `tsc --noEmit` over
-every `tsconfig.{app,lib,spec}.json` it can glob — 16 of them, eight at a time,
-~2m (serially it is 5m; `TYPECHECK_JOBS` tunes the pool). It has to be one run
+That script (`txnet-backend/scripts/typecheck.sh`) runs a cached Nx
+`typecheck` target per project (`scripts/typecheck-plugin.js`): `tsc --noEmit
+--incremental` over each `tsconfig.{app,lib,spec}.json`. Unchanged project: a
+cache hit (8s for all 12); one service edited: ~33s; a `.prisma` change: ~130s
+(was 265s every run, 2026-09-23). `--skip-nx-cache` forces it. It has to be one run
 per config: a `tsconfig.spec.json` pulls in its spec files plus what they
 statically `import` and nothing else, so **no project sees the workspace**.
 `*-e2e` is in the list because type-checking a spec is not running it.

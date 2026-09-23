@@ -26,69 +26,66 @@
 # still checks everyone, because everyone imports it. This is the default
 # check (user, 2026-09-18) — the whole run is for when the graph is in doubt.
 #
-# Run in parallel, because serially this is five minutes and a five-minute gate
-# is one that gets skipped. Each run's output is captured and replayed whole
-# afterwards, so parallelism never interleaves two compilers' errors into
-# something unreadable. Every config is checked even after one fails: one pass
-# should show the whole picture, not the first project alphabetically.
+# Each project is one cached Nx target (`scripts/typecheck-plugin.js`), so
+# a project whose inputs did not change since its last green check is replayed
+# from the cache instead of re-checked, the same as `test`. On a miss, `tsc
+# --incremental` keeps its build info under `node_modules/.cache/typecheck/`,
+# which roughly halves a re-check (24s -> 13s for tenant-service). Measured
+# 2026-09-23, 12 projects: 265s every run before; now 8s when nothing changed,
+# ~33s for one edited service, ~130s for a .prisma change (all projects).
+# `--skip-nx-cache` (passed through) forces a real run.
+#
+# Nx runs projects in parallel and prints each one's output whole when it
+# finishes, so two compilers' errors never interleave; every project is checked
+# even after one fails, and inside a project every config is too.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 shopt -s nullglob
 
-JOBS="${TYPECHECK_JOBS:-$(nproc 2>/dev/null || echo 4)}"
-OUT="$(mktemp -d)"
-trap 'rm -rf "$OUT"' EXIT
+# Projects at once. Each runs ~2 tsc processes (up to 1.2GB each), so half the
+# cores keeps the machine at one tsc per core instead of two.
+JOBS="${TYPECHECK_JOBS:-$(( $(nproc 2>/dev/null || echo 4) / 2 ))}"
+NX=node_modules/.bin/nx
 
-mapfile -t CONFIGS < <(printf '%s\n' */tsconfig.app.json */tsconfig.lib.json */tsconfig.spec.json | sort)
-if [ ${#CONFIGS[@]} -eq 0 ]; then
-  echo "typecheck: no tsconfig found — is this the workspace root?" >&2
-  exit 1
-fi
-
-if [ "${1:-}" = "--affected" ]; then
-  # `nx show projects` answers a JSON array when not on a terminal; a project's name is its directory.
-  AFFECTED=" $(node_modules/.bin/nx show projects --affected --base="${BASE:-HEAD}" --json | tr -d '[]"' | tr ',' ' ') "
-  KEPT=()
-  for config in "${CONFIGS[@]}"; do
-    [[ "$AFFECTED" == *" ${config%%/*} "* ]] && KEPT+=("$config")
-  done
-  CONFIGS=("${KEPT[@]}")
-  if [ ${#CONFIGS[@]} -eq 0 ]; then
-    echo "type-check: no project affected since ${BASE:-HEAD}"
-    exit 0
-  fi
-fi
-
-printf 'type-checking %d project(s), %s at a time\n' "${#CONFIGS[@]}" "$JOBS"
-
-check_one() {
-  local config="$1"
-  node_modules/.bin/tsc -p "$config" --noEmit > "$OUT/${config//\//__}.log" 2>&1
-  echo $? > "$OUT/${config//\//__}.code"
-}
-export -f check_one
-export OUT
-
-printf '%s\n' "${CONFIGS[@]}" | xargs -P "$JOBS" -I{} bash -c 'check_one "$@"' _ {}
-
-failed=()
-for config in "${CONFIGS[@]}"; do
-  slug="${config//\//__}"
-  code="$(cat "$OUT/$slug.code" 2>/dev/null || echo 1)"
-  if [ "$code" = "0" ]; then
-    printf '  ok    %s\n' "$config"
-  else
-    failed+=("$config")
-    printf '\n\033[1mFAIL  %s\033[0m\n' "$config"
-    cat "$OUT/$slug.log"
-  fi
-done
-
-echo
-if [ ${#failed[@]} -eq 0 ]; then
-  printf 'type-check passed (%d projects)\n' "${#CONFIGS[@]}"
-  exit 0
-fi
-printf 'type-check FAILED in %d of %d project(s):\n' "${#failed[@]}" "${#CONFIGS[@]}"
-printf '  %s\n' "${failed[@]}"
-exit 1
+case "${1:-}" in
+  --project)
+    # A project's configs run side by side (billing-service's spec config alone
+    # is 86s; one after the other made it the whole run's critical path), their
+    # output held back and printed in order so it never interleaves.
+    root="${2:?--project needs a project root}"
+    cache=node_modules/.cache/typecheck
+    out="$(mktemp -d)"
+    trap 'rm -rf "$out"' EXIT
+    mkdir -p "$cache"
+    configs=()
+    for config in "$root"/tsconfig.{app,lib,spec}.json; do
+      [ -f "$config" ] && configs+=("$config")
+    done
+    for config in "${configs[@]}"; do
+      slug="${config//\//__}"
+      { node_modules/.bin/tsc -p "$config" --noEmit --incremental \
+          --tsBuildInfoFile "$cache/$slug.tsbuildinfo" > "$out/$slug.log" 2>&1
+        echo $? > "$out/$slug.code"; } &
+    done
+    wait
+    failed=0
+    for config in "${configs[@]}"; do
+      slug="${config//\//__}"
+      if [ "$(cat "$out/$slug.code")" = 0 ]; then
+        printf '  ok    %s\n' "$config"
+      else
+        printf '\033[1mFAIL  %s\033[0m\n' "$config"
+        cat "$out/$slug.log"
+        failed=1
+      fi
+    done
+    exit $failed
+    ;;
+  --affected)
+    shift
+    exec "$NX" affected -t typecheck --base="${BASE:-HEAD}" --parallel="$JOBS" --outputStyle=static "$@"
+    ;;
+  *)
+    exec "$NX" run-many -t typecheck --parallel="$JOBS" --outputStyle=static "$@"
+    ;;
+esac

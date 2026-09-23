@@ -396,6 +396,11 @@ cd txnet-backend && { npm run test:affected > /tmp/test.log 2>&1 & \
                       npm run typecheck:affected > /tmp/tc.log 2>&1 & wait; }
 ```
 
+Both are Nx-cached: a project unchanged since its last green run replays in
+~0s, so a re-run after a small fix costs only what the fix reached (typecheck
+8s warm vs 265s uncached, 2026-09-23). Never pass `--skip-nx-cache` by habit,
+and run Go tests without `-count=1`: Go's test cache is already exact.
+
 Note the braces. `cd X && (A) & (B) &` binds the `cd` to the **first** subshell
 only, and the second command then runs in the wrong directory and reports
 `Missing script` — which reads exactly like a repo problem and is not one.
