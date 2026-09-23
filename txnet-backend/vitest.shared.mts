@@ -31,6 +31,16 @@ export function backendVitestConfig(root: string, name: string, test: TestOption
       // `*.int.spec.ts` needs Docker; it runs from <project>/vitest.int.config.mts (`npm run test:int`).
       exclude: ['**/node_modules/**', 'src/**/*.int.spec.ts'],
       coverage: { reportsDirectory: `../coverage/${name}` },
+      // `npm run test:affected` sets VITEST_ISOLATE=0: a worker then loads
+      // NestJS and the shared-core barrel once instead of once per spec file —
+      // 238s -> 108s for the workspace, billing-service 79s -> 18s
+      // (2026-09-23, user's choice). `npm test`, the int and e2e tiers and a
+      // bare `vitest run` stay isolated, so a spec that leans on another's
+      // leftovers still fails there. The resets below keep shared workers clean.
+      isolate: process.env.VITEST_ISOLATE !== '0',
+      restoreMocks: true,
+      unstubEnvs: true,
+      unstubGlobals: true,
       ...test,
     },
   });

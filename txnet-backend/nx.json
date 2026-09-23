@@ -15,7 +15,8 @@
       "{workspaceRoot}/prisma/**/*.prisma",
       "{workspaceRoot}/test-support/**/*",
       "{workspaceRoot}/tsconfig.base.json",
-      "{workspaceRoot}/vitest.shared.mts"
+      "{workspaceRoot}/vitest.shared.mts",
+      { "env": "VITEST_ISOLATE" }
     ]
   },
   "plugins": [

@@ -129,7 +129,8 @@ That script (`txnet-backend/scripts/typecheck.sh`) runs a cached Nx
 `typecheck` target per project (`scripts/typecheck-plugin.js`): `tsc --noEmit
 --incremental` over each `tsconfig.{app,lib,spec}.json`. Unchanged project: a
 cache hit (8s for all 12); one service edited: ~33s; a `.prisma` change: ~130s
-(was 265s every run, 2026-09-23). `--skip-nx-cache` forces it. It has to be one run
+(was 265s every run, 2026-09-23). `--skip-nx-cache` forces it. `test:affected`
+runs vitest with `VITEST_ISOLATE=0` (`vitest.shared.mts`), `npm test` isolated. It has to be one run
 per config: a `tsconfig.spec.json` pulls in its spec files plus what they
 statically `import` and nothing else, so **no project sees the workspace**.
 `*-e2e` is in the list because type-checking a spec is not running it.

@@ -400,6 +400,9 @@ Both are Nx-cached: a project unchanged since its last green run replays in
 ~0s, so a re-run after a small fix costs only what the fix reached (typecheck
 8s warm vs 265s uncached, 2026-09-23). Never pass `--skip-nx-cache` by habit,
 and run Go tests without `-count=1`: Go's test cache is already exact.
+`test:affected` also runs spec files without per-file isolation
+(`VITEST_ISOLATE=0`, 238s -> 108s for the workspace); `npm test` stays
+isolated. A spec that passes only one way is broken — fix the spec.
 
 Note the braces. `cd X && (A) & (B) &` binds the `cd` to the **first** subshell
 only, and the second command then runs in the wrong directory and reports

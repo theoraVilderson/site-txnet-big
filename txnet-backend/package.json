@@ -13,7 +13,7 @@
     "prisma:seed": "prisma db seed",
     "typecheck": "bash scripts/typecheck.sh",
     "test": "nx run-many -t test",
-    "test:affected": "nx affected -t test --base=${BASE:-HEAD}",
+    "test:affected": "VITEST_ISOLATE=0 nx affected -t test --base=${BASE:-HEAD}",
     "typecheck:affected": "bash scripts/typecheck.sh --affected",
     "test:int": "vitest run -c auth-service/vitest.int.config.mts && vitest run -c billing-service/vitest.int.config.mts",
     "test:e2e": "vitest run -c auth-service-e2e/vitest.config.mts"
