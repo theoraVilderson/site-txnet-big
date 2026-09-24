@@ -26,11 +26,22 @@ type Domain struct {
 	VerificationStatus string
 }
 
-// Grant is an `entitlement.grant` row, as much of it as this row reads.
+// Grant is an `entitlement.grant` row, as much of it as `/sub` reads.
 type Grant struct {
 	ID       string
 	TenantID string
 	Status   string
+	// What `Subscription-Userinfo` is built from (F-609, userinfo.go).
+	BillingMode   string
+	ConsumedBytes int64
+	// TrafficLimit is `quotas.traffic_bytes.limit` as text; empty when the
+	// Grant has no traffic quota.
+	TrafficLimit string
+	// TrafficAdjustment is the sum of the Grant's `traffic_bytes`
+	// QuotaAdjustments that have not expired.
+	TrafficAdjustment int64
+	// EndsAt is nil for a permanent Grant.
+	EndsAt *time.Time
 }
 
 // Store is every read this endpoint makes. Neither method writes; the
@@ -114,7 +125,7 @@ func (h *Handler) Serve(w http.ResponseWriter, r *http.Request) {
 	format := DetectFormat(r)
 	key := h.cache.key(TokenHash(token), format, host)
 	if e, ok := h.cache.lookup(ctx, h.log, key); ok {
-		h.write(w, e.Body, e.ContentType)
+		h.write(w, e.Body, e.ContentType, e.Userinfo)
 		return
 	}
 	// Taken before the first read, so a write committed while this render
@@ -141,19 +152,26 @@ func (h *Handler) Serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	configs, err := h.store.ConfigsOfGrant(ctx, grant.ID)
-	if err != nil {
-		// Not an empty body: an app that reads one drops every server it had.
-		h.unavailable(w, "config lookup failed", err)
-		return
+	// A Grant that is not active serves nothing, and says so with a 200 and
+	// zero remaining: a client app handles a 4xx badly (F-609).
+	var configs []Config
+	if grant.Status == "active" {
+		configs, err = h.store.ConfigsOfGrant(ctx, grant.ID)
+		if err != nil {
+			// Not an empty body: an app that reads one drops every server it had.
+			h.unavailable(w, "config lookup failed", err)
+			return
+		}
 	}
 	body, contentType := render(format, servedLines(configs))
-	h.write(w, body, contentType)
+	info := userinfo(grant)
+	h.write(w, body, contentType, info)
 	if cacheable {
 		h.cache.store(ctx, h.log, key, entry{
 			Built:       built,
 			Deps:        h.cache.deps(domain.TenantID, grant.ID, configs),
 			ContentType: contentType,
+			Userinfo:    info,
 			Body:        body,
 		})
 	}
@@ -161,8 +179,9 @@ func (h *Handler) Serve(w http.ResponseWriter, r *http.Request) {
 
 // write sends a `200`. `Profile-Update-Interval` is the cache TTL in hours
 // (catalog §7.5): a client app refetches no sooner than an entry could expire.
-func (h *Handler) write(w http.ResponseWriter, body []byte, contentType string) {
+func (h *Handler) write(w http.ResponseWriter, body []byte, contentType, info string) {
 	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Subscription-Userinfo", info)
 	w.Header().Set("Profile-Update-Interval", strconv.Itoa(h.cache.updateIntervalHours()))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(body)

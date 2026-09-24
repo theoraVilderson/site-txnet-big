@@ -53,7 +53,7 @@ type RenderCache struct {
 // renderRevision is part of every render key. Bump it when the same stored
 // lines render to a different body, so a replica still running the old code
 // during a rolling deploy cannot serve its entries to the new one's requests.
-const renderRevision = "1"
+const renderRevision = "2"
 
 // entry is one cached answer.
 type entry struct {
@@ -62,7 +62,11 @@ type entry struct {
 	// Deps are the stamp keys this answer depends on, prefix included.
 	Deps        []string `json:"deps"`
 	ContentType string   `json:"contentType"`
-	Body        []byte   `json:"body"`
+	// Userinfo is `Subscription-Userinfo` as it was built with the body. It
+	// is not outdated by usage: `consumedBytes` fires no trigger, so the
+	// figure an app shows lags by up to the TTL (F-609).
+	Userinfo string `json:"userinfo"`
+	Body     []byte `json:"body"`
 }
 
 func (c RenderCache) enabled() bool {

@@ -10,8 +10,8 @@ updated: 2026-09-24
 
 **Partly built.** F-113-a is the deployable, the route and the host/token gate
 (`sub-service/`); F-113-b is the base64 body; F-113-c the cache and
-`Profile-Update-Interval`. The other formats and `Subscription-Userinfo` are
-the later F-113-* rows and F-609. The *why* is in ADR-0082 and ADR-0083. The spec is catalog §7.5
+`Profile-Update-Interval`; F-609 `Subscription-Userinfo` and the inactive
+Grant. The other formats are the later F-113-* rows. The *why* is in ADR-0082 and ADR-0083. The spec is catalog §7.5
 (`python3 tools/spec.py --section 7.5`), F-113 and F-609.
 
 ## TL;DR
@@ -60,11 +60,38 @@ Order: configs oldest first (`createdAt`, then `id`), each config's lines in
 the panel's order. The body is those lines joined by `\n` in standard padded
 base64, `text/plain; charset=utf-8`. No lines is an empty body.
 
+**Only an `active` Grant is served.** Any other status (`pending`, `suspended`,
+`exhausted`, `expired`, `cancelled`) is a `200` with an empty body, and its
+configs are not read (F-609).
+
 Format: `?format=` when it names one (`base64`, `clash`, `singbox`/`sing-box`,
 `xray`, any case), else the `User-Agent` (Clash / mihomo / Stash → Clash;
 sing-box / SFA / SFI / SFM → Sing-box), else base64. An unknown `?format=` is
 ignored, never a 4xx. A format not rendered yet is answered with base64:
 Clash, Sing-box and Xray JSON are F-113-f; Outline waits for F-407.
+
+### Subscription-Userinfo (F-609, built)
+`sub/userinfo.go`. Every `200` carries
+`Subscription-Userinfo: upload=0; download=<used>; total=<cap>; expire=<unix>`,
+which client apps show as used, remaining and expiry. An app reads
+`total=0` as unlimited and `expire=0` as never.
+
+1. **Used is `grant.consumedBytes`, all of it `download`.** The Grant keeps
+   one figure, not split by direction.
+2. **Cap:** a `prepaid` Grant with `quotas.traffic_bytes.limit` → that limit
+   plus the sum of its `traffic_bytes` QuotaAdjustments not yet expired
+   (rollover, F-604, shows here), never below `1`. A `metered` Grant, or no
+   readable limit → `0`: a metered Grant buys blocks just before use
+   (ADR-0072), so `purchasedBytes` would always look nearly empty (user,
+   2026-09-24).
+3. **A Grant that is not active shows zero remaining:** `download = total =
+   max(consumedBytes, 1)`, never `total=0`.
+4. `expire` is `endsAt` in Unix seconds; `0` for a permanent Grant.
+5. **Cached with the body, and usage does not outdate it.** `consumedBytes`
+   fires no trigger (it moves every collector pass), so the used figure lags
+   by up to the TTL; `endsAt`, `quotas`, `billingMode` and a new traffic
+   adjustment do fire (user, 2026-09-24). Fresher usage would be a push to
+   Redis from the delta consumer, a row of its own.
 
 ### The cache (F-113-c, built)
 `sub/cache.go`, ADR-0083. A `200` is stored in Redis under
@@ -73,8 +100,9 @@ Clash, Sing-box and Xray JSON are F-113-f; Outline waits for F-407.
 `Profile-Update-Interval` = that TTL in hours. A refusal is never cached.
 
 1. **Served only while nothing it was built from changed.** Triggers on
-   `network.panel`, `network.config`, `entitlement.grant` and
-   `tenant.tenant_domain` NOTIFY `sub_invalidate`. The listener stamps
+   `network.panel`, `network.config`, `entitlement.grant`,
+   `entitlement.quota_adjustment` and `tenant.tenant_domain` NOTIFY
+   `sub_invalidate`. The listener stamps
    `sub:changed:{panel|grant|tenant}:<id>` with the Redis time. An entry
    records the Redis time taken **before** its first Postgres read. It is
    served only while the stamps of `all`, its Grant, its tenant and every
@@ -94,7 +122,7 @@ None.
 ## Consumes
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
-| entitlement | `grant` by `subscriptionTokenHash` (SHA-256 lowercase hex of the path token), its status, period and bytes | a cached render is still served until its TTL; with no cache, `503` |
+| entitlement | `grant` by `subscriptionTokenHash` (SHA-256 lowercase hex of the path token), its status, billing mode, `endsAt`, `consumedBytes`, traffic quota and unexpired traffic `quota_adjustment` rows | a cached render is still served until its TTL; with no cache, `503` |
 | network | each config's stored link lines, and which panels are healthy | the same |
 | tenant | the request host must be a `purpose = subscription` domain of the Grant's tenant (F-066-q); `TenantStatusPolicy` column `subscriptionLink` (`tenant/rules.md`) | a refused tenant is served the empty body, as an inactive Grant is |
 | redis-keyspace | the cached render and the change stamps ("The cache" above; C-07's key, ADR-0083 (3)) | a miss renders from Postgres reads |
