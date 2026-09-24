@@ -19,6 +19,9 @@ type Config struct {
 	// was never captured (network contract.links.md rule 7).
 	LinksUUID string
 	LinkLines []string
+	// Draining: the panel is a `drain` member of the Grant's panel group
+	// (network contract.groups.md rule 13).
+	Draining bool
 }
 
 // servingPanelStates are the `network.PanelState` values of a panel still
@@ -45,10 +48,23 @@ func serves(c Config) bool {
 
 // servedLines is every line of every served config, configs in the store's
 // order and each config's lines in the panel's.
+//
+// A draining panel's lines are left out while the Grant has another served
+// config (network contract.groups.md rule 13): the drain waits two
+// subscription lifetimes from then before deleting the client, so no client
+// still holds the line when it goes. A Grant whose only served lines are on
+// draining panels keeps them — dropping them would cut the user off.
 func servedLines(configs []Config) []string {
+	replaced := false
+	for _, c := range configs {
+		if serves(c) && !c.Draining {
+			replaced = true
+			break
+		}
+	}
 	var lines []string
 	for _, c := range configs {
-		if serves(c) {
+		if serves(c) && !(replaced && c.Draining) {
 			lines = append(lines, c.LinkLines...)
 		}
 	}

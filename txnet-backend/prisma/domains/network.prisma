@@ -488,6 +488,9 @@ model PanelGroupMember {
   priority  Int                  @default(0)
   weight    Int                  @default(1)
   role      PanelGroupMemberRole @default(primary)
+  /// When `role` became `drain`; the database's clock, set and held by trigger
+  /// `panel_group_member_drain_clock` (F-027-bm). Null when not draining.
+  drainingSince DateTime?
   createdAt DateTime             @default(now())
 
   group PanelGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)

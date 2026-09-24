@@ -155,3 +155,29 @@ func TestConfigReadFailureIs503(t *testing.T) {
 type errString string
 
 func (e errString) Error() string { return string(e) }
+
+// F-027-bm (network contract.groups.md rule 13): a draining panel's lines stop
+// reaching the body once the Grant has another served line — the drain's 2 ×
+// TTL wait is counted from then — and never before, or the user is cut off.
+func TestADrainingPanelsLinesLeaveOnlyOnceAnotherLineServes(t *testing.T) {
+	draining := func(c Config) Config { c.Draining = true; return c }
+	cases := []struct {
+		name    string
+		configs []Config
+		want    []string
+	}{
+		{"replaced", []Config{draining(live("healthy", "u1", "vless://drain")), live("healthy", "u2", "vless://kept")}, []string{"vless://kept"}},
+		{"only line", []Config{draining(live("healthy", "u1", "vless://drain"))}, []string{"vless://drain"}},
+		// A replacement /sub would not serve is no replacement.
+		{"replacement down", []Config{draining(live("healthy", "u1", "vless://drain")), live("down", "u2", "vless://dead")}, []string{"vless://drain"}},
+		{"replacement uncaptured", []Config{draining(live("healthy", "u1", "vless://drain")), {PanelState: "healthy", Status: "active", DesiredRemote: "present", UUID: "u2"}}, []string{"vless://drain"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := decoded(t, get(t, storeWith(tc.configs...), "/sub/"+token, ""))
+			if strings.Join(got, "|") != strings.Join(tc.want, "|") {
+				t.Fatalf("lines = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

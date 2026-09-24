@@ -47,13 +47,18 @@ func (s Store) GrantByTokenHash(ctx context.Context, hash string) (sub.Grant, bo
 	return g, found(err), missIsNil(err)
 }
 
-// ConfigsOfGrant reads every config of a Grant with its panel's state, oldest
+// ConfigsOfGrant reads every config of a Grant with its panel's state and
+// whether the panel is a drain member of the Grant's group (F-027-bm), oldest
 // first so the body's order does not change between renders. Filtering is the
 // handler's (`sub.serves`), so the rule is tested without a database.
 func (s Store) ConfigsOfGrant(ctx context.Context, grantID string) ([]sub.Config, error) {
 	rows, err := s.DB.Query(ctx,
 		`SELECT c."panelId"::text, p."panelState"::text, c.status::text, c."desiredRemote"::text, c.uuid,
-		        COALESCE(c."linksUuid", ''), c."linkLines"
+		        COALESCE(c."linksUuid", ''), c."linkLines",
+		        EXISTS (SELECT 1 FROM entitlement."grant" g
+		                  JOIN catalog.product_variant v ON v.id = g."variantId"
+		                  JOIN network.panel_group_member m ON m."groupId" = v."panelGroupId" AND m."panelId" = c."panelId"
+		                 WHERE g.id = c."grantId" AND m.role = 'drain')
 		   FROM network.config c JOIN network.panel p ON p.id = c."panelId"
 		  WHERE c."grantId" = $1::uuid
 		  ORDER BY c."createdAt", c.id`, grantID)
@@ -64,7 +69,7 @@ func (s Store) ConfigsOfGrant(ctx context.Context, grantID string) ([]sub.Config
 	var configs []sub.Config
 	for rows.Next() {
 		var c sub.Config
-		if err := rows.Scan(&c.PanelID, &c.PanelState, &c.Status, &c.DesiredRemote, &c.UUID, &c.LinksUUID, &c.LinkLines); err != nil {
+		if err := rows.Scan(&c.PanelID, &c.PanelState, &c.Status, &c.DesiredRemote, &c.UUID, &c.LinksUUID, &c.LinkLines, &c.Draining); err != nil {
 			return nil, err
 		}
 		configs = append(configs, c)

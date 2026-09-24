@@ -56,6 +56,12 @@ reach the body only when all of these hold:
 3. **Its lines are from the client it is now:** `linksUuid = uuid`. After a
    regenerate the old lines name a revoked uuid; the config contributes
    nothing until the next pass captures again.
+4. **Its panel is not draining, unless nothing else would be served.** A
+   config on a `drain` member of its Grant's panel group is left out while
+   another config of the Grant passes 1-3; with none, it stays, since
+   dropping it would cut the user off (network `contract.groups.md` rules
+   13-14, F-027-bm). A role moving into or out of `drain` notifies as its
+   panel, so cached renders are rebuilt.
 
 Order: configs oldest first (`createdAt`, then `id`), each config's lines in
 the panel's order. The body is those lines joined by `\n` in standard padded

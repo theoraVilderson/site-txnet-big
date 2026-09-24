@@ -8,6 +8,7 @@ import { CollectionHealthService } from './collection-health';
 import { ConfigActionsService } from './config-actions';
 import { GroupFulfilmentController } from './group-fulfilment.controller';
 import { GroupFulfilmentService } from './group-fulfilment';
+import { GroupDrainService } from './group-drain';
 import { HotLoopService } from './horizon';
 import { RemainderCreditService } from './remainder-credit';
 import { UserConfigsController } from './user-configs.controller';
@@ -26,12 +27,14 @@ import { UserConfigsService } from './user-configs';
  * `ConfigActionsService` is every action on a config as a desired-state write
  * (F-027-z); `network-service` carries it to the panel, nothing here does.
  * `GroupFulfilmentService` places a panel group's configs through it and
- * activates the Grant (F-027-bl), asked by `worker-service` over `fulfil-due`.
+ * activates the Grant (F-027-bl), asked by `worker-service` over `fulfil-due`;
+ * `GroupDrainService` retires a drained member's configs through it (F-027-bm),
+ * over `drain-due`.
  */
 @Module({
   imports: [WalletModule],
   controllers: [CollectionHealthController, UserConfigsController, GroupFulfilmentController],
-  providers: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, CollectionHealthService, ConfigActionsService, UserConfigsService, GroupFulfilmentService],
+  providers: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, CollectionHealthService, ConfigActionsService, UserConfigsService, GroupFulfilmentService, GroupDrainService],
   exports: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, ConfigActionsService],
 })
 export class TrafficModule {}

@@ -12,14 +12,14 @@ A topic file of `contract.md` (§10), beside `contract.provisioning.md`. What
 governs `network.panel_group` / `network.panel_group_member` and the
 `catalog.product_variant.panelGroupId` that names one. The schema is F-027-bk
 (migration `20260924000900_a_variant_is_provisioned_on_a_panel_group`);
-fulfilment is F-027-bl (below), draining F-027-bm.
+fulfilment is F-027-bl (below), draining F-027-bm (below).
 
 ## The tables
 
 | table | columns that matter | held by |
 |---|---|---|
 | `panel_group` | `tenantId` (null = platform), `name`, `strategy` (`mirror` default), `minHealthyPanels` (default 1), `subscriptionTtlSeconds` (default 3600), `protocol` (`ConfigProtocol`, default `vless`) | CHECK `minHealthyPanels >= 1`, `subscriptionTtlSeconds > 0`; trigger `panel_group_tenant_is_fixed` |
-| `panel_group_member` | key `(groupId, panelId)`; `tenantId` = its group's; `priority` (default 0, lower first), `weight` (default 1), `role` (`primary` default) | CHECK `priority >= 0`, `weight >= 1`; trigger `panel_group_member_fits` |
+| `panel_group_member` | key `(groupId, panelId)`; `tenantId` = its group's; `priority` (default 0, lower first), `weight` (default 1), `role` (`primary` default), `drainingSince` (F-027-bm) | CHECK `priority >= 0`, `weight >= 1`, `drainingSince` iff `drain`; triggers `panel_group_member_fits`, `panel_group_member_drain_clock` |
 
 Both are policied as `network.panel` is: shared-read for `txnet_app` (its own
 tenant's rows and the platform's), everything for `txnet_cross_tenant`.
@@ -47,7 +47,8 @@ tenant's rows and the platform's), everything for `txnet_cross_tenant`.
    therefore a refusal, never a pass.
 6. **`role` is the member's, not the panel's.** `PanelGroupMemberRole`
    (`primary | replica | drain`) is apart from `Panel.role` (`PanelRole`, an HA
-   pair's `active | passive`). `drain` takes no new Grants (F-027-bm).
+   pair's `active | passive`). `drain` takes no new Grants, and is drained
+   (rules 13-15).
 7. **Three strategies are declared; one is built.** `mirror` places a config on
    every non-drain healthy member and reads neither `priority` nor `weight`
    (F-027-bl). `priority` and `weighted` were declared on the user's call
@@ -101,8 +102,43 @@ convergence pass against `network.config` (`MemoryDesired` staging,
 `contract.provisioning.md`), so no config reaches `complete` and no Grant
 activates on a live stack until F-027-bo wires it.
 
+## Draining — `GroupDrainService` (billing-service, F-027-bm)
+
+`billing-service/src/app/traffic/group-drain.ts`. Setting a member's `role` to
+`drain` is the whole operator action; the rest follows, and **no user is cut
+off at any step**.
+
+13. **`/sub` stops handing out a drain line once the Grant has another.**
+    sub-api "What is served" rule 4: a config on a `drain` member of its
+    Grant's group is left out of the body while another config of the Grant
+    is served; with none, it stays. A role moving into or out of `drain`
+    invalidates the panel's renders (trigger `sub_member_changed`).
+14. **The config goes two subscription lifetimes after the line stopped
+    being served** — `2 × subscriptionTtlSeconds` from the later of
+    `drainingSince` and the earliest `linksCapturedAt` of the Grant's served
+    replacement, so every client has refreshed onto a body without it. An
+    `active` Grant with no served replacement is **held**, and re-read every
+    tick; one `/sub` serves nothing of (not `active`) waits from the drain.
+    The clock is the database's: trigger `panel_group_member_drain_clock`
+    stamps `drainingSince` on entering `drain`, keeps it while the member
+    stays (a rewrite neither restarts nor shortens the wait), clears it on
+    leaving. The retire is `ConfigActionsService.retire` (desired state, the
+    Grant rebalanced), logged as `GROUP_DRAIN_ACTOR`.
+15. **The member row goes when nothing of the group is left on it**: no
+    Grant held, no retire failed, and — in the `DELETE` itself — still
+    `drain` and no unretired config of the group's Grants on the panel. An
+    un-drain meanwhile stands. The retired rows keep the panel covered for
+    those Grants (rule 9).
+
+The sweep is `POST /api/internal/billing/network/drain-due`
+(`ServiceOnlyGuard`), asked by the same `grant_group_fulfilment` tick after
+`fulfil-due`, so a replacement is placed before the drain reads. Answer:
+`scanned`, `configsRetired`, `grantsHeld`, `membersRemoved`, `failed`.
+
 ## Not decided here
 
-The drain wait and removal (F-027-bm), what `priority` / `weighted` place, and
-whether a member added later reaches Grants already placed (today: yes, on the
-next tick — the sweep reads the group as it is).
+What `priority` / `weighted` place; whether a member added later reaches
+Grants already placed (today: yes, on the next tick — the sweep reads the
+group as it is); and whether a panel drained and later **re-added** to the
+same group is placed again for the Grants it was drained from (today: no —
+their retired rows cover it, rule 9).

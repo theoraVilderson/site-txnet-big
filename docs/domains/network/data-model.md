@@ -26,7 +26,7 @@ Source of truth: `txnet-backend/prisma/domains/network.prisma` (Postgres schema
 | unattributed_usage | usage against a remote client that matches no config | via panel | one row per remote client |
 | radius_session | one RADIUS accounting session, its high-water bytes and how it closed | via config (nullable) / panel | permanent |
 | panel_group | where a variant's Grants are provisioned: `strategy`, `minHealthyPanels`, `subscriptionTtlSeconds`, `protocol` ([contract.groups.md](contract.groups.md)) | `tenantId` nullable (null = platform), shared-read | permanent |
-| panel_group_member | a panel in a group, once: `priority`, `weight`, `role` (`primary \| replica \| drain`) | `tenantId` = its group's (trigger), shared-read | removed after draining |
+| panel_group_member | a panel in a group, once: `priority`, `weight`, `role` (`primary \| replica \| drain`), `drainingSince` | `tenantId` = its group's (trigger), shared-read | removed after draining |
 
 ## The Panel declaration (F-027-a, ADR-0074)
 
