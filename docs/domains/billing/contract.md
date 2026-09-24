@@ -123,8 +123,9 @@ numbers are `gateway-pricing.golden.json` (F-0611).
 | `perUserUsageLimit` may exceed 1 and is **not** enforced by an index — the redemption transaction counts it | D-21; F-092-h |
 | Amounts are base currency; `chargedAmountMinor` + `exchangeRateSnapshot` are what the gateway was asked for, frozen at intent | ADR-0019 |
 | `amountReceivedMinor` + `receivedCurrency` are what the gateway reports **arrived** — a receipt, never money of record: both or neither (CHECK), amount `>= 0`, code `^[A-Z0-9]{2,20}$`, in that currency's minor unit. Migration `20260916000200_payment_d32_providers_and_receipt` also adds D-32's providers and `GatewayCategory.in_chat` | D-32; C-02's one exception (F-104-a) |
+| `taxApplied` (`>= 0`, default 0) + `taxRatePercent` (0..100, null = no tax) are what a top-up was taxed and at which rate, frozen at intent so a later rate change cannot re-explain the receipt. No rate means `taxApplied = 0` (CHECK); rows before F-104-ae read 0 and null. Migration `20260924001300_tax_on_top_up_returns` | ADR-0076 (F-104-ae) |
 | `exchangeRateSnapshotId` says **which** reading that rate was — a FK to `currency.currency_exchange_rate`, `RESTRICT`, null on a `staticRate` gateway. The FX worker appends a row per accepted poll, so the number alone identifies nothing | F-0606-b |
-| `displayName` and gateway pricing (fee / min / max, and F-0609's rate columns; no tax rate since v3, ADR-0038) have the same columns on `payment_gateway` and `tenant.tenant_gateway_config` | one calculator reads both (F-092-e) |
+| `displayName` and gateway pricing (fee / min / max, and F-0609's rate columns, and `taxRatePercent` — null = the tenant's default, ADR-0076) have the same columns on `payment_gateway` and `tenant.tenant_gateway_config` | one calculator reads both (F-092-e) |
 
 ## Request edge (built — F-092-a)
 

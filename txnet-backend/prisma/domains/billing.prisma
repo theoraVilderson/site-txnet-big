@@ -439,6 +439,9 @@ model PaymentGateway {
   confirmationMode    ConfirmationMode @default(automatic)
   // Quick amounts on the top-up page (F-092-v). Empty = the tenant's default.
   depositPresets      Decimal[]           @default([]) @db.Decimal(18, 2)
+  // Tax on a top-up through this gateway (ADR-0076, F-104-ae). Null = the
+  // tenant's default on `deposit_setting`. 0..100, CHECK in the migration.
+  taxRatePercent      Decimal?         @db.Decimal(9, 4)
   // The callback address the provider is given (F-092-w). Null = the tenant's panel domain.
   callbackUrl         String?
   createdAt           DateTime         @default(now())
@@ -456,9 +459,12 @@ model PaymentGateway {
 /// A tenant's default quick amounts on the top-up page (F-092-v); a gateway's
 /// own `depositPresets` override them. Base currency (ADR-0019). One row per
 /// tenant, written through `deposit-presets.ts`.
+/// `taxRatePercent` is the tenant's default tax on a top-up (ADR-0076), which a
+/// gateway's own rate overrides; null = no tax. 0..100, CHECK in the migration.
 model DepositSetting {
   tenantId        String    @id @db.Uuid
   presets         Decimal[] @default([]) @db.Decimal(18, 2)
+  taxRatePercent  Decimal?  @db.Decimal(9, 4)
   updatedByUserId String?   @db.Uuid
   updatedAt       DateTime  @updatedAt
 
@@ -481,6 +487,11 @@ model PaymentTransaction {
   feeApplied            Decimal             @db.Decimal(18, 2)
   discountApplied       Decimal             @default(0) @db.Decimal(18, 2) // every coupon together
   amountCredited        Decimal             @db.Decimal(18, 2) // base + adjustment gap
+  // The tax charged on top (ADR-0076) and the rate it was charged at, frozen
+  // at intent so a later rate change cannot re-explain the receipt. No rate =
+  // no tax: a row from before F-104-ae reads 0 and NULL. CHECKs in the migration.
+  taxApplied            Decimal             @default(0) @db.Decimal(18, 2)
+  taxRatePercent        Decimal?            @db.Decimal(9, 4)
   // What the gateway is asked to charge, in its own currency's minor unit, and
   // the base->that-currency rate that produced it (ADR-0019). Frozen at intent.
   chargedAmountMinor    BigInt

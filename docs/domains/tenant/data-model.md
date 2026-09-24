@@ -33,6 +33,7 @@ Source of truth: `txnet-backend/prisma/domains/tenant.prisma` (Postgres schema
 | tenant.ownerUserId, tenant_staff_member.userId / .invitedByUserId | -> | identity.user.id | a tenant is owned/staffed by identities. No FK, as `role.tenantId`: the cross-schema SQL is F-041 / F-066-m's, and both columns are written in one place from a user row just read |
 | tenant_staff_member.userId | -> | identity.user.roleId -> identity.role | a member's powers are a role **of that tenant** (F-018-n); this table holds no role of its own (D-42 (2)) |
 | tenant_gateway_config.providerName / gatewayCategory | -> | billing enums | reuse of the payment-provider taxonomy |
+| tenant_gateway_config.taxRatePercent (null) | -> | billing.deposit_setting.taxRatePercent | no FK: null inherits the tenant's default top-up tax, read by billing's one calculator (ADR-0076, F-104-ae) |
 
 ## Access rules
 

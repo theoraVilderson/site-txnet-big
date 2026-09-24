@@ -17,7 +17,7 @@ Source of truth: `txnet-backend/prisma/domains/billing.prisma` (Postgres schema
 | sub_account | Config-scoped shared spending pocket (byte cap) | via parent wallet | with config |
 | wallet_transfer_request | OTP-confirmed user->user transfer state machine | — | permanent (audit) |
 | coupon + coupon_service_scope + coupon_allowed_user + coupon_redemption + coupon_tenant + coupon_batch + coupon_gateway | coupon engine (reserve/confirm), management | `coupon.tenantId` nullable (null = platform coupon, serving the tenants `coupon_tenant` names, else the platform owner's users — ADR-0048); soft delete | permanent |
-| payment_gateway | platform-brand gateway config (card/rial/crypto) | platform-owner only | permanent |
+| payment_gateway | platform-brand gateway config (card/rial/crypto); `taxRatePercent` null = the tenant's `deposit_setting` default (ADR-0076) | platform-owner only | permanent |
 | payment_transaction | payment intent + status + confirmation source; `billingTenantId` set = a reseller's billing top-up in the platform owner's scope (ADR-0056); `payerChatPlatform` + `payerChatId` (both or neither, CHECK) = an in-chat payment's payer, the only sender its relayed events are admitted from (F-104-ab) ; a row with no `returnOrigin`, an `expiresAt` already past and a **transfer's** reference as its code is a follow-on — money that arrived for an invoice already settled, written as a payment of its own (F-104-s, ADR-0068) | denormalized `tenantId` | permanent |
 | payment_reconciliation_log | inquiry-API cross-check results | via payment | permanent |
 | crypto_payment_detail | asset/network/address/confs/rate snapshot | via payment | permanent |
@@ -64,6 +64,15 @@ All three are RLS shape A (strict) on the borrowing tenant. **Reading is
 isolated; writing is not restricted to the platform owner** — the admin surface
 has no tenant of its own yet, the same gap `admin_audit_log` has. Proof:
 `payment/gateway-grant-schema.int.spec.ts`.
+
+**Tax on a top-up is two-level** (`20260924001300_tax_on_top_up_returns`,
+F-104-ae, ADR-0076): `taxRatePercent` on `payment_gateway` and
+`tenant.tenant_gateway_config` (null = inherit) over the tenant's default on
+`deposit_setting` (null = no tax), each `DECIMAL(9,4)` with a 0..100 CHECK.
+`payment_transaction` keeps `taxApplied` and the rate it was charged at; a
+CHECK makes "no rate" imply `taxApplied = 0`, which is also how every payment
+recorded before the migration reads. Additive only — nothing was backfilled.
+Proof: `shared-core/src/lib/prisma/billing-top-up-tax.spec.ts`.
 
 There is deliberately **no outstanding-balance column**: what is owed is the
 accruals minus the payouts, because ADR-0041 §5 says the ledger and not a

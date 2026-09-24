@@ -23,7 +23,7 @@ while `pending`; `usedCount` increments on `confirmed`.
 | # | Rule | Trigger | Exception |
 |---|---|---|---|
 | 1 | Fee is computed per gateway: `manual` vs `automatic`, `fixed` vs `percentage`, with optional floor/ceiling | payment start | — |
-| 2 | A top-up carries no tax; tax is charged when credit buys a service (ADR-0038) | payment | — |
+| 2 | Tax is charged on the top-up, never on a sale (ADR-0076, superseding ADR-0038): the gateway's `taxRatePercent`, else the tenant's `deposit_setting` default, null = none. The columns exist (F-104-ae); the calculator charges none until F-104-af | payment | — |
 | 3 | Coupon `minPurchaseAmount` / `maxDiscountCap` (percentage only) bound the discount | redeem | — |
 | 4 | Targeted coupon (`visibility = targeted`) requires a `coupon_allowed_user` row | redeem | — |
 | 5 | Affiliate commission is separate from `identity.user.referredByUserId` — it needs its own status ledger | payment success by referred user | — |

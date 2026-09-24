@@ -460,6 +460,9 @@ model TenantGatewayConfig {
   roundingMode        RateRoundingMode                @default(up)
   // Quick amounts on the top-up page (F-092-v). Empty = the tenant's default.
   depositPresets      Decimal[]                       @default([]) @db.Decimal(18, 2)
+  // Tax on a top-up through this gateway (ADR-0076, F-104-ae). Null = the
+  // tenant's default on `billing.deposit_setting`. 0..100, CHECK in the migration.
+  taxRatePercent      Decimal?                        @db.Decimal(9, 4)
   // The callback address the provider is given (F-092-w). Null = the tenant's panel domain.
   callbackUrl         String?
   createdAt           DateTime                        @default(now())
