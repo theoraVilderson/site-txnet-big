@@ -22,6 +22,7 @@ import { WebhookGatewayMiddleware } from './request/webhook-gateway.middleware';
 import { CouponAdminModule } from './payment/coupon-admin/coupon-admin.module';
 import { GatewayAdminModule } from './payment/gateway-admin/gateway-admin.module';
 import { SettlementModule } from './settlement/settlement.module';
+import { SystemsModule } from './systems/systems.module';
 import { TenantBillingModule } from './tenant-billing/tenant-billing.module';
 import { TrafficModule } from './traffic/traffic.module';
 import { WalletModule } from './wallet/wallet.module';
@@ -65,6 +66,7 @@ const INTERNAL_ROUTES = 'internal/*path';
     TenantBillingModule,
     RevenueModule,
     TrafficModule,
+    SystemsModule,
   ],
   controllers: [HealthController],
   providers: [

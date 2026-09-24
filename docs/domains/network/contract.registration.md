@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: draft
 version: 15
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
 # Registration: the connection test and its verdict
@@ -17,8 +17,10 @@ rows and `Verdict`, is `contract.md` "The acceptance questionnaire".
 
 Nothing asks `network-service` to test a panel — it has no route anyone could
 call (ADR-0071). `billing-service`'s register route (F-027-ar) writes the
-`panel` row with `reviewState = pending` and its credentials through the
-vault; `register.Registrar` finds pending panels on its own tick (30 s by
+`panel` row with `reviewState = pending` and its login into the owner's vault
+(`billing/contract.systems.md`). `panelApiCredentials` holds only where the
+vault keeps it — `vault:<tenantId>:panel_credentials:panel:<panelId>`
+(`panelCredentialRef`, `shared-core`) — never the login; `register.Registrar` finds pending panels on its own tick (30 s by
 default), opens a driver for each, runs `Driver.Capabilities` under a 30 s
 deadline, and writes the result. A verdict therefore arrives on the next tick,
 not in the response to the click, and the systems page shows `pending` until
@@ -77,5 +79,6 @@ panel provisioned, which is exactly what refusing it was for (invariant 44).
 The Postgres-backed `register.Store` lands with the panel source, beside
 `collect.MemoryCursors`; the `Opener` that builds a real driver from
 `driverType`, `apiBaseUrl` and the vault's credentials lands with the first
-real family (F-027-ae). Until both do, `cmd/server` does not start the pass —
+real family (F-027-ae), and with it how Go resolves that reference — the vault
+is Node, with a data key per tenant. Until both do, `cmd/server` does not start the pass —
 the staging every other loop in this service is in.

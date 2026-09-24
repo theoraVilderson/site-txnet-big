@@ -68,8 +68,9 @@ type Pending struct {
 	Transport        driver.Transport
 	CounterSemantics driver.CounterSemantics
 	APIBaseURL       string
-	// Credentials is `panel.panelApiCredentials` as stored — encrypted. Only
-	// the Opener decrypts it.
+	// Credentials is `panel.panelApiCredentials` as stored: a vault reference
+	// (`vault:<tenantId>:panel_credentials:panel:<panelId>`, F-027-ar), never
+	// the login. Only the Opener resolves it.
 	Credentials string
 }
 

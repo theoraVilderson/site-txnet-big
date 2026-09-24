@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 32
+version: 33
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -12,6 +12,7 @@ source:
   - txnet-backend/billing-service/src/app/prisma/**
   - txnet-backend/billing-service/src/app/revenue/**
   - txnet-backend/billing-service/src/app/traffic/**
+  - txnet-backend/billing-service/src/app/systems/**
   - txnet-backend/metering-service/src/app/**
   - txnet-backend/prisma/domains/billing.prisma
   - txnet-backend/prisma/domains/migrations/20260912000100_payment_rate_snapshot_id/**
@@ -33,7 +34,7 @@ source:
   - txnet-backend/prisma/domains/migrations/20260922000200_traffic_refund_reason/**
 owns_tables: [wallet, wallet_transaction, sub_account, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_tenant, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout]
 depends_on: [identity, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
 # Billing
@@ -59,6 +60,7 @@ display-currency conversion (`currency`), plan prices (`catalog`).
 | [contract.revenue.md](contract.revenue.md) | what one reseller sold and what its users paid in, over a period |
 | [contract.metering.md](contract.metering.md) | a collection pass becoming usage: what `metering-service` writes, and what it refuses to |
 | [contract.traffic-block.md](contract.traffic-block.md) | the money a metered Grant's bytes cost: block pricing, the debit, the cursors, and the remainder given back at close |
+| [contract.systems.md](contract.systems.md) | the platform owner's systems routes: registering a panel, and what the systems page reads and acts on |
 | [invariants.md](invariants.md) | writing any code that touches it |
 | [data-model.md](data-model.md) | changing storage |
 | [rules.md](rules.md) | implementing inside this unit |
@@ -67,10 +69,9 @@ display-currency conversion (`currency`), plan prices (`catalog`).
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-24 | contract v33 (F-027-ar): new `POST /systems/panels`, owner-only behind `panel.manage` — writes a `pending` panel, its login to the owner's vault via `tenant-service`; `contract.systems.md` |
 | 2026-09-23 | contract v32 (F-027-ac): `GET /gift/grants` also answers `billingMode`, consumed/purchased bytes, `suspendedAt` and `purgeAt`; new `GET /traffic/grants/:grantId/configs` and `POST /traffic/configs/actions` (regenerate/retire, 1–50 configs, one outcome per config). Additive, no break. Rules: [contract.gift.md](contract.gift.md). Consumer panel-web: `/services` |
 | 2026-09-23 | contract v31 (F-027-ap): a credit to a **user's** wallet goes through `WalletCreditService.credit`, which revives the Grants that balance funds in the same transaction (ADR-0079); a caller that reaches `WalletLedgerService.credit` instead fails `entitlement/revival.spec.ts`. A debit, and the reseller billing wallet, are unchanged. No wire change. Rules: [contract.md](contract.md) "Wallet ledger". Consumer panel-web: none |
 | 2026-09-22 | contract v30 (F-027-r): the remainder credit — a closed metered Grant's unconsumed purchased bytes go back to the wallet as one `traffic_refund` credit, priced **down** to a whole cent, with `billedBytes` as the record and the guard (ADR-0072 rule 3). New `WalletReasonType`, so `/wallet/history` answers it on an unnarrowed page. **Breaking on a figure:** `sales` in `/tenants/:id/revenue` is now net of it. In-process only, no route. Rules: [contract.traffic-block.md](contract.traffic-block.md), [contract.revenue.md](contract.revenue.md). Consumer panel-web: the type filter (`financial/_lib/filters.ts`) |
-| 2026-09-22 | contract v29 (F-027-am): **breaking on the default** — `GET /wallet/history` leaves `traffic_consumption` out of a page nobody narrowed, the other eight types by name; `types[]` or a matching search term still answers it in full. The ledger keeps every block's row (ADR-0072 admits no roll-up), so the aggregation is on the read side, and the block floor is F-027-u's. ADR-0072 amended with F-027-q's partial-block rule. Rules: [contract.history.md](contract.history.md). Consumer panel-web: F-027-an, F-027-ao |
-| 2026-09-22 | contract v28 (F-027-q): the block purchaser — a metered Grant's bytes are bought at a whole-cent price from `grant.meteredRate` before they are served, and the debit, `purchasedBytes` and `billedBytes` commit in one transaction (ADR-0072). In-process only, no HTTP surface and no wire change. Rules: [contract.traffic-block.md](contract.traffic-block.md). Consumer panel-web: none until F-027-ac |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

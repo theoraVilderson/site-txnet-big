@@ -2,8 +2,8 @@
 id: tenant
 layer: domain
 status: active
-version: 9
-updated: 2026-09-18
+version: 10
+updated: 2026-09-24
 ---
 
 # Contract — tenant / the Credential Vault
@@ -44,6 +44,7 @@ value in a refusal.
 |---|---|
 | `POST /api/internal/vault/destroy-expired` | `{destroyed}` — a count, nothing naming what went; idempotent. Caller: worker's `vault_credential_retention` |
 | `POST /api/internal/vault/gateway-credential` (+ `/state`, `/revoke`) | `{merchantId, secretKey, webhookSecret}` each `{configured, version, rotatedAt}`; 400 blank / nothing to set, 403 `not_owner`, 404 `gateway_not_found`. Caller: `billing` gateway management |
+| `POST /api/internal/vault/panel-credential` | `{configured, version, rotatedAt}` of kind `panel_credentials` under `panelCredentialLabel(panelId)`; 400 blank, 403 `not_owner` (a `platform` panel only into the platform owner's vault, a `tenant` one only into its own), 404 `panel_not_found`. Caller: `billing` systems (F-027-ar) |
 
 A loader mounts the same `VAULT_KEK_FILE` and gets `CredentialEnvGuard` with
 it. Every rule below holds in either process.

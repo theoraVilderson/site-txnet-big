@@ -9,6 +9,8 @@ import {
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { GatewayCredentialController } from './gateway-credential.controller';
 import { GatewayCredentialService } from './gateway-credential.service';
+import { PanelCredentialController } from './panel-credential.controller';
+import { PanelCredentialService } from './panel-credential.service';
 import { VaultInternalController } from './vault-internal.controller';
 
 /**
@@ -16,9 +18,9 @@ import { VaultInternalController } from './vault-internal.controller';
  * `auth-service` with F-018-ab (ADR-0058 (2)): writing a gateway's secrets is
  * tenant administration, not authentication.
  *
- * Two controllers, both service-only: the retention sweep `worker-service`
- * ticks (F-031-c) and the gateway-secret writer `billing-service` relays
- * through (F-102-a, D-31). `auth-service` still loads the vault itself — its
+ * Three controllers, all service-only: the retention sweep `worker-service`
+ * ticks (F-031-c), and the gateway-secret and panel-login writers
+ * `billing-service` relays through (F-102-a, D-31; F-027-ar). `auth-service` still loads the vault itself — its
  * bot directory and SMS sender read through it — but serves no route on it.
  *
  * `VAULT_DB` is the cross-tenant pool: the sweep spans every tenant, and the
@@ -31,11 +33,12 @@ import { VaultInternalController } from './vault-internal.controller';
  * `PrismaModule` is `@Global`, so it is not imported here.
  */
 @Module({
-  controllers: [VaultInternalController, GatewayCredentialController],
+  controllers: [VaultInternalController, GatewayCredentialController, PanelCredentialController],
   providers: [
     KekService,
     CredentialVaultService,
     GatewayCredentialService,
+    PanelCredentialService,
     CredentialEnvGuard,
     { provide: VAULT_DB, useExisting: CrossTenantPrismaService },
   ],

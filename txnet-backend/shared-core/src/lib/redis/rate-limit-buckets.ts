@@ -296,6 +296,14 @@ export const RateLimitBucket = {
   GATEWAY_ADMIN_WRITE: 'gateway:admin:write',
 
   /**
+   * The platform owner's systems surface in `billing-service` (F-027-ar), per
+   * user. Registering a panel is a handful of acts ever, and each costs a call
+   * to `tenant-service`'s vault seam and, on the next tick, a connection test
+   * against somebody's server — the budget bounds both.
+   */
+  SYSTEMS_ADMIN_WRITE: 'systems:admin:write',
+
+  /**
    * Manual payment confirmation in `billing-service` (F-092-z), per user. The
    * list is polled by a screen; an inquire or a confirm is a call to a bank.
    */

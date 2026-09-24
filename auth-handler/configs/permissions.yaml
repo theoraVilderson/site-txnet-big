@@ -35,6 +35,11 @@ roles:
       # and its siblings still refuse any tenant but the platform owner's, so
       # this line is the outer door, never the boundary.
       - tenant.manage
+      # The systems surface — registering a panel (F-027-ar, ADR-0080). Held by
+      # no named role for `tenant.manage`'s reason: the collector dials what is
+      # registered, and only the platform owner registers.
+      # `PanelRegistrationService` refuses any other tenant regardless.
+      - panel.manage
   Admin:
     permissions:
       - user.read
