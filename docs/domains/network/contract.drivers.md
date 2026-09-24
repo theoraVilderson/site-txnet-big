@@ -80,6 +80,61 @@ Conformance: the eleven pull scenarios pass. The four push scenarios and
 `ceiling_refused` are skipped by name (no sessions, and the ceiling always
 exists). `marzban_test.go` also pins rules 1-3 and the one-login retry.
 
+## Sanaee — MHSanaei 3x-ui (F-027-ah)
+
+`internal/driver/sanaee`. Pull, `cumulative`, and the panel enforces its own
+per-client total, so it carries ADR-0072 as Marzban does. `three_x_ui` and
+the two `x_ui` forks are separate families (F-027-bb..bd), not aliases of it.
+
+A client lives inside its inbound: its settings are one element of the
+inbound's `settings` JSON string, and its counters are one row of the
+inbound's `clientStats`.
+
+| 3x-ui | ours |
+|---|---|
+| `POST /login` (form), session cookie | made on the first call. Every reply is `{success, msg, obj}`, and `success=false` on a 200 is a failure. A `404` (v2 hides its API) or `401` (older versions) is an expired session: **one** login, one retry |
+| `GET /panel/api/inbounds/list` | `GetUsage`, `ListClients`, `ListInbounds`, and `GetUsageFor` (a subset is filtered out of it, since `getClientTraffics` reads one email per request) |
+| `addClient`, `updateClient/{uuid}`, `{id}/delClient/{uuid}` | the lifecycle. A trojan client is keyed by its password |
+| `email` | `RemoteID`: the uuid without hyphens. It is unique on the panel and keys the counters, so it is never changed |
+| `comment` | `Label`, the claim tag |
+| `id` (or `password` for trojan) | `UUID` |
+| `clientStats.up` / `.down` | `UpBytes` / `DownBytes` |
+| `totalGB` (bytes, despite the name) | `DataLimitBytes` |
+| `enable` | `Enabled` |
+| `expiryTime` (unix ms, 0 = none) | `ExpiresAt` |
+
+The rules:
+
+1. **A zero ceiling is written as one byte.** `totalGB: 0` is unlimited on
+   3x-ui, as `data_limit: 0` is on Marzban.
+2. **Every write sets `reset: 0`.** Any other value zeroes the counter every
+   that many days, a second writer of the quota (`internal_credit_disablable`).
+3. **Every write reads the panel first.** 3x-ui writes a whole client, never a
+   field, so the fields we do not own (`limitIp`, `tgId`, `flow`, `subId`) are
+   carried through unchanged. A client cannot move inbound or protocol.
+4. **An inbound's last client is disabled, not deleted.** 3x-ui refuses that
+   delete. `DeleteClient` disables the client and returns `unsupported`, never
+   done, because the client is still there. A client already gone is done.
+5. **No per-client rate limit.** `limitIp` counts addresses, not bandwidth.
+   `SetClientRateLimit(0)` succeeds and any other rate is `unsupported`.
+6. **The subscription is the link.** 3x-ui builds share links in its browser
+   page, so `BuildLink` is `unsupported`. `SubscriptionURL` is the address
+   that page shows: the panel's `subURI` if set, otherwise the sub server's
+   scheme, domain (or the panel's host), port and path, then the client's
+   `subId`, all read from `POST /panel/setting/all`. With the sub server off it
+   returns false.
+
+`apiBaseUrl` includes the panel's secret web path, and every route above is
+relative to it.
+
+Its questionnaire answers: every row yes except `per_client_rate_limit` and
+`usage_for_named_subset`. Verdict `accepted`, metered sale allowed.
+
+Conformance: the eleven pull scenarios pass. The four push scenarios and
+`ceiling_refused` are skipped by name. `sanaee_test.go` also pins rules 1, 2
+and 4, the create round trip and the one-login retry. **Opened by
+`internal/opener`** with the panel's login, typed `username:password`.
+
 ## Mikrotik User Manager (F-027-ag)
 
 `internal/driver/usermanager`. Push, `session`: the NAS sends accounting to

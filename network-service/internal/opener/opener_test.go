@@ -13,6 +13,7 @@ import (
 
 	"network-service/internal/driver"
 	"network-service/internal/driver/marzban"
+	"network-service/internal/driver/sanaee"
 	"network-service/internal/driver/usermanager"
 	"network-service/internal/register"
 )
@@ -77,6 +78,23 @@ func TestOpensMarzbanWithTheVaultsLogin(t *testing.T) {
 	}
 	if _, ok := d.(*marzban.Driver); !ok {
 		t.Fatalf("Open built %T, want *marzban.Driver", d)
+	}
+}
+
+// A 3x-ui panel signs in with the same username:password login, and its
+// base URL keeps the panel's secret web path (F-027-ah).
+func TestOpensSanaeeWithTheVaultsLogin(t *testing.T) {
+	srv, _ := vaultStub(t, "admin:pa:ss", http.StatusOK, "")
+	o := Opener{Logins: Vault{BaseURL: srv.URL, ServiceToken: "svc-token"}}
+
+	p := pending(driver.DriverSanaee)
+	p.APIBaseURL = "https://panel.example:2053/s3cr3t-path"
+	d, err := o.Open(context.Background(), p)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if _, ok := d.(*sanaee.Driver); !ok {
+		t.Fatalf("Open built %T, want *sanaee.Driver", d)
 	}
 }
 
