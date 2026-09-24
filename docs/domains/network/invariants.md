@@ -15,7 +15,7 @@ promise the rest of them serve and are service rules; 32 is a service rule too,
 and is the one rule of this set that runs before a panel has any rows at all.
 33 is a service rule held by the driver conformance suite (F-027-j), and 34 is
 its request-volume half (F-027-k). The pull half of 18 is enforced as of
-F-027-l; its push half waits for F-027-af.
+F-027-l, its push half as of F-027-af (`internal/radius`).
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -37,7 +37,7 @@ F-027-l; its push half waits for F-027-af.
 | 15 | A completed purge holds no `remoteId` | CHECK `config_purged_has_no_remote_id` | the loop adopts a panel seat it has just freed, and usage is attributed to a client that is gone |
 | 16 | One remote client belongs to one config | UNIQUE `(panelId, remoteId)` | one client's traffic counted against two configs, or a ceiling written twice with two different numbers |
 | 17 | Every config has a `claimTag`, unique across the whole system | NOT NULL (`20260923000200`) + schema `@unique`, written by `ConfigActionsService.provision` (F-027-aa) | the second matching key matches the wrong row, which is invariant 1's failure reached the long way round |
-| 18 | Every measured byte ends billed, held or quarantined — never dropped | `internal/collect` on the pull side (F-027-l), asserted by `collect_test.go`; the push side is F-027-af and the consumer F-027-n | the thing ADR-0074 exists to prevent: usage lost in silence, which nobody can detect after the fact |
+| 18 | Every measured byte ends billed, held or quarantined — never dropped | `internal/collect` on the pull side (F-027-l), asserted by `collect_test.go`; `internal/radius` on the push side (F-027-af), asserted by `radius_test.go`; the consumer F-027-n | the thing ADR-0074 exists to prevent: usage lost in silence, which nobody can detect after the fact |
 | 19 | One delta is applied at most once | PK `usage_delta_seen.deltaId` | a redelivered message charges the user twice, and at-least-once delivery guarantees a redelivery |
 | 20 | One config has at most one counter cursor | UNIQUE `config_counter_state.configId` | two opinions about where the counter was; the losing one re-counts everything since the last reset |
 | 21 | No byte figure anywhere is negative | CHECKs `*_bytes_not_negative` | a counter going backward is a reset, never negative usage — a negative delta credits traffic nobody bought |
@@ -48,7 +48,7 @@ F-027-l; its push half waits for F-027-af.
 | 26 | One `Acct-Session-Id` on one NAS is one session | UNIQUE `radius_session_nas_acct_key` | two NASes numbering their sessions from 1 collide, and one user's traffic lands on another's session |
 | 27 | A session publishes no more than it measured | CHECK `radius_session_published_within_high_water` | the extrapolation past a missing `Stop` that ADR-0074 forbids, reaching the user as a charge for traffic nobody watched happen |
 | 28 | A closed session says why it closed | CHECK `radius_session_closed_has_reason` | a stale session's last figure cannot be told from a real `Stop` figure, so the weaker number is billed as the stronger one |
-| 29 | A session past 4 GB whose NAS never sent Gigawords is held, not billed | planned service rule (`radius_session.gigawordsSeen` makes it expressible) | 4 GB per wrap lost in silence — invariant 18's failure on the push side, and the one ADR-0074 names |
+| 29 | A session past 4 GB whose NAS never sent Gigawords is held, not billed | `radius.Account` splits the rise at 4 GB and the part past it is a `gigawords_missing` `usage_hold` row (F-027-af, `radius_test.go`) | 4 GB per wrap lost in silence — invariant 18's failure on the push side, and the one ADR-0074 names |
 | 30 | One rollup row per `(configId, date)` | UNIQUE `traffic_daily_aggregate_config_date_key` (F-027-e) | a cron rerun doubles a day's reported usage, with both rows individually correct — which is what makes it invisible |
 | 31 | A measured byte lands in a partition that retention will reach, or the insert fails | monthly partitions with **no** `DEFAULT` partition (F-027-e) | the one partition nobody can drop keeps an uncreated month's rows past every retention rule, in silence |
 | 32 | A panel failing a load-bearing acceptance row never carries users, and one that cannot enforce a per-client ceiling never sells metered service | `driver.Capabilities.Verdict` (F-027-i), asserted by `questionnaire_test.go` | a family whose figures we cannot bill is discovered at billing time, with users already on it — and a metered sale with no enforceable ceiling serves bytes nobody paid for (ADR-0072) |
@@ -90,7 +90,7 @@ figure a pass carries in exactly one of billed, held, quarantined and
 unattributed, and `metering.service.spec.ts` asserts that as a sum over a
 mixed pass — bytes in equals bytes landed. 19 is the same file's other
 assertion: a redelivered pass applies once, with the pre-read defeated.
-29 is the same rule on the push side and belongs to the receiver (F-027-af).
+29 is the same rule on the push side, held by `internal/radius` (F-027-af).
 
 32 is registration-time and is held by `network-service/internal/driver`:
 `questionnaire_test.go` asserts the refusal, the withheld metered sale and the

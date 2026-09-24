@@ -420,22 +420,27 @@ func (n Normaliser) markFor(reading driver.ClientUsage, at time.Time) *SessionMa
 // outage does not turn a user's genuine backlog into a quarantine queue and a
 // pass that ran early does not cap at nearly nothing.
 func (n Normaliser) overCap(since, at time.Time, up, down int64, afterReset bool) (bool, QuarantineReason) {
-	if n.Panel.MaxLineRateBps <= 0 {
-		// Unknown, not zero. See Panel.MaxLineRateBps.
-		return false, ""
-	}
-	window := at.Sub(since)
-	if window < n.minWindow() {
-		window = n.minWindow()
-	}
-	ceiling := int64(window.Seconds() * float64(n.Panel.MaxLineRateBps) / 8)
-	if up+down <= ceiling {
+	if !ExceedsLineRate(n.Panel.MaxLineRateBps, at.Sub(since), n.minWindow(), up+down) {
 		return false, ""
 	}
 	if afterReset {
 		return true, ReasonResetWithUnmeasuredBytes
 	}
 	return true, ReasonImplausibleVolume
+}
+
+// ExceedsLineRate is the plausibility cap itself, and the one copy of it: the
+// pull normaliser and the RADIUS receiver (F-027-af) both ask it, so a byte
+// is judged by one rule whichever direction it arrived from. A line rate of
+// zero is unknown, not zero (see Panel.MaxLineRateBps), and never caps.
+func ExceedsLineRate(maxLineRateBps int64, window, minWindow time.Duration, bytes int64) bool {
+	if maxLineRateBps <= 0 {
+		return false
+	}
+	if window < minWindow {
+		window = minWindow
+	}
+	return bytes > int64(window.Seconds()*float64(maxLineRateBps)/8)
 }
 
 func (n Normaliser) minWindow() time.Duration {

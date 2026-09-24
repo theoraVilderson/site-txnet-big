@@ -155,8 +155,8 @@ collide and one user's traffic would land on another's session. `configId` is
 nullable and `remoteIdentifier` is not: an unplaced session still has a row, so
 the bytes are never dropped for want of one.
 
-The receiver itself is F-027-af; the table lands now so one migration series
-covers the whole network schema.
+`internal/radius` reads and writes it (F-027-af). The table landed first so
+one migration series covers the whole network schema.
 
 ## Traffic goes by the month (F-027-e)
 

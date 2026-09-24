@@ -43,6 +43,15 @@ type Config struct {
 	// pending panel would be tested as unopenable, so both refuse the boot.
 	TenantAPIBaseURL string
 	ServiceAuthToken string
+
+	// RadiusAddr is the UDP address the RADIUS accounting receiver listens
+	// on (F-027-af). It is the one surface of this service reachable from
+	// outside, which is why it answers only an accepted push panel's address
+	// under that panel's own secret (ADR-0071).
+	RadiusAddr        string
+	RadiusStaleAfter  time.Duration
+	RadiusRefresh     time.Duration
+	RadiusConcurrency int
 }
 
 // Load reads configuration from the environment and validates it.
@@ -65,6 +74,10 @@ func Load() (Config, error) {
 		BrokerPublishTimeout: getEnvDuration("NETWORK_BROKER_PUBLISH_TIMEOUT", publish.DefaultConfirmTimeout),
 		TenantAPIBaseURL:     os.Getenv("TENANT_API_BASE_URL"),
 		ServiceAuthToken:     os.Getenv("SERVICE_AUTH_TOKEN"),
+		RadiusAddr:           getEnv("RADIUS_ACCT_ADDR", ":1813"),
+		RadiusStaleAfter:     getEnvDuration("RADIUS_STALE_AFTER", time.Hour),
+		RadiusRefresh:        getEnvDuration("RADIUS_ALLOWLIST_REFRESH", time.Minute),
+		RadiusConcurrency:    getEnvInt("RADIUS_CONCURRENCY", 32),
 	}
 	if err := cfg.validate(); err != nil {
 		return Config{}, err
@@ -93,6 +106,12 @@ func (c Config) validate() error {
 	}
 	if c.Port == "" {
 		return fmt.Errorf("NETWORK_SERVICE_PORT must not be empty")
+	}
+	if c.RadiusConcurrency < 1 {
+		return fmt.Errorf("RADIUS_CONCURRENCY must be at least 1, got %d", c.RadiusConcurrency)
+	}
+	if c.RadiusStaleAfter <= 0 {
+		return fmt.Errorf("RADIUS_STALE_AFTER must be positive, got %s", c.RadiusStaleAfter)
 	}
 	if c.PoolMaxConns < 1 {
 		return fmt.Errorf("NETWORK_DB_POOL_MAX_CONNS must be at least 1, got %d", c.PoolMaxConns)

@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 15
+version: 16
 updated: 2026-09-24
 ---
 
@@ -173,7 +173,8 @@ told apart into, and the rate a pass writes back are F-027-v and are
 arithmetics into one delta stream, and `internal/publish` is where that pass
 leaves the process (F-027-m). Their rules — the maths, reset detection, the
 stretched plausibility cap, where a byte waits, and the one message a pass
-becomes — are [contract.collection.md](contract.collection.md).
+becomes — are [contract.collection.md](contract.collection.md), with the push
+half: the RADIUS accounting receiver, `internal/radius` (F-027-af).
 
 ## The nightly rollup (F-027-o)
 

@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -21,6 +22,7 @@ import (
 	"network-service/internal/httpapi"
 	"network-service/internal/opener"
 	"network-service/internal/publish"
+	"network-service/internal/radius"
 	"network-service/internal/register"
 	"network-service/internal/shutdown"
 	"network-service/pkg/logger"
@@ -91,12 +93,42 @@ func main() {
 	// — a panel row, and a login read through tenant-service (F-027-ax).
 	runCtx, stopLoops := context.WithCancel(ctx)
 	defer stopLoops()
+	vault := opener.Vault{BaseURL: cfg.TenantAPIBaseURL, ServiceToken: cfg.ServiceAuthToken}
 	registrar := &register.Registrar{
 		Store:  register.PostgresStore{DB: pool},
-		Opener: opener.Opener{Logins: opener.Vault{BaseURL: cfg.TenantAPIBaseURL, ServiceToken: cfg.ServiceAuthToken}},
+		Opener: opener.Opener{Logins: vault},
 		Log:    log,
 	}
 	go func() { _ = registrar.Run(runCtx) }()
+
+	// The RADIUS accounting receiver (F-027-af): the push half of
+	// collection, and the one surface here reachable from outside. The
+	// allowlist is read before the socket opens, so the first packet meets
+	// the panels that exist rather than an empty list; a failure to bind is
+	// a refusal to start, as a NAS would otherwise retransmit into nothing.
+	nases := &radius.PanelDirectory{DB: pool, Logins: vault, Log: log}
+	if err := nases.Refresh(ctx); err != nil {
+		log.Error("refusing to start", "error", err)
+		os.Exit(1)
+	}
+	udp, err := net.ListenPacket("udp", cfg.RadiusAddr)
+	if err != nil {
+		log.Error("refusing to start", "error", fmt.Errorf("radius listener: %w", err))
+		os.Exit(1)
+	}
+	sessions := radius.PostgresStore{DB: pool}
+	receiver := &radius.Receiver{
+		Directory: nases, Store: sessions, Sink: publish.Publisher{Transport: broker},
+		Log: log, Concurrency: cfg.RadiusConcurrency,
+	}
+	go nases.Run(runCtx, cfg.RadiusRefresh)
+	go radius.Sweeper{Store: sessions, StaleAfter: cfg.RadiusStaleAfter, Log: log}.Run(runCtx)
+	go func() {
+		log.Info("radius accounting listening", "addr", cfg.RadiusAddr)
+		if err := receiver.Serve(runCtx, udp); err != nil {
+			log.Error("radius receiver stopped", "error", err)
+		}
+	}()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", httpapi.New(pool, log).Health)
