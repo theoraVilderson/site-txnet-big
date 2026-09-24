@@ -649,6 +649,24 @@ func (p *Panel) BuildLink(ctx context.Context, client driver.RemoteClient, inbou
 	return fmt.Sprintf("%s://%s@%s:%d?#%s", inbound.Protocol, client.UUID, inbound.Host, inbound.Port, inbound.Tag), nil
 }
 
+// ClientLinks is one line per client, from its uuid and label; a panel that
+// declares no subscription link has none to give (contract.links.md).
+func (p *Panel) ClientLinks(ctx context.Context, client driver.RemoteClient) ([]string, error) {
+	if err := p.gate(ctx, "ClientLinks"); err != nil {
+		return nil, err
+	}
+	if !p.supports(driver.RowNativeSubscriptionLink) {
+		return nil, nil
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	c := p.clients[client.RemoteID]
+	if c == nil {
+		return nil, p.notFound("ClientLinks", client.RemoteID)
+	}
+	return []string{"vless://" + c.uuid + "@fake.invalid:443#" + c.label}, nil
+}
+
 func (p *Panel) SubscriptionURL(ctx context.Context, remoteID string) (string, bool) {
 	if !p.supports(driver.RowNativeSubscriptionLink) {
 		return "", false

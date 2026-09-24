@@ -549,6 +549,22 @@ func (d *Driver) SubscriptionURL(ctx context.Context, remoteID string) (string, 
 	return d.base.ResolveReference(ref).String(), true
 }
 
+// ClientLinks is every link Marzban built for the user, its `links` field:
+// rule 6, for every protocol at once (contract.links.md).
+func (d *Driver) ClientLinks(ctx context.Context, client driver.RemoteClient) ([]string, error) {
+	u, err := d.getUser(ctx, "ClientLinks", client.RemoteID)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, link := range u.Links {
+		if link = strings.TrimSpace(link); link != "" {
+			out = append(out, link)
+		}
+	}
+	return out, nil
+}
+
 func isProtocol(p string) bool {
 	for _, known := range protocols {
 		if p == known {

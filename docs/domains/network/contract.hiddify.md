@@ -75,7 +75,8 @@ The rules:
    page `<clientBaseUrl>/<uuid>/`, which answers each app in its own format.
    The admin key is never sent there. Without it, `BuildLink` is
    `unsupported` and `SubscriptionURL` returns false, as it does for a name
-   no user holds or a failed read (Marzban's fallback).
+   no user holds or a failed read (Marzban's fallback). `ClientLinks` is every
+   line at `…/<uuid>/sub/`, and none without `clientBaseUrl` (`contract.links.md`).
 9. **One inbound per protocol.** A Hiddify user belongs to no inbound, so
    `ListInbounds` reports `vless`, `vmess` and `trojan` on the panel's host;
    a client carries no `InboundRemoteID`.

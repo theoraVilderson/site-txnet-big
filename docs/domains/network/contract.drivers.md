@@ -76,6 +76,7 @@ The rules:
    against the panel (it is a path unless the panel sets a prefix);
    `BuildLink` returns the link Marzban built for the inbound's protocol,
    because one assembled here would disagree with the one Marzban serves.
+   `ClientLinks` is the whole `links` list (`contract.links.md`).
 
 Its questionnaire answers: every row yes except `per_client_rate_limit`.
 Verdict `accepted`, metered sale allowed.
@@ -128,7 +129,7 @@ The rules:
    that page shows: the panel's `subURI` if set, otherwise the sub server's
    scheme, domain (or the panel's host), port and path, then the client's
    `subId`, all read from `POST /panel/setting/all`. With the sub server off it
-   returns false.
+   returns false. `ClientLinks` reads that address with no session.
 
 `apiBaseUrl` includes the panel's secret web path, and every route above is
 relative to it.
@@ -154,7 +155,7 @@ a family of its own (user, 2026-09-24). Pull, `cumulative`, ADR-0072 as above.
 | `clients/add` (`{client, inboundIds}`), `clients/update/{email}`, `clients/del/{email}`, `clients/resetTraffic/{email}` | the lifecycle, keyed by email |
 | `uuid` (or `password` for trojan) | `UUID`; `id` on the list is the panel's row number |
 | `traffic.total` / `totalGB` | `DataLimitBytes` (the traffic row is the one enforced) |
-| `POST /panel/api/setting/all` | `SubscriptionURL`, built as Sanaee's rule 6 |
+| `POST /panel/api/setting/all` | `SubscriptionURL` and `ClientLinks`, built as Sanaee's rule 6 |
 
 Its own rules, beside Sanaee's rules 1, 5 and 6, which hold unchanged:
 
@@ -224,8 +225,8 @@ The rules:
 6. **Disabling refuses the next login.** User Manager does not cut a session
    that is already open. The ceiling is what ends that session's traffic.
 7. **Some calls have nothing to do.** `ResetUsage` and `BuildLink` return
-   `unsupported`, and `SubscriptionURL` returns false. `CreateClient` accepts
-   `pppoe` and `openvpn` and refuses any Xray protocol.
+   `unsupported`, `SubscriptionURL` returns false and `ClientLinks` none.
+   `CreateClient` accepts `pppoe` and `openvpn` and refuses any Xray protocol.
 
 The connection test fails, rather than answering, on a router whose User
 Manager is disabled. Its answers are yes on every push-scope row except

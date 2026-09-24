@@ -686,3 +686,24 @@ func TestExpiredTokenLogsInOnce(t *testing.T) {
 		t.Errorf("a refused login cost %d requests, want 2 (the 401, one login)", got)
 	}
 }
+
+// ClientLinks is the whole of the user's public subscription in `links` form
+// (contract.links.md, F-027-bi), read without the admin token (rule 9).
+func TestClientLinksAreTheWholeSubscription(t *testing.T) {
+	f, d, _ := open(t, "")
+	ctx := context.Background()
+	created, err := d.CreateClient(ctx, driver.CreateClientRequest{
+		ClaimTag: "cfg_1", UUID: "11111111-1111-4111-8111-111111111111", InboundRemoteID: "2",
+		Protocol: "trojan", DataLimitBytes: 1 << 30, Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("CreateClient: %v", err)
+	}
+	lines, err := d.ClientLinks(ctx, created)
+	if err != nil || len(lines) != 2 || !strings.HasPrefix(lines[0], "vless://") || !strings.HasPrefix(lines[1], "trojan://") {
+		t.Errorf("ClientLinks = %q, %v, want the vless and the trojan line Marzneshin serves", lines, err)
+	}
+	if f.subAuth != 0 {
+		t.Errorf("%d subscription reads carried the admin token", f.subAuth)
+	}
+}

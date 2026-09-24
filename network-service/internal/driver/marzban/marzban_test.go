@@ -441,3 +441,25 @@ func TestExpiredTokenLogsInOnce(t *testing.T) {
 		t.Errorf("a refused login cost %d requests, want 2 (the 401, one login): retrying it is how an address gets banned", got)
 	}
 }
+
+// ClientLinks is every line Marzban built for the user (contract.links.md,
+// F-027-bi): the `links` Marzban serves, not a line assembled here.
+func TestClientLinksAreTheLinesMarzbanBuilt(t *testing.T) {
+	_, d := open(t)
+	ctx := context.Background()
+	created, err := d.CreateClient(ctx, driver.CreateClientRequest{
+		ClaimTag: "cfg_1", UUID: "11111111-1111-4111-8111-111111111111", InboundRemoteID: "VLESS TCP",
+		Protocol: "vless", DataLimitBytes: 1 << 30, Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("CreateClient: %v", err)
+	}
+	lines, err := d.ClientLinks(ctx, created)
+	want := "vless://11111111-1111-4111-8111-111111111111@panel.example:443?type=tcp#" + created.RemoteID
+	if err != nil || len(lines) != 1 || lines[0] != want {
+		t.Errorf("ClientLinks = %q, %v, want [%q]", lines, err, want)
+	}
+	if _, err := d.ClientLinks(ctx, driver.RemoteClient{RemoteID: "nobody"}); err == nil {
+		t.Error("a user the panel does not hold gave no error: a failed read is not a user with no links")
+	}
+}

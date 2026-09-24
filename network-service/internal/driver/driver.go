@@ -77,6 +77,16 @@ type Driver interface {
 	// result is false where the family serves none, and the link is built
 	// from the inbound instead.
 	SubscriptionURL(ctx context.Context, remoteID string) (string, bool)
+	// ClientLinks returns every link line the panel gives this client, in the
+	// panel's order and as the panel built them — never lines assembled here,
+	// which would disagree with the ones the panel serves (ADR-0082 rule 2).
+	// It is what the provisioning pass stores and `/sub` renders.
+	//
+	// A family, or a panel, that has no links to give answers no lines and
+	// no error: that is a fact about the panel, not a failure, and the config
+	// simply contributes nothing to `/sub`. A read that failed is a Fault,
+	// never an empty answer, so a transient error cannot erase stored lines.
+	ClientLinks(ctx context.Context, client RemoteClient) ([]string, error)
 }
 
 // Inbound is one listener on the panel: the thing a client's link points at.

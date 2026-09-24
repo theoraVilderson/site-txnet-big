@@ -46,7 +46,7 @@ Marzban.
 | `id` (or `password` for trojan) | `UUID` |
 | `clientStats.up` / `.down` / `.total` | `UpBytes` / `DownBytes` / `DataLimitBytes` |
 | `enable`, `expiryTime` (unix ms, 0 = none) | `Enabled`, `ExpiresAt` |
-| `POST /xui/setting/all` | `SubscriptionURL`, built as Sanaee's rule 6 |
+| `POST /xui/setting/all` | `SubscriptionURL`, built as Sanaee's rule 6; `ClientLinks` reads the sub server there (`contract.links.md`) |
 
 The rules:
 

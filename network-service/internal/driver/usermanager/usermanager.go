@@ -580,6 +580,10 @@ func (d *Driver) BuildLink(context.Context, driver.RemoteClient, driver.Inbound)
 
 func (d *Driver) SubscriptionURL(context.Context, string) (string, bool) { return "", false }
 
+// ClientLinks: none to give (contract.links.md). A PPP client is configured
+// with its name and password, not a link.
+func (d *Driver) ClientLinks(context.Context, driver.RemoteClient) ([]string, error) { return nil, nil }
+
 func isProtocol(p string) bool {
 	for _, known := range protocols {
 		if p == known {

@@ -740,6 +740,22 @@ func (d *Driver) SubscriptionURL(ctx context.Context, remoteID string) (string, 
 	return d.subscription(u)
 }
 
+// ClientLinks is the whole of the user's public subscription in `links` form,
+// read without the admin token (rule 9, contract.links.md). A user with no
+// subscription_url has no links to give.
+func (d *Driver) ClientLinks(ctx context.Context, client driver.RemoteClient) ([]string, error) {
+	const op = "ClientLinks"
+	u, err := d.getUser(ctx, op, client.RemoteID)
+	if err != nil {
+		return nil, err
+	}
+	sub, ok := d.subscription(u)
+	if !ok {
+		return nil, nil
+	}
+	return driver.FetchLinks(ctx, d.http, op, strings.TrimRight(sub, "/")+"/links")
+}
+
 func (d *Driver) subscription(u user) (string, bool) {
 	if u.SubscriptionURL == "" {
 		return "", false

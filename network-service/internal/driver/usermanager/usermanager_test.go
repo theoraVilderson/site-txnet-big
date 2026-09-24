@@ -527,6 +527,9 @@ func TestWhatTheFamilyCannotDoIsRefused(t *testing.T) {
 	if _, ok := d.SubscriptionURL(ctx, testName); ok {
 		t.Error("SubscriptionURL answered true")
 	}
+	if lines, err := d.ClientLinks(ctx, driver.RemoteClient{RemoteID: testName}); err != nil || lines != nil {
+		t.Errorf("ClientLinks = %q, %v, want none and no error: the family has no links to give (F-027-bi)", lines, err)
+	}
 
 	d.creds.Password = "wrong"
 	before := f.calls

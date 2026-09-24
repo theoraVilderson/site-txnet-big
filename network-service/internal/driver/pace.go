@@ -293,3 +293,13 @@ func (p *paced) BuildLink(ctx context.Context, client RemoteClient, inbound Inbo
 	})
 	return out, err
 }
+
+func (p *paced) ClientLinks(ctx context.Context, client RemoteClient) ([]string, error) {
+	var out []string
+	err := p.spend(ctx, "ClientLinks", func(ctx context.Context) error {
+		var err error
+		out, err = p.Driver.ClientLinks(ctx, client)
+		return err
+	})
+	return out, err
+}

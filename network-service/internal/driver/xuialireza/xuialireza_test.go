@@ -2,6 +2,7 @@ package xuialireza
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -34,6 +35,12 @@ type farEnd struct {
 	// resets counts writes that carried a `reset` key, which this fork does
 	// not have: 3x-ui's auto-renewal must not be assumed here.
 	resets int
+
+	// subURI and subOff are the sub server's settings; subCookies counts
+	// subscription reads that carried a cookie, which none may (F-027-bi).
+	subURI     string
+	subOff     bool
+	subCookies int
 
 	nextStall    time.Duration
 	nextStatus   int
@@ -91,6 +98,10 @@ func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// The panel sits under its web base path; every route is below it.
+	if subID, ok := strings.CutPrefix(r.URL.Path, "/sub/"); ok && r.Method == http.MethodGet {
+		f.serveSub(w, r, subID)
+		return
+	}
 	path, ok := strings.CutPrefix(r.URL.Path, "/base")
 	if !ok {
 		http.NotFound(w, r)
@@ -131,8 +142,8 @@ func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(w, true, "", f.list())
 	case r.Method == http.MethodPost && path == "/xui/setting/all":
 		reply(w, true, "", map[string]any{
-			"subEnable": true, "subPort": 2096, "subPath": "/sub/", "subDomain": "sub.example",
-			"subURI": "", "subCertFile": "/cert.pem",
+			"subEnable": !f.subOff, "subPort": 2096, "subPath": "/sub/", "subDomain": "sub.example",
+			"subURI": f.subURI, "subCertFile": "/cert.pem",
 		})
 	case r.Method == http.MethodPost && path == "/xui/API/inbounds/addClient":
 		inboundID, cl, ok := f.decode(w, r)
@@ -530,5 +541,59 @@ func TestLastClientOfAnInboundIsDisabledNotDeleted(t *testing.T) {
 	}
 	if err := d.DeleteClient(ctx, "c1"); err != nil {
 		t.Errorf("deleting a client already gone = %v, want done", err)
+	}
+}
+
+// serveSub is the panel's subscription server: the client's links, base64 as
+// the sub server answers by default, by subId and with no session.
+func (f *farEnd) serveSub(w http.ResponseWriter, r *http.Request, subID string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if r.Header.Get("Cookie") != "" {
+		f.subCookies++
+	}
+	for _, c := range f.clients {
+		if c.SubID == subID && !f.subOff {
+			body := "vless://" + c.Email + "@node.example:443#a\ntrojan://" + c.Email + "@node.example:8443#b\n"
+			_, _ = w.Write([]byte(base64.StdEncoding.EncodeToString([]byte(body))))
+			return
+		}
+	}
+	http.NotFound(w, r)
+}
+
+// ClientLinks is every line the panel's sub server gives the client
+// (contract.links.md, F-027-bi), read with no session; with the sub server
+// off the family has none to give, which is no lines and no error.
+func TestClientLinksAreTheSubServersLines(t *testing.T) {
+	f, d := open(t)
+	ctx := context.Background()
+	created, err := d.CreateClient(ctx, driver.CreateClientRequest{
+		ClaimTag: "cfg_1", UUID: "8a3c1e2b-0000-4000-8000-00000000abcd", InboundRemoteID: "1",
+		Protocol: "vless", DataLimitBytes: 1 << 30, Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("CreateClient: %v", err)
+	}
+	f.mu.Lock()
+	f.subURI = d.base.Scheme + "://" + d.base.Host + "/sub/"
+	f.mu.Unlock()
+	lines, err := d.ClientLinks(ctx, created)
+	want := "vless://" + created.RemoteID + "@node.example:443#a"
+	if err != nil || len(lines) != 2 || lines[0] != want {
+		t.Fatalf("ClientLinks = %q, %v, want the sub server's two lines, the first %q", lines, err, want)
+	}
+	if f.subCookies != 0 {
+		t.Error("the subscription read carried the panel session")
+	}
+
+	f.mu.Lock()
+	f.subOff = true
+	f.mu.Unlock()
+	if lines, err := d.ClientLinks(ctx, created); err != nil || lines != nil {
+		t.Errorf("with the sub server off ClientLinks = %q, %v, want none and no error", lines, err)
+	}
+	if _, err := d.ClientLinks(ctx, driver.RemoteClient{RemoteID: "nobody"}); err == nil {
+		t.Error("a client the panel does not hold gave no error")
 	}
 }

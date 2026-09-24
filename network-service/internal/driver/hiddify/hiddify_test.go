@@ -711,3 +711,36 @@ func TestNoClientPathNoLink(t *testing.T) {
 		t.Errorf("native_subscription_link with a client path: %+v, %v", caps.Answers[driver.RowNativeSubscriptionLink], err)
 	}
 }
+
+// ClientLinks is every line Hiddify serves the user at `<client
+// path>/<uuid>/sub/` (contract.links.md, F-027-bi); without a client path the
+// family has none to give, which is no lines and no error.
+func TestClientLinksAreEveryLineHiddifyServes(t *testing.T) {
+	f, d := open(t)
+	(&harness{f: f, d: d}).Given("c1")
+	lines, err := d.ClientLinks(context.Background(), driver.RemoteClient{RemoteID: "c1", UUID: "uuid-c1"})
+	if err != nil || len(lines) != 3 || lines[1] != "vless://uuid-c1@cdn.example.net:443?security=tls#c1" {
+		t.Fatalf("ClientLinks = %q, %v, want Hiddify's three lines", lines, err)
+	}
+	f.mu.Lock()
+	for _, k := range f.clientKeys {
+		if k != "" {
+			t.Error("the admin api key was sent to the client path")
+		}
+	}
+	f.mu.Unlock()
+	if _, err := d.ClientLinks(context.Background(), driver.RemoteClient{RemoteID: "c9", UUID: "uuid-c9"}); err == nil {
+		t.Error("a uuid the panel does not serve gave no error")
+	}
+
+	bare := newFarEnd(t)
+	srv := httptest.NewServer(bare)
+	t.Cleanup(srv.Close)
+	noPath, err := New(srv.URL+adminPath, "", apiKey, srv.Client())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if lines, err := noPath.ClientLinks(context.Background(), driver.RemoteClient{RemoteID: "c1", UUID: "uuid-c1"}); err != nil || lines != nil {
+		t.Errorf("with no client path ClientLinks = %q, %v, want none and no error", lines, err)
+	}
+}

@@ -674,8 +674,35 @@ func (d *Driver) BuildLink(context.Context, driver.RemoteClient, driver.Inbound)
 func (d *Driver) SubscriptionURL(ctx context.Context, remoteID string) (string, bool) {
 	const op = "SubscriptionURL"
 	f, ok, err := d.find(ctx, op, remoteID)
-	if err != nil || !ok || f.client.SubID == "" {
+	if err != nil || !ok {
 		return "", false
+	}
+	u, ok, err := d.subscription(ctx, op, f.client.SubID)
+	return u, ok && err == nil
+}
+
+// ClientLinks is every line the panel's subscription server gives the client,
+// read from the address SubscriptionURL builds, with no session of ours
+// (contract.links.md). A client with no subId, or a panel with the sub server
+// off, has none to give.
+func (d *Driver) ClientLinks(ctx context.Context, client driver.RemoteClient) ([]string, error) {
+	const op = "ClientLinks"
+	f, err := d.mustFind(ctx, op, client.RemoteID)
+	if err != nil {
+		return nil, err
+	}
+	u, ok, err := d.subscription(ctx, op, f.client.SubID)
+	if err != nil || !ok {
+		return nil, err
+	}
+	return driver.FetchLinks(ctx, d.http, op, u)
+}
+
+// subscription builds the address from the panel's settings. ok is false for
+// no subId or the sub server off; err is a settings read that failed.
+func (d *Driver) subscription(ctx context.Context, op, subID string) (string, bool, error) {
+	if subID == "" {
+		return "", false, nil
 	}
 	var s struct {
 		SubEnable   bool   `json:"subEnable"`
@@ -685,11 +712,14 @@ func (d *Driver) SubscriptionURL(ctx context.Context, remoteID string) (string, 
 		SubURI      string `json:"subURI"`
 		SubCertFile string `json:"subCertFile"`
 	}
-	if err := d.call(ctx, op, http.MethodPost, []string{"xui", "setting", "all"}, nil, &s); err != nil || !s.SubEnable {
-		return "", false
+	if err := d.call(ctx, op, http.MethodPost, []string{"xui", "setting", "all"}, nil, &s); err != nil {
+		return "", false, err
+	}
+	if !s.SubEnable {
+		return "", false, nil
 	}
 	if s.SubURI != "" {
-		return strings.TrimRight(s.SubURI, "/") + "/" + f.client.SubID, true
+		return strings.TrimRight(s.SubURI, "/") + "/" + subID, true, nil
 	}
 	scheme := "http"
 	if s.SubCertFile != "" {
@@ -706,7 +736,7 @@ func (d *Driver) SubscriptionURL(ctx context.Context, remoteID string) (string, 
 	if path == "//" {
 		path = "/"
 	}
-	return scheme + "://" + host + path + f.client.SubID, true
+	return scheme + "://" + host + path + subID, true, nil
 }
 
 // expired is a status an expired session can arrive as: x-ui's redirect to

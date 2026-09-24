@@ -25,7 +25,6 @@ package hiddify
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -37,7 +36,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 
 	"network-service/internal/driver"
 )
@@ -606,19 +604,8 @@ func (d *Driver) BuildLink(ctx context.Context, client driver.RemoteClient, in d
 // lineFor picks the first link of the protocol from a subscription body,
 // plain or base64, as Hiddify's `sub/` and `sub64/` answer it.
 func lineFor(body, protocol string) (string, bool) {
-	if !strings.Contains(body, "://") {
-		compact := strings.Map(func(r rune) rune {
-			if unicode.IsSpace(r) {
-				return -1
-			}
-			return r
-		}, body)
-		if decoded, err := base64.StdEncoding.DecodeString(compact); err == nil {
-			body = string(decoded)
-		}
-	}
-	for _, line := range strings.Split(body, "\n") {
-		if line = strings.TrimSpace(line); strings.HasPrefix(line, protocol+"://") {
+	for _, line := range driver.ParseLinks([]byte(body)) {
+		if strings.HasPrefix(line, protocol+"://") {
 			return line, true
 		}
 	}
@@ -639,6 +626,20 @@ func (d *Driver) SubscriptionURL(ctx context.Context, remoteID string) (string, 
 		return "", false
 	}
 	return d.userPage(uuid), true
+}
+
+// ClientLinks is every line Hiddify serves the user at
+// `<client base url>/<uuid>/sub/`, without the admin key (rule 8,
+// contract.links.md). With no client base url the panel has none to give.
+func (d *Driver) ClientLinks(ctx context.Context, client driver.RemoteClient) ([]string, error) {
+	const op = "ClientLinks"
+	if d.client == nil {
+		return nil, nil
+	}
+	if client.UUID == "" {
+		return nil, driver.NewFault(driver.FaultProtocol, op, 0, errors.New("the client has no uuid"))
+	}
+	return driver.FetchLinks(ctx, d.http, op, d.userPage(client.UUID)+"sub/")
 }
 
 func (d *Driver) userPage(uuid string) string {

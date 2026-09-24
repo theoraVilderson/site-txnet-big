@@ -67,6 +67,7 @@ The rules:
    `clientBaseUrl`, or `apiBaseUrl` without one. `BuildLink` reads the line
    for the inbound's protocol from `<subscription>/links`, **without** the
    admin token: the subscription is public and may be on another domain.
+   `ClientLinks` is the whole of `<subscription>/links` (`contract.links.md`).
 
 Its questionnaire answers: every row yes except `per_client_rate_limit`.
 Verdict `accepted`, metered sale allowed.

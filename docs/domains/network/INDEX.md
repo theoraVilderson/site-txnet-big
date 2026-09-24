@@ -30,7 +30,7 @@ real-time rate limiting (Redis, deliberately no table), product definitions
 | [contract.budget.md](contract.budget.md) | how often a panel may be asked, what a `429`/`403` means, and the rate a pass writes back |
 | [contract.hot-loop.md](contract.hot-loop.md) | a config near its ceiling is read sooner than the bulk pass reads it, and the next block is sized in seconds |
 | [contract.rollup.md](contract.rollup.md) | the nightly aggregate, retention, and dropping a raw partition |
-| [contract.drivers.md](contract.drivers.md) | a real panel family's driver (Marzban, …): what its API maps to, and the family's rules |
+| [contract.drivers.md](contract.drivers.md), [contract.links.md](contract.links.md) | a real panel family's driver (Marzban, …): what its API maps to, and the family's rules; the link lines a panel gives one client (`ClientLinks`), per family |
 | [contract.xui.md](contract.xui.md), [contract.hiddify.md](contract.hiddify.md), [contract.marzneshin.md](contract.marzneshin.md) | an x-ui panel (alireza0 fork or the original): why they are two families; a Hiddify Manager panel: GB units, the name as remote id, day-granular expiry; a Marzneshin panel: paged reads, services as inbounds, a regenerate recreates |
 | [contract.registration.md](contract.registration.md) | a panel is registered: the connection test, its verdict or its fault, and why only an accepted panel is collected |
 | [contract.resilience.md](contract.resilience.md) | the collector is stopping or has stopped: the shutdown extension, the watchdog, and what the user is told |
