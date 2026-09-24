@@ -10,8 +10,7 @@ updated: 2026-09-24
 
 A topic file of `contract.md` (§10), beside `contract.drivers.md`, whose "What
 every family is" holds here unchanged. What governs
-`network-service/internal/driver/xuialireza/` and, from F-027-bd, the driver
-for the original x-ui.
+`network-service/internal/driver/xuialireza/`; the original x-ui has no driver.
 
 ## Two values (user, 2026-09-24)
 
@@ -77,5 +76,9 @@ redirect retry, the absent `reset`, rule 4 and the round trip. Opened by
 
 ## x-ui, original — `x_ui_vaxilu` (F-027-bd)
 
-No driver yet: the opener answers `ErrNoDriver`, so such a panel stays
-`pending`, `unopenable`.
+**No driver, by decision** (user, 2026-09-24; F-027-bd dropped). vaxilu's
+x-ui counts traffic, limit, expiry and enable per **inbound** — its model has
+no per-client counters and its routes are only `/xui/inbound/{list,add,del,update}`
+— so per-client metering would need one inbound (and one port) per config,
+which was declined. The opener answers `ErrNoDriver`, so such a panel stays
+`pending`, `unopenable`. The enum value is kept: dropping it takes a migration.
