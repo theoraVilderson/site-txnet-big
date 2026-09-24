@@ -64,8 +64,8 @@ const panel = "55555555-5555-4555-8555-555555555555"
 func TestPendingReadsTheRowAsTheRegistrarNeedsIt(t *testing.T) {
 	tested := time.Date(2026, 9, 24, 8, 0, 0, 0, time.UTC)
 	f := &fakeDB{rows: []row{
-		{panel, "marzban", "pull", "cumulative", "https://p.example", "vault:t:panel_credentials:panel:" + panel, tested, "blocked"},
-		{"66666666-6666-4666-8666-666666666666", "ibsng", "push", "session", "", "vault:t:x", nil, ""},
+		{panel, "hiddify", "pull", "cumulative", "https://p.example/adm1n", "https://cdn.example/cl1ent", "vault:t:panel_credentials:panel:" + panel, tested, "blocked"},
+		{"66666666-6666-4666-8666-666666666666", "ibsng", "push", "session", "", "", "vault:t:x", nil, ""},
 	}}
 	got, err := PostgresStore{DB: f}.Pending(context.Background())
 	if err != nil {
@@ -78,8 +78,9 @@ func TestPendingReadsTheRowAsTheRegistrarNeedsIt(t *testing.T) {
 		t.Fatalf("got %d candidates, want 2", len(got))
 	}
 	first := got[0]
-	if first.DriverType != driver.DriverMarzban || first.Transport != driver.TransportPull ||
-		first.CounterSemantics != driver.CounterCumulative || first.APIBaseURL != "https://p.example" {
+	if first.DriverType != driver.DriverHiddify || first.Transport != driver.TransportPull ||
+		first.CounterSemantics != driver.CounterCumulative || first.APIBaseURL != "https://p.example/adm1n" ||
+		first.ClientBaseURL != "https://cdn.example/cl1ent" {
 		t.Errorf("declaration read as %+v", first.Pending)
 	}
 	if !first.TestedAt.Equal(tested) || first.Fault != FaultKind(driver.FaultBlocked) {

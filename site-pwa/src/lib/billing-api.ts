@@ -1283,6 +1283,8 @@ export interface RegisterPanelBody {
   name: string;
   ipAddress: string;
   apiBaseUrl?: string;
+  /** Where users are served their links — Hiddify's client proxy path (F-027-bg). Refused on a push panel. */
+  clientBaseUrl?: string;
   driverType: string;
   counterSemantics: string;
   transport: "pull" | "push";

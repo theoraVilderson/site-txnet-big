@@ -63,6 +63,7 @@ function enumValues(name: string): string[] {
 const PANEL_COLUMNS = [
   'ownershipType',
   'apiBaseUrl',
+  'clientBaseUrl',
   'driverType',
   'counterSemantics',
   'transport',

@@ -138,7 +138,7 @@ func (o Opener) Open(ctx context.Context, p register.Pending) (driver.Driver, er
 	if p.DriverType == driver.DriverHiddify {
 		// Hiddify's API takes no username: the login is the admin's API key
 		// (its uuid), typed alone.
-		return hiddify.New(p.APIBaseURL, login, o.HTTP)
+		return hiddify.New(p.APIBaseURL, p.ClientBaseURL, login, o.HTTP)
 	}
 	username, password, err := usernamePassword(login)
 	if err != nil {

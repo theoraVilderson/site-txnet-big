@@ -177,6 +177,17 @@ describe("validateRegister mirrors registerPanelSchema", () => {
     expect(pull.ok && "radiusSecret" in pull.body).toBe(false);
   });
 
+  // F-027-bg: where Hiddify serves its users' links, apart from its API.
+  it("sends a client address trimmed when typed, refuses a bad one, and never sends one for a push panel", () => {
+    const sent = validateRegister({ ...good, driverType: "hiddify", clientBaseUrl: " https://cdn.example.net/cl1ent " });
+    expect(sent.ok && sent.body.clientBaseUrl).toBe("https://cdn.example.net/cl1ent");
+    expect("clientBaseUrl" in (validateRegister(good) as { body: object }).body).toBe(false);
+    const bad = validateRegister({ ...good, clientBaseUrl: "cl1ent" });
+    expect(bad.ok ? null : bad.errors.clientBaseUrl).toBe(SYSTEMS_KEYS.register.invalid.clientBaseUrl);
+    const push = validateRegister({ ...good, transport: "push", radiusSecret: "s", clientBaseUrl: "https://cdn.example.net/cl1ent" });
+    expect(push.ok && "clientBaseUrl" in push.body).toBe(false);
+  });
+
   it("accepts an IPv6 address and a budget inside 1–6000", () => {
     const out = validateRegister({ ...good, ipAddress: "2001:db8::7", maxRequestsPerMinute: "120" });
     expect(out.ok && out.body.ipAddress).toBe("2001:db8::7");

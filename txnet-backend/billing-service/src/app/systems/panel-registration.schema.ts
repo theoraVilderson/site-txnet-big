@@ -20,6 +20,7 @@ export const registerPanelSchema = z
     name: z.string().trim().min(1).max(100),
     ipAddress: z.union([z.string().ip({ version: 'v4' }), z.string().ip({ version: 'v6' })]),
     apiBaseUrl: z.string().url().max(500).nullable().optional(),
+    clientBaseUrl: z.string().trim().url().max(500).nullable().optional(),
     driverType: z.nativeEnum(DriverType),
     counterSemantics: z.nativeEnum(CounterSemantics),
     transport: z.nativeEnum(PanelTransport),
@@ -40,6 +41,13 @@ export const registerPanelSchema = z
   .refine((body) => (body.transport === PanelTransport.push) === (body.radiusSecret !== undefined), {
     path: ['radiusSecret'],
     message: 'radiusSecret is required for a push panel and refused for a pull panel',
+  })
+  // Where a family serves its users' links apart from its API (Hiddify's
+  // client proxy path, F-027-bg). A push panel has no API to serve them beside,
+  // and the database refuses one there too (`panel_client_base_url_is_pull_only`).
+  .refine((body) => body.transport === PanelTransport.pull || !body.clientBaseUrl, {
+    path: ['clientBaseUrl'],
+    message: 'clientBaseUrl is refused for a push panel',
   });
 
 export type RegisterPanelBody = z.infer<typeof registerPanelSchema>;

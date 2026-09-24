@@ -15,6 +15,8 @@ every family is" holds here unchanged. What governs
 Pull, `cumulative`, and Hiddify enforces its own per-user limit, so it carries
 ADR-0072. It speaks the **v2 admin API**: `apiBaseUrl` is the scheme, host and
 the panel's **admin** proxy path, and every route is `api/v2/admin/…` below it.
+`clientBaseUrl` (optional, F-027-bg) is the same for the **client** proxy
+path, often on another domain: the admin API does not report it.
 
 | Hiddify | ours |
 |---|---|
@@ -64,10 +66,16 @@ The rules:
 7. **A name two users hold is neither written nor counted.** Writing either
    could be writing someone else's client, and two counters under one remote
    id would read as resets. Both still appear in `ListClients`.
-8. **No rate limit, no link.** `SetClientRateLimit(0)` succeeds, any other
-   rate is `unsupported`. Links and the subscription are served under the
-   **client** proxy path, which the admin API does not report, so `BuildLink`
-   is `unsupported` and `SubscriptionURL` returns false.
+8. **No rate limit; links only from the client path.** `SetClientRateLimit(0)`
+   succeeds, any other rate is `unsupported`. Hiddify builds its links per
+   domain and transport from configuration the admin API does not show, so
+   none is assembled here. With `clientBaseUrl`, `BuildLink` returns the line
+   Hiddify serves for the protocol at `<clientBaseUrl>/<uuid>/sub/` (plain or
+   base64; none for it is `unsupported`), and `SubscriptionURL` is the user's
+   page `<clientBaseUrl>/<uuid>/`, which answers each app in its own format.
+   The admin key is never sent there. Without it, `BuildLink` is
+   `unsupported` and `SubscriptionURL` returns false, as it does for a name
+   no user holds or a failed read (Marzban's fallback).
 9. **One inbound per protocol.** A Hiddify user belongs to no inbound, so
    `ListInbounds` reports `vless`, `vmess` and `trojan` on the panel's host;
    a client carries no `InboundRemoteID`.
@@ -76,10 +84,12 @@ The key must be the owner's: `GET user/` lists only the users of the key's
 admin and its sub-admins, so another admin's users would never be seen.
 
 Its questionnaire answers: every row yes except `usage_for_named_subset`,
-`per_client_rate_limit`, `stable_remote_id` and `native_subscription_link`.
+`per_client_rate_limit` and `stable_remote_id`; `native_subscription_link`
+is yes exactly when `clientBaseUrl` is set.
 Verdict `accepted`, metered sale allowed.
 
 Conformance: the eleven pull scenarios pass; the four push scenarios and
 `ceiling_refused` are skipped by name. `hiddify_test.go` also pins rules 1-7,
-the empty panel and the refused key. **Opened by `internal/opener`** with the
-key as the whole login.
+the empty panel, the refused key and rule 8 with and without a client path.
+**Opened by `internal/opener`** with the key as the whole login and
+`clientBaseUrl` from the row.

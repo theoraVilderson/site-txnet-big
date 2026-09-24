@@ -12,6 +12,8 @@ export type RegisterPanelInput = {
   name: string;
   ipAddress: string;
   apiBaseUrl?: string | null;
+  /** Where users are served their links, for a family that serves them apart from its API (F-027-bg). */
+  clientBaseUrl?: string | null;
   driverType: DriverType;
   counterSemantics: CounterSemantics;
   transport: PanelTransport;
@@ -89,6 +91,7 @@ export class PanelRegistrationService {
         name: input.name,
         ipAddress: input.ipAddress,
         apiBaseUrl: input.apiBaseUrl ?? null,
+        clientBaseUrl: input.clientBaseUrl ?? null,
         driverType: input.driverType,
         counterSemantics: input.counterSemantics,
         transport: input.transport,

@@ -68,6 +68,10 @@ type Pending struct {
 	Transport        driver.Transport
 	CounterSemantics driver.CounterSemantics
 	APIBaseURL       string
+	// ClientBaseURL is where users are served their links, for a family that
+	// serves them apart from its API (Hiddify's client proxy path, F-027-bg);
+	// "" for none.
+	ClientBaseURL string
 	// Credentials is `panel.panelApiCredentials` as stored: a vault reference
 	// (`vault:<tenantId>:panel_credentials:panel:<panelId>`, F-027-ar), never
 	// the login. Only the Opener resolves it.

@@ -16,7 +16,9 @@ import (
 
 const (
 	adminPath = "/adm1n"
-	apiKey    = "0f1e2d3c-4b5a-4968-8776-a5b4c3d2e1f0"
+	// clientPath is the client proxy path users are served under (F-027-bg).
+	clientPath = "/cl1ent"
+	apiKey     = "0f1e2d3c-4b5a-4968-8776-a5b4c3d2e1f0"
 )
 
 // farEnd is a scripted Hiddify Manager: the v2 admin API under the panel's
@@ -34,6 +36,8 @@ type farEnd struct {
 	lists   int
 	patches []map[string]any
 	key     string
+	// clientKeys is every Hiddify-API-Key header the client path was sent.
+	clientKeys []string
 
 	nextStall    time.Duration
 	nextStatus   int
@@ -104,6 +108,11 @@ func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Retry-After", "7")
 		}
 		http.Error(w, `{"message":"scripted"}`, status)
+		return
+	}
+	// The client proxy path serves a user's links by uuid, with no key.
+	if strings.HasPrefix(r.URL.Path, clientPath+"/") {
+		f.serveClient(w, r)
 		return
 	}
 	// Hiddify answers an unknown key with its logout redirect, not a 401.
@@ -201,6 +210,24 @@ func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // apply is add_or_update: a field is written only when present and not null,
 // and start_date only beside package_days. The GB setters multiply by 1024³.
+// serveClient is `<client path>/<uuid>/sub/`: the user's links in plain
+// text, one per protocol, as Hiddify's user view answers them.
+func (f *farEnd) serveClient(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.clientKeys = append(f.clientKeys, r.Header.Get("Hiddify-API-Key"))
+	uuid, rest, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, clientPath+"/"), "/")
+	u := f.byUUID(uuid)
+	if u == nil || rest != "sub/" {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain")
+	_, _ = w.Write([]byte("vmess://eyJhZGQiOiJjZG4uZXhhbXBsZS5uZXQifQ==\n" +
+		"vless://" + u.UUID + "@cdn.example.net:443?security=tls#" + u.Name + "\n" +
+		"trojan://" + u.UUID + "@cdn.example.net:443?security=tls#" + u.Name + "\n"))
+}
+
 func (f *farEnd) apply(u *farUser, b map[string]any) {
 	if v, ok := b["uuid"].(string); ok && v != "" {
 		u.UUID = v
@@ -331,7 +358,7 @@ func open(t *testing.T) (*farEnd, *Driver) {
 	f := newFarEnd(t)
 	srv := httptest.NewServer(f)
 	t.Cleanup(srv.Close)
-	d, err := New(srv.URL+adminPath, apiKey, srv.Client())
+	d, err := New(srv.URL+adminPath, srv.URL+clientPath, apiKey, srv.Client())
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -616,5 +643,71 @@ func TestResetUsage(t *testing.T) {
 	defer f.mu.Unlock()
 	if f.byName("c1").Usage != 0 {
 		t.Error("the counter was not zeroed")
+	}
+}
+
+// Rule 8 (F-027-bg): with the client base url, the subscription is the
+// user's page under it, by the uuid the name holds now.
+func TestSubscriptionIsTheUsersPageUnderTheClientPath(t *testing.T) {
+	f, d := open(t)
+	h := &harness{f: f, d: d}
+	h.Given("c1")
+	got, ok := d.SubscriptionURL(context.Background(), "c1")
+	if want := d.client.String() + "/uuid-c1/"; !ok || got != want {
+		t.Fatalf("SubscriptionURL = %q, %v; want %q, true", got, ok, want)
+	}
+	if _, ok := d.SubscriptionURL(context.Background(), "nobody"); ok {
+		t.Error("a name no user holds answered a subscription")
+	}
+}
+
+// Rule 8: a link is the line Hiddify itself serves for the protocol, and the
+// admin key never leaves for the client path.
+func TestBuildLinkReadsTheLineHiddifyServes(t *testing.T) {
+	f, d := open(t)
+	h := &harness{f: f, d: d}
+	h.Given("c1")
+	c := driver.RemoteClient{RemoteID: "c1", UUID: "uuid-c1"}
+	link, err := d.BuildLink(context.Background(), c, driver.Inbound{RemoteID: "vless", Protocol: "vless"})
+	if err != nil || link != "vless://uuid-c1@cdn.example.net:443?security=tls#c1" {
+		t.Fatalf("BuildLink(vless) = %q, %v", link, err)
+	}
+	if _, err := d.BuildLink(context.Background(), c, driver.Inbound{RemoteID: "ss", Protocol: "shadowsocks"}); !driver.IsUnsupported(err) {
+		t.Errorf("a protocol Hiddify serves no line for gave %v, want unsupported", err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, k := range f.clientKeys {
+		if k != "" {
+			t.Fatal("the admin api key was sent to the client path")
+		}
+	}
+}
+
+// Rule 8: without a client base url there is no link and no subscription,
+// and the questionnaire says so.
+func TestNoClientPathNoLink(t *testing.T) {
+	f := newFarEnd(t)
+	srv := httptest.NewServer(f)
+	t.Cleanup(srv.Close)
+	d, err := New(srv.URL+adminPath, "", apiKey, srv.Client())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	(&harness{f: f, d: d}).Given("c1")
+	if _, ok := d.SubscriptionURL(context.Background(), "c1"); ok {
+		t.Error("a subscription was answered with no client path")
+	}
+	if _, err := d.BuildLink(context.Background(), driver.RemoteClient{UUID: "uuid-c1"}, driver.Inbound{Protocol: "vless"}); !driver.IsUnsupported(err) {
+		t.Errorf("BuildLink with no client path gave %v, want unsupported", err)
+	}
+	caps, err := d.Capabilities(context.Background())
+	if err != nil || caps.Answers[driver.RowNativeSubscriptionLink].Supported {
+		t.Errorf("native_subscription_link without a client path: %+v, %v", caps.Answers[driver.RowNativeSubscriptionLink], err)
+	}
+	_, withPath := open(t)
+	caps, err = withPath.Capabilities(context.Background())
+	if err != nil || !caps.Answers[driver.RowNativeSubscriptionLink].Supported {
+		t.Errorf("native_subscription_link with a client path: %+v, %v", caps.Answers[driver.RowNativeSubscriptionLink], err)
 	}
 }

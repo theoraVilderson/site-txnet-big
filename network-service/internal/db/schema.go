@@ -39,6 +39,8 @@ var RequiredColumns = map[string][]string{
 	// (F-027-i) and the request budget every loop holds itself to (F-027-v).
 	"panel": {
 		"id", "tenantId", "ownershipType", "apiBaseUrl",
+		// Where users are served their links (F-027-bg).
+		"clientBaseUrl",
 		"driverType", "counterSemantics", "transport", "capabilities",
 		"reviewState", "orphanPolicy", "panelApiCredentials",
 		// Why the connection test gave no verdict (F-027-aq, ADR-0080).

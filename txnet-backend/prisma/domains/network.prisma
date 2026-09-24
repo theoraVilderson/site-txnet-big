@@ -279,6 +279,10 @@ model Panel {
   ipAddress                  String
   /// Where the driver talks to it; null for a push source we never call.
   apiBaseUrl                 String?
+  /// Where users are served their links, for a family that serves them apart
+  /// from its API: Hiddify's client proxy path, often on another domain
+  /// (F-027-bg). Null for none; pull only (`panel_client_base_url_is_pull_only`).
+  clientBaseUrl              String?
   driverType                 DriverType
   counterSemantics           CounterSemantics
   transport                  PanelTransport

@@ -38,7 +38,7 @@ const maxDetail = 1000
 
 const pendingSQL = `
 SELECT id::text, "driverType"::text, transport::text, "counterSemantics"::text,
-       coalesce("apiBaseUrl", ''), "panelApiCredentials",
+       coalesce("apiBaseUrl", ''), coalesce("clientBaseUrl", ''), "panelApiCredentials",
        "connectionTestedAt", coalesce("connectionTestFault"::text, '')
   FROM network.panel
  WHERE "reviewState" = 'pending'
@@ -56,7 +56,7 @@ func (s PostgresStore) Pending(ctx context.Context) ([]Candidate, error) {
 		var family, transport, semantics, fault string
 		var testedAt *time.Time
 		if err := rows.Scan(&c.PanelID, &family, &transport, &semantics,
-			&c.APIBaseURL, &c.Credentials, &testedAt, &fault); err != nil {
+			&c.APIBaseURL, &c.ClientBaseURL, &c.Credentials, &testedAt, &fault); err != nil {
 			return nil, fmt.Errorf("reading pending panels: %w", err)
 		}
 		c.DriverType = driver.DriverType(family)

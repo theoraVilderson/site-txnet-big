@@ -154,6 +154,13 @@ func TestOpensHiddifyWithTheKeyAlone(t *testing.T) {
 	if _, ok := d.(*hiddify.Driver); !ok {
 		t.Fatalf("Open built %T, want *hiddify.Driver", d)
 	}
+
+	// The client base url is carried to the driver (F-027-bg): one it cannot
+	// use is refused at Open, not at the first link.
+	p.ClientBaseURL = "cl1ent"
+	if _, err := o.Open(context.Background(), p); err == nil {
+		t.Fatal("Open accepted a client base url that is not absolute")
+	}
 }
 
 // A push panel has two secrets (F-027-az). The Opener signs in to the

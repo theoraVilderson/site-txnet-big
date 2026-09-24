@@ -139,6 +139,13 @@ export function RegisterPanel({ onRegistered }: { onRegistered: () => Promise<vo
             <input dir="ltr" value={form.apiBaseUrl} maxLength={500} onChange={(e) => set("apiBaseUrl", e.target.value)} className={`${INPUT} font-mono`} />,
             F.apiBaseUrlHint,
           )}
+          {form.transport === "pull" &&
+            field(
+              "clientBaseUrl",
+              F.clientBaseUrl,
+              <input dir="ltr" value={form.clientBaseUrl} maxLength={500} onChange={(e) => set("clientBaseUrl", e.target.value)} className={`${INPUT} font-mono`} />,
+              F.clientBaseUrlHint,
+            )}
           {field(
             "counterSemantics",
             F.counterSemantics,

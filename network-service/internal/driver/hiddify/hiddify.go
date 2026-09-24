@@ -16,11 +16,16 @@
 //     remote id is therefore the user's `name`, created as the uuid without
 //     hyphens and never changed by us, and the uuid a write needs is looked
 //     up from the last read of the panel.
+//
+// Links and the subscription are served under the panel's client proxy path,
+// which the admin API does not report. The owner registers it as the panel's
+// client base url (F-027-bg); without it the driver builds no link.
 package hiddify
 
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,6 +37,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"network-service/internal/driver"
 )
@@ -39,9 +45,12 @@ import (
 // Driver is one Hiddify panel. It is safe for concurrent use.
 type Driver struct {
 	base *url.URL
-	key  string
-	http *http.Client
-	now  func() time.Time
+	// client is the scheme, host and client proxy path users are served
+	// under; nil when the owner registered none.
+	client *url.URL
+	key    string
+	http   *http.Client
+	now    func() time.Time
 
 	mu sync.Mutex
 	// uuids is name -> uuid from the last read of the panel. A name held by
@@ -67,11 +76,19 @@ const (
 )
 
 // New builds a driver over the panel at baseURL: the scheme, host and admin
-// proxy path, below which every route is relative. key is the admin's uuid.
-func New(baseURL, key string, client *http.Client) (*Driver, error) {
-	base, err := url.Parse(strings.TrimRight(baseURL, "/"))
-	if err != nil || base.Scheme == "" || base.Host == "" {
+// proxy path, below which every route is relative. clientBaseURL is the same
+// for the client proxy path, often on another domain, or "" for none. key is
+// the admin's uuid.
+func New(baseURL, clientBaseURL, key string, client *http.Client) (*Driver, error) {
+	base, err := absolute(baseURL)
+	if err != nil {
 		return nil, fmt.Errorf("hiddify: base url %q is not an absolute url", baseURL)
+	}
+	var clientBase *url.URL
+	if strings.TrimSpace(clientBaseURL) != "" {
+		if clientBase, err = absolute(clientBaseURL); err != nil {
+			return nil, fmt.Errorf("hiddify: client base url %q is not an absolute url", clientBaseURL)
+		}
 	}
 	if strings.TrimSpace(key) == "" {
 		return nil, errors.New("hiddify: the api key is empty")
@@ -83,7 +100,15 @@ func New(baseURL, key string, client *http.Client) (*Driver, error) {
 	// An unknown key is answered with Hiddify's logout redirect, and
 	// following it would read the login page as the answer.
 	own.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &Driver{base: base, key: strings.TrimSpace(key), http: &own, now: time.Now, uuids: map[string]string{}}, nil
+	return &Driver{base: base, client: clientBase, key: strings.TrimSpace(key), http: &own, now: time.Now, uuids: map[string]string{}}, nil
+}
+
+func absolute(raw string) (*url.URL, error) {
+	u, err := url.Parse(strings.TrimRight(strings.TrimSpace(raw), "/"))
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return nil, errors.New("not an absolute url")
+	}
+	return u, nil
 }
 
 // ---- wire ------------------------------------------------------------------
@@ -362,6 +387,10 @@ func (d *Driver) Capabilities(ctx context.Context) (driver.Capabilities, error) 
 	}
 	yes := func(detail string) driver.Answer { return driver.Answer{Supported: true, Detail: detail} }
 	no := func(detail string) driver.Answer { return driver.Answer{Supported: false, Detail: detail} }
+	subscription := no("the subscription is served under the client proxy path, which the admin api does not report and was not registered")
+	if d.client != nil {
+		subscription = yes("the user's page under the registered client proxy path, <client base url>/<uuid>/")
+	}
 	return driver.Capabilities{
 		Version:    driver.CapabilitiesVersion,
 		AnsweredAt: time.Now().UTC(),
@@ -378,7 +407,7 @@ func (d *Driver) Capabilities(ctx context.Context) (driver.Capabilities, error) 
 			driver.RowClientLifecycle:         yes("POST, PATCH and DELETE /api/v2/admin/user/"),
 			driver.RowStableRemoteID:          no("the only id the API addresses is the uuid, which a regenerate changes; the name we key on can be renamed by hand"),
 			driver.RowClientLabelStorable:     yes("the comment field"),
-			driver.RowNativeSubscriptionLink:  no("the subscription is served under the client proxy path, which the admin API does not report"),
+			driver.RowNativeSubscriptionLink:  subscription,
 			driver.RowServerSideExpiry:        yes("package_days from start_date, in whole days on the server's date; written as the day after ours"),
 			driver.RowInternalCreditDisabled:  yes("no credit of its own; mode is written no_reset on every write"),
 		},
@@ -532,16 +561,89 @@ func (d *Driver) ResetUsage(ctx context.Context, remoteID string) error {
 	return nil
 }
 
-// BuildLink: Hiddify builds its links per domain and transport from its own
-// configuration, under the client proxy path, and none of it is on the admin
-// API. A link assembled here would not be one Hiddify serves.
-func (d *Driver) BuildLink(context.Context, driver.RemoteClient, driver.Inbound) (string, error) {
-	return "", driver.NewFault(driver.FaultUnsupported, "BuildLink", 0,
-		errors.New("hiddify's links are built under its client proxy path, which the admin api does not report"))
+// BuildLink returns the line Hiddify itself serves for the inbound's
+// protocol, read from `<client base url>/<uuid>/sub/`: Hiddify builds its
+// links per domain and transport from its own configuration, none of which is
+// on the admin API, so a link assembled here would not be one it serves. The
+// admin key is never sent there. With no client base url it is unsupported.
+func (d *Driver) BuildLink(ctx context.Context, client driver.RemoteClient, in driver.Inbound) (string, error) {
+	const op = "BuildLink"
+	if d.client == nil {
+		return "", driver.NewFault(driver.FaultUnsupported, op, 0,
+			errors.New("hiddify's links are served under its client proxy path, and the panel was registered without one"))
+	}
+	if client.UUID == "" {
+		return "", driver.NewFault(driver.FaultProtocol, op, 0, errors.New("the client has no uuid"))
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, d.userPage(client.UUID)+"sub/", nil)
+	if err != nil {
+		return "", driver.NewFault(driver.FaultProtocol, op, 0, err)
+	}
+	resp, err := d.http.Do(req)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return "", driver.NewFault(driver.FaultTimeout, op, 0, fmt.Errorf("%w: %v", ctxErr, err))
+		}
+		return "", driver.NewFault(driver.FaultUnavailable, op, 0, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return "", driver.FaultForStatus(op, resp.StatusCode,
+			fmt.Errorf("the client path answered %d: %s", resp.StatusCode, strings.TrimSpace(string(detail))))
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return "", driver.NewFault(driver.FaultUnavailable, op, 0, err)
+	}
+	if link, ok := lineFor(string(raw), in.Protocol); ok {
+		return link, nil
+	}
+	return "", driver.NewFault(driver.FaultUnsupported, op, 0,
+		fmt.Errorf("hiddify serves this user no %s link", in.Protocol))
 }
 
-// SubscriptionURL: see BuildLink.
-func (d *Driver) SubscriptionURL(context.Context, string) (string, bool) { return "", false }
+// lineFor picks the first link of the protocol from a subscription body,
+// plain or base64, as Hiddify's `sub/` and `sub64/` answer it.
+func lineFor(body, protocol string) (string, bool) {
+	if !strings.Contains(body, "://") {
+		compact := strings.Map(func(r rune) rune {
+			if unicode.IsSpace(r) {
+				return -1
+			}
+			return r
+		}, body)
+		if decoded, err := base64.StdEncoding.DecodeString(compact); err == nil {
+			body = string(decoded)
+		}
+	}
+	for _, line := range strings.Split(body, "\n") {
+		if line = strings.TrimSpace(line); strings.HasPrefix(line, protocol+"://") {
+			return line, true
+		}
+	}
+	return "", false
+}
+
+// SubscriptionURL is the user's page under the client base url,
+// `<client base url>/<uuid>/`: Hiddify's own share link, which answers each
+// client app in the format it asks for. The uuid is the one the name holds
+// now; a name no user holds, or a failed read, answers false, as Marzban's
+// does, and the caller falls back to BuildLink.
+func (d *Driver) SubscriptionURL(ctx context.Context, remoteID string) (string, bool) {
+	if d.client == nil {
+		return "", false
+	}
+	uuid, found, err := d.uuidOf(ctx, "SubscriptionURL", remoteID, false)
+	if err != nil || !found {
+		return "", false
+	}
+	return d.userPage(uuid), true
+}
+
+func (d *Driver) userPage(uuid string) string {
+	return d.client.String() + "/" + url.PathEscape(uuid) + "/"
+}
 
 func isProtocol(p string) bool {
 	for _, known := range protocols {

@@ -181,6 +181,36 @@ describe('registerPanelSchema, radiusSecret (F-027-az)', () => {
   });
 });
 
+/**
+ * A client base url (F-027-bg): where a family that serves its users' links
+ * apart from its API (Hiddify's client proxy path) serves them. Optional, and
+ * a push panel has no API to serve them beside.
+ */
+const HIDDIFY = {
+  ...INPUT,
+  apiBaseUrl: 'https://panel.example.net/adm1n',
+  clientBaseUrl: 'https://cdn.example.net/cl1ent',
+  driverType: DriverType.hiddify,
+  credentials: '0f1e2d3c-4b5a-4968-8776-a5b4c3d2e1f0',
+};
+
+describe('registerPanelSchema and register, clientBaseUrl (F-027-bg)', () => {
+  it('is optional on a pull panel and refused on a push panel', () => {
+    expect(registerPanelSchema.safeParse(HIDDIFY).success).toBe(true);
+    expect(registerPanelSchema.safeParse(INPUT).success).toBe(true);
+    expect(registerPanelSchema.safeParse({ ...HIDDIFY, clientBaseUrl: 'cl1ent' }).success).toBe(false);
+    const push = registerPanelSchema.safeParse({ ...PUSH, clientBaseUrl: 'https://cdn.example.net/cl1ent' });
+    expect(push.success ? null : push.error.issues.map((i) => i.path.join('.'))).toEqual(['clientBaseUrl']);
+  });
+
+  it('writes it to the row, and null when none was given', async () => {
+    const { service, panels } = harness();
+    await service.register({ adminId: ADMIN, tenantId: OWNER }, HIDDIFY);
+    await service.register({ adminId: ADMIN, tenantId: OWNER }, INPUT);
+    expect(panels.map((p) => p['clientBaseUrl'])).toEqual(['https://cdn.example.net/cl1ent', null]);
+  });
+});
+
 describe('PanelRegistrationService.resubmitRadiusSecret (F-027-az)', () => {
   const PANEL = '55555555-5555-4555-8555-555555555555';
   type Row = { id: string; transport: PanelTransport; reviewState: PanelReviewState; panelRadiusSecret: string | null };

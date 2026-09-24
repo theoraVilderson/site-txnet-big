@@ -185,6 +185,8 @@ export type RegisterForm = {
   name: string;
   ipAddress: string;
   apiBaseUrl: string;
+  /** Where users are served their links — Hiddify's client proxy path (F-027-bg). Optional; pull only. */
+  clientBaseUrl: string;
   driverType: (typeof DRIVER_TYPES)[number];
   counterSemantics: (typeof COUNTER_SEMANTICS)[number];
   transport: (typeof PANEL_TRANSPORTS)[number];
@@ -202,6 +204,7 @@ export function emptyRegisterForm(): RegisterForm {
     name: "",
     ipAddress: "",
     apiBaseUrl: "",
+    clientBaseUrl: "",
     driverType: "marzban",
     counterSemantics: "cumulative",
     transport: "pull",
@@ -247,6 +250,7 @@ export function validateRegister(form: RegisterForm): RegisterValidation {
   const name = form.name.trim();
   const ipAddress = form.ipAddress.trim();
   const apiBaseUrl = form.apiBaseUrl.trim();
+  const clientBaseUrl = form.clientBaseUrl.trim();
   const region = form.region.trim();
   const budget = form.maxRequestsPerMinute.trim();
 
@@ -255,13 +259,16 @@ export function validateRegister(form: RegisterForm): RegisterValidation {
   if (apiBaseUrl ? apiBaseUrl.length > 500 || !isUrl(apiBaseUrl) : form.transport === "pull") {
     errors.apiBaseUrl = K.register.invalid.apiBaseUrl;
   }
+  const push = form.transport === "push";
+  if (!push && clientBaseUrl && (clientBaseUrl.length > 500 || !isUrl(clientBaseUrl))) {
+    errors.clientBaseUrl = K.register.invalid.clientBaseUrl;
+  }
   if (region.length < 1 || region.length > 50) errors.region = K.register.invalid.region;
   const perMinute = budget === "" ? undefined : Number(budget);
   if (perMinute !== undefined && !(Number.isInteger(perMinute) && perMinute >= 1 && perMinute <= 6000)) {
     errors.maxRequestsPerMinute = K.register.invalid.maxRequestsPerMinute;
   }
   if (form.credentials.length < 1 || form.credentials.length > 4096) errors.credentials = K.register.invalid.credentials;
-  const push = form.transport === "push";
   if (push && (form.radiusSecret.length < 1 || form.radiusSecret.length > 4096)) errors.radiusSecret = K.register.invalid.radiusSecret;
   if (Object.keys(errors).length > 0) return { ok: false, errors };
 
@@ -269,6 +276,8 @@ export function validateRegister(form: RegisterForm): RegisterValidation {
     name,
     ipAddress,
     ...(apiBaseUrl ? { apiBaseUrl } : {}),
+    // Never for a push panel, even if typed before switching: billing refuses it there.
+    ...(clientBaseUrl && !push ? { clientBaseUrl } : {}),
     driverType: form.driverType,
     counterSemantics: form.counterSemantics,
     transport: form.transport,

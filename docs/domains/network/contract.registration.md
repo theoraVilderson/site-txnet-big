@@ -112,5 +112,9 @@ implementation, every `use` audited where the others are.
    error is what `connectionTestDetail` stores.
 3. **A vault refusal names its reason** (`not_owner`,
    `credential_unavailable`, …) and never a value; the panel stays `pending`.
-4. The Opener paces nothing: a connection test is one call. Pacing a
+4. **`clientBaseUrl` rides along** (F-027-bg): `register.Pending` carries it
+   and the Opener hands it to the families that serve links apart from their
+   API — Hiddify only, today. One that is not an absolute url is `unopenable`.
+   Pull only: CHECK `panel_client_base_url_is_pull_only`.
+5. The Opener paces nothing: a connection test is one call. Pacing a
    collected panel by its `maxRequestsPerMinute` is the panel source's.
