@@ -204,8 +204,8 @@ rows individually correct, which is what made it invisible.
 
 ## Access rules
 
-A tenant's User panel reads `config` filtered by `tenantId` (composite index leads with
-`tenantId`). Traffic tables are written by an ingestion path, read by reporting.
+User panel: `config` by `tenantId` (index leads with it); `/sub`: by `grantId`, oldest
+first (`(grantId, createdAt)`, F-027-bn). Traffic: ingestion writes, reporting reads.
 
 ## Migration notes
 

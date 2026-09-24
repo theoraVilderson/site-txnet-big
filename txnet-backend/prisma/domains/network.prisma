@@ -418,6 +418,8 @@ model Config {
   @@index([tenantId, createdAt(sort: Desc)])
   @@index([userId, status])
   @@index([credentialGroupId])
+  /// `/sub` reads a Grant's configs oldest first on every cache miss (F-027-bn).
+  @@index([grantId, createdAt])
   @@index([panelId, enforcementState])
   @@map("config")
   @@schema("network")
