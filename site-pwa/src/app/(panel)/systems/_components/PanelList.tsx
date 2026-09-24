@@ -6,6 +6,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type CapabilityMatrix, type SystemsPanel } from "@/lib/billing-api";
 import { formatInstant } from "../../_lib/datetime";
 import {
+  driverLabel,
   FAULT_KEYS,
   PANEL_STATE_KEYS,
   REVIEW_KEYS,
@@ -76,7 +77,7 @@ function PanelItem({ panel, onChanged }: { panel: SystemsPanel; onChanged: () =>
           <span className="flex flex-wrap items-center gap-2 text-sm font-bold text-text-primary">
             {panel.name}
             <span dir="ltr" className="font-mono text-[11px] font-normal text-text-secondary">
-              {panel.driverType} · {panel.transport} · {panel.role} · {panel.region}
+              {driverLabel(panel.driverType)} · {panel.transport} · {panel.role} · {panel.region}
             </span>
           </span>
           <span className="flex flex-wrap items-center gap-2">

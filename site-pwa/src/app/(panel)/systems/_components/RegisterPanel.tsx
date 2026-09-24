@@ -7,6 +7,7 @@ import { fieldErrorsByPath } from "@/lib/api-error";
 import { billingApi, type RegisteredPanel } from "@/lib/billing-api";
 import {
   COUNTER_SEMANTICS,
+  DRIVER_LABELS,
   DRIVER_TYPES,
   PANEL_ROLES,
   PANEL_TRANSPORTS,
@@ -115,7 +116,7 @@ export function RegisterPanel({ onRegistered }: { onRegistered: () => Promise<vo
             <select dir="ltr" value={form.driverType} onChange={(e) => set("driverType", e.target.value as RegisterForm["driverType"])} className={INPUT}>
               {DRIVER_TYPES.map((d) => (
                 <option key={d} value={d}>
-                  {d}
+                  {DRIVER_LABELS[d]}
                 </option>
               ))}
             </select>,

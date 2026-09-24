@@ -8,7 +8,9 @@ import {
   CAPABILITY_KEYS,
   COUNTER_SEMANTICS,
   DRIFT_EVENT_KEYS,
+  DRIVER_LABELS,
   DRIVER_TYPES,
+  driverLabel,
   FAULT_KEYS,
   HOLD_REASON_KEYS,
   HOLD_STATE_KEYS,
@@ -98,6 +100,15 @@ describe("every value the backend can write has a sentence here", () => {
       "credentials_unavailable",
     ];
     expect(Object.keys(REFUSAL_KEYS).sort()).toEqual(billing.sort());
+  });
+});
+
+describe("a family is shown by its product name", () => {
+  it("tells 3x-ui v2 (sanaee) from v3 (three_x_ui), whose APIs differ (F-027-bb)", () => {
+    expect(new Set(Object.values(DRIVER_LABELS)).size).toBe(DRIVER_TYPES.length);
+    expect(DRIVER_LABELS.sanaee).toContain("v2");
+    expect(DRIVER_LABELS.three_x_ui).toContain("v3");
+    expect(driverLabel("not_a_family")).toBe("not_a_family");
   });
 });
 

@@ -23,6 +23,7 @@ import (
 	"network-service/internal/driver"
 	"network-service/internal/driver/marzban"
 	"network-service/internal/driver/sanaee"
+	"network-service/internal/driver/threexui"
 	"network-service/internal/driver/usermanager"
 	"network-service/internal/register"
 )
@@ -118,7 +119,7 @@ var ErrNoDriver = errors.New("no driver for this family yet")
 // asked, so a panel no driver can open costs no read of its login.
 func (o Opener) Open(ctx context.Context, p register.Pending) (driver.Driver, error) {
 	switch p.DriverType {
-	case driver.DriverMarzban, driver.DriverSanaee, driver.DriverMikrotikUserManager:
+	case driver.DriverMarzban, driver.DriverSanaee, driver.DriverThreeXUI, driver.DriverMikrotikUserManager:
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrNoDriver, p.DriverType)
 	}
@@ -140,6 +141,8 @@ func (o Opener) Open(ctx context.Context, p register.Pending) (driver.Driver, er
 		return usermanager.New(p.APIBaseURL, usermanager.Credentials{Username: username, Password: password}, o.HTTP)
 	case driver.DriverSanaee:
 		return sanaee.New(p.APIBaseURL, sanaee.Credentials{Username: username, Password: password}, o.HTTP)
+	case driver.DriverThreeXUI:
+		return threexui.New(p.APIBaseURL, threexui.Credentials{Username: username, Password: password}, o.HTTP)
 	}
 	return marzban.New(p.APIBaseURL, marzban.Credentials{Username: username, Password: password}, o.HTTP)
 }

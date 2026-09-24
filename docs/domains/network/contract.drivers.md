@@ -87,8 +87,8 @@ exists). `marzban_test.go` also pins rules 1-3 and the one-login retry.
 ## Sanaee — MHSanaei 3x-ui (F-027-ah)
 
 `internal/driver/sanaee`. Pull, `cumulative`, and the panel enforces its own
-per-client total, so it carries ADR-0072 as Marzban does. `three_x_ui` and
-the two `x_ui` forks are separate families (F-027-bb..bd), not aliases of it.
+per-client total, so it carries ADR-0072 as Marzban does. It speaks **v2.x**:
+3x-ui v3.x is `three_x_ui` below, and the two `x_ui` forks are F-027-bc/bd.
 
 A client lives inside its inbound: its settings are one element of the
 inbound's `settings` JSON string, and its counters are one row of the
@@ -138,6 +138,39 @@ Conformance: the eleven pull scenarios pass. The four push scenarios and
 `ceiling_refused` are skipped by name. `sanaee_test.go` also pins rules 1, 2
 and 4, the create round trip and the one-login retry. **Opened by
 `internal/opener`** with the panel's login, typed `username:password`.
+
+## 3x-ui v3 — `three_x_ui` (F-027-bb)
+
+`internal/driver/threexui`. The same product as Sanaee, v3.x: v3 removed the
+`inbounds/addClient|updateClient|delClient` routes v2 writes through, so it is
+a family of its own (user, 2026-09-24). Pull, `cumulative`, ADR-0072 as above.
+
+| 3x-ui v3 | ours |
+|---|---|
+| `GET /csrf-token`, then `POST /login` (form) with `X-CSRF-Token` | the session; every later POST carries the token too, or is a `403`. A `401` is an expired session: **one** fresh token and login, one retry. A `404` is real (v3 answers the panel's ajax with `401`) |
+| `GET /panel/api/clients/list` | `GetUsage`, `GetUsageFor` (filtered), `ListClients`: every client with `inboundIds` and its `traffic` row, unpaged |
+| `clients/add` (`{client, inboundIds}`), `clients/update/{email}`, `clients/del/{email}`, `clients/resetTraffic/{email}` | the lifecycle, keyed by email |
+| `uuid` (or `password` for trojan) | `UUID`; `id` on the list is the panel's row number |
+| `traffic.total` / `totalGB` | `DataLimitBytes` (the traffic row is the one enforced) |
+| `POST /panel/api/setting/all` | `SubscriptionURL`, built as Sanaee's rule 6 |
+
+Its own rules, beside Sanaee's rules 1, 5 and 6, which hold unchanged:
+
+1. **An update writes the whole client.** A field left out is zeroed, except
+   the credentials and `subId`. Every write reads the client first and carries
+   `limitIp`, `limitHwid`, `tgId`, `flow`, `security`, `group` and the rest.
+2. **No renewal of its own.** `reset`, `resetDay`, `resetMax` are written 0
+   and `trafficReset` `never` on every write: each is a second quota writer.
+3. **A delete is a delete.** v3 has no last-client rule; the counters go too.
+4. **A client is not moved.** One on several inbounds reports its lowest id;
+   an update naming another inbound is `unsupported`.
+
+A v3 panel registered as `sanaee` fails its connection test at the login
+(`403`, no token); a v2 panel as `three_x_ui` fails at `/csrf-token` (`404`).
+Questionnaire and conformance as Sanaee's (11 pass, 5 skipped by name);
+`threexui_test.go` also pins the token, rules 1-3 and the one-login retry.
+Opened by `internal/opener` with the `username:password` login; v3's API token
+is not used (user, 2026-09-24).
 
 ## Mikrotik User Manager (F-027-ag)
 

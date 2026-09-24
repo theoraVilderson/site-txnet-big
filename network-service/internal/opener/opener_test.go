@@ -14,6 +14,7 @@ import (
 	"network-service/internal/driver"
 	"network-service/internal/driver/marzban"
 	"network-service/internal/driver/sanaee"
+	"network-service/internal/driver/threexui"
 	"network-service/internal/driver/usermanager"
 	"network-service/internal/register"
 )
@@ -95,6 +96,23 @@ func TestOpensSanaeeWithTheVaultsLogin(t *testing.T) {
 	}
 	if _, ok := d.(*sanaee.Driver); !ok {
 		t.Fatalf("Open built %T, want *sanaee.Driver", d)
+	}
+}
+
+// 3x-ui v3 is its own family, not v2's (F-027-bb): the same username:password
+// login opens the v3 driver, never the sanaee one, whose routes v3 removed.
+func TestOpensThreeXUIWithItsOwnDriverNotSanaees(t *testing.T) {
+	srv, _ := vaultStub(t, "admin:pa:ss", http.StatusOK, "")
+	o := Opener{Logins: Vault{BaseURL: srv.URL, ServiceToken: "svc-token"}}
+
+	p := pending(driver.DriverThreeXUI)
+	p.APIBaseURL = "https://panel.example:2053/s3cr3t-path"
+	d, err := o.Open(context.Background(), p)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if _, ok := d.(*threexui.Driver); !ok {
+		t.Fatalf("Open built %T, want *threexui.Driver", d)
 	}
 }
 

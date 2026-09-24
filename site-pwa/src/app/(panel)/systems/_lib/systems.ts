@@ -36,6 +36,33 @@ export const DRIVER_TYPES = [
   "mikrotik_wireguard",
   "fake",
 ] as const;
+
+/**
+ * The product each family is, as its operator knows it. Product names, not
+ * prose, so not translated (C-06 is for `t()` keys). `sanaee` and
+ * `three_x_ui` are one product's v2 and v3, whose APIs differ (F-027-bb): the
+ * form must tell them apart, and the enum values alone do not.
+ */
+export const DRIVER_LABELS: Record<(typeof DRIVER_TYPES)[number], string> = {
+  marzban: "Marzban",
+  marzneshin: "Marzneshin",
+  sanaee: "3x-ui v2.x (MHSanaei)",
+  x_ui: "x-ui",
+  three_x_ui: "3x-ui v3.x (MHSanaei)",
+  s_ui: "S-UI",
+  hiddify: "Hiddify Manager",
+  core_xray: "Xray core",
+  ibsng: "IBSng",
+  cloudius: "Cloudius",
+  mikrotik_user_manager: "MikroTik User Manager",
+  mikrotik_wireguard: "MikroTik WireGuard",
+  fake: "fake",
+};
+
+/** A panel row's family by name; a value this build does not know shows as sent. */
+export function driverLabel(driverType: string): string {
+  return (DRIVER_LABELS as Record<string, string>)[driverType] ?? driverType;
+}
 export const COUNTER_SEMANTICS = ["cumulative", "session", "reset_on_read"] as const;
 export const PANEL_TRANSPORTS = ["pull", "push"] as const;
 export const PANEL_ROLES = ["active", "passive"] as const;
