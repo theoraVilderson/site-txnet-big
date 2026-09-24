@@ -40,6 +40,7 @@ export const REFUSAL_KEYS: Record<CatalogRejection, string> = {
   key_taken: CATALOG_KEYS.refusals.key_taken,
   sku_taken: CATALOG_KEYS.refusals.sku_taken,
   price_in_the_past: CATALOG_KEYS.refusals.price_in_the_past,
+  panel_group_not_found: CATALOG_KEYS.refusals.panel_group_not_found,
   text_key_invalid: CATALOG_KEYS.refusals.text_key_invalid,
   texts_unavailable: CATALOG_KEYS.refusals.texts_unavailable,
   lang_unknown: CATALOG_KEYS.refusals.lang_unknown,

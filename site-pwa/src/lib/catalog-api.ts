@@ -48,6 +48,7 @@ export type CatalogRejection =
   | "key_taken"
   | "sku_taken"
   | "price_in_the_past"
+  | "panel_group_not_found"
   | "text_key_invalid"
   | "texts_unavailable"
   | "lang_unknown"

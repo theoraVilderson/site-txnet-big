@@ -1247,7 +1247,8 @@
       "text_key_invalid": "That is not the text of a catalog item.",
       "texts_unavailable": "The names could not be saved right now. Nothing was changed; try again.",
       "lang_unknown": "That language is not available on this platform.",
-      "source_text_missing": "Write the text in the source language."
+      "source_text_missing": "Write the text in the source language.",
+      "panel_group_not_found": "That server group was not found, or is another tenant's."
     },
     "rename": "Edit names",
     "translations": {
@@ -1754,7 +1755,8 @@
       "text_key_invalid": "that name key is not valid.",
       "texts_unavailable": "the translation service is not answering. The item was not changed; try again shortly.",
       "lang_unknown": "that language is not one this platform serves.",
-      "source_text_missing": "write the name in its source language first."
+      "source_text_missing": "write the name in its source language first.",
+      "panel_group_not_found": "that server group is neither the platform's nor this reseller's."
     }
   },
   "resellerBots": {
