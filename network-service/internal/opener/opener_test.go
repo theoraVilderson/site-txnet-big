@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"network-service/internal/driver"
+	"network-service/internal/driver/hiddify"
 	"network-service/internal/driver/marzban"
 	"network-service/internal/driver/sanaee"
 	"network-service/internal/driver/threexui"
@@ -138,6 +139,23 @@ func TestOpensXUIAlirezaButNotTheOriginalWithIt(t *testing.T) {
 	}
 }
 
+// Hiddify's login is its API key alone: no username:password split, which a
+// uuid would fail.
+func TestOpensHiddifyWithTheKeyAlone(t *testing.T) {
+	srv, _ := vaultStub(t, "0f1e2d3c-4b5a-4968-8776-a5b4c3d2e1f0", http.StatusOK, "")
+	o := Opener{Logins: Vault{BaseURL: srv.URL, ServiceToken: "svc-token"}}
+
+	p := pending(driver.DriverHiddify)
+	p.APIBaseURL = "https://panel.example/adm1n"
+	d, err := o.Open(context.Background(), p)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if _, ok := d.(*hiddify.Driver); !ok {
+		t.Fatalf("Open built %T, want *hiddify.Driver", d)
+	}
+}
+
 // A push panel has two secrets (F-027-az). The Opener signs in to the
 // router's REST API, so it asks for the login by name; the NAS secret is the
 // allowlist's, and a driver built with it would be refused on every call.
@@ -178,9 +196,9 @@ func TestAFamilyWithNoDriverIsNotOpenedAndItsLoginNotRead(t *testing.T) {
 	srv, calls := vaultStub(t, "admin:secret", http.StatusOK, "")
 	o := Opener{Logins: Vault{BaseURL: srv.URL, ServiceToken: "svc-token"}}
 
-	_, err := o.Open(context.Background(), pending(driver.DriverHiddify))
+	_, err := o.Open(context.Background(), pending(driver.DriverSUI))
 	if !errors.Is(err, ErrNoDriver) {
-		t.Fatalf("Open(hiddify) = %v, want ErrNoDriver", err)
+		t.Fatalf("Open(s_ui) = %v, want ErrNoDriver", err)
 	}
 	if *calls != 0 {
 		t.Errorf("the vault was read %d times for a panel nothing could open", *calls)

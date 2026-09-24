@@ -102,11 +102,12 @@ which re-derives the owner's vault from the row and logs the read. One crypto
 implementation, every `use` audited where the others are.
 
 1. **The family is checked before the login is read.** Each family in
-   `contract.drivers.md` and `contract.xui.md` with a driver has a case. A family with no driver yet (`ErrNoDriver`) is
+   `contract.drivers.md`, `contract.xui.md` and `contract.hiddify.md` with a driver has a case. A family with no driver yet (`ErrNoDriver`) is
    `unopenable` and costs no vault read; it is ours to ship, so it is never
    `refused`. The Opener reads the **login** by name, never a push panel's
    RADIUS secret (F-027-az), which the driver has no use for.
-2. **A login is typed `username:password`**, split at the first colon. A
+2. **A login is typed `username:password`**, split at the first colon;
+   Hiddify's is its API key alone (`contract.hiddify.md`). A
    login not in that form is `unopenable`, and no error quotes it — the
    error is what `connectionTestDetail` stores.
 3. **A vault refusal names its reason** (`not_owner`,

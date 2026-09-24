@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"network-service/internal/driver"
+	"network-service/internal/driver/hiddify"
 	"network-service/internal/driver/marzban"
 	"network-service/internal/driver/sanaee"
 	"network-service/internal/driver/threexui"
@@ -121,7 +122,7 @@ var ErrNoDriver = errors.New("no driver for this family yet")
 func (o Opener) Open(ctx context.Context, p register.Pending) (driver.Driver, error) {
 	switch p.DriverType {
 	case driver.DriverMarzban, driver.DriverSanaee, driver.DriverThreeXUI, driver.DriverXUIAlireza,
-		driver.DriverMikrotikUserManager:
+		driver.DriverHiddify, driver.DriverMikrotikUserManager:
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrNoDriver, p.DriverType)
 	}
@@ -133,6 +134,11 @@ func (o Opener) Open(ctx context.Context, p register.Pending) (driver.Driver, er
 	login, err := o.Logins.PanelLogin(ctx, p.PanelID)
 	if err != nil {
 		return nil, err
+	}
+	if p.DriverType == driver.DriverHiddify {
+		// Hiddify's API takes no username: the login is the admin's API key
+		// (its uuid), typed alone.
+		return hiddify.New(p.APIBaseURL, login, o.HTTP)
 	}
 	username, password, err := usernamePassword(login)
 	if err != nil {
