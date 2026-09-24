@@ -8,7 +8,7 @@ import { CouponValidationService, RejectedCoupon } from '../coupon/coupon-valida
 import { GatewayMerchant, GatewaySource, hasEverySecret } from '../gateway/gateway-merchant';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { FxRateReader } from '../pricing/fx-rate.reader';
-import { type GatewayOffer, offeredInThisChat, priceDeposit, selectableGateways, selectGateway, type SelectOptions } from './deposit-pricing';
+import { defaultTaxRate, type GatewayOffer, offeredInThisChat, priceDeposit, selectableGateways, selectGateway, type SelectOptions } from './deposit-pricing';
 import { resolvePresets } from './deposit-presets';
 
 /**
@@ -92,6 +92,10 @@ export type DepositQuote = {
   discount: string;
   gap: string;
   fee: string;
+  /** Tax added on top (ADR-0076); `"0.00"` with no rate. */
+  tax: string;
+  /** The rate `tax` was charged at, as a decimal string; `null` = no tax, and on the free path. */
+  taxRatePercent: string | null;
   payable: string;
   credited: string;
   free: boolean;
@@ -182,7 +186,7 @@ export class DepositQuoteService {
     const tenant = TenantContext.current('deposit quote');
     const { userId, gatewayId, amount } = request;
 
-    const { gateway, coupons } = await tenantTransaction(this.prisma, async (tx) => {
+    const { gateway, coupons, defaultTaxRatePercent } = await tenantTransaction(this.prisma, async (tx) => {
       const gateway = await selectGateway(tx, this.crossTenant, tenant.id, gatewayId, request.source, { canTest: request.canTest });
       if (!gateway || !this.offeredHere(gateway, request.chatPlatform)) throw new DepositGatewayNotFound(gatewayId, request.source);
       const coupons = await this.coupons.validate(tx, {
@@ -195,7 +199,7 @@ export class DepositQuoteService {
         channel: request.channel ?? CouponChannel.panel,
         userId,
       });
-      return { gateway, coupons };
+      return { gateway, coupons, defaultTaxRatePercent: await defaultTaxRate(tx, tenant.id) };
     });
 
     const { provider, price } = await priceDeposit(
@@ -216,6 +220,7 @@ export class DepositQuoteService {
         amount,
         discount: coupons.totalDiscount,
         actorId: userId,
+        defaultTaxRatePercent,
       },
     );
 
@@ -228,6 +233,8 @@ export class DepositQuoteService {
       discount: money(price.discount),
       gap: money(price.gap),
       fee: money(price.fee),
+      tax: money(price.tax),
+      taxRatePercent: price.taxRatePercent?.toFixed() ?? null,
       payable: money(price.payable),
       credited: money(price.credited),
       free: price.free,

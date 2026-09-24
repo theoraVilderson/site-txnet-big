@@ -124,6 +124,8 @@ function build(setup: Setup = {}) {
     // misses, and `selectableGateways` always asks (F-096-b).
     paymentGatewayGrant: { findMany: async () => [] },
     tenantGatewayConfig: { findFirst: async () => row },
+    // No tenant default tax: these cases price without one (ADR-0076 is pinned in gateway-pricing.spec.ts).
+    depositSetting: { findUnique: async () => null },
     // The filter and the order are the service's, so the fake applies the
     // `where` and `orderBy` it was handed rather than answering every row: what
     // is under test is which host the service asks for, and an unproven custom

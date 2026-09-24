@@ -30,12 +30,16 @@ import { FeeCalcMode, FeeType, PaymentGateway, Prisma, RateRoundingMode } from '
  *     and receives exactly that much more;
  *  4. fee — fixed, a percentage of the basis, or the provider's quote, then the
  *     floor and the ceiling, in every mode;
- *  5. payable = basis + fee; credited = amount + gap.
- * A remainder of zero is the free path: nothing is charged, so there is no fee
- * and no rate, and no quote is needed.
+ *  5. tax — the gateway's `taxRatePercent`, else the tenant default, of the
+ *     basis (not of the fee), rounded **half-up** to the cent, once (ADR-0076);
+ *  6. payable = basis + fee + tax; credited = amount + gap — tax is added on
+ *     top, never taken out of what arrives.
+ * A remainder of zero is the free path: nothing is charged, so there is no fee,
+ * no tax and no rate, and no quote is needed.
  *
- * There is no tax here. A top-up is a prepayment, not a sale: tax is charged
- * when the credit buys a service (ADR-0038).
+ * Tax rounds to the nearest cent where the fee rounds up: a fee is our revenue,
+ * tax is collected to be remitted, and over-collecting it is a liability to
+ * somebody else (ADR-0076).
  *
  * Money is rounded to the cent **up**, never down, and so is the rate at its
  * `roundingStep` unless the gateway says `nearest`. A rate outside
@@ -73,6 +77,7 @@ export type GatewayPricing = Pick<
   | 'maxRate'
   | 'roundingStep'
   | 'roundingMode'
+  | 'taxRatePercent'
 >;
 
 export type PriceRequest = {
@@ -82,6 +87,11 @@ export type PriceRequest = {
   amount: Prisma.Decimal;
   /** Every coupon together, 0 <= discount <= amount, at most 2 decimal places. */
   discount: Prisma.Decimal;
+  /**
+   * The tenant's default tax on a top-up (`deposit_setting.taxRatePercent`),
+   * used when the gateway's own `taxRatePercent` is null. Null = no tax.
+   */
+  defaultTaxRatePercent?: Prisma.Decimal | null;
   /** Required when `feeCalculationMode` is `automatic` and something is charged. Base currency. */
   quotedFee?: Prisma.Decimal | null;
   /** The rate the caller may use and the snapshot behind it; `null` when none. */
@@ -105,6 +115,10 @@ export type GatewayPrice = {
   discount: Prisma.Decimal;
   gap: Prisma.Decimal;
   fee: Prisma.Decimal;
+  /** Tax on the basis, added on top (ADR-0076). Zero with no rate, and on the free path. */
+  tax: Prisma.Decimal;
+  /** The rate `tax` was charged at — the gateway's, else the tenant's. `null` = none, and on the free path. */
+  taxRatePercent: Prisma.Decimal | null;
   payable: Prisma.Decimal;
   credited: Prisma.Decimal;
   /** Nothing is charged; the gateway is never called. */
@@ -183,6 +197,13 @@ const decOrNull = (v: Prisma.Decimal | null | undefined): Dec | null => (v == nu
 const out = (v: Dec, scale?: number): Prisma.Decimal =>
   new Prisma.Decimal(scale === undefined ? v.toFixed() : v.toFixed(scale));
 const centsUp = (v: Dec): Dec => v.toDecimalPlaces(MONEY_SCALE, Dec.ROUND_UP);
+const centsHalfUp = (v: Dec): Dec => v.toDecimalPlaces(MONEY_SCALE, Dec.ROUND_HALF_UP);
+
+function taxRate(v: Prisma.Decimal | null | undefined, name: string): Dec | null {
+  const d = decOrNull(v);
+  if (d && (d.lt(0) || d.gt(100))) throw new InvalidPricingInput(`${name} must be between 0 and 100`);
+  return d;
+}
 
 function money(v: Prisma.Decimal, name: string): Dec {
   const d = dec(v);
@@ -253,6 +274,13 @@ function feeOf(p: GatewayPricing, basis: Dec, quotedFee: Prisma.Decimal | null |
   if (floor && fee.lt(floor)) fee = floor;
   if (ceiling && fee.gt(ceiling)) fee = ceiling;
   return fee;
+}
+
+/** The gateway's rate, else the tenant's; a gateway rate of 0 is a rate, not inherit. */
+function taxRateOf(request: PriceRequest): Dec | null {
+  const own = taxRate(request.pricing.taxRatePercent, 'taxRatePercent');
+  const fallback = taxRate(request.defaultTaxRatePercent, 'defaultTaxRatePercent');
+  return own ?? fallback;
 }
 
 type RateUsed = { rate: Dec; snapshotId: string | null };
@@ -338,6 +366,8 @@ export function priceAtGateway(request: PriceRequest): GatewayPrice {
 
   const { amount, discount, gap, basis } = settle(request);
   const credited = amount.plus(gap);
+  // Checked on the free path too: a broken rate is a broken config whether or not this top-up meets it.
+  const taxPercent = taxRateOf(request);
 
   if (basis.isZero()) {
     return {
@@ -345,6 +375,8 @@ export function priceAtGateway(request: PriceRequest): GatewayPrice {
       discount: out(discount, MONEY_SCALE),
       gap: out(ZERO, MONEY_SCALE),
       fee: out(ZERO, MONEY_SCALE),
+      tax: out(ZERO, MONEY_SCALE),
+      taxRatePercent: null,
       payable: out(ZERO, MONEY_SCALE),
       credited: out(credited, MONEY_SCALE),
       free: true,
@@ -355,7 +387,8 @@ export function priceAtGateway(request: PriceRequest): GatewayPrice {
   }
 
   const fee = feeOf(pricing, basis, request.quotedFee);
-  const payable = basis.plus(fee);
+  const tax = taxPercent ? centsHalfUp(basis.mul(taxPercent).div(100)) : ZERO;
+  const payable = basis.plus(fee).plus(tax);
   const { rate, snapshotId } = rateOf(request);
   const charged = payable
     .mul(rate)
@@ -367,6 +400,8 @@ export function priceAtGateway(request: PriceRequest): GatewayPrice {
     discount: out(discount, MONEY_SCALE),
     gap: out(gap, MONEY_SCALE),
     fee: out(fee, MONEY_SCALE),
+    tax: out(tax, MONEY_SCALE),
+    taxRatePercent: taxPercent ? out(taxPercent) : null,
     payable: out(payable, MONEY_SCALE),
     credited: out(credited, MONEY_SCALE),
     free: false,

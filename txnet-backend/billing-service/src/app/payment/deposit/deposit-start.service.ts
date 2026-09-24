@@ -23,7 +23,7 @@ import { GatewayCredentials, GatewayFailure } from '../gateway/payment-provider'
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { FxRateReader } from '../pricing/fx-rate.reader';
 import { Chat } from './chat-platform';
-import { offeredInThisChat, priceDeposit, selectGateway } from './deposit-pricing';
+import { defaultTaxRate, offeredInThisChat, priceDeposit, selectGateway } from './deposit-pricing';
 import { DepositGatewayNotFound, money } from './deposit-quote.service';
 import { InvoiceLinkClient } from './invoice-link.client';
 import { webhookUrlFor, withPaymentId } from './payment-callback-url';
@@ -117,6 +117,9 @@ export type DepositStarted = {
   amount: string;
   discount: string;
   fee: string;
+  /** Tax added on top (ADR-0076); `"0.00"` with no rate. */
+  tax: string;
+  taxRatePercent: string | null;
   payable: string;
   credited: string;
   /** The wallet balance a free top-up left behind; `null` when a gateway still has to be paid. */
@@ -164,7 +167,7 @@ export class DepositStartService {
 
     // 1. Read: the gateway, the coupons as they stand, and where the bank will
     //    send the user back to. Nothing is held after this closes.
-    const { gateway, coupons, callbackUrl, returnOrigin } = await tenantTransaction(this.prisma, async (tx) => {
+    const { gateway, coupons, callbackUrl, returnOrigin, defaultTaxRatePercent } = await tenantTransaction(this.prisma, async (tx) => {
       const gateway = await selectGateway(tx, this.crossTenant, tenant.id, gatewayId, source, { canTest: request.canTest });
       if (!gateway) throw new DepositGatewayNotFound(gatewayId, source);
       if (this.providers.has(gateway.providerName) && !offeredInThisChat(this.providers.get(gateway.providerName), gateway, request.chat?.platform ?? null)) {
@@ -185,6 +188,7 @@ export class DepositStartService {
         coupons,
         callbackUrl: gateway.callbackUrl ?? (await this.callbackUrl(tx, tenant.id)),
         returnOrigin: await this.returnOrigin(tx, tenant.id, request.origin),
+        defaultTaxRatePercent: await defaultTaxRate(tx, tenant.id),
       };
     });
 
@@ -199,7 +203,7 @@ export class DepositStartService {
     };
     const { provider, price } = await priceDeposit(
       { providers: this.providers, merchant: this.merchant, fx: this.fx },
-      { gateway, ref, amount, discount: coupons.totalDiscount, actorId: userId },
+      { gateway, ref, amount, discount: coupons.totalDiscount, actorId: userId, defaultTaxRatePercent },
     );
 
     // A gateway that will be paid needs somewhere to answer; a free top-up does
@@ -236,6 +240,10 @@ export class DepositStartService {
           billingTenantId: request.billingTenantId ?? null,
           amountRequested: price.amount,
           feeApplied: price.fee,
+          // What was taxed and at which rate, frozen here so a later rate
+          // change cannot re-explain this receipt (ADR-0076).
+          taxApplied: price.tax,
+          taxRatePercent: price.taxRatePercent,
           discountApplied: price.discount,
           amountCredited: price.credited,
           // Non-null on the column, and the free path charges nobody anything.
@@ -286,6 +294,8 @@ export class DepositStartService {
       amount: money(price.amount),
       discount: money(price.discount),
       fee: money(price.fee),
+      tax: money(price.tax),
+      taxRatePercent: price.taxRatePercent?.toFixed() ?? null,
       payable: money(price.payable),
       credited: money(price.credited),
       balance: balance ? money(balance) : null,

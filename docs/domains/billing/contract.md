@@ -97,11 +97,11 @@ numbers are `gateway-pricing.golden.json` (F-0611).
 |---|---|
 | The quote shown and the amount charged both come from `priceAtGateway`; nothing else does money arithmetic on a deposit | F-0612 — legacy clamped a quoted fee on one path only |
 | Pure: the provider's fee quote and the FX rate are arguments. The caller asks the provider for `feeQuoteAmountMinor(request)` and passes `quotedFeeFromMinor(request, feeMinor)` (cents up); the staleness ladder decides whether a `liveRate` is passed | F-0610; F-0607 needs a clock |
-| Order: `amount` in `[minAcceptAmount, maxAcceptAmount]` → minus `discount` → gap → fee → `payable`; `credited = amount + gap`. Either bound may be `null` — no limit on that side, and no gap without a minimum (migration `20260914000800`) | F-092-o's quote shape; the user's call, 2026-09-14 |
-| **No tax on a top-up** — the result has no tax field (changed in v3) | ADR-0038: tax is charged when credit buys a service |
+| Order: `amount` in `[minAcceptAmount, maxAcceptAmount]` → minus `discount` → gap → fee → tax → `payable = basis + fee + tax`; `credited = amount + gap`. Either bound may be `null` — no limit on that side, and no gap without a minimum (migration `20260914000800`) | F-092-o's quote shape; the user's call, 2026-09-14 |
+| **Tax on a top-up** (v37, reversing v3): `tax` is the gateway's `taxRatePercent`, else the caller's `deposit_setting` default, of the basis (not of the fee), added on top and rounded **half-up** to the cent once; `taxRatePercent` in the result is the rate used, `null` = none. A rate outside 0..100 is `InvalidPricingInput` | ADR-0076: tax is remitted, so it is never rounded up like the fee |
 | Gap: a remainder above zero and under the minimum is raised to it, and the difference is credited too | legacy behaviour kept |
 | A percentage fee is taken on that remainder (after discount and gap) | the fee follows what reaches the gateway |
-| Remainder zero is the free path: no fee, rate or quote; `chargedAmountMinor = null` | nothing reaches the gateway |
+| Remainder zero is the free path: no fee, tax, rate or quote; `chargedAmountMinor = null` | nothing reaches the gateway |
 | A `discount` above `amount` is `InvalidPricingInput`, not a free deposit | the coupon engine (F-092-g) caps stacking |
 | `feeFloor` / `feeCeiling` bind a quoted fee exactly as they bind a manual one | the legacy bug named on the row |
 | Cents round **up**; the rate rounds to `roundingStep` up or nearest (half up); `chargedAmountMinor` rounds up | F-0609 — never down |

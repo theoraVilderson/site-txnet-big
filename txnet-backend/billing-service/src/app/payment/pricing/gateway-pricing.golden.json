@@ -38,7 +38,7 @@
   },
   "cases": [
     {
-      "name": "percentage fee between floor and ceiling; a top-up carries no tax (ADR-0038)",
+      "name": "percentage fee between floor and ceiling; no tax rate at either level is no tax",
       "config": "zarinpal-platform",
       "input": {
         "amount": "100.00",

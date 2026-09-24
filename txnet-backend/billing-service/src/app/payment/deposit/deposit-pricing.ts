@@ -95,6 +95,7 @@ export const GATEWAY_COLUMNS = {
   maxRate: true,
   roundingStep: true,
   roundingMode: true,
+  taxRatePercent: true,
   depositPresets: true,
   callbackUrl: true,
 } satisfies Prisma.TenantGatewayConfigSelect & Prisma.PaymentGatewaySelect;
@@ -122,6 +123,16 @@ export type GatewayOffer = SelectedGateway & {
   /** Off, or a tenant row not yet verified: reached only in test mode ({@link SelectOptions}). */
   testing: boolean;
 };
+
+/**
+ * This tenant's default tax on a top-up (`deposit_setting.taxRatePercent`,
+ * ADR-0076): what a gateway with no rate of its own charges. No row, or a null
+ * rate, is no tax.
+ */
+export async function defaultTaxRate(tx: Prisma.TransactionClient, tenantId: string): Promise<Prisma.Decimal | null> {
+  const row = await tx.depositSetting.findUnique({ where: { tenantId }, select: { taxRatePercent: true } });
+  return row?.taxRatePercent ?? null;
+}
 
 /**
  * `payment_gateway` has no tenant column and no RLS policy, so this read is the
@@ -315,6 +326,12 @@ export type DepositPricingInput = {
   amount: Prisma.Decimal;
   /** Every applied coupon together, as validation answered it. */
   discount: Prisma.Decimal;
+  /**
+   * The caller's `deposit_setting.taxRatePercent` — the rate a gateway with
+   * none of its own inherits (ADR-0076). The caller's, not a lender's, like the
+   * preset list: the credit is the caller's tenant's to sell.
+   */
+  defaultTaxRatePercent: Prisma.Decimal | null;
   /** The user the vault access is attributed to. */
   actorId: string;
 };
@@ -340,7 +357,7 @@ export async function priceDeposit(
   },
   input: DepositPricingInput,
 ): Promise<DepositPricing> {
-  const { gateway, ref, amount, discount, actorId } = input;
+  const { gateway, ref, amount, discount, actorId, defaultTaxRatePercent } = input;
   const provider = deps.providers.get(gateway.providerName);
   // A gateway charging the base currency prices at 1: the live rate is rial per dollar (F-104-g).
   const chargesInBaseCurrency = provider.chargeCurrency === BASE_CURRENCY_CODE;
@@ -358,6 +375,7 @@ export async function priceDeposit(
     pricing,
     amount,
     discount,
+    defaultTaxRatePercent,
     liveRate: pricing.useLiveRate && !chargesInBaseCurrency ? await deps.fx.current() : null,
     chargeDecimals: provider.chargeDecimals,
     chargesInBaseCurrency,

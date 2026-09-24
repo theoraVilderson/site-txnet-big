@@ -288,6 +288,7 @@ describe('a Telegram Stars price', () => {
         amount: d('10.00'),
         discount: d('0'),
         actorId: USER,
+        defaultTaxRatePercent: null,
       },
     );
     expect(provider.chargeCurrency).toBe('XTR');

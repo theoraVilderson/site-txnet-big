@@ -166,6 +166,8 @@ describe('DepositQuoteService.quote', () => {
       discount: '5.00',
       gap: '0.00',
       fee: '0.15',
+      tax: '0.00',
+      taxRatePercent: null,
       payable: '15.15',
       credited: '20.00',
       free: false,
