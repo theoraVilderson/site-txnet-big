@@ -14,6 +14,7 @@ import (
 	"network-service/internal/driver"
 	"network-service/internal/driver/hiddify"
 	"network-service/internal/driver/marzban"
+	"network-service/internal/driver/marzneshin"
 	"network-service/internal/driver/sanaee"
 	"network-service/internal/driver/threexui"
 	"network-service/internal/driver/usermanager"
@@ -81,6 +82,27 @@ func TestOpensMarzbanWithTheVaultsLogin(t *testing.T) {
 	}
 	if _, ok := d.(*marzban.Driver); !ok {
 		t.Fatalf("Open built %T, want *marzban.Driver", d)
+	}
+}
+
+// Marzneshin signs in as Marzban does, and carries the client base url its
+// subscription is served on (F-027-ba, F-027-bg).
+func TestOpensMarzneshinWithTheVaultsLoginAndClientBase(t *testing.T) {
+	srv, _ := vaultStub(t, "admin:pa:ss", http.StatusOK, "")
+	o := Opener{Logins: Vault{BaseURL: srv.URL, ServiceToken: "svc-token"}}
+
+	p := pending(driver.DriverMarzneshin)
+	p.ClientBaseURL = "https://sub.example.com"
+	d, err := o.Open(context.Background(), p)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if _, ok := d.(*marzneshin.Driver); !ok {
+		t.Fatalf("Open built %T, want *marzneshin.Driver", d)
+	}
+	p.ClientBaseURL = "sub.example.com"
+	if _, err := o.Open(context.Background(), p); err == nil {
+		t.Fatal("Open accepted a client base url that is not absolute")
 	}
 }
 

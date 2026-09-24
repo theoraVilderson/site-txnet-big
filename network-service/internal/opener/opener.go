@@ -23,6 +23,7 @@ import (
 	"network-service/internal/driver"
 	"network-service/internal/driver/hiddify"
 	"network-service/internal/driver/marzban"
+	"network-service/internal/driver/marzneshin"
 	"network-service/internal/driver/sanaee"
 	"network-service/internal/driver/threexui"
 	"network-service/internal/driver/usermanager"
@@ -121,8 +122,8 @@ var ErrNoDriver = errors.New("no driver for this family yet")
 // asked, so a panel no driver can open costs no read of its login.
 func (o Opener) Open(ctx context.Context, p register.Pending) (driver.Driver, error) {
 	switch p.DriverType {
-	case driver.DriverMarzban, driver.DriverSanaee, driver.DriverThreeXUI, driver.DriverXUIAlireza,
-		driver.DriverHiddify, driver.DriverMikrotikUserManager:
+	case driver.DriverMarzban, driver.DriverMarzneshin, driver.DriverSanaee, driver.DriverThreeXUI,
+		driver.DriverXUIAlireza, driver.DriverHiddify, driver.DriverMikrotikUserManager:
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrNoDriver, p.DriverType)
 	}
@@ -145,6 +146,9 @@ func (o Opener) Open(ctx context.Context, p register.Pending) (driver.Driver, er
 		return nil, err
 	}
 	switch p.DriverType {
+	case driver.DriverMarzneshin:
+		// Its subscription may be served on another domain (F-027-bg).
+		return marzneshin.New(p.APIBaseURL, p.ClientBaseURL, marzneshin.Credentials{Username: username, Password: password}, o.HTTP)
 	case driver.DriverMikrotikUserManager:
 		return usermanager.New(p.APIBaseURL, usermanager.Credentials{Username: username, Password: password}, o.HTTP)
 	case driver.DriverSanaee:
