@@ -513,8 +513,8 @@ model ConfigActionLog {
 /// 5.4 — the raw traffic log; the highest-volume table in the platform.
 /// **Monthly native range partitioning on `recordedAt`** (F-027-e), so
 /// retention is `DROP PARTITION` and never a row-wise `DELETE` (invariant 2).
-/// Partitioning, its per-month tables and the BRIN index on `recordedAt` are
-/// hand-written SQL — Prisma cannot express any of the three.
+/// Partitioning and its per-month tables are hand-written SQL — Prisma cannot
+/// express either. The BRIN index is declared below so Prisma sees no drift.
 model TrafficRawLog {
   /// Postgres requires the partition key in every unique constraint, so the
   /// key is the pair. A bare `BIGSERIAL` id cannot be enforced unique across
@@ -534,6 +534,7 @@ model TrafficRawLog {
   @@id([id, recordedAt], map: "traffic_raw_log_pkey")
   @@index([configId, recordedAt])
   @@index([tenantId, recordedAt])
+  @@index([recordedAt], type: Brin, map: "traffic_raw_log_recordedAt_brin_idx")
   @@map("traffic_raw_log")
   @@schema("network")
 }
@@ -634,7 +635,7 @@ model UsageDeltaQuarantine {
   resolvedByAdminId String?               @db.Uuid
   resolutionNote    String?
 
-  config Config? @relation(fields: [configId], references: [id])
+  config Config? @relation(fields: [configId], references: [id], onDelete: Restrict)
   panel  Panel   @relation(fields: [panelId], references: [id])
 
   @@index([state, detectedAt])
@@ -765,7 +766,7 @@ model RadiusSession {
   createdAt         DateTime                  @default(now())
   updatedAt         DateTime                  @updatedAt
 
-  config Config? @relation(fields: [configId], references: [id])
+  config Config? @relation(fields: [configId], references: [id], onDelete: Restrict)
   panel  Panel   @relation(fields: [panelId], references: [id])
 
   @@unique([nasId, acctSessionId], map: "radius_session_nas_acct_key")
