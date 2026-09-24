@@ -66,6 +66,8 @@ function build() {
     list: record([{ id: GATEWAY }]),
     presets: record(['10.00']),
     setPresets: record(['20.00']),
+    tax: record(null),
+    setTax: record('9'),
     create: record({ id: GATEWAY }),
     update: record({ id: GATEWAY }),
     remove: record({ id: GATEWAY, mode: 'deleted' }),
@@ -81,11 +83,13 @@ describe('a named reseller’s gateways', () => {
     await service.list(owner, RESELLER);
     await service.presets(owner, RESELLER);
     await service.setPresets(owner, RESELLER, ['20.00']);
+    await service.tax(owner, RESELLER);
+    await service.setTax(owner, RESELLER, '9');
     await service.create(owner, RESELLER, { source: 'tenant', displayName: 'Zarinpal' });
     await service.update(owner, RESELLER, { source: 'tenant', id: GATEWAY }, { isActive: true });
     await service.remove(owner, RESELLER, { source: 'tenant', id: GATEWAY });
 
-    expect(seen).toHaveLength(6);
+    expect(seen).toHaveLength(8);
     for (const call of seen) {
       // The reseller is the tenant of the work, and the caller only its author.
       expect(call.actor).toEqual({ adminId: OWNER_USER, tenantId: RESELLER, ip: '10.0.0.9' });

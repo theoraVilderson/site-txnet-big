@@ -31,10 +31,12 @@ import { GATEWAY_ADMIN_READ as READ, GATEWAY_ADMIN_WRITE as WRITE } from './gate
 import {
   CreateGatewayBody,
   DepositPresetsBody,
+  DepositTaxBody,
   ListGatewaysQuery,
   UpdateGatewayBody,
   createGatewaySchema,
   depositPresetsSchema,
+  depositTaxSchema,
   listGatewaysSchema,
   updateGatewaySchema,
 } from './gateway-admin.schema';
@@ -111,6 +113,19 @@ export class GatewayAdminController {
   @RateLimit(WRITE)
   async setPresets(@Body(new ZodValidationPipe(depositPresetsSchema)) body: DepositPresetsBody, @Req() req: Request, @Ip() ip: string) {
     return this.refusing(async () => ({ presets: await this.gateways.setPresets(this.actor(req, ip), body.presets ?? []) }));
+  }
+
+  /** The caller's default tax on a top-up (ADR-0076, F-104-ag); a gateway's own rate overrides it, `null` is none. */
+  @Get('tax')
+  @RateLimit(READ)
+  async tax(@Req() req: Request, @Ip() ip: string) {
+    return this.refusing(async () => ({ taxRatePercent: await this.gateways.tax(this.actor(req, ip)) }));
+  }
+
+  @Put('tax')
+  @RateLimit(WRITE)
+  async setTax(@Body(new ZodValidationPipe(depositTaxSchema)) body: DepositTaxBody, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(async () => ({ taxRatePercent: await this.gateways.setTax(this.actor(req, ip), body.taxRatePercent) }));
   }
 
   @Post()

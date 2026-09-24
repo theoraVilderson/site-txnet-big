@@ -35,6 +35,9 @@ enum AdminAction {
   gateway_delete
   // F-092-v — a tenant's default quick amounts on the top-up page.
   deposit_presets_update
+  // F-104-ag — a tenant's default tax on a top-up (ADR-0076). Its own value:
+  // a price change and a tax change answer different questions afterwards.
+  deposit_tax_update
   // F-092-ak — a person ends an open payment nobody paid. Its own value beside
   // `payment_manual_confirm`: a credit by hand and a refusal by hand are
   // opposite acts, and the trail must say which one a person took.

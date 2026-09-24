@@ -73,6 +73,8 @@ export type GatewayFields = {
   verificationStatus?: string;
   /** Quick amounts on the top-up page; empty inherits the tenant's default (F-092-v). */
   depositPresets?: string[];
+  /** Tax on a top-up through this gateway, 0..100; `null` inherits the tenant's default (ADR-0076). */
+  taxRatePercent?: string | null;
   /** The callback address sent to the provider; `null` = the tenant's panel domain (F-092-w). */
   callbackUrl?: string | null;
 };
@@ -109,6 +111,8 @@ export type GatewayView = {
   roundingMode: string | null;
   /** This gateway's own quick amounts; empty means it inherits the tenant's default (F-092-v). */
   depositPresets: string[];
+  /** This gateway's own tax rate; `null` means it inherits the tenant's default (ADR-0076). */
+  taxRatePercent: string | null;
   /** The callback address sent to the provider, or `null` for the tenant's panel domain (F-092-w). */
   callbackUrl: string | null;
   /** `null` when the vault writer could not be asked; the list still renders. */
@@ -155,6 +159,7 @@ const DECIMAL_COLUMNS = [
   'minRate',
   'maxRate',
   'roundingStep',
+  'taxRatePercent',
 ] as const;
 const PLAIN_COLUMNS = ['displayName', 'isActive', 'useLiveRate'] as const;
 const ENUM_COLUMNS = { providerName: PaymentProviderName, gatewayCategory: GatewayCategory, feeCalculationMode: FeeCalcMode, feeType: FeeType, roundingMode: RateRoundingMode } as const;
@@ -197,6 +202,16 @@ function callbackAddress(value: string | null): string | null {
 
 const presetStrings = (v: unknown): string[] => (Array.isArray(v) ? v.map((d) => new Prisma.Decimal(String(d)).toFixed(2)) : []);
 const dec = (v: unknown): Prisma.Decimal | null => (v === null || v === undefined || v === '' ? null : new Prisma.Decimal(String(v)));
+
+/**
+ * A tax rate as stored (ADR-0076): a percentage, 0..100. The migration's CHECK
+ * stands behind it, but a CHECK answers the operator's typo with a 500.
+ */
+function taxRate(v: unknown): Prisma.Decimal | null {
+  const d = dec(v);
+  if (d && (d.isNegative() || d.greaterThan(100))) throw new GatewayAdminRefused('invalid_range', 'taxRatePercent must be 0..100');
+  return d;
+}
 
 /**
  * Managing payment gateways (F-102-b, D-31): create, change and delete the
@@ -286,6 +301,42 @@ export class GatewayAdminService {
       });
     });
     return presetStrings(presets);
+  }
+
+  /**
+   * The caller's default tax on a top-up (ADR-0076, F-104-ag) — a gateway with
+   * a rate of its own overrides it; `null` is no tax. The caller's tenant only,
+   * like the quick amounts it shares a row with.
+   */
+  async tax(actor: GatewayActor): Promise<string | null> {
+    const row = await tenantTransaction(this.prisma, (db) => db.depositSetting.findUnique({ where: { tenantId: actor.tenantId } }));
+    return str(row?.taxRatePercent);
+  }
+
+  async setTax(actor: GatewayActor, value: string | null): Promise<string | null> {
+    const taxRatePercent = taxRate(value);
+    await tenantTransaction(this.prisma, async (tx) => {
+      const before = str((await tx.depositSetting.findUnique({ where: { tenantId: actor.tenantId } }))?.taxRatePercent);
+      // `update` names the rate alone: the quick amounts on the same row are not this write's.
+      await tx.depositSetting.upsert({
+        where: { tenantId: actor.tenantId },
+        create: { tenantId: actor.tenantId, taxRatePercent, updatedByUserId: actor.adminId },
+        update: { taxRatePercent, updatedByUserId: actor.adminId },
+      });
+      await tx.adminAuditLog.create({
+        data: {
+          tenantId: actor.tenantId,
+          adminId: actor.adminId,
+          action: 'deposit_tax_update',
+          targetEntityType: 'config',
+          targetEntityId: actor.tenantId,
+          oldValue: { taxRatePercent: before },
+          newValue: { taxRatePercent: str(taxRatePercent) },
+          adminIpAddress: actor.ip,
+        },
+      });
+    });
+    return str(taxRatePercent);
   }
 
   /** Every gateway the caller may manage, platform rows first. */
@@ -672,6 +723,7 @@ export class GatewayAdminService {
       const d = dec(r[k]);
       if (d && d.isNegative()) throw new GatewayAdminRefused('invalid_range', k);
     }
+    taxRate(r['taxRatePercent']);
   }
 
   private view(source: GatewaySource, row: Row, credentials: GatewaySecretsState | null): GatewayView {
@@ -703,6 +755,7 @@ export class GatewayAdminService {
       roundingStep: str(row['roundingStep']),
       roundingMode: str(row['roundingMode']),
       depositPresets: presetStrings(row['depositPresets']),
+      taxRatePercent: str(row['taxRatePercent']),
       callbackUrl: str(row['callbackUrl']),
       credentials,
       missingSecrets: credentials

@@ -561,6 +561,81 @@ describe('GatewayAdminService — quick amounts (F-092-v)', () => {
   });
 });
 
+/**
+ * ADR-0076, F-104-ag: the tax on a top-up, set at the same two levels as the
+ * quick amounts — a gateway's own rate overrides the tenant's default on
+ * `deposit_setting`, and `null` inherits. A rate outside 0..100 is refused
+ * before anything is written; a CHECK behind it would only turn the operator's
+ * typo into a 500.
+ */
+describe('GatewayAdminService — tax on a top-up (F-104-ag)', () => {
+  const gw = { source: 'tenant', id: RESELLER_GW } as const;
+
+  it("stores a gateway's own rate, answers it, audits the change, and clears it with null", async () => {
+    const { service, audit, db } = build();
+    // As Postgres reads a row from before any rate was set: the column is there, and null.
+    db.tenantGatewayConfig.rows.find((r) => r['id'] === RESELLER_GW)!['taxRatePercent'] = null;
+
+    const set = await service.update(actor(RESELLER), gw, { taxRatePercent: '9.5' });
+    expect(set.taxRatePercent).toBe('9.5');
+    expect(audit.at(-1)).toMatchObject({ action: 'gateway_update', oldValue: { taxRatePercent: null }, newValue: { taxRatePercent: '9.5' } });
+
+    const cleared = await service.update(actor(RESELLER), gw, { taxRatePercent: null });
+    expect(cleared.taxRatePercent).toBeNull();
+    expect(audit.at(-1)).toMatchObject({ oldValue: { taxRatePercent: '9.5' }, newValue: { taxRatePercent: null } });
+  });
+
+  it('refuses a gateway rate outside 0..100, and writes nothing', async () => {
+    const { service, writes } = build();
+
+    for (const taxRatePercent of ['100.0001', '-1']) {
+      const e = await refusal(() => service.update(actor(RESELLER), gw, { taxRatePercent }));
+      expect(e.reason).toBe('invalid_range');
+      expect(e.message).toContain('taxRatePercent');
+    }
+    expect(writes).toEqual([]);
+  });
+
+  it("reads and writes the caller's own default, audited in the same transaction, and no other tenant's", async () => {
+    const { service, audit, writes } = build();
+
+    expect(await service.tax(actor(RESELLER))).toBeNull();
+    expect(await service.setTax(actor(RESELLER), '9')).toBe('9');
+    expect(await service.tax(actor(RESELLER))).toBe('9');
+    expect(await service.tax(actor(OTHER))).toBeNull();
+    expect(writes).toEqual(['depositSetting.upsert', 'audit', 'commit']);
+    expect(audit.at(-1)).toMatchObject({
+      tenantId: RESELLER,
+      action: 'deposit_tax_update',
+      targetEntityType: 'config',
+      targetEntityId: RESELLER,
+      oldValue: { taxRatePercent: null },
+      newValue: { taxRatePercent: '9' },
+    });
+
+    expect(await service.setTax(actor(RESELLER), null)).toBeNull();
+    expect(audit.at(-1)).toMatchObject({ oldValue: { taxRatePercent: '9' }, newValue: { taxRatePercent: null } });
+  });
+
+  it('leaves the default quick amounts alone, and they leave it alone — one row holds both', async () => {
+    const { service } = build();
+
+    await service.setPresets(actor(RESELLER), ['5']);
+    await service.setTax(actor(RESELLER), '9');
+    await service.setPresets(actor(RESELLER), ['10']);
+
+    expect(await service.presets(actor(RESELLER))).toEqual(['10.00']);
+    expect(await service.tax(actor(RESELLER))).toBe('9');
+  });
+
+  it('refuses a default outside 0..100, and writes nothing', async () => {
+    const { service, writes } = build();
+
+    expect((await refusal(() => service.setTax(actor(RESELLER), '100.5'))).reason).toBe('invalid_range');
+    expect(writes).toEqual([]);
+  });
+});
+
 /** F-092-w: the callback address Zarinpal is given, written per gateway. */
 describe('GatewayAdminService — callback address (F-092-w)', () => {
   it('stores an http(s) address trimmed, answers it, and clears it with null', async () => {

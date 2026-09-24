@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createGatewaySchema, updateGatewaySchema } from './gateway-admin.schema';
+import { createGatewaySchema, depositTaxSchema, updateGatewaySchema } from './gateway-admin.schema';
 
 /**
  * The wire refuses money finer than the column that stores it (F-104-ad).
@@ -38,6 +38,18 @@ describe('gateway admin schema decimals', () => {
       expect(at({ [k]: '0.00012345' }).success).toBe(true);
       expect(errorOf({ [k]: '0.000123456' })).toBe(`${k} must be a decimal string with at most 8 places`);
     }
+  });
+
+  it('takes four places on a tax rate, at both levels, and null inherits (F-104-ag)', () => {
+    expect(at({ taxRatePercent: '9.1234' }).success).toBe(true);
+    expect(at({ taxRatePercent: null }).success).toBe(true);
+    expect(errorOf({ taxRatePercent: '9.12345' })).toBe('taxRatePercent must be a decimal string with at most 4 places');
+
+    expect(depositTaxSchema.safeParse({ taxRatePercent: '9.1234' }).success).toBe(true);
+    expect(depositTaxSchema.safeParse({ taxRatePercent: null }).success).toBe(true);
+    const finer = depositTaxSchema.safeParse({ taxRatePercent: '9.12345' });
+    expect(finer.success ? '' : finer.error.issues[0].message).toBe('taxRatePercent must be a decimal string with at most 4 places');
+    expect(depositTaxSchema.safeParse({}).success).toBe(false);
   });
 
   it('still refuses what it always refused: a negative, a comma, an empty string', () => {

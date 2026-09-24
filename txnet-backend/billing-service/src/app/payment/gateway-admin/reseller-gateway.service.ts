@@ -93,6 +93,14 @@ export class ResellerGatewayService {
     return this.run(actor, tenantId, 'staffWrite', (as) => this.gateways.setPresets(as, values));
   }
 
+  tax(actor: ResellerGatewayActor, tenantId: string): Promise<string | null> {
+    return this.run(actor, tenantId, 'read', (as) => this.gateways.tax(as));
+  }
+
+  setTax(actor: ResellerGatewayActor, tenantId: string, value: string | null): Promise<string | null> {
+    return this.run(actor, tenantId, 'staffWrite', (as) => this.gateways.setTax(as, value));
+  }
+
   create(actor: ResellerGatewayActor, tenantId: string, input: ResellerCreateGatewayInput): Promise<GatewayView> {
     return this.run(actor, tenantId, 'staffWrite', (as) => this.gateways.create(as, { ...input, tenantId: as.tenantId }));
   }

@@ -29,9 +29,11 @@ import { GATEWAY_ADMIN_READ as READ, GATEWAY_ADMIN_WRITE as WRITE } from './gate
 import {
   CreateResellerGatewayBody,
   DepositPresetsBody,
+  DepositTaxBody,
   UpdateGatewayBody,
   createResellerGatewaySchema,
   depositPresetsSchema,
+  depositTaxSchema,
   updateGatewaySchema,
 } from './gateway-admin.schema';
 import {
@@ -111,6 +113,24 @@ export class ResellerGatewayController {
     @Ip() ip: string,
   ) {
     return this.refusing(async () => ({ presets: await this.gateways.setPresets(this.actor(req, ip), tenantId, body.presets ?? []) }));
+  }
+
+  /** The reseller's own default tax on a top-up (ADR-0076, F-104-ag). */
+  @Get('tax')
+  @RateLimit(READ)
+  async tax(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(async () => ({ taxRatePercent: await this.gateways.tax(this.actor(req, ip), tenantId) }));
+  }
+
+  @Put('tax')
+  @RateLimit(WRITE)
+  async setTax(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Body(new ZodValidationPipe(depositTaxSchema)) body: DepositTaxBody,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    return this.refusing(async () => ({ taxRatePercent: await this.gateways.setTax(this.actor(req, ip), tenantId, body.taxRatePercent) }));
   }
 
   @Post()

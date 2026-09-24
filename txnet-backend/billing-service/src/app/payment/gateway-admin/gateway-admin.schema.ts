@@ -68,6 +68,8 @@ const fields = {
   verificationStatus: z.nativeEnum(TenantGatewayVerificationStatus),
   // Normalised and bounded by `deposit-presets.ts`; the schema only keeps the shape sane.
   depositPresets: z.array(z.string().max(20)).max(20),
+  // Tax on a top-up (ADR-0076): `numeric(9, 4)`, 0..100 checked in the service; null inherits the tenant's default.
+  taxRatePercent: decimal('taxRatePercent', 4).nullable(),
   // Checked by `callbackAddress` in the service; the schema only bounds it.
   callbackUrl: z.string().max(600).nullable(),
   merchantId: secret('merchantId'),
@@ -102,6 +104,10 @@ export const updateGatewaySchema = z.object(optional).strict();
 
 export const depositPresetsSchema = z.object({ presets: z.array(z.string().max(20)).max(20) }).strict();
 export type DepositPresetsBody = z.infer<typeof depositPresetsSchema>;
+
+/** The tenant's default tax on a top-up (F-104-ag). Required, so an empty body is not read as "clear it"; `null` is. */
+export const depositTaxSchema = z.object({ taxRatePercent: fields.taxRatePercent }).strict();
+export type DepositTaxBody = z.infer<typeof depositTaxSchema>;
 
 export const listGatewaysSchema = z.object({ tenantId: uuid('tenantId').optional() });
 
