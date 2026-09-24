@@ -1,0 +1,190 @@
+# NestJS auth-service.
+# Included by ../docker-compose.main.yml with `project_directory: .`, so every
+# relative path below resolves from dev-docker/, not from this folder.
+
+services:
+  # ===========================================================================
+  # NestJS Auth Service (Nx Monorepo)
+  # ===========================================================================
+  auth-service:
+    build:
+      context: ../txnet-backend
+      dockerfile: Dockerfile
+      target: ${ENVIRONMENT}
+      extra_hosts:
+        - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
+      args:
+        - APP_NAME=auth-service
+        - DOCKER_REGISTRY=${DOCKER_REGISTRY}
+    container_name: ${STACK_NAME:-txnet}-auth-service
+    restart: unless-stopped
+    volumes:
+      - ../txnet-backend:/app:delegated
+      - /app/node_modules
+      # The Credential Vault's KEK (ADR-0026). Mounted as a file, read-only,
+      # because it must never be an environment variable — an env var is
+      # readable from `docker inspect` and from every child process. In Swarm
+      # this is a real `secrets:` entry landing at the same path; here it is a
+      # bind mount so the dev stack needs no swarm mode. `:ro` and the leading
+      # `./secrets/` are both deliberate: nothing in the app writes it.
+      - ./secrets/vault-kek:/run/secrets/vault-kek:ro
+    environment:
+      - PORT=${AUTH_PORT}
+      - NODE_ENV=${NODE_ENV:-development}
+      # The owner connection. Prisma's CLI reads it by name; the running
+      # service does not use it — it owns every table, and Row-Level
+      # Security does not apply to a table's owner (F-066-m-a).
+      - DATABASE_URL=postgresql://${MAIN_DB_USERNAME}:${MAIN_DB_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      # What the service actually connects with: a login role that owns
+      # nothing and carries NOBYPASSRLS, so the policies bind. Created by
+      # `./scripts/db-login-roles.sh`, which is a manual step on an
+      # existing database — the service refuses to boot without it.
+      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      # The second pool (F-066-m-b). Same database, different role: its policy
+      # is `USING (true)`, so it answers the reads that resolve a tenant and
+      # therefore cannot run inside one. A policy, not a bypass — this role
+      # carries NOBYPASSRLS too.
+      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - REDIS_URL=${REDIS_URL}
+      - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      # The one message this process publishes: an `admin_manual` tick from
+      # `POST /api/auth/workers/:key/run` (F-031-b). Optional by design — the
+      # connection is opened on first use, so an environment without a broker
+      # boots and serves logins, and only that route answers 503.
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+      - AUTOMATION_EXCHANGE=${AUTOMATION_EXCHANGE:-txnet.automation}  # default declared in shared-core/src/lib/automation/bot-update.ts (F-079)
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
+      - JWT_REFRESH_HASH_SECRET=${JWT_REFRESH_HASH_SECRET}
+      - JWT_ACCESS_TTL_SEC=${JWT_ACCESS_TTL_SEC:-900}
+      - OTP_TOKEN_TTL_SEC=${OTP_TOKEN_TTL_SEC:-300}
+      - RESET_TOKEN_TTL_SEC=${RESET_TOKEN_TTL_SEC:-300}
+      # Abuse limits. Defaults are what the code shipped with; a deployment
+      # with a different risk appetite moves them without a rebuild.
+      - LOGIN_FAILURE_LOCK_THRESHOLD=${LOGIN_FAILURE_LOCK_THRESHOLD:-10}
+      # Per-route request limits (F-087). Forwarded empty when unset: the
+      # default for each lives once, in auth-service's env schema, so it is not
+      # repeated here where it could disagree.
+      - LOGIN_PWD_RATE_LIMIT=${LOGIN_PWD_RATE_LIMIT:-}
+      - LOGIN_OTP_REQUEST_RATE_LIMIT=${LOGIN_OTP_REQUEST_RATE_LIMIT:-}
+      - LOGIN_OTP_VERIFY_RATE_LIMIT=${LOGIN_OTP_VERIFY_RATE_LIMIT:-}
+      - REGISTER_RATE_LIMIT=${REGISTER_RATE_LIMIT:-}
+      - REGISTER_VERIFY_RATE_LIMIT=${REGISTER_VERIFY_RATE_LIMIT:-}
+      - PASSWORD_FORGOT_RATE_LIMIT=${PASSWORD_FORGOT_RATE_LIMIT:-}
+      - FORGOT_VERIFY_RATE_LIMIT=${FORGOT_VERIFY_RATE_LIMIT:-}
+      - OTP_PHONE_RATE_LIMIT=${OTP_PHONE_RATE_LIMIT:-}
+      - BOT_UNPROVEN_RATE_LIMIT=${BOT_UNPROVEN_RATE_LIMIT:-}
+      - OTP_DELIVERY_STATUS_RATE_LIMIT=${OTP_DELIVERY_STATUS_RATE_LIMIT:-}
+      - OTP_CHANNELS_RATE_LIMIT=${OTP_CHANNELS_RATE_LIMIT:-}
+      - CAPTCHA_RATE_LIMIT=${CAPTCHA_RATE_LIMIT:-}
+      - BOT_LINK_RESOLVE_RATE_LIMIT=${BOT_LINK_RESOLVE_RATE_LIMIT:-}
+      - BOT_LINK_CONTACT_RATE_LIMIT=${BOT_LINK_CONTACT_RATE_LIMIT:-}
+      - BOT_LINK_STATUS_RATE_LIMIT=${BOT_LINK_STATUS_RATE_LIMIT:-}
+      - BOT_SESSION_RATE_LIMIT=${BOT_SESSION_RATE_LIMIT:-}
+      - BOT_WEBAPP_SESSION_RATE_LIMIT=${BOT_WEBAPP_SESSION_RATE_LIMIT:-}
+      - ACCOUNTS_ADD_OTP_REQUEST_RATE_LIMIT=${ACCOUNTS_ADD_OTP_REQUEST_RATE_LIMIT:-}
+      - ACCOUNTS_ADD_OTP_VERIFY_RATE_LIMIT=${ACCOUNTS_ADD_OTP_VERIFY_RATE_LIMIT:-}
+      - ACCOUNTS_ADD_PASSWORD_RATE_LIMIT=${ACCOUNTS_ADD_PASSWORD_RATE_LIMIT:-}
+      - ACCOUNTS_LIST_RATE_LIMIT=${ACCOUNTS_LIST_RATE_LIMIT:-}
+      - ACCOUNTS_SWITCH_RATE_LIMIT=${ACCOUNTS_SWITCH_RATE_LIMIT:-}
+      - ACCOUNTS_REMOVE_RATE_LIMIT=${ACCOUNTS_REMOVE_RATE_LIMIT:-}
+      - ME_EMAIL_REQUEST_RATE_LIMIT=${ME_EMAIL_REQUEST_RATE_LIMIT:-}
+      - ME_EMAIL_VERIFY_RATE_LIMIT=${ME_EMAIL_VERIFY_RATE_LIMIT:-}
+      # The platform-wide ceiling over every guarded route, as a multiple of
+      # that route's own per-tenant limit (F-066-s). 0 switches it off.
+      - PLATFORM_RATE_LIMIT_FACTOR=${PLATFORM_RATE_LIMIT_FACTOR:-10}
+      - OTP_DELIVERY_MODE=${OTP_DELIVERY_MODE:-console}
+      # Which delivery methods this environment offers. Drop one from the list
+      # and it disappears from GET /api/auth/otp/channels as well.
+      - OTP_ALLOWED_CHANNELS=${OTP_ALLOWED_CHANNELS:-sms}
+      - OTP_DEV_CONSOLE_LOG=${OTP_DEV_CONSOLE_LOG:-false}
+      - BOT_LINK_TOKEN_TTL_SEC=${BOT_LINK_TOKEN_TTL_SEC:-900}
+      # Telegram / Bale, as platforms: the API host and the deep-link host,
+      # which are the same whoever the bot belongs to. Every bot's token,
+      # username and webhook secret is its tenant's, and lives on that tenant's
+      # BotIntegration row and in the Credential Vault (F-066-i).
+      - TELEGRAM_API_BASE=${TELEGRAM_API_BASE:-https://api.telegram.org}
+      - TELEGRAM_DEEP_LINK_BASE=${TELEGRAM_DEEP_LINK_BASE:-https://t.me}
+      - BALE_API_BASE=${BALE_API_BASE:-https://tapi.bale.ai}
+      - BALE_DEEP_LINK_BASE=${BALE_DEEP_LINK_BASE:-https://ble.ir}
+      # The webhook belongs to bot-service (ADR-0011); the deprecated route
+      # this service kept for one release is gone with F-066-i.
+      # Shared secret bot-service presents as X-Service-Token: it waives the
+      # captcha and re-buckets the rate limit, and authenticates no user.
+      - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
+      # A reseller owner's renewal notices also land in the panel inbox (F-019-c).
+      - NOTIFICATION_API_BASE_URL=http://notification-service:3000
+      # The SMS gateway's URL. Its key and sender line are the platform owner's
+      # vault values (F-018-a): `scripts/seed-sms-line.sh` puts them there, and
+      # SMS_API_KEY / SMS_SENDER here would refuse the boot.
+      - SMS_API_URL=${SMS_API_URL:-}
+      # Mail (D-39): plain SMTP. The dev default is the mailpit container
+      # below, which accepts anything and delivers nothing — read the mail at
+      # https://mail.${DOMAIN_NAME}. Point these at a real relay elsewhere.
+      - SMTP_HOST=${SMTP_HOST:-mailpit}
+      - SMTP_PORT=${SMTP_PORT:-1025}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - MAIL_FROM=${MAIL_FROM:-TXNet <no-reply@${DOMAIN_NAME}>}
+      - DOMAIN_NAME=${DOMAIN_NAME}
+      - FRONTEND_ORIGIN=https://panel.${DOMAIN_NAME}
+      - COOKIE_SECURE=${COOKIE_SECURE:-true}
+      - TRUST_PROXY=${TRUST_PROXY}
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+      # No DEFAULT_TENANT_SLUG: there is no fallback tenant (ADR-0025). A Host
+      # that matches no tenant_domain row is answered a neutral 404, so the dev
+      # stack depends on `node prisma/seed.js` having created the row for
+      # api.${DOMAIN_NAME} — see .env.example.
+      # Phone numbers are every country by default (ADR-0018). The region a
+      # number typed without `+` belongs to follows DEFAULT_LANGUAGE unless
+      # DEFAULT_PHONE_COUNTRY overrides it.
+      - DEFAULT_PHONE_COUNTRY=${DEFAULT_PHONE_COUNTRY:-}
+      - SUPPORTED_PHONE_COUNTRIES=${SUPPORTED_PHONE_COUNTRIES:-}
+      - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
+      - LOCALE_SCOPE=backend
+      # A PATH to the mounted secret above, never the key itself (ADR-0026).
+      # Unset it and the service still boots, refusing every credential
+      # operation — nothing writes a tenant credential until F-066-i.
+      - VAULT_KEK_FILE=${VAULT_KEK_FILE:-/run/secrets/vault-kek}
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      # CORS is handled inside the app (app.enableCors, FRONTEND_ORIGIN) —
+      # do not also apply a Traefik-level CORS headers middleware here. A
+      # second layer duplicates Access-Control-Allow-* on the same response,
+      # which browsers reject, so the preflight/POST for login+register
+      # never lands and refresh_token never gets set client-side.
+      - "traefik.http.middlewares.auth-rate-limit.ratelimit.average=100"
+      - "traefik.http.middlewares.auth-rate-limit.ratelimit.period=1m"
+      - "traefik.http.middlewares.auth-rate-limit.ratelimit.burst=50"
+      - "traefik.http.services.auth-service.loadbalancer.server.port=${AUTH_PORT}"
+
+      # **No `Host(...)` on any router the panel calls** (F-066-u, ADR-0060).
+      # The panel calls `/api/<service>` and the realtime path on the domain it
+      # was loaded from — the platform's panel or any reseller's — so these
+      # match on the path alone. Which tenant a host belongs to is decided by
+      # the service (a neutral 404 for an unknown one), as for the callback.
+      # Priority 120 puts them above the panel's own routers, which would
+      # otherwise win by rule length and serve `/api/auth` from Next.js.
+      - "traefik.http.routers.auth-service-http.rule=PathPrefix(`/api/auth`)"
+      - "traefik.http.routers.auth-service-http.priority=120"
+      - "traefik.http.routers.auth-service-http.entrypoints=web"
+      - "traefik.http.routers.auth-service-http.middlewares=auth-rate-limit"
+      - "traefik.http.routers.auth-service-http.service=auth-service"
+
+      # https router for auth-service (with TLS)
+      - "traefik.http.routers.auth-service-https.rule=PathPrefix(`/api/auth`)"
+      - "traefik.http.routers.auth-service-https.priority=120"
+      - "traefik.http.routers.auth-service-https.entrypoints=websecure"
+      - "traefik.http.routers.auth-service-https.tls.certresolver=myresolver"
+      - "traefik.http.routers.auth-service-https.middlewares=auth-rate-limit"
+
+      - "traefik.http.routers.auth-service-https.service=auth-service"
+      - "txnet.logging=true"
+    depends_on:
+      main-db:
+        condition: service_healthy
+      locale-service:
+        condition: service_healthy

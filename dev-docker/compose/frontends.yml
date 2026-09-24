@@ -1,0 +1,160 @@
+# Next.js frontends: site-pwa and coinsite.
+# Included by ../docker-compose.main.yml with `project_directory: .`, so every
+# relative path below resolves from dev-docker/, not from this folder.
+
+services:
+  # ===========================================================================
+  # Next.js PWA — Main Frontend Application
+  # ===========================================================================
+  site-pwa:
+    image: ${ENVIRONMENT}_site-pwa_${WEB_APP_VERSION:-latest}
+    build:
+      target: ${ENVIRONMENT}
+      context: ../site-pwa
+      extra_hosts:
+        - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+        # Empty unless the machine building the image needs a proxy for npm
+        # (F-088). The value used to be baked into the Dockerfile as one
+        # developer's host.
+        BUILD_HTTP_PROXY: ${BUILD_HTTP_PROXY:-}
+        BUILD_HTTPS_PROXY: ${BUILD_HTTPS_PROXY:-}
+        BUILD_NO_PROXY: ${BUILD_NO_PROXY:-}
+    container_name: ${STACK_NAME:-txnet}-site-pwa
+    restart: unless-stopped
+    volumes:
+      - ../site-pwa:/app:delegated
+      - ../site-pwa/node_modules:/app/node_modules
+      - ../site-pwa/.next:/app/.next
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME}
+      - ENVIRONMENT=${ENVIRONMENT}
+      - PORT=8181
+      - HOSTNAME=${DOMAIN_NAME}
+      - JWT_SECRET=${JWT_SECRET}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - MAIN_DB_USERNAME=${MAIN_DB_USERNAME}
+      - MAIN_DB_PASSWORD=${MAIN_DB_PASSWORD}
+      - DB_PORT=${MAIN_DB_PORT:-5432}
+      - SMS_USERNAME=${SMS_USERNAME}
+      - SMS_PASS=${SMS_PASS}
+      - SMS_SENDER_PRIVATE=${SMS_SENDER_PRIVATE}
+      - JWT_SECRET_CAPTCHA=${JWT_SECRET_CAPTCHA}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - NEXT_PUBLIC_PAYMENT_URL=${NEXT_PUBLIC_PAYMENT_URL}
+      # Server only: verifies billing's signed payment result (?t=), so a
+      # hand-typed /payment/success?ref=… shows nothing. Same value as billing.
+      - PAYMENT_RESULT_SECRET=${PAYMENT_RESULT_SECRET:-}
+      # No API origin (F-066-u, ADR-0060): the browser calls `/api/<service>`
+      # and the realtime path on the domain the panel was loaded from, and
+      # Traefik routes them to the services on every host. A build-time origin
+      # made every reseller's panel talk as the platform's host.
+      # Server-to-server only, for the auth-screen session check in src/proxy.ts:
+      # that one stays on private_backend_network, since it runs before the login
+      # page renders and the public hop above would be the whole delay the check
+      # exists to avoid. A failure here just shows the login form.
+      - AUTH_SERVICE_ORIGIN=http://auth-service:${AUTH_PORT}
+      # Server-to-server only, for the domain's brand in the root layout
+      # (src/lib/branding.ts, F-066-v): GET /api/branding with the visitor's
+      # host as Host, on every page render (cached 60s per host). A failure
+      # renders the neutral look, never another tenant's brand.
+      - TENANT_SERVICE_ORIGIN=http://tenant-service:3000
+      - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
+      - LOCALE_SCOPE=frontend
+      # The language a stranger is answered in, same variable the backend reads.
+      # Both names, one value: only NEXT_PUBLIC_ reaches the browser bundle, and
+      # `lib/phone` needs it there to open the country picker on the right
+      # region (src/env.ts).
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+      - NEXT_PUBLIC_DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+      # The realtime gateway answers on the page's own host at the same path
+      # its Traefik router rule carries my-auth-optional on. NEXT_PUBLIC_ is
+      # the only prefix Next inlines into the browser bundle, and the socket is
+      # opened only there (src/env.ts). One value, from the same REALTIME_PATH
+      # gateway-service reads, so the two cannot drift apart.
+      - NEXT_PUBLIC_REALTIME_PATH=${REALTIME_PATH:-/realtime}
+    depends_on:
+      locale-service:
+        condition: service_healthy
+    networks:
+      - private_backend_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # (no custom `dns:` — it would break resolution of compose service names;
+    #  set upstream DNS in /etc/docker/daemon.json if you need it)
+    labels:
+      - "traefik.enable=true"
+      # Panel subdomain
+      - "traefik.http.routers.nextjs.rule=Host(`panel.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.nextjs.entrypoints=websecure"
+      - "traefik.http.routers.nextjs.tls.certresolver=myresolver"
+      - "traefik.http.routers.nextjs.middlewares=nextjs-compress,pwa-security,sw-cache-control"
+      # Compression
+      - "traefik.http.middlewares.nextjs-compress.compress=true"
+      # Security headers for PWA
+      - "traefik.http.middlewares.pwa-security.headers.customFrameOptionsValue=SAMEORIGIN"
+      - "traefik.http.middlewares.pwa-security.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.pwa-security.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.pwa-security.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.pwa-security.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.pwa-security.headers.stsIncludeSubdomains=true"
+      # Service Worker cache control
+      - "traefik.http.middlewares.sw-cache-control.headers.customResponseHeaders.Cache-Control=no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
+      # Every other host (F-066-u, ADR-0060): a reseller's domain reaches the
+      # panel here. The reseller's CDN holds its certificate and points a CNAME
+      # at this gateway (user, 2026-09-18), so no certresolver — TLS here is
+      # the CDN-to-origin hop. Priority 1: every named host above wins. Which
+      # hosts actually *work* is the tenant resolver's call — an unregistered
+      # one gets the page, and a neutral 404 from every service it calls.
+      - "traefik.http.routers.nextjs-any-http.rule=HostRegexp(`.+`)"
+      - "traefik.http.routers.nextjs-any-http.priority=1"
+      - "traefik.http.routers.nextjs-any-http.entrypoints=web"
+      - "traefik.http.routers.nextjs-any-http.middlewares=nextjs-compress,pwa-security,sw-cache-control"
+      - "traefik.http.routers.nextjs-any-http.service=nextjs"
+      - "traefik.http.routers.nextjs-any.rule=HostRegexp(`.+`)"
+      - "traefik.http.routers.nextjs-any.priority=1"
+      - "traefik.http.routers.nextjs-any.entrypoints=websecure"
+      - "traefik.http.routers.nextjs-any.tls=true"
+      - "traefik.http.routers.nextjs-any.middlewares=nextjs-compress,pwa-security,sw-cache-control"
+      - "traefik.http.routers.nextjs-any.service=nextjs"
+      # Backend port
+      - "traefik.http.services.nextjs.loadbalancer.server.port=8181"
+      - "txnet.logging=true"
+
+  # ===========================================================================
+  # Coinsite — Secondary Next.js Frontend
+  # ===========================================================================
+  coinsite:
+    image: ${ENVIRONMENT}_coinsite_${WEB_APP_VERSION:-latest}
+    build:
+      target: ${ENVIRONMENT}
+      context: ../coinsite
+      extra_hosts:
+        - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+    container_name: ${STACK_NAME:-txnet}-coinsite
+    restart: unless-stopped
+    volumes:
+      - ../coinsite:/app:delegated
+      - /app/node_modules # anonymous vol: keep the image's node_modules
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      # The apex domain greets visitors in the deployment's language. coinsite
+      # has no locale-service client, so this is the whole of its i18n: `lang`
+      # and `dir` on <html> (src/env.ts).
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+      - NEXT_PUBLIC_DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.coinsite.rule=Host(`${DOMAIN_NAME}`) || Host(`www.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.coinsite.entrypoints=websecure"
+      - "traefik.http.routers.coinsite.tls.certresolver=myresolver"
+      - "traefik.http.services.coinsite.loadbalancer.server.port=8080"
+      - "txnet.logging=true"

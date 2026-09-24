@@ -1,0 +1,151 @@
+# Edge: Traefik and the Go ForwardAuth handler in front of every route.
+# Included by ../docker-compose.main.yml with `project_directory: .`, so every
+# relative path below resolves from dev-docker/, not from this folder.
+
+services:
+  # ===========================================================================
+  # Traefik v3.7 — Reverse Proxy & TLS Termination
+  # ===========================================================================
+  gateway-handler:
+    image: ${DOCKER_REGISTRY}/traefik:v3.7
+    container_name: ${STACK_NAME:-txnet}-gateway
+    restart: unless-stopped
+    command:
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=${PRIVATE_NET_NAME:-private_backend_network}"
+      # Entrypoints
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # Let's Encrypt — HTTP challenge (production)
+      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.myresolver.acme.email=${EMAIL_SSL}"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "${HTTP_ENTRANCE_PORT:-80}:80"
+      - "${HTTPS_ENTRANCE_PORT:-443}:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ../dev_letsencrypt:/letsencrypt
+    networks:
+      public_gateway_network:
+      private_backend_network:
+        # The API host, answered in-network (F-306-a): bot-service reaches the
+        # panel's billing routes through this gate, as `api.<domain>` so the
+        # router rules match, without leaving the private network.
+        aliases:
+          - api.${DOMAIN_NAME}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard-http.rule=Host(`monitor.${DOMAIN_NAME}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+      - "traefik.http.routers.dashboard-http.entrypoints=web"
+      - "traefik.http.routers.dashboard-http.service=api@internal"
+      - "traefik.http.routers.dashboard-http.middlewares=auth-dashboard"
+      # Above the host-less `/api/<service>` routers (priority 120, ADR-0060),
+      # whose paths sit under the dashboard's `/api` on this host too.
+      - "traefik.http.routers.dashboard-http.priority=1000"
+      - "traefik.http.routers.dashboard-https.rule=Host(`monitor.${DOMAIN_NAME}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+      - "traefik.http.routers.dashboard-https.entrypoints=websecure"
+      - "traefik.http.routers.dashboard-https.tls.certresolver=myresolver"
+      - "traefik.http.routers.dashboard-https.service=api@internal"
+      - "traefik.http.routers.dashboard-https.middlewares=auth-dashboard"
+      - "traefik.http.routers.dashboard-https.priority=1000"
+      - "traefik.http.middlewares.auth-dashboard.basicauth.users=${TRAEFIK_PANEL_USERNAME}:${TRAEFIK_PANEL_PASSWORD}"
+      - "txnet.logging=true"
+
+  # ===========================================================================
+  # Go Authorization Handler — Traefik ForwardAuth Middleware
+  # ===========================================================================
+  authorization-handler:
+    build:
+      context: .. # repo root — shared Go module lives here
+      dockerfile: auth-handler/Dockerfile
+      target: ${ENVIRONMENT}
+      extra_hosts:
+        - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+    container_name: ${STACK_NAME:-txnet}-auth-handler
+    restart: unless-stopped
+    working_dir: /src/auth-handler
+    volumes:
+      - ../auth-handler:/src/auth-handler
+      - ../i18n-platform/clients/go:/src/i18n-platform/clients/go:ro
+    environment:
+      - GATEWAY_PORT=${GATEWAY_PORT}
+      - JWT_SECRET=${JWT_ACCESS_SECRET}
+      - REDIS_URL=${REDIS_URL}
+      - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      - PERMISSIONS_FILE_PATH=/src/auth-handler/configs/permissions.yaml
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+      - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
+      - LOCALE_SCOPE=backend
+      # Browser origins that may read a refusal (401/403/500) from this gate.
+      # Traefik returns it to the client as-is, so the service's own CORS never
+      # runs on it; without this an expired token reads as a CORS error.
+      - CORS_ALLOWED_ORIGINS=https://panel.${DOMAIN_NAME}
+      # How long the boot blocks for the first snapshots (F-086). It was
+      # hardcoded twice at two different values; the gateway waits longer than
+      # the shared client's default because it cannot retry — it blocks its own
+      # start, and coming up without translations means serving raw message
+      # keys to every user.
+      - LOCALE_BOOT_TIMEOUT=${LOCALE_BOOT_TIMEOUT:-60s}
+    depends_on:
+      locale-service:
+        condition: service_healthy
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      # ForwardAuth middleware — validates every request that uses it
+      - "traefik.http.middlewares.my-auth.forwardauth.address=http://authorization-handler:${INTERAL_BACKEND_PORT:-8080}/validate"
+      # Strip fake headers from incoming requests (security)
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-User-Id="
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Actor-Id="
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-User-Permissions="
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Tenant-Id="
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Role-Id="
+      # The impersonation pair. Forwarded since the feature shipped and never
+      # stripped, which `tools/contracts.py` found on its first run (F-072).
+      # `my-auth` happens to cover it — Traefik deletes every header in
+      # `authResponseHeaders` from the request before copying the auth
+      # response onto it — but that is a property of one middleware, not a
+      # boundary: a router carrying `strip-fake-headers` without a ForwardAuth
+      # would pass a client-set `X-Impersonated: true` straight through, and
+      # downstream reads it as an audit fact about who is acting.
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Impersonated="
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Impersonated-By="
+      # F-067-h. `gateway-service` re-checks `session:<id>` on a timer, because
+      # a WebSocket outlives by hours the access token that opened it. It is
+      # stripped here for the same reason as every header above: downstream
+      # trusts it, so a client must not be able to set it.
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Session-Id="
+      # ADR-0031. Set by the optional gate on a 2xx that identified nobody, so
+      # `gateway-service` can tell an anonymous caller from a router that lost
+      # its middleware. Stripped here because downstream reads it as evidence
+      # that the gate ran.
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Auth-Anonymous="
+      # F-104-q. The messenger whose chat a session was minted in; billing
+      # offers an in-chat gateway on it, so a browser must not be able to claim it.
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Chat-Platform="
+      # F-104-ab. That chat's id: billing records it as an in-chat payer's.
+      - "traefik.http.middlewares.strip-fake-headers.headers.customrequestheaders.X-Chat-User-Id="
+      - "traefik.http.middlewares.my-auth.forwardauth.authResponseHeaders=X-User-Id,X-Tenant-Id,X-Role-Id,X-User-Permissions,X-Impersonated,X-Impersonated-By,X-Session-Id,X-Chat-Platform,X-Chat-User-Id"
+
+      # The optional gate (ADR-0031): the same decision as `my-auth` for a
+      # caller that brought a credential, and a 200 identifying nobody for one
+      # that did not. The realtime router uses it, because a WebSocket here is
+      # opened before anyone signs in — the OTP delivery result is pushed onto
+      # one during registration (F-067-j).
+      #
+      # It is a second middleware rather than a flag on the first because
+      # ForwardAuth's address is what chooses the behaviour, and a router picks
+      # a middleware by name. Every other router keeps `my-auth` and is
+      # unaffected.
+      - "traefik.http.middlewares.my-auth-optional.forwardauth.address=http://authorization-handler:${INTERAL_BACKEND_PORT:-8080}/validate-optional"
+      - "traefik.http.middlewares.my-auth-optional.forwardauth.authResponseHeaders=X-User-Id,X-Tenant-Id,X-Role-Id,X-User-Permissions,X-Impersonated,X-Impersonated-By,X-Session-Id,X-Chat-Platform,X-Chat-User-Id,X-Auth-Anonymous"
+
+      - "txnet.logging=true"

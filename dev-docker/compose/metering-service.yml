@@ -1,0 +1,70 @@
+# NestJS metering-service.
+# Included by ../docker-compose.main.yml with `project_directory: .`, so every
+# relative path below resolves from dev-docker/, not from this folder.
+
+services:
+  # ===========================================================================
+  # NestJS Metering Service (Nx Monorepo) — collection passes become usage
+  # ---------------------------------------------------------------------------
+  # ADR-0077, F-027-n. Its own process rather than a folder in billing-service:
+  # it consumes `network.usage.#` at whatever rate the panels are polled at,
+  # writes the highest-volume table on the platform, and holds the cross-tenant
+  # pool — none of which belongs in a replica that is also answering a user's
+  # request. No Traefik labels and no port: nothing can reach it from outside,
+  # which is the point of a process holding that pool.
+  # ===========================================================================
+  metering-service:
+    build:
+      context: ../txnet-backend
+      dockerfile: Dockerfile
+      target: ${ENVIRONMENT}
+      extra_hosts:
+        - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
+      args:
+        - APP_NAME=metering-service
+        - DOCKER_REGISTRY=${DOCKER_REGISTRY}
+    container_name: ${STACK_NAME:-txnet}-metering-service
+    restart: unless-stopped
+    volumes:
+      - ../txnet-backend:/app:delegated
+      - /app/node_modules
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      # Overrides the image's baked APP_NAME so every backend app shares one
+      # built image — worker-service's comment says why at length.
+      - APP_NAME=metering-service
+      # The NOBYPASSRLS login role, with no fallback to the owner (F-066-m-a).
+      # `traffic_raw_log` carries a policy since F-027-ak and the tenant is
+      # bound per delta, inside the transaction that writes the row.
+      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      # The second pool, one reader: a delta names a config, and a pass over a
+      # platform-owned panel carries no tenant at all, so the read that
+      # resolves one cannot itself be scoped (ADR-0024).
+      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+      - AUTOMATION_EXCHANGE=${AUTOMATION_EXCHANGE:-txnet.automation}  # the one exchange (F-079)
+      # Rejected passes go to the platform's dead-letter exchange (F-067-d);
+      # the pass is kept as the evidence of what arrived.
+      - AUTOMATION_DLX=${AUTOMATION_DLX:-txnet.automation.dlx}
+      # This service's own queue, bound to `network.usage.#` — its own, so a
+      # backlog of usage never sits in front of an OTP.
+      - METERING_QUEUE=${METERING_QUEUE:-txnet.network.usage}
+      # One pass is up to 500 deltas and each is its own transaction, so the
+      # work behind one message is already substantial (F-027-m).
+      - METERING_PREFETCH=${METERING_PREFETCH:-2}
+      # Where a Grant's committed total goes for `/sub` (F-609-a). A write that
+      # may fail: Redis down never fails or retries a delta.
+      - REDIS_URL=${REDIS_URL}
+      - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      # At or above sub-service's SUB_RENDER_TTL, or /sub's fallback goes stale.
+      - SUB_USAGE_TTL_SECONDS=${SUB_USAGE_TTL_SECONDS:-86400}
+    networks:
+      - private_backend_network
+    labels:
+      - "txnet.logging=true"
+    depends_on:
+      main-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy

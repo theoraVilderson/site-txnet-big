@@ -1,0 +1,98 @@
+# i18n: locale-service and the two machine translators it asks.
+# Included by ../docker-compose.main.yml with `project_directory: .`, so every
+# relative path below resolves from dev-docker/, not from this folder.
+
+services:
+  # ===========================================================================
+  # locale-service — i18n source of truth (gRPC). Every backend/frontend
+  # service preloads a scope from here on boot and keeps it live via Watch.
+  # ===========================================================================
+  locale-service:
+    build:
+      context: ../i18n-platform/services/locale-service
+      dockerfile: Dockerfile
+    container_name: ${STACK_NAME:-txnet}-locale-service
+    restart: unless-stopped
+    volumes:
+      - ../locales:/locales:ro
+      # Runtime-written text (catalog names, drafts) — state, back it up like
+      # the database (ADR-0050).
+      - locales_runtime:/locales-runtime
+    environment:
+      - GRPC_ADDR=:${LOCALE_SERVICE_HOST_PORT:-50051}
+      - LOCALES_DIR=/locales
+      - LOCALES_RUNTIME_DIR=/locales-runtime
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/locale-service", "-healthcheck"]
+      interval: 5s
+      timeout: 3s
+      start_period: 5s
+      retries: 12
+    networks:
+      - private_backend_network
+    labels:
+      - "txnet.logging=true"
+
+  # ===========================================================================
+  # translator — self-hosted LibreTranslate (Argos models). Drafts catalog text
+  # for every language an admin did not write; a human publishes it (ADR-0050).
+  # Private network only; models download once into the volume. Which models
+  # load is deployment data (TRANSLATOR_LANGUAGES), never code (§1.1): add a
+  # language's code there when the language is added to locales/.
+  # ===========================================================================
+  translator:
+    image: ${DOCKER_REGISTRY}/libretranslate/libretranslate:v1.6.2
+    container_name: ${STACK_NAME:-txnet}-translator
+    restart: unless-stopped
+    volumes:
+      - translator_models:/home/libretranslate/.local
+    environment:
+      - LT_LOAD_ONLY=${TRANSLATOR_LANGUAGES:-en,fa}
+      - LT_UPDATE_MODELS=true
+      - LT_DISABLE_WEB_UI=true
+      - LT_THREADS=${TRANSLATOR_THREADS:-2}
+    healthcheck:
+      test: ["CMD-SHELL", "./venv/bin/python scripts/healthcheck.py"]
+      interval: 15s
+      timeout: 5s
+      start_period: 600s
+      retries: 5
+    networks:
+      - private_backend_network
+    labels:
+      - "txnet.logging=true"
+
+  # ===========================================================================
+  # translator-llm — a local LLM (Ollama) that drafts catalog text before
+  # LibreTranslate is asked (ADR-0050 amendment 3). Free and offline: the model
+  # is pulled once into the volume (on first start, if missing) and nothing
+  # leaves the deployment after that. qwen2.5:3b is ~2 GB on disk and needs
+  # ~3-4 GB RAM; no GPU required. No route to ollama.com (offline, national
+  # internet): download the GGUF anywhere and run scripts/translator-llm-import.sh.
+  # ===========================================================================
+  translator-llm:
+    image: ${DOCKER_REGISTRY}/ollama/ollama:0.6.8
+    container_name: ${STACK_NAME:-txnet}-translator-llm
+    restart: unless-stopped
+    volumes:
+      - translator_llm_models:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=${TRANSLATOR_LLM_KEEP_ALIVE:-30m}
+      - TRANSLATOR_LLM_MODEL=${TRANSLATOR_LLM_MODEL:-qwen2.5:3b}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        ollama serve & pid=$$!;
+        sleep 5;
+        ollama show "$$TRANSLATOR_LLM_MODEL" >/dev/null 2>&1 || ollama pull "$$TRANSLATOR_LLM_MODEL" || echo "model pull failed: drafts fall back to LibreTranslate";
+        wait $$pid
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    networks:
+      - private_backend_network
+    labels:
+      - "txnet.logging=true"

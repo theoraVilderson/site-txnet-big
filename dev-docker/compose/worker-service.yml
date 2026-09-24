@@ -1,0 +1,126 @@
+# NestJS worker-service.
+# Included by ../docker-compose.main.yml with `project_directory: .`, so every
+# relative path below resolves from dev-docker/, not from this folder.
+
+services:
+  # ===========================================================================
+  # NestJS Worker Service (Nx Monorepo) — background work, no HTTP surface
+  # ===========================================================================
+  # ADR-0027: background work runs as RabbitMQ consumers in a process that
+  # serves no requests. There are no Traefik labels and no port below, and that
+  # is the decision rather than an omission — an in-process scheduler runs
+  # inside a request-serving replica, so two replicas run every job twice and a
+  # slow job degrades logins.
+  worker-service:
+    build:
+      context: ../txnet-backend
+      dockerfile: Dockerfile
+      target: ${ENVIRONMENT}
+      extra_hosts:
+        - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
+      args:
+        - APP_NAME=worker-service
+        - DOCKER_REGISTRY=${DOCKER_REGISTRY}
+    container_name: ${STACK_NAME:-txnet}-worker-service
+    restart: unless-stopped
+    volumes:
+      - ../txnet-backend:/app:delegated
+      - /app/node_modules
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      # Which app `scripts/dev-serve.js` builds and runs. The Dockerfile bakes
+      # this from its `APP_NAME` build arg, but that arg sits in the *base*
+      # stage, so giving it a new value invalidates the cache from layer one
+      # and re-runs `npm ci` — which needs egress this host does not have.
+      # Setting it here overrides the image's own ENV, so every backend app can
+      # share one built image. The source tree is bind-mounted and
+      # node_modules is a volume, so nothing else about the image differs.
+      - APP_NAME=worker-service
+      # The same NOBYPASSRLS login role auth-service uses, and no fallback to
+      # the owner connection (F-066-m-a). automation's three worker tables
+      # carry no tenantId and no policy; the grants cover every schema.
+      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+      # The shared store behind the per-tenant run cap (F-067-e). Same
+      # namespace and version as auth-service and bot-service: one bump
+      # abandons every key this platform holds (ADR-0005).
+      - REDIS_URL=${REDIS_URL}
+      - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      - AUTOMATION_EXCHANGE=${AUTOMATION_EXCHANGE:-txnet.automation}  # default declared in shared-core/src/lib/automation/bot-update.ts (F-079)
+      # `.v2`: F-067-d declares this queue with a dead-letter exchange, and a
+      # durable queue's arguments cannot be changed in place — asserting the old
+      # name would fail every boot with PRECONDITION_FAILED. The old
+      # `txnet.automation.ticks` drains itself and can be deleted at leisure.
+      - AUTOMATION_QUEUE=${AUTOMATION_QUEUE:-txnet.automation.ticks.v2}
+      - AUTOMATION_DLX=${AUTOMATION_DLX:-txnet.automation.dlx}
+      - AUTOMATION_DEAD_QUEUE=${AUTOMATION_DEAD_QUEUE:-txnet.automation.ticks.dead}
+      - BOT_UPDATE_QUEUE_PREFIX=${BOT_UPDATE_QUEUE_PREFIX:-txnet.automation.bot.update}
+      # One consumer per queue at prefetch 1, so a chat's updates stay in
+      # order; the count is this bot's whole cross-chat parallelism (F-067-b).
+      - BOT_UPDATE_QUEUES=${BOT_UPDATE_QUEUES:-4}
+      - AUTOMATION_PREFETCH=${AUTOMATION_PREFETCH:-4}
+      # Shared across replicas since F-067-e — a set of expiring leases in
+      # Redis, not a per-process count.
+      - AUTOMATION_TENANT_CONCURRENCY=${AUTOMATION_TENANT_CONCURRENCY:-2}
+      - AUTOMATION_DEFER_MS=${AUTOMATION_DEFER_MS:-5000}
+      # How many unpublished outbox_event rows one relay run claims (F-067-c).
+      - AUTOMATION_OUTBOX_BATCH=${AUTOMATION_OUTBOX_BATCH:-100}
+      - AUTOMATION_TICK_INTERVAL_MS=${AUTOMATION_TICK_INTERVAL_MS:-60000}
+      # Also the lifetime of a tenant run lease (F-067-e): the slot a dead
+      # process held and the run row it left open expire together.
+      - AUTOMATION_RUN_TIMEOUT_MS=${AUTOMATION_RUN_TIMEOUT_MS:-600000}
+      # The internal seam a job reaches another service's code through
+      # (F-031-c). `VaultRetentionJob` calls auth-service because the
+      # Credential Vault is tenant's code in that process and an Nx app cannot
+      # import an Nx app. Both are optional here: this service boots without
+      # them and the job fails its own run, into bot_execution_log.
+      - AUTH_API_BASE_URL=http://auth-service:${AUTH_PORT}
+      - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
+      - AUTH_API_TIMEOUT_MS=${AUTH_API_TIMEOUT_MS:-30000}
+      # The other end of the same seam: bot-service owns the conversation a
+      # queued update runs (F-067-b).
+      - BOT_API_BASE_URL=http://bot-service:${BOT_PORT:-3000}
+      - BOT_API_TIMEOUT_MS=${BOT_API_TIMEOUT_MS:-30000}
+      # The third end of it: billing-service owns what an expired top-up is —
+      # the coupon reservation functions and this platform's two pools live
+      # there (F-092-k). The same SERVICE_AUTH_TOKEN above opens it; the token
+      # says which process is calling and never which user.
+      - BILLING_API_BASE_URL=http://billing-service:3000
+      - BILLING_API_TIMEOUT_MS=${BILLING_API_TIMEOUT_MS:-30000}
+      # The fourth end of it: tenant-service owns a reseller's subscription and
+      # its renewal since F-018-v (ADR-0058). The sweep job and the
+      # credited-wallet consumer call it; `AUTH_API_TIMEOUT_MS` is the budget
+      # for both seams.
+      - TENANT_API_BASE_URL=http://tenant-service:3000
+      # Reconciliation's own budget (F-092-l): a batch there is one call to a
+      # bank per payment, and the bank is the slow part.
+      - BILLING_RECONCILE_TIMEOUT_MS=${BILLING_RECONCILE_TIMEOUT_MS:-120000}
+      # The campaign fan-out's end of the seam (F-035-d): notification-service
+      # owns the rows and the audience query (ADR-0052).
+      - NOTIFICATION_API_BASE_URL=http://notification-service:3000
+      - NOTIFICATION_API_TIMEOUT_MS=${NOTIFICATION_API_TIMEOUT_MS:-60000}
+      # The FX worker's sources and its per-source deadline (F-0603, D-22).
+      # A list rather than a constant because three of the four exchanges are
+      # on the US OFAC list since June 2026 and dropping one must be config.
+      # The default is the two endpoints D-22 states in full; wallex and bitpin
+      # are implemented but unverified.
+      - FX_SOURCES=${FX_SOURCES:-nobitex,tabdeal}
+      - FX_SOURCE_TIMEOUT_MS=${FX_SOURCE_TIMEOUT_MS:-3000}
+      # The quorum and the hard sanity band F-0604 reduces with. Wide on
+      # purpose: the band rejects what cannot be a price, the median handles
+      # disagreement, and a sudden move is F-0605's.
+      - FX_MIN_SOURCES=${FX_MIN_SOURCES:-2}
+      - FX_SANITY_MIN_RIAL=${FX_SANITY_MIN_RIAL:-100000}
+      - FX_SANITY_MAX_RIAL=${FX_SANITY_MAX_RIAL:-10000000}
+      - FX_MAX_DEVIATION_PERCENT=${FX_MAX_DEVIATION_PERCENT:-5}
+      - WORKER_NAME=${WORKER_NAME:-}
+    networks:
+      - private_backend_network
+    labels:
+      - "txnet.logging=true"
+    depends_on:
+      main-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy

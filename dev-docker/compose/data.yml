@@ -1,0 +1,106 @@
+# Data plane: Redis, PostgreSQL, Mailpit, RabbitMQ.
+# Included by ../docker-compose.main.yml with `project_directory: .`, so every
+# relative path below resolves from dev-docker/, not from this folder.
+
+services:
+  # ===========================================================================
+  # Redis — Session Store & Cache
+  # ===========================================================================
+  memory-data:
+    image: ${DOCKER_REGISTRY}/redis:8.8-alpine
+    container_name: ${STACK_NAME:-txnet}-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --save ""
+      --requirepass ${REDIS_PASSWORD}
+      --appendonly yes
+      --appendfsync everysec
+    volumes:
+      - redis_vol_internal:/data
+    networks:
+      - private_backend_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "--no-auth-warning",
+          "-a",
+          "${REDIS_PASSWORD}",
+          "ping",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================================================
+  # PostgreSQL — Primary Relational Database
+  # ===========================================================================
+  main-db:
+    image: ${DOCKER_REGISTRY}/postgres:18-alpine
+    container_name: ${STACK_NAME:-txnet}-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${MAIN_DB_USERNAME}
+      - POSTGRES_PASSWORD=${MAIN_DB_PASSWORD}
+      - POSTGRES_DB=${MAIN_DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    networks:
+      - private_backend_network
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U ${MAIN_DB_USERNAME} -d ${MAIN_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ===========================================================================
+  # Mailpit — dev SMTP sink (D-39). Catches every mail auth-service sends; the
+  # inbox is at mail.${DOMAIN_NAME}. Not a relay: nothing leaves the machine.
+  # ===========================================================================
+  mailpit:
+    image: ${DOCKER_REGISTRY}/axllent/mailpit:v1.27
+    container_name: ${STACK_NAME:-txnet}-mailpit
+    restart: unless-stopped
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mailpit.rule=Host(`mail.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.mailpit.entrypoints=websecure"
+      - "traefik.http.routers.mailpit.tls.certresolver=myresolver"
+      - "traefik.http.services.mailpit.loadbalancer.server.port=8025"
+
+  # ===========================================================================
+  # RabbitMQ — Message Broker
+  # ===========================================================================
+  rabbitmq:
+    image: ${DOCKER_REGISTRY}/rabbitmq:4.2-management-alpine
+    container_name: ${STACK_NAME:-txnet}-rabbitmq
+    restart: unless-stopped
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - private_backend_network
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mq-admin.rule=Host(`mq.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.mq-admin.entrypoints=websecure"
+      - "traefik.http.routers.mq-admin.tls.certresolver=myresolver"
+      - "traefik.http.services.mq-admin.loadbalancer.server.port=15672"

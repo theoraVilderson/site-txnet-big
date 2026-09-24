@@ -105,7 +105,7 @@ LOCALE_SERVICE_ADDR=localhost:50051 LOCALE_SCOPE=backend  ... auth-handler / aut
 LOCALE_SERVICE_ADDR=localhost:50051 LOCALE_SCOPE=frontend ... site-pwa
 ```
 
-In `dev-docker/docker-compose.main.yml` the `locale-service` container mounts
+In `dev-docker/compose/i18n.yml` the `locale-service` container mounts
 `../locales:/locales:ro` and every consumer gets `LOCALE_SERVICE_ADDR=locale-service:50051`.
 
 ## Contract summary (`proto/locale/v1/locale.proto`)

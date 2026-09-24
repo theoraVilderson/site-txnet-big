@@ -1,0 +1,24 @@
+# Networks and named volumes shared by every service file.
+# Included by ../docker-compose.main.yml with `project_directory: .`, so every
+# relative path below resolves from dev-docker/, not from this folder.
+
+networks:
+  public_gateway_network:
+    name: ${PUBLIC_NET_NAME:-public_gateway_network}
+
+  private_backend_network:
+    name: ${PRIVATE_NET_NAME:-private_backend_network}
+    driver: bridge
+    # No fixed subnet: let Docker pick a free pool. Pinning a /16 makes a
+    # second stack (or a leftover network) fail with "Pool overlaps".
+    # To pin one anyway, add:  ipam: { config: [{ subnet: 10.x.0.0/16 }] }
+
+volumes:
+  redis_vol_internal:
+  postgres_data:
+  rabbitmq_data:
+  translator_models:
+  translator_llm_models:
+  locales_runtime:
+  # Uploaded files (F-018-m): the object-storage `local` driver's volume.
+  object_storage:

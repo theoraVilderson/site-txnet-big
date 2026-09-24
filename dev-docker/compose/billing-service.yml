@@ -1,0 +1,246 @@
+# NestJS billing-service.
+# Included by ../docker-compose.main.yml with `project_directory: .`, so every
+# relative path below resolves from dev-docker/, not from this folder.
+
+services:
+  # ===========================================================================
+  # NestJS Billing Service (Nx Monorepo) — Protected by ForwardAuth
+  # ===========================================================================
+  billing-service:
+    build:
+      context: ../txnet-backend
+      dockerfile: Dockerfile
+      target: ${ENVIRONMENT}
+      extra_hosts:
+        - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
+      args:
+        - APP_NAME=billing-service
+        - DOCKER_REGISTRY=${DOCKER_REGISTRY}
+    container_name: ${STACK_NAME:-txnet}-billing-service
+    restart: unless-stopped
+    # No `command:` — the image's CMD, as for auth-service. On the dev target
+    # that is `scripts/dev-serve.js`: one webpack watch over the mounted
+    # source, restarting the app on every save, so a code change needs no
+    # rebuild. A pinned `node dist/.../main.js` ran whatever bundle was last
+    # built and ignored every edit.
+    volumes:
+      - ../txnet-backend:/app:delegated
+      - /app/node_modules
+      # The same vault KEK auth-service mounts, read-only: this service decrypts
+      # a gateway's merchant id itself (ADR-0039).
+      - ./secrets/vault-kek:/run/secrets/vault-kek:ro
+    environment:
+      # Validated at boot by `app/config/env.validation.ts` (F-089); a typo'd
+      # variable is a refusal to start rather than a default nobody chose.
+      - PORT=3000
+      - NODE_ENV=${NODE_ENV:-development}
+      - GLOBAL_PREFIX=${BILLING_GLOBAL_PREFIX:-api}
+      - PUBLIC_HOST=billing-service
+      # The panel calls this from the browser, cross-origin, the same way it
+      # calls auth-service (F-093-c) — so the same origin, and the service
+      # refuses to boot without one when NODE_ENV=production.
+      - FRONTEND_ORIGIN=https://panel.${DOMAIN_NAME}
+      # The platform's own processes on the internal seam (F-092-k): the
+      # worker's expiry tick proves itself with this and nothing else reaches
+      # `/api/internal/*`, which Traefik does not route at all. Empty closes
+      # the seam — and is refused when NODE_ENV=production.
+      - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
+      # The HMAC key the deposit callback signs the payment result with; the
+      # panel shows a result only under it. Same value on site-pwa below.
+      - PAYMENT_RESULT_SECRET=${PAYMENT_RESULT_SECRET:-}
+      # The other direction on the same seam (F-102-c): gateway management
+      # relays a gateway's secrets to tenant-service, the vault's only writer
+      # (F-018-ab).
+      - TENANT_API_BASE_URL=http://tenant-service:3000
+      # A Mini App's invoice link is made by the tenant's bot (F-104-q).
+      - BOT_API_BASE_URL=http://bot-service:${BOT_PORT:-3000}
+      # The app role, never the owner: RLS does not bind a table's owner
+      # (F-066-m-a). Every gated route reads the tenant forward-auth forwards
+      # (F-092-a) and uses this pool.
+      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      # The second pool, for the one read that resolves a tenant instead of
+      # running inside one: the public gateway callback's host lookup (F-092-j).
+      # Its role's policy is `USING (true)` and it holds no BYPASSRLS.
+      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      # The response envelope translates through locale-service (F-094).
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+      - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
+      # Drafts catalog names in every language but the item's source (F-1533-d, ADR-0050).
+      # Unset = no drafts; names still publish and read with the en -> fa fallback.
+      - TRANSLATOR_URL=${TRANSLATOR_URL:-}
+      # A local LLM first, LibreTranslate behind it (ADR-0050 amendment 3).
+      # Unset TRANSLATOR_LLM_URL = LibreTranslate alone.
+      - TRANSLATOR_LLM_URL=${TRANSLATOR_LLM_URL:-}
+      - TRANSLATOR_LLM_MODEL=${TRANSLATOR_LLM_MODEL:-qwen2.5:3b}
+      # A PATH, never the key (ADR-0026).
+      - VAULT_KEK_FILE=${VAULT_KEK_FILE:-/run/secrets/vault-kek}
+      # Refused when NODE_ENV=production.
+      - PAYMENT_GATEWAY_SANDBOX=${PAYMENT_GATEWAY_SANDBOX:-false}
+      # How long a pending top-up stays payable, and its coupon holds with it (F-092-i).
+      - PAYMENT_PENDING_TTL_SEC=${PAYMENT_PENDING_TTL_SEC:-}
+      # How long an expired top-up keeps its coupon holds — the bank may still charge it (F-092-ah).
+      - COUPON_HOLD_AFTER_EXPIRY_SEC=${COUPON_HOLD_AFTER_EXPIRY_SEC:-}
+      # How long the callback waits on the bank's verify before answering "verifying" (F-092-ab).
+      - DEPOSIT_CALLBACK_VERIFY_BUDGET_MS=${DEPOSIT_CALLBACK_VERIFY_BUDGET_MS:-}
+      # One gateway-callback origin for every tenant. Dev and test only — in
+      # production the host is the tenant's own panel domain (ADR-0020).
+      - PAYMENT_CALLBACK_ORIGIN=${PAYMENT_CALLBACK_ORIGIN:-}
+      # The rate limiter's counters (F-092-r) — the keyspace every service writes.
+      - REDIS_URL=${REDIS_URL}
+      - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      # Per-user limits; empty means the schema default (F-087).
+      - PLATFORM_RATE_LIMIT_FACTOR=${PLATFORM_RATE_LIMIT_FACTOR:-}
+      - DEPOSIT_GATEWAYS_RATE_LIMIT=${DEPOSIT_GATEWAYS_RATE_LIMIT:-}
+      - DEPOSIT_QUOTE_RATE_LIMIT=${DEPOSIT_QUOTE_RATE_LIMIT:-}
+      - DEPOSIT_START_RATE_LIMIT=${DEPOSIT_START_RATE_LIMIT:-}
+      - DEPOSIT_ABANDON_RATE_LIMIT=${DEPOSIT_ABANDON_RATE_LIMIT:-}
+      - DEPOSIT_IN_CHAT_RATE_LIMIT=${DEPOSIT_IN_CHAT_RATE_LIMIT:-}
+      # The callback's budget is per authority, not per user: it is public.
+      - DEPOSIT_CALLBACK_RATE_LIMIT=${DEPOSIT_CALLBACK_RATE_LIMIT:-}
+      # Per gateway per minute: the webhook is public too (F-104-b).
+      - DEPOSIT_WEBHOOK_RATE_LIMIT=${DEPOSIT_WEBHOOK_RATE_LIMIT:-}
+      - WALLET_HISTORY_RATE_LIMIT=${WALLET_HISTORY_RATE_LIMIT:-}
+      - WALLET_PAYMENTS_RATE_LIMIT=${WALLET_PAYMENTS_RATE_LIMIT:-}
+      - GIFT_REDEEM_RATE_LIMIT=${GIFT_REDEEM_RATE_LIMIT:-}
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.billing-service.loadbalancer.server.port=3000"
+
+      # `strip-fake-headers,my-auth` in that order: strip what the client
+      # claimed, then let the gate set what it proved. The required gate, not
+      # the optional one — every billing route needs a signed-in caller, and the
+      # service refuses a request that arrives without the identity headers
+      # (`app/request/identity.middleware.ts`). `/api/health` is not published.
+      - "traefik.http.routers.billing-service-http.rule=PathPrefix(`/api/billing`)"
+      - "traefik.http.routers.billing-service-http.priority=120"
+      - "traefik.http.routers.billing-service-http.entrypoints=web"
+      - "traefik.http.routers.billing-service-http.middlewares=strip-fake-headers,my-auth"
+      - "traefik.http.routers.billing-service-http.service=billing-service"
+
+      - "traefik.http.routers.billing-service.rule=PathPrefix(`/api/billing`)"
+      - "traefik.http.routers.billing-service.priority=120"
+      - "traefik.http.routers.billing-service.entrypoints=websecure"
+      - "traefik.http.routers.billing-service.tls.certresolver=myresolver"
+      - "traefik.http.routers.billing-service.middlewares=strip-fake-headers,my-auth"
+      - "traefik.http.routers.billing-service.service=billing-service"
+
+      # The CORS preflight, and the one thing `my-auth` must not see.
+      #
+      # The panel calls billing cross-origin with a bearer token (F-093-c), so
+      # every call is preceded by an `OPTIONS` the browser sends **without**
+      # the Authorization header — by specification. The gate refuses it, and a
+      # refused preflight means the browser never sends the real request at
+      # all: what the user sees is the panel's own "could not reach the server"
+      # line, on a service that is up and answering. `auth-service` never hit
+      # this because its routers carry no `my-auth`; billing is the first gated
+      # thing a browser talks to directly.
+      #
+      # Nothing is weakened. A preflight carries no credentials, no cookies and
+      # no body, `strip-fake-headers` still runs so nothing can claim an
+      # identity on it, and the real request behind it still goes through the
+      # gate. What answers here is the service's own `enableCors`, which knows
+      # the allowed origin (`FRONTEND_ORIGIN`) and replies 204.
+      #
+      # Priority beats the two gated routers above and stays under the
+      # callback's 200, which is Host-less and must keep winning on its path.
+      - "traefik.http.routers.billing-preflight-http.rule=PathPrefix(`/api/billing`) && Method(`OPTIONS`)"
+      - "traefik.http.routers.billing-preflight-http.entrypoints=web"
+      - "traefik.http.routers.billing-preflight-http.priority=150"
+      - "traefik.http.routers.billing-preflight-http.middlewares=strip-fake-headers"
+      - "traefik.http.routers.billing-preflight-http.service=billing-service"
+
+      - "traefik.http.routers.billing-preflight.rule=PathPrefix(`/api/billing`) && Method(`OPTIONS`)"
+      - "traefik.http.routers.billing-preflight.entrypoints=websecure"
+      - "traefik.http.routers.billing-preflight.priority=150"
+      - "traefik.http.routers.billing-preflight.tls.certresolver=myresolver"
+      - "traefik.http.routers.billing-preflight.middlewares=strip-fake-headers"
+      - "traefik.http.routers.billing-preflight.service=billing-service"
+
+      # Catalog management (F-026-d) runs inside billing-service (ADR-0049) but
+      # is published on its own path, `/api/catalog` — the user's call,
+      # 2026-09-14, over `/api/billing/catalog`. The same gate and the same
+      # preflight exemption as billing above, for the same reasons.
+      - "traefik.http.routers.catalog-http.rule=PathPrefix(`/api/catalog`)"
+      - "traefik.http.routers.catalog-http.priority=120"
+      - "traefik.http.routers.catalog-http.entrypoints=web"
+      - "traefik.http.routers.catalog-http.middlewares=strip-fake-headers,my-auth"
+      - "traefik.http.routers.catalog-http.service=billing-service"
+
+      - "traefik.http.routers.catalog.rule=PathPrefix(`/api/catalog`)"
+      - "traefik.http.routers.catalog.priority=120"
+      - "traefik.http.routers.catalog.entrypoints=websecure"
+      - "traefik.http.routers.catalog.tls.certresolver=myresolver"
+      - "traefik.http.routers.catalog.middlewares=strip-fake-headers,my-auth"
+      - "traefik.http.routers.catalog.service=billing-service"
+
+      - "traefik.http.routers.catalog-preflight-http.rule=PathPrefix(`/api/catalog`) && Method(`OPTIONS`)"
+      - "traefik.http.routers.catalog-preflight-http.entrypoints=web"
+      - "traefik.http.routers.catalog-preflight-http.priority=150"
+      - "traefik.http.routers.catalog-preflight-http.middlewares=strip-fake-headers"
+      - "traefik.http.routers.catalog-preflight-http.service=billing-service"
+
+      - "traefik.http.routers.catalog-preflight.rule=PathPrefix(`/api/catalog`) && Method(`OPTIONS`)"
+      - "traefik.http.routers.catalog-preflight.entrypoints=websecure"
+      - "traefik.http.routers.catalog-preflight.priority=150"
+      - "traefik.http.routers.catalog-preflight.tls.certresolver=myresolver"
+      - "traefik.http.routers.catalog-preflight.middlewares=strip-fake-headers"
+      - "traefik.http.routers.catalog-preflight.service=billing-service"
+
+      # The gateway callback (F-092-j) — the one billing route **without**
+      # `my-auth`, because a bank redirects a browser to it and a browser
+      # arriving from a bank carries no session. `strip-fake-headers` stays:
+      # nothing reads an identity here, and a public route is exactly where a
+      # forged `X-Tenant-Id` would be tried.
+      #
+      # **No `Host(...)` on purpose.** The callback is minted on each tenant's
+      # own panel domain (ADR-0020), so a rule naming one host would work for
+      # the platform and for nobody else, and adding a Traefik label per
+      # reseller is the per-container tenancy ADR-0025 forecloses. The path is
+      # the whole rule; which tenant it belongs to is decided by the service,
+      # against `tenant_domain`, and a host nobody owns gets a neutral 404
+      # there rather than a route here.
+      #
+      # The priority beats both the gated `/api/billing` routers above and the
+      # panel's own `Host(panel.…)` router, which would otherwise serve this
+      # path to Next.js. It is explicit rather than left to Traefik's
+      # rule-length default, because that default is not a rule anyone should
+      # have to recompute when a hostname changes.
+      - "traefik.http.routers.billing-callback-http.rule=PathPrefix(`/api/billing/deposit/callback`)"
+      - "traefik.http.routers.billing-callback-http.entrypoints=web"
+      - "traefik.http.routers.billing-callback-http.priority=200"
+      - "traefik.http.routers.billing-callback-http.middlewares=strip-fake-headers"
+      - "traefik.http.routers.billing-callback-http.service=billing-service"
+
+      - "traefik.http.routers.billing-callback.rule=PathPrefix(`/api/billing/deposit/callback`)"
+      - "traefik.http.routers.billing-callback.entrypoints=websecure"
+      - "traefik.http.routers.billing-callback.priority=200"
+      - "traefik.http.routers.billing-callback.tls.certresolver=myresolver"
+      - "traefik.http.routers.billing-callback.middlewares=strip-fake-headers"
+      - "traefik.http.routers.billing-callback.service=billing-service"
+
+      # The second public door (F-104-b, ADR-0051): a provider's server posts a
+      # signed result. Same shape as the callback — no `my-auth`, no `Host(...)`
+      # — because a provider calls one URL per gateway on whatever host it was
+      # given; the gateway id in the path is resolved by the service, and an
+      # unknown one is a neutral 404 there.
+      - "traefik.http.routers.billing-webhook-http.rule=PathPrefix(`/api/billing/deposit/webhook/`)"
+      - "traefik.http.routers.billing-webhook-http.entrypoints=web"
+      - "traefik.http.routers.billing-webhook-http.priority=200"
+      - "traefik.http.routers.billing-webhook-http.middlewares=strip-fake-headers"
+      - "traefik.http.routers.billing-webhook-http.service=billing-service"
+
+      - "traefik.http.routers.billing-webhook.rule=PathPrefix(`/api/billing/deposit/webhook/`)"
+      - "traefik.http.routers.billing-webhook.entrypoints=websecure"
+      - "traefik.http.routers.billing-webhook.priority=200"
+      - "traefik.http.routers.billing-webhook.tls.certresolver=myresolver"
+      - "traefik.http.routers.billing-webhook.middlewares=strip-fake-headers"
+      - "traefik.http.routers.billing-webhook.service=billing-service"
+      - "txnet.logging=true"
+    depends_on:
+      main-db:
+        condition: service_healthy
+      locale-service:
+        condition: service_healthy

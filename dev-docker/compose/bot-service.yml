@@ -1,0 +1,128 @@
+# NestJS bot-service.
+# Included by ../docker-compose.main.yml with `project_directory: .`, so every
+# relative path below resolves from dev-docker/, not from this folder.
+
+services:
+  # ===========================================================================
+  # NestJS Bot Service (Nx Monorepo) — the Telegram/Bale surface
+  # ---------------------------------------------------------------------------
+  # It holds no database credentials and no JWT secret on purpose: every
+  # decision comes from auth-service over HTTP, exactly as the panel's does
+  # (ADR-0009). What it owns is the inbound webhook — one unguessable path per
+  # bot — and the conversation state in Redis.
+  # ===========================================================================
+  bot-service:
+    build:
+      context: ../txnet-backend
+      dockerfile: Dockerfile
+      target: ${ENVIRONMENT}
+      extra_hosts:
+        - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
+      args:
+        - APP_NAME=bot-service
+        - DOCKER_REGISTRY=${DOCKER_REGISTRY}
+    container_name: ${STACK_NAME:-txnet}-bot-service
+    restart: unless-stopped
+    volumes:
+      - ../txnet-backend:/app:delegated
+      - /app/node_modules
+    environment:
+      - PORT=${BOT_PORT:-3000}
+      - NODE_ENV=${NODE_ENV:-development}
+      - REDIS_URL=${REDIS_URL}
+      # Same namespace and version as auth-service: one bump abandons every
+      # key this platform holds, bot sessions included (ADR-0005).
+      - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      # In-network, so bot traffic never leaves the private network to reach
+      # the API it depends on.
+      - AUTH_API_BASE_URL=http://auth-service:${AUTH_PORT}
+      # Billing through the gate, never billing-service directly (F-306-a): its
+      # routes trust only what `my-auth` writes. The chat's access token is the
+      # Bearer; Traefik's network alias keeps it in-network.
+      - BILLING_API_BASE_URL=http://api.${DOMAIN_NAME}
+      # The same gate, for the one tenant route the bot reads (F-311-c): the
+      # door's verdict on whether this chat may administer the reseller whose
+      # bot it is (`GET /api/tenants/:id/access`, F-311-e). Unset, the member
+      # menu simply has no management row.
+      - TENANT_API_BASE_URL=http://api.${DOMAIN_NAME}
+      # And again for the reseller's own campaigns (F-313-b): drafting, sizing
+      # and starting a bulk message go through the gate to notification's
+      # reseller-named routes (F-313-d). Unset, the reseller panel has no
+      # bulk-message row.
+      - NOTIFICATION_API_BASE_URL=http://api.${DOMAIN_NAME}
+      # The one exception (F-104-ab): the in-chat payment relay goes to
+      # billing's `/api/internal/*` directly, with the service token and the
+      # sender — a payment's events need no chat session.
+      - BILLING_INTERNAL_BASE_URL=http://billing-service:3000
+      # A bot chat has no host to resolve a tenant from, and there is no
+      # fallback tenant (ADR-0025). Since F-066-i an update names its own
+      # tenant — the one its webhook path resolved to — so this is only the
+      # fallback for calls that are not answering an update. `prisma/seed.js`
+      # prints the id it created.
+      - BOT_TENANT_ID=${BOT_TENANT_ID:-}
+      - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
+      # The webhook verifies and enqueues; worker-service runs the flow and
+      # calls back in (F-067-b). Required here, unlike in auth-service: this
+      # service's only route is the one that publishes.
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+      - AUTOMATION_EXCHANGE=${AUTOMATION_EXCHANGE:-txnet.automation}  # default declared in shared-core/src/lib/automation/bot-update.ts (F-079)
+      # Must equal worker-service's BOT_UPDATE_QUEUES: this side hashes a chat
+      # into a routing key, that side declares the queues bound to it (D-16).
+      - BOT_UPDATE_QUEUES=${BOT_UPDATE_QUEUES:-4}
+      - AUTOMATION_PUBLISH_CONFIRM_MS=${AUTOMATION_PUBLISH_CONFIRM_MS:-5000}
+      - BOT_SESSION_TTL_SEC=${BOT_SESSION_TTL_SEC:-2592000}
+      - BOT_NAV_TTL_SEC=${BOT_NAV_TTL_SEC:-1800}
+      - TELEGRAM_API_BASE=${TELEGRAM_API_BASE:-https://api.telegram.org}
+      - TELEGRAM_DEEP_LINK_BASE=${TELEGRAM_DEEP_LINK_BASE:-https://t.me}
+      - BALE_API_BASE=${BALE_API_BASE:-https://tapi.bale.ai}
+      - BALE_DEEP_LINK_BASE=${BALE_DEEP_LINK_BASE:-https://ble.ir}
+      # On boot this service points every tenant's bot at its own path,
+      # <public base>/api/bots/<platform>/<webhookPath> (F-321).
+      - BOT_WEBHOOK_AUTO_REGISTER=${BOT_WEBHOOK_AUTO_REGISTER:-true}
+      - BOT_WEBHOOK_PUBLIC_BASE=${BOT_WEBHOOK_PUBLIC_BASE:-}
+      - TELEGRAM_WEBHOOK_PUBLIC_BASE=${TELEGRAM_WEBHOOK_PUBLIC_BASE:-}
+      - BALE_WEBHOOK_PUBLIC_BASE=${BALE_WEBHOOK_PUBLIC_BASE:-}
+      - DOMAIN_NAME=${DOMAIN_NAME}
+      - PANEL_BASE_URL=https://panel.${DOMAIN_NAME}
+      - TRUST_PROXY=${TRUST_PROXY}
+      # The bot answers in DEFAULT_LANGUAGE unless a chat picks otherwise; the
+      # messenger's own language_code is the last resort (ADR-0016). The three
+      # BOT_* vars below are optional overrides — an unset one is simply absent
+      # inside the container, which is what `:-` guarantees here.
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+      - BOT_DEFAULT_LANGUAGE=${BOT_DEFAULT_LANGUAGE:-}
+      # The same variable auth-service reads: the region a number typed in the
+      # chat without a `+` belongs to. Unset, it follows the bot's language.
+      - DEFAULT_PHONE_COUNTRY=${DEFAULT_PHONE_COUNTRY:-}
+      - BOT_LANG_TTL_SEC=${BOT_LANG_TTL_SEC:-}
+      - BOT_COMMAND_LANGS=${BOT_COMMAND_LANGS:-}
+      - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
+      - LOCALE_SCOPE=backend
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.bot-service.loadbalancer.server.port=${BOT_PORT:-3000}"
+      # Explicit priority: auth-service's https router also matches the bare
+      # host, so without this the two rules are decided by rule length alone.
+      - "traefik.http.routers.bot-service-http.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/bot`)"
+      - "traefik.http.routers.bot-service-http.entrypoints=web"
+      - "traefik.http.routers.bot-service-http.priority=100"
+      - "traefik.http.routers.bot-service-http.service=bot-service"
+      - "traefik.http.routers.bot-service-https.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/bot`)"
+      - "traefik.http.routers.bot-service-https.entrypoints=websecure"
+      - "traefik.http.routers.bot-service-https.tls.certresolver=myresolver"
+      - "traefik.http.routers.bot-service-https.priority=100"
+      - "traefik.http.routers.bot-service-https.service=bot-service"
+      - "txnet.logging=true"
+    depends_on:
+      auth-service:
+        condition: service_started
+      locale-service:
+        condition: service_healthy
+      # Since F-067-b the webhook's whole job is to publish, so this service
+      # cannot serve its one route without the broker and refuses to boot
+      # without RABBITMQ_URL.
+      rabbitmq:
+        condition: service_healthy

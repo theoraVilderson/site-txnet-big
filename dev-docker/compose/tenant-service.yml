@@ -1,0 +1,175 @@
+# NestJS tenant-service.
+# Included by ../docker-compose.main.yml with `project_directory: .`, so every
+# relative path below resolves from dev-docker/, not from this folder.
+
+services:
+  tenant-service:
+    build:
+      context: ../txnet-backend
+      dockerfile: Dockerfile
+      target: ${ENVIRONMENT}
+      extra_hosts:
+        - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
+      args:
+        - APP_NAME=tenant-service
+        - DOCKER_REGISTRY=${DOCKER_REGISTRY}
+    container_name: ${STACK_NAME:-txnet}-tenant-service
+    restart: unless-stopped
+    volumes:
+      - ../txnet-backend:/app:delegated
+      - /app/node_modules
+      # The object-storage `local` driver's root (F-018-m). One node or one
+      # shared volume: a replica on another disk would hold other files.
+      - object_storage:/data/objects
+      # The Credential Vault's KEK (ADR-0026): the vault's internal seams —
+      # the gateway-secret writer and the retention sweep — live here (F-018-ab).
+      - ./secrets/vault-kek:/run/secrets/vault-kek:ro
+    environment:
+      # Tenant administration, out of auth-service (F-018-t, ADR-0058).
+      # Validated at boot by `app/config/env.validation.ts`.
+      - PORT=3000
+      - NODE_ENV=${NODE_ENV:-development}
+      - GLOBAL_PREFIX=${TENANT_GLOBAL_PREFIX:-api}
+      - PUBLIC_HOST=tenant-service
+      # A new reseller's host is `<slug>.${DOMAIN_NAME}` (F-018-y).
+      - DOMAIN_NAME=${DOMAIN_NAME}
+      - FRONTEND_ORIGIN=https://panel.${DOMAIN_NAME}
+      # `worker-service`'s renewal reaches `/api/internal/*` once F-018-v moves
+      # it here; Traefik does not route it. Refused empty in production.
+      - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
+      # The app role, never the owner (F-066-m-a).
+      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      # The platform owner administers every reseller: a policy, not a bypass (ADR-0053).
+      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+      - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
+      - REDIS_URL=${REDIS_URL}
+      - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      # Per-user limits; empty means the schema default (F-087).
+      - PLATFORM_RATE_LIMIT_FACTOR=${PLATFORM_RATE_LIMIT_FACTOR:-}
+      - RESELLER_PURCHASE_READ_RATE_LIMIT=${RESELLER_PURCHASE_READ_RATE_LIMIT:-}
+      - RESELLER_PURCHASE_WRITE_RATE_LIMIT=${RESELLER_PURCHASE_WRITE_RATE_LIMIT:-}
+      # The whole `public/` prefix, per visitor IP per minute (F-018-al) — the
+      # routes nobody signs in to, spent in `PublicHostMiddleware`.
+      - PUBLIC_ROUTE_RATE_LIMIT=${PUBLIC_ROUTE_RATE_LIMIT:-}
+      # `req.ip` is Traefik's without it, so every visitor would share one
+      # bucket (F-018-al). One hop: Traefik, then this service.
+      - TRUST_PROXY=${TRUST_PROXY}
+      # Object storage (F-018-m): only `local` is built; its root is the volume above.
+      - OBJECT_STORAGE_DRIVER=${OBJECT_STORAGE_DRIVER:-local}
+      - OBJECT_STORAGE_LOCAL_ROOT=/data/objects
+      # A PATH, never the key (ADR-0026). Unset = every vault operation refused.
+      - VAULT_KEK_FILE=${VAULT_KEK_FILE:-/run/secrets/vault-kek}
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.tenant-service.loadbalancer.server.port=3000"
+
+      # The required gate, as for billing: every route needs a signed-in caller.
+      # No business route answers yet (F-018-t); the routes move in from F-018-u.
+      - "traefik.http.routers.tenant-service-http.rule=(PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`))"
+      - "traefik.http.routers.tenant-service-http.priority=120"
+      - "traefik.http.routers.tenant-service-http.entrypoints=web"
+      - "traefik.http.routers.tenant-service-http.middlewares=strip-fake-headers,my-auth"
+      - "traefik.http.routers.tenant-service-http.service=tenant-service"
+
+      - "traefik.http.routers.tenant-service.rule=(PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`))"
+      - "traefik.http.routers.tenant-service.priority=120"
+      - "traefik.http.routers.tenant-service.entrypoints=websecure"
+      - "traefik.http.routers.tenant-service.tls.certresolver=myresolver"
+      - "traefik.http.routers.tenant-service.middlewares=strip-fake-headers,my-auth"
+      - "traefik.http.routers.tenant-service.service=tenant-service"
+
+      # The CORS preflight carries no Authorization header by specification;
+      # billing's labels say why it must skip `my-auth` and why nothing weakens.
+      - "traefik.http.routers.tenant-preflight-http.rule=(PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`)) && Method(`OPTIONS`)"
+      - "traefik.http.routers.tenant-preflight-http.entrypoints=web"
+      - "traefik.http.routers.tenant-preflight-http.priority=150"
+      - "traefik.http.routers.tenant-preflight-http.middlewares=strip-fake-headers"
+      - "traefik.http.routers.tenant-preflight-http.service=tenant-service"
+
+      - "traefik.http.routers.tenant-preflight.rule=(PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`)) && Method(`OPTIONS`)"
+      - "traefik.http.routers.tenant-preflight.entrypoints=websecure"
+      - "traefik.http.routers.tenant-preflight.priority=150"
+      - "traefik.http.routers.tenant-preflight.tls.certresolver=myresolver"
+      - "traefik.http.routers.tenant-preflight.middlewares=strip-fake-headers"
+      - "traefik.http.routers.tenant-preflight.service=tenant-service"
+
+      # Every public route of this service (F-018-ak, ADR-0065): one router
+      # pair for the prefix, never one per route. No `my-auth` — nobody signs
+      # in to these; the service names the tenant from the Host and holds each
+      # route to the doors its `@PublicRoute` declares (the neutral 404 on any
+      # other). A new public route is a controller under `public/tenant/` and
+      # nothing here. Another service joins with a pair like this one, once.
+      - "traefik.http.routers.tenant-public-http.rule=PathPrefix(`/api/public/tenant`)"
+      - "traefik.http.routers.tenant-public-http.entrypoints=web"
+      - "traefik.http.routers.tenant-public-http.priority=130"
+      - "traefik.http.routers.tenant-public-http.middlewares=strip-fake-headers"
+      - "traefik.http.routers.tenant-public-http.service=tenant-service"
+
+      - "traefik.http.routers.tenant-public.rule=PathPrefix(`/api/public/tenant`)"
+      - "traefik.http.routers.tenant-public.entrypoints=websecure"
+      - "traefik.http.routers.tenant-public.priority=130"
+      - "traefik.http.routers.tenant-public.tls.certresolver=myresolver"
+      - "traefik.http.routers.tenant-public.middlewares=strip-fake-headers"
+      - "traefik.http.routers.tenant-public.service=tenant-service"
+
+      # @deprecated since 2026-09-19, remove after the next release (F-018-ak):
+      # the three routers below are the paths before ADR-0065, kept so a page
+      # or a cached image URL from the last build still answers. They reach the
+      # same controllers as `/api/public/tenant/*`.
+      # The custom-domain probe (F-018-i): the sweep's own request, arriving
+      # through a reseller's CDN, so no caller is signed in. It answers only a
+      # host with a tenant_domain row, and the neutral 404 anywhere else.
+      - "traefik.http.routers.tenant-domain-probe-http.rule=PathPrefix(`/api/tenant-domain-probe`)"
+      - "traefik.http.routers.tenant-domain-probe-http.entrypoints=web"
+      - "traefik.http.routers.tenant-domain-probe-http.priority=130"
+      - "traefik.http.routers.tenant-domain-probe-http.middlewares=strip-fake-headers"
+      - "traefik.http.routers.tenant-domain-probe-http.service=tenant-service"
+
+      - "traefik.http.routers.tenant-domain-probe.rule=PathPrefix(`/api/tenant-domain-probe`)"
+      - "traefik.http.routers.tenant-domain-probe.entrypoints=websecure"
+      - "traefik.http.routers.tenant-domain-probe.priority=130"
+      - "traefik.http.routers.tenant-domain-probe.tls.certresolver=myresolver"
+      - "traefik.http.routers.tenant-domain-probe.middlewares=strip-fake-headers"
+      - "traefik.http.routers.tenant-domain-probe.service=tenant-service"
+
+      # The file route (F-018-m): an <img> on a panel or landing page carries no
+      # session, so no gate. The service answers only a key in the Host's own
+      # tenant, and the neutral 404 for every other host and key.
+      - "traefik.http.routers.tenant-files-http.rule=PathPrefix(`/api/files/`)"
+      - "traefik.http.routers.tenant-files-http.entrypoints=web"
+      - "traefik.http.routers.tenant-files-http.priority=130"
+      - "traefik.http.routers.tenant-files-http.middlewares=strip-fake-headers"
+      - "traefik.http.routers.tenant-files-http.service=tenant-service"
+
+      - "traefik.http.routers.tenant-files.rule=PathPrefix(`/api/files/`)"
+      - "traefik.http.routers.tenant-files.entrypoints=websecure"
+      - "traefik.http.routers.tenant-files.priority=130"
+      - "traefik.http.routers.tenant-files.tls.certresolver=myresolver"
+      - "traefik.http.routers.tenant-files.middlewares=strip-fake-headers"
+      - "traefik.http.routers.tenant-files.service=tenant-service"
+
+      # The public branding read (F-018-h): a stranger's first page load has no
+      # session. The service answers the Host's own tenant over the file
+      # route's doors, and the neutral 404 for any other host.
+      - "traefik.http.routers.tenant-branding-http.rule=Path(`/api/branding`)"
+      - "traefik.http.routers.tenant-branding-http.entrypoints=web"
+      - "traefik.http.routers.tenant-branding-http.priority=130"
+      - "traefik.http.routers.tenant-branding-http.middlewares=strip-fake-headers"
+      - "traefik.http.routers.tenant-branding-http.service=tenant-service"
+
+      - "traefik.http.routers.tenant-branding.rule=Path(`/api/branding`)"
+      - "traefik.http.routers.tenant-branding.entrypoints=websecure"
+      - "traefik.http.routers.tenant-branding.priority=130"
+      - "traefik.http.routers.tenant-branding.tls.certresolver=myresolver"
+      - "traefik.http.routers.tenant-branding.middlewares=strip-fake-headers"
+      - "traefik.http.routers.tenant-branding.service=tenant-service"
+      - "txnet.logging=true"
+    depends_on:
+      main-db:
+        condition: service_healthy
+      locale-service:
+        condition: service_healthy

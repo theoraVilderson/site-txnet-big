@@ -46,7 +46,7 @@ supplies `externals`/`cache`/`devtool` tuning; not tracked as any unit's
 
 | Stack | Compose file | Project | Contents |
 |---|---|---|---|
-| main | `dev-docker/docker-compose.main.yml` | `txnet-main` / `devtxnet` / `prodtxnet` | Traefik, locale-service, auth-handler, auth-service, bot-service, billing-service, network-service, site-pwa, coinsite, Postgres, Redis, RabbitMQ |
+| main | `dev-docker/docker-compose.main.yml` (only `include:`s `dev-docker/compose/*.yml`, one file per service) | `txnet-main` / `devtxnet` / `prodtxnet` | Traefik, locale-service, auth-handler, auth-service, bot-service, billing-service, network-service, site-pwa, coinsite, Postgres, Redis, RabbitMQ |
 | monitoring | `dev-docker/monitoring/docker-compose.sys-monitor.yml` | `txnet-monitor` | Prometheus, Grafana, Loki, Promtail, node-exporter, cAdvisor, Alertmanager |
 | bug-tracker | `dev-docker/bug-tracker/docker-compose.bug-tracker.yml` | `txnet-bugtracker` | Glitchtip (+ own Postgres/Redis/worker) |
 | registry | `dev-docker/registry/docker-compose.registry.yml` | `txnet-registry` | private Docker registry |

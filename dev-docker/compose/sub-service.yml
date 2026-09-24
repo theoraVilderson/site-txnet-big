@@ -1,0 +1,70 @@
+# Go sub-service.
+# Included by ../docker-compose.main.yml with `project_directory: .`, so every
+# relative path below resolves from dev-docker/, not from this folder.
+
+services:
+  # ===========================================================================
+  # sub-service — `GET /sub/{token}` (Go, ADR-0082, unit sub-api)
+  # ---------------------------------------------------------------------------
+  # Its own deployable so that a flood of `/sub` traffic, or a crash in it,
+  # cannot stall the collector. It connects as `txnet_cross_tenant` like
+  # network-service — a host is resolved before any tenant is known — but in a
+  # read-only session, and it *is* routed: the one query it answers is keyed by
+  # the token's hash and the request host, and a token only answers on a
+  # `subscription` domain of its own Grant's tenant (catalog C-16).
+  #
+  # Same router shape as the billing callback: no `my-auth` (the token is the
+  # only authentication, no cookie is read), no `Host(...)` (every tenant serves
+  # it on its own subscription domain, ADR-0025), and a priority above the
+  # panel's host router, which would otherwise hand `/sub/` to Next.js.
+  # ===========================================================================
+  sub-service:
+    build:
+      context: ../sub-service
+      dockerfile: Dockerfile
+      target: ${ENVIRONMENT}
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+    container_name: ${STACK_NAME:-txnet}-sub-service
+    restart: unless-stopped
+    working_dir: /src
+    volumes:
+      - ../sub-service:/src
+    environment:
+      - SUB_SERVICE_PORT=${SUB_SERVICE_PORT:-8091}
+      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      # The render cache (F-113-c, ADR-0083). SUB_RENDER_TTL is also the
+      # Profile-Update-Interval client apps are told, so whole hours only.
+      - REDIS_URL=${REDIS_URL}
+      - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      - SUB_RENDER_TTL=${SUB_RENDER_TTL:-1h}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      main-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${SUB_SERVICE_PORT:-8091}/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 6
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.sub-service.loadbalancer.server.port=${SUB_SERVICE_PORT:-8091}"
+
+      - "traefik.http.routers.sub-http.rule=PathPrefix(`/sub/`)"
+      - "traefik.http.routers.sub-http.entrypoints=web"
+      - "traefik.http.routers.sub-http.priority=200"
+      - "traefik.http.routers.sub-http.middlewares=strip-fake-headers"
+      - "traefik.http.routers.sub-http.service=sub-service"
+
+      - "traefik.http.routers.sub.rule=PathPrefix(`/sub/`)"
+      - "traefik.http.routers.sub.entrypoints=websecure"
+      - "traefik.http.routers.sub.priority=200"
+      - "traefik.http.routers.sub.tls.certresolver=myresolver"
+      - "traefik.http.routers.sub.middlewares=strip-fake-headers"
+      - "traefik.http.routers.sub.service=sub-service"
+      - "txnet.logging=true"

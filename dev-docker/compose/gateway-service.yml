@@ -1,0 +1,94 @@
+# NestJS gateway-service (WebSocket gateway).
+# Included by ../docker-compose.main.yml with `project_directory: .`, so every
+# relative path below resolves from dev-docker/, not from this folder.
+
+services:
+  # ===========================================================================
+  # NestJS Gateway Service (Nx Monorepo) — the WebSocket gateway (F-067-h)
+  # ---------------------------------------------------------------------------
+  # One socket per signed-in user, multiplexed into channels. It holds no
+  # database and no JWT secret: the upgrade goes through `my-auth` like every
+  # other request, and this process reads the identity headers that come back
+  # (ADR-0030). That is the whole reason owning a realtime gateway is cheap
+  # here — there is no second identity model to run beside the first.
+  #
+  # Its one dependency is the Redis holding `session:<id>`, which it re-reads
+  # on a timer so a revoked session does not keep a live socket.
+  # ===========================================================================
+  gateway-service:
+    build:
+      context: ../txnet-backend
+      dockerfile: Dockerfile
+      target: ${ENVIRONMENT}
+      extra_hosts:
+        - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
+      args:
+        - APP_NAME=gateway-service
+        - DOCKER_REGISTRY=${DOCKER_REGISTRY}
+    container_name: ${STACK_NAME:-txnet}-gateway-service
+    restart: unless-stopped
+    volumes:
+      - ../txnet-backend:/app:delegated
+      - /app/node_modules
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${REALTIME_PORT:-3000}
+      # Same namespace and version as auth-service, bot-service and
+      # worker-service: one bump abandons every key this platform holds
+      # (ADR-0005). This process only ever reads `session:<id>`.
+      - REDIS_URL=${REDIS_URL}
+      - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      # Must agree with the router rule below. A socket reachable on a path the
+      # gate does not cover would be an unauthenticated socket.
+      - REALTIME_PATH=${REALTIME_PATH:-/realtime}
+      - REALTIME_HEARTBEAT_MS=${REALTIME_HEARTBEAT_MS:-30000}
+      # The window a revoked session keeps its socket — a security number, not
+      # a tuning one. One EXISTS per distinct session per tick.
+      - REALTIME_SESSION_RECHECK_MS=${REALTIME_SESSION_RECHECK_MS:-60000}
+      - REALTIME_MAX_SUBSCRIPTIONS=${REALTIME_MAX_SUBSCRIPTIONS:-32}
+      - REALTIME_MAX_CONNECTIONS_PER_USER=${REALTIME_MAX_CONNECTIONS_PER_USER:-4}
+      # The cap that applies when there is no user to count against (ADR-0031).
+      - REALTIME_MAX_CONNECTIONS_PER_IP=${REALTIME_MAX_CONNECTIONS_PER_IP:-16}
+      - REALTIME_MAX_FRAME_BYTES=${REALTIME_MAX_FRAME_BYTES:-8192}
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.gateway-service.loadbalancer.server.port=${REALTIME_PORT:-3000}"
+
+      # The realtime router. `strip-fake-headers,my-auth-optional` in that
+      # order: strip what the client claimed, then let the gate set what it
+      # proved. Traefik runs a WebSocket upgrade through ForwardAuth like any
+      # other request, which is what makes one gate answer for both (ADR-0030).
+      #
+      # **The optional gate, not `my-auth`** (ADR-0031). A socket here is the
+      # live-data transport and is opened before anyone signs in, so an upgrade
+      # with no credential has to reach the service rather than be refused at
+      # the gate. A credential that *is* presented and fails is still a 401 —
+      # the gate does not downgrade it — so an authenticated socket is exactly
+      # as authenticated as it was before this changed.
+      #
+      # No rate-limit middleware here on purpose: `auth-rate-limit` counts
+      # requests, and a WebSocket is one request that then lives for hours —
+      # it would do nothing against the failure that matters, which is one
+      # client opening sockets in a loop. That is capped inside the service
+      # instead (REALTIME_MAX_CONNECTIONS_PER_USER, and
+      # REALTIME_MAX_CONNECTIONS_PER_IP for anonymous sockets, which have no
+      # user to be counted against).
+      - "traefik.http.routers.gateway-service-http.rule=PathPrefix(`${REALTIME_PATH:-/realtime}`)"
+      - "traefik.http.routers.gateway-service-http.priority=120"
+      - "traefik.http.routers.gateway-service-http.entrypoints=web"
+      - "traefik.http.routers.gateway-service-http.middlewares=strip-fake-headers,my-auth-optional"
+      - "traefik.http.routers.gateway-service-http.service=gateway-service"
+
+      - "traefik.http.routers.gateway-service-https.rule=PathPrefix(`${REALTIME_PATH:-/realtime}`)"
+      - "traefik.http.routers.gateway-service-https.priority=120"
+      - "traefik.http.routers.gateway-service-https.entrypoints=websecure"
+      - "traefik.http.routers.gateway-service-https.tls.certresolver=myresolver"
+      - "traefik.http.routers.gateway-service-https.middlewares=strip-fake-headers,my-auth-optional"
+      - "traefik.http.routers.gateway-service-https.service=gateway-service"
+      - "txnet.logging=true"
+    depends_on:
+      memory-data:
+        condition: service_healthy

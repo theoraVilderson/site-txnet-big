@@ -1,0 +1,112 @@
+# NestJS notification-service.
+# Included by ../docker-compose.main.yml with `project_directory: .`, so every
+# relative path below resolves from dev-docker/, not from this folder.
+
+services:
+  # A user's in-app notifications (F-035-a, ADR-0052): its own deployable, the
+  # way billing is. Same gate, same preflight exemption, same CORS origin.
+  notification-service:
+    build:
+      context: ../txnet-backend
+      dockerfile: Dockerfile
+      target: ${ENVIRONMENT}
+      extra_hosts:
+        - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
+      args:
+        - APP_NAME=notification-service
+        - DOCKER_REGISTRY=${DOCKER_REGISTRY}
+    container_name: ${STACK_NAME:-txnet}-notification-service
+    restart: unless-stopped
+    volumes:
+      - ../txnet-backend:/app:delegated
+      - /app/node_modules
+      # The vault KEK, read-only, as auth-service mounts it (ADR-0026): the
+      # campaign SMS line is read from the platform owner's vault (F-018-a).
+      - ./secrets/vault-kek:/run/secrets/vault-kek:ro
+    environment:
+      # Validated at boot by `app/config/env.validation.ts`.
+      - PORT=3000
+      - NODE_ENV=${NODE_ENV:-development}
+      - GLOBAL_PREFIX=${NOTIFICATION_GLOBAL_PREFIX:-api}
+      - PUBLIC_HOST=notification-service
+      - FRONTEND_ORIGIN=https://panel.${DOMAIN_NAME}
+      # Other units create a notification on `/api/internal/notifications`,
+      # which Traefik does not route. Refused empty in production.
+      - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
+      # Campaign delivery (F-035-e): each tenant's primary bot and its token come
+      # from auth-service's internal seam; the sends go to the bot APIs.
+      - AUTH_API_BASE_URL=http://auth-service:${AUTH_PORT}
+      - TELEGRAM_API_BASE=${TELEGRAM_API_BASE:-https://api.telegram.org}
+      - BALE_API_BASE=${BALE_API_BASE:-https://tapi.bale.ai}
+      # Campaign SMS (F-035-f, D-38): the platform's line, the OTP gateway's.
+      # Its key and sender are the owner's vault values (F-018-a), read with the
+      # KEK below. Empty boots; SMS rows then stay queued as stalled.
+      - SMS_API_URL=${SMS_API_URL:-}
+      - VAULT_KEK_FILE=${VAULT_KEK_FILE:-/run/secrets/vault-kek}
+      # Campaign email (F-035-h, D-38): the platform's SMTP, auth-service's (D-39).
+      # Unset host or sender boots; email rows then stay queued as stalled.
+      - SMTP_HOST=${SMTP_HOST:-mailpit}
+      - SMTP_PORT=${SMTP_PORT:-1025}
+      - SMTP_SECURE=${SMTP_SECURE:-false}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - MAIL_FROM=${MAIL_FROM:-TXNet <no-reply@${DOMAIN_NAME}>}
+      # Drafts a campaign in every language but its source (F-035-h, ADR-0050's engines).
+      # Unset = no drafts; recipients get the source text.
+      - TRANSLATOR_URL=${TRANSLATOR_URL:-}
+      - TRANSLATOR_LLM_URL=${TRANSLATOR_LLM_URL:-}
+      - TRANSLATOR_LLM_MODEL=${TRANSLATOR_LLM_MODEL:-qwen2.5:3b}
+      # The app role, never the owner (F-066-m-a).
+      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      # Campaign management only (F-035-c): a platform-wide campaign is
+      # refused on the app role by RLS. A policy, not a bypass.
+      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
+      - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
+      - REDIS_URL=${REDIS_URL}
+      - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      # Per-user limits; empty means the schema default (F-087).
+      - PLATFORM_RATE_LIMIT_FACTOR=${PLATFORM_RATE_LIMIT_FACTOR:-}
+      - NOTIFICATION_READ_RATE_LIMIT=${NOTIFICATION_READ_RATE_LIMIT:-}
+      - NOTIFICATION_WRITE_RATE_LIMIT=${NOTIFICATION_WRITE_RATE_LIMIT:-}
+    networks:
+      - private_backend_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.notification-service.loadbalancer.server.port=3000"
+
+      # The required gate, as for billing: every route needs a signed-in caller.
+      - "traefik.http.routers.notification-service-http.rule=PathPrefix(`/api/notifications`)"
+      - "traefik.http.routers.notification-service-http.priority=120"
+      - "traefik.http.routers.notification-service-http.entrypoints=web"
+      - "traefik.http.routers.notification-service-http.middlewares=strip-fake-headers,my-auth"
+      - "traefik.http.routers.notification-service-http.service=notification-service"
+
+      - "traefik.http.routers.notification-service.rule=PathPrefix(`/api/notifications`)"
+      - "traefik.http.routers.notification-service.priority=120"
+      - "traefik.http.routers.notification-service.entrypoints=websecure"
+      - "traefik.http.routers.notification-service.tls.certresolver=myresolver"
+      - "traefik.http.routers.notification-service.middlewares=strip-fake-headers,my-auth"
+      - "traefik.http.routers.notification-service.service=notification-service"
+
+      # The CORS preflight carries no Authorization header by specification;
+      # billing's labels say why it must skip `my-auth` and why nothing weakens.
+      - "traefik.http.routers.notification-preflight-http.rule=PathPrefix(`/api/notifications`) && Method(`OPTIONS`)"
+      - "traefik.http.routers.notification-preflight-http.entrypoints=web"
+      - "traefik.http.routers.notification-preflight-http.priority=150"
+      - "traefik.http.routers.notification-preflight-http.middlewares=strip-fake-headers"
+      - "traefik.http.routers.notification-preflight-http.service=notification-service"
+
+      - "traefik.http.routers.notification-preflight.rule=PathPrefix(`/api/notifications`) && Method(`OPTIONS`)"
+      - "traefik.http.routers.notification-preflight.entrypoints=websecure"
+      - "traefik.http.routers.notification-preflight.priority=150"
+      - "traefik.http.routers.notification-preflight.tls.certresolver=myresolver"
+      - "traefik.http.routers.notification-preflight.middlewares=strip-fake-headers"
+      - "traefik.http.routers.notification-preflight.service=notification-service"
+      - "txnet.logging=true"
+    depends_on:
+      main-db:
+        condition: service_healthy
+      locale-service:
+        condition: service_healthy

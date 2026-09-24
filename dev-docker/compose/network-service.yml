@@ -1,0 +1,66 @@
+# Go network-service.
+# Included by ../docker-compose.main.yml with `project_directory: .`, so every
+# relative path below resolves from dev-docker/, not from this folder.
+
+services:
+  # ===========================================================================
+  # network-service — the VPN/proxy plane's collector (Go, ADR-0071)
+  # ---------------------------------------------------------------------------
+  # Deliberately without a single `traefik.*` label, and that absence is the
+  # design. It connects as `txnet_cross_tenant`, whose policy is `USING (true)`,
+  # so it reads every tenant's rows and has no request-tenant to scope them to.
+  # A router in front of it would turn "the collector sees everything" into
+  # "anyone who reaches this route sees everything". It lives on the private
+  # network and is reached by nothing but the health check.
+  #
+  # It writes no migrations either: Prisma owns the schema. At boot it checks
+  # the role it connected as and every `network.*` column it depends on, and
+  # refuses to start naming what is missing — so `db-login-roles.sh` and a
+  # migrated database are both preconditions, and a missing one is a refusal
+  # in the log rather than a wrong number an hour later.
+  # ===========================================================================
+  network-service:
+    build:
+      context: ../network-service
+      dockerfile: Dockerfile
+      target: ${ENVIRONMENT}
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+    container_name: ${STACK_NAME:-txnet}-network-service
+    restart: unless-stopped
+    working_dir: /src
+    volumes:
+      - ../network-service:/src
+    environment:
+      - NETWORK_SERVICE_PORT=${NETWORK_SERVICE_PORT:-8090}
+      # The only connection this service has. There is no owner URL and no
+      # per-tenant URL here on purpose: it has no use for either, and the
+      # absence is what keeps the collector out of a tenant's scope.
+      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      # Where a collection pass goes (F-027-m). One broker and one exchange for
+      # the whole platform: the routing key `network.usage.delta` is what
+      # separates this traffic, not a topology of its own. A collector that
+      # cannot publish cannot move a cursor, so a missing URL is a refusal to
+      # start rather than a degraded mode.
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
+      - AUTOMATION_EXCHANGE=${AUTOMATION_EXCHANGE:-txnet.automation}  # default declared in contracts/network/delta.json and shared-core (F-079)
+      # A panel's login is read through tenant-service's service-only vault
+      # route, never decrypted here: this service holds no KEK (F-027-aw).
+      - TENANT_API_BASE_URL=http://tenant-service:3000
+      - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      main-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${NETWORK_SERVICE_PORT:-8090}/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 6
+    networks:
+      - private_backend_network
+    labels:
+      - "txnet.logging=true"

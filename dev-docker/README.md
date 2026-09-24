@@ -60,7 +60,15 @@
 ```
 dev-docker/
 ├── dev-setup.sh                          # Master control script
-├── docker-compose.main.yml               # Main application stack
+├── docker-compose.main.yml               # Main application stack: only `include:`s compose/
+├── docker-compose.dev.yml                # Dev-only overrides (scripts/dev.compose.sh)
+├── compose/                              # One file per service, included by main.yml
+│   ├── base.yml                          # Shared networks + named volumes
+│   ├── edge.yml                          # Traefik + Go auth handler
+│   ├── i18n.yml                          # locale-service + translators
+│   ├── <name>-service.yml                # One NestJS / Go service each
+│   ├── frontends.yml                     # site-pwa + coinsite
+│   └── data.yml                          # Redis, Postgres, Mailpit, RabbitMQ
 ├── monitoring/
 │   ├── docker-compose.sys-monitor.yml    # Prometheus + Grafana + Loki stack
 │   ├── .env.dev                          # Monitoring env vars
@@ -154,7 +162,7 @@ docker compose --env-file .env -p txnet-main -f dev-docker/docker-compose.main.y
 
 3. **No Swarm**: All `deploy` sections from the original `compose.yml` have been removed. This is pure `docker compose` for local development.
 
-4. **Let's Encrypt staging**: The main Traefik uses the Let's Encrypt **staging** server to avoid rate limits during development. Switch to production by removing the `caServer` line in `docker-compose.main.yml`.
+4. **Let's Encrypt staging**: The main Traefik uses the Let's Encrypt **staging** server to avoid rate limits during development. Switch to production by removing the `caServer` line in `compose/edge.yml`.
 
 5. **Hot-reload**: Source code is mounted with `:delegated` for the Go auth-handler, NestJS services, and Next.js frontends.
 
