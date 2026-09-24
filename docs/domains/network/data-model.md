@@ -25,6 +25,8 @@ Source of truth: `txnet-backend/prisma/domains/network.prisma` (Postgres schema
 | panel_drift_event | a drift verdict over a whole panel's population | via panel | permanent |
 | unattributed_usage | usage against a remote client that matches no config | via panel | one row per remote client |
 | radius_session | one RADIUS accounting session, its high-water bytes and how it closed | via config (nullable) / panel | permanent |
+| panel_group | where a variant's Grants are provisioned: `strategy`, `minHealthyPanels`, `subscriptionTtlSeconds` ([contract.groups.md](contract.groups.md)) | `tenantId` nullable (null = platform), shared-read | permanent |
+| panel_group_member | a panel in a group, once: `priority`, `weight`, `role` (`primary \| replica \| drain`) | `tenantId` = its group's (trigger), shared-read | removed after draining |
 
 ## The Panel declaration (F-027-a, ADR-0074)
 
@@ -244,7 +246,5 @@ each month it creates, so the gap cannot return on a clock.
 `traffic_daily_aggregate` has no `tenantId` and no policy of its own — it is
 reached through `configId` (open question, 2026-09-21).
 
-`20260921000900_the_rollup_commits_before_the_partition_drops` (F-027-o) adds
-the rollup itself: three `SECURITY DEFINER` functions, one of which refuses to
-drop a partition the aggregate does not match. See
-[contract.rollup.md](contract.rollup.md).
+`20260921000900_the_rollup_commits_before_the_partition_drops` (F-027-o): the
+rollup's three `SECURITY DEFINER` functions, [contract.rollup.md](contract.rollup.md).

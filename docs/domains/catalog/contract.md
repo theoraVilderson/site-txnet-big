@@ -36,7 +36,7 @@ cross-tenant pool.
 | `POST /categories`, `PATCH /categories/:id` | `tenantId?` (absent / `null` / uuid), `key`, `sourceLang?`, `name: {lang: text}`; patch `sourceLang`, `name`, `isActive` | category | `not_platform_owner` 403, `category_not_found` 404, `key_taken` 409, `lang_unknown` / `source_text_missing` 400, `texts_unavailable` 503 |
 | `GET /products` | `categoryId?`, `tenantId?` (owner: uuid or `platform`) | products | — |
 | `POST /products`, `GET\|PATCH /products/:id` | `categoryId`, `key`, `sourceLang?`, `name: {lang: text}`, `description?: {lang: text} \| null`, `fulfilmentKind`, `featureKeys?`, `defaultQuotas?`; patch has no key or kind | product; `GET` with variants and each price history | `category_not_found` (another tenant's category), `product_not_found`, `key_taken`, `lang_unknown`, `source_text_missing`, `texts_unavailable` |
-| `POST /products/:id/variants`, `PATCH /variants/:id` | `sku`, `billingMode`, `visibility`, `quotas?`, `durationDays?`, `panelGroupId?`, `qualityTier?`, first `price`; patch has no SKU or billing mode | variant with prices | `variant_not_found`, `sku_taken`, `price_in_the_past` |
+| `POST /products/:id/variants`, `PATCH /variants/:id` | `sku`, `billingMode`, `visibility`, `quotas?`, `durationDays?`, `panelGroupId?`, `qualityTier?`, first `price`; patch has no SKU or billing mode | variant with prices | `variant_not_found`, `sku_taken`, `price_in_the_past`, `panel_group_not_found` (a group that is neither the platform's nor the variant's tenant's, F-027-bk) |
 | `POST /variants/:id/prices` | `amount`, `effectiveFrom?` (default now; never in the past) | a **new** price row | `variant_not_found`, `price_in_the_past` 400 |
 | `POST /prices/:id/deactivate` | — | the price, switched off | `price_not_found` |
 | `GET /translations` | `lang?` | drafts: `{lang, key, draft, published, source: {lang, text}}` — the caller's items' (owner: all) | — |
@@ -129,7 +129,7 @@ None.
 |---|---|
 | billing | `coupon_service_scope.productId` / `variantId`: a purchase matches a row naming its variant or its product |
 | entitlement | a variant's quotas, duration, billing mode and its product's feature keys, copied into a Grant (F-026-b, F-026-e); the metered rate in effect, locked onto `Grant.meteredRate` at issue (F-027-p, ADR-0073) |
-| network | a variant's `panelGroupId` and `qualityTier` (F-027) |
+| network | a variant's `panelGroupId` (FK to `network.panel_group`, F-027-bk) and `qualityTier` (F-027) |
 | tenant | `offeredToTenant`: the onboarding checklist's `pricing` step (F-018-ah) |
 
 ## Guarantees (built — `catalog-schema.int.spec.ts`)

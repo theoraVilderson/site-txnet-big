@@ -78,6 +78,7 @@ const STATUS: Record<ResellerCatalogRejection, 400 | 403 | 404 | 409 | 503> = {
   category_not_found: 404,
   product_not_found: 404,
   variant_not_found: 404,
+  panel_group_not_found: 404,
   price_not_found: 404,
   key_taken: 409,
   sku_taken: 409,

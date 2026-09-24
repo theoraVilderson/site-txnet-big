@@ -81,6 +81,27 @@ enum PanelRole {
   @@schema("network")
 }
 
+/// How a group places a Grant on its members (§7.3). `mirror` puts a config on
+/// every non-drain healthy member (F-027-bl). `priority` and `weighted` are
+/// declared (user 2026-09-24) and have no fulfilment yet.
+enum PanelGroupStrategy {
+  mirror
+  priority
+  weighted
+
+  @@schema("network")
+}
+
+/// A member's part in its group, not the panel's HA role (`PanelRole`).
+/// `drain` takes no new Grants and is then emptied (F-027-bm).
+enum PanelGroupMemberRole {
+  primary
+  replica
+  drain
+
+  @@schema("network")
+}
+
 /// Why a connection test gave no verdict (F-027-aq, ADR-0080): the driver's six
 /// fault kinds, plus the two that happen on our side of the call. A panel with
 /// one of these was not refused — it did not answer, so it stays `pending`.
@@ -329,6 +350,7 @@ model Panel {
   quarantinedDeltas UsageDeltaQuarantine[]
   unattributedUsage UnattributedUsage[]
   radiusSessions    RadiusSession[]
+  groupMemberships  PanelGroupMember[]
 
   @@index([tenantId])
   @@map("panel")
@@ -422,6 +444,54 @@ model Config {
   @@index([grantId, createdAt])
   @@index([panelId, enforcementState])
   @@map("config")
+  @@schema("network")
+}
+
+/// Where a variant's Grants are provisioned (§7.3, F-027-bk). `tenantId` null
+/// is a platform group: it holds platform panels only and serves anyone's
+/// variants. A tenant's group holds its own panels and platform ones, and
+/// serves its own variants only. The tenant never changes (a trigger).
+model PanelGroup {
+  id                     String             @id @default(uuid()) @db.Uuid
+  tenantId               String?            @db.Uuid
+  name                   String
+  strategy               PanelGroupStrategy @default(mirror)
+  /// Healthy members a Grant needs before it activates (F-027-bl).
+  minHealthyPanels       Int                @default(1)
+  /// How long a client keeps a subscription before asking again; draining
+  /// waits twice this (F-027-bm). 3600 = `/sub`'s render TTL today.
+  subscriptionTtlSeconds Int                @default(3600)
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @default(now()) @updatedAt
+
+  members  PanelGroupMember[]
+  variants ProductVariant[]
+
+  @@index([tenantId])
+  @@map("panel_group")
+  @@schema("network")
+}
+
+/// A panel in a group, once. `tenantId` is its group's — a trigger holds it —
+/// so RLS reads it without a join. `priority` and `weight` are for the
+/// strategies that choose among members; `mirror` reads neither.
+model PanelGroupMember {
+  groupId   String               @db.Uuid
+  panelId   String               @db.Uuid
+  tenantId  String?              @db.Uuid
+  /// Lower first.
+  priority  Int                  @default(0)
+  weight    Int                  @default(1)
+  role      PanelGroupMemberRole @default(primary)
+  createdAt DateTime             @default(now())
+
+  group PanelGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  panel Panel      @relation(fields: [panelId], references: [id], onDelete: Restrict)
+
+  @@id([groupId, panelId])
+  @@index([panelId])
+  @@index([tenantId])
+  @@map("panel_group_member")
   @@schema("network")
 }
 

@@ -116,7 +116,8 @@ model ProductVariant {
   durationDays Int?
   billingMode  VariantBillingMode
   visibility   VariantVisibility
-  /// Where a `network_access` Grant is provisioned (F-027); no FK until that unit is built.
+  /// Where a `network_access` Grant is provisioned (§7.3). The platform's
+  /// groups serve anyone's variants, a tenant's only its own (a trigger).
   panelGroupId String?            @db.Uuid
   qualityTier  QualityTier        @default(standard)
   isActive     Boolean            @default(true)
@@ -124,6 +125,7 @@ model ProductVariant {
   updatedAt    DateTime           @default(now()) @updatedAt
 
   product             Product              @relation(fields: [productId], references: [id])
+  panelGroup          PanelGroup?          @relation(fields: [panelGroupId], references: [id], onDelete: Restrict)
   prices              Price[]
   meteredRates        MeteredRate[]
   couponServiceScopes CouponServiceScope[]

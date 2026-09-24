@@ -47,6 +47,7 @@ export type CatalogAdminRejection =
   | 'category_not_found'
   | 'product_not_found'
   | 'variant_not_found'
+  | 'panel_group_not_found'
   | 'price_not_found'
   | 'key_taken'
   | 'sku_taken'
@@ -238,6 +239,18 @@ export class CatalogAdminService {
   }
 
   /** Run `fn` in one transaction on the pool that serves this caller (ADR-0053). */
+  /**
+   * A variant is provisioned on a platform panel group or its own tenant's
+   * (F-027-bk); any other is not found, as another tenant's variant is. The
+   * database refuses the same (`product_variant_panel_group_fits`) — this is
+   * the refusal the caller can read.
+   */
+  private async usableGroup(db: Prisma.TransactionClient, id: string | null | undefined, tenantId: string | null): Promise<void> {
+    if (!id) return;
+    const group = await db.panelGroup.findUnique({ where: { id }, select: { tenantId: true } });
+    if (!group || (group.tenantId !== null && group.tenantId !== tenantId)) throw new CatalogAdminRefused('panel_group_not_found', id);
+  }
+
   private within<T>(owner: boolean, fn: (db: Prisma.TransactionClient) => Promise<T>): Promise<T> {
     return owner ? this.all.$transaction(fn) : tenantTransaction(this.prisma, fn);
   }
@@ -441,6 +454,7 @@ export class CatalogAdminService {
     return this.within(owner, async (tx) => {
       const product = await this.managed(tx, 'product', 'product_not_found', actor, productId, owner);
       const tenantId = (product['tenantId'] as string | null) ?? null;
+      await this.usableGroup(tx, input.panelGroupId, tenantId);
       const variant = (await this.refuseDuplicate('sku_taken', input.sku, () =>
         tx.productVariant.create({
           data: {
@@ -477,6 +491,7 @@ export class CatalogAdminService {
     const { owner } = await this.access(actor);
     return this.within(owner, async (tx) => {
       const before = await this.managed(tx, 'productVariant', 'variant_not_found', actor, id, owner);
+      await this.usableGroup(tx, patch.panelGroupId, (before['tenantId'] as string | null) ?? null);
       const data: Prisma.ProductVariantUpdateInput = {
         ...(patch.nameKey !== undefined ? { nameKey: patch.nameKey } : {}),
         ...(patch.quotas !== undefined ? { quotas: patch.quotas as Prisma.InputJsonValue } : {}),

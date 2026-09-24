@@ -38,6 +38,9 @@ const RESELLER_PRODUCT = 'b0000000-0000-4000-8000-000000000002';
 const OTHER_PRODUCT = 'b0000000-0000-4000-8000-000000000003';
 const RESELLER_VARIANT = 'c0000000-0000-4000-8000-000000000002';
 const RESELLER_PRICE = 'd0000000-0000-4000-8000-000000000002';
+const PLATFORM_GROUP = 'f0000000-0000-4000-8000-000000000001';
+const RESELLER_GROUP = 'f0000000-0000-4000-8000-000000000002';
+const OTHER_GROUP = 'f0000000-0000-4000-8000-000000000003';
 
 const actor = (tenantId: string) => ({ adminId: ADMIN, tenantId, ip: '10.0.0.9' });
 
@@ -142,6 +145,15 @@ function build() {
       'productVariant',
       writes,
       ['tenantId', 'sku'],
+    ),
+    panelGroup: table(
+      [
+        { id: PLATFORM_GROUP, tenantId: null },
+        { id: RESELLER_GROUP, tenantId: RESELLER },
+        { id: OTHER_GROUP, tenantId: OTHER },
+      ],
+      'panelGroup',
+      writes,
     ),
     price: table(
       [{ id: RESELLER_PRICE, tenantId: RESELLER, variantId: RESELLER_VARIANT, amount: new Prisma.Decimal('5.00'), effectiveFrom: new Date('2026-01-01T00:00:00Z'), isActive: true, createdByAdminId: ADMIN }],
@@ -278,6 +290,19 @@ describe('CatalogAdminService — variants and prices', () => {
     expect(db.price.rows).toHaveLength(1);
     expect(writes.filter((w) => w.startsWith('price.'))).toEqual(['price.update']);
     expect(audit.map((a) => a['action'])).toEqual(['catalog_price_deactivate']);
+  });
+
+  it("provisions on the platform's panel groups or the tenant's own, never another tenant's (F-027-bk)", async () => {
+    const { service, db } = build();
+    await expect(service.createVariant(actor(RESELLER), RESELLER_PRODUCT, { ...NEW_VARIANT, panelGroupId: PLATFORM_GROUP })).resolves.toMatchObject({ panelGroupId: PLATFORM_GROUP });
+    await expect(service.updateVariant(actor(RESELLER), RESELLER_VARIANT, { panelGroupId: RESELLER_GROUP })).resolves.toMatchObject({ panelGroupId: RESELLER_GROUP });
+    // Another tenant's group is not found, as its variant is: the surface never confirms it exists.
+    expect((await refusal(() => service.updateVariant(actor(RESELLER), RESELLER_VARIANT, { panelGroupId: OTHER_GROUP }))).reason).toBe('panel_group_not_found');
+    expect((await refusal(() => service.createVariant(actor(RESELLER), RESELLER_PRODUCT, { ...NEW_VARIANT, sku: 'VPN-7', panelGroupId: 'f0000000-0000-4000-8000-0000000000ff' }))).reason).toBe('panel_group_not_found');
+    // The platform owner acting on a reseller's variant is held to the variant's tenant, not its own.
+    expect((await refusal(() => service.updateVariant(actor(OWNER), RESELLER_VARIANT, { panelGroupId: OTHER_GROUP }))).reason).toBe('panel_group_not_found');
+    expect(db.productVariant.rows.find((r) => r['id'] === RESELLER_VARIANT)?.['panelGroupId']).toBe(RESELLER_GROUP);
+    await expect(service.updateVariant(actor(RESELLER), RESELLER_VARIANT, { panelGroupId: null })).resolves.toMatchObject({ panelGroupId: null });
   });
 
   it("answers another tenant's variant as not found, to change or to price", async () => {
