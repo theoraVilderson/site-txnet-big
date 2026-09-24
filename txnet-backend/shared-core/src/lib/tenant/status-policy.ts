@@ -43,8 +43,9 @@ export type TenantStatusValue = (typeof TENANT_STATUSES)[number];
  *   or callback for a payment already taken, expiry, notifications. Refusing
  *   it loses a record of money that moved, so no status closes it.
  * - `subscriptionLink` — `/sub`. Enforced by `sub-service` (Go,
- *   `internal/sub/tenant.go`), which copies this one column: change it here
- *   and there together (F-113-e).
+ *   `internal/sub/tenant.go`), which copies this one column. Change it here
+ *   and in `contracts/tenant/subscription-link.json`; the tests on both
+ *   sides go red until the Go copy agrees (F-113-g).
  */
 export const TENANT_CAPABILITIES = [
   'signIn',

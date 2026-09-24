@@ -21,12 +21,40 @@ import (
 // nobody** (rules.md #6): the listener rewrites every tenant on connect, and
 // refusing on a miss would empty every link on the platform with Redis.
 
-// tenantState is `TenantStatusState` as Redis holds it.
+// tenantState is `TenantStatusState` as Redis holds it. Each field is read
+// the way shared-core's `parseTenantStatusState` reads it, not by Go's
+// types: a status that is not a known string is no state at all, a grace that
+// is not a string is none, and onboarding is on only when it is `true` — so a
+// wrongly typed field never turns the whole value into "no state".
 type tenantState struct {
-	Status      string  `json:"status"`
-	GraceEndsAt *string `json:"graceEndsAt"`
-	Onboarding  bool    `json:"onboarding"`
+	Status      any `json:"status"`
+	GraceEndsAt any `json:"graceEndsAt"`
+	Onboarding  any `json:"onboarding"`
 }
+
+// linkRule is one cell of the column: the matrix's true, false or `hold`.
+type linkRule int
+
+const (
+	linkRefused linkRule = iota
+	linkAllowed
+	// linkHold is allowed up to and including `graceEndsAt`, refused after it
+	// or with none.
+	linkHold
+)
+
+// subscriptionLinkColumn is `TenantStatusPolicy[status].subscriptionLink`, and
+// subscriptionLinkOnboarding `TenantOnboardingPolicy.subscriptionLink`. Both
+// are held to TypeScript by `contracts/tenant/subscription-link.json`
+// (F-113-g); a status missing here is one the TS parser rejects.
+var subscriptionLinkColumn = map[string]linkRule{
+	"trial":      linkAllowed,
+	"active":     linkAllowed,
+	"suspended":  linkHold,
+	"terminated": linkRefused,
+}
+
+const subscriptionLinkOnboarding = linkRefused
 
 // subscriptionLinkAllowed judges one raw `tenant:status` value at now.
 // Empty is "no key".
@@ -38,37 +66,35 @@ func subscriptionLinkAllowed(raw string, now time.Time) bool {
 	if err := json.Unmarshal([]byte(raw), &s); err != nil {
 		return true
 	}
-	if s.Onboarding && knownStatus(s.Status) {
-		return false
-	}
-	switch s.Status {
-	case "suspended":
-		return withinGrace(s.GraceEndsAt, now)
-	case "terminated":
-		return false
-	default:
-		// `trial`, `active`, and a status this file does not know: the TS
-		// parser reads an unknown one as no state, which refuses nobody.
+	status, _ := s.Status.(string)
+	rule, known := subscriptionLinkColumn[status]
+	if !known {
+		// The TS parser reads an unknown status as no state: refuses nobody.
 		return true
 	}
+	grace, _ := s.GraceEndsAt.(string)
+	if !applies(rule, grace, now) {
+		return false
+	}
+	return s.Onboarding != true || applies(subscriptionLinkOnboarding, grace, now)
 }
 
-func knownStatus(s string) bool {
-	switch s {
-	case "trial", "active", "suspended", "terminated":
-		return true
+func applies(rule linkRule, graceEndsAt string, now time.Time) bool {
+	if rule == linkHold {
+		return withinGrace(graceEndsAt, now)
 	}
-	return false
+	return rule == linkAllowed
 }
 
 // withinGrace is the matrix's `hold`: allowed up to and including
 // `graceEndsAt`, refused after it or with none. An unparseable time is
-// refused, as `Date.parse` giving NaN is on the TypeScript side.
-func withinGrace(graceEndsAt *string, now time.Time) bool {
-	if graceEndsAt == nil {
+// refused, as `Date.parse` giving NaN is on the TypeScript side. Empty is
+// none.
+func withinGrace(graceEndsAt string, now time.Time) bool {
+	if graceEndsAt == "" {
 		return false
 	}
-	end, err := time.Parse(time.RFC3339Nano, *graceEndsAt)
+	end, err := time.Parse(time.RFC3339Nano, graceEndsAt)
 	if err != nil {
 		return false
 	}

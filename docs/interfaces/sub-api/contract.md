@@ -67,7 +67,8 @@ configs are not read (F-609).
 
 ### The tenant gate (F-113-e, built)
 `sub/tenant.go`. The Grant's tenant must be allowed `subscriptionLink` by
-`TenantStatusPolicy` (tenant `rules.md`; only that column is copied to Go):
+`TenantStatusPolicy` (tenant `rules.md`; only that column is copied to Go,
+held to TypeScript by `contracts/tenant/subscription-link.json`, F-113-g):
 `trial`/`active` yes, `suspended` up to and including `graceEndsAt`,
 `terminated` no, and no while `onboarding`.
 
@@ -80,7 +81,9 @@ configs are not read (F-609).
    the Grant is known. A grace runs out with no write to stamp, so the gate is
    never baked into an entry, and a refusal is not cached.
 3. **A missing, unreadable or unknown state, or Redis failing, refuses
-   nobody** (tenant `rules.md` #6), as `TenantStatusGuard` does.
+   nobody** (tenant `rules.md` #6), as `TenantStatusGuard` does. Each field
+   is read as `parseTenantStatusState` reads it: a grace that is not a string
+   is none, onboarding is on only when `true`.
 4. The grace is judged against this process's clock, as the TypeScript
    guard's is. The key name is held to `contracts/redis/keyspace.json`
    `subKeyCases` by `usage_test.go`.

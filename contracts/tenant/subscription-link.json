@@ -1,0 +1,43 @@
+{
+  "$comment": [
+    "The `subscriptionLink` column of TenantStatusPolicy (F-018-f, tenant rules.md)",
+    "and how a raw `tenant:status:<tenantId>` value is judged against it (F-113-g).",
+    "",
+    "shared-core's status-policy.ts is the executable matrix; sub-service is Go,",
+    "outside the Nx workspace, and copies this one column. Nothing else compares the",
+    "copies, so this fixture plus a test on each side replaces the import that does",
+    "not exist (ADR-0036). The Go half is sub-service/internal/sub/tenant_contract_test.go;",
+    "the TypeScript half is shared-core/src/lib/tenant/subscription-link.contract.spec.ts.",
+    "",
+    "`column`: true = allowed, false = refused, \"hold\" = allowed up to and including",
+    "graceEndsAt. `onboarding` is the column applied on top while the reseller has no",
+    "proven domain. `cases`: `raw` is the Redis value (\"\" = no key), judged at `now`.",
+    "A value TypeScript's parser rejects refuses nobody (rules.md #6).",
+    "",
+    "Change a value here and both sides go red until they agree."
+  ],
+  "column": { "trial": true, "active": true, "suspended": "hold", "terminated": false },
+  "onboarding": false,
+  "now": "2026-09-24T12:00:00.000Z",
+  "cases": [
+    { "name": "trial", "raw": "{\"status\":\"trial\",\"graceEndsAt\":null,\"onboarding\":false}", "allowed": true },
+    { "name": "active", "raw": "{\"status\":\"active\",\"graceEndsAt\":null,\"onboarding\":false}", "allowed": true },
+    { "name": "active, no onboarding field", "raw": "{\"status\":\"active\",\"graceEndsAt\":null}", "allowed": true },
+    { "name": "suspended, in grace", "raw": "{\"status\":\"suspended\",\"graceEndsAt\":\"2026-09-24T13:00:00.000Z\",\"onboarding\":false}", "allowed": true },
+    { "name": "suspended, grace ends now", "raw": "{\"status\":\"suspended\",\"graceEndsAt\":\"2026-09-24T12:00:00.000Z\"}", "allowed": true },
+    { "name": "suspended, grace over by 1ms", "raw": "{\"status\":\"suspended\",\"graceEndsAt\":\"2026-09-24T11:59:59.999Z\"}", "allowed": false },
+    { "name": "suspended, no grace", "raw": "{\"status\":\"suspended\",\"graceEndsAt\":null}", "allowed": false },
+    { "name": "suspended, grace not a time", "raw": "{\"status\":\"suspended\",\"graceEndsAt\":\"soon\"}", "allowed": false },
+    { "name": "suspended, grace not a string", "raw": "{\"status\":\"suspended\",\"graceEndsAt\":5}", "allowed": false },
+    { "name": "terminated", "raw": "{\"status\":\"terminated\",\"graceEndsAt\":null,\"onboarding\":false}", "allowed": false },
+    { "name": "active, onboarding", "raw": "{\"status\":\"active\",\"graceEndsAt\":null,\"onboarding\":true}", "allowed": false },
+    { "name": "trial, onboarding", "raw": "{\"status\":\"trial\",\"graceEndsAt\":null,\"onboarding\":true}", "allowed": false },
+    { "name": "suspended in grace, onboarding", "raw": "{\"status\":\"suspended\",\"graceEndsAt\":\"2026-09-24T13:00:00.000Z\",\"onboarding\":true}", "allowed": false },
+    { "name": "onboarding not a boolean", "raw": "{\"status\":\"active\",\"graceEndsAt\":null,\"onboarding\":\"yes\"}", "allowed": true },
+    { "name": "unknown status", "raw": "{\"status\":\"archived\",\"graceEndsAt\":null}", "allowed": true },
+    { "name": "unknown status, onboarding", "raw": "{\"status\":\"archived\",\"graceEndsAt\":null,\"onboarding\":true}", "allowed": true },
+    { "name": "status not a string", "raw": "{\"status\":7}", "allowed": true },
+    { "name": "not JSON", "raw": "not json", "allowed": true },
+    { "name": "no key", "raw": "", "allowed": true }
+  ]
+}
