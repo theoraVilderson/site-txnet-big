@@ -19,7 +19,9 @@ import (
 	"network-service/internal/config"
 	"network-service/internal/db"
 	"network-service/internal/httpapi"
+	"network-service/internal/opener"
 	"network-service/internal/publish"
+	"network-service/internal/register"
 	"network-service/internal/shutdown"
 	"network-service/pkg/logger"
 )
@@ -83,6 +85,19 @@ func main() {
 	// own. What this gate buys today is that the exchange and the credentials
 	// are wrong at boot, in the log, rather than at 03:00 in a pass.
 
+	// Registration (ADR-0080): pending panels are tested on the registrar's
+	// own tick and their verdict written back. It is the first loop this
+	// process runs, because it needs nothing the collection loop still lacks
+	// — a panel row, and a login read through tenant-service (F-027-ax).
+	runCtx, stopLoops := context.WithCancel(ctx)
+	defer stopLoops()
+	registrar := &register.Registrar{
+		Store:  register.PostgresStore{DB: pool},
+		Opener: opener.Opener{Logins: opener.Vault{BaseURL: cfg.TenantAPIBaseURL, ServiceToken: cfg.ServiceAuthToken}},
+		Log:    log,
+	}
+	go func() { _ = registrar.Run(runCtx) }()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", httpapi.New(pool, log).Health)
 
@@ -107,6 +122,7 @@ func main() {
 	<-stop
 
 	log.Info("shutting down")
+	stopLoops()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
 

@@ -76,11 +76,19 @@ the guard **fails closed**, so a panel source that forgets the column
 collects nothing instead of everything. A refused panel converged would be a
 panel provisioned, which is exactly what refusing it was for (invariant 44).
 
-## Not here yet
+## The store, and the process that runs it (F-027-ax)
 
-The Postgres-backed `register.Store` lands with the panel source, beside
-`collect.MemoryCursors` (F-027-ax); until it does, `cmd/server` does not start
-the pass — the staging every other loop in this service is in.
+`register.PostgresStore` is `Store` over `network.panel`, through the
+cross-tenant pool. Both writes carry `"reviewState" = 'pending'` in their own
+`WHERE`, so rule 3 is held by the statement, not by a read before it; a write
+that touched no row is `Stale`. `connectionTestDetail` is cut at 1000 bytes on
+a rune boundary — a far end's error body is not ours to store whole.
+
+`cmd/server` starts `register.Registrar` at boot and stops it first on
+shutdown. It is the first loop this process runs: it needs only the panel row
+and the vault route, so `TENANT_API_BASE_URL` and `SERVICE_AUTH_TOKEN` refuse
+the boot when missing — without them every panel would be tested
+`unopenable`.
 
 ## The Opener (F-027-aw)
 

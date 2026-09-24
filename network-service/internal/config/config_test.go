@@ -16,6 +16,7 @@ const (
 func TestLoadRefusesAMissingCrossTenantURL(t *testing.T) {
 	t.Setenv("DATABASE_CROSS_TENANT_URL", "")
 	t.Setenv("RABBITMQ_URL", someBroker)
+	setVault(t)
 
 	_, err := Load()
 
@@ -30,6 +31,7 @@ func TestLoadRefusesAMissingCrossTenantURL(t *testing.T) {
 func TestLoadDefaultsAreUsableWithoutAnyTuning(t *testing.T) {
 	t.Setenv("DATABASE_CROSS_TENANT_URL", someDSN)
 	t.Setenv("RABBITMQ_URL", someBroker)
+	setVault(t)
 
 	cfg, err := Load()
 
@@ -55,6 +57,7 @@ func TestLoadDefaultsAreUsableWithoutAnyTuning(t *testing.T) {
 func TestLoadRefusesAMissingBrokerURL(t *testing.T) {
 	t.Setenv("DATABASE_CROSS_TENANT_URL", someDSN)
 	t.Setenv("RABBITMQ_URL", "")
+	setVault(t)
 
 	_, err := Load()
 
@@ -69,6 +72,7 @@ func TestLoadRefusesAMissingBrokerURL(t *testing.T) {
 func TestLoadReadsOverrides(t *testing.T) {
 	t.Setenv("DATABASE_CROSS_TENANT_URL", someDSN)
 	t.Setenv("RABBITMQ_URL", someBroker)
+	setVault(t)
 	t.Setenv("NETWORK_SERVICE_PORT", "9999")
 	t.Setenv("NETWORK_DB_POOL_MAX_CONNS", "40")
 	t.Setenv("NETWORK_DB_CONNECT_TIMEOUT", "3s")
@@ -86,10 +90,33 @@ func TestLoadReadsOverrides(t *testing.T) {
 func TestLoadRefusesAnInvertedPool(t *testing.T) {
 	t.Setenv("DATABASE_CROSS_TENANT_URL", someDSN)
 	t.Setenv("RABBITMQ_URL", someBroker)
+	setVault(t)
 	t.Setenv("NETWORK_DB_POOL_MAX_CONNS", "2")
 	t.Setenv("NETWORK_DB_POOL_MIN_CONNS", "8")
 
 	if _, err := Load(); err == nil {
 		t.Fatal("Load() = nil error, want a refusal")
+	}
+}
+
+// setVault sets the two values the vault read needs, which every test but
+// the one about them takes as given.
+func setVault(t *testing.T) {
+	t.Helper()
+	t.Setenv("TENANT_API_BASE_URL", "http://tenant-service:3000")
+	t.Setenv("SERVICE_AUTH_TOKEN", "svc-token")
+}
+
+func TestLoadRefusesAMissingVaultRoute(t *testing.T) {
+	for _, unset := range []string{"TENANT_API_BASE_URL", "SERVICE_AUTH_TOKEN"} {
+		t.Run(unset, func(t *testing.T) {
+			t.Setenv("DATABASE_CROSS_TENANT_URL", someDSN)
+			t.Setenv("RABBITMQ_URL", someBroker)
+			setVault(t)
+			t.Setenv(unset, "")
+			if _, err := Load(); err == nil || !strings.Contains(err.Error(), unset) {
+				t.Fatalf("Load() with %s unset = %v, want a refusal naming it", unset, err)
+			}
+		})
 	}
 }

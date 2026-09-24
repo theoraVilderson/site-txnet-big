@@ -1,0 +1,129 @@
+package register
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
+
+	"network-service/internal/db"
+	"network-service/internal/driver"
+)
+
+// The statements themselves were run against the real schema (F-027-ax, a
+// rolled-back transaction on the dev database). What this pins is what the
+// Go side does around them: the pending guard is in every write, a write
+// that touched no row is a stale answer, and a fault's detail is bounded.
+
+type row []any
+
+type fakeRows struct {
+	rows []row
+	at   int
+}
+
+func (f *fakeRows) Next() bool { f.at++; return f.at <= len(f.rows) }
+func (f *fakeRows) Err() error { return nil }
+func (f *fakeRows) Close()     {}
+func (f *fakeRows) Scan(dest ...any) error {
+	for i, v := range f.rows[f.at-1] {
+		switch d := dest[i].(type) {
+		case *string:
+			*d = v.(string)
+		case **time.Time:
+			if v != nil {
+				t := v.(time.Time)
+				*d = &t
+			}
+		}
+	}
+	return nil
+}
+
+type fakeDB struct {
+	rows     []row
+	affected string
+	sql      []string
+	args     [][]any
+}
+
+func (f *fakeDB) Query(_ context.Context, sql string, args ...any) (db.Rows, error) {
+	f.sql, f.args = append(f.sql, sql), append(f.args, args)
+	return &fakeRows{rows: f.rows}, nil
+}
+
+func (f *fakeDB) Exec(_ context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	f.sql, f.args = append(f.sql, sql), append(f.args, args)
+	return pgconn.NewCommandTag(f.affected), nil
+}
+
+const panel = "55555555-5555-4555-8555-555555555555"
+
+func TestPendingReadsTheRowAsTheRegistrarNeedsIt(t *testing.T) {
+	tested := time.Date(2026, 9, 24, 8, 0, 0, 0, time.UTC)
+	f := &fakeDB{rows: []row{
+		{panel, "marzban", "pull", "cumulative", "https://p.example", "vault:t:panel_credentials:panel:" + panel, tested, "blocked"},
+		{"66666666-6666-4666-8666-666666666666", "ibsng", "push", "session", "", "vault:t:x", nil, ""},
+	}}
+	got, err := PostgresStore{DB: f}.Pending(context.Background())
+	if err != nil {
+		t.Fatalf("Pending: %v", err)
+	}
+	if !strings.Contains(f.sql[0], `"reviewState" = 'pending'`) {
+		t.Error("the read is not limited to pending panels")
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d candidates, want 2", len(got))
+	}
+	first := got[0]
+	if first.DriverType != driver.DriverMarzban || first.Transport != driver.TransportPull ||
+		first.CounterSemantics != driver.CounterCumulative || first.APIBaseURL != "https://p.example" {
+		t.Errorf("declaration read as %+v", first.Pending)
+	}
+	if !first.TestedAt.Equal(tested) || first.Fault != FaultKind(driver.FaultBlocked) {
+		t.Errorf("last test read as %s / %q: the cool-off after a block is timed from it", first.TestedAt, first.Fault)
+	}
+	if !got[1].TestedAt.IsZero() || got[1].Fault != "" {
+		t.Errorf("a never-tested panel read as tested %s / %q, so it would wait instead of being tested", got[1].TestedAt, got[1].Fault)
+	}
+}
+
+func TestAVerdictOverAPanelNoLongerPendingIsStale(t *testing.T) {
+	f := &fakeDB{affected: "UPDATE 0"}
+	caps := driver.Capabilities{Version: driver.CapabilitiesVersion, Answers: map[driver.RowKey]driver.Answer{}}
+	written, err := PostgresStore{DB: f}.Answer(context.Background(), panel, caps, driver.ReviewAccepted, time.Now())
+	if err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if written {
+		t.Error("an update that touched no row reported the verdict written")
+	}
+	if !strings.Contains(f.sql[0], `AND "reviewState" = 'pending'`) {
+		t.Error("the verdict write is not guarded by pending in its own statement (rule 3)")
+	}
+
+	f.affected = "UPDATE 1"
+	if written, _ := (PostgresStore{DB: f}).Answer(context.Background(), panel, caps, driver.ReviewAccepted, time.Now()); !written {
+		t.Error("an update of one row did not report the verdict written")
+	}
+}
+
+func TestAFaultIsGuardedAndItsDetailBounded(t *testing.T) {
+	f := &fakeDB{affected: "UPDATE 1"}
+	detail := strings.Repeat("ж", maxDetail) // two bytes each: the cut lands mid-rune
+	if err := (PostgresStore{DB: f}).Fail(context.Background(), panel, FaultUnopenable, detail, time.Now()); err != nil {
+		t.Fatalf("Fail: %v", err)
+	}
+	if !strings.Contains(f.sql[0], `AND "reviewState" = 'pending'`) {
+		t.Error("the fault write is not guarded by pending (rule 5)")
+	}
+	stored := f.args[0][2].(string)
+	if len(stored) > maxDetail {
+		t.Errorf("detail stored at %d bytes, over the %d bound", len(stored), maxDetail)
+	}
+	if !strings.HasPrefix(detail, stored) || !strings.HasSuffix(stored, "ж") {
+		t.Error("the bounded detail is not a whole-rune prefix of the original")
+	}
+}

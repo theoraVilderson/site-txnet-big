@@ -37,6 +37,12 @@ type Config struct {
 	BrokerURL            string
 	BrokerExchange       string
 	BrokerPublishTimeout time.Duration
+
+	// TenantAPIBaseURL and ServiceAuthToken are how a panel's login is read:
+	// tenant-service's service-only vault route (F-027-aw). Without them every
+	// pending panel would be tested as unopenable, so both refuse the boot.
+	TenantAPIBaseURL string
+	ServiceAuthToken string
 }
 
 // Load reads configuration from the environment and validates it.
@@ -57,6 +63,8 @@ func Load() (Config, error) {
 		BrokerURL:            os.Getenv("RABBITMQ_URL"),
 		BrokerExchange:       getEnv("AUTOMATION_EXCHANGE", publish.DefaultExchange),
 		BrokerPublishTimeout: getEnvDuration("NETWORK_BROKER_PUBLISH_TIMEOUT", publish.DefaultConfirmTimeout),
+		TenantAPIBaseURL:     os.Getenv("TENANT_API_BASE_URL"),
+		ServiceAuthToken:     os.Getenv("SERVICE_AUTH_TOKEN"),
 	}
 	if err := cfg.validate(); err != nil {
 		return Config{}, err
@@ -76,6 +84,12 @@ func (c Config) validate() error {
 	// refusal to start, not a degraded mode (F-027-m).
 	if c.BrokerURL == "" {
 		return fmt.Errorf("RABBITMQ_URL is required")
+	}
+	if c.TenantAPIBaseURL == "" {
+		return fmt.Errorf("TENANT_API_BASE_URL is required: a panel's login is read through tenant-service")
+	}
+	if c.ServiceAuthToken == "" {
+		return fmt.Errorf("SERVICE_AUTH_TOKEN is required: tenant-service's vault route answers nothing without it")
 	}
 	if c.Port == "" {
 		return fmt.Errorf("NETWORK_SERVICE_PORT must not be empty")

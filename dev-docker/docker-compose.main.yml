@@ -1414,6 +1414,10 @@ services:
       # start rather than a degraded mode.
       - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
       - AUTOMATION_EXCHANGE=${AUTOMATION_EXCHANGE:-txnet.automation}  # default declared in contracts/network/delta.json and shared-core (F-079)
+      # A panel's login is read through tenant-service's service-only vault
+      # route, never decrypted here: this service holds no KEK (F-027-aw).
+      - TENANT_API_BASE_URL=http://tenant-service:3000
+      - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     depends_on:
       main-db:

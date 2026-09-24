@@ -222,7 +222,7 @@ to a panel: each writes desired state, and one pass carries it (F-027-z).
 |---|---|---|
 | identity | `userId` owner of a config | provisioning blocked |
 | entitlement | the `grant` a config is provisioned for — its status, quotas and `panelGroupId` via its variant (ADR-0049; F-027) | provisioning blocked |
-| tenant | `tenantId` denormalized onto panel/config; dedicated Panel pools | shared pool still usable |
+| tenant | `tenantId` denormalized onto panel/config; dedicated Panel pools; a panel's login via the vault's `use` route (F-027-aw) | shared pool still usable; a pending panel stays `pending`, `unopenable` |
 | billing | `sub_account` draws down `config` byte caps | metering stops |
 
 ## Guarantees (intended)
