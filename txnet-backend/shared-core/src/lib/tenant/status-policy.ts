@@ -42,8 +42,9 @@ export type TenantStatusValue = (typeof TENANT_STATUSES)[number];
  * - `system` — the platform settling what already happened: a gateway webhook
  *   or callback for a payment already taken, expiry, notifications. Refusing
  *   it loses a record of money that moved, so no status closes it.
- * - `subscriptionLink` — `/sub`. Enforced by `network`'s service when it
- *   exists; the matrix and `graceEndsAt` are here now.
+ * - `subscriptionLink` — `/sub`. Enforced by `sub-service` (Go,
+ *   `internal/sub/tenant.go`), which copies this one column: change it here
+ *   and there together (F-113-e).
  */
 export const TENANT_CAPABILITIES = [
   'signIn',

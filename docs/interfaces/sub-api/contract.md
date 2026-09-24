@@ -11,7 +11,8 @@ updated: 2026-09-24
 **Partly built.** F-113-a is the deployable, the route and the host/token gate
 (`sub-service/`); F-113-b is the base64 body; F-113-c the cache and
 `Profile-Update-Interval`; F-113-d proves a rotated token stops at once;
-F-609 `Subscription-Userinfo` and the inactive Grant; F-609-b its live usage. The other formats are the later F-113-* rows. The *why* is in ADR-0082 and ADR-0083. The spec is catalog §7.5
+F-609 `Subscription-Userinfo` and the inactive Grant; F-609-b its live usage;
+F-113-e the tenant gate. The other formats are the later F-113-* rows. The *why* is in ADR-0082 and ADR-0083. The spec is catalog §7.5
 (`python3 tools/spec.py --section 7.5`), F-113 and F-609.
 
 ## TL;DR
@@ -64,6 +65,26 @@ base64, `text/plain; charset=utf-8`. No lines is an empty body.
 `exhausted`, `expired`, `cancelled`) is a `200` with an empty body, and its
 configs are not read (F-609).
 
+### The tenant gate (F-113-e, built)
+`sub/tenant.go`. The Grant's tenant must be allowed `subscriptionLink` by
+`TenantStatusPolicy` (tenant `rules.md`; only that column is copied to Go):
+`trial`/`active` yes, `suspended` up to and including `graceEndsAt`,
+`terminated` no, and no while `onboarding`.
+
+1. **A refused tenant gets the inactive Grant's answer:** `200`, an empty body
+   in the format asked for, zero remaining in `Subscription-Userinfo`; never a
+   4xx, and its configs are not read.
+2. **Judged on every answer, cached or not.** The state is
+   `tenant:status:<tenantId>` (tenant-service `TenantStatusListener`), read in
+   a hit's stamps `MGET` and in a render's one `MGET` with the usage key, once
+   the Grant is known. A grace runs out with no write to stamp, so the gate is
+   never baked into an entry, and a refusal is not cached.
+3. **A missing, unreadable or unknown state, or Redis failing, refuses
+   nobody** (tenant `rules.md` #6), as `TenantStatusGuard` does.
+4. The grace is judged against this process's clock, as the TypeScript
+   guard's is. The key name is held to `contracts/redis/keyspace.json`
+   `subKeyCases` by `usage_test.go`.
+
 Format: `?format=` when it names one (`base64`, `clash`, `singbox`/`sing-box`,
 `xray`, any case), else the `User-Agent` (Clash / mihomo / Stash → Clash;
 sing-box / SFA / SFI / SFM → Sing-box), else base64. An unknown `?format=` is
@@ -92,8 +113,9 @@ which client apps show as used, remaining and expiry. An app reads
 5. **Usage is live on every answer, cached or not (F-609-b).** metering-service
    writes a Grant's total to `sub:usage:<grantId>` after each charge commits
    (billing `contract.metering.md`, F-609-a). A cache hit reads it in the
-   stamps' `MGET`, so the hit stays two round trips; a render reads it with
-   one `GET` after its Postgres reads, listener or not (it is not the cache).
+   stamps' `MGET`, so the hit stays two round trips; a render reads it in one
+   `MGET` with the tenant state once the Grant is read, listener or not (it is
+   not the cache).
    The entry stores the Grant's userinfo inputs, not the header, and the
    header is rebuilt each time. A missing, unreadable or lower key, or Redis
    failing, shows the render's own figure — the key is never the truth, and
@@ -132,7 +154,7 @@ None.
 |---|---|---|
 | entitlement | `grant` by `subscriptionTokenHash` (SHA-256 lowercase hex of the path token), its status, billing mode, `endsAt`, `consumedBytes`, traffic quota and unexpired traffic `quota_adjustment` rows | a cached render is still served until its TTL; with no cache, `503` |
 | network | each config's stored link lines, and which panels are healthy | the same |
-| tenant | the request host must be a `purpose = subscription` domain of the Grant's tenant (F-066-q); `TenantStatusPolicy` column `subscriptionLink` (`tenant/rules.md`) | a refused tenant is served the empty body, as an inactive Grant is |
+| tenant | the request host must be a `purpose = subscription` domain of the Grant's tenant (F-066-q); `TenantStatusPolicy` column `subscriptionLink` (`tenant/rules.md`), from `tenant:status:<tenantId>` ("The tenant gate") | a refused tenant is served the empty body, as an inactive Grant is; no state refuses nobody |
 | redis-keyspace | the cached render and the change stamps ("The cache" above; C-07's key, ADR-0083 (3)); `sub:usage:<grantId>`, written by billing's metering-service (F-609-a), key name held to `contracts/redis/keyspace.json` `subKeyCases` by `usage_test.go` | a miss renders from Postgres reads; no usage key shows the render's figure |
 
 ## Guarantees
@@ -143,7 +165,8 @@ None.
   tenant is known); boot also refuses a missing column it reads.
 - **No panel request**, ever (ADR-0082 decision 2).
 - p99 under 50 ms from cache: a hit is two Redis round trips (`GET`, `MGET` —
-  the stamps and the live usage together) and no Postgres read.
+  the stamps, the live usage and the tenant state together) and no Postgres
+  read.
 - A rotated token stops working at once, not at the next cache expiry.
   Nothing deletes by key: `rotateToken` rewrites `subscriptionTokenHash`,
   the Grant trigger fires on that column, and the stamp outdates the old

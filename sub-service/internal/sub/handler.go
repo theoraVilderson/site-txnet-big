@@ -62,11 +62,13 @@ type Handler struct {
 	store Store
 	cache RenderCache
 	log   *slog.Logger
+	// now is the clock a tenant's `graceEndsAt` is judged against.
+	now func() time.Time
 }
 
 // New builds the handler. With no cache every request renders from Postgres.
 func New(store Store, log *slog.Logger) *Handler {
-	return &Handler{store: store, cache: RenderCache{TTL: defaultTTL}, log: log}
+	return &Handler{store: store, cache: RenderCache{TTL: defaultTTL}, log: log, now: time.Now}
 }
 
 // defaultTTL is the TTL a handler without a configured cache still announces.
@@ -125,7 +127,11 @@ func (h *Handler) Serve(w http.ResponseWriter, r *http.Request) {
 	format := DetectFormat(r)
 	key := h.cache.key(TokenHash(token), format, host)
 	if e, live, ok := h.cache.lookup(ctx, h.log, key); ok {
-		h.write(w, e.Body, e.ContentType, userinfo(e.Grant, live))
+		if !subscriptionLinkAllowed(live.Tenant, h.now()) {
+			h.refuseTenant(w, format, e.Grant, live)
+			return
+		}
+		h.write(w, e.Body, e.ContentType, userinfo(e.Grant, live.Usage))
 		return
 	}
 	// Taken before the first read, so a write committed while this render
@@ -152,6 +158,14 @@ func (h *Handler) Serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Judged on every answer, a render included; a refusal is not cached, so
+	// a reactivated tenant's next answer is its body again (F-113-e).
+	live := h.cache.live(ctx, h.log, grant)
+	if !subscriptionLinkAllowed(live.Tenant, h.now()) {
+		h.refuseTenant(w, format, grant, live)
+		return
+	}
+
 	// A Grant that is not active serves nothing, and says so with a 200 and
 	// zero remaining: a client app handles a 4xx badly (F-609).
 	var configs []Config
@@ -164,7 +178,7 @@ func (h *Handler) Serve(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	body, contentType := render(format, servedLines(configs))
-	h.write(w, body, contentType, userinfo(grant, h.cache.usage(ctx, h.log, grant.ID)))
+	h.write(w, body, contentType, userinfo(grant, live.Usage))
 	if cacheable {
 		h.cache.store(ctx, h.log, key, entry{
 			Built:       built,
@@ -184,6 +198,15 @@ func (h *Handler) write(w http.ResponseWriter, body []byte, contentType, info st
 	w.Header().Set("Profile-Update-Interval", strconv.Itoa(h.cache.updateIntervalHours()))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(body)
+}
+
+// refuseTenant is the answer a tenant the gate closes gets (F-113-e): what an
+// inactive Grant gets — a `200`, an empty body in the format asked for, zero
+// remaining — never a 4xx, which a client app may read as a deleted link.
+func (h *Handler) refuseTenant(w http.ResponseWriter, f Format, g Grant, live liveState) {
+	g.Status = "tenant_refused" // any status but active: userinfo's zero remaining
+	body, contentType := render(f, nil)
+	h.write(w, body, contentType, userinfo(g, live.Usage))
 }
 
 func notFound(w http.ResponseWriter) {

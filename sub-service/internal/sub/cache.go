@@ -77,51 +77,63 @@ func (c RenderCache) key(tokenHash string, f Format, host string) string {
 	return cache.RenderKey(c.Prefix, renderRevision, tokenHash, string(f), host)
 }
 
+// liveState is what is read from Redis on every answer, cached or not: the
+// Grant's live usage (F-609-b) and its tenant's status (F-113-e). Neither is
+// the cache, and neither is ever baked into an entry.
+type liveState struct {
+	// Usage is `sub:usage:<grantId>`; 0 when there is none.
+	Usage int64
+	// Tenant is the raw `tenant:status:<tenantId>`; empty when there is none.
+	Tenant string
+}
+
+func (c RenderCache) liveKeys(g Grant) []string {
+	return []string{cache.UsageKey(c.Prefix, g.ID), cache.TenantStatusKey(c.Prefix, g.TenantID)}
+}
+
 // lookup returns the cached answer for key if it is still fresh, with the
-// Grant's live usage read in the same `MGET` as the stamps, so a hit stays two
-// round trips. Any Redis failure is a miss: the answer is rendered from
-// Postgres instead.
-func (c RenderCache) lookup(ctx context.Context, log *slog.Logger, key string) (entry, int64, bool) {
+// live state read in the same `MGET` as the stamps, so a hit stays two round
+// trips. Any Redis failure is a miss: the answer is rendered from Postgres
+// instead.
+func (c RenderCache) lookup(ctx context.Context, log *slog.Logger, key string) (entry, liveState, bool) {
 	if !c.enabled() {
-		return entry{}, 0, false
+		return entry{}, liveState{}, false
 	}
 	raw, ok, err := c.Store.Get(ctx, key)
 	if err != nil {
 		log.Warn("render cache read failed", "error", err)
-		return entry{}, 0, false
+		return entry{}, liveState{}, false
 	}
 	if !ok {
-		return entry{}, 0, false
+		return entry{}, liveState{}, false
 	}
 	var e entry
-	if err := json.Unmarshal(raw, &e); err != nil || len(e.Deps) == 0 || e.Grant.ID == "" {
-		return entry{}, 0, false
+	if err := json.Unmarshal(raw, &e); err != nil || len(e.Deps) == 0 || e.Grant.ID == "" || e.Grant.TenantID == "" {
+		return entry{}, liveState{}, false
 	}
-	values, err := c.Store.MGet(ctx, append(e.Deps, cache.UsageKey(c.Prefix, e.Grant.ID))...)
+	values, err := c.Store.MGet(ctx, append(e.Deps, c.liveKeys(e.Grant)...)...)
 	if err != nil {
 		log.Warn("render cache stamp read failed", "error", err)
-		return entry{}, 0, false
+		return entry{}, liveState{}, false
 	}
-	stamps := values[:len(e.Deps)]
-	return e, parseUsage(values[len(e.Deps)]), fresh(e.Built, stamps)
+	stamps, rest := values[:len(e.Deps)], values[len(e.Deps):]
+	return e, liveState{Usage: parseUsage(rest[0]), Tenant: rest[1]}, fresh(e.Built, stamps)
 }
 
-// usage is the Grant's live total from `sub:usage:<grantId>` (F-609-a), for a
-// render. It is not the cache, so it is read with no listener too; missing,
-// unreadable or Redis failing is 0, and the render's own figure is shown.
-func (c RenderCache) usage(ctx context.Context, log *slog.Logger, grantID string) int64 {
+// live is the live state for a render, in one `MGET` taken once the Grant is
+// known, so a refused tenant reads no configs. It is not the cache, so it is
+// read with no listener too; Redis failing is the zero state — no usage
+// figure, and no tenant state, which refuses nobody.
+func (c RenderCache) live(ctx context.Context, log *slog.Logger, g Grant) liveState {
 	if c.Store == nil {
-		return 0
+		return liveState{}
 	}
-	raw, ok, err := c.Store.Get(ctx, cache.UsageKey(c.Prefix, grantID))
+	values, err := c.Store.MGet(ctx, c.liveKeys(g)...)
 	if err != nil {
-		log.Warn("live usage read failed", "error", err)
-		return 0
+		log.Warn("live state read failed", "error", err)
+		return liveState{}
 	}
-	if !ok {
-		return 0
-	}
-	return parseUsage(string(raw))
+	return liveState{Usage: parseUsage(values[0]), Tenant: values[1]}
 }
 
 // parseUsage reads the key's decimal total; anything else is "no figure".

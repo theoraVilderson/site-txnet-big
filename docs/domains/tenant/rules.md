@@ -68,7 +68,7 @@ the two answers wins, and the platform owner is never in it.
 ## Edge cases decided
 | Case | Decision | Date |
 |---|---|---|
-| `/sub` has no server yet | the matrix column and `graceEndsAt` ship now; `network`'s service calls `tenantAllows(state, 'subscriptionLink')` when it serves the link (user, F-018-f) | 2026-09-17 |
+| `/sub` has no server yet | the matrix column and `graceEndsAt` ship now (user, F-018-f). Enforced since F-113-e by `sub-service` (Go), which copies only this column and reads `tenant:status:<id>` on every answer, cached or not; refused = the inactive Grant's empty `200` (`sub-api/contract.md`) | 2026-09-17 |
 | A mutating route nobody labelled | closed for a suspended tenant (`staffWrite`) — fail closed (user, F-018-f) | 2026-09-17 |
 | One row, one session | the user chose not to split enforcement per service | 2026-09-17 |
 | A terminated tenant's in-flight payment | settles (`system`); a card-to-card confirmation by staff does not (`staffWrite`) | 2026-09-17 |

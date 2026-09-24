@@ -24,8 +24,8 @@ Built: the deployable, the host/token gate (F-113-a), the base64 body of
 the served configs' stored lines (F-113-b) and the Redis render cache,
 invalidated by Postgres notifications (F-113-c, ADR-0083), and
 `Subscription-Userinfo` with the inactive Grant's empty body (F-609), its
-used figure live from Redis on every answer (F-609-b). The
-rest is the F-113-* series and F-027-bi..bm in `BACKLOG.md`.
+used figure live from Redis on every answer (F-609-b), and the tenant
+status gate (F-113-e). The rest is the F-113-* series and F-027-bi..bm in `BACKLOG.md`.
 
 ## Files
 | File | Read it when |

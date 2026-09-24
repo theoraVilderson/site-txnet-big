@@ -120,8 +120,8 @@ func TestRedisDownShowsTheRendersFigure(t *testing.T) {
 	}
 }
 
-// The Go half of `contracts/redis/keyspace.json` `subKeyCases`: the key is
-// written in TypeScript (shared-core `SubKeys.subUsage`) and read here, and a
+// The Go half of `contracts/redis/keyspace.json` `subKeyCases`: the keys are
+// written in TypeScript (shared-core `UnscopedRedisKeys`) and read here, and a
 // name built differently on one side reads as "no live usage" forever.
 func TestUsageKeyMatchesTheSharedFixture(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Clean("../../../contracts/redis/keyspace.json"))
@@ -134,7 +134,13 @@ func TestUsageKeyMatchesTheSharedFixture(t *testing.T) {
 	if err := json.Unmarshal(raw, &fixture); err != nil {
 		t.Fatalf("parse fixture: %v", err)
 	}
-	builders := map[string]func(prefix, id string) string{"subUsage": cache.UsageKey}
+	// tenantStatus: a name built differently here is a key that is always
+	// missing, and missing refuses nobody — the tenant gate (F-113-e) would be
+	// off with no error anywhere.
+	builders := map[string]func(prefix, id string) string{
+		"subUsage":     cache.UsageKey,
+		"tenantStatus": cache.TenantStatusKey,
+	}
 	if len(fixture.SubKeyCases) == 0 {
 		t.Fatal("fixture declares no subKeyCases")
 	}

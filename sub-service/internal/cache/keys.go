@@ -57,3 +57,11 @@ func ChangedAllKey(prefix string) string {
 func UsageKey(prefix, grantID string) string {
 	return prefix + "sub:usage:" + grantID
 }
+
+// TenantStatusKey is a tenant's `{status, graceEndsAt, onboarding}`, written by
+// tenant-service's `TenantStatusListener` (F-018-f) and read for the tenant
+// gate (F-113-e). The same name as shared-core's
+// `UnscopedRedisKeys.tenantStatus`; unscoped, so the prefix is the only one.
+func TenantStatusKey(prefix, tenantID string) string {
+	return prefix + "tenant:status:" + tenantID
+}
