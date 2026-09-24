@@ -38,7 +38,7 @@ no service yet. A unit that is `active` with an empty `source:` is a lie and
 | panel-web | Next.js user panel (site-pwa): auth screens, locale/theme, API proxy | active | [->](interfaces/panel-web/INDEX.md) |
 | marketing-web | Next.js public landing site (coinsite) | draft | [->](interfaces/marketing-web/INDEX.md) |
 | bot-app | the bot as a full product surface (D-02, §10.4): platform-agnostic flows + screens for Telegram and Bale | active | [->](interfaces/bot-app/INDEX.md) |
-| sub-api | `GET /sub/{token}` on a tenant's subscription domain: one link per Grant from stored link lines; own Go deployable `sub-service` (ADR-0082) | draft | [->](interfaces/sub-api/INDEX.md) |
+| sub-api | `GET /sub/{token}` on a tenant's subscription domain: one link per Grant from stored link lines; own Go deployable `sub-service` (ADR-0082) | active | [->](interfaces/sub-api/INDEX.md) |
 
 ## Platform — cross-cutting, no business rules
 | id | capability | status | doc |

@@ -6,4 +6,5 @@ use (
 	./i18n-platform/codegen/go
 	./i18n-platform/services/locale-service
 	./network-service
+	./sub-service
 )
