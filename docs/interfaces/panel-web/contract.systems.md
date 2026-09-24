@@ -32,7 +32,7 @@ every write are [billing/contract.systems.md](../../domains/billing/contract.sys
    that bar metered sale (`refusedBecause`). The question and the cost of a
    `no` are said in the reader's language by row key (`CAPABILITY_KEYS`);
    billing never sends question text (billing rule 7).
-4. **The register form mirrors `registerPanelSchema`** (`validateRegister`):
+4. **The register wizard mirrors `registerPanelSchema`** (`validateRegister`):
    everything trimmed but the login, IPv4/IPv6, an http(s) `apiBaseUrl`
    required for `pull`, a budget of 1–6000 or blank (billing's default 60).
    The login is a password input, sent once; the answer's `configured` is all
@@ -66,9 +66,23 @@ every write are [billing/contract.systems.md](../../domains/billing/contract.sys
 9. **One sentence per value the backend can write.** Review state, panel
    state, connection-test fault, hold reason and state, drift event type and
    refusal are each a `Record` over the union. Theme tokens only, never gold.
+10. **Registering is a five-step wizard** (F-027-bq, `RegisterWizard.tsx`,
+   rules `_lib/register-wizard.ts`): family → details → connection → login →
+   review, as the gateway wizard (F-102-e). A step blocks only on its own
+   fields; `validateRegister` still decides the body. Picking a family fills
+   its transport and counting (`DRIVER_PROFILES`, from the network driver
+   contracts; editable under "advanced") and clears a client address the family
+   has no use for, since a hidden field is never sent. A family is offered as
+   ready only if `internal/opener` has a case for it; any other registers and
+   says it stays `pending`. **The login is asked in its parts** — username and
+   password, or Hiddify's API key — and composed as the Opener splits it
+   (`composeLogin`); a username with `:` is refused here, since the Opener
+   would test it as someone else. `role` reads as primary / standby, an HA
+   pair's (network `contract.groups.md` rule 6), never as on / off.
 
 ## Proof
 
+`systems/register-wizard.test.ts` — rule 10: the steps, each blocking on its own fields, the family profiles (the ready set read out of `opener.go`), the composed login, the IP an address names.
 `systems/systems.test.ts` — every set above against its declared home
 (`network.prisma` enums, `contracts/network/capabilities.json` in order,
 billing's `SystemsRejection` / `PanelScopeRejection` / `ResubmitRejection`),

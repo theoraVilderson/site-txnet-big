@@ -1977,8 +1977,8 @@
         "push": "Push — the panel reports to us"
       },
       "role": {
-        "active": "Active",
-        "passive": "Passive"
+        "active": "Primary",
+        "passive": "Standby"
       },
       "counter": {
         "cumulative": "Cumulative",
@@ -1995,7 +1995,125 @@
         "credentials": "Enter the login (up to 4096 characters).",
         "radiusSecret": "Enter the RADIUS secret (up to 4096 characters). A push panel needs one."
       },
-      "radiusSecretStored": "The RADIUS secret was stored in the vault too."
+      "radiusSecretStored": "The RADIUS secret was stored in the vault too.",
+      "wizard": {
+        "stepOf": "Step {{current}} of {{total}}",
+        "close": "Close",
+        "back": "Back",
+        "next": "Next",
+        "submit": "Register panel",
+        "submitting": "Registering…",
+        "edit": "Edit",
+        "optional": "optional",
+        "tip": "Tip",
+        "confirmClose": "What you entered will not be saved. Close anyway?",
+        "steps": {
+          "family": {
+            "title": "Panel type",
+            "subtitle": "Pick the panel installed on the server.",
+            "tip": "3x-ui v2 and v3 are different: check the version at the foot of the panel's login page or its About section. A wrong version is refused by the connection test."
+          },
+          "details": {
+            "title": "Details",
+            "subtitle": "The name you know the panel by, and where its server is.",
+            "tip": "Name and region are for you alone and never shown to users. A name like \"Germany 1\" makes the panel easy to find in the list."
+          },
+          "connection": {
+            "title": "Connection",
+            "subtitle": "The address we call the panel at, and how often we may ask.",
+            "tip": "Write the address with http or https and the port, exactly as you open the panel's login page in a browser. If the panel sits behind a domain, enter that server's IP separately."
+          },
+          "login": {
+            "title": "Panel login",
+            "subtitle": "The admin account we create users and read usage with.",
+            "tip": "Better to create a separate admin account for us than to give your own. If you change its password later, use \"new login\" in the panel list."
+          },
+          "review": {
+            "title": "Review",
+            "subtitle": "One more look; every part can be edited.",
+            "tip": "After registering, the panel stays pending until the connection test runs on the next pass. The verdict, accepted or refused, appears in this page's list."
+          }
+        },
+        "groups": {
+          "xray": "Xray / V2Ray panels",
+          "router": "Router and RADIUS",
+          "test": "Testing"
+        },
+        "ready": "Ready",
+        "notReady": "Soon",
+        "notReadyNote": "This panel type registers, but we have not built its connection yet; until then it stays pending and is not tested.",
+        "profile": {
+          "title": "This panel type:",
+          "userPassword": "signs in with a username and password",
+          "apiKey": "signs in with an API key",
+          "clientBaseUrl": "a separate address for users' links"
+        },
+        "role": {
+          "active": {
+            "title": "Primary",
+            "desc": "The panel is on its own, or it is the one serving right now in a failover pair."
+          },
+          "passive": {
+            "title": "Standby",
+            "desc": "In a failover pair, it waits ready to take over if the primary goes down."
+          }
+        },
+        "placeholder": {
+          "name": "e.g. Germany 1",
+          "region": "e.g. Germany or de",
+          "apiBaseUrl": "https://panel.example.com:8000",
+          "clientBaseUrl": "https://sub.example.com/path",
+          "ipAddress": "203.0.113.7"
+        },
+        "apiBaseUrlHint": {
+          "default": "The panel's login page address, with its port and path (if any).",
+          "hiddify": "Hiddify's admin proxy path address — the one you open the admin panel with.",
+          "router": "The router's REST API root (RouterOS v7), e.g. https://router.example.com/rest"
+        },
+        "useIp": "Use {{ip}}",
+        "advanced": {
+          "title": "Advanced settings",
+          "hint": "Filled from the panel type. Change them only if you are sure; the connection test checks them."
+        },
+        "budget": {
+          "gentle": "Gentle",
+          "default": "Default",
+          "fast": "Fast",
+          "custom": "Custom"
+        },
+        "login": {
+          "username": "Username",
+          "password": "Password",
+          "apiKey": "Admin API key",
+          "apiKeyHint": "The admin's key (a UUID), from the admins section of the Hiddify panel.",
+          "show": "Show",
+          "hide": "Hide",
+          "safe": "Encrypted and sent to the vault once, and never shown anywhere again."
+        },
+        "invalid": {
+          "username": "Enter the username.",
+          "usernameColon": "The username cannot contain \":\".",
+          "password": "Enter the password.",
+          "apiKey": "Enter the API key."
+        },
+        "review": {
+          "entered": "Entered",
+          "notEntered": "Not entered",
+          "none": "—",
+          "defaultBudget": "Default (60 a minute)",
+          "login": "Login",
+          "family": "Type"
+        },
+        "done": {
+          "title": "\"{{name}}\" is registered",
+          "subtitle": "The panel is pending now. Nothing more to do; the rest is automatic:",
+          "step1": "On the next pass, we connect to the panel and try the login.",
+          "step2": "The acceptance questionnaire is filled: what the panel supports.",
+          "step3": "The verdict, accepted or refused with its reason, shows in this page's panel list.",
+          "another": "Register another",
+          "finish": "Done"
+        }
+      }
     },
     "panels": {
       "title": "Panels",
