@@ -82,15 +82,20 @@ type DesiredConfig struct {
 	// `driftRepairedAt`: the anti-flap stop's memory (F-027-ab).
 	RepairCount int
 	RepairedAt  time.Time
+	// Links is the lines stored for `/sub` and the client they were read
+	// from (links.go, F-027-bj).
+	Links CapturedLinks
 }
 
 // Outcome is what the pass learned about one row. RemoteID is the value the
-// row should now hold, empty to clear it.
+// row should now hold, empty to clear it. Links is nil unless this pass
+// captured them; nil leaves the stored lines as they are.
 type Outcome struct {
 	ConfigID string
 	RemoteID string
 	State    EnforcementState
 	At       time.Time
+	Links    *CapturedLinks
 }
 
 // Desired is `network.config`'s desired state behind an interface, as
@@ -156,12 +161,14 @@ type ProvisionFinding struct {
 // Stopped is the rows whose repair budget is spent, with the verdict each
 // holds, so the ceiling pass holds its repairs too.
 type ProvisionReport struct {
-	PanelID  string
-	Checked  int
-	Synced   int
-	Written  int
-	Skipped  int
-	Failed   int
+	PanelID string
+	Checked int
+	Synced  int
+	Written int
+	Skipped int
+	Failed  int
+	// Captured is the configs whose lines this pass read and stored.
+	Captured int
 	Findings []ProvisionFinding
 	Removed  map[string]bool
 	Drift    map[string]Judgement
@@ -218,7 +225,10 @@ func (v *Provisioning) PassOver(ctx context.Context, p collect.Panel, clients []
 			}
 		}
 		report.Drift[row.ConfigID] = judgement
-		if outcome != nil && (outcome.State != row.State || outcome.RemoteID != row.RemoteID) {
+		if outcome != nil && outcome.State == StateComplete && row.Present && matched {
+			v.capture(ctx, p, row, match.Client, outcome, &report)
+		}
+		if outcome != nil && (outcome.State != row.State || outcome.RemoteID != row.RemoteID || outcome.Links != nil) {
 			outcomes = append(outcomes, *outcome)
 		}
 	}
@@ -439,9 +449,9 @@ func (c *Converger) Converge(ctx context.Context, p collect.Panel, res collect.R
 		return err
 	}
 	prov, ceil := report.Provisioning, report.Ceilings
-	if prov.Written > 0 || prov.Failed > 0 || ceil.Written > 0 || ceil.Failed > 0 || len(prov.Orphans) > 0 {
+	if prov.Written > 0 || prov.Failed > 0 || prov.Captured > 0 || ceil.Written > 0 || ceil.Failed > 0 || len(prov.Orphans) > 0 {
 		c.log().Info("panel converged",
-			"panel", p.ID, "provisioned", prov.Written, "provision_failed", prov.Failed,
+			"panel", p.ID, "provisioned", prov.Written, "provision_failed", prov.Failed, "links_captured", prov.Captured,
 			"ceilings_written", ceil.Written, "ceilings_failed", ceil.Failed, "orphans", len(prov.Orphans))
 	}
 	return nil

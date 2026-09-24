@@ -57,6 +57,8 @@ var RequiredColumns = map[string][]string{
 		"driftState", "driftRepairCount", "driftRepairedAt", "lastReconciledAt",
 		"allocatedCeilingBytes", "appliedCeilingBytes", "observedRateBps",
 		"ceilingAppliedAt", "walletBackedCeilingBytes",
+		// The lines `/sub` renders, and the client they were read from (F-027-bj).
+		"linkLines", "linksRemoteId", "linksUuid", "linksCapturedAt",
 	},
 	// Where the counter was, so that a figure going backward is a reset and
 	// never negative usage (invariant 20, ADR-0074).

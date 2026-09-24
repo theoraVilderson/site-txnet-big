@@ -76,6 +76,10 @@ const CONFIG_COLUMNS = [
   'observedRateBps',
   'ceilingAppliedAt',
   'walletBackedCeilingBytes',
+  'linkLines',
+  'linksRemoteId',
+  'linksUuid',
+  'linksCapturedAt',
 ];
 
 describe('network.Config carries its desired state, its drift and its ceiling', () => {
@@ -178,6 +182,13 @@ describe('network.Config carries its desired state, its drift and its ceiling', 
     // where it is smaller would have a graceful shutdown quietly *lowering*
     // every ceiling on its way out, which is the cut-off it exists to prevent.
     expect(sql).toContain('config_wallet_backed_ceiling_extends');
+  });
+
+  it('cannot hold link lines captured from no client', () => {
+    // F-027-bj: a capture is keyed by the client it was read from, and the key
+    // is what makes a regenerate or a re-key capture again. Lines with no key
+    // would be served forever; a key with no time reads as never captured.
+    expect(sql).toContain('config_links_captured_from_a_client');
   });
 
   it('refuses a negative ceiling, rate or repair count', () => {

@@ -10,8 +10,9 @@ updated: 2026-09-24
 
 A topic file of `contract.md` (§10), beside `contract.drivers.md`. What governs
 `driver.Driver.ClientLinks` and `network-service/internal/driver/links.go`: the
-lines `/sub` will serve (ADR-0082 rule 2). Where they are stored and when a
-capture runs is F-027-bj's, and is not built yet.
+lines `/sub` will serve (ADR-0082 rule 2); and, under "Stored lines" below,
+when the provisioning pass captures them and where they are kept (F-027-bj,
+`internal/converge/links.go`).
 
 ## The rules
 
@@ -35,7 +36,7 @@ capture runs is F-027-bj's, and is not built yet.
 5. **One budgeted call.** `ClientLinks` is paced as one call, as `BuildLink`
    is. Inside it a family makes at most three requests (x-ui: the client list,
    the settings, the sub server). Capture runs only when a client is created,
-   regenerated, moved or re-keyed, never on a collection pass.
+   regenerated, moved or re-keyed (rule 6), never for a config that is steady.
 
 ## Per family
 
@@ -50,6 +51,32 @@ capture runs is F-027-bj's, and is not built yet.
 
 A name or uuid the panel does not hold is a fault, not "none": it is a client
 that should exist and does not, which is drift (`contract.drift.md`).
+
+## Stored lines (F-027-bj)
+
+6. **Captured on the read that confirms, keyed by the client read.** The
+   provisioning pass calls `ClientLinks` on a client the pass confirmed
+   (`complete`: matched, present, holding the desired state), and only when the
+   row's lines were read from another client, another `remoteId` or `uuid`.
+   That one test is every trigger: a create, a move (a new row) and a recreate
+   confirm a client the row has no lines from; a regenerate confirms a new
+   `uuid`; a rename or a rebuild re-keys `remoteId`. Our own write confirms
+   nothing, so a capture lands one pass after it, like `complete` does.
+7. **Stored on `network.config`.** `linkLines` (in the panel's order),
+   `linksRemoteId` and `linksUuid` (the key), `linksCapturedAt`. CHECK
+   `config_links_captured_from_a_client`: key and time together, and lines only
+   with both. Empty lines with a time is a panel that gives none (rule 2); no
+   time is a client never captured. `/sub` can tell a stale capture from a
+   fresh one by `linksUuid = uuid`.
+8. **A failed read keeps what is stored.** It is a `links_unread` finding with
+   the driver's fault, not a refused write; the re-key or state change the
+   pass made is still recorded, and the capture is retried on the next pass
+   because its key still differs. A panel whose sub server is down is asked
+   once a pass per unconfirmed config, inside its budget.
+
+Staging: `converge.MemoryDesired` holds the lines until `network.config` is
+read directly, as it holds the rest of the desired state
+(`contract.provisioning.md`); the columns are in `db.RequiredColumns`.
 
 ## Revisit
 

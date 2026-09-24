@@ -389,6 +389,17 @@ model Config {
   /// the first pass after a restart pulls the panel back to `allocated`.
   /// Never below `allocatedCeilingBytes` — an extension only ever extends.
   walletBackedCeilingBytes BigInt?
+  /// Every link line the panel gives this client, as the panel built them,
+  /// captured on the read that confirms it (ADR-0082 rule 2, F-027-bj). `/sub`
+  /// renders these and never asks a panel. Empty with `linksCapturedAt` set is
+  /// a panel that gives none; with it null, the client was never captured.
+  linkLines                String[]  @default([])
+  /// The client the lines were read from. A capture runs again when either
+  /// differs from the client the pass confirms: a regenerate, a move, a rename
+  /// or a rebuild.
+  linksRemoteId            String?
+  linksUuid                String?
+  linksCapturedAt          DateTime?
 
   panel Panel @relation(fields: [panelId], references: [id])
   grant Grant @relation(fields: [grantId], references: [id])

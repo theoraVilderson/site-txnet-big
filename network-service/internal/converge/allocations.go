@@ -114,6 +114,9 @@ func (m *MemoryDesired) Record(_ context.Context, outcomes []Outcome) error {
 			continue
 		}
 		row.RemoteID, row.State = o.RemoteID, o.State
+		if o.Links != nil {
+			row.Links = *o.Links
+		}
 		m.rows[o.ConfigID] = row
 	}
 	return nil

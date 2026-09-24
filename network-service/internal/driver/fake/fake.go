@@ -87,6 +87,8 @@ type Panel struct {
 	nextStatus int
 	// ceilingDelay is consumed by the next ceiling write.
 	ceilingDelay int
+	// linksDown is the subscription server off while the admin API answers.
+	linksDown bool
 
 	calls map[string]int
 }
@@ -273,6 +275,14 @@ func (p *Panel) FailNextCall(status int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.nextStatus = status
+}
+
+// FailLinks turns the panel's subscription server off, or back on: every
+// ClientLinks fails as unavailable while the admin API goes on answering.
+func (p *Panel) FailLinks(down bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.linksDown = down
 }
 
 // AbandonSession leaves the session open and un-updated: the NAS that never
@@ -660,6 +670,9 @@ func (p *Panel) ClientLinks(ctx context.Context, client driver.RemoteClient) ([]
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.linksDown {
+		return nil, driver.FaultForStatus("ClientLinks", 503, nil)
+	}
 	c := p.clients[client.RemoteID]
 	if c == nil {
 		return nil, p.notFound("ClientLinks", client.RemoteID)

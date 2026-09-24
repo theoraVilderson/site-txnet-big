@@ -97,7 +97,9 @@ client's id — a renamed or rebuilt client is re-keyed and carried on.
 | `present` | matches | `complete` |
 
 **`complete` is a read, never our write** — the rule `appliedCeilingBytes`
-keeps (invariant 36). A write that returned nil is `partial`; only a later read
+keeps (invariant 36). That read is also where a config's link lines are
+captured, when the row's were read from another client (`contract.links.md`
+rules 6–8, F-027-bj). A write that returned nil is `partial`; only a later read
 showing the desired state is `complete`, and only that read clears a deleted
 client's `remoteId` (invariant 15). A refused write leaves the row where it was
 and is a `write_refused` finding with the driver's fault; the rest of the panel

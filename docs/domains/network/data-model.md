@@ -73,10 +73,10 @@ deleted** (ADR-0075), because desired state is what makes a rebuild a button.
 confirmed, and the gap is the loop's remaining work — what the panel UI shows
 as `in queue`. Collapsed into one, the system believes a ceiling it never
 wrote, which is free traffic at the far end of it and nothing red anywhere.
-`observedRateBps` sizes the horizon in seconds (F-027-u); `driftState`,
-`driftRepairCount`/`driftRepairedAt` are the verdict and 24 h stop (F-027-ab);
-`credentialGroupId` groups configs over one quota (§4.6); a shutdown raises a
-ceiling to `walletBackedCeilingBytes`, CHECKed ≥ the allocation (ADR-0078).
+`observedRateBps` sizes the horizon (F-027-u); `driftState`/`driftRepairCount`/
+`driftRepairedAt` are the verdict and 24 h stop (F-027-ab); `credentialGroupId`
+is one quota (§4.6); `walletBackedCeilingBytes` ≥ allocation is a shutdown's
+ceiling (ADR-0078); `linkLines` is what `/sub` serves (contract.links.md).
 
 Five CHECK constraints, for the same reason the Panel has its five:
 `config_ceiling_bytes_not_negative`, `config_observed_rate_not_negative`,
