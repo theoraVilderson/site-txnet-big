@@ -27,6 +27,20 @@ type Config struct {
 	WriteTimeout      time.Duration
 	IdleTimeout       time.Duration
 	ShutdownTimeout   time.Duration
+
+	// RedisURL holds the render cache (F-113-c). Redis down at runtime costs
+	// cache misses, never an answer; unset is a refusal to start, because
+	// Postgres alone does not meet catalog §7.5's p99.
+	RedisURL             string
+	RedisKeyNamespace    string
+	RedisKeyspaceVersion string
+	RedisPoolSize        int
+	RedisDialTimeout     time.Duration
+	RedisTimeout         time.Duration
+	// RenderTTL is how long a cached render lives when nothing it was built
+	// from changes, and `Profile-Update-Interval` (in hours) — so a whole
+	// number of hours.
+	RenderTTL time.Duration
 }
 
 // Load reads configuration from the environment and validates it.
@@ -44,6 +58,14 @@ func Load() (Config, error) {
 		WriteTimeout:      getEnvDuration("HTTP_WRITE_TIMEOUT", 5*time.Second),
 		IdleTimeout:       getEnvDuration("HTTP_IDLE_TIMEOUT", 60*time.Second),
 		ShutdownTimeout:   getEnvDuration("HTTP_SHUTDOWN_TIMEOUT", 10*time.Second),
+
+		RedisURL:             os.Getenv("REDIS_URL"),
+		RedisKeyNamespace:    getEnv("REDIS_KEY_NAMESPACE", "txnet:auth"),
+		RedisKeyspaceVersion: getEnv("REDIS_KEYSPACE_VERSION", "v2"),
+		RedisPoolSize:        getEnvInt("REDIS_POOL_SIZE", 20),
+		RedisDialTimeout:     getEnvDuration("REDIS_DIAL_TIMEOUT", time.Second),
+		RedisTimeout:         getEnvDuration("REDIS_READ_TIMEOUT", 200*time.Millisecond),
+		RenderTTL:            getEnvDuration("SUB_RENDER_TTL", time.Hour),
 	}
 	if err := cfg.validate(); err != nil {
 		return Config{}, err
@@ -57,6 +79,12 @@ func (c Config) validate() error {
 	}
 	if c.Port == "" {
 		return fmt.Errorf("SUB_SERVICE_PORT must not be empty")
+	}
+	if c.RedisURL == "" {
+		return fmt.Errorf("REDIS_URL is required")
+	}
+	if c.RenderTTL < time.Hour || c.RenderTTL%time.Hour != 0 {
+		return fmt.Errorf("SUB_RENDER_TTL must be a whole number of hours, at least 1h (it is sent as Profile-Update-Interval), got %s", c.RenderTTL)
 	}
 	if c.PoolMaxConns < 1 {
 		return fmt.Errorf("SUB_DB_POOL_MAX_CONNS must be at least 1, got %d", c.PoolMaxConns)

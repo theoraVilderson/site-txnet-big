@@ -43,7 +43,7 @@ func (s Store) GrantByTokenHash(ctx context.Context, hash string) (sub.Grant, bo
 // handler's (`sub.serves`), so the rule is tested without a database.
 func (s Store) ConfigsOfGrant(ctx context.Context, grantID string) ([]sub.Config, error) {
 	rows, err := s.DB.Query(ctx,
-		`SELECT p."panelState"::text, c.status::text, c."desiredRemote"::text, c.uuid,
+		`SELECT c."panelId"::text, p."panelState"::text, c.status::text, c."desiredRemote"::text, c.uuid,
 		        COALESCE(c."linksUuid", ''), c."linkLines"
 		   FROM network.config c JOIN network.panel p ON p.id = c."panelId"
 		  WHERE c."grantId" = $1::uuid
@@ -55,7 +55,7 @@ func (s Store) ConfigsOfGrant(ctx context.Context, grantID string) ([]sub.Config
 	var configs []sub.Config
 	for rows.Next() {
 		var c sub.Config
-		if err := rows.Scan(&c.PanelState, &c.Status, &c.DesiredRemote, &c.UUID, &c.LinksUUID, &c.LinkLines); err != nil {
+		if err := rows.Scan(&c.PanelID, &c.PanelState, &c.Status, &c.DesiredRemote, &c.UUID, &c.LinksUUID, &c.LinkLines); err != nil {
 			return nil, err
 		}
 		configs = append(configs, c)

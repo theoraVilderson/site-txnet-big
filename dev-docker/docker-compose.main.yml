@@ -1465,6 +1465,12 @@ services:
     environment:
       - SUB_SERVICE_PORT=${SUB_SERVICE_PORT:-8091}
       - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      # The render cache (F-113-c, ADR-0083). SUB_RENDER_TTL is also the
+      # Profile-Update-Interval client apps are told, so whole hours only.
+      - REDIS_URL=${REDIS_URL}
+      - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      - SUB_RENDER_TTL=${SUB_RENDER_TTL:-1h}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     depends_on:
       main-db:

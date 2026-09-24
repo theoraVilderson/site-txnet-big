@@ -15,9 +15,11 @@ import (
 	"os/signal"
 	"syscall"
 
+	"sub-service/internal/cache"
 	"sub-service/internal/config"
 	"sub-service/internal/db"
 	"sub-service/internal/httpapi"
+	"sub-service/internal/invalidate"
 	"sub-service/internal/sub"
 	"sub-service/pkg/logger"
 )
@@ -54,9 +56,28 @@ func main() {
 		os.Exit(1)
 	}
 
+	redis, err := cache.New(cfg.RedisURL, cfg.RedisPoolSize, cfg.RedisDialTimeout, cfg.RedisTimeout)
+	if err != nil {
+		log.Error("redis unusable", "error", err)
+		os.Exit(1)
+	}
+	defer redis.Close()
+	prefix := cache.Prefix(cfg.RedisKeyNamespace, cfg.RedisKeyspaceVersion)
+
+	// The cache is used only while the listener is being told what changed.
+	listenCtx, stopListening := context.WithCancel(ctx)
+	defer stopListening()
+	listener := invalidate.New(cfg.DatabaseURL, cfg.ConnectTimeout, redis, prefix, cfg.RenderTTL, log)
+	go listener.Run(listenCtx)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", httpapi.New(pool, log).Health)
-	sub.New(db.Store{DB: pool}, log).Register(mux)
+	sub.New(db.Store{DB: pool}, log).WithCache(sub.RenderCache{
+		Store:  redis,
+		Prefix: prefix,
+		TTL:    cfg.RenderTTL,
+		Live:   listener.Live,
+	}).Register(mux)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,

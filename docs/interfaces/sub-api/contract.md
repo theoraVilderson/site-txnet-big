@@ -9,8 +9,9 @@ updated: 2026-09-24
 # Contract — sub-api
 
 **Partly built.** F-113-a is the deployable, the route and the host/token gate
-(`sub-service/`); F-113-b is the base64 body. The other formats, the headers
-and the cache are the later F-113-* rows and F-609. The *why* is in ADR-0082. The spec is catalog §7.5
+(`sub-service/`); F-113-b is the base64 body; F-113-c the cache and
+`Profile-Update-Interval`. The other formats and `Subscription-Userinfo` are
+the later F-113-* rows and F-609. The *why* is in ADR-0082 and ADR-0083. The spec is catalog §7.5
 (`python3 tools/spec.py --section 7.5`), F-113 and F-609.
 
 ## TL;DR
@@ -65,6 +66,28 @@ sing-box / SFA / SFI / SFM → Sing-box), else base64. An unknown `?format=` is
 ignored, never a 4xx. A format not rendered yet is answered with base64:
 Clash, Sing-box and Xray JSON are F-113-f; Outline waits for F-407.
 
+### The cache (F-113-c, built)
+`sub/cache.go`, ADR-0083. A `200` is stored in Redis under
+`sub:render:r<revision>:<tokenHash>:<format>:<host>` for `SUB_RENDER_TTL`
+(default `1h`, whole hours only). Every `200`, cached or not, carries
+`Profile-Update-Interval` = that TTL in hours. A refusal is never cached.
+
+1. **Served only while nothing it was built from changed.** Triggers on
+   `network.panel`, `network.config`, `entitlement.grant` and
+   `tenant.tenant_domain` NOTIFY `sub_invalidate`. The listener stamps
+   `sub:changed:{panel|grant|tenant}:<id>` with the Redis time. An entry
+   records the Redis time taken **before** its first Postgres read. It is
+   served only while the stamps of `all`, its Grant, its tenant and every
+   panel it has a config on (served or not) are all older than that time.
+2. **A (re)connected listener stamps `all`**, so a notification lost while
+   nobody listened outdates everything, not nothing.
+3. **No live listener in this process: no cache.** Nothing is read or
+   written. Redis failing is a miss, never an error answer.
+4. A render that starts reading a column no trigger watches adds it to the
+   trigger in the same row (ADR-0083 revisit trigger).
+5. `renderRevision` is bumped when the same lines render differently, so a
+   rolling deploy cannot serve one version's bodies to the other.
+
 ## Emits (events)
 None.
 
@@ -74,7 +97,7 @@ None.
 | entitlement | `grant` by `subscriptionTokenHash` (SHA-256 lowercase hex of the path token), its status, period and bytes | a cached render is still served until its TTL; with no cache, `503` |
 | network | each config's stored link lines, and which panels are healthy | the same |
 | tenant | the request host must be a `purpose = subscription` domain of the Grant's tenant (F-066-q); `TenantStatusPolicy` column `subscriptionLink` (`tenant/rules.md`) | a refused tenant is served the empty body, as an inactive Grant is |
-| redis-keyspace | the cached render, keyed by catalog C-07: `(grantId, healthyPanelSetHash, activeDomainSetHash, format)` | a miss renders from Postgres reads |
+| redis-keyspace | the cached render and the change stamps ("The cache" above; C-07's key, ADR-0083 (3)) | a miss renders from Postgres reads |
 
 ## Guarantees
 - **No Postgres write**, ever, on this path. Reads happen only on a cache miss.
@@ -83,7 +106,8 @@ None.
   did not take. The role is `txnet_cross_tenant` (a host is resolved before a
   tenant is known); boot also refuses a missing column it reads.
 - **No panel request**, ever (ADR-0082 decision 2).
-- p99 under 50 ms from cache.
+- p99 under 50 ms from cache: a hit is two Redis round trips (`GET`, `MGET`)
+  and no Postgres read.
 - A rotated token stops working at once, not at the next cache expiry.
 - The origin is independent (catalog C-16): no cookie is set or read, there is
   no CORS to the panel domain, and the token in the path is the only

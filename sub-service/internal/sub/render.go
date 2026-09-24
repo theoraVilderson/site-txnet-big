@@ -9,6 +9,8 @@ import (
 // Config is a `network.config` row joined to its panel's state, as much of it
 // as decides whether its stored lines reach the body.
 type Config struct {
+	// PanelID is what the render cache stamps a panel's changes under.
+	PanelID       string
 	PanelState    string
 	Status        string
 	DesiredRemote string

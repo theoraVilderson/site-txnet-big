@@ -4,7 +4,7 @@ layer: interface
 status: active
 version: 1
 keywords: [subscription link, sub link, /sub, sub endpoint, subscription url, sub-service, subscription domain, subscription token, subscription-userinfo, remaining quota in the app, profile-update-interval, clash, sing-box, v2rayng, base64 subscription, لینک اشتراک, لینک ساب, ساب, لینک سابسکریپشن]
-source: [sub-service/**]
+source: [sub-service/**, txnet-backend/prisma/domains/migrations/20260924000700_sub_is_told_what_changed/**]
 owns_tables: []
 depends_on: [network, entitlement, tenant, redis-keyspace]
 updated: 2026-09-24
@@ -20,8 +20,9 @@ lines of all its configs, served by its own Go deployable `sub-service`
 issuing or rotating the token (`entitlement`, F-502-p), deciding what a tenant's
 status allows (`tenant`, `TenantStatusPolicy`), any panel request.
 
-Built: the deployable, the host/token gate (F-113-a) and the base64 body of
-the served configs' stored lines (F-113-b). The rest is the
+Built: the deployable, the host/token gate (F-113-a), the base64 body of
+the served configs' stored lines (F-113-b) and the Redis render cache,
+invalidated by Postgres notifications (F-113-c, ADR-0083). The rest is the
 F-113-* series, F-609 and F-027-bi..bm in `BACKLOG.md`.
 
 ## Files

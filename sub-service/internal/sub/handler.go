@@ -13,6 +13,8 @@ import (
 	"encoding/hex"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"time"
 )
 
 // Domain is a `tenant.tenant_domain` row, as much of it as decides whether a
@@ -47,12 +49,22 @@ type Store interface {
 // Handler serves the subscription endpoint.
 type Handler struct {
 	store Store
+	cache RenderCache
 	log   *slog.Logger
 }
 
-// New builds the handler.
+// New builds the handler. With no cache every request renders from Postgres.
 func New(store Store, log *slog.Logger) *Handler {
-	return &Handler{store: store, log: log}
+	return &Handler{store: store, cache: RenderCache{TTL: defaultTTL}, log: log}
+}
+
+// defaultTTL is the TTL a handler without a configured cache still announces.
+const defaultTTL = time.Hour
+
+// WithCache puts the Redis render cache (F-113-c) in front of the reads.
+func (h *Handler) WithCache(c RenderCache) *Handler {
+	h.cache = c
+	return h
 }
 
 // Register mounts the route. The method is part of the pattern, so any other
@@ -99,6 +111,16 @@ func (h *Handler) Serve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+	format := DetectFormat(r)
+	key := h.cache.key(TokenHash(token), format, host)
+	if e, ok := h.cache.lookup(ctx, h.log, key); ok {
+		h.write(w, e.Body, e.ContentType)
+		return
+	}
+	// Taken before the first read, so a write committed while this render
+	// reads is stamped after it (cache.go).
+	built, cacheable := h.cache.begin(ctx, h.log)
+
 	domain, ok, err := h.store.DomainByHost(ctx, host)
 	if err != nil {
 		h.unavailable(w, "domain lookup failed", err)
@@ -125,8 +147,23 @@ func (h *Handler) Serve(w http.ResponseWriter, r *http.Request) {
 		h.unavailable(w, "config lookup failed", err)
 		return
 	}
-	body, contentType := render(DetectFormat(r), servedLines(configs))
+	body, contentType := render(format, servedLines(configs))
+	h.write(w, body, contentType)
+	if cacheable {
+		h.cache.store(ctx, h.log, key, entry{
+			Built:       built,
+			Deps:        h.cache.deps(domain.TenantID, grant.ID, configs),
+			ContentType: contentType,
+			Body:        body,
+		})
+	}
+}
+
+// write sends a `200`. `Profile-Update-Interval` is the cache TTL in hours
+// (catalog §7.5): a client app refetches no sooner than an entry could expire.
+func (h *Handler) write(w http.ResponseWriter, body []byte, contentType string) {
 	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Profile-Update-Interval", strconv.Itoa(h.cache.updateIntervalHours()))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(body)
 }
