@@ -136,8 +136,9 @@ Then:
 While an unacknowledged event halts the panel, both loops skip its read and
 report it `OpHalted` (it is never stamped, so the watchdog ages it into an
 alert). The bulk pass **still converges it**: a suspension or a delete must
-reach the panel whatever its counters say. Acknowledging is F-027-ad's drift
-report. `mass_missing`, `mass_rename` and `mass_limit_override` are schema
+reach the panel whatever its counters say. Acknowledging is `billing-service`'s
+`POST /systems/drift-events/:id/acknowledge` (F-027-as,
+`billing/contract.systems.md`), which sets `acknowledgedAt` once. `mass_missing`, `mass_rename` and `mass_limit_override` are schema
 only; nothing raises them.
 
 ## Proof

@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 33
+version: 34
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -69,9 +69,9 @@ display-currency conversion (`currency`), plan prices (`catalog`).
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-24 | contract v34 (F-027-as): new `GET /systems/panels` (review, health, request budget), `GET /systems/panels/:id/capabilities`, `GET /systems/drift-events`, `POST /systems/drift-events/:id/acknowledge` — resumes a halted panel on the next pass. Additive, no break; `contract.systems.md`. Consumer panel-web: F-027-ad |
 | 2026-09-24 | contract v33 (F-027-ar): new `POST /systems/panels`, owner-only behind `panel.manage` — writes a `pending` panel, its login to the owner's vault via `tenant-service`; `contract.systems.md` |
 | 2026-09-23 | contract v32 (F-027-ac): `GET /gift/grants` also answers `billingMode`, consumed/purchased bytes, `suspendedAt` and `purgeAt`; new `GET /traffic/grants/:grantId/configs` and `POST /traffic/configs/actions` (regenerate/retire, 1–50 configs, one outcome per config). Additive, no break. Rules: [contract.gift.md](contract.gift.md). Consumer panel-web: `/services` |
 | 2026-09-23 | contract v31 (F-027-ap): a credit to a **user's** wallet goes through `WalletCreditService.credit`, which revives the Grants that balance funds in the same transaction (ADR-0079); a caller that reaches `WalletLedgerService.credit` instead fails `entitlement/revival.spec.ts`. A debit, and the reseller billing wallet, are unchanged. No wire change. Rules: [contract.md](contract.md) "Wallet ledger". Consumer panel-web: none |
-| 2026-09-22 | contract v30 (F-027-r): the remainder credit — a closed metered Grant's unconsumed purchased bytes go back to the wallet as one `traffic_refund` credit, priced **down** to a whole cent, with `billedBytes` as the record and the guard (ADR-0072 rule 3). New `WalletReasonType`, so `/wallet/history` answers it on an unnarrowed page. **Breaking on a figure:** `sales` in `/tenants/:id/revenue` is now net of it. In-process only, no route. Rules: [contract.traffic-block.md](contract.traffic-block.md), [contract.revenue.md](contract.revenue.md). Consumer panel-web: the type filter (`financial/_lib/filters.ts`) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

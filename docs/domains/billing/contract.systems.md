@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 33
+version: 34
 updated: 2026-09-24
 ---
 
@@ -20,20 +20,27 @@ reads observations in the database (ADR-0071: the Go service has no route).
 
 | Door | Boundary |
 |---|---|
-| `PanelPermissionGuard`: `panel.manage` (migration `20260924000100`; granted to no role, so SuperAdmin via `*`) | `PanelRegistrationService`: the caller's tenant is `platform_owner`, else 403 `not_platform_owner` |
+| `PanelPermissionGuard`: `panel.manage` (migration `20260924000100`; granted to no role, so SuperAdmin via `*`) | `panelScopeOf` (`panel-scope.ts`): the caller's tenant is `platform_owner`, else 403 `not_platform_owner` |
 
-Every route is scoped by the gate's `tenantId` from its first line, so opening
-one to a reseller with a dedicated panel is a permission change, not a rewrite
-(ADR-0080 decision 2). **Registering** stays owner-only: the collector would
-dial an address a tenant chose (`network/open-questions.md`).
+Every route opens with `panelScopeOf`, which answers the `where` of every read
+and the ownership of every write: for the owner, the **platform's** panels
+(`ownershipType = platform`, `tenantId` null), not a reseller's dedicated one.
+Opening the page to a reseller is a change to that one function, not to a
+route (ADR-0080 decision 2). **Registering** stays owner-only: the collector
+would dial an address a tenant chose (`network/open-questions.md`).
 
 ## Routes
 
 | Route | Body | Answers | Errors |
 |---|---|---|---|
 | `POST /api/billing/systems/panels` | `name`, `ipAddress`, `apiBaseUrl` (required for `pull`), `driverType`, `counterSemantics`, `transport`, `role`, `region`, `maxRequestsPerMinute?`, `credentials` (≤4096); `.strict()` | `201 {id, reviewState: 'pending', credentials: {configured, version, rotatedAt}}` | 400 validation; 403 `panel.manage` / `not_platform_owner`; 400/403/404 relayed from the vault seam; 502 `credentials_unavailable` |
+| `GET /api/billing/systems/panels` | — | `[{id, name, driverType, transport, role, region, review: {reviewState, connectionTestedAt, connectionTestFault, connectionTestDetail}, health: {panelState, lastHealthyAt, lastSuccessfulCollectionAt, collectionHalted, openDriftEvents}, budget: {maxRequestsPerMinute, blockedSince}}]`, by name | 403 |
+| `GET /api/billing/systems/panels/:id/capabilities` | — | `{id, transport, reviewState, connectionTestedAt, documentVersion, current, answeredAt, rows: [{key, scope, severity, state, detail}]}` | 400 id not a uuid; 403; 404 `not_found` |
+| `GET /api/billing/systems/drift-events` | query `state?` (`open` \| `all`, default `all`), `after?` (event id), `limit?` (1–100, default 50); `.strict()` | `{items: [{id, panelId, panelName, eventType, affectedConfigCount, observedConfigCount, detectedAt, collectionHalted, acknowledgedAt, acknowledgedByAdminId, note}], next}`, newest first; `next` is the `after` of the following page, null on the last | 400; 403 |
+| `POST /api/billing/systems/drift-events/:id/acknowledge` | `note?` (1–1000); `.strict()` | `200` the event, acknowledged | 400; 403; 404 `not_found`; 409 `already_acknowledged` |
 
-Rate limit: `SYSTEMS_ADMIN_WRITE`, per user, 30 per 15 minutes.
+Rate limits, per user, per 15 minutes: `SYSTEMS_ADMIN_WRITE` 30 (register,
+acknowledge), `SYSTEMS_ADMIN_READ` 120 (the three reads).
 
 ## Registering a panel — the rules
 
@@ -56,10 +63,38 @@ Rate limit: `SYSTEMS_ADMIN_WRITE`, per user, 30 per 15 minutes.
 
 `panel-registration.spec.ts` pins rules 1–3 and the owner refusal.
 
-## Not here yet
+## The reads, and acknowledging drift — the rules
 
-- The read routes — capability matrix, health, request budget, drift report —
-  and acknowledging a drift event: F-027-as.
+5. **What the loops last wrote, never a call.** Health, budget, review and
+   the matrix are `network.panel` columns as `network-service` left them
+   (ADR-0071). Staleness shows as a timestamp (`lastSuccessfulCollectionAt`,
+   `connectionTestedAt`), never as a figure this service made up.
+6. **Field by field.** Every panel read names its columns;
+   `panelApiCredentials` is never selected, so no answer can carry the vault
+   reference.
+7. **The matrix's vocabulary is `contracts/network/capabilities.json`.**
+   `systems/capabilities.ts` mirrors its keys, scopes and severities, held to
+   it by `systems-read.spec.ts` as `questionnaire_test.go` holds Go's. Every
+   row is answered, in order, as one of: `supported`, `unsupported` (with the
+   driver's `detail`), `unanswered` (in scope, no current answer), or
+   `not_asked` (outside the panel's transport). A document under another
+   `version` is not read: `current: false`, every row in scope is
+   `unanswered`, and the next connection test re-answers it. Question text
+   is not sent; the page says it in the reader's language, keyed by `key`.
+8. **`collectionHalted` is the collector's own test**: an event with
+   `collectionHalted` and no `acknowledgedAt` (`collect.Containment.Halted`).
+   The page and the loop cannot disagree about a halted panel.
+9. **Acknowledging is the decision the halt waits for, once.** It sets
+   `acknowledgedAt`, `acknowledgedByAdminId` and the `note`, conditional on
+   `acknowledgedAt IS NULL`; the panel is read again on the next pass.
+   A second click, even concurrent, is 409 `already_acknowledged`, and who
+   decided is never rewritten. An event on a panel outside the scope is 404,
+   the same as one that does not exist.
+
+`systems-read.spec.ts` pins rules 6–9, the scope on every route, and the
+fixture.
+
+## Not here yet
 - The holds queue, release through the meter and write-off: F-027-at
   (ADR-0080 decision 3).
 - Re-submitting a panel's login (which clears `connectionTestedAt`, network

@@ -35,3 +35,28 @@ export const registerPanelSchema = z
   });
 
 export type RegisterPanelBody = z.infer<typeof registerPanelSchema>;
+
+/** Which drift events the report lists: `open` is the unacknowledged ones — those still halting a panel. */
+export const DRIFT_EVENT_STATES = ['open', 'all'] as const;
+
+/** The drift report's query (F-027-as). `after` is the last id of the previous page. */
+export const driftEventQuerySchema = z
+  .object({
+    state: z.enum(DRIFT_EVENT_STATES).optional(),
+    after: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .strict();
+
+export type DriftEventQueryInput = z.infer<typeof driftEventQuerySchema>;
+
+/**
+ * Acknowledging a drift event. `.strict()`: who acknowledged and when come
+ * from the gate and the clock, and a body naming either is refused, not
+ * dropped. The note is why — the restore that explains the reset.
+ */
+export const acknowledgeDriftSchema = z
+  .object({ note: z.string().trim().min(1).max(1000).optional() })
+  .strict();
+
+export type AcknowledgeDriftBody = z.infer<typeof acknowledgeDriftSchema>;

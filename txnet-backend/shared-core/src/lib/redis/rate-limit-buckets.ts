@@ -304,6 +304,13 @@ export const RateLimitBucket = {
   SYSTEMS_ADMIN_WRITE: 'systems:admin:write',
 
   /**
+   * The systems page's reads (F-027-as), per user: the panel list, a panel's
+   * capability matrix and the drift report. Database reads only — nothing
+   * here reaches a panel — so the budget is a screen's, not a remote's.
+   */
+  SYSTEMS_ADMIN_READ: 'systems:admin:read',
+
+  /**
    * Manual payment confirmation in `billing-service` (F-092-z), per user. The
    * list is polled by a screen; an inquire or a confirm is a call to a bank.
    */

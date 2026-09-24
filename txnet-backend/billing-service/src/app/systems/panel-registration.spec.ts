@@ -17,7 +17,8 @@
 import { DriverType, CounterSemantics, PanelTransport, PanelRole, TenantType } from '@prisma/client';
 import { panelCredentialLabel, panelCredentialRef } from '@txnet-backend/shared-core';
 
-import { PanelCredentialWriter, PanelRegistrationRefused, PanelRegistrationService } from './panel-registration';
+import { PanelCredentialWriter, PanelRegistrationService } from './panel-registration';
+import { PanelScopeRefused } from './panel-scope';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const RESELLER = '22222222-2222-4222-8222-222222222222';
@@ -78,7 +79,7 @@ describe('PanelRegistrationService.register', () => {
       reason: 'not_platform_owner',
     });
     await expect(service.register({ adminId: ADMIN, tenantId: RESELLER }, INPUT)).rejects.toBeInstanceOf(
-      PanelRegistrationRefused,
+      PanelScopeRefused,
     );
     expect(panels).toHaveLength(0);
     expect(written).toHaveLength(0);

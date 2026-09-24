@@ -1,20 +1,10 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import {
-  CounterSemantics,
-  DriverType,
-  PanelOwnershipType,
-  PanelReviewState,
-  PanelRole,
-  PanelTransport,
-  TenantType,
-} from '@prisma/client';
+import { CounterSemantics, DriverType, PanelReviewState, PanelRole, PanelTransport } from '@prisma/client';
 import { panelCredentialRef } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
 import { PrismaService } from '../prisma/prisma.service';
-
-/** Who is registering: the gate's user and tenant, never a body field. */
-export type SystemsActor = { adminId: string; tenantId: string };
+import { panelScopeOf, SystemsActor } from './panel-scope';
 
 /** A panel as its owner declares it. The questionnaire is the connection test's to answer, not this. */
 export type RegisterPanelInput = {
@@ -41,15 +31,6 @@ export interface PanelCredentialWriter {
 
 export const PANEL_CREDENTIAL_WRITER = Symbol('PANEL_CREDENTIAL_WRITER');
 
-export type PanelRegistrationRejection = 'not_platform_owner';
-
-export class PanelRegistrationRefused extends Error {
-  constructor(readonly reason: PanelRegistrationRejection) {
-    super(reason);
-    this.name = 'PanelRegistrationRefused';
-  }
-}
-
 /**
  * Registering a panel (F-027-ar, ADR-0080 decision 1): a desired-state write.
  *
@@ -61,7 +42,7 @@ export class PanelRegistrationRefused extends Error {
  * **Owner-only, scoped by tenant from the first line** (decision 2). The
  * caller's tenant must be the platform owner, and the panel is written as the
  * platform's (`ownershipType = platform`, `tenantId` null — network invariant
- * 9). Opening this to a reseller is a change to {@link ownerOf} and a decision
+ * 9). Opening this to a reseller is a change to {@link panelScopeOf} and a decision
  * (`network/open-questions.md`: the collector would dial an address a tenant
  * chose), not a rewrite.
  *
@@ -85,7 +66,7 @@ export class PanelRegistrationService {
   ) {}
 
   async register(actor: SystemsActor, input: RegisterPanelInput) {
-    const owner = await this.ownerOf(actor);
+    const owner = await panelScopeOf(this.prisma, actor);
     const id = randomUUID();
 
     await this.prisma.panel.create({
@@ -116,15 +97,5 @@ export class PanelRegistrationService {
 
     this.logger.log(`panel ${id} (${input.driverType}) registered by ${actor.adminId}; pending its connection test`);
     return { id, reviewState: PanelReviewState.pending, credentials };
-  }
-
-  /**
-   * The door and the scope in one place. Read on the app pool: `tenant.tenant`
-   * has no RLS policy (as in `GatewayAdminService.isOwner`).
-   */
-  private async ownerOf(actor: SystemsActor) {
-    const tenant = await this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
-    if (tenant?.tenantType !== TenantType.platform_owner) throw new PanelRegistrationRefused('not_platform_owner');
-    return { ownershipType: PanelOwnershipType.platform, tenantId: null };
   }
 }
