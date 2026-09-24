@@ -124,8 +124,8 @@ func (h *Handler) Serve(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	format := DetectFormat(r)
 	key := h.cache.key(TokenHash(token), format, host)
-	if e, ok := h.cache.lookup(ctx, h.log, key); ok {
-		h.write(w, e.Body, e.ContentType, e.Userinfo)
+	if e, live, ok := h.cache.lookup(ctx, h.log, key); ok {
+		h.write(w, e.Body, e.ContentType, userinfo(e.Grant, live))
 		return
 	}
 	// Taken before the first read, so a write committed while this render
@@ -164,14 +164,13 @@ func (h *Handler) Serve(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	body, contentType := render(format, servedLines(configs))
-	info := userinfo(grant)
-	h.write(w, body, contentType, info)
+	h.write(w, body, contentType, userinfo(grant, h.cache.usage(ctx, h.log, grant.ID)))
 	if cacheable {
 		h.cache.store(ctx, h.log, key, entry{
 			Built:       built,
 			Deps:        h.cache.deps(domain.TenantID, grant.ID, configs),
 			ContentType: contentType,
-			Userinfo:    info,
+			Grant:       grant,
 			Body:        body,
 		})
 	}

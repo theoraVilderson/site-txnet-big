@@ -11,7 +11,7 @@ updated: 2026-09-24
 **Partly built.** F-113-a is the deployable, the route and the host/token gate
 (`sub-service/`); F-113-b is the base64 body; F-113-c the cache and
 `Profile-Update-Interval`; F-609 `Subscription-Userinfo` and the inactive
-Grant. The other formats are the later F-113-* rows. The *why* is in ADR-0082 and ADR-0083. The spec is catalog §7.5
+Grant; F-609-b its live usage. The other formats are the later F-113-* rows. The *why* is in ADR-0082 and ADR-0083. The spec is catalog §7.5
 (`python3 tools/spec.py --section 7.5`), F-113 and F-609.
 
 ## TL;DR
@@ -76,8 +76,10 @@ Clash, Sing-box and Xray JSON are F-113-f; Outline waits for F-407.
 which client apps show as used, remaining and expiry. An app reads
 `total=0` as unlimited and `expire=0` as never.
 
-1. **Used is `grant.consumedBytes`, all of it `download`.** The Grant keeps
-   one figure, not split by direction.
+1. **Used is the Grant's consumed bytes, all of it `download`.** The Grant
+   keeps one figure, not split by direction. It is the larger of
+   `grant.consumedBytes` as the render read it and `sub:usage:<grantId>`
+   (F-609-b, rule 5): both only grow, so the larger is the newer.
 2. **Cap:** a `prepaid` Grant with `quotas.traffic_bytes.limit` → that limit
    plus the sum of its `traffic_bytes` QuotaAdjustments not yet expired
    (rollover, F-604, shows here), never below `1`. A `metered` Grant, or no
@@ -87,11 +89,17 @@ which client apps show as used, remaining and expiry. An app reads
 3. **A Grant that is not active shows zero remaining:** `download = total =
    max(consumedBytes, 1)`, never `total=0`.
 4. `expire` is `endsAt` in Unix seconds; `0` for a permanent Grant.
-5. **Cached with the body, and usage does not outdate it.** `consumedBytes`
-   fires no trigger (it moves every collector pass), so the used figure lags
-   by up to the TTL; `endsAt`, `quotas`, `billingMode` and a new traffic
-   adjustment do fire (user, 2026-09-24). Fresher usage would be a push to
-   Redis from the delta consumer, a row of its own.
+5. **Usage is live on every answer, cached or not (F-609-b).** metering-service
+   writes a Grant's total to `sub:usage:<grantId>` after each charge commits
+   (billing `contract.metering.md`, F-609-a). A cache hit reads it in the
+   stamps' `MGET`, so the hit stays two round trips; a render reads it with
+   one `GET` after its Postgres reads, listener or not (it is not the cache).
+   The entry stores the Grant's userinfo inputs, not the header, and the
+   header is rebuilt each time. A missing, unreadable or lower key, or Redis
+   failing, shows the render's own figure — the key is never the truth, and
+   it outlives the render (`SUB_USAGE_TTL_SECONDS` ≥ `SUB_RENDER_TTL`).
+   `consumedBytes` still fires no trigger; `endsAt`, `quotas`, `billingMode`
+   and a new traffic adjustment do (user, 2026-09-24).
 
 ### The cache (F-113-c, built)
 `sub/cache.go`, ADR-0083. A `200` is stored in Redis under
@@ -125,7 +133,7 @@ None.
 | entitlement | `grant` by `subscriptionTokenHash` (SHA-256 lowercase hex of the path token), its status, billing mode, `endsAt`, `consumedBytes`, traffic quota and unexpired traffic `quota_adjustment` rows | a cached render is still served until its TTL; with no cache, `503` |
 | network | each config's stored link lines, and which panels are healthy | the same |
 | tenant | the request host must be a `purpose = subscription` domain of the Grant's tenant (F-066-q); `TenantStatusPolicy` column `subscriptionLink` (`tenant/rules.md`) | a refused tenant is served the empty body, as an inactive Grant is |
-| redis-keyspace | the cached render and the change stamps ("The cache" above; C-07's key, ADR-0083 (3)) | a miss renders from Postgres reads |
+| redis-keyspace | the cached render and the change stamps ("The cache" above; C-07's key, ADR-0083 (3)); `sub:usage:<grantId>`, written by billing's metering-service (F-609-a), key name held to `contracts/redis/keyspace.json` `subKeyCases` by `usage_test.go` | a miss renders from Postgres reads; no usage key shows the render's figure |
 
 ## Guarantees
 - **No Postgres write**, ever, on this path. Reads happen only on a cache miss.
@@ -134,8 +142,8 @@ None.
   did not take. The role is `txnet_cross_tenant` (a host is resolved before a
   tenant is known); boot also refuses a missing column it reads.
 - **No panel request**, ever (ADR-0082 decision 2).
-- p99 under 50 ms from cache: a hit is two Redis round trips (`GET`, `MGET`)
-  and no Postgres read.
+- p99 under 50 ms from cache: a hit is two Redis round trips (`GET`, `MGET` —
+  the stamps and the live usage together) and no Postgres read.
 - A rotated token stops working at once, not at the next cache expiry.
 - The origin is independent (catalog C-16): no cookie is set or read, there is
   no CORS to the panel domain, and the token in the path is the only

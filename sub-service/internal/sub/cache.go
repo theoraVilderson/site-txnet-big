@@ -53,7 +53,7 @@ type RenderCache struct {
 // renderRevision is part of every render key. Bump it when the same stored
 // lines render to a different body, so a replica still running the old code
 // during a rolling deploy cannot serve its entries to the new one's requests.
-const renderRevision = "2"
+const renderRevision = "3"
 
 // entry is one cached answer.
 type entry struct {
@@ -62,11 +62,11 @@ type entry struct {
 	// Deps are the stamp keys this answer depends on, prefix included.
 	Deps        []string `json:"deps"`
 	ContentType string   `json:"contentType"`
-	// Userinfo is `Subscription-Userinfo` as it was built with the body. It
-	// is not outdated by usage: `consumedBytes` fires no trigger, so the
-	// figure an app shows lags by up to the TTL (F-609).
-	Userinfo string `json:"userinfo"`
-	Body     []byte `json:"body"`
+	// Grant is what `Subscription-Userinfo` is built from. The header is
+	// rebuilt on every answer with the live usage (F-609-b): `consumedBytes`
+	// fires no trigger, so the figure read here is only the floor.
+	Grant Grant  `json:"grant"`
+	Body  []byte `json:"body"`
 }
 
 func (c RenderCache) enabled() bool {
@@ -77,30 +77,60 @@ func (c RenderCache) key(tokenHash string, f Format, host string) string {
 	return cache.RenderKey(c.Prefix, renderRevision, tokenHash, string(f), host)
 }
 
-// lookup returns the cached answer for key if it is still fresh. Any Redis
-// failure is a miss: the answer is rendered from Postgres instead.
-func (c RenderCache) lookup(ctx context.Context, log *slog.Logger, key string) (entry, bool) {
+// lookup returns the cached answer for key if it is still fresh, with the
+// Grant's live usage read in the same `MGET` as the stamps, so a hit stays two
+// round trips. Any Redis failure is a miss: the answer is rendered from
+// Postgres instead.
+func (c RenderCache) lookup(ctx context.Context, log *slog.Logger, key string) (entry, int64, bool) {
 	if !c.enabled() {
-		return entry{}, false
+		return entry{}, 0, false
 	}
 	raw, ok, err := c.Store.Get(ctx, key)
 	if err != nil {
 		log.Warn("render cache read failed", "error", err)
-		return entry{}, false
+		return entry{}, 0, false
 	}
 	if !ok {
-		return entry{}, false
+		return entry{}, 0, false
 	}
 	var e entry
-	if err := json.Unmarshal(raw, &e); err != nil || len(e.Deps) == 0 {
-		return entry{}, false
+	if err := json.Unmarshal(raw, &e); err != nil || len(e.Deps) == 0 || e.Grant.ID == "" {
+		return entry{}, 0, false
 	}
-	stamps, err := c.Store.MGet(ctx, e.Deps...)
+	values, err := c.Store.MGet(ctx, append(e.Deps, cache.UsageKey(c.Prefix, e.Grant.ID))...)
 	if err != nil {
 		log.Warn("render cache stamp read failed", "error", err)
-		return entry{}, false
+		return entry{}, 0, false
 	}
-	return e, fresh(e.Built, stamps)
+	stamps := values[:len(e.Deps)]
+	return e, parseUsage(values[len(e.Deps)]), fresh(e.Built, stamps)
+}
+
+// usage is the Grant's live total from `sub:usage:<grantId>` (F-609-a), for a
+// render. It is not the cache, so it is read with no listener too; missing,
+// unreadable or Redis failing is 0, and the render's own figure is shown.
+func (c RenderCache) usage(ctx context.Context, log *slog.Logger, grantID string) int64 {
+	if c.Store == nil {
+		return 0
+	}
+	raw, ok, err := c.Store.Get(ctx, cache.UsageKey(c.Prefix, grantID))
+	if err != nil {
+		log.Warn("live usage read failed", "error", err)
+		return 0
+	}
+	if !ok {
+		return 0
+	}
+	return parseUsage(string(raw))
+}
+
+// parseUsage reads the key's decimal total; anything else is "no figure".
+func parseUsage(s string) int64 {
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
 }
 
 // fresh is the whole invalidation rule: every stamp an entry depends on is

@@ -19,11 +19,15 @@ import (
 //     its bytes in blocks just before they are used (ADR-0072), so
 //     `purchasedBytes` would always look nearly empty.
 //
+// Used is the larger of the Grant as read and `live`, its total from
+// `sub:usage:<grantId>` (F-609-b; 0 when there is none). Both only grow, so
+// the larger is the newer, and a key that lags the row never lowers it.
+//
 // A Grant that is not active shows zero remaining: `download = total`, at
 // least 1 for the same reason. `expire` is `endsAt` in Unix seconds, 0 when
 // the Grant is permanent.
-func userinfo(g Grant) string {
-	used := max(g.ConsumedBytes, 0)
+func userinfo(g Grant, live int64) string {
+	used := max(g.ConsumedBytes, live, 0)
 	var total int64
 	if g.Status != "active" {
 		used = max(used, 1)

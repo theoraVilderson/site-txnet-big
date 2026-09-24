@@ -3,9 +3,10 @@ package cache
 import "strings"
 
 // The `sub:` family of the Redis key catalogue (redis-keyspace contract,
-// C-03). `sub-service` is the only process that reads or writes it, so it is
-// Go-only and not declared in `contracts/redis/keyspace.json`, which holds the
-// families two languages build.
+// C-03). `sub-service` is the only process that reads or writes the render and
+// stamp keys, so those are Go-only. `sub:usage:` is written in TypeScript, so
+// it is declared in `contracts/redis/keyspace.json` `subKeyCases`, and
+// `usage_test.go` holds `UsageKey` to it.
 //
 // Every builder takes the prefix rather than reading config, as
 // `auth-handler/internal/cache/keys.go` does: a key builder is then a pure
@@ -47,4 +48,12 @@ func ChangedKey(prefix, kind, id string) string {
 // listener was connected is lost.
 func ChangedAllKey(prefix string) string {
 	return prefix + "sub:changed:all"
+}
+
+// UsageKey holds the Grant's `consumedBytes` as its last committed charge left
+// it, written by metering-service after each commit (F-609-a) and read for
+// `Subscription-Userinfo` (F-609-b). The same name as shared-core's
+// `SubKeys.subUsage`.
+func UsageKey(prefix, grantID string) string {
+	return prefix + "sub:usage:" + grantID
 }
