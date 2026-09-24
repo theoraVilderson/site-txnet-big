@@ -247,6 +247,15 @@ export const UnscopedRedisKeys = {
    * already unique platform-wide.
    */
   outboxProcessed: (consumer: string, eventId: string) => `outbox:processed:${consumer}:${eventId}`,
+
+  /**
+   * A Grant's `consumedBytes`, as last committed (F-609-a). Written by
+   * `metering-service` after each delta's transaction, read by `sub-service`
+   * for `Subscription-Userinfo` — so it is declared in
+   * `contracts/redis/keyspace.json` as well. Never the truth: a miss or a
+   * stale value is answered from the figure the render was built with.
+   */
+  subUsage: (grantId: string) => `sub:usage:${grantId}`,
 } as const;
 
 /**

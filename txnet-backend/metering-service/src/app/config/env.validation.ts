@@ -1,16 +1,21 @@
-import { AUTOMATION_EXCHANGE_DEFAULT } from '@txnet-backend/shared-core';
+import {
+  AUTOMATION_EXCHANGE_DEFAULT,
+  REDIS_KEYSPACE_VERSION_DEFAULT,
+  REDIS_KEY_NAMESPACE_DEFAULT,
+} from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 /**
  * `metering-service` turns collection passes into usage and serves no requests
  * (ADR-0077).
  *
- * It needs four things and holds nothing else: a broker to take passes from,
+ * It needs four things, plus one courtesy, and holds nothing else: a broker to take passes from,
  * the application pool it writes every tenant's traffic through, the
  * cross-tenant pool that resolves a delta's config to its tenant, and how many
  * passes it works on at once. No JWT secret, no tenant credential, no vault
  * key — this process answers to nobody and only ever writes what a pass
- * measured.
+ * measured. The courtesy is Redis, where the Grant's total goes for `/sub`
+ * (F-609-a) — a write that is allowed to fail.
  */
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -50,6 +55,20 @@ export const envSchema = z.object({
    * it on a restart.
    */
   METERING_PREFETCH: z.coerce.number().int().positive().default(2),
+
+  /** Where `sub:usage:<grantId>` is written (F-609-a), under the platform's one keyspace prefix (ADR-0005). */
+  REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
+  REDIS_KEY_NAMESPACE: z.string().min(1).default(REDIS_KEY_NAMESPACE_DEFAULT),
+  REDIS_KEYSPACE_VERSION: z.string().min(1).default(REDIS_KEYSPACE_VERSION_DEFAULT),
+  /**
+   * How long a Grant's published total outlives its last delta.
+   *
+   * **Keep it at or above `sub-service`'s `SUB_RENDER_TTL`** (1h). `/sub`
+   * falls back to the figure a render was built with when the key is gone;
+   * that fallback is only as fresh as this key if the key cannot expire before
+   * every render built ahead of the Grant's last delta has.
+   */
+  SUB_USAGE_TTL_SECONDS: z.coerce.number().int().min(3600).default(86_400),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

@@ -752,6 +752,13 @@ services:
       # One pass is up to 500 deltas and each is its own transaction, so the
       # work behind one message is already substantial (F-027-m).
       - METERING_PREFETCH=${METERING_PREFETCH:-2}
+      # Where a Grant's committed total goes for `/sub` (F-609-a). A write that
+      # may fail: Redis down never fails or retries a delta.
+      - REDIS_URL=${REDIS_URL}
+      - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
+      - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
+      # At or above sub-service's SUB_RENDER_TTL, or /sub's fallback goes stale.
+      - SUB_USAGE_TTL_SECONDS=${SUB_USAGE_TTL_SECONDS:-86400}
     networks:
       - private_backend_network
     labels:

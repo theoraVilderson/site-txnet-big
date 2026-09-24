@@ -7,6 +7,7 @@ import {
   buildRedisKeyPrefix,
   normalizeRedisNamespace,
 } from './keyspace';
+import { UnscopedRedisKeys } from './keys';
 
 /**
  * The TypeScript half of the keyspace contract (ADR-0036, C-03).
@@ -25,6 +26,7 @@ interface KeyspaceFixture {
   namespaceDefault: string;
   version: string;
   prefixCases: Array<{ namespace: string; version: string; prefix: string }>;
+  subKeyCases: Array<{ builder: 'subUsage'; id: string; key: string }>;
 }
 
 const fixture = JSON.parse(
@@ -53,6 +55,14 @@ describe('contracts/redis/keyspace.json', () => {
     expect(buildRedisKeyPrefix()).toBe(
       `${fixture.namespaceDefault}:${fixture.version}:`,
     );
+  });
+});
+
+describe('the sub: keys TypeScript writes and sub-service reads', () => {
+  // A spelling that differs from Go's is not an error anywhere: `/sub` just
+  // misses the key and keeps answering with the render's older figure.
+  it.each(fixture.subKeyCases)('$builder($id) is $key', ({ builder, id, key }) => {
+    expect(UnscopedRedisKeys[builder](id)).toBe(key);
   });
 });
 

@@ -24,5 +24,12 @@
     { "builder": "rolePermissions", "id": "role-1", "key": "role:role-1:permissions" },
     { "builder": "userRole", "id": "user-1", "key": "user:user-1:role" }
   ],
+  "subKeys": {
+    "note": "The `sub:` families written in TypeScript and read in Go by sub-service. Kept apart from `keys`/`keyCases`, which auth-handler's keys_contract_test.go requires to be exactly the builders auth-handler has. Read by shared-core/src/lib/redis/keyspace.contract.spec.ts; sub-service's reader holds its Go builder to the same cases (F-609-b).",
+    "subUsage": "sub:usage:<grantId>"
+  },
+  "subKeyCases": [
+    { "builder": "subUsage", "id": "44444444-4444-4444-8444-444444444444", "key": "sub:usage:44444444-4444-4444-8444-444444444444" }
+  ],
   "prefixCasesNote": "The last two are the shapes that split the keyspace if only one language normalises. A trailing colon in REDIS_KEY_NAMESPACE is the operator typo this file exists to make harmless."
 }

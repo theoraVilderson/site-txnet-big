@@ -14,6 +14,7 @@ import {
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SubUsagePublisher } from './sub-usage.publisher';
 
 /** What one pass became. Every figure the message carried is in exactly one of these. */
 export interface MeteringOutcome {
@@ -85,6 +86,10 @@ class HoldAlreadyResolved extends Error {}
  * statement. The tenant itself comes from the `config` row, and *that* read
  * cannot be scoped: a platform-owned panel's message carries no `tenantId` at
  * all, so the read that produces the scope runs on the cross-tenant pool.
+ *
+ * **After a charge commits, the Grant's new total goes to Redis** for `/sub`
+ * (F-609-a) through {@link SubUsagePublisher}, which never throws: the write is
+ * outside the transaction and can never undo or retry it.
  */
 @Injectable()
 export class MeteringService {
@@ -93,6 +98,7 @@ export class MeteringService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly crossTenant: CrossTenantPrismaService,
+    private readonly subUsage: SubUsagePublisher,
   ) {}
 
   async apply(message: UsageDeltaMessage): Promise<MeteringOutcome> {
@@ -167,6 +173,7 @@ export class MeteringService {
     if (!hold) throw new UnknownHold(release.holdId);
     if (hold.state !== UsageDispositionState.pending) return 'already_resolved';
 
+    let total: bigint | undefined;
     try {
       const applied = await this.onceUnder(hold.config.tenantId, async (tx) => {
         const { count } = await tx.usageHold.updateMany({
@@ -179,7 +186,7 @@ export class MeteringService {
           },
         });
         if (count === 0) throw new HoldAlreadyResolved();
-        await this.charge(tx, {
+        total = await this.charge(tx, {
           deltaId: usageReleaseDeltaId(hold.id),
           panelId: hold.panelId,
           config: { id: hold.configId, tenantId: hold.config.tenantId, grantId: hold.config.grantId },
@@ -193,6 +200,7 @@ export class MeteringService {
       if (err instanceof HoldAlreadyResolved) return 'already_resolved';
       throw err;
     }
+    if (total !== undefined) await this.subUsage.publish(hold.config.grantId, total);
     this.logger.log(`hold ${hold.id} released by ${release.adminId}: ${hold.upBytes + hold.downBytes} bytes billed`);
     return 'released';
   }
@@ -226,39 +234,48 @@ export class MeteringService {
     return new Set(rows.map((row) => row.deltaId));
   }
 
-  /** Bill one delta. `false` means the unique index said it was already applied. */
-  private bill(panelId: string, config: ConfigAttribution, delta: UsageDeltaRow): Promise<boolean> {
-    return this.onceUnder(config.tenantId, (tx) =>
-      this.charge(tx, {
+  /**
+   * Bill one delta. `false` means the unique index said it was already applied.
+   * The Grant's total is published only once the transaction has committed.
+   */
+  private async bill(panelId: string, config: ConfigAttribution, delta: UsageDeltaRow): Promise<boolean> {
+    let total = 0n;
+    const applied = await this.onceUnder(config.tenantId, async (tx) => {
+      total = await this.charge(tx, {
         deltaId: delta.deltaId,
         panelId,
         config,
         up: BigInt(delta.upBytes),
         down: BigInt(delta.downBytes),
         observedAt: new Date(delta.observedAt),
-      }),
-    );
+      });
+    });
+    if (applied) await this.subUsage.publish(config.grantId, total);
+    return applied;
   }
 
   /**
    * The one path that writes consumption: the seen row, the raw log and the
    * Grant cursor. A collected delta and a released hold both come through
    * here, so a release cannot skip a rule the normal path holds (ADR-0080).
+   * Returns the Grant's `consumedBytes` as this transaction left it.
    */
   private async charge(
     tx: Prisma.TransactionClient,
     c: { deltaId: string; panelId: string; config: Omit<ConfigAttribution, 'remoteId'>; up: bigint; down: bigint; observedAt: Date },
-  ): Promise<void> {
+  ): Promise<bigint> {
     await tx.usageDeltaSeen.create({
       data: { deltaId: c.deltaId, configId: c.config.id, panelId: c.panelId, upBytes: c.up, downBytes: c.down, observedAt: c.observedAt },
     });
     await tx.trafficRawLog.create({
       data: { tenantId: c.config.tenantId, configId: c.config.id, uploadBytes: c.up, downloadBytes: c.down, recordedAt: c.observedAt },
     });
-    await tx.grant.update({
+    const grant = await tx.grant.update({
       where: { id: c.config.grantId },
       data: { consumedBytes: { increment: c.up + c.down } },
+      select: { consumedBytes: true },
     });
+    return grant.consumedBytes;
   }
 
   /** Hold one delta, for the same price as billing it: the seen row is written either way. */

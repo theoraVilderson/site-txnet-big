@@ -112,3 +112,24 @@ bytes still owed rather than recorded as applied. Nothing is lost by that: the
 collector's cursor moves only after a successful publish, so the same counter is
 read again on the next pass, and whatever *was* applied before the throw is held
 by `usage_delta_seen` against the redelivery.
+
+## Live usage for `/sub` (F-609-a)
+
+After a charge commits — a collected delta or a released hold — the Grant's
+`consumedBytes` as that transaction left it is written to `sub:usage:<grantId>`
+(redis-keyspace catalogue) by `SubUsagePublisher`, for `sub-service`'s
+`Subscription-Userinfo`. Three rules:
+
+1. **Redis never costs a delta.** The write is outside the transaction and
+   `publish` never throws: a failure is logged, the pass is acked, and nothing
+   is retried — the Grant's next delta carries a newer total. The connection
+   has no offline queue and is not awaited at boot, so a Redis outage neither
+   holds a pass nor stops the process.
+2. **Never lowered.** One Lua script writes the total only when it is larger
+   than what the key holds. `consumedBytes` only grows, and two replicas can
+   reach Redis in the opposite order from their commits.
+3. **Outlives the render.** `SUB_USAGE_TTL_SECONDS` (default 24h, minimum 1h)
+   is refreshed on every write and must stay ≥ `SUB_RENDER_TTL`, so a miss at
+   `/sub` means the render's own figure is at least as fresh.
+
+A duplicate delta commits nothing and publishes nothing.

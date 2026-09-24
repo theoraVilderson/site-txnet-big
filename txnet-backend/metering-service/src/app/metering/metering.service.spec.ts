@@ -7,6 +7,7 @@ import {
 } from '@txnet-backend/shared-core';
 
 import { MeteringService, UnsupportedDeltaVersion } from './metering.service';
+import { SubUsagePublisher } from './sub-usage.publisher';
 
 /**
  * The delta consumer (F-027-n).
@@ -86,7 +87,7 @@ function fakeStore(configs: ConfigRow[], stored: Array<Record<string, unknown>> 
     grant: {
       update: async ({ where, data }: { where: { id: string }; data: { consumedBytes: { increment: bigint } } }) => {
         consumed.set(where.id, (consumed.get(where.id) ?? 0n) + data.consumedBytes.increment);
-        return { id: where.id };
+        return { id: where.id, consumedBytes: consumed.get(where.id) as bigint };
       },
     },
     usageHold: {
@@ -191,6 +192,7 @@ function service(store: ReturnType<typeof fakeStore>) {
   return new MeteringService(
     store.client as never,
     store.client as never,
+    new SubUsagePublisher({ eval: async () => 1 }, 3600),
   );
 }
 

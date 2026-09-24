@@ -3,7 +3,7 @@ id: redis-keyspace
 layer: platform
 status: active
 version: 5
-updated: 2026-09-18
+updated: 2026-09-24
 ---
 
 # Contract — redis-keyspace
@@ -146,6 +146,7 @@ open for an event that can never come.
 | `fx:rate:<currencyCode>` | string (JSON `{snapshotId,currencyCode,rate,source,effectiveAt}`) | **none — deliberately** | worker-service `FxRateSnapshotStore.publish`, on every accepted poll of `fx_rate_refresh` (F-0606-a) | same — `.lastAccepted`, which is F-0605's deviation baseline; and billing's rial path once F-0606-b lands. A **cache of the `currency.CurrencyExchangeRate` row**, not a second copy of the number: it carries the snapshot id so a quoted price can record which rate it was priced at, and `effectiveAt` so F-0607-a's staleness ladder can judge its age without a query. That ladder is why there is no TTL — an expiry would delete the evidence it is made of and turn a rate it would have called *degraded* into *no rate at all*, silently. A miss is answered from the table |
 | `sub:render:r<revision>:<tokenHash>:<format>:<host>` | string (JSON `{built, deps, contentType, body}`) | `SUB_RENDER_TTL` (1h) | sub-service `RenderCache.store` on a `200` (F-113-c) | sub-service `RenderCache.lookup` — served only while every stamp in `deps` is older than `built` (ADR-0083). Go-only builders in `sub-service/internal/cache/keys.go`; `<tokenHash>` is the SHA-256, never the token |
 | `sub:changed:<panel\|grant\|tenant>:<id>`, `sub:changed:all` | string (Redis `TIME`, µs) | 2 × `SUB_RENDER_TTL` + 60s | sub-service `invalidate.Listener`, on each `sub_invalidate` notification; `all` on every (re)connect | sub-service `RenderCache.lookup` (`MGET`). A missing stamp means *never changed* — which is why it outlives every entry it can outdate |
+| `sub:usage:<grantId>` | string (decimal `consumedBytes`) | `SUB_USAGE_TTL_SECONDS` (24h, ≥ `SUB_RENDER_TTL`), refreshed on each write | metering-service `SubUsagePublisher`, after each charge commits (F-609-a) — one Lua script that never lowers the value, since `consumedBytes` only grows and replicas reach Redis out of order | sub-service, for `Subscription-Userinfo` (F-609-b). **Cross-language**: declared in `contracts/redis/keyspace.json` `subKeyCases`. Never the truth — a miss uses the render's figure, and a failed write never fails the delta |
 
 ## Rules
 
