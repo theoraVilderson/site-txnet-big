@@ -16,6 +16,7 @@ import (
 	"network-service/internal/driver/sanaee"
 	"network-service/internal/driver/threexui"
 	"network-service/internal/driver/usermanager"
+	"network-service/internal/driver/xuialireza"
 	"network-service/internal/register"
 )
 
@@ -113,6 +114,27 @@ func TestOpensThreeXUIWithItsOwnDriverNotSanaees(t *testing.T) {
 	}
 	if _, ok := d.(*threexui.Driver); !ok {
 		t.Fatalf("Open built %T, want *threexui.Driver", d)
+	}
+}
+
+// The two x-ui forks are two families (F-027-bc): `x_ui_alireza` opens the
+// driver over the fork's /xui/API, and the original's `x_ui_vaxilu`, which has
+// no such API, is not opened by it.
+func TestOpensXUIAlirezaButNotTheOriginalWithIt(t *testing.T) {
+	srv, _ := vaultStub(t, "admin:pa:ss", http.StatusOK, "")
+	o := Opener{Logins: Vault{BaseURL: srv.URL, ServiceToken: "svc-token"}}
+
+	p := pending(driver.DriverXUIAlireza)
+	p.APIBaseURL = "https://panel.example:54321"
+	d, err := o.Open(context.Background(), p)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if _, ok := d.(*xuialireza.Driver); !ok {
+		t.Fatalf("Open built %T, want *xuialireza.Driver", d)
+	}
+	if _, err := o.Open(context.Background(), pending(driver.DriverXUIVaxilu)); !errors.Is(err, ErrNoDriver) {
+		t.Fatalf("Open(x_ui_vaxilu) = %v, want ErrNoDriver until F-027-bd", err)
 	}
 }
 

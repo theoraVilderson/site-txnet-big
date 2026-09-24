@@ -17,7 +17,8 @@ enum DriverType {
   marzban
   marzneshin
   sanaee
-  x_ui
+  x_ui_alireza
+  x_ui_vaxilu
   three_x_ui
   s_ui
   hiddify

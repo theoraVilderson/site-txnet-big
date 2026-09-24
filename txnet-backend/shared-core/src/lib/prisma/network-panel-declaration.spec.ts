@@ -106,7 +106,11 @@ describe('network.Panel declares its driver, its counter and its transport', () 
     // ADR-0071's six families, plus `fake` — the driver the conformance suite
     // runs against before any real one exists (F-027-j).
     expect(enumValues('DriverType')).toContain('fake');
-    expect(enumValues('DriverType')).toHaveLength(13);
+    expect(enumValues('DriverType')).toHaveLength(14);
+    // The two x-ui forks are two families, not one value opened two ways
+    // (F-027-bc): each has its own API and its own questionnaire.
+    expect(enumValues('DriverType')).toEqual(expect.arrayContaining(['x_ui_alireza', 'x_ui_vaxilu']));
+    expect(enumValues('DriverType')).not.toContain('x_ui');
   });
 
   it('distinguishes a panel that is refusing us from one that is down', () => {
@@ -133,7 +137,7 @@ describe('network.Panel declares its driver, its counter and its transport', () 
 
   it('has no `panelType` left to disagree with `driverType`', () => {
     // C-09: a closed set of wire values is declared once. `PanelType` named
-    // two Xray builds and `DriverType` names all thirteen families, so a row
+    // two Xray builds and `DriverType` names every family, so a row
     // carrying both could say two different things about the same panel.
     expect(schema).not.toContain('panelType');
     expect(schema).not.toContain('enum PanelType');

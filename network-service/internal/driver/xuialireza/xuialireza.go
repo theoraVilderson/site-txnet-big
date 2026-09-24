@@ -1,0 +1,725 @@
+// Package xuialireza is the driver for x-ui panels of the alireza0 fork
+// (F-027-bc), over the API the fork publishes under `/xui/API/inbounds`. Pull,
+// cumulative, and the panel enforces its own per-client traffic total, so it
+// carries ADR-0072 as Marzban does. The original x-ui (vaxilu) has no such
+// API and is a family of its own, `x_ui_vaxilu` (user, 2026-09-24).
+//
+// 3x-ui was forked from this panel, so the shapes are Sanaee's (package
+// sanaee), and so are the three things the driver absorbs:
+//
+//   - the session is a cookie from a form login, and every reply is a
+//     `{success, msg, obj}` envelope whose failures arrive as a 200 with
+//     success=false. An API request with no valid session is redirected to
+//     the login page, so redirects are not followed: one is an expired
+//     session, answered by one login and one retry. The request is not marked
+//     as the panel's ajax, which would turn that redirect into a success=false
+//     no different from a refusal.
+//   - a client lives inside its inbound: its settings are an element of the
+//     inbound's `settings` JSON string, and its counters are a row of the
+//     inbound's `clientStats`. The client's `email` is unique across the panel
+//     and is the key of its counters, so it is our RemoteID.
+//   - writing one field of a client means writing the whole client, sent to
+//     the key x-ui finds it by (the uuid, or a trojan client's password). So
+//     every write reads the panel first.
+//
+// Where it is not Sanaee:
+//
+//   - a client has no comment. x-ui stores the client map as it was sent and
+//     builds Xray's config from a whitelist of its keys, so the claim tag is
+//     written in a `comment` key it keeps but never reads. An operator who
+//     saves the client in the panel's page drops it; the client then matches
+//     by its other two keys (contract.drift.md).
+//   - a client has no auto-renewal, so there is no `reset` to hold at 0, and
+//     none is sent.
+//
+// One default is still the opposite of ours, held at the wire: a `totalGB` of
+// 0 (a byte figure, despite the name) is unlimited on x-ui, and a ceiling of
+// zero is a cut-off here. Zero is written as one byte.
+package xuialireza
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"network-service/internal/driver"
+)
+
+// Credentials is an x-ui panel login, read out of the owner's vault by
+// internal/opener.
+type Credentials struct {
+	Username string
+	Password string
+}
+
+// Driver is one x-ui panel. It is safe for concurrent use; driver.Pace is
+// what keeps concurrent use from becoming a flood.
+type Driver struct {
+	base  *url.URL
+	creds Credentials
+	http  *http.Client
+
+	mu      sync.Mutex
+	cookies []*http.Cookie
+}
+
+var _ driver.Driver = (*Driver)(nil)
+
+// protocols are the inbound protocols this driver provisions clients on.
+// Shadowsocks is not one: a 2022 cipher's client key is a base64 key of the
+// cipher's length, and the config's uuid is not one.
+var protocols = []string{"vless", "vmess", "trojan"}
+
+// New builds a driver over the panel at baseURL, which includes the panel's
+// web base path when it has one. Nothing is sent until the first call.
+func New(baseURL string, creds Credentials, client *http.Client) (*Driver, error) {
+	base, err := url.Parse(strings.TrimRight(baseURL, "/"))
+	if err != nil || base.Scheme == "" || base.Host == "" {
+		return nil, fmt.Errorf("xuialireza: base url %q is not an absolute url", baseURL)
+	}
+	// No client timeout: the caller's context is the deadline (driver.Driver).
+	own := http.Client{}
+	if client != nil {
+		own = *client
+	}
+	// A redirect is x-ui's answer to an expired session (package doc), and
+	// following it would read the login page as the answer.
+	own.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return &Driver{base: base, creds: creds, http: &own}, nil
+}
+
+// ---- wire ------------------------------------------------------------------
+
+type envelope struct {
+	Success bool            `json:"success"`
+	Msg     string          `json:"msg"`
+	Obj     json.RawMessage `json:"obj"`
+}
+
+// client is one element of an inbound's settings.clients. Fields this driver
+// does not own (limitIp, tgId, flow) are carried through a write unchanged.
+// Comment is not x-ui's: it is kept because the map is stored as sent.
+type client struct {
+	ID         string `json:"id,omitempty"`
+	Password   string `json:"password,omitempty"`
+	Email      string `json:"email"`
+	Enable     bool   `json:"enable"`
+	TotalGB    int64  `json:"totalGB"`
+	ExpiryTime int64  `json:"expiryTime"`
+	Comment    string `json:"comment,omitempty"`
+	SubID      string `json:"subId"`
+	LimitIP    int    `json:"limitIp"`
+	TgID       any    `json:"tgId,omitempty"`
+	Flow       string `json:"flow,omitempty"`
+}
+
+type clientStat struct {
+	Email string `json:"email"`
+	Up    int64  `json:"up"`
+	Down  int64  `json:"down"`
+	Total int64  `json:"total"`
+}
+
+type inbound struct {
+	ID          int          `json:"id"`
+	Enable      bool         `json:"enable"`
+	Port        int          `json:"port"`
+	Protocol    string       `json:"protocol"`
+	Tag         string       `json:"tag"`
+	Settings    string       `json:"settings"`
+	ClientStats []clientStat `json:"clientStats"`
+}
+
+// found is one client where the panel holds it: its settings, its counters,
+// and the inbound it belongs to.
+type found struct {
+	inbound  inbound
+	client   client
+	stat     clientStat
+	hasStat  bool
+	protocol string
+}
+
+// key is what x-ui finds a client by in updateClient and delClient: the
+// uuid, or the password of a trojan client.
+func (f found) key() string {
+	if f.protocol == "trojan" {
+		return f.client.Password
+	}
+	return f.client.ID
+}
+
+func (f found) remote() driver.RemoteClient {
+	c := driver.RemoteClient{
+		RemoteID:        f.client.Email,
+		Label:           f.client.Comment,
+		UUID:            f.client.ID + f.client.Password,
+		InboundRemoteID: strconv.Itoa(f.inbound.ID),
+		Enabled:         f.client.Enable,
+		DataLimitBytes:  f.client.TotalGB,
+	}
+	// The counters' row is what x-ui's depletion job checks, so its total is
+	// the ceiling actually enforced; the settings copy is only its source.
+	if f.hasStat {
+		c.DataLimitBytes = f.stat.Total
+	}
+	// A negative expiry is a delayed start in days, not a date.
+	if f.client.ExpiryTime > 0 {
+		c.ExpiresAt = time.UnixMilli(f.client.ExpiryTime).UTC()
+	}
+	return c
+}
+
+// clients flattens every inbound's clients. An inbound whose settings do not
+// parse is a protocol fault: skipping it would drop its clients from a pass.
+func clients(op string, list []inbound) ([]found, error) {
+	var out []found
+	for _, in := range list {
+		var settings struct {
+			Clients []client `json:"clients"`
+		}
+		if err := json.Unmarshal([]byte(in.Settings), &settings); err != nil {
+			return nil, driver.NewFault(driver.FaultProtocol, op, 0,
+				fmt.Errorf("inbound %d settings: %w", in.ID, err))
+		}
+		stats := make(map[string]clientStat, len(in.ClientStats))
+		for _, s := range in.ClientStats {
+			stats[s.Email] = s
+		}
+		for _, c := range settings.Clients {
+			s, ok := stats[c.Email]
+			out = append(out, found{inbound: in, client: c, stat: s, hasStat: ok, protocol: in.Protocol})
+		}
+	}
+	return out, nil
+}
+
+// ceiling is a ceiling as x-ui must be told it: never 0, which it reads as
+// unlimited (package doc).
+func ceiling(bytes int64) int64 {
+	if bytes < 1 {
+		return 1
+	}
+	return bytes
+}
+
+func expiry(at time.Time) int64 {
+	if at.IsZero() {
+		return 0
+	}
+	return at.UnixMilli()
+}
+
+func credential(c *client, protocol, id string) {
+	c.ID, c.Password = "", ""
+	if protocol == "trojan" {
+		c.Password = id
+	} else {
+		c.ID = id
+	}
+}
+
+// newSubID is the client's subscription token. It is a secret — whoever has
+// it has the client's links — so it is random, not derived.
+func newSubID() (string, error) {
+	const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+	raw := make([]byte, 16)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	for i, b := range raw {
+		raw[i] = alphabet[int(b)%len(alphabet)]
+	}
+	return string(raw), nil
+}
+
+// ---- transport -------------------------------------------------------------
+
+// call sends one request with the current session. A redirect is an expired
+// session (package doc), and so may a 401 or a 404 be behind a proxy, so each
+// is answered by one login and one retry; a login refused is a blocked fault
+// and is not retried (contract.budget.md). One that survives the fresh login
+// is real.
+func (d *Driver) call(ctx context.Context, op, method string, path []string, body, out any) error {
+	cookies, err := d.currentSession(ctx, op)
+	if err != nil {
+		return err
+	}
+	err = d.do(ctx, op, method, path, body, out, cookies)
+	var fault *driver.Fault
+	if !errors.As(err, &fault) || !expired(fault.Status) {
+		return err
+	}
+	if cookies, err = d.login(ctx, op); err != nil {
+		return err
+	}
+	return d.do(ctx, op, method, path, body, out, cookies)
+}
+
+func (d *Driver) currentSession(ctx context.Context, op string) ([]*http.Cookie, error) {
+	d.mu.Lock()
+	cookies := d.cookies
+	d.mu.Unlock()
+	if cookies != nil {
+		return cookies, nil
+	}
+	return d.login(ctx, op)
+}
+
+// login posts the form and keeps whatever cookies the panel set: the cookie's
+// name has changed between versions, and no version is asked for.
+func (d *Driver) login(ctx context.Context, op string) ([]*http.Cookie, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.cookies = nil
+	form := url.Values{"username": {d.creds.Username}, "password": {d.creds.Password}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, d.base.JoinPath("login").String(),
+		strings.NewReader(form.Encode()))
+	if err != nil {
+		return nil, driver.NewFault(driver.FaultProtocol, op, 0, err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := d.roundTrip(ctx, op, req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var env envelope
+	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+		return nil, driver.NewFault(driver.FaultProtocol, op, 0, fmt.Errorf("decoding the login answer: %w", err))
+	}
+	if !env.Success {
+		return nil, driver.NewFault(driver.FaultBlocked, op, resp.StatusCode, fmt.Errorf("login refused: %s", env.Msg))
+	}
+	if len(resp.Cookies()) == 0 {
+		return nil, driver.NewFault(driver.FaultProtocol, op, 0, errors.New("login set no session cookie"))
+	}
+	d.cookies = resp.Cookies()
+	return d.cookies, nil
+}
+
+func (d *Driver) do(ctx context.Context, op, method string, path []string, body, out any, cookies []*http.Cookie) error {
+	var reader io.Reader
+	if body != nil {
+		raw, err := json.Marshal(body)
+		if err != nil {
+			return driver.NewFault(driver.FaultProtocol, op, 0, err)
+		}
+		reader = strings.NewReader(string(raw))
+	}
+	req, err := http.NewRequestWithContext(ctx, method, d.base.JoinPath(path...).String(), reader)
+	if err != nil {
+		return driver.NewFault(driver.FaultProtocol, op, 0, err)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	// Not marked as the panel's own ajax: x-ui would answer an expired session
+	// with a success=false, which reads like a refusal (package doc).
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+	resp, err := d.roundTrip(ctx, op, req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	var env envelope
+	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return driver.NewFault(driver.FaultTimeout, op, 0, fmt.Errorf("%w: %v", ctxErr, err))
+		}
+		return driver.NewFault(driver.FaultProtocol, op, 0, fmt.Errorf("decoding the answer: %w", err))
+	}
+	if !env.Success {
+		return driver.NewFault(driver.FaultProtocol, op, resp.StatusCode, fmt.Errorf("panel refused: %s", env.Msg))
+	}
+	if out == nil {
+		return nil
+	}
+	if err := json.Unmarshal(env.Obj, out); err != nil {
+		return driver.NewFault(driver.FaultProtocol, op, 0, fmt.Errorf("decoding obj: %w", err))
+	}
+	return nil
+}
+
+// roundTrip is where every transport and status failure is classified
+// (driver.Fault). A success=false inside a 200 is classified by the caller.
+func (d *Driver) roundTrip(ctx context.Context, op string, req *http.Request) (*http.Response, error) {
+	resp, err := d.http.Do(req)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, driver.NewFault(driver.FaultTimeout, op, 0, fmt.Errorf("%w: %v", ctxErr, err))
+		}
+		return nil, driver.NewFault(driver.FaultUnavailable, op, 0, err)
+	}
+	if resp.StatusCode >= 300 {
+		defer resp.Body.Close()
+		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		fault := driver.FaultForStatus(op, resp.StatusCode, fmt.Errorf("%s", strings.TrimSpace(string(detail))))
+		if seconds, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil && seconds > 0 {
+			fault.RetryAfter = time.Duration(seconds) * time.Second
+		}
+		return nil, fault
+	}
+	return resp, nil
+}
+
+func (d *Driver) list(ctx context.Context, op string) ([]inbound, time.Time, error) {
+	var list []inbound
+	if err := d.call(ctx, op, http.MethodGet, []string{"xui", "API", "inbounds/"}, nil, &list); err != nil {
+		return nil, time.Time{}, err
+	}
+	return list, time.Now(), nil
+}
+
+// find reads the panel and returns one client. ok is false when no inbound
+// holds it.
+func (d *Driver) find(ctx context.Context, op, remoteID string) (found, bool, error) {
+	list, _, err := d.list(ctx, op)
+	if err != nil {
+		return found{}, false, err
+	}
+	all, err := clients(op, list)
+	if err != nil {
+		return found{}, false, err
+	}
+	for _, f := range all {
+		if f.client.Email == remoteID {
+			return f, true, nil
+		}
+	}
+	return found{}, false, nil
+}
+
+func (d *Driver) mustFind(ctx context.Context, op, remoteID string) (found, error) {
+	f, ok, err := d.find(ctx, op, remoteID)
+	if err == nil && !ok {
+		err = driver.NewFault(driver.FaultProtocol, op, http.StatusNotFound, fmt.Errorf("no client %q on the panel", remoteID))
+	}
+	return f, err
+}
+
+// write sends the whole client, as it should now be, to the inbound it lives
+// on.
+func (d *Driver) write(ctx context.Context, op string, path []string, inboundID int, c client) error {
+	settings, err := json.Marshal(map[string][]client{"clients": {c}})
+	if err != nil {
+		return driver.NewFault(driver.FaultProtocol, op, 0, err)
+	}
+	body := map[string]any{"id": inboundID, "settings": string(settings)}
+	return d.call(ctx, op, http.MethodPost, path, body, nil)
+}
+
+// update applies change to the client as the panel holds it now, and writes
+// it back to the key the panel knows it by.
+func (d *Driver) update(ctx context.Context, op, remoteID string, change func(*client)) error {
+	f, err := d.mustFind(ctx, op, remoteID)
+	if err != nil {
+		return err
+	}
+	key := f.key()
+	next := f.client
+	change(&next)
+	return d.write(ctx, op, []string{"xui", "API", "inbounds", "updateClient", key}, f.inbound.ID, next)
+}
+
+// ---- the driver ------------------------------------------------------------
+
+// Capabilities proves the login, then answers for the family. x-ui has no
+// per-client choice that changes a row: there is no auto-reset to switch off.
+func (d *Driver) Capabilities(ctx context.Context) (driver.Capabilities, error) {
+	if err := d.HealthCheck(ctx); err != nil {
+		return driver.Capabilities{}, err
+	}
+	yes := func(detail string) driver.Answer { return driver.Answer{Supported: true, Detail: detail} }
+	no := func(detail string) driver.Answer { return driver.Answer{Supported: false, Detail: detail} }
+	return driver.Capabilities{
+		Version:    driver.CapabilitiesVersion,
+		AnsweredAt: time.Now().UTC(),
+		Answers: map[driver.RowKey]driver.Answer{
+			driver.RowPerClientUsage:          yes("clientStats up and down per client email"),
+			driver.RowBulkUsageInOneCall:      yes("GET /xui/API/inbounds/ carries every client's counters"),
+			driver.RowUsageForNamedSubset:     no("getClientTraffics reads one email per request; a subset is served from the bulk call"),
+			driver.RowUsageResetSupported:     yes("POST /xui/API/inbounds/{id}/resetClientTraffic/{email}"),
+			driver.RowCounterSurvivesUpdate:   yes("updateClient keeps up and down while the email is unchanged, and we never change it"),
+			driver.RowPerClientDataLimit:      yes("totalGB, enforced by x-ui's depletion job; zero is written as one byte, since 0 is unlimited there"),
+			driver.RowDataLimitCountsSameByte: yes("the total is checked against up plus down, the figures we read"),
+			driver.RowPerClientRateLimit:      no("x-ui has no per-client bandwidth cap; limitIp counts addresses"),
+			driver.RowEnableDisableClient:     yes("the client's enable flag"),
+			driver.RowClientLifecycle:         yes("addClient, updateClient, delClient; an inbound's last client cannot be deleted and is disabled instead"),
+			driver.RowStableRemoteID:          yes("the email, which we never change"),
+			driver.RowClientLabelStorable:     yes("a comment key x-ui stores with the client but does not read; lost if the client is saved in the panel's page"),
+			driver.RowNativeSubscriptionLink:  yes("the panel's subscription server, by the client's subId"),
+			driver.RowServerSideExpiry:        yes("expiryTime, enforced by x-ui itself"),
+			driver.RowInternalCreditDisabled:  yes("no credit and no auto-renewal of its own"),
+		},
+	}, nil
+}
+
+// HealthCheck reads the inbound list: x-ui has no cheaper call behind a
+// session.
+func (d *Driver) HealthCheck(ctx context.Context) error {
+	_, _, err := d.list(ctx, "HealthCheck")
+	return err
+}
+
+func (d *Driver) ListInbounds(ctx context.Context) ([]driver.Inbound, error) {
+	list, _, err := d.list(ctx, "ListInbounds")
+	if err != nil {
+		return nil, err
+	}
+	out := make([]driver.Inbound, 0, len(list))
+	for _, in := range list {
+		out = append(out, driver.Inbound{
+			RemoteID: strconv.Itoa(in.ID), Tag: in.Tag, Protocol: in.Protocol, Port: in.Port, Enabled: in.Enable,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Tag < out[j].Tag })
+	return out, nil
+}
+
+// ListClients reads the panel, never our last write: the limit reported is
+// the one x-ui's counters row holds now.
+func (d *Driver) ListClients(ctx context.Context) ([]driver.RemoteClient, error) {
+	list, _, err := d.list(ctx, "ListClients")
+	if err != nil {
+		return nil, err
+	}
+	all, err := clients("ListClients", list)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]driver.RemoteClient, 0, len(all))
+	for _, f := range all {
+		out = append(out, f.remote())
+	}
+	return out, nil
+}
+
+// CreateClient names the client after its uuid without hyphens, as its email:
+// unique on the panel, and never changed, because the email is the key of the
+// client's counters. It is created under its first block and its enabled
+// state in one request.
+func (d *Driver) CreateClient(ctx context.Context, req driver.CreateClientRequest) (driver.RemoteClient, error) {
+	const op = "CreateClient"
+	if !isProtocol(req.Protocol) {
+		return driver.RemoteClient{}, driver.NewFault(driver.FaultUnsupported, op, 0,
+			fmt.Errorf("x-ui clients are provisioned on %v, not %q", protocols, req.Protocol))
+	}
+	inboundID, err := strconv.Atoi(req.InboundRemoteID)
+	if err != nil {
+		return driver.RemoteClient{}, driver.NewFault(driver.FaultProtocol, op, 0,
+			fmt.Errorf("inbound %q is not an x-ui inbound id", req.InboundRemoteID))
+	}
+	subID, err := newSubID()
+	if err != nil {
+		return driver.RemoteClient{}, driver.NewFault(driver.FaultProtocol, op, 0, err)
+	}
+	c := client{
+		Email:      strings.ReplaceAll(req.UUID, "-", ""),
+		Enable:     req.Enabled,
+		TotalGB:    ceiling(req.DataLimitBytes),
+		ExpiryTime: expiry(req.ExpiresAt),
+		Comment:    req.ClaimTag,
+		SubID:      subID,
+	}
+	credential(&c, req.Protocol, req.UUID)
+	if err := d.write(ctx, op, []string{"xui", "API", "inbounds", "addClient"}, inboundID, c); err != nil {
+		return driver.RemoteClient{}, err
+	}
+	return found{inbound: inbound{ID: inboundID}, client: c, protocol: req.Protocol}.remote(), nil
+}
+
+// UpdateClient writes the whole client as it should now be. The inbound and
+// the protocol are the ones the client has: x-ui cannot move a client.
+func (d *Driver) UpdateClient(ctx context.Context, req driver.UpdateClientRequest) error {
+	const op = "UpdateClient"
+	f, err := d.mustFind(ctx, op, req.RemoteID)
+	if err != nil {
+		return err
+	}
+	if req.InboundRemoteID != "" && req.InboundRemoteID != strconv.Itoa(f.inbound.ID) {
+		return driver.NewFault(driver.FaultUnsupported, op, 0,
+			fmt.Errorf("x-ui cannot move client %q to inbound %s", req.RemoteID, req.InboundRemoteID))
+	}
+	key := f.key()
+	next := f.client
+	credential(&next, f.protocol, req.UUID)
+	next.Enable = req.Enabled
+	next.TotalGB = ceiling(req.DataLimitBytes)
+	next.ExpiryTime = expiry(req.ExpiresAt)
+	next.Comment = req.ClaimTag
+	return d.write(ctx, op, []string{"xui", "API", "inbounds", "updateClient", key}, f.inbound.ID, next)
+}
+
+func (d *Driver) SetClientEnabled(ctx context.Context, remoteID string, enabled bool) error {
+	return d.update(ctx, "SetClientEnabled", remoteID, func(c *client) { c.Enable = enabled })
+}
+
+// DeleteClient removes the client. A client already gone is done. x-ui
+// refuses to delete the last client of an inbound, so that one is disabled
+// and the delete is reported unsupported — never as done, since it is still
+// there.
+func (d *Driver) DeleteClient(ctx context.Context, remoteID string) error {
+	const op = "DeleteClient"
+	f, ok, err := d.find(ctx, op, remoteID)
+	if err != nil || !ok {
+		return err
+	}
+	var siblings int
+	var settings struct {
+		Clients []client `json:"clients"`
+	}
+	if err := json.Unmarshal([]byte(f.inbound.Settings), &settings); err == nil {
+		siblings = len(settings.Clients)
+	}
+	if siblings == 1 {
+		next := f.client
+		next.Enable = false
+		if err := d.write(ctx, op, []string{"xui", "API", "inbounds", "updateClient", f.key()}, f.inbound.ID, next); err != nil {
+			return err
+		}
+		return driver.NewFault(driver.FaultUnsupported, op, 0,
+			fmt.Errorf("client %q is the last on inbound %d, which x-ui keeps; it is disabled", remoteID, f.inbound.ID))
+	}
+	return d.call(ctx, op, http.MethodPost,
+		[]string{"xui", "API", "inbounds", strconv.Itoa(f.inbound.ID), "delClient", f.key()}, nil, nil)
+}
+
+// SetClientDataLimit writes the ceiling x-ui enforces. Raising it above what
+// was used is also what lets a depleted client through again.
+func (d *Driver) SetClientDataLimit(ctx context.Context, remoteID string, ceilingBytes int64) error {
+	return d.update(ctx, "SetClientDataLimit", remoteID, func(c *client) { c.TotalGB = ceiling(ceilingBytes) })
+}
+
+// SetClientRateLimit: x-ui has no per-client bandwidth cap. "No cap" is
+// already true, and anything else is refused rather than believed.
+func (d *Driver) SetClientRateLimit(_ context.Context, _ string, rateBps int64) error {
+	if rateBps <= 0 {
+		return nil
+	}
+	return driver.NewFault(driver.FaultUnsupported, "SetClientRateLimit", 0, errors.New("x-ui has no per-client rate limit"))
+}
+
+func (d *Driver) GetUsage(ctx context.Context) ([]driver.ClientUsage, error) {
+	return d.usage(ctx, "GetUsage", nil)
+}
+
+// GetUsageFor is served from the bulk call, filtered: one request whatever
+// the subset, since x-ui reads one email per request otherwise. An empty set
+// is not read.
+func (d *Driver) GetUsageFor(ctx context.Context, remoteIDs []string) ([]driver.ClientUsage, error) {
+	if len(remoteIDs) == 0 {
+		return nil, nil
+	}
+	want := make(map[string]bool, len(remoteIDs))
+	for _, id := range remoteIDs {
+		want[id] = true
+	}
+	return d.usage(ctx, "GetUsageFor", want)
+}
+
+// usage reads the counters rows, which carry the real up/down split.
+func (d *Driver) usage(ctx context.Context, op string, want map[string]bool) ([]driver.ClientUsage, error) {
+	list, at, err := d.list(ctx, op)
+	if err != nil {
+		return nil, err
+	}
+	var out []driver.ClientUsage
+	for _, in := range list {
+		for _, s := range in.ClientStats {
+			if want != nil && !want[s.Email] {
+				continue
+			}
+			out = append(out, driver.ClientUsage{RemoteID: s.Email, UpBytes: s.Up, DownBytes: s.Down, ObservedAt: at})
+		}
+	}
+	return out, nil
+}
+
+func (d *Driver) ResetUsage(ctx context.Context, remoteID string) error {
+	const op = "ResetUsage"
+	f, err := d.mustFind(ctx, op, remoteID)
+	if err != nil {
+		return err
+	}
+	return d.call(ctx, op, http.MethodPost,
+		[]string{"xui", "API", "inbounds", strconv.Itoa(f.inbound.ID), "resetClientTraffic", remoteID}, nil, nil)
+}
+
+// BuildLink: x-ui assembles share links in its browser page, from the
+// inbound's stream settings, and serves them only through its subscription
+// server. A link assembled here would be a second implementation of that page
+// and would disagree with it, so the subscription is the link.
+func (d *Driver) BuildLink(context.Context, driver.RemoteClient, driver.Inbound) (string, error) {
+	return "", driver.NewFault(driver.FaultUnsupported, "BuildLink", 0,
+		errors.New("x-ui serves links through its subscription server; use SubscriptionURL"))
+}
+
+// SubscriptionURL builds the address x-ui's own page shows for a client: the
+// panel's subURI when it is set, else its sub server's scheme, domain (or the
+// panel's host), port and path, then the client's subId. A panel with the
+// subscription server off answers false.
+func (d *Driver) SubscriptionURL(ctx context.Context, remoteID string) (string, bool) {
+	const op = "SubscriptionURL"
+	f, ok, err := d.find(ctx, op, remoteID)
+	if err != nil || !ok || f.client.SubID == "" {
+		return "", false
+	}
+	var s struct {
+		SubEnable   bool   `json:"subEnable"`
+		SubPort     int    `json:"subPort"`
+		SubPath     string `json:"subPath"`
+		SubDomain   string `json:"subDomain"`
+		SubURI      string `json:"subURI"`
+		SubCertFile string `json:"subCertFile"`
+	}
+	if err := d.call(ctx, op, http.MethodPost, []string{"xui", "setting", "all"}, nil, &s); err != nil || !s.SubEnable {
+		return "", false
+	}
+	if s.SubURI != "" {
+		return strings.TrimRight(s.SubURI, "/") + "/" + f.client.SubID, true
+	}
+	scheme := "http"
+	if s.SubCertFile != "" {
+		scheme = "https"
+	}
+	host := s.SubDomain
+	if host == "" {
+		host = d.base.Hostname()
+	}
+	if s.SubPort != 0 && !(scheme == "https" && s.SubPort == 443) && !(scheme == "http" && s.SubPort == 80) {
+		host += ":" + strconv.Itoa(s.SubPort)
+	}
+	path := "/" + strings.Trim(s.SubPath, "/") + "/"
+	if path == "//" {
+		path = "/"
+	}
+	return scheme + "://" + host + path + f.client.SubID, true
+}
+
+// expired is a status an expired session can arrive as: x-ui's redirect to
+// the login page, or a 401/404 from a proxy in front of it.
+func expired(status int) bool {
+	return (status >= 300 && status < 400) || status == http.StatusUnauthorized || status == http.StatusNotFound
+}
+
+func isProtocol(p string) bool {
+	for _, known := range protocols {
+		if p == known {
+			return true
+		}
+	}
+	return false
+}

@@ -108,6 +108,8 @@ describe("a family is shown by its product name", () => {
     expect(new Set(Object.values(DRIVER_LABELS)).size).toBe(DRIVER_TYPES.length);
     expect(DRIVER_LABELS.sanaee).toContain("v2");
     expect(DRIVER_LABELS.three_x_ui).toContain("v3");
+    expect(DRIVER_LABELS.x_ui_alireza).toContain("alireza0");
+    expect(DRIVER_LABELS.x_ui_vaxilu).toContain("vaxilu");
     expect(driverLabel("not_a_family")).toBe("not_a_family");
   });
 });

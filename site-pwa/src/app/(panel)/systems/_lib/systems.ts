@@ -25,7 +25,8 @@ export const DRIVER_TYPES = [
   "marzban",
   "marzneshin",
   "sanaee",
-  "x_ui",
+  "x_ui_alireza",
+  "x_ui_vaxilu",
   "three_x_ui",
   "s_ui",
   "hiddify",
@@ -41,13 +42,15 @@ export const DRIVER_TYPES = [
  * The product each family is, as its operator knows it. Product names, not
  * prose, so not translated (C-06 is for `t()` keys). `sanaee` and
  * `three_x_ui` are one product's v2 and v3, whose APIs differ (F-027-bb): the
- * form must tell them apart, and the enum values alone do not.
+ * form must tell them apart, and the enum values alone do not. The two x-ui
+ * forks are named by their authors, as operators know them (F-027-bc).
  */
 export const DRIVER_LABELS: Record<(typeof DRIVER_TYPES)[number], string> = {
   marzban: "Marzban",
   marzneshin: "Marzneshin",
   sanaee: "3x-ui v2.x (MHSanaei)",
-  x_ui: "x-ui",
+  x_ui_alireza: "x-ui (alireza0)",
+  x_ui_vaxilu: "x-ui (vaxilu)",
   three_x_ui: "3x-ui v3.x (MHSanaei)",
   s_ui: "S-UI",
   hiddify: "Hiddify Manager",

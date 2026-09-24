@@ -101,8 +101,8 @@ with a data key per tenant, and this service never holds the KEK (user,
 which re-derives the owner's vault from the row and logs the read. One crypto
 implementation, every `use` audited where the others are.
 
-1. **The family is checked before the login is read.** Marzban, Sanaee and
-   User Manager have a case. A family with no driver yet (`ErrNoDriver`) is
+1. **The family is checked before the login is read.** Each family in
+   `contract.drivers.md` and `contract.xui.md` with a driver has a case. A family with no driver yet (`ErrNoDriver`) is
    `unopenable` and costs no vault read; it is ours to ship, so it is never
    `refused`. The Opener reads the **login** by name, never a push panel's
    RADIUS secret (F-027-az), which the driver has no use for.

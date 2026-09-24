@@ -88,7 +88,7 @@ exists). `marzban_test.go` also pins rules 1-3 and the one-login retry.
 
 `internal/driver/sanaee`. Pull, `cumulative`, and the panel enforces its own
 per-client total, so it carries ADR-0072 as Marzban does. It speaks **v2.x**:
-3x-ui v3.x is `three_x_ui` below, and the two `x_ui` forks are F-027-bc/bd.
+3x-ui v3.x is `three_x_ui` below; the two x-ui forks are `contract.xui.md`.
 
 A client lives inside its inbound: its settings are one element of the
 inbound's `settings` JSON string, and its counters are one row of the
