@@ -34,9 +34,10 @@ would dial an address a tenant chose (`network/open-questions.md`).
 
 | Route | Body | Answers | Errors |
 |---|---|---|---|
-| `POST /api/billing/systems/panels` | `name`, `ipAddress`, `apiBaseUrl` (required for `pull`), `driverType`, `counterSemantics`, `transport`, `role`, `region`, `maxRequestsPerMinute?`, `credentials` (≤4096); `.strict()` | `201 {id, reviewState: 'pending', credentials: {configured, version, rotatedAt}}` | 400 validation; 403 `panel.manage` / `not_platform_owner`; 400/403/404 relayed from the vault seam; 502 `credentials_unavailable` |
+| `POST /api/billing/systems/panels` | `name`, `ipAddress`, `apiBaseUrl` (required for `pull`), `driverType`, `counterSemantics`, `transport`, `role`, `region`, `maxRequestsPerMinute?`, `credentials` (≤4096), `radiusSecret` (≤4096; required for `push`, refused for `pull`); `.strict()` | `201 {id, reviewState: 'pending', credentials: {configured, version, rotatedAt}, radiusSecret?}` (`radiusSecret` on a push panel, same three fields) | 400 validation; 403 `panel.manage` / `not_platform_owner`; 400/403/404 relayed from the vault seam; 502 `credentials_unavailable` |
 | `PUT /api/billing/systems/panels/:id/credentials` | `credentials` (1–4096, untrimmed); `.strict()` | `200 {id, reviewState, retest, credentials: {configured, version, rotatedAt}}` | 400; 403; 404 `not_found`; 409 `panel_refused`; 400/403/404 relayed from the vault seam; 502 `credentials_unavailable` |
-| `GET /api/billing/systems/panels` | — | `[{id, name, driverType, transport, role, region, review: {reviewState, connectionTestedAt, connectionTestFault, connectionTestDetail}, health: {panelState, lastHealthyAt, lastSuccessfulCollectionAt, collectionHalted, openDriftEvents}, budget: {maxRequestsPerMinute, blockedSince}}]`, by name | 403 |
+| `PUT /api/billing/systems/panels/:id/radius-secret` | `radiusSecret` (1–4096, untrimmed); `.strict()` | `200 {id, reviewState, radiusSecret: {configured, version, rotatedAt}}` | 400; 403; 404 `not_found`; 409 `panel_not_push` / `panel_refused`; 400/403/404 relayed from the vault seam; 502 `credentials_unavailable` |
+| `GET /api/billing/systems/panels` | — | `[{id, name, driverType, transport, role, region, radiusSecretConfigured, review: {reviewState, connectionTestedAt, connectionTestFault, connectionTestDetail}, health: {panelState, lastHealthyAt, lastSuccessfulCollectionAt, collectionHalted, openDriftEvents}, budget: {maxRequestsPerMinute, blockedSince}}]`, by name | 403 |
 | `GET /api/billing/systems/panels/:id/capabilities` | — | `{id, transport, reviewState, connectionTestedAt, documentVersion, current, answeredAt, rows: [{key, scope, severity, state, detail}]}` | 400 id not a uuid; 403; 404 `not_found` |
 | `GET /api/billing/systems/drift-events` | query `state?` (`open` \| `all`, default `all`), `after?` (event id), `limit?` (1–100, default 50); `.strict()` | `{items: [{id, panelId, panelName, eventType, affectedConfigCount, observedConfigCount, detectedAt, collectionHalted, acknowledgedAt, acknowledgedByAdminId, note}], next}`, newest first; `next` is the `after` of the following page, null on the last | 400; 403 |
 | `POST /api/billing/systems/drift-events/:id/acknowledge` | `note?` (1–1000); `.strict()` | `200` the event, acknowledged | 400; 403; 404 `not_found`; 409 `already_acknowledged` |
@@ -45,7 +46,7 @@ would dial an address a tenant chose (`network/open-questions.md`).
 | `POST /api/billing/systems/holds/:id/write-off` | `note` (1–1000, required); `.strict()` | `200` the hold, `written_off` | 400; 403; 404 `not_found`; 409 `already_resolved` |
 
 Rate limits, per user, per 15 minutes: `SYSTEMS_ADMIN_WRITE` 30 (register,
-re-submit, acknowledge, release, write-off), `SYSTEMS_ADMIN_READ` 120 (the four reads).
+both re-submits, acknowledge, release, write-off), `SYSTEMS_ADMIN_READ` 120 (the four reads).
 
 ## Registering a panel — the rules
 
@@ -62,11 +63,12 @@ re-submit, acknowledge, release, write-off), `SYSTEMS_ADMIN_READ` 120 (the four 
    Both spellings are in `shared-core` (`tenant/vault/panel-label.ts`).
 3. **No half-registration.** Row first (the seam checks the row exists), vault
    second; a vault that refuses or does not answer deletes the row, so no tick
-   tests a panel whose login was never stored.
+   tests a panel whose login was never stored. A push panel's RADIUS secret
+   is the second vault write, and its failure deletes the row too.
 4. **Nothing reads a login back.** The answer is `{configured, version,
    rotatedAt}`, picked field by field from the seam's reply.
 
-`panel-registration.spec.ts` pins rules 1–3 and the owner refusal.
+`panel-registration.spec.ts` pins rules 1–3, the owner refusal and rules 17–19.
 
 ## The reads, and acknowledging drift — the rules
 
@@ -76,7 +78,8 @@ re-submit, acknowledge, release, write-off), `SYSTEMS_ADMIN_READ` 120 (the four 
    `connectionTestedAt`), never as a figure this service made up.
 6. **Field by field.** Every panel read names its columns;
    `panelApiCredentials` is never selected, so no answer can carry the vault
-   reference.
+   reference. `panelRadiusSecret` is selected only to answer
+   `radiusSecretConfigured` (null on a pull panel); the reference never leaves.
 7. **The matrix's vocabulary is `contracts/network/capabilities.json`.**
    `systems/capabilities.ts` mirrors its keys, scopes and severities, held to
    it by `systems-read.spec.ts` as `questionnaire_test.go` holds Go's. Every
@@ -144,3 +147,20 @@ outside it is absent from the list and 404 by id.
    was refused on its answers, which a login does not change.
 
 `panel-resubmit.spec.ts` pins rules 14–16, the scope and the schema.
+
+## A push panel's RADIUS secret — the rules (F-027-az)
+
+17. **Its own secret, its own reference.** The NAS signs accounting with a
+    shared secret that cannot also be the REST login. It goes to the same
+    seam with `secret: 'radius_secret'`, under
+    `panelRadiusSecretLabel(panelId)` (`panel:<panelId>:radius`), and
+    `panel.panelRadiusSecret` holds `panelRadiusSecretRef`. CHECK
+    `panel_radius_secret_is_push_only` refuses it on a pull panel.
+18. **Required at registration for push, refused for pull** (the schema). A
+    push panel registered before this has none. The panel list says so with
+    `radiusSecretConfigured: false`, and the allowlist leaves its NAS off.
+19. **Re-submitting it re-tests nothing.** The connection test never reads the
+    secret, so the review and the last test are left alone, and the allowlist
+    reads the new secret within a minute. On a row with no reference yet, the
+    reference is written **after** the vault answered. A pull panel is 409
+    `panel_not_push`, a refused one 409 `panel_refused`.

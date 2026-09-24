@@ -22,6 +22,7 @@ import (
 
 	"network-service/internal/driver"
 	"network-service/internal/driver/marzban"
+	"network-service/internal/driver/usermanager"
 	"network-service/internal/register"
 )
 
@@ -50,7 +51,20 @@ type Vault struct {
 // (`panel_not_found`, `not_owner`, `credential_unavailable`) and never a
 // value; the registrar records it as `unopenable`, and the panel stays pending.
 func (v Vault) PanelLogin(ctx context.Context, panelID string) (string, error) {
-	body, _ := json.Marshal(map[string]string{"panelId": panelID})
+	return v.read(ctx, panelID, "login")
+}
+
+// PanelRadiusSecret asks for a push panel's RADIUS shared secret (F-027-az):
+// its own vault reference, never the login. A panel with none stored is
+// refused `credential_unavailable`, and the allowlist leaves it off.
+func (v Vault) PanelRadiusSecret(ctx context.Context, panelID string) (string, error) {
+	return v.read(ctx, panelID, "radius_secret")
+}
+
+// read names the secret it wants (`PANEL_SECRETS` in shared-core's
+// panel-label.ts): the vault audits the two reads under different callers.
+func (v Vault) read(ctx context.Context, panelID, secret string) (string, error) {
+	body, _ := json.Marshal(map[string]string{"panelId": panelID, "secret": secret})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(v.BaseURL, "/")+usePath, bytes.NewReader(body))
 	if err != nil {
 		return "", err
@@ -103,31 +117,36 @@ var ErrNoDriver = errors.New("no driver for this family yet")
 // asked, so a panel no driver can open costs no read of its login.
 func (o Opener) Open(ctx context.Context, p register.Pending) (driver.Driver, error) {
 	switch p.DriverType {
-	case driver.DriverMarzban:
+	case driver.DriverMarzban, driver.DriverMikrotikUserManager:
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrNoDriver, p.DriverType)
 	}
 	if p.APIBaseURL == "" {
 		return nil, errors.New("panel has no apiBaseUrl")
 	}
+	// The login, never the RADIUS secret: a push panel's driver speaks its
+	// REST API, and the NAS secret is the allowlist's (F-027-az).
 	login, err := o.Logins.PanelLogin(ctx, p.PanelID)
 	if err != nil {
 		return nil, err
 	}
-	creds, err := usernamePassword(login)
+	username, password, err := usernamePassword(login)
 	if err != nil {
 		return nil, err
 	}
-	return marzban.New(p.APIBaseURL, creds, o.HTTP)
+	if p.DriverType == driver.DriverMikrotikUserManager {
+		return usermanager.New(p.APIBaseURL, usermanager.Credentials{Username: username, Password: password}, o.HTTP)
+	}
+	return marzban.New(p.APIBaseURL, marzban.Credentials{Username: username, Password: password}, o.HTTP)
 }
 
 // usernamePassword reads a login typed as `username:password`, split at the
 // first colon: a username cannot hold one on these panels, and a password
 // can. Its error never quotes the login.
-func usernamePassword(login string) (marzban.Credentials, error) {
+func usernamePassword(login string) (string, string, error) {
 	username, password, ok := strings.Cut(strings.TrimSpace(login), ":")
 	if !ok || username == "" || password == "" {
-		return marzban.Credentials{}, errors.New("the stored login is not in the form username:password")
+		return "", "", errors.New("the stored login is not in the form username:password")
 	}
-	return marzban.Credentials{Username: username, Password: password}, nil
+	return username, password, nil
 }

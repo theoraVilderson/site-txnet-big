@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { RequestHeaders } from '@txnet-backend/shared-core';
+import { PanelSecret, RequestHeaders } from '@txnet-backend/shared-core';
 
 import type { PanelCredentialState, PanelCredentialWriter } from './panel-registration';
 
@@ -44,7 +44,7 @@ export class PanelCredentialClient implements PanelCredentialWriter {
     this.timeoutMs = Number(config.get<number>('TENANT_API_TIMEOUT_MS', 10_000));
   }
 
-  async set(target: { tenantId: string; panelId: string }, credentials: string, actorId: string): Promise<PanelCredentialState> {
+  async set(target: { tenantId: string; panelId: string }, credentials: string, actorId: string, secret: PanelSecret): Promise<PanelCredentialState> {
     if (!this.baseUrl) throw new PanelCredentialUnavailable('TENANT_API_BASE_URL is not set');
     if (!this.token) throw new PanelCredentialUnavailable('SERVICE_AUTH_TOKEN is not set');
 
@@ -55,7 +55,7 @@ export class PanelCredentialClient implements PanelCredentialWriter {
       response = await fetch(`${this.baseUrl}${SEAM}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', [RequestHeaders.serviceToken]: this.token },
-        body: JSON.stringify({ ...target, credentials, actorId }),
+        body: JSON.stringify({ ...target, credentials, actorId, secret }),
         signal: controller.signal,
       });
     } catch (e) {

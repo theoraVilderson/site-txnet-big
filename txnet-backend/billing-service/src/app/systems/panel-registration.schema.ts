@@ -27,11 +27,19 @@ export const registerPanelSchema = z
     region: z.string().trim().min(1).max(50),
     maxRequestsPerMinute: z.number().int().positive().max(6000).optional(),
     credentials: z.string().min(1).max(4096),
+    radiusSecret: z.string().min(1).max(4096).optional(),
   })
   .strict()
   .refine((body) => body.transport !== PanelTransport.pull || !!body.apiBaseUrl, {
     path: ['apiBaseUrl'],
     message: 'apiBaseUrl is required for a pull panel',
+  })
+  // A push panel's NAS signs accounting with a secret of its own (F-027-az):
+  // required there, since without it the NAS never reaches the allowlist, and
+  // refused on a pull panel, which has no NAS to hold it.
+  .refine((body) => (body.transport === PanelTransport.push) === (body.radiusSecret !== undefined), {
+    path: ['radiusSecret'],
+    message: 'radiusSecret is required for a push panel and refused for a pull panel',
   });
 
 export type RegisterPanelBody = z.infer<typeof registerPanelSchema>;
@@ -44,6 +52,11 @@ export type RegisterPanelBody = z.infer<typeof registerPanelSchema>;
 export const resubmitCredentialsSchema = z.object({ credentials: z.string().min(1).max(4096) }).strict();
 
 export type ResubmitCredentialsBody = z.infer<typeof resubmitCredentialsSchema>;
+
+/** Re-submitting a push panel's RADIUS secret (F-027-az): bounded and untrimmed, as the login is. */
+export const resubmitRadiusSecretSchema = z.object({ radiusSecret: z.string().min(1).max(4096) }).strict();
+
+export type ResubmitRadiusSecretBody = z.infer<typeof resubmitRadiusSecretSchema>;
 
 /** Which drift events the report lists: `open` is the unacknowledged ones — those still halting a panel. */
 export const DRIFT_EVENT_STATES = ['open', 'all'] as const;

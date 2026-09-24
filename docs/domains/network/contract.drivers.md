@@ -145,7 +145,7 @@ that arrives without them anyway. The eleven pull scenarios and
 `ceiling_refused` are skipped too. `usermanager_test.go` also pins rules 1-5 and
 the connection test.
 
-**Not opened yet.** `internal/opener` has no case for this family. A push
-panel's single vault login is also its RADIUS secret (`contract.collection.md`),
-so one value cannot be both the REST login and the secret. F-027-az keeps the
-two apart and adds the case.
+**Opened by `internal/opener`** (F-027-az) with the panel's login, typed
+`username:password` as Marzban's is, against `apiBaseUrl`, the router's REST
+root. The NAS's RADIUS secret is a separate vault reference, which only the
+allowlist reads (`contract.collection.md`).

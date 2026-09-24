@@ -13,16 +13,23 @@ import (
 
 	"network-service/internal/driver"
 	"network-service/internal/driver/marzban"
+	"network-service/internal/driver/usermanager"
 	"network-service/internal/register"
 )
 
 const panelID = "55555555-5555-4555-8555-555555555555"
 
 // vaultStub is tenant-service's use route: the service token, the panel id,
-// and an answer or a refusal.
+// and an answer or a refusal. asked records which secret each call named.
 func vaultStub(t *testing.T, login string, status int, reason string) (*httptest.Server, *int) {
+	srv, calls, _ := vaultStubAsked(t, login, status, reason)
+	return srv, calls
+}
+
+func vaultStubAsked(t *testing.T, login string, status int, reason string) (*httptest.Server, *int, *[]string) {
 	t.Helper()
 	calls := 0
+	var asked []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
 		if r.Method != http.MethodPost || r.URL.Path != usePath {
@@ -32,8 +39,12 @@ func vaultStub(t *testing.T, login string, status int, reason string) (*httptest
 			http.NotFound(w, r)
 			return
 		}
-		var body struct{ PanelID string }
+		var body struct {
+			PanelID string
+			Secret  string
+		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
+		asked = append(asked, body.Secret)
 		if body.PanelID != panelID {
 			t.Errorf("vault asked for panel %q, want %q", body.PanelID, panelID)
 		}
@@ -45,7 +56,7 @@ func vaultStub(t *testing.T, login string, status int, reason string) (*httptest
 		_ = json.NewEncoder(w).Encode(map[string]string{"credentials": login})
 	}))
 	t.Cleanup(srv.Close)
-	return srv, &calls
+	return srv, &calls, &asked
 }
 
 func pending(family driver.DriverType) register.Pending {
@@ -66,6 +77,40 @@ func TestOpensMarzbanWithTheVaultsLogin(t *testing.T) {
 	}
 	if _, ok := d.(*marzban.Driver); !ok {
 		t.Fatalf("Open built %T, want *marzban.Driver", d)
+	}
+}
+
+// A push panel has two secrets (F-027-az). The Opener signs in to the
+// router's REST API, so it asks for the login by name; the NAS secret is the
+// allowlist's, and a driver built with it would be refused on every call.
+func TestOpensUserManagerWithItsRESTLoginNotItsRadiusSecret(t *testing.T) {
+	srv, _, asked := vaultStubAsked(t, "api:pa:ss", http.StatusOK, "")
+	o := Opener{Logins: Vault{BaseURL: srv.URL, ServiceToken: "svc-token"}}
+
+	p := pending(driver.DriverMikrotikUserManager)
+	p.Transport, p.CounterSemantics, p.APIBaseURL = driver.TransportPush, driver.CounterSession, "https://10.0.0.1"
+	d, err := o.Open(context.Background(), p)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if _, ok := d.(*usermanager.Driver); !ok {
+		t.Fatalf("Open built %T, want *usermanager.Driver", d)
+	}
+	if len(*asked) != 1 || (*asked)[0] != "login" {
+		t.Errorf("the Opener asked the vault for %q, want exactly [login]", *asked)
+	}
+}
+
+// The allowlist's read names the secret, and the vault's answer comes back
+// in the same field as a login does.
+func TestTheRadiusSecretIsAskedForByName(t *testing.T) {
+	srv, _, asked := vaultStubAsked(t, "nas-shared", http.StatusOK, "")
+	got, err := Vault{BaseURL: srv.URL, ServiceToken: "svc-token"}.PanelRadiusSecret(context.Background(), panelID)
+	if err != nil || got != "nas-shared" {
+		t.Fatalf("PanelRadiusSecret = %q, %v", got, err)
+	}
+	if len(*asked) != 1 || (*asked)[0] != "radius_secret" {
+		t.Errorf("the vault was asked for %q, want exactly [radius_secret]", *asked)
 	}
 }
 

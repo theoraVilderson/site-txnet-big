@@ -21,13 +21,16 @@ import {
   SYSTEMS_KEYS,
   canAcknowledge,
   canResubmit,
+  canResubmitRadiusSecret,
   canResolveHold,
   emptyRegisterForm,
   haltsCollection,
+  radiusSecretMissing,
   refusedBecause,
   resubmitOutcome,
   validateNote,
   validateLogin,
+  validateRadiusSecret,
   validateRegister,
   verdictOf,
 } from "./_lib/systems";
@@ -150,6 +153,17 @@ describe("validateRegister mirrors registerPanelSchema", () => {
     expect(out.ok ? [] : Object.keys(out.errors)).toContain(field);
   });
 
+  // F-027-az: a push panel's NAS signs accounting with a secret of its own.
+  it("needs a RADIUS secret on a push panel, sends it as typed, and never sends one for a pull panel", () => {
+    const push = { ...good, transport: "push" as const, apiBaseUrl: "https://10.0.0.1" };
+    const missing = validateRegister(push);
+    expect(missing.ok ? null : missing.errors.radiusSecret).toBe(SYSTEMS_KEYS.register.invalid.radiusSecret);
+    const sent = validateRegister({ ...push, radiusSecret: " nas secret " });
+    expect(sent.ok && sent.body.radiusSecret).toBe(" nas secret ");
+    const pull = validateRegister({ ...good, radiusSecret: "typed, then switched to pull" });
+    expect(pull.ok && "radiusSecret" in pull.body).toBe(false);
+  });
+
   it("accepts an IPv6 address and a budget inside 1–6000", () => {
     const out = validateRegister({ ...good, ipAddress: "2001:db8::7", maxRequestsPerMinute: "120" });
     expect(out.ok && out.body.ipAddress).toBe("2001:db8::7");
@@ -167,6 +181,7 @@ const panel = (review: Partial<SystemsPanel["review"]>): SystemsPanel => ({
   review: { reviewState: "pending", connectionTestedAt: null, connectionTestFault: null, connectionTestDetail: null, ...review },
   health: { panelState: "healthy", lastHealthyAt: null, lastSuccessfulCollectionAt: null, collectionHalted: false, openDriftEvents: 0 },
   budget: { maxRequestsPerMinute: 60, blockedSince: null },
+  radiusSecretConfigured: null,
 });
 
 describe("verdictOf — the connection test's answer, never one made up here", () => {
@@ -225,6 +240,28 @@ describe("re-submitting a panel's login", () => {
     expect(resubmitOutcome(answer("pending", false))).toBe(SYSTEMS_KEYS.resubmit.outcome.coolingOff);
     expect(resubmitOutcome(answer("accepted", false))).toBe(SYSTEMS_KEYS.resubmit.outcome.rotated);
     expect(resubmitOutcome(answer("accepted_low_trust", false))).toBe(SYSTEMS_KEYS.resubmit.outcome.rotated);
+  });
+});
+
+// F-027-az: a push panel's RADIUS secret, kept apart from its login.
+describe("a push panel's RADIUS secret", () => {
+  const push = (over: Partial<SystemsPanel>): SystemsPanel => ({ ...panel({}), transport: "push", radiusSecretConfigured: true, ...over });
+
+  it("is offered on a push panel that is not refused, and never on a pull panel", () => {
+    expect(canResubmitRadiusSecret(push({}))).toBe(true);
+    expect(canResubmitRadiusSecret(push({ review: { ...panel({}).review, reviewState: "refused" } }))).toBe(false);
+    expect(canResubmitRadiusSecret(panel({}))).toBe(false);
+  });
+
+  it("says when a push panel has none, which keeps its NAS off the allowlist", () => {
+    expect(radiusSecretMissing(push({ radiusSecretConfigured: false }))).toBe(true);
+    expect(radiusSecretMissing(push({}))).toBe(false);
+    expect(radiusSecretMissing(panel({}))).toBe(false);
+  });
+
+  it("is sent as typed, within 1–4096", () => {
+    expect(validateRadiusSecret(" s ")).toEqual({ ok: true, radiusSecret: " s " });
+    expect(validateRadiusSecret("")).toEqual({ ok: false, error: SYSTEMS_KEYS.register.invalid.radiusSecret });
   });
 });
 

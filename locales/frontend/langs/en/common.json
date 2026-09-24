@@ -1948,7 +1948,9 @@
         "maxRequestsPerMinute": "Request budget (per minute)",
         "maxRequestsPerMinuteHint": "Leave blank for the default of 60.",
         "credentials": "Panel login",
-        "credentialsHint": "Sent once to the vault; this page never reads it back."
+        "credentialsHint": "Sent once to the vault; this page never reads it back.",
+        "radiusSecret": "RADIUS secret",
+        "radiusSecretHint": "The shared secret the NAS signs its accounting with. A push panel needs one, apart from its login. Sent once to the vault."
       },
       "transport": {
         "pull": "Pull — we ask the panel",
@@ -1969,8 +1971,10 @@
         "apiBaseUrl": "Enter the http(s) address we poll (up to 500 characters). A pull panel needs one.",
         "region": "Enter a region of 1 to 50 characters.",
         "maxRequestsPerMinute": "Enter a whole number from 1 to 6000, or leave it blank.",
-        "credentials": "Enter the login (up to 4096 characters)."
-      }
+        "credentials": "Enter the login (up to 4096 characters).",
+        "radiusSecret": "Enter the RADIUS secret (up to 4096 characters). A push panel needs one."
+      },
+      "radiusSecretStored": "The RADIUS secret was stored in the vault too."
     },
     "panels": {
       "title": "Panels",
@@ -2160,7 +2164,8 @@
       "already_resolved": "Someone already decided this hold.",
       "not_platform_owner": "Only the platform owner manages the platform's panels.",
       "credentials_unavailable": "The vault could not be reached, so the panel was not registered. Try again.",
-      "panel_refused": "A refused panel keeps its refusal: it was refused on its answers, and a new login does not change them. Register it again instead."
+      "panel_refused": "A refused panel keeps its refusal: it was refused on its answers, and a new login does not change them. Register it again instead.",
+      "panel_not_push": "Only a push panel has a RADIUS secret."
     },
     "resubmit": {
       "open": "New login",
@@ -2173,6 +2178,14 @@
         "coolingOff": "Saved. The panel was rate-limiting us, so its next test waits out the cool-off.",
         "rotated": "Saved. Collection uses the new login from its next pass."
       }
+    },
+    "radiusSecret": {
+      "open": "New RADIUS secret",
+      "title": "Re-submit this panel's RADIUS secret",
+      "hint": "The NAS signs every accounting packet with this secret. The new one replaces the stored one; packets are accepted under it within a minute. The panel is not tested again.",
+      "submit": "Save the new secret",
+      "saved": "Saved. Accounting from this NAS is checked against the new secret within a minute.",
+      "missing": "No RADIUS secret"
     }
   }
 }

@@ -130,6 +130,7 @@ export type SystemsRefusal =
   | "already_resolved"
   | "not_platform_owner"
   | "panel_refused"
+  | "panel_not_push"
   | "credentials_unavailable";
 
 export const REFUSAL_KEYS: Record<SystemsRefusal, string> = {
@@ -138,6 +139,7 @@ export const REFUSAL_KEYS: Record<SystemsRefusal, string> = {
   already_resolved: K.refusals.already_resolved,
   not_platform_owner: K.refusals.not_platform_owner,
   panel_refused: K.refusals.panel_refused,
+  panel_not_push: K.refusals.panel_not_push,
   credentials_unavailable: K.refusals.credentials_unavailable,
 };
 
@@ -161,6 +163,8 @@ export type RegisterForm = {
   /** Blank sends none, and billing keeps the column's default of 60. */
   maxRequestsPerMinute: string;
   credentials: string;
+  /** A push panel's RADIUS secret (F-027-az). Sent only for a push panel. */
+  radiusSecret: string;
 };
 
 export function emptyRegisterForm(): RegisterForm {
@@ -175,6 +179,7 @@ export function emptyRegisterForm(): RegisterForm {
     region: "",
     maxRequestsPerMinute: "",
     credentials: "",
+    radiusSecret: "",
   };
 }
 
@@ -226,6 +231,8 @@ export function validateRegister(form: RegisterForm): RegisterValidation {
     errors.maxRequestsPerMinute = K.register.invalid.maxRequestsPerMinute;
   }
   if (form.credentials.length < 1 || form.credentials.length > 4096) errors.credentials = K.register.invalid.credentials;
+  const push = form.transport === "push";
+  if (push && (form.radiusSecret.length < 1 || form.radiusSecret.length > 4096)) errors.radiusSecret = K.register.invalid.radiusSecret;
   if (Object.keys(errors).length > 0) return { ok: false, errors };
 
   const body: RegisterPanelBody = {
@@ -239,6 +246,8 @@ export function validateRegister(form: RegisterForm): RegisterValidation {
     region,
     ...(perMinute !== undefined ? { maxRequestsPerMinute: perMinute } : {}),
     credentials: form.credentials,
+    // Never for a pull panel, even if typed before switching: billing refuses it there.
+    ...(push ? { radiusSecret: form.radiusSecret } : {}),
   };
   return { ok: true, body };
 }
@@ -289,6 +298,25 @@ export function validateLogin(input: string): { ok: true; credentials: string } 
 export function resubmitOutcome(answer: ResubmittedLogin): string {
   if (answer.reviewState !== "pending") return K.resubmit.outcome.rotated;
   return answer.retest ? K.resubmit.outcome.retest : K.resubmit.outcome.coolingOff;
+}
+
+// ── A push panel's RADIUS secret (F-027-az) ──────────────────────────────────
+
+/** A push panel that is not refused: a pull panel has no NAS (409 `panel_not_push`). */
+export function canResubmitRadiusSecret(panel: SystemsPanel): boolean {
+  return panel.transport === "push" && panel.review.reviewState !== "refused";
+}
+
+/** A push panel with no secret stored: its NAS is kept off the allowlist and every packet from it is dropped. */
+export function radiusSecretMissing(panel: SystemsPanel): boolean {
+  return panel.transport === "push" && panel.radiusSecretConfigured === false;
+}
+
+/** The secret alone: 1–4096 and not trimmed, as the login. */
+export function validateRadiusSecret(input: string): { ok: true; radiusSecret: string } | { ok: false; error: string } {
+  return input.length >= 1 && input.length <= 4096
+    ? { ok: true, radiusSecret: input }
+    : { ok: false, error: K.register.invalid.radiusSecret };
 }
 
 // ── Drift and holds ───────────────────────────────────────────────────────────

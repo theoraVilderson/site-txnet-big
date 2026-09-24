@@ -45,11 +45,11 @@ clock on it. `maxRequestsPerMinute`, `maxLineRateBps` and
 external watchdog reads, so a stalled collector is visible before a wrong
 number is.
 
-Five of these are CHECK constraints rather than service rules, because every
-one of them is a silent wrong number if it is only a convention:
-`panel_ownership_matches_tenant`, `panel_pull_has_base_url`,
-`panel_capabilities_object`, `panel_request_budget_positive` and
-`panel_blocked_since_needs_state`.
+Six are CHECKs, not service rules, as each is a silent wrong number if only a
+convention: `panel_ownership_matches_tenant`, `panel_pull_has_base_url`,
+`panel_capabilities_object`, `panel_request_budget_positive`,
+`panel_blocked_since_needs_state` and `panel_radius_secret_is_push_only`: a
+push panel's NAS secret is a vault reference of its own (F-027-az).
 
 ## The Config's desired state (F-027-b, ADR-0072/0075)
 

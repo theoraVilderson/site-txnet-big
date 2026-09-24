@@ -5,11 +5,14 @@ import (
 	"crypto/md5" //nolint:gosec // RFC 2866's authenticator is MD5; the test builds what a NAS sends.
 	"encoding/binary"
 	"errors"
+	"io"
+	"log/slog"
 	"net/netip"
 	"testing"
 	"time"
 
 	"network-service/internal/collect"
+	"network-service/internal/db"
 )
 
 // What F-027-af turns on, in the order a packet meets it: the allowlist before
@@ -335,5 +338,70 @@ func TestAnInterimWithoutASessionIDIsRefused(t *testing.T) {
 	attrs := withStatus([]Attribute{{}, str(AttrUserName, "alice"), u32(AttrAcctInputOctets, 1)}, StatusInterimUpdate)
 	if reply, err := receiver(s, st).Handle(context.Background(), nasAddr, request(t, secret, attrs...)); err == nil || reply != nil {
 		t.Fatalf("acked a session nobody can name: %v", reply)
+	}
+}
+
+// nasRows is the allowlist query's answer: id, ipAddress, ownershipType,
+// tenantId, maxLineRateBps.
+type nasRows struct {
+	rows [][]any
+	i    int
+}
+
+func (r *nasRows) Next() bool { r.i++; return r.i <= len(r.rows) }
+func (r *nasRows) Scan(dest ...any) error {
+	for k, v := range r.rows[r.i-1] {
+		switch d := dest[k].(type) {
+		case *string:
+			*d = v.(string)
+		case *int64:
+			*d = v.(int64)
+		}
+	}
+	return nil
+}
+func (r *nasRows) Err() error { return nil }
+func (r *nasRows) Close()     {}
+
+type nasQuerier struct{ rows [][]any }
+
+func (q nasQuerier) Query(context.Context, string, ...any) (db.Rows, error) {
+	return &nasRows{rows: q.rows}, nil
+}
+
+// secrets is the vault as the allowlist sees it: the RADIUS secret by panel,
+// and nothing else it could be asked for.
+type secrets map[string]string
+
+func (s secrets) PanelRadiusSecret(_ context.Context, panelID string) (string, error) {
+	v, ok := s[panelID]
+	if !ok {
+		return "", errors.New("vault refused the login read (http 404): credential_unavailable")
+	}
+	return v, nil
+}
+
+// F-027-az: a NAS is on the allowlist under its RADIUS secret, which is its
+// own vault reference, never the panel's REST login. A push panel with no
+// secret stored is left off and logged; a packet from it is dropped as from
+// an unknown source, not verified under some other value.
+func TestTheAllowlistHoldsEachNASUnderItsRadiusSecretOnly(t *testing.T) {
+	d := &PanelDirectory{
+		DB: nasQuerier{rows: [][]any{
+			{"panel-1", "198.51.100.7", "platform", "", int64(0)},
+			{"panel-2", "198.51.100.8", "platform", "", int64(0)},
+		}},
+		Secrets: secrets{"panel-1": "nas-one"},
+		Log:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	if err := d.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	nas, ok := d.NAS(netip.MustParseAddr("198.51.100.7"))
+	if !ok || string(nas.Secret) != "nas-one" {
+		t.Fatalf("panel-1 = %+v, %v; want it listed under its RADIUS secret", nas, ok)
+	}
+	if _, ok := d.NAS(netip.MustParseAddr("198.51.100.8")); ok {
+		t.Error("a push panel with no RADIUS secret is on the allowlist")
 	}
 }

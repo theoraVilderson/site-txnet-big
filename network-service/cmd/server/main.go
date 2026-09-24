@@ -106,7 +106,7 @@ func main() {
 	// allowlist is read before the socket opens, so the first packet meets
 	// the panels that exist rather than an empty list; a failure to bind is
 	// a refusal to start, as a NAS would otherwise retransmit into nothing.
-	nases := &radius.PanelDirectory{DB: pool, Logins: vault, Log: log}
+	nases := &radius.PanelDirectory{DB: pool, Secrets: vault, Log: log}
 	if err := nases.Refresh(ctx); err != nil {
 		log.Error("refusing to start", "error", err)
 		os.Exit(1)

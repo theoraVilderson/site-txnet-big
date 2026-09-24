@@ -107,11 +107,16 @@ them into the same `collect.Result` the pull pass publishes, through the same
 `publish.Publisher`. Past the publisher nothing can tell the two apart.
 
 **A NAS is an accepted push panel.** Its `ipAddress` is the allowlist entry and
-its vault login is the shared secret, so every NAS has its own
-(ADR-0071). `PanelDirectory` rebuilds the list every
-`RADIUS_ALLOWLIST_REFRESH` (1 min) and keeps the old one if a refresh fails. An
-address two panels claim, or a secret the vault will not answer, keeps that
-panel off the list. It is logged, never guessed.
+its RADIUS secret is the shared secret, so every NAS has its own (ADR-0071).
+The secret is a vault reference of its own, `panelRadiusSecret`, beside the
+REST login its driver signs in with (F-027-az). `PanelDirectory` asks the vault
+for it by name (`secret: radius_secret`, audited as `network:RadiusDirectory`)
+and has no way to ask for the login. An allowlist holding the login would
+verify against a value no NAS has, and drop every packet as forged.
+`PanelDirectory` rebuilds the list every `RADIUS_ALLOWLIST_REFRESH` (1 min)
+and keeps the old one if a refresh fails. An address two panels claim, or a
+secret the vault will not answer (none stored is one), keeps that panel off
+the list. It is logged, never guessed.
 
 A packet meets the rules in this order, and the order is the defence:
 
@@ -152,6 +157,4 @@ packet on a closed row is still accounted for; it is a measurement.
 **Accepted window, same as the pull side.** If a publish succeeds and the
 commit after it fails, the NAS retransmits. The receive clock then differs, so
 the `deltaId` differs. Re-reading is chosen over losing, exactly as a pull
-cursor that failed to advance. The first push driver, User Manager (F-027-ag),
-is not opened until a push panel keeps its RADIUS secret apart from its API
-login (F-027-az); until then no NAS passes rule 1.
+cursor that failed to advance.

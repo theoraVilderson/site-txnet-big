@@ -15,10 +15,13 @@
  *    credentials were never stored.
  */
 import { DriverType, CounterSemantics, PanelTransport, PanelRole, TenantType } from '@prisma/client';
-import { panelCredentialLabel, panelCredentialRef } from '@txnet-backend/shared-core';
+import { PanelReviewState } from '@prisma/client';
+import { panelCredentialLabel, panelCredentialRef, PanelSecret, panelRadiusSecretRef } from '@txnet-backend/shared-core';
 
-import { PanelCredentialWriter, PanelRegistrationService } from './panel-registration';
+import { PanelCredentialWriter, PanelRegistrationService, PanelResubmitRefused } from './panel-registration';
+import { registerPanelSchema } from './panel-registration.schema';
 import { PanelScopeRefused } from './panel-scope';
+import { SystemsRefused } from './systems-read';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const RESELLER = '22222222-2222-4222-8222-222222222222';
@@ -37,7 +40,7 @@ const INPUT = {
   credentials: SECRET,
 };
 
-function harness(opts: { vaultFails?: boolean } = {}) {
+function harness(opts: { vaultFails?: boolean; secretFails?: boolean } = {}) {
   const panels: Array<Record<string, unknown>> = [];
   const tenants = new Map([
     [OWNER, TenantType.platform_owner],
@@ -59,11 +62,11 @@ function harness(opts: { vaultFails?: boolean } = {}) {
       },
     },
   };
-  const written: Array<{ tenantId: string; panelId: string; credentials: string; actorId: string }> = [];
+  const written: Array<{ tenantId: string; panelId: string; credentials: string; actorId: string; secret?: PanelSecret }> = [];
   const vault: PanelCredentialWriter = {
-    set: async (target, credentials, actorId) => {
-      if (opts.vaultFails) throw new Error('tenant-service did not answer');
-      written.push({ ...target, credentials, actorId });
+    set: async (target, credentials, actorId, secret) => {
+      if (opts.vaultFails || (opts.secretFails && secret === 'radius_secret')) throw new Error('tenant-service did not answer');
+      written.push({ ...target, credentials, actorId, ...(secret ? { secret } : {}) });
       return { configured: true, version: 1, rotatedAt: '2026-09-24T10:00:00.000Z' };
     },
   };
@@ -103,7 +106,7 @@ describe('PanelRegistrationService.register', () => {
     expect(JSON.stringify(row)).not.toContain('hunter2');
 
     // The owner's vault, under the panel's own label, with who did it.
-    expect(written).toEqual([{ tenantId: OWNER, panelId: row['id'], credentials: SECRET, actorId: ADMIN }]);
+    expect(written).toEqual([{ tenantId: OWNER, panelId: row["id"], credentials: SECRET, actorId: ADMIN, secret: "login" }]);
     expect(panelCredentialRef(OWNER, row['id'] as string)).toContain(panelCredentialLabel(row['id'] as string));
 
     expect(answer).toEqual({
@@ -119,5 +122,139 @@ describe('PanelRegistrationService.register', () => {
 
     await expect(service.register({ adminId: ADMIN, tenantId: OWNER }, INPUT)).rejects.toThrow();
     expect(panels).toHaveLength(0);
+  });
+});
+
+/**
+ * A push panel (F-027-az): a REST login for its driver and a RADIUS secret for
+ * its NAS, two vault references. One value cannot be both, and a panel that
+ * reached the allowlist signed with its login would have every packet dropped
+ * as forged, with nothing red anywhere.
+ */
+const RADIUS = 'nas-shared-hunter3';
+const PUSH = {
+  ...INPUT,
+  apiBaseUrl: 'https://10.0.0.1/rest',
+  driverType: DriverType.mikrotik_user_manager,
+  counterSemantics: CounterSemantics.session,
+  transport: PanelTransport.push,
+  credentials: 'api:hunter2-rest',
+  radiusSecret: RADIUS,
+};
+
+describe('PanelRegistrationService.register, push (F-027-az)', () => {
+  it('writes both references and each secret under its own label, never one for the other', async () => {
+    const { service, panels, written } = harness();
+    const answer = await service.register({ adminId: ADMIN, tenantId: OWNER }, PUSH);
+
+    const id = panels[0]['id'] as string;
+    expect(panels[0]['panelApiCredentials']).toBe(panelCredentialRef(OWNER, id));
+    expect(panels[0]['panelRadiusSecret']).toBe(panelRadiusSecretRef(OWNER, id));
+    expect(JSON.stringify(panels[0])).not.toContain('hunter');
+    expect(written).toEqual([
+      { tenantId: OWNER, panelId: id, credentials: 'api:hunter2-rest', actorId: ADMIN, secret: 'login' },
+      { tenantId: OWNER, panelId: id, credentials: RADIUS, actorId: ADMIN, secret: 'radius_secret' },
+    ]);
+    expect(answer).toMatchObject({ radiusSecret: { configured: true, version: 1 } });
+    expect(JSON.stringify(answer)).not.toContain('hunter');
+  });
+
+  it('writes no secret reference on a pull panel', async () => {
+    const { service, panels } = harness();
+    await service.register({ adminId: ADMIN, tenantId: OWNER }, INPUT);
+    expect(panels[0]['panelRadiusSecret']).toBeUndefined();
+  });
+
+  it('leaves no pending panel behind when the secret write fails after the login landed', async () => {
+    const { service, panels } = harness({ secretFails: true });
+    await expect(service.register({ adminId: ADMIN, tenantId: OWNER }, PUSH)).rejects.toThrow();
+    expect(panels).toHaveLength(0);
+  });
+});
+
+describe('registerPanelSchema, radiusSecret (F-027-az)', () => {
+  const { radiusSecret: _drop, ...pushWithout } = PUSH;
+  it('requires it on a push panel and refuses it on a pull panel', () => {
+    expect(registerPanelSchema.safeParse(PUSH).success).toBe(true);
+    expect(registerPanelSchema.safeParse(pushWithout).success).toBe(false);
+    expect(registerPanelSchema.safeParse({ ...INPUT, radiusSecret: RADIUS }).success).toBe(false);
+  });
+});
+
+describe('PanelRegistrationService.resubmitRadiusSecret (F-027-az)', () => {
+  const PANEL = '55555555-5555-4555-8555-555555555555';
+  type Row = { id: string; transport: PanelTransport; reviewState: PanelReviewState; panelRadiusSecret: string | null };
+
+  function rotating(row: Partial<Row> | null, opts: { vaultFails?: boolean } = {}) {
+    const panel: Row | null = row && {
+      id: PANEL,
+      transport: PanelTransport.push,
+      reviewState: PanelReviewState.accepted,
+      panelRadiusSecret: panelRadiusSecretRef(OWNER, PANEL),
+      ...row,
+    };
+    const updates: Array<Record<string, unknown>> = [];
+    const prisma = {
+      tenant: { findUnique: async ({ where }: { where: { id: string } }) => ({ tenantType: where.id === OWNER ? TenantType.platform_owner : TenantType.reseller }) },
+      panel: {
+        findFirst: async ({ where }: { where: { id: string } }) => (panel && panel.id === where.id ? { ...panel } : null),
+        update: async ({ data }: { data: Record<string, unknown> }) => {
+          updates.push(data);
+          Object.assign(panel as Row, data);
+        },
+        updateMany: async (args: Record<string, unknown>) => {
+          updates.push(args);
+          return { count: 0 };
+        },
+      },
+    };
+    const written: Array<{ credentials: string; secret?: PanelSecret }> = [];
+    const vault: PanelCredentialWriter = {
+      set: async (_t, credentials, _a, secret) => {
+        if (opts.vaultFails) throw new Error('tenant-service did not answer');
+        written.push({ credentials, secret });
+        return { configured: true, version: 2, rotatedAt: '2026-09-24T10:00:00.000Z' };
+      },
+    };
+    return { service: new PanelRegistrationService(prisma as never, vault), panel, updates, written };
+  }
+  const actor = { adminId: ADMIN, tenantId: OWNER };
+
+  it('rotates an accepted panel\'s secret and leaves its review and its last test alone', async () => {
+    const { service, updates, written } = rotating({});
+    const out = await service.resubmitRadiusSecret(actor, PANEL, RADIUS);
+    expect(written).toEqual([{ credentials: RADIUS, secret: 'radius_secret' }]);
+    expect(updates).toHaveLength(0);
+    expect(out).toEqual({ id: PANEL, reviewState: PanelReviewState.accepted, radiusSecret: { configured: true, version: 2, rotatedAt: '2026-09-24T10:00:00.000Z' } });
+  });
+
+  it('gives a push panel registered before its reference existed one, after the vault answered', async () => {
+    const { service, panel, updates } = rotating({ panelRadiusSecret: null });
+    await service.resubmitRadiusSecret(actor, PANEL, RADIUS);
+    expect(updates).toEqual([{ panelRadiusSecret: panelRadiusSecretRef(OWNER, PANEL) }]);
+    expect(panel?.panelRadiusSecret).toBe(panelRadiusSecretRef(OWNER, PANEL));
+  });
+
+  it('writes no reference when the vault fails', async () => {
+    const { service, updates } = rotating({ panelRadiusSecret: null }, { vaultFails: true });
+    await expect(service.resubmitRadiusSecret(actor, PANEL, RADIUS)).rejects.toThrow('tenant-service did not answer');
+    expect(updates).toHaveLength(0);
+  });
+
+  it('refuses a pull panel, which has no NAS, and a refused panel, and writes nothing', async () => {
+    for (const [row, reason] of [
+      [{ transport: PanelTransport.pull, panelRadiusSecret: null }, 'panel_not_push'],
+      [{ reviewState: PanelReviewState.refused }, 'panel_refused'],
+    ] as const) {
+      const { service, written } = rotating(row);
+      await expect(service.resubmitRadiusSecret(actor, PANEL, RADIUS)).rejects.toMatchObject({ reason });
+      await expect(service.resubmitRadiusSecret(actor, PANEL, RADIUS)).rejects.toBeInstanceOf(PanelResubmitRefused);
+      expect(written).toHaveLength(0);
+    }
+  });
+
+  it('is not_found for a panel outside the scope', async () => {
+    const { service } = rotating(null);
+    await expect(service.resubmitRadiusSecret(actor, PANEL, RADIUS)).rejects.toBeInstanceOf(SystemsRefused);
   });
 });

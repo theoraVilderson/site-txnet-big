@@ -102,6 +102,7 @@ export function RegisterPanel({ onRegistered }: { onRegistered: () => Promise<vo
         <p role="status" className="text-xs font-bold text-primary">
           {t("common", K.register.sent)}
           {sent.credentials.configured && ` ${t("common", K.register.credentialsStored)}`}
+          {sent.radiusSecret?.configured && ` ${t("common", K.register.radiusSecretStored)}`}
         </p>
       )}
       {open && (
@@ -180,6 +181,21 @@ export function RegisterPanel({ onRegistered }: { onRegistered: () => Promise<vo
             />,
             F.credentialsHint,
           )}
+          {form.transport === "push" &&
+            field(
+              "radiusSecret",
+              F.radiusSecret,
+              <input
+                dir="ltr"
+                type="password"
+                autoComplete="off"
+                value={form.radiusSecret}
+                maxLength={4096}
+                onChange={(e) => set("radiusSecret", e.target.value)}
+                className={`${INPUT} font-mono`}
+              />,
+              F.radiusSecretHint,
+            )}
           <p className="text-xs leading-5 text-text-secondary sm:col-span-2">{t("common", K.budget.tradeOff)}</p>
           {failure && (
             <p role="alert" className="text-xs font-bold text-error sm:col-span-2">

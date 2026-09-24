@@ -20,8 +20,10 @@ call (ADR-0071). `billing-service`'s register route (F-027-ar) writes the
 `panel` row with `reviewState = pending` and its login into the owner's vault
 (`billing/contract.systems.md`). `panelApiCredentials` holds only where the
 vault keeps it — `vault:<tenantId>:panel_credentials:panel:<panelId>`
-(`panelCredentialRef`, `shared-core`) — never the login; `register.Registrar` finds pending panels on its own tick (30 s by
-default), opens a driver for each, runs `Driver.Capabilities` under a 30 s
+(`panelCredentialRef`, `shared-core`) — never the login. A push panel's
+RADIUS secret lands beside it under `panelRadiusSecret`
+(`…:panel:<panelId>:radius`, F-027-az); the connection test never reads it.
+`register.Registrar` finds pending panels on its own tick (30 s by default), opens a driver for each, runs `Driver.Capabilities` under a 30 s
 deadline, and writes the result. A verdict therefore arrives on the next tick,
 not in the response to the click, and the systems page shows `pending` until
 then (F-027-ad).
@@ -99,9 +101,11 @@ with a data key per tenant, and this service never holds the KEK (user,
 which re-derives the owner's vault from the row and logs the read. One crypto
 implementation, every `use` audited where the others are.
 
-1. **The family is checked before the login is read.** A family with no
-   driver yet (`ErrNoDriver`) is `unopenable` and costs no vault read; it is
-   ours to ship, so it is never `refused`.
+1. **The family is checked before the login is read.** Marzban and User
+   Manager have a case. A family with no driver yet (`ErrNoDriver`) is
+   `unopenable` and costs no vault read; it is ours to ship, so it is never
+   `refused`. The Opener reads the **login** by name, never a push panel's
+   RADIUS secret (F-027-az), which the driver has no use for.
 2. **A login is typed `username:password`**, split at the first colon. A
    login not in that form is `unopenable`, and no error quotes it — the
    error is what `connectionTestDetail` stores.

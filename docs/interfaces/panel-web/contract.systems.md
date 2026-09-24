@@ -36,7 +36,9 @@ every write are [billing/contract.systems.md](../../domains/billing/contract.sys
    everything trimmed but the login, IPv4/IPv6, an http(s) `apiBaseUrl`
    required for `pull`, a budget of 1–6000 or blank (billing's default 60).
    The login is a password input, sent once; the answer's `configured` is all
-   the page says about it.
+   the page says about it. A push panel also asks for its RADIUS secret
+   (F-027-az), required there and never sent for a pull panel, even if it
+   was typed before the transport changed.
 5. **The request budget is shown with its trade-off**: lower is gentler on the
    owner's server and less likely to get us banned, but a pass waits for its
    slots, so usage and ceilings land later ([network contract.budget.md](../../domains/network/contract.budget.md)).
@@ -56,6 +58,11 @@ every write are [billing/contract.systems.md](../../domains/billing/contract.sys
    in a password input cleared on success. `resubmitOutcome` says what the
    answer means — re-tested on the next pass, cooling off after
    `rate_limited`, or rotated under a live panel — and the list is re-read.
+   A push panel also offers a new **RADIUS secret** (F-027-az,
+   `canResubmitRadiusSecret`: push and not refused, `validateRadiusSecret`).
+   It re-tests nothing, so it says only that the NAS is checked against the
+   new secret within a minute. A push panel with none stored shows
+   `radiusSecretMissing` as an error pill: its NAS is off the allowlist.
 9. **One sentence per value the backend can write.** Review state, panel
    state, connection-test fault, hold reason and state, drift event type and
    refusal are each a `Record` over the union. Theme tokens only, never gold.
@@ -66,5 +73,6 @@ every write are [billing/contract.systems.md](../../domains/billing/contract.sys
 (`network.prisma` enums, `contracts/network/capabilities.json` in order,
 billing's `SystemsRejection` / `PanelScopeRejection` / `ResubmitRejection`),
 `validateRegister`'s limits, `verdictOf` with and without a fault,
-`refusedBecause`, `canResubmit`, `validateLogin`, `resubmitOutcome`, the hold
+`refusedBecause`, `canResubmit`, `validateLogin`, `resubmitOutcome`, the
+RADIUS secret's predicates and limits, the hold
 and drift predicates, `validateNote`, the menu entry, every key in `en` and `fa`.

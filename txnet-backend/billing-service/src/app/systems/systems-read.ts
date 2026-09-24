@@ -38,6 +38,8 @@ const PANEL_FIELDS = {
   lastHealthyAt: true,
   lastSuccessfulCollectionAt: true,
   maxRequestsPerMinute: true,
+  // Selected only to answer whether it is set; the reference never leaves.
+  panelRadiusSecret: true,
 } satisfies Prisma.PanelSelect;
 
 const DRIFT_FIELDS = {
@@ -93,6 +95,8 @@ export class SystemsReadService {
         transport: p.transport,
         role: p.role,
         region: p.region,
+        // A push panel with no secret never reaches the RADIUS allowlist (F-027-az); null on a pull panel.
+        radiusSecretConfigured: p.transport === 'push' ? p.panelRadiusSecret !== null : null,
         review: {
           reviewState: p.reviewState,
           connectionTestedAt: p.connectionTestedAt,

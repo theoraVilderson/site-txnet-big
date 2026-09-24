@@ -169,10 +169,11 @@ func nullableTime(t time.Time) *time.Time {
 	return &t
 }
 
-// LoginSource answers a panel's login: opener.Vault. For a push panel the
-// login is the NAS's shared secret.
-type LoginSource interface {
-	PanelLogin(ctx context.Context, panelID string) (string, error)
+// SecretSource answers a push panel's RADIUS shared secret: opener.Vault.
+// It is the panel's own vault reference, never its REST login (F-027-az), so
+// this interface has no way to ask for the login.
+type SecretSource interface {
+	PanelRadiusSecret(ctx context.Context, panelID string) (string, error)
 }
 
 // Querier is what PanelDirectory reads panels through: db.Pool satisfies it.
@@ -181,12 +182,12 @@ type Querier interface {
 }
 
 // PanelDirectory is the allowlist: every accepted push panel, keyed by its
-// `ipAddress`, with its secret read through the vault. It is rebuilt whole on
+// `ipAddress`, with its RADIUS secret read through the vault. It is rebuilt whole on
 // each Refresh and swapped in one step, so a lookup never sees half of one.
 type PanelDirectory struct {
-	DB     Querier
-	Logins LoginSource
-	Log    *slog.Logger
+	DB      Querier
+	Secrets SecretSource
+	Log     *slog.Logger
 	// MinWindow is the plausibility cap's floor for every NAS.
 	MinWindow time.Duration
 
@@ -257,7 +258,7 @@ func (d *PanelDirectory) Refresh(ctx context.Context) error {
 			d.Log.Warn("push panel left off the allowlist: its address is another panel's too", "panel", c.nas.PanelID)
 			continue
 		}
-		secret, err := d.Logins.PanelLogin(ctx, c.nas.PanelID)
+		secret, err := d.Secrets.PanelRadiusSecret(ctx, c.nas.PanelID)
 		if err != nil {
 			d.Log.Warn("push panel left off the allowlist: its secret could not be read", "panel", c.nas.PanelID, "error", err)
 			continue

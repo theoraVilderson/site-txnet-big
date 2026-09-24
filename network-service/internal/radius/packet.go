@@ -9,8 +9,8 @@
 //     and its `ipAddress` is the allowlist entry; anything else is dropped
 //     before a byte of it is hashed.
 //  2. The Request Authenticator is verified under **that NAS's** secret (the
-//     panel's vault login). A packet signed with another NAS's secret is not
-//     that NAS's packet.
+//     panel's RADIUS secret, F-027-az). A packet signed with another NAS's
+//     secret is not that NAS's packet.
 //  3. Only then is a counter believed, and only once the bytes are published
 //     and the session row advanced is the NAS acked. An unacked NAS
 //     retransmits: the NAS is this side's retry queue, which is invariant 18

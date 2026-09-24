@@ -11,10 +11,13 @@ import {
   REVIEW_KEYS,
   SYSTEMS_KEYS as K,
   canResubmit,
+  canResubmitRadiusSecret,
   capabilityText,
+  radiusSecretMissing,
   refusedBecause,
   resubmitOutcome,
   validateLogin,
+  validateRadiusSecret,
   verdictOf,
 } from "../_lib/systems";
 import { ListState, Section, useSystemsError } from "./parts";
@@ -59,7 +62,8 @@ export function PanelList({
 function PanelItem({ panel, onChanged }: { panel: SystemsPanel; onChanged: () => Promise<void> }) {
   const { lang, t } = useLocale();
   const [open, setOpen] = useState(false);
-  const [loginOpen, setLoginOpen] = useState(false);
+  // Which secret is being re-submitted: the login, or a push panel's RADIUS secret (F-027-az).
+  const [editing, setEditing] = useState<Secret | null>(null);
   // The sentence for the last answer; the row itself is read again, never patched.
   const [saved, setSaved] = useState<string | null>(null);
   const verdict = verdictOf(panel);
@@ -84,23 +88,37 @@ function PanelItem({ panel, onChanged }: { panel: SystemsPanel; onChanged: () =>
                 {t("common", K.panels.halted)}
               </Pill>
             )}
+            {radiusSecretMissing(panel) && <Pill tone={BAD}>{t("common", K.radiusSecret.missing)}</Pill>}
             {panel.health.openDriftEvents > 0 && (
               <Pill tone={BAD}>{t("common", K.panels.openDrift, { count: String(panel.health.openDriftEvents) })}</Pill>
             )}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {canResubmit(panel) && !loginOpen && (
+          {canResubmit(panel) && editing === null && (
             <button
               type="button"
               onClick={() => {
-                setLoginOpen(true);
+                setEditing("login");
                 setSaved(null);
               }}
               className="inline-flex items-center gap-1 rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-primary hover:bg-leaf-bg"
             >
               <KeyRound size={14} aria-hidden />
               {t("common", K.resubmit.open)}
+            </button>
+          )}
+          {canResubmitRadiusSecret(panel) && editing === null && (
+            <button
+              type="button"
+              onClick={() => {
+                setEditing("radiusSecret");
+                setSaved(null);
+              }}
+              className="inline-flex items-center gap-1 rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-primary hover:bg-leaf-bg"
+            >
+              <KeyRound size={14} aria-hidden />
+              {t("common", K.radiusSecret.open)}
             </button>
           )}
           <button
@@ -120,15 +138,16 @@ function PanelItem({ panel, onChanged }: { panel: SystemsPanel; onChanged: () =>
           {t("common", saved)}
         </p>
       )}
-      {loginOpen && canResubmit(panel) && (
-        <LoginForm
+      {editing !== null && (editing === "login" ? canResubmit(panel) : canResubmitRadiusSecret(panel)) && (
+        <SecretForm
           panelId={panel.id}
+          secret={editing}
           onDone={async (sentence) => {
-            setLoginOpen(false);
+            setEditing(null);
             setSaved(sentence);
             await onChanged();
           }}
-          onCancel={() => setLoginOpen(false)}
+          onCancel={() => setEditing(null)}
         />
       )}
 
@@ -168,30 +187,72 @@ function PanelItem({ panel, onChanged }: { panel: SystemsPanel; onChanged: () =>
   );
 }
 
+type Secret = "login" | "radiusSecret";
+/** A value refused before the call (its sentence key), or the sentence for billing's answer. */
+type Sent = { error: string } | { sentence: string };
+
+/** What each form says and sends: the login (F-027-au) or a push panel's RADIUS secret (F-027-az). */
+const SECRET_FORM = {
+  login: {
+    title: K.resubmit.title,
+    hint: K.resubmit.hint,
+    field: K.register.field.credentials,
+    submit: K.resubmit.submit,
+    send: async (panelId: string, value: string): Promise<Sent> => {
+      const checked = validateLogin(value);
+      if (!checked.ok) return { error: checked.error };
+      return { sentence: resubmitOutcome(await billingApi.resubmitPanelLogin(panelId, checked.credentials)) };
+    },
+  },
+  radiusSecret: {
+    title: K.radiusSecret.title,
+    hint: K.radiusSecret.hint,
+    field: K.register.field.radiusSecret,
+    submit: K.radiusSecret.submit,
+    send: async (panelId: string, value: string): Promise<Sent> => {
+      const checked = validateRadiusSecret(value);
+      if (!checked.ok) return { error: checked.error };
+      await billingApi.resubmitPanelRadiusSecret(panelId, checked.radiusSecret);
+      return { sentence: K.radiusSecret.saved };
+    },
+  },
+} satisfies Record<Secret, unknown>;
+
 /**
- * A new login for this panel (F-027-au). A password input, sent once and
- * cleared from state with the form; the answer's `retest` decides the sentence.
+ * A new secret for this panel. A password input, sent once and cleared from
+ * state with the form. For the login, the answer's `retest` decides the
+ * sentence; a RADIUS secret re-tests nothing.
  */
-function LoginForm({ panelId, onDone, onCancel }: { panelId: string; onDone: (sentence: string) => Promise<void>; onCancel: () => void }) {
+function SecretForm({
+  panelId,
+  secret,
+  onDone,
+  onCancel,
+}: {
+  panelId: string;
+  secret: Secret;
+  onDone: (sentence: string) => Promise<void>;
+  onCancel: () => void;
+}) {
   const { t } = useLocale();
   const message = useSystemsError();
+  const copy = SECRET_FORM[secret];
   const [login, setLogin] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    const checked = validateLogin(login);
-    if (!checked.ok) {
-      setError(t("common", checked.error));
-      return;
-    }
     setBusy(true);
     setError(null);
     try {
-      const answer = await billingApi.resubmitPanelLogin(panelId, checked.credentials);
+      const answer = await copy.send(panelId, login);
+      if ("error" in answer) {
+        setError(t("common", answer.error));
+        return;
+      }
       setLogin("");
-      await onDone(resubmitOutcome(answer));
+      await onDone(answer.sentence);
     } catch (e) {
       setError(message(e));
     } finally {
@@ -201,10 +262,10 @@ function LoginForm({ panelId, onDone, onCancel }: { panelId: string; onDone: (se
 
   return (
     <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3 rounded-2xl border border-card-border bg-bg-inner p-4">
-      <p className="text-sm font-bold text-text-primary">{t("common", K.resubmit.title)}</p>
-      <p className="text-xs leading-5 text-text-secondary">{t("common", K.resubmit.hint)}</p>
+      <p className="text-sm font-bold text-text-primary">{t("common", copy.title)}</p>
+      <p className="text-xs leading-5 text-text-secondary">{t("common", copy.hint)}</p>
       <label className="flex flex-col gap-1 text-xs text-text-secondary">
-        {t("common", K.register.field.credentials)}
+        {t("common", copy.field)}
         <input
           dir="ltr"
           type="password"
@@ -218,7 +279,7 @@ function LoginForm({ panelId, onDone, onCancel }: { panelId: string; onDone: (se
       </label>
       <div className="flex flex-wrap gap-2">
         <button type="submit" disabled={busy} className="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-text-on-accent disabled:opacity-50">
-          {t("common", K.resubmit.submit)}
+          {t("common", copy.submit)}
         </button>
         <button type="button" onClick={onCancel} className="rounded-xl px-4 py-2 text-xs font-medium text-text-secondary hover:bg-leaf-bg">
           {t("common", K.resubmit.cancel)}

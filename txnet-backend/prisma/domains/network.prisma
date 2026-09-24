@@ -293,6 +293,11 @@ model Panel {
   connectionTestDetail       String?
   orphanPolicy               OrphanPolicy       @default(report_only)
   panelApiCredentials        String // SENSITIVE, encrypted — never default-select
+  /// A push panel's RADIUS shared secret, as a vault reference
+  /// (`panelRadiusSecretRef`), never the secret (F-027-az). Its own reference
+  /// because the REST login cannot also be the NAS's secret. Null on a pull
+  /// panel (CHECK `panel_radius_secret_is_push_only`).
+  panelRadiusSecret          String?
   role                       PanelRole
   pairedPanelId              String?            @db.Uuid // برای HA
   panelState                 PanelState         @default(healthy)

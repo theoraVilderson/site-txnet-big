@@ -12,7 +12,7 @@
  * ends up in a log.
  */
 import { PanelOwnershipType, TenantCredentialKind, TenantType } from '@prisma/client';
-import { CredentialUnavailable, panelCredentialRef } from '@txnet-backend/shared-core';
+import { CredentialUnavailable, panelCredentialRef, panelRadiusSecretRef } from '@txnet-backend/shared-core';
 
 import { PanelCredentialRefused, PanelCredentialService } from './panel-credential.service';
 
@@ -23,8 +23,11 @@ const PLATFORM_PANEL = '44444444-4444-4444-8444-444444444444';
 const RESELLER_PANEL = '55555555-5555-4555-8555-555555555555';
 const TAMPERED_PANEL = '66666666-6666-4666-8666-666666666666';
 const BARE_PANEL = '77777777-7777-4777-8777-777777777777';
+const NAS_PANEL = '99999999-9999-4999-8999-999999999999';
+const TAMPERED_NAS = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
 const LOGIN = 'admin:hunter2-very-secret';
+const RADIUS_SECRET = 'nas-shared-hunter3';
 
 type Ref = { tenantId: string; kind: TenantCredentialKind; label?: string };
 
@@ -33,6 +36,9 @@ function build() {
     [`${OWNER}/panel:${PLATFORM_PANEL}`, LOGIN],
     [`${RESELLER}/panel:${RESELLER_PANEL}`, LOGIN],
     [`${OTHER}/panel:${TAMPERED_PANEL}`, LOGIN],
+    [`${RESELLER}/panel:${NAS_PANEL}`, LOGIN],
+    [`${RESELLER}/panel:${NAS_PANEL}:radius`, RADIUS_SECRET],
+    [`${OTHER}/panel:${TAMPERED_NAS}:radius`, RADIUS_SECRET],
   ]);
   const vault = {
     use: vi.fn(async (ref: Ref, _access: { caller: string }) => {
@@ -41,13 +47,28 @@ function build() {
       return value;
     }),
   };
-  const panels: Record<string, { ownershipType: PanelOwnershipType; tenantId: string | null; panelApiCredentials: string }> = {
+  type Row = { ownershipType: PanelOwnershipType; tenantId: string | null; panelApiCredentials: string; panelRadiusSecret?: string | null };
+  const panels: Record<string, Row> = {
     [PLATFORM_PANEL]: { ownershipType: PanelOwnershipType.platform, tenantId: null, panelApiCredentials: panelCredentialRef(OWNER, PLATFORM_PANEL) },
     [RESELLER_PANEL]: { ownershipType: PanelOwnershipType.tenant, tenantId: RESELLER, panelApiCredentials: panelCredentialRef(RESELLER, RESELLER_PANEL) },
     // A reseller's panel whose reference was edited to name another vault.
     [TAMPERED_PANEL]: { ownershipType: PanelOwnershipType.tenant, tenantId: RESELLER, panelApiCredentials: panelCredentialRef(OTHER, TAMPERED_PANEL) },
     // A row holding something that is not a reference at all.
     [BARE_PANEL]: { ownershipType: PanelOwnershipType.tenant, tenantId: RESELLER, panelApiCredentials: LOGIN },
+    // A push panel: a REST login and a NAS secret, two references (F-027-az).
+    [NAS_PANEL]: {
+      ownershipType: PanelOwnershipType.tenant,
+      tenantId: RESELLER,
+      panelApiCredentials: panelCredentialRef(RESELLER, NAS_PANEL),
+      panelRadiusSecret: panelRadiusSecretRef(RESELLER, NAS_PANEL),
+    },
+    // A push panel whose secret reference was edited to name another vault.
+    [TAMPERED_NAS]: {
+      ownershipType: PanelOwnershipType.tenant,
+      tenantId: RESELLER,
+      panelApiCredentials: panelCredentialRef(RESELLER, TAMPERED_NAS),
+      panelRadiusSecret: panelRadiusSecretRef(OTHER, TAMPERED_NAS),
+    },
   };
   const prisma = {
     panel: { findUnique: vi.fn(async ({ where }: { where: { id: string } }) => panels[where.id] ?? null) },
@@ -69,7 +90,7 @@ async function refusal(p: Promise<unknown>): Promise<PanelCredentialRefused> {
     (err: unknown) => err,
   );
   expect(e).toBeInstanceOf(PanelCredentialRefused);
-  expect(String((e as Error).message)).not.toContain('hunter2');
+  expect(String((e as Error).message)).not.toContain('hunter');
   return e as PanelCredentialRefused;
 }
 
@@ -109,5 +130,36 @@ describe('PanelCredentialService.use (F-027-aw)', () => {
     const { service, vault } = build();
     vault.use.mockRejectedValueOnce(new CredentialUnavailable({ tenantId: RESELLER, kind: TenantCredentialKind.panel_credentials }, 'revoked'));
     expect((await refusal(service.use(RESELLER_PANEL))).reason).toBe('credential_unavailable');
+  });
+});
+
+/**
+ * A push panel's RADIUS secret (F-027-az). One vault login cannot be both the
+ * router's REST login and the NAS's shared secret, so the secret has its own
+ * reference and its own label. The failure this guards is quiet: a secret
+ * read that falls back to the login signs the allowlist with a value no NAS
+ * holds, and every packet is discarded as forged.
+ */
+describe("PanelCredentialService.use('radius_secret') (F-027-az)", () => {
+  it('reads the secret under its own label, named as the RADIUS directory, never the login', async () => {
+    const { service, vault } = build();
+    await expect(service.use(NAS_PANEL, 'radius_secret')).resolves.toBe(RADIUS_SECRET);
+    expect(vault.use).toHaveBeenCalledWith(
+      { tenantId: RESELLER, kind: TenantCredentialKind.panel_credentials, label: `panel:${NAS_PANEL}:radius` },
+      { caller: 'network:RadiusDirectory' },
+    );
+    await expect(service.use(NAS_PANEL)).resolves.toBe(LOGIN);
+  });
+
+  it('refuses a panel that holds no secret reference, and never answers the login in its place', async () => {
+    const { service, vault } = build();
+    expect((await refusal(service.use(RESELLER_PANEL, 'radius_secret'))).reason).toBe('credential_unavailable');
+    expect(vault.use).not.toHaveBeenCalled();
+  });
+
+  it('refuses a secret reference naming a vault that is not the owner’s', async () => {
+    const { service, vault } = build();
+    expect((await refusal(service.use(TAMPERED_NAS, 'radius_secret'))).reason).toBe('not_owner');
+    expect(vault.use).not.toHaveBeenCalled();
   });
 });

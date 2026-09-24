@@ -9,15 +9,22 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { ServiceOnlyGuard } from '@txnet-backend/shared-core';
+import { PANEL_SECRETS, PanelSecret, ServiceOnlyGuard } from '@txnet-backend/shared-core';
 
 import type { SecretState } from './gateway-credential.service';
 import { PanelCredentialRefused, PanelCredentialRejection, PanelCredentialService } from './panel-credential.service';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type SetBody = { tenantId?: unknown; panelId?: unknown; credentials?: unknown; actorId?: unknown };
-type UseBody = { panelId?: unknown };
+type SetBody = { tenantId?: unknown; panelId?: unknown; credentials?: unknown; actorId?: unknown; secret?: unknown };
+type UseBody = { panelId?: unknown; secret?: unknown };
+
+/** Which secret the call means (F-027-az). Absent is the login, the only one there was before. */
+function secretOf(value: unknown): PanelSecret {
+  if (value === undefined) return 'login';
+  if (typeof value === 'string' && (PANEL_SECRETS as readonly string[]).includes(value)) return value as PanelSecret;
+  throw new BadRequestException(`secret must be one of ${PANEL_SECRETS.join(', ')}`);
+}
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
 const STATUS: Record<PanelCredentialRejection, 400 | 403 | 404> = {
@@ -48,9 +55,10 @@ export class PanelCredentialController {
     if (typeof credentials !== 'string' || credentials.length > 4096) {
       throw new BadRequestException('credentials must be a string of at most 4096 characters');
     }
+    const secret = secretOf(body.secret);
     const actorId = typeof body.actorId === 'string' && UUID.test(body.actorId) ? body.actorId : null;
     try {
-      return await this.credentials.set({ tenantId, panelId }, credentials, actorId);
+      return await this.credentials.set({ tenantId, panelId }, credentials, actorId, secret);
     } catch (e) {
       throw refusal(e);
     }
@@ -60,15 +68,17 @@ export class PanelCredentialController {
    * `POST /api/internal/vault/panel-credential/use` — the login itself, for
    * `network-service`'s Opener (F-027-aw). The only route here that answers a
    * value; the vault it reads is re-derived from the panel row, never named
-   * by the caller.
+   * by the caller. `secret: 'radius_secret'` is the allowlist's read of a
+   * NAS's shared secret (F-027-az), answered in the same field.
    */
   @Post('use')
   @HttpCode(HttpStatus.OK)
   async use(@Body() body: UseBody): Promise<{ credentials: string }> {
     const panelId = body?.panelId;
     if (typeof panelId !== 'string' || !UUID.test(panelId)) throw new BadRequestException('panelId must be a uuid');
+    const secret = secretOf(body.secret);
     try {
-      return { credentials: await this.credentials.use(panelId) };
+      return { credentials: await this.credentials.use(panelId, secret) };
     } catch (e) {
       throw refusal(e);
     }

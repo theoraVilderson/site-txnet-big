@@ -760,6 +760,18 @@ export const billingApi = {
     });
   },
 
+  /**
+   * A new RADIUS secret for a push panel (F-027-az): rotated in the vault; the
+   * allowlist reads it within a minute and nothing is re-tested. A pull panel
+   * is 409 `panel_not_push`, a refused one 409 `panel_refused`.
+   */
+  async resubmitPanelRadiusSecret(id: string, radiusSecret: string): Promise<ResubmittedRadiusSecret> {
+    return call<ResubmittedRadiusSecret>(`/systems/panels/${encodeURIComponent(id)}/radius-secret`, {
+      method: "PUT",
+      body: JSON.stringify({ radiusSecret }),
+    });
+  },
+
   async systemsPanels(): Promise<SystemsPanel[]> {
     return call<SystemsPanel[]>("/systems/panels", { method: "GET" });
   },
@@ -1161,6 +1173,8 @@ export interface SystemsPanel {
   transport: "pull" | "push";
   role: "active" | "passive";
   region: string;
+  /** Whether a push panel's RADIUS secret is stored (F-027-az); null on a pull panel. */
+  radiusSecretConfigured: boolean | null;
   review: {
     reviewState: PanelReviewState;
     connectionTestedAt: string | null;
@@ -1245,6 +1259,13 @@ export interface ResubmittedLogin {
   credentials: RegisteredPanel["credentials"];
 }
 
+/** What re-submitting a push panel's RADIUS secret answers (F-027-az). Nothing is re-tested. */
+export interface ResubmittedRadiusSecret {
+  id: string;
+  reviewState: PanelReviewState;
+  radiusSecret: RegisteredPanel["credentials"];
+}
+
 /** What a release answers: queued for the meter, the hold still `pending` (rule 10). */
 export interface QueuedRelease {
   id: string;
@@ -1270,12 +1291,16 @@ export interface RegisterPanelBody {
   maxRequestsPerMinute?: number;
   /** The panel's login. Relayed once to the vault and never answered back. */
   credentials: string;
+  /** A push panel's RADIUS shared secret (F-027-az): required there, refused on a pull panel. */
+  radiusSecret?: string;
 }
 
 export interface RegisteredPanel {
   id: string;
   reviewState: "pending";
   credentials: { configured: boolean; version: number | null; rotatedAt: string | null };
+  /** Present for a push panel only (F-027-az). */
+  radiusSecret?: { configured: boolean; version: number | null; rotatedAt: string | null };
 }
 
 /** The secrets a gateway can carry (F-102-a, F-104-c) — billing's `GATEWAY_SECRET_NAMES`. */

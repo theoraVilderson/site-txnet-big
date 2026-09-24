@@ -38,6 +38,8 @@ import {
   RegisterPanelBody,
   registerPanelSchema,
   ResubmitCredentialsBody,
+  resubmitRadiusSecretSchema,
+  ResubmitRadiusSecretBody,
   resubmitCredentialsSchema,
   ReleaseHoldBody,
   releaseHoldSchema,
@@ -207,9 +209,26 @@ export class SystemsController {
       refusing(() => this.registration.resubmitCredentials(actorOf(req), id, body.credentials as string)),
     );
   }
+
+  /**
+   * Re-submit a push panel's RADIUS secret (F-027-az). `200 {id, reviewState,
+   * radiusSecret}`; nothing is re-tested. A pull panel is 409
+   * `panel_not_push`, a refused one 409 `panel_refused`.
+   */
+  @Put('panels/:id/radius-secret')
+  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  resubmitRadiusSecret(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(resubmitRadiusSecretSchema)) body: ResubmitRadiusSecretBody,
+    @Req() req: Request,
+  ) {
+    return relayingVault(() =>
+      refusing(() => this.registration.resubmitRadiusSecret(actorOf(req), id, body.radiusSecret as string)),
+    );
+  }
 }
 
-/** The two routes that write a login: the scope as 403, the vault seam's refusals relayed, its silence a 502. */
+/** The routes that write a login or a secret: the scope as 403, the vault seam's refusals relayed, its silence a 502. */
 async function relayingVault<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();

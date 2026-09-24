@@ -13,9 +13,10 @@ import (
 )
 
 // NAS is one accepted push panel as the receiver needs it. One panel row is
-// one NAS: its `ipAddress` is the allowlist entry and its vault login is the
-// shared secret, so two NASes never share a secret unless an operator typed
-// the same one twice.
+// one NAS: its `ipAddress` is the allowlist entry and its RADIUS secret, a
+// vault reference of its own beside the REST login (F-027-az), is the shared
+// secret, so two NASes never share a secret unless an operator typed the same
+// one twice.
 type NAS struct {
 	PanelID       string
 	OwnershipType string
