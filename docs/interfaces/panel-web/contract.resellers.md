@@ -217,15 +217,15 @@ behind it is [tenant/contract.onboarding.md](../../domains/tenant/contract.onboa
 ### Its gateways (F-066-w4)
 
 `/my-resellers/[id]/gateways` is the ambient `/gateways` page's own components
-over `/api/billing/tenants/:id/gateways` — the same list, add wizard, editor and
-default quick amounts. Every rule behind the route is
+over `/api/billing/tenants/:id/gateways` — the same list, add wizard, editor,
+default quick amounts and default top-up tax (F-104-aj). Every rule behind the route is
 [billing/contract.gateways.md](../../domains/billing/contract.gateways.md)
 "A named reseller's gateways"; the page's own are
 [contract.deposit.md](contract.deposit.md)'s neighbours and are not restated.
 
 27. **One page, two surfaces, chosen by path and never by session**
     (`GatewaySurface`, `gateways/_lib/surface.ts`). `gatewayAdminApi(tenantId)`
-    builds `/gateways` or `/tenants/:id/gateways` from the same six calls; the
+    builds `/gateways` or `/tenants/:id/gateways` from the same eight calls; the
     surface also carries what goes above the header and which refusals have a
     sentence. There is one gateway page, not a second copy that drifts.
 28. **The ambient page is never this screen.** A reseller's owner signs in to

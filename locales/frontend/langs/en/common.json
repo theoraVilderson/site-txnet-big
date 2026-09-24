@@ -92,7 +92,8 @@
       "precision": "At most {{places}} decimal places",
       "range": "Must not be above the maximum",
       "merchantFormat": "A Zarinpal merchant id is 36 characters, like xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-      "url": "Enter a full address like https://example.com/..."
+      "url": "Enter a full address like https://example.com/...",
+      "percent": "Between 0 and 100"
     },
     "range": {
       "between": "{{min}} – {{max}}",
@@ -341,7 +342,20 @@
       "starRate": "USD value of one Star",
       "starRateHint": "What one Telegram Star is worth in USD for your users. There is no live rate for Stars."
     },
-    "missingSecrets": "Cannot take payments yet — missing: {{fields}}"
+    "missingSecrets": "Cannot take payments yet — missing: {{fields}}",
+    "tax": {
+      "label": "Tax on a top-up",
+      "gatewayHint": "Optional. Added on top of the amount for top-ups through this gateway. Leave empty to use the default rate.",
+      "inherit": "From the default rate",
+      "title": "Tax on top-ups",
+      "subtitle": "A percentage added on top of each top-up and shown to the payer before they pay.",
+      "defaultTitle": "Default rate",
+      "defaultHint": "Applies to every gateway, except one with a rate of its own. Leave empty for no tax.",
+      "none": "No tax",
+      "save": "Save rate",
+      "saving": "Saving…",
+      "saved": "Rate saved."
+    }
   },
   "wallet": {
     "label": "Wallet balance",

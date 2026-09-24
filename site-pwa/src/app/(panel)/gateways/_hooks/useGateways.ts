@@ -9,6 +9,8 @@ export interface GatewaysState {
   grants: GatewayGrant[] | null;
   /** The caller tenant's default quick amounts (F-092-v); `null` until read or when it could not be. */
   presets: string[] | null;
+  /** The caller tenant's default top-up tax (F-104-ag), `{rate}` so "no tax" (`null`) differs from "not read" (`null` itself). */
+  tax: { rate: string | null } | null;
   /** Only until the first answer. A later reload keeps the lists on screen and sets `isRefreshing`. */
   isLoading: boolean;
   isRefreshing: boolean;
@@ -31,6 +33,7 @@ export function useGateways(api: GatewayAdminApi, withLinks: boolean, enabled = 
   const [gateways, setGateways] = useState<AdminGateway[]>([]);
   const [grants, setGrants] = useState<GatewayGrant[] | null>(null);
   const [presets, setPresets] = useState<string[] | null>(null);
+  const [tax, setTax] = useState<{ rate: string | null } | null>(null);
   const [isLoading, setLoading] = useState(true);
   const [isRefreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -38,7 +41,7 @@ export function useGateways(api: GatewayAdminApi, withLinks: boolean, enabled = 
   // No state is set before the first await, so the effect below does not render twice.
   const fetchAll = useCallback(async () => {
     try {
-      const [list, links, defaults] = await Promise.all([
+      const [list, links, defaults, taxDefault] = await Promise.all([
         api.list(),
         withLinks ? billingApi.gatewayGrants() : Promise.resolve(null),
         // Read with the lists so the card appears with them; a failure here
@@ -47,10 +50,16 @@ export function useGateways(api: GatewayAdminApi, withLinks: boolean, enabled = 
           (r) => r.presets,
           () => null,
         ),
+        // The same for the default tax card.
+        api.tax().then(
+          (r) => ({ rate: r.taxRatePercent }),
+          () => null,
+        ),
       ]);
       setGateways(list);
       setGrants(links);
       setPresets(defaults);
+      setTax(taxDefault);
       setError(null);
     } catch (e) {
       setError(e);
@@ -74,5 +83,5 @@ export function useGateways(api: GatewayAdminApi, withLinks: boolean, enabled = 
     if (enabled) void fetchAll();
   }, [enabled, fetchAll]);
 
-  return { gateways, grants, presets, isLoading, isRefreshing, error, reload };
+  return { gateways, grants, presets, tax, isLoading, isRefreshing, error, reload };
 }

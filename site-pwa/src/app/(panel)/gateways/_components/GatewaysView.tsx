@@ -14,6 +14,7 @@ import { AMBIENT_GATEWAYS, useGatewayMessage, type GatewaySurface } from "../_li
 import { secretFields } from "../_lib/provider-fields";
 import { GatewayEditor } from "./GatewayEditor";
 import { DepositPresetsCard } from "./DepositPresetsCard";
+import { DepositTaxCard } from "./DepositTaxCard";
 import { GatewayLinks } from "./GatewayLinks";
 import { GatewayWizard } from "./GatewayWizard";
 
@@ -40,7 +41,7 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
   // power in a body (`surfaceActor`) — the actor billing sees is the reseller.
   const owner = surface.tenantId === null && canManageLinks(me);
   const actor = surfaceActor(me, surface.tenantId);
-  const { gateways, grants, presets, isLoading, isRefreshing, error, reload } = useGateways(surface.api, owner, !sessionLoading);
+  const { gateways, grants, presets, tax, isLoading, isRefreshing, error, reload } = useGateways(surface.api, owner, !sessionLoading);
   const reduceMotion = useReducedMotion();
   // One moment for the whole page: the list and the links panel appear together,
   // never the list first and the owner's panel a beat later.
@@ -242,8 +243,14 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
             </motion.div>
           )}
 
-          {owner && grants && (
+          {tax && (
             <motion.div {...reveal(2)}>
+              <DepositTaxCard surface={surface} initial={tax.rate} />
+            </motion.div>
+          )}
+
+          {owner && grants && (
+            <motion.div {...reveal(3)}>
               <GatewayLinks gateways={gateways} grants={grants} onChanged={reload} />
             </motion.div>
           )}

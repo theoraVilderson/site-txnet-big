@@ -8,8 +8,11 @@ import {
   emptyForm,
   formFromGateway,
   updateBody,
+  taxRateError,
   validateForm,
 } from "./_lib/gateway-form";
+import { sectionOf } from "./_lib/gateway-editor";
+import { stepErrors } from "./_lib/gateway-wizard";
 import { MAX_PRESETS, addPreset } from "./_lib/presets";
 import { PROVIDER_FIELDS, providerFields } from "./_lib/provider-fields";
 import { PROVIDERS as WIZARD_PROVIDERS } from "./_lib/gateway-form";
@@ -71,6 +74,7 @@ const GATEWAY: AdminGateway = {
   roundingMode: "up",
   depositPresets: ["2.00", "5.00"],
   callbackUrl: null,
+  taxRatePercent: null,
   credentials: {
     merchantId: { configured: true, version: 3, rotatedAt: "2026-09-13T10:00:00.000Z" },
     secretKey: { configured: false, version: null, rotatedAt: null },
@@ -245,6 +249,48 @@ describe("quick amounts", () => {
     const create = { ...emptyForm("tenant"), displayName: "X", providerName: "idpay", gatewayCategory: "domestic_rial", minAcceptAmount: "1", maxAcceptAmount: "20", feeValue: "0" };
     expect(createBody(create, OWNER_ME)).not.toHaveProperty("depositPresets");
     expect(createBody({ ...create, depositPresets: ["2.00", "2.50"] }, OWNER_ME).depositPresets).toEqual(["2.00", "2.50"]);
+  });
+});
+
+/**
+ * F-104-aj over ADR-0076: a gateway's own top-up tax rate and the tenant's
+ * default. Billing refuses past 4 places or outside 0..100
+ * (`billing/contract.gateways.md`); the form names the field first, and an
+ * emptied box is `null` — inherit on a gateway, no tax on the default.
+ */
+describe("top-up tax rate", () => {
+  it("is judged the way billing judges it, empty being allowed", () => {
+    expect(taxRateError("")).toBeUndefined();
+    expect(taxRateError(" 9 ")).toBeUndefined();
+    expect(taxRateError("0")).toBeUndefined();
+    expect(taxRateError("100")).toBeUndefined();
+    expect(taxRateError("9.1234")).toBeUndefined();
+    expect(taxRateError("9.12345")).toEqual({ kind: "precision", places: 4 });
+    expect(taxRateError("100.0001")).toBe("percent");
+    expect(taxRateError("-1")).toBe("decimal");
+    expect(taxRateError("nine")).toBe("decimal");
+  });
+
+  it("refuses a gateway's rate before the request, in the fee step and section", () => {
+    const form = { ...formFromGateway(GATEWAY), taxRatePercent: "120" };
+    expect(validateForm(form).taxRatePercent).toBe("percent");
+    expect(stepErrors(form, "fee").taxRatePercent).toBe("percent");
+    expect(sectionOf("taxRatePercent")).toBe("fee");
+  });
+
+  it("starts from the gateway's rate, sends it only when changed, and null when emptied", () => {
+    const taxed = { ...GATEWAY, taxRatePercent: "9" };
+    const form = formFromGateway(taxed);
+    expect(form.taxRatePercent).toBe("9");
+    expect(updateBody(taxed, form, RESELLER_ME)).toEqual({});
+    expect(updateBody(taxed, { ...form, taxRatePercent: "10.5" }, RESELLER_ME)).toEqual({ taxRatePercent: "10.5" });
+    expect(updateBody(taxed, { ...form, taxRatePercent: " " }, RESELLER_ME)).toEqual({ taxRatePercent: null });
+  });
+
+  it("leaves a new gateway's rate out unless one was typed", () => {
+    const create = { ...emptyForm("tenant"), displayName: "X", providerName: "idpay", gatewayCategory: "domestic_rial" };
+    expect(createBody(create, RESELLER_ME)).not.toHaveProperty("taxRatePercent");
+    expect(createBody({ ...create, taxRatePercent: "9" }, RESELLER_ME).taxRatePercent).toBe("9");
   });
 });
 

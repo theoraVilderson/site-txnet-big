@@ -315,6 +315,20 @@ export function FeeFields({ form, set, errors, money }: { form: GatewayForm; set
         )}
       </div>
 
+      {/* Tax is charged on top whatever the fee mode (ADR-0076); empty inherits the tenant's default. */}
+      <Field id="gw-taxRatePercent" label={t("common", G.tax.label)} error={errors.taxRatePercent} hint={t("common", G.tax.gatewayHint)} optional>
+        <TextInput
+          id="gw-taxRatePercent"
+          value={form.taxRatePercent}
+          onChange={(v) => set("taxRatePercent", v)}
+          invalid={Boolean(errors.taxRatePercent)}
+          ltr
+          decimal
+          suffix="%"
+          placeholder={t("common", G.tax.inherit)}
+        />
+      </Field>
+
       {manual && (
         <div className="rounded-2xl bg-[image:var(--card-gradient)] p-4 text-white shadow-md">
           <p className="mb-3 text-xs font-bold opacity-90">{t("common", W.preview.title)}</p>

@@ -43,11 +43,13 @@ export interface GatewayForm {
   depositPresets: string[];
   /** The callback address sent to the provider; empty = the tenant's panel domain (F-092-w). */
   callbackUrl: string;
+  /** Tax on a top-up through this gateway, a percentage; empty inherits the tenant's default (ADR-0076). */
+  taxRatePercent: string;
 }
 
 /** More decimal places than the column that stores this field keeps. `places` is that column's. */
 export type PrecisionError = { kind: "precision"; places: number };
-export type FormError = "required" | "decimal" | "range" | "merchantFormat" | "url" | PrecisionError;
+export type FormError = "required" | "decimal" | "range" | "percent" | "merchantFormat" | "url" | PrecisionError;
 export type FormErrors = Partial<Record<keyof GatewayForm, FormError>>;
 
 const DECIMAL = /^(0|[1-9]\d{0,15})(\.\d{1,8})?$/;
@@ -66,6 +68,7 @@ const PLACES: Partial<Record<keyof GatewayForm, number>> = {
   feeFloor: 2,
   feeCeiling: 2,
   feeValue: 4,
+  taxRatePercent: 4,
   staticRate: 8,
 };
 
@@ -91,7 +94,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const REQUIRED = ["displayName", "providerName", "gatewayCategory"] as const;
 const DECIMALS = ["minAcceptAmount", "maxAcceptAmount", "feeValue", "feeFloor", "feeCeiling"] as const;
 /** Empty is sent as `null`: no fee floor or ceiling, and no minimum or maximum amount. */
-const NULLABLE = new Set<keyof GatewayForm>(["feeFloor", "feeCeiling", "minAcceptAmount", "maxAcceptAmount"]);
+const NULLABLE = new Set<keyof GatewayForm>(["feeFloor", "feeCeiling", "minAcceptAmount", "maxAcceptAmount", "taxRatePercent"]);
 /** Every field an edit may send, secrets and verification aside — they have rules of their own below. */
 const EDITABLE = [
   "displayName",
@@ -105,6 +108,7 @@ const EDITABLE = [
   "feeValue",
   "feeFloor",
   "feeCeiling",
+  "taxRatePercent",
 ] as const;
 
 /** Only the platform owner links gateways, verifies them, or manages another tenant's (D-31). */
@@ -147,6 +151,7 @@ export function emptyForm(source: GatewaySource): GatewayForm {
     staticRate: "",
     depositPresets: [],
     callbackUrl: "",
+    taxRatePercent: "",
   };
 }
 
@@ -177,7 +182,24 @@ export function formFromGateway(g: AdminGateway): GatewayForm {
     staticRate: g.staticRate ?? "",
     depositPresets: [...(g.depositPresets ?? [])],
     callbackUrl: g.callbackUrl ?? "",
+    taxRatePercent: g.taxRatePercent ?? "",
   };
+}
+
+/**
+ * A top-up tax rate as billing stores it (ADR-0076): a percentage, 0..100, at
+ * most 4 places. Empty is allowed — a gateway's inherits the tenant's default,
+ * the default's is no tax. The gateway form and the default-rate card judge
+ * with this one function, so the two levels cannot disagree.
+ */
+export function taxRateError(raw: string): FormError | undefined {
+  const v = raw.trim();
+  if (v === "") return undefined;
+  if (!DECIMAL.test(v)) return "decimal";
+  const fine = tooFine("taxRatePercent", v);
+  if (fine) return fine;
+  // `DECIMAL` has no sign and at most 16 whole digits, so Number compares it exactly enough against 100.
+  return Number(v) > 100 ? "percent" : undefined;
 }
 
 /** Each field that billing would refuse, named before a request is made. Billing still decides. */
@@ -214,6 +236,8 @@ export function validateForm(form: GatewayForm): FormErrors {
       if (fine) errors.staticRate = fine;
     }
   }
+  const tax = taxRateError(form.taxRatePercent);
+  if (tax) errors.taxRatePercent = tax;
   if (form.callbackUrl.trim() && !isWebAddress(form.callbackUrl.trim())) errors.callbackUrl = "url";
   return errors;
 }

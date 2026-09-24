@@ -660,6 +660,7 @@ function ReviewStep({ form, owner, money, onEdit }: { form: GatewayForm; owner: 
         [t("common", F.feeValue), feeText],
         [t("common", W.review.floor), form.feeFloor ? <span dir="ltr">{money(form.feeFloor)}</span> : none],
         [t("common", W.review.ceiling), form.feeCeiling ? <span dir="ltr">{money(form.feeCeiling)}</span> : none],
+        [t("common", G.tax.label), form.taxRatePercent.trim() ? <span dir="ltr">{form.taxRatePercent.trim()}%</span> : t("common", G.tax.inherit)],
       ])}
       {section("secrets", [
         ...providerFields(form.providerName).map(

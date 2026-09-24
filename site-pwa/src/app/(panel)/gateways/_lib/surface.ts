@@ -19,7 +19,7 @@ import { ambientGatewayApi, type GatewayAdminApi } from "@/lib/billing-api";
 export interface GatewaySurface {
   /** The reseller the path names; `null` on the ambient page. */
   tenantId: string | null;
-  /** Its six calls — `gatewayAdminApi` for that tenant. */
+  /** Its eight calls — `gatewayAdminApi` for that tenant. */
   api: GatewayAdminApi;
   /** Put above the page's header: the way back to the console, and whose gateways these are. */
   chrome?: ReactNode;

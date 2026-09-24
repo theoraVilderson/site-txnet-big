@@ -73,6 +73,7 @@ const FIELD_LABELS: Partial<Record<keyof GatewayForm, string>> = {
   feeValue: F.feeValue,
   feeFloor: F.feeFloor,
   feeCeiling: F.feeCeiling,
+  taxRatePercent: G.tax.label,
   merchantId: G.merchantId,
   secretKey: G.secretKey,
   webhookSecret: G.fields.webhookSecret,

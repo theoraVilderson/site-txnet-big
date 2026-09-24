@@ -12,7 +12,7 @@ export type WizardStepId = "provider" | "details" | "fee" | "secrets" | "review"
 export const WIZARD_STEPS: readonly { id: WizardStepId; fields: readonly (keyof GatewayForm)[] }[] = [
   { id: "provider", fields: ["source", "tenantId", "providerName"] },
   { id: "details", fields: ["displayName", "gatewayCategory", "minAcceptAmount", "maxAcceptAmount", "isActive"] },
-  { id: "fee", fields: ["feeCalculationMode", "feeType", "feeValue", "feeFloor", "feeCeiling"] },
+  { id: "fee", fields: ["feeCalculationMode", "feeType", "feeValue", "feeFloor", "feeCeiling", "taxRatePercent"] },
   { id: "secrets", fields: ["merchantId", "secretKey", "webhookSecret", "staticRate", "callbackUrl", "verificationStatus"] },
   { id: "review", fields: [] },
 ];

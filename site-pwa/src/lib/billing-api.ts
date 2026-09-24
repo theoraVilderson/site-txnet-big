@@ -442,7 +442,7 @@ export interface TenantWalletAdjusted {
 export const gatewayApiPrefix = (tenantId: string | null) =>
   tenantId === null ? "/gateways" : `/tenants/${encodeURIComponent(tenantId)}/gateways`;
 
-/** The six calls both gateway surfaces answer. `GatewaysView` takes one of these, not `billingApi`. */
+/** The eight calls both gateway surfaces answer. `GatewaysView` takes one of these, not `billingApi`. */
 export interface GatewayAdminApi {
   list(): Promise<AdminGateway[]>;
   create(body: CreateGatewayBody): Promise<AdminGateway>;
@@ -450,6 +450,9 @@ export interface GatewayAdminApi {
   remove(source: GatewaySource, id: string): Promise<GatewayRemoved>;
   presets(): Promise<{ presets: string[] }>;
   setPresets(presets: string[]): Promise<{ presets: string[] }>;
+  /** The tenant's default tax on a top-up (F-104-ag); `null` is no tax. */
+  tax(): Promise<{ taxRatePercent: string | null }>;
+  setTax(taxRatePercent: string | null): Promise<{ taxRatePercent: string | null }>;
 }
 
 /**
@@ -468,6 +471,9 @@ export function gatewayAdminApi(tenantId: string | null): GatewayAdminApi {
     remove: (source, id) => call<GatewayRemoved>(row(source, id), { method: "DELETE" }),
     presets: () => call<{ presets: string[] }>(`${at}/presets`, { method: "GET" }),
     setPresets: (presets) => call<{ presets: string[] }>(`${at}/presets`, { method: "PUT", body: JSON.stringify({ presets }) }),
+    tax: () => call<{ taxRatePercent: string | null }>(`${at}/tax`, { method: "GET" }),
+    setTax: (taxRatePercent) =>
+      call<{ taxRatePercent: string | null }>(`${at}/tax`, { method: "PUT", body: JSON.stringify({ taxRatePercent }) }),
   };
 }
 
@@ -1349,6 +1355,8 @@ export interface AdminGateway {
   depositPresets: string[];
   /** The callback address sent to the provider; `null` = the tenant's panel domain (F-092-w). */
   callbackUrl: string | null;
+  /** Tax on a top-up through this gateway, a percentage; `null` inherits the tenant's default (ADR-0076). */
+  taxRatePercent: string | null;
   /** `null` when billing could not ask the vault; the row is still manageable. */
   credentials: Record<GatewaySecretName, GatewaySecretState> | null;
   /** The secrets its provider needs that are not stored: saved, maybe active, and cannot take a payment yet (F-104-e). `null` with `credentials`. */
@@ -1372,6 +1380,8 @@ type GatewayFieldsBody = {
   verificationStatus?: string;
   depositPresets?: string[];
   callbackUrl?: string | null;
+  /** `null` inherits the tenant's default tax (ADR-0076). */
+  taxRatePercent?: string | null;
   /** A Telegram Stars gateway's USD value per Star, with the live rate off (F-104-e). */
   staticRate?: string | null;
   useLiveRate?: boolean;
