@@ -8,6 +8,7 @@ import {
   Landmark,
   Package,
   Rocket,
+  Server,
   ShieldCheck,
   ReceiptText,
   Settings,
@@ -17,7 +18,7 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_TENANT_BILLING } from "@/lib/routes";
+import { PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SYSTEMS, PANEL_TENANT_BILLING } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 /** The shell's menu labels as generated constants (C-06). */
@@ -154,6 +155,16 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
     label: M.buyReseller,
     icon: Rocket,
     href: PANEL_RESELLER_PURCHASE,
+    tenantTypes: ["platform_owner"],
+  },
+  // F-027-ad. The platform's own panels. billing refuses anyone but the
+  // platform owner (`panelScopeOf`), so the tenant type gates it here too.
+  {
+    id: "systems",
+    label: M.systems,
+    icon: Server,
+    href: PANEL_SYSTEMS,
+    requires: ["panel.manage"],
     tenantTypes: ["platform_owner"],
   },
   { id: "tutorials", label: M.tutorials, icon: BookOpen, href: null },

@@ -740,6 +740,58 @@ export const billingApi = {
     });
   },
 
+  // The systems page (F-027-ad). billing scopes every one to the platform
+  // owner's panels (`panelScopeOf`); nothing here sends a tenant.
+
+  /** Register a panel as desired state. The answer is always `pending`: the verdict is the next tick's. */
+  async registerPanel(body: RegisterPanelBody): Promise<RegisteredPanel> {
+    return call<RegisteredPanel>("/systems/panels", { method: "POST", body: JSON.stringify(body) });
+  },
+
+  async systemsPanels(): Promise<SystemsPanel[]> {
+    return call<SystemsPanel[]>("/systems/panels", { method: "GET" });
+  },
+
+  async panelCapabilities(id: string): Promise<CapabilityMatrix> {
+    return call<CapabilityMatrix>(`/systems/panels/${encodeURIComponent(id)}/capabilities`, { method: "GET" });
+  },
+
+  async driftEvents(query: { state: "open" | "all"; after?: string }): Promise<CursorPage<SystemsDriftEvent>> {
+    const q = new URLSearchParams({ state: query.state });
+    if (query.after) q.set("after", query.after);
+    return call<CursorPage<SystemsDriftEvent>>(`/systems/drift-events?${q}`, { method: "GET" });
+  },
+
+  /** The decision a halted panel waits for; its collection resumes on the next pass. */
+  async acknowledgeDrift(id: string, note?: string): Promise<SystemsDriftEvent> {
+    return call<SystemsDriftEvent>(`/systems/drift-events/${encodeURIComponent(id)}/acknowledge`, {
+      method: "POST",
+      body: JSON.stringify(note === undefined ? {} : { note }),
+    });
+  },
+
+  async usageHolds(query: { state: "pending" | "all"; after?: string }): Promise<CursorPage<SystemsHold>> {
+    const q = new URLSearchParams({ state: query.state });
+    if (query.after) q.set("after", query.after);
+    return call<CursorPage<SystemsHold>>(`/systems/holds?${q}`, { method: "GET" });
+  },
+
+  /** Queued for the meter (202); the hold stays `pending` until it is billed. A second release is harmless. */
+  async releaseHold(id: string, note?: string): Promise<QueuedRelease> {
+    return call<QueuedRelease>(`/systems/holds/${encodeURIComponent(id)}/release`, {
+      method: "POST",
+      body: JSON.stringify(note === undefined ? {} : { note }),
+    });
+  },
+
+  /** Never charged, and once: a second write-off is 409 `already_resolved`. */
+  async writeOffHold(id: string, note: string): Promise<SystemsHold> {
+    return call<SystemsHold>(`/systems/holds/${encodeURIComponent(id)}/write-off`, {
+      method: "POST",
+      body: JSON.stringify({ note }),
+    });
+  },
+
   // The six gateway calls are {@link ambientGatewayApi}'s, kept here under
   // their old names for the pages that ask about the caller's own tenant and
   // nothing else (the coupon form's gateway picker). A screen that configures
@@ -1068,6 +1120,142 @@ export interface ManualAnswer {
   outcome: ManualOutcome;
   gatewayStatus: string | null;
   referenceId: string | null;
+}
+
+// ── The systems page (F-027-ad) — billing `contract.systems.md` ──────────────
+// Every value below is what `network-service`'s loops last wrote (ADR-0071):
+// billing reads columns, it never calls the Go service, so a stale figure
+// shows as an old timestamp, never as a number made up on the way.
+
+/** `network.PanelReviewState`. A verdict arrives on the next tick; until then `pending`. */
+export type PanelReviewState = "pending" | "accepted" | "accepted_low_trust" | "refused";
+/** `network.PanelState`. `throttled_or_blocked` is a panel answering and refusing us, not one that is down. */
+export type PanelState = "healthy" | "degraded" | "maintenance" | "down" | "throttled_or_blocked";
+/** `network.ConnectionTestFault`: the test did not get an answer — not a verdict. */
+export type ConnectionTestFault =
+  | "timeout"
+  | "rate_limited"
+  | "blocked"
+  | "unavailable"
+  | "unsupported"
+  | "protocol"
+  | "unopenable"
+  | "invalid_answers";
+
+export interface SystemsPanel {
+  id: string;
+  name: string;
+  driverType: string;
+  transport: "pull" | "push";
+  role: "active" | "passive";
+  region: string;
+  review: {
+    reviewState: PanelReviewState;
+    connectionTestedAt: string | null;
+    connectionTestFault: ConnectionTestFault | null;
+    connectionTestDetail: string | null;
+  };
+  health: {
+    panelState: PanelState;
+    lastHealthyAt: string | null;
+    lastSuccessfulCollectionAt: string | null;
+    collectionHalted: boolean;
+    openDriftEvents: number;
+  };
+  budget: { maxRequestsPerMinute: number; blockedSince: string | null };
+}
+
+/** One questionnaire row as billing answers it (`systems/capabilities.ts`). The question is said here, by `key`. */
+export interface CapabilityRow {
+  key: string;
+  scope: string;
+  severity: string;
+  state: string;
+  detail: string | null;
+}
+
+export interface CapabilityMatrix {
+  id: string;
+  transport: string;
+  reviewState: PanelReviewState;
+  connectionTestedAt: string | null;
+  documentVersion: number | null;
+  /** False when the stored answers are under another version: every row in scope reads `unanswered`. */
+  current: boolean;
+  answeredAt: string | null;
+  rows: CapabilityRow[];
+}
+
+export interface SystemsDriftEvent {
+  id: string;
+  panelId: string;
+  panelName: string | null;
+  eventType: "mass_reset" | "mass_missing" | "mass_rename" | "mass_limit_override";
+  affectedConfigCount: number;
+  observedConfigCount: number;
+  detectedAt: string;
+  collectionHalted: boolean;
+  acknowledgedAt: string | null;
+  acknowledgedByAdminId: string | null;
+  note: string | null;
+}
+
+export type HoldReason =
+  | "gigawords_missing"
+  | "session_never_closed"
+  | "publish_failed_after_read"
+  | "attribution_ambiguous"
+  | "panel_drift_event"
+  | "low_trust_source";
+
+export interface SystemsHold {
+  id: string;
+  configId: string;
+  panelId: string;
+  panelName: string | null;
+  /** Decimal strings: a BIGINT past 2^53 is not a JSON number (rule 13). */
+  upBytes: string;
+  downBytes: string;
+  reason: HoldReason;
+  state: "pending" | "released" | "written_off";
+  heldFrom: string;
+  heldAt: string;
+  resolvedAt: string | null;
+  resolvedByAdminId: string | null;
+  resolutionNote: string | null;
+}
+
+/** What a release answers: queued for the meter, the hold still `pending` (rule 10). */
+export interface QueuedRelease {
+  id: string;
+  state: "pending";
+  release: "queued";
+}
+
+/** A keyset page: `next` is the `after` of the following one, null on the last. */
+export interface CursorPage<Row> {
+  items: Row[];
+  next: string | null;
+}
+
+export interface RegisterPanelBody {
+  name: string;
+  ipAddress: string;
+  apiBaseUrl?: string;
+  driverType: string;
+  counterSemantics: string;
+  transport: "pull" | "push";
+  role: "active" | "passive";
+  region: string;
+  maxRequestsPerMinute?: number;
+  /** The panel's login. Relayed once to the vault and never answered back. */
+  credentials: string;
+}
+
+export interface RegisteredPanel {
+  id: string;
+  reviewState: "pending";
+  credentials: { configured: boolean; version: number | null; rotatedAt: string | null };
 }
 
 /** The secrets a gateway can carry (F-102-a, F-104-c) — billing's `GATEWAY_SECRET_NAMES`. */

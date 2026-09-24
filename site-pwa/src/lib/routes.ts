@@ -124,6 +124,8 @@ export const myResellerCatalogPath = (id: string) => `${PANEL_MY_RESELLERS}/${en
 export const myResellerCatalogTranslationsPath = (id: string) => `${myResellerCatalogPath(id)}/translations`;
 /** Payments the gateway has not confirmed, for a person to settle (F-093-n). */
 export const PANEL_MANUAL_PAYMENTS = "/payments/manual";
+/** The platform owner's panels: registration, health, drift and the holds queue (F-027-ad). */
+export const PANEL_SYSTEMS = "/systems";
 /**
  * Where a bank returns a payer (F-093-f). These two are `billing`'s to name:
  * `deposit-callback.controller.ts` redirects to them by path, so they are the

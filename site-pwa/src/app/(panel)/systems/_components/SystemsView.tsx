@@ -1,0 +1,66 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { Server } from "lucide-react";
+import { useLocale } from "@/context/LocaleContext";
+import { billingApi, type SystemsPanel } from "@/lib/billing-api";
+import { SYSTEMS_KEYS as K } from "../_lib/systems";
+import { DriftReport } from "./DriftReport";
+import { HoldsQueue } from "./HoldsQueue";
+import { PanelList } from "./PanelList";
+import { RegisterPanel } from "./RegisterPanel";
+
+/**
+ * The systems page (F-027-ad, ADR-0080): register a panel, read what its
+ * connection test answered, its health and request budget, the drift report
+ * and the holds queue.
+ *
+ * **Everything shown is what `network-service` last wrote.** Billing reads
+ * columns and never calls the Go service (ADR-0071), so a registered panel
+ * reads `pending` until the next tick tests it, and nothing here says
+ * otherwise. The holds queue is the visible face of *in doubt, do not charge*:
+ * while anything sits in it, nothing was dropped silently.
+ */
+export function SystemsView() {
+  const { t } = useLocale();
+  const [panels, setPanels] = useState<SystemsPanel[]>([]);
+  const [isLoading, setLoading] = useState(true);
+  const [error, setError] = useState<unknown>(null);
+
+  const reload = useCallback(async () => {
+    try {
+      setPanels(await billingApi.systemsPanels());
+      setError(null);
+    } catch (e) {
+      setError(e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Every setState in reload runs after its first await, as in `useGateways`.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void reload();
+  }, [reload]);
+
+  return (
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="flex items-center gap-2 text-lg font-bold text-text-primary">
+            <Server size={18} className="text-primary" aria-hidden />
+            {t("common", K.title)}
+          </h1>
+          <p className="text-xs leading-5 text-text-secondary">{t("common", K.subtitle)}</p>
+        </div>
+      </header>
+
+      <RegisterPanel onRegistered={reload} />
+      <PanelList panels={panels} isLoading={isLoading} error={error} onRetry={reload} />
+      {/* Acknowledging resumes a halted panel: its health line is read again. */}
+      <DriftReport onAcknowledged={reload} />
+      <HoldsQueue />
+    </div>
+  );
+}

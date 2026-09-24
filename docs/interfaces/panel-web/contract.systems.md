@@ -1,0 +1,63 @@
+---
+id: panel-web
+layer: interface
+status: active
+version: 32
+updated: 2026-09-24
+---
+
+# Contract — panel-web: the systems page (F-027-ad)
+
+A topic file of [contract.md](contract.md) (§10). One page, `/systems`
+(`PANEL_SYSTEMS`), under `(panel)/systems/`: `page.tsx` is a server shell,
+`_components/SystemsView.tsx` the screen (register form, panel list with its
+capability matrix, drift report, holds queue), and `_lib/systems.ts` its rules.
+It is the panel end of billing's systems routes — the routes, the scope and
+every write are [billing/contract.systems.md](../../domains/billing/contract.systems.md)'s
+(F-027-ar/as/at). The *why* is **ADR-0080**.
+
+## Rules
+
+1. **The platform owner's page.** The menu entry (top level, `systems`)
+   `requires: ["panel.manage"]` and `tenantTypes: ["platform_owner"]`: billing
+   refuses anyone else (`panelScopeOf`, 403 `not_platform_owner`), so a
+   reseller holding the key does not see a page that could only refuse it.
+2. **Nothing here is a verdict of its own.** Every figure is what
+   `network-service` last wrote (ADR-0071). A registered panel reads `pending`
+   until the next tick's connection test; a `connectionTestFault` is the test
+   getting no answer, not a verdict, and the panel still reads `pending`
+   (`verdictOf`). Staleness shows as a timestamp, never as a guess.
+3. **Refused here, not at billing time.** A refused panel's matrix names the
+   `required` rows it answered `no`, and an accepted one the `metered` rows
+   that bar metered sale (`refusedBecause`). The question and the cost of a
+   `no` are said in the reader's language by row key (`CAPABILITY_KEYS`);
+   billing never sends question text (billing rule 7).
+4. **The register form mirrors `registerPanelSchema`** (`validateRegister`):
+   everything trimmed but the login, IPv4/IPv6, an http(s) `apiBaseUrl`
+   required for `pull`, a budget of 1–6000 or blank (billing's default 60).
+   The login is a password input, sent once; the answer's `configured` is all
+   the page says about it.
+5. **The request budget is shown with its trade-off**: lower is gentler on the
+   owner's server and less likely to get us banned, but a pass waits for its
+   slots, so usage and ceilings land later ([network contract.budget.md](../../domains/network/contract.budget.md)).
+   `blockedSince` shows beside it as an error tone.
+6. **Drift: acknowledge once.** `haltsCollection` is the collector's own test
+   (halted and unacknowledged); acknowledge is offered only while
+   `acknowledgedAt` is null, with an optional note, and re-reads the drift list
+   *and* the panels, since the halt ends on the next pass. A 409 re-reads too.
+7. **Holds: release or write off, only while `pending`** (`canResolveHold`).
+   A release answers `202` and the hold stays `pending` until the meter bills
+   it — the row says "queued", never "released". A write-off requires a note
+   (1–1000, `validateNote`) and uses error tones. Every action re-reads the
+   list; nothing is patched in from an answer.
+8. **One sentence per value the backend can write.** Review state, panel
+   state, connection-test fault, hold reason and state, drift event type and
+   refusal are each a `Record` over the union. Theme tokens only, never gold.
+
+## Proof
+
+`systems/systems.test.ts` — every set above against its declared home
+(`network.prisma` enums, `contracts/network/capabilities.json` in order,
+billing's `SystemsRejection` / `PanelScopeRejection`), `validateRegister`'s
+limits, `verdictOf` with and without a fault, `refusedBecause`, the hold and
+drift predicates, `validateNote`, the menu entry, every key in `en` and `fa`.

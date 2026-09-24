@@ -24,7 +24,8 @@
       "catalog": "Catalog",
       "tenantBilling": "Platform billing",
       "resellers": "Resellers",
-      "buyReseller": "Become a reseller"
+      "buyReseller": "Become a reseller",
+      "systems": "Systems"
     },
     "paymentCredited": {
       "title": "Payment confirmed",
@@ -1911,6 +1912,254 @@
       "exhausted": "Used up",
       "expired": "Expired",
       "cancelled": "Cancelled"
+    }
+  },
+  "systems": {
+    "title": "Systems",
+    "subtitle": "The platform's panels: what each one answered when it was tested, how it is doing, what the collector found, and the bytes that were held rather than billed.",
+    "loading": "Loading…",
+    "retry": "Retry",
+    "never": "never",
+    "more": "Load more",
+    "filter": {
+      "open": "Open",
+      "pending": "Waiting",
+      "all": "All"
+    },
+    "register": {
+      "open": "Register a panel",
+      "title": "Register a panel",
+      "hint": "The panel is saved as waiting for its connection test. The test runs on the next pass, answers the acceptance questionnaire, and accepts or refuses the panel here — never later, when someone is being billed.",
+      "submit": "Register",
+      "cancel": "Cancel",
+      "sent": "Registered. Its verdict appears after the next connection test.",
+      "credentialsStored": "The login was stored in the vault. It is never shown again.",
+      "field": {
+        "name": "Name",
+        "ipAddress": "IP address",
+        "apiBaseUrl": "API address",
+        "apiBaseUrlHint": "Where we poll the panel. Required for a pull panel.",
+        "driverType": "Panel type",
+        "counterSemantics": "How it counts usage",
+        "counterSemanticsHint": "Checked by the connection test; a wrong declaration is refused, not billed.",
+        "transport": "Transport",
+        "role": "Role",
+        "region": "Region",
+        "maxRequestsPerMinute": "Request budget (per minute)",
+        "maxRequestsPerMinuteHint": "Leave blank for the default of 60.",
+        "credentials": "Panel login",
+        "credentialsHint": "Sent once to the vault; this page never reads it back."
+      },
+      "transport": {
+        "pull": "Pull — we ask the panel",
+        "push": "Push — the panel reports to us"
+      },
+      "role": {
+        "active": "Active",
+        "passive": "Passive"
+      },
+      "counter": {
+        "cumulative": "Cumulative",
+        "session": "Per session",
+        "reset_on_read": "Reset on read"
+      },
+      "invalid": {
+        "name": "Enter a name of 1 to 100 characters.",
+        "ipAddress": "Enter an IPv4 or IPv6 address.",
+        "apiBaseUrl": "Enter the http(s) address we poll (up to 500 characters). A pull panel needs one.",
+        "region": "Enter a region of 1 to 50 characters.",
+        "maxRequestsPerMinute": "Enter a whole number from 1 to 6000, or leave it blank.",
+        "credentials": "Enter the login (up to 4096 characters)."
+      }
+    },
+    "panels": {
+      "title": "Panels",
+      "empty": "No panels are registered yet.",
+      "tested": "Tested",
+      "notTested": "Not tested yet",
+      "lastHealthy": "Last healthy",
+      "lastCollected": "Last collected",
+      "openDrift": "Open drift events: {{count}}",
+      "halted": "Collection halted",
+      "showMatrix": "Capabilities",
+      "hideMatrix": "Hide capabilities"
+    },
+    "review": {
+      "pending": "Waiting for its test",
+      "accepted": "Accepted",
+      "accepted_low_trust": "Accepted, low trust",
+      "refused": "Refused",
+      "pendingHint": "The verdict appears after the next connection test.",
+      "faultHint": "The last test got no answer, so there is no verdict yet; it is tried again:",
+      "lowTrustHint": "Accepted, but what it reports is held for a person before it is billed.",
+      "refusedHint": "Refused at registration. Nothing from this panel is read or billed."
+    },
+    "fault": {
+      "timeout": "the panel did not answer in time.",
+      "rate_limited": "the panel is rate-limiting us.",
+      "blocked": "the panel refused our requests.",
+      "unavailable": "the panel could not be reached.",
+      "unsupported": "this panel type has no driver yet.",
+      "protocol": "the panel answered something we could not read.",
+      "unopenable": "the login could not be read from the vault.",
+      "invalid_answers": "the questionnaire's answers did not validate."
+    },
+    "panelState": {
+      "healthy": "Healthy",
+      "degraded": "Degraded",
+      "maintenance": "Maintenance",
+      "down": "Down",
+      "throttled_or_blocked": "Refusing us"
+    },
+    "budget": {
+      "perMinute": "At most {{count}} requests a minute",
+      "tradeOff": "This is the panel owner's limit on how often we may ask. Lower is gentler on their server and less likely to get our address banned, but a pass waits for its slots, so usage arrives later and ceilings are enforced later. Higher is fresher, and only safe if the owner agreed to it.",
+      "blockedSince": "Refusing us since"
+    },
+    "matrix": {
+      "title": "Acceptance questionnaire",
+      "answeredAt": "Answered",
+      "stale": "These answers are under an older questionnaire. The next connection test answers it again.",
+      "refusedBecause": "Refused because it cannot:",
+      "noMeteredSale": "Accepted, but no metered sale: it cannot",
+      "unmetLabel": "If not",
+      "state": {
+        "supported": "Yes",
+        "unsupported": "No",
+        "unanswered": "Not answered",
+        "not_asked": "Not asked for this transport"
+      },
+      "severity": {
+        "required": "Required",
+        "metered": "Needed for metered sale",
+        "degrades": "Works around it"
+      },
+      "row": {
+        "per_client_usage": {
+          "question": "Does it report a usage figure for one named client, rather than only a server total?",
+          "unmet": "Refused: a server total cannot be split between the users on it, so there is nothing to bill."
+        },
+        "bulk_usage_in_one_call": {
+          "question": "Does one call return the usage of every client on the panel?",
+          "unmet": "Refused: 5000 clients would be 5000 requests a pass on someone else's server."
+        },
+        "usage_for_named_subset": {
+          "question": "Does one call return the usage of a named subset of clients?",
+          "unmet": "Each pass re-reads the whole panel, so how often it runs is bounded by the cost of that call."
+        },
+        "usage_reset_supported": {
+          "question": "Can a client's counter be zeroed on request?",
+          "unmet": "Nothing is lost: we only ever read a counter. A reset is something we detect, never something we cause."
+        },
+        "counter_survives_client_update": {
+          "question": "Does a client's counter keep its value when the client is updated — a ceiling written, a label changed?",
+          "unmet": "Every ceiling write looks like a reset, so the counter is re-read in the same pass as the write."
+        },
+        "gigawords_reported": {
+          "question": "Does the NAS send the gigaword counters beside the 32-bit octet counters?",
+          "unmet": "A session past 4 GB is held rather than billed, and never estimated."
+        },
+        "per_client_data_limit": {
+          "question": "Can a byte ceiling be written for one client, and does the panel enforce it itself?",
+          "unmet": "No metered sale: the ceiling is the only limit that still works while our service is down."
+        },
+        "data_limit_counts_the_same_bytes_as_usage": {
+          "question": "Does the enforced ceiling count the same bytes the usage figure reports — both directions, same units?",
+          "unmet": "No metered sale: a block bought against one number would be spent against another, and the gap is free traffic."
+        },
+        "per_client_rate_limit": {
+          "question": "Can a bandwidth rate be written for one client?",
+          "unmet": "A custom rate is recorded but not enforced on the panel; our own limiting stays."
+        },
+        "enable_disable_client": {
+          "question": "Can one client be disabled and re-enabled without deleting it?",
+          "unmet": "Refused: suspending would have to delete the client, and a top-up could not restore it."
+        },
+        "client_lifecycle": {
+          "question": "Can a client be created, updated and deleted through the API?",
+          "unmet": "Refused: nothing could be provisioned or removed."
+        },
+        "stable_remote_id": {
+          "question": "Does a client carry an id that survives being renamed?",
+          "unmet": "A renamed client reads as missing until the next matching key is tried."
+        },
+        "client_label_storable": {
+          "question": "Can we store our own tag on the client — a note, label or remark field?",
+          "unmet": "A client rebuilt on the panel reads as an orphan rather than as ours."
+        },
+        "native_subscription_link": {
+          "question": "Does the panel serve a subscription URL for a client?",
+          "unmet": "We build the link ourselves, so a change reaches the user only when the link is fetched again."
+        },
+        "server_side_expiry": {
+          "question": "Does the panel enforce an expiry date on a client by itself?",
+          "unmet": "Expiry is ours alone: a service that ends while our loop is down keeps working until the loop returns."
+        },
+        "internal_credit_disablable": {
+          "question": "Can the panel's own billing or credit be switched off, leaving us the only writer of the quota?",
+          "unmet": "The panel cuts users off on its own schedule, so it is used for metering only."
+        }
+      }
+    },
+    "drift": {
+      "title": "Drift report",
+      "hint": "What the collector found changed on a panel all at once. An event that halts collection waits for a person: acknowledging it resumes collection on the next pass.",
+      "empty": "No drift events.",
+      "affected": "{{affected}} of {{observed}} clients",
+      "detectedAt": "Detected",
+      "acknowledgedAt": "Acknowledged",
+      "acknowledge": "Acknowledge",
+      "acknowledgeHint": "Only once you know why it happened — a restore, a migration. Collection resumes on the next pass.",
+      "submit": "Acknowledge and resume",
+      "cancel": "Cancel",
+      "done": "Acknowledged. Collection resumes on the next pass.",
+      "type": {
+        "mass_reset": "Many counters reset",
+        "mass_missing": "Many clients missing",
+        "mass_rename": "Many clients renamed",
+        "mass_limit_override": "Many limits changed on the panel"
+      }
+    },
+    "holds": {
+      "title": "Holds queue",
+      "hint": "Bytes the meter believed but could not bill with certainty. In doubt, nothing is charged — and nothing is dropped either: every one waits here until a person releases or writes it off.",
+      "empty": "Nothing is held.",
+      "bytes": "Up {{up}} · Down {{down}}",
+      "heldFrom": "Held from",
+      "resolvedAt": "Decided",
+      "release": "Release",
+      "releaseHint": "The meter bills these bytes. The hold reads as waiting until it has.",
+      "releaseSubmit": "Release for billing",
+      "queued": "Queued for the meter. The hold stays waiting until it is billed.",
+      "writeOff": "Write off",
+      "writeOffHint": "These bytes are never charged. Say why — the note is kept with your name.",
+      "writeOffSubmit": "Write off",
+      "cancel": "Cancel",
+      "reason": {
+        "gigawords_missing": "Past 4 GB with no gigaword counters",
+        "session_never_closed": "The session never closed",
+        "publish_failed_after_read": "Read, but could not be sent to billing",
+        "attribution_ambiguous": "Could not tell whose traffic it was",
+        "panel_drift_event": "Read during a drift event",
+        "low_trust_source": "From a low-trust panel"
+      },
+      "state": {
+        "pending": "Waiting",
+        "released": "Released",
+        "written_off": "Written off"
+      }
+    },
+    "note": {
+      "label": "Note",
+      "required": "Write a note of 1 to 1000 characters.",
+      "tooLong": "The note may be at most 1000 characters."
+    },
+    "refusals": {
+      "not_found": "It no longer exists, or is not one of the platform's panels.",
+      "already_acknowledged": "Someone already acknowledged this event.",
+      "already_resolved": "Someone already decided this hold.",
+      "not_platform_owner": "Only the platform owner manages the platform's panels.",
+      "credentials_unavailable": "The vault could not be reached, so the panel was not registered. Try again."
     }
   }
 }
