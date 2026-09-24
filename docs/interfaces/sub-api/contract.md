@@ -12,7 +12,7 @@ updated: 2026-09-24
 (`sub-service/`); F-113-b is the base64 body; F-113-c the cache and
 `Profile-Update-Interval`; F-113-d proves a rotated token stops at once;
 F-609 `Subscription-Userinfo` and the inactive Grant; F-609-b its live usage;
-F-113-e the tenant gate. The other formats are the later F-113-* rows. The *why* is in ADR-0082 and ADR-0083. The spec is catalog §7.5
+F-113-e the tenant gate; F-113-f Clash, Sing-box and Xray JSON. The *why* is in ADR-0082 and ADR-0083. The spec is catalog §7.5
 (`python3 tools/spec.py --section 7.5`), F-113 and F-609.
 
 ## TL;DR
@@ -91,8 +91,30 @@ held to TypeScript by `contracts/tenant/subscription-link.json`, F-113-g):
 Format: `?format=` when it names one (`base64`, `clash`, `singbox`/`sing-box`,
 `xray`, any case), else the `User-Agent` (Clash / mihomo / Stash → Clash;
 sing-box / SFA / SFI / SFM → Sing-box), else base64. An unknown `?format=` is
-ignored, never a 4xx. A format not rendered yet is answered with base64:
-Clash, Sing-box and Xray JSON are F-113-f; Outline waits for F-407.
+ignored, never a 4xx. A format not rendered is answered with base64
+(Outline waits for F-407).
+
+### Clash, Sing-box and Xray JSON (F-113-f, built)
+`sub/links.go` reads each served line; `sub/formats.go` renders.
+
+1. **The same lines, in the same order**, one proxy per line the format can
+   express. Read: `vless`, `vmess` (alterId 0), `trojan`, `ss` (SIP002 or
+   legacy, no plugin), `hysteria2`/`hy2`, `tuic`; transports tcp (plain, or
+   the HTTP header), ws, grpc, h2, httpupgrade, xhttp.
+2. **A line the format cannot express is left out, never guessed at.** Clash:
+   no xhttp. Sing-box: no xhttp, no TCP HTTP header. Xray: no hysteria2 or
+   tuic. Anything unread is left out of all three; base64 still serves it.
+3. **Names are unique within a body.** A repeat, or one of the group names
+   `Proxy`/`Auto`, gets ` 2`, ` 3`, … (an app refuses a duplicate).
+4. **Shapes.** Clash (`text/yaml`): the proxies, a `Proxy` select over `Auto`
+   (url-test) and each proxy, `MATCH,Proxy`. Sing-box (`application/json`): a
+   tun inbound (1.10+ `address`), the `Proxy` selector first, `Auto`, the
+   proxies, `direct`; `route.final` = `Proxy`. Xray (`application/json`): an
+   array of full client configs, one per proxy, named by `remarks`, with the
+   proxy as the first outbound (v2rayN's import format).
+5. **Nothing left is still a valid config that proxies nothing**: Clash with
+   no proxies and `MATCH,DIRECT`; Sing-box with no inbound and only `direct`;
+   Xray `[]`. The inactive Grant and the refused tenant get the same.
 
 ### Subscription-Userinfo (F-609, built)
 `sub/userinfo.go`. Every `200` carries

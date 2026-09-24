@@ -109,10 +109,13 @@ func DetectFormat(r *http.Request) Format {
 // renderer turns the served lines into a body and its Content-Type.
 type renderer func(lines []string) (body []byte, contentType string)
 
-// renderers holds every format rendered today; F-113-f adds the rest. A
-// format asked for and not here is answered with base64.
+// renderers holds every format; the structured ones are formats.go (F-113-f).
+// A format asked for and not here is answered with base64.
 var renderers = map[Format]renderer{
-	FormatBase64: renderBase64,
+	FormatBase64:  renderBase64,
+	FormatClash:   renderClash,
+	FormatSingBox: renderSingBox,
+	FormatXray:    renderXray,
 }
 
 func render(f Format, lines []string) ([]byte, string) {

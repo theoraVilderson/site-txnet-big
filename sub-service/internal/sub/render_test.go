@@ -12,8 +12,8 @@ import (
 // The invariant this row turns on (F-113-b, catalog §7.5, ADR-0082 rule 3):
 // the body is every stored line of the Grant's configs that a client app can
 // actually use — a live config, captured from the client it is now, on a panel
-// still serving users — in one base64 URI list, whatever format the app asked
-// for until F-113-f renders the others. Nothing else in the store reaches it.
+// still serving users — in one base64 URI list. Nothing else in the store
+// reaches it; the other formats are built from the same lines (formats_test.go).
 
 func live(panelState, uuid string, lines ...string) Config {
 	return Config{PanelState: panelState, Status: "active", DesiredRemote: "present",
@@ -140,19 +140,6 @@ func TestFormatComesFromTheOverrideThenTheUserAgent(t *testing.T) {
 		req.Header.Set("User-Agent", tc.ua)
 		if got := DetectFormat(req); got != tc.want {
 			t.Errorf("?%s UA %q: format = %s, want %s", tc.query, tc.ua, got, tc.want)
-		}
-	}
-}
-
-func TestAFormatNotRenderedYetGetsBase64(t *testing.T) {
-	store := storeWith(live("healthy", "u1", "vless://a"))
-	for _, path := range []string{"/sub/" + token + "?format=clash", "/sub/" + token + "?format=xray"} {
-		res := get(t, store, path, "")
-		if ct := res.Header.Get("Content-Type"); ct != "text/plain; charset=utf-8" {
-			t.Errorf("%s: Content-Type = %q, want the base64 list's", path, ct)
-		}
-		if got := decoded(t, res); len(got) != 1 || got[0] != "vless://a" {
-			t.Errorf("%s: lines = %q, want the base64 list until F-113-f", path, got)
 		}
 	}
 }

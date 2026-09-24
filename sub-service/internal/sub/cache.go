@@ -53,7 +53,7 @@ type RenderCache struct {
 // renderRevision is part of every render key. Bump it when the same stored
 // lines render to a different body, so a replica still running the old code
 // during a rolling deploy cannot serve its entries to the new one's requests.
-const renderRevision = "3"
+const renderRevision = "4"
 
 // entry is one cached answer.
 type entry struct {
