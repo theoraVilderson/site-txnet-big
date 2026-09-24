@@ -1,10 +1,11 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { CounterSemantics, DriverType, PanelReviewState, PanelRole, PanelTransport } from '@prisma/client';
+import { ConnectionTestFault, CounterSemantics, DriverType, PanelReviewState, PanelRole, PanelTransport } from '@prisma/client';
 import { panelCredentialRef } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { panelScopeOf, SystemsActor } from './panel-scope';
+import { SystemsRefused } from './systems-read';
 
 /** A panel as its owner declares it. The questionnaire is the connection test's to answer, not this. */
 export type RegisterPanelInput = {
@@ -30,6 +31,16 @@ export interface PanelCredentialWriter {
 }
 
 export const PANEL_CREDENTIAL_WRITER = Symbol('PANEL_CREDENTIAL_WRITER');
+
+/** Why a re-submitted login is refused, beyond the scope's own refusals. */
+export type ResubmitRejection = 'panel_refused';
+
+export class PanelResubmitRefused extends Error {
+  constructor(readonly reason: ResubmitRejection) {
+    super(reason);
+    this.name = 'PanelResubmitRefused';
+  }
+}
 
 /**
  * Registering a panel (F-027-ar, ADR-0080 decision 1): a desired-state write.
@@ -97,5 +108,47 @@ export class PanelRegistrationService {
 
     this.logger.log(`panel ${id} (${input.driverType}) registered by ${actor.adminId}; pending its connection test`);
     return { id, reviewState: PanelReviewState.pending, credentials };
+  }
+
+  /**
+   * Re-submitting a panel's login (F-027-au): rotated in the vault (`put` is
+   * also rotate, `tenant/contract.vault.md` rule 3), then — only on a panel
+   * still `pending` — the last connection test is cleared, so the next tick
+   * tests the corrected login instead of waiting out its retry
+   * (`network/contract.registration.md` rule 4).
+   *
+   * - An **accepted** panel is rotated and nothing else: collection reads only
+   *   an accepted panel (invariant 44), and a password change must not stop it.
+   * - A **refused** panel is 409 `panel_refused`: it was refused on its answers,
+   *   and a new login changes none of them. Nothing is written.
+   * - A **`rate_limited`** fault keeps its time. It is not a bad login, and
+   *   retrying through a ban is what makes it permanent.
+   *
+   * Vault first, row second: a vault that fails leaves the row as it was. The
+   * clear is conditional on `pending`, so a verdict the tick wrote meanwhile
+   * stands, and `retest` says whether the clear landed.
+   */
+  async resubmitCredentials(actor: SystemsActor, panelId: string, credentials: string) {
+    const scope = await panelScopeOf(this.prisma, actor);
+    const where = { id: panelId, ...scope };
+    const panel = await this.prisma.panel.findFirst({ where, select: { reviewState: true, connectionTestFault: true } });
+    if (!panel) throw new SystemsRefused('not_found');
+    if (panel.reviewState === PanelReviewState.refused) throw new PanelResubmitRefused('panel_refused');
+
+    const stored = await this.vault.set({ tenantId: actor.tenantId, panelId }, credentials, actor.adminId);
+
+    let reviewState: PanelReviewState = panel.reviewState;
+    let retest = false;
+    if (panel.reviewState === PanelReviewState.pending && panel.connectionTestFault !== ConnectionTestFault.rate_limited) {
+      const cleared = await this.prisma.panel.updateMany({
+        where: { ...where, reviewState: PanelReviewState.pending },
+        data: { connectionTestedAt: null, connectionTestFault: null, connectionTestDetail: null },
+      });
+      retest = cleared.count > 0;
+      if (!retest) reviewState = (await this.prisma.panel.findFirst({ where, select: { reviewState: true } }))?.reviewState ?? reviewState;
+    }
+
+    this.logger.log(`panel ${panelId}: login re-submitted by ${actor.adminId}${retest ? '; re-tested on the next tick' : ''}`);
+    return { id: panelId, reviewState, retest, credentials: stored };
   }
 }

@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 35
+version: 36
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -69,9 +69,9 @@ display-currency conversion (`currency`), plan prices (`catalog`).
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-24 | contract v36 (F-027-au): new `PUT /systems/panels/:id/credentials` — rotates a panel's login in the vault; on a `pending` panel clears its last test (not after `rate_limited`) so the next tick re-tests; an accepted one is rotated only; refused is 409 `panel_refused`. [contract.systems.md](contract.systems.md) |
 | 2026-09-24 | contract v35 (F-027-at): new `GET /systems/holds`, `POST /systems/holds/:id/release` (202; queued to `metering-service` through the outbox as `network.usage.release`, billed there through the meter) and `POST /systems/holds/:id/write-off` (never charged, once, note required). Additive, no break; `contract.systems.md`, `contract.metering.md`. Consumer panel-web: F-027-ad |
 | 2026-09-24 | contract v34 (F-027-as): new `GET /systems/panels` (review, health, request budget), `GET /systems/panels/:id/capabilities`, `GET /systems/drift-events`, `POST /systems/drift-events/:id/acknowledge` — resumes a halted panel on the next pass. Additive, no break; `contract.systems.md`. Consumer panel-web: F-027-ad |
 | 2026-09-24 | contract v33 (F-027-ar): new `POST /systems/panels`, owner-only behind `panel.manage` — writes a `pending` panel, its login to the owner's vault via `tenant-service`; `contract.systems.md` |
-| 2026-09-23 | contract v32 (F-027-ac): `GET /gift/grants` also answers `billingMode`, consumed/purchased bytes, `suspendedAt` and `purgeAt`; new `GET /traffic/grants/:grantId/configs` and `POST /traffic/configs/actions` (regenerate/retire, 1–50 configs, one outcome per config). Additive, no break. Rules: [contract.gift.md](contract.gift.md). Consumer panel-web: `/services` |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

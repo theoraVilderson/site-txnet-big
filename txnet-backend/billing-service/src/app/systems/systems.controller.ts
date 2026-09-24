@@ -15,6 +15,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
@@ -26,7 +27,7 @@ import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { PanelCredentialRefused, PanelCredentialUnavailable } from './panel-credential.client';
-import { PanelRegistrationService, RegisterPanelInput } from './panel-registration';
+import { PanelRegistrationService, PanelResubmitRefused, RegisterPanelInput } from './panel-registration';
 import {
   AcknowledgeDriftBody,
   acknowledgeDriftSchema,
@@ -36,6 +37,8 @@ import {
   holdQueueQuerySchema,
   RegisterPanelBody,
   registerPanelSchema,
+  ResubmitCredentialsBody,
+  resubmitCredentialsSchema,
   ReleaseHoldBody,
   releaseHoldSchema,
   WriteOffHoldBody,
@@ -182,18 +185,42 @@ export class SystemsController {
   @RateLimit(SYSTEMS_ADMIN_WRITE)
   async register(@Body(new ZodValidationPipe(registerPanelSchema)) body: RegisterPanelBody, @Req() req: Request) {
     const { userId, tenantId } = identityOf(req);
-    try {
-      // The schema requires every field; the cast is for this project's
-      // non-strict tsconfig, under which zod infers every key as optional.
-      return await this.registration.register({ adminId: userId, tenantId }, body as RegisterPanelInput);
-    } catch (e) {
-      if (e instanceof PanelScopeRefused) throw new ForbiddenException({ reason: e.reason, message: e.message });
-      if (e instanceof PanelCredentialRefused) throw new HttpException({ reason: e.reason, message: e.message }, e.status);
-      if (e instanceof PanelCredentialUnavailable) {
-        throw new BadGatewayException({ reason: 'credentials_unavailable', message: 'the credential vault could not be reached' });
-      }
-      throw e;
+    // The schema requires every field; the cast is for this project's
+    // non-strict tsconfig, under which zod infers every key as optional.
+    return relayingVault(() => this.registration.register({ adminId: userId, tenantId }, body as RegisterPanelInput));
+  }
+
+  /**
+   * Re-submit a panel's login (F-027-au). `200 {id, reviewState, retest,
+   * credentials}`: `retest` is whether the next tick tests it again — only a
+   * `pending` panel not cooling off after `rate_limited`. A refused panel is
+   * 409 `panel_refused`.
+   */
+  @Put('panels/:id/credentials')
+  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  resubmitCredentials(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(resubmitCredentialsSchema)) body: ResubmitCredentialsBody,
+    @Req() req: Request,
+  ) {
+    return relayingVault(() =>
+      refusing(() => this.registration.resubmitCredentials(actorOf(req), id, body.credentials as string)),
+    );
+  }
+}
+
+/** The two routes that write a login: the scope as 403, the vault seam's refusals relayed, its silence a 502. */
+async function relayingVault<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (e) {
+    if (e instanceof PanelScopeRefused) throw new ForbiddenException({ reason: e.reason, message: e.message });
+    if (e instanceof PanelResubmitRefused) throw new ConflictException({ reason: e.reason, message: e.message });
+    if (e instanceof PanelCredentialRefused) throw new HttpException({ reason: e.reason, message: e.message }, e.status);
+    if (e instanceof PanelCredentialUnavailable) {
+      throw new BadGatewayException({ reason: 'credentials_unavailable', message: 'the credential vault could not be reached' });
     }
+    throw e;
   }
 }
 

@@ -36,6 +36,15 @@ export const registerPanelSchema = z
 
 export type RegisterPanelBody = z.infer<typeof registerPanelSchema>;
 
+/**
+ * Re-submitting a panel's login (F-027-au): the login alone, bounded as at
+ * registration and not trimmed — a password may start or end with a space.
+ * `.strict()`, so a body naming `reviewState` is refused, not dropped.
+ */
+export const resubmitCredentialsSchema = z.object({ credentials: z.string().min(1).max(4096) }).strict();
+
+export type ResubmitCredentialsBody = z.infer<typeof resubmitCredentialsSchema>;
+
 /** Which drift events the report lists: `open` is the unacknowledged ones — those still halting a panel. */
 export const DRIFT_EVENT_STATES = ['open', 'all'] as const;
 

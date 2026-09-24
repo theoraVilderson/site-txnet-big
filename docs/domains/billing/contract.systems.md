@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 35
+version: 36
 updated: 2026-09-24
 ---
 
@@ -35,6 +35,7 @@ would dial an address a tenant chose (`network/open-questions.md`).
 | Route | Body | Answers | Errors |
 |---|---|---|---|
 | `POST /api/billing/systems/panels` | `name`, `ipAddress`, `apiBaseUrl` (required for `pull`), `driverType`, `counterSemantics`, `transport`, `role`, `region`, `maxRequestsPerMinute?`, `credentials` (≤4096); `.strict()` | `201 {id, reviewState: 'pending', credentials: {configured, version, rotatedAt}}` | 400 validation; 403 `panel.manage` / `not_platform_owner`; 400/403/404 relayed from the vault seam; 502 `credentials_unavailable` |
+| `PUT /api/billing/systems/panels/:id/credentials` | `credentials` (1–4096, untrimmed); `.strict()` | `200 {id, reviewState, retest, credentials: {configured, version, rotatedAt}}` | 400; 403; 404 `not_found`; 409 `panel_refused`; 400/403/404 relayed from the vault seam; 502 `credentials_unavailable` |
 | `GET /api/billing/systems/panels` | — | `[{id, name, driverType, transport, role, region, review: {reviewState, connectionTestedAt, connectionTestFault, connectionTestDetail}, health: {panelState, lastHealthyAt, lastSuccessfulCollectionAt, collectionHalted, openDriftEvents}, budget: {maxRequestsPerMinute, blockedSince}}]`, by name | 403 |
 | `GET /api/billing/systems/panels/:id/capabilities` | — | `{id, transport, reviewState, connectionTestedAt, documentVersion, current, answeredAt, rows: [{key, scope, severity, state, detail}]}` | 400 id not a uuid; 403; 404 `not_found` |
 | `GET /api/billing/systems/drift-events` | query `state?` (`open` \| `all`, default `all`), `after?` (event id), `limit?` (1–100, default 50); `.strict()` | `{items: [{id, panelId, panelName, eventType, affectedConfigCount, observedConfigCount, detectedAt, collectionHalted, acknowledgedAt, acknowledgedByAdminId, note}], next}`, newest first; `next` is the `after` of the following page, null on the last | 400; 403 |
@@ -44,7 +45,7 @@ would dial an address a tenant chose (`network/open-questions.md`).
 | `POST /api/billing/systems/holds/:id/write-off` | `note` (1–1000, required); `.strict()` | `200` the hold, `written_off` | 400; 403; 404 `not_found`; 409 `already_resolved` |
 
 Rate limits, per user, per 15 minutes: `SYSTEMS_ADMIN_WRITE` 30 (register,
-acknowledge, release, write-off), `SYSTEMS_ADMIN_READ` 120 (the four reads).
+re-submit, acknowledge, release, write-off), `SYSTEMS_ADMIN_READ` 120 (the four reads).
 
 ## Registering a panel — the rules
 
@@ -125,6 +126,21 @@ outside it is absent from the list and 404 by id.
 
 `usage-holds.spec.ts` pins rules 10–13 and the scope on the three routes.
 
-## Not here yet
-- Re-submitting a panel's login (which clears `connectionTestedAt`, network
-  contract.registration.md rule 4): no route yet.
+## Re-submitting a login — the rules (F-027-au)
+
+14. **Rotated, never read.** The login goes to the same seam as at
+   registration; the vault's `put` is also rotate
+   (`tenant/contract.vault.md` rule 3), and the answer is the same three
+   fields. The vault answers first: one that fails leaves the row as it was.
+15. **Only a `pending` panel is re-tested.** Its `connectionTestedAt`,
+   fault and detail are cleared, conditional on `pending`, so the next tick
+   tests the new login at once (`network/contract.registration.md` rule 4)
+   and a verdict written meanwhile stands. `retest` says whether the clear
+   landed. **Except after `rate_limited`**: that fault keeps its time and the
+   cool-off runs out as it would have — a new login does not lift a rate limit.
+16. **An accepted panel is rotated and nothing else.** Collection reads only
+   an accepted panel (network invariant 44); a password change must not stop
+   it. A **refused** one is 409 `panel_refused` and nothing is written: it
+   was refused on its answers, which a login does not change.
+
+`panel-resubmit.spec.ts` pins rules 14–16, the scope and the schema.

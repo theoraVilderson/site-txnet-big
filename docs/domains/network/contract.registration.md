@@ -53,8 +53,10 @@ The rules:
    retried after 5 minutes. After `blocked` or `rate_limited` it waits
    `panelstate.DefaultCooloff` (15 minutes), the same wait every other loop
    honours, because retrying through a ban is what makes it permanent
-   (`contract.budget.md`). A re-submission clears `connectionTestedAt`, so a
-   corrected credential is tested on the next tick.
+   (`contract.budget.md`). A re-submitted login (billing's `PUT /systems/panels/:id/credentials`,
+   F-027-au) clears `connectionTestedAt` and the fault, so a corrected
+   credential is tested on the next tick — except after `rate_limited`, whose
+   cool-off a new login does not lift.
 5. **A fault lives only on a pending panel.** CHECK
    `panel_connection_fault_is_pending_only`: set only while `pending` and
    always with its time.
