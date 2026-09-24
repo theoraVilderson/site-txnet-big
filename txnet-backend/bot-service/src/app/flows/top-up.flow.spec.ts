@@ -2,6 +2,7 @@ import type { Mocked } from 'vitest';
 import { aBotIntegration } from '@txnet-backend/messenger';
 import { AuthApiClient } from '../auth-api/auth-api.client';
 import { BillingApiClient } from '../billing-api/billing-api.client';
+import { BotKeys } from '../locale/bot-keys';
 import { ChatContext, NavState } from '../conversation/nav.types';
 import { BotSessionStore } from '../session/bot-session.store';
 import { ChatAccess } from '../session/chat-access';
@@ -15,7 +16,7 @@ const GW = 'a1b2c3d4-0000-4000-8000-000000000001';
 const GATEWAYS = [
   { id: GW, source: 'tenant', displayName: 'Zarinpal', providerName: 'zarinpal', category: 'ipg', minAmount: '10.00', maxAmount: null, presets: ['50.00', '100.00'] },
 ];
-const QUOTE = { gatewayId: GW, source: 'tenant', amount: '100.00', discount: '0.00', fee: '2.00', payable: '102.00', credited: '100.00', free: false };
+const QUOTE = { gatewayId: GW, source: 'tenant', amount: '100.00', discount: '0.00', fee: '2.00', tax: '0.00', taxRatePercent: null, payable: '102.00', credited: '100.00', free: false };
 
 function harness(over: { session?: unknown; billing?: Partial<BillingApiClient> } = {}) {
   const auth = {
@@ -89,6 +90,19 @@ describe('TopUpFlow', () => {
     expect(result.view.body).toMatchObject({ values: { payable: '102.00', fee: '2.00', credited: '100.00' } });
     expect(ids(result)).toContain('topup:pay');
     expect(result.nextState).toMatchObject({ step: 'topUp.confirm', data: { amount: '100' } });
+  });
+
+  it('shows the tax line only when the top-up is taxed, so the total adds up on screen (ADR-0076)', async () => {
+    const untaxed = await harness().flow.handle({ ...ctx, text: '100' }, onAmount, null);
+    expect(untaxed.view.body).toMatchObject({ key: BotKeys.topUp.quote });
+
+    const taxedQuote = { ...QUOTE, tax: '9.00', taxRatePercent: '9', payable: '111.00' };
+    const { flow } = harness({ billing: { quote: vi.fn().mockResolvedValue(ok(taxedQuote)) } });
+    const taxed = await flow.handle({ ...ctx, text: '100' }, onAmount, null);
+    expect(taxed.view.body).toEqual({
+      key: BotKeys.topUp.quoteTaxed,
+      values: { amount: '100.00', fee: '2.00', tax: '9.00', taxRatePercent: '9', payable: '111.00', credited: '100.00' },
+    });
   });
 
   it('keeps the user on the amount question when billing refuses it', async () => {

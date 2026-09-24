@@ -32,6 +32,10 @@ export interface DepositQuote {
   amount: string;
   discount: string;
   fee: string;
+  /** Added on top of the fee (ADR-0076); `"0.00"` when the top-up is not taxed. */
+  tax: string;
+  /** The rate `tax` was charged at; `null` = no tax. */
+  taxRatePercent: string | null;
   payable: string;
   credited: string;
   free: boolean;

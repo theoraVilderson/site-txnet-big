@@ -155,6 +155,7 @@
     "none": "No payment gateway is available right now. Please try again a little later.",
     "askAmount": "How much would you like to add? Pick an amount or type one.",
     "quote": "Amount: {{amount}}\nFee: {{fee}}\nYou pay: {{payable}}\nAdded to your wallet: {{credited}}",
+    "quoteTaxed": "Amount: {{amount}}\nFee: {{fee}}\nTax ({{taxRatePercent}}%): {{tax}}\nYou pay: {{payable}}\nAdded to your wallet: {{credited}}",
     "pay": "Your payment is ready. Tap the button below to pay — once it is confirmed, you will get a message here.",
     "credited": "{{credited}} was added to your wallet. Your balance is now {{balance}} ✅",
     "payInChat": "Your invoice is below. Pay it right here in the chat — you will get a message as soon as it is confirmed.",

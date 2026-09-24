@@ -115,10 +115,16 @@ export class TopUpFlow {
     if (!quoted.ok || !quoted.data) return { view: say('topUp.refused', { raw: quoted.msg }), nextState: state };
 
     const q = quoted.data;
+    // A taxed total must add up on screen, so the tax gets its own line; an
+    // untaxed top-up keeps the message it always had (ADR-0076).
+    const taxed = q.taxRatePercent != null && q.tax !== '0.00';
+    const body = taxed
+      ? { key: BotKeys.topUp.quoteTaxed, values: { amount: q.amount, fee: q.fee, tax: q.tax, taxRatePercent: q.taxRatePercent, payable: q.payable, credited: q.credited } }
+      : { key: BotKeys.topUp.quote, values: { amount: q.amount, fee: q.fee, payable: q.payable, credited: q.credited } };
     return {
       view: ask(
         'topUp.confirm',
-        { key: BotKeys.topUp.quote, values: { amount: q.amount, fee: q.fee, payable: q.payable, credited: q.credited } },
+        body,
         [[{ id: ACTIONS.topUpPay, label: { key: BotKeys.action.toPayment } }]],
       ),
       nextState: { flow: 'topUp', step: 'topUp.confirm', data: { ...state.data, amount } },
