@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, Loader2, TriangleAlert } from "lucide-react";
+import { ChevronDown, ChevronUp, KeyRound, Loader2, TriangleAlert } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type CapabilityMatrix, type SystemsPanel } from "@/lib/billing-api";
 import { formatInstant } from "../../_lib/datetime";
@@ -10,8 +10,11 @@ import {
   PANEL_STATE_KEYS,
   REVIEW_KEYS,
   SYSTEMS_KEYS as K,
+  canResubmit,
   capabilityText,
   refusedBecause,
+  resubmitOutcome,
+  validateLogin,
   verdictOf,
 } from "../_lib/systems";
 import { ListState, Section, useSystemsError } from "./parts";
@@ -45,7 +48,7 @@ export function PanelList({
       <ListState isLoading={isLoading} error={error} empty={panels.length === 0 ? K.panels.empty : null} onRetry={() => void onRetry()}>
         <ul className="divide-y divide-card-border">
           {panels.map((p) => (
-            <PanelItem key={p.id} panel={p} />
+            <PanelItem key={p.id} panel={p} onChanged={onRetry} />
           ))}
         </ul>
       </ListState>
@@ -53,9 +56,12 @@ export function PanelList({
   );
 }
 
-function PanelItem({ panel }: { panel: SystemsPanel }) {
+function PanelItem({ panel, onChanged }: { panel: SystemsPanel; onChanged: () => Promise<void> }) {
   const { lang, t } = useLocale();
   const [open, setOpen] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
+  // The sentence for the last answer; the row itself is read again, never patched.
+  const [saved, setSaved] = useState<string | null>(null);
   const verdict = verdictOf(panel);
   const when = (iso: string | null) => formatInstant(iso, lang) ?? t("common", K.never);
 
@@ -83,16 +89,48 @@ function PanelItem({ panel }: { panel: SystemsPanel }) {
             )}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          aria-expanded={open}
-          className="inline-flex items-center gap-1 rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-primary hover:bg-leaf-bg"
-        >
-          {open ? <ChevronUp size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />}
-          {t("common", open ? K.panels.hideMatrix : K.panels.showMatrix)}
-        </button>
+        <div className="flex items-center gap-2">
+          {canResubmit(panel) && !loginOpen && (
+            <button
+              type="button"
+              onClick={() => {
+                setLoginOpen(true);
+                setSaved(null);
+              }}
+              className="inline-flex items-center gap-1 rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-primary hover:bg-leaf-bg"
+            >
+              <KeyRound size={14} aria-hidden />
+              {t("common", K.resubmit.open)}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            className="inline-flex items-center gap-1 rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-primary hover:bg-leaf-bg"
+          >
+            {open ? <ChevronUp size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />}
+            {t("common", open ? K.panels.hideMatrix : K.panels.showMatrix)}
+          </button>
+        </div>
       </div>
+
+      {saved && (
+        <p role="status" className="text-xs font-bold text-primary">
+          {t("common", saved)}
+        </p>
+      )}
+      {loginOpen && canResubmit(panel) && (
+        <LoginForm
+          panelId={panel.id}
+          onDone={async (sentence) => {
+            setLoginOpen(false);
+            setSaved(sentence);
+            await onChanged();
+          }}
+          onCancel={() => setLoginOpen(false)}
+        />
+      )}
 
       <VerdictLine panel={panel} />
 
@@ -127,6 +165,66 @@ function PanelItem({ panel }: { panel: SystemsPanel }) {
 
       {open && <Matrix panelId={panel.id} />}
     </li>
+  );
+}
+
+/**
+ * A new login for this panel (F-027-au). A password input, sent once and
+ * cleared from state with the form; the answer's `retest` decides the sentence.
+ */
+function LoginForm({ panelId, onDone, onCancel }: { panelId: string; onDone: (sentence: string) => Promise<void>; onCancel: () => void }) {
+  const { t } = useLocale();
+  const message = useSystemsError();
+  const [login, setLogin] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const checked = validateLogin(login);
+    if (!checked.ok) {
+      setError(t("common", checked.error));
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const answer = await billingApi.resubmitPanelLogin(panelId, checked.credentials);
+      setLogin("");
+      await onDone(resubmitOutcome(answer));
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3 rounded-2xl border border-card-border bg-bg-inner p-4">
+      <p className="text-sm font-bold text-text-primary">{t("common", K.resubmit.title)}</p>
+      <p className="text-xs leading-5 text-text-secondary">{t("common", K.resubmit.hint)}</p>
+      <label className="flex flex-col gap-1 text-xs text-text-secondary">
+        {t("common", K.register.field.credentials)}
+        <input
+          dir="ltr"
+          type="password"
+          autoComplete="off"
+          value={login}
+          maxLength={4096}
+          onChange={(e) => setLogin(e.target.value)}
+          className="rounded-xl border border-card-border bg-card-bg px-3 py-2 font-mono text-sm text-text-primary"
+        />
+        {error && <span className="text-error">{error}</span>}
+      </label>
+      <div className="flex flex-wrap gap-2">
+        <button type="submit" disabled={busy} className="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-text-on-accent disabled:opacity-50">
+          {t("common", K.resubmit.submit)}
+        </button>
+        <button type="button" onClick={onCancel} className="rounded-xl px-4 py-2 text-xs font-medium text-text-secondary hover:bg-leaf-bg">
+          {t("common", K.resubmit.cancel)}
+        </button>
+      </div>
+    </form>
   );
 }
 

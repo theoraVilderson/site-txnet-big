@@ -50,7 +50,13 @@ every write are [billing/contract.systems.md](../../domains/billing/contract.sys
    it — the row says "queued", never "released". A write-off requires a note
    (1–1000, `validateNote`) and uses error tones. Every action re-reads the
    list; nothing is patched in from an answer.
-8. **One sentence per value the backend can write.** Review state, panel
+8. **A new login, on every panel but a refused one** (F-027-av → billing
+   F-027-au). `canResubmit` hides it on a refused panel (billing answers 409
+   `panel_refused`); `validateLogin` mirrors the schema (1–4096, untrimmed),
+   in a password input cleared on success. `resubmitOutcome` says what the
+   answer means — re-tested on the next pass, cooling off after
+   `rate_limited`, or rotated under a live panel — and the list is re-read.
+9. **One sentence per value the backend can write.** Review state, panel
    state, connection-test fault, hold reason and state, drift event type and
    refusal are each a `Record` over the union. Theme tokens only, never gold.
 
@@ -58,6 +64,7 @@ every write are [billing/contract.systems.md](../../domains/billing/contract.sys
 
 `systems/systems.test.ts` — every set above against its declared home
 (`network.prisma` enums, `contracts/network/capabilities.json` in order,
-billing's `SystemsRejection` / `PanelScopeRejection`), `validateRegister`'s
-limits, `verdictOf` with and without a fault, `refusedBecause`, the hold and
-drift predicates, `validateNote`, the menu entry, every key in `en` and `fa`.
+billing's `SystemsRejection` / `PanelScopeRejection` / `ResubmitRejection`),
+`validateRegister`'s limits, `verdictOf` with and without a fault,
+`refusedBecause`, `canResubmit`, `validateLogin`, `resubmitOutcome`, the hold
+and drift predicates, `validateNote`, the menu entry, every key in `en` and `fa`.

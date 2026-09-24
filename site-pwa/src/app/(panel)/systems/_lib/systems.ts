@@ -6,6 +6,7 @@ import type {
   PanelReviewState,
   PanelState,
   RegisterPanelBody,
+  ResubmittedLogin,
   SystemsDriftEvent,
   SystemsHold,
   SystemsPanel,
@@ -122,14 +123,21 @@ export function capabilityText(key: string): { question: string; unmet: string }
   return key in CAPABILITY_KEYS ? CAPABILITY_KEYS[key as keyof typeof CAPABILITY_KEYS] : null;
 }
 
-/** The refusals billing's systems routes name (`SystemsRejection`, `PanelScopeRejection`, the vault's 502). */
-export type SystemsRefusal = "not_found" | "already_acknowledged" | "already_resolved" | "not_platform_owner" | "credentials_unavailable";
+/** The refusals billing's systems routes name (`SystemsRejection`, `PanelScopeRejection`, `ResubmitRejection`, the vault's 502). */
+export type SystemsRefusal =
+  | "not_found"
+  | "already_acknowledged"
+  | "already_resolved"
+  | "not_platform_owner"
+  | "panel_refused"
+  | "credentials_unavailable";
 
 export const REFUSAL_KEYS: Record<SystemsRefusal, string> = {
   not_found: K.refusals.not_found,
   already_acknowledged: K.refusals.already_acknowledged,
   already_resolved: K.refusals.already_resolved,
   not_platform_owner: K.refusals.not_platform_owner,
+  panel_refused: K.refusals.panel_refused,
   credentials_unavailable: K.refusals.credentials_unavailable,
 };
 
@@ -256,6 +264,31 @@ export function verdictOf(panel: SystemsPanel): { state: PanelReviewState; fault
 export function refusedBecause(rows: readonly CapabilityRow[]): { refused: string[]; noMeteredSale: string[] } {
   const unmet = (severity: string) => rows.filter((r) => r.severity === severity && r.state === "unsupported").map((r) => r.key);
   return { refused: unmet("required"), noMeteredSale: unmet("metered") };
+}
+
+// ── A new login (F-027-au) ────────────────────────────────────────────────────
+
+/** Every panel but a refused one: it was refused on its answers, and billing answers 409 `panel_refused`. */
+export function canResubmit(panel: SystemsPanel): boolean {
+  return panel.review.reviewState !== "refused";
+}
+
+/** The login alone, as at registration: 1–4096 and not trimmed. */
+export function validateLogin(input: string): { ok: true; credentials: string } | { ok: false; error: string } {
+  return input.length >= 1 && input.length <= 4096
+    ? { ok: true, credentials: input }
+    : { ok: false, error: K.register.invalid.credentials };
+}
+
+/**
+ * What the answer means, in one sentence: a `pending` panel is re-tested on
+ * the next tick, or — no `retest` — is cooling off after `rate_limited` (or
+ * got its verdict meanwhile, which the list then shows); an accepted one keeps
+ * collecting and uses the new login from its next pass.
+ */
+export function resubmitOutcome(answer: ResubmittedLogin): string {
+  if (answer.reviewState !== "pending") return K.resubmit.outcome.rotated;
+  return answer.retest ? K.resubmit.outcome.retest : K.resubmit.outcome.coolingOff;
 }
 
 // ── Drift and holds ───────────────────────────────────────────────────────────

@@ -2159,7 +2159,20 @@
       "already_acknowledged": "Someone already acknowledged this event.",
       "already_resolved": "Someone already decided this hold.",
       "not_platform_owner": "Only the platform owner manages the platform's panels.",
-      "credentials_unavailable": "The vault could not be reached, so the panel was not registered. Try again."
+      "credentials_unavailable": "The vault could not be reached, so the panel was not registered. Try again.",
+      "panel_refused": "A refused panel keeps its refusal: it was refused on its answers, and a new login does not change them. Register it again instead."
+    },
+    "resubmit": {
+      "open": "New login",
+      "title": "Re-submit this panel's login",
+      "hint": "The new login replaces the stored one in the vault; the old one is not shown or kept here. A panel still waiting for its test is tested again on the next pass.",
+      "submit": "Save the new login",
+      "cancel": "Cancel",
+      "outcome": {
+        "retest": "Saved. The panel is tested again on the next pass.",
+        "coolingOff": "Saved. The panel was rate-limiting us, so its next test waits out the cool-off.",
+        "rotated": "Saved. Collection uses the new login from its next pass."
+      }
     }
   }
 }

@@ -20,11 +20,14 @@ import {
   REVIEW_KEYS,
   SYSTEMS_KEYS,
   canAcknowledge,
+  canResubmit,
   canResolveHold,
   emptyRegisterForm,
   haltsCollection,
   refusedBecause,
+  resubmitOutcome,
   validateNote,
+  validateLogin,
   validateRegister,
   verdictOf,
 } from "./_lib/systems";
@@ -88,6 +91,7 @@ describe("every value the backend can write has a sentence here", () => {
     const billing = [
       ...union("systems-read.ts", "SystemsRejection"),
       ...union("panel-scope.ts", "PanelScopeRejection"),
+      ...union("panel-registration.ts", "ResubmitRejection"),
       "credentials_unavailable",
     ];
     expect(Object.keys(REFUSAL_KEYS).sort()).toEqual(billing.sort());
@@ -193,6 +197,34 @@ describe("refusedBecause — the rows that refused a panel at registration", () 
       row("client_lifecycle", "required", "unanswered"),
     ]);
     expect(out).toEqual({ refused: ["per_client_usage"], noMeteredSale: ["per_client_data_limit"] });
+  });
+});
+
+// F-027-av: a new login for a registered panel (billing F-027-au).
+describe("re-submitting a panel's login", () => {
+  it("is offered on every panel but a refused one", () => {
+    expect(canResubmit(panel({}))).toBe(true);
+    expect(canResubmit(panel({ reviewState: "accepted" }))).toBe(true);
+    expect(canResubmit(panel({ reviewState: "refused" }))).toBe(false);
+  });
+
+  it("sends the login as typed, within 1–4096", () => {
+    expect(validateLogin(" pw ")).toEqual({ ok: true, credentials: " pw " });
+    expect(validateLogin("")).toEqual({ ok: false, error: SYSTEMS_KEYS.register.invalid.credentials });
+    expect(validateLogin("x".repeat(4097))).toEqual({ ok: false, error: SYSTEMS_KEYS.register.invalid.credentials });
+  });
+
+  it("says what the answer means: re-tested, cooling off, or rotated under a live panel", () => {
+    const answer = (reviewState: SystemsPanel["review"]["reviewState"], retest: boolean) => ({
+      id: "p",
+      reviewState,
+      retest,
+      credentials: { configured: true, version: 2, rotatedAt: null },
+    });
+    expect(resubmitOutcome(answer("pending", true))).toBe(SYSTEMS_KEYS.resubmit.outcome.retest);
+    expect(resubmitOutcome(answer("pending", false))).toBe(SYSTEMS_KEYS.resubmit.outcome.coolingOff);
+    expect(resubmitOutcome(answer("accepted", false))).toBe(SYSTEMS_KEYS.resubmit.outcome.rotated);
+    expect(resubmitOutcome(answer("accepted_low_trust", false))).toBe(SYSTEMS_KEYS.resubmit.outcome.rotated);
   });
 });
 

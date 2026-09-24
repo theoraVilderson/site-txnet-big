@@ -748,6 +748,18 @@ export const billingApi = {
     return call<RegisteredPanel>("/systems/panels", { method: "POST", body: JSON.stringify(body) });
   },
 
+  /**
+   * A new login for a registered panel (F-027-au): rotated in the vault; a
+   * `pending` panel is re-tested on the next tick unless it is cooling off
+   * after `rate_limited`. A refused panel is 409 `panel_refused`.
+   */
+  async resubmitPanelLogin(id: string, credentials: string): Promise<ResubmittedLogin> {
+    return call<ResubmittedLogin>(`/systems/panels/${encodeURIComponent(id)}/credentials`, {
+      method: "PUT",
+      body: JSON.stringify({ credentials }),
+    });
+  },
+
   async systemsPanels(): Promise<SystemsPanel[]> {
     return call<SystemsPanel[]>("/systems/panels", { method: "GET" });
   },
@@ -1223,6 +1235,14 @@ export interface SystemsHold {
   resolvedAt: string | null;
   resolvedByAdminId: string | null;
   resolutionNote: string | null;
+}
+
+/** What re-submitting a login answers (F-027-au). `retest`: the next tick tests the panel again. */
+export interface ResubmittedLogin {
+  id: string;
+  reviewState: PanelReviewState;
+  retest: boolean;
+  credentials: RegisteredPanel["credentials"];
 }
 
 /** What a release answers: queued for the meter, the hold still `pending` (rule 10). */
