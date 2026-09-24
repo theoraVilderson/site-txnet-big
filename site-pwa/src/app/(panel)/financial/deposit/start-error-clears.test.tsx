@@ -78,6 +78,8 @@ const BASE: DepositQuote = {
   discount: "0.00",
   gap: "0.00",
   fee: "0.00",
+  tax: "0.00",
+  taxRatePercent: null,
   payable: "10.00",
   credited: "10.00",
   free: false,

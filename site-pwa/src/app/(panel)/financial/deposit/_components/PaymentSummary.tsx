@@ -32,9 +32,9 @@ interface PaymentSummaryProps {
  * (F-0612, `billing/contract.deposit.md`). Legacy's version took an amount, a
  * tax rate, a fee and a coupon array and did the arithmetic in the render, and
  * that render was the second implementation of a calculation the server also
- * had. There is no tax row here for the same reason there is no tax field:
- * tax is inside the figures `priceAtGateway` answers, and a row this app
- * computed would be one more number nothing vouches for.
+ * had. The tax row (F-104-ah, ADR-0076) is billing's `tax`, labelled with
+ * billing's `taxRatePercent` — `payable` already includes it, and without the
+ * row the bill's lines would not add up to its total.
  *
  * The mobile footer and the desktop card are one component so the two cannot
  * come to show different figures — which they did in legacy, where the footer
@@ -91,6 +91,10 @@ export function PaymentSummary({
         value={quote.fee === "0.00" ? t("common", D.free) : money(quote.fee)}
         tone={quote.fee === "0.00" ? "primary" : undefined}
       />
+
+      {quote.tax !== "0.00" && quote.taxRatePercent !== null && (
+        <Row label={t("common", D.tax, { rate: quote.taxRatePercent })} value={money(quote.tax)} />
+      )}
 
       <Row label={t("common", D.credited)} value={money(quote.credited)} />
     </div>

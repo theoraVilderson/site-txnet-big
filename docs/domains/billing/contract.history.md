@@ -23,7 +23,7 @@ query, so neither route has an id to authorise.
 | Route | Query | Answers `data` |
 |---|---|---|
 | `GET /api/billing/wallet/history` | `page`, `pageSize` (≤ 100), `types[]`, `direction`, `from`, `to`, `search` | `{balance, total, page, pageSize, rows[{id, amount, direction, reasonType, referenceId, balanceAfter, createdAt}]}` |
-| `GET /api/billing/wallet/payments` | `page`, `pageSize` (≤ 100), `statuses[]`, `from`, `to` | `{total, page, pageSize, rows[{id, status, amountRequested, fee, discount, amountCredited, charge{amountMinor, rate}, trackingCode, referenceId, cardPanMasked, failureCode, gateway{source, id, displayName}, createdAt, expiresAt}]}` |
+| `GET /api/billing/wallet/payments` | `page`, `pageSize` (≤ 100), `statuses[]`, `from`, `to` | `{total, page, pageSize, rows[{id, status, amountRequested, fee, tax, taxRatePercent, discount, amountCredited, charge{amountMinor, rate}, trackingCode, referenceId, cardPanMasked, failureCode, gateway{source, id, displayName}, createdAt, expiresAt}]}` |
 
 ## Rules
 
@@ -41,6 +41,7 @@ query, so neither route has an id to authorise.
 | Rows are ordered `createdAt` desc, then `id` desc | two rows of one transaction share a timestamp, and an unstable order repeats or skips one across pages |
 | Both lists read in a `tenantTransaction`. `paymentTransaction` joins `TENANT_SCOPED_MODELS` here — the first row to query it (`tenant-context/contract.md` rule 2) — so the tenant is a filter and not only a header. `wallet` carries no `tenantId` and is reached through `ownerUserId` | the list filters on a user id that arrives in a header; without the scope a page is one mis-set header away from another tenant's payments |
 | A payment's columns are selected explicitly, and it names its gateway as `{source, id, displayName}` — exactly one of the two gateway columns is set (ADR-0006, F-092-d). No `merchantId`, no `*Encrypted` column, ever | invariant 8, and the same explicit list the deposit routes use |
+| A payment's `tax` is `taxApplied` and `taxRatePercent` the rate frozen on it at intent (F-104-ah, ADR-0076) — `0.00` and `null` when untaxed, and for every payment before F-104-ae. Never re-read from today's gateway or default | a rate changed later must not re-explain a receipt |
 | Neither route raises a domain error: a filter matching nothing is an empty page. The only failures are a malformed query (**400**) and the limiter (**429**) | so this controller maps no i18n key of its own, unlike the deposit routes |
 | Per user, per 900s: `WALLET_HISTORY_RATE_LIMIT` (default 180), `WALLET_PAYMENTS_RATE_LIMIT` (default 120) | the page refetches on every filter change, so the budget is the user's typing speed, not a bank's limit (F-092-r) |
 

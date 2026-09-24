@@ -80,6 +80,9 @@ export interface WalletPaymentRow {
   status: "pending" | "success" | "failed" | "expired";
   amountRequested: string;
   fee: string;
+  /** The tax on top, and the rate it was charged at — frozen at intent (ADR-0076). `0.00` and `null` when untaxed. */
+  tax: string;
+  taxRatePercent: string | null;
   discount: string;
   amountCredited: string;
   /** What the gateway was asked for, and the rate that produced it — frozen at intent (ADR-0019). */
@@ -326,6 +329,13 @@ export interface DepositQuote {
    */
   gap: string;
   fee: string;
+  /**
+   * Tax on top of the basis (ADR-0076), already inside `payable`. `0.00` when
+   * untaxed; `taxRatePercent` is the rate billing applied — the gateway's, else
+   * the tenant default — or `null` for none.
+   */
+  tax: string;
+  taxRatePercent: string | null;
   /** What the card is charged, in base currency. `0.00` on the free path. */
   payable: string;
   /** What lands in the wallet — the amount plus the adjustment gap. */
@@ -367,6 +377,8 @@ export interface DepositStarted {
   amount: string;
   discount: string;
   fee: string;
+  tax: string;
+  taxRatePercent: string | null;
   payable: string;
   credited: string;
   /** The wallet balance after a free top-up credited it; `null` when nothing was credited. */

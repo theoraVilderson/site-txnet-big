@@ -62,6 +62,8 @@ function paymentRow(overrides: Record<string, unknown> = {}) {
     status: 'failed',
     amountRequested: d('10.00'),
     feeApplied: d('0.10'),
+    taxApplied: d('0'),
+    taxRatePercent: null,
     discountApplied: d('0'),
     amountCredited: d('10.00'),
     chargedAmountMinor: BigInt(1000000),
@@ -311,6 +313,16 @@ describe('WalletHistoryService.payments', () => {
     });
     // A failed attempt has no balance of its own: it never reached the ledger.
     expect(result.rows[0]).not.toHaveProperty('balanceAfter');
+  });
+
+  it('answers the tax a payment was charged and the rate frozen on it, and none when untaxed (F-104-ah)', async () => {
+    const { service } = build({
+      payments: [paymentRow({ taxApplied: d('9'), taxRatePercent: d('9.5000') }), paymentRow()],
+    });
+    const result = await runWithTenant({ id: TENANT }, () => service.payments({ userId: USER, ...page }));
+
+    expect(result.rows[0]).toMatchObject({ tax: '9.00', taxRatePercent: '9.5' });
+    expect(result.rows[1]).toMatchObject({ tax: '0.00', taxRatePercent: null });
   });
 
   it("names the reseller's own gateway as its own source", async () => {

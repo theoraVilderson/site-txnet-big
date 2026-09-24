@@ -24,7 +24,7 @@ import { ExpandableRow } from "./ExpandableRow";
 
 const F = FrontendI18nKeys.common.financial;
 
-/** A decimal string that is not zero — a fee or a discount worth a line of its own. */
+/** A decimal string that is not zero — a fee, a tax or a discount worth a line of its own. */
 const isSet = (amount: string) => Number(amount) !== 0;
 
 /**
@@ -67,6 +67,13 @@ export function PaymentRow({ row }: { row: WalletPaymentRow }) {
           />
           {isSet(row.fee) && (
             <DetailItem icon={CreditCard} label={t("common", F.detail.fee)} value={money(row.fee)} />
+          )}
+          {isSet(row.tax) && row.taxRatePercent !== null && (
+            <DetailItem
+              icon={Landmark}
+              label={t("common", F.detail.tax, { rate: row.taxRatePercent })}
+              value={money(row.tax)}
+            />
           )}
           {isSet(row.discount) && (
             <DetailItem

@@ -128,6 +128,9 @@ export type PaymentRow = {
   status: PaymentStatus;
   amountRequested: string;
   fee: string;
+  /** The tax on top, and the rate it was charged at — frozen at intent (ADR-0076). `0.00` and `null` when untaxed. */
+  tax: string;
+  taxRatePercent: string | null;
   discount: string;
   amountCredited: string;
   /** What the gateway was asked for, and the rate that produced it — frozen at intent (ADR-0019). */
@@ -174,6 +177,8 @@ const PAYMENT_COLUMNS = {
   status: true,
   amountRequested: true,
   feeApplied: true,
+  taxApplied: true,
+  taxRatePercent: true,
   discountApplied: true,
   amountCredited: true,
   chargedAmountMinor: true,
@@ -212,6 +217,8 @@ function paymentRowOf(r: PaymentColumns): PaymentRow {
     status: r.status,
     amountRequested: money(r.amountRequested),
     fee: money(r.feeApplied),
+    tax: money(r.taxApplied),
+    taxRatePercent: r.taxRatePercent?.toFixed() ?? null,
     discount: money(r.discountApplied),
     amountCredited: money(r.amountCredited),
     charge: {

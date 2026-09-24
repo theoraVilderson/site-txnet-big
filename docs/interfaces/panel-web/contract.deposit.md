@@ -151,10 +151,17 @@ route returns the whole breakdown instead of the pieces of one.
     while the inputs it belongs to are unchanged. Proof:
     `deposit/start-error-clears.test.tsx`.
 
+17. **A taxed bill shows its tax as its own line (F-104-ah, ADR-0076).** Since
+    F-104-af `payable` is `basis + fee + tax`, so a bill without the line shows
+    a total its own lines do not reach. The row is the quote's `tax`, labelled
+    with its `taxRatePercent` ("Tax (9%)") — both billing's; this page neither
+    adds it nor knows which level the rate came from. `tax` `0.00` or a `null`
+    rate shows no row, so an untaxed bill is exactly as before. Proof:
+    `deposit/tax-line.test.tsx`.
+
 ## What this page does not do
 
-No tax row: tax is already inside the figures `priceAtGateway` answers, and a
-row this app computed would be one more number nothing vouches for. No display
+No display
 currency: amounts are base currency until F-025, and `charge` is shown as the
 gateway's own figure beside the payable rather than converted here. No live
 staleness on the rate — that ladder is F-0607-a's.
@@ -178,3 +185,6 @@ changed input drops the old bill at once, one call per burst, a slow answer to
 abandoned inputs never lands, a rejected code is not a failure) and the amount
 helpers (cents in and out, minor units split on the digits, presets from the
 gateway's range).
+
+`financial/deposit/tax-line.test.tsx` — a taxed quote shows `tax` under its
+rate, an untaxed one shows no row; the same for a payment row in history.

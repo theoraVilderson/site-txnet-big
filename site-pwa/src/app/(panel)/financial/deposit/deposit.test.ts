@@ -54,6 +54,8 @@ function quoteFor(amount: string): DepositQuote {
     discount: "0.00",
     gap: "0.00",
     fee: "0.07",
+    tax: "0.00",
+    taxRatePercent: null,
     payable: "0.42",
     credited: "0.99",
     free: false,

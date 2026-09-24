@@ -34,7 +34,7 @@ balance column of every row above it — permanently, and invisibly.
 | | ledger tab | payments tab |
 |---|---|---|
 | route | `GET /wallet/history` | `GET /wallet/payments` |
-| a row is | a movement: `direction`, `reasonType`, `amount`, `balanceAfter` | an attempt: `status`, requested / fee / discount / credited, a gateway |
+| a row is | a movement: `direction`, `reasonType`, `amount`, `balanceAfter` | an attempt: `status`, requested / fee / tax / discount / credited, a gateway — tax only when taxed, labelled with the rate frozen on the payment (F-104-ah) |
 | has a status | no — it exists because money moved | yes, and `pending` / `failed` / `expired` moved nothing |
 | has a balance | yes, as the ledger wrote it | no |
 | its own filters | reason type, direction, search | status |

@@ -23,6 +23,8 @@ const row = (overrides: Partial<WalletPaymentRow> = {}): WalletPaymentRow => ({
   status: "pending",
   amountRequested: "10.00",
   fee: "0.00",
+  tax: "0.00",
+  taxRatePercent: null,
   discount: "0.00",
   amountCredited: "10.00",
   charge: { amountMinor: "1000000", rate: null },
