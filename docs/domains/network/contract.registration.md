@@ -79,11 +79,25 @@ panel provisioned, which is exactly what refusing it was for (invariant 44).
 ## Not here yet
 
 The Postgres-backed `register.Store` lands with the panel source, beside
-`collect.MemoryCursors`. The `Opener` that builds a real driver from
-`driverType`, `apiBaseUrl` and the vault's credentials is F-027-aw: the first
-family (Marzban, F-027-ae, `contract.drivers.md`) exists, and nothing opens it
-from a row yet. The vault is Node, with a data key per tenant, so Go reads the
-login through a service-only route in `tenant-service`, never by holding the
-KEK itself (user, 2026-09-24): one crypto implementation, and every `use`
-audited where the others are. Until both land, `cmd/server` does not start the
-pass — the staging every other loop in this service is in.
+`collect.MemoryCursors` (F-027-ax); until it does, `cmd/server` does not start
+the pass — the staging every other loop in this service is in.
+
+## The Opener (F-027-aw)
+
+`internal/opener` builds a driver from a pending panel. The vault is Node,
+with a data key per tenant, and this service never holds the KEK (user,
+2026-09-24): the login is read through `tenant-service`'s service-only
+`POST /api/internal/vault/panel-credential/use` (`tenant/contract.vault.md`),
+which re-derives the owner's vault from the row and logs the read. One crypto
+implementation, every `use` audited where the others are.
+
+1. **The family is checked before the login is read.** A family with no
+   driver yet (`ErrNoDriver`) is `unopenable` and costs no vault read; it is
+   ours to ship, so it is never `refused`.
+2. **A login is typed `username:password`**, split at the first colon. A
+   login not in that form is `unopenable`, and no error quotes it — the
+   error is what `connectionTestDetail` stores.
+3. **A vault refusal names its reason** (`not_owner`,
+   `credential_unavailable`, …) and never a value; the panel stays `pending`.
+4. The Opener paces nothing: a connection test is one call. Pacing a
+   collected panel by its `maxRequestsPerMinute` is the panel source's.

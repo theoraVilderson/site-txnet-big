@@ -28,8 +28,8 @@ A family that reports one byte total, not an up/down split, puts it in
 end's figure (`readsAs`); it accepts no third one.
 
 Building a driver from a `panel` row — `driverType`, `apiBaseUrl` and the login
-in the owner's vault — is not a family's job. That is the `Opener`, F-027-aw
-(`contract.registration.md` "Not here yet").
+in the owner's vault — is not a family's job. That is `internal/opener`
+(`contract.registration.md` "The Opener"); a new family adds one `case` there.
 
 ## Marzban (F-027-ae)
 
