@@ -204,6 +204,17 @@ export class ConfigActionsService {
     await this.allocator.rebalance(tx, { grantId: config.grantId });
   }
 
+  /**
+   * A drain's retire (network `contract.groups.md` rules 14, 9): a retire
+   * marked `drainedAt`, so the row does not hold its panel if the member is
+   * re-added to the group. Only the drain sweep calls it.
+   */
+  async drain(tx: Prisma.TransactionClient, input: { configId: string; actor: ConfigActor }): Promise<void> {
+    const config = await this.live(tx, input.configId, input.actor);
+    await this.retireRow(tx, config, input.actor, 'drain', { drainedAt: new Date() });
+    await this.allocator.rebalance(tx, { grantId: config.grantId });
+  }
+
   async move(
     tx: Prisma.TransactionClient,
     input: { configId: string; toPanelId: string; actor: ConfigActor },
@@ -224,8 +235,9 @@ export class ConfigActionsService {
     return { ...made, retiredConfigId: config.id };
   }
 
-  private async retireRow(tx: Prisma.TransactionClient, config: ConfigRow, actor: ConfigActor, action: string) {
+  private async retireRow(tx: Prisma.TransactionClient, config: ConfigRow, actor: ConfigActor, action: string, extra: Prisma.ConfigUpdateManyMutationInput = {}) {
     await this.write(tx, config, {
+      ...extra,
       status: ConfigStatus.retired,
       desiredRemote: DesiredRemote.absent,
       desiredEnabled: false,

@@ -121,6 +121,18 @@ describe('GroupFulfilmentService.fulfil (mirror)', () => {
     expect(configs).toHaveLength(1);
   });
 
+  it('places again on a panel re-added after a drain: the drain\'s retire is not the user\'s decision (F-027-bp)', async () => {
+    const { service, tx, configs } = build({ members: [member(A), member(B)] });
+    await service.fulfil(tx, GRANT);
+    // A was drained and removed; the member is back, as primary.
+    Object.assign(configs[0], { status: ConfigStatus.retired, desiredRemote: DesiredRemote.absent, drainedAt: new Date() });
+
+    expect((await service.fulfil(tx, GRANT)).placed).toBe(1);
+    expect(configs.map((c) => [c.panelId, c.status])).toEqual([[A, ConfigStatus.retired], [B, ConfigStatus.active], [A, ConfigStatus.active]]);
+    expect(configs[2].credentialGroupId).toBe(configs[1].credentialGroupId);
+    expect((await service.fulfil(tx, GRANT)).placed).toBe(0);
+  });
+
   it('activates a pending Grant only at minHealthyPanels complete configs on serving panels', async () => {
     const { service, tx, grant, group, configs } = build({ minHealthyPanels: 2, members: [member(A), member(B), member(C)] });
     await service.fulfil(tx, GRANT);
@@ -157,7 +169,7 @@ describe('GroupFulfilmentService.fulfil (mirror)', () => {
     const facts = {
       grantStatus: GrantStatus.pending,
       group: { strategy: PanelGroupStrategy.mirror, minHealthyPanels: 1, members: [member(B), member(A, PanelState.maintenance)] },
-      configs: [{ panelId: B, status: ConfigStatus.active, desiredRemote: DesiredRemote.present, enforcementState: EnforcementState.pending, credentialGroupId: 'g' }],
+      configs: [{ panelId: B, status: ConfigStatus.active, desiredRemote: DesiredRemote.present, enforcementState: EnforcementState.pending, credentialGroupId: 'g', drainedAt: null }],
     };
     expect(planFulfilment(facts)).toEqual({ place: [], waiting: [A], activate: false, credentialGroupId: 'g' });
     expect(planFulfilment({ ...facts, group: { ...facts.group, members: [...facts.group.members].reverse() } })).toEqual(planFulfilment(facts));

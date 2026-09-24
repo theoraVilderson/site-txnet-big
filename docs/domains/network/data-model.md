@@ -77,7 +77,7 @@ as `in queue`. Collapsed into one, the system believes a ceiling it never
 wrote, which is free traffic at the far end of it and nothing red anywhere.
 `observedRateBps` sizes the horizon (F-027-u); `driftState`/`driftRepairCount`/
 `driftRepairedAt` are the verdict and 24 h stop (F-027-ab); `credentialGroupId`
-is one group placement, one row per panel (`config_group_panel_once`, F-027-bl); `walletBackedCeilingBytes` ≥ allocation is a shutdown's
+is one group placement, one row per panel (`config_group_panel_once`, F-027-bl) but a drained (`drainedAt`) one, F-027-bp; `walletBackedCeilingBytes` ≥ allocation is a shutdown's
 ceiling (ADR-0078); `linkLines` is what `/sub` serves (contract.links.md).
 
 Five CHECK constraints, for the same reason the Panel has its five:

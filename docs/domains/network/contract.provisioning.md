@@ -37,6 +37,7 @@ split, and a new one has its share before the pass creates its client.
 | `disable(tx, {configId, reason, actor})` | `disabled_by_admin` (or `_by_system`), `desiredEnabled = false`, `disabledReason` | `actor_not_allowed` for a user |
 | `enable(tx, {configId, actor})` | `active`; `desiredEnabled` = the Grant is `active` | `actor_not_allowed` for a user |
 | `retire(tx, {configId, actor})` | `retired`, `absent`, `desiredEnabled = false`, `pending` | — |
+| `drain(tx, {configId, actor})` | as `retire`, plus `drainedAt`: the panel is not held for the Grant (drain sweep only, `contract.groups.md` rules 9, 14) | — |
 | `move(tx, {configId, toPanelId, actor})` | the old row retired (`move_out`), then `provision` on the target | `same_panel`, `panel_not_found` |
 
 Every action on an existing row refuses `config_not_found` (unknown, or another

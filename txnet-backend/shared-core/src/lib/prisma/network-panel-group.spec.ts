@@ -129,6 +129,14 @@ describe('network.PanelGroup: where a variant is provisioned', () => {
     expect(sql).toMatch(/CREATE UNIQUE INDEX "config_group_panel_once" ON "network"."config"\("grantId", "panelId"\) WHERE "credentialGroupId" IS NOT NULL/);
   });
 
+  it("lets a drained config stand beside the one placed when its panel is re-added (F-027-bp)", () => {
+    // Last definition wins: the index excludes the drain's retired rows, and
+    // only those — a user's delete or move still holds the panel.
+    const defs = sql.match(/CREATE UNIQUE INDEX "config_group_panel_once"[^;]*/g) ?? [];
+    expect(defs.at(-1)).toMatch(/WHERE "credentialGroupId" IS NOT NULL AND "drainedAt" IS NULL/);
+    expect(sql).toMatch(/"config_drained_is_retired" CHECK \("drainedAt" IS NULL OR "status" = 'retired'\)/);
+  });
+
   it('is policied like the panels it groups', () => {
     for (const table of ['network.panel_group', 'network.panel_group_member']) {
       expect(sql).toContain(`'${table}'`);

@@ -95,8 +95,10 @@ describe('GroupDrainService.drainDue', () => {
       $executeRaw: async () => 1,
       config: {
         findUnique: async ({ where }: { where: { id: string } }) => rows.get(where.id) ?? null,
-        updateMany: async ({ where }: { where: { id: string } }) => {
+        updateMany: async ({ where, data }: { where: { id: string }; data: { status?: ConfigStatus; drainedAt?: Date } }) => {
           if (where.id === opts.failRetire) return { count: 0 };
+          // Marked as the drain's, so a re-added member is placed again (F-027-bp).
+          if (data.status !== ConfigStatus.retired || !(data.drainedAt instanceof Date)) throw new Error(`not a drain retire: ${JSON.stringify(data)}`);
           retired.push(where.id);
           return { count: 1 };
         },

@@ -424,6 +424,9 @@ model Config {
   linksRemoteId            String?
   linksUuid                String?
   linksCapturedAt          DateTime?
+  /// Set by a drain's retire only (F-027-bm/bp): such a row no longer covers
+  /// its panel, so a member re-added to the group is placed again.
+  drainedAt                DateTime?
 
   panel Panel @relation(fields: [panelId], references: [id])
   grant Grant @relation(fields: [grantId], references: [id])

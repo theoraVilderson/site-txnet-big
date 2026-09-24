@@ -55,7 +55,14 @@ export class GroupFulfilmentRefused extends Error {
 }
 
 type MemberFacts = { panelId: string; role: PanelGroupMemberRole; panel: { reviewState: PanelReviewState; panelState: PanelState } };
-type ConfigFacts = { panelId: string; status: ConfigStatus; desiredRemote: DesiredRemote; enforcementState: EnforcementState; credentialGroupId: string | null };
+type ConfigFacts = {
+  panelId: string;
+  status: ConfigStatus;
+  desiredRemote: DesiredRemote;
+  enforcementState: EnforcementState;
+  credentialGroupId: string | null;
+  drainedAt: Date | null;
+};
 
 export type FulfilmentFacts = {
   grantStatus: GrantStatus;
@@ -84,9 +91,11 @@ export type FulfilmentPlan = {
  * delete, or a move away) that a refill would undo. That is what keeps it to
  * one config per panel, and the partial unique index
  * `config_group_panel_once` holds the same line against two concurrent runs.
+ * **Except a drained one** (`drainedAt`, F-027-bp): the platform emptied the
+ * panel, the user decided nothing, so a member re-added is placed again.
  */
 export function planFulfilment(facts: FulfilmentFacts): FulfilmentPlan {
-  const covered = new Set(facts.configs.map((c) => c.panelId));
+  const covered = new Set(facts.configs.filter((c) => !c.drainedAt).map((c) => c.panelId));
   const members = [...facts.group.members].sort((a, b) => a.panelId.localeCompare(b.panelId));
   const open = members.filter((m) => m.role !== PanelGroupMemberRole.drain && !covered.has(m.panelId));
   const placeable = (m: MemberFacts) => PLACEABLE_REVIEW_STATES.includes(m.panel.reviewState) && PLACEABLE_PANEL_STATES.includes(m.panel.panelState);
@@ -168,7 +177,7 @@ export class GroupFulfilmentService {
 
     const configs = await tx.config.findMany({
       where: { grantId },
-      select: { panelId: true, status: true, desiredRemote: true, enforcementState: true, credentialGroupId: true },
+      select: { panelId: true, status: true, desiredRemote: true, enforcementState: true, credentialGroupId: true, drainedAt: true },
     });
     const plan = planFulfilment({ grantStatus: grant.status, group, configs });
 
@@ -212,7 +221,8 @@ export class GroupFulfilmentService {
                     AND m."role" <> 'drain'
                     AND p."reviewState" IN ('accepted', 'accepted_low_trust')
                     AND p."panelState" = 'healthy'
-                    AND NOT EXISTS (SELECT 1 FROM "network"."config" c WHERE c."grantId" = g."id" AND c."panelId" = m."panelId"))
+                    AND NOT EXISTS (SELECT 1 FROM "network"."config" c
+                                    WHERE c."grantId" = g."id" AND c."panelId" = m."panelId" AND c."drainedAt" IS NULL))
             OR (g."status" = 'pending' AND pg."minHealthyPanels" <= (
                  SELECT count(*) FROM "network"."config" c
                    JOIN "network"."panel" p ON p."id" = c."panelId"

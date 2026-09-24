@@ -70,9 +70,12 @@ rows are written through `ConfigActionsService.provisionForGroup`
 9. **A panel with any config of the Grant is covered**, whatever its status. A
    row still `pending` on a panel that died mid-provisioning is the pass's to
    finish when it returns; a `retired` one was a delete or a move, and a refill
-   would undo it. The planner's read is not enough under an at-least-once job:
-   partial unique `config_group_panel_once` `(grantId, panelId) WHERE
-   credentialGroupId IS NOT NULL` refuses the second of two concurrent runs,
+   would undo it. **Except a drained one** (`drainedAt`, F-027-bp): the
+   platform emptied the panel and the user decided nothing, so a member
+   re-added to the group is placed again, beside the old retired row. The
+   planner's read is not enough under an at-least-once job: partial unique
+   `config_group_panel_once` `(grantId, panelId) WHERE credentialGroupId IS
+   NOT NULL AND drainedAt IS NULL` refuses the second of two concurrent runs,
    whose transaction rolls back whole.
 10. **A `pending` Grant is provisioned, and activates on the panels' word.** It
     moves to `active` once `minHealthyPanels` of its configs are `active`,
@@ -122,13 +125,14 @@ off at any step**.
     The clock is the database's: trigger `panel_group_member_drain_clock`
     stamps `drainingSince` on entering `drain`, keeps it while the member
     stays (a rewrite neither restarts nor shortens the wait), clears it on
-    leaving. The retire is `ConfigActionsService.retire` (desired state, the
-    Grant rebalanced), logged as `GROUP_DRAIN_ACTOR`.
+    leaving. The retire is `ConfigActionsService.drain`: `retire` plus
+    `drainedAt` (CHECK `config_drained_is_retired`), the Grant rebalanced,
+    logged `drain` as `GROUP_DRAIN_ACTOR`.
 15. **The member row goes when nothing of the group is left on it**: no
     Grant held, no retire failed, and — in the `DELETE` itself — still
     `drain` and no unretired config of the group's Grants on the panel. An
-    un-drain meanwhile stands. The retired rows keep the panel covered for
-    those Grants (rule 9).
+    un-drain meanwhile stands. Re-added later, the panel is placed again for
+    those Grants: a drained row covers nothing (rule 9, F-027-bp).
 
 The sweep is `POST /api/internal/billing/network/drain-due`
 (`ServiceOnlyGuard`), asked by the same `grant_group_fulfilment` tick after
@@ -137,8 +141,6 @@ The sweep is `POST /api/internal/billing/network/drain-due`
 
 ## Not decided here
 
-What `priority` / `weighted` place; whether a member added later reaches
+What `priority` / `weighted` place, and whether a member added later reaches
 Grants already placed (today: yes, on the next tick — the sweep reads the
-group as it is); and whether a panel drained and later **re-added** to the
-same group is placed again for the Grants it was drained from (today: no —
-their retired rows cover it, rule 9).
+group as it is).

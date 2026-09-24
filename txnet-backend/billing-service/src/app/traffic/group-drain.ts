@@ -74,8 +74,8 @@ type DueMember = { groupId: string; panelId: string; drainingSince: Date; subscr
  * Grant has another, and this sweep retires its configs once no client can
  * still hold a subscription naming them, then removes the member.
  *
- * Desired state only, as fulfilment: `ConfigActionsService.retire` marks the
- * row `absent` and rebalances the Grant, and the convergence pass deletes the
+ * Desired state only, as fulfilment: `ConfigActionsService.drain` retires the
+ * row, marked `drainedAt`, and rebalances the Grant, and the convergence pass deletes the
  * client. **No user is cut off at any step** — the wait is `planDrain`'s.
  */
 @Injectable()
@@ -116,7 +116,7 @@ export class GroupDrainService {
       let failed = 0;
       for (const c of plan.retire) {
         try {
-          await runWithTenant({ id: c.tenantId }, () => tenantTransaction(this.prisma, (tx) => this.actions.retire(tx, { configId: c.configId, actor: GROUP_DRAIN_ACTOR })));
+          await runWithTenant({ id: c.tenantId }, () => tenantTransaction(this.prisma, (tx) => this.actions.drain(tx, { configId: c.configId, actor: GROUP_DRAIN_ACTOR })));
           result.configsRetired += 1;
         } catch (e) {
           // One config's failure — a user's own retire or move meanwhile — is its
