@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: draft
 version: 15
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
 # Contract — network
@@ -134,8 +134,8 @@ normaliser decides on (F-027-l) and bills the repair instead.
 A driver's own test supplies a `conformance.Harness`: the driver, plus its far
 end scripted. The fake is both halves at once; a real family is a driver over a
 scripted HTTP server of its own, and the suite is written to that split. Every
-later driver row — F-027-ae, F-027-ag, F-027-ah, F-027-ai — is an
-implementation plus a call to `conformance.Run`, and nothing else. A family
+real family — Marzban (F-027-ae), then F-027-ag, F-027-ah, F-027-ai — is an
+implementation plus a call to `conformance.Run`: [contract.drivers.md](contract.drivers.md). A family
 that cannot be put into a scenario's shape skips it **by name**, so a gap is
 reported rather than passed.
 

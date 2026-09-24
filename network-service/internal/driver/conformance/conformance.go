@@ -181,6 +181,20 @@ func usageOf(t *testing.T, h Harness, remoteID string) (driver.ClientUsage, bool
 	return driver.ClientUsage{}, false
 }
 
+// readsAs asks whether a reading is up/down as served. A family that reports
+// one total puts it in DownBytes and leaves UpBytes zero (driver.ClientUsage),
+// so either shape is the far end's figure reported faithfully; any other is not.
+func readsAs(r driver.ClientUsage, up, down int64) bool {
+	return (r.UpBytes == up && r.DownBytes == down) || (r.UpBytes == 0 && r.DownBytes == up+down)
+}
+
+// carried asks whether a direction that had a figure before a reset still
+// reads at or above it after one. A direction the family never reports reads
+// zero on both sides and carries nothing.
+func carried(before, after int64) bool {
+	return before > 0 && after >= before
+}
+
 func mustUsageOf(t *testing.T, h Harness, remoteID string) driver.ClientUsage {
 	t.Helper()
 	reading, ok := usageOf(t, h, remoteID)
@@ -198,8 +212,8 @@ func counterReset(t *testing.T, h Harness, _ Shape) {
 	h.Given("c1")
 	h.Serve("c1", 1_000, 2_000)
 	before := mustUsageOf(t, h, "c1")
-	if before.UpBytes != 1_000 || before.DownBytes != 2_000 {
-		t.Fatalf("first reading = %d/%d, want 1000/2000", before.UpBytes, before.DownBytes)
+	if !readsAs(before, 1_000, 2_000) {
+		t.Fatalf("first reading = %d/%d, want 1000/2000 (or 0/3000 from a single-total family)", before.UpBytes, before.DownBytes)
 	}
 
 	h.ZeroCounter("c1")
@@ -209,7 +223,7 @@ func counterReset(t *testing.T, h Harness, _ Shape) {
 	if after.UpBytes < 0 || after.DownBytes < 0 {
 		t.Errorf("reading after a reset = %d/%d: a raw counter is never negative", after.UpBytes, after.DownBytes)
 	}
-	if after.UpBytes >= before.UpBytes || after.DownBytes >= before.DownBytes {
+	if carried(before.UpBytes, after.UpBytes) || carried(before.DownBytes, after.DownBytes) {
 		t.Errorf("reading after a reset = %d/%d, not below %d/%d: the driver carried the old figure forward, "+
 			"and the reset the normaliser decides on is no longer visible",
 			after.UpBytes, after.DownBytes, before.UpBytes, before.DownBytes)
@@ -313,7 +327,7 @@ func slowReply(t *testing.T, h Harness, _ Shape) {
 	for _, r := range readings {
 		if r.RemoteID == "c1" {
 			found = true
-			if r.UpBytes != 7 || r.DownBytes != 9 {
+			if !readsAs(r, 7, 9) {
 				t.Errorf("slow reading = %d/%d, want 7/9", r.UpBytes, r.DownBytes)
 			}
 		}
@@ -683,8 +697,8 @@ func singleFlightUnderASlowPanel(t *testing.T, h Harness, _ Shape) {
 		if got.err != nil {
 			t.Fatalf("caller %d: %v", i, got.err)
 		}
-		if len(got.readings) != 1 || got.readings[0].DownBytes != 20 {
-			t.Errorf("caller %d got %+v, want the one reading of 20 down that the flight read", i, got.readings)
+		if len(got.readings) != 1 || !readsAs(got.readings[0], 10, 20) {
+			t.Errorf("caller %d got %+v, want the one reading of 10/20 that the flight read", i, got.readings)
 		}
 	}
 	if got := h.TotalCalls() - before; got != 1 {

@@ -79,8 +79,11 @@ panel provisioned, which is exactly what refusing it was for (invariant 44).
 ## Not here yet
 
 The Postgres-backed `register.Store` lands with the panel source, beside
-`collect.MemoryCursors`; the `Opener` that builds a real driver from
-`driverType`, `apiBaseUrl` and the vault's credentials lands with the first
-real family (F-027-ae), and with it how Go resolves that reference — the vault
-is Node, with a data key per tenant. Until both do, `cmd/server` does not start the pass —
-the staging every other loop in this service is in.
+`collect.MemoryCursors`. The `Opener` that builds a real driver from
+`driverType`, `apiBaseUrl` and the vault's credentials is F-027-aw: the first
+family (Marzban, F-027-ae, `contract.drivers.md`) exists, and nothing opens it
+from a row yet. The vault is Node, with a data key per tenant, so Go reads the
+login through a service-only route in `tenant-service`, never by holding the
+KEK itself (user, 2026-09-24): one crypto implementation, and every `use`
+audited where the others are. Until both land, `cmd/server` does not start the
+pass — the staging every other loop in this service is in.
