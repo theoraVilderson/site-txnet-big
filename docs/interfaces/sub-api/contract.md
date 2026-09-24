@@ -10,8 +10,8 @@ updated: 2026-09-24
 
 **Partly built.** F-113-a is the deployable, the route and the host/token gate
 (`sub-service/`); F-113-b is the base64 body; F-113-c the cache and
-`Profile-Update-Interval`; F-609 `Subscription-Userinfo` and the inactive
-Grant; F-609-b its live usage. The other formats are the later F-113-* rows. The *why* is in ADR-0082 and ADR-0083. The spec is catalog §7.5
+`Profile-Update-Interval`; F-113-d proves a rotated token stops at once;
+F-609 `Subscription-Userinfo` and the inactive Grant; F-609-b its live usage. The other formats are the later F-113-* rows. The *why* is in ADR-0082 and ADR-0083. The spec is catalog §7.5
 (`python3 tools/spec.py --section 7.5`), F-113 and F-609.
 
 ## TL;DR
@@ -145,6 +145,9 @@ None.
 - p99 under 50 ms from cache: a hit is two Redis round trips (`GET`, `MGET` —
   the stamps and the live usage together) and no Postgres read.
 - A rotated token stops working at once, not at the next cache expiry.
+  Nothing deletes by key: `rotateToken` rewrites `subscriptionTokenHash`,
+  the Grant trigger fires on that column, and the stamp outdates the old
+  hash's entries with the rest (F-113-d, `sub/rotate_test.go`).
 - The origin is independent (catalog C-16): no cookie is set or read, there is
   no CORS to the panel domain, and the token in the path is the only
   authentication.
