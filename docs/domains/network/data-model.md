@@ -25,7 +25,7 @@ Source of truth: `txnet-backend/prisma/domains/network.prisma` (Postgres schema
 | panel_drift_event | a drift verdict over a whole panel's population | via panel | permanent |
 | unattributed_usage | usage against a remote client that matches no config | via panel | one row per remote client |
 | radius_session | one RADIUS accounting session, its high-water bytes and how it closed | via config (nullable) / panel | permanent |
-| panel_group | where a variant's Grants are provisioned: `strategy`, `minHealthyPanels`, `subscriptionTtlSeconds` ([contract.groups.md](contract.groups.md)) | `tenantId` nullable (null = platform), shared-read | permanent |
+| panel_group | where a variant's Grants are provisioned: `strategy`, `minHealthyPanels`, `subscriptionTtlSeconds`, `protocol` ([contract.groups.md](contract.groups.md)) | `tenantId` nullable (null = platform), shared-read | permanent |
 | panel_group_member | a panel in a group, once: `priority`, `weight`, `role` (`primary \| replica \| drain`) | `tenantId` = its group's (trigger), shared-read | removed after draining |
 
 ## The Panel declaration (F-027-a, ADR-0074)
@@ -77,7 +77,7 @@ as `in queue`. Collapsed into one, the system believes a ceiling it never
 wrote, which is free traffic at the far end of it and nothing red anywhere.
 `observedRateBps` sizes the horizon (F-027-u); `driftState`/`driftRepairCount`/
 `driftRepairedAt` are the verdict and 24 h stop (F-027-ab); `credentialGroupId`
-is one quota (§4.6); `walletBackedCeilingBytes` ≥ allocation is a shutdown's
+is one group placement, one row per panel (`config_group_panel_once`, F-027-bl); `walletBackedCeilingBytes` ≥ allocation is a shutdown's
 ceiling (ADR-0078); `linkLines` is what `/sub` serves (contract.links.md).
 
 Five CHECK constraints, for the same reason the Panel has its five:

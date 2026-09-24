@@ -53,8 +53,10 @@ const APP = join(__dirname, '..');
  * `EntitlementInternalController` is the same seam and the same argument
  * (F-027-y): one hourly tick, `SERVICE_ONLY` or a 404, and throttling it would
  * leave panel seats held by Grants whose clock ran out weeks ago.
+ * `GroupFulfilmentController` too (F-027-bl): a minute tick, and throttling it
+ * would leave paid Grants `pending` on panels that are ready.
  */
-const EXEMPT = new Set(['HealthController', 'DepositInternalController', 'EntitlementInternalController']);
+const EXEMPT = new Set(['HealthController', 'DepositInternalController', 'EntitlementInternalController', 'GroupFulfilmentController']);
 
 /**
  * Controllers with no identity to bucket on, and what they count instead.

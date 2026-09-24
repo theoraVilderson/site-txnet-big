@@ -85,7 +85,10 @@ request-serving process (ADR-0027, `automation/contract.worker.md`).
 Issue rules: a `purchase` needs a `public` or `unlisted` variant; any other
 source may assign any live variant, `admin_only` included (F-506). A purchase
 starts `pending`; every other source `active`. Quotas, feature keys, billing
-mode and `endsAt = startsAt + durationDays` are copied at issue.
+mode and `endsAt = startsAt + durationDays` are copied at issue. A `pending`
+Grant of a variant with a panel group is moved to `active` by group fulfilment
+once `minHealthyPanels` of its configs are confirmed (network
+`contract.groups.md` rule 10, F-027-bl).
 
 A **metered** variant also has its rate copied: the `catalog.metered_rate` row
 in effect at `startsAt` is locked onto `Grant.meteredRate` (F-027-p, ADR-0073),
@@ -121,7 +124,7 @@ None yet.
 
 | Unit | What it reads |
 |---|---|
-| network | `config.grantId`: a config draws on its Grant's quota (F-027) |
+| network | `config.grantId`: a config draws on its Grant's quota (F-027); group fulfilment moves a grouped `pending` Grant to `active` (F-027-bl) |
 | billing | issues a Grant for a `free_grant` coupon (F-502-l) and, later, a purchase; the hot loop suspends a spent one (F-027-x) |
 | automation | holds the purge clock: `grant_config_purge` asks `purge-due` hourly (F-027-y) |
 

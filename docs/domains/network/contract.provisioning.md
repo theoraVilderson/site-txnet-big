@@ -32,6 +32,7 @@ split, and a new one has its share before the pass creates its client.
 | action | writes | refused with |
 |---|---|---|
 | `provision(tx, {grantId, panelId, protocol, actor})` | a new row: fresh `uuid`, `present`, enabled, `pending`, `remoteId` null | `grant_not_found`, `grant_not_active`, `panel_not_found` |
+| `provisionForGroup(tx, {grantId, panelIds, protocol, credentialGroupId, actor})` | one such row per panel under one `credentialGroupId`, one rebalance; a `pending` Grant too — its caller is group fulfilment (`contract.groups.md` rules 8–10) | `grant_not_found`, `grant_not_active` (neither `pending` nor `active`) |
 | `regenerate(tx, {configId, actor})` | a fresh `uuid`, `regenerateUsedCount + 1`, `pending` | `regenerate_limit_reached`, `config_changed` |
 | `disable(tx, {configId, reason, actor})` | `disabled_by_admin` (or `_by_system`), `desiredEnabled = false`, `disabledReason` | `actor_not_allowed` for a user |
 | `enable(tx, {configId, actor})` | `active`; `desiredEnabled` = the Grant is `active` | `actor_not_allowed` for a user |

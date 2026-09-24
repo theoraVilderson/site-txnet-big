@@ -180,6 +180,10 @@ const SEEDED_SCHEDULES = [
   // costs nothing, and a cross-tenant join every minute for a daily row would.
   // Twenty past, so it does not wake with every other cron on the hour.
   { key: 'grant_config_purge', scheduleType: 'cron_expression', cronExpression: '20 * * * *' },
+  // Panel-group fulfilment (F-027-bl): unscheduled, a grouped variant's Grant
+  // gets no config and never activates. Every minute: a buyer waits on it, and
+  // an idle run is one query.
+  { key: 'grant_group_fulfilment', scheduleType: 'cron_expression', cronExpression: '* * * * *' },
   // Custom-domain verification (F-018-i): unscheduled, no custom domain ever
   // becomes `verified` and a lost record never stops routing. An idle run is one query.
   { key: 'tenant_domain_verification', scheduleType: 'cron_expression', cronExpression: '*/5 * * * *' },

@@ -382,6 +382,8 @@ model Config {
   /// a key some rows lack is one the match cannot rely on.
   claimTag              String           @unique
   /// The configs issued together from one package, sharing one quota (§4.6).
+  /// A panel group's placement writes it (F-027-bl); one row of a Grant per
+  /// panel while it is set — partial unique `config_group_panel_once`, raw SQL.
   credentialGroupId     String?          @db.Uuid
   /// Desired state, not a command: the loop compares it as it is now and
   /// never replays an instruction (ADR-0075).
@@ -461,6 +463,9 @@ model PanelGroup {
   /// How long a client keeps a subscription before asking again; draining
   /// waits twice this (F-027-bm). 3600 = `/sub`'s render TTL today.
   subscriptionTtlSeconds Int                @default(3600)
+  /// The protocol every config of the group is placed with, one per member
+  /// panel (F-027-bl, user 2026-09-24). A list later keys (group, panel, protocol).
+  protocol               ConfigProtocol     @default(vless)
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @default(now()) @updatedAt
 

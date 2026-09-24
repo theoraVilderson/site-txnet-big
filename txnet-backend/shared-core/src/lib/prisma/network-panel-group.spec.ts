@@ -117,6 +117,18 @@ describe('network.PanelGroup: where a variant is provisioned', () => {
     expect(sql).toMatch(/CREATE TRIGGER panel_keeps_its_groups\s+AFTER UPDATE OF "tenantId"/);
   });
 
+  it('places every config of the group with the protocol it names', () => {
+    // A config needs one, and nothing else named it (F-027-bl, user 2026-09-24).
+    expect(group).toMatch(/^\s*protocol\s+ConfigProtocol\s+@default\(vless\)/m);
+    expect(sql).toMatch(/"panel_group" ADD COLUMN "protocol" "network"."ConfigProtocol" NOT NULL DEFAULT 'vless'/);
+  });
+
+  it("holds a Grant's placement to one config per panel against two concurrent runs", () => {
+    // The sweep is at-least-once; the planner's check is a read, and two runs
+    // can both read a panel as uncovered. Partial: a Grant with no group is free.
+    expect(sql).toMatch(/CREATE UNIQUE INDEX "config_group_panel_once" ON "network"."config"\("grantId", "panelId"\) WHERE "credentialGroupId" IS NOT NULL/);
+  });
+
   it('is policied like the panels it groups', () => {
     for (const table of ['network.panel_group', 'network.panel_group_member']) {
       expect(sql).toContain(`'${table}'`);

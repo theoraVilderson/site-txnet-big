@@ -93,24 +93,63 @@ export class ConfigActionsService {
     if (grant.status !== GrantStatus.active) throw new ConfigActionRefused('grant_not_active', grant.status);
     await this.panelFor(tx, input.panelId, grant.tenantId);
 
+    const made = await this.create(tx, grant, input.panelId, input.protocol as ConfigProtocol, null, input.actor);
+    await this.allocator.rebalance(tx, { grantId: grant.id });
+    return made;
+  }
+
+  /**
+   * A panel group's placement (F-027-bl): one row per panel, all under one
+   * `credentialGroupId`, and one rebalance for the lot. The caller is
+   * `GroupFulfilmentService`, which chose the panels from the group's members
+   * — the member triggers already held their tenancy (network
+   * `contract.groups.md` rule 2), so no panel is re-checked here.
+   *
+   * **A `pending` Grant is provisioned**, unlike `provision`: a group's Grant
+   * activates on what its panels confirm, so its configs exist first. `/sub`
+   * serves nothing of a Grant that is not `active` (F-609).
+   */
+  async provisionForGroup(
+    tx: Prisma.TransactionClient,
+    input: { grantId: string; panelIds: string[]; protocol: ConfigProtocol; credentialGroupId: string; actor: ConfigActor },
+  ): Promise<{ configId: string; uuid: string }[]> {
+    const grant = await tx.grant.findUnique({ where: { id: input.grantId }, select: { id: true, tenantId: true, userId: true, status: true } });
+    if (!grant) throw new ConfigActionRefused('grant_not_found', input.grantId);
+    if (grant.status !== GrantStatus.active && grant.status !== GrantStatus.pending) throw new ConfigActionRefused('grant_not_active', grant.status);
+    if (input.panelIds.length === 0) return [];
+
+    const made: { configId: string; uuid: string }[] = [];
+    for (const panelId of input.panelIds) made.push(await this.create(tx, grant, panelId, input.protocol, input.credentialGroupId, input.actor));
+    await this.allocator.rebalance(tx, { grantId: grant.id });
+    return made;
+  }
+
+  private async create(
+    tx: Prisma.TransactionClient,
+    grant: { id: string; tenantId: string; userId: string },
+    panelId: string,
+    protocol: ConfigProtocol,
+    credentialGroupId: string | null,
+    actor: ConfigActor,
+  ): Promise<{ configId: string; uuid: string }> {
     const uuid = randomUUID();
     const config = await tx.config.create({
       data: {
         tenantId: grant.tenantId,
         userId: grant.userId,
         grantId: grant.id,
-        panelId: input.panelId,
-        protocol: input.protocol as ConfigProtocol,
+        panelId,
+        protocol,
         uuid,
         claimTag: claimTag(),
+        credentialGroupId,
         desiredRemote: DesiredRemote.present,
         desiredEnabled: true,
         enforcementState: EnforcementState.pending,
       },
       select: { id: true },
     });
-    await this.log(tx, config.id, input.actor, 'provision');
-    await this.allocator.rebalance(tx, { grantId: grant.id });
+    await this.log(tx, config.id, actor, 'provision');
     return { configId: config.id, uuid };
   }
 
