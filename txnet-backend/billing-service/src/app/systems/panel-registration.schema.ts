@@ -60,3 +60,31 @@ export const acknowledgeDriftSchema = z
   .strict();
 
 export type AcknowledgeDriftBody = z.infer<typeof acknowledgeDriftSchema>;
+
+/** Which holds the queue lists: `pending` is the ones still waiting for a decision. */
+export const HOLD_QUEUE_STATES = ['pending', 'all'] as const;
+
+/** The holds queue's query (F-027-at). `after` is the last id of the previous page. */
+export const holdQueueQuerySchema = z
+  .object({
+    state: z.enum(HOLD_QUEUE_STATES).optional(),
+    after: z.string().uuid().optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .strict();
+
+export type HoldQueueQueryInput = z.infer<typeof holdQueueQuerySchema>;
+
+/** Releasing a hold. Who released comes from the gate; the note is optional, as on a drift acknowledgement. */
+export const releaseHoldSchema = z
+  .object({ note: z.string().trim().min(1).max(1000).optional() })
+  .strict();
+
+export type ReleaseHoldBody = z.infer<typeof releaseHoldSchema>;
+
+/** Writing a hold off. The note is required: bytes that are never charged say why (ADR-0080 decision 3). */
+export const writeOffHoldSchema = z
+  .object({ note: z.string().trim().min(1).max(1000) })
+  .strict();
+
+export type WriteOffHoldBody = z.infer<typeof writeOffHoldSchema>;

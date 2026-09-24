@@ -1,12 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { HoldReason, Prisma } from '@prisma/client';
+import { HoldReason, Prisma, UsageDispositionState } from '@prisma/client';
 import {
   runWithTenant,
   tenantTransaction,
   USAGE_DELTA_MESSAGE_VERSION,
+  usageReleaseDeltaId,
   type UsageDeltaMessage,
   type UsageDeltaRow,
   type UsageQuarantineRow,
+  type UsageReleasePayload,
   type UsageUnattributedRow,
 } from '@txnet-backend/shared-core';
 
@@ -35,6 +37,17 @@ export class UnsupportedDeltaVersion extends Error {
     this.name = 'UnsupportedDeltaVersion';
   }
 }
+
+/** A release names a hold this platform does not hold. Thrown so the message dead-letters as evidence. */
+export class UnknownHold extends Error {
+  constructor(readonly holdId: string) {
+    super(`usage hold ${holdId} does not exist`);
+    this.name = 'UnknownHold';
+  }
+}
+
+/** The hold was released or written off before this release reached it. Rolls the transaction back. */
+class HoldAlreadyResolved extends Error {}
 
 /**
  * The delta consumer (F-027-n) — where a collection pass stops being a message
@@ -132,6 +145,59 @@ export class MeteringService {
   }
 
   /**
+   * A released hold (F-027-at, ADR-0080 decision 3), billed as a delta.
+   *
+   * The figure is the hold row's, never the message's. One transaction flips
+   * the hold `pending -> released` **conditionally**, inserts the seen row
+   * under {@link usageReleaseDeltaId}, and bills through {@link charge} — the
+   * same writes a collected delta makes. A hold that is no longer pending
+   * (released by an earlier copy, or written off after the release was
+   * queued) is `already_resolved` and nothing is billed; the seen row is the
+   * backstop behind the flip, as it is behind the pre-read in {@link apply}.
+   */
+  async release(release: UsageReleasePayload): Promise<'released' | 'already_resolved'> {
+    // Cross-tenant for the reason `configsOf` is: this read produces the tenant.
+    const hold = await this.crossTenant.usageHold.findUnique({
+      where: { id: release.holdId },
+      select: {
+        id: true, configId: true, panelId: true, upBytes: true, downBytes: true, heldFrom: true, state: true,
+        config: { select: { tenantId: true, grantId: true } },
+      },
+    });
+    if (!hold) throw new UnknownHold(release.holdId);
+    if (hold.state !== UsageDispositionState.pending) return 'already_resolved';
+
+    try {
+      const applied = await this.onceUnder(hold.config.tenantId, async (tx) => {
+        const { count } = await tx.usageHold.updateMany({
+          where: { id: hold.id, state: UsageDispositionState.pending },
+          data: {
+            state: UsageDispositionState.released,
+            resolvedAt: new Date(),
+            resolvedByAdminId: release.adminId,
+            resolutionNote: release.note,
+          },
+        });
+        if (count === 0) throw new HoldAlreadyResolved();
+        await this.charge(tx, {
+          deltaId: usageReleaseDeltaId(hold.id),
+          panelId: hold.panelId,
+          config: { id: hold.configId, tenantId: hold.config.tenantId, grantId: hold.config.grantId },
+          up: hold.upBytes,
+          down: hold.downBytes,
+          observedAt: hold.heldFrom,
+        });
+      });
+      if (!applied) return 'already_resolved';
+    } catch (err) {
+      if (err instanceof HoldAlreadyResolved) return 'already_resolved';
+      throw err;
+    }
+    this.logger.log(`hold ${hold.id} released by ${release.adminId}: ${hold.upBytes + hold.downBytes} bytes billed`);
+    return 'released';
+  }
+
+  /**
    * The configs the pass names, read across tenants.
    *
    * The audit `CrossTenantPrismaService` asks for: this read *produces* the
@@ -162,19 +228,36 @@ export class MeteringService {
 
   /** Bill one delta. `false` means the unique index said it was already applied. */
   private bill(panelId: string, config: ConfigAttribution, delta: UsageDeltaRow): Promise<boolean> {
-    const up = BigInt(delta.upBytes);
-    const down = BigInt(delta.downBytes);
-    return this.onceUnder(config.tenantId, async (tx) => {
-      await tx.usageDeltaSeen.create({
-        data: { deltaId: delta.deltaId, configId: config.id, panelId, upBytes: up, downBytes: down, observedAt: new Date(delta.observedAt) },
-      });
-      await tx.trafficRawLog.create({
-        data: { tenantId: config.tenantId, configId: config.id, uploadBytes: up, downloadBytes: down, recordedAt: new Date(delta.observedAt) },
-      });
-      await tx.grant.update({
-        where: { id: config.grantId },
-        data: { consumedBytes: { increment: up + down } },
-      });
+    return this.onceUnder(config.tenantId, (tx) =>
+      this.charge(tx, {
+        deltaId: delta.deltaId,
+        panelId,
+        config,
+        up: BigInt(delta.upBytes),
+        down: BigInt(delta.downBytes),
+        observedAt: new Date(delta.observedAt),
+      }),
+    );
+  }
+
+  /**
+   * The one path that writes consumption: the seen row, the raw log and the
+   * Grant cursor. A collected delta and a released hold both come through
+   * here, so a release cannot skip a rule the normal path holds (ADR-0080).
+   */
+  private async charge(
+    tx: Prisma.TransactionClient,
+    c: { deltaId: string; panelId: string; config: Omit<ConfigAttribution, 'remoteId'>; up: bigint; down: bigint; observedAt: Date },
+  ): Promise<void> {
+    await tx.usageDeltaSeen.create({
+      data: { deltaId: c.deltaId, configId: c.config.id, panelId: c.panelId, upBytes: c.up, downBytes: c.down, observedAt: c.observedAt },
+    });
+    await tx.trafficRawLog.create({
+      data: { tenantId: c.config.tenantId, configId: c.config.id, uploadBytes: c.up, downloadBytes: c.down, recordedAt: c.observedAt },
+    });
+    await tx.grant.update({
+      where: { id: c.config.grantId },
+      data: { consumedBytes: { increment: c.up + c.down } },
     });
   }
 

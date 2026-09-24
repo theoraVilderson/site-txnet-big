@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 34
+version: 35
 updated: 2026-09-24
 ---
 
@@ -14,7 +14,8 @@ A topic file of `contract.md` (§10). What governs
 registered panel is `network/contract.registration.md`.
 
 Nothing here calls `network-service`. Every route writes desired state or
-reads observations in the database (ADR-0071: the Go service has no route).
+reads observations in the database (ADR-0071: the Go service has no route);
+a hold's release goes to `metering-service` through the outbox.
 
 ## Who may call
 
@@ -38,9 +39,12 @@ would dial an address a tenant chose (`network/open-questions.md`).
 | `GET /api/billing/systems/panels/:id/capabilities` | — | `{id, transport, reviewState, connectionTestedAt, documentVersion, current, answeredAt, rows: [{key, scope, severity, state, detail}]}` | 400 id not a uuid; 403; 404 `not_found` |
 | `GET /api/billing/systems/drift-events` | query `state?` (`open` \| `all`, default `all`), `after?` (event id), `limit?` (1–100, default 50); `.strict()` | `{items: [{id, panelId, panelName, eventType, affectedConfigCount, observedConfigCount, detectedAt, collectionHalted, acknowledgedAt, acknowledgedByAdminId, note}], next}`, newest first; `next` is the `after` of the following page, null on the last | 400; 403 |
 | `POST /api/billing/systems/drift-events/:id/acknowledge` | `note?` (1–1000); `.strict()` | `200` the event, acknowledged | 400; 403; 404 `not_found`; 409 `already_acknowledged` |
+| `GET /api/billing/systems/holds` | query `state?` (`pending` \| `all`, default `all`), `after?` (hold id), `limit?` (1–100, default 50); `.strict()` | `{items: [{id, configId, panelId, panelName, upBytes, downBytes, reason, state, heldFrom, heldAt, resolvedAt, resolvedByAdminId, resolutionNote}], next}`, newest first; bytes are decimal strings | 400; 403 |
+| `POST /api/billing/systems/holds/:id/release` | `note?` (1–1000); `.strict()` | `202 {id, state: 'pending', release: 'queued'}` | 400; 403; 404 `not_found`; 409 `already_resolved` |
+| `POST /api/billing/systems/holds/:id/write-off` | `note` (1–1000, required); `.strict()` | `200` the hold, `written_off` | 400; 403; 404 `not_found`; 409 `already_resolved` |
 
 Rate limits, per user, per 15 minutes: `SYSTEMS_ADMIN_WRITE` 30 (register,
-acknowledge), `SYSTEMS_ADMIN_READ` 120 (the three reads).
+acknowledge, release, write-off), `SYSTEMS_ADMIN_READ` 120 (the four reads).
 
 ## Registering a panel — the rules
 
@@ -94,8 +98,33 @@ acknowledge), `SYSTEMS_ADMIN_READ` 120 (the three reads).
 `systems-read.spec.ts` pins rules 6–9, the scope on every route, and the
 fixture.
 
+## The holds queue — the rules
+
+Bytes the meter believed and could not bill (ADR-0074), and the two ways a
+person ends one (ADR-0080 decision 3). `usage_hold` has no relation to
+`panel`, so the scope is the set of panel ids `panelScopeOf` admits: a hold
+outside it is absent from the list and 404 by id.
+
+10. **Release goes through the meter; this service never bills.** The route
+    writes an `outbox_event` of type `network.usage.release`
+    (`OutboxEventType.USAGE_RELEASE`, aggregate `network.usage_hold`, payload
+    `{holdId, adminId, note}`) and answers `202`; the hold stays `pending`.
+    The relay publishes it as `outbox.network.usage.release`, and
+    `metering-service` flips and bills it ([contract.metering.md](contract.metering.md)).
+    The message carries no bytes: the meter reads them from the hold.
+11. **A second release is harmless.** Every copy — a second click, a relay
+    redelivery — carries the same `usageReleaseDeltaId(holdId)` (a UUIDv5,
+    `shared-core` `usage-release.ts`), and the meter absorbs it.
+12. **A write-off is never charged, and happens once.** It sets `written_off`,
+    `resolvedAt`, `resolvedByAdminId` and the required `note`, conditional on
+    `pending`; a second click is 409 `already_resolved` and who decided is
+    never rewritten. A release queued before it then finds the hold resolved
+    and bills nothing. There is no `dropped` state.
+13. **Bytes leave as decimal strings**, as on the wire (`usage-delta.ts`): a
+    BIGINT past 2^53 is not a JSON number.
+
+`usage-holds.spec.ts` pins rules 10–13 and the scope on the three routes.
+
 ## Not here yet
-- The holds queue, release through the meter and write-off: F-027-at
-  (ADR-0080 decision 3).
 - Re-submitting a panel's login (which clears `connectionTestedAt`, network
   contract.registration.md rule 4): no route yet.

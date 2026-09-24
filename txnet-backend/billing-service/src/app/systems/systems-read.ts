@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { capabilityMatrix } from './capabilities';
 import { panelScopeOf, SystemsActor } from './panel-scope';
 
-export type SystemsRejection = 'not_found' | 'already_acknowledged';
+export type SystemsRejection = 'not_found' | 'already_acknowledged' | 'already_resolved';
 
 export class SystemsRefused extends Error {
   constructor(readonly reason: SystemsRejection) {

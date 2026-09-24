@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
-import type { UsageDeltaMessage } from '@txnet-backend/shared-core';
+import type { UsageDeltaMessage, UsageReleasePayload } from '@txnet-backend/shared-core';
 
 import { BrokerService } from '../broker/broker.service';
 import { MeteringService } from './metering.service';
@@ -23,11 +23,19 @@ export class DeltaConsumer implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap() {
-    await this.broker.consumeUsageDeltas((message) => this.handle(message));
-    this.logger.log('consuming network.usage.# — every measured byte is billed, held or quarantined');
+    await this.broker.consumeUsage(
+      (message) => this.handle(message),
+      (release) => this.release(release),
+    );
+    this.logger.log('consuming network.usage.# and released holds — every measured byte is billed, held or quarantined');
   }
 
   private async handle(message: UsageDeltaMessage): Promise<void> {
     await this.metering.apply(message);
+  }
+
+  /** A released hold (F-027-at). `already_resolved` is an answer, not a failure: it acks. */
+  private async release(release: UsageReleasePayload): Promise<void> {
+    await this.metering.release(release);
   }
 }

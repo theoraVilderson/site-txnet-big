@@ -32,11 +32,18 @@ import {
   acknowledgeDriftSchema,
   DriftEventQueryInput,
   driftEventQuerySchema,
+  HoldQueueQueryInput,
+  holdQueueQuerySchema,
   RegisterPanelBody,
   registerPanelSchema,
+  ReleaseHoldBody,
+  releaseHoldSchema,
+  WriteOffHoldBody,
+  writeOffHoldSchema,
 } from './panel-registration.schema';
 import { PanelScopeRefused, SystemsActor } from './panel-scope';
 import { SystemsReadService, SystemsRefused } from './systems-read';
+import { UsageHoldsService } from './usage-holds';
 
 /** The permission the systems surface needs (F-027-ar). SuperAdmin holds it as `*`. */
 export const PANEL_MANAGE = 'panel.manage';
@@ -75,7 +82,7 @@ async function refusing<T>(work: () => Promise<T>): Promise<T> {
   } catch (e) {
     if (e instanceof PanelScopeRefused) throw new ForbiddenException({ reason: e.reason, message: e.message });
     if (e instanceof SystemsRefused) {
-      if (e.reason === 'already_acknowledged') throw new ConflictException({ reason: e.reason, message: e.message });
+      if (e.reason === 'already_acknowledged' || e.reason === 'already_resolved') throw new ConflictException({ reason: e.reason, message: e.message });
       throw new NotFoundException({ reason: e.reason, message: e.message });
     }
     throw e;
@@ -95,6 +102,11 @@ async function refusing<T>(work: () => Promise<T>): Promise<T> {
  * drift report. Acknowledging a drift event is the one write among them, and
  * it resumes a halted panel's collection on the next pass.
  *
+ * The holds queue (F-027-at) lists what the meter held, and ends a hold one
+ * of two ways: a release is queued for the meter (`202`, the hold stays
+ * `pending` until it is billed), a write-off is recorded here and never
+ * charged (ADR-0080 decision 3).
+ *
  * Who the caller is comes from the gate (`X-User-Id`, `X-Tenant-Id`), never
  * from the body.
  */
@@ -104,6 +116,7 @@ export class SystemsController {
   constructor(
     private readonly registration: PanelRegistrationService,
     private readonly reads: SystemsReadService,
+    private readonly holdsQueue: UsageHoldsService,
   ) {}
 
   @Get('panels')
@@ -133,6 +146,35 @@ export class SystemsController {
     @Req() req: Request,
   ) {
     return refusing(() => this.reads.acknowledge(actorOf(req), id, body));
+  }
+
+  @Get('holds')
+  @RateLimit(SYSTEMS_ADMIN_READ)
+  holds(@Query(new ZodValidationPipe(holdQueueQuerySchema)) query: HoldQueueQueryInput, @Req() req: Request) {
+    return refusing(() => this.holdsQueue.holds(actorOf(req), query));
+  }
+
+  @Post('holds/:id/release')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  release(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(releaseHoldSchema)) body: ReleaseHoldBody,
+    @Req() req: Request,
+  ) {
+    return refusing(() => this.holdsQueue.release(actorOf(req), id, body));
+  }
+
+  @Post('holds/:id/write-off')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  writeOff(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(writeOffHoldSchema)) body: WriteOffHoldBody,
+    @Req() req: Request,
+  ) {
+    // Required by the schema; the cast is for the non-strict tsconfig, as in `register`.
+    return refusing(() => this.holdsQueue.writeOff(actorOf(req), id, body as { note: string }));
   }
 
   @Post('panels')

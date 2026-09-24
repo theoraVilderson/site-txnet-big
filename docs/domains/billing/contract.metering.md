@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 1
-updated: 2026-09-22
+updated: 2026-09-24
 ---
 
 # Metering — a collection pass becomes usage
@@ -67,6 +67,26 @@ not hold the same bytes twice.
 `unattributed_usage` has no delta id to dedupe on, so it dedupes on time: the
 update applies only to a row whose `lastSeenAt` is **before** this observation.
 A redelivered pass carries the same `observedAt` and therefore adds nothing.
+
+## A released hold
+
+The holds queue's release (F-027-at, ADR-0080 decision 3) arrives on the same
+queue, bound to `outbox.network.usage.release`: `billing-service` queues it
+through its outbox ([contract.systems.md](contract.systems.md) rule 10). The
+body is an `OutboxMessage` parsed with `usageReleaseMessageSchema`; its payload
+names the hold, who released it and why — **never bytes**.
+
+`MeteringService.release` reads the hold across tenants (it produces the
+tenant, as `configsOf` does) and, in **one transaction** under the config's
+tenant, flips it `pending -> released` conditionally, then writes what a billed
+delta writes — the seen row under `usageReleaseDeltaId(holdId)`, the raw log at
+`heldFrom`, the Grant cursor — through the same `charge` a collected delta
+takes. A hold no longer pending (released by an earlier copy, or written off
+after the release was queued) is `already_resolved`: acked, nothing billed. A
+hold that does not exist throws and dead-letters, as evidence.
+
+`metering.service.spec.ts` pins it: billed once, never after a write-off, and
+still once with the state pre-read defeated.
 
 ## Tenant scope — the label, not the permission
 

@@ -1,5 +1,10 @@
-import { ConfigProtocol, PanelOwnershipType, Prisma, QuarantineReason } from '@prisma/client';
-import { USAGE_DELTA_MESSAGE_VERSION, type UsageDeltaMessage } from '@txnet-backend/shared-core';
+import { ConfigProtocol, HoldReason, PanelOwnershipType, Prisma, QuarantineReason, UsageDispositionState } from '@prisma/client';
+import {
+  USAGE_DELTA_MESSAGE_VERSION,
+  usageReleaseDeltaId,
+  type UsageDeltaMessage,
+  type UsageReleasePayload,
+} from '@txnet-backend/shared-core';
 
 import { MeteringService, UnsupportedDeltaVersion } from './metering.service';
 
@@ -41,10 +46,10 @@ type ConfigRow = {
   remoteId: string | null;
 };
 
-function fakeStore(configs: ConfigRow[]) {
+function fakeStore(configs: ConfigRow[], stored: Array<Record<string, unknown>> = []) {
   const seen = new Map<string, Record<string, unknown>>();
   const rawLog: Array<Record<string, unknown>> = [];
-  const holds: Array<Record<string, unknown>> = [];
+  const holds: Array<Record<string, unknown>> = [...stored];
   const quarantines: Array<Record<string, unknown>> = [];
   const unattributed = new Map<string, { upBytes: bigint; downBytes: bigint; observationCount: number; lastSeenAt: Date }>();
   const consumed = new Map<string, bigint>([[GRANT, 0n]]);
@@ -88,6 +93,17 @@ function fakeStore(configs: ConfigRow[]) {
       create: async ({ data }: { data: Record<string, unknown> }) => {
         holds.push(data);
         return data;
+      },
+      findUnique: async ({ where }: { where: { id: string } }) => {
+        const hold = holds.find((h) => h['id'] === where.id);
+        if (!hold) return null;
+        const config = configs.find((c) => c.id === hold['configId']);
+        return { ...hold, config: config ? { tenantId: config.tenantId, grantId: config.grantId } : null };
+      },
+      updateMany: async ({ where, data }: { where: { id: string; state: string }; data: Record<string, unknown> }) => {
+        const hit = holds.filter((h) => h['id'] === where.id && h['state'] === where.state);
+        hit.forEach((h) => Object.assign(h, data));
+        return { count: hit.length };
       },
     },
     usageDeltaQuarantine: {
@@ -342,5 +358,67 @@ describe('MeteringService', () => {
       UnsupportedDeltaVersion,
     );
     expect(store.seen.size).toBe(0);
+  });
+
+  describe('release (F-027-at, ADR-0080 decision 3)', () => {
+    const HOLD = '77777777-7777-4777-8777-777777777777';
+    const ADMIN = '88888888-8888-4888-8888-888888888888';
+    const heldFrom = new Date('2026-09-21T10:00:00.000Z');
+
+    function heldStore(state: UsageDispositionState = UsageDispositionState.pending) {
+      return fakeStore(
+        [{ id: CONFIG, tenantId: TENANT, grantId: GRANT, remoteId: 'client-a' }],
+        [{ id: HOLD, configId: CONFIG, panelId: PANEL, upBytes: 1000n, downBytes: 2000n, heldFrom,
+           reason: HoldReason.attribution_ambiguous, state, resolvedAt: null, resolvedByAdminId: null, resolutionNote: null }],
+      );
+    }
+    const release: UsageReleasePayload = { holdId: HOLD, adminId: ADMIN, note: 'client-a is this config' };
+
+    it("bills the hold's own bytes through the meter and flips it, under the config's tenant", async () => {
+      const store = heldStore();
+
+      expect(await service(store).release(release)).toBe('released');
+
+      expect(store.consumed.get(GRANT)).toBe(3000n);
+      expect(store.rawLog).toEqual([expect.objectContaining({ tenantId: TENANT, configId: CONFIG, uploadBytes: 1000n, downloadBytes: 2000n })]);
+      // The seen row is the one a collected delta would have written, keyed
+      // by the id derived from the hold — the meter's own deduplication.
+      expect([...store.seen.keys()]).toEqual([usageReleaseDeltaId(HOLD)]);
+      expect(store.holds[0]).toMatchObject({ state: UsageDispositionState.released, resolvedByAdminId: ADMIN, resolutionNote: release.note });
+      expect(store.holds[0]['resolvedAt']).toBeInstanceOf(Date);
+      expect(store.bound).toContain(TENANT);
+    });
+
+    it('absorbs a second release of the same hold — redelivered or clicked twice — without billing it again', async () => {
+      const store = heldStore();
+      await service(store).release(release);
+
+      expect(await service(store).release({ ...release, adminId: OTHER_CONFIG, note: 'again' })).toBe('already_resolved');
+
+      expect(store.consumed.get(GRANT)).toBe(3000n);
+      expect(store.rawLog).toHaveLength(1);
+      expect(store.holds[0]).toMatchObject({ resolvedByAdminId: ADMIN, resolutionNote: release.note });
+    });
+
+    it('still bills once when the seen row already exists and the flip is what refuses', async () => {
+      // The pre-read of the state is an optimisation: defeat it, and the
+      // conditional flip inside the transaction must still hold the line.
+      const store = heldStore();
+      store.seen.set(usageReleaseDeltaId(HOLD), {});
+
+      expect(await service(store).release(release)).toBe('already_resolved');
+      expect(store.consumed.get(GRANT)).toBe(0n);
+    });
+
+    it('never bills a hold that was written off, even if a release was already queued', async () => {
+      const store = heldStore(UsageDispositionState.written_off);
+
+      expect(await service(store).release(release)).toBe('already_resolved');
+
+      expect(store.consumed.get(GRANT)).toBe(0n);
+      expect(store.rawLog).toHaveLength(0);
+      expect(store.seen.size).toBe(0);
+      expect(store.holds[0]['state']).toBe(UsageDispositionState.written_off);
+    });
   });
 });

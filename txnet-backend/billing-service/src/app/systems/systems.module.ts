@@ -4,6 +4,7 @@ import { PanelCredentialClient } from './panel-credential.client';
 import { PANEL_CREDENTIAL_WRITER, PanelRegistrationService } from './panel-registration';
 import { SystemsReadService } from './systems-read';
 import { PanelPermissionGuard, SystemsController } from './systems.controller';
+import { UsageHoldsService } from './usage-holds';
 
 /**
  * The platform owner's systems surface (F-027-ar, ADR-0080): the routes behind
@@ -20,6 +21,7 @@ import { PanelPermissionGuard, SystemsController } from './systems.controller';
   providers: [
     PanelRegistrationService,
     SystemsReadService,
+    UsageHoldsService,
     PanelPermissionGuard,
     PanelCredentialClient,
     { provide: PANEL_CREDENTIAL_WRITER, useExisting: PanelCredentialClient },

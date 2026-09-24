@@ -8,12 +8,20 @@ import { ConfigService } from '@nestjs/config';
 import * as amqp from 'amqplib';
 import {
   NETWORK_USAGE_ROUTING_PREFIX,
+  OutboxEventType,
+  outboxRoutingKey,
   topicBindingAll,
   usageDeltaMessageSchema,
+  usageReleaseMessageSchema,
   type UsageDeltaMessage,
+  type UsageReleasePayload,
 } from '@txnet-backend/shared-core';
 
 export type UsageDeltaHandler = (message: UsageDeltaMessage) => Promise<void>;
+export type UsageReleaseHandler = (release: UsageReleasePayload) => Promise<void>;
+
+/** Where a released hold arrives from: `billing-service`'s outbox (F-027-at, ADR-0080 decision 3). */
+const USAGE_RELEASE_KEY = outboxRoutingKey(OutboxEventType.USAGE_RELEASE);
 
 /**
  * The RabbitMQ connection, and the only place in this service that knows the
@@ -22,7 +30,8 @@ export type UsageDeltaHandler = (message: UsageDeltaMessage) => Promise<void>;
  * **Topology.** The automation exchange every message on this platform rides,
  * and one durable queue on it bound to `network.usage.#` — the prefix
  * `contracts/network/delta.json` declares and `network-service` publishes
- * under. Its own queue, not a share of the tick queue: a collection pass is a
+ * under — and to `outbox.network.usage.release`, the released holds
+ * `billing-service` queues through its outbox (F-027-at). Its own queue, not a share of the tick queue: a collection pass is a
  * different rate and a different depth to alert on, and a backlog of usage must
  * never sit in front of an OTP.
  *
@@ -76,6 +85,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       arguments: { 'x-dead-letter-exchange': this.deadExchange },
     });
     await this.channel.bindQueue(this.queue, this.exchange, topicBindingAll(NETWORK_USAGE_ROUTING_PREFIX));
+    await this.channel.bindQueue(this.queue, this.exchange, USAGE_RELEASE_KEY);
     await this.channel.prefetch(this.prefetch);
 
     // A dropped connection is fatal rather than retried, for the reason
@@ -90,15 +100,34 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
 
     this.logger.log(
       `connected to broker; exchange=${this.exchange} queue=${this.queue} ` +
-        `binding=${topicBindingAll(NETWORK_USAGE_ROUTING_PREFIX)} prefetch=${this.prefetch} dlx=${this.deadExchange}`,
+        `binding=${topicBindingAll(NETWORK_USAGE_ROUTING_PREFIX)},${USAGE_RELEASE_KEY} prefetch=${this.prefetch} dlx=${this.deadExchange}`,
     );
   }
 
-  /** Start consuming collection passes. One handler for every pass. */
-  async consumeUsageDeltas(handle: UsageDeltaHandler): Promise<void> {
+  /** Start consuming: collection passes to one handler, released holds to the other, by routing key. */
+  async consumeUsage(handle: UsageDeltaHandler, release: UsageReleaseHandler): Promise<void> {
     const channel = this.require();
     await channel.consume(this.queue, async (message) => {
       if (message === null) return;
+
+      if (message.fields.routingKey === USAGE_RELEASE_KEY) {
+        const parsed = usageReleaseMessageSchema.safeParse(safeJson(message.content));
+        if (!parsed.success) {
+          this.logger.error(`dead-lettering a usage release that is not valid: ${parsed.error.message}`);
+          channel.nack(message, false, false);
+          return;
+        }
+        try {
+          await release(parsed.data.payload);
+          channel.ack(message);
+        } catch (err) {
+          this.logger.error(
+            `usage release of hold ${parsed.data.payload.holdId} failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          channel.nack(message, false, false);
+        }
+        return;
+      }
 
       const parsed = usageDeltaMessageSchema.safeParse(safeJson(message.content));
       if (!parsed.success) {
