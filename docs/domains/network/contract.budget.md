@@ -2,8 +2,8 @@
 id: network
 layer: domain
 status: draft
-version: 10
-updated: 2026-09-22
+version: 11
+updated: 2026-09-24
 ---
 
 # The request budget, and what a refusal means
@@ -35,6 +35,10 @@ Two properties come with the wrapper and neither is a family's to reimplement:
   flooded by the callers waiting on it. It is single-flight and not a cache: a
   caller arriving after the flight lands gets a fresh read, because a figure
   served from memory is one nobody measured at the moment it was billed.
+- **A page is a request** (ADR-0081). A family whose bulk read is paged calls
+  `driver.NextPage` before each page after the first, and that page waits for
+  its slot like any other request. Counting the method call instead would let
+  fifty pages through as one slot of the owner's figure.
 - **A call over the budget waits for its slot, and never fails.** A dropped
   read is a hole in a counter somebody is charged from (invariant 18), and the
   panel would have answered it a moment later.

@@ -46,7 +46,7 @@ const (
 	ScenarioCeilingRefused     Scenario = "ceiling_refused"
 	ScenarioCeilingAppliedLate Scenario = "ceiling_applied_late"
 	ScenarioRateLimitedVsFault Scenario = "rate_limited_vs_server_fault"
-	ScenarioBulkPassIsOneCall  Scenario = "bulk_pass_is_one_call"
+	ScenarioBulkPassIsBounded  Scenario = "bulk_pass_is_bounded"
 	ScenarioHotPassIsOneCall   Scenario = "hot_pass_is_one_call"
 	ScenarioSingleFlight       Scenario = "single_flight_under_a_slow_panel"
 	ScenarioRequestBudget      Scenario = "request_budget_is_never_exceeded"
@@ -145,7 +145,7 @@ func Run(t *testing.T, setup Setup) {
 		{ScenarioCeilingRefused, Shape{driver.TransportPull, driver.CounterCumulative, false, false}, ceilingRefused},
 		{ScenarioCeilingAppliedLate, pull(driver.CounterCumulative), ceilingAppliedLate},
 		{ScenarioRateLimitedVsFault, pull(driver.CounterCumulative), rateLimitedVsServerFault},
-		{ScenarioBulkPassIsOneCall, pull(driver.CounterCumulative), bulkPassIsOneCall},
+		{ScenarioBulkPassIsBounded, pull(driver.CounterCumulative), bulkPassIsBounded},
 		{ScenarioHotPassIsOneCall, pull(driver.CounterCumulative), hotPassIsOneCall},
 		{ScenarioSingleFlight, pull(driver.CounterCumulative), singleFlightUnderASlowPanel},
 		{ScenarioRequestBudget, pull(driver.CounterCumulative), requestBudgetIsNeverExceeded},
@@ -585,11 +585,14 @@ func callAndFail(t *testing.T, d driver.Driver, label string) error {
 // because what has to hold is "this family, paced, asks once" — a property of
 // the pair, which a test of the wrapper alone cannot see.
 
-// bulkPassIsOneCall: the whole panel, however many users are on it, costs one
-// request. Five thousand is the figure the questionnaire's refusal names, and
-// the reason bulk_usage_in_one_call is a `required` row: a family without it
-// would make every collection pass 5000 requests on someone else's server.
-func bulkPassIsOneCall(t *testing.T, h Harness, _ Shape) {
+// bulkPassIsBounded: the whole panel costs a bounded number of requests — one,
+// or one per page of at least driver.MinPageSize clients (ADR-0081). Five
+// thousand is the figure the questionnaire's refusal names, and the reason
+// bulk_usage_in_one_call is a `required` row: a family that reads client by
+// client would make every collection pass 5000 requests on someone else's
+// server. Fifty pages of a hundred is a different thing, and each of them is
+// paid for in the panel's budget (driver.NextPage).
+func bulkPassIsBounded(t *testing.T, h Harness, _ Shape) {
 	const clients = 5_000
 	for i := 0; i < clients; i++ {
 		h.Given(fmt.Sprintf("c%d", i))
@@ -600,13 +603,14 @@ func bulkPassIsOneCall(t *testing.T, h Harness, _ Shape) {
 	if err != nil {
 		t.Fatalf("GetUsage over %d clients: %v", clients, err)
 	}
-	if got := h.TotalCalls() - before; got != 1 {
-		t.Errorf("a bulk pass over %d clients cost %d requests, want exactly 1: "+
-			"per-client reads are the flood catalog 8.4 forbids", clients, got)
+	most := (clients + driver.MinPageSize - 1) / driver.MinPageSize
+	if got := h.TotalCalls() - before; got > most {
+		t.Errorf("a bulk pass over %d clients cost %d requests, want at most %d (pages of %d or more): "+
+			"per-client reads are the flood catalog 8.4 forbids", clients, got, most, driver.MinPageSize)
 	}
 	if len(readings) != clients {
-		t.Errorf("the bulk pass returned %d readings of %d clients: a pass that pages is a pass "+
-			"whose cost grows with the panel", len(readings), clients)
+		t.Errorf("the bulk pass returned %d readings of %d clients: a paged read that stops early "+
+			"is a pass that silently misses users", len(readings), clients)
 	}
 }
 
@@ -614,7 +618,9 @@ func bulkPassIsOneCall(t *testing.T, h Harness, _ Shape) {
 // every few seconds (F-027-u), so its cost is the one that multiplies. One
 // request per panel is the contract whether the family has a subset endpoint
 // or serves the subset from its bulk call — the loop reads the declared answer
-// to size its interval, never the shape of the implementation.
+// to size its interval, never the shape of the implementation. A family whose
+// bulk read is paged therefore needs a subset endpoint: served from fifty
+// pages, the hot pass would be fifty requests every few seconds (ADR-0081).
 func hotPassIsOneCall(t *testing.T, h Harness, _ Shape) {
 	const clients, hot = 5_000, 12
 	for i := 0; i < clients; i++ {

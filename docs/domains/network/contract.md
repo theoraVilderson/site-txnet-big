@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 16
+version: 17
 updated: 2026-09-24
 ---
 
@@ -60,9 +60,9 @@ while this service is down. `SetClientRateLimit` is the same for bandwidth.
 `GetUsageFor` takes a named subset, so the hot loop over the few configs near
 their ceiling does not cost a pass over all 5000 (F-027-u).
 
-`GetUsage` returns every client in **one** call, and that is the contract
-rather than an optimisation — catalog 8.4 forbids per-client reads and
-F-027-k asserts the request count. `ListClients` is its counterpart for
+`GetUsage` reads every client in a **bounded** number of requests: one, or one
+per page of at least 100, each paid for in the budget (ADR-0081). That is the
+contract, since catalog 8.4 forbids per-client reads. `ListClients` is its counterpart for
 state rather than bytes: the ceiling, rate and expiry the panel is
 **enforcing**, never the ones we last asked for. Both comparisons built on it —
 applied against allocated (F-027-t) and the three-key drift match (F-027-aa) —
@@ -146,9 +146,9 @@ far end rather than inside the driver. A driver can be right about every
 figure and still be a flood on a customer's own server, and that failure has
 no wrong reading to inspect: 5000 clients read one at a time is ~1000 req/s
 against a machine we do not own. Catalog 8.4 forbids it; these assert it. A
-bulk pass over 5000 clients is **one** request, and a hot pass (F-027-u) is one
-per panel whether the family has a subset endpoint or serves the subset from
-its bulk call.
+bulk pass over 5000 clients is at most **fifty** requests (pages of 100 or more,
+ADR-0081), and a hot pass (F-027-u) is **one** per panel. So a family that pages
+its bulk read needs a subset endpoint.
 
 The other two belong to `driver.Pace`, the layer every family is wrapped in
 rather than reimplements. Concurrent whole-panel reads **share one flight** —

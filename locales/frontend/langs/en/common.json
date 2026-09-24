@@ -2044,8 +2044,8 @@
           "unmet": "Refused: a server total cannot be split between the users on it, so there is nothing to bill."
         },
         "bulk_usage_in_one_call": {
-          "question": "Does one call return the usage of every client on the panel?",
-          "unmet": "Refused: 5000 clients would be 5000 requests a pass on someone else's server."
+          "question": "Can the usage of every client on the panel be read in a bounded number of requests: one, or one per page of at least 100 clients?",
+          "unmet": "Refused: a panel read client by client makes 5000 clients 5000 requests a pass on someone else's server."
         },
         "usage_for_named_subset": {
           "question": "Does one call return the usage of a named subset of clients?",

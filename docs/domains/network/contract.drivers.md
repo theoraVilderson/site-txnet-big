@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 15
+version: 16
 updated: 2026-09-24
 ---
 
@@ -22,6 +22,10 @@ family's own wire shapes, and call `conformance.Run` over it. Nothing else is
 added to the pipeline for a family — no case in the normaliser, the
 convergence loop or the registrar. A scenario the family cannot be put into is
 refused by the test's `Setup` and reported as skipped **by name**.
+
+A family whose bulk read is paged calls `driver.NextPage` before each page
+after the first, uses pages of at least `driver.MinPageSize`, and serves
+`GetUsageFor` from a subset endpoint, never from the pages (ADR-0081).
 
 A family that reports one byte total, not an up/down split, puts it in
 `DownBytes` (`driver.ClientUsage`). The suite accepts either shape as the far

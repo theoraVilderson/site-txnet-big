@@ -31,7 +31,10 @@ const CapabilitiesVersion = 1
 type RowKey string
 
 const (
-	RowPerClientUsage          RowKey = "per_client_usage"
+	RowPerClientUsage RowKey = "per_client_usage"
+	// RowBulkUsageInOneCall now asks for a bounded read — one request, or one
+	// per page of at least MinPageSize (ADR-0081). The key keeps its old words:
+	// it is an address stored in every panel's capabilities document.
 	RowBulkUsageInOneCall      RowKey = "bulk_usage_in_one_call"
 	RowUsageForNamedSubset     RowKey = "usage_for_named_subset"
 	RowUsageResetSupported     RowKey = "usage_reset_supported"
@@ -103,8 +106,8 @@ var questionnaire = []Row{
 	},
 	{
 		Key: RowBulkUsageInOneCall, Scope: ScopePull, Severity: SeverityRequired,
-		Question: "Does one call return the usage of every client on the panel?",
-		Unmet:    "Refused: 5000 clients would be 5000 requests a pass on someone else's server (catalog 8.4, F-027-k).",
+		Question: "Can the usage of every client on the panel be read in a bounded number of requests: one, or one per page of at least 100 clients?",
+		Unmet:    "Refused: a panel read client by client makes 5000 clients 5000 requests a pass on someone else's server (catalog 8.4, F-027-k, ADR-0081).",
 	},
 	{
 		Key: RowUsageForNamedSubset, Scope: ScopePull, Severity: SeverityDegrades,

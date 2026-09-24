@@ -13,6 +13,11 @@
 // invisible — every byte correct, and a flood on a customer's server. The
 // conformance suite asserts both properties over each family as it is paced.
 //
+// A page is a request (ADR-0081). A family whose bulk read is paged spends the
+// budget once per page: Pace pays for the first when the call starts, and the
+// driver calls NextPage before each page after it. A family that reads in one
+// request never calls it, and nothing changes for it.
+//
 // What is *not* here is the per-panel wiring: reading `maxRequestsPerMinute`
 // off the panel row, recording the observed rate, backing off on a 429 and
 // alerting the owner on a 403. That is F-027-v, and it builds a Budget from
@@ -27,6 +32,27 @@ import (
 	"sync"
 	"time"
 )
+
+// MinPageSize is the smallest page a paged bulk read may use (ADR-0081). Below
+// it, a pass over 5000 clients stops being a bounded handful of requests and
+// starts to become the per-client flood catalog 8.4 forbids. The conformance
+// suite holds a family's bulk pass to ceil(clients / MinPageSize) requests.
+const MinPageSize = 100
+
+// pacerKey carries the pacing layer through a call, so a driver's second and
+// later pages pay the same budget its first did.
+type pacerKey struct{}
+
+// NextPage spends the panel's budget on one more page of the read in flight,
+// waiting for room exactly as the call's first request did. Outside Pace (a
+// driver used unwrapped, as in its own tests) there is no budget to spend,
+// and it returns at once.
+func NextPage(ctx context.Context, op string) error {
+	if p, ok := ctx.Value(pacerKey{}).(*paced); ok {
+		return p.acquire(ctx, op)
+	}
+	return nil
+}
 
 // Budget is one panel's request allowance, as the panel row declares it.
 type Budget struct {
@@ -126,7 +152,7 @@ func (p *paced) acquire(ctx context.Context, op string) error {
 // longer deadline is bounded by the leader's. That is the safe direction: the
 // alternative is a call outliving the caller that authorised it, and the
 // loop's budget is per panel.
-func share[T any](ctx context.Context, p *paced, op, key string, call func() (T, error)) (T, error) {
+func share[T any](ctx context.Context, p *paced, op, key string, call func(context.Context) (T, error)) (T, error) {
 	var zero T
 	p.mu.Lock()
 	if joined, ok := p.flights[key]; ok {
@@ -148,7 +174,7 @@ func share[T any](ctx context.Context, p *paced, op, key string, call func() (T,
 	// behind it for a second request.
 	val, err := zero, p.acquire(ctx, op)
 	if err == nil {
-		val, err = call()
+		val, err = call(context.WithValue(ctx, pacerKey{}, p))
 	}
 
 	p.mu.Lock()
@@ -162,11 +188,11 @@ func share[T any](ctx context.Context, p *paced, op, key string, call func() (T,
 // spend is the write path and every call that is not a shareable read: it pays
 // the budget and goes. Two identical writes are two intentions and are never
 // collapsed — the second one is not the first one happening again.
-func (p *paced) spend(ctx context.Context, op string, call func() error) error {
+func (p *paced) spend(ctx context.Context, op string, call func(context.Context) error) error {
 	if err := p.acquire(ctx, op); err != nil {
 		return err
 	}
-	return call()
+	return call(context.WithValue(ctx, pacerKey{}, p))
 }
 
 // ---- the shared reads ------------------------------------------------------
@@ -177,31 +203,31 @@ func (p *paced) spend(ctx context.Context, op string, call func() error) error {
 // subsets do not, because the second one's answer is not in the first one's.
 
 func (p *paced) Capabilities(ctx context.Context) (Capabilities, error) {
-	return share(ctx, p, "Capabilities", "Capabilities", func() (Capabilities, error) {
+	return share(ctx, p, "Capabilities", "Capabilities", func(ctx context.Context) (Capabilities, error) {
 		return p.Driver.Capabilities(ctx)
 	})
 }
 
 func (p *paced) ListInbounds(ctx context.Context) ([]Inbound, error) {
-	return share(ctx, p, "ListInbounds", "ListInbounds", func() ([]Inbound, error) {
+	return share(ctx, p, "ListInbounds", "ListInbounds", func(ctx context.Context) ([]Inbound, error) {
 		return p.Driver.ListInbounds(ctx)
 	})
 }
 
 func (p *paced) ListClients(ctx context.Context) ([]RemoteClient, error) {
-	return share(ctx, p, "ListClients", "ListClients", func() ([]RemoteClient, error) {
+	return share(ctx, p, "ListClients", "ListClients", func(ctx context.Context) ([]RemoteClient, error) {
 		return p.Driver.ListClients(ctx)
 	})
 }
 
 func (p *paced) GetUsage(ctx context.Context) ([]ClientUsage, error) {
-	return share(ctx, p, "GetUsage", "GetUsage", func() ([]ClientUsage, error) {
+	return share(ctx, p, "GetUsage", "GetUsage", func(ctx context.Context) ([]ClientUsage, error) {
 		return p.Driver.GetUsage(ctx)
 	})
 }
 
 func (p *paced) GetUsageFor(ctx context.Context, remoteIDs []string) ([]ClientUsage, error) {
-	return share(ctx, p, "GetUsageFor", usageForKey(remoteIDs), func() ([]ClientUsage, error) {
+	return share(ctx, p, "GetUsageFor", usageForKey(remoteIDs), func(ctx context.Context) ([]ClientUsage, error) {
 		return p.Driver.GetUsageFor(ctx, remoteIDs)
 	})
 }
@@ -217,12 +243,12 @@ func usageForKey(remoteIDs []string) string {
 // ---- the rest --------------------------------------------------------------
 
 func (p *paced) HealthCheck(ctx context.Context) error {
-	return p.spend(ctx, "HealthCheck", func() error { return p.Driver.HealthCheck(ctx) })
+	return p.spend(ctx, "HealthCheck", func(ctx context.Context) error { return p.Driver.HealthCheck(ctx) })
 }
 
 func (p *paced) CreateClient(ctx context.Context, req CreateClientRequest) (RemoteClient, error) {
 	var out RemoteClient
-	err := p.spend(ctx, "CreateClient", func() error {
+	err := p.spend(ctx, "CreateClient", func(ctx context.Context) error {
 		var err error
 		out, err = p.Driver.CreateClient(ctx, req)
 		return err
@@ -231,36 +257,36 @@ func (p *paced) CreateClient(ctx context.Context, req CreateClientRequest) (Remo
 }
 
 func (p *paced) UpdateClient(ctx context.Context, req UpdateClientRequest) error {
-	return p.spend(ctx, "UpdateClient", func() error { return p.Driver.UpdateClient(ctx, req) })
+	return p.spend(ctx, "UpdateClient", func(ctx context.Context) error { return p.Driver.UpdateClient(ctx, req) })
 }
 
 func (p *paced) SetClientEnabled(ctx context.Context, remoteID string, enabled bool) error {
-	return p.spend(ctx, "SetClientEnabled", func() error { return p.Driver.SetClientEnabled(ctx, remoteID, enabled) })
+	return p.spend(ctx, "SetClientEnabled", func(ctx context.Context) error { return p.Driver.SetClientEnabled(ctx, remoteID, enabled) })
 }
 
 func (p *paced) DeleteClient(ctx context.Context, remoteID string) error {
-	return p.spend(ctx, "DeleteClient", func() error { return p.Driver.DeleteClient(ctx, remoteID) })
+	return p.spend(ctx, "DeleteClient", func(ctx context.Context) error { return p.Driver.DeleteClient(ctx, remoteID) })
 }
 
 func (p *paced) SetClientDataLimit(ctx context.Context, remoteID string, ceilingBytes int64) error {
-	return p.spend(ctx, "SetClientDataLimit", func() error {
+	return p.spend(ctx, "SetClientDataLimit", func(ctx context.Context) error {
 		return p.Driver.SetClientDataLimit(ctx, remoteID, ceilingBytes)
 	})
 }
 
 func (p *paced) SetClientRateLimit(ctx context.Context, remoteID string, rateBps int64) error {
-	return p.spend(ctx, "SetClientRateLimit", func() error {
+	return p.spend(ctx, "SetClientRateLimit", func(ctx context.Context) error {
 		return p.Driver.SetClientRateLimit(ctx, remoteID, rateBps)
 	})
 }
 
 func (p *paced) ResetUsage(ctx context.Context, remoteID string) error {
-	return p.spend(ctx, "ResetUsage", func() error { return p.Driver.ResetUsage(ctx, remoteID) })
+	return p.spend(ctx, "ResetUsage", func(ctx context.Context) error { return p.Driver.ResetUsage(ctx, remoteID) })
 }
 
 func (p *paced) BuildLink(ctx context.Context, client RemoteClient, inbound Inbound) (string, error) {
 	var out string
-	err := p.spend(ctx, "BuildLink", func() error {
+	err := p.spend(ctx, "BuildLink", func(ctx context.Context) error {
 		var err error
 		out, err = p.Driver.BuildLink(ctx, client, inbound)
 		return err
