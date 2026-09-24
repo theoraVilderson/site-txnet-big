@@ -128,7 +128,7 @@
       "scope": "any",
       "severity": "degrades",
       "question": "Can the panel's own billing or credit be switched off, leaving us the only writer of the quota?",
-      "unmet": "The panel cuts users off on a schedule we do not control, so it is run metering_only and the tenant keeps its own billing (F-027-ag)."
+      "unmet": "The panel cuts users off on a schedule we do not control, so it is run metering_only and the tenant keeps its own billing (F-027-ay)."
     }
   ]
 }

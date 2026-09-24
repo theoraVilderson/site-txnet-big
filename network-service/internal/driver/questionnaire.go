@@ -174,7 +174,7 @@ var questionnaire = []Row{
 	{
 		Key: RowInternalCreditDisabled, Scope: ScopeAny, Severity: SeverityDegrades,
 		Question: "Can the panel's own billing or credit be switched off, leaving us the only writer of the quota?",
-		Unmet:    "The panel cuts users off on a schedule we do not control, so it is run metering_only and the tenant keeps its own billing (F-027-ag).",
+		Unmet:    "The panel cuts users off on a schedule we do not control, so it is run metering_only and the tenant keeps its own billing (F-027-ay).",
 	},
 }
 

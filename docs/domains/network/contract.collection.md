@@ -152,5 +152,6 @@ packet on a closed row is still accounted for; it is a measurement.
 **Accepted window, same as the pull side.** If a publish succeeds and the
 commit after it fails, the NAS retransmits. The receive clock then differs, so
 the `deltaId` differs. Re-reading is chosen over losing, exactly as a pull
-cursor that failed to advance. A NAS no panel's review has accepted meets rule
-1 until a push driver ships (F-027-ag).
+cursor that failed to advance. The first push driver, User Manager (F-027-ag),
+is not opened until a push panel keeps its RADIUS secret apart from its API
+login (F-027-az); until then no NAS passes rule 1.
