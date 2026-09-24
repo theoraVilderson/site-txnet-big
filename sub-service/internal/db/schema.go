@@ -35,6 +35,11 @@ var RequiredColumns = map[string]map[string][]string{
 	"entitlement": {
 		"grant": {"id", "tenantId", "status", "subscriptionTokenHash"},
 	},
+	// The Grant's configs, their stored lines and their panel's state (F-113-b).
+	"network": {
+		"config": {"id", "grantId", "panelId", "status", "desiredRemote", "uuid", "linkLines", "linksUuid", "createdAt"},
+		"panel":  {"id", "panelState"},
+	},
 }
 
 // MissingColumns reports every required column the database does not have,

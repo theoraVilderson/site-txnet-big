@@ -20,7 +20,8 @@ lines of all its configs, served by its own Go deployable `sub-service`
 issuing or rotating the token (`entitlement`, F-502-p), deciding what a tenant's
 status allows (`tenant`, `TenantStatusPolicy`), any panel request.
 
-Built: the deployable and the host/token gate (F-113-a). The rest is the
+Built: the deployable, the host/token gate (F-113-a) and the base64 body of
+the served configs' stored lines (F-113-b). The rest is the
 F-113-* series, F-609 and F-027-bi..bm in `BACKLOG.md`.
 
 ## Files

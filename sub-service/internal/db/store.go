@@ -9,8 +9,9 @@ import (
 	"sub-service/internal/sub"
 )
 
-// Store is `/sub`'s reads against Postgres. Both are single-row lookups on a
-// unique column (`tenant_domain.domainValue`, `grant.subscriptionTokenHash`).
+// Store is `/sub`'s reads against Postgres: two single-row lookups on a unique
+// column (`tenant_domain.domainValue`, `grant.subscriptionTokenHash`), then the
+// Grant's configs.
 type Store struct {
 	DB Querier
 }
@@ -35,6 +36,31 @@ func (s Store) GrantByTokenHash(ctx context.Context, hash string) (sub.Grant, bo
 		   FROM entitlement."grant" WHERE "subscriptionTokenHash" = $1`, hash,
 	).Scan(&g.ID, &g.TenantID, &g.Status)
 	return g, found(err), missIsNil(err)
+}
+
+// ConfigsOfGrant reads every config of a Grant with its panel's state, oldest
+// first so the body's order does not change between renders. Filtering is the
+// handler's (`sub.serves`), so the rule is tested without a database.
+func (s Store) ConfigsOfGrant(ctx context.Context, grantID string) ([]sub.Config, error) {
+	rows, err := s.DB.Query(ctx,
+		`SELECT p."panelState"::text, c.status::text, c."desiredRemote"::text, c.uuid,
+		        COALESCE(c."linksUuid", ''), c."linkLines"
+		   FROM network.config c JOIN network.panel p ON p.id = c."panelId"
+		  WHERE c."grantId" = $1::uuid
+		  ORDER BY c."createdAt", c.id`, grantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var configs []sub.Config
+	for rows.Next() {
+		var c sub.Config
+		if err := rows.Scan(&c.PanelState, &c.Status, &c.DesiredRemote, &c.UUID, &c.LinksUUID, &c.LinkLines); err != nil {
+			return nil, err
+		}
+		configs = append(configs, c)
+	}
+	return configs, rows.Err()
 }
 
 func found(err error) bool { return err == nil }

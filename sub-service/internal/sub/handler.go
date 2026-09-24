@@ -3,9 +3,8 @@
 //
 // It is the one surface of this service reachable from the edge, and it is
 // read-only: the token in the path is the only authentication, no cookie is
-// set or read and no CORS header is ever sent (catalog C-16). Rendering the
-// Grant's stored link lines is F-113-b; until then a served Grant is an empty
-// body, which every client app reads as a valid subscription with nothing in it.
+// set or read and no CORS header is ever sent (catalog C-16). The body is the
+// Grant's stored link lines (F-113-b, render.go); it never asks a panel.
 package sub
 
 import (
@@ -40,6 +39,9 @@ type Store interface {
 	// GrantByTokenHash finds the Grant whose `subscriptionTokenHash` is the
 	// lowercase hex SHA-256 of the path token.
 	GrantByTokenHash(ctx context.Context, hash string) (Grant, bool, error)
+	// ConfigsOfGrant is every `network.config` of the Grant with its panel's
+	// state, in a stable order; which of them are served is decided here.
+	ConfigsOfGrant(ctx context.Context, grantID string) ([]Config, error)
 }
 
 // Handler serves the subscription endpoint.
@@ -117,10 +119,16 @@ func (h *Handler) Serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// F-113-b renders the Grant's stored lines here. An empty body is a valid
-	// base64 subscription with no configs in it.
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	configs, err := h.store.ConfigsOfGrant(ctx, grant.ID)
+	if err != nil {
+		// Not an empty body: an app that reads one drops every server it had.
+		h.unavailable(w, "config lookup failed", err)
+		return
+	}
+	body, contentType := render(DetectFormat(r), servedLines(configs))
+	w.Header().Set("Content-Type", contentType)
 	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(body)
 }
 
 func notFound(w http.ResponseWriter) {

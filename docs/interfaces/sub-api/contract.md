@@ -9,8 +9,8 @@ updated: 2026-09-24
 # Contract — sub-api
 
 **Partly built.** F-113-a is the deployable, the route and the host/token gate
-(`sub-service/`); the body, the headers and the cache are the later F-113-*
-rows and F-609. The *why* is in ADR-0082. The spec is catalog §7.5
+(`sub-service/`); F-113-b is the base64 body. The other formats, the headers
+and the cache are the later F-113-* rows and F-609. The *why* is in ADR-0082. The spec is catalog §7.5
 (`python3 tools/spec.py --section 7.5`), F-113 and F-609.
 
 ## TL;DR
@@ -37,10 +37,33 @@ Any miss is the **same** `404` and body, so a token cannot be probed from
 another tenant's domain. A database error is `503`, never `404`: a client app
 may drop a subscription on a 404. Only `GET`; any other method (a preflight
 included) is the mux's `405`. Every answer is `Cache-Control: no-store`.
-Until F-113-b a served Grant is `200` with an empty body.
+A read of the Grant's configs that fails is also `503`, never an empty body:
+an app that reads an empty body drops every server it had.
 
-Formats: base64 URI first (F-113-b); Clash, Sing-box and Xray JSON later
-(F-113-f). Outline waits for F-407. An unknown `User-Agent` gets base64.
+### What is served (F-113-b, built)
+`sub/render.go`. A config's stored lines (network `contract.links.md` rule 7)
+reach the body only when all of these hold:
+
+1. **Its panel still serves users:** `panelState` is `healthy`, `degraded` or
+   `throttled_or_blocked`. Every state is judged from the panel's *admin API*
+   (network `contract.budget.md`); the last two are a working panel that
+   answered oddly or refused us. `down` and `maintenance` are left out, and so
+   is any state added later until it is named in `servingPanelStates`.
+2. **It is live:** `status = active` and `desiredRemote = present`. A frozen
+   or disabled client is disabled on the panel, so its lines are dead links.
+3. **Its lines are from the client it is now:** `linksUuid = uuid`. After a
+   regenerate the old lines name a revoked uuid; the config contributes
+   nothing until the next pass captures again.
+
+Order: configs oldest first (`createdAt`, then `id`), each config's lines in
+the panel's order. The body is those lines joined by `\n` in standard padded
+base64, `text/plain; charset=utf-8`. No lines is an empty body.
+
+Format: `?format=` when it names one (`base64`, `clash`, `singbox`/`sing-box`,
+`xray`, any case), else the `User-Agent` (Clash / mihomo / Stash → Clash;
+sing-box / SFA / SFI / SFM → Sing-box), else base64. An unknown `?format=` is
+ignored, never a 4xx. A format not rendered yet is answered with base64:
+Clash, Sing-box and Xray JSON are F-113-f; Outline waits for F-407.
 
 ## Emits (events)
 None.

@@ -28,7 +28,10 @@ const (
 type fakeStore struct {
 	domains map[string]Domain
 	grants  map[string]Grant
+	configs map[string][]Config
 	err     error
+	// configErr fails only the config read, after the gate has passed.
+	configErr error
 	// hashes records what the store was asked for, so a test can prove the
 	// raw token never reached it.
 	hashes []string
@@ -50,6 +53,15 @@ func (f *fakeStore) GrantByTokenHash(_ context.Context, hash string) (Grant, boo
 	g, ok := f.grants[hash]
 	return g, ok, nil
 }
+
+func (f *fakeStore) ConfigsOfGrant(_ context.Context, grantID string) ([]Config, error) {
+	if f.configErr != nil {
+		return nil, f.configErr
+	}
+	return f.configs[grantID], nil
+}
+
+func discard() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
 
 func hashOf(s string) string {
 	sum := sha256.Sum256([]byte(s))
@@ -75,7 +87,7 @@ func newStore() *fakeStore {
 func serve(t *testing.T, store Store, method, host, path string) *http.Response {
 	t.Helper()
 	mux := http.NewServeMux()
-	New(store, slog.New(slog.NewTextHandler(io.Discard, nil))).Register(mux)
+	New(store, discard()).Register(mux)
 	req := httptest.NewRequest(method, path, nil)
 	req.Host = host
 	req.Header.Set("Origin", "https://panel.alpha.com")
