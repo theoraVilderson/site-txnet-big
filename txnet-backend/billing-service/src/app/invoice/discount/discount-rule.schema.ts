@@ -24,6 +24,7 @@ const fields = {
   categoryId: uuid('categoryId').nullable(),
   forNamedUsers: z.boolean(),
   userIds: z.array(uuid('userIds')).max(1000),
+  groupId: uuid('groupId').nullable(),
   startsAt: instant('startsAt'),
   endsAt: instant('endsAt').nullable(),
   isActive: z.boolean(),
@@ -36,6 +37,7 @@ export const createDiscountRuleSchema = z
     categoryId: fields.categoryId.optional(),
     forNamedUsers: fields.forNamedUsers.optional(),
     userIds: fields.userIds.optional(),
+    groupId: fields.groupId.optional(),
     endsAt: fields.endsAt.optional(),
     isActive: fields.isActive.optional(),
   })

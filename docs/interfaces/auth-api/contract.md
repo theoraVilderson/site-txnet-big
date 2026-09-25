@@ -2,7 +2,7 @@
 id: auth-api
 layer: interface
 status: active
-version: 32
+version: 33
 updated: 2026-09-25
 ---
 
@@ -13,7 +13,7 @@ in `domains/identity/contract.md`; this file is shapes, status codes, headers,
 cookies and rate limits. Field-level schemas live in code — link, do not copy:
 `txnet-backend/auth-service/src/app/auth/auth.schema.ts`,
 `.../auth/register/register.schema.ts`. Topic files: [contract.roles.md](contract.roles.md) (v25, F-018-n),
-[contract.reseller-users.md](contract.reseller-users.md) (v29, F-311-a).
+[contract.reseller-users.md](contract.reseller-users.md) (v29, F-311-a), [contract.user-groups.md](contract.user-groups.md) (v33, F-114-j).
 
 ## Conventions
 

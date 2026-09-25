@@ -425,6 +425,14 @@ export const RateLimitBucket = {
   RESELLER_USER_WRITE: 'reseller-user:write',
 
   /**
+   * User groups in `auth-service` (F-114-j), per caller. The usual pair: the
+   * list and a group's members are read as an admin browses, while a write
+   * changes who a discount rule or a campaign reaches.
+   */
+  USER_GROUP_READ: 'user-group:read',
+  USER_GROUP_WRITE: 'user-group:write',
+
+  /**
    * A named reseller's own revenue figure in `billing-service` (F-311-b), per
    * caller. Read only, so there is one bucket and not the usual pair.
    *

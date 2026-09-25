@@ -12,7 +12,8 @@
  *  - a percentage rounds down to the cent and a fixed amount never takes more
  *    than the price, as a coupon's does;
  *  - an admin writes only their own tenant's rules, naming only their own
- *    users and products they can see, and every write leaves an audit row.
+ *    users, groups and products they can see, and every write leaves an audit row;
+ *  - a group rule (F-114-j) serves the group's user members and no one else.
  */
 import { DiscountRuleKind, Prisma } from '@prisma/client';
 import { runWithTenant } from '@txnet-backend/shared-core';
@@ -28,6 +29,8 @@ const PRODUCT = '44444444-4444-4444-8444-444444444444';
 const OTHER_PRODUCT = '44444444-4444-4444-8444-444444444445';
 const PARENT_CATEGORY = '55555555-5555-4555-8555-555555555551';
 const CATEGORY = '55555555-5555-4555-8555-555555555552';
+const GROUP = '66666666-6666-4666-8666-666666666661';
+const OTHER_GROUP = '66666666-6666-4666-8666-666666666662';
 
 const D = (v: string) => new Prisma.Decimal(v);
 const AT = new Date('2026-09-25T12:00:00Z');
@@ -42,6 +45,7 @@ function rule(o: Partial<DiscountRuleFacts> = {}): DiscountRuleFacts {
     categoryId: null,
     forNamedUsers: false,
     userIds: [],
+    groupId: null,
     startsAt: new Date('2026-09-01T00:00:00Z'),
     endsAt: null,
     isActive: true,
@@ -50,7 +54,7 @@ function rule(o: Partial<DiscountRuleFacts> = {}): DiscountRuleFacts {
   };
 }
 
-const purchase: PurchaseFacts = { userId: USER, productId: PRODUCT, categoryIds: [CATEGORY, PARENT_CATEGORY], at: AT };
+const purchase: PurchaseFacts = { userId: USER, productId: PRODUCT, categoryIds: [CATEGORY, PARENT_CATEGORY], groupIds: [GROUP], at: AT };
 
 describe('ruleMatches', () => {
   it('a rule for everything and everyone matches inside its window', () => {
@@ -65,11 +69,13 @@ describe('ruleMatches', () => {
     ['a category the product is not under', rule({ categoryId: '55555555-5555-4555-8555-555555555559' })],
     ['other named users', rule({ forNamedUsers: true, userIds: [OTHER_USER] })],
     ['named users, none listed', rule({ forNamedUsers: true, userIds: [] })],
+    ['a group the buyer is not in', rule({ groupId: OTHER_GROUP })],
   ])('takes nothing when %s', (_why, r) => {
     expect(ruleMatches(r, purchase)).toBe(false);
   });
 
-  it('matches its product, its category, a category above the product, and a named user', () => {
+  it('matches its product, its category, a category above the product, a named user, and a group the buyer is in', () => {
+    expect(ruleMatches(rule({ groupId: GROUP }), purchase)).toBe(true);
     expect(ruleMatches(rule({ productId: PRODUCT }), purchase)).toBe(true);
     expect(ruleMatches(rule({ categoryId: CATEGORY }), purchase)).toBe(true);
     expect(ruleMatches(rule({ categoryId: PARENT_CATEGORY }), purchase)).toBe(true);
@@ -143,6 +149,7 @@ describe('DiscountRuleAdminService', () => {
         },
         findUnique: async () => ({ ...created[0], users: [] }),
       },
+      userGroup: { findUnique: async ({ where }: { where: { id: string } }) => (where.id === GROUP ? { id: GROUP } : null) },
       discountRuleUser: { createMany: async () => ({ count: 1 }), deleteMany: async () => ({ count: 0 }) },
       adminAuditLog: { create: async ({ data }: { data: Record<string, unknown> }) => audits.push(data) },
     };
@@ -169,6 +176,8 @@ describe('DiscountRuleAdminService', () => {
     ['named users, none given', { forNamedUsers: true, userIds: [] }, 'named_needs_users'],
     ['a product this tenant cannot see', { productId: OTHER_PRODUCT }, 'target_not_found'],
     ['a user of another tenant', { forNamedUsers: true, userIds: [OTHER_USER] }, 'user_out_of_scope'],
+    ['named users and a group at once', { forNamedUsers: true, userIds: [USER], groupId: GROUP }, 'one_audience'],
+    ['a group this tenant cannot see', { groupId: OTHER_GROUP }, 'group_not_found'],
   ])('refuses %s, writing nothing', async (_why, patch, reason) => {
     const { service, audits, created } = build({ users: [{ id: OTHER_USER, tenantId: '22222222-2222-4222-8222-222222222222' }] });
     const run = asTenant(() => service.create(actor, { ...base, ...patch } as never));

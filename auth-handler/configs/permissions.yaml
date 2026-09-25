@@ -78,6 +78,10 @@ roles:
       # Campaign drafts (F-035-c). A tenant's Admin drafts its own tenant's
       # campaigns; the service keeps platform-wide ones for the platform owner.
       - campaign.manage
+      # User groups (F-114-j). A tenant's Admin manages its own tenant's
+      # groups; only the platform owner's may hold resellers or another
+      # tenant's users — the service and a trigger refuse it elsewhere.
+      - user_group.manage
       # Manual billing-wallet adjustment (F-019-a, D-41). Only the platform
       # owner's Admin gets through: the service refuses every other tenant.
       - tenant_billing.adjust

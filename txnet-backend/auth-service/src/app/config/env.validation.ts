@@ -247,6 +247,10 @@ export const envSchema = z.object({
   // it names, so it is budgeted like the bot connect beside it.
   RESELLER_USER_READ_RATE_LIMIT: rateLimit(60),
   RESELLER_USER_WRITE_RATE_LIMIT: rateLimit(20),
+  // User groups (F-114-j), per caller. Reads as an admin browses; a write
+  // changes who a discount rule or a campaign reaches.
+  USER_GROUP_READ_RATE_LIMIT: rateLimit(120),
+  USER_GROUP_WRITE_RATE_LIMIT: rateLimit(60),
   // The platform-wide ceiling over every guarded route's bucket, as a
   // multiple of that route's own per-tenant limit (F-066-s). Per-tenant
   // buckets hand one IP a fresh budget for every tenant it can name, so this

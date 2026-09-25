@@ -13,7 +13,8 @@ import { PrismaService } from '../../prisma/prisma.service';
  * there is no cross-tenant pool here (unlike coupons, ADR-0053 — a platform
  * rule serving other tenants' users is not a thing). The product or category a
  * rule covers must be one the tenant can see (its own or the platform's), and
- * a named user one of its own.
+ * a named user one of its own, and a group (F-114-j) one of its own — the
+ * composite foreign key refuses any other as well.
  *
  * A rule an invoice names is never deleted (the invoice's foreign key is
  * RESTRICT): it is switched off. Changing one changes only invoices made
@@ -27,7 +28,9 @@ export type DiscountRuleRejection =
   | 'invalid_value'
   | 'invalid_window'
   | 'one_target'
-  | 'named_needs_users';
+  | 'named_needs_users'
+  | 'one_audience'
+  | 'group_not_found';
 
 export class DiscountRuleRefused extends Error {
   constructor(
@@ -50,6 +53,8 @@ export type DiscountRuleInput = {
   categoryId?: string | null;
   forNamedUsers?: boolean;
   userIds?: string[];
+  /** One user group of this tenant (F-114-j); never with `forNamedUsers`. */
+  groupId?: string | null;
   startsAt: string;
   endsAt?: string | null;
   isActive?: boolean;
@@ -69,6 +74,7 @@ export type DiscountRuleView = {
   categoryId: string | null;
   forNamedUsers: boolean;
   userIds: string[];
+  groupId: string | null;
   startsAt: Date;
   endsAt: Date | null;
   isActive: boolean;
@@ -87,6 +93,7 @@ type Merged = {
   categoryId: string | null;
   forNamedUsers: boolean;
   userIds: string[];
+  groupId: string | null;
   startsAt: Date;
   endsAt: Date | null;
   isActive: boolean;
@@ -111,6 +118,7 @@ function viewOf(row: RuleRow, userIds: string[], now = Date.now()): DiscountRule
     categoryId: row.categoryId,
     forNamedUsers: row.forNamedUsers,
     userIds,
+    groupId: row.groupId,
     startsAt: row.startsAt,
     endsAt: row.endsAt,
     isActive: row.isActive,
@@ -135,6 +143,7 @@ function checkShape(m: Merged): void {
     throw new DiscountRuleRefused('invalid_window');
   }
   if (m.forNamedUsers && m.userIds.length === 0) throw new DiscountRuleRefused('named_needs_users');
+  if (m.forNamedUsers && m.groupId !== null) throw new DiscountRuleRefused('one_audience');
 }
 
 function decimal(v: string): Prisma.Decimal {
@@ -169,12 +178,13 @@ export class DiscountRuleAdminService {
         categoryId: input.categoryId ?? null,
         forNamedUsers: input.forNamedUsers ?? false,
         userIds: [...new Set(input.userIds ?? [])],
+        groupId: input.groupId ?? null,
         startsAt: new Date(input.startsAt),
         endsAt: input.endsAt ? new Date(input.endsAt) : null,
         isActive: input.isActive ?? true,
       };
       checkShape(m);
-      await this.checkRelations(tx, tenant.id, m, { target: true, users: true });
+      await this.checkRelations(tx, tenant.id, m, { target: true, users: true, group: true });
 
       const { userIds, ...columns } = m;
       const row = await tx.discountRule.create({ data: { ...columns, tenantId: tenant.id, createdByAdminId: actor.adminId } });
@@ -203,6 +213,7 @@ export class DiscountRuleAdminService {
         categoryId: patch.categoryId !== undefined ? patch.categoryId : row.categoryId,
         forNamedUsers: patch.forNamedUsers ?? row.forNamedUsers,
         userIds: patch.userIds !== undefined ? [...new Set(patch.userIds)] : before.userIds,
+        groupId: patch.groupId !== undefined ? patch.groupId : row.groupId,
         startsAt: patch.startsAt !== undefined ? new Date(patch.startsAt) : row.startsAt,
         endsAt: patch.endsAt !== undefined ? (patch.endsAt ? new Date(patch.endsAt) : null) : row.endsAt,
         isActive: patch.isActive ?? row.isActive,
@@ -211,6 +222,7 @@ export class DiscountRuleAdminService {
       await this.checkRelations(tx, tenant.id, m, {
         target: patch.productId !== undefined || patch.categoryId !== undefined,
         users: patch.userIds !== undefined,
+        group: patch.groupId !== undefined,
       });
 
       const { userIds, ...columns } = m;
@@ -226,8 +238,8 @@ export class DiscountRuleAdminService {
     });
   }
 
-  /** The product or category is one this tenant can see and not archived; a named user is this tenant's. */
-  private async checkRelations(tx: Tx, tenantId: string, m: Merged, check: { target: boolean; users: boolean }): Promise<void> {
+  /** The product or category is one this tenant can see and not archived; a named user and a group are this tenant's. */
+  private async checkRelations(tx: Tx, tenantId: string, m: Merged, check: { target: boolean; users: boolean; group: boolean }): Promise<void> {
     if (check.target && m.productId !== null) {
       const p = await tx.product.findFirst({ where: { id: m.productId, archivedAt: null }, select: { id: true } });
       if (!p) throw new DiscountRuleRefused('target_not_found', m.productId);
@@ -235,6 +247,11 @@ export class DiscountRuleAdminService {
     if (check.target && m.categoryId !== null) {
       const c = await tx.productCategory.findFirst({ where: { id: m.categoryId, archivedAt: null }, select: { id: true } });
       if (!c) throw new DiscountRuleRefused('target_not_found', m.categoryId);
+    }
+    if (check.group && m.groupId !== null) {
+      // RLS: another tenant's group is not found, as one that never existed.
+      const g = await tx.userGroup.findUnique({ where: { id: m.groupId }, select: { id: true } });
+      if (!g) throw new DiscountRuleRefused('group_not_found', m.groupId);
     }
     if (check.users && m.userIds.length > 0) {
       const users = await tx.user.findMany({ where: { id: { in: m.userIds } }, select: { id: true, tenantId: true } });

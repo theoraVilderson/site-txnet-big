@@ -188,7 +188,7 @@ reserve/confirm state machine (built, F-092-h).
 | reserve coupons — **built**, see above | tx, userId, orderReferenceId, paymentTransactionId?, applied[] | `coupon_redemption` rows (`pending`) | sync tx | refused (reason), invalid input, scope conflict |
 | confirm / release coupons — **built**, see above | tx, orderReferenceId, outcome | count moved to `confirmed` / `cancelled` / `expired` | sync tx | scope conflict |
 | create an invoice — **built**, [contract.purchase.md](contract.purchase.md) | userId (header), variantId, couponCodes[] | invoice priced from the catalog, the best discount rule with no code taken (F-114-h), coupons held, 30-min expiry | sync | variant not for sale, coupon hold refused |
-| manage discount rules — **built**, [contract.purchase.md](contract.purchase.md) | `coupon.manage`; name, kind, value, product or category, named users, window | the tenant's own rule, audited | sync | invalid value / window / target, user out of scope |
+| manage discount rules — **built**, [contract.purchase.md](contract.purchase.md) | `coupon.manage`; name, kind, value, product or category, named users or one user group (F-114-j), window | the tenant's own rule, audited | sync | invalid value / window / target, user or group out of scope |
 | accrue affiliate commission | triggering paymentId | `affiliate_commission` (`pending`) | async | — |
 
 ## Emits (events)
@@ -204,6 +204,7 @@ Its delivery's `entitlement.grant.delivered` / `.refunded` are entitlement's (F-
 | identity | `ownerUserId`, transfer sender/receiver, OTP for transfer confirm | transfer/credit blocked |
 | catalog | a coupon scope's `productId` / `variantId`, and a `free_grant` coupon's `grantVariantId` (F-026-a, D-35); the variant's price in effect, for an invoice (F-026-c, `sellableOfferById`, F-111-a); a discount rule's `productId` / `categoryId` and the product's category chain (F-114-h) | coupon scope check fails; a free-service code is refused `variant_not_found` |
 | entitlement | `GrantService.issue` inside the gift redemption's transaction, `source = coupon` (F-502-l-b, ADR-0049), and inside an invoice's payment, `source = purchase` (F-111-b) | the redemption rolls back; the code stays unused |
+| governance | a discount rule's `groupId` names one of the tenant's user groups; at pricing, the buyer's own `user_group_member` rows (user members only), read under RLS in the invoice's `tenantTransaction` (F-114-j) | a group rule matches nobody |
 | currency | base-currency amounts only in; display conversion is currency's job | — |
 | tenant | `tenantId` denormalized on `wallet_transaction` / `payment_transaction` for reporting | — |
 | tenant | the request tenant's `tenant_domain` rows — the `panel` host a gateway callback comes back to, proven custom domain first, never a CNAME target (`isCnameTarget`, ADR-0060 (6)) (F-092-i, ADR-0020). Read under RLS in its `tenantTransaction`; never a request header | no host to answer on: starting a payment is refused 503 |

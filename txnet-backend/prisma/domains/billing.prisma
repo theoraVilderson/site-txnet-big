@@ -553,6 +553,8 @@ model DiscountRule {
   categoryId       String?          @db.Uuid
   /// True = only the users in `users`.
   forNamedUsers    Boolean          @default(false)
+  /// Only this group's user members (F-114-j); never with `forNamedUsers`.
+  groupId          String?          @db.Uuid
   startsAt         DateTime
   /// Null = until switched off.
   endsAt           DateTime?
@@ -563,6 +565,7 @@ model DiscountRule {
 
   product  Product?           @relation(fields: [productId], references: [id], onDelete: Cascade)
   category ProductCategory?   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  group    UserGroup?         @relation(fields: [groupId, tenantId], references: [id, tenantId], onDelete: Restrict)
   users    DiscountRuleUser[]
   invoices Invoice[]
 

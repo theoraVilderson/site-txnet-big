@@ -93,3 +93,70 @@ model UserRestriction {
 }
 
 // =============================================================================
+
+/// Who is a member of a user group (F-114-j): a person, or — in the platform
+/// owner's groups only — a whole reseller.
+enum UserGroupMemberType {
+  user
+  tenant
+
+  @@schema("governance")
+}
+
+/// How a group's members are decided. `manual` alone today: an admin adds
+/// and removes them. A computed kind is a new value here, never a new table —
+/// consumers ask `user-group.ts`, not the member rows (F-114-j).
+enum UserGroupKind {
+  manual
+
+  @@schema("governance")
+}
+
+/// F-114-j — a named set of one tenant's users, the one target discount rules
+/// (F-114-h), campaigns and restrictions share. Every group is exactly one
+/// tenant's (strict RLS). The platform owner's groups may also hold resellers,
+/// another tenant's users, or every reseller at once (`allTenants`) — a
+/// trigger refuses those in any other tenant's group.
+model UserGroup {
+  id               String        @id @default(uuid()) @db.Uuid
+  tenantId         String        @db.Uuid
+  name             String        @db.VarChar(80)
+  kind             UserGroupKind @default(manual)
+  /// Platform owner's groups only: every reseller is a member.
+  allTenants       Boolean       @default(false)
+  createdByAdminId String        @db.Uuid
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @default(now()) @updatedAt
+
+  members       UserGroupMember[]
+  discountRules DiscountRule[]
+
+  @@unique([tenantId, name])
+  /// The composite key members and discount rules point at, so neither can
+  /// name another tenant's group.
+  @@unique([id, tenantId])
+  @@map("user_group")
+  @@schema("governance")
+}
+
+/// One member of a group, once. `tenantId` is the group's (the RLS key);
+/// exactly one of `userId` / `memberTenantId` is set, by `memberType` (CHECK).
+model UserGroupMember {
+  id             String              @id @default(uuid()) @db.Uuid
+  groupId        String              @db.Uuid
+  tenantId       String              @db.Uuid
+  memberType     UserGroupMemberType
+  userId         String?             @db.Uuid
+  memberTenantId String?             @db.Uuid
+  addedByAdminId String              @db.Uuid
+  createdAt      DateTime            @default(now())
+
+  group UserGroup @relation(fields: [groupId, tenantId], references: [id, tenantId], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@unique([groupId, memberTenantId])
+  @@index([userId])
+  @@index([memberTenantId])
+  @@map("user_group_member")
+  @@schema("governance")
+}

@@ -95,6 +95,13 @@ enum AdminAction {
   tenant_status_change
   // F-019-g. The platform owner gives a reseller more time to pay its renewal.
   tenant_subscription_grace
+  // F-114-j. A user group, and who is in it; a member added or removed is
+  // its own act, not an update of the group.
+  user_group_create
+  user_group_update
+  user_group_delete
+  user_group_member_add
+  user_group_member_remove
 
   @@schema("audit")
 }
@@ -135,6 +142,8 @@ enum AuditTargetType {
   tenant_subscription_setting
   // F-114-h. A discount with no code.
   discount_rule
+  // F-114-j. A user group.
+  user_group
 
   @@schema("audit")
 }

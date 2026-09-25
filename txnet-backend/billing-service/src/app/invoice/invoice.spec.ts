@@ -141,6 +141,7 @@ describe('InvoiceService.create', () => {
       productId: PRODUCT,
       categoryId: null,
       forNamedUsers: false,
+      groupId: null,
       users: [],
       startsAt: new Date('2026-01-01T00:00:00Z'),
       endsAt: null,
@@ -165,7 +166,7 @@ describe('InvoiceService.create', () => {
   });
 
   it('asks no coupon engine when a rule took the whole price: every code is nothing_to_discount', async () => {
-    const rule = { id: 'free', name: 'Gift', kind: 'percentage', value: D('100'), productId: null, categoryId: null, forNamedUsers: false, users: [], startsAt: new Date('2026-01-01T00:00:00Z'), endsAt: null, isActive: true, createdAt: new Date('2026-01-01T00:00:00Z') };
+    const rule = { id: 'free', name: 'Gift', kind: 'percentage', value: D('100'), productId: null, categoryId: null, forNamedUsers: false, groupId: null, users: [], startsAt: new Date('2026-01-01T00:00:00Z'), endsAt: null, isActive: true, createdAt: new Date('2026-01-01T00:00:00Z') };
     const { service, calls } = buildCreate({ rules: [rule] });
 
     const invoice = await asTenant(() => service.create({ userId: USER, variantId: VARIANT, couponCodes: ['SPRING'] }));

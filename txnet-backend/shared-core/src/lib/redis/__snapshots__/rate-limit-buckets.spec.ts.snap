@@ -79,6 +79,8 @@ exports[`RateLimitBucket > records the whole rate-limited surface in one place 1
   "RESELLER_BOT_WRITE = reseller-bot:write",
   "RESELLER_USER_READ = reseller-user:read",
   "RESELLER_USER_WRITE = reseller-user:write",
+  "USER_GROUP_READ = user-group:read",
+  "USER_GROUP_WRITE = user-group:write",
   "RESELLER_REVENUE_READ = reseller-revenue:read",
   "RESELLER_CAMPAIGN_READ = reseller-campaign:read",
   "RESELLER_CAMPAIGN_WRITE = reseller-campaign:write",

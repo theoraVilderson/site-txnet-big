@@ -11,6 +11,7 @@ import { AutomationModule } from './automation/automation.module';
 import { WebhookRotationModule } from './automation/webhook-rotation.module';
 import { ResellerBotModule } from './automation/reseller-bot.module';
 import { VaultModule } from './tenant/vault/vault.module';
+import { UserGroupModule } from './governance/user-groups/user-group.module';
 import { LanguageMiddleware } from './common/middlewares/language.middleware';
 import { ServiceCallerMiddleware } from './common/security/service-caller';
 import { SwitchScopeMiddleware } from './common/security/switch-scope.middleware';
@@ -30,6 +31,7 @@ import { TenantContextMiddleware } from './tenant-context/tenant-context.middlew
     AutomationModule,
     WebhookRotationModule,
     ResellerBotModule,
+    UserGroupModule,
   ],
 })
 export class AppModule implements NestModule {

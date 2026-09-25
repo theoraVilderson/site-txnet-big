@@ -1,4 +1,4 @@
-import { DiscountRuleKind, Prisma } from '@prisma/client';
+import { DiscountRuleKind, Prisma, UserGroupMemberType } from '@prisma/client';
 import { categoryChainInclude } from '@txnet-backend/shared-core';
 
 /**
@@ -6,8 +6,9 @@ import { categoryChainInclude } from '@txnet-backend/shared-core';
  * takes, and what it takes.
  *
  * A rule is one tenant's own (RLS). It covers everything, one product, or one
- * category **and the categories under it**; it serves everyone, or its named
- * users; it runs from `startsAt` to `endsAt` (exclusive; null = until switched
+ * category **and the categories under it**; it serves everyone, its named
+ * users, or one user group's user members (F-114-j — a reseller member of the
+ * platform's group is not its customers, as governance `admitsUser` says); it runs from `startsAt` to `endsAt` (exclusive; null = until switched
  * off). Of every rule that matches, the one that takes the most wins — rules
  * never stack — and a tie goes to the older rule, so the same purchase is
  * priced the same twice. Coupons are then validated against what it left.
@@ -29,6 +30,8 @@ export type DiscountRuleFacts = {
   forNamedUsers: boolean;
   /** For a `forNamedUsers` rule: its users, or at least the buyer if named. */
   userIds: readonly string[];
+  /** Only this group's user members (F-114-j); never with `forNamedUsers`. */
+  groupId: string | null;
   startsAt: Date;
   endsAt: Date | null;
   isActive: boolean;
@@ -40,6 +43,8 @@ export type PurchaseFacts = {
   productId: string;
   /** Every category the product is filed in, and every one above each. */
   categoryIds: readonly string[];
+  /** Every group the buyer is a user member of. */
+  groupIds: readonly string[];
   at: Date;
 };
 
@@ -53,6 +58,7 @@ export function ruleMatches(rule: DiscountRuleFacts, p: PurchaseFacts): boolean 
   if (rule.productId !== null && rule.productId !== p.productId) return false;
   if (rule.categoryId !== null && !p.categoryIds.includes(rule.categoryId)) return false;
   if (rule.forNamedUsers && !rule.userIds.includes(p.userId)) return false;
+  if (rule.groupId !== null && !p.groupIds.includes(rule.groupId)) return false;
   return true;
 }
 
@@ -115,6 +121,11 @@ export async function discountRuleFor(
   const categoryIds = new Set<string>();
   for (const l of links) chainIds(l.category as CategoryWithChain, categoryIds);
 
+  // The buyer's groups, asked only when a rule targets one — RLS keeps them this tenant's.
+  const groupIds = rows.some((r) => r.groupId !== null)
+    ? (await tx.userGroupMember.findMany({ where: { userId, memberType: UserGroupMemberType.user }, select: { groupId: true } })).map((m) => m.groupId)
+    : [];
+
   const facts = rows.map((r) => ({ ...r, userIds: r.users.map((u) => u.userId) }));
-  return bestDiscountRule(facts, { userId, productId, categoryIds: [...categoryIds], at }, amount);
+  return bestDiscountRule(facts, { userId, productId, categoryIds: [...categoryIds], groupIds, at }, amount);
 }

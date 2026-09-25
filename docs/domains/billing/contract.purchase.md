@@ -143,11 +143,12 @@ ADR-0087, D-45. `discount-rule.ts` decides, proved by
 | Rule | Held by |
 |---|---|
 | A rule is its tenant's own (strict RLS), the platform owner's included; none serves another tenant's users | `discount_rule` policies; every read and write in the caller's `tenantTransaction` |
-| It covers everything, one `productId`, or one `categoryId` **and every category under it** — never both (CHECK); it serves everyone, or its `discount_rule_user` rows (`forNamedUsers`) | `ruleMatches` |
+| It covers everything, one `productId`, or one `categoryId` **and every category under it** — never both (CHECK); it serves everyone, its `discount_rule_user` rows (`forNamedUsers`), or the **user** members of one of its tenant's groups (`groupId`, F-114-j) — never named users and a group at once (CHECK); a reseller member of the platform's group is not its customers | `ruleMatches`; `discount_rule_one_audience`; `discount_rule_groupId_tenantId_fkey` (the group's `(id, tenantId)`) |
 | It runs from `startsAt` to `endsAt`, the end exclusive, null = until switched off; `isActive: false` takes nothing | `ruleMatches`; `discount_rule_window_ok` |
 | A percentage in (0, 100] rounds down to the cent; a fixed amount takes at most the price | `ruleDiscountOf`; `discount_rule_value_ok` |
 | Of every match, the one that takes the most; a tie goes to the older rule. Rules never stack | `bestDiscountRule` |
 | An invoice keeps what its rule took: an edit reaches only later invoices, and a rule an invoice names is switched off, never deleted | `invoice.ruleDiscount`; `invoice_discountRuleId_fkey` RESTRICT |
+| A group a rule names is not deleted: the rule is pointed elsewhere first | `discount_rule_groupId_tenantId_fkey` RESTRICT; governance `group_in_use` |
 
 `/api/billing/discount-rules` — `DiscountRuleController`, behind `coupon.manage`
 (`CouponPermissionGuard`) and the coupon admin's `COUPON_ADMIN_READ` / `_WRITE`
@@ -155,8 +156,8 @@ budgets. Bodies are `.strict()`; money is a decimal string (C-02).
 
 | Route | Answer | Refusals (`{reason, message}`) |
 |---|---|---|
-| `GET /` | every rule of the caller's tenant, newest first: `{id, name, kind, value, productId, categoryId, forNamedUsers, userIds, startsAt, endsAt, isActive, status, createdAt, updatedAt}`; `status` is `off` / `ended` / `scheduled` / `running` | — |
-| `POST /` | `201` the rule. Body: `name` (≤ 80), `kind` (`percentage` / `fixed_amount`), `value`, `startsAt`; optional `productId`, `categoryId`, `forNamedUsers`, `userIds` (≤ 1000), `endsAt`, `isActive` | `400` `invalid_value`, `invalid_window`, `one_target`, `named_needs_users`, `user_out_of_scope` (a user not of this tenant); `404 target_not_found` (a product or category this tenant cannot see, or archived) |
+| `GET /` | every rule of the caller's tenant, newest first: `{id, name, kind, value, productId, categoryId, forNamedUsers, userIds, groupId, startsAt, endsAt, isActive, status, createdAt, updatedAt}`; `status` is `off` / `ended` / `scheduled` / `running` | — |
+| `POST /` | `201` the rule. Body: `name` (≤ 80), `kind` (`percentage` / `fixed_amount`), `value`, `startsAt`; optional `productId`, `categoryId`, `forNamedUsers`, `userIds` (≤ 1000), `groupId`, `endsAt`, `isActive` | `400` `invalid_value`, `invalid_window`, `one_target`, `named_needs_users`, `one_audience` (named users and a group), `user_out_of_scope` (a user not of this tenant); `404 target_not_found` (a product or category this tenant cannot see, or archived), `404 group_not_found` (not this tenant's group) |
 | `PATCH /:id` | the rule, any field of the body above; `userIds` replaces the list | the same, and `404 rule_not_found` |
 
 Every write leaves an `admin_audit_log` row: `discount_rule_create` /

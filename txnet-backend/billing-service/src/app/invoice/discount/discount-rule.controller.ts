@@ -40,6 +40,8 @@ export const DISCOUNT_RULE_REFUSAL_STATUS: Record<DiscountRuleRejection, 400 | 4
   invalid_window: 400,
   one_target: 400,
   named_needs_users: 400,
+  one_audience: 400,
+  group_not_found: 404,
 };
 
 // The coupon admin's budgets: the same admins, the same family of writes (ADR-0087).
