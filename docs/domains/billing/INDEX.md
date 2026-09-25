@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 46
+version: 47
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -76,9 +76,9 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-25 | contract v47 (F-027-ca): `DELETE /api/billing/systems/panel-groups/:id` — an empty group no variant names; else 409 `group_has_members` / `group_in_use`. Additive. [contract.systems.md](contract.systems.md) rule 24a. Consumer panel-web: F-027-cb |
 | 2026-09-25 | contract v46 (F-027-bz): `DELETE /api/billing/systems/panels/:id` — deleted with no history, archived (`retiredAt`) with it; `POST …/restore`; the list answers `retiredAt`. Additive. [contract.panel-lifecycle.md](contract.panel-lifecycle.md). Consumer panel-web: F-027-cb |
 | 2026-09-25 | contract v45 (F-027-by): new `PATCH /api/billing/systems/panels/:id` — a panel's settings; a changed API or link address sends it back to `pending`. Additive. [contract.panel-lifecycle.md](contract.panel-lifecycle.md). Consumer panel-web: F-027-cb |
 | 2026-09-25 | contract v44 (F-114-j): a discount rule may serve one user group (`groupId`, governance) — its user members; `one_audience` / `group_not_found`. Additive. [contract.purchase.md](contract.purchase.md). Consumer panel-web: F-114-k |
-| 2026-09-25 | contract v43 (F-114-h, ADR-0087): new `/api/billing/discount-rules` (list, create, patch; `coupon.manage`) — a discount with no code, the tenant's own; an invoice takes the best matching rule before coupons and answers `automaticDiscount`. Additive |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

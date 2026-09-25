@@ -61,7 +61,7 @@ tenant's rows and the platform's), everything for `txnet_cross_tenant`.
 The platform owner, on billing's systems routes (F-027-bw,
 `billing/contract.systems.md` rules 20–24) from the panel's `/systems` page
 (F-027-bx, panel-web `contract.systems.md` rule 11): list, create, edit, add
-and remove a member, drain one. Platform groups only, always `mirror`; a member
+and remove a member, drain one, delete an empty group no variant names (F-027-ca). Platform groups only, always `mirror`; a member
 with a live config of the group's Grants is drained, never removed.
 
 ## Fulfilment — `GroupFulfilmentService` (billing-service, F-027-bl)

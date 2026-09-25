@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 46
+version: 47
 updated: 2026-09-25
 ---
 
@@ -48,6 +48,7 @@ would dial an address a tenant chose (`network/open-questions.md`).
 | `GET /api/billing/systems/panel-groups` | — | `[{id, name, strategy, minHealthyPanels, subscriptionTtlSeconds, createdAt, updatedAt, variantCount, members: [{groupId, panelId, panelName, panelState, reviewState, lastHealthyAt, priority, weight, role, drainingSince, createdAt}]}]`, by name; members by `priority` | 403 |
 | `POST /api/billing/systems/panel-groups` | `name`, `minHealthyPanels?` (1–100), `subscriptionTtlSeconds?` (60–604800); `.strict()` — `protocol` is refused since F-114-b | `201` the group, `strategy: mirror` | 400; 403 |
 | `PATCH /api/billing/systems/panel-groups/:id` | any of the three, at least one; `.strict()` | `200` the group | 400; 403; 404 `not_found` |
+| `DELETE /api/billing/systems/panel-groups/:id` | — | `200 {id, removed: true}` | 400; 403; 404 `not_found`; 409 `group_has_members` / `group_in_use` |
 | `POST /api/billing/systems/panel-groups/:id/members` | `panelId`, `priority?` (0–1000), `weight?` (1–1000); `.strict()` | `201` the member, `primary` | 400; 403; 404 `not_found` / `panel_not_found`; 409 `already_member` |
 | `DELETE /api/billing/systems/panel-groups/:id/members/:panelId` | — | `200 {groupId, panelId, removed: true}` | 400; 403; 404 `not_found` / `member_not_found`; 409 `member_has_configs` |
 | `POST /api/billing/systems/panel-groups/:id/members/:panelId/drain` | — | `200` the member, `drain`, with `drainingSince` and `waitSeconds` | 400; 403; 404 `not_found` / `member_not_found`; 409 `already_draining` |
@@ -56,7 +57,7 @@ would dial an address a tenant chose (`network/open-questions.md`).
 | `POST /api/billing/systems/panels/:id/inbounds/refresh` | — | `202 {panelId, refreshRequested: true}` | 400; 403; 404 `panel_not_found` |
 
 Rate limits, per user, per 15 minutes: `SYSTEMS_ADMIN_WRITE` 30 (register,
-both re-submits, the panel edit, delete and restore, acknowledge, release, write-off, the five group writes, the two inbound writes), `SYSTEMS_ADMIN_READ` 120 (the six reads).
+both re-submits, the panel edit, delete and restore, acknowledge, release, write-off, the six group writes, the two inbound writes), `SYSTEMS_ADMIN_READ` 120 (the six reads).
 
 ## Registering a panel — the rules
 
@@ -201,8 +202,11 @@ Where a `network_access` variant's Grants are placed (network
     is 409 `already_draining`, and the database's clock is never restarted
     (groups rule 14). `waitSeconds` is `2 × subscriptionTtlSeconds`, the least
     the sweep waits from `drainingSince`; the member row goes on its own.
+24a. **A group goes only empty and unsold** (F-027-ca). Members are 409
+    `group_has_members` (remove or drain them); a variant naming it is 409
+    `group_in_use` — the FK is `RESTRICT`, and the delete meets both keys.
 
-`panel-groups.spec.ts` pins rules 20–24.
+`panel-groups.spec.ts` pins rules 20–24a.
 
 ## A panel's inbounds (F-114-b)
 

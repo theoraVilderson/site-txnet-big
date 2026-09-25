@@ -108,6 +108,8 @@ const CONFLICTS: ReadonlySet<SystemsRejection> = new Set([
   'panel_has_configs',
   'panel_retired',
   'panel_not_retired',
+  'group_has_members',
+  'group_in_use',
 ]);
 
 /** The service's refusals as HTTP: the scope is a 403, a panel, group or event outside it a 404. */
@@ -187,6 +189,13 @@ export class SystemsController {
     @Req() req: Request,
   ) {
     return refusing(() => this.panelGroups.update(actorOf(req), id, body));
+  }
+
+  /** Delete a group (F-027-ca). 409 `group_has_members` / `group_in_use` while it has members or a variant names it. */
+  @Delete('panel-groups/:id')
+  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  removeGroup(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
+    return refusing(() => this.panelGroups.remove(actorOf(req), id));
   }
 
   @Post('panel-groups/:id/members')

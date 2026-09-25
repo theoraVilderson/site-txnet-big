@@ -12,7 +12,9 @@
  *    the group's Grants would orphan those configs outside every drain; it is
  *    refused, and draining is the way out;
  *  - **the drain clock.** Draining twice does not restart the wait, and the
- *    answer states the wait the sweep will hold to.
+ *    answer states the wait the sweep will hold to;
+ *  - **a group deleted under a sale.** A group a variant names, or that still
+ *    has members, is not deleted (F-027-ca).
  */
 import { PanelGroupMemberRole, PanelGroupStrategy, Prisma, TenantType } from '@prisma/client';
 
@@ -53,6 +55,8 @@ function harness() {
   ];
   // Panels holding an unretired config of the group's Grants — what the DELETE's NOT EXISTS reads.
   const livePanels = new Set<string>();
+  // Variants naming each group — `_count.variants`, and the FK the delete meets.
+  const variants = new Map<string, number>();
   const tenants = new Map([
     [OWNER, TenantType.platform_owner],
     [RESELLER, TenantType.reseller],
@@ -64,7 +68,7 @@ function harness() {
   const withMembers = (g: Row) => ({
     ...g,
     members: members.filter((m) => m['groupId'] === g['id']).map(withPanel),
-    _count: { variants: 0 },
+    _count: { variants: variants.get(g['id'] as string) ?? 0 },
   });
 
   const prisma = {
@@ -97,6 +101,16 @@ function harness() {
         hit.forEach((g) => Object.assign(g, data));
         return { count: hit.length };
       },
+      deleteMany: async ({ where }: { where: Row }) => {
+        const i = groups.findIndex((g) => matches(g, where));
+        if (i < 0) return { count: 0 };
+        const id = groups[i]['id'] as string;
+        if ((variants.get(id) ?? 0) > 0 || members.some((m) => m['groupId'] === id)) {
+          throw new Prisma.PrismaClientKnownRequestError('fk', { code: 'P2003', clientVersion: 'test' });
+        }
+        groups.splice(i, 1);
+        return { count: 1 };
+      },
     },
     panelGroupMember: {
       findFirst: async ({ where }: { where: Row }) => {
@@ -125,7 +139,7 @@ function harness() {
       return 1;
     },
   };
-  return { service: new PanelGroupsService(prisma as never, crossTenant as never), groups, members, livePanels };
+  return { service: new PanelGroupsService(prisma as never, crossTenant as never), groups, members, livePanels, variants };
 }
 
 const owner = { adminId: ADMIN, tenantId: OWNER };
@@ -151,6 +165,7 @@ describe('PanelGroupsService', () => {
     await expect(service.addMember(reseller, GROUP, { panelId: SECOND_PANEL })).rejects.toBeInstanceOf(PanelScopeRefused);
     await expect(service.removeMember(reseller, GROUP, PLATFORM_PANEL)).rejects.toBeInstanceOf(PanelScopeRefused);
     await expect(service.drain(reseller, GROUP, PLATFORM_PANEL)).rejects.toBeInstanceOf(PanelScopeRefused);
+    await expect(service.remove(reseller, GROUP)).rejects.toBeInstanceOf(PanelScopeRefused);
     expect(groups).toHaveLength(2);
     expect(members).toHaveLength(1);
   });
@@ -212,5 +227,19 @@ describe('PanelGroupsService', () => {
     await expect(service.drain(owner, GROUP, PLATFORM_PANEL)).rejects.toMatchObject({ reason: 'already_draining' });
     await expect(service.drain(owner, GROUP, SECOND_PANEL)).rejects.toMatchObject({ reason: 'member_not_found' });
     expect(members[0]['role']).toBe(PanelGroupMemberRole.drain);
+  });
+
+  it('deletes an empty group no variant names; refuses one with members or one a variant sells on (F-027-ca)', async () => {
+    const { service, groups, members, variants } = harness();
+    await expect(service.remove(owner, GROUP)).rejects.toMatchObject({ reason: 'group_has_members' });
+
+    members.splice(0, 1);
+    variants.set(GROUP, 2);
+    await expect(service.remove(owner, GROUP)).rejects.toMatchObject({ reason: 'group_in_use' });
+
+    variants.clear();
+    await expect(service.remove(owner, TENANT_GROUP)).rejects.toMatchObject({ reason: 'not_found' });
+    await expect(service.remove(owner, GROUP)).resolves.toEqual({ id: GROUP, removed: true });
+    expect(groups.map((g) => g['id'])).toEqual([TENANT_GROUP]);
   });
 });

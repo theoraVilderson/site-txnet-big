@@ -24,7 +24,10 @@ export type SystemsRejection =
   | 'panel_in_group'
   | 'panel_has_configs'
   | 'panel_retired'
-  | 'panel_not_retired';
+  | 'panel_not_retired'
+  // Deleting a panel group (F-027-ca).
+  | 'group_has_members'
+  | 'group_in_use';
 
 export class SystemsRefused extends Error {
   constructor(readonly reason: SystemsRejection) {

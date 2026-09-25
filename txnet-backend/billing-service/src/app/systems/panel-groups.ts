@@ -168,6 +168,30 @@ export class PanelGroupsService {
     return { ...wireMember(member), waitSeconds: DRAIN_TTL_MULTIPLE * group.subscriptionTtlSeconds };
   }
 
+  /**
+   * Delete a group (F-027-ca). One with members is `group_has_members` — remove
+   * or drain them first — and one a variant names is `group_in_use`: the FK is
+   * `RESTRICT` (groups rule 4), and the variant would be left with nowhere to
+   * deliver. The delete itself meets both keys, so a member or a variant added
+   * meanwhile refuses it too.
+   */
+  async remove(actor: SystemsActor, groupId: string) {
+    const scope = await this.groupScopeOf(actor);
+    const refusal = (g: GroupRow) => (g.members.length > 0 ? 'group_has_members' : g._count.variants > 0 ? 'group_in_use' : null);
+    const reason = refusal(await this.groupInScope(scope, groupId));
+    if (reason) throw new SystemsRefused(reason);
+
+    try {
+      const { count } = await this.crossTenant.panelGroup.deleteMany({ where: { id: groupId, ...scope } });
+      if (count === 0) throw new SystemsRefused('not_found');
+    } catch (e) {
+      if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003')) throw e;
+      throw new SystemsRefused(refusal(await this.groupInScope(scope, groupId)) ?? 'group_in_use');
+    }
+    this.logger.log(`panel group ${groupId} deleted by ${actor.adminId}`);
+    return { id: groupId, removed: true as const };
+  }
+
   /** The groups an actor may manage: the platform's, for the owner (ADR-0080 decision 2). */
   private async groupScopeOf(actor: SystemsActor) {
     return (await this.scopes(actor))[0];
