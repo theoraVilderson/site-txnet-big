@@ -76,9 +76,9 @@ type PanelProgress struct {
 	At time.Time
 }
 
-// Progress is where those marks are written. Nil on a loop records nothing,
-// which is what every test of the normaliser wants, and the Postgres-backed
-// implementation lands with the panel source beside the durable `Cursors`.
+// Progress is where those marks are written — `PostgresProgress` in a running
+// process. Nil on a loop records nothing, which is what every test of the
+// normaliser wants.
 type Progress interface {
 	Collected(ctx context.Context, marks []PanelProgress) error
 }
@@ -117,6 +117,10 @@ type Loop struct {
 	// backup restore is parked before it publishes, and the panel is not read
 	// again until the event is acknowledged. Nil contains nothing.
 	Containment *Containment
+	// Turns is the per-panel lock this loop shares with the hot loop
+	// (F-027-bu). Nil takes no lock, which is right only while no other loop
+	// reads the same panels.
+	Turns *TurnLocks
 
 	// Interval is the gap between passes (DefaultInterval).
 	Interval time.Duration
@@ -216,6 +220,9 @@ func (l *Loop) Pass(ctx context.Context) (PassReport, error) {
 				return
 			}
 			defer func() { <-slots }()
+			if l.Turns != nil {
+				defer l.Turns.Hold(p.ID)()
+			}
 
 			res, op, err := l.collect(ctx, p)
 

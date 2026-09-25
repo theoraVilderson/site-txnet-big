@@ -195,6 +195,10 @@ type Loop struct {
 	// not holding — and a hot subset that goes backward together is judged
 	// by the same thresholds.
 	Containment *collect.Containment
+	// Turns is the per-panel lock shared with the bulk pass (F-027-bu). A
+	// panel the bulk pass is reading is skipped, never waited on: that read
+	// covers the hot clients too. Nil takes no lock.
+	Turns *collect.TurnLocks
 
 	// Horizon is how close to its ceiling a config has to be (DefaultHorizon).
 	Horizon time.Duration
@@ -214,8 +218,11 @@ type PassReport struct {
 	Considered int
 	Members    int
 	// Panels is how many panels were actually read — one request each.
-	Panels    int
-	Deltas    int
+	Panels int
+	Deltas int
+	// Busy is how many panels were skipped because the bulk pass held them.
+	// It is not a failure: the bulk read covers the hot clients.
+	Busy      int
 	Failed    []collect.PanelFailure
 	NextAfter time.Duration
 }
@@ -235,6 +242,9 @@ func (l *Loop) Run(ctx context.Context) error {
 			l.log().Error("hot pass failed", "error", err)
 		} else {
 			next = report.NextAfter
+			for _, f := range report.Failed {
+				l.log().Warn("hot panel not collected", "panel", f.PanelID, "op", f.Op, "error", f.Err)
+			}
 		}
 
 		timer := time.NewTimer(next)
@@ -297,6 +307,16 @@ func (l *Loop) Pass(ctx context.Context) (PassReport, error) {
 				return
 			}
 			defer func() { <-slots }()
+			if l.Turns != nil {
+				release, ok := l.Turns.TryHold(rows[0].Panel.ID)
+				if !ok {
+					mu.Lock()
+					report.Busy++
+					mu.Unlock()
+					return
+				}
+				defer release()
+			}
 
 			res, op, err := l.collect(ctx, rows)
 

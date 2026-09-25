@@ -141,6 +141,30 @@ data, which is why the figure is defined here once rather than passed.
 in. What connects them is a decision, not an oversight, and it is open in
 `open-questions.md`.
 
+## Running it — `cmd/server` (F-027-bu)
+
+`cmd` starts `hot.Loop` beside the bulk pass, and it owns nothing of its own:
+
+1. **Candidates are `hot.PostgresSource`**: every config on a panel the bulk
+   pass last offered (`collect.PostgresSource.Offered`) with a share, a client,
+   `present` and enabled. Headroom is the share less the cursor's lifetime,
+   up and down. Membership is still `IsHot`, in Go, in one place.
+2. **One driver per panel.** The candidate rides the bulk pass's driver and
+   so its request budget; a panel no bulk pass has offered is read by nobody.
+   Its `Configs` are the statement's, so a config created since the bulk pass
+   is billed here rather than written down as unattributed.
+3. **Its cursors are read in the same statement**, under the cursors' lock
+   (`PostgresCursors.Merge`): a client re-keyed since the bulk pass keeps its
+   cursor instead of being adopted from zero, which would restart its
+   lifetime and the ceiling offset built on it.
+4. **One turn per panel at a time** (`collect.TurnLocks`). Two loops
+   normalising one panel against the same cursor would publish the same bytes
+   under two delta ids, which `usage_delta_seen` cannot absorb. The bulk pass
+   waits for a hot turn; a hot turn finding the bulk pass there steps aside
+   (`PassReport.Busy`), because that read covers the hot clients too.
+5. **No converger.** It writes to no panel, per the next section: a client
+   list every two seconds would spend the panel's budget on nothing.
+
 ## What it will not do
 
 It does not write to a panel — that is the convergence loop's (F-027-t). It

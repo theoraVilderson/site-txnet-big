@@ -21,6 +21,7 @@ import (
 	"network-service/internal/config"
 	"network-service/internal/converge"
 	"network-service/internal/db"
+	"network-service/internal/hot"
 	"network-service/internal/httpapi"
 	"network-service/internal/opener"
 	"network-service/internal/panelstate"
@@ -107,10 +108,13 @@ func main() {
 	// accepted through.
 	cursors := &collect.PostgresCursors{DB: pool}
 	health := &panelstate.Tracker{Writer: panelstate.PostgresWriter{DB: pool}, Log: log}
+	panels := &collect.PostgresSource{
+		DB: pool, Opener: opener.Opener{Logins: vault}, Cursors: cursors, States: health, Log: log,
+	}
+	turns := &collect.TurnLocks{}
+	containment := &collect.Containment{Events: collect.PostgresDriftEvents{DB: pool}}
 	collector := &collect.Loop{
-		Source: &collect.PostgresSource{
-			DB: pool, Opener: opener.Opener{Logins: vault}, Cursors: cursors, States: health, Log: log,
-		},
+		Source:  panels,
 		Sink:    publish.Publisher{Transport: broker},
 		Cursors: cursors,
 		Ceilings: &converge.Converger{
@@ -121,10 +125,30 @@ func main() {
 		Health:      health,
 		Rates:       collect.PostgresRates{DB: pool},
 		Progress:    collect.PostgresProgress{DB: pool},
-		Containment: &collect.Containment{Events: collect.PostgresDriftEvents{DB: pool}},
+		Containment: containment,
+		Turns:       turns,
 		Log:         log,
 	}
 	go func() { _ = collector.Run(runCtx) }()
+
+	// The hot loop (F-027-bu): the few configs near their ceiling, read on
+	// their own interval through the bulk pass's panels, drivers, cursors,
+	// sink, health, rates and containment — nothing downstream can tell the
+	// two apart (`contract.hot-loop.md`). It shares the per-panel turn lock,
+	// so the two never normalise one panel's counters at once, and it writes
+	// to no panel: that is the convergence pass's, once a minute, because a
+	// client list every two seconds is a denial of service on the panel.
+	hotLoop := &hot.Loop{
+		Source:      &hot.PostgresSource{DB: pool, Panels: panels, Cursors: cursors},
+		Sink:        publish.Publisher{Transport: broker},
+		Cursors:     cursors,
+		Health:      health,
+		Rates:       collect.PostgresRates{DB: pool},
+		Containment: containment,
+		Turns:       turns,
+		Log:         log,
+	}
+	go func() { _ = hotLoop.Run(runCtx) }()
 
 	// The RADIUS accounting receiver (F-027-af): the push half of
 	// collection, and the one surface here reachable from outside. The

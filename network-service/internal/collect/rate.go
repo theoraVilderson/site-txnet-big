@@ -46,10 +46,9 @@ type RateSample struct {
 	ObservedAt time.Time
 }
 
-// Rates is where measured rates are written (`config.observedRateBps`). Nil on
-// a loop records nothing, which is what every test of the normaliser wants,
-// and the Postgres-backed implementation lands with the panel source beside
-// the durable `Cursors`.
+// Rates is where measured rates are written (`config.observedRateBps`) —
+// `PostgresRates` in a running process. Nil on a loop records nothing, which
+// is what every test of the normaliser wants.
 type Rates interface {
 	Record(ctx context.Context, samples []RateSample) error
 }

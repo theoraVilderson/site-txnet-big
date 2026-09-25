@@ -89,7 +89,9 @@ loop is proved against.
    `network.usage.delta` means no provisioning either.
 
 Each pass logs one line, plus one per panel that did not complete, with its
-`Op`.
+`Op`. The hot loop reads through the same panels, drivers and cursors, and
+the two never hold one panel's turn at once (`contract.hot-loop.md` "Running
+it", F-027-bu).
 
 ## Where a pass goes (F-027-m)
 

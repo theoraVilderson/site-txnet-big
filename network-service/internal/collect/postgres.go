@@ -71,6 +71,7 @@ type PostgresSource struct {
 
 	mu      sync.Mutex
 	drivers map[string]opened
+	offered []Panel
 }
 
 // opened is one panel's driver and the row it was built from. A row that
@@ -164,7 +165,20 @@ func (s *PostgresSource) Panels(ctx context.Context) ([]Panel, error) {
 		offered = append(offered, p)
 	}
 	s.forgetExcept(ids)
+	s.mu.Lock()
+	s.offered = append([]Panel(nil), offered...)
+	s.mu.Unlock()
 	return offered, nil
+}
+
+// Offered is the panels the last pass was given, with their drivers — what
+// the hot loop reads through (F-027-bu), so a panel has one driver and one
+// request budget whichever loop is asking. A panel the bulk pass has not
+// offered yet is not read early by anyone.
+func (s *PostgresSource) Offered() []Panel {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]Panel(nil), s.offered...)
 }
 
 // driverFor is the panel's driver, opened once and kept until its row changes
@@ -320,6 +334,30 @@ func (c *PostgresCursors) reload(ctx context.Context, panelIDs []string) (map[st
 	}
 	c.counters = counters
 	return configs, nil
+}
+
+// CursorKey is where a cursor is found: the panel, and its client id there.
+type CursorKey struct{ PanelID, RemoteID string }
+
+// Merge runs read under the lock reload and Apply hold, and folds the cursors
+// it returns into the map. It is how a reader with a statement of its own —
+// the hot loop's candidates (F-027-bu) — brings its cursors up to date
+// between two bulk passes, with the same guarantee reload has: an apply
+// cannot land between the read and the fold.
+func (c *PostgresCursors) Merge(read func() (map[CursorKey]Counter, error)) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	got, err := read()
+	if err != nil {
+		return err
+	}
+	if c.counters == nil {
+		c.counters = map[string]Counter{}
+	}
+	for k, cur := range got {
+		c.counters[key(k.PanelID, k.RemoteID)] = cur
+	}
+	return nil
 }
 
 func (c *PostgresCursors) Counter(panelID, remoteID string) (Counter, bool) {
