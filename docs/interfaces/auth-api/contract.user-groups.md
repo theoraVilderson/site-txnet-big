@@ -58,5 +58,6 @@ removal path, so neither id can be read as the other.
 
 ## Consumers
 
-None on the wire yet: the panel page is a row of its own. Billing's discount
+panel-web's `/user-groups` page (F-114-m,
+[contract.user-groups.md](../panel-web/contract.user-groups.md)). Billing's discount
 rules name a group by id (`groupId`, billing `contract.purchase.md`).

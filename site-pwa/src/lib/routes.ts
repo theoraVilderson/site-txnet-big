@@ -141,6 +141,11 @@ export const PANEL_MANUAL_PAYMENTS = "/payments/manual";
 /** The platform owner's panels: registration, health, drift and the holds queue (F-027-ad). */
 export const PANEL_SYSTEMS = "/systems";
 /**
+ * An admin's user groups and their members (F-114-m). One route for every
+ * audience: auth-service answers each tenant its own groups (F-114-j).
+ */
+export const PANEL_USER_GROUPS = "/user-groups";
+/**
  * Where a bank returns a payer (F-093-f). These two are `billing`'s to name:
  * `deposit-callback.controller.ts` redirects to them by path, so they are the
  * one pair of routes here that cannot be renamed from this side alone.

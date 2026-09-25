@@ -25,7 +25,8 @@
       "tenantBilling": "Platform billing",
       "resellers": "Resellers",
       "buyReseller": "Become a reseller",
-      "systems": "Systems"
+      "systems": "Systems",
+      "userGroups": "User groups"
     },
     "paymentCredited": {
       "title": "Payment confirmed",
@@ -2627,5 +2628,83 @@
     "traffic": "{{amount}} of traffic",
     "devices": "{{count}} devices at once",
     "metered": "Pay as you use"
+  },
+  "userGroups": {
+    "title": "User groups",
+    "subtitle": "Named sets of users, for discounts and campaigns to target.",
+    "new": "New group",
+    "empty": "No groups yet.",
+    "retry": "Try again",
+    "notAllowed": "Your role cannot manage user groups.",
+    "prev": "Newer",
+    "next": "Older",
+    "columns": {
+      "name": "Name",
+      "users": "Users",
+      "resellers": "Resellers",
+      "created": "Created"
+    },
+    "everyReseller": "Every reseller",
+    "actions": {
+      "members": "Members",
+      "edit": "Rename",
+      "delete": "Delete"
+    },
+    "confirmDelete": "Delete the group \"{{name}}\"? Its members are removed with it.",
+    "deleted": "The group \"{{name}}\" was deleted.",
+    "form": {
+      "createTitle": "New user group",
+      "editTitle": "Edit group",
+      "name": "Name",
+      "nameHint": "Up to 80 characters, unique among your groups.",
+      "allTenants": "Every reseller",
+      "allTenantsHint": "Every reseller is a member, including ones created later. Named resellers cannot be added while this is on.",
+      "save": "Save",
+      "saved": "Saved.",
+      "unchanged": "Nothing changed."
+    },
+    "members": {
+      "title": "Members of {{name}}",
+      "empty": "This group has no members yet.",
+      "user": "User",
+      "reseller": "Reseller",
+      "remove": "Remove",
+      "confirmRemove": "Remove {{label}} from this group?",
+      "noLabel": "(no name)",
+      "addUsers": "Add users",
+      "search": "Search by phone, username or email",
+      "searchHint": "Type at least 3 characters.",
+      "searching": "Searching…",
+      "noMatch": "No user matches.",
+      "add": "Add",
+      "userIds": "User ids",
+      "userIdsHint": "One or more user ids, separated by spaces, commas or lines.",
+      "addResellers": "Add resellers",
+      "resellerIds": "Reseller ids",
+      "resellerIdsHint": "One or more reseller ids, separated by spaces, commas or lines.",
+      "pickReseller": "Pick a reseller",
+      "allTenantsNote": "Every reseller is already a member of this group.",
+      "addSubmit": "Add members",
+      "added": "{{count}} added. Anyone already in the group was left as they were.",
+      "total": "{{count}} members"
+    },
+    "errors": {
+      "nameRequired": "Enter a name.",
+      "nameTooLong": "A name is at most 80 characters.",
+      "badIds": "These are not ids: {{ids}}",
+      "tooManyIds": "At most 500 ids at a time.",
+      "noIds": "Name at least one member."
+    },
+    "refusals": {
+      "group_not_found": "This group no longer exists.",
+      "name_taken": "You already have a group with this name.",
+      "platform_only": "Only the platform can add resellers or every reseller to a group.",
+      "user_not_found": "A user you named does not exist.",
+      "tenant_not_found": "A reseller you named does not exist.",
+      "not_a_reseller": "The platform itself cannot be a member of its own group.",
+      "all_tenants_conflict": "A group of every reseller cannot also name resellers. Remove the named resellers first, or switch \"every reseller\" off.",
+      "member_not_found": "That member is no longer in this group.",
+      "group_in_use": "A discount rule serves this group. Point the rule elsewhere first."
+    }
   }
 }

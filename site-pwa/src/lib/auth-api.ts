@@ -465,3 +465,47 @@ export const resellerBotsApi = {
   async connect(tenantId: string, body: { platform: BotPlatformName; token: string }) { return request<{ bot: ResellerBot; registered: boolean }>(resellerBotApiPath(tenantId), { method: "POST", body: JSON.stringify(body) }); },
   async retire(tenantId: string, platform: string, botUsername: string) { return request<{ retired: true; webhookRemoved: boolean }>(resellerBotRetirePath(tenantId, platform, botUsername), { method: "DELETE" }); },
 };
+
+/** A user group as `/auth/user-groups` answers it (F-114-j, `auth-api/contract.user-groups.md`). */
+export type UserGroup = {
+  id: string;
+  name: string;
+  kind: "manual";
+  /** The platform owner's only: every reseller is a member. */
+  allTenants: boolean;
+  userCount: number;
+  tenantCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** One member. `label` is a user's name or a reseller's slug — never a phone. */
+export type UserGroupMember = {
+  memberType: "user" | "tenant";
+  userId: string | null;
+  tenantId: string | null;
+  label: string | null;
+  addedAt: string;
+};
+
+/** One user as a reseller's own list answers it (F-311-a, `contract.reseller-users.md`). */
+export type ResellerUser = UserSearchHit & { createdAt: string };
+
+const userGroupPath = (id: string) => `/auth/user-groups/${encodeURIComponent(id)}`;
+
+export const userGroupsApi = {
+  async list() { return request<UserGroup[]>("/auth/user-groups", { method: "GET" }); },
+  async create(body: { name: string; allTenants?: boolean }) { return request<UserGroup>("/auth/user-groups", { method: "POST", body: JSON.stringify(body) }); },
+  async update(id: string, body: { name?: string; allTenants?: boolean }) { return request<UserGroup>(userGroupPath(id), { method: "PATCH", body: JSON.stringify(body) }); },
+  async remove(id: string) { return request<{ id: string; deleted: true }>(userGroupPath(id), { method: "DELETE" }); },
+  async members(id: string, page: number, pageSize: number) {
+    return request<{ items: UserGroupMember[]; total: number; page: number; pageSize: number }>(`${userGroupPath(id)}/members?page=${page}&pageSize=${pageSize}`, { method: "GET" });
+  },
+  async addMembers(id: string, body: { userIds?: string[]; tenantIds?: string[] }) { return request<{ added: number }>(`${userGroupPath(id)}/members`, { method: "POST", body: JSON.stringify(body) }); },
+  async removeUser(id: string, userId: string) { return request<{ removed: true }>(`${userGroupPath(id)}/members/users/${encodeURIComponent(userId)}`, { method: "DELETE" }); },
+  async removeTenant(id: string, tenantId: string) { return request<{ removed: true }>(`${userGroupPath(id)}/members/tenants/${encodeURIComponent(tenantId)}`, { method: "DELETE" }); },
+  /** A reseller finds its own users (F-311-a); the door is `ResellerAccess`, not a permission key. */
+  async resellerUsers(tenantId: string, q: string) {
+    return request<{ items: ResellerUser[]; total: number }>(`/auth/tenants/${encodeURIComponent(tenantId)}/users?q=${encodeURIComponent(q)}&pageSize=10`, { method: "GET" });
+  },
+};

@@ -15,10 +15,11 @@ import {
   Store,
   ShoppingCart,
   TicketPercent,
+  Users,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SHOP, PANEL_SYSTEMS, PANEL_TENANT_BILLING } from "@/lib/routes";
+import { PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SHOP, PANEL_SYSTEMS, PANEL_TENANT_BILLING, PANEL_USER_GROUPS } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 /** The shell's menu labels as generated constants (C-06). */
@@ -177,6 +178,9 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
     requires: ["panel.manage"],
     tenantTypes: ["platform_owner"],
   },
+  // F-114-m. Every tenant has its own groups: the permission hides it, and
+  // auth-service answers each tenant its own (F-114-j).
+  { id: "user-groups", label: M.userGroups, icon: Users, href: PANEL_USER_GROUPS, requires: ["user_group.manage"] },
   { id: "tutorials", label: M.tutorials, icon: BookOpen, href: null },
   { id: "support", label: M.support, icon: Headphones, href: null },
   { id: "settings", label: M.settings, icon: Settings, href: PANEL_SETTINGS },
