@@ -54,6 +54,9 @@ enum DiscountType {
 model ProductCategory {
   id        String   @id @default(uuid()) @db.Uuid
   tenantId  String?  @db.Uuid
+  /// The category this one sits under; null = a top-level one (F-026-q). The
+  /// platform's or its own tenant's, never a descendant of itself (triggers).
+  parentId  String?  @db.Uuid
   key       String
   /// An i18n key, not text (§4.3).
   nameKey   String
@@ -67,9 +70,12 @@ model ProductCategory {
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
-  products Product[]
+  parent   ProductCategory?      @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children ProductCategory[]     @relation("CategoryTree")
+  products ProductCategoryLink[]
 
   @@index([tenantId])
+  @@index([parentId])
   @@map("product_category")
   @@schema("catalog")
 }
@@ -78,7 +84,6 @@ model ProductCategory {
 model Product {
   id             String         @id @default(uuid()) @db.Uuid
   tenantId       String?        @db.Uuid
-  categoryId     String         @db.Uuid
   key            String
   nameKey        String
   descriptionKey String?
@@ -98,13 +103,35 @@ model Product {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @default(now()) @updatedAt
 
-  category            ProductCategory      @relation(fields: [categoryId], references: [id])
+  /// The categories it is filed in, one or more (F-026-q); `position` orders them.
+  categories          ProductCategoryLink[]
   variants            ProductVariant[]
   couponServiceScopes CouponServiceScope[]
 
   @@index([tenantId])
-  @@index([categoryId])
   @@map("product")
+  @@schema("catalog")
+}
+
+/// A product filed in a category (F-026-q). `tenantId` is the product's — a
+/// trigger holds it, and that the category is the platform's or that tenant's —
+/// so RLS reads it without a join. The category side is RESTRICT: a category
+/// any product sits in is kept (`has_products`).
+model ProductCategoryLink {
+  productId  String   @db.Uuid
+  categoryId String   @db.Uuid
+  tenantId   String?  @db.Uuid
+  /// The product's own order of its categories; 0 is shown first.
+  position   Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  product  Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@id([productId, categoryId])
+  @@index([categoryId])
+  @@index([tenantId])
+  @@map("product_category_link")
   @@schema("catalog")
 }
 
