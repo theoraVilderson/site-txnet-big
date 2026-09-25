@@ -1,7 +1,7 @@
 ---
 id: billing
 layer: domain
-updated: 2026-09-04
+updated: 2026-09-25
 ---
 
 # Data model — billing
@@ -25,6 +25,7 @@ Source of truth: `txnet-backend/prisma/domains/billing.prisma` (Postgres schema
 | payment_gateway_grant | who may use whose gateway (ADR-0041). Withdrawn, never deleted | `tenantId` = the **borrowing** tenant | permanent |
 | gateway_settlement_entry | what a granted gateway collected, one row per payment, append-only — the debt | `tenantId` = the tenant owed | permanent |
 | gateway_settlement_payout | a recorded manual transfer with its proof and its operator — the repayment | `tenantId` = the tenant paid | permanent |
+| invoice | one purchase of one catalog variant, server-priced (`priceId` = the price row used), `total = amount - discount` (CHECK); its coupon holds are `coupon_redemption` rows with its id as `orderReferenceId` (F-111-a) | `tenantId`, strict RLS | permanent |
 
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |
@@ -35,6 +36,7 @@ Source of truth: `txnet-backend/prisma/domains/billing.prisma` (Postgres schema
 | coupon.grantVariantId | -> | catalog.product_variant | what a `free_grant` coupon gives (D-35); `Restrict`, a variant is never deleted |
 | affiliate_commission.payoutWalletTransactionId | -> | billing.wallet_transaction | payout is itself a ledger entry |
 | payment_gateway_grant.tenantGatewayConfigId | -> | tenant.tenant_gateway_config | a grant may lend one reseller's gateway to another (ADR-0041 §2); the owner is unchanged by it |
+| invoice.variantId / priceId | -> | catalog.product_variant / price | what was invoiced and at which price; `Restrict`, so an invoiced variant is archived, never deleted (F-026-h) |
 
 ## Access rules
 

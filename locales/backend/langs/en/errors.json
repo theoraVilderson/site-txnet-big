@@ -204,6 +204,10 @@
     },
     "grant": {
       "notFound": "No such subscription in your account."
+    },
+    "invoice": {
+      "variantInvalid": "Choose a product to buy.",
+      "variantNotFound": "This product is not available to buy."
     }
   },
   "role": {

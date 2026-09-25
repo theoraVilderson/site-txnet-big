@@ -281,6 +281,8 @@ export const envSchema = z.object({
   DEPOSIT_START_RATE_LIMIT: rateLimit(20),
   /** Giving up a Mini App top-up before paying it (`payment/deposit/deposit-abandon.service.ts`). */
   DEPOSIT_ABANDON_RATE_LIMIT: rateLimit(30),
+  /** Each call holds coupons for 30 minutes (`invoice/invoice.service.ts`, F-111-a). */
+  INVOICE_CREATE_RATE_LIMIT: rateLimit(20),
   /** The bot's in-chat pre-checkout and paid relay, per payer (`payment/deposit/deposit-in-chat.controller.ts`). */
   DEPOSIT_IN_CHAT_RATE_LIMIT: rateLimit(120),
   /**

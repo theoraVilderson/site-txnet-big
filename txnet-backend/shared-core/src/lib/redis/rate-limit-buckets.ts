@@ -181,6 +181,13 @@ export const RateLimitBucket = {
   DEPOSIT_ABANDON: 'deposit:abandon',
 
   /**
+   * Creating an invoice in `billing-service` (F-111-a), per user. Each call
+   * holds coupons for 30 minutes, so its budget sits with `DEPOSIT_START`'s
+   * rather than a read's: a shopper makes one invoice and pays it.
+   */
+  INVOICE_CREATE: 'invoice:create',
+
+  /**
    * The bot relaying an in-chat payment's `pre_checkout_query` or
    * `successful_payment` to `billing-service` (F-104-k), per **user** — the
    * payer the gate names. Generous: a `paid` refused here is money the

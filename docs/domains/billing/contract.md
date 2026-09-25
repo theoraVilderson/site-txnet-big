@@ -15,7 +15,8 @@ whole top-up — the gateway list and quote (F-092-o), starting the payment
 (F-092-i) and the callback that settles it (F-092-j) — in
 **[contract.deposit.md](contract.deposit.md)**, and the wallet history +
 payment attempt routes (F-092-n) in
-**[contract.history.md](contract.history.md)** (both §10). Every other row in *Provides* is still intent from
+**[contract.history.md](contract.history.md)** (both §10), and the invoice for buying a catalog product
+(F-111-a) in **[contract.purchase.md](contract.purchase.md)**. Every other row in *Provides* is still intent from
 `txnet-backend/prisma/domains/billing.prisma`.
 
 ## Gateway management (built — F-102-b/c, F-102-f-b, F-066-w3, D-31)
@@ -186,6 +187,7 @@ reserve/confirm state machine (built, F-092-h).
 | validate coupons — **built**, see above | tx, codes[], amount, target, userId | applied (couponId, code, discount), rejected (code, reason), totalDiscount, payable | sync, read | invalid input, scope conflict |
 | reserve coupons — **built**, see above | tx, userId, orderReferenceId, paymentTransactionId?, applied[] | `coupon_redemption` rows (`pending`) | sync tx | refused (reason), invalid input, scope conflict |
 | confirm / release coupons — **built**, see above | tx, orderReferenceId, outcome | count moved to `confirmed` / `cancelled` / `expired` | sync tx | scope conflict |
+| create an invoice — **built**, [contract.purchase.md](contract.purchase.md) | userId (header), variantId, couponCodes[] | invoice priced from the catalog, coupons held, 30-min expiry | sync | variant not for sale, coupon hold refused |
 | accrue affiliate commission | triggering paymentId | `affiliate_commission` (`pending`) | async | — |
 
 ## Emits (events)
@@ -198,7 +200,7 @@ None planned yet (no bus). Payment confirmation is expected to drive
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
 | identity | `ownerUserId`, transfer sender/receiver, OTP for transfer confirm | transfer/credit blocked |
-| catalog | a coupon scope's `productId` / `variantId`, and a `free_grant` coupon's `grantVariantId` (F-026-a, D-35); the variant's price for order pricing (F-026-c, not yet used by a purchase) | coupon scope check fails; a free-service code is refused `variant_not_found` |
+| catalog | a coupon scope's `productId` / `variantId`, and a `free_grant` coupon's `grantVariantId` (F-026-a, D-35); the variant's price in effect, for an invoice (F-026-c, `sellableOfferById`, F-111-a) | coupon scope check fails; a free-service code is refused `variant_not_found` |
 | entitlement | `GrantService.issue` inside the gift redemption's transaction, `source = coupon` (F-502-l-b, ADR-0049) | the redemption rolls back; the code stays unused |
 | currency | base-currency amounts only in; display conversion is currency's job | — |
 | tenant | `tenantId` denormalized on `wallet_transaction` / `payment_transaction` for reporting | — |

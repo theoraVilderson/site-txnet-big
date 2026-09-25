@@ -53,7 +53,7 @@ const E = BackendI18nKeys.errors.billing;
 const canTest = (req: Request) => holdsPermission(identityOf(req).permissions, 'gateway.manage');
 
 /** Every rejection reason has a message; a new reason does not compile until it gets one. */
-const COUPON_REJECTION_KEY: Record<CouponRejection, string> = {
+export const COUPON_REJECTION_KEY: Record<CouponRejection, string> = {
   not_found: E.coupon.notFound,
   not_a_discount: E.coupon.notADiscount,
   platform_coupon_needs_platform_gateway: E.coupon.platformCouponNeedsPlatformGateway,

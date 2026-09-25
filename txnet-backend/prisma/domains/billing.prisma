@@ -472,6 +472,48 @@ model DepositSetting {
   @@schema("billing")
 }
 
+enum InvoiceStatus {
+  pending
+  paid
+  expired
+  cancelled
+
+  @@schema("billing")
+}
+
+/// One purchase of one catalog variant (F-111-a, spec §5.8 step 1). Priced by
+/// the server from the catalog in USD at creation — `priceId` is the row that
+/// was in effect — and never from a client's number. Its coupon holds are the
+/// `coupon_redemption` rows whose `orderReferenceId` is this id. Money moves
+/// only when it is paid (F-111-b); a `pending` one past `expiresAt` is expired
+/// by the sweep and its holds given back.
+model Invoice {
+  id        String        @id @db.Uuid
+  tenantId  String        @db.Uuid
+  userId    String        @db.Uuid
+  variantId String        @db.Uuid
+  priceId   String        @db.Uuid
+  /// The catalog price, base currency.
+  amount    Decimal       @db.Decimal(18, 2)
+  /// What the applied coupons took, stacked (F-092-g).
+  discount  Decimal       @db.Decimal(18, 2)
+  /// `amount - discount`, a CHECK; what the wallet pays.
+  total     Decimal       @db.Decimal(18, 2)
+  status    InvoiceStatus @default(pending)
+  expiresAt DateTime
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @default(now()) @updatedAt
+
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  price   Price          @relation(fields: [priceId], references: [id], onDelete: Restrict)
+
+  @@index([status, expiresAt])
+  @@index([tenantId, userId, createdAt(sort: Desc)])
+  @@index([variantId])
+  @@map("invoice")
+  @@schema("billing")
+}
+
 /// 8.2 — تراکنش پرداخت با دو خط دفاعی تأیید (Webhook + Reconciliation)
 /// به‌علاوه Fallback تأیید دستی ادمین.
 model PaymentTransaction {

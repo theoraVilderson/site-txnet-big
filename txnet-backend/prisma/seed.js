@@ -147,6 +147,9 @@ const SEEDED_SCHEDULES = [
   { key: 'fx_rate_refresh', scheduleType: 'cron_expression', cronExpression: '*/5 * * * *' },
   // Every tick (AUTOMATION_TICK_INTERVAL_MS, 60s): a clock, and it calls no gateway.
   { key: 'deposit_pending_expiry', scheduleType: 'always_on', cronExpression: null },
+  // Unpaid invoices (F-111-a): the same clock for a purchase, the user's call
+  // 2026-09-25 — unscheduled, an abandoned invoice holds its coupons for ever.
+  { key: 'invoice_pending_expiry', scheduleType: 'always_on', cronExpression: null },
   // One gateway call per due payment, so a cron rather than every tick.
   { key: 'deposit_reconciliation', scheduleType: 'cron_expression', cronExpression: '*/5 * * * *' },
   // Due verify retries (F-092-ac): every tick, so the ladder's 30 s rung waits a

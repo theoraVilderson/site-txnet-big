@@ -114,6 +114,7 @@ Free metered service is a quota with no rate.
 | `listOffers(at?)` — built | tenant (ambient), instant (default now) | every `public` variant under an active product and category, with the price in effect; a variant with no price is not offered | sync | — |
 | `offerBySku(sku, at?)` — built | sku | the offer, `public` or `unlisted`; the caller's own SKU over the platform's | sync | `null`: unknown, `admin_only`, switched off, or no price |
 | `offeredToTenant(tenantId, at)` — built | tenant id, instant | a Prisma `where` for a variant `listOffers` would return to that tenant: `listedVariantWhere`, own or platform row, a price in effect — for a reader on the cross-tenant pool, where RLS does not narrow (F-018-ah) | sync | — |
+| `sellableOfferById(tx, variantId, at)` — built | the caller's `tenantTransaction`, variant id, instant | the offer as `offerBySku` would sell it (`public` or `unlisted`, live, priced), read in the caller's transaction — billing's invoice (F-111-a) | sync | `null` |
 | `priceAt(variantId, at)` — built | variantId, instant | the newest active price row with `effectiveFrom <= at` (F-0602) | sync | `null` |
 | manage category / product / variant, write a new price | admin payload, `catalog.manage` | row (F-026-d) | sync | — |
 
@@ -133,7 +134,7 @@ None.
 
 | Unit | What it reads |
 |---|---|
-| billing | `coupon_service_scope.productId` / `variantId`: a purchase matches a row naming its variant or its product |
+| billing | `coupon_service_scope.productId` / `variantId`: a purchase matches a row naming its variant or its product; `sellableOfferById` + `invoice.variantId` / `priceId` (`Restrict`): what an invoice was priced at (F-111-a) |
 | entitlement | a variant's quotas, duration, billing mode and its product's feature keys, copied into a Grant (F-026-b, F-026-e); the metered rate in effect, locked onto `Grant.meteredRate` at issue (F-027-p, ADR-0073) |
 | network | a variant's `panelGroupId` (FK to `network.panel_group`, F-027-bk) and `qualityTier` (F-027) |
 | tenant | `offeredToTenant`: the onboarding checklist's `pricing` step (F-018-ah) |

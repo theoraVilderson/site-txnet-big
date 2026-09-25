@@ -66,7 +66,7 @@ Why each of those is the answer — and what a Redis that cannot be reached does
 |---|---|---|
 | `worker_heartbeat` | nothing, and records that it did — the proof the tick path is alive | — |
 | `vault_credential_retention` | destroys superseded credential versions past their rotation grace window (ADR-0026 rule 4) | `TENANT_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
-| `deposit_pending_expiry` | expires `pending` top-ups past their `expiresAt` and gives the coupon holds they took back (F-092-k, `domains/billing/contract.deposit.md`) | `BILLING_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
+| `deposit_pending_expiry` / `invoice_pending_expiry` | expires `pending` top-ups / unpaid invoices past their `expiresAt` and gives their coupon holds back (F-092-k `contract.deposit.md`; F-111-a `contract.purchase.md`, billing) | `BILLING_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 | `deposit_reconciliation` | asks the gateway about pending and expired top-ups nobody came back for, and about a verifying one only when its retry is 10 min overdue (the next job is not running): credits what it confirms, flags a differing amount (F-092-l; `domains/billing/contract.verify.md`) | the same two |
 | `deposit_verify_retry` | asks again about verifying top-ups whose retry is due, every tick: credits, re-schedules silence, flags one still verifying after a day (F-092-y, F-092-ac) | the same two |
 | `notification_campaign_fan_out` | writes recipient rows for started campaigns in resumable batches (F-035-d, `domains/notification/contract.md` "Sending") | `NOTIFICATION_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
@@ -108,7 +108,7 @@ default for a sweep that writes, and the first thing to check when one appears
 to do nothing. **Three exceptions are seeded** by `prisma/seed.js`
 (`SEEDED_SCHEDULES`): `fx_rate_refresh`, and — decided by the user 2026-09-14
 — `deposit_pending_expiry` (`always_on`) and `deposit_reconciliation` (`*/5`); since
-F-092-ac also `deposit_verify_retry` (`always_on`), since F-035-d `notification_campaign_fan_out` and F-035-e `notification_campaign_delivery` (both `always_on`), since F-027-o `network_traffic_rollup` (`15 3 * * *` — unscheduled, no daily aggregate is ever written and the raw partitions accumulate for ever), since F-027-y `grant_config_purge` (`20 * * * *` — unscheduled, a spent Grant's clients hold their panel seats for ever), and since F-027-bl `grant_group_fulfilment` (`* * * * *` — unscheduled, a grouped Grant never activates).
+F-092-ac also `deposit_verify_retry` (`always_on`), since F-035-d `notification_campaign_fan_out` and F-035-e `notification_campaign_delivery` (both `always_on`), since F-027-o `network_traffic_rollup` (`15 3 * * *` — unscheduled, no daily aggregate is ever written and the raw partitions accumulate for ever), since F-027-y `grant_config_purge` (`20 * * * *` — unscheduled, a spent Grant's clients hold their panel seats for ever), since F-027-bl `grant_group_fulfilment` (`* * * * *` — unscheduled, a grouped Grant never activates), and since F-111-a `invoice_pending_expiry` (`always_on` — unscheduled, an unpaid invoice holds its coupons for ever).
 Left unscheduled, a payment the bank took but never called back about is never
 credited, which is the manual top-up legacy needed. The seed never touches a
 job that already has a schedule.

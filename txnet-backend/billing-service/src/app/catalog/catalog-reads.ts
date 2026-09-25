@@ -101,6 +101,18 @@ function toOffer(v: VariantRow, at: Date, offered: (f: OfferFacts) => boolean): 
   };
 }
 
+/**
+ * One variant by its id, as {@link CatalogReadService.offerBySku} would sell it
+ * — `public` or `unlisted`, live, with a price in effect at `at` — or `null`.
+ * Runs on the caller's `tx` (a `tenantTransaction`), so an invoice reads the
+ * price it stores in the transaction that stores it (F-111-a). Another tenant's
+ * variant is `null`: RLS never returns it.
+ */
+export async function sellableOfferById(tx: Prisma.TransactionClient, variantId: string, at: Date): Promise<CatalogOffer | null> {
+  const row = await tx.productVariant.findUnique({ where: { id: variantId }, include: withPrices(at) });
+  return row ? toOffer(row, at, isSellableBySku) : null;
+}
+
 @Injectable()
 export class CatalogReadService {
   constructor(private readonly prisma: PrismaService) {}

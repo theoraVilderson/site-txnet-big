@@ -13,6 +13,7 @@ import { CouponModule } from './payment/coupon/coupon.module';
 import { DepositModule } from './payment/deposit/deposit.module';
 import { GatewayModule } from './payment/gateway/gateway.module';
 import { GiftModule } from './payment/gift/gift.module';
+import { InvoiceModule } from './invoice/invoice.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 import { RevenueModule } from './revenue/revenue.module';
@@ -58,6 +59,7 @@ const INTERNAL_ROUTES = 'internal/*path';
     CouponModule,
     DepositModule,
     GiftModule,
+    InvoiceModule,
     SettlementModule,
     GatewayAdminModule,
     CouponAdminModule,
