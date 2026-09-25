@@ -47,6 +47,18 @@ func (m *MemoryStore) Decide(panelID string, state driver.ReviewState) {
 	}
 }
 
+// Edit changes a panel's addresses as billing's `PATCH
+// /systems/panels/:id` does (F-027-by): back to `pending`, last test cleared.
+func (m *MemoryStore) Edit(panelID, apiBaseURL, clientBaseURL string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if r := m.rows[panelID]; r != nil {
+		r.APIBaseURL, r.ClientBaseURL = apiBaseURL, clientBaseURL
+		r.ReviewState, r.Capabilities = driver.ReviewPending, nil
+		r.TestedAt, r.Fault, r.Detail = time.Time{}, "", ""
+	}
+}
+
 // Record returns a copy of one panel's state.
 func (m *MemoryStore) Record(panelID string) Record {
 	m.mu.Lock()
@@ -70,11 +82,22 @@ func (m *MemoryStore) Pending(context.Context) ([]Candidate, error) {
 	return out, nil
 }
 
-func (m *MemoryStore) Answer(_ context.Context, panelID string, caps driver.Capabilities, state driver.ReviewState, at time.Time) (bool, error) {
+// tested is the row p's answer may land on: still pending, at the addresses
+// that were tested.
+func (m *MemoryStore) tested(p Pending) *Record {
+	r := m.rows[p.PanelID]
+	if r == nil || r.ReviewState != driver.ReviewPending ||
+		r.APIBaseURL != p.APIBaseURL || r.ClientBaseURL != p.ClientBaseURL {
+		return nil
+	}
+	return r
+}
+
+func (m *MemoryStore) Answer(_ context.Context, p Pending, caps driver.Capabilities, state driver.ReviewState, at time.Time) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	r := m.rows[panelID]
-	if r == nil || r.ReviewState != driver.ReviewPending {
+	r := m.tested(p)
+	if r == nil {
 		return false, nil
 	}
 	r.Capabilities = &caps
@@ -83,11 +106,13 @@ func (m *MemoryStore) Answer(_ context.Context, panelID string, caps driver.Capa
 	return true, nil
 }
 
-func (m *MemoryStore) Fail(_ context.Context, panelID string, fault FaultKind, detail string, at time.Time) error {
+func (m *MemoryStore) Fail(_ context.Context, p Pending, fault FaultKind, detail string, at time.Time) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if r := m.rows[panelID]; r != nil && r.ReviewState == driver.ReviewPending {
-		r.TestedAt, r.Fault, r.Detail = at, fault, detail
+	r := m.tested(p)
+	if r == nil {
+		return false, nil
 	}
-	return nil
+	r.TestedAt, r.Fault, r.Detail = at, fault, detail
+	return true, nil
 }

@@ -23,9 +23,11 @@ type DB interface {
 // PostgresStore is Store over `network.panel` (F-027-ax), through the
 // cross-tenant pool: registration spans every tenant's panels.
 //
-// Both writes carry `"reviewState" = 'pending'` in their WHERE, so the rule
-// that a verdict lands only over pending (contract.registration.md rule 3)
-// is the database's to hold, in the same statement, not a read before it.
+// Both writes carry `"reviewState" = 'pending'` and the two addresses that
+// were tested in their WHERE, so the rule that an answer lands only over
+// pending, for the server it reached (contract.registration.md rule 3,
+// F-027-cc), is the database's to hold, in the same statement, not a read
+// before it.
 type PostgresStore struct {
 	DB DB
 }
@@ -103,6 +105,13 @@ SELECT gen_random_uuid(), 'network.panel', t.id::text, $%d::text,
         OR (t."tenantId" IS NULL AND o."tenantType" = 'platform_owner')
      ORDER BY o."createdAt", o.id LIMIT 1) o ON true`
 
+// testedAddressSQL holds a write to the addresses the test ran against ($5,
+// $6; "" for none, as Pending reads a null). An edit that changed either
+// sends the panel back to pending (billing contract.panel-lifecycle.md rule
+// 2), so pending alone would let the old server's answer land on the new one.
+const testedAddressSQL = `
+   AND coalesce("apiBaseUrl", '') = $5 AND coalesce("clientBaseUrl", '') = $6`
+
 var answerSQL = `
 WITH tested AS (
 UPDATE network.panel
@@ -111,20 +120,22 @@ UPDATE network.panel
        "connectionTestedAt" = $4,
        "connectionTestFault" = NULL,
        "connectionTestDetail" = NULL
- WHERE id = $1::uuid AND "reviewState" = 'pending'
-RETURNING id, name, "tenantId", "reviewState", "connectionTestFault")` + fmt.Sprintf(announceSQL, 5)
+ WHERE id = $1::uuid AND "reviewState" = 'pending'` + testedAddressSQL + `
+RETURNING id, name, "tenantId", "reviewState", "connectionTestFault")` + fmt.Sprintf(announceSQL, 7)
 
 // Answer writes the verdict and announces it. false is a panel no longer
-// pending — withdrawn or already answered — and the answer is dropped (rule
-// 3): the CTE returns no row, so nothing is announced either.
-func (s PostgresStore) Answer(ctx context.Context, panelID string, caps driver.Capabilities, state driver.ReviewState, at time.Time) (bool, error) {
+// pending — withdrawn or already answered — or no longer at the address
+// tested, and the answer is dropped (rule 3): the CTE returns no row, so
+// nothing is announced either.
+func (s PostgresStore) Answer(ctx context.Context, p Pending, caps driver.Capabilities, state driver.ReviewState, at time.Time) (bool, error) {
 	doc, err := json.Marshal(caps)
 	if err != nil {
 		return false, fmt.Errorf("encoding capabilities: %w", err)
 	}
-	tag, err := s.DB.Exec(ctx, answerSQL, panelID, doc, string(state), at, PanelTestedEvent)
+	tag, err := s.DB.Exec(ctx, answerSQL, p.PanelID, doc, string(state), at,
+		p.APIBaseURL, p.ClientBaseURL, PanelTestedEvent)
 	if err != nil {
-		return false, fmt.Errorf("writing panel %s verdict: %w", panelID, err)
+		return false, fmt.Errorf("writing panel %s verdict: %w", p.PanelID, err)
 	}
 	return tag.RowsAffected() == 1, nil
 }
@@ -135,16 +146,19 @@ UPDATE network.panel
    SET "connectionTestedAt" = $4,
        "connectionTestFault" = $2::network."ConnectionTestFault",
        "connectionTestDetail" = $3
- WHERE id = $1::uuid AND "reviewState" = 'pending'
-RETURNING id, name, "tenantId", "reviewState", "connectionTestFault")` + fmt.Sprintf(announceSQL, 5)
+ WHERE id = $1::uuid AND "reviewState" = 'pending'` + testedAddressSQL + `
+RETURNING id, name, "tenantId", "reviewState", "connectionTestFault")` + fmt.Sprintf(announceSQL, 7)
 
 // Fail records a test that produced no verdict. A panel no longer pending is
-// left as it is: a fault lives only on a pending panel (rule 5).
-func (s PostgresStore) Fail(ctx context.Context, panelID string, fault FaultKind, detail string, at time.Time) error {
-	if _, err := s.DB.Exec(ctx, failSQL, panelID, string(fault), truncate(detail, maxDetail), at, PanelTestedEvent); err != nil {
-		return fmt.Errorf("writing panel %s fault: %w", panelID, err)
+// left as it is: a fault lives only on a pending panel (rule 5). One whose
+// address changed is left too: the new server has not failed anything.
+func (s PostgresStore) Fail(ctx context.Context, p Pending, fault FaultKind, detail string, at time.Time) (bool, error) {
+	tag, err := s.DB.Exec(ctx, failSQL, p.PanelID, string(fault), truncate(detail, maxDetail), at,
+		p.APIBaseURL, p.ClientBaseURL, PanelTestedEvent)
+	if err != nil {
+		return false, fmt.Errorf("writing panel %s fault: %w", p.PanelID, err)
 	}
-	return nil
+	return tag.RowsAffected() == 1, nil
 }
 
 func truncate(s string, max int) string {

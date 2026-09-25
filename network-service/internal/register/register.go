@@ -92,11 +92,14 @@ type Store interface {
 	// Pending returns every panel whose reviewState is `pending`.
 	Pending(ctx context.Context) ([]Candidate, error)
 	// Answer writes the document and the verdict, and clears any recorded
-	// fault — **only while the panel is still pending**. False means it was
-	// not: withdrawn or decided while the test ran, and nothing was written.
-	Answer(ctx context.Context, panelID string, caps driver.Capabilities, state driver.ReviewState, at time.Time) (bool, error)
+	// fault — **only while the panel is still pending at the addresses p
+	// names**. False means it was not: withdrawn, decided, or given a new
+	// `apiBaseUrl` / `clientBaseUrl` while the test ran (F-027-cc), and
+	// nothing was written.
+	Answer(ctx context.Context, p Pending, caps driver.Capabilities, state driver.ReviewState, at time.Time) (bool, error)
 	// Fail records a test that produced no verdict. The panel stays pending.
-	Fail(ctx context.Context, panelID string, fault FaultKind, detail string, at time.Time) error
+	// It is held by the same guard as Answer, and false means the same.
+	Fail(ctx context.Context, p Pending, fault FaultKind, detail string, at time.Time) (bool, error)
 }
 
 // Opener builds the driver for one panel.
@@ -131,7 +134,8 @@ type Report struct {
 	Answered int
 	// Waiting is how many pending panels were inside their retry wait.
 	Waiting int
-	// Stale is how many answers arrived for a panel no longer pending.
+	// Stale is how many answers — verdicts or faults — arrived for a panel no
+	// longer pending, or no longer at the address that was tested.
 	Stale  int
 	Failed []Failure
 }
@@ -197,9 +201,17 @@ func (r *Registrar) due(c Candidate) bool {
 func (r *Registrar) test(ctx context.Context, p Pending, report *Report) error {
 	at := r.now()
 	fail := func(fault FaultKind, detail string) error {
+		written, err := r.Store.Fail(ctx, p, fault, detail, at)
+		if err != nil {
+			return err
+		}
+		if !written {
+			report.Stale++
+			return nil
+		}
 		report.Failed = append(report.Failed, Failure{PanelID: p.PanelID, Fault: fault, Detail: detail})
 		r.log().Warn("connection test produced no verdict", "panel", p.PanelID, "fault", fault, "detail", detail)
-		return r.Store.Fail(ctx, p.PanelID, fault, detail, at)
+		return nil
 	}
 
 	d, err := r.Opener.Open(ctx, p)
@@ -224,7 +236,7 @@ func (r *Registrar) test(ctx context.Context, p Pending, report *Report) error {
 	}
 
 	verdict := caps.Verdict(p.Transport, p.CounterSemantics)
-	written, err := r.Store.Answer(ctx, p.PanelID, caps, verdict.ReviewState, at)
+	written, err := r.Store.Answer(ctx, p, caps, verdict.ReviewState, at)
 	if err != nil {
 		return err
 	}

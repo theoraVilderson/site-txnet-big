@@ -48,9 +48,12 @@ The rules:
 2. **An invalid document is never stored and no verdict is read off it.**
    `Verdict` reads a missing row as "no", so a driver that forgot a row would
    get a panel refused (or accepted under a row nobody tested).
-3. **The verdict is written only over `pending`.** A panel withdrawn or
-   re-submitted while its test ran keeps what it was given; the late answer
-   is counted `Stale` in the pass report and dropped.
+3. **An answer is written only over `pending`, at the address tested.** A
+   panel withdrawn or re-submitted while its test ran keeps what it was
+   given; one whose `apiBaseUrl` or `clientBaseUrl` was edited (billing's
+   `PATCH`, which sends it back to `pending`) waits for a test of the new
+   server (F-027-cc). Either way the late answer — verdict or fault — is
+   counted `Stale` in the pass report and dropped.
 4. **The retry is a wait, and a refusal waits longer.** A failed test is
    retried after 5 minutes. After `blocked` or `rate_limited` it waits
    `panelstate.DefaultCooloff` (15 minutes), the same wait every other loop
@@ -114,9 +117,10 @@ before it is collected again.
 ## The store, and the process that runs it (F-027-ax)
 
 `register.PostgresStore` is `Store` over `network.panel`, through the
-cross-tenant pool. Both writes carry `"reviewState" = 'pending'` in their own
-`WHERE`, so rule 3 is held by the statement, not by a read before it; a write
-that touched no row is `Stale`. `connectionTestDetail` is cut at 1000 bytes on
+cross-tenant pool. Both writes carry `"reviewState" = 'pending'` and the two
+addresses the test reached (null read as `""`) in their own `WHERE`, so rule 3
+is held by the statement, not by a read before it; a write that touched no row
+is `Stale`. `connectionTestDetail` is cut at 1000 bytes on
 a rune boundary — a far end's error body is not ours to store whole.
 
 `cmd/server` starts `register.Registrar` at boot and stops it first on

@@ -253,6 +253,53 @@ func (w withdrawing) Capabilities(ctx context.Context) (driver.Capabilities, err
 	return w.Driver.Capabilities(ctx)
 }
 
+// F-027-cc: a test's answer is about the server it reached. An owner who
+// changed the address while it ran gets a test of the new one, not the old
+// one's verdict — and not its fault either, which would hold the new address
+// in a retry wait it never earned.
+func TestAnAnswerLandsOnlyForTheAddressItTested(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		edit func(*register.MemoryStore)
+	}{
+		{"the API address", func(s *register.MemoryStore) { s.Edit("p1", "https://moved.example", "") }},
+		{"the link address", func(s *register.MemoryStore) { s.Edit("p1", "https://p1.example", "https://cdn.example") }},
+	} {
+		for _, answer := range []string{"verdict", "fault"} {
+			t.Run(tc.name+" / "+answer, func(t *testing.T) {
+				p := fake.New(fake.Config{Transport: driver.TransportPull, CounterSemantics: driver.CounterCumulative})
+				if answer == "fault" {
+					p.FailNextCall(503)
+				}
+				r, store, _ := setup(nil, pending("p1", driver.TransportPull, driver.CounterCumulative))
+				r.Opener = opener{panels: map[string]driver.Driver{"p1": editing{Driver: p, store: store, edit: tc.edit}}}
+
+				report := pass(t, r)
+
+				rec := store.Record("p1")
+				if rec.ReviewState != driver.ReviewPending || rec.Capabilities != nil || rec.Fault != "" || !rec.TestedAt.IsZero() {
+					t.Errorf("record = %+v; the old address's %s landed on the new one", rec, answer)
+				}
+				if report.Stale != 1 || report.Answered != 0 || len(report.Failed) != 0 {
+					t.Errorf("report = %+v, want one stale answer and nothing written", report)
+				}
+			})
+		}
+	}
+}
+
+// editing changes the panel's address while its test is in flight.
+type editing struct {
+	driver.Driver
+	store *register.MemoryStore
+	edit  func(*register.MemoryStore)
+}
+
+func (e editing) Capabilities(ctx context.Context) (driver.Capabilities, error) {
+	e.edit(e.store)
+	return e.Driver.Capabilities(ctx)
+}
+
 // Only accepted panels are collected. The collection loop's own guard is
 // asserted in `collect`; this is the rule it reads.
 func TestOnlyAnAcceptedVerdictIsCollectable(t *testing.T) {

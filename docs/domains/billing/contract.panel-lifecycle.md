@@ -46,9 +46,10 @@ its next tick.
    `clientBaseUrl`, and cannot clear the IP its NAS is allowlisted by: 409
    `not_for_transport` (the CHECKs `panel_push_has_ip_address` and
    `panel_client_base_url_is_pull_only` hold the same).
-5. **Known window.** A test already running against the old address may
-   still write its verdict after the edit; the Go write is conditional on
-   `pending`, not on the address. Editing the address again re-tests.
+5. **A test of the old address is discarded.** One still running when the
+   edit lands writes nothing — neither its verdict nor its fault: the Go
+   write is conditional on the addresses it tested as well as on `pending`
+   (`network/contract.registration.md` rule 3, F-027-cc).
 
 `panel-edit.spec.ts` pins rules 1–4 and the scope.
 

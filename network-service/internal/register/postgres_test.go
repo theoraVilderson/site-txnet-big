@@ -64,6 +64,9 @@ func (f *fakeDB) Exec(_ context.Context, sql string, args ...any) (pgconn.Comman
 
 const panel = "55555555-5555-4555-8555-555555555555"
 
+// tested is the declaration a write carries: the addresses its test reached.
+var tested = Pending{PanelID: panel, APIBaseURL: "https://p.example/adm1n", ClientBaseURL: ""}
+
 func TestPendingReadsTheRowAsTheRegistrarNeedsIt(t *testing.T) {
 	tested := time.Date(2026, 9, 24, 8, 0, 0, 0, time.UTC)
 	f := &fakeDB{rows: []row{
@@ -97,7 +100,7 @@ func TestPendingReadsTheRowAsTheRegistrarNeedsIt(t *testing.T) {
 func TestAVerdictOverAPanelNoLongerPendingIsStale(t *testing.T) {
 	f := &fakeDB{affected: "UPDATE 0"}
 	caps := driver.Capabilities{Version: driver.CapabilitiesVersion, Answers: map[driver.RowKey]driver.Answer{}}
-	written, err := PostgresStore{DB: f}.Answer(context.Background(), panel, caps, driver.ReviewAccepted, time.Now())
+	written, err := PostgresStore{DB: f}.Answer(context.Background(), tested, caps, driver.ReviewAccepted, time.Now())
 	if err != nil {
 		t.Fatalf("Answer: %v", err)
 	}
@@ -109,7 +112,7 @@ func TestAVerdictOverAPanelNoLongerPendingIsStale(t *testing.T) {
 	}
 
 	f.affected = "UPDATE 1"
-	if written, _ := (PostgresStore{DB: f}).Answer(context.Background(), panel, caps, driver.ReviewAccepted, time.Now()); !written {
+	if written, _ := (PostgresStore{DB: f}).Answer(context.Background(), tested, caps, driver.ReviewAccepted, time.Now()); !written {
 		t.Error("an update of one row did not report the verdict written")
 	}
 }
@@ -117,7 +120,7 @@ func TestAVerdictOverAPanelNoLongerPendingIsStale(t *testing.T) {
 func TestAFaultIsGuardedAndItsDetailBounded(t *testing.T) {
 	f := &fakeDB{affected: "UPDATE 1"}
 	detail := strings.Repeat("ж", maxDetail) // two bytes each: the cut lands mid-rune
-	if err := (PostgresStore{DB: f}).Fail(context.Background(), panel, FaultUnopenable, detail, time.Now()); err != nil {
+	if _, err := (PostgresStore{DB: f}).Fail(context.Background(), tested, FaultUnopenable, detail, time.Now()); err != nil {
 		t.Fatalf("Fail: %v", err)
 	}
 	if !strings.Contains(f.sql[0], `AND "reviewState" = 'pending'`) {
@@ -132,16 +135,40 @@ func TestAFaultIsGuardedAndItsDetailBounded(t *testing.T) {
 	}
 }
 
+// F-027-cc: an edit that changes an address sends the panel back to pending,
+// so pending alone does not tell the old server's answer from the new one's.
+// Both writes name the addresses tested, and a changed one touches no row.
+func TestAnAnswerIsGuardedByTheAddressItTested(t *testing.T) {
+	f := &fakeDB{affected: "UPDATE 0"}
+	caps := driver.Capabilities{Version: driver.CapabilitiesVersion, Answers: map[driver.RowKey]driver.Answer{}}
+	written, err := PostgresStore{DB: f}.Answer(context.Background(), tested, caps, driver.ReviewAccepted, time.Now())
+	if err != nil || written {
+		t.Fatalf("Answer: written=%v err=%v; an update that touched no row is stale", written, err)
+	}
+	failed, err := PostgresStore{DB: f}.Fail(context.Background(), tested, FaultUnopenable, "x", time.Now())
+	if err != nil || failed {
+		t.Fatalf("Fail: written=%v err=%v; an update that touched no row is stale", failed, err)
+	}
+	for i, write := range []string{"verdict", "fault"} {
+		if !strings.Contains(f.sql[i], `coalesce("apiBaseUrl", '') = $5 AND coalesce("clientBaseUrl", '') = $6`) {
+			t.Errorf("the %s write is not guarded by the addresses it tested", write)
+		}
+		if f.args[i][4] != tested.APIBaseURL || f.args[i][5] != tested.ClientBaseURL {
+			t.Errorf("the %s write carries addresses %v / %v, want the tested ones", write, f.args[i][4], f.args[i][5])
+		}
+	}
+}
+
 // F-027-bs: every test result is announced through the outbox, in the same
 // statement as the write it announces — never a publish after it.
 func TestEveryTestResultIsAnnouncedInItsOwnStatement(t *testing.T) {
 	f := &fakeDB{affected: "INSERT 0 1"}
 	caps := driver.Capabilities{Version: driver.CapabilitiesVersion, Answers: map[driver.RowKey]driver.Answer{}}
-	written, err := PostgresStore{DB: f}.Answer(context.Background(), panel, caps, driver.ReviewRefused, time.Now())
+	written, err := PostgresStore{DB: f}.Answer(context.Background(), tested, caps, driver.ReviewRefused, time.Now())
 	if err != nil || !written {
 		t.Fatalf("Answer: written=%v err=%v", written, err)
 	}
-	if err := (PostgresStore{DB: f}).Fail(context.Background(), panel, FaultUnopenable, "no driver", time.Now()); err != nil {
+	if _, err := (PostgresStore{DB: f}).Fail(context.Background(), tested, FaultUnopenable, "no driver", time.Now()); err != nil {
 		t.Fatalf("Fail: %v", err)
 	}
 	for i, write := range []string{"verdict", "fault"} {
