@@ -101,6 +101,12 @@ type VariantShape = {
  * refuses a rate on a prepaid Grant, and a rate nobody reads is a second answer
  * to what the user owes. A metered variant with no rate at all resolves to
  * `null` too; `issue` is what refuses that, with the variant in the message.
+ *
+ * `purchasedBytes` is the bag the allocator splits into panel ceilings
+ * (ADR-0072). A prepaid package *is* a bag with a fixed ceiling, so it is
+ * filled here with the sold `traffic_bytes` limit; a metered Grant starts
+ * empty and buys blocks. Left at 0, a prepaid config is born with a 0-byte
+ * ceiling, never placed on its panel, and refunded by the delivery clock.
  */
 export function grantFromVariant(input: { source: GrantSource; startsAt: Date }, v: VariantShape) {
   return {
@@ -111,7 +117,15 @@ export function grantFromVariant(input: { source: GrantSource; startsAt: Date },
     quotas: structuredClone(v.quotas),
     featureKeys: [...v.product.featureKeys],
     meteredRate: v.billingMode === VariantBillingMode.metered ? (meteredRateAt(v.meteredRates, input.startsAt)?.rate ?? null) : null,
+    purchasedBytes: v.billingMode === VariantBillingMode.prepaid ? trafficLimitOf(v.quotas) : BigInt(0),
   };
+}
+
+/** The sold `traffic_bytes` limit, or 0 where the variant sells none. */
+function trafficLimitOf(quotas: Prisma.JsonValue): bigint {
+  const q = quotas as { traffic_bytes?: { limit?: unknown } } | null;
+  const limit = q?.traffic_bytes?.limit;
+  return typeof limit === 'number' && Number.isSafeInteger(limit) && limit > 0 ? BigInt(limit) : BigInt(0);
 }
 
 /** SHA-256 of a subscription token, lowercase hex — what `/sub` looks a Grant up by. */

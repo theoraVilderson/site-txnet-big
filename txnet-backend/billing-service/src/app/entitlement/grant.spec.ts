@@ -132,7 +132,15 @@ describe('grantFromVariant', () => {
       quotas: variant.quotas,
       featureKeys: ['vpn.access'],
       meteredRate: null,
+      purchasedBytes: BigInt(53687091200),
     });
+  });
+
+  it('fills a prepaid Grant\'s bag with its traffic quota at issue, and a metered one\'s with nothing (ADR-0072)', () => {
+    const start = { source: GrantSource.purchase, startsAt: at('2026-09-01T00:00:00Z') };
+    expect(grantFromVariant(start, variant).purchasedBytes).toBe(BigInt(53687091200));
+    expect(grantFromVariant(start, { ...variant, billingMode: VariantBillingMode.metered }).purchasedBytes).toBe(BigInt(0));
+    expect(grantFromVariant(start, { ...variant, quotas: {} }).purchasedBytes).toBe(BigInt(0));
   });
 
   it('locks the rate in effect at the start onto a metered Grant, and never a later one', () => {
@@ -229,7 +237,7 @@ describe('GrantService.issue', () => {
     expect(grants).toHaveLength(1);
     expect(grants[0]).toMatchObject({ tenantId: TENANT, userId: USER, variantId: VARIANT, status: GrantStatus.active });
     expect(grants[0]['subscriptionTokenHash']).toBe(hashSubscriptionToken(first.token as string));
-    expect(JSON.stringify(grants[0])).not.toContain(first.token as string);
+    expect(JSON.stringify(grants[0], (_k, v) => (typeof v === 'bigint' ? v.toString() : v))).not.toContain(first.token as string);
   });
 
   it('answers the first Grant and no token when the same cause issues again', async () => {
