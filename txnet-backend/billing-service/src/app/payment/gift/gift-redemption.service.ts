@@ -62,7 +62,7 @@ export type GiftRedemption =
       redemptionId: string;
       code: string;
       grant: Grant;
-      /** The subscription token, answered this once; only its hash is stored. */
+      /** The token minted with the Grant. The route does not answer it: the link is My services' (F-114-e-c). */
       token: string;
     };
 

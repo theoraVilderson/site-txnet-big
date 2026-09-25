@@ -194,7 +194,8 @@ describe('paying an invoice from the wallet (F-111-b)', () => {
     expect(paid).toMatchObject({ id, status: InvoiceStatus.paid, total: '10.00', balanceAfter: '90.00' });
     expect(paid.grants).toHaveLength(1);
     expect(paid.grants[0].status).toBe(GrantStatus.pending);
-    expect(paid.grants[0].token).toEqual(expect.any(String));
+    // The link is My services' (F-114-e-c): the pay answers no token.
+    expect(paid.grants[0]).not.toHaveProperty('token');
 
     const written = await writtenFor(id);
     expect(written.invoice).toBe(InvoiceStatus.paid);

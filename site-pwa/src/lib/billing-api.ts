@@ -127,9 +127,8 @@ export interface GiftCredit {
 }
 
 /**
- * A free-service code (F-502-l-b): a Grant. Billing's answer also carries the
- * subscription token, which the panel does not read: the link is My services'
- * to show, as often as asked (F-114-e-c, ADR-0085).
+ * A free-service code (F-502-l-b): a Grant, and no token — the link is My
+ * services' to show, as often as asked (F-114-e-c, ADR-0085).
  */
 export interface GiftGrant {
   kind: "free_grant";
@@ -236,7 +235,7 @@ export interface ShopInvoice {
   expiresAt: string;
 }
 
-/** `POST /invoices/:id/pay`'s answer. Each Grant's token is also answered and not read here: the link is My services' (F-114-e-c). */
+/** `POST /invoices/:id/pay`'s answer. No token: the link is My services' (F-114-e-c). */
 export interface InvoicePaid {
   id: string;
   status: "paid";

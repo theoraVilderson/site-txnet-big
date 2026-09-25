@@ -62,7 +62,7 @@ otherwise) → `InvoiceExpiryService.expirePending()` → `{scanned, expired, ho
 
 | Answer | When |
 |---|---|
-| `200 {id, status: "paid", total, balanceAfter, walletTransactionId, grants: [{id, status: "pending", token}]}` | paid. `token` is the subscription key, shown this once (entitlement `issue`) |
+| `200 {id, status: "paid", total, balanceAfter, walletTransactionId, grants: [{id, status: "pending"}]}` | paid. No token: the link is `GET /api/billing/gift/grants/:id/subscription-link`'s (`contract.gift.md`, F-114-e-c) |
 | `404 errors.billing.invoice.notFound` | unknown, another tenant's (RLS) or another user's — never told apart |
 | `409` `reason`: `already_paid` / `expired` / `cancelled` | its i18n key beside it. Past `expiresAt` is `expired` even before the sweep flips it. A `refunded` invoice (F-111-d) is `already_paid`: it was, and its clock may still run |
 | `409 insufficient_balance` + `error.facts: {total, balance, missing}` | the wallet holds less than `total`; nothing is written. `missing` is the top-up to offer — "The shortfall" below. In `facts` because the shared envelope drops any other field (F-111-e: until then the figure never reached a client) |

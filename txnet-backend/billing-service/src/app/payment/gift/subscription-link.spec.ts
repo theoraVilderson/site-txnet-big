@@ -21,6 +21,7 @@ import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { BackendI18nKeys, RATE_LIMIT_KEY, RateLimitBucket, type RateLimitOptions, runWithTenant } from '@txnet-backend/shared-core';
 
 import { EntitlementRefused } from '../../entitlement/grant';
+import { GiftController } from './gift.controller';
 import { GrantTokenController } from './grant-token.controller';
 import { SubscriptionLinkService, subscriptionHostOf } from './subscription-link.service';
 
@@ -173,5 +174,27 @@ describe('GrantTokenController — the link routes', () => {
     expect(limit.configKey).toBe('SUBSCRIPTION_LINK_RATE_LIMIT');
     expect(limit.key(req(USER) as never)).toBe(`${RateLimitBucket.SUBSCRIPTION_LINK}:${USER}`);
     expect(RateLimitBucket.SUBSCRIPTION_LINK).not.toBe(RateLimitBucket.GRANT_ROTATE_TOKEN);
+  });
+});
+
+describe('the token leaves only inside the link (F-114-e-c)', () => {
+  it('a free-service redemption answers the Grant, and neither a key nor the token', async () => {
+    const gifts = {
+      redeem: vi.fn(async () => ({
+        kind: 'free_grant' as const,
+        redemptionId: 'r-1',
+        code: 'FREEVPN',
+        grant: { id: GRANT, variantId: 'v-1', startsAt: new Date('2026-09-25T00:00:00Z'), endsAt: null, featureKeys: ['vpn.access'] },
+        token: 'tok-secret',
+      })),
+    };
+    const controller = new GiftController(gifts as never);
+    const req = { identity: { userId: USER, tenantId: TENANT, roleId: 'r', sessionId: 's', permissions: [] } };
+
+    const answer = await controller.redeem({ code: 'FREEVPN' }, req as never);
+
+    expect(answer).toMatchObject({ kind: 'free_grant', code: 'FREEVPN', grant: { id: GRANT } });
+    expect(answer).not.toHaveProperty('subscriptionKey');
+    expect(JSON.stringify(answer)).not.toContain('tok-secret');
   });
 });

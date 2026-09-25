@@ -51,8 +51,8 @@ export type InvoicePaid = {
   balanceAfter: string;
   /** Null for a free invoice: no ledger row. */
   walletTransactionId: string | null;
-  /** The subscription token is shown here once, as on every issue. */
-  grants: Array<{ id: string; status: Grant['status']; token: string | null }>;
+  /** No token: the link is My services' to answer, as often as asked (F-114-e-c, ADR-0085). */
+  grants: Array<{ id: string; status: Grant['status'] }>;
 };
 
 export type InvoicePayRejection = 'not_found' | 'already_paid' | 'expired' | 'cancelled' | 'insufficient_balance';
@@ -182,7 +182,7 @@ export class InvoicePaymentService {
         total: total.toFixed(2),
         balanceAfter: balanceAfter.toFixed(2),
         walletTransactionId,
-        grants: [{ id: issued.grant.id, status: issued.grant.status, token: issued.token }],
+        grants: [{ id: issued.grant.id, status: issued.grant.status }],
       };
     });
   }

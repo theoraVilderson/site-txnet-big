@@ -51,7 +51,8 @@ export class GiftController {
     try {
       const result = await this.gifts.redeem({ userId, code: body.code });
       if (result.kind === 'free_grant') {
-        // D-35: the subscription key is shown this once; it is never stored.
+        // No token: the link is My services' to answer, as often as asked
+        // (F-114-e-c, ADR-0085) — a key here would be one the panel never shows.
         return {
           kind: result.kind,
           code: result.code,
@@ -62,7 +63,6 @@ export class GiftController {
             endsAt: result.grant.endsAt,
             featureKeys: result.grant.featureKeys,
           },
-          subscriptionKey: result.token,
         };
       }
       return {

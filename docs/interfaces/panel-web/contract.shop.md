@@ -75,8 +75,8 @@ carry one piece of the return (rules 7 and 8).
    has a sentence (`common.shop.invoice.status.*`, keyed by the union
    `INVOICE_STATUSES`, which mirrors `billing.prisma`). A `pending` one past its
    clock reads `expired` from billing already.
-10. **No key, then My services** (F-114-e-c, ADR-0085). The pay still answers
-   each Grant's `token`; the page never shows it. It says the service is being
+10. **No key, then My services** (F-114-e-c, ADR-0085). The pay answers no
+   token (billing, F-114-e-c). The page says the service is being
    prepared and that its subscription link is in My services, and links there.
    A paid Grant is `pending` until delivery — "being prepared" — and My
    services turns it active live

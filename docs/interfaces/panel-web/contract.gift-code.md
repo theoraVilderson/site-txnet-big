@@ -130,8 +130,7 @@ effect is also what `react-hooks/set-state-in-effect` refuses.
 10. **A free-service code shows the service and where its link is — no key**
     (F-502-l-c, F-114-e-c, ADR-0085). A `free_grant` answer shows the service,
     its period and "the subscription link is always in My services", with a
-    link there. Billing's answer still carries the token; the panel never reads
-    it. No money figure, no burst.
+    link there. Billing's answer carries no token. No money figure, no burst.
 11. **It closes like any other answer.** `Escape`, the backdrop, the X, "done"
     and the My services link all close it on the first press. The former rules 11-12 of
     F-502-m/q — ask before closing, reissue from the modal — existed only

@@ -262,14 +262,13 @@ describe("one page: pick, codes, pay", () => {
       total: "12.50",
       balanceAfter: "7.50",
       walletTransactionId: "w1",
-      // Billing still answers the token; the panel must not show it (F-114-e-c).
-      grants: [{ id: "g1", status: "pending", token: "tok-once" }],
-    } as never);
+      grants: [{ id: "g1", status: "pending" }],
+    });
     const user = await toCheckout();
     await user.click(screen.getByRole("button", { name: "shop.invoice.pay" }));
 
     expect(await screen.findByText("shop.paid.preparing")).toBeTruthy();
-    expect(document.body.textContent ?? "").not.toMatch(/tok-once|wallet\.gift\.key/);
+    expect(document.body.textContent ?? "").not.toMatch(/wallet\.gift\.key/);
     expect(screen.getByRole("link", { name: "shop.paid.myServices" }).getAttribute("href")).toBe(PANEL_MY_SERVICES);
   });
 

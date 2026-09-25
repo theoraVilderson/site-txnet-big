@@ -49,13 +49,11 @@ vi.mock("@/lib/billing-api", () => ({
 
 const redeemGift = vi.mocked(billingApi.redeemGift);
 
-/** Billing still answers the token beside the Grant; the panel must not show it. */
 const GRANTED = {
   kind: "free_grant" as const,
   code: "FREEVPN",
   grant: { id: "g1", variantId: "v1", startsAt: "2026-09-15T00:00:00.000Z", endsAt: "2026-10-15T00:00:00.000Z", featureKeys: ["vpn.access"] },
-  subscriptionKey: "tok-3kq9",
-} as never;
+};
 
 /** The key back, so an assertion names the string the component asked for. */
 const t = (_ns: string, key: string, vars?: Record<string, string | number>) =>
@@ -212,7 +210,7 @@ describe("a free-service code", () => {
     expect(await screen.findByText("wallet.gift.serviceTitle")).toBeInTheDocument();
     expect(screen.getByText("wallet.gift.serviceLink")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "wallet.gift.toMyServices" }).getAttribute("href")).toBe(PANEL_MY_SERVICES);
-    expect(document.body.textContent ?? "").not.toMatch(/wallet\.gift\.key|newKey|tok-/);
+    expect(document.body.textContent ?? "").not.toMatch(/wallet\.gift\.key|newKey/);
     expect(screen.queryByText(/wallet\.gift\.credited/)).not.toBeInTheDocument();
     expect(screen.queryByText(/wallet\.gift\.newBalance/)).not.toBeInTheDocument();
     expect(onRedeemed).toHaveBeenCalledTimes(1);
