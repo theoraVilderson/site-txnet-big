@@ -2222,7 +2222,17 @@
       "showMatrix": "Capabilities",
       "hideMatrix": "Hide capabilities",
       "showInbounds": "Inbounds",
-      "hideInbounds": "Hide inbounds"
+      "hideInbounds": "Hide inbounds",
+      "edit": "Edit",
+      "more": "More actions",
+      "showArchived": "Show archived ({{n}})",
+      "hideArchived": "Hide archived",
+      "archived": "Archived",
+      "archivedHint": "Archived {{when}}. Not tested or collected; its usage and history are kept.",
+      "restore": "Restore",
+      "restored": "Restored. It is tested again on the next pass, and collected once it passes.",
+      "details": "Details",
+      "address": "Address"
     },
     "review": {
       "pending": "Waiting for its test",
@@ -2408,7 +2418,14 @@
       "already_draining": "It is already draining; its wait was not restarted.",
       "member_has_configs": "Users still have configs on this panel through this group. Drain it instead — it leaves the group on its own once they have moved.",
       "inbound_not_found": "That inbound is not on this panel any more. Read the inbounds again.",
-      "inbound_not_sellable": "That inbound cannot be sold: it is gone from the panel, or serves a protocol we do not sell."
+      "inbound_not_sellable": "That inbound cannot be sold: it is gone from the panel, or serves a protocol we do not sell.",
+      "not_for_transport": "A push panel takes no API or link address, and cannot lose its NAS IP.",
+      "panel_in_group": "It is still in a panel group. Remove it from the group first — or drain it, if users have configs on it.",
+      "panel_has_configs": "Users still have configs on this panel. Drain it from its group first.",
+      "panel_retired": "This panel is archived. Restore it first.",
+      "panel_not_retired": "This panel is not archived.",
+      "group_has_members": "The group still has members. Remove or drain them first.",
+      "group_in_use": "A variant still sells on this group. Move it to another group in the catalog first."
     },
     "resubmit": {
       "open": "New login",
@@ -2524,7 +2541,42 @@
         "cap": "A whole number from 1, or empty for no cap.",
         "unchanged": "Nothing was changed."
       }
-    }
+    },
+    "edit": {
+      "title": "Edit {{panel}}",
+      "basics": "Name and region",
+      "addresses": "Addresses",
+      "budget": "Request budget",
+      "login": "Login",
+      "loginHint": "Leave blank to keep the stored login. A new one replaces it in the vault and is never shown again.",
+      "pushAddresses": "A push panel reports to us, so it has no API or link address — only the NAS IP the allowlist trusts.",
+      "ipHint": "The NAS's address. The allowlist reads a change within a minute.",
+      "addressWarning": "You changed an address. The panel goes back to its connection test, and collection pauses until the new address passes — usually within a minute.",
+      "submit": "Save changes",
+      "saved": "Saved.",
+      "savedRetest": "Saved. The new address is tested on the next pass; collection resumes once it passes.",
+      "unchanged": "Nothing was changed.",
+      "invalidBudget": "Enter a whole number from 1 to 6000."
+    },
+    "remove": {
+      "action": "Delete panel",
+      "title": "Delete {{panel}}?",
+      "hint": "If this panel never had users, it is deleted for good. If it had, it is archived instead: hidden from this list, no longer tested or collected, and its usage and history kept. You can restore an archived panel later.",
+      "blockedGroups": "It is still a member of {{groups}}. Remove it from each group first — or drain it, if users still have configs on it.",
+      "submit": "Delete",
+      "deleted": "Deleted.",
+      "archived": "It had history, so it was archived: hidden from the list, no longer collected, its records kept."
+    },
+    "groupsRemove": {
+      "action": "Delete group",
+      "title": "Delete the group {{group}}?",
+      "hint": "The group is deleted for good.",
+      "blockedMembers": "It still has {{n}} member(s). Remove or drain them first.",
+      "blockedVariants": "{{n}} variant(s) sell on it. In the catalog, move them to another group first.",
+      "submit": "Delete group",
+      "deleted": "Group deleted."
+    },
+    "groupsMembersCount": "{{n}} member(s)"
   },
   "shop": {
     "title": "Shop",

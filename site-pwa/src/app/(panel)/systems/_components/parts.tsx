@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { Loader2, RotateCw } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Loader2, MoreHorizontal, RotateCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { SYSTEMS_KEYS as K, refusalKey, validateNote } from "../_lib/systems";
@@ -40,6 +40,111 @@ export function Section({ title, hint, actions, children }: { title: string; hin
       </div>
       {children}
     </section>
+  );
+}
+
+/** A card's button — green tokens, never gold (panel theme). `tone: "error"` for the one that gives something up. */
+export function CardButton({
+  icon,
+  children,
+  onClick,
+  pressed,
+  tone = "plain",
+  disabled,
+}: {
+  icon?: ReactNode;
+  children: ReactNode;
+  onClick: () => void;
+  pressed?: boolean;
+  tone?: "plain" | "error";
+  disabled?: boolean;
+}) {
+  const look =
+    tone === "error"
+      ? "border-error-border text-error hover:bg-error-bg"
+      : pressed
+        ? "border-primary/30 bg-leaf-bg text-primary"
+        : "border-card-border text-text-primary hover:bg-leaf-bg";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={pressed}
+      className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold disabled:opacity-50 ${look}`}
+    >
+      {icon}
+      {children}
+    </button>
+  );
+}
+
+export type MenuItem = { label: string; icon?: ReactNode; onSelect: () => void; tone?: "error" };
+
+/**
+ * The rarer actions of a card, behind one button, so a row stays readable on
+ * a phone. Closes on a pick, on Escape and on a click outside; the items are
+ * real buttons, so the keyboard reaches them in order.
+ */
+export function ActionsMenu({ label, items }: { label: string; items: readonly MenuItem[] }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  if (items.length === 0) return null;
+  return (
+    <div ref={box} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={label}
+        title={label}
+        className="inline-flex items-center rounded-xl border border-card-border p-2 text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
+      >
+        <MoreHorizontal size={16} aria-hidden />
+      </button>
+      {open && (
+        <div role="menu" className="absolute end-0 top-full z-20 mt-1 flex min-w-48 flex-col rounded-2xl border border-card-border bg-card-bg p-1 shadow-lg">
+          {items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                item.onSelect();
+              }}
+              className={`flex items-center gap-2 rounded-xl px-3 py-2 text-start text-xs font-bold ${
+                item.tone === "error" ? "text-error hover:bg-error-bg" : "text-text-primary hover:bg-leaf-bg"
+              }`}
+            >
+              {item.icon}
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A sentence after an action: green when it landed, error tones when it was refused. */
+export function Notice({ tone, children }: { tone: "good" | "bad"; children: ReactNode }) {
+  return (
+    <p role={tone === "bad" ? "alert" : "status"} className={`rounded-xl border px-3 py-2 text-xs font-bold leading-5 ${tone === "bad" ? BAD : GOOD}`}>
+      {children}
+    </p>
   );
 }
 

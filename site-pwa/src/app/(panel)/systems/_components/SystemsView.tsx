@@ -101,7 +101,7 @@ export function SystemsView() {
       </header>
 
       <RegisterPanel onRegistered={reload} />
-      <PanelList panels={panels} isLoading={isLoading} error={error} onRetry={reloadPanels} />
+      <PanelList panels={panels} groups={groups} isLoading={isLoading} error={error} onRetry={reloadPanels} />
       <PanelGroups groups={groups} panels={panels} isLoading={groupsLoading} error={groupsError} onChanged={reloadGroups} />
       {/* Acknowledging resumes a halted panel: its health line is read again. */}
       <DriftReport onAcknowledged={reload} />

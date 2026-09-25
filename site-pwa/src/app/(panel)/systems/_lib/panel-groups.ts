@@ -131,7 +131,8 @@ export function groupHealth(group: PanelGroup): { placeable: number; min: number
 export function addablePanels(panels: readonly SystemsPanel[], group: PanelGroup): SystemsPanel[] {
   const held = new Set(group.members.map((m) => m.panelId));
   return panels
-    .filter((p) => !held.has(p.id) && p.review.reviewState !== "refused")
+    // An archived panel takes no group (F-027-bz; billing answers `panel_not_found`).
+    .filter((p) => !held.has(p.id) && p.review.reviewState !== "refused" && !p.retiredAt)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 

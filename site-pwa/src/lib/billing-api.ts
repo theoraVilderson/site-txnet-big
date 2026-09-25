@@ -887,6 +887,28 @@ export const billingApi = {
     });
   },
 
+  /**
+   * A panel's settings (F-027-by): only what changed. A changed API or link
+   * address sends it back to `pending` (`retest`); a push panel takes neither
+   * (409 `not_for_transport`), an archived one nothing (409 `panel_retired`).
+   */
+  async updatePanel(id: string, body: PanelSettingsBody): Promise<UpdatedPanel> {
+    return call<UpdatedPanel>(`/systems/panels/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+
+  /**
+   * Delete a panel (F-027-bz): `deleted` with no history, `archived` with it.
+   * 409 `panel_in_group` / `panel_has_configs` while it serves.
+   */
+  async deletePanel(id: string): Promise<RemovedPanel> {
+    return call<RemovedPanel>(`/systems/panels/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+
+  /** Restore an archived panel (F-027-bz): back to `pending`, tested before it is collected. */
+  async restorePanel(id: string): Promise<{ id: string; reviewState: "pending" }> {
+    return call<{ id: string; reviewState: "pending" }>(`/systems/panels/${encodeURIComponent(id)}/restore`, { method: "POST" });
+  },
+
   async systemsPanels(): Promise<SystemsPanel[]> {
     return call<SystemsPanel[]>("/systems/panels", { method: "GET" });
   },
@@ -971,6 +993,11 @@ export const billingApi = {
   },
 
   /** 409 `member_has_configs` while a live config of the group's Grants is on it: drain it instead (rule 23). */
+  /** Delete a group (F-027-ca): 409 `group_has_members` / `group_in_use` while it has members or a variant names it. */
+  async deletePanelGroup(id: string): Promise<{ id: string; removed: true }> {
+    return call<{ id: string; removed: true }>(`/systems/panel-groups/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+
   async removePanelGroupMember(groupId: string, panelId: string): Promise<RemovedMember> {
     return call<RemovedMember>(`/systems/panel-groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(panelId)}`, { method: "DELETE" });
   },
@@ -1339,6 +1366,12 @@ export interface SystemsPanel {
   transport: "pull" | "push";
   role: "active" | "passive";
   region: string;
+  /** Where it is reached (F-027-by): what the edit form starts from. */
+  ipAddress: string | null;
+  apiBaseUrl: string | null;
+  clientBaseUrl: string | null;
+  /** Archived (F-027-bz): kept for its records, skipped by every loop. Null for a panel in service. */
+  retiredAt: string | null;
   /** Whether a push panel's RADIUS secret is stored (F-027-az); null on a pull panel. */
   radiusSecretConfigured: boolean | null;
   review: {
@@ -1494,6 +1527,20 @@ export type PanelInboundsBody = {
 
 export type DrainedMember = PanelGroupMember & { waitSeconds: number };
 export type RemovedMember = { groupId: string; panelId: string; removed: true };
+
+/** billing `updatePanelSchema` (F-027-by): any of these, at least one. `apiBaseUrl` is never cleared. */
+export type PanelSettingsBody = Partial<{
+  name: string;
+  region: string;
+  ipAddress: string | null;
+  apiBaseUrl: string;
+  clientBaseUrl: string | null;
+  maxRequestsPerMinute: number;
+}>;
+
+export type UpdatedPanel = { id: string; reviewState: PanelReviewState; retest: boolean };
+
+export type RemovedPanel = { id: string; outcome: "deleted" | "archived" };
 
 /** What re-submitting a login answers (F-027-au). `retest`: the next tick tests the panel again. */
 export interface ResubmittedLogin {

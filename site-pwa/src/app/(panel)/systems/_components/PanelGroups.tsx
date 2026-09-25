@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Layers, Plus, TriangleAlert } from "lucide-react";
+import { Layers, Pencil, Plus, Trash2, TriangleAlert } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type PanelGroup, type PanelGroupMember, type SystemsPanel } from "@/lib/billing-api";
 import { formatInstant } from "../../_lib/datetime";
+import { Alert, Field, Sheet, input, primaryButton, quietButton } from "../../catalog/_components/catalog-ui";
+import { groupDeleteBlock } from "../_lib/panel-lifecycle";
 import {
   DRAIN_TTL_MULTIPLE,
   MEMBER_ROLE_KEYS,
@@ -21,7 +23,7 @@ import {
   type GroupForm,
 } from "../_lib/panel-groups";
 import { PANEL_STATE_KEYS, REVIEW_KEYS, SYSTEMS_KEYS } from "../_lib/systems";
-import { BAD, GOOD, ListState, Pill, QUIET, REVIEW_TONE, STATE_TONE, Section, useSystemsError } from "./parts";
+import { BAD, CardButton, GOOD, ListState, Notice, Pill, QUIET, REVIEW_TONE, STATE_TONE, Section, useSystemsError } from "./parts";
 
 const K = SYSTEMS_KEYS.groups;
 
@@ -60,20 +62,21 @@ export function PanelGroups({
 }) {
   const { t } = useLocale();
   const [creating, setCreating] = useState(false);
+  // A deleted group's card is gone, so its sentence is the section's.
+  const [notice, setNotice] = useState<string | null>(null);
 
   return (
     <Section
       title={t("common", K.title)}
       hint={t("common", K.hint)}
       actions={
-        !creating && (
-          <button type="button" onClick={() => setCreating(true)} className={`inline-flex items-center gap-1 ${PRIMARY}`}>
-            <Plus size={14} aria-hidden />
-            {t("common", K.create)}
-          </button>
-        )
+        <button type="button" onClick={() => setCreating(true)} className={`inline-flex items-center gap-1 ${PRIMARY}`}>
+          <Plus size={14} aria-hidden />
+          {t("common", K.create)}
+        </button>
       }
     >
+      {notice && <Notice tone="good">{t("common", notice)}</Notice>}
       {creating && (
         <GroupEditor
           title={t("common", K.create)}
@@ -88,7 +91,7 @@ export function PanelGroups({
       <ListState isLoading={isLoading} error={error} empty={groups.length === 0 ? K.empty : null} onRetry={() => void onChanged()}>
         <ul className="flex flex-col gap-4">
           {groups.map((g) => (
-            <GroupCard key={g.id} group={g} panels={panels} onChanged={onChanged} />
+            <GroupCard key={g.id} group={g} panels={panels} onChanged={onChanged} onNotice={setNotice} />
           ))}
         </ul>
       </ListState>
@@ -96,7 +99,7 @@ export function PanelGroups({
   );
 }
 
-/** Create, or — with `group` — edit: only what changed is sent (`validateGroup`). */
+/** Create, or — with `group` — edit, in a sheet: only what changed is sent (`validateGroup`). */
 function GroupEditor({
   group,
   title,
@@ -116,11 +119,9 @@ function GroupEditor({
   const [errors, setErrors] = useState<Partial<Record<keyof GroupForm, string>>>({});
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const set = (field: keyof GroupForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm((f) => ({ ...f, [field]: e.target.value }));
+  const set = (field: keyof GroupForm) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const submit = async () => {
     const checked = validateGroup(form, group);
     if (!checked.ok) {
       setErrors(checked.errors);
@@ -140,55 +141,109 @@ function GroupEditor({
     }
   };
 
-  const field = (name: keyof GroupForm, label: string, input: React.ReactNode, hint?: string) => (
-    <label className="flex flex-col gap-1 text-xs text-text-secondary">
-      {label}
-      {input}
-      {hint && <span className="leading-5">{hint}</span>}
-      {errors[name] && <span className="text-error">{t("common", errors[name])}</span>}
-    </label>
-  );
-
   return (
-    <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3 rounded-2xl border border-card-border bg-bg-inner p-4">
-      <p className="text-sm font-bold text-text-primary">{title}</p>
-      {group && <p className="text-xs leading-5 text-text-secondary">{t("common", K.editHint)}</p>}
+    <Sheet
+      title={title}
+      onClose={onCancel}
+      footer={
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button type="button" onClick={onCancel} className={quietButton}>
+            {t("common", K.cancel)}
+          </button>
+          <button type="button" disabled={busy} onClick={() => void submit()} className={primaryButton}>
+            {submitLabel}
+          </button>
+        </div>
+      }
+    >
+      <p className="text-xs leading-5 text-text-secondary">{t("common", group ? K.editHint : K.hint)}</p>
+      <Field label={t("common", K.field.name)} error={errors.name}>
+        <input value={form.name} maxLength={100} onChange={set("name")} className={input} />
+      </Field>
       <div className="grid gap-3 sm:grid-cols-2">
-        {field("name", t("common", K.field.name), <input value={form.name} maxLength={100} onChange={set("name")} className={INPUT} />)}
-        {field(
-          "minHealthyPanels",
-          t("common", K.field.minHealthyPanels),
-          <input dir="ltr" inputMode="numeric" value={form.minHealthyPanels} onChange={set("minHealthyPanels")} className={INPUT} />,
-          t("common", K.field.minHealthyPanelsHint),
-        )}
-        {field(
-          "ttlMinutes",
-          t("common", K.field.ttlMinutes),
-          <input dir="ltr" inputMode="numeric" value={form.ttlMinutes} onChange={set("ttlMinutes")} className={INPUT} />,
-          t("common", K.field.ttlHint),
-        )}
+        <Field label={t("common", K.field.minHealthyPanels)} error={errors.minHealthyPanels} hint={t("common", K.field.minHealthyPanelsHint)}>
+          <input dir="ltr" inputMode="numeric" value={form.minHealthyPanels} onChange={set("minHealthyPanels")} className={input} />
+        </Field>
+        <Field label={t("common", K.field.ttlMinutes)} error={errors.ttlMinutes} hint={t("common", K.field.ttlHint)}>
+          <input dir="ltr" inputMode="numeric" value={form.ttlMinutes} onChange={set("ttlMinutes")} className={input} />
+        </Field>
       </div>
-      {failure && (
-        <p role="alert" className="text-xs font-bold text-error">
-          {failure}
-        </p>
-      )}
-      <div className="flex flex-wrap gap-2">
-        <button type="submit" disabled={busy} className={PRIMARY}>
-          {submitLabel}
-        </button>
-        <button type="button" onClick={onCancel} className={SECONDARY}>
-          {t("common", K.cancel)}
-        </button>
-      </div>
-    </form>
+      {failure && <Alert>{failure}</Alert>}
+    </Sheet>
   );
 }
 
-function GroupCard({ group, panels, onChanged }: { group: PanelGroup; panels: SystemsPanel[]; onChanged: () => Promise<void> }) {
+/**
+ * Delete a group (F-027-ca, billing rule 24a). The button is offered only on
+ * an empty group no variant names; otherwise the sheet says what to do first.
+ */
+function DeleteGroupSheet({ group, onClose, onDone }: { group: PanelGroup; onClose: () => void; onDone: () => Promise<void> }) {
+  const { t } = useLocale();
+  const message = useSystemsError();
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const block = groupDeleteBlock(group);
+
+  const remove = async () => {
+    setBusy(true);
+    setFailure(null);
+    try {
+      await billingApi.deletePanelGroup(group.id);
+      await onDone();
+    } catch (e) {
+      setFailure(message(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Sheet
+      title={t("common", SYSTEMS_KEYS.groupsRemove.title, { group: group.name })}
+      onClose={onClose}
+      footer={
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button type="button" onClick={onClose} className={quietButton}>
+            {t("common", K.cancel)}
+          </button>
+          {!block && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void remove()}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-error-border bg-error-bg px-3 py-2 text-xs font-bold text-error disabled:opacity-50"
+            >
+              <Trash2 size={14} aria-hidden />
+              {t("common", SYSTEMS_KEYS.groupsRemove.submit)}
+            </button>
+          )}
+        </div>
+      }
+    >
+      {block ? (
+        <Notice tone="bad">{t("common", block.key, { n: String(block.n) })}</Notice>
+      ) : (
+        <p className="text-sm leading-6 text-text-secondary">{t("common", SYSTEMS_KEYS.groupsRemove.hint)}</p>
+      )}
+      {failure && <Notice tone="bad">{failure}</Notice>}
+    </Sheet>
+  );
+}
+
+function GroupCard({
+  group,
+  panels,
+  onChanged,
+  onNotice,
+}: {
+  group: PanelGroup;
+  panels: SystemsPanel[];
+  onChanged: () => Promise<void>;
+  onNotice: (sentence: string) => void;
+}) {
   const { t } = useLocale();
   const wait = useWait();
-  const [editing, setEditing] = useState(false);
+  const [sheet, setSheet] = useState<"edit" | "delete" | null>(null);
   const health = groupHealth(group);
 
   return (
@@ -199,16 +254,20 @@ function GroupCard({ group, panels, onChanged }: { group: PanelGroup; panels: Sy
             <Layers size={14} className="text-primary" aria-hidden />
             {group.name}
           </span>
-          <span className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-secondary">
-            <span>{t("common", K.ttl, { wait: wait(group.subscriptionTtlSeconds) })}</span>
-            <span>{t("common", K.variants, { n: String(group.variantCount) })}</span>
+          <span className="flex flex-wrap gap-2">
+            <Pill tone={QUIET}>{t("common", SYSTEMS_KEYS.groupsMembersCount, { n: String(group.members.length) })}</Pill>
+            <Pill tone={QUIET}>{t("common", K.variants, { n: String(group.variantCount) })}</Pill>
+            <Pill tone={QUIET}>{t("common", K.ttl, { wait: wait(group.subscriptionTtlSeconds) })}</Pill>
           </span>
         </div>
-        {!editing && (
-          <button type="button" onClick={() => setEditing(true)} className="text-xs font-bold text-primary">
+        <div className="flex flex-wrap items-center gap-2">
+          <CardButton icon={<Pencil size={14} aria-hidden />} onClick={() => setSheet("edit")}>
             {t("common", K.edit)}
-          </button>
-        )}
+          </CardButton>
+          <CardButton icon={<Trash2 size={14} aria-hidden />} tone="error" onClick={() => setSheet("delete")}>
+            {t("common", SYSTEMS_KEYS.groupsRemove.action)}
+          </CardButton>
+        </div>
       </div>
 
       <p className={`flex items-start gap-1 rounded-xl border px-3 py-2 text-xs leading-5 ${health.short ? BAD : GOOD}`}>
@@ -216,20 +275,31 @@ function GroupCard({ group, panels, onChanged }: { group: PanelGroup; panels: Sy
         {t("common", health.short ? K.health.short : K.health.ok, { placeable: String(health.placeable), min: String(health.min) })}
       </p>
 
-      {editing && (
+      {sheet === "edit" && (
         <GroupEditor
           group={group}
-          title={t("common", K.edit)}
+          title={`${t("common", K.edit)} — ${group.name}`}
           submitLabel={t("common", K.editSubmit)}
           onDone={async () => {
-            setEditing(false);
+            setSheet(null);
             await onChanged();
           }}
-          onCancel={() => setEditing(false)}
+          onCancel={() => setSheet(null)}
+        />
+      )}
+      {sheet === "delete" && (
+        <DeleteGroupSheet
+          group={group}
+          onClose={() => setSheet(null)}
+          onDone={async () => {
+            setSheet(null);
+            onNotice(SYSTEMS_KEYS.groupsRemove.deleted);
+            await onChanged();
+          }}
         />
       )}
 
-      <p className="text-xs font-bold text-text-primary">{t("common", K.members.title)}</p>
+      <p className="border-t border-card-border pt-3 text-xs font-bold text-text-primary">{t("common", K.members.title)}</p>
       {group.members.length === 0 ? (
         <p className="text-xs text-text-secondary">{t("common", K.members.empty)}</p>
       ) : (

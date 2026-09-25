@@ -142,9 +142,10 @@ describe("adding and draining a member", () => {
   const panel = (id: string, name: string, reviewState: SystemsPanel["review"]["reviewState"] = "accepted") =>
     ({ id, name, review: { reviewState } }) as SystemsPanel;
 
-  it("offers registered panels not yet in the group, never a refused one", () => {
+  it("offers registered panels not yet in the group, never a refused or an archived one", () => {
     const g = group({ members: [member({ panelId: "p-1" })] });
-    const panels = [panel("p-3", "zz"), panel("p-1", "in"), panel("p-2", "aa", "pending"), panel("p-4", "no", "refused")];
+    const archived = { ...panel("p-5", "old"), retiredAt: "2026-09-20T00:00:00Z" } as SystemsPanel;
+    const panels = [panel("p-3", "zz"), panel("p-1", "in"), panel("p-2", "aa", "pending"), panel("p-4", "no", "refused"), archived];
     expect(addablePanels(panels, g).map((p) => p.id)).toEqual(["p-2", "p-3"]);
   });
 

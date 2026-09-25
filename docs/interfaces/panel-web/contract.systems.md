@@ -131,6 +131,29 @@ The *why* is **ADR-0080**.
    again" is `refresh`, answered in a sentence: the list is re-read within a
    minute.
 
+13. **A panel is edited in one sheet** (F-027-cb -> billing F-027-by,
+   `PanelEditSheet.tsx`, rules `_lib/panel-lifecycle.ts`). "Edit" on the card
+   opens name and region, addresses, request budget and login, grouped; a
+   push panel is asked only its NAS IP (billing `not_for_transport`).
+   `validatePanelEdit` mirrors `updatePanelSchema` and sends **only what
+   differs** — an untouched form is refused here — and a changed API or link
+   address is warned about before the save (`addressChanged`): it re-tests
+   the panel and pauses its collection. A typed login goes to rule 8's route
+   after the settings; blank keeps the stored one. The card keeps edit,
+   inbounds and capabilities in view; a new login, a RADIUS secret and delete
+   sit behind "more" (`ActionsMenu`).
+14. **Delete says what it will do** (F-027-cb -> billing F-027-bz). The
+   sheet says a panel with no history is deleted and one with history
+   archived; a panel a group holds gets no button — the groups are named
+   (`groupsHolding`) — and billing's other refusals are said by key. The
+   outcome (`DELETE_OUTCOME_KEYS`) and a restore's sentence are the list's,
+   since the card moves. Archived panels are hidden behind a toggle with
+   their count (`visiblePanels`), read as archived with when, and offer only
+   restore; the add-member picker never offers one (`addablePanels`).
+15. **A group is created, edited and deleted in a sheet** (F-027-cb ->
+   billing F-027-ca). The card names members, variants and refresh as pills;
+   delete is offered with its blocker said first (`groupDeleteBlock`:
+   members, then variants), and the button only on an empty, unsold group.
 ## Proof
 
 `systems/register-wizard.test.ts` — rule 10: the steps, each blocking on its own fields, the family profiles (the ready set read out of `opener.go`), the composed login, the IP an address names.
@@ -142,4 +165,5 @@ billing's `SystemsRejection` / `PanelScopeRejection` / `ResubmitRejection`),
 `refusedBecause`, `canResubmit`, `validateLogin`, `resubmitOutcome`, the
 RADIUS secret's predicates and limits, the hold
 and drift predicates, `validateNote`, the menu entry, every key in `en` and `fa`.
+`systems/panel-lifecycle.test.ts` — rules 13–15: only what changed is sent, the untouched form refused, the address warning, a push panel's fields, `groupsHolding`, both delete outcomes, `groupDeleteBlock`, `visiblePanels`.
 `systems/panel-groups.test.ts` — rule 11: `ConfigProtocol` and `PanelGroupMemberRole` read out of `network.prisma`; rule 12: `InboundPlacement` and the two inbound refusals from their homes, `validateInbounds` (only what changed, caps, never an unsellable tick), `inboundNote`, `nothingPicked`; the drain multiple out of `group-drain.ts`, `validateGroup` (create, limits, an edit sending only what changed), `memberPlaceable`, `groupHealth`, `addablePanels`, `canDrain` / `canRemove`, `drainEarliestAt`, `waitOf`.

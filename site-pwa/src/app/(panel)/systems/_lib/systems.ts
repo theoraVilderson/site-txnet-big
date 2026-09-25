@@ -196,7 +196,15 @@ export type SystemsRefusal =
   | "member_has_configs"
   // A panel's inbounds (F-114-b).
   | "inbound_not_found"
-  | "inbound_not_sellable";
+  | "inbound_not_sellable"
+  // A panel's settings, deleting it, deleting a group (F-027-by/bz/ca).
+  | "not_for_transport"
+  | "panel_in_group"
+  | "panel_has_configs"
+  | "panel_retired"
+  | "panel_not_retired"
+  | "group_has_members"
+  | "group_in_use";
 
 export const REFUSAL_KEYS: Record<SystemsRefusal, string> = {
   not_found: K.refusals.not_found,
@@ -213,6 +221,13 @@ export const REFUSAL_KEYS: Record<SystemsRefusal, string> = {
   member_has_configs: K.refusals.member_has_configs,
   inbound_not_found: K.refusals.inbound_not_found,
   inbound_not_sellable: K.refusals.inbound_not_sellable,
+  not_for_transport: K.refusals.not_for_transport,
+  panel_in_group: K.refusals.panel_in_group,
+  panel_has_configs: K.refusals.panel_has_configs,
+  panel_retired: K.refusals.panel_retired,
+  panel_not_retired: K.refusals.panel_not_retired,
+  group_has_members: K.refusals.group_has_members,
+  group_in_use: K.refusals.group_in_use,
 };
 
 /** The refusal's own sentence key, when billing named one this page knows; else the generic message applies. */
@@ -264,7 +279,7 @@ export type RegisterValidation =
 
 const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 
-function isIp(value: string): boolean {
+export function isIp(value: string): boolean {
   if (IPV4.test(value)) return true;
   if (!value.includes(":") || !/^[0-9a-fA-F:.]+$/.test(value)) return false;
   try {
@@ -274,7 +289,7 @@ function isIp(value: string): boolean {
   }
 }
 
-function isUrl(value: string): boolean {
+export function isUrl(value: string): boolean {
   try {
     return /^https?:$/.test(new URL(value).protocol);
   } catch {
