@@ -22,6 +22,12 @@
 // DEFAULT_LANGUAGE when that is fa or en (the two written here), else fa.
 // Every other language: "Translate missing" on /catalog/translations. With
 // locale-service unreachable the rows are still seeded and the names skipped.
+//
+// Capabilities (F-114-f-a, ADR-0086): every key a seeded product carries is a
+// platform `product_capability` row, written first. A key a tenant already
+// holds under a row the migration wrote (no name yet, `sourceLang` null) is
+// promoted to the platform's — the tenant still sees it; one a tenant named
+// itself is left alone and the key is not seeded.
 const { PrismaClient } = require('@prisma/client');
 const { createLocaleClient } = require('@txnet/locale-client');
 
@@ -41,6 +47,14 @@ const variant = (sku, price, fields) => ({
   quotas: {},
   ...fields,
 });
+
+/** What a seeded product may unlock (F-114-f-a); every `featureKeys` entry below is one of these. */
+const CAPABILITIES = [
+  { key: 'vpn.access', name: { fa: 'دسترسی وی‌پی‌ان', en: 'VPN access' } },
+  { key: 'vpn.premium_nodes', name: { fa: 'سرورهای پرمیوم', en: 'Premium servers' } },
+  { key: 'vpn.dedicated_ip', name: { fa: 'آی‌پی اختصاصی', en: 'Dedicated IP' } },
+  { key: 'api.public', name: { fa: 'API عمومی', en: 'Public API' } },
+];
 
 const CATALOG = [
   {
@@ -180,13 +194,36 @@ const CATALOG = [
   },
 ];
 
-const counts = { categories: 0, products: 0, variants: 0 };
+const counts = { capabilities: 0, categories: 0, products: 0, variants: 0 };
 
 const SOURCE_LANG = ['fa', 'en'].includes(process.env.DEFAULT_LANGUAGE) ? process.env.DEFAULT_LANGUAGE : 'fa';
 /** Platform rows' keys: `catalog.<kind>.<key>.name` (billing's `catalogTextKey`, no tenant prefix). */
 const nameKeyOf = (kind, key) => `catalog.${kind}.${key}.name`;
 /** fa/en name per full key, published at the end. */
 const names = new Map();
+
+/** The platform's row for a capability key, or null when a tenant named its own and it was left alone. */
+async function ensureCapability({ key, name }) {
+  const nameKey = nameKeyOf('capability', key);
+  const found = await prisma.productCapability.findFirst({ where: { tenantId: null, key } });
+  if (found) {
+    names.set(nameKey, name);
+    return found;
+  }
+  const held = await prisma.productCapability.findMany({ where: { key, tenantId: { not: null } } });
+  if (held.some((c) => c.sourceLang !== null)) {
+    console.warn(`[seed-catalog] capability ${key} is a tenant's own, named by it: not seeded, and no seeded product carries it.`);
+    return null;
+  }
+  names.set(nameKey, name);
+  counts.capabilities++;
+  // The migration's unnamed tenant rows give way to the platform's, in one transaction: the tenant sees it either way.
+  const [, created] = await prisma.$transaction([
+    prisma.productCapability.deleteMany({ where: { key, tenantId: { not: null }, sourceLang: null } }),
+    prisma.productCapability.create({ data: { tenantId: null, key, nameKey, sourceLang: SOURCE_LANG } }),
+  ]);
+  return created;
+}
 
 async function ensureCategory({ key, name }) {
   const nameKey = nameKeyOf('category', key);
@@ -197,7 +234,7 @@ async function ensureCategory({ key, name }) {
   return prisma.productCategory.create({ data: { tenantId: null, key, nameKey, sourceLang: SOURCE_LANG } });
 }
 
-async function ensureProduct(categoryId, p) {
+async function ensureProduct(categoryId, p, capabilities) {
   names.set(nameKeyOf('product', p.key), p.name);
   const found = await prisma.product.findFirst({ where: { tenantId: null, key: p.key } });
   if (found) return found;
@@ -205,15 +242,16 @@ async function ensureProduct(categoryId, p) {
   return prisma.product.create({
     data: {
       tenantId: null,
-      categoryId,
       key: p.key,
       nameKey: nameKeyOf('product', p.key),
       // No description text is seeded, so no key that would show as one.
       descriptionKey: null,
       sourceLang: SOURCE_LANG,
       fulfilmentKind: p.fulfilmentKind,
-      featureKeys: p.featureKeys,
+      featureKeys: p.featureKeys.filter((k) => capabilities.has(k)),
       defaultQuotas: p.defaultQuotas,
+      // Filed in its category, first (F-026-q: a product's categories are links).
+      categories: { create: { categoryId, tenantId: null, position: 0 } },
     },
   });
 }
@@ -236,16 +274,18 @@ async function ensureVariant(productId, v, at) {
 
 async function main() {
   const at = new Date();
+  const capabilities = new Set();
+  for (const c of CAPABILITIES) if (await ensureCapability(c)) capabilities.add(c.key);
   for (const c of CATALOG) {
     const category = await ensureCategory(c);
     for (const p of c.products) {
-      const product = await ensureProduct(category.id, p);
+      const product = await ensureProduct(category.id, p, capabilities);
       for (const v of p.variants) await ensureVariant(product.id, v, at);
     }
   }
   await publishNames();
   console.log(
-    `[seed-catalog] added ${counts.categories} categories, ${counts.products} products, ${counts.variants} variants (existing rows left as they were).`,
+    `[seed-catalog] added ${counts.capabilities} capabilities, ${counts.categories} categories, ${counts.products} products, ${counts.variants} variants (existing rows left as they were).`,
   );
 }
 
