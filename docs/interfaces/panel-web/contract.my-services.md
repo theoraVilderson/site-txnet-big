@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 29
-updated: 2026-09-23
+updated: 2026-09-25
 ---
 
 # Contract — panel-web: the "my services" page (F-502-s)
@@ -22,8 +22,9 @@ of the `/sub` link (F-113).
 
 Its pieces: `_components/MyServicesView.tsx` (the page), `_components/ServiceRow.tsx`
 (one Grant), `_components/GrantConfigs.tsx` (its configs, F-027-ac),
-`_hooks/useGrantsPage.ts` (the two reads), `_lib/my-services.ts` (the status
-tones and the name rule), `_lib/service-configs.ts` (verdicts, refusals, bytes,
+`_hooks/useGrantsPage.ts` (the two reads, and the re-read a purchase's end
+asks for), `_lib/my-services.ts` (the status tones, the name rule and
+`readGrantSettled`), `_lib/service-configs.ts` (verdicts, refusals, bytes,
 the purge countdown).
 
 ## Rules
@@ -104,6 +105,19 @@ the purge countdown).
     `unavailable` the page says the service is not cut off; a failed read of
     that flag shows nothing.
 
+13. **A paid Grant reads "being prepared" until delivery ends, then turns
+    live without a reload** (F-111-f). `pending` is a Grant paid for and not
+    yet delivered, so its pill says "being prepared" and the row says there is
+    nothing to do. `entitlement.grant.delivered` or `.refunded` on the buyer's
+    `user:` channel ([automation/contract.outbox.md](../../domains/automation/contract.outbox.md),
+    "A purchase's end, told") re-reads the page — only when it names a row
+    shown as `pending`, and a payload with no `grantId` is ignored. The re-read
+    is quiet: no skeleton, and a failure keeps billing's last answer, because
+    the event is a hint and not the record (D-15). The row is never patched
+    from the payload: delivery sets the period, and a refund ends in whatever
+    status billing says (today `cancelled`). Only the latest read lands, so a
+    quiet read of page 1 cannot overwrite page 2.
+
 ## Proof
 
 `services/my-services.test.tsx` — the status union against
@@ -111,12 +125,19 @@ the purge countdown).
 refusal that changes nothing, and one ask at a time. F-027-ac: `DriftState` and
 `ConfigStatus` against `network.prisma` and the refusals against billing's
 tuple; usage, the countdown, the verdict button, the queued ceiling, a bulk
-delete with one refusal, a declined confirm, and a spent allowance.
+delete with one refusal, a declined confirm, and a spent allowance. F-111-f:
+the "being prepared" line on a pending row only, and
+`services/_hooks/useGrantsPage.test.ts` — a delivery and a refund each re-read
+without a skeleton, an event for a row not shown pending (or with no
+`grantId`) asks nothing, a failed re-read keeps the rows, and no socket still
+reads the page.
 
 ## Not covered
 
 The `/sub` link itself (F-113, F-027) — this page is where it will go, and
 where a regenerated config's new credential will be read. Moving a config or
-adding one from here is nobody's row. Filtering
+adding one from here is nobody's row. A purchase ending while the socket is down is
+seen on the next read, not live — the socket is how the page hears sooner
+(`contract.realtime.md`). Filtering
 or searching the list is nobody's row; so is renewing a service from here, which
 needs a checkout the panel does not have yet.

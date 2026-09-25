@@ -111,6 +111,14 @@ export function ServiceRow({ row, name }: { row: GrantRow; name: string | null }
         </span>
       </div>
 
+      {/* Paid and not yet delivered (F-111-f). The page re-reads on its own
+          when delivery ends, so the sentence says there is nothing to do. */}
+      {row.status === "pending" && (
+        <p role="status" className="mt-3 rounded-2xl border border-gold/20 bg-gold-bg px-3 py-2 text-xs font-medium text-gold">
+          {t("common", S.preparing)}
+        </p>
+      )}
+
       {countdown !== null && (
         <p role="status" className="mt-3 rounded-2xl border border-gold/20 bg-gold-bg px-3 py-2 text-xs font-medium text-gold">
           {countdown === "due"

@@ -132,6 +132,16 @@ describe("the statuses billing can answer", () => {
   });
 });
 
+describe("a paid Grant not yet delivered (F-111-f)", () => {
+  it("says it is being prepared, and only while it is pending", () => {
+    const { unmount } = show({ status: "pending" });
+    expect(screen.getByText("myServices.preparing")).toBeTruthy();
+    unmount();
+    show({ status: "active" });
+    expect(screen.queryByText("myServices.preparing")).toBeNull();
+  });
+});
+
 describe("the verdicts, config statuses and refusals billing can answer", () => {
   it("each have a sentence on this page, and every verdict but synced says why", () => {
     expect([...DRIFT_STATES].sort()).toEqual(enumOf(NETWORK_PRISMA, "DriftState").sort());

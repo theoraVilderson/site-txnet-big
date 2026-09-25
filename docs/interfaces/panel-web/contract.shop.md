@@ -60,7 +60,8 @@ carry one piece of the return (rules 5 and 6).
    `token` in the clear this one time (D-35); it is shown with the gift modal's
    own sentences and never kept, and the page points to My services, where a
    lost key is asked for again. A paid Grant is `pending` until delivery —
-   "being prepared" — and turning it active live is F-111-f.
+   "being prepared" — and My services turns it active live
+   ([contract.my-services.md](contract.my-services.md) rule 13, F-111-f).
 
 ## Proof
 
@@ -72,5 +73,5 @@ the key once with the My services link, one pay per press, and the return on
 
 ## Not covered
 
-Delivery status live on My services (F-111-f). Buying inside the bot (bot-app).
+Buying inside the bot (bot-app).
 A metered variant's first block is bought by the Grant's own flow, not here.

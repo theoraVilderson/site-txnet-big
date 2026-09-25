@@ -1,9 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { billingApi, type GrantRow } from "@/lib/billing-api";
 import { catalogApi } from "@/lib/catalog-api";
+import { userChannel } from "@/lib/realtime";
+import { usePanelRealtime } from "../../_context/PanelRealtimeContext";
+import { usePanelSession } from "../../_context/PanelSessionContext";
 import { flattenTexts } from "../../catalog/_lib/catalog-form";
+import { readGrantSettled } from "../_lib/my-services";
 
 /** Billing's own default page size (`GrantService.listForUser`), sent explicitly. */
 export const PAGE_SIZE = 20;
@@ -35,6 +39,14 @@ export interface GrantsPageState {
  * the page, the language and a retry counter, with an `alive` flag, so a fast
  * answer to an abandoned page cannot land after a slow answer to the current
  * one.
+ *
+ * **A pending Grant turns live without a reload (F-111-f).** A paid Grant is
+ * `pending` until entitlement delivers it, and the end of that — delivered or
+ * refunded — arrives on the buyer's `user:` channel. When it names a row this
+ * page is showing as `pending`, the page is read again, quietly: no skeleton,
+ * and a failure keeps billing's last answer, because the event was a hint and
+ * not the record (D-15). The row is never patched from the payload — delivery
+ * also sets the period, and a refund ends in a status this page would guess.
  */
 export function useGrantsPage(page: number, lang: string): GrantsPageState {
   const [rows, setRows] = useState<GrantRow[] | null>(null);
@@ -52,15 +64,54 @@ export function useGrantsPage(page: number, lang: string): GrantsPageState {
   const [loaded, setLoaded] = useState<string | null>(null);
   const isLoading = loaded !== key;
 
+  // Every read, loud or quiet, takes a number; only the latest may land. That
+  // is what stops a quiet re-read of page 1 from landing after the user moved
+  // to page 2 — the `alive` flag below covers the loud reads alone.
+  const seq = useRef(0);
+  // The ids this page shows as `pending`, for the socket listener to test an
+  // event against without resubscribing each time the rows change.
+  const pendingIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    pendingIds.current = new Set((rows ?? []).filter((r) => r.status === "pending").map((r) => r.id));
+  }, [rows]);
+
+  const pageRef = useRef(page);
+  pageRef.current = page;
+  const quietRead = useCallback(async () => {
+    const mine = ++seq.current;
+    try {
+      const answer = await billingApi.grants(pageRef.current, PAGE_SIZE);
+      if (mine !== seq.current) return;
+      setRows(answer.rows);
+      setTotal(answer.total);
+    } catch {
+      // Billing's last answer stays up; a reload or the next event asks again.
+    }
+  }, []);
+
+  const { group } = usePanelSession();
+  const userId = group?.current.userId ?? null;
+  const client = usePanelRealtime();
+  useEffect(() => {
+    if (!client || !userId) return;
+    return client.subscribe(userChannel(userId), {
+      onMessage: (payload) => {
+        const settled = readGrantSettled(payload);
+        if (settled && pendingIds.current.has(settled.grantId)) void quietRead();
+      },
+    });
+  }, [client, userId, quietRead]);
+
   useEffect(() => {
     let alive = true;
+    const mine = ++seq.current;
     (async () => {
       try {
         const [answer, catalogTexts] = await Promise.all([
           billingApi.grants(page, PAGE_SIZE),
           catalogApi.texts(lang).then(flattenTexts).catch(() => ({})),
         ]);
-        if (!alive) return;
+        if (!alive || mine !== seq.current) return;
         setRows(answer.rows);
         setTotal(answer.total);
         setTexts(catalogTexts);
@@ -68,7 +119,7 @@ export function useGrantsPage(page: number, lang: string): GrantsPageState {
       } catch (e) {
         // A failed read is not an empty list: the rows go, because showing the
         // previous page's services under a failure would be a lie.
-        if (!alive) return;
+        if (!alive || mine !== seq.current) return;
         setError(e);
         setRows(null);
         setTotal(0);

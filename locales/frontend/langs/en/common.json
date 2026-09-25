@@ -1947,13 +1947,14 @@
       }
     },
     "status": {
-      "pending": "Pending",
+      "pending": "Being prepared",
       "active": "Active",
       "suspended": "Suspended",
       "exhausted": "Used up",
       "expired": "Expired",
       "cancelled": "Cancelled"
-    }
+    },
+    "preparing": "Paid — your service is being set up. This row turns active on its own when it is ready; there is no need to reload."
   },
   "systems": {
     "title": "Systems",

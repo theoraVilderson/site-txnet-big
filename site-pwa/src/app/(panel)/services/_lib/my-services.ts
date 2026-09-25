@@ -8,6 +8,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { RealtimeEvents } from "@/generated/wire";
 import { GRANT_STATUSES, type GrantRow, type GrantStatus } from "@/lib/billing-api";
 
 const S = FrontendI18nKeys.common.myServices;
@@ -85,4 +86,18 @@ export function serviceName(texts: Record<string, string>, row: Pick<GrantRow, "
   if (!row.variant) return null;
   const name = texts[row.variant.nameKey];
   return name && name !== "" ? name : row.variant.sku;
+}
+
+/**
+ * The Grant a purchase's end names, off the buyer's `user:` channel — or
+ * `null` for anything else on it (F-111-f). Delivered and refunded both count:
+ * either way the `pending` row is over, and what it became is billing's to say
+ * (`automation/contract.outbox.md`, "A purchase's end, told"). Nothing else in
+ * the payload is read, so a refund's amount is never this page's to print.
+ */
+export function readGrantSettled(payload: unknown): { grantId: string } | null {
+  if (!payload || typeof payload !== "object") return null;
+  const p = payload as Record<string, unknown>;
+  if (p.type !== RealtimeEvents.grantDelivered && p.type !== RealtimeEvents.grantRefunded) return null;
+  return typeof p.grantId === "string" && p.grantId !== "" ? { grantId: p.grantId } : null;
 }
