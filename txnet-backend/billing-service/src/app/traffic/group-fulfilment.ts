@@ -56,6 +56,14 @@ export class GroupFulfilmentRefused extends Error {
 }
 
 type MemberFacts = { panelId: string; role: PanelGroupMemberRole; panel: { reviewState: PanelReviewState; panelState: PanelState } };
+
+/**
+ * A member a new config may be placed on now: not `drain`, its panel accepted
+ * and healthy. What catalog's group list counts as healthy (F-026-p), so the
+ * figure an admin picks by is the one fulfilment acts on.
+ */
+export const placeableMember = (m: Pick<MemberFacts, 'role' | 'panel'>): boolean =>
+  m.role !== PanelGroupMemberRole.drain && PLACEABLE_REVIEW_STATES.includes(m.panel.reviewState) && PLACEABLE_PANEL_STATES.includes(m.panel.panelState);
 type ConfigFacts = {
   panelId: string;
   status: ConfigStatus;
@@ -99,7 +107,7 @@ export function planFulfilment(facts: FulfilmentFacts): FulfilmentPlan {
   const covered = new Set(facts.configs.filter((c) => !c.drainedAt).map((c) => c.panelId));
   const members = [...facts.group.members].sort((a, b) => a.panelId.localeCompare(b.panelId));
   const open = members.filter((m) => m.role !== PanelGroupMemberRole.drain && !covered.has(m.panelId));
-  const placeable = (m: MemberFacts) => PLACEABLE_REVIEW_STATES.includes(m.panel.reviewState) && PLACEABLE_PANEL_STATES.includes(m.panel.panelState);
+  const placeable = placeableMember;
 
   const serving = new Set(members.filter((m) => SERVING_PANEL_STATES.includes(m.panel.panelState)).map((m) => m.panelId));
   const confirmed = facts.configs.filter(

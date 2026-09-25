@@ -20,6 +20,7 @@ import {
   CreateVariantInput,
   EditTextsInput,
   ListProductsFilter,
+  PanelGroupOption,
   PriceView,
   ProductView,
   RemovalOutcome,
@@ -98,6 +99,12 @@ export class ResellerCatalogService {
     private readonly access: ResellerAccess,
     private readonly catalog: CatalogAdminService,
   ) {}
+
+  // -------------------------------------------------------------- panel groups
+
+  listPanelGroups(actor: ResellerCatalogActor, tenantId: string): Promise<PanelGroupOption[]> {
+    return this.run(actor, tenantId, 'read', (as) => this.catalog.listPanelGroups(as));
+  }
 
   // ---------------------------------------------------------------- categories
 

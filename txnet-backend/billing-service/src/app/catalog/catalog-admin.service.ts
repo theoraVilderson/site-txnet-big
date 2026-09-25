@@ -1,10 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { FulfilmentKind, Prisma, QualityTier, TenantType, VariantBillingMode, VariantVisibility } from '@prisma/client';
+import { ConfigProtocol, FulfilmentKind, PanelGroupStrategy, Prisma, QualityTier, TenantType, VariantBillingMode, VariantVisibility } from '@prisma/client';
 
 import { tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { placeableMember } from '../traffic/group-fulfilment';
 import { CatalogTextKind, CatalogTextService, ReviewItem, Texts, catalogTextKey, parseCatalogTextKey } from './catalog-texts';
 
 /**
@@ -56,6 +57,16 @@ export type CatalogAdminRejection =
   | 'texts_unavailable'
   | 'lang_unknown'
   | 'source_text_missing';
+
+/** One group a variant may name (F-026-p). */
+export type PanelGroupOption = {
+  id: string;
+  tenantId: string | null;
+  name: string;
+  strategy: PanelGroupStrategy;
+  protocol: ConfigProtocol;
+  healthyMembers: number;
+};
 
 export class CatalogAdminRefused extends Error {
   constructor(
@@ -298,6 +309,35 @@ export class CatalogAdminService {
       throw new CatalogAdminRefused('tenant_not_found', tenantId);
     }
     return tenantId;
+  }
+
+  // -------------------------------------------------------------- panel groups
+
+  /**
+   * The panel groups a variant may name (F-026-p): the platform's and the
+   * caller's own, or every group for the platform owner — each with its
+   * `tenantId`, so a client offers a variant only the platform's and its own
+   * tenant's, as {@link usableGroup} admits. `healthyMembers` counts what
+   * fulfilment would place on now (`placeableMember`); `strategy` is shown,
+   * because only `mirror` is fulfilled (network `contract.groups.md` rule 7).
+   */
+  async listPanelGroups(actor: CatalogActor): Promise<PanelGroupOption[]> {
+    const { owner } = await this.access(actor);
+    const rows = await this.within(owner, (db) =>
+      db.panelGroup.findMany({
+        where: owner ? {} : { OR: [{ tenantId: null }, { tenantId: actor.tenantId }] },
+        select: {
+          id: true,
+          tenantId: true,
+          name: true,
+          strategy: true,
+          protocol: true,
+          members: { select: { role: true, panel: { select: { reviewState: true, panelState: true } } } },
+        },
+        orderBy: { name: 'asc' },
+      }),
+    );
+    return rows.map(({ members, ...g }) => ({ ...g, healthyMembers: members.filter(placeableMember).length }));
   }
 
   // ---------------------------------------------------------------- categories

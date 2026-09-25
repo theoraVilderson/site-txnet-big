@@ -199,9 +199,18 @@ function build() {
     ),
     panelGroup: table(
       [
-        { id: PLATFORM_GROUP, tenantId: null },
-        { id: RESELLER_GROUP, tenantId: RESELLER },
-        { id: OTHER_GROUP, tenantId: OTHER },
+        {
+          id: PLATFORM_GROUP, tenantId: null, name: 'Europe', strategy: 'mirror', protocol: 'vless',
+          members: [
+            { role: 'primary', panel: { reviewState: 'accepted', panelState: 'healthy' } },
+            { role: 'replica', panel: { reviewState: 'accepted_low_trust', panelState: 'healthy' } },
+            { role: 'drain', panel: { reviewState: 'accepted', panelState: 'healthy' } },
+            { role: 'primary', panel: { reviewState: 'accepted', panelState: 'degraded' } },
+            { role: 'primary', panel: { reviewState: 'pending_review', panelState: 'healthy' } },
+          ],
+        },
+        { id: RESELLER_GROUP, tenantId: RESELLER, name: 'Alpha own', strategy: 'mirror', protocol: 'vmess', members: [] },
+        { id: OTHER_GROUP, tenantId: OTHER, name: 'Other own', strategy: 'priority', protocol: 'vless', members: [] },
       ],
       'panelGroup',
       writes,
@@ -360,6 +369,36 @@ describe('CatalogAdminService — variants and prices', () => {
     const { service } = build();
     expect((await refusal(() => service.setPrice(actor(OTHER), RESELLER_VARIANT, { amount: '1.00' }))).reason).toBe('variant_not_found');
     expect((await refusal(() => service.updateVariant(actor(OTHER), RESELLER_VARIANT, { isActive: false }))).reason).toBe('variant_not_found');
+  });
+});
+
+describe('CatalogAdminService — the panel groups a variant may name (F-026-p)', () => {
+  it("offers a tenant the platform's groups and its own, never another tenant's", async () => {
+    const { service } = build();
+    const ids = (await service.listPanelGroups(actor(RESELLER))).map((g) => g.id);
+    expect(ids.sort()).toEqual([PLATFORM_GROUP, RESELLER_GROUP].sort());
+  });
+
+  it('offers the platform owner every group, each with its tenant, so a variant is matched to its own', async () => {
+    const { service } = build();
+    const groups = await service.listPanelGroups(actor(OWNER));
+    expect(groups.map((g) => [g.id, g.tenantId]).sort()).toEqual(
+      [[PLATFORM_GROUP, null], [RESELLER_GROUP, RESELLER], [OTHER_GROUP, OTHER]].sort(),
+    );
+  });
+
+  it('counts a member healthy only where fulfilment would place: not drain, accepted, healthy', async () => {
+    const { service } = build();
+    const [europe] = (await service.listPanelGroups(actor(RESELLER))).filter((g) => g.id === PLATFORM_GROUP);
+    expect(europe).toEqual({ id: PLATFORM_GROUP, tenantId: null, name: 'Europe', strategy: 'mirror', protocol: 'vless', healthyMembers: 2 });
+  });
+
+  it('reads on the pool that serves the caller and writes nothing', async () => {
+    const { service, calls, writes } = build();
+    await service.listPanelGroups(actor(RESELLER));
+    await service.listPanelGroups(actor(OWNER));
+    expect(calls.filter((c) => c.includes('panelGroup'))).toEqual(['app:panelGroup.findMany', 'all:panelGroup.findMany']);
+    expect(writes).toEqual([]);
   });
 });
 

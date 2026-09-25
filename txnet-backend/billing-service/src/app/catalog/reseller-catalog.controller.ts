@@ -118,6 +118,13 @@ const STATUS: Record<ResellerCatalogRejection, 400 | 403 | 404 | 409 | 503> = {
 export class ResellerCatalogController {
   constructor(private readonly catalog: ResellerCatalogService) {}
 
+  /** F-026-p: the groups this reseller's variants may name — the platform's and its own. */
+  @Get('panel-groups')
+  @RateLimit(READ)
+  async listPanelGroups(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.catalog.listPanelGroups(this.actor(req, ip), tenantId));
+  }
+
   @Get('categories')
   @RateLimit(READ)
   async listCategories(

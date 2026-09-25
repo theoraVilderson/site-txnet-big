@@ -109,6 +109,13 @@ export class CatalogAdminController {
     return { adminId: userId, tenantId, ip };
   }
 
+  /** F-026-p: the groups a variant may name — the platform's and the caller's own; every group, with its tenant, for the platform owner. */
+  @Get('panel-groups')
+  @RateLimit(READ)
+  async listPanelGroups(@Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.catalog.listPanelGroups(this.actor(req, ip)));
+  }
+
   @Get('categories')
   @RateLimit(READ)
   async listCategories(@Query(new ZodValidationPipe(listCategoriesSchema)) query: ListCategoriesQuery, @Req() req: Request, @Ip() ip: string) {
