@@ -14,7 +14,10 @@ export type SystemsRejection =
   | 'member_not_found'
   | 'already_member'
   | 'already_draining'
-  | 'member_has_configs';
+  | 'member_has_configs'
+  // A panel's inbounds (F-114-b).
+  | 'inbound_not_found'
+  | 'inbound_not_sellable';
 
 export class SystemsRefused extends Error {
   constructor(readonly reason: SystemsRejection) {

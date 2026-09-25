@@ -92,6 +92,16 @@ enum PanelGroupStrategy {
   @@schema("network")
 }
 
+/// How a panel places a buyer on the inbounds its admin picked (F-114-b, user
+/// 2026-09-25). `all`: a config on every picked inbound. `spread`: one config,
+/// on the picked inbound with the fewest clients that is under its cap.
+enum InboundPlacement {
+  all
+  spread
+
+  @@schema("network")
+}
+
 /// A member's part in its group, not the panel's HA role (`PanelRole`).
 /// `drain` takes no new Grants and is then emptied (F-027-bm).
 enum PanelGroupMemberRole {
@@ -344,6 +354,13 @@ model Panel {
   /// The external watchdog's input (F-027-w): a stalled collector is visible
   /// here before it is visible as a wrong number.
   lastSuccessfulCollectionAt DateTime?
+  /// How a buyer is placed on the picked inbounds (F-114-b).
+  inboundPlacement           InboundPlacement   @default(all)
+  /// The most users (Grants with a live config) the panel takes; null = no cap.
+  maxClients                 Int?
+  /// When `network-service` last read the panel's inbounds into
+  /// `panel_inbound`. Null asks for a read on the next pass (the admin's refresh).
+  inboundsReadAt             DateTime?
 
   pairedPanel Panel?   @relation("PanelHAPair", fields: [pairedPanelId], references: [id])
   pairedWith  Panel[]  @relation("PanelHAPair")
@@ -354,6 +371,7 @@ model Panel {
   unattributedUsage UnattributedUsage[]
   radiusSessions    RadiusSession[]
   groupMemberships  PanelGroupMember[]
+  inbounds          PanelInbound[]
 
   @@index([tenantId])
   @@map("panel")
@@ -430,6 +448,10 @@ model Config {
   /// Set by a drain's retire only (F-027-bm/bp): such a row no longer covers
   /// its panel, so a member re-added to the group is placed again.
   drainedAt                DateTime?
+  /// The inbound the client is created on (`panel_inbound.remoteId`), chosen
+  /// by fulfilment from the panel's picks (F-114-b). Null on a row placed
+  /// before: the pass then uses the lowest picked inbound of its protocol.
+  inboundRemoteId          String?
 
   panel Panel @relation(fields: [panelId], references: [id])
   grant Grant @relation(fields: [grantId], references: [id])
@@ -469,9 +491,6 @@ model PanelGroup {
   /// How long a client keeps a subscription before asking again; draining
   /// waits twice this (F-027-bm). 3600 = `/sub`'s render TTL today.
   subscriptionTtlSeconds Int                @default(3600)
-  /// The protocol every config of the group is placed with, one per member
-  /// panel (F-027-bl, user 2026-09-24). A list later keys (group, panel, protocol).
-  protocol               ConfigProtocol     @default(vless)
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @default(now()) @updatedAt
 
@@ -480,6 +499,37 @@ model PanelGroup {
 
   @@index([tenantId])
   @@map("panel_group")
+  @@schema("network")
+}
+
+/// One inbound of a panel as `network-service` last read it (`ListInbounds`),
+/// plus the admin's pick (F-114-b). The read writes the panel's columns and
+/// `goneAt`; only the admin writes `sold` and `maxClients`. A buyer is placed
+/// only on a `sold` inbound that is enabled, not gone, and of a known protocol.
+model PanelInbound {
+  panelId    String          @db.Uuid
+  /// The panel's own id for the inbound (`driver.Inbound.RemoteID`).
+  remoteId   String
+  /// The panel's tenant, copied on insert (a trigger), for RLS without a join.
+  tenantId   String?         @db.Uuid
+  tag        String          @default("")
+  /// Null when the driver reported a protocol we do not sell (or none).
+  protocol   ConfigProtocol?
+  port       Int             @default(0)
+  host       String          @default("")
+  enabled    Boolean         @default(true)
+  /// Set when a read no longer lists it; cleared when it returns.
+  goneAt     DateTime?
+  seenAt     DateTime        @default(now())
+  sold       Boolean         @default(false)
+  /// The most clients placed on it; null = no cap.
+  maxClients Int?
+
+  panel Panel @relation(fields: [panelId], references: [id], onDelete: Cascade)
+
+  @@id([panelId, remoteId])
+  @@index([tenantId])
+  @@map("panel_inbound")
   @@schema("network")
 }
 

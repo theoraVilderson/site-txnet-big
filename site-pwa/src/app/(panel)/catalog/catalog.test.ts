@@ -414,7 +414,7 @@ describe("the variant form", () => {
 });
 
 describe("a variant's panel group (F-026-o)", () => {
-  const group = (id: string, tenantId: string | null): PanelGroupOption => ({ id, tenantId, name: id, strategy: "mirror", protocol: "vless", healthyMembers: 1 });
+  const group = (id: string, tenantId: string | null): PanelGroupOption => ({ id, tenantId, name: id, strategy: "mirror", protocols: ["vless"], healthyMembers: 1 });
   const groups = [group("platform-eu", null), group("owner-own", "t-owner"), group("res-a", "t-res"), group("res-b", "t-other")];
   const form = () => ({ ...emptyVariantForm(), sku: "VPN-30", price: "5", durationDays: "30" });
 

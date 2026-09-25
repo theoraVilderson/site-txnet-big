@@ -14,7 +14,7 @@
  *  - **the drain clock.** Draining twice does not restart the wait, and the
  *    answer states the wait the sweep will hold to.
  */
-import { ConfigProtocol, PanelGroupMemberRole, PanelGroupStrategy, Prisma, TenantType } from '@prisma/client';
+import { PanelGroupMemberRole, PanelGroupStrategy, Prisma, TenantType } from '@prisma/client';
 
 import { PanelGroupsService } from './panel-groups';
 import { createPanelGroupSchema, updatePanelGroupSchema, addPanelGroupMemberSchema } from './panel-registration.schema';
@@ -45,8 +45,8 @@ function harness() {
     { id: RESELLER_PANEL, tenantId: RESELLER, ownershipType: 'tenant', name: 'their-own', panelState: 'healthy', reviewState: 'accepted', lastHealthyAt: null },
   ];
   const groups: Row[] = [
-    { id: GROUP, tenantId: null, name: 'Europe', strategy: PanelGroupStrategy.mirror, minHealthyPanels: 1, subscriptionTtlSeconds: 3600, protocol: ConfigProtocol.vless },
-    { id: TENANT_GROUP, tenantId: RESELLER, name: 'Theirs', strategy: PanelGroupStrategy.mirror, minHealthyPanels: 1, subscriptionTtlSeconds: 3600, protocol: ConfigProtocol.vless },
+    { id: GROUP, tenantId: null, name: 'Europe', strategy: PanelGroupStrategy.mirror, minHealthyPanels: 1, subscriptionTtlSeconds: 3600 },
+    { id: TENANT_GROUP, tenantId: RESELLER, name: 'Theirs', strategy: PanelGroupStrategy.mirror, minHealthyPanels: 1, subscriptionTtlSeconds: 3600 },
   ];
   const members: Row[] = [
     { groupId: GROUP, panelId: PLATFORM_PANEL, tenantId: null, priority: 0, weight: 1, role: PanelGroupMemberRole.primary, drainingSince: null },
@@ -88,7 +88,7 @@ function harness() {
       },
       create: async ({ data }: { data: Row }) => {
         const g = { id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', strategy: PanelGroupStrategy.mirror, minHealthyPanels: 1,
-          subscriptionTtlSeconds: 3600, protocol: ConfigProtocol.vless, ...data };
+          subscriptionTtlSeconds: 3600, ...data };
         groups.push(g);
         return withMembers(g);
       },
@@ -157,9 +157,9 @@ describe('PanelGroupsService', () => {
 
   it('creates a platform group as mirror, whatever it is asked', async () => {
     const { service, groups } = harness();
-    const g = await service.create(owner, { name: 'Asia', minHealthyPanels: 2, protocol: ConfigProtocol.trojan });
+    const g = await service.create(owner, { name: 'Asia', minHealthyPanels: 2 });
 
-    expect(g).toMatchObject({ name: 'Asia', minHealthyPanels: 2, protocol: ConfigProtocol.trojan, strategy: PanelGroupStrategy.mirror, members: [] });
+    expect(g).toMatchObject({ name: 'Asia', minHealthyPanels: 2, strategy: PanelGroupStrategy.mirror, members: [] });
     expect(groups[2]).toMatchObject({ tenantId: null });
     expect(createPanelGroupSchema.safeParse({ name: 'x', strategy: 'weighted' }).success).toBe(false);
     expect(createPanelGroupSchema.safeParse({ name: 'x', minHealthyPanels: 0 }).success).toBe(false);

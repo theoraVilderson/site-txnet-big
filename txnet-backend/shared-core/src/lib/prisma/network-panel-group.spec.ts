@@ -117,16 +117,18 @@ describe('network.PanelGroup: where a variant is provisioned', () => {
     expect(sql).toMatch(/CREATE TRIGGER panel_keeps_its_groups\s+AFTER UPDATE OF "tenantId"/);
   });
 
-  it('places every config of the group with the protocol it names', () => {
-    // A config needs one, and nothing else named it (F-027-bl, user 2026-09-24).
-    expect(group).toMatch(/^\s*protocol\s+ConfigProtocol\s+@default\(vless\)/m);
-    expect(sql).toMatch(/"panel_group" ADD COLUMN "protocol" "network"."ConfigProtocol" NOT NULL DEFAULT 'vless'/);
+  it('names no protocol: a group sells what its panels\' picked inbounds do (F-114-b)', () => {
+    // It had one from F-027-bl (user 2026-09-24) until the panel's picks replaced it (user 2026-09-25).
+    expect(group).not.toMatch(/^\s*protocol\s/m);
+    expect(sql).toMatch(/ALTER TABLE "network"."panel_group" DROP COLUMN "protocol"/);
   });
 
-  it("holds a Grant's placement to one config per panel against two concurrent runs", () => {
+  it("holds a Grant's placement to one config per (panel, inbound) against two concurrent runs", () => {
     // The sweep is at-least-once; the planner's check is a read, and two runs
-    // can both read a panel as uncovered. Partial: a Grant with no group is free.
-    expect(sql).toMatch(/CREATE UNIQUE INDEX "config_group_panel_once" ON "network"."config"\("grantId", "panelId"\) WHERE "credentialGroupId" IS NOT NULL/);
+    // can both read an inbound as uncovered. Partial: a Grant with no group is
+    // free. A row placed before F-114-b has no inbound and still holds its panel once.
+    const defs = sql.match(/CREATE UNIQUE INDEX "config_group_panel_once"[^;]*/g) ?? [];
+    expect(defs.at(-1)).toMatch(/\("grantId", "panelId", coalesce\("inboundRemoteId", ''\)\)/);
   });
 
   it("lets a drained config stand beside the one placed when its panel is re-added (F-027-bp)", () => {

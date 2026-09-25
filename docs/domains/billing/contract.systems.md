@@ -44,15 +44,18 @@ would dial an address a tenant chose (`network/open-questions.md`).
 | `GET /api/billing/systems/holds` | query `state?` (`pending` \| `all`, default `all`), `after?` (hold id), `limit?` (1–100, default 50); `.strict()` | `{items: [{id, configId, panelId, panelName, upBytes, downBytes, reason, state, heldFrom, heldAt, resolvedAt, resolvedByAdminId, resolutionNote}], next}`, newest first; bytes are decimal strings | 400; 403 |
 | `POST /api/billing/systems/holds/:id/release` | `note?` (1–1000); `.strict()` | `202 {id, state: 'pending', release: 'queued'}` | 400; 403; 404 `not_found`; 409 `already_resolved` |
 | `POST /api/billing/systems/holds/:id/write-off` | `note` (1–1000, required); `.strict()` | `200` the hold, `written_off` | 400; 403; 404 `not_found`; 409 `already_resolved` |
-| `GET /api/billing/systems/panel-groups` | — | `[{id, name, strategy, minHealthyPanels, subscriptionTtlSeconds, protocol, createdAt, updatedAt, variantCount, members: [{groupId, panelId, panelName, panelState, reviewState, lastHealthyAt, priority, weight, role, drainingSince, createdAt}]}]`, by name; members by `priority` | 403 |
-| `POST /api/billing/systems/panel-groups` | `name`, `minHealthyPanels?` (1–100), `subscriptionTtlSeconds?` (60–604800), `protocol?` (`ConfigProtocol`); `.strict()` | `201` the group, `strategy: mirror` | 400; 403 |
-| `PATCH /api/billing/systems/panel-groups/:id` | any of the four, at least one; `.strict()` | `200` the group | 400; 403; 404 `not_found` |
+| `GET /api/billing/systems/panel-groups` | — | `[{id, name, strategy, minHealthyPanels, subscriptionTtlSeconds, createdAt, updatedAt, variantCount, members: [{groupId, panelId, panelName, panelState, reviewState, lastHealthyAt, priority, weight, role, drainingSince, createdAt}]}]`, by name; members by `priority` | 403 |
+| `POST /api/billing/systems/panel-groups` | `name`, `minHealthyPanels?` (1–100), `subscriptionTtlSeconds?` (60–604800); `.strict()` — `protocol` is refused since F-114-b | `201` the group, `strategy: mirror` | 400; 403 |
+| `PATCH /api/billing/systems/panel-groups/:id` | any of the three, at least one; `.strict()` | `200` the group | 400; 403; 404 `not_found` |
 | `POST /api/billing/systems/panel-groups/:id/members` | `panelId`, `priority?` (0–1000), `weight?` (1–1000); `.strict()` | `201` the member, `primary` | 400; 403; 404 `not_found` / `panel_not_found`; 409 `already_member` |
 | `DELETE /api/billing/systems/panel-groups/:id/members/:panelId` | — | `200 {groupId, panelId, removed: true}` | 400; 403; 404 `not_found` / `member_not_found`; 409 `member_has_configs` |
 | `POST /api/billing/systems/panel-groups/:id/members/:panelId/drain` | — | `200` the member, `drain`, with `drainingSince` and `waitSeconds` | 400; 403; 404 `not_found` / `member_not_found`; 409 `already_draining` |
+| `GET /api/billing/systems/panels/:id/inbounds` | — | `{panelId, inboundPlacement, maxClients, inboundsReadAt, users, inbounds: [{remoteId, tag, protocol, port, host, enabled, goneAt, seenAt, sold, maxClients, clients}]}`, by id | 400; 403; 404 `panel_not_found` |
+| `PUT /api/billing/systems/panels/:id/inbounds` | any of `inboundPlacement` (`all` \| `spread`), `maxClients` (1–1000000 \| null), `inbounds: [{remoteId, sold, maxClients?}]` (≤500, each once); `.strict()` | `200` as the `GET` | 400; 403; 404 `panel_not_found` / `inbound_not_found`; 409 `inbound_not_sellable` |
+| `POST /api/billing/systems/panels/:id/inbounds/refresh` | — | `202 {panelId, refreshRequested: true}` | 400; 403; 404 `panel_not_found` |
 
 Rate limits, per user, per 15 minutes: `SYSTEMS_ADMIN_WRITE` 30 (register,
-both re-submits, acknowledge, release, write-off, the five group writes), `SYSTEMS_ADMIN_READ` 120 (the five reads).
+both re-submits, acknowledge, release, write-off, the five group writes, the two inbound writes), `SYSTEMS_ADMIN_READ` 120 (the six reads).
 
 ## Registering a panel — the rules
 
@@ -186,9 +189,9 @@ Where a `network_access` variant's Grants are placed (network
 21. **Every group is `mirror`.** No route sets `strategy`, and a body naming it
     is refused (`.strict()`): the others have no fulfilment (groups rule 7).
 22. **A change reaches what is placed next.** Fulfilment reads the group on
-    its next tick: a new member is placed for Grants already sold, a new
-    `protocol` is what the next config is created with, and configs already
-    placed keep theirs (groups rule 9).
+    its next tick: a new member is placed for Grants already sold, and configs
+    already placed keep theirs (groups rule 9). A group names no protocol: its
+    panels' picked inbounds do (rule 25).
 23. **A member with a live config is drained, not removed.** The `DELETE`
     holds the drain sweep's own condition — no unretired config of the group's
     Grants on the panel — so a removal cannot leave configs outside every
@@ -199,3 +202,19 @@ Where a `network_access` variant's Grants are placed (network
     the sweep waits from `drainingSince`; the member row goes on its own.
 
 `panel-groups.spec.ts` pins rules 20–24.
+
+## A panel's inbounds (F-114-b)
+
+`panel-inbounds.ts`; what the pick does is network's
+[contract.inbounds.md](../network/contract.inbounds.md).
+
+25. **The read is the panel's, the pick is the admin's.** The `GET` is what
+    `network-service` last read, each inbound's live configs and the panel's
+    users (the counts fulfilment caps by). The `PUT` writes only `sold`,
+    `maxClients` and the panel's `inboundPlacement` / `maxClients`, in one
+    transaction; a field left out keeps its value. A pick names an inbound
+    the read found (404 `inbound_not_found`), and only a sellable one — not
+    gone, of a `ConfigProtocol` — may be sold (409 `inbound_not_sellable`);
+    unselling is always allowed. `refresh` clears `inboundsReadAt`, and the
+    panel's next pass reads again. On the cross-tenant pool, scoped as rule 20.
+    `panel-inbounds.spec.ts` pins it.

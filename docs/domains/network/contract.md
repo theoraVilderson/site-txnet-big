@@ -2,8 +2,8 @@
 id: network
 layer: domain
 status: draft
-version: 17
-updated: 2026-09-24
+version: 18
+updated: 2026-09-25
 ---
 
 # Contract — network

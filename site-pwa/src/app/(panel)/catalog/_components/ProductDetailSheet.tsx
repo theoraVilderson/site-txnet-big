@@ -549,7 +549,7 @@ function PanelGroupSelect({ value, groups, onChange }: { value: string; groups: 
     [
       g.name,
       g.tenantId === null ? t("common", K.platform) : null,
-      g.protocol,
+      g.protocols.length > 0 ? g.protocols.join("/") : t("common", K.variant.noInbound),
       t("common", K.variant.healthy, { count: g.healthyMembers }),
       g.strategy === "mirror" ? null : t("common", K.variant.notFulfilled),
     ]

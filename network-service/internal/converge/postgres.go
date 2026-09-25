@@ -38,8 +38,17 @@ var _ Desired = PostgresDesired{}
 // row again, and every action that does moves it off `complete`. Served bytes
 // are the counter cursor's lifetime figure, the basis the share is counted on;
 // a config never collected has served none.
+//
+// The inbound is the config's own (F-114-b). A row placed before it names
+// none, and takes the lowest picked inbound of its protocol on the panel —
+// still only a picked one: with nothing picked it is '' and `no_inbound`.
 const desiredSQL = `
 SELECT c.id::text, coalesce(c."remoteId", ''), c."claimTag", c.uuid, c.protocol::text,
+       coalesce(c."inboundRemoteId",
+                (SELECT i."remoteId" FROM network.panel_inbound i
+                  WHERE i."panelId" = c."panelId" AND i.sold AND i."goneAt" IS NULL AND i.protocol = c.protocol
+                  ORDER BY length(i."remoteId"), i."remoteId" LIMIT 1),
+                ''),
        c."desiredEnabled", c."desiredRemote" = 'present', c."allocatedCeilingBytes",
        coalesce(s."lifetimeUpBytes" + s."lifetimeDownBytes", 0)::bigint,
        c."enforcementState"::text, c."driftState"::text, c."driftRepairCount", c."driftRepairedAt",
@@ -61,7 +70,7 @@ func (s PostgresDesired) For(ctx context.Context, panelID string) ([]DesiredConf
 		var d DesiredConfig
 		var state, drift string
 		var repairedAt, capturedAt *time.Time
-		if err := rows.Scan(&d.ConfigID, &d.RemoteID, &d.ClaimTag, &d.UUID, &d.Protocol,
+		if err := rows.Scan(&d.ConfigID, &d.RemoteID, &d.ClaimTag, &d.UUID, &d.Protocol, &d.InboundRemoteID,
 			&d.Enabled, &d.Present, &d.AllocatedBytes, &d.ServedBytes,
 			&state, &drift, &d.RepairCount, &repairedAt,
 			&d.Links.Lines, &d.Links.RemoteID, &d.Links.UUID, &capturedAt); err != nil {

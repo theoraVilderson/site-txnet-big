@@ -1,4 +1,4 @@
-import { ConfigProtocol, CounterSemantics, DriverType, PanelRole, PanelTransport } from '@prisma/client';
+import { CounterSemantics, DriverType, InboundPlacement, PanelRole, PanelTransport } from '@prisma/client';
 import { z } from 'zod';
 
 /**
@@ -131,13 +131,13 @@ export type WriteOffHoldBody = z.infer<typeof writeOffHoldSchema>;
  * the table's CHECKs (`>= 1`, `> 0`), so a 400 names the field before a 500
  * names the constraint. A subscription lifetime runs a minute to a week: a
  * drain waits twice it, and a longer one would hold a panel for weeks. `.strict()`: `strategy` is refused, not dropped — only `mirror`
- * has a fulfilment (rule 7), and `tenantId` is the scope's to write.
+ * has a fulfilment (rule 7), and `tenantId` is the scope's to write. There is
+ * no `protocol`: a group sells what its panels' picked inbounds do (F-114-b).
  */
 const panelGroupFields = {
   name: z.string().trim().min(1).max(100),
   minHealthyPanels: z.number().int().min(1).max(100),
   subscriptionTtlSeconds: z.number().int().min(60).max(7 * 24 * 3600),
-  protocol: z.nativeEnum(ConfigProtocol),
 };
 
 export const createPanelGroupSchema = z
@@ -145,13 +145,12 @@ export const createPanelGroupSchema = z
     name: panelGroupFields.name,
     minHealthyPanels: panelGroupFields.minHealthyPanels.optional(),
     subscriptionTtlSeconds: panelGroupFields.subscriptionTtlSeconds.optional(),
-    protocol: panelGroupFields.protocol.optional(),
   })
   .strict();
 
 export type CreatePanelGroupBody = z.infer<typeof createPanelGroupSchema>;
 
-/** Editing a group: any of the four, at least one. */
+/** Editing a group: any of the three, at least one. */
 export const updatePanelGroupSchema = createPanelGroupSchema
   .partial()
   .strict()
@@ -172,3 +171,29 @@ export const addPanelGroupMemberSchema = z
   .strict();
 
 export type AddPanelGroupMemberBody = z.infer<typeof addPanelGroupMemberSchema>;
+
+/**
+ * A panel's inbound picks and placement (F-114-b, network `contract.inbounds.md`).
+ * A cap is `>= 1` or null (none), as the table's CHECKs; a pick names the
+ * inbound by the panel's own id. `.strict()`: the read's columns (`protocol`,
+ * `enabled`, `goneAt`) are the panel's and are refused, not dropped.
+ */
+const capSchema = z.number().int().min(1).max(1_000_000).nullable();
+
+export const updatePanelInboundsSchema = z
+  .object({
+    inboundPlacement: z.nativeEnum(InboundPlacement).optional(),
+    maxClients: capSchema.optional(),
+    inbounds: z
+      .array(z.object({ remoteId: z.string().min(1).max(200), sold: z.boolean(), maxClients: capSchema.optional() }).strict())
+      .max(500)
+      .optional(),
+  })
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, { message: 'name one field to change' })
+  .refine((body) => new Set((body.inbounds ?? []).map((i) => i.remoteId)).size === (body.inbounds ?? []).length, {
+    message: 'an inbound is named twice',
+    path: ['inbounds'],
+  });
+
+export type UpdatePanelInboundsBody = z.infer<typeof updatePanelInboundsSchema>;

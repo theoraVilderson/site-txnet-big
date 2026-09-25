@@ -10,7 +10,11 @@ import { SYSTEMS_KEYS } from "./systems";
  */
 const K = SYSTEMS_KEYS.groups;
 
-/** `network.ConfigProtocol`, in the schema's order (C-09). Protocol names, not prose: not translated. */
+/**
+ * `network.ConfigProtocol`, in the schema's order (C-09). Protocol names, not
+ * prose: not translated. A group names none — its panels' picked inbounds do
+ * (F-114-b) — so this is what a picked inbound can be.
+ */
 export const CONFIG_PROTOCOLS = [
   "vmess",
   "vless",
@@ -43,11 +47,10 @@ export type GroupForm = {
   name: string;
   minHealthyPanels: string;
   ttlMinutes: string;
-  protocol: ConfigProtocol;
 };
 
 export function emptyGroupForm(): GroupForm {
-  return { name: "", minHealthyPanels: "1", ttlMinutes: "60", protocol: "vless" };
+  return { name: "", minHealthyPanels: "1", ttlMinutes: "60" };
 }
 
 /** A group's own values. A lifetime that is not whole minutes shows as a fraction and is sent only if edited. */
@@ -56,7 +59,6 @@ export function groupFormOf(group: PanelGroup): GroupForm {
     name: group.name,
     minHealthyPanels: String(group.minHealthyPanels),
     ttlMinutes: String(group.subscriptionTtlSeconds / 60),
-    protocol: group.protocol,
   };
 }
 
@@ -98,7 +100,6 @@ export function validateGroup(form: GroupForm, original?: PanelGroup): GroupVali
     if (n === null) errors.ttlMinutes = K.invalid.ttlMinutes;
     else body.subscriptionTtlSeconds = n * 60;
   }
-  if (touched("protocol")) body.protocol = form.protocol;
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   if (original && Object.keys(body).length === 0) return { ok: false, errors: { name: K.invalid.unchanged } };

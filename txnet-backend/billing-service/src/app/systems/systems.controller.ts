@@ -31,6 +31,7 @@ import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { PanelCredentialRefused, PanelCredentialUnavailable } from './panel-credential.client';
 import { PanelRegistrationService, PanelResubmitRefused, RegisterPanelInput } from './panel-registration';
 import { PanelGroupInput, PanelGroupMemberInput, PanelGroupsService } from './panel-groups';
+import { PanelInboundsInput, PanelInboundsService } from './panel-inbounds';
 import {
   AcknowledgeDriftBody,
   AddPanelGroupMemberBody,
@@ -39,6 +40,8 @@ import {
   createPanelGroupSchema,
   UpdatePanelGroupBody,
   updatePanelGroupSchema,
+  UpdatePanelInboundsBody,
+  updatePanelInboundsSchema,
   acknowledgeDriftSchema,
   DriftEventQueryInput,
   driftEventQuerySchema,
@@ -96,6 +99,7 @@ const CONFLICTS: ReadonlySet<SystemsRejection> = new Set([
   'already_member',
   'already_draining',
   'member_has_configs',
+  'inbound_not_sellable',
 ]);
 
 /** The service's refusals as HTTP: the scope is a 403, a panel, group or event outside it a 404. */
@@ -134,6 +138,10 @@ async function refusing<T>(work: () => Promise<T>): Promise<T> {
  * placed: the platform's groups, their members, and draining one — desired
  * state, read by fulfilment and the drain sweep on their next tick.
  *
+ * A panel's inbounds (F-114-b) are what `network-service` last read from it,
+ * and the admin's pick of which ones a buyer is placed on — `refresh` asks the
+ * next pass to read them again (`202`).
+ *
  * Who the caller is comes from the gate (`X-User-Id`, `X-Tenant-Id`), never
  * from the body.
  */
@@ -145,6 +153,7 @@ export class SystemsController {
     private readonly reads: SystemsReadService,
     private readonly holdsQueue: UsageHoldsService,
     private readonly panelGroups: PanelGroupsService,
+    private readonly panelInbounds: PanelInboundsService,
   ) {}
 
   @Get('panel-groups')
@@ -215,6 +224,29 @@ export class SystemsController {
   @RateLimit(SYSTEMS_ADMIN_READ)
   capabilities(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
     return refusing(() => this.reads.capabilities(actorOf(req), id));
+  }
+
+  @Get('panels/:id/inbounds')
+  @RateLimit(SYSTEMS_ADMIN_READ)
+  inbounds(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
+    return refusing(() => this.panelInbounds.inbounds(actorOf(req), id));
+  }
+
+  @Put('panels/:id/inbounds')
+  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  updateInbounds(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(updatePanelInboundsSchema)) body: UpdatePanelInboundsBody,
+    @Req() req: Request,
+  ) {
+    return refusing(() => this.panelInbounds.update(actorOf(req), id, body as PanelInboundsInput));
+  }
+
+  @Post('panels/:id/inbounds/refresh')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  refreshInbounds(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
+    return refusing(() => this.panelInbounds.refresh(actorOf(req), id));
   }
 
   @Get('drift-events')

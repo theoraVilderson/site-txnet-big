@@ -1,7 +1,7 @@
 ---
 id: network
 layer: domain
-updated: 2026-09-23
+updated: 2026-09-25
 ---
 
 # Data model — network
@@ -25,8 +25,9 @@ Source of truth: `txnet-backend/prisma/domains/network.prisma` (Postgres schema
 | panel_drift_event | a drift verdict over a whole panel's population | via panel | permanent |
 | unattributed_usage | usage against a remote client that matches no config | via panel | one row per remote client |
 | radius_session | one RADIUS accounting session, its high-water bytes and how it closed | via config (nullable) / panel | permanent |
-| panel_group | where a variant's Grants are provisioned: `strategy`, `minHealthyPanels`, `subscriptionTtlSeconds`, `protocol` ([contract.groups.md](contract.groups.md)) | `tenantId` nullable (null = platform), shared-read | permanent |
+| panel_group | where a variant's Grants are provisioned: `strategy`, `minHealthyPanels`, `subscriptionTtlSeconds` ([contract.groups.md](contract.groups.md)) | `tenantId` nullable (null = platform), shared-read | permanent |
 | panel_group_member | a panel in a group, once: `priority`, `weight`, `role` (`primary \| replica \| drain`), `drainingSince` | `tenantId` = its group's (trigger), shared-read | removed after draining |
+| panel_inbound | a panel's inbound as last read (`goneAt` once unlisted), and the admin's pick `sold` / `maxClients`; with `panel.inboundPlacement`, `panel.maxClients`, `config.inboundRemoteId` ([contract.inbounds.md](contract.inbounds.md)) | `tenantId` = its panel's (trigger), shared-read | with its panel |
 
 ## The Panel declaration (F-027-a, ADR-0074)
 
@@ -47,8 +48,7 @@ clock on it. `maxRequestsPerMinute`, `maxLineRateBps` and
 external watchdog reads, so a stalled collector is visible before a wrong
 number is.
 
-Six are CHECKs, not service rules, as each is a silent wrong number if only a
-convention: `panel_ownership_matches_tenant`, `panel_pull_has_base_url`,
+Six are CHECKs, as each is a silent wrong number if only a convention: `panel_ownership_matches_tenant`, `panel_pull_has_base_url`,
 `panel_capabilities_object`, `panel_request_budget_positive`,
 `panel_blocked_since_needs_state` and `panel_radius_secret_is_push_only`: a
 push panel's NAS secret is a vault reference of its own (F-027-az).

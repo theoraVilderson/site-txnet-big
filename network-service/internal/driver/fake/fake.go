@@ -40,6 +40,9 @@ type Config struct {
 	// Unsupported switches a row off. Rows outside this transport's scope are
 	// ignored rather than refused — they are not asked at all.
 	Unsupported map[driver.RowKey]bool
+	// Inbounds is what ListInbounds reports; nil is one enabled vless inbound,
+	// `inbound-1`.
+	Inbounds []driver.Inbound
 }
 
 type client struct {
@@ -394,6 +397,9 @@ func (p *Panel) HealthCheck(ctx context.Context) error { return p.gate(ctx, "Hea
 func (p *Panel) ListInbounds(ctx context.Context) ([]driver.Inbound, error) {
 	if err := p.gate(ctx, "ListInbounds"); err != nil {
 		return nil, err
+	}
+	if p.cfg.Inbounds != nil {
+		return append([]driver.Inbound(nil), p.cfg.Inbounds...), nil
 	}
 	return []driver.Inbound{{
 		RemoteID: "inbound-1", Tag: "fake-vless", Protocol: "vless",

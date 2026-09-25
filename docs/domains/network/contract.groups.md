@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 17
+version: 18
 updated: 2026-09-25
 ---
 
@@ -18,7 +18,7 @@ fulfilment is F-027-bl (below), draining F-027-bm (below).
 
 | table | columns that matter | held by |
 |---|---|---|
-| `panel_group` | `tenantId` (null = platform), `name`, `strategy` (`mirror` default), `minHealthyPanels` (default 1), `subscriptionTtlSeconds` (default 3600), `protocol` (`ConfigProtocol`, default `vless`) | CHECK `minHealthyPanels >= 1`, `subscriptionTtlSeconds > 0`; trigger `panel_group_tenant_is_fixed` |
+| `panel_group` | `tenantId` (null = platform), `name`, `strategy` (`mirror` default), `minHealthyPanels` (default 1), `subscriptionTtlSeconds` (default 3600); no protocol — its panels' picked inbounds say it (`contract.inbounds.md`) | CHECK `minHealthyPanels >= 1`, `subscriptionTtlSeconds > 0`; trigger `panel_group_tenant_is_fixed` |
 | `panel_group_member` | key `(groupId, panelId)`; `tenantId` = its group's; `priority` (default 0, lower first), `weight` (default 1), `role` (`primary` default), `drainingSince` (F-027-bm) | CHECK `priority >= 0`, `weight >= 1`, `drainingSince` iff `drain`; triggers `panel_group_member_fits`, `panel_group_member_drain_clock` |
 
 Both are policied as `network.panel` is: shared-read for `txnet_app` (its own
@@ -70,24 +70,26 @@ with a live config of the group's Grants is drained, never removed.
 rows are written through `ConfigActionsService.provisionForGroup`
 (`contract.provisioning.md`), and the convergence pass creates the clients.
 
-8. **`mirror` places one config on every member that is not `drain`, whose
-   panel is `accepted`/`accepted_low_trust` and `healthy`**, with the group's
-   `protocol`. Every config of the placement carries one `credentialGroupId`
+8. **`mirror` places configs on every member that is not `drain`, whose
+   panel is `accepted`/`accepted_low_trust` and `healthy`** — on the inbounds
+   its panel picked, as its placement and caps say (`contract.inbounds.md`
+   rules 3-5), each with its inbound's protocol. Every config of the placement carries one `credentialGroupId`
    (the first one's, else a new uuid), and the Grant is rebalanced once for the
    lot, so no client is created without its share.
-9. **A panel with any config of the Grant is covered**, whatever its status. A
+9. **An inbound with any config of the Grant is covered** (`spread`: its
+   panel), whatever its status. A
    row still `pending` on a panel that died mid-provisioning is the pass's to
    finish when it returns; a `retired` one was a delete or a move, and a refill
    would undo it. **Except a drained one** (`drainedAt`, F-027-bp): the
    platform emptied the panel and the user decided nothing, so a member
    re-added to the group is placed again, beside the old retired row. The
    planner's read is not enough under an at-least-once job: partial unique
-   `config_group_panel_once` `(grantId, panelId) WHERE credentialGroupId IS
-   NOT NULL AND drainedAt IS NULL` refuses the second of two concurrent runs,
-   whose transaction rolls back whole.
+   `config_group_panel_once` `(grantId, panelId, coalesce(inboundRemoteId,
+   '')) WHERE credentialGroupId IS NOT NULL AND drainedAt IS NULL` refuses the
+   second of two concurrent runs, whose transaction rolls back whole.
 10. **A `pending` Grant is provisioned, and activates on the panels' word.** It
-    moves to `active` once `minHealthyPanels` of its configs are `active`,
-    `present`, `complete` on a member whose panel still serves — sub-api's
+    moves to `active` once `minHealthyPanels` distinct panels hold a config of
+    it that is `active`, `present`, `complete` on a member whose panel still serves — sub-api's
     `servingPanelStates` (`healthy`, `degraded`, `throttled_or_blocked`).
     `complete` is a read (invariant 36), so a Grant is never activated on our
     own write. The move is entitlement's `markDelivered` — conditional on
@@ -97,7 +99,8 @@ rows are written through `ConfigActionsService.provisionForGroup`
 11. **The retry is the sweep.** `POST /api/internal/billing/network/fulfil-due`
     (`ServiceOnlyGuard`), asked every minute by `worker-service`'s
     `grant_group_fulfilment`, names only Grants with a write due: a placeable
-    member with no config of the Grant, or a `pending` Grant at its minimum. A
+    member with a picked inbound the Grant is not on and a seat on it and on
+    the panel (`contract.inbounds.md` rule 5), or a `pending` Grant at its minimum. A
     member that is down is `waiting` and costs no batch slot; it is filled on
     the tick after it is `healthy` again. Panel-side backoff is the pass's own
     (`contract.budget.md`). One Grant's failure is counted in `grantsFailed`

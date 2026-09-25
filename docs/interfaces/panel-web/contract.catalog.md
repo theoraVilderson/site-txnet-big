@@ -119,8 +119,9 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    (`notForSale`), and the shop drops it. A card's change is one
    `PATCH panelGroupId` (`panelGroupPatch`, blank = `null`); a create sends a
    group only for `network_access` (`variantBody(form, kind)`). Each option
-   shows its owner, protocol, `healthyMembers` and, off `mirror`, "not
-   delivered yet". A failed list costs the choices, never the form.
+   shows its owner, the protocols its panels' picked inbounds sell ("no
+   inbound ticked" when none, F-114-b), `healthyMembers` and, off `mirror`,
+   "not delivered yet". A failed list costs the choices, never the form.
 
 ## The same page for a reseller a route names (F-066-w8, ADR-0064 (4))
 

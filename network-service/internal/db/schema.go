@@ -48,6 +48,13 @@ var RequiredColumns = map[string][]string{
 		"panelState", "blockedSince", "maxRequestsPerMinute",
 		"maxLineRateBps", "observedWriteLatencyMs",
 		"lastHealthyAt", "lastSuccessfulCollectionAt",
+		// When its inbounds were last read (F-114-b).
+		"inboundsReadAt",
+	},
+	// The panel's inbounds as last read, and the admin's pick (F-114-b).
+	"panel_inbound": {
+		"panelId", "remoteId", "tenantId", "tag", "protocol", "port", "host",
+		"enabled", "goneAt", "seenAt", "sold",
 	},
 	// The client we meter, its desired state and its ceiling (ADR-0072).
 	"config": {
@@ -59,6 +66,8 @@ var RequiredColumns = map[string][]string{
 		"ceilingAppliedAt", "walletBackedCeilingBytes",
 		// The lines `/sub` renders, and the client they were read from (F-027-bj).
 		"linkLines", "linksRemoteId", "linksUuid", "linksCapturedAt",
+		// The inbound fulfilment placed it on (F-114-b).
+		"inboundRemoteId",
 	},
 	// Where the counter was, so that a figure going backward is a reset and
 	// never negative usage (invariant 20, ADR-0074).

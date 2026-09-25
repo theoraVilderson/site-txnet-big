@@ -169,14 +169,15 @@ export type PanelGroupStrategy = "mirror" | "priority" | "weighted";
 /**
  * One group a variant may name (F-026-p): the platform's (`tenantId: null`) and
  * the caller's own — every group, each with its tenant, for the platform owner.
- * `healthyMembers` counts what fulfilment would place on now.
+ * `healthyMembers` counts what fulfilment would place on now; `protocols` is
+ * what its members' ticked inbounds sell (F-114-b) — empty, nothing is placed.
  */
 export interface PanelGroupOption {
   id: string;
   tenantId: string | null;
   name: string;
   strategy: PanelGroupStrategy;
-  protocol: string;
+  protocols: string[];
   healthyMembers: number;
 }
 

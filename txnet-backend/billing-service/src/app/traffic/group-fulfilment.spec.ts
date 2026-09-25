@@ -11,9 +11,13 @@
  *    same `credentialGroupId`, and one that is `drain` never is;
  *  - **activation is a read of the panel, never of our write**: only a
  *    `complete` config on a panel still serving counts towards the minimum;
- *  - **an unbuilt strategy is refused**, never treated as `mirror`.
+ *  - **an unbuilt strategy is refused**, never treated as `mirror`;
+ *  - **a config goes only on an inbound the panel's admin picked** (F-114-b,
+ *    `contract.inbounds.md`): every pick under `all`, the emptiest under
+ *    `spread`, none past an inbound's or the panel's cap, and nothing at all —
+ *    never the first enabled inbound — on a panel with no pick.
  */
-import { ActorType, ConfigStatus, DesiredRemote, EnforcementState, GrantStatus, PanelGroupMemberRole, PanelGroupStrategy, PanelReviewState, PanelState, Prisma } from '@prisma/client';
+import { ActorType, ConfigProtocol, ConfigStatus, DesiredRemote, EnforcementState, GrantStatus, InboundPlacement, PanelGroupMemberRole, PanelGroupStrategy, PanelReviewState, PanelState, Prisma } from '@prisma/client';
 import { OutboxEventType } from '@txnet-backend/shared-core';
 
 import { ConfigActionsService } from './config-actions';
@@ -25,23 +29,43 @@ const GRANT = '99999999-9999-4999-8999-999999999991';
 const [A, B, C, D, E] = ['a', 'b', 'c', 'd', 'e'].map((x) => `${x.repeat(8)}-${x.repeat(4)}-4${x.repeat(3)}-8${x.repeat(3)}-${x.repeat(12)}`);
 
 type Row = Record<string, unknown> & { id: string };
-type Member = { panelId: string; role: PanelGroupMemberRole; panel: { reviewState: PanelReviewState; panelState: PanelState } };
+type Inbound = { remoteId: string; protocol: ConfigProtocol; maxClients: number | null };
+type PanelOpts = { inboundPlacement?: InboundPlacement; maxClients?: number | null; inbounds?: Inbound[] };
+type Member = {
+  panelId: string;
+  role: PanelGroupMemberRole;
+  panel: { reviewState: PanelReviewState; panelState: PanelState; inboundPlacement: InboundPlacement; maxClients: number | null; inbounds: Inbound[] };
+};
 
-const member = (panelId: string, panelState: PanelState = PanelState.healthy, role: PanelGroupMemberRole = PanelGroupMemberRole.primary, reviewState: PanelReviewState = PanelReviewState.accepted): Member => ({
+const inbound = (remoteId: string, protocol: ConfigProtocol = ConfigProtocol.vless, maxClients: number | null = null): Inbound => ({ remoteId, protocol, maxClients });
+
+/** One picked vless inbound, `1`, unless the panel says otherwise. */
+const member = (
+  panelId: string,
+  panelState: PanelState = PanelState.healthy,
+  role: PanelGroupMemberRole = PanelGroupMemberRole.primary,
+  reviewState: PanelReviewState = PanelReviewState.accepted,
+  panel: PanelOpts = {},
+): Member => ({
   panelId,
   role,
-  panel: { reviewState, panelState },
+  panel: { reviewState, panelState, inboundPlacement: panel.inboundPlacement ?? InboundPlacement.all, maxClients: panel.maxClients ?? null, inbounds: panel.inbounds ?? [inbound('1')] },
 });
+const on = (panelId: string, panel: PanelOpts) => member(panelId, PanelState.healthy, PanelGroupMemberRole.primary, PanelReviewState.accepted, panel);
 
-function build(opts: { status?: GrantStatus; strategy?: PanelGroupStrategy; minHealthyPanels?: number; members: Member[] }) {
+function build(opts: { status?: GrantStatus; strategy?: PanelGroupStrategy; minHealthyPanels?: number; members: Member[]; others?: Row[] }) {
   const grant = { id: GRANT, tenantId: TENANT, userId: USER, status: opts.status ?? GrantStatus.pending };
-  const group = { id: 'group-1', strategy: opts.strategy ?? PanelGroupStrategy.mirror, minHealthyPanels: opts.minHealthyPanels ?? 1, protocol: 'vless', members: opts.members };
+  const group = { id: 'group-1', strategy: opts.strategy ?? PanelGroupStrategy.mirror, minHealthyPanels: opts.minHealthyPanels ?? 1, members: opts.members };
   const configs: Row[] = [];
+  /** Other buyers' configs: they fill inbounds and panels, and are never this Grant's. */
+  const others: Row[] = opts.others ?? [];
   const rebalanced: string[] = [];
   const outbox: Array<{ type: string; payload: Record<string, unknown> }> = [];
+  const locked: string[] = [];
   let next = 0;
 
   const tx = {
+    $executeRaw: async (_s: TemplateStringsArray, key: string) => void locked.push(key),
     grant: {
       findUnique: async ({ where, select }: { where: { id: string }; select: Record<string, unknown> }) =>
         where.id === GRANT ? { ...grant, ...('variant' in select ? { variant: { panelGroup: group } } : {}) } : null,
@@ -52,7 +76,7 @@ function build(opts: { status?: GrantStatus; strategy?: PanelGroupStrategy; minH
       },
     },
     config: {
-      findMany: async ({ where }: { where: { grantId: string } }) => configs.filter((c) => c.grantId === where.grantId),
+      findMany: async ({ where }: { where: { grantId: string } }) => configs.filter((c) => c.grantId === where.grantId).map((c) => ({ inboundRemoteId: null, drainedAt: null, ...c })),
       create: async ({ data }: { data: Record<string, unknown> }) => {
         const row: Row = { id: `config-${++next}`, status: ConfigStatus.active, ...data };
         configs.push(row);
@@ -63,15 +87,40 @@ function build(opts: { status?: GrantStatus; strategy?: PanelGroupStrategy; minH
     outboxEvent: { create: async ({ data }: { data: { type: string; payload: Record<string, unknown> } }) => void outbox.push(data) },
   };
 
+  // The load query, answered from the rows: per (panel, inbound) and per panel, live configs only.
+  const crossTenant = {
+    $queryRaw: async (_s: TemplateStringsArray, panelIds: string[]) => {
+      const live = [...configs, ...others].filter((c) => panelIds.includes(c.panelId as string) && c.desiredRemote === DesiredRemote.present && !c.drainedAt);
+      const rows: Record<string, unknown>[] = [];
+      for (const panelId of new Set(live.map((c) => c.panelId as string))) {
+        const mine = live.filter((c) => c.panelId === panelId);
+        rows.push({ panelId, inboundRemoteId: null, total: 1, clients: BigInt(mine.length), users: BigInt(new Set(mine.map((c) => c.grantId)).size) });
+        for (const id of new Set(mine.map((c) => (c.inboundRemoteId as string | null) ?? null))) {
+          const n = mine.filter((c) => (c.inboundRemoteId ?? null) === id);
+          rows.push({ panelId, inboundRemoteId: id, total: 0, clients: BigInt(n.length), users: BigInt(new Set(n.map((c) => c.grantId)).size) });
+        }
+      }
+      return rows;
+    },
+  };
+
   const allocator = {
     rebalance: async (_tx: unknown, input: { grantId: string }) => {
       rebalanced.push(input.grantId);
       return {};
     },
   };
-  const service = new GroupFulfilmentService(new ConfigActionsService(allocator as never), {} as never, {} as never);
-  return { service, tx: tx as unknown as Prisma.TransactionClient, grant, group, configs, rebalanced, outbox };
+  const service = new GroupFulfilmentService(new ConfigActionsService(allocator as never), {} as never, crossTenant as never);
+  return { service, tx: tx as unknown as Prisma.TransactionClient, grant, group, configs, rebalanced, outbox, locked };
 }
+
+/** A member as `planFulfilment` takes it: loaded, nobody on it yet. */
+const withLoad = (m: Member) => ({ ...m, panel: { ...m.panel, users: 0, inbounds: m.panel.inbounds.map((i) => ({ ...i, clients: 0 })) } });
+
+/** Another buyer's live config on (panel, inbound). */
+const taken = (panelId: string, inboundRemoteId: string, grantId = `other-${panelId}-${inboundRemoteId}-${Math.random()}`): Row => ({
+  id: `o-${grantId}`, grantId, panelId, inboundRemoteId, desiredRemote: DesiredRemote.present, drainedAt: null,
+});
 
 describe('GroupFulfilmentService.fulfil (mirror)', () => {
   it('places one config on every non-drain healthy accepted member, all in one credential group', async () => {
@@ -90,7 +139,7 @@ describe('GroupFulfilmentService.fulfil (mirror)', () => {
     expect(configs.map((c) => c.panelId)).toEqual([A, B]);
     expect(new Set(configs.map((c) => c.credentialGroupId)).size).toBe(1);
     expect(configs[0].credentialGroupId).toMatch(/^[0-9a-f-]{36}$/);
-    expect(configs.every((c) => c.protocol === 'vless' && c.desiredRemote === DesiredRemote.present && c.userId === USER)).toBe(true);
+    expect(configs.every((c) => c.protocol === 'vless' && c.inboundRemoteId === '1' && c.desiredRemote === DesiredRemote.present && c.userId === USER)).toBe(true);
     // A pending Grant is provisioned: it activates on what the panels confirm.
     expect(result).toMatchObject({ placed: 2, waiting: [D, E], activated: false });
     // Once for the whole placement, so every new config has its share before the pass creates it.
@@ -174,11 +223,81 @@ describe('GroupFulfilmentService.fulfil (mirror)', () => {
   it('answers the same plan from the same facts, whatever order the members come in', () => {
     const facts = {
       grantStatus: GrantStatus.pending,
-      group: { strategy: PanelGroupStrategy.mirror, minHealthyPanels: 1, members: [member(B), member(A, PanelState.maintenance)] },
-      configs: [{ panelId: B, status: ConfigStatus.active, desiredRemote: DesiredRemote.present, enforcementState: EnforcementState.pending, credentialGroupId: 'g', drainedAt: null }],
+      group: { strategy: PanelGroupStrategy.mirror, minHealthyPanels: 1, members: [member(B), member(A, PanelState.maintenance)].map(withLoad) },
+      configs: [{ panelId: B, inboundRemoteId: '1', status: ConfigStatus.active, desiredRemote: DesiredRemote.present, enforcementState: EnforcementState.pending, credentialGroupId: 'g', drainedAt: null }],
     };
     expect(planFulfilment(facts)).toEqual({ place: [], waiting: [A], activate: false, credentialGroupId: 'g' });
     expect(planFulfilment({ ...facts, group: { ...facts.group, members: [...facts.group.members].reverse() } })).toEqual(planFulfilment(facts));
+  });
+});
+
+describe('placement on the picked inbounds (F-114-b)', () => {
+  it('places nothing on a panel with no pick — never the first enabled inbound — and waits for one', async () => {
+    const { service, tx, configs, group } = build({ members: [on(A, { inbounds: [] }), member(B)] });
+
+    const result = await service.fulfil(tx, GRANT);
+    expect(configs.map((c) => [c.panelId, c.inboundRemoteId])).toEqual([[B, '1']]);
+    expect(result.waiting).toEqual([A]);
+
+    // The admin picks one: the next run fills it, in the same credential group.
+    group.members = [on(A, { inbounds: [inbound('7', ConfigProtocol.trojan)] }), member(B)];
+    expect((await service.fulfil(tx, GRANT)).placed).toBe(1);
+    expect(configs[1]).toMatchObject({ panelId: A, inboundRemoteId: '7', protocol: ConfigProtocol.trojan, credentialGroupId: configs[0].credentialGroupId });
+  });
+
+  it('under `all`, a config on every pick, each with its inbound\'s protocol; a pick added later reaches existing buyers', async () => {
+    const { service, tx, configs, group } = build({ members: [on(A, { inbounds: [inbound('2', ConfigProtocol.vmess), inbound('10'), inbound('1')] })] });
+
+    await service.fulfil(tx, GRANT);
+    expect(configs.map((c) => [c.inboundRemoteId, c.protocol])).toEqual([['1', 'vless'], ['2', 'vmess'], ['10', 'vless']]);
+    expect((await service.fulfil(tx, GRANT)).placed).toBe(0);
+
+    group.members = [on(A, { inbounds: [inbound('1'), inbound('2', ConfigProtocol.vmess), inbound('10'), inbound('11', ConfigProtocol.trojan)] })];
+    expect((await service.fulfil(tx, GRANT)).placed).toBe(1);
+    expect(configs[3]).toMatchObject({ inboundRemoteId: '11', protocol: 'trojan' });
+  });
+
+  it('under `spread`, one config, on the emptiest pick with a seat', async () => {
+    const others = [taken(A, '1'), taken(A, '1'), taken(A, '2'), taken(A, '3'), taken(A, '3')];
+    const panel = { inboundPlacement: InboundPlacement.spread, inbounds: [inbound('1'), inbound('2', ConfigProtocol.vless, 1), inbound('3')] };
+    const { service, tx, configs } = build({ members: [on(A, panel)], others });
+
+    // 2 is the emptiest but full at its cap of 1; 1 and 3 tie at two, and 1 sorts first.
+    await service.fulfil(tx, GRANT);
+    expect(configs.map((c) => c.inboundRemoteId)).toEqual(['1']);
+    expect((await service.fulfil(tx, GRANT)).placed).toBe(0);
+  });
+
+  it('a full inbound takes nobody; a full panel takes no new buyer, and still fills in one it holds', async () => {
+    const full = build({ members: [on(A, { inbounds: [inbound('1', ConfigProtocol.vless, 2), inbound('2')] })], others: [taken(A, '1'), taken(A, '1')] });
+    await full.service.fulfil(full.tx, GRANT);
+    expect(full.configs.map((c) => c.inboundRemoteId)).toEqual(['2']);
+
+    const others = [taken(A, '1', 'g1'), taken(A, '1', 'g2')];
+    const capped = build({ members: [on(A, { maxClients: 2 })], others });
+    expect(await capped.service.fulfil(capped.tx, GRANT)).toMatchObject({ placed: 0, waiting: [A] });
+
+    const held = build({ members: [on(A, { maxClients: 1 })], others: [] });
+    await held.service.fulfil(held.tx, GRANT);
+    held.group.members = [on(A, { maxClients: 1, inbounds: [inbound('1'), inbound('5')] })];
+    expect((await held.service.fulfil(held.tx, GRANT)).placed).toBe(1);
+  });
+
+  it('a config placed before picks holds its panel, and counts once towards minHealthyPanels', async () => {
+    const legacy = build({ members: [on(A, { inbounds: [inbound('1'), inbound('2')] })] });
+    legacy.configs.push({ id: 'old', grantId: GRANT, panelId: A, inboundRemoteId: null, status: ConfigStatus.active, desiredRemote: DesiredRemote.present, credentialGroupId: 'g' });
+    expect((await legacy.service.fulfil(legacy.tx, GRANT)).placed).toBe(0);
+
+    const two = build({ minHealthyPanels: 2, members: [on(A, { inbounds: [inbound('1'), inbound('2')] }), member(B)] });
+    await two.service.fulfil(two.tx, GRANT);
+    for (const c of two.configs.filter((c) => c.panelId === A)) c.enforcementState = EnforcementState.complete;
+    expect((await two.service.fulfil(two.tx, GRANT)).activated).toBe(false);
+  });
+
+  it('takes each placeable panel\'s lock before counting, in panel order', async () => {
+    const { service, tx, locked } = build({ members: [member(B), member(C, PanelState.down), member(A)] });
+    await service.fulfil(tx, GRANT);
+    expect(locked).toEqual([`panel_inbound:${A}`, `panel_inbound:${B}`]);
   });
 });
 

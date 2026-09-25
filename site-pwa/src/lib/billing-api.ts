@@ -881,6 +881,22 @@ export const billingApi = {
     return call<CapabilityMatrix>(`/systems/panels/${encodeURIComponent(id)}/capabilities`, { method: "GET" });
   },
 
+  // A panel's inbounds (F-114-b): what the last read found, and which ones a buyer is placed on.
+
+  async panelInbounds(id: string): Promise<PanelInbounds> {
+    return call<PanelInbounds>(`/systems/panels/${encodeURIComponent(id)}/inbounds`, { method: "GET" });
+  },
+
+  /** 404 `inbound_not_found`, 409 `inbound_not_sellable` (gone, or a protocol we do not sell). */
+  async updatePanelInbounds(id: string, body: PanelInboundsBody): Promise<PanelInbounds> {
+    return call<PanelInbounds>(`/systems/panels/${encodeURIComponent(id)}/inbounds`, { method: "PUT", body: JSON.stringify(body) });
+  },
+
+  /** 202: the panel's next pass (within a minute) reads its inbounds again. */
+  async refreshPanelInbounds(id: string): Promise<{ panelId: string; refreshRequested: true }> {
+    return call<{ panelId: string; refreshRequested: true }>(`/systems/panels/${encodeURIComponent(id)}/inbounds/refresh`, { method: "POST" });
+  },
+
   async driftEvents(query: { state: "open" | "all"; after?: string }): Promise<CursorPage<SystemsDriftEvent>> {
     const q = new URLSearchParams({ state: query.state });
     if (query.after) q.set("after", query.after);
@@ -927,7 +943,7 @@ export const billingApi = {
     return call<PanelGroup>("/systems/panel-groups", { method: "POST", body: JSON.stringify(body) });
   },
 
-  /** At least one field; configs already placed keep their protocol (billing rule 22). */
+  /** At least one field; configs already placed stay where they are (billing rule 22). */
   async updatePanelGroup(id: string, body: PanelGroupBody): Promise<PanelGroup> {
     return call<PanelGroup>(`/systems/panel-groups/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
   },
@@ -1387,7 +1403,7 @@ export interface SystemsHold {
   resolutionNote: string | null;
 }
 
-/** `network.ConfigProtocol`: what the group's next config is created with. */
+/** `network.ConfigProtocol`: what a panel's inbound serves, and so a config placed on it. */
 export type ConfigProtocol = "vmess" | "vless" | "trojan" | "shadowsocks" | "hysteria2" | "tuic" | "wireguard" | "openvpn" | "pppoe";
 /** `network.PanelGroupMemberRole` — the member's, not the panel's HA `role`. */
 export type PanelGroupMemberRole = "primary" | "replica" | "drain";
@@ -1413,7 +1429,6 @@ export interface PanelGroup {
   strategy: "mirror" | "priority" | "weighted";
   minHealthyPanels: number;
   subscriptionTtlSeconds: number;
-  protocol: ConfigProtocol;
   createdAt: string;
   updatedAt: string;
   /** Variants sold on this group. */
@@ -1422,7 +1437,46 @@ export interface PanelGroup {
 }
 
 /** `createPanelGroupSchema`'s fields; `strategy` is never sent (billing rule 21). */
-export type PanelGroupBody = Partial<Pick<PanelGroup, "name" | "minHealthyPanels" | "subscriptionTtlSeconds" | "protocol">>;
+export type PanelGroupBody = Partial<Pick<PanelGroup, "name" | "minHealthyPanels" | "subscriptionTtlSeconds">>;
+
+/** `network.InboundPlacement` (F-114-b): a config on every picked inbound, or one on the emptiest. */
+export type InboundPlacement = "all" | "spread";
+
+/** One inbound as `network-service` last read it, the admin's pick, and how many live configs it holds. */
+export interface PanelInbound {
+  remoteId: string;
+  tag: string;
+  /** Null: a protocol we do not sell — listed, never sellable. */
+  protocol: ConfigProtocol | null;
+  port: number;
+  host: string;
+  enabled: boolean;
+  /** When a read stopped listing it; null while it is listed. */
+  goneAt: string | null;
+  seenAt: string;
+  sold: boolean;
+  maxClients: number | null;
+  clients: number;
+}
+
+/** `GET /systems/panels/:id/inbounds` (billing `panel-inbounds.ts`). */
+export interface PanelInbounds {
+  panelId: string;
+  inboundPlacement: InboundPlacement;
+  maxClients: number | null;
+  /** Null until the first read, and again after a refresh until the next pass reads. */
+  inboundsReadAt: string | null;
+  /** Grants with a live config on the panel — what `maxClients` caps. */
+  users: number;
+  inbounds: PanelInbound[];
+}
+
+/** `updatePanelInboundsSchema`: what is left out keeps its value; null clears a cap. */
+export type PanelInboundsBody = {
+  inboundPlacement?: InboundPlacement;
+  maxClients?: number | null;
+  inbounds?: { remoteId: string; sold: boolean; maxClients?: number | null }[];
+};
 
 export type DrainedMember = PanelGroupMember & { waitSeconds: number };
 export type RemovedMember = { groupId: string; panelId: string; removed: true };

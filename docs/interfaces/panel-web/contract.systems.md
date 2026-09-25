@@ -115,6 +115,21 @@ The *why* is **ADR-0080**.
    `drainEarliestAt` — never "at", since a Grant whose replacement is served
    later waits longer. Every write re-reads the groups; a refusal does too.
    The page's live re-read (rule 2) re-reads the groups with the panels.
+   A group names no protocol: its panels' picked inbounds do (rule 12).
+12. **A panel's inbounds: which ones a buyer is placed on** (F-114-b,
+   `PanelInbounds.tsx`, billing rule 25, network `contract.inbounds.md`).
+   "Inbounds" on a pull panel's row (a push panel is never called, so has
+   none) opens what the last read found, when, and the panel's users. The
+   admin ticks inbounds, picks `all` or `spread` (each said in a sentence),
+   and sets the panel's and each inbound's user cap, empty = none. Only a
+   sellable inbound can be ticked — a gone one, or one of a protocol we do
+   not sell, is marked and never sent (`sellable`, `inboundNote`); a
+   disabled one keeps its tick and is marked. A panel with no live, sellable
+   tick is an error tone: it places nobody (`nothingPicked`). The save sends
+   only what differs from the read (`validateInbounds`), so a pick made
+   elsewhere is not overwritten, and nothing changed is refused here. "Read
+   again" is `refresh`, answered in a sentence: the list is re-read within a
+   minute.
 
 ## Proof
 
@@ -127,4 +142,4 @@ billing's `SystemsRejection` / `PanelScopeRejection` / `ResubmitRejection`),
 `refusedBecause`, `canResubmit`, `validateLogin`, `resubmitOutcome`, the
 RADIUS secret's predicates and limits, the hold
 and drift predicates, `validateNote`, the menu entry, every key in `en` and `fa`.
-`systems/panel-groups.test.ts` — rule 11: `ConfigProtocol` and `PanelGroupMemberRole` read out of `network.prisma`, the drain multiple out of `group-drain.ts`, `validateGroup` (create, limits, an edit sending only what changed), `memberPlaceable`, `groupHealth`, `addablePanels`, `canDrain` / `canRemove`, `drainEarliestAt`, `waitOf`.
+`systems/panel-groups.test.ts` — rule 11: `ConfigProtocol` and `PanelGroupMemberRole` read out of `network.prisma`; rule 12: `InboundPlacement` and the two inbound refusals from their homes, `validateInbounds` (only what changed, caps, never an unsellable tick), `inboundNote`, `nothingPicked`; the drain multiple out of `group-drain.ts`, `validateGroup` (create, limits, an edit sending only what changed), `memberPlaceable`, `groupHealth`, `addablePanels`, `canDrain` / `canRemove`, `drainEarliestAt`, `waitOf`.

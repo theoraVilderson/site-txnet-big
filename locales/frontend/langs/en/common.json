@@ -1217,7 +1217,8 @@
       "notForSale": "Not for sale: no panel group",
       "healthy": "{{count}} healthy",
       "notFulfilled": "not delivered yet",
-      "panelGroupsFailed": "The panel groups could not be loaded."
+      "panelGroupsFailed": "The panel groups could not be loaded.",
+      "noInbound": "no inbound ticked"
     },
     "price": {
       "amount": "Price (USD)",
@@ -2190,7 +2191,9 @@
       "openDrift": "Open drift events: {{count}}",
       "halted": "Collection halted",
       "showMatrix": "Capabilities",
-      "hideMatrix": "Hide capabilities"
+      "hideMatrix": "Hide capabilities",
+      "showInbounds": "Inbounds",
+      "hideInbounds": "Hide inbounds"
     },
     "review": {
       "pending": "Waiting for its test",
@@ -2374,7 +2377,9 @@
       "member_not_found": "That panel is no longer in this group.",
       "already_member": "That panel is already in this group.",
       "already_draining": "It is already draining; its wait was not restarted.",
-      "member_has_configs": "Users still have configs on this panel through this group. Drain it instead — it leaves the group on its own once they have moved."
+      "member_has_configs": "Users still have configs on this panel through this group. Drain it instead — it leaves the group on its own once they have moved.",
+      "inbound_not_found": "That inbound is not on this panel any more. Read the inbounds again.",
+      "inbound_not_sellable": "That inbound cannot be sold: it is gone from the panel, or serves a protocol we do not sell."
     },
     "resubmit": {
       "open": "New login",
@@ -2398,12 +2403,12 @@
     },
     "groups": {
       "title": "Panel groups",
-      "hint": "Where a VPN product's users get their configs. A variant names a group, and each Grant sold on it gets a config on every member that is accepted and healthy. Changes reach what is placed next, within a minute.",
+      "hint": "Where a VPN product's users get their configs. A variant names a group, and each Grant sold on it gets configs on every member that is accepted and healthy — on the inbounds each panel sells (Panels → Inbounds). Changes reach what is placed next, within a minute.",
       "empty": "No groups yet. A VPN variant cannot be sold until it names one.",
       "create": "New group",
       "createSubmit": "Create group",
       "edit": "Edit",
-      "editHint": "A new protocol is used for configs placed from now on; configs already placed keep theirs.",
+      "editHint": "Changes reach configs placed from now on; configs already placed stay where they are. Which inbounds, and so which protocols, is set on each panel.",
       "editSubmit": "Save",
       "cancel": "Cancel",
       "field": {
@@ -2411,8 +2416,7 @@
         "minHealthyPanels": "Panels needed to deliver",
         "minHealthyPanelsHint": "A Grant turns active once this many of its configs are live.",
         "ttlMinutes": "Subscription refresh (minutes)",
-        "ttlHint": "How often users' apps re-read their subscription. Draining a member waits twice this, so every app has moved first.",
-        "protocol": "Protocol"
+        "ttlHint": "How often users' apps re-read their subscription. Draining a member waits twice this, so every app has moved first."
       },
       "invalid": {
         "name": "A name of 1 to 100 characters.",
@@ -2457,6 +2461,39 @@
         "minutes": "{{n}} min",
         "hours": "{{n}} h",
         "days": "{{n}} days"
+      }
+    },
+    "inbounds": {
+      "title": "Inbounds sold on this panel",
+      "hint": "Tick the inbounds a buyer is placed on. With nothing ticked, nobody is placed on this panel. A change reaches the next buyer; configs already placed stay where they are.",
+      "placement": {
+        "label": "How a buyer is placed",
+        "all": "On every ticked inbound",
+        "allHint": "Each buyer gets a config on every ticked inbound, one link each. Their traffic is shared across them.",
+        "spread": "On one ticked inbound, the emptiest",
+        "spreadHint": "Each buyer gets one config, on the ticked inbound with the fewest users that is under its cap."
+      },
+      "panelMax": "Most users on this panel",
+      "panelMaxHint": "Empty = no cap. At the cap, no new buyer is placed here; buyers already here keep their configs.",
+      "users": "{{count}} user(s) on this panel now",
+      "readAt": "Read from the panel",
+      "notRead": "Not read yet — within a minute of the panel's next pass",
+      "refresh": "Read again",
+      "refreshed": "Asked. The inbounds are read again on the panel's next pass, within a minute.",
+      "empty": "No inbounds read yet.",
+      "sold": "Sold",
+      "cap": "Most users",
+      "capHint": "Empty = no cap",
+      "clients": "{{count}} on it",
+      "gone": "No longer on the panel",
+      "disabled": "Disabled on the panel",
+      "unknownProtocol": "A protocol we do not sell",
+      "nothingPicked": "Nothing is ticked: no buyer is placed on this panel.",
+      "save": "Save",
+      "saved": "Saved. The next buyer is placed this way.",
+      "invalid": {
+        "cap": "A whole number from 1, or empty for no cap.",
+        "unchanged": "Nothing was changed."
       }
     }
   },

@@ -228,17 +228,17 @@ function build() {
     panelGroup: table(
       [
         {
-          id: PLATFORM_GROUP, tenantId: null, name: 'Europe', strategy: 'mirror', protocol: 'vless',
+          id: PLATFORM_GROUP, tenantId: null, name: 'Europe', strategy: 'mirror',
           members: [
-            { role: 'primary', panel: { reviewState: 'accepted', panelState: 'healthy' } },
-            { role: 'replica', panel: { reviewState: 'accepted_low_trust', panelState: 'healthy' } },
-            { role: 'drain', panel: { reviewState: 'accepted', panelState: 'healthy' } },
-            { role: 'primary', panel: { reviewState: 'accepted', panelState: 'degraded' } },
-            { role: 'primary', panel: { reviewState: 'pending_review', panelState: 'healthy' } },
+            { role: 'primary', panel: { reviewState: 'accepted', panelState: 'healthy', inbounds: [{ protocol: 'vless' }, { protocol: 'trojan' }] } },
+            { role: 'replica', panel: { reviewState: 'accepted_low_trust', panelState: 'healthy', inbounds: [{ protocol: 'vless' }] } },
+            { role: 'drain', panel: { reviewState: 'accepted', panelState: 'healthy', inbounds: [] } },
+            { role: 'primary', panel: { reviewState: 'accepted', panelState: 'degraded', inbounds: [] } },
+            { role: 'primary', panel: { reviewState: 'pending_review', panelState: 'healthy', inbounds: [] } },
           ],
         },
-        { id: RESELLER_GROUP, tenantId: RESELLER, name: 'Alpha own', strategy: 'mirror', protocol: 'vmess', members: [] },
-        { id: OTHER_GROUP, tenantId: OTHER, name: 'Other own', strategy: 'priority', protocol: 'vless', members: [] },
+        { id: RESELLER_GROUP, tenantId: RESELLER, name: 'Alpha own', strategy: 'mirror', members: [] },
+        { id: OTHER_GROUP, tenantId: OTHER, name: 'Other own', strategy: 'priority', members: [] },
       ],
       'panelGroup',
       writes,
@@ -437,10 +437,10 @@ describe('CatalogAdminService — the panel groups a variant may name (F-026-p)'
     );
   });
 
-  it('counts a member healthy only where fulfilment would place: not drain, accepted, healthy', async () => {
+  it('counts a member healthy only where fulfilment would place, and lists what its picked inbounds sell', async () => {
     const { service } = build();
     const [europe] = (await service.listPanelGroups(actor(RESELLER))).filter((g) => g.id === PLATFORM_GROUP);
-    expect(europe).toEqual({ id: PLATFORM_GROUP, tenantId: null, name: 'Europe', strategy: 'mirror', protocol: 'vless', healthyMembers: 2 });
+    expect(europe).toEqual({ id: PLATFORM_GROUP, tenantId: null, name: 'Europe', strategy: 'mirror', protocols: ['trojan', 'vless'], healthyMembers: 2 });
   });
 
   it('reads on the pool that serves the caller and writes nothing', async () => {

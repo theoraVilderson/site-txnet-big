@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, KeyRound, Loader2, TriangleAlert } from "lucide-react";
+import { ChevronDown, ChevronUp, KeyRound, ListChecks, Loader2, TriangleAlert } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type CapabilityMatrix, type SystemsPanel } from "@/lib/billing-api";
 import { formatInstant } from "../../_lib/datetime";
@@ -22,6 +22,7 @@ import {
   verdictOf,
 } from "../_lib/systems";
 import { BAD, ListState, Pill, REVIEW_TONE, STATE_TONE, Section, useSystemsError } from "./parts";
+import { PanelInbounds } from "./PanelInbounds";
 
 export function PanelList({
   panels,
@@ -51,6 +52,9 @@ export function PanelList({
 function PanelItem({ panel, onChanged }: { panel: SystemsPanel; onChanged: () => Promise<void> }) {
   const { lang, t } = useLocale();
   const [open, setOpen] = useState(false);
+  // A push panel is never called, so it has no inbounds to read or pick (F-114-b).
+  const [inboundsOpen, setInboundsOpen] = useState(false);
+  const hasInbounds = panel.transport !== "push";
   // Which secret is being re-submitted: the login, or a push panel's RADIUS secret (F-027-az).
   const [editing, setEditing] = useState<Secret | null>(null);
   // The sentence for the last answer; the row itself is read again, never patched.
@@ -108,6 +112,17 @@ function PanelItem({ panel, onChanged }: { panel: SystemsPanel; onChanged: () =>
             >
               <KeyRound size={14} aria-hidden />
               {t("common", K.radiusSecret.open)}
+            </button>
+          )}
+          {hasInbounds && (
+            <button
+              type="button"
+              onClick={() => setInboundsOpen((o) => !o)}
+              aria-expanded={inboundsOpen}
+              className="inline-flex items-center gap-1 rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-primary hover:bg-leaf-bg"
+            >
+              <ListChecks size={14} aria-hidden />
+              {t("common", inboundsOpen ? K.panels.hideInbounds : K.panels.showInbounds)}
             </button>
           )}
           <button
@@ -171,6 +186,7 @@ function PanelItem({ panel, onChanged }: { panel: SystemsPanel; onChanged: () =>
         <p>{t("common", K.budget.tradeOff)}</p>
       </div>
 
+      {hasInbounds && inboundsOpen && <PanelInbounds panelId={panel.id} />}
       {open && <Matrix panelId={panel.id} />}
     </li>
   );

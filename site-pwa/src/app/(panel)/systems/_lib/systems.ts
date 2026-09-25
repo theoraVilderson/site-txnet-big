@@ -193,7 +193,10 @@ export type SystemsRefusal =
   | "member_not_found"
   | "already_member"
   | "already_draining"
-  | "member_has_configs";
+  | "member_has_configs"
+  // A panel's inbounds (F-114-b).
+  | "inbound_not_found"
+  | "inbound_not_sellable";
 
 export const REFUSAL_KEYS: Record<SystemsRefusal, string> = {
   not_found: K.refusals.not_found,
@@ -208,6 +211,8 @@ export const REFUSAL_KEYS: Record<SystemsRefusal, string> = {
   already_member: K.refusals.already_member,
   already_draining: K.refusals.already_draining,
   member_has_configs: K.refusals.member_has_configs,
+  inbound_not_found: K.refusals.inbound_not_found,
+  inbound_not_sellable: K.refusals.inbound_not_sellable,
 };
 
 /** The refusal's own sentence key, when billing named one this page knows; else the generic message applies. */

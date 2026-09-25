@@ -73,7 +73,8 @@ export type PanelGroupOption = {
   tenantId: string | null;
   name: string;
   strategy: PanelGroupStrategy;
-  protocol: ConfigProtocol;
+  /** What its members' picked inbounds sell (network `contract.inbounds.md`), sorted; empty = nothing to place on. */
+  protocols: ConfigProtocol[];
   healthyMembers: number;
 };
 
@@ -340,7 +341,8 @@ export class CatalogAdminService {
    * `tenantId`, so a client offers a variant only the platform's and its own
    * tenant's, as {@link usableGroup} admits. `healthyMembers` counts what
    * fulfilment would place on now (`placeableMember`); `strategy` is shown,
-   * because only `mirror` is fulfilled (network `contract.groups.md` rule 7).
+   * because only `mirror` is fulfilled (network `contract.groups.md` rule 7);
+   * `protocols` is what its members' picked inbounds sell (F-114-b).
    */
   async listPanelGroups(actor: CatalogActor): Promise<PanelGroupOption[]> {
     const { owner } = await this.access(actor);
@@ -352,13 +354,27 @@ export class CatalogAdminService {
           tenantId: true,
           name: true,
           strategy: true,
-          protocol: true,
-          members: { select: { role: true, panel: { select: { reviewState: true, panelState: true } } } },
+          members: {
+            select: {
+              role: true,
+              panel: {
+                select: {
+                  reviewState: true,
+                  panelState: true,
+                  inbounds: { where: { sold: true, enabled: true, goneAt: null, protocol: { not: null } }, select: { protocol: true } },
+                },
+              },
+            },
+          },
         },
         orderBy: { name: 'asc' },
       }),
     );
-    return rows.map(({ members, ...g }) => ({ ...g, healthyMembers: members.filter(placeableMember).length }));
+    return rows.map(({ members, ...g }) => ({
+      ...g,
+      protocols: [...new Set(members.flatMap((m) => m.panel.inbounds.flatMap((i) => (i.protocol ? [i.protocol] : []))))].sort(),
+      healthyMembers: members.filter(placeableMember).length,
+    }));
   }
 
   // ---------------------------------------------------------------- categories

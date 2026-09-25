@@ -118,7 +118,9 @@ func main() {
 		Sink:    publish.Publisher{Transport: broker},
 		Cursors: cursors,
 		Ceilings: &converge.Converger{
-			Provisioning: &converge.Provisioning{Desired: converge.PostgresDesired{DB: pool}, Log: log},
+			Provisioning: &converge.Provisioning{
+				Desired: converge.PostgresDesired{DB: pool}, Inbounds: converge.PostgresInbounds{DB: pool}, Log: log,
+			},
 			Ceilings:     &converge.Ceilings{Allocations: converge.PostgresAllocations{DB: pool}, Counters: cursors, Log: log},
 			Log:          log,
 		},

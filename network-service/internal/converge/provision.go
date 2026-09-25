@@ -66,6 +66,11 @@ type DesiredConfig struct {
 	// one here and nothing else; the pass carries it.
 	UUID     string
 	Protocol string
+	// InboundRemoteID is the inbound the client is created on: the one
+	// fulfilment placed the config on from the panel's picks (F-114-b). Empty
+	// is nothing picked, and nothing is created (`no_inbound`) — never the
+	// first enabled inbound of the protocol.
+	InboundRemoteID string
 	// Enabled is `desiredEnabled`; Present is `desiredRemote = present`.
 	Enabled bool
 	Present bool
@@ -149,7 +154,9 @@ const (
 	// ActionAllowanceExhausted: present, no client, and the share is spent. A
 	// client created under a zero ceiling reads back as "no limit".
 	ActionAllowanceExhausted Action = "allowance_exhausted"
-	// ActionNoInbound: the panel has no enabled inbound for the protocol.
+	// ActionNoInbound: the config names no inbound (nothing is picked on the
+	// panel), or the one it names is not on the panel, is disabled, or serves
+	// another protocol.
 	ActionNoInbound Action = "no_inbound"
 	// ActionRefused: the panel would not take the write. Err is a *driver.Fault.
 	ActionRefused Action = "write_refused"
@@ -189,7 +196,23 @@ type ProvisionReport struct {
 // of its own.
 type Provisioning struct {
 	Desired Desired
-	Log     *slog.Logger
+	// Inbounds is where the panel's inbounds are written (F-114-b); nil
+	// keeps no inventory.
+	Inbounds Inbounds
+	Log      *slog.Logger
+}
+
+// InboundReadEvery is how stale a panel's stored inbounds may get before a
+// pass reads them again. An admin's refresh makes them due at once.
+const InboundReadEvery = 10 * time.Minute
+
+// Inbounds is the panel's inventory of inbounds: what the admin picks from.
+type Inbounds interface {
+	// Due says whether the panel's inbounds should be read on this pass.
+	Due(ctx context.Context, panelID string, at time.Time) (bool, error)
+	// Record writes one full read: every inbound listed, the ones no longer
+	// listed marked gone.
+	Record(ctx context.Context, panelID string, rows []driver.Inbound, at time.Time) error
 }
 
 // PassOver converges every config on one panel against a population already
@@ -247,7 +270,29 @@ func (v *Provisioning) PassOver(ctx context.Context, p collect.Panel, clients []
 			return report, err
 		}
 	}
+	v.takeInventory(ctx, p, inbounds, at)
 	return report, nil
+}
+
+// takeInventory writes the panel's inbounds to `panel_inbound` when the
+// stored read is due (F-114-b, `contract.inbounds.md` rule 1), reusing this
+// pass's read if a create already made one. It never fails the pass: a
+// panel that would not list its inbounds is read again next pass, and the
+// admin's picks stand meanwhile.
+func (v *Provisioning) takeInventory(ctx context.Context, p collect.Panel, inbounds *inboundCache, at time.Time) {
+	if v.Inbounds == nil {
+		return
+	}
+	due, err := v.Inbounds.Due(ctx, p.ID, at)
+	if err == nil && due {
+		var rows []driver.Inbound
+		if rows, err = inbounds.all(ctx); err == nil {
+			err = v.Inbounds.Record(ctx, p.ID, rows, at)
+		}
+	}
+	if err != nil {
+		v.log().Warn("panel inbounds not read", "panel", p.ID, "err", err)
+	}
 }
 
 // one decides a single row. The branches are in the order the desired state
@@ -392,7 +437,7 @@ func (v *Provisioning) create(
 		return nil, found(ActionAllowanceExhausted, "", nil)
 	}
 
-	inbound, ok, err := inbounds.forProtocol(ctx, row.Protocol)
+	inbound, ok, err := inbounds.named(ctx, row.InboundRemoteID, row.Protocol)
 	if err != nil {
 		return refused("", err)
 	}
@@ -413,24 +458,39 @@ func (v *Provisioning) create(
 }
 
 // inboundCache reads the panel's inbounds at most once a pass, and only when
-// something is to be created — a pass with nothing to create costs nothing.
+// something is to be created or the inventory is due — a pass with neither
+// costs nothing.
 type inboundCache struct {
 	driver driver.Driver
 	read   bool
 	rows   []driver.Inbound
 }
 
-func (c *inboundCache) forProtocol(ctx context.Context, protocol string) (driver.Inbound, bool, error) {
+func (c *inboundCache) all(ctx context.Context) ([]driver.Inbound, error) {
 	if !c.read {
 		rows, err := c.driver.ListInbounds(ctx)
 		if err != nil {
-			return driver.Inbound{}, false, err
+			return nil, err
 		}
 		c.rows, c.read = rows, true
 	}
-	for _, inbound := range c.rows {
-		if inbound.Enabled && inbound.Protocol == protocol {
-			return inbound, true, nil
+	return c.rows, nil
+}
+
+// named is the inbound a config was placed on, if the panel still has it
+// enabled and serving the config's protocol (F-114-b). No read is spent on a
+// config that names none.
+func (c *inboundCache) named(ctx context.Context, remoteID, protocol string) (driver.Inbound, bool, error) {
+	if remoteID == "" {
+		return driver.Inbound{}, false, nil
+	}
+	rows, err := c.all(ctx)
+	if err != nil {
+		return driver.Inbound{}, false, err
+	}
+	for _, inbound := range rows {
+		if inbound.RemoteID == remoteID {
+			return inbound, inbound.Enabled && inbound.Protocol == protocol, nil
 		}
 	}
 	return driver.Inbound{}, false, nil
@@ -517,6 +577,13 @@ func (c *Converger) recordDrift(ctx context.Context, report ConvergeReport, at t
 func (c *Converger) log() *slog.Logger {
 	if c.Log != nil {
 		return c.Log
+	}
+	return slog.Default()
+}
+
+func (v *Provisioning) log() *slog.Logger {
+	if v.Log != nil {
+		return v.Log
 	}
 	return slog.Default()
 }

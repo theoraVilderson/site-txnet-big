@@ -85,7 +85,7 @@ func bytes(n int64) *int64 { return &n }
 func wanted(configID string) converge.DesiredConfig {
 	return converge.DesiredConfig{
 		ConfigID: configID, UUID: "uuid-" + configID, ClaimTag: "tag-" + configID,
-		Protocol: "vless", Enabled: true, Present: true,
+		Protocol: "vless", InboundRemoteID: "inbound-1", Enabled: true, Present: true,
 		AllocatedBytes: bytes(10 * gb), State: converge.StatePending,
 	}
 }
@@ -184,6 +184,92 @@ func TestNoInboundForTheProtocolIsAFindingNotAGuess(t *testing.T) {
 	onlyAction(t, r.pass(t), converge.ActionNoInbound)
 	if n := r.panel.CallCount("CreateClient"); n != 0 {
 		t.Fatalf("CreateClient called %d times onto an inbound of another protocol", n)
+	}
+}
+
+func TestAClientIsCreatedOnTheInboundItsConfigWasPlacedOn(t *testing.T) {
+	// F-114-b: the admin picked 2 and 3; the first enabled vless inbound is 1.
+	r := newProvRig(t, fake.Config{Inbounds: []driver.Inbound{
+		{RemoteID: "1", Protocol: "vless", Enabled: true},
+		{RemoteID: "2", Protocol: "vless", Enabled: true},
+		{RemoteID: "3", Protocol: "trojan", Enabled: true},
+	}})
+	on2, on3 := wanted("c1"), wanted("c2")
+	on2.InboundRemoteID = "2"
+	on3.InboundRemoteID, on3.Protocol = "3", "trojan"
+	r.desired.Put("panel-1", on2)
+	r.desired.Put("panel-1", on3)
+
+	r.pass(t)
+
+	for id, inbound := range map[string]string{"c1": "2", "c2": "3"} {
+		client, ok := r.client(t, r.row(t, id).RemoteID)
+		if !ok || client.InboundRemoteID != inbound {
+			t.Fatalf("%s created on %+v, want inbound %s", id, client, inbound)
+		}
+	}
+	if n := r.panel.CallCount("ListInbounds"); n != 1 {
+		t.Fatalf("ListInbounds called %d times in one pass, want 1", n)
+	}
+}
+
+func TestNothingPickedOrAPickThepanelNoLongerServesCreatesNothing(t *testing.T) {
+	r := newProvRig(t, fake.Config{Inbounds: []driver.Inbound{
+		{RemoteID: "1", Protocol: "vless", Enabled: true},
+		{RemoteID: "2", Protocol: "vless", Enabled: false},
+	}})
+	for id, inbound := range map[string]string{"none": "", "disabled": "2", "gone": "9"} {
+		row := wanted(id)
+		row.InboundRemoteID = inbound
+		r.desired.Put("panel-1", row)
+	}
+
+	report := r.pass(t)
+
+	if n := r.panel.CallCount("CreateClient"); n != 0 {
+		t.Fatalf("CreateClient called %d times: never the first enabled inbound in place of the pick", n)
+	}
+	if len(report.Findings) != 3 {
+		t.Fatalf("findings = %+v", report.Findings)
+	}
+	for _, f := range report.Findings {
+		if f.Action != converge.ActionNoInbound {
+			t.Fatalf("finding %+v, want no_inbound", f)
+		}
+	}
+}
+
+// ---- inventory ----------------------------------------------------------------
+
+func TestThePanelsInboundsAreReadWhenDueAndKeptWhenGone(t *testing.T) {
+	cfg := fake.Config{Inbounds: []driver.Inbound{
+		{RemoteID: "1", Protocol: "vless", Enabled: true},
+		{RemoteID: "2", Protocol: "trojan", Enabled: true},
+	}}
+	r := newProvRig(t, cfg)
+	store := converge.NewMemoryInbounds()
+	r.conv.Provisioning.Inbounds = store
+
+	r.pass(t)
+	if _, ok := store.Get("panel-1", "2"); !ok || r.panel.CallCount("ListInbounds") != 1 {
+		t.Fatal("a panel never read was not read on its first pass")
+	}
+	r.pass(t)
+	if n := r.panel.CallCount("ListInbounds"); n != 1 {
+		t.Fatalf("read again a minute later (%d reads): the inventory is read every %s", n, converge.InboundReadEvery)
+	}
+
+	// The admin asks for a refresh after removing 2 on the panel.
+	gone := newProvRig(t, fake.Config{Inbounds: cfg.Inbounds[:1]})
+	gone.conv.Provisioning.Inbounds = store
+	store.RequestRead("panel-1")
+	gone.at = r.at
+	gone.pass(t)
+	if row, _ := store.Get("panel-1", "2"); row.Gone.IsZero() {
+		t.Fatal("an inbound the panel no longer lists is not marked gone")
+	}
+	if row, _ := store.Get("panel-1", "1"); !row.Gone.IsZero() {
+		t.Fatal("an inbound still listed is marked gone")
 	}
 }
 

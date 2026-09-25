@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: draft
 version: 14
-updated: 2026-09-23
+updated: 2026-09-25
 ---
 
 # Provisioning — every action is desired state, and one pass carries it
@@ -32,7 +32,7 @@ split, and a new one has its share before the pass creates its client.
 | action | writes | refused with |
 |---|---|---|
 | `provision(tx, {grantId, panelId, protocol, actor})` | a new row: fresh `uuid`, `present`, enabled, `pending`, `remoteId` null | `grant_not_found`, `grant_not_active`, `panel_not_found` |
-| `provisionForGroup(tx, {grantId, panelIds, protocol, credentialGroupId, actor})` | one such row per panel under one `credentialGroupId`, one rebalance; a `pending` Grant too — its caller is group fulfilment (`contract.groups.md` rules 8–10) | `grant_not_found`, `grant_not_active` (neither `pending` nor `active`) |
+| `provisionForGroup(tx, {grantId, placements: [{panelId, inboundRemoteId, protocol}], credentialGroupId, actor})` | one such row per placement, carrying its `inboundRemoteId`, under one `credentialGroupId`, one rebalance; a `pending` Grant too — its caller is group fulfilment (`contract.groups.md` rules 8–10, `contract.inbounds.md`) | `grant_not_found`, `grant_not_active` (neither `pending` nor `active`) |
 | `regenerate(tx, {configId, actor})` | a fresh `uuid`, `regenerateUsedCount + 1`, `pending` | `regenerate_limit_reached`, `config_changed` |
 | `disable(tx, {configId, reason, actor})` | `disabled_by_admin` (or `_by_system`), `desiredEnabled = false`, `disabledReason` | `actor_not_allowed` for a user |
 | `enable(tx, {configId, actor})` | `active`; `desiredEnabled` = the Grant is `active` | `actor_not_allowed` for a user |
@@ -111,8 +111,11 @@ goes on.
 with the create, in the new counter's origin — `allocatedCeilingBytes` less the
 lifetime bytes the config already served, so a rebuilt client is not handed
 the whole share again. No allocation yet is `awaiting_allocation`; nothing left
-is `allowance_exhausted`; a panel with no enabled inbound for the protocol is
-`no_inbound`. None of the three creates anything.
+is `allowance_exhausted`; a config whose inbound (`inboundRemoteId`, else the
+lowest picked one of its protocol) is not listed enabled with its protocol, or
+that has none, is `no_inbound` — never the first enabled inbound
+(`contract.inbounds.md` rule 7). None of the three creates anything. The same
+pass writes the panel's inventory of inbounds when it is due (rule 1 there).
 
 **Staging.** Desired state is read through `converge.Desired` and shares
 through `converge.Allocations`; `PostgresDesired` and `PostgresAllocations`

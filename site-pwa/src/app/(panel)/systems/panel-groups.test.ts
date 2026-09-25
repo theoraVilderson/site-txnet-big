@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import type { PanelGroup, PanelGroupMember, SystemsPanel } from "@/lib/billing-api";
+import type { PanelGroup, PanelGroupMember, PanelInbound, PanelInbounds, SystemsPanel } from "@/lib/billing-api";
 import {
   CONFIG_PROTOCOLS,
   DRAIN_TTL_MULTIPLE,
@@ -17,7 +17,8 @@ import {
   validateGroup,
   waitOf,
 } from "./_lib/panel-groups";
-import { SYSTEMS_KEYS as K } from "./_lib/systems";
+import { INBOUND_PLACEMENTS, capField, inboundNote, inboundsFormOf, nothingPicked, validateInbounds } from "./_lib/panel-inbounds";
+import { REFUSAL_KEYS, SYSTEMS_KEYS as K } from "./_lib/systems";
 
 /**
  * Panel groups on the systems page (F-027-bx, billing rules 20–24, network
@@ -29,7 +30,10 @@ import { SYSTEMS_KEYS as K } from "./_lib/systems";
  *  - a group that reads as able to sell while fewer members can be placed on
  *    than its `minHealthyPanels` — a Grant sold there never activates;
  *  - a drain whose stated wait is not the sweep's (`2 × subscriptionTtlSeconds`);
- *  - remove or drain offered on a member already draining.
+ *  - remove or drain offered on a member already draining;
+ *  - a panel's inbound pick (F-114-b) that sends what `updatePanelInboundsSchema`
+ *    refuses, re-sends picks nobody touched, or sells an inbound nobody can be
+ *    placed on — and a panel with nothing sellable ticked not said to place nobody.
  */
 const REPO = join(__dirname, "../../../../..");
 const PRISMA = readFileSync(join(REPO, "txnet-backend/prisma/domains/network.prisma"), "utf8");
@@ -64,7 +68,6 @@ const group = (over: Partial<PanelGroup> = {}): PanelGroup => ({
   strategy: "mirror",
   minHealthyPanels: 1,
   subscriptionTtlSeconds: 3600,
-  protocol: "vless",
   createdAt: "2026-09-25T10:00:00.000Z",
   updatedAt: "2026-09-25T10:00:00.000Z",
   variantCount: 0,
@@ -88,9 +91,9 @@ describe("validateGroup mirrors createPanelGroupSchema / updatePanelGroupSchema"
   const form = (over: Partial<ReturnType<typeof emptyGroupForm>> = {}) => ({ ...emptyGroupForm(), name: " Germany ", ...over });
 
   it("creates with every field, the lifetime asked in minutes and sent in seconds", () => {
-    expect(validateGroup(form({ ttlMinutes: "30", minHealthyPanels: "2", protocol: "trojan" }))).toEqual({
+    expect(validateGroup(form({ ttlMinutes: "30", minHealthyPanels: "2" }))).toEqual({
       ok: true,
-      body: { name: "Germany", minHealthyPanels: 2, subscriptionTtlSeconds: 1800, protocol: "trojan" },
+      body: { name: "Germany", minHealthyPanels: 2, subscriptionTtlSeconds: 1800 },
     });
   });
 
@@ -114,7 +117,7 @@ describe("validateGroup mirrors createPanelGroupSchema / updatePanelGroupSchema"
     const f = groupFormOf(g);
     expect(validateGroup(f, g)).toEqual({ ok: false, errors: { name: K.groups.invalid.unchanged } });
     // A lifetime set by SQL outside the schema (90 s is not whole minutes) is never re-sent untouched.
-    expect(validateGroup({ ...f, protocol: "trojan" }, g)).toEqual({ ok: true, body: { protocol: "trojan" } });
+    expect(validateGroup({ ...f, minHealthyPanels: "3" }, g)).toEqual({ ok: true, body: { minHealthyPanels: 3 } });
     expect(validateGroup({ ...f, ttlMinutes: "2" }, g)).toEqual({ ok: true, body: { subscriptionTtlSeconds: 120 } });
   });
 });
@@ -164,5 +167,64 @@ describe("adding and draining a member", () => {
     expect(waitOf(2 * 86400)).toEqual({ key: K.groups.wait.days, n: 2 });
     expect(waitOf(180)).toEqual({ key: K.groups.wait.minutes, n: 3 });
     expect(waitOf(150)).toEqual({ key: K.groups.wait.minutes, n: 3 });
+  });
+});
+
+describe("a panel's inbounds (F-114-b)", () => {
+  const inbound = (remoteId: string, over: Partial<PanelInbound> = {}): PanelInbound => ({
+    remoteId, tag: "", protocol: "vless", port: 443, host: "", enabled: true, goneAt: null,
+    seenAt: "2026-09-25T10:00:00.000Z", sold: false, maxClients: null, clients: 0, ...over,
+  });
+  const view = (inbounds: PanelInbound[], over: Partial<PanelInbounds> = {}): PanelInbounds => ({
+    panelId: "p-1", inboundPlacement: "all", maxClients: null, inboundsReadAt: null, users: 0, inbounds, ...over,
+  });
+
+  it("names every placement the database can hold, and every refusal billing can answer", () => {
+    expect([...INBOUND_PLACEMENTS].sort()).toEqual(prismaEnum("InboundPlacement").sort());
+    const billing = readFileSync(join(REPO, "txnet-backend/billing-service/src/app/systems/systems-read.ts"), "utf8");
+    for (const reason of ["inbound_not_found", "inbound_not_sellable"]) {
+      expect(billing).toContain(`'${reason}'`);
+      expect(REFUSAL_KEYS).toHaveProperty(reason);
+    }
+  });
+
+  it("sends only what changed: the placement, the panel's cap, and the inbounds whose pick or cap moved", () => {
+    const v = view([inbound("1", { sold: true }), inbound("2"), inbound("3", { maxClients: 5 })], { maxClients: 40 });
+    const form = inboundsFormOf(v);
+    expect(validateInbounds(form, v)).toEqual({ ok: false, errors: { form: K.inbounds.invalid.unchanged } });
+
+    form.placement = "spread";
+    form.panelMax = "";
+    form.picks["2"] = { sold: true, cap: "10" };
+    form.picks["3"] = { sold: true, cap: "5" };
+    expect(validateInbounds(form, v)).toEqual({
+      ok: true,
+      body: { inboundPlacement: "spread", maxClients: null, inbounds: [{ remoteId: "2", sold: true, maxClients: 10 }, { remoteId: "3", sold: true }] },
+    });
+  });
+
+  it("refuses a cap that is not a whole number from 1, per field", () => {
+    const v = view([inbound("1")]);
+    const form = { ...inboundsFormOf(v), panelMax: "0" };
+    form.picks["1"] = { sold: true, cap: "2.5" };
+    expect(validateInbounds(form, v)).toEqual({ ok: false, errors: { panelMax: K.inbounds.invalid.cap, [capField("1")]: K.inbounds.invalid.cap } });
+  });
+
+  it("never sells an inbound nobody can be placed on, and says why each one will not take a buyer", () => {
+    const gone = inbound("1", { goneAt: "2026-09-25T09:00:00.000Z" });
+    const odd = inbound("2", { protocol: null });
+    const off = inbound("3", { enabled: false });
+    const v = view([gone, odd, off]);
+    const form = inboundsFormOf(v);
+    form.picks["1"].sold = true;
+    form.picks["2"].sold = true;
+    expect(validateInbounds(form, v)).toEqual({ ok: false, errors: { form: K.inbounds.invalid.unchanged } });
+    expect([gone, odd, off, inbound("4")].map(inboundNote)).toEqual([K.inbounds.gone, K.inbounds.unknownProtocol, K.inbounds.disabled, null]);
+  });
+
+  it("says a panel places nobody until a live, sellable inbound is ticked", () => {
+    expect(nothingPicked(view([]))).toBe(true);
+    expect(nothingPicked(view([inbound("1"), inbound("2", { sold: true, enabled: false }), inbound("3", { sold: true, goneAt: "x" })]))).toBe(true);
+    expect(nothingPicked(view([inbound("1", { sold: true })]))).toBe(false);
   });
 });

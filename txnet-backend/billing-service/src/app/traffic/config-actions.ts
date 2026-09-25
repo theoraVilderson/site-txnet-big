@@ -17,6 +17,9 @@ const claimTag = (): string => `txn-${randomUUID().replace(/-/g, '')}`;
 /** Who asked. `actorId` is the user, the admin, or the job's own id for `system`. */
 export type ConfigActor = { actorType: ActorType; actorId: string };
 
+/** Where one config of a group's placement goes: a panel, and the picked inbound on it (F-114-b). */
+export type InboundPlacementTarget = { panelId: string; inboundRemoteId: string; protocol: ConfigProtocol };
+
 /**
  * Why an action wrote nothing — declared once as a tuple (C-09), because the
  * panel names each to the user (F-027-ac) and its spec reads this list.
@@ -99,11 +102,12 @@ export class ConfigActionsService {
   }
 
   /**
-   * A panel group's placement (F-027-bl): one row per panel, all under one
-   * `credentialGroupId`, and one rebalance for the lot. The caller is
-   * `GroupFulfilmentService`, which chose the panels from the group's members
-   * — the member triggers already held their tenancy (network
-   * `contract.groups.md` rule 2), so no panel is re-checked here.
+   * A panel group's placement (F-027-bl): one row per placement — a panel and
+   * the picked inbound it is on (F-114-b) — all under one `credentialGroupId`,
+   * and one rebalance for the lot. The caller is `GroupFulfilmentService`,
+   * which chose them from the group's members and their panels' picks — the
+   * member triggers already held their tenancy (network `contract.groups.md`
+   * rule 2), so no panel is re-checked here.
    *
    * **A `pending` Grant is provisioned**, unlike `provision`: a group's Grant
    * activates on what its panels confirm, so its configs exist first. `/sub`
@@ -111,15 +115,17 @@ export class ConfigActionsService {
    */
   async provisionForGroup(
     tx: Prisma.TransactionClient,
-    input: { grantId: string; panelIds: string[]; protocol: ConfigProtocol; credentialGroupId: string; actor: ConfigActor },
+    input: { grantId: string; placements: InboundPlacementTarget[]; credentialGroupId: string; actor: ConfigActor },
   ): Promise<{ configId: string; uuid: string }[]> {
     const grant = await tx.grant.findUnique({ where: { id: input.grantId }, select: { id: true, tenantId: true, userId: true, status: true } });
     if (!grant) throw new ConfigActionRefused('grant_not_found', input.grantId);
     if (grant.status !== GrantStatus.active && grant.status !== GrantStatus.pending) throw new ConfigActionRefused('grant_not_active', grant.status);
-    if (input.panelIds.length === 0) return [];
+    if (input.placements.length === 0) return [];
 
     const made: { configId: string; uuid: string }[] = [];
-    for (const panelId of input.panelIds) made.push(await this.create(tx, grant, panelId, input.protocol, input.credentialGroupId, input.actor));
+    for (const p of input.placements) {
+      made.push(await this.create(tx, grant, p.panelId, p.protocol, input.credentialGroupId, input.actor, p.inboundRemoteId));
+    }
     await this.allocator.rebalance(tx, { grantId: grant.id });
     return made;
   }
@@ -131,6 +137,7 @@ export class ConfigActionsService {
     protocol: ConfigProtocol,
     credentialGroupId: string | null,
     actor: ConfigActor,
+    inboundRemoteId: string | null = null,
   ): Promise<{ configId: string; uuid: string }> {
     const uuid = randomUUID();
     const config = await tx.config.create({
@@ -143,6 +150,7 @@ export class ConfigActionsService {
         uuid,
         claimTag: claimTag(),
         credentialGroupId,
+        inboundRemoteId,
         desiredRemote: DesiredRemote.present,
         desiredEnabled: true,
         enforcementState: EnforcementState.pending,

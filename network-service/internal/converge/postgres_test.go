@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"network-service/internal/db"
+	"network-service/internal/driver"
 )
 
 // The statements themselves were run against the real schema (F-027-bo, a
@@ -80,9 +81,9 @@ func TestDesiredForReadsTheRowAsTheProvisioningPassNeedsIt(t *testing.T) {
 	repaired := time.Date(2026, 9, 24, 8, 0, 0, 0, time.UTC)
 	captured := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	f := &pgDB{rows: []pgRow{
-		{pgConfig, "r-1", "txn-abc", "uuid-1", "vless", true, true, int64(5_000), int64(1_200),
+		{pgConfig, "r-1", "txn-abc", "uuid-1", "vless", "7", true, true, int64(5_000), int64(1_200),
 			"partial", "renamed", 1, repaired, []string{"vless://a"}, "r-1", "uuid-1", captured},
-		{"88888888-8888-4888-8888-888888888888", "", "txn-def", "uuid-2", "vmess", true, true, nil, int64(0),
+		{"88888888-8888-4888-8888-888888888888", "", "txn-def", "uuid-2", "vmess", "", true, true, nil, int64(0),
 			"pending", "synced", 0, nil, []string{}, "", "", nil},
 	}}
 	got, err := PostgresDesired{DB: f}.For(context.Background(), pgPanel)
@@ -102,7 +103,7 @@ func TestDesiredForReadsTheRowAsTheProvisioningPassNeedsIt(t *testing.T) {
 	}
 	first := got[0]
 	if first.ConfigID != pgConfig || first.RemoteID != "r-1" || first.ClaimTag != "txn-abc" || first.UUID != "uuid-1" ||
-		first.Protocol != "vless" || !first.Enabled || !first.Present {
+		first.Protocol != "vless" || first.InboundRemoteID != "7" || !first.Enabled || !first.Present {
 		t.Errorf("identity read wrong: %+v", first)
 	}
 	if first.AllocatedBytes == nil || *first.AllocatedBytes != 5_000 || first.ServedBytes != 1_200 {
@@ -114,7 +115,14 @@ func TestDesiredForReadsTheRowAsTheProvisioningPassNeedsIt(t *testing.T) {
 	if want := (CapturedLinks{Lines: []string{"vless://a"}, RemoteID: "r-1", UUID: "uuid-1", At: captured}); !sameLinks(first.Links, want) {
 		t.Errorf("links read %+v, want %+v", first.Links, want)
 	}
+	// A row placed before F-114-b takes a picked inbound only: never an unpicked or gone one.
+	if !strings.Contains(f.sql[0], `i.sold AND i."goneAt" IS NULL AND i.protocol = c.protocol`) {
+		t.Error("a config with no inbound of its own is not held to the panel's picks")
+	}
 	second := got[1]
+	if second.InboundRemoteID != "" {
+		t.Errorf("nothing picked read as inbound %q", second.InboundRemoteID)
+	}
 	if second.AllocatedBytes != nil {
 		t.Error("no share yet read as a share: the pass would create a client with no ceiling")
 	}
@@ -274,4 +282,31 @@ func sameLinks(a, b CapturedLinks) bool {
 		}
 	}
 	return true
+}
+
+func TestInboundsRecordWritesTheReadAndNeverThePick(t *testing.T) {
+	at := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
+	f := &pgDB{}
+	err := PostgresInbounds{DB: f}.Record(context.Background(), pgPanel, []driver.Inbound{
+		{RemoteID: "1", Tag: "vless-443", Protocol: "vless", Port: 443, Enabled: true},
+		{RemoteID: "2", Tag: "odd", Protocol: "dokodemo-door", Port: 80, Enabled: false},
+	}, at)
+	if err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	if len(f.sql) != 4 {
+		t.Fatalf("%d statements, want two upserts, one gone-mark, one stamp", len(f.sql))
+	}
+	if strings.Contains(f.sql[0], "sold") || strings.Contains(f.sql[0], `"maxClients"`) {
+		t.Error("a read writes the admin's pick")
+	}
+	if !strings.Contains(f.sql[0], `enum_range(NULL::network."ConfigProtocol")`) {
+		t.Error("a protocol we do not sell is not stored as null")
+	}
+	if ids := f.args[2][1].([]string); len(ids) != 2 || ids[0] != "1" || ids[1] != "2" {
+		t.Errorf("gone-mark spares %v, want every listed inbound", ids)
+	}
+	if !strings.Contains(f.sql[3], `"inboundsReadAt"`) {
+		t.Error("the read is not stamped: every pass would read again")
+	}
 }

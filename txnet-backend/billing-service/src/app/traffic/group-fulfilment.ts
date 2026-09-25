@@ -8,6 +8,7 @@ import {
   DesiredRemote,
   EnforcementState,
   GrantStatus,
+  InboundPlacement,
   PanelGroupMemberRole,
   PanelGroupStrategy,
   PanelReviewState,
@@ -19,7 +20,7 @@ import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 import { markDelivered } from '../entitlement/delivered';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { ConfigActionsService, ConfigActor } from './config-actions';
+import { ConfigActionsService, ConfigActor, InboundPlacementTarget } from './config-actions';
 
 /**
  * Who placed a group's configs in `config_action_log`: the fulfilment job, not
@@ -55,17 +56,49 @@ export class GroupFulfilmentRefused extends Error {
   }
 }
 
-type MemberFacts = { panelId: string; role: PanelGroupMemberRole; panel: { reviewState: PanelReviewState; panelState: PanelState } };
+/**
+ * A member's panel as fulfilment reads it: its health, how it places, its cap,
+ * and only the inbounds a buyer may be placed on (network `contract.inbounds.md`
+ * rule 2) — the unpicked, disabled and gone ones are never loaded.
+ */
+const MEMBER_PANEL_FIELDS = {
+  reviewState: true,
+  panelState: true,
+  inboundPlacement: true,
+  maxClients: true,
+  inbounds: {
+    where: { sold: true, enabled: true, goneAt: null, protocol: { not: null } },
+    select: { remoteId: true, protocol: true, maxClients: true },
+  },
+} satisfies Prisma.PanelSelect;
+
+type MemberRow = { panelId: string; role: PanelGroupMemberRole; panel: Prisma.PanelGetPayload<{ select: typeof MEMBER_PANEL_FIELDS }> };
+
+/** A picked inbound as fulfilment reads it: `sold`, enabled, not gone, of a known protocol (F-114-b). */
+export type InboundFacts = { remoteId: string; protocol: ConfigProtocol; maxClients: number | null; clients: number };
+
+type PanelFacts = {
+  reviewState: PanelReviewState;
+  panelState: PanelState;
+  inboundPlacement: InboundPlacement;
+  maxClients: number | null;
+  /** Grants holding a live config on the panel — what `maxClients` caps. */
+  users: number;
+  inbounds: InboundFacts[];
+};
+
+type MemberFacts = { panelId: string; role: PanelGroupMemberRole; panel: PanelFacts };
 
 /**
  * A member a new config may be placed on now: not `drain`, its panel accepted
  * and healthy. What catalog's group list counts as healthy (F-026-p), so the
  * figure an admin picks by is the one fulfilment acts on.
  */
-export const placeableMember = (m: Pick<MemberFacts, 'role' | 'panel'>): boolean =>
+export const placeableMember = (m: { role: PanelGroupMemberRole; panel: Pick<PanelFacts, 'reviewState' | 'panelState'> }): boolean =>
   m.role !== PanelGroupMemberRole.drain && PLACEABLE_REVIEW_STATES.includes(m.panel.reviewState) && PLACEABLE_PANEL_STATES.includes(m.panel.panelState);
 type ConfigFacts = {
   panelId: string;
+  inboundRemoteId: string | null;
   status: ConfigStatus;
   desiredRemote: DesiredRemote;
   enforcementState: EnforcementState;
@@ -80,47 +113,94 @@ export type FulfilmentFacts = {
 };
 
 export type FulfilmentPlan = {
-  /** Members to place a config on now, in panel-id order. */
-  place: string[];
-  /** Non-drain members with no config that cannot be placed on yet — retried when they can. */
+  /** Configs to place now, in panel-id then inbound order. */
+  place: InboundPlacementTarget[];
+  /**
+   * Non-drain members owed a config that cannot take one yet — not placeable,
+   * nothing picked (`no_inbound`), or full — retried when they can.
+   */
   waiting: string[];
-  /** A `pending` Grant has `minHealthyPanels` confirmed configs on serving panels. */
+  /** A `pending` Grant has `minHealthyPanels` serving panels with a confirmed config. */
   activate: boolean;
   /** The group's id if one of the Grant's configs already carries it; null means a new one. */
   credentialGroupId: string | null;
 };
 
+const byRemoteId = (a: { remoteId: string }, b: { remoteId: string }) => a.remoteId.localeCompare(b.remoteId, 'en', { numeric: true });
+const hasRoom = (i: InboundFacts) => i.maxClients === null || i.clients < i.maxClients;
+
 /**
- * `mirror` over what is true now (network `contract.groups.md` rule 7). Pure,
- * so the same facts give the same plan in any member order.
+ * The inbounds one member owes this Grant now (network `contract.inbounds.md`).
+ * `held`: the inbounds its un-drained configs on the panel are on — `null` for
+ * a row placed before F-114-b, which holds the whole panel.
+ */
+function placementsOn(m: MemberFacts, held: (string | null)[], live: boolean): { targets: InboundFacts[]; owed: boolean } {
+  if (held.includes(null)) return { targets: [], owed: false };
+  const picked = [...m.panel.inbounds].sort(byRemoteId);
+  if (m.panel.inboundPlacement === InboundPlacement.spread) {
+    if (held.length > 0) return { targets: [], owed: false };
+    const open = picked.filter(hasRoom).sort((a, b) => a.clients - b.clients || byRemoteId(a, b));
+    const full = !live && m.panel.maxClients !== null && m.panel.users >= m.panel.maxClients;
+    return { targets: full ? [] : open.slice(0, 1), owed: true };
+  }
+  const missing = picked.filter((i) => !held.includes(i.remoteId));
+  // Owed nothing once on every pick; a panel with nothing picked still owes a user it does not hold (`no_inbound`).
+  if (missing.length === 0 && held.length > 0) return { targets: [], owed: false };
+  // A panel at its cap takes no new user; a user already on it still gets the inbounds it lacks.
+  const full = !live && m.panel.maxClients !== null && m.panel.users >= m.panel.maxClients;
+  return { targets: full ? [] : missing.filter(hasRoom), owed: true };
+}
+
+/**
+ * `mirror` over what is true now (network `contract.groups.md` rule 7,
+ * `contract.inbounds.md`). Pure, so the same facts give the same plan in any
+ * member order.
  *
- * **A panel with any config of this Grant is covered**, whatever its status: a
- * row still `pending` on a panel that died mid-provisioning is carried by the
- * convergence pass when it returns, and a retired one was a decision (a
- * delete, or a move away) that a refill would undo. That is what keeps it to
- * one config per panel, and the partial unique index
- * `config_group_panel_once` holds the same line against two concurrent runs.
- * **Except a drained one** (`drainedAt`, F-027-bp): the platform emptied the
- * panel, the user decided nothing, so a member re-added is placed again.
+ * **An inbound with any config of this Grant is covered**, whatever its
+ * status: a row still `pending` on a panel that died mid-provisioning is
+ * carried by the convergence pass when it returns, and a retired one was a
+ * decision (a delete, or a move away) that a refill would undo. Under
+ * `spread`, any config covers the whole panel. The partial unique index
+ * `config_group_panel_once` (grant, panel, inbound) holds the same line against
+ * two concurrent runs. **Except a drained one** (`drainedAt`, F-027-bp): the
+ * platform emptied the panel, the user decided nothing, so a member re-added
+ * is placed again.
  */
 export function planFulfilment(facts: FulfilmentFacts): FulfilmentPlan {
-  const covered = new Set(facts.configs.filter((c) => !c.drainedAt).map((c) => c.panelId));
+  const kept = facts.configs.filter((c) => !c.drainedAt);
   const members = [...facts.group.members].sort((a, b) => a.panelId.localeCompare(b.panelId));
-  const open = members.filter((m) => m.role !== PanelGroupMemberRole.drain && !covered.has(m.panelId));
-  const placeable = placeableMember;
+
+  const place: InboundPlacementTarget[] = [];
+  const waiting: string[] = [];
+  for (const m of members) {
+    if (m.role === PanelGroupMemberRole.drain) continue;
+    const mine = kept.filter((c) => c.panelId === m.panelId);
+    const live = mine.some((c) => c.desiredRemote === DesiredRemote.present);
+    const { targets, owed } = placementsOn(m, mine.map((c) => c.inboundRemoteId), live);
+    if (!owed) continue;
+    if (!placeableMember(m) || targets.length === 0) {
+      waiting.push(m.panelId);
+      continue;
+    }
+    for (const i of targets) place.push({ panelId: m.panelId, inboundRemoteId: i.remoteId, protocol: i.protocol });
+  }
 
   const serving = new Set(members.filter((m) => SERVING_PANEL_STATES.includes(m.panel.panelState)).map((m) => m.panelId));
-  const confirmed = facts.configs.filter(
-    (c) =>
-      c.status === ConfigStatus.active &&
-      c.desiredRemote === DesiredRemote.present &&
-      c.enforcementState === EnforcementState.complete &&
-      serving.has(c.panelId),
-  ).length;
+  const confirmed = new Set(
+    facts.configs
+      .filter(
+        (c) =>
+          c.status === ConfigStatus.active &&
+          c.desiredRemote === DesiredRemote.present &&
+          c.enforcementState === EnforcementState.complete &&
+          serving.has(c.panelId),
+      )
+      .map((c) => c.panelId),
+  ).size;
 
   return {
-    place: open.filter(placeable).map((m) => m.panelId),
-    waiting: open.filter((m) => !placeable(m)).map((m) => m.panelId),
+    place,
+    waiting,
     activate: facts.grantStatus === GrantStatus.pending && confirmed >= facts.group.minHealthyPanels,
     credentialGroupId: facts.configs.find((c) => c.credentialGroupId !== null)?.credentialGroupId ?? null,
   };
@@ -134,8 +214,9 @@ const FULFIL_BATCH_SIZE = 200;
 
 /**
  * Group fulfilment (F-027-bl, catalog §7.3): a Grant of a variant with a panel
- * group gets a config on every non-drain healthy member, and activates once
- * `minHealthyPanels` of them are confirmed by the panel.
+ * group gets a config on every non-drain healthy member — one per picked
+ * inbound under `all`, one on the emptiest under `spread` (F-114-b) — and
+ * activates once `minHealthyPanels` of those panels confirm one.
  *
  * It writes desired state and nothing else — `ConfigActionsService` makes the
  * rows and `network-service`'s convergence pass creates the clients (ADR-0075).
@@ -168,8 +249,7 @@ export class GroupFulfilmentService {
               select: {
                 strategy: true,
                 minHealthyPanels: true,
-                protocol: true,
-                members: { select: { panelId: true, role: true, panel: { select: { reviewState: true, panelState: true } } } },
+                members: { select: { panelId: true, role: true, panel: { select: MEMBER_PANEL_FIELDS } } },
               },
             },
           },
@@ -186,14 +266,14 @@ export class GroupFulfilmentService {
 
     const configs = await tx.config.findMany({
       where: { grantId },
-      select: { panelId: true, status: true, desiredRemote: true, enforcementState: true, credentialGroupId: true, drainedAt: true },
+      select: { panelId: true, inboundRemoteId: true, status: true, desiredRemote: true, enforcementState: true, credentialGroupId: true, drainedAt: true },
     });
-    const plan = planFulfilment({ grantStatus: grant.status, group, configs });
+    const members = await this.withLoad(tx, group.members);
+    const plan = planFulfilment({ grantStatus: grant.status, group: { ...group, members }, configs });
 
     const made = await this.actions.provisionForGroup(tx, {
       grantId,
-      panelIds: plan.place,
-      protocol: group.protocol as ConfigProtocol,
+      placements: plan.place,
       credentialGroupId: plan.credentialGroupId ?? randomUUID(),
       actor: GROUP_FULFILMENT_ACTOR,
     });
@@ -205,9 +285,44 @@ export class GroupFulfilmentService {
   }
 
   /**
+   * Each member's picked inbounds with how full they are (`contract.inbounds.md`
+   * rule 4). The count is every tenant's, so it is read on the cross-tenant
+   * pool — **after** a transaction lock on each placeable panel, in panel-id
+   * order: a second fulfilment on the same panel (the sweep and the purchase
+   * consumer, F-114-i) waits for this one to commit and then counts its rows,
+   * so two buyers never take an inbound's last seat together.
+   */
+  private async withLoad(tx: Prisma.TransactionClient, members: MemberRow[]): Promise<MemberFacts[]> {
+    const panelIds = members.filter(placeableMember).map((m) => m.panelId).sort();
+    for (const id of panelIds) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`panel_inbound:${id}`}))`;
+    const load = panelIds.length === 0 ? [] : await this.crossTenant.$queryRaw<{ panelId: string; inboundRemoteId: string | null; total: number; clients: bigint; users: bigint }[]>`
+      SELECT c."panelId"::text AS "panelId", c."inboundRemoteId", GROUPING(c."inboundRemoteId")::int AS total,
+             count(*) AS clients, count(DISTINCT c."grantId") AS users
+        FROM "network"."config" c
+       WHERE c."panelId" = ANY(${panelIds}::uuid[]) AND c."desiredRemote" = 'present' AND c."drainedAt" IS NULL
+       GROUP BY GROUPING SETS ((c."panelId", c."inboundRemoteId"), (c."panelId"))`;
+    // `total = 1` is the grouping set without the inbound: the panel's own row, its `users`.
+    const panelRow = (id: string) => load.find((r) => r.panelId === id && r.total === 1);
+    return members.map((m) => ({
+      panelId: m.panelId,
+      role: m.role,
+      panel: {
+        ...m.panel,
+        users: Number(panelRow(m.panelId)?.users ?? 0),
+        inbounds: m.panel.inbounds.flatMap((i) =>
+          i.protocol === null
+            ? []
+            : [{ remoteId: i.remoteId, protocol: i.protocol, maxClients: i.maxClients, clients: Number(load.find((r) => r.panelId === m.panelId && r.total === 0 && r.inboundRemoteId === i.remoteId)?.clients ?? 0) }],
+        ),
+      },
+    }));
+  }
+
+  /**
    * One sweep, for `worker-service`'s tick. **The scan names only Grants with
-   * a write due** — a placeable member with no config of the Grant, or a
-   * `pending` Grant with enough confirmed configs — so a Grant waiting on a
+   * a write due** — a placeable member with a picked inbound the Grant is not
+   * on and a seat on it (`contract.inbounds.md`), or a `pending` Grant with
+   * enough confirmed configs — so a Grant waiting on a
    * down panel does not occupy a batch slot, and a second call finds nothing
    * (ADR-0027). The scan is cross-tenant; each write runs in its tenant.
    */
@@ -223,14 +338,31 @@ export class GroupFulfilmentService {
                EXISTS (
                  SELECT 1 FROM "network"."panel_group_member" m
                    JOIN "network"."panel" p ON p."id" = m."panelId"
+                   JOIN "network"."panel_inbound" i ON i."panelId" = p."id"
+                        AND i."sold" AND i."enabled" AND i."goneAt" IS NULL AND i."protocol" IS NOT NULL
                   WHERE m."groupId" = pg."id"
                     AND m."role" <> 'drain'
                     AND p."reviewState" IN ('accepted', 'accepted_low_trust')
                     AND p."panelState" = 'healthy'
+                    -- not already where this inbound would put the Grant
                     AND NOT EXISTS (SELECT 1 FROM "network"."config" c
-                                    WHERE c."grantId" = g."id" AND c."panelId" = m."panelId" AND c."drainedAt" IS NULL))
+                                    WHERE c."grantId" = g."id" AND c."panelId" = m."panelId" AND c."drainedAt" IS NULL
+                                      AND (p."inboundPlacement" = 'spread' OR c."inboundRemoteId" IS NULL OR c."inboundRemoteId" = i."remoteId"))
+                    -- the inbound has a seat
+                    AND (i."maxClients" IS NULL OR i."maxClients" > (
+                           SELECT count(*) FROM "network"."config" c
+                            WHERE c."panelId" = i."panelId" AND c."inboundRemoteId" = i."remoteId"
+                              AND c."desiredRemote" = 'present' AND c."drainedAt" IS NULL))
+                    -- the panel has room, or already holds this Grant
+                    AND (p."maxClients" IS NULL
+                         OR EXISTS (SELECT 1 FROM "network"."config" c
+                                     WHERE c."grantId" = g."id" AND c."panelId" = p."id"
+                                       AND c."desiredRemote" = 'present' AND c."drainedAt" IS NULL)
+                         OR p."maxClients" > (
+                              SELECT count(DISTINCT c."grantId") FROM "network"."config" c
+                               WHERE c."panelId" = p."id" AND c."desiredRemote" = 'present' AND c."drainedAt" IS NULL)))
             OR (g."status" = 'pending' AND pg."minHealthyPanels" <= (
-                 SELECT count(*) FROM "network"."config" c
+                 SELECT count(DISTINCT c."panelId") FROM "network"."config" c
                    JOIN "network"."panel" p ON p."id" = c."panelId"
                    JOIN "network"."panel_group_member" m ON m."groupId" = pg."id" AND m."panelId" = c."panelId"
                   WHERE c."grantId" = g."id"

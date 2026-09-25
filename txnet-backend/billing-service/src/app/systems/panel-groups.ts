@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigProtocol, PanelGroupMemberRole, Prisma } from '@prisma/client';
+import { PanelGroupMemberRole, Prisma } from '@prisma/client';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -11,7 +11,6 @@ export type PanelGroupInput = {
   name?: string;
   minHealthyPanels?: number;
   subscriptionTtlSeconds?: number;
-  protocol?: ConfigProtocol;
 };
 
 export type PanelGroupMemberInput = { panelId: string; priority?: number; weight?: number };
@@ -34,7 +33,6 @@ const GROUP_FIELDS = {
   strategy: true,
   minHealthyPanels: true,
   subscriptionTtlSeconds: true,
-  protocol: true,
   createdAt: true,
   updatedAt: true,
   members: { select: MEMBER_FIELDS, orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }] },
@@ -87,8 +85,9 @@ export class PanelGroupsService {
   }
 
   /**
-   * A change reaches what is placed next: a new `protocol` is what the next
-   * config is created with, and configs already placed keep theirs (rule 9).
+   * A change reaches what is placed next; configs already placed keep theirs
+   * (rule 9). Which inbounds, and so which protocols, is the panels' own pick
+   * (F-114-b, `contract.inbounds.md`), not the group's.
    */
   async update(actor: SystemsActor, groupId: string, input: PanelGroupInput) {
     const scope = await this.groupScopeOf(actor);

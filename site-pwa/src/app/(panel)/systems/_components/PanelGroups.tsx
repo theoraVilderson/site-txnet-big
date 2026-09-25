@@ -6,7 +6,6 @@ import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type PanelGroup, type PanelGroupMember, type SystemsPanel } from "@/lib/billing-api";
 import { formatInstant } from "../../_lib/datetime";
 import {
-  CONFIG_PROTOCOLS,
   DRAIN_TTL_MULTIPLE,
   MEMBER_ROLE_KEYS,
   addablePanels,
@@ -157,17 +156,6 @@ function GroupEditor({
       <div className="grid gap-3 sm:grid-cols-2">
         {field("name", t("common", K.field.name), <input value={form.name} maxLength={100} onChange={set("name")} className={INPUT} />)}
         {field(
-          "protocol",
-          t("common", K.field.protocol),
-          <select dir="ltr" value={form.protocol} onChange={set("protocol")} className={INPUT}>
-            {CONFIG_PROTOCOLS.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>,
-        )}
-        {field(
           "minHealthyPanels",
           t("common", K.field.minHealthyPanels),
           <input dir="ltr" inputMode="numeric" value={form.minHealthyPanels} onChange={set("minHealthyPanels")} className={INPUT} />,
@@ -212,9 +200,6 @@ function GroupCard({ group, panels, onChanged }: { group: PanelGroup; panels: Sy
             {group.name}
           </span>
           <span className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-secondary">
-            <span dir="ltr" className="font-mono">
-              {group.protocol}
-            </span>
             <span>{t("common", K.ttl, { wait: wait(group.subscriptionTtlSeconds) })}</span>
             <span>{t("common", K.variants, { n: String(group.variantCount) })}</span>
           </span>
