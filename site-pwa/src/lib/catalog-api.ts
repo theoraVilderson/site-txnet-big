@@ -19,6 +19,9 @@ const call = createApiClient({
 /** Prisma's `FulfilmentKind` (§4.1). `catalog.test.ts` holds each tuple to its enum. */
 export const FULFILMENT_KINDS = ["network_access", "external_order", "feature_access", "wallet_topup"] as const;
 export type FulfilmentKind = (typeof FULFILMENT_KINDS)[number];
+/** Kept for products that already exist, never offered for a new one — billing's `RETIRED_FULFILMENT_KINDS` (F-111-g). */
+export const RETIRED_FULFILMENT_KINDS = ["wallet_topup"] as const satisfies readonly FulfilmentKind[];
+export const CREATABLE_FULFILMENT_KINDS = FULFILMENT_KINDS.filter((k) => !(RETIRED_FULFILMENT_KINDS as readonly string[]).includes(k));
 /** Prisma's `VariantVisibility` (§4.2). */
 export const VISIBILITIES = ["public", "unlisted", "admin_only"] as const;
 export type Visibility = (typeof VISIBILITIES)[number];

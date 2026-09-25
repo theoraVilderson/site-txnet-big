@@ -30,6 +30,7 @@
 import { FulfilmentKind, Prisma, TenantType, VariantBillingMode, VariantVisibility } from '@prisma/client';
 import { runWithTenant } from '@txnet-backend/shared-core';
 
+import { RETIRED_FULFILMENT_KINDS, createProductSchema } from './catalog-admin.schema';
 import { CatalogAdminRefused, CatalogAdminService } from './catalog-admin.service';
 import { CatalogTextService, catalogTextKey } from './catalog-texts';
 
@@ -272,6 +273,21 @@ async function refusal(run: () => Promise<unknown>): Promise<CatalogAdminRefused
 
 const NEW_PRODUCT = { categoryId: PLATFORM_CATEGORY, key: 'vpn_pro', name: { fa: 'وی‌پی‌ان پرو', en: 'VPN Pro' }, fulfilmentKind: FulfilmentKind.network_access };
 const NEW_VARIANT = { sku: 'VPN-90', billingMode: VariantBillingMode.prepaid, visibility: VariantVisibility.public, durationDays: 90, price: '12.00' };
+
+describe('createProductSchema — a retired kind is never created (F-111-g)', () => {
+  const body = (fulfilmentKind: string) => ({ ...NEW_PRODUCT, fulfilmentKind });
+
+  it('refuses `wallet_topup`: a top-up is the deposit page, and from the wallet it is circular', () => {
+    expect(RETIRED_FULFILMENT_KINDS).toEqual([FulfilmentKind.wallet_topup]);
+    expect(createProductSchema.safeParse(body(FulfilmentKind.wallet_topup)).success).toBe(false);
+  });
+
+  it('accepts every kind that is not retired', () => {
+    const live = Object.values(FulfilmentKind).filter((k) => !(RETIRED_FULFILMENT_KINDS as readonly string[]).includes(k));
+    expect(live.length).toBeGreaterThan(0);
+    for (const k of live) expect(createProductSchema.safeParse(body(k)).success).toBe(true);
+  });
+});
 
 describe('CatalogAdminService — who manages which item', () => {
   it("refuses a platform product, or another tenant's, to a reseller", async () => {

@@ -11,7 +11,7 @@ import { Select } from "../../_components/kit/Select";
 import {
   CATALOG_KEYS as K,
   DESCRIPTION_MAX,
-  FULFILMENT_KINDS,
+  CREATABLE_FULFILMENT_KINDS,
   NAME_MAX,
   WIZARD_STEPS,
   categoryBody,
@@ -301,7 +301,7 @@ export function ProductWizard({
           <div className="flex flex-col gap-2">
             <p className="text-xs font-bold text-text-secondary">{t("common", K.product.fulfilmentKind)}</p>
             <div className="grid gap-2 sm:grid-cols-2">
-              {FULFILMENT_KINDS.map((kind) => (
+              {CREATABLE_FULFILMENT_KINDS.map((kind) => (
                 <Choice key={kind} on={w.product.fulfilmentKind === kind} onClick={() => setProduct({ fulfilmentKind: kind })}>
                   <span className="text-sm font-bold">{t("common", K.fulfilmentKind[kind])}</span>
                   <span className="text-[11px] font-normal leading-5 text-text-secondary">{t("common", K.fulfilmentHint[kind])}</span>

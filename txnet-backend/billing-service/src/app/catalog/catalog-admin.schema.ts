@@ -17,6 +17,18 @@ import { z } from 'zod';
 export const RESET_POLICIES = ['none', 'monthly', 'daily'] as const;
 export type ResetPolicy = (typeof RESET_POLICIES)[number];
 
+/**
+ * Kinds kept in the enum for rows that already exist, but never created again
+ * (F-111-g, the user's call 2026-09-25): `wallet_topup` paid from the wallet
+ * debits and credits the same wallet, and money comes in through one path only
+ * — the deposit page (`contract.deposit.md`). A credit bonus is a deposit coupon.
+ */
+export const RETIRED_FULFILMENT_KINDS = ['wallet_topup'] as const;
+const RETIRED: readonly FulfilmentKind[] = RETIRED_FULFILMENT_KINDS;
+const CREATABLE_FULFILMENT_KINDS = Object.values(FulfilmentKind).filter(
+  (k) => !RETIRED.includes(k),
+) as [FulfilmentKind, ...FulfilmentKind[]];
+
 const DECIMAL = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
 /** A stable string key referenced elsewhere: `vpn`, `vpn_basic`. */
 const KEY = /^[a-z][a-z0-9_]{1,63}$/;
@@ -87,7 +99,7 @@ export const createProductSchema = z
     sourceLang: lang.optional(),
     name: texts(NAME_MAX),
     description: texts(DESCRIPTION_MAX).nullable().optional(),
-    fulfilmentKind: z.nativeEnum(FulfilmentKind),
+    fulfilmentKind: z.enum(CREATABLE_FULFILMENT_KINDS),
     featureKeys: featureKeys.optional(),
     defaultQuotas: quotas.optional(),
   })

@@ -20,7 +20,7 @@ import type {
   Visibility,
 } from "@/lib/catalog-api";
 
-export { BILLING_MODES, FULFILMENT_KINDS, QUALITY_TIERS, QUOTA_METRICS, RESET_POLICIES, VISIBILITIES } from "@/lib/catalog-api";
+export { BILLING_MODES, CREATABLE_FULFILMENT_KINDS, FULFILMENT_KINDS, QUALITY_TIERS, RETIRED_FULFILMENT_KINDS, QUOTA_METRICS, RESET_POLICIES, VISIBILITIES } from "@/lib/catalog-api";
 
 /** Every string the catalog page can show (C-06). */
 export const CATALOG_KEYS = FrontendI18nKeys.common.catalog;

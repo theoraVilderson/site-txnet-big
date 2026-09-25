@@ -9,7 +9,9 @@ import {
   BILLING_MODES,
   CATALOG_KEYS,
   CATALOG_MANAGE,
+  CREATABLE_FULFILMENT_KINDS,
   FULFILMENT_KINDS,
+  RETIRED_FULFILMENT_KINDS,
   QUALITY_TIERS,
   QUOTA_METRICS,
   REFUSAL_KEYS,
@@ -127,6 +129,12 @@ describe("what billing can refuse, and what it accepts", () => {
     ["QuotaMetric", "prisma/domains/entitlement.prisma", QUOTA_METRICS],
   ])("offers exactly the %s enum", (name, file, offered) => {
     expect([...offered].sort()).toEqual(enumOf(file, name).sort());
+  });
+
+  it("never offers a kind billing retired (F-111-g)", () => {
+    expect([...RETIRED_FULFILMENT_KINDS]).toEqual(tupleOf("billing-service/src/app/catalog/catalog-admin.schema.ts", "RETIRED_FULFILMENT_KINDS"));
+    expect(CREATABLE_FULFILMENT_KINDS).not.toContain("wallet_topup");
+    expect(CREATABLE_FULFILMENT_KINDS.length + RETIRED_FULFILMENT_KINDS.length).toBe(FULFILMENT_KINDS.length);
   });
 
   it("offers exactly the schema's reset policies", () => {
