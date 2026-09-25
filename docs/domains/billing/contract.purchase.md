@@ -89,8 +89,22 @@ Both on `InvoiceService`, proved by `invoice/invoice.spec.ts`.
 
 | Route | Answer | Rule |
 |---|---|---|
-| `GET /api/billing/offers` (`OffersController`) | `[{variantId, sku, nameKey, productId, descriptionKey, categoryKey, fulfilmentKind, durationDays, billingMode, quotas, price}]`, by SKU | `forSale`: catalog's `listOffersIn` (listed, live, priced), **less what `deliveryRouteOf` cannot deliver** — the rule `create` refuses with, so the list never offers a buy that answers `variantNotFound`. `@TenantCapability('sell')`; `SHOP_OFFERS` bucket, `SHOP_OFFERS_RATE_LIMIT` (120) per 15 min |
+| `GET /api/billing/offers` (`OffersController`) | `[{variantId, sku, nameKey, productId, productNameKey, descriptionKey, categoryKey, categories: [{key, nameKey}], fulfilmentKind, durationDays, billingMode, quotas, price}]`, by SKU. `nameKey` is the variant's own, else its product's; `productNameKey` always the product's; `categories` every **live** category the product is filed in, by its own order (F-114-d) | `forSale`: catalog's `listOffersIn` (listed, live, priced), **less what `deliveryRouteOf` cannot deliver** — the rule `create` refuses with, so the list never offers a buy that answers `variantNotFound`. `@TenantCapability('sell')`; `SHOP_OFFERS` bucket, `SHOP_OFFERS_RATE_LIMIT` (120) per 15 min |
 | `GET /api/billing/invoices/:id` | the create answer without `rejected`; `applied` = the holds under the invoice's id, `pending` or `confirmed` | `get`: scoped to the caller's user (+ RLS) — unknown, another tenant's and another user's are one `404 notFound`. A `pending` one past `expiresAt` reads `expired`, as the pay refuses it. No capability (it sells nothing); `INVOICE_READ` bucket, `INVOICE_READ_RATE_LIMIT` (120) per 15 min |
+
+## Giving an invoice up (built — F-114-d)
+
+`POST /api/billing/invoices/:id/cancel` — `InvoiceService.cancel`, proved by
+`invoice/invoice.spec.ts`. The shop replaces its invoice when the codes change;
+a code held by the old one counts as a use (`per_user_limit_reached` counts
+`pending` holds) until released, so the old one is cancelled first.
+
+| Rule | Held by |
+|---|---|
+| The caller's own `pending` invoice -> `cancelled`, guarded by `status = pending` like the sweep; its holds released `cancelled` in the same transaction. One lapsed but not yet swept is cancelled too | `updateMany` + `CouponReservationService.release` |
+| `cancelled` or `expired` already: `200` with that status — it holds nothing, so there is nothing to refuse | `cancel` |
+| `paid` / `refunded`: `409 already_paid` (the pay's key); unknown, another user's or tenant's: `404 notFound`. A pay holding the row lock first makes the flip match nothing | `InvoiceNotCancellable` |
+| No capability (it sells nothing); `INVOICE_CANCEL` bucket, `INVOICE_CANCEL_RATE_LIMIT` (60) per 15 min — one per create, near enough, on a budget of its own | `@RateLimit` |
 
 ## The shortfall (built — F-111-c)
 

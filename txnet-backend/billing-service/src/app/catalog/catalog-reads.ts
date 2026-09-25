@@ -13,6 +13,7 @@ import {
   type MeteredRateRow,
   type OfferFacts,
   type PriceRow,
+  categoryLive,
   firstLiveCategory,
   productCategoriesInclude,
   productCategoriesLive,
@@ -47,9 +48,13 @@ export type CatalogOffer = {
   /** The variant's own i18n key, else its product's (§4.3). */
   nameKey: string;
   productId: string;
+  /** The product's own i18n key — what a list heads the product's variants with (F-114-d). */
+  productNameKey: string;
   productKey: string;
   descriptionKey: string | null;
   categoryKey: string;
+  /** Every live category the product is filed in, by the product's own order (F-026-r, F-114-d). */
+  categories: Array<{ key: string; nameKey: string }>;
   fulfilmentKind: FulfilmentKind;
   featureKeys: string[];
   quotas: Prisma.JsonValue;
@@ -92,10 +97,15 @@ function toOffer(v: VariantRow, at: Date, offered: (f: OfferFacts) => boolean): 
     tenantId: v.tenantId,
     nameKey: v.nameKey ?? v.product.nameKey,
     productId: v.product.id,
+    productNameKey: v.product.nameKey,
     productKey: v.product.key,
     descriptionKey: v.product.descriptionKey,
     // The first live category by the product's own order (F-026-r): a live offer has one.
     categoryKey: firstLiveCategory(v.product.categories)?.key ?? '',
+    categories: [...v.product.categories]
+      .sort((a, b) => a.position - b.position)
+      .filter((l) => categoryLive(l.category))
+      .map((l) => ({ key: l.category.key, nameKey: l.category.nameKey })),
     fulfilmentKind: v.product.fulfilmentKind,
     featureKeys: v.product.featureKeys,
     quotas: v.quotas,

@@ -31,7 +31,7 @@ import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { InvoicePayRejection, InvoicePaymentService, InvoiceUnpayable } from './invoice-payment.service';
 import { InvoiceCreateBody, invoiceCreateSchema } from './invoice.schema';
-import { InvoiceService, InvoiceVariantNotFound } from './invoice.service';
+import { InvoiceCancelRefusal, InvoiceNotCancellable, InvoiceService, InvoiceVariantNotFound } from './invoice.service';
 
 const E = BackendI18nKeys.errors.billing;
 
@@ -44,8 +44,18 @@ const PAY_REFUSAL_KEY: Record<InvoicePayRejection, string> = {
   insufficient_balance: E.invoice.insufficientBalance,
 };
 
+/** Every way a cancel is refused (F-114-d), keyed exhaustively like a pay's. */
+const CANCEL_REFUSAL_KEY: Record<InvoiceCancelRefusal, string> = {
+  not_found: E.invoice.notFound,
+  already_paid: E.invoice.alreadyPaid,
+};
+
 function toHttp(e: unknown): unknown {
   const message = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+  if (e instanceof InvoiceNotCancellable) {
+    const body = { i18nKey: CANCEL_REFUSAL_KEY[e.reason], reason: e.reason, message };
+    return e.reason === 'not_found' ? new NotFoundException(body) : new ConflictException(body);
+  }
   if (e instanceof InvoiceVariantNotFound) return new NotFoundException({ i18nKey: E.invoice.variantNotFound, message });
   if (e instanceof InvoiceUnpayable) {
     const body = { i18nKey: PAY_REFUSAL_KEY[e.reason], reason: e.reason, message };
@@ -161,6 +171,27 @@ export class InvoiceController {
       throw toHttp(e);
     }
   }
+
+  /**
+   * Giving up one's own pending invoice (F-114-d): the shop replaces the invoice
+   * when the codes change, and this gives the old one's coupon holds back at
+   * once instead of after its 30 minutes. No capability: it sells nothing, and
+   * a suspended tenant's shopper may still let go of what they held.
+   */
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.INVOICE_CANCEL, identityOf(req).userId),
+    configKey: 'INVOICE_CANCEL_RATE_LIMIT',
+    windowSec: 900,
+  })
+  async cancel(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
+    try {
+      return await this.invoices.cancel(identityOf(req).userId, id);
+    } catch (e) {
+      throw toHttp(e);
+    }
+  }
 }
 
 /**
@@ -187,8 +218,10 @@ export class OffersController {
       sku: o.sku,
       nameKey: o.nameKey,
       productId: o.productId,
+      productNameKey: o.productNameKey,
       descriptionKey: o.descriptionKey,
       categoryKey: o.categoryKey,
+      categories: o.categories,
       fulfilmentKind: o.fulfilmentKind,
       durationDays: o.durationDays,
       billingMode: o.billingMode,

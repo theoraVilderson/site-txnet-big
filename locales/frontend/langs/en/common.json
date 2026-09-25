@@ -2521,7 +2521,9 @@
       "codeLabel": "Have a discount code?",
       "addCode": "Apply",
       "removeCode": "Remove {{code}}",
-      "create": "Make the invoice"
+      "summary": "Your order",
+      "balance": "Wallet balance: {{balance}}",
+      "priceChanged": "The price was updated. Check the amount, then pay."
     },
     "invoice": {
       "title": "Your invoice",
@@ -2549,6 +2551,11 @@
       "balance": "Wallet balance now: {{balance}}",
       "preparing": "Your service is being prepared. You can see it under My services.",
       "myServices": "Go to My services"
-    }
+    },
+    "all": "All",
+    "pick": "Choose an option",
+    "traffic": "{{amount}} of traffic",
+    "devices": "{{count}} devices at once",
+    "metered": "Pay as you use"
   }
 }

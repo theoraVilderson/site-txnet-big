@@ -6,17 +6,19 @@ version: 33
 updated: 2026-09-25
 ---
 
-# Contract — panel-web: the shop (F-111-e)
+# Contract — panel-web: the shop (F-111-e, rebuilt by F-114-d)
 
 `/shop` (`(panel)/shop/`), the sidebar's `buy` entry. What the caller may buy,
-then buy -> invoice -> pay from the wallet, over billing's purchase routes
-([billing/contract.purchase.md](../../domains/billing/contract.purchase.md)):
-`GET /offers`, `POST /invoices`, `GET /invoices/:id`, `POST /invoices/:id/pay`.
+laid out to compare, then one page to pay from the wallet, over billing's
+purchase routes ([billing/contract.purchase.md](../../domains/billing/contract.purchase.md)):
+`GET /offers`, `POST /invoices`, `GET /invoices/:id`, `POST /invoices/:id/pay`,
+`POST /invoices/:id/cancel`.
 
-Its pieces: `_components/ShopView.tsx` (list, checkout, invoice, paid),
-`_lib/shop.ts` (the shortfall, the pre-fill, the grouping, the return id),
+Its pieces: `_components/ShopView.tsx` (cards, checkout, paid),
+`_lib/shop.ts` (the shortfall, the pre-fill, the grouping, the tabs, a quota's
+limit, the return id),
 `page.tsx` (reads `?invoice=`). The top-up page and `/payment/success` each
-carry one piece of the return (rules 5 and 6).
+carry one piece of the return (rules 7 and 8).
 
 ## Rules
 
@@ -25,19 +27,34 @@ carry one piece of the return (rules 5 and 6).
    what is paid is the invoice's `total`. A price on screen is never sent back.
 2. **The list is billing's, unfiltered here.** `GET /offers` already leaves out
    what an invoice would refuse — unlisted, unpriced, undeliverable — so the page
-   never offers a buy that answers `variantNotFound`. Variants are grouped under
-   their product in billing's order (`groupOffers`). A name is a `nameKey`
-   resolved through the published `catalog` namespace, falling back to the SKU,
-   as on My services ([contract.my-services.md](contract.my-services.md) rule 6).
-3. **Codes are typed before the invoice.** Billing holds the applied ones under
-   the invoice for its 30 minutes, so changing them is a new invoice, not an
-   edit. The invoice shows each applied code's discount and each rejected
-   code with billing's sentence.
-4. **One press pays once.** The claim is a ref taken on the click, before the
-   request; the button is disabled while it is in flight. A 409 other than the
-   shortfall (`expired`, `already_paid`, `cancelled`) re-reads the invoice, so
-   the status on screen and the pay button follow billing's.
-5. **A shortfall is billing's figure, and a link.** `insufficient_balance`
+   never offers a buy that answers `variantNotFound`. A name is a key resolved
+   through the published `catalog` namespace, falling back to the SKU (a
+   category's to its key), as on My services
+   ([contract.my-services.md](contract.my-services.md) rule 6).
+3. **One card per product, to compare** (F-114-d). `groupOffers` keeps billing's
+   order. The card is headed by `productNameKey`; its variants are a radio
+   group of chips — a variant's own name when it has one, else its term, plus
+   its traffic when siblings differ on it — and the picked one's facts (term,
+   traffic, devices, "pay as you use" for `metered`: only what the catalog set,
+   `quotaLimit`) and price sit on the card over one buy. Tabs (`categoriesOf`,
+   "All" first) only when the offers span more than one category.
+4. **Checkout is one page; no invoice for looking** (F-114-d). The order, the
+   codes, the figures, the wallet balance and pay sit together. An invoice is
+   made when a code is applied (to show billing's discount) or on the pay
+   press. A code not applied is dropped from the chips and shown with billing's
+   sentence. A total made on the pay press that differs from what was on
+   screen is shown, not paid — the second press pays it.
+5. **An invoice replaced or left is cancelled first** (F-114-d). A code held
+   by an unpaid invoice counts as a use for 30 minutes, so a new invoice beside
+   it refuses a one-use code: a change of codes, and going back to the list,
+   send `POST /invoices/:id/cancel` for the pending one before anything else.
+   Best effort — its clock frees the holds anyway.
+6. **One press pays once.** The claim is a ref taken on the click, before any
+   request — it covers the invoice made on the press too; the button is off
+   while it is held. A 409 other than the shortfall (`expired`,
+   `already_paid`, `cancelled`) re-reads the invoice, so the status on screen
+   and the pay button follow billing's.
+7. **A shortfall is billing's figure, and a link.** `insufficient_balance`
    carries `missing` in the envelope's `error.facts` (`ApiError.facts`,
    [contract.errors.md](contract.errors.md)); `shortfallOf` reads it and never
    recomputes it from a balance, so the round-up-to-the-cent rule (F-111-c)
@@ -45,18 +62,20 @@ carry one piece of the return (rules 5 and 6).
    The top-up page ([contract.deposit.md](contract.deposit.md) rule 18)
    pre-fills `missing` raised to the chosen gateway's `minAmount`
    (`prefillAmount`, exact decimal compare, C-02) and links back.
-6. **Back to the same invoice.** `/shop?invoice=<id>` opens on
+8. **Back to the same invoice.** `/shop?invoice=<id>` opens on
    `GET /invoices/:id` instead of the list — its price and its held codes, not
    a new invoice. The bank returns to `/payment/success`, which has no other
    way to know, so the top-up page keeps the id in **session** storage and the
    success page offers "continue your purchase" while it is there
    ([contract.payment-result.md](contract.payment-result.md)); the shop forgets
-   it once the invoice is paid. Only the id is kept — never a code or a figure.
-7. **An invoice that is not `pending` offers no pay.** Every `InvoiceStatus`
+   it once the invoice is paid or replaced. Changing the codes there cancels
+   it and makes a new one for the same variant (rule 5). Only the id is kept —
+   never a code or a figure.
+9. **An invoice that is not `pending` offers no pay.** Every `InvoiceStatus`
    has a sentence (`common.shop.invoice.status.*`, keyed by the union
    `INVOICE_STATUSES`, which mirrors `billing.prisma`). A `pending` one past its
    clock reads `expired` from billing already.
-8. **The key is shown once, then My services.** The pay answers each Grant's
+10. **The key is shown once, then My services.** The pay answers each Grant's
    `token` in the clear this one time (D-35); it is shown with the gift modal's
    own sentences and never kept, and the page points to My services, where a
    lost key is asked for again. A paid Grant is `pending` until delivery —
@@ -66,9 +85,11 @@ carry one piece of the return (rules 5 and 6).
 ## Proof
 
 `shop/shop.test.tsx` — the shortfall read from `facts` and nothing else, the
-pre-fill never lowered below `missing`, the grouping, an invoice made from the
-variant and codes alone, the top-up link carrying the invoice and `missing`,
-the key once with the My services link, one pay per press, and the return on
+pre-fill never lowered below `missing`, the grouping and the tabs, a chip
+picking the variant bought, no invoice until a code or the pay, a changed
+total not paid, the replaced invoice cancelled before the next is made, a
+rejected code dropped, the top-up link carrying the invoice and `missing`, the
+key once with the My services link, one pay per press, and the return on
 `?invoice=` — pending pays, expired does not.
 
 ## Not covered

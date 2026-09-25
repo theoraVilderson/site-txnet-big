@@ -74,6 +74,19 @@ export class InvoiceVariantNotFound extends Error {
 
 const ZERO = new Prisma.Decimal(0);
 
+/** Why an invoice could not be cancelled: unknown to this user, or paid already (its holds are uses now). */
+export type InvoiceCancelRefusal = 'not_found' | 'already_paid';
+
+export class InvoiceNotCancellable extends Error {
+  constructor(
+    readonly reason: InvoiceCancelRefusal,
+    readonly invoiceId: string,
+  ) {
+    super(`invoice ${invoiceId} cannot be cancelled: ${reason}`);
+    this.name = 'InvoiceNotCancellable';
+  }
+}
+
 @Injectable()
 export class InvoiceService {
   constructor(
@@ -191,6 +204,31 @@ export class InvoiceService {
         applied: held.map((h) => ({ code: h.coupon.code, discount: h.discountAppliedAmount.toFixed(2) })),
         expiresAt: row.expiresAt,
       };
+    });
+  }
+
+  /**
+   * The caller gives up their own pending invoice (F-114-d): the shop replaces
+   * it when the codes change, and a code held by the old one would otherwise
+   * count against the new one for 30 minutes (`per_user_limit_reached`). The
+   * flip is guarded by `pending`, as the sweep's is, so an invoice paid under
+   * its row lock first matches nothing and keeps its holds. One already
+   * `cancelled` or `expired` holds nothing and is answered as it is.
+   */
+  cancel(userId: string, id: string): Promise<{ id: string; status: InvoiceStatus }> {
+    return tenantTransaction(this.prisma, async (tx) => {
+      const { count } = await tx.invoice.updateMany({
+        where: { id, userId, status: InvoiceStatus.pending },
+        data: { status: InvoiceStatus.cancelled },
+      });
+      if (count === 1) {
+        await this.reservations.release(tx, id, RedemptionStatus.cancelled);
+        return { id, status: InvoiceStatus.cancelled };
+      }
+      const row = await tx.invoice.findFirst({ where: { id, userId }, select: { status: true } });
+      if (!row) throw new InvoiceNotCancellable('not_found', id);
+      if (row.status === InvoiceStatus.cancelled || row.status === InvoiceStatus.expired) return { id, status: row.status };
+      throw new InvoiceNotCancellable('already_paid', id);
     });
   }
 }

@@ -2,7 +2,7 @@ import { ApiError } from "@/lib/api-error";
 import type { ShopOffer } from "@/lib/billing-api";
 
 /**
- * The shop's rules that are not layout (F-111-e, `panel-web/contract.shop.md`).
+ * The shop's rules that are not layout (F-111-e, F-114-d, `panel-web/contract.shop.md`).
  */
 
 /** Billing's refusal of a wallet payment it cannot cover (`billing/contract.purchase.md`). */
@@ -38,6 +38,10 @@ export function prefillAmount(missing: string, minAmount: string | null): string
 
 export interface OfferGroup {
   productId: string;
+  productNameKey: string;
+  descriptionKey: string | null;
+  /** The product's live categories, as billing answered them. */
+  categoryKeys: string[];
   variants: ShopOffer[];
 }
 
@@ -45,12 +49,37 @@ export interface OfferGroup {
 export function groupOffers(offers: readonly ShopOffer[]): OfferGroup[] {
   const groups = new Map<string, OfferGroup>();
   for (const offer of offers) {
-    const group = groups.get(offer.productId) ?? { productId: offer.productId, variants: [] };
+    const group = groups.get(offer.productId) ?? {
+      productId: offer.productId,
+      productNameKey: offer.productNameKey,
+      descriptionKey: offer.descriptionKey,
+      categoryKeys: offer.categories.map((c) => c.key),
+      variants: [],
+    };
     group.variants.push(offer);
     groups.set(offer.productId, group);
   }
   return [...groups.values()];
 }
+
+/** The tabs over the cards: every category any offer is filed in, once, in the order first met (F-114-d). */
+export function categoriesOf(offers: readonly ShopOffer[]): Array<{ key: string; nameKey: string }> {
+  const seen = new Map<string, { key: string; nameKey: string }>();
+  for (const offer of offers) for (const c of offer.categories) if (!seen.has(c.key)) seen.set(c.key, c);
+  return [...seen.values()];
+}
+
+/** A variant's limit for one metric, as the catalog wrote it (`{metric: {limit}}`), or `null` when it sets none. */
+export function quotaLimit(quotas: unknown, metric: "traffic_bytes" | "concurrent_devices"): number | null {
+  if (!quotas || typeof quotas !== "object") return null;
+  const entry = (quotas as Record<string, unknown>)[metric];
+  if (!entry || typeof entry !== "object") return null;
+  const limit = (entry as { limit?: unknown }).limit;
+  return typeof limit === "number" && Number.isFinite(limit) && limit > 0 ? limit : null;
+}
+
+/** Whether the variant carries a name of its own, rather than its product's — then the chip says it (F-114-d). */
+export const hasOwnName = (offer: ShopOffer) => offer.nameKey !== offer.productNameKey;
 
 /** The shop's hand-off to the top-up page (`panelDepositForInvoicePath`). */
 export interface ForInvoice {

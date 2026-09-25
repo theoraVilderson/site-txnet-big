@@ -164,7 +164,7 @@ route returns the whole breakdown instead of the pieces of one.
     derived, so it follows the picker — until the user types their own. A
     banner and the free path's result link back to `/shop?invoice=`; the id is
     kept in session storage for `/payment/success`. No code rides in the URL.
-    Rules: [contract.shop.md](contract.shop.md) 5-6.
+    Rules: [contract.shop.md](contract.shop.md) 7-8.
 
 ## What this page does not do
 

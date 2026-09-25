@@ -193,10 +193,15 @@ export type GrantsPage = Paged<GrantRow>;
 export interface ShopOffer {
   variantId: string;
   sku: string;
+  /** The variant's own name, else its product's. */
   nameKey: string;
   productId: string;
+  /** The product's own name — what a card is headed with (F-114-d). */
+  productNameKey: string;
   descriptionKey: string | null;
   categoryKey: string;
+  /** Every live category the product is filed in, in the product's order (F-114-d). */
+  categories: Array<{ key: string; nameKey: string }>;
   fulfilmentKind: string;
   /** `null` = permanent. */
   durationDays: number | null;
@@ -744,6 +749,15 @@ export const billingApi = {
    */
   async payInvoice(id: string): Promise<InvoicePaid> {
     return call<InvoicePaid>(`/invoices/${encodeURIComponent(id)}/pay`, { method: "POST" });
+  },
+
+  /**
+   * Gives up the caller's own pending invoice (F-114-d) — the shop replaces it
+   * when the codes change, and this hands its coupon holds back at once rather
+   * than after its 30 minutes. One already cancelled or expired answers as it is.
+   */
+  async cancelInvoice(id: string): Promise<{ id: string; status: InvoiceStatus }> {
+    return call<{ id: string; status: InvoiceStatus }>(`/invoices/${encodeURIComponent(id)}/cancel`, { method: "POST" });
   },
 
   async grants(page: number, pageSize: number): Promise<GrantsPage> {

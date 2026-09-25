@@ -195,6 +195,14 @@ export const RateLimitBucket = {
   INVOICE_PAY: 'invoice:pay',
 
   /**
+   * Giving up one's own pending invoice (F-114-d), per user. The shop cancels
+   * the invoice it replaces each time the codes change — one per
+   * `INVOICE_CREATE`, near enough — so it has a budget of its own rather than
+   * eating the one a shopper needs to make the next invoice.
+   */
+  INVOICE_CANCEL: 'invoice:cancel',
+
+  /**
    * Reading one's own invoice back (F-111-e), per user — the shop returning to
    * it after a top-up. A read, so a read's budget: it writes and holds nothing.
    */

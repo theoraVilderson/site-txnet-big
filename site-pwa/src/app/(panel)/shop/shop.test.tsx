@@ -6,7 +6,7 @@ import { ApiError } from "@/lib/api-error";
 import { billingApi, type ShopInvoice, type ShopOffer } from "@/lib/billing-api";
 import { PANEL_MY_SERVICES } from "@/lib/routes";
 import { ShopView } from "./_components/ShopView";
-import { groupOffers, prefillAmount, shortfallOf } from "./_lib/shop";
+import { categoriesOf, groupOffers, prefillAmount, quotaLimit, shortfallOf } from "./_lib/shop";
 
 /**
  * The shop page (F-111-e), and what breaks silently on it:
@@ -27,12 +27,19 @@ import { groupOffers, prefillAmount, shortfallOf } from "./_lib/shop";
  * > **One press pays once.** The server pays exactly once under concurrency
  * > anyway; a button that stays live sends the second request into a
  * > refusal the user then reads as a failure of the first.
+ *
+ * > **An invoice replaced is cancelled first** (F-114-d). A code held by an
+ * > unpaid invoice counts as a use for its 30 minutes, so a new invoice made
+ * > beside the old one refuses a one-use code the shopper typed a moment ago.
  */
 
 vi.mock("@/context/LocaleContext", () => ({ useLocale: vi.fn() }));
 vi.mock("@/lib/billing-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/billing-api")>()),
-  billingApi: { shopOffers: vi.fn(), createInvoice: vi.fn(), invoice: vi.fn(), payInvoice: vi.fn() },
+  billingApi: { shopOffers: vi.fn(), createInvoice: vi.fn(), invoice: vi.fn(), payInvoice: vi.fn(), cancelInvoice: vi.fn() },
+}));
+vi.mock("../_hooks/useWalletBalance", () => ({
+  useWalletBalance: () => ({ balance: "5.00", isLoading: false, failed: false, refresh: () => {} }),
 }));
 vi.mock("@/lib/catalog-api", () => ({ catalogApi: { texts: vi.fn().mockRejectedValue(new Error("404")) } }));
 
@@ -40,6 +47,7 @@ const shopOffers = vi.mocked(billingApi.shopOffers);
 const createInvoice = vi.mocked(billingApi.createInvoice);
 const readInvoice = vi.mocked(billingApi.invoice);
 const payInvoice = vi.mocked(billingApi.payInvoice);
+const cancelInvoice = vi.mocked(billingApi.cancelInvoice);
 
 const t = (_ns: string, key: string, vars?: Record<string, string | number>) =>
   vars ? `${key}:${Object.values(vars).join(",")}` : key;
@@ -51,13 +59,28 @@ const OFFER: ShopOffer = {
   sku: "VPN-30",
   nameKey: "catalog.product.vpn.name",
   productId: "p-vpn",
+  productNameKey: "catalog.product.vpn.name",
   descriptionKey: null,
   categoryKey: "vpn",
+  categories: [{ key: "vpn", nameKey: "catalog.category.vpn.name" }],
   fulfilmentKind: "network_access",
   durationDays: 30,
   billingMode: "prepaid",
-  quotas: {},
+  quotas: { traffic_bytes: { limit: 50 * 1024 ** 3, resetPolicy: "never" } },
   price: "12.50",
+};
+
+const OFFER_90: ShopOffer = { ...OFFER, variantId: "v-90", sku: "VPN-90", durationDays: 90, price: "30.00" };
+const MAIL: ShopOffer = {
+  ...OFFER,
+  variantId: "m-1",
+  sku: "MAIL",
+  nameKey: "catalog.product.mail.name",
+  productId: "p-mail",
+  productNameKey: "catalog.product.mail.name",
+  categoryKey: "mail",
+  categories: [{ key: "mail", nameKey: "catalog.category.mail.name" }],
+  price: "3.00",
 };
 
 const INVOICE: ShopInvoice = {
@@ -87,6 +110,7 @@ beforeEach(() => {
   shopOffers.mockResolvedValue([OFFER]);
   createInvoice.mockResolvedValue(INVOICE);
   readInvoice.mockResolvedValue(INVOICE);
+  cancelInvoice.mockResolvedValue({ id: INVOICE_ID, status: "cancelled" });
 });
 
 describe("the shortfall", () => {
@@ -110,38 +134,118 @@ describe("the shortfall", () => {
 
 describe("the list", () => {
   it("groups variants under their product, in the order billing answered", () => {
-    const other = { ...OFFER, variantId: "v-90", sku: "VPN-90", productId: "p-vpn" };
-    const mail = { ...OFFER, variantId: "m-1", sku: "MAIL", productId: "p-mail" };
-    expect(groupOffers([OFFER, mail, other]).map((g) => [g.productId, g.variants.map((v) => v.sku)])).toEqual([
+    const mail = { ...MAIL };
+    expect(groupOffers([OFFER, mail, OFFER_90]).map((g) => [g.productId, g.variants.map((v) => v.sku)])).toEqual([
       ["p-vpn", ["VPN-30", "VPN-90"]],
       ["p-mail", ["MAIL"]],
     ]);
   });
+
+  it("tabs every category an offer is filed in, once, in the order first met", () => {
+    const both = { ...OFFER_90, categories: [...OFFER.categories, { key: "gold", nameKey: "catalog.category.gold.name" }] };
+    expect(categoriesOf([OFFER, both, MAIL]).map((c) => c.key)).toEqual(["vpn", "gold", "mail"]);
+  });
+
+  it("reads a quota's limit from the catalog's shape, and nothing it did not set", () => {
+    expect(quotaLimit(OFFER.quotas, "traffic_bytes")).toBe(50 * 1024 ** 3);
+    expect(quotaLimit(OFFER.quotas, "concurrent_devices")).toBeNull();
+    expect(quotaLimit(null, "traffic_bytes")).toBeNull();
+  });
+
+  it("puts a product's variants on one card: picking one changes the price, and buy takes the one picked", async () => {
+    shopOffers.mockResolvedValue([OFFER, OFFER_90]);
+    const user = userEvent.setup();
+    render(<ShopView invoiceId={null} />);
+    const pick = await screen.findByRole("radio", { name: "shop.duration:90" });
+    expect(screen.getAllByRole("button", { name: "shop.buy" })).toHaveLength(1);
+    await user.click(pick);
+    expect(screen.getByText("$30.00")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "shop.buy" }));
+    await user.click(await screen.findByRole("button", { name: "shop.invoice.pay" }));
+    await waitFor(() => expect(createInvoice).toHaveBeenCalledWith("v-90", []));
+  });
+
+  it("filters the cards by category tab, and shows no tabs for one category", async () => {
+    shopOffers.mockResolvedValue([OFFER, MAIL]);
+    const user = userEvent.setup();
+    render(<ShopView invoiceId={null} />);
+    await user.click(await screen.findByRole("tab", { name: "mail" }));
+    expect(screen.getAllByRole("button", { name: "shop.buy" })).toHaveLength(1);
+    expect(screen.getByText("MAIL")).toBeTruthy();
+    expect(screen.queryByText("VPN-30")).toBeNull();
+  });
 });
 
-describe("buy -> invoice -> pay", () => {
-  async function toInvoice() {
+describe("one page: pick, codes, pay", () => {
+  async function toCheckout() {
     const user = userEvent.setup();
     render(<ShopView invoiceId={null} />);
     await user.click(await screen.findByRole("button", { name: "shop.buy" }));
-    await user.click(await screen.findByRole("button", { name: "shop.checkout.create" }));
     await screen.findByRole("button", { name: "shop.invoice.pay" });
     return user;
   }
 
-  it("prices on the server: the invoice is made from the variant and the codes, never a figure", async () => {
-    const user = userEvent.setup();
-    render(<ShopView invoiceId={null} />);
-    await user.click(await screen.findByRole("button", { name: "shop.buy" }));
+  it("makes no invoice for looking: one press with no code makes it and pays it", async () => {
+    payInvoice.mockReturnValue(new Promise(() => {}));
+    const user = await toCheckout();
+    expect(createInvoice).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "shop.invoice.pay" }));
+    await waitFor(() => expect(payInvoice).toHaveBeenCalledWith(INVOICE_ID));
+    expect(createInvoice).toHaveBeenCalledWith("v-30", []);
+  });
+
+  it("does not pay a price other than the one on screen: a changed price waits for a second press", async () => {
+    createInvoice.mockResolvedValue({ ...INVOICE, amount: "14.00", total: "14.00" });
+    const user = await toCheckout();
+    await user.click(screen.getByRole("button", { name: "shop.invoice.pay" }));
+    expect(await screen.findByText("shop.checkout.priceChanged")).toBeTruthy();
+    expect(payInvoice).not.toHaveBeenCalled();
+  });
+
+  it("prices on the server: a code makes the invoice from the variant and the codes, never a figure, and pays nothing", async () => {
+    const user = await toCheckout();
     await user.type(screen.getByRole("textbox"), "spring");
     await user.click(screen.getByRole("button", { name: "shop.checkout.addCode" }));
-    await user.click(screen.getByRole("button", { name: "shop.checkout.create" }));
     await waitFor(() => expect(createInvoice).toHaveBeenCalledWith("v-30", ["SPRING"]));
+    expect(payInvoice).not.toHaveBeenCalled();
+  });
+
+  it("cancels the invoice it replaces before making the next, so a one-use code is not held against itself", async () => {
+    createInvoice.mockResolvedValueOnce({ ...INVOICE, applied: [{ code: "SPRING", discount: "2.50" }], discount: "2.50", total: "10.00" });
+    createInvoice.mockResolvedValueOnce({ ...INVOICE, id: "second" });
+    const user = await toCheckout();
+    await user.type(screen.getByRole("textbox"), "spring");
+    await user.click(screen.getByRole("button", { name: "shop.checkout.addCode" }));
+    await screen.findByText("$10.00");
+    await user.type(screen.getByRole("textbox"), "summer");
+    await user.click(screen.getByRole("button", { name: "shop.checkout.addCode" }));
+    await waitFor(() => expect(createInvoice).toHaveBeenLastCalledWith("v-30", ["SPRING", "SUMMER"]));
+    expect(cancelInvoice).toHaveBeenCalledWith(INVOICE_ID);
+    expect(cancelInvoice.mock.invocationCallOrder[0]).toBeLessThan(createInvoice.mock.invocationCallOrder[1]);
+  });
+
+  it("drops a code billing did not apply, with billing's sentence", async () => {
+    createInvoice.mockResolvedValue({ ...INVOICE, rejected: [{ code: "BAD", reason: "not_found", message: "No such code" }] });
+    const user = await toCheckout();
+    await user.type(screen.getByRole("textbox"), "bad");
+    await user.click(screen.getByRole("button", { name: "shop.checkout.addCode" }));
+    expect(await screen.findByText(/No such code/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "shop.checkout.removeCode:BAD" })).toBeNull();
+  });
+
+  it("cancels the invoice it leaves behind when the shopper goes back to the list", async () => {
+    const user = await toCheckout();
+    await user.type(screen.getByRole("textbox"), "spring");
+    await user.click(screen.getByRole("button", { name: "shop.checkout.addCode" }));
+    await waitFor(() => expect(createInvoice).toHaveBeenCalled());
+    await user.click(screen.getByRole("button", { name: "shop.checkout.back" }));
+    await waitFor(() => expect(cancelInvoice).toHaveBeenCalledWith(INVOICE_ID));
+    expect(await screen.findByRole("button", { name: "shop.buy" })).toBeTruthy();
   });
 
   it("on a shortfall, offers the top-up for exactly it and a way back to this invoice", async () => {
     payInvoice.mockRejectedValue(insufficient("7.50"));
-    const user = await toInvoice();
+    const user = await toCheckout();
     await user.click(screen.getByRole("button", { name: "shop.invoice.pay" }));
 
     const link = await screen.findByRole("link", { name: /shop\.shortfall\.topUp/ });
@@ -160,7 +264,7 @@ describe("buy -> invoice -> pay", () => {
       walletTransactionId: "w1",
       grants: [{ id: "g1", status: "pending", token: "KEY-once" }],
     });
-    const user = await toInvoice();
+    const user = await toCheckout();
     await user.click(screen.getByRole("button", { name: "shop.invoice.pay" }));
 
     expect(await screen.findByText("KEY-once")).toBeTruthy();
@@ -171,7 +275,7 @@ describe("buy -> invoice -> pay", () => {
   it("pays once per press: the button is off while the pay is in flight", async () => {
     let settle: (v: never) => void = () => {};
     payInvoice.mockReturnValue(new Promise((resolve) => (settle = resolve as never)));
-    const user = await toInvoice();
+    const user = await toCheckout();
     const pay = screen.getByRole("button", { name: "shop.invoice.pay" });
     await user.click(pay);
     await user.click(pay);

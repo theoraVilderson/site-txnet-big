@@ -18,7 +18,7 @@ import { FulfilmentKind, InvoiceStatus, Prisma, RedemptionStatus, VariantVisibil
 import { TenantContext, runWithTenant } from '@txnet-backend/shared-core';
 
 import { CouponReservationRefused } from '../payment/coupon/coupon-reservation';
-import { INVOICE_TTL_MS, InvoiceService, InvoiceVariantNotFound } from './invoice.service';
+import { INVOICE_TTL_MS, InvoiceNotCancellable, InvoiceService, InvoiceVariantNotFound } from './invoice.service';
 import { InvoiceExpiryService } from './invoice-expiry.service';
 import { invoiceCreateSchema } from './invoice.schema';
 
@@ -66,7 +66,11 @@ function variantRow(o: VariantOverrides = {}) {
       fulfilmentKind: o.fulfilmentKind ?? FulfilmentKind.network_access,
       featureKeys: ['vpn'],
       isActive: o.productActive ?? true,
-      categories: [{ position: 0, category: { key: 'vpn', isActive: true, parentId: null } }],
+      categories: [
+        { position: 0, category: { key: 'vpn', nameKey: 'catalog.category.vpn.name', isActive: true, parentId: null } },
+        { position: 1, category: { key: 'old', nameKey: 'catalog.category.old.name', isActive: false, parentId: null } },
+        { position: 2, category: { key: 'gold', nameKey: 'catalog.category.gold.name', isActive: true, parentId: null } },
+      ],
     },
     prices: o.prices ?? [{ id: PRICE, amount: D('12.50'), effectiveFrom: new Date('2026-01-01T00:00:00Z'), isActive: true }],
   };
@@ -355,6 +359,17 @@ describe('InvoiceService.forSale — what the shop lists (F-111-e)', () => {
     expect(offers[0]).toMatchObject({ variantId: VARIANT, sku: 'VPN-30', productId: PRODUCT, price: { amount: '12.50' } });
   });
 
+  it("names the product apart from the variant, and every live category it is filed in, in the product's order (F-114-d)", async () => {
+    const { service } = buildList([{ ...variantRow(), nameKey: 'catalog.variant.vpn30.name' } as never]);
+    const [offer] = await asTenant(() => service.forSale(new Date('2026-09-25T12:00:00Z')));
+    expect(offer.nameKey).toBe('catalog.variant.vpn30.name');
+    expect(offer.productNameKey).toBe('catalog.product.vpn.name');
+    expect(offer.categories).toEqual([
+      { key: 'vpn', nameKey: 'catalog.category.vpn.name' },
+      { key: 'gold', nameKey: 'catalog.category.gold.name' },
+    ]);
+  });
+
   it('leaves out what nothing can deliver, so the shop never offers a buy that answers variantNotFound', async () => {
     const { service } = buildList([
       variantRow({ panelGroupId: null }),
@@ -366,5 +381,69 @@ describe('InvoiceService.forSale — what the shop lists (F-111-e)', () => {
   it('leaves out an unlisted variant: a direct link sells it, the list does not show it', async () => {
     const { service } = buildList([variantRow({ visibility: VariantVisibility.unlisted })]);
     await expect(asTenant(() => service.forSale(new Date('2026-09-25T12:00:00Z')))).resolves.toEqual([]);
+  });
+});
+
+describe('InvoiceService.cancel — the shop replaces an invoice it will not pay (F-114-d)', () => {
+  function buildCancel(opts: { matched: boolean; status?: InvoiceStatus | null }) {
+    const calls = {
+      updated: [] as Array<{ where: Record<string, unknown>; data: Record<string, unknown> }>,
+      released: [] as Array<{ id: string; outcome: RedemptionStatus }>,
+      read: [] as unknown[],
+    };
+    const tx = {
+      $executeRaw: async () => 0,
+      invoice: {
+        updateMany: async (q: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+          calls.updated.push(q);
+          return { count: opts.matched ? 1 : 0 };
+        },
+        findFirst: async (q: unknown) => {
+          calls.read.push(q);
+          return opts.status ? { status: opts.status } : null;
+        },
+      },
+    };
+    const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
+    const reservations = {
+      release: async (_tx: unknown, id: string, outcome: RedemptionStatus) => {
+        calls.released.push({ id, outcome });
+        return 1;
+      },
+    };
+    return { service: new InvoiceService(prisma as never, {} as never, reservations as never), calls };
+  }
+
+  it("cancels the caller's own pending invoice and gives its holds back at once, as cancelled", async () => {
+    const { service, calls } = buildCancel({ matched: true });
+    await expect(asTenant(() => service.cancel(USER, INVOICE_1))).resolves.toEqual({ id: INVOICE_1, status: 'cancelled' });
+    expect(calls.updated).toEqual([
+      { where: { id: INVOICE_1, userId: USER, status: InvoiceStatus.pending }, data: { status: InvoiceStatus.cancelled } },
+    ]);
+    expect(calls.released).toEqual([{ id: INVOICE_1, outcome: RedemptionStatus.cancelled }]);
+  });
+
+  it('answers an invoice already cancelled or expired as it is: it holds nothing, so there is nothing to refuse', async () => {
+    for (const status of [InvoiceStatus.cancelled, InvoiceStatus.expired]) {
+      const { service, calls } = buildCancel({ matched: false, status });
+      await expect(asTenant(() => service.cancel(USER, INVOICE_1))).resolves.toEqual({ id: INVOICE_1, status });
+      expect(calls.released).toEqual([]);
+    }
+  });
+
+  it('refuses a paid (or refunded) invoice — its holds are uses now — and releases nothing', async () => {
+    for (const status of [InvoiceStatus.paid, InvoiceStatus.refunded]) {
+      const { service, calls } = buildCancel({ matched: false, status });
+      await expect(asTenant(() => service.cancel(USER, INVOICE_1))).rejects.toMatchObject({ reason: 'already_paid' });
+      expect(calls.released).toEqual([]);
+    }
+  });
+
+  it("answers another user's invoice as a missing one", async () => {
+    const { service, calls } = buildCancel({ matched: false, status: null });
+    const refused = await asTenant(() => service.cancel(USER, INVOICE_1)).catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(InvoiceNotCancellable);
+    expect(refused).toMatchObject({ reason: 'not_found' });
+    expect(calls.read[0]).toMatchObject({ where: { id: INVOICE_1, userId: USER } });
   });
 });
