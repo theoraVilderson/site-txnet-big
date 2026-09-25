@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
@@ -12,6 +12,7 @@ import { LogoutButton } from "./LogoutButton";
 import { ResellerPanelButton, useOwnedResellers } from "./ResellerPanelButton";
 import { ThemeDropdown } from "@auth/auth/_components/ThemeDropdown";
 import { useLocale } from "@/context/LocaleContext";
+import { resellerPurchaseApi } from "@/lib/tenant-api";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import {
   PANEL_MENU,
@@ -29,6 +30,34 @@ import { usePanelSession } from "../_context/PanelSessionContext";
 const S = FrontendI18nKeys.common.shell;
 
 export const PANEL_SIDEBAR_ID = "panel-sidebar";
+
+/**
+ * Whether the caller holds a live reseller — `GET /purchase/mine`, the one the
+ * purchase refuses as `already_reseller` (F-114-c). Not `useOwnedResellers`:
+ * that list keeps a terminated reseller, whose owner may buy again. Asked only
+ * of a caller the entry could be shown to (`canAsk`); `null` while `me` is
+ * unknown or the answer is pending, which hides the entry. A failed read is
+ * `false`: the page answers a holder itself (F-019-l).
+ */
+function useHoldsLiveReseller(canAsk: boolean | null): boolean | null {
+  const [holds, setHolds] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (canAsk === null) return;
+    if (!canAsk) {
+      setHolds(false);
+      return;
+    }
+    let live = true;
+    resellerPurchaseApi
+      .mine()
+      .then((r) => live && setHolds(r.reseller !== null))
+      .catch(() => live && setHolds(false));
+    return () => {
+      live = false;
+    };
+  }, [canAsk]);
+  return holds;
+}
 
 /**
  * The panel's sidebar (F-093-a). One element, two behaviours: from `lg` up it
@@ -64,7 +93,7 @@ export function PanelSidebar() {
   const tenantType = me?.tenant.type ?? null;
   const isOwner = me?.tenant.isOwner ?? false;
   const resellers = useOwnedResellers();
-  const ownsReseller = resellers === null ? null : resellers.length > 0;
+  const ownsReseller = useHoldsLiveReseller(me ? tenantType === "platform_owner" && !isOwner : null);
   const menu = useMemo(
     () => visibleMenu(PANEL_MENU, held ?? [], tenantType, isOwner, ownsReseller),
     [held, tenantType, isOwner, ownsReseller],

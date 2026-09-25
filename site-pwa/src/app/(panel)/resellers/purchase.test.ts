@@ -98,6 +98,14 @@ describe("who may buy", () => {
     expect(hrefs(BUYER, null)).toContain(PANEL_HOME);
   });
 
+  // The holder is the one `already_reseller` counts — a live reseller — not the
+  // handoff list, which keeps a terminated one whose owner may buy again.
+  it("asks the sidebar's holder question of `/purchase/mine`", () => {
+    const sidebar = readFileSync(join(__dirname, "../_components/PanelSidebar.tsx"), "utf8");
+    expect(sidebar).toMatch(/resellerPurchaseApi\s*\.mine\(\)/);
+    expect(sidebar).toMatch(/visibleMenu\(PANEL_MENU, [^)]*ownsReseller\)/);
+  });
+
   it("is highlighted over the administration entry, which is its path's prefix", () => {
     expect(PANEL_RESELLER_PURCHASE.startsWith(`${PANEL_RESELLERS}/`)).toBe(true);
     expect(PANEL_RESELLER_PURCHASE.length).toBeGreaterThan(PANEL_RESELLERS.length);

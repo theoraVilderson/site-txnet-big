@@ -32,8 +32,7 @@ type Reseller = { id: string; slug: string };
  *
  * Renders nothing for a caller who owns no reseller, and nothing if the list
  * cannot be read: it is a shortcut, never a reason to break the sidebar. The
- * list is `useOwnedResellers`', read once by the sidebar, which also hides
- * "become a reseller" from a caller it names (F-114-c).
+ * list is `useOwnedResellers`', read by the sidebar.
  */
 export function ResellerPanelButton({
   resellers,
@@ -74,10 +73,9 @@ export function ResellerPanelButton({
 }
 
 /**
- * The resellers the caller owns (`GET /auth/handoff`): `null` until it answers.
- * A list that cannot be read is empty — the entry this hides is an invitation
- * the purchase page itself answers for a holder (F-019-l), so a lost answer
- * costs nothing but a shortcut.
+ * The resellers the caller owns (`GET /auth/handoff`): `null` until it answers,
+ * empty when it cannot be read. A terminated one is still listed, so this is
+ * not "may buy another" — that is `GET /purchase/mine` (F-114-c).
  */
 export function useOwnedResellers(): readonly Reseller[] | null {
   const [resellers, setResellers] = useState<Reseller[] | null>(null);

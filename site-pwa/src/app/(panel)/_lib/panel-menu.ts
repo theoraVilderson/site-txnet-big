@@ -61,7 +61,7 @@ type PermissionGated = {
    * Callers the entry is not for even when everything above admits them
    * (F-114-c) — an invitation to someone who has already accepted it.
    * `tenantOwner` is `me.tenant.isOwner`; `resellerOwner` is a caller who
-   * already owns a reseller, and while that is unknown the entry is hidden.
+   * already holds a live reseller, and while that is unknown the entry is hidden.
    */
   hiddenFrom?: readonly ("tenantOwner" | "resellerOwner")[];
 };
@@ -206,7 +206,7 @@ export function isMenuGroup<T extends PanelMenuEntry | VisibleMenuEntry>(
  * `isOwner` is `me.tenant.isOwner`, and counts only on an entry marked
  * `ownerSuffices`. Absent means not the owner — the safe direction again.
  *
- * `ownsReseller` is whether the caller owns a reseller (`GET /auth/handoff`),
+ * `ownsReseller` is whether the caller holds a live reseller (`GET /purchase/mine`),
  * read only by an entry `hiddenFrom` `resellerOwner`; `null` is not yet known,
  * and hides it.
  */
