@@ -40,6 +40,8 @@ and hears about new rows over the panel socket
    the shape *is* agreed for this one
    ([automation/contract.outbox.md](../../domains/automation/contract.outbox.md),
    "the third consumer"): it was not for a payment when the wallet shipped.
+   A reconnect (`onMissed`) re-reads too: nothing is queued for a dropped
+   socket, so a message created meanwhile would leave the badge short (F-070-d).
 4. **The event's payload is still not rendered.** It carries the row, but not
    `unreadCount`, and the badge is the point of hearing about it at all — so
    arrival is the signal and the route is the answer. A redelivery is

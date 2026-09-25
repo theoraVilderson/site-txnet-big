@@ -49,7 +49,8 @@ client.close();  // for good — no reconnect follows, on any code
   a dropped socket (`realtime/contract.fanout.md`), so after a reconnect each
   listener of a channel the `resumed` frame accepted back is told once —
   after the server holds the channel again, never on the first connection.
-  A screen that shows a record re-reads it there (F-111-f, My services).
+  A screen that shows a record re-reads it there (F-111-f, My services;
+  F-070-d, the wallet balance and the bell).
 
 ## The five rules that are not obvious
 

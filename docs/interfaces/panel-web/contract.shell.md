@@ -90,7 +90,8 @@ in this app to call a backend other than `auth-service`, so two of its rules are
 about the data path rather than the bar.
 
 1. **The panel never computes a balance.** It shows the decimal string
-   `billing` last answered and re-reads on a wallet event; it never adjusts a
+   `billing` last answered and re-reads on a wallet event, and after a
+   reconnect (`onMissed`, F-070-d) for one it may have missed; it never adjusts a
    held figure by an event's amount. `wallet.cachedBalance` is written only
    inside the transaction that appends the proving ledger row
    ([billing/contract.history.md](../../domains/billing/contract.history.md)),

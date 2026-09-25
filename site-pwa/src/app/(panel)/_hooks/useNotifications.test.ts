@@ -44,14 +44,17 @@ const markRead = vi.mocked(notificationApi.markRead);
 /** A stand-in for `RealtimeClient`; the transport has its own spec. */
 function fakeClient() {
   const listeners: Array<(payload: unknown) => void> = [];
+  const missed: Array<() => void> = [];
   const unsubscribe = vi.fn();
   return {
     channels: [] as string[],
     listeners,
+    missed,
     unsubscribe,
-    subscribe: vi.fn((channel: string, options: { onMessage: (p: unknown) => void }) => {
+    subscribe: vi.fn((channel: string, options: { onMessage: (p: unknown) => void; onMissed?: () => void }) => {
       client.channels.push(channel);
       listeners.push(options.onMessage);
+      if (options.onMissed) missed.push(options.onMissed);
       return unsubscribe;
     }),
   };
@@ -116,6 +119,16 @@ describe("useNotifications", () => {
       ),
     );
     await waitFor(() => expect(inbox).toHaveBeenCalledTimes(2));
+  });
+
+  it("re-reads after a reconnect, since a notification told while the socket was down reached nobody", async () => {
+    const { result } = renderHook(() => useNotifications());
+    await waitFor(() => expect(inbox).toHaveBeenCalledTimes(1));
+
+    await act(async () => client.missed.forEach((onMissed) => onMissed()));
+
+    await waitFor(() => expect(inbox).toHaveBeenCalledTimes(2));
+    expect(result.current.failed).toBe(false);
   });
 
   it("takes the new count from the mark-read answer and re-reads the page", async () => {

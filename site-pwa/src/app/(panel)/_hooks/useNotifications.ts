@@ -104,6 +104,9 @@ export function useNotifications(): NotificationsState {
       onMessage: (payload) => {
         if (isNotificationCreated(payload)) refreshRef.current();
       },
+      // A notification created while the socket was down was told to nobody,
+      // and the badge would stay short until the next one (F-070-d).
+      onMissed: () => refreshRef.current(),
     });
   }, [client, userId]);
 

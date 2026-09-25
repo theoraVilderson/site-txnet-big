@@ -92,6 +92,9 @@ export function useWalletBalance(): WalletBalanceState {
     // filter written now would have to be widened by each of them.
     return client.subscribe(userChannel(userId), {
       onMessage: () => refreshRef.current(),
+      // A payment credited while the socket was down was told to nobody, so a
+      // reconnect asks again (F-070-d) — the same read an event would cost.
+      onMissed: () => refreshRef.current(),
     });
   }, [client, userId]);
 

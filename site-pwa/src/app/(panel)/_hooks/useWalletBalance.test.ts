@@ -42,14 +42,17 @@ const walletBalance = vi.mocked(billingApi.walletBalance);
 /** A stand-in for `RealtimeClient`; the transport has its own spec. */
 function fakeClient() {
   const listeners: Array<(payload: unknown) => void> = [];
+  const missed: Array<() => void> = [];
   const unsubscribe = vi.fn();
   return {
     channels: [] as string[],
     listeners,
+    missed,
     unsubscribe,
-    subscribe: vi.fn((channel: string, options: { onMessage: (p: unknown) => void }) => {
+    subscribe: vi.fn((channel: string, options: { onMessage: (p: unknown) => void; onMissed?: () => void }) => {
       client.channels.push(channel);
       listeners.push(options.onMessage);
+      if (options.onMissed) missed.push(options.onMissed);
       return unsubscribe;
     }),
   };
@@ -101,6 +104,17 @@ describe("useWalletBalance", () => {
         onMessage({ type: "payment.succeeded", amount: 50 });
       }
     });
+
+    await waitFor(() => expect(result.current.balance).toBe("62.34"));
+    expect(walletBalance).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-reads after a reconnect, since a payment told while the socket was down reached nobody", async () => {
+    const { result } = renderHook(() => useWalletBalance());
+    await waitFor(() => expect(result.current.balance).toBe("12.34"));
+
+    walletBalance.mockResolvedValue({ balance: "62.34" });
+    await act(async () => client.missed.forEach((onMissed) => onMissed()));
 
     await waitFor(() => expect(result.current.balance).toBe("62.34"));
     expect(walletBalance).toHaveBeenCalledTimes(2);
