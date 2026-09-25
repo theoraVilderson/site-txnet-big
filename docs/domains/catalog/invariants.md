@@ -18,7 +18,7 @@ Held by the database since F-026-a; proved by
 | 3 | A variant carries its product's tenant, and a price and a metered rate their variant's; a product sits in its own tenant's category or the platform's | trigger `same_tenant_as_parent` | one tenant sells on another's catalog, or RLS shows the wrong rows |
 | 4 | A tenant reads the platform's rows and its own, and writes only its own | RLS shared-read policy | a reseller edits the platform's catalog |
 | 5 | Keys and SKUs are unique inside a tenant | partial unique indexes | a direct link buys the wrong variant |
-| 6 | Nothing referenced is hard-deleted: a variant may back a Grant or a coupon scope. A product removal that meets one archives instead (F-026-h); a category any product sits in, archived included, is kept (`has_products`, F-026-j) | FKs `ON DELETE RESTRICT` (Postgres `23001`) | receipts and Grants pointing at nothing |
+| 6 | Nothing referenced is hard-deleted: a variant may back a Grant or a coupon scope. A product removal that meets one archives instead (F-026-h); a category any product sits in, archived included, is kept (`has_products`, F-026-j), or archived when removed with its products (F-026-l) | FKs `ON DELETE RESTRICT` (Postgres `23001`) | receipts and Grants pointing at nothing |
 | 7 | A metered rate is USD `Decimal(18,8)` and strictly positive (ADR-0073, F-027-al) | column type, `metered_rate_is_positive` | 1c-per-GiB pricing steps; a byte that pays the user; or a rate of zero, which stalls its Grant at the first block instead of serving free traffic |
 
 ## How to test

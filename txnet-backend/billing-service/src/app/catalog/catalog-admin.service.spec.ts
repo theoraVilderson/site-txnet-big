@@ -18,7 +18,8 @@
  *    database lets go is deleted with its variants, one that anything
  *    references is archived instead — hidden, never sold again, and every
  *    Grant of it untouched; a category goes only when no product, archived
- *    included, sits in it (F-026-j);
+ *    included, sits in it (F-026-j) — asked to take its products with it, it
+ *    removes only its own tenant's, then goes or is archived (F-026-l);
  *  - **names are the server's keys** (F-1533-d): a tenant's item is named under
  *    its own `t_<tenant>.` prefix, and a translation is reviewed only by
  *    whoever manages the item it names — the rules of the text itself are
@@ -57,9 +58,14 @@ const actor = (tenantId: string) => ({ adminId: ADMIN, tenantId, ip: '10.0.0.9' 
 
 type Row = Record<string, unknown>;
 
-const matches = (row: Row, where: Row = {}) =>
+const matches = (row: Row, where: Row = {}): boolean =>
   Object.entries(where).every(([k, v]) =>
-    v === undefined || (v !== null && typeof v === 'object' && 'not' in v ? (row[k] ?? null) !== (v as { not: unknown }).not : (row[k] ?? null) === v),
+    v === undefined ||
+    (k === 'OR'
+      ? (v as Row[]).some((w) => matches(row, w))
+      : v !== null && typeof v === 'object' && 'not' in v
+        ? (row[k] ?? null) !== (v as { not: unknown }).not
+        : (row[k] ?? null) === v),
   );
 
 const unique = (message: string) =>
@@ -562,5 +568,85 @@ describe('CatalogAdminService — removing categories (F-026-j)', () => {
       { id: EMPTY_CATEGORY, outcome: 'deleted' },
       { id: PLATFORM_CATEGORY, outcome: 'has_products' },
     ]);
+  });
+});
+
+describe('CatalogAdminService — removing a category with its products (F-026-l)', () => {
+  const NEVER_SOLD = 'b0000000-0000-4000-8000-000000000006';
+  /** The reseller's category holding one product never sold and one sold, and an empty-able one holding a never-sold product alone. */
+  const withFilled = () => {
+    const built = build();
+    built.db.productCategory.rows.push(
+      { id: RESELLER_CATEGORY, tenantId: RESELLER, key: 'old', nameKey: 'catalog.t_22.category.old.name', isActive: true },
+      { id: EMPTY_CATEGORY, tenantId: RESELLER, key: 'fresh', nameKey: 'catalog.t_22.category.fresh.name', isActive: true },
+    );
+    for (const p of built.db.product.rows) if (p['id'] === SOLD_PRODUCT) p['categoryId'] = RESELLER_CATEGORY;
+    built.db.product.rows.push(built.product(NEVER_SOLD, RESELLER, 'vpn_fresh', EMPTY_CATEGORY));
+    return built;
+  };
+
+  it('archives the category when a sold product stays in it: the never-sold go, the sold are archived, and the answer counts both', async () => {
+    const { service, db, audit } = withFilled();
+    for (const p of db.product.rows) if (p['id'] === RESELLER_PRODUCT) p['categoryId'] = RESELLER_CATEGORY;
+    await expect(service.removeCategories(actor(RESELLER), [RESELLER_CATEGORY], true)).resolves.toEqual([
+      { id: RESELLER_CATEGORY, outcome: 'archived', products: { deleted: 1, archived: 1 } },
+    ]);
+    expect(db.productCategory.rows.find((r) => r['id'] === RESELLER_CATEGORY)).toMatchObject({ isActive: false, archivedAt: expect.any(Date) });
+    expect(audit.map((a) => a['action'])).toEqual(['catalog_product_delete', 'catalog_product_archive', 'catalog_category_archive']);
+    expect((await service.listCategories(actor(RESELLER))).map((c) => c.id)).not.toContain(RESELLER_CATEGORY);
+    expect((await service.listCategories(actor(RESELLER), { archived: true })).map((c) => c.id)).toEqual([RESELLER_CATEGORY]);
+  });
+
+  it('deletes the category when every product in it was never sold', async () => {
+    const { service, db } = withFilled();
+    await expect(service.removeCategories(actor(RESELLER), [EMPTY_CATEGORY], true)).resolves.toEqual([
+      { id: EMPTY_CATEGORY, outcome: 'deleted', products: { deleted: 1, archived: 0 } },
+    ]);
+    expect(db.productCategory.rows.find((r) => r['id'] === EMPTY_CATEGORY)).toBeUndefined();
+  });
+
+  it('without withProducts nothing inside is touched: the category is kept and answered has_products', async () => {
+    const { service, db } = withFilled();
+    await expect(service.removeCategories(actor(RESELLER), [EMPTY_CATEGORY])).resolves.toEqual([{ id: EMPTY_CATEGORY, outcome: 'has_products' }]);
+    expect(db.product.rows.find((r) => r['id'] === NEVER_SOLD)).toBeDefined();
+  });
+
+  it("never removes another tenant's product from the platform's shared category: the owner's own go, the category stays", async () => {
+    const { service, db } = withFilled();
+    await expect(service.removeCategories(actor(OWNER), [PLATFORM_CATEGORY], true)).resolves.toEqual([
+      { id: PLATFORM_CATEGORY, outcome: 'has_products', products: { deleted: 1, archived: 0 } },
+    ]);
+    expect(db.product.rows.find((r) => r['id'] === PLATFORM_PRODUCT)).toBeUndefined();
+    expect(db.product.rows.find((r) => r['id'] === RESELLER_PRODUCT)).toMatchObject({ categoryId: PLATFORM_CATEGORY, isActive: true });
+    expect(db.productCategory.rows.find((r) => r['id'] === PLATFORM_CATEGORY)).toMatchObject({ isActive: true });
+    expect(db.productCategory.rows.find((r) => r['id'] === PLATFORM_CATEGORY)?.['archivedAt']).toBeUndefined();
+  });
+
+  it("answers another tenant's category not found and touches nothing in it", async () => {
+    const { service, db } = withFilled();
+    await expect(service.removeCategories(actor(RESELLER), [OTHER_CATEGORY, PLATFORM_CATEGORY], true)).resolves.toEqual([
+      { id: OTHER_CATEGORY, outcome: 'not_found' },
+      { id: PLATFORM_CATEGORY, outcome: 'not_found' },
+    ]);
+    expect(db.product.rows.map((r) => r['id'])).toEqual(expect.arrayContaining([OTHER_PRODUCT, PLATFORM_PRODUCT]));
+  });
+
+  it('files no new product in an archived category, and restoring a product in it restores the category, still switched off', async () => {
+    const { service, db } = withFilled();
+    await service.removeCategories(actor(RESELLER), [RESELLER_CATEGORY], true);
+    expect((await refusal(() => service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, categoryId: RESELLER_CATEGORY }))).reason).toBe('category_not_found');
+    await service.updateProduct(actor(RESELLER), SOLD_PRODUCT, { archived: false });
+    expect(db.productCategory.rows.find((r) => r['id'] === RESELLER_CATEGORY)).toMatchObject({ archivedAt: null, isActive: false });
+    expect((await service.listCategories(actor(RESELLER))).map((c) => c.id)).toContain(RESELLER_CATEGORY);
+  });
+
+  it('a category already archived is answered archived again, and written once', async () => {
+    const { service, audit } = withFilled();
+    await service.removeCategories(actor(RESELLER), [RESELLER_CATEGORY], true);
+    const before = audit.length;
+    await expect(service.removeCategories(actor(RESELLER), [RESELLER_CATEGORY], true)).resolves.toEqual([
+      { id: RESELLER_CATEGORY, outcome: 'archived', products: { deleted: 0, archived: 0 } },
+    ]);
+    expect(audit.length).toBe(before);
   });
 });

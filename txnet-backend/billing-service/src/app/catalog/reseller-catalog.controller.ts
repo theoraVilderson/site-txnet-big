@@ -32,6 +32,7 @@ import {
   ListTextDraftsQuery,
   PublishTextsBody,
   RemoveCategoriesBody,
+  ListCategoriesQuery,
   RemoveProductsBody,
   SetPriceBody,
   UpdateCategoryBody,
@@ -45,6 +46,7 @@ import {
   listTextDraftsSchema,
   publishTextsSchema,
   removeCategoriesSchema,
+  listCategoriesSchema,
   removeProductsSchema,
   setPriceSchema,
   updateCategorySchema,
@@ -118,8 +120,13 @@ export class ResellerCatalogController {
 
   @Get('categories')
   @RateLimit(READ)
-  async listCategories(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(() => this.catalog.listCategories(this.actor(req, ip), tenantId));
+  async listCategories(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Query(new ZodValidationPipe(listCategoriesSchema)) query: ListCategoriesQuery,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    return this.refusing(() => this.catalog.listCategories(this.actor(req, ip), tenantId, query));
   }
 
   @Post('categories')
@@ -157,7 +164,7 @@ export class ResellerCatalogController {
     @Req() req: Request,
     @Ip() ip: string,
   ) {
-    return this.refusing(() => this.catalog.removeCategories(this.actor(req, ip), tenantId, body.ids as string[]));
+    return this.refusing(() => this.catalog.removeCategories(this.actor(req, ip), tenantId, body.ids as string[], body.withProducts === true));
   }
 
   @Get('products')

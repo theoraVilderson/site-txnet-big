@@ -13,6 +13,7 @@ import {
   CatalogAdminRejection,
   CatalogAdminService,
   CategoryRemovalOutcome,
+  ListCategoriesFilter,
   CategoryView,
   CreateCategoryInput,
   CreateProductInput,
@@ -100,8 +101,8 @@ export class ResellerCatalogService {
 
   // ---------------------------------------------------------------- categories
 
-  listCategories(actor: ResellerCatalogActor, tenantId: string): Promise<CategoryView[]> {
-    return this.run(actor, tenantId, 'read', (as) => this.catalog.listCategories(as));
+  listCategories(actor: ResellerCatalogActor, tenantId: string, filter: ListCategoriesFilter = {}): Promise<CategoryView[]> {
+    return this.run(actor, tenantId, 'read', (as) => this.catalog.listCategories(as, filter.archived ? { archived: true } : {}));
   }
 
   createCategory(actor: ResellerCatalogActor, tenantId: string, input: ResellerCreateCategoryInput): Promise<CategoryView> {
@@ -112,8 +113,8 @@ export class ResellerCatalogService {
     return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.updateCategory(as, id, patch));
   }
 
-  removeCategories(actor: ResellerCatalogActor, tenantId: string, ids: string[]): Promise<CategoryRemovalOutcome[]> {
-    return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.removeCategories(as, ids));
+  removeCategories(actor: ResellerCatalogActor, tenantId: string, ids: string[], withProducts = false): Promise<CategoryRemovalOutcome[]> {
+    return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.removeCategories(as, ids, withProducts));
   }
 
   // ------------------------------------------------------------------ products

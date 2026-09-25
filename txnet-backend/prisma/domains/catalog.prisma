@@ -61,6 +61,9 @@ model ProductCategory {
   /// (F-1533-f, ADR-0050 amendment 2). Null = DEFAULT_LANGUAGE (older rows).
   sourceLang String?
   isActive  Boolean  @default(true)
+  /// Set when a removal with its products kept it for a sold product still
+  /// in it (F-026-l): out of the list, nothing new filed in it.
+  archivedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 

@@ -33,6 +33,7 @@ import {
   ListTextDraftsQuery,
   PublishTextsBody,
   RemoveCategoriesBody,
+  ListCategoriesQuery,
   RemoveProductsBody,
   SetPriceBody,
   UpdateCategoryBody,
@@ -46,6 +47,7 @@ import {
   listTextDraftsSchema,
   publishTextsSchema,
   removeCategoriesSchema,
+  listCategoriesSchema,
   removeProductsSchema,
   setPriceSchema,
   updateCategorySchema,
@@ -109,8 +111,8 @@ export class CatalogAdminController {
 
   @Get('categories')
   @RateLimit(READ)
-  async listCategories(@Req() req: Request, @Ip() ip: string) {
-    return this.refusing(() => this.catalog.listCategories(this.actor(req, ip)));
+  async listCategories(@Query(new ZodValidationPipe(listCategoriesSchema)) query: ListCategoriesQuery, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.catalog.listCategories(this.actor(req, ip), query));
   }
 
   @Post('categories')
@@ -132,12 +134,12 @@ export class CatalogAdminController {
     return this.refusing(() => this.catalog.updateCategory(this.actor(req, ip), id, body as UpdateCategoryInput));
   }
 
-  /** F-026-j: one outcome per id — `deleted`, `has_products`, or `not_found`. */
+  /** F-026-j: one outcome per id — `deleted`, `has_products`, or `not_found`; F-026-l: `withProducts` adds `archived`. */
   @Post('categories/remove')
   @HttpCode(HttpStatus.OK)
   @RateLimit(WRITE)
   async removeCategories(@Body(new ZodValidationPipe(removeCategoriesSchema)) body: RemoveCategoriesBody, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(() => this.catalog.removeCategories(this.actor(req, ip), body.ids as string[]));
+    return this.refusing(() => this.catalog.removeCategories(this.actor(req, ip), body.ids as string[], body.withProducts === true));
   }
 
   @Get('products')

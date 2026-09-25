@@ -69,7 +69,8 @@ export class CatalogAdminRefused extends Error {
 
 export type CreateCategoryInput = { tenantId?: string | null; key: string; sourceLang?: string; name: Texts };
 /** A new `sourceLang` needs `name` with that language's text. */
-export type UpdateCategoryInput = { sourceLang?: string; name?: Texts; isActive?: boolean };
+/** `archived: false` brings an archived category back, still switched off (F-026-l). */
+export type UpdateCategoryInput = { sourceLang?: string; name?: Texts; isActive?: boolean; archived?: false };
 export type CreateProductInput = {
   tenantId?: string | null;
   categoryId: string;
@@ -116,8 +117,18 @@ export type SetPriceInput = { amount: string; effectiveFrom?: string };
 export type ListProductsFilter = { categoryId?: string; tenantId?: string; archived?: boolean };
 /** What `removeProducts` did to one id: gone for good, kept but archived, or not the caller's to remove. */
 export type RemovalOutcome = { id: string; outcome: 'deleted' | 'archived' | 'not_found' };
-/** What `removeCategories` did to one id: gone, kept because a product sits in it, or not the caller's to remove. */
-export type CategoryRemovalOutcome = { id: string; outcome: 'deleted' | 'has_products' | 'not_found' };
+/**
+ * What `removeCategories` did to one id: gone, kept because a product sits in it, or not the caller's to remove.
+ * Asked to take its products with it (F-026-l): `archived` when a sold product stays in it, and `products`
+ * counts what happened to its own products.
+ */
+export type CategoryRemovalOutcome = {
+  id: string;
+  outcome: 'deleted' | 'archived' | 'has_products' | 'not_found';
+  products?: { deleted: number; archived: number };
+};
+/** `archived`: the archived categories alone; the list otherwise leaves them out (F-026-l). */
+export type ListCategoriesFilter = { archived?: boolean };
 export type PublishTextsInput = { lang: string; keys: string[] };
 export type EditTextsInput = { lang: string; texts: Record<string, string> };
 
@@ -130,6 +141,8 @@ export type CategoryView = {
   /** The language the admin wrote it in; a reader's fallback. `DEFAULT_LANGUAGE` for a row from before F-1533-f. */
   sourceLang: string;
   isActive: boolean;
+  /** Set when a removal with its products found a sold one in it and kept it (F-026-l). */
+  archivedAt: Date | null;
 };
 export type ProductView = {
   id: string;
@@ -189,6 +202,7 @@ const categoryView = (r: Row, defaultLang: string): CategoryView => ({
   nameKey: r['nameKey'] as string,
   sourceLang: sourceOf(r, defaultLang),
   isActive: r['isActive'] as boolean,
+  archivedAt: (r['archivedAt'] as Date | null | undefined) ?? null,
 });
 
 const productView = (r: Row, defaultLang: string): ProductView => ({
@@ -288,12 +302,13 @@ export class CatalogAdminService {
 
   // ---------------------------------------------------------------- categories
 
-  async listCategories(actor: CatalogActor): Promise<CategoryView[]> {
+  async listCategories(actor: CatalogActor, filter: ListCategoriesFilter = {}): Promise<CategoryView[]> {
     const { owner } = await this.access(actor);
     // A tenant sees the platform's shared categories beside its own: it files products in either.
+    const archivedAt = filter.archived ? { not: null } : null;
     const rows = await this.within(owner, (db) =>
       db.productCategory.findMany({
-        where: owner ? {} : { OR: [{ tenantId: null }, { tenantId: actor.tenantId }] },
+        where: owner ? { archivedAt } : { OR: [{ tenantId: null }, { tenantId: actor.tenantId }], archivedAt },
         orderBy: { key: 'asc' },
       }),
     );
@@ -326,7 +341,11 @@ export class CatalogAdminService {
       const before = await this.managed(tx, 'productCategory', 'category_not_found', actor, id, owner);
       sourceLang = renaming ? this.sourceLang(patch.sourceLang ?? sourceOf(before, this.texts.defaultLanguage()), patch.name ?? {}, undefined) : null;
       const nameKey = catalogTextKey((before['tenantId'] as string | null) ?? null, 'category', before['key'] as string, 'name');
-      const data = { ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}), ...(renaming ? { nameKey, sourceLang } : {}) };
+      const data = {
+        ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
+        ...(renaming ? { nameKey, sourceLang } : {}),
+        ...(patch.archived === false ? { archivedAt: null } : {}),
+      };
       const row = (await tx.productCategory.update({ where: { id }, data })) as unknown as Row;
       const updated = categoryView(row, this.texts.defaultLanguage());
       await this.audit(tx, actor, updated.tenantId, 'catalog_category_update', 'product_category', id, categoryView(before, this.texts.defaultLanguage()), { ...updated, name: patch.name });
@@ -344,11 +363,60 @@ export class CatalogAdminService {
    * so the database decides — there is no count to race with a product filed
    * in the meantime.
    */
-  async removeCategories(actor: CatalogActor, ids: string[]): Promise<CategoryRemovalOutcome[]> {
+  async removeCategories(actor: CatalogActor, ids: string[], withProducts = false): Promise<CategoryRemovalOutcome[]> {
     const { owner } = await this.access(actor);
     const outcomes: CategoryRemovalOutcome[] = [];
-    for (const id of ids) outcomes.push({ id, outcome: await this.removeCategory(actor, owner, id) });
+    for (const id of ids) {
+      outcomes.push(withProducts ? await this.removeCategoryWithProducts(actor, owner, id) : { id, outcome: await this.removeCategory(actor, owner, id) });
+    }
     return outcomes;
+  }
+
+  /**
+   * A category and its products (F-026-l). Each product of the category's own
+   * tenant is removed as `removeProducts` removes it — deleted if never sold,
+   * archived if sold — then the category goes if nothing sits in it, and is
+   * archived if only archived products do. Another tenant's product in the
+   * platform's shared category is never touched: it keeps the category, and
+   * the answer is `has_products`.
+   */
+  private async removeCategoryWithProducts(actor: CatalogActor, owner: boolean, id: string): Promise<CategoryRemovalOutcome> {
+    let category: Row;
+    try {
+      category = await this.within(owner, (db) => this.managed(db, 'productCategory', 'category_not_found', actor, id, owner));
+    } catch (e) {
+      if (e instanceof CatalogAdminRefused) return { id, outcome: 'not_found' };
+      throw e;
+    }
+    const tenantId = (category['tenantId'] as string | null) ?? null;
+    const inside = (await this.within(owner, (db) => db.product.findMany({ where: { categoryId: id, tenantId, archivedAt: null } }))) as unknown as Row[];
+    const products = { deleted: 0, archived: 0 };
+    for (const p of inside) {
+      const outcome = await this.removeProduct(actor, owner, p['id'] as string);
+      if (outcome !== 'not_found') products[outcome] += 1;
+    }
+    const outcome = await this.removeCategory(actor, owner, id);
+    return { id, outcome: outcome === 'has_products' ? await this.archiveCategory(actor, owner, id) : outcome, products };
+  }
+
+  /** Archive a category only archived products sit in; a live product in it (another tenant's, or one filed meanwhile) keeps it. */
+  private async archiveCategory(actor: CatalogActor, owner: boolean, id: string): Promise<'archived' | 'has_products' | 'not_found'> {
+    try {
+      return await this.within(owner, async (tx) => {
+        const before = await this.managed(tx, 'productCategory', 'category_not_found', actor, id, owner);
+        if ((await tx.product.count({ where: { categoryId: id, archivedAt: null } })) > 0) return 'has_products' as const;
+        if (before['archivedAt']) return 'archived' as const;
+        const updated = await tx.productCategory.update({ where: { id }, data: { isActive: false, archivedAt: new Date() } });
+        await this.audit(tx, actor, (before['tenantId'] as string | null) ?? null, 'catalog_category_archive', 'product_category', id, categoryView(before, this.texts.defaultLanguage()), {
+          ...categoryView(updated as unknown as Row, this.texts.defaultLanguage()),
+          outcome: 'archived',
+        });
+        return 'archived' as const;
+      });
+    } catch (e) {
+      if (e instanceof CatalogAdminRefused) return 'not_found';
+      throw e;
+    }
   }
 
   private async removeCategory(actor: CatalogActor, owner: boolean, id: string): Promise<CategoryRemovalOutcome['outcome']> {
@@ -408,7 +476,8 @@ export class CatalogAdminService {
     const view = await this.within(owner, async (tx) => {
       const category = (await tx.productCategory.findUnique({ where: { id: input.categoryId } })) as unknown as Row | null;
       // The platform's shared category holds anyone's products; a tenant's only its own.
-      if (!category || (category['tenantId'] !== null && category['tenantId'] !== tenantId)) {
+      // An archived category holds only what was sold; nothing new is filed in it (F-026-l).
+      if (!category || category['archivedAt'] || (category['tenantId'] !== null && category['tenantId'] !== tenantId)) {
         throw new CatalogAdminRefused('category_not_found', input.categoryId);
       }
       const row = (await this.refuseDuplicate('key_taken', input.key, () =>
@@ -461,6 +530,7 @@ export class CatalogAdminService {
         ...(patch.archived === false ? { archivedAt: null } : {}),
       };
       const updated = productView((await tx.product.update({ where: { id }, data })) as unknown as Row, this.texts.defaultLanguage());
+      if (patch.archived === false) await this.restoreCategoryOf(tx, actor, updated.categoryId);
       await this.audit(tx, actor, updated.tenantId, 'catalog_product_update', 'product', id, productView(before, this.texts.defaultLanguage()), {
         ...updated,
         name: patch.name,
@@ -517,6 +587,17 @@ export class CatalogAdminService {
         outcome: 'archived',
       });
       return 'archived' as const;
+    });
+  }
+
+  /** A product back from the archive brings its archived category back too, still switched off (F-026-l). */
+  private async restoreCategoryOf(tx: Prisma.TransactionClient, actor: CatalogActor, categoryId: string): Promise<void> {
+    const before = (await tx.productCategory.findUnique({ where: { id: categoryId } })) as unknown as Row | null;
+    if (!before?.['archivedAt']) return;
+    const row = (await tx.productCategory.update({ where: { id: categoryId }, data: { archivedAt: null } })) as unknown as Row;
+    await this.audit(tx, actor, (before['tenantId'] as string | null) ?? null, 'catalog_category_update', 'product_category', categoryId, categoryView(before, this.texts.defaultLanguage()), {
+      ...categoryView(row, this.texts.defaultLanguage()),
+      restoredWith: 'product',
     });
   }
 

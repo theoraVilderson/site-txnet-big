@@ -59,8 +59,17 @@ export const createCategorySchema = z
   .strict();
 
 export const updateCategorySchema = z
-  .object({ sourceLang: lang.optional(), name: texts(NAME_MAX).optional(), isActive: z.boolean().optional() })
+  .object({
+    sourceLang: lang.optional(),
+    name: texts(NAME_MAX).optional(),
+    isActive: z.boolean().optional(),
+    /** Only `false`: back from the archive (F-026-l). Archiving is `POST /categories/remove` with its products. */
+    archived: z.literal(false).optional(),
+  })
   .strict();
+
+/** `true`: the archived categories alone (F-026-l). */
+export const listCategoriesSchema = z.object({ archived: z.literal('true').transform(() => true).optional() }).strict();
 
 export const listProductsSchema = z.object({
   categoryId: uuid('categoryId').optional(),
@@ -101,7 +110,8 @@ export const updateProductSchema = z
 export const removeProductsSchema = z
   .object({ ids: z.array(uuid('ids')).min(1).max(100).refine((ids) => new Set(ids).size === ids.length, 'ids must be distinct') })
   .strict();
-export const removeCategoriesSchema = removeProductsSchema;
+/** F-026-l: `withProducts` removes each of its own products first, then deletes or archives the category. */
+export const removeCategoriesSchema = removeProductsSchema.extend({ withProducts: z.boolean().optional() }).strict();
 
 const variantFields = {
   nameKey: i18nKey('nameKey').nullable().optional(),
@@ -149,6 +159,7 @@ export const listResellerProductsSchema = listProductsSchema.omit({ tenantId: tr
 export type CreateCategoryBody = z.infer<typeof createCategorySchema>;
 export type UpdateCategoryBody = z.infer<typeof updateCategorySchema>;
 export type ListProductsQuery = z.infer<typeof listProductsSchema>;
+export type ListCategoriesQuery = z.infer<typeof listCategoriesSchema>;
 export type CreateProductBody = z.infer<typeof createProductSchema>;
 export type UpdateProductBody = z.infer<typeof updateProductSchema>;
 export type RemoveProductsBody = z.infer<typeof removeProductsSchema>;

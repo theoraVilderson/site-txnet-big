@@ -32,9 +32,9 @@ cross-tenant pool.
 
 | Route | Body / query | Answer | Refusals |
 |---|---|---|---|
-| `GET /categories` | — | the platform's and the caller's own (owner: all) | — |
-| `POST /categories`, `PATCH /categories/:id` | `tenantId?` (absent / `null` / uuid), `key`, `sourceLang?`, `name: {lang: text}`; patch `sourceLang`, `name`, `isActive` | category | `not_platform_owner` 403, `category_not_found` 404, `key_taken` 409, `lang_unknown` / `source_text_missing` 400, `texts_unavailable` 503 |
-| `POST /categories/remove` (F-026-j) | `ids[]` (1-100, distinct) | `[{id, outcome}]`, `outcome` `deleted` / `has_products` / `not_found`, each id on its own | — (a refusal is that id's `not_found`) |
+| `GET /categories` | `archived?` (only `true`: the archived alone; without it they are left out, F-026-l) | the platform's and the caller's own (owner: all), each with `archivedAt` | — |
+| `POST /categories`, `PATCH /categories/:id` | `tenantId?` (absent / `null` / uuid), `key`, `sourceLang?`, `name: {lang: text}`; patch `sourceLang`, `name`, `isActive`, `archived: false` (back from the archive, still off) | category | `not_platform_owner` 403, `category_not_found` 404, `key_taken` 409, `lang_unknown` / `source_text_missing` 400, `texts_unavailable` 503 |
+| `POST /categories/remove` (F-026-j/l) | `ids[]` (1-100, distinct), `withProducts?` | `[{id, outcome, products?}]`, `outcome` `deleted` / `archived` (only with `withProducts`) / `has_products` / `not_found`, each id on its own; `products: {deleted, archived}` with `withProducts` | — (a refusal is that id's `not_found`) |
 | `GET /products` | `categoryId?`, `tenantId?` (owner: uuid or `platform`), `archived?` (only `true`: the archived alone; without it they are left out) | products, each with `archivedAt` | — |
 | `POST /products/remove` (F-026-h) | `ids[]` (1-100, distinct) | `[{id, outcome}]`, `outcome` `deleted` / `archived` / `not_found`, each id on its own | — (a refusal is that id's `not_found`) |
 | `POST /products`, `GET\|PATCH /products/:id` | `categoryId`, `key`, `sourceLang?`, `name: {lang: text}`, `description?: {lang: text} \| null`, `fulfilmentKind`, `featureKeys?`, `defaultQuotas?`; patch has no key or kind, and `archived: false` brings an archived product back (still off) | product; `GET` with variants and each price history | `category_not_found` (another tenant's category), `product_not_found`, `key_taken`, `lang_unknown`, `source_text_missing`, `texts_unavailable` |
@@ -51,7 +51,13 @@ but a product `POST /products/remove` finds unreferenced (`catalog_product_delet
 its variants with it), and a category `POST /categories/remove` finds empty
 (`catalog_category_delete`). A category any product sits in, an archived one
 included, is kept and answered `has_products`: `product.categoryId` is RESTRICT,
-so the database decides (`removeCategories`). One a Grant, a coupon or a coupon scope references is
+so the database decides (`removeCategories`). With `withProducts` (F-026-l)
+each product **of the category's own tenant** is removed first as below, then
+the category is deleted, or archived (`catalog_category_archive`: off, out of
+the list, no new product filed in it) when only archived products remain.
+Another tenant's product in the platform's shared category is never touched
+and keeps it `has_products`. Restoring a product restores its archived
+category, still off. One a Grant, a coupon or a coupon scope references is
 archived instead (`catalog_product_archive`): off, out of the list, never sold,
 every Grant untouched. The foreign keys decide, so a new table that references
 a variant counts without a change (`removeProducts`, invariant 6).
