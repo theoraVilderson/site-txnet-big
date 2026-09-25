@@ -100,7 +100,10 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    and "change categories" in the product sheet — a patch replaces the list);
    the order picked is the order sent, and at least one is required. Lists and
    the filter name a category by its path (`categoryPath`); the filter matches
-   a product in any of its categories. A removal answers `has_children` and
+   a product in any of its categories. The wizard files a new category under
+   the product's owner (`wizardCategoryBody`: platform product → platform
+   category) and refuses an existing pick that owner cannot use before any call
+   (`categoryNotForOwner`) — billing's `category_not_found` otherwise. A removal answers `has_children` and
    `unlinked` lines too (`categoryRemovalReport`).
 10a. **A retired kind is never offered** (F-111-g): the wizard lists
    `CREATABLE_FULFILMENT_KINDS` — `FULFILMENT_KINDS` less billing's

@@ -1374,7 +1374,8 @@
       "none": "—",
       "partial": "The product was created but the variant was not saved. Add it again from “Variants and prices”.",
       "done": "Product created. If you ticked “Translate into every language”, drafts will appear shortly under “Translations”.",
-      "edit": "Edit"
+      "edit": "Edit",
+      "categoryNotForOwner": "A platform product goes only in shared categories, and another tenant's product in that tenant's or shared ones. Pick another category, or change the owner under “Type & capabilities”."
     },
     "fulfilmentHint": {
       "network_access": "Internet/VPN subscription: the user gets a connection link with traffic and device quotas.",

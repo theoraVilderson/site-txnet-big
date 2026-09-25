@@ -48,6 +48,7 @@ import {
   validatePriceForm,
   validateProductForm,
   validateVariantForm,
+  wizardCategoryBody,
   variantBody,
   emptyWizard,
   featureKeysIn,
@@ -261,6 +262,38 @@ describe("the new product wizard", () => {
     expect(wizardStepErrors("category", w, RESELLER)).toHaveProperty("name");
     w.newCategory.name = "وی‌پی‌ان";
     expect(wizardStepErrors("category", w, RESELLER)).toEqual({});
+  });
+
+  it("files a new category under the product's owner, whatever the shared box says", () => {
+    const w = ready();
+    w.categoryMode = "new";
+    w.newCategory = { ...w.newCategory, key: "vpn", name: "وی‌پی‌ان" };
+    // The platform owner's platform product: the category must be the platform's too.
+    w.product.owner = "platform";
+    expect(wizardCategoryBody(w, OWNER)).toMatchObject({ tenantId: null });
+    w.product = { ...w.product, owner: "tenant", tenantId: UUID };
+    expect(wizardCategoryBody(w, OWNER)).toMatchObject({ tenantId: UUID });
+    w.product.owner = "own";
+    expect(wizardCategoryBody(w, OWNER)).not.toHaveProperty("tenantId");
+    expect(wizardCategoryBody({ ...w, newCategory: { ...w.newCategory, shared: true } }, OWNER)).toMatchObject({ tenantId: null });
+    // Nobody else chooses: billing files a reseller's category under the reseller.
+    expect(wizardCategoryBody({ ...w, product: { ...w.product, owner: "platform" } }, RESELLER)).not.toHaveProperty("tenantId");
+  });
+
+  it("refuses an existing category the product's owner cannot file in, before anything is sent", () => {
+    const w = ready();
+    const cats = [
+      { id: UUID, tenantId: "t-owner" },
+      { id: "shared", tenantId: null },
+    ];
+    w.product.owner = "platform";
+    expect(wizardStepErrors("category", w, OWNER, cats)).toHaveProperty("categoryIds", CATALOG_KEYS.wizard.categoryNotForOwner);
+    w.categoryIds = ["shared"];
+    expect(wizardStepErrors("category", w, OWNER, cats)).toEqual({});
+    w.categoryIds = [UUID];
+    w.product.owner = "own";
+    expect(wizardStepErrors("category", w, OWNER, cats)).toEqual({});
+    expect(firstInvalidStep({ ...w, product: { ...w.product, owner: "platform" } }, OWNER, cats)).toBe("category");
   });
 
   it("lets the first variant be skipped, and checks it only when it is not", () => {

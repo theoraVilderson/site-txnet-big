@@ -542,12 +542,45 @@ export const emptyWizard = (defaultLang: string): ProductWizard => ({
 const pick = <T extends object>(errors: T, keys: readonly (keyof T)[]) =>
   Object.fromEntries(Object.entries(errors).filter(([k]) => keys.includes(k as keyof T))) as Partial<T>;
 
-/** One step's errors, keyed by the field of the form that step edits. */
-export function wizardStepErrors(step: WizardStep, w: ProductWizard, me: Me | null): Record<string, string> {
+/**
+ * A category the product can be filed in: the platform's, or the product's own
+ * tenant's — billing's `usableCategories`. `undefined` = billing decides (not the
+ * platform owner): a tenant only ever sees its own and the platform's.
+ */
+const fitsOwner = (c: { tenantId: string | null }, tenant: string | null | undefined) =>
+  tenant === undefined || c.tenantId === null || c.tenantId === tenant;
+
+/**
+ * The wizard's new category, filed where its product can use it: a platform
+ * product's under the platform, another tenant's product's under that tenant.
+ * Left to the "shared" box it would be the owner's own, and billing would then
+ * refuse the product as `category_not_found`.
+ */
+export function wizardCategoryBody(w: ProductWizard, me: Me | null): CreateCategoryBody {
+  const body = categoryBody(w.newCategory, isPlatformOwner(me));
+  const tenant = wizardVariantTenant(w.product, me);
+  if (tenant === undefined || w.product.owner === "own") return body;
+  return { ...body, tenantId: tenant };
+}
+
+/**
+ * One step's errors, keyed by the field of the form that step edits.
+ * `categories`: what the existing picks are checked against for the product's owner.
+ */
+export function wizardStepErrors(
+  step: WizardStep,
+  w: ProductWizard,
+  me: Me | null,
+  categories: readonly { id: string; tenantId: string | null }[] = [],
+): Record<string, string> {
   switch (step) {
-    case "category":
+    case "category": {
       if (w.categoryMode === "new") return validateCategoryForm(w.newCategory) as Record<string, string>;
-      return unique(w.categoryIds).length === 0 ? { categoryIds: E.required } : {};
+      if (unique(w.categoryIds).length === 0) return { categoryIds: E.required };
+      const tenant = wizardVariantTenant(w.product, me);
+      const unfit = categories.some((c) => w.categoryIds.includes(c.id) && !fitsOwner(c, tenant));
+      return unfit ? { categoryIds: CATALOG_KEYS.wizard.categoryNotForOwner } : {};
+    }
     case "names":
       return pick(validateProductForm(w.product, me), ["key", "sourceLang", "name"]) as Record<string, string>;
     case "access":
@@ -559,8 +592,8 @@ export function wizardStepErrors(step: WizardStep, w: ProductWizard, me: Me | nu
   }
 }
 
-export function firstInvalidStep(w: ProductWizard, me: Me | null): WizardStep | null {
-  return WIZARD_STEPS.find((s) => Object.keys(wizardStepErrors(s, w, me)).length > 0) ?? null;
+export function firstInvalidStep(w: ProductWizard, me: Me | null, categories: readonly { id: string; tenantId: string | null }[] = []): WizardStep | null {
+  return WIZARD_STEPS.find((s) => Object.keys(wizardStepErrors(s, w, me, categories)).length > 0) ?? null;
 }
 
 // --------------------------------------------------------------------- price

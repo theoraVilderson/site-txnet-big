@@ -14,7 +14,7 @@ import {
   CREATABLE_FULFILMENT_KINDS,
   NAME_MAX,
   WIZARD_STEPS,
-  categoryBody,
+  wizardCategoryBody,
   isPlatformOwner,
   productBody,
   suggestKey,
@@ -111,7 +111,7 @@ export function ProductWizard({
     setReached((r) => Math.max(r, WIZARD_STEPS.indexOf(to)));
   };
   const next = () => {
-    const found = wizardStepErrors(step, w, actor);
+    const found = wizardStepErrors(step, w, actor, categories);
     setErrors(found);
     if (Object.keys(found).length) return;
     // The SKU follows the product key and the duration until the admin types one.
@@ -123,10 +123,10 @@ export function ProductWizard({
   const setVariant = (patch: Partial<VariantForm>) => setW((x) => ({ ...x, variant: { ...x.variant, ...patch } }));
 
   const create = async () => {
-    const invalid = firstInvalidStep(w, actor);
+    const invalid = firstInvalidStep(w, actor, categories);
     if (invalid) {
       go(invalid);
-      setErrors(wizardStepErrors(invalid, w, actor));
+      setErrors(wizardStepErrors(invalid, w, actor, categories));
       return;
     }
     setBusy(true);
@@ -135,7 +135,7 @@ export function ProductWizard({
     let ids = created;
     try {
       if (w.categoryMode === "new" && !ids.categoryId) {
-        const c = await api.createCategory(categoryBody(w.newCategory, owner));
+        const c = await api.createCategory(wizardCategoryBody(w, actor));
         ids = { ...ids, categoryId: c.id };
         setCreated(ids);
       }
@@ -221,7 +221,11 @@ export function ProductWizard({
             <>
               <p className="text-[11px] text-text-secondary">{t("common", K.product.categoriesHint)}</p>
               <CategoryMultiPicker categories={categories} label={categoryLabel} value={w.categoryIds} onChange={(ids) => setW((x) => ({ ...x, categoryIds: ids }))} />
-              {errors.categoryIds && <p className="text-[11px] text-error">{t("common", K.wizard.pickCategory)}</p>}
+              {errors.categoryIds && (
+                <p className="text-[11px] text-error">
+                  {t("common", errors.categoryIds === K.wizard.categoryNotForOwner ? K.wizard.categoryNotForOwner : K.wizard.pickCategory)}
+                </p>
+              )}
               <button type="button" className={`${quietButton} self-start`} onClick={() => setW((x) => ({ ...x, categoryMode: "new" }))}>
                 {t("common", K.wizard.useNewCategory)}
               </button>
