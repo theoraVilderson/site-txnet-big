@@ -26,7 +26,8 @@ invalidated by Postgres notifications (F-113-c, ADR-0083), and
 `Subscription-Userinfo` with the inactive Grant's empty body (F-609), its
 used figure live from Redis on every answer (F-609-b), and the tenant
 status gate (F-113-e), and Clash, Sing-box and Xray JSON from the same lines
-(F-113-f). The rest is the F-113-* series and F-027-bi..bm in `BACKLOG.md`.
+(F-113-f). Stage 1 of F-027-bh — one merged link per Grant, every driver
+family — is complete; panel groups (F-027-bk..bm) sit under it.
 
 ## Files
 | File | Read it when |
