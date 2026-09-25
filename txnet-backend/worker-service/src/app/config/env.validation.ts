@@ -121,6 +121,8 @@ export const envSchema = z.object({
   AUTOMATION_PAYMENT_REVERSED_QUEUE: z.string().min(1).default('txnet.automation.outbox.payment-reversed'),
   /** The queue `notification.created` outbox events land in for the live inbox push (F-035-b). */
   AUTOMATION_NOTIFICATION_CREATED_QUEUE: z.string().min(1).default('txnet.automation.outbox.notification-created'),
+  /** The queue `network.panel.tested` outbox events land in for the live systems page (F-027-bs). */
+  AUTOMATION_PANEL_TESTED_QUEUE: z.string().min(1).default('txnet.automation.outbox.panel-tested'),
   /** The queue `tenant.billing.credited` outbox events land in, to renew the credited reseller at once (F-019-c). */
   AUTOMATION_TENANT_BILLING_CREDITED_QUEUE: z.string().min(1).default('txnet.automation.outbox.tenant-billing-credited'),
   /** The queue a reseller owner's renewal notices land in (F-019-c). */

@@ -2,6 +2,9 @@ package register
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -126,5 +129,49 @@ func TestAFaultIsGuardedAndItsDetailBounded(t *testing.T) {
 	}
 	if !strings.HasPrefix(detail, stored) || !strings.HasSuffix(stored, "ж") {
 		t.Error("the bounded detail is not a whole-rune prefix of the original")
+	}
+}
+
+// F-027-bs: every test result is announced through the outbox, in the same
+// statement as the write it announces — never a publish after it.
+func TestEveryTestResultIsAnnouncedInItsOwnStatement(t *testing.T) {
+	f := &fakeDB{affected: "INSERT 0 1"}
+	caps := driver.Capabilities{Version: driver.CapabilitiesVersion, Answers: map[driver.RowKey]driver.Answer{}}
+	written, err := PostgresStore{DB: f}.Answer(context.Background(), panel, caps, driver.ReviewRefused, time.Now())
+	if err != nil || !written {
+		t.Fatalf("Answer: written=%v err=%v", written, err)
+	}
+	if err := (PostgresStore{DB: f}).Fail(context.Background(), panel, FaultUnopenable, "no driver", time.Now()); err != nil {
+		t.Fatalf("Fail: %v", err)
+	}
+	for i, write := range []string{"verdict", "fault"} {
+		sql := f.sql[i]
+		if !strings.Contains(sql, "INSERT INTO automation.outbox_event") || !strings.Contains(sql, "RETURNING") {
+			t.Errorf("the %s write does not insert its outbox event in the same statement", write)
+		}
+		if !strings.Contains(sql, "'platform_owner'") {
+			t.Errorf("the %s event does not name the platform owner for a platform panel, whose tenantId is null", write)
+		}
+		if f.args[i][len(f.args[i])-1] != PanelTestedEvent {
+			t.Errorf("the %s event is typed %v, want %q", write, f.args[i][len(f.args[i])-1], PanelTestedEvent)
+		}
+	}
+}
+
+// The type is the routing key the worker binds and the `type` the panel
+// filters on; both read it from contracts/realtime/events.json (C-08).
+func TestThePanelTestedTypeIsTheDeclaredRealtimeEvent(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Clean("../../../contracts/realtime/events.json"))
+	if err != nil {
+		t.Fatalf("reading the fixture: %v", err)
+	}
+	var doc struct {
+		RealtimeEvents map[string]string `json:"realtimeEvents"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("parsing the fixture: %v", err)
+	}
+	if got := doc.RealtimeEvents["panelTested"]; got != PanelTestedEvent {
+		t.Errorf("events.json panelTested = %q, register.PanelTestedEvent = %q", got, PanelTestedEvent)
 	}
 }

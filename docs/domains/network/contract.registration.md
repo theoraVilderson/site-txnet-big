@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: draft
 version: 15
-updated: 2026-09-24
+updated: 2026-09-25
 ---
 
 # Registration: the connection test and its verdict
@@ -26,7 +26,7 @@ RADIUS secret lands beside it under `panelRadiusSecret`
 `register.Registrar` finds pending panels on its own tick (30 s by default), opens a driver for each, runs `Driver.Capabilities` under a 30 s
 deadline, and writes the result. A verdict therefore arrives on the next tick,
 not in the response to the click, and the systems page shows `pending` until
-then (F-027-ad).
+then (F-027-ad) — and then the answer, without a reload (F-027-bs, below).
 
 One test runs at a time. Registrations are rare, and testing them in parallel
 would only spend the connections a collection pass needs.
@@ -67,6 +67,28 @@ The rules:
 kinds (`contract.md` "The driver contract") plus `unopenable` and
 `invalid_answers`. `register.FaultKind` mirrors it, and
 `network-panel-declaration.spec.ts` pins the eight values.
+
+## Every result is announced, in the statement that writes it (F-027-bs)
+
+Both writes are one statement: a `tested` CTE (the `UPDATE`, `RETURNING` the
+row) feeding an `INSERT` into `automation.outbox_event`, type
+`network.panel.tested` (`register.PanelTestedEvent`), aggregate
+`network.panel`. The event and the state it announces commit or fail together
+(ADR-0021) — never a Redis publish or a broker call after it (user,
+2026-09-25).
+
+- **A stale write announces nothing.** The `WHERE … 'pending'` that makes it
+  `Stale` (rule 3) leaves the CTE empty, so no row is inserted.
+- **The payload names whose page it is**: `{panelId, tenantId, reviewState,
+  fault}`, where `tenantId` is the panel's, or — a platform panel's being null
+  (invariant 9) — the `platform_owner` tenant's, oldest first if tenant
+  invariant 1 were ever broken. The consumer never resolves it.
+- **A fault is announced on every retry**, every 5 minutes while it lasts: the
+  page's "tested at" moves each time, so each is a change worth reading.
+- The type is pinned to `contracts/realtime/events.json` from Go
+  (`postgres_test.go`) and from TypeScript (`routing-keys.contract.spec.ts`).
+  `automation/contract.outbox.md` has the consumer; `panel-web/contract.systems.md`
+  the page.
 
 ## Only an accepted panel is collected
 

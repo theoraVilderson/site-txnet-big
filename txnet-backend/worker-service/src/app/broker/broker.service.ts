@@ -180,6 +180,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   private readonly paymentConfirmedQueue: string;
   private readonly paymentReversedQueue: string;
   private readonly notificationCreatedQueue: string;
+  private readonly panelTestedQueue: string;
   private readonly tenantBillingCreditedQueue: string;
   private readonly tenantSubscriptionNoticeQueue: string;
   private readonly botUpdatePrefix: string;
@@ -199,6 +200,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     this.paymentConfirmedQueue = config.getOrThrow<string>('AUTOMATION_PAYMENT_CONFIRMED_QUEUE');
     this.paymentReversedQueue = config.getOrThrow<string>('AUTOMATION_PAYMENT_REVERSED_QUEUE');
     this.notificationCreatedQueue = config.getOrThrow<string>('AUTOMATION_NOTIFICATION_CREATED_QUEUE');
+    this.panelTestedQueue = config.getOrThrow<string>('AUTOMATION_PANEL_TESTED_QUEUE');
     this.tenantBillingCreditedQueue = config.getOrThrow<string>('AUTOMATION_TENANT_BILLING_CREDITED_QUEUE');
     this.tenantSubscriptionNoticeQueue = config.getOrThrow<string>('AUTOMATION_TENANT_SUBSCRIPTION_NOTICE_QUEUE');
     this.botUpdatePrefix = config.getOrThrow<string>('BOT_UPDATE_QUEUE_PREFIX');
@@ -273,6 +275,12 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       this.exchange,
       outboxRoutingKey(OutboxEventType.NOTIFICATION_CREATED),
     );
+    // F-027-bs: a connection test's verdict or fault pushed to the owner's systems page.
+    await this.channel.assertQueue(this.panelTestedQueue, {
+      durable: true,
+      arguments: { 'x-dead-letter-exchange': this.deadExchange },
+    });
+    await this.channel.bindQueue(this.panelTestedQueue, this.exchange, outboxRoutingKey(OutboxEventType.PANEL_TESTED));
     // F-019-c: a credited billing wallet asks auth-service to renew at once; the
     // renewal notices to a reseller's owner have their own queue, both types on it.
     await this.channel.assertQueue(this.tenantBillingCreditedQueue, {
@@ -477,6 +485,11 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   /** Start consuming `notification.created` outbox events (F-035-b), by the same rules. */
   async consumeNotificationCreated(handle: OutboxHandler): Promise<void> {
     await this.consumeOutbox(this.notificationCreatedQueue, handle);
+  }
+
+  /** Start consuming `network.panel.tested` outbox events (F-027-bs), by the same rules. */
+  async consumePanelTested(handle: OutboxHandler): Promise<void> {
+    await this.consumeOutbox(this.panelTestedQueue, handle);
   }
 
   /** Start consuming `tenant.billing.credited` outbox events (F-019-c), by the same rules. */

@@ -1,4 +1,6 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { RealtimeEvents } from "@/generated/wire";
+import { tenantChannel } from "@/lib/realtime";
 import type {
   CapabilityRow,
   ConnectionTestFault,
@@ -18,6 +20,30 @@ const K = SYSTEMS_KEYS;
 
 /** billing's `PANEL_MANAGE` — the menu entry needs it (F-027-ar). */
 export const PANEL_MANAGE = "panel.manage";
+
+/** gateway-service's `TENANT_CHANNEL_PERMISSION`: the `tenant:` channel needs it. */
+export const REALTIME_TENANT_READ = "realtime.tenant.read";
+
+/**
+ * The channel a connection test's verdict or fault arrives on (F-027-bs), or
+ * null when the gateway would refuse it — then the page reads on load, as it
+ * always did. `*` holds every permission, as `visibleMenu` reads it.
+ */
+export function liveChannelOf(me: { tenant: { id: string }; permissions: readonly string[] } | null): string | null {
+  if (!me) return null;
+  const held = me.permissions.includes("*") || me.permissions.includes(REALTIME_TENANT_READ);
+  return held ? tenantChannel(me.tenant.id) : null;
+}
+
+/**
+ * A filter, not a parser: `automation` pushes `{type:'network.panel.tested',
+ * panelId, reviewState, fault}` and the page re-reads `GET /systems/panels`
+ * for the row, so what is shown is still only what billing reads back.
+ */
+export function isPanelTested(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object") return false;
+  return (payload as Record<string, unknown>).type === RealtimeEvents.panelTested;
+}
 
 // The closed sets the register form offers, as `network.prisma` declares them
 // (C-09). `systems.test.ts` reads each enum out of the schema.

@@ -14,6 +14,8 @@ import {
   FAULT_KEYS,
   HOLD_REASON_KEYS,
   HOLD_STATE_KEYS,
+  isPanelTested,
+  liveChannelOf,
   PANEL_MANAGE,
   PANEL_ROLES,
   PANEL_STATE_KEYS,
@@ -384,5 +386,23 @@ describe("every key this page can reach", () => {
   it.each(["en", "fa"])("resolves in %s", (lang) => {
     const keys = shipped(lang);
     expect(flatten(SYSTEMS_KEYS).filter((k) => !keys.has(k))).toEqual([]);
+  });
+});
+
+describe("a connection test's answer arrives without a reload (F-027-bs)", () => {
+  const me = (permissions: string[]) => ({ tenant: { id: "t-1" }, permissions });
+
+  it("listens on its own tenant's channel only when the gateway would let it", () => {
+    expect(liveChannelOf(me(["*"]))).toBe("tenant:t-1");
+    expect(liveChannelOf(me(["panel.manage", "realtime.tenant.read"]))).toBe("tenant:t-1");
+    // Refused as `realtime.channelForbidden`: the page reads on load, as before.
+    expect(liveChannelOf(me(["panel.manage"]))).toBeNull();
+    expect(liveChannelOf(null)).toBeNull();
+  });
+
+  it("re-reads on network.panel.tested and on nothing else the channel carries", () => {
+    expect(isPanelTested({ type: "network.panel.tested", panelId: "p", reviewState: "accepted", fault: null })).toBe(true);
+    expect(isPanelTested({ type: "notification.created" })).toBe(false);
+    expect(isPanelTested(null)).toBe(false);
   });
 });

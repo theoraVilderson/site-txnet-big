@@ -3,7 +3,7 @@ id: automation
 layer: domain
 status: active
 version: 6
-updated: 2026-09-16
+updated: 2026-09-25
 ---
 
 # Contract — automation: the transactional outbox
@@ -180,6 +180,18 @@ transaction that writes the row (`notification/contract.md` "Emits").
 | No marker to give back: `RealtimePublisher` never throws | a closed panel reads the row on its next load, so at most once is enough |
 | A payload without `userId` or `notification.id` throws | whose row it is is never guessed |
 
+## A connection test's answer, live (F-027-bs)
+
+`PanelTestedConsumer`, queue `AUTOMATION_PANEL_TESTED_QUEUE` bound to exactly
+`outbox.network.panel.tested`. The producer is `network-service`
+(`network/contract.registration.md` "Every result is announced").
+
+| Rule | Why |
+|---|---|
+| `{type:'network.panel.tested', panelId, reviewState, fault}` on `tenant:<tenantId>` — the first push on a `tenant:` channel | the systems page is an operator's view, and only a `realtime.tenant.read` holder in that tenant hears it |
+| The tenant is the payload's; a payload without `tenantId` or `panelId` throws and dead-letters | the producer names the platform owner for a platform panel; this side never guesses |
+| **No marker** | a redelivery is one more re-read of the page; `RealtimePublisher` never throws |
+
 ## The tenant consumers: a reseller's renewal (F-019-c)
 
 Both in `outbox/tenant-renewal.consumers.ts`. The producers are tenant's:
@@ -195,7 +207,7 @@ Both in `outbox/tenant-renewal.consumers.ts`. The producers are tenant's:
 
 ## What is not built
 
-- Payer notices, one live push and the tenant renewal only; no Postgres idempotency store — ADR-0045 chose
+- Payer notices, two live pushes and the tenant renewal only; no Postgres idempotency store — ADR-0045 chose
   Redis for the first, and a consumer that moves money must choose again.
 - No retention or archive of published rows. ADR-0021 makes the table an audit
   trail; when that stops being worth keeping needs a producer with an opinion.

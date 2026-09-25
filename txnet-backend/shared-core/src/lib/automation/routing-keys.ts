@@ -13,13 +13,16 @@
  */
 
 /**
- * The outbox events a browser also reads off a `user:` channel, under the same
- * name — held to `contracts/realtime/events.json` (C-08).
+ * The outbox events a browser also reads off a `user:` channel (or, for
+ * `network.panel.tested`, its operator's `tenant:` one), under the same name —
+ * held to `contracts/realtime/events.json` (C-08).
  */
 export const RealtimeEventType = {
   PAYMENT_CONFIRMED: 'billing.payment.confirmed',
   PAYMENT_REVERSED: 'billing.payment.reversed',
   NOTIFICATION_CREATED: 'notification.created',
+  /** F-027-bs: `network-service` wrote a connection test's verdict or fault (`register.PostgresStore`). */
+  PANEL_TESTED: 'network.panel.tested',
 } as const;
 
 /** Outbox event types (`outbox_event.type`), routed as `outboxRoutingKey(type)`. Only {@link RealtimeEventType} reach a browser. */

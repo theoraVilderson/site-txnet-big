@@ -74,40 +74,67 @@ func (s PostgresStore) Pending(ctx context.Context) ([]Candidate, error) {
 	return out, nil
 }
 
-const answerSQL = `
+// PanelTestedEvent is the outbox type every test result is announced under
+// (F-027-bs): automation pushes it on the owner's `tenant:` channel and the
+// systems page re-reads on it. Declared in contracts/realtime/events.json.
+const PanelTestedEvent = "network.panel.tested"
+
+// announceSQL follows a `tested` CTE — the write it announces — so the event
+// and the state change commit or fail together (ADR-0021). A platform panel's
+// tenantId is null (invariant 9); its owner is the platform_owner tenant,
+// named here so the consumer never guesses whose page it is.
+const announceSQL = `
+INSERT INTO automation.outbox_event (id, aggregate, "aggregateId", type, payload)
+SELECT gen_random_uuid(), 'network.panel', t.id::text, $%d::text,
+       jsonb_build_object(
+         'panelId', t.id::text,
+         'tenantId', coalesce(t."tenantId", (
+             SELECT o.id FROM tenant.tenant o
+              WHERE o."tenantType" = 'platform_owner'
+              ORDER BY o."createdAt", o.id LIMIT 1))::text,
+         'reviewState', t."reviewState"::text,
+         'fault', t."connectionTestFault"::text)
+  FROM tested t`
+
+var answerSQL = `
+WITH tested AS (
 UPDATE network.panel
    SET capabilities = $2::jsonb,
        "reviewState" = $3::network."PanelReviewState",
        "connectionTestedAt" = $4,
        "connectionTestFault" = NULL,
        "connectionTestDetail" = NULL
- WHERE id = $1::uuid AND "reviewState" = 'pending'`
+ WHERE id = $1::uuid AND "reviewState" = 'pending'
+RETURNING id, "tenantId", "reviewState", "connectionTestFault")` + fmt.Sprintf(announceSQL, 5)
 
-// Answer writes the verdict. false is a panel no longer pending — withdrawn
-// or already answered — and the answer is dropped (rule 3).
+// Answer writes the verdict and announces it. false is a panel no longer
+// pending — withdrawn or already answered — and the answer is dropped (rule
+// 3): the CTE returns no row, so nothing is announced either.
 func (s PostgresStore) Answer(ctx context.Context, panelID string, caps driver.Capabilities, state driver.ReviewState, at time.Time) (bool, error) {
 	doc, err := json.Marshal(caps)
 	if err != nil {
 		return false, fmt.Errorf("encoding capabilities: %w", err)
 	}
-	tag, err := s.DB.Exec(ctx, answerSQL, panelID, doc, string(state), at)
+	tag, err := s.DB.Exec(ctx, answerSQL, panelID, doc, string(state), at, PanelTestedEvent)
 	if err != nil {
 		return false, fmt.Errorf("writing panel %s verdict: %w", panelID, err)
 	}
 	return tag.RowsAffected() == 1, nil
 }
 
-const failSQL = `
+var failSQL = `
+WITH tested AS (
 UPDATE network.panel
    SET "connectionTestedAt" = $4,
        "connectionTestFault" = $2::network."ConnectionTestFault",
        "connectionTestDetail" = $3
- WHERE id = $1::uuid AND "reviewState" = 'pending'`
+ WHERE id = $1::uuid AND "reviewState" = 'pending'
+RETURNING id, "tenantId", "reviewState", "connectionTestFault")` + fmt.Sprintf(announceSQL, 5)
 
 // Fail records a test that produced no verdict. A panel no longer pending is
 // left as it is: a fault lives only on a pending panel (rule 5).
 func (s PostgresStore) Fail(ctx context.Context, panelID string, fault FaultKind, detail string, at time.Time) error {
-	if _, err := s.DB.Exec(ctx, failSQL, panelID, string(fault), truncate(detail, maxDetail), at); err != nil {
+	if _, err := s.DB.Exec(ctx, failSQL, panelID, string(fault), truncate(detail, maxDetail), at, PanelTestedEvent); err != nil {
 		return fmt.Errorf("writing panel %s fault: %w", panelID, err)
 	}
 	return nil

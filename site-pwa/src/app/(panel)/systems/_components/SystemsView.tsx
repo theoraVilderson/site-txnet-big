@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { Server } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type SystemsPanel } from "@/lib/billing-api";
-import { SYSTEMS_KEYS as K } from "../_lib/systems";
+import { usePanelRealtime } from "../../_context/PanelRealtimeContext";
+import { usePanelSession } from "../../_context/PanelSessionContext";
+import { SYSTEMS_KEYS as K, isPanelTested, liveChannelOf } from "../_lib/systems";
 import { DriftReport } from "./DriftReport";
 import { HoldsQueue } from "./HoldsQueue";
 import { PanelList } from "./PanelList";
@@ -18,7 +20,8 @@ import { RegisterPanel } from "./RegisterPanel";
  * **Everything shown is what `network-service` last wrote.** Billing reads
  * columns and never calls the Go service (ADR-0071), so a registered panel
  * reads `pending` until the next tick tests it, and nothing here says
- * otherwise. The holds queue is the visible face of *in doubt, do not charge*:
+ * otherwise. A test's answer arrives without a reload (F-027-bs): the socket
+ * says a row changed and the page reads it again. The holds queue is the visible face of *in doubt, do not charge*:
  * while anything sits in it, nothing was dropped silently.
  */
 export function SystemsView() {
@@ -43,6 +46,20 @@ export function SystemsView() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void reload();
   }, [reload]);
+
+  const { me } = usePanelSession();
+  const client = usePanelRealtime();
+  const channel = liveChannelOf(me);
+  // `reload` is stable (no deps), so this subscribes once per socket and
+  // channel — a channel dropped and re-declared is a window where an event is lost.
+  useEffect(() => {
+    if (!client || !channel) return;
+    return client.subscribe(channel, {
+      onMessage: (payload) => {
+        if (isPanelTested(payload)) void reload();
+      },
+    });
+  }, [client, channel, reload]);
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">

@@ -28,6 +28,15 @@ export function userChannel(userId: string): string {
   return `user:${userId}`;
 }
 
+/**
+ * A reseller-wide channel (F-027-bs). The gateway grants it only with
+ * `realtime.tenant.read` *and* an exact tenant match
+ * (`platform/realtime/contract.channels.md`), so the id is the caller's own.
+ */
+export function tenantChannel(tenantId: string): string {
+  return `tenant:${tenantId}`;
+}
+
 /** Used until a `welcome` frame says otherwise; the gateway's own default. */
 const DEFAULT_MAX_SUBSCRIPTIONS = 32;
 const DEFAULT_HEARTBEAT_MS = 30_000;
