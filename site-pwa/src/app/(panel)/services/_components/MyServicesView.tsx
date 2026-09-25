@@ -10,7 +10,7 @@ import { billingApi } from "@/lib/billing-api";
 import { Pagination } from "../../_components/kit/Pagination";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { useGrantsPage } from "../_hooks/useGrantsPage";
-import { serviceName } from "../_lib/my-services";
+import { capabilityNames, serviceName } from "../_lib/my-services";
 import { ServiceRow } from "./ServiceRow";
 
 const S = FrontendI18nKeys.common.myServices;
@@ -113,7 +113,12 @@ export function MyServicesView() {
       {!state.isLoading && state.error == null && (state.rows?.length ?? 0) > 0 && (
         <ul className="space-y-3">
           {state.rows?.map((row) => (
-            <ServiceRow key={row.id} row={row} name={serviceName(state.texts, row)} />
+            <ServiceRow
+              key={row.id}
+              row={row}
+              name={serviceName(state.texts, row)}
+              capabilities={capabilityNames(state.texts, row)}
+            />
           ))}
         </ul>
       )}

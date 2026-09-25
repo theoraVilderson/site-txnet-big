@@ -124,6 +124,18 @@ the purge countdown).
     every minute (`PENDING_POLL_MS`) with the tab visible: 15 per 900s,
     inside `GRANT_LIST`'s 120. A live socket makes that clock ask nothing.
 
+14. **A capability reads by its name, and by its key only where none is
+    published** (F-114-f-c, ADR-0086). A Grant's `featureKeys` resolve against
+    the `catalog` texts the page already reads, at
+    `catalog.[t_<hex>.]capability.<key>.name`. The Grant answers no tenant, so
+    the prefix is the one in its variant's `nameKey`: the product's tenant is
+    the only tenant whose capabilities it may carry
+    ([catalog/invariants.md](../../domains/catalog/invariants.md) 9), so another
+    tenant's text under the same key is never read. The platform's is read
+    beside it; no variant reads the platform's alone. No text in this language
+    shows the key, `dir="ltr"`, as before — no second read, no source-language
+    fallback (rule 6's reason). A named chip keeps the key as its `title`.
+
 ## Proof
 
 `services/my-services.test.tsx` — the status union against
@@ -139,6 +151,9 @@ without a skeleton, an event for a row not shown pending (or with no
 only while a row is pending, the minute clock asks only with a pending row, a
 socket that is not live and a visible tab, and no socket still reads the page;
 `lib/realtime.test.ts` — `onMissed` on a reconnect's accepted channels only.
+F-114-f-c: `capabilityNames` — a tenant's own by its product's prefix, the
+platform's, another tenant's same key never read — and a chip showing the
+name, the key only where none was published.
 
 ## Not covered
 

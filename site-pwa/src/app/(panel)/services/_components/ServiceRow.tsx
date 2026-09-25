@@ -9,7 +9,7 @@ import { ApiError } from "@/lib/api-error";
 import { billingApi, type GrantRow } from "@/lib/billing-api";
 import { copyText } from "../../_lib/clipboard";
 import { formatInstant } from "../../_lib/datetime";
-import { GRANT_TONES } from "../_lib/my-services";
+import { GRANT_TONES, type CapabilityName } from "../_lib/my-services";
 import { formatBytes, purgeCountdown } from "../_lib/service-configs";
 import { GrantConfigs } from "./GrantConfigs";
 
@@ -37,7 +37,16 @@ const G = FrontendI18nKeys.common.wallet.gift;
  * is the row a user most often came for — the key was lost, not the service —
  * and the route deliberately does not gate on status either (F-502-p).
  */
-export function ServiceRow({ row, name }: { row: GrantRow; name: string | null }) {
+export function ServiceRow({
+  row,
+  name,
+  capabilities,
+}: {
+  row: GrantRow;
+  name: string | null;
+  /** `capabilityNames` of this row — a name where one is published, else the key (F-114-f-c). */
+  capabilities: CapabilityName[];
+}) {
   const { t, lang } = useLocale();
   const toMessage = useApiErrorMessage();
 
@@ -131,17 +140,28 @@ export function ServiceRow({ row, name }: { row: GrantRow; name: string | null }
         </p>
       )}
 
-      {row.featureKeys.length > 0 && (
+      {capabilities.length > 0 && (
         <ul aria-label={t("common", S.features)} className="mt-3 flex flex-wrap gap-1.5">
-          {row.featureKeys.map((key) => (
-            <li
-              key={key}
-              dir="ltr"
-              className="rounded-lg border border-card-border bg-bg-inner px-2 py-0.5 font-mono text-[10px] text-text-secondary"
-            >
-              {key}
-            </li>
-          ))}
+          {capabilities.map(({ key, name: label }) =>
+            label ? (
+              <li
+                key={key}
+                title={key}
+                className="rounded-lg border border-card-border bg-bg-inner px-2 py-0.5 text-[10px] text-text-secondary"
+              >
+                {label}
+              </li>
+            ) : (
+              // No published name in this language: the key, which support can read.
+              <li
+                key={key}
+                dir="ltr"
+                className="rounded-lg border border-card-border bg-bg-inner px-2 py-0.5 font-mono text-[10px] text-text-secondary"
+              >
+                {key}
+              </li>
+            ),
+          )}
         </ul>
       )}
 

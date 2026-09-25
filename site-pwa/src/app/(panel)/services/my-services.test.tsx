@@ -8,7 +8,7 @@ import { billingApi, type GrantRow } from "@/lib/billing-api";
 import { ApiError } from "@/lib/api-error";
 import { ServiceRow } from "./_components/ServiceRow";
 import { GrantConfigs } from "./_components/GrantConfigs";
-import { GRANT_STATUSES, GRANT_TONES } from "./_lib/my-services";
+import { GRANT_STATUSES, GRANT_TONES, capabilityNames } from "./_lib/my-services";
 import {
   CONFIG_ACTION_REFUSALS,
   CONFIG_STATUSES,
@@ -115,7 +115,7 @@ const CONFIG: UserConfigRow = {
 };
 
 const show = (row: Partial<GrantRow> = {}) =>
-  render(<ServiceRow row={{ ...GRANT, ...row }} name="VPN Pro" />);
+  render(<ServiceRow row={{ ...GRANT, ...row }} name="VPN Pro" capabilities={[]} />);
 
 const newKeyButton = () => screen.getByRole("button", { name: "wallet.gift.newKey" });
 
@@ -139,6 +139,44 @@ describe("a paid Grant not yet delivered (F-111-f)", () => {
     unmount();
     show({ status: "active" });
     expect(screen.queryByText("myServices.preparing")).toBeNull();
+  });
+});
+
+describe("a Grant's capabilities (F-114-f-c)", () => {
+  const TENANT = "t_0123456789abcdef0123456789abcdef";
+  const texts = {
+    "catalog.capability.vpn.pro.name": "Pro VPN",
+    [`catalog.${TENANT}.capability.vpn.gaming.name`]: "Gaming routes",
+    // Another tenant's capability under the same key: never this Grant's.
+    "catalog.t_ffffffffffffffffffffffffffffffff.capability.vpn.gaming.name": "Someone else's",
+  };
+  const ownRow = { featureKeys: ["vpn.pro", "vpn.gaming", "vpn.unnamed"], variant: { ...GRANT.variant!, nameKey: `catalog.${TENANT}.product.vpn.name` } };
+
+  it("names the platform's by its text and a tenant's own by its product's tenant", () => {
+    expect(capabilityNames(texts, ownRow)).toEqual([
+      { key: "vpn.pro", name: "Pro VPN" },
+      { key: "vpn.gaming", name: "Gaming routes" },
+      { key: "vpn.unnamed", name: null },
+    ]);
+  });
+
+  it("reads only the platform's when the product is the platform's or there is none", () => {
+    expect(capabilityNames(texts, { ...ownRow, variant: GRANT.variant })).toEqual([
+      { key: "vpn.pro", name: "Pro VPN" },
+      { key: "vpn.gaming", name: null },
+      { key: "vpn.unnamed", name: null },
+    ]);
+    expect(capabilityNames(texts, { featureKeys: ["vpn.pro"], variant: null })).toEqual([{ key: "vpn.pro", name: "Pro VPN" }]);
+  });
+
+  it("shows the name, and the key only where no name was published", () => {
+    render(
+      <ServiceRow row={GRANT} name="VPN Pro" capabilities={[{ key: "vpn.pro", name: "Pro VPN" }, { key: "vpn.raw", name: null }]} />,
+    );
+    const list = screen.getByRole("list", { name: "myServices.features" });
+    expect(list).toHaveTextContent("Pro VPN");
+    expect(list).not.toHaveTextContent("vpn.pro");
+    expect(list).toHaveTextContent("vpn.raw");
   });
 });
 

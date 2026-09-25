@@ -88,6 +88,43 @@ export function serviceName(texts: Record<string, string>, row: Pick<GrantRow, "
   return name && name !== "" ? name : row.variant.sku;
 }
 
+/** A capability a Grant holds: its key, and its published name or `null`. */
+export interface CapabilityName {
+  key: string;
+  name: string | null;
+}
+
+/** `t_<hex>.` when a catalog text key is a tenant's own, else `""` — `catalogTextKey`'s prefix. */
+const TENANT_PREFIX = /^catalog\.(t_[0-9a-f]{32}\.)?/;
+
+/**
+ * What each of a Grant's `featureKeys` is called on this page (F-114-f-c): the
+ * capability's published name in the viewer's language, or `null` and the
+ * caller shows the key.
+ *
+ * A capability is the platform's or its product's tenant's own
+ * (`catalog/invariants.md` 9), and its text lives under that owner's prefix
+ * (`catalog.[t_<hex>.]capability.<key>.name`). The Grant does not answer a
+ * tenant, so the product's own `nameKey` says whose it is — the same prefix
+ * `catalogTextKey` wrote there. A key is unique among what one tenant sees, so
+ * at most one of the two lookups can hit; another tenant's text under the same
+ * key is never read. With no variant only the platform's are named.
+ */
+export function capabilityNames(
+  texts: Record<string, string>,
+  row: Pick<GrantRow, "featureKeys" | "variant">,
+): CapabilityName[] {
+  const own = row.variant ? (TENANT_PREFIX.exec(row.variant.nameKey)?.[1] ?? "") : "";
+  const prefixes = own ? [own, ""] : [""];
+  return row.featureKeys.map((key) => {
+    for (const p of prefixes) {
+      const name = texts[`catalog.${p}capability.${key}.name`];
+      if (name) return { key, name };
+    }
+    return { key, name: null };
+  });
+}
+
 /**
  * The Grant a purchase's end names, off the buyer's `user:` channel — or
  * `null` for anything else on it (F-111-f). Delivered and refunded both count:
