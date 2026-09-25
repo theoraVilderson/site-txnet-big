@@ -74,9 +74,10 @@ that should exist and does not, which is drift (`contract.drift.md`).
    because its key still differs. A panel whose sub server is down is asked
    once a pass per unconfirmed config, inside its budget.
 
-Staging: `converge.MemoryDesired` holds the lines until `network.config` is
-read directly, as it holds the rest of the desired state
-(`contract.provisioning.md`); the columns are in `db.RequiredColumns`.
+Stored by `converge.PostgresDesired`, as the rest of the desired state is
+(`contract.provisioning.md` "Staging", F-027-bo): a capture writes lines, key
+and time in one statement, and an outcome with none leaves them untouched. The
+columns are in `db.RequiredColumns`.
 
 ## Revisit
 

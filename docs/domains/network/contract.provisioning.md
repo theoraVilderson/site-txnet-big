@@ -114,7 +114,16 @@ the whole share again. No allocation yet is `awaiting_allocation`; nothing left
 is `allowance_exhausted`; a panel with no enabled inbound for the protocol is
 `no_inbound`. None of the three creates anything.
 
-**Staging.** Desired state is read through `converge.Desired`, proved against
-`MemoryDesired` — the same staging `MemoryAllocations` is in until
-`network.config` is read directly. Every row has a `claimTag`
-(NOT NULL, F-027-aa), and it goes out with every create and update.
+**Staging.** Desired state is read through `converge.Desired` and shares
+through `converge.Allocations`; `PostgresDesired` and `PostgresAllocations`
+(`internal/converge/postgres.go`, F-027-bo) are both over `network.config`, and
+`MemoryDesired` / `MemoryAllocations` stay as what the pass is proved against.
+A pass reads every row on its panel except a delete already confirmed
+(`absent`, no `remoteId`, `complete`); served bytes are the counter cursor's
+lifetime figure. **An outcome is recorded only over the desired state it was
+judged against** — `uuid`, `desiredEnabled`, `desiredRemote` in the update's
+`where` — so an action landing mid-pass leaves no row to update, and a
+`complete` nobody checked is never written (group fulfilment activates on it).
+The pass is not running yet: the collection loop that calls it is started in
+`cmd` by F-027-bt. Every row has a `claimTag` (NOT NULL, F-027-aa), and it goes
+out with every create and update.

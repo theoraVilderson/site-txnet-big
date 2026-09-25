@@ -90,12 +90,21 @@ type DesiredConfig struct {
 // Outcome is what the pass learned about one row. RemoteID is the value the
 // row should now hold, empty to clear it. Links is nil unless this pass
 // captured them; nil leaves the stored lines as they are.
+//
+// UUID, Enabled and Present are the desired state the outcome was judged
+// against. An action that writes between the read and the record has changed
+// what the verdict is about, so a store that can see the row as it is now
+// drops the outcome rather than confirm a state nobody checked — the next
+// pass judges the new one (F-027-bo).
 type Outcome struct {
 	ConfigID string
 	RemoteID string
 	State    EnforcementState
 	At       time.Time
 	Links    *CapturedLinks
+	UUID     string
+	Enabled  bool
+	Present  bool
 }
 
 // Desired is `network.config`'s desired state behind an interface, as
@@ -249,7 +258,10 @@ func (v *Provisioning) one(
 	inbounds *inboundCache, at time.Time, report *ProvisionReport,
 ) (*Outcome, *ProvisionFinding) {
 	outcome := func(remoteID string, state EnforcementState) *Outcome {
-		return &Outcome{ConfigID: row.ConfigID, RemoteID: remoteID, State: state, At: at}
+		return &Outcome{
+			ConfigID: row.ConfigID, RemoteID: remoteID, State: state, At: at,
+			UUID: row.UUID, Enabled: row.Enabled, Present: row.Present,
+		}
 	}
 	found := func(action Action, remoteID string, err error) *ProvisionFinding {
 		return &ProvisionFinding{ConfigID: row.ConfigID, RemoteID: remoteID, Action: action, Err: err}

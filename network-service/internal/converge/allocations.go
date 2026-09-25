@@ -6,9 +6,8 @@ import (
 )
 
 // MemoryAllocations holds shares and confirmations in memory. It is what the
-// convergence is proved against, and what a single-process run uses until the
-// Postgres-backed implementation lands beside the durable `Cursors` — the same
-// staging `collect.MemoryCursors` is in.
+// convergence is proved against; `PostgresAllocations` is the one a running
+// process uses (F-027-bo).
 type MemoryAllocations struct {
 	mu       sync.Mutex
 	byPanel  map[string][]Allocation
@@ -72,8 +71,9 @@ func (m *MemoryAllocations) Applied(configID string) (AppliedCeiling, bool) {
 	return row, ok
 }
 
-// MemoryDesired holds desired state in memory, in the order it was put — the
-// same staging as MemoryAllocations, until `network.config` is read directly.
+// MemoryDesired holds desired state in memory, in the order it was put — what
+// the pass is proved against, as MemoryAllocations is; `PostgresDesired` reads
+// `network.config` (F-027-bo).
 type MemoryDesired struct {
 	mu      sync.Mutex
 	byPanel map[string][]string

@@ -102,9 +102,10 @@ Refusals are `GROUP_FULFILMENT_REJECTIONS`: `grant_not_found`,
 `grant_not_fulfillable`, `no_panel_group`, `strategy_not_built`.
 
 **Not reachable end to end yet:** `network-service` does not yet run the
-convergence pass against `network.config` (`MemoryDesired` staging,
-`contract.provisioning.md`), so no config reaches `complete` and no Grant
-activates on a live stack until F-027-bo wires it.
+convergence pass: its Postgres state is built (F-027-bo,
+`contract.provisioning.md` "Staging"), but the collection loop that calls it is
+not started in `cmd`, so no config reaches `complete` and no Grant activates on
+a live stack until F-027-bt wires it.
 
 ## Draining — `GroupDrainService` (billing-service, F-027-bm)
 
