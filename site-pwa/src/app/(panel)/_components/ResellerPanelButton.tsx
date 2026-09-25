@@ -31,27 +31,23 @@ type Reseller = { id: string; slug: string };
  * leaves the visitor where they were.
  *
  * Renders nothing for a caller who owns no reseller, and nothing if the list
- * cannot be read: it is a shortcut, never a reason to break the sidebar.
+ * cannot be read: it is a shortcut, never a reason to break the sidebar. The
+ * list is `useOwnedResellers`', read once by the sidebar, which also hides
+ * "become a reseller" from a caller it names (F-114-c).
  */
-export function ResellerPanelButton({ collapsed = false }: { collapsed?: boolean }) {
+export function ResellerPanelButton({
+  resellers,
+  collapsed = false,
+}: {
+  resellers: readonly Reseller[] | null;
+  collapsed?: boolean;
+}) {
   const { t } = useLocale();
-  const [resellers, setResellers] = useState<Reseller[]>([]);
   const { pending, open } = useResellerPanelOpener();
-
-  useEffect(() => {
-    let live = true;
-    authApi
-      .ownedResellers()
-      .then((r) => live && setResellers(r.resellers))
-      .catch(() => undefined);
-    return () => {
-      live = false;
-    };
-  }, []);
 
   return (
     <>
-      {resellers.map((reseller) => {
+      {(resellers ?? []).map((reseller) => {
         const label = t("common", pending === reseller.id ? C.openingResellerPanel : C.resellerPanel, {
           slug: reseller.slug,
         });
@@ -75,6 +71,27 @@ export function ResellerPanelButton({ collapsed = false }: { collapsed?: boolean
       })}
     </>
   );
+}
+
+/**
+ * The resellers the caller owns (`GET /auth/handoff`): `null` until it answers.
+ * A list that cannot be read is empty — the entry this hides is an invitation
+ * the purchase page itself answers for a holder (F-019-l), so a lost answer
+ * costs nothing but a shortcut.
+ */
+export function useOwnedResellers(): readonly Reseller[] | null {
+  const [resellers, setResellers] = useState<Reseller[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    authApi
+      .ownedResellers()
+      .then((r) => live && setResellers(r.resellers))
+      .catch(() => live && setResellers([]));
+    return () => {
+      live = false;
+    };
+  }, []);
+  return resellers;
 }
 
 /**

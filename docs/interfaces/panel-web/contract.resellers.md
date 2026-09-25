@@ -104,9 +104,10 @@ rule behind them is [tenant/contract.admin.md](../../domains/tenant/contract.adm
     `me.tenant.type === "platform_owner"` and nothing else: the routes admit
     any signed-in user of the platform owner's tenant, so a key would hide the
     page from the people it is for. The menu entry (`buy-reseller`) names
-    `tenantTypes` alone for the same reason. `not_platform_user` stays the
-    boundary, and the page shows that sentence rather than a form it knows will
-    be refused.
+    `tenantTypes` alone for the same reason, and is `hiddenFrom` the platform's
+    own owner and a caller who already owns a reseller — `GET /auth/handoff`,
+    the sidebar's one read, hiding while unanswered (F-114-c). `not_platform_user`
+    stays the boundary; the page shows that sentence, not a form sure to fail.
 13. **Its own refusal sentences** (`PURCHASE_REFUSAL_KEYS`, namespace
     `common.resellerPurchase`), read from `PurchaseRejection`'s own source by
     the spec. Not `REFUSAL_KEYS`: the same word means something else here —

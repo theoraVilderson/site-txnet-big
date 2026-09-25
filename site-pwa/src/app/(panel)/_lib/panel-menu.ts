@@ -57,6 +57,13 @@ type PermissionGated = {
    * `me.tenant.isOwner`.
    */
   ownerSuffices?: boolean;
+  /**
+   * Callers the entry is not for even when everything above admits them
+   * (F-114-c) — an invitation to someone who has already accepted it.
+   * `tenantOwner` is `me.tenant.isOwner`; `resellerOwner` is a caller who
+   * already owns a reseller, and while that is unknown the entry is hidden.
+   */
+  hiddenFrom?: readonly ("tenantOwner" | "resellerOwner")[];
 };
 
 export type TenantType = "platform_owner" | "reseller";
@@ -150,12 +157,15 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
   // F-019-i. The other side of the same product: any user of the platform
   // owner's tenant may buy a reseller, so this one names no permission key —
   // only the tenant type, which is the service's own `not_platform_user`.
+  // F-114-c: not the platform's own account, and not a user who already owns
+  // one — the sidebar's "my reseller panel" is their way in.
   {
     id: "buy-reseller",
     label: M.buyReseller,
     icon: Rocket,
     href: PANEL_RESELLER_PURCHASE,
     tenantTypes: ["platform_owner"],
+    hiddenFrom: ["tenantOwner", "resellerOwner"],
   },
   // F-027-ad. The platform's own panels. billing refuses anyone but the
   // platform owner (`panelScopeOf`), so the tenant type gates it here too.
@@ -195,14 +205,23 @@ export function isMenuGroup<T extends PanelMenuEntry | VisibleMenuEntry>(
  *
  * `isOwner` is `me.tenant.isOwner`, and counts only on an entry marked
  * `ownerSuffices`. Absent means not the owner — the safe direction again.
+ *
+ * `ownsReseller` is whether the caller owns a reseller (`GET /auth/handoff`),
+ * read only by an entry `hiddenFrom` `resellerOwner`; `null` is not yet known,
+ * and hides it.
  */
 export function visibleMenu(
   entries: readonly PanelMenuEntry[],
   held: readonly string[],
   tenantType: TenantType | null = null,
   isOwner = false,
+  ownsReseller: boolean | null = null,
 ): VisibleMenuEntry[] {
+  const hidden = (e: PermissionGated) =>
+    (e.hiddenFrom?.includes("tenantOwner") === true && isOwner) ||
+    (e.hiddenFrom?.includes("resellerOwner") === true && ownsReseller !== false);
   const permitted = (e: PermissionGated) =>
+    !hidden(e) &&
     (!e.tenantTypes || (tenantType !== null && e.tenantTypes.includes(tenantType))) &&
     ((isOwner && e.ownerSuffices === true) ||
       held.includes(ALL_PERMISSIONS) ||

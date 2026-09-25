@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Me } from "@/lib/auth-api";
 import type { OwnedReseller, PackageOffer } from "@/lib/tenant-api";
-import { PANEL_RESELLERS, PANEL_RESELLER_PURCHASE } from "@/lib/routes";
+import { PANEL_HOME, PANEL_RESELLERS, PANEL_RESELLER_PURCHASE } from "@/lib/routes";
 import { PANEL_MENU, menuHrefs, visibleMenu } from "../_lib/panel-menu";
 import {
   PURCHASE_REFUSAL_KEYS,
@@ -75,10 +75,27 @@ describe("who may buy", () => {
   });
 
   it("shows the menu entry to a platform user who may not administer resellers", () => {
-    const hrefs = (me: Me) => menuHrefs(visibleMenu(PANEL_MENU, me.permissions, me.tenant.type, me.tenant.isOwner));
+    const hrefs = (me: Me) => menuHrefs(visibleMenu(PANEL_MENU, me.permissions, me.tenant.type, me.tenant.isOwner, false));
     expect(hrefs(BUYER)).toContain(PANEL_RESELLER_PURCHASE);
     expect(hrefs(BUYER)).not.toContain(PANEL_RESELLERS);
     expect(hrefs(RESELLER_USER)).not.toContain(PANEL_RESELLER_PURCHASE);
+  });
+
+  // F-114-c. The entry invites a purchase; it is not offered to the account
+  // that owns the platform, nor to a buyer who already owns a reseller — the
+  // sidebar's own "my reseller panel" is that buyer's way in.
+  it("is not offered to the platform's owner, nor to a user who owns a reseller", () => {
+    const hrefs = (me: Me, ownsReseller: boolean | null) =>
+      menuHrefs(visibleMenu(PANEL_MENU, me.permissions, me.tenant.type, me.tenant.isOwner, ownsReseller));
+    const PLATFORM_OWNER: Me = { ...OWNER, tenant: { ...OWNER.tenant, isOwner: true } };
+    expect(hrefs(BUYER, false)).toContain(PANEL_RESELLER_PURCHASE);
+    expect(hrefs(BUYER, true)).not.toContain(PANEL_RESELLER_PURCHASE);
+    expect(hrefs(PLATFORM_OWNER, false)).not.toContain(PANEL_RESELLER_PURCHASE);
+    expect(hrefs(PLATFORM_OWNER, false)).toContain(PANEL_RESELLERS);
+    // Until the list answers, it is not shown — the safe direction, as for `me`.
+    expect(hrefs(BUYER, null)).not.toContain(PANEL_RESELLER_PURCHASE);
+    // Nothing else hangs on the list.
+    expect(hrefs(BUYER, null)).toContain(PANEL_HOME);
   });
 
   it("is highlighted over the administration entry, which is its path's prefix", () => {
