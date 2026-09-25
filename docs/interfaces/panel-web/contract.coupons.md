@@ -2,16 +2,17 @@
 id: panel-web
 layer: interface
 status: active
-version: 19
-updated: 2026-09-20
+version: 20
+updated: 2026-09-25
 ---
 
-# Contract — panel-web: coupons and gift codes (F-502-g, F-502-h)
+# Contract — panel-web: coupons, gift codes and discounts with no code (F-502-g, F-502-h, F-114-k)
 
 A topic file of [contract.md](contract.md) (§10). One page, `/coupons`
 (`PANEL_COUPONS`), under `(panel)/coupons/`: `page.tsx` is a server shell,
-`_components/CouponsView.tsx` the two tabs, `CouponForm.tsx` the create/edit
-sheet, `CouponUsage.tsx` the usage report, and `_lib/coupon-form.ts` the rules.
+`_components/CouponsView.tsx` the three tabs, `CouponForm.tsx` the create/edit
+sheet, `CouponUsage.tsx` the usage report, and `_lib/coupon-form.ts` the rules;
+tab 3 is `DiscountRules.tsx` + `DiscountRuleForm.tsx`, rules `_lib/discount-rules.ts`.
 The routes, the scope and every rule are
 [billing/contract.coupon.md](../../domains/billing/contract.coupon.md)'s
 (F-502-c..f, ADR-0048).
@@ -82,6 +83,29 @@ The routes, the scope and every rule are
     (F-502-n), so the field says so before billing's `limits_not_for_gift_codes`
     does. Billing's `variant_not_found` has its sentence.
 
+13. **Discounts with no code (tab 3, F-114-k, ADR-0087).** Billing's
+    `/api/billing/discount-rules`, rules in
+    [billing/contract.purchase.md](../../domains/billing/contract.purchase.md)
+    "Discounts with no code". The list is the caller's own tenant's, newest
+    first, with billing's `status` (`RULE_STATUS_TONES`, test-checked against
+    `DiscountRuleStatus`); no owner scope filter, since a rule never serves
+    another tenant. **No delete** — an invoice may name a rule, so a row only
+    switches off and on. The form mirrors `checkShape` and the schema
+    (`validateRuleForm`): a name ≤ 80, a value > 0 with ≤ 2 decimals and a
+    percentage ≤ 100, one target (everything / a product / a category), one
+    audience (everyone / named users ≤ 1000 / a user group), days as rule 4 —
+    `endsAt` the day after the last day picked, which billing reads as
+    exclusive; a new rule starts today in Tehran. **An edit sends only what
+    changed** (`updateRuleBody`), but the target and the audience each go
+    whole: picking a group sends `forNamedUsers: false` in the same write, or
+    billing answers `one_audience`. A day left alone is not re-sent, so a
+    mid-day start made through the API is not moved to midnight. Pickers read
+    `/api/catalog` (products, categories) and `/api/auth/user-groups`, whose
+    permissions a coupon manager may lack: a failed read falls back to typing
+    the id (`ChoicePicker`). Named users are found with the user-groups page's
+    `UserSearch`, through the caller's own door (`memberSearchOf`), else typed.
+    One sentence per `DiscountRuleRejection` (`RULE_REFUSAL_KEYS`, test-checked).
+
 ## Proof
 
 `coupons/coupons.test.ts` — refusal and status unions against the service
@@ -92,3 +116,8 @@ statuses against Prisma), every key in `en` and `fa`.
 `coupons/gift-codes.test.ts` — `validateGiftBatch` per rule and against
 `GIFT_BATCH_MAX` in the service, `giftBatchBody` (reseller vs owner, prefix,
 inclusive day), every gift key in `en` and `fa`.
+`coupons/discount-rules.test.ts` — refusal and status unions against
+`discount-rule-admin.service.ts`, the schema's bounds, `validateRuleForm` per
+rule, `createRuleBody` (defaults, Tehran today, exclusive end, audiences),
+`updateRuleBody` (round trip, audience and target as units, untouched days),
+every key in `en` and `fa`.

@@ -13,15 +13,17 @@ import { formatInstant } from "../../_lib/datetime";
 import { COUPON_KEYS as K, STATUS_TONES, isPlatformOwner, refusalKey } from "../_lib/coupon-form";
 import { CouponForm } from "./CouponForm";
 import { CouponUsage } from "./CouponUsage";
+import { DiscountRules } from "./DiscountRules";
 import { GiftCodes } from "./GiftCodes";
 import { ListSkeleton } from "./ListSkeleton";
 
 const PAGE_SIZE = 20;
-type Tab = "discount" | "gift";
+type Tab = "discount" | "gift" | "rules";
 
 /**
  * The coupons page (F-502-g, D-33). Tab 1 lists discount coupons; tab 2 is
- * gift-code batches (F-502-h, `GiftCodes.tsx`).
+ * gift-code batches (F-502-h, `GiftCodes.tsx`); tab 3 is discounts with no
+ * code (F-114-k, `DiscountRules.tsx`) — the caller's own tenant's only.
  *
  * One page for two audiences, and the page decides neither: billing answers
  * the platform owner every coupon and a tenant its own. The owner's scope
@@ -50,7 +52,7 @@ export function CouponsView() {
       </header>
 
       <div role="tablist" className="flex gap-2 rounded-2xl border border-card-border bg-card-bg p-1 shadow-sm">
-        {(["discount", "gift"] as const).map((id) => (
+        {(["discount", "gift", "rules"] as const).map((id) => (
           <button
             key={id}
             type="button"
@@ -64,7 +66,7 @@ export function CouponsView() {
         ))}
       </div>
 
-      {sessionLoading ? <ListSkeleton label={t("common", K.loading)} /> : tab === "discount" ? <DiscountCoupons owner={owner} /> : <GiftCodes me={me} owner={owner} />}
+      {sessionLoading ? <ListSkeleton label={t("common", K.loading)} /> : tab === "discount" ? <DiscountCoupons owner={owner} /> : tab === "gift" ? <GiftCodes me={me} owner={owner} /> : <DiscountRules me={me} />}
     </div>
   );
 }

@@ -1036,6 +1036,20 @@ export const billingApi = {
     return call<CouponRemoved>(`/coupons/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
 
+  /** Every discount rule with no code of the caller's tenant, newest first (F-114-h). */
+  async discountRules(): Promise<DiscountRule[]> {
+    return call<DiscountRule[]>("/discount-rules", { method: "GET" });
+  },
+
+  async createDiscountRule(body: CreateDiscountRuleBody): Promise<DiscountRule> {
+    return call<DiscountRule>("/discount-rules", { method: "POST", body: JSON.stringify(body) });
+  },
+
+  /** Change only what `body` names; `userIds` replaces the list. No delete: a rule is switched off. */
+  async updateDiscountRule(id: string, body: UpdateDiscountRuleBody): Promise<DiscountRule> {
+    return call<DiscountRule>(`/discount-rules/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+
   async couponUsage(id: string, query: UsageQuery = {}): Promise<CouponUsageReport> {
     return call<CouponUsageReport>(`/coupons/${encodeURIComponent(id)}/usage${queryString(query)}`, { method: "GET" });
   },
@@ -1095,6 +1109,60 @@ export interface CouponGatewayRef {
   source: GatewaySource;
   id: string;
 }
+
+/** Every reason `/discount-rules` can refuse with (`billing/contract.purchase.md` "Discounts with no code"). */
+export type DiscountRuleRejection =
+  | "rule_not_found"
+  | "target_not_found"
+  | "user_out_of_scope"
+  | "invalid_value"
+  | "invalid_window"
+  | "one_target"
+  | "named_needs_users"
+  | "one_audience"
+  | "group_not_found";
+
+/** What an admin sees at a glance; billing decides it (`statusOfRule`). */
+export type DiscountRuleStatus = "off" | "ended" | "scheduled" | "running";
+
+/** A discount with no code as `GET /discount-rules` answers it (F-114-h, ADR-0087). `value` is a decimal string (C-02). */
+export interface DiscountRule {
+  id: string;
+  name: string;
+  kind: "percentage" | "fixed_amount";
+  value: string;
+  /** At most one of these two; neither = everything. A category covers every category under it. */
+  productId: string | null;
+  categoryId: string | null;
+  /** Serves only `userIds`. Never together with `groupId`. */
+  forNamedUsers: boolean;
+  userIds: string[];
+  /** Serves the user members of one group (F-114-j). */
+  groupId: string | null;
+  startsAt: string;
+  /** Exclusive; `null` = until switched off. */
+  endsAt: string | null;
+  isActive: boolean;
+  status: DiscountRuleStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateDiscountRuleBody {
+  name?: string;
+  kind?: DiscountRule["kind"];
+  value?: string;
+  productId?: string | null;
+  categoryId?: string | null;
+  forNamedUsers?: boolean;
+  userIds?: string[];
+  groupId?: string | null;
+  startsAt?: string;
+  endsAt?: string | null;
+  isActive?: boolean;
+}
+
+export type CreateDiscountRuleBody = UpdateDiscountRuleBody & Required<Pick<UpdateDiscountRuleBody, "name" | "kind" | "value" | "startsAt">>;
 
 /** Every reason `/coupons` can refuse with (`billing/contract.coupon.md` "HTTP surface"). */
 export type CouponRejection =
