@@ -57,6 +57,8 @@ enum AdminAction {
   catalog_category_update
   catalog_product_create
   catalog_product_update
+  catalog_product_delete
+  catalog_product_archive
   catalog_variant_create
   catalog_variant_update
   catalog_price_set

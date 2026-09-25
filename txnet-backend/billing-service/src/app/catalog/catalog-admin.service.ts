@@ -91,6 +91,8 @@ export type UpdateProductInput = {
   featureKeys?: string[];
   defaultQuotas?: Record<string, unknown>;
   isActive?: boolean;
+  /** `false` brings an archived product back into the list (F-026-h); it stays switched off. Archiving is `removeProducts`. */
+  archived?: false;
 };
 export type VariantFields = {
   nameKey?: string | null;
@@ -110,7 +112,10 @@ export type CreateVariantInput = VariantFields & {
 };
 export type UpdateVariantInput = VariantFields & { isActive?: boolean };
 export type SetPriceInput = { amount: string; effectiveFrom?: string };
-export type ListProductsFilter = { categoryId?: string; tenantId?: string };
+/** `archived`: the archived products alone; the list otherwise leaves them out (F-026-h). */
+export type ListProductsFilter = { categoryId?: string; tenantId?: string; archived?: boolean };
+/** What `removeProducts` did to one id: gone for good, kept but archived, or not the caller's to remove. */
+export type RemovalOutcome = { id: string; outcome: 'deleted' | 'archived' | 'not_found' };
 export type PublishTextsInput = { lang: string; keys: string[] };
 export type EditTextsInput = { lang: string; texts: Record<string, string> };
 
@@ -136,6 +141,8 @@ export type ProductView = {
   featureKeys: string[];
   defaultQuotas: unknown;
   isActive: boolean;
+  /** Set when a removal found the product referenced and kept it (F-026-h). */
+  archivedAt: Date | null;
 };
 export type VariantView = {
   id: string;
@@ -160,6 +167,15 @@ type Row = Record<string, unknown>;
 const PAST_SKEW_MS = 60_000;
 
 const isUniqueViolation = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002';
+/**
+ * A delete some foreign key still points at: a Grant, a coupon, a coupon scope —
+ * or whatever references a variant next. `ON DELETE RESTRICT` is Postgres
+ * `23001`, which Prisma does not map and throws as an unknown error; a
+ * `NO ACTION` key is `23503`, mapped to `P2003`.
+ */
+const isStillReferenced = (e: unknown) =>
+  (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') ||
+  (e instanceof Prisma.PrismaClientUnknownRequestError && /code: "(23001|23503)"/.test(e.message));
 
 /** A row's source language, `DEFAULT_LANGUAGE` when it has none (a row from before F-1533-f). */
 const sourceOf = (r: Row, defaultLang: string) => (r['sourceLang'] as string | null) ?? defaultLang;
@@ -185,6 +201,7 @@ const productView = (r: Row, defaultLang: string): ProductView => ({
   featureKeys: (r['featureKeys'] as string[] | undefined) ?? [],
   defaultQuotas: r['defaultQuotas'] ?? {},
   isActive: r['isActive'] as boolean,
+  archivedAt: (r['archivedAt'] as Date | null | undefined) ?? null,
 });
 
 const priceView = (r: Row): PriceView => ({
@@ -325,7 +342,11 @@ export class CatalogAdminService {
     const tenant = owner ? (filter.tenantId === 'platform' ? null : filter.tenantId) : actor.tenantId;
     const rows = await this.within(owner, (db) =>
       db.product.findMany({
-        where: { ...(tenant === undefined ? {} : { tenantId: tenant }), ...(filter.categoryId ? { categoryId: filter.categoryId } : {}) },
+        where: {
+          ...(tenant === undefined ? {} : { tenantId: tenant }),
+          ...(filter.categoryId ? { categoryId: filter.categoryId } : {}),
+          archivedAt: filter.archived ? { not: null } : null,
+        },
         orderBy: { key: 'asc' },
       }),
     );
@@ -404,6 +425,7 @@ export class CatalogAdminService {
         ...(patch.featureKeys !== undefined ? { featureKeys: patch.featureKeys } : {}),
         ...(patch.defaultQuotas !== undefined ? { defaultQuotas: patch.defaultQuotas as Prisma.InputJsonValue } : {}),
         ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
+        ...(patch.archived === false ? { archivedAt: null } : {}),
       };
       const updated = productView((await tx.product.update({ where: { id }, data })) as unknown as Row, this.texts.defaultLanguage());
       await this.audit(tx, actor, updated.tenantId, 'catalog_product_update', 'product', id, productView(before, this.texts.defaultLanguage()), {
@@ -417,6 +439,52 @@ export class CatalogAdminService {
     });
     void this.texts.draftOthers(draft);
     return view;
+  }
+
+  /**
+   * Remove products, each on its own (F-026-h): a product the database lets go
+   * is deleted with its variants, whose prices and metered rates go with them
+   * (`ON DELETE CASCADE`, and the history triggers allow exactly that). One that
+   * anything references — a Grant, a coupon, a coupon scope — is archived
+   * instead: switched off, out of the list, every Grant of it untouched. The
+   * foreign keys decide "was it sold", so a table that references a variant
+   * tomorrow is counted without a change here.
+   */
+  async removeProducts(actor: CatalogActor, ids: string[]): Promise<RemovalOutcome[]> {
+    const { owner } = await this.access(actor);
+    const outcomes: RemovalOutcome[] = [];
+    for (const id of ids) outcomes.push({ id, outcome: await this.removeProduct(actor, owner, id) });
+    return outcomes;
+  }
+
+  private async removeProduct(actor: CatalogActor, owner: boolean, id: string): Promise<RemovalOutcome['outcome']> {
+    try {
+      return await this.within(owner, async (tx) => {
+        const before = await this.managed(tx, 'product', 'product_not_found', actor, id, owner);
+        const variants = (await tx.productVariant.findMany({ where: { productId: id } })) as unknown as Row[];
+        await tx.productVariant.deleteMany({ where: { productId: id } });
+        await tx.product.delete({ where: { id } });
+        await this.audit(tx, actor, (before['tenantId'] as string | null) ?? null, 'catalog_product_delete', 'product', id, productView(before, this.texts.defaultLanguage()), {
+          outcome: 'deleted',
+          variants: variants.map((v) => v['sku']),
+        });
+        return 'deleted' as const;
+      });
+    } catch (e) {
+      if (e instanceof CatalogAdminRefused) return 'not_found';
+      // Postgres aborted that transaction, so the archive is a second one.
+      if (!isStillReferenced(e)) throw e;
+    }
+    return this.within(owner, async (tx) => {
+      const before = await this.managed(tx, 'product', 'product_not_found', actor, id, owner);
+      if (before['archivedAt']) return 'archived' as const;
+      const updated = await tx.product.update({ where: { id }, data: { isActive: false, archivedAt: new Date() } });
+      await this.audit(tx, actor, (before['tenantId'] as string | null) ?? null, 'catalog_product_archive', 'product', id, productView(before, this.texts.defaultLanguage()), {
+        ...productView(updated as unknown as Row, this.texts.defaultLanguage()),
+        outcome: 'archived',
+      });
+      return 'archived' as const;
+    });
   }
 
   // -------------------------------------------------------------- translations

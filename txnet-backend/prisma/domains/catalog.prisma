@@ -88,6 +88,10 @@ model Product {
   /// Quotas a new variant starts from, by metric (§4.5).
   defaultQuotas  Json           @default("{}")
   isActive       Boolean        @default(true)
+  /// Set when a removal found it referenced and kept it (F-026-h): out of the
+  /// list and never sold, every Grant of it untouched. A product nothing
+  /// referenced is deleted instead.
+  archivedAt     DateTime?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @default(now()) @updatedAt
 
@@ -141,6 +145,8 @@ model ProductVariant {
 /// A variant's price in USD (ADR-0019, C-02) from `effectiveFrom` on. History:
 /// a change is a new row, and a trigger refuses any update but `isActive` and
 /// any delete (F-0602) — yesterday's invoice is computed at yesterday's price.
+/// The one exception is its variant's own delete, which cascades (F-026-h):
+/// a variant is deletable only while nothing references it.
 model Price {
   id               String   @id @default(uuid()) @db.Uuid
   tenantId         String?  @db.Uuid
@@ -151,7 +157,7 @@ model Price {
   createdByAdminId String?  @db.Uuid
   createdAt        DateTime @default(now())
 
-  variant ProductVariant @relation(fields: [variantId], references: [id])
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
 
   @@index([variantId, effectiveFrom(sort: Desc)])
   @@index([tenantId])
@@ -185,7 +191,7 @@ model MeteredRate {
   createdByAdminId String?  @db.Uuid
   createdAt        DateTime @default(now())
 
-  variant ProductVariant @relation(fields: [variantId], references: [id])
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
 
   @@index([variantId, effectiveFrom(sort: Desc)])
   @@index([tenantId])

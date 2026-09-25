@@ -5,7 +5,8 @@
  * Only a database can say any of it: a tenant reads the platform's catalog and
  * its own through Row-Level Security; a price row is never rewritten, because
  * yesterday's invoice is computed at yesterday's price (F-0602); a variant and
- * its prices belong to their product's tenant; a SKU is unique inside a tenant;
+ * its prices belong to their product's tenant, and go with it only when
+ * nothing references the variant (F-026-h); a SKU is unique inside a tenant;
  * and a coupon's service scope names exactly one product or one variant.
  *
  *   npm run test:int
@@ -148,6 +149,42 @@ describe('a price row is history', () => {
     await expect(
       cross.$executeRawUnsafe(`UPDATE catalog.price SET "isActive" = false WHERE id = '${PLATFORM_PRICE}'`),
     ).resolves.toBe(1);
+  });
+});
+
+describe('a variant nothing references can be deleted, and its prices go with it (F-026-h)', () => {
+  const SPARE_PRODUCT = '44444444-4444-4444-8444-4444444444b4';
+  const SPARE_VARIANT = '44444444-4444-4444-8444-4444444444c4';
+  const SPARE_PRICE = '44444444-4444-4444-8444-4444444444d4';
+  const SOLD_PRODUCT = '44444444-4444-4444-8444-4444444444b5';
+  const SOLD_VARIANT = '44444444-4444-4444-8444-4444444444c5';
+
+  it("deletes a tenant's unreferenced variant with its price, from the tenant's own connection", async () => {
+    await insertProduct(SPARE_PRODUCT, RESELLER_A, 'vpn_spare');
+    await insertVariant(SPARE_VARIANT, RESELLER_A, SPARE_PRODUCT, 'VPN-SPARE');
+    await insertPrice(SPARE_PRICE, RESELLER_A, SPARE_VARIANT, '3.00');
+    await expect(cross.$executeRawUnsafe(`DELETE FROM catalog.price WHERE id = '${SPARE_PRICE}'`)).rejects.toThrow(/price_is_history/);
+
+    await asTenant(RESELLER_A, async (tx) => {
+      await tx.productVariant.deleteMany({ where: { productId: SPARE_PRODUCT } });
+      await tx.product.delete({ where: { id: SPARE_PRODUCT } });
+    });
+    await expect(owner.price.count({ where: { id: SPARE_PRICE } })).resolves.toBe(0);
+  });
+
+  it('refuses the delete of a variant something references — RESTRICT, 23001 — and keeps its price', async () => {
+    await insertProduct(SOLD_PRODUCT, RESELLER_A, 'vpn_sold');
+    await insertVariant(SOLD_VARIANT, RESELLER_A, SOLD_PRODUCT, 'VPN-SOLD');
+    await insertPrice('44444444-4444-4444-8444-4444444444d5', RESELLER_A, SOLD_VARIANT, '4.00');
+    await owner.$executeRawUnsafe(`
+      INSERT INTO billing.coupon_service_scope (id, "couponId", "productId", "variantId")
+      VALUES (gen_random_uuid(), '${COUPON}', NULL, '${SOLD_VARIANT}')
+    `);
+    // Prisma leaves 23001 unmapped; `isStillReferenced` in catalog-admin.service.ts reads it from the message.
+    await expect(asTenant(RESELLER_A, (tx) => tx.productVariant.deleteMany({ where: { productId: SOLD_PRODUCT } }))).rejects.toThrow(
+      /code: "23001"/,
+    );
+    await expect(owner.price.count({ where: { variantId: SOLD_VARIANT } })).resolves.toBe(1);
   });
 });
 

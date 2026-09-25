@@ -66,6 +66,8 @@ export const listProductsSchema = z.object({
   categoryId: uuid('categoryId').optional(),
   /** Platform owner only: a tenant id, or `platform`. */
   tenantId: z.union([z.literal('platform'), uuid('tenantId')]).optional(),
+  /** `true`: the archived products alone (F-026-h). */
+  archived: z.literal('true').transform(() => true).optional(),
 });
 
 export const createProductSchema = z
@@ -90,7 +92,14 @@ export const updateProductSchema = z
     featureKeys: featureKeys.optional(),
     defaultQuotas: quotas.optional(),
     isActive: z.boolean().optional(),
+    /** Only `false`: back from the archive. Archiving is `POST /products/remove`. */
+    archived: z.literal(false).optional(),
   })
+  .strict();
+
+/** F-026-h: up to 100 distinct products, each answered on its own. */
+export const removeProductsSchema = z
+  .object({ ids: z.array(uuid('ids')).min(1).max(100).refine((ids) => new Set(ids).size === ids.length, 'ids must be distinct') })
   .strict();
 
 const variantFields = {
@@ -141,6 +150,7 @@ export type UpdateCategoryBody = z.infer<typeof updateCategorySchema>;
 export type ListProductsQuery = z.infer<typeof listProductsSchema>;
 export type CreateProductBody = z.infer<typeof createProductSchema>;
 export type UpdateProductBody = z.infer<typeof updateProductSchema>;
+export type RemoveProductsBody = z.infer<typeof removeProductsSchema>;
 export type CreateVariantBody = z.infer<typeof createVariantSchema>;
 export type UpdateVariantBody = z.infer<typeof updateVariantSchema>;
 export type SetPriceBody = z.infer<typeof setPriceSchema>;

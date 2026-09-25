@@ -20,6 +20,7 @@ import {
   ListProductsFilter,
   PriceView,
   ProductView,
+  RemovalOutcome,
   PublishTextsInput,
   SetPriceInput,
   UpdateCategoryInput,
@@ -114,7 +115,9 @@ export class ResellerCatalogService {
 
   listProducts(actor: ResellerCatalogActor, tenantId: string, filter: ResellerProductFilter): Promise<ProductView[]> {
     // The tenant is settled by the path; only the category narrows the answer.
-    return this.run(actor, tenantId, 'read', (as) => this.catalog.listProducts(as, { ...(filter.categoryId ? { categoryId: filter.categoryId } : {}) }));
+    return this.run(actor, tenantId, 'read', (as) =>
+      this.catalog.listProducts(as, { ...(filter.categoryId ? { categoryId: filter.categoryId } : {}), ...(filter.archived ? { archived: true } : {}) }),
+    );
   }
 
   getProduct(actor: ResellerCatalogActor, tenantId: string, id: string): Promise<ProductView & { variants: VariantView[] }> {
@@ -127,6 +130,10 @@ export class ResellerCatalogService {
 
   updateProduct(actor: ResellerCatalogActor, tenantId: string, id: string, patch: UpdateProductInput): Promise<ProductView> {
     return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.updateProduct(as, id, patch));
+  }
+
+  removeProducts(actor: ResellerCatalogActor, tenantId: string, ids: string[]): Promise<RemovalOutcome[]> {
+    return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.removeProducts(as, ids));
   }
 
   // ------------------------------------------------------------ variants, prices

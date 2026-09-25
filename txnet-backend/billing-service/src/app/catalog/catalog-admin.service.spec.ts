@@ -14,6 +14,10 @@
  *    invoice already issued; a price is switched off, never deleted;
  *  - **a SKU is unique in its tenant**, and a second one is its own refusal;
  *  - **audit.** Every write leaves a row naming the actor and what changed;
+ *  - **removal deletes only what was never sold** (F-026-h): a product the
+ *    database lets go is deleted with its variants, one that anything
+ *    references is archived instead — hidden, never sold again, and every
+ *    Grant of it untouched;
  *  - **names are the server's keys** (F-1533-d): a tenant's item is named under
  *    its own `t_<tenant>.` prefix, and a translation is reviewed only by
  *    whoever manages the item it names — the rules of the text itself are
@@ -38,6 +42,9 @@ const RESELLER_PRODUCT = 'b0000000-0000-4000-8000-000000000002';
 const OTHER_PRODUCT = 'b0000000-0000-4000-8000-000000000003';
 const RESELLER_VARIANT = 'c0000000-0000-4000-8000-000000000002';
 const RESELLER_PRICE = 'd0000000-0000-4000-8000-000000000002';
+/** The reseller's second product: its variant backs a Grant, so it was sold. */
+const SOLD_PRODUCT = 'b0000000-0000-4000-8000-000000000004';
+const SOLD_VARIANT = 'c0000000-0000-4000-8000-000000000004';
 const PLATFORM_GROUP = 'f0000000-0000-4000-8000-000000000001';
 const RESELLER_GROUP = 'f0000000-0000-4000-8000-000000000002';
 const OTHER_GROUP = 'f0000000-0000-4000-8000-000000000003';
@@ -47,10 +54,16 @@ const actor = (tenantId: string) => ({ adminId: ADMIN, tenantId, ip: '10.0.0.9' 
 type Row = Record<string, unknown>;
 
 const matches = (row: Row, where: Row = {}) =>
-  Object.entries(where).every(([k, v]) => v === undefined || (row[k] ?? null) === v);
+  Object.entries(where).every(([k, v]) =>
+    v === undefined || (v !== null && typeof v === 'object' && 'not' in v ? (row[k] ?? null) !== (v as { not: unknown }).not : (row[k] ?? null) === v),
+  );
 
 const unique = (message: string) =>
   new Prisma.PrismaClientKnownRequestError(message, { code: 'P2002', clientVersion: 'test' });
+
+/** What Postgres answers a delete an `ON DELETE RESTRICT` key refuses — Prisma leaves 23001 unmapped (catalog-schema.int.spec.ts). */
+const referenced = (message: string) =>
+  new Prisma.PrismaClientUnknownRequestError(`${message}: PostgresError { code: "23001", message: "violates RESTRICT setting" }`, { clientVersion: 'test' });
 
 /**
  * Both pools over the same rows, every call logged as `app:` or `all:` (ADR-0053),
@@ -83,8 +96,16 @@ function inTenant<T extends object>(service: T): T {
   });
 }
 
-function table(rows: Row[], name: string, writes: string[], uniqueOn: string[] = []) {
+/** `held`: ids a foreign key elsewhere still points at — deleting one fails as Postgres's RESTRICT does. */
+function table(rows: Row[], name: string, writes: string[], uniqueOn: string[] = [], held: Set<string> = new Set()) {
   let next = 0;
+  const remove = (where: Row) => {
+    const gone = rows.filter((r) => matches(r, where));
+    if (gone.some((r) => held.has(r['id'] as string))) throw referenced(`${name}: still referenced`);
+    writes.push(`${name}.delete`);
+    for (const r of gone) rows.splice(rows.indexOf(r), 1);
+    return gone;
+  };
   return {
     rows,
     findMany: async ({ where }: { where?: Row } = {}) => rows.filter((r) => matches(r, where)),
@@ -106,6 +127,12 @@ function table(rows: Row[], name: string, writes: string[], uniqueOn: string[] =
       if (!row) throw new Error(`${name}: no row`);
       return Object.assign(row, data);
     },
+    delete: async ({ where }: { where: Row }) => {
+      const [row] = remove(where);
+      if (!row) throw new Error(`${name}: no row`);
+      return row;
+    },
+    deleteMany: async ({ where }: { where: Row }) => ({ count: remove(where).length }),
   };
 }
 
@@ -129,7 +156,12 @@ function build() {
       ['tenantId', 'key'],
     ),
     product: table(
-      [product(PLATFORM_PRODUCT, null, 'vpn_basic'), product(RESELLER_PRODUCT, RESELLER, 'vpn_alpha'), product(OTHER_PRODUCT, OTHER, 'followers_1k', OTHER_CATEGORY)],
+      [
+        product(PLATFORM_PRODUCT, null, 'vpn_basic'),
+        product(RESELLER_PRODUCT, RESELLER, 'vpn_alpha'),
+        product(OTHER_PRODUCT, OTHER, 'followers_1k', OTHER_CATEGORY),
+        product(SOLD_PRODUCT, RESELLER, 'vpn_sold'),
+      ],
       'product',
       writes,
       ['tenantId', 'key'],
@@ -141,10 +173,16 @@ function build() {
           durationDays: 30, billingMode: VariantBillingMode.prepaid, visibility: VariantVisibility.public, panelGroupId: null,
           qualityTier: 'standard', isActive: true,
         },
+        {
+          id: SOLD_VARIANT, tenantId: RESELLER, productId: SOLD_PRODUCT, sku: 'VPN-SOLD', nameKey: null, quotas: {},
+          durationDays: 30, billingMode: VariantBillingMode.prepaid, visibility: VariantVisibility.public, panelGroupId: null,
+          qualityTier: 'standard', isActive: true,
+        },
       ],
       'productVariant',
       writes,
       ['tenantId', 'sku'],
+      new Set([SOLD_VARIANT]),
     ),
     panelGroup: table(
       [
@@ -356,10 +394,12 @@ describe('CatalogAdminService — names (F-1533-d)', () => {
     expect(mine.map((d) => [d.key, d.source.lang])).toEqual([
       [catalogTextKey(RESELLER, 'product', 'vpn_alpha', 'name'), 'en'],
       [catalogTextKey(RESELLER, 'product', 'vpn_alpha', 'description'), 'en'],
+      [catalogTextKey(RESELLER, 'product', 'vpn_sold', 'name'), 'fa'],
+      [catalogTextKey(RESELLER, 'product', 'vpn_sold', 'description'), 'fa'],
     ]);
-    // 2 categories + 3 products × (name, description)
-    expect(await service.listTextDrafts(actor(OWNER))).toHaveLength(8);
-    await expect(service.draftMissingTexts(actor(RESELLER))).resolves.toEqual({ drafted: 2 });
+    // 2 categories + 4 products × (name, description)
+    expect(await service.listTextDrafts(actor(OWNER))).toHaveLength(10);
+    await expect(service.draftMissingTexts(actor(RESELLER))).resolves.toEqual({ drafted: 4 });
   });
 
   it('writes in the source language the admin picks, and drafts every other language from it', async () => {
@@ -426,5 +466,46 @@ describe('CatalogAdminService — the pool follows the caller (ADR-0053)', () =>
     // Only "who is asking" is read on the app pool.
     expect(new Set(calls.filter((c) => c.startsWith('app:')))).toEqual(new Set(['app:tenant.findUnique']));
     expect(calls).toContain('all:product.create');
+  });
+});
+
+describe('CatalogAdminService — removing products (F-026-h)', () => {
+  it('deletes a product nothing ever referenced, with its variants, and audits what it was', async () => {
+    const { service, db, audit } = build();
+    await expect(service.removeProducts(actor(RESELLER), [RESELLER_PRODUCT])).resolves.toEqual([{ id: RESELLER_PRODUCT, outcome: 'deleted' }]);
+    expect(db.product.rows.find((r) => r['id'] === RESELLER_PRODUCT)).toBeUndefined();
+    expect(db.productVariant.rows.find((r) => r['id'] === RESELLER_VARIANT)).toBeUndefined();
+    expect(audit).toEqual([
+      expect.objectContaining({ tenantId: RESELLER, action: 'catalog_product_delete', targetEntityId: RESELLER_PRODUCT, oldValue: expect.objectContaining({ key: 'vpn_alpha' }) }),
+    ]);
+  });
+
+  it('archives a product whose variant was sold instead: kept, switched off, hidden from the list until asked for', async () => {
+    const { service, db, audit } = build();
+    await expect(service.removeProducts(actor(RESELLER), [SOLD_PRODUCT])).resolves.toEqual([{ id: SOLD_PRODUCT, outcome: 'archived' }]);
+    const row = db.product.rows.find((r) => r['id'] === SOLD_PRODUCT);
+    expect(row).toMatchObject({ isActive: false, archivedAt: expect.any(Date) });
+    expect(db.productVariant.rows.find((r) => r['id'] === SOLD_VARIANT)).toBeDefined();
+    expect(audit).toEqual([expect.objectContaining({ action: 'catalog_product_archive', targetEntityId: SOLD_PRODUCT })]);
+    expect((await service.listProducts(actor(RESELLER))).map((p) => p.id)).not.toContain(SOLD_PRODUCT);
+    expect((await service.listProducts(actor(RESELLER), { archived: true })).map((p) => p.id)).toEqual([SOLD_PRODUCT]);
+  });
+
+  it("answers each id on its own: another tenant's and the platform's are not found, and the rest still go", async () => {
+    const { service, db } = build();
+    await expect(service.removeProducts(actor(RESELLER), [OTHER_PRODUCT, PLATFORM_PRODUCT, RESELLER_PRODUCT, SOLD_PRODUCT])).resolves.toEqual([
+      { id: OTHER_PRODUCT, outcome: 'not_found' },
+      { id: PLATFORM_PRODUCT, outcome: 'not_found' },
+      { id: RESELLER_PRODUCT, outcome: 'deleted' },
+      { id: SOLD_PRODUCT, outcome: 'archived' },
+    ]);
+    expect(db.product.rows.map((r) => r['id'])).toEqual(expect.arrayContaining([OTHER_PRODUCT, PLATFORM_PRODUCT]));
+  });
+
+  it('brings an archived product back into the list, still switched off', async () => {
+    const { service } = build();
+    await service.removeProducts(actor(RESELLER), [SOLD_PRODUCT]);
+    await expect(service.updateProduct(actor(RESELLER), SOLD_PRODUCT, { archived: false })).resolves.toMatchObject({ archivedAt: null, isActive: false });
+    expect((await service.listProducts(actor(RESELLER))).map((p) => p.id)).toContain(SOLD_PRODUCT);
   });
 });

@@ -2,8 +2,8 @@
 id: catalog
 layer: domain
 status: draft
-version: 2
-updated: 2026-09-21
+version: 3
+updated: 2026-09-25
 ---
 
 # Contract — catalog
@@ -34,8 +34,9 @@ cross-tenant pool.
 |---|---|---|---|
 | `GET /categories` | — | the platform's and the caller's own (owner: all) | — |
 | `POST /categories`, `PATCH /categories/:id` | `tenantId?` (absent / `null` / uuid), `key`, `sourceLang?`, `name: {lang: text}`; patch `sourceLang`, `name`, `isActive` | category | `not_platform_owner` 403, `category_not_found` 404, `key_taken` 409, `lang_unknown` / `source_text_missing` 400, `texts_unavailable` 503 |
-| `GET /products` | `categoryId?`, `tenantId?` (owner: uuid or `platform`) | products | — |
-| `POST /products`, `GET\|PATCH /products/:id` | `categoryId`, `key`, `sourceLang?`, `name: {lang: text}`, `description?: {lang: text} \| null`, `fulfilmentKind`, `featureKeys?`, `defaultQuotas?`; patch has no key or kind | product; `GET` with variants and each price history | `category_not_found` (another tenant's category), `product_not_found`, `key_taken`, `lang_unknown`, `source_text_missing`, `texts_unavailable` |
+| `GET /products` | `categoryId?`, `tenantId?` (owner: uuid or `platform`), `archived?` (only `true`: the archived alone; without it they are left out) | products, each with `archivedAt` | — |
+| `POST /products/remove` (F-026-h) | `ids[]` (1-100, distinct) | `[{id, outcome}]`, `outcome` `deleted` / `archived` / `not_found`, each id on its own | — (a refusal is that id's `not_found`) |
+| `POST /products`, `GET\|PATCH /products/:id` | `categoryId`, `key`, `sourceLang?`, `name: {lang: text}`, `description?: {lang: text} \| null`, `fulfilmentKind`, `featureKeys?`, `defaultQuotas?`; patch has no key or kind, and `archived: false` brings an archived product back (still off) | product; `GET` with variants and each price history | `category_not_found` (another tenant's category), `product_not_found`, `key_taken`, `lang_unknown`, `source_text_missing`, `texts_unavailable` |
 | `POST /products/:id/variants`, `PATCH /variants/:id` | `sku`, `billingMode`, `visibility`, `quotas?`, `durationDays?`, `panelGroupId?`, `qualityTier?`, first `price`; patch has no SKU or billing mode | variant with prices | `variant_not_found`, `sku_taken`, `price_in_the_past`, `panel_group_not_found` (a group that is neither the platform's nor the variant's tenant's, F-027-bk) |
 | `POST /variants/:id/prices` | `amount`, `effectiveFrom?` (default now; never in the past) | a **new** price row | `variant_not_found`, `price_in_the_past` 400 |
 | `POST /prices/:id/deactivate` | — | the price, switched off | `price_not_found` |
@@ -44,7 +45,12 @@ cross-tenant pool.
 | `POST /translations/publish` | `lang`, `keys[]` (1-200) | `{published}` — drafts as they are | `text_key_invalid` 400, `product_not_found` / `category_not_found` (not the caller's item) |
 | `PATCH /translations` | `lang`, `texts: {key: text}` | `{published}` — the reviewer's text, draft dropped | same |
 
-Every write leaves an `admin_audit_log` row (`catalog_*` actions). Nothing is deleted.
+Every write leaves an `admin_audit_log` row (`catalog_*` actions). Nothing is deleted
+but a product `POST /products/remove` finds unreferenced (`catalog_product_delete`,
+its variants with it). One a Grant, a coupon or a coupon scope references is
+archived instead (`catalog_product_archive`): off, out of the list, never sold,
+every Grant untouched. The foreign keys decide, so a new table that references
+a variant counts without a change (`removeProducts`, invariant 6).
 A translation publish is audited as `catalog_product_update` / `catalog_category_update`
 on the item it names, `newValue.texts`.
 
@@ -138,7 +144,7 @@ None.
 |---|---|
 | A tenant reads the platform's rows and its own; it writes only its own | RLS, shared-read (`NULL OR mine` / strictly mine) |
 | A product sits in the platform's category or its own tenant's; a variant carries its product's tenant; a price its variant's (`catalog_tenant_mismatch`) | trigger `catalog.same_tenant_as_parent` |
-| A price row is never deleted, and only `isActive` changes on it (`price_is_history`) | trigger `catalog.price_is_history` |
+| A price row is never deleted on its own, and only `isActive` changes on it (`price_is_history`); it goes only with its variant's delete (cascade, F-026-h) | trigger `catalog.price_is_history` |
 | A category key, a product key and a SKU are unique inside a tenant, and once among platform rows | partial unique indexes |
 | A coupon scope row names exactly one product or one variant (`coupon_service_scope_names_one`) | CHECK |
 | Money is USD `Decimal(18,2)`, never negative; zero is a free variant | column type + CHECK (ADR-0019, C-02) |

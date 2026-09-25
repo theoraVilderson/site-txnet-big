@@ -1,7 +1,7 @@
 ---
 id: catalog
 layer: domain
-updated: 2026-09-21
+updated: 2026-09-25
 ---
 
 # Data model — catalog
@@ -13,9 +13,9 @@ Source of truth: `txnet-backend/prisma/domains/catalog.prisma` (Postgres schema
 | Table | Purpose | Tenant-scoped? | Retention |
 |---|---|---|---|
 | product_category | a group of products; `key`, `nameKey` | `tenantId` nullable, shared-read | permanent (`isActive`) |
-| product | marketing object: `key`, `nameKey`/`descriptionKey`, `fulfilmentKind`, `featureKeys[]`, `defaultQuotas` | `tenantId` nullable, shared-read | permanent (`isActive`) |
+| product | marketing object: `key`, `nameKey`/`descriptionKey`, `fulfilmentKind`, `featureKeys[]`, `defaultQuotas`, `archivedAt` | `tenantId` nullable, shared-read | deletable with its variants until one is referenced, then permanent (`isActive`, `archivedAt`) — F-026-h |
 | product_variant | the SKU: `quotas` (JSONB by metric), `durationDays` (null = permanent), `billingMode`, `visibility`, `panelGroupId` (FK `network.panel_group`, a platform group or its own tenant's — F-027-bk), `qualityTier` | `tenantId` = its product's, shared-read | permanent (`isActive`) |
-| price | a variant's USD `amount` from `effectiveFrom`; append-only | `tenantId` = its variant's, shared-read | permanent |
+| price | a variant's USD `amount` from `effectiveFrom`; append-only | `tenantId` = its variant's, shared-read | as long as its variant (FK `ON DELETE CASCADE`) |
 | metered_rate | a variant's USD `rate` per 2^30 bytes from `effectiveFrom`, `Decimal(18,8)`, strictly positive; append-only (F-027-g) | `tenantId` = its variant's, shared-read | permanent |
 
 ## Relationships crossing unit boundaries

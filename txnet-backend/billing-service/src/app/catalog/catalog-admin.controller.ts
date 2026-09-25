@@ -32,6 +32,7 @@ import {
   ListProductsQuery,
   ListTextDraftsQuery,
   PublishTextsBody,
+  RemoveProductsBody,
   SetPriceBody,
   UpdateCategoryBody,
   UpdateProductBody,
@@ -43,6 +44,7 @@ import {
   listProductsSchema,
   listTextDraftsSchema,
   publishTextsSchema,
+  removeProductsSchema,
   setPriceSchema,
   updateCategorySchema,
   updateProductSchema,
@@ -90,7 +92,8 @@ export const CATALOG_REFUSAL_STATUS: Record<CatalogAdminRejection, 400 | 403 | 4
  * One surface for two audiences, told apart by the tenant, never by the path:
  * the platform owner manages platform items and every tenant's, any other
  * tenant its own. `CatalogPermissionGuard` is the first door and the service
- * the real one. Nothing here deletes: an item or a price is switched off.
+ * the real one. Nothing here deletes but `POST /products/remove` (F-026-h),
+ * and it deletes only a product nothing references; the rest is switched off.
  */
 @Controller('catalog')
 @UseGuards(CatalogPermissionGuard)
@@ -138,6 +141,14 @@ export class CatalogAdminController {
   @RateLimit(WRITE)
   async createProduct(@Body(new ZodValidationPipe(createProductSchema)) body: CreateProductBody, @Req() req: Request, @Ip() ip: string) {
     return this.refusing(() => this.catalog.createProduct(this.actor(req, ip), body as CreateProductInput));
+  }
+
+  /** F-026-h: one outcome per id — `deleted`, `archived`, or `not_found`. */
+  @Post('products/remove')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(WRITE)
+  async removeProducts(@Body(new ZodValidationPipe(removeProductsSchema)) body: RemoveProductsBody, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.catalog.removeProducts(this.actor(req, ip), body.ids as string[]));
   }
 
   @Get('products/:id')
