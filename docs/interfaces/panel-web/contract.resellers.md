@@ -6,7 +6,7 @@ version: 24
 updated: 2026-09-20
 ---
 
-# Contract — panel-web: resellers (F-018-k, F-019-k, F-019-i, F-066-w2/w4, F-066-w)
+# Contract — panel-web: resellers (F-018-k, F-019-k, F-019-i/l, F-066-w2/w4, F-066-w)
 
 A topic file of [contract.md](contract.md) (§10). Three pages under
 `(panel)/resellers/`, each a server shell over a client view:
@@ -95,7 +95,7 @@ behind them are [tenant/contract.admin.md](../../domains/tenant/contract.admin.m
 
 `/resellers/buy`: a platform user buys a reseller of their own, paid from their
 wallet. `_lib/purchase.ts` holds its rules, `resellerPurchaseApi`
-(`lib/tenant-api.ts`) its three calls — `GET /api/tenants/purchase/packages`,
+(`lib/tenant-api.ts`) its four calls — `GET /api/tenants/purchase/mine`, `/packages`,
 `GET /api/tenants/purchase/slug?name=`, `POST /api/tenants/purchase`. Every
 rule behind them is [tenant/contract.admin.md](../../domains/tenant/contract.admin.md)
 "A platform user buys a reseller" (F-019-h, ADR-0061).
@@ -134,6 +134,10 @@ rule behind them is [tenant/contract.admin.md](../../domains/tenant/contract.adm
 17. **No figure is computed here** (rule 7 again, and it moves real money). The
     price is the offer's, the balance `billingApi.walletBalance()`, and what was
     charged is the answer's `charged` — never the price the page showed.
+31. **A buyer who holds one sees it, not a form** (F-019-l). `GET /purchase/mine`
+    is asked first; a reseller in it replaces the form with its package, period,
+    a proved panel domain (`ownedHosts` — the CNAME target is said, never linked)
+    and the sidebar's handoff (`useResellerPanelOpener`). Renewal goes here.
 
 ## A reseller's platform host is not a link (F-018-ai, ADR-0063)
 

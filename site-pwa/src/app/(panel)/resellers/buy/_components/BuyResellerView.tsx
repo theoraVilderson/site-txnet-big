@@ -2,18 +2,25 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, HandCoins, Loader2 } from "lucide-react";
+import { CheckCircle2, HandCoins, Loader2, Store } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { billingApi } from "@/lib/billing-api";
 import { PANEL_DEPOSIT, myResellerDomainsPath } from "@/lib/routes";
-import { resellerPurchaseApi, type PackageOffer, type Purchased, type ResellerBillingModel } from "@/lib/tenant-api";
+import {
+  resellerPurchaseApi,
+  type OwnedReseller,
+  type PackageOffer,
+  type Purchased,
+  type ResellerBillingModel,
+} from "@/lib/tenant-api";
+import { useResellerPanelOpener } from "../../../_components/ResellerPanelButton";
 import { Select } from "../../../_components/kit/Select";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { formatInstant } from "../../../_lib/datetime";
 import { BASE_CURRENCY, formatMoney } from "../../../_lib/money";
-import { Alert, Field, input, primaryButton } from "../../_components/resellers-ui";
+import { Alert, Field, StatusBadge, input, primaryButton } from "../../_components/resellers-ui";
 import { BILLING_MODELS, RESELLER_KEYS } from "../../_lib/resellers";
 import {
   PURCHASE_KEYS as K,
@@ -22,6 +29,7 @@ import {
   isInsufficientBalance,
   offerChoices,
   offerPrice,
+  ownedHosts,
   purchaseBody,
   purchaseRefusalKey,
   suggestibleName,
@@ -52,12 +60,17 @@ const SUGGEST_AFTER_MS = 300;
  *    buyer on a page they cannot complete.
  *  - **no figure is computed here.** The price is the offer's, the balance
  *    billing's, and what the purchase charged is the answer's `charged`.
+ *  - **a buyer who already holds one sees it, not a form** (F-019-l).
+ *    `GET /purchase/mine` is asked first, and the packages only when it answers
+ *    `null` — the form would end in `already_reseller`.
  */
 export function BuyResellerView() {
   const { lang, t } = useLocale();
   const { me } = usePanelSession();
   const message = usePurchaseMessage();
 
+  /** `undefined` until asked; `null` for a buyer who holds none. */
+  const [held, setHeld] = useState<OwnedReseller | null | undefined>(undefined);
   const [offers, setOffers] = useState<PackageOffer[] | null>(null);
   const [balance, setBalance] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<unknown>(null);
@@ -74,13 +87,18 @@ export function BuyResellerView() {
 
   const mayBuy = canBuyReseller(me);
 
-  // The packages on sale and the buyer's wallet. Two services, one wait: the
-  // price is worth nothing without the balance to compare it against.
+  // The reseller the buyer already holds, first: it decides which page this is.
+  // Only then the packages on sale and the buyer's wallet — two services, one
+  // wait, because the price is worth nothing without the balance beside it.
   useEffect(() => {
     if (!mayBuy) return;
     let alive = true;
     (async () => {
       try {
+        const { reseller } = await resellerPurchaseApi.mine();
+        if (!alive) return;
+        setHeld(reseller);
+        if (reseller) return setLoadError(null);
         const [onSale, wallet] = await Promise.all([resellerPurchaseApi.packages(), billingApi.walletBalance()]);
         if (!alive) return;
         setOffers(onSale);
@@ -149,6 +167,14 @@ export function BuyResellerView() {
     return (
       <Shell title={t("common", K.title)} subtitle={t("common", K.subtitle)}>
         <Alert>{t("common", K.refusals.not_platform_user)}</Alert>
+      </Shell>
+    );
+  }
+
+  if (held) {
+    return (
+      <Shell title={t("common", K.title)} subtitle={t("common", K.subtitle)}>
+        <HeldReseller reseller={held} />
       </Shell>
     );
   }
@@ -279,6 +305,67 @@ export function BuyResellerView() {
         </div>
       )}
     </Shell>
+  );
+}
+
+/**
+ * The reseller this buyer already holds (F-019-l): its package and period, its
+ * address, and the way into its panel — the sidebar entry's own handoff. The
+ * CNAME target is said as where to point a domain, never linked (ADR-0063).
+ * Renewal and a package upgrade belong here as they are built.
+ */
+function HeldReseller({ reseller }: { reseller: OwnedReseller }) {
+  const { lang, t } = useLocale();
+  const { pending, open } = useResellerPanelOpener();
+  const hosts = ownedHosts(reseller);
+  const H = K.owned;
+  const periodEnd = reseller.currentPeriodEnd
+    ? (formatInstant(reseller.currentPeriodEnd, lang, { withTime: false }) ?? reseller.currentPeriodEnd)
+    : null;
+  const period = reseller.billingModel in RESELLER_KEYS.period
+    ? t("common", RESELLER_KEYS.period[reseller.billingModel as ResellerBillingModel])
+    : reseller.billingModel;
+
+  return (
+    <div className="space-y-5 rounded-2xl border border-card-border bg-card-bg p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-text-primary">{t("common", H.title)}</h2>
+          <p className="mt-1 text-sm text-text-secondary">{t("common", H.body, { slug: reseller.slug })}</p>
+        </div>
+        <StatusBadge status={reseller.status} />
+      </div>
+
+      <dl className="grid gap-4 text-sm sm:grid-cols-2">
+        <div>
+          <dt className="text-xs text-text-secondary">{t("common", H.package)}</dt>
+          <dd className="mt-1 font-medium text-text-primary">
+            {reseller.package ? `${reseller.package.name} — ${period}` : t("common", H.noPackage)}
+          </dd>
+        </div>
+        {periodEnd && (
+          <div>
+            <dt className="text-xs text-text-secondary">{t("common", H.periodEnd)}</dt>
+            <dd className="mt-1 font-medium text-text-primary">{periodEnd}</dd>
+          </div>
+        )}
+        <div className="sm:col-span-2">
+          <dt className="text-xs text-text-secondary">{t("common", H.address)}</dt>
+          <dd className="mt-1 font-medium text-text-primary">
+            {hosts.panel ? (
+              <span dir="ltr">{hosts.panel}</span>
+            ) : (
+              t("common", H.noAddress, { target: hosts.target ?? "—" })
+            )}
+          </dd>
+        </div>
+      </dl>
+
+      <button type="button" className={primaryButton} disabled={pending !== null} onClick={() => open(reseller.id)}>
+        {pending ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Store size={16} aria-hidden />}
+        {t("common", pending ? H.opening : H.open)}
+      </button>
+    </div>
   );
 }
 

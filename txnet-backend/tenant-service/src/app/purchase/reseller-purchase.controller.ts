@@ -21,6 +21,7 @@ import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { PurchaseInput, SuggestSlugInput, purchaseSchema, suggestSlugSchema } from './reseller-purchase.schema';
 import {
+  OwnedReseller,
   PackageOffer,
   PurchaseBuyer,
   PurchaseRejection,
@@ -57,7 +58,8 @@ const WRITE = {
 /**
  * A platform user buys a reseller (F-019-h, ADR-0061):
  * `GET /api/tenants/purchase/packages`, `GET /api/tenants/purchase/slug?name=`,
- * `POST /api/tenants/purchase`.
+ * `POST /api/tenants/purchase` — and `GET /api/tenants/purchase/mine`, the
+ * reseller the caller already holds (F-019-l).
  *
  * No permission key: any signed-in user of the platform owner's tenant may
  * buy, and that is the service's check. `forward-auth` proved the caller.
@@ -70,6 +72,13 @@ export class ResellerPurchaseController {
   @RateLimit(READ)
   async packages(@Req() req: Request, @Ip() ip: string): Promise<PackageOffer[]> {
     return this.refusing(() => this.purchases.packages(buyerOf(req, ip)));
+  }
+
+  /** `{ reseller: null }` for a caller who holds none: a 200 either way, the page's choice of state. */
+  @Get('mine')
+  @RateLimit(READ)
+  async mine(@Req() req: Request, @Ip() ip: string): Promise<{ reseller: OwnedReseller | null }> {
+    return this.refusing(() => this.purchases.mine(buyerOf(req, ip)));
   }
 
   @Get('slug')

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import type { Me } from "@/lib/auth-api";
-import type { PackageOffer } from "@/lib/tenant-api";
+import type { OwnedReseller, PackageOffer } from "@/lib/tenant-api";
 import { PANEL_RESELLERS, PANEL_RESELLER_PURCHASE } from "@/lib/routes";
 import { PANEL_MENU, menuHrefs, visibleMenu } from "../_lib/panel-menu";
 import {
@@ -13,6 +13,7 @@ import {
   isInsufficientBalance,
   offerChoices,
   offerPrice,
+  ownedHosts,
   purchaseBody,
   suggestibleName,
   validatePurchase,
@@ -137,5 +138,43 @@ describe("buying", () => {
     expect(suggestibleName(" Acme VPN ")).toBe("Acme VPN");
     expect(suggestibleName("   ")).toBeNull();
     expect(suggestibleName("a".repeat(101))).toBeNull();
+  });
+});
+
+describe("a buyer who already holds one (F-019-l)", () => {
+  const domain = (domainValue: string, domainType: string, purpose: string, verificationStatus: string) => ({
+    domainValue,
+    domainType,
+    purpose,
+    verificationStatus,
+  });
+  const held: OwnedReseller = {
+    id: "r1",
+    slug: "ali-vpn",
+    status: "active",
+    billingModel: "subscription_monthly",
+    package: { id: "p1", name: "Pro" },
+    currentPeriodEnd: "2026-10-18T10:00:00.000Z",
+    domains: [
+      domain("ali-vpn.edge.txnet.app", "subdomain", "panel", "pending"),
+      domain("pending.ali.ir", "custom_domain", "panel", "verifying"),
+      domain("sub.ali.ir", "custom_domain", "subscription", "verified"),
+      domain("panel.ali.ir", "custom_domain", "panel", "verified"),
+    ],
+  };
+
+  it("names only a proved panel domain as the address — never the CNAME target, which opens nothing", () => {
+    expect(ownedHosts(held)).toEqual({ panel: "panel.ali.ir", target: "ali-vpn.edge.txnet.app" });
+  });
+
+  it("has no address until a panel domain is proved, and still says where to point one", () => {
+    const fresh = { ...held, domains: held.domains.filter((d) => d.domainValue !== "panel.ali.ir") };
+    expect(ownedHosts(fresh)).toEqual({ panel: null, target: "ali-vpn.edge.txnet.app" });
+  });
+
+  it("reads the route the page asks before the form: the service's own `/purchase/mine`", () => {
+    const api = readFileSync(join(__dirname, "../../../lib/tenant-api.ts"), "utf8");
+    expect(api).toMatch(/"\/tenants\/purchase\/mine"/);
+    expect(read("tenant-service/src/app/purchase/reseller-purchase.controller.ts")).toMatch(/@Get\('mine'\)/);
   });
 });

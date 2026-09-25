@@ -92,6 +92,21 @@ export type Purchased = Reseller & {
   walletBalance: string;
 };
 
+/**
+ * `GET /tenants/purchase/mine` (F-019-l): the reseller the caller already
+ * holds — the same "live" the purchase's `already_reseller` counts. `package`
+ * and `currentPeriodEnd` are null only for one never put on a package.
+ */
+export interface OwnedReseller {
+  id: string;
+  slug: string;
+  status: TenantStatus;
+  billingModel: Reseller["billingModel"];
+  package: { id: string; name: string } | null;
+  currentPeriodEnd: string | null;
+  domains: Reseller["domains"];
+}
+
 export interface StatusChange {
   tenantId: string;
   status: TenantStatus;
@@ -202,7 +217,7 @@ export const resellerDomainsApi = {
 /**
  * A platform user buying a reseller of their own (F-019-i,
  * `tenant/contract.admin.md` "A platform user buys a reseller"). Its own
- * object, not a member of {@link tenantApi}: these three routes take no
+ * object, not a member of {@link tenantApi}: these four routes take no
  * permission key and admit any user of the platform owner's tenant, where
  * every route above wants `tenant.manage`.
  */
@@ -210,6 +225,10 @@ export const resellerPurchaseApi = {
   /** The packages on sale, by name. Shares a rate-limit budget with {@link suggestSlug}. */
   async packages(): Promise<PackageOffer[]> {
     return call<PackageOffer[]>("/tenants/purchase/packages", { method: "GET" });
+  },
+  /** The reseller the caller already holds, or `null` — a 200 either way (F-019-l). Shares the read budget. */
+  async mine(): Promise<{ reseller: OwnedReseller | null }> {
+    return call<{ reseller: OwnedReseller | null }>("/tenants/purchase/mine", { method: "GET" });
   },
   /** The address `name` suggests. A suggestion only: the purchase checks it again. */
   async suggestSlug(name: string): Promise<{ slug: string }> {

@@ -65,6 +65,7 @@ read on the app pool before the cross-tenant pool is touched.
 
 | Route | Body / query | Answer |
 |---|---|---|
+| `GET /api/tenants/purchase/mine` | — | `{reseller}`: the caller's live reseller (`id, slug, status, billingModel, package {id, name}, currentPeriodEnd, domains`), `null` when none — a 200 either way (F-019-l) |
 | `GET /api/tenants/purchase/packages` | — | active packages by name: `id, name, monthlyPrice, yearlyPrice, includedFeatureKeys` |
 | `GET /api/tenants/purchase/slug` | `name` 1..100, `.strict()` | `{slug}` — a suggestion, checked again by the purchase |
 | `POST /api/tenants/purchase` | `{packageId, billingModel, name, slug?}`, `.strict()` | `201` a reseller view + `packageId, currentPeriodEnd, charged, walletBalance` |
@@ -77,10 +78,10 @@ Refusals: `not_platform_user` 403; `package_not_found` 404; `buyer_inactive`,
 |---|---|
 | **Paid from the buyer's wallet; the first period is paid and the reseller `active` at once**; `trial` stays the platform owner's hand-made path | a free purchase lets one account hold many slugs (user, 2026-09-18) |
 | **One transaction on the cross-tenant pool**, the package `FOR SHARE` first: `writeReseller`'s rows, the buyer's `wallet` debit (`reseller_purchase`, `referenceId` = the new tenant, `tenantId` = the platform owner), the price credited to the reseller's billing wallet (`reseller_purchase`) and charged from it (`subscription_charge`, the renewal's reference for the period starting now), the subscription ending one period on (`addBillingPeriod`), the package's `package_included` keys, and `trial` -> `active` (history `reseller_purchased`, actor the buyer) | money never leaves a wallet without a reseller; a short wallet throws inside the transaction, so nothing is refunded (ADR-0061) |
-| **One live reseller per user**: one they own that is not `terminated` or deleted is `already_reseller`, checked before and again inside the transaction; two purchases racing meet at the wallet's version guard (`wallet_changed`) | `GET /auth/me` and the panel assume one tenant per owner (user, 2026-09-18) |
+| **One live reseller per user**: one they own that is not `terminated` or deleted (`liveReseller`, the same one `mine` answers) is `already_reseller`, checked before and again inside the transaction; two purchases racing meet at the wallet's version guard (`wallet_changed`) | `GET /auth/me` and the panel assume one tenant per owner (user, 2026-09-18) |
 | **The slug:** sent, it is the buyer's own (`slugSchema`, the create's rules) and a held one is `slug_taken`; absent, the one `name` suggests. A suggestion transliterates Persian to Latin, becomes one DNS label of at most 50 characters (`reseller` when nothing is left), then takes the first of `base`, `base-2` … `base-20` neither reserved nor held, else a random suffix. Fixed after creation | close to the name and editable before buying; renaming would move both hosts and break a CNAME to `<slug>.edge` (user, 2026-09-18) |
 | The package must be active and priced for the period, read again under its lock | a deactivated package takes no new subscriber (F-018-d) |
-| Rate limits per user over 15 minutes: `RESELLER_PURCHASE_READ` for the package list and the suggestion together (`RESELLER_PURCHASE_READ_RATE_LIMIT`, default 120), `RESELLER_PURCHASE_WRITE` for the purchase (`RESELLER_PURCHASE_WRITE_RATE_LIMIT`, default 10); over it is `429` | the suggestion is asked as the name is typed; a purchase moves money. Tunable without a rebuild (F-087) |
+| Rate limits per user over 15 minutes: `RESELLER_PURCHASE_READ` for `mine`, the package list and the suggestion together (`RESELLER_PURCHASE_READ_RATE_LIMIT`, default 120), `RESELLER_PURCHASE_WRITE` for the purchase (`RESELLER_PURCHASE_WRITE_RATE_LIMIT`, default 10); over it is `429` | the suggestion is asked as the name is typed; a purchase moves money. Tunable without a rebuild (F-087) |
 
 ## Packages the platform sells (F-018-d)
 

@@ -1643,6 +1643,17 @@
       "next": "Next: add your own domain and point it (CNAME) at {{target}}. Until it is verified, your customers cannot reach you.",
       "addDomain": "Add your domain"
     },
+    "owned": {
+      "title": "Your reseller",
+      "body": "You already hold {{slug}}; each user holds one live reseller.",
+      "package": "Package",
+      "noPackage": "Not on a package yet.",
+      "periodEnd": "This period ends",
+      "address": "Panel address",
+      "noAddress": "No domain is verified yet. Point your own domain (CNAME) at {{target}}.",
+      "open": "Open the reseller panel",
+      "opening": "Opening…"
+    },
     "errors": {
       "packageId": "Pick a package.",
       "name": "Enter a name of at most 100 characters.",

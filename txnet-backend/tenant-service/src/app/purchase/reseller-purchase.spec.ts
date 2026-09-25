@@ -216,6 +216,38 @@ describe('ResellerPurchaseService', () => {
     ).rejects.toMatchObject({ reason: 'package_not_sold_for_period' });
   });
 
+  it('answers the reseller the caller already owns, or null — never a refusal for having none (F-019-l)', async () => {
+    const none = build();
+    expect(await none.service.mine(buyer)).toEqual({ reseller: null });
+
+    const held = build({ owns: true });
+    held.all.tenant.findFirst.mockResolvedValueOnce({
+      id: 'old',
+      slug: 'ali-vpn',
+      status: 'active',
+      billingModel: 'subscription_monthly',
+      subscription: { currentPeriodEnd: NOW, package: { id: PACKAGE, name: 'Pro' } },
+      domains: [{ domainValue: 'ali-vpn.edge.txnet.app', domainType: 'subdomain', purpose: 'panel', verificationStatus: 'verified' }],
+    } as never);
+    expect(await held.service.mine(buyer)).toEqual({
+      reseller: {
+        id: 'old',
+        slug: 'ali-vpn',
+        status: 'active',
+        billingModel: 'subscription_monthly',
+        package: { id: PACKAGE, name: 'Pro' },
+        currentPeriodEnd: NOW,
+        domains: [{ domainValue: 'ali-vpn.edge.txnet.app', domainType: 'subdomain', purpose: 'panel', verificationStatus: 'verified' }],
+      },
+    });
+    // The same "live" the purchase refuses on: one rule, so the page and `already_reseller` never disagree.
+    expect((held.all.tenant.findFirst.mock.calls as unknown as [{ where: unknown }][])[0][0]).toMatchObject({
+      where: { ownerUserId: BUYER, tenantType: 'reseller', deletedAt: null, status: { not: 'terminated' } },
+    });
+
+    await expect(build({ callerType: 'reseller' }).service.mine(buyer)).rejects.toMatchObject({ reason: 'not_platform_user' });
+  });
+
   it('refuses a buyer who is not active', async () => {
     await expect(build({ status: 'banned' }).service.purchase(buyer, input, NOW)).rejects.toMatchObject({ reason: 'buyer_inactive' });
   });
@@ -229,6 +261,7 @@ describe('ResellerPurchaseController', () => {
     const req = { identity: { userId: 'u-1', tenantId: 't-1' } };
     expect(limitOf('packages')?.configKey).toBe('RESELLER_PURCHASE_READ_RATE_LIMIT');
     expect(limitOf('slug')?.configKey).toBe('RESELLER_PURCHASE_READ_RATE_LIMIT');
+    expect(limitOf('mine')?.configKey).toBe('RESELLER_PURCHASE_READ_RATE_LIMIT');
     expect(limitOf('purchase')?.configKey).toBe('RESELLER_PURCHASE_WRITE_RATE_LIMIT');
     // Built from the caller, so one user never spends another's allowance.
     expect(limitOf('packages')?.key(req)).toBe(rateLimitBucketKey(RateLimitBucket.RESELLER_PURCHASE_READ, 'u-1'));

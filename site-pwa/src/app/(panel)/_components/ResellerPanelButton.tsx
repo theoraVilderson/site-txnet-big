@@ -35,9 +35,8 @@ type Reseller = { id: string; slug: string };
  */
 export function ResellerPanelButton({ collapsed = false }: { collapsed?: boolean }) {
   const { t } = useLocale();
-  const router = useRouter();
   const [resellers, setResellers] = useState<Reseller[]>([]);
-  const [pending, setPending] = useState<string | null>(null);
+  const { pending, open } = useResellerPanelOpener();
 
   useEffect(() => {
     let live = true;
@@ -50,17 +49,6 @@ export function ResellerPanelButton({ collapsed = false }: { collapsed?: boolean
     };
   }, []);
 
-  const open = async (reseller: Reseller) => {
-    setPending(reseller.id);
-    try {
-      const { origin, code } = await authApi.issueHandoff(reseller.id);
-      window.location.assign(`${origin}${AUTH_HANDOFF}#${code}`);
-    } catch (e) {
-      setPending(null);
-      if (e instanceof ApiError && !e.unreachable) router.push(myResellerConsolePath(reseller.id));
-    }
-  };
-
   return (
     <>
       {resellers.map((reseller) => {
@@ -71,7 +59,7 @@ export function ResellerPanelButton({ collapsed = false }: { collapsed?: boolean
           <button
             key={reseller.id}
             type="button"
-            onClick={() => open(reseller)}
+            onClick={() => open(reseller.id)}
             disabled={pending !== null}
             className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-text-secondary transition-colors duration-200 hover:bg-leaf-bg hover:text-text-primary disabled:opacity-60 ${
               collapsed ? "lg:justify-center" : ""
@@ -87,4 +75,27 @@ export function ResellerPanelButton({ collapsed = false }: { collapsed?: boolean
       })}
     </>
   );
+}
+
+/**
+ * Opens one reseller's own panel, signed in as the same account: mint a
+ * handoff code and spend it on its origin. An answered refusal — it has no
+ * panel host — opens its console here instead (F-066-w); only an unreachable
+ * service leaves the visitor where they were. Shared by the sidebar entry and
+ * `/resellers/buy`'s held state (F-019-l), so the two never disagree.
+ */
+export function useResellerPanelOpener() {
+  const router = useRouter();
+  const [pending, setPending] = useState<string | null>(null);
+  const open = async (tenantId: string) => {
+    setPending(tenantId);
+    try {
+      const { origin, code } = await authApi.issueHandoff(tenantId);
+      window.location.assign(`${origin}${AUTH_HANDOFF}#${code}`);
+    } catch (e) {
+      setPending(null);
+      if (e instanceof ApiError && !e.unreachable) router.push(myResellerConsolePath(tenantId));
+    }
+  };
+  return { pending, open };
 }

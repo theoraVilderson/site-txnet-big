@@ -1,5 +1,5 @@
 import type { Me } from "@/lib/auth-api";
-import type { PackageOffer, PurchaseBody, ResellerBillingModel } from "@/lib/tenant-api";
+import type { OwnedReseller, PackageOffer, PurchaseBody, ResellerBillingModel } from "@/lib/tenant-api";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { RESERVED_SLUGS, type Errors } from "./resellers";
 
@@ -47,6 +47,20 @@ export const isInsufficientBalance = (e: unknown) => reasonOf(e) === "insufficie
  * a reseller is the visitor this page exists for, and they hold nothing.
  */
 export const canBuyReseller = (me: Me | null) => me?.tenant?.type === "platform_owner";
+
+/**
+ * Where a held reseller lives (F-019-l). `panel` is a proved custom panel
+ * domain, the one host its customers can open; `target` is its CNAME target,
+ * shown as where to point one and never as a link — it opens nothing
+ * (ADR-0063).
+ */
+export function ownedHosts(reseller: OwnedReseller): { panel: string | null; target: string | null } {
+  const panel = reseller.domains.find(
+    (d) => d.domainType === "custom_domain" && d.purpose === "panel" && d.verificationStatus === "verified",
+  );
+  const target = reseller.domains.find((d) => d.domainType === "subdomain");
+  return { panel: panel?.domainValue ?? null, target: target?.domainValue ?? null };
+}
 
 /** The period's own price, `null` when the package is not sold for it. */
 export const offerPrice = (offer: PackageOffer, period: ResellerBillingModel) =>

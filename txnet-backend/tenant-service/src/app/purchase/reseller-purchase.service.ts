@@ -47,6 +47,17 @@ export type PurchaseBuyer = { userId: string; tenantId: string; ip: string };
 
 export type PurchaseView = ResellerView & { packageId: string; currentPeriodEnd: Date; charged: string; walletBalance: string };
 
+/**
+ * The reseller a buyer already holds (F-019-l): what `/resellers/buy` shows in
+ * place of a form `already_reseller` would refuse. `package` and
+ * `currentPeriodEnd` are null only for a reseller the platform owner created
+ * and never put on a package.
+ */
+export type OwnedReseller = Pick<ResellerView, 'id' | 'slug' | 'status' | 'billingModel' | 'domains'> & {
+  package: { id: string; name: string } | null;
+  currentPeriodEnd: Date | null;
+};
+
 export type PackageOffer = {
   id: string;
   name: string;
@@ -113,6 +124,29 @@ export class ResellerPurchaseService {
       yearlyPrice: p.yearlyPrice?.toFixed(2) ?? null,
       includedFeatureKeys: p.includedFeatureKeys as string[],
     }));
+  }
+
+  /**
+   * The caller's live reseller, or `null` (F-019-l). Never a refusal for
+   * having none: the page asks this to choose which of its two states to show.
+   * "Live" is {@link liveReseller}, the rule `already_reseller` refuses on.
+   */
+  async mine(buyer: PurchaseBuyer): Promise<{ reseller: OwnedReseller | null }> {
+    await this.access(buyer);
+    const row = await this.all.tenant.findFirst({
+      where: liveReseller(buyer.userId),
+      select: {
+        id: true,
+        slug: true,
+        status: true,
+        billingModel: true,
+        subscription: { select: { currentPeriodEnd: true, package: { select: { id: true, name: true } } } },
+        domains: { select: { domainValue: true, domainType: true, purpose: true, verificationStatus: true } },
+      },
+    });
+    if (!row) return { reseller: null };
+    const { subscription, ...rest } = row;
+    return { reseller: { ...rest, package: subscription?.package ?? null, currentPeriodEnd: subscription?.currentPeriodEnd ?? null } };
   }
 
   /** The slug a name suggests, or the first free one beside it. Advisory: the purchase checks again. */
@@ -200,10 +234,7 @@ export class ResellerPurchaseService {
 
   /** A reseller the user owns that is not terminated or deleted: one live reseller per user. */
   private async ownsReseller(db: Prisma.TransactionClient, userId: string): Promise<boolean> {
-    const held = await db.tenant.findFirst({
-      where: { ownerUserId: userId, tenantType: TenantType.reseller, deletedAt: null, status: { not: TenantStatus.terminated } },
-      select: { id: true },
-    });
+    const held = await db.tenant.findFirst({ where: liveReseller(userId), select: { id: true } });
     return Boolean(held);
   }
 
@@ -223,6 +254,11 @@ export class ResellerPurchaseService {
   private domain(): string {
     return this.config.get<string>('DOMAIN_NAME') as string;
   }
+}
+
+/** A reseller the user owns that is not terminated or deleted — what "one live reseller per user" counts. */
+function liveReseller(userId: string) {
+  return { ownerUserId: userId, tenantType: TenantType.reseller, deletedAt: null, status: { not: TenantStatus.terminated } } satisfies Prisma.TenantWhereInput;
 }
 
 /** The package's price for the period, or the refusal that says why it is not on sale. */
