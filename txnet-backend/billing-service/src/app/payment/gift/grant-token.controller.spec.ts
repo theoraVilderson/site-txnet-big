@@ -23,14 +23,14 @@ const GRANT = '11111111-1111-4111-8111-111111111111';
 const req = (userId: string) => ({ identity: { userId, tenantId: 't-1', roleId: 'r', sessionId: 's', permissions: [] } });
 
 describe('GrantTokenController', () => {
-  it('answers the new link — and, until F-114-e-c, its key — for the id in the path and the user from the gate', async () => {
+  it('answers the new link, never a bare key, for the id in the path and the user from the gate', async () => {
     const links = { reset: vi.fn(async () => 'https://sub.example.com/sub/sub-key-0001') };
     const controller = new GrantTokenController(links as never);
 
     const answer = await controller.rotate(GRANT, req('u-1') as never);
 
     expect(links.reset).toHaveBeenCalledWith(GRANT, 'u-1');
-    expect(answer).toEqual({ grantId: GRANT, subscriptionUrl: 'https://sub.example.com/sub/sub-key-0001', subscriptionKey: 'sub-key-0001' });
+    expect(answer).toEqual({ grantId: GRANT, subscriptionUrl: 'https://sub.example.com/sub/sub-key-0001' });
   });
 
   it('lets a refusal through as the service raised it: another user’s Grant stays the 404', async () => {

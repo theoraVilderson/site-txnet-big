@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, KeyRound, Loader2 } from "lucide-react";
+import { AlertCircle, Copy, Loader2, QrCode, RotateCcw } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
@@ -14,28 +15,22 @@ import { formatBytes, purgeCountdown } from "../_lib/service-configs";
 import { GrantConfigs } from "./GrantConfigs";
 
 const S = FrontendI18nKeys.common.myServices;
-/**
- * The key panel's sentences are the gift modal's (C-06 is satisfied by either
- * set). They are deliberately not copied under `myServices`: "shown only this
- * once" and "the previous key has stopped working" are the same two facts
- * about the same credential, and a second copy is a second translation to keep
- * in step — the sentence would drift on one surface and not the other.
- */
-const G = FrontendI18nKeys.common.wallet.gift;
+const L = S.link;
 
 /**
  * One Grant on the "my services" page (F-502-s): what it is, how long it runs,
- * what state billing says it is in — and the way back to its subscription key.
+ * what state billing says it is in — and its subscription link (F-114-e-c).
  *
- * **The row never shows a key it was given.** The list carries none: billing
- * keeps only the hash (D-35) and selects its columns so that neither the key
- * nor the hash can leave in a list (`billing/contract.gift.md`). A key appears
- * here only as the answer to a press on this row, and what appears is the key
- * billing minted in that call.
+ * **The link is asked for, never carried.** The list answers no token
+ * (`billing/contract.gift.md`); the link is read from its own route the first
+ * time this row needs it — a copy or the QR — and held only while the page is
+ * up. Billing keeps the token sealed and answers the same link every time
+ * (ADR-0085), so there is nothing to lose by not storing it.
  *
- * **The button is offered whatever the status.** An expired or cancelled Grant
- * is the row a user most often came for — the key was lost, not the service —
- * and the route deliberately does not gate on status either (F-502-p).
+ * **Reset is for a leaked link, behind a question.** It destroys the link the
+ * user's app already holds, so it asks first, never retries, and a refusal
+ * changes nothing on screen. Every control is offered whatever the status:
+ * a link opens nothing more than its Grant allows, because `/sub` reads it.
  */
 export function ServiceRow({
   row,
@@ -50,14 +45,15 @@ export function ServiceRow({
   const { t, lang } = useLocale();
   const toMessage = useApiErrorMessage();
 
-  // The key billing last minted for this row, or `null` — which is every row
-  // until someone asks. A reissue replaces it, because the old one is dead
-  // inside billing's transaction and leaving it up would offer a credential
-  // that opens nothing.
-  const [subscriptionKey, setSubscriptionKey] = useState<string | null>(null);
-  const [reissued, setReissued] = useState(false);
+  // The link billing answered for this row, or `null` until something asks.
+  const [link, setLink] = useState<string | null>(null);
+  const [showLink, setShowLink] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [isRotating, setIsRotating] = useState(false);
+  const [isReading, setIsReading] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
   const [error, setError] = useState<{ message: string; ref?: string } | null>(null);
 
   const tone = GRANT_TONES[row.status];
@@ -76,31 +72,64 @@ export function ServiceRow({
       : t("common", S.usageUnmetered, { consumed });
   const countdown = purgeCountdown(row.purgeAt);
 
-  async function askForANewKey() {
-    if (isRotating) return;
+  function refused(e: unknown) {
+    // Billing's own sentence, laid out (`contract.errors.md`) — `link_not_kept`
+    // tells an older Grant's user to reset once.
+    console.error(e);
+    setError({ message: toMessage(e), ref: e instanceof ApiError ? e.ref : undefined });
+  }
+
+  /** The link, read once per row; `null` after a refusal, which is on screen. */
+  async function readLink(): Promise<string | null> {
+    if (link) return link;
     setError(null);
-    setIsRotating(true);
+    setIsReading(true);
     try {
-      const { subscriptionKey: minted } = await billingApi.rotateGrantToken(row.id);
-      // `reissued` is about the *previous* key, so it is set only when there
-      // was one on screen to replace; the first ask mints a key for a row that
-      // showed none.
-      setReissued(subscriptionKey !== null);
-      setSubscriptionKey(minted);
-      setCopied(false);
+      const { subscriptionUrl } = await billingApi.subscriptionLink(row.id);
+      setLink(subscriptionUrl);
+      return subscriptionUrl;
     } catch (e) {
-      // Nothing was minted, so whatever is on screen is still the key. Only
-      // billing's own sentence is added (`contract.errors.md`).
-      console.error(e);
-      setError({ message: toMessage(e), ref: e instanceof ApiError ? e.ref : undefined });
+      refused(e);
+      return null;
     } finally {
-      setIsRotating(false);
+      setIsReading(false);
     }
   }
 
-  const copy = async () => {
-    if (subscriptionKey && (await copyText(subscriptionKey))) setCopied(true);
-  };
+  async function copy() {
+    if (isReading) return;
+    const url = await readLink();
+    if (!url) return;
+    if (await copyText(url)) setCopied(true);
+    // No clipboard (an insecure origin, an old in-app browser): the link is
+    // shown to select by hand.
+    else setShowLink(true);
+  }
+
+  async function toggleQr() {
+    if (qrOpen) return setQrOpen(false);
+    if (await readLink()) setQrOpen(true);
+  }
+
+  async function reset() {
+    if (isResetting) return;
+    setConfirmReset(false);
+    setError(null);
+    setIsResetting(true);
+    try {
+      const { subscriptionUrl } = await billingApi.resetSubscriptionLink(row.id);
+      // The old link is dead inside billing's transaction, so it must not stay
+      // on screen to be copied.
+      setLink(subscriptionUrl);
+      setResetDone(true);
+      setCopied(false);
+    } catch (e) {
+      // Nothing was reset, so whatever is on screen is still the link.
+      refused(e);
+    } finally {
+      setIsResetting(false);
+    }
+  }
 
   return (
     <li className="rounded-2xl border border-card-border bg-card-bg p-4">
@@ -165,29 +194,46 @@ export function ServiceRow({
         </ul>
       )}
 
-      {subscriptionKey && (
-        <div className="mt-3 rounded-2xl border border-card-border bg-bg-inner p-3">
-          <p className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-text-secondary">
-            {t("common", G.keyLabel)}
-          </p>
-          <div className="flex items-center gap-2">
-            <code className="min-w-0 flex-1 select-all break-all font-mono text-xs text-text-primary" dir="ltr">
-              {subscriptionKey}
-            </code>
-            <button
-              type="button"
-              onClick={() => void copy()}
-              className="shrink-0 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white"
-            >
-              {t("common", copied ? G.copied : G.copy)}
-            </button>
-          </div>
-          <p className="mt-2 text-[11px] font-bold text-error">{t("common", G.keyOnce)}</p>
-          {reissued && (
-            <p className="mt-1 text-[11px] font-bold text-text-secondary">{t("common", G.keyReplaced)}</p>
-          )}
+      <div className="mt-3 rounded-2xl border border-card-border bg-bg-inner p-3">
+        <p className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-text-secondary">{t("common", L.label)}</p>
+        <p className="text-[11px] text-text-secondary">{t("common", L.hint)}</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void copy()}
+            disabled={isReading}
+            className="flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+          >
+            {isReading ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Copy size={14} aria-hidden />}
+            {t("common", isReading ? L.copying : copied ? L.copied : L.copy)}
+          </button>
+          <button
+            type="button"
+            onClick={() => void toggleQr()}
+            disabled={isReading}
+            className="flex items-center gap-1.5 rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-secondary hover:bg-leaf-bg hover:text-text-primary disabled:opacity-50"
+          >
+            <QrCode size={14} aria-hidden />
+            {t("common", qrOpen ? L.hideQr : L.showQr)}
+          </button>
         </div>
-      )}
+
+        {link && (qrOpen || showLink) && (
+          <div className="mt-3 space-y-3">
+            {qrOpen && (
+              // White behind the code in both themes: a scanner needs the contrast.
+              <div role="img" aria-label={t("common", L.qrLabel)} className="mx-auto w-fit rounded-xl bg-white p-3">
+                <QRCodeSVG value={link} size={176} aria-hidden />
+              </div>
+            )}
+            <code className="block select-all break-all font-mono text-xs text-text-primary" dir="ltr">
+              {link}
+            </code>
+          </div>
+        )}
+
+        {resetDone && <p className="mt-2 text-[11px] font-bold text-text-secondary">{t("common", L.resetDone)}</p>}
+      </div>
 
       {error && (
         <div
@@ -208,16 +254,38 @@ export function ServiceRow({
 
       <GrantConfigs grantId={row.id} />
 
-      <p className="mt-3 text-[11px] text-text-secondary">{t("common", S.keyHint)}</p>
-      <button
-        type="button"
-        onClick={() => void askForANewKey()}
-        disabled={isRotating}
-        className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-card-border py-3 text-xs font-bold text-text-secondary transition-colors duration-200 hover:bg-leaf-bg hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {isRotating ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <KeyRound size={14} aria-hidden />}
-        {t("common", isRotating ? G.newKeySending : G.newKey)}
-      </button>
+      {confirmReset ? (
+        <div className="mt-3 rounded-2xl border border-error-border bg-error-bg p-3">
+          <p className="text-[13px] font-bold text-error">{t("common", L.resetConfirm)}</p>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmReset(false)}
+              autoFocus
+              className="flex-1 rounded-xl bg-primary py-2.5 text-xs font-bold text-white"
+            >
+              {t("common", L.resetNo)}
+            </button>
+            <button
+              type="button"
+              onClick={() => void reset()}
+              className="flex-1 rounded-xl bg-leaf-bg py-2.5 text-xs font-bold text-text-primary"
+            >
+              {t("common", L.resetYes)}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirmReset(true)}
+          disabled={isResetting}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-card-border py-3 text-xs font-bold text-text-secondary transition-colors duration-200 hover:bg-leaf-bg hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isResetting ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <RotateCcw size={14} aria-hidden />}
+          {t("common", isResetting ? L.resetting : L.reset)}
+        </button>
+      )}
     </li>
   );
 }

@@ -255,20 +255,21 @@ describe("one page: pick, codes, pay", () => {
     expect(href.searchParams.get("missing")).toBe("7.50");
   });
 
-  it("shows the key once, then sends the user to My services", async () => {
+  it("shows no key or link — it sends the user to My services, where the link is", async () => {
     payInvoice.mockResolvedValue({
       id: INVOICE_ID,
       status: "paid",
       total: "12.50",
       balanceAfter: "7.50",
       walletTransactionId: "w1",
-      grants: [{ id: "g1", status: "pending", token: "KEY-once" }],
-    });
+      // Billing still answers the token; the panel must not show it (F-114-e-c).
+      grants: [{ id: "g1", status: "pending", token: "tok-once" }],
+    } as never);
     const user = await toCheckout();
     await user.click(screen.getByRole("button", { name: "shop.invoice.pay" }));
 
-    expect(await screen.findByText("KEY-once")).toBeTruthy();
-    expect(screen.getByText("wallet.gift.keyOnce")).toBeTruthy();
+    expect(await screen.findByText("shop.paid.preparing")).toBeTruthy();
+    expect(document.body.textContent ?? "").not.toMatch(/tok-once|wallet\.gift\.key/);
     expect(screen.getByRole("link", { name: "shop.paid.myServices" }).getAttribute("href")).toBe(PANEL_MY_SERVICES);
   });
 

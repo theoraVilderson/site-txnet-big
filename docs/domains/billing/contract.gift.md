@@ -62,7 +62,7 @@ link that leaked, no longer how a lost key comes back.
 | Route | Body | Answers `data` |
 |---|---|---|
 | `GET /api/billing/gift/grants/:id/subscription-link` | none | `{grantId, subscriptionUrl}` — `https://<subscription host>/sub/<token>` |
-| `POST /api/billing/gift/grants/:id/rotate-token` ("reset link") | none | `{grantId, subscriptionUrl, subscriptionKey}` — the new link; `subscriptionKey` is its last segment, kept only until the panel stops showing a key (F-114-e-c) |
+| `POST /api/billing/gift/grants/:id/rotate-token` ("reset link") | none | `{grantId, subscriptionUrl}` — the new link, never a bare key (F-114-e-c) |
 
 | Rule | Why |
 |---|---|
@@ -99,11 +99,12 @@ closed had no way back.
 | Its own bucket, `GRANT_LIST`, default **120** per 900s; the `subscriptionLink` capability, as above | it reads no secret and destroys nothing, so it is no security control — but sharing `GRANT_ROTATE_TOKEN`'s five calls would spend a user's recovery budget on looking at the list that offers the recovery |
 | Bytes are decimal strings. `purgeAt` is `suspendedAt` + `coalesce(grant.purgeAfterDays, tenant.purgeAfterDays)` days, and `null` when the Grant is not suspended or the window is `0` (F-027-ac) | a Grant's bytes pass 2^53; and it is the SQL `entitlement/purge.ts` runs, so the panel's countdown is the instant the hourly job acts after. The tenant is read only when a suspended row has no window of its own |
 
-**Not covered:** the panel's copy-link, QR and reset button (F-114-e-c); the
-reissue button of F-502-q is what F-114-e-c replaces. Its consumer since
+**Not covered:** the redemption above and the shop's pay (`contract.purchase.md`)
+still answer the token itself; the panel no longer reads it (F-114-e-c), and
+dropping it from those answers is nobody's row yet. Its consumer since
 2026-09-20 is the panel's "my services" page (F-502-s,
 `panel-web/contract.my-services.md`), which lists every status this answers and
-puts the reissue button on each row. Filtering or searching the list is nobody's
+puts each Grant's link and its reset on the row. Filtering or searching the list is nobody's
 row yet: paging is the only knob.
 
 ## A Grant's configs, and what a user may do to them (built — F-027-ac)

@@ -5,6 +5,7 @@ import { GiftCodeModal } from "./GiftCodeModal";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi } from "@/lib/billing-api";
 import { ApiError } from "@/lib/api-error";
+import { PANEL_MY_SERVICES } from "@/lib/routes";
 
 /**
  * The gift-code modal (F-093-g), and the one thing about it that has to be
@@ -43,11 +44,18 @@ vi.setConfig({ testTimeout: 15_000 });
 
 vi.mock("@/context/LocaleContext", () => ({ useLocale: vi.fn() }));
 vi.mock("@/lib/billing-api", () => ({
-  billingApi: { redeemGift: vi.fn(), rotateGrantToken: vi.fn() },
+  billingApi: { redeemGift: vi.fn() },
 }));
 
 const redeemGift = vi.mocked(billingApi.redeemGift);
-const rotateGrantToken = vi.mocked(billingApi.rotateGrantToken);
+
+/** Billing still answers the token beside the Grant; the panel must not show it. */
+const GRANTED = {
+  kind: "free_grant" as const,
+  code: "FREEVPN",
+  grant: { id: "g1", variantId: "v1", startsAt: "2026-09-15T00:00:00.000Z", endsAt: "2026-10-15T00:00:00.000Z", featureKeys: ["vpn.access"] },
+  subscriptionKey: "tok-3kq9",
+} as never;
 
 /** The key back, so an assertion names the string the component asked for. */
 const t = (_ns: string, key: string, vars?: Record<string, string | number>) =>
@@ -193,23 +201,18 @@ describe("a redeemed code", () => {
  * keeps only its hash — so the screen says so, and no money figure appears.
  */
 describe("a free-service code", () => {
-  it("shows the activated service and its key once, and no credit", async () => {
+  it("shows the activated service and where its link is — no key, and no credit", async () => {
     const user = userEvent.setup();
-    redeemGift.mockResolvedValue({
-      kind: "free_grant",
-      code: "FREEVPN",
-      grant: { id: "g1", variantId: "v1", startsAt: "2026-09-15T00:00:00.000Z", endsAt: "2026-10-15T00:00:00.000Z", featureKeys: ["vpn.access"] },
-      subscriptionKey: "KEY-3kq9-once",
-    });
+    redeemGift.mockResolvedValue(GRANTED);
     const { onRedeemed } = open();
 
     fillCode("FREEVPN");
     await user.click(submit());
 
     expect(await screen.findByText("wallet.gift.serviceTitle")).toBeInTheDocument();
-    expect(screen.getByText("KEY-3kq9-once")).toBeInTheDocument();
-    expect(screen.getByText("wallet.gift.keyOnce")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "wallet.gift.copy" })).toBeInTheDocument();
+    expect(screen.getByText("wallet.gift.serviceLink")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "wallet.gift.toMyServices" }).getAttribute("href")).toBe(PANEL_MY_SERVICES);
+    expect(document.body.textContent ?? "").not.toMatch(/wallet\.gift\.key|newKey|tok-/);
     expect(screen.queryByText(/wallet\.gift\.credited/)).not.toBeInTheDocument();
     expect(screen.queryByText(/wallet\.gift\.newBalance/)).not.toBeInTheDocument();
     expect(onRedeemed).toHaveBeenCalledTimes(1);
@@ -276,34 +279,15 @@ describe("the box itself", () => {
 });
 
 /**
- * The key is shown once and billing keeps only its hash (F-502-m, D-35), so a
- * dismissal that was not meant is not a closed modal — it is a key the user
- * never copied.
- *
- * `Escape` and the backdrop are the two ways to close a dialog *without
- * deciding to*, and since F-502-q they neither close it nor do nothing: they
- * ask. That is the relaxation F-502-p paid for — a key can be reissued from
- * this screen, so the answer to "close?" is now a real answer rather than a
- * door that has to stay shut. The X and "done" are aimed at, and still close
- * it on the first press.
+ * A granted service puts nothing secret on screen (F-114-e-c, ADR-0085): the
+ * link is My services' to show, as often as asked. So the modal closes like
+ * any other answer — `Escape` and the backdrop included — where it used to ask
+ * first while a once-only key was up (F-502-q).
  */
-describe("the key on screen", () => {
-  const grant = {
-    kind: "free_grant" as const,
-    code: "FREEVPN",
-    grant: {
-      id: "g1",
-      variantId: "v1",
-      startsAt: "2026-09-15T00:00:00.000Z",
-      endsAt: "2026-10-15T00:00:00.000Z",
-      featureKeys: ["vpn.access"],
-    },
-    subscriptionKey: "KEY-3kq9-once",
-  };
-
+describe("a granted service", () => {
   async function granted() {
     const user = userEvent.setup();
-    redeemGift.mockResolvedValue(grant);
+    redeemGift.mockResolvedValue(GRANTED);
     const opened = open();
 
     fillCode("FREEVPN");
@@ -313,145 +297,22 @@ describe("the key on screen", () => {
     return { user, ...opened };
   }
 
-  it("is not dismissed by Escape — it asks first", async () => {
+  it("closes on Escape and on the backdrop, without asking", async () => {
     const { user, onClose } = await granted();
 
-    await user.keyboard("{Escape}");
-
-    expect(onClose).not.toHaveBeenCalled();
-    expect(screen.getByText("wallet.gift.closeAsk")).toBeInTheDocument();
-    expect(screen.getByText("KEY-3kq9-once")).toBeInTheDocument();
-  });
-
-  it("is not dismissed by a click on the backdrop — it asks first", async () => {
-    const { user, onClose } = await granted();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
 
     await user.click(screen.getByTestId("gift-backdrop"));
-
-    expect(onClose).not.toHaveBeenCalled();
-    expect(screen.getByText("wallet.gift.closeAsk")).toBeInTheDocument();
-    expect(screen.getByText("KEY-3kq9-once")).toBeInTheDocument();
-  });
-
-  it("closes when the asked question is answered, and goes back when it is not", async () => {
-    const { user, onClose } = await granted();
-
-    await user.keyboard("{Escape}");
-    await user.click(screen.getByRole("button", { name: "wallet.gift.stay" }));
-
-    // Back to the key, with nothing closed and nothing lost.
-    expect(onClose).not.toHaveBeenCalled();
-    expect(screen.queryByText("wallet.gift.closeAsk")).not.toBeInTheDocument();
-    expect(screen.getByText("KEY-3kq9-once")).toBeInTheDocument();
-
-    await user.keyboard("{Escape}");
-    await user.click(screen.getByRole("button", { name: "wallet.gift.closeAnyway" }));
-
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it("closes on the two controls the user aims at", async () => {
-    const { user, onClose } = await granted();
-
-    await user.click(screen.getByRole("button", { name: "wallet.gift.done" }));
-    expect(onClose).toHaveBeenCalledTimes(1);
-
-    await user.click(screen.getByRole("button", { name: "wallet.gift.close" }));
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 
-  it("leaves the empty box dismissible — nothing has been shown to lose yet", async () => {
-    const user = userEvent.setup();
-    const { onClose } = open();
+  it("closes on done, on the X, and on the way to My services", async () => {
+    const { user, onClose } = await granted();
 
-    await user.click(screen.getByTestId("gift-backdrop"));
-
-    expect(onClose).toHaveBeenCalled();
-  });
-});
-
-/**
- * A key that did not reach the user (F-502-q), over F-502-p's
- * `POST /gift/grants/:id/rotate-token`.
- *
- * The key is shown once and only hashed (D-35), and until F-502-p that made a
- * failed copy final: the clipboard write can throw on an insecure origin, the
- * selection can be half a key, the paste can land in the wrong window. The
- * button asks billing to mint a new one, and what comes back obeys the same
- * rule as the first — shown this once, hashed on billing's side, with the old
- * key already dead in the same transaction.
- *
- * It is the Grant's id that is sent and nothing else: the route takes no body
- * and the owner is the gate's user (`billing/contract.gift.md`).
- */
-describe("a key that did not reach the user", () => {
-  const grant = {
-    kind: "free_grant" as const,
-    code: "FREEVPN",
-    grant: {
-      id: "g1",
-      variantId: "v1",
-      startsAt: "2026-09-15T00:00:00.000Z",
-      endsAt: "2026-10-15T00:00:00.000Z",
-      featureKeys: ["vpn.access"],
-    },
-    subscriptionKey: "KEY-3kq9-once",
-  };
-
-  async function granted() {
-    const user = userEvent.setup();
-    redeemGift.mockResolvedValue(grant);
-    const opened = open();
-
-    fillCode("FREEVPN");
-    await user.click(submit());
-    await screen.findByText("wallet.gift.serviceTitle");
-
-    return { user, ...opened };
-  }
-
-  const askForOne = () => screen.getByRole("button", { name: "wallet.gift.newKey" });
-
-  it("asks for one by Grant id, and shows it in place of the key it replaced", async () => {
-    rotateGrantToken.mockResolvedValue({ grantId: "g1", subscriptionKey: "KEY-7mx2-again" });
-    const { user } = await granted();
-
-    await user.click(askForOne());
-
-    await waitFor(() => expect(rotateGrantToken).toHaveBeenCalledWith("g1"));
-    expect(await screen.findByText("KEY-7mx2-again")).toBeInTheDocument();
-    // The old one stopped working inside billing's transaction, so it must not
-    // still be on screen to be copied.
-    expect(screen.queryByText("KEY-3kq9-once")).not.toBeInTheDocument();
-    expect(screen.getByText("wallet.gift.keyReplaced")).toBeInTheDocument();
-    // Same rule as the first key: this is the only time it exists in the clear.
-    expect(screen.getByText("wallet.gift.keyOnce")).toBeInTheDocument();
-  });
-
-  it("leaves the key on screen alone when billing refuses", async () => {
-    rotateGrantToken.mockRejectedValue(
-      new ApiError("Too many attempts. Try again later.", { status: 429, ref: "f00dcafe11" }),
-    );
-    const { user } = await granted();
-
-    await user.click(askForOne());
-
-    expect(await screen.findByRole("alert")).toHaveTextContent("Too many attempts. Try again later.");
-    // A refused ask mints nothing, so the key the user has is still the key.
-    expect(screen.getByText("KEY-3kq9-once")).toBeInTheDocument();
-    expect(screen.queryByText("wallet.gift.keyReplaced")).not.toBeInTheDocument();
-  });
-
-  it("is not asked twice while the first ask is in flight — the bucket is 5 per 15 minutes", async () => {
-    let answer: (v: never) => void = () => undefined;
-    rotateGrantToken.mockReturnValue(new Promise((resolve) => (answer = resolve as never)));
-    const { user } = await granted();
-
-    await user.click(askForOne());
-
-    expect(screen.getByRole("button", { name: "wallet.gift.newKeySending" })).toBeDisabled();
-    answer({ grantId: "g1", subscriptionKey: "KEY-7mx2-again" } as never);
-    await screen.findByText("KEY-7mx2-again");
-    expect(rotateGrantToken).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "wallet.gift.done" }));
+    await user.click(screen.getByRole("button", { name: "wallet.gift.close" }));
+    await user.click(screen.getByRole("link", { name: "wallet.gift.toMyServices" }));
+    expect(onClose).toHaveBeenCalledTimes(3);
   });
 });

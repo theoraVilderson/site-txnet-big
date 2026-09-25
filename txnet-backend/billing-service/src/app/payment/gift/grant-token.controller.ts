@@ -14,8 +14,7 @@ import { SubscriptionLinkService } from './subscription-link.service';
  *
  * Reset was built as "reissue key" (F-502-p), when a key was shown once and
  * only hashed; since the token is kept sealed it is a security action, not
- * recovery. Until the panel stops showing a key (F-114-e-c) its answer still
- * carries `subscriptionKey` beside the URL.
+ * recovery, and it answers the new link — never a bare key (F-114-e-c).
  *
  * **Ownership is the gate's user, never a field**, and another user's Grant is
  * answered exactly as a missing one (`SubscriptionLinkService`).
@@ -49,8 +48,6 @@ export class GrantTokenController {
     windowSec: 900,
   })
   async rotate(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
-    const subscriptionUrl = await this.links.reset(id, identityOf(req).userId);
-    // `subscriptionKey` is the last path segment, for the panel that still shows it (F-114-e-c drops it).
-    return { grantId: id, subscriptionUrl, subscriptionKey: subscriptionUrl.slice(subscriptionUrl.lastIndexOf('/') + 1) };
+    return { grantId: id, subscriptionUrl: await this.links.reset(id, identityOf(req).userId) };
   }
 }

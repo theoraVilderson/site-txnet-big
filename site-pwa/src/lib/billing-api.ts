@@ -126,13 +126,15 @@ export interface GiftCredit {
   balance: string;
 }
 
-/** A free-service code (F-502-l-b, D-35): a Grant, and its subscription key shown this once. */
+/**
+ * A free-service code (F-502-l-b): a Grant. Billing's answer also carries the
+ * subscription token, which the panel does not read: the link is My services'
+ * to show, as often as asked (F-114-e-c, ADR-0085).
+ */
 export interface GiftGrant {
   kind: "free_grant";
   code: string;
   grant: { id: string; variantId: string | null; startsAt: string; endsAt: string | null; featureKeys: string[] };
-  /** Billing keeps only its hash: this answer is the only time it exists in the clear. */
-  subscriptionKey: string;
 }
 
 export type GiftRedemption = GiftCredit | GiftGrant;
@@ -234,14 +236,14 @@ export interface ShopInvoice {
   expiresAt: string;
 }
 
-/** `POST /invoices/:id/pay`'s answer. `token` is the subscription key, in the clear this once. */
+/** `POST /invoices/:id/pay`'s answer. Each Grant's token is also answered and not read here: the link is My services' (F-114-e-c). */
 export interface InvoicePaid {
   id: string;
   status: "paid";
   total: string;
   balanceAfter: string;
   walletTransactionId: string | null;
-  grants: Array<{ id: string; status: string; token: string }>;
+  grants: Array<{ id: string; status: string }>;
 }
 
 /**
@@ -765,24 +767,30 @@ export const billingApi = {
   },
 
   /**
-   * Reissue one Grant's subscription key (F-502-q → F-502-p).
+   * One Grant's `/sub` link (F-114-e-b, ADR-0085): `https://<tenant subscription
+   * domain>/sub/<token>`, the same on every call — billing keeps the token
+   * sealed, so the link is asked for whenever it is wanted, never stored here.
    *
-   * The key a redemption answers exists in the clear exactly once — billing
-   * keeps only its hash (D-35) — so a copy that did not land used to be final.
-   * This mints a new one, and the old key stops working inside the same
-   * transaction: there is no moment when both open the link, and none when
-   * neither does (`billing/contract.gift.md`).
-   *
-   * **The id is the whole request.** The route takes no body, because the only
-   * thing it protects is that the caller owns the Grant, and a field naming a
-   * user would be a field to lie in. Another user's Grant and one that does not
-   * exist are the same 404, so this client cannot tell them apart either.
-   *
-   * Its own bucket, 5 per 900s: each call destroys a working key, so a caller
-   * that retried on the user's behalf would spend the budget that recovers it.
+   * **The id is the whole request**; another user's Grant and a missing one are
+   * the same 404. The two named refusals are 409s: `no_subscription_domain`
+   * (the tenant's setup) and `link_not_kept` (a Grant from before the token was
+   * kept — one reset keeps it from then on).
    */
-  async rotateGrantToken(grantId: string): Promise<{ grantId: string; subscriptionKey: string }> {
-    return call<{ grantId: string; subscriptionKey: string }>(
+  async subscriptionLink(grantId: string): Promise<{ grantId: string; subscriptionUrl: string }> {
+    return call<{ grantId: string; subscriptionUrl: string }>(
+      `/gift/grants/${encodeURIComponent(grantId)}/subscription-link`,
+      { method: "GET" },
+    );
+  },
+
+  /**
+   * "Reset link" (F-502-p, F-114-e-b): a new token for a link that leaked. The
+   * old link stops working in billing's transaction, and the answer is the new
+   * one. Its own bucket, 5 per 900s: each call destroys a working link, so a
+   * caller that retried on the user's behalf would spend the budget for it.
+   */
+  async resetSubscriptionLink(grantId: string): Promise<{ grantId: string; subscriptionUrl: string }> {
+    return call<{ grantId: string; subscriptionUrl: string }>(
       `/gift/grants/${encodeURIComponent(grantId)}/rotate-token`,
       { method: "POST" },
     );

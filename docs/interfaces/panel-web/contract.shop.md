@@ -75,11 +75,11 @@ carry one piece of the return (rules 7 and 8).
    has a sentence (`common.shop.invoice.status.*`, keyed by the union
    `INVOICE_STATUSES`, which mirrors `billing.prisma`). A `pending` one past its
    clock reads `expired` from billing already.
-10. **The key is shown once, then My services.** The pay answers each Grant's
-   `token` in the clear this one time (D-35); it is shown with the gift modal's
-   own sentences and never kept, and the page points to My services, where a
-   lost key is asked for again. A paid Grant is `pending` until delivery —
-   "being prepared" — and My services turns it active live
+10. **No key, then My services** (F-114-e-c, ADR-0085). The pay still answers
+   each Grant's `token`; the page never shows it. It says the service is being
+   prepared and that its subscription link is in My services, and links there.
+   A paid Grant is `pending` until delivery — "being prepared" — and My
+   services turns it active live
    ([contract.my-services.md](contract.my-services.md) rule 13, F-111-f).
 
 ## Proof
@@ -88,8 +88,8 @@ carry one piece of the return (rules 7 and 8).
 pre-fill never lowered below `missing`, the grouping and the tabs, a chip
 picking the variant bought, no invoice until a code or the pay, a changed
 total not paid, the replaced invoice cancelled before the next is made, a
-rejected code dropped, the top-up link carrying the invoice and `missing`, the
-key once with the My services link, one pay per press, and the return on
+rejected code dropped, the top-up link carrying the invoice and `missing`, no key
+shown, only the My services link, one pay per press, and the return on
 `?invoice=` — pending pays, expired does not.
 
 ## Not covered

@@ -385,16 +385,10 @@
       "serviceTitle": "Your service is active",
       "serviceUntil": "Active until {{until}}.",
       "servicePermanent": "Active with no end date.",
-      "keyLabel": "Subscription key",
-      "keyOnce": "Copy it now — it is shown only this once.",
       "copy": "Copy",
       "copied": "Copied",
-      "newKey": "Ask for a new key",
-      "newKeySending": "Asking for a new key…",
-      "keyReplaced": "This is the new key. The one before it has stopped working.",
-      "closeAsk": "Close this? The key is shown only once — if you have not copied it, ask for a new one first.",
-      "closeAnyway": "Close anyway",
-      "stay": "Go back"
+      "serviceLink": "This service's subscription link is always in My services — copy it or scan its QR code there.",
+      "toMyServices": "Go to My services"
     }
   },
   "notifications": {
@@ -2031,7 +2025,7 @@
   },
   "myServices": {
     "title": "My services",
-    "subtitle": "The services you have — each one's period and status, and the way to its subscription key.",
+    "subtitle": "The services you have — each one's period and status, and its subscription link.",
     "empty": "You have no services yet.",
     "unavailable": "The service list is unavailable.",
     "retry": "Try again",
@@ -2039,7 +2033,6 @@
     "period": "From {{from}} to {{until}}",
     "periodPermanent": "From {{from}} — no end date",
     "features": "Features",
-    "keyHint": "If you do not have this service's subscription key, ask for a new one; the previous key stops working.",
     "usage": "{{consumed}} used of {{purchased}} bought",
     "usageUnmetered": "{{consumed}} used",
     "purgeIn": "Suspended. Top up within {{days}} days and {{hours}} hours ({{at}}) or this service's configs are removed from the servers. Nothing you bought is lost; a top-up brings them back.",
@@ -2120,7 +2113,23 @@
       "expired": "Expired",
       "cancelled": "Cancelled"
     },
-    "preparing": "Paid — your service is being set up. This row turns active on its own when it is ready; there is no need to reload."
+    "preparing": "Paid — your service is being set up. This row turns active on its own when it is ready; there is no need to reload.",
+    "link": {
+      "label": "Subscription link",
+      "hint": "Add this link to your VPN app (such as v2rayNG) or scan its QR code. You can come back for it here whenever you need it.",
+      "copy": "Copy subscription link",
+      "copying": "Getting the link…",
+      "copied": "Link copied",
+      "showQr": "Show QR",
+      "hideQr": "Hide QR",
+      "qrLabel": "Subscription link QR code",
+      "reset": "Reset link",
+      "resetting": "Resetting…",
+      "resetConfirm": "The current link will stop working and you will have to add the new one to your app again. Only do this if someone else has your link. Continue?",
+      "resetYes": "Yes, reset it",
+      "resetNo": "Cancel",
+      "resetDone": "A new link was created. The previous link no longer works."
+    }
   },
   "systems": {
     "title": "Systems",
@@ -2714,7 +2723,7 @@
     "paid": {
       "title": "Paid",
       "balance": "Wallet balance now: {{balance}}",
-      "preparing": "Your service is being prepared. You can see it under My services.",
+      "preparing": "Your service is being prepared. You will find it, with its subscription link, in My services.",
       "myServices": "Go to My services"
     },
     "all": "All",

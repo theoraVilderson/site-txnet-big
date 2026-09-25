@@ -18,7 +18,6 @@ import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
 import { categoriesOf, forgetReturnInvoice, groupOffers, hasOwnName, quotaLimit, shortfallOf, type OfferGroup } from "../_lib/shop";
 
 const S = FrontendI18nKeys.common.shop;
-const G = FrontendI18nKeys.common.wallet.gift;
 
 /**
  * What the checkout is buying. `offer` is there when the shopper came from the
@@ -626,21 +625,12 @@ function Checkout({
 // -------------------------------------------------------------------- paid
 
 /**
- * Paid. The key is billing's answer to the pay and the one time it exists in
- * the clear (D-35), so it is shown with the gift modal's own sentences
- * (`contract.my-services.md` rule 5) and never kept; My services is the way back.
+ * Paid. No link or key is shown here (F-114-e-c, ADR-0085): billing keeps the
+ * subscription link and My services shows it as often as asked, so this says
+ * where it is and goes there.
  */
 function Paid({ paid, name, money }: { paid: InvoicePaid; name: string; money: (v: string) => string }) {
   const { t } = useLocale();
-  const [copied, setCopied] = useState<string | null>(null);
-  const copy = async (token: string) => {
-    try {
-      await navigator.clipboard.writeText(token);
-      setCopied(token);
-    } catch {
-      // No clipboard: the key stays selectable.
-    }
-  };
 
   return (
     <section className="mx-auto max-w-xl space-y-5 rounded-3xl border border-card-border bg-card-bg p-6 text-center shadow-lg md:p-8">
@@ -654,25 +644,6 @@ function Paid({ paid, name, money }: { paid: InvoicePaid; name: string; money: (
           {t("common", S.paid.balance, { balance: money(paid.balanceAfter) })}
         </p>
       </div>
-
-      {paid.grants.map((grant) => (
-        <div key={grant.id} className="rounded-2xl border border-card-border bg-bg-inner p-3 text-start">
-          <p className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-text-secondary">{t("common", G.keyLabel)}</p>
-          <div className="flex items-center gap-2">
-            <code className="min-w-0 flex-1 select-all break-all font-mono text-xs text-text-primary" dir="ltr">
-              {grant.token}
-            </code>
-            <button
-              type="button"
-              onClick={() => void copy(grant.token)}
-              className="shrink-0 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white"
-            >
-              {t("common", copied === grant.token ? G.copied : G.copy)}
-            </button>
-          </div>
-          <p className="mt-2 text-[11px] font-bold text-error">{t("common", G.keyOnce)}</p>
-        </div>
-      ))}
 
       <p className="text-xs text-text-secondary">{t("common", S.paid.preparing)}</p>
       <Link

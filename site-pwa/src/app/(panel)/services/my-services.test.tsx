@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type GrantRow } from "@/lib/billing-api";
 import { ApiError } from "@/lib/api-error";
+import { copyText } from "../_lib/clipboard";
 import { ServiceRow } from "./_components/ServiceRow";
 import { GrantConfigs } from "./_components/GrantConfigs";
 import { GRANT_STATUSES, GRANT_TONES, capabilityNames } from "./_lib/my-services";
@@ -67,6 +68,7 @@ function rejectionsBillingCanAnswer(): string[] {
 }
 
 vi.mock("@/context/LocaleContext", () => ({ useLocale: vi.fn() }));
+vi.mock("../_lib/clipboard", () => ({ copyText: vi.fn(async () => true) }));
 /**
  * The client is faked, but its *constants* are the shipped ones: `GRANT_STATUSES`
  * is the union this page's tones are checked against, and a mock that restated
@@ -75,10 +77,11 @@ vi.mock("@/context/LocaleContext", () => ({ useLocale: vi.fn() }));
  */
 vi.mock("@/lib/billing-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/billing-api")>()),
-  billingApi: { rotateGrantToken: vi.fn(), grantConfigs: vi.fn(), configAction: vi.fn() },
+  billingApi: { subscriptionLink: vi.fn(), resetSubscriptionLink: vi.fn(), grantConfigs: vi.fn(), configAction: vi.fn() },
 }));
 
-const rotateGrantToken = vi.mocked(billingApi.rotateGrantToken);
+const subscriptionLink = vi.mocked(billingApi.subscriptionLink);
+const resetSubscriptionLink = vi.mocked(billingApi.resetSubscriptionLink);
 const grantConfigs = vi.mocked(billingApi.grantConfigs);
 const configAction = vi.mocked(billingApi.configAction);
 
@@ -117,12 +120,16 @@ const CONFIG: UserConfigRow = {
 const show = (row: Partial<GrantRow> = {}) =>
   render(<ServiceRow row={{ ...GRANT, ...row }} name="VPN Pro" capabilities={[]} />);
 
-const newKeyButton = () => screen.getByRole("button", { name: "wallet.gift.newKey" });
+const L = "myServices.link";
+const LINK_1 = "https://sub.example.com/sub/tok-first";
+const LINK_2 = "https://sub.example.com/sub/tok-second";
+const button = (name: string) => screen.getByRole("button", { name });
 
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(useLocale).mockReturnValue({ lang: "en", t } as ReturnType<typeof useLocale>);
-  rotateGrantToken.mockResolvedValue({ grantId: "g1", subscriptionKey: "KEY-first" });
+  subscriptionLink.mockResolvedValue({ grantId: "g1", subscriptionUrl: LINK_1 });
+  resetSubscriptionLink.mockResolvedValue({ grantId: "g1", subscriptionUrl: LINK_2 });
 });
 
 describe("the statuses billing can answer", () => {
@@ -284,74 +291,113 @@ describe("a Grant's configs", () => {
   });
 });
 
-describe("a row", () => {
-  it("offers the reissue button whatever the status — an expired Grant most of all", () => {
-    show({ status: "expired", endsAt: "2026-01-01T00:00:00.000Z" });
-    expect(newKeyButton()).toBeEnabled();
-    expect(screen.getByText("myServices.status.expired")).toBeInTheDocument();
+describe("a row's subscription link (F-114-e-c)", () => {
+  it("offers copy, QR and reset whatever the status, and never says key", () => {
+    const { container } = show({ status: "expired", endsAt: "2026-01-01T00:00:00.000Z" });
+    expect(button(`${L}.copy`)).toBeEnabled();
+    expect(button(`${L}.showQr`)).toBeEnabled();
+    expect(button(`${L}.reset`)).toBeEnabled();
+    expect(container.textContent ?? "").not.toMatch(/wallet\.gift\.key|newKey/);
   });
 
-  it("shows no key before one is asked for: billing never answers one in the list", () => {
+  it("reads nothing until asked: the list never carries the link", () => {
     show();
-    expect(screen.queryByText("wallet.gift.keyOnce")).not.toBeInTheDocument();
+    expect(subscriptionLink).not.toHaveBeenCalled();
+    expect(screen.queryByText(LINK_1)).not.toBeInTheDocument();
+  });
+
+  it("copies the link billing answers for this Grant, and asks once per row", async () => {
+    const user = userEvent.setup();
+    show();
+
+    await user.click(button(`${L}.copy`));
+    await waitFor(() => expect(copyText).toHaveBeenCalledWith(LINK_1));
+    expect(subscriptionLink).toHaveBeenCalledWith("g1");
+    expect(await screen.findByRole("button", { name: `${L}.copied` })).toBeInTheDocument();
+
+    await user.click(button(`${L}.showQr`));
+    expect(await screen.findByRole("img", { name: `${L}.qrLabel` })).toBeInTheDocument();
+    expect(screen.getByText(LINK_1)).toBeInTheDocument();
+    expect(subscriptionLink).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the link to select by hand when the clipboard refuses", async () => {
+    vi.mocked(copyText).mockResolvedValueOnce(false);
+    const user = userEvent.setup();
+    show();
+
+    await user.click(button(`${L}.copy`));
+    expect(await screen.findByText(LINK_1)).toBeInTheDocument();
+  });
+
+  it("shows billing's sentence on a refusal — an older Grant's link_not_kept — and still offers reset", async () => {
+    subscriptionLink.mockRejectedValue(new ApiError("press reset link once", { status: 409, ref: "req-9" }));
+    const user = userEvent.setup();
+    show();
+
+    await user.click(button(`${L}.copy`));
+    expect(await screen.findByRole("alert")).toHaveTextContent("press reset link once");
+    expect(screen.getByText("req-9")).toBeInTheDocument();
+    expect(copyText).not.toHaveBeenCalled();
+    expect(button(`${L}.reset`)).toBeEnabled();
   });
 });
 
-describe("asking for a new key", () => {
-  it("sends the Grant's id alone and shows what billing minted, once", async () => {
+describe("resetting a link", () => {
+  it("asks first, and a declined confirmation resets nothing", async () => {
     const user = userEvent.setup();
     show();
 
-    await user.click(newKeyButton());
+    await user.click(button(`${L}.reset`));
+    expect(screen.getByText(`${L}.resetConfirm`)).toBeInTheDocument();
+    await user.click(button(`${L}.resetNo`));
 
-    await waitFor(() => expect(rotateGrantToken).toHaveBeenCalledWith("g1"));
-    expect(await screen.findByText("KEY-first")).toBeInTheDocument();
-    expect(screen.getByText("wallet.gift.keyOnce")).toBeInTheDocument();
+    expect(resetSubscriptionLink).not.toHaveBeenCalled();
+    expect(screen.queryByText(`${L}.resetConfirm`)).not.toBeInTheDocument();
   });
 
-  it("replaces the key on screen, because billing killed the old one in the same transaction", async () => {
+  it("replaces the link on screen with the new one, because the old one stopped working", async () => {
     const user = userEvent.setup();
     show();
 
-    await user.click(newKeyButton());
-    expect(await screen.findByText("KEY-first")).toBeInTheDocument();
+    await user.click(button(`${L}.showQr`));
+    expect(await screen.findByText(LINK_1)).toBeInTheDocument();
 
-    rotateGrantToken.mockResolvedValue({ grantId: "g1", subscriptionKey: "KEY-second" });
-    await user.click(newKeyButton());
+    await user.click(button(`${L}.reset`));
+    await user.click(button(`${L}.resetYes`));
 
-    expect(await screen.findByText("KEY-second")).toBeInTheDocument();
-    expect(screen.queryByText("KEY-first")).not.toBeInTheDocument();
-    expect(screen.getByText("wallet.gift.keyReplaced")).toBeInTheDocument();
+    await waitFor(() => expect(resetSubscriptionLink).toHaveBeenCalledWith("g1"));
+    expect(await screen.findByText(LINK_2)).toBeInTheDocument();
+    expect(screen.queryByText(LINK_1)).not.toBeInTheDocument();
+    expect(screen.getByText(`${L}.resetDone`)).toBeInTheDocument();
   });
 
   it("changes nothing on a refusal and shows billing's own sentence", async () => {
     const user = userEvent.setup();
     show();
+    await user.click(button(`${L}.showQr`));
+    expect(await screen.findByText(LINK_1)).toBeInTheDocument();
 
-    await user.click(newKeyButton());
-    expect(await screen.findByText("KEY-first")).toBeInTheDocument();
-
-    rotateGrantToken.mockRejectedValue(
-      new ApiError("too many requests, try again later", { status: 429, ref: "req-7" }),
-    );
-    await user.click(newKeyButton());
+    resetSubscriptionLink.mockRejectedValue(new ApiError("too many requests, try again later", { status: 429, ref: "req-7" }));
+    await user.click(button(`${L}.reset`));
+    await user.click(button(`${L}.resetYes`));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("too many requests, try again later");
-    expect(screen.getByText("req-7")).toBeInTheDocument();
-    // Nothing was minted, so the key already shown is still the key.
-    expect(screen.getByText("KEY-first")).toBeInTheDocument();
+    expect(screen.getByText(LINK_1)).toBeInTheDocument();
+    expect(screen.queryByText(`${L}.resetDone`)).not.toBeInTheDocument();
   });
 
-  it("never asks twice while an ask is in flight — each call destroys a working key", async () => {
+  it("never asks twice while a reset is in flight — each call destroys a working link", async () => {
     const user = userEvent.setup();
-    let answer: (v: { grantId: string; subscriptionKey: string }) => void = () => {};
-    rotateGrantToken.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    let answer: (v: { grantId: string; subscriptionUrl: string }) => void = () => {};
+    resetSubscriptionLink.mockReturnValue(new Promise((resolve) => (answer = resolve)));
     show();
 
-    await user.click(newKeyButton());
-    expect(screen.getByRole("button", { name: "wallet.gift.newKeySending" })).toBeDisabled();
+    await user.click(button(`${L}.reset`));
+    await user.click(button(`${L}.resetYes`));
+    expect(screen.getByRole("button", { name: `${L}.resetting` })).toBeDisabled();
 
-    answer({ grantId: "g1", subscriptionKey: "KEY-first" });
-    await waitFor(() => expect(rotateGrantToken).toHaveBeenCalledTimes(1));
+    answer({ grantId: "g1", subscriptionUrl: LINK_2 });
+    await waitFor(() => expect(resetSubscriptionLink).toHaveBeenCalledTimes(1));
   });
 });

@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 28
-updated: 2026-09-20
+updated: 2026-09-25
 ---
 
 # Contract — panel-web: the gift-code modal (F-093-g)
@@ -127,46 +127,17 @@ up. One key closing both would leave the user with neither.
 reset** — a closed modal holds no half-typed code and no previous attempt's
 error, with no effect that has to remember to clear each one. Resetting in an
 effect is also what `react-hooks/set-state-in-effect` refuses.
-10. **A free-service code shows its key once** (F-502-l-c, D-35): a `free_grant`
-    answer shows the service and its `subscriptionKey` with a copy button and
-    "shown only this once" — billing keeps only the hash. No money figure, no
-    burst. (It was written as a second "7." when F-502-l-c added it; the number
-    is corrected here, not the rule.)
-11. **While that key is on screen, the accidental dismissals ask instead of
-    closing** (F-502-m, relaxed by F-502-q). Billing stores the hash alone, so
-    an unmeant dismissal is a key the user never copied. `Escape` and a backdrop
-    click are the two ways to close a dialog *without deciding to*, and for
-    `kind === "free_grant"` neither closes it: both raise the question in the
-    card — "the key is shown only once; if you have not copied it, ask for a new
-    one first" — over "go back" and "close anyway". The X and "done" are aimed
-    at and still close on the first press. Until F-502-q the two were simply
-    inert, because there was no second answer to offer; now there is one, and a
-    dialog that swallows `Escape` outright is no longer the smaller loss.
-12. **A key that did not reach the user is asked for again, not mourned**
-    (F-502-q, over `billing`'s `POST /gift/grants/:id/rotate-token`). The
-    clipboard write throws on an insecure origin, a selection is half a key, a
-    paste lands in the wrong window — so the key panel carries a second button
-    that mints a new one. Its rules follow from the route
-    ([billing/contract.gift.md](../../domains/billing/contract.gift.md)) and
-    from rule 10, which the new key obeys exactly as the first did:
-    - **The Grant's id is the whole request.** The route takes no body and the
-      owner is the gate's user, so this app sends no user and branches on no
-      reason code — another user's Grant and a missing one are one 404.
-    - **What comes back replaces what is on screen.** The old key is dead
-      inside billing's transaction, so leaving it up to be copied would hand
-      the user a credential that opens nothing. The "shown only this once" line
-      stays, joined by one saying the previous key has stopped working.
-    - **A refusal changes nothing.** Nothing was minted, so the key already
-      shown is still the key; billing's own sentence goes on screen,
-      `role="alert"`, with its `ref` ([contract.errors.md](contract.errors.md)).
-      The bucket is 5 per 900s and each call destroys a working key, so the
-      button is disabled while its ask is in flight and never retries for the
-      user.
+10. **A free-service code shows the service and where its link is — no key**
+    (F-502-l-c, F-114-e-c, ADR-0085). A `free_grant` answer shows the service,
+    its period and "the subscription link is always in My services", with a
+    link there. Billing's answer still carries the token; the panel never reads
+    it. No money figure, no burst.
+11. **It closes like any other answer.** `Escape`, the backdrop, the X, "done"
+    and the My services link all close it on the first press. The former rules 11-12 of
+    F-502-m/q — ask before closing, reissue from the modal — existed only
+    because a key was shown once and only hashed; since the link is kept
+    (D-43), there is nothing on this screen to lose and nothing to reissue here.
+    Resetting a leaked link is My services' ([contract.my-services.md](contract.my-services.md)).
 
-**Not covered:** a key lost after the modal is closed. This panel's list of a
-user's Grants is `/services` (F-502-s,
-[contract.my-services.md](contract.my-services.md)), and the button is on every
-row of it — so the modal is now one of two places this key can be asked for,
-and rule 12 is the same rule on both because it follows from the route rather
-than from where the button sits. What is still nobody's row is the `/sub` link
-itself (F-113).
+**Not covered:** nothing about the link: it lives on
+[contract.my-services.md](contract.my-services.md).

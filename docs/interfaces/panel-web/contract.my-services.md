@@ -11,14 +11,12 @@ updated: 2026-09-25
 `/services` (`(panel)/services/`), the sidebar's `my-services` entry. One row
 per Grant the caller holds, over `GET /api/billing/gift/grants`
 ([billing/contract.gift.md](../../domains/billing/contract.gift.md)), with
-F-502-q's reissue button on each.
+each Grant's subscription link on its row (F-114-e-c).
 
-It exists because of the sentence
-[contract.gift-code.md](contract.gift-code.md) used to end with: a free-service
-key is shown once and billing keeps only its hash (D-35), so until this page
-the reissue button was reachable only while the redemption modal was still up.
-A key lost yesterday had no way back. This is that way back, and the later home
-of the `/sub` link (F-113).
+It was built as the way back to a key shown once (D-35, F-502-q). Since
+ADR-0085 (D-43) billing keeps the token sealed, so this page is where a user
+gets their `/sub` link — copied or as a QR, as often as asked — and the only
+place a leaked one is reset. The panel never says "key".
 
 Its pieces: `_components/MyServicesView.tsx` (the page), `_components/ServiceRow.tsx`
 (one Grant), `_components/GrantConfigs.tsx` (its configs, F-027-ac),
@@ -30,41 +28,39 @@ the purge countdown).
 ## Rules
 
 1. **Every Grant is listed and nothing is filtered here.** Billing answers the
-   status and never narrows the list, because a key is lost from an expired
-   Grant as easily as from a live one — so the dead statuses are exactly the
-   rows a user arrives looking for. There is no status tab, no "active only"
-   default, and the reissue button is on every row whatever its status; the
-   route does not gate on status either (F-502-p). Paging is the only knob the
-   list has.
+   status and never narrows the list: a user comes for an expired Grant's
+   link as readily as a live one's. There is no status tab, no "active only"
+   default, and the link controls are on every row whatever its status —
+   `/sub` reads the Grant, so a dead Grant's link opens nothing. Paging is the
+   only knob the list has.
 2. **Every status billing can answer has a tone and a sentence**
    (`_lib/my-services.ts`). A status with no row renders as a blank pill next
    to a service someone is trying to understand, so the spec reads the union
    out of `entitlement.prisma` rather than restating it: a seventh status goes
    red here instead of shipping empty. The colours are theme tokens, never raw
    palette classes, and gold is a tone and never a control (user, 2026-09-13).
-3. **The list carries no key, and the page never pretends otherwise.** Billing
-   selects its columns explicitly so neither the subscription key nor its hash
-   can leave in a list, so a row shows a key only as the answer to a press on
-   that row. Nothing is cached across a reload: a page that remembered a minted
-   key would be storing a credential billing itself does not keep.
-4. **A reissue replaces what is on screen, and a refusal changes nothing** —
-   rule 12 of [contract.gift-code.md](contract.gift-code.md), unchanged on this
-   surface because it follows from the route and not from where the button is.
-   The old key is dead inside billing's transaction, so leaving it up would
-   offer a credential that opens nothing; a refusal minted nothing, so the key
-   already shown is still the key and only billing's sentence is added,
-   `role="alert"`, with its `ref` ([contract.errors.md](contract.errors.md)).
-   The button is disabled while its ask is in flight and never retries for the
-   user: the bucket is 5 per 900s and each call destroys a working key.
-   "The previous key has stopped working" is shown only when there *was* a key
-   on screen to replace — the first ask on a row replaces nothing the user
-   could have.
-5. **The key panel's sentences are the gift modal's keys**, not a second copy
-   under `myServices`. "Shown only this once" and "the previous key has stopped
-   working" are the same two facts about the same credential; a second set would
-   be a second translation to keep in step, and the two surfaces would drift.
-   What this page does own is its own chrome — title, empty state, periods,
-   statuses (`common.myServices.*`).
+3. **The link is asked for, never carried or kept** (F-114-e-c). The list
+   answers no token; a row reads `GET .../subscription-link` the first time a
+   copy or the QR needs it, once per row while the page is up, and nothing is
+   stored across a reload — billing answers the same link every time. A
+   clipboard that refuses shows the link to select by hand. The QR is drawn
+   in the browser (`qrcode.react`), on white in both themes, so the link never
+   leaves for a QR service.
+4. **Reset asks first, replaces what is on screen, and a refusal changes
+   nothing.** "Reset link" is for a leaked link: the confirmation says the
+   current one stops working and must be added to the app again, and "cancel"
+   is the focused answer. The new link replaces the old on screen — dead
+   inside billing's transaction — with "the previous link no longer works". A
+   refusal minted nothing, so the link on screen stays and only billing's
+   sentence is added, `role="alert"`, with its `ref`
+   ([contract.errors.md](contract.errors.md)). Disabled while in flight, never
+   retried: the bucket is 5 per 900s and each call destroys a working link.
+5. **A refusal to read is billing's sentence, and reset stays offered.**
+   `link_not_kept` (a Grant from before the token was kept) tells the user to
+   reset once; `no_subscription_domain` to contact support. The panel branches
+   on neither: the sentence is the answer and the reset button is always there.
+   The texts are `common.myServices.link.*`; the gift modal's key sentences
+   are gone with the key.
 6. **A name is a `nameKey` this page resolves, and a failure costs the names
    only.** The list answers the variant's key, not its text, so the published
    `catalog` namespace is read beside it — the same route and the same
@@ -139,8 +135,11 @@ the purge countdown).
 ## Proof
 
 `services/my-services.test.tsx` — the status union against
-`entitlement.prisma`, and a row's reissue: the id alone, the replacement, a
-refusal that changes nothing, and one ask at a time. F-027-ac: `DriftState` and
+`entitlement.prisma`, and a row's link (F-114-e-c): nothing read until asked,
+the copy of billing's link and one read per row, the QR, the hand-select
+fallback, a refusal's sentence with reset still offered, and "key" nowhere;
+reset: a declined confirmation, the replacement, a refusal that changes
+nothing, and one ask at a time. F-027-ac: `DriftState` and
 `ConfigStatus` against `network.prisma` and the refusals against billing's
 tuple; usage, the countdown, the verdict button, the queued ceiling, a bulk
 delete with one refusal, a declined confirm, and a spent allowance. F-111-f:
@@ -157,8 +156,9 @@ name, the key only where none was published.
 
 ## Not covered
 
-The `/sub` link itself (F-113, F-027) — this page is where it will go, and
-where a regenerated config's new credential will be read. Moving a config or
+A regenerated config's new credential is delivered by the same link (F-113).
+The configs' own "new key" action (F-027-ac) is a config credential, not the
+subscription link, and keeps its wording. Moving a config or
 adding one from here is nobody's row. Filtering
 or searching the list is nobody's row; so is renewing a service from here, which
 needs a checkout the panel does not have yet.
