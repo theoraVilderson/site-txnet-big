@@ -504,8 +504,12 @@ model Invoice {
   priceId   String        @db.Uuid
   /// The catalog price, base currency.
   amount    Decimal       @db.Decimal(18, 2)
-  /// What the applied coupons took, stacked (F-092-g).
+  /// Everything taken off `amount`: the automatic rule's part, then the
+  /// coupons', stacked on what the rule left (F-092-g, F-114-h).
   discount  Decimal       @db.Decimal(18, 2)
+  /// The automatic discount rule applied, if any (F-114-h, D-45), and what it took.
+  discountRuleId String?  @db.Uuid
+  ruleDiscount   Decimal  @default(0) @db.Decimal(18, 2)
   /// `amount - discount`, a CHECK; what the wallet pays.
   total     Decimal       @db.Decimal(18, 2)
   status    InvoiceStatus @default(pending)
@@ -515,11 +519,69 @@ model Invoice {
 
   variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
   price   Price          @relation(fields: [priceId], references: [id], onDelete: Restrict)
+  discountRule DiscountRule? @relation(fields: [discountRuleId], references: [id], onDelete: Restrict)
 
   @@index([status, expiresAt])
   @@index([tenantId, userId, createdAt(sort: Desc)])
   @@index([variantId])
   @@map("invoice")
+  @@schema("billing")
+}
+
+enum DiscountRuleKind {
+  percentage
+  fixed_amount
+
+  @@schema("billing")
+}
+
+/// A discount with no code (F-114-h, D-45, ADR-0087): taken at invoice pricing
+/// from every purchase it matches, before any coupon. One tenant's own; what it
+/// covers is everything, one product, or one category and those under it; who
+/// it serves is everyone, or the users in `users`. Switched off, never deleted
+/// once an invoice names it.
+model DiscountRule {
+  id               String           @id @default(uuid()) @db.Uuid
+  tenantId         String           @db.Uuid
+  /// The admin's label, shown to the buyer beside what it took.
+  name             String           @db.VarChar(80)
+  kind             DiscountRuleKind
+  /// A percentage in (0, 100], or a fixed amount in base currency (C-02).
+  value            Decimal          @db.Decimal(18, 2)
+  /// At most one of the two; neither = every product.
+  productId        String?          @db.Uuid
+  categoryId       String?          @db.Uuid
+  /// True = only the users in `users`.
+  forNamedUsers    Boolean          @default(false)
+  startsAt         DateTime
+  /// Null = until switched off.
+  endsAt           DateTime?
+  isActive         Boolean          @default(true)
+  createdByAdminId String           @db.Uuid
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @default(now()) @updatedAt
+
+  product  Product?           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category ProductCategory?   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  users    DiscountRuleUser[]
+  invoices Invoice[]
+
+  @@index([tenantId, isActive])
+  @@map("discount_rule")
+  @@schema("billing")
+}
+
+/// A user a `forNamedUsers` rule serves (F-114-h).
+model DiscountRuleUser {
+  ruleId   String @db.Uuid
+  userId   String @db.Uuid
+  tenantId String @db.Uuid
+
+  rule DiscountRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@id([ruleId, userId])
+  @@index([userId])
+  @@map("discount_rule_user")
   @@schema("billing")
 }
 

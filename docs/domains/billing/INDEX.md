@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 42
+version: 43
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -38,6 +38,7 @@ source:
   - txnet-backend/prisma/domains/migrations/20260925000400_invoice/**
   - txnet-backend/prisma/domains/migrations/20260925000500_product_purchase_reason/**
   - txnet-backend/prisma/domains/migrations/20260925000600_product_refund/**
+  - txnet-backend/prisma/domains/migrations/20260925001500_a_discount_without_a_code/**
 owns_tables: [wallet, wallet_transaction, sub_account, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_tenant, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice]
 depends_on: [identity, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]
 updated: 2026-09-25
@@ -55,7 +56,7 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 |---|---|
 | [contract.md](contract.md) | using or changing billing from outside |
 | [contract.gateways.md](contract.gateways.md) | creating, changing or deleting a payment gateway — a tenant's own, or a named reseller's |
-| [contract.purchase.md](contract.purchase.md) | buying a catalog product: the invoice, its coupons, its 30-minute clock, and paying it from the wallet |
+| [contract.purchase.md](contract.purchase.md) | buying a catalog product: the invoice, its coupons and discounts with no code, its 30-minute clock, and paying it from the wallet |
 | [contract.deposit.md](contract.deposit.md) | one whole top-up: gateway list, quote, start — and the bank's callback that settles it |
 | [contract.webhook.md](contract.webhook.md) | a provider's signed webhook, and money that arrived for more, for less, or after the row was settled |
 | [contract.history.md](contract.history.md) | the panel's financial page: the wallet ledger and the top-up attempts |
@@ -74,10 +75,10 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-25 | contract v43 (F-114-h, ADR-0087): new `/api/billing/discount-rules` (list, create, patch; `coupon.manage`) — a discount with no code, the tenant's own; an invoice takes the best matching rule before coupons and answers `automaticDiscount`. Additive |
 | 2026-09-25 | contract v42 (F-114-d): new `POST /api/billing/invoices/:id/cancel` — the caller's own `pending` invoice -> `cancelled`, its coupon holds released `cancelled` at once; `cancelled`/`expired` answer as they are, paid is 409 `already_paid`. `GET /offers` gains `productNameKey` + `categories[]`. Additive. [contract.purchase.md](contract.purchase.md). Consumer panel-web: F-114-d |
 | 2026-09-25 | contract v41 (F-027-bw): panel groups on `/systems` — list, create, edit, add/remove a member, drain one; platform groups, `mirror` only; a member with a live config is 409 `member_has_configs`, drain it. Additive. [contract.systems.md](contract.systems.md). Consumer panel-web: F-027-bx |
 | 2026-09-25 | contract v40 (F-111-e): new `GET /api/billing/offers` (what the shop sells: listed, priced, deliverable) and `GET /api/billing/invoices/:id` (own invoice; past its clock reads `expired`). The pay's shortfall moves to the envelope's `error.facts` — the only place the shared filter lets it through. Additive. Consumer panel-web: F-111-e |
 | 2026-09-25 | contract v39 (F-111-b): new `POST /api/billing/invoices/:id/pay` — one transaction under the invoice's row lock: `product_purchase` debit, `paid`, Grant `pending`, coupons confirmed, `entitlement.grant.created` in the outbox; exactly once under concurrent calls. New `WalletReasonType` `product_purchase` (a sale in revenue, on history's default page). Additive. Consumer panel-web: F-111-e |
-| 2026-09-25 | contract v38 (F-111-a): new `POST /api/billing/invoices` — server-priced from the catalog, coupons held under the invoice id, expires in 30 min; `invoice_pending_expiry` gives unpaid holds back. Additive. [contract.purchase.md](contract.purchase.md). Consumer panel-web: F-111-e |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

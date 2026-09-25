@@ -25,7 +25,9 @@ Source of truth: `txnet-backend/prisma/domains/billing.prisma` (Postgres schema
 | payment_gateway_grant | who may use whose gateway (ADR-0041). Withdrawn, never deleted | `tenantId` = the **borrowing** tenant | permanent |
 | gateway_settlement_entry | what a granted gateway collected, one row per payment, append-only — the debt | `tenantId` = the tenant owed | permanent |
 | gateway_settlement_payout | a recorded manual transfer with its proof and its operator — the repayment | `tenantId` = the tenant paid | permanent |
-| invoice | one purchase of one catalog variant, server-priced (`priceId` = the price row used), `total = amount - discount` (CHECK); its coupon holds are `coupon_redemption` rows with its id as `orderReferenceId` (F-111-a) | `tenantId`, strict RLS | permanent |
+| invoice | one purchase of one catalog variant, server-priced (`priceId` = the price row used), `total = amount - discount` (CHECK); what an automatic rule took is `ruleDiscount` (inside `discount`, CHECK) and `discountRuleId` names it (F-114-h); its coupon holds are `coupon_redemption` rows with its id as `orderReferenceId` (F-111-a) | `tenantId`, strict RLS | permanent |
+| discount_rule | a discount with no code (F-114-h, ADR-0087): `kind` (`percentage` / `fixed_amount`) + `value`, covering everything, a `productId` or a `categoryId` (never both, CHECK), for everyone or its named users (`forNamedUsers`), from `startsAt` to `endsAt` (null = open); switched off, never deleted once invoiced | `tenantId`, strict RLS | until switched off |
+| discount_rule_user | a user a `forNamedUsers` rule serves; `(ruleId, userId)` key | `tenantId`, strict RLS | with its rule (cascade) |
 
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |
@@ -37,6 +39,7 @@ Source of truth: `txnet-backend/prisma/domains/billing.prisma` (Postgres schema
 | affiliate_commission.payoutWalletTransactionId | -> | billing.wallet_transaction | payout is itself a ledger entry |
 | payment_gateway_grant.tenantGatewayConfigId | -> | tenant.tenant_gateway_config | a grant may lend one reseller's gateway to another (ADR-0041 §2); the owner is unchanged by it |
 | invoice.variantId / priceId | -> | catalog.product_variant / price | what was invoiced and at which price; `Restrict`, so an invoiced variant is archived, never deleted (F-026-h) |
+| discount_rule.productId / categoryId | -> | catalog.product / product_category | what a rule covers; `Cascade` — a rule on a deleted product or category covers nothing |
 
 ## Access rules
 

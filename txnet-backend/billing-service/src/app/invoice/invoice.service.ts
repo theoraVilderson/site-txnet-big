@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 
 import { CatalogOffer, listOffersIn, sellableOfferById } from '../catalog/catalog-reads';
 import { deliveryRouteOf } from '../entitlement/delivery';
+import { discountRuleFor } from './discount/discount-rule';
 import { PrismaService } from '../prisma/prisma.service';
 import { CouponReservationService } from '../payment/coupon/coupon-reservation';
 import {
@@ -21,7 +22,9 @@ import {
  * carries no price at all (`invoice.schema.ts`). Then, in **one**
  * `tenantTransaction`: the variant must be for sale to this tenant (live,
  * `public` or `unlisted`, a price in effect; RLS hides another tenant's), the
- * typed codes are validated against this variant and product, the invoice row
+ * best discount rule with no code is taken (F-114-h, D-45), the typed codes
+ * are validated against this variant and product and against what the rule
+ * left, the invoice row
  * is written `pending` for {@link INVOICE_TTL_MS}, and the applied codes are
  * held under the invoice's id. A hold that can no longer be taken throws and
  * the whole transaction goes with it, as on a top-up (F-092-h).
@@ -54,12 +57,17 @@ export type InvoiceCreated = {
   amount: string;
   discount: string;
   total: string;
+  /** The rule with no code taken before the coupons (F-114-h), or null. `discount` includes it. */
+  automaticDiscount: AutomaticDiscount | null;
   /** The codes applied, in the order typed, with what each took. */
   applied: Array<{ code: string; discount: string }>;
   /** The codes that took nothing, and why. The invoice is still made without them. */
   rejected: RejectedCoupon[];
   expiresAt: Date;
 };
+
+/** What a discount rule took, and its label for the buyer (F-114-h). */
+export type AutomaticDiscount = { ruleId: string; name: string; discount: string };
 
 /** One invoice as its owner reads it back (F-111-e): what it was priced at, without the coupon verdicts of its creation. */
 export type InvoiceView = Omit<InvoiceCreated, 'rejected'>;
@@ -109,8 +117,12 @@ export class InvoiceService {
       if (deliveryRouteOf(offer.fulfilmentKind, routed?.panelGroupId ?? null) === null) throw new InvoiceVariantNotFound(variantId);
 
       const amount = new Prisma.Decimal(offer.price.amount);
-      const coupons: CouponValidation = amount.isZero()
-        ? // A free variant: nothing to discount, and the engine refuses a zero amount.
+      // The best rule with no code comes first; the coupons see what it left (D-45).
+      const rule = await discountRuleFor(tx, { userId, productId: offer.productId, at: now }, amount);
+      const ruleDiscount = rule?.discount ?? ZERO;
+      const couponBase = amount.minus(ruleDiscount);
+      const coupons: CouponValidation = couponBase.isZero()
+        ? // A free variant, or one a rule took whole: nothing to discount, and the engine refuses a zero amount.
           {
             applied: [],
             rejected: normalizeCouponCodes(request.couponCodes).map((code) => ({ code, reason: 'nothing_to_discount' })),
@@ -119,7 +131,7 @@ export class InvoiceService {
           }
         : await this.coupons.validate(tx, {
             codes: request.couponCodes,
-            amount,
+            amount: couponBase,
             target: { kind: 'purchase', productId: offer.productId, variantId: offer.variantId },
             channel: request.channel ?? CouponChannel.panel,
             userId,
@@ -134,8 +146,10 @@ export class InvoiceService {
           variantId: offer.variantId,
           priceId: offer.price.id,
           amount,
-          discount: coupons.totalDiscount,
+          discount: ruleDiscount.plus(coupons.totalDiscount),
           total: coupons.payable,
+          discountRuleId: rule?.rule.id ?? null,
+          ruleDiscount,
           status: InvoiceStatus.pending,
           expiresAt: new Date(now.getTime() + INVOICE_TTL_MS),
         },
@@ -151,8 +165,9 @@ export class InvoiceService {
         nameKey: offer.nameKey,
         status: InvoiceStatus.pending,
         amount: amount.toFixed(2),
-        discount: coupons.totalDiscount.toFixed(2),
+        discount: ruleDiscount.plus(coupons.totalDiscount).toFixed(2),
         total: coupons.payable.toFixed(2),
+        automaticDiscount: rule ? { ruleId: rule.rule.id, name: rule.rule.name, discount: rule.discount.toFixed(2) } : null,
         applied: coupons.applied.map((a) => ({ code: a.code, discount: a.discount.toFixed(2) })),
         rejected: coupons.rejected,
         expiresAt: invoice.expiresAt,
@@ -182,7 +197,10 @@ export class InvoiceService {
     return tenantTransaction(this.prisma, async (tx) => {
       const row = await tx.invoice.findFirst({
         where: { id, userId },
-        include: { variant: { select: { sku: true, nameKey: true, product: { select: { nameKey: true } } } } },
+        include: {
+          variant: { select: { sku: true, nameKey: true, product: { select: { nameKey: true } } } },
+          discountRule: { select: { name: true } },
+        },
       });
       if (!row) return null;
       // The holds `create` took under this id; confirmed once it was paid.
@@ -201,6 +219,10 @@ export class InvoiceService {
         amount: row.amount.toFixed(2),
         discount: row.discount.toFixed(2),
         total: row.total.toFixed(2),
+        automaticDiscount:
+          row.discountRuleId && row.discountRule
+            ? { ruleId: row.discountRuleId, name: row.discountRule.name, discount: row.ruleDiscount.toFixed(2) }
+            : null,
         applied: held.map((h) => ({ code: h.coupon.code, discount: h.discountAppliedAmount.toFixed(2) })),
         expiresAt: row.expiresAt,
       };

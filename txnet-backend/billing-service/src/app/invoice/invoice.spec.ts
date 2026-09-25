@@ -81,6 +81,8 @@ type CreateSetup = {
   /** What coupon validation answers; default: nothing applied. */
   validation?: { applied: Array<{ couponId: string; code: string; discount: Prisma.Decimal }>; rejected: Array<{ code: string; reason: string }> };
   refuseReservation?: boolean;
+  /** Discount rules in the tenant (F-114-h), as `discountRule.findMany` returns them. */
+  rules?: Array<Record<string, unknown>>;
 };
 
 function buildCreate(setup: CreateSetup = {}) {
@@ -93,6 +95,8 @@ function buildCreate(setup: CreateSetup = {}) {
   const tx = {
     $executeRaw: async () => 0,
     productVariant: { findUnique: async () => variant },
+    discountRule: { findMany: async () => setup.rules ?? [] },
+    productCategoryLink: { findMany: async () => [] },
     invoice: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
         calls.created.push(data);
@@ -128,6 +132,48 @@ describe('POST /api/billing/invoices — the body', () => {
 });
 
 describe('InvoiceService.create', () => {
+  it('takes the best discount rule first, validates the coupons against what it left, and records both (F-114-h)', async () => {
+    const rule = {
+      id: 'rule-1',
+      name: 'Autumn',
+      kind: 'percentage',
+      value: D('20'),
+      productId: PRODUCT,
+      categoryId: null,
+      forNamedUsers: false,
+      users: [],
+      startsAt: new Date('2026-01-01T00:00:00Z'),
+      endsAt: null,
+      isActive: true,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    };
+    const { service, calls } = buildCreate({
+      rules: [rule],
+      validation: { applied: [{ couponId: COUPON, code: 'SPRING', discount: D('1.00') }], rejected: [] },
+    });
+
+    const invoice = await asTenant(() => service.create({ userId: USER, variantId: VARIANT, couponCodes: ['SPRING'] }));
+
+    // 12.50 - 20% = 10.00 left for the coupons; the coupon takes 1.00 of that.
+    expect((calls.validated[0]['amount'] as Prisma.Decimal).toFixed(2)).toBe('10.00');
+    const row = calls.created[0];
+    expect(row['discountRuleId']).toBe('rule-1');
+    expect((row['ruleDiscount'] as Prisma.Decimal).toFixed(2)).toBe('2.50');
+    expect((row['discount'] as Prisma.Decimal).toFixed(2)).toBe('3.50');
+    expect((row['total'] as Prisma.Decimal).toFixed(2)).toBe('9.00');
+    expect(invoice).toMatchObject({ amount: '12.50', discount: '3.50', total: '9.00', automaticDiscount: { ruleId: 'rule-1', name: 'Autumn', discount: '2.50' } });
+  });
+
+  it('asks no coupon engine when a rule took the whole price: every code is nothing_to_discount', async () => {
+    const rule = { id: 'free', name: 'Gift', kind: 'percentage', value: D('100'), productId: null, categoryId: null, forNamedUsers: false, users: [], startsAt: new Date('2026-01-01T00:00:00Z'), endsAt: null, isActive: true, createdAt: new Date('2026-01-01T00:00:00Z') };
+    const { service, calls } = buildCreate({ rules: [rule] });
+
+    const invoice = await asTenant(() => service.create({ userId: USER, variantId: VARIANT, couponCodes: ['SPRING'] }));
+
+    expect(calls.validated).toEqual([]);
+    expect(invoice).toMatchObject({ discount: '12.50', total: '0.00', rejected: [{ code: 'SPRING', reason: 'nothing_to_discount' }] });
+  });
+
   it('prices the invoice from the catalog in effect now, in USD, and stores it pending for 30 minutes', async () => {
     const { service, calls } = buildCreate();
     const before = Date.now();
@@ -321,6 +367,7 @@ describe('InvoiceService.get — the invoice the shop comes back to (F-111-e)', 
       amount: '12.50',
       discount: '2.50',
       total: '10.00',
+      automaticDiscount: null,
       applied: [{ code: 'SPRING', discount: '2.50' }],
       expiresAt: ROW.expiresAt,
     });

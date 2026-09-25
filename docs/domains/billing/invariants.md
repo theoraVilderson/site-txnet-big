@@ -7,7 +7,7 @@ updated: 2026-09-25
 
 # Invariants — billing
 
-From schema comments, plus 11 from the gift path (F-092-m). 1-4 are enforced by `WalletLedgerService` (F-092-b), 15 by the block purchaser (F-027-q), 16 by the remainder credit (F-027-r), 17 by the invoice (F-111-a), 18 by its payment (F-111-b), 6 by coupon reservation (F-092-h) and gift redemption (F-092-m), 8 in part by the gateway port (F-092-f), 11 by `billing.redeem_gift_coupon`; the rest are not enforced in code yet.
+From schema comments, plus 11 from the gift path (F-092-m). 1-4 are enforced by `WalletLedgerService` (F-092-b), 15 by the block purchaser (F-027-q), 16 by the remainder credit (F-027-r), 17 by the invoice (F-111-a), 18 by its payment (F-111-b), 20 by its discount rule (F-114-h), 6 by coupon reservation (F-092-h) and gift redemption (F-092-m), 8 in part by the gateway port (F-092-f), 11 by `billing.redeem_gift_coupon`; the rest are not enforced in code yet.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -30,6 +30,7 @@ From schema comments, plus 11 from the gift path (F-092-m). 1-4 are enforced by 
 | 17 | An invoice's price is the server's: `amount` is the catalog price row `priceId` names, in effect when it was created, never a client number; `total = amount - discount` | `InvoiceService.create` reads it through `sellableOfferById` and the body has no price (F-111-a, `invoice/invoice.spec.ts`); CHECKs in migration `20260925000400_invoice` | a shopper choosing their own price |
 | 18 | An invoice is paid at most once: one debit, one Grant, one confirmed use per hold, however many calls race | `InvoicePaymentService.pay` takes the invoice row `FOR UPDATE` and refuses anything not `pending` (F-111-b, `invoice/invoice-payment.int.spec.ts`); the Grant's `(source, sourceReferenceId)` unique index | a shopper charged twice for one product, or given two for one price |
 | 19 | An invoice is refunded at most once, whole, and only when its Grant was never delivered; a refunded invoice is never paid again | `GrantDeliveryService.refund` flips the Grant `pending -> cancelled` and the invoice `paid -> refunded` under its row lock, or rolls back; `pay` answers `already_paid` to `refunded` (F-111-d, `invoice-payment.int.spec.ts`) | money back and service kept, or a second charge inside the invoice's 30 minutes |
+| 20 | A purchase takes at most one discount rule, the matching one that takes the most, and never more than the price; coupons see only what it left | `bestDiscountRule` / `ruleDiscountOf` (F-114-h, `invoice/discount/discount-rule.spec.ts`); `invoice_rule_discount_within_discount` and `invoice_discount_within_amount` CHECKs | two campaigns stacking into a price no one set, or a discount below zero |
 
 ## How to test
 

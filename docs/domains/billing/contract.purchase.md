@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 4
+version: 5
 updated: 2026-09-25
 ---
 
@@ -13,7 +13,8 @@ A topic file of `contract.md` (§10): buying a catalog product from the wallet
 Step 1, the invoice, is built (F-111-a), step 2, paying it from the wallet
 (F-111-b), the shortfall a refused payment carries (F-111-c, spec §5.9), and
 step 3, delivery and the refund of what could not be delivered (F-111-d), and
-the two reads the panel's shop page needs (F-111-e). Consumer: that page,
+the two reads the panel's shop page needs (F-111-e), and the discounts with
+no code an invoice is priced with (F-114-h, ADR-0087). Consumer: that page,
 `panel-web/contract.shop.md`.
 
 ## Creating an invoice (built — F-111-a)
@@ -24,16 +25,17 @@ the gate like every billing route ("Request edge" in `contract.md`).
 
 | Body | Answer (201) |
 |---|---|
-| `variantId` (uuid), `couponCodes?` (≤ 10, ≤ 64 chars each) | `{id, variantId, sku, nameKey, status: "pending", amount, discount, total, applied: [{code, discount}], rejected: [{code, reason, message}], expiresAt}` — money as decimal strings, base currency (C-02) |
+| `variantId` (uuid), `couponCodes?` (≤ 10, ≤ 64 chars each) | `{id, variantId, sku, nameKey, status: "pending", amount, discount, total, automaticDiscount: {ruleId, name, discount} \| null, applied: [{code, discount}], rejected: [{code, reason, message}], expiresAt}` — money as decimal strings, base currency (C-02) |
 
 | Rule | Held by |
 |---|---|
 | **The server prices it.** `amount` is the catalog price row in effect now, in USD; the body has no price field, and one sent (`price`, `amount`, `total`) is stripped by the schema — ignored, not validated (spec §5.8) | `invoiceCreateSchema` (not strict), `InvoiceCreateRequest` has no price |
 | For sale to **this** tenant, or a neutral `404 errors.billing.invoice.variantNotFound`: live variant, product and category; `public` or `unlisted` (a direct link is a way to buy); a price in effect; RLS returns only the tenant's own variants and the platform's | `sellableOfferById` (catalog's rules, `offers.ts`) |
 | The tenant's status: `@TenantCapability('sell')` — suspended, terminated or onboarding sells nothing (`403`) | `TenantStatusGuard` |
-| Coupons are validated against this variant and its product (`target: purchase`), with the discount engine's order and gates ([contract.md](contract.md) "Coupon validation"). A code that fails is in `rejected`, with its i18n message, and the invoice is made without it — the shopper removes it or buys | `CouponValidationService` |
+| **A discount with no code first** (F-114-h, D-45): the one matching rule that takes the most ("Discounts with no code" below). `discount` = the rule's part + the coupons'; the row records `discountRuleId` and `ruleDiscount` | `discountRuleFor` (`invoice/discount/discount-rule.ts`) |
+| Coupons are validated against this variant and its product (`target: purchase`), **on what the rule left**, with the discount engine's order and gates ([contract.md](contract.md) "Coupon validation"). A code that fails is in `rejected`, with its i18n message, and the invoice is made without it — the shopper removes it or buys | `CouponValidationService` |
 | The applied codes are **held** under the invoice's id (`orderReferenceId`), in the same transaction as the row. A hold that can no longer be taken is `409` with the code's reason, and nothing is written | `CouponReservationService.reserve` |
-| A free variant (price `0`) asks no coupon engine; every code typed is `nothing_to_discount` | `InvoiceService.create` |
+| A free variant (price `0`), or one a rule took whole, asks no coupon engine; every code typed is `nothing_to_discount` | `InvoiceService.create` |
 | `total = amount - discount`, `0 <= discount <= amount`, `amount >= 0` — CHECKs; `priceId` names the price row used | migration `20260925000400_invoice` |
 | `expiresAt` = creation + 30 minutes (`INVOICE_TTL_MS`) | `InvoiceService.create` |
 | Per user, `INVOICE_CREATE` bucket, `INVOICE_CREATE_RATE_LIMIT` (20) per 15 min | `@RateLimit` |
@@ -131,3 +133,31 @@ paid Grant". What it means for the invoice:
 | Not delivered — no handler at the first check, or still `pending` after 6 retries at 1, 2, 4, 8, 16, 32 minutes: the Grant `cancelled`, the invoice `paid -> refunded`, one `product_refund` credit of the whole `total` (`referenceId` = the invoice), `entitlement.grant.refunded` with `amount` | the user's call, 2026-09-25. The refund is a credit like any other, so it revives what it funds (F-027-ap) |
 | `product_refund` undoes a `product_purchase` in a reseller's sales (`contract.revenue.md`) and shows on `/wallet/history` (`contract.history.md`) | money back belongs where the user and the reseller see it |
 | The coupon uses stay confirmed | the refund is `total`, which is what was paid |
+
+## Discounts with no code (built — F-114-h)
+
+ADR-0087, D-45. `discount-rule.ts` decides, proved by
+`invoice/discount/discount-rule.spec.ts`; migration
+`20260925001500_a_discount_without_a_code`.
+
+| Rule | Held by |
+|---|---|
+| A rule is its tenant's own (strict RLS), the platform owner's included; none serves another tenant's users | `discount_rule` policies; every read and write in the caller's `tenantTransaction` |
+| It covers everything, one `productId`, or one `categoryId` **and every category under it** — never both (CHECK); it serves everyone, or its `discount_rule_user` rows (`forNamedUsers`) | `ruleMatches` |
+| It runs from `startsAt` to `endsAt`, the end exclusive, null = until switched off; `isActive: false` takes nothing | `ruleMatches`; `discount_rule_window_ok` |
+| A percentage in (0, 100] rounds down to the cent; a fixed amount takes at most the price | `ruleDiscountOf`; `discount_rule_value_ok` |
+| Of every match, the one that takes the most; a tie goes to the older rule. Rules never stack | `bestDiscountRule` |
+| An invoice keeps what its rule took: an edit reaches only later invoices, and a rule an invoice names is switched off, never deleted | `invoice.ruleDiscount`; `invoice_discountRuleId_fkey` RESTRICT |
+
+`/api/billing/discount-rules` — `DiscountRuleController`, behind `coupon.manage`
+(`CouponPermissionGuard`) and the coupon admin's `COUPON_ADMIN_READ` / `_WRITE`
+budgets. Bodies are `.strict()`; money is a decimal string (C-02).
+
+| Route | Answer | Refusals (`{reason, message}`) |
+|---|---|---|
+| `GET /` | every rule of the caller's tenant, newest first: `{id, name, kind, value, productId, categoryId, forNamedUsers, userIds, startsAt, endsAt, isActive, status, createdAt, updatedAt}`; `status` is `off` / `ended` / `scheduled` / `running` | — |
+| `POST /` | `201` the rule. Body: `name` (≤ 80), `kind` (`percentage` / `fixed_amount`), `value`, `startsAt`; optional `productId`, `categoryId`, `forNamedUsers`, `userIds` (≤ 1000), `endsAt`, `isActive` | `400` `invalid_value`, `invalid_window`, `one_target`, `named_needs_users`, `user_out_of_scope` (a user not of this tenant); `404 target_not_found` (a product or category this tenant cannot see, or archived) |
+| `PATCH /:id` | the rule, any field of the body above; `userIds` replaces the list | the same, and `404 rule_not_found` |
+
+Every write leaves an `admin_audit_log` row: `discount_rule_create` /
+`discount_rule_update`, target `discount_rule`, the rule before and after.

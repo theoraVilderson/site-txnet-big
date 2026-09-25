@@ -73,6 +73,7 @@ model ProductCategory {
   parent   ProductCategory?      @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
   children ProductCategory[]     @relation("CategoryTree")
   products ProductCategoryLink[]
+  discountRules DiscountRule[]
 
   @@index([tenantId])
   @@index([parentId])
@@ -131,6 +132,7 @@ model Product {
   categories          ProductCategoryLink[]
   variants            ProductVariant[]
   couponServiceScopes CouponServiceScope[]
+  discountRules       DiscountRule[]
 
   @@index([tenantId])
   @@map("product")

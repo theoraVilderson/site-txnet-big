@@ -187,7 +187,8 @@ reserve/confirm state machine (built, F-092-h).
 | validate coupons — **built**, see above | tx, codes[], amount, target, userId | applied (couponId, code, discount), rejected (code, reason), totalDiscount, payable | sync, read | invalid input, scope conflict |
 | reserve coupons — **built**, see above | tx, userId, orderReferenceId, paymentTransactionId?, applied[] | `coupon_redemption` rows (`pending`) | sync tx | refused (reason), invalid input, scope conflict |
 | confirm / release coupons — **built**, see above | tx, orderReferenceId, outcome | count moved to `confirmed` / `cancelled` / `expired` | sync tx | scope conflict |
-| create an invoice — **built**, [contract.purchase.md](contract.purchase.md) | userId (header), variantId, couponCodes[] | invoice priced from the catalog, coupons held, 30-min expiry | sync | variant not for sale, coupon hold refused |
+| create an invoice — **built**, [contract.purchase.md](contract.purchase.md) | userId (header), variantId, couponCodes[] | invoice priced from the catalog, the best discount rule with no code taken (F-114-h), coupons held, 30-min expiry | sync | variant not for sale, coupon hold refused |
+| manage discount rules — **built**, [contract.purchase.md](contract.purchase.md) | `coupon.manage`; name, kind, value, product or category, named users, window | the tenant's own rule, audited | sync | invalid value / window / target, user out of scope |
 | accrue affiliate commission | triggering paymentId | `affiliate_commission` (`pending`) | async | — |
 
 ## Emits (events)
@@ -201,7 +202,7 @@ Its delivery's `entitlement.grant.delivered` / `.refunded` are entitlement's (F-
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
 | identity | `ownerUserId`, transfer sender/receiver, OTP for transfer confirm | transfer/credit blocked |
-| catalog | a coupon scope's `productId` / `variantId`, and a `free_grant` coupon's `grantVariantId` (F-026-a, D-35); the variant's price in effect, for an invoice (F-026-c, `sellableOfferById`, F-111-a) | coupon scope check fails; a free-service code is refused `variant_not_found` |
+| catalog | a coupon scope's `productId` / `variantId`, and a `free_grant` coupon's `grantVariantId` (F-026-a, D-35); the variant's price in effect, for an invoice (F-026-c, `sellableOfferById`, F-111-a); a discount rule's `productId` / `categoryId` and the product's category chain (F-114-h) | coupon scope check fails; a free-service code is refused `variant_not_found` |
 | entitlement | `GrantService.issue` inside the gift redemption's transaction, `source = coupon` (F-502-l-b, ADR-0049), and inside an invoice's payment, `source = purchase` (F-111-b) | the redemption rolls back; the code stays unused |
 | currency | base-currency amounts only in; display conversion is currency's job | — |
 | tenant | `tenantId` denormalized on `wallet_transaction` / `payment_transaction` for reporting | — |

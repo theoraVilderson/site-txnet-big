@@ -62,6 +62,8 @@ enum AdminAction {
   // only one nothing holds.
   catalog_capability_create
   catalog_capability_update
+  discount_rule_create
+  discount_rule_update
   catalog_capability_delete
   catalog_product_create
   catalog_product_update
@@ -131,6 +133,8 @@ enum AuditTargetType {
   tenant_feature_package
   // F-018-e. The platform's one row of subscription settings.
   tenant_subscription_setting
+  // F-114-h. A discount with no code.
+  discount_rule
 
   @@schema("audit")
 }
