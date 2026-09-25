@@ -2,7 +2,7 @@ import { RequestHeaders } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotWorkerCategory } from '@prisma/client';
-import { Job, JobResult } from '../automation/job';
+import { DefaultSchedule, Job, JobResult } from '../automation/job';
 import { envelopeData } from '../automation/internal-answer';
 
 /** The one route this job exists to call. Service callers only; 404 otherwise. */
@@ -34,6 +34,8 @@ export class GrantDeliveryJob implements Job {
   readonly description =
     'Delivers paid Grants by fulfilment kind; one still undelivered after its last retry, or of a kind with no handler, is cancelled and its invoice refunded in full (F-111-d).';
   readonly category = BotWorkerCategory.other;
+  /** Unscheduled, a paid Grant is never delivered nor refunded (F-114-a). Every minute: the first retry is a minute out. */
+  readonly defaultSchedule: DefaultSchedule = { scheduleType: 'cron_expression', cronExpression: '* * * * *' };
 
   private readonly logger = new Logger(GrantDeliveryJob.name);
   private readonly baseUrl: string;

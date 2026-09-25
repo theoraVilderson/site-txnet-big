@@ -78,8 +78,18 @@ async function seedPlatformDomains(tenantId) {
 // every check reads as "any key". Migration 20260913000100 makes the same grant
 // on a database whose role already existed; on a fresh one the role is created
 // above, after migrations ran, so the grant has to happen here too.
+function systemRole(name) {
+  return prisma.role.findFirst({ where: { name, tenantId: null } });
+}
+
+async function systemRoleOrThrow(name) {
+  const role = await systemRole(name);
+  if (!role) throw new Error(`system role ${name} is missing`);
+  return role;
+}
+
 async function grantAllPermissionsToSuperAdmin() {
-  const role = await prisma.role.findUniqueOrThrow({ where: { name: 'SuperAdmin' } });
+  const role = await systemRoleOrThrow('SuperAdmin');
   const all = await prisma.permission.upsert({
     where: { key: '*' },
     update: {},
@@ -103,7 +113,7 @@ async function grantAllPermissionsToSuperAdmin() {
 // `tenant_billing.adjust` (F-019-a), `tenant_billing.topup` (F-019-b) and
 // `tenant_billing.read` (F-019-j) likewise.
 async function grantGatewayManageToAdmin() {
-  const role = await prisma.role.findUniqueOrThrow({ where: { name: 'Admin' } });
+  const role = await systemRoleOrThrow('Admin');
   for (const key of ['gateway.manage', 'payment.confirm_manual', 'coupon.manage', 'catalog.manage', 'campaign.manage', 'tenant_billing.adjust', 'tenant_billing.topup', 'tenant_billing.read']) {
     const permission = await prisma.permission.upsert({ where: { key }, update: {}, create: { key } });
     await prisma.rolePermission.upsert({
@@ -131,86 +141,8 @@ async function seedCurrencies() {
   }
 }
 
-// Six jobs run from a `bot_schedule` row seeded here; every other job waits
-// for an operator (`automation/contract.worker.md` "A job is registered; it is
-// not scheduled"). The worker creates its own `bot_worker` rows on boot; before
-// that first boot there is nothing to schedule yet, and a re-run adds them.
-// A job that already has any schedule is left exactly as the operator set it.
-//
-// - `fx_rate_refresh`: without it no rate is ever written
-//   (currency/contract.fx-worker.md "How it is scheduled").
-// - `deposit_pending_expiry` and `deposit_reconciliation` (decided 2026-09-14):
-//   unscheduled, an abandoned top-up holds its coupon slots for ever and a
-//   payment the bank took but whose callback never arrived is never credited —
-//   the manual top-up legacy needed. Too costly to leave to someone remembering.
-const SEEDED_SCHEDULES = [
-  { key: 'fx_rate_refresh', scheduleType: 'cron_expression', cronExpression: '*/5 * * * *' },
-  // Every tick (AUTOMATION_TICK_INTERVAL_MS, 60s): a clock, and it calls no gateway.
-  { key: 'deposit_pending_expiry', scheduleType: 'always_on', cronExpression: null },
-  // Unpaid invoices (F-111-a): the same clock for a purchase, the user's call
-  // 2026-09-25 — unscheduled, an abandoned invoice holds its coupons for ever.
-  { key: 'invoice_pending_expiry', scheduleType: 'always_on', cronExpression: null },
-  // One gateway call per due payment, so a cron rather than every tick.
-  { key: 'deposit_reconciliation', scheduleType: 'cron_expression', cronExpression: '*/5 * * * *' },
-  // Due verify retries (F-092-ac): every tick, so the ladder's 30 s rung waits a
-  // minute, not five. Only rows whose retry has come; most ticks ask nothing.
-  { key: 'deposit_verify_retry', scheduleType: 'always_on', cronExpression: null },
-  // The outbox relay (ADR-0021, decided 2026-09-14): unscheduled, every event a
-  // payment writes — a late credit, a reversal — is never published, and the
-  // payer is never told. Every tick, so a notice waits a minute at most.
-  { key: 'outbox_relay', scheduleType: 'always_on', cronExpression: null },
-  // Campaign fan-out (F-035-d, decided 2026-09-17): unscheduled, a started send
-  // stays `sending` with no recipients and no error. Every tick; an idle one is
-  // one query, and a run writes at most FAN_OUT_BUDGET rows.
-  { key: 'notification_campaign_fan_out', scheduleType: 'always_on', cronExpression: null },
-  // Campaign delivery (F-035-e), the fan-out's twin: unscheduled, recipients stay
-  // `queued` forever. Every tick; an idle run is one claim query.
-  { key: 'notification_campaign_delivery', scheduleType: 'always_on', cronExpression: null },
-  // Reseller subscription renewal (F-019-c, decided 2026-09-17): unscheduled, no
-  // period is ever charged and an unpaid reseller is never suspended. A credit
-  // renews its payer at once through the outbox; this is the sweep behind it.
-  { key: 'tenant_subscription_renewal', scheduleType: 'cron_expression', cronExpression: '*/5 * * * *' },
-  // The nightly traffic rollup (F-027-o): unscheduled, `traffic_daily_aggregate`
-  // is never written and the monthly raw partitions accumulate for ever — the
-  // retention rule in `network/data-model.md` describes a thing nobody does.
-  // 03:15 UTC: after midnight, so a whole day is closed, and off the hour that
-  // every other cron in the estate wakes on.
-  { key: 'network_traffic_rollup', scheduleType: 'cron_expression', cronExpression: '15 3 * * *' },
-  // The suspended-Grant purge (F-027-y, ADR-0075): unscheduled, a spent Grant's
-  // clients sit on their panels for ever, holding seats and licences nobody can
-  // reclaim, and `purgeAfterDays` describes a clock that never runs out. Hourly
-  // is not a compromise: the window is measured in days, so an hour of lateness
-  // costs nothing, and a cross-tenant join every minute for a daily row would.
-  // Twenty past, so it does not wake with every other cron on the hour.
-  { key: 'grant_config_purge', scheduleType: 'cron_expression', cronExpression: '20 * * * *' },
-  // Panel-group fulfilment (F-027-bl): unscheduled, a grouped variant's Grant
-  // gets no config and never activates. Every minute: a buyer waits on it, and
-  // an idle run is one query.
-  { key: 'grant_group_fulfilment', scheduleType: 'cron_expression', cronExpression: '* * * * *' },
-  // Paid Grant delivery (F-111-d): unscheduled, a purchase stays `pending` for
-  // ever — never delivered and never refunded. Every minute: the first retry
-  // is a minute out and a buyer waits on it.
-  { key: 'grant_delivery', scheduleType: 'cron_expression', cronExpression: '* * * * *' },
-  // Custom-domain verification (F-018-i): unscheduled, no custom domain ever
-  // becomes `verified` and a lost record never stops routing. An idle run is one query.
-  { key: 'tenant_domain_verification', scheduleType: 'cron_expression', cronExpression: '*/5 * * * *' },
-];
-
-async function seedWorkerSchedules(adminId) {
-  for (const { key, scheduleType, cronExpression } of SEEDED_SCHEDULES) {
-    const worker = await prisma.botWorker.findUnique({ where: { key } });
-    if (!worker) {
-      console.log(`[seed] ${key} not registered yet — start worker-service once, then re-run the seed.`);
-      continue;
-    }
-    const existing = await prisma.botSchedule.findFirst({ where: { botWorkerId: worker.id } });
-    if (existing) continue;
-    await prisma.botSchedule.create({
-      data: { botWorkerId: worker.id, scheduleType, cronExpression, setByAdminId: adminId },
-    });
-    console.log(`[seed] scheduled ${key} (${cronExpression ?? scheduleType}).`);
-  }
-}
+// Job schedules are not seeded: a job that has to run declares its
+// `defaultSchedule` and worker-service writes it on boot (F-114-a).
 
 function generatePassword() {
   // Satisfies strongPasswordSchema (upper, lower, digit, special, 8-72 chars)
@@ -219,12 +151,10 @@ function generatePassword() {
 }
 
 async function main() {
+  // A system role has no tenant; `(tenantId, name)` cannot be upserted on a
+  // null, so it is found by the partial index `role_system_name_key` instead.
   for (const name of ROLE_NAMES) {
-    await prisma.role.upsert({
-      where: { name },
-      update: {},
-      create: { name, isSystemRole: true },
-    });
+    if (!(await systemRole(name))) await prisma.role.create({ data: { name, isSystemRole: true } });
   }
   await grantAllPermissionsToSuperAdmin();
   await grantGatewayManageToAdmin();
@@ -238,13 +168,10 @@ async function main() {
     // Not `return`: an install seeded before ADR-0025 has the tenant but no
     // domain row, and that install now answers 404 until it gets one.
     await seedPlatformDomains(existingTenant.id);
-    await seedWorkerSchedules(existingTenant.ownerUserId);
     return;
   }
 
-  const superAdminRole = await prisma.role.findUniqueOrThrow({
-    where: { name: 'SuperAdmin' },
-  });
+  const superAdminRole = await systemRoleOrThrow('SuperAdmin');
 
   const ownerId = randomUUID();
   const password = generatePassword();
@@ -277,7 +204,6 @@ async function main() {
   });
 
   await seedPlatformDomains(tenant.id);
-  await seedWorkerSchedules(ownerId);
 
   console.log('[seed] created platform_owner tenant + roles + owner user.');
   console.log('[seed]   owner username: platform_owner');

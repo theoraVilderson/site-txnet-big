@@ -2,7 +2,7 @@ import { RequestHeaders } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotWorkerCategory } from '@prisma/client';
-import { Job, JobResult } from '../automation/job';
+import { DefaultSchedule, Job, JobResult } from '../automation/job';
 import { envelopeData } from '../automation/internal-answer';
 
 /** The one route this job exists to call. Service callers only; 404 otherwise. */
@@ -25,6 +25,8 @@ export class InvoiceExpiryJob implements Job {
   readonly name = 'Pending invoice expiry';
   readonly description = 'Expires unpaid invoices past their expiresAt and releases the coupon holds they took (F-111-a).';
   readonly category = BotWorkerCategory.other;
+  /** Unscheduled, an abandoned invoice holds its coupons for ever (the user's call, 2026-09-25). */
+  readonly defaultSchedule: DefaultSchedule = { scheduleType: 'always_on' };
 
   private readonly logger = new Logger(InvoiceExpiryJob.name);
   private readonly baseUrl: string;

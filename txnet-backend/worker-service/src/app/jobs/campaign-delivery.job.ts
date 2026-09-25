@@ -2,7 +2,7 @@ import { RequestHeaders } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotWorkerCategory } from '@prisma/client';
-import { Job, JobResult } from '../automation/job';
+import { DefaultSchedule, Job, JobResult } from '../automation/job';
 import { envelopeData } from '../automation/internal-answer';
 
 /** The one route this job exists to call. Service callers only; 404 otherwise. */
@@ -29,6 +29,8 @@ export class CampaignDeliveryJob implements Job {
   readonly description =
     'Sends queued campaign recipients through their tenant\'s Telegram or Bale bot, in bounded runs (F-035-e).';
   readonly category = BotWorkerCategory.campaign;
+  /** Unscheduled, recipients stay `queued` for ever. An idle run is one claim query. */
+  readonly defaultSchedule: DefaultSchedule = { scheduleType: 'always_on' };
   /**
    * A started campaign finishes whatever its tenant's status (F-018-p, user
    * 2026-09-17): only starting one is a `staffWrite`. Declared for the day a

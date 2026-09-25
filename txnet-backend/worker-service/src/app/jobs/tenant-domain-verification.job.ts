@@ -2,7 +2,7 @@ import { RequestHeaders } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotWorkerCategory } from '@prisma/client';
-import { Job, JobResult } from '../automation/job';
+import { DefaultSchedule, Job, JobResult } from '../automation/job';
 import { envelopeData } from '../automation/internal-answer';
 
 /** The one route this job exists to call. Service callers only; 404 otherwise. */
@@ -26,6 +26,8 @@ export class TenantDomainVerificationJob implements Job {
   readonly name = 'Reseller custom-domain verification';
   readonly description = "Checks resellers' custom domains: TXT record, CNAME and an http/https answer; re-validates verified ones (F-018-i).";
   readonly category = BotWorkerCategory.other;
+  /** Unscheduled, no custom domain ever becomes `verified`. An idle run is one query. */
+  readonly defaultSchedule: DefaultSchedule = { scheduleType: 'cron_expression', cronExpression: '*/5 * * * *' };
 
   private readonly logger = new Logger(TenantDomainVerificationJob.name);
   private readonly baseUrl: string;

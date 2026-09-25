@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotWorkerCategory } from '@prisma/client';
 
-import { Job, JobResult } from '../automation/job';
+import { DefaultSchedule, Job, JobResult } from '../automation/job';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** A partition's name, as `pg_inherits` reports it. */
@@ -75,6 +75,8 @@ export class TrafficRollupJob implements Job {
   readonly description =
     'Rolls raw traffic up into traffic_daily_aggregate, rolls the monthly partitions forward, and drops a raw month only once its aggregate matches (network invariant 3).';
   readonly category = BotWorkerCategory.data_aggregation;
+  /** Unscheduled, no daily aggregate is written and raw partitions pile up. 03:15 UTC: a whole day closed, off the hour. */
+  readonly defaultSchedule: DefaultSchedule = { scheduleType: 'cron_expression', cronExpression: '15 3 * * *' };
 
   private readonly logger = new Logger(TrafficRollupJob.name);
   private readonly lookbackDays: number;

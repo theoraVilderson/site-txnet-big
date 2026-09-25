@@ -14,7 +14,7 @@ Source of truth: `txnet-backend/prisma/domains/automation.prisma` (Postgres sche
 | Table | Purpose | Tenant-scoped? | Retention |
 |---|---|---|---|
 | bot_worker | worker definition + category + `isActive` master switch | no | permanent |
-| bot_schedule | when a worker runs (window / cron / always), timezone, admin-set | no | permanent |
+| bot_schedule | when a worker runs (window / cron / always), timezone; `setByAdminId` = the admin, or null for the job's own `defaultSchedule` (F-114-a) | no | permanent |
 | bot_execution_log | per-run: trigger source, timing, status, items processed, errors, metrics JSON | no | long / rolling |
 | bot_integration | one bot a tenant owns: platform, `@username`, `role`, `credentialRef`, `webhookPath`, `status` + `lastErrorAt`, cached `capabilities` | yes — but see below | with tenant |
 | outbox_event | one cross-domain event, written inside the transaction that caused it and published by `OutboxRelayJob` (F-067-c, ADR-0021) | no — see below | permanent (no archive yet) |

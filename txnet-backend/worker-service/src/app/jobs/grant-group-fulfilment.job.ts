@@ -2,7 +2,7 @@ import { RequestHeaders } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotWorkerCategory } from '@prisma/client';
-import { Job, JobResult } from '../automation/job';
+import { DefaultSchedule, Job, JobResult } from '../automation/job';
 import { envelopeData } from '../automation/internal-answer';
 
 /** The two routes this job exists to call. Service callers only; 404 otherwise. */
@@ -43,6 +43,8 @@ export class GrantGroupFulfilmentJob implements Job {
   readonly description =
     'Places a config on every non-drain healthy member of a Grant\'s panel group and activates it at minHealthyPanels (F-027-bl); retires a drained member\'s configs after 2 × subscriptionTtl and removes it (F-027-bm).';
   readonly category = BotWorkerCategory.other;
+  /** Unscheduled, a grouped Grant never activates. Every minute: a buyer waits on it. */
+  readonly defaultSchedule: DefaultSchedule = { scheduleType: 'cron_expression', cronExpression: '* * * * *' };
 
   private readonly logger = new Logger(GrantGroupFulfilmentJob.name);
   private readonly baseUrl: string;

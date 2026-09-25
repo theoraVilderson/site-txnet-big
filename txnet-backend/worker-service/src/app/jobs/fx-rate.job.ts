@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotWorkerCategory, Prisma } from '@prisma/client';
-import { Job, JobResult } from '../automation/job';
+import { DefaultSchedule, Job, JobResult } from '../automation/job';
 import { accepted, gateFxDeviation } from '../currency/fx-rate.gate';
 import { answered, FxRatePoller } from '../currency/fx-rate.poller';
 import { reduceFxReads, reduced } from '../currency/fx-rate.reducer';
@@ -82,6 +82,8 @@ export class FxRateJob implements Job {
   readonly description =
     'Queries every active USDT/IRT order book concurrently with a 3s timeout (F-0603), discards failures and out-of-band values, takes the median of at least minSources (F-0604), refuses a move beyond FX_MAX_DEVIATION_PERCENT since the last accepted rate (F-0605), and writes an append-only snapshot cached under fx:rate:{code} (F-0606-a).';
   readonly category = BotWorkerCategory.data_aggregation;
+  /** Unscheduled, no rate is ever refreshed and every Toman figure goes stale. */
+  readonly defaultSchedule: DefaultSchedule = { scheduleType: 'cron_expression', cronExpression: '*/5 * * * *' };
 
   private readonly logger = new Logger(FxRateJob.name);
 

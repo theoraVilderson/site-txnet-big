@@ -2,7 +2,7 @@ import { RequestHeaders } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotWorkerCategory } from '@prisma/client';
-import { Job, JobResult } from '../automation/job';
+import { DefaultSchedule, Job, JobResult } from '../automation/job';
 import { envelopeData } from '../automation/internal-answer';
 
 /** The routes these jobs exist to call. Service callers only; 404 otherwise. */
@@ -49,6 +49,8 @@ export class DepositReconciliationJob implements Job {
   readonly description: string =
     'Asks the gateway about pending and expired top-ups nobody came back for: credits what it confirms and flags an amount it reports differently (F-092-l). Verifying ones are deposit_verify_retry\'s.';
   readonly category = BotWorkerCategory.other;
+  /** One gateway call per due payment, so a cron rather than every tick. */
+  readonly defaultSchedule: DefaultSchedule = { scheduleType: 'cron_expression', cronExpression: '*/5 * * * *' };
   /** The billing route a run calls. */
   protected readonly path: string = RECONCILE_PATH;
 
@@ -147,5 +149,7 @@ export class DepositVerifyRetryJob extends DepositReconciliationJob {
   override readonly description =
     'Asks the gateway again about verifying top-ups whose retry is due: credits what it confirms, re-schedules silence, flags a payment still verifying after a day (F-092-x, F-092-y, F-092-ac).';
   protected override readonly path = VERIFY_DUE_PATH;
+  /** Every tick, so the retry ladder's 30 s rung waits a minute, not five. */
+  override readonly defaultSchedule: DefaultSchedule = { scheduleType: 'always_on' };
 }
 

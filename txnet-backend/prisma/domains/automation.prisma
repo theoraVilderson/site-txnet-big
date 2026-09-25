@@ -63,7 +63,8 @@ model BotSchedule {
   windowEndAt    DateTime? // فقط time_window
   cronExpression String? // فقط cron_expression
   timezone       String       @default("Asia/Tehran")
-  setByAdminId   String       @db.Uuid
+  /// null = the job's own `defaultSchedule`, written by worker-service on boot (F-114-a)
+  setByAdminId   String?      @db.Uuid
   isActive       Boolean      @default(true)
 
   botWorker BotWorker @relation(fields: [botWorkerId], references: [id])

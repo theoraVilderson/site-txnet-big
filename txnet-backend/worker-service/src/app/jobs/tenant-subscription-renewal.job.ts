@@ -2,7 +2,7 @@ import { RequestHeaders } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotWorkerCategory } from '@prisma/client';
-import { Job, JobResult } from '../automation/job';
+import { DefaultSchedule, Job, JobResult } from '../automation/job';
 import { envelopeData } from '../automation/internal-answer';
 
 /** The one route this job exists to call. Service callers only; 404 otherwise. */
@@ -28,6 +28,8 @@ export class TenantSubscriptionRenewalJob implements Job {
   readonly name = 'Reseller subscription renewal';
   readonly description = "Charges due reseller subscriptions from their billing wallet; warns, then suspends, an unpaid one (F-019-c).";
   readonly category = BotWorkerCategory.other;
+  /** Unscheduled, no period is charged and an unpaid reseller is never suspended. */
+  readonly defaultSchedule: DefaultSchedule = { scheduleType: 'cron_expression', cronExpression: '*/5 * * * *' };
 
   private readonly logger = new Logger(TenantSubscriptionRenewalJob.name);
   private readonly baseUrl: string;

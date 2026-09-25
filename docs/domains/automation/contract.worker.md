@@ -101,18 +101,17 @@ no gateway; reconciliation makes one call to a bank per payment. They are
 separate keys with separate schedules and separate timeouts, because merging
 them would tie the cheap frequent one to the rate a bank will answer.
 
-**A job is registered; it is not scheduled.** `WorkerRegistryService` upserts a
-`bot_worker` row on boot, and the publisher ticks a job only for the
-`bot_schedule` rows an operator set through `/auth/workers` (F-031-b). A new
-job therefore runs never until somebody schedules it — which is a deliberate
-default for a sweep that writes, and the first thing to check when one appears
-to do nothing. **Three exceptions are seeded** by `prisma/seed.js`
-(`SEEDED_SCHEDULES`): `fx_rate_refresh`, and — decided by the user 2026-09-14
-— `deposit_pending_expiry` (`always_on`) and `deposit_reconciliation` (`*/5`); since
-F-092-ac also `deposit_verify_retry` (`always_on`), since F-035-d `notification_campaign_fan_out` and F-035-e `notification_campaign_delivery` (both `always_on`), since F-027-o `network_traffic_rollup` (`15 3 * * *` — unscheduled, no daily aggregate is ever written and the raw partitions accumulate for ever), since F-027-y `grant_config_purge` (`20 * * * *` — unscheduled, a spent Grant's clients hold their panel seats for ever), since F-027-bl `grant_group_fulfilment` (`* * * * *` — unscheduled, a grouped Grant never activates), since F-111-a `invoice_pending_expiry` (`always_on` — unscheduled, an unpaid invoice holds its coupons for ever), and since F-111-d `grant_delivery` (`* * * * *` — unscheduled, a paid Grant is never delivered nor refunded).
-Left unscheduled, a payment the bank took but never called back about is never
-credited, which is the manual top-up legacy needed. The seed never touches a
-job that already has a schedule.
+**A job registers itself; one that has to run schedules itself** (F-114-a).
+`WorkerRegistryService` upserts a `bot_worker` row on boot; the publisher ticks
+only `bot_schedule` rows. A job's `defaultSchedule` is written on boot,
+`setByAdminId` null, **only while it has no schedule row at all** — an
+operator's, or one switched off, stays theirs; an advisory lock makes two
+replicas write one row. A job with none (`worker_heartbeat`,
+`vault_credential_retention`) waits for an operator on `/auth/workers`
+(F-031-b). Each default sits on its job class beside its reason. They were
+`SEEDED_SCHEDULES` in `prisma/seed.js` until 2026-09-25: a job not yet
+registered was skipped, and the seed failed outright from 2026-09-19, so no
+job added that week was ever ticked — a paid Grant stayed `pending` for ever.
 
 **An internal answer is enveloped.** `auth-service` and `billing-service` send
 every route, `/api/internal/*` included, through shared-core's

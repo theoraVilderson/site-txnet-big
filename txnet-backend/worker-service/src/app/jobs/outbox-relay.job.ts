@@ -6,7 +6,7 @@ import {
   PublishNotConfirmedError,
   type OutboxMessage,
 } from '@txnet-backend/shared-core';
-import { Job, JobResult } from '../automation/job';
+import { DefaultSchedule, Job, JobResult } from '../automation/job';
 import { BrokerService } from '../broker/broker.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -68,6 +68,8 @@ export class OutboxRelayJob implements Job {
   readonly description =
     'Publishes unpublished automation.outbox_event rows to the broker (ADR-0021).';
   readonly category = BotWorkerCategory.other;
+  /** Unscheduled, no event is ever published and nobody is told (ADR-0045). Every tick: a notice waits a minute at most. */
+  readonly defaultSchedule: DefaultSchedule = { scheduleType: 'always_on' };
 
   private readonly logger = new Logger(OutboxRelayJob.name);
   private readonly batchSize: number;

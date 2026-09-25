@@ -2,7 +2,7 @@ import { RequestHeaders } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotWorkerCategory } from '@prisma/client';
-import { Job, JobResult } from '../automation/job';
+import { DefaultSchedule, Job, JobResult } from '../automation/job';
 import { envelopeData } from '../automation/internal-answer';
 
 /** The one route this job exists to call. Service callers only; 404 otherwise. */
@@ -32,6 +32,8 @@ export class CampaignFanOutJob implements Job {
   readonly description =
     'Writes one queued recipient row per user of every started campaign, in resumable batches (F-035-d).';
   readonly category = BotWorkerCategory.campaign;
+  /** Unscheduled, a started send stays `sending` with no recipients. An idle tick is one query. */
+  readonly defaultSchedule: DefaultSchedule = { scheduleType: 'always_on' };
   /**
    * A started campaign finishes whatever its tenant's status (F-018-p, user
    * 2026-09-17): only starting one is a `staffWrite`. Declared for the day a

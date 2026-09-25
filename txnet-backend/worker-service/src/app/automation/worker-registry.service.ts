@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { JOBS, Job } from './job';
+import { DefaultSchedule, JOBS, Job } from './job';
 import { WorkerRow } from '@txnet-backend/shared-core';
 
 /**
@@ -24,6 +24,13 @@ import { WorkerRow } from '@txnet-backend/shared-core';
  * `bot_execution_log` history is referenced by foreign key. It simply never
  * becomes due here, because nothing publishes for a key no `Job` claims.
  */
+/**
+ * The `classid` half of the default-schedule advisory lock, paired with
+ * `hashtext(key)`: a namespace of our own in Postgres's one advisory space
+ * (the `PAYOUT_LOCK` pattern). Two replicas booting together write one row.
+ */
+const DEFAULT_SCHEDULE_LOCK = 114_01;
+
 @Injectable()
 export class WorkerRegistryService implements OnModuleInit {
   private readonly logger = new Logger(WorkerRegistryService.name);
@@ -44,7 +51,7 @@ export class WorkerRegistryService implements OnModuleInit {
 
   async onModuleInit() {
     for (const job of this.jobs) {
-      await this.prisma.botWorker.upsert({
+      const worker = await this.prisma.botWorker.upsert({
         where: { key: job.key },
         create: {
           key: job.key,
@@ -57,11 +64,33 @@ export class WorkerRegistryService implements OnModuleInit {
           description: job.description ?? null,
           category: job.category,
         },
+        select: { id: true },
       });
+      if (job.defaultSchedule) await this.scheduleByDefault(job.key, worker.id, job.defaultSchedule);
     }
     this.logger.log(
       `registered ${this.jobs.length} job(s): ${[...this.byKey.keys()].join(', ') || '—'}`,
     );
+  }
+
+  private async scheduleByDefault(key: string, botWorkerId: string, schedule: DefaultSchedule) {
+    const written = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${DEFAULT_SCHEDULE_LOCK}::int, hashtext(${key}::text))`;
+      if ((await tx.botSchedule.count({ where: { botWorkerId } })) > 0) return false;
+      await tx.botSchedule.create({
+        data: {
+          botWorkerId,
+          scheduleType: schedule.scheduleType,
+          cronExpression: schedule.scheduleType === 'cron_expression' ? schedule.cronExpression : null,
+          setByAdminId: null,
+        },
+      });
+      return true;
+    });
+    if (written) {
+      const shown = schedule.scheduleType === 'cron_expression' ? schedule.cronExpression : schedule.scheduleType;
+      this.logger.log(`scheduled ${key} by default (${shown})`);
+    }
   }
 
   job(key: string): Job | undefined {

@@ -2,7 +2,7 @@ import { RequestHeaders } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotWorkerCategory } from '@prisma/client';
-import { Job, JobResult } from '../automation/job';
+import { DefaultSchedule, Job, JobResult } from '../automation/job';
 import { envelopeData } from '../automation/internal-answer';
 
 /** The one route this job exists to call. Service callers only; 404 otherwise. */
@@ -45,6 +45,8 @@ export class DepositExpiryJob implements Job {
   readonly description =
     'Expires pending payments past their expiresAt and releases the coupon holds they took (F-092-k).';
   readonly category = BotWorkerCategory.other;
+  /** Every tick: a clock, and it calls no gateway. */
+  readonly defaultSchedule: DefaultSchedule = { scheduleType: 'always_on' };
 
   private readonly logger = new Logger(DepositExpiryJob.name);
   private readonly baseUrl: string;

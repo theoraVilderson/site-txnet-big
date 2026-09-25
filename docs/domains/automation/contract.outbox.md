@@ -168,7 +168,7 @@ every other stays so.
 | A payload with `shownInChat: true` is acked and nothing is sent, whatever its channel (F-104-m) | billing sets it only on the credit the bot's `paid` relay made, and the bot has already said it in that chat |
 | Consumer `payment-credited-notify`: live `{type:'billing.payment.confirmed', paymentId, amountCredited}` on `user:<userId>`, then template `paymentCredited` to the payer's inbox and bot, `X-Tenant-Id` = the payload's tenant | the one notice path; markers `RedisTtl.outboxProcessed` (7 days) |
 | A payload missing its tenant, user, payment, amount or source throws | whose payment it is is never guessed |
-| **The relay's schedule is seeded** (2026-09-14): `outbox_relay` is in `SEEDED_SCHEDULES`, `always_on`. A database seeded before that needs `prisma db seed` re-run; unscheduled, the event is never published and nobody is told | ADR-0045 consequences — the operator decided it once, in the seed, rather than per deployment |
+| **The relay schedules itself**: `outbox_relay` declares `defaultSchedule` `always_on`, written on boot while it has none (F-114-a, `contract.worker.md`); unscheduled, the event is never published and nobody is told | ADR-0045 consequences — decided once, in the code, rather than per deployment |
 
 ## The second consumer: a reversed payment (F-067-m, ADR-0046)
 

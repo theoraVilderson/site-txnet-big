@@ -33,8 +33,21 @@ export interface Job {
    * tick (no `tenantId`) is never judged.
    */
   readonly tenantCapability?: TenantCapabilityName;
+  /**
+   * The schedule this job gets when it has none (F-114-a). The registry writes
+   * it on boot, `setByAdminId` null, only while the job has no `bot_schedule`
+   * row at all — so an operator's schedule, or one switched off, stays theirs.
+   * Unset: the job waits for an operator, the right default for a sweep whose
+   * cadence is a business decision.
+   */
+  readonly defaultSchedule?: DefaultSchedule;
   run(): Promise<JobResult>;
 }
+
+/** A schedule the code can pick on its own: every tick, or a cron. */
+export type DefaultSchedule =
+  | { readonly scheduleType: 'always_on' }
+  | { readonly scheduleType: 'cron_expression'; readonly cronExpression: string };
 
 /**
  * The multi-provider every job registers under, the way `auth-service` injects
