@@ -13,6 +13,8 @@ import {
   catalogText,
   categoryRemovalReport,
   featureKeysIn,
+  heldByProducts,
+  mergeRemovals,
   flattenTexts,
   isPlatformOwner,
   productCounts,
@@ -85,6 +87,8 @@ export function CatalogView() {
   const owner = isPlatformOwner(surfaceActor(me, surface.tenantId));
   const [tab, setTab] = useState<"products" | "categories">("products");
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
+  // Categories archived with their sold products (F-026-l): out of the tab, still naming those products.
+  const [archivedCategories, setArchivedCategories] = useState<CatalogCategory[]>([]);
   // Every product the caller manages: the capability list and the taken keys come from here,
   // whatever the filters show.
   const [products, setProducts] = useState<CatalogProduct[] | null>(null);
@@ -117,13 +121,15 @@ export function CatalogView() {
 
   const load = useCallback(async () => {
     try {
-      const [cats, prods, kept, names] = await Promise.all([
+      const [cats, keptCats, prods, kept, names] = await Promise.all([
         api.categories(),
+        api.categories({ archived: "true" }),
         api.products(),
         api.products({ archived: "true" }),
         loadTexts(api, langCodes ? langCodes.split(",") : [lang]),
       ]);
       setCategories(cats);
+      setArchivedCategories(keptCats);
       setProducts(prods);
       setArchived(kept);
       setSelected((before) => stillSelected(before, prods));
@@ -157,7 +163,7 @@ export function CatalogView() {
 
   const nameOf = (item: { key: string; nameKey: string; sourceLang: string }) => catalogText(texts, lang, item.nameKey, item.sourceLang) ?? item.key;
   const categoryName = (id: string) => {
-    const c = categories.find((x) => x.id === id);
+    const c = categories.find((x) => x.id === id) ?? archivedCategories.find((x) => x.id === id);
     return c ? nameOf(c) : "—";
   };
   const knownFeatureKeys = useMemo(() => featureKeysIn(products ?? []), [products]);
@@ -204,7 +210,13 @@ export function CatalogView() {
     setActionError(null);
     setNotice(null);
     try {
-      setReport(categoryRemovalReport(await api.removeCategories(ids)));
+      // Billing keeps a category with products in it; only then, and only for those, the page asks again (F-026-m).
+      let outcomes = await api.removeCategories(ids);
+      const held = heldByProducts(outcomes);
+      if (held.length > 0 && window.confirm(t("common", K.categories.confirmWithProducts, { count: held.length }))) {
+        outcomes = mergeRemovals(outcomes, await api.removeCategories(held, true));
+      }
+      setReport(categoryRemovalReport(outcomes));
       setPickedCategories(new Set());
       await load();
     } catch (e) {

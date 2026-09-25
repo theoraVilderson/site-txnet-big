@@ -25,6 +25,8 @@ import {
   namesBody,
   removalReport,
   categoryRemovalReport,
+  heldByProducts,
+  mergeRemovals,
   productCounts,
   switchReport,
   switchTargets,
@@ -424,7 +426,7 @@ describe("categories in a group (F-026-j/k)", () => {
   it("has a line for every outcome billing answers, and reports each once, deleted before kept before not found", () => {
     const field = /export type CategoryRemovalOutcome = \{[^}]*outcome: ([^;}]*)/.exec(read("billing-service/src/app/catalog/catalog-admin.service.ts"));
     if (!field) throw new Error("CategoryRemovalOutcome no longer has an outcome union — this test is stale");
-    expect([...field[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort()).toEqual(["deleted", "has_products", "not_found"]);
+    expect([...field[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort()).toEqual(["archived", "deleted", "has_products", "not_found"]);
     expect(
       categoryRemovalReport([
         { id: "a", outcome: "has_products" },
@@ -436,6 +438,37 @@ describe("categories in a group (F-026-j/k)", () => {
       { key: C.deleted, count: 1 },
       { key: C.hasProducts, count: 2 },
       { key: C.notFound, count: 1 },
+    ]);
+  });
+
+  it("reports a category archived with its products, and what happened to the products, once each (F-026-m)", () => {
+    const R = CATALOG_KEYS.removal;
+    expect(
+      categoryRemovalReport([
+        { id: "a", outcome: "archived", products: { deleted: 1, archived: 2 } },
+        { id: "b", outcome: "deleted", products: { deleted: 3, archived: 0 } },
+        { id: "c", outcome: "has_products", products: { deleted: 0, archived: 0 } },
+      ]),
+    ).toEqual([
+      { key: C.deleted, count: 1 },
+      { key: C.archived, count: 1 },
+      { key: C.hasProducts, count: 1 },
+      { key: R.deleted, count: 4 },
+      { key: R.archived, count: 2 },
+    ]);
+  });
+
+  it("asks again only for the categories billing kept for their products, and the second answer replaces the first", () => {
+    const first = [
+      { id: "a", outcome: "deleted" as const },
+      { id: "b", outcome: "has_products" as const },
+      { id: "c", outcome: "not_found" as const },
+    ];
+    expect(heldByProducts(first)).toEqual(["b"]);
+    expect(mergeRemovals(first, [{ id: "b", outcome: "archived", products: { deleted: 0, archived: 1 } }])).toEqual([
+      { id: "a", outcome: "deleted" },
+      { id: "b", outcome: "archived", products: { deleted: 0, archived: 1 } },
+      { id: "c", outcome: "not_found" },
     ]);
   });
 

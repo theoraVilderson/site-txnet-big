@@ -496,18 +496,35 @@ export const stillSelected = (selected: ReadonlySet<string>, listed: readonly { 
 
 // ------------------------------------------------------------ category group
 
-const CATEGORY_REMOVAL_ORDER: readonly CategoryRemoval["outcome"][] = ["deleted", "has_products", "not_found"];
+const CATEGORY_REMOVAL_ORDER: readonly CategoryRemoval["outcome"][] = ["deleted", "archived", "has_products", "not_found"];
 const CATEGORY_REMOVAL_KEYS: Record<CategoryRemoval["outcome"], string> = {
   deleted: CATALOG_KEYS.categories.deleted,
+  archived: CATALOG_KEYS.categories.archived,
   has_products: CATALOG_KEYS.categories.hasProducts,
   not_found: CATALOG_KEYS.categories.notFound,
 };
 
-/** What a group removal of categories did, one line per outcome that happened (F-026-k over F-026-j). */
+/**
+ * What a group removal of categories did, one line per outcome that happened
+ * (F-026-k over F-026-j), then what happened to the products removed with them
+ * (F-026-m over F-026-l) — in the products' own sentences.
+ */
 export function categoryRemovalReport(outcomes: readonly CategoryRemoval[]): { key: string; count: number }[] {
-  return CATEGORY_REMOVAL_ORDER.map((o) => ({ key: CATEGORY_REMOVAL_KEYS[o], count: outcomes.filter((r) => r.outcome === o).length })).filter(
-    (l) => l.count > 0,
-  );
+  const products = (o: "deleted" | "archived") => outcomes.reduce((n, r) => n + (r.products?.[o] ?? 0), 0);
+  return [
+    ...CATEGORY_REMOVAL_ORDER.map((o) => ({ key: CATEGORY_REMOVAL_KEYS[o], count: outcomes.filter((r) => r.outcome === o).length })),
+    { key: CATALOG_KEYS.removal.deleted, count: products("deleted") },
+    { key: CATALOG_KEYS.removal.archived, count: products("archived") },
+  ].filter((l) => l.count > 0);
+}
+
+/** The categories billing kept for the products in them: the ones the page asks about a second time (F-026-m). */
+export const heldByProducts = (outcomes: readonly CategoryRemoval[]) => outcomes.filter((r) => r.outcome === "has_products").map((r) => r.id);
+
+/** The first answer with each category the second removal (with its products) answered replaced by that answer. */
+export function mergeRemovals(first: readonly CategoryRemoval[], second: readonly CategoryRemoval[]): CategoryRemoval[] {
+  const again = new Map(second.map((r) => [r.id, r]));
+  return first.map((r) => again.get(r.id) ?? r);
 }
 
 /**

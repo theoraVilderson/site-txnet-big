@@ -49,9 +49,14 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    stay taken, so the wizard counts them.
 6c. **Categories are selected the same way, on their own** (F-026-k over
    F-026-j): the categories tab keeps its own selection, never the products'.
-   Remove is a confirm, then `POST /categories/remove` and one line per outcome
-   (`categoryRemovalReport`: deleted, kept because it holds products, not
-   found). A category's product count includes the archived (`productCounts`),
+   Remove is a confirm, then `POST /categories/remove`. Only if billing
+   answers some `has_products` does the page ask again, for those alone
+   (`heldByProducts`); a yes resends them `withProducts` (F-026-m over
+   F-026-l) and that answer replaces theirs (`mergeRemovals`). One line per
+   outcome (`categoryRemovalReport`: deleted, archived with its sold
+   products, kept, not found), then the products' own deleted / archived
+   counts. An archived category is out of the tab but still names its
+   archived products, and comes back when one of them is restored. A category's product count includes the archived (`productCounts`),
    because billing keeps a category any of them sits in — a count without them
    would show 0 beside a refusal. Switch on / off is one `PATCH isActive` per
    selected category not already in that state (`switchTargets`), each on its
@@ -119,7 +124,8 @@ in a source language (`validateCategoryForm` / `categoryBody`,
 `flattenTexts` / `catalogText` fallback to the source, `reviewWrites`,
 `removalReport` / `stillSelected` (F-026-i); `categoryRemovalReport` against
 billing's `CategoryRemovalOutcome`, `productCounts`, `switchTargets`,
-`switchReport` (F-026-k).
+`switchReport` (F-026-k); `heldByProducts`, `mergeRemovals` and the products'
+counts in the report (F-026-m).
 
 `my-resellers/catalog.test.ts` (F-066-w8) — `catalogApiPrefix` on both
 surfaces against the controller's own `@Controller`, `surfaceActor` holding a

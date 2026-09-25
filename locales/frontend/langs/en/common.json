@@ -1385,14 +1385,16 @@
       "empty": "No categories yet.",
       "products": "{{count}} products",
       "selected": "{{count}} categories selected",
-      "confirm": "Remove {{count}} categories? An empty category is deleted; one that still holds products, archived ones included, is kept.",
+      "confirm": "Remove {{count}} categories? An empty category is deleted. If some still hold products, you will be asked about those next.",
       "deleted": "{{count}} categories deleted.",
       "hasProducts": "{{count}} categories kept because they still hold products (archived ones count). Move or remove those first.",
       "notFound": "{{count}} categories were not found or are not yours.",
       "switchOn": "Switch on selected",
       "switchOff": "Switch off selected",
       "switched": "{{count}} categories changed.",
-      "switchFailed": "{{count}} categories could not be changed."
+      "switchFailed": "{{count}} categories could not be changed.",
+      "confirmWithProducts": "{{count}} categories still hold products. Remove those products too? A product never sold is deleted for good; one that was sold is archived, its buyers keep their service, and its category is archived with it.",
+      "archived": "{{count}} categories archived with the sold products in them."
     },
     "copyId": "Copy id",
     "copied": "Copied",

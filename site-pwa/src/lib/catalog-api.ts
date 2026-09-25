@@ -85,6 +85,8 @@ export interface CatalogCategory {
   /** The language its name was written in; the list falls back to it. */
   sourceLang: string;
   isActive: boolean;
+  /** Set when it was removed with its products and a sold one stayed in it (F-026-l); only in the `archived` list. */
+  archivedAt: string | null;
 }
 
 export interface CatalogProduct {
@@ -109,10 +111,14 @@ export interface ProductRemoval {
   outcome: "deleted" | "archived" | "not_found";
 }
 
-/** What a removal did to one category (F-026-j): gone, kept because a product sits in it (archived ones too), or not the caller's. */
+/**
+ * What a removal did to one category (F-026-j): gone, kept because a product sits in it (archived ones too), or not
+ * the caller's. Removed with its products (F-026-l): `archived` when a sold one stays, and what happened to them.
+ */
 export interface CategoryRemoval {
   id: string;
-  outcome: "deleted" | "has_products" | "not_found";
+  outcome: "deleted" | "archived" | "has_products" | "not_found";
+  products?: { deleted: number; archived: number };
 }
 
 /** Base currency, a decimal string (C-02). A row is history: never edited, only switched off. */
@@ -206,8 +212,9 @@ export type CatalogAdminApi = ReturnType<typeof catalogAdminApi>;
 export function catalogAdminApi(tenantId: string | null) {
   const at = catalogApiPrefix(tenantId);
   return {
-    async categories(): Promise<CatalogCategory[]> {
-      return call<CatalogCategory[]>(`${at}/categories`, { method: "GET" });
+    async categories(query: { archived?: "true" } = {}): Promise<CatalogCategory[]> {
+      const qs = new URLSearchParams(query).toString();
+      return call<CatalogCategory[]>(`${at}/categories${qs ? `?${qs}` : ""}`, { method: "GET" });
     },
 
     async createCategory(body: CreateCategoryBody): Promise<CatalogCategory> {
@@ -219,9 +226,9 @@ export function catalogAdminApi(tenantId: string | null) {
     },
 
     /** The platform owner may narrow by a tenant id or `platform`; a tenant always gets its own. `archived: "true"` lists the archived alone. */
-    /** One outcome per id; an empty category is deleted, one holding products is kept (F-026-j). */
-    async removeCategories(ids: string[]): Promise<CategoryRemoval[]> {
-      return call<CategoryRemoval[]>(`${at}/categories/remove`, { method: "POST", ...json({ ids }) });
+    /** One outcome per id; an empty category is deleted, one holding products is kept (F-026-j) — or, `withProducts`, removed with them (F-026-l). */
+    async removeCategories(ids: string[], withProducts = false): Promise<CategoryRemoval[]> {
+      return call<CategoryRemoval[]>(`${at}/categories/remove`, { method: "POST", ...json(withProducts ? { ids, withProducts } : { ids }) });
     },
 
     async products(query: { categoryId?: string; tenantId?: string; archived?: "true" } = {}): Promise<CatalogProduct[]> {
