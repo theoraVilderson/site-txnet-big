@@ -6,9 +6,7 @@ import (
 )
 
 // MemoryReserves holds the extension figures in memory. It is what the
-// extension is proved against, and what a single-process run uses until the
-// Postgres-backed implementation lands beside the durable `collect.Cursors`
-// and `converge.MemoryAllocations` — the same staging those are in.
+// extension is proved against; a running process uses `PostgresReserves`.
 type MemoryReserves struct {
 	mu      sync.Mutex
 	byPanel map[string][]Extension

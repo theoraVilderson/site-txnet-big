@@ -214,18 +214,21 @@ func main() {
 	// (`contract.hot-loop.md`). Draining the HTTP server first would spend the
 	// budget on a surface that answers nobody: `/health` is for the container
 	// and the watchdog, and neither of them is a user mid-download.
-	extendCeilings(shutdownCtx, log, ceilingExtender)
+	extendCeilings(shutdownCtx, log, &shutdown.Extender{
+		// The panels and drivers the bulk pass already opened: the exit
+		// budget is seconds, and it is not spent on vault reads.
+		Source:   collect.PanelsFunc(func(context.Context) ([]collect.Panel, error) { return panels.Offered(), nil }),
+		Reserves: shutdown.PostgresReserves{DB: pool},
+		Counters: cursors,
+		Health:   health,
+		Turns:    turns,
+		Log:      log,
+	})
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error("graceful shutdown failed", "error", err)
 	}
 }
-
-// ceilingExtender is nil until a Postgres-backed `shutdown.Reserves` lands;
-// the collection loop above is already running on `network.*`.
-// What the wiring buys today is the exit *order*, decided once and in one
-// place, rather than at the moment a stalled deploy makes it urgent.
-var ceilingExtender *shutdown.Extender
 
 // extendCeilings raises every active ceiling to what the user's money still
 // backs, before this process stops being able to raise any of them

@@ -122,6 +122,11 @@ type Extender struct {
 	Counters converge.Counters
 	// Health gates what may be asked (F-027-v). Nil asks every panel.
 	Health collect.PanelHealth
+	// Turns is the per-panel lock the loops hold (F-027-bu). A turn still
+	// running when the loops were told to stop finishes before this panel is
+	// written, so its ceiling pass cannot pull the extension straight back
+	// down. Nil takes no lock.
+	Turns *collect.TurnLocks
 
 	// PanelTimeout bounds one panel's slice of the exit budget.
 	PanelTimeout time.Duration
@@ -164,6 +169,9 @@ func (e *Extender) Run(ctx context.Context) (Report, error) {
 				return
 			}
 			defer func() { <-slots }()
+			if e.Turns != nil {
+				defer e.Turns.Hold(p.ID)()
+			}
 
 			one := e.extend(ctx, p)
 

@@ -39,9 +39,13 @@ call is ADR-0078.
 | **bounded** | `DefaultPanelTimeout` 5s per panel, 8 in flight, inside `HTTP_SHUTDOWN_TIMEOUT`. A budget that runs out leaves the panels it reached extended and the rest as they were — never worse than no extension |
 
 A failure is logged and never fatal: exiting non-zero over it would give the
-orchestrator a container to restart in a loop. `cmd/server` holds the exit
-**order** today; the extender is nil there until a Postgres-backed `Reserves` lands;
-the loop itself runs on `network.*` (F-027-bt).
+orchestrator a container to restart in a loop. `cmd/server` runs it first
+on the way out (F-027-bv): `shutdown.PostgresReserves` reads the share and
+`walletBackedCeilingBytes` of every `present`, enabled config with a client,
+and a config billing has not sized is left where it is. It extends the panels
+the bulk pass already opened, with their drivers and the cursor cache — the
+exit budget is not spent on vault reads — and it takes each panel's turn
+lock, so a turn still finishing cannot pull the extension back down.
 
 ## The mark, and who reads it
 
