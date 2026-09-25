@@ -89,3 +89,4 @@ repomix-output.xml
 # The previous app's archive; the port series (`F-092-*` / `F-093-*`) is done and
 # the extracted reference folder was removed 2026-09-20 — see git history
 txnetsite-perv.zip
+coinsite/flooder
