@@ -47,6 +47,8 @@ export interface GrantsPageState {
  * and a failure keeps billing's last answer, because the event was a hint and
  * not the record (D-15). The row is never patched from the payload — delivery
  * also sets the period, and a refund ends in a status this page would guess.
+ * The same quiet read follows a reconnect while a row is pending (`onMissed`),
+ * since an event sent to a dropped socket reaches nobody.
  */
 export function useGrantsPage(page: number, lang: string): GrantsPageState {
   const [rows, setRows] = useState<GrantRow[] | null>(null);
@@ -98,6 +100,11 @@ export function useGrantsPage(page: number, lang: string): GrantsPageState {
       onMessage: (payload) => {
         const settled = readGrantSettled(payload);
         if (settled && pendingIds.current.has(settled.grantId)) void quietRead();
+      },
+      // A delivery that ended while the socket was down was told to nobody,
+      // so a page still showing a pending row asks again once it is back.
+      onMissed: () => {
+        if (pendingIds.current.size > 0) void quietRead();
       },
     });
   }, [client, userId, quietRead]);

@@ -116,7 +116,10 @@ the purge countdown).
     the event is a hint and not the record (D-15). The row is never patched
     from the payload: delivery sets the period, and a refund ends in whatever
     status billing says (today `cancelled`). Only the latest read lands, so a
-    quiet read of page 1 cannot overwrite page 2.
+    quiet read of page 1 cannot overwrite page 2. A delivery that ended while the socket
+    was down went to nobody, so the same quiet read follows a reconnect
+    (`onMissed`, [contract.realtime.md](contract.realtime.md)) while a row is
+    still `pending`.
 
 ## Proof
 
@@ -129,15 +132,16 @@ delete with one refusal, a declined confirm, and a spent allowance. F-111-f:
 the "being prepared" line on a pending row only, and
 `services/_hooks/useGrantsPage.test.ts` — a delivery and a refund each re-read
 without a skeleton, an event for a row not shown pending (or with no
-`grantId`) asks nothing, a failed re-read keeps the rows, and no socket still
-reads the page.
+`grantId`) asks nothing, a failed re-read keeps the rows, a reconnect re-reads
+only while a row is pending, and no socket still reads the page;
+`lib/realtime.test.ts` — `onMissed` on a reconnect's accepted channels only.
 
 ## Not covered
 
 The `/sub` link itself (F-113, F-027) — this page is where it will go, and
 where a regenerated config's new credential will be read. Moving a config or
-adding one from here is nobody's row. A purchase ending while the socket is down is
-seen on the next read, not live — the socket is how the page hears sooner
-(`contract.realtime.md`). Filtering
+adding one from here is nobody's row. A socket that never connects at all (the
+gateway down) shows delivery on the next read, not live — the socket is how
+the page hears sooner (`contract.realtime.md`). Filtering
 or searching the list is nobody's row; so is renewing a service from here, which
 needs a checkout the panel does not have yet.

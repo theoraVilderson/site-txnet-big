@@ -92,6 +92,13 @@ export type ChannelListener = {
   onMessage: (payload: unknown) => void;
   /** A refusal for this channel. The code is a key, not a sentence. */
   onError?: (code: RealtimeErrorCode) => void;
+  /**
+   * The channel is back after a dropped socket, and anything published while
+   * it was down went to nobody — nothing is queued for a closed socket. A
+   * listener that shows a record re-reads it here. Called once the server has
+   * accepted the channel again, and never on the first connection.
+   */
+  onMissed?: () => void;
 };
 
 export type SubscribeOptions = ChannelListener & {
@@ -153,6 +160,9 @@ export class RealtimeClient {
   private socket: RealtimeSocket | null = null;
   private connection: RealtimeConnection | null = null;
   private welcomed = false;
+  /** A welcome has been heard before this one: the current socket is a reconnect. */
+  private everWelcomed = false;
+  private reconnected = false;
   private stopped = false;
   private attempt = 0;
   private maxSubscriptions = DEFAULT_MAX_SUBSCRIPTIONS;
@@ -221,7 +231,7 @@ export class RealtimeClient {
       return () => {};
     }
 
-    const listener: ChannelListener = { onMessage: options.onMessage, onError: options.onError };
+    const listener: ChannelListener = { onMessage: options.onMessage, onError: options.onError, onMissed: options.onMissed };
     if (existing) {
       // A fresh proof supersedes the one held — the caller has just been
       // handed it, and the stored one may be the expired half of a retry.
@@ -296,6 +306,8 @@ export class RealtimeClient {
 
   private onWelcome(frame: Record<string, unknown>): void {
     this.welcomed = true;
+    this.reconnected = this.everWelcomed;
+    this.everWelcomed = true;
     this.attempt = 0;
     this.credentialRetried = false;
     this.connection = {
@@ -339,6 +351,12 @@ export class RealtimeClient {
   }
 
   private onResumed(frame: Record<string, unknown>): void {
+    if (this.reconnected && Array.isArray(frame.channels)) {
+      for (const name of frame.channels) {
+        const entry = this.subscriptions.get(String(name));
+        for (const listener of [...(entry?.listeners ?? [])]) listener.onMissed?.();
+      }
+    }
     const refused = Array.isArray(frame.refused) ? frame.refused : [];
     for (const name of refused) {
       const channel = String(name);

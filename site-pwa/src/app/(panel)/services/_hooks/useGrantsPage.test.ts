@@ -61,12 +61,15 @@ const page = (...rows: Partial<GrantRow>[]) => ({
 /** A stand-in for `RealtimeClient`; the transport has its own spec. */
 function fakeClient() {
   const listeners: Array<(payload: unknown) => void> = [];
+  const missed: Array<() => void> = [];
   return {
     channels: [] as string[],
     listeners,
-    subscribe: vi.fn((channel: string, options: { onMessage: (p: unknown) => void }) => {
+    missed,
+    subscribe: vi.fn((channel: string, options: { onMessage: (p: unknown) => void; onMissed?: () => void }) => {
       client.channels.push(channel);
       listeners.push(options.onMessage);
+      if (options.onMissed) missed.push(options.onMissed);
       return vi.fn();
     }),
   };
@@ -137,6 +140,31 @@ describe("useGrantsPage — a pending Grant turning live (F-111-f)", () => {
     await waitFor(() => expect(grants).toHaveBeenCalledTimes(2));
     expect(result.current.rows?.[0].status).toBe("pending");
     expect(result.current.error).toBeNull();
+  });
+
+  it("re-reads after a reconnect while a Grant is pending — the event may have been sent to nobody", async () => {
+    const { result } = renderHook(() => useGrantsPage(1, "en"));
+    await waitFor(() => expect(result.current.rows?.[0].status).toBe("pending"));
+
+    grants.mockResolvedValue(page({ id: "g1", status: "active" }) as never);
+    await act(async () => {
+      for (const onMissed of client.missed) onMissed();
+    });
+
+    expect(result.current.isLoading).toBe(false);
+    await waitFor(() => expect(result.current.rows?.[0].status).toBe("active"));
+  });
+
+  it("asks nothing after a reconnect when nothing on the page is pending", async () => {
+    grants.mockResolvedValue(page({ id: "g2", status: "active" }) as never);
+    const { result } = renderHook(() => useGrantsPage(1, "en"));
+    await waitFor(() => expect(result.current.rows).not.toBeNull());
+
+    await act(async () => {
+      for (const onMissed of client.missed) onMissed();
+    });
+
+    expect(grants).toHaveBeenCalledTimes(1);
   });
 
   it("still reads the page with no socket at all", async () => {

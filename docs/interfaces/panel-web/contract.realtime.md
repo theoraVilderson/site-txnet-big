@@ -45,6 +45,11 @@ client.close();  // for good — no reconnect follows, on any code
 - **`onError` receives a machine key**, never a sentence —
   `realtime.channelForbidden` and its three siblings. A socket refusal does not
   pass through `locale-service`, so the screen maps the key to its own string.
+- **`onMissed` says a reconnect may have lost events.** Nothing is queued for
+  a dropped socket (`realtime/contract.fanout.md`), so after a reconnect each
+  listener of a channel the `resumed` frame accepted back is told once —
+  after the server holds the channel again, never on the first connection.
+  A screen that shows a record re-reads it there (F-111-f, My services).
 
 ## The five rules that are not obvious
 

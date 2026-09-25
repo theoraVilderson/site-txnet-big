@@ -253,6 +253,30 @@ describe("reconnecting", () => {
     expect(client.channels()).toEqual([]);
   });
 
+  it("tells a resumed channel's listeners they may have missed events — on a reconnect only", () => {
+    // Nothing is queued for a dropped socket (`realtime/contract.fanout.md`),
+    // so a listener that re-reads the record on this call is how an event sent
+    // while the socket was down still reaches the screen (F-111-f).
+    const { client, socket } = connected();
+    const missed = vi.fn();
+    const refusedToo = vi.fn();
+    client.subscribe("user:u1", { onMessage: () => {}, onMissed: missed });
+    client.subscribe("tenant:t1", { onMessage: () => {}, onMissed: refusedToo });
+    socket.emit({ type: "resumed", channels: ["user:u1", "tenant:t1"], refused: [] });
+    expect(missed).not.toHaveBeenCalled(); // the first connection missed nothing
+
+    socket.drop(4408);
+    vi.advanceTimersByTime(60_000);
+    const next = FakeSocket.live.at(-1)!;
+    next.accept();
+    welcome(next);
+    expect(missed).not.toHaveBeenCalled(); // not before the server has the channel again
+
+    next.emit({ type: "resumed", channels: ["user:u1"], refused: ["tenant:t1"] });
+    expect(missed).toHaveBeenCalledTimes(1);
+    expect(refusedToo).not.toHaveBeenCalled();
+  });
+
   it("treats 4401 as a sign-out and never reconnects", () => {
     const sessionLost = vi.fn();
     const { socket } = connected({ onSessionLost: sessionLost });
