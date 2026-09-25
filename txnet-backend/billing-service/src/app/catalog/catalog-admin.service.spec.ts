@@ -32,7 +32,7 @@
 import { FulfilmentKind, Prisma, TenantType, VariantBillingMode, VariantVisibility } from '@prisma/client';
 import { runWithTenant } from '@txnet-backend/shared-core';
 
-import { RETIRED_FULFILMENT_KINDS, createProductSchema, updateCategorySchema } from './catalog-admin.schema';
+import { RETIRED_FULFILMENT_KINDS, createProductSchema, updateCapabilitySchema, updateCategorySchema } from './catalog-admin.schema';
 import { CatalogAdminRefused, CatalogAdminService } from './catalog-admin.service';
 import { CatalogTextService, catalogTextKey } from './catalog-texts';
 
@@ -56,6 +56,12 @@ const SOLD_VARIANT = 'c0000000-0000-4000-8000-000000000004';
 const PLATFORM_GROUP = 'f0000000-0000-4000-8000-000000000001';
 const RESELLER_GROUP = 'f0000000-0000-4000-8000-000000000002';
 const OTHER_GROUP = 'f0000000-0000-4000-8000-000000000003';
+/** Capabilities (F-114-f-a): the platform's two, the reseller's own, another tenant's. */
+const PLATFORM_CAPABILITY = '90000000-0000-4000-8000-000000000001';
+const PREMIUM_CAPABILITY = '90000000-0000-4000-8000-000000000002';
+const RESELLER_CAPABILITY = '90000000-0000-4000-8000-000000000003';
+const OTHER_CAPABILITY = '90000000-0000-4000-8000-000000000004';
+const UNUSED_CAPABILITY = '90000000-0000-4000-8000-000000000005';
 
 const actor = (tenantId: string) => ({ adminId: ADMIN, tenantId, ip: '10.0.0.9' });
 
@@ -70,7 +76,9 @@ const matches = (row: Row, where: Row = {}): boolean =>
         ? (row[k] ?? null) !== (v as { not: unknown }).not
         : v !== null && typeof v === 'object' && 'in' in v
           ? (v as { in: unknown[] }).in.includes(row[k])
-          : (row[k] ?? null) === v),
+          : v !== null && typeof v === 'object' && 'has' in v
+            ? ((row[k] as unknown[] | undefined) ?? []).includes((v as { has: unknown }).has)
+            : (row[k] ?? null) === v),
   );
 
 const unique = (message: string) =>
@@ -87,7 +95,10 @@ const referenced = (message: string) =>
 function pools(db: object) {
   const calls: string[] = [];
   const pool = (name: string) => {
-    const client: Record<string, unknown> = { $executeRaw: async () => 0 };
+    // A raw statement is only ever a row lock here; logged with its SQL, so a test can see which rows and how.
+    const client: Record<string, unknown> = {
+      $executeRaw: async (sql: TemplateStringsArray) => (calls.push(`${name}:$executeRaw ${sql.join('?').replace(/\s+/g, ' ')}`), 0),
+    };
     for (const [model, delegate] of Object.entries(db)) {
       client[model] = Object.fromEntries(
         Object.entries(delegate as Row)
@@ -243,6 +254,20 @@ function build() {
       'panelGroup',
       writes,
     ),
+    productCapability: table(
+      [
+        { id: PLATFORM_CAPABILITY, tenantId: null, key: 'vpn.access', nameKey: 'catalog.capability.vpn.access.name', descriptionKey: null, sourceLang: null },
+        // Held by no product — only by another tenant's Grant.
+        { id: PREMIUM_CAPABILITY, tenantId: null, key: 'vpn.premium', nameKey: 'catalog.capability.vpn.premium.name', descriptionKey: null, sourceLang: 'fa' },
+        { id: RESELLER_CAPABILITY, tenantId: RESELLER, key: 'alpha.extra', nameKey: 'catalog.t_x.capability.alpha.extra.name', descriptionKey: null, sourceLang: 'fa' },
+        { id: OTHER_CAPABILITY, tenantId: OTHER, key: 'other.only', nameKey: 'catalog.t_y.capability.other.only.name', descriptionKey: null, sourceLang: 'fa' },
+        { id: UNUSED_CAPABILITY, tenantId: RESELLER, key: 'alpha.unused', nameKey: 'catalog.t_x.capability.alpha.unused.name', descriptionKey: 'catalog.t_x.capability.alpha.unused.description', sourceLang: 'fa' },
+      ],
+      'productCapability',
+      writes,
+      ['tenantId', 'key'],
+    ),
+    grant: table([{ id: 'a1000000-0000-4000-8000-000000000001', tenantId: OTHER, featureKeys: ['vpn.premium'] }], 'grant', writes),
     price: table(
       [{ id: RESELLER_PRICE, tenantId: RESELLER, variantId: RESELLER_VARIANT, amount: new Prisma.Decimal('5.00'), effectiveFrom: new Date('2026-01-01T00:00:00Z'), isActive: true, createdByAdminId: ADMIN }],
       'price',
@@ -493,10 +518,15 @@ describe('CatalogAdminService — names (F-1533-d)', () => {
       [catalogTextKey(RESELLER, 'product', 'vpn_alpha', 'description'), 'en'],
       [catalogTextKey(RESELLER, 'product', 'vpn_sold', 'name'), 'fa'],
       [catalogTextKey(RESELLER, 'product', 'vpn_sold', 'description'), 'fa'],
+      // Its own capabilities too (F-114-f-a), never the platform's.
+      [catalogTextKey(RESELLER, 'capability', 'alpha.extra', 'name'), 'fa'],
+      [catalogTextKey(RESELLER, 'capability', 'alpha.extra', 'description'), 'fa'],
+      [catalogTextKey(RESELLER, 'capability', 'alpha.unused', 'name'), 'fa'],
+      [catalogTextKey(RESELLER, 'capability', 'alpha.unused', 'description'), 'fa'],
     ]);
-    // 2 categories + 4 products × (name, description)
-    expect(await service.listTextDrafts(actor(OWNER))).toHaveLength(10);
-    await expect(service.draftMissingTexts(actor(RESELLER))).resolves.toEqual({ drafted: 4 });
+    // 2 categories + (4 products + 5 capabilities) × (name, description)
+    expect(await service.listTextDrafts(actor(OWNER))).toHaveLength(20);
+    await expect(service.draftMissingTexts(actor(RESELLER))).resolves.toEqual({ drafted: 8 });
   });
 
   it('writes in the source language the admin picks, and drafts every other language from it when asked', async () => {
@@ -868,5 +898,92 @@ describe('CatalogAdminService — every other language is drafted only on reques
     expect(createProductSchema.parse(NEW_PRODUCT).translateAll).toBeUndefined();
     expect(createProductSchema.safeParse({ ...NEW_PRODUCT, translateAll: 'yes' }).success).toBe(false);
     expect(updateCategorySchema.safeParse({ name: { fa: 'x' }, translateAll: true }).success).toBe(true);
+  });
+});
+
+describe('CatalogAdminService — capabilities are catalog rows (F-114-f-a, ADR-0086)', () => {
+  const locks = (calls: string[], how: string) => calls.filter((c) => c.includes('$executeRaw') && c.includes('product_capability') && c.includes(how));
+
+  it("lists the platform's capabilities and the caller's own to a reseller, and every one with its tenant to the owner", async () => {
+    const { service } = build();
+    expect((await service.listCapabilities(actor(RESELLER))).map((c) => c.key).sort()).toEqual(['alpha.extra', 'alpha.unused', 'vpn.access', 'vpn.premium']);
+    const all = await service.listCapabilities(actor(OWNER));
+    expect(all.find((c) => c.key === 'other.only')).toMatchObject({ tenantId: OTHER });
+    // A row the migration wrote from a key in use has no source language of its own.
+    expect(all.find((c) => c.key === 'vpn.access')).toMatchObject({ tenantId: null, sourceLang: 'fa' });
+  });
+
+  it("lets a product carry the platform's capabilities and its own tenant's, and refuses any other key before writing", async () => {
+    const { service, writes, calls } = build();
+    await expect(service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, featureKeys: ['vpn.access', 'alpha.extra'] })).resolves.toMatchObject({
+      featureKeys: ['vpn.access', 'alpha.extra'],
+    });
+    expect(locks(calls, 'FOR SHARE')).toHaveLength(1);
+    writes.length = 0;
+    const foreign = await refusal(() => service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, key: 'vpn_x', featureKeys: ['vpn.access', 'other.only'] }));
+    expect([foreign.reason, foreign.message]).toEqual(['capability_unknown', expect.stringContaining('other.only')]);
+    expect((await refusal(() => service.updateProduct(actor(RESELLER), RESELLER_PRODUCT, { featureKeys: ['typed.by_hand'] }))).reason).toBe('capability_unknown');
+    expect(writes).toEqual([]);
+  });
+
+  it("judges a product the owner writes for a tenant by that tenant's capabilities, not the owner's view of all", async () => {
+    const { service } = build();
+    expect((await refusal(() => service.createProduct(actor(OWNER), { ...NEW_PRODUCT, tenantId: null, featureKeys: ['alpha.extra'] }))).reason).toBe('capability_unknown');
+    await expect(service.createProduct(actor(OWNER), { ...NEW_PRODUCT, tenantId: OTHER, featureKeys: ['other.only'] })).resolves.toMatchObject({ tenantId: OTHER });
+  });
+
+  it("creates a reseller's capability under its own prefix, named and audited, and refuses a key it can already see", async () => {
+    const { service, audit, texts } = build();
+    const created = await service.createCapability(actor(RESELLER), { key: 'alpha.speed', name: { fa: 'سرعت بالا' } });
+    const nameKey = catalogTextKey(RESELLER, 'capability', 'alpha.speed', 'name');
+    expect(created).toMatchObject({ tenantId: RESELLER, key: 'alpha.speed', nameKey, sourceLang: 'fa' });
+    expect(texts).toEqual([`publish ${nameKey} fa=سرعت بالا`]);
+    expect(audit).toEqual([expect.objectContaining({ action: 'catalog_capability_create', targetEntityType: 'product_capability', targetEntityId: created.id })]);
+    expect((await refusal(() => service.createCapability(actor(RESELLER), { key: 'vpn.access', name: { fa: 'x' } }))).reason).toBe('key_taken');
+    expect((await refusal(() => service.createCapability(actor(RESELLER), { key: 'alpha.extra', name: { fa: 'x' } }))).reason).toBe('key_taken');
+    expect((await refusal(() => service.createCapability(actor(RESELLER), { tenantId: null, key: 'vpn.new', name: { fa: 'x' } }))).reason).toBe('not_platform_owner');
+  });
+
+  it("refuses the owner a platform key a tenant already holds — that tenant would see it twice", async () => {
+    const { service } = build();
+    expect((await refusal(() => service.createCapability(actor(OWNER), { tenantId: null, key: 'other.only', name: { fa: 'x' } }))).reason).toBe('key_taken');
+    await expect(service.createCapability(actor(OWNER), { tenantId: null, key: 'vpn.new', name: { fa: 'x' } })).resolves.toMatchObject({ tenantId: null });
+  });
+
+  it("renames a capability and never changes its key; another tenant's and the platform's are not found to a reseller", async () => {
+    const { service, db } = build();
+    const renamed = await service.updateCapability(actor(RESELLER), RESELLER_CAPABILITY, { name: { fa: 'ویژه' } });
+    expect(renamed).toMatchObject({ key: 'alpha.extra', nameKey: catalogTextKey(RESELLER, 'capability', 'alpha.extra', 'name') });
+    expect(updateCapabilitySchema.safeParse({ key: 'alpha.other' }).success).toBe(false);
+    expect((await refusal(() => service.updateCapability(actor(RESELLER), OTHER_CAPABILITY, { name: { fa: 'x' } }))).reason).toBe('capability_not_found');
+    expect((await refusal(() => service.updateCapability(actor(RESELLER), PLATFORM_CAPABILITY, { name: { fa: 'x' } }))).reason).toBe('capability_not_found');
+    expect(db.productCapability.rows.find((r) => r['id'] === PLATFORM_CAPABILITY)).toMatchObject({ nameKey: 'catalog.capability.vpn.access.name' });
+  });
+
+  it('deletes a capability nothing holds, after locking it, audited and its texts cleared', async () => {
+    const { service, db, audit, texts, calls } = build();
+    await expect(service.removeCapability(actor(RESELLER), UNUSED_CAPABILITY)).resolves.toEqual({ id: UNUSED_CAPABILITY, outcome: 'deleted' });
+    expect(db.productCapability.rows.some((r) => r['id'] === UNUSED_CAPABILITY)).toBe(false);
+    expect(locks(calls, 'FOR UPDATE')).toHaveLength(1);
+    expect(audit).toEqual([expect.objectContaining({ action: 'catalog_capability_delete', targetEntityId: UNUSED_CAPABILITY })]);
+    expect(texts).toEqual(['clear catalog.t_x.capability.alpha.unused.name', 'clear catalog.t_x.capability.alpha.unused.description']);
+  });
+
+  it('keeps a capability a product holds, and a platform one only another tenant’s Grant holds — capability_in_use', async () => {
+    const { service, db, writes } = build();
+    expect((await refusal(() => service.removeCapability(actor(OWNER), PLATFORM_CAPABILITY))).reason).toBe('capability_in_use');
+    expect((await refusal(() => service.removeCapability(actor(OWNER), PREMIUM_CAPABILITY))).reason).toBe('capability_in_use');
+    expect((await refusal(() => service.removeCapability(actor(RESELLER), PLATFORM_CAPABILITY))).reason).toBe('capability_not_found');
+    expect(db.productCapability.rows).toHaveLength(5);
+    expect(writes).toEqual([]);
+  });
+
+  it("reviews a capability's translation like a product's: the caller's own only, audited on the capability", async () => {
+    const { service, audit } = build();
+    const own = catalogTextKey(RESELLER, 'capability', 'alpha.extra', 'name');
+    await expect(service.publishTextDrafts(actor(RESELLER), { lang: 'de', keys: [own] })).resolves.toEqual({ published: 1 });
+    expect(audit).toEqual([expect.objectContaining({ action: 'catalog_capability_update', targetEntityType: 'product_capability', targetEntityId: RESELLER_CAPABILITY })]);
+    const foreign = catalogTextKey(OTHER, 'capability', 'other.only', 'name');
+    expect((await refusal(() => service.publishTextDrafts(actor(RESELLER), { lang: 'de', keys: [foreign] }))).reason).toBe('capability_not_found');
   });
 });

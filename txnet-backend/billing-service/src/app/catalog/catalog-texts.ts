@@ -23,7 +23,8 @@ import { CatalogAdminRefused } from './catalog-admin.service';
 export const CATALOG_NAMESPACE = 'catalog';
 const WRITE_SCOPE = 'shareds';
 
-export type CatalogTextKind = 'category' | 'product';
+/** `capability` (F-114-f-a, ADR-0086): its key is a dotted feature key, `vpn.access`. */
+export type CatalogTextKind = 'category' | 'product' | 'capability';
 export type CatalogTextField = 'name' | 'description';
 /** Text by language code, e.g. `{ fa: 'وی‌پی‌ان' }`. */
 export type Texts = Record<string, string>;
@@ -55,7 +56,7 @@ export type ReviewItem = {
   source: { lang: string; text: string | null };
 };
 
-const KEY_RE = /^catalog\.(?:t_([0-9a-f]{32})\.)?(category|product)\.([a-z][a-z0-9_]{1,63})\.(name|description)$/;
+const KEY_RE = /^catalog\.(?:t_([0-9a-f]{32})\.)?(?:(category|product)\.([a-z][a-z0-9_]{1,63})|(capability)\.([a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+))\.(name|description)$/;
 
 const hex = (uuid: string) => uuid.replace(/-/g, '').toLowerCase();
 const uuidOf = (h: string) => `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
@@ -71,7 +72,7 @@ export function parseCatalogTextKey(
 ): { tenantId: string | null; kind: CatalogTextKind; key: string; field: CatalogTextField } | null {
   const m = KEY_RE.exec(full);
   if (!m) return null;
-  return { tenantId: m[1] ? uuidOf(m[1]) : null, kind: m[2] as CatalogTextKind, key: m[3], field: m[4] as CatalogTextField };
+  return { tenantId: m[1] ? uuidOf(m[1]) : null, kind: (m[2] ?? m[4]) as CatalogTextKind, key: m[3] ?? m[5], field: m[6] as CatalogTextField };
 }
 
 const entryKey = (full: string) => full.slice(CATALOG_NAMESPACE.length + 1);

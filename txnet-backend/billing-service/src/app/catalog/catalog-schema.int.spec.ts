@@ -7,7 +7,9 @@
  * yesterday's invoice is computed at yesterday's price (F-0602); a variant and
  * its prices belong to their product's tenant, and go with it only when
  * nothing references the variant (F-026-h); a SKU is unique inside a tenant;
- * and a coupon's service scope names exactly one product or one variant.
+ * a coupon's service scope names exactly one product or one variant; and a
+ * capability's key is unique among what one tenant sees, while a product's
+ * `featureKeys` is checked under a lock the service's raw SQL takes (F-114-f-a).
  *
  *   npm run test:int
  */
@@ -21,6 +23,8 @@ import {
   startPostgresFixture,
 } from '../../../../test-support/postgres-fixture';
 import { PrismaService } from '../prisma/prisma.service';
+import { CatalogAdminRefused, CatalogAdminService } from './catalog-admin.service';
+import type { CatalogTextService } from './catalog-texts';
 
 vi.setConfig({ testTimeout: HARNESS_TIMEOUT_MS, hookTimeout: HARNESS_TIMEOUT_MS });
 
@@ -248,5 +252,45 @@ describe("a coupon's service scope", () => {
     await expect(scope(null, PLATFORM_VARIANT)).resolves.toBe(1);
     await expect(scope(null, null)).rejects.toThrow(/coupon_service_scope_names_one/);
     await expect(scope(PLATFORM_PRODUCT, PLATFORM_VARIANT)).rejects.toThrow(/coupon_service_scope_names_one/);
+  });
+});
+
+describe('capabilities are catalog rows (F-114-f-a, ADR-0086)', () => {
+  const capability = (tenantId: string | null, key: string) =>
+    owner.$executeRawUnsafe(`INSERT INTO catalog.product_capability (id, "tenantId", key, "nameKey") VALUES (gen_random_uuid(), ${q(tenantId)}, '${key}', 'n')`);
+
+  beforeAll(async () => {
+    await capability(null, 'vpn.access');
+    await capability(RESELLER_A, 'alpha.extra');
+    await capability(RESELLER_B, 'beta.only');
+  });
+
+  it("are read shared: a tenant sees the platform's and its own, and writes no platform row", async () => {
+    const keys = await asTenant(RESELLER_A, async (tx) => (await tx.productCapability.findMany({ select: { key: true } })).map((c) => c.key).sort());
+    expect(keys).toEqual(['alpha.extra', 'vpn.access']);
+    await expect(asTenant(RESELLER_A, (tx) => tx.productCapability.create({ data: { tenantId: null, key: 'vpn.new', nameKey: 'n' } }))).rejects.toThrow();
+  });
+
+  it("refuses a tenant key the platform holds, and a platform key a tenant holds — one tenant would see it twice", async () => {
+    await expect(capability(RESELLER_A, 'vpn.access')).rejects.toThrow(/capability_key_taken/);
+    await expect(capability(null, 'beta.only')).rejects.toThrow(/capability_key_taken/);
+    await expect(capability(RESELLER_B, 'alpha.extra')).resolves.toBe(1);
+  });
+
+  it("lets a tenant's product carry the platform's and its own keys and refuses another tenant's, through the service's locking SQL", async () => {
+    const texts = { defaultLanguage: () => 'fa', languages: () => ['fa'], publishSources: async () => undefined, clear: async () => undefined };
+    const service = new CatalogAdminService(app, cross as unknown as never, texts as unknown as CatalogTextService);
+    const as = { adminId: ADMIN, tenantId: RESELLER_A, ip: '10.0.0.1' };
+    const input = { categoryIds: [CATEGORY], name: { fa: 'x' }, fulfilmentKind: 'network_access' as const };
+    const create = (key: string, featureKeys: string[]) => runWithTenant({ id: RESELLER_A }, () => service.createProduct(as, { ...input, key, featureKeys }));
+
+    await expect(create('vpn_caps', ['vpn.access', 'alpha.extra'])).resolves.toMatchObject({ featureKeys: ['vpn.access', 'alpha.extra'] });
+    const refused = await create('vpn_foreign', ['beta.only']).catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(CatalogAdminRefused);
+    expect((refused as CatalogAdminRefused).reason).toBe('capability_unknown');
+    // Held now: the delete's row lock and count run on the same database.
+    const id = (await owner.productCapability.findFirstOrThrow({ where: { tenantId: RESELLER_A, key: 'alpha.extra' } })).id;
+    const held = await runWithTenant({ id: RESELLER_A }, () => service.removeCapability(as, id)).catch((e: unknown) => e);
+    expect((held as CatalogAdminRefused).reason).toBe('capability_in_use');
   });
 });

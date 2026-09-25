@@ -58,6 +58,11 @@ enum AdminAction {
   catalog_category_update
   catalog_category_delete
   catalog_category_archive
+  // F-114-f-a (ADR-0086) — a capability a product may unlock. A delete is
+  // only one nothing holds.
+  catalog_capability_create
+  catalog_capability_update
+  catalog_capability_delete
   catalog_product_create
   catalog_product_update
   catalog_product_delete
@@ -112,6 +117,8 @@ enum AuditTargetType {
   // F-026-d. Catalog management audits the item it touched; a price is its
   // own target because it is written as history, never as an edit.
   product_category
+  // F-114-f-a.
+  product_capability
   product
   product_variant
   price

@@ -2,7 +2,7 @@
 id: catalog
 layer: domain
 status: draft
-version: 5
+version: 6
 updated: 2026-09-25
 ---
 
@@ -15,7 +15,7 @@ another service asks the same question (F-018-ah); management built
 (F-026-d) at `/api/catalog` — `catalog/catalog-admin.*`, proved by
 `catalog-admin.service.spec.ts`; the same management for a **named** reseller
 (F-066-w7) at `/api/catalog/tenants/:tenantId/...` — `catalog/reseller-catalog.*`,
-proved by `reseller-catalog.service.spec.ts`.** Decisions: ADR-0049, ADR-0064, ADR-0073.
+proved by `reseller-catalog.service.spec.ts`.** Decisions: ADR-0049, ADR-0064, ADR-0073, ADR-0086.
 
 ## HTTP surface (F-026-d)
 
@@ -37,7 +37,10 @@ cross-tenant pool.
 | `POST /categories/remove` (F-026-j/l/r) | `ids[]` (1-100, distinct), `withProducts?` | `[{id, outcome, products?}]`, `outcome` `deleted` / `archived` (only with `withProducts`) / `has_products` / `has_children` (a category sits under it; nothing touched) / `not_found`, each id on its own; `products: {deleted, archived, unlinked}` with `withProducts` | — (a refusal is that id's `not_found`) |
 | `GET /products` | `categoryId?` (filed in it, first or not), `tenantId?` (owner: uuid or `platform`), `archived?` (only `true`: the archived alone; without it they are left out) | products, each with `categoryIds` and `archivedAt` | — |
 | `POST /products/remove` (F-026-h) | `ids[]` (1-100, distinct) | `[{id, outcome}]`, `outcome` `deleted` / `archived` / `not_found`, each id on its own | — (a refusal is that id's `not_found`) |
-| `POST /products`, `GET\|PATCH /products/:id` | `categoryIds[]` (F-026-r: 1-20, distinct, the first shown first; a patch replaces them all), `key`, `sourceLang?`, `name: {lang: text}`, `description?: {lang: text} \| null`, `translateAll?` (F-1533-i, create and patch), `fulfilmentKind` (never `wallet_topup` — retired, F-111-g: top-ups are the deposit page — nor `external_order` — retired, F-111-h, until a real provider exists; the schema's `RETIRED_FULFILMENT_KINDS`, a 400), `featureKeys?`, `defaultQuotas?`; patch has no key or kind, and `archived: false` brings an archived product back (still off) | product; `GET` with variants and each price history | `category_not_found` (another tenant's category), `product_not_found`, `key_taken`, `lang_unknown`, `source_text_missing`, `texts_unavailable` |
+| `POST /products`, `GET\|PATCH /products/:id` | `categoryIds[]` (F-026-r: 1-20, distinct, the first shown first; a patch replaces them all), `key`, `sourceLang?`, `name: {lang: text}`, `description?: {lang: text} \| null`, `translateAll?` (F-1533-i, create and patch), `fulfilmentKind` (never `wallet_topup` — retired, F-111-g: top-ups are the deposit page — nor `external_order` — retired, F-111-h, until a real provider exists; the schema's `RETIRED_FULFILMENT_KINDS`, a 400), `featureKeys?`, `defaultQuotas?`; patch has no key or kind, and `archived: false` brings an archived product back (still off) | product; `GET` with variants and each price history | `category_not_found` (another tenant's category), `capability_unknown` 400 (a `featureKeys` entry that is not the platform's capability or the product's tenant's, F-114-f-a), `product_not_found`, `key_taken`, `lang_unknown`, `source_text_missing`, `texts_unavailable` |
+| `GET /capabilities` (F-114-f-a) | — | the platform's and the caller's own (owner: all), each `{id, tenantId, key, nameKey, descriptionKey, sourceLang}` by key | — |
+| `POST /capabilities`, `PATCH /capabilities/:id` | `tenantId?`, `key` (the feature-key shape, `vpn.access`), `sourceLang?`, `name`, `description?`, `translateAll?`; patch has no key | capability | `key_taken` 409 (a key the new row's tenant already sees; for a platform row, a key any tenant holds), `not_platform_owner`, `capability_not_found` 404, the text refusals |
+| `POST /capabilities/:id/remove` | — | `{id, outcome: 'deleted'}` | `capability_in_use` 409 (a product or a Grant holds the key — a platform one counted across tenants), `capability_not_found` |
 | `POST /products/:id/variants`, `PATCH /variants/:id` | `sku`, `billingMode`, `visibility`, `quotas?`, `durationDays?`, `panelGroupId?`, `qualityTier?`, first `price`; patch has no SKU or billing mode | variant with prices | `variant_not_found`, `sku_taken`, `price_in_the_past`, `panel_group_not_found` (a group that is neither the platform's nor the variant's tenant's, F-027-bk) |
 | `GET /panel-groups` (F-026-p) | — | `[{id, tenantId, name, strategy, protocols, healthyMembers}]` by name (`protocols`: what its members' picked inbounds sell, sorted, F-114-b — empty = nothing is placed): the groups a variant may name — the platform's and the caller's own (owner: all, so a variant is offered only the platform's and its own tenant's). `healthyMembers` counts what fulfilment places on now (`placeableMember`: not `drain`, accepted, `healthy`); only `mirror` is fulfilled | — |
 | `POST /variants/:id/prices` | `amount`, `effectiveFrom?` (default now; never in the past) | a **new** price row | `variant_not_found`, `price_in_the_past` 400 |
@@ -83,7 +86,21 @@ surface is untouched and stays what a tenant managing its **own** catalog uses.
 | Refusals: `not_allowed` 403, `reseller_not_found` 404, `reseller_suspended` 403, `reseller_terminated` 409, then every reason above | `ResellerCatalogRefused` |
 | One rate-limit bucket per caller across both surfaces — the same person doing the same work (`catalog-admin.rate-limit.ts`) | `CATALOG_ADMIN_READ` / `_WRITE` |
 
-The panel screen over it is F-066-w8.
+The panel screen over it is F-066-w8. The capability routes are there too.
+
+## Capabilities (F-114-f-a, ADR-0086)
+
+A product's `featureKeys` are keys of `product_capability` rows; a Grant still
+copies the strings (`catalog/catalog-admin.service.ts`, proved by
+`catalog-admin.service.spec.ts` and `catalog-schema.int.spec.ts`).
+
+| Rule | Held by |
+|---|---|
+| A product may carry the platform's capabilities and its own tenant's, judged by the **product's** tenant (the owner writing a tenant's product sees no more) | `knownCapabilities` |
+| The check locks those rows `FOR SHARE`; a delete locks its row `FOR UPDATE`, then counts products and Grants holding the key — so neither slips past the other | `knownCapabilities`, `removeCapability` |
+| A key is unique among what one tenant sees: a tenant's never repeats the platform's, nor the platform's a tenant's | partial unique indexes + trigger `capability_key_free` |
+| The key never changes; the name is text of kind `capability` (`catalog.[t_<hex>.]capability.<key>.name`), reviewed like a product's | `catalogTextKey`, `TEXT_ITEMS` |
+| A row the migration wrote from a key in use has no text: a reader falls back to the key | migration `20260925001400` |
 
 ## Names (F-1533-d/f, ADR-0050 and its amendments)
 

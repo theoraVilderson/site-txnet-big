@@ -73,7 +73,9 @@ const quotas = z.record(
   z.object({ limit: z.number().int().min(0), resetPolicy: z.enum(RESET_POLICIES) }).strict(),
 );
 
-const featureKeys = z.array(z.string().regex(FEATURE_KEY, { message: 'a feature key looks like vpn.access' })).max(50);
+const featureKey = z.string().max(100).regex(FEATURE_KEY, { message: 'a feature key looks like vpn.access' });
+/** Each must be a capability the product's tenant can see (F-114-f-a) — the service's check, `capability_unknown`. */
+const featureKeys = z.array(featureKey).max(50);
 
 /** The category one sits under (F-026-r); `null` = top level. Depth and cycles are the service's. */
 const parentId = uuid('parentId').nullable().optional();
@@ -143,6 +145,26 @@ export const updateProductSchema = z
   })
   .strict();
 
+/**
+ * A capability (F-114-f-a, ADR-0086): the key is the one a product's
+ * `featureKeys` carries, written once and never changed; the name is text,
+ * like a product's.
+ */
+export const createCapabilitySchema = z
+  .object({
+    tenantId: uuid('tenantId').nullable().optional(),
+    key: featureKey,
+    sourceLang: lang.optional(),
+    name: texts(NAME_MAX),
+    description: texts(DESCRIPTION_MAX).nullable().optional(),
+    translateAll,
+  })
+  .strict();
+
+export const updateCapabilitySchema = z
+  .object({ sourceLang: lang.optional(), name: texts(NAME_MAX).optional(), description: texts(DESCRIPTION_MAX).nullable().optional(), translateAll })
+  .strict();
+
 /** F-026-h: up to 100 distinct products, each answered on its own. F-026-j: the same body for categories. */
 export const removeProductsSchema = z
   .object({ ids: z.array(uuid('ids')).min(1).max(100).refine((ids) => new Set(ids).size === ids.length, 'ids must be distinct') })
@@ -191,6 +213,7 @@ export const editTextsSchema = z
  */
 export const createResellerCategorySchema = createCategorySchema.omit({ tenantId: true }).strict();
 export const createResellerProductSchema = createProductSchema.omit({ tenantId: true }).strict();
+export const createResellerCapabilitySchema = createCapabilitySchema.omit({ tenantId: true }).strict();
 export const listResellerProductsSchema = listProductsSchema.omit({ tenantId: true }).strict();
 
 export type CreateCategoryBody = z.infer<typeof createCategorySchema>;
@@ -199,6 +222,9 @@ export type ListProductsQuery = z.infer<typeof listProductsSchema>;
 export type ListCategoriesQuery = z.infer<typeof listCategoriesSchema>;
 export type CreateProductBody = z.infer<typeof createProductSchema>;
 export type UpdateProductBody = z.infer<typeof updateProductSchema>;
+export type CreateCapabilityBody = z.infer<typeof createCapabilitySchema>;
+export type UpdateCapabilityBody = z.infer<typeof updateCapabilitySchema>;
+export type CreateResellerCapabilityBody = z.infer<typeof createResellerCapabilitySchema>;
 export type RemoveProductsBody = z.infer<typeof removeProductsSchema>;
 export type RemoveCategoriesBody = z.infer<typeof removeCategoriesSchema>;
 export type CreateVariantBody = z.infer<typeof createVariantSchema>;

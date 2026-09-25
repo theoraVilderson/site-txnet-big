@@ -25,6 +25,7 @@ import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { CATALOG_ADMIN_READ as READ, CATALOG_ADMIN_WRITE as WRITE } from './catalog-admin.rate-limit';
 import {
+  CreateCapabilityBody,
   CreateCategoryBody,
   CreateProductBody,
   CreateVariantBody,
@@ -36,9 +37,11 @@ import {
   ListCategoriesQuery,
   RemoveProductsBody,
   SetPriceBody,
+  UpdateCapabilityBody,
   UpdateCategoryBody,
   UpdateProductBody,
   UpdateVariantBody,
+  createCapabilitySchema,
   createCategorySchema,
   createProductSchema,
   createVariantSchema,
@@ -50,6 +53,7 @@ import {
   listCategoriesSchema,
   removeProductsSchema,
   setPriceSchema,
+  updateCapabilitySchema,
   updateCategorySchema,
   updateProductSchema,
   updateVariantSchema,
@@ -59,12 +63,14 @@ import {
   CatalogAdminRefused,
   CatalogAdminRejection,
   CatalogAdminService,
+  CreateCapabilityInput,
   CreateCategoryInput,
   CreateProductInput,
   CreateVariantInput,
   EditTextsInput,
   PublishTextsInput,
   SetPriceInput,
+  UpdateCapabilityInput,
   UpdateCategoryInput,
   UpdateProductInput,
 } from './catalog-admin.service';
@@ -88,6 +94,9 @@ export const CATALOG_REFUSAL_STATUS: Record<CatalogAdminRejection, 400 | 403 | 4
   source_text_missing: 400,
   category_cycle: 409,
   category_too_deep: 400,
+  capability_not_found: 404,
+  capability_unknown: 400,
+  capability_in_use: 409,
 };
 
 
@@ -149,6 +158,39 @@ export class CatalogAdminController {
   @RateLimit(WRITE)
   async removeCategories(@Body(new ZodValidationPipe(removeCategoriesSchema)) body: RemoveCategoriesBody, @Req() req: Request, @Ip() ip: string) {
     return this.refusing(() => this.catalog.removeCategories(this.actor(req, ip), body.ids as string[], body.withProducts === true));
+  }
+
+  /** F-114-f-a: the platform's capabilities and the caller's own; every one, with its tenant, for the platform owner. */
+  @Get('capabilities')
+  @RateLimit(READ)
+  async listCapabilities(@Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.catalog.listCapabilities(this.actor(req, ip)));
+  }
+
+  @Post('capabilities')
+  @HttpCode(HttpStatus.CREATED)
+  @RateLimit(WRITE)
+  async createCapability(@Body(new ZodValidationPipe(createCapabilitySchema)) body: CreateCapabilityBody, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.catalog.createCapability(this.actor(req, ip), body as CreateCapabilityInput));
+  }
+
+  @Patch('capabilities/:id')
+  @RateLimit(WRITE)
+  async updateCapability(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(updateCapabilitySchema)) body: UpdateCapabilityBody,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    return this.refusing(() => this.catalog.updateCapability(this.actor(req, ip), id, body as UpdateCapabilityInput));
+  }
+
+  /** Deleted, or `capability_in_use` while a product or a Grant holds its key. */
+  @Post('capabilities/:id/remove')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(WRITE)
+  async removeCapability(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.catalog.removeCapability(this.actor(req, ip), id));
   }
 
   @Get('products')

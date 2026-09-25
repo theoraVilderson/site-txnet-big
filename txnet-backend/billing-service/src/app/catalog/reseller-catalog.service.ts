@@ -14,7 +14,9 @@ import {
   CatalogAdminService,
   CategoryRemovalOutcome,
   ListCategoriesFilter,
+  CapabilityView,
   CategoryView,
+  CreateCapabilityInput,
   CreateCategoryInput,
   CreateProductInput,
   CreateVariantInput,
@@ -26,6 +28,7 @@ import {
   RemovalOutcome,
   PublishTextsInput,
   SetPriceInput,
+  UpdateCapabilityInput,
   UpdateCategoryInput,
   UpdateProductInput,
   UpdateVariantInput,
@@ -53,6 +56,7 @@ export class ResellerCatalogRefused extends Error {
 /** A create body on this surface: `tenantId` is the path's, so it is not a key a client may send. */
 export type ResellerCreateCategoryInput = Omit<CreateCategoryInput, 'tenantId'>;
 export type ResellerCreateProductInput = Omit<CreateProductInput, 'tenantId'>;
+export type ResellerCreateCapabilityInput = Omit<CreateCapabilityInput, 'tenantId'>;
 /** A list on this surface: the tenant is the path's, so only the category narrows it. */
 export type ResellerProductFilter = Omit<ListProductsFilter, 'tenantId'>;
 
@@ -122,6 +126,25 @@ export class ResellerCatalogService {
 
   removeCategories(actor: ResellerCatalogActor, tenantId: string, ids: string[], withProducts = false): Promise<CategoryRemovalOutcome[]> {
     return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.removeCategories(as, ids, withProducts));
+  }
+
+  // -------------------------------------------------------------- capabilities
+
+  /** F-114-f-a: the platform's and this reseller's own. */
+  listCapabilities(actor: ResellerCatalogActor, tenantId: string): Promise<CapabilityView[]> {
+    return this.run(actor, tenantId, 'read', (as) => this.catalog.listCapabilities(as));
+  }
+
+  createCapability(actor: ResellerCatalogActor, tenantId: string, input: ResellerCreateCapabilityInput): Promise<CapabilityView> {
+    return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.createCapability(as, { ...input, tenantId: as.tenantId }));
+  }
+
+  updateCapability(actor: ResellerCatalogActor, tenantId: string, id: string, patch: UpdateCapabilityInput): Promise<CapabilityView> {
+    return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.updateCapability(as, id, patch));
+  }
+
+  removeCapability(actor: ResellerCatalogActor, tenantId: string, id: string): Promise<{ id: string; outcome: 'deleted' }> {
+    return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.removeCapability(as, id));
   }
 
   // ------------------------------------------------------------------ products

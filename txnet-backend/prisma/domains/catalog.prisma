@@ -80,6 +80,29 @@ model ProductCategory {
   @@schema("catalog")
 }
 
+/// Something a Grant of a product unlocks (F-114-f-a, ADR-0086): a product's
+/// `featureKeys` may name only a row its tenant can see — the platform's
+/// (`tenantId` null, seen by every tenant) or its own. The key is unique among
+/// what one tenant sees and never changes: products and Grants hold it as a
+/// string. The name is text in `catalog-texts` (kind `capability`).
+model ProductCapability {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String?  @db.Uuid
+  /// `vpn.access`. Immutable.
+  key            String
+  nameKey        String
+  descriptionKey String?
+  /// The language the name was written in; null = DEFAULT_LANGUAGE (a row the
+  /// migration wrote from a key already in use, named after the key).
+  sourceLang     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
+
+  @@index([tenantId])
+  @@map("product_capability")
+  @@schema("catalog")
+}
+
 /// The marketing object (§4.2). Name and description are i18n keys (§4.3).
 model Product {
   id             String         @id @default(uuid()) @db.Uuid
@@ -91,7 +114,8 @@ model Product {
   /// (F-1533-f). Null = DEFAULT_LANGUAGE (older rows).
   sourceLang     String?
   fulfilmentKind FulfilmentKind
-  /// What a Grant of this product unlocks (§4.4).
+  /// What a Grant of this product unlocks (§4.4): keys of `ProductCapability`
+  /// rows its tenant can see (F-114-f-a).
   featureKeys    String[]       @default([])
   /// Quotas a new variant starts from, by metric (§4.5).
   defaultQuotas  Json           @default("{}")

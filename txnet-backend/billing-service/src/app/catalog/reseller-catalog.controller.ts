@@ -24,6 +24,7 @@ import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { CATALOG_ADMIN_READ as READ, CATALOG_ADMIN_WRITE as WRITE } from './catalog-admin.rate-limit';
 import {
+  CreateResellerCapabilityBody,
   CreateResellerCategoryBody,
   CreateResellerProductBody,
   CreateVariantBody,
@@ -35,9 +36,11 @@ import {
   ListCategoriesQuery,
   RemoveProductsBody,
   SetPriceBody,
+  UpdateCapabilityBody,
   UpdateCategoryBody,
   UpdateProductBody,
   UpdateVariantBody,
+  createResellerCapabilitySchema,
   createResellerCategorySchema,
   createResellerProductSchema,
   createVariantSchema,
@@ -49,6 +52,7 @@ import {
   listCategoriesSchema,
   removeProductsSchema,
   setPriceSchema,
+  updateCapabilitySchema,
   updateCategorySchema,
   updateProductSchema,
   updateVariantSchema,
@@ -58,6 +62,7 @@ import {
   EditTextsInput,
   PublishTextsInput,
   SetPriceInput,
+  UpdateCapabilityInput,
   UpdateCategoryInput,
   UpdateProductInput,
 } from './catalog-admin.service';
@@ -66,6 +71,7 @@ import {
   ResellerCatalogRefused,
   ResellerCatalogRejection,
   ResellerCatalogService,
+  ResellerCreateCapabilityInput,
   ResellerCreateCategoryInput,
   ResellerCreateProductInput,
 } from './reseller-catalog.service';
@@ -95,6 +101,9 @@ const STATUS: Record<ResellerCatalogRejection, 400 | 403 | 404 | 409 | 503> = {
   source_text_missing: 400,
   category_cycle: 409,
   category_too_deep: 400,
+  capability_not_found: 404,
+  capability_unknown: 400,
+  capability_in_use: 409,
 };
 
 /**
@@ -174,6 +183,49 @@ export class ResellerCatalogController {
     @Ip() ip: string,
   ) {
     return this.refusing(() => this.catalog.removeCategories(this.actor(req, ip), tenantId, body.ids as string[], body.withProducts === true));
+  }
+
+  /** F-114-f-a: the capabilities this reseller's products may carry — the platform's and its own. */
+  @Get('capabilities')
+  @RateLimit(READ)
+  async listCapabilities(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.catalog.listCapabilities(this.actor(req, ip), tenantId));
+  }
+
+  @Post('capabilities')
+  @HttpCode(HttpStatus.CREATED)
+  @RateLimit(WRITE)
+  async createCapability(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Body(new ZodValidationPipe(createResellerCapabilitySchema)) body: CreateResellerCapabilityBody,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    return this.refusing(() => this.catalog.createCapability(this.actor(req, ip), tenantId, body as ResellerCreateCapabilityInput));
+  }
+
+  @Patch('capabilities/:id')
+  @RateLimit(WRITE)
+  async updateCapability(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(updateCapabilitySchema)) body: UpdateCapabilityBody,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    return this.refusing(() => this.catalog.updateCapability(this.actor(req, ip), tenantId, id, body as UpdateCapabilityInput));
+  }
+
+  @Post('capabilities/:id/remove')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(WRITE)
+  async removeCapability(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    return this.refusing(() => this.catalog.removeCapability(this.actor(req, ip), tenantId, id));
   }
 
   @Get('products')

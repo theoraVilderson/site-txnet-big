@@ -44,6 +44,13 @@ import { CatalogTextKind, CatalogTextService, ReviewItem, Texts, catalogTextKey,
  * has an optional parent — the platform's or its own tenant's, never inside
  * itself, at most `CATEGORY_MAX_DEPTH` levels — and a product is filed in one
  * or more categories through `product_category_link`, first shown first.
+ *
+ * **A product unlocks only capabilities its tenant can see** (F-114-f-a,
+ * ADR-0086): `featureKeys` names `product_capability` rows, the platform's or
+ * its own tenant's (`capability_unknown`). A capability's key never changes,
+ * and it is deleted only while no product and no Grant holds it
+ * (`capability_in_use`). The check and the delete lock the capability rows, so
+ * neither can slip past the other.
  */
 
 export type CatalogActor = { adminId: string; tenantId: string; ip: string };
@@ -65,7 +72,10 @@ export type CatalogAdminRejection =
   | 'lang_unknown'
   | 'source_text_missing'
   | 'category_cycle'
-  | 'category_too_deep';
+  | 'category_too_deep'
+  | 'capability_not_found'
+  | 'capability_unknown'
+  | 'capability_in_use';
 
 /** One group a variant may name (F-026-p). */
 export type PanelGroupOption = {
@@ -122,6 +132,9 @@ export type UpdateProductInput = TranslateAll & {
   /** `false` brings an archived product back into the list (F-026-h); it stays switched off. Archiving is `removeProducts`. */
   archived?: false;
 };
+/** A capability (F-114-f-a): the key is written once; the name is text, as a product's. */
+export type CreateCapabilityInput = TranslateAll & { tenantId?: string | null; key: string; sourceLang?: string; name: Texts; description?: Texts | null };
+export type UpdateCapabilityInput = TranslateAll & { sourceLang?: string; name?: Texts; description?: Texts | null };
 export type VariantFields = {
   nameKey?: string | null;
   quotas?: Record<string, unknown>;
@@ -172,6 +185,16 @@ export type CategoryView = {
   isActive: boolean;
   /** Set when a removal with its products found a sold one in it and kept it (F-026-l). */
   archivedAt: Date | null;
+};
+export type CapabilityView = {
+  id: string;
+  /** `null`: the platform's, seen by every tenant. */
+  tenantId: string | null;
+  key: string;
+  nameKey: string;
+  descriptionKey: string | null;
+  /** A row the migration wrote from a key in use has no text yet: a reader falls back to the key. */
+  sourceLang: string;
 };
 export type ProductView = {
   id: string;
@@ -224,6 +247,9 @@ const isStillReferenced = (e: unknown) =>
   (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') ||
   (e instanceof Prisma.PrismaClientUnknownRequestError && /code: "(23001|23503)"/.test(e.message));
 
+/** The database's own refusal (`capability_key_free`): a tenant key the platform holds, or the reverse. */
+const isCapabilityKeyTaken = (e: unknown) => e instanceof Error && /capability_key_taken/.test(e.message);
+
 /** A row's source language, `DEFAULT_LANGUAGE` when it has none (a row from before F-1533-f). */
 const sourceOf = (r: Row, defaultLang: string) => (r['sourceLang'] as string | null) ?? defaultLang;
 
@@ -236,6 +262,15 @@ const categoryView = (r: Row, defaultLang: string): CategoryView => ({
   sourceLang: sourceOf(r, defaultLang),
   isActive: r['isActive'] as boolean,
   archivedAt: (r['archivedAt'] as Date | null | undefined) ?? null,
+});
+
+const capabilityView = (r: Row, defaultLang: string): CapabilityView => ({
+  id: r['id'] as string,
+  tenantId: (r['tenantId'] as string | null) ?? null,
+  key: r['key'] as string,
+  nameKey: r['nameKey'] as string,
+  descriptionKey: (r['descriptionKey'] as string | null) ?? null,
+  sourceLang: sourceOf(r, defaultLang),
 });
 
 const productView = (r: Row, defaultLang: string, categoryIds: string[]): ProductView => ({
@@ -278,6 +313,21 @@ const variantView = (r: Row, prices: Row[]): VariantView => ({
     .map(priceView)
     .sort((a, b) => b.effectiveFrom.getTime() - a.effectiveFrom.getTime()),
 });
+
+/** The row a text key names, and how a review of it is refused and audited. */
+const TEXT_ITEMS = {
+  category: { model: 'productCategory', missing: 'category_not_found', action: 'catalog_category_update', target: 'product_category' },
+  product: { model: 'product', missing: 'product_not_found', action: 'catalog_product_update', target: 'product' },
+  capability: { model: 'productCapability', missing: 'capability_not_found', action: 'catalog_capability_update', target: 'product_capability' },
+} as const satisfies Record<
+  CatalogTextKind,
+  {
+    model: 'productCategory' | 'product' | 'productCapability';
+    missing: CatalogAdminRejection;
+    action: Prisma.AdminAuditLogUncheckedCreateInput['action'];
+    target: Prisma.AdminAuditLogUncheckedCreateInput['targetEntityType'];
+  }
+>;
 
 type DraftRequest = { key: string; from: string; text: string; written: string[] };
 
@@ -550,6 +600,119 @@ export class CatalogAdminService {
     }
   }
 
+  // -------------------------------------------------------------- capabilities
+
+  /** The platform's capabilities and the caller's own (owner: every one, each with its tenant). */
+  async listCapabilities(actor: CatalogActor): Promise<CapabilityView[]> {
+    const { owner } = await this.access(actor);
+    const rows = await this.within(owner, (db) =>
+      db.productCapability.findMany({ where: owner ? {} : { OR: [{ tenantId: null }, { tenantId: actor.tenantId }] }, orderBy: { key: 'asc' } }),
+    );
+    return (rows as unknown as Row[]).map((r) => capabilityView(r, this.texts.defaultLanguage()));
+  }
+
+  /**
+   * A key is unique among what one tenant sees: a tenant's may not repeat the
+   * platform's, and the platform's may not repeat any tenant's — else a tenant
+   * would see one key twice. `key_taken` either way.
+   */
+  async createCapability(actor: CatalogActor, input: CreateCapabilityInput): Promise<CapabilityView> {
+    const { owner } = await this.access(actor);
+    const tenantId = await this.ownerOfNew(actor, input.tenantId);
+    const sourceLang = this.sourceLang(input.sourceLang, input.name, input.description);
+    const texts = this.itemTexts('capability', tenantId, input.key, sourceLang, input.name, input.description);
+    const view = await this.within(owner, async (tx) => {
+      const clash = await tx.productCapability.findFirst({ where: tenantId === null ? { key: input.key } : { key: input.key, OR: [{ tenantId: null }, { tenantId }] } });
+      if (clash) throw new CatalogAdminRefused('key_taken', input.key);
+      const row = (await this.refuseDuplicate('key_taken', input.key, () =>
+        tx.productCapability.create({
+          data: { tenantId, key: input.key, nameKey: texts.nameKey, descriptionKey: input.description ? texts.descriptionKey : null, sourceLang },
+        }),
+      )) as unknown as Row;
+      const created = capabilityView(row, this.texts.defaultLanguage());
+      await this.audit(tx, actor, tenantId, 'catalog_capability_create', 'product_capability', created.id, null, {
+        ...created,
+        name: input.name,
+        description: input.description ?? null,
+      });
+      await this.texts.publishSources(texts.publish);
+      await this.texts.clear(texts.clear);
+      return created;
+    });
+    if (input.translateAll) void this.texts.draftOthers(texts.draft);
+    return view;
+  }
+
+  /** Name and description only: the key is held as a string by products and Grants, so it never changes. */
+  async updateCapability(actor: CatalogActor, id: string, patch: UpdateCapabilityInput): Promise<CapabilityView> {
+    const { owner } = await this.access(actor);
+    const renaming = patch.name !== undefined || patch.sourceLang !== undefined;
+    let draft: DraftRequest[] = [];
+    const view = await this.within(owner, async (tx) => {
+      const before = await this.managed(tx, 'productCapability', 'capability_not_found', actor, id, owner);
+      const current = sourceOf(before, this.texts.defaultLanguage());
+      const sourceLang =
+        renaming || patch.description ? this.sourceLang(patch.sourceLang ?? current, patch.name ?? (renaming ? {} : undefined), patch.description) : current;
+      const texts = this.itemTexts('capability', (before['tenantId'] as string | null) ?? null, before['key'] as string, sourceLang, patch.name, patch.description);
+      draft = texts.draft;
+      const data = {
+        ...(renaming ? { nameKey: texts.nameKey, sourceLang } : {}),
+        ...(patch.description !== undefined ? { descriptionKey: patch.description ? texts.descriptionKey : null } : {}),
+      };
+      const updated = capabilityView((await tx.productCapability.update({ where: { id }, data })) as unknown as Row, this.texts.defaultLanguage());
+      await this.audit(tx, actor, updated.tenantId, 'catalog_capability_update', 'product_capability', id, capabilityView(before, this.texts.defaultLanguage()), {
+        ...updated,
+        name: patch.name,
+        description: patch.description,
+      });
+      await this.texts.publishSources(texts.publish);
+      await this.texts.clear(texts.clear);
+      return updated;
+    });
+    if (patch.translateAll) void this.texts.draftOthers(draft);
+    return view;
+  }
+
+  /**
+   * Deleted only while no product and no Grant holds its key
+   * (`capability_in_use`) — a platform capability counted across every tenant.
+   * The row is locked first, so a product write naming it either finished
+   * before the count or finds it gone ({@link knownCapabilities}).
+   */
+  async removeCapability(actor: CatalogActor, id: string): Promise<{ id: string; outcome: 'deleted' }> {
+    const { owner } = await this.access(actor);
+    const gone = await this.within(owner, async (tx) => {
+      const before = await this.managed(tx, 'productCapability', 'capability_not_found', actor, id, owner);
+      await tx.$executeRaw`SELECT 1 FROM "catalog"."product_capability" WHERE "id" = ${id}::uuid FOR UPDATE`;
+      const tenantId = (before['tenantId'] as string | null) ?? null;
+      const held = { ...(tenantId === null ? {} : { tenantId }), featureKeys: { has: before['key'] as string } };
+      if ((await tx.product.count({ where: held })) + (await tx.grant.count({ where: held })) > 0) {
+        throw new CatalogAdminRefused('capability_in_use', before['key'] as string);
+      }
+      await tx.productCapability.delete({ where: { id } });
+      await this.audit(tx, actor, tenantId, 'catalog_capability_delete', 'product_capability', id, capabilityView(before, this.texts.defaultLanguage()), { outcome: 'deleted' });
+      return capabilityView(before, this.texts.defaultLanguage());
+    });
+    // The row is gone; a text left behind costs nothing but a stale name if the key is reused.
+    await this.texts.clear([gone.nameKey, ...(gone.descriptionKey ? [gone.descriptionKey] : [])]).catch((e: unknown) => this.logger.warn(`capability texts kept: ${String(e)}`));
+    return { id, outcome: 'deleted' };
+  }
+
+  /**
+   * Every key must be a capability `tenantId`'s product can carry: the
+   * platform's or that tenant's own (`capability_unknown`). The rows are
+   * locked `FOR SHARE` until the write commits, so a delete waits for it and
+   * then counts this product.
+   */
+  private async knownCapabilities(db: Prisma.TransactionClient, tenantId: string | null, keys: string[] | undefined): Promise<void> {
+    const wanted = [...new Set(keys ?? [])];
+    if (wanted.length === 0) return;
+    await db.$executeRaw`SELECT 1 FROM "catalog"."product_capability" WHERE "key" = ANY(${wanted}) AND ("tenantId" IS NULL OR "tenantId" = ${tenantId}::uuid) FOR SHARE`;
+    const seen = await db.productCapability.findMany({ where: { key: { in: wanted }, OR: [{ tenantId: null }, { tenantId }] }, select: { key: true } });
+    const missing = wanted.filter((k) => !seen.some((c) => c.key === k));
+    if (missing.length > 0) throw new CatalogAdminRefused('capability_unknown', missing.join(', '));
+  }
+
   // ------------------------------------------------------------------ products
 
   async listProducts(actor: CatalogActor, filter: ListProductsFilter = {}): Promise<ProductView[]> {
@@ -588,9 +751,10 @@ export class CatalogAdminService {
     const { owner } = await this.access(actor);
     const tenantId = await this.ownerOfNew(actor, input.tenantId);
     const sourceLang = this.sourceLang(input.sourceLang, input.name, input.description);
-    const texts = this.productTexts(tenantId, input.key, sourceLang, input.name, input.description);
+    const texts = this.itemTexts('product', tenantId, input.key, sourceLang, input.name, input.description);
     const view = await this.within(owner, async (tx) => {
       await this.usableCategories(tx, input.categoryIds, tenantId);
+      await this.knownCapabilities(tx, tenantId, input.featureKeys);
       const row = (await this.refuseDuplicate('key_taken', input.key, () =>
         tx.product.create({
           data: {
@@ -630,10 +794,11 @@ export class CatalogAdminService {
       const tenantId = (before['tenantId'] as string | null) ?? null;
       const categoriesBefore = (await this.categoryIdsOf(tx, [id])).get(id) ?? [];
       if (patch.categoryIds) await this.usableCategories(tx, patch.categoryIds, tenantId);
+      await this.knownCapabilities(tx, tenantId, patch.featureKeys);
       const current = sourceOf(before, this.texts.defaultLanguage());
       const sourceLang =
         renaming || patch.description ? this.sourceLang(patch.sourceLang ?? current, patch.name ?? (renaming ? {} : undefined), patch.description) : current;
-      const texts = this.productTexts((before['tenantId'] as string | null) ?? null, before['key'] as string, sourceLang, patch.name, patch.description);
+      const texts = this.itemTexts('product', (before['tenantId'] as string | null) ?? null, before['key'] as string, sourceLang, patch.name, patch.description);
       draft = texts.draft;
       const data: Prisma.ProductUpdateInput = {
         ...(renaming ? { nameKey: texts.nameKey, sourceLang } : {}),
@@ -918,10 +1083,17 @@ export class CatalogAdminService {
     }
   }
 
-  /** A product's derived keys, the texts a create or patch publishes or clears, and what to draft after. */
-  private productTexts(tenantId: string | null, key: string, sourceLang: string, name: Texts | undefined, description: Texts | null | undefined) {
-    const nameKey = catalogTextKey(tenantId, 'product', key, 'name');
-    const descriptionKey = catalogTextKey(tenantId, 'product', key, 'description');
+  /** A product's or capability's derived keys, the texts a create or patch publishes or clears, and what to draft after. */
+  private itemTexts(
+    kind: 'product' | 'capability',
+    tenantId: string | null,
+    key: string,
+    sourceLang: string,
+    name: Texts | undefined,
+    description: Texts | null | undefined,
+  ) {
+    const nameKey = catalogTextKey(tenantId, kind, key, 'name');
+    const descriptionKey = catalogTextKey(tenantId, kind, key, 'description');
     const publish: { key: string; text: Texts }[] = [];
     const draft: DraftRequest[] = [];
     const clear: string[] = [];
@@ -964,7 +1136,11 @@ export class CatalogAdminService {
     const where = owner ? {} : { tenantId: actor.tenantId };
     const fallback = this.texts.defaultLanguage();
     const sources = new Map<string, string>();
-    const [categories, products] = await this.within(owner, async (db) => [await db.productCategory.findMany({ where }), await db.product.findMany({ where })]);
+    const [categories, products, capabilities] = await this.within(owner, async (db) => [
+      await db.productCategory.findMany({ where }),
+      await db.product.findMany({ where }),
+      await db.productCapability.findMany({ where }),
+    ]);
     for (const r of categories as unknown as Row[]) {
       sources.set(catalogTextKey((r['tenantId'] as string | null) ?? null, 'category', r['key'] as string, 'name'), sourceOf(r, fallback));
     }
@@ -972,6 +1148,11 @@ export class CatalogAdminService {
       const tenantId = (r['tenantId'] as string | null) ?? null;
       sources.set(catalogTextKey(tenantId, 'product', r['key'] as string, 'name'), sourceOf(r, fallback));
       sources.set(catalogTextKey(tenantId, 'product', r['key'] as string, 'description'), sourceOf(r, fallback));
+    }
+    for (const r of capabilities as unknown as Row[]) {
+      const tenantId = (r['tenantId'] as string | null) ?? null;
+      sources.set(catalogTextKey(tenantId, 'capability', r['key'] as string, 'name'), sourceOf(r, fallback));
+      sources.set(catalogTextKey(tenantId, 'capability', r['key'] as string, 'description'), sourceOf(r, fallback));
     }
     return sources;
   }
@@ -994,8 +1175,8 @@ export class CatalogAdminService {
       for (const key of keys) {
         const parsed = parseCatalogTextKey(key);
         if (!parsed) throw new CatalogAdminRefused('text_key_invalid', key);
-        const missing: CatalogAdminRejection = parsed.kind === 'product' ? 'product_not_found' : 'category_not_found';
-        const delegate = (parsed.kind === 'product' ? tx.product : tx.productCategory) as unknown as {
+        const missing = TEXT_ITEMS[parsed.kind].missing;
+        const delegate = tx[TEXT_ITEMS[parsed.kind].model] as unknown as {
           findFirst(args: { where: Row }): Promise<Row | null>;
         };
         const row = await delegate.findFirst({ where: { tenantId: parsed.tenantId, key: parsed.key } });
@@ -1005,8 +1186,7 @@ export class CatalogAdminService {
       for (const [id, { kind, row }] of items) {
         const tenantId = (row['tenantId'] as string | null) ?? null;
         const texts = { lang, ...change };
-        if (kind === 'product') await this.audit(tx, actor, tenantId, 'catalog_product_update', 'product', id, null, { texts });
-        else await this.audit(tx, actor, tenantId, 'catalog_category_update', 'product_category', id, null, { texts });
+        await this.audit(tx, actor, tenantId, TEXT_ITEMS[kind].action, TEXT_ITEMS[kind].target, id, null, { texts });
       }
       return { published: await write() };
     });
@@ -1015,7 +1195,7 @@ export class CatalogAdminService {
   /** A row the caller may manage, or the table's own *not found* — another tenant's and the platform's alike. */
   private async managed(
     db: Prisma.TransactionClient,
-    model: 'productCategory' | 'product' | 'productVariant' | 'price',
+    model: 'productCategory' | 'product' | 'productCapability' | 'productVariant' | 'price',
     missing: CatalogAdminRejection,
     actor: CatalogActor,
     id: string,
@@ -1040,7 +1220,7 @@ export class CatalogAdminService {
     try {
       return await create();
     } catch (e) {
-      if (isUniqueViolation(e)) throw new CatalogAdminRefused(reason, value);
+      if (isUniqueViolation(e) || isCapabilityKeyTaken(e)) throw new CatalogAdminRefused(reason, value);
       throw e;
     }
   }
