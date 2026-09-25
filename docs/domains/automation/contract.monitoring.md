@@ -75,7 +75,8 @@ collectors switched off, and connects as `txnet_app_user` — the RLS-enforced
 role, not the owner.
 
 **The floor on every threshold here is `AUTOMATION_TICK_INTERVAL_MS`,** because
-the relay is a scheduled job like any other. A row thirty seconds old is not
+the tick is the relay's fallback: an insert normally wakes it at once (F-067-n),
+but a lost notification waits for the next tick. A row thirty seconds old is not
 late; a row five minutes old has missed several ticks.
 
 **`AutomationOutboxRowRefused` is expected to fire on the first producer's

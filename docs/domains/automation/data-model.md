@@ -77,3 +77,8 @@ backfill, no policy. It carries its own **section 99** SQL: the partial index
 cannot express and which is the index the relay actually uses — published rows
 accumulate for ever and unpublished ones are a working set of near zero, so
 the partial index stays the size of the backlog rather than of the history.
+
+`20260925000200_the_outbox_wakes_its_relay` (F-067-n) adds a statement-level
+`AFTER INSERT` trigger on `outbox_event` and its function
+`automation.notify_outbox_ready()`, which `pg_notify('outbox_ready', '')` once
+per statement. No column changes; dropping both leaves the relay on the tick.

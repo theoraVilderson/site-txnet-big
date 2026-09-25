@@ -91,9 +91,20 @@ ADR-0021 calls the outbox a new unit; splitting it out later stays cheap while
 it is still one of each.
 
 **It needs an `always_on` `bot_schedule`**, exactly like the other two — a job
-with no schedule never becomes due. `prisma/seed.js` creates it (2026-09-14). Its latency is therefore one
-`AUTOMATION_TICK_INTERVAL_MS`, 60 seconds by default, and the day an event
-cannot wait a minute that is a schedule change rather than a rewrite.
+with no schedule never becomes due. `prisma/seed.js` creates it (2026-09-14).
+
+**Postgres wakes it, so the tick is only the fallback** (F-067-n, ADR-0084
+decision 1). Migration `20260925000200_the_outbox_wakes_its_relay` puts a
+`FOR EACH STATEMENT` `AFTER INSERT` trigger on `outbox_event` that notifies
+`outbox_ready`; `OutboxRelayListener` (`worker-service/src/app/jobs/`) holds
+the `LISTEN` on `DATABASE_APP_URL` and runs the same `run()` when woken — an
+event is out about a second after its commit (16 ms on dev), not up to one
+`AUTOMATION_TICK_INTERVAL_MS`. At most one woken pass runs and one waits
+behind it; a burst folds into that one. A pass runs on every (re)connect,
+because a notification nobody heard is gone. A woken pass is still a run of
+`outbox_relay`, so `isActive = false` stops it (invariant #1), and it records
+no `bot_execution_log` row: a failure stays on the row's `lastError`, and the
+tick's run is the one that fails loudly.
 
 **Rows are claimed `FOR UPDATE SKIP LOCKED`, `AUTOMATION_OUTBOX_BATCH` at a
 time.** Two relays running at once is the expected case, not the pathological

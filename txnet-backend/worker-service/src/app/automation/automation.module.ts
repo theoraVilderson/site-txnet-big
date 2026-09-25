@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { Client } from 'pg';
 import { WorkerRegistryService } from './worker-registry.service';
 import { TickPublisher } from './tick.publisher';
 import { TickConsumer } from './tick.consumer';
@@ -17,6 +19,7 @@ import { CampaignFanOutJob } from '../jobs/campaign-fan-out.job';
 import { CampaignDeliveryJob } from '../jobs/campaign-delivery.job';
 import { DepositReconciliationJob, DepositVerifyRetryJob } from '../jobs/deposit-reconciliation.job';
 import { OutboxRelayJob } from '../jobs/outbox-relay.job';
+import { OUTBOX_READY_LISTEN_CLIENT, OutboxRelayListener } from '../jobs/outbox-relay.listener';
 import { FxRateJob } from '../jobs/fx-rate.job';
 import { TrafficRollupJob } from '../jobs/traffic-rollup.job';
 import { TenantSubscriptionRenewalJob } from '../jobs/tenant-subscription-renewal.job';
@@ -48,6 +51,14 @@ import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
     DepositReconciliationJob,
     DepositVerifyRetryJob,
     OutboxRelayJob,
+    // Wakes the relay on `outbox_ready` (F-067-n). Its own `pg.Client`, held
+    // open for the life of the process — never the request pool.
+    OutboxRelayListener,
+    {
+      provide: OUTBOX_READY_LISTEN_CLIENT,
+      useFactory: (config: ConfigService) => () => new Client({ connectionString: config.get<string>('DATABASE_APP_URL') }),
+      inject: [ConfigService],
+    },
     FxRatePoller,
     FxRateSnapshotStore,
     FxRateJob,
