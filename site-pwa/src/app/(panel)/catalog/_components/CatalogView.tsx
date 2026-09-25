@@ -19,6 +19,7 @@ import {
   isPlatformOwner,
   productCounts,
   removalReport,
+  RESTORE_CATEGORY,
   stillSelected,
   surfaceActor,
   switchReport,
@@ -89,6 +90,7 @@ export function CatalogView() {
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   // Categories archived with their sold products (F-026-l): out of the tab, still naming those products.
   const [archivedCategories, setArchivedCategories] = useState<CatalogCategory[]>([]);
+  const [showArchivedCategories, setShowArchivedCategories] = useState(false);
   // Every product the caller manages: the capability list and the taken keys come from here,
   // whatever the filters show.
   const [products, setProducts] = useState<CatalogProduct[] | null>(null);
@@ -343,10 +345,28 @@ export function CatalogView() {
             )}
           </div>
         ) : (
-          <button type="button" className={quietButton} onClick={() => setCreating("category")}>
-            <Tags size={14} aria-hidden />
-            {t("common", K.newCategory)}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            {(archivedCategories.length > 0 || showArchivedCategories) && (
+              <button
+                type="button"
+                className={quietButton}
+                aria-pressed={showArchivedCategories}
+                onClick={() => {
+                  setShowArchivedCategories(!showArchivedCategories);
+                  setPickedCategories(new Set());
+                }}
+              >
+                <Archive size={14} aria-hidden />
+                {showArchivedCategories
+                  ? t("common", K.categories.showActive)
+                  : t("common", K.categories.showArchived, { count: archivedCategories.length })}
+              </button>
+            )}
+            <button type="button" className={quietButton} onClick={() => setCreating("category")}>
+              <Tags size={14} aria-hidden />
+              {t("common", K.newCategory)}
+            </button>
+          </div>
         )}
       </div>
 
@@ -473,6 +493,31 @@ export function CatalogView() {
             </ul>
           </div>
         )
+      ) : showArchivedCategories ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs text-text-secondary">{t("common", K.categories.archivedHint)}</p>
+          {archivedCategories.length === 0 ? (
+            <p className="py-8 text-center text-sm text-text-secondary">{t("common", K.categories.archivedEmpty)}</p>
+          ) : (
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {archivedCategories.map((c) => (
+                <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-card-border bg-card-bg p-3 opacity-80 shadow-sm">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold text-text-primary">{nameOf(c)}</p>
+                    <p className="text-[11px] text-text-secondary">
+                      {t("common", K.categories.archivedProducts, { count: counts.get(c.id) ?? 0 })} · {t("common", K.removal.archivedBadge)}
+                      {c.tenantId === null && ` · ${t("common", K.platform)}`}
+                    </p>
+                  </div>
+                  <button type="button" className={quietButton} onClick={() => void act(() => api.updateCategory(c.id, RESTORE_CATEGORY))}>
+                    <RotateCcw size={14} aria-hidden />
+                    {t("common", K.removal.restore)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       ) : categories.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-8">
           <p className="text-sm text-text-secondary">{t("common", K.categories.empty)}</p>

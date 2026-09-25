@@ -25,6 +25,7 @@ import {
   namesBody,
   removalReport,
   categoryRemovalReport,
+  RESTORE_CATEGORY,
   heldByProducts,
   mergeRemovals,
   productCounts,
@@ -470,6 +471,13 @@ describe("categories in a group (F-026-j/k)", () => {
       { id: "b", outcome: "archived", products: { deleted: 0, archived: 1 } },
       { id: "c", outcome: "not_found" },
     ]);
+  });
+
+  it("restores an archived category with the one patch billing's schema takes for it (F-026-n)", () => {
+    expect(RESTORE_CATEGORY).toEqual({ archived: false });
+    const schema = /export const updateCategorySchema = z([\s\S]*?)\.strict\(\);/.exec(read("billing-service/src/app/catalog/catalog-admin.schema.ts"));
+    if (!schema) throw new Error("updateCategorySchema moved — this test is stale");
+    expect(schema[1]).toMatch(/archived: z\.literal\(false\)/);
   });
 
   it("counts an archived product in its category, because billing refuses to remove that category for it", () => {

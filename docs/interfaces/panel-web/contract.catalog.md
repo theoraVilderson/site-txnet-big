@@ -56,7 +56,11 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    outcome (`categoryRemovalReport`: deleted, archived with its sold
    products, kept, not found), then the products' own deleted / archived
    counts. An archived category is out of the tab but still names its
-   archived products, and comes back when one of them is restored. A category's product count includes the archived (`productCounts`),
+   archived products, and comes back when one of them is restored.
+6d. **Archived categories are behind their own toggle** (F-026-n, as 6b for
+   products): `?archived=true`, shown only when there are some; each named,
+   with its archived-product count, no selection, and "restore"
+   (`RESTORE_CATEGORY`, `PATCH archived:false`) brings it back switched off. A category's product count includes the archived (`productCounts`),
    because billing keeps a category any of them sits in — a count without them
    would show 0 beside a refusal. Switch on / off is one `PATCH isActive` per
    selected category not already in that state (`switchTargets`), each on its
@@ -125,7 +129,8 @@ in a source language (`validateCategoryForm` / `categoryBody`,
 `removalReport` / `stillSelected` (F-026-i); `categoryRemovalReport` against
 billing's `CategoryRemovalOutcome`, `productCounts`, `switchTargets`,
 `switchReport` (F-026-k); `heldByProducts`, `mergeRemovals` and the products'
-counts in the report (F-026-m).
+counts in the report (F-026-m); `RESTORE_CATEGORY` against billing's
+`updateCategorySchema` (F-026-n).
 
 `my-resellers/catalog.test.ts` (F-066-w8) — `catalogApiPrefix` on both
 surfaces against the controller's own `@Controller`, `surfaceActor` holding a

@@ -221,7 +221,7 @@ export function catalogAdminApi(tenantId: string | null) {
       return call<CatalogCategory>(`${at}/categories`, { method: "POST", ...json(body) });
     },
 
-    async updateCategory(categoryId: string, body: { sourceLang?: string; name?: Texts; isActive?: boolean }): Promise<CatalogCategory> {
+    async updateCategory(categoryId: string, body: { sourceLang?: string; name?: Texts; isActive?: boolean; archived?: false }): Promise<CatalogCategory> {
       return call<CatalogCategory>(`${at}/categories/${id(categoryId)}`, { method: "PATCH", ...json(body) });
     },
 

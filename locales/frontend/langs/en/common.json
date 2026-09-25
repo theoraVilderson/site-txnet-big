@@ -1394,7 +1394,12 @@
       "switched": "{{count}} categories changed.",
       "switchFailed": "{{count}} categories could not be changed.",
       "confirmWithProducts": "{{count}} categories still hold products. Remove those products too? A product never sold is deleted for good; one that was sold is archived, its buyers keep their service, and its category is archived with it.",
-      "archived": "{{count}} categories archived with the sold products in them."
+      "archived": "{{count}} categories archived with the sold products in them.",
+      "showArchived": "Archived categories ({{count}})",
+      "showActive": "Back to categories",
+      "archivedProducts": "{{count}} archived products",
+      "archivedEmpty": "No archived categories.",
+      "archivedHint": "These categories were removed with their products, and a sold product kept each of them: nothing new is filed in them and they are not in the list. Restore brings one back, switched off."
     },
     "copyId": "Copy id",
     "copied": "Copied",

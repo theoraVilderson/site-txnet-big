@@ -518,6 +518,9 @@ export function categoryRemovalReport(outcomes: readonly CategoryRemoval[]): { k
   ].filter((l) => l.count > 0);
 }
 
+/** Back from the archive, still switched off (F-026-n over F-026-l). */
+export const RESTORE_CATEGORY = { archived: false } as const;
+
 /** The categories billing kept for the products in them: the ones the page asks about a second time (F-026-m). */
 export const heldByProducts = (outcomes: readonly CategoryRemoval[]) => outcomes.filter((r) => r.outcome === "has_products").map((r) => r.id);
 
