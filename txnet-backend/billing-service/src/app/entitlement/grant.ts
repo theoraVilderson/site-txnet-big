@@ -402,16 +402,6 @@ export class GrantService {
     });
   }
 
-  /**
-   * `rotateToken` in a transaction of its own, for a caller with no other work
-   * to commit with it (F-502-p). Every other writer here takes the caller's
-   * `tx` because it has one; a route that only rotates would otherwise open
-   * one at the call site and get the tenant scoping wrong.
-   */
-  rotateTokenForUser(grantId: string, userId: string): Promise<string> {
-    return tenantTransaction(this.prisma, (tx) => this.rotateToken(tx, grantId, userId));
-  }
-
   /** A new subscription token for the Grant's own user, answered once; the old link stops working. */
   async rotateToken(tx: Prisma.TransactionClient, grantId: string, userId: string): Promise<string> {
     const grant = await tx.grant.findUnique({ where: { id: grantId }, select: { userId: true } });
@@ -423,11 +413,6 @@ export class GrantService {
       data: { subscriptionTokenHash: hash, subscriptionTokenSealed: this.sealed(token), tokenRotatedAt: new Date() },
     });
     return token;
-  }
-
-  /** `subscriptionTokenFor` in a transaction of its own, as `rotateTokenForUser` is. */
-  subscriptionTokenForUser(grantId: string, userId: string): Promise<string | null> {
-    return tenantTransaction(this.prisma, (tx) => this.subscriptionTokenFor(tx, grantId, userId));
   }
 
   /**

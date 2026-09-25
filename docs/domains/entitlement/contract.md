@@ -28,9 +28,7 @@ and changes its quota only through `quota_adjustment` rows.
 | `activeGrant` / `hasActiveGrant` | userId, featureKey, at? | the longest-lasting active Grant / boolean | own tenant transaction | — |
 | `adjustQuota(tx, …)` | grantId, metric, delta, source, capPercent?, expiresAt?, reason? | QuotaAdjustment | caller's transaction | `grant_not_found`, `grant_not_active` |
 | `rotateToken(tx, id, userId)` | grantId, its user | the new token, kept sealed; the old link stops working | caller's transaction | `grant_not_found` (also for another user's) |
-| `rotateTokenForUser(id, userId)` | grantId, its user | the same, in a transaction of its own | own tenant transaction | the same |
 | `subscriptionTokenFor(tx, id, userId)` | grantId, its user | the current token, as often as asked; `null` when none is kept (a Grant from before F-114-e-a, or issued with no KEK) — resetting keeps one | caller's transaction | `grant_not_found` (also for another user's); throws if the opened token does not hash to the row |
-| `subscriptionTokenForUser(id, userId)` | grantId, its user | the same, in a transaction of its own | own tenant transaction | the same |
 | `listForUser(userId, {page?, pageSize?})` | the user, paging | one page of that user's Grants — id, status, period, feature keys, variant `{id, sku, nameKey}`, billing mode, consumed/purchased bytes, `suspendedAt` and `purgeAt` (F-027-ac, `purgeAtOf`); never the token or its hash | own tenant transaction | — |
 
 **Exhaustion suspends (F-027-x, ADR-0075)** — `suspendForExhaustion(tx,
