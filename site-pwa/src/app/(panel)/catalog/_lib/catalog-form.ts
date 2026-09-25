@@ -49,6 +49,8 @@ export const REFUSAL_KEYS: Record<CatalogRejection, string> = {
   texts_unavailable: CATALOG_KEYS.refusals.texts_unavailable,
   lang_unknown: CATALOG_KEYS.refusals.lang_unknown,
   source_text_missing: CATALOG_KEYS.refusals.source_text_missing,
+  category_cycle: CATALOG_KEYS.refusals.category_cycle,
+  category_too_deep: CATALOG_KEYS.refusals.category_too_deep,
 };
 
 /** The refusal's own sentence key, when billing named one this page knows. */
@@ -178,7 +180,12 @@ export interface NamesForm {
   sourceLang: string;
   name: string;
   description: string;
+  /** Draft every other language for review (F-1533-i). Off by default: only this language changes. */
+  translateAll: boolean;
 }
+
+/** `translateAll` on the wire only when ticked — billing reads absent as off. */
+const translateAllOf = (f: { translateAll: boolean }) => (f.translateAll ? { translateAll: true } : {});
 
 export function validateNamesForm(f: NamesForm): Errors<NamesForm> {
   const errors: Errors<NamesForm> = {};
@@ -187,12 +194,12 @@ export function validateNamesForm(f: NamesForm): Errors<NamesForm> {
   return errors;
 }
 
-/** A rename in billing's shape. Every other language is billing's to draft; a product's blank description is removed. */
+/** A rename in billing's shape. Other languages are drafted only when ticked; a product's blank description is removed. */
 export function namesBody(f: NamesForm, kind: "product" | "category") {
   const sourceLang = f.sourceLang.trim();
   const name = { [sourceLang]: f.name.trim() };
-  if (kind === "category") return { sourceLang, name };
-  return { sourceLang, name, description: blank(f.description) ? null : { [sourceLang]: f.description.trim() } };
+  if (kind === "category") return { sourceLang, name, ...translateAllOf(f) };
+  return { sourceLang, name, description: blank(f.description) ? null : { [sourceLang]: f.description.trim() }, ...translateAllOf(f) };
 }
 
 /** A review edit's id: one draft is one (language, key). A key never holds `|`. */
@@ -232,10 +239,21 @@ export interface CategoryForm {
   name: string;
   /** The platform owner only: a category every tenant files products in. */
   shared: boolean;
+  /** The category it sits under; blank = top level (F-026-r). */
+  parentId: string;
+  /** Draft every other language for review (F-1533-i). */
+  translateAll: boolean;
 }
 
 /** `defaultLang` is the deployment's `DEFAULT_LOCALE`: billing's default source language too. */
-export const emptyCategoryForm = (defaultLang: string): CategoryForm => ({ key: "", sourceLang: defaultLang, name: "", shared: false });
+export const emptyCategoryForm = (defaultLang: string): CategoryForm => ({
+  key: "",
+  sourceLang: defaultLang,
+  name: "",
+  shared: false,
+  parentId: "",
+  translateAll: false,
+});
 
 export function validateCategoryForm(f: CategoryForm): Errors<CategoryForm> {
   const errors: Errors<CategoryForm> = {};
@@ -247,8 +265,83 @@ export function validateCategoryForm(f: CategoryForm): Errors<CategoryForm> {
 
 export function categoryBody(f: CategoryForm, owner: boolean): CreateCategoryBody {
   const sourceLang = f.sourceLang.trim();
-  return { key: f.key.trim(), sourceLang, name: { [sourceLang]: f.name.trim() }, ...(owner && f.shared ? { tenantId: null } : {}) };
+  return {
+    key: f.key.trim(),
+    sourceLang,
+    name: { [sourceLang]: f.name.trim() },
+    ...(owner && f.shared ? { tenantId: null } : {}),
+    ...(blank(f.parentId) ? {} : { parentId: f.parentId.trim() }),
+    ...translateAllOf(f),
+  };
 }
+
+// ------------------------------------------------------------------- tree
+
+/** billing's cap (`CATEGORY_MAX_DEPTH`, shared-core `category-tree.ts`): a top-level category is level 1. */
+export const CATEGORY_MAX_DEPTH = 3;
+
+type TreeItem = { id: string; parentId: string | null; key: string };
+
+/**
+ * Every category once, each right after its parent, siblings by key, with its
+ * depth (0 = top). One whose parent the list does not hold — another tenant's
+ * category above a platform one never reaches a tenant — is shown at the top.
+ */
+export function categoryTree<T extends TreeItem>(categories: readonly T[]): { category: T; depth: number }[] {
+  const listed = new Set(categories.map((c) => c.id));
+  const children = new Map<string | null, T[]>();
+  for (const c of categories) {
+    const parent = c.parentId && listed.has(c.parentId) ? c.parentId : null;
+    children.set(parent, [...(children.get(parent) ?? []), c]);
+  }
+  const out: { category: T; depth: number }[] = [];
+  const seen = new Set<string>();
+  const walk = (parent: string | null, depth: number) => {
+    for (const c of [...(children.get(parent) ?? [])].sort((a, b) => a.key.localeCompare(b.key))) {
+      if (seen.has(c.id)) continue;
+      seen.add(c.id);
+      out.push({ category: c, depth });
+      walk(c.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
+}
+
+/** `vpn › fast › gaming`: a category named by its path from the top, as far as the list reaches. */
+export function categoryPath<T extends TreeItem>(categories: readonly T[], id: string, name: (c: T) => string): string {
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  const path: string[] = [];
+  for (let c = byId.get(id); c && path.length <= CATEGORY_MAX_DEPTH; c = c.parentId ? byId.get(c.parentId) : undefined) path.unshift(name(c));
+  return path.join(" › ");
+}
+
+/**
+ * The parents a category may be moved under (`self`), or a new one filed
+ * under (`null`): not itself, nothing under it, and no place that would take
+ * it — with everything under it — past {@link CATEGORY_MAX_DEPTH}. billing
+ * refuses the same (`category_cycle`, `category_too_deep`); this keeps the
+ * picker from offering them.
+ */
+export function parentChoices<T extends TreeItem>(categories: readonly T[], self: string | null): T[] {
+  const tree = categoryTree(categories);
+  const depthOf = new Map(tree.map((n) => [n.category.id, n.depth]));
+  const below = new Set<string>();
+  let span = 1;
+  if (self) {
+    below.add(self);
+    for (const n of tree) {
+      if (n.category.parentId && below.has(n.category.parentId)) {
+        below.add(n.category.id);
+        span = Math.max(span, n.depth - (depthOf.get(self) ?? 0) + 1);
+      }
+    }
+  }
+  return tree.filter((n) => !below.has(n.category.id) && n.depth + 1 + span <= CATEGORY_MAX_DEPTH).map((n) => n.category);
+}
+
+/** A move in billing's patch shape: blank is the top level, which billing takes as `null`. */
+export const moveBody = (parentId: string): { parentId: string | null } => ({ parentId: parentId.trim() || null });
 
 // ------------------------------------------------------------------- product
 
@@ -259,12 +352,15 @@ export interface ProductForm {
   /** The platform owner only: whose product it is. */
   owner: CatalogOwnerChoice;
   tenantId: string;
-  categoryId: string;
+  /** Every category it is filed in; the first is shown first (F-026-r). */
+  categoryIds: string[];
   key: string;
   sourceLang: string;
   name: string;
   /** Blank = none. */
   description: string;
+  /** Draft every other language for review (F-1533-i). */
+  translateAll: boolean;
   fulfilmentKind: FulfilmentKind;
   /** What a Grant of this product unlocks, picked from the ones in use or added. */
   featureKeys: string[];
@@ -273,11 +369,12 @@ export interface ProductForm {
 export const emptyProductForm = (defaultLang: string): ProductForm => ({
   owner: "own",
   tenantId: "",
-  categoryId: "",
+  categoryIds: [],
   key: "",
   sourceLang: defaultLang,
   name: "",
   description: "",
+  translateAll: false,
   fulfilmentKind: "network_access",
   featureKeys: [],
 });
@@ -285,7 +382,7 @@ export const emptyProductForm = (defaultLang: string): ProductForm => ({
 export function validateProductForm(f: ProductForm, me: Me | null): Errors<ProductForm> {
   const errors: Errors<ProductForm> = {};
   if (isPlatformOwner(me) && f.owner === "tenant" && !UUID.test(f.tenantId.trim())) errors.tenantId = E.uuid;
-  if (blank(f.categoryId)) errors.categoryId = E.required;
+  if (unique(f.categoryIds).length === 0) errors.categoryIds = E.required;
   if (!KEY.test(f.key.trim())) errors.key = E.key;
   if (blank(f.sourceLang)) errors.sourceLang = E.required;
   if (blank(f.name)) errors.name = E.required;
@@ -296,7 +393,7 @@ export function validateProductForm(f: ProductForm, me: Me | null): Errors<Produ
 /** A new product, in billing's wire shape. `tenantId` only for the platform owner's choice. */
 export function productBody(f: ProductForm, me: Me | null): CreateProductBody {
   const body: CreateProductBody = {
-    categoryId: f.categoryId.trim(),
+    categoryIds: unique(f.categoryIds),
     key: f.key.trim(),
     sourceLang: f.sourceLang.trim(),
     name: { [f.sourceLang.trim()]: f.name.trim() },
@@ -304,6 +401,7 @@ export function productBody(f: ProductForm, me: Me | null): CreateProductBody {
     featureKeys: unique(f.featureKeys),
   };
   if (!blank(f.description)) body.description = { [f.sourceLang.trim()]: f.description.trim() };
+  if (f.translateAll) body.translateAll = true;
   if (isPlatformOwner(me) && f.owner === "platform") body.tenantId = null;
   if (isPlatformOwner(me) && f.owner === "tenant") body.tenantId = f.tenantId.trim();
   return body;
@@ -423,7 +521,8 @@ export type WizardStep = (typeof WIZARD_STEPS)[number];
 
 export interface ProductWizard {
   categoryMode: "existing" | "new";
-  categoryId: string;
+  /** The existing categories picked, in the order picked. */
+  categoryIds: string[];
   newCategory: CategoryForm;
   product: ProductForm;
   /** A product with no variant cannot be sold; skipping is allowed, and the list says so. */
@@ -433,7 +532,7 @@ export interface ProductWizard {
 
 export const emptyWizard = (defaultLang: string): ProductWizard => ({
   categoryMode: "existing",
-  categoryId: "",
+  categoryIds: [],
   newCategory: emptyCategoryForm(defaultLang),
   product: emptyProductForm(defaultLang),
   withVariant: true,
@@ -448,7 +547,7 @@ export function wizardStepErrors(step: WizardStep, w: ProductWizard, me: Me | nu
   switch (step) {
     case "category":
       if (w.categoryMode === "new") return validateCategoryForm(w.newCategory) as Record<string, string>;
-      return blank(w.categoryId) ? { categoryId: E.required } : {};
+      return unique(w.categoryIds).length === 0 ? { categoryIds: E.required } : {};
     case "names":
       return pick(validateProductForm(w.product, me), ["key", "sourceLang", "name"]) as Record<string, string>;
     case "access":
@@ -531,11 +630,12 @@ export const stillSelected = (selected: ReadonlySet<string>, listed: readonly { 
 
 // ------------------------------------------------------------ category group
 
-const CATEGORY_REMOVAL_ORDER: readonly CategoryRemoval["outcome"][] = ["deleted", "archived", "has_products", "not_found"];
+const CATEGORY_REMOVAL_ORDER: readonly CategoryRemoval["outcome"][] = ["deleted", "archived", "has_products", "has_children", "not_found"];
 const CATEGORY_REMOVAL_KEYS: Record<CategoryRemoval["outcome"], string> = {
   deleted: CATALOG_KEYS.categories.deleted,
   archived: CATALOG_KEYS.categories.archived,
   has_products: CATALOG_KEYS.categories.hasProducts,
+  has_children: CATALOG_KEYS.categories.hasChildren,
   not_found: CATALOG_KEYS.categories.notFound,
 };
 
@@ -545,11 +645,13 @@ const CATEGORY_REMOVAL_KEYS: Record<CategoryRemoval["outcome"], string> = {
  * (F-026-m over F-026-l) — in the products' own sentences.
  */
 export function categoryRemovalReport(outcomes: readonly CategoryRemoval[]): { key: string; count: number }[] {
-  const products = (o: "deleted" | "archived") => outcomes.reduce((n, r) => n + (r.products?.[o] ?? 0), 0);
+  const products = (o: "deleted" | "archived" | "unlinked") => outcomes.reduce((n, r) => n + (r.products?.[o] ?? 0), 0);
   return [
     ...CATEGORY_REMOVAL_ORDER.map((o) => ({ key: CATEGORY_REMOVAL_KEYS[o], count: outcomes.filter((r) => r.outcome === o).length })),
     { key: CATALOG_KEYS.removal.deleted, count: products("deleted") },
     { key: CATALOG_KEYS.removal.archived, count: products("archived") },
+    // Filed in another category too: taken out of this one, still sold there (F-026-r).
+    { key: CATALOG_KEYS.categories.unlinked, count: products("unlinked") },
   ].filter((l) => l.count > 0);
 }
 
@@ -570,9 +672,9 @@ export function mergeRemovals(first: readonly CategoryRemoval[], second: readonl
  * any product sits in, archived ones included, so a count that left them out
  * would show 0 beside a category the removal then refuses.
  */
-export function productCounts(...lists: readonly (readonly { categoryId: string }[])[]): Map<string, number> {
+export function productCounts(...lists: readonly (readonly { categoryIds: readonly string[] }[])[]): Map<string, number> {
   const counts = new Map<string, number>();
-  for (const p of lists.flat()) counts.set(p.categoryId, (counts.get(p.categoryId) ?? 0) + 1);
+  for (const p of lists.flat()) for (const id of p.categoryIds) counts.set(id, (counts.get(id) ?? 0) + 1);
   return counts;
 }
 

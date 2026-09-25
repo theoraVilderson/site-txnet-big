@@ -2,7 +2,7 @@
 id: panel-web
 layer: interface
 status: active
-version: 24
+version: 25
 updated: 2026-09-25
 ---
 
@@ -73,7 +73,11 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    `DEFAULT_LOCALE`) and one name — and a product's description — in it
    (`validateCategoryForm`, `validateNamesForm`). Picking another language in a
    rename shows its published text. A blank description on a rename removes
-   it. Billing derives the key and drafts every other language from the source.
+   it. Billing derives the key. **Every other language is drafted only when
+   "translate into every language" is ticked** (`TranslateAllBox`, F-1533-i),
+   off by default on every create and rename sheet and the wizard; unticked,
+   `translateAll` is not sent, only the written language changes, and the
+   list falls back to the source (rule 9). Ticked, the drafts wait in rule 10.
 9. **A list shows the name, not the key.** The page fetches the published
    `catalog` namespace from the panel's own `/api/i18n/<lang>/catalog` for every
    available language and reads the viewer's language, then the item's
@@ -85,6 +89,19 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    one as the reviewer's text, a blank one never (`reviewWrites`). Languages
    offered are locale-service's — no list in code. "Translate missing" is
    billing's `draft-missing`. Billing scopes every call.
+10c. **Categories are a tree, and a product sits in several** (F-026-s over
+   F-026-r). The categories tab lists `categoryTree` order — each under its
+   parent, indented, siblings by key; one whose parent is not listed shows at
+   the top. A new category and "move" (`MoveCategorySheet`, one
+   `PATCH parentId` via `moveBody`, blank = top) pick a parent from
+   `parentChoices`: never itself or its subtree, never past billing's
+   `CATEGORY_MAX_DEPTH` (3, mirrored and checked against shared-core in
+   `catalog.test.ts`). A product is filed with `CategoryMultiPicker` (wizard,
+   and "change categories" in the product sheet — a patch replaces the list);
+   the order picked is the order sent, and at least one is required. Lists and
+   the filter name a category by its path (`categoryPath`); the filter matches
+   a product in any of its categories. A removal answers `has_children` and
+   `unlinked` lines too (`categoryRemovalReport`).
 10a. **A retired kind is never offered** (F-111-g): the wizard lists
    `CREATABLE_FULFILMENT_KINDS` — `FULFILMENT_KINDS` less billing's
    `RETIRED_FULFILMENT_KINDS` (`wallet_topup`, `external_order` — F-111-h); an existing product still

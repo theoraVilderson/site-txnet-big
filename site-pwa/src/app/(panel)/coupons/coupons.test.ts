@@ -304,7 +304,7 @@ describe("the variant picker", () => {
   const product = (patch: Partial<CatalogProductDetail>): CatalogProductDetail => ({
     id: "p",
     tenantId: null,
-    categoryId: "c",
+    categoryIds: ["c"],
     key: "vpn",
     nameKey: "k",
     sourceLang: "fa",

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
+import type { CatalogCategory } from "@/lib/catalog-api";
 import { DEFAULT_LOCALE } from "@/env";
 import { useCatalogSurface } from "../_lib/surface";
 import {
@@ -20,9 +21,11 @@ import {
   type NamesForm,
 } from "../_lib/catalog-form";
 import { Alert, Field, KeyField, LanguageSelect, Sheet, input, primaryButton, quietButton, useDirOf, useMessage } from "./catalog-ui";
+import { ParentSelect, TranslateAllBox } from "./CategoryPickers";
 
 /**
- * A category's fields: the name in its source language, the key made from it.
+ * A category's fields: the name in its source language, the key made from it,
+ * the category it sits under (F-026-s) and whether to translate it now.
  * Shared by "new category" and the wizard's first step.
  */
 export function CategoryFields({
@@ -31,12 +34,16 @@ export function CategoryFields({
   errors,
   takenKeys,
   owner,
+  categories,
+  label,
 }: {
   form: CategoryForm;
   onChange: (f: CategoryForm) => void;
   errors: Errors<CategoryForm>;
   takenKeys: readonly string[];
   owner: boolean;
+  categories: readonly CatalogCategory[];
+  label: (c: CatalogCategory) => string;
 }) {
   const { t } = useLocale();
   const dirOf = useDirOf();
@@ -67,12 +74,18 @@ export function CategoryFields({
           onChange({ ...form, key: v });
         }}
       />
+      {categories.length > 0 && (
+        <Field label={t("common", K.category.parent)} hint={t("common", K.category.parentHint)}>
+          <ParentSelect categories={categories} self={null} label={label} value={form.parentId} onChange={(v) => onChange({ ...form, parentId: v })} />
+        </Field>
+      )}
       {owner && (
         <label className="flex items-center gap-2 text-xs text-text-primary">
           <input type="checkbox" checked={form.shared} onChange={(e) => onChange({ ...form, shared: e.target.checked })} />
           {t("common", K.category.shared)}
         </label>
       )}
+      <TranslateAllBox checked={form.translateAll} onChange={(v) => onChange({ ...form, translateAll: v })} />
     </div>
   );
 }
@@ -80,11 +93,15 @@ export function CategoryFields({
 export function CategorySheet({
   owner,
   takenKeys,
+  categories,
+  label,
   onClose,
   onSaved,
 }: {
   owner: boolean;
   takenKeys: readonly string[];
+  categories: readonly CatalogCategory[];
+  label: (c: CatalogCategory) => string;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
@@ -115,7 +132,7 @@ export function CategorySheet({
   return (
     <Sheet title={t("common", K.newCategory)} onClose={onClose}>
       <p className="text-[11px] text-text-secondary">{t("common", K.guide.category.body)}</p>
-      <CategoryFields form={form} onChange={setForm} errors={errors} takenKeys={takenKeys} owner={owner} />
+      <CategoryFields form={form} onChange={setForm} errors={errors} takenKeys={takenKeys} owner={owner} categories={categories} label={label} />
       {error && <Alert>{error}</Alert>}
       <div className="flex justify-end gap-2">
         <button type="button" className={quietButton} onClick={onClose}>
@@ -131,8 +148,8 @@ export function CategorySheet({
 
 /**
  * Renames an existing item in the source language picked (F-1533-g). Picking
- * another language shows its published text, if any; billing re-keys the item
- * and drafts every other language from the new source.
+ * another language shows its published text, if any; billing re-keys the item,
+ * and drafts every other language from the new source only when asked (F-1533-i).
  */
 export function NamesSheet({
   kind,
@@ -161,12 +178,13 @@ export function NamesSheet({
     sourceLang: lang,
     name: texts[lang]?.[nameKey] ?? "",
     description: (descriptionKey && texts[lang]?.[descriptionKey]) || "",
+    translateAll: false,
   });
   const [form, setForm] = useState<NamesForm>(() => textsIn(initialSource));
   const [errors, setErrors] = useState<Errors<NamesForm>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const set = (k: keyof NamesForm, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const set = (k: "name" | "description", v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const save = async () => {
     const found = validateNamesForm(form);
@@ -202,6 +220,7 @@ export function NamesSheet({
           <textarea className={input} dir={dir} rows={3} maxLength={DESCRIPTION_MAX} value={form.description} onChange={(e) => set("description", e.target.value)} />
         </Field>
       )}
+      <TranslateAllBox checked={form.translateAll} onChange={(v) => setForm((f) => ({ ...f, translateAll: v }))} />
       {error && <Alert>{error}</Alert>}
       <div className="flex justify-end gap-2">
         <button type="button" className={quietButton} onClick={onClose}>

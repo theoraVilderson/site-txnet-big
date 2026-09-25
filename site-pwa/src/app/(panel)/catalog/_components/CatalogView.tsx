@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Archive, BookOpen, ChevronLeft, Languages, Loader2, Package, Pencil, Plus, Power, RotateCcw, RotateCw, Tags, Trash2 } from "lucide-react";
+import { Archive, BookOpen, ChevronLeft, FolderTree, Languages, Loader2, Package, Pencil, Plus, Power, RotateCcw, RotateCw, Tags, Trash2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { type CatalogAdminApi, type CatalogCategory, type CatalogProduct } from "@/lib/catalog-api";
 import { useCatalogSurface } from "../_lib/surface";
@@ -11,6 +11,8 @@ import { Select } from "../../_components/kit/Select";
 import {
   CATALOG_KEYS as K,
   catalogText,
+  categoryPath,
+  categoryTree,
   categoryRemovalReport,
   featureKeysIn,
   heldByProducts,
@@ -28,6 +30,7 @@ import {
 } from "../_lib/catalog-form";
 import { CatalogGuide } from "./CatalogGuide";
 import { CategorySheet, NamesSheet } from "./NameSheets";
+import { MoveCategorySheet } from "./CategoryPickers";
 import { ProductDetailSheet } from "./ProductDetailSheet";
 import { ProductWizard } from "./ProductWizard";
 import { Alert, primaryButton, quietButton, useMessage } from "./catalog-ui";
@@ -113,6 +116,7 @@ export function CatalogView() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [texts, setTexts] = useState<CatalogTexts>({});
   const [renaming, setRenaming] = useState<Renaming | null>(null);
+  const [moving, setMoving] = useState<CatalogCategory | null>(null);
   const [guide, setGuide] = useState(false);
 
   useEffect(() => {
@@ -164,13 +168,16 @@ export function CatalogView() {
   };
 
   const nameOf = (item: { key: string; nameKey: string; sourceLang: string }) => catalogText(texts, lang, item.nameKey, item.sourceLang) ?? item.key;
+  // A product sits in several categories (F-026-r): each named by its path from the top, first first.
   const categoryName = (id: string) => {
-    const c = categories.find((x) => x.id === id) ?? archivedCategories.find((x) => x.id === id);
-    return c ? nameOf(c) : "—";
+    const all = [...categories, ...archivedCategories];
+    return all.some((x) => x.id === id) ? categoryPath(all, id, nameOf) : "—";
   };
+  const categoryNames = (ids: readonly string[]) => ids.map(categoryName).join("، ");
+  const tree = useMemo(() => categoryTree(categories), [categories]);
   const knownFeatureKeys = useMemo(() => featureKeysIn(products ?? []), [products]);
   const listed = showArchived ? archived : (products ?? []);
-  const shown = listed.filter((p) => (!categoryId || p.categoryId === categoryId) && (!platformOnly || p.tenantId === null));
+  const shown = listed.filter((p) => (!categoryId || p.categoryIds.includes(categoryId)) && (!platformOnly || p.tenantId === null));
   const allSelected = !showArchived && shown.length > 0 && shown.every((p) => selected.has(p.id));
   const toggle = (id: string) =>
     setSelected((before) => {
@@ -249,6 +256,7 @@ export function CatalogView() {
   const saved = async () => {
     setCreating(null);
     setRenaming(null);
+    setMoving(null);
     setNotice(t("common", K.saved));
     await load();
   };
@@ -314,7 +322,7 @@ export function CatalogView() {
               ariaLabel={t("common", K.filters.category)}
               value={categoryId}
               onChange={setCategoryId}
-              options={[{ value: "", label: t("common", K.filters.allCategories) }, ...categories.map((c) => ({ value: c.id, label: nameOf(c) }))]}
+              options={[{ value: "", label: t("common", K.filters.allCategories) }, ...tree.map(({ category: c }) => ({ value: c.id, label: categoryName(c.id) }))]}
               className="w-44"
             />
             {owner && (
@@ -405,7 +413,7 @@ export function CatalogView() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold text-text-primary">{nameOf(p)}</p>
                     <p className="text-[11px] text-text-secondary">
-                      {categoryName(p.categoryId)} · {t("common", K.removal.archivedBadge)}
+                      {categoryNames(p.categoryIds)} · {t("common", K.removal.archivedBadge)}
                       {p.tenantId === null && ` · ${t("common", K.platform)}`}
                     </p>
                   </div>
@@ -456,7 +464,7 @@ export function CatalogView() {
                   <button type="button" className="min-w-0 flex-1 text-start" onClick={() => setOpenId(p.id)}>
                   <p className="truncate text-sm font-bold text-text-primary">{nameOf(p)}</p>
                   <p className="text-[11px] text-text-secondary">
-                    {categoryName(p.categoryId)} · {t("common", K.fulfilmentKind[p.fulfilmentKind])}
+                    {categoryNames(p.categoryIds)} · {t("common", K.fulfilmentKind[p.fulfilmentKind])}
                     {p.tenantId === null && ` · ${t("common", K.platform)}`}
                     {!p.isActive && ` · ${t("common", K.inactive)}`}
                   </p>
@@ -560,9 +568,13 @@ export function CatalogView() {
               </>
             )}
           </div>
-          <ul className="grid gap-2 sm:grid-cols-2">
-            {categories.map((c) => (
-              <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm">
+          <ul className="flex flex-col gap-2">
+            {tree.map(({ category: c, depth }) => (
+              <li
+                key={c.id}
+                style={{ marginInlineStart: `${depth * 1.5}rem` }}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm"
+              >
                 <input type="checkbox" checked={pickedCategories.has(c.id)} onChange={() => pickCategory(c.id)} aria-label={nameOf(c)} />
                 <button
                   type="button"
@@ -588,6 +600,10 @@ export function CatalogView() {
                     <Pencil size={14} aria-hidden />
                     {t("common", K.rename)}
                   </button>
+                  <button type="button" className={quietButton} onClick={() => setMoving(c)}>
+                    <FolderTree size={14} aria-hidden />
+                    {t("common", K.categories.move)}
+                  </button>
                   <button type="button" className={quietButton} onClick={() => void act(() => api.updateCategory(c.id, { isActive: !c.isActive }))}>
                     <Power size={14} aria-hidden />
                     {t("common", c.isActive ? K.deactivate : K.activate)}
@@ -600,7 +616,14 @@ export function CatalogView() {
       )}
 
       {creating === "category" && (
-        <CategorySheet owner={owner} takenKeys={categories.map((c) => c.key)} onClose={() => setCreating(null)} onSaved={saved} />
+        <CategorySheet
+          owner={owner}
+          takenKeys={categories.map((c) => c.key)}
+          categories={categories}
+          label={nameOf}
+          onClose={() => setCreating(null)}
+          onSaved={saved}
+        />
       )}
       {creating === "product" && (
         <ProductWizard
@@ -626,10 +649,13 @@ export function CatalogView() {
           product={openProduct}
           name={nameOf(openProduct)}
           knownFeatureKeys={knownFeatureKeys}
+          categories={categories}
+          categoryLabel={nameOf}
           onClose={() => setOpenId(null)}
           onChanged={load}
         />
       )}
+      {moving && <MoveCategorySheet category={moving} categories={categories} label={nameOf} onClose={() => setMoving(null)} onSaved={saved} />}
       {renaming && (
         <NamesSheet
           kind={renaming.kind}

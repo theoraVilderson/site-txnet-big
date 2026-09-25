@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, Loader2, Plus, Power, Sparkles } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { type CatalogProduct, type CatalogProductDetail, type CatalogVariant, type FulfilmentKind, type PanelGroupOption, type Quotas } from "@/lib/catalog-api";
+import { type CatalogCategory, type CatalogProduct, type CatalogProductDetail, type CatalogVariant, type FulfilmentKind, type PanelGroupOption, type Quotas } from "@/lib/catalog-api";
 import { useCatalogSurface } from "../_lib/surface";
 import { DatePicker } from "../../_components/kit/DatePicker";
 import { Select } from "../../_components/kit/Select";
@@ -35,6 +35,7 @@ import {
   type VariantForm,
 } from "../_lib/catalog-form";
 import { FeatureKeyPicker } from "./FeatureKeyPicker";
+import { ProductCategories } from "./CategoryPickers";
 import { Alert, CopyId, Field, Sheet, input, primaryButton, quietButton, useMessage } from "./catalog-ui";
 
 /**
@@ -46,12 +47,17 @@ export function ProductDetailSheet({
   product,
   name,
   knownFeatureKeys,
+  categories,
+  categoryLabel,
   onClose,
   onChanged,
 }: {
   product: CatalogProduct;
   name: string;
   knownFeatureKeys: readonly string[];
+  /** Where it can be filed; its own list is `product.categoryIds` (F-026-s). */
+  categories: readonly CatalogCategory[];
+  categoryLabel: (c: CatalogCategory) => string;
   onClose: () => void;
   onChanged: () => Promise<void>;
 }) {
@@ -95,6 +101,7 @@ export function ProductDetailSheet({
       }
       onClose={onClose}
     >
+      <ProductCategories product={detail ?? product} categories={categories} label={categoryLabel} onSaved={async () => Promise.all([load(), onChanged()]).then(() => undefined)} />
       <Capabilities product={detail ?? product} known={knownFeatureKeys} onSaved={async () => Promise.all([load(), onChanged()]).then(() => undefined)} />
 
       <h3 className="text-xs font-bold text-text-secondary">{t("common", K.open)}</h3>

@@ -55,7 +55,9 @@ export type CatalogRejection =
   | "text_key_invalid"
   | "texts_unavailable"
   | "lang_unknown"
-  | "source_text_missing";
+  | "source_text_missing"
+  | "category_cycle"
+  | "category_too_deep";
 
 /** Text by language code (F-1533-d/f); at least the item's source language. The key is billing's. */
 export type Texts = Record<string, string>;
@@ -73,16 +75,22 @@ export interface TranslationDraft {
 
 export interface CreateCategoryBody {
   tenantId?: string | null;
+  /** The category it sits under (F-026-r); absent or `null` = top level. */
+  parentId?: string | null;
   key: string;
   /** Absent = billing's `DEFAULT_LANGUAGE`. */
   sourceLang?: string;
   name: Texts;
+  /** Draft every other language into the review list (F-1533-i). Off when absent. */
+  translateAll?: boolean;
 }
 
 export interface CatalogCategory {
   id: string;
   /** `null` = the platform's, shared with every tenant. */
   tenantId: string | null;
+  /** The category it sits under, or `null` at the top (F-026-q). */
+  parentId: string | null;
   key: string;
   nameKey: string;
   /** The language its name was written in; the list falls back to it. */
@@ -95,7 +103,8 @@ export interface CatalogCategory {
 export interface CatalogProduct {
   id: string;
   tenantId: string | null;
-  categoryId: string;
+  /** Every category it sits in, first shown first (F-026-q). */
+  categoryIds: string[];
   key: string;
   nameKey: string;
   descriptionKey: string | null;
@@ -120,8 +129,9 @@ export interface ProductRemoval {
  */
 export interface CategoryRemoval {
   id: string;
-  outcome: "deleted" | "archived" | "has_products" | "not_found";
-  products?: { deleted: number; archived: number };
+  outcome: "deleted" | "archived" | "has_products" | "has_children" | "not_found";
+  /** `unlinked`: filed in another category too, so only taken out of this one (F-026-r). */
+  products?: { deleted: number; archived: number; unlinked: number };
 }
 
 /** Base currency, a decimal string (C-02). A row is history: never edited, only switched off. */
@@ -173,16 +183,19 @@ export interface PanelGroupOption {
 export interface CreateProductBody {
   /** Absent = the caller's tenant; `null` = platform; another id = the platform owner's alone. */
   tenantId?: string | null;
-  categoryId: string;
+  /** One or more, distinct; the first is shown first (F-026-r). */
+  categoryIds: string[];
   key: string;
   sourceLang?: string;
   name: Texts;
   description?: Texts | null;
+  /** Draft every other language into the review list (F-1533-i). Off when absent. */
+  translateAll?: boolean;
   fulfilmentKind: FulfilmentKind;
   featureKeys?: string[];
   defaultQuotas?: Quotas;
 }
-export type UpdateProductBody = Partial<Pick<CreateProductBody, "sourceLang" | "name" | "description" | "featureKeys" | "defaultQuotas">> & {
+export type UpdateProductBody = Partial<Pick<CreateProductBody, "categoryIds" | "sourceLang" | "name" | "description" | "translateAll" | "featureKeys" | "defaultQuotas">> & {
   isActive?: boolean;
   /** Only `false`: back from the archive, still switched off. */
   archived?: false;
@@ -248,7 +261,10 @@ export function catalogAdminApi(tenantId: string | null) {
       return call<CatalogCategory>(`${at}/categories`, { method: "POST", ...json(body) });
     },
 
-    async updateCategory(categoryId: string, body: { sourceLang?: string; name?: Texts; isActive?: boolean; archived?: false }): Promise<CatalogCategory> {
+    async updateCategory(
+      categoryId: string,
+      body: { parentId?: string | null; sourceLang?: string; name?: Texts; translateAll?: boolean; isActive?: boolean; archived?: false },
+    ): Promise<CatalogCategory> {
       return call<CatalogCategory>(`${at}/categories/${id(categoryId)}`, { method: "PATCH", ...json(body) });
     },
 

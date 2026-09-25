@@ -17,6 +17,11 @@ import {
   REFUSAL_KEYS,
   RESET_POLICIES,
   VISIBILITIES,
+  CATEGORY_MAX_DEPTH,
+  categoryPath,
+  categoryTree,
+  moveBody,
+  parentChoices,
   catalogText,
   categoryBody,
   currentPrice,
@@ -144,7 +149,7 @@ describe("what billing can refuse, and what it accepts", () => {
 });
 
 describe("the product form", () => {
-  const valid = () => ({ ...emptyProductForm("fa"), categoryId: UUID, key: "vpn_pro", name: "وی‌پی‌ان پرو", featureKeys: ["vpn.access"] });
+  const valid = () => ({ ...emptyProductForm("fa"), categoryIds: [UUID], key: "vpn_pro", name: "وی‌پی‌ان پرو", featureKeys: ["vpn.access"] });
 
   it("accepts a plain product", () => {
     expect(validateProductForm(valid(), RESELLER)).toEqual({});
@@ -155,7 +160,7 @@ describe("the product form", () => {
     [{ name: "  " }, "name"],
     [{ sourceLang: "" }, "sourceLang"],
     [{ featureKeys: ["vpn.access", "Not-A-Key"] }, "featureKeys"],
-    [{ categoryId: "" }, "categoryId"],
+    [{ categoryIds: [] }, "categoryIds"],
   ])("refuses %o on %s", (patch, field) => {
     expect(validateProductForm({ ...valid(), ...patch }, RESELLER)).toHaveProperty(field);
   });
@@ -170,6 +175,15 @@ describe("the product form", () => {
     expect(productBody({ ...valid(), owner: "platform" }, OWNER)).toMatchObject({ tenantId: null });
     expect(productBody({ ...valid(), owner: "tenant", tenantId: UUID }, OWNER)).toMatchObject({ tenantId: UUID });
     expect(productBody({ ...valid(), owner: "own" }, OWNER)).not.toHaveProperty("tenantId");
+  });
+
+  it("files a product in every category picked, in the order picked, and asks for translations only when ticked (F-026-s)", () => {
+    const OTHER = "33333333-3333-4333-8333-333333333333";
+    const body = productBody({ ...valid(), categoryIds: [OTHER, UUID, OTHER] }, RESELLER);
+    expect(body.categoryIds).toEqual([OTHER, UUID]);
+    expect(body).not.toHaveProperty("translateAll");
+    expect(emptyProductForm("fa").translateAll).toBe(false);
+    expect(productBody({ ...valid(), translateAll: true }, RESELLER)).toMatchObject({ translateAll: true });
   });
 
   it("trims feature keys and drops repeats, and leaves out a blank description", () => {
@@ -219,7 +233,7 @@ describe("nothing to remember: keys and capabilities are suggested", () => {
 describe("the new product wizard", () => {
   const ready = () => {
     const w = emptyWizard("fa");
-    w.categoryId = UUID;
+    w.categoryIds = [UUID];
     w.product = { ...w.product, key: "vpn_pro", name: "وی‌پی‌ان پرو", featureKeys: ["vpn.access"] };
     w.variant = { ...w.variant, sku: "VPN_PRO-30D", price: "5", durationDays: "30" };
     return w;
@@ -240,8 +254,8 @@ describe("the new product wizard", () => {
 
   it("needs a picked category, or a new one with a name", () => {
     const w = ready();
-    w.categoryId = "";
-    expect(wizardStepErrors("category", w, RESELLER)).toHaveProperty("categoryId");
+    w.categoryIds = [];
+    expect(wizardStepErrors("category", w, RESELLER)).toHaveProperty("categoryIds");
     w.newCategory = { ...w.newCategory, key: "vpn", name: "" };
     w.categoryMode = "new";
     expect(wizardStepErrors("category", w, RESELLER)).toHaveProperty("name");
@@ -268,13 +282,21 @@ describe("the category form and renaming", () => {
     expect(categoryBody({ ...valid, shared: true }, false)).toEqual({ key: "games", sourceLang: "fa", name: { fa: "بازی" } });
   });
 
+  it("files a new category under the parent picked, and asks for translations only when ticked (F-026-s)", () => {
+    const valid = { ...emptyCategoryForm("fa"), key: "games", name: "بازی" };
+    expect(emptyCategoryForm("fa")).toMatchObject({ parentId: "", translateAll: false });
+    expect(categoryBody({ ...valid, parentId: UUID }, false)).toEqual({ key: "games", sourceLang: "fa", name: { fa: "بازی" }, parentId: UUID });
+    expect(categoryBody({ ...valid, translateAll: true }, false)).toMatchObject({ translateAll: true });
+  });
+
   it("renames in the source language picked, and clears a description left blank", () => {
-    const names = { sourceLang: "en", name: "Alpha", description: "" };
+    const names = { sourceLang: "en", name: "Alpha", description: "", translateAll: false };
     expect(validateNamesForm(names)).toEqual({});
     expect(namesBody(names, "product")).toEqual({ sourceLang: "en", name: { en: "Alpha" }, description: null });
     expect(namesBody({ ...names, description: " About " }, "product")).toEqual({ sourceLang: "en", name: { en: "Alpha" }, description: { en: "About" } });
     expect(namesBody(names, "category")).toEqual({ sourceLang: "en", name: { en: "Alpha" } });
     expect(validateNamesForm({ ...names, name: "" })).toHaveProperty("name");
+    expect(namesBody({ ...names, translateAll: true }, "category")).toEqual({ sourceLang: "en", name: { en: "Alpha" }, translateAll: true });
   });
 });
 
@@ -494,17 +516,19 @@ describe("categories in a group (F-026-j/k)", () => {
   it("has a line for every outcome billing answers, and reports each once, deleted before kept before not found", () => {
     const field = /export type CategoryRemovalOutcome = \{[^}]*outcome: ([^;}]*)/.exec(read("billing-service/src/app/catalog/catalog-admin.service.ts"));
     if (!field) throw new Error("CategoryRemovalOutcome no longer has an outcome union — this test is stale");
-    expect([...field[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort()).toEqual(["archived", "deleted", "has_products", "not_found"]);
+    expect([...field[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort()).toEqual(["archived", "deleted", "has_children", "has_products", "not_found"]);
     expect(
       categoryRemovalReport([
         { id: "a", outcome: "has_products" },
         { id: "b", outcome: "not_found" },
         { id: "c", outcome: "deleted" },
         { id: "d", outcome: "has_products" },
+        { id: "e", outcome: "has_children" },
       ]),
     ).toEqual([
       { key: C.deleted, count: 1 },
       { key: C.hasProducts, count: 2 },
+      { key: C.hasChildren, count: 1 },
       { key: C.notFound, count: 1 },
     ]);
   });
@@ -513,9 +537,9 @@ describe("categories in a group (F-026-j/k)", () => {
     const R = CATALOG_KEYS.removal;
     expect(
       categoryRemovalReport([
-        { id: "a", outcome: "archived", products: { deleted: 1, archived: 2 } },
-        { id: "b", outcome: "deleted", products: { deleted: 3, archived: 0 } },
-        { id: "c", outcome: "has_products", products: { deleted: 0, archived: 0 } },
+        { id: "a", outcome: "archived", products: { deleted: 1, archived: 2, unlinked: 0 } },
+        { id: "b", outcome: "deleted", products: { deleted: 3, archived: 0, unlinked: 2 } },
+        { id: "c", outcome: "has_products", products: { deleted: 0, archived: 0, unlinked: 0 } },
       ]),
     ).toEqual([
       { key: C.deleted, count: 1 },
@@ -523,6 +547,7 @@ describe("categories in a group (F-026-j/k)", () => {
       { key: C.hasProducts, count: 1 },
       { key: R.deleted, count: 4 },
       { key: R.archived, count: 2 },
+      { key: C.unlinked, count: 2 },
     ]);
   });
 
@@ -533,9 +558,9 @@ describe("categories in a group (F-026-j/k)", () => {
       { id: "c", outcome: "not_found" as const },
     ];
     expect(heldByProducts(first)).toEqual(["b"]);
-    expect(mergeRemovals(first, [{ id: "b", outcome: "archived", products: { deleted: 0, archived: 1 } }])).toEqual([
+    expect(mergeRemovals(first, [{ id: "b", outcome: "archived", products: { deleted: 0, archived: 1, unlinked: 0 } }])).toEqual([
       { id: "a", outcome: "deleted" },
-      { id: "b", outcome: "archived", products: { deleted: 0, archived: 1 } },
+      { id: "b", outcome: "archived", products: { deleted: 0, archived: 1, unlinked: 0 } },
       { id: "c", outcome: "not_found" },
     ]);
   });
@@ -548,9 +573,9 @@ describe("categories in a group (F-026-j/k)", () => {
   });
 
   it("counts an archived product in its category, because billing refuses to remove that category for it", () => {
-    const counts = productCounts([{ categoryId: "x" }, { categoryId: "y" }], [{ categoryId: "x" }]);
+    const counts = productCounts([{ categoryIds: ["x", "y"] }, { categoryIds: ["y"] }], [{ categoryIds: ["x"] }]);
     expect(counts.get("x")).toBe(2);
-    expect(counts.get("y")).toBe(1);
+    expect(counts.get("y")).toBe(2);
     expect(counts.get("empty")).toBeUndefined();
   });
 
@@ -582,6 +607,37 @@ describe("the menu", () => {
   it("shows the catalog page only to a holder of catalog.manage", () => {
     const links = PANEL_MENU.flatMap((e) => (isMenuGroup(e) ? e.children : [e]));
     expect(links.find((l) => l.href === PANEL_CATALOG)?.requires).toEqual([CATALOG_MANAGE]);
+  });
+});
+
+describe("categories as a tree (F-026-s over F-026-r)", () => {
+  const cat = (id: string, parentId: string | null, key = id) => ({ id, parentId, key });
+  // vpn > fast > gaming; vpn > slow; games (top); orphan's parent is not in the list (another tenant's).
+  const cats = [cat("gaming", "fast"), cat("games", null), cat("slow", "vpn"), cat("fast", "vpn"), cat("vpn", null), cat("orphan", "gone")];
+
+  it("keeps billing's depth cap", () => {
+    const shared = read("shared-core/src/lib/catalog/category-tree.ts");
+    expect(shared).toContain(`export const CATEGORY_MAX_DEPTH = ${CATEGORY_MAX_DEPTH};`);
+  });
+
+  it("lists every category once, each under its parent, by key; one whose parent is not listed goes to the top", () => {
+    expect(categoryTree(cats).map((n) => `${n.depth}:${n.category.id}`)).toEqual(["0:games", "0:orphan", "0:vpn", "1:fast", "2:gaming", "1:slow"]);
+  });
+
+  it("names a category by its path from the top", () => {
+    expect(categoryPath(cats, "gaming", (c) => c.key)).toBe("vpn › fast › gaming");
+  });
+
+  it("offers as a parent neither the category itself, nor anything under it, nor a place that would pass the cap", () => {
+    // `fast` spans two levels (fast > gaming): it fits only at the top or right under a top-level one.
+    expect(parentChoices(cats, "fast").map((c) => c.id).sort()).toEqual(["games", "orphan", "vpn"]);
+    // A new category (one level) goes anywhere above level three.
+    expect(parentChoices(cats, null).map((c) => c.id).sort()).toEqual(["fast", "games", "orphan", "slow", "vpn"]);
+  });
+
+  it("sends a move with the one field billing's patch takes, null for the top", () => {
+    expect(moveBody("")).toEqual({ parentId: null });
+    expect(moveBody(UUID)).toEqual({ parentId: UUID });
   });
 });
 

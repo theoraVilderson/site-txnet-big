@@ -1167,7 +1167,10 @@
       "key": "Key",
       "shared": "Shared with every tenant",
       "sourceLang": "Source language",
-      "name": "Name"
+      "name": "Name",
+      "parent": "Parent category",
+      "top": "None (top level)",
+      "parentHint": "Optional. Up to 3 levels: category › subcategory › sub-subcategory."
     },
     "product": {
       "key": "Key",
@@ -1180,10 +1183,15 @@
       "ownerPlatform": "The platform's",
       "ownerTenant": "Another tenant's",
       "tenantId": "Tenant ID",
-      "nameHint": "Written in the source language. Other languages are drafted by machine from it and published after review; a language with no text shows this one.",
+      "nameHint": "Written in the source language. A language with no text shows this one.",
       "sourceLang": "Source language",
       "name": "Name",
-      "description": "Description"
+      "description": "Description",
+      "categories": "Categories",
+      "categoriesHint": "Pick one or more. The first one picked is shown first.",
+      "translateAll": "Translate into every language",
+      "translateAllHint": "Makes machine drafts in every other language and puts them under “Translations” for you to check and publish. Left unticked, only this language changes and other languages show this text until translated.",
+      "editCategories": "Change categories"
     },
     "variant": {
       "sku": "SKU",
@@ -1278,7 +1286,9 @@
       "texts_unavailable": "The names could not be saved right now. Nothing was changed; try again.",
       "lang_unknown": "That language is not available on this platform.",
       "source_text_missing": "Write the text in the source language.",
-      "panel_group_not_found": "That server group was not found, or is another tenant's."
+      "panel_group_not_found": "That server group was not found, or is another tenant's.",
+      "category_cycle": "A category cannot sit under itself or under one of its own subcategories.",
+      "category_too_deep": "Categories go at most 3 levels deep; this would go deeper. Pick a higher parent."
     },
     "rename": "Edit names",
     "translations": {
@@ -1327,7 +1337,7 @@
       },
       "translations": {
         "title": "5. Translations",
-        "body": "Write the name in one language only. Other languages get machine drafts, shown to users only after you publish them under “Translations”."
+        "body": "Write the name in one language only. Tick “Translate into every language” to get machine drafts for the others; they are shown to users only after you publish them under “Translations”."
       }
     },
     "wizard": {
@@ -1350,7 +1360,7 @@
       "next": "Next",
       "back": "Back",
       "create": "Create product",
-      "pickCategory": "Pick a category",
+      "pickCategory": "Pick at least one category",
       "useNewCategory": "Create a new category",
       "useExistingCategory": "Pick an existing category",
       "noCategories": "You have no categories yet; create the first one here.",
@@ -1363,7 +1373,7 @@
       "advanced": "More settings",
       "none": "—",
       "partial": "The product was created but the variant was not saved. Add it again from “Variants and prices”.",
-      "done": "Product created. Its name in other languages will appear shortly as drafts under “Translations”.",
+      "done": "Product created. If you ticked “Translate into every language”, drafts will appear shortly under “Translations”.",
       "edit": "Edit"
     },
     "fulfilmentHint": {
@@ -1406,7 +1416,12 @@
       "showActive": "Back to categories",
       "archivedProducts": "{{count}} archived products",
       "archivedEmpty": "No archived categories.",
-      "archivedHint": "These categories were removed with their products, and a sold product kept each of them: nothing new is filed in them and they are not in the list. Restore brings one back, switched off."
+      "archivedHint": "These categories were removed with their products, and a sold product kept each of them: nothing new is filed in them and they are not in the list. Restore brings one back, switched off.",
+      "hasChildren": "{{count}} categories kept because other categories sit under them. Move or remove those first.",
+      "unlinked": "{{count}} products were also in another category, so they were only taken out of this one.",
+      "move": "Move",
+      "moveTitle": "Move category",
+      "under": "under {{name}}"
     },
     "copyId": "Copy id",
     "copied": "Copied",
@@ -1818,7 +1833,9 @@
       "texts_unavailable": "the translation service is not answering. The item was not changed; try again shortly.",
       "lang_unknown": "that language is not one this platform serves.",
       "source_text_missing": "write the name in its source language first.",
-      "panel_group_not_found": "that server group is neither the platform's nor this reseller's."
+      "panel_group_not_found": "that server group is neither the platform's nor this reseller's.",
+      "category_cycle": "a category cannot sit under itself or under one of its own subcategories.",
+      "category_too_deep": "categories go at most 3 levels deep; pick a higher parent."
     }
   },
   "resellerBots": {

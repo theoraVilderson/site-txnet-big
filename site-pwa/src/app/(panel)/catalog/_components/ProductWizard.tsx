@@ -34,6 +34,7 @@ import {
 } from "../_lib/catalog-form";
 import { FeatureKeyPicker } from "./FeatureKeyPicker";
 import { CategoryFields } from "./NameSheets";
+import { CategoryMultiPicker, TranslateAllBox } from "./CategoryPickers";
 import { VariantFields, usePanelGroups } from "./ProductDetailSheet";
 import { Alert, Field, KeyField, LanguageSelect, Sheet, input, primaryButton, quietButton, useDirOf, useMessage } from "./catalog-ui";
 
@@ -43,6 +44,8 @@ const REFUSAL_STEP: Record<string, WizardStep> = {
   source_text_missing: "names",
   lang_unknown: "names",
   category_not_found: "category",
+  category_cycle: "category",
+  category_too_deep: "category",
   tenant_not_found: "access",
   not_platform_owner: "access",
   sku_taken: "variant",
@@ -86,7 +89,7 @@ export function ProductWizard({
   const [w, setW] = useState<Wizard>(() => ({
     ...emptyWizard(DEFAULT_LOCALE),
     categoryMode: categories.length ? "existing" : "new",
-    categoryId: categories.length === 1 ? categories[0].id : "",
+    categoryIds: categories.length === 1 ? [categories[0].id] : [],
   }));
   const [step, setStep] = useState<WizardStep>("category");
   const [reached, setReached] = useState(0);
@@ -138,8 +141,8 @@ export function ProductWizard({
       }
       stage = "names";
       if (!ids.productId) {
-        const categoryId = w.categoryMode === "new" ? ids.categoryId! : w.categoryId;
-        const p = await api.createProduct(productBody({ ...w.product, categoryId }, actor));
+        const categoryIds = w.categoryMode === "new" ? [ids.categoryId!] : w.categoryIds;
+        const p = await api.createProduct(productBody({ ...w.product, categoryIds }, actor));
         ids = { ...ids, productId: p.id };
         setCreated(ids);
       }
@@ -164,7 +167,7 @@ export function ProductWizard({
   };
 
   const nameDir = dirOf(w.product.sourceLang);
-  const category = categories.find((c) => c.id === w.categoryId);
+  const picked = w.categoryIds.map((id) => categories.find((c) => c.id === id)).filter((c): c is CatalogCategory => c !== undefined);
 
   const footer = (
     <div className="flex items-center justify-between gap-2">
@@ -216,15 +219,9 @@ export function ProductWizard({
         <div className="flex flex-col gap-3">
           {w.categoryMode === "existing" ? (
             <>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {categories.map((c) => (
-                  <Choice key={c.id} on={w.categoryId === c.id} onClick={() => setW((x) => ({ ...x, categoryId: c.id }))}>
-                    <span className="text-sm font-bold">{categoryLabel(c)}</span>
-                    {!c.isActive && <span className="text-[11px] text-text-secondary">{t("common", K.inactive)}</span>}
-                  </Choice>
-                ))}
-              </div>
-              {errors.categoryId && <p className="text-[11px] text-error">{t("common", K.wizard.pickCategory)}</p>}
+              <p className="text-[11px] text-text-secondary">{t("common", K.product.categoriesHint)}</p>
+              <CategoryMultiPicker categories={categories} label={categoryLabel} value={w.categoryIds} onChange={(ids) => setW((x) => ({ ...x, categoryIds: ids }))} />
+              {errors.categoryIds && <p className="text-[11px] text-error">{t("common", K.wizard.pickCategory)}</p>}
               <button type="button" className={`${quietButton} self-start`} onClick={() => setW((x) => ({ ...x, categoryMode: "new" }))}>
                 {t("common", K.wizard.useNewCategory)}
               </button>
@@ -232,7 +229,15 @@ export function ProductWizard({
           ) : (
             <>
               {categories.length === 0 && <p className="text-[11px] text-text-secondary">{t("common", K.wizard.noCategories)}</p>}
-              <CategoryFields form={w.newCategory} onChange={(c) => setW((x) => ({ ...x, newCategory: c }))} errors={errors} takenKeys={takenCategoryKeys} owner={owner} />
+              <CategoryFields
+                form={w.newCategory}
+                onChange={(c) => setW((x) => ({ ...x, newCategory: c }))}
+                errors={errors}
+                takenKeys={takenCategoryKeys}
+                owner={owner}
+                categories={categories}
+                label={categoryLabel}
+              />
               {categories.length > 0 && (
                 <button type="button" className={`${quietButton} self-start`} onClick={() => setW((x) => ({ ...x, categoryMode: "existing" }))}>
                   {t("common", K.wizard.useExistingCategory)}
@@ -265,6 +270,7 @@ export function ProductWizard({
           <Field label={t("common", K.product.description)}>
             <textarea className={input} dir={nameDir} rows={3} maxLength={DESCRIPTION_MAX} value={w.product.description} onChange={(e) => setProduct({ description: e.target.value })} />
           </Field>
+          <TranslateAllBox checked={w.product.translateAll} onChange={(v) => setProduct({ translateAll: v })} />
           <KeyField
             value={w.product.key}
             error={errors.key}
@@ -342,7 +348,7 @@ export function ProductWizard({
       {step === "review" && (
         <dl className="grid gap-x-4 gap-y-2 rounded-2xl border border-card-border p-3 text-xs sm:grid-cols-[10rem_1fr]">
           <Row label={t("common", K.wizard.steps.category)} onEdit={() => go("category")}>
-            {w.categoryMode === "new" ? w.newCategory.name : category ? categoryLabel(category) : t("common", K.wizard.none)}
+            {w.categoryMode === "new" ? w.newCategory.name : picked.length ? picked.map(categoryLabel).join("، ") : t("common", K.wizard.none)}
           </Row>
           <Row label={t("common", K.product.name)} onEdit={() => go("names")}>
             <span dir={nameDir}>{w.product.name}</span>{" "}
