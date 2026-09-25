@@ -87,8 +87,12 @@ export function useGrantsPage(page: number, lang: string): GrantsPageState {
     pendingIds.current = new Set((rows ?? []).filter((r) => r.status === "pending").map((r) => r.id));
   }, [rows]);
 
+  // The page the quiet read asks for, synced after render as `pendingIds` is:
+  // it is read only from a socket event or the clock, never while rendering.
   const pageRef = useRef(page);
-  pageRef.current = page;
+  useEffect(() => {
+    pageRef.current = page;
+  }, [page]);
   const quietRead = useCallback(async () => {
     const mine = ++seq.current;
     try {
