@@ -22,8 +22,11 @@ export type ResetPolicy = (typeof RESET_POLICIES)[number];
  * (F-111-g, the user's call 2026-09-25): `wallet_topup` paid from the wallet
  * debits and credits the same wallet, and money comes in through one path only
  * — the deposit page (`contract.deposit.md`). A credit bonus is a deposit coupon.
+ * `external_order` (F-111-h, the user's call 2026-09-25) until a real provider
+ * exists: a generic order API designed with no counterpart would not fit the
+ * first one. That provider is a row of its own, and un-retires the kind.
  */
-export const RETIRED_FULFILMENT_KINDS = ['wallet_topup'] as const;
+export const RETIRED_FULFILMENT_KINDS = ['wallet_topup', 'external_order'] as const;
 const RETIRED: readonly FulfilmentKind[] = RETIRED_FULFILMENT_KINDS;
 const CREATABLE_FULFILMENT_KINDS = Object.values(FulfilmentKind).filter(
   (k) => !RETIRED.includes(k),

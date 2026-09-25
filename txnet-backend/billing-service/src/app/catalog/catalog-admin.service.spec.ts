@@ -274,12 +274,19 @@ async function refusal(run: () => Promise<unknown>): Promise<CatalogAdminRefused
 const NEW_PRODUCT = { categoryId: PLATFORM_CATEGORY, key: 'vpn_pro', name: { fa: 'وی‌پی‌ان پرو', en: 'VPN Pro' }, fulfilmentKind: FulfilmentKind.network_access };
 const NEW_VARIANT = { sku: 'VPN-90', billingMode: VariantBillingMode.prepaid, visibility: VariantVisibility.public, durationDays: 90, price: '12.00' };
 
-describe('createProductSchema — a retired kind is never created (F-111-g)', () => {
+describe('createProductSchema — a retired kind is never created (F-111-g, F-111-h)', () => {
   const body = (fulfilmentKind: string) => ({ ...NEW_PRODUCT, fulfilmentKind });
 
+  it('retires exactly `wallet_topup` and `external_order`', () => {
+    expect([...RETIRED_FULFILMENT_KINDS].sort()).toEqual([FulfilmentKind.external_order, FulfilmentKind.wallet_topup].sort());
+  });
+
   it('refuses `wallet_topup`: a top-up is the deposit page, and from the wallet it is circular', () => {
-    expect(RETIRED_FULFILMENT_KINDS).toEqual([FulfilmentKind.wallet_topup]);
     expect(createProductSchema.safeParse(body(FulfilmentKind.wallet_topup)).success).toBe(false);
+  });
+
+  it('refuses `external_order`: no provider exists to place the order with', () => {
+    expect(createProductSchema.safeParse(body(FulfilmentKind.external_order)).success).toBe(false);
   });
 
   it('accepts every kind that is not retired', () => {

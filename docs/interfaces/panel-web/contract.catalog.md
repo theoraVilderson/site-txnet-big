@@ -87,7 +87,7 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    billing's `draft-missing`. Billing scopes every call.
 10a. **A retired kind is never offered** (F-111-g): the wizard lists
    `CREATABLE_FULFILMENT_KINDS` — `FULFILMENT_KINDS` less billing's
-   `RETIRED_FULFILMENT_KINDS` (`wallet_topup`); an existing product still
+   `RETIRED_FULFILMENT_KINDS` (`wallet_topup`, `external_order` — F-111-h); an existing product still
    shows its kind by name.
 10b. **A `network_access` variant names its panel group** (F-026-o over
    F-026-p; no other kind is placed on a panel — `takesPanelGroup`). The

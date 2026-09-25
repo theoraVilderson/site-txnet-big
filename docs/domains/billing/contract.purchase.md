@@ -37,7 +37,7 @@ the gate like every billing route ("Request edge" in `contract.md`).
 | `total = amount - discount`, `0 <= discount <= amount`, `amount >= 0` — CHECKs; `priceId` names the price row used | migration `20260925000400_invoice` |
 | `expiresAt` = creation + 30 minutes (`INVOICE_TTL_MS`) | `InvoiceService.create` |
 | Per user, `INVOICE_CREATE` bucket, `INVOICE_CREATE_RATE_LIMIT` (20) per 15 min | `@RateLimit` |
-| **Only what can be delivered is sold** (F-111-d): a kind with no delivery handler — `external_order`, `wallet_topup` (retired, never built: no new product of it is created — F-111-g; money comes in through the deposit page only), a `network_access` variant with no panel group — is the same neutral `404 variantNotFound` | `deliveryRouteOf` (entitlement `delivery.ts`); the user's call 2026-09-25 — a paid Grant nothing can deliver could only be refunded |
+| **Only what can be delivered is sold** (F-111-d): a kind with no delivery handler — `external_order` (retired until a real provider exists — F-111-h), `wallet_topup` (retired, never built: no new product of it is created — F-111-g; money comes in through the deposit page only), a `network_access` variant with no panel group — is the same neutral `404 variantNotFound` | `deliveryRouteOf` (entitlement `delivery.ts`); the user's call 2026-09-25 — a paid Grant nothing can deliver could only be refunded |
 | **Not yet checked:** governance restrictions and the reseller cap (F-904) — added here once their units exist | — |
 
 ## The clock (built — F-111-a)

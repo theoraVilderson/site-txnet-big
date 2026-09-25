@@ -131,9 +131,10 @@ describe("what billing can refuse, and what it accepts", () => {
     expect([...offered].sort()).toEqual(enumOf(file, name).sort());
   });
 
-  it("never offers a kind billing retired (F-111-g)", () => {
+  it("never offers a kind billing retired (F-111-g, F-111-h)", () => {
     expect([...RETIRED_FULFILMENT_KINDS]).toEqual(tupleOf("billing-service/src/app/catalog/catalog-admin.schema.ts", "RETIRED_FULFILMENT_KINDS"));
     expect(CREATABLE_FULFILMENT_KINDS).not.toContain("wallet_topup");
+    expect(CREATABLE_FULFILMENT_KINDS).not.toContain("external_order");
     expect(CREATABLE_FULFILMENT_KINDS.length + RETIRED_FULFILMENT_KINDS.length).toBe(FULFILMENT_KINDS.length);
   });
 

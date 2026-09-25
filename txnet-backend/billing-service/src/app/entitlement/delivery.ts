@@ -24,8 +24,8 @@ import { GRANT_AGGREGATE, markDelivered } from './delivered';
  * activates the Grant once `minHealthyPanels` confirm it (network
  * `contract.groups.md` rule 10) — on this sweep's check or on its own
  * minute tick, whichever reads it first, both through `markDelivered`. A kind
- * with no handler — `external_order`, `wallet_topup` (retired, F-111-g: never
- * created again), a network variant with
+ * with no handler — `external_order` and `wallet_topup` (both retired,
+ * F-111-h / F-111-g: never created again), a network variant with
  * no group — is refunded at the first check: nothing an hour of retries does
  * can deliver it (the user's call, 2026-09-25), and the invoice refuses to
  * sell one in the first place (`sellableKind`, F-111-a).
