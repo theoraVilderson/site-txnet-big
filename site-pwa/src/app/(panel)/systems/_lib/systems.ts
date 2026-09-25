@@ -255,11 +255,12 @@ export function validateRegister(form: RegisterForm): RegisterValidation {
   const budget = form.maxRequestsPerMinute.trim();
 
   if (name.length < 1 || name.length > 100) errors.name = K.register.invalid.name;
-  if (!isIp(ipAddress)) errors.ipAddress = K.register.invalid.ipAddress;
   if (apiBaseUrl ? apiBaseUrl.length > 500 || !isUrl(apiBaseUrl) : form.transport === "pull") {
     errors.apiBaseUrl = K.register.invalid.apiBaseUrl;
   }
   const push = form.transport === "push";
+  // Only a push panel's IP is ever read — its NAS's allowlist entry (F-027-br).
+  if (push && !isIp(ipAddress)) errors.ipAddress = K.register.invalid.ipAddress;
   if (!push && clientBaseUrl && (clientBaseUrl.length > 500 || !isUrl(clientBaseUrl))) {
     errors.clientBaseUrl = K.register.invalid.clientBaseUrl;
   }
@@ -274,7 +275,8 @@ export function validateRegister(form: RegisterForm): RegisterValidation {
 
   const body: RegisterPanelBody = {
     name,
-    ipAddress,
+    // Never for a pull panel, even if typed before switching: nothing reads it there.
+    ...(push ? { ipAddress } : {}),
     ...(apiBaseUrl ? { apiBaseUrl } : {}),
     // Never for a push panel, even if typed before switching: billing refuses it there.
     ...(clientBaseUrl && !push ? { clientBaseUrl } : {}),

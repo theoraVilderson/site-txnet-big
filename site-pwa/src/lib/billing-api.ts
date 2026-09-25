@@ -1299,7 +1299,8 @@ export interface CursorPage<Row> {
 
 export interface RegisterPanelBody {
   name: string;
-  ipAddress: string;
+  /** A push panel's NAS address, its allowlist entry: required there, never sent for a pull panel (F-027-br). */
+  ipAddress?: string;
   apiBaseUrl?: string;
   /** Where users are served their links — Hiddify's client proxy path (F-027-bg). Refused on a push panel. */
   clientBaseUrl?: string;

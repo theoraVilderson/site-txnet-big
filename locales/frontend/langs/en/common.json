@@ -2021,7 +2021,7 @@
           "connection": {
             "title": "Connection",
             "subtitle": "The address we call the panel at, and how often we may ask.",
-            "tip": "Write the address with http or https and the port, exactly as you open the panel's login page in a browser. If the panel sits behind a domain, enter that server's IP separately."
+            "tip": "Write the address with http or https and the port, exactly as you open the panel's login page in a browser. For this panel type that address is all we need; an IP is asked only of routers."
           },
           "login": {
             "title": "Panel login",

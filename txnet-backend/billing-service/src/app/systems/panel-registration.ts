@@ -10,7 +10,8 @@ import { SystemsRefused } from './systems-read';
 /** A panel as its owner declares it. The questionnaire is the connection test's to answer, not this. */
 export type RegisterPanelInput = {
   name: string;
-  ipAddress: string;
+  /** The NAS's allowlist entry: required for a push panel, optional for a pull one (F-027-br). */
+  ipAddress?: string | null;
   apiBaseUrl?: string | null;
   /** Where users are served their links, for a family that serves them apart from its API (F-027-bg). */
   clientBaseUrl?: string | null;
@@ -89,7 +90,7 @@ export class PanelRegistrationService {
         id,
         ...owner,
         name: input.name,
-        ipAddress: input.ipAddress,
+        ipAddress: input.ipAddress ?? null,
         apiBaseUrl: input.apiBaseUrl ?? null,
         clientBaseUrl: input.clientBaseUrl ?? null,
         driverType: input.driverType,

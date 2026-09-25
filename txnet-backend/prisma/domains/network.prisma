@@ -297,7 +297,10 @@ model Panel {
   /// `tenant` exactly when `tenantId` is set (`panel_ownership_matches_tenant`).
   ownershipType              PanelOwnershipType @default(platform)
   name                       String
-  ipAddress                  String
+  /// A push panel's NAS address, its allowlist entry — the only reader.
+  /// Optional for a pull panel, reached at `apiBaseUrl` (F-027-br,
+  /// `panel_push_has_ip_address`).
+  ipAddress                  String?
   /// Where the driver talks to it; null for a push source we never call.
   apiBaseUrl                 String?
   /// Where users are served their links, for a family that serves them apart

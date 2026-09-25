@@ -124,13 +124,12 @@ describe("validateRegister mirrors registerPanelSchema", () => {
     credentials: " admin:secret ",
   };
 
-  it("sends a pull panel trimmed, the login untouched, and no budget when left blank", () => {
+  it("sends a pull panel trimmed, the login untouched, no budget when left blank, and no IP (F-027-br)", () => {
     const out = validateRegister(good);
     expect(out).toEqual({
       ok: true,
       body: {
         name: "de-1",
-        ipAddress: "203.0.113.7",
         apiBaseUrl: "https://de-1.example.net:2053",
         driverType: "marzban",
         counterSemantics: "cumulative",
@@ -150,8 +149,6 @@ describe("validateRegister mirrors registerPanelSchema", () => {
   });
 
   it.each([
-    ["ipAddress", { ipAddress: "300.1.1.1" }],
-    ["ipAddress", { ipAddress: "example.net" }],
     ["name", { name: "  " }],
     ["name", { name: "x".repeat(101) }],
     ["region", { region: "x".repeat(51) }],
@@ -188,9 +185,23 @@ describe("validateRegister mirrors registerPanelSchema", () => {
     expect(push.ok && "clientBaseUrl" in push.body).toBe(false);
   });
 
-  it("accepts an IPv6 address and a budget inside 1–6000", () => {
-    const out = validateRegister({ ...good, ipAddress: "2001:db8::7", maxRequestsPerMinute: "120" });
-    expect(out.ok && out.body.ipAddress).toBe("2001:db8::7");
+  // F-027-br: only a push panel's IP is read — its NAS's allowlist entry.
+  it("needs a valid IP on a push panel, and never asks a pull panel for one", () => {
+    const push = { ...good, transport: "push" as const, radiusSecret: "s" };
+    for (const ipAddress of ["", "300.1.1.1", "example.net"]) {
+      const out = validateRegister({ ...push, ipAddress });
+      expect(out.ok ? null : out.errors.ipAddress).toBe(SYSTEMS_KEYS.register.invalid.ipAddress);
+    }
+    const v6 = validateRegister({ ...push, ipAddress: "2001:db8::7" });
+    expect(v6.ok && v6.body.ipAddress).toBe("2001:db8::7");
+    const pull = validateRegister({ ...good, ipAddress: "" });
+    expect(pull.ok && "ipAddress" in pull.body).toBe(false);
+    // Typed on push, then switched to pull: hidden, so never sent.
+    expect("ipAddress" in (validateRegister({ ...good, ipAddress: "example.net" }) as { body: object }).body).toBe(false);
+  });
+
+  it("accepts a budget inside 1–6000", () => {
+    const out = validateRegister({ ...good, maxRequestsPerMinute: "120" });
     expect(out.ok && out.body.maxRequestsPerMinute).toBe(120);
   });
 });

@@ -199,7 +199,7 @@ type PanelDirectory struct {
 const DefaultRefresh = time.Minute
 
 const nasSQL = `
-SELECT id::text, "ipAddress", "ownershipType"::text, coalesce("tenantId"::text, ''),
+SELECT id::text, coalesce("ipAddress", ''), "ownershipType"::text, coalesce("tenantId"::text, ''),
        coalesce("maxLineRateBps", 0)
   FROM network.panel
  WHERE transport = 'push' AND "reviewState" = 'accepted'`

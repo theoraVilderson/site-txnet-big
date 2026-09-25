@@ -33,7 +33,8 @@ every write are [billing/contract.systems.md](../../domains/billing/contract.sys
    `no` are said in the reader's language by row key (`CAPABILITY_KEYS`);
    billing never sends question text (billing rule 7).
 4. **The register wizard mirrors `registerPanelSchema`** (`validateRegister`):
-   everything trimmed but the login, IPv4/IPv6, an http(s) `apiBaseUrl`
+   everything trimmed but the login, IPv4/IPv6 asked and sent only for `push`
+   (F-027-br: nothing reads a pull panel's), an http(s) `apiBaseUrl`
    required for `pull`, a budget of 1–6000 or blank (billing's default 60).
    The login is a password input, sent once; the answer's `configured` is all
    the page says about it. A push panel also asks for its RADIUS secret

@@ -60,14 +60,18 @@ describe("register wizard steps", () => {
     expect(registerStepErrors(form, parts, "family")).toEqual({});
     expect(Object.keys(registerStepErrors(form, parts, "details")).sort()).toEqual(["name", "region"]);
     expect(registerStepErrors(form, parts, "details").ipAddress).toBeUndefined();
-    expect(Object.keys(registerStepErrors(form, parts, "connection")).sort()).toEqual(["apiBaseUrl", "ipAddress"]);
+    // A pull panel is reached at its address alone; only a push panel's NAS needs an IP (F-027-br).
+    expect(Object.keys(registerStepErrors(form, parts, "connection")).sort()).toEqual(["apiBaseUrl"]);
+    const push = applyDriver(form, "mikrotik_user_manager");
+    expect(Object.keys(registerStepErrors(push, parts, "connection"))).toEqual(["ipAddress"]);
   });
 
   it("finds the first step with an error, for the review step's submit", () => {
     const { form, parts } = ready("marzban");
     expect(firstInvalidRegisterStep(form, parts)).toBeNull();
     expect(validateRegister(form).ok).toBe(true);
-    expect(firstInvalidRegisterStep({ ...form, ipAddress: "nope" }, parts)).toBe("connection");
+    expect(firstInvalidRegisterStep({ ...form, apiBaseUrl: "nope" }, parts)).toBe("connection");
+    expect(firstInvalidRegisterStep({ ...form, ipAddress: "" }, parts)).toBeNull();
     expect(firstInvalidRegisterStep({ ...form, name: " " }, parts)).toBe("details");
   });
 });

@@ -18,7 +18,7 @@ import { z } from 'zod';
 export const registerPanelSchema = z
   .object({
     name: z.string().trim().min(1).max(100),
-    ipAddress: z.union([z.string().ip({ version: 'v4' }), z.string().ip({ version: 'v6' })]),
+    ipAddress: z.union([z.string().ip({ version: 'v4' }), z.string().ip({ version: 'v6' })]).optional(),
     apiBaseUrl: z.string().url().max(500).nullable().optional(),
     clientBaseUrl: z.string().trim().url().max(500).nullable().optional(),
     driverType: z.nativeEnum(DriverType),
@@ -34,6 +34,13 @@ export const registerPanelSchema = z
   .refine((body) => body.transport !== PanelTransport.pull || !!body.apiBaseUrl, {
     path: ['apiBaseUrl'],
     message: 'apiBaseUrl is required for a pull panel',
+  })
+  // Only a push panel's address is read: it is its NAS's allowlist entry
+  // (F-027-br). A pull panel is reached at `apiBaseUrl`, so its IP is optional;
+  // the database refuses a push panel without one too (`panel_push_has_ip_address`).
+  .refine((body) => body.transport !== PanelTransport.push || !!body.ipAddress, {
+    path: ['ipAddress'],
+    message: 'ipAddress is required for a push panel',
   })
   // A push panel's NAS signs accounting with a secret of its own (F-027-az):
   // required there, since without it the NAS never reaches the allowlist, and

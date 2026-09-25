@@ -288,3 +288,32 @@ describe('PanelRegistrationService.resubmitRadiusSecret (F-027-az)', () => {
     await expect(service.resubmitRadiusSecret(actor, PANEL, RADIUS)).rejects.toBeInstanceOf(SystemsRefused);
   });
 });
+
+/**
+ * The panel's IP (F-027-br): only a push panel's is ever read — it is the
+ * NAS's allowlist entry (network `contract.collection.md`). A pull panel is
+ * reached at `apiBaseUrl`, so asking it for an address nothing reads only
+ * gets a guess typed in.
+ */
+describe('registerPanelSchema and register, ipAddress (F-027-br)', () => {
+  const { ipAddress: _dropPull, ...pullWithout } = INPUT;
+  const { ipAddress: _dropPush, ...pushWithout } = PUSH;
+
+  it('is optional on a pull panel, and still checked when sent', () => {
+    expect(registerPanelSchema.safeParse(pullWithout).success).toBe(true);
+    expect(registerPanelSchema.safeParse(INPUT).success).toBe(true);
+    const bad = registerPanelSchema.safeParse({ ...INPUT, ipAddress: 'example.net' });
+    expect(bad.success ? null : bad.error.issues.map((i) => i.path.join('.'))).toEqual(['ipAddress']);
+  });
+
+  it('is required on a push panel, naming the field', () => {
+    const out = registerPanelSchema.safeParse(pushWithout);
+    expect(out.success ? null : out.error.issues.map((i) => i.path.join('.'))).toEqual(['ipAddress']);
+  });
+
+  it('writes null for a pull panel registered without one', async () => {
+    const { service, panels } = harness();
+    await service.register({ adminId: ADMIN, tenantId: OWNER }, pullWithout);
+    expect(panels[0]['ipAddress']).toBeNull();
+  });
+});

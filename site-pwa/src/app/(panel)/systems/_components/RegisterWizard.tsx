@@ -403,24 +403,26 @@ export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void;
             t("common", F.clientBaseUrlHint),
             true,
           )}
-        <div className="flex flex-col gap-1.5">
-          {labeled("ipAddress", t("common", F.ipAddress), textInput("ipAddress", { ltr: true, placeholder: t("common", W.placeholder.ipAddress) }))}
-          <AnimatePresence>
-            {suggestedIp && suggestedIp !== form.ipAddress.trim() && (
-              <motion.button
-                type="button"
-                initial={reduceMotion ? false : { opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={reduceMotion ? undefined : { opacity: 0, scale: 0.9 }}
-                onClick={() => set("ipAddress", suggestedIp)}
-                className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[var(--accent-primary)]/40 bg-[var(--leaf-bg)] px-3 py-1 text-[11px] font-bold text-primary hover:brightness-105"
-              >
-                <Sparkles size={12} aria-hidden />
-                <span dir="ltr">{t("common", W.useIp, { ip: suggestedIp })}</span>
-              </motion.button>
-            )}
-          </AnimatePresence>
-        </div>
+        {form.transport === "push" && (
+          <div className="flex flex-col gap-1.5">
+            {labeled("ipAddress", t("common", F.ipAddress), textInput("ipAddress", { ltr: true, placeholder: t("common", W.placeholder.ipAddress) }))}
+            <AnimatePresence>
+              {suggestedIp && suggestedIp !== form.ipAddress.trim() && (
+                <motion.button
+                  type="button"
+                  initial={reduceMotion ? false : { opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={reduceMotion ? undefined : { opacity: 0, scale: 0.9 }}
+                  onClick={() => set("ipAddress", suggestedIp)}
+                  className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[var(--accent-primary)]/40 bg-[var(--leaf-bg)] px-3 py-1 text-[11px] font-bold text-primary hover:brightness-105"
+                >
+                  <Sparkles size={12} aria-hidden />
+                  <span dir="ltr">{t("common", W.useIp, { ip: suggestedIp })}</span>
+                </motion.button>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
         <BudgetField value={form.maxRequestsPerMinute} onChange={(v) => set("maxRequestsPerMinute", v)} error={errorText("maxRequestsPerMinute")} />
         <Advanced
           forceOpen={Boolean(errors.transport || errors.counterSemantics)}
@@ -847,7 +849,7 @@ function ReviewStep({ form, onEdit }: { form: RegisterForm; onEdit: (id: Registe
       [
         [t("common", F.apiBaseUrl), ltr(form.apiBaseUrl)],
         ...(profile.clientBaseUrl && form.transport === "pull" ? ([[t("common", F.clientBaseUrl), ltr(form.clientBaseUrl)]] as [string, ReactNode][]) : []),
-        [t("common", F.ipAddress), ltr(form.ipAddress)],
+        ...(form.transport === "push" ? ([[t("common", F.ipAddress), ltr(form.ipAddress)]] as [string, ReactNode][]) : []),
         [t("common", F.maxRequestsPerMinute), form.maxRequestsPerMinute.trim() ? <span dir="ltr">{form.maxRequestsPerMinute.trim()}</span> : t("common", W.review.defaultBudget)],
         [t("common", F.transport), t("common", R.transport[form.transport])],
         [t("common", F.counterSemantics), t("common", R.counter[form.counterSemantics])],
