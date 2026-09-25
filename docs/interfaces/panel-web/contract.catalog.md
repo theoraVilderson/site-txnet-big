@@ -122,6 +122,11 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    shows its owner, the protocols its panels' picked inbounds sell ("no
    inbound ticked" when none, F-114-b), `healthyMembers` and, off `mirror`,
    "not delivered yet". A failed list costs the choices, never the form.
+10d. **A created product lands on the list, not in its sheet** (F-114-g,
+   `afterWizard`): the wizard closes onto the products tab with every filter
+   cleared, the new row outlined and the notice offering "open it" — the sheet
+   would only repeat the review. Only a failed variant opens the sheet, with
+   `wizard.partial`, because adding it is the work left.
 
 ## Capabilities by name (F-114-f-b, ADR-0086)
 
@@ -182,7 +187,8 @@ counts in the report (F-026-m); `RESTORE_CATEGORY` against billing's
 `updateCategorySchema` (F-026-n); `takesPanelGroup`, `groupsForVariant`,
 `wizardVariantTenant`, `variantBody` by kind, `panelGroupPatch` against
 billing's schema, `notForSale` (F-026-o); `capabilitiesFor`, `suggestCapabilityKey`,
-`validateCapabilityForm` / `capabilityBody`, `canEditCapability` (F-114-f-b).
+`validateCapabilityForm` / `capabilityBody`, `canEditCapability` (F-114-f-b);
+`afterWizard` (F-114-g).
 
 `my-resellers/catalog.test.ts` (F-066-w8) — `catalogApiPrefix` on both
 surfaces against the controller's own `@Controller`, `surfaceActor` holding a

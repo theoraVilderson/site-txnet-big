@@ -48,6 +48,7 @@ import {
   validatePriceForm,
   validateProductForm,
   validateVariantForm,
+  afterWizard,
   wizardCategoryBody,
   variantBody,
   emptyWizard,
@@ -354,6 +355,11 @@ describe("the new product wizard", () => {
     expect(wizardStepErrors("variant", w, RESELLER)).toHaveProperty("price");
     w.withVariant = false;
     expect(wizardStepErrors("variant", w, RESELLER)).toEqual({});
+  });
+
+  it("lands on the list with the new product marked, and opens it only when a variant is still to add (F-114-g)", () => {
+    expect(afterWizard("p1", false)).toEqual({ openId: null, freshId: "p1", notice: CATALOG_KEYS.wizard.done, error: null });
+    expect(afterWizard("p1", true)).toEqual({ openId: "p1", freshId: "p1", notice: null, error: CATALOG_KEYS.wizard.partial });
   });
 });
 

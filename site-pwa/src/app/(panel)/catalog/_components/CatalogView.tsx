@@ -10,6 +10,7 @@ import { usePanelSession } from "../../_context/PanelSessionContext";
 import { Select } from "../../_components/kit/Select";
 import {
   CATALOG_KEYS as K,
+  afterWizard,
   catalogText,
   categoryPath,
   categoryTree,
@@ -116,6 +117,8 @@ export function CatalogView() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [creating, setCreating] = useState<"product" | "category" | "capability" | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  // The product the wizard just made (F-114-g): marked in the list, offered from the notice.
+  const [freshId, setFreshId] = useState<string | null>(null);
   const [texts, setTexts] = useState<CatalogTexts>({});
   const [renaming, setRenaming] = useState<Renaming | null>(null);
   const [moving, setMoving] = useState<CatalogCategory | null>(null);
@@ -393,7 +396,16 @@ export function CatalogView() {
         )}
       </div>
 
-      {notice && <p className="text-xs font-bold text-primary">{notice}</p>}
+      {notice && (
+        <p className="flex flex-wrap items-center gap-2 text-xs font-bold text-primary" role="status">
+          {notice}
+          {freshId && products?.some((p) => p.id === freshId) && (
+            <button type="button" className={quietButton} onClick={() => setOpenId(freshId)}>
+              {t("common", K.wizard.openNew)}
+            </button>
+          )}
+        </p>
+      )}
       {report.length > 0 && (
         <ul className="flex flex-col gap-0.5 text-xs font-bold text-primary" role="status">
           {report.map((line) => (
@@ -474,7 +486,10 @@ export function CatalogView() {
             </div>
             <ul className="flex flex-col gap-2">
               {shown.map((p) => (
-                <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm">
+                <li
+                  key={p.id}
+                  className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-card-bg p-3 shadow-sm ${p.id === freshId ? "border-primary ring-2 ring-primary/30" : "border-card-border"}`}
+                >
                   <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggle(p.id)} aria-label={nameOf(p)} />
                   <button type="button" className="min-w-0 flex-1 text-start" onClick={() => setOpenId(p.id)}>
                   <p className="truncate text-sm font-bold text-text-primary">{nameOf(p)}</p>
@@ -662,13 +677,17 @@ export function CatalogView() {
           onCapabilityCreated={load}
           onClose={() => setCreating(null)}
           onCreated={async (productId, variantFailed) => {
+            const next = afterWizard(productId, variantFailed);
             setCreating(null);
             setTab("products");
             setCategoryId("");
+            setPlatformOnly(false);
+            setShowArchived(false);
             await load();
-            setOpenId(productId);
-            if (variantFailed) setActionError(t("common", K.wizard.partial));
-            else setNotice(t("common", K.wizard.done));
+            setFreshId(next.freshId);
+            setOpenId(next.openId);
+            setNotice(next.notice && t("common", next.notice));
+            setActionError(next.error && t("common", next.error));
           }}
         />
       )}

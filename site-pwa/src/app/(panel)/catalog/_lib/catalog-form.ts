@@ -572,6 +572,17 @@ export const notForSale = (v: { panelGroupId: string | null }, kind: FulfilmentK
 export const WIZARD_STEPS = ["category", "names", "access", "variant", "review"] as const;
 export type WizardStep = (typeof WIZARD_STEPS)[number];
 
+/**
+ * Where a created product leaves the panel (F-114-g): on the list, the new row
+ * marked and the notice offering to open it — the sheet would only repeat what
+ * the review just showed. Only a failed variant opens it, since that is the work left.
+ */
+export function afterWizard(productId: string, variantFailed: boolean) {
+  return variantFailed
+    ? { openId: productId, freshId: productId, notice: null, error: CATALOG_KEYS.wizard.partial }
+    : { openId: null, freshId: productId, notice: CATALOG_KEYS.wizard.done, error: null };
+}
+
 export interface ProductWizard {
   categoryMode: "existing" | "new";
   /** The existing categories picked, in the order picked. */
