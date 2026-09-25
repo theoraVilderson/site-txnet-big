@@ -6,6 +6,7 @@ import { TenantContext, meteredRatesInEffect, productCategoriesInclude, productC
 
 import { isSellableBySku, meteredRateAt, type MeteredRateRow, type OfferFacts } from '../catalog/catalog-reads';
 import { PrismaService } from '../prisma/prisma.service';
+import { GrantTokenSeal, NO_TOKEN_SEAL, type SealedToken } from './grant-token-seal';
 
 /**
  * Grant core (F-026-e; D-34, ADR-0049; spec: `tools/spec.py --section 4.4`).
@@ -19,7 +20,8 @@ import { PrismaService } from '../prisma/prisma.service';
  * The database holds the same rules for every writer
  * (`entitlement-schema.int.spec.ts`); these refuse first, with a reason a
  * caller can act on, and do what a trigger cannot: copy a variant into a Grant,
- * mint a token and keep only its hash.
+ * mint a token and keep its hash, and a sealed copy My services can show
+ * again (ADR-0085).
  */
 
 /** Why a Grant operation was refused. Nothing was written. */
@@ -112,10 +114,10 @@ export function grantFromVariant(input: { source: GrantSource; startsAt: Date },
   };
 }
 
-/** SHA-256 of a subscription token, lowercase hex — the only form ever stored. */
+/** SHA-256 of a subscription token, lowercase hex — what `/sub` looks a Grant up by. */
 export const hashSubscriptionToken = (token: string): string => createHash('sha256').update(token).digest('hex');
 
-/** 32 random bytes as base64url, and its hash. The token is answered once and never written. */
+/** 32 random bytes as base64url, and its hash. The token itself is written only sealed (ADR-0085). */
 export function newSubscriptionToken(): { token: string; hash: string } {
   const token = randomBytes(32).toString('base64url');
   return { token, hash: hashSubscriptionToken(token) };
@@ -226,7 +228,11 @@ const isUniqueViolation = (e: unknown) => e instanceof Prisma.PrismaClientKnownR
 
 @Injectable()
 export class GrantService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    // Defaulted so a spec or script that builds the service by hand needs no KEK.
+    private readonly tokens: GrantTokenSeal = NO_TOKEN_SEAL,
+  ) {}
 
   /**
    * Issues a Grant of a variant to a user of the caller's tenant, or answers the
@@ -283,6 +289,7 @@ export class GrantService {
           sourceReferenceId: reference,
           issuedByAdminId: input.issuedByAdminId ?? null,
           subscriptionTokenHash: hash,
+          subscriptionTokenSealed: this.sealed(token),
         },
       });
       return { grant, token };
@@ -397,7 +404,44 @@ export class GrantService {
     // Another user's Grant is answered exactly as a missing one.
     if (!grant || grant.userId !== userId) throw new EntitlementRefused('grant_not_found', grantId);
     const { token, hash } = newSubscriptionToken();
-    await tx.grant.update({ where: { id: grantId }, data: { subscriptionTokenHash: hash, tokenRotatedAt: new Date() } });
+    await tx.grant.update({
+      where: { id: grantId },
+      data: { subscriptionTokenHash: hash, subscriptionTokenSealed: this.sealed(token), tokenRotatedAt: new Date() },
+    });
     return token;
+  }
+
+  /** `subscriptionTokenFor` in a transaction of its own, as `rotateTokenForUser` is. */
+  subscriptionTokenForUser(grantId: string, userId: string): Promise<string | null> {
+    return tenantTransaction(this.prisma, (tx) => this.subscriptionTokenFor(tx, grantId, userId));
+  }
+
+  /**
+   * The Grant's current token, for its own user, as often as asked (ADR-0085).
+   * `null` when none is kept: a Grant from before the sealed column, or one issued
+   * with no KEK loaded. Resetting its link (`rotateToken`) keeps one from then on.
+   */
+  async subscriptionTokenFor(tx: Prisma.TransactionClient, grantId: string, userId: string): Promise<string | null> {
+    const grant = await tx.grant.findUnique({
+      where: { id: grantId },
+      select: { userId: true, subscriptionTokenHash: true, subscriptionTokenSealed: true },
+    });
+    // Another user's Grant is answered exactly as a missing one.
+    if (!grant || grant.userId !== userId) throw new EntitlementRefused('grant_not_found', grantId);
+    if (!grant.subscriptionTokenSealed) return null;
+    // The shape is held by `grant_token_sealed_shape`, so the JSON is read as one.
+    const token = this.tokens.open(grant.subscriptionTokenSealed as unknown as SealedToken);
+    // `/sub` finds the Grant by the hash; a sealed copy that disagrees would hand
+    // out a link to another Grant, or to none. Refuse loudly instead.
+    if (hashSubscriptionToken(token) !== grant.subscriptionTokenHash) {
+      throw new Error(`Grant ${grantId}: the sealed subscription token does not match its hash.`);
+    }
+    return token;
+  }
+
+  /** `Prisma.DbNull` when nothing is sealed: a JSON column is told apart from JSON `null`. */
+  private sealed(token: string): Prisma.InputJsonObject | typeof Prisma.DbNull {
+    const sealed = this.tokens.seal(token);
+    return sealed ? { ...sealed } : Prisma.DbNull;
   }
 }

@@ -14,7 +14,7 @@ schema `entitlement`), migrations `20260914001600_entitlement_grant` and
 ## Tables owned
 | Table | Purpose | Tenant-scoped? | Retention |
 |---|---|---|---|
-| grant | one entitlement: user, variant, `source` + `sourceReferenceId`, `status`, `startsAt`/`endsAt`, `billingMode`, `featureKeys`, `quotas` copied from the variant, `sharingPolicy`, `subscriptionTokenHash`, the three byte cursors (`billedBytes`, `consumedBytes`, `purchasedBytes`), `meteredRate`, `suspendedAt`, `purgeAfterDays`, `resellerPath`, the delivery clock `deliveryAttempts` (CHECK ≥ 0) + `nextDeliveryAt` (index `grant_status_nextDeliveryAt_idx`, F-111-d) | yes, strict RLS | permanent |
+| grant | one entitlement: user, variant, `source` + `sourceReferenceId`, `status`, `startsAt`/`endsAt`, `billingMode`, `featureKeys`, `quotas` copied from the variant, `sharingPolicy`, `subscriptionTokenHash` + `subscriptionTokenSealed` (ADR-0085), the three byte cursors (`billedBytes`, `consumedBytes`, `purchasedBytes`), `meteredRate`, `suspendedAt`, `purgeAfterDays`, `resellerPath`, the delivery clock `deliveryAttempts` (CHECK ≥ 0) + `nextDeliveryAt` (index `grant_status_nextDeliveryAt_idx`, F-111-d) | yes, strict RLS | permanent |
 | quota_adjustment | a signed `delta` on one `metric` of a Grant, with its `source`, optional `capPercent` and `expiresAt`; append-only | yes, strict RLS | permanent |
 
 `grant` is a reserved word: SQL quotes it (`entitlement."grant"`).
@@ -31,7 +31,8 @@ schema `entitlement`), migrations `20260914001600_entitlement_grant` and
 
 Written only through the entitlement module in `billing-service` (ADR-0049).
 A link lookup hashes the arriving token and reads by
-`grant_subscriptionTokenHash_key`; the token itself is never stored.
+`grant_subscriptionTokenHash_key`. The token itself is stored only sealed
+(`subscriptionTokenSealed`, ADR-0085), and only `subscriptionTokenFor` opens it.
 
 ## The three byte cursors (F-027-f, ADR-0072)
 

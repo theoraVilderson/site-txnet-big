@@ -13,8 +13,8 @@
  *  - **yesterday's traffic repriced.** A metered variant's rate in effect is
  *    copied onto `Grant.meteredRate` at issue (F-027-p, ADR-0073), and a
  *    metered variant with no rate is not issued at all;
- *  - **a working link in the database.** Only the token's SHA-256 is written;
- *    the token is answered once;
+ *  - **a working link in the database.** The token is written only as its
+ *    SHA-256 and sealed (ADR-0085, `grant-token-seal.spec.ts`), never in clear;
  *  - **a retried cause granting twice.** A second issue for the same
  *    `(source, sourceReferenceId)` answers the first Grant and no token.
  *

@@ -70,9 +70,12 @@ model Grant {
   /// Per metric, copied from the variant: `{"traffic_bytes": {"limit": ..., "resetPolicy": "none"}}`.
   quotas                Json               @default("{}")
   sharingPolicy         SharingPolicy      @default(exclusive)
-  /// SHA-256 of the subscription token, lowercase hex. The token itself is shown
-  /// once — at issue and on rotation — and never stored (the user's call, 2026-09-14).
+  /// SHA-256 of the subscription token, lowercase hex: what `/sub` looks a Grant up by.
   subscriptionTokenHash String             @unique
+  /// The same token sealed, `{kekId, iv, authTag, ciphertext}` (AES-256-GCM under a
+  /// key derived from the vault KEK, ADR-0085), so My services can show the link
+  /// again. Null for a Grant from before it, or issued with no KEK loaded.
+  subscriptionTokenSealed Json?
   tokenRotatedAt        DateTime           @default(now())
   /// Billing cursor for metered usage: how far the money has been taken.
   billedBytes           BigInt             @default(0)

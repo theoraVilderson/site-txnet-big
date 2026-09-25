@@ -23,12 +23,14 @@ and changes its quota only through `quota_adjustment` rows.
 
 | Operation | Input | Output | Sync/Async | Errors (`EntitlementRefused.reason`) |
 |---|---|---|---|---|
-| `issue(tx, …)` | userId, variantId, source, sourceReferenceId?, startsAt?, issuedByAdminId? | `{grant, token}` — the token once; a repeat for the same cause answers the first Grant and `token: null` | inside the caller's transaction | `variant_not_found`, `variant_not_assignable`, `metered_rate_missing`, `metered_rate_not_positive`, `already_issued` (a concurrent issue won: retry) |
+| `issue(tx, …)` | userId, variantId, source, sourceReferenceId?, startsAt?, issuedByAdminId? | `{grant, token}` — the token, also kept sealed (ADR-0085); a repeat for the same cause answers the first Grant and `token: null` | inside the caller's transaction | `variant_not_found`, `variant_not_assignable`, `metered_rate_missing`, `metered_rate_not_positive`, `already_issued` (a concurrent issue won: retry) |
 | `transition(tx, id, to, reason?)` | grantId, status | Grant; staying put is a no-op | caller's transaction | `grant_not_found`, `illegal_transition` |
 | `activeGrant` / `hasActiveGrant` | userId, featureKey, at? | the longest-lasting active Grant / boolean | own tenant transaction | — |
 | `adjustQuota(tx, …)` | grantId, metric, delta, source, capPercent?, expiresAt?, reason? | QuotaAdjustment | caller's transaction | `grant_not_found`, `grant_not_active` |
-| `rotateToken(tx, id, userId)` | grantId, its user | the new token, once | caller's transaction | `grant_not_found` (also for another user's) |
+| `rotateToken(tx, id, userId)` | grantId, its user | the new token, kept sealed; the old link stops working | caller's transaction | `grant_not_found` (also for another user's) |
 | `rotateTokenForUser(id, userId)` | grantId, its user | the same, in a transaction of its own | own tenant transaction | the same |
+| `subscriptionTokenFor(tx, id, userId)` | grantId, its user | the current token, as often as asked; `null` when none is kept (a Grant from before F-114-e-a, or issued with no KEK) — resetting keeps one | caller's transaction | `grant_not_found` (also for another user's); throws if the opened token does not hash to the row |
+| `subscriptionTokenForUser(id, userId)` | grantId, its user | the same, in a transaction of its own | own tenant transaction | the same |
 | `listForUser(userId, {page?, pageSize?})` | the user, paging | one page of that user's Grants — id, status, period, feature keys, variant `{id, sku, nameKey}`, billing mode, consumed/purchased bytes, `suspendedAt` and `purgeAt` (F-027-ac, `purgeAtOf`); never the token or its hash | own tenant transaction | — |
 
 **Exhaustion suspends (F-027-x, ADR-0075)** — `suspendForExhaustion(tx,
@@ -164,7 +166,7 @@ Through the outbox (ADR-0021), both also live on the buyer's `user:` channel
 | A tenant reads and writes only its own Grants and adjustments — never shared-read | RLS, strict |
 | A Grant's user is its tenant's; its variant is the platform's or its tenant's; an adjustment and a config are their Grant's tenant's (`entitlement_tenant_mismatch`) | trigger `entitlement.same_tenant` |
 | `pending → active → (suspended \| exhausted \| expired \| cancelled)`, `pending → cancelled`; only `suspended → active` goes back (`grant_status_one_way`) | trigger |
-| The subscription token is stored only as SHA-256 lowercase hex, unique; the token is shown once — at issue and on rotation (`grant_token_hash_shape`) | CHECK + unique index; the user's call 2026-09-14 |
+| `/sub` finds a Grant by the token's SHA-256 (lowercase hex, unique). The token is also kept sealed in `subscriptionTokenSealed`: AES-256-GCM under an HKDF key derived from the vault KEK, `{kekId, iv, authTag, ciphertext}`. Only `subscriptionTokenFor` opens it, for the Grant's own user (`grant_token_hash_shape`, `grant_token_sealed_shape`) | CHECK + unique index; D-43, ADR-0085 (reverses the hash-only call of 2026-09-14) |
 | One cause issues one Grant: `(source, sourceReferenceId)` unique when set | partial unique index |
 | A quota adjustment is never changed or deleted; `delta ≠ 0`; a rollover cap is 1..100 % (`quota_adjustment_is_history`) | trigger + CHECKs |
 | `endsAt = null` is permanent; when set it is after `startsAt`. Quota sits on the Grant, never on a config (§4.6) | CHECK; schema |

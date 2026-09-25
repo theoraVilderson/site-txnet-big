@@ -22,7 +22,7 @@ database — the shapes are proved by
 | 3 | A Grant's quota changes only by a `quota_adjustment` row, and that row is never changed | trigger `quota_adjustment_is_history` | usage that cannot be reconciled |
 | 4 | Quota is on the Grant; every config of a Grant draws on one quota | `config.grantId`; F-027 | a family plan billed five times |
 | 5 | A Grant, its adjustments and its configs are one tenant's; its variant the platform's or that tenant's | trigger `same_tenant` + strict RLS | one tenant reads or sells into another's customers |
-| 6 | The subscription token is never stored — only its SHA-256 | CHECK `grant_token_hash_shape` | a database leak hands out every working link |
+| 6 | The subscription token is stored in clear nowhere: only its SHA-256 and a copy sealed under a key derived from the KEK, which lives outside the database (ADR-0085) | CHECK `grant_token_hash_shape`, `grant_token_sealed_shape` | a database leak hands out every working link |
 | 7 | One cause issues one Grant | partial unique `(source, sourceReferenceId)` | a retried coupon or payment grants twice |
 | 8 | No byte is served that has not been paid for: `Σ ceilings ≤ purchasedBytes` across every config of a Grant | `CeilingAllocatorService` splits the bag so it holds by construction, proved over generated Grants by `ceiling-allocator.spec.ts` (F-027-s, [network/contract.ceiling.md](../network/contract.ceiling.md)) | free traffic at the far end of a ceiling nobody bounded |
 | 9 | No byte counter is ever negative — a counter going backward is a reset, never negative usage | CHECK `grant_byte_counters_not_negative` | a reset read as negative usage, and a refund of traffic nobody bought |

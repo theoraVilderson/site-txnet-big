@@ -54,8 +54,9 @@ Migration `20260915000200_gift_redeems_free_grant`; `GiftRedemptionService` with
 ## Reissuing a lost key (built — F-502-p)
 
 `GrantTokenController` beside the box, over `GrantService.rotateTokenForUser`
-(`entitlement/contract.md`). A key is shown once and only hashed, so a key lost
-to a mis-click was lost for good; this is the way back.
+(`entitlement/contract.md`). It was built while a key was shown once and only
+hashed. Since ADR-0085 the token is also kept sealed, and F-114-e-b turns this
+route into "reset link", for a link that leaked.
 
 | Route | Body | Answers `data` |
 |---|---|---|

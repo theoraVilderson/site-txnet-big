@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
+import { KekService } from '@txnet-backend/shared-core';
 
 import { TrafficModule } from '../traffic/traffic.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { GrantDeliveryService } from './delivery';
 import { EntitlementInternalController } from './entitlement-internal.controller';
 import { GrantService } from './grant';
+import { GrantTokenSeal } from './grant-token-seal';
 import { GrantPurgeService } from './purge';
 
 /**
@@ -16,12 +18,13 @@ import { GrantPurgeService } from './purge';
  * `worker-service` over the internal seam. ADR-0027 is why the clocks are not
  * here — background work does not run inside a request-serving process.
  * Delivery hands a network Grant to group fulfilment and a refund to the
- * wallet, hence the two imports.
+ * wallet, hence the two imports. `KekService` is for the sealed subscription
+ * token (ADR-0085): the same KEK file the gateway module reads.
  */
 @Module({
   imports: [TrafficModule, WalletModule],
   controllers: [EntitlementInternalController],
-  providers: [GrantService, GrantPurgeService, GrantDeliveryService],
+  providers: [KekService, GrantTokenSeal, GrantService, GrantPurgeService, GrantDeliveryService],
   exports: [GrantService, GrantPurgeService],
 })
 export class EntitlementModule {}
