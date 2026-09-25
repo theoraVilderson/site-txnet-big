@@ -10,8 +10,9 @@ updated: 2026-09-25
 
 A topic file of `contract.md` (§10): buying a catalog product from the wallet
 (spec §5.8 Purchase Settlement Flow — `python3 tools/spec.py --section 5.8`).
-Step 1, the invoice, is built (F-111-a), and step 2, paying it from the wallet
-(F-111-b). The shortfall (F-111-c) and delivery (F-111-d) are not yet.
+Step 1, the invoice, is built (F-111-a), step 2, paying it from the wallet
+(F-111-b), and the shortfall a refused payment carries (F-111-c, spec §5.9).
+Delivery (F-111-d) is not yet.
 Consumer: the panel's shop page (F-111-e).
 
 ## Creating an invoice (built — F-111-a)
@@ -60,7 +61,7 @@ otherwise) → `InvoiceExpiryService.expirePending()` → `{scanned, expired, ho
 | `200 {id, status: "paid", total, balanceAfter, walletTransactionId, grants: [{id, status: "pending", token}]}` | paid. `token` is the subscription key, shown this once (entitlement `issue`) |
 | `404 errors.billing.invoice.notFound` | unknown, another tenant's (RLS) or another user's — never told apart |
 | `409` `reason`: `already_paid` / `expired` / `cancelled` | its i18n key beside it. Past `expiresAt` is `expired` even before the sweep flips it |
-| `409 insufficient_balance` + `shortfall: {total, balance, missing}` | the wallet holds less than `total`; nothing is written. F-111-c offers the top-up for `missing` |
+| `409 insufficient_balance` + `shortfall: {total, balance, missing}` | the wallet holds less than `total`; nothing is written. `missing` is the top-up to offer — "The shortfall" below |
 | `404 errors.billing.invoice.variantNotFound` | the variant was switched off since the invoice: the Grant cannot be issued and the whole payment rolls back |
 
 **One transaction, in this order** (spec §5.8 step 2):
@@ -79,3 +80,16 @@ otherwise) → `InvoiceExpiryService.expirePending()` → `{scanned, expired, ho
 Per user, `INVOICE_PAY` bucket, `INVOICE_PAY_RATE_LIMIT` (20) per 15 min. It
 bounds the transactions one caller opens on the wallet row; exactly-once does
 not rest on it.
+
+## The shortfall (built — F-111-c)
+
+`invoiceShortfall` in `invoice/invoice-shortfall.ts`, proved by
+`invoice/invoice-shortfall.spec.ts` against the deposit pricer itself.
+
+| Rule | Why |
+|---|---|
+| `missing` = `total - balance` rounded **up** to the cent — never half-up — and only for a balance short of `total` | spec §5.9: the user must never come back from a top-up a fraction of a cent short. Every column is `Decimal(18, 2)` today, so this is exact now and stays right if a balance ever carries more places |
+| `missing` has at most 2 places | a deposit `amount` takes at most 2 (`deposit.schema.ts`, `priceAtGateway`); a longer one would be refused |
+| A top-up of exactly `missing` covers the invoice | a top-up credits `amount + gap`; fee and tax are on top of it, never taken from it (`contract.deposit.md`) |
+| The panel pre-fills `missing` raised to the chosen gateway's `minAmount` (the gateway list), and returns to the same invoice (F-111-e) | below its minimum a gateway refuses the top-up `400 billing.amountOutOfRange`, and only the panel knows which gateway the user picks; a larger top-up credits whole, so it still covers |
+| The shortfall is not held: the invoice's 30-minute clock runs on while the user tops up | a top-up that outlives it pays into the wallet, and the user starts a new invoice |

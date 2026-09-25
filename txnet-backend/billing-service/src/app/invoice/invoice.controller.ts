@@ -50,6 +50,7 @@ function toHttp(e: unknown): unknown {
     const body = { i18nKey: PAY_REFUSAL_KEY[e.reason], reason: e.reason, message };
     if (e.reason === 'not_found') return new NotFoundException(body);
     // The shortfall rides along so the panel can offer the top-up for exactly it (F-111-c).
+    // `missing` is already whole cents, rounded up — toFixed(2) only formats it.
     const shortfall = e.shortfall && {
       total: e.shortfall.total.toFixed(2),
       balance: e.shortfall.balance.toFixed(2),
