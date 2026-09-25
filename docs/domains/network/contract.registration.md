@@ -102,6 +102,15 @@ the guard **fails closed**, so a panel source that forgets the column
 collects nothing instead of everything. A refused panel converged would be a
 panel provisioned, which is exactly what refusing it was for (invariant 44).
 
+**An archived panel is no panel** (F-027-bz, invariant 49). `retiredAt` set
+takes it out of `panelsSQL` (collection and convergence), `pendingSQL` (the
+connection test), `nasSQL` (the RADIUS allowlist) and the watchdog's count,
+whatever its `reviewState`. Billing archives only a panel no group holds and
+with no live config (`billing/contract.panel-lifecycle.md`), and the triggers
+`config_panel_not_retired` / `panel_group_member_panel_not_retired` refuse a
+config or a membership on it. A restore returns it `pending`, so it is tested
+before it is collected again.
+
 ## The store, and the process that runs it (F-027-ax)
 
 `register.PostgresStore` is `Store` over `network.panel`, through the

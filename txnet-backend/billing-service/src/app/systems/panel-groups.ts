@@ -101,7 +101,8 @@ export class PanelGroupsService {
   async addMember(actor: SystemsActor, groupId: string, input: PanelGroupMemberInput) {
     const [scope, panelScope] = await this.scopes(actor);
     const group = await this.groupInScope(scope, groupId);
-    const panel = await this.prisma.panel.findFirst({ where: { id: input.panelId, ...panelScope }, select: { id: true } });
+    // An archived panel (F-027-bz) takes no group; the trigger `panel_group_member_panel_not_retired` holds it too.
+    const panel = await this.prisma.panel.findFirst({ where: { id: input.panelId, ...panelScope, retiredAt: null }, select: { id: true } });
     if (!panel) throw new SystemsRefused('panel_not_found');
 
     try {

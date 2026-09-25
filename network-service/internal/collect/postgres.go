@@ -101,6 +101,7 @@ SELECT id::text, "driverType"::text, "counterSemantics"::text,
  WHERE "reviewState" IN ('accepted', 'accepted_low_trust')
    AND transport = 'pull'
    AND "counterSemantics" <> 'session'
+   AND "retiredAt" IS NULL
  ORDER BY id`
 
 func (s *PostgresSource) Panels(ctx context.Context) ([]Panel, error) {

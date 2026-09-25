@@ -361,6 +361,10 @@ model Panel {
   /// When `network-service` last read the panel's inbounds into
   /// `panel_inbound`. Null asks for a read on the next pass (the admin's refresh).
   inboundsReadAt             DateTime?
+  /// Archived (F-027-bz): a panel with history taken out of service. Every
+  /// `network-service` loop skips it; its configs, usage and holds stay for
+  /// the record. Null for a panel in service; one with no history is deleted.
+  retiredAt                  DateTime?
 
   pairedPanel Panel?   @relation("PanelHAPair", fields: [pairedPanelId], references: [id])
   pairedWith  Panel[]  @relation("PanelHAPair")

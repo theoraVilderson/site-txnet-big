@@ -42,6 +42,7 @@ function harness(row: Row = {}) {
     connectionTestedAt: TESTED,
     connectionTestFault: null,
     connectionTestDetail: null,
+    retiredAt: null,
     ...row,
   };
   const inScope = (where: Row) => panel['id'] === where['id'] && panel['ownershipType'] === where['ownershipType'] && panel['tenantId'] === where['tenantId'];
@@ -57,7 +58,7 @@ function harness(row: Row = {}) {
   const all = {
     panel: {
       updateMany: async ({ where, data }: { where: Row; data: Row }) => {
-        if (!inScope(where)) return { count: 0 };
+        if (!inScope(where) || (where['retiredAt'] === null && panel['retiredAt'] !== null)) return { count: 0 };
         Object.assign(panel, data);
         return { count: 1 };
       },

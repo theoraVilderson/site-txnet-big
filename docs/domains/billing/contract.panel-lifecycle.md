@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 45
+version: 46
 updated: 2026-09-25
 ---
 
@@ -19,7 +19,9 @@ its next tick.
 
 | Route | Body | Answers | Errors |
 |---|---|---|---|
-| `PATCH /api/billing/systems/panels/:id` | any of `name` (1–100), `region` (1–50), `ipAddress` (v4/v6 \| null), `apiBaseUrl` (URL ≤500, never null), `clientBaseUrl` (URL ≤500 \| null), `maxRequestsPerMinute` (1–6000); at least one; `.strict()` | `200 {id, reviewState, retest}` | 400; 403; 404 `not_found`; 409 `not_for_transport` |
+| `PATCH /api/billing/systems/panels/:id` | any of `name` (1–100), `region` (1–50), `ipAddress` (v4/v6 \| null), `apiBaseUrl` (URL ≤500, never null), `clientBaseUrl` (URL ≤500 \| null), `maxRequestsPerMinute` (1–6000); at least one; `.strict()` | `200 {id, reviewState, retest}` | 400; 403; 404 `not_found`; 409 `not_for_transport` / `panel_retired` |
+| `DELETE /api/billing/systems/panels/:id` | — | `200 {id, outcome: 'deleted' \| 'archived'}` | 400; 403; 404 `not_found`; 409 `panel_in_group` / `panel_has_configs` / `panel_retired` |
+| `POST /api/billing/systems/panels/:id/restore` | — | `200 {id, reviewState: 'pending'}` | 400; 403; 404 `not_found`; 409 `panel_not_retired` |
 
 `SYSTEMS_ADMIN_WRITE` (30 per user per 15 minutes), as every systems write.
 
@@ -49,3 +51,27 @@ its next tick.
    `pending`, not on the address. Editing the address again re-tests.
 
 `panel-edit.spec.ts` pins rules 1–4 and the scope.
+
+## Deleting a panel — the rules (F-027-bz)
+
+Decided with the user 2026-09-25, the catalog's rule for products (F-026-i).
+
+6. **Refused while it serves.** A panel any group holds is 409
+   `panel_in_group` — remove the member, or drain it (contract.systems.md
+   rules 23–24). One with a config not `retired` is 409 `panel_has_configs`.
+7. **No history: deleted.** History is any row that names the panel: a
+   config in any state, counter state, a seen or quarantined delta, a hold,
+   a drift event, unattributed usage, a RADIUS session, or an HA partner. With
+   none, the row goes (`panel_inbound` cascades); its login stays in the
+   vault under an id nothing names, as after a failed registration.
+8. **History: archived.** `retiredAt` is set by one `UPDATE` that holds rule 6
+   itself, and the rows stay. A key the check missed makes the delete fail;
+   that archives instead. What an archived panel is to `network-service` is
+   network invariant 49. The list answers `retiredAt`; the page hides it
+   behind a toggle.
+9. **Archived is final until restored.** An edit is 409 `panel_retired`;
+   so is a second delete. `restore` clears `retiredAt` and sends the panel
+   back to `pending` with its last test cleared — it is tested before it is
+   collected again.
+
+`panel-retire.spec.ts` pins rules 6–9 and the scope.

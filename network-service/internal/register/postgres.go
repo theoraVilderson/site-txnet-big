@@ -42,6 +42,7 @@ SELECT id::text, "driverType"::text, transport::text, "counterSemantics"::text,
        "connectionTestedAt", coalesce("connectionTestFault"::text, '')
   FROM network.panel
  WHERE "reviewState" = 'pending'
+   AND "retiredAt" IS NULL
  ORDER BY id`
 
 func (s PostgresStore) Pending(ctx context.Context) ([]Candidate, error) {

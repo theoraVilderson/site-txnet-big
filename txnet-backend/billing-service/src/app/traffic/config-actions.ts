@@ -288,10 +288,15 @@ export class ConfigActionsService {
     return config;
   }
 
-  /** A shared panel, or one dedicated to this tenant (`Panel.tenantId`). Anyone else's reads as absent. */
+  /**
+   * A shared panel, or one dedicated to this tenant (`Panel.tenantId`). Anyone else's reads as absent, and so
+   * does an archived one (F-027-bz; the trigger `config_panel_not_retired` holds it too).
+   */
   private async panelFor(tx: Prisma.TransactionClient, panelId: string, tenantId: string) {
-    const panel = await tx.panel.findUnique({ where: { id: panelId }, select: { id: true, tenantId: true } });
-    if (!panel || (panel.tenantId !== null && panel.tenantId !== tenantId)) throw new ConfigActionRefused('panel_not_found', panelId);
+    const panel = await tx.panel.findUnique({ where: { id: panelId }, select: { id: true, tenantId: true, retiredAt: true } });
+    if (!panel || panel.retiredAt || (panel.tenantId !== null && panel.tenantId !== tenantId)) {
+      throw new ConfigActionRefused('panel_not_found', panelId);
+    }
   }
 
   private owns(actor: ConfigActor, userId: string) {

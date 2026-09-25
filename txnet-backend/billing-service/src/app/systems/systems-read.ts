@@ -19,7 +19,12 @@ export type SystemsRejection =
   | 'inbound_not_found'
   | 'inbound_not_sellable'
   // A panel's settings (F-027-by).
-  | 'not_for_transport';
+  | 'not_for_transport'
+  // Deleting a panel (F-027-bz).
+  | 'panel_in_group'
+  | 'panel_has_configs'
+  | 'panel_retired'
+  | 'panel_not_retired';
 
 export class SystemsRefused extends Error {
   constructor(readonly reason: SystemsRejection) {
@@ -58,6 +63,7 @@ const PANEL_FIELDS = {
   maxRequestsPerMinute: true,
   // Selected only to answer whether it is set; the reference never leaves.
   panelRadiusSecret: true,
+  retiredAt: true,
 } satisfies Prisma.PanelSelect;
 
 const DRIFT_FIELDS = {
@@ -116,6 +122,8 @@ export class SystemsReadService {
         ipAddress: p.ipAddress,
         apiBaseUrl: p.apiBaseUrl,
         clientBaseUrl: p.clientBaseUrl,
+        // Archived (F-027-bz): kept for its records, skipped by every loop.
+        retiredAt: p.retiredAt,
         // A push panel with no secret never reaches the RADIUS allowlist (F-027-az); null on a pull panel.
         radiusSecretConfigured: p.transport === 'push' ? p.panelRadiusSecret !== null : null,
         review: {

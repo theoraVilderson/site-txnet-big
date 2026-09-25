@@ -104,6 +104,10 @@ const CONFLICTS: ReadonlySet<SystemsRejection> = new Set([
   'member_has_configs',
   'inbound_not_sellable',
   'not_for_transport',
+  'panel_in_group',
+  'panel_has_configs',
+  'panel_retired',
+  'panel_not_retired',
 ]);
 
 /** The service's refusals as HTTP: the scope is a 403, a panel, group or event outside it a 404. */
@@ -237,6 +241,25 @@ export class SystemsController {
     @Req() req: Request,
   ) {
     return refusing(() => this.lifecycle.update(actorOf(req), id, body as PanelSettingsInput));
+  }
+
+  /**
+   * Delete a panel (F-027-bz). `200 {id, outcome}`: `deleted` when it had no
+   * history, `archived` when it had. 409 while a group holds it or a config
+   * on it is live.
+   */
+  @Delete('panels/:id')
+  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  removePanel(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
+    return refusing(() => this.lifecycle.remove(actorOf(req), id));
+  }
+
+  /** Restore an archived panel (F-027-bz). `200 {id, reviewState: 'pending'}`: it is re-tested first. */
+  @Post('panels/:id/restore')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  restorePanel(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
+    return refusing(() => this.lifecycle.restore(actorOf(req), id));
   }
 
   @Get('panels/:id/capabilities')

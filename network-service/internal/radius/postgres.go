@@ -202,7 +202,7 @@ const nasSQL = `
 SELECT id::text, coalesce("ipAddress", ''), "ownershipType"::text, coalesce("tenantId"::text, ''),
        coalesce("maxLineRateBps", 0)
   FROM network.panel
- WHERE transport = 'push' AND "reviewState" = 'accepted'`
+ WHERE transport = 'push' AND "reviewState" = 'accepted' AND "retiredAt" IS NULL`
 
 func (d *PanelDirectory) NAS(addr netip.Addr) (NAS, bool) {
 	m := d.nases.Load()
