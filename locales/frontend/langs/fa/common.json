@@ -1202,7 +1202,14 @@
       "limit": "سقف",
       "resetPolicy": "بازنشانی",
       "remove": "حذف",
-      "gb": "{{count}} گیگ"
+      "gb": "{{count}} گیگ",
+      "panelGroup": "گروه پنل",
+      "panelGroupHint": "سرورهایی که این واریانت را تحویل می‌دهند. بدون آن، این واریانت فروخته نمی‌شود.",
+      "panelGroupNone": "هیچ‌کدام — برای فروش نیست",
+      "notForSale": "برای فروش نیست: گروه پنل ندارد",
+      "healthy": "{{count}} سالم",
+      "notFulfilled": "هنوز تحویل نمی‌شود",
+      "panelGroupsFailed": "گروه‌های پنل بارگذاری نشد."
     },
     "price": {
       "amount": "قیمت (USD)",

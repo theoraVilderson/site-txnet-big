@@ -21,6 +21,9 @@ import {
   surfaceActor,
   suggestSku,
   variantBody,
+  takesPanelGroup,
+  groupsForVariant,
+  wizardVariantTenant,
   wizardStepErrors,
   emptyWizard,
   firstInvalidStep,
@@ -31,7 +34,7 @@ import {
 } from "../_lib/catalog-form";
 import { FeatureKeyPicker } from "./FeatureKeyPicker";
 import { CategoryFields } from "./NameSheets";
-import { VariantFields } from "./ProductDetailSheet";
+import { VariantFields, usePanelGroups } from "./ProductDetailSheet";
 import { Alert, Field, KeyField, LanguageSelect, Sheet, input, primaryButton, quietButton, useDirOf, useMessage } from "./catalog-ui";
 
 /** Which step a refusal belongs to, so the wizard returns the admin to the field billing named. */
@@ -93,6 +96,9 @@ export function ProductWizard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<{ categoryId?: string; productId?: string }>({});
+  const kind = w.product.fulfilmentKind;
+  const groups = usePanelGroups(takesPanelGroup(kind));
+  const offered = { ...groups, options: groupsForVariant(groups.options, wizardVariantTenant(w.product, actor)) };
 
   const index = WIZARD_STEPS.indexOf(step);
   const go = (to: WizardStep) => {
@@ -138,7 +144,7 @@ export function ProductWizard({
         setCreated(ids);
       }
       stage = "variant";
-      if (w.withVariant) await api.createVariant(ids.productId!, variantBody(w.variant));
+      if (w.withVariant) await api.createVariant(ids.productId!, variantBody(w.variant, kind));
       await onCreated(ids.productId!, false);
     } catch (e) {
       const reason = (e as { reason?: unknown } | null)?.reason;
@@ -318,6 +324,8 @@ export function ProductWizard({
               form={w.variant}
               errors={errors}
               productKey={w.product.key}
+              kind={kind}
+              groups={offered}
               set={(k, v) => {
                 if (k === "sku") setSkuTouched(true);
                 const patch: Partial<VariantForm> = { [k]: v };
@@ -360,6 +368,12 @@ export function ProductWizard({
                 {w.variant.durationDays ? t("common", K.variant.days, { count: Number(w.variant.durationDays) }) : t("common", K.variant.permanent)}
                 {" · "}
                 <span dir="ltr">{w.variant.price} USD</span>
+                {takesPanelGroup(kind) && (
+                  <>
+                    {" · "}
+                    {offered.options.find((g) => g.id === w.variant.panelGroupId)?.name ?? t("common", K.variant.notForSale)}
+                  </>
+                )}
               </>
             ) : (
               t("common", K.wizard.skipVariant)

@@ -10,11 +10,13 @@ import type {
   FulfilmentKind,
   ProductRemoval,
   CategoryRemoval,
+  PanelGroupOption,
   QualityTier,
   QuotaMetric,
   Quotas,
   ResetPolicy,
   SetPriceBody,
+  UpdateVariantBody,
   Visibility,
 } from "@/lib/catalog-api";
 
@@ -325,6 +327,8 @@ export interface VariantForm {
   /** The first price, base currency. */
   price: string;
   quotas: QuotaRow[];
+  /** A `network_access` variant's panel group; blank = none, and not for sale (F-026-o). */
+  panelGroupId: string;
 }
 
 export const emptyVariantForm = (): VariantForm => ({
@@ -335,6 +339,7 @@ export const emptyVariantForm = (): VariantForm => ({
   durationDays: "",
   price: "",
   quotas: [],
+  panelGroupId: "",
 });
 
 export function validateVariantForm(f: VariantForm): Errors<VariantForm> {
@@ -367,8 +372,9 @@ export function quotaToInput(metric: QuotaMetric, limit: string): string {
 const quotasOf = (rows: QuotaRow[]): Quotas =>
   Object.fromEntries(rows.map((q) => [q.metric, { limit: Number(q.limit.trim()), resetPolicy: q.resetPolicy }]));
 
-/** A new variant with its first price, in billing's wire shape. */
-export function variantBody(f: VariantForm): CreateVariantBody {
+/** A new variant with its first price, in billing's wire shape. A group only for `network_access` (F-026-o). */
+export function variantBody(f: VariantForm, kind: FulfilmentKind): CreateVariantBody {
+  const group = f.panelGroupId.trim();
   return {
     sku: f.sku.trim().toUpperCase(),
     billingMode: f.billingMode,
@@ -377,8 +383,37 @@ export function variantBody(f: VariantForm): CreateVariantBody {
     durationDays: blank(f.durationDays) ? null : Number(f.durationDays.trim()),
     price: f.price.trim(),
     ...(f.quotas.length ? { quotas: quotasOf(f.quotas) } : {}),
+    ...(takesPanelGroup(kind) && group ? { panelGroupId: group } : {}),
   };
 }
+
+// --------------------------------------------------------------- panel group
+
+/** Only a `network_access` variant is placed on a panel, so only it names a group (F-026-o). */
+export const takesPanelGroup = (kind: FulfilmentKind) => kind === "network_access";
+
+/**
+ * The groups a variant is offered: the platform's and its own tenant's, as
+ * billing's `usableGroup` admits. `undefined` = billing already narrowed the
+ * list (a tenant's own, or a reseller's screen); only the platform owner is
+ * sent every group.
+ */
+export function groupsForVariant(groups: readonly PanelGroupOption[], tenantId: string | null | undefined): PanelGroupOption[] {
+  return tenantId === undefined ? [...groups] : groups.filter((g) => g.tenantId === null || g.tenantId === tenantId);
+}
+
+/** Whose the wizard's variant will be, when the platform owner chose it; anyone else's is billing's to narrow. */
+export function wizardVariantTenant(f: ProductForm, me: Me | null): string | null | undefined {
+  if (!isPlatformOwner(me)) return undefined;
+  if (f.owner === "platform") return null;
+  return f.owner === "tenant" ? f.tenantId.trim() : me!.tenant.id;
+}
+
+/** An edit's group: blank clears it, which billing's schema takes as `null`. */
+export const panelGroupPatch = (value: string): UpdateVariantBody => ({ panelGroupId: value.trim() || null });
+
+/** A `network_access` variant with no group is never offered — billing's shop drops it (F-111-e). */
+export const notForSale = (v: { panelGroupId: string | null }, kind: FulfilmentKind) => takesPanelGroup(kind) && v.panelGroupId === null;
 
 // -------------------------------------------------------------------- wizard
 

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { Me } from "@/lib/auth-api";
-import type { CatalogPrice } from "@/lib/catalog-api";
+import type { CatalogPrice, PanelGroupOption } from "@/lib/catalog-api";
 import { PANEL_CATALOG } from "@/lib/routes";
 import { PANEL_MENU, isMenuGroup } from "../_lib/panel-menu";
 import {
@@ -53,6 +53,11 @@ import {
   WIZARD_STEPS,
   quotaFromInput,
   quotaToInput,
+  groupsForVariant,
+  notForSale,
+  panelGroupPatch,
+  takesPanelGroup,
+  wizardVariantTenant,
 } from "./_lib/catalog-form";
 
 /**
@@ -295,7 +300,7 @@ describe("the variant form", () => {
 
   it("accepts a plain variant and sends the SKU upper-cased with its quotas by metric", () => {
     expect(validateVariantForm(valid())).toEqual({});
-    expect(variantBody(valid())).toEqual({
+    expect(variantBody(valid(), "network_access")).toEqual({
       sku: "VPN-90",
       billingMode: "prepaid",
       visibility: "public",
@@ -307,7 +312,7 @@ describe("the variant form", () => {
   });
 
   it("sends a blank duration as permanent", () => {
-    expect(variantBody({ ...valid(), durationDays: "" })).toMatchObject({ durationDays: null });
+    expect(variantBody({ ...valid(), durationDays: "" }, "feature_access")).toMatchObject({ durationDays: null });
   });
 
   it.each([
@@ -341,6 +346,59 @@ describe("the variant form", () => {
 
   it("allows a free variant", () => {
     expect(validateVariantForm({ ...valid(), price: "0" })).toEqual({});
+  });
+});
+
+describe("a variant's panel group (F-026-o)", () => {
+  const group = (id: string, tenantId: string | null): PanelGroupOption => ({ id, tenantId, name: id, strategy: "mirror", protocol: "vless", healthyMembers: 1 });
+  const groups = [group("platform-eu", null), group("owner-own", "t-owner"), group("res-a", "t-res"), group("res-b", "t-other")];
+  const form = () => ({ ...emptyVariantForm(), sku: "VPN-30", price: "5", durationDays: "30" });
+
+  it("is asked only of a network_access variant — nothing else is placed on a panel", () => {
+    expect(FULFILMENT_KINDS.filter(takesPanelGroup)).toEqual(["network_access"]);
+  });
+
+  it("offers a variant the platform's groups and its own tenant's, as billing's usableGroup admits", () => {
+    expect(groupsForVariant(groups, "t-res").map((g) => g.id)).toEqual(["platform-eu", "res-a"]);
+    expect(groupsForVariant(groups, null).map((g) => g.id)).toEqual(["platform-eu"]);
+    // A tenant's own list, or a reseller's screen: billing already narrowed it.
+    expect(groupsForVariant(groups, undefined)).toEqual(groups);
+  });
+
+  it("knows the wizard's variant tenant from the owner's choice; anyone else's is billing's to narrow", () => {
+    const p = emptyProductForm("en");
+    expect(wizardVariantTenant({ ...p, owner: "platform" }, OWNER)).toBeNull();
+    expect(wizardVariantTenant({ ...p, owner: "own" }, OWNER)).toBe("t-owner");
+    expect(wizardVariantTenant({ ...p, owner: "tenant", tenantId: " t-res " }, OWNER)).toBe("t-res");
+    expect(wizardVariantTenant({ ...p, owner: "platform" }, RESELLER)).toBeUndefined();
+    expect(wizardVariantTenant(p, null)).toBeUndefined();
+  });
+
+  it("sends the group on a network_access variant only, and none when none is picked", () => {
+    expect(variantBody({ ...form(), panelGroupId: "g-1" }, "network_access")).toMatchObject({ panelGroupId: "g-1" });
+    expect(variantBody({ ...form(), panelGroupId: "" }, "network_access")).not.toHaveProperty("panelGroupId");
+    // A group picked, then the product's kind changed in the wizard: billing would store it on a product nothing places.
+    expect(variantBody({ ...form(), panelGroupId: "g-1" }, "feature_access")).not.toHaveProperty("panelGroupId");
+  });
+
+  it("clears a group on edit with null, which billing's schema takes", () => {
+    expect(panelGroupPatch("g-2")).toEqual({ panelGroupId: "g-2" });
+    expect(panelGroupPatch("")).toEqual({ panelGroupId: null });
+    const schema = read("billing-service/src/app/catalog/catalog-admin.schema.ts");
+    expect(schema).toMatch(/panelGroupId: uuid\('panelGroupId'\)\.nullable\(\)\.optional\(\)/);
+  });
+
+  it("marks a network_access variant with no group as not for sale — the shop hides it", () => {
+    expect(notForSale({ panelGroupId: null }, "network_access")).toBe(true);
+    expect(notForSale({ panelGroupId: "g-1" }, "network_access")).toBe(false);
+    expect(notForSale({ panelGroupId: null }, "feature_access")).toBe(false);
+  });
+
+  it("names every string it shows in en and fa", () => {
+    for (const lang of ["en", "fa"]) {
+      const v = JSON.parse(readFileSync(join(LOCALES, lang, "common.json"), "utf8")).catalog.variant;
+      for (const k of ["panelGroup", "panelGroupHint", "panelGroupNone", "notForSale", "healthy", "notFulfilled", "panelGroupsFailed"]) expect(v[k], `${lang} ${k}`).toBeTruthy();
+    }
   });
 });
 

@@ -1202,7 +1202,14 @@
       "limit": "Limit",
       "resetPolicy": "Resets",
       "remove": "Remove",
-      "gb": "{{count}} GB"
+      "gb": "{{count}} GB",
+      "panelGroup": "Panel group",
+      "panelGroupHint": "The servers that deliver this variant. Without one it is not for sale.",
+      "panelGroupNone": "None — not for sale",
+      "notForSale": "Not for sale: no panel group",
+      "healthy": "{{count}} healthy",
+      "notFulfilled": "not delivered yet",
+      "panelGroupsFailed": "The panel groups could not be loaded."
     },
     "price": {
       "amount": "Price (USD)",

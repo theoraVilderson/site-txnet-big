@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, Loader2, Plus, Power, Sparkles } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { type CatalogProduct, type CatalogProductDetail, type CatalogVariant, type Quotas } from "@/lib/catalog-api";
+import { type CatalogProduct, type CatalogProductDetail, type CatalogVariant, type FulfilmentKind, type PanelGroupOption, type Quotas } from "@/lib/catalog-api";
 import { useCatalogSurface } from "../_lib/surface";
 import { DatePicker } from "../../_components/kit/DatePicker";
 import { Select } from "../../_components/kit/Select";
@@ -18,6 +18,10 @@ import {
   VISIBILITIES,
   currentPrice,
   emptyVariantForm,
+  groupsForVariant,
+  notForSale,
+  panelGroupPatch,
+  takesPanelGroup,
   priceBody,
   quotaFromInput,
   quotaToInput,
@@ -57,6 +61,9 @@ export function ProductDetailSheet({
   const [detail, setDetail] = useState<CatalogProductDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const kind = product.fulfilmentKind;
+  const groups = usePanelGroups(takesPanelGroup(kind));
+  const offered = { ...groups, options: groupsForVariant(groups.options, product.tenantId) };
 
   const load = useCallback(async () => {
     try {
@@ -100,13 +107,15 @@ export function ProductDetailSheet({
       )}
       {detail?.variants.length === 0 && !adding && <p className="rounded-xl bg-[var(--leaf-bg)] p-3 text-xs text-text-primary">{t("common", K.wizard.skipVariant)}</p>}
       {detail?.variants.map((v) => (
-        <VariantCard key={v.id} variant={v} money={money} onChanged={load} />
+        <VariantCard key={v.id} variant={v} kind={kind} groups={offered} money={money} onChanged={load} />
       ))}
       {detail &&
         (adding ? (
           <NewVariant
             productId={product.id}
             productKey={product.key}
+            kind={kind}
+            groups={offered}
             onCancel={() => setAdding(false)}
             onSaved={async () => {
               setAdding(false);
@@ -196,7 +205,19 @@ function QuotaSummary({ quotas }: { quotas: Quotas }) {
   return parts.length ? <>{` · ${parts.join(" · ")}`}</> : null;
 }
 
-function VariantCard({ variant: v, money, onChanged }: { variant: CatalogVariant; money: (a: string) => string; onChanged: () => Promise<void> }) {
+function VariantCard({
+  variant: v,
+  kind,
+  groups,
+  money,
+  onChanged,
+}: {
+  variant: CatalogVariant;
+  kind: FulfilmentKind;
+  groups: PanelGroups;
+  money: (a: string) => string;
+  onChanged: () => Promise<void>;
+}) {
   const { t, lang } = useLocale();
   const message = useMessage();
   const { api } = useCatalogSurface();
@@ -239,6 +260,7 @@ function VariantCard({ variant: v, money, onChanged }: { variant: CatalogVariant
             <QuotaSummary quotas={v.quotas} />
             {!v.isActive && ` · ${t("common", K.inactive)}`}
           </p>
+          {notForSale(v, kind) && <p className="mt-1 text-[11px] font-bold text-error">{t("common", K.variant.notForSale)}</p>}
         </div>
         <div className="flex flex-wrap items-center gap-1">
           <span className="rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-xs font-bold text-primary">
@@ -251,6 +273,10 @@ function VariantCard({ variant: v, money, onChanged }: { variant: CatalogVariant
           </button>
         </div>
       </div>
+
+      {takesPanelGroup(kind) && (
+        <PanelGroupSelect value={v.panelGroupId ?? ""} groups={groups} onChange={(id) => void act(() => api.updateVariant(v.id, panelGroupPatch(id)))} />
+      )}
 
       <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
         <Field label={t("common", K.price.amount)} error={errors.amount}>
@@ -313,11 +339,16 @@ export function VariantFields({
   set,
   errors,
   productKey,
+  kind,
+  groups,
 }: {
   form: VariantForm;
   set: <F extends keyof VariantForm>(k: F, v: VariantForm[F]) => void;
   errors: Errors<VariantForm>;
   productKey: string;
+  kind: FulfilmentKind;
+  /** What this variant may name; only asked of a `network_access` one (F-026-o). */
+  groups: PanelGroups;
 }) {
   const { t } = useLocale();
   const [advanced, setAdvanced] = useState(false);
@@ -343,6 +374,8 @@ export function VariantFields({
           </span>
         </Field>
       </div>
+
+      {takesPanelGroup(kind) && <PanelGroupSelect value={form.panelGroupId} groups={groups} onChange={(id) => set("panelGroupId", id)} />}
 
       <div className="flex flex-col gap-2">
         <p className="text-xs font-bold text-text-secondary">{t("common", K.variant.quotas)}</p>
@@ -412,7 +445,21 @@ export function VariantFields({
   );
 }
 
-function NewVariant({ productId, productKey, onCancel, onSaved }: { productId: string; productKey: string; onCancel: () => void; onSaved: () => Promise<void> }) {
+function NewVariant({
+  productId,
+  productKey,
+  kind,
+  groups,
+  onCancel,
+  onSaved,
+}: {
+  productId: string;
+  productKey: string;
+  kind: FulfilmentKind;
+  groups: PanelGroups;
+  onCancel: () => void;
+  onSaved: () => Promise<void>;
+}) {
   const { t } = useLocale();
   const message = useMessage();
   const { api } = useCatalogSurface();
@@ -431,7 +478,7 @@ function NewVariant({ productId, productKey, onCancel, onSaved }: { productId: s
     setBusy(true);
     setError(null);
     try {
-      await api.createVariant(productId, variantBody(withSku));
+      await api.createVariant(productId, variantBody(withSku, kind));
       await onSaved();
     } catch (e) {
       setError(message(e));
@@ -442,7 +489,7 @@ function NewVariant({ productId, productKey, onCancel, onSaved }: { productId: s
 
   return (
     <section className="flex flex-col gap-3 rounded-2xl border border-dashed border-primary p-3">
-      <VariantFields form={form} set={set} errors={errors} productKey={productKey} />
+      <VariantFields form={form} set={set} errors={errors} productKey={productKey} kind={kind} groups={groups} />
       {error && <Alert>{error}</Alert>}
       <div className="flex justify-end gap-2">
         <button type="button" className={quietButton} onClick={onCancel}>
@@ -453,5 +500,59 @@ function NewVariant({ productId, productKey, onCancel, onSaved }: { productId: s
         </button>
       </div>
     </section>
+  );
+}
+
+/** The groups a variant may name on this surface, and whether they loaded. */
+export interface PanelGroups {
+  options: PanelGroupOption[];
+  failed: boolean;
+}
+
+/** `GET /panel-groups` once, when the product is `network_access` (F-026-p); a failure costs the choices, never the form. */
+export function usePanelGroups(enabled: boolean): PanelGroups {
+  const { api } = useCatalogSurface();
+  const [state, setState] = useState<PanelGroups>({ options: [], failed: false });
+  useEffect(() => {
+    if (!enabled) return;
+    let live = true;
+    api.panelGroups().then(
+      (options) => live && setState({ options, failed: false }),
+      () => live && setState({ options: [], failed: true }),
+    );
+    return () => {
+      live = false;
+    };
+    // The surface's api is fixed for the page; `enabled` is what decides a load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled]);
+  return state;
+}
+
+/**
+ * A variant's panel group (F-026-o): "none" first, because none is a real
+ * answer — the variant is kept and simply not sold. Each group says whose it
+ * is, how many panels fulfilment would place on now, and whether its strategy
+ * is fulfilled at all. A group the list no longer has keeps its id as a label,
+ * so the select never shows a variant as having none when it has one.
+ */
+function PanelGroupSelect({ value, groups, onChange }: { value: string; groups: PanelGroups; onChange: (id: string) => void }) {
+  const { t } = useLocale();
+  const label = (g: PanelGroupOption) =>
+    [
+      g.name,
+      g.tenantId === null ? t("common", K.platform) : null,
+      g.protocol,
+      t("common", K.variant.healthy, { count: g.healthyMembers }),
+      g.strategy === "mirror" ? null : t("common", K.variant.notFulfilled),
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  const options = [{ value: "", label: t("common", K.variant.panelGroupNone) }, ...groups.options.map((g) => ({ value: g.id, label: label(g) }))];
+  if (value && !groups.options.some((g) => g.id === value)) options.push({ value, label: value });
+  return (
+    <Field label={t("common", K.variant.panelGroup)} hint={t("common", groups.failed ? K.variant.panelGroupsFailed : K.variant.panelGroupHint)}>
+      <Select ariaLabel={t("common", K.variant.panelGroup)} value={value} onChange={onChange} options={options} />
+    </Field>
   );
 }

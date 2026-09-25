@@ -2,7 +2,7 @@
 id: panel-web
 layer: interface
 status: active
-version: 23
+version: 24
 updated: 2026-09-25
 ---
 
@@ -85,6 +85,18 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    one as the reviewer's text, a blank one never (`reviewWrites`). Languages
    offered are locale-service's — no list in code. "Translate missing" is
    billing's `draft-missing`. Billing scopes every call.
+10b. **A `network_access` variant names its panel group** (F-026-o over
+   F-026-p; no other kind is placed on a panel — `takesPanelGroup`). The
+   wizard's variant step, "new variant" and each variant card offer
+   `GET /panel-groups` narrowed to the platform's and the variant's own
+   tenant's (`groupsForVariant`, as billing's `usableGroup`; the owner's
+   wizard reads the tenant from its choice, `wizardVariantTenant`). "None" is
+   an answer: the variant is kept, marked "not for sale: no panel group"
+   (`notForSale`), and the shop drops it. A card's change is one
+   `PATCH panelGroupId` (`panelGroupPatch`, blank = `null`); a create sends a
+   group only for `network_access` (`variantBody(form, kind)`). Each option
+   shows its owner, protocol, `healthyMembers` and, off `mirror`, "not
+   delivered yet". A failed list costs the choices, never the form.
 
 ## The same page for a reseller a route names (F-066-w8, ADR-0064 (4))
 
@@ -130,7 +142,9 @@ in a source language (`validateCategoryForm` / `categoryBody`,
 billing's `CategoryRemovalOutcome`, `productCounts`, `switchTargets`,
 `switchReport` (F-026-k); `heldByProducts`, `mergeRemovals` and the products'
 counts in the report (F-026-m); `RESTORE_CATEGORY` against billing's
-`updateCategorySchema` (F-026-n).
+`updateCategorySchema` (F-026-n); `takesPanelGroup`, `groupsForVariant`,
+`wizardVariantTenant`, `variantBody` by kind, `panelGroupPatch` against
+billing's schema, `notForSale` (F-026-o).
 
 `my-resellers/catalog.test.ts` (F-066-w8) — `catalogApiPrefix` on both
 surfaces against the controller's own `@Controller`, `surfaceActor` holding a

@@ -150,6 +150,23 @@ export interface CatalogVariant {
 
 export type CatalogProductDetail = CatalogProduct & { variants: CatalogVariant[] };
 
+/** Prisma's `PanelGroupStrategy`; only `mirror` is fulfilled today (network `contract.groups.md`). */
+export type PanelGroupStrategy = "mirror" | "priority" | "weighted";
+
+/**
+ * One group a variant may name (F-026-p): the platform's (`tenantId: null`) and
+ * the caller's own — every group, each with its tenant, for the platform owner.
+ * `healthyMembers` counts what fulfilment would place on now.
+ */
+export interface PanelGroupOption {
+  id: string;
+  tenantId: string | null;
+  name: string;
+  strategy: PanelGroupStrategy;
+  protocol: string;
+  healthyMembers: number;
+}
+
 export interface CreateProductBody {
   /** Absent = the caller's tenant; `null` = platform; another id = the platform owner's alone. */
   tenantId?: string | null;
@@ -176,11 +193,13 @@ export interface CreateVariantBody {
   durationDays?: number | null;
   quotas?: Quotas;
   nameKey?: string | null;
+  /** A `network_access` variant's group; none = not for sale (F-026-o). */
+  panelGroupId?: string | null;
   /** The first price. */
   price: string;
   effectiveFrom?: string;
 }
-export type UpdateVariantBody = Partial<Pick<CreateVariantBody, "visibility" | "qualityTier" | "durationDays" | "quotas" | "nameKey">> & { isActive?: boolean };
+export type UpdateVariantBody = Partial<Pick<CreateVariantBody, "visibility" | "qualityTier" | "durationDays" | "quotas" | "nameKey" | "panelGroupId">> & { isActive?: boolean };
 
 export interface SetPriceBody {
   amount: string;
@@ -212,6 +231,11 @@ export type CatalogAdminApi = ReturnType<typeof catalogAdminApi>;
 export function catalogAdminApi(tenantId: string | null) {
   const at = catalogApiPrefix(tenantId);
   return {
+    /** The groups a variant on this surface may name (F-026-p). */
+    async panelGroups(): Promise<PanelGroupOption[]> {
+      return call<PanelGroupOption[]>(`${at}/panel-groups`, { method: "GET" });
+    },
+
     async categories(query: { archived?: "true" } = {}): Promise<CatalogCategory[]> {
       const qs = new URLSearchParams(query).toString();
       return call<CatalogCategory[]>(`${at}/categories${qs ? `?${qs}` : ""}`, { method: "GET" });
