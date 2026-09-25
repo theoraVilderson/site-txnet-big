@@ -29,11 +29,6 @@ the same Postgres transaction that writes the ledger**, and `OutboxRelayJob`
 publishes the unpublished rows afterwards. The event and the state change that
 caused it commit or fail together, which is the whole of ADR-0021.
 
-**Nothing produces yet.** `billing`, `network`, `notification` and `ai` are all
-`draft`, so the table has no writer and the relay drains an empty table. That
-is why this was cheap to build today and would not have been on the day the
-first payment landed.
-
 ## How a domain writes one
 
 Inside the transaction, never outside it. There is no service API for this and
@@ -141,11 +136,11 @@ somewhere else, and an event a committed transaction promised is not something
 to throw away because nobody was listening yet. What makes the retrying
 visible instead is monitoring — see [contract.monitoring.md](contract.monitoring.md).
 
-**Today every publish that happens at all is `unroutable`**, because no domain
-binds a queue to `outbox.#` and every publish is `mandatory`. That is the
-correct answer rather than a gap: an event announced to nobody is not an event
-delivered, and the alternative — a plain publish the broker acks into nothing
-— is what invariant #10 exists to forbid.
+**Every type has a bound queue** (F-114-i): publishes are `mandatory` and the
+relay never skips a row, so one unbound type stalls every later event, as
+`entitlement.grant.created` did. `OUTBOX_EVENT_BINDER` (`routing-keys.ts`,
+exhaustive) names each type's binder — a new type does not compile without one —
+and `grant-created.consumer.spec.ts` fails when worker-service does not bind its share.
 
 ## One notice path: live, inbox, bot (F-067-o, F-067-p, ADR-0084)
 
@@ -233,6 +228,16 @@ Both in `outbox/tenant-renewal.consumers.ts`. The producers are tenant's:
 |---|---|
 | Live on `user:<userId>` under the event's own name — `{type, grantId}`, a refund adding `invoiceId, amount` — then template `purchaseDelivered` / `purchaseRefunded` (`{amount}`) to the buyer's inbox and bot | an open My services turns the Grant live (F-111-f) and the top bar re-reads the balance; every purchase ends in exactly one of the two |
 | A payload without tenant, user or Grant, or a refund without `amount`, throws and dead-letters | whose purchase it is is never guessed |
+
+## A purchase delivered at once (F-114-i)
+
+`GrantCreatedConsumer`, queue `AUTOMATION_GRANT_CREATED_QUEUE` bound to exactly
+`outbox.entitlement.grant.created`, written by the invoice payment.
+
+| Rule | Why |
+|---|---|
+| `POST /api/internal/billing/entitlement/grants/:grantId/deliver` — the sweep's check for this one Grant, only while `pending` and due; **no marker** | a repeat answers `skipped` and moves no clock; a feature is live a second after payment, not up to a minute |
+| A refusal, an unset seam, an answer without `outcome`, or a payload without `grantId` throws and dead-letters | the minute `grant_delivery` sweep stays the backstop |
 
 ## What is not built
 

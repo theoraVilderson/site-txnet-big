@@ -254,3 +254,15 @@ describe('GrantDeliveryService.deliver', () => {
     expect(seen.outbox).toEqual([]);
   });
 });
+
+describe('GrantDeliveryService.deliverNow — the purchase event (F-114-i)', () => {
+  it('checks only a Grant the sweep would pick now, so a repeated event moves no clock', async () => {
+    const asked: Array<Record<string, unknown>> = [];
+    const crossTenant = { grant: { findFirst: async ({ where }: { where: Record<string, unknown> }) => (asked.push(where), null) } };
+    const service = new GrantDeliveryService({} as never, crossTenant as never, {} as never, {} as never, {} as never, {} as never);
+
+    expect(await service.deliverNow(GRANT, NOW)).toBe('skipped');
+    expect(asked[0]).toMatchObject({ id: GRANT, status: GrantStatus.pending, source: GrantSource.purchase });
+    expect(asked[0]['OR']).toEqual([{ nextDeliveryAt: null }, { nextDeliveryAt: { lte: NOW } }]);
+  });
+});

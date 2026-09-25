@@ -129,6 +129,8 @@ export const envSchema = z.object({
   AUTOMATION_TENANT_SUBSCRIPTION_NOTICE_QUEUE: z.string().min(1).default('txnet.automation.outbox.tenant-subscription-notice'),
   /** F-111-d: a paid Grant delivered or refunded, told to its buyer — both types on one queue. */
   AUTOMATION_GRANT_DELIVERY_NOTICE_QUEUE: z.string().min(1).default('txnet.automation.outbox.grant-delivery-notice'),
+  /** F-114-i: a purchase's `entitlement.grant.created`, delivered at once rather than on the next minute sweep. */
+  AUTOMATION_GRANT_CREATED_QUEUE: z.string().min(1).default('txnet.automation.outbox.grant-created'),
   /** Where a combined notice's flush waits out its window, consumed by nobody (F-067-p, ADR-0084 decision 3). */
   AUTOMATION_NOTICE_DELAY_QUEUE: z.string().min(1).default('txnet.automation.notice.delay'),
   /** Where that flush lands once the window has passed; the worker tells the burst from here. */

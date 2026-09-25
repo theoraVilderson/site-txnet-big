@@ -45,6 +45,27 @@ export const OutboxEventType = {
 } as const;
 export type OutboxEventType = (typeof OutboxEventType)[keyof typeof OutboxEventType];
 
+/**
+ * Which app binds a queue to each outbox event type (F-114-i). The relay
+ * publishes `mandatory` and never skips a row, so a type nobody binds is
+ * `unroutable` for ever and holds every later event behind it. Exhaustive: a
+ * new type does not compile until somebody says who consumes it, and
+ * `grant-created.consumer.spec.ts` holds worker-service's broker to its share.
+ */
+export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'metering-service'> = {
+  [OutboxEventType.PAYMENT_CONFIRMED]: 'worker-service',
+  [OutboxEventType.PAYMENT_REVERSED]: 'worker-service',
+  [OutboxEventType.NOTIFICATION_CREATED]: 'worker-service',
+  [OutboxEventType.PANEL_TESTED]: 'worker-service',
+  [OutboxEventType.GRANT_DELIVERED]: 'worker-service',
+  [OutboxEventType.GRANT_REFUNDED]: 'worker-service',
+  [OutboxEventType.TENANT_BILLING_CREDITED]: 'worker-service',
+  [OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE]: 'worker-service',
+  [OutboxEventType.TENANT_SUBSCRIPTION_SUSPENDED]: 'worker-service',
+  [OutboxEventType.USAGE_RELEASE]: 'metering-service',
+  [OutboxEventType.GRANT_CREATED]: 'worker-service',
+};
+
 /** Every tick routing key starts with this. The suffix is the worker key. */
 export const AUTOMATION_TICK_ROUTING_PREFIX = 'automation.tick.';
 export const automationTickRoutingKey = (workerKey: string): string =>

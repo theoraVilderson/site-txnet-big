@@ -195,6 +195,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   private readonly tenantBillingCreditedQueue: string;
   private readonly tenantSubscriptionNoticeQueue: string;
   private readonly grantDeliveryNoticeQueue: string;
+  private readonly grantCreatedQueue: string;
   private readonly noticeDelayQueue: string;
   private readonly noticeFlushQueue: string;
   private readonly outboxPrefetch: number;
@@ -220,6 +221,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     this.tenantBillingCreditedQueue = config.getOrThrow<string>('AUTOMATION_TENANT_BILLING_CREDITED_QUEUE');
     this.tenantSubscriptionNoticeQueue = config.getOrThrow<string>('AUTOMATION_TENANT_SUBSCRIPTION_NOTICE_QUEUE');
     this.grantDeliveryNoticeQueue = config.getOrThrow<string>('AUTOMATION_GRANT_DELIVERY_NOTICE_QUEUE');
+    this.grantCreatedQueue = config.getOrThrow<string>('AUTOMATION_GRANT_CREATED_QUEUE');
     this.noticeDelayQueue = config.getOrThrow<string>('AUTOMATION_NOTICE_DELAY_QUEUE');
     this.noticeFlushQueue = config.getOrThrow<string>('AUTOMATION_NOTICE_FLUSH_QUEUE');
     this.outboxPrefetch = config.getOrThrow<number>('AUTOMATION_OUTBOX_PREFETCH');
@@ -324,6 +326,13 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     for (const type of [OutboxEventType.GRANT_DELIVERED, OutboxEventType.GRANT_REFUNDED]) {
       await this.channel.bindQueue(this.grantDeliveryNoticeQueue, this.exchange, outboxRoutingKey(type));
     }
+    // F-114-i: a purchase delivered at once. Its own queue, apart from the
+    // notices: this one asks billing to act, and its depth means buyers waiting.
+    await this.channel.assertQueue(this.grantCreatedQueue, {
+      durable: true,
+      arguments: { 'x-dead-letter-exchange': this.deadExchange },
+    });
+    await this.channel.bindQueue(this.grantCreatedQueue, this.exchange, outboxRoutingKey(OutboxEventType.GRANT_CREATED));
     // F-067-p: a combined notice's flush waits out its window in a queue nobody
     // consumes; the broker dead-letters it on expiry onto the flush key. A
     // durable delay: a flush survives the process that scheduled it.
@@ -571,6 +580,11 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   /** Start consuming a paid Grant's delivered / refunded events (F-111-d), by the same rules. */
   async consumeGrantDeliveryNotices(handle: OutboxHandler): Promise<void> {
     await this.consumeOutbox(this.grantDeliveryNoticeQueue, handle);
+  }
+
+  /** Start consuming a purchase's `entitlement.grant.created` (F-114-i), by the same rules. */
+  async consumeGrantCreated(handle: OutboxHandler): Promise<void> {
+    await this.consumeOutbox(this.grantCreatedQueue, handle);
   }
 
   /**

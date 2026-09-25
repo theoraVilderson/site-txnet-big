@@ -1,7 +1,7 @@
-import { Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
+import { Controller, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
 
-import { DeliverDueResult, GrantDeliveryService } from './delivery';
+import { DeliverDueResult, DeliveryOutcome, GrantDeliveryService } from './delivery';
 import { GrantPurgeService, PurgeResult } from './purge';
 
 /**
@@ -58,5 +58,16 @@ export class EntitlementInternalController {
   @HttpCode(200)
   deliverDue(): Promise<DeliverDueResult> {
     return this.delivery.deliverDue();
+  }
+
+  /**
+   * The same check for one Grant, the moment its purchase is announced
+   * (F-114-i). Checked only while `pending` and due, so a repeat answers
+   * `skipped`; the answer is `{ outcome }` in the usual envelope.
+   */
+  @Post('grants/:grantId/deliver')
+  @HttpCode(200)
+  async deliverNow(@Param('grantId', new ParseUUIDPipe()) grantId: string): Promise<{ outcome: DeliveryOutcome }> {
+    return { outcome: await this.delivery.deliverNow(grantId) };
   }
 }

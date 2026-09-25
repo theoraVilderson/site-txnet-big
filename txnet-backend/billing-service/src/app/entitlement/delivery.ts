@@ -79,6 +79,13 @@ export function nextDeliveryAt(attempts: number, now: Date, policy: DeliveryPoli
 export const DELIVERY_FAILURES = ['no_delivery_route', 'delivery_timed_out'] as const;
 export type DeliveryFailure = (typeof DELIVERY_FAILURES)[number];
 
+/** A purchase still `pending` whose next check is due — the sweep's scan and the one-Grant check alike. */
+export const dueForDelivery = (now: Date): Prisma.GrantWhereInput => ({
+  status: GrantStatus.pending,
+  source: GrantSource.purchase,
+  OR: [{ nextDeliveryAt: null }, { nextDeliveryAt: { lte: now } }],
+});
+
 export type DeliveryOutcome = 'delivered' | 'waiting' | 'refunded' | 'skipped';
 export type DeliverDueResult = { scanned: number; delivered: number; waiting: number; refunded: number; failed: number };
 
@@ -186,6 +193,19 @@ export class GrantDeliveryService {
   }
 
   /**
+   * The same check for one Grant, the moment its purchase is announced
+   * (F-114-i): `worker-service`'s `entitlement.grant.created` consumer. Only a
+   * Grant the sweep would pick now is checked — a redelivered event, or one
+   * the sweep beat to it, answers `skipped` and moves no clock. The tenant is
+   * the Grant's own, read here, never the caller's.
+   */
+  async deliverNow(grantId: string, now: Date = new Date()): Promise<DeliveryOutcome> {
+    const grant = await this.crossTenant.grant.findFirst({ where: { id: grantId, ...dueForDelivery(now) }, select: { id: true, tenantId: true } });
+    if (!grant) return 'skipped';
+    return runWithTenant({ id: grant.tenantId }, () => tenantTransaction(this.prisma, (tx) => this.deliver(tx, grant.id, now)));
+  }
+
+  /**
    * One sweep, for `worker-service`'s `grant_delivery` tick. The scan is the
    * `pending` purchases whose check is due, oldest first, cross-tenant; each
    * check runs in its own tenant transaction, so one Grant's failure is its
@@ -193,11 +213,7 @@ export class GrantDeliveryService {
    */
   async deliverDue(now: Date = new Date()): Promise<DeliverDueResult> {
     const due = await this.crossTenant.grant.findMany({
-      where: {
-        status: GrantStatus.pending,
-        source: GrantSource.purchase,
-        OR: [{ nextDeliveryAt: null }, { nextDeliveryAt: { lte: now } }],
-      },
+      where: dueForDelivery(now),
       select: { id: true, tenantId: true },
       orderBy: { createdAt: 'asc' },
       take: this.config.get('PAYMENT_EXPIRY_BATCH_SIZE', { infer: true }),

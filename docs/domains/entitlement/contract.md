@@ -109,6 +109,11 @@ rate on a prepaid Grant.
 (null = at once) over `POST /api/internal/billing/entitlement/deliver-due`
 (`ServiceOnlyGuard`), asked every minute by `grant_delivery`. Answer:
 `scanned`, `delivered`, `waiting`, `refunded`, `failed`.
+The same check for one Grant — `deliverNow`, over
+`POST /api/internal/billing/entitlement/grants/:grantId/deliver`, answer
+`{ outcome }` — is asked the moment `entitlement.grant.created` is published
+(F-114-i); it checks only a Grant still `pending` and due (`dueForDelivery`),
+so a repeat is `skipped` and the minute sweep stays the backstop.
 
 | Rule | Why |
 |---|---|
@@ -150,7 +155,7 @@ Through the outbox (ADR-0021), both also live on the buyer's `user:` channel
 |---|---|
 | network | `config.grantId`: a config draws on its Grant's quota (F-027); group fulfilment moves a grouped `pending` Grant to `active` (F-027-bl) |
 | billing | issues a Grant for a `free_grant` coupon (F-502-l) and, later, a purchase; the hot loop suspends a spent one (F-027-x) |
-| automation | holds the purge clock: `grant_config_purge` asks `purge-due` hourly (F-027-y), and the delivery clock: `grant_delivery` asks `deliver-due` every minute (F-111-d); tells the buyer on either event |
+| automation | holds the purge clock: `grant_config_purge` asks `purge-due` hourly (F-027-y), and the delivery clock: `grant_delivery` asks `deliver-due` every minute (F-111-d), and `grant-created` asks `grants/:grantId/deliver` on each purchase (F-114-i); tells the buyer on either event |
 
 ## Guarantees (built — `entitlement-schema.int.spec.ts`)
 
