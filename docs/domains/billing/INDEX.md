@@ -37,6 +37,7 @@ source:
   - txnet-backend/prisma/domains/migrations/20260924001400_deposit_tax_action/**
   - txnet-backend/prisma/domains/migrations/20260925000400_invoice/**
   - txnet-backend/prisma/domains/migrations/20260925000500_product_purchase_reason/**
+  - txnet-backend/prisma/domains/migrations/20260925000600_product_refund/**
 owns_tables: [wallet, wallet_transaction, sub_account, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_tenant, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice]
 depends_on: [identity, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]
 updated: 2026-09-25

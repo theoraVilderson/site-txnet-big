@@ -194,6 +194,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   private readonly panelTestedQueue: string;
   private readonly tenantBillingCreditedQueue: string;
   private readonly tenantSubscriptionNoticeQueue: string;
+  private readonly grantDeliveryNoticeQueue: string;
   private readonly noticeDelayQueue: string;
   private readonly noticeFlushQueue: string;
   private readonly outboxPrefetch: number;
@@ -218,6 +219,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     this.panelTestedQueue = config.getOrThrow<string>('AUTOMATION_PANEL_TESTED_QUEUE');
     this.tenantBillingCreditedQueue = config.getOrThrow<string>('AUTOMATION_TENANT_BILLING_CREDITED_QUEUE');
     this.tenantSubscriptionNoticeQueue = config.getOrThrow<string>('AUTOMATION_TENANT_SUBSCRIPTION_NOTICE_QUEUE');
+    this.grantDeliveryNoticeQueue = config.getOrThrow<string>('AUTOMATION_GRANT_DELIVERY_NOTICE_QUEUE');
     this.noticeDelayQueue = config.getOrThrow<string>('AUTOMATION_NOTICE_DELAY_QUEUE');
     this.noticeFlushQueue = config.getOrThrow<string>('AUTOMATION_NOTICE_FLUSH_QUEUE');
     this.outboxPrefetch = config.getOrThrow<number>('AUTOMATION_OUTBOX_PREFETCH');
@@ -312,6 +314,15 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     });
     for (const type of [OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE, OutboxEventType.TENANT_SUBSCRIPTION_SUSPENDED]) {
       await this.channel.bindQueue(this.tenantSubscriptionNoticeQueue, this.exchange, outboxRoutingKey(type));
+    }
+    // F-111-d: a paid Grant delivered or refunded, told to its buyer — one
+    // queue, because both are the end of the same purchase.
+    await this.channel.assertQueue(this.grantDeliveryNoticeQueue, {
+      durable: true,
+      arguments: { 'x-dead-letter-exchange': this.deadExchange },
+    });
+    for (const type of [OutboxEventType.GRANT_DELIVERED, OutboxEventType.GRANT_REFUNDED]) {
+      await this.channel.bindQueue(this.grantDeliveryNoticeQueue, this.exchange, outboxRoutingKey(type));
     }
     // F-067-p: a combined notice's flush waits out its window in a queue nobody
     // consumes; the broker dead-letters it on expiry onto the flush key. A
@@ -555,6 +566,11 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   /** Start consuming a reseller's renewal notices (F-019-c), by the same rules. */
   async consumeTenantSubscriptionNotices(handle: OutboxHandler): Promise<void> {
     await this.consumeOutbox(this.tenantSubscriptionNoticeQueue, handle);
+  }
+
+  /** Start consuming a paid Grant's delivered / refunded events (F-111-d), by the same rules. */
+  async consumeGrantDeliveryNotices(handle: OutboxHandler): Promise<void> {
+    await this.consumeOutbox(this.grantDeliveryNoticeQueue, handle);
   }
 
   /**

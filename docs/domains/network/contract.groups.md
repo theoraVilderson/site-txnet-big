@@ -82,8 +82,9 @@ rows are written through `ConfigActionsService.provisionForGroup`
     `present`, `complete` on a member whose panel still serves — sub-api's
     `servingPanelStates` (`healthy`, `degraded`, `throttled_or_blocked`).
     `complete` is a read (invariant 36), so a Grant is never activated on our
-    own write. The move is conditional on `pending`, so a cancel meanwhile
-    stands. An `active` Grant (a gift) is placed and left as it is; any other
+    own write. The move is entitlement's `markDelivered` — conditional on
+    `pending`, so a cancel or a delivery refund meanwhile stands, and it writes
+    `entitlement.grant.delivered` so the buyer is told (F-111-d). An `active` Grant (a gift) is placed and left as it is; any other
     status is `grant_not_fulfillable`.
 11. **The retry is the sweep.** `POST /api/internal/billing/network/fulfil-due`
     (`ServiceOnlyGuard`), asked every minute by `worker-service`'s

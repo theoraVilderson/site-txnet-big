@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { GrantDeliveryConsumer } from './grant-delivery.consumer';
 import { NoticeFlushConsumer } from './notice-flush.consumer';
 import { NotificationCreatedConsumer } from './notification-created.consumer';
 import { PanelTestedConsumer } from './panel-tested.consumer';
@@ -19,5 +20,5 @@ import { TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer } from 
  * `NoticeFlushConsumer` after the window (F-067-p). `BrokerService`, `RedisService` and `RealtimePublisher` are
  * global modules.
  */
-@Module({ providers: [PaymentConfirmedConsumer, PaymentReversedConsumer, NotificationCreatedConsumer, PanelTestedConsumer, TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer, NoticeFlushConsumer] })
+@Module({ providers: [PaymentConfirmedConsumer, PaymentReversedConsumer, NotificationCreatedConsumer, PanelTestedConsumer, TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer, GrantDeliveryConsumer, NoticeFlushConsumer] })
 export class OutboxModule {}

@@ -14,7 +14,7 @@
  *  - the sweep's flip is guarded by the row's status, like the top-up sweep:
  *    an invoice paid between the scan and the write keeps its holds.
  */
-import { InvoiceStatus, Prisma, RedemptionStatus, VariantVisibility } from '@prisma/client';
+import { FulfilmentKind, InvoiceStatus, Prisma, RedemptionStatus, VariantVisibility } from '@prisma/client';
 import { TenantContext, runWithTenant } from '@txnet-backend/shared-core';
 
 import { CouponReservationRefused } from '../payment/coupon/coupon-reservation';
@@ -29,6 +29,7 @@ const PRODUCT = '44444444-4444-4444-8444-444444444444';
 const VARIANT = '55555555-5555-4555-8555-555555555555';
 const PRICE = '66666666-6666-4666-8666-666666666666';
 const COUPON = '77777777-7777-4777-8777-777777777777';
+const GROUP = '88888888-8888-4888-8888-888888888888';
 const INVOICE_1 = '88888888-8888-4888-8888-888888888881';
 const INVOICE_2 = '88888888-8888-4888-8888-888888888882';
 
@@ -40,6 +41,8 @@ type VariantOverrides = {
   isActive?: boolean;
   productActive?: boolean;
   prices?: Array<{ id: string; amount: Prisma.Decimal; effectiveFrom: Date; isActive: boolean }>;
+  fulfilmentKind?: FulfilmentKind;
+  panelGroupId?: string | null;
 };
 
 function variantRow(o: VariantOverrides = {}) {
@@ -54,12 +57,13 @@ function variantRow(o: VariantOverrides = {}) {
     durationDays: 30,
     billingMode: 'prepaid',
     qualityTier: 'standard',
+    panelGroupId: o.panelGroupId === undefined ? GROUP : o.panelGroupId,
     product: {
       id: PRODUCT,
       key: 'vpn',
       nameKey: 'catalog.product.vpn.name',
       descriptionKey: null,
-      fulfilmentKind: 'vpn_config',
+      fulfilmentKind: o.fulfilmentKind ?? FulfilmentKind.network_access,
       featureKeys: ['vpn'],
       isActive: o.productActive ?? true,
       category: { key: 'vpn', isActive: true },
@@ -165,6 +169,9 @@ describe('InvoiceService.create', () => {
     ['switched off', variantRow({ isActive: false })],
     ['under a switched-off product', variantRow({ productActive: false })],
     ['with no price in effect', variantRow({ prices: [] })],
+    // F-111-d: nothing is sold that nothing can deliver.
+    ['of a kind with no delivery (external order)', variantRow({ fulfilmentKind: FulfilmentKind.external_order })],
+    ['a network service with no panel group', variantRow({ panelGroupId: null })],
   ])('refuses a variant that is %s, and writes nothing', async (_what, variant) => {
     const { service, calls } = buildCreate({ variant });
 

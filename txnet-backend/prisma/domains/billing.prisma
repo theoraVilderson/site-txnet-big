@@ -27,6 +27,10 @@ enum WalletReasonType {
   /// F-111-b: a catalog product bought from the wallet; `referenceId` = the
   /// invoice. Always a debit — a sale (`IS_SALE` in `reseller-revenue.service.ts`).
   product_purchase
+  /// F-111-d: a paid invoice whose Grant could not be delivered, given back in
+  /// full; `referenceId` = the invoice. Always a credit — it undoes a
+  /// `product_purchase` (`UNDOES`).
+  product_refund
 
   @@schema("billing")
 }
@@ -480,6 +484,8 @@ enum InvoiceStatus {
   paid
   expired
   cancelled
+  /// F-111-d: paid, its Grant not delivered, and the whole `total` credited back.
+  refunded
 
   @@schema("billing")
 }

@@ -57,5 +57,15 @@
     "acceptedManyTitle": "{{count}} panels accepted",
     "refusedMany": "❌ {{count}} of your panels were refused by their connection test. The details are on the systems page.",
     "refusedManyTitle": "{{count}} panels refused"
+  },
+  "purchase": {
+    "deliveredTitle": "Your purchase is ready",
+    "delivered": "✅ Your purchase is ready to use. You will find it under My services.",
+    "refundedTitle": "Purchase refunded",
+    "refunded": "↩️ Your purchase could not be delivered, so it was cancelled and {{amount}} was returned to your wallet.",
+    "deliveredMany": "✅ {{count}} of your purchases are ready to use. You will find them under My services.",
+    "deliveredManyTitle": "{{count}} purchases ready",
+    "refundedMany": "↩️ {{count}} of your purchases could not be delivered, so they were cancelled and their full price was returned to your wallet.",
+    "refundedManyTitle": "{{count}} purchases refunded"
   }
 }

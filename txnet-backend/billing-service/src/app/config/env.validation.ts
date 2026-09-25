@@ -206,6 +206,24 @@ export const envSchema = z.object({
   ),
 
   /**
+   * Delivery of a paid Grant (F-111-d, spec §5.8 step 3): it is checked once at
+   * the first tick after payment, then retried this many times, the first retry
+   * `GRANT_DELIVERY_FIRST_RETRY_MS` later and each one after at twice the last
+   * wait. A Grant still undelivered after the last retry is cancelled and its
+   * invoice refunded in full. The user's call (2026-09-25): 6 retries from one
+   * minute — 1, 2, 4, 8, 16 and 32 minutes, about an hour — so a panel slow or
+   * down for a few minutes refunds nobody, and nobody waits past the hour.
+   */
+  GRANT_DELIVERY_RETRIES: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().min(0).default(6),
+  ),
+  GRANT_DELIVERY_FIRST_RETRY_MS: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().int().positive().default(60_000),
+  ),
+
+  /**
    * How long an expired top-up keeps its coupon holds before the sweep gives
    * them back (F-092-ah, ADR-0047 decision 2). The clock closes the payment,
    * not the coupon: a bank may still charge it, and a slot handed to someone

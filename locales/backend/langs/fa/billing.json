@@ -10,6 +10,7 @@
     "wallet_transfer_out": "انتقال به کیف پول دیگر",
     "reseller_purchase": "خرید پکیج نمایندگی",
     "traffic_refund": "بازگشت ترافیک مصرف‌نشده",
-    "product_purchase": "خرید محصول"
+    "product_purchase": "خرید محصول",
+    "product_refund": "بازگشت وجه محصول — تحویل نشد"
   }
 }

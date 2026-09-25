@@ -243,6 +243,8 @@ describe('WalletHistoryService.ledger', () => {
         WalletReasonType.traffic_refund,
         // A product bought from the wallet (F-111-b), joined by the same rule.
         WalletReasonType.product_purchase,
+        // And its refund when it was never delivered (F-111-d).
+        WalletReasonType.product_refund,
       ],
     });
   });

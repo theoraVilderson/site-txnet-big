@@ -4,6 +4,7 @@ import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
 import { sellableOfferById } from '../catalog/catalog-reads';
+import { deliveryRouteOf } from '../entitlement/delivery';
 import { PrismaService } from '../prisma/prisma.service';
 import { CouponReservationService } from '../payment/coupon/coupon-reservation';
 import {
@@ -86,6 +87,10 @@ export class InvoiceService {
       const now = new Date();
       const offer = await sellableOfferById(tx, variantId, now);
       if (!offer) throw new InvoiceVariantNotFound(variantId);
+      // Nothing is sold that nothing can deliver (F-111-d, the user's call
+      // 2026-09-25): a paid Grant with no handler could only be refunded.
+      const routed = await tx.productVariant.findUnique({ where: { id: offer.variantId }, select: { panelGroupId: true } });
+      if (deliveryRouteOf(offer.fulfilmentKind, routed?.panelGroupId ?? null) === null) throw new InvoiceVariantNotFound(variantId);
 
       const amount = new Prisma.Decimal(offer.price.amount);
       const coupons: CouponValidation = amount.isZero()

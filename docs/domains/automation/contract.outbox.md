@@ -222,9 +222,21 @@ Both in `outbox/tenant-renewal.consumers.ts`. The producers are tenant's:
 | `TenantSubscriptionNoticeConsumer`, queue `AUTOMATION_TENANT_SUBSCRIPTION_NOTICE_QUEUE` on `outbox.tenant.subscription.payment_due` and `.suspended`: consumer `tenant-subscription-notice`: template `subscriptionPaymentDue` / `subscriptionSuspended` to `ownerUserId`'s inbox and bot, no live push of its own | the inbox row's `notification.created` is already live on every device (F-035-b); one queue, because both are the same owner's same story |
 | `OutboxEventType` is not all realtime: only `RealtimeEventType` is held to `contracts/realtime/events.json` | a tenant event is never pushed to a browser |
 
+## A purchase's end, told (F-111-d)
+
+`GrantDeliveryConsumer`, queue `AUTOMATION_GRANT_DELIVERY_NOTICE_QUEUE` bound to
+`outbox.entitlement.grant.delivered` and `.refunded`, consumer
+`grant-delivery-notify`. The producer is entitlement's delivery
+(`domains/entitlement/contract.md`).
+
+| Rule | Why |
+|---|---|
+| Live on `user:<userId>` under the event's own name — `{type, grantId}`, a refund adding `invoiceId, amount` — then template `purchaseDelivered` / `purchaseRefunded` (`{amount}`) to the buyer's inbox and bot | an open My services turns the Grant live (F-111-f) and the top bar re-reads the balance; every purchase ends in exactly one of the two |
+| A payload without tenant, user or Grant, or a refund without `amount`, throws and dead-letters | whose purchase it is is never guessed |
+
 ## What is not built
 
-- The notices above, two live pushes and the tenant renewal only; no Postgres idempotency store — ADR-0045 chose
+- The notices above, the live pushes and the tenant renewal only; no Postgres idempotency store — ADR-0045 chose
   Redis for the first, and a consumer that moves money must choose again.
 - No retention or archive of published rows. ADR-0021 makes the table an audit
   trail; when that stops being worth keeping needs a producer with an opinion.

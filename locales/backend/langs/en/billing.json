@@ -10,6 +10,7 @@
     "wallet_transfer_out": "Transfer sent to another wallet",
     "reseller_purchase": "Reseller package purchase",
     "traffic_refund": "Unused traffic returned",
-    "product_purchase": "Product purchase"
+    "product_purchase": "Product purchase",
+    "product_refund": "Product refund — not delivered"
   }
 }

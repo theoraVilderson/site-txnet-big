@@ -98,6 +98,11 @@ model Grant {
   /// The owning reseller node (C-15). Always null until reseller nodes exist (F-901).
   resellerPath          String?
   issuedByAdminId       String?            @db.Uuid
+  /// Delivery of a paid Grant (F-111-d, spec §5.8 step 3): the checks that
+  /// found it not yet delivered, and when the next one is due. Null = due now.
+  /// Only a `pending` Grant is ever checked; the clock is left as it stood.
+  deliveryAttempts      Int                @default(0)
+  nextDeliveryAt        DateTime?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @default(now()) @updatedAt
 
@@ -110,6 +115,8 @@ model Grant {
   @@index([userId, status])
   /// The purge job's only question: which suspended Grants are now due (F-027-y).
   @@index([status, suspendedAt], map: "grant_status_suspendedAt_idx")
+  /// The delivery sweep's only question: which `pending` Grants are due a check (F-111-d).
+  @@index([status, nextDeliveryAt], map: "grant_status_nextDeliveryAt_idx")
   @@map("grant")
   @@schema("entitlement")
 }

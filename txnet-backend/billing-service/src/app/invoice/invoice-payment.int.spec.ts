@@ -12,6 +12,8 @@
  *   - A balance short of the total writes nothing and says by how much.
  *   - Past its clock, or someone else's, is refused before any lock on money.
  *   - A free invoice moves no money and still issues its Grant.
+ *   - A Grant that cannot be delivered is refunded whole, once, and its
+ *     invoice cannot be paid again while its clock still runs (F-111-d).
  *
  *   npm run test:int
  */
@@ -24,9 +26,12 @@ import {
   prismaAt,
   startPostgresFixture,
 } from '../../../../test-support/postgres-fixture';
+import { GrantDeliveryService } from '../entitlement/delivery';
 import { EntitlementRefused, GrantService } from '../entitlement/grant';
 import { CouponReservationService } from '../payment/coupon/coupon-reservation';
 import { PrismaService } from '../prisma/prisma.service';
+import { ConfigActionsService } from '../traffic/config-actions';
+import { WalletCreditService } from '../wallet/wallet-credit.service';
 import { WalletLedgerService } from '../wallet/wallet-ledger.service';
 import { InvoicePaid, InvoicePaymentService, InvoiceUnpayable } from './invoice-payment.service';
 
@@ -50,6 +55,7 @@ let pg: PostgresFixture;
 let owner: PrismaClient;
 let app: PrismaService;
 let payments: InvoicePaymentService;
+let delivery: GrantDeliveryService;
 const reservations = new CouponReservationService();
 
 beforeAll(async () => {
@@ -96,6 +102,16 @@ beforeAll(async () => {
   const base = new PrismaService(pg.appUrl);
   app = base.$extends(withTenant(base)) as unknown as PrismaService;
   payments = new InvoicePaymentService(app, new WalletLedgerService(), new GrantService(app), reservations);
+  const policy = { get: (k: string) => (k === 'GRANT_DELIVERY_RETRIES' ? 6 : 60_000) };
+  const allocator = { rebalance: async () => ({}) };
+  delivery = new GrantDeliveryService(
+    app,
+    {} as never,
+    {} as never,
+    new ConfigActionsService(allocator as never),
+    new WalletCreditService(new WalletLedgerService()),
+    policy as never,
+  );
 });
 
 afterAll(async () => {
@@ -239,5 +255,36 @@ describe('paying an invoice from the wallet (F-111-b)', () => {
     expect(written.grants).toHaveLength(1);
     expect(written.events).toHaveLength(1);
     expect(await balanceOf(FREE_USER)).toBeNull();
+  });
+
+  it('an undeliverable Grant is refunded whole, once, and its invoice cannot be paid again (F-111-d)', async () => {
+    // The fixture's product is `network_access` with no panel group: nothing can deliver it.
+    const id = await invoice();
+    const paid = await pay(id);
+    expect(await balanceOf(USER)).not.toBeNull();
+    const before = new Prisma.Decimal((await balanceOf(USER))!);
+    const deliver = () =>
+      runWithTenant({ id: TENANT }, () => tenantTransaction(app, (tx) => delivery.deliver(tx, paid.grants[0].id, new Date())));
+
+    await expect(deliver()).resolves.toBe('refunded');
+    await expect(deliver()).resolves.toBe('skipped');
+
+    expect(await balanceOf(USER)).toBe(before.plus('12.50').toFixed(2));
+    const written = await writtenFor(id);
+    expect(written.invoice).toBe(InvoiceStatus.refunded);
+    expect(written.debits.map((d) => [d.direction, d.reasonType, d.amount.toFixed(2)])).toEqual(
+      expect.arrayContaining([
+        ['debit', WalletReasonType.product_purchase, '12.50'],
+        ['credit', WalletReasonType.product_refund, '12.50'],
+      ]),
+    );
+    expect(written.debits).toHaveLength(2);
+    expect(written.grants.map((g) => [g.status, g.statusReason])).toEqual([[GrantStatus.cancelled, 'no_delivery_route']]);
+    const refunded = await owner.outboxEvent.findMany({ where: { type: OutboxEventType.GRANT_REFUNDED, aggregateId: paid.grants[0].id } });
+    expect(refunded.map((e) => e.payload)).toEqual([expect.objectContaining({ invoiceId: id, amount: '12.50', reason: 'no_delivery_route' })]);
+
+    // Refunded a minute after paying, the invoice's 30-minute clock still runs.
+    expect((await refusal(pay(id))).reason).toBe('already_paid');
+    expect(await balanceOf(USER)).toBe(before.plus('12.50').toFixed(2));
   });
 });

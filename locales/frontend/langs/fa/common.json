@@ -557,7 +557,8 @@
       "wallet_transfer_out": "انتقال ارسالی",
       "reseller_purchase": "خرید نمایندگی",
       "traffic_refund": "بازگشت ترافیک مصرف‌نشده",
-      "product_purchase": "خرید محصول"
+      "product_purchase": "خرید محصول",
+      "product_refund": "بازگشت وجه محصول — تحویل نشد"
     },
     "status": {
       "pending": "در انتظار",

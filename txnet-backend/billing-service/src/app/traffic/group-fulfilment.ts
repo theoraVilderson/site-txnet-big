@@ -16,6 +16,7 @@ import {
 } from '@prisma/client';
 import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
+import { markDelivered } from '../entitlement/delivered';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigActionsService, ConfigActor } from './config-actions';
@@ -189,12 +190,9 @@ export class GroupFulfilmentService {
       actor: GROUP_FULFILMENT_ACTOR,
     });
 
-    let activated = false;
-    if (plan.activate) {
-      // Conditional on the status read: an admin's cancel meanwhile stands.
-      const moved = await tx.grant.updateMany({ where: { id: grantId, status: GrantStatus.pending }, data: { status: GrantStatus.active } });
-      activated = moved.count === 1;
-    }
+    // Conditional on `pending`: an admin's cancel or a refund meanwhile stands.
+    // Delivered with its outbox event, so the buyer is told (F-111-d).
+    const activated = plan.activate ? await markDelivered(tx, grantId) : false;
     return { placed: made.length, waiting: plan.waiting, activated };
   }
 

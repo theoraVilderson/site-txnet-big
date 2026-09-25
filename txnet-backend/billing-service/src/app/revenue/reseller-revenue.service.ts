@@ -80,6 +80,8 @@ const IS_SALE: Record<WalletReasonType, boolean> = {
   // A catalog product bought from the wallet (F-111-b): what a reseller sells,
   // paid up front rather than by the byte.
   [WalletReasonType.product_purchase]: true,
+  // A credit: an undelivered purchase given back (F-111-d). Subtracted below, like `traffic_refund`.
+  [WalletReasonType.product_refund]: false,
 };
 
 /** The reasons that count, derived from the table above rather than listed twice. */
@@ -101,6 +103,8 @@ export const SALE_REASONS = (Object.keys(IS_SALE) as WalletReasonType[]).filter(
  */
 const UNDOES: Record<WalletReasonType, WalletReasonType | null> = {
   [WalletReasonType.traffic_refund]: WalletReasonType.traffic_consumption,
+  // F-111-d: the whole `total` of an invoice whose Grant was never delivered.
+  [WalletReasonType.product_refund]: WalletReasonType.product_purchase,
   [WalletReasonType.payment_gateway]: null,
   [WalletReasonType.coupon_redemption]: null,
   [WalletReasonType.affiliate_commission]: null,

@@ -55,6 +55,7 @@ const LABEL_KEYS: Record<WalletReasonType, string> = {
   [WalletReasonType.traffic_refund]: REASON_LABEL_KEY.traffic_refund,
   // A product bought from the wallet (F-111-b): on the default page, like every debit but traffic.
   [WalletReasonType.product_purchase]: REASON_LABEL_KEY.product_purchase,
+  [WalletReasonType.product_refund]: REASON_LABEL_KEY.product_refund,
 };
 
 /** The declaration order, which is the order a filter is answered in. */

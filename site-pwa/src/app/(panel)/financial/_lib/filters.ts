@@ -40,6 +40,7 @@ export const REASON_TYPES = [
   "reseller_purchase",
   "traffic_refund",
   "product_purchase",
+  "product_refund",
 ] as const;
 export type ReasonType = (typeof REASON_TYPES)[number];
 

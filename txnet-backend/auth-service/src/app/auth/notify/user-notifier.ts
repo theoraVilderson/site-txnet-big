@@ -14,6 +14,8 @@ export const NOTIFY_TEMPLATES = [
   'subscriptionSuspended',
   'panelAccepted',
   'panelRefused',
+  'purchaseDelivered',
+  'purchaseRefunded',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -26,7 +28,7 @@ export type NotifyRequest = { userId: string; channel: NotifyChannel; template: 
 export type NotifyResult = { sent: BotPlatform[] };
 
 type Texts = Partial<Record<string, string>>;
-type NotificationsNamespace = { payment?: Texts; subscription?: Texts; panel?: Texts };
+type NotificationsNamespace = { payment?: Texts; subscription?: Texts; panel?: Texts; purchase?: Texts };
 type Text = { read: (ns: NotificationsNamespace | undefined) => string | undefined; fallback: string };
 type Notice = Text & { inbox: Text };
 
@@ -102,6 +104,27 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       read: (ns) => ns?.panel?.refusedMany,
       fallback: '❌ {{count}} of your panels were refused by their connection test. The details are on the systems page.',
       inbox: { read: (ns) => ns?.panel?.refusedManyTitle, fallback: '{{count}} panels refused' },
+    },
+  },
+  // F-111-d: a paid Grant was delivered, or could not be and was refunded in full.
+  purchaseDelivered: {
+    read: (ns) => ns?.purchase?.delivered,
+    fallback: '✅ Your purchase is ready to use. You will find it under My services.',
+    inbox: { read: (ns) => ns?.purchase?.deliveredTitle, fallback: 'Your purchase is ready' },
+    many: {
+      read: (ns) => ns?.purchase?.deliveredMany,
+      fallback: '✅ {{count}} of your purchases are ready to use. You will find them under My services.',
+      inbox: { read: (ns) => ns?.purchase?.deliveredManyTitle, fallback: '{{count}} purchases ready' },
+    },
+  },
+  purchaseRefunded: {
+    read: (ns) => ns?.purchase?.refunded,
+    fallback: '↩️ Your purchase could not be delivered, so it was cancelled and {{amount}} was returned to your wallet.',
+    inbox: { read: (ns) => ns?.purchase?.refundedTitle, fallback: 'Purchase refunded' },
+    many: {
+      read: (ns) => ns?.purchase?.refundedMany,
+      fallback: '↩️ {{count}} of your purchases could not be delivered, so they were cancelled and their full price was returned to your wallet.',
+      inbox: { read: (ns) => ns?.purchase?.refundedManyTitle, fallback: '{{count}} purchases refunded' },
     },
   },
 };

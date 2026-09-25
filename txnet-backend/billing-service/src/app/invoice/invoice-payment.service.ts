@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Grant, GrantSource, InvoiceStatus, Prisma, WalletReasonType } from '@prisma/client';
 import { OutboxEventType, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
+import { GRANT_AGGREGATE } from '../entitlement/delivered';
 import { GrantService } from '../entitlement/grant';
 import { PrismaService } from '../prisma/prisma.service';
 import { CouponReservationService } from '../payment/coupon/coupon-reservation';
@@ -68,9 +69,6 @@ export class InvoiceUnpayable extends Error {
   }
 }
 
-/** `aggregate` of the event, and its type — the routing key suffix. */
-export const GRANT_AGGREGATE = 'entitlement.grant';
-
 type LockedInvoice = {
   id: string;
   userId: string;
@@ -104,7 +102,10 @@ export class InvoicePaymentService {
          WHERE id = ${invoiceId}::uuid AND "userId" = ${userId}::uuid
          FOR UPDATE`;
       if (!invoice) throw new InvoiceUnpayable('not_found', invoiceId);
-      if (invoice.status === InvoiceStatus.paid) throw new InvoiceUnpayable('already_paid', invoiceId);
+      // A refunded invoice was paid once (F-111-d); its clock may still be running.
+      if (invoice.status === InvoiceStatus.paid || invoice.status === InvoiceStatus.refunded) {
+        throw new InvoiceUnpayable('already_paid', invoiceId);
+      }
       if (invoice.status === InvoiceStatus.cancelled) throw new InvoiceUnpayable('cancelled', invoiceId);
       // Past its clock but not yet swept is expired all the same: the sweep
       // would release its holds a moment later, under a paid invoice.

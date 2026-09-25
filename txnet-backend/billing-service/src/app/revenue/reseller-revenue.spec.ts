@@ -189,7 +189,7 @@ describe('ResellerRevenueService.totals', () => {
 
     const where = seen.find((c) => c.what === 'refunds')!.args.where;
     expect(where.direction).toBe(LedgerDirection.credit);
-    expect(where.reasonType.in).toEqual([WalletReasonType.traffic_refund]);
+    expect(where.reasonType.in).toEqual([WalletReasonType.traffic_refund, WalletReasonType.product_refund]);
   });
 
   it('reports a close whose blocks were bought before the window, rather than dropping it', async () => {

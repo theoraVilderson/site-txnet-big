@@ -2,8 +2,8 @@
 id: entitlement
 layer: domain
 status: draft
-version: 1
-updated: 2026-09-23
+version: 4
+updated: 2026-09-25
 ---
 
 # Contract — entitlement
@@ -102,6 +102,23 @@ value (`metered_rate_is_positive`). Nothing is
 copied for any other billing mode: `grant_metered_rate_is_metered` refuses a
 rate on a prepaid Grant.
 
+**Delivery of a paid Grant (F-111-d, spec §5.8 step 3)** —
+`entitlement/delivery.ts`, proved by `delivery.spec.ts` and, against Postgres,
+`invoice/invoice-payment.int.spec.ts`. A purchase is issued `pending`;
+`GrantDeliveryService.deliverDue` checks each one whose `nextDeliveryAt` is due
+(null = at once) over `POST /api/internal/billing/entitlement/deliver-due`
+(`ServiceOnlyGuard`), asked every minute by `grant_delivery`. Answer:
+`scanned`, `delivered`, `waiting`, `refunded`, `failed`.
+
+| Rule | Why |
+|---|---|
+| The handler is the product's `fulfilmentKind` (`DELIVERY_ROUTE`, exhaustive): `feature_access` is delivered at the first check; `network_access` by its panel group — group fulfilment activates it at `minHealthyPanels` (network `contract.groups.md` rule 10), on this check or its own tick | a new kind does not compile until somebody says how it is delivered |
+| **No handler** — `external_order`, `wallet_topup`, a network variant with no group — is refunded at the first check, `statusReason = no_delivery_route`, and is not sold at all (`contract.purchase.md`) | the user's call, 2026-09-25: an hour of retries cannot deliver it |
+| Checked at once, then retried after 1, 2, 4, 8, 16, 32 minutes (`GRANT_DELIVERY_RETRIES` = 6, `GRANT_DELIVERY_FIRST_RETRY_MS` = 60 000, doubling); the check after the last finds it `pending` → refunded, `delivery_timed_out`. `strategy_not_built` is a failed check | the user's call, 2026-09-25: a panel down a few minutes refunds nobody, and nobody waits past the hour |
+| `markDelivered(tx, id)` (`delivered.ts`) is the one way to deliver: `pending -> active` conditional on `pending`, plus `entitlement.grant.delivered` | group fulfilment and this sweep both deliver; the buyer hears once, whichever wins |
+| A refund, one transaction: `pending -> cancelled` conditional on `pending`; every config retired (`GRANT_DELIVERY_ACTOR`); the invoice `paid -> refunded` under its row lock — anything else rolls it all back; one `product_refund` credit of `total` through `WalletCreditService` (none for a free invoice); `entitlement.grant.refunded` | a delivery that won the race is never refunded, a refund is never paid twice, and no client outlives the money |
+| The coupon uses stay used | the refund is `total`, what the user paid |
+
 In-process calls from `billing-service` modules (ADR-0049); HTTP routes are
 added only when a row needs them. Two do: `rotateTokenForUser` over `POST
 /api/billing/gift/grants/:id/rotate-token` (F-502-p) and `listForUser` over
@@ -110,7 +127,14 @@ written down in its `contract.gift.md`.
 
 ## Emits (events)
 
-None yet.
+Through the outbox (ADR-0021), both also live on the buyer's `user:` channel
+(`contracts/realtime/events.json`); consumer `GrantDeliveryConsumer`
+(`automation/contract.outbox.md`).
+
+| Event | Payload | When |
+|---|---|---|
+| `entitlement.grant.delivered` | `tenantId, userId, grantId, variantId, source, invoiceId` | a `pending` Grant turned `active` (F-111-d) |
+| `entitlement.grant.refunded` | `tenantId, userId, grantId, invoiceId, amount, reason` | a paid Grant cancelled, its invoice refunded whole (F-111-d) |
 
 ## Consumes
 
@@ -126,7 +150,7 @@ None yet.
 |---|---|
 | network | `config.grantId`: a config draws on its Grant's quota (F-027); group fulfilment moves a grouped `pending` Grant to `active` (F-027-bl) |
 | billing | issues a Grant for a `free_grant` coupon (F-502-l) and, later, a purchase; the hot loop suspends a spent one (F-027-x) |
-| automation | holds the purge clock: `grant_config_purge` asks `purge-due` hourly (F-027-y) |
+| automation | holds the purge clock: `grant_config_purge` asks `purge-due` hourly (F-027-y), and the delivery clock: `grant_delivery` asks `deliver-due` every minute (F-111-d); tells the buyer on either event |
 
 ## Guarantees (built — `entitlement-schema.int.spec.ts`)
 

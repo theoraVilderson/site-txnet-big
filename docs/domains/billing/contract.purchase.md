@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 2
+version: 3
 updated: 2026-09-25
 ---
 
@@ -11,8 +11,8 @@ updated: 2026-09-25
 A topic file of `contract.md` (§10): buying a catalog product from the wallet
 (spec §5.8 Purchase Settlement Flow — `python3 tools/spec.py --section 5.8`).
 Step 1, the invoice, is built (F-111-a), step 2, paying it from the wallet
-(F-111-b), and the shortfall a refused payment carries (F-111-c, spec §5.9).
-Delivery (F-111-d) is not yet.
+(F-111-b), the shortfall a refused payment carries (F-111-c, spec §5.9), and
+step 3, delivery and the refund of what could not be delivered (F-111-d).
 Consumer: the panel's shop page (F-111-e).
 
 ## Creating an invoice (built — F-111-a)
@@ -36,6 +36,7 @@ the gate like every billing route ("Request edge" in `contract.md`).
 | `total = amount - discount`, `0 <= discount <= amount`, `amount >= 0` — CHECKs; `priceId` names the price row used | migration `20260925000400_invoice` |
 | `expiresAt` = creation + 30 minutes (`INVOICE_TTL_MS`) | `InvoiceService.create` |
 | Per user, `INVOICE_CREATE` bucket, `INVOICE_CREATE_RATE_LIMIT` (20) per 15 min | `@RateLimit` |
+| **Only what can be delivered is sold** (F-111-d): a kind with no delivery handler — `external_order`, `wallet_topup`, a `network_access` variant with no panel group — is the same neutral `404 variantNotFound` | `deliveryRouteOf` (entitlement `delivery.ts`); the user's call 2026-09-25 — a paid Grant nothing can deliver could only be refunded |
 | **Not yet checked:** governance restrictions and the reseller cap (F-904) — added here once their units exist | — |
 
 ## The clock (built — F-111-a)
@@ -60,7 +61,7 @@ otherwise) → `InvoiceExpiryService.expirePending()` → `{scanned, expired, ho
 |---|---|
 | `200 {id, status: "paid", total, balanceAfter, walletTransactionId, grants: [{id, status: "pending", token}]}` | paid. `token` is the subscription key, shown this once (entitlement `issue`) |
 | `404 errors.billing.invoice.notFound` | unknown, another tenant's (RLS) or another user's — never told apart |
-| `409` `reason`: `already_paid` / `expired` / `cancelled` | its i18n key beside it. Past `expiresAt` is `expired` even before the sweep flips it |
+| `409` `reason`: `already_paid` / `expired` / `cancelled` | its i18n key beside it. Past `expiresAt` is `expired` even before the sweep flips it. A `refunded` invoice (F-111-d) is `already_paid`: it was, and its clock may still run |
 | `409 insufficient_balance` + `shortfall: {total, balance, missing}` | the wallet holds less than `total`; nothing is written. `missing` is the top-up to offer — "The shortfall" below |
 | `404 errors.billing.invoice.variantNotFound` | the variant was switched off since the invoice: the Grant cannot be issued and the whole payment rolls back |
 
@@ -73,7 +74,7 @@ otherwise) → `InvoiceExpiryService.expirePending()` → `{scanned, expired, ho
 | 3 | `total <= cachedBalance`, else `insufficient_balance` | a user with no wallet has a balance of zero |
 | 4 | one debit of `total`, `reasonType: product_purchase`, `referenceId` = the invoice — skipped when `total` is `0` | invariant 2: a ledger amount is > 0, so a free invoice writes no row |
 | 5 | invoice → `paid` | — |
-| 6 | `GrantService.issue`, `source: purchase`, `sourceReferenceId` = the invoice, `startsAt` = now | a purchase starts `pending` (entitlement contract); delivery (F-111-d) activates it. The `(source, sourceReferenceId)` unique index is the second line against a double issue |
+| 6 | `GrantService.issue`, `source: purchase`, `sourceReferenceId` = the invoice, `startsAt` = now | a purchase starts `pending` (entitlement contract); delivery (below) activates it. The `(source, sourceReferenceId)` unique index is the second line against a double issue |
 | 7 | `CouponReservationService.confirm(invoiceId)` | the holds step 1 took become uses |
 | 8 | `outbox_event` `entitlement.grant.created`, aggregate `entitlement.grant` | ADR-0021; payload `{tenantId, userId, grantId, variantId, status, source, invoiceId, total}`. No consumer yet: the relay records it `unroutable` until delivery binds one |
 
@@ -93,3 +94,16 @@ not rest on it.
 | A top-up of exactly `missing` covers the invoice | a top-up credits `amount + gap`; fee and tax are on top of it, never taken from it (`contract.deposit.md`) |
 | The panel pre-fills `missing` raised to the chosen gateway's `minAmount` (the gateway list), and returns to the same invoice (F-111-e) | below its minimum a gateway refuses the top-up `400 billing.amountOutOfRange`, and only the panel knows which gateway the user picks; a larger top-up credits whole, so it still covers |
 | The shortfall is not held: the invoice's 30-minute clock runs on while the user tops up | a top-up that outlives it pays into the wallet, and the user starts a new invoice |
+
+## Delivering it (built — F-111-d)
+
+Spec §5.8 step 3, and entitlement's: `GrantDeliveryService`
+(`entitlement/delivery.ts`), rules in `entitlement/contract.md` "Delivery of a
+paid Grant". What it means for the invoice:
+
+| Rule | Why |
+|---|---|
+| Delivered: the Grant `active`, the invoice stays `paid`; `entitlement.grant.delivered` tells the buyer (inbox, bot, live) | the sale stood |
+| Not delivered — no handler at the first check, or still `pending` after 6 retries at 1, 2, 4, 8, 16, 32 minutes: the Grant `cancelled`, the invoice `paid -> refunded`, one `product_refund` credit of the whole `total` (`referenceId` = the invoice), `entitlement.grant.refunded` with `amount` | the user's call, 2026-09-25. The refund is a credit like any other, so it revives what it funds (F-027-ap) |
+| `product_refund` undoes a `product_purchase` in a reseller's sales (`contract.revenue.md`) and shows on `/wallet/history` (`contract.history.md`) | money back belongs where the user and the reseller see it |
+| The coupon uses stay confirmed | the refund is `total`, which is what was paid |

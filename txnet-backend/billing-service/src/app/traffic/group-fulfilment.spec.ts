@@ -14,6 +14,7 @@
  *  - **an unbuilt strategy is refused**, never treated as `mirror`.
  */
 import { ActorType, ConfigStatus, DesiredRemote, EnforcementState, GrantStatus, PanelGroupMemberRole, PanelGroupStrategy, PanelReviewState, PanelState, Prisma } from '@prisma/client';
+import { OutboxEventType } from '@txnet-backend/shared-core';
 
 import { ConfigActionsService } from './config-actions';
 import { GroupFulfilmentService, planFulfilment } from './group-fulfilment';
@@ -37,6 +38,7 @@ function build(opts: { status?: GrantStatus; strategy?: PanelGroupStrategy; minH
   const group = { id: 'group-1', strategy: opts.strategy ?? PanelGroupStrategy.mirror, minHealthyPanels: opts.minHealthyPanels ?? 1, protocol: 'vless', members: opts.members };
   const configs: Row[] = [];
   const rebalanced: string[] = [];
+  const outbox: Array<{ type: string; payload: Record<string, unknown> }> = [];
   let next = 0;
 
   const tx = {
@@ -58,6 +60,7 @@ function build(opts: { status?: GrantStatus; strategy?: PanelGroupStrategy; minH
       },
     },
     configActionLog: { create: async ({ data }: { data: Record<string, unknown> }) => data },
+    outboxEvent: { create: async ({ data }: { data: { type: string; payload: Record<string, unknown> } }) => void outbox.push(data) },
   };
 
   const allocator = {
@@ -67,7 +70,7 @@ function build(opts: { status?: GrantStatus; strategy?: PanelGroupStrategy; minH
     },
   };
   const service = new GroupFulfilmentService(new ConfigActionsService(allocator as never), {} as never, {} as never);
-  return { service, tx: tx as unknown as Prisma.TransactionClient, grant, group, configs, rebalanced };
+  return { service, tx: tx as unknown as Prisma.TransactionClient, grant, group, configs, rebalanced, outbox };
 }
 
 describe('GroupFulfilmentService.fulfil (mirror)', () => {
@@ -134,7 +137,7 @@ describe('GroupFulfilmentService.fulfil (mirror)', () => {
   });
 
   it('activates a pending Grant only at minHealthyPanels complete configs on serving panels', async () => {
-    const { service, tx, grant, group, configs } = build({ minHealthyPanels: 2, members: [member(A), member(B), member(C)] });
+    const { service, tx, grant, group, configs, outbox } = build({ minHealthyPanels: 2, members: [member(A), member(B), member(C)] });
     await service.fulfil(tx, GRANT);
 
     configs[0].enforcementState = EnforcementState.complete;
@@ -150,7 +153,10 @@ describe('GroupFulfilmentService.fulfil (mirror)', () => {
     group.members = [member(A), member(B, PanelState.throttled_or_blocked), member(C)];
     expect((await service.fulfil(tx, GRANT)).activated).toBe(true);
     expect(grant.status).toBe(GrantStatus.active);
+    // Delivered once, and the buyer is told (F-111-d).
+    expect(outbox.map((e) => [e.type, e.payload['grantId']])).toEqual([[OutboxEventType.GRANT_DELIVERED, GRANT]]);
     expect((await service.fulfil(tx, GRANT)).activated).toBe(false);
+    expect(outbox).toHaveLength(1);
   });
 
   it('refuses a strategy with no fulfilment behind it, and a Grant that no longer carries service', async () => {

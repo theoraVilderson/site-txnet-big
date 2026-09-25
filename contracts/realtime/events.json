@@ -5,6 +5,8 @@
     "paymentConfirmed": "billing.payment.confirmed",
     "paymentReversed": "billing.payment.reversed",
     "notificationCreated": "notification.created",
-    "panelTested": "network.panel.tested"
+    "panelTested": "network.panel.tested",
+    "grantDelivered": "entitlement.grant.delivered",
+    "grantRefunded": "entitlement.grant.refunded"
   }
 }

@@ -35,6 +35,6 @@ import { UserConfigsService } from './user-configs';
   imports: [WalletModule],
   controllers: [CollectionHealthController, UserConfigsController, GroupFulfilmentController],
   providers: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, CollectionHealthService, ConfigActionsService, UserConfigsService, GroupFulfilmentService, GroupDrainService],
-  exports: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, ConfigActionsService],
+  exports: [BlockPurchaseService, RemainderCreditService, CeilingAllocatorService, HotLoopService, ConfigActionsService, GroupFulfilmentService],
 })
 export class TrafficModule {}

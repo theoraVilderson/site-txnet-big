@@ -1,6 +1,7 @@
 import { Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
 import { ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
 
+import { DeliverDueResult, GrantDeliveryService } from './delivery';
 import { GrantPurgeService, PurgeResult } from './purge';
 
 /**
@@ -27,7 +28,10 @@ import { GrantPurgeService, PurgeResult } from './purge';
 @Controller('internal/billing/entitlement')
 @UseGuards(ServiceOnlyGuard)
 export class EntitlementInternalController {
-  constructor(private readonly purge: GrantPurgeService) {}
+  constructor(
+    private readonly purge: GrantPurgeService,
+    private readonly delivery: GrantDeliveryService,
+  ) {}
 
   /**
    * Set `desiredRemote = absent` on every config of every suspended Grant past
@@ -41,5 +45,18 @@ export class EntitlementInternalController {
   @HttpCode(200)
   purgeDue(): Promise<PurgeResult> {
     return this.purge.purgeDue();
+  }
+
+  /**
+   * One check of every paid Grant whose delivery is due (F-111-d, spec §5.8
+   * step 3): delivered, pushed to its next retry, or — past the last one, or
+   * with no handler for its kind — cancelled and its invoice refunded in full.
+   * Safe to run twice: every write is conditional on `pending`, and a Grant
+   * checked is not due again until its `nextDeliveryAt`.
+   */
+  @Post('deliver-due')
+  @HttpCode(200)
+  deliverDue(): Promise<DeliverDueResult> {
+    return this.delivery.deliverDue();
   }
 }

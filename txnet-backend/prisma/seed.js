@@ -187,6 +187,10 @@ const SEEDED_SCHEDULES = [
   // gets no config and never activates. Every minute: a buyer waits on it, and
   // an idle run is one query.
   { key: 'grant_group_fulfilment', scheduleType: 'cron_expression', cronExpression: '* * * * *' },
+  // Paid Grant delivery (F-111-d): unscheduled, a purchase stays `pending` for
+  // ever — never delivered and never refunded. Every minute: the first retry
+  // is a minute out and a buyer waits on it.
+  { key: 'grant_delivery', scheduleType: 'cron_expression', cronExpression: '* * * * *' },
   // Custom-domain verification (F-018-i): unscheduled, no custom domain ever
   // becomes `verified` and a lost record never stops routing. An idle run is one query.
   { key: 'tenant_domain_verification', scheduleType: 'cron_expression', cronExpression: '*/5 * * * *' },

@@ -194,6 +194,7 @@ reserve/confirm state machine (built, F-092-h).
 
 Through the outbox (ADR-0021). `entitlement.grant.created` — a paid invoice's
 Grant, `pending` (F-111-b, [contract.purchase.md](contract.purchase.md)); no consumer yet.
+Its delivery's `entitlement.grant.delivered` / `.refunded` are entitlement's (F-111-d).
 
 ## Consumes
 
