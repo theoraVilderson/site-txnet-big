@@ -164,12 +164,14 @@ and turns one into the other, then reads `GET /auth/accounts`.
 
 `authApi.ensureSession()` does that **through `refreshCredential`**, the one
 refresh per browser (single-flight, `navigator.locks`, broadcast to same-user
-tabs) — never a `refresh()` of its own. `refresh` rotates the token, so two
-concurrent refreshes with one cookie sign the loser out; a page-load refresh
-outside the lock lost to a sidebar call's retry or another tab, and bounced a
-signed-in user (`panel-refresh-race-bounce`). With a token already live — a
-sign-in on this page — it rotates nothing, and `refreshCredential` adopts any
-live token that is not the one a call was refused with, including none.
+tabs). `refresh` rotates, so two at once with one cookie sign the loser out
+(`panel-refresh-race-bounce`). A live token is never rotated again, and one
+that is not the token a call was refused with — including none — is adopted.
+
+A child's effect runs before its parent's, so the provider **holds every
+tokenless call** from a layout effect (`authApi.holdUntilSession`) and releases
+it once the session is made or refused — the sidebar's `GET /auth/handoff` no
+longer goes out tokenless to be refused 401. `webAppSession` is never held.
 
 No live session sends the visitor to `AUTH_LOGIN`. That is the mirror of the
 auth-screen guard below: one keeps a signed-in visitor off the login screen,

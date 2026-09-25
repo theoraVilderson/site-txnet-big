@@ -677,6 +677,52 @@ describe('one refresh for every call, socket and tab', () => {
     expect(auth(fetchMock.mock.calls.at(-1)!)).toBe(`Bearer ${jwt('u-1', 'a')}`);
   });
 
+  // The same order, closed at the source: the provider holds calls from its
+  // layout effect, which runs before any child's `useEffect`, so the sidebar's
+  // call is never sent tokenless to be refused (`GET /auth/handoff` 401).
+  it('a tokenless call made while the panel holds for its session waits, and goes out with the token', async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      url.endsWith('/auth/refresh') ? refreshed(jwt('u-1', 'a')) : accounts(),
+    );
+
+    authApi.holdUntilSession();
+    const call = authApi.listAccounts();
+    await tick();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await authApi.ensureSession();
+    authApi.releaseSessionHold();
+    await call;
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(auth(fetchMock.mock.calls[1])).toBe(`Bearer ${jwt('u-1', 'a')}`);
+  });
+
+  it('a call released without a session is sent as it is, and the login screen answers it', async () => {
+    fetchMock.mockResolvedValue(accounts());
+    authApi.holdUntilSession();
+    const call = authApi.listAccounts();
+    authApi.releaseSessionHold();
+    await call;
+    expect(auth(fetchMock.mock.calls[0])).toBeNull();
+  });
+
+  it('the Mini App sign-in is not held: it is how the held session is made', async () => {
+    fetchMock.mockResolvedValueOnce(
+      envelope({ ok: true, data: { state: 'authenticated', accessToken: jwt('u-1', 'a'), expiresIn: 900 } }),
+    );
+    authApi.holdUntilSession();
+    await expect(authApi.webAppSession('telegram', 'init')).resolves.toMatchObject({ state: 'authenticated' });
+    authApi.releaseSessionHold();
+  });
+
+  it('holds nothing once a token is live', async () => {
+    fetchMock.mockResolvedValueOnce(refreshed(jwt('u-1', 'a'))).mockResolvedValueOnce(accounts());
+    await authApi.ensureSession();
+    authApi.holdUntilSession();
+    await authApi.listAccounts();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('the page-load session joins a refresh already in flight instead of racing it with the same cookie', async () => {
     fetchMock.mockImplementation(async () => {
       await tick();

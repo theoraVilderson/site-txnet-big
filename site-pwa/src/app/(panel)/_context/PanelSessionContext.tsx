@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useState,
   type ReactNode,
 } from "react";
@@ -76,11 +77,23 @@ export function PanelSessionProvider({ children }: { children: ReactNode }) {
     setMe(who);
   }, []);
 
+  // Before any child's `useEffect`: a sidebar entry fetching on mount waits for
+  // the session below instead of going out tokenless (`authApi.holdUntilSession`).
+  // No cleanup releases it: StrictMode's simulated unmount would free a call the
+  // first mount held, tokenless. The `finally` below runs past an unmount anyway.
+  useLayoutEffect(() => {
+    authApi.holdUntilSession();
+  }, []);
+
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        await establishSession();
+        try {
+          await establishSession();
+        } finally {
+          authApi.releaseSessionHold();
+        }
         const [next, who] = await Promise.all([
           authApi.listAccounts(),
           readMe(),

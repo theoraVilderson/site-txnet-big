@@ -40,7 +40,28 @@ function track<T>(p: Promise<T>): Promise<T> {
   });
   return p;
 }
-const credentialSettled = (): Promise<void> => pending ?? Promise.resolve();
+/**
+ * The panel's page load, held open until `PanelSessionProvider` has a session
+ * or knows it has none. React runs a child's effect before its parent's, so a
+ * sidebar entry fetching on mount went out before the page-load refresh had
+ * even started — tokenless, refused 401, then retried. The provider opens this
+ * from a layout effect, which runs before any child's `useEffect`; every
+ * tokenless call waits for it, and nothing is sent to be refused.
+ */
+let sessionHold: { settled: Promise<void>; release: () => void } | null = null;
+function holdUntilSession(): void {
+  if (accessToken || sessionHold) return;
+  let release!: () => void;
+  const settled = new Promise<void>((r) => (release = r));
+  sessionHold = { settled, release };
+}
+function releaseSessionHold(): void {
+  sessionHold?.release();
+  sessionHold = null;
+}
+
+const credentialSettled = (): Promise<void> =>
+  Promise.all([sessionHold?.settled, pending]).then(() => undefined);
 
 /** Told after each refresh, so what was rendered from the old token (`me`) is read again. */
 const permissionsRefreshed = new Set<() => void>();
@@ -336,7 +357,8 @@ export const authApi = {
    * token, and the caller falls through to the ordinary login screen.
    */
   async webAppSession(platform: "telegram" | "bale", initData: string) {
-    const result = await request<{ state: "authenticated" | "needsContact" } & Partial<AuthResult>>(
+    // Raw, like `/auth/refresh`: it *is* the session every held call waits for.
+    const result = await rawRequest<{ state: "authenticated" | "needsContact" } & Partial<AuthResult>>(
       "/auth/bots/webapp/session",
       { method: "POST", body: JSON.stringify({ platform, initData }) },
     );
@@ -360,6 +382,9 @@ export const authApi = {
   async confirmEmail(email: string, otpCode: string) { return request<{ email: string; emailVerifiedAt: string }>("/auth/me/email/verify", { method: "POST", body: JSON.stringify({ email, otpCode }) }); },
   /** The one refresh every client and the socket run (see `credentialRefresh`). */
   refreshCredential,
+  /** Hold every tokenless call until `releaseSessionHold` — the panel's page load (see `sessionHold`). */
+  holdUntilSession,
+  releaseSessionHold,
   /** Resolves once no credential is being established; a call with none waits on it. */
   credentialSettled,
   /**
