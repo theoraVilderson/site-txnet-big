@@ -86,22 +86,29 @@ func (v Vault) read(ctx context.Context, panelID, secret string) (string, error)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		// tenant-service answers in the shared envelope: the reason is under `error`.
 		var refusal struct {
-			Reason string `json:"reason"`
+			Error struct {
+				Reason string `json:"reason"`
+			} `json:"error"`
 		}
 		_ = json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&refusal)
-		if refusal.Reason == "" {
-			refusal.Reason = "no reason given"
+		reason := refusal.Error.Reason
+		if reason == "" {
+			reason = "no reason given"
 		}
-		return "", fmt.Errorf("vault refused the login read (http %d): %s", resp.StatusCode, refusal.Reason)
+		return "", fmt.Errorf("vault refused the login read (http %d): %s", resp.StatusCode, reason)
 	}
+	// ...and the value under `data`, never at the top level.
 	var answer struct {
-		Credentials string `json:"credentials"`
+		Data struct {
+			Credentials string `json:"credentials"`
+		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&answer); err != nil || answer.Credentials == "" {
+	if err := json.NewDecoder(resp.Body).Decode(&answer); err != nil || answer.Data.Credentials == "" {
 		return "", errors.New("vault answered no login")
 	}
-	return answer.Credentials, nil
+	return answer.Data.Credentials, nil
 }
 
 // Opener is register.Opener over the families this service has drivers for.

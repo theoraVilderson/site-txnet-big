@@ -3,6 +3,7 @@ import { ConnectionTestFault, CounterSemantics, DriverType, PanelReviewState, Pa
 import { panelCredentialRef, PanelSecret, panelRadiusSecretRef } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
+import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { panelScopeOf, SystemsActor } from './panel-scope';
 import { SystemsRefused } from './systems-read';
@@ -70,7 +71,10 @@ export class PanelResubmitRefused extends Error {
  * deletes the row again, so no tick ever tests a panel whose login was never
  * stored.
  *
- * `network.panel` has no RLS policy, so the app pool writes it directly.
+ * Every panel write goes through the cross-tenant pool, after `panelScopeOf`
+ * has proved the caller is the platform owner on the scoped one: a platform
+ * panel's `tenantId` is null, and `network.panel`'s RLS `WITH CHECK` refuses a
+ * null tenant on the app pool (20260909001500, list B: shared-read).
  */
 @Injectable()
 export class PanelRegistrationService {
@@ -78,6 +82,8 @@ export class PanelRegistrationService {
 
   constructor(
     private readonly prisma: PrismaService,
+    /** The platform owner's pool, for the panel writes only. */
+    private readonly all: CrossTenantPrismaService,
     @Inject(PANEL_CREDENTIAL_WRITER) private readonly vault: PanelCredentialWriter,
   ) {}
 
@@ -85,7 +91,7 @@ export class PanelRegistrationService {
     const owner = await panelScopeOf(this.prisma, actor);
     const id = randomUUID();
 
-    await this.prisma.panel.create({
+    await this.all.panel.create({
       data: {
         id,
         ...owner,
@@ -114,7 +120,7 @@ export class PanelRegistrationService {
     } catch (err) {
       // A login already stored stays in the vault under a panel id nothing
       // names any more: unreachable, and never read.
-      await this.prisma.panel.delete({ where: { id } });
+      await this.all.panel.delete({ where: { id } });
       throw err;
     }
 
@@ -152,7 +158,7 @@ export class PanelRegistrationService {
     let reviewState: PanelReviewState = panel.reviewState;
     let retest = false;
     if (panel.reviewState === PanelReviewState.pending && panel.connectionTestFault !== ConnectionTestFault.rate_limited) {
-      const cleared = await this.prisma.panel.updateMany({
+      const cleared = await this.all.panel.updateMany({
         where: { ...where, reviewState: PanelReviewState.pending },
         data: { connectionTestedAt: null, connectionTestFault: null, connectionTestDetail: null },
       });
@@ -190,7 +196,7 @@ export class PanelRegistrationService {
 
     const stored = await this.vault.set({ tenantId: actor.tenantId, panelId }, radiusSecret, actor.adminId, 'radius_secret');
     if (panel.panelRadiusSecret === null) {
-      await this.prisma.panel.update({ where: { id: panelId }, data: { panelRadiusSecret: panelRadiusSecretRef(actor.tenantId, panelId) } });
+      await this.all.panel.update({ where: { id: panelId }, data: { panelRadiusSecret: panelRadiusSecretRef(actor.tenantId, panelId) } });
     }
 
     this.logger.log(`panel ${panelId}: RADIUS secret re-submitted by ${actor.adminId}`);

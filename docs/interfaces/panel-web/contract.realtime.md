@@ -164,8 +164,8 @@ the provider waits for the session and keys the socket to the account it
 resolved to.
 
 **A refused upgrade refreshes the token, once.** `onCredentialRejected` calls
-`authApi.refresh()` and not `ensureSession()`, which is memoised per page load
-and would hand back the same dead token; the client has already stopped and
+`authApi.refreshCredential()` and not `ensureSession()`, which rotates nothing
+while a token is held and so would hand back the same dead one; the client has already stopped and
 retries on its own backoff, so a live token is the only thing this owes it. A
 refresh that fails means the cookie is gone too, and that ends the session
 here rather than asking again forever.

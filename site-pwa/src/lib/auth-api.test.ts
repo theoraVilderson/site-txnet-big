@@ -650,5 +650,60 @@ describe('one refresh for every call, socket and tab', () => {
     await Promise.all([authApi.ensureSession(), authApi.listAccounts()]);
     expect(refreshes()).toHaveLength(1);
   });
+
+  // React runs a child's effect before its parent's, so a sidebar entry's call
+  // goes out tokenless *before* `PanelSessionProvider` starts the page-load
+  // refresh, and its 401 lands after that refresh is done. A second rotation
+  // then, racing the provider's first reads, is what bounced a signed-in
+  // user to the login screen while login said "already signed in".
+  it('a tokenless call refused after the page-load refresh finished retries on that token, not a new rotation', async () => {
+    let refuse!: () => void;
+    fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
+      if (url.endsWith('/auth/refresh')) return refreshed(jwt('u-1', 'a'));
+      if (!new Headers(init.headers).get('authorization')) {
+        await new Promise<void>((r) => (refuse = r));
+        return envelope({ ok: false, msg: 'Authorization required', error: { reason: 'authorizationRequired' } }, 401);
+      }
+      return accounts();
+    });
+
+    const call = authApi.listAccounts();
+    await tick();
+    await authApi.ensureSession();
+    refuse();
+    await call;
+
+    expect(refreshes()).toHaveLength(1);
+    expect(auth(fetchMock.mock.calls.at(-1)!)).toBe(`Bearer ${jwt('u-1', 'a')}`);
+  });
+
+  it('the page-load session joins a refresh already in flight instead of racing it with the same cookie', async () => {
+    fetchMock.mockImplementation(async () => {
+      await tick();
+      return refreshed(jwt('u-1', 'a'));
+    });
+
+    await Promise.all([authApi.refreshCredential(), authApi.ensureSession()]);
+    expect(refreshes()).toHaveLength(1);
+  });
+
+  it('the page-load session takes the cross-tab lock, so another tab cannot rotate under it', async () => {
+    const request = vi.fn((_name: string, fn: () => Promise<unknown>) => fn());
+    vi.stubGlobal('navigator', { ...navigator, locks: { request } });
+    fetchMock.mockResolvedValueOnce(refreshed(jwt('u-1', 'a')));
+
+    await authApi.ensureSession();
+    expect(request).toHaveBeenCalledWith('txnet:auth-refresh', expect.any(Function));
+  });
+
+  it('does not rotate again when a sign-in on this page already left a token', async () => {
+    fetchMock.mockResolvedValueOnce(
+      envelope({ ok: true, data: { accessToken: jwt('u-1', 'a'), expiresIn: 900 } }),
+    );
+    await authApi.loginPassword('e2e_user', 'pw', 'cap');
+
+    await authApi.ensureSession();
+    expect(refreshes()).toHaveLength(0);
+  });
 });
 

@@ -9,17 +9,6 @@ const API_URL = API_BASE;
 let accessToken: string | null = null;
 
 /**
- * The access token lives in memory only, so a full page load starts with none
- * — but the httpOnly `refresh_token` cookie is still there. `ensureSession()`
- * turns that cookie back into an access token exactly once per page load.
- *
- * Once, not per caller: refresh *rotates* the token, so two concurrent calls
- * race and the loser is handed a token that no longer resolves to a session.
- * React Strict Mode alone is enough to produce that pair.
- */
-let sessionBootstrap: Promise<AuthResult> | null = null;
-
-/**
  * **One refresh for the whole browser.** Refresh *rotates* the session: the one
  * it replaces is revoked on the spot. So two refreshes racing with the same
  * cookie sign the loser out, and a tab that refreshes retires the token every
@@ -97,7 +86,10 @@ function withRefreshLock(fn: () => Promise<void>): Promise<void> {
  * refresh, and refreshing anyway would rotate the session again.
  */
 function refreshCredential(stale: string | null = null): Promise<void> {
-  if (stale && accessToken && accessToken !== stale) return Promise.resolve();
+  // Replaced already — or the call carried none and a token has arrived since:
+  // a sidebar call sent before the page-load refresh started, refused after it
+  // finished. Rotating again would revoke the token that refresh just handed out.
+  if (accessToken && accessToken !== stale) return Promise.resolve();
   // No token was sent while one is being established: that one is the answer.
   // A second refresh with the same cookie would sign the first out.
   if (!stale && pending) {
@@ -105,9 +97,8 @@ function refreshCredential(stale: string | null = null): Promise<void> {
   }
   credentialRefresh ??= withRefreshLock(async () => {
     // Another tab may have rotated while this one waited for the lock.
-    if (stale && accessToken && accessToken !== stale) return;
-    const result = await authApi.refresh();
-    sessionBootstrap = Promise.resolve(result);
+    if (accessToken && accessToken !== stale) return;
+    await authApi.refresh();
     for (const listener of permissionsRefreshed) listener();
   }).finally(() => {
     credentialRefresh = null;
@@ -309,10 +300,8 @@ export const authApi = {
     );
     if (result.switchedTo && result.accessToken) {
       accessToken = result.accessToken;
-      sessionBootstrap = Promise.resolve(result as AuthResult);
     } else {
       accessToken = null;
-      sessionBootstrap = null;
     }
     return result;
   },
@@ -322,9 +311,17 @@ export const authApi = {
    * The deliberate one, and never the same button as `logout()` — see
    * `SignOutEverywhere`, which asks first.
    */
-  async logoutAll() { const result = await request<{ success: boolean }>("/auth/logout/all", { method: "POST", body: JSON.stringify({}) }); accessToken = null; sessionBootstrap = null; return result; },
+  async logoutAll() { const result = await request<{ success: boolean }>("/auth/logout/all", { method: "POST", body: JSON.stringify({}) }); accessToken = null; return result; },
   /** An access token for this page load, from the refresh cookie. Throws if there is no live session. */
-  async ensureSession() { sessionBootstrap ??= authApi.refresh(); return sessionBootstrap; },
+  /**
+   * The access token lives in memory only, so a full page load starts with none
+   * — but the httpOnly `refresh_token` cookie is still there. This turns it back
+   * into one through the same shared, cross-tab-locked refresh every refused
+   * call uses: a page-load refresh of its own raced them with the same cookie,
+   * and the loser — sometimes this one — was signed out. A token a sign-in on
+   * this page already left is live, so nothing is rotated then.
+   */
+  async ensureSession(): Promise<void> { if (!accessToken) await refreshCredential(); },
   /**
    * Sign in from inside a messenger's Mini App (F-310, ADR-0017).
    *
@@ -343,7 +340,7 @@ export const authApi = {
       "/auth/bots/webapp/session",
       { method: "POST", body: JSON.stringify({ platform, initData }) },
     );
-    if (result.accessToken) { accessToken = result.accessToken; sessionBootstrap = Promise.resolve(result as AuthResult); }
+    if (result.accessToken) accessToken = result.accessToken;
     return result;
   },
   /** The caller's own account plus the accounts they may switch to (F-0206). */
@@ -353,7 +350,7 @@ export const authApi = {
   /** A single-use code for one of them, and the origin of its panel to spend it on. */
   async issueHandoff(tenantId: string) { return request<{ origin: string; code: string; expiresIn: number }>("/auth/handoff", { method: "POST", body: JSON.stringify({ tenantId }) }); },
   /** Spend that code on the reseller's own domain: the same session a password sign-in opens. */
-  async redeemHandoff(code: string) { const result = await request<AuthResult>("/auth/handoff/redeem", { method: "POST", body: JSON.stringify({ code }) }); accessToken = result.accessToken; sessionBootstrap = Promise.resolve(result); return result; },
+  async redeemHandoff(code: string) { const result = await request<AuthResult>("/auth/handoff/redeem", { method: "POST", body: JSON.stringify({ code }) }); accessToken = result.accessToken; return result; },
   /** The caller's own identity and authority (F-097). */
   async me() { return request<Me>("/auth/me", { method: "GET" }); },
   /** The platform owner finds a user by phone, username or email (F-018-ad): `user.search` on the platform's tenant. */
@@ -387,7 +384,7 @@ export const authApi = {
    * server-side by this call, so the returned token replaces it here — there is
    * no moment where the old one is still usable.
    */
-  async switchAccount(userId: string) { const result = await request<AuthResult & { userId: string; fullName: string }>("/auth/accounts/switch", { method: "POST", body: JSON.stringify({ userId }) }); accessToken = result.accessToken; sessionBootstrap = null; return result; },
+  async switchAccount(userId: string) { const result = await request<AuthResult & { userId: string; fullName: string }>("/auth/accounts/switch", { method: "POST", body: JSON.stringify({ userId }) }); accessToken = result.accessToken; return result; },
   /**
    * Remove a member from the group (F-0208).
    *

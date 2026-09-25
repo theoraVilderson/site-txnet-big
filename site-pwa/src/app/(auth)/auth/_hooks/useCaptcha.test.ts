@@ -130,6 +130,59 @@ describe('failures', () => {
   });
 });
 
+describe('a challenge left unslid past its TTL', () => {
+  // The server keeps a challenge 60s (`RedisTtl.captchaChallenge`) and the
+  // mount fetches one. A user who spends longer than that on the form used to
+  // slide against a dead id: `/verify` said `captcha.invalid`, the thumb
+  // snapped back, and only the second slide worked.
+  it('renews the challenge before the server forgets it', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    challenge
+      .mockResolvedValueOnce({ challengeId: 'ch_1' })
+      .mockResolvedValueOnce({ challengeId: 'ch_2' });
+
+    const { result } = renderHook(() => useCaptcha());
+    await vi.waitFor(() => expect(challenge).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(55_000);
+    });
+    expect(challenge).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      await result.current.complete();
+    });
+    expect(verify).toHaveBeenCalledExactlyOnceWith('ch_2');
+    expect(result.current.verified).toBe(true);
+  });
+
+  it('fetches a fresh one on slide when the renewal timer never ran (a sleeping laptop)', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    challenge
+      .mockResolvedValueOnce({ challengeId: 'ch_1' })
+      .mockResolvedValueOnce({ challengeId: 'ch_2' });
+
+    const { result } = renderHook(() => useCaptcha());
+    await vi.waitFor(() => expect(challenge).toHaveBeenCalledTimes(1));
+
+    // wall clock jumps, timers do not fire
+    vi.setSystemTime(Date.now() + 70_000);
+
+    let completed!: Promise<void>;
+    act(() => {
+      completed = result.current.complete();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+      await completed;
+    });
+
+    expect(challenge).toHaveBeenCalledTimes(2);
+    expect(verify).toHaveBeenCalledExactlyOnceWith('ch_2');
+    expect(result.current.verified).toBe(true);
+  });
+});
+
 describe('the pass expiring', () => {
   it('drops back to unverified when the server-side TTL runs out', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });

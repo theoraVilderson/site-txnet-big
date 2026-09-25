@@ -51,6 +51,10 @@ function harness(opts: { vaultFails?: boolean; secretFails?: boolean } = {}) {
       findUnique: async ({ where }: { where: { id: string } }) =>
         tenants.has(where.id) ? { tenantType: tenants.get(where.id) } : null,
     },
+  };
+  // A platform panel has tenantId null, which RLS refuses on the scoped pool:
+  // every panel write goes through the cross-tenant one.
+  const all = {
     panel: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
         panels.push({ ...data });
@@ -70,7 +74,7 @@ function harness(opts: { vaultFails?: boolean; secretFails?: boolean } = {}) {
       return { configured: true, version: 1, rotatedAt: '2026-09-24T10:00:00.000Z' };
     },
   };
-  const service = new PanelRegistrationService(prisma as never, vault);
+  const service = new PanelRegistrationService(prisma as never, all as never, vault);
   return { service, panels, written };
 }
 
@@ -228,6 +232,10 @@ describe('PanelRegistrationService.resubmitRadiusSecret (F-027-az)', () => {
       tenant: { findUnique: async ({ where }: { where: { id: string } }) => ({ tenantType: where.id === OWNER ? TenantType.platform_owner : TenantType.reseller }) },
       panel: {
         findFirst: async ({ where }: { where: { id: string } }) => (panel && panel.id === where.id ? { ...panel } : null),
+      },
+    };
+    const all = {
+      panel: {
         update: async ({ data }: { data: Record<string, unknown> }) => {
           updates.push(data);
           Object.assign(panel as Row, data);
@@ -246,7 +254,7 @@ describe('PanelRegistrationService.resubmitRadiusSecret (F-027-az)', () => {
         return { configured: true, version: 2, rotatedAt: '2026-09-24T10:00:00.000Z' };
       },
     };
-    return { service: new PanelRegistrationService(prisma as never, vault), panel, updates, written };
+    return { service: new PanelRegistrationService(prisma as never, all as never, vault), panel, updates, written };
   }
   const actor = { adminId: ADMIN, tenantId: OWNER };
 

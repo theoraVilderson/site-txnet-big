@@ -61,6 +61,10 @@ function harness(row: Partial<Row> | null, opts: { vaultFails?: boolean; duringV
         panel && panel.id === where.id && panel.ownershipType === where.ownershipType && panel.tenantId === where.tenantId
           ? { reviewState: panel.reviewState, connectionTestFault: panel.connectionTestFault }
           : null,
+    },
+  };
+  const all = {
+    panel: {
       updateMany: async (args: { where: { id: string; reviewState: PanelReviewState }; data: Record<string, unknown> }) => {
         updates.push(args);
         if (!panel || panel.reviewState !== args.where.reviewState) return { count: 0 };
@@ -78,7 +82,7 @@ function harness(row: Partial<Row> | null, opts: { vaultFails?: boolean; duringV
       return { configured: true, version: 2, rotatedAt: '2026-09-24T10:00:00.000Z' };
     },
   };
-  return { service: new PanelRegistrationService(prisma as never, vault), panel, updates, written };
+  return { service: new PanelRegistrationService(prisma as never, all as never, vault), panel, updates, written };
 }
 
 const actor = { adminId: ADMIN, tenantId: OWNER };

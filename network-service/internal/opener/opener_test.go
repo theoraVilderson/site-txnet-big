@@ -55,10 +55,11 @@ func vaultStubAsked(t *testing.T, login string, status int, reason string) (*htt
 		}
 		if status != http.StatusOK {
 			w.WriteHeader(status)
-			_ = json.NewEncoder(w).Encode(map[string]string{"reason": reason, "message": reason})
+			// tenant-service's envelope, as it answers on the wire.
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "msg": "not found", "error": map[string]string{"reason": reason}})
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]string{"credentials": login})
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "msg": "done", "data": map[string]string{"credentials": login}})
 	}))
 	t.Cleanup(srv.Close)
 	return srv, &calls, &asked

@@ -34,7 +34,9 @@ for **every** event, not that one:
    one queued behind it. The tick stays as the fallback. A notification sent
    while nobody listened is lost, so on every (re)connect the worker runs one
    pass. Nothing is published outside the relay: ADR-0021 and invariant #10
-   stand unchanged.
+   stand unchanged. A woken pass is still a run of `outbox_relay`, so it reads
+   the worker's switch (`workerIsRunnable`, invariant #1) before each pass: an
+   operator who switched the relay off must not see it run on a wake.
 2. **One notice path, three channels.** An event type that tells a person is
    declared once with its audience and its template. `worker-service` sends
    through one `EventNotice` sender, which replaces the per-consumer copies:

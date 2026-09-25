@@ -162,11 +162,14 @@ but the httpOnly refresh cookie is still there. `PanelSessionProvider`
 (`app/(panel)/_context/PanelSessionContext.tsx`) sits in the `(panel)` layout
 and turns one into the other, then reads `GET /auth/accounts`.
 
-`authApi.ensureSession()` does that **once per page load**, and the "once"
-is load-bearing: `refresh` rotates the token, so two concurrent calls race and
-the loser is handed a token that no longer resolves to a session. React Strict
-Mode alone produces that pair. Every later refresh is `refreshCredential`:
-one per browser (single-flight, `navigator.locks`, broadcast to same-user tabs).
+`authApi.ensureSession()` does that **through `refreshCredential`**, the one
+refresh per browser (single-flight, `navigator.locks`, broadcast to same-user
+tabs) — never a `refresh()` of its own. `refresh` rotates the token, so two
+concurrent refreshes with one cookie sign the loser out; a page-load refresh
+outside the lock lost to a sidebar call's retry or another tab, and bounced a
+signed-in user (`panel-refresh-race-bounce`). With a token already live — a
+sign-in on this page — it rotates nothing, and `refreshCredential` adopts any
+live token that is not the one a call was refused with, including none.
 
 No live session sends the visitor to `AUTH_LOGIN`. That is the mirror of the
 auth-screen guard below: one keeps a signed-in visitor off the login screen,
