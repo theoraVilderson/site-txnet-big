@@ -152,6 +152,11 @@ func TestEveryTestResultIsAnnouncedInItsOwnStatement(t *testing.T) {
 		if !strings.Contains(sql, "'platform_owner'") {
 			t.Errorf("the %s event does not name the platform owner for a platform panel, whose tenantId is null", write)
 		}
+		// F-067-o: the owner is told in their inbox and bot, so the event names
+		// them and the panel — the consumer never resolves either.
+		if !strings.Contains(sql, "'ownerUserId'") || !strings.Contains(sql, "'panelName'") {
+			t.Errorf("the %s event does not name the tenant's owner and the panel", write)
+		}
 		if f.args[i][len(f.args[i])-1] != PanelTestedEvent {
 			t.Errorf("the %s event is typed %v, want %q", write, f.args[i][len(f.args[i])-1], PanelTestedEvent)
 		}

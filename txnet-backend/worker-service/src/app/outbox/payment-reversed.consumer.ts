@@ -1,11 +1,11 @@
-import { OutboxEventType, RedisTtl, UnscopedRedisKeys, type OutboxMessage } from '@txnet-backend/shared-core';
+import { OutboxEventType, type OutboxMessage } from '@txnet-backend/shared-core';
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { BrokerService } from '../broker/broker.service';
 import { RealtimePublisher } from '../realtime/realtime.publisher';
 import { RedisService } from '../redis/redis.service';
-import { UserNoticeSender } from './user-notice';
+import { EventNoticeSender } from './event-notice';
 
 /** This consumer's segment of the processed-event key — not the credited notice's (ADR-0045). */
 const CONSUMER = 'payment-reversed-notify';
@@ -17,16 +17,15 @@ type PaymentReversed = { tenantId: string; userId: string; paymentId: string; am
  * Tell the payer the bank is returning a payment the gateway reversed
  * (F-067-m, ADR-0046 decision 5).
  *
- * The credited notice's rules exactly (ADR-0045): the marker is `SET NX` before
- * any side effect and given back when one throws; the live event on the payer's
- * own `user:` channel, then the bot message through auth-service. Unlike a
+ * The credited notice's path exactly (`EventNoticeSender`, F-067-o): live on
+ * the payer's own `user:` channel, then their inbox and bot. Unlike a
  * credit there is no case to skip — nobody watches a reversal happen, and a
  * payer who paid and got nothing must hear why.
  */
 @Injectable()
 export class PaymentReversedConsumer implements OnApplicationBootstrap {
   private readonly logger = new Logger(PaymentReversedConsumer.name);
-  private readonly notices: UserNoticeSender;
+  private readonly notices: EventNoticeSender;
 
   constructor(
     private readonly broker: BrokerService,
@@ -34,7 +33,7 @@ export class PaymentReversedConsumer implements OnApplicationBootstrap {
     private readonly realtime: RealtimePublisher,
     config: ConfigService,
   ) {
-    this.notices = new UserNoticeSender(config);
+    this.notices = new EventNoticeSender(redis, realtime, config);
   }
 
   async onApplicationBootstrap() {
@@ -44,29 +43,15 @@ export class PaymentReversedConsumer implements OnApplicationBootstrap {
 
   async handle(event: OutboxMessage): Promise<void> {
     const payment = paymentOf(event);
-
-    const marker = UnscopedRedisKeys.outboxProcessed(CONSUMER, event.id);
-    if (!(await this.redis.setNx(marker, RedisTtl.outboxProcessed))) {
-      this.logger.debug(`outbox event ${event.id} already handled`);
-      return;
-    }
-
-    try {
-      await this.realtime.publish(`user:${payment.userId}`, {
-        type: OutboxEventType.PAYMENT_REVERSED,
-        paymentId: payment.paymentId,
-        amountCredited: payment.amountCredited,
-      });
-      await this.notices.send({
-        tenantId: payment.tenantId,
-        userId: payment.userId,
-        template: 'paymentReversed',
-        params: { amount: payment.amountCredited },
-      });
-    } catch (err) {
-      await this.redis.del(marker);
-      throw err;
-    }
+    await this.notices.send({
+      consumer: CONSUMER,
+      eventId: event.id,
+      live: {
+        channel: `user:${payment.userId}`,
+        body: { type: OutboxEventType.PAYMENT_REVERSED, paymentId: payment.paymentId, amountCredited: payment.amountCredited },
+      },
+      person: { tenantId: payment.tenantId, userId: payment.userId, template: 'paymentReversed', params: { amount: payment.amountCredited } },
+    });
   }
 }
 

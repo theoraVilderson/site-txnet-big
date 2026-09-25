@@ -7,7 +7,8 @@ import { PaymentReversedConsumer } from './payment-reversed.consumer';
 import { TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer } from './tenant-renewal.consumers';
 
 /**
- * Outbox consumers (ADR-0021, ADR-0045): the payer notices for a late
+ * Outbox consumers (ADR-0021, ADR-0045). Every notice goes through one
+ * `EventNoticeSender` (F-067-o, ADR-0084): the payer notices for a late
  * credit (F-067-l) and for a payment the bank reversed (F-067-m), a new inbox
  * row pushed to an open panel (F-035-b), a connection test's verdict pushed to
  * the systems page (F-027-bs), and a reseller's renewal on a credit

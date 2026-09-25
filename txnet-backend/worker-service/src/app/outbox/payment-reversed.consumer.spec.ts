@@ -80,25 +80,27 @@ function build({ marked = false, notifyStatus = 200 }: { marked?: boolean; notif
 afterEach(() => vi.unstubAllGlobals());
 
 describe('PaymentReversedConsumer.handle', () => {
-  it('marks the event under its own consumer, tells the payer live, then messages them through auth-service', async () => {
+  it('tells the payer live, in the inbox, then on the bot — each under its own marker (F-067-o)', async () => {
     const { consumer, calls } = build();
 
     await consumer.handle(event());
 
-    expect(calls.set).toEqual([[UnscopedRedisKeys.outboxProcessed('payment-reversed-notify', EVENT), expect.any(Number)]]);
+    expect(calls.set.map((c) => c[0])).toEqual(
+      ['live', 'inbox', 'bot'].map((channel) => UnscopedRedisKeys.outboxProcessed(`payment-reversed-notify:${channel}`, EVENT)),
+    );
     expect(calls.published).toEqual([
       {
         channel: `user:${USER}`,
         payload: { type: 'billing.payment.reversed', paymentId: PAYMENT, amountCredited: '19.80' },
       },
     ]);
-    expect(calls.fetched).toEqual([
-      {
+    expect(calls.fetched).toEqual(
+      ['inbox', 'bot'].map((channel) => ({
         url: 'http://auth:3000/api/internal/notify/user',
         headers: expect.objectContaining({ [RequestHeaders.serviceToken]: 'svc', [IdentityHeaders.tenantId]: TENANT }),
-        body: { userId: USER, template: 'paymentReversed', params: { amount: '19.80' } },
-      },
-    ]);
+        body: { userId: USER, channel, template: 'paymentReversed', params: { amount: '19.80' } },
+      })),
+    );
     expect(calls.del).toEqual([]);
   });
 
@@ -116,7 +118,9 @@ describe('PaymentReversedConsumer.handle', () => {
 
     await expect(consumer.handle(event())).rejects.toThrow(/502/);
 
-    expect(calls.del).toEqual([UnscopedRedisKeys.outboxProcessed('payment-reversed-notify', EVENT)]);
+    expect(calls.del).toEqual(
+      ['inbox', 'bot'].map((channel) => UnscopedRedisKeys.outboxProcessed(`payment-reversed-notify:${channel}`, EVENT)),
+    );
   });
 
   it('refuses a payload without its tenant or user, rather than guessing whose it is', async () => {

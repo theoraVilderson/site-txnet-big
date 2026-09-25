@@ -11,7 +11,8 @@ import { OtpChannel, OtpPurpose } from '../otp.interface';
 import { BaleOtpSender } from './bale.sender';
 import { SmsOtpSender } from './sms.sender';
 import { TelegramOtpSender } from './telegram.sender';
-import { UserNotifier } from '../../notify/user-notifier';
+import { NOTIFY_TEMPLATES, UserNotifier } from '../../notify/user-notifier';
+import { NotificationInboxClient } from '../../notify/notification-inbox.client';
 
 /**
  * The senders are where a one-time code leaves the platform, so the question
@@ -508,7 +509,7 @@ describe('UserNotifier', () => {
     const notifier = new UserNotifier(db as unknown as PrismaService, registry(client), locale);
 
     const out = await inTenant(() =>
-      notifier.notify({ userId: 'user-1', template: 'paymentCredited', params: { amount: '19.80', reference: '900' } }),
+      notifier.notify({ userId: 'user-1', channel: 'bot', template: 'paymentCredited', params: { amount: '19.80', reference: '900' } }),
     );
 
     expect(out).toEqual({ sent: ['telegram'] });
@@ -521,14 +522,14 @@ describe('UserNotifier', () => {
 
   it('sends nothing, and is not an error, for a user with no linked chat or no bot', async () => {
     const none = new UserNotifier(notifierPrisma() as unknown as PrismaService, registry(botClient()), localeService(ns));
-    expect(await inTenant(() => none.notify({ userId: 'user-1', template: 'paymentCredited', params: {} }))).toEqual({ sent: [] });
+    expect(await inTenant(() => none.notify({ userId: 'user-1', channel: 'bot', template: 'paymentCredited', params: {} }))).toEqual({ sent: [] });
 
     const noBot = new UserNotifier(
       notifierPrisma({ links: [{ platform: 'bale', platformUserId: '7' }] }) as unknown as PrismaService,
       registry(null),
       localeService(ns),
     );
-    expect(await inTenant(() => noBot.notify({ userId: 'user-1', template: 'paymentCredited', params: {} }))).toEqual({ sent: [] });
+    expect(await inTenant(() => noBot.notify({ userId: 'user-1', channel: 'bot', template: 'paymentCredited', params: {} }))).toEqual({ sent: [] });
   });
 
   it('throws when every send failed, so the caller retries the event', async () => {
@@ -539,8 +540,55 @@ describe('UserNotifier', () => {
       localeService(ns),
     );
     await expect(
-      inTenant(() => notifier.notify({ userId: 'user-1', template: 'paymentCredited', params: { amount: '1', reference: '' } })),
+      inTenant(() => notifier.notify({ userId: 'user-1', channel: 'bot', template: 'paymentCredited', params: { amount: '1', reference: '' } })),
     ).rejects.toThrow(/telegram down/);
+  });
+
+  // F-067-o (ADR-0084 decision 2): the worker asks once per channel, so a
+  // redelivery repeats only the channel that failed.
+  it('the inbox channel writes the inbox row and messages no chat', async () => {
+    const client = botClient();
+    const inbox = { put: vi.fn(async () => undefined) };
+    const notifier = new UserNotifier(
+      notifierPrisma({ links: [{ platform: 'telegram', platformUserId: '5501' }] }) as unknown as PrismaService,
+      registry(client),
+      localeService(ns),
+      inbox as unknown as NotificationInboxClient,
+    );
+    const out = await inTenant(() =>
+      notifier.notify({ userId: 'user-1', channel: 'inbox', template: 'paymentCredited', params: { amount: '19.80', reference: '900' } }),
+    );
+    expect(out).toEqual({ sent: [] });
+    expect(inbox.put).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user-1', body: 'Credited 19.80 (ref 900)' }));
+    expect(client.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('the bot channel writes no inbox row', async () => {
+    const inbox = { put: vi.fn(async () => undefined) };
+    const notifier = new UserNotifier(
+      notifierPrisma({ links: [{ platform: 'telegram', platformUserId: '5501' }] }) as unknown as PrismaService,
+      registry(botClient()),
+      localeService(ns),
+      inbox as unknown as NotificationInboxClient,
+    );
+    await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'bot', template: 'subscriptionSuspended', params: { amount: '5' } }));
+    expect(inbox.put).not.toHaveBeenCalled();
+  });
+
+  it('every template has an inbox title, because every notice also goes to the inbox', async () => {
+    const inbox = { put: vi.fn(async () => undefined) };
+    const notifier = new UserNotifier(
+      notifierPrisma() as unknown as PrismaService,
+      registry(null),
+      localeService(undefined),
+      inbox as unknown as NotificationInboxClient,
+    );
+    for (const template of NOTIFY_TEMPLATES) {
+      await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'inbox', template, params: {} }));
+    }
+    const titles = inbox.put.mock.calls.map((c) => (c as unknown as [{ title: string }])[0].title);
+    expect(titles).toHaveLength(NOTIFY_TEMPLATES.length);
+    expect(titles.every((t) => t.length > 0)).toBe(true);
   });
 
   it('falls back to English text when the namespace has no template', async () => {
@@ -550,7 +598,7 @@ describe('UserNotifier', () => {
       registry(client),
       localeService(undefined),
     );
-    await inTenant(() => notifier.notify({ userId: 'user-1', template: 'paymentCredited', params: { amount: '19.80', reference: '900' } }));
+    await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'bot', template: 'paymentCredited', params: { amount: '19.80', reference: '900' } }));
     expect(client.sendMessage.mock.calls[0][1]).toContain('19.80');
   });
 });

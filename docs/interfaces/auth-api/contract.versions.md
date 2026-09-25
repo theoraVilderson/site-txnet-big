@@ -236,6 +236,11 @@ Consumers: `panel-web` sends the header from the same change (`accounts/add/page
 `bot-app` is unaffected, its `SERVICE_AUTH_TOKEN` satisfies the guard (ADR-0011). No
 deprecation window — the gate is the fix, and the one browser consumer ships with it.
 
+## Breaking: v31 — `/internal/notify/user` takes one `channel` (F-067-o, ADR-0084)
+
+A body without `channel` (`inbox` | `bot`) is 400. Service-only; its one caller,
+`worker-service`'s `EventNoticeSender`, ships in the same change. No window.
+
 ## Removed shapes
 
 | Item | Deprecated since | Removal after | Replacement |

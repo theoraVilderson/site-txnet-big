@@ -1,13 +1,13 @@
-import { OutboxEventType, RedisTtl, UnscopedRedisKeys, type OutboxMessage } from '@txnet-backend/shared-core';
+import { OutboxEventType, type OutboxMessage } from '@txnet-backend/shared-core';
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { BrokerService } from '../broker/broker.service';
 import { RealtimePublisher } from '../realtime/realtime.publisher';
 import { RedisService } from '../redis/redis.service';
-import { UserNoticeSender } from './user-notice';
+import { EventNoticeSender } from './event-notice';
 
-/** This consumer's segment of the processed-event key (ADR-0045). */
+/** This consumer's segment of its per-channel markers (ADR-0045, F-067-o). */
 const CONSUMER = 'payment-credited-notify';
 
 /** The part of billing's `billing.payment.confirmed` payload this reads (`DepositSettlementService.publishConfirmed`). */
@@ -37,21 +37,14 @@ type PaymentConfirmed = {
  * `shownInChat` (F-104-m): the bot relayed that payment's `successful_payment`
  * and answered in the chat itself, so a notice would be the same news twice.
  *
- * **Once, at-least-once delivery notwithstanding.** The marker is `SET NX`
- * before any side effect; a redelivered event finds it and stops. A side
- * effect that throws **deletes the marker** before rethrowing, so the message
- * dead-letters (F-067-d) with the event still owed rather than recorded as
- * handled.
- *
- * Two halves, in this order: the live event on the payer's own `user:` channel
- * (at most once, and the top bar re-reads the balance on it), then the bot
- * message through auth-service, which owns the tenant's bots and the user's
- * linked chats.
+ * Told through `EventNoticeSender` (F-067-o, ADR-0084): the live event on
+ * the payer's own `user:` channel (the top bar re-reads the balance on it),
+ * then the payer's inbox, then their bot — each once, under its own marker.
  */
 @Injectable()
 export class PaymentConfirmedConsumer implements OnApplicationBootstrap {
   private readonly logger = new Logger(PaymentConfirmedConsumer.name);
-  private readonly notices: UserNoticeSender;
+  private readonly notices: EventNoticeSender;
 
   constructor(
     private readonly broker: BrokerService,
@@ -59,7 +52,7 @@ export class PaymentConfirmedConsumer implements OnApplicationBootstrap {
     private readonly realtime: RealtimePublisher,
     config: ConfigService,
   ) {
-    this.notices = new UserNoticeSender(config);
+    this.notices = new EventNoticeSender(redis, realtime, config);
   }
 
   async onApplicationBootstrap() {
@@ -72,31 +65,19 @@ export class PaymentConfirmedConsumer implements OnApplicationBootstrap {
     if (payment.shownInChat) return;
     if (payment.confirmationSource === 'webhook_auto' && payment.channel !== 'bot') return;
 
-    const marker = UnscopedRedisKeys.outboxProcessed(CONSUMER, event.id);
-    if (!(await this.redis.setNx(marker, RedisTtl.outboxProcessed))) {
-      this.logger.debug(`outbox event ${event.id} already handled`);
-      return;
-    }
-
-    try {
-      await this.realtime.publish(`user:${payment.userId}`, {
-        type: OutboxEventType.PAYMENT_CONFIRMED,
-        paymentId: payment.paymentId,
-        amountCredited: payment.amountCredited,
-      });
-      await this.notify(payment);
-    } catch (err) {
-      await this.redis.del(marker);
-      throw err;
-    }
-  }
-
-  private notify(payment: PaymentConfirmed): Promise<void> {
-    return this.notices.send({
-      tenantId: payment.tenantId,
-      userId: payment.userId,
-      template: 'paymentCredited',
-      params: { amount: payment.amountCredited, reference: payment.gatewayReferenceId ?? '' },
+    await this.notices.send({
+      consumer: CONSUMER,
+      eventId: event.id,
+      live: {
+        channel: `user:${payment.userId}`,
+        body: { type: OutboxEventType.PAYMENT_CONFIRMED, paymentId: payment.paymentId, amountCredited: payment.amountCredited },
+      },
+      person: {
+        tenantId: payment.tenantId,
+        userId: payment.userId,
+        template: 'paymentCredited',
+        params: { amount: payment.amountCredited, reference: payment.gatewayReferenceId ?? '' },
+      },
     });
   }
 }

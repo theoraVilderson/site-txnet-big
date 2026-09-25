@@ -82,19 +82,25 @@ const PanelTestedEvent = "network.panel.tested"
 // announceSQL follows a `tested` CTE — the write it announces — so the event
 // and the state change commit or fail together (ADR-0021). A platform panel's
 // tenantId is null (invariant 9); its owner is the platform_owner tenant,
-// named here so the consumer never guesses whose page it is.
+// named here so the consumer never guesses whose page it is. The tenant's
+// ownerUserId and the panel's name ride along (F-067-o): a verdict is also
+// told in the owner's inbox and bot, and a message needs to say which panel.
 const announceSQL = `
 INSERT INTO automation.outbox_event (id, aggregate, "aggregateId", type, payload)
 SELECT gen_random_uuid(), 'network.panel', t.id::text, $%d::text,
        jsonb_build_object(
          'panelId', t.id::text,
-         'tenantId', coalesce(t."tenantId", (
-             SELECT o.id FROM tenant.tenant o
-              WHERE o."tenantType" = 'platform_owner'
-              ORDER BY o."createdAt", o.id LIMIT 1))::text,
+         'panelName', t.name,
+         'tenantId', o.id::text,
+         'ownerUserId', o."ownerUserId"::text,
          'reviewState', t."reviewState"::text,
          'fault', t."connectionTestFault"::text)
-  FROM tested t`
+  FROM tested t
+  LEFT JOIN LATERAL (
+    SELECT o.id, o."ownerUserId" FROM tenant.tenant o
+     WHERE o.id = t."tenantId"
+        OR (t."tenantId" IS NULL AND o."tenantType" = 'platform_owner')
+     ORDER BY o."createdAt", o.id LIMIT 1) o ON true`
 
 var answerSQL = `
 WITH tested AS (
@@ -105,7 +111,7 @@ UPDATE network.panel
        "connectionTestFault" = NULL,
        "connectionTestDetail" = NULL
  WHERE id = $1::uuid AND "reviewState" = 'pending'
-RETURNING id, "tenantId", "reviewState", "connectionTestFault")` + fmt.Sprintf(announceSQL, 5)
+RETURNING id, name, "tenantId", "reviewState", "connectionTestFault")` + fmt.Sprintf(announceSQL, 5)
 
 // Answer writes the verdict and announces it. false is a panel no longer
 // pending — withdrawn or already answered — and the answer is dropped (rule
@@ -129,7 +135,7 @@ UPDATE network.panel
        "connectionTestFault" = $2::network."ConnectionTestFault",
        "connectionTestDetail" = $3
  WHERE id = $1::uuid AND "reviewState" = 'pending'
-RETURNING id, "tenantId", "reviewState", "connectionTestFault")` + fmt.Sprintf(announceSQL, 5)
+RETURNING id, name, "tenantId", "reviewState", "connectionTestFault")` + fmt.Sprintf(announceSQL, 5)
 
 // Fail records a test that produced no verdict. A panel no longer pending is
 // left as it is: a fault lives only on a pending panel (rule 5).

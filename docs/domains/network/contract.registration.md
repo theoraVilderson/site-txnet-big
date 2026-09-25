@@ -79,10 +79,12 @@ row) feeding an `INSERT` into `automation.outbox_event`, type
 
 - **A stale write announces nothing.** The `WHERE … 'pending'` that makes it
   `Stale` (rule 3) leaves the CTE empty, so no row is inserted.
-- **The payload names whose page it is**: `{panelId, tenantId, reviewState,
-  fault}`, where `tenantId` is the panel's, or — a platform panel's being null
-  (invariant 9) — the `platform_owner` tenant's, oldest first if tenant
-  invariant 1 were ever broken. The consumer never resolves it.
+- **The payload names whose page it is**: `{panelId, panelName, tenantId,
+  ownerUserId, reviewState, fault}`, where `tenantId` is the panel's, or — a
+  platform panel's being null (invariant 9) — the `platform_owner` tenant's,
+  oldest first if tenant invariant 1 were ever broken, and `ownerUserId` is
+  that tenant's owner, told a verdict in their inbox and bot (F-067-o). The
+  consumer never resolves either.
 - **A fault is announced on every retry**, every 5 minutes while it lasts: the
   page's "tested at" moves each time, so each is a change worth reading.
 - The type is pinned to `contracts/realtime/events.json` from Go

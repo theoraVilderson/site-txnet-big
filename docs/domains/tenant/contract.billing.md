@@ -161,7 +161,7 @@ invariant is 19.
 | **Short:** nothing is debited — prepaid only (invariant 14) | D-01 |
 | Short before the deadline — `currentPeriodEnd` + `renewalGraceDays`, or the platform owner's later `graceUntil` (F-019-g, `contract.admin.md`) — warns; at or after it, suspends | more time is given by moving the deadline, not by crediting money that never arrived |
 | Every notice is an outbox row in the renewal's transaction: `tenant.subscription.payment_due` `{tenantId, ownerUserId, amount, balance, suspendsAt}`, `tenant.subscription.suspended` `{tenantId, ownerUserId, amount, balance}` | a warning is owed exactly when the state that caused it committed (ADR-0021) |
-| The worker's `TenantSubscriptionNoticeConsumer` sends them to the owner through `POST /api/internal/notify/user` (`subscriptionPaymentDue` / `subscriptionSuspended`): the panel inbox always, the owner's linked bots best effort, in the owner's language | an owner may have no linked bot; the inbox copy is the one that must land |
+| The worker's `TenantSubscriptionNoticeConsumer` sends them to the owner's panel inbox and linked bots, each owed on its own (`subscriptionPaymentDue` / `subscriptionSuspended`, F-067-o's `EventNoticeSender`), in the owner's language | an owner may have no linked bot; the inbox copy lands regardless |
 
 **Proof:** `tenant-service` `renewal/tenant-renewal.spec.ts`.
 

@@ -1,13 +1,14 @@
-import { OutboxEventType, RedisTtl, RequestHeaders, UnscopedRedisKeys, type OutboxMessage } from '@txnet-backend/shared-core';
+import { OutboxEventType, RequestHeaders, type OutboxMessage } from '@txnet-backend/shared-core';
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { envelopeData } from '../automation/internal-answer';
 import { BrokerService } from '../broker/broker.service';
 import { RedisService } from '../redis/redis.service';
-import { UserNoticeSender } from './user-notice';
+import { RealtimePublisher } from '../realtime/realtime.publisher';
+import { EventNoticeSender } from './event-notice';
 
-/** This consumer's segment of the processed-event key (ADR-0045). */
+/** This consumer's segment of its per-channel markers (ADR-0045, F-067-o). */
 const NOTICE_CONSUMER = 'tenant-subscription-notice';
 
 const str = (p: Record<string, unknown>, k: string) => (typeof p[k] === 'string' && p[k] !== '' ? (p[k] as string) : null);
@@ -68,21 +69,23 @@ export class TenantBillingCreditedConsumer implements OnApplicationBootstrap {
 
 /**
  * Tell a reseller's owner its renewal is unpaid, or that the panel was
- * suspended for it (F-019-c) — through auth-service's notice seam, which
- * renders the owner's language and writes the inbox copy. Once per event: the
- * marker is `SET NX` first and given back if the send throws.
+ * suspended for it (F-019-c) — through `EventNoticeSender` (F-067-o): the
+ * owner's inbox and bot, each once under its own marker. No live push of its
+ * own: the inbox row's `notification.created` already reaches every open
+ * device (F-035-b), and no page reads a subscription event.
  */
 @Injectable()
 export class TenantSubscriptionNoticeConsumer implements OnApplicationBootstrap {
   private readonly logger = new Logger(TenantSubscriptionNoticeConsumer.name);
-  private readonly notices: UserNoticeSender;
+  private readonly notices: EventNoticeSender;
 
   constructor(
     private readonly broker: BrokerService,
-    private readonly redis: RedisService,
+    redis: RedisService,
+    realtime: RealtimePublisher,
     config: ConfigService,
   ) {
-    this.notices = new UserNoticeSender(config);
+    this.notices = new EventNoticeSender(redis, realtime, config);
   }
 
   async onApplicationBootstrap() {
@@ -104,21 +107,11 @@ export class TenantSubscriptionNoticeConsumer implements OnApplicationBootstrap 
           : null;
     if (!template) throw new Error(`outbox event ${event.id} is ${event.type}, not a renewal notice`);
 
-    const marker = UnscopedRedisKeys.outboxProcessed(NOTICE_CONSUMER, event.id);
-    if (!(await this.redis.setNx(marker, RedisTtl.outboxProcessed))) {
-      this.logger.debug(`outbox event ${event.id} already handled`);
-      return;
+    const params: Record<string, string> = { amount };
+    if (template === 'subscriptionPaymentDue') {
+      params.balance = str(p, 'balance') ?? '0.00';
+      params.suspendsAt = str(p, 'suspendsAt') ?? '';
     }
-    try {
-      const params: Record<string, string> = { amount };
-      if (template === 'subscriptionPaymentDue') {
-        params.balance = str(p, 'balance') ?? '0.00';
-        params.suspendsAt = str(p, 'suspendsAt') ?? '';
-      }
-      await this.notices.send({ tenantId, userId: ownerUserId, template, params });
-    } catch (err) {
-      await this.redis.del(marker);
-      throw err;
-    }
+    await this.notices.send({ consumer: NOTICE_CONSUMER, eventId: event.id, person: { tenantId, userId: ownerUserId, template, params } });
   }
 }

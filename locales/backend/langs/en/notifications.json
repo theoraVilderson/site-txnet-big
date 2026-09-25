@@ -27,7 +27,9 @@
   },
   "payment": {
     "credited": "✅ Your payment was confirmed and {{amount}} was added to your wallet. Reference: {{reference}}",
-    "reversed": "↩️ Your payment of {{amount}} was reversed by the gateway and was not added to your wallet. The bank is returning it to your card; if it has not arrived within 72 hours, contact support."
+    "reversed": "↩️ Your payment of {{amount}} was reversed by the gateway and was not added to your wallet. The bank is returning it to your card; if it has not arrived within 72 hours, contact support.",
+    "creditedTitle": "Payment confirmed",
+    "reversedTitle": "Payment reversed"
   },
   "campaign": {
     "emailSubject": "A new message for you"
@@ -37,5 +39,11 @@
     "paymentDue": "⚠️ Your subscription renewal of {{amount}} could not be charged: your billing balance is {{balance}}. Top up before {{suspendsAt}} or your panel will be suspended.",
     "suspendedTitle": "Panel suspended for non-payment",
     "suspended": "⛔ Your panel was suspended because the subscription renewal of {{amount}} was not paid. Nothing was deleted: top up your billing balance and it is charged and reactivated at once."
+  },
+  "panel": {
+    "acceptedTitle": "Panel accepted",
+    "accepted": "✅ Your panel {{panel}} passed its connection test and was accepted.",
+    "refusedTitle": "Panel refused",
+    "refused": "❌ Your panel {{panel}} was refused: its connection test showed it cannot report what the platform needs. The details are on the systems page."
   }
 }

@@ -7,30 +7,47 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContext } from '../../tenant-context/tenant-context';
 
 /** The named messages a service may ask to send. A template, never text: the words are this service's, in the user's language. */
-export const NOTIFY_TEMPLATES = ['paymentCredited', 'paymentReversed', 'subscriptionPaymentDue', 'subscriptionSuspended'] as const;
+export const NOTIFY_TEMPLATES = [
+  'paymentCredited',
+  'paymentReversed',
+  'subscriptionPaymentDue',
+  'subscriptionSuspended',
+  'panelAccepted',
+  'panelRefused',
+] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
-export type NotifyRequest = { userId: string; template: NotifyTemplate; params: Record<string, string> };
+/** One call is one channel (F-067-o, ADR-0084 decision 2): the worker marks each on its own, so a redelivery repeats only the one that failed. */
+export const NOTIFY_CHANNELS = ['inbox', 'bot'] as const;
+export type NotifyChannel = (typeof NOTIFY_CHANNELS)[number];
+
+export type NotifyRequest = { userId: string; channel: NotifyChannel; template: NotifyTemplate; params: Record<string, string> };
 export type NotifyResult = { sent: BotPlatform[] };
 
 type NotificationsNamespace = {
-  payment?: { credited?: string; reversed?: string };
+  payment?: { creditedTitle?: string; credited?: string; reversedTitle?: string; reversed?: string };
   subscription?: { paymentDueTitle?: string; paymentDue?: string; suspendedTitle?: string; suspended?: string };
+  panel?: { acceptedTitle?: string; accepted?: string; refusedTitle?: string; refused?: string };
 };
 type Text = { read: (ns: NotificationsNamespace | undefined) => string | undefined; fallback: string };
 
-/** The key path in `notifications` each template reads, and the English it falls back to. */
-/** `inbox` — the title of a notice that also goes to the panel inbox, whether or not a bot delivers it (F-019-c). */
-const TEMPLATE_TEXT: Record<NotifyTemplate, Text & { inbox?: Text }> = {
+/**
+ * The key path in `notifications` each template reads, and the English it
+ * falls back to. `inbox` is the title of its panel inbox row: every notice has
+ * one, because every notice also goes to the inbox (F-067-o, ADR-0084).
+ */
+const TEMPLATE_TEXT: Record<NotifyTemplate, Text & { inbox: Text }> = {
   paymentCredited: {
     read: (ns) => ns?.payment?.credited,
     fallback: '✅ Your payment was confirmed and {{amount}} was added to your wallet. Reference: {{reference}}',
+    inbox: { read: (ns) => ns?.payment?.creditedTitle, fallback: 'Payment confirmed' },
   },
   // F-067-m: the gateway reversed the payment; the bank returns the money (ADR-0046 decision 5).
   paymentReversed: {
     read: (ns) => ns?.payment?.reversed,
     fallback:
       '↩️ Your payment of {{amount}} was reversed by the gateway and was not added to your wallet. The bank is returning it to your card; if it has not arrived within 72 hours, contact support.',
+    inbox: { read: (ns) => ns?.payment?.reversedTitle, fallback: 'Payment reversed' },
   },
   // F-019-c: a reseller's renewal is unpaid and in grace; its owner is told how much and until when.
   subscriptionPaymentDue: {
@@ -45,6 +62,17 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Text & { inbox?: Text }> = {
       '⛔ Your panel was suspended because the subscription renewal of {{amount}} was not paid. Nothing was deleted: top up your billing balance and it is charged and reactivated at once.',
     inbox: { read: (ns) => ns?.subscription?.suspendedTitle, fallback: 'Panel suspended for non-payment' },
   },
+  // F-067-o: a connection test's verdict, told to the owner (`accepted_low_trust` is an acceptance).
+  panelAccepted: {
+    read: (ns) => ns?.panel?.accepted,
+    fallback: '✅ Your panel {{panel}} passed its connection test and was accepted.',
+    inbox: { read: (ns) => ns?.panel?.acceptedTitle, fallback: 'Panel accepted' },
+  },
+  panelRefused: {
+    read: (ns) => ns?.panel?.refused,
+    fallback: '❌ Your panel {{panel}} was refused: its connection test showed it cannot report what the platform needs. The details are on the systems page.',
+    inbox: { read: (ns) => ns?.panel?.refusedTitle, fallback: 'Panel refused' },
+  },
 };
 
 function interpolate(template: string, vars: Record<string, string>): string {
@@ -55,7 +83,9 @@ function interpolate(template: string, vars: Record<string, string>): string {
 }
 
 /**
- * Message a user on their linked bot (F-067-l, ADR-0045 decision 2).
+ * Tell a user one notice through one channel (F-067-l, ADR-0045 decision 2;
+ * F-067-o, ADR-0084 decision 2): `inbox` puts the rendered row in their panel
+ * inbox, `bot` messages their linked chats. The worker asks once per channel.
  *
  * The OTP senders' neighbour and deliberately built from the same parts: the
  * tenant's primary bot per platform (`BotClientRegistry`), and only links whose
@@ -86,21 +116,21 @@ export class UserNotifier {
     });
     if (!user) return { sent: [] };
 
-    const links = await this.prisma.linkedBotAccount.findMany({
-      where: { userId: request.userId, contactVerifiedAt: { not: null } },
-      select: { platform: true, platformUserId: true },
-    });
-
     const ns = this.locale.getNamespace(user.languagePreference, 'notifications') as NotificationsNamespace | undefined;
     const spec = TEMPLATE_TEXT[request.template];
     const text = interpolate(spec.read(ns) ?? spec.fallback, request.params);
 
-    // The inbox first, and it throws: a notice with an inbox copy is owed until that copy lands.
-    // Once it has, a bot that fails is best effort — a redelivery would put a second row in the inbox.
-    if (spec.inbox) {
+    if (request.channel === 'inbox') {
+      // Throws: the row is owed until it lands.
       if (!this.inbox) throw new Error(`${request.template} needs the notification inbox, which is not wired`);
       await this.inbox.put({ tenantId, userId: request.userId, title: interpolate(spec.inbox.read(ns) ?? spec.inbox.fallback, request.params), body: text });
+      return { sent: [] };
     }
+
+    const links = await this.prisma.linkedBotAccount.findMany({
+      where: { userId: request.userId, contactVerifiedAt: { not: null } },
+      select: { platform: true, platformUserId: true },
+    });
 
     const sent: NotifyResult['sent'] = [];
     let lastError: unknown = null;
@@ -116,7 +146,7 @@ export class UserNotifier {
         this.logger.warn(`${request.template} to user ${request.userId} on ${platform} failed: ${(err as Error).message}`);
       }
     }
-    if (sent.length === 0 && lastError && !spec.inbox) throw lastError;
+    if (sent.length === 0 && lastError) throw lastError;
     return { sent };
   }
 }

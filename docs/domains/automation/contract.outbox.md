@@ -147,6 +147,19 @@ correct answer rather than a gap: an event announced to nobody is not an event
 delivered, and the alternative — a plain publish the broker acks into nothing
 — is what invariant #10 exists to forbid.
 
+## One notice path: live, inbox, bot (F-067-o, ADR-0084 decision 2)
+
+Every consumer below that tells a person sends through
+`outbox/event-notice.ts` (`EventNoticeSender`), never its own copy.
+
+| Rule | Why |
+|---|---|
+| A notice declares `live` (`{channel: user:<id> \| tenant:<id>, body}`) and/or `person` (`{tenantId, userId, template, params}`); a tenant-audience notice's person is the payload's `ownerUserId` | the producer names who is told; this side never resolves it |
+| Channels run in order live, `inbox`, `bot`; each is one `POST /api/internal/notify/user` with its `channel` for the last two | the words and the user's language stay auth-service's |
+| **Each channel has its own marker**, `outboxProcessed('<consumer>:<channel>', <event id>)`, `SET NX` before it and given back if it throws | a redelivery repeats only the channel that failed, never a landed bot message or inbox row |
+| A failed channel does not stop the others; the sender rethrows after all ran, and the event dead-letters | one broken seam does not starve the rest |
+| Markers were renamed from `'<consumer>'` to `'<consumer>:<channel>'` at F-067-o | an event in flight at that deploy may be told twice through one channel, once (ADR-0084 consequences) |
+
 ## The first consumer: the payer notice (F-067-l, ADR-0045)
 
 `PaymentConfirmedConsumer` in `worker-service/src/app/outbox/`, on its own
@@ -158,24 +171,21 @@ every other stays so.
 |---|---|
 | A `webhook_auto` credit is acked and nothing is sent — **unless the payload's `channel` is `bot`** (F-306-a; absent = `panel`) | a panel payer is on the success page; the notice is for a **late** credit. A bot payer started in a chat and waits there |
 | A payload with `shownInChat: true` is acked and nothing is sent, whatever its channel (F-104-m) | billing sets it only on the credit the bot's `paid` relay made, and the bot has already said it in that chat |
-| **Dedupe first:** `SET NX` `UnscopedRedisKeys.outboxProcessed('payment-credited-notify', <event id>)`, `RedisTtl.outboxProcessed` (7 days), before any side effect; already set is an ack | at-least-once delivery (ADR-0021) must not tell the payer twice |
-| Then `{type:'billing.payment.confirmed', paymentId, amountCredited}` on `user:<userId>` (`RealtimePublisher`), then `POST /api/internal/notify/user` on auth-service with `X-Tenant-Id` = the payload's tenant and template `paymentCredited` | the live half is at most once and cheap; the bot half needs the tenant's bots, which are auth-service's |
-| A side effect that throws **deletes the marker** and rethrows: nack, no requeue, dead-letter | the event stays owed instead of being recorded as handled |
+| Consumer `payment-credited-notify`: live `{type:'billing.payment.confirmed', paymentId, amountCredited}` on `user:<userId>`, then template `paymentCredited` to the payer's inbox and bot, `X-Tenant-Id` = the payload's tenant | the one notice path; markers `RedisTtl.outboxProcessed` (7 days) |
 | A payload missing its tenant, user, payment, amount or source throws | whose payment it is is never guessed |
 | **The relay's schedule is seeded** (2026-09-14): `outbox_relay` is in `SEEDED_SCHEDULES`, `always_on`. A database seeded before that needs `prisma db seed` re-run; unscheduled, the event is never published and nobody is told | ADR-0045 consequences — the operator decided it once, in the seed, rather than per deployment |
 
 ## The second consumer: a reversed payment (F-067-m, ADR-0046)
 
 `PaymentReversedConsumer`, on its own queue `AUTOMATION_PAYMENT_REVERSED_QUEUE`
-bound to exactly `outbox.billing.payment.reversed`. Both consumers send through
-`outbox/user-notice.ts` (`UserNoticeSender`).
+bound to exactly `outbox.billing.payment.reversed`.
 
 | Rule | Why |
 |---|---|
 | Every reversal is told — there is no source to skip | nobody watches a reversal happen; a payer who paid and got nothing must hear why |
-| Its marker is `outboxProcessed('payment-reversed-notify', <event id>)`, never the credited notice's | one payment can carry both events in its life; neither may swallow the other |
-| `{type:'billing.payment.reversed', paymentId, amountCredited}` on `user:<userId>`, then template `paymentReversed` with `{amount}` | the panel toast and the bot message; the words are auth-service's, in the user's language |
-| Otherwise the first consumer's rules: dedupe before any side effect, marker given back on a throw, a payload without tenant, user, payment or amount throws | ADR-0045 |
+| Consumer `payment-reversed-notify`, never the credited notice's | one payment can carry both events in its life; neither may swallow the other |
+| `{type:'billing.payment.reversed', paymentId, amountCredited}` on `user:<userId>`, then template `paymentReversed` with `{amount}` to inbox and bot | the panel toast, the inbox row and the bot message; the words are auth-service's, in the user's language |
+| A payload without tenant, user, payment or amount throws | ADR-0045 |
 
 ## The third consumer: a new inbox row (F-035-b)
 
@@ -201,7 +211,8 @@ transaction that writes the row (`notification/contract.md` "Emits").
 |---|---|
 | `{type:'network.panel.tested', panelId, reviewState, fault}` on `tenant:<tenantId>` — the first push on a `tenant:` channel | the systems page is an operator's view, and only a `realtime.tenant.read` holder in that tenant hears it |
 | The tenant is the payload's; a payload without `tenantId` or `panelId` throws and dead-letters | the producer names the platform owner for a platform panel; this side never guesses |
-| **No marker** | a redelivery is one more re-read of the page; `RealtimePublisher` never throws |
+| Consumer `panel-tested`. A **verdict** (`accepted`, `accepted_low_trust` → `panelAccepted`; `refused` → `panelRefused`, `{panel}` = `panelName`) also goes to `ownerUserId`'s inbox and bot (F-067-o) | a fault repeats every 5 minutes while it lasts; a message each time is noise, and the page shows it |
+| A payload without `ownerUserId` (written before F-067-o) is pushed live only | nobody is guessed at |
 
 ## The tenant consumers: a reseller's renewal (F-019-c)
 
@@ -213,12 +224,12 @@ Both in `outbox/tenant-renewal.consumers.ts`. The producers are tenant's:
 |---|---|
 | `TenantBillingCreditedConsumer`, queue `AUTOMATION_TENANT_BILLING_CREDITED_QUEUE` on `outbox.tenant.billing.credited`: `POST /api/internal/tenant-subscriptions/:tenantId/renew`; **no marker** | the renewal repeats safely; a paid reseller is charged and reactivated at once (user, 2026-09-17) |
 | A refusal, an unset seam or an answer without `outcome` throws and dead-letters | the `tenant_subscription_renewal` sweep stands behind a lost event |
-| `TenantSubscriptionNoticeConsumer`, queue `AUTOMATION_TENANT_SUBSCRIPTION_NOTICE_QUEUE` on `outbox.tenant.subscription.payment_due` and `.suspended`: template `subscriptionPaymentDue` / `subscriptionSuspended` to `ownerUserId`, marker `outboxProcessed('tenant-subscription-notice', <event id>)`, given back on a throw | the payer notices' rules (ADR-0045); one queue, because both are the same owner's same story |
+| `TenantSubscriptionNoticeConsumer`, queue `AUTOMATION_TENANT_SUBSCRIPTION_NOTICE_QUEUE` on `outbox.tenant.subscription.payment_due` and `.suspended`: consumer `tenant-subscription-notice`: template `subscriptionPaymentDue` / `subscriptionSuspended` to `ownerUserId`'s inbox and bot, no live push of its own | the inbox row's `notification.created` is already live on every device (F-035-b); one queue, because both are the same owner's same story |
 | `OutboxEventType` is not all realtime: only `RealtimeEventType` is held to `contracts/realtime/events.json` | a tenant event is never pushed to a browser |
 
 ## What is not built
 
-- Payer notices, two live pushes and the tenant renewal only; no Postgres idempotency store — ADR-0045 chose
+- The notices above, two live pushes and the tenant renewal only; no combining of a burst (F-067-p); no Postgres idempotency store — ADR-0045 chose
   Redis for the first, and a consumer that moves money must choose again.
 - No retention or archive of published rows. ADR-0021 makes the table an audit
   trail; when that stops being worth keeping needs a producer with an opinion.

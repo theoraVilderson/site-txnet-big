@@ -80,25 +80,27 @@ function build({ marked = false, notifyStatus = 200 }: { marked?: boolean; notif
 afterEach(() => vi.unstubAllGlobals());
 
 describe('PaymentConfirmedConsumer.handle', () => {
-  it('marks the event, tells the payer live, then messages them through auth-service', async () => {
+  it('tells the payer live, in the inbox, then on the bot — each under its own marker (F-067-o)', async () => {
     const { consumer, calls } = build();
 
     await consumer.handle(event());
 
-    expect(calls.set).toEqual([[UnscopedRedisKeys.outboxProcessed('payment-credited-notify', EVENT), expect.any(Number)]]);
+    expect(calls.set.map((c) => c[0])).toEqual(
+      ['live', 'inbox', 'bot'].map((channel) => UnscopedRedisKeys.outboxProcessed(`payment-credited-notify:${channel}`, EVENT)),
+    );
     expect(calls.published).toEqual([
       {
         channel: `user:${USER}`,
         payload: { type: 'billing.payment.confirmed', paymentId: PAYMENT, amountCredited: '19.80' },
       },
     ]);
-    expect(calls.fetched).toEqual([
-      {
+    expect(calls.fetched).toEqual(
+      ['inbox', 'bot'].map((channel) => ({
         url: 'http://auth:3000/api/internal/notify/user',
         headers: expect.objectContaining({ [RequestHeaders.serviceToken]: 'svc', [IdentityHeaders.tenantId]: TENANT }),
-        body: { userId: USER, template: 'paymentCredited', params: { amount: '19.80', reference: '900900900' } },
-      },
-    ]);
+        body: { userId: USER, channel, template: 'paymentCredited', params: { amount: '19.80', reference: '900900900' } },
+      })),
+    );
     expect(calls.del).toEqual([]);
   });
 
@@ -126,8 +128,8 @@ describe('PaymentConfirmedConsumer.handle', () => {
 
     await consumer.handle(event({ confirmationSource: 'webhook_auto', channel: 'bot' }));
 
-    expect(calls.set).toHaveLength(1);
-    expect(calls.fetched).toHaveLength(1);
+    expect(calls.set).toHaveLength(3);
+    expect(calls.fetched).toHaveLength(2);
   });
 
   it('tells nobody again about an in-chat payment the bot already answered in the chat (F-104-m)', async () => {
@@ -144,7 +146,9 @@ describe('PaymentConfirmedConsumer.handle', () => {
 
     await expect(consumer.handle(event())).rejects.toThrow(/502/);
 
-    expect(calls.del).toEqual([UnscopedRedisKeys.outboxProcessed('payment-credited-notify', EVENT)]);
+    expect(calls.del).toEqual(
+      ['inbox', 'bot'].map((channel) => UnscopedRedisKeys.outboxProcessed(`payment-credited-notify:${channel}`, EVENT)),
+    );
   });
 
   it('refuses a payload without its tenant or user, rather than guessing whose it is', async () => {
