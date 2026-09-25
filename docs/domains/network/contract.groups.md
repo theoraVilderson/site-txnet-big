@@ -101,11 +101,11 @@ rows are written through `ConfigActionsService.provisionForGroup`
 Refusals are `GROUP_FULFILMENT_REJECTIONS`: `grant_not_found`,
 `grant_not_fulfillable`, `no_panel_group`, `strategy_not_built`.
 
-**Not reachable end to end yet:** `network-service` does not yet run the
-convergence pass: its Postgres state is built (F-027-bo,
-`contract.provisioning.md` "Staging"), but the collection loop that calls it is
-not started in `cmd`, so no config reaches `complete` and no Grant activates on
-a live stack until F-027-bt wires it.
+**End to end:** `network-service` runs the convergence pass in each collected
+panel's turn (F-027-bt, `contract.collection.md` "Running it"), so a placed
+config reaches `complete` on the pass after it is written. The turn converges
+only after its usage publish succeeds, so a stack with nothing bound to
+`network.usage.delta` activates no Grant.
 
 ## Draining — `GroupDrainService` (billing-service, F-027-bm)
 

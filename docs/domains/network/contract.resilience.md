@@ -40,8 +40,8 @@ call is ADR-0078.
 
 A failure is logged and never fatal: exiting non-zero over it would give the
 orchestrator a container to restart in a loop. `cmd/server` holds the exit
-**order** today; the extender is nil there until the panel source and the
-Postgres-backed `Reserves` land, the staging `collect.Loop` is in.
+**order** today; the extender is nil there until a Postgres-backed `Reserves` lands;
+the loop itself runs on `network.*` (F-027-bt).
 
 ## The mark, and who reads it
 

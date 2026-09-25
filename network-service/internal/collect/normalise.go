@@ -162,7 +162,11 @@ type Result struct {
 // Advance is one cursor's new value. Session holds the per-session high-water
 // under session semantics, and is nil otherwise.
 type Advance struct {
-	PanelID   string
+	PanelID string
+	// ConfigID is the config that owns the client. It is where a durable
+	// cursor lives (`config_counter_state.configId`), because the client id
+	// is the panel's and a re-key moves it (F-027-bt).
+	ConfigID  string
 	RemoteID  string
 	SessionID string
 	Counter   Counter
@@ -460,7 +464,7 @@ func (n Normaliser) quarantine(res *Result, configID, remoteID string, up, down 
 func (n Normaliser) advance(res *Result, remoteID, sessionID string, cur Counter, mark *SessionMark) {
 	cur.Semantics = n.Panel.CounterSemantics
 	res.Advances = append(res.Advances, Advance{
-		PanelID: n.Panel.ID, RemoteID: remoteID, SessionID: sessionID,
+		PanelID: n.Panel.ID, ConfigID: n.Panel.Configs[remoteID].ConfigID, RemoteID: remoteID, SessionID: sessionID,
 		Counter: cur, Session: mark,
 	})
 }

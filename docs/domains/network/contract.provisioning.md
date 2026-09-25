@@ -124,6 +124,6 @@ lifetime figure. **An outcome is recorded only over the desired state it was
 judged against** — `uuid`, `desiredEnabled`, `desiredRemote` in the update's
 `where` — so an action landing mid-pass leaves no row to update, and a
 `complete` nobody checked is never written (group fulfilment activates on it).
-The pass is not running yet: the collection loop that calls it is started in
-`cmd` by F-027-bt. Every row has a `claimTag` (NOT NULL, F-027-aa), and it goes
+The pass runs in each collected panel's turn, started in `cmd` with the loop
+(`contract.collection.md` "Running it", F-027-bt). Every row has a `claimTag` (NOT NULL, F-027-aa), and it goes
 out with every create and update.

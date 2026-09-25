@@ -141,4 +141,4 @@ implementation, every `use` audited where the others are.
    API — Hiddify and Marzneshin, today. One that is not an absolute url is `unopenable`.
    Pull only: CHECK `panel_client_base_url_is_pull_only`.
 5. The Opener paces nothing: a connection test is one call. Pacing a
-   collected panel by its `maxRequestsPerMinute` is the panel source's.
+   collected panel by its `maxRequestsPerMinute` is `collect.PostgresSource`'s.

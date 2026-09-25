@@ -51,14 +51,45 @@ quarantine every byte on that panel in silence.
 Every byte read is billed, quarantined or written down as `unattributed`
 (invariant 18), and **the cursor moves only after the publish succeeds** — a
 failed pass re-reads rather than loses, and the repeat is what
-`usage_delta_seen` absorbs (F-027-n). A durable `Cursors` is still to come;
-until then the loop runs against `MemoryCursors`.
+`usage_delta_seen` absorbs (F-027-n). The cursors are durable (see "Running
+it", below).
 
 **A population going backward together is not a set of resets.** Before the
 publish, `collect.Containment` counts this pass's cumulative resets; past 20%
 and five, every post-reset delta is quarantined as `panel_drift_event`, a
 halting event is raised, and the panel is not read until it is acknowledged
 (F-027-ab, [contract.drift.md](contract.drift.md) "The panel-wide event").
+
+
+## Running it — `cmd/server` (F-027-bt)
+
+`cmd` starts `collect.Loop` beside the registrar, with every seam on
+`network.*` (`internal/collect/postgres.go`); the memory ones stay as what the
+loop is proved against.
+
+1. **`PostgresSource` offers accepted pull panels only**, and never a session
+   one — those are push, and the RADIUS receiver is their collector. Each is
+   opened through `opener.Opener`, the driver it was accepted through, paced to
+   its own `maxRequestsPerMinute`, and **kept**: an open is an audited vault
+   read, so a driver is rebuilt only when its row changes or after 15 minutes
+   (`DefaultReopenAfter`). A panel that will not open is logged and left out,
+   so it is never stamped and ages into the watchdog's alert.
+2. **`PostgresCursors` is `config_counter_state`, keyed by config.** The map
+   the normaliser reads is rebuilt from the join each pass, so a client the
+   convergence pass re-keyed keeps its cursor. `Apply` writes the whole pass in
+   one upsert and then the map, under the lock the reload holds across its
+   query, so a reload can never overwrite a newer cursor with an older one.
+   An advance with a session mark, or no config, fails the apply, which means
+   a republish, never a dropped mark.
+3. **Progress, rates, drift events, panel state** are one statement each.
+   `lastSuccessfulCollectionAt` never moves backward.
+4. **The convergence pass runs in the turn, after the cursors move**
+   (`converge.Converger` over `PostgresDesired` / `PostgresAllocations`). A turn
+   that fails its publish converges nothing: no queue bound for
+   `network.usage.delta` means no provisioning either.
+
+Each pass logs one line, plus one per panel that did not complete, with its
+`Op`.
 
 ## Where a pass goes (F-027-m)
 

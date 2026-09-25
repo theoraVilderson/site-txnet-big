@@ -137,9 +137,8 @@ func Judge(was Record, err error, at time.Time) Verdict {
 	return verdict
 }
 
-// Writer persists a verdict. Nil on the Tracker keeps the state in memory
-// only, which is the staging `collect.MemoryCursors` is in until the panel
-// source lands.
+// Writer persists a verdict — `PostgresWriter` in a running process. Nil on
+// the Tracker keeps the state in memory only, which is what every test wants.
 type Writer interface {
 	SetState(ctx context.Context, panelID string, rec Record) error
 }
@@ -183,6 +182,30 @@ func (t *Tracker) Ask(panelID string, at time.Time) bool {
 		return true
 	}
 	return !at.Before(row.notBefore)
+}
+
+// Restore seeds a panel's state from its row, for a panel this process has
+// not observed yet. A ban written before a restart is still a ban after it:
+// the cool-off runs from the row's `blockedSince`, not from the moment the
+// process came back, because a collector that asks a banned panel on every
+// deploy is the retry that makes the ban permanent (F-027-bt).
+//
+// What this process observed itself always outranks the row, so a restore
+// after the first turn changes nothing.
+func (t *Tracker) Restore(panelID string, rec Record) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if _, known := t.byPanel[panelID]; known {
+		return
+	}
+	if t.byPanel == nil {
+		t.byPanel = map[string]entry{}
+	}
+	next := entry{Record: rec}
+	if rec.State == ThrottledOrBlocked && !rec.BlockedSince.IsZero() {
+		next.notBefore = rec.BlockedSince.Add(t.cooloff())
+	}
+	t.byPanel[panelID] = next
 }
 
 // State is what the tracker currently believes about a panel.

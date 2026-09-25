@@ -17,10 +17,13 @@ import (
 	"os/signal"
 	"syscall"
 
+	"network-service/internal/collect"
 	"network-service/internal/config"
+	"network-service/internal/converge"
 	"network-service/internal/db"
 	"network-service/internal/httpapi"
 	"network-service/internal/opener"
+	"network-service/internal/panelstate"
 	"network-service/internal/publish"
 	"network-service/internal/radius"
 	"network-service/internal/register"
@@ -81,16 +84,9 @@ func main() {
 			log.Error("broker close failed", "error", err)
 		}
 	}()
-	// `publish.Publisher{Transport: broker}` is the collection loop's sink.
-	// The loop is not started here yet: it needs its panels read off
-	// `network.panel` and its cursors in Postgres, and each is a row of its
-	// own. What this gate buys today is that the exchange and the credentials
-	// are wrong at boot, in the log, rather than at 03:00 in a pass.
-
 	// Registration (ADR-0080): pending panels are tested on the registrar's
-	// own tick and their verdict written back. It is the first loop this
-	// process runs, because it needs nothing the collection loop still lacks
-	// — a panel row, and a login read through tenant-service (F-027-ax).
+	// own tick and their verdict written back, beside the collection loop
+	// below, which reads only the panels it accepted (F-027-ax).
 	runCtx, stopLoops := context.WithCancel(ctx)
 	defer stopLoops()
 	vault := opener.Vault{BaseURL: cfg.TenantAPIBaseURL, ServiceToken: cfg.ServiceAuthToken}
@@ -100,6 +96,35 @@ func main() {
 		Log:    log,
 	}
 	go func() { _ = registrar.Run(runCtx) }()
+
+	// The collection loop (F-027-bt), with the convergence pass inside it:
+	// every accepted pull panel once a minute, one bulk read each, published
+	// before its cursors move (invariant 18), then converged over one read of
+	// its clients (`contract.budget.md`). Convergence rides the same turn
+	// because the reset it has to act on is the one this pass just detected
+	// (ADR-0072). Its drivers are opened through the same Opener the
+	// registrar tested them with, so a panel is read by the driver it was
+	// accepted through.
+	cursors := &collect.PostgresCursors{DB: pool}
+	health := &panelstate.Tracker{Writer: panelstate.PostgresWriter{DB: pool}, Log: log}
+	collector := &collect.Loop{
+		Source: &collect.PostgresSource{
+			DB: pool, Opener: opener.Opener{Logins: vault}, Cursors: cursors, States: health, Log: log,
+		},
+		Sink:    publish.Publisher{Transport: broker},
+		Cursors: cursors,
+		Ceilings: &converge.Converger{
+			Provisioning: &converge.Provisioning{Desired: converge.PostgresDesired{DB: pool}, Log: log},
+			Ceilings:     &converge.Ceilings{Allocations: converge.PostgresAllocations{DB: pool}, Counters: cursors, Log: log},
+			Log:          log,
+		},
+		Health:      health,
+		Rates:       collect.PostgresRates{DB: pool},
+		Progress:    collect.PostgresProgress{DB: pool},
+		Containment: &collect.Containment{Events: collect.PostgresDriftEvents{DB: pool}},
+		Log:         log,
+	}
+	go func() { _ = collector.Run(runCtx) }()
 
 	// The RADIUS accounting receiver (F-027-af): the push half of
 	// collection, and the one surface here reachable from outside. The
@@ -172,8 +197,8 @@ func main() {
 	}
 }
 
-// ceilingExtender is nil until the panel source and the Postgres-backed
-// `shutdown.Reserves` land — the same staging `collect.Loop` is in above.
+// ceilingExtender is nil until a Postgres-backed `shutdown.Reserves` lands;
+// the collection loop above is already running on `network.*`.
 // What the wiring buys today is the exit *order*, decided once and in one
 // place, rather than at the moment a stalled deploy makes it urgent.
 var ceilingExtender *shutdown.Extender

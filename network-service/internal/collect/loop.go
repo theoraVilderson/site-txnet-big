@@ -160,8 +160,12 @@ func (l *Loop) Run(ctx context.Context) error {
 	ticker := time.NewTicker(l.interval())
 	defer ticker.Stop()
 	for {
-		if _, err := l.Pass(ctx); err != nil && ctx.Err() == nil {
+		report, err := l.Pass(ctx)
+		switch {
+		case err != nil && ctx.Err() == nil:
 			l.log().Error("collection pass failed", "error", err)
+		case err == nil:
+			l.logReport(report)
 		}
 		select {
 		case <-ctx.Done():
@@ -348,6 +352,18 @@ func (l *Loop) stamp(ctx context.Context, marks []PanelProgress) {
 	if err := l.Progress.Collected(ctx, marks); err != nil {
 		l.log().Error("collection progress write failed", "panels", len(marks), "error", err)
 	}
+}
+
+// logReport is the pass's one line, and one line per panel that did not
+// complete. A failed turn is otherwise visible only as a clock ageing towards
+// the watchdog's alert, which says *that* a panel is not read and never why.
+func (l *Loop) logReport(r PassReport) {
+	for _, f := range r.Failed {
+		l.log().Warn("panel not collected", "panel", f.PanelID, "op", f.Op, "error", f.Err)
+	}
+	l.log().Info("collection pass",
+		"panels", r.Panels, "collected", r.Collected, "failed", len(r.Failed), "unreviewed", r.Unreviewed,
+		"deltas", r.Deltas, "quarantines", r.Quarantines, "unattributed", r.Unattributed)
 }
 
 func (l *Loop) interval() time.Duration {

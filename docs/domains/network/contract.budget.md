@@ -85,6 +85,10 @@ arithmetic rather than by decision.
   budget — and a pass a minute would otherwise be an alert a minute. Where that
   alert is delivered, and to the tenant or the platform (invariant 9), is the
   notification domain's.
+- **A ban survives a restart.** The source restores each panel's stored state
+  into the tracker before the first pass (`Tracker.Restore`, F-027-bt), and the
+  cool-off runs from `blockedSince`, not from boot: a collector that asks a
+  banned panel on every deploy is the retry that makes the ban permanent.
 - **A ban the database did not take is not held.** The write happens first, and
   a failed write leaves the tracker where it was, because a ban only this
   process knows about is invisible to everything else.
