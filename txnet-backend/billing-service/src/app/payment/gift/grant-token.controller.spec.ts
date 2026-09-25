@@ -1,5 +1,5 @@
 /**
- * Reissuing a lost subscription key (F-502-p): `POST
+ * Resetting a Grant's subscription link (F-502-p, F-114-e-b): `POST
  * /api/billing/gift/grants/:id/rotate-token`.
  *
  * Three things are the whole route, and all three are silent when wrong:
@@ -17,48 +17,28 @@ import { NotFoundException } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { BackendI18nKeys, RATE_LIMIT_KEY, RateLimitBucket, type RateLimitOptions } from '@txnet-backend/shared-core';
 
-import { EntitlementRefused } from '../../entitlement/grant';
 import { GrantTokenController } from './grant-token.controller';
 
 const GRANT = '11111111-1111-4111-8111-111111111111';
 const req = (userId: string) => ({ identity: { userId, tenantId: 't-1', roleId: 'r', sessionId: 's', permissions: [] } });
 
 describe('GrantTokenController', () => {
-  it('answers the new key once, for the id in the path and the user from the gate', async () => {
-    const grants = { rotateTokenForUser: vi.fn(async () => 'sub-key-0001') };
-    const controller = new GrantTokenController(grants as never);
+  it('answers the new link — and, until F-114-e-c, its key — for the id in the path and the user from the gate', async () => {
+    const links = { reset: vi.fn(async () => 'https://sub.example.com/sub/sub-key-0001') };
+    const controller = new GrantTokenController(links as never);
 
     const answer = await controller.rotate(GRANT, req('u-1') as never);
 
-    expect(grants.rotateTokenForUser).toHaveBeenCalledWith(GRANT, 'u-1');
-    expect(answer).toEqual({ grantId: GRANT, subscriptionKey: 'sub-key-0001' });
+    expect(links.reset).toHaveBeenCalledWith(GRANT, 'u-1');
+    expect(answer).toEqual({ grantId: GRANT, subscriptionUrl: 'https://sub.example.com/sub/sub-key-0001', subscriptionKey: 'sub-key-0001' });
   });
 
-  it('answers another user’s Grant as a missing one: 404, its i18nKey, and no key', async () => {
-    const grants = {
-      rotateTokenForUser: vi.fn(async () => {
-        throw new EntitlementRefused('grant_not_found', GRANT);
-      }),
-    };
-    const controller = new GrantTokenController(grants as never);
+  it('lets a refusal through as the service raised it: another user’s Grant stays the 404', async () => {
+    const notFound = new NotFoundException({ i18nKey: BackendI18nKeys.errors.billing.grant.notFound, reason: 'grant_not_found' });
+    const links = { reset: vi.fn(async () => Promise.reject(notFound)) };
+    const controller = new GrantTokenController(links as never);
 
-    const err = await controller.rotate(GRANT, req('u-2') as never).catch((e: unknown) => e);
-
-    expect(err).toBeInstanceOf(NotFoundException);
-    const body = (err as NotFoundException).getResponse() as Record<string, unknown>;
-    expect(body).toMatchObject({ i18nKey: BackendI18nKeys.errors.billing.grant.notFound, reason: 'grant_not_found' });
-    expect(JSON.stringify(body)).not.toContain('sub-key');
-  });
-
-  it('lets anything that is not a refusal through, rather than turning a bug into a 404', async () => {
-    const grants = {
-      rotateTokenForUser: vi.fn(async () => {
-        throw new Error('the database is down');
-      }),
-    };
-    const controller = new GrantTokenController(grants as never);
-
-    await expect(controller.rotate(GRANT, req('u-1') as never)).rejects.toThrow('the database is down');
+    await expect(controller.rotate(GRANT, req('u-2') as never)).rejects.toBe(notFound);
   });
 
   it('is a POST on its own bucket, not the gift box’s', () => {

@@ -127,10 +127,11 @@ so a repeat is `skipped` and the minute sweep stays the backstop.
 | The coupon uses stay used | the refund is `total`, what the user paid |
 
 In-process calls from `billing-service` modules (ADR-0049); HTTP routes are
-added only when a row needs them. Two do: `rotateTokenForUser` over `POST
-/api/billing/gift/grants/:id/rotate-token` (F-502-p) and `listForUser` over
-`GET /api/billing/gift/grants` (F-502-r). Both belong to `billing` and are
-written down in its `contract.gift.md`.
+added only when a row needs them. Three do: `subscriptionTokenFor` over `GET
+/api/billing/gift/grants/:id/subscription-link` and `rotateToken` over `POST
+.../rotate-token` (F-114-e-b, each in the transaction that reads the tenant's
+subscription domain), and `listForUser` over `GET /api/billing/gift/grants`
+(F-502-r). All belong to `billing` and are written down in its `contract.gift.md`.
 
 ## Emits (events)
 

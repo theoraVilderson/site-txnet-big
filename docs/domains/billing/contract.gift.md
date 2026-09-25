@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 7
-updated: 2026-09-23
+updated: 2026-09-25
 ---
 
 # Contract — billing / gift code
@@ -51,25 +51,31 @@ Migration `20260915000200_gift_redeems_free_grant`; `GiftRedemptionService` with
 | The answer is `{kind: "free_grant", code, grant: {id, variantId, startsAt, endsAt, featureKeys}, subscriptionKey}`; the key is shown this once and only its hash is stored. A credit answers `{kind: "wallet_credit", code, credited, balance}` | the user's call, 2026-09-14 |
 | A variant switched off after the coupon was made refuses the issue and rolls the use back (500) | an admin's broken coupon, never a user's mistake |
 
-## Reissuing a lost key (built — F-502-p)
+## A Grant's subscription link, and resetting it (built — F-502-p, F-114-e-b)
 
-`GrantTokenController` beside the box, over `GrantService.rotateTokenForUser`
-(`entitlement/contract.md`). It was built while a key was shown once and only
-hashed. Since ADR-0085 the token is also kept sealed, and F-114-e-b turns this
-route into "reset link", for a link that leaked.
+`GrantTokenController` beside the box, over `SubscriptionLinkService`
+(`subscription-link.service.ts`), which calls `GrantService.subscriptionTokenFor`
+and `rotateToken` (`entitlement/contract.md`). Since ADR-0085 (D-43) the token is
+kept sealed, so the link is answered as often as asked; "reset link" is for a
+link that leaked, no longer how a lost key comes back.
 
 | Route | Body | Answers `data` |
 |---|---|---|
-| `POST /api/billing/gift/grants/:id/rotate-token` | none — the id is the path, the user is the gate's | `{grantId, subscriptionKey}` — the new key, shown this once |
+| `GET /api/billing/gift/grants/:id/subscription-link` | none | `{grantId, subscriptionUrl}` — `https://<subscription host>/sub/<token>` |
+| `POST /api/billing/gift/grants/:id/rotate-token` ("reset link") | none | `{grantId, subscriptionUrl, subscriptionKey}` — the new link; `subscriptionKey` is its last segment, kept only until the panel stops showing a key (F-114-e-c) |
 
 | Rule | Why |
 |---|---|
-| The owner is the gate's user. There is no body, so there is no field that could name another one | the only thing this route protects |
-| Another user's Grant, and one that does not exist, are one answer: **404**, `i18nKey` `errors.billing.grant.notFound`, `reason: grant_not_found` | told apart, the route answers whether a Grant id exists |
-| Its own bucket, `GRANT_ROTATE_TOKEN`, default **5** per 900s; **429** past it | sharing `GIFT_REDEEM`'s would spend the box's tiny budget recovering the key the box just gave out. Owner-only, so it is no oracle — but each call destroys a working key, so it is still a security limit |
-| Capability `subscriptionLink`, not `endUserDeposit` | it moves no money and what it mints is the `/sub` credential, so it is open exactly when `/sub` is: a suspended tenant's user recovers a key until the grace ends, a terminated tenant's does not mint one for a link that answers nothing |
-| The rotation is one transaction of its own and the old key stops working in it | there is no window in which both keys open the link, and none in which neither does |
-| The Grant's **status is not a gate** | the row's scope (2026-09-20): a token grants nothing on its own — `/sub` reads the Grant — so rotating a dead one mints a key that opens nothing rather than something it should not |
+| The owner is the gate's user. There is no body, so there is no field that could name another one | the only thing these routes protect |
+| Another user's Grant, and one that does not exist, are one answer: **404**, `errors.billing.grant.notFound`, `reason: grant_not_found` — decided before any domain is read | told apart, or answered with a domain refusal, the route says whether a Grant id exists |
+| The host is one of the tenant's `purpose = subscription` domains that `/sub` routes (a `subdomain`, or a `verified` custom domain — `sub-api/contract.md` "Who is answered"): a custom domain first, then a subdomain, each alphabetically, never a CNAME target (`subscriptionHostOf`). A reseller's platform subdomain **is** an answer | a link on any other host is a 404 to the user's app, which may drop it; one host, so two answers never name two links. ADR-0063's closed door is the panel's, not `/sub`'s |
+| No such domain: **409**, `errors.billing.grant.noSubscriptionDomain`, `reason: no_subscription_domain` | the tenant's setup, not the user's mistake — the panel says to contact support |
+| No sealed token (a Grant from before F-114-e-a, or issued with no KEK): **409**, `errors.billing.grant.linkNotKept`, `reason: link_not_kept`. When both apply, the domain is named | the panel offers "reset link", which keeps one from then on (ADR-0085 point 4) |
+| A reset finds the host **before** it rotates, in the rotation's transaction; with none it refuses and the old link keeps working | rotating first would destroy a working link and answer nothing |
+| The rotation is one transaction and the old token stops working in it | there is no window in which both links open, and none in which neither does |
+| Buckets: `SUBSCRIPTION_LINK`, default **60** per 900s, for reading; `GRANT_ROTATE_TOKEN`, default **5**, for a reset; **429** past either | each reset destroys a working link, so it stays a security limit; copying the link must never spend the budget for revoking a leaked one |
+| Capability `subscriptionLink`, not `endUserDeposit` | neither moves money and both answer the `/sub` credential, so they are open exactly when `/sub` is: a suspended tenant's user until the grace ends, a terminated tenant's never |
+| The Grant's **status is not a gate** | a link grants nothing on its own — `/sub` reads the Grant — so a dead Grant's link opens nothing rather than something it should not |
 
 ## A user's own Grants, listed (built — F-502-r)
 
@@ -93,8 +99,8 @@ closed had no way back.
 | Its own bucket, `GRANT_LIST`, default **120** per 900s; the `subscriptionLink` capability, as above | it reads no secret and destroys nothing, so it is no security control — but sharing `GRANT_ROTATE_TOKEN`'s five calls would spend a user's recovery budget on looking at the list that offers the recovery |
 | Bytes are decimal strings. `purgeAt` is `suspendedAt` + `coalesce(grant.purgeAfterDays, tenant.purgeAfterDays)` days, and `null` when the Grant is not suspended or the window is `0` (F-027-ac) | a Grant's bytes pass 2^53; and it is the SQL `entitlement/purge.ts` runs, so the panel's countdown is the instant the hourly job acts after. The tenant is read only when a suspended row has no window of its own |
 
-**Not covered:** a `/sub` link for the key (F-113, F-027); the panel showing it
-(F-502-l-c) and its reissue button (F-502-q, built). Its consumer since
+**Not covered:** the panel's copy-link, QR and reset button (F-114-e-c); the
+reissue button of F-502-q is what F-114-e-c replaces. Its consumer since
 2026-09-20 is the panel's "my services" page (F-502-s,
 `panel-web/contract.my-services.md`), which lists every status this answers and
 puts the reissue button on each row. Filtering or searching the list is nobody's

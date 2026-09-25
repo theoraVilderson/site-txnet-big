@@ -203,7 +203,9 @@
       "capacityReached": "This gift code has been used up."
     },
     "grant": {
-      "notFound": "No such subscription in your account."
+      "notFound": "No such subscription in your account.",
+      "noSubscriptionDomain": "This store has no subscription domain set up yet. Please contact support.",
+      "linkNotKept": "This service’s subscription link was not kept. Press “Reset link” once to create a new one."
     },
     "invoice": {
       "variantInvalid": "Choose a product to buy.",

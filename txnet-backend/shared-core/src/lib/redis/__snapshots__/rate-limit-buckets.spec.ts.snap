@@ -52,6 +52,7 @@ exports[`RateLimitBucket > records the whole rate-limited surface in one place 1
   "GIFT_REDEEM = gift:redeem",
   "GRANT_ROTATE_TOKEN = grant:rotate-token",
   "GRANT_LIST = grant:list",
+  "SUBSCRIPTION_LINK = grant:subscription-link",
   "TRAFFIC_COLLECTION_HEALTH = traffic:collection-health",
   "CONFIG_LIST = config:list",
   "CONFIG_ACTION = config:action",

@@ -283,6 +283,14 @@ export const RateLimitBucket = {
   GRANT_LIST: 'grant:list',
 
   /**
+   * A Grant's `/sub` link, read (F-114-e-b), per user. It answers a secret, but
+   * only the owner's own, as often as asked (ADR-0085), so it is no oracle; it is
+   * its own bucket because the reset budget (`GRANT_ROTATE_TOKEN`) is a handful
+   * and copying a link must never spend the way to revoke a leaked one.
+   */
+  SUBSCRIPTION_LINK: 'grant:subscription-link',
+
+  /**
    * Whether the collector is still reading the panels a user's configs sit on
    * (F-027-w), per user. Not a security control: it answers a flag and three
    * numbers about the user's own service. It is its own bucket because the

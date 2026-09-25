@@ -1,37 +1,44 @@
-import { Controller, HttpCode, HttpStatus, NotFoundException, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
-import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, TenantCapability } from '@txnet-backend/shared-core';
+import { Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
+import { RateLimitBucket, rateLimitBucketKey, TenantCapability } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
-import { EntitlementRefused, GrantService } from '../../entitlement/grant';
 import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
-
-const E = BackendI18nKeys.errors.billing;
+import { SubscriptionLinkService } from './subscription-link.service';
 
 /**
- * Reissuing the subscription key of one Grant (F-502-p): `POST
- * /api/billing/gift/grants/:id/rotate-token`.
+ * A Grant's subscription link (F-114-e-b, ADR-0085): `GET
+ * /api/billing/gift/grants/:id/subscription-link` answers it as often as
+ * asked, and `POST .../rotate-token` — "reset link" — replaces it for a link
+ * that leaked and answers the new one.
  *
- * A `free_grant` code shows its key once and stores only a hash (D-35), so a
- * key lost to a mis-click was lost for good — `GrantService.rotateToken` has
- * existed since F-026-e with nothing calling it. This is its caller, and it
- * lives beside the gift box because the box is where the key was first shown
- * and where the panel shows this one (F-502-q).
+ * Reset was built as "reissue key" (F-502-p), when a key was shown once and
+ * only hashed; since the token is kept sealed it is a security action, not
+ * recovery. Until the panel stops showing a key (F-114-e-c) its answer still
+ * carries `subscriptionKey` beside the URL.
  *
- * **Ownership is the gate's user, never a field.** `rotateToken` checks it
- * again inside the transaction and answers another user's Grant exactly as a
- * missing one — the route must not tell them apart either, or it becomes a way
- * to ask whether a Grant id exists.
+ * **Ownership is the gate's user, never a field**, and another user's Grant is
+ * answered exactly as a missing one (`SubscriptionLinkService`).
  *
- * The capability is `subscriptionLink` rather than `endUserDeposit`: this moves
- * no money, and what it mints is the `/sub` credential, so it should be open
- * exactly when `/sub` is. A suspended tenant's user may still recover a key
- * until the grace ends, and a terminated tenant's may not mint one for a link
- * that answers nothing.
+ * The capability is `subscriptionLink` on both: neither moves money, and what
+ * they answer is the `/sub` credential, so they are open exactly when `/sub`
+ * is — a suspended tenant's user until the grace ends, a terminated tenant's
+ * never.
  */
 @Controller('billing/gift/grants')
 export class GrantTokenController {
-  constructor(private readonly grants: GrantService) {}
+  constructor(private readonly links: SubscriptionLinkService) {}
+
+  @TenantCapability('subscriptionLink')
+  @Get(':id/subscription-link')
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.SUBSCRIPTION_LINK, identityOf(req).userId),
+    configKey: 'SUBSCRIPTION_LINK_RATE_LIMIT',
+    windowSec: 900,
+  })
+  async link(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
+    return { grantId: id, subscriptionUrl: await this.links.linkFor(id, identityOf(req).userId) };
+  }
 
   @TenantCapability('subscriptionLink')
   @Post(':id/rotate-token')
@@ -42,15 +49,8 @@ export class GrantTokenController {
     windowSec: 900,
   })
   async rotate(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
-    const { userId } = identityOf(req);
-    try {
-      // Shown this once, like the key a redemption answers: only its hash is kept.
-      return { grantId: id, subscriptionKey: await this.grants.rotateTokenForUser(id, userId) };
-    } catch (e) {
-      if (e instanceof EntitlementRefused && e.reason === 'grant_not_found') {
-        throw new NotFoundException({ i18nKey: E.grant.notFound, reason: e.reason, message: `${e.name}: ${e.message}` });
-      }
-      throw e;
-    }
+    const subscriptionUrl = await this.links.reset(id, identityOf(req).userId);
+    // `subscriptionKey` is the last path segment, for the panel that still shows it (F-114-e-c drops it).
+    return { grantId: id, subscriptionUrl, subscriptionKey: subscriptionUrl.slice(subscriptionUrl.lastIndexOf('/') + 1) };
   }
 }
