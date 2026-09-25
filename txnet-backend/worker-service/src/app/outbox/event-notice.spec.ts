@@ -34,6 +34,7 @@ function build({ failChannel = null as null | 'inbox' | 'bot' } = {}) {
       return true;
     }),
     del: vi.fn(async (key: string) => void strings.delete(key)),
+    present: vi.fn(async (keys: string[]) => keys.map((k) => strings.has(k))),
     evalScript: vi.fn(async (script: string, keys: string[], args: (string | number)[]) => {
       if (script === NOTICE_BURST_ADD) {
         const [burst, scheduled] = keys as [string, string];
@@ -77,7 +78,7 @@ function build({ failChannel = null as null | 'inbox' | 'bot' } = {}) {
     }),
   );
   const sender = new EventNoticeSender(redis as never, realtime as never, config as never, broker as never);
-  return { sender, calls, failing };
+  return { sender, calls, failing, strings };
 }
 
 const event = (n: number) => `99999999-9999-4999-8999-99999999999${n}`;
@@ -197,5 +198,19 @@ describe('EventNoticeSender — a burst is told once', () => {
   it('the markers are per channel and keyed by the flush', () => {
     expect(UnscopedRedisKeys.noticeBurst(TENANT, USER, 'panelAccepted')).toContain(USER);
     expect(UnscopedRedisKeys.noticeBurstBatch('f1')).toContain('f1');
+  });
+
+  // ADR-0084 consequences: a marker rename is accepted once (F-067-o), never again.
+  it('an event already told on one channel before F-067-p is finished on the other alone, never joined', async () => {
+    const { sender, calls, strings } = build();
+    strings.set(UnscopedRedisKeys.outboxProcessed(`panel-tested:inbox`, event(1)), '1');
+    await sender.send(notice(1));
+
+    expect(calls.flushes).toEqual([]);
+    expect(calls.fetched.map((f) => f.body.channel)).toEqual(['bot']);
+    expect(calls.fetched[0]!.body.params).toEqual({ panel: 'edge-1' });
+
+    await sender.send(notice(1));
+    expect(calls.fetched).toHaveLength(1);
   });
 });

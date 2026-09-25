@@ -102,8 +102,27 @@ export class EventNoticeSender {
     const failures: unknown[] = [];
     const { live, person } = notice;
     if (live) await this.once(notice, 'live', () => this.realtime.publish(live.channel, live.body), failures);
-    if (person) await this.once(notice, 'person', () => this.join(notice.eventId, person), failures);
+    if (person) {
+      const owed = await this.owedBeforeBursts(notice);
+      if (owed === null) await this.once(notice, 'person', () => this.join(notice.eventId, person), failures);
+      for (const channel of owed ?? []) await this.once(notice, channel, () => this.tell(channel, person), failures);
+    }
     if (failures.length > 0) throw failures[0];
+  }
+
+  /**
+   * An event F-067-o already told on a channel keeps its F-067-o markers: the
+   * channels it still owes are told on their own, never joined to a burst,
+   * so the F-067-p marker change repeats nothing (ADR-0084 consequences: a
+   * rename is accepted once). `null` is every other event. Dead code once
+   * those markers expire (`RedisTtl.outboxProcessed`, 7 days after deploy).
+   */
+  private async owedBeforeBursts(notice: EventNotice): Promise<(typeof PERSON_CHANNELS)[number][] | null> {
+    const told = await this.redis.present(
+      PERSON_CHANNELS.map((channel) => UnscopedRedisKeys.outboxProcessed(`${notice.consumer}:${channel}`, notice.eventId)),
+    );
+    if (!told.some(Boolean)) return null;
+    return PERSON_CHANNELS.filter((_, i) => !told[i]);
   }
 
   /**

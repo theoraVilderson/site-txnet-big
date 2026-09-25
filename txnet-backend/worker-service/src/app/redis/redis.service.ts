@@ -98,6 +98,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return (await this.client.set(key, '1', 'EX', ttlSec, 'NX')) === 'OK';
   }
 
+  /** Whether each key exists, in order — one round trip (`MGET`). */
+  async present(keys: string[]): Promise<boolean[]> {
+    return (await this.client.mget(...keys)).map((value) => value !== null);
+  }
+
   async del(key: string): Promise<void> {
     await this.client.del(key);
   }

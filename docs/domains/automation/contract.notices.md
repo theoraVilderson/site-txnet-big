@@ -23,7 +23,7 @@ is the same for every consumer: `EventNoticeSender`
 | **Each step has its own marker**, `outboxProcessed('<consumer>:<step>', <event id>)` — `live` and `person` per event, `inbox` and `bot` per flush (consumer `notice-burst`, the flush id) — `SET NX` before it and given back if it throws | a redelivery repeats only the step that failed, never a landed push, bot message or inbox row |
 | A failed step does not stop the others; the sender rethrows after all ran, and the event or the flush dead-letters | one broken seam does not starve the rest |
 | Markers were renamed from `'<consumer>'` to `'<consumer>:<channel>'` at F-067-o | an event in flight at that deploy may be told twice through one channel, once (ADR-0084 consequences) |
-| At F-067-p the per-event `inbox` / `bot` markers became one `person` marker | an event dead-lettered before that deploy with one channel owed is told on both when replayed. See ADR-0084 consequences |
+| At F-067-p the per-event `inbox` / `bot` markers became one `person` marker. An event holding either old marker is **not** joined: the channel it still owes is told alone, under its old marker (`owedBeforeBursts`) | ADR-0084 accepts a rename once, at F-067-o. Dead code once those markers expire, 7 days after deploy |
 
 ## A burst is told once (F-067-p, ADR-0084 decision 3)
 
