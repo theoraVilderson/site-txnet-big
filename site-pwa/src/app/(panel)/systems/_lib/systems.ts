@@ -187,7 +187,13 @@ export type SystemsRefusal =
   | "not_platform_owner"
   | "panel_refused"
   | "panel_not_push"
-  | "credentials_unavailable";
+  | "credentials_unavailable"
+  // Panel groups (F-027-bx -> billing F-027-bw).
+  | "panel_not_found"
+  | "member_not_found"
+  | "already_member"
+  | "already_draining"
+  | "member_has_configs";
 
 export const REFUSAL_KEYS: Record<SystemsRefusal, string> = {
   not_found: K.refusals.not_found,
@@ -197,6 +203,11 @@ export const REFUSAL_KEYS: Record<SystemsRefusal, string> = {
   panel_refused: K.refusals.panel_refused,
   panel_not_push: K.refusals.panel_not_push,
   credentials_unavailable: K.refusals.credentials_unavailable,
+  panel_not_found: K.refusals.panel_not_found,
+  member_not_found: K.refusals.member_not_found,
+  already_member: K.refusals.already_member,
+  already_draining: K.refusals.already_draining,
+  member_has_configs: K.refusals.member_has_configs,
 };
 
 /** The refusal's own sentence key, when billing named one this page knows; else the generic message applies. */

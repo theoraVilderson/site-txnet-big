@@ -3,20 +3,21 @@
 import { useCallback, useEffect, useState } from "react";
 import { Server } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { billingApi, type SystemsPanel } from "@/lib/billing-api";
+import { billingApi, type PanelGroup, type SystemsPanel } from "@/lib/billing-api";
 import { LIVE_REREAD_MS, trailingThrottle } from "@/lib/realtime";
 import { usePanelRealtime } from "../../_context/PanelRealtimeContext";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { SYSTEMS_KEYS as K, isPanelTested, liveChannelOf } from "../_lib/systems";
 import { DriftReport } from "./DriftReport";
 import { HoldsQueue } from "./HoldsQueue";
+import { PanelGroups } from "./PanelGroups";
 import { PanelList } from "./PanelList";
 import { RegisterPanel } from "./RegisterPanel";
 
 /**
  * The systems page (F-027-ad, ADR-0080): register a panel, read what its
- * connection test answered, its health and request budget, the drift report
- * and the holds queue.
+ * connection test answered, its health and request budget, the panel groups
+ * a VPN variant is sold on (F-027-bx), the drift report and the holds queue.
  *
  * **Everything shown is what `network-service` last wrote.** Billing reads
  * columns and never calls the Go service (ADR-0071), so a registered panel
@@ -30,8 +31,11 @@ export function SystemsView() {
   const [panels, setPanels] = useState<SystemsPanel[]>([]);
   const [isLoading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
+  const [groups, setGroups] = useState<PanelGroup[]>([]);
+  const [groupsLoading, setGroupsLoading] = useState(true);
+  const [groupsError, setGroupsError] = useState<unknown>(null);
 
-  const reload = useCallback(async () => {
+  const reloadPanels = useCallback(async () => {
     try {
       setPanels(await billingApi.systemsPanels());
       setError(null);
@@ -42,6 +46,22 @@ export function SystemsView() {
     }
   }, []);
 
+  const reloadGroups = useCallback(async () => {
+    try {
+      setGroups(await billingApi.panelGroups());
+      setGroupsError(null);
+    } catch (e) {
+      setGroupsError(e);
+    } finally {
+      setGroupsLoading(false);
+    }
+  }, []);
+
+  // A member's pills are its panel's health, so whatever re-reads the panels re-reads the groups.
+  const reload = useCallback(async () => {
+    await Promise.all([reloadPanels(), reloadGroups()]);
+  }, [reloadPanels, reloadGroups]);
+
   useEffect(() => {
     // Every setState in reload runs after its first await, as in `useGateways`.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -51,7 +71,7 @@ export function SystemsView() {
   const { me } = usePanelSession();
   const client = usePanelRealtime();
   const channel = liveChannelOf(me);
-  // `reload` is stable (no deps), so this subscribes once per socket and
+  // `reload` is stable (its deps are), so this subscribes once per socket and
   // channel — a channel dropped and re-declared is a window where an event is lost.
   // A burst of tests is one read now and one at the end (F-067-p), not one per event.
   useEffect(() => {
@@ -81,7 +101,8 @@ export function SystemsView() {
       </header>
 
       <RegisterPanel onRegistered={reload} />
-      <PanelList panels={panels} isLoading={isLoading} error={error} onRetry={reload} />
+      <PanelList panels={panels} isLoading={isLoading} error={error} onRetry={reloadPanels} />
+      <PanelGroups groups={groups} panels={panels} isLoading={groupsLoading} error={groupsError} onChanged={reloadGroups} />
       {/* Acknowledging resumes a halted panel: its health line is read again. */}
       <DriftReport onAcknowledged={reload} />
       <HoldsQueue />

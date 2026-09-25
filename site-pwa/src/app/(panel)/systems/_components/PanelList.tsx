@@ -21,19 +21,7 @@ import {
   validateRadiusSecret,
   verdictOf,
 } from "../_lib/systems";
-import { ListState, Section, useSystemsError } from "./parts";
-
-/** Theme tokens only: green for what is well, error tones for what stopped, never gold. */
-const GOOD = "border-primary/20 bg-leaf-bg text-primary";
-const BAD = "border-error-border bg-error-bg text-error";
-const QUIET = "border-card-border bg-bg-inner text-text-secondary";
-
-const REVIEW_TONE = { pending: QUIET, accepted: GOOD, accepted_low_trust: QUIET, refused: BAD } as const;
-const STATE_TONE = { healthy: GOOD, degraded: QUIET, maintenance: QUIET, down: BAD, throttled_or_blocked: BAD } as const;
-
-function Pill({ tone, children }: { tone: string; children: React.ReactNode }) {
-  return <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${tone}`}>{children}</span>;
-}
+import { BAD, ListState, Pill, REVIEW_TONE, STATE_TONE, Section, useSystemsError } from "./parts";
 
 export function PanelList({
   panels,

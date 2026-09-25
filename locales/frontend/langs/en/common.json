@@ -2344,7 +2344,12 @@
       "not_platform_owner": "Only the platform owner manages the platform's panels.",
       "credentials_unavailable": "The vault could not be reached, so the panel was not registered. Try again.",
       "panel_refused": "A refused panel keeps its refusal: it was refused on its answers, and a new login does not change them. Register it again instead.",
-      "panel_not_push": "Only a push panel has a RADIUS secret."
+      "panel_not_push": "Only a push panel has a RADIUS secret.",
+      "panel_not_found": "That panel is not one of the platform's panels, or no longer exists.",
+      "member_not_found": "That panel is no longer in this group.",
+      "already_member": "That panel is already in this group.",
+      "already_draining": "It is already draining; its wait was not restarted.",
+      "member_has_configs": "Users still have configs on this panel through this group. Drain it instead — it leaves the group on its own once they have moved."
     },
     "resubmit": {
       "open": "New login",
@@ -2365,6 +2370,69 @@
       "submit": "Save the new secret",
       "saved": "Saved. Accounting from this NAS is checked against the new secret within a minute.",
       "missing": "No RADIUS secret"
+    },
+    "groups": {
+      "title": "Panel groups",
+      "hint": "Where a VPN product's users get their configs. A variant names a group, and each Grant sold on it gets a config on every member that is accepted and healthy. Changes reach what is placed next, within a minute.",
+      "empty": "No groups yet. A VPN variant cannot be sold until it names one.",
+      "create": "New group",
+      "createSubmit": "Create group",
+      "edit": "Edit",
+      "editHint": "A new protocol is used for configs placed from now on; configs already placed keep theirs.",
+      "editSubmit": "Save",
+      "cancel": "Cancel",
+      "field": {
+        "name": "Name",
+        "minHealthyPanels": "Panels needed to deliver",
+        "minHealthyPanelsHint": "A Grant turns active once this many of its configs are live.",
+        "ttlMinutes": "Subscription refresh (minutes)",
+        "ttlHint": "How often users' apps re-read their subscription. Draining a member waits twice this, so every app has moved first.",
+        "protocol": "Protocol"
+      },
+      "invalid": {
+        "name": "A name of 1 to 100 characters.",
+        "minHealthyPanels": "A whole number from 1 to 100.",
+        "ttlMinutes": "A whole number of minutes, from 1 to 10080 (a week).",
+        "unchanged": "Nothing was changed."
+      },
+      "variants": "Sold by {{n}} variant(s)",
+      "ttl": "Refresh every {{wait}}",
+      "health": {
+        "ok": "{{placeable}} member(s) take new configs; {{min}} needed.",
+        "short": "Only {{placeable}} member(s) take new configs, and {{min}} are needed: a Grant sold now waits until more are accepted and healthy."
+      },
+      "members": {
+        "title": "Members",
+        "empty": "No panels yet. Nothing sold on this group can be delivered until it has one.",
+        "placed": "Takes new configs",
+        "waiting": "Takes nothing new until its panel is accepted and healthy"
+      },
+      "add": {
+        "label": "Add a registered panel",
+        "pick": "Choose a panel",
+        "submit": "Add",
+        "none": "Every registered panel that is not refused is already in this group.",
+        "hint": "It takes new configs once its panel is accepted and healthy; Grants already sold on this group are placed on it within a minute."
+      },
+      "remove": "Remove",
+      "drain": {
+        "action": "Drain",
+        "confirmTitle": "Drain {{panel}}?",
+        "confirmHint": "It takes no new configs. Each user is given another member's line first; this panel's configs go no sooner than {{wait}} after that, and the member leaves the group on its own. No user is cut off.",
+        "submit": "Drain",
+        "started": "Draining. Its configs go no sooner than {{wait}} from now — later for a Grant whose replacement is not served yet.",
+        "since": "Draining since {{since}} · configs go no sooner than {{at}}"
+      },
+      "role": {
+        "primary": "Primary",
+        "replica": "Replica",
+        "drain": "Draining"
+      },
+      "wait": {
+        "minutes": "{{n}} min",
+        "hours": "{{n}} h",
+        "days": "{{n}} days"
+      }
     }
   },
   "shop": {

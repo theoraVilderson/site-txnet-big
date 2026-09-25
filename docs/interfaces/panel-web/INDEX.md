@@ -39,7 +39,7 @@ updated: 2026-09-25
 | [contract.reseller-bot.md](contract.reseller-bot.md) | a reseller's own Telegram or Bale bot at `/my-resellers/:id/bot` — the connect form, a token the messenger refused, or a retire that reads wrong (F-066-w6) |
 | [contract.payment-result.md](contract.payment-result.md) | a bank returns a payer to `/payment/success` or `/payment/failed` — a reference, an "already paid", or an error code that reads wrong (F-093-f) |
 | [contract.financial.md](contract.financial.md) | the financial page's two lists, its filters, or a date range that returns the wrong day (F-093-d) |
-| [contract.systems.md](contract.systems.md) | the platform owner's systems page at `/systems` — registering a panel, a verdict or capability that reads wrong, the request budget, drift acknowledge, or a hold released / written off (F-027-ad) |
+| [contract.systems.md](contract.systems.md) | the platform owner's systems page at `/systems` — registering a panel, a verdict or capability that reads wrong, the request budget, drift acknowledge, a hold released / written off (F-027-ad), or a panel group — create, edit, add a panel, drain one (F-027-bx) |
 | [contract.session-guard.md](contract.session-guard.md) | a signed-in visitor is not redirected off an auth screen (F-0101) |
 | [open-questions.md](open-questions.md) | something is undecided |
 

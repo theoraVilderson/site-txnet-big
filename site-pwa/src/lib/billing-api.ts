@@ -917,6 +917,41 @@ export const billingApi = {
     });
   },
 
+  // Panel groups (F-027-bx -> billing F-027-bw): the platform's, always `mirror`.
+
+  async panelGroups(): Promise<PanelGroup[]> {
+    return call<PanelGroup[]>("/systems/panel-groups", { method: "GET" });
+  },
+
+  async createPanelGroup(body: PanelGroupBody & { name: string }): Promise<PanelGroup> {
+    return call<PanelGroup>("/systems/panel-groups", { method: "POST", body: JSON.stringify(body) });
+  },
+
+  /** At least one field; configs already placed keep their protocol (billing rule 22). */
+  async updatePanelGroup(id: string, body: PanelGroupBody): Promise<PanelGroup> {
+    return call<PanelGroup>(`/systems/panel-groups/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+
+  /** Enters as `primary`; fulfilment places on it once its panel is accepted and healthy. */
+  async addPanelGroupMember(groupId: string, panelId: string): Promise<PanelGroupMember> {
+    return call<PanelGroupMember>(`/systems/panel-groups/${encodeURIComponent(groupId)}/members`, {
+      method: "POST",
+      body: JSON.stringify({ panelId }),
+    });
+  },
+
+  /** 409 `member_has_configs` while a live config of the group's Grants is on it: drain it instead (rule 23). */
+  async removePanelGroupMember(groupId: string, panelId: string): Promise<RemovedMember> {
+    return call<RemovedMember>(`/systems/panel-groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(panelId)}`, { method: "DELETE" });
+  },
+
+  /** Once: a second is 409 `already_draining`. `waitSeconds` is the least the sweep waits from `drainingSince`. */
+  async drainPanelGroupMember(groupId: string, panelId: string): Promise<DrainedMember> {
+    return call<DrainedMember>(`/systems/panel-groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(panelId)}/drain`, {
+      method: "POST",
+    });
+  },
+
   // The six gateway calls are {@link ambientGatewayApi}'s, kept here under
   // their old names for the pages that ask about the caller's own tenant and
   // nothing else (the coupon form's gateway picker). A screen that configures
@@ -1351,6 +1386,46 @@ export interface SystemsHold {
   resolvedByAdminId: string | null;
   resolutionNote: string | null;
 }
+
+/** `network.ConfigProtocol`: what the group's next config is created with. */
+export type ConfigProtocol = "vmess" | "vless" | "trojan" | "shadowsocks" | "hysteria2" | "tuic" | "wireguard" | "openvpn" | "pppoe";
+/** `network.PanelGroupMemberRole` — the member's, not the panel's HA `role`. */
+export type PanelGroupMemberRole = "primary" | "replica" | "drain";
+
+/** A member as `panel-groups.ts` `wireMember` answers it: its panel's health beside it. */
+export interface PanelGroupMember {
+  groupId: string;
+  panelId: string;
+  priority: number;
+  weight: number;
+  role: PanelGroupMemberRole;
+  drainingSince: string | null;
+  createdAt: string;
+  panelName: string;
+  panelState: PanelState;
+  reviewState: PanelReviewState;
+  lastHealthyAt: string | null;
+}
+
+export interface PanelGroup {
+  id: string;
+  name: string;
+  strategy: "mirror" | "priority" | "weighted";
+  minHealthyPanels: number;
+  subscriptionTtlSeconds: number;
+  protocol: ConfigProtocol;
+  createdAt: string;
+  updatedAt: string;
+  /** Variants sold on this group. */
+  variantCount: number;
+  members: PanelGroupMember[];
+}
+
+/** `createPanelGroupSchema`'s fields; `strategy` is never sent (billing rule 21). */
+export type PanelGroupBody = Partial<Pick<PanelGroup, "name" | "minHealthyPanels" | "subscriptionTtlSeconds" | "protocol">>;
+
+export type DrainedMember = PanelGroupMember & { waitSeconds: number };
+export type RemovedMember = { groupId: string; panelId: string; removed: true };
 
 /** What re-submitting a login answers (F-027-au). `retest`: the next tick tests the panel again. */
 export interface ResubmittedLogin {

@@ -14,7 +14,9 @@ A topic file of [contract.md](contract.md) (§10). One page, `/systems`
 capability matrix, drift report, holds queue), and `_lib/systems.ts` its rules.
 It is the panel end of billing's systems routes — the routes, the scope and
 every write are [billing/contract.systems.md](../../domains/billing/contract.systems.md)'s
-(F-027-ar/as/at). The *why* is **ADR-0080**.
+(F-027-ar/as/at), and the panel groups section (`PanelGroups.tsx`, rules
+`_lib/panel-groups.ts`) is the panel end of billing rules 20–24 (F-027-bw).
+The *why* is **ADR-0080**.
 
 ## Rules
 
@@ -91,6 +93,29 @@ every write are [billing/contract.systems.md](../../domains/billing/contract.sys
    would test it as someone else. `role` reads as primary / standby, an HA
    pair's (network `contract.groups.md` rule 6), never as on / off.
 
+11. **Panel groups: where a VPN variant's Grants are placed** (F-027-bx,
+   network `contract.groups.md`). A group lists its members with their
+   panel's review and state, and says how many fulfilment can place on —
+   `memberPlaceable` is groups rule 8's own test (not `drain`, accepted,
+   `healthy`) — against `minHealthyPanels`; a group short of it is an error
+   tone, since a Grant sold there never activates. The form mirrors
+   `createPanelGroupSchema` (`validateGroup`): the lifetime is asked in whole
+   minutes (1–10080) and sent in seconds; `strategy` is never offered or sent
+   (billing rule 21), and **`priority` / `weight` are not asked** — `mirror`
+   reads neither, and they open with the strategy that does. An edit sends
+   only the fields that differ from the group, so a value set outside the
+   schema is never re-sent untouched, and one that changes nothing is refused
+   here. The add picker offers registered panels the group does not hold,
+   never a refused one (`addablePanels`). **Drain, not remove, is the answer
+   to a member in use:** both are offered only on a member not already
+   draining (`canDrain`, `canRemove`); a remove answered 409
+   `member_has_configs` says so. Drain asks once, states the least wait
+   (`DRAIN_TTL_MULTIPLE × subscriptionTtlSeconds`, the sweep's constant,
+   `waitOf` rounding up), and a draining member reads "no sooner than"
+   `drainEarliestAt` — never "at", since a Grant whose replacement is served
+   later waits longer. Every write re-reads the groups; a refusal does too.
+   The page's live re-read (rule 2) re-reads the groups with the panels.
+
 ## Proof
 
 `systems/register-wizard.test.ts` — rule 10: the steps, each blocking on its own fields, the family profiles (the ready set read out of `opener.go`), the composed login, the IP an address names.
@@ -102,3 +127,4 @@ billing's `SystemsRejection` / `PanelScopeRejection` / `ResubmitRejection`),
 `refusedBecause`, `canResubmit`, `validateLogin`, `resubmitOutcome`, the
 RADIUS secret's predicates and limits, the hold
 and drift predicates, `validateNote`, the menu entry, every key in `en` and `fa`.
+`systems/panel-groups.test.ts` — rule 11: `ConfigProtocol` and `PanelGroupMemberRole` read out of `network.prisma`, the drain multiple out of `group-drain.ts`, `validateGroup` (create, limits, an edit sending only what changed), `memberPlaceable`, `groupHealth`, `addablePanels`, `canDrain` / `canRemove`, `drainEarliestAt`, `waitOf`.
