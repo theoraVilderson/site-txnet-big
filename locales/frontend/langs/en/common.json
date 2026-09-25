@@ -556,7 +556,8 @@
       "wallet_transfer_in": "Transfer received",
       "wallet_transfer_out": "Transfer sent",
       "reseller_purchase": "Reseller purchase",
-      "traffic_refund": "Unused traffic returned"
+      "traffic_refund": "Unused traffic returned",
+      "product_purchase": "Product purchase"
     },
     "status": {
       "pending": "Pending",

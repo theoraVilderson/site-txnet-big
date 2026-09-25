@@ -7,7 +7,7 @@ updated: 2026-09-25
 
 # Invariants — billing
 
-From schema comments, plus 11 from the gift path (F-092-m). 1-4 are enforced by `WalletLedgerService` (F-092-b), 15 by the block purchaser (F-027-q), 16 by the remainder credit (F-027-r), 17 by the invoice (F-111-a), 6 by coupon reservation (F-092-h) and gift redemption (F-092-m), 8 in part by the gateway port (F-092-f), 11 by `billing.redeem_gift_coupon`; the rest are not enforced in code yet.
+From schema comments, plus 11 from the gift path (F-092-m). 1-4 are enforced by `WalletLedgerService` (F-092-b), 15 by the block purchaser (F-027-q), 16 by the remainder credit (F-027-r), 17 by the invoice (F-111-a), 18 by its payment (F-111-b), 6 by coupon reservation (F-092-h) and gift redemption (F-092-m), 8 in part by the gateway port (F-092-f), 11 by `billing.redeem_gift_coupon`; the rest are not enforced in code yet.
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
@@ -28,6 +28,7 @@ From schema comments, plus 11 from the gift path (F-092-m). 1-4 are enforced by 
 | 15 | A metered Grant's bytes are bought before they are served: `purchasedBytes` advances only in the transaction that debited the wallet for them, and never by more bytes than the debited whole cents buy at `grant.meteredRate` | `BlockPurchaseService.purchase` — one transaction, `increment` on both cursors, integer sizing (F-027-q, `traffic/block-purchase.spec.ts`, ADR-0072) | free traffic at the far end of a ceiling nobody paid for |
 | 16 | A closed metered Grant's unconsumed purchased bytes are credited back exactly once, and never for more than they cost: the refund is `billedBytes - consumedBytes` priced **down** to a whole cent, and `billedBytes` comes down by it in the same transaction | `RemainderCreditService.credit` — the cursor is claimed under a guard on the value it read, so a retry or a racing close finds nothing left (F-027-r, `traffic/remainder-credit.spec.ts`, ADR-0072 rule 3) | money held for service nobody received, or the same remainder paid back twice |
 | 17 | An invoice's price is the server's: `amount` is the catalog price row `priceId` names, in effect when it was created, never a client number; `total = amount - discount` | `InvoiceService.create` reads it through `sellableOfferById` and the body has no price (F-111-a, `invoice/invoice.spec.ts`); CHECKs in migration `20260925000400_invoice` | a shopper choosing their own price |
+| 18 | An invoice is paid at most once: one debit, one Grant, one confirmed use per hold, however many calls race | `InvoicePaymentService.pay` takes the invoice row `FOR UPDATE` and refuses anything not `pending` (F-111-b, `invoice/invoice-payment.int.spec.ts`); the Grant's `(source, sourceReferenceId)` unique index | a shopper charged twice for one product, or given two for one price |
 
 ## How to test
 
@@ -41,5 +42,5 @@ the per-user limit under a race, and the credit that commits with the use:
 one-accrual-per-payment key (ADR-0041): `payment/gateway-grant-schema.int.spec.ts`. Block
 sizing and the one transaction that debits and advances both cursors:
 `traffic/block-purchase.spec.ts`. The remainder priced down, paid once, and
-refused on a cursor that moved: `traffic/remainder-credit.spec.ts`. Still to write: transfer atomicity,
+refused on a cursor that moved: `traffic/remainder-credit.spec.ts`. Concurrent pays of one invoice, and the payment rolled back whole: `invoice/invoice-payment.int.spec.ts`. Still to write: transfer atomicity,
 the status-guarded credit on a duplicate webhook.

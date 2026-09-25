@@ -24,6 +24,9 @@ enum WalletReasonType {
   /// (ADR-0072 rule 3); `referenceId` = the Grant. Always a credit, and the
   /// counterpart of the `traffic_consumption` debits that bought them.
   traffic_refund
+  /// F-111-b: a catalog product bought from the wallet; `referenceId` = the
+  /// invoice. Always a debit — a sale (`IS_SALE` in `reseller-revenue.service.ts`).
+  product_purchase
 
   @@schema("billing")
 }

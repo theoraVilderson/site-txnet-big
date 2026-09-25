@@ -36,6 +36,8 @@ export const OutboxEventType = {
   TENANT_SUBSCRIPTION_SUSPENDED: 'tenant.subscription.suspended',
   /** F-027-at: the platform owner released a usage hold; `metering-service` bills it (ADR-0080 decision 3). */
   USAGE_RELEASE: 'network.usage.release',
+  /** F-111-b: a paid invoice issued a Grant, `pending` until delivery (spec §5.8 step 2). */
+  GRANT_CREATED: 'entitlement.grant.created',
 } as const;
 export type OutboxEventType = (typeof OutboxEventType)[keyof typeof OutboxEventType];
 

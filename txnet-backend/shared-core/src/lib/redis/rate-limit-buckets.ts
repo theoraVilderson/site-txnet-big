@@ -188,6 +188,13 @@ export const RateLimitBucket = {
   INVOICE_CREATE: 'invoice:create',
 
   /**
+   * Paying an invoice from the wallet (F-111-b), per user. Correctness does
+   * not rest on it — a second pay of one invoice is refused under its row
+   * lock — it bounds the transactions one caller can open on the wallet row.
+   */
+  INVOICE_PAY: 'invoice:pay',
+
+  /**
    * The bot relaying an in-chat payment's `pre_checkout_query` or
    * `successful_payment` to `billing-service` (F-104-k), per **user** — the
    * payer the gate names. Generous: a `paid` refused here is money the

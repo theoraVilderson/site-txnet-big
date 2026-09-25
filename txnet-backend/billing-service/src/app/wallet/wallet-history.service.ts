@@ -53,6 +53,8 @@ const LABEL_KEYS: Record<WalletReasonType, string> = {
   // A credit of its own, and **not** hidden with the debits below: money going
   // back to a user belongs on the page they read without narrowing (F-027-r).
   [WalletReasonType.traffic_refund]: REASON_LABEL_KEY.traffic_refund,
+  // A product bought from the wallet (F-111-b): on the default page, like every debit but traffic.
+  [WalletReasonType.product_purchase]: REASON_LABEL_KEY.product_purchase,
 };
 
 /** The declaration order, which is the order a filter is answered in. */

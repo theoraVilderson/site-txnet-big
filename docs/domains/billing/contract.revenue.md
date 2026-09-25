@@ -31,7 +31,7 @@ page when one is built.
 | **The scope is the whole filter.** The work runs inside `ResellerAccess.run`, and no query names a `tenantId` | both tables are strict under RLS (`20260909001500`, list C) *and* in `TENANT_SCOPED_MODELS`; a filter written by hand is one that can be written wrong, and the failure is a reseller reading another's takings |
 | Two figures, answered together, neither folded into the other: `sales` (what its users spent) and `topUps` (what they paid in) | a user who tops up 100 and spends 40 is 40 of revenue and 100 of cash in — ADR-0067 decision 1 |
 | **Gross.** What the platform charges this reseller is not subtracted | it lives in `tenant_billing_transaction` on a different clock (F-019-a/b); the subtraction would reconcile to no row. Read it at F-019-j |
-| A sale is a **debit with a sale reason**, and `IS_SALE` classifies every `WalletReasonType` exhaustively. Today only `traffic_consumption` qualifies | a new reason must be judged before it compiles. `wallet_transfer_out` is excluded because two users passing money back and forth would otherwise manufacture revenue; `sub_account_charge` because the consumption charged out of that wallet is already counted |
+| A sale is a **debit with a sale reason**, and `IS_SALE` classifies every `WalletReasonType` exhaustively. Today `traffic_consumption` and `product_purchase` (a catalog product bought from the wallet, F-111-b) qualify | a new reason must be judged before it compiles. `wallet_transfer_out` is excluded because two users passing money back and forth would otherwise manufacture revenue; `sub_account_charge` because the consumption charged out of that wallet is already counted |
 | **A refund of a sale comes off it**, and `UNDOES` names, exhaustively, which sale each credit undoes. Today only `traffic_refund` -> `traffic_consumption` (F-027-r). It is subtracted from that reason's total and from `sales.total`; `count` is untouched | the blocks were bought ahead of consumption and the unconsumed ones go back when the Grant closes (ADR-0072 rule 3). A figure that took the debits and ignored the credits would report every reseller more than it kept, by the headroom this platform holds — and grow with the number of Grants that expire, which is all of them. The rows were still sold, so what changed is the money, not the count |
 | A window holding a close whose blocks were bought earlier reports a **negative** reason, and is not clamped to zero | the figure is the movement in the window; a zero would be a number no rows back, and it would hide exactly the period a reseller asks about |
 | `topUps` counts `status: success` and `billingTenantId: null` only | a `pending` or `failed` attempt is not money — the arithmetic legacy got wrong (`contract.history.md`); a row with `billingTenantId` is the reseller paying **the platform** (F-019-b), money out |
@@ -43,10 +43,10 @@ page when one is built.
 
 ## What it does not answer yet
 
-**`sales.total` is `0.00` today, and will be until `entitlement` is built.**
-Nothing writes a `traffic_consumption` row: `entitlement` is `draft`, schema
-only (F-026-b), which is the same gap that blocks F-311-d. The surface is
-complete and its arithmetic is proved; its headline number is empty.
+**`sales.total` counts only products bought from the wallet** (`product_purchase`,
+F-111-b, once the panel's shop — F-111-e — calls it). Nothing writes a
+`traffic_consumption` row in production yet: the block purchaser has no caller
+until the hot loop (F-027-u), the same gap that blocks F-311-d.
 
 `topUps` is real today. A consumer built before `entitlement` lands — F-311-c is
 the first — shows that figure and says what it is, rather than showing a zero

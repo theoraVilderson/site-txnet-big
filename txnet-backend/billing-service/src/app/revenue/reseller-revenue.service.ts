@@ -49,8 +49,8 @@ export type RevenueTotals = {
  * a business rule rather than a schema).
  *
  * A sale is a **debit with a sale reason**, and almost nothing qualifies:
- * `traffic_consumption` is a user paying this reseller for service, and that is
- * what a reseller sells. The rest move money without anything being sold, and
+ * `traffic_consumption` and `product_purchase` are a user paying this reseller
+ * for service, and that is what a reseller sells. The rest move money without anything being sold, and
  * each would inflate the figure in a different direction.
  */
 const IS_SALE: Record<WalletReasonType, boolean> = {
@@ -77,6 +77,9 @@ const IS_SALE: Record<WalletReasonType, boolean> = {
   // A credit: money given back, not a sale. It is subtracted below rather than
   // counted here, which `UNDOES` is what says.
   [WalletReasonType.traffic_refund]: false,
+  // A catalog product bought from the wallet (F-111-b): what a reseller sells,
+  // paid up front rather than by the byte.
+  [WalletReasonType.product_purchase]: true,
 };
 
 /** The reasons that count, derived from the table above rather than listed twice. */
@@ -107,6 +110,7 @@ const UNDOES: Record<WalletReasonType, WalletReasonType | null> = {
   [WalletReasonType.wallet_transfer_out]: null,
   [WalletReasonType.admin_manual_adjust]: null,
   [WalletReasonType.reseller_purchase]: null,
+  [WalletReasonType.product_purchase]: null,
 };
 
 /** The credits that come off a sale, derived from the table above. */

@@ -150,7 +150,7 @@ describe('ResellerRevenueService.totals', () => {
 
     const where = seen[0].args.where;
     expect(where.direction).toBe(LedgerDirection.debit);
-    expect(where.reasonType.in).toEqual([WalletReasonType.traffic_consumption]);
+    expect(where.reasonType.in).toEqual([WalletReasonType.traffic_consumption, WalletReasonType.product_purchase]);
     // A transfer between two of this reseller's users sells nothing; an
     // operator's correction is not a sale either.
     expect(where.reasonType.in).not.toContain(WalletReasonType.wallet_transfer_out);

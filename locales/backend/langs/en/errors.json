@@ -207,7 +207,12 @@
     },
     "invoice": {
       "variantInvalid": "Choose a product to buy.",
-      "variantNotFound": "This product is not available to buy."
+      "variantNotFound": "This product is not available to buy.",
+      "notFound": "This invoice was not found.",
+      "alreadyPaid": "This invoice is already paid.",
+      "expired": "This invoice has expired. Start the purchase again.",
+      "cancelled": "This invoice was cancelled.",
+      "insufficientBalance": "Your wallet balance is not enough to pay this invoice."
     }
   },
   "role": {

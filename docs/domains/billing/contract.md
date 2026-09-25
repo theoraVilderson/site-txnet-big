@@ -192,8 +192,8 @@ reserve/confirm state machine (built, F-092-h).
 
 ## Emits (events)
 
-None planned yet (no bus). Payment confirmation is expected to drive
-`network` provisioning and `notification` — mechanism undecided.
+Through the outbox (ADR-0021). `entitlement.grant.created` — a paid invoice's
+Grant, `pending` (F-111-b, [contract.purchase.md](contract.purchase.md)); no consumer yet.
 
 ## Consumes
 
@@ -201,7 +201,7 @@ None planned yet (no bus). Payment confirmation is expected to drive
 |---|---|---|
 | identity | `ownerUserId`, transfer sender/receiver, OTP for transfer confirm | transfer/credit blocked |
 | catalog | a coupon scope's `productId` / `variantId`, and a `free_grant` coupon's `grantVariantId` (F-026-a, D-35); the variant's price in effect, for an invoice (F-026-c, `sellableOfferById`, F-111-a) | coupon scope check fails; a free-service code is refused `variant_not_found` |
-| entitlement | `GrantService.issue` inside the gift redemption's transaction, `source = coupon` (F-502-l-b, ADR-0049) | the redemption rolls back; the code stays unused |
+| entitlement | `GrantService.issue` inside the gift redemption's transaction, `source = coupon` (F-502-l-b, ADR-0049), and inside an invoice's payment, `source = purchase` (F-111-b) | the redemption rolls back; the code stays unused |
 | currency | base-currency amounts only in; display conversion is currency's job | — |
 | tenant | `tenantId` denormalized on `wallet_transaction` / `payment_transaction` for reporting | — |
 | tenant | the request tenant's `tenant_domain` rows — the `panel` host a gateway callback comes back to, proven custom domain first, never a CNAME target (`isCnameTarget`, ADR-0060 (6)) (F-092-i, ADR-0020). Read under RLS in its `tenantTransaction`; never a request header | no host to answer on: starting a payment is refused 503 |

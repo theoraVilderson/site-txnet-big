@@ -241,6 +241,8 @@ describe('WalletHistoryService.ledger', () => {
         // hundreds of block debits, not the one row that returns their
         // remainder — which is the rule above working, not an exception to it.
         WalletReasonType.traffic_refund,
+        // A product bought from the wallet (F-111-b), joined by the same rule.
+        WalletReasonType.product_purchase,
       ],
     });
   });

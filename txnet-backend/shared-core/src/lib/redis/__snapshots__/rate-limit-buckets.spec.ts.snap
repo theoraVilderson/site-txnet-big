@@ -40,6 +40,7 @@ exports[`RateLimitBucket > records the whole rate-limited surface in one place 1
   "DEPOSIT_START = deposit:start",
   "DEPOSIT_ABANDON = deposit:abandon",
   "INVOICE_CREATE = invoice:create",
+  "INVOICE_PAY = invoice:pay",
   "DEPOSIT_IN_CHAT = deposit:in-chat",
   "DEPOSIT_CALLBACK = deposit:callback",
   "DEPOSIT_WEBHOOK = deposit:webhook",
