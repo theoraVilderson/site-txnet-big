@@ -498,6 +498,10 @@
         "confirm": "Pay anyway",
         "cancel": "Don’t pay"
       }
+    },
+    "forInvoice": {
+      "notice": "This top-up is for your purchase: {{amount}} covers what is missing.",
+      "back": "Back to the invoice"
     }
   },
   "financial": {
@@ -783,7 +787,8 @@
       "closedSubtitle": "The gateway did not confirm this payment. If money was taken, it is returned by your bank.",
       "reversedTitle": "Payment reversed",
       "reversedSubtitle": "The gateway reversed this payment and your wallet was not charged. The bank is returning the money to your card; if it has not arrived within 72 hours, contact support."
-    }
+    },
+    "backToInvoice": "Continue your purchase"
   },
   "manualPayments": {
     "title": "Payments to confirm",
@@ -2343,6 +2348,49 @@
       "submit": "Save the new secret",
       "saved": "Saved. Accounting from this NAS is checked against the new secret within a minute.",
       "missing": "No RADIUS secret"
+    }
+  },
+  "shop": {
+    "title": "Shop",
+    "subtitle": "Pick a service, pay from your wallet, and get its subscription key.",
+    "empty": "Nothing is for sale right now.",
+    "retry": "Try again",
+    "buy": "Buy",
+    "duration": "{{days}} days",
+    "permanent": "No end date",
+    "checkout": {
+      "back": "Back to the list",
+      "codeLabel": "Have a discount code?",
+      "addCode": "Apply",
+      "removeCode": "Remove {{code}}",
+      "create": "Make the invoice"
+    },
+    "invoice": {
+      "title": "Your invoice",
+      "amount": "Price",
+      "total": "To pay",
+      "rejected": "Codes not applied",
+      "expiresAt": "This invoice stays open until {{time}}.",
+      "pay": "Pay from wallet",
+      "again": "Back to the shop",
+      "status": {
+        "pending": "This invoice is waiting for payment.",
+        "paid": "This invoice is already paid. Your service is under My services.",
+        "expired": "This invoice ran out before it was paid. Start a new one from the shop.",
+        "cancelled": "This invoice was cancelled.",
+        "refunded": "This invoice was paid, the service could not be delivered, and the amount went back to your wallet."
+      }
+    },
+    "shortfall": {
+      "title": "Your balance is {{missing}} short.",
+      "hint": "Top up, then you come back to this same invoice. It stays open until {{time}}.",
+      "topUp": "Top up {{amount}}"
+    },
+    "paid": {
+      "title": "Paid",
+      "balance": "Wallet balance now: {{balance}}",
+      "preparing": "Your service is being prepared. You can see it under My services.",
+      "myServices": "Go to My services"
     }
   }
 }

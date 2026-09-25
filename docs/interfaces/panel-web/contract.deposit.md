@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 17
-updated: 2026-09-20
+version: 18
+updated: 2026-09-25
 ---
 
 # Contract — panel-web: the top-up page (F-093-e)
@@ -158,6 +158,13 @@ route returns the whole breakdown instead of the pieces of one.
     adds it nor knows which level the rate came from. `tax` `0.00` or a `null`
     rate shows no row, so an untaxed bill is exactly as before. Proof:
     `deposit/tax-line.test.tsx`.
+18. **Opened for an invoice's shortfall (F-111-e), it pre-fills and links back.**
+    `?invoice=&missing=` (`panelDepositForInvoicePath`, well-formed or ignored)
+    makes the amount `missing` raised to the chosen gateway's `minAmount` —
+    derived, so it follows the picker — until the user types their own. A
+    banner and the free path's result link back to `/shop?invoice=`; the id is
+    kept in session storage for `/payment/success`. No code rides in the URL.
+    Rules: [contract.shop.md](contract.shop.md) 5-6.
 
 ## What this page does not do
 

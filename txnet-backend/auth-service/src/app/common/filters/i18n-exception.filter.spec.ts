@@ -71,6 +71,26 @@ describe('I18nExceptionFilter', () => {
       });
     });
 
+    it('carries a reason and its facts as error: {reason, facts} — a refusal a client acts on by its figures', () => {
+      const { host, response } = fakeArgumentsHost({ language: 'fa' });
+
+      filter.catch(
+        new ConflictException({
+          i18nKey: 'system.conflict',
+          reason: 'insufficient_balance',
+          facts: { total: '12.50', balance: '5.00', missing: '7.50' },
+        }),
+        host,
+      );
+
+      expect(response.body()).toEqual({
+        ok: false,
+        msg: 'تداخل داده',
+        ref: expect.stringMatching(/^[0-9a-f]{10}$/),
+        error: { reason: 'insufficient_balance', facts: { total: '12.50', balance: '5.00', missing: '7.50' } },
+      });
+    });
+
     it('translates into the language the middleware put on the request', () => {
       const { host, response } = fakeArgumentsHost({ language: 'en' });
 

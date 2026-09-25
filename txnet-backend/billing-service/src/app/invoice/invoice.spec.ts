@@ -264,3 +264,107 @@ describe('InvoiceExpiryService.expirePending', () => {
     expect(calls.released).toEqual([]);
   });
 });
+
+describe('InvoiceService.get — the invoice the shop comes back to (F-111-e)', () => {
+  const ROW = {
+    id: INVOICE_1,
+    userId: USER,
+    variantId: VARIANT,
+    amount: D('12.50'),
+    discount: D('2.50'),
+    total: D('10.00'),
+    status: InvoiceStatus.pending,
+    expiresAt: new Date('2026-09-25T12:30:00Z'),
+    variant: { sku: 'VPN-30', nameKey: null, product: { nameKey: 'catalog.product.vpn.name' } },
+  };
+
+  function buildGet(row: typeof ROW | null, redemptions: Array<{ discountAppliedAmount: Prisma.Decimal; coupon: { code: string } }> = []) {
+    const asked = { invoice: [] as unknown[], redemptions: [] as unknown[] };
+    const tx = {
+      $executeRaw: async () => 0,
+      invoice: {
+        findFirst: async (q: unknown) => {
+          asked.invoice.push(q);
+          return row;
+        },
+      },
+      couponRedemption: {
+        findMany: async (q: unknown) => {
+          asked.redemptions.push(q);
+          return redemptions;
+        },
+      },
+    };
+    const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
+    return { service: new InvoiceService(prisma as never, {} as never, {} as never), asked };
+  }
+
+  it("reads only the caller's own invoice — another user's is the same null as a missing one", async () => {
+    const { service, asked } = buildGet(null);
+    await expect(asTenant(() => service.get(USER, INVOICE_1, new Date('2026-09-25T12:00:00Z')))).resolves.toBeNull();
+    expect(asked.invoice[0]).toMatchObject({ where: { id: INVOICE_1, userId: USER } });
+  });
+
+  it('answers the figures it was priced at, and the codes it holds under its own id', async () => {
+    const { service, asked } = buildGet(ROW, [{ discountAppliedAmount: D('2.50'), coupon: { code: 'SPRING' } }]);
+    const got = await asTenant(() => service.get(USER, INVOICE_1, new Date('2026-09-25T12:00:00Z')));
+    expect(got).toEqual({
+      id: INVOICE_1,
+      variantId: VARIANT,
+      sku: 'VPN-30',
+      nameKey: 'catalog.product.vpn.name',
+      status: 'pending',
+      amount: '12.50',
+      discount: '2.50',
+      total: '10.00',
+      applied: [{ code: 'SPRING', discount: '2.50' }],
+      expiresAt: ROW.expiresAt,
+    });
+    expect(asked.redemptions[0]).toMatchObject({
+      where: { orderReferenceId: INVOICE_1, userId: USER, status: { in: [RedemptionStatus.pending, RedemptionStatus.confirmed] } },
+    });
+  });
+
+  it('reads a pending invoice past its clock as expired, as the pay step does, before the sweep flips it', async () => {
+    const { service } = buildGet(ROW);
+    const got = await asTenant(() => service.get(USER, INVOICE_1, new Date('2026-09-25T12:30:00Z')));
+    expect(got?.status).toBe('expired');
+  });
+});
+
+describe('InvoiceService.forSale — what the shop lists (F-111-e)', () => {
+  function buildList(rows: Array<ReturnType<typeof variantRow>>) {
+    const asked: unknown[] = [];
+    const tx = {
+      $executeRaw: async () => 0,
+      productVariant: {
+        findMany: async (q: unknown) => {
+          asked.push(q);
+          return rows;
+        },
+      },
+    };
+    const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
+    return { service: new InvoiceService(prisma as never, {} as never, {} as never), asked };
+  }
+
+  it('lists a listed, priced variant with the price in effect', async () => {
+    const { service } = buildList([variantRow()]);
+    const offers = await asTenant(() => service.forSale(new Date('2026-09-25T12:00:00Z')));
+    expect(offers).toHaveLength(1);
+    expect(offers[0]).toMatchObject({ variantId: VARIANT, sku: 'VPN-30', productId: PRODUCT, price: { amount: '12.50' } });
+  });
+
+  it('leaves out what nothing can deliver, so the shop never offers a buy that answers variantNotFound', async () => {
+    const { service } = buildList([
+      variantRow({ panelGroupId: null }),
+      { ...variantRow({ fulfilmentKind: FulfilmentKind.external_order }), id: INVOICE_2 },
+    ]);
+    await expect(asTenant(() => service.forSale(new Date('2026-09-25T12:00:00Z')))).resolves.toEqual([]);
+  });
+
+  it('leaves out an unlisted variant: a direct link sells it, the list does not show it', async () => {
+    const { service } = buildList([variantRow({ visibility: VariantVisibility.unlisted })]);
+    await expect(asTenant(() => service.forSale(new Date('2026-09-25T12:00:00Z')))).resolves.toEqual([]);
+  });
+});

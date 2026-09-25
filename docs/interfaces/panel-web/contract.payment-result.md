@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 17
-updated: 2026-09-12
+version: 18
+updated: 2026-09-25
 ---
 
 # Contract — panel-web: where a bank returns a payer (F-093-f)
@@ -98,6 +98,11 @@ That is why neither page has a client data path, a loading state or an effect.
    It settles nothing and asks no gateway — billing's retries do
    (`domains/billing/contract.verify.md`). The `pending` tone is theme green
    with clock hands, never gold.
+12. **A top-up for an invoice leads back to it (F-111-e).** When session
+   storage holds the id the top-up page kept (`shop/_lib/shop.ts`
+   `returnInvoice`, read after hydration), `PaymentSuccessView` puts "continue
+   your purchase" first, to `/shop?invoice=`. Nothing else changes; the shop
+   forgets the id once the invoice is paid ([contract.shop.md](contract.shop.md)).
 
 ## What these pages do not do
 

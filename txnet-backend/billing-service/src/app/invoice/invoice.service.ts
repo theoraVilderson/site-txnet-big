@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { CouponChannel, InvoiceStatus, Prisma } from '@prisma/client';
+import { CouponChannel, InvoiceStatus, Prisma, RedemptionStatus } from '@prisma/client';
 import { TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
-import { sellableOfferById } from '../catalog/catalog-reads';
+import { CatalogOffer, listOffersIn, sellableOfferById } from '../catalog/catalog-reads';
 import { deliveryRouteOf } from '../entitlement/delivery';
 import { PrismaService } from '../prisma/prisma.service';
 import { CouponReservationService } from '../payment/coupon/coupon-reservation';
@@ -60,6 +60,9 @@ export type InvoiceCreated = {
   rejected: RejectedCoupon[];
   expiresAt: Date;
 };
+
+/** One invoice as its owner reads it back (F-111-e): what it was priced at, without the coupon verdicts of its creation. */
+export type InvoiceView = Omit<InvoiceCreated, 'rejected'>;
 
 /** Not for sale to this caller: unknown, another tenant's, `admin_only`, switched off, or no price in effect — never told apart. */
 export class InvoiceVariantNotFound extends Error {
@@ -140,6 +143,53 @@ export class InvoiceService {
         applied: coupons.applied.map((a) => ({ code: a.code, discount: a.discount.toFixed(2) })),
         rejected: coupons.rejected,
         expiresAt: invoice.expiresAt,
+      };
+    });
+  }
+
+  /**
+   * What the shop lists (F-111-e): every listed variant with a price in
+   * effect, less those nothing can deliver — the rule {@link create} refuses
+   * with, so the list never offers a buy that answers `variantNotFound`.
+   */
+  forSale(at: Date = new Date()): Promise<CatalogOffer[]> {
+    return tenantTransaction(this.prisma, async (tx) => {
+      const offers = await listOffersIn(tx, at);
+      return offers.filter((o) => deliveryRouteOf(o.fulfilmentKind, o.panelGroupId) !== null);
+    });
+  }
+
+  /**
+   * The caller's own invoice, or `null` — unknown, another tenant's (RLS) and
+   * another user's are never told apart. The shop reads it to come back to the
+   * same invoice after a top-up (F-111-e). A `pending` one past its clock reads
+   * `expired`, as the pay step refuses it, before the sweep flips the row.
+   */
+  get(userId: string, id: string, at: Date = new Date()): Promise<InvoiceView | null> {
+    return tenantTransaction(this.prisma, async (tx) => {
+      const row = await tx.invoice.findFirst({
+        where: { id, userId },
+        include: { variant: { select: { sku: true, nameKey: true, product: { select: { nameKey: true } } } } },
+      });
+      if (!row) return null;
+      // The holds `create` took under this id; confirmed once it was paid.
+      const held = await tx.couponRedemption.findMany({
+        where: { orderReferenceId: id, userId, status: { in: [RedemptionStatus.pending, RedemptionStatus.confirmed] } },
+        select: { discountAppliedAmount: true, coupon: { select: { code: true } } },
+        orderBy: { redeemedAt: 'asc' },
+      });
+      const lapsed = row.status === InvoiceStatus.pending && row.expiresAt.getTime() <= at.getTime();
+      return {
+        id: row.id,
+        variantId: row.variantId,
+        sku: row.variant.sku,
+        nameKey: row.variant.nameKey ?? row.variant.product.nameKey,
+        status: lapsed ? InvoiceStatus.expired : row.status,
+        amount: row.amount.toFixed(2),
+        discount: row.discount.toFixed(2),
+        total: row.total.toFixed(2),
+        applied: held.map((h) => ({ code: h.coupon.code, discount: h.discountAppliedAmount.toFixed(2) })),
+        expiresAt: row.expiresAt,
       };
     });
   }

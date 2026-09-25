@@ -33,6 +33,14 @@ export interface SanitizedError {
    * ever passes (`isSafeReason`), never text a throw happened to carry.
    */
   reason?: string;
+  /**
+   * The figures a `reason` carries, sent as `error.facts` — e.g. the
+   * `missing` of an `insufficient_balance` (F-111-e), so a client acts on the
+   * refusal without a second read. Only beside a reason, one flat level, and
+   * only values that cannot carry text (`isSafeFact`): a decimal, an
+   * identifier, a uuid, a finite number, a boolean.
+   */
+  facts?: Record<string, SafeFact>;
   /** short correlation id — also written to the server log */
   ref: string;
   /** full detail — SERVER LOG ONLY, never sent to the client */
@@ -140,6 +148,25 @@ function isSafeReason(value: unknown): value is string {
   return typeof value === 'string' && /^[a-z][A-Za-z0-9_]{0,63}$/.test(value);
 }
 
+export type SafeFact = string | number | boolean;
+
+/** A fact's value: nothing with a space, a slash or a dotted path in it — never a sentence or a table name. */
+function isSafeFact(value: unknown): value is SafeFact {
+  if (typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  return typeof value === 'string' && /^(?:-?\d{1,18}(?:\.\d{1,8})?|[A-Za-z][A-Za-z0-9_]{0,63}|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/.test(value);
+}
+
+/** The safe entries of a thrown `facts` object, or `undefined` when none survive. At most 16. */
+function safeFacts(value: unknown): Record<string, SafeFact> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const out: Record<string, SafeFact> = {};
+  for (const [key, fact] of Object.entries(value).slice(0, 16)) {
+    if (isSafeReason(key) && isSafeFact(fact)) out[key] = fact;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 export function sanitizeError(exception: unknown): SanitizedError {
   const ref = newRef();
   const detail = describe(exception);
@@ -175,10 +202,13 @@ export function sanitizeError(exception: unknown): SanitizedError {
     // An explicit i18n key on the body, or a `message` that *is* a key.
     const candidate = obj ? (obj['i18nKey'] ?? obj['message']) : res;
     const reason = obj ? obj['reason'] : undefined;
+    // Facts only beside a reason: a figure means nothing unless the client knows which refusal it is.
+    const facts = isSafeReason(reason) && obj ? safeFacts(obj['facts']) : undefined;
     return {
       status,
       msgKey: isSafeKey(candidate) ? candidate : genericKeyFor(status),
       ...(isSafeReason(reason) ? { reason } : {}),
+      ...(facts ? { facts } : {}),
       ref,
       detail,
       logLevel,

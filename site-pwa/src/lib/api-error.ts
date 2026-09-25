@@ -27,6 +27,13 @@ export class ApiError extends Error {
    */
   readonly reason?: string;
   /**
+   * The envelope's `error.facts`: the figures that `reason` carries — e.g. the
+   * `missing` of billing's `insufficient_balance` (F-111-e). Flat, and only
+   * decimals, identifiers, uuids, numbers and booleans (shared-core
+   * `sanitizeError`). Read it by the `reason` it came with.
+   */
+  readonly facts: Readonly<Record<string, string | number | boolean>>;
+  /**
    * True when `message` did NOT come from `auth-api`: the network failed, or
    * the answer had no envelope to read. Nothing here is translated, so a UI
    * must show its own string instead of `message`.
@@ -40,6 +47,7 @@ export class ApiError extends Error {
       fieldErrors?: ApiFieldError[];
       ref?: string;
       reason?: string;
+      facts?: Record<string, string | number | boolean>;
       unreachable?: boolean;
       cause?: unknown;
     },
@@ -50,6 +58,7 @@ export class ApiError extends Error {
     this.fieldErrors = init.fieldErrors ?? [];
     this.ref = init.ref;
     this.reason = init.reason;
+    this.facts = init.facts ?? {};
     this.unreachable = init.unreachable ?? false;
   }
 

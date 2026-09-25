@@ -302,6 +302,8 @@ export const envSchema = z.object({
   /** Each call holds coupons for 30 minutes (`invoice/invoice.service.ts`, F-111-a). */
   INVOICE_CREATE_RATE_LIMIT: rateLimit(20),
   INVOICE_PAY_RATE_LIMIT: rateLimit(20),
+  INVOICE_READ_RATE_LIMIT: rateLimit(120),
+  SHOP_OFFERS_RATE_LIMIT: rateLimit(120),
   /** The bot's in-chat pre-checkout and paid relay, per payer (`payment/deposit/deposit-in-chat.controller.ts`). */
   DEPOSIT_IN_CHAT_RATE_LIMIT: rateLimit(120),
   /**

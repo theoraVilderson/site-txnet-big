@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 29
-updated: 2026-09-20
+version: 30
+updated: 2026-09-25
 ---
 
 # Contract — panel-web: failures the user can read (F-063)
@@ -33,6 +33,10 @@ in the user's language, not keys. Three rules follow.
   `refusalKey`, `gateways/_lib/grants.ts` `grantRefusalKey` (F-096-f). A
   reason the service adds does not compile, and a test reads the service's own
   union for the case where both sides forgot.
+- **A refusal's figures are `ApiError.facts`** — the envelope's `error.facts`,
+  flat scalars beside a `reason` (shared-core `sanitizeError`). Read one only
+  by the `reason` it came with: billing's `insufficient_balance` carries
+  `missing` (`shop/_lib/shop.ts` `shortfallOf`, F-111-e). `{}` when none came.
 - **A caught error is displayed, never only logged.** `useSubmitError` +
   `<FormError>` is that surface: `role="alert"`, cleared per attempt, field
   errors under the message, the `ref` shown so a user can quote it.

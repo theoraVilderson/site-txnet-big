@@ -195,6 +195,15 @@ export const RateLimitBucket = {
   INVOICE_PAY: 'invoice:pay',
 
   /**
+   * Reading one's own invoice back (F-111-e), per user — the shop returning to
+   * it after a top-up. A read, so a read's budget: it writes and holds nothing.
+   */
+  INVOICE_READ: 'invoice:read',
+
+  /** The shop's list of what is for sale (F-111-e), per user. A read, like `INVOICE_READ`. */
+  SHOP_OFFERS: 'shop:offers',
+
+  /**
    * The bot relaying an in-chat payment's `pre_checkout_query` or
    * `successful_payment` to `billing-service` (F-104-k), per **user** — the
    * payer the gate names. Generous: a `paid` refused here is money the

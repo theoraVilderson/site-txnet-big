@@ -123,11 +123,12 @@ export function createApiClient({
       if (typeof body.msg !== "string" || body.msg.length === 0) {
         throw ApiError.unreachable(`${path} answered ${response.status} with no message`);
       }
-      const detail = body.error as { reason?: unknown } | null | undefined;
+      const detail = body.error as { reason?: unknown; facts?: unknown } | null | undefined;
       throw new ApiError(body.msg, {
         status: response.status,
         ref: typeof body.ref === "string" ? body.ref : undefined,
         reason: typeof detail?.reason === "string" ? detail.reason : undefined,
+        facts: factsOf(detail?.facts),
         fieldErrors: Array.isArray(body.fieldErrors)
           ? (body.fieldErrors as unknown[])
               .map((f) => f as { path?: unknown; message?: unknown })
@@ -174,4 +175,14 @@ export function createApiClient({
       return once<T>(path, init, extraHeaders);
     }
   };
+}
+
+/** The envelope's `error.facts`, keeping only the scalar entries the server may send. */
+function factsOf(value: unknown): Record<string, string | number | boolean> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const out: Record<string, string | number | boolean> = {};
+  for (const [key, fact] of Object.entries(value)) {
+    if (typeof fact === "string" || typeof fact === "number" || typeof fact === "boolean") out[key] = fact;
+  }
+  return out;
 }

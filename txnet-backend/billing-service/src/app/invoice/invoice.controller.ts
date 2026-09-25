@@ -2,6 +2,7 @@ import {
   Body,
   ConflictException,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   NotFoundException,
@@ -49,14 +50,16 @@ function toHttp(e: unknown): unknown {
   if (e instanceof InvoiceUnpayable) {
     const body = { i18nKey: PAY_REFUSAL_KEY[e.reason], reason: e.reason, message };
     if (e.reason === 'not_found') return new NotFoundException(body);
-    // The shortfall rides along so the panel can offer the top-up for exactly it (F-111-c).
-    // `missing` is already whole cents, rounded up — toFixed(2) only formats it.
-    const shortfall = e.shortfall && {
+    // The shortfall rides along as the envelope's `error.facts` so the panel can
+    // offer the top-up for exactly it (F-111-c, F-111-e) — any other field the
+    // exception filter drops. `missing` is already whole cents, rounded up —
+    // toFixed(2) only formats it.
+    const facts = e.shortfall && {
       total: e.shortfall.total.toFixed(2),
       balance: e.shortfall.balance.toFixed(2),
       missing: e.shortfall.missing.toFixed(2),
     };
-    return new ConflictException(shortfall ? { ...body, shortfall } : body);
+    return new ConflictException(facts ? { ...body, facts } : body);
   }
   // The variant was switched off between the invoice and its payment: nothing was written.
   if (e instanceof EntitlementRefused && (e.reason === 'variant_not_found' || e.reason === 'variant_not_assignable')) {
@@ -121,6 +124,24 @@ export class InvoiceController {
   }
 
   /**
+   * The caller's own invoice (F-111-e): what the shop reads to come back to the
+   * same invoice after a top-up. Unknown, another tenant's and another user's
+   * are one `404 notFound`. No capability: reading what was already priced
+   * sells nothing.
+   */
+  @Get(':id')
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.INVOICE_READ, identityOf(req).userId),
+    configKey: 'INVOICE_READ_RATE_LIMIT',
+    windowSec: 900,
+  })
+  async get(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
+    const invoice = await this.invoices.get(identityOf(req).userId, id);
+    if (!invoice) throw new NotFoundException({ i18nKey: E.invoice.notFound, message: `invoice ${id} not found for this user` });
+    return invoice;
+  }
+
+  /**
    * Paying it from the wallet (F-111-b, spec §5.8 step 2): one transaction,
    * exactly once under concurrent calls — `InvoicePaymentService`. `200` with
    * the Grant, `pending` until delivery, and its subscription token, once.
@@ -139,5 +160,40 @@ export class InvoiceController {
     } catch (e) {
       throw toHttp(e);
     }
+  }
+}
+
+/**
+ * What the shop lists (F-111-e): `GET /api/billing/offers` — every listed
+ * variant this tenant sells with the price in effect, less what nothing can
+ * deliver (`InvoiceService.forSale`). `sell`, like buying: a tenant that
+ * sells nothing lists nothing.
+ */
+@Controller('billing/offers')
+export class OffersController {
+  constructor(private readonly invoices: InvoiceService) {}
+
+  @TenantCapability('sell')
+  @Get()
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.SHOP_OFFERS, identityOf(req).userId),
+    configKey: 'SHOP_OFFERS_RATE_LIMIT',
+    windowSec: 900,
+  })
+  async list() {
+    const offers = await this.invoices.forSale();
+    return offers.map((o) => ({
+      variantId: o.variantId,
+      sku: o.sku,
+      nameKey: o.nameKey,
+      productId: o.productId,
+      descriptionKey: o.descriptionKey,
+      categoryKey: o.categoryKey,
+      fulfilmentKind: o.fulfilmentKind,
+      durationDays: o.durationDays,
+      billingMode: o.billingMode,
+      quotas: o.quotas,
+      price: o.price.amount,
+    }));
   }
 }

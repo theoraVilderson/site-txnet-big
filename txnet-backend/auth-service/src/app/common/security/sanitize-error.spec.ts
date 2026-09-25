@@ -32,6 +32,7 @@ const outward = (s: SanitizedError) =>
     status: s.status,
     msgKey: s.msgKey,
     reason: s.reason,
+    facts: s.facts,
     fieldErrors: s.fieldErrors,
     ref: s.ref,
   });
@@ -239,6 +240,50 @@ describe('sanitizeError', () => {
 
       expect(out.reason).toBeUndefined();
       expect(outward(out)).not.toContain(String(reason));
+    });
+
+    it('passes the facts a reason carries — the figures a client acts on beside it (F-111-e)', () => {
+      // A refused wallet payment names what is missing, so the panel offers the
+      // top-up for exactly it (billing/contract.purchase.md "The shortfall").
+      const out = sanitizeError(
+        new ConflictException({
+          i18nKey: 'errors.billing.invoice.insufficientBalance',
+          reason: 'insufficient_balance',
+          facts: { total: '12.50', balance: '5.00', missing: '7.50' },
+        }),
+      );
+      expect(out.facts).toEqual({ total: '12.50', balance: '5.00', missing: '7.50' });
+    });
+
+    it('passes a number, a boolean and a uuid as facts', () => {
+      const id = '88888888-8888-4888-8888-888888888881';
+      const out = sanitizeError(new ConflictException({ reason: 'cap_reached', facts: { cap: 5, soft: true, invoiceId: id } }));
+      expect(out.facts).toEqual({ cap: 5, soft: true, invoiceId: id });
+    });
+
+    it('sends no facts without a reason: a figure means nothing unless the client knows which refusal it is', () => {
+      const out = sanitizeError(new ConflictException({ i18nKey: 'system.conflict', facts: { missing: '7.50' } }));
+      expect(out.facts).toBeUndefined();
+    });
+
+    it.each([
+      ['a sentence', { note: 'balance 5.00 on wallet 42 at 10:42' }],
+      ['a nested object', { shortfall: { missing: '7.50' } }],
+      ['an array', { codes: ['SPRING'] }],
+      ['a key that is not an identifier', { 'wallet.id': 'abc' }],
+      ['a Prisma code in a value', { cause: 'P2002 on billing.wallet' }],
+      ['a non-finite number', { n: Number.POSITIVE_INFINITY }],
+    ])('drops a fact that is %s', (_label, facts) => {
+      const out = sanitizeError(new ConflictException({ reason: 'insufficient_balance', facts }));
+      expect(out.facts).toBeUndefined();
+      expect(outward(out)).not.toContain(JSON.stringify(Object.values(facts)[0]).slice(1, 12));
+    });
+
+    it('keeps the safe facts and drops only the unsafe ones', () => {
+      const out = sanitizeError(
+        new ConflictException({ reason: 'insufficient_balance', facts: { missing: '7.50', note: 'wallet row 42 locked' } }),
+      );
+      expect(out.facts).toEqual({ missing: '7.50' });
     });
 
     it('falls back to body.message only when it is itself a key', () => {

@@ -2,7 +2,7 @@
 id: auth-api
 layer: interface
 status: active
-version: 31
+version: 32
 updated: 2026-09-25
 ---
 
@@ -155,7 +155,7 @@ Three shapes, all from `response.util.ts` + the global `I18nExceptionFilter`.
 |---|---|---|---|
 | success | `{ ok: true, msg, data }` | the handler's own (200/201) | `ok(...)` |
 | business rejection | `{ ok: false, msg, error: null }` | **the handler's own — 200, or 201 on `register`** | `err(...)` |
-| thrown error | `{ ok: false, msg, ref, fieldErrors?: [{path,message}] }` | 4xx / 5xx | any exception |
+| thrown error | `{ ok: false, msg, ref, error?: {reason, facts?}, fieldErrors?: [{path,message}] }` — `facts` flat scalars, only beside a `reason` (F-111-e) | 4xx / 5xx | any exception |
 
 A **business rejection** is an expected outcome the service decided on, not a
 failure of the request: wrong password, a phone number already registered, a

@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 3
+version: 4
 updated: 2026-09-25
 ---
 
@@ -12,8 +12,9 @@ A topic file of `contract.md` (§10): buying a catalog product from the wallet
 (spec §5.8 Purchase Settlement Flow — `python3 tools/spec.py --section 5.8`).
 Step 1, the invoice, is built (F-111-a), step 2, paying it from the wallet
 (F-111-b), the shortfall a refused payment carries (F-111-c, spec §5.9), and
-step 3, delivery and the refund of what could not be delivered (F-111-d).
-Consumer: the panel's shop page (F-111-e).
+step 3, delivery and the refund of what could not be delivered (F-111-d), and
+the two reads the panel's shop page needs (F-111-e). Consumer: that page,
+`panel-web/contract.shop.md`.
 
 ## Creating an invoice (built — F-111-a)
 
@@ -62,7 +63,7 @@ otherwise) → `InvoiceExpiryService.expirePending()` → `{scanned, expired, ho
 | `200 {id, status: "paid", total, balanceAfter, walletTransactionId, grants: [{id, status: "pending", token}]}` | paid. `token` is the subscription key, shown this once (entitlement `issue`) |
 | `404 errors.billing.invoice.notFound` | unknown, another tenant's (RLS) or another user's — never told apart |
 | `409` `reason`: `already_paid` / `expired` / `cancelled` | its i18n key beside it. Past `expiresAt` is `expired` even before the sweep flips it. A `refunded` invoice (F-111-d) is `already_paid`: it was, and its clock may still run |
-| `409 insufficient_balance` + `shortfall: {total, balance, missing}` | the wallet holds less than `total`; nothing is written. `missing` is the top-up to offer — "The shortfall" below |
+| `409 insufficient_balance` + `error.facts: {total, balance, missing}` | the wallet holds less than `total`; nothing is written. `missing` is the top-up to offer — "The shortfall" below. In `facts` because the shared envelope drops any other field (F-111-e: until then the figure never reached a client) |
 | `404 errors.billing.invoice.variantNotFound` | the variant was switched off since the invoice: the Grant cannot be issued and the whole payment rolls back |
 
 **One transaction, in this order** (spec §5.8 step 2):
@@ -81,6 +82,15 @@ otherwise) → `InvoiceExpiryService.expirePending()` → `{scanned, expired, ho
 Per user, `INVOICE_PAY` bucket, `INVOICE_PAY_RATE_LIMIT` (20) per 15 min. It
 bounds the transactions one caller opens on the wallet row; exactly-once does
 not rest on it.
+
+## What the shop reads (built — F-111-e)
+
+Both on `InvoiceService`, proved by `invoice/invoice.spec.ts`.
+
+| Route | Answer | Rule |
+|---|---|---|
+| `GET /api/billing/offers` (`OffersController`) | `[{variantId, sku, nameKey, productId, descriptionKey, categoryKey, fulfilmentKind, durationDays, billingMode, quotas, price}]`, by SKU | `forSale`: catalog's `listOffersIn` (listed, live, priced), **less what `deliveryRouteOf` cannot deliver** — the rule `create` refuses with, so the list never offers a buy that answers `variantNotFound`. `@TenantCapability('sell')`; `SHOP_OFFERS` bucket, `SHOP_OFFERS_RATE_LIMIT` (120) per 15 min |
+| `GET /api/billing/invoices/:id` | the create answer without `rejected`; `applied` = the holds under the invoice's id, `pending` or `confirmed` | `get`: scoped to the caller's user (+ RLS) — unknown, another tenant's and another user's are one `404 notFound`. A `pending` one past `expiresAt` reads `expired`, as the pay refuses it. No capability (it sells nothing); `INVOICE_READ` bucket, `INVOICE_READ_RATE_LIMIT` (120) per 15 min |
 
 ## The shortfall (built — F-111-c)
 

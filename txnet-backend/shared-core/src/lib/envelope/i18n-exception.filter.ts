@@ -13,7 +13,7 @@ import { sanitizeError } from './sanitize-error';
  * third-party failure, plain bug — goes through {@link sanitizeError}, so the
  * client only ever receives:
  *
- *   { ok: false, msg: "<translated safe message>", ref: "<id>", fieldErrors?: [...] }
+ *   { ok: false, msg: "<translated safe message>", ref: "<id>", error?: {reason, facts?}, fieldErrors?: [...] }
  *
  * The real error (message, stack, DB code/meta) is written to the server log
  * only, correlated by `ref`.
@@ -48,7 +48,8 @@ export class I18nExceptionFilter implements ExceptionFilter {
     };
     // What a client acts on without reading `msg` (ADR-0043). Absent unless
     // the throw named one, so no existing answer changes shape.
-    if (safe.reason) body['error'] = { reason: safe.reason };
+    // `facts` ride beside it — the figures of that refusal (F-111-e).
+    if (safe.reason) body['error'] = safe.facts ? { reason: safe.reason, facts: safe.facts } : { reason: safe.reason };
     if (safe.fieldErrors?.length) {
       body['fieldErrors'] = safe.fieldErrors.map((f) => ({
         path: f.path,

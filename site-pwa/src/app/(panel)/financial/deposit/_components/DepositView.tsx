@@ -1,13 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, Sparkles } from "lucide-react";
+import { CheckCircle2, ShoppingCart, Sparkles } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { ApiError } from "@/lib/api-error";
 import { billingApi, type DepositGateway, type DepositStarted } from "@/lib/billing-api";
 import { openMiniAppInvoice } from "@/lib/mini-app";
+import { panelShopInvoicePath } from "@/lib/routes";
+import { prefillAmount, rememberReturnInvoice, type ForInvoice } from "../../../shop/_lib/shop";
 import { useWalletBalance } from "../../../_hooks/useWalletBalance";
 import { PaymentPendingView } from "../../../payment/_components/PaymentPendingView";
 import { BASE_CURRENCY, formatMoney } from "../../../_lib/money";
@@ -52,7 +55,7 @@ const D = FrontendI18nKeys.common.deposit;
  * coupon holds back at once (F-093-q), and the retry the payer makes a second
  * later is not refused a one-use code the messenger never charged for.
  */
-export function DepositView() {
+export function DepositView({ forInvoice = null }: { forInvoice?: ForInvoice | null } = {}) {
   const { lang, t } = useLocale();
   const messageFor = useApiErrorMessage();
   const { balance, refresh } = useWalletBalance();
@@ -67,8 +70,23 @@ export function DepositView() {
   const [loaded, setLoaded] = useState(-1);
   const loadingGateways = loaded !== asked;
 
-  const [amount, setAmount] = useState("");
+  const [typedAmount, setAmount] = useState("");
   const [codes, setCodes] = useState<string[]>([]);
+  // Opened for an invoice's shortfall (F-111-e): the amount is the shortfall
+  // raised to the chosen gateway's minimum — derived, so it follows the picker
+  // — until the user types one of their own.
+  const [typed, setTyped] = useState(false);
+  const amount =
+    forInvoice && !typed ? prefillAmount(forInvoice.missing, gateway?.minAmount ?? null) : typedAmount;
+  const onAmountChange = useCallback((value: string) => {
+    setTyped(true);
+    setAmount(value);
+  }, []);
+  // The bank returns to `/payment/success`, which has no other way to know the
+  // user was on their way to an invoice.
+  useEffect(() => {
+    if (forInvoice) rememberReturnInvoice(forInvoice.invoiceId);
+  }, [forInvoice]);
 
   // One press of Pay starts one payment (F-093-r): the claim is taken on the
   // click, before the verifying check's network read, not inside `pay()`.
@@ -226,13 +244,22 @@ export function DepositView() {
               {t("common", D.summary.newBalance, { balance: money(credited.balance) })}
             </p>
           )}
-          <button
-            type="button"
-            onClick={reset}
-            className="mt-6 rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-white hover:brightness-110"
-          >
-            {t("common", D.summary.again)}
-          </button>
+          {forInvoice ? (
+            <Link
+              href={panelShopInvoicePath(forInvoice.invoiceId)}
+              className="mt-6 inline-block rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-white hover:brightness-110"
+            >
+              {t("common", D.forInvoice.back)}
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={reset}
+              className="mt-6 rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-white hover:brightness-110"
+            >
+              {t("common", D.summary.again)}
+            </button>
+          )}
         </div>
       </div>
     );
@@ -262,6 +289,18 @@ export function DepositView() {
         </div>
       </header>
 
+      {forInvoice && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-card-border bg-leaf-bg px-4 py-3 text-sm">
+          <span className="flex items-center gap-2 text-text-primary">
+            <ShoppingCart size={18} className="text-primary" aria-hidden />
+            {t("common", D.forInvoice.notice, { amount: formatMoney(forInvoice.missing, BASE_CURRENCY, { lang, t }) })}
+          </span>
+          <Link href={panelShopInvoicePath(forInvoice.invoiceId)} className="font-bold text-primary underline">
+            {t("common", D.forInvoice.back)}
+          </Link>
+        </div>
+      )}
+
       {verifyingGuard.verifying && <VerifyingBanner payment={verifyingGuard.verifying} />}
       {verifyingGuard.warning && (
         <VerifyingConfirm
@@ -279,7 +318,7 @@ export function DepositView() {
 
           <AmountInput
             amount={amount}
-            onAmountChange={setAmount}
+            onAmountChange={onAmountChange}
             gateway={gateway}
             disabled={noGateway}
           />

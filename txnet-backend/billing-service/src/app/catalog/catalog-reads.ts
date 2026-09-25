@@ -55,6 +55,8 @@ export type CatalogOffer = {
   billingMode: VariantBillingMode;
   qualityTier: QualityTier;
   visibility: VariantVisibility;
+  /** The network panel group a `network_access` variant is delivered on (F-027-bk), or `null`. */
+  panelGroupId: string | null;
   price: { id: string; amount: string; effectiveFrom: Date };
 };
 
@@ -97,6 +99,7 @@ function toOffer(v: VariantRow, at: Date, offered: (f: OfferFacts) => boolean): 
     billingMode: v.billingMode,
     qualityTier: v.qualityTier,
     visibility: v.visibility,
+    panelGroupId: v.panelGroupId,
     price: { id: price.id, amount: price.amount.toFixed(2), effectiveFrom: price.effectiveFrom },
   };
 }
@@ -113,20 +116,28 @@ export async function sellableOfferById(tx: Prisma.TransactionClient, variantId:
   return row ? toOffer(row, at, isSellableBySku) : null;
 }
 
+/**
+ * Every listed variant the caller may buy, with the price in effect at `at`,
+ * read on the caller's `tx` — what {@link CatalogReadService.listOffers}
+ * answers, for a caller that narrows it further in its own transaction (the
+ * shop, F-111-e).
+ */
+export async function listOffersIn(tx: Prisma.TransactionClient, at: Date): Promise<CatalogOffer[]> {
+  const rows = await tx.productVariant.findMany({
+    where: listedVariantWhere,
+    include: withPrices(at),
+    orderBy: [{ sku: 'asc' }],
+  });
+  return rows.flatMap((v) => toOffer(v, at, isListed) ?? []);
+}
+
 @Injectable()
 export class CatalogReadService {
   constructor(private readonly prisma: PrismaService) {}
 
   /** Every listed variant the caller's tenant may buy, with the price in effect at `at`. */
   listOffers(at: Date = new Date()): Promise<CatalogOffer[]> {
-    return tenantTransaction(this.prisma, async (tx) => {
-      const rows = await tx.productVariant.findMany({
-        where: listedVariantWhere,
-        include: withPrices(at),
-        orderBy: [{ sku: 'asc' }],
-      });
-      return rows.flatMap((v) => toOffer(v, at, isListed) ?? []);
-    });
+    return tenantTransaction(this.prisma, (tx) => listOffersIn(tx, at));
   }
 
   /** One variant by its SKU — `public` or `unlisted` — or `null`. The caller's own SKU over the platform's. */

@@ -29,6 +29,13 @@ export const PANEL_SETTINGS = "/settings";
  */
 export const PANEL_MY_SERVICES = "/services";
 /**
+ * The shop (F-111-e): what the caller may buy, buy -> invoice -> pay from the
+ * wallet. The sidebar's `buy` entry.
+ */
+export const PANEL_SHOP = "/shop";
+/** The shop opened on one invoice — where a top-up for its shortfall comes back to. */
+export const panelShopInvoicePath = (invoiceId: string) => `${PANEL_SHOP}?invoice=${encodeURIComponent(invoiceId)}`;
+/**
  * The financial history page (F-093-d) — the wallet ledger and the top-up
  * attempts, as two lists. The sidebar's `financial-history` entry and the
  * wallet control's `history` quick action both point here.
@@ -40,6 +47,13 @@ export const PANEL_FINANCIAL = "/financial";
  * (`panel-web/contract.shell.md` rule 3).
  */
 export const PANEL_DEPOSIT = "/financial/deposit";
+/**
+ * The top-up page opened for an invoice's shortfall (F-111-e): `missing` is
+ * pre-filled (raised to the gateway's minimum there) and the page links back to
+ * the invoice. No coupon code ever rides in it.
+ */
+export const panelDepositForInvoicePath = (invoiceId: string, missing: string) =>
+  `${PANEL_DEPOSIT}?${new URLSearchParams({ invoice: invoiceId, missing })}`;
 /** A reseller's billing wallet with the platform (F-019-d). */
 export const PANEL_TENANT_BILLING = "/financial/billing";
 /**

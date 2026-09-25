@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, History } from "lucide-react";
+import { useSyncExternalStore } from "react";
+import { ArrowLeft, History, ShoppingCart } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { PANEL_FINANCIAL, PANEL_HOME } from "@/lib/routes";
+import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { PANEL_FINANCIAL, PANEL_HOME, panelShopInvoicePath } from "@/lib/routes";
+import { returnInvoice } from "../../shop/_lib/shop";
 import { PAYMENT_RESULT_KEYS as P, type PaymentSuccess } from "../_lib/payment-result";
 import { PaymentResultCard } from "./PaymentResultCard";
 import { ReferenceCard } from "./ReferenceCard";
@@ -24,9 +27,16 @@ export const SECONDARY_ACTION =
  * (`domains/billing/contract.deposit.md`). There is nothing here to call and
  * nothing to retry — and nothing to add up either: the top bar reads the
  * balance from `billing` on this load like it does on any other.
+ *
+ * A top-up the shop started for an invoice's shortfall (F-111-e) adds one
+ * action: back to that invoice. The id was kept in session storage by the
+ * top-up page, because the bank's return URL carries nothing of the panel's;
+ * the shop forgets it once the invoice is paid.
  */
 export function PaymentSuccessView({ reference, alreadyPaid }: PaymentSuccess) {
   const { t } = useLocale();
+  // Storage is not there on the server render: `null` there, the kept id after hydration.
+  const invoiceId = useSyncExternalStore(noSubscription, returnInvoice, () => null);
   return (
     <PaymentResultCard
       tone="success"
@@ -35,7 +45,13 @@ export function PaymentSuccessView({ reference, alreadyPaid }: PaymentSuccess) {
       message={t("common", alreadyPaid ? P.success.alreadySubtitle : P.success.subtitle)}
       actions={
         <>
-          <Link href={PANEL_HOME} className={PRIMARY_ACTION}>
+          {invoiceId && (
+            <Link href={panelShopInvoicePath(invoiceId)} className={PRIMARY_ACTION}>
+              <ShoppingCart size={16} aria-hidden />
+              {t("common", FrontendI18nKeys.common.paymentResult.backToInvoice)}
+            </Link>
+          )}
+          <Link href={PANEL_HOME} className={invoiceId ? SECONDARY_ACTION : PRIMARY_ACTION}>
             {t("common", P.success.toPanel)}
             {/* Points forward in the reading direction: left in RTL, right in LTR. */}
             <ArrowLeft
@@ -55,3 +71,6 @@ export function PaymentSuccessView({ reference, alreadyPaid }: PaymentSuccess) {
     </PaymentResultCard>
   );
 }
+
+/** Session storage has no event for the tab that wrote it; the id is read once per render. */
+const noSubscription = () => () => {};

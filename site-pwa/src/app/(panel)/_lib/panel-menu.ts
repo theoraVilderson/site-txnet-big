@@ -18,7 +18,7 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SYSTEMS, PANEL_TENANT_BILLING } from "@/lib/routes";
+import { PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_HOME, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SHOP, PANEL_SYSTEMS, PANEL_TENANT_BILLING } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 /** The shell's menu labels as generated constants (C-06). */
@@ -103,7 +103,7 @@ export type VisibleMenuEntry = VisibleMenuLink | VisibleMenuGroup;
  */
 export const PANEL_MENU: readonly PanelMenuEntry[] = [
   { id: "dashboard", label: M.dashboard, icon: Home, href: PANEL_HOME },
-  { id: "buy", label: M.buy, icon: ShoppingCart, href: null },
+  { id: "buy", label: M.buy, icon: ShoppingCart, href: PANEL_SHOP },
   // F-502-s
   { id: "my-services", label: M.myServices, icon: Globe, href: PANEL_MY_SERVICES },
   {

@@ -184,6 +184,62 @@ export interface GrantRow {
 export type GrantsPage = Paged<GrantRow>;
 
 /**
+ * One variant the shop sells, as `GET /offers` answers it (F-111-e,
+ * `billing/contract.purchase.md`): listed, priced now, and deliverable — billing
+ * leaves out what an invoice would refuse. `price` is the catalog's, in base
+ * currency; it is shown, never sent back. Names are keys, resolved through the
+ * published `catalog` namespace as My services does.
+ */
+export interface ShopOffer {
+  variantId: string;
+  sku: string;
+  nameKey: string;
+  productId: string;
+  descriptionKey: string | null;
+  categoryKey: string;
+  fulfilmentKind: string;
+  /** `null` = permanent. */
+  durationDays: number | null;
+  billingMode: "prepaid" | "metered";
+  quotas: unknown;
+  price: string;
+}
+
+/** The statuses an invoice can be in, as `billing.prisma` declares `InvoiceStatus` (C-09). */
+export const INVOICE_STATUSES = ["pending", "paid", "expired", "cancelled", "refunded"] as const;
+export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
+
+/**
+ * An invoice, as `POST /invoices` makes it and `GET /invoices/:id` reads it back
+ * (F-111-a, F-111-e). Money is a decimal string in base currency (C-02).
+ * `rejected` is only in the creation's answer: the codes that took nothing, with
+ * billing's sentence.
+ */
+export interface ShopInvoice {
+  id: string;
+  variantId: string;
+  sku: string;
+  nameKey: string;
+  status: InvoiceStatus;
+  amount: string;
+  discount: string;
+  total: string;
+  applied: Array<{ code: string; discount: string }>;
+  rejected?: Array<{ code: string; reason: string; message: string }>;
+  expiresAt: string;
+}
+
+/** `POST /invoices/:id/pay`'s answer. `token` is the subscription key, in the clear this once. */
+export interface InvoicePaid {
+  id: string;
+  status: "paid";
+  total: string;
+  balanceAfter: string;
+  walletTransactionId: string | null;
+  grants: Array<{ id: string; status: string; token: string }>;
+}
+
+/**
  * The convergence loop's verdicts on a config (F-027-aa/ab), as `network.prisma`
  * declares `DriftState` (C-09). Only `synced` is quiet: every other one is a
  * button on the service page that says why (F-027-ac).
@@ -663,6 +719,33 @@ export const billingApi = {
    * pass and nothing to get wrong. A user with no Grants is an empty page, not
    * a 404; paging is the only knob the route has.
    */
+  async shopOffers(): Promise<ShopOffer[]> {
+    return call<ShopOffer[]>("/offers", { method: "GET" });
+  },
+
+  /**
+   * An invoice for one variant (F-111-a). **The body has no price**: billing
+   * prices it from the catalog, so a figure sent here would be ignored anyway.
+   * The codes are held under the invoice for its 30 minutes.
+   */
+  async createInvoice(variantId: string, couponCodes: string[]): Promise<ShopInvoice> {
+    return call<ShopInvoice>("/invoices", { method: "POST", body: JSON.stringify({ variantId, couponCodes }) });
+  },
+
+  /** The caller's own invoice (F-111-e) — the one a top-up comes back to. Another user's is a 404. */
+  async invoice(id: string): Promise<ShopInvoice> {
+    return call<ShopInvoice>(`/invoices/${encodeURIComponent(id)}`, { method: "GET" });
+  },
+
+  /**
+   * Pay it from the wallet (F-111-b), exactly once. A shortfall is a 409
+   * `insufficient_balance` whose `facts.missing` is the top-up to offer
+   * (F-111-c) — `shop/_lib/shop.ts` reads it.
+   */
+  async payInvoice(id: string): Promise<InvoicePaid> {
+    return call<InvoicePaid>(`/invoices/${encodeURIComponent(id)}/pay`, { method: "POST" });
+  },
+
   async grants(page: number, pageSize: number): Promise<GrantsPage> {
     return call<GrantsPage>(`/gift/grants?page=${page}&pageSize=${pageSize}`, { method: "GET" });
   },

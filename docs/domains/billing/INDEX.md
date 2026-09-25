@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 39
+version: 40
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -74,10 +74,10 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-25 | contract v40 (F-111-e): new `GET /api/billing/offers` (what the shop sells: listed, priced, deliverable) and `GET /api/billing/invoices/:id` (own invoice; past its clock reads `expired`). The pay's shortfall moves to the envelope's `error.facts` — the only place the shared filter lets it through. Additive. Consumer panel-web: F-111-e |
 | 2026-09-25 | contract v39 (F-111-b): new `POST /api/billing/invoices/:id/pay` — one transaction under the invoice's row lock: `product_purchase` debit, `paid`, Grant `pending`, coupons confirmed, `entitlement.grant.created` in the outbox; exactly once under concurrent calls. New `WalletReasonType` `product_purchase` (a sale in revenue, on history's default page). Additive. Consumer panel-web: F-111-e |
 | 2026-09-25 | contract v38 (F-111-a): new `POST /api/billing/invoices` — server-priced from the catalog, coupons held under the invoice id, expires in 30 min; `invoice_pending_expiry` gives unpaid holds back. Additive. [contract.purchase.md](contract.purchase.md). Consumer panel-web: F-111-e |
 | 2026-09-24 | contract v37 (F-104-af): a top-up is taxed again (ADR-0076, reversing v3's "no tax") — `priceAtGateway` adds `tax` on the basis, half-up; the quote and start answers gain `tax` + `taxRatePercent`, and `payable` includes it. Additive fields; with no rate set `tax` is `0.00` and nothing moves. Consumers: panel-web F-104-ah; bot-app F-104-ai (the quote's tax line) |
 | 2026-09-24 | contract v36 (F-027-au): new `PUT /systems/panels/:id/credentials` — rotates a panel's login in the vault; on a `pending` panel clears its last test (not after `rate_limited`) so the next tick re-tests; an accepted one is rotated only; refused is 409 `panel_refused`. [contract.systems.md](contract.systems.md) |
-| 2026-09-24 | contract v35 (F-027-at): new `GET /systems/holds`, `POST /systems/holds/:id/release` (202; queued to `metering-service` through the outbox as `network.usage.release`, billed there through the meter) and `POST /systems/holds/:id/write-off` (never charged, once, note required). Additive, no break; `contract.systems.md`, `contract.metering.md`. Consumer panel-web: F-027-ad |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->
