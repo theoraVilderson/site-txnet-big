@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, Loader2, Plus, Power, Sparkles } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { type CatalogCategory, type CatalogProduct, type CatalogProductDetail, type CatalogVariant, type FulfilmentKind, type PanelGroupOption, type Quotas } from "@/lib/catalog-api";
+import { type CatalogCapability, type CatalogCategory, type CatalogProduct, type CatalogProductDetail, type CatalogVariant, type FulfilmentKind, type PanelGroupOption, type Quotas } from "@/lib/catalog-api";
 import { useCatalogSurface } from "../_lib/surface";
+import { usePanelSession } from "../../_context/PanelSessionContext";
 import { DatePicker } from "../../_components/kit/DatePicker";
 import { Select } from "../../_components/kit/Select";
 import { BASE_CURRENCY, formatMoney } from "../../_lib/money";
@@ -16,7 +17,10 @@ import {
   QUOTA_METRICS,
   RESET_POLICIES,
   VISIBILITIES,
+  capabilitiesFor,
   currentPrice,
+  isPlatformOwner,
+  surfaceActor,
   emptyVariantForm,
   groupsForVariant,
   notForSale,
@@ -34,7 +38,7 @@ import {
   type PriceForm,
   type VariantForm,
 } from "../_lib/catalog-form";
-import { FeatureKeyPicker } from "./FeatureKeyPicker";
+import { CapabilityPicker } from "./CapabilityPicker";
 import { ProductCategories } from "./CategoryPickers";
 import { Alert, CopyId, Field, Sheet, input, primaryButton, quietButton, useMessage } from "./catalog-ui";
 
@@ -46,7 +50,9 @@ import { Alert, CopyId, Field, Sheet, input, primaryButton, quietButton, useMess
 export function ProductDetailSheet({
   product,
   name,
-  knownFeatureKeys,
+  capabilities,
+  capabilityLabel,
+  onCapabilityCreated,
   categories,
   categoryLabel,
   onClose,
@@ -54,7 +60,10 @@ export function ProductDetailSheet({
 }: {
   product: CatalogProduct;
   name: string;
-  knownFeatureKeys: readonly string[];
+  /** Every capability the caller sees; the picker offers those this product's tenant may carry. */
+  capabilities: readonly CatalogCapability[];
+  capabilityLabel: (c: CatalogCapability) => string;
+  onCapabilityCreated: () => Promise<void>;
   /** Where it can be filed; its own list is `product.categoryIds` (F-026-s). */
   categories: readonly CatalogCategory[];
   categoryLabel: (c: CatalogCategory) => string;
@@ -102,7 +111,12 @@ export function ProductDetailSheet({
       onClose={onClose}
     >
       <ProductCategories product={detail ?? product} categories={categories} label={categoryLabel} onSaved={async () => Promise.all([load(), onChanged()]).then(() => undefined)} />
-      <Capabilities product={detail ?? product} known={knownFeatureKeys} onSaved={async () => Promise.all([load(), onChanged()]).then(() => undefined)} />
+      <Capabilities
+        product={detail ?? product}
+        capabilities={capabilities}
+        label={capabilityLabel}
+        onCreated={onCapabilityCreated}
+        onSaved={async () => Promise.all([load(), onChanged()]).then(() => undefined)} />
 
       <h3 className="text-xs font-bold text-text-secondary">{t("common", K.open)}</h3>
       {error && <Alert>{error}</Alert>}
@@ -139,10 +153,29 @@ export function ProductDetailSheet({
   );
 }
 
-function Capabilities({ product, known, onSaved }: { product: CatalogProduct; known: readonly string[]; onSaved: () => Promise<void> }) {
+function Capabilities({
+  product,
+  capabilities,
+  label,
+  onCreated,
+  onSaved,
+}: {
+  product: CatalogProduct;
+  capabilities: readonly CatalogCapability[];
+  label: (c: CatalogCapability) => string;
+  onCreated: () => Promise<void>;
+  onSaved: () => Promise<void>;
+}) {
   const { t } = useLocale();
   const message = useMessage();
-  const { api } = useCatalogSurface();
+  const { api, tenantId } = useCatalogSurface();
+  const { me } = usePanelSession();
+  // Only the platform owner names whose a new capability is; a reseller's screen's schema refuses a `tenantId`.
+  const owner = isPlatformOwner(surfaceActor(me, tenantId));
+  const nameOf = (k: string) => {
+    const c = capabilities.find((x) => x.key === k);
+    return c ? label(c) : k;
+  };
   const [editing, setEditing] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -161,8 +194,8 @@ function Capabilities({ product, known, onSaved }: { product: CatalogProduct; kn
             <span className="text-[11px] text-text-secondary">{t("common", K.wizard.none)}</span>
           ) : (
             product.featureKeys.map((k) => (
-              <span key={k} dir="ltr" className="rounded-full bg-[var(--leaf-bg)] px-2.5 py-1 font-mono text-[11px] font-bold text-primary">
-                {k}
+              <span key={k} title={k} className="rounded-full bg-[var(--leaf-bg)] px-2.5 py-1 text-[11px] font-bold text-primary">
+                {nameOf(k)}
               </span>
             ))
           )}
@@ -187,7 +220,15 @@ function Capabilities({ product, known, onSaved }: { product: CatalogProduct; kn
 
   return (
     <section className="flex flex-col gap-3 rounded-2xl border border-dashed border-primary p-3">
-      <FeatureKeyPicker value={editing} onChange={setEditing} known={known} />
+      <CapabilityPicker
+        value={editing}
+        onChange={setEditing}
+        options={capabilitiesFor(capabilities, product.tenantId)}
+        label={label}
+        takenKeys={capabilities.map((c) => c.key)}
+        newTenant={owner ? product.tenantId : undefined}
+        onCreated={onCreated}
+      />
       {error && <Alert>{error}</Alert>}
       <div className="flex justify-end gap-2">
         <button type="button" className={quietButton} onClick={() => setEditing(null)}>

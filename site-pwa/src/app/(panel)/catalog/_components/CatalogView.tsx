@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Archive, BookOpen, ChevronLeft, FolderTree, Languages, Loader2, Package, Pencil, Plus, Power, RotateCcw, RotateCw, Tags, Trash2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { type CatalogAdminApi, type CatalogCategory, type CatalogProduct } from "@/lib/catalog-api";
+import { type CatalogAdminApi, type CatalogCapability, type CatalogCategory, type CatalogProduct } from "@/lib/catalog-api";
 import { useCatalogSurface } from "../_lib/surface";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { Select } from "../../_components/kit/Select";
@@ -14,7 +14,6 @@ import {
   categoryPath,
   categoryTree,
   categoryRemovalReport,
-  featureKeysIn,
   heldByProducts,
   mergeRemovals,
   flattenTexts,
@@ -28,6 +27,8 @@ import {
   switchTargets,
   type CatalogTexts,
 } from "../_lib/catalog-form";
+import { CapabilitiesTab } from "./CapabilitiesTab";
+import { CapabilitySheet } from "./CapabilityPicker";
 import { CatalogGuide } from "./CatalogGuide";
 import { CategorySheet, NamesSheet } from "./NameSheets";
 import { MoveCategorySheet } from "./CategoryPickers";
@@ -63,7 +64,7 @@ const writeGuideClosed = (closed: boolean) => {
   }
 };
 
-type Renaming = { kind: "product" | "category"; id: string; nameKey: string; descriptionKey: string | null; sourceLang: string };
+type Renaming = { kind: "product" | "category" | "capability"; id: string; nameKey: string; descriptionKey: string | null; sourceLang: string };
 
 /**
  * The catalog page (F-026-f, D-34): products and categories on two tabs, a
@@ -89,13 +90,14 @@ export function CatalogView() {
   // Nobody is an owner on a reseller's screen: billing runs the work as the
   // reseller and refuses a platform item there, whoever is signed in (F-066-w8).
   const owner = isPlatformOwner(surfaceActor(me, surface.tenantId));
-  const [tab, setTab] = useState<"products" | "categories">("products");
+  const [tab, setTab] = useState<"products" | "categories" | "capabilities">("products");
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   // Categories archived with their sold products (F-026-l): out of the tab, still naming those products.
   const [archivedCategories, setArchivedCategories] = useState<CatalogCategory[]>([]);
   const [showArchivedCategories, setShowArchivedCategories] = useState(false);
-  // Every product the caller manages: the capability list and the taken keys come from here,
-  // whatever the filters show.
+  // What a product may unlock (F-114-f-b): the platform's and the caller's own, every one for the owner.
+  const [capabilities, setCapabilities] = useState<CatalogCapability[]>([]);
+  // Every product the caller manages: the taken keys come from here, whatever the filters show.
   const [products, setProducts] = useState<CatalogProduct[] | null>(null);
   // Sold products a removal kept (F-026-h): out of the list, still holding their keys.
   const [archived, setArchived] = useState<CatalogProduct[]>([]);
@@ -112,7 +114,7 @@ export function CatalogView() {
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [creating, setCreating] = useState<"product" | "category" | null>(null);
+  const [creating, setCreating] = useState<"product" | "category" | "capability" | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [texts, setTexts] = useState<CatalogTexts>({});
   const [renaming, setRenaming] = useState<Renaming | null>(null);
@@ -127,17 +129,19 @@ export function CatalogView() {
 
   const load = useCallback(async () => {
     try {
-      const [cats, keptCats, prods, kept, names] = await Promise.all([
+      const [cats, keptCats, prods, kept, caps, names] = await Promise.all([
         api.categories(),
         api.categories({ archived: "true" }),
         api.products(),
         api.products({ archived: "true" }),
+        api.capabilities(),
         loadTexts(api, langCodes ? langCodes.split(",") : [lang]),
       ]);
       setCategories(cats);
       setArchivedCategories(keptCats);
       setProducts(prods);
       setArchived(kept);
+      setCapabilities(caps);
       setSelected((before) => stillSelected(before, prods));
       setPickedCategories((before) => stillSelected(before, cats));
       setTexts(names);
@@ -175,7 +179,10 @@ export function CatalogView() {
   };
   const categoryNames = (ids: readonly string[]) => ids.map(categoryName).join("، ");
   const tree = useMemo(() => categoryTree(categories), [categories]);
-  const knownFeatureKeys = useMemo(() => featureKeysIn(products ?? []), [products]);
+  const capabilityName = (k: string) => {
+    const c = capabilities.find((x) => x.key === k);
+    return c ? nameOf(c) : k;
+  };
   const listed = showArchived ? archived : (products ?? []);
   const shown = listed.filter((p) => (!categoryId || p.categoryIds.includes(categoryId)) && (!platformOnly || p.tenantId === null));
   const allSelected = !showArchived && shown.length > 0 && shown.every((p) => selected.has(p.id));
@@ -315,6 +322,9 @@ export function CatalogView() {
           <button type="button" role="tab" aria-selected={tab === "categories"} className={tabClass(tab === "categories")} onClick={() => setTab("categories")}>
             {t("common", K.tabs.categories)} ({categories.length})
           </button>
+          <button type="button" role="tab" aria-selected={tab === "capabilities"} className={tabClass(tab === "capabilities")} onClick={() => setTab("capabilities")}>
+            {t("common", K.tabs.capabilities)} ({capabilities.length})
+          </button>
         </div>
         {tab === "products" ? (
           <div className="flex flex-wrap gap-2">
@@ -352,6 +362,11 @@ export function CatalogView() {
               </button>
             )}
           </div>
+        ) : tab === "capabilities" ? (
+          <button type="button" className={quietButton} onClick={() => setCreating("capability")}>
+            <Plus size={14} aria-hidden />
+            {t("common", K.capabilities.new)}
+          </button>
         ) : (
           <div className="flex flex-wrap gap-2">
             {(archivedCategories.length > 0 || showArchivedCategories) && (
@@ -469,10 +484,10 @@ export function CatalogView() {
                     {!p.isActive && ` · ${t("common", K.inactive)}`}
                   </p>
                   {p.featureKeys.length > 0 && (
-                    <p className="mt-1 flex flex-wrap gap-1" dir="ltr">
+                    <p className="mt-1 flex flex-wrap gap-1">
                       {p.featureKeys.map((k) => (
-                        <span key={k} className="rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 font-mono text-[10px] font-bold text-primary">
-                          {k}
+                        <span key={k} title={k} className="rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-[10px] font-bold text-primary">
+                          {capabilityName(k)}
                         </span>
                       ))}
                     </p>
@@ -501,6 +516,14 @@ export function CatalogView() {
             </ul>
           </div>
         )
+      ) : tab === "capabilities" ? (
+        <CapabilitiesTab
+          capabilities={capabilities}
+          owner={owner}
+          label={nameOf}
+          onRename={(c) => setRenaming({ kind: "capability", id: c.id, nameKey: c.nameKey, descriptionKey: c.descriptionKey, sourceLang: c.sourceLang })}
+          onRemove={(c) => void act(() => api.removeCapability(c.id))}
+        />
       ) : showArchivedCategories ? (
         <div className="flex flex-col gap-2">
           <p className="text-xs text-text-secondary">{t("common", K.categories.archivedHint)}</p>
@@ -625,13 +648,18 @@ export function CatalogView() {
           onSaved={saved}
         />
       )}
+      {creating === "capability" && (
+        <CapabilitySheet owner={owner} takenKeys={capabilities.map((c) => c.key)} onClose={() => setCreating(null)} onSaved={saved} />
+      )}
       {creating === "product" && (
         <ProductWizard
           categories={categories}
           categoryLabel={nameOf}
           takenProductKeys={[...(products ?? []), ...archived].map((p) => p.key)}
           takenCategoryKeys={categories.map((c) => c.key)}
-          knownFeatureKeys={knownFeatureKeys}
+          capabilities={capabilities}
+          capabilityLabel={nameOf}
+          onCapabilityCreated={load}
           onClose={() => setCreating(null)}
           onCreated={async (productId, variantFailed) => {
             setCreating(null);
@@ -648,7 +676,9 @@ export function CatalogView() {
         <ProductDetailSheet
           product={openProduct}
           name={nameOf(openProduct)}
-          knownFeatureKeys={knownFeatureKeys}
+          capabilities={capabilities}
+          capabilityLabel={nameOf}
+          onCapabilityCreated={load}
           categories={categories}
           categoryLabel={nameOf}
           onClose={() => setOpenId(null)}

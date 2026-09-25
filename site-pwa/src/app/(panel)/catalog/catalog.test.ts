@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { Me } from "@/lib/auth-api";
-import type { CatalogPrice, PanelGroupOption } from "@/lib/catalog-api";
+import type { CatalogCapability, CatalogPrice, PanelGroupOption } from "@/lib/catalog-api";
 import { PANEL_CATALOG } from "@/lib/routes";
 import { PANEL_MENU, isMenuGroup } from "../_lib/panel-menu";
 import {
@@ -51,7 +51,12 @@ import {
   wizardCategoryBody,
   variantBody,
   emptyWizard,
-  featureKeysIn,
+  capabilitiesFor,
+  capabilityBody,
+  canEditCapability,
+  emptyCapabilityForm,
+  suggestCapabilityKey,
+  validateCapabilityForm,
   firstInvalidStep,
   isFeatureKey,
   slugKey,
@@ -203,9 +208,7 @@ describe("the product form", () => {
 });
 
 describe("nothing to remember: keys and capabilities are suggested", () => {
-  it("offers every capability the caller's products already use, once and sorted", () => {
-    const products = [{ featureKeys: ["vpn.access", "vpn.premium_nodes"] }, { featureKeys: [] }, { featureKeys: ["api.public", "vpn.access"] }];
-    expect(featureKeysIn(products)).toEqual(["api.public", "vpn.access", "vpn.premium_nodes"]);
+  it("knows billing's feature-key shape", () => {
     expect(isFeatureKey("vpn.access")).toBe(true);
     expect(isFeatureKey("vpn")).toBe(false);
     expect(isFeatureKey("VPN.Access")).toBe(false);
@@ -228,6 +231,55 @@ describe("nothing to remember: keys and capabilities are suggested", () => {
     expect(suggestSku("vpn_pro", "30")).toBe("VPN_PRO-30D");
     expect(suggestSku("vpn_pro", "")).toBe("VPN_PRO-PERM");
     expect(suggestSku("a".repeat(64), "365")).toMatch(/^[A-Z0-9][A-Z0-9_-]{1,39}$/);
+  });
+});
+
+describe("capabilities are picked from billing's list, by name (F-114-f-b, ADR-0086)", () => {
+  const cap = (key: string, tenantId: string | null): CatalogCapability => ({
+    id: `id-${key}`,
+    tenantId,
+    key,
+    nameKey: `catalog.capability.${key}.name`,
+    descriptionKey: null,
+    sourceLang: "fa",
+  });
+  const list = [cap("vpn.access", null), cap("feature.gold", "t-res"), cap("feature.other", "t-x")];
+
+  it("offers a product the platform's capabilities and its own tenant's, never another tenant's", () => {
+    expect(capabilitiesFor(list, "t-res").map((c) => c.key)).toEqual(["vpn.access", "feature.gold"]);
+    expect(capabilitiesFor(list, null).map((c) => c.key)).toEqual(["vpn.access"]);
+    // Not the platform owner: billing already narrowed the list.
+    expect(capabilitiesFor(list, undefined)).toHaveLength(3);
+  });
+
+  it("derives a dotted key from the name, past every key the list already holds", () => {
+    expect(suggestCapabilityKey("Premium nodes", [])).toBe("feature.premium_nodes");
+    expect(suggestCapabilityKey("Premium nodes", ["feature.premium_nodes", "feature.premium_nodes_2"])).toBe("feature.premium_nodes_3");
+    expect(isFeatureKey(suggestCapabilityKey("سرور ویژه", []))).toBe(true);
+    expect(isFeatureKey(suggestCapabilityKey("!!!", []))).toBe(true);
+  });
+
+  it("asks a name and a key in billing's shape, and sends text, never a name key", () => {
+    const valid = { ...emptyCapabilityForm("fa"), key: "feature.gold", name: "طلایی" };
+    expect(validateCapabilityForm(valid)).toEqual({});
+    expect(validateCapabilityForm({ ...valid, key: "gold" })).toHaveProperty("key");
+    expect(validateCapabilityForm({ ...valid, name: " " })).toHaveProperty("name");
+    const body = capabilityBody({ ...valid, name: " طلایی " }, undefined);
+    expect(body).toEqual({ key: "feature.gold", sourceLang: "fa", name: { fa: "طلایی" } });
+    expect(capabilityBody({ ...valid, translateAll: true }, undefined)).toMatchObject({ translateAll: true });
+  });
+
+  it("files a new capability under the tenant named, and leaves it to billing when none is", () => {
+    const valid = { ...emptyCapabilityForm("fa"), key: "feature.gold", name: "طلایی" };
+    expect(capabilityBody(valid, null)).toMatchObject({ tenantId: null });
+    expect(capabilityBody(valid, UUID)).toMatchObject({ tenantId: UUID });
+    expect(capabilityBody(valid, undefined)).not.toHaveProperty("tenantId");
+  });
+
+  it("lets the platform owner edit every capability, and a tenant only its own", () => {
+    expect(canEditCapability(cap("vpn.access", null), true)).toBe(true);
+    expect(canEditCapability(cap("vpn.access", null), false)).toBe(false);
+    expect(canEditCapability(cap("feature.gold", "t-res"), false)).toBe(true);
   });
 });
 

@@ -161,7 +161,7 @@ export function NamesSheet({
   onClose,
   onSaved,
 }: {
-  kind: "product" | "category";
+  kind: "product" | "category" | "capability";
   id: string;
   nameKey: string;
   descriptionKey: string | null;
@@ -194,6 +194,8 @@ export function NamesSheet({
     setError(null);
     try {
       if (kind === "product") await api.updateProduct(id, namesBody(form, "product"));
+      // A capability is renamed as a category is: its name alone.
+      else if (kind === "capability") await api.updateCapability(id, namesBody(form, "category"));
       else await api.updateCategory(id, namesBody(form, "category"));
       await onSaved();
     } catch (e) {

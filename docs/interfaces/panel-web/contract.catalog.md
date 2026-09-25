@@ -123,6 +123,18 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    inbound ticked" when none, F-114-b), `healthyMembers` and, off `mirror`,
    "not delivered yet". A failed list costs the choices, never the form.
 
+## Capabilities by name (F-114-f-b, ADR-0086)
+
+What a product unlocks is ticked from billing's `GET /capabilities`, never
+typed as a key. `_components/CapabilityPicker.tsx`, `CapabilitiesTab.tsx`.
+
+| Rule | Held by |
+|---|---|
+| The wizard and the product sheet offer a product only the platform's capabilities and its own tenant's — the wizard judges by the owner picked, the sheet by `product.tenantId`; a ticked key off that list is shown red, to be taken off, and billing's `capability_unknown` returns the wizard to its access step | `capabilitiesFor` |
+| A chip shows the capability's name (viewer's language, then its source, then the key), the key only as a tooltip; the product list and the wizard's review do the same | `nameOf` over the `catalog` texts |
+| "New capability" asks a name; the key is `feature.<slugKey>`, numbered past every key the caller sees, editable behind "change key". From a picker it is filed under the product's tenant (the owner only; a reseller's screen sends no `tenantId`) and ticked after the list is re-read | `suggestCapabilityKey`, `capabilityBody` |
+| The capabilities tab: the platform owner renames and removes every row and may make a new one the platform's; a tenant, or a reseller's screen, its own — the platform's are read-only. A removal billing refuses (`capability_in_use`) is its sentence, nothing else | `canEditCapability` |
+
 ## The same page for a reseller a route names (F-066-w8, ADR-0064 (4))
 
 `/my-resellers/[id]/catalog` and `.../catalog/translations` are these same
@@ -169,7 +181,8 @@ billing's `CategoryRemovalOutcome`, `productCounts`, `switchTargets`,
 counts in the report (F-026-m); `RESTORE_CATEGORY` against billing's
 `updateCategorySchema` (F-026-n); `takesPanelGroup`, `groupsForVariant`,
 `wizardVariantTenant`, `variantBody` by kind, `panelGroupPatch` against
-billing's schema, `notForSale` (F-026-o).
+billing's schema, `notForSale` (F-026-o); `capabilitiesFor`, `suggestCapabilityKey`,
+`validateCapabilityForm` / `capabilityBody`, `canEditCapability` (F-114-f-b).
 
 `my-resellers/catalog.test.ts` (F-066-w8) — `catalogApiPrefix` on both
 surfaces against the controller's own `@Controller`, `surfaceActor` holding a

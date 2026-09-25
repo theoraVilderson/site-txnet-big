@@ -57,7 +57,10 @@ export type CatalogRejection =
   | "lang_unknown"
   | "source_text_missing"
   | "category_cycle"
-  | "category_too_deep";
+  | "category_too_deep"
+  | "capability_not_found"
+  | "capability_unknown"
+  | "capability_in_use";
 
 /** Text by language code (F-1533-d/f); at least the item's source language. The key is billing's. */
 export type Texts = Record<string, string>;
@@ -115,6 +118,31 @@ export interface CatalogProduct {
   isActive: boolean;
   /** Set when a removal found it sold and kept it (F-026-h); such a product is only in the `archived` list. */
   archivedAt: string | null;
+}
+
+/**
+ * What a product may unlock (F-114-f-a, ADR-0086): the platform's (`tenantId:
+ * null`) and a tenant's own. A product's `featureKeys` names these by `key`,
+ * which never changes; the name is catalog text like a product's.
+ */
+export interface CatalogCapability {
+  id: string;
+  tenantId: string | null;
+  key: string;
+  nameKey: string;
+  descriptionKey: string | null;
+  sourceLang: string;
+}
+
+export interface CreateCapabilityBody {
+  /** Absent = the caller's tenant; `null` = platform; another id = the platform owner's alone. */
+  tenantId?: string | null;
+  /** The feature-key shape, `vpn.access`. */
+  key: string;
+  sourceLang?: string;
+  name: Texts;
+  description?: Texts | null;
+  translateAll?: boolean;
 }
 
 /** What a removal did to one product (F-026-h): gone for good, kept because it was sold, or not the caller's. */
@@ -315,6 +343,25 @@ export function catalogAdminApi(tenantId: string | null) {
 
     async deactivatePrice(priceId: string): Promise<CatalogPrice> {
       return call<CatalogPrice>(`${at}/prices/${id(priceId)}/deactivate`, { method: "POST" });
+    },
+
+    /** The platform's capabilities and this surface's tenant's own; every one, with its tenant, for the platform owner (F-114-f-a). */
+    async capabilities(): Promise<CatalogCapability[]> {
+      return call<CatalogCapability[]>(`${at}/capabilities`, { method: "GET" });
+    },
+
+    async createCapability(body: CreateCapabilityBody): Promise<CatalogCapability> {
+      return call<CatalogCapability>(`${at}/capabilities`, { method: "POST", ...json(body) });
+    },
+
+    /** A rename; the key never changes. */
+    async updateCapability(capabilityId: string, body: Partial<Pick<CreateCapabilityBody, "sourceLang" | "name" | "description" | "translateAll">>): Promise<CatalogCapability> {
+      return call<CatalogCapability>(`${at}/capabilities/${id(capabilityId)}`, { method: "PATCH", ...json(body) });
+    },
+
+    /** Deleted, or refused `capability_in_use` while a product or a Grant holds its key. */
+    async removeCapability(capabilityId: string): Promise<{ id: string; outcome: "deleted" }> {
+      return call<{ id: string; outcome: "deleted" }>(`${at}/capabilities/${id(capabilityId)}/remove`, { method: "POST" });
     },
 
     // Translation review (F-1533-d/e): billing limits each call to the caller's items.

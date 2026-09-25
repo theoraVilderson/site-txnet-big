@@ -4,6 +4,7 @@ import type {
   BillingMode,
   CatalogPrice,
   CatalogRejection,
+  CreateCapabilityBody,
   CreateCategoryBody,
   CreateProductBody,
   CreateVariantBody,
@@ -51,6 +52,9 @@ export const REFUSAL_KEYS: Record<CatalogRejection, string> = {
   source_text_missing: CATALOG_KEYS.refusals.source_text_missing,
   category_cycle: CATALOG_KEYS.refusals.category_cycle,
   category_too_deep: CATALOG_KEYS.refusals.category_too_deep,
+  capability_not_found: CATALOG_KEYS.refusals.capability_not_found,
+  capability_unknown: CATALOG_KEYS.refusals.capability_unknown,
+  capability_in_use: CATALOG_KEYS.refusals.capability_in_use,
 };
 
 /** The refusal's own sentence key, when billing named one this page knows. */
@@ -84,14 +88,6 @@ const unique = (items: readonly string[]) => [...new Set(items.map((x) => x.trim
 export const isFeatureKey = (k: string) => FEATURE_KEY.test(k);
 
 // --------------------------------------------------------------- suggestions
-
-/**
- * Every capability the caller's products already grant — the picker's list, so
- * nobody types `vpn.premium_nodes` from memory. No registry exists: a product's
- * `featureKeys` is the only place these live (ADR-0049).
- */
-export const featureKeysIn = (products: readonly { featureKeys: readonly string[] }[]) =>
-  unique(products.flatMap((p) => p.featureKeys)).sort();
 
 /** Persian letters in Latin, so a name written in Persian still gives a readable key. */
 const LATIN: Record<string, string> = {
@@ -274,6 +270,63 @@ export function categoryBody(f: CategoryForm, owner: boolean): CreateCategoryBod
     ...translateAllOf(f),
   };
 }
+
+// ------------------------------------------------------------ capability
+
+/**
+ * A capability (F-114-f-b, ADR-0086): named like a category, its key made
+ * from the name. Billing's key is dotted (`vpn.access`), so a derived one sits
+ * under `feature.`; a key is opaque to code, so the prefix means nothing more.
+ */
+export interface CapabilityForm {
+  key: string;
+  sourceLang: string;
+  name: string;
+  /** The platform owner only, on the capabilities tab: a capability every tenant sees. */
+  shared: boolean;
+  translateAll: boolean;
+}
+
+export const emptyCapabilityForm = (defaultLang: string): CapabilityForm => ({ key: "", sourceLang: defaultLang, name: "", shared: false, translateAll: false });
+
+const CAPABILITY_PREFIX = "feature.";
+
+/** `feature.<the name's key>`, numbered past every key already on the list. */
+export const suggestCapabilityKey = (name: string, taken: Iterable<string>) => {
+  const inPrefix = [...taken].filter((k) => k.startsWith(CAPABILITY_PREFIX)).map((k) => k.slice(CAPABILITY_PREFIX.length));
+  return `${CAPABILITY_PREFIX}${suggestKey(name, inPrefix, "capability")}`;
+};
+
+export function validateCapabilityForm(f: CapabilityForm): Errors<CapabilityForm> {
+  const errors: Errors<CapabilityForm> = {};
+  if (!FEATURE_KEY.test(f.key.trim())) errors.key = E.featureKey;
+  if (blank(f.sourceLang)) errors.sourceLang = E.required;
+  if (blank(f.name)) errors.name = E.required;
+  return errors;
+}
+
+/** `tenant`: whose it is — `null` the platform's, an id that tenant's, `undefined` the caller's (billing decides). */
+export function capabilityBody(f: CapabilityForm, tenant: string | null | undefined): CreateCapabilityBody {
+  const sourceLang = f.sourceLang.trim();
+  return {
+    ...(tenant === undefined ? {} : { tenantId: tenant }),
+    key: f.key.trim(),
+    sourceLang,
+    name: { [sourceLang]: f.name.trim() },
+    ...translateAllOf(f),
+  };
+}
+
+/**
+ * What a product may carry: the platform's capabilities and its own tenant's —
+ * billing's `knownCapabilities`, judged by the product's tenant. `undefined` =
+ * billing already narrowed the list (not the platform owner).
+ */
+export const capabilitiesFor = <T extends { tenantId: string | null }>(caps: readonly T[], tenant: string | null | undefined): T[] =>
+  caps.filter((c) => tenant === undefined || c.tenantId === null || c.tenantId === tenant);
+
+/** The platform owner edits every capability; a tenant its own, never the platform's (ADR-0086 §3). */
+export const canEditCapability = (c: { tenantId: string | null }, owner: boolean) => owner || c.tenantId !== null;
 
 // ------------------------------------------------------------------- tree
 

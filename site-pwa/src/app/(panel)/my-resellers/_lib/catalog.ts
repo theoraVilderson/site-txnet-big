@@ -32,7 +32,10 @@ export type ResellerCatalogRefusal =
   | "lang_unknown"
   | "source_text_missing"
   | "category_cycle"
-  | "category_too_deep";
+  | "category_too_deep"
+  | "capability_not_found"
+  | "capability_unknown"
+  | "capability_in_use";
 
 export const CATALOG_REFUSAL_KEYS: Record<ResellerCatalogRefusal, string> = K.refusals;
 

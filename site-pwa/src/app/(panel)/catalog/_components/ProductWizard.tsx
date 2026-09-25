@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { Check, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { type CatalogCategory } from "@/lib/catalog-api";
+import { type CatalogCapability, type CatalogCategory } from "@/lib/catalog-api";
 import { useCatalogSurface } from "../_lib/surface";
 import { DEFAULT_LOCALE } from "@/env";
 import { usePanelSession } from "../../_context/PanelSessionContext";
@@ -14,6 +14,7 @@ import {
   CREATABLE_FULFILMENT_KINDS,
   NAME_MAX,
   WIZARD_STEPS,
+  capabilitiesFor,
   wizardCategoryBody,
   isPlatformOwner,
   productBody,
@@ -32,7 +33,7 @@ import {
   type VariantForm,
   type WizardStep,
 } from "../_lib/catalog-form";
-import { FeatureKeyPicker } from "./FeatureKeyPicker";
+import { CapabilityPicker } from "./CapabilityPicker";
 import { CategoryFields } from "./NameSheets";
 import { CategoryMultiPicker, TranslateAllBox } from "./CategoryPickers";
 import { VariantFields, usePanelGroups } from "./ProductDetailSheet";
@@ -48,6 +49,7 @@ const REFUSAL_STEP: Record<string, WizardStep> = {
   category_too_deep: "category",
   tenant_not_found: "access",
   not_platform_owner: "access",
+  capability_unknown: "access",
   sku_taken: "variant",
 };
 
@@ -65,7 +67,9 @@ export function ProductWizard({
   categoryLabel,
   takenProductKeys,
   takenCategoryKeys,
-  knownFeatureKeys,
+  capabilities,
+  capabilityLabel,
+  onCapabilityCreated,
   onClose,
   onCreated,
 }: {
@@ -73,7 +77,11 @@ export function ProductWizard({
   categoryLabel: (c: CatalogCategory) => string;
   takenProductKeys: readonly string[];
   takenCategoryKeys: readonly string[];
-  knownFeatureKeys: readonly string[];
+  /** Every capability the caller sees; the product is offered those its tenant may carry. */
+  capabilities: readonly CatalogCapability[];
+  capabilityLabel: (c: CatalogCapability) => string;
+  /** Re-reads the list after "new capability". */
+  onCapabilityCreated: () => Promise<void>;
   onClose: () => void;
   onCreated: (productId: string, variantFailed: boolean) => Promise<void>;
 }) {
@@ -101,7 +109,12 @@ export function ProductWizard({
   const [created, setCreated] = useState<{ categoryId?: string; productId?: string }>({});
   const kind = w.product.fulfilmentKind;
   const groups = usePanelGroups(takesPanelGroup(kind));
-  const offered = { ...groups, options: groupsForVariant(groups.options, wizardVariantTenant(w.product, actor)) };
+  const productTenant = wizardVariantTenant(w.product, actor);
+  const offered = { ...groups, options: groupsForVariant(groups.options, productTenant) };
+  const capabilityName = (k: string) => {
+    const c = capabilities.find((x) => x.key === k);
+    return c ? capabilityLabel(c) : k;
+  };
 
   const index = WIZARD_STEPS.indexOf(step);
   const go = (to: WizardStep) => {
@@ -319,7 +332,16 @@ export function ProductWizard({
               ))}
             </div>
           </div>
-          <FeatureKeyPicker value={w.product.featureKeys} onChange={(keys) => setProduct({ featureKeys: keys })} known={knownFeatureKeys} error={errors.featureKeys} />
+          <CapabilityPicker
+            value={w.product.featureKeys}
+            onChange={(keys) => setProduct({ featureKeys: keys })}
+            options={capabilitiesFor(capabilities, productTenant)}
+            label={capabilityLabel}
+            takenKeys={capabilities.map((c) => c.key)}
+            newTenant={productTenant}
+            onCreated={onCapabilityCreated}
+            error={errors.featureKeys}
+          />
         </div>
       )}
 
@@ -364,9 +386,7 @@ export function ProductWizard({
             {t("common", K.fulfilmentKind[w.product.fulfilmentKind])}
           </Row>
           <Row label={t("common", K.capabilities.label)} onEdit={() => go("access")}>
-            <span dir="ltr" className="font-mono">
-              {w.product.featureKeys.join(", ") || t("common", K.wizard.none)}
-            </span>
+            {w.product.featureKeys.map(capabilityName).join("، ") || t("common", K.wizard.none)}
           </Row>
           <Row label={t("common", K.wizard.steps.variant)} onEdit={() => go("variant")}>
             {w.withVariant ? (

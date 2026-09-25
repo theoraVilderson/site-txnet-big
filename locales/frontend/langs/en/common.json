@@ -1289,7 +1289,10 @@
       "source_text_missing": "Write the text in the source language.",
       "panel_group_not_found": "That server group was not found, or is another tenant's.",
       "category_cycle": "A category cannot sit under itself or under one of its own subcategories.",
-      "category_too_deep": "Categories go at most 3 levels deep; this would go deeper. Pick a higher parent."
+      "category_too_deep": "Categories go at most 3 levels deep; this would go deeper. Pick a higher parent.",
+      "capability_not_found": "That capability was not found, or is not yours to change.",
+      "capability_unknown": "A capability picked is not on this product's list — the platform's or its own tenant's. Pick again.",
+      "capability_in_use": "A product or a service already sold carries this capability, so it stays. Take it off those products first; a sold one keeps it."
     },
     "rename": "Edit names",
     "translations": {
@@ -1314,7 +1317,8 @@
     },
     "tabs": {
       "products": "Products",
-      "categories": "Categories"
+      "categories": "Categories",
+      "capabilities": "Capabilities"
     },
     "guide": {
       "title": "How does the catalog work?",
@@ -1386,14 +1390,24 @@
     },
     "capabilities": {
       "label": "Capabilities",
-      "hint": "What buying this product unlocks. Pick from the list; if it is not there, type a new one.",
-      "search": "Search or type a new one, e.g. vpn.access",
-      "add": "Add “{{key}}”",
-      "remove": "Remove {{key}}",
-      "empty": "None of your products has a capability yet. Type the first one, e.g. vpn.access",
+      "hint": "What buying this product unlocks. Tick from the list; if it is not there, add a new one by its name.",
+      "search": "Search by name",
+      "add": "New capability “{{name}}”",
+      "remove": "Remove {{name}}",
+      "empty": "No capability yet. Add the first one by its name.",
       "selected": "Selected",
       "edit": "Edit capabilities",
-      "save": "Save capabilities"
+      "save": "Save capabilities",
+      "new": "New capability",
+      "newHint": "Give it a name; the internal key is made from it and never changes.",
+      "name": "Capability name",
+      "create": "Add and tick",
+      "shared": "The platform's: every tenant can offer it",
+      "notOffered": "Not on this product's list",
+      "listHint": "What a product can unlock. A product ticks these by name. The platform's are shared with every tenant; a tenant adds its own.",
+      "removeOne": "Remove",
+      "confirmRemove": "Remove the capability “{{name}}”? This is refused while a product or a sold service carries it.",
+      "platformOnly": "The platform's — only the platform owner changes it."
     },
     "variantHint": {
       "billingMode": "Prepaid: paid before use. Metered: charged by usage.",
@@ -1848,7 +1862,10 @@
       "source_text_missing": "write the name in its source language first.",
       "panel_group_not_found": "that server group is neither the platform's nor this reseller's.",
       "category_cycle": "a category cannot sit under itself or under one of its own subcategories.",
-      "category_too_deep": "categories go at most 3 levels deep; pick a higher parent."
+      "category_too_deep": "categories go at most 3 levels deep; pick a higher parent.",
+      "capability_not_found": "That capability was not found, or is the platform's and not this reseller's to change.",
+      "capability_unknown": "A capability picked is not on this reseller's list — the platform's or its own. Pick again.",
+      "capability_in_use": "A product or a service already sold carries this capability, so it stays. Take it off those products first; a sold one keeps it."
     }
   },
   "resellerBots": {
