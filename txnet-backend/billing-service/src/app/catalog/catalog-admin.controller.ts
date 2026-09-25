@@ -86,6 +86,8 @@ export const CATALOG_REFUSAL_STATUS: Record<CatalogAdminRejection, 400 | 403 | 4
   texts_unavailable: 503,
   lang_unknown: 400,
   source_text_missing: 400,
+  category_cycle: 409,
+  category_too_deep: 400,
 };
 
 

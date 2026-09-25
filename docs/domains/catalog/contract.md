@@ -2,7 +2,7 @@
 id: catalog
 layer: domain
 status: draft
-version: 4
+version: 5
 updated: 2026-09-25
 ---
 
@@ -32,12 +32,12 @@ cross-tenant pool.
 
 | Route | Body / query | Answer | Refusals |
 |---|---|---|---|
-| `GET /categories` | `archived?` (only `true`: the archived alone; without it they are left out, F-026-l) | the platform's and the caller's own (owner: all), each with `archivedAt` | — |
-| `POST /categories`, `PATCH /categories/:id` | `tenantId?` (absent / `null` / uuid), `key`, `sourceLang?`, `name: {lang: text}`; patch `sourceLang`, `name`, `isActive`, `archived: false` (back from the archive, still off) | category | `not_platform_owner` 403, `category_not_found` 404, `key_taken` 409, `lang_unknown` / `source_text_missing` 400, `texts_unavailable` 503 |
-| `POST /categories/remove` (F-026-j/l) | `ids[]` (1-100, distinct), `withProducts?` | `[{id, outcome, products?}]`, `outcome` `deleted` / `archived` (only with `withProducts`) / `has_products` / `not_found`, each id on its own; `products: {deleted, archived}` with `withProducts` | — (a refusal is that id's `not_found`) |
-| `GET /products` | `categoryId?`, `tenantId?` (owner: uuid or `platform`), `archived?` (only `true`: the archived alone; without it they are left out) | products, each with `archivedAt` | — |
+| `GET /categories` | `archived?` (only `true`: the archived alone; without it they are left out, F-026-l) | the platform's and the caller's own (owner: all), each with `parentId` and `archivedAt` | — |
+| `POST /categories`, `PATCH /categories/:id` | `tenantId?` (absent / `null` / uuid), `parentId?` (F-026-r: the platform's or its own tenant's, not archived; `null` = top level), `key`, `sourceLang?`, `name: {lang: text}`; patch `parentId`, `sourceLang`, `name`, `isActive`, `archived: false` (back from the archive, still off) | category | `category_cycle` 409 (under itself or its own subtree), `category_too_deep` 400 (over `CATEGORY_MAX_DEPTH` = 3 levels, a moved category's subtree counted), `not_platform_owner` 403, `category_not_found` 404 (a parent too), `key_taken` 409, `lang_unknown` / `source_text_missing` 400, `texts_unavailable` 503 |
+| `POST /categories/remove` (F-026-j/l/r) | `ids[]` (1-100, distinct), `withProducts?` | `[{id, outcome, products?}]`, `outcome` `deleted` / `archived` (only with `withProducts`) / `has_products` / `has_children` (a category sits under it; nothing touched) / `not_found`, each id on its own; `products: {deleted, archived, unlinked}` with `withProducts` | — (a refusal is that id's `not_found`) |
+| `GET /products` | `categoryId?` (filed in it, first or not), `tenantId?` (owner: uuid or `platform`), `archived?` (only `true`: the archived alone; without it they are left out) | products, each with `categoryIds` and `archivedAt` | — |
 | `POST /products/remove` (F-026-h) | `ids[]` (1-100, distinct) | `[{id, outcome}]`, `outcome` `deleted` / `archived` / `not_found`, each id on its own | — (a refusal is that id's `not_found`) |
-| `POST /products`, `GET\|PATCH /products/:id` | `categoryId`, `key`, `sourceLang?`, `name: {lang: text}`, `description?: {lang: text} \| null`, `fulfilmentKind` (never `wallet_topup` — retired, F-111-g: top-ups are the deposit page — nor `external_order` — retired, F-111-h, until a real provider exists; the schema's `RETIRED_FULFILMENT_KINDS`, a 400), `featureKeys?`, `defaultQuotas?`; patch has no key or kind, and `archived: false` brings an archived product back (still off) | product; `GET` with variants and each price history | `category_not_found` (another tenant's category), `product_not_found`, `key_taken`, `lang_unknown`, `source_text_missing`, `texts_unavailable` |
+| `POST /products`, `GET\|PATCH /products/:id` | `categoryIds[]` (F-026-r: 1-20, distinct, the first shown first; a patch replaces them all), `key`, `sourceLang?`, `name: {lang: text}`, `description?: {lang: text} \| null`, `fulfilmentKind` (never `wallet_topup` — retired, F-111-g: top-ups are the deposit page — nor `external_order` — retired, F-111-h, until a real provider exists; the schema's `RETIRED_FULFILMENT_KINDS`, a 400), `featureKeys?`, `defaultQuotas?`; patch has no key or kind, and `archived: false` brings an archived product back (still off) | product; `GET` with variants and each price history | `category_not_found` (another tenant's category), `product_not_found`, `key_taken`, `lang_unknown`, `source_text_missing`, `texts_unavailable` |
 | `POST /products/:id/variants`, `PATCH /variants/:id` | `sku`, `billingMode`, `visibility`, `quotas?`, `durationDays?`, `panelGroupId?`, `qualityTier?`, first `price`; patch has no SKU or billing mode | variant with prices | `variant_not_found`, `sku_taken`, `price_in_the_past`, `panel_group_not_found` (a group that is neither the platform's nor the variant's tenant's, F-027-bk) |
 | `GET /panel-groups` (F-026-p) | — | `[{id, tenantId, name, strategy, protocol, healthyMembers}]` by name: the groups a variant may name — the platform's and the caller's own (owner: all, so a variant is offered only the platform's and its own tenant's). `healthyMembers` counts what fulfilment places on now (`placeableMember`: not `drain`, accepted, `healthy`); only `mirror` is fulfilled | — |
 | `POST /variants/:id/prices` | `amount`, `effectiveFrom?` (default now; never in the past) | a **new** price row | `variant_not_found`, `price_in_the_past` 400 |
@@ -51,14 +51,17 @@ Every write leaves an `admin_audit_log` row (`catalog_*` actions). Nothing is de
 but a product `POST /products/remove` finds unreferenced (`catalog_product_delete`,
 its variants with it), and a category `POST /categories/remove` finds empty
 (`catalog_category_delete`). A category any product sits in, an archived one
-included, is kept and answered `has_products`: `product.categoryId` is RESTRICT,
-so the database decides (`removeCategories`). With `withProducts` (F-026-l)
-each product **of the category's own tenant** is removed first as below, then
+included, is kept and answered `has_products`: `product_category_link.categoryId`
+is RESTRICT, so the database decides (`removeCategories`); one a category sits
+under is `has_children`, checked first. With `withProducts` (F-026-l)
+each product **of the category's own tenant** is removed first as below — one
+filed in another category too is only taken out of this one (`unlinked`,
+audited `catalog_product_update`) — then
 the category is deleted, or archived (`catalog_category_archive`: off, out of
 the list, no new product filed in it) when only archived products remain.
 Another tenant's product in the platform's shared category is never touched
-and keeps it `has_products`. Restoring a product restores its archived
-category, still off. One a Grant, a coupon or a coupon scope references is
+and keeps it `has_products`. Restoring a product restores each archived
+category it sits in, still off. One a Grant, a coupon or a coupon scope references is
 archived instead (`catalog_product_archive`): off, out of the list, never sold,
 every Grant untouched. The foreign keys decide, so a new table that references
 a variant counts without a change (`removeProducts`, invariant 6).
@@ -122,7 +125,7 @@ Free metered service is a quota with no rate.
 
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
-| `listOffers(at?)` — built | tenant (ambient), instant (default now) | every `public` variant under an active product and category, with the price in effect; a variant with no price is not offered | sync | — |
+| `listOffers(at?)` — built | tenant (ambient), instant (default now) | every `public` variant under an active product filed in at least one live category (it and every one above it on — `category-tree.ts`, F-026-r), with the price in effect; a variant with no price is not offered | sync | — |
 | `listOffersIn(tx, at)` — built | the caller's `tenantTransaction`, instant | what `listOffers` answers, read in the caller's transaction; each offer carries `panelGroupId` — billing's shop list narrows it to what can be delivered (F-111-e) | sync | — |
 | `offerBySku(sku, at?)` — built | sku | the offer, `public` or `unlisted`; the caller's own SKU over the platform's | sync | `null`: unknown, `admin_only`, switched off, or no price |
 | `offeredToTenant(tenantId, at)` — built | tenant id, instant | a Prisma `where` for a variant `listOffers` would return to that tenant: `listedVariantWhere`, own or platform row, a price in effect — for a reader on the cross-tenant pool, where RLS does not narrow (F-018-ah) | sync | — |
@@ -156,7 +159,8 @@ None.
 | Rule | Held by |
 |---|---|
 | A tenant reads the platform's rows and its own; it writes only its own | RLS, shared-read (`NULL OR mine` / strictly mine) |
-| A product sits in the platform's category or its own tenant's; a variant carries its product's tenant; a price its variant's (`catalog_tenant_mismatch`) | trigger `catalog.same_tenant_as_parent` |
+| A product is filed (`product_category_link`, carrying its tenant) in the platform's categories or its own tenant's; a variant carries its product's tenant; a price its variant's (`catalog_tenant_mismatch`) | triggers `catalog.category_link_ok`, `catalog.same_tenant_as_parent` |
+| A category sits under the platform's or its own tenant's, never under itself or its subtree (`category_cycle`, one re-parent at a time); a parent with children is RESTRICT. The depth cap is code, not schema | trigger `catalog.category_parent_ok` (F-026-q) |
 | A price row is never deleted on its own, and only `isActive` changes on it (`price_is_history`); it goes only with its variant's delete (cascade, F-026-h) | trigger `catalog.price_is_history` |
 | A category key, a product key and a SKU are unique inside a tenant, and once among platform rows | partial unique indexes |
 | A coupon scope row names exactly one product or one variant (`coupon_service_scope_names_one`) | CHECK |

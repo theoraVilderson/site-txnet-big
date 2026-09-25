@@ -31,6 +31,7 @@ export * from './lib/tenant/vault/credential-env';
 export * from './lib/tenant/vault/sms-line-credentials';
 export * from './lib/billing/wallet-ledger';
 export * from './lib/catalog/offers';
+export * from './lib/catalog/category-tree';
 export * from './lib/catalog/metered-rate';
 export * from './lib/tenant/billing/tenant-billing-ledger';
 export * from './lib/tenant/feature-keys';

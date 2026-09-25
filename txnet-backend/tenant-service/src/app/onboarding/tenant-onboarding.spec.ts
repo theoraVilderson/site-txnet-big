@@ -186,7 +186,7 @@ describe('TenantOnboardingService', () => {
     it('counts only what listOffers would list: public, live, priced now', async () => {
       const where = await pricingWhere();
       expect(where).toMatchObject(listedVariantWhere);
-      expect(where).toMatchObject({ visibility: 'public', isActive: true, product: { isActive: true, category: { isActive: true } } });
+      expect(where).toMatchObject({ visibility: 'public', isActive: true, product: { isActive: true, categories: { some: { category: expect.objectContaining({ isActive: true }) } } } });
       expect(where.prices).toMatchObject({ some: pricesInEffect(now) });
       expect(pricesInEffect(now)).toEqual({ isActive: true, effectiveFrom: { lte: now } });
     });

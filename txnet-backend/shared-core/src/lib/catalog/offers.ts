@@ -1,5 +1,7 @@
 import { Prisma, VariantVisibility } from '@prisma/client';
 
+import { inLiveCategoryWhere } from './category-tree';
+
 /**
  * What the catalog offers a tenant, as rules every service can ask (F-026-c;
  * moved here by F-018-ah so tenant-service's onboarding checklist asks the
@@ -44,6 +46,7 @@ export type OfferFacts = {
   visibility: VariantVisibility;
   isActive: boolean;
   productActive: boolean;
+  /** At least one of the product's categories is live — it and every one above it on (`productCategoriesLive`). */
   categoryActive: boolean;
 };
 
@@ -68,7 +71,7 @@ export function pickBySku<T extends { tenantId: string | null }>(rows: readonly 
 export const listedVariantWhere = {
   isActive: true,
   visibility: VariantVisibility.public,
-  product: { isActive: true, category: { isActive: true } },
+  product: { isActive: true, ...inLiveCategoryWhere },
 } satisfies Prisma.ProductVariantWhereInput;
 
 /** The price rows {@link priceAt} chooses among at `at`. */

@@ -13,6 +13,9 @@ import {
   type MeteredRateRow,
   type OfferFacts,
   type PriceRow,
+  firstLiveCategory,
+  productCategoriesInclude,
+  productCategoriesLive,
 } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -60,12 +63,12 @@ export type CatalogOffer = {
   price: { id: string; amount: string; effectiveFrom: Date };
 };
 
-type VariantRow = Prisma.ProductVariantGetPayload<{ include: { product: { include: { category: true } }; prices: true } }>;
+type VariantRow = Prisma.ProductVariantGetPayload<{ include: { product: { include: typeof productCategoriesInclude }; prices: true } }>;
 
-/** A variant with its product, category and the active prices that could be in effect at `at`. */
+/** A variant with its product, its categories (each with its chain up) and the active prices that could be in effect at `at`. */
 const withPrices = (at: Date) =>
   ({
-    product: { include: { category: true } },
+    product: { include: productCategoriesInclude },
     prices: {
       where: pricesInEffect(at),
       orderBy: [{ effectiveFrom: 'desc' }, { createdAt: 'desc' }],
@@ -77,7 +80,7 @@ function toOffer(v: VariantRow, at: Date, offered: (f: OfferFacts) => boolean): 
     visibility: v.visibility,
     isActive: v.isActive,
     productActive: v.product.isActive,
-    categoryActive: v.product.category.isActive,
+    categoryActive: productCategoriesLive(v.product.categories),
   };
   if (!offered(facts)) return null;
   // A variant with no price in effect is not for sale — never at zero by default.
@@ -91,7 +94,8 @@ function toOffer(v: VariantRow, at: Date, offered: (f: OfferFacts) => boolean): 
     productId: v.product.id,
     productKey: v.product.key,
     descriptionKey: v.product.descriptionKey,
-    categoryKey: v.product.category.key,
+    // The first live category by the product's own order (F-026-r): a live offer has one.
+    categoryKey: firstLiveCategory(v.product.categories)?.key ?? '',
     fulfilmentKind: v.product.fulfilmentKind,
     featureKeys: v.product.featureKeys,
     quotas: v.quotas,

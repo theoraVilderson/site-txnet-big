@@ -193,7 +193,7 @@ describe('GrantService.issue', () => {
     quotas: {},
     durationDays: 30,
     meteredRates: [] as Array<{ id: string; rate: Prisma.Decimal; effectiveFrom: Date; isActive: boolean }>,
-    product: { isActive: true, featureKeys: ['vpn.access'], category: { isActive: true } },
+    product: { isActive: true, featureKeys: ['vpn.access'], categories: [{ position: 0, category: { key: 'vpn', isActive: true, parentId: null } }] },
   });
 
   function fakeTx(variant: ReturnType<typeof variantRow> | null) {
@@ -270,7 +270,7 @@ describe('GrantService.issue locks the metered rate (F-027-p, ADR-0073)', () => 
       effectiveFrom: at(r.effectiveFrom),
       isActive: true,
     })),
-    product: { isActive: true, featureKeys: ['vpn.access'], category: { isActive: true } },
+    product: { isActive: true, featureKeys: ['vpn.access'], categories: [{ position: 0, category: { key: 'vpn', isActive: true, parentId: null } }] },
   });
 
   function fakeTx(variant: ReturnType<typeof meteredVariant>) {

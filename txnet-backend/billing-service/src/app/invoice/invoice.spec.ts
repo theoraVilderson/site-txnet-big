@@ -66,7 +66,7 @@ function variantRow(o: VariantOverrides = {}) {
       fulfilmentKind: o.fulfilmentKind ?? FulfilmentKind.network_access,
       featureKeys: ['vpn'],
       isActive: o.productActive ?? true,
-      category: { key: 'vpn', isActive: true },
+      categories: [{ position: 0, category: { key: 'vpn', isActive: true, parentId: null } }],
     },
     prices: o.prices ?? [{ id: PRICE, amount: D('12.50'), effectiveFrom: new Date('2026-01-01T00:00:00Z'), isActive: true }],
   };

@@ -7,8 +7,10 @@
  *  - **ownership.** The platform owner manages platform items and every
  *    tenant's; any other tenant only its own. Another tenant's item is *not
  *    found*, so the surface never confirms it exists;
- *  - **whose category.** A tenant's product sits in its own category or the
- *    platform's shared one, never another tenant's;
+ *  - **whose category.** A tenant's product sits in its own categories or the
+ *    platform's shared ones, never another tenant's — one or more of them, and
+ *    a category sits under its own tenant's or the platform's, never inside
+ *    itself, at most `CATEGORY_MAX_DEPTH` deep (F-026-r);
  *  - **a price is history.** A change writes a new row and never edits the old;
  *    a price effective in the past is refused, because it would reprice an
  *    invoice already issued; a price is switched off, never deleted;
@@ -66,7 +68,9 @@ const matches = (row: Row, where: Row = {}): boolean =>
       ? (v as Row[]).some((w) => matches(row, w))
       : v !== null && typeof v === 'object' && 'not' in v
         ? (row[k] ?? null) !== (v as { not: unknown }).not
-        : (row[k] ?? null) === v),
+        : v !== null && typeof v === 'object' && 'in' in v
+          ? (v as { in: unknown[] }).in.includes(row[k])
+          : (row[k] ?? null) === v),
   );
 
 const unique = (message: string) =>
@@ -107,14 +111,18 @@ function inTenant<T extends object>(service: T): T {
   });
 }
 
-/** `held`: whether a foreign key elsewhere still points at an id — deleting one fails as Postgres's RESTRICT does. */
-function table(rows: Row[], name: string, writes: string[], uniqueOn: string[] = [], held: (id: string) => boolean = () => false) {
+/**
+ * `held`: whether a foreign key elsewhere still points at an id — deleting one fails as Postgres's RESTRICT does.
+ * `cascade`: what an `ON DELETE CASCADE` elsewhere takes with a deleted row.
+ */
+function table(rows: Row[], name: string, writes: string[], uniqueOn: string[] = [], held: (id: string) => boolean = () => false, cascade: (gone: Row[]) => void = () => undefined) {
   let next = 0;
   const remove = (where: Row) => {
     const gone = rows.filter((r) => matches(r, where));
     if (gone.some((r) => held(r['id'] as string))) throw referenced(`${name}: still referenced`);
     writes.push(`${name}.delete`);
     for (const r of gone) rows.splice(rows.indexOf(r), 1);
+    cascade(gone);
     return gone;
   };
   return {
@@ -151,35 +159,54 @@ function build() {
   const writes: string[] = [];
   const audit: Row[] = [];
   const types: Record<string, TenantType> = { [OWNER]: TenantType.platform_owner, [RESELLER]: TenantType.reseller, [OTHER]: TenantType.reseller };
-  const product = (id: string, tenantId: string | null, key: string, categoryId = PLATFORM_CATEGORY): Row => ({
-    id, tenantId, categoryId, key, nameKey: `catalog.product.${key}.name`, descriptionKey: null,
-    fulfilmentKind: FulfilmentKind.network_access, featureKeys: ['vpn.access'], defaultQuotas: {}, isActive: true,
-  });
+  /** `product_category_link`: where each product is filed (F-026-q). */
+  const links: Row[] = [];
+  /** A product row, filed in `categoryId` as its first category. */
+  const product = (id: string, tenantId: string | null, key: string, categoryId = PLATFORM_CATEGORY): Row => {
+    links.push({ productId: id, categoryId, tenantId, position: 0 });
+    return {
+      id, tenantId, key, nameKey: `catalog.product.${key}.name`, descriptionKey: null,
+      fulfilmentKind: FulfilmentKind.network_access, featureKeys: ['vpn.access'], defaultQuotas: {}, isActive: true,
+    };
+  };
+  /** Moves a product to exactly these categories, in order. */
+  const refile = (productId: string, ...categoryIds: string[]) => {
+    const tenantId = links.find((l) => l['productId'] === productId)?.['tenantId'] ?? null;
+    for (const l of links.filter((x) => x['productId'] === productId)) links.splice(links.indexOf(l), 1);
+    categoryIds.forEach((categoryId, position) => links.push({ productId, categoryId, tenantId, position }));
+  };
   const products = [
     product(PLATFORM_PRODUCT, null, 'vpn_basic'),
     product(RESELLER_PRODUCT, RESELLER, 'vpn_alpha'),
     product(OTHER_PRODUCT, OTHER, 'followers_1k', OTHER_CATEGORY),
     product(SOLD_PRODUCT, RESELLER, 'vpn_sold'),
   ];
+  const categories: Row[] = [
+    { id: PLATFORM_CATEGORY, tenantId: null, parentId: null, key: 'vpn', nameKey: 'catalog.category.vpn.name', isActive: true },
+    { id: OTHER_CATEGORY, tenantId: OTHER, parentId: null, key: 'followers', nameKey: 'catalog.category.followers.name', isActive: true },
+  ];
   const db = {
     tenant: table(Object.entries(types).map(([id, tenantType]) => ({ id, tenantType })), 'tenant', writes),
     productCategory: table(
-      [
-        { id: PLATFORM_CATEGORY, tenantId: null, key: 'vpn', nameKey: 'catalog.category.vpn.name', isActive: true },
-        { id: OTHER_CATEGORY, tenantId: OTHER, key: 'followers', nameKey: 'catalog.category.followers.name', isActive: true },
-      ],
+      categories,
       'productCategory',
       writes,
       ['tenantId', 'key'],
-      // product.categoryId is ON DELETE RESTRICT: any product, archived or not, holds its category.
-      (id) => products.some((p) => p['categoryId'] === id),
+      // Both keys onto a category are ON DELETE RESTRICT: any product filed in it, archived or not, and any child.
+      (id) => links.some((l) => l['categoryId'] === id) || categories.some((c) => c['parentId'] === id),
     ),
     product: table(
       products,
       'product',
       writes,
       ['tenantId', 'key'],
+      () => false,
+      // product_category_link.productId is ON DELETE CASCADE.
+      (gone) => {
+        for (const l of links.filter((x) => gone.some((p) => p['id'] === x['productId']))) links.splice(links.indexOf(l), 1);
+      },
     ),
+    productCategoryLink: table(links, 'productCategoryLink', writes),
     productVariant: table(
       [
         {
@@ -258,7 +285,7 @@ function build() {
       return Object.keys(t).length;
     },
   };
-  return { service: inTenant(new CatalogAdminService(app as never, all as never, textService as unknown as CatalogTextService)), db, writes, audit, texts, calls, product };
+  return { service: inTenant(new CatalogAdminService(app as never, all as never, textService as unknown as CatalogTextService)), db, writes, audit, texts, calls, product, links, refile };
 }
 
 async function refusal(run: () => Promise<unknown>): Promise<CatalogAdminRefused> {
@@ -271,7 +298,7 @@ async function refusal(run: () => Promise<unknown>): Promise<CatalogAdminRefused
   throw new Error('expected a refusal');
 }
 
-const NEW_PRODUCT = { categoryId: PLATFORM_CATEGORY, key: 'vpn_pro', name: { fa: 'وی‌پی‌ان پرو', en: 'VPN Pro' }, fulfilmentKind: FulfilmentKind.network_access };
+const NEW_PRODUCT = { categoryIds: [PLATFORM_CATEGORY], key: 'vpn_pro', name: { fa: 'وی‌پی‌ان پرو', en: 'VPN Pro' }, fulfilmentKind: FulfilmentKind.network_access };
 const NEW_VARIANT = { sku: 'VPN-90', billingMode: VariantBillingMode.prepaid, visibility: VariantVisibility.public, durationDays: 90, price: '12.00' };
 
 describe('createProductSchema — a retired kind is never created (F-111-g, F-111-h)', () => {
@@ -325,7 +352,7 @@ describe('CatalogAdminService — who manages which item', () => {
 
   it("refuses a tenant's product in another tenant's category", async () => {
     const { service } = build();
-    expect((await refusal(() => service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, categoryId: OTHER_CATEGORY }))).reason).toBe('category_not_found');
+    expect((await refusal(() => service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, categoryIds: [OTHER_CATEGORY] }))).reason).toBe('category_not_found');
   });
 });
 
@@ -642,16 +669,16 @@ describe('CatalogAdminService — removing a category with its products (F-026-l
       { id: RESELLER_CATEGORY, tenantId: RESELLER, key: 'old', nameKey: 'catalog.t_22.category.old.name', isActive: true },
       { id: EMPTY_CATEGORY, tenantId: RESELLER, key: 'fresh', nameKey: 'catalog.t_22.category.fresh.name', isActive: true },
     );
-    for (const p of built.db.product.rows) if (p['id'] === SOLD_PRODUCT) p['categoryId'] = RESELLER_CATEGORY;
+    built.refile(SOLD_PRODUCT, RESELLER_CATEGORY);
     built.db.product.rows.push(built.product(NEVER_SOLD, RESELLER, 'vpn_fresh', EMPTY_CATEGORY));
     return built;
   };
 
   it('archives the category when a sold product stays in it: the never-sold go, the sold are archived, and the answer counts both', async () => {
-    const { service, db, audit } = withFilled();
-    for (const p of db.product.rows) if (p['id'] === RESELLER_PRODUCT) p['categoryId'] = RESELLER_CATEGORY;
+    const { service, db, audit, refile } = withFilled();
+    refile(RESELLER_PRODUCT, RESELLER_CATEGORY);
     await expect(service.removeCategories(actor(RESELLER), [RESELLER_CATEGORY], true)).resolves.toEqual([
-      { id: RESELLER_CATEGORY, outcome: 'archived', products: { deleted: 1, archived: 1 } },
+      { id: RESELLER_CATEGORY, outcome: 'archived', products: { deleted: 1, archived: 1, unlinked: 0 } },
     ]);
     expect(db.productCategory.rows.find((r) => r['id'] === RESELLER_CATEGORY)).toMatchObject({ isActive: false, archivedAt: expect.any(Date) });
     expect(audit.map((a) => a['action'])).toEqual(['catalog_product_delete', 'catalog_product_archive', 'catalog_category_archive']);
@@ -662,7 +689,7 @@ describe('CatalogAdminService — removing a category with its products (F-026-l
   it('deletes the category when every product in it was never sold', async () => {
     const { service, db } = withFilled();
     await expect(service.removeCategories(actor(RESELLER), [EMPTY_CATEGORY], true)).resolves.toEqual([
-      { id: EMPTY_CATEGORY, outcome: 'deleted', products: { deleted: 1, archived: 0 } },
+      { id: EMPTY_CATEGORY, outcome: 'deleted', products: { deleted: 1, archived: 0, unlinked: 0 } },
     ]);
     expect(db.productCategory.rows.find((r) => r['id'] === EMPTY_CATEGORY)).toBeUndefined();
   });
@@ -674,12 +701,13 @@ describe('CatalogAdminService — removing a category with its products (F-026-l
   });
 
   it("never removes another tenant's product from the platform's shared category: the owner's own go, the category stays", async () => {
-    const { service, db } = withFilled();
+    const { service, db, links } = withFilled();
     await expect(service.removeCategories(actor(OWNER), [PLATFORM_CATEGORY], true)).resolves.toEqual([
-      { id: PLATFORM_CATEGORY, outcome: 'has_products', products: { deleted: 1, archived: 0 } },
+      { id: PLATFORM_CATEGORY, outcome: 'has_products', products: { deleted: 1, archived: 0, unlinked: 0 } },
     ]);
     expect(db.product.rows.find((r) => r['id'] === PLATFORM_PRODUCT)).toBeUndefined();
-    expect(db.product.rows.find((r) => r['id'] === RESELLER_PRODUCT)).toMatchObject({ categoryId: PLATFORM_CATEGORY, isActive: true });
+    expect(db.product.rows.find((r) => r['id'] === RESELLER_PRODUCT)).toMatchObject({ isActive: true });
+    expect(links).toContainEqual(expect.objectContaining({ productId: RESELLER_PRODUCT, categoryId: PLATFORM_CATEGORY }));
     expect(db.productCategory.rows.find((r) => r['id'] === PLATFORM_CATEGORY)).toMatchObject({ isActive: true });
     expect(db.productCategory.rows.find((r) => r['id'] === PLATFORM_CATEGORY)?.['archivedAt']).toBeUndefined();
   });
@@ -696,7 +724,7 @@ describe('CatalogAdminService — removing a category with its products (F-026-l
   it('files no new product in an archived category, and restoring a product in it restores the category, still switched off', async () => {
     const { service, db } = withFilled();
     await service.removeCategories(actor(RESELLER), [RESELLER_CATEGORY], true);
-    expect((await refusal(() => service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, categoryId: RESELLER_CATEGORY }))).reason).toBe('category_not_found');
+    expect((await refusal(() => service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, categoryIds: [RESELLER_CATEGORY] }))).reason).toBe('category_not_found');
     await service.updateProduct(actor(RESELLER), SOLD_PRODUCT, { archived: false });
     expect(db.productCategory.rows.find((r) => r['id'] === RESELLER_CATEGORY)).toMatchObject({ archivedAt: null, isActive: false });
     expect((await service.listCategories(actor(RESELLER))).map((c) => c.id)).toContain(RESELLER_CATEGORY);
@@ -707,8 +735,105 @@ describe('CatalogAdminService — removing a category with its products (F-026-l
     await service.removeCategories(actor(RESELLER), [RESELLER_CATEGORY], true);
     const before = audit.length;
     await expect(service.removeCategories(actor(RESELLER), [RESELLER_CATEGORY], true)).resolves.toEqual([
-      { id: RESELLER_CATEGORY, outcome: 'archived', products: { deleted: 0, archived: 0 } },
+      { id: RESELLER_CATEGORY, outcome: 'archived', products: { deleted: 0, archived: 0, unlinked: 0 } },
     ]);
     expect(audit.length).toBe(before);
+  });
+});
+
+describe('CatalogAdminService — categories nest (F-026-r)', () => {
+  const CHILD = 'a0000000-0000-4000-8000-000000000011';
+  const GRANDCHILD = 'a0000000-0000-4000-8000-000000000012';
+  /** The reseller's own `old` category under the platform's `vpn`. */
+  const withTree = () => {
+    const built = build();
+    built.db.productCategory.rows.push({ id: RESELLER_CATEGORY, tenantId: RESELLER, parentId: PLATFORM_CATEGORY, key: 'old', nameKey: 'k', isActive: true });
+    return built;
+  };
+  const NEW_CATEGORY = { key: 'fast', name: { fa: 'سریع' } };
+
+  it("files a tenant's category under its own or the platform's, and answers another tenant's as not found", async () => {
+    const { service } = withTree();
+    await expect(service.createCategory(actor(RESELLER), { ...NEW_CATEGORY, parentId: RESELLER_CATEGORY })).resolves.toMatchObject({ parentId: RESELLER_CATEGORY, tenantId: RESELLER });
+    await expect(service.createCategory(actor(RESELLER), { ...NEW_CATEGORY, key: 'top', parentId: PLATFORM_CATEGORY })).resolves.toMatchObject({ parentId: PLATFORM_CATEGORY });
+    expect((await refusal(() => service.createCategory(actor(RESELLER), { ...NEW_CATEGORY, key: 'x', parentId: OTHER_CATEGORY }))).reason).toBe('category_not_found');
+  });
+
+  it('refuses a category under itself or under anything below it', async () => {
+    const { service, db } = withTree();
+    db.productCategory.rows.push({ id: CHILD, tenantId: RESELLER, parentId: RESELLER_CATEGORY, key: 'child', nameKey: 'k', isActive: true });
+    expect((await refusal(() => service.updateCategory(actor(RESELLER), RESELLER_CATEGORY, { parentId: RESELLER_CATEGORY }))).reason).toBe('category_cycle');
+    expect((await refusal(() => service.updateCategory(actor(RESELLER), RESELLER_CATEGORY, { parentId: CHILD }))).reason).toBe('category_cycle');
+  });
+
+  it('refuses a fourth level, counting the subtree a moved category brings with it', async () => {
+    const { service, db } = withTree();
+    db.productCategory.rows.push({ id: CHILD, tenantId: RESELLER, parentId: RESELLER_CATEGORY, key: 'child', nameKey: 'k', isActive: true });
+    // vpn > old > child is three levels: nothing more goes under child.
+    expect((await refusal(() => service.createCategory(actor(RESELLER), { ...NEW_CATEGORY, parentId: CHILD }))).reason).toBe('category_too_deep');
+    // A top-level category with a child of its own cannot go under `old`: it would reach level four.
+    db.productCategory.rows.push(
+      { id: EMPTY_CATEGORY, tenantId: RESELLER, parentId: null, key: 'empty', nameKey: 'k', isActive: true },
+      { id: GRANDCHILD, tenantId: RESELLER, parentId: EMPTY_CATEGORY, key: 'under_empty', nameKey: 'k', isActive: true },
+    );
+    expect((await refusal(() => service.updateCategory(actor(RESELLER), EMPTY_CATEGORY, { parentId: RESELLER_CATEGORY }))).reason).toBe('category_too_deep');
+    await expect(service.updateCategory(actor(RESELLER), EMPTY_CATEGORY, { parentId: PLATFORM_CATEGORY })).resolves.toMatchObject({ parentId: PLATFORM_CATEGORY });
+  });
+
+  it('keeps a category another sits under — has_children — with or without its products, and touches nothing', async () => {
+    const { service, db, audit } = withTree();
+    db.productCategory.rows.push({ id: CHILD, tenantId: RESELLER, parentId: RESELLER_CATEGORY, key: 'child', nameKey: 'k', isActive: true });
+    await expect(service.removeCategories(actor(RESELLER), [RESELLER_CATEGORY])).resolves.toEqual([{ id: RESELLER_CATEGORY, outcome: 'has_children' }]);
+    await expect(service.removeCategories(actor(RESELLER), [RESELLER_CATEGORY], true)).resolves.toEqual([{ id: RESELLER_CATEGORY, outcome: 'has_children' }]);
+    expect(audit).toEqual([]);
+  });
+
+  it('moves a category back to the top with parentId null', async () => {
+    const { service } = withTree();
+    await expect(service.updateCategory(actor(RESELLER), RESELLER_CATEGORY, { parentId: null })).resolves.toMatchObject({ parentId: null });
+  });
+});
+
+describe('CatalogAdminService — a product sits in several categories (F-026-r)', () => {
+  const withOwn = () => {
+    const built = build();
+    built.db.productCategory.rows.push({ id: RESELLER_CATEGORY, tenantId: RESELLER, parentId: null, key: 'old', nameKey: 'k', isActive: true });
+    return built;
+  };
+
+  it('files a new product in every category given, in order, each link carrying its tenant', async () => {
+    const { service, links } = withOwn();
+    const view = await service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, categoryIds: [RESELLER_CATEGORY, PLATFORM_CATEGORY] });
+    expect(view.categoryIds).toEqual([RESELLER_CATEGORY, PLATFORM_CATEGORY]);
+    expect(links.filter((l) => l['productId'] === view.id)).toEqual([
+      expect.objectContaining({ categoryId: RESELLER_CATEGORY, tenantId: RESELLER, position: 0 }),
+      expect.objectContaining({ categoryId: PLATFORM_CATEGORY, tenantId: RESELLER, position: 1 }),
+    ]);
+    expect((await service.listProducts(actor(RESELLER), { categoryId: RESELLER_CATEGORY })).map((p) => p.id)).toEqual([view.id]);
+  });
+
+  it("refuses the whole product when one category is another tenant's, and files nothing", async () => {
+    const { service, links } = withOwn();
+    const before = links.length;
+    expect((await refusal(() => service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, categoryIds: [RESELLER_CATEGORY, OTHER_CATEGORY] }))).reason).toBe('category_not_found');
+    expect(links.length).toBe(before);
+  });
+
+  it('replaces the categories on an edit, and audits both lists', async () => {
+    const { service, audit } = withOwn();
+    const view = await service.updateProduct(actor(RESELLER), RESELLER_PRODUCT, { categoryIds: [RESELLER_CATEGORY] });
+    expect(view.categoryIds).toEqual([RESELLER_CATEGORY]);
+    expect(audit.at(-1)).toMatchObject({ oldValue: expect.objectContaining({ categoryIds: [PLATFORM_CATEGORY] }), newValue: expect.objectContaining({ categoryIds: [RESELLER_CATEGORY] }) });
+  });
+
+  it('removing a category with its products only takes out of it a product filed elsewhere too', async () => {
+    const { service, db, refile, links } = withOwn();
+    refile(RESELLER_PRODUCT, RESELLER_CATEGORY, PLATFORM_CATEGORY);
+    refile(SOLD_PRODUCT, PLATFORM_CATEGORY);
+    await expect(service.removeCategories(actor(RESELLER), [RESELLER_CATEGORY], true)).resolves.toEqual([
+      { id: RESELLER_CATEGORY, outcome: 'deleted', products: { deleted: 0, archived: 0, unlinked: 1 } },
+    ]);
+    expect(db.product.rows.find((r) => r['id'] === RESELLER_PRODUCT)).toMatchObject({ isActive: true });
+    expect(links.filter((l) => l['productId'] === RESELLER_PRODUCT).map((l) => l['categoryId'])).toEqual([PLATFORM_CATEGORY]);
   });
 });

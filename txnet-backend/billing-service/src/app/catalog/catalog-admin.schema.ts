@@ -69,12 +69,24 @@ const quotas = z.record(
 
 const featureKeys = z.array(z.string().regex(FEATURE_KEY, { message: 'a feature key looks like vpn.access' })).max(50);
 
+/** The category one sits under (F-026-r); `null` = top level. Depth and cycles are the service's. */
+const parentId = uuid('parentId').nullable().optional();
+
+/** A product's categories (F-026-r): one or more, distinct, the first shown first. */
+const MAX_CATEGORIES_PER_PRODUCT = 20;
+const categoryIds = z
+  .array(uuid('categoryIds'))
+  .min(1, { message: 'a product sits in at least one category' })
+  .max(MAX_CATEGORIES_PER_PRODUCT)
+  .refine((ids) => new Set(ids).size === ids.length, 'categoryIds must be distinct');
+
 export const createCategorySchema = z
-  .object({ tenantId: uuid('tenantId').nullable().optional(), key: z.string().regex(KEY), sourceLang: lang.optional(), name: texts(NAME_MAX) })
+  .object({ tenantId: uuid('tenantId').nullable().optional(), parentId, key: z.string().regex(KEY), sourceLang: lang.optional(), name: texts(NAME_MAX) })
   .strict();
 
 export const updateCategorySchema = z
   .object({
+    parentId,
     sourceLang: lang.optional(),
     name: texts(NAME_MAX).optional(),
     isActive: z.boolean().optional(),
@@ -97,7 +109,7 @@ export const listProductsSchema = z.object({
 export const createProductSchema = z
   .object({
     tenantId: uuid('tenantId').nullable().optional(),
-    categoryId: uuid('categoryId'),
+    categoryIds,
     key: z.string().regex(KEY),
     sourceLang: lang.optional(),
     name: texts(NAME_MAX),
@@ -110,6 +122,7 @@ export const createProductSchema = z
 
 export const updateProductSchema = z
   .object({
+    categoryIds: categoryIds.optional(),
     sourceLang: lang.optional(),
     name: texts(NAME_MAX).optional(),
     description: texts(DESCRIPTION_MAX).nullable().optional(),

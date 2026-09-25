@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
 import { Grant, GrantSource, GrantStatus, Prisma, QuotaAdjustment, QuotaMetric, VariantBillingMode } from '@prisma/client';
-import { TenantContext, meteredRatesInEffect, tenantTransaction } from '@txnet-backend/shared-core';
+import { TenantContext, meteredRatesInEffect, productCategoriesInclude, productCategoriesLive, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { isSellableBySku, meteredRateAt, type MeteredRateRow, type OfferFacts } from '../catalog/catalog-reads';
 import { PrismaService } from '../prisma/prisma.service';
@@ -246,14 +246,14 @@ export class GrantService {
       where: { id: input.variantId },
       // The rate history comes back with the variant — one round trip, and the
       // rows are narrowed to those that could be in effect at the sale.
-      include: { product: { include: { category: true } }, meteredRates: { where: meteredRatesInEffect(startsAt) } },
+      include: { product: { include: productCategoriesInclude }, meteredRates: { where: meteredRatesInEffect(startsAt) } },
     });
     if (!variant) throw new EntitlementRefused('variant_not_found', input.variantId);
     const facts: OfferFacts = {
       visibility: variant.visibility,
       isActive: variant.isActive,
       productActive: variant.product.isActive,
-      categoryActive: variant.product.category.isActive,
+      categoryActive: productCategoriesLive(variant.product.categories),
     };
     if (!assignable(input.source, facts)) throw new EntitlementRefused('variant_not_assignable', input.variantId);
 

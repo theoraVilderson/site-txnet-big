@@ -92,9 +92,10 @@ beforeAll(async () => {
   `);
   for (const [id, tenantId, key] of [[PLATFORM_PRODUCT, null, 'vpn_basic'], [B_PRODUCT, TENANT_B, 'vpn_beta']]) {
     await owner.$executeRawUnsafe(`
-      INSERT INTO catalog.product (id, "tenantId", "categoryId", key, "nameKey", "fulfilmentKind")
-      VALUES ('${id}', ${tenantId ? `'${tenantId}'` : 'NULL'}, '${CATEGORY}', '${key}', 'k', 'network_access')
+      INSERT INTO catalog.product (id, "tenantId", key, "nameKey", "fulfilmentKind")
+      VALUES ('${id}', ${tenantId ? `'${tenantId}'` : 'NULL'}, '${key}', 'k', 'network_access')
     `);
+    await owner.$executeRawUnsafe(`INSERT INTO catalog.product_category_link ("productId", "categoryId", "tenantId") SELECT id, '${CATEGORY}', "tenantId" FROM catalog.product WHERE id = '${id}'`);
   }
   for (const [id, tenantId, productId] of [[PLATFORM_VARIANT, null, PLATFORM_PRODUCT], [B_VARIANT, TENANT_B, B_PRODUCT]]) {
     await owner.$executeRawUnsafe(`

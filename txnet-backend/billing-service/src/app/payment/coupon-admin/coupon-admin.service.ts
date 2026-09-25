@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { CouponChannel, CouponVisibility, DiscountType, Prisma, TenantType } from '@prisma/client';
 
-import { tenantTransaction, type TenantTransactionOptions } from '@txnet-backend/shared-core';
+import { productCategoriesInclude, productCategoriesLive, tenantTransaction, type TenantTransactionOptions } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -645,9 +645,9 @@ export class CouponAdminService {
   async assertGrantVariant(db: Tx, tenantId: string | null, variantId: string): Promise<void> {
     const v = await db.productVariant.findUnique({
       where: { id: variantId },
-      select: { tenantId: true, isActive: true, product: { select: { isActive: true, category: { select: { isActive: true } } } } },
+      select: { tenantId: true, isActive: true, product: { select: { isActive: true, ...productCategoriesInclude } } },
     });
-    const live = v !== null && v.isActive && v.product.isActive && v.product.category.isActive;
+    const live = v !== null && v.isActive && v.product.isActive && productCategoriesLive(v.product.categories);
     if (!live || (v.tenantId !== null && v.tenantId !== tenantId)) throw new CouponAdminRefused('variant_not_found', variantId);
   }
 

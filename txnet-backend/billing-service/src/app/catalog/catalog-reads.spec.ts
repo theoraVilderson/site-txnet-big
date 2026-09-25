@@ -15,6 +15,8 @@
  */
 import { Prisma, VariantVisibility } from '@prisma/client';
 
+import { CATEGORY_MAX_DEPTH, categoryLive, firstLiveCategory, liveCategoryWhere, productCategoriesLive } from '@txnet-backend/shared-core';
+
 import { isListed, isSellableBySku, meteredRateAt, pickBySku, priceAt, type MeteredRateRow, type PriceRow } from './catalog-reads';
 
 const d = (v: string) => new Prisma.Decimal(v);
@@ -122,5 +124,41 @@ describe('pickBySku', () => {
 
   it("never answers another tenant's row, even if a caller passed one in", () => {
     expect(pickBySku([{ id: 'other', tenantId: '22222222-2222-4222-8222-222222222222' }], TENANT)).toBeNull();
+  });
+});
+
+describe('a category is live when it and every one above it are on (F-026-r)', () => {
+  const top = { key: 'vpn', isActive: true, parentId: null, parent: null };
+  const under = (parent: typeof top, isActive = true, key = 'x') => ({ key, isActive, parentId: 'p', parent });
+
+  it('hides a whole subtree under a switched-off parent', () => {
+    expect(categoryLive(under(under(top)))).toBe(true);
+    expect(categoryLive(under(under({ ...top, isActive: false })))).toBe(false);
+  });
+
+  it('treats a chain deeper than the cap reads as not live — out of sight is out of sale', () => {
+    let c = top;
+    for (let i = 1; i < CATEGORY_MAX_DEPTH; i++) c = under(c);
+    expect(categoryLive(c)).toBe(true);
+    expect(categoryLive(under(c))).toBe(false);
+  });
+
+  it('keeps a product on sale while one of its categories is live, and shows it under the first live one', () => {
+    const off = { ...top, key: 'off', isActive: false };
+    const links = [{ position: 0, category: off }, { position: 1, category: under(top, true, 'fast') }];
+    expect(productCategoriesLive(links)).toBe(true);
+    expect(firstLiveCategory(links)?.key).toBe('fast');
+    expect(productCategoriesLive([{ category: off }])).toBe(false);
+  });
+
+  it('asks the database the same question, to the same depth', () => {
+    let where = liveCategoryWhere() as Record<string, unknown>;
+    let levels = 1;
+    while (Array.isArray(where['OR'])) {
+      levels++;
+      where = (where['OR'] as Record<string, unknown>[])[1]['parent'] as Record<string, unknown>;
+    }
+    expect(levels).toBe(CATEGORY_MAX_DEPTH);
+    expect(where).toEqual({ isActive: true, parentId: null });
   });
 });

@@ -48,9 +48,10 @@ const q = (v: string | null) => (v === null ? 'NULL' : `'${v}'`);
 
 async function insertProduct(id: string, tenantId: string | null, key: string, categoryId = CATEGORY) {
   await owner.$executeRawUnsafe(`
-    INSERT INTO catalog.product (id, "tenantId", "categoryId", key, "nameKey", "fulfilmentKind")
-    VALUES ('${id}', ${q(tenantId)}, '${categoryId}', '${key}', 'catalog.product.${key}.name', 'network_access')
+    INSERT INTO catalog.product (id, "tenantId", key, "nameKey", "fulfilmentKind")
+    VALUES ('${id}', ${q(tenantId)}, '${key}', 'catalog.product.${key}.name', 'network_access')
   `);
+  await owner.$executeRawUnsafe(`INSERT INTO catalog.product_category_link ("productId", "categoryId", "tenantId") SELECT id, '${categoryId}', "tenantId" FROM catalog.product WHERE id = '${id}'`);
 }
 
 async function insertVariant(id: string, tenantId: string | null, productId: string, sku: string) {
@@ -127,7 +128,7 @@ describe("whose catalog a tenant reads", () => {
     await expect(
       asTenant(RESELLER_A, (tx) =>
         tx.product.create({
-          data: { tenantId: null, categoryId: CATEGORY, key: 'sneaky', nameKey: 'k', fulfilmentKind: 'network_access' },
+          data: { tenantId: null, key: 'sneaky', nameKey: 'k', fulfilmentKind: 'network_access' },
         }),
       ),
     ).rejects.toThrow(/row-level security|42501/);

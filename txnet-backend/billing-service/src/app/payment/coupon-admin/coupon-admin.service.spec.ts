@@ -41,12 +41,12 @@ const RESELLER_VARIANT = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 const OTHER_VARIANT = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
 const OFF_VARIANT = '0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a0a';
 
-const live = { isActive: true, product: { isActive: true, category: { isActive: true } } };
+const live = { isActive: true, product: { isActive: true, categories: [{ position: 0, category: { key: 'vpn', isActive: true, parentId: null } }] } };
 const VARIANTS = [
   { id: PLATFORM_VARIANT, tenantId: null, ...live },
   { id: RESELLER_VARIANT, tenantId: RESELLER, ...live },
   { id: OTHER_VARIANT, tenantId: OTHER, ...live },
-  { id: OFF_VARIANT, tenantId: RESELLER, isActive: true, product: { isActive: false, category: { isActive: true } } },
+  { id: OFF_VARIANT, tenantId: RESELLER, isActive: true, product: { isActive: false, categories: [{ position: 0, category: { key: 'vpn', isActive: true, parentId: null } }] } },
 ];
 
 const actor = (tenantId: string) => ({ adminId: ADMIN, tenantId, ip: '10.0.0.9' });

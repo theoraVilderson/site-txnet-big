@@ -161,8 +161,9 @@ describe('a free_grant coupon', () => {
   beforeAll(async () => {
     await owner.$executeRawUnsafe(`INSERT INTO catalog.product_category (id, key, "nameKey") VALUES ('${CATEGORY}', 'vpn', 'k.v')`);
     await owner.$executeRawUnsafe(`
-      INSERT INTO catalog.product (id, "categoryId", key, "nameKey", "fulfilmentKind") VALUES ('${PRODUCT}', '${CATEGORY}', 'vpn_free', 'k.p', 'network_access')
+      INSERT INTO catalog.product (id, key, "nameKey", "fulfilmentKind") VALUES ('${PRODUCT}', 'vpn_free', 'k.p', 'network_access')
     `);
+    await owner.$executeRawUnsafe(`INSERT INTO catalog.product_category_link ("productId", "categoryId", "tenantId") SELECT id, '${CATEGORY}', "tenantId" FROM catalog.product WHERE id = '${PRODUCT}'`);
     await owner.$executeRawUnsafe(`
       INSERT INTO catalog.product_variant (id, "productId", sku, "billingMode", visibility) VALUES ('${VARIANT}', '${PRODUCT}', 'FREE-30', 'prepaid', 'public')
     `);
