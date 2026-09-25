@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 23
-updated: 2026-09-20
+updated: 2026-09-25
 ---
 
 # Contract — panel-web: catalog (F-026-f)
@@ -35,8 +35,18 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    already past is refused here as billing refuses it. A price is switched off,
    never deleted. "Current" is billing's `priceAt`: the newest active row in
    effect (`currentPrice`).
-6. **Nothing is patched from an answer, and nothing is deleted.** Every write
-   re-reads; products, variants and prices are switched off.
+6. **Nothing is patched from an answer, and one thing is deleted.** Every write
+   re-reads; variants and prices are switched off, and so is a product one at a
+   time. The one delete is **a group removal of products** (F-026-i over
+   F-026-h): a checkbox per row and "select all" over what the filters show, a
+   confirm, then `POST /products/remove` and one line per outcome that happened
+   (`removalReport`: deleted, archived because sold, not found). Billing
+   decides which — the page never guesses. A read-back drops a selected id the
+   list no longer has (`stillSelected`).
+6b. **Archived products are behind their own toggle** (`?archived=true`,
+   shown only when there are some): named, marked archived, no selection, and
+   "restore" (`PATCH archived:false`) brings one back switched off. Their keys
+   stay taken, so the wizard counts them.
 7. **Buttons stay on the green tokens** (`bg-primary`, `--leaf-bg`).
 8. **Names are text, never keys** (F-1533-e/g, ADR-0050 amendments). A
    category or product is created and renamed with a **source language**
@@ -96,7 +106,8 @@ quotas), `validatePriceForm` / `priceBody` (today, future, past),
 `currentPrice`, the menu permission, every key in `en` and `fa`; names
 in a source language (`validateCategoryForm` / `categoryBody`,
 `validateNamesForm` / `namesBody`, `productBody` never sends a key),
-`flattenTexts` / `catalogText` fallback to the source, `reviewWrites`.
+`flattenTexts` / `catalogText` fallback to the source, `reviewWrites`,
+`removalReport` / `stillSelected` (F-026-i).
 
 `my-resellers/catalog.test.ts` (F-066-w8) — `catalogApiPrefix` on both
 surfaces against the controller's own `@Controller`, `surfaceActor` holding a

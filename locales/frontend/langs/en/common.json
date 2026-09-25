@@ -1381,7 +1381,23 @@
     "copyId": "Copy id",
     "copied": "Copied",
     "productDetail": "Product details",
-    "translationsPending": "{{count}} translations awaiting review"
+    "translationsPending": "{{count}} translations awaiting review",
+    "removal": {
+      "selectAll": "Select all",
+      "selected": "{{count}} products selected",
+      "remove": "Remove selected",
+      "removing": "Removing…",
+      "confirm": "Remove {{count}} products? A product never sold is deleted for good; one that was sold is archived and its buyers keep their service.",
+      "deleted": "{{count}} products deleted for good.",
+      "archived": "{{count}} products archived because they were sold.",
+      "notFound": "{{count}} products were not found or are not yours.",
+      "showArchived": "Archived ({{count}})",
+      "showActive": "Back to products",
+      "archivedBadge": "Archived",
+      "restore": "Restore",
+      "archivedEmpty": "No archived products.",
+      "archivedHint": "These products were sold, so they are not deleted: they are not on sale and not in the list, but their buyers keep their service. Restore brings one back to the list, switched off."
+    }
   },
   "settings": {
     "title": "Settings",

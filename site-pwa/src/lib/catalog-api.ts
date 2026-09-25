@@ -99,6 +99,14 @@ export interface CatalogProduct {
   featureKeys: string[];
   defaultQuotas: Quotas;
   isActive: boolean;
+  /** Set when a removal found it sold and kept it (F-026-h); such a product is only in the `archived` list. */
+  archivedAt: string | null;
+}
+
+/** What a removal did to one product (F-026-h): gone for good, kept because it was sold, or not the caller's. */
+export interface ProductRemoval {
+  id: string;
+  outcome: "deleted" | "archived" | "not_found";
 }
 
 /** Base currency, a decimal string (C-02). A row is history: never edited, only switched off. */
@@ -142,7 +150,11 @@ export interface CreateProductBody {
   featureKeys?: string[];
   defaultQuotas?: Quotas;
 }
-export type UpdateProductBody = Partial<Pick<CreateProductBody, "sourceLang" | "name" | "description" | "featureKeys" | "defaultQuotas">> & { isActive?: boolean };
+export type UpdateProductBody = Partial<Pick<CreateProductBody, "sourceLang" | "name" | "description" | "featureKeys" | "defaultQuotas">> & {
+  isActive?: boolean;
+  /** Only `false`: back from the archive, still switched off. */
+  archived?: false;
+};
 
 export interface CreateVariantBody {
   sku: string;
@@ -200,8 +212,8 @@ export function catalogAdminApi(tenantId: string | null) {
       return call<CatalogCategory>(`${at}/categories/${id(categoryId)}`, { method: "PATCH", ...json(body) });
     },
 
-    /** The platform owner may narrow by a tenant id or `platform`; a tenant always gets its own. */
-    async products(query: { categoryId?: string; tenantId?: string } = {}): Promise<CatalogProduct[]> {
+    /** The platform owner may narrow by a tenant id or `platform`; a tenant always gets its own. `archived: "true"` lists the archived alone. */
+    async products(query: { categoryId?: string; tenantId?: string; archived?: "true" } = {}): Promise<CatalogProduct[]> {
       const params = new URLSearchParams();
       for (const [k, v] of Object.entries(query)) if (v) params.set(k, v);
       const qs = params.toString();
@@ -219,6 +231,11 @@ export function catalogAdminApi(tenantId: string | null) {
 
     async updateProduct(productId: string, body: UpdateProductBody): Promise<CatalogProduct> {
       return call<CatalogProduct>(`${at}/products/${id(productId)}`, { method: "PATCH", ...json(body) });
+    },
+
+    /** One outcome per id; a sold product is archived, never deleted (F-026-h). */
+    async removeProducts(ids: string[]): Promise<ProductRemoval[]> {
+      return call<ProductRemoval[]>(`${at}/products/remove`, { method: "POST", ...json({ ids }) });
     },
 
     async createVariant(productId: string, body: CreateVariantBody): Promise<CatalogVariant> {

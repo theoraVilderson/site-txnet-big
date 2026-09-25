@@ -2,13 +2,23 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { BookOpen, ChevronLeft, Languages, Loader2, Package, Pencil, Plus, Power, RotateCw, Tags } from "lucide-react";
+import { Archive, BookOpen, ChevronLeft, Languages, Loader2, Package, Pencil, Plus, Power, RotateCcw, RotateCw, Tags, Trash2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { type CatalogAdminApi, type CatalogCategory, type CatalogProduct } from "@/lib/catalog-api";
 import { useCatalogSurface } from "../_lib/surface";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { Select } from "../../_components/kit/Select";
-import { CATALOG_KEYS as K, catalogText, featureKeysIn, flattenTexts, isPlatformOwner, surfaceActor, type CatalogTexts } from "../_lib/catalog-form";
+import {
+  CATALOG_KEYS as K,
+  catalogText,
+  featureKeysIn,
+  flattenTexts,
+  isPlatformOwner,
+  removalReport,
+  stillSelected,
+  surfaceActor,
+  type CatalogTexts,
+} from "../_lib/catalog-form";
 import { CatalogGuide } from "./CatalogGuide";
 import { CategorySheet, NamesSheet } from "./NameSheets";
 import { ProductDetailSheet } from "./ProductDetailSheet";
@@ -53,8 +63,10 @@ type Renaming = { kind: "product" | "category"; id: string; nameKey: string; des
  *
  * One page for two audiences, and the page decides neither: billing answers
  * the platform owner every item and a tenant its own. Nothing is patched from a
- * write's answer — the list is re-read — and nothing is deleted: an item or a
- * price is switched off. A price change is always a new row (F-0602).
+ * write's answer — the list is re-read. An item or a price is switched off; the
+ * one delete is a group removal of products (F-026-i), where billing deletes a
+ * product never sold and archives a sold one — the page shows what it did, and
+ * the archived behind their own toggle. A price change is always a new row (F-0602).
  */
 export function CatalogView() {
   const { t, lang, availableLocales } = useLocale();
@@ -71,6 +83,12 @@ export function CatalogView() {
   // Every product the caller manages: the capability list and the taken keys come from here,
   // whatever the filters show.
   const [products, setProducts] = useState<CatalogProduct[] | null>(null);
+  // Sold products a removal kept (F-026-h): out of the list, still holding their keys.
+  const [archived, setArchived] = useState<CatalogProduct[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [removing, setRemoving] = useState(false);
+  const [report, setReport] = useState<{ key: string; count: number }[]>([]);
   const [categoryId, setCategoryId] = useState("");
   const [platformOnly, setPlatformOnly] = useState(false);
   const [pending, setPending] = useState<number | null>(null);
@@ -91,13 +109,16 @@ export function CatalogView() {
 
   const load = useCallback(async () => {
     try {
-      const [cats, prods, names] = await Promise.all([
+      const [cats, prods, kept, names] = await Promise.all([
         api.categories(),
         api.products(),
+        api.products({ archived: "true" }),
         loadTexts(api, langCodes ? langCodes.split(",") : [lang]),
       ]);
       setCategories(cats);
       setProducts(prods);
+      setArchived(kept);
+      setSelected((before) => stillSelected(before, prods));
       setTexts(names);
       setError(null);
     } catch (e) {
@@ -115,6 +136,7 @@ export function CatalogView() {
 
   const act = async (run: () => Promise<unknown>) => {
     setActionError(null);
+    setReport([]);
     try {
       await run();
       setNotice(t("common", K.saved));
@@ -130,7 +152,32 @@ export function CatalogView() {
     return c ? nameOf(c) : "—";
   };
   const knownFeatureKeys = useMemo(() => featureKeysIn(products ?? []), [products]);
-  const shown = (products ?? []).filter((p) => (!categoryId || p.categoryId === categoryId) && (!platformOnly || p.tenantId === null));
+  const listed = showArchived ? archived : (products ?? []);
+  const shown = listed.filter((p) => (!categoryId || p.categoryId === categoryId) && (!platformOnly || p.tenantId === null));
+  const allSelected = !showArchived && shown.length > 0 && shown.every((p) => selected.has(p.id));
+  const toggle = (id: string) =>
+    setSelected((before) => {
+      const next = new Set(before);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const removeSelected = async () => {
+    const ids = [...selected];
+    if (ids.length === 0 || !window.confirm(t("common", K.removal.confirm, { count: ids.length }))) return;
+    setRemoving(true);
+    setActionError(null);
+    setNotice(null);
+    try {
+      setReport(removalReport(await api.removeProducts(ids)));
+      setSelected(new Set());
+      await load();
+    } catch (e) {
+      setActionError(message(e));
+    } finally {
+      setRemoving(false);
+    }
+  };
   const countIn = (id: string) => (products ?? []).filter((p) => p.categoryId === id).length;
   const openProduct = products?.find((p) => p.id === openId) ?? null;
 
@@ -221,6 +268,20 @@ export function CatalogView() {
                 className="w-40"
               />
             )}
+            {(archived.length > 0 || showArchived) && (
+              <button
+                type="button"
+                className={quietButton}
+                aria-pressed={showArchived}
+                onClick={() => {
+                  setShowArchived(!showArchived);
+                  setSelected(new Set());
+                }}
+              >
+                <Archive size={14} aria-hidden />
+                {showArchived ? t("common", K.removal.showActive) : t("common", K.removal.showArchived, { count: archived.length })}
+              </button>
+            )}
           </div>
         ) : (
           <button type="button" className={quietButton} onClick={() => setCreating("category")}>
@@ -231,6 +292,13 @@ export function CatalogView() {
       </div>
 
       {notice && <p className="text-xs font-bold text-primary">{notice}</p>}
+      {report.length > 0 && (
+        <ul className="flex flex-col gap-0.5 text-xs font-bold text-primary" role="status">
+          {report.map((line) => (
+            <li key={line.key}>{t("common", line.key, { count: line.count })}</li>
+          ))}
+        </ul>
+      )}
       {actionError && <Alert>{actionError}</Alert>}
 
       {sessionLoading || (!products && !error) ? (
@@ -246,6 +314,31 @@ export function CatalogView() {
             {t("common", K.retry)}
           </button>
         </div>
+      ) : tab === "products" && showArchived ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs text-text-secondary">{t("common", K.removal.archivedHint)}</p>
+          {shown.length === 0 ? (
+            <p className="py-8 text-center text-sm text-text-secondary">{t("common", K.removal.archivedEmpty)}</p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {shown.map((p) => (
+                <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-card-border bg-card-bg p-3 opacity-80 shadow-sm">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold text-text-primary">{nameOf(p)}</p>
+                    <p className="text-[11px] text-text-secondary">
+                      {categoryName(p.categoryId)} · {t("common", K.removal.archivedBadge)}
+                      {p.tenantId === null && ` · ${t("common", K.platform)}`}
+                    </p>
+                  </div>
+                  <button type="button" className={quietButton} onClick={() => void act(() => api.updateProduct(p.id, { archived: false }))}>
+                    <RotateCcw size={14} aria-hidden />
+                    {t("common", K.removal.restore)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       ) : tab === "products" ? (
         shown.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-8">
@@ -256,10 +349,32 @@ export function CatalogView() {
             </button>
           </div>
         ) : (
-          <ul className="flex flex-col gap-2">
-            {shown.map((p) => (
-              <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm">
-                <button type="button" className="min-w-0 flex-1 text-start" onClick={() => setOpenId(p.id)}>
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-3 px-1 text-xs">
+              <label className="flex items-center gap-2 font-bold text-text-primary">
+                <input type="checkbox" checked={allSelected} onChange={() => setSelected(allSelected ? new Set() : new Set(shown.map((p) => p.id)))} />
+                {t("common", K.removal.selectAll)}
+              </label>
+              {selected.size > 0 && (
+                <>
+                  <span className="text-text-secondary">{t("common", K.removal.selected, { count: selected.size })}</span>
+                  <button
+                    type="button"
+                    disabled={removing}
+                    onClick={() => void removeSelected()}
+                    className="inline-flex items-center gap-1 rounded-xl border border-error-border px-2.5 py-1 font-bold text-error hover:bg-error-bg disabled:opacity-50"
+                  >
+                    {removing ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Trash2 size={14} aria-hidden />}
+                    {t("common", removing ? K.removal.removing : K.removal.remove)}
+                  </button>
+                </>
+              )}
+            </div>
+            <ul className="flex flex-col gap-2">
+              {shown.map((p) => (
+                <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm">
+                  <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggle(p.id)} aria-label={nameOf(p)} />
+                  <button type="button" className="min-w-0 flex-1 text-start" onClick={() => setOpenId(p.id)}>
                   <p className="truncate text-sm font-bold text-text-primary">{nameOf(p)}</p>
                   <p className="text-[11px] text-text-secondary">
                     {categoryName(p.categoryId)} · {t("common", K.fulfilmentKind[p.fulfilmentKind])}
@@ -294,9 +409,10 @@ export function CatalogView() {
                     <ChevronLeft size={14} className="ltr:-scale-x-100" aria-hidden />
                   </button>
                 </div>
-              </li>
-            ))}
-          </ul>
+                </li>
+              ))}
+            </ul>
+          </div>
         )
       ) : categories.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-8">
@@ -351,7 +467,7 @@ export function CatalogView() {
         <ProductWizard
           categories={categories}
           categoryLabel={nameOf}
-          takenProductKeys={(products ?? []).map((p) => p.key)}
+          takenProductKeys={[...(products ?? []), ...archived].map((p) => p.key)}
           takenCategoryKeys={categories.map((c) => c.key)}
           knownFeatureKeys={knownFeatureKeys}
           onClose={() => setCreating(null)}

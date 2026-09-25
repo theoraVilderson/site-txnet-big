@@ -8,6 +8,7 @@ import type {
   CreateProductBody,
   CreateVariantBody,
   FulfilmentKind,
+  ProductRemoval,
   QualityTier,
   QuotaMetric,
   Quotas,
@@ -469,3 +470,25 @@ export function currentPrice(prices: readonly CatalogPrice[], now: Date = new Da
   }
   return best;
 }
+
+// ------------------------------------------------------------------ removal
+
+const REMOVAL_ORDER: readonly ProductRemoval["outcome"][] = ["deleted", "archived", "not_found"];
+const REMOVAL_KEYS: Record<ProductRemoval["outcome"], string> = {
+  deleted: CATALOG_KEYS.removal.deleted,
+  archived: CATALOG_KEYS.removal.archived,
+  not_found: CATALOG_KEYS.removal.notFound,
+};
+
+/**
+ * What a group removal did, one line per outcome that happened (F-026-i):
+ * billing answers each product on its own, so a batch can be part deleted,
+ * part archived because it was sold, and part not the caller's.
+ */
+export function removalReport(outcomes: readonly ProductRemoval[]): { key: string; count: number }[] {
+  return REMOVAL_ORDER.map((o) => ({ key: REMOVAL_KEYS[o], count: outcomes.filter((r) => r.outcome === o).length })).filter((l) => l.count > 0);
+}
+
+/** The selection, less every product the list no longer has — a removed one, or one another tab removed. */
+export const stillSelected = (selected: ReadonlySet<string>, listed: readonly { id: string }[]) =>
+  new Set(listed.map((p) => p.id).filter((id) => selected.has(id)));

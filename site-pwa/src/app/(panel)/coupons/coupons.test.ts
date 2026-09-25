@@ -313,6 +313,7 @@ describe("the variant picker", () => {
     featureKeys: [],
     defaultQuotas: {},
     isActive: true,
+    archivedAt: null,
     variants: [],
     ...patch,
   });

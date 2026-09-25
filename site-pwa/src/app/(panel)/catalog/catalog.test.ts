@@ -23,7 +23,9 @@ import {
   flattenTexts,
   editId,
   namesBody,
+  removalReport,
   reviewWrites,
+  stillSelected,
   validateCategoryForm,
   validateNamesForm,
   emptyVariantForm,
@@ -386,6 +388,29 @@ describe("the translation review", () => {
   it("never sends a draft cleared to blank", () => {
     const item = draft("de", "catalog.product.a.name", "A");
     expect(reviewWrites([item], { [editId(item)]: "   " })).toEqual([]);
+  });
+});
+
+describe("removing products in a group (F-026-h/i)", () => {
+  it("reports each outcome once, as a count, deleted before archived before not found, and nothing it did not do", () => {
+    const R = CATALOG_KEYS.removal;
+    expect(
+      removalReport([
+        { id: "a", outcome: "archived" },
+        { id: "b", outcome: "deleted" },
+        { id: "c", outcome: "not_found" },
+        { id: "d", outcome: "deleted" },
+      ]),
+    ).toEqual([
+      { key: R.deleted, count: 2 },
+      { key: R.archived, count: 1 },
+      { key: R.notFound, count: 1 },
+    ]);
+    expect(removalReport([{ id: "a", outcome: "deleted" }])).toEqual([{ key: R.deleted, count: 1 }]);
+  });
+
+  it("keeps a selection only for products still in the list after it is read again", () => {
+    expect(stillSelected(new Set(["a", "gone", "c"]), [{ id: "a" }, { id: "b" }, { id: "c" }])).toEqual(new Set(["a", "c"]));
   });
 });
 
