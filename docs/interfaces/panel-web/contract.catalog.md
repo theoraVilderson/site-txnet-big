@@ -35,9 +35,9 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    already past is refused here as billing refuses it. A price is switched off,
    never deleted. "Current" is billing's `priceAt`: the newest active row in
    effect (`currentPrice`).
-6. **Nothing is patched from an answer, and one thing is deleted.** Every write
+6. **Nothing is patched from an answer, and two things are deleted.** Every write
    re-reads; variants and prices are switched off, and so is a product one at a
-   time. The one delete is **a group removal of products** (F-026-i over
+   time. One delete is **a group removal of products** (F-026-i over
    F-026-h): a checkbox per row and "select all" over what the filters show, a
    confirm, then `POST /products/remove` and one line per outcome that happened
    (`removalReport`: deleted, archived because sold, not found). Billing
@@ -47,6 +47,16 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    shown only when there are some): named, marked archived, no selection, and
    "restore" (`PATCH archived:false`) brings one back switched off. Their keys
    stay taken, so the wizard counts them.
+6c. **Categories are selected the same way, on their own** (F-026-k over
+   F-026-j): the categories tab keeps its own selection, never the products'.
+   Remove is a confirm, then `POST /categories/remove` and one line per outcome
+   (`categoryRemovalReport`: deleted, kept because it holds products, not
+   found). A category's product count includes the archived (`productCounts`),
+   because billing keeps a category any of them sits in — a count without them
+   would show 0 beside a refusal. Switch on / off is one `PATCH isActive` per
+   selected category not already in that state (`switchTargets`), each on its
+   own (`allSettled`), then one re-read and a changed / not-changed count
+   (`switchReport`).
 7. **Buttons stay on the green tokens** (`bg-primary`, `--leaf-bg`).
 8. **Names are text, never keys** (F-1533-e/g, ADR-0050 amendments). A
    category or product is created and renamed with a **source language**
@@ -107,7 +117,9 @@ quotas), `validatePriceForm` / `priceBody` (today, future, past),
 in a source language (`validateCategoryForm` / `categoryBody`,
 `validateNamesForm` / `namesBody`, `productBody` never sends a key),
 `flattenTexts` / `catalogText` fallback to the source, `reviewWrites`,
-`removalReport` / `stillSelected` (F-026-i).
+`removalReport` / `stillSelected` (F-026-i); `categoryRemovalReport` against
+billing's `CategoryRemovalOutcome`, `productCounts`, `switchTargets`,
+`switchReport` (F-026-k).
 
 `my-resellers/catalog.test.ts` (F-066-w8) — `catalogApiPrefix` on both
 surfaces against the controller's own `@Controller`, `surfaceActor` holding a

@@ -24,6 +24,10 @@ import {
   editId,
   namesBody,
   removalReport,
+  categoryRemovalReport,
+  productCounts,
+  switchReport,
+  switchTargets,
   reviewWrites,
   stillSelected,
   validateCategoryForm,
@@ -411,6 +415,58 @@ describe("removing products in a group (F-026-h/i)", () => {
 
   it("keeps a selection only for products still in the list after it is read again", () => {
     expect(stillSelected(new Set(["a", "gone", "c"]), [{ id: "a" }, { id: "b" }, { id: "c" }])).toEqual(new Set(["a", "c"]));
+  });
+});
+
+describe("categories in a group (F-026-j/k)", () => {
+  const C = CATALOG_KEYS.categories;
+
+  it("has a line for every outcome billing answers, and reports each once, deleted before kept before not found", () => {
+    const field = /export type CategoryRemovalOutcome = \{[^}]*outcome: ([^;}]*)/.exec(read("billing-service/src/app/catalog/catalog-admin.service.ts"));
+    if (!field) throw new Error("CategoryRemovalOutcome no longer has an outcome union — this test is stale");
+    expect([...field[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort()).toEqual(["deleted", "has_products", "not_found"]);
+    expect(
+      categoryRemovalReport([
+        { id: "a", outcome: "has_products" },
+        { id: "b", outcome: "not_found" },
+        { id: "c", outcome: "deleted" },
+        { id: "d", outcome: "has_products" },
+      ]),
+    ).toEqual([
+      { key: C.deleted, count: 1 },
+      { key: C.hasProducts, count: 2 },
+      { key: C.notFound, count: 1 },
+    ]);
+  });
+
+  it("counts an archived product in its category, because billing refuses to remove that category for it", () => {
+    const counts = productCounts([{ categoryId: "x" }, { categoryId: "y" }], [{ categoryId: "x" }]);
+    expect(counts.get("x")).toBe(2);
+    expect(counts.get("y")).toBe(1);
+    expect(counts.get("empty")).toBeUndefined();
+  });
+
+  it("switches only the selected categories that are not already in the asked state", () => {
+    const cats = [
+      { id: "on1", isActive: true },
+      { id: "off1", isActive: false },
+      { id: "on2", isActive: true },
+      { id: "unpicked", isActive: false },
+    ];
+    const picked = new Set(["on1", "off1", "on2"]);
+    expect(switchTargets(picked, cats, false)).toEqual(["on1", "on2"]);
+    expect(switchTargets(picked, cats, true)).toEqual(["off1"]);
+  });
+
+  it("reports how many switched and how many failed, each only when it happened", () => {
+    const ok: PromiseSettledResult<unknown> = { status: "fulfilled", value: {} };
+    const no: PromiseSettledResult<unknown> = { status: "rejected", reason: new Error("x") };
+    expect(switchReport([ok, no, ok])).toEqual([
+      { key: C.switched, count: 2 },
+      { key: C.switchFailed, count: 1 },
+    ]);
+    expect(switchReport([ok])).toEqual([{ key: C.switched, count: 1 }]);
+    expect(switchReport([])).toEqual([]);
   });
 });
 

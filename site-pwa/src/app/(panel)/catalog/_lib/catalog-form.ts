@@ -9,6 +9,7 @@ import type {
   CreateVariantBody,
   FulfilmentKind,
   ProductRemoval,
+  CategoryRemoval,
   QualityTier,
   QuotaMetric,
   Quotas,
@@ -492,3 +493,43 @@ export function removalReport(outcomes: readonly ProductRemoval[]): { key: strin
 /** The selection, less every product the list no longer has — a removed one, or one another tab removed. */
 export const stillSelected = (selected: ReadonlySet<string>, listed: readonly { id: string }[]) =>
   new Set(listed.map((p) => p.id).filter((id) => selected.has(id)));
+
+// ------------------------------------------------------------ category group
+
+const CATEGORY_REMOVAL_ORDER: readonly CategoryRemoval["outcome"][] = ["deleted", "has_products", "not_found"];
+const CATEGORY_REMOVAL_KEYS: Record<CategoryRemoval["outcome"], string> = {
+  deleted: CATALOG_KEYS.categories.deleted,
+  has_products: CATALOG_KEYS.categories.hasProducts,
+  not_found: CATALOG_KEYS.categories.notFound,
+};
+
+/** What a group removal of categories did, one line per outcome that happened (F-026-k over F-026-j). */
+export function categoryRemovalReport(outcomes: readonly CategoryRemoval[]): { key: string; count: number }[] {
+  return CATEGORY_REMOVAL_ORDER.map((o) => ({ key: CATEGORY_REMOVAL_KEYS[o], count: outcomes.filter((r) => r.outcome === o).length })).filter(
+    (l) => l.count > 0,
+  );
+}
+
+/**
+ * Products per category, the archived counted too: billing keeps a category
+ * any product sits in, archived ones included, so a count that left them out
+ * would show 0 beside a category the removal then refuses.
+ */
+export function productCounts(...lists: readonly (readonly { categoryId: string }[])[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const p of lists.flat()) counts.set(p.categoryId, (counts.get(p.categoryId) ?? 0) + 1);
+  return counts;
+}
+
+/** The selected categories a group switch actually changes: those not already on (or off). */
+export const switchTargets = (selected: ReadonlySet<string>, categories: readonly { id: string; isActive: boolean }[], on: boolean) =>
+  categories.filter((c) => selected.has(c.id) && c.isActive !== on).map((c) => c.id);
+
+/** A group switch is one PATCH per category, each on its own: how many changed, how many did not. */
+export function switchReport(results: readonly PromiseSettledResult<unknown>[]): { key: string; count: number }[] {
+  const ok = results.filter((r) => r.status === "fulfilled").length;
+  return [
+    { key: CATALOG_KEYS.categories.switched, count: ok },
+    { key: CATALOG_KEYS.categories.switchFailed, count: results.length - ok },
+  ].filter((l) => l.count > 0);
+}

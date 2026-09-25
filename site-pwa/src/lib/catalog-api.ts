@@ -109,6 +109,12 @@ export interface ProductRemoval {
   outcome: "deleted" | "archived" | "not_found";
 }
 
+/** What a removal did to one category (F-026-j): gone, kept because a product sits in it (archived ones too), or not the caller's. */
+export interface CategoryRemoval {
+  id: string;
+  outcome: "deleted" | "has_products" | "not_found";
+}
+
 /** Base currency, a decimal string (C-02). A row is history: never edited, only switched off. */
 export interface CatalogPrice {
   id: string;
@@ -213,6 +219,11 @@ export function catalogAdminApi(tenantId: string | null) {
     },
 
     /** The platform owner may narrow by a tenant id or `platform`; a tenant always gets its own. `archived: "true"` lists the archived alone. */
+    /** One outcome per id; an empty category is deleted, one holding products is kept (F-026-j). */
+    async removeCategories(ids: string[]): Promise<CategoryRemoval[]> {
+      return call<CategoryRemoval[]>(`${at}/categories/remove`, { method: "POST", ...json({ ids }) });
+    },
+
     async products(query: { categoryId?: string; tenantId?: string; archived?: "true" } = {}): Promise<CatalogProduct[]> {
       const params = new URLSearchParams();
       for (const [k, v] of Object.entries(query)) if (v) params.set(k, v);

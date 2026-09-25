@@ -11,12 +11,16 @@ import { Select } from "../../_components/kit/Select";
 import {
   CATALOG_KEYS as K,
   catalogText,
+  categoryRemovalReport,
   featureKeysIn,
   flattenTexts,
   isPlatformOwner,
+  productCounts,
   removalReport,
   stillSelected,
   surfaceActor,
+  switchReport,
+  switchTargets,
   type CatalogTexts,
 } from "../_lib/catalog-form";
 import { CatalogGuide } from "./CatalogGuide";
@@ -64,9 +68,10 @@ type Renaming = { kind: "product" | "category"; id: string; nameKey: string; des
  * One page for two audiences, and the page decides neither: billing answers
  * the platform owner every item and a tenant its own. Nothing is patched from a
  * write's answer — the list is re-read. An item or a price is switched off; the
- * one delete is a group removal of products (F-026-i), where billing deletes a
+ * deletes are group removals: of products (F-026-i), where billing deletes a
  * product never sold and archives a sold one — the page shows what it did, and
- * the archived behind their own toggle. A price change is always a new row (F-0602).
+ * the archived behind their own toggle — and of categories (F-026-k), where an
+ * empty one goes and one holding products stays. A price change is always a new row (F-0602).
  */
 export function CatalogView() {
   const { t, lang, availableLocales } = useLocale();
@@ -88,6 +93,9 @@ export function CatalogView() {
   const [showArchived, setShowArchived] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [removing, setRemoving] = useState(false);
+  // The categories tab has its own selection (F-026-k): a tab switch never carries one into the other.
+  const [pickedCategories, setPickedCategories] = useState<Set<string>>(new Set());
+  const [switching, setSwitching] = useState(false);
   const [report, setReport] = useState<{ key: string; count: number }[]>([]);
   const [categoryId, setCategoryId] = useState("");
   const [platformOnly, setPlatformOnly] = useState(false);
@@ -119,6 +127,7 @@ export function CatalogView() {
       setProducts(prods);
       setArchived(kept);
       setSelected((before) => stillSelected(before, prods));
+      setPickedCategories((before) => stillSelected(before, cats));
       setTexts(names);
       setError(null);
     } catch (e) {
@@ -178,7 +187,45 @@ export function CatalogView() {
       setRemoving(false);
     }
   };
-  const countIn = (id: string) => (products ?? []).filter((p) => p.categoryId === id).length;
+  // Archived products count: billing keeps a category any of them sits in (F-026-j).
+  const counts = useMemo(() => productCounts(products ?? [], archived), [products, archived]);
+  const allCategoriesPicked = categories.length > 0 && categories.every((c) => pickedCategories.has(c.id));
+  const pickCategory = (id: string) =>
+    setPickedCategories((before) => {
+      const next = new Set(before);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const removeCategories = async () => {
+    const ids = [...pickedCategories];
+    if (ids.length === 0 || !window.confirm(t("common", K.categories.confirm, { count: ids.length }))) return;
+    setRemoving(true);
+    setActionError(null);
+    setNotice(null);
+    try {
+      setReport(categoryRemovalReport(await api.removeCategories(ids)));
+      setPickedCategories(new Set());
+      await load();
+    } catch (e) {
+      setActionError(message(e));
+    } finally {
+      setRemoving(false);
+    }
+  };
+  // One PATCH per category that changes, each on its own; the list is read once after all of them.
+  const switchCategories = async (on: boolean) => {
+    const ids = switchTargets(pickedCategories, categories, on);
+    setSwitching(true);
+    setActionError(null);
+    setNotice(null);
+    try {
+      setReport(switchReport(await Promise.allSettled(ids.map((id) => api.updateCategory(id, { isActive: on })))));
+      await load();
+    } finally {
+      setSwitching(false);
+    }
+  };
   const openProduct = products?.find((p) => p.id === openId) ?? null;
 
   const closeGuide = () => {
@@ -423,41 +470,76 @@ export function CatalogView() {
           </button>
         </div>
       ) : (
-        <ul className="grid gap-2 sm:grid-cols-2">
-          {categories.map((c) => (
-            <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm">
-              <button
-                type="button"
-                className="min-w-0 flex-1 text-start"
-                onClick={() => {
-                  setCategoryId(c.id);
-                  setTab("products");
-                }}
-              >
-                <p className="truncate text-sm font-bold text-text-primary">{nameOf(c)}</p>
-                <p className="text-[11px] text-text-secondary">
-                  {t("common", K.categories.products, { count: countIn(c.id) })}
-                  {c.tenantId === null && ` · ${t("common", K.platform)}`}
-                  {!c.isActive && ` · ${t("common", K.inactive)}`}
-                </p>
-              </button>
-              <div className="flex gap-1">
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-3 px-1 text-xs">
+            <label className="flex items-center gap-2 font-bold text-text-primary">
+              <input
+                type="checkbox"
+                checked={allCategoriesPicked}
+                onChange={() => setPickedCategories(allCategoriesPicked ? new Set() : new Set(categories.map((c) => c.id)))}
+              />
+              {t("common", K.removal.selectAll)}
+            </label>
+            {pickedCategories.size > 0 && (
+              <>
+                <span className="text-text-secondary">{t("common", K.categories.selected, { count: pickedCategories.size })}</span>
+                <button type="button" className={quietButton} disabled={switching || removing} onClick={() => void switchCategories(true)}>
+                  <Power size={14} aria-hidden />
+                  {t("common", K.categories.switchOn)}
+                </button>
+                <button type="button" className={quietButton} disabled={switching || removing} onClick={() => void switchCategories(false)}>
+                  <Power size={14} aria-hidden />
+                  {t("common", K.categories.switchOff)}
+                </button>
                 <button
                   type="button"
-                  className={quietButton}
-                  onClick={() => setRenaming({ kind: "category", id: c.id, nameKey: c.nameKey, descriptionKey: null, sourceLang: c.sourceLang })}
+                  disabled={switching || removing}
+                  onClick={() => void removeCategories()}
+                  className="inline-flex items-center gap-1 rounded-xl border border-error-border px-2.5 py-1 font-bold text-error hover:bg-error-bg disabled:opacity-50"
                 >
-                  <Pencil size={14} aria-hidden />
-                  {t("common", K.rename)}
+                  {removing ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Trash2 size={14} aria-hidden />}
+                  {t("common", removing ? K.removal.removing : K.removal.remove)}
                 </button>
-                <button type="button" className={quietButton} onClick={() => void act(() => api.updateCategory(c.id, { isActive: !c.isActive }))}>
-                  <Power size={14} aria-hidden />
-                  {t("common", c.isActive ? K.deactivate : K.activate)}
+              </>
+            )}
+          </div>
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {categories.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm">
+                <input type="checkbox" checked={pickedCategories.has(c.id)} onChange={() => pickCategory(c.id)} aria-label={nameOf(c)} />
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 text-start"
+                  onClick={() => {
+                    setCategoryId(c.id);
+                    setTab("products");
+                  }}
+                >
+                  <p className="truncate text-sm font-bold text-text-primary">{nameOf(c)}</p>
+                  <p className="text-[11px] text-text-secondary">
+                    {t("common", K.categories.products, { count: counts.get(c.id) ?? 0 })}
+                    {c.tenantId === null && ` · ${t("common", K.platform)}`}
+                    {!c.isActive && ` · ${t("common", K.inactive)}`}
+                  </p>
                 </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    className={quietButton}
+                    onClick={() => setRenaming({ kind: "category", id: c.id, nameKey: c.nameKey, descriptionKey: null, sourceLang: c.sourceLang })}
+                  >
+                    <Pencil size={14} aria-hidden />
+                    {t("common", K.rename)}
+                  </button>
+                  <button type="button" className={quietButton} onClick={() => void act(() => api.updateCategory(c.id, { isActive: !c.isActive }))}>
+                    <Power size={14} aria-hidden />
+                    {t("common", c.isActive ? K.deactivate : K.activate)}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {creating === "category" && (

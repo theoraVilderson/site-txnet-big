@@ -1383,7 +1383,16 @@
     },
     "categories": {
       "empty": "No categories yet.",
-      "products": "{{count}} products"
+      "products": "{{count}} products",
+      "selected": "{{count}} categories selected",
+      "confirm": "Remove {{count}} categories? An empty category is deleted; one that still holds products, archived ones included, is kept.",
+      "deleted": "{{count}} categories deleted.",
+      "hasProducts": "{{count}} categories kept because they still hold products (archived ones count). Move or remove those first.",
+      "notFound": "{{count}} categories were not found or are not yours.",
+      "switchOn": "Switch on selected",
+      "switchOff": "Switch off selected",
+      "switched": "{{count}} categories changed.",
+      "switchFailed": "{{count}} categories could not be changed."
     },
     "copyId": "Copy id",
     "copied": "Copied",
