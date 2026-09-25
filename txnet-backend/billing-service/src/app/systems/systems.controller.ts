@@ -32,6 +32,7 @@ import { PanelCredentialRefused, PanelCredentialUnavailable } from './panel-cred
 import { PanelRegistrationService, PanelResubmitRefused, RegisterPanelInput } from './panel-registration';
 import { PanelGroupInput, PanelGroupMemberInput, PanelGroupsService } from './panel-groups';
 import { PanelInboundsInput, PanelInboundsService } from './panel-inbounds';
+import { PanelLifecycleService, PanelSettingsInput } from './panel-lifecycle';
 import {
   AcknowledgeDriftBody,
   AddPanelGroupMemberBody,
@@ -40,6 +41,8 @@ import {
   createPanelGroupSchema,
   UpdatePanelGroupBody,
   updatePanelGroupSchema,
+  UpdatePanelBody,
+  updatePanelSchema,
   UpdatePanelInboundsBody,
   updatePanelInboundsSchema,
   acknowledgeDriftSchema,
@@ -100,6 +103,7 @@ const CONFLICTS: ReadonlySet<SystemsRejection> = new Set([
   'already_draining',
   'member_has_configs',
   'inbound_not_sellable',
+  'not_for_transport',
 ]);
 
 /** The service's refusals as HTTP: the scope is a 403, a panel, group or event outside it a 404. */
@@ -154,6 +158,7 @@ export class SystemsController {
     private readonly holdsQueue: UsageHoldsService,
     private readonly panelGroups: PanelGroupsService,
     private readonly panelInbounds: PanelInboundsService,
+    private readonly lifecycle: PanelLifecycleService,
   ) {}
 
   @Get('panel-groups')
@@ -218,6 +223,20 @@ export class SystemsController {
   @RateLimit(SYSTEMS_ADMIN_READ)
   panels(@Req() req: Request) {
     return refusing(() => this.reads.panels(actorOf(req)));
+  }
+
+  /**
+   * Edit a panel's settings (F-027-by). `200 {id, reviewState, retest}`:
+   * `retest` is whether a changed address sent it back to `pending`.
+   */
+  @Patch('panels/:id')
+  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  updatePanel(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(updatePanelSchema)) body: UpdatePanelBody,
+    @Req() req: Request,
+  ) {
+    return refusing(() => this.lifecycle.update(actorOf(req), id, body as PanelSettingsInput));
   }
 
   @Get('panels/:id/capabilities')

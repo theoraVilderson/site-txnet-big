@@ -17,7 +17,9 @@ export type SystemsRejection =
   | 'member_has_configs'
   // A panel's inbounds (F-114-b).
   | 'inbound_not_found'
-  | 'inbound_not_sellable';
+  | 'inbound_not_sellable'
+  // A panel's settings (F-027-by).
+  | 'not_for_transport';
 
 export class SystemsRefused extends Error {
   constructor(readonly reason: SystemsRejection) {
@@ -41,6 +43,10 @@ const PANEL_FIELDS = {
   transport: true,
   role: true,
   region: true,
+  // What the edit form starts from (F-027-by). Addresses, not secrets.
+  ipAddress: true,
+  apiBaseUrl: true,
+  clientBaseUrl: true,
   reviewState: true,
   connectionTestedAt: true,
   connectionTestFault: true,
@@ -107,6 +113,9 @@ export class SystemsReadService {
         transport: p.transport,
         role: p.role,
         region: p.region,
+        ipAddress: p.ipAddress,
+        apiBaseUrl: p.apiBaseUrl,
+        clientBaseUrl: p.clientBaseUrl,
         // A push panel with no secret never reaches the RADIUS allowlist (F-027-az); null on a pull panel.
         radiusSecretConfigured: p.transport === 'push' ? p.panelRadiusSecret !== null : null,
         review: {

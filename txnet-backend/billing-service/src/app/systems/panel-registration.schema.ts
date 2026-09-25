@@ -73,6 +73,29 @@ export const resubmitRadiusSecretSchema = z.object({ radiusSecret: z.string().mi
 
 export type ResubmitRadiusSecretBody = z.infer<typeof resubmitRadiusSecretSchema>;
 
+/**
+ * Editing a panel's settings (F-027-by): any of them, at least one, bounded as
+ * at registration. `.strict()`: `transport`, `driverType`, `reviewState` and
+ * the secrets are refused, not dropped — a transport or family change is
+ * another panel, the verdict is the test's, and a secret has its own route.
+ * `apiBaseUrl` cannot be cleared: a pull panel is reached there. Which fields
+ * a push panel may take is the service's to say, since it reads the row.
+ */
+export const updatePanelSchema = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+    region: z.string().trim().min(1).max(50),
+    ipAddress: z.union([z.string().ip({ version: 'v4' }), z.string().ip({ version: 'v6' })]).nullable(),
+    apiBaseUrl: z.string().url().max(500),
+    clientBaseUrl: z.string().trim().url().max(500).nullable(),
+    maxRequestsPerMinute: z.number().int().positive().max(6000),
+  })
+  .partial()
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, { message: 'name one field to change' });
+
+export type UpdatePanelBody = z.infer<typeof updatePanelSchema>;
+
 /** Which drift events the report lists: `open` is the unacknowledged ones — those still halting a panel. */
 export const DRIFT_EVENT_STATES = ['open', 'all'] as const;
 
