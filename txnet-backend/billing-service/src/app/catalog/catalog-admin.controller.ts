@@ -32,6 +32,7 @@ import {
   ListProductsQuery,
   ListTextDraftsQuery,
   PublishTextsBody,
+  RemoveCategoriesBody,
   RemoveProductsBody,
   SetPriceBody,
   UpdateCategoryBody,
@@ -44,6 +45,7 @@ import {
   listProductsSchema,
   listTextDraftsSchema,
   publishTextsSchema,
+  removeCategoriesSchema,
   removeProductsSchema,
   setPriceSchema,
   updateCategorySchema,
@@ -128,6 +130,14 @@ export class CatalogAdminController {
     @Ip() ip: string,
   ) {
     return this.refusing(() => this.catalog.updateCategory(this.actor(req, ip), id, body as UpdateCategoryInput));
+  }
+
+  /** F-026-j: one outcome per id — `deleted`, `has_products`, or `not_found`. */
+  @Post('categories/remove')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(WRITE)
+  async removeCategories(@Body(new ZodValidationPipe(removeCategoriesSchema)) body: RemoveCategoriesBody, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.catalog.removeCategories(this.actor(req, ip), body.ids as string[]));
   }
 
   @Get('products')

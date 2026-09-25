@@ -50,11 +50,13 @@ enum AdminAction {
   // F-502-d — a gift-code batch. Export is audited: the file is the credit.
   coupon_batch_create
   coupon_batch_export
-  // F-026-d — catalog management. Nothing is deleted, so no delete values; a
-  // price has its own two, because a new price and a switched-off one are
-  // opposite acts on what an invoice is computed at.
+  // F-026-d — catalog management. A delete is only what nothing references
+  // (F-026-h products, F-026-j categories); a price has its own two, because a
+  // new price and a switched-off one are opposite acts on what an invoice is
+  // computed at.
   catalog_category_create
   catalog_category_update
+  catalog_category_delete
   catalog_product_create
   catalog_product_update
   catalog_product_delete

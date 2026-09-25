@@ -97,10 +97,11 @@ export const updateProductSchema = z
   })
   .strict();
 
-/** F-026-h: up to 100 distinct products, each answered on its own. */
+/** F-026-h: up to 100 distinct products, each answered on its own. F-026-j: the same body for categories. */
 export const removeProductsSchema = z
   .object({ ids: z.array(uuid('ids')).min(1).max(100).refine((ids) => new Set(ids).size === ids.length, 'ids must be distinct') })
   .strict();
+export const removeCategoriesSchema = removeProductsSchema;
 
 const variantFields = {
   nameKey: i18nKey('nameKey').nullable().optional(),
@@ -151,6 +152,7 @@ export type ListProductsQuery = z.infer<typeof listProductsSchema>;
 export type CreateProductBody = z.infer<typeof createProductSchema>;
 export type UpdateProductBody = z.infer<typeof updateProductSchema>;
 export type RemoveProductsBody = z.infer<typeof removeProductsSchema>;
+export type RemoveCategoriesBody = z.infer<typeof removeCategoriesSchema>;
 export type CreateVariantBody = z.infer<typeof createVariantSchema>;
 export type UpdateVariantBody = z.infer<typeof updateVariantSchema>;
 export type SetPriceBody = z.infer<typeof setPriceSchema>;

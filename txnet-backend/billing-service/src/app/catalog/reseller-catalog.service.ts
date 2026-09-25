@@ -12,6 +12,7 @@ import {
   CatalogAdminRefused,
   CatalogAdminRejection,
   CatalogAdminService,
+  CategoryRemovalOutcome,
   CategoryView,
   CreateCategoryInput,
   CreateProductInput,
@@ -109,6 +110,10 @@ export class ResellerCatalogService {
 
   updateCategory(actor: ResellerCatalogActor, tenantId: string, id: string, patch: UpdateCategoryInput): Promise<CategoryView> {
     return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.updateCategory(as, id, patch));
+  }
+
+  removeCategories(actor: ResellerCatalogActor, tenantId: string, ids: string[]): Promise<CategoryRemovalOutcome[]> {
+    return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.removeCategories(as, ids));
   }
 
   // ------------------------------------------------------------------ products

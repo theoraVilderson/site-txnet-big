@@ -31,6 +31,7 @@ import {
   ListResellerProductsQuery,
   ListTextDraftsQuery,
   PublishTextsBody,
+  RemoveCategoriesBody,
   RemoveProductsBody,
   SetPriceBody,
   UpdateCategoryBody,
@@ -43,6 +44,7 @@ import {
   listResellerProductsSchema,
   listTextDraftsSchema,
   publishTextsSchema,
+  removeCategoriesSchema,
   removeProductsSchema,
   setPriceSchema,
   updateCategorySchema,
@@ -143,6 +145,19 @@ export class ResellerCatalogController {
     @Ip() ip: string,
   ) {
     return this.refusing(() => this.catalog.updateCategory(this.actor(req, ip), tenantId, id, body as UpdateCategoryInput));
+  }
+
+  /** F-026-j: one outcome per id — `deleted`, `has_products`, or `not_found`. */
+  @Post('categories/remove')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(WRITE)
+  async removeCategories(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Body(new ZodValidationPipe(removeCategoriesSchema)) body: RemoveCategoriesBody,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    return this.refusing(() => this.catalog.removeCategories(this.actor(req, ip), tenantId, body.ids as string[]));
   }
 
   @Get('products')

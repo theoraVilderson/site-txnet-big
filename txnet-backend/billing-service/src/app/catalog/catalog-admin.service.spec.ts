@@ -17,7 +17,8 @@
  *  - **removal deletes only what was never sold** (F-026-h): a product the
  *    database lets go is deleted with its variants, one that anything
  *    references is archived instead — hidden, never sold again, and every
- *    Grant of it untouched;
+ *    Grant of it untouched; a category goes only when no product, archived
+ *    included, sits in it (F-026-j);
  *  - **names are the server's keys** (F-1533-d): a tenant's item is named under
  *    its own `t_<tenant>.` prefix, and a translation is reviewed only by
  *    whoever manages the item it names — the rules of the text itself are
@@ -37,6 +38,9 @@ const OTHER = '33333333-3333-4333-8333-333333333333';
 const ADMIN = '44444444-4444-4444-8444-444444444444';
 const PLATFORM_CATEGORY = 'a0000000-0000-4000-8000-000000000001';
 const OTHER_CATEGORY = 'a0000000-0000-4000-8000-000000000003';
+/** The reseller's own categories: one holds a product, one is empty. */
+const RESELLER_CATEGORY = 'a0000000-0000-4000-8000-000000000002';
+const EMPTY_CATEGORY = 'a0000000-0000-4000-8000-000000000004';
 const PLATFORM_PRODUCT = 'b0000000-0000-4000-8000-000000000001';
 const RESELLER_PRODUCT = 'b0000000-0000-4000-8000-000000000002';
 const OTHER_PRODUCT = 'b0000000-0000-4000-8000-000000000003';
@@ -96,12 +100,12 @@ function inTenant<T extends object>(service: T): T {
   });
 }
 
-/** `held`: ids a foreign key elsewhere still points at — deleting one fails as Postgres's RESTRICT does. */
-function table(rows: Row[], name: string, writes: string[], uniqueOn: string[] = [], held: Set<string> = new Set()) {
+/** `held`: whether a foreign key elsewhere still points at an id — deleting one fails as Postgres's RESTRICT does. */
+function table(rows: Row[], name: string, writes: string[], uniqueOn: string[] = [], held: (id: string) => boolean = () => false) {
   let next = 0;
   const remove = (where: Row) => {
     const gone = rows.filter((r) => matches(r, where));
-    if (gone.some((r) => held.has(r['id'] as string))) throw referenced(`${name}: still referenced`);
+    if (gone.some((r) => held(r['id'] as string))) throw referenced(`${name}: still referenced`);
     writes.push(`${name}.delete`);
     for (const r of gone) rows.splice(rows.indexOf(r), 1);
     return gone;
@@ -144,6 +148,12 @@ function build() {
     id, tenantId, categoryId, key, nameKey: `catalog.product.${key}.name`, descriptionKey: null,
     fulfilmentKind: FulfilmentKind.network_access, featureKeys: ['vpn.access'], defaultQuotas: {}, isActive: true,
   });
+  const products = [
+    product(PLATFORM_PRODUCT, null, 'vpn_basic'),
+    product(RESELLER_PRODUCT, RESELLER, 'vpn_alpha'),
+    product(OTHER_PRODUCT, OTHER, 'followers_1k', OTHER_CATEGORY),
+    product(SOLD_PRODUCT, RESELLER, 'vpn_sold'),
+  ];
   const db = {
     tenant: table(Object.entries(types).map(([id, tenantType]) => ({ id, tenantType })), 'tenant', writes),
     productCategory: table(
@@ -154,14 +164,11 @@ function build() {
       'productCategory',
       writes,
       ['tenantId', 'key'],
+      // product.categoryId is ON DELETE RESTRICT: any product, archived or not, holds its category.
+      (id) => products.some((p) => p['categoryId'] === id),
     ),
     product: table(
-      [
-        product(PLATFORM_PRODUCT, null, 'vpn_basic'),
-        product(RESELLER_PRODUCT, RESELLER, 'vpn_alpha'),
-        product(OTHER_PRODUCT, OTHER, 'followers_1k', OTHER_CATEGORY),
-        product(SOLD_PRODUCT, RESELLER, 'vpn_sold'),
-      ],
+      products,
       'product',
       writes,
       ['tenantId', 'key'],
@@ -182,7 +189,7 @@ function build() {
       'productVariant',
       writes,
       ['tenantId', 'sku'],
-      new Set([SOLD_VARIANT]),
+      (id) => id === SOLD_VARIANT,
     ),
     panelGroup: table(
       [
@@ -235,7 +242,7 @@ function build() {
       return Object.keys(t).length;
     },
   };
-  return { service: inTenant(new CatalogAdminService(app as never, all as never, textService as unknown as CatalogTextService)), db, writes, audit, texts, calls };
+  return { service: inTenant(new CatalogAdminService(app as never, all as never, textService as unknown as CatalogTextService)), db, writes, audit, texts, calls, product };
 }
 
 async function refusal(run: () => Promise<unknown>): Promise<CatalogAdminRefused> {
@@ -507,5 +514,53 @@ describe('CatalogAdminService — removing products (F-026-h)', () => {
     await service.removeProducts(actor(RESELLER), [SOLD_PRODUCT]);
     await expect(service.updateProduct(actor(RESELLER), SOLD_PRODUCT, { archived: false })).resolves.toMatchObject({ archivedAt: null, isActive: false });
     expect((await service.listProducts(actor(RESELLER))).map((p) => p.id)).toContain(SOLD_PRODUCT);
+  });
+});
+
+describe('CatalogAdminService — removing categories (F-026-j)', () => {
+  /** The reseller's two own categories: one only an archived product sits in, one empty. */
+  const withCategories = () => {
+    const built = build();
+    built.db.productCategory.rows.push(
+      { id: RESELLER_CATEGORY, tenantId: RESELLER, key: 'old', nameKey: 'catalog.t_22.category.old.name', isActive: true },
+      { id: EMPTY_CATEGORY, tenantId: RESELLER, key: 'empty', nameKey: 'catalog.t_22.category.empty.name', isActive: true },
+    );
+    built.db.product.rows.push({ ...built.product('b0000000-0000-4000-8000-000000000005', RESELLER, 'vpn_old', RESELLER_CATEGORY), isActive: false, archivedAt: new Date('2026-09-01T00:00:00Z') });
+    return built;
+  };
+
+  it('deletes a category no product sits in, and audits what it was', async () => {
+    const { service, db, audit } = withCategories();
+    await expect(service.removeCategories(actor(RESELLER), [EMPTY_CATEGORY])).resolves.toEqual([{ id: EMPTY_CATEGORY, outcome: 'deleted' }]);
+    expect(db.productCategory.rows.find((r) => r['id'] === EMPTY_CATEGORY)).toBeUndefined();
+    expect(audit).toEqual([
+      expect.objectContaining({ tenantId: RESELLER, action: 'catalog_category_delete', targetEntityType: 'product_category', targetEntityId: EMPTY_CATEGORY, oldValue: expect.objectContaining({ key: 'empty' }) }),
+    ]);
+  });
+
+  it('keeps a category an archived product still sits in, and writes nothing', async () => {
+    const { service, db, audit } = withCategories();
+    await expect(service.removeCategories(actor(RESELLER), [RESELLER_CATEGORY])).resolves.toEqual([{ id: RESELLER_CATEGORY, outcome: 'has_products' }]);
+    expect(db.productCategory.rows.find((r) => r['id'] === RESELLER_CATEGORY)).toMatchObject({ isActive: true });
+    expect(audit).toEqual([]);
+  });
+
+  it("answers each id on its own: another tenant's and the platform's are not found, and the rest still go", async () => {
+    const { service, db } = withCategories();
+    await expect(service.removeCategories(actor(RESELLER), [OTHER_CATEGORY, PLATFORM_CATEGORY, RESELLER_CATEGORY, EMPTY_CATEGORY])).resolves.toEqual([
+      { id: OTHER_CATEGORY, outcome: 'not_found' },
+      { id: PLATFORM_CATEGORY, outcome: 'not_found' },
+      { id: RESELLER_CATEGORY, outcome: 'has_products' },
+      { id: EMPTY_CATEGORY, outcome: 'deleted' },
+    ]);
+    expect(db.productCategory.rows.map((r) => r['id'])).toEqual([PLATFORM_CATEGORY, OTHER_CATEGORY, RESELLER_CATEGORY]);
+  });
+
+  it("lets the platform owner remove a tenant's empty category, and refuses its own shared one while products sit in it", async () => {
+    const { service } = withCategories();
+    await expect(service.removeCategories(actor(OWNER), [EMPTY_CATEGORY, PLATFORM_CATEGORY])).resolves.toEqual([
+      { id: EMPTY_CATEGORY, outcome: 'deleted' },
+      { id: PLATFORM_CATEGORY, outcome: 'has_products' },
+    ]);
   });
 });

@@ -34,6 +34,7 @@ cross-tenant pool.
 |---|---|---|---|
 | `GET /categories` | — | the platform's and the caller's own (owner: all) | — |
 | `POST /categories`, `PATCH /categories/:id` | `tenantId?` (absent / `null` / uuid), `key`, `sourceLang?`, `name: {lang: text}`; patch `sourceLang`, `name`, `isActive` | category | `not_platform_owner` 403, `category_not_found` 404, `key_taken` 409, `lang_unknown` / `source_text_missing` 400, `texts_unavailable` 503 |
+| `POST /categories/remove` (F-026-j) | `ids[]` (1-100, distinct) | `[{id, outcome}]`, `outcome` `deleted` / `has_products` / `not_found`, each id on its own | — (a refusal is that id's `not_found`) |
 | `GET /products` | `categoryId?`, `tenantId?` (owner: uuid or `platform`), `archived?` (only `true`: the archived alone; without it they are left out) | products, each with `archivedAt` | — |
 | `POST /products/remove` (F-026-h) | `ids[]` (1-100, distinct) | `[{id, outcome}]`, `outcome` `deleted` / `archived` / `not_found`, each id on its own | — (a refusal is that id's `not_found`) |
 | `POST /products`, `GET\|PATCH /products/:id` | `categoryId`, `key`, `sourceLang?`, `name: {lang: text}`, `description?: {lang: text} \| null`, `fulfilmentKind`, `featureKeys?`, `defaultQuotas?`; patch has no key or kind, and `archived: false` brings an archived product back (still off) | product; `GET` with variants and each price history | `category_not_found` (another tenant's category), `product_not_found`, `key_taken`, `lang_unknown`, `source_text_missing`, `texts_unavailable` |
@@ -47,7 +48,10 @@ cross-tenant pool.
 
 Every write leaves an `admin_audit_log` row (`catalog_*` actions). Nothing is deleted
 but a product `POST /products/remove` finds unreferenced (`catalog_product_delete`,
-its variants with it). One a Grant, a coupon or a coupon scope references is
+its variants with it), and a category `POST /categories/remove` finds empty
+(`catalog_category_delete`). A category any product sits in, an archived one
+included, is kept and answered `has_products`: `product.categoryId` is RESTRICT,
+so the database decides (`removeCategories`). One a Grant, a coupon or a coupon scope references is
 archived instead (`catalog_product_archive`): off, out of the list, never sold,
 every Grant untouched. The foreign keys decide, so a new table that references
 a variant counts without a change (`removeProducts`, invariant 6).

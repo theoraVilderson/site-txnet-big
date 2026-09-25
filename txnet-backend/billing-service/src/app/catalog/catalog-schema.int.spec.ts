@@ -46,10 +46,10 @@ let app: PrismaService;
 
 const q = (v: string | null) => (v === null ? 'NULL' : `'${v}'`);
 
-async function insertProduct(id: string, tenantId: string | null, key: string) {
+async function insertProduct(id: string, tenantId: string | null, key: string, categoryId = CATEGORY) {
   await owner.$executeRawUnsafe(`
     INSERT INTO catalog.product (id, "tenantId", "categoryId", key, "nameKey", "fulfilmentKind")
-    VALUES ('${id}', ${q(tenantId)}, '${CATEGORY}', '${key}', 'catalog.product.${key}.name', 'network_access')
+    VALUES ('${id}', ${q(tenantId)}, '${categoryId}', '${key}', 'catalog.product.${key}.name', 'network_access')
   `);
 }
 
@@ -185,6 +185,27 @@ describe('a variant nothing references can be deleted, and its prices go with it
       /code: "23001"/,
     );
     await expect(owner.price.count({ where: { variantId: SOLD_VARIANT } })).resolves.toBe(1);
+  });
+});
+
+describe('a category goes only when no product sits in it (F-026-j)', () => {
+  const EMPTY = '44444444-4444-4444-8444-4444444444a6';
+  const HELD = '44444444-4444-4444-8444-4444444444a7';
+  const ARCHIVED_PRODUCT = '44444444-4444-4444-8444-4444444444b7';
+
+  it('deletes an empty category and refuses one an archived product still sits in — RESTRICT, 23001', async () => {
+    await owner.$executeRawUnsafe(`
+      INSERT INTO catalog.product_category (id, "tenantId", key, "nameKey") VALUES
+        ('${EMPTY}', '${RESELLER_A}', 'empty', 'catalog.category.empty.name'),
+        ('${HELD}', '${RESELLER_A}', 'held', 'catalog.category.held.name')
+    `);
+    await insertProduct(ARCHIVED_PRODUCT, RESELLER_A, 'vpn_archived', HELD);
+    await owner.$executeRawUnsafe(`UPDATE catalog.product SET "isActive" = false, "archivedAt" = now() WHERE id = '${ARCHIVED_PRODUCT}'`);
+
+    await asTenant(RESELLER_A, (tx) => tx.productCategory.delete({ where: { id: EMPTY } }));
+    // `has_products` in catalog-admin.service.ts is this refusal, read by `isStillReferenced`.
+    await expect(asTenant(RESELLER_A, (tx) => tx.productCategory.delete({ where: { id: HELD } }))).rejects.toThrow(/code: "23001"/);
+    await expect(owner.productCategory.count({ where: { id: { in: [EMPTY, HELD] } } })).resolves.toBe(1);
   });
 });
 

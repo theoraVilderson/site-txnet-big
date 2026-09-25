@@ -116,6 +116,8 @@ export type SetPriceInput = { amount: string; effectiveFrom?: string };
 export type ListProductsFilter = { categoryId?: string; tenantId?: string; archived?: boolean };
 /** What `removeProducts` did to one id: gone for good, kept but archived, or not the caller's to remove. */
 export type RemovalOutcome = { id: string; outcome: 'deleted' | 'archived' | 'not_found' };
+/** What `removeCategories` did to one id: gone, kept because a product sits in it, or not the caller's to remove. */
+export type CategoryRemovalOutcome = { id: string; outcome: 'deleted' | 'has_products' | 'not_found' };
 export type PublishTextsInput = { lang: string; keys: string[] };
 export type EditTextsInput = { lang: string; texts: Record<string, string> };
 
@@ -333,6 +335,37 @@ export class CatalogAdminService {
     });
     if (patch.name && sourceLang) void this.texts.draftOthers(drafts(view.nameKey, sourceLang, patch.name));
     return view;
+  }
+
+  /**
+   * Remove categories, each on its own (F-026-j): one no product sits in is
+   * deleted; one that holds any product, an archived one included, is kept
+   * and answered `has_products`. `product.categoryId` is `ON DELETE RESTRICT`,
+   * so the database decides — there is no count to race with a product filed
+   * in the meantime.
+   */
+  async removeCategories(actor: CatalogActor, ids: string[]): Promise<CategoryRemovalOutcome[]> {
+    const { owner } = await this.access(actor);
+    const outcomes: CategoryRemovalOutcome[] = [];
+    for (const id of ids) outcomes.push({ id, outcome: await this.removeCategory(actor, owner, id) });
+    return outcomes;
+  }
+
+  private async removeCategory(actor: CatalogActor, owner: boolean, id: string): Promise<CategoryRemovalOutcome['outcome']> {
+    try {
+      return await this.within(owner, async (tx) => {
+        const before = await this.managed(tx, 'productCategory', 'category_not_found', actor, id, owner);
+        await tx.productCategory.delete({ where: { id } });
+        await this.audit(tx, actor, (before['tenantId'] as string | null) ?? null, 'catalog_category_delete', 'product_category', id, categoryView(before, this.texts.defaultLanguage()), {
+          outcome: 'deleted',
+        });
+        return 'deleted' as const;
+      });
+    } catch (e) {
+      if (e instanceof CatalogAdminRefused) return 'not_found';
+      if (isStillReferenced(e)) return 'has_products';
+      throw e;
+    }
   }
 
   // ------------------------------------------------------------------ products
