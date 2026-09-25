@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Server } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type SystemsPanel } from "@/lib/billing-api";
+import { LIVE_REREAD_MS, trailingThrottle } from "@/lib/realtime";
 import { usePanelRealtime } from "../../_context/PanelRealtimeContext";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { SYSTEMS_KEYS as K, isPanelTested, liveChannelOf } from "../_lib/systems";
@@ -21,7 +22,7 @@ import { RegisterPanel } from "./RegisterPanel";
  * columns and never calls the Go service (ADR-0071), so a registered panel
  * reads `pending` until the next tick tests it, and nothing here says
  * otherwise. A test's answer arrives without a reload (F-027-bs): the socket
- * says a row changed and the page reads it again. The holds queue is the visible face of *in doubt, do not charge*:
+ * says a row changed and the page reads it again, at most once per 2 s (F-067-p). The holds queue is the visible face of *in doubt, do not charge*:
  * while anything sits in it, nothing was dropped silently.
  */
 export function SystemsView() {
@@ -52,13 +53,19 @@ export function SystemsView() {
   const channel = liveChannelOf(me);
   // `reload` is stable (no deps), so this subscribes once per socket and
   // channel — a channel dropped and re-declared is a window where an event is lost.
+  // A burst of tests is one read now and one at the end (F-067-p), not one per event.
   useEffect(() => {
     if (!client || !channel) return;
-    return client.subscribe(channel, {
+    const live = trailingThrottle(() => void reload(), LIVE_REREAD_MS);
+    const unsubscribe = client.subscribe(channel, {
       onMessage: (payload) => {
-        if (isPanelTested(payload)) void reload();
+        if (isPanelTested(payload)) live.call();
       },
     });
+    return () => {
+      live.cancel();
+      unsubscribe();
+    };
   }, [client, channel, reload]);
 
   return (

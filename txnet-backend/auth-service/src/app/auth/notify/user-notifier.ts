@@ -21,26 +21,32 @@ export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 export const NOTIFY_CHANNELS = ['inbox', 'bot'] as const;
 export type NotifyChannel = (typeof NOTIFY_CHANNELS)[number];
 
-export type NotifyRequest = { userId: string; channel: NotifyChannel; template: NotifyTemplate; params: Record<string, string> };
+/** `count` (F-067-p, ADR-0084 decision 3): the worker combined this many of one template into one notice; the summary text is told, with `{{count}}`. */
+export type NotifyRequest = { userId: string; channel: NotifyChannel; template: NotifyTemplate; params: Record<string, string>; count?: number };
 export type NotifyResult = { sent: BotPlatform[] };
 
-type NotificationsNamespace = {
-  payment?: { creditedTitle?: string; credited?: string; reversedTitle?: string; reversed?: string };
-  subscription?: { paymentDueTitle?: string; paymentDue?: string; suspendedTitle?: string; suspended?: string };
-  panel?: { acceptedTitle?: string; accepted?: string; refusedTitle?: string; refused?: string };
-};
+type Texts = Partial<Record<string, string>>;
+type NotificationsNamespace = { payment?: Texts; subscription?: Texts; panel?: Texts };
 type Text = { read: (ns: NotificationsNamespace | undefined) => string | undefined; fallback: string };
+type Notice = Text & { inbox: Text };
 
 /**
  * The key path in `notifications` each template reads, and the English it
  * falls back to. `inbox` is the title of its panel inbox row: every notice has
  * one, because every notice also goes to the inbox (F-067-o, ADR-0084).
+ * `many` is the same notice for a combined burst, read at `<key>Many` and
+ * `<key>ManyTitle` (F-067-p).
  */
-const TEMPLATE_TEXT: Record<NotifyTemplate, Text & { inbox: Text }> = {
+const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
   paymentCredited: {
     read: (ns) => ns?.payment?.credited,
     fallback: '✅ Your payment was confirmed and {{amount}} was added to your wallet. Reference: {{reference}}',
     inbox: { read: (ns) => ns?.payment?.creditedTitle, fallback: 'Payment confirmed' },
+    many: {
+      read: (ns) => ns?.payment?.creditedMany,
+      fallback: '✅ {{count}} of your payments were confirmed and added to your wallet.',
+      inbox: { read: (ns) => ns?.payment?.creditedManyTitle, fallback: '{{count}} payments confirmed' },
+    },
   },
   // F-067-m: the gateway reversed the payment; the bank returns the money (ADR-0046 decision 5).
   paymentReversed: {
@@ -48,6 +54,11 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Text & { inbox: Text }> = {
     fallback:
       '↩️ Your payment of {{amount}} was reversed by the gateway and was not added to your wallet. The bank is returning it to your card; if it has not arrived within 72 hours, contact support.',
     inbox: { read: (ns) => ns?.payment?.reversedTitle, fallback: 'Payment reversed' },
+    many: {
+      read: (ns) => ns?.payment?.reversedMany,
+      fallback: '↩️ {{count}} of your payments were reversed by the gateway and were not added to your wallet. The bank is returning them to your card.',
+      inbox: { read: (ns) => ns?.payment?.reversedManyTitle, fallback: '{{count}} payments reversed' },
+    },
   },
   // F-019-c: a reseller's renewal is unpaid and in grace; its owner is told how much and until when.
   subscriptionPaymentDue: {
@@ -55,23 +66,43 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Text & { inbox: Text }> = {
     fallback:
       '⚠️ Your subscription renewal of {{amount}} could not be charged: your billing balance is {{balance}}. Top up before {{suspendsAt}} or your panel will be suspended.',
     inbox: { read: (ns) => ns?.subscription?.paymentDueTitle, fallback: 'Subscription payment due' },
+    many: {
+      read: (ns) => ns?.subscription?.paymentDueMany,
+      fallback: '⚠️ {{count}} subscription renewals could not be charged. Top up your billing balance or your panel will be suspended.',
+      inbox: { read: (ns) => ns?.subscription?.paymentDueManyTitle, fallback: '{{count}} subscription payments due' },
+    },
   },
   subscriptionSuspended: {
     read: (ns) => ns?.subscription?.suspended,
     fallback:
       '⛔ Your panel was suspended because the subscription renewal of {{amount}} was not paid. Nothing was deleted: top up your billing balance and it is charged and reactivated at once.',
     inbox: { read: (ns) => ns?.subscription?.suspendedTitle, fallback: 'Panel suspended for non-payment' },
+    many: {
+      read: (ns) => ns?.subscription?.suspendedMany,
+      fallback: '⛔ Your panel was suspended {{count}} times for unpaid renewals. Nothing was deleted: top up your billing balance and it is reactivated at once.',
+      inbox: { read: (ns) => ns?.subscription?.suspendedManyTitle, fallback: 'Panel suspended for non-payment ({{count}})' },
+    },
   },
   // F-067-o: a connection test's verdict, told to the owner (`accepted_low_trust` is an acceptance).
   panelAccepted: {
     read: (ns) => ns?.panel?.accepted,
     fallback: '✅ Your panel {{panel}} passed its connection test and was accepted.',
     inbox: { read: (ns) => ns?.panel?.acceptedTitle, fallback: 'Panel accepted' },
+    many: {
+      read: (ns) => ns?.panel?.acceptedMany,
+      fallback: '✅ {{count}} of your panels passed their connection test and were accepted.',
+      inbox: { read: (ns) => ns?.panel?.acceptedManyTitle, fallback: '{{count}} panels accepted' },
+    },
   },
   panelRefused: {
     read: (ns) => ns?.panel?.refused,
     fallback: '❌ Your panel {{panel}} was refused: its connection test showed it cannot report what the platform needs. The details are on the systems page.',
     inbox: { read: (ns) => ns?.panel?.refusedTitle, fallback: 'Panel refused' },
+    many: {
+      read: (ns) => ns?.panel?.refusedMany,
+      fallback: '❌ {{count}} of your panels were refused by their connection test. The details are on the systems page.',
+      inbox: { read: (ns) => ns?.panel?.refusedManyTitle, fallback: '{{count}} panels refused' },
+    },
   },
 };
 
@@ -117,13 +148,15 @@ export class UserNotifier {
     if (!user) return { sent: [] };
 
     const ns = this.locale.getNamespace(user.languagePreference, 'notifications') as NotificationsNamespace | undefined;
-    const spec = TEMPLATE_TEXT[request.template];
-    const text = interpolate(spec.read(ns) ?? spec.fallback, request.params);
+    const combined = request.count !== undefined && request.count > 1;
+    const spec = combined ? TEMPLATE_TEXT[request.template].many : TEMPLATE_TEXT[request.template];
+    const params = combined ? { ...request.params, count: String(request.count) } : request.params;
+    const text = interpolate(spec.read(ns) ?? spec.fallback, params);
 
     if (request.channel === 'inbox') {
       // Throws: the row is owed until it lands.
       if (!this.inbox) throw new Error(`${request.template} needs the notification inbox, which is not wired`);
-      await this.inbox.put({ tenantId, userId: request.userId, title: interpolate(spec.inbox.read(ns) ?? spec.inbox.fallback, request.params), body: text });
+      await this.inbox.put({ tenantId, userId: request.userId, title: interpolate(spec.inbox.read(ns) ?? spec.inbox.fallback, params), body: text });
       return { sent: [] };
     }
 

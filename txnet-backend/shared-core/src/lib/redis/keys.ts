@@ -249,6 +249,18 @@ export const UnscopedRedisKeys = {
   outboxProcessed: (consumer: string, eventId: string) => `outbox:processed:${consumer}:${eventId}`,
 
   /**
+   * One recipient's inbox and bot notices of one template, waiting to be told
+   * together (F-067-p, ADR-0084 decision 3). A hash keyed by event id, so a
+   * redelivered event is counted once; the flush renames it to its batch.
+   */
+  noticeBurst: (tenantId: string, userId: string, template: string) => `notice:burst:${tenantId}:${userId}:${template}`,
+  /** The flush id already scheduled for that burst; `SET NX`, so a burst schedules one flush. */
+  noticeBurstScheduled: (tenantId: string, userId: string, template: string) =>
+    `notice:burst-scheduled:${tenantId}:${userId}:${template}`,
+  /** What one flush took, kept so a redelivered flush tells the same batch and nothing newer. */
+  noticeBurstBatch: (flushId: string) => `notice:burst-batch:${flushId}`,
+
+  /**
    * A Grant's `consumedBytes`, as last committed (F-609-a). Written by
    * `metering-service` after each delta's transaction, read by `sub-service`
    * for `Subscription-Userinfo` — so it is declared in

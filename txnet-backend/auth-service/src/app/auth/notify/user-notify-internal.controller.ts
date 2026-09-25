@@ -12,6 +12,8 @@ const notifySchema = z
     channel: z.enum(NOTIFY_CHANNELS),
     template: z.enum(NOTIFY_TEMPLATES),
     params: z.record(z.string().max(200)).default({}),
+    // F-067-p: a combined burst of this template; absent for one event.
+    count: z.number().int().min(2).max(100_000).optional(),
   })
   .strict();
 

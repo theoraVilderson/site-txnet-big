@@ -49,9 +49,9 @@ See [contract.md](contract.md) (HTTP API), [contract.roles.md](contract.roles.md
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-25 | Contract v31 -> **v32** (additive, F-067-p, ADR-0084 decision 3): `POST /internal/notify/user` takes an optional `count` (≥2) and tells the template's summary text; every template has one, fa + en. Consumer `worker-service` in the same item |
 | 2026-09-25 | Contract v30 -> **v31** (**break**, F-067-o, ADR-0084): `POST /internal/notify/user` requires `channel` (`inbox` \| `bot`), one per call, and every template has an inbox title; `panelAccepted`, `panelRefused` added. Its one consumer, `worker-service`, moved in the same item. [contract.versions.md](contract.versions.md) |
 | 2026-09-20 | Contract v28 -> **v29** (additive, F-311-a, ADR-0064): `GET /auth/tenants/:tenantId/users` and `POST`/`DELETE .../:userId/block` — a reseller's own users, admitted by `ResellerAccess` and never by a permission. [contract.reseller-users.md](contract.reseller-users.md). Consumer `bot-app` in F-311-c |
 | 2026-09-20 | Contract v27 -> **v28** (additive, F-066-w5, ADR-0064): `GET`/`POST /auth/tenants/:tenantId/bots` and `DELETE .../:platform/:botUsername` — a reseller's bots, admitted by `ResellerAccess` and never by a permission. [contract.reseller-bots.md](contract.reseller-bots.md). Consumer `panel-web` in F-066-w6 |
 | 2026-09-19 | Contract v26 -> **v27** (deprecation, F-018-ak, ADR-0065): `GET /auth/door` is `@deprecated` — the door question is tenant's `GET /api/public/tenant/serves-panel`, and the rule (`doorClosed`) is shared-core's. Consumer `panel-web` moved in the same item; removed after the next release |
-| 2026-09-19 | Contract v25 -> **v26** (additive, F-066-x): `GET /auth/door` — `{serves}` for the host that asked, exempt from `TenantGuard`'s surface refusals. Consumer `panel-web` (same item) |
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

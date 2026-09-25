@@ -147,18 +147,13 @@ correct answer rather than a gap: an event announced to nobody is not an event
 delivered, and the alternative — a plain publish the broker acks into nothing
 — is what invariant #10 exists to forbid.
 
-## One notice path: live, inbox, bot (F-067-o, ADR-0084 decision 2)
+## One notice path: live, inbox, bot (F-067-o, F-067-p, ADR-0084)
 
 Every consumer below that tells a person sends through
-`outbox/event-notice.ts` (`EventNoticeSender`), never its own copy.
-
-| Rule | Why |
-|---|---|
-| A notice declares `live` (`{channel: user:<id> \| tenant:<id>, body}`) and/or `person` (`{tenantId, userId, template, params}`); a tenant-audience notice's person is the payload's `ownerUserId` | the producer names who is told; this side never resolves it |
-| Channels run in order live, `inbox`, `bot`; each is one `POST /api/internal/notify/user` with its `channel` for the last two | the words and the user's language stay auth-service's |
-| **Each channel has its own marker**, `outboxProcessed('<consumer>:<channel>', <event id>)`, `SET NX` before it and given back if it throws | a redelivery repeats only the channel that failed, never a landed bot message or inbox row |
-| A failed channel does not stop the others; the sender rethrows after all ran, and the event dead-letters | one broken seam does not starve the rest |
-| Markers were renamed from `'<consumer>'` to `'<consumer>:<channel>'` at F-067-o | an event in flight at that deploy may be told twice through one channel, once (ADR-0084 consequences) |
+`outbox/event-notice.ts` (`EventNoticeSender`), never its own copy. Its rules —
+a marker per channel, and a burst told once — are in
+[contract.notices.md](contract.notices.md). Where a table below says "to inbox
+and bot", that notice joins its recipient's burst and is told after the window.
 
 ## The first consumer: the payer notice (F-067-l, ADR-0045)
 
@@ -229,7 +224,7 @@ Both in `outbox/tenant-renewal.consumers.ts`. The producers are tenant's:
 
 ## What is not built
 
-- The notices above, two live pushes and the tenant renewal only; no combining of a burst (F-067-p); no Postgres idempotency store — ADR-0045 chose
+- The notices above, two live pushes and the tenant renewal only; no Postgres idempotency store — ADR-0045 chose
   Redis for the first, and a consumer that moves money must choose again.
 - No retention or archive of published rows. ADR-0021 makes the table an audit
   trail; when that stops being worth keeping needs a producer with an opinion.

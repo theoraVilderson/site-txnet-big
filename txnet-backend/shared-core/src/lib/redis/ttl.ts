@@ -78,6 +78,12 @@ export const RedisTtl = {
    * a duplicate is possible, which a notification can afford.
    */
   outboxProcessed: 7 * 24 * 3600,
+  /**
+   * How long a scheduled burst flush is trusted to arrive, beyond its window
+   * (F-067-p). A flush lost with its process frees the burst after this, and
+   * the next event schedules another.
+   */
+  noticeBurstScheduledSlack: 60,
 
   botNav: 30 * 60,
   botSession: 30 * 24 * 3600,

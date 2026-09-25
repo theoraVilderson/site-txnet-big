@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { NoticeFlushConsumer } from './notice-flush.consumer';
 import { NotificationCreatedConsumer } from './notification-created.consumer';
 import { PanelTestedConsumer } from './panel-tested.consumer';
 import { PaymentConfirmedConsumer } from './payment-confirmed.consumer';
@@ -13,8 +14,10 @@ import { TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer } from 
  * row pushed to an open panel (F-035-b), a connection test's verdict pushed to
  * the systems page (F-027-bs), and a reseller's renewal on a credit
  * and its owner's renewal notices (F-019-c),
- * and a reseller's campaigns stopped with its suspension (F-018-q). `BrokerService`, `RedisService` and `RealtimePublisher` are
+ * and a reseller's campaigns stopped with its suspension (F-018-q). Inbox and
+ * bot notices are combined per recipient and template, told by
+ * `NoticeFlushConsumer` after the window (F-067-p). `BrokerService`, `RedisService` and `RealtimePublisher` are
  * global modules.
  */
-@Module({ providers: [PaymentConfirmedConsumer, PaymentReversedConsumer, NotificationCreatedConsumer, PanelTestedConsumer, TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer] })
+@Module({ providers: [PaymentConfirmedConsumer, PaymentReversedConsumer, NotificationCreatedConsumer, PanelTestedConsumer, TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer, NoticeFlushConsumer] })
 export class OutboxModule {}

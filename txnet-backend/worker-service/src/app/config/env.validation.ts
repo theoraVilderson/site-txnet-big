@@ -127,6 +127,10 @@ export const envSchema = z.object({
   AUTOMATION_TENANT_BILLING_CREDITED_QUEUE: z.string().min(1).default('txnet.automation.outbox.tenant-billing-credited'),
   /** The queue a reseller owner's renewal notices land in (F-019-c). */
   AUTOMATION_TENANT_SUBSCRIPTION_NOTICE_QUEUE: z.string().min(1).default('txnet.automation.outbox.tenant-subscription-notice'),
+  /** Where a combined notice's flush waits out its window, consumed by nobody (F-067-p, ADR-0084 decision 3). */
+  AUTOMATION_NOTICE_DELAY_QUEUE: z.string().min(1).default('txnet.automation.notice.delay'),
+  /** Where that flush lands once the window has passed; the worker tells the burst from here. */
+  AUTOMATION_NOTICE_FLUSH_QUEUE: z.string().min(1).default('txnet.automation.notice.flush'),
   /**
    * The bot-update queue set (F-067-b): `<prefix>.0` … `<prefix>.N-1`, each
    * bound to its own `bot.update.<slot>` on the same exchange and
@@ -180,6 +184,19 @@ export const envSchema = z.object({
    * is short against the tick interval and long against a broker round trip.
    */
   AUTOMATION_DEFER_MS: z.coerce.number().int().positive().default(5_000),
+  /**
+   * How many outbox events **each** outbox queue hands this process at once
+   * (F-067-p, ADR-0084 decision 3). Each outbox queue has its own channel, so a
+   * burst of one event type waits in its own queue instead of taking the tick
+   * queue's `AUTOMATION_PREFETCH` slots or another type's.
+   */
+  AUTOMATION_OUTBOX_PREFETCH: z.coerce.number().int().positive().default(8),
+  /**
+   * How long a recipient's inbox and bot notices of one template are gathered
+   * before they are told as one (F-067-p). The live push is never delayed; a
+   * burst's notice arrives up to this late (ADR-0084 consequences).
+   */
+  AUTOMATION_NOTICE_WINDOW_MS: z.coerce.number().int().positive().default(10_000),
 
   /**
    * How many unpublished `automation.outbox_event` rows one relay run claims

@@ -37,8 +37,17 @@ function build() {
       published.push({ channel, payload });
     }),
   };
-  const broker = { consumePanelTested: vi.fn() };
-  const redis = { setNx: vi.fn(async () => true), del: vi.fn() };
+  const broker = { consumePanelTested: vi.fn(), publishNoticeFlush: vi.fn(async () => undefined) };
+  const joined: Array<{ burst: string; params: unknown }> = [];
+  const redis = {
+    setNx: vi.fn(async () => true),
+    del: vi.fn(),
+    // F-067-p: the owner's notice joins their burst, told after the window.
+    evalScript: vi.fn(async (_script: string, keys: string[], args: unknown[]) => {
+      joined.push({ burst: keys[0]!, params: JSON.parse(String(args[1])) });
+      return 1;
+    }),
+  };
   const config = {
     get: (key: string, fallback?: unknown) => ({ AUTH_API_BASE_URL: 'http://auth:3000', SERVICE_AUTH_TOKEN: 'svc' })[key] ?? fallback,
   };
@@ -51,7 +60,7 @@ function build() {
     }),
   );
   const consumer = new PanelTestedConsumer(broker as never, redis as never, realtime as never, config as never);
-  return { consumer, published, told, redis };
+  return { consumer, published, told, joined, redis };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -84,26 +93,25 @@ describe('PanelTestedConsumer.handle', () => {
     expect(published).toEqual([]);
   });
 
-  it("tells the owner a verdict in their inbox and on their bot, naming the panel (F-067-o)", async () => {
-    const { consumer, told, redis } = build();
+  it("tells the owner a verdict in their inbox and on their bot, naming the panel (F-067-o, combined F-067-p)", async () => {
+    const { consumer, joined, redis } = build();
 
     await consumer.handle(event({ reviewState: 'refused', fault: null, ownerUserId: OWNER, panelName: 'Frankfurt' }));
 
-    expect(told).toEqual(
-      ['inbox', 'bot'].map((channel) => ({ userId: OWNER, channel, template: 'panelRefused', params: { panel: 'Frankfurt' } })),
-    );
+    expect(joined).toEqual([{ burst: UnscopedRedisKeys.noticeBurst(TENANT, OWNER, 'panelRefused'), params: { panel: 'Frankfurt' } }]);
     expect(redis.setNx.mock.calls.map((c) => (c as unknown[])[0])).toEqual(
-      ['live', 'inbox', 'bot'].map((channel) => UnscopedRedisKeys.outboxProcessed(`panel-tested:${channel}`, EVENT)),
+      ['live', 'person'].map((channel) => UnscopedRedisKeys.outboxProcessed(`panel-tested:${channel}`, EVENT)),
     );
   });
 
   it('tells nobody about a fault, nor an event that does not name its owner', async () => {
-    const { consumer, told, published } = build();
+    const { consumer, told, joined, published } = build();
 
     await consumer.handle(event({ ownerUserId: OWNER }));
     await consumer.handle(event({ reviewState: 'accepted_low_trust', fault: null }));
 
     expect(told).toEqual([]);
+    expect(joined).toEqual([]);
     expect(published).toHaveLength(2);
   });
 });

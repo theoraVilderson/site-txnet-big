@@ -66,6 +66,10 @@ services:
       - AUTOMATION_DEFER_MS=${AUTOMATION_DEFER_MS:-5000}
       # How many unpublished outbox_event rows one relay run claims (F-067-c).
       - AUTOMATION_OUTBOX_BATCH=${AUTOMATION_OUTBOX_BATCH:-100}
+      # Per outbox queue, each on its own channel; and the window a burst of
+      # inbox and bot notices is combined over (F-067-p).
+      - AUTOMATION_OUTBOX_PREFETCH=${AUTOMATION_OUTBOX_PREFETCH:-8}
+      - AUTOMATION_NOTICE_WINDOW_MS=${AUTOMATION_NOTICE_WINDOW_MS:-10000}
       - AUTOMATION_TICK_INTERVAL_MS=${AUTOMATION_TICK_INTERVAL_MS:-60000}
       # Also the lifetime of a tenant run lease (F-067-e): the slot a dead
       # process held and the run row it left open expire together.

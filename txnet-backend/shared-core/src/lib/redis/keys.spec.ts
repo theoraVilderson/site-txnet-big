@@ -70,6 +70,9 @@ describe('the key catalogue', () => {
       tenantRuns: UnscopedRedisKeys.tenantRuns('tenant-1'),
       fxRate: UnscopedRedisKeys.fxRate('IRR'),
       outboxProcessed: UnscopedRedisKeys.outboxProcessed('payment-credited-notify', 'evt-1'),
+      noticeBurst: UnscopedRedisKeys.noticeBurst('tenant-1', 'user-1', 'panelAccepted'),
+      noticeBurstScheduled: UnscopedRedisKeys.noticeBurstScheduled('tenant-1', 'user-1', 'panelAccepted'),
+      noticeBurstBatch: UnscopedRedisKeys.noticeBurstBatch('flush-1'),
       subUsage: UnscopedRedisKeys.subUsage('grant-1'),
     }).toMatchSnapshot();
   });

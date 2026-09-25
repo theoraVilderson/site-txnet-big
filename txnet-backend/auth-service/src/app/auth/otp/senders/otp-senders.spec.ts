@@ -591,6 +591,34 @@ describe('UserNotifier', () => {
     expect(titles.every((t) => t.length > 0)).toBe(true);
   });
 
+  // F-067-p (ADR-0084 decision 3): the worker combines a burst and asks once with its count.
+  it('a combined notice tells the summary with its count, in the inbox title and body, for every template', async () => {
+    const inbox = { put: vi.fn(async () => undefined) };
+    const notifier = new UserNotifier(
+      notifierPrisma() as unknown as PrismaService,
+      registry(null),
+      localeService({ panel: { acceptedMany: '{{count}} panels accepted', acceptedManyTitle: '{{count}} accepted' } }),
+      inbox as unknown as NotificationInboxClient,
+    );
+    await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'inbox', template: 'panelAccepted', params: {}, count: 12 }));
+    expect(inbox.put).toHaveBeenCalledWith(expect.objectContaining({ title: '12 accepted', body: '12 panels accepted' }));
+
+    for (const template of NOTIFY_TEMPLATES) {
+      inbox.put.mockClear();
+      const english = new UserNotifier(
+        notifierPrisma() as unknown as PrismaService,
+        registry(null),
+        localeService(undefined),
+        inbox as unknown as NotificationInboxClient,
+      );
+      await inTenant(() => english.notify({ userId: 'user-1', channel: 'inbox', template, params: {}, count: 3 }));
+      const [row] = inbox.put.mock.calls[0] as unknown as [{ title: string; body: string }];
+      expect(row.body).toContain('3');
+      expect(row.body).not.toContain('{{');
+      expect(row.title.length).toBeGreaterThan(0);
+    }
+  });
+
   it('falls back to English text when the namespace has no template', async () => {
     const client = botClient();
     const notifier = new UserNotifier(

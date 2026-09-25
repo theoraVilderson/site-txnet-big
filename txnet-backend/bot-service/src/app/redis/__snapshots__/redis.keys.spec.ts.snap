@@ -27,6 +27,7 @@ exports[`RedisKeys — bot key catalogue > keeps the canonical TTLs stable 1`] =
   "handoff": 60,
   "impersonation": 1800,
   "loginFailureWindow": 900,
+  "noticeBurstScheduledSlack": 60,
   "otpChannel": 300,
   "otpCode": 300,
   "otpCooldown": 60,

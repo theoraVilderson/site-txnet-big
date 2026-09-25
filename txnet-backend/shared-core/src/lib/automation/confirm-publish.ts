@@ -36,6 +36,8 @@ export type PublishOptions = {
   headers?: Record<string, unknown>;
   mandatory?: boolean;
   messageId?: string;
+  /** Per-message TTL in ms, as a string (AMQP's own type) — a delayed notice flush (F-067-p). */
+  expiration?: string;
 };
 
 /** What the broker hands back when a mandatory message reached no queue. */

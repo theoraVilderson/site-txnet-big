@@ -49,5 +49,13 @@ export const OTP_DELIVERY_ROUTING_PREFIX = 'otp.delivery.';
 /** The routing key an OTP send is published under. */
 export const OTP_DELIVERY_ROUTING_KEY = `${OTP_DELIVERY_ROUTING_PREFIX}send`;
 
+/**
+ * A combined notice's flush (F-067-p, ADR-0084 decision 3). Published to the
+ * delay queue under `DELAY`; the broker dead-letters it after the window under
+ * `FLUSH`, which the flush queue binds.
+ */
+export const NOTICE_BURST_DELAY_ROUTING_KEY = 'notice.burst.delay';
+export const NOTICE_BURST_FLUSH_ROUTING_KEY = 'notice.burst.flush';
+
 /** A topic binding matching every routing key under `prefix` (which ends in `.`). */
 export const topicBindingAll = (prefix: string): string => `${prefix}#`;

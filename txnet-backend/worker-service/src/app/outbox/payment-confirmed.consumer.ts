@@ -52,7 +52,7 @@ export class PaymentConfirmedConsumer implements OnApplicationBootstrap {
     private readonly realtime: RealtimePublisher,
     config: ConfigService,
   ) {
-    this.notices = new EventNoticeSender(redis, realtime, config);
+    this.notices = new EventNoticeSender(redis, realtime, config, broker);
   }
 
   async onApplicationBootstrap() {

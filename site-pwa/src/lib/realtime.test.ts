@@ -1,7 +1,9 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import {
+  LIVE_REREAD_MS,
   RealtimeClient,
   SUBPROTOCOL,
+  trailingThrottle,
   type RealtimeSocket,
 } from "./realtime";
 
@@ -297,5 +299,59 @@ describe("reconnecting", () => {
 
     vi.advanceTimersByTime(60_000);
     expect(FakeSocket.live.length).toBeGreaterThan(1);
+  });
+});
+
+/**
+ * A burst of events is not a burst of reads (F-067-p, ADR-0084 decision 3):
+ * the push is never combined, so the reader throttles — at most one read per
+ * window, and the last event always causes one.
+ */
+describe("trailingThrottle", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("reads at once on the first event, then once more at the end of a burst", () => {
+    const read = vi.fn();
+    const live = trailingThrottle(read, LIVE_REREAD_MS);
+
+    live.call();
+    expect(read).toHaveBeenCalledTimes(1);
+    for (let i = 0; i < 12; i++) {
+      vi.advanceTimersByTime(100);
+      live.call();
+    }
+    expect(read).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(LIVE_REREAD_MS);
+    expect(read).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(LIVE_REREAD_MS * 3);
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it("never reads twice inside one window", () => {
+    const read = vi.fn();
+    const live = trailingThrottle(read, 2_000);
+    const at: number[] = [];
+    read.mockImplementation(() => at.push(Date.now()));
+    for (let i = 0; i < 100; i++) {
+      live.call();
+      vi.advanceTimersByTime(150);
+    }
+    vi.advanceTimersByTime(2_000);
+    expect(at.slice(1).every((t, i) => t - at[i]! >= 2_000)).toBe(true);
+    expect(at.at(-1)! >= 99 * 150).toBe(true);
+  });
+
+  it("an event after a quiet window reads at once, and cancel drops the owed read", () => {
+    const read = vi.fn();
+    const live = trailingThrottle(read, 2_000);
+    live.call();
+    vi.advanceTimersByTime(5_000);
+    live.call();
+    expect(read).toHaveBeenCalledTimes(2);
+    live.call();
+    live.cancel();
+    vi.advanceTimersByTime(5_000);
+    expect(read).toHaveBeenCalledTimes(2);
   });
 });

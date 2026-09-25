@@ -33,6 +33,10 @@ every write are [billing/contract.systems.md](../../domains/billing/contract.sys
    else — and on `network.panel.tested` (`isPanelTested`) re-reads
    `GET /systems/panels`. The event is a nudge, never rendered: the row shown
    is still billing's. Without the key the page reads on load, as before.
+   **A burst is two reads, not twelve** (F-067-p, ADR-0084 decision 3): the
+   re-read goes through `trailingThrottle(…, LIVE_REREAD_MS)` (`lib/realtime.ts`,
+   2 s) — the first event reads at once, the rest of the window owes one read
+   at its end, so the last event always causes one. Unmounting cancels it.
 3. **Refused here, not at billing time.** A refused panel's matrix names the
    `required` rows it answered `no`, and an accepted one the `metered` rows
    that bar metered sale (`refusedBecause`). The question and the cost of a

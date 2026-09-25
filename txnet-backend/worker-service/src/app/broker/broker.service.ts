@@ -12,6 +12,8 @@ import {
   botUpdateQueueName,
   BOT_UPDATE_ROUTING_PREFIX,
   confirmedPublisher,
+  NOTICE_BURST_DELAY_ROUTING_KEY,
+  NOTICE_BURST_FLUSH_ROUTING_KEY,
   OTP_DELIVERY_ROUTING_PREFIX,
   OutboxEventType,
   outboxRoutingKey,
@@ -105,6 +107,15 @@ export type BotUpdateHandler = (message: BotUpdateMessage) => Promise<void>;
 /** What an outbox consumer is handed: the relay's message, as published. */
 export type OutboxHandler = (event: OutboxMessage) => Promise<void>;
 
+/** A combined notice's flush (F-067-p): one recipient's burst of one template. */
+export interface NoticeFlush {
+  flushId: string;
+  tenantId: string;
+  userId: string;
+  template: string;
+}
+export type NoticeFlushHandler = (flush: NoticeFlush) => Promise<void>;
+
 /**
  * The header every publish stamps with how many times this message has been
  * published. It is read back by `deadLetterRecordOf` (F-067-d), and it lives
@@ -183,11 +194,15 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   private readonly panelTestedQueue: string;
   private readonly tenantBillingCreditedQueue: string;
   private readonly tenantSubscriptionNoticeQueue: string;
+  private readonly noticeDelayQueue: string;
+  private readonly noticeFlushQueue: string;
+  private readonly outboxPrefetch: number;
   private readonly botUpdatePrefix: string;
   private readonly botUpdateQueues: number;
   private readonly confirmMs: number;
   /** One channel per bot-update queue — see {@link consumeBotUpdates}. */
-  private readonly botUpdateChannels: amqp.Channel[] = [];
+  /** The bot-update and outbox consumers' own channels (F-067-b, F-067-p), closed on shutdown. */
+  private readonly consumerChannels: amqp.Channel[] = [];
 
   constructor(config: ConfigService) {
     this.url = config.getOrThrow<string>('RABBITMQ_URL');
@@ -203,6 +218,9 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     this.panelTestedQueue = config.getOrThrow<string>('AUTOMATION_PANEL_TESTED_QUEUE');
     this.tenantBillingCreditedQueue = config.getOrThrow<string>('AUTOMATION_TENANT_BILLING_CREDITED_QUEUE');
     this.tenantSubscriptionNoticeQueue = config.getOrThrow<string>('AUTOMATION_TENANT_SUBSCRIPTION_NOTICE_QUEUE');
+    this.noticeDelayQueue = config.getOrThrow<string>('AUTOMATION_NOTICE_DELAY_QUEUE');
+    this.noticeFlushQueue = config.getOrThrow<string>('AUTOMATION_NOTICE_FLUSH_QUEUE');
+    this.outboxPrefetch = config.getOrThrow<number>('AUTOMATION_OUTBOX_PREFETCH');
     this.botUpdatePrefix = config.getOrThrow<string>('BOT_UPDATE_QUEUE_PREFIX');
     this.botUpdateQueues = config.getOrThrow<number>('BOT_UPDATE_QUEUES');
     this.confirmMs = config.getOrThrow<number>('AUTOMATION_PUBLISH_CONFIRM_MS');
@@ -295,6 +313,22 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     for (const type of [OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE, OutboxEventType.TENANT_SUBSCRIPTION_SUSPENDED]) {
       await this.channel.bindQueue(this.tenantSubscriptionNoticeQueue, this.exchange, outboxRoutingKey(type));
     }
+    // F-067-p: a combined notice's flush waits out its window in a queue nobody
+    // consumes; the broker dead-letters it on expiry onto the flush key. A
+    // durable delay: a flush survives the process that scheduled it.
+    await this.channel.assertQueue(this.noticeDelayQueue, {
+      durable: true,
+      arguments: {
+        'x-dead-letter-exchange': this.exchange,
+        'x-dead-letter-routing-key': NOTICE_BURST_FLUSH_ROUTING_KEY,
+      },
+    });
+    await this.channel.bindQueue(this.noticeDelayQueue, this.exchange, NOTICE_BURST_DELAY_ROUTING_KEY);
+    await this.channel.assertQueue(this.noticeFlushQueue, {
+      durable: true,
+      arguments: { 'x-dead-letter-exchange': this.deadExchange },
+    });
+    await this.channel.bindQueue(this.noticeFlushQueue, this.exchange, NOTICE_BURST_FLUSH_ROUTING_KEY);
     // The bot-update set (F-067-b, D-16). One queue per slot, each bound to
     // exactly its own routing key — not one queue on `bot.update.#`, which
     // would put every chat back in a single line and lose the whole point.
@@ -386,6 +420,27 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
         messageId: event.id,
       },
     );
+  }
+
+  /**
+   * Schedule a combined notice's flush `delayMs` from now (F-067-p): the
+   * message expires in the delay queue and the broker moves it to the flush
+   * queue. Every flush has the same window, so the queue's head always
+   * expires first and none waits behind a later one.
+   */
+  async publishNoticeFlush(flush: NoticeFlush, delayMs: number): Promise<void> {
+    if (!this.publish) throw new Error('broker channel is not open');
+    await this.publish(this.exchange, NOTICE_BURST_DELAY_ROUTING_KEY, Buffer.from(JSON.stringify(flush)), {
+      persistent: true,
+      contentType: 'application/json',
+      messageId: flush.flushId,
+      expiration: String(delayMs),
+    });
+  }
+
+  /** Start consuming combined notices' flushes (F-067-p), by the outbox queues' rules. */
+  async consumeNoticeFlushes(handle: NoticeFlushHandler): Promise<void> {
+    await this.consumeOutbox(this.noticeFlushQueue, (message) => handle(message as unknown as NoticeFlush));
   }
 
   /** Start consuming. One handler for every tick; it dispatches by `key`. */
@@ -502,8 +557,19 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     await this.consumeOutbox(this.tenantSubscriptionNoticeQueue, handle);
   }
 
-    private async consumeOutbox(queue: string, handle: OutboxHandler): Promise<void> {
-    const channel = this.require();
+  /**
+   * Each outbox queue on **its own channel at `AUTOMATION_OUTBOX_PREFETCH`**
+   * (F-067-p, ADR-0084 decision 3), for the reason the bot-update queues have
+   * theirs: `prefetch` is a channel setting here, so on the shared channel a
+   * burst of one event type would take the ticks' slots and every other
+   * type's. A burst now waits in its own queue, drained at a bounded rate.
+   */
+  private async consumeOutbox(queue: string, handle: OutboxHandler): Promise<void> {
+    const connection = this.connection;
+    if (!connection) throw new Error('broker connection is not open');
+    const channel = await connection.createChannel();
+    await channel.prefetch(this.outboxPrefetch);
+    this.consumerChannels.push(channel);
     await channel.consume(queue, async (message) => {
       if (message === null) return;
       let event: OutboxMessage;
@@ -553,7 +619,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       const queue = botUpdateQueueName(this.botUpdatePrefix, slot);
       const channel = await connection.createChannel();
       await channel.prefetch(1);
-      this.botUpdateChannels.push(channel);
+      this.consumerChannels.push(channel);
 
       await channel.consume(queue, async (message) => {
         if (message === null) return;
@@ -619,7 +685,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   }
 
   async onApplicationShutdown() {
-    for (const channel of this.botUpdateChannels) {
+    for (const channel of this.consumerChannels) {
       await channel.close().catch((): void => undefined);
     }
     await this.channel?.close().catch((): void => undefined);
