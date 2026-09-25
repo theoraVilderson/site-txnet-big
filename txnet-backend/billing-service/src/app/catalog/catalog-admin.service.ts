@@ -35,8 +35,10 @@ import { CatalogTextKind, CatalogTextService, ReviewItem, Texts, catalogTextKey,
  * is written with its name in that language, plus any others the admin types;
  * the server derives the i18n key (`catalog-texts.ts`). The written texts are
  * published inside the transaction, so a locale-service that does not answer
- * rolls the row back; every other language is drafted from the source after it
- * commits and never fails it.
+ * rolls the row back. Every other language is drafted from the source after it
+ * commits — only when the write asks (`translateAll`, F-1533-i), and never
+ * failing it; without it the others are left as they are and a reader falls
+ * back to the source.
  *
  * **Categories nest, and a product sits in several** (F-026-q/r): a category
  * has an optional parent — the platform's or its own tenant's, never inside
@@ -86,11 +88,13 @@ export class CatalogAdminRefused extends Error {
 }
 
 /** `parentId`: the category it sits under; absent or `null` = top level (F-026-r). */
-export type CreateCategoryInput = { tenantId?: string | null; parentId?: string | null; key: string; sourceLang?: string; name: Texts };
+/** `translateAll` (F-1533-i): draft every language not written into the review list. Off when absent. */
+type TranslateAll = { translateAll?: boolean };
+export type CreateCategoryInput = TranslateAll & { tenantId?: string | null; parentId?: string | null; key: string; sourceLang?: string; name: Texts };
 /** A new `sourceLang` needs `name` with that language's text. */
 /** `archived: false` brings an archived category back, still switched off (F-026-l). `parentId: null` moves it to the top. */
-export type UpdateCategoryInput = { parentId?: string | null; sourceLang?: string; name?: Texts; isActive?: boolean; archived?: false };
-export type CreateProductInput = {
+export type UpdateCategoryInput = TranslateAll & { parentId?: string | null; sourceLang?: string; name?: Texts; isActive?: boolean; archived?: false };
+export type CreateProductInput = TranslateAll & {
   tenantId?: string | null;
   /** One or more, distinct; the first is shown first (F-026-r). */
   categoryIds: string[];
@@ -104,7 +108,7 @@ export type CreateProductInput = {
   featureKeys?: string[];
   defaultQuotas?: Record<string, unknown>;
 };
-export type UpdateProductInput = {
+export type UpdateProductInput = TranslateAll & {
   /** Replaces every category the product sits in, in this order. */
   categoryIds?: string[];
   sourceLang?: string;
@@ -387,7 +391,7 @@ export class CatalogAdminService {
       await this.texts.publishSources([{ key: nameKey, text: input.name }]);
       return created;
     });
-    void this.texts.draftOthers(drafts(nameKey, sourceLang, input.name));
+    if (input.translateAll) void this.texts.draftOthers(drafts(nameKey, sourceLang, input.name));
     return view;
   }
 
@@ -412,7 +416,7 @@ export class CatalogAdminService {
       if (patch.name) await this.texts.publishSources([{ key: nameKey, text: patch.name }]);
       return updated;
     });
-    if (patch.name && sourceLang) void this.texts.draftOthers(drafts(view.nameKey, sourceLang, patch.name));
+    if (patch.translateAll && patch.name && sourceLang) void this.texts.draftOthers(drafts(view.nameKey, sourceLang, patch.name));
     return view;
   }
 
@@ -596,7 +600,7 @@ export class CatalogAdminService {
       await this.texts.clear(texts.clear);
       return created;
     });
-    void this.texts.draftOthers(texts.draft);
+    if (input.translateAll) void this.texts.draftOthers(texts.draft);
     return view;
   }
 
@@ -635,7 +639,7 @@ export class CatalogAdminService {
       await this.texts.clear(texts.clear);
       return updated;
     });
-    void this.texts.draftOthers(draft);
+    if (patch.translateAll) void this.texts.draftOthers(draft);
     return view;
   }
 

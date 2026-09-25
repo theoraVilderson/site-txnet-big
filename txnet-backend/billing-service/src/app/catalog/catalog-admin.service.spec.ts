@@ -32,7 +32,7 @@
 import { FulfilmentKind, Prisma, TenantType, VariantBillingMode, VariantVisibility } from '@prisma/client';
 import { runWithTenant } from '@txnet-backend/shared-core';
 
-import { RETIRED_FULFILMENT_KINDS, createProductSchema } from './catalog-admin.schema';
+import { RETIRED_FULFILMENT_KINDS, createProductSchema, updateCategorySchema } from './catalog-admin.schema';
 import { CatalogAdminRefused, CatalogAdminService } from './catalog-admin.service';
 import { CatalogTextService, catalogTextKey } from './catalog-texts';
 
@@ -462,13 +462,8 @@ describe('CatalogAdminService — names (F-1533-d)', () => {
     expect(platform.nameKey).toBe('catalog.product.vpn_pro.name');
     expect(mine.descriptionKey).toBeNull();
     expect(mine.sourceLang).toBe('fa'); // DEFAULT_LANGUAGE when none was picked
-    // Published inside the write, drafted after it.
-    expect(texts).toEqual([
-      `publish ${mine.nameKey} fa=وی‌پی‌ان پرو en=VPN Pro`,
-      `draft ${mine.nameKey} from fa skipping fa,en`,
-      `publish ${platform.nameKey} fa=وی‌پی‌ان پرو en=VPN Pro`,
-      `draft ${platform.nameKey} from fa skipping fa,en`,
-    ]);
+    // Published inside the write; nothing drafted unless asked (F-1533-i).
+    expect(texts).toEqual([`publish ${mine.nameKey} fa=وی‌پی‌ان پرو en=VPN Pro`, `publish ${platform.nameKey} fa=وی‌پی‌ان پرو en=VPN Pro`]);
   });
 
   it('writes the name inside the transaction, after the row and its audit', async () => {
@@ -504,9 +499,9 @@ describe('CatalogAdminService — names (F-1533-d)', () => {
     await expect(service.draftMissingTexts(actor(RESELLER))).resolves.toEqual({ drafted: 4 });
   });
 
-  it('writes in the source language the admin picks, and drafts every other language from it', async () => {
+  it('writes in the source language the admin picks, and drafts every other language from it when asked', async () => {
     const { service, db, texts } = build();
-    const view = await service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, sourceLang: 'en', name: { en: 'VPN Pro' } });
+    const view = await service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, sourceLang: 'en', name: { en: 'VPN Pro' }, translateAll: true });
     expect(view.sourceLang).toBe('en');
     expect(db.product.rows.at(-1)).toMatchObject({ sourceLang: 'en' });
     expect(texts).toEqual([`publish ${view.nameKey} en=VPN Pro`, `draft ${view.nameKey} from en skipping en`]);
@@ -835,5 +830,43 @@ describe('CatalogAdminService — a product sits in several categories (F-026-r)
     ]);
     expect(db.product.rows.find((r) => r['id'] === RESELLER_PRODUCT)).toMatchObject({ isActive: true });
     expect(links.filter((l) => l['productId'] === RESELLER_PRODUCT).map((l) => l['categoryId'])).toEqual([PLATFORM_CATEGORY]);
+  });
+});
+
+describe('CatalogAdminService — every other language is drafted only on request (F-1533-i)', () => {
+  it('drafts a new category and product into every language not written only with translateAll', async () => {
+    const { service, texts } = build();
+    const plain = await service.createCategory(actor(RESELLER), { key: 'games', name: { fa: 'بازی' } });
+    expect(texts.filter((t) => t.startsWith('draft'))).toEqual([]);
+    const asked = await service.createCategory(actor(RESELLER), { key: 'music', name: { fa: 'موسیقی' }, translateAll: true });
+    const product = await service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, description: { fa: 'سریع' }, translateAll: true });
+    expect(texts.filter((t) => t.startsWith('draft'))).toEqual([
+      `draft ${asked.nameKey} from fa skipping fa`,
+      `draft ${product.nameKey} from fa skipping fa,en`,
+      `draft ${product.descriptionKey} from fa skipping fa`,
+    ]);
+    expect(plain.nameKey).not.toBe(asked.nameKey);
+  });
+
+  it('a rename without it writes the source alone: no draft, and no other language cleared', async () => {
+    const { service, texts } = build();
+    await service.updateProduct(actor(RESELLER), RESELLER_PRODUCT, { name: { fa: 'آلفا' } });
+    await service.updateCategory(actor(OWNER), PLATFORM_CATEGORY, { name: { fa: 'وی‌پی‌ان' } });
+    expect(texts).toEqual([
+      `publish ${catalogTextKey(RESELLER, 'product', 'vpn_alpha', 'name')} fa=آلفا`,
+      `publish catalog.category.vpn.name fa=وی‌پی‌ان`,
+    ]);
+  });
+
+  it('a rename with it drafts every language not written, published ones included — they wait for review', async () => {
+    const { service, texts } = build();
+    await service.updateCategory(actor(OWNER), PLATFORM_CATEGORY, { name: { fa: 'وی‌پی‌ان' }, translateAll: true });
+    expect(texts).toContain('draft catalog.category.vpn.name from fa skipping fa');
+  });
+
+  it('takes translateAll on the wire, off when absent, and refuses anything but a boolean', () => {
+    expect(createProductSchema.parse(NEW_PRODUCT).translateAll).toBeUndefined();
+    expect(createProductSchema.safeParse({ ...NEW_PRODUCT, translateAll: 'yes' }).success).toBe(false);
+    expect(updateCategorySchema.safeParse({ name: { fa: 'x' }, translateAll: true }).success).toBe(true);
   });
 });

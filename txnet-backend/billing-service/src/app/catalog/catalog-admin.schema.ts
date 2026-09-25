@@ -59,6 +59,12 @@ const text = (max: number) => z.string().trim().min(1, { message: 'text is requi
 const texts = (max: number) =>
   z.record(lang, text(max)).refine((o) => Object.keys(o).length > 0 && Object.keys(o).length <= 50, { message: 'text in 1-50 languages' });
 const NAME_MAX = 200;
+/**
+ * F-1533-i (user, 2026-09-25): draft every other language from the source into
+ * the review list. Off when absent — then only the languages written change,
+ * and a reader falls back to the source for the rest.
+ */
+const translateAll = z.boolean().optional();
 const DESCRIPTION_MAX = 2000;
 
 /** Quota per metric (§4.5). A metric absent from the map has no quota. */
@@ -81,7 +87,7 @@ const categoryIds = z
   .refine((ids) => new Set(ids).size === ids.length, 'categoryIds must be distinct');
 
 export const createCategorySchema = z
-  .object({ tenantId: uuid('tenantId').nullable().optional(), parentId, key: z.string().regex(KEY), sourceLang: lang.optional(), name: texts(NAME_MAX) })
+  .object({ tenantId: uuid('tenantId').nullable().optional(), parentId, key: z.string().regex(KEY), sourceLang: lang.optional(), name: texts(NAME_MAX), translateAll })
   .strict();
 
 export const updateCategorySchema = z
@@ -89,6 +95,7 @@ export const updateCategorySchema = z
     parentId,
     sourceLang: lang.optional(),
     name: texts(NAME_MAX).optional(),
+    translateAll,
     isActive: z.boolean().optional(),
     /** Only `false`: back from the archive (F-026-l). Archiving is `POST /categories/remove` with its products. */
     archived: z.literal(false).optional(),
@@ -114,6 +121,7 @@ export const createProductSchema = z
     sourceLang: lang.optional(),
     name: texts(NAME_MAX),
     description: texts(DESCRIPTION_MAX).nullable().optional(),
+    translateAll,
     fulfilmentKind: z.enum(CREATABLE_FULFILMENT_KINDS),
     featureKeys: featureKeys.optional(),
     defaultQuotas: quotas.optional(),
@@ -126,6 +134,7 @@ export const updateProductSchema = z
     sourceLang: lang.optional(),
     name: texts(NAME_MAX).optional(),
     description: texts(DESCRIPTION_MAX).nullable().optional(),
+    translateAll,
     featureKeys: featureKeys.optional(),
     defaultQuotas: quotas.optional(),
     isActive: z.boolean().optional(),
