@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { PanelCredentialClient } from './panel-credential.client';
+import { PanelGroupsService } from './panel-groups';
 import { PANEL_CREDENTIAL_WRITER, PanelRegistrationService } from './panel-registration';
 import { SystemsReadService } from './systems-read';
 import { PanelPermissionGuard, SystemsController } from './systems.controller';
@@ -22,6 +23,7 @@ import { UsageHoldsService } from './usage-holds';
     PanelRegistrationService,
     SystemsReadService,
     UsageHoldsService,
+    PanelGroupsService,
     PanelPermissionGuard,
     PanelCredentialClient,
     { provide: PANEL_CREDENTIAL_WRITER, useExisting: PanelCredentialClient },

@@ -12,8 +12,10 @@ import {
   HttpStatus,
   Injectable,
   NotFoundException,
+  Delete,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Put,
   Query,
@@ -28,8 +30,15 @@ import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { PanelCredentialRefused, PanelCredentialUnavailable } from './panel-credential.client';
 import { PanelRegistrationService, PanelResubmitRefused, RegisterPanelInput } from './panel-registration';
+import { PanelGroupInput, PanelGroupMemberInput, PanelGroupsService } from './panel-groups';
 import {
   AcknowledgeDriftBody,
+  AddPanelGroupMemberBody,
+  addPanelGroupMemberSchema,
+  CreatePanelGroupBody,
+  createPanelGroupSchema,
+  UpdatePanelGroupBody,
+  updatePanelGroupSchema,
   acknowledgeDriftSchema,
   DriftEventQueryInput,
   driftEventQuerySchema,
@@ -47,7 +56,7 @@ import {
   writeOffHoldSchema,
 } from './panel-registration.schema';
 import { PanelScopeRefused, SystemsActor } from './panel-scope';
-import { SystemsReadService, SystemsRefused } from './systems-read';
+import { SystemsReadService, SystemsRefused, SystemsRejection } from './systems-read';
 import { UsageHoldsService } from './usage-holds';
 
 /** The permission the systems surface needs (F-027-ar). SuperAdmin holds it as `*`. */
@@ -80,14 +89,23 @@ const SYSTEMS_ADMIN_READ = {
   windowSec: 900,
 };
 
-/** The service's refusals as HTTP: the scope is a 403, a panel or event outside it a 404. */
+/** The refusals that are a state already reached, not something absent: 409. */
+const CONFLICTS: ReadonlySet<SystemsRejection> = new Set([
+  'already_acknowledged',
+  'already_resolved',
+  'already_member',
+  'already_draining',
+  'member_has_configs',
+]);
+
+/** The service's refusals as HTTP: the scope is a 403, a panel, group or event outside it a 404. */
 async function refusing<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();
   } catch (e) {
     if (e instanceof PanelScopeRefused) throw new ForbiddenException({ reason: e.reason, message: e.message });
     if (e instanceof SystemsRefused) {
-      if (e.reason === 'already_acknowledged' || e.reason === 'already_resolved') throw new ConflictException({ reason: e.reason, message: e.message });
+      if (CONFLICTS.has(e.reason)) throw new ConflictException({ reason: e.reason, message: e.message });
       throw new NotFoundException({ reason: e.reason, message: e.message });
     }
     throw e;
@@ -112,6 +130,10 @@ async function refusing<T>(work: () => Promise<T>): Promise<T> {
  * `pending` until it is billed), a write-off is recorded here and never
  * charged (ADR-0080 decision 3).
  *
+ * Panel groups (F-027-bw) are where a `network_access` variant's Grants are
+ * placed: the platform's groups, their members, and draining one — desired
+ * state, read by fulfilment and the drain sweep on their next tick.
+ *
  * Who the caller is comes from the gate (`X-User-Id`, `X-Tenant-Id`), never
  * from the body.
  */
@@ -122,7 +144,66 @@ export class SystemsController {
     private readonly registration: PanelRegistrationService,
     private readonly reads: SystemsReadService,
     private readonly holdsQueue: UsageHoldsService,
+    private readonly panelGroups: PanelGroupsService,
   ) {}
+
+  @Get('panel-groups')
+  @RateLimit(SYSTEMS_ADMIN_READ)
+  groups(@Req() req: Request) {
+    return refusing(() => this.panelGroups.groups(actorOf(req)));
+  }
+
+  @Post('panel-groups')
+  @HttpCode(HttpStatus.CREATED)
+  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  createGroup(@Body(new ZodValidationPipe(createPanelGroupSchema)) body: CreatePanelGroupBody, @Req() req: Request) {
+    // `name` is required by the schema; the cast is for the non-strict tsconfig, as in `register`.
+    return refusing(() => this.panelGroups.create(actorOf(req), body as PanelGroupInput & { name: string }));
+  }
+
+  @Patch('panel-groups/:id')
+  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  updateGroup(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(updatePanelGroupSchema)) body: UpdatePanelGroupBody,
+    @Req() req: Request,
+  ) {
+    return refusing(() => this.panelGroups.update(actorOf(req), id, body));
+  }
+
+  @Post('panel-groups/:id/members')
+  @HttpCode(HttpStatus.CREATED)
+  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  addMember(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(addPanelGroupMemberSchema)) body: AddPanelGroupMemberBody,
+    @Req() req: Request,
+  ) {
+    return refusing(() => this.panelGroups.addMember(actorOf(req), id, body as PanelGroupMemberInput));
+  }
+
+  /** `409 member_has_configs` while a live config of the group's Grants is on it: drain it instead. */
+  @Delete('panel-groups/:id/members/:panelId')
+  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  removeMember(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('panelId', new ParseUUIDPipe()) panelId: string,
+    @Req() req: Request,
+  ) {
+    return refusing(() => this.panelGroups.removeMember(actorOf(req), id, panelId));
+  }
+
+  /** `200` the member, `drain`, with `drainingSince` and the least `waitSeconds` before its configs go. */
+  @Post('panel-groups/:id/members/:panelId/drain')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  drainMember(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('panelId', new ParseUUIDPipe()) panelId: string,
+    @Req() req: Request,
+  ) {
+    return refusing(() => this.panelGroups.drain(actorOf(req), id, panelId));
+  }
 
   @Get('panels')
   @RateLimit(SYSTEMS_ADMIN_READ)

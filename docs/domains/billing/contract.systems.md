@@ -2,8 +2,8 @@
 id: billing
 layer: domain
 status: active
-version: 36
-updated: 2026-09-24
+version: 41
+updated: 2026-09-25
 ---
 
 # Systems — the platform owner's panel routes
@@ -44,9 +44,15 @@ would dial an address a tenant chose (`network/open-questions.md`).
 | `GET /api/billing/systems/holds` | query `state?` (`pending` \| `all`, default `all`), `after?` (hold id), `limit?` (1–100, default 50); `.strict()` | `{items: [{id, configId, panelId, panelName, upBytes, downBytes, reason, state, heldFrom, heldAt, resolvedAt, resolvedByAdminId, resolutionNote}], next}`, newest first; bytes are decimal strings | 400; 403 |
 | `POST /api/billing/systems/holds/:id/release` | `note?` (1–1000); `.strict()` | `202 {id, state: 'pending', release: 'queued'}` | 400; 403; 404 `not_found`; 409 `already_resolved` |
 | `POST /api/billing/systems/holds/:id/write-off` | `note` (1–1000, required); `.strict()` | `200` the hold, `written_off` | 400; 403; 404 `not_found`; 409 `already_resolved` |
+| `GET /api/billing/systems/panel-groups` | — | `[{id, name, strategy, minHealthyPanels, subscriptionTtlSeconds, protocol, createdAt, updatedAt, variantCount, members: [{groupId, panelId, panelName, panelState, reviewState, lastHealthyAt, priority, weight, role, drainingSince, createdAt}]}]`, by name; members by `priority` | 403 |
+| `POST /api/billing/systems/panel-groups` | `name`, `minHealthyPanels?` (1–100), `subscriptionTtlSeconds?` (60–604800), `protocol?` (`ConfigProtocol`); `.strict()` | `201` the group, `strategy: mirror` | 400; 403 |
+| `PATCH /api/billing/systems/panel-groups/:id` | any of the four, at least one; `.strict()` | `200` the group | 400; 403; 404 `not_found` |
+| `POST /api/billing/systems/panel-groups/:id/members` | `panelId`, `priority?` (0–1000), `weight?` (1–1000); `.strict()` | `201` the member, `primary` | 400; 403; 404 `not_found` / `panel_not_found`; 409 `already_member` |
+| `DELETE /api/billing/systems/panel-groups/:id/members/:panelId` | — | `200 {groupId, panelId, removed: true}` | 400; 403; 404 `not_found` / `member_not_found`; 409 `member_has_configs` |
+| `POST /api/billing/systems/panel-groups/:id/members/:panelId/drain` | — | `200` the member, `drain`, with `drainingSince` and `waitSeconds` | 400; 403; 404 `not_found` / `member_not_found`; 409 `already_draining` |
 
 Rate limits, per user, per 15 minutes: `SYSTEMS_ADMIN_WRITE` 30 (register,
-both re-submits, acknowledge, release, write-off), `SYSTEMS_ADMIN_READ` 120 (the four reads).
+both re-submits, acknowledge, release, write-off, the five group writes), `SYSTEMS_ADMIN_READ` 120 (the five reads).
 
 ## Registering a panel — the rules
 
@@ -164,3 +170,32 @@ outside it is absent from the list and 404 by id.
     reads the new secret within a minute. On a row with no reference yet, the
     reference is written **after** the vault answered. A pull panel is 409
     `panel_not_push`, a refused one 409 `panel_refused`.
+
+## Panel groups — the rules (F-027-bw)
+
+Where a `network_access` variant's Grants are placed (network
+[contract.groups.md](../network/contract.groups.md)). `panel-groups.ts`.
+
+20. **The platform's groups, and only through the scope.** The group scope is
+    `panelScopeOf`'s `tenantId` (null for the owner); a tenant's group is 404
+    `not_found`, and a member's panel must be in the panel scope
+    (`panel_not_found`). The writes run on `CrossTenantPrismaService`: the
+    `tenant_isolation` `WITH CHECK` refuses a null `tenantId` on the app pool.
+    Every query carries the scope; `panel_group_member_fits` still holds a
+    platform group to platform panels. Tenant groups open in that one scope.
+21. **Every group is `mirror`.** No route sets `strategy`, and a body naming it
+    is refused (`.strict()`): the others have no fulfilment (groups rule 7).
+22. **A change reaches what is placed next.** Fulfilment reads the group on
+    its next tick: a new member is placed for Grants already sold, a new
+    `protocol` is what the next config is created with, and configs already
+    placed keep theirs (groups rule 9).
+23. **A member with a live config is drained, not removed.** The `DELETE`
+    holds the drain sweep's own condition — no unretired config of the group's
+    Grants on the panel — so a removal cannot leave configs outside every
+    drain; one it does not remove is 409 `member_has_configs`.
+24. **Draining is `role = drain`, once.** Conditional on not `drain`; a second
+    is 409 `already_draining`, and the database's clock is never restarted
+    (groups rule 14). `waitSeconds` is `2 × subscriptionTtlSeconds`, the least
+    the sweep waits from `drainingSince`; the member row goes on its own.
+
+`panel-groups.spec.ts` pins rules 20–24.

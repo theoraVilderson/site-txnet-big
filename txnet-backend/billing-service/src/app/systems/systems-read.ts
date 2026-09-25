@@ -5,7 +5,16 @@ import { PrismaService } from '../prisma/prisma.service';
 import { capabilityMatrix } from './capabilities';
 import { panelScopeOf, SystemsActor } from './panel-scope';
 
-export type SystemsRejection = 'not_found' | 'already_acknowledged' | 'already_resolved';
+export type SystemsRejection =
+  | 'not_found'
+  | 'already_acknowledged'
+  | 'already_resolved'
+  // Panel groups (F-027-bw).
+  | 'panel_not_found'
+  | 'member_not_found'
+  | 'already_member'
+  | 'already_draining'
+  | 'member_has_configs';
 
 export class SystemsRefused extends Error {
   constructor(readonly reason: SystemsRejection) {

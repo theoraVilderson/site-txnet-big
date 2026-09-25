@@ -10,7 +10,7 @@ import { ConfigActionsService, ConfigActor } from './config-actions';
 export const GROUP_DRAIN_ACTOR: ConfigActor = { actorType: ActorType.system, actorId: '00000000-0000-4000-8000-0000000f027c' };
 
 /** How many subscription lifetimes a drain line is left unserved before its config goes. */
-const DRAIN_TTL_MULTIPLE = 2;
+export const DRAIN_TTL_MULTIPLE = 2;
 
 /** One live config of the group's Grants on the draining panel. */
 export type DrainConfig = {

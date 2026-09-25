@@ -1,4 +1,4 @@
-import { CounterSemantics, DriverType, PanelRole, PanelTransport } from '@prisma/client';
+import { ConfigProtocol, CounterSemantics, DriverType, PanelRole, PanelTransport } from '@prisma/client';
 import { z } from 'zod';
 
 /**
@@ -125,3 +125,50 @@ export const writeOffHoldSchema = z
   .strict();
 
 export type WriteOffHoldBody = z.infer<typeof writeOffHoldSchema>;
+
+/**
+ * A panel group's settings (F-027-bw, network `contract.groups.md`), inside
+ * the table's CHECKs (`>= 1`, `> 0`), so a 400 names the field before a 500
+ * names the constraint. A subscription lifetime runs a minute to a week: a
+ * drain waits twice it, and a longer one would hold a panel for weeks. `.strict()`: `strategy` is refused, not dropped — only `mirror`
+ * has a fulfilment (rule 7), and `tenantId` is the scope's to write.
+ */
+const panelGroupFields = {
+  name: z.string().trim().min(1).max(100),
+  minHealthyPanels: z.number().int().min(1).max(100),
+  subscriptionTtlSeconds: z.number().int().min(60).max(7 * 24 * 3600),
+  protocol: z.nativeEnum(ConfigProtocol),
+};
+
+export const createPanelGroupSchema = z
+  .object({
+    name: panelGroupFields.name,
+    minHealthyPanels: panelGroupFields.minHealthyPanels.optional(),
+    subscriptionTtlSeconds: panelGroupFields.subscriptionTtlSeconds.optional(),
+    protocol: panelGroupFields.protocol.optional(),
+  })
+  .strict();
+
+export type CreatePanelGroupBody = z.infer<typeof createPanelGroupSchema>;
+
+/** Editing a group: any of the four, at least one. */
+export const updatePanelGroupSchema = createPanelGroupSchema
+  .partial()
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, { message: 'name one field to change' });
+
+export type UpdatePanelGroupBody = z.infer<typeof updatePanelGroupSchema>;
+
+/**
+ * Adding a panel to a group. `.strict()`: `role` is refused — a member enters
+ * as `primary`, and `drain` is its own route, whose clock the database keeps.
+ */
+export const addPanelGroupMemberSchema = z
+  .object({
+    panelId: z.string().uuid(),
+    priority: z.number().int().min(0).max(1000).optional(),
+    weight: z.number().int().min(1).max(1000).optional(),
+  })
+  .strict();
+
+export type AddPanelGroupMemberBody = z.infer<typeof addPanelGroupMemberSchema>;
