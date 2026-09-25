@@ -12,6 +12,13 @@ import { readGrantSettled } from "../_lib/my-services";
 /** Billing's own default page size (`GrantService.listForUser`), sent explicitly. */
 export const PAGE_SIZE = 20;
 
+/**
+ * How often a page with a pending row asks billing while the socket is not
+ * live (F-111-f). A minute is well under delivery's shortest retry (1 min)
+ * doubled, and at 15 asks per 900s it leaves `GRANT_LIST` (120/900s) the rest.
+ */
+export const PENDING_POLL_MS = 60_000;
+
 export interface GrantsPageState {
   rows: GrantRow[] | null;
   total: number;
@@ -48,7 +55,10 @@ export interface GrantsPageState {
  * not the record (D-15). The row is never patched from the payload — delivery
  * also sets the period, and a refund ends in a status this page would guess.
  * The same quiet read follows a reconnect while a row is pending (`onMissed`),
- * since an event sent to a dropped socket reaches nobody.
+ * since an event sent to a dropped socket reaches nobody. And while the
+ * socket is not live at all — never welcomed, or down between attempts — a
+ * pending row is asked about every `PENDING_POLL_MS` with the tab visible;
+ * a live socket makes that clock ask nothing.
  */
 export function useGrantsPage(page: number, lang: string): GrantsPageState {
   const [rows, setRows] = useState<GrantRow[] | null>(null);
@@ -108,6 +118,21 @@ export function useGrantsPage(page: number, lang: string): GrantsPageState {
       },
     });
   }, [client, userId, quietRead]);
+
+  // The fallback for a socket that is not live: nothing is published to it,
+  // and `onMissed` waits on a reconnect that may never come. The clock runs
+  // only while a row is pending; each tick asks only if the socket is still
+  // not live and the tab is visible, so a working socket costs no request.
+  const hasPending = (rows ?? []).some((r) => r.status === "pending");
+  useEffect(() => {
+    if (!hasPending) return;
+    const timer = setInterval(() => {
+      if (client?.connectionInfo()) return;
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      void quietRead();
+    }, PENDING_POLL_MS);
+    return () => clearInterval(timer);
+  }, [hasPending, client, quietRead]);
 
   useEffect(() => {
     let alive = true;

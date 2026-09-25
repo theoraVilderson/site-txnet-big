@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { RealtimeEvents } from "@/generated/wire";
 import { billingApi, type GrantRow } from "@/lib/billing-api";
@@ -6,7 +6,7 @@ import { catalogApi } from "@/lib/catalog-api";
 import { userChannel } from "@/lib/realtime";
 import { usePanelRealtime } from "../../_context/PanelRealtimeContext";
 import { usePanelSession } from "../../_context/PanelSessionContext";
-import { useGrantsPage } from "./useGrantsPage";
+import { PENDING_POLL_MS, useGrantsPage } from "./useGrantsPage";
 
 /**
  * A purchase's last step, seen from "my services" (F-111-f):
@@ -66,6 +66,9 @@ function fakeClient() {
     channels: [] as string[],
     listeners,
     missed,
+    /** `null` is a socket that is not live — never welcomed, or dropped. */
+    live: null as null | { connectionId: string; userId: string | null },
+    connectionInfo: vi.fn(() => client.live),
     subscribe: vi.fn((channel: string, options: { onMessage: (p: unknown) => void; onMissed?: () => void }) => {
       client.channels.push(channel);
       listeners.push(options.onMessage);
@@ -165,6 +168,67 @@ describe("useGrantsPage — a pending Grant turning live (F-111-f)", () => {
     });
 
     expect(grants).toHaveBeenCalledTimes(1);
+  });
+
+  describe("when the socket is not live — the gateway never answered", () => {
+    // Nothing is published to a socket that does not exist, and `onMissed`
+    // needs a reconnect that never comes. So while a row is pending and the
+    // socket is not live, the page asks billing on a slow clock; with a live
+    // socket the clock asks nothing, and the GRANT_LIST budget is left alone.
+    beforeEach(() => vi.useFakeTimers({ shouldAdvanceTime: true }));
+    afterEach(() => vi.useRealTimers());
+
+    it("asks on the slow clock while a row is pending, and stops once it is not", async () => {
+      const { result } = renderHook(() => useGrantsPage(1, "en"));
+      await waitFor(() => expect(result.current.rows?.[0].status).toBe("pending"));
+
+      grants.mockResolvedValue(page({ id: "g1", status: "active" }) as never);
+      await act(async () => {
+        vi.advanceTimersByTime(PENDING_POLL_MS);
+      });
+      await waitFor(() => expect(result.current.rows?.[0].status).toBe("active"));
+      expect(result.current.isLoading).toBe(false);
+      expect(grants).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        vi.advanceTimersByTime(PENDING_POLL_MS * 3);
+      });
+      expect(grants).toHaveBeenCalledTimes(2);
+    });
+
+    it("asks nothing on the clock while the socket is live", async () => {
+      client.live = { connectionId: "c1", userId: "u-1" };
+      const { result } = renderHook(() => useGrantsPage(1, "en"));
+      await waitFor(() => expect(result.current.rows?.[0].status).toBe("pending"));
+
+      await act(async () => {
+        vi.advanceTimersByTime(PENDING_POLL_MS * 3);
+      });
+      expect(grants).toHaveBeenCalledTimes(1);
+    });
+
+    it("asks on the clock with no socket configured at all", async () => {
+      realtime.mockReturnValue(null);
+      const { result } = renderHook(() => useGrantsPage(1, "en"));
+      await waitFor(() => expect(result.current.rows?.[0].status).toBe("pending"));
+
+      await act(async () => {
+        vi.advanceTimersByTime(PENDING_POLL_MS);
+      });
+      await waitFor(() => expect(grants).toHaveBeenCalledTimes(2));
+    });
+
+    it("asks nothing on the clock while the tab is hidden", async () => {
+      const { result } = renderHook(() => useGrantsPage(1, "en"));
+      await waitFor(() => expect(result.current.rows?.[0].status).toBe("pending"));
+      const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+
+      await act(async () => {
+        vi.advanceTimersByTime(PENDING_POLL_MS * 2);
+      });
+      expect(grants).toHaveBeenCalledTimes(1);
+      visibility.mockRestore();
+    });
   });
 
   it("still reads the page with no socket at all", async () => {
