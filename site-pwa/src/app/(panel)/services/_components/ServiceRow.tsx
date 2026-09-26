@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, Copy, Loader2, QrCode, RotateCcw } from "lucide-react";
+import { AlertCircle, ChevronDown, Copy, Loader2, QrCode, RotateCcw } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
@@ -13,6 +13,7 @@ import { formatInstant } from "../../_lib/datetime";
 import { GRANT_TONES, type CapabilityName } from "../_lib/my-services";
 import { formatBytes, purgeCountdown } from "../_lib/service-configs";
 import { GrantConfigs } from "./GrantConfigs";
+import { UsageRing } from "./UsageRing";
 
 const S = FrontendI18nKeys.common.myServices;
 const L = S.link;
@@ -31,6 +32,11 @@ const L = S.link;
  * user's app already holds, so it asks first, never retries, and a refusal
  * changes nothing on screen. Every control is offered whatever the status:
  * a link opens nothing more than its Grant allows, because `/sub` reads it.
+ *
+ * **Configs first, the link folded below** (F-307-c, user 2026-09-26). The
+ * row leads with used-against-bought and, expanded, the 30 days and each
+ * config's own lines; the `/sub` link — the one that keeps an app up to date
+ * after a new key — stays, closed until asked for.
  */
 export function ServiceRow({
   row,
@@ -47,6 +53,7 @@ export function ServiceRow({
 
   // The link billing answered for this row, or `null` until something asks.
   const [link, setLink] = useState<string | null>(null);
+  const [linkOpen, setLinkOpen] = useState(false);
   const [showLink, setShowLink] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -134,12 +141,15 @@ export function ServiceRow({
   return (
     <li className="rounded-2xl border border-card-border bg-card-bg p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-text-primary">
-            {name ?? t("common", S.unnamed)}
-          </p>
-          <p className="mt-1 text-xs text-text-secondary">{period}</p>
-          <p className="mt-1 text-xs text-text-secondary">{usage}</p>
+        <div className="flex min-w-0 items-center gap-3">
+          {row.billingMode === "metered" && (
+            <UsageRing consumedBytes={row.consumedBytes} purchasedBytes={row.purchasedBytes} />
+          )}
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold text-text-primary">{name ?? t("common", S.unnamed)}</p>
+            <p className="mt-1 text-xs text-text-secondary">{period}</p>
+            <p className="mt-1 text-xs text-text-secondary">{usage}</p>
+          </div>
         </div>
         <span
           className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone.className}`}
@@ -152,13 +162,19 @@ export function ServiceRow({
       {/* Paid and not yet delivered (F-111-f). The page re-reads on its own
           when delivery ends, so the sentence says there is nothing to do. */}
       {row.status === "pending" && (
-        <p role="status" className="mt-3 rounded-2xl border border-gold/20 bg-gold-bg px-3 py-2 text-xs font-medium text-gold">
+        <p
+          role="status"
+          className="mt-3 rounded-2xl border border-gold/20 bg-gold-bg px-3 py-2 text-xs font-medium text-gold"
+        >
           {t("common", S.preparing)}
         </p>
       )}
 
       {countdown !== null && (
-        <p role="status" className="mt-3 rounded-2xl border border-gold/20 bg-gold-bg px-3 py-2 text-xs font-medium text-gold">
+        <p
+          role="status"
+          className="mt-3 rounded-2xl border border-gold/20 bg-gold-bg px-3 py-2 text-xs font-medium text-gold"
+        >
           {countdown === "due"
             ? t("common", S.purgeDue)
             : t("common", S.purgeIn, {
@@ -194,97 +210,118 @@ export function ServiceRow({
         </ul>
       )}
 
-      <div className="mt-3 rounded-2xl border border-card-border bg-bg-inner p-3">
-        <p className="mb-1.5 text-[10px] font-black uppercase tracking-widest text-text-secondary">{t("common", L.label)}</p>
-        <p className="text-[11px] text-text-secondary">{t("common", L.hint)}</p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => void copy()}
-            disabled={isReading}
-            className="flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
-          >
-            {isReading ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Copy size={14} aria-hidden />}
-            {t("common", isReading ? L.copying : copied ? L.copied : L.copy)}
-          </button>
-          <button
-            type="button"
-            onClick={() => void toggleQr()}
-            disabled={isReading}
-            className="flex items-center gap-1.5 rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-secondary hover:bg-leaf-bg hover:text-text-primary disabled:opacity-50"
-          >
-            <QrCode size={14} aria-hidden />
-            {t("common", qrOpen ? L.hideQr : L.showQr)}
-          </button>
-        </div>
-
-        {link && (qrOpen || showLink) && (
-          <div className="mt-3 space-y-3">
-            {qrOpen && (
-              // White behind the code in both themes: a scanner needs the contrast.
-              <div role="img" aria-label={t("common", L.qrLabel)} className="mx-auto w-fit rounded-xl bg-white p-3">
-                <QRCodeSVG value={link} size={176} aria-hidden />
-              </div>
-            )}
-            <code className="block select-all break-all font-mono text-xs text-text-primary" dir="ltr">
-              {link}
-            </code>
-          </div>
-        )}
-
-        {resetDone && <p className="mt-2 text-[11px] font-bold text-text-secondary">{t("common", L.resetDone)}</p>}
-      </div>
-
-      {error && (
-        <div
-          role="alert"
-          className="mt-3 flex items-start gap-3 rounded-2xl border border-error-border bg-error-bg px-4 py-3 text-sm font-medium text-error"
-        >
-          <AlertCircle size={18} className="mt-0.5 shrink-0" aria-hidden />
-          <span className="min-w-0">
-            {error.message}
-            {error.ref && (
-              <span className="mt-1 block font-mono text-[0.65rem] opacity-70" dir="ltr">
-                {error.ref}
-              </span>
-            )}
-          </span>
-        </div>
-      )}
-
       <GrantConfigs grantId={row.id} />
 
-      {confirmReset ? (
-        <div className="mt-3 rounded-2xl border border-error-border bg-error-bg p-3">
-          <p className="text-[13px] font-bold text-error">{t("common", L.resetConfirm)}</p>
-          <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              onClick={() => setConfirmReset(false)}
-              autoFocus
-              className="flex-1 rounded-xl bg-primary py-2.5 text-xs font-bold text-white"
-            >
-              {t("common", L.resetNo)}
-            </button>
-            <button
-              type="button"
-              onClick={() => void reset()}
-              className="flex-1 rounded-xl bg-leaf-bg py-2.5 text-xs font-bold text-text-primary"
-            >
-              {t("common", L.resetYes)}
-            </button>
+      <button
+        type="button"
+        aria-expanded={linkOpen}
+        onClick={() => setLinkOpen((o) => !o)}
+        className="mt-3 flex w-full items-center justify-between rounded-2xl border border-card-border px-3 py-2 text-xs font-bold text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
+      >
+        {t("common", L.label)}
+        <ChevronDown size={14} className={linkOpen ? "rotate-180" : ""} aria-hidden />
+      </button>
+
+      {linkOpen && (
+        <>
+          <div className="mt-3 rounded-2xl border border-card-border bg-bg-inner p-3">
+            <p className="text-[11px] text-text-secondary">{t("common", L.hint)}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void copy()}
+                disabled={isReading}
+                className="flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+              >
+                {isReading ? (
+                  <Loader2 size={14} className="animate-spin" aria-hidden />
+                ) : (
+                  <Copy size={14} aria-hidden />
+                )}
+                {t("common", isReading ? L.copying : copied ? L.copied : L.copy)}
+              </button>
+              <button
+                type="button"
+                onClick={() => void toggleQr()}
+                disabled={isReading}
+                className="flex items-center gap-1.5 rounded-xl border border-card-border px-3 py-2 text-xs font-bold text-text-secondary hover:bg-leaf-bg hover:text-text-primary disabled:opacity-50"
+              >
+                <QrCode size={14} aria-hidden />
+                {t("common", qrOpen ? L.hideQr : L.showQr)}
+              </button>
+            </div>
+
+            {link && (qrOpen || showLink) && (
+              <div className="mt-3 space-y-3">
+                {qrOpen && (
+                  // White behind the code in both themes: a scanner needs the contrast.
+                  <div role="img" aria-label={t("common", L.qrLabel)} className="mx-auto w-fit rounded-xl bg-white p-3">
+                    <QRCodeSVG value={link} size={176} aria-hidden />
+                  </div>
+                )}
+                <code className="block select-all break-all font-mono text-xs text-text-primary" dir="ltr">
+                  {link}
+                </code>
+              </div>
+            )}
+
+            {resetDone && <p className="mt-2 text-[11px] font-bold text-text-secondary">{t("common", L.resetDone)}</p>}
           </div>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setConfirmReset(true)}
-          disabled={isResetting}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-card-border py-3 text-xs font-bold text-text-secondary transition-colors duration-200 hover:bg-leaf-bg hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {isResetting ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <RotateCcw size={14} aria-hidden />}
-          {t("common", isResetting ? L.resetting : L.reset)}
-        </button>
+
+          {error && (
+            <div
+              role="alert"
+              className="mt-3 flex items-start gap-3 rounded-2xl border border-error-border bg-error-bg px-4 py-3 text-sm font-medium text-error"
+            >
+              <AlertCircle size={18} className="mt-0.5 shrink-0" aria-hidden />
+              <span className="min-w-0">
+                {error.message}
+                {error.ref && (
+                  <span className="mt-1 block font-mono text-[0.65rem] opacity-70" dir="ltr">
+                    {error.ref}
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
+
+          {confirmReset ? (
+            <div className="mt-3 rounded-2xl border border-error-border bg-error-bg p-3">
+              <p className="text-[13px] font-bold text-error">{t("common", L.resetConfirm)}</p>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmReset(false)}
+                  autoFocus
+                  className="flex-1 rounded-xl bg-primary py-2.5 text-xs font-bold text-white"
+                >
+                  {t("common", L.resetNo)}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void reset()}
+                  className="flex-1 rounded-xl bg-leaf-bg py-2.5 text-xs font-bold text-text-primary"
+                >
+                  {t("common", L.resetYes)}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmReset(true)}
+              disabled={isResetting}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-card-border py-3 text-xs font-bold text-text-secondary transition-colors duration-200 hover:bg-leaf-bg hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isResetting ? (
+                <Loader2 size={14} className="animate-spin" aria-hidden />
+              ) : (
+                <RotateCcw size={14} aria-hidden />
+              )}
+              {t("common", isResetting ? L.resetting : L.reset)}
+            </button>
+          )}
+        </>
       )}
     </li>
   );

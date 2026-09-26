@@ -2039,8 +2039,8 @@
     "purgeDue": "Suspended. This service's configs are being removed from the servers. Nothing you bought is lost; a top-up brings them back.",
     "meteringUnavailable": "Usage is not being measured right now. Your service is not cut off; the numbers catch up once measuring resumes.",
     "configs": {
-      "show": "Show configs",
-      "hide": "Hide configs",
+      "show": "Show usage and configs",
+      "hide": "Hide usage and configs",
       "loading": "Loading configs…",
       "empty": "This service has no configs.",
       "selectAll": "Select all",
@@ -2116,7 +2116,7 @@
     "preparing": "Paid — your service is being set up. This row turns active on its own when it is ready; there is no need to reload.",
     "link": {
       "label": "Subscription link",
-      "hint": "Add this link to your VPN app (such as v2rayNG) or scan its QR code. You can come back for it here whenever you need it.",
+      "hint": "One link for all your configs. Add it to your app (such as v2rayNG) once and it keeps them up to date — a new key included. You can come back for it here whenever you need it.",
       "copy": "Copy subscription link",
       "copying": "Getting the link…",
       "copied": "Link copied",
@@ -2129,6 +2129,31 @@
       "resetYes": "Yes, reset it",
       "resetNo": "Cancel",
       "resetDone": "A new link was created. The previous link no longer works."
+    },
+    "ring": {
+      "label": "{{used}} used of {{bought}} — {{remaining}} left"
+    },
+    "chart": {
+      "title": "Last 30 days",
+      "label": "Daily usage over the last 30 days, {{total}} in all",
+      "total": "{{total}} in 30 days",
+      "day": "{{date}}: {{download}} download, {{upload}} upload",
+      "download": "Download",
+      "upload": "Upload",
+      "loading": "Loading daily usage…",
+      "unavailable": "Daily usage is unavailable right now. Your configs below are not affected."
+    },
+    "lines": {
+      "title": "Connection links",
+      "copy": "Copy",
+      "copied": "Copied",
+      "showQr": "QR",
+      "hideQr": "Hide QR",
+      "qrLabel": "QR code of {{name}}",
+      "qrTooLong": "This link is too long for a QR code. Copy it instead.",
+      "download": "Download .conf",
+      "notCaptured": "This config's links are not ready yet — they appear after the next sync. The subscription link below already carries it.",
+      "none": "This server gives no link for this config. Use the subscription link below."
     }
   },
   "systems": {

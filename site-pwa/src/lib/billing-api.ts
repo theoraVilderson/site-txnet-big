@@ -307,6 +307,25 @@ export interface UserConfigRow {
   regenerateUsedCount: number;
   maxRegenerateCount: number;
   lastReconciledAt: string | null;
+  /**
+   * The config's captured link lines — what `/sub` hands the same user
+   * (F-307-a). `[]` with `linksCapturedAt` `null`: not captured since the last
+   * new key. `[]` with a time: the panel gives none.
+   */
+  lines: string[];
+  linksCapturedAt: string | null;
+}
+
+/**
+ * `GET /traffic/grants/:id/usage` (F-307-b): exactly 30 UTC days, today
+ * included, oldest first, a day with no traffic as `"0"`. Bytes are decimal
+ * strings; today is what the last rollup saw.
+ */
+export interface GrantUsage {
+  grantId: string;
+  from: string;
+  to: string;
+  days: { date: string; uploadBytes: string; downloadBytes: string }[];
 }
 
 export type ConfigActionOutcome =
@@ -804,6 +823,11 @@ export const billingApi = {
       `/traffic/grants/${encodeURIComponent(grantId)}/configs`,
       { method: "GET" },
     );
+  },
+
+  /** A Grant's daily bytes over the last 30 days (F-307-b) — the same 404 as `grantConfigs` for another user's Grant. */
+  async grantUsage(grantId: string): Promise<GrantUsage> {
+    return call<GrantUsage>(`/traffic/grants/${encodeURIComponent(grantId)}/usage`, { method: "GET" });
   },
 
   /**

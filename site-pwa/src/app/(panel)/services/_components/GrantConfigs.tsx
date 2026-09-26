@@ -20,6 +20,8 @@ import {
   ceilingQueued,
   formatBytes,
 } from "../_lib/service-configs";
+import { ConfigLines } from "./ConfigLines";
+import { UsageBars } from "./UsageBars";
 
 const C = FrontendI18nKeys.common.myServices.configs;
 
@@ -40,6 +42,9 @@ type Refused = Extract<ConfigActionOutcome, { ok: false }>;
  * reason under the list, by the label they had when they were pressed.
  *
  * Read only when opened: a user with ten services opens the one they came for.
+ * Opening also draws the Grant's last 30 days (F-307-c), read beside the list,
+ * and each config is a card of its link lines — copy, QR, and a `.conf` where
+ * the protocol needs a file.
  */
 export function GrantConfigs({ grantId }: { grantId: string }) {
   const { t, lang } = useLocale();
@@ -144,6 +149,8 @@ export function GrantConfigs({ grantId }: { grantId: string }) {
 
       {open && (
         <div className="mt-2 space-y-2">
+          <UsageBars grantId={grantId} />
+
           {isLoading && rows === null && (
             <p className="flex items-center gap-2 text-xs text-text-secondary">
               <Loader2 size={12} className="animate-spin" aria-hidden />
@@ -331,6 +338,8 @@ function ConfigItem({
 
       <p className="mt-2 text-[11px] text-text-secondary">{ceiling}</p>
       {checkedAt && <p className="text-[11px] text-text-secondary">{t("common", C.checkedAt, { at: checkedAt })}</p>}
+
+      <ConfigLines config={row} />
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <button

@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 29
-updated: 2026-09-25
+updated: 2026-09-26
 ---
 
 # Contract — panel-web: the "my services" page (F-502-s)
@@ -19,11 +19,13 @@ gets their `/sub` link — copied or as a QR, as often as asked — and the only
 place a leaked one is reset. The panel never says "key".
 
 Its pieces: `_components/MyServicesView.tsx` (the page), `_components/ServiceRow.tsx`
-(one Grant), `_components/GrantConfigs.tsx` (its configs, F-027-ac),
+(one Grant), `_components/GrantConfigs.tsx` (its configs, F-027-ac), `UsageRing.tsx`,
+`UsageBars.tsx` and `ConfigLines.tsx` (F-307-c),
 `_hooks/useGrantsPage.ts` (the two reads, and the re-read a purchase's end
 asks for), `_lib/my-services.ts` (the status tones, the name rule and
 `readGrantSettled`), `_lib/service-configs.ts` (verdicts, refusals, bytes,
-the purge countdown).
+the purge countdown), `_lib/usage.ts` (ring and bar shares) and
+`_lib/config-lines.ts` (a line's name, the WireGuard `.conf`).
 
 ## Rules
 
@@ -39,7 +41,8 @@ the purge countdown).
    out of `entitlement.prisma` rather than restating it: a seventh status goes
    red here instead of shipping empty. The colours are theme tokens, never raw
    palette classes, and gold is a tone and never a control (user, 2026-09-13).
-3. **The link is asked for, never carried or kept** (F-114-e-c). The list
+3. **The link is asked for, never carried or kept** (F-114-e-c). It sits
+   folded under the configs (F-307-c) and unfolding reads nothing. The list
    answers no token; a row reads `GET .../subscription-link` the first time a
    copy or the QR needs it, once per row while the page is up, and nothing is
    stored across a reload — billing answers the same link every time. A
@@ -132,6 +135,22 @@ the purge countdown).
     shows the key, `dir="ltr"`, as before — no second read, no source-language
     fallback (rule 6's reason). A named chip keeps the key as its `title`.
 
+15. **Configs first: a ring, 30 bars, then each config's lines** (F-307-c,
+    user 2026-09-26). A metered Grant with bytes bought shows used against
+    bought as a ring, from the row itself — no read; a prepaid one has no
+    bound and no ring. Expanding reads the 30 days (billing's `GRANT_USAGE`)
+    beside the config list and draws one bar per day, download under upload,
+    scaled to the busiest day; a failed read costs the chart only. Every share
+    is taken in `BigInt`, so a Grant with a byte left never draws full. SVG,
+    no chart library, theme tokens; the time axis never mirrors in RTL.
+16. **A line is copied or scanned on its own, and a file only where the
+    protocol needs one.** Each captured line has copy and QR; nothing is read
+    for it. A `wireguard://` line gets a `.conf`, built in the browser (the
+    line holds the private key) and offered only when the line has a key, an
+    endpoint with a port, a peer key and an address — a half file imports and
+    never connects. No lines is two sentences: `linksCapturedAt` `null` is not
+    captured yet, a time is a panel that gives none; both point at the link.
+
 ## Proof
 
 `services/my-services.test.tsx` — the status union against
@@ -153,10 +172,17 @@ socket that is not live and a visible tab, and no socket still reads the page;
 F-114-f-c: `capabilityNames` — a tenant's own by its product's prefix, the
 platform's, another tenant's same key never read — and a chip showing the
 name, the key only where none was published.
+F-307-c: `services/connection.test.tsx` — the `.conf` for a whole line and
+none for a partial one, a line's name, shares exact past 2^53 and a ring
+never full with bytes left, 30 bars read on expand, per-line copy and QR,
+the download on a whole WireGuard line only, the two empty-lines sentences,
+and the link folded and unread until asked.
 
 ## Not covered
 
-A regenerated config's new credential is delivered by the same link (F-113).
+A regenerated config's new credential is delivered by the same link (F-113),
+and reaches its card only after the next capture. An OpenVPN `.ovpn` is
+F-307-d. Per-config bars and a window other than 30 days are nobody's row.
 The configs' own "new key" action (F-027-ac) is a config credential, not the
 subscription link, and keeps its wording. Moving a config or
 adding one from here is nobody's row. Filtering

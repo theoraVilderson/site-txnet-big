@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type GrantRow } from "@/lib/billing-api";
@@ -77,7 +77,13 @@ vi.mock("../_lib/clipboard", () => ({ copyText: vi.fn(async () => true) }));
  */
 vi.mock("@/lib/billing-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/billing-api")>()),
-  billingApi: { subscriptionLink: vi.fn(), resetSubscriptionLink: vi.fn(), grantConfigs: vi.fn(), configAction: vi.fn() },
+  billingApi: {
+    subscriptionLink: vi.fn(),
+    resetSubscriptionLink: vi.fn(),
+    grantConfigs: vi.fn(),
+    grantUsage: vi.fn(() => new Promise(() => {})),
+    configAction: vi.fn(),
+  },
 }));
 
 const subscriptionLink = vi.mocked(billingApi.subscriptionLink);
@@ -115,10 +121,16 @@ const CONFIG: UserConfigRow = {
   regenerateUsedCount: 0,
   maxRegenerateCount: 3,
   lastReconciledAt: null,
+  lines: [],
+  linksCapturedAt: null,
 };
 
-const show = (row: Partial<GrantRow> = {}) =>
-  render(<ServiceRow row={{ ...GRANT, ...row }} name="VPN Pro" capabilities={[]} />);
+/** A row with its subscription link unfolded — folded below the configs since F-307-c. */
+const show = (row: Partial<GrantRow> = {}) => {
+  const view = render(<ServiceRow row={{ ...GRANT, ...row }} name="VPN Pro" capabilities={[]} />);
+  fireEvent.click(screen.getByRole("button", { name: "myServices.link.label" }));
+  return view;
+};
 
 const L = "myServices.link";
 const LINK_1 = "https://sub.example.com/sub/tok-first";
