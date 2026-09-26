@@ -134,8 +134,11 @@ which client apps show as used, remaining and expiry. An app reads
    (F-609-b, rule 5): both only grow, so the larger is the newer.
 2. **Cap:** a `prepaid` Grant with `quotas.traffic_bytes.limit` → that limit
    plus the sum of its `traffic_bytes` QuotaAdjustments not yet expired
-   (rollover, F-604, shows here), never below `1`. A `metered` Grant, or no
-   readable limit → `0`: a metered Grant buys blocks just before use
+   (rollover, F-604, shows here), never below `1`. A Grant sold with
+   unlimited traffic (`grant.trafficUnlimited`, F-111-s) → `0`: its quotas
+   keep the catalog's `limit = 0`, which read as a cap is `1`, "nothing left".
+   The flag is set at issue and never changes, so no trigger watches it.
+   A `metered` Grant, or no readable limit → `0`: a metered Grant buys blocks just before use
    (ADR-0072), so `purchasedBytes` would always look nearly empty (user,
    2026-09-24).
 3. **A Grant that is not active shows zero remaining:** `download = total =
@@ -174,8 +177,9 @@ which client apps show as used, remaining and expiry. An app reads
    written. Redis failing is a miss, never an error answer.
 4. A render that starts reading a column no trigger watches adds it to the
    trigger in the same row (ADR-0083 revisit trigger).
-5. `renderRevision` is bumped when the same lines render differently, so a
-   rolling deploy cannot serve one version's bodies to the other.
+5. `renderRevision` is bumped when the same lines render differently, or an
+   entry's stored Grant gains a field (`r5`, F-111-s), so a rolling deploy
+   cannot serve one version's bodies to the other.
 
 ## Emits (events)
 None.

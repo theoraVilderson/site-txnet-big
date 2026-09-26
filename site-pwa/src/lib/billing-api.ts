@@ -176,6 +176,8 @@ export interface GrantRow {
   consumedBytes: string;
   /** Bytes, as a decimal string: what has been bought. */
   purchasedBytes: string;
+  /** Sold with unlimited traffic (F-111-q): `purchasedBytes` is 0 and bounds nothing (F-111-s). */
+  trafficUnlimited: boolean;
   /** Set only while suspended (ADR-0075). */
   suspendedAt: string | null;
   /** When the panel seats are released; `null` when nothing is due (not suspended, or a window of 0). */

@@ -90,6 +90,11 @@ the purge countdown), `_lib/usage.ts` (ring and bar shares) and
    formatter. A suspended Grant with a `purgeAt` shows a days-and-hours
    countdown and says a top-up brings it back; past the instant it says the
    configs are being removed — the hourly job acts *after* it, never at it.
+9a. **Unlimited is said, never inferred from a 0** (F-111-s). A Grant billing
+    answers with `trafficUnlimited` shows what it used and "unlimited
+    traffic", and no ring: its `purchasedBytes` of 0 bounds nothing
+    ([entitlement/invariants.md](../../domains/entitlement/invariants.md) 15).
+    An `endsAt` of `null` reads "unlimited time" — 0 days sold is stored null.
 10. **Every verdict but `synced` is a button that says why.** Each
     `DriftState` has a label and — except `synced` — a sentence; the spec reads
     the enum out of `network.prisma`, so a new verdict is red there, not a
@@ -178,6 +183,8 @@ down, and no socket still reads the page; F-111-l: a capture bumps only a
 shown row's configs, a reconnect bumps every row's, and `connection.test.tsx`
 — an open list re-reads with no skeleton, keeps its rows on a failure, and a
 closed one reads nothing;
+F-111-s: an unlimited Grant's "unlimited traffic" and "unlimited time",
+no "0 B" anywhere, and a capped prepaid one still saying only what it used.
 `lib/realtime.test.ts` — `onMissed` on a reconnect's accepted channels only.
 F-114-f-c: `capabilityNames` — a tenant's own by its product's prefix, the
 platform's, another tenant's same key never read — and a chip showing the

@@ -40,6 +40,9 @@ type Grant struct {
 	// TrafficAdjustment is the sum of the Grant's `traffic_bytes`
 	// QuotaAdjustments that have not expired.
 	TrafficAdjustment int64
+	// TrafficUnlimited is `grant.trafficUnlimited` (F-111-q): the Grant was
+	// sold with unlimited traffic, and its `limit` of 0 is not a cap.
+	TrafficUnlimited bool
 	// EndsAt is nil for a permanent Grant.
 	EndsAt *time.Time
 }

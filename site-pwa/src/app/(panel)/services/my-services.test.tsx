@@ -105,6 +105,7 @@ const GRANT: GrantRow = {
   billingMode: "metered",
   consumedBytes: "1610612736",
   purchasedBytes: "2147483648",
+  trafficUnlimited: false,
   suspendedAt: null,
   purgeAt: null,
 };
@@ -217,6 +218,19 @@ describe("usage and the purge clock", () => {
   it("shows consumed against purchased for a metered Grant", () => {
     show();
     expect(screen.getByText("myServices.usage:1.5 GB,2 GB")).toBeInTheDocument();
+  });
+
+  it("says unlimited traffic and unlimited time, never 0 bought or a blank end (F-111-s)", () => {
+    // What billing answers for a Grant sold with traffic 0 and 0 days
+    // (entitlement invariant 15): no bag, no end, and the flag saying why.
+    const unlimited = show({ billingMode: "prepaid", purchasedBytes: "0", trafficUnlimited: true, endsAt: null, consumedBytes: "7516192768" });
+    expect(screen.getByText("myServices.usageUnlimited:7 GB")).toBeInTheDocument();
+    expect(screen.getByText(/^myServices\.periodUnlimited:/)).toBeInTheDocument();
+    expect(screen.queryByText(/0 B/)).toBeNull();
+    unlimited.unmount();
+    // A prepaid Grant with a cap is not unlimited, and says only what it used.
+    show({ billingMode: "prepaid", trafficUnlimited: false });
+    expect(screen.getByText("myServices.usageUnmetered:1.5 GB")).toBeInTheDocument();
   });
 
   it("counts down to the purge in days and hours, and says when it is due", () => {

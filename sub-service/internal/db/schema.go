@@ -33,7 +33,7 @@ var RequiredColumns = map[string]map[string][]string{
 	},
 	// The Grant a token names (F-502), and its Subscription-Userinfo (F-609).
 	"entitlement": {
-		"grant":            {"id", "tenantId", "status", "subscriptionTokenHash", "billingMode", "consumedBytes", "quotas", "endsAt", "variantId"},
+		"grant":            {"id", "tenantId", "status", "subscriptionTokenHash", "billingMode", "consumedBytes", "quotas", "endsAt", "variantId", "trafficUnlimited"},
 		"quota_adjustment": {"grantId", "metric", "delta", "expiresAt"},
 	},
 	// The Grant's configs, their stored lines and their panel's state (F-113-b).

@@ -86,7 +86,7 @@ closed had no way back.
 
 | Route | Query | Answers `data` |
 |---|---|---|
-| `GET /api/billing/gift/grants` | `page`, `pageSize` (≤ 100) | `{total, page, pageSize, rows[{id, status, startsAt, endsAt, featureKeys, variant{id, sku, nameKey} \| null, billingMode, consumedBytes, purchasedBytes, suspendedAt, purgeAt}]}` |
+| `GET /api/billing/gift/grants` | `page`, `pageSize` (≤ 100) | `{total, page, pageSize, rows[{id, status, startsAt, endsAt, featureKeys, variant{id, sku, nameKey} \| null, billingMode, consumedBytes, purchasedBytes, trafficUnlimited, suspendedAt, purgeAt}]}` |
 
 | Rule | Why |
 |---|---|

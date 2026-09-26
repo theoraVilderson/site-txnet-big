@@ -43,6 +43,7 @@ function grantRow(overrides: Record<string, unknown> = {}) {
     billingMode: VariantBillingMode.metered,
     consumedBytes: BigInt('1500000000'),
     purchasedBytes: BigInt('2147483648'),
+    trafficUnlimited: false,
     suspendedAt: null,
     purgeAfterDays: null,
     ...overrides,
@@ -101,6 +102,7 @@ describe('GrantService.listForUser', () => {
           billingMode: VariantBillingMode.metered,
           consumedBytes: '1500000000',
           purchasedBytes: '2147483648',
+          trafficUnlimited: false,
           suspendedAt: null,
           purgeAt: null,
         },
@@ -130,6 +132,15 @@ describe('GrantService.listForUser', () => {
     expect(rows.map((r) => r.purgeAt)).toEqual(['2026-09-27T00:00:00.000Z', '2026-09-22T00:00:00.000Z', null, null]);
     expect(rows[0].suspendedAt).toBe('2026-09-20T00:00:00.000Z');
     expect(rows[3].suspendedAt).toBeNull();
+  });
+
+  it('says a Grant sold with unlimited traffic is unlimited, so its 0 bytes bought is not read as empty (F-111-s)', async () => {
+    const { list, asked } = build([grantRow({ billingMode: VariantBillingMode.prepaid, purchasedBytes: BigInt(0), trafficUnlimited: true, endsAt: null })]);
+
+    const { rows } = await list();
+
+    expect(asked.select).toMatchObject({ trafficUnlimited: true });
+    expect(rows[0]).toMatchObject({ purchasedBytes: '0', trafficUnlimited: true, endsAt: null });
   });
 
   it('never reads the subscription key or its hash, whatever the schema grows', async () => {

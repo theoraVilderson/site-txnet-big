@@ -31,7 +31,8 @@ func (s Store) DomainByHost(ctx context.Context, host string) (sub.Domain, bool,
 // GrantByTokenHash reads the Grant a token hash names, with what its
 // `Subscription-Userinfo` is built from (F-609): the traffic limit as text
 // (`sub.userinfo` decides what an unreadable one means) and the sum of its
-// unexpired `traffic_bytes` adjustments, read by `quota_adjustment_grantId_idx`.
+// unexpired `traffic_bytes` adjustments, read by `quota_adjustment_grantId_idx`,
+// and whether it was sold with unlimited traffic (F-111-s).
 func (s Store) GrantByTokenHash(ctx context.Context, hash string) (sub.Grant, bool, error) {
 	var g sub.Grant
 	err := s.DB.QueryRow(ctx,
@@ -40,10 +41,10 @@ func (s Store) GrantByTokenHash(ctx context.Context, hash string) (sub.Grant, bo
 		        COALESCE((SELECT sum(a.delta) FROM entitlement.quota_adjustment a
 		                   WHERE a."grantId" = g.id AND a.metric = 'traffic_bytes'
 		                     AND (a."expiresAt" IS NULL OR a."expiresAt" > now())), 0)::bigint,
-		        g."endsAt"
+		        g."endsAt", g."trafficUnlimited"
 		   FROM entitlement."grant" g WHERE g."subscriptionTokenHash" = $1`, hash,
 	).Scan(&g.ID, &g.TenantID, &g.Status, &g.BillingMode, &g.ConsumedBytes,
-		&g.TrafficLimit, &g.TrafficAdjustment, &g.EndsAt)
+		&g.TrafficLimit, &g.TrafficAdjustment, &g.EndsAt, &g.TrafficUnlimited)
 	return g, found(err), missIsNil(err)
 }
 

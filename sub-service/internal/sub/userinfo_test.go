@@ -50,6 +50,24 @@ func TestNoFixedCapIsUnlimitedAndNoEndIsNoExpiry(t *testing.T) {
 	}
 }
 
+// F-111-s: a Grant sold with unlimited traffic keeps the catalog's
+// `limit = 0` in its quotas, and read as a cap that is `total=1` — an app
+// showing "0 B left" to a user who bought everything. The flag says what the
+// 0 means (entitlement invariant 15); an inactive one still shows empty.
+func TestAnUnlimitedGrantIsUnlimitedInTheApp(t *testing.T) {
+	g := Grant{Status: "active", BillingMode: "prepaid", ConsumedBytes: 7 * gib,
+		TrafficLimit: "0", TrafficUnlimited: true}
+	res := get(t, grantWith(g), "/sub/"+token, "")
+	if got := res.Header.Get("Subscription-Userinfo"); got != "upload=0; download=7516192768; total=0; expire=0" {
+		t.Fatalf("Subscription-Userinfo = %q, want total=0 (unlimited) and expire=0 (no end)", got)
+	}
+	g.Status = "suspended"
+	res = get(t, grantWith(g), "/sub/"+token, "")
+	if got := res.Header.Get("Subscription-Userinfo"); got != "upload=0; download=7516192768; total=7516192768; expire=0" {
+		t.Fatalf("suspended: Subscription-Userinfo = %q, want zero remaining, never total=0", got)
+	}
+}
+
 func TestAnAdjustmentBelowTheLimitNeverReadsAsUnlimited(t *testing.T) {
 	res := get(t, grantWith(Grant{Status: "active", BillingMode: "prepaid",
 		TrafficLimit: "100", TrafficAdjustment: -500}), "/sub/"+token, "")

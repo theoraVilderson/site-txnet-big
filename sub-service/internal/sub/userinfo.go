@@ -15,6 +15,9 @@ import (
 //   - a prepaid Grant with a traffic quota: `quotas.traffic_bytes.limit` plus
 //     its unexpired `traffic_bytes` QuotaAdjustments (a rollover shows here);
 //     never below 1, so an adjustment past the limit is not read as unlimited.
+//   - a Grant sold with unlimited traffic (`trafficUnlimited`, F-111-q): 0.
+//     Its quotas keep the catalog's `limit = 0`, which read as a cap is 1 —
+//     "nothing left" to a user who bought everything (F-111-s).
 //   - a metered Grant, or one with no traffic quota: 0. A metered Grant buys
 //     its bytes in blocks just before they are used (ADR-0072), so
 //     `purchasedBytes` would always look nearly empty.
@@ -32,7 +35,7 @@ func userinfo(g Grant, live int64) string {
 	if g.Status != "active" {
 		used = max(used, 1)
 		total = used
-	} else if g.BillingMode == "prepaid" {
+	} else if g.BillingMode == "prepaid" && !g.TrafficUnlimited {
 		if limit, err := strconv.ParseInt(g.TrafficLimit, 10, 64); err == nil {
 			total = max(limit+g.TrafficAdjustment, 1)
 		}

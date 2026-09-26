@@ -168,6 +168,8 @@ export type GrantView = {
   consumedBytes: string;
   /** What has been bought, in bytes, as a decimal string: the bound every ceiling shares (ADR-0072). */
   purchasedBytes: string;
+  /** Sold with unlimited traffic (F-111-q): `purchasedBytes` is 0 and bounds nothing. */
+  trafficUnlimited: boolean;
   /** When the bag ran empty; `null` unless the Grant is suspended (ADR-0075). */
   suspendedAt: string | null;
   /** When the purge releases its panel seats; `null` when nothing is due — not suspended, or a window of `0` (never). */
@@ -192,6 +194,7 @@ const GRANT_VIEW_COLUMNS = {
   billingMode: true,
   consumedBytes: true,
   purchasedBytes: true,
+  trafficUnlimited: true,
   suspendedAt: true,
   purgeAfterDays: true,
 } satisfies Prisma.GrantSelect;
@@ -224,6 +227,7 @@ function grantViewOf(r: Prisma.GrantGetPayload<{ select: typeof GRANT_VIEW_COLUM
     billingMode: r.billingMode,
     consumedBytes: r.consumedBytes.toString(),
     purchasedBytes: r.purchasedBytes.toString(),
+    trafficUnlimited: r.trafficUnlimited,
     suspendedAt: suspended?.toISOString() ?? null,
     purgeAt: purgeAtOf(suspended, r.purgeAfterDays, tenantPurgeDays)?.toISOString() ?? null,
   };

@@ -71,13 +71,16 @@ export function ServiceRow({
   const until = row.endsAt ? formatInstant(row.endsAt, lang) : null;
   const period = until
     ? t("common", S.period, { from: from ?? row.startsAt, until })
-    : t("common", S.periodPermanent, { from: from ?? row.startsAt });
+    : t("common", S.periodUnlimited, { from: from ?? row.startsAt });
 
   // Consumed is measured, purchased is what was bought (ADR-0072); only a
-  // metered Grant buys bytes, so a prepaid one shows what it used alone.
+  // metered Grant buys bytes, so a prepaid one shows what it used alone. A
+  // Grant sold with unlimited traffic says so: its 0 bought bounds nothing
+  // (F-111-s, entitlement invariant 15).
   const consumed = formatBytes(row.consumedBytes, lang) ?? row.consumedBytes;
-  const usage =
-    row.billingMode === "metered"
+  const usage = row.trafficUnlimited
+    ? t("common", S.usageUnlimited, { consumed })
+    : row.billingMode === "metered"
       ? t("common", S.usage, { consumed, purchased: formatBytes(row.purchasedBytes, lang) ?? row.purchasedBytes })
       : t("common", S.usageUnmetered, { consumed });
   const countdown = purgeCountdown(row.purgeAt);
@@ -145,7 +148,7 @@ export function ServiceRow({
     <li className="rounded-2xl border border-card-border bg-card-bg p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          {row.billingMode === "metered" && (
+          {row.billingMode === "metered" && !row.trafficUnlimited && (
             <UsageRing consumedBytes={row.consumedBytes} purchasedBytes={row.purchasedBytes} />
           )}
           <div className="min-w-0">

@@ -47,6 +47,7 @@ const ROW: GrantRow = {
   billingMode: "prepaid",
   consumedBytes: "0",
   purchasedBytes: "0",
+  trafficUnlimited: false,
   suspendedAt: null,
   purgeAt: null,
 };

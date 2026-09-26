@@ -76,6 +76,7 @@ const GRANT: GrantRow = {
   billingMode: "metered",
   consumedBytes: "1610612736",
   purchasedBytes: "2147483648",
+  trafficUnlimited: false,
   suspendedAt: null,
   purgeAt: null,
 };
