@@ -90,8 +90,9 @@ loop is proved against.
 5. **A changed desired state wakes its panel at once** (F-111-j). A trigger on
    `network.config` (migration `…_a_new_config_wakes_its_panel`) notifies
    `network_converge` with the panel id on an insert, or when `desiredEnabled`,
-   `desiredRemote`, `uuid`, `inboundRemoteId` or `panelId` changes — columns
-   no process here writes, so a turn never wakes the next. It is ADR-0083's
+   `desiredRemote`, `uuid`, `inboundRemoteId`, `panelId` or — a re-split,
+   F-027-cp — `allocatedCeilingBytes` changes: columns no process here writes,
+   so a turn never wakes the next. It is ADR-0083's
    pattern, chosen over a broker event (user, 2026-09-26): every writer, a
    purchase, an admin's action or a hand edit, is heard without code.
    `WakeListener` holds one `LISTEN` connection; `Waker` folds a panel's wakes

@@ -137,7 +137,9 @@ extension never read them, and a client with no limit is never taken for
 `network-service/internal/converge` is the other half: the allocator's number
 is ours until a panel is enforcing it, and the panel is the enforcement point
 that keeps working while this service is down. It runs at the end of each
-panel's turn in the collection pass (`collect.PassConverger`), costs **one**
+panel's turn in the collection pass (`collect.PassConverger`) — and on a woken
+turn seconds after the allocator moves a share (F-027-cp, `contract.collection.md`
+rule 5), so a re-split is not a 60 s cut mid-download — costs **one**
 `ListClients` for the whole population, and writes `SetClientDataLimit` only to
 the configs that disagree.
 
