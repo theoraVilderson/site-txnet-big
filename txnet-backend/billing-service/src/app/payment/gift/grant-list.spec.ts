@@ -44,6 +44,7 @@ function grantRow(overrides: Record<string, unknown> = {}) {
     consumedBytes: BigInt('1500000000'),
     purchasedBytes: BigInt('2147483648'),
     trafficUnlimited: false,
+    quotas: {},
     suspendedAt: null,
     purgeAfterDays: null,
     ...overrides,
@@ -53,8 +54,15 @@ function grantRow(overrides: Record<string, unknown> = {}) {
 type Slice = { skip: number; take: number };
 
 /** Records what the list was actually asked for — the `where`, the slice and the order. */
-function build(rows: ReturnType<typeof grantRow>[] = [grantRow()], total = rows.length, tenantPurgeDays = 7) {
-  const asked: { where?: Prisma.GrantWhereInput; slice?: Slice; orderBy?: unknown; select?: unknown; tenantReads: number } = { tenantReads: 0 };
+function build(rows: ReturnType<typeof grantRow>[] = [grantRow()], total = rows.length, tenantPurgeDays = 7, adjustments: { grantId: string; delta: bigint }[] = []) {
+  const asked: {
+    where?: Prisma.GrantWhereInput;
+    slice?: Slice;
+    orderBy?: unknown;
+    select?: unknown;
+    tenantReads: number;
+    adjustmentsWhere?: Prisma.QuotaAdjustmentWhereInput;
+  } = { tenantReads: 0 };
   const tx = {
     tenant: {
       findUnique: async () => {
@@ -63,6 +71,16 @@ function build(rows: ReturnType<typeof grantRow>[] = [grantRow()], total = rows.
       },
     },
     $executeRaw: async () => 0,
+    quotaAdjustment: {
+      groupBy: async (args: { where: Prisma.QuotaAdjustmentWhereInput }) => {
+        asked.adjustmentsWhere = args.where;
+        const ids = (args.where.grantId as { in: string[] }).in;
+        return ids.map((grantId) => ({
+          grantId,
+          _sum: { delta: adjustments.filter((a) => a.grantId === grantId).reduce((s, a) => s + a.delta, BigInt(0)) },
+        }));
+      },
+    },
     grant: {
       findMany: async (args: { where: Prisma.GrantWhereInput; orderBy: unknown; select: unknown } & Slice) => {
         asked.where = args.where;
@@ -103,6 +121,7 @@ describe('GrantService.listForUser', () => {
           consumedBytes: '1500000000',
           purchasedBytes: '2147483648',
           trafficUnlimited: false,
+          trafficCapBytes: null,
           suspendedAt: null,
           purgeAt: null,
         },
@@ -141,6 +160,30 @@ describe('GrantService.listForUser', () => {
 
     expect(asked.select).toMatchObject({ trafficUnlimited: true });
     expect(rows[0]).toMatchObject({ purchasedBytes: '0', trafficUnlimited: true, endsAt: null });
+  });
+
+  it('answers a capped prepaid Grant its cap as /sub gives it — the limit plus unexpired adjustments; none for metered or unlimited (F-111-t)', async () => {
+    const GIB = BigInt(1) << BigInt(30);
+    const capped = grantRow({ id: 'g-capped', billingMode: VariantBillingMode.prepaid, quotas: { traffic_bytes: { limit: 10 * 2 ** 30 } } });
+    const unlimited = grantRow({ id: 'g-unl', billingMode: VariantBillingMode.prepaid, trafficUnlimited: true, purchasedBytes: BigInt(0), quotas: { traffic_bytes: { limit: 0 } } });
+    const metered = grantRow({ id: 'g-met', quotas: { traffic_bytes: { limit: 10 * 2 ** 30 } } });
+    const { list, asked } = build([capped, unlimited, metered], 3, 7, [
+      { grantId: 'g-capped', delta: BigInt(3) * GIB },
+      { grantId: 'g-capped', delta: -GIB },
+    ]);
+
+    const { rows } = await list();
+
+    expect(rows.map((r) => r.trafficCapBytes)).toEqual([(BigInt(12) * GIB).toString(), null, null]);
+    // One read for the page, only for the rows with a cap, and only what has not expired.
+    expect(asked.adjustmentsWhere).toMatchObject({ grantId: { in: ['g-capped'] }, metric: 'traffic_bytes' });
+    expect(asked.adjustmentsWhere?.OR).toEqual([{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }]);
+  });
+
+  it('never reads adjustments for a page with no capped Grant', async () => {
+    const { list, asked } = build();
+    await list();
+    expect(asked.adjustmentsWhere).toBeUndefined();
   });
 
   it('never reads the subscription key or its hash, whatever the schema grows', async () => {

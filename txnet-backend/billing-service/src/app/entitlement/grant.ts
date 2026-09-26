@@ -170,6 +170,12 @@ export type GrantView = {
   purchasedBytes: string;
   /** Sold with unlimited traffic (F-111-q): `purchasedBytes` is 0 and bounds nothing. */
   trafficUnlimited: boolean;
+  /**
+   * A capped prepaid Grant's traffic cap, as a decimal string: the quota's
+   * `limit` plus its unexpired `traffic_bytes` adjustments — the `total` `/sub`
+   * gives the app (F-111-t). `null` for metered, unlimited or no quota.
+   */
+  trafficCapBytes: string | null;
   /** When the bag ran empty; `null` unless the Grant is suspended (ADR-0075). */
   suspendedAt: string | null;
   /** When the purge releases its panel seats; `null` when nothing is due — not suspended, or a window of `0` (never). */
@@ -195,6 +201,7 @@ const GRANT_VIEW_COLUMNS = {
   consumedBytes: true,
   purchasedBytes: true,
   trafficUnlimited: true,
+  quotas: true,
   suspendedAt: true,
   purgeAfterDays: true,
 } satisfies Prisma.GrantSelect;
@@ -215,7 +222,18 @@ export function purgeAtOf(suspendedAt: Date | null, grantDays: number | null, te
   return new Date(suspendedAt.getTime() + days * DAY_MS);
 }
 
-function grantViewOf(r: Prisma.GrantGetPayload<{ select: typeof GRANT_VIEW_COLUMNS }>, tenantPurgeDays: number | null): GrantView {
+type GrantViewRow = Prisma.GrantGetPayload<{ select: typeof GRANT_VIEW_COLUMNS }>;
+
+/** The sold limit of a Grant that has a cap; `null` for metered, unlimited or no quota (F-111-t). */
+function soldLimitOf(r: GrantViewRow): bigint | null {
+  if (r.billingMode !== VariantBillingMode.prepaid || r.trafficUnlimited) return null;
+  const traffic = trafficQuotaOf(r.quotas);
+  return traffic.kind === 'limited' ? traffic.bytes : null;
+}
+
+function grantViewOf(r: GrantViewRow, tenantPurgeDays: number | null, adjustedBytes = BigInt(0)): GrantView {
+  const limit = soldLimitOf(r);
+  const cap = limit === null ? null : limit + adjustedBytes;
   const suspended = r.status === GrantStatus.suspended ? r.suspendedAt : null;
   return {
     id: r.id,
@@ -228,6 +246,7 @@ function grantViewOf(r: Prisma.GrantGetPayload<{ select: typeof GRANT_VIEW_COLUM
     consumedBytes: r.consumedBytes.toString(),
     purchasedBytes: r.purchasedBytes.toString(),
     trafficUnlimited: r.trafficUnlimited,
+    trafficCapBytes: cap === null ? null : (cap > BigInt(0) ? cap : BigInt(0)).toString(),
     suspendedAt: suspended?.toISOString() ?? null,
     purgeAt: purgeAtOf(suspended, r.purgeAfterDays, tenantPurgeDays)?.toISOString() ?? null,
   };
@@ -384,7 +403,18 @@ export class GrantService {
       const tenant = needsTenant
         ? await tx.tenant.findUnique({ where: { id: TenantContext.current('grant list').id }, select: { purgeAfterDays: true } })
         : null;
-      return { total, page, pageSize, rows: rows.map((r) => grantViewOf(r, tenant?.purgeAfterDays ?? null)) };
+      // A cap moves with its traffic adjustments (a rollover): one read for
+      // the page, the same sum `/sub` makes, so the panel and the app agree.
+      const capped = rows.filter((r) => soldLimitOf(r) !== null).map((r) => r.id);
+      const sums = capped.length
+        ? await tx.quotaAdjustment.groupBy({
+            by: ['grantId'],
+            where: { grantId: { in: capped }, metric: QuotaMetric.traffic_bytes, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+            _sum: { delta: true },
+          })
+        : [];
+      const adjusted = new Map(sums.map((s) => [s.grantId, s._sum.delta ?? BigInt(0)]));
+      return { total, page, pageSize, rows: rows.map((r) => grantViewOf(r, tenant?.purgeAfterDays ?? null, adjusted.get(r.id))) };
     });
   }
 

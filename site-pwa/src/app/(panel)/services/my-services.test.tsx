@@ -106,6 +106,7 @@ const GRANT: GrantRow = {
   consumedBytes: "1610612736",
   purchasedBytes: "2147483648",
   trafficUnlimited: false,
+  trafficCapBytes: null,
   suspendedAt: null,
   purgeAt: null,
 };
@@ -228,9 +229,16 @@ describe("usage and the purge clock", () => {
     expect(screen.getByText(/^myServices\.periodUnlimited:/)).toBeInTheDocument();
     expect(screen.queryByText(/0 B/)).toBeNull();
     unlimited.unmount();
-    // A prepaid Grant with a cap is not unlimited, and says only what it used.
+    // A prepaid Grant billing answers no cap for says only what it used.
     show({ billingMode: "prepaid", trafficUnlimited: false });
     expect(screen.getByText("myServices.usageUnmetered:1.5 GB")).toBeInTheDocument();
+  });
+
+  it("shows a capped prepaid Grant used against its cap, with a ring — the cap /sub gives the app (F-111-t)", () => {
+    // Billing's cap is the limit plus a rollover, not `purchasedBytes`.
+    show({ billingMode: "prepaid", purchasedBytes: "2147483648", trafficCapBytes: "3221225472" });
+    expect(screen.getByText("myServices.usage:1.5 GB,3 GB")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /^myServices\.ring\.label:/ })).toBeInTheDocument();
   });
 
   it("counts down to the purge in days and hours, and says when it is due", () => {

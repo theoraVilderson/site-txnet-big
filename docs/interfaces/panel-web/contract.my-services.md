@@ -85,9 +85,10 @@ the purge countdown), `_lib/usage.ts` (ring and bar shares) and
    before the first Grant does.
 
 9. **Consumed against purchased, and the purge clock** (F-027-ac). A metered
-   Grant shows what the panels measured against what was bought; a prepaid one
-   what it used alone. Bytes arrive as decimal strings and stay exact to the
-   formatter. A suspended Grant with a `purgeAt` shows a days-and-hours
+   Grant shows what the panels measured against what was bought; a capped
+   prepaid one against billing's `trafficCapBytes` — the limit plus unexpired
+   adjustments, `/sub`'s `total`, so panel and app agree (F-111-t). Bytes
+   arrive as decimal strings and stay exact to the formatter. A suspended Grant with a `purgeAt` shows a days-and-hours
    countdown and says a top-up brings it back; past the instant it says the
    configs are being removed — the hourly job acts *after* it, never at it.
 9a. **Unlimited is said, never inferred from a 0** (F-111-s). A Grant billing
@@ -149,8 +150,8 @@ the purge countdown), `_lib/usage.ts` (ring and bar shares) and
 
 15. **Configs first: a ring, 30 bars, then each config's lines** (F-307-c,
     user 2026-09-26). A metered Grant with bytes bought shows used against
-    bought as a ring, from the row itself — no read; a prepaid one has no
-    bound and no ring. Expanding reads the 30 days (billing's `GRANT_USAGE`)
+    bought — or a capped prepaid one against its cap (F-111-t) — as a ring,
+    from the row itself, no read; an unlimited one has no bound and no ring. Expanding reads the 30 days (billing's `GRANT_USAGE`)
     beside the config list and draws one bar per day, download under upload,
     scaled to the busiest day; a failed read costs the chart only. Every share
     is taken in `BigInt`, so a Grant with a byte left never draws full. SVG,
@@ -184,7 +185,8 @@ shown row's configs, a reconnect bumps every row's, and `connection.test.tsx`
 — an open list re-reads with no skeleton, keeps its rows on a failure, and a
 closed one reads nothing;
 F-111-s: an unlimited Grant's "unlimited traffic" and "unlimited time",
-no "0 B" anywhere, and a capped prepaid one still saying only what it used.
+no "0 B" anywhere; F-111-t: a capped prepaid one against billing's cap,
+with a ring, and one with no cap saying only what it used.
 `lib/realtime.test.ts` — `onMissed` on a reconnect's accepted channels only.
 F-114-f-c: `capabilityNames` — a tenant's own by its product's prefix, the
 platform's, another tenant's same key never read — and a chip showing the

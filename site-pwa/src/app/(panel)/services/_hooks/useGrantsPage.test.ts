@@ -48,6 +48,7 @@ const ROW: GrantRow = {
   consumedBytes: "0",
   purchasedBytes: "0",
   trafficUnlimited: false,
+  trafficCapBytes: null,
   suspendedAt: null,
   purgeAt: null,
 };

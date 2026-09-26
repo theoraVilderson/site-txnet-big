@@ -86,7 +86,7 @@ closed had no way back.
 
 | Route | Query | Answers `data` |
 |---|---|---|
-| `GET /api/billing/gift/grants` | `page`, `pageSize` (≤ 100) | `{total, page, pageSize, rows[{id, status, startsAt, endsAt, featureKeys, variant{id, sku, nameKey} \| null, billingMode, consumedBytes, purchasedBytes, trafficUnlimited, suspendedAt, purgeAt}]}` |
+| `GET /api/billing/gift/grants` | `page`, `pageSize` (≤ 100) | `{total, page, pageSize, rows[{id, status, startsAt, endsAt, featureKeys, variant{id, sku, nameKey} \| null, billingMode, consumedBytes, purchasedBytes, trafficUnlimited, trafficCapBytes, suspendedAt, purgeAt}]}` |
 
 | Rule | Why |
 |---|---|
@@ -98,6 +98,7 @@ closed had no way back.
 | No domain error: a user with no Grants is an empty page, not a **404**. Only a malformed query (**400**) and the limiter (**429**) fail | the page exists before the first Grant does |
 | Its own bucket, `GRANT_LIST`, default **120** per 900s; the `subscriptionLink` capability, as above | it reads no secret and destroys nothing, so it is no security control — but sharing `GRANT_ROTATE_TOKEN`'s five calls would spend a user's recovery budget on looking at the list that offers the recovery |
 | Bytes are decimal strings. `purgeAt` is `suspendedAt` + `coalesce(grant.purgeAfterDays, tenant.purgeAfterDays)` days, and `null` when the Grant is not suspended or the window is `0` (F-027-ac) | a Grant's bytes pass 2^53; and it is the SQL `entitlement/purge.ts` runs, so the panel's countdown is the instant the hourly job acts after. The tenant is read only when a suspended row has no window of its own |
+| `trafficUnlimited` is the Grant's flag (F-111-s). `trafficCapBytes` is a capped prepaid Grant's `quotas.traffic_bytes.limit` plus its unexpired `traffic_bytes` adjustments, floored at 0, from one `groupBy` per page read only when a row has a cap; `null` for metered, unlimited or no quota (F-111-t) | the same sum `/sub` answers as `total` (sub-api `contract.md`), so the panel and the app never show two caps for one Grant |
 
 **Not covered:** filtering or searching the list is nobody's row yet. Its consumer since
 2026-09-20 is the panel's "my services" page (F-502-s,

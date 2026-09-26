@@ -73,15 +73,21 @@ export function ServiceRow({
     ? t("common", S.period, { from: from ?? row.startsAt, until })
     : t("common", S.periodUnlimited, { from: from ?? row.startsAt });
 
-  // Consumed is measured, purchased is what was bought (ADR-0072); only a
-  // metered Grant buys bytes, so a prepaid one shows what it used alone. A
-  // Grant sold with unlimited traffic says so: its 0 bought bounds nothing
-  // (F-111-s, entitlement invariant 15).
+  // Consumed is measured against a bound: a metered Grant's is what it has
+  // bought (ADR-0072), a capped prepaid one's the cap billing answers — the
+  // `total` `/sub` gives the app, rollover included (F-111-t). A Grant sold
+  // with unlimited traffic says so: its 0 bought bounds nothing (F-111-s,
+  // entitlement invariant 15). No bound at all shows what was used alone.
   const consumed = formatBytes(row.consumedBytes, lang) ?? row.consumedBytes;
+  const bound = row.trafficUnlimited
+    ? null
+    : row.billingMode === "metered"
+      ? row.purchasedBytes
+      : row.trafficCapBytes;
   const usage = row.trafficUnlimited
     ? t("common", S.usageUnlimited, { consumed })
-    : row.billingMode === "metered"
-      ? t("common", S.usage, { consumed, purchased: formatBytes(row.purchasedBytes, lang) ?? row.purchasedBytes })
+    : bound !== null
+      ? t("common", S.usage, { consumed, purchased: formatBytes(bound, lang) ?? bound })
       : t("common", S.usageUnmetered, { consumed });
   const countdown = purgeCountdown(row.purgeAt);
 
@@ -148,9 +154,7 @@ export function ServiceRow({
     <li className="rounded-2xl border border-card-border bg-card-bg p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          {row.billingMode === "metered" && !row.trafficUnlimited && (
-            <UsageRing consumedBytes={row.consumedBytes} purchasedBytes={row.purchasedBytes} />
-          )}
+          {bound !== null && <UsageRing consumedBytes={row.consumedBytes} purchasedBytes={bound} />}
           <div className="min-w-0">
             <p className="truncate text-sm font-bold text-text-primary">{name ?? t("common", S.unnamed)}</p>
             <p className="mt-1 text-xs text-text-secondary">{period}</p>

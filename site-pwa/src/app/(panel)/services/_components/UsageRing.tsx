@@ -12,9 +12,9 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 /**
  * Used against bought, as a ring (F-307-c) — drawn from the Grant's own bytes,
- * so it costs no read. Only a metered Grant buys a bound; a prepaid one, or a
- * metered one before its first block, has nothing to be a share of and draws
- * no ring. SVG, no chart library; the colours are theme tokens.
+ * so it costs no read. The bound is a metered Grant's bought bytes or a capped
+ * prepaid one's cap (F-111-t); an unlimited Grant, or a metered one before its
+ * first block, has nothing to be a share of and draws no ring. SVG, no chart library; the colours are theme tokens.
  */
 export function UsageRing({ consumedBytes, purchasedBytes }: { consumedBytes: string; purchasedBytes: string }) {
   const { t, lang } = useLocale();
