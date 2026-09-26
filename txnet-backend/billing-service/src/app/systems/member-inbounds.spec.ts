@@ -42,6 +42,7 @@ function harness(opts: { liveElsewhere?: Record<string, number>; raceOn?: string
   // Inbound 3 is already the other group's.
   const assignments: Row[] = [{ groupId: OTHER_GROUP, panelId: PANEL, inboundRemoteId: '3' }];
   const locks: string[] = [];
+  const queries: string[] = [];
   const match = (r: Row, where: Row) => Object.entries(where).every(([k, v]) => (r[k] ?? null) === v);
 
   const prisma = {
@@ -79,10 +80,10 @@ function harness(opts: { liveElsewhere?: Record<string, number>; raceOn?: string
       return 1;
     },
     // Live configs of other groups, per inbound.
-    $queryRaw: async () => Object.entries(opts.liveElsewhere ?? {}).map(([inboundRemoteId, n]) => ({ inboundRemoteId, configs: BigInt(n) })),
+    $queryRaw: async (sql: TemplateStringsArray) => (queries.push(sql.join('?')), Object.entries(opts.liveElsewhere ?? {}).map(([inboundRemoteId, n]) => ({ inboundRemoteId, configs: BigInt(n) }))),
   };
   const crossTenant = { ...db, $transaction: async (work: (tx: typeof db) => Promise<unknown>) => work(db) };
-  return { service: new MemberInboundsService(prisma as never, crossTenant as never), assignments, locks };
+  return { service: new MemberInboundsService(prisma as never, crossTenant as never), assignments, locks, queries };
 }
 
 const owner = { adminId: ADMIN, tenantId: OWNER };
@@ -124,6 +125,13 @@ describe('MemberInboundsService.assign', () => {
     const { service, assignments } = harness({ liveElsewhere: { '2': 7 } });
     await expect(service.assign(owner, GROUP, PANEL, ['1', '2'])).rejects.toMatchObject({ reason: 'inbound_has_configs', remoteId: '2', configs: 7 });
     expect(mine(assignments)).toEqual([]);
+  });
+
+  it('counts a client placed before F-114-b whose inbound is not written down yet, if it could be on this one', async () => {
+    const { service, queries } = harness();
+    await service.assign(owner, GROUP, PANEL, ['1']);
+    // Its row names no inbound; the pass records the one its client is on. Until then any of its protocol may be it.
+    expect(queries[0]).toContain('c."inboundRemoteId" IS NULL AND c."remoteId" IS NOT NULL AND c."protocol" = i."protocol"');
   });
 
   it('answers a concurrent assignment that won the unique index as the same refusal', async () => {

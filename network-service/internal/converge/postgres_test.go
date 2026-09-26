@@ -82,9 +82,9 @@ func TestDesiredForReadsTheRowAsTheProvisioningPassNeedsIt(t *testing.T) {
 	captured := time.Date(2026, 9, 24, 9, 0, 0, 0, time.UTC)
 	f := &pgDB{rows: []pgRow{
 		{pgConfig, "r-1", "txn-abc", "uuid-1", "vless", "7", true, true, int64(5_000), int64(1_200),
-			"partial", "renamed", 1, repaired, []string{"vless://a"}, "r-1", "uuid-1", captured, false},
+			"partial", "renamed", 1, repaired, []string{"vless://a"}, "r-1", "uuid-1", captured, false, false},
 		{"88888888-8888-4888-8888-888888888888", "", "txn-def", "uuid-2", "vmess", "", true, true, nil, int64(0),
-			"pending", "synced", 0, nil, []string{}, "", "", nil, true},
+			"pending", "synced", 0, nil, []string{}, "", "", nil, true, true},
 	}}
 	got, err := PostgresDesired{DB: f}.For(context.Background(), pgPanel)
 	if err != nil {
@@ -119,7 +119,14 @@ func TestDesiredForReadsTheRowAsTheProvisioningPassNeedsIt(t *testing.T) {
 	if !strings.Contains(f.sql[0], `i.sold AND i."goneAt" IS NULL AND i.protocol = c.protocol`) {
 		t.Error("a config with no inbound of its own is not held to the panel's picks")
 	}
+	// F-027-ch: and never one a group holds — that inbound left the pool.
+	if !strings.Contains(f.sql[0], `NOT EXISTS (SELECT 1 FROM network.panel_group_member_inbound a`) {
+		t.Error("a config with no inbound of its own can be created on an inbound a group holds")
+	}
 	second := got[1]
+	if first.InboundResolved || !second.InboundResolved {
+		t.Errorf("resolved read %v, %v; want false, true", first.InboundResolved, second.InboundResolved)
+	}
 	if second.InboundRemoteID != "" {
 		t.Errorf("nothing picked read as inbound %q", second.InboundRemoteID)
 	}
@@ -138,7 +145,7 @@ func TestDesiredRecordIsHeldToTheDesiredStateItWasJudgedAgainst(t *testing.T) {
 	at := time.Date(2026, 9, 25, 10, 0, 0, 0, time.UTC)
 	f := &pgDB{}
 	err := PostgresDesired{DB: f}.Record(context.Background(), []Outcome{
-		{ConfigID: pgConfig, RemoteID: "r-9", State: StateComplete, At: at, UUID: "uuid-1", Enabled: true, Present: true},
+		{ConfigID: pgConfig, RemoteID: "r-9", State: StateComplete, At: at, UUID: "uuid-1", Enabled: true, Present: true, InboundRemoteID: "4"},
 		{ConfigID: "88888888-8888-4888-8888-888888888888", State: StateComplete, At: at, UUID: "uuid-2", Present: false,
 			Links: &CapturedLinks{RemoteID: "r-2", UUID: "uuid-2", At: at}},
 	})
@@ -163,6 +170,12 @@ func TestDesiredRecordIsHeldToTheDesiredStateItWasJudgedAgainst(t *testing.T) {
 	}
 	if first[7] != false {
 		t.Error("an outcome with no capture overwrote the stored lines")
+	}
+	// F-027-ch: the inbound a client was found on is written only over none,
+	// and never where another row of the Grant already holds it on the panel.
+	if first[15] != "4" || !strings.Contains(f.sql[0], `WHEN "inboundRemoteId" IS NULL AND $16 <> ''`) ||
+		!strings.Contains(f.sql[0], `o."inboundRemoteId" = $16`) {
+		t.Errorf("the learned inbound is not written over none only: arg %v", first[15])
 	}
 	second := f.args[1]
 	if second[1] != "" {
@@ -359,7 +372,7 @@ func TestDesiredRecordAnnouncesAConfirmationOfAGrantsConfigInTheSameStatement(t 
 		}
 	}
 	args := f.args[0]
-	if args[len(args)-2] != ConfirmedEvent || args[len(args)-1] != true {
-		t.Errorf("args end %v, want the confirmation announced as %s", args[len(args)-2:], ConfirmedEvent)
+	if args[13] != ConfirmedEvent || args[14] != true {
+		t.Errorf("args %v, want the confirmation announced as %s", args[13:15], ConfirmedEvent)
 	}
 }

@@ -115,6 +115,9 @@ func (m *MemoryDesired) Record(_ context.Context, outcomes []Outcome) error {
 			continue
 		}
 		row.RemoteID, row.State = o.RemoteID, o.State
+		if o.InboundRemoteID != "" && row.InboundResolved {
+			row.InboundRemoteID, row.InboundResolved = o.InboundRemoteID, false
+		}
 		if o.Confirmed {
 			m.confirmed = append(m.confirmed, o.ConfigID)
 		}

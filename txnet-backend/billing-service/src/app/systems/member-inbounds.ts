@@ -79,7 +79,8 @@ export class MemberInboundsService {
    * placed on (`inbound_not_sellable`), held by no other membership
    * (`inbound_assigned_elsewhere`) and carrying no live config of another
    * group's Grants (`inbound_has_configs`, with the count) — those buyers would
-   * stay on an inbound their group no longer sells.
+   * stay on an inbound their group no longer sells. A client whose row does not
+   * yet name its inbound may be on any of its protocol, so it counts on each.
    */
   private async admissible(tx: Prisma.TransactionClient, groupId: string, panelId: string, remoteIds: string[]) {
     const known = await tx.panelInbound.findMany({
@@ -98,16 +99,21 @@ export class MemberInboundsService {
     });
     if (held.length > 0) throw new InboundHeldElsewhere('inbound_assigned_elsewhere', held[0].inboundRemoteId, held[0].member.group);
 
+    // A row placed before F-114-b names no inbound until the pass writes down the one its client is on
+    // (network `contract.inbounds.md` rule 7); until then it counts against every inbound of its protocol.
     const live = await tx.$queryRaw<{ inboundRemoteId: string; configs: bigint }[]>`
-      SELECT c."inboundRemoteId", count(*) AS configs
-        FROM "network"."config" c
+      SELECT i."remoteId" AS "inboundRemoteId", count(*) AS configs
+        FROM "network"."panel_inbound" i
+        JOIN "network"."config" c ON c."panelId" = i."panelId"
+             AND (c."inboundRemoteId" = i."remoteId"
+                  OR (c."inboundRemoteId" IS NULL AND c."remoteId" IS NOT NULL AND c."protocol" = i."protocol"))
         JOIN "entitlement"."grant" g ON g."id" = c."grantId"
         JOIN "catalog"."product_variant" v ON v."id" = g."variantId"
-       WHERE c."panelId" = ${panelId}::uuid AND c."inboundRemoteId" = ANY(${remoteIds}::text[])
+       WHERE i."panelId" = ${panelId}::uuid AND i."remoteId" = ANY(${remoteIds}::text[])
          AND c."desiredRemote" = 'present' AND c."drainedAt" IS NULL
          AND v."panelGroupId" IS DISTINCT FROM ${groupId}::uuid
-       GROUP BY c."inboundRemoteId"
-       ORDER BY c."inboundRemoteId"`;
+       GROUP BY i."remoteId"
+       ORDER BY i."remoteId"`;
     if (live.length > 0) throw new InboundHeldElsewhere('inbound_has_configs', live[0].inboundRemoteId, null, Number(live[0].configs));
   }
 }

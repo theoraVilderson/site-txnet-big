@@ -42,19 +42,25 @@ var _ Desired = PostgresDesired{}
 //
 // The inbound is the config's own (F-114-b). A row placed before it names
 // none, and takes the lowest picked inbound of its protocol on the panel —
-// still only a picked one: with nothing picked it is '' and `no_inbound`.
+// still only a picked one: with nothing picked it is '' and `no_inbound` —
+// and only one in the pool: never an inbound a group holds (F-027-ch). Which
+// group the row is for lives outside `network.*` (ADR-0071), so it is never
+// placed on its own group's either; the pass writes down where its client is
+// (recordSQL), and such a row is a guess only until then.
 const desiredSQL = `
 SELECT c.id::text, coalesce(c."remoteId", ''), c."claimTag", c.uuid, c.protocol::text,
        coalesce(c."inboundRemoteId",
                 (SELECT i."remoteId" FROM network.panel_inbound i
                   WHERE i."panelId" = c."panelId" AND i.sold AND i."goneAt" IS NULL AND i.protocol = c.protocol
+                    AND NOT EXISTS (SELECT 1 FROM network.panel_group_member_inbound a
+                                     WHERE a."panelId" = i."panelId" AND a."inboundRemoteId" = i."remoteId")
                   ORDER BY length(i."remoteId"), i."remoteId" LIMIT 1),
                 ''),
        c."desiredEnabled", c."desiredRemote" = 'present', c."allocatedCeilingBytes",
        coalesce(s."lifetimeUpBytes" + s."lifetimeDownBytes", 0)::bigint,
        c."enforcementState"::text, c."driftState"::text, c."driftRepairCount", c."driftRepairedAt",
        c."linkLines", coalesce(c."linksRemoteId", ''), coalesce(c."linksUuid", ''), c."linksCapturedAt",
-       c."trafficUnlimited"
+       c."trafficUnlimited", c."inboundRemoteId" IS NULL
   FROM network.config c
   LEFT JOIN network.config_counter_state s ON s."configId" = c.id
  WHERE c."panelId" = $1::uuid
@@ -75,7 +81,7 @@ func (s PostgresDesired) For(ctx context.Context, panelID string) ([]DesiredConf
 		if err := rows.Scan(&d.ConfigID, &d.RemoteID, &d.ClaimTag, &d.UUID, &d.Protocol, &d.InboundRemoteID,
 			&d.Enabled, &d.Present, &d.AllocatedBytes, &d.ServedBytes,
 			&state, &drift, &d.RepairCount, &repairedAt,
-			&d.Links.Lines, &d.Links.RemoteID, &d.Links.UUID, &capturedAt, &d.Unlimited); err != nil {
+			&d.Links.Lines, &d.Links.RemoteID, &d.Links.UUID, &capturedAt, &d.Unlimited, &d.InboundResolved); err != nil {
 			return nil, fmt.Errorf("reading panel %s desired state: %w", panelID, err)
 		}
 		d.State, d.Drift = EnforcementState(state), DriftState(drift)
@@ -114,6 +120,9 @@ const ConfirmedEvent = "network.config.confirmed"
 // row and announces nothing. Only a config's first confirmation is announced
 // (`confirmedAt`, F-111-o): `prior` is the row before this statement, so a
 // later disable, rotation or repair has no Grant waiting on it and is silent.
+// The inbound a client was found on ($16, F-027-ch) is written only over none,
+// and not where another live row of the Grant holds it on the panel: that is
+// `config_group_panel_once`, and one row's guess must not fail the batch.
 const recordSQL = `
 WITH prior AS (SELECT "confirmedAt" FROM network.config WHERE id = $1::uuid),
 recorded AS (
@@ -125,7 +134,13 @@ UPDATE network.config
        "linksRemoteId" = CASE WHEN $8 THEN $10 ELSE "linksRemoteId" END,
        "linksUuid" = CASE WHEN $8 THEN $11 ELSE "linksUuid" END,
        "linksCapturedAt" = CASE WHEN $8 THEN $12 ELSE "linksCapturedAt" END,
-       "confirmedAt" = CASE WHEN $15 THEN COALESCE("confirmedAt", $4) ELSE "confirmedAt" END
+       "confirmedAt" = CASE WHEN $15 THEN COALESCE("confirmedAt", $4) ELSE "confirmedAt" END,
+       "inboundRemoteId" = CASE
+         WHEN "inboundRemoteId" IS NULL AND $16 <> ''
+          AND NOT EXISTS (SELECT 1 FROM network.config o
+                           WHERE o."grantId" = config."grantId" AND o."panelId" = config."panelId" AND o.id <> config.id
+                             AND o."inboundRemoteId" = $16 AND o."credentialGroupId" IS NOT NULL AND o."drainedAt" IS NULL)
+         THEN $16 ELSE "inboundRemoteId" END
  WHERE id = $1::uuid
    AND uuid = $5 AND "desiredEnabled" = $6 AND ("desiredRemote" = 'present') = $7
 RETURNING id, "tenantId", "userId", "grantId")
@@ -160,7 +175,7 @@ func (s PostgresDesired) Record(ctx context.Context, rows []Outcome) error {
 		if _, err := s.DB.Exec(ctx, recordSQL,
 			o.ConfigID, o.RemoteID, string(o.State), o.At,
 			o.UUID, o.Enabled, o.Present,
-			captured, lines, linksRemote, linksUUID, linksAt, LinksCapturedEvent, ConfirmedEvent, o.Confirmed); err != nil {
+			captured, lines, linksRemote, linksUUID, linksAt, LinksCapturedEvent, ConfirmedEvent, o.Confirmed, o.InboundRemoteID); err != nil {
 			return fmt.Errorf("recording config %s: %w", o.ConfigID, err)
 		}
 	}

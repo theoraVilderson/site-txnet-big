@@ -73,6 +73,11 @@ type DesiredConfig struct {
 	// is nothing picked, and nothing is created (`no_inbound`) — never the
 	// first enabled inbound of the protocol.
 	InboundRemoteID string
+	// InboundResolved: the row names no inbound of its own — placed before
+	// F-114-b — and InboundRemoteID is the store's resolution, used only to
+	// create a client. The pass then writes down the inbound the client is
+	// actually on (Outcome.InboundRemoteID, F-027-ch).
+	InboundResolved bool
 	// Enabled is `desiredEnabled`; Present is `desiredRemote = present`.
 	Enabled bool
 	Present bool
@@ -117,6 +122,11 @@ type Outcome struct {
 	UUID     string
 	Enabled  bool
 	Present  bool
+	// InboundRemoteID is where this pass found — or created — the client of a
+	// row that names no inbound (DesiredConfig.InboundResolved). The store
+	// writes it only over none: a row that names its inbound is never
+	// rewritten by a read (F-027-ch). Empty writes nothing.
+	InboundRemoteID string
 	// Confirmed is the read that found a present client holding its desired
 	// state, where the row did not already say so (F-111-n): the panels' word
 	// a pending Grant activates on (contract.groups.md rule 10), announced.
@@ -342,6 +352,16 @@ func (v *Provisioning) one(
 		return nil, found(ActionRefused, remoteID, err)
 	}
 	client := match.Client
+	if matched && row.InboundResolved {
+		// A row placed before F-114-b: the client, not the resolution, is where it is.
+		learned := client.InboundRemoteID
+		base := outcome
+		outcome = func(remoteID string, state EnforcementState) *Outcome {
+			o := base(remoteID, state)
+			o.InboundRemoteID = learned
+			return o
+		}
+	}
 
 	if !row.Present {
 		if !matched {
@@ -493,6 +513,9 @@ func (v *Provisioning) create(
 	// empty until they are (F-111-k). The row stays `partial`; a read that
 	// fails is retried on the confirming read, whose key still differs.
 	o := outcome(created.RemoteID, StatePartial)
+	if row.InboundResolved {
+		o.InboundRemoteID = inbound.RemoteID
+	}
 	v.capture(ctx, p, row, created, o, report)
 	return o, found(ActionCreated, created.RemoteID, nil)
 }

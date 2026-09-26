@@ -422,3 +422,43 @@ func TestARefusedWriteLeavesTheRowAndTheRestOfThePanelGoesOn(t *testing.T) {
 		t.Fatalf("refusal = %v, want the driver's own classification", report.Findings[0].Err)
 	}
 }
+
+// F-027-ch: a row placed before F-114-b names no inbound. The pass writes down
+// the inbound it found the client on — or created it on — so the row stops
+// being a guess, and an inbound a group takes is counted by where its
+// clients actually are.
+func TestARowWithNoInboundOfItsOwnRecordsTheOneItsClientIsOn(t *testing.T) {
+	r := newProvRig(t, fake.Config{Inbounds: []driver.Inbound{
+		{RemoteID: "1", Protocol: "vless", Enabled: true},
+		{RemoteID: "2", Protocol: "vless", Enabled: true},
+	}})
+	legacy := wanted("c1")
+	legacy.InboundRemoteID, legacy.InboundResolved = "2", true
+	r.desired.Put("panel-1", legacy)
+
+	r.pass(t)
+	row := r.row(t, "c1")
+	if row.InboundResolved || row.InboundRemoteID != "2" {
+		t.Fatalf("created on 2, recorded %+v", row)
+	}
+
+	// Already on the panel, and the row does not know where: the client says.
+	row.InboundRemoteID, row.InboundResolved = "1", true
+	r.desired.Put("panel-1", row)
+	r.pass(t)
+	if got := r.row(t, "c1"); got.InboundResolved || got.InboundRemoteID != "2" {
+		t.Fatalf("client on 2, recorded %+v — the resolution is a guess, the client is the fact", got)
+	}
+}
+
+func TestARowThatNamesItsInboundIsNeverRewrittenByThePass(t *testing.T) {
+	r := newProvRig(t, fake.Config{Inbounds: []driver.Inbound{{RemoteID: "1", Protocol: "vless", Enabled: true}}})
+	row := wanted("c1")
+	row.InboundRemoteID = "1"
+	r.desired.Put("panel-1", row)
+	r.pass(t)
+	r.pass(t)
+	if got := r.row(t, "c1"); got.InboundResolved || got.InboundRemoteID != "1" {
+		t.Fatalf("row rewritten: %+v", got)
+	}
+}

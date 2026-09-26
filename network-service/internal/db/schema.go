@@ -60,6 +60,8 @@ var RequiredColumns = map[string][]string{
 		"panelId", "remoteId", "tenantId", "tag", "protocol", "port", "host",
 		"enabled", "goneAt", "seenAt", "sold",
 	},
+	// An inbound a group holds is out of the pool (F-027-ch).
+	"panel_group_member_inbound": {"panelId", "inboundRemoteId"},
 	// The client we meter, its desired state and its ceiling (ADR-0072).
 	"config": {
 		"id", "tenantId", "userId", "panelId", "grantId", "uuid", "protocol", "status",

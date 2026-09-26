@@ -61,7 +61,8 @@ holds the panel inherits it, and a panel with nothing picked places nobody.
    under the panel's fulfilment lock (rule 5): a named inbound held by another
    membership is 409 `inbound_assigned_elsewhere` naming that group, one with
    live configs (`present`, not drained) of another group's Grants is 409
-   `inbound_has_configs` with their count. Unassigning is always allowed and
+   `inbound_has_configs` with their count — a client whose row does not yet
+   name its inbound (rule 7) counts on every inbound of its protocol. Unassigning is always allowed and
    moves nobody (rule 6). `sold` and the inbound's `maxClients` stay the
    inbound's: the cap binds whichever group sells it. Before F-027-ch every
    group sold the pool, and that is the table empty, so nothing moved.
@@ -99,8 +100,15 @@ holds the panel inherits it, and a panel with nothing picked places nobody.
 7. **A config is created on its own inbound.** The pass creates the client on
    `inboundRemoteId` only if the panel still lists it enabled with the
    config's protocol, else `no_inbound`. A row placed before F-114-b has none:
-   the pass reads the lowest picked inbound of its protocol, and with none
-   picked it too is `no_inbound`. Such a row covers its whole panel.
+   to create its client the pass reads the lowest picked inbound of its
+   protocol **in the pool** — never one a group holds (rule 3a) — and with none
+   it too is `no_inbound`. Such a row covers its whole panel only until the
+   pass **writes down the inbound its client is on** (found, or just created;
+   only over null, and not where another live row of the Grant holds it —
+   `config_group_panel_once`). From then it is an ordinary row: under `all`
+   the Grant is given the panel's other picks, as any buyer (user,
+   2026-09-26). Which group such a row is for lives outside `network.*`
+   (ADR-0071), so its own group's assigned inbounds are not offered to it.
 8. **Activation counts panels.** `minHealthyPanels` is met by distinct panels
    with a confirmed config, never by configs — `all` puts several on one.
 
