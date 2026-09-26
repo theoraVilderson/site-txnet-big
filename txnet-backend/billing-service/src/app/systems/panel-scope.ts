@@ -33,3 +33,14 @@ export async function panelScopeOf(prisma: PrismaService, actor: SystemsActor) {
   if (tenant?.tenantType !== TenantType.platform_owner) throw new PanelScopeRefused('not_platform_owner');
   return { ownershipType: PanelOwnershipType.platform, tenantId: null };
 }
+
+export type PanelScope = Awaited<ReturnType<typeof panelScopeOf>>;
+
+/**
+ * Whether a panel met through another one — the panel a duplicate is, the one
+ * holding an address — is the actor's to see. Only then is it named: a
+ * reseller must never learn a platform panel's name through a refusal.
+ */
+export function inScope(scope: PanelScope, panel: { ownershipType: string; tenantId: string | null }): boolean {
+  return panel.ownershipType === scope.ownershipType && panel.tenantId === scope.tenantId;
+}

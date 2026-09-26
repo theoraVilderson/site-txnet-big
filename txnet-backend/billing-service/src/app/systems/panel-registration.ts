@@ -92,8 +92,8 @@ export class PanelRegistrationService {
     const owner = await panelScopeOf(this.prisma, actor);
     const id = randomUUID();
 
-    // Registered once (F-027-cd): 409 `panel_already_registered`, naming the panel that holds the address.
-    await claimingAddress(this.all, input.apiBaseUrl, null, () =>
+    // Registered once (F-027-cd): 409 `panel_already_registered`, naming the panel that holds the address if it is ours to see.
+    await claimingAddress(this.all, owner, input.apiBaseUrl, null, () =>
       this.all.panel.create({
         data: {
           id,

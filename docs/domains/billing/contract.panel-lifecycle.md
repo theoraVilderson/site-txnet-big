@@ -19,7 +19,7 @@ its next tick.
 
 | Route | Body | Answers | Errors |
 |---|---|---|---|
-| `PATCH /api/billing/systems/panels/:id` | any of `name` (1–100), `region` (1–50), `ipAddress` (v4/v6 \| null), `apiBaseUrl` (URL ≤500, never null), `clientBaseUrl` (URL ≤500 \| null), `maxRequestsPerMinute` (1–6000), `ovpnProfile` (text ≤64 KiB \| null, rule 5a); at least one; `.strict()` | `200 {id, reviewState, retest}` | 400; 403; 404 `not_found`; 409 `not_for_transport` / `not_for_driver` / `panel_retired` / `panel_already_registered` + `panel: {id, name}` (rule 2a) |
+| `PATCH /api/billing/systems/panels/:id` | any of `name` (1–100), `region` (1–50), `ipAddress` (v4/v6 \| null), `apiBaseUrl` (URL ≤500, never null), `clientBaseUrl` (URL ≤500 \| null), `maxRequestsPerMinute` (1–6000), `ovpnProfile` (text ≤64 KiB \| null, rule 5a); at least one; `.strict()` | `200 {id, reviewState, retest}` | 400; 403; 404 `not_found`; 409 `not_for_transport` / `not_for_driver` / `panel_retired` / `panel_already_registered` + `panel: {id, name} \| null` (rule 2a) |
 | `DELETE /api/billing/systems/panels/:id` | — | `200 {id, outcome: 'deleted' \| 'archived'}` | 400; 403; 404 `not_found`; 409 `panel_in_group` / `panel_has_configs` / `panel_retired` |
 | `POST /api/billing/systems/panels/:id/restore` | — | `200 {id, reviewState: 'pending'}` | 400; 403; 404 `not_found`; 409 `panel_not_retired` |
 
@@ -42,7 +42,7 @@ its next tick.
    refused duplicate's `duplicateOfPanelId` is cleared with it, and on
    restore (F-027-ce, `network/contract.registration.md` rule 8).
 2a. **A new API address is one no other panel holds** (F-027-cd): 409
-   `panel_already_registered` naming the holder, and nothing is written —
+   `panel_already_registered` naming the holder if in scope, nothing written —
    contract.systems.md rule 4a. The panel's own address, re-spelled, is not
    a duplicate: the look-up leaves the panel out.
 3. **Everything else leaves the verdict alone.** A name, region, budget or a

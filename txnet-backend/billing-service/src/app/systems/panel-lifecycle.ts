@@ -87,7 +87,7 @@ export class PanelLifecycleService {
     };
     // A new API address is one no other panel holds (F-027-cd); its own, re-spelled, is not a duplicate.
     const apiBaseUrl = input.apiBaseUrl !== undefined && input.apiBaseUrl !== panel.apiBaseUrl ? input.apiBaseUrl : undefined;
-    const { count } = await claimingAddress(this.all, apiBaseUrl, panelId, () =>
+    const { count } = await claimingAddress(this.all, scope, apiBaseUrl, panelId, () =>
       this.all.panel.updateMany({ where: { ...where, retiredAt: null }, data }),
     );
     if (count === 0) throw new SystemsRefused('panel_retired');

@@ -206,4 +206,20 @@ describe('SystemsReadService', () => {
     expect(byId.get('ffffffff-ffff-4fff-8fff-000000000002')).toMatchObject({ eventType: 'foreign_claim', foreignPanel: null });
     expect(JSON.stringify(items)).not.toContain(RESELLER_PANEL);
   });
+
+  it("names the panel a refused duplicate is, and not one outside the reader's scope (F-027-ce)", async () => {
+    const { service, panels } = harness();
+    const TWIN = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+    const OF_THEIRS = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee2';
+    const refused = { ...panels[0], reviewState: PanelReviewState.refused };
+    panels.push(
+      { ...refused, id: TWIN, name: 'de-fra-1-again', duplicateOf: { id: PLATFORM_PANEL, name: 'de-fra-1', ownershipType: 'platform', tenantId: null } },
+      { ...refused, id: OF_THEIRS, name: 'their-own-again', duplicateOf: { id: RESELLER_PANEL, name: 'their-own', ownershipType: 'tenant', tenantId: RESELLER } },
+    );
+
+    const byId = new Map((await service.panels(owner)).map((p) => [p.id, p]));
+    expect(byId.get(TWIN)?.review.duplicateOf).toEqual({ id: PLATFORM_PANEL, name: 'de-fra-1' });
+    expect(byId.get(OF_THEIRS)?.review.duplicateOf).toBeNull();
+    expect(JSON.stringify([...byId.values()])).not.toContain('"their-own"');
+  });
 });

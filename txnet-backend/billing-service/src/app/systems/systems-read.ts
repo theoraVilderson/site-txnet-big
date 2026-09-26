@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { capabilityMatrix } from './capabilities';
-import { panelScopeOf, SystemsActor } from './panel-scope';
+import { inScope, panelScopeOf, SystemsActor } from './panel-scope';
 
 export type SystemsRejection =
   | 'not_found'
@@ -65,8 +65,8 @@ const PANEL_FIELDS = {
   connectionTestedAt: true,
   connectionTestFault: true,
   connectionTestDetail: true,
-  // The panel a refused duplicate is (F-027-ce): its id and name, nothing else.
-  duplicateOf: { select: { id: true, name: true } },
+  // The panel a refused duplicate is (F-027-ce): its id and name, and whose it is to decide whether to name it.
+  duplicateOf: { select: { id: true, name: true, ownershipType: true, tenantId: true } },
   panelState: true,
   blockedSince: true,
   lastHealthyAt: true,
@@ -143,7 +143,8 @@ export class SystemsReadService {
           connectionTestedAt: p.connectionTestedAt,
           connectionTestFault: p.connectionTestFault,
           connectionTestDetail: p.connectionTestDetail,
-          duplicateOf: p.duplicateOf,
+          // Named only inside the reader's scope, as a foreign claim is.
+          duplicateOf: p.duplicateOf && inScope(scope, p.duplicateOf) ? { id: p.duplicateOf.id, name: p.duplicateOf.name } : null,
         },
         health: {
           panelState: p.panelState,
