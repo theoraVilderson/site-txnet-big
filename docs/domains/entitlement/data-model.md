@@ -1,7 +1,7 @@
 ---
 id: entitlement
 layer: domain
-updated: 2026-09-25
+updated: 2026-09-26
 ---
 
 # Data model — entitlement
@@ -9,12 +9,13 @@ updated: 2026-09-25
 Source of truth: `txnet-backend/prisma/domains/entitlement.prisma` (Postgres
 schema `entitlement`), migrations `20260914001600_entitlement_grant` and
 `20260921000600_a_grant_buys_its_bytes_before_it_serves_them` and
-`20260925000700_grant_delivery_clock`.
+`20260925000700_grant_delivery_clock` and
+`20260926000400_an_unlimited_grant_says_so`.
 
 ## Tables owned
 | Table | Purpose | Tenant-scoped? | Retention |
 |---|---|---|---|
-| grant | one entitlement: user, variant, `source` + `sourceReferenceId`, `status`, `startsAt`/`endsAt`, `billingMode`, `featureKeys`, `quotas` copied from the variant, `sharingPolicy`, `subscriptionTokenHash` + `subscriptionTokenSealed` (ADR-0085), the three byte cursors (`billedBytes`, `consumedBytes`, `purchasedBytes`), `meteredRate`, `suspendedAt`, `purgeAfterDays`, `resellerPath`, the delivery clock `deliveryAttempts` (CHECK ≥ 0) + `nextDeliveryAt` (index `grant_status_nextDeliveryAt_idx`, F-111-d) | yes, strict RLS | permanent |
+| grant | one entitlement: user, variant, `source` + `sourceReferenceId`, `status`, `startsAt`/`endsAt`, `billingMode`, `featureKeys`, `quotas` copied from the variant, `sharingPolicy`, `subscriptionTokenHash` + `subscriptionTokenSealed` (ADR-0085), the three byte cursors (`billedBytes`, `consumedBytes`, `purchasedBytes`), `meteredRate`, `suspendedAt`, `purgeAfterDays`, `resellerPath`, `trafficUnlimited` (F-111-q: sold with `limit = 0`; CHECK `grant_traffic_unlimited_is_prepaid` — prepaid, `purchasedBytes = 0`), the delivery clock `deliveryAttempts` (CHECK ≥ 0) + `nextDeliveryAt` (index `grant_status_nextDeliveryAt_idx`, F-111-d) | yes, strict RLS | permanent |
 | quota_adjustment | a signed `delta` on one `metric` of a Grant, with its `source`, optional `capPercent` and `expiresAt`; append-only | yes, strict RLS | permanent |
 
 `grant` is a reserved word: SQL quotes it (`entitlement."grant"`).

@@ -261,9 +261,15 @@ export class HotLoopService {
     const atMs = input.atMs ?? Date.now();
     const grant = await tx.grant.findUnique({
       where: { id: input.grantId },
-      select: { id: true, purchasedBytes: true, consumedBytes: true },
+      select: { id: true, purchasedBytes: true, consumedBytes: true, trafficUnlimited: true },
     });
     if (!grant) throw new HotLoopRefused('grant_not_found', input.grantId);
+    // No ceiling to approach and nothing to buy (F-111-q). Its empty bag would
+    // otherwise put it inside the horizon on every pass, and exhaustion after.
+    if (grant.trafficUnlimited) {
+      const idle = { rateBps: BigInt(0), timeToCeilingSeconds: null, hot: false, targetBytes: BigInt(0), flooredToMinimumBlock: false };
+      return { ...idle, grantId: grant.id, hotConfigId: null, bought: null, rebalanced: null, exhausted: null };
+    }
 
     const configs = await tx.config.findMany({
       where: { grantId: grant.id, status: ConfigStatus.active, desiredEnabled: true },

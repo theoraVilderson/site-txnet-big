@@ -177,6 +177,8 @@ export type RebalancedGrant = Allocation & {
   walletBacked: ConfigCeiling[];
   /** What the wallet added to the bag at the Grant's locked rate. Zero for a prepaid Grant. */
   walletBackedBytes: bigint;
+  /** Sold unlimited (F-111-q): nothing was split, and no config carries a ceiling. */
+  unlimited: boolean;
 };
 
 @Injectable()
@@ -205,9 +207,15 @@ export class CeilingAllocatorService {
   async rebalance(tx: Prisma.TransactionClient, input: RebalanceGrant): Promise<RebalancedGrant> {
     const grant = await tx.grant.findUnique({
       where: { id: input.grantId },
-      select: { id: true, userId: true, purchasedBytes: true, billingMode: true, meteredRate: true },
+      select: { id: true, userId: true, purchasedBytes: true, billingMode: true, meteredRate: true, trafficUnlimited: true },
     });
     if (!grant) throw new CeilingAllocationRefused('grant_not_found', input.grantId);
+    // An unlimited Grant's bag is 0 and is not a bag (F-111-q). Split, it
+    // would hand every config a 0-byte ceiling: a user who bought everything,
+    // told by the panel they may carry nothing. Its configs keep no ceiling.
+    if (grant.trafficUnlimited) {
+      return { ceilings: [], unallocatedBytes: BigInt(0), grantId: grant.id, written: 0, walletBacked: [], walletBackedBytes: BigInt(0), unlimited: true };
+    }
 
     const configs = await tx.config.findMany({
       where: { grantId: grant.id, status: ConfigStatus.active, desiredEnabled: true },
@@ -269,7 +277,7 @@ export class CeilingAllocatorService {
       });
     }
 
-    return { ...allocation, grantId: grant.id, written: moved.length, walletBacked: backed.ceilings, walletBackedBytes };
+    return { ...allocation, grantId: grant.id, written: moved.length, walletBacked: backed.ceilings, walletBackedBytes, unlimited: false };
   }
 
   /**

@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: draft
 version: 14
-updated: 2026-09-23
+updated: 2026-09-26
 ---
 
 # The ceiling — one bag, split across the configs that draw on it
@@ -115,6 +115,12 @@ Only configs that can carry traffic: `status = active` with
 `desiredEnabled = true`. A disabled or purged config holding a share would be
 bytes the bag has spent that no panel can serve, and the user would read it as
 a bag emptying while they are offline.
+
+**An unlimited Grant has no split at all** (F-111-q). Its `purchasedBytes` is 0
+by construction and `trafficUnlimited` says why; `rebalance` returns
+`unlimited: true`, no ceilings, and writes nothing — split, a 0 bag would hand
+every config a 0-byte ceiling. Its configs keep `allocatedCeilingBytes = null`;
+creating them on the panel with no limit is F-111-r.
 
 ## The convergence loop — carrying the number to the panel (F-027-t)
 

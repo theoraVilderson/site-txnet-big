@@ -3,7 +3,7 @@ id: entitlement
 layer: domain
 status: draft
 version: 4
-updated: 2026-09-25
+updated: 2026-09-26
 ---
 
 # Contract — entitlement
@@ -81,6 +81,16 @@ The clock is not here. `worker-service` holds it and asks hourly over `POST
 /api/internal/billing/entitlement/purge-due` (`ServiceOnlyGuard`, key
 `grant_config_purge`), because background work does not run in a
 request-serving process (ADR-0027, `automation/contract.worker.md`).
+
+**Unlimited traffic (F-111-q).** A prepaid variant sold with
+`traffic_bytes.limit = 0` (catalog invariant 10) is issued with
+`trafficUnlimited = true` and `purchasedBytes = 0` — the flag, never the
+number, because downstream 0 means empty. Such a Grant gets no ceiling
+(network `contract.ceiling.md`), is never suspended as exhausted
+(`suspendIfExhausted` → `unlimited`), never buys a block, and its usage is
+still recorded. A purchase of one stays refused (`sellsTrafficToday`) until
+network places its configs with no limit (F-111-r); a coupon or an admin issue
+is not gated, and its configs wait on F-111-r too.
 
 Issue rules: a `purchase` needs a `public` or `unlisted` variant; any other
 source may assign any live variant, `admin_only` included (F-506). A purchase

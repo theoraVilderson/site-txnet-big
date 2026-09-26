@@ -92,6 +92,11 @@ model Grant {
   /// `billingMode = metered`. `(18, 8)` because a rate is not an amount: every
   /// amount derived from it is still whole cents before the ledger (C-02).
   meteredRate           Decimal?           @db.Decimal(18, 8)
+  /// Sold with `traffic_bytes.limit = 0` (F-111-q): no ceiling, never
+  /// exhausted, never buys a block. The catalog is the only place 0 means
+  /// unlimited; here the bag stays 0 and this says why. Only on a prepaid
+  /// Grant, and only with `purchasedBytes = 0` (`grant_traffic_unlimited_is_prepaid`).
+  trafficUnlimited      Boolean            @default(false)
   /// When the bag ran empty (ADR-0075). Starts the purge clock; cleared when a
   /// top-up returns the Grant to `active`.
   suspendedAt           DateTime?

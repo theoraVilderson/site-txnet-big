@@ -39,7 +39,14 @@ export function walletCanBuy(rate: Prisma.Decimal, balance: Prisma.Decimal): boo
   }
 }
 
-export type ExhaustionVerdict = 'suspended' | 'grant_not_found' | 'not_active' | 'not_metered' | 'bag_not_empty' | 'wallet_can_buy';
+export type ExhaustionVerdict =
+  | 'suspended'
+  | 'grant_not_found'
+  | 'not_active'
+  | 'unlimited'
+  | 'not_metered'
+  | 'bag_not_empty'
+  | 'wallet_can_buy';
 
 export type Exhaustion = {
   grantId: string;
@@ -75,10 +82,12 @@ export async function suspendIfExhausted(tx: Prisma.TransactionClient, grantId: 
   // Read again, after the lock: a block bought meanwhile moved these.
   const grant = await tx.grant.findUnique({
     where: { id: grantId },
-    select: { status: true, billingMode: true, meteredRate: true, purchasedBytes: true, consumedBytes: true },
+    select: { status: true, billingMode: true, meteredRate: true, purchasedBytes: true, consumedBytes: true, trafficUnlimited: true },
   });
   if (!grant) return verdict('grant_not_found');
   if (grant.status !== GrantStatus.active) return verdict('not_active');
+  // Its bag is 0 by construction and is not a bag (F-111-q): past it is not spent.
+  if (grant.trafficUnlimited) return verdict('unlimited');
   if (grant.billingMode !== VariantBillingMode.metered || grant.meteredRate === null) return verdict('not_metered');
   // Past the bag counts as spent: an overrun is a debt for the holds queue (ADR-0074), never credit.
   if (grant.consumedBytes < grant.purchasedBytes) return verdict('bag_not_empty');

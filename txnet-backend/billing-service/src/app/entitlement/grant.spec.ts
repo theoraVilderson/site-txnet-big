@@ -133,6 +133,7 @@ describe('grantFromVariant', () => {
       featureKeys: ['vpn.access'],
       meteredRate: null,
       purchasedBytes: BigInt(53687091200),
+      trafficUnlimited: false,
     });
   });
 

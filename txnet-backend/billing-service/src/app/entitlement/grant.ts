@@ -5,6 +5,7 @@ import { Grant, GrantSource, GrantStatus, Prisma, QuotaAdjustment, QuotaMetric, 
 import { TenantContext, meteredRatesInEffect, productCategoriesInclude, productCategoriesLive, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { isSellableBySku, meteredRateAt, type MeteredRateRow, type OfferFacts } from '../catalog/catalog-reads';
+import { trafficQuotaOf } from '../catalog/traffic-quota';
 import { PrismaService } from '../prisma/prisma.service';
 import { GrantTokenSeal, NO_TOKEN_SEAL, type SealedToken } from './grant-token-seal';
 
@@ -107,8 +108,15 @@ type VariantShape = {
  * filled here with the sold `traffic_bytes` limit; a metered Grant starts
  * empty and buys blocks. Left at 0, a prepaid config is born with a 0-byte
  * ceiling, never placed on its panel, and refunded by the delivery clock.
+ *
+ * A prepaid variant sold with `traffic_bytes.limit = 0` is unlimited
+ * (F-111-q): the bag stays 0 and `trafficUnlimited` says why, so nothing
+ * downstream ever reads 0 as unlimited — to the allocator and to exhaustion
+ * 0 is empty.
  */
 export function grantFromVariant(input: { source: GrantSource; startsAt: Date }, v: VariantShape) {
+  // A metered Grant's traffic is what its blocks buy, never the variant's.
+  const traffic = v.billingMode === VariantBillingMode.prepaid ? trafficQuotaOf(v.quotas) : null;
   return {
     status: input.source === GrantSource.purchase ? GrantStatus.pending : GrantStatus.active,
     startsAt: input.startsAt,
@@ -117,15 +125,9 @@ export function grantFromVariant(input: { source: GrantSource; startsAt: Date },
     quotas: structuredClone(v.quotas),
     featureKeys: [...v.product.featureKeys],
     meteredRate: v.billingMode === VariantBillingMode.metered ? (meteredRateAt(v.meteredRates, input.startsAt)?.rate ?? null) : null,
-    purchasedBytes: v.billingMode === VariantBillingMode.prepaid ? trafficLimitOf(v.quotas) : BigInt(0),
+    purchasedBytes: traffic?.kind === 'limited' ? traffic.bytes : BigInt(0),
+    trafficUnlimited: traffic?.kind === 'unlimited',
   };
-}
-
-/** The sold `traffic_bytes` limit, or 0 where the variant sells none. */
-function trafficLimitOf(quotas: Prisma.JsonValue): bigint {
-  const q = quotas as { traffic_bytes?: { limit?: unknown } } | null;
-  const limit = q?.traffic_bytes?.limit;
-  return typeof limit === 'number' && Number.isSafeInteger(limit) && limit > 0 ? BigInt(limit) : BigInt(0);
 }
 
 /** SHA-256 of a subscription token, lowercase hex — what `/sub` looks a Grant up by. */

@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: draft
 version: 14
-updated: 2026-09-23
+updated: 2026-09-26
 ---
 
 # The hot loop — the few configs near their ceiling, in seconds
@@ -130,6 +130,13 @@ spent **and** no block is affordable — entitlement's `suspendForExhaustion`,
 which is `suspended` with `statusReason = quota_exhausted`, never `exhausted`
 (ADR-0075). The lock is what keeps a top-up from being undone: it either
 committed first and is seen, or it waits and finds the Grant suspended.
+
+**An unlimited Grant never gets here** (F-111-q). Its bag is 0, so it would be
+inside the horizon every pass and spent from the first byte: `topUpIn` answers
+it at once — not hot, nothing bought, `exhausted: null` — and
+`suspendIfExhausted` answers `unlimited` before reading the wallet's figure.
+Its usage is still counted: the delta consumer advances `consumedBytes` for
+every Grant alike.
 
 ## Two halves, two processes, no channel between them
 
