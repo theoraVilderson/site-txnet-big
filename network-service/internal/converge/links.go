@@ -12,13 +12,15 @@ import (
 // its row; `/sub` renders them and never contacts a panel (ADR-0082 rule 2,
 // F-027-bj, contract.links.md).
 //
-// A capture runs on the read that confirms a client — `complete`, never on
-// our own write — and only when the stored lines were read from another
-// client: another `remoteId` or another `uuid`. That one rule is every
-// trigger the ADR names. A create, a move (a new row) and a recreate confirm a
-// client the row has no lines from; a regenerate confirms a new `uuid`; a
-// rename or a rebuild re-keys `remoteId`. A config nobody changed is never
-// asked again, so capture spends no budget on a steady panel.
+// A capture runs on the read that confirms a client — `complete` — and only
+// when the stored lines were read from another client: another `remoteId` or
+// another `uuid`. That one rule is every trigger the ADR names. A move (a new
+// row) confirms a client the row has no lines from; a regenerate confirms a
+// new `uuid`; a rename or a rebuild re-keys `remoteId`. A create and a
+// recreate capture at once, from the client the panel answered with (F-111-k),
+// and the confirming read then finds them read from that client. A config
+// nobody changed is never asked again, so capture spends no budget on a
+// steady panel.
 
 // CapturedLinks is `linkLines` and the key they were captured under. At is
 // zero for a config never captured, which is not the same as one captured

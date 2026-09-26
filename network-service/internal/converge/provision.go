@@ -454,7 +454,13 @@ func (v *Provisioning) create(
 		return refused("", err)
 	}
 	report.Written++
-	return outcome(created.RemoteID, StatePartial), found(ActionCreated, created.RemoteID, nil)
+	// The lines are read now, from the client the panel answered with, rather
+	// than a minute later on the read that confirms it: a buyer's `/sub` is
+	// empty until they are (F-111-k). The row stays `partial`; a read that
+	// fails is retried on the confirming read, whose key still differs.
+	o := outcome(created.RemoteID, StatePartial)
+	v.capture(ctx, p, row, created, o, report)
+	return o, found(ActionCreated, created.RemoteID, nil)
 }
 
 // inboundCache reads the panel's inbounds at most once a pass, and only when

@@ -60,8 +60,15 @@ that should exist and does not, which is drift (`contract.drift.md`).
    row's lines were read from another client, another `remoteId` or `uuid`.
    That one test is every trigger: a create, a move (a new row) and a recreate
    confirm a client the row has no lines from; a regenerate confirms a new
-   `uuid`; a rename or a rebuild re-keys `remoteId`. Our own write confirms
-   nothing, so a capture lands one pass after it, like `complete` does.
+   `uuid`; a rename or a rebuild re-keys `remoteId`.
+6a. **A create captures in its own pass** (F-111-k). After a create or a
+   recreate the pass calls `ClientLinks` on the client the panel answered
+   with, keyed by that client, so a buyer's `/sub` is filled in the pass that
+   placed them and not a minute later. The row stays `partial` — a link read is
+   not the list read that makes it `complete` — and the confirming read finds
+   the lines already read from that client and asks nothing. A failed read is
+   rule 8. A regenerate still captures on the confirming read: an update
+   answers with no client to key the lines by.
 7. **Stored on `network.config`.** `linkLines` (in the panel's order),
    `linksRemoteId` and `linksUuid` (the key), `linksCapturedAt`. CHECK
    `config_links_captured_from_a_client`: key and time together, and lines only

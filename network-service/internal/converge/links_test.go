@@ -9,33 +9,60 @@ import (
 	"network-service/internal/driver/fake"
 )
 
-// A config's link lines are captured on the read that confirms its client and
-// stored on the row; `/sub` renders from them and never asks a panel
-// (ADR-0082 rule 2, F-027-bj). A capture is keyed by the client it was read
-// from, so create, regenerate, move and every re-key capture again, and a
-// config nobody changed costs nothing.
+// A config's link lines are captured on a read of its client and stored on
+// the row; `/sub` renders from them and never asks a panel (ADR-0082 rule 2,
+// F-027-bj). A capture is keyed by the client it was read from, so create,
+// regenerate, move and every re-key capture again, and a config nobody changed
+// costs nothing. A create's lines are read in the pass that created it, from
+// the client the panel answered with (F-111-k).
 
-func TestACreatedClientsLinesAreStoredOnTheReadThatConfirmsIt(t *testing.T) {
+func TestACreatedClientsLinesAreStoredInThePassThatCreatedIt(t *testing.T) {
 	r := newProvRig(t, fake.Config{})
 	r.desired.Put("panel-1", wanted("c1"))
 
-	r.pass(t) // the create: our own write confirms nothing
-	if got := r.row(t, "c1"); !got.Links.At.IsZero() || r.panel.CallCount("ClientLinks") != 0 {
-		t.Fatalf("links captured on the create's pass: %+v", got.Links)
+	report := r.pass(t) // the create, and its capture
+	got := r.row(t, "c1")
+	if report.Captured != 1 || len(got.Links.Lines) != 1 || !strings.Contains(got.Links.Lines[0], "uuid-c1") {
+		t.Fatalf("after the create's pass: captured %d, links %+v; want the panel's line for uuid-c1", report.Captured, got.Links)
 	}
+	if got.Links.RemoteID != got.RemoteID || got.Links.UUID != "uuid-c1" || got.Links.At.IsZero() {
+		t.Fatalf("capture key = %+v, want the client the create answered with", got.Links)
+	}
+	if got.State != converge.StatePartial {
+		t.Fatalf("state = %q, want partial: the capture reads links, only the list read confirms the client", got.State)
+	}
+
+	r.pass(t) // the confirming read finds the lines already read from this client
+	r.pass(t)
+	if n := r.panel.CallCount("ClientLinks"); n != 1 {
+		t.Fatalf("ClientLinks called %d times, want 1: a created config is not captured again", n)
+	}
+}
+
+func TestACreatesFailedCaptureIsAFindingAndRetriedOnTheConfirmingRead(t *testing.T) {
+	r := newProvRig(t, fake.Config{})
+	r.desired.Put("panel-1", wanted("c1"))
+	r.panel.FailLinks(true)
 
 	report := r.pass(t)
 	got := r.row(t, "c1")
-	if report.Captured != 1 || len(got.Links.Lines) != 1 || !strings.Contains(got.Links.Lines[0], "uuid-c1") {
-		t.Fatalf("after the confirming read: captured %d, links %+v; want the panel's line for uuid-c1", report.Captured, got.Links)
+	if got.RemoteID == "" || !got.Links.At.IsZero() {
+		t.Fatalf("row = %+v, want the create recorded and nothing captured", got)
 	}
-	if got.Links.RemoteID != got.RemoteID || got.Links.UUID != "uuid-c1" || got.Links.At.IsZero() {
-		t.Fatalf("capture key = %+v, want the client it was read from", got.Links)
+	var unread bool
+	for _, f := range report.Findings {
+		if f.Action == converge.ActionLinksUnread && f.Err != nil {
+			unread = true
+		}
+	}
+	if !unread || report.Failed != 0 || report.Written != 1 {
+		t.Fatalf("report = %+v, want the create written, a links_unread finding and no refused write", report)
 	}
 
+	r.panel.FailLinks(false)
 	r.pass(t)
-	if n := r.panel.CallCount("ClientLinks"); n != 1 {
-		t.Fatalf("ClientLinks called %d times, want 1: an unchanged config is not captured again", n)
+	if got := r.row(t, "c1"); got.Links.RemoteID != got.RemoteID || len(got.Links.Lines) != 1 {
+		t.Fatalf("links = %+v, want the capture retried on the next pass", got.Links)
 	}
 }
 
