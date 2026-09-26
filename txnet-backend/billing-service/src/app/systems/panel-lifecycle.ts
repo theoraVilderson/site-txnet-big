@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigStatus, PanelReviewState, PanelTransport, Prisma } from '@prisma/client';
+import { ConfigStatus, DriverType, PanelReviewState, PanelTransport, Prisma } from '@prisma/client';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -14,6 +14,8 @@ export type PanelSettingsInput = {
   apiBaseUrl?: string;
   clientBaseUrl?: string | null;
   maxRequestsPerMinute?: number;
+  /** A User Manager router's shared `.ovpn` (F-307-d); null clears it. */
+  ovpnProfile?: string | null;
 };
 
 /** The addresses the connection test reached: changing one may point at another server. */
@@ -47,13 +49,15 @@ export class PanelLifecycleService {
    * about the old server, and of a refused one, since the new server has not
    * been asked. A push panel is never called: it takes no API or link address
    * and cannot drop the IP its NAS is allowlisted by (`not_for_transport`).
+   * Only a User Manager router takes a `.ovpn` (`not_for_driver`, F-307-d); it
+   * is a file for buyers, not an address, so it re-tests nothing.
    */
   async update(actor: SystemsActor, panelId: string, input: PanelSettingsInput) {
     const scope = await panelScopeOf(this.prisma, actor);
     const where = { id: panelId, ...scope };
     const panel = await this.prisma.panel.findFirst({
       where,
-      select: { transport: true, reviewState: true, apiBaseUrl: true, clientBaseUrl: true, retiredAt: true },
+      select: { transport: true, driverType: true, reviewState: true, apiBaseUrl: true, clientBaseUrl: true, retiredAt: true },
     });
     if (!panel) throw new SystemsRefused('not_found');
     if (panel.retiredAt !== null) throw new SystemsRefused('panel_retired');
@@ -61,6 +65,9 @@ export class PanelLifecycleService {
     if (panel.transport === PanelTransport.push) {
       const pullOnly = input.apiBaseUrl !== undefined || (input.clientBaseUrl !== undefined && input.clientBaseUrl !== null);
       if (pullOnly || input.ipAddress === null) throw new SystemsRefused('not_for_transport');
+    }
+    if (input.ovpnProfile != null && panel.driverType !== DriverType.mikrotik_user_manager) {
+      throw new SystemsRefused('not_for_driver');
     }
 
     const retest = TESTED_ADDRESSES.some((k) => input[k] !== undefined && input[k] !== panel[k]);

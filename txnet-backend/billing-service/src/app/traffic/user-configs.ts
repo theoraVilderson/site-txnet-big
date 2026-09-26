@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ActorType, ConfigProtocol, ConfigStatus, DriftState, EnforcementState } from '@prisma/client';
+import { ActorType, ConfigProtocol, ConfigStatus, DriftState, DriverType, EnforcementState } from '@prisma/client';
 import { tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -18,7 +18,9 @@ export const CONFIG_ACTION_FAILED = 'failed';
 /**
  * One config of a Grant, as its own user reads it (F-027-ac). Never its bare
  * `uuid`; its captured link lines are the owner's (F-307-a), the same lines
- * `/sub` hands out (F-113).
+ * `/sub` hands out (F-113). The one exception is a User Manager login
+ * (F-307-d): there the uuid *is* the password and there are no lines to carry
+ * it, so the owner is answered it as `login`.
  */
 export type UserConfigView = {
   id: string;
@@ -39,6 +41,10 @@ export type UserConfigView = {
   lines: string[];
   /** When `lines` were captured; `null` when they are not this client's. Set with `lines` empty is a panel that gives none. */
   linksCapturedAt: string | null;
+  /** A User Manager (PPPoE, OpenVPN) login, once the router confirmed this one; `null` for every other family, and while a regenerate waits. */
+  login: { username: string; password: string } | null;
+  /** The router's shared `.ovpn`, for an OpenVPN config with a `login`; `null` when its admin uploaded none. */
+  ovpnProfile: string | null;
 };
 
 export type UserConfigOutcome =
@@ -56,12 +62,13 @@ const CONFIG_VIEW_COLUMNS = {
   regenerateUsedCount: true,
   maxRegenerateCount: true,
   lastReconciledAt: true,
-  // Read only to judge whether the lines are this client's — never answered.
+  // Read to judge whether the lines are this client's; answered only as a User Manager `login` (F-307-d).
   uuid: true,
   linksUuid: true,
   linkLines: true,
   linksCapturedAt: true,
-  panel: { select: { region: true } },
+  linksRemoteId: true,
+  panel: { select: { region: true, driverType: true, ovpnProfile: true } },
 } as const;
 
 /**
@@ -102,6 +109,13 @@ export class UserConfigsService {
         // `/sub`'s rule (network contract.links.md): lines read from another
         // client are dead links, so they wait for the next capture.
         const current = r.linksUuid !== null && r.linksUuid === r.uuid;
+        // A User Manager user is named after its uuid and logs in with it
+        // (network contract.drivers.md): the key the capture confirmed is
+        // exactly the login the router holds now (F-307-d, user 2026-09-26).
+        const login =
+          current && r.linksRemoteId !== null && r.panel.driverType === DriverType.mikrotik_user_manager
+            ? { username: r.linksRemoteId, password: r.uuid }
+            : null;
         return {
           id: r.id,
           protocol: r.protocol,
@@ -116,6 +130,8 @@ export class UserConfigsService {
           lastReconciledAt: r.lastReconciledAt?.toISOString() ?? null,
           lines: current ? r.linkLines : [],
           linksCapturedAt: current ? (r.linksCapturedAt?.toISOString() ?? null) : null,
+          login,
+          ovpnProfile: login && r.protocol === ConfigProtocol.openvpn ? r.panel.ovpnProfile : null,
         };
       });
     });

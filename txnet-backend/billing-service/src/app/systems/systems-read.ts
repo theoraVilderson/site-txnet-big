@@ -20,6 +20,8 @@ export type SystemsRejection =
   | 'inbound_not_sellable'
   // A panel's settings (F-027-by).
   | 'not_for_transport'
+  // A router's .ovpn (F-307-d).
+  | 'not_for_driver'
   // Deleting a panel (F-027-bz).
   | 'panel_in_group'
   | 'panel_has_configs'
@@ -55,6 +57,8 @@ const PANEL_FIELDS = {
   ipAddress: true,
   apiBaseUrl: true,
   clientBaseUrl: true,
+  // A router's shared client file (F-307-d): a CA and an address, no key.
+  ovpnProfile: true,
   reviewState: true,
   connectionTestedAt: true,
   connectionTestFault: true,
@@ -125,6 +129,7 @@ export class SystemsReadService {
         ipAddress: p.ipAddress,
         apiBaseUrl: p.apiBaseUrl,
         clientBaseUrl: p.clientBaseUrl,
+        ovpnProfile: p.ovpnProfile,
         // Archived (F-027-bz): kept for its records, skipped by every loop.
         retiredAt: p.retiredAt,
         // A push panel with no secret never reaches the RADIUS allowlist (F-027-az); null on a pull panel.

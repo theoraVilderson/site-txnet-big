@@ -317,6 +317,11 @@ model Panel {
   /// from its API: Hiddify's client proxy path, often on another domain
   /// (F-027-bg). Null for none; pull only (`panel_client_base_url_is_pull_only`).
   clientBaseUrl              String?
+  /// The router's OpenVPN client file, as its admin uploaded it (F-307-d):
+  /// the server and its CA, no key — every buyer on the router downloads the
+  /// same file and logs in with their own name and password. User Manager
+  /// only (`panel_ovpn_profile_is_user_manager`); null for none.
+  ovpnProfile                String?
   driverType                 DriverType
   counterSemantics           CounterSemantics
   transport                  PanelTransport

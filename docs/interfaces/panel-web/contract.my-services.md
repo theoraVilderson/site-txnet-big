@@ -181,8 +181,8 @@ and the link folded and unread until asked.
 ## Not covered
 
 A regenerated config's new credential is delivered by the same link (F-113),
-and reaches its card only after the next capture. An OpenVPN `.ovpn` is
-F-307-d. Per-config bars and a window other than 30 days are nobody's row.
+and reaches its card only after the next capture. A User Manager config's login and
+its router's `.ovpn` (answered since F-307-d) are shown by F-307-e. Per-config bars and a window other than 30 days are nobody's row.
 The configs' own "new key" action (F-027-ac) is a config credential, not the
 subscription link, and keeps its wording. Moving a config or
 adding one from here is nobody's row. Filtering

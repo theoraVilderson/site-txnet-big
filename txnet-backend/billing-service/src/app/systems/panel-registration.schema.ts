@@ -73,13 +73,32 @@ export const resubmitRadiusSecretSchema = z.object({ radiusSecret: z.string().mi
 
 export type ResubmitRadiusSecretBody = z.infer<typeof resubmitRadiusSecretSchema>;
 
+/** What `network.panel_ovpn_profile_is_bounded` allows, in bytes. */
+export const MAX_OVPN_PROFILE_BYTES = 65536;
+
+/**
+ * A User Manager router's `.ovpn` (F-307-d), as its admin uploads it. Every
+ * buyer on the router downloads this same file, so it must name a server
+ * (`remote`), ask for the buyer's own login (`auth-user-pass`), and carry no
+ * private key — a `<key>` block or a PEM private key would be one client's
+ * identity handed to all of them. Untrimmed: it is the file as written.
+ */
+const ovpnProfileSchema = z
+  .string()
+  .min(1)
+  .refine((text) => Buffer.byteLength(text, 'utf8') <= MAX_OVPN_PROFILE_BYTES, { message: 'ovpnProfile is over 64 KiB' })
+  .refine((text) => /^\s*remote\s+\S+/m.test(text), { message: 'ovpnProfile names no remote server' })
+  .refine((text) => /^\s*auth-user-pass\b/m.test(text), { message: 'ovpnProfile does not ask for a login (auth-user-pass)' })
+  .refine((text) => !/<key>|PRIVATE KEY-----/i.test(text), { message: 'ovpnProfile carries a private key; every buyer would get it' });
+
 /**
  * Editing a panel's settings (F-027-by): any of them, at least one, bounded as
  * at registration. `.strict()`: `transport`, `driverType`, `reviewState` and
  * the secrets are refused, not dropped — a transport or family change is
  * another panel, the verdict is the test's, and a secret has its own route.
  * `apiBaseUrl` cannot be cleared: a pull panel is reached there. Which fields
- * a push panel may take is the service's to say, since it reads the row.
+ * a push panel may take is the service's to say, since it reads the row, and
+ * so is which family may hold an `ovpnProfile` (F-307-d).
  */
 export const updatePanelSchema = z
   .object({
@@ -89,6 +108,7 @@ export const updatePanelSchema = z
     apiBaseUrl: z.string().url().max(500),
     clientBaseUrl: z.string().trim().url().max(500).nullable(),
     maxRequestsPerMinute: z.number().int().positive().max(6000),
+    ovpnProfile: ovpnProfileSchema.nullable(),
   })
   .partial()
   .strict()

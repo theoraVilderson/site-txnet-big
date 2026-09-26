@@ -19,7 +19,7 @@
  */
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { NotFoundException } from '@nestjs/common';
-import { ActorType, ConfigProtocol, ConfigStatus, DriftState, EnforcementState } from '@prisma/client';
+import { ActorType, ConfigProtocol, ConfigStatus, DriftState, DriverType, EnforcementState } from '@prisma/client';
 import { RATE_LIMIT_KEY, RateLimitBucket, type RateLimitOptions, runWithTenant } from '@txnet-backend/shared-core';
 
 import { ConfigActionRefused } from './config-actions';
@@ -51,8 +51,9 @@ function configRow(overrides: Record<string, unknown> = {}) {
     uuid: 'uuid-now',
     linksUuid: 'uuid-now' as string | null,
     linkLines: ['vless://uuid-now@de.example:443?type=tcp#de-1'],
+    linksRemoteId: 'remote-now' as string | null,
     linksCapturedAt: new Date('2026-09-23T09:00:00Z') as Date | null,
-    panel: { region: 'de-fra' },
+    panel: { region: 'de-fra', driverType: DriverType.marzban as DriverType, ovpnProfile: null as string | null },
     ...overrides,
   };
 }
@@ -116,6 +117,8 @@ describe('UserConfigsService.listForGrant', () => {
         lastReconciledAt: '2026-09-23T10:00:00.000Z',
         lines: ['vless://uuid-now@de.example:443?type=tcp#de-1'],
         linksCapturedAt: '2026-09-23T09:00:00.000Z',
+        login: null,
+        ovpnProfile: null,
       },
     ]);
   });
@@ -147,6 +150,56 @@ describe('UserConfigsService.listForGrant', () => {
     const [row] = await inTenant(() => service.listForGrant(USER, GRANT));
     expect(row.lines).toEqual([]);
     expect(row.linksCapturedAt).toBe('2026-09-23T09:00:00.000Z');
+  });
+
+  describe('a User Manager login (F-307-d, user 2026-09-26)', () => {
+    const PROFILE = 'client\ndev tun\nproto tcp\nremote vpn.arianet.example 1194\nauth-user-pass\n<ca>\n…\n</ca>\n';
+    const um = (overrides: Record<string, unknown> = {}) =>
+      configRow({
+        protocol: ConfigProtocol.openvpn,
+        uuid: 'a1b2-c3d4',
+        linksUuid: 'a1b2-c3d4',
+        linksRemoteId: 'a1b2c3d4',
+        linkLines: [],
+        panel: { region: 'ir-thr', driverType: DriverType.mikrotik_user_manager, ovpnProfile: PROFILE },
+        ...overrides,
+      });
+
+    it('answers the owner the login the router confirmed, and the router’s .ovpn for an OpenVPN config', async () => {
+      const { service, inTenant } = build({ configs: [um()] });
+      const [row] = await inTenant(() => service.listForGrant(USER, GRANT));
+      expect(row.login).toEqual({ username: 'a1b2c3d4', password: 'a1b2-c3d4' });
+      expect(row.ovpnProfile).toBe(PROFILE);
+    });
+
+    it('answers a PPPoE config its login and no file', async () => {
+      const { service, inTenant } = build({ configs: [um({ protocol: ConfigProtocol.pppoe })] });
+      const [row] = await inTenant(() => service.listForGrant(USER, GRANT));
+      expect(row.login).toEqual({ username: 'a1b2c3d4', password: 'a1b2-c3d4' });
+      expect(row.ovpnProfile).toBeNull();
+    });
+
+    it('answers no login while a regenerate waits for the router to confirm the new one', async () => {
+      const { service, inTenant } = build({ configs: [um({ uuid: 'e5f6-a7b8' })] });
+      const [row] = await inTenant(() => service.listForGrant(USER, GRANT));
+      // The old password is refused by the router already; the new one is not there yet.
+      expect(row.login).toBeNull();
+      expect(row.ovpnProfile).toBeNull();
+    });
+
+    it('answers no file for a router whose admin uploaded none', async () => {
+      const { service, inTenant } = build({ configs: [um({ panel: { region: 'ir-thr', driverType: DriverType.mikrotik_user_manager, ovpnProfile: null } })] });
+      const [row] = await inTenant(() => service.listForGrant(USER, GRANT));
+      expect(row.login).not.toBeNull();
+      expect(row.ovpnProfile).toBeNull();
+    });
+
+    it('never answers the uuid of any other family, whose credential is inside its lines', async () => {
+      const { service, inTenant } = build({ configs: [configRow({ protocol: ConfigProtocol.vless })] });
+      const [row] = await inTenant(() => service.listForGrant(USER, GRANT));
+      expect(row.login).toBeNull();
+      expect(JSON.stringify(row)).not.toContain('"uuid-now"');
+    });
   });
 
   it('refuses another user’s Grant exactly as a missing one', async () => {

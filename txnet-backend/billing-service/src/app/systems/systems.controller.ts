@@ -104,6 +104,7 @@ const CONFLICTS: ReadonlySet<SystemsRejection> = new Set([
   'member_has_configs',
   'inbound_not_sellable',
   'not_for_transport',
+  'not_for_driver',
   'panel_in_group',
   'panel_has_configs',
   'panel_retired',

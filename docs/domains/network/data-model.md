@@ -12,7 +12,7 @@ Source of truth: `txnet-backend/prisma/domains/network.prisma` (Postgres schema
 ## Tables owned
 | Table | Purpose | Tenant-scoped? | Retention |
 |---|---|---|---|
-| panel | one remote management install, and its **declaration** — driver family, counter semantics, transport, capabilities, review verdict and why a connection test gave none (`connectionTest*`, [contract.registration.md](contract.registration.md)), health and request budget; `retiredAt` = archived (invariant 49) | `tenantId` nullable | permanent; one with no history may be deleted (F-027-bz) |
+| panel | one remote management install, and its **declaration** — driver family, counter semantics, transport, capabilities, review verdict and why a connection test gave none (`connectionTest*`, [contract.registration.md](contract.registration.md)), health and request budget; `retiredAt` = archived (invariant 49); `ovpnProfile` = a User Manager router's shared `.ovpn` ([contract.links.md](contract.links.md) rule 9) | `tenantId` nullable | permanent; one with no history may be deleted (F-027-bz) |
 | config | user credential on a panel (uuid + protocol + status), and its **desired state** — presence, enablement, drift verdict and ceiling | `tenantId` NOT NULL (denormalized) | soft state via `status` — `retired` is deleted or moved away, CHECK `config_retired_is_absent` (F-027-z); the row outlives its remote client |
 | config_action_log | who did what to a config | via config | permanent |
 | traffic_raw_log | per-interval up/down bytes; **monthly partitioned** on `recordedAt`, PK `(id, recordedAt)` | `tenantId` NOT NULL (denormalized) | `DROP PARTITION` by the month |

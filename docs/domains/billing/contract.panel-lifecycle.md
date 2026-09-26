@@ -19,7 +19,7 @@ its next tick.
 
 | Route | Body | Answers | Errors |
 |---|---|---|---|
-| `PATCH /api/billing/systems/panels/:id` | any of `name` (1–100), `region` (1–50), `ipAddress` (v4/v6 \| null), `apiBaseUrl` (URL ≤500, never null), `clientBaseUrl` (URL ≤500 \| null), `maxRequestsPerMinute` (1–6000); at least one; `.strict()` | `200 {id, reviewState, retest}` | 400; 403; 404 `not_found`; 409 `not_for_transport` / `panel_retired` |
+| `PATCH /api/billing/systems/panels/:id` | any of `name` (1–100), `region` (1–50), `ipAddress` (v4/v6 \| null), `apiBaseUrl` (URL ≤500, never null), `clientBaseUrl` (URL ≤500 \| null), `maxRequestsPerMinute` (1–6000), `ovpnProfile` (text ≤64 KiB \| null, rule 5a); at least one; `.strict()` | `200 {id, reviewState, retest}` | 400; 403; 404 `not_found`; 409 `not_for_transport` / `not_for_driver` / `panel_retired` |
 | `DELETE /api/billing/systems/panels/:id` | — | `200 {id, outcome: 'deleted' \| 'archived'}` | 400; 403; 404 `not_found`; 409 `panel_in_group` / `panel_has_configs` / `panel_retired` |
 | `POST /api/billing/systems/panels/:id/restore` | — | `200 {id, reviewState: 'pending'}` | 400; 403; 404 `not_found`; 409 `panel_not_retired` |
 
@@ -51,7 +51,15 @@ its next tick.
    write is conditional on the addresses it tested as well as on `pending`
    (`network/contract.registration.md` rule 3, F-027-cc).
 
-`panel-edit.spec.ts` pins rules 1–4 and the scope.
+5a. **A router's `.ovpn` (F-307-d, user 2026-09-26).** Only a MikroTik User
+   Manager panel takes `ovpnProfile`, else 409 `not_for_driver` (the CHECK
+   `panel_ovpn_profile_is_user_manager` holds the same). Every buyer on the
+   router downloads this one file, so it must name a `remote` and ask for
+   `auth-user-pass`, and a `<key>` block or PEM private key is a 400. It is a
+   file for buyers, not an address: no re-test. The panel list answers it back
+   as `ovpnProfile` for the edit form.
+
+`panel-edit.spec.ts` pins rules 1–4, 5a and the scope.
 
 ## Deleting a panel — the rules (F-027-bz)
 
