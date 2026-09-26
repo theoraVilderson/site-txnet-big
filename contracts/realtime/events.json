@@ -8,6 +8,7 @@
     "panelTested": "network.panel.tested",
     "grantDelivered": "entitlement.grant.delivered",
     "grantRefunded": "entitlement.grant.refunded",
-    "grantLinksCaptured": "network.grant.linksCaptured"
+    "grantLinksCaptured": "network.grant.linksCaptured",
+    "walletChanged": "billing.wallet.changed"
   }
 }

@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 26
-updated: 2026-09-20
+updated: 2026-09-26
 ---
 
 # Contract — panel-web: the dashboard shell (F-093-a)
@@ -98,6 +98,9 @@ about the data path rather than the bar.
    so re-reading is the only thing that can be right. Legacy kept the balance in
    a client store and let components add to it — a refused gift code showed
    success over a balance of `NaN` (F-093-g).
+   Since F-111-m every movement is announced — `billing.wallet.changed` from
+   the ledger itself, so a purchase, a gift code, an admin adjustment and a
+   webhook top-up all reach the bar at once, not only a late credit.
 2. **The event's payload is not read**, only its arrival. There is no agreed
    shape for a payment event yet — `F-092-j` is the row that will publish one —
    and a hook that parsed an amount would have to guess that shape and break

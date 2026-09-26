@@ -18,6 +18,8 @@ const CONSUMER = 'live-push';
 export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, readonly string[]>> = {
   /** F-111-l: `network-service` captured a config's lines — the Grant's configs are ready. */
   [OutboxEventType.GRANT_LINKS_CAPTURED]: ['grantId'],
+  /** F-111-m: a wallet balance moved — the top bar re-reads it; no amount rides along. */
+  [OutboxEventType.WALLET_CHANGED]: [],
 };
 
 /**
@@ -27,8 +29,10 @@ export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, readonly string[]
  * These are the events a page re-reads on and a person is not told about: a
  * config's lines being captured is a Grant becoming usable a few seconds after
  * "delivered" already said so, and a Grant with three configs would otherwise
- * be three messages. So there is one queue for all of them and one consumer,
- * and a new type is a row in {@link LIVE_PUSH_FIELDS} plus its binding.
+ * be three messages; a wallet movement is the balance in the top bar, and the
+ * reason it moved already has its own notice where one is owed. So there is
+ * one queue for all of them and one consumer, and a new type is a row in
+ * {@link LIVE_PUSH_FIELDS} plus its binding.
  *
  * The user is the one the producer named in the payload — never looked up,
  * never guessed — and the body is the fields the row names, nothing more: a

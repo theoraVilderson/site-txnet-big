@@ -341,7 +341,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       durable: true,
       arguments: { 'x-dead-letter-exchange': this.deadExchange },
     });
-    for (const type of [OutboxEventType.GRANT_LINKS_CAPTURED]) {
+    for (const type of [OutboxEventType.GRANT_LINKS_CAPTURED, OutboxEventType.WALLET_CHANGED]) {
       await this.channel.bindQueue(this.livePushQueue, this.exchange, outboxRoutingKey(type));
     }
     // F-067-p: a combined notice's flush waits out its window in a queue nobody

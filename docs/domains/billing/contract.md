@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 8
-updated: 2026-09-20
+updated: 2026-09-26
 ---
 
 # Contract — billing
@@ -159,6 +159,7 @@ numbers are `gateway-pricing.golden.json` (F-0611).
 | A debit below zero, or from a user with no wallet, is `InsufficientFunds` | a missing wallet is a zero balance |
 | A first credit opens the wallet (`createMany … skipDuplicates`) | two first credits meet at the version guard, not at the unique `ownerUserId` |
 | Returns the appended `wallet_transaction`, whose `balanceAfter` is the new balance | — |
+| **Every movement writes `billing.wallet.changed`** to the outbox in the same `tx` — `{tenantId, userId, walletTransactionId}`, no amount — pushed live-only to `user:<userId>` (F-111-m, `automation/contract.notices.md`) | the top bar re-reads at once whichever writer moved it, and a new writer cannot forget to say so |
 | A credit to a **user's** wallet is written through `WalletCreditService.credit` (`wallet/wallet-credit.service.ts`), not the ledger directly: it appends the row and then revives the Grants that balance funds, in the same transaction (F-027-ap, ADR-0079). The four callers are the gateway settlement, the free top-up, a gift redemption and the remainder credit; a fifth that calls the ledger instead fails `entitlement/revival.spec.ts`. A **debit** still calls the ledger — nothing a debit does revives anything — and so does `TenantBillingLedger`, a different wallet with no Grant | a balance the user can see while their service is still off is a support ticket |
 
 The errors are plain classes with English messages (C-01); the route that first

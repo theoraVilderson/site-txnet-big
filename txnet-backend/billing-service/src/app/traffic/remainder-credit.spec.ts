@@ -118,6 +118,8 @@ function fakeTx(grant: Partial<GrantRow> & { id: string }, balance: Prisma.Decim
         return created;
       },
     },
+    // Every ledger movement announces itself (F-111-m); `wallet-ledger.spec.ts` holds that.
+    outboxEvent: { create: async ({ data }: { data: Record<string, unknown> }) => data },
   };
   return { tx: tx as unknown as Prisma.TransactionClient, row, wallet, ledger };
 }

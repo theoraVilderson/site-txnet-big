@@ -32,6 +32,7 @@ type WalletRow = {
 function fakeStore() {
   const wallets = new Map<string, WalletRow>();
   const ledger: Array<Record<string, unknown>> = [];
+  const outbox: Array<Record<string, unknown>> = [];
   /** Resolved when every expected reader has read — forces the interleaving. */
   let barrier: { waiting: number; release: () => void; ready: Promise<void> } | null = null;
 
@@ -89,12 +90,19 @@ function fakeStore() {
         return row;
       },
     },
+    outboxEvent: {
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        outbox.push(data);
+        return data;
+      },
+    },
   };
 
   return {
     tx: tx as unknown as Prisma.TransactionClient,
     wallets,
     ledger,
+    outbox,
     seed(ownerUserId: string, balance: string) {
       wallets.set(ownerUserId, {
         id: `wallet-${ownerUserId}`,
@@ -210,5 +218,32 @@ describe('WalletLedgerService', () => {
       }),
     ).rejects.toBeInstanceOf(InvalidLedgerAmount);
     expect(store.ledger).toHaveLength(0);
+  });
+
+  // F-111-m: the owner's open panel hears every movement at once. The event is
+  // written in the caller's transaction, so it commits with the balance it
+  // announces or not at all (ADR-0021), and every writer — billing's and
+  // tenant-service's — announces without doing anything itself.
+  it('announces every movement to its owner in the same transaction', async () => {
+    const store = fakeStore();
+    store.seed('user-1', '100.00');
+
+    await ledgerService.debit(store.tx, { userId: 'user-1', amount: D('30.00'), reasonType: 'traffic_consumption', tenantId: 't-1' });
+    await ledgerService.credit(store.tx, { userId: 'user-1', amount: D('5.00'), reasonType: 'payment_gateway', tenantId: 't-1' });
+
+    expect(store.outbox).toEqual([
+      expect.objectContaining({ aggregate: 'billing.wallet', aggregateId: 'wallet-user-1', type: 'billing.wallet.changed', payload: { tenantId: 't-1', userId: 'user-1', walletTransactionId: 'ledger-1' } }),
+      expect.objectContaining({ type: 'billing.wallet.changed', payload: { tenantId: 't-1', userId: 'user-1', walletTransactionId: 'ledger-2' } }),
+    ]);
+  });
+
+  it('announces nothing for a refused movement', async () => {
+    const store = fakeStore();
+    store.seed('user-1', '10.00');
+
+    await expect(
+      ledgerService.debit(store.tx, { userId: 'user-1', amount: D('30.00'), reasonType: 'traffic_consumption' }),
+    ).rejects.toBeInstanceOf(InsufficientFunds);
+    expect(store.outbox).toEqual([]);
   });
 });

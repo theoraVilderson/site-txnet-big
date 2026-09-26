@@ -29,6 +29,8 @@ export const RealtimeEventType = {
   GRANT_REFUNDED: 'entitlement.grant.refunded',
   /** F-111-l: `network-service` captured a config's link lines — a Grant's configs are ready to use (`converge.PostgresDesired.Record`). */
   GRANT_LINKS_CAPTURED: 'network.grant.linksCaptured',
+  /** F-111-m: a wallet balance moved, any reason, any writer (`WalletLedgerService`). */
+  WALLET_CHANGED: 'billing.wallet.changed',
 } as const;
 
 /** Outbox event types (`outbox_event.type`), routed as `outboxRoutingKey(type)`. Only {@link RealtimeEventType} reach a browser. */
@@ -62,6 +64,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.GRANT_DELIVERED]: 'worker-service',
   [OutboxEventType.GRANT_REFUNDED]: 'worker-service',
   [OutboxEventType.GRANT_LINKS_CAPTURED]: 'worker-service',
+  [OutboxEventType.WALLET_CHANGED]: 'worker-service',
   [OutboxEventType.TENANT_BILLING_CREDITED]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_SUSPENDED]: 'worker-service',

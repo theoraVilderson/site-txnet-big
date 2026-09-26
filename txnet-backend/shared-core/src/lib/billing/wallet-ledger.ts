@@ -6,6 +6,8 @@ import {
   WalletTransaction,
 } from '@prisma/client';
 
+import { OutboxEventType } from '../automation/routing-keys';
+
 /**
  * The one place a wallet balance changes (F-092-b, billing invariants 1-4, C-02).
  *
@@ -27,6 +29,11 @@ import {
  * `billing-service` (deposits, gifts) and `tenant-service`'s reseller purchase,
  * which debits the buyer in the transaction that creates the reseller
  * (ADR-0061).
+ *
+ * **Every movement is announced** (F-111-m): `billing.wallet.changed` goes
+ * into the outbox in the same `tx`, so the owner's open panel re-reads the
+ * balance the moment it commits, and a rolled-back movement announces nothing
+ * (ADR-0021). Here and not at each caller, so a new writer cannot forget it.
  *
  * A lost version race is refused, not retried. The caller owns the transaction,
  * and a retry inside it would re-read a row this transaction has already seen
@@ -129,7 +136,7 @@ export class WalletLedgerService {
     });
     if (count !== 1) throw new WalletVersionConflict(userId);
 
-    return tx.walletTransaction.create({
+    const movement = await tx.walletTransaction.create({
       data: {
         walletId: wallet.id,
         amount,
@@ -140,5 +147,17 @@ export class WalletLedgerService {
         balanceAfter,
       },
     });
+    // The payload names whose wallet and nothing it holds: the panel re-reads
+    // the balance, so two events arriving out of order cannot show an old one.
+    // The tenant is the one the row was stamped with.
+    await tx.outboxEvent.create({
+      data: {
+        aggregate: 'billing.wallet',
+        aggregateId: wallet.id,
+        type: OutboxEventType.WALLET_CHANGED,
+        payload: { tenantId: movement.tenantId ?? entry.tenantId ?? null, userId, walletTransactionId: movement.id },
+      },
+    });
+    return movement;
   }
 }

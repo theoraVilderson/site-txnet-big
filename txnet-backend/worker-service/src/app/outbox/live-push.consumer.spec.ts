@@ -82,4 +82,20 @@ describe('LivePushConsumer.handle', () => {
 
     await expect(consumer.handle({ ...event(), type: OutboxEventType.GRANT_CREATED })).rejects.toThrow(/live push/);
   });
+
+  // F-111-m: the top bar re-reads the balance on any event of the owner's; the
+  // body names no amount, so an out-of-order pair can never show an old one.
+  it("pushes a wallet movement on the owner's channel with nothing but its type", async () => {
+    const { consumer, published, fetch } = build();
+
+    await consumer.handle({
+      ...event(),
+      aggregate: 'billing.wallet',
+      type: OutboxEventType.WALLET_CHANGED,
+      payload: { tenantId: TENANT, userId: USER, walletTransactionId: 'wt-1' },
+    });
+
+    expect(published).toEqual([{ channel: `user:${USER}`, payload: { type: OutboxEventType.WALLET_CHANGED } }]);
+    expect(fetch).not.toHaveBeenCalled();
+  });
 });

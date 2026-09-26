@@ -35,7 +35,7 @@ in `LIVE_PUSH_FIELDS` plus its binding in `BrokerService`, and
 | Rule | Why |
 |---|---|
 | `live` only, on `user:<payload.userId>`; never `person` | a Grant with three configs captured would be three bot messages about one purchase |
-| The body is `{type}` plus exactly the fields the row names — `network.grant.linksCaptured` carries `grantId` | a payload holds what its producer needed; that is not the browser's |
+| The body is `{type}` plus exactly the fields the row names — `network.grant.linksCaptured` carries `grantId`, `billing.wallet.changed` nothing (F-111-m) | a payload holds what its producer needed; that is not the browser's |
 | A payload without `userId` or a named field, or a type with no row, throws and dead-letters | whose page it is is never guessed |
 
 ## A burst is told once (F-067-p, ADR-0084 decision 3)
