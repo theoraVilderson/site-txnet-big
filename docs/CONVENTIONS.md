@@ -159,24 +159,24 @@ does the half it can, forbidding a raw literal, and the set comparison is done
 by three tests instead: `wire.contract.spec.ts`, `headers_contract_test.go` and
 `tools/contracts.py` for the Traefik lists.
 
-**Two files stay in `except:` permanently, and they are not debt.**
-`broker.service.ts` spells `x-attempts`, an AMQP message header on a different
-transport entirely; `webhook.controller.ts` spells
+**Some files stay in `except:` permanently, and they are not debt.**
+`webhook.controller.ts` spells
 `x-telegram-bot-api-secret-token`, which is Telegram's name and not ours to
-declare. Neither crosses a boundary this contract owns. The payment drivers
+declare, on a boundary this contract does not own. The payment drivers
 (`payment/gateway/*.provider.ts`) are the same case: `x-nowpayments-sig` and
-`x-api-key` are a provider's names on its own wire (F-104-h). The two broker
-classes are that case once more: `x-dead-letter-exchange` is RabbitMQ's own
-queue argument, not a name on a wire this contract owns. `site-pwa` is not in
+`x-api-key` are a provider's names on its own wire (F-104-h). RabbitMQ's own
+queue arguments (`x-dead-letter-exchange`, `x-message-ttl`, …) are not names
+on a wire this contract owns either; the pattern skips them by prefix, so a
+new queue file needs no `except:` line. `site-pwa` is not in
 the Nx workspace and cannot import `shared-core`; it imports the same names
 from `@/generated/wire`, which `tools/wire-gen.py` writes from `contracts/` and
 `tools/contracts.py` fails on when stale (ADR-0036 amendment 2026-09-14). The
 second check block below holds it to that.
 
 ```check C-04
-forbid: ['"]x-[a-z0-9]+(-[a-z0-9]+)+['"]
+forbid: ['"](?!x-dead-letter-|x-message-ttl|x-max-|x-queue-|x-single-active-consumer)x-[a-z0-9]+(-[a-z0-9]+)+['"]
 in: txnet-backend/**/*.ts
-except: txnet-backend/shared-core/src/lib/http/**, txnet-backend/**/*.spec.ts, txnet-backend/worker-service/src/app/broker/broker.service.ts, txnet-backend/metering-service/src/app/broker/broker.service.ts, txnet-backend/billing-service/src/app/traffic/hot-loop.queue.ts, txnet-backend/bot-service/src/app/webhook/webhook.controller.ts, txnet-backend/billing-service/src/app/payment/gateway/*.provider.ts
+except: txnet-backend/shared-core/src/lib/http/**, txnet-backend/**/*.spec.ts, txnet-backend/bot-service/src/app/webhook/webhook.controller.ts, txnet-backend/billing-service/src/app/payment/gateway/*.provider.ts
 message: import the name from shared-core/src/lib/http (C-04) — a header spelled twice is the drift ADR-0036 exists to stop
 ```
 
