@@ -8,6 +8,7 @@ import { isSellableBySku, meteredRateAt, type MeteredRateRow, type OfferFacts } 
 import { trafficQuotaOf } from '../catalog/traffic-quota';
 import { PrismaService } from '../prisma/prisma.service';
 import { GrantTokenSeal, NO_TOKEN_SEAL, type SealedToken } from './grant-token-seal';
+import { configIdentityOf, storedLineIdentity } from '../traffic/config-identity';
 import { foldConfigText } from '../traffic/config-text';
 
 /**
@@ -272,6 +273,31 @@ async function configNamedLike(tx: Prisma.TransactionClient, userId: string, q: 
   };
 }
 
+/**
+ * A live config of the user's that any pasted line is (F-307-p,
+ * `config-identity.ts`): the uuid a line carries matched in the query, case
+ * aside; a line with none compared with the configs' current captured lines,
+ * `#name` left out of both. A captured line read from another client (a
+ * regenerate not yet re-captured) is a dead link and matches nothing, as
+ * `/sub` serves nothing from it. An empty result matches no Grant.
+ */
+async function configHoldingLines(tx: Prisma.TransactionClient, userId: string, pasted: readonly string[]): Promise<Prisma.ConfigWhereInput> {
+  const live = { not: ConfigStatus.retired };
+  const ids = pasted.map(configIdentityOf).filter((i) => i !== null);
+  const uuids = [...new Set(ids.flatMap((i) => ('uuid' in i ? [i.uuid] : [])))];
+  const lines = new Set(ids.flatMap((i) => ('line' in i ? [i.line] : [])));
+  const OR: Prisma.ConfigWhereInput[] = [];
+  if (uuids.length) OR.push({ uuid: { in: uuids, mode: 'insensitive' } });
+  if (lines.size || !OR.length) {
+    const stored = lines.size
+      ? await tx.config.findMany({ where: { userId, status: live }, select: { id: true, uuid: true, linksUuid: true, linkLines: true } })
+      : [];
+    const held = stored.filter((c) => c.linksUuid !== null && c.linksUuid === c.uuid && c.linkLines.some((l) => lines.has(storedLineIdentity(l))));
+    OR.push({ id: { in: held.map((c) => c.id) } });
+  }
+  return { status: live, OR };
+}
+
 function soldLimitOf(r: GrantViewRow): bigint | null {
   if (r.billingMode !== VariantBillingMode.prepaid || r.trafficUnlimited) return null;
   const traffic = trafficQuotaOf(r.quotas);
@@ -432,14 +458,24 @@ export class GrantService {
    *
    * **`q` keeps the Grants holding a live config named like it** (F-307-m):
    * `configNamedLike`. `hidden` then counts the ended Grants that match.
+   * **`lines` keeps the Grants holding a config any pasted line is** (F-307-p):
+   * `configHoldingLines`, the same way; it wins over `q`.
    */
-  listForUser(userId: string, request: { page?: number; pageSize?: number; scope?: GrantListScope; q?: string } = {}): Promise<GrantPage> {
+  listForUser(
+    userId: string,
+    request: { page?: number; pageSize?: number; scope?: GrantListScope; q?: string; lines?: readonly string[] } = {},
+  ): Promise<GrantPage> {
     const page = request.page ?? DEFAULT_PAGE;
     const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
     const all = request.scope === 'all';
     const q = request.q?.trim() ?? '';
     return tenantTransaction(this.prisma, async (tx) => {
-      const mine: Prisma.GrantWhereInput = q === '' ? { userId } : { userId, configs: { some: await configNamedLike(tx, userId, q) } };
+      const configs = request.lines
+        ? await configHoldingLines(tx, userId, request.lines)
+        : q === ''
+          ? null
+          : await configNamedLike(tx, userId, q);
+      const mine: Prisma.GrantWhereInput = configs ? { userId, configs: { some: configs } } : { userId };
       const where: Prisma.GrantWhereInput = all ? mine : { ...mine, status: { notIn: [...SETTLED_GRANT_STATUSES] } };
       const [rows, total, everything] = await Promise.all([
         tx.grant.findMany({

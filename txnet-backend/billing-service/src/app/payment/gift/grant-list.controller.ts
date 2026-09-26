@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Req } from '@nestjs/common';
 import { RateLimitBucket, rateLimitBucketKey, TenantCapability } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
@@ -6,7 +6,7 @@ import { GrantService } from '../../entitlement/grant';
 import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
 import { ZodValidationPipe } from '../../request/zod-validation.pipe';
-import { GrantListQuery, grantListSchema } from './grant-list.schema';
+import { GrantListQuery, GrantsByLinesBody, grantListSchema, grantsByLinesSchema } from './grant-list.schema';
 
 /**
  * A user's own Grants, listed (F-502-r): `GET /api/billing/gift/grants`.
@@ -40,5 +40,23 @@ export class GrantListController {
   })
   list(@Query(new ZodValidationPipe(grantListSchema)) query: GrantListQuery, @Req() req: Request) {
     return this.grants.listForUser(identityOf(req).userId, query);
+  }
+
+  /**
+   * The same list, narrowed to the Grants holding any of up to 20 pasted
+   * config lines (F-307-p). A POST only because a line is a credential and
+   * must not travel in a URL; it reads, so it answers 200 and spends the
+   * list's bucket.
+   */
+  @TenantCapability('subscriptionLink')
+  @Post('by-lines')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.GRANT_LIST, identityOf(req).userId),
+    configKey: 'GRANT_LIST_RATE_LIMIT',
+    windowSec: 900,
+  })
+  byLines(@Body(new ZodValidationPipe(grantsByLinesSchema)) body: GrantsByLinesBody, @Req() req: Request) {
+    return this.grants.listForUser(identityOf(req).userId, body);
   }
 }

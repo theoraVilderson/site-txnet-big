@@ -29,3 +29,27 @@ export const grantListSchema = z.object({
 });
 
 export type GrantListQuery = z.infer<typeof grantListSchema>;
+
+/** How many lines one paste may carry: a Grant holds up to 20 configs (user, 2026-09-26). */
+export const GRANTS_BY_LINES_MAX = 20;
+/** Longer than any line a panel captures (a reality line is a few hundred characters). */
+export const PASTED_LINE_MAX = 4096;
+
+/**
+ * The body of `POST /api/billing/gift/grants/by-lines` (F-307-p): pasted config
+ * lines, and the list's paging and scope. **A body, never a query string** — a
+ * line is a credential, and a URL lands in access logs and browser history.
+ */
+export const grantsByLinesSchema = z.object({
+  lines: z
+    .array(z.string({ message: E.historyFilterInvalid }).trim().min(1, { message: E.historyFilterInvalid }).max(PASTED_LINE_MAX, { message: E.historyFilterInvalid }), {
+      message: E.historyFilterInvalid,
+    })
+    .min(1, { message: E.historyFilterInvalid })
+    .max(GRANTS_BY_LINES_MAX, { message: E.historyFilterInvalid }),
+  page: grantListSchema.shape.page,
+  pageSize: grantListSchema.shape.pageSize,
+  scope: grantListSchema.shape.scope,
+});
+
+export type GrantsByLinesBody = z.infer<typeof grantsByLinesSchema>;

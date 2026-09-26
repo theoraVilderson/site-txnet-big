@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 9
+version: 10
 updated: 2026-09-26
 ---
 
@@ -87,6 +87,7 @@ closed had no way back.
 | Route | Query | Answers `data` |
 |---|---|---|
 | `GET /api/billing/gift/grants` | `page`, `pageSize` (≤ 100), `scope` (`current` default, `all`), `q` (≤ 100, trimmed; blank is none) | `{total, page, pageSize, hidden, rows[{id, status, startsAt, endsAt, featureKeys, variant{id, sku, nameKey} \| null, billingMode, consumedBytes, purchasedBytes, trafficUnlimited, trafficCapBytes, suspendedAt, purgeAt}]}` |
+| `POST /api/billing/gift/grants/by-lines` | body: `lines` (1–20, each trimmed, ≤ 4096), `page`, `pageSize`, `scope` as above | the same page, narrowed to the Grants holding a config any line is (F-307-p) |
 
 | Rule | Why |
 |---|---|
@@ -94,6 +95,7 @@ closed had no way back.
 | The columns are selected explicitly and **neither the subscription key nor its hash is among them** | the hash sits in the same row (D-35). A `select` is what keeps it, and whatever the schema grows next, out of a response nobody re-read |
 | **`current` leaves out `cancelled` and `exhausted`** (`SETTLED_GRANT_STATUSES`) and answers `hidden`, how many; `all` lists every Grant and `hidden` is 0 (F-502-t, user 2026-09-26) | those two never serve again and nothing the user does brings them back; `suspended` (a top-up revives it) and `expired` stay. The filter is here, not in the reader, so a page of 20 is never short — and `hidden` keeps an ended Grant's link one request away |
 | **`q` keeps the Grants holding a live config named like it**, case aside: its buyer's `label`, else the tenant's template over its panel's region (ADR-0089). `hidden` then counts the ended Grants that match (F-307-m) | the page is billing's (rule 1 of `contract.my-services.md`), so a filter in the reader would come back short. A default name is one per region, evaluated once per region and matched as a region list, so the page stays one query. The ` 2` numbering and a panel's own name (a template that evaluates empty) are not matched. A product's name is catalog text in the reader's language, not a column, so it is not searched here. **One spelling** (F-307-o, `traffic/config-text.ts`): a label is saved, and `q` and a default name matched, with ي/ى as ی, ك as ک and Persian/Arabic digits Latin — so either keyboard finds either; the label stays one indexed `contains` |
+| **`by-lines` keeps the Grants holding a live config of the caller that a pasted line is**, name aside (`traffic/config-identity.ts`): the uuid a `vless`/`trojan`/`vmess` line carries is `config.uuid`, case aside, matched in the query; any other line is compared with the config's current captured lines, `#name` left out of both. `hidden` as for `q`; a paste naming no config is an empty page (F-307-p) | the name changes under the buyer (label, template, ` 2`) and the client does not. **A body, never a query string**: a line is a credential, and a URL lands in access logs and history — so it is a POST that reads, answers 200 and spends `GRANT_LIST`. Lines captured from a client the config no longer is are dead links and match nothing, as `/sub` serves nothing from them |
 | `nameKey` is the variant's own wording, else its product's (§4.3), and a Grant issued without a catalog item answers `variant: null`. The key is answered, not the translated text | the same key the catalog answers (`catalog-reads.ts`), so the panel resolves both through `locale-service` and neither holds a language |
 | Ordered `startsAt` desc, then `id` desc. Absent paging is page 1 of 20 | two Grants issued in one transaction share an instant, and an unstable order repeats or skips one across pages |
 | No domain error: a user with no Grants is an empty page, not a **404**. Only a malformed query (**400**) and the limiter (**429**) fail | the page exists before the first Grant does |
@@ -101,7 +103,7 @@ closed had no way back.
 | Bytes are decimal strings. `purgeAt` is `suspendedAt` + `coalesce(grant.purgeAfterDays, tenant.purgeAfterDays)` days, and `null` when the Grant is not suspended or the window is `0` (F-027-ac) | a Grant's bytes pass 2^53; and it is the SQL `entitlement/purge.ts` runs, so the panel's countdown is the instant the hourly job acts after. The tenant is read only when a suspended row has no window of its own |
 | `trafficUnlimited` is the Grant's flag (F-111-s). `trafficCapBytes` is a capped prepaid Grant's `quotas.traffic_bytes.limit` plus its unexpired `traffic_bytes` adjustments, floored at 0, from one `groupBy` per page read only when a row has a cap; `null` for metered, unlimited or no quota (F-111-t) | the same sum `/sub` answers as `total` (sub-api `contract.md`), so the panel and the app never show two caps for one Grant |
 
-**Not covered:** searching by product name, or any scope but these two. Its consumer since
+**Not covered:** searching by product name, or any scope but these two; a pasted `/sub` link (a Grant's token, not a config line). Its consumer since
 2026-09-20 is the panel's "my services" page (F-502-s,
 `panel-web/contract.my-services.md`), which asks `current` and offers `all`
 (F-502-u) and puts each Grant's link and its reset on the row.

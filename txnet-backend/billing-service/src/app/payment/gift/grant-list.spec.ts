@@ -23,7 +23,7 @@ import { RATE_LIMIT_KEY, RateLimitBucket, type RateLimitOptions, runWithTenant }
 
 import { GrantService } from '../../entitlement/grant';
 import { GrantListController } from './grant-list.controller';
-import { GRANT_LIST_QUERY_MAX, grantListSchema } from './grant-list.schema';
+import { GRANT_LIST_QUERY_MAX, GRANTS_BY_LINES_MAX, PASTED_LINE_MAX, grantListSchema, grantsByLinesSchema } from './grant-list.schema';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '44444444-4444-4444-8444-444444444444';
@@ -60,7 +60,12 @@ function build(
   tenantPurgeDays = 7,
   adjustments: { grantId: string; delta: bigint }[] = [],
   hidden = 0,
-  search: { branding?: { brandName: string; lineNameTemplate: string | null } | null; regions?: string[] } = {},
+  search: {
+    branding?: { brandName: string; lineNameTemplate: string | null } | null;
+    regions?: string[];
+    /** The user's live configs as a pasted line is compared with them (F-307-p). */
+    stored?: { id: string; uuid: string; linksUuid: string | null; linkLines: string[] }[];
+  } = {},
 ) {
   const asked: {
     where?: Prisma.GrantWhereInput;
@@ -85,6 +90,7 @@ function build(
     config: {
       findMany: async (args: { where: Prisma.ConfigWhereInput }) => {
         asked.configReads.push(args.where);
+        if (search.stored) return search.stored;
         return (search.regions ?? []).map((region) => ({ panel: { region } }));
       },
     },
@@ -117,7 +123,8 @@ function build(
   const grants = new GrantService(prisma as never);
   const list = (page?: number, pageSize?: number, scope?: 'current' | 'all', q?: string) =>
     runWithTenant({ id: TENANT }, () => grants.listForUser(USER, { page, pageSize, scope, q }));
-  return { grants, list, asked };
+  const byLines = (lines: string[], scope?: 'current' | 'all') => runWithTenant({ id: TENANT }, () => grants.listForUser(USER, { lines, scope }));
+  return { grants, list, byLines, asked };
 }
 
 describe('GrantService.listForUser', () => {
@@ -346,6 +353,67 @@ describe('GrantService.listForUser with q (F-307-m)', () => {
   });
 });
 
+describe('GrantService.listForUser with pasted lines (F-307-p)', () => {
+  const UUID = 'b831381d-6324-4d53-ad4f-8cda48b30811';
+  const CONFIG = '77777777-7777-4777-8777-777777777771';
+  const some = (where?: Prisma.GrantWhereInput) => (where?.configs as { some: Prisma.ConfigWhereInput }).some;
+
+  it('keeps the Grants holding a live config of the caller with the uuid a line carries, whatever the line is named', async () => {
+    const { byLines, asked } = build();
+
+    await byLines([`vless://${UUID.toUpperCase()}@de1.example.com:443#Ali`]);
+
+    expect(asked.where?.userId).toBe(USER);
+    expect(some(asked.where)).toEqual({ status: { not: ConfigStatus.retired }, OR: [{ uuid: { in: [UUID], mode: 'insensitive' } }] });
+    // A uuid is matched in the query: no config is read to compare lines.
+    expect(asked.configReads).toEqual([]);
+  });
+
+  it('matches a line with no uuid against the caller’s current captured lines, the `#name` left out of both', async () => {
+    const line = 'ss://YWVzLTI1Ni1nY206cGFzcw@de1.example.com:8388';
+    const { byLines, asked } = build([grantRow()], 1, 7, [], 0, {
+      stored: [
+        { id: CONFIG, uuid: UUID, linksUuid: UUID, linkLines: [`${line}#panel-name`] },
+        // Captured from a client it no longer is: a dead line finds nothing.
+        { id: 'stale', uuid: 'new-uuid', linksUuid: UUID, linkLines: [`${line}#panel-name`] },
+        { id: 'other', uuid: 'u2', linksUuid: 'u2', linkLines: ['ss://b3RoZXI@nl1.example.com:8388#x'] },
+      ],
+    });
+
+    await byLines([`${line}#Ali home`]);
+
+    expect(asked.configReads).toEqual([{ userId: USER, status: { not: ConfigStatus.retired } }]);
+    expect(some(asked.where)).toEqual({ status: { not: ConfigStatus.retired }, OR: [{ id: { in: [CONFIG] } }] });
+  });
+
+  it('keeps the default scope and counts ended matches in `hidden`, as q does', async () => {
+    const { byLines, asked } = build([grantRow()], 1, 7, [], 3);
+
+    const answer = await byLines([`trojan://${UUID}@h:443`]);
+
+    expect(asked.where?.status).toEqual({ notIn: [GrantStatus.cancelled, GrantStatus.exhausted] });
+    expect(answer.hidden).toBe(3);
+  });
+
+  it('a paste that names no config matches no Grant — never the whole list', async () => {
+    const { byLines, asked } = build([], 0, 7, [], 0, { stored: [] });
+
+    await byLines(['ss://nothing@h:1']);
+
+    expect(some(asked.where)).toEqual({ status: { not: ConfigStatus.retired }, OR: [{ id: { in: [] } }] });
+  });
+});
+
+describe('grantsByLinesSchema', () => {
+  it('takes 1 to 20 lines, trimmed, with the list’s paging and scope', () => {
+    expect(grantsByLinesSchema.parse({ lines: [' vless://a@h:1 '], scope: 'all', page: 2 })).toEqual({ lines: ['vless://a@h:1'], scope: 'all', page: 2 });
+    expect(grantsByLinesSchema.safeParse({ lines: [] }).success).toBe(false);
+    expect(grantsByLinesSchema.safeParse({ lines: Array(GRANTS_BY_LINES_MAX + 1).fill('ss://a@h:1') }).success).toBe(false);
+    expect(grantsByLinesSchema.safeParse({ lines: ['   '] }).success).toBe(false);
+    expect(grantsByLinesSchema.safeParse({ lines: ['x'.repeat(PASTED_LINE_MAX + 1)] }).success).toBe(false);
+  });
+});
+
 describe('grantListSchema', () => {
   it('leaves an absent page absent — the service decides what absent means', () => {
     expect(grantListSchema.parse({})).toEqual({});
@@ -391,5 +459,17 @@ describe('GrantListController', () => {
     // Not the reissue budget: a page the panel refetches must not spend the
     // five calls a user has for recovering a key.
     expect(limit.key(req(USER) as never)).not.toContain(RateLimitBucket.GRANT_ROTATE_TOKEN);
+  });
+
+  it('finds by pasted lines in a POST body — a line holds a credential, so never a URL — under the list’s bucket', async () => {
+    const handler = GrantListController.prototype.byLines;
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(1); // RequestMethod.POST
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe('by-lines');
+    const limit = Reflect.getMetadata(RATE_LIMIT_KEY, handler) as RateLimitOptions;
+    expect(limit.key(req(USER) as never)).toBe(`${RateLimitBucket.GRANT_LIST}:${USER}`);
+
+    const grants = { listForUser: vi.fn(async () => ({ total: 0, page: 1, pageSize: 20, hidden: 0, rows: [] })) };
+    await new GrantListController(grants as never).byLines({ lines: ['ss://a@h:1'] }, req(USER) as never);
+    expect(grants.listForUser).toHaveBeenCalledWith(USER, { lines: ['ss://a@h:1'] });
   });
 });
