@@ -475,6 +475,13 @@ export const RateLimitBucket = {
   RESELLER_USER_GRANTS_READ: 'reseller-user-grants:read',
 
   /**
+   * An admin's config action on one user's configs in `billing-service`
+   * (F-311-g), per caller and per request of 1..50 ids. Its own bucket: acting
+   * must not spend the budget for looking, nor the admin's own `CONFIG_ACTION`.
+   */
+  RESELLER_USER_CONFIG_ACTION: 'reseller-user-configs:action',
+
+  /**
    * A named reseller's own campaigns in `notification-service` (F-313-d), per
    * caller. The two-bucket split the reseller users surface uses, for the same
    * reason: the list and the audience count are asked repeatedly while a

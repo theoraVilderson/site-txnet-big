@@ -168,20 +168,26 @@ export class ConfigActionsService {
    * A new credential on the same row. The limit is held in the write's own
    * `where` on the count it read, so two regenerates racing each other cannot
    * both pass (network invariant 4); the loser is refused, never applied.
+   *
+   * **The cap is the user's own** (F-311-g): an admin's or the system's
+   * regenerate neither checks it nor spends it, so support rotating a leaked
+   * credential never costs the user one of theirs. `config_action_log` says
+   * who asked.
    */
   async regenerate(tx: Prisma.TransactionClient, input: { configId: string; actor: ConfigActor }): Promise<{ uuid: string; regenerateUsedCount: number }> {
     const config = await this.live(tx, input.configId, input.actor);
-    if (config.regenerateUsedCount >= config.maxRegenerateCount) {
+    const counted = input.actor.actorType === ActorType.user;
+    if (counted && config.regenerateUsedCount >= config.maxRegenerateCount) {
       throw new ConfigActionRefused('regenerate_limit_reached', `${config.regenerateUsedCount}/${config.maxRegenerateCount}`);
     }
     const uuid = randomUUID();
     const moved = await tx.config.updateMany({
       where: { id: config.id, status: config.status, regenerateUsedCount: config.regenerateUsedCount },
-      data: { uuid, regenerateUsedCount: { increment: 1 }, enforcementState: EnforcementState.pending },
+      data: { uuid, ...(counted ? { regenerateUsedCount: { increment: 1 } } : {}), enforcementState: EnforcementState.pending },
     });
     if (moved.count === 0) throw new ConfigActionRefused('config_changed', config.id);
     await this.log(tx, config.id, input.actor, 'regenerate');
-    return { uuid, regenerateUsedCount: config.regenerateUsedCount + 1 };
+    return { uuid, regenerateUsedCount: config.regenerateUsedCount + (counted ? 1 : 0) };
   }
 
   /**

@@ -2,7 +2,7 @@ import { BackendI18nKeys } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 import { MAX_CONFIG_LABEL_LENGTH } from './line-names';
-import { MAX_BULK_CONFIGS, USER_CONFIG_ACTIONS } from './user-configs';
+import { ADMIN_CONFIG_ACTIONS, MAX_BULK_CONFIGS, USER_CONFIG_ACTIONS } from './user-configs';
 
 const E = BackendI18nKeys.errors.billing;
 
@@ -37,3 +37,21 @@ export const configLabelSchema = z.object({
 });
 
 export type ConfigLabelBody = z.infer<typeof configLabelSchema>;
+
+/**
+ * The body of `POST /api/billing/tenants/:tenantId/users/:userId/configs/actions`
+ * (F-311-g): an admin's action on 1..50 of that user's configs. A disable
+ * carries its `reason` (it is the config's `disabledReason`); a move names
+ * its target panel, and nothing else does.
+ */
+export const adminConfigActionSchema = z
+  .object({
+    action: z.enum(ADMIN_CONFIG_ACTIONS, { message: E.configActionInvalid }),
+    configIds: configActionSchema.shape.configIds,
+    reason: z.string({ message: E.configActionInvalid }).trim().min(1, { message: E.configActionInvalid }).max(200, { message: E.configActionInvalid }).optional(),
+    toPanelId: z.string().uuid({ message: E.configActionInvalid }).optional(),
+  })
+  .refine((b) => (b.action === 'disable') === (b.reason !== undefined), { message: E.configActionInvalid, path: ['reason'] })
+  .refine((b) => (b.action === 'move') === (b.toPanelId !== undefined), { message: E.configActionInvalid, path: ['toPanelId'] });
+
+export type AdminConfigActionBody = z.infer<typeof adminConfigActionSchema>;

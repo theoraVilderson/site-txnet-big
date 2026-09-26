@@ -1,11 +1,15 @@
 import {
+  Body,
   ConflictException,
   Controller,
   ForbiddenException,
   Get,
+  HttpCode,
+  HttpStatus,
   NotFoundException,
   Param,
   ParseUUIDPipe,
+  Post,
   Query,
   Req,
 } from '@nestjs/common';
@@ -16,6 +20,8 @@ import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
 import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import { ConfigActionRefused } from '../../traffic/config-actions';
+import type { AdminConfigCommand } from '../../traffic/user-configs';
+import { AdminConfigActionBody, adminConfigActionSchema } from '../../traffic/user-configs.schema';
 import { GrantListQuery, grantListSchema } from './grant-list.schema';
 import {
   ResellerUserGrantsRefused,
@@ -41,21 +47,30 @@ const readLimit = RateLimit({
   windowSec: 900,
 });
 
+/** Per request, not per config: one request is 1..50 configs. */
+const actionLimit = RateLimit({
+  key: (req: Request) => rateLimitBucketKey(RateLimitBucket.RESELLER_USER_CONFIG_ACTION, identityOf(req).userId),
+  configKey: 'RESELLER_USER_CONFIG_ACTION_RATE_LIMIT',
+  windowSec: 900,
+});
+
 /**
  * An admin reads one user's services (F-311-f): the owner's four reads —
  * Grant list, a Grant's configs, its 30-day usage, its `/sub` link — for a
  * user of the reseller the **path** names. The data half of the panel's and
- * the bot's user sheet (F-311-v, F-311-y).
+ * the bot's user sheet (F-311-v, F-311-y). And their config actions
+ * (F-311-g): regenerate, disable, enable, retire, move — 1..50 ids, one
+ * outcome per id, always 200, as on the owner's route.
  *
  * **No permission guard**, as on every reseller-named surface: `ResellerAccess`
  * is the door, inside the service. **The tenant is the path's**: the owner's
  * session carries the platform's `X-Tenant-Id` (ADR-0059).
  */
-@Controller('billing/tenants/:tenantId/users/:userId/grants')
+@Controller('billing/tenants/:tenantId/users/:userId')
 export class ResellerUserGrantsController {
   constructor(private readonly service: ResellerUserGrantsService) {}
 
-  @Get()
+  @Get('grants')
   @readLimit
   grants(
     @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
@@ -66,7 +81,7 @@ export class ResellerUserGrantsController {
     return this.refusing(() => this.service.grants(actorOf(req), tenantId, userId, query));
   }
 
-  @Get(':grantId/configs')
+  @Get('grants/:grantId/configs')
   @readLimit
   async configs(
     @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
@@ -77,7 +92,7 @@ export class ResellerUserGrantsController {
     return { grantId, rows: await this.refusing(() => this.service.configs(actorOf(req), tenantId, userId, grantId)) };
   }
 
-  @Get(':grantId/usage')
+  @Get('grants/:grantId/usage')
   @readLimit
   async usage(
     @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
@@ -89,7 +104,7 @@ export class ResellerUserGrantsController {
   }
 
   /** Read only: resetting the link is an admin action of its own (F-311-n). */
-  @Get(':grantId/subscription-link')
+  @Get('grants/:grantId/subscription-link')
   @readLimit
   async subscriptionLink(
     @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
@@ -99,6 +114,19 @@ export class ResellerUserGrantsController {
   ) {
     const subscriptionUrl = await this.refusing(() => this.service.subscriptionLink(actorOf(req), tenantId, userId, grantId));
     return { grantId, subscriptionUrl };
+  }
+
+  /** Always 200 with one outcome per config; a refusal of the door, the user or the body is the request's. */
+  @Post('configs/actions')
+  @HttpCode(HttpStatus.OK)
+  @actionLimit
+  async act(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Body(new ZodValidationPipe(adminConfigActionSchema)) body: AdminConfigActionBody,
+    @Req() req: Request,
+  ) {
+    return { action: body.action, results: await this.refusing(() => this.service.act(actorOf(req), tenantId, userId, body as AdminConfigCommand)) };
   }
 
   /**

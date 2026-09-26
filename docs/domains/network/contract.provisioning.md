@@ -33,7 +33,7 @@ split, and a new one has its share before the pass creates its client.
 |---|---|---|
 | `provision(tx, {grantId, panelId, protocol, actor})` | a new row: fresh `uuid`, `present`, enabled, `pending`, `remoteId` null | `grant_not_found`, `grant_not_active`, `panel_not_found` |
 | `provisionForGroup(tx, {grantId, placements: [{panelId, inboundRemoteId, protocol}], credentialGroupId, actor})` | one such row per placement, carrying its `inboundRemoteId`, under one `credentialGroupId`, one rebalance; a `pending` Grant too — its caller is group fulfilment (`contract.groups.md` rules 8–10, `contract.inbounds.md`) | `grant_not_found`, `grant_not_active` (neither `pending` nor `active`) |
-| `regenerate(tx, {configId, actor})` | a fresh `uuid`, `regenerateUsedCount + 1`, `pending` | `regenerate_limit_reached`, `config_changed` |
+| `regenerate(tx, {configId, actor})` | a fresh `uuid`, `pending`; `regenerateUsedCount + 1` for a `user` actor only — an admin's or the system's is outside the user's cap (F-311-g) | `regenerate_limit_reached` (a `user` actor), `config_changed` |
 | `disable(tx, {configId, reason, actor})` | `disabled_by_admin` (or `_by_system`), `desiredEnabled = false`, `disabledReason` | `actor_not_allowed` for a user |
 | `enable(tx, {configId, actor})` | `active`; `desiredEnabled` = the Grant is `active` | `actor_not_allowed` for a user |
 | `retire(tx, {configId, actor})` | `retired`, `absent`, `desiredEnabled = false`, `pending` | — |

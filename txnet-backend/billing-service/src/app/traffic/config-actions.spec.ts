@@ -179,6 +179,20 @@ describe('ConfigActionsService', () => {
     expect(configs[0].claimTag).toBe(tag);
   });
 
+  it("an admin's regenerate is outside the user's cap: it neither checks nor spends it (F-311-g)", async () => {
+    const { service, tx, configs, logs } = build();
+    const { configId, uuid } = await service.provision(tx, { grantId: GRANT, panelId: PANEL_A, protocol: 'vless', actor: OWNER });
+    configs[0].regenerateUsedCount = 3;
+
+    const done = await service.regenerate(tx, { configId, actor: ADMIN });
+
+    expect(done.uuid).not.toBe(uuid);
+    expect(configs[0]).toMatchObject({ uuid: done.uuid, regenerateUsedCount: 3, enforcementState: EnforcementState.pending });
+    expect(logs.at(-1)).toMatchObject({ actorType: ActorType.admin, action: 'regenerate' });
+    // The user's own is still refused at the cap.
+    await expect(service.regenerate(tx, { configId, actor: OWNER })).rejects.toEqual(refusal('regenerate_limit_reached'));
+  });
+
   it('a regenerate that lost the race to another write is refused, not applied twice', async () => {
     const { service, tx, configs } = build();
     const { configId } = await service.provision(tx, { grantId: GRANT, panelId: PANEL_A, protocol: 'vless', actor: OWNER });

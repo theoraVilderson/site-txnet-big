@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ActorType, ConfigProtocol, ConfigStatus, DriftState, DriverType, EnforcementState } from '@prisma/client';
+import { ActorType, ConfigProtocol, ConfigStatus, DriftState, DriverType, EnforcementState, Prisma } from '@prisma/client';
 import { tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,6 +10,17 @@ import { foldConfigText } from './config-text';
 /** What a user may do to their own config from the panel (user, 2026-09-23). Enable/disable is an operator's switch; a move needs a panel list users do not have. */
 export const USER_CONFIG_ACTIONS = ['regenerate', 'retire'] as const;
 export type UserConfigAction = (typeof USER_CONFIG_ACTIONS)[number];
+
+/**
+ * What a reseller's admin may do to one of its users' configs (F-311-g): the
+ * user's two, plus the operator's switch and a move. A regenerate here is
+ * outside the user's cap (`ConfigActionsService.regenerate`).
+ */
+export const ADMIN_CONFIG_ACTIONS = ['regenerate', 'disable', 'enable', 'retire', 'move'] as const;
+export type AdminConfigAction = (typeof ADMIN_CONFIG_ACTIONS)[number];
+
+/** An admin's bulk action. `reason` is a disable's, `toPanelId` a move's; the schema requires each for its action. */
+export type AdminConfigCommand = { action: AdminConfigAction; configIds: readonly string[]; reason?: string; toPanelId?: string };
 
 /** How many configs one bulk request may name. */
 export const MAX_BULK_CONFIGS = 50;
@@ -52,7 +63,8 @@ export type UserConfigView = {
 };
 
 export type UserConfigOutcome =
-  | { configId: string; ok: true }
+  /** `movedTo` is a move's new config: a move retires the row and provisions another. */
+  | { configId: string; ok: true; movedTo?: string }
   | { configId: string; ok: false; reason: ConfigActionRejection | typeof CONFIG_ACTION_FAILED };
 
 const CONFIG_VIEW_COLUMNS = {
@@ -174,16 +186,61 @@ export class UserConfigsService {
   }
 
   /** Runs `action` on each config in its own transaction, in the order named, and answers every outcome. */
-  async act(userId: string, action: UserConfigAction, configIds: readonly string[]): Promise<UserConfigOutcome[]> {
+  act(userId: string, action: UserConfigAction, configIds: readonly string[]): Promise<UserConfigOutcome[]> {
     const actor = { actorType: ActorType.user, actorId: userId };
+    return this.each(action, configIds, async (tx, configId) => {
+      if (action === 'regenerate') await this.actions.regenerate(tx, { configId, actor });
+      else await this.actions.retire(tx, { configId, actor });
+    });
+  }
+
+  /**
+   * An admin's action on `userId`'s configs (F-311-g), as `act` runs a user's.
+   * The caller has already admitted the admin and checked `userId` is their
+   * reseller's. **The fence is here**: an `admin` actor passes
+   * `ConfigActionsService`'s ownership check for any config, so a config that
+   * is not `userId`'s is `config_not_found` — read in the action's own
+   * transaction — and is never acted on.
+   */
+  actAsAdmin(adminId: string, userId: string, command: AdminConfigCommand): Promise<UserConfigOutcome[]> {
+    const actor = { actorType: ActorType.admin, actorId: adminId };
+    return this.each(command.action, command.configIds, async (tx, configId) => {
+      const own = await tx.config.findFirst({ where: { id: configId, userId }, select: { id: true } });
+      if (!own) throw new ConfigActionRefused('config_not_found', configId);
+      switch (command.action) {
+        case 'regenerate':
+          await this.actions.regenerate(tx, { configId, actor });
+          return;
+        case 'disable':
+          await this.actions.disable(tx, { configId, reason: command.reason ?? '', actor });
+          return;
+        case 'enable':
+          await this.actions.enable(tx, { configId, actor });
+          return;
+        case 'retire':
+          await this.actions.retire(tx, { configId, actor });
+          return;
+        case 'move':
+          return (await this.actions.move(tx, { configId, toPanelId: command.toPanelId ?? '', actor })).configId;
+      }
+    });
+  }
+
+  /**
+   * One transaction per config, ids deduplicated, in the order named; a
+   * refusal or a throw is that config's outcome and the rest still run.
+   * `step` may answer a moved config's new id.
+   */
+  private async each(
+    action: string,
+    configIds: readonly string[],
+    step: (tx: Prisma.TransactionClient, configId: string) => Promise<string | void>,
+  ): Promise<UserConfigOutcome[]> {
     const outcomes: UserConfigOutcome[] = [];
     for (const configId of new Set(configIds)) {
       try {
-        await tenantTransaction(this.prisma, async (tx) => {
-          if (action === 'regenerate') await this.actions.regenerate(tx, { configId, actor });
-          else await this.actions.retire(tx, { configId, actor });
-        });
-        outcomes.push({ configId, ok: true });
+        const movedTo = await tenantTransaction(this.prisma, (tx) => step(tx, configId));
+        outcomes.push(movedTo ? { configId, ok: true, movedTo } : { configId, ok: true });
       } catch (e) {
         if (e instanceof ConfigActionRefused) {
           outcomes.push({ configId, ok: false, reason: e.reason });

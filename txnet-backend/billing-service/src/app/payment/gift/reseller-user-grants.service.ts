@@ -10,7 +10,7 @@ import {
 import { GrantService } from '../../entitlement/grant';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GrantUsageService, GrantUsageView } from '../../traffic/grant-usage';
-import { UserConfigsService, UserConfigView } from '../../traffic/user-configs';
+import { AdminConfigCommand, UserConfigOutcome, UserConfigsService, UserConfigView } from '../../traffic/user-configs';
 import { GrantListQuery } from './grant-list.schema';
 import { SubscriptionLinkService } from './subscription-link.service';
 
@@ -28,7 +28,8 @@ export class ResellerUserGrantsRefused extends Error {
 }
 
 /**
- * An admin reads one user's services (F-311-f, spec F-311):
+ * An admin reads one user's services (F-311-f, spec F-311) and acts on their
+ * configs (F-311-g, spec F-307):
  * `/api/billing/tenants/:tenantId/users/:userId/grants...` — the user's
  * Grants, one Grant's configs, its 30-day usage and its `/sub` link.
  *
@@ -72,10 +73,26 @@ export class ResellerUserGrantsService {
     return this.run(actor, tenantId, userId, () => this.links.linkFor(grantId, userId));
   }
 
+  /**
+   * An admin's config action on this user's configs (F-311-g): the door is
+   * `staffWrite`, so a suspended reseller reads its users' services but
+   * changes none. One outcome per config; the fence to this user's configs is
+   * `actAsAdmin`'s.
+   */
+  act(actor: ResellerActor, tenantId: string, userId: string, command: AdminConfigCommand): Promise<UserConfigOutcome[]> {
+    return this.run(actor, tenantId, userId, () => this.configService.actAsAdmin(actor.userId, userId, command), 'staffWrite');
+  }
+
   /** Admit, run in the reseller's scope, check the user is its own, then `work`; the door's refusal becomes this surface's one type. */
-  private async run<T>(actor: ResellerActor, tenantId: string, userId: string, work: () => Promise<T>): Promise<T> {
+  private async run<T>(
+    actor: ResellerActor,
+    tenantId: string,
+    userId: string,
+    work: () => Promise<T>,
+    capability: 'read' | 'staffWrite' = 'read',
+  ): Promise<T> {
     try {
-      return await this.access.run(actor, tenantId, 'read', async () => {
+      return await this.access.run(actor, tenantId, capability, async () => {
         const user = await tenantTransaction(this.prisma, (tx) => tx.user.findFirst({ where: { id: userId }, select: { id: true } }));
         if (!user) throw new ResellerUserGrantsRefused('user_not_found', userId);
         return await work();

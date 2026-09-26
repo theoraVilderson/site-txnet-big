@@ -171,8 +171,34 @@ which asks the four owner reads above — `GrantService.listForUser`,
 | **The reseller is the path's**, and every read runs in its scope | the owner's session carries the platform's `X-Tenant-Id` (ADR-0059) |
 | **Only that reseller's users** (C-15): the user is read first, in the reseller's scope (`user` is RLS-strict and in `TENANT_SCOPED_MODELS`); another tenant's user or none is **404** `user_not_found`, and no Grant is read for them | the Grant reads fence only by `userId`, and `traffic_daily_aggregate` has no tenant at all |
 | The owner reads are asked **as the path's user**, so a Grant of another user of the same reseller is their own **404** `grant_not_found` | their ownership check is the only one that knows a Grant's user |
-| One bucket for all four, `RESELLER_USER_GRANTS_READ`, default **300**/900s per caller; nothing here writes or rotates | expanding one Grant asks three routes at once. Reset link is F-311-n; config actions are F-311-g |
+| One bucket for all four, `RESELLER_USER_GRANTS_READ`, default **300**/900s per caller; none of the four writes or rotates | expanding one Grant asks three routes at once. Reset link is F-311-n; config actions are the next section |
 
 **Not covered:** retired configs (the owner's view leaves them out), and an audit
 row for a read (F-311-r audits actions only). Its consumers are F-311-v (panel)
 and F-311-y (bot).
+
+## An admin's actions on one user's configs (built — F-311-g)
+
+`POST /api/billing/tenants/:tenantId/users/:userId/configs/actions`, on the same
+controller, over `ResellerUserGrantsService.act` -> `UserConfigsService.actAsAdmin`
+-> `ConfigActionsService` with `actorType = admin`, `actorId` = the caller.
+
+| In | Answers `data` |
+|---|---|
+| `{action: regenerate \| disable \| enable \| retire \| move, configIds[1..50], reason?, toPanelId?}` — `reason` (1..200, the config's `disabledReason`) with `disable` and only with it; `toPanelId` with `move` and only with it | `{action, results[{configId, ok: true, movedTo?} \| {configId, ok: false, reason}]}` — always **200**; `movedTo` is a move's new config id |
+
+| Rule | Why |
+|---|---|
+| The door is `ResellerAccess` with capability **`staffWrite`**: a suspended reseller (`read_only`, §14.6) is **403** `reseller_suspended` and nothing is read or written; platform staff pass, as on every reseller surface | it still reads its users' services (the section above) but changes none |
+| The user is the reseller's (C-15) before any config is read, as above: **404** `user_not_found` | the same fence as the reads |
+| **A config must be the path's user's**, read in the action's own transaction; any other — another user of the same reseller included — is the outcome `config_not_found` and is never acted on | an `admin` actor passes `ConfigActionsService`'s ownership check for every config; this is the only fence |
+| One transaction per config, ids deduplicated, in the order named; `reason` is `CONFIG_ACTION_REJECTIONS` or `failed` — the owner route's rules above, unchanged | one refused config must not stop the others |
+| **An admin's regenerate is outside the user's cap**: not checked, not counted (network `contract.provisioning.md`); the log row says `admin` | support rotating a leaked credential must not spend one of the user's three |
+| A move goes to a panel shared or dedicated to the Grant's tenant, not archived, not the config's own (`panel_not_found`, `same_panel`), and only while the Grant is `active` (`grant_not_active`) — `ConfigActionsService.move`, unchanged | the new row is provisioned like a purchase's |
+| Bucket `RESELLER_USER_CONFIG_ACTION`, default **60**/900s per caller, per request | acting must not spend the budget for looking |
+
+**Not covered:** a panel list for the admin to pick a move's target from (the
+owner's systems page has one; a reseller's admin has none yet), an audit row
+beyond `config_action_log` (F-311-r), telling the user (F-311-s). A move of a
+panel group's config lands outside the group, as `move` always has. Consumers
+F-311-v (panel), F-311-y (bot).

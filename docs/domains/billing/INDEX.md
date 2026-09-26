@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 55
+version: 56
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -76,9 +76,9 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-26 | contract v56 (F-311-g): `POST /api/billing/tenants/:tenantId/users/:userId/configs/actions` — an admin's regenerate / disable / enable / retire / move on 1..50 of that user's configs, `staffWrite`, one outcome per id; an admin's regenerate no longer counts against the user's cap. Additive. [contract.gift.md](contract.gift.md). Consumers: F-311-v, F-311-y |
 | 2026-09-26 | contract v55 (F-311-f): `GET /api/billing/tenants/:tenantId/users/:userId/grants` and a Grant's `configs`, `usage`, `subscription-link` under it — the owner reads for a reseller's admin, 404 `user_not_found` for another tenant's user. Additive. [contract.gift.md](contract.gift.md). Consumers: F-311-v, F-311-y |
 | 2026-09-26 | contract v54 (F-027-ci): the holder of 409 `panel_already_registered` / `inbound_assigned_elsewhere` / `inbound_has_configs` travels as `facts` ids (`panelId`; `remoteId`, `groupId`, `configs`) — the envelope had dropped the old body fields, so no client ever received them |
 | 2026-09-26 | contract v53 (F-027-ch): `PUT …/members/:panelId/inbounds` is new (409 `inbound_assigned_elsewhere` / `inbound_has_configs`); a member answers `inbounds`, a panel's inbound `assignedTo`. Additive. [contract.systems.md](contract.systems.md) rule 24c. Consumer panel-web: F-027-ci |
-| 2026-09-26 | contract v52 (F-027-cg): a group member's and a panel's `priority` / `weight` are nullable (null = inherited); both reads add `effective` `{value, layer}`; `PATCH …/members/:panelId` is new. [contract.systems.md](contract.systems.md) rule 24b. Consumer panel-web: this row (types, placement form), F-027-ci (display) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->
