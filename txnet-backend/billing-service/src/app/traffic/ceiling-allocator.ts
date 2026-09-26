@@ -42,13 +42,28 @@ export type ConfigDemand = {
   servedBytes: bigint;
   /** `billing.SubAccount.dataCapBytes` (F-608), or null where the config carries no active sub-account. */
   capBytes: bigint | null;
+  /**
+   * `panel.maxLineRateBps` of the config's panel, in bits per second: how fast
+   * an idle config can drain its floor (ADR-0091). Zero and null are unknown.
+   */
+  lineRateBps?: bigint | null;
 };
 
 export type AllocationInput = {
   /** The bag: what this Grant has bought and not given back. The bound on the whole allocation. */
   purchasedBytes: bigint;
-  /** Headroom every config keeps above what it has served, before the hot one takes the rest. */
+  /**
+   * Headroom every config keeps above what it has served, before the hot one
+   * takes the rest. With `floorSeconds`, the least of it.
+   */
   floorBytes: bigint;
+  /**
+   * The floor in seconds of each config's line (ADR-0091): `lineRateBps / 8 ×
+   * floorSeconds`, at least `floorBytes`, at most an even share of what pass 1
+   * left; an even share where the line rate is unknown. Absent is `floorBytes`
+   * flat, the floor before ADR-0091.
+   */
+  floorSeconds?: number;
   /** The config the hot loop says is consuming (F-027-u). It is first in line for everything. */
   hotConfigId?: string | null;
   configs: ConfigDemand[];
@@ -74,6 +89,16 @@ export type Allocation = {
  * hands out only what is already bought.
  */
 export const DEFAULT_CONFIG_FLOOR_BYTES = BigInt(100 * 1024 * 1024);
+
+/**
+ * How long an idle config's floor lasts at its panel's line rate (ADR-0091):
+ * the bulk pass's interval (`collect.DefaultInterval`, 60s, network-service)
+ * — the longest a config that starts drawing goes unseen — plus the hot loop's
+ * horizon (`HORIZON_SECONDS`, 120s), inside which the next rebalance hands it
+ * the bag. Under it, a user switching inbounds at line rate is cut off before
+ * anything can move bytes to them.
+ */
+export const IDLE_FLOOR_SECONDS = 180;
 
 /** Why nothing was allocated. Nothing was written. */
 export type CeilingAllocationRejection = 'grant_not_found';
@@ -103,7 +128,8 @@ const capOf = (config: ConfigDemand, bag: bigint) => (config.capBytes === null ?
  *    with no ceiling covering it, which is the guarantee failing after the
  *    fact rather than a byte saved.
  * 2. **the floor above it**, so no config is starved to zero headroom while
- *    another one runs.
+ *    another one runs — seconds of its own line (ADR-0091), so a user who
+ *    switches inbounds at full speed is not cut off before the loop reacts.
  * 3. **everything left**, to the hot config first. That is the concentration:
  *    the config actually consuming gets the bag, and the others keep a floor.
  *
@@ -144,7 +170,8 @@ export function allocateCeilings(input: AllocationInput): Allocation {
   };
 
   pass((config) => config.servedBytes);
-  pass((config) => config.servedBytes + floorBytes);
+  const floorOf = floors(input, floorBytes, remaining);
+  pass((config) => config.servedBytes + floorOf(config));
   pass(() => bag);
 
   return {
@@ -155,6 +182,23 @@ export function allocateCeilings(input: AllocationInput): Allocation {
       return { configId: config.configId, ceilingBytes, cappedBySubAccount: config.capBytes !== null && ceilingBytes === config.capBytes };
     }),
     unallocatedBytes: remaining,
+  };
+}
+
+/**
+ * Pass 2's headroom per config. Sized from what pass 1 left, so the floors
+ * together never exceed it and pass 2 always fits: the split stays monotone in
+ * the bag, which the shutdown figure rests on (F-027-w).
+ */
+function floors(input: AllocationInput, floorBytes: bigint, left: bigint): (config: ConfigDemand) => bigint {
+  if (input.floorSeconds === undefined) return () => floorBytes;
+  const even = input.configs.length > 0 ? left / BigInt(input.configs.length) : BigInt(0);
+  const seconds = BigInt(Math.max(0, Math.floor(input.floorSeconds)));
+  return (config) => {
+    const rate = config.lineRateBps;
+    if (rate === null || rate === undefined || rate <= BigInt(0)) return even;
+    const line = (rate / BigInt(8)) * seconds;
+    return min(even, line > floorBytes ? line : floorBytes);
   };
 }
 
@@ -225,6 +269,7 @@ export class CeilingAllocatorService {
         walletBackedCeilingBytes: true,
         counterState: { select: { lifetimeUpBytes: true, lifetimeDownBytes: true } },
         subAccount: { select: { dataCapBytes: true, isActive: true } },
+        panel: { select: { maxLineRateBps: true } },
       },
     });
 
@@ -234,8 +279,14 @@ export class CeilingAllocatorService {
       servedBytes: config.counterState ? config.counterState.lifetimeUpBytes + config.counterState.lifetimeDownBytes : BigInt(0),
       // A deactivated sub-account is not a cap of zero — it is no cap at all (F-608).
       capBytes: config.subAccount?.isActive ? config.subAccount.dataCapBytes : null,
+      lineRateBps: config.panel?.maxLineRateBps ?? null,
     }));
-    const split = { floorBytes: input.floorBytes ?? DEFAULT_CONFIG_FLOOR_BYTES, hotConfigId: input.hotConfigId ?? null, configs: demands };
+    const split = {
+      floorBytes: input.floorBytes ?? DEFAULT_CONFIG_FLOOR_BYTES,
+      floorSeconds: IDLE_FLOOR_SECONDS,
+      hotConfigId: input.hotConfigId ?? null,
+      configs: demands,
+    };
 
     const allocation = allocateCeilings({ purchasedBytes: grant.purchasedBytes, ...split });
 

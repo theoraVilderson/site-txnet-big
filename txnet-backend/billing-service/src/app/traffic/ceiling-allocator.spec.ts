@@ -21,7 +21,7 @@
  */
 import { Prisma } from '@prisma/client';
 
-import { CeilingAllocatorService, DEFAULT_CONFIG_FLOOR_BYTES, allocateCeilings, type ConfigDemand } from './ceiling-allocator';
+import { CeilingAllocatorService, DEFAULT_CONFIG_FLOOR_BYTES, IDLE_FLOOR_SECONDS, allocateCeilings, type ConfigDemand } from './ceiling-allocator';
 
 const MIB = BigInt(1024 * 1024);
 const GRANT = '77777777-7777-4777-8777-777777777777';
@@ -29,7 +29,13 @@ const USER = '88888888-8888-4888-8888-888888888888';
 /** 2^30 — what one unit of `grant.meteredRate` prices (ADR-0073). */
 const GIB_BYTES = BigInt(1024) * MIB;
 
-const demand = (configId: string, servedBytes: bigint, capBytes: bigint | null = null): ConfigDemand => ({ configId, servedBytes, capBytes });
+const demand = (configId: string, servedBytes: bigint, capBytes: bigint | null = null, lineRateBps: bigint | null = null): ConfigDemand => ({
+  configId,
+  servedBytes,
+  capBytes,
+  lineRateBps,
+});
+const GBIT = BigInt(1_000_000_000);
 const sum = (values: bigint[]) => values.reduce((a, b) => a + b, BigInt(0));
 const byId = (allocation: { ceilings: { configId: string; ceilingBytes: bigint }[] }) =>
   new Map(allocation.ceilings.map((c) => [c.configId, c.ceilingBytes]));
@@ -146,6 +152,62 @@ describe('allocateCeilings', () => {
    * of up to six configs, with overruns, sub-account caps, empty bags and
    * floors larger than the bag all reachable.
    */
+  describe('an idle config keeps seconds of its line, not a fixed figure (ADR-0091)', () => {
+    const bag = BigInt(50) * GIB_BYTES;
+    const seconds = { floorBytes, floorSeconds: IDLE_FLOOR_SECONDS };
+    const lineSeconds = (rateBps: bigint) => (rateBps / BigInt(8)) * BigInt(IDLE_FLOOR_SECONDS);
+
+    it('keeps an idle config a few minutes of its gigabit line, and the rest goes to the one in use', () => {
+      // Reported 2026-09-26: 50 GB on two inbounds read 49.9 / 0.09 on x-ui —
+      // 100 MiB is under a second on a gigabit line, and the loop reacts in a minute.
+      const ceilings = byId(
+        allocateCeilings({ purchasedBytes: bag, ...seconds, hotConfigId: null, configs: [demand('a', BigInt(0), null, GBIT), demand('b', BigInt(0), null, GBIT)] }),
+      );
+      expect(ceilings.get('b')).toBe(lineSeconds(GBIT));
+      expect(ceilings.get('a')).toBe(bag - lineSeconds(GBIT));
+    });
+
+    it("sizes it by each config's own panel", () => {
+      const rate = BigInt(100_000_000);
+      const ceilings = byId(
+        allocateCeilings({ purchasedBytes: bag, ...seconds, hotConfigId: 'a', configs: [demand('a', BigInt(0), null, GBIT), demand('b', BigInt(0), null, rate)] }),
+      );
+      expect(ceilings.get('b')).toBe(lineSeconds(rate));
+    });
+
+    it('never keeps more than an even share, so a small bag splits evenly', () => {
+      const small = BigInt(1) * GIB_BYTES;
+      const ceilings = byId(
+        allocateCeilings({ purchasedBytes: small, ...seconds, hotConfigId: 'a', configs: [demand('a', BigInt(0), null, GBIT), demand('b', BigInt(0), null, GBIT)] }),
+      );
+      expect(ceilings.get('b')).toBe(small / BigInt(2));
+      expect(ceilings.get('a')).toBe(small / BigInt(2));
+    });
+
+    it('splits evenly where the panel declares no line rate: nothing says how fast it drains', () => {
+      const ceilings = byId(
+        allocateCeilings({ purchasedBytes: bag, ...seconds, hotConfigId: 'a', configs: [demand('a', BigInt(0)), demand('b', BigInt(0))] }),
+      );
+      expect(ceilings.get('b')).toBe(bag / BigInt(2));
+    });
+
+    it('keeps the fixed floor as the least, on a slow line', () => {
+      const slow = BigInt(1_000_000);
+      const ceilings = byId(
+        allocateCeilings({ purchasedBytes: bag, ...seconds, hotConfigId: 'a', configs: [demand('a', BigInt(0), null, GBIT), demand('b', BigInt(0), null, slow)] }),
+      );
+      expect(ceilings.get('b')).toBe(floorBytes);
+    });
+
+    it('is headroom above what the config has served, as the fixed floor is', () => {
+      const served = BigInt(3) * GIB_BYTES;
+      const ceilings = byId(
+        allocateCeilings({ purchasedBytes: bag, ...seconds, hotConfigId: 'a', configs: [demand('a', BigInt(0), null, GBIT), demand('b', served, null, GBIT)] }),
+      );
+      expect(ceilings.get('b')).toBe(served + lineSeconds(GBIT));
+    });
+  });
+
   describe('over generated Grants (ADR-0072 rule 1)', () => {
     /** Mulberry32 — a seeded PRNG in four lines, so no dependency and no flake. */
     const rng = (seed: number) => () => {
@@ -162,12 +224,19 @@ describe('allocateCeilings', () => {
         const purchasedBytes = BigInt(pick(5_000)) * MIB;
         const configFloor = BigInt(pick(300)) * MIB;
         const configs: ConfigDemand[] = Array.from({ length: 1 + pick(6) }, (unused, i) =>
-          demand(`c${i}`, BigInt(pick(2_000)) * MIB, next() < 0.4 ? BigInt(pick(1_500)) * MIB : null),
+          demand(
+            `c${i}`,
+            BigInt(pick(2_000)) * MIB,
+            next() < 0.4 ? BigInt(pick(1_500)) * MIB : null,
+            next() < 0.3 ? null : BigInt(pick(2_000)) * BigInt(1_000_000),
+          ),
         );
+        // Half the Grants in the seconds floor (ADR-0091), half in the fixed one.
+        const floorSeconds = next() < 0.5 ? IDLE_FLOOR_SECONDS : undefined;
         const hotConfigId = next() < 0.9 ? (configs[pick(configs.length)] as ConfigDemand).configId : null;
         const where = `seed ${seed}`;
 
-        const allocation = allocateCeilings({ purchasedBytes, floorBytes: configFloor, hotConfigId, configs });
+        const allocation = allocateCeilings({ purchasedBytes, floorBytes: configFloor, floorSeconds, hotConfigId, configs });
         const ceilings = byId(allocation);
 
         // The invariant itself: Σ ceilings ≤ purchasedBytes, always (entitlement invariant 8).
@@ -190,7 +259,7 @@ describe('allocateCeilings', () => {
         // shutdown would quietly *lower* one. Monotone in the bag by
         // construction; asserted here because the whole meaning of the column
         // rests on it (`config_wallet_backed_ceiling_extends`).
-        const backed = byId(allocateCeilings({ purchasedBytes: purchasedBytes + BigInt(pick(5_000)) * MIB, floorBytes: configFloor, hotConfigId, configs }));
+        const backed = byId(allocateCeilings({ purchasedBytes: purchasedBytes + BigInt(pick(5_000)) * MIB, floorBytes: configFloor, floorSeconds, hotConfigId, configs }));
         for (const config of configs) {
           const over = backed.get(config.configId) as bigint;
           expect(over >= (ceilings.get(config.configId) as bigint), `${where} ${config.configId} extends rather than lowers`).toBe(true);
@@ -218,6 +287,8 @@ function fakeTx(options: {
   configs: ConfigRow[];
   served: Record<string, bigint>;
   caps?: Record<string, { dataCapBytes: bigint; isActive: boolean }>;
+  /** `panel.maxLineRateBps` per config; absent is a panel that declares none. */
+  rates?: Record<string, bigint>;
   /** `grant.meteredRate`; null makes the Grant prepaid, which has no wallet-backed extension. */
   meteredRate?: string | null;
   /** `wallet.cachedBalance`, in dollars. Undefined is a user with no wallet row. */
@@ -247,6 +318,7 @@ function fakeTx(options: {
           walletBackedCeilingBytes: row.walletBackedCeilingBytes ?? null,
           counterState: options.served[row.id] === undefined ? null : { lifetimeUpBytes: options.served[row.id], lifetimeDownBytes: BigInt(0) },
           subAccount: options.caps?.[row.id] ?? null,
+          panel: { maxLineRateBps: options.rates?.[row.id] ?? null },
         })),
       update: async ({ where, data }: { where: { id: string }; data: { allocatedCeilingBytes?: bigint; walletBackedCeilingBytes?: bigint } }) => {
         const row = rows.find((r) => r.id === where.id);
@@ -269,6 +341,8 @@ describe('CeilingAllocatorService.rebalance', () => {
       purchasedBytes: BigInt(1000) * MIB,
       configs: [config('hot'), config('cold')],
       served: { hot: BigInt(200) * MIB, cold: BigInt(50) * MIB },
+      // A slow line: its seconds are under the floor, so the 100 MiB binds.
+      rates: { hot: BigInt(1_000_000), cold: BigInt(1_000_000) },
     });
 
     const allocation = await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'hot', floorBytes: BigInt(100) * MIB });
@@ -440,10 +514,28 @@ describe('CeilingAllocatorService.rebalance', () => {
       purchasedBytes: DEFAULT_CONFIG_FLOOR_BYTES * BigInt(4),
       configs: [config('a'), config('b')],
       served: { a: BigInt(0), b: BigInt(0) },
+      // A slow line: its seconds are under the floor, so the floor is what binds.
+      rates: { a: BigInt(1_000_000), b: BigInt(1_000_000) },
     });
 
     await service().rebalance(tx, { grantId: GRANT, hotConfigId: 'a' });
 
     expect(rows.find((r) => r.id === 'b')?.allocatedCeilingBytes).toBe(DEFAULT_CONFIG_FLOOR_BYTES);
+  });
+
+  it("sizes an idle config's floor by its own panel's line rate (ADR-0091)", async () => {
+    const bag = BigInt(50) * GIB_BYTES;
+    const { tx, rows } = fakeTx({
+      purchasedBytes: bag,
+      configs: [config('a'), config('b')],
+      served: { a: BigInt(0), b: BigInt(0) },
+      rates: { a: GBIT, b: GBIT },
+    });
+
+    await service().rebalance(tx, { grantId: GRANT });
+
+    const idle = (GBIT / BigInt(8)) * BigInt(IDLE_FLOOR_SECONDS);
+    expect(rows.find((r) => r.id === 'b')?.allocatedCeilingBytes).toBe(idle);
+    expect(rows.find((r) => r.id === 'a')?.allocatedCeilingBytes).toBe(bag - idle);
   });
 });

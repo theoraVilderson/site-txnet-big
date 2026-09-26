@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 14
+version: 15
 updated: 2026-09-26
 ---
 
@@ -74,6 +74,14 @@ left:
    rather than a byte saved.
 2. **the floor above it**, so no config is starved to zero headroom while
    another one runs. A user's phone still connects while their desktop pulls.
+   The floor is **seconds of the config's own panel line** (ADR-0091):
+   `maxLineRateBps / 8 × IDLE_FLOOR_SECONDS` (180 s — the bulk interval, the
+   longest a config that starts drawing goes unseen, plus the hot loop's
+   horizon), at least 100 MiB (`DEFAULT_CONFIG_FLOOR_BYTES`), at most an even
+   share of what pass 1 left — so a small bag splits evenly. A panel that
+   declares no line rate gives the even share. An idle config on a gigabit
+   panel keeps 22.5 GB; at 100 Mbps, 2.25 GB. The floors together
+   never exceed what pass 1 left, so the split stays monotone in the bag.
 3. **everything left**, hot config first. That is the concentration: the config
    actually consuming gets the bag, and the others keep their floor.
 
