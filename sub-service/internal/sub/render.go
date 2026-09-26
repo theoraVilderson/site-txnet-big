@@ -59,7 +59,7 @@ func serves(c Config) bool {
 // subscription lifetimes from then before deleting the client, so no client
 // still holds the line when it goes. A Grant whose only served lines are on
 // draining panels keeps them — dropping them would cut the user off.
-func servedLines(configs []Config) []string {
+func servedLines(configs []Config, naming LineNaming) []string {
 	replaced := false
 	for _, c := range configs {
 		if serves(c) && !c.Draining {
@@ -67,7 +67,7 @@ func servedLines(configs []Config) []string {
 			break
 		}
 	}
-	names := lineNamesOfGrant(configs)
+	names := lineNamesOfGrant(configs, naming)
 	var lines []string
 	for i, c := range configs {
 		if serves(c) && !(replaced && c.Draining) {

@@ -3,7 +3,7 @@ id: tenant
 layer: domain
 status: active
 version: 2
-updated: 2026-09-19
+updated: 2026-09-26
 ---
 
 # Contract — tenant / branding
@@ -21,16 +21,20 @@ rows. Rendering it: the panel is F-066-v, the landing site F-040.
 | `PUT /api/tenants/:id/branding` | same, `staffWrite` | the text, **whole**: a field left out is cleared; the images are untouched |
 | `PUT /api/tenants/:id/branding/assets/:slot` | same | multipart, one field `file`; stores the image and points the slot at it |
 | `DELETE /api/tenants/:id/branding/assets/:slot` | same | clears the slot, then deletes the file; repeats safely |
+| `PUT /api/tenants/:id/branding/line-name-template` | same, `staffWrite` | `{template: string \| null}`; the branding view. Empty or `null` is the platform's `{region}`; a template rule 7 refuses is 400 `validation.failed` |
+| `POST /api/tenants/:id/branding/line-name-template/preview` | same, read | `{template, region}` (a sample region, plain, ≤ 64) → 200 `{name, problem}`: one line's name with this reseller's brand, or `name: null` and why rule 7 would refuse it. Writes nothing |
 | `GET /api/public/tenant/branding` | public (ADR-0065: Traefik `tenant-public`, no `my-auth`; `@PublicRoute` doors `panel`, `assets`). `GET /api/branding` is **@deprecated since 2026-09-19**, same controller, remove after the next release | the branding of the tenant whose Host asked |
 
 Slots: `logo-light`, `logo-dark`, `favicon`, `og-image`. The body of the text
 `PUT`: `brandName` (required, 1-64), `primaryColorHex`, `secondaryColorHex`,
 `supportEmail`, `supportPhone`, `supportUrl`, `socials` (`{telegram, instagram,
 whatsapp, bale, eitaa, rubika, x, youtube, linkedin}`, each optional),
-`aboutText`, `termsUrl`, `privacyUrl`, `defaultLanguage` (`fa` default).
+`aboutText`, `termsUrl`, `privacyUrl`, `defaultLanguage` (`fa` default). It
+never names `lineNameTemplate`, which keeps its own route so an editor of the
+text cannot clear it.
 
-The view: the same fields plus `logoLightUrl`, `logoDarkUrl`, `faviconUrl`,
-`ogImageUrl` and `updatedAt`. A reseller with no row reads as its slug for
+The view: the same fields plus `lineNameTemplate` (F-307-j), `logoLightUrl`,
+`logoDarkUrl`, `faviconUrl`, `ogImageUrl` and `updatedAt`. A reseller with no row reads as its slug for
 `brandName` and nothing else set.
 
 **Who** is `ResellerAccess` (F-061-h, invariant 21), as for domains: a suspended
@@ -49,6 +53,7 @@ only), `reseller_terminated` 409, `too_large` 413, `type_not_allowed` /
 | 4. An image is PNG or WebP — never SVG, and not JPEG (a logo needs transparency) — sniffed by the port. Caps: logos 512 KB, favicon 128 KB, OG image 1 MB; the multipart parser is capped at the largest | an SVG runs script; a type is served as stored |
 | 5. Bytes are written in the **reseller's** scope (`runWithTenant`), then the key; a clear removes the key, then the bytes | the object-storage port's own order: an orphan file, never a key with no file |
 | 6. `GET /api/public/tenant/branding` resolves its tenant with `PublicHostMiddleware` and the file route's doors (`panel`, `assets`; a subdomain or a verified custom domain; never a closed door, ADR-0063). Any other Host is the neutral 404 | a host never answers with another tenant's brand, nor says which tenants exist |
+| 7. **The line-name template** (F-307-j, ADR-0089 rule 4) is the default name of every served config line its buyer has not named: trimmed, ≤ 40 characters, no control or bidi-override character, and no `{`/`}` but the placeholders `{brand}` (the brand name) and `{region}` (the panel's). Numbering (` 2`, ` 3`) is automatic. Billing's config list and `/sub` evaluate it per request, in one pass (`shared-core` `line-name-template.ts`, held with Go to `contracts/network/line-names.json`); a CHECK holds length and trim, and a trigger stamps the tenant for `/sub`'s cache when it, or the brand name while it is set, changes | the name in a buyer's app is the reseller's brand (white-label); per request, so a change needs no backfill; the preview uses the same code, so the panel never builds a name (ADR-0089) |
 
 A replaced image keeps its key, so a browser may show the old one for up to
 five minutes (`Cache-Control: max-age=300` on the file route).
@@ -59,3 +64,6 @@ five minutes (`Cache-Control: max-age=300` on the file route).
 |---|---|
 | panel-web | `GET /api/public/tenant/branding` server-side, by the visitor's host (F-066-v, `interfaces/panel-web/contract.branding.md`) |
 | marketing-web | `GET /api/public/tenant/branding` (F-040, not yet built) |
+| panel-web | the line-name template routes, `/my-resellers/:id/branding` (F-307-k) |
+| billing | `lineNameTemplate` + `brandName`, read in its config list (F-307-j, `contract.gift.md`) |
+| sub-api | the same two, read with the Grant (F-307-j) |

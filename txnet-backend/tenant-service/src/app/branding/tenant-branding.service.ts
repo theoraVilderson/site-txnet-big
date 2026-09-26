@@ -15,12 +15,15 @@ import {
   ResellerAccessRefused,
   ResellerAccessRejection,
   ResellerActor,
+  evaluateLineNameTemplate,
+  lineNameTemplateProblem,
+  type LineNameTemplateProblem,
 } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../config/env.validation';
 import { FILES_PATH } from '../files/files.controller';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
-import type { BrandingSlot, UpdateBrandingInput } from './tenant-branding.schema';
+import type { BrandingSlot, LineNamePreviewInput, UpdateBrandingInput } from './tenant-branding.schema';
 
 /**
  * A reseller's branding (F-018-h, catalog 13.8, D-42 (3)).
@@ -62,8 +65,13 @@ export type BrandingView = {
   termsUrl: string | null;
   privacyUrl: string | null;
   defaultLanguage: Language;
+  /** The default name of a served config line (F-307-j); `null` is the platform's `{region}`. */
+  lineNameTemplate: string | null;
   updatedAt: Date | null;
 };
+
+/** One line's name under a template (F-307-k's preview), or why the template would be refused. */
+export type LineNamePreview = { name: string | null; problem: LineNameTemplateProblem | null };
 
 /** An upload as the controller received it. */
 export type UploadedAsset = { buffer: Buffer; mimetype: string };
@@ -137,6 +145,38 @@ export class TenantBrandingService {
     return this.view(reseller.id, reseller.slug);
   }
 
+  /**
+   * Sets or clears the line-name template (F-307-j, ADR-0089 rule 4). The
+   * schema has judged it. Billing and `/sub` read it per request, and the
+   * row's trigger tells `/sub`'s cache, so nothing else is written.
+   */
+  async setLineNameTemplate(actor: BrandingActor, tenantId: string, template: string | null): Promise<BrandingView> {
+    const reseller = await this.access(actor, tenantId, 'staffWrite');
+    await this.all.tenantBranding.upsert({
+      where: { tenantId: reseller.id },
+      // No row yet: the slug stands in for the name, as for a first upload.
+      create: { tenantId: reseller.id, brandName: reseller.slug, lineNameTemplate: template },
+      update: { lineNameTemplate: template },
+    });
+    this.logger.log(`line-name template of ${reseller.id} set by ${actor.userId}`);
+    return this.view(reseller.id, reseller.slug);
+  }
+
+  /**
+   * One line's name under `template`, with this reseller's brand name and a
+   * sample region (F-307-k): evaluated here, by the rule billing and `/sub`
+   * use, so the panel never builds a name itself (ADR-0089). A template that
+   * would be refused answers why instead of a name.
+   */
+  async previewLineName(actor: BrandingActor, tenantId: string, input: LineNamePreviewInput): Promise<LineNamePreview> {
+    const reseller = await this.access(actor, tenantId, 'read');
+    const problem = lineNameTemplateProblem(input.template);
+    if (problem) return { name: null, problem };
+    const { brandName } = await this.view(reseller.id, reseller.slug);
+    const name = evaluateLineNameTemplate(input.template, { brand: brandName, region: input.region });
+    return { name: name === '' ? null : name, problem: null };
+  }
+
   /** Store one image and point its slot at it. A refused file writes nothing. */
   async upload(actor: BrandingActor, tenantId: string, slot: BrandingSlot, file: UploadedAsset): Promise<BrandingView> {
     const reseller = await this.access(actor, tenantId, 'staffWrite');
@@ -204,6 +244,7 @@ export class TenantBrandingService {
       termsUrl: row?.termsUrl ?? null,
       privacyUrl: row?.privacyUrl ?? null,
       defaultLanguage: row?.defaultLanguage ?? Language.fa,
+      lineNameTemplate: row?.lineNameTemplate ?? null,
       updatedAt: row?.updatedAt ?? null,
     };
   }

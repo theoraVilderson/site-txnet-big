@@ -30,6 +30,8 @@ var RequiredColumns = map[string]map[string][]string{
 	// Which host belongs to whom, and what it may serve (F-066-q).
 	"tenant": {
 		"tenant_domain": {"tenantId", "domainValue", "purpose", "domainType", "verificationStatus"},
+		// A tenant's line-name template and the brand it names (F-307-j).
+		"tenant_branding": {"tenantId", "lineNameTemplate", "brandName"},
 	},
 	// The Grant a token names (F-502), and its Subscription-Userinfo (F-609).
 	"entitlement": {

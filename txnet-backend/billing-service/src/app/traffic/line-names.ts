@@ -6,9 +6,9 @@
  * `contracts/network/line-names.json` and each side is held to it by its own
  * test (`line-names.spec.ts` here). A change here is a change there.
  */
+import { evaluateLineNameTemplate } from '@txnet-backend/shared-core';
 
-/** The default name before a tenant can set its own (F-307-j): the panel's region, e.g. `آلمان`. */
-export const PLATFORM_LINE_NAME_TEMPLATE = '{region}';
+export { PLATFORM_LINE_NAME_TEMPLATE } from '@txnet-backend/shared-core';
 
 /** The longest name a buyer may give a config (CHECK `config_user_label_shape`). */
 export const MAX_CONFIG_LABEL_LENGTH = 40;
@@ -19,6 +19,11 @@ const VMESS = 'vmess://';
 /** One config's part in its Grant's naming: its buyer's label, its panel's region, and the lines it serves. */
 export type NamedConfig = { label: string | null; region: string; lines: readonly string[] };
 
+/** The tenant's part (F-307-j): its template (`null` is the platform's) and its brand name. */
+export type LineNaming = { template: string | null; brand: string };
+
+const PLATFORM_NAMING: LineNaming = { template: null, brand: '' };
+
 /**
  * The name of every line of a Grant, config by config, in the order given.
  * The caller passes the configs not retired whose lines are their current
@@ -26,10 +31,10 @@ export type NamedConfig = { label: string | null; region: string; lines: readonl
  * it does not serve, so a line is named alike in both. `null` keeps the
  * panel's own name.
  */
-export function lineNamesOfGrant(configs: readonly NamedConfig[]): (string | null)[][] {
+export function lineNamesOfGrant(configs: readonly NamedConfig[], naming: LineNaming = PLATFORM_NAMING): (string | null)[][] {
   const given = new Set<string>();
   return configs.map((c) => {
-    const base = c.label ?? PLATFORM_LINE_NAME_TEMPLATE.split('{region}').join(c.region).trim();
+    const base = c.label ?? evaluateLineNameTemplate(naming.template, { brand: naming.brand, region: c.region });
     return c.lines.map(() => {
       if (base === '') return null;
       let name = base;
@@ -41,8 +46,8 @@ export function lineNamesOfGrant(configs: readonly NamedConfig[]): (string | nul
 }
 
 /** Every config's lines, named by `lineNamesOfGrant`. */
-export function nameGrantLines(configs: readonly NamedConfig[]): string[][] {
-  return lineNamesOfGrant(configs).map((names, i) =>
+export function nameGrantLines(configs: readonly NamedConfig[], naming?: LineNaming): string[][] {
+  return lineNamesOfGrant(configs, naming).map((names, i) =>
     names.map((name, j) => (name === null ? configs[i].lines[j] : nameLine(configs[i].lines[j], name))),
   );
 }

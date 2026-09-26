@@ -193,6 +193,10 @@ model TenantBranding {
   termsUrl          String?
   privacyUrl        String?
   defaultLanguage   Language @default(fa)
+  /// The default name of a served config line (F-307-j, ADR-0089 rule 4), e.g.
+  /// `{brand} · {region}`; `null` is the platform's `{region}`. Evaluated per
+  /// request by billing's config list and `/sub`, never stored per config.
+  lineNameTemplate  String?
   updatedAt         DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)

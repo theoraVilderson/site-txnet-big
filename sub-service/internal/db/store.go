@@ -32,7 +32,8 @@ func (s Store) DomainByHost(ctx context.Context, host string) (sub.Domain, bool,
 // `Subscription-Userinfo` is built from (F-609): the traffic limit as text
 // (`sub.userinfo` decides what an unreadable one means) and the sum of its
 // unexpired `traffic_bytes` adjustments, read by `quota_adjustment_grantId_idx`,
-// and whether it was sold with unlimited traffic (F-111-s).
+// and whether it was sold with unlimited traffic (F-111-s), and its tenant's
+// line-name template and brand name (F-307-j), empty with no branding row.
 func (s Store) GrantByTokenHash(ctx context.Context, hash string) (sub.Grant, bool, error) {
 	var g sub.Grant
 	err := s.DB.QueryRow(ctx,
@@ -41,10 +42,14 @@ func (s Store) GrantByTokenHash(ctx context.Context, hash string) (sub.Grant, bo
 		        COALESCE((SELECT sum(a.delta) FROM entitlement.quota_adjustment a
 		                   WHERE a."grantId" = g.id AND a.metric = 'traffic_bytes'
 		                     AND (a."expiresAt" IS NULL OR a."expiresAt" > now())), 0)::bigint,
-		        g."endsAt", g."trafficUnlimited"
-		   FROM entitlement."grant" g WHERE g."subscriptionTokenHash" = $1`, hash,
+		        g."endsAt", g."trafficUnlimited",
+		        COALESCE(b."lineNameTemplate", ''), COALESCE(b."brandName", '')
+		   FROM entitlement."grant" g
+		   LEFT JOIN tenant.tenant_branding b ON b."tenantId" = g."tenantId"
+		  WHERE g."subscriptionTokenHash" = $1`, hash,
 	).Scan(&g.ID, &g.TenantID, &g.Status, &g.BillingMode, &g.ConsumedBytes,
-		&g.TrafficLimit, &g.TrafficAdjustment, &g.EndsAt, &g.TrafficUnlimited)
+		&g.TrafficLimit, &g.TrafficAdjustment, &g.EndsAt, &g.TrafficUnlimited,
+		&g.Naming.Template, &g.Naming.Brand)
 	return g, found(err), missIsNil(err)
 }
 

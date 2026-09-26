@@ -65,7 +65,9 @@ reach the body only when all of these hold:
 
 Order: configs oldest first (`createdAt`, then `id`), each config's lines in
 the panel's order. **Each line is named** (F-307-h, ADR-0089) as billing's
-config list names it: the buyer's `userLabel`, else the panel's `region`; a
+config list names it: the buyer's `userLabel`, else the tenant's
+`lineNameTemplate` (`{brand}`, `{region}`; tenant `contract.branding.md` rule 7,
+F-307-j), else the panel's `region`; a
 name given earlier in the Grant gets ` 2`, ` 3`. Numbered over configs not
 retired with `linksUuid = uuid`, before 1 and 4 drop any, so a line reads
 the same in both (`sub/line_names.go`, held to
@@ -183,9 +185,10 @@ which client apps show as used, remaining and expiry. An app reads
    written. Redis failing is a miss, never an error answer.
 4. A render that starts reading a column no trigger watches adds it to the
    trigger in the same row (ADR-0083 revisit trigger): `config."userLabel"`
-   and `panel.region` since F-307-h.
+   and `panel.region` since F-307-h; `tenant_branding."lineNameTemplate"` and
+   `"brandName"` (stamping the tenant) since F-307-j.
 5. `renderRevision` is bumped when the same lines render differently, or an
-   entry's stored Grant gains a field (`r5`, F-111-s; `r6`, lines named, F-307-h), so a rolling deploy
+   entry's stored Grant gains a field (`r5`, F-111-s; `r6`, lines named, F-307-h; `r7`, the tenant's template, F-307-j), so a rolling deploy
    cannot serve one version's bodies to the other.
 
 ## Emits (events)

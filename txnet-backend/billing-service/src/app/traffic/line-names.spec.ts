@@ -17,6 +17,8 @@ const FIXTURE = join(__dirname, '../../../../../contracts/network/line-names.jso
 type LineCase = { why: string; line: string; name: string; expect?: string; expectVmess?: Record<string, unknown> };
 type GrantCase = {
   why: string;
+  template?: string | null;
+  brand?: string;
   configs: { region: string; label: string | null; lines: number }[];
   expectNames: (string | null)[][];
 };
@@ -46,6 +48,7 @@ describe('contracts/network/line-names.json', () => {
       label: k.label,
       lines: Array.from({ length: k.lines }, (_, j) => `vless://u@h:1#c${i}-${j}`),
     }));
-    expect(lineNamesOfGrant(configs)).toEqual(c.expectNames);
+    const naming = c.template === undefined ? undefined : { template: c.template, brand: c.brand ?? '' };
+    expect(lineNamesOfGrant(configs, naming)).toEqual(c.expectNames);
   });
 });

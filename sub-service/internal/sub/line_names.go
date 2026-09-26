@@ -17,9 +17,28 @@ import (
 // held to it by its own test (line_names_test.go here). A change here is a
 // change there.
 
-// platformLineNameTemplate is the default name before a tenant can set its
-// own (F-307-j): the panel's region, e.g. `آلمان`.
+// platformLineNameTemplate is the default name when a tenant has set no
+// template of its own: the panel's region, e.g. `آلمان`.
 const platformLineNameTemplate = "{region}"
+
+// LineNaming is a tenant's part in naming its lines (F-307-j, ADR-0089 rule
+// 4): its template, empty for the platform's, and its brand name. What a
+// template may hold is tenant-service's rule; here it is only evaluated.
+type LineNaming struct {
+	Template string
+	Brand    string
+}
+
+// base is a line's name from the template, `{brand}` and `{region}` replaced
+// in one pass (a brand name holding `{region}` stays as written), then
+// trimmed; empty keeps the panel's own name.
+func (n LineNaming) base(region string) string {
+	t := n.Template
+	if t == "" {
+		t = platformLineNameTemplate
+	}
+	return strings.TrimSpace(strings.NewReplacer("{brand}", n.Brand, "{region}", region).Replace(t))
+}
 
 var (
 	uriLine      = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*://`)
@@ -38,7 +57,7 @@ func named(c Config) bool {
 // the store's order. A config outside the naming list gets none; nil keeps
 // the panel's own name. A name already given gets " 2", " 3", ... (the first
 // free).
-func lineNamesOfGrant(configs []Config) [][]*string {
+func lineNamesOfGrant(configs []Config, naming LineNaming) [][]*string {
 	given := map[string]bool{}
 	out := make([][]*string, len(configs))
 	for i, c := range configs {
@@ -47,7 +66,7 @@ func lineNamesOfGrant(configs []Config) [][]*string {
 		}
 		base := c.UserLabel
 		if base == "" {
-			base = strings.TrimSpace(strings.ReplaceAll(platformLineNameTemplate, "{region}", c.Region))
+			base = naming.base(c.Region)
 		}
 		out[i] = make([]*string, len(c.LinkLines))
 		if base == "" {

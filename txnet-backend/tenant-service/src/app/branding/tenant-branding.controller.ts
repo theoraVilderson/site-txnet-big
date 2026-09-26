@@ -7,9 +7,11 @@ import {
   Get,
   HttpException,
   HttpStatus,
+  HttpCode,
   NotFoundException,
   Param,
   ParseUUIDPipe,
+  Post,
   Put,
   Req,
   UploadedFile,
@@ -21,13 +23,22 @@ import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
-import { BrandingSlot, UpdateBrandingInput, brandingSlotSchema, updateBrandingSchema } from './tenant-branding.schema';
+import {
+  BrandingSlot,
+  LineNamePreviewInput,
+  UpdateBrandingInput,
+  brandingSlotSchema,
+  lineNamePreviewSchema,
+  lineNameTemplateSchema,
+  updateBrandingSchema,
+} from './tenant-branding.schema';
 import {
   BRANDING_MAX_BYTES,
   BrandingActor,
   BrandingRefused,
   BrandingRejection,
   BrandingView,
+  LineNamePreview,
   TenantBrandingService,
   UploadedAsset,
 } from './tenant-branding.service';
@@ -52,7 +63,8 @@ const STATUS: Record<BrandingRejection, 403 | 404 | 409 | 413 | 415> = {
 /**
  * A reseller's branding (F-018-h): `GET` / `PUT /api/tenants/:id/branding` for
  * the text, `PUT` / `DELETE /api/tenants/:id/branding/assets/:slot` for an
- * image (multipart, field `file`).
+ * image (multipart, field `file`), `PUT .../line-name-template` and its
+ * `POST .../preview` for the default name of a served config line (F-307-j).
  *
  * No `TenantPermissionGuard`: the reseller's owner holds no `tenant.manage`,
  * and is let in by `ResellerAccess` (F-061-h), as the platform owner's staff are.
@@ -73,6 +85,26 @@ export class TenantBrandingController {
     @Body(new ZodValidationPipe(updateBrandingSchema)) body: UpdateBrandingInput,
   ): Promise<BrandingView> {
     return refusing(() => this.branding.update(actorOf(req), id, body));
+  }
+
+  @Put('line-name-template')
+  setLineNameTemplate(
+    @Req() req: Request,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(lineNameTemplateSchema)) body: { template: string | null },
+  ): Promise<BrandingView> {
+    return refusing(() => this.branding.setLineNameTemplate(actorOf(req), id, body.template));
+  }
+
+  /** Writes nothing: a 200 with the name, or with why the template would be refused. */
+  @Post('line-name-template/preview')
+  @HttpCode(200)
+  previewLineName(
+    @Req() req: Request,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(lineNamePreviewSchema)) body: LineNamePreviewInput,
+  ): Promise<LineNamePreview> {
+    return refusing(() => this.branding.previewLineName(actorOf(req), id, body));
   }
 
   // No `dest`, so multer holds the file in memory, capped before the policy

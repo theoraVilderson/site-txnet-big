@@ -20,7 +20,14 @@ const lineNamesFixture = "../../../contracts/network/line-names.json"
 type lineNamesContract struct {
 	PlatformTemplate string `json:"platformTemplate"`
 	MaxLabelLength   int    `json:"maxLabelLength"`
-	LineCases        []struct {
+	TemplateCases    []struct {
+		Why      string  `json:"why"`
+		Template *string `json:"template"`
+		Brand    string  `json:"brand"`
+		Region   string  `json:"region"`
+		Expect   string  `json:"expect"`
+	} `json:"templateCases"`
+	LineCases []struct {
 		Why         string         `json:"why"`
 		Line        string         `json:"line"`
 		Name        string         `json:"name"`
@@ -28,8 +35,10 @@ type lineNamesContract struct {
 		ExpectVmess map[string]any `json:"expectVmess"`
 	} `json:"lineCases"`
 	GrantCases []struct {
-		Why     string `json:"why"`
-		Configs []struct {
+		Why      string  `json:"why"`
+		Template *string `json:"template"`
+		Brand    string  `json:"brand"`
+		Configs  []struct {
 			Region string  `json:"region"`
 			Label  *string `json:"label"`
 			Lines  int     `json:"lines"`
@@ -55,6 +64,20 @@ func TestLineNamesTemplateMatchesContract(t *testing.T) {
 	c := readLineNames(t)
 	if platformLineNameTemplate != c.PlatformTemplate {
 		t.Fatalf("template %q, contract says %q", platformLineNameTemplate, c.PlatformTemplate)
+	}
+}
+
+func TestLineNameTemplateMatchesContract(t *testing.T) {
+	for _, tc := range readLineNames(t).TemplateCases {
+		t.Run(tc.Why, func(t *testing.T) {
+			n := LineNaming{Brand: tc.Brand}
+			if tc.Template != nil {
+				n.Template = *tc.Template
+			}
+			if got := n.base(tc.Region); got != tc.Expect {
+				t.Fatalf("got %q, want %q", got, tc.Expect)
+			}
+		})
 	}
 }
 
@@ -96,7 +119,11 @@ func TestLineNamesOfGrantMatchesContract(t *testing.T) {
 					configs[i].LinkLines = append(configs[i].LinkLines, fmt.Sprintf("vless://u@h:1#c%d-%d", i, j))
 				}
 			}
-			got := lineNamesOfGrant(configs)
+			naming := LineNaming{Brand: tc.Brand}
+			if tc.Template != nil {
+				naming.Template = *tc.Template
+			}
+			got := lineNamesOfGrant(configs, naming)
 			if len(got) != len(tc.ExpectNames) {
 				t.Fatalf("got %d configs, want %d", len(got), len(tc.ExpectNames))
 			}
@@ -121,7 +148,7 @@ func TestServedLinesAreNamedOverTheWholeGrant(t *testing.T) {
 		return Config{PanelState: state, Status: "active", DesiredRemote: "present", UUID: "u", LinksUUID: "u",
 			Region: "de", LinkLines: []string{line}}
 	}
-	got := servedLines([]Config{cfg("down", "vless://a@h:1#x"), cfg("healthy", "vless://b@h:1#x")})
+	got := servedLines([]Config{cfg("down", "vless://a@h:1#x"), cfg("healthy", "vless://b@h:1#x")}, LineNaming{})
 	want := []string{"vless://b@h:1#de%202"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
@@ -136,7 +163,7 @@ func TestRetiredAndDeadLinesTakeNoNumber(t *testing.T) {
 	retired.Status = "retired"
 	dead := c
 	dead.LinksUUID = "old"
-	got := servedLines([]Config{retired, dead, c})
+	got := servedLines([]Config{retired, dead, c}, LineNaming{})
 	if want := []string{"vless://c@h:1#de"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}

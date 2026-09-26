@@ -45,6 +45,9 @@ type Grant struct {
 	TrafficUnlimited bool
 	// EndsAt is nil for a permanent Grant.
 	EndsAt *time.Time
+	// Naming is its tenant's line-name template and brand (F-307-j); both
+	// empty when the tenant has no branding row.
+	Naming LineNaming
 }
 
 // Store is every read this endpoint makes. Neither method writes; the
@@ -180,7 +183,7 @@ func (h *Handler) Serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	body, contentType := render(format, servedLines(configs))
+	body, contentType := render(format, servedLines(configs, grant.Naming))
 	h.write(w, body, contentType, userinfo(grant, live.Usage))
 	if cacheable {
 		h.cache.store(ctx, h.log, key, entry{

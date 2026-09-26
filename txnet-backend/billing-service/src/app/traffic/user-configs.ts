@@ -102,12 +102,17 @@ export class UserConfigsService {
   /** A Grant's live configs, oldest first. Retired ones are gone from the user's view: they deleted them. */
   listForGrant(userId: string, grantId: string): Promise<UserConfigView[]> {
     return tenantTransaction(this.prisma, async (tx) => {
-      const grant = await tx.grant.findFirst({ where: { id: grantId, userId }, select: { id: true } });
+      const grant = await tx.grant.findFirst({ where: { id: grantId, userId }, select: { id: true, tenantId: true } });
       if (!grant) throw new ConfigActionRefused('grant_not_found', grantId);
       const rows = await tx.config.findMany({
         where: { grantId, userId, status: { not: ConfigStatus.retired } },
         select: CONFIG_VIEW_COLUMNS,
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      });
+      // The reseller's line-name template (F-307-j); no row is the platform's.
+      const branding = await tx.tenantBranding.findUnique({
+        where: { tenantId: grant.tenantId },
+        select: { brandName: true, lineNameTemplate: true },
       });
       // `/sub`'s rule (network contract.links.md): lines read from another
       // client are dead links, so they wait for the next capture.
@@ -115,6 +120,7 @@ export class UserConfigsService {
       // Named over this whole list, as `/sub` names it (ADR-0089 rule 3).
       const named = nameGrantLines(
         rows.map((r) => ({ label: r.userLabel, region: r.panel.region, lines: isCurrent(r) ? r.linkLines : [] })),
+        { template: branding?.lineNameTemplate ?? null, brand: branding?.brandName ?? '' },
       );
       return rows.map((r, i) => {
         const current = isCurrent(r);

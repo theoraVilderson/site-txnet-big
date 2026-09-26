@@ -59,9 +59,14 @@ function configRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function build(opts: { grant?: { id: string } | null; configs?: ReturnType<typeof configRow>[]; updated?: number } = {}) {
+type Branding = { brandName: string; lineNameTemplate: string | null } | null;
+
+function build(
+  opts: { grant?: { id: string; tenantId: string } | null; configs?: ReturnType<typeof configRow>[]; updated?: number; branding?: Branding } = {},
+) {
   const asked: {
     grantWhere?: unknown;
+    brandingWhere?: unknown;
     configWhere?: unknown;
     select?: unknown;
     orderBy?: unknown;
@@ -74,7 +79,13 @@ function build(opts: { grant?: { id: string } | null; configs?: ReturnType<typeo
     grant: {
       findFirst: async (args: { where: unknown }) => {
         asked.grantWhere = args.where;
-        return opts.grant === undefined ? { id: GRANT } : opts.grant;
+        return opts.grant === undefined ? { id: GRANT, tenantId: TENANT } : opts.grant;
+      },
+    },
+    tenantBranding: {
+      findUnique: async (args: { where: unknown }) => {
+        asked.brandingWhere = args.where;
+        return opts.branding ?? null;
       },
     },
     config: {
@@ -153,6 +164,20 @@ describe('UserConfigsService.listForGrant', () => {
       ['خانه', [`${line('a').replace('#raw', '')}#${encodeURIComponent('خانه')}`, `${line('b').replace('#raw', '')}#${encodeURIComponent('خانه 2')}`]],
       [null, []],
       [null, [line('c').replace('#raw', '#de-fra')]],
+    ]);
+  });
+
+  it('names lines the buyer did not name by the reseller’s template (F-307-j), read by the Grant’s tenant', async () => {
+    const line = (h: string) => `vless://uuid-now@${h}:443?type=tcp#raw`;
+    const { service, asked, inTenant } = build({
+      branding: { brandName: 'Nova', lineNameTemplate: '{brand} · {region}' },
+      configs: [configRow({ id: C1, linkLines: [line('a')] }), configRow({ id: C2, userLabel: 'خانه', linkLines: [line('b')] })],
+    });
+    const rows = await inTenant(() => service.listForGrant(USER, GRANT));
+    expect(asked.brandingWhere).toEqual({ tenantId: TENANT });
+    expect(rows.map((r) => r.lines)).toEqual([
+      [line('a').replace('#raw', `#${encodeURIComponent('Nova · de-fra')}`)],
+      [line('b').replace('#raw', `#${encodeURIComponent('خانه')}`)],
     ]);
   });
 

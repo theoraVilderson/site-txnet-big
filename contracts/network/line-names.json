@@ -1,6 +1,6 @@
 {
   "$comment": [
-    "How a served config line is named (F-307-g, F-307-h, ADR-0089).",
+    "How a served config line is named (F-307-g, F-307-h, F-307-j, ADR-0089).",
     "",
     "The stored lines are served by two readers in two languages: billing's",
     "config list (TypeScript, the panel's copy) and sub-service (Go, `/sub`).",
@@ -10,8 +10,10 @@
     "TypeScript half is billing-service/src/app/traffic/line-names.spec.ts; the",
     "Go half is sub-service/internal/sub/line_names_test.go.",
     "",
-    "A line's base name: the buyer's `label`, else `platformTemplate` with",
-    "`{region}` as the panel's region; an empty base keeps the panel's own name",
+    "A line's base name: the buyer's `label`, else the tenant's `template`",
+    "(absent or `null` is `platformTemplate`) with `{brand}` as the tenant's",
+    "brand name and `{region}` as the panel's region, each replaced in one pass,",
+    "then trimmed (`templateCases`); an empty base keeps the panel's own name",
     "and takes no part in numbering. The Grant is named as one list: configs",
     "not retired whose lines are their current client's, oldest first (createdAt,",
     "id), each config's lines in order, BEFORE a reader drops what it does not",
@@ -26,6 +28,8 @@
   ],
   "platformTemplate": "{region}",
   "maxLabelLength": 40,
+  "placeholders": ["brand", "region"],
+  "maxTemplateLength": 40,
   "lineCases": [
     {
       "why": "a fragment is replaced",
@@ -76,6 +80,15 @@
       "expect": "[Interface]\nPrivateKey = k"
     }
   ],
+  "templateCases": [
+    { "why": "no template is the platform's: the region", "template": null, "brand": "Nova", "region": "آلمان", "expect": "آلمان" },
+    { "why": "brand and region", "template": "{brand} · {region}", "brand": "Nova", "region": "آلمان", "expect": "Nova · آلمان" },
+    { "why": "a placeholder may repeat", "template": "{region}/{region}", "brand": "Nova", "region": "DE", "expect": "DE/DE" },
+    { "why": "a template with no placeholder is its own text", "template": "VPN", "brand": "Nova", "region": "DE", "expect": "VPN" },
+    { "why": "one pass: a brand name holding a placeholder is not expanded again", "template": "{brand} {region}", "brand": "{region}Net", "region": "DE", "expect": "{region}Net DE" },
+    { "why": "the result is trimmed", "template": "{region} {brand}", "brand": "", "region": "DE", "expect": "DE" },
+    { "why": "an empty result is empty: the panel's own name", "template": "{region}", "brand": "Nova", "region": "", "expect": "" }
+  ],
   "grantCases": [
     {
       "why": "no label: the platform template names every line; the second line of a config is numbered",
@@ -122,6 +135,23 @@
         { "region": "x", "label": null, "lines": 1 }
       ],
       "expectNames": [[], ["x"]]
+    },
+    {
+      "why": "a tenant's template names every line without a label; a label still wins",
+      "template": "{brand} {region}",
+      "brand": "Nova",
+      "configs": [
+        { "region": "آلمان", "label": null, "lines": 2 },
+        { "region": "آلمان", "label": "خانه", "lines": 1 }
+      ],
+      "expectNames": [["Nova آلمان", "Nova آلمان 2"], ["خانه"]]
+    },
+    {
+      "why": "a tenant's template that comes out empty keeps the panel's own name",
+      "template": "{region}",
+      "brand": "Nova",
+      "configs": [{ "region": "", "label": null, "lines": 1 }],
+      "expectNames": [[null]]
     }
   ]
 }

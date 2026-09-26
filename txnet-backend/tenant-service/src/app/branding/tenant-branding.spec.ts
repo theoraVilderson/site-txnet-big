@@ -1,6 +1,6 @@
 import { ObjectStorage, TenantContext, type ObjectDriver, type StoredObjectRow, type StoredObjectStore, ResellerAccess } from '@txnet-backend/shared-core';
 
-import { updateBrandingSchema } from './tenant-branding.schema';
+import { lineNamePreviewSchema, lineNameTemplateSchema, updateBrandingSchema } from './tenant-branding.schema';
 import { BrandingRefused, TenantBrandingService } from './tenant-branding.service';
 
 /**
@@ -134,6 +134,53 @@ describe('TenantBrandingService', () => {
     it('reads a reseller with no row as its slug and nothing else', async () => {
       const { service } = build();
       expect(await service.read(owner, RESELLER)).toMatchObject({ brandName: 'ali', logoLightUrl: null, socials: {}, defaultLanguage: 'fa' });
+    });
+  });
+
+  describe('the line-name template (F-307-j, ADR-0089 rule 4)', () => {
+    const template = (t: unknown) => lineNameTemplateSchema.parse({ template: t }).template;
+
+    it('stores a template trimmed, reads it back, and an empty one is the platform default', async () => {
+      const { service } = build();
+      expect(await service.read(owner, RESELLER)).toMatchObject({ lineNameTemplate: null });
+      // No row yet: the slug stands in for the name, as for a first upload.
+      expect(await service.setLineNameTemplate(owner, RESELLER, template('  {brand} · {region} '))).toMatchObject({
+        brandName: 'ali',
+        lineNameTemplate: '{brand} · {region}',
+      });
+      expect(await service.setLineNameTemplate(owner, RESELLER, template(''))).toMatchObject({ lineNameTemplate: null });
+    });
+
+    it('is left alone by the whole-text PUT, which does not name it', async () => {
+      const { service } = build();
+      await service.setLineNameTemplate(owner, RESELLER, template('{brand}'));
+      expect(await service.update(owner, RESELLER, text())).toMatchObject({ brandName: 'Ali VPN', lineNameTemplate: '{brand}' });
+    });
+
+    it.each([
+      ['a placeholder it does not know', '{brand} {n}'],
+      ['a stray brace', '{brand'],
+      ['more than 40 characters', 'x'.repeat(41)],
+      ['a bidi override', '{brand}\u202e'],
+    ])('refuses %s', (_what, t) => {
+      expect(lineNameTemplateSchema.safeParse({ template: t }).success).toBe(false);
+    });
+
+    it('is written by the owner or staff, never a suspended owner', async () => {
+      const { service } = build({ status: 'suspended' });
+      await expect(service.setLineNameTemplate(owner, RESELLER, '{brand}')).rejects.toMatchObject({ reason: 'reseller_suspended' });
+      await expect(service.setLineNameTemplate(stranger, RESELLER, '{brand}')).rejects.toMatchObject({ reason: 'not_allowed' });
+      await expect(service.setLineNameTemplate(staff, RESELLER, '{brand}')).resolves.toMatchObject({ lineNameTemplate: '{brand}' });
+    });
+
+    it('previews one line\'s name with the reseller\'s brand, or says what is wrong', async () => {
+      const { service } = build();
+      await service.update(owner, RESELLER, text());
+      const preview = (t: string | null) => service.previewLineName(owner, RESELLER, lineNamePreviewSchema.parse({ template: t, region: 'آلمان' }));
+      expect(await preview('{brand} · {region}')).toEqual({ name: 'Ali VPN · آلمان', problem: null });
+      expect(await preview(null)).toEqual({ name: 'آلمان', problem: null });
+      expect(await preview('{brand} {n}')).toEqual({ name: null, problem: 'unknown_placeholder' });
+      await expect(service.previewLineName(stranger, RESELLER, { template: null, region: 'x' })).rejects.toMatchObject({ reason: 'not_allowed' });
     });
   });
 
