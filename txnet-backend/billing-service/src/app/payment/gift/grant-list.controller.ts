@@ -45,15 +45,15 @@ export class GrantListController {
   /**
    * The same list, narrowed to the Grants holding any of up to 20 pasted
    * config lines (F-307-p). A POST only because a line is a credential and
-   * must not travel in a URL; it reads, so it answers 200 and spends the
-   * list's bucket.
+   * must not travel in a URL; it reads, so it answers 200. Its own bucket,
+   * `GRANTS_BY_LINES` (user, 2026-09-26).
    */
   @TenantCapability('subscriptionLink')
   @Post('by-lines')
   @HttpCode(HttpStatus.OK)
   @RateLimit({
-    key: (req) => rateLimitBucketKey(RateLimitBucket.GRANT_LIST, identityOf(req).userId),
-    configKey: 'GRANT_LIST_RATE_LIMIT',
+    key: (req) => rateLimitBucketKey(RateLimitBucket.GRANTS_BY_LINES, identityOf(req).userId),
+    configKey: 'GRANTS_BY_LINES_RATE_LIMIT',
     windowSec: 900,
   })
   byLines(@Body(new ZodValidationPipe(grantsByLinesSchema)) body: GrantsByLinesBody, @Req() req: Request) {

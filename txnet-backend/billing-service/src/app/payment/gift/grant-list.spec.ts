@@ -461,12 +461,14 @@ describe('GrantListController', () => {
     expect(limit.key(req(USER) as never)).not.toContain(RateLimitBucket.GRANT_ROTATE_TOKEN);
   });
 
-  it('finds by pasted lines in a POST body — a line holds a credential, so never a URL — under the list’s bucket', async () => {
+  it('finds by pasted lines in a POST body — a line holds a credential, so never a URL — with a bucket of its own', async () => {
     const handler = GrantListController.prototype.byLines;
     expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(1); // RequestMethod.POST
     expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe('by-lines');
     const limit = Reflect.getMetadata(RATE_LIMIT_KEY, handler) as RateLimitOptions;
-    expect(limit.key(req(USER) as never)).toBe(`${RateLimitBucket.GRANT_LIST}:${USER}`);
+    // Its own per-user budget (user, 2026-09-26): pasting never spends the list's.
+    expect(limit.configKey).toBe('GRANTS_BY_LINES_RATE_LIMIT');
+    expect(limit.key(req(USER) as never)).toBe(`${RateLimitBucket.GRANTS_BY_LINES}:${USER}`);
 
     const grants = { listForUser: vi.fn(async () => ({ total: 0, page: 1, pageSize: 20, hidden: 0, rows: [] })) };
     await new GrantListController(grants as never).byLines({ lines: ['ss://a@h:1'] }, req(USER) as never);

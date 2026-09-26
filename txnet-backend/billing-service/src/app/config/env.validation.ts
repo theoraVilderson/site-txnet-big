@@ -330,6 +330,8 @@ export const envSchema = z.object({
   GRANT_ROTATE_TOKEN_RATE_LIMIT: rateLimit(5),
   /** The "my services" page, refetched on every visit (`payment/gift/grant-list.controller.ts`, F-502-r). */
   GRANT_LIST_RATE_LIMIT: rateLimit(120),
+  /** Config lines pasted into the "my services" search (`payment/gift/grant-list.controller.ts`, F-307-p). */
+  GRANTS_BY_LINES_RATE_LIMIT: rateLimit(60),
   /** Copy link / QR on the "my services" page (`payment/gift/subscription-link.service.ts`, F-114-e-b). */
   SUBSCRIPTION_LINK_RATE_LIMIT: rateLimit(60),
   /** Polled by the service page while metering is down (`traffic/collection-health.controller.ts`, F-027-w). */

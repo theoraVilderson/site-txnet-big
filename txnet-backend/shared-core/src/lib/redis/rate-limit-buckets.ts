@@ -283,6 +283,14 @@ export const RateLimitBucket = {
   GRANT_LIST: 'grant:list',
 
   /**
+   * A user's own Grants found by pasted config lines (F-307-p), per user. Its
+   * own bucket (user, 2026-09-26): a paste reads every live config of the user
+   * to compare lines, so it is tuned apart from the list the panel refetches,
+   * and pasting never spends the budget for simply opening the page.
+   */
+  GRANTS_BY_LINES: 'grant:by-lines',
+
+  /**
    * A Grant's `/sub` link, read (F-114-e-b), per user. It answers a secret, but
    * only the owner's own, as often as asked (ADR-0085), so it is no oracle; it is
    * its own bucket because the reset budget (`GRANT_ROTATE_TOKEN`) is a handful
