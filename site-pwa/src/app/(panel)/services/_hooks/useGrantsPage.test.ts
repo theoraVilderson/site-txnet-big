@@ -58,6 +58,7 @@ const page = (...rows: Partial<GrantRow>[]) => ({
   total: rows.length,
   page: 1,
   pageSize: 20,
+  hidden: 0,
 });
 
 /** A stand-in for `RealtimeClient`; the transport has its own spec. */
@@ -236,5 +237,26 @@ describe("useGrantsPage — a Grant's configs ready (F-111-l)", () => {
     });
 
     expect(result.current.configsAsked).toEqual({ g1: 1, g2: 1 });
+  });
+});
+
+describe("useGrantsPage — which Grants (user, 2026-09-26)", () => {
+  it("asks billing for the current Grants by default and answers how many it left out", async () => {
+    grants.mockResolvedValue({ ...page({ id: "g2", status: "expired" }), hidden: 3 } as never);
+    const { result } = renderHook(() => useGrantsPage(1, "en"));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(grants).toHaveBeenCalledWith(1, 20, "current");
+    expect(result.current.hidden).toBe(3);
+  });
+
+  it("asks for every Grant on scope all, and reads again when the scope changes", async () => {
+    const { result, rerender } = renderHook(({ scope }) => useGrantsPage(1, "en", scope), {
+      initialProps: { scope: "current" as "current" | "all" },
+    });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    rerender({ scope: "all" });
+    await waitFor(() => expect(grants).toHaveBeenLastCalledWith(1, 20, "all"));
   });
 });

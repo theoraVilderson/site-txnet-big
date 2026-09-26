@@ -163,7 +163,7 @@ export type GrantStatus = (typeof GRANT_STATUSES)[number];
  */
 export interface GrantRow {
   id: string;
-  /** Answered for every Grant; billing never filters the list by it. */
+  /** Answered for every Grant; `cancelled` and `exhausted` come only on scope `all`. */
   status: GrantStatus;
   startsAt: string;
   /** `null` = permanent. */
@@ -186,7 +186,13 @@ export interface GrantRow {
   purgeAt: string | null;
 }
 
-export type GrantsPage = Paged<GrantRow>;
+/**
+ * Which Grants the list answers (user, 2026-09-26): `current` leaves out the
+ * ones that will never serve again — `cancelled` and `exhausted` — and `all`
+ * lists every one. `hidden` is how many `current` left out (0 on `all`).
+ */
+export type GrantScope = "current" | "all";
+export type GrantsPage = Paged<GrantRow> & { hidden: number };
 
 /**
  * One variant the shop sells, as `GET /offers` answers it (F-111-e,
@@ -787,8 +793,8 @@ export const billingApi = {
     return call<{ id: string; status: InvoiceStatus }>(`/invoices/${encodeURIComponent(id)}/cancel`, { method: "POST" });
   },
 
-  async grants(page: number, pageSize: number): Promise<GrantsPage> {
-    return call<GrantsPage>(`/gift/grants?page=${page}&pageSize=${pageSize}`, { method: "GET" });
+  async grants(page: number, pageSize: number, scope: GrantScope): Promise<GrantsPage> {
+    return call<GrantsPage>(`/gift/grants?page=${page}&pageSize=${pageSize}&scope=${scope}`, { method: "GET" });
   },
 
   /**

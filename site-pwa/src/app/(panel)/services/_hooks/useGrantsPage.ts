@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { billingApi, type GrantRow } from "@/lib/billing-api";
+import { billingApi, type GrantRow, type GrantScope } from "@/lib/billing-api";
 import { catalogApi } from "@/lib/catalog-api";
 import { userChannel } from "@/lib/realtime";
 import { usePanelRealtime } from "../../_context/PanelRealtimeContext";
@@ -16,6 +16,8 @@ export interface GrantsPageState {
   rows: GrantRow[] | null;
   total: number;
   pageSize: number;
+  /** How many Grants the scope left out — what "show ended services" offers. */
+  hidden: number;
   /** The published `catalog` namespace in the viewer's language, flat by full key. */
   texts: Record<string, string>;
   isLoading: boolean;
@@ -31,7 +33,8 @@ export interface GrantsPageState {
 
 /**
  * One page of the caller's own Grants, plus the names to show them under
- * (F-502-s).
+ * (F-502-s) — in billing's `current` scope unless `all` is asked (F-502-u).
+ * `hidden` is how many `current` left out.
  *
  * **The names are a second read, and a failing one costs only the names.**
  * Billing answers a `nameKey`, not a translated string
@@ -65,9 +68,10 @@ export interface GrantsPageState {
  * reconnects on its own backoff (`lib/realtime.ts`), and `onMissed` is the
  * one read that follows; until then the page shows billing's last answer.
  */
-export function useGrantsPage(page: number, lang: string): GrantsPageState {
+export function useGrantsPage(page: number, lang: string, scope: GrantScope = "current"): GrantsPageState {
   const [rows, setRows] = useState<GrantRow[] | null>(null);
   const [total, setTotal] = useState(0);
+  const [hidden, setHidden] = useState(0);
   const [texts, setTexts] = useState<Record<string, string>>({});
   const [error, setError] = useState<unknown>(null);
 
@@ -77,7 +81,7 @@ export function useGrantsPage(page: number, lang: string): GrantsPageState {
   // What this read *is*, as one string: loading is derived rather than stored,
   // so the skeleton is up in the render that changed the page rather than one
   // render later (`contract.financial.md`'s hook has the longer note).
-  const key = `${page}|${lang}|${asked}`;
+  const key = `${page}|${lang}|${scope}|${asked}`;
   const [loaded, setLoaded] = useState<string | null>(null);
   const isLoading = loaded !== key;
 
@@ -94,17 +98,18 @@ export function useGrantsPage(page: number, lang: string): GrantsPageState {
 
   // The page the quiet read asks for, synced after render as `pendingIds` is:
   // it is read only from a socket event or the clock, never while rendering.
-  const pageRef = useRef(page);
+  const pageRef = useRef({ page, scope });
   useEffect(() => {
-    pageRef.current = page;
-  }, [page]);
+    pageRef.current = { page, scope };
+  }, [page, scope]);
   const quietRead = useCallback(async () => {
     const mine = ++seq.current;
     try {
-      const answer = await billingApi.grants(pageRef.current, PAGE_SIZE);
+      const answer = await billingApi.grants(pageRef.current.page, PAGE_SIZE, pageRef.current.scope);
       if (mine !== seq.current) return;
       setRows(answer.rows);
       setTotal(answer.total);
+      setHidden(answer.hidden);
     } catch {
       // Billing's last answer stays up; a reload or the next event asks again.
     }
@@ -152,12 +157,13 @@ export function useGrantsPage(page: number, lang: string): GrantsPageState {
     (async () => {
       try {
         const [answer, catalogTexts] = await Promise.all([
-          billingApi.grants(page, PAGE_SIZE),
+          billingApi.grants(page, PAGE_SIZE, scope),
           catalogApi.texts(lang).then(flattenTexts).catch(() => ({})),
         ]);
         if (!alive || mine !== seq.current) return;
         setRows(answer.rows);
         setTotal(answer.total);
+        setHidden(answer.hidden);
         setTexts(catalogTexts);
         setError(null);
       } catch (e) {
@@ -167,6 +173,7 @@ export function useGrantsPage(page: number, lang: string): GrantsPageState {
         setError(e);
         setRows(null);
         setTotal(0);
+        setHidden(0);
       } finally {
         if (alive) setLoaded(key);
       }
@@ -174,7 +181,7 @@ export function useGrantsPage(page: number, lang: string): GrantsPageState {
     return () => {
       alive = false;
     };
-  }, [page, lang, key]);
+  }, [page, lang, scope, key]);
 
-  return { rows, total, pageSize: PAGE_SIZE, texts, isLoading, configsAsked, error, retry };
+  return { rows, total, pageSize: PAGE_SIZE, hidden, texts, isLoading, configsAsked, error, retry };
 }

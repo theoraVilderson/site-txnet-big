@@ -34,9 +34,9 @@ import type { UserConfigRow } from "@/lib/billing-api";
  * > a credential billing killed in the same transaction, and one that mints
  * > on a refusal would do the opposite.
  *
- * > **Every status is listed and every status is named.** Billing answers the
- * > status and never filters (`domains/billing/contract.gift.md`), because a
- * > key is lost from an expired Grant as easily as a live one. A status this
+ * > **Every status is named.** The ended ones come only on "show ended
+ * > services" (`domains/billing/contract.gift.md`), but a key is lost from
+ * > them as easily as from a live one. A status this
  * > page has no sentence for is a blank pill, and a status it refuses the
  * > button on is the row the user came for.
  *

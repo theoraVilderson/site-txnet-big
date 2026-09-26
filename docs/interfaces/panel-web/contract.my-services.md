@@ -2,7 +2,7 @@
 id: panel-web
 layer: interface
 status: active
-version: 31
+version: 32
 updated: 2026-09-26
 ---
 
@@ -31,12 +31,13 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
 
 ## Rules
 
-1. **Every Grant is listed and nothing is filtered here.** Billing answers the
-   status and never narrows the list: a user comes for an expired Grant's
-   link as readily as a live one's. There is no status tab, no "active only"
-   default, and the link controls are on every row whatever its status —
-   `/sub` reads the Grant, so a dead Grant's link opens nothing. Paging is the
-   only knob the list has.
+1. **Ended services are hidden by default, one tap away** (F-502-u, user
+   2026-09-26). The page asks billing's `current` scope — `cancelled` and
+   `exhausted` left out, `hidden` counted — and, when `hidden` > 0, one button
+   asks `all`. `?all=1` sits in the URL beside `?page=` and a toggle goes back
+   to page 1. Expired and suspended Grants are always in the default list.
+   The filter is billing's, never this page's: a page filtered here comes back
+   short. The link controls are on every row whatever its status.
 2. **Every status billing can answer has a tone and a sentence**
    (`_lib/my-services.ts`). A status with no row renders as a blank pill next
    to a service someone is trying to understand, so the spec reads the union

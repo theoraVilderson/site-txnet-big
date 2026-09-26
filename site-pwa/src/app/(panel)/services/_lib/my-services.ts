@@ -27,10 +27,10 @@ export interface GrantTone {
 /**
  * The colours a service is read by (F-502-s).
  *
- * **Every status billing can answer has a row here**, because billing never
- * filters the list (`domains/billing/contract.gift.md`): a key is lost from an
- * expired Grant as easily as a live one, so the dead statuses are exactly the
- * rows a user comes to this page for. A status with no row is a blank pill,
+ * **Every status billing can answer has a row here**: the ended ones
+ * (`cancelled`, `exhausted`) come only on "show ended services", but a link is
+ * lost from them as easily as from a live one, so they are rows a user comes
+ * to this page for. A status with no row is a blank pill,
  * which is why the spec reads the union out of `entitlement.prisma`.
  *
  * Every colour is a theme token, never a raw palette class — three themes ship
