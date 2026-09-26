@@ -1,4 +1,4 @@
-import { RequestHeaders, type OutboxMessage } from '@txnet-backend/shared-core';
+import { OutboxEventType, RequestHeaders, type OutboxMessage } from '@txnet-backend/shared-core';
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -17,6 +17,13 @@ import { BrokerService } from '../broker/broker.service';
  * or an unreadable answer throws and the event dead-letters; the minute sweep
  * stands behind it, as `tenant_subscription_renewal` does behind
  * `TenantBillingCreditedConsumer`.
+ *
+ * `network.config.confirmed` (F-111-n) is the second half for a network
+ * Grant: the purchase placed its configs, and the read that finds one on its
+ * panel asks billing's `POST /api/internal/billing/network/grants/:grantId/fulfil`
+ * — group fulfilment for that one Grant, which activates it on
+ * `minHealthyPanels` confirmed configs. Not `/deliver`: that check runs on the
+ * delivery clock and is not due again for a minute.
  */
 @Injectable()
 export class GrantCreatedConsumer implements OnApplicationBootstrap {
@@ -36,7 +43,7 @@ export class GrantCreatedConsumer implements OnApplicationBootstrap {
 
   async onApplicationBootstrap() {
     await this.broker.consumeGrantCreated((event) => this.handle(event));
-    this.logger.log('consuming entitlement.grant.created to deliver at once');
+    this.logger.log('consuming entitlement.grant.created and network.config.confirmed to deliver at once');
   }
 
   async handle(event: OutboxMessage): Promise<void> {
@@ -45,7 +52,10 @@ export class GrantCreatedConsumer implements OnApplicationBootstrap {
     if (!this.baseUrl) throw new Error('BILLING_API_BASE_URL is not set');
     if (!this.serviceToken) throw new Error('SERVICE_AUTH_TOKEN is not set');
 
-    const path = `/api/internal/billing/entitlement/grants/${encodeURIComponent(grantId)}/deliver`;
+    const path =
+      event.type === OutboxEventType.CONFIG_CONFIRMED
+        ? `/api/internal/billing/network/grants/${encodeURIComponent(grantId)}/fulfil`
+        : `/api/internal/billing/entitlement/grants/${encodeURIComponent(grantId)}/deliver`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
@@ -59,6 +69,7 @@ export class GrantCreatedConsumer implements OnApplicationBootstrap {
       const outcome = envelopeData(await response.json())?.outcome;
       if (typeof outcome !== 'string') throw new Error(`billing answered ${path} without an 'outcome'`);
       if (outcome === 'delivered' || outcome === 'refunded') this.logger.log(`grant ${grantId} ${outcome} on its purchase`);
+      if (outcome === 'activated') this.logger.log(`grant ${grantId} activated on its config's confirmation`);
     } finally {
       clearTimeout(timer);
     }

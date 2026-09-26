@@ -106,6 +106,16 @@ rows are written through `ConfigActionsService.provisionForGroup`
     (`contract.budget.md`). One Grant's failure is counted in `grantsFailed`
     and named again next tick. Answer: `scanned`, `configsPlaced`,
     `grantsActivated`, `grantsFailed`.
+11a. **A confirmed config activates its Grant at once** (F-111-n). The read
+    that finds a present client `complete` — where the row said otherwise —
+    writes `network.config.confirmed` `{tenantId, userId, grantId, configId}`
+    in the statement that records it (`PostgresDesired.Record`, ADR-0021);
+    a config with no Grant announces nothing. `worker-service`'s
+    `GrantCreatedConsumer` asks `POST …/network/grants/:grantId/fulfil`
+    (`ServiceOnlyGuard`): `fulfil` for that one Grant, only while `pending`,
+    answering `{outcome: skipped | waiting | activated}`. The sweep above
+    stays the backstop for a lost event. Measured 2026-09-26 before it:
+    paid 04:18:03, confirmed 04:18:33, active 04:19:17.
 12. **`priority` / `weighted` are refused** (`strategy_not_built`) by `fulfil`,
     and the sweep does not name them (rule 7).
 

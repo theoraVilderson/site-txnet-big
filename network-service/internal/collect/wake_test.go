@@ -168,3 +168,52 @@ func TestAWakeDoesNotAskAPanelThatIsRefusingUs(t *testing.T) {
 		t.Fatalf("a panel inside its cool-off was converged %d times, want 0 (F-027-v)", got)
 	}
 }
+
+// F-111-n: a pass that wrote to a panel asks for the read that confirms it,
+// ~2s later instead of on the next minute's pass.
+
+func (l *turnLog) confirming(panelID string) []bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var out []bool
+	for _, r := range l.turns {
+		if r.PanelID == panelID {
+			out = append(out, r.Confirming)
+		}
+	}
+	return out
+}
+
+func TestAConfirmRunsOneTurnMarkedConfirming(t *testing.T) {
+	r := newWakeRig(t, "panel-1")
+	r.waker.Confirm(context.Background(), "panel-1")
+	r.waker.Confirm(context.Background(), "panel-1")
+	settle()
+	if got := r.turns.confirming("panel-1"); len(got) != 1 || !got[0] {
+		t.Fatalf("turns = %v, want one confirming turn", got)
+	}
+}
+
+func TestAConfirmAskedDuringATurnRunsAConfirmingTurnAfterIt(t *testing.T) {
+	r := newWakeRig(t, "panel-1")
+	r.turns.hold = make(chan struct{})
+	r.waker.Wake(context.Background(), "panel-1")
+	time.Sleep(3 * wakeDebounce) // the woken turn is inside Converge, as its own write would ask
+	r.waker.Confirm(context.Background(), "panel-1")
+	close(r.turns.hold)
+	settle()
+	if got := r.turns.confirming("panel-1"); len(got) != 2 || got[0] || !got[1] {
+		t.Fatalf("turns = %v, want the woken turn, then a confirming one", got)
+	}
+}
+
+func TestAWakeAndAConfirmInOneWindowAreOneOrdinaryTurn(t *testing.T) {
+	r := newWakeRig(t, "panel-1")
+	r.waker.Confirm(context.Background(), "panel-1")
+	r.waker.Wake(context.Background(), "panel-1")
+	settle()
+	// Ordinary, so a write it makes for the new desired state is confirmed in turn.
+	if got := r.turns.confirming("panel-1"); len(got) != 1 || got[0] {
+		t.Fatalf("turns = %v, want one ordinary turn", got)
+	}
+}

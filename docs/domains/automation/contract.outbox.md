@@ -232,11 +232,11 @@ Both in `outbox/tenant-renewal.consumers.ts`. The producers are tenant's:
 ## A purchase delivered at once (F-114-i)
 
 `GrantCreatedConsumer`, queue `AUTOMATION_GRANT_CREATED_QUEUE` bound to exactly
-`outbox.entitlement.grant.created`, written by the invoice payment.
+`outbox.entitlement.grant.created` (the invoice payment) and `outbox.network.config.confirmed` (F-111-n).
 
 | Rule | Why |
 |---|---|
-| `POST /api/internal/billing/entitlement/grants/:grantId/deliver` — the sweep's check for this one Grant, only while `pending` and due; **no marker** | a repeat answers `skipped` and moves no clock; a feature is live a second after payment, not up to a minute |
+| `POST /api/internal/billing/entitlement/grants/:grantId/deliver` — the sweep's check for this one Grant, only while `pending` and due; **no marker**. A confirmed config asks `…/network/grants/:grantId/fulfil` instead (network `contract.groups.md` rule 11a): `/deliver` is not due again for a minute | a repeat answers `skipped` and moves no clock; a feature is live a second after payment, a network Grant seconds after its panel is read |
 | A refusal, an unset seam, an answer without `outcome`, or a payload without `grantId` throws and dead-letters | the minute `grant_delivery` sweep stays the backstop |
 
 ## What is not built

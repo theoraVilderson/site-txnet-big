@@ -326,12 +326,30 @@ func TestDesiredRecordAnnouncesACaptureInTheSameStatement(t *testing.T) {
 		t.Fatalf("Record: %v", err)
 	}
 	sql := f.sql[0]
-	for _, part := range []string{"INSERT INTO automation.outbox_event", "RETURNING", `"grantId"`, `"userId"`, `"tenantId"`, "WHERE $8"} {
+	for _, part := range []string{"INSERT INTO automation.outbox_event", "RETURNING", `"grantId"`, `"userId"`, `"tenantId"`, "($13::text, $8::boolean"} {
 		if !strings.Contains(sql, part) {
 			t.Errorf("the capture's announcement is missing %q", part)
 		}
 	}
-	if got := f.args[0][len(f.args[0])-1]; got != LinksCapturedEvent {
+	if got := f.args[0][12]; got != LinksCapturedEvent {
 		t.Errorf("announced as %v, want %s", got, LinksCapturedEvent)
+	}
+}
+
+func TestDesiredRecordAnnouncesAConfirmationOfAGrantsConfigInTheSameStatement(t *testing.T) {
+	at := time.Date(2026, 9, 26, 10, 0, 0, 0, time.UTC)
+	f := &pgDB{}
+	err := PostgresDesired{DB: f}.Record(context.Background(), []Outcome{
+		{ConfigID: pgConfig, RemoteID: "r-1", State: StateComplete, At: at, UUID: "uuid-1", Enabled: true, Present: true, Confirmed: true},
+	})
+	if err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	if !strings.Contains(f.sql[0], `r."grantId" IS NOT NULL`) {
+		t.Error("a confirmation is announced for a config with no Grant: nothing to activate")
+	}
+	args := f.args[0]
+	if args[len(args)-2] != ConfirmedEvent || args[len(args)-1] != true {
+		t.Errorf("args end %v, want the confirmation announced as %s", args[len(args)-2:], ConfirmedEvent)
 	}
 }

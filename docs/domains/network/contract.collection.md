@@ -101,6 +101,14 @@ loop is proved against.
    the broker — under the panel's turn lock and health gate, over the panels
    the last pass offered (`Offered`). A lost wake or an unoffered panel is left
    to this loop, which stays the safety net.
+6. **A turn that wrote asks for the read that confirms it** (F-111-n). A
+   write leaves the row `partial` until a read finds it, and a Grant
+   activates only on that read (`contract.groups.md` rules 10, 11a). So a
+   pass with a provisioning write calls `Converger.Confirm` — `Waker.Confirm`
+   — and a convergence turn marked `Result.Confirming` runs after the same 2s
+   debounce. A confirming turn never asks again: a panel that does not hold
+   what we write costs one extra client list, then the minute loop. A wake in
+   the same window makes it an ordinary turn.
 
 Each pass logs one line, plus one per panel that did not complete, with its
 `Op`. The hot loop reads through the same panels, drivers and cursors, and

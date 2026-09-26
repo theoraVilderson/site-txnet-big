@@ -63,6 +63,14 @@ describe('GrantCreatedConsumer (F-114-i)', () => {
     expect((calls[0].init.headers as Record<string, string>)[RequestHeaders.serviceToken]).toBe('svc');
   });
 
+  it('asks billing to fulfil the Grant a confirmed config serves, not to deliver it again (F-111-n)', async () => {
+    const { consumer: c, calls } = consumer({ body: { ok: true, msg: 'ok', data: { outcome: 'activated' } } });
+    await c.handle({ ...event({ configId: 'cfg-1' }), aggregate: 'network.config', type: OutboxEventType.CONFIG_CONFIRMED });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe(`http://billing:3000/api/internal/billing/network/grants/${GRANT}/fulfil`);
+    expect((calls[0].init.headers as Record<string, string>)[RequestHeaders.serviceToken]).toBe('svc');
+  });
+
   it('throws on a refusal or an answer without its outcome — the sweep stands behind it', async () => {
     await expect(consumer({ status: 500 }).consumer.handle(event())).rejects.toThrow(/500/);
     await expect(consumer({ body: { ok: true, msg: 'ok', data: {} } }).consumer.handle(event())).rejects.toThrow(/outcome/);
@@ -97,6 +105,7 @@ describe('every outbox event type has a bound queue (F-114-i)', () => {
     const bound = await workerBindings();
     const claimed = Object.values(OutboxEventType).filter((t) => OUTBOX_EVENT_BINDER[t] === 'worker-service');
     expect(claimed).toContain(OutboxEventType.GRANT_CREATED);
+    expect(claimed).toContain(OutboxEventType.CONFIG_CONFIRMED);
     for (const type of claimed) expect(bound.has(outboxRoutingKey(type)), type).toBe(true);
     const others = Object.values(OutboxEventType).filter((t) => OUTBOX_EVENT_BINDER[t] !== 'worker-service');
     for (const type of others) expect(bound.has(outboxRoutingKey(type)), type).toBe(false);

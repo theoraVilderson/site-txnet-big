@@ -157,6 +157,10 @@ type Result struct {
 	Quarantines   []Quarantine
 	Unattributed  []Unattributed
 	Advances      []Advance
+	// Confirming marks a convergence turn asked for to read back what an
+	// earlier turn wrote (F-111-n). Such a turn does not ask for another, so a
+	// panel that never holds what we write is left to the minute pass.
+	Confirming bool
 }
 
 // Advance is one cursor's new value. Session holds the per-session high-water

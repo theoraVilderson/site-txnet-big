@@ -75,9 +75,10 @@ func (m *MemoryAllocations) Applied(configID string) (AppliedCeiling, bool) {
 // the pass is proved against, as MemoryAllocations is; `PostgresDesired` reads
 // `network.config` (F-027-bo).
 type MemoryDesired struct {
-	mu      sync.Mutex
-	byPanel map[string][]string
-	rows    map[string]DesiredConfig
+	mu        sync.Mutex
+	byPanel   map[string][]string
+	rows      map[string]DesiredConfig
+	confirmed []string
 }
 
 func NewMemoryDesired() *MemoryDesired {
@@ -114,12 +115,23 @@ func (m *MemoryDesired) Record(_ context.Context, outcomes []Outcome) error {
 			continue
 		}
 		row.RemoteID, row.State = o.RemoteID, o.State
+		if o.Confirmed {
+			m.confirmed = append(m.confirmed, o.ConfigID)
+		}
 		if o.Links != nil {
 			row.Links = *o.Links
 		}
 		m.rows[o.ConfigID] = row
 	}
 	return nil
+}
+
+// Confirmed is the configs whose confirmation was announced, in order
+// (F-111-n) — what `PostgresDesired` writes to the outbox.
+func (m *MemoryDesired) Confirmed() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]string(nil), m.confirmed...)
 }
 
 func (m *MemoryDesired) RecordDrift(_ context.Context, verdicts []Verdict) error {

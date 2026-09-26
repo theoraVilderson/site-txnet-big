@@ -97,13 +97,19 @@ func (s PostgresDesired) For(ctx context.Context, panelID string) ([]DesiredConf
 // contracts/realtime/events.json.
 const LinksCapturedEvent = "network.grant.linksCaptured"
 
+// ConfirmedEvent is the outbox type a config's confirming read is announced
+// under (F-111-n): worker-service asks billing to fulfil that one Grant, which
+// activates it once `minHealthyPanels` confirm (contract.groups.md rule 10).
+const ConfirmedEvent = "network.config.confirmed"
+
 // recordSQL writes one outcome over the desired state it was judged against,
 // in the same statement: an action that wrote in between leaves no row to
 // update, and the next pass judges what it wrote. The lines move only with a
 // capture ($8), and then with their key and time together
-// (`config_links_captured_from_a_client`). A capture is announced in the same
-// statement, so the event and the lines commit or fail together (ADR-0021);
-// a dropped outcome updates no row and announces nothing.
+// (`config_links_captured_from_a_client`). A capture ($8) and a confirmation
+// of a Grant's config ($15) are announced in the same statement, so the event
+// and the row commit or fail together (ADR-0021); a dropped outcome updates no
+// row and announces nothing.
 const recordSQL = `
 WITH recorded AS (
 UPDATE network.config
@@ -118,14 +124,15 @@ UPDATE network.config
    AND uuid = $5 AND "desiredEnabled" = $6 AND ("desiredRemote" = 'present') = $7
 RETURNING id, "tenantId", "userId", "grantId")
 INSERT INTO automation.outbox_event (id, aggregate, "aggregateId", type, payload)
-SELECT gen_random_uuid(), 'network.config', r.id::text, $13::text,
+SELECT gen_random_uuid(), 'network.config', r.id::text, e.type,
        jsonb_build_object(
          'tenantId', r."tenantId"::text,
          'userId', r."userId"::text,
          'grantId', r."grantId"::text,
          'configId', r.id::text)
   FROM recorded r
- WHERE $8`
+ CROSS JOIN (VALUES ($13::text, $8::boolean, false), ($14::text, $15::boolean, true)) AS e(type, due, confirm)
+ WHERE e.due AND (NOT e.confirm OR r."grantId" IS NOT NULL)`
 
 // Record writes each outcome on its own: a capture carries an array per row,
 // which one set-based statement cannot. An outcome whose row moved on is
@@ -146,7 +153,7 @@ func (s PostgresDesired) Record(ctx context.Context, rows []Outcome) error {
 		if _, err := s.DB.Exec(ctx, recordSQL,
 			o.ConfigID, o.RemoteID, string(o.State), o.At,
 			o.UUID, o.Enabled, o.Present,
-			captured, lines, linksRemote, linksUUID, linksAt, LinksCapturedEvent); err != nil {
+			captured, lines, linksRemote, linksUUID, linksAt, LinksCapturedEvent, ConfirmedEvent, o.Confirmed); err != nil {
 			return fmt.Errorf("recording config %s: %w", o.ConfigID, err)
 		}
 	}

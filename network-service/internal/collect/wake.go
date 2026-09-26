@@ -41,9 +41,13 @@ type Waker struct {
 // wakeState is one panel with a turn armed. `running` is set once the turn
 // holds the panel, after which it may already have read the desired state, so
 // a wake then asks for one more turn (`again`) rather than folding.
+// `confirming` is a turn asked for only to read back a write (F-111-n); a
+// wake folded into it makes it an ordinary one.
 type wakeState struct {
-	running bool
-	again   bool
+	running    bool
+	again      bool
+	confirming bool
+	confirm    bool
 }
 
 // Wake asks for the panel's turn. It never blocks: the turn runs on its own
@@ -54,25 +58,43 @@ func (w *Waker) Wake(ctx context.Context, panelID string) {
 	if s, ok := w.state[panelID]; ok {
 		if s.running {
 			s.again = true
+		} else {
+			s.confirming = false
 		}
 		return
 	}
-	w.armLocked(ctx, panelID)
+	w.armLocked(ctx, panelID, false)
 }
 
-func (w *Waker) armLocked(ctx context.Context, panelID string) {
+// Confirm asks for a turn that reads back what a turn just wrote (F-111-n):
+// a created client is `complete`, and its Grant activates, on the read after
+// the write, and without this that read is the next minute's pass. It folds
+// like a wake, and one asked during a turn runs after it.
+func (w *Waker) Confirm(ctx context.Context, panelID string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if s, ok := w.state[panelID]; ok {
+		if s.running {
+			s.confirm = true
+		}
+		return
+	}
+	w.armLocked(ctx, panelID, true)
+}
+
+func (w *Waker) armLocked(ctx context.Context, panelID string, confirming bool) {
 	if w.state == nil {
 		w.state = map[string]*wakeState{}
 	}
-	s := &wakeState{}
+	s := &wakeState{confirming: confirming}
 	w.state[panelID] = s
 	time.AfterFunc(w.debounce(), func() {
 		w.turn(ctx, panelID, s)
 		w.mu.Lock()
 		defer w.mu.Unlock()
 		delete(w.state, panelID)
-		if s.again && ctx.Err() == nil {
-			w.armLocked(ctx, panelID)
+		if (s.again || s.confirm) && ctx.Err() == nil {
+			w.armLocked(ctx, panelID, !s.again)
 		}
 	})
 }
@@ -91,6 +113,7 @@ func (w *Waker) turn(ctx context.Context, panelID string, s *wakeState) {
 	}
 	w.mu.Lock()
 	s.running = true
+	confirming := s.confirming
 	w.mu.Unlock()
 	if l.Health != nil && !l.Health.Ask(p.ID, l.now()) {
 		// Inside its cool-off (F-027-v): a wake is no reason to ask a panel
@@ -98,7 +121,7 @@ func (w *Waker) turn(ctx context.Context, panelID string, s *wakeState) {
 		return
 	}
 	l.log().Debug("panel woken", "panel", p.ID)
-	l.converge(ctx, p, Result{PanelID: p.ID, OwnershipType: p.OwnershipType, TenantID: p.TenantID, ObservedAt: l.now()})
+	l.converge(ctx, p, Result{PanelID: p.ID, OwnershipType: p.OwnershipType, TenantID: p.TenantID, ObservedAt: l.now(), Confirming: confirming})
 }
 
 func (w *Waker) offered(panelID string) (Panel, bool) {

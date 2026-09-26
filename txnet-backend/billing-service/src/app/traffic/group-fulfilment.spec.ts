@@ -89,6 +89,10 @@ function build(opts: { status?: GrantStatus; strategy?: PanelGroupStrategy; minH
 
   // The load query, answered from the rows: per (panel, inbound) and per panel, live configs only.
   const crossTenant = {
+    grant: {
+      findFirst: async ({ where }: { where: { id: string; status: GrantStatus } }) =>
+        where.id === GRANT && where.status === grant.status ? { id: GRANT, tenantId: TENANT } : null,
+    },
     $queryRaw: async (_s: TemplateStringsArray, panelIds: string[]) => {
       const live = [...configs, ...others].filter((c) => panelIds.includes(c.panelId as string) && c.desiredRemote === DesiredRemote.present && !c.drainedAt);
       const rows: Record<string, unknown>[] = [];
@@ -110,7 +114,8 @@ function build(opts: { status?: GrantStatus; strategy?: PanelGroupStrategy; minH
       return {};
     },
   };
-  const service = new GroupFulfilmentService(new ConfigActionsService(allocator as never), {} as never, crossTenant as never);
+  const prisma = { $transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(tx) };
+  const service = new GroupFulfilmentService(new ConfigActionsService(allocator as never), prisma as never, crossTenant as never);
   return { service, tx: tx as unknown as Prisma.TransactionClient, grant, group, configs, rebalanced, outbox, locked };
 }
 
@@ -308,5 +313,33 @@ describe('the system actor', () => {
     (tx as unknown as { configActionLog: { create: (a: { data: Record<string, unknown> }) => unknown } }).configActionLog.create = async ({ data }) => logs.push(data);
     await service.fulfil(tx, GRANT);
     expect(logs).toEqual([expect.objectContaining({ actorType: ActorType.system, action: 'provision' })]);
+  });
+});
+
+describe('GroupFulfilmentService.fulfilNow — a config confirmed (F-111-n)', () => {
+  const confirmed = (panelId: string): Row => ({
+    id: `c-${panelId}`, grantId: GRANT, panelId, status: ConfigStatus.active, desiredRemote: DesiredRemote.present,
+    enforcementState: EnforcementState.complete, credentialGroupId: 'cg-1', inboundRemoteId: '1',
+  });
+
+  it('activates a pending Grant the moment its panels have confirmed it, without waiting for the sweep', async () => {
+    const { service, grant, configs, outbox } = build({ members: [member(A)] });
+    configs.push(confirmed(A));
+    expect(await service.fulfilNow(GRANT)).toBe('activated');
+    expect(grant.status).toBe(GrantStatus.active);
+    expect(outbox.map((e) => e.type)).toContain(OutboxEventType.GRANT_DELIVERED);
+  });
+
+  it('leaves a Grant short of minHealthyPanels waiting', async () => {
+    const { service, grant, configs } = build({ minHealthyPanels: 2, members: [member(A), member(B)] });
+    configs.push(confirmed(A));
+    expect(await service.fulfilNow(GRANT)).toBe('waiting');
+    expect(grant.status).toBe(GrantStatus.pending);
+  });
+
+  it('skips a Grant that is no longer pending — a repeat, a cancel or a gift touches nothing', async () => {
+    const { service, configs } = build({ status: GrantStatus.active, members: [member(A)] });
+    expect(await service.fulfilNow(GRANT)).toBe('skipped');
+    expect(configs).toHaveLength(0);
   });
 });

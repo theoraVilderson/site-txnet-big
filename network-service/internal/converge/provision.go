@@ -110,6 +110,10 @@ type Outcome struct {
 	UUID     string
 	Enabled  bool
 	Present  bool
+	// Confirmed is the read that found a present client holding its desired
+	// state, where the row did not already say so (F-111-n): the panels' word
+	// a pending Grant activates on (contract.groups.md rule 10), announced.
+	Confirmed bool
 }
 
 // Desired is `network.config`'s desired state behind an interface, as
@@ -261,6 +265,7 @@ func (v *Provisioning) PassOver(ctx context.Context, p collect.Panel, clients []
 			v.capture(ctx, p, row, match.Client, outcome, &report)
 		}
 		if outcome != nil && (outcome.State != row.State || outcome.RemoteID != row.RemoteID || outcome.Links != nil) {
+			outcome.Confirmed = outcome.State == StateComplete && row.State != StateComplete && row.Present
 			outcomes = append(outcomes, *outcome)
 		}
 	}
@@ -515,9 +520,16 @@ type ConvergeReport struct {
 // Provisioning goes first because a disable or a delete changes what a
 // ceiling means; the clients it deleted are taken out of the ceiling pass's
 // population, so a stale share is never written to a client that is gone.
+//
+// Confirm, when set, is asked for a read of the panel after a pass that wrote
+// to it (`collect.Waker.Confirm`, F-111-n): the write is `partial` until a
+// read finds it, and the Grant it serves activates only then. A confirming
+// turn never asks again, so a panel that does not hold what we write costs
+// one extra read, and then the minute pass as before.
 type Converger struct {
 	Provisioning *Provisioning
 	Ceilings     *Ceilings
+	Confirm      func(ctx context.Context, panelID string)
 	Log          *slog.Logger
 }
 
@@ -531,6 +543,9 @@ func (c *Converger) Converge(ctx context.Context, p collect.Panel, res collect.R
 		c.log().Info("panel converged",
 			"panel", p.ID, "provisioned", prov.Written, "provision_failed", prov.Failed, "links_captured", prov.Captured,
 			"ceilings_written", ceil.Written, "ceilings_failed", ceil.Failed, "orphans", len(prov.Orphans))
+	}
+	if prov.Written > 0 && !res.Confirming && c.Confirm != nil {
+		c.Confirm(ctx, p.ID)
 	}
 	return nil
 }

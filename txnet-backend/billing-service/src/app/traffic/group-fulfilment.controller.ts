@@ -1,8 +1,8 @@
-import { Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
+import { Controller, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
 
 import { DrainDueResult, GroupDrainService } from './group-drain';
-import { FulfilDueResult, GroupFulfilmentService } from './group-fulfilment';
+import { FulfilDueResult, FulfilNowOutcome, GroupFulfilmentService } from './group-fulfilment';
 
 /**
  * The seam `worker-service`'s `grant_group_fulfilment` tick reaches group
@@ -27,6 +27,17 @@ export class GroupFulfilmentController {
   @HttpCode(200)
   fulfilDue(): Promise<FulfilDueResult> {
     return this.fulfilment.fulfilDue();
+  }
+
+  /**
+   * One Grant, now: a config of it was confirmed on its panel (F-111-n).
+   * Only a `pending` Grant is looked at, so a repeat answers `skipped`; the
+   * answer is `{ outcome }` in the usual envelope.
+   */
+  @Post('grants/:grantId/fulfil')
+  @HttpCode(200)
+  async fulfilNow(@Param('grantId', new ParseUUIDPipe()) grantId: string): Promise<{ outcome: FulfilNowOutcome }> {
+    return { outcome: await this.fulfilment.fulfilNow(grantId) };
   }
 
   /** One batch: retire the drained configs whose wait is over, remove the members left bare. */

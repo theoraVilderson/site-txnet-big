@@ -113,17 +113,18 @@ func main() {
 	}
 	turns := &collect.TurnLocks{}
 	containment := &collect.Containment{Events: collect.PostgresDriftEvents{DB: pool}}
-	collector := &collect.Loop{
-		Source:  panels,
-		Sink:    publish.Publisher{Transport: broker},
-		Cursors: cursors,
-		Ceilings: &converge.Converger{
-			Provisioning: &converge.Provisioning{
-				Desired: converge.PostgresDesired{DB: pool}, Inbounds: converge.PostgresInbounds{DB: pool}, Log: log,
-			},
-			Ceilings:     &converge.Ceilings{Allocations: converge.PostgresAllocations{DB: pool}, Counters: cursors, Log: log},
-			Log:          log,
+	converger := &converge.Converger{
+		Provisioning: &converge.Provisioning{
+			Desired: converge.PostgresDesired{DB: pool}, Inbounds: converge.PostgresInbounds{DB: pool}, Log: log,
 		},
+		Ceilings: &converge.Ceilings{Allocations: converge.PostgresAllocations{DB: pool}, Counters: cursors, Log: log},
+		Log:      log,
+	}
+	collector := &collect.Loop{
+		Source:      panels,
+		Sink:        publish.Publisher{Transport: broker},
+		Cursors:     cursors,
+		Ceilings:    converger,
 		Health:      health,
 		Rates:       collect.PostgresRates{DB: pool},
 		Progress:    collect.PostgresProgress{DB: pool},
@@ -131,16 +132,20 @@ func main() {
 		Turns:       turns,
 		Log:         log,
 	}
-	go func() { _ = collector.Run(runCtx) }()
 
 	// A config whose desired state changed wakes its panel's convergence turn
 	// at once (F-111-j): Postgres notifies on commit, and the waker folds a
 	// purchase's rows into one turn per panel. The loop above stays the safety
 	// net, so a wake lost while the listener reconnects is only the old delay.
+	// A turn that wrote asks the same waker for the read that confirms it
+	// (F-111-n), so a Grant activates seconds after its client is created.
+	waker := &collect.Waker{Loop: collector, Panels: panels.Offered}
+	converger.Confirm = waker.Confirm
+	go func() { _ = collector.Run(runCtx) }()
 	wakes := &collect.WakeListener{
 		DatabaseURL:    cfg.DatabaseURL,
 		ConnectTimeout: cfg.ConnectTimeout,
-		Waker:          &collect.Waker{Loop: collector, Panels: panels.Offered},
+		Waker:          waker,
 		Log:            log,
 	}
 	go wakes.Run(runCtx)

@@ -238,6 +238,8 @@ export function planFulfilment(facts: FulfilmentFacts): FulfilmentPlan {
 }
 
 export type Fulfilment = { placed: number; waiting: string[]; activated: boolean };
+/** What one Grant's check found (F-111-n): not `pending` any more, still short of its panels, or activated now. */
+export type FulfilNowOutcome = 'skipped' | 'waiting' | 'activated';
 export type FulfilDueResult = { scanned: number; configsPlaced: number; grantsActivated: number; grantsFailed: number };
 
 /** Grants per sweep. The scan names only Grants with a write due, so a batch drains. */
@@ -347,6 +349,21 @@ export class GroupFulfilmentService {
         ),
       },
     }));
+  }
+
+  /**
+   * One Grant, the moment a config of it is confirmed (F-111-n): network's
+   * `network.config.confirmed` -> worker-service -> here. The same `fulfil`
+   * the sweep runs, so it activates only on `minHealthyPanels` confirmed
+   * configs (rule 10); only a `pending` Grant is looked at, so a repeat, a
+   * cancel or a gift answers `skipped` and writes nothing. The sweep stays
+   * behind it for an event that is lost.
+   */
+  async fulfilNow(grantId: string): Promise<FulfilNowOutcome> {
+    const grant = await this.crossTenant.grant.findFirst({ where: { id: grantId, status: GrantStatus.pending }, select: { id: true, tenantId: true } });
+    if (!grant) return 'skipped';
+    const done = await runWithTenant({ id: grant.tenantId }, () => tenantTransaction(this.prisma, (tx) => this.fulfil(tx, grant.id)));
+    return done.activated ? 'activated' : 'waiting';
   }
 
   /**

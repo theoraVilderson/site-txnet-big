@@ -330,11 +330,15 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     }
     // F-114-i: a purchase delivered at once. Its own queue, apart from the
     // notices: this one asks billing to act, and its depth means buyers waiting.
+    // F-111-n: a config confirmed on its panel is the same ask for a network
+    // Grant — activate it now — so it waits in the same line.
     await this.channel.assertQueue(this.grantCreatedQueue, {
       durable: true,
       arguments: { 'x-dead-letter-exchange': this.deadExchange },
     });
-    await this.channel.bindQueue(this.grantCreatedQueue, this.exchange, outboxRoutingKey(OutboxEventType.GRANT_CREATED));
+    for (const type of [OutboxEventType.GRANT_CREATED, OutboxEventType.CONFIG_CONFIRMED]) {
+      await this.channel.bindQueue(this.grantCreatedQueue, this.exchange, outboxRoutingKey(type));
+    }
     // F-111-l: the events only an open page needs — one queue, because each is
     // a live push and nothing else (`LIVE_PUSH_FIELDS`).
     await this.channel.assertQueue(this.livePushQueue, {
@@ -593,7 +597,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     await this.consumeOutbox(this.grantDeliveryNoticeQueue, handle);
   }
 
-  /** Start consuming a purchase's `entitlement.grant.created` (F-114-i), by the same rules. */
+  /** Start consuming a purchase's `entitlement.grant.created` (F-114-i) and `network.config.confirmed` (F-111-n), by the same rules. */
   async consumeGrantCreated(handle: OutboxHandler): Promise<void> {
     await this.consumeOutbox(this.grantCreatedQueue, handle);
   }
