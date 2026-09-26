@@ -193,7 +193,7 @@ export function ServiceRow({
             {configs.rows !== null && configs.rows.length === 0 && (
               <p className="text-xs text-text-secondary">{t("common", S.configs.empty)}</p>
             )}
-            {configs.rows !== null && configs.rows.length > 0 && <ConfigLines rows={configs.rows} />}
+            {configs.rows !== null && configs.rows.length > 0 && <ConfigLines rows={configs.rows} onRenamed={configs.reload} />}
           </>
         ) : (
           <button

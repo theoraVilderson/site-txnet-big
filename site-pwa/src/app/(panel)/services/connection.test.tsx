@@ -35,12 +35,14 @@ vi.mock("@/lib/billing-api", async (importOriginal) => ({
     grantConfigs: vi.fn(),
     grantUsage: vi.fn(),
     configAction: vi.fn(),
+    setConfigLabel: vi.fn(),
   },
 }));
 
 const grantConfigs = vi.mocked(billingApi.grantConfigs);
 const grantUsage = vi.mocked(billingApi.grantUsage);
 const subscriptionLink = vi.mocked(billingApi.subscriptionLink);
+const setConfigLabel = vi.mocked(billingApi.setConfigLabel);
 
 const t = (_ns: string, key: string, vars?: Record<string, string | number>) =>
   vars ? `${key}:${Object.values(vars).join(",")}` : key;
@@ -61,6 +63,7 @@ const CONFIG: UserConfigRow = {
   regenerateUsedCount: 0,
   maxRegenerateCount: 3,
   lastReconciledAt: null,
+  label: null,
   lines: [VLESS],
   linksCapturedAt: "2026-09-26T00:00:00.000Z",
 };
@@ -254,6 +257,63 @@ describe("a row's configs", () => {
     ]);
     expect(screen.getByText("myServices.lines.notCaptured")).toBeInTheDocument();
     expect(screen.getByText("myServices.lines.none")).toBeInTheDocument();
+  });
+});
+
+describe("naming a config (F-307-i, ADR-0089)", () => {
+  const rename = "myServices.lines.rename";
+
+  it("offers a name once per config, on its first line", async () => {
+    await openRow([{ ...CONFIG, lines: [VLESS, WG] }, { ...CONFIG, id: "c2" }]);
+    expect(screen.getAllByRole("button", { name: rename })).toHaveLength(2);
+  });
+
+  it("saves the name, then re-reads so every line is copied by the name billing put on it", async () => {
+    const { user } = await openRow([CONFIG]);
+    setConfigLabel.mockResolvedValue({ configId: "c1", label: "خانه" });
+    const named = VLESS.replace("#DE%20Reality", "#%D8%AE%D8%A7%D9%86%D9%87");
+    grantConfigs.mockResolvedValue({ grantId: "g1", rows: [{ ...CONFIG, label: "خانه", lines: [named] }] });
+
+    await user.click(screen.getByRole("button", { name: rename }));
+    const field = screen.getByRole("textbox", { name: "myServices.lines.nameField" });
+    // The default is shown, not filled in: saving untouched keeps it.
+    expect(field).toHaveValue("");
+    expect(field).toHaveAttribute("placeholder", "de-fra");
+    expect(field).toHaveAttribute("maxlength", "40");
+    await user.type(field, "خانه{Enter}");
+
+    await waitFor(() => expect(setConfigLabel).toHaveBeenCalledWith("c1", "خانه"));
+    expect(await screen.findByText("خانه")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "myServices.lines.copy" }));
+    await waitFor(() => expect(copyText).toHaveBeenCalledWith(named));
+  });
+
+  it("clears back to the default with an empty name", async () => {
+    const { user } = await openRow([{ ...CONFIG, label: "خانه" }]);
+    setConfigLabel.mockResolvedValue({ configId: "c1", label: null });
+    await user.click(screen.getByRole("button", { name: rename }));
+    const field = screen.getByRole("textbox", { name: "myServices.lines.nameField" });
+    expect(field).toHaveValue("خانه");
+    await user.clear(field);
+    await user.click(screen.getByRole("button", { name: "myServices.lines.nameSave" }));
+    await waitFor(() => expect(setConfigLabel).toHaveBeenCalledWith("c1", null));
+  });
+
+  it("writes nothing on Escape", async () => {
+    const { user } = await openRow([CONFIG]);
+    await user.click(screen.getByRole("button", { name: rename }));
+    await user.type(screen.getByRole("textbox", { name: "myServices.lines.nameField" }), "x{Escape}");
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(setConfigLabel).not.toHaveBeenCalled();
+  });
+
+  it("keeps the field open with billing's sentence when the write is refused", async () => {
+    const { user } = await openRow([CONFIG]);
+    setConfigLabel.mockRejectedValue(new Error("refused"));
+    await user.click(screen.getByRole("button", { name: rename }));
+    await user.type(screen.getByRole("textbox", { name: "myServices.lines.nameField" }), "x{Enter}");
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "myServices.lines.nameField" })).toHaveValue("x");
   });
 });
 

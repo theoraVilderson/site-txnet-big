@@ -311,8 +311,11 @@ export interface UserConfigRow {
   regenerateUsedCount: number;
   maxRegenerateCount: number;
   lastReconciledAt: string | null;
+  /** The buyer's own name for it (F-307-g); `null` is the default name. */
+  label: string | null;
   /**
-   * The config's captured link lines — what `/sub` hands the same user
+   * The config's captured link lines, named by billing as `/sub` names them
+   * (ADR-0089) — what `/sub` hands the same user
    * (F-307-a). `[]` with `linksCapturedAt` `null`: not captured since the last
    * new key. `[]` with a time: the panel gives none.
    */
@@ -844,6 +847,18 @@ export const billingApi = {
     return call<{ action: ConfigAction; results: ConfigActionOutcome[] }>("/traffic/configs/actions", {
       method: "POST",
       body: JSON.stringify({ action, configIds }),
+    });
+  },
+
+  /**
+   * Names one of the user's configs, or clears the name with `null`
+   * (F-307-g, ADR-0089). Display only: the lines carry it on the next read,
+   * and `/sub` on the app's next refresh. Another user's config is a 404.
+   */
+  async setConfigLabel(configId: string, label: string | null): Promise<{ configId: string; label: string | null }> {
+    return call<{ configId: string; label: string | null }>(`/traffic/configs/${encodeURIComponent(configId)}/label`, {
+      method: "PUT",
+      body: JSON.stringify({ label }),
     });
   },
 

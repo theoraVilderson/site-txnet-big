@@ -176,6 +176,12 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
     endpoint with a port, a peer key and an address — a half file imports and
     never connects. No lines is two sentences: `linksCapturedAt` `null` is not
     captured yet, a time is a panel that gives none; both point at the link.
+17. **A config is named by its buyer, and billing names the lines** (F-307-i,
+    ADR-0089). A pencil on each config's first line edits its `label` in
+    place (≤ 40, the region as placeholder, empty = the default); Enter
+    saves through `billing-config-label`, Escape writes nothing, a refusal
+    keeps what was typed with billing's sentence. A save re-reads the list:
+    the lines arrive named, as `/sub` serves them, and are never renamed here.
 
 ## Proof
 
@@ -212,7 +218,9 @@ never full with bytes left, 30 bars read under "manage" only, an open row
 offering no new link, delete or reset, per-line copy and a QR dialog, "copy
 all", a closed row opening with one tap, the download on a whole WireGuard
 line only, the two empty-lines sentences, and the link row unread until
-asked.
+asked. F-307-i: one rename per config, a save that re-reads and copies the
+line billing named, an empty name clearing to the default, Escape writing
+nothing, and a refusal keeping the field.
 
 ## Not covered
 

@@ -2157,7 +2157,11 @@
       "notCaptured": "Ready in a few minutes; it shows up here on its own. Until then, use the subscription link below.",
       "none": "This server gives no separate link. Use the subscription link below.",
       "copyAll": "Copy all",
-      "allCopied": "All copied"
+      "allCopied": "All copied",
+      "rename": "Rename",
+      "nameField": "Config name",
+      "nameSave": "Save name",
+      "nameCancel": "Cancel"
     },
     "left": {
       "days": "{{days}} days left",

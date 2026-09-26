@@ -124,6 +124,7 @@ const CONFIG: UserConfigRow = {
   regenerateUsedCount: 0,
   maxRegenerateCount: 3,
   lastReconciledAt: null,
+  label: null,
   lines: [],
   linksCapturedAt: null,
 };
