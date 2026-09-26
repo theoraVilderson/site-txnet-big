@@ -107,7 +107,7 @@ function harness() {
     },
   };
   const service = new SystemsReadService(prisma as never);
-  return { service, events, selects };
+  return { service, events, selects, panels };
 }
 
 const owner = { adminId: ADMIN, tenantId: OWNER };
@@ -188,5 +188,22 @@ describe('SystemsReadService', () => {
 
     await service.acknowledge(owner, OPEN_EVENT, {});
     expect((await service.driftEvents(owner, { state: 'open' })).items).toEqual([]);
+  });
+
+  it("names the panel a foreign claim found, and not one outside the reader's scope (F-027-cf)", async () => {
+    const { service, events, panels } = harness();
+    const OTHER_PLATFORM_PANEL = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+    panels.push({ ...panels[0], id: OTHER_PLATFORM_PANEL, name: 'de-fra-2' });
+    const claim = (id: string, foreignPanelId: string): Row => ({
+      ...events[0], id, eventType: 'foreign_claim', affectedConfigCount: 3, observedConfigCount: 3, foreignPanelId,
+    });
+    events.push(claim('ffffffff-ffff-4fff-8fff-000000000001', OTHER_PLATFORM_PANEL), claim('ffffffff-ffff-4fff-8fff-000000000002', RESELLER_PANEL));
+
+    const items = (await service.driftEvents(owner, {})).items;
+    const byId = new Map(items.map((e) => [e.id, e]));
+    expect(byId.get(OPEN_EVENT)).toMatchObject({ foreignPanel: null });
+    expect(byId.get('ffffffff-ffff-4fff-8fff-000000000001')).toMatchObject({ foreignPanel: { id: OTHER_PLATFORM_PANEL, name: 'de-fra-2' } });
+    expect(byId.get('ffffffff-ffff-4fff-8fff-000000000002')).toMatchObject({ eventType: 'foreign_claim', foreignPanel: null });
+    expect(JSON.stringify(items)).not.toContain(RESELLER_PANEL);
   });
 });

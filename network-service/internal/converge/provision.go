@@ -201,6 +201,9 @@ type ProvisionReport struct {
 	Drift    map[string]Judgement
 	Orphans  []string
 	Stopped  map[string]DriftState
+	// Foreign is the panel whose clients this one answered with; set, the
+	// pass wrote nothing (F-027-cf).
+	Foreign *ForeignHolder
 }
 
 // Provisioning converges one panel's desired state per call. It holds no state
@@ -210,7 +213,12 @@ type Provisioning struct {
 	// Inbounds is where the panel's inbounds are written (F-114-b); nil
 	// keeps no inventory.
 	Inbounds Inbounds
-	Log      *slog.Logger
+	// Claims and Events are the collector guard (F-027-cf, foreign.go): an
+	// orphan carrying another panel's config stops the pass before it writes
+	// and raises a halting event naming both. Nil Claims guards nothing.
+	Claims Claims
+	Events collect.DriftEvents
+	Log    *slog.Logger
 }
 
 // InboundReadEvery is how stale a panel's stored inbounds may get before a
@@ -242,6 +250,12 @@ func (v *Provisioning) PassOver(ctx context.Context, p collect.Panel, clients []
 	matching := MatchClients(rows, clients)
 	for _, orphan := range matching.Orphans {
 		report.Orphans = append(report.Orphans, orphan.RemoteID)
+	}
+	if report.Foreign, err = v.guard(ctx, p, clients, matching.Orphans, at); err != nil || report.Foreign != nil {
+		if err == nil {
+			err = ErrForeignClaim
+		}
+		return report, err
 	}
 
 	inbounds := &inboundCache{driver: p.Driver}
@@ -573,6 +587,8 @@ func (c *Converger) Pass(ctx context.Context, p collect.Panel, res collect.Resul
 		return report, err
 	}
 	if c.Provisioning != nil {
+		// A foreign claim returns ErrForeignClaim: no ceiling is written and
+		// no verdict recorded over another server's clients (F-027-cf).
 		report.Provisioning, err = c.Provisioning.PassOver(ctx, p, clients, res.ObservedAt)
 		if err != nil {
 			return report, err

@@ -503,36 +503,43 @@ type PostgresDriftEvents struct {
 
 var _ DriftEvents = PostgresDriftEvents{}
 
+// haltedSQL is the type of the open event that halts the panel, a foreign
+// claim first: it is the one that stops convergence too.
 const haltedSQL = `
-SELECT EXISTS (
-  SELECT 1 FROM network.panel_drift_event
-   WHERE "panelId" = $1::uuid AND "collectionHalted" AND "acknowledgedAt" IS NULL)`
+SELECT "eventType"::text FROM network.panel_drift_event
+ WHERE "panelId" = $1::uuid AND "collectionHalted" AND "acknowledgedAt" IS NULL
+ ORDER BY ("eventType" = 'foreign_claim') DESC
+ LIMIT 1`
 
-func (s PostgresDriftEvents) Halted(ctx context.Context, panelID string) (bool, error) {
+func (s PostgresDriftEvents) Halted(ctx context.Context, panelID string) (DriftEventType, error) {
 	rows, err := s.DB.Query(ctx, haltedSQL, panelID)
 	if err != nil {
-		return false, fmt.Errorf("reading panel %s drift events: %w", panelID, err)
+		return "", fmt.Errorf("reading panel %s drift events: %w", panelID, err)
 	}
 	defer rows.Close()
-	halted := false
+	var halt string
 	if rows.Next() {
-		if err := rows.Scan(&halted); err != nil {
-			return false, fmt.Errorf("reading panel %s drift events: %w", panelID, err)
+		if err := rows.Scan(&halt); err != nil {
+			return "", fmt.Errorf("reading panel %s drift events: %w", panelID, err)
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return false, fmt.Errorf("reading panel %s drift events: %w", panelID, err)
+		return "", fmt.Errorf("reading panel %s drift events: %w", panelID, err)
 	}
-	return halted, nil
+	return DriftEventType(halt), nil
 }
 
 const raiseSQL = `
 INSERT INTO network.panel_drift_event
-       (id, "panelId", "eventType", "affectedConfigCount", "observedConfigCount", "detectedAt", "collectionHalted")
-VALUES (gen_random_uuid(), $1::uuid, $2::network."PanelDriftEventType", $3, $4, $5, $6)`
+       (id, "panelId", "eventType", "foreignPanelId", "affectedConfigCount", "observedConfigCount", "detectedAt", "collectionHalted")
+VALUES (gen_random_uuid(), $1::uuid, $2::network."PanelDriftEventType", $3::uuid, $4, $5, $6, $7)`
 
 func (s PostgresDriftEvents) Raise(ctx context.Context, e DriftEvent) error {
-	if _, err := s.DB.Exec(ctx, raiseSQL, e.PanelID, string(e.Type), e.Affected, e.Observed, e.DetectedAt, e.CollectionHalted); err != nil {
+	var foreign *string
+	if e.ForeignPanelID != "" {
+		foreign = &e.ForeignPanelID
+	}
+	if _, err := s.DB.Exec(ctx, raiseSQL, e.PanelID, string(e.Type), foreign, e.Affected, e.Observed, e.DetectedAt, e.CollectionHalted); err != nil {
 		return fmt.Errorf("raising panel %s drift event: %w", e.PanelID, err)
 	}
 	return nil

@@ -97,8 +97,8 @@ var RequiredColumns = map[string][]string{
 	// The verdict over a whole panel's population, which halts collection
 	// (F-027-ab).
 	"panel_drift_event": {
-		"id", "panelId", "eventType", "affectedConfigCount", "observedConfigCount",
-		"detectedAt", "collectionHalted", "acknowledgedAt",
+		"id", "panelId", "eventType", "foreignPanelId", "affectedConfigCount",
+		"observedConfigCount", "detectedAt", "collectionHalted", "acknowledgedAt",
 	},
 	"unattributed_usage": {
 		"id", "panelId", "remoteIdentifier", "upBytes", "downBytes",

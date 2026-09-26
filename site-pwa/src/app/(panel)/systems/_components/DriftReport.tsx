@@ -104,6 +104,12 @@ function DriftItem({ event, onAcknowledged }: { event: SystemsDriftEvent; onAckn
               </span>
             )}
           </span>
+          {event.foreignPanel && (
+            <span className="text-text-primary">{t("common", K.drift.foreignPanel, { name: event.foreignPanel.name })}</span>
+          )}
+          {event.eventType === "foreign_claim" && haltsCollection(event) && (
+            <span className="text-text-secondary">{t("common", K.drift.foreignHint)}</span>
+          )}
           {event.note && <span className="text-text-secondary">{event.note}</span>}
         </div>
         {canAcknowledge(event) && !formOpen && (

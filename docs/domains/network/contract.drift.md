@@ -137,10 +137,38 @@ Then:
 While an unacknowledged event halts the panel, both loops skip its read and
 report it `OpHalted` (it is never stamped, so the watchdog ages it into an
 alert). The bulk pass **still converges it**: a suspension or a delete must
-reach the panel whatever its counters say. Acknowledging is `billing-service`'s
+reach the panel whatever its counters say — except under a `foreign_claim`,
+below (`DriftEventType.Converges`; `Halted` answers that type first). Acknowledging is `billing-service`'s
 `POST /systems/drift-events/:id/acknowledge` (F-027-as,
 `billing/contract.systems.md`), which sets `acknowledgedAt` once. `mass_missing`, `mass_rename` and `mass_limit_override` are schema
 only; nothing raises them.
+
+### Another panel's clients — the collector guard (F-027-cf, ADR-0090 decision 1)
+
+The connection test proves a panel is not one already registered
+(`contract.registration.md` rules 6–9), but only when it runs: an address
+re-pointed in DNS after acceptance is never tested again. Such a panel answers
+with another server's clients, and a pass over it would bill their bytes as
+unattributed and recreate our own configs there as `missing`.
+
+- **Found how.** The convergence pass's orphans — and only they: a client this
+  panel's configs claim is ours — are looked up by `claimTag` and `uuid` among
+  every other panel's configs, retired ones too (`Claims.Holder`,
+  `converge/foreign.go`). Tags and uuids are global and a move takes fresh
+  ones (invariant 17), so a match is proof. No orphans, no query.
+- **Then, before any write.** A halting `foreign_claim` event is raised:
+  `panelId` the panel read, `foreignPanelId` the one holding most of the
+  matched configs, `affected` the clients matched (never above the orphans),
+  `observed` every client listed; an ERROR line names both. The pass writes
+  no client, ceiling or verdict (`ErrForeignClaim`). An event that could not
+  be written leaves nothing written either, and the next pass looks again.
+- **While open, the panel is neither read nor converged**, by either loop:
+  converging would recreate our configs on a server that is not theirs.
+  The bytes the detecting pass read are already published, as unattributed
+  (no config matches another server's clients).
+- **Acknowledging resumes it**, the same route as a restore. An address left
+  pointing at the other server raises it again on the next pass — which is
+  the point; the admin puts the address right first.
 
 ## Proof
 
@@ -154,3 +182,7 @@ repair; the third inside the window is held `contested` and the window
 running out starts the count again; a higher ceiling is rewritten on a
 contested config; a restore halts, charges nothing, restates the ceiling and
 resumes on acknowledgement; 20% exactly, and four of four, do not fire.
+`internal/converge/foreign_test.go`, through the loop: another panel's client
+by tag, and by uuid alone, stops the panel before the missing config is
+recreated, names both, and neither reads nor converges it until acknowledged;
+a stranger no config anywhere claims is only an orphan.

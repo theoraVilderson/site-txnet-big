@@ -112,10 +112,12 @@ func main() {
 		DB: pool, Opener: opener.Opener{Logins: vault}, Cursors: cursors, States: health, Log: log,
 	}
 	turns := &collect.TurnLocks{}
-	containment := &collect.Containment{Events: collect.PostgresDriftEvents{DB: pool}}
+	driftEvents := collect.PostgresDriftEvents{DB: pool}
+	containment := &collect.Containment{Events: driftEvents}
 	converger := &converge.Converger{
 		Provisioning: &converge.Provisioning{
-			Desired: converge.PostgresDesired{DB: pool}, Inbounds: converge.PostgresInbounds{DB: pool}, Log: log,
+			Desired: converge.PostgresDesired{DB: pool}, Inbounds: converge.PostgresInbounds{DB: pool},
+			Claims: converge.PostgresDesired{DB: pool}, Events: driftEvents, Log: log,
 		},
 		Ceilings: &converge.Ceilings{Allocations: converge.PostgresAllocations{DB: pool}, Counters: cursors, Log: log},
 		Log:      log,

@@ -182,14 +182,20 @@ export class SystemsReadService {
 
     const rows = await this.prisma.panelDriftEvent.findMany({
       where: { panelId: { in: [...names.keys()] }, ...(query.state === 'open' ? { acknowledgedAt: null } : {}) },
-      select: DRIFT_FIELDS,
+      select: { ...DRIFT_FIELDS, foreignPanelId: true },
       orderBy: [{ detectedAt: 'desc' }, { id: 'desc' }],
       take,
       ...(query.after ? { cursor: { id: query.after }, skip: 1 } : {}),
     });
 
+    // A `foreign_claim` names the panel whose clients were found (F-027-cf) —
+    // only one inside the reader's scope: another tenant's panel is not named.
     return {
-      items: rows.map((e) => ({ ...e, panelName: names.get(e.panelId) ?? null })),
+      items: rows.map(({ foreignPanelId, ...e }) => ({
+        ...e,
+        panelName: names.get(e.panelId) ?? null,
+        foreignPanel: foreignPanelId && names.has(foreignPanelId) ? { id: foreignPanelId, name: names.get(foreignPanelId) as string } : null,
+      })),
       next: rows.length === take ? rows[rows.length - 1].id : null,
     };
   }

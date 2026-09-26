@@ -2573,11 +2573,14 @@
       "submit": "Acknowledge and resume",
       "cancel": "Cancel",
       "done": "Acknowledged. Collection resumes on the next pass.",
+      "foreignPanel": "Its users are {{name}}'s: the address likely points at that panel's server.",
+      "foreignHint": "Not read and sent no change while this is open. Put the panel's address right first; acknowledged as it is, it is raised again on the next pass.",
       "type": {
         "mass_reset": "Many counters reset",
         "mass_missing": "Many clients missing",
         "mass_rename": "Many clients renamed",
-        "mass_limit_override": "Many limits changed on the panel"
+        "mass_limit_override": "Many limits changed on the panel",
+        "foreign_claim": "Answers with another panel's users"
       }
     },
     "holds": {

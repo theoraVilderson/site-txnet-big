@@ -326,7 +326,7 @@ func TestNormaliserNamesTheConfigOnEveryAdvance(t *testing.T) {
 
 func TestPassSideWritesAreOneStatementEach(t *testing.T) {
 	at := time.Date(2026, 9, 25, 9, 1, 0, 0, time.UTC)
-	pool := &pgDB{answers: map[string][]pgRow{`FROM network.panel_drift_event`: {{true}}}}
+	pool := &pgDB{answers: map[string][]pgRow{`FROM network.panel_drift_event`: {{"mass_reset"}}}}
 	ctx := context.Background()
 
 	if err := (collect.PostgresProgress{DB: pool}).Collected(ctx, []collect.PanelProgress{{PanelID: pgPanelA, At: at}, {PanelID: pgPanelB, At: at}}); err != nil {
@@ -339,9 +339,9 @@ func TestPassSideWritesAreOneStatementEach(t *testing.T) {
 	if err := events.Raise(ctx, collect.DriftEvent{PanelID: pgPanelA, Type: collect.MassReset, Affected: 6, Observed: 10, DetectedAt: at, CollectionHalted: true}); err != nil {
 		t.Fatal(err)
 	}
-	halted, err := events.Halted(ctx, pgPanelA)
-	if err != nil || !halted {
-		t.Fatalf("halted = %v, %v", halted, err)
+	halt, err := events.Halted(ctx, pgPanelA)
+	if err != nil || halt != collect.MassReset {
+		t.Fatalf("halted = %q, %v", halt, err)
 	}
 
 	if got := pool.executed(`"lastSuccessfulCollectionAt"`); len(got) != 1 || len(got[0][0].([]string)) != 2 {
@@ -351,7 +351,7 @@ func TestPassSideWritesAreOneStatementEach(t *testing.T) {
 		t.Fatalf("rate writes = %v", got)
 	}
 	// Both counts, never the ratio (invariant 23).
-	if got := pool.executed(`INSERT INTO network.panel_drift_event`); len(got) != 1 || got[0][2] != 6 || got[0][3] != 10 {
+	if got := pool.executed(`INSERT INTO network.panel_drift_event`); len(got) != 1 || got[0][2].(*string) != nil || got[0][3] != 6 || got[0][4] != 10 {
 		t.Fatalf("drift event = %v", got)
 	}
 }

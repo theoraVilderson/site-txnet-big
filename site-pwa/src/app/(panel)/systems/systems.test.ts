@@ -342,6 +342,7 @@ const drift = (overrides: Partial<SystemsDriftEvent>): SystemsDriftEvent => ({
   panelId: "11111111-1111-4111-8111-111111111111",
   panelName: "de-1",
   eventType: "mass_reset",
+  foreignPanel: null,
   affectedConfigCount: 40,
   observedConfigCount: 50,
   detectedAt: "2026-09-24T09:00:00Z",

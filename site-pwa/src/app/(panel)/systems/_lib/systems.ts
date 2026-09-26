@@ -147,6 +147,7 @@ export const DRIFT_EVENT_KEYS: Record<SystemsDriftEvent["eventType"], string> = 
   mass_missing: K.drift.type.mass_missing,
   mass_rename: K.drift.type.mass_rename,
   mass_limit_override: K.drift.type.mass_limit_override,
+  foreign_claim: K.drift.type.foreign_claim,
 };
 
 /**

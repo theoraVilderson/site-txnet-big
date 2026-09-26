@@ -40,7 +40,7 @@ would dial an address a tenant chose (`network/open-questions.md`).
 | `GET /api/billing/systems/panels` | — | `[{id, name, driverType, transport, role, region, ipAddress, apiBaseUrl, clientBaseUrl, retiredAt, radiusSecretConfigured, review: {reviewState, connectionTestedAt, connectionTestFault, connectionTestDetail, duplicateOf: {id, name} | null}, health: {panelState, lastHealthyAt, lastSuccessfulCollectionAt, collectionHalted, openDriftEvents}, budget: {maxRequestsPerMinute, blockedSince}}]`, by name | 403 |
 | `PATCH /api/billing/systems/panels/:id`, `DELETE …/panels/:id`, `POST …/panels/:id/restore` | edit, delete or archive, restore — [contract.panel-lifecycle.md](contract.panel-lifecycle.md) | | |
 | `GET /api/billing/systems/panels/:id/capabilities` | — | `{id, transport, reviewState, connectionTestedAt, documentVersion, current, answeredAt, rows: [{key, scope, severity, state, detail}]}` | 400 id not a uuid; 403; 404 `not_found` |
-| `GET /api/billing/systems/drift-events` | query `state?` (`open` \| `all`, default `all`), `after?` (event id), `limit?` (1–100, default 50); `.strict()` | `{items: [{id, panelId, panelName, eventType, affectedConfigCount, observedConfigCount, detectedAt, collectionHalted, acknowledgedAt, acknowledgedByAdminId, note}], next}`, newest first; `next` is the `after` of the following page, null on the last | 400; 403 |
+| `GET /api/billing/systems/drift-events` | query `state?` (`open` \| `all`, default `all`), `after?` (event id), `limit?` (1–100, default 50); `.strict()` | `{items: [{id, panelId, panelName, eventType, foreignPanel: {id, name} \| null, affectedConfigCount, observedConfigCount, detectedAt, collectionHalted, acknowledgedAt, acknowledgedByAdminId, note}], next}`, newest first; `next` is the `after` of the following page, null on the last | 400; 403 |
 | `POST /api/billing/systems/drift-events/:id/acknowledge` | `note?` (1–1000); `.strict()` | `200` the event, acknowledged | 400; 403; 404 `not_found`; 409 `already_acknowledged` |
 | `GET /api/billing/systems/holds` | query `state?` (`pending` \| `all`, default `all`), `after?` (hold id), `limit?` (1–100, default 50); `.strict()` | `{items: [{id, configId, panelId, panelName, upBytes, downBytes, reason, state, heldFrom, heldAt, resolvedAt, resolvedByAdminId, resolutionNote}], next}`, newest first; bytes are decimal strings | 400; 403 |
 | `POST /api/billing/systems/holds/:id/release` | `note?` (1–1000); `.strict()` | `202 {id, state: 'pending', release: 'queued'}` | 400; 403; 404 `not_found`; 409 `already_resolved` |
@@ -118,8 +118,12 @@ both re-submits, the panel edit, delete and restore, acknowledge, release, write
    A second click, even concurrent, is 409 `already_acknowledged`, and who
    decided is never rewritten. An event on a panel outside the scope is 404,
    the same as one that does not exist.
+9a. **A `foreign_claim` names the other panel only inside the scope**
+   (F-027-cf, `network/contract.drift.md`): `foreignPanel` is the panel whose
+   users it answered with, null when unset or outside the reader's panels.
+   It stops convergence too, so acknowledging one unfixed only raises it again.
 
-`systems-read.spec.ts` pins rules 6–9, the scope on every route, and the
+`systems-read.spec.ts` pins rules 6–9a, the scope on every route, and the
 fixture.
 
 ## The holds queue — the rules

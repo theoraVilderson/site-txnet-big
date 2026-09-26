@@ -105,6 +105,9 @@ refused one is not taken anyway, and a push panel is never called
    `pending` with the fault and a detail naming the suspect — never accepted
    past the check, never refused for our failure. A DNS failure only removes
    a reason to suspect.
+10. **After acceptance the collector keeps asking** (F-027-cf): an orphan
+   carrying another panel's config stops the panel and raises a halting
+   `foreign_claim` naming both — `contract.drift.md` "the collector guard".
 
 ## Every result is announced, in the statement that writes it (F-027-bs)
 

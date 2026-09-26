@@ -60,6 +60,8 @@ The *why* is **ADR-0080**.
    (halted and unacknowledged); acknowledge is offered only while
    `acknowledgedAt` is null, with an optional note, and re-reads the drift list
    *and* the panels, since the halt ends on the next pass. A 409 re-reads too.
+   A `foreign_claim` names the other panel when billing does (`foreignPanel`,
+   F-027-cf) and, while it halts, says to put the address right first.
 7. **Holds: release or write off, only while `pending`** (`canResolveHold`).
    A release answers `202` and the hold stays `pending` until the meter bills
    it — the row says "queued", never "released". A write-off requires a note

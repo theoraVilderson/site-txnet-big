@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 49
+version: 50
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -76,9 +76,9 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-26 | contract v50 (F-027-cf): a drift event answers `foreignPanel: {id, name} \| null` — the panel a `foreign_claim` found, named only inside the scope. Additive. [contract.systems.md](contract.systems.md) rule 9a. Consumer panel-web: this row |
 | 2026-09-26 | contract v49 (F-027-ce): the panel list answers `review.duplicateOf: {id, name} \| null`; an address edit or restore clears it. Additive. [contract.systems.md](contract.systems.md). Consumer panel-web: F-027-ci |
 | 2026-09-26 | contract v48 (F-027-cd): register and address edit answer 409 `panel_already_registered` + `panel: {id, name}` when another panel holds the normalised `apiBaseUrl` (ADR-0090). [contract.systems.md](contract.systems.md) rule 4a. Consumer panel-web: F-027-ci |
 | 2026-09-25 | contract v47 (F-027-ca): `DELETE /api/billing/systems/panel-groups/:id` — an empty group no variant names; else 409 `group_has_members` / `group_in_use`. Additive. [contract.systems.md](contract.systems.md) rule 24a. Consumer panel-web: F-027-cb |
-| 2026-09-25 | contract v46 (F-027-bz): `DELETE /api/billing/systems/panels/:id` — deleted with no history, archived (`retiredAt`) with it; `POST …/restore`; the list answers `retiredAt`. Additive. [contract.panel-lifecycle.md](contract.panel-lifecycle.md). Consumer panel-web: F-027-cb |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

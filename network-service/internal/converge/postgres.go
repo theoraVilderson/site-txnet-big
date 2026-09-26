@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"network-service/internal/db"
+	"network-service/internal/driver"
 )
 
 // The convergence pass's state on `network.config` (F-027-bo), through the
@@ -193,6 +194,49 @@ func (s PostgresDesired) RecordDrift(ctx context.Context, rows []Verdict) error 
 		return fmt.Errorf("recording drift verdicts: %w", err)
 	}
 	return nil
+}
+
+var _ Claims = PostgresDesired{}
+
+// holderSQL is the other panel with the most configs whose claim tag or uuid
+// the orphans carry — the same match as the connection test's
+// (`register.claimHolderSQL`), counted. Both columns are unique, so each is
+// one index probe per key.
+const holderSQL = `
+SELECT c."panelId"::text, count(*)::int
+  FROM network.config c
+ WHERE c."panelId" <> $1::uuid
+   AND (c."claimTag" = ANY($2::text[]) OR c.uuid = ANY($3::text[]))
+ GROUP BY c."panelId"
+ ORDER BY count(*) DESC, c."panelId"
+ LIMIT 1`
+
+func (s PostgresDesired) Holder(ctx context.Context, panelID string, clients []driver.RemoteClient) (ForeignHolder, bool, error) {
+	tags, uuids := []string{}, []string{}
+	for _, c := range clients {
+		if c.Label != "" {
+			tags = append(tags, c.Label)
+		}
+		if c.UUID != "" {
+			uuids = append(uuids, c.UUID)
+		}
+	}
+	if len(tags)+len(uuids) == 0 {
+		return ForeignHolder{}, false, nil
+	}
+	rows, err := s.DB.Query(ctx, holderSQL, panelID, tags, uuids)
+	if err != nil {
+		return ForeignHolder{}, false, fmt.Errorf("reading whose clients panel %s holds: %w", panelID, err)
+	}
+	defer rows.Close()
+	var h ForeignHolder
+	found := rows.Next()
+	if found {
+		if err := rows.Scan(&h.PanelID, &h.Clients); err != nil {
+			return ForeignHolder{}, false, fmt.Errorf("reading whose clients panel %s holds: %w", panelID, err)
+		}
+	}
+	return h, found, rows.Err()
 }
 
 // PostgresAllocations is Allocations over `network.config`.

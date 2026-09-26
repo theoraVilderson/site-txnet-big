@@ -281,6 +281,9 @@ describe('network usage accounting: a byte is billed, held or quarantined', () =
       'mass_missing',
       'mass_rename',
       'mass_limit_override',
+      // F-027-cf: a panel answering with another panel's clients, named in
+      // `foreignPanelId`. Its own migration, so the value is committed first.
+      'foreign_claim',
     ]);
     expect(sql).toContain('panel_drift_event_counts_sane');
   });

@@ -241,6 +241,9 @@ enum PanelDriftEventType {
   mass_missing
   mass_rename
   mass_limit_override
+  /// A pass found another panel's clients on this one: its address was
+  /// re-pointed after registration (F-027-cf, ADR-0090). Stops convergence too.
+  foreign_claim
 
   @@schema("network")
 }
@@ -382,7 +385,8 @@ model Panel {
   duplicates  Panel[]  @relation("PanelDuplicate")
   configs     Config[]
 
-  driftEvents       PanelDriftEvent[]
+  driftEvents       PanelDriftEvent[] @relation("PanelDriftEventPanel")
+  foreignClaims     PanelDriftEvent[] @relation("PanelDriftEventForeign")
   quarantinedDeltas UsageDeltaQuarantine[]
   unattributedUsage UnattributedUsage[]
   radiusSessions    RadiusSession[]
@@ -781,8 +785,12 @@ model PanelDriftEvent {
   acknowledgedAt        DateTime?
   acknowledgedByAdminId String?             @db.Uuid
   note                  String?
+  /// The panel whose clients a `foreign_claim` found, and set on no other type
+  /// (`panel_drift_event_foreign_is_claim`); a deleted one leaves it NULL.
+  foreignPanelId        String?             @db.Uuid
 
-  panel Panel @relation(fields: [panelId], references: [id])
+  panel        Panel  @relation("PanelDriftEventPanel", fields: [panelId], references: [id])
+  foreignPanel Panel? @relation("PanelDriftEventForeign", fields: [foreignPanelId], references: [id], onDelete: SetNull)
 
   @@index([panelId, detectedAt(sort: Desc)])
   @@map("panel_drift_event")

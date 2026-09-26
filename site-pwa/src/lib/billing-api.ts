@@ -1556,7 +1556,9 @@ export interface SystemsDriftEvent {
   id: string;
   panelId: string;
   panelName: string | null;
-  eventType: "mass_reset" | "mass_missing" | "mass_rename" | "mass_limit_override";
+  eventType: "mass_reset" | "mass_missing" | "mass_rename" | "mass_limit_override" | "foreign_claim";
+  /** The panel whose users a `foreign_claim` found; null otherwise, or when it is outside your panels. */
+  foreignPanel: { id: string; name: string } | null;
   affectedConfigCount: number;
   observedConfigCount: number;
   detectedAt: string;

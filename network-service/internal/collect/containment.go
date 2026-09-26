@@ -20,11 +20,24 @@ import (
 // ReasonPanelDriftEvent parks a delta the panel-wide stop would not believe.
 const ReasonPanelDriftEvent QuarantineReason = "panel_drift_event"
 
-// DriftEventType is `network.PanelDriftEventType`. Only MassReset is raised
-// here: the others are the convergence pass's population and are not built.
+// DriftEventType is `network.PanelDriftEventType`. MassReset is raised here;
+// ForeignClaim by the convergence pass, the one that reads the panel's
+// clients. The other mass_* values are schema only.
 type DriftEventType string
 
-const MassReset DriftEventType = "mass_reset"
+const (
+	MassReset DriftEventType = "mass_reset"
+	// ForeignClaim is a panel answering with another panel's clients (F-027-cf,
+	// ADR-0090 decision 1): its address was re-pointed after registration.
+	ForeignClaim DriftEventType = "foreign_claim"
+)
+
+// Converges says whether a panel halted by this event is still converged. A
+// restore's counters are not believed, but the server is ours, so a
+// suspension or a delete still has to reach it. A foreign claim is the
+// opposite: the server is not the one our configs are on, and converging it
+// would recreate them there.
+func (t DriftEventType) Converges() bool { return t != ForeignClaim }
 
 // The defaults the stop fires at (user, 2026-09-23): **more than** 20% of the
 // panel's cumulative counters going backward in one pass, and at least five
@@ -46,8 +59,11 @@ var ErrCollectionHalted = errors.New("panel collection is halted by a drift even
 // DriftEvent is one `panel_drift_event` row. Both counts, never the ratio: a
 // percentage cannot be checked afterwards (invariant 23).
 type DriftEvent struct {
-	PanelID          string
-	Type             DriftEventType
+	PanelID string
+	Type    DriftEventType
+	// ForeignPanelID is the panel whose clients a ForeignClaim found, and set
+	// on no other type (`panel_drift_event_foreign_is_claim`).
+	ForeignPanelID   string
 	Affected         int
 	Observed         int
 	DetectedAt       time.Time
@@ -56,8 +72,10 @@ type DriftEvent struct {
 }
 
 // DriftEvents is where the events go and whether one still halts a panel.
+// Halted answers the type of the open event that halts it, "" for none; of
+// several, ForeignClaim, because it is the one that stops convergence too.
 type DriftEvents interface {
-	Halted(ctx context.Context, panelID string) (bool, error)
+	Halted(ctx context.Context, panelID string) (DriftEventType, error)
 	Raise(ctx context.Context, event DriftEvent) error
 }
 
@@ -72,9 +90,9 @@ type Containment struct {
 
 // Halted asks whether the panel may be read. A store that cannot answer is an
 // error, and the caller does not read: not knowing is not permission.
-func (c *Containment) Halted(ctx context.Context, panelID string) (bool, error) {
+func (c *Containment) Halted(ctx context.Context, panelID string) (DriftEventType, error) {
 	if c == nil || c.Events == nil {
-		return false, nil
+		return "", nil
 	}
 	return c.Events.Halted(ctx, panelID)
 }
@@ -174,15 +192,16 @@ func (m *MemoryDriftEvents) Raise(_ context.Context, event DriftEvent) error {
 	return nil
 }
 
-func (m *MemoryDriftEvents) Halted(_ context.Context, panelID string) (bool, error) {
+func (m *MemoryDriftEvents) Halted(_ context.Context, panelID string) (DriftEventType, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	var halt DriftEventType
 	for _, e := range m.byPanel[panelID] {
-		if e.CollectionHalted && e.AcknowledgedAt.IsZero() {
-			return true, nil
+		if e.CollectionHalted && e.AcknowledgedAt.IsZero() && (halt == "" || e.Type == ForeignClaim) {
+			halt = e.Type
 		}
 	}
-	return false, nil
+	return halt, nil
 }
 
 // Acknowledge is somebody deciding the panel may be read again (the drift

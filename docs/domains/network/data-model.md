@@ -115,10 +115,10 @@ anything sits in it, nobody can claim the system lost a byte in silence. Note
 this is not ADR-0072's rejected *wallet* hold: no money is reserved, only
 bytes are parked.
 
-`panel_drift_event` is the panel-wide stop (F-027-ab): a backup restore reads
-as thousands of individually plausible resets, so the population is the unit of
-judgement. Both counts are stored rather than a ratio, and `collectionHalted`
-defaults to true because carrying on is ~$16k of wrong charges in a minute.
+`panel_drift_event` is the panel-wide stop: a backup restore (F-027-ab), or a
+panel answering with another's clients, named in `foreignPanelId` (F-027-cf).
+Both counts are stored rather than a ratio, and `collectionHalted` defaults to
+true because carrying on is ~$16k of wrong charges in a minute.
 
 `unattributed_usage` is the byte we measured and could not place. It exists so
 the bytes cannot be dropped for want of a row, and it is **one row per remote

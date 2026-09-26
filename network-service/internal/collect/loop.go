@@ -255,16 +255,19 @@ func (l *Loop) collect(ctx context.Context, p Panel) (Result, string, error) {
 		return Result{}, OpSkipped, ErrRefusingToAsk
 	}
 
-	halted, err := l.Containment.Halted(ctx, p.ID)
+	halt, err := l.Containment.Halted(ctx, p.ID)
 	if err != nil {
 		return Result{}, OpHalted, err
 	}
-	if halted {
+	if halt != "" {
 		// Not read, because what it reports is what nobody believes yet — but
 		// still converged, because a suspension or a delete has to reach the
 		// panel whatever its counters say, and the ceilings hold over the
-		// cursors the event pass left (F-027-ab).
-		l.converge(ctx, p, Result{PanelID: p.ID, OwnershipType: p.OwnershipType, TenantID: p.TenantID, ObservedAt: l.now()})
+		// cursors the event pass left (F-027-ab). Unless the server is not
+		// ours at all (F-027-cf): then converging recreates our configs on it.
+		if halt.Converges() {
+			l.converge(ctx, p, Result{PanelID: p.ID, OwnershipType: p.OwnershipType, TenantID: p.TenantID, ObservedAt: l.now()})
+		}
 		return Result{}, OpHalted, ErrCollectionHalted
 	}
 

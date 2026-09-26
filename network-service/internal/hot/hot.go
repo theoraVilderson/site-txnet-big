@@ -351,7 +351,7 @@ func (l *Loop) collect(ctx context.Context, rows []Candidate) (collect.Result, s
 		// from it is the fastest way to make the ban permanent (F-027-v).
 		return collect.Result{}, collect.OpSkipped, collect.ErrRefusingToAsk
 	}
-	if halted, err := l.Containment.Halted(ctx, panel.ID); err != nil || halted {
+	if halt, err := l.Containment.Halted(ctx, panel.ID); err != nil || halt != "" {
 		// Not read, and not converged either: the bulk pass converges a
 		// halted panel once a minute, and this loop exists for bytes.
 		if err == nil {
