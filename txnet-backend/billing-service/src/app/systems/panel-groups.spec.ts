@@ -64,7 +64,8 @@ function harness() {
   const withPanel = (m: Row) => {
     const p = panels.find((x) => x['id'] === m['panelId'])!;
     const selling = { inboundPlacement: p['inboundPlacement'] ?? null, maxClients: p['maxClients'] ?? null, priority: p['priority'] ?? null, weight: p['weight'] ?? null };
-    return { ...m, panel: { name: p['name'], panelState: p['panelState'], reviewState: p['reviewState'], lastHealthyAt: p['lastHealthyAt'], ...selling } };
+    // No assigned inbound: every member here sells its panel's pool (F-027-ch).
+    return { ...m, inbounds: [], panel: { name: p['name'], panelState: p['panelState'], reviewState: p['reviewState'], lastHealthyAt: p['lastHealthyAt'], ...selling } };
   };
   const withMembers = (g: Row) => ({
     ...g,

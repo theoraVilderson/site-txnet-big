@@ -45,20 +45,21 @@ would dial an address a tenant chose (`network/open-questions.md`).
 | `GET /api/billing/systems/holds` | query `state?` (`pending` \| `all`, default `all`), `after?` (hold id), `limit?` (1–100, default 50); `.strict()` | `{items: [{id, configId, panelId, panelName, upBytes, downBytes, reason, state, heldFrom, heldAt, resolvedAt, resolvedByAdminId, resolutionNote}], next}`, newest first; bytes are decimal strings | 400; 403 |
 | `POST /api/billing/systems/holds/:id/release` | `note?` (1–1000); `.strict()` | `202 {id, state: 'pending', release: 'queued'}` | 400; 403; 404 `not_found`; 409 `already_resolved` |
 | `POST /api/billing/systems/holds/:id/write-off` | `note` (1–1000, required); `.strict()` | `200` the hold, `written_off` | 400; 403; 404 `not_found`; 409 `already_resolved` |
-| `GET /api/billing/systems/panel-groups` | — | `[{id, name, strategy, minHealthyPanels, subscriptionTtlSeconds, createdAt, updatedAt, variantCount, members: [{groupId, panelId, panelName, panelState, reviewState, lastHealthyAt, inboundPlacement, maxClients, priority, weight, effective, role, drainingSince, createdAt}]}]`, by name; members by effective `priority`. The four are the member's own (null = inherited); `effective` is `{<setting>: {value, layer}}`, layer `member` \| `panel` \| `platform` (rule 24b) | 403 |
+| `GET /api/billing/systems/panel-groups` | — | `[{id, name, strategy, minHealthyPanels, subscriptionTtlSeconds, createdAt, updatedAt, variantCount, members: [{groupId, panelId, panelName, panelState, reviewState, lastHealthyAt, inboundPlacement, maxClients, priority, weight, effective, inbounds, role, drainingSince, createdAt}]}]`, by name; members by effective `priority`. The four are the member's own (null = inherited); `inbounds` its assigned remote ids, `[]` = the pool (rule 24c); `effective` is `{<setting>: {value, layer}}`, layer `member` \| `panel` \| `platform` (rule 24b) | 403 |
 | `POST /api/billing/systems/panel-groups` | `name`, `minHealthyPanels?` (1–100), `subscriptionTtlSeconds?` (60–604800); `.strict()` — `protocol` is refused since F-114-b | `201` the group, `strategy: mirror` | 400; 403 |
 | `PATCH /api/billing/systems/panel-groups/:id` | any of the three, at least one; `.strict()` | `200` the group | 400; 403; 404 `not_found` |
 | `DELETE /api/billing/systems/panel-groups/:id` | — | `200 {id, removed: true}` | 400; 403; 404 `not_found`; 409 `group_has_members` / `group_in_use` |
 | `POST /api/billing/systems/panel-groups/:id/members` | `panelId`, and any of `inboundPlacement`, `maxClients` (1–1000000), `priority` (0–1000), `weight` (1–1000), each nullable; `.strict()` | `201` the member, `primary` | 400; 403; 404 `not_found` / `panel_not_found`; 409 `already_member` |
 | `PATCH /api/billing/systems/panel-groups/:id/members/:panelId` | any of those four, at least one; null inherits; `.strict()` — a server fact is refused | `200` the member | 400; 403; 404 `not_found` / `member_not_found` |
 | `DELETE /api/billing/systems/panel-groups/:id/members/:panelId` | — | `200 {groupId, panelId, removed: true}` | 400; 403; 404 `not_found` / `member_not_found`; 409 `member_has_configs` |
+| `PUT /api/billing/systems/panel-groups/:id/members/:panelId/inbounds` | `inbounds: [remoteId]` (≤500, each once; `[]` = the pool again); `.strict()` | `200 {groupId, panelId, inbounds}` | 400; 403; 404 `not_found` / `member_not_found` / `inbound_not_found`; 409 `inbound_not_sellable`, `inbound_assigned_elsewhere` `{remoteId, group: {id, name}}`, `inbound_has_configs` `{remoteId, configs}` |
 | `POST /api/billing/systems/panel-groups/:id/members/:panelId/drain` | — | `200` the member, `drain`, with `drainingSince` and `waitSeconds` | 400; 403; 404 `not_found` / `member_not_found`; 409 `already_draining` |
-| `GET /api/billing/systems/panels/:id/inbounds` | — | `{panelId, inboundPlacement, maxClients, priority, weight, effective, inboundsReadAt, users, inbounds: [{remoteId, tag, protocol, port, host, enabled, goneAt, seenAt, sold, maxClients, clients}]}`, by id | 400; 403; 404 `panel_not_found` |
+| `GET /api/billing/systems/panels/:id/inbounds` | — | `{panelId, inboundPlacement, maxClients, priority, weight, effective, inboundsReadAt, users, inbounds: [{remoteId, tag, protocol, port, host, enabled, goneAt, seenAt, sold, maxClients, assignedTo, clients}]}`, by id; `assignedTo` `{id, name}` of the group holding it, null = the pool (rule 24c) | 400; 403; 404 `panel_not_found` |
 | `PUT /api/billing/systems/panels/:id/inbounds` | any of the four selling settings as on a member (null = platform default), `inbounds: [{remoteId, sold, maxClients?}]` (≤500, each once); `.strict()` | `200` as the `GET` | 400; 403; 404 `panel_not_found` / `inbound_not_found`; 409 `inbound_not_sellable` |
 | `POST /api/billing/systems/panels/:id/inbounds/refresh` | — | `202 {panelId, refreshRequested: true}` | 400; 403; 404 `panel_not_found` |
 
 Rate limits, per user, per 15 minutes: `SYSTEMS_ADMIN_WRITE` 30 (register,
-both re-submits, the panel edit, delete and restore, acknowledge, release, write-off, the seven group writes, the two inbound writes), `SYSTEMS_ADMIN_READ` 120 (the six reads).
+both re-submits, the panel edit, delete and restore, acknowledge, release, write-off, the eight group writes, the two inbound writes), `SYSTEMS_ADMIN_READ` 120 (the six reads).
 
 ## Registering a panel — the rules
 
@@ -225,6 +226,9 @@ Where a `network_access` variant's Grants are placed (network
 24b. **A member's selling settings override its panel's** (F-027-cg). Resolved
     member -> panel -> platform default, each read naming the layer (network
     `contract.inbounds.md` rule 4a). `selling-settings.spec.ts` pins it.
+
+24c. **An inbound is the pool's or one group's** (F-027-ch, ADR-0090 decision 3): the `PUT` sets a
+    member's whole set — network `contract.inbounds.md` rule 3a. `member-inbounds.spec.ts` pins it.
 
 `panel-groups.spec.ts` pins rules 20–24b.
 

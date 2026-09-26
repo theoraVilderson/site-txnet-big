@@ -241,11 +241,11 @@ function build() {
         {
           id: PLATFORM_GROUP, tenantId: null, name: 'Europe', strategy: 'mirror',
           members: [
-            { role: 'primary', panel: { reviewState: 'accepted', panelState: 'healthy', inbounds: [{ protocol: 'vless' }, { protocol: 'trojan' }] } },
-            { role: 'replica', panel: { reviewState: 'accepted_low_trust', panelState: 'healthy', inbounds: [{ protocol: 'vless' }] } },
-            { role: 'drain', panel: { reviewState: 'accepted', panelState: 'healthy', inbounds: [] } },
-            { role: 'primary', panel: { reviewState: 'accepted', panelState: 'degraded', inbounds: [] } },
-            { role: 'primary', panel: { reviewState: 'pending_review', panelState: 'healthy', inbounds: [] } },
+            { role: 'primary', inbounds: [], panel: { reviewState: 'accepted', panelState: 'healthy', inbounds: [{ protocol: 'vless' }, { protocol: 'trojan' }] } },
+            { role: 'replica', inbounds: [], panel: { reviewState: 'accepted_low_trust', panelState: 'healthy', inbounds: [{ protocol: 'vless' }] } },
+            { role: 'drain', inbounds: [], panel: { reviewState: 'accepted', panelState: 'healthy', inbounds: [] } },
+            { role: 'primary', inbounds: [], panel: { reviewState: 'accepted', panelState: 'degraded', inbounds: [] } },
+            { role: 'primary', inbounds: [], panel: { reviewState: 'pending_review', panelState: 'healthy', inbounds: [] } },
           ],
         },
         { id: RESELLER_GROUP, tenantId: RESELLER, name: 'Alpha own', strategy: 'mirror', members: [] },

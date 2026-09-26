@@ -33,6 +33,8 @@ const MEMBER_FIELDS = {
   role: true,
   drainingSince: true,
   createdAt: true,
+  // The inbounds it sells instead of the pool (F-027-ch); none = the pool.
+  inbounds: { select: { inboundRemoteId: true } },
   panel: { select: { name: true, panelState: true, reviewState: true, lastHealthyAt: true, ...PANEL_SELLING_FIELDS } },
 } satisfies Prisma.PanelGroupMemberSelect;
 
@@ -245,11 +247,13 @@ function sellingData(input: MemberSellingInput) {
 
 /**
  * The member's own values as stored (null = inherited), and `effective`:
- * each setting's value for this group and the layer it came from.
+ * each setting's value for this group and the layer it came from. `inbounds`
+ * are the ones assigned to it (F-027-ch); `[]` = it sells the panel's pool.
  */
-function wireMember({ panel, ...m }: MemberRow) {
+function wireMember({ panel, inbounds, ...m }: MemberRow) {
   return {
     ...m,
+    inbounds: inbounds.map((i) => i.inboundRemoteId).sort((a, b) => a.localeCompare(b, 'en', { numeric: true })),
     panelName: panel.name,
     panelState: panel.panelState,
     reviewState: panel.reviewState,

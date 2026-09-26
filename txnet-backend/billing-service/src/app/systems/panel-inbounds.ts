@@ -27,6 +27,8 @@ const INBOUND_FIELDS = {
   seenAt: true,
   sold: true,
   maxClients: true,
+  // The group it is assigned to (F-027-ch); none = the panel's default pool.
+  assignment: { select: { member: { select: { group: { select: { id: true, name: true } } } } } },
 } satisfies Prisma.PanelInboundSelect;
 
 const PANEL_FIELDS = { id: true, inboundPlacement: true, maxClients: true, priority: true, weight: true, inboundsReadAt: true } satisfies Prisma.PanelSelect;
@@ -58,7 +60,8 @@ export class PanelInboundsService {
   /**
    * The panel's selling settings as stored (null = the platform's) and
    * `effective` — each value with its layer, `panel` or `platform` (F-027-cg);
-   * its inbounds by id, and how full each is.
+   * its inbounds by id, how full each is, and `assignedTo` — the group it is
+   * assigned to, or null for the default pool (F-027-ch).
    */
   async inbounds(actor: SystemsActor, panelId: string) {
     const panel = await this.panelInScope(actor, panelId);
@@ -68,7 +71,7 @@ export class PanelInboundsService {
     ]);
     const inbounds = rows
       .sort((a, b) => a.remoteId.localeCompare(b.remoteId, 'en', { numeric: true }))
-      .map((i) => ({ ...i, clients: load.byInbound.get(i.remoteId) ?? 0 }));
+      .map(({ assignment, ...i }) => ({ ...i, assignedTo: assignment?.member.group ?? null, clients: load.byInbound.get(i.remoteId) ?? 0 }));
     const { id, inboundsReadAt, ...settings } = panel;
     return { panelId: id, ...settings, effective: effectiveSellingSettings(null, settings), inboundsReadAt, users: load.users, inbounds };
   }

@@ -37,6 +37,8 @@ import {
   AcknowledgeDriftBody,
   AddPanelGroupMemberBody,
   addPanelGroupMemberSchema,
+  AssignMemberInboundsBody,
+  assignMemberInboundsSchema,
   CreatePanelGroupBody,
   createPanelGroupSchema,
   UpdatePanelGroupBody,
@@ -64,6 +66,7 @@ import {
   writeOffHoldSchema,
 } from './panel-registration.schema';
 import { PanelScopeRefused, SystemsActor } from './panel-scope';
+import { InboundHeldElsewhere, MemberInboundsService } from './member-inbounds';
 import { PanelAlreadyRegistered } from './panel-address';
 import { SystemsReadService, SystemsRefused, SystemsRejection } from './systems-read';
 import { UsageHoldsService } from './usage-holds';
@@ -115,6 +118,8 @@ const CONFLICTS: ReadonlySet<SystemsRejection> = new Set([
   'panel_not_retired',
   'group_has_members',
   'group_in_use',
+  'inbound_assigned_elsewhere',
+  'inbound_has_configs',
 ]);
 
 /** The service's refusals as HTTP: the scope is a 403, a panel, group or event outside it a 404. */
@@ -125,6 +130,9 @@ async function refusing<T>(work: () => Promise<T>): Promise<T> {
     if (e instanceof PanelScopeRefused) throw new ForbiddenException({ reason: e.reason, message: e.message });
     if (e instanceof SystemsRefused) {
       if (e instanceof PanelAlreadyRegistered) throw new ConflictException({ reason: e.reason, message: e.message, panel: e.panel });
+      if (e instanceof InboundHeldElsewhere) {
+        throw new ConflictException({ reason: e.reason, message: e.message, remoteId: e.remoteId, group: e.group, configs: e.configs });
+      }
       if (CONFLICTS.has(e.reason)) throw new ConflictException({ reason: e.reason, message: e.message });
       throw new NotFoundException({ reason: e.reason, message: e.message });
     }
@@ -171,6 +179,7 @@ export class SystemsController {
     private readonly panelGroups: PanelGroupsService,
     private readonly panelInbounds: PanelInboundsService,
     private readonly lifecycle: PanelLifecycleService,
+    private readonly memberInbounds: MemberInboundsService,
   ) {}
 
   @Get('panel-groups')
@@ -228,6 +237,23 @@ export class SystemsController {
     @Req() req: Request,
   ) {
     return refusing(() => this.panelGroups.updateMember(actorOf(req), id, panelId, body as MemberSellingInput));
+  }
+
+  /**
+   * The inbounds this membership sells instead of the panel's pool (F-027-ch):
+   * the whole set, `[]` = the pool again. `409 inbound_assigned_elsewhere`
+   * names the group holding one, `409 inbound_has_configs` counts another
+   * group's live configs on one.
+   */
+  @Put('panel-groups/:id/members/:panelId/inbounds')
+  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  assignMemberInbounds(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('panelId', new ParseUUIDPipe()) panelId: string,
+    @Body(new ZodValidationPipe(assignMemberInboundsSchema)) body: AssignMemberInboundsBody,
+    @Req() req: Request,
+  ) {
+    return refusing(() => this.memberInbounds.assign(actorOf(req), id, panelId, body.inbounds as string[]));
   }
 
   /** `409 member_has_configs` while a live config of the group's Grants is on it: drain it instead. */

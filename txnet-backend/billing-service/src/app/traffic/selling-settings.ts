@@ -1,4 +1,4 @@
-import { InboundPlacement } from '@prisma/client';
+import { ConfigProtocol, InboundPlacement } from '@prisma/client';
 
 /**
  * A panel's selling settings, resolved in three layers (F-027-cg, ADR-0090
@@ -8,7 +8,8 @@ import { InboundPlacement } from '@prisma/client';
  *
  * Only *selling* choices resolve this way. Server facts — addresses,
  * credentials, `maxRequestsPerMinute`, `maxLineRateBps` — are the panel's and
- * no group overrides them. Which inbounds a member sells is F-027-ch.
+ * no group overrides them. Which inbounds a member sells is
+ * {@link sellingInbounds} (F-027-ch).
  */
 export type SellingValues = {
   inboundPlacement: InboundPlacement;
@@ -66,4 +67,26 @@ export function sellingValues(effective: EffectiveSellingSettings): SellingValue
     priority: effective.priority.value,
     weight: effective.weight.value,
   };
+}
+
+/** An inbound a buyer may be placed on: of a protocol we sell, with its cap (null = none). */
+export type SellingInbound = { remoteId: string; protocol: ConfigProtocol; maxClients: number | null };
+
+type AssignedInbound = { remoteId: string; protocol: ConfigProtocol | null; maxClients: number | null; enabled: boolean; goneAt: Date | null };
+
+/**
+ * Which inbounds one group sells on one panel (F-027-ch, ADR-0090 decision 3):
+ * the membership's own assignments when it has any, else the panel's default
+ * pool — `sold` inbounds no membership holds, as the caller loaded them.
+ * An assignment **replaces** the pool: a member whose every assigned inbound is
+ * disabled or gone sells nothing, never the pool, so an admin's split between
+ * groups is not undone by an inbound going down.
+ */
+export function sellingInbounds(member: {
+  inbounds: { inbound: AssignedInbound }[];
+  panel: { inbounds: { remoteId: string; protocol: ConfigProtocol | null; maxClients: number | null }[] };
+}): SellingInbound[] {
+  const own = member.inbounds.length > 0;
+  const rows = own ? member.inbounds.map((a) => a.inbound).filter((i) => i.enabled && i.goneAt === null) : member.panel.inbounds;
+  return rows.flatMap((i) => (i.protocol === null ? [] : [{ remoteId: i.remoteId, protocol: i.protocol, maxClients: i.maxClients }]));
 }

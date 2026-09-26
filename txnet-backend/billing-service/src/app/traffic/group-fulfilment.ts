@@ -22,7 +22,7 @@ import { errorLine } from '../log-line';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigActionsService, ConfigActor, InboundPlacementTarget } from './config-actions';
-import { effectiveSellingSettings, PLATFORM_SELLING_DEFAULTS } from './selling-settings';
+import { effectiveSellingSettings, PLATFORM_SELLING_DEFAULTS, sellingInbounds } from './selling-settings';
 
 /**
  * Who placed a group's configs in `config_action_log`: the fulfilment job, not
@@ -58,28 +58,35 @@ export class GroupFulfilmentRefused extends Error {
   }
 }
 
+/** An inbound a buyer may be placed on (network `contract.inbounds.md` rule 2), before who sells it. */
+const PLACEABLE_INBOUND = { enabled: true, goneAt: null, protocol: { not: null } } satisfies Prisma.PanelInboundWhereInput;
+
+/** The panel's default pool: picked, placeable, and assigned to no membership (F-027-ch). */
+const POOL_INBOUND = { sold: true, ...PLACEABLE_INBOUND, assignment: { is: null } } satisfies Prisma.PanelInboundWhereInput;
+
 /**
  * A member's panel as fulfilment reads it: its health, how it places, its cap,
- * and only the inbounds a buyer may be placed on (network `contract.inbounds.md`
- * rule 2) — the unpicked, disabled and gone ones are never loaded.
+ * and its default pool (network `contract.inbounds.md` rules 2, 3a) — the
+ * unpicked, disabled, gone and group-assigned ones are never loaded.
  */
 const MEMBER_PANEL_FIELDS = {
   reviewState: true,
   panelState: true,
   inboundPlacement: true,
   maxClients: true,
-  inbounds: {
-    where: { sold: true, enabled: true, goneAt: null, protocol: { not: null } },
-    select: { remoteId: true, protocol: true, maxClients: true },
-  },
+  inbounds: { where: POOL_INBOUND, select: { remoteId: true, protocol: true, maxClients: true } },
 } satisfies Prisma.PanelSelect;
 
-/** The member's own layer of the selling settings (F-027-cg); null = the panel's. */
+/**
+ * The member's own layer of the selling settings (F-027-cg; null = the
+ * panel's) and its assigned inbounds, which replace the pool (F-027-ch).
+ */
 const MEMBER_FIELDS = {
   panelId: true,
   role: true,
   inboundPlacement: true,
   maxClients: true,
+  inbounds: { select: { inbound: { select: { remoteId: true, protocol: true, maxClients: true, enabled: true, goneAt: true } } } },
   panel: { select: MEMBER_PANEL_FIELDS },
 } satisfies Prisma.PanelGroupMemberSelect;
 
@@ -127,7 +134,8 @@ export const placeableMember = (m: { role: PanelGroupMemberRole; panel: Pick<Pan
 /**
  * The groups among `groupIds` that can deliver a new sale (F-111-i): at least
  * `minHealthyPanels` members that could ever place one — not `drain`, not
- * retired, accepted, with one sold inbound. Health is left out on purpose: a
+ * retired, accepted, selling one inbound: an assigned one, or with none
+ * assigned one of the pool (F-027-ch). Health is left out on purpose: a
  * panel down for a minute is waited for by delivery's clock, and must not take
  * the variant out of the shop and put it back each minute.
  */
@@ -141,11 +149,11 @@ export async function deliverableGroupIds(tx: Prisma.TransactionClient, groupIds
       members: {
         where: {
           role: { not: PanelGroupMemberRole.drain },
-          panel: {
-            retiredAt: null,
-            reviewState: { in: [...PLACEABLE_REVIEW_STATES] },
-            inbounds: { some: { sold: true, enabled: true, goneAt: null, protocol: { not: null } } },
-          },
+          panel: { retiredAt: null, reviewState: { in: [...PLACEABLE_REVIEW_STATES] } },
+          OR: [
+            { inbounds: { some: { inbound: PLACEABLE_INBOUND } } },
+            { inbounds: { none: {} }, panel: { inbounds: { some: POOL_INBOUND } } },
+          ],
         },
         select: { panelId: true },
       },
@@ -370,11 +378,11 @@ export class GroupFulfilmentService {
         ...m.panel,
         ...placementSettings(m),
         users: Number(panelRow(m.panelId)?.users ?? 0),
-        inbounds: m.panel.inbounds.flatMap((i) =>
-          i.protocol === null
-            ? []
-            : [{ remoteId: i.remoteId, protocol: i.protocol, maxClients: i.maxClients, clients: Number(load.find((r) => r.panelId === m.panelId && r.total === 0 && r.inboundRemoteId === i.remoteId)?.clients ?? 0) }],
-        ),
+        // The membership's own inbounds, else the pool (F-027-ch).
+        inbounds: sellingInbounds(m).map((i) => ({
+          ...i,
+          clients: Number(load.find((r) => r.panelId === m.panelId && r.total === 0 && r.inboundRemoteId === i.remoteId)?.clients ?? 0),
+        })),
       },
     }));
   }
@@ -396,8 +404,8 @@ export class GroupFulfilmentService {
 
   /**
    * One sweep, for `worker-service`'s tick. **The scan names only Grants with
-   * a write due** — a placeable member with a picked inbound the Grant is not
-   * on and a seat on it (`contract.inbounds.md`), or a `pending` Grant with
+   * a write due** — a placeable member with an inbound it sells (its own, else
+   * the pool) the Grant is not on and a seat on it (`contract.inbounds.md`), or a `pending` Grant with
    * enough confirmed configs — so a Grant waiting on a
    * down panel does not occupy a batch slot, and a second call finds nothing
    * (ADR-0027). The scan is cross-tenant; each write runs in its tenant.
@@ -415,7 +423,15 @@ export class GroupFulfilmentService {
                  SELECT 1 FROM "network"."panel_group_member" m
                    JOIN "network"."panel" p ON p."id" = m."panelId"
                    JOIN "network"."panel_inbound" i ON i."panelId" = p."id"
-                        AND i."sold" AND i."enabled" AND i."goneAt" IS NULL AND i."protocol" IS NOT NULL
+                        AND i."enabled" AND i."goneAt" IS NULL AND i."protocol" IS NOT NULL
+                        -- sold by this group: assigned to its membership, or (none assigned) the unassigned pool (F-027-ch)
+                        AND (EXISTS (SELECT 1 FROM "network"."panel_group_member_inbound" a
+                                      WHERE a."groupId" = m."groupId" AND a."panelId" = m."panelId" AND a."inboundRemoteId" = i."remoteId")
+                             OR (i."sold"
+                                 AND NOT EXISTS (SELECT 1 FROM "network"."panel_group_member_inbound" a
+                                                  WHERE a."panelId" = i."panelId" AND a."inboundRemoteId" = i."remoteId")
+                                 AND NOT EXISTS (SELECT 1 FROM "network"."panel_group_member_inbound" a
+                                                  WHERE a."groupId" = m."groupId" AND a."panelId" = m."panelId")))
                   WHERE m."groupId" = pg."id"
                     AND m."role" <> 'drain'
                     AND p."reviewState" IN ('accepted', 'accepted_low_trust')

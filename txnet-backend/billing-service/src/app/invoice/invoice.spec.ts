@@ -270,7 +270,7 @@ describe('InvoiceService.create', () => {
     expect(calls.reserved).toEqual([]);
   });
 
-  it('counts a member only if it could ever place: not drain, not retired, accepted, one sold inbound — never its health (F-111-i)', async () => {
+  it('counts a member only if it could ever place: not drain, not retired, accepted, selling one inbound — never its health (F-111-i)', async () => {
     const { service, calls } = buildCreate();
     await asTenant(() => service.create({ userId: USER, variantId: VARIANT, couponCodes: [] }));
 
@@ -278,13 +278,15 @@ describe('InvoiceService.create', () => {
     const q = calls.groupQueries[0] as { where: unknown; select: { members: { where: Record<string, unknown> } } };
     expect(q.where).toEqual({ id: { in: [GROUP] } });
     const members = q.select.members.where;
+    // Selling one: an assigned inbound, or with none assigned one of the pool (F-027-ch).
+    const placeable = { enabled: true, goneAt: null, protocol: { not: null } };
     expect(members).toEqual({
       role: { not: 'drain' },
-      panel: {
-        retiredAt: null,
-        reviewState: { in: ['accepted', 'accepted_low_trust'] },
-        inbounds: { some: { sold: true, enabled: true, goneAt: null, protocol: { not: null } } },
-      },
+      panel: { retiredAt: null, reviewState: { in: ['accepted', 'accepted_low_trust'] } },
+      OR: [
+        { inbounds: { some: { inbound: placeable } } },
+        { inbounds: { none: {} }, panel: { inbounds: { some: { sold: true, ...placeable, assignment: { is: null } } } } },
+      ],
     });
     expect(JSON.stringify(members)).not.toContain('panelState');
   });

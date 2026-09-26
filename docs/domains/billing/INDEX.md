@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 52
+version: 53
 keywords: [wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -76,9 +76,9 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-09-26 | contract v53 (F-027-ch): `PUT …/members/:panelId/inbounds` is new (409 `inbound_assigned_elsewhere` / `inbound_has_configs`); a member answers `inbounds`, a panel's inbound `assignedTo`. Additive. [contract.systems.md](contract.systems.md) rule 24c. Consumer panel-web: F-027-ci |
 | 2026-09-26 | contract v52 (F-027-cg): a group member's and a panel's `priority` / `weight` are nullable (null = inherited); both reads add `effective` `{value, layer}`; `PATCH …/members/:panelId` is new. [contract.systems.md](contract.systems.md) rule 24b. Consumer panel-web: this row (types, placement form), F-027-ci (display) |
 | 2026-09-26 | contract v51: a refusal or read names another panel only inside the reader's scope — 409 `panel_already_registered` answers `panel: null` for another owner's holder, `review.duplicateOf` is null likewise. Consumer panel-web: F-027-ci |
 | 2026-09-26 | contract v50 (F-027-cf): a drift event answers `foreignPanel: {id, name} \| null` — the panel a `foreign_claim` found, named only inside the scope. Additive. [contract.systems.md](contract.systems.md) rule 9a. Consumer panel-web: this row |
-| 2026-09-26 | contract v49 (F-027-ce): the panel list answers `review.duplicateOf: {id, name} \| null`; an address edit or restore clears it. Additive. [contract.systems.md](contract.systems.md). Consumer panel-web: F-027-ci |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

@@ -36,6 +36,8 @@ type Member = {
   role: PanelGroupMemberRole;
   inboundPlacement?: InboundPlacement | null;
   maxClients?: number | null;
+  /** Assigned inbounds (F-027-ch); none = the panel's pool, `panel.inbounds`. */
+  inbounds: { inbound: Inbound & { enabled: boolean; goneAt: Date | null } }[];
   panel: { reviewState: PanelReviewState; panelState: PanelState; inboundPlacement: InboundPlacement; maxClients: number | null; inbounds: Inbound[] };
 };
 
@@ -51,6 +53,7 @@ const member = (
 ): Member => ({
   panelId,
   role,
+  inbounds: [],
   panel: { reviewState, panelState, inboundPlacement: panel.inboundPlacement ?? InboundPlacement.all, maxClients: panel.maxClients ?? null, inbounds: panel.inbounds ?? [inbound('1')] },
 });
 const on = (panelId: string, panel: PanelOpts) => member(panelId, PanelState.healthy, PanelGroupMemberRole.primary, PanelReviewState.accepted, panel);
@@ -262,6 +265,14 @@ describe('placement on the picked inbounds (F-114-b)', () => {
     group.members = [on(A, { inbounds: [inbound('1'), inbound('2', ConfigProtocol.vmess), inbound('10'), inbound('11', ConfigProtocol.trojan)] })];
     expect((await service.fulfil(tx, GRANT)).placed).toBe(1);
     expect(configs[3]).toMatchObject({ inboundRemoteId: '11', protocol: 'trojan' });
+  });
+
+  it('a member with assigned inbounds is placed on those, never on the pool (F-027-ch)', async () => {
+    const own = { ...inbound('7', ConfigProtocol.trojan), enabled: true, goneAt: null };
+    const { service, tx, configs } = build({ members: [{ ...on(A, { inbounds: [inbound('1')] }), inbounds: [{ inbound: own }] }] });
+
+    await service.fulfil(tx, GRANT);
+    expect(configs.map((c) => [c.inboundRemoteId, c.protocol])).toEqual([['7', 'trojan']]);
   });
 
   it('under `spread`, one config, on the emptiest pick with a seat', async () => {

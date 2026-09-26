@@ -31,7 +31,10 @@ export type SystemsRejection =
   | 'panel_not_retired'
   // Deleting a panel group (F-027-ca).
   | 'group_has_members'
-  | 'group_in_use';
+  | 'group_in_use'
+  // An inbound is the pool's or one group's (F-027-ch).
+  | 'inbound_assigned_elsewhere'
+  | 'inbound_has_configs';
 
 export class SystemsRefused extends Error {
   constructor(readonly reason: SystemsRejection) {

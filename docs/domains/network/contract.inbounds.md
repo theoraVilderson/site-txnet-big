@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-version: 18
+version: 19
 updated: 2026-09-25
 ---
 
@@ -26,6 +26,7 @@ holds the panel inherits it, and a panel with nothing picked places nobody.
 | `panel_inbound` | `sold`, `maxClients` (null = no cap, else `>= 1`) | the admin, on billing's systems routes |
 | `panel` | the panel's layer of the selling settings (rule 4a): `inboundPlacement` (`all` \| `spread`), `maxClients` (`>= 1`), `priority` (`>= 0`), `weight` (`>= 1`); null = the platform default | the admin |
 | `panel_group_member` | the member's layer: the same four, null = the panel's | the admin |
+| `panel_group_member_inbound` | key `(groupId, panelId, inboundRemoteId)`, unique `(panelId, inboundRemoteId)`; `tenantId` = its member's (trigger); both FKs cascade (rule 3a) | the admin |
 | `panel` | `inboundsReadAt` — null = read on the next pass | the read sets it; the admin's refresh clears it |
 | `config` | `inboundRemoteId` — the inbound fulfilment placed it on | `ConfigActionsService.provisionForGroup` |
 
@@ -49,6 +50,24 @@ holds the panel inherits it, and a panel with nothing picked places nobody.
 3. **Nothing picked, nobody placed.** A member with no loaded inbound is
    `waiting` (`no_inbound`), never given the first enabled inbound. A group's
    protocols are its members' picks'; `panel_group.protocol` is dropped.
+3a. **An inbound is the pool's or one group's** (F-027-ch, ADR-0090 decision 3).
+   An inbound assigned to a membership (`panel_group_member_inbound`) leaves
+   the panel's **default pool** — `sold` inbounds no membership holds — and
+   only that group places on it. A membership with an assignment sells its
+   own inbounds and never the pool, even when all of them are disabled; one
+   with none sells the pool, which is shared on purpose. The unique
+   `(panelId, inboundRemoteId)` holds "one group at most" against a race. The
+   write is billing's (`contract.systems.md` rule 24c), the whole set at once
+   under the panel's fulfilment lock (rule 5): a named inbound held by another
+   membership is 409 `inbound_assigned_elsewhere` naming that group, one with
+   live configs (`present`, not drained) of another group's Grants is 409
+   `inbound_has_configs` with their count. Unassigning is always allowed and
+   moves nobody (rule 6). `sold` and the inbound's `maxClients` stay the
+   inbound's: the cap binds whichever group sells it. Before F-027-ch every
+   group sold the pool, and that is the table empty, so nothing moved.
+   `sellingInbounds` (billing `traffic/selling-settings.ts`) is the one
+   resolution; fulfilment, the due scan and catalog's `protocols` read by it.
+   `member-inbounds.spec.ts` pins it.
 4. **The placement.** `all`: the Grant gets a config on every picked inbound
    it is not yet on — one link each, the bag split across them
    (`contract.ceiling.md`). `spread`: one config, on the picked inbound with
@@ -64,7 +83,7 @@ holds the panel inherits it, and a panel with nothing picked places nobody.
    cannot set "no cap" under a capped panel: unset inherits the cap. The due
    scan resolves the two `mirror` reads in SQL (`COALESCE`), which assumes the
    platform cap is none; `placementSettings` does it in TypeScript, and rules 4
-   and 5 read the effective values. Which inbounds a member sells is F-027-ch.
+   and 5 read the effective values. Which inbounds a member sells is rule 3a.
 5. **The caps.** An inbound at `maxClients` live configs takes nobody. A panel
    at its effective `maxClients` (rule 4a) users — distinct Grants with a live config (`present`, not
    drained) — takes no **new** Grant; a Grant already on it still gets a pick

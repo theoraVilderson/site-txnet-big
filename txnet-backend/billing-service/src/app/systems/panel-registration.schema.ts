@@ -260,3 +260,16 @@ export const updatePanelInboundsSchema = z
   });
 
 export type UpdatePanelInboundsBody = z.infer<typeof updatePanelInboundsSchema>;
+
+/**
+ * The inbounds one group membership sells instead of the panel's pool
+ * (F-027-ch, ADR-0090 decision 3): the whole set, by the panel's own ids; `[]`
+ * gives the membership back to the pool. `.strict()`: `sold` and `maxClients`
+ * are the inbound's, on the panel's route.
+ */
+export const assignMemberInboundsSchema = z
+  .object({ inbounds: z.array(z.string().min(1).max(200)).max(500) })
+  .strict()
+  .refine((body) => new Set(body.inbounds).size === body.inbounds.length, { message: 'an inbound is named twice', path: ['inbounds'] });
+
+export type AssignMemberInboundsBody = z.infer<typeof assignMemberInboundsSchema>;

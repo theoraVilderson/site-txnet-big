@@ -6,6 +6,7 @@ import { CATEGORY_MAX_DEPTH, tenantTransaction } from '@txnet-backend/shared-cor
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { placeableMember } from '../traffic/group-fulfilment';
+import { sellingInbounds } from '../traffic/selling-settings';
 import { CatalogTextKind, CatalogTextService, ReviewItem, Texts, catalogTextKey, parseCatalogTextKey } from './catalog-texts';
 import { mustStateTraffic, trafficQuotaOf } from './traffic-quota';
 
@@ -395,7 +396,8 @@ export class CatalogAdminService {
    * tenant's, as {@link usableGroup} admits. `healthyMembers` counts what
    * fulfilment would place on now (`placeableMember`); `strategy` is shown,
    * because only `mirror` is fulfilled (network `contract.groups.md` rule 7);
-   * `protocols` is what its members' picked inbounds sell (F-114-b).
+   * `protocols` is what its members' inbounds sell — each its own, else the
+   * panel's pool (F-114-b, F-027-ch).
    */
   async listPanelGroups(actor: CatalogActor): Promise<PanelGroupOption[]> {
     const { owner } = await this.access(actor);
@@ -410,11 +412,16 @@ export class CatalogAdminService {
           members: {
             select: {
               role: true,
+              // Its own inbounds replace the pool (F-027-ch): `sellingInbounds` picks which it sells.
+              inbounds: { select: { inbound: { select: { remoteId: true, protocol: true, maxClients: true, enabled: true, goneAt: true } } } },
               panel: {
                 select: {
                   reviewState: true,
                   panelState: true,
-                  inbounds: { where: { sold: true, enabled: true, goneAt: null, protocol: { not: null } }, select: { protocol: true } },
+                  inbounds: {
+                    where: { sold: true, enabled: true, goneAt: null, protocol: { not: null }, assignment: { is: null } },
+                    select: { remoteId: true, protocol: true, maxClients: true },
+                  },
                 },
               },
             },
@@ -425,7 +432,7 @@ export class CatalogAdminService {
     );
     return rows.map(({ members, ...g }) => ({
       ...g,
-      protocols: [...new Set(members.flatMap((m) => m.panel.inbounds.flatMap((i) => (i.protocol ? [i.protocol] : []))))].sort(),
+      protocols: [...new Set(members.flatMap((m) => sellingInbounds(m).map((i) => i.protocol)))].sort(),
       healthyMembers: members.filter(placeableMember).length,
     }));
   }

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { PanelCredentialClient } from './panel-credential.client';
 import { PanelGroupsService } from './panel-groups';
+import { MemberInboundsService } from './member-inbounds';
 import { PanelInboundsService } from './panel-inbounds';
 import { PanelLifecycleService } from './panel-lifecycle';
 import { PANEL_CREDENTIAL_WRITER, PanelRegistrationService } from './panel-registration';
@@ -27,6 +28,7 @@ import { UsageHoldsService } from './usage-holds';
     UsageHoldsService,
     PanelGroupsService,
     PanelInboundsService,
+    MemberInboundsService,
     PanelLifecycleService,
     PanelPermissionGuard,
     PanelCredentialClient,

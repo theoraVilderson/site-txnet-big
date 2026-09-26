@@ -565,7 +565,9 @@ model PanelInbound {
   /// The most clients placed on it; null = no cap.
   maxClients Int?
 
-  panel Panel @relation(fields: [panelId], references: [id], onDelete: Cascade)
+  panel      Panel                    @relation(fields: [panelId], references: [id], onDelete: Cascade)
+  /// The one membership this inbound is assigned to (F-027-ch); none = the panel's default pool.
+  assignment PanelGroupMemberInbound?
 
   @@id([panelId, remoteId])
   @@index([tenantId])
@@ -593,13 +595,36 @@ model PanelGroupMember {
   drainingSince DateTime?
   createdAt DateTime             @default(now())
 
-  group PanelGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
-  panel Panel      @relation(fields: [panelId], references: [id], onDelete: Restrict)
+  group    PanelGroup                @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  panel    Panel                     @relation(fields: [panelId], references: [id], onDelete: Restrict)
+  /// The inbounds this membership sells instead of the pool (F-027-ch); none = the pool.
+  inbounds PanelGroupMemberInbound[]
 
   @@id([groupId, panelId])
   @@index([panelId])
   @@index([tenantId])
   @@map("panel_group_member")
+  @@schema("network")
+}
+
+/// An inbound assigned to one group membership (F-027-ch, ADR-0090 decision 3):
+/// it leaves the panel's default pool and only that group places on it. The
+/// unique `(panelId, inboundRemoteId)` holds "one group at most" under
+/// concurrency. A membership with no row sells the pool (`sold`, unassigned).
+/// `tenantId` is its membership's, set by trigger.
+model PanelGroupMemberInbound {
+  groupId         String  @db.Uuid
+  panelId         String  @db.Uuid
+  inboundRemoteId String
+  tenantId        String? @db.Uuid
+
+  member  PanelGroupMember @relation(fields: [groupId, panelId], references: [groupId, panelId], onDelete: Cascade)
+  inbound PanelInbound     @relation(fields: [panelId, inboundRemoteId], references: [panelId, remoteId], onDelete: Cascade)
+
+  @@id([groupId, panelId, inboundRemoteId])
+  @@unique([panelId, inboundRemoteId])
+  @@index([tenantId])
+  @@map("panel_group_member_inbound")
   @@schema("network")
 }
 
