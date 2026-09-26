@@ -2027,7 +2027,7 @@
   },
   "myServices": {
     "title": "My services",
-    "subtitle": "The services you bought. To connect, press “Connect”.",
+    "subtitle": "Copy a config in one tap, or scan its QR code.",
     "empty": "You have no services yet.",
     "unavailable": "The service list is unavailable.",
     "retry": "Try again",
@@ -2042,8 +2042,8 @@
     "purgeDue": "This service is paused and its servers are being removed. Nothing you bought is lost — a top-up brings it back.",
     "meteringUnavailable": "Your usage is not updating right now, but your service is still connected. The numbers catch up shortly.",
     "configs": {
-      "loading": "Loading servers…",
-      "empty": "No server has been set up for this service yet.",
+      "loading": "Loading configs…",
+      "empty": "No config has been set up for this service yet.",
       "selectAll": "Select all",
       "selected": "{{count}} selected",
       "bulkRegenerate": "New link for the selected",
@@ -2051,12 +2051,12 @@
       "regenerate": "New link",
       "regenerateLeft": "{{left}} of {{max}} left",
       "retire": "Delete",
-      "retireConfirm": "Delete {{count}} server(s)? Their links stop working for good.",
+      "retireConfirm": "Delete {{count}} config(s)? They stop working for good.",
       "sending": "Sending…",
-      "done": "Done for {{count}} server(s).",
-      "ceiling": "This server's share of the traffic: {{allocated}}",
-      "ceilingQueued": "This server's share of the traffic: {{allocated}} — {{applied}} is on the server so far, the rest is on its way.",
-      "ceilingNone": "This server's share of the traffic is not set yet.",
+      "done": "Done for {{count}} config(s).",
+      "ceiling": "This config's share of the traffic: {{allocated}}",
+      "ceilingQueued": "This config's share of the traffic: {{allocated}} — {{applied}} is on the server so far, the rest is on its way.",
+      "ceilingNone": "This config's share of the traffic is not set yet.",
       "status": {
         "active": "Active",
         "frozen": "Paused",
@@ -2100,11 +2100,12 @@
         "config_not_found": "Not found — it may already be deleted.",
         "config_retired": "already deleted.",
         "grant_not_active": "the service is not active.",
-        "regenerate_limit_reached": "No new links are left for this server.",
+        "regenerate_limit_reached": "No new links are left for this config.",
         "config_changed": "it changed while you were acting on it. Try again.",
         "failed": "could not be done. Try again."
       },
-      "title": "This service's servers"
+      "title": "This service's configs",
+      "show": "Show configs"
     },
     "status": {
       "pending": "Being prepared",
@@ -2116,13 +2117,12 @@
     },
     "preparing": "Paid — your service is being set up. There is nothing to do; it turns active on its own when it is ready.",
     "link": {
-      "label": "One link for every server",
-      "hint": "This subscription link holds all the servers above. Add it to your app once and it stays up to date — even after you make a new link for a server.",
+      "label": "Subscription link",
+      "hint": "Every config in one link. Add it to your app (v2rayNG, Hiddify, Streisand) once and it stays up to date.",
       "copy": "Copy subscription link",
       "copying": "Getting the link…",
       "copied": "Link copied",
       "showQr": "Show QR",
-      "hideQr": "Hide QR",
       "qrLabel": "Subscription link QR code",
       "reset": "Make a new subscription link",
       "resetting": "Making…",
@@ -2147,33 +2147,26 @@
       "unavailable": "The usage chart is not available right now. Your service is fine."
     },
     "lines": {
-      "title": "Connection links",
-      "copy": "Copy",
+      "title": "Configs",
+      "copy": "Copy config",
       "copied": "Copied",
-      "showQr": "QR",
-      "hideQr": "Hide QR",
+      "showQr": "Show QR",
       "qrLabel": "QR code of {{name}}",
       "qrTooLong": "This link is too long for a QR code. Copy it instead.",
       "download": "Download WireGuard file",
-      "notCaptured": "This server's link will be ready in a few minutes and shows up here on its own. Until then, use “One link for every server” below.",
-      "none": "This server has no separate link. Use “One link for every server” below."
+      "notCaptured": "Ready in a few minutes; it shows up here on its own. Until then, use the subscription link below.",
+      "none": "This server gives no separate link. Use the subscription link below.",
+      "copyAll": "Copy all",
+      "allCopied": "All copied"
     },
     "left": {
-      "trafficTitle": "Traffic left",
-      "timeTitle": "Time left",
-      "traffic": "{{left}}",
-      "unlimited": "Unlimited",
-      "days": "{{days}} days",
-      "ended": "Ended",
-      "timeLabel": "{{days}} days left, until {{until}}"
-    },
-    "connect": {
-      "open": "Connect",
-      "step": "Copy one server's link, or scan its QR code with your app (such as v2rayNG, Hiddify or Streisand)."
+      "days": "{{days}} days left",
+      "ended": "Ended"
     },
     "manage": {
-      "open": "Details and settings"
-    }
+      "open": "Manage configs and usage chart"
+    },
+    "qrClose": "Close"
   },
   "systems": {
     "title": "Systems",

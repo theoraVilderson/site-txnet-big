@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Loader2, Plug, RotateCcw } from "lucide-react";
+import { AlertCircle, Check, ChevronDown, Copy, Link2, Loader2, QrCode, RotateCcw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { useApiErrorMessage } from "@/hooks/useApiError";
 import type { GrantRow } from "@/lib/billing-api";
 import { formatInstant } from "../../_lib/datetime";
 import { useGrantConfigs } from "../_hooks/useGrantConfigs";
@@ -11,41 +12,41 @@ import { useSubscriptionLink } from "../_hooks/useSubscriptionLink";
 import { GRANT_TONES, type CapabilityName } from "../_lib/my-services";
 import { formatBytes, purgeCountdown } from "../_lib/service-configs";
 import { remainingBytes, timeLeft, usedShare } from "../_lib/usage";
-import { ConnectPanel, LinkError } from "./ConnectPanel";
+import { ConfigLines } from "./ConfigLines";
 import { GrantConfigs } from "./GrantConfigs";
-import { Meter } from "./Meter";
+import { QrDialog } from "./QrDialog";
 import { UsageBars } from "./UsageBars";
 
 const S = FrontendI18nKeys.common.myServices;
 const L = S.link;
 
-type Panel = "connect" | "manage" | null;
-
 /**
- * One Grant on the "my services" page (F-502-s), laid out for the question a
- * user arrives with (user, 2026-09-26: "nothing is easy, the words are not
- * clear"):
+ * One Grant on the "my services" page (F-502-s), laid out like a subscription
+ * page (user, 2026-09-26: "confusing, not responsive, copying a config is
+ * not simple — take the idea from Marzban's subscription page"). One column,
+ * top to bottom:
  *
- * 1. **What is it and is it working** — its name and a status pill big
- *    enough to read.
- * 2. **How much is left** — traffic and time, each a headline and a bar,
+ * 1. **Name and status.**
+ * 2. **Usage** — one bar, used against bought, and the days left beside it,
  *    from the row itself (no read).
- * 3. **Connect** — the one strong button. It opens each server's lines and
- *    the subscription link (`ConnectPanel`); nothing there changes anything.
- * 4. **Details** — the 30 days, each server's share, a new link, delete, and
- *    resetting the subscription link. Everything that can break a working
- *    setup is here, one press further away.
+ * 3. **Configs** — every line a row with copy and QR icons, and "copy all"
+ *    (`ConfigLines`). Open from the start on a live row the page chose
+ *    (`autoOpen`); one tap on any other.
+ * 4. **Subscription link** — one row: copy, and a QR in a dialog. Read only
+ *    when a copy or the QR needs it.
+ * 5. **Manage** — folded: the 30 days, each server with a new link and
+ *    delete, and resetting the subscription link. Everything that can break a
+ *    working setup is here, never above it.
  *
- * Only one of the two is open at a time: on a phone, two long panels under
- * one card lose the card. Both share the row's configs and link, so moving
- * between them reads nothing twice, and a reset in "details" replaces the
- * link "connect" shows.
+ * The configs and the link are read once per row and shared by 3–5, so a
+ * reset under "manage" replaces the link row 4 copies.
  */
 export function ServiceRow({
   row,
   name,
   capabilities,
   configsAsked = 0,
+  autoOpen = false,
 }: {
   row: GrantRow;
   name: string | null;
@@ -53,16 +54,20 @@ export function ServiceRow({
   capabilities: CapabilityName[];
   /** `useGrantsPage().configsAsked` for this row: its open config list re-reads when it moves (F-111-l). */
   configsAsked?: number;
+  /** Show the configs without a tap — the page gives this to its first few live rows. */
+  autoOpen?: boolean;
 }) {
   const { t, lang } = useLocale();
-  const [panel, setPanel] = useState<Panel>(null);
+  const toMessage = useApiErrorMessage();
+  const [configsOpen, setConfigsOpen] = useState(autoOpen);
+  const [manageOpen, setManageOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
-  const configs = useGrantConfigs(row.id, panel !== null, configsAsked);
+  const configs = useGrantConfigs(row.id, configsOpen || manageOpen, configsAsked);
   const sub = useSubscriptionLink(row.id);
 
   const tone = GRANT_TONES[row.status];
   const countdown = purgeCountdown(row.purgeAt);
-  const toggle = (next: Exclude<Panel, null>) => setPanel((p) => (p === next ? null : next));
 
   // Traffic is measured against a bound: a metered Grant's is what it has
   // bought (ADR-0072), a capped prepaid one's the cap billing answers — the
@@ -76,137 +81,199 @@ export function ServiceRow({
       ? row.purchasedBytes
       : row.trafficCapBytes;
   const share = bound !== null ? usedShare(row.consumedBytes, bound) : null;
-  const boundText = bound !== null ? (formatBytes(bound, lang) ?? bound) : null;
-  const traffic =
-    row.trafficUnlimited
-      ? { headline: t("common", S.left.unlimited), detail: t("common", S.usageUnlimited, { consumed }) }
-      : bound !== null && share !== null
-        ? {
-            headline: t("common", S.left.traffic, {
-              left: formatBytes(remainingBytes(row.consumedBytes, bound), lang) ?? "",
-            }),
-            detail: t("common", S.usage, { consumed, purchased: boundText ?? "" }),
-          }
-        : { headline: consumed, detail: t("common", S.usageUnmetered, { consumed }) };
+  const boundText = bound !== null ? (formatBytes(bound, lang) ?? bound) : "";
+  const remaining = bound !== null ? (formatBytes(remainingBytes(row.consumedBytes, bound), lang) ?? "") : "";
+  const usage = row.trafficUnlimited
+    ? t("common", S.usageUnlimited, { consumed })
+    : share !== null
+      ? t("common", S.usage, { consumed, purchased: boundText })
+      : t("common", S.usageUnmetered, { consumed });
 
   const from = formatInstant(row.startsAt, lang) ?? row.startsAt;
   const until = row.endsAt ? formatInstant(row.endsAt, lang) : null;
   const time = timeLeft(row.startsAt, row.endsAt);
-  const period = until
-    ? t("common", S.period, { from, until })
-    : t("common", S.periodUnlimited, { from });
+  const days =
+    time === null
+      ? t("common", S.periodUnlimited, { from })
+      : time.days === 0
+        ? t("common", S.left.ended)
+        : t("common", S.left.days, { days: time.days });
+  const full = share !== null && share >= 1;
+
+  async function openQr() {
+    if (await sub.readLink()) setQrOpen(true);
+  }
 
   return (
-    <li className="rounded-3xl border border-card-border bg-card-bg p-4 md:p-5">
-      <div className="flex items-start justify-between gap-3">
-        <h2 className="min-w-0 text-base font-bold text-text-primary md:text-lg">{name ?? t("common", S.unnamed)}</h2>
-        <span
-          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold ${tone.className}`}
-        >
-          <tone.icon size={14} aria-hidden />
-          {t("common", tone.labelKey)}
-        </span>
-      </div>
+    <li className="overflow-hidden rounded-3xl border border-card-border bg-card-bg">
+      <div className="space-y-4 p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="min-w-0 break-words text-base font-bold text-text-primary">{name ?? t("common", S.unnamed)}</h2>
+          <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${tone.className}`}>
+            <tone.icon size={14} aria-hidden />
+            {t("common", tone.labelKey)}
+          </span>
+        </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <Meter
-          title={t("common", S.left.trafficTitle)}
-          headline={traffic.headline}
-          detail={traffic.detail}
-          share={share}
-          label={
-            bound !== null && share !== null
-              ? t("common", S.ring.label, {
-                  used: consumed,
-                  bought: boundText ?? "",
-                  remaining: formatBytes(remainingBytes(row.consumedBytes, bound), lang) ?? "",
-                })
-              : undefined
-          }
-        />
-        <Meter
-          title={t("common", S.left.timeTitle)}
-          headline={
-            time === null
-              ? t("common", S.left.unlimited)
-              : time.days === 0
-                ? t("common", S.left.ended)
-                : t("common", S.left.days, { days: time.days })
-          }
-          detail={period}
-          share={time?.spent ?? null}
-          label={time && until ? t("common", S.left.timeLabel, { days: time.days, until }) : undefined}
-        />
-      </div>
-
-      {/* Paid and not yet delivered (F-111-f). The page re-reads on its own
-          when delivery ends, so the sentence says there is nothing to do. */}
-      {row.status === "pending" && (
-        <p role="status" className="mt-3 rounded-2xl border border-gold/20 bg-gold-bg px-3 py-2 text-sm font-medium text-gold">
-          {t("common", S.preparing)}
-        </p>
-      )}
-
-      {countdown !== null && (
-        <p role="status" className="mt-3 rounded-2xl border border-gold/20 bg-gold-bg px-3 py-2 text-sm font-medium text-gold">
-          {countdown === "due"
-            ? t("common", S.purgeDue)
-            : t("common", S.purgeIn, {
-                days: countdown.days,
-                hours: countdown.hours,
-                at: formatInstant(row.purgeAt, lang) ?? row.purgeAt ?? "",
-              })}
-        </p>
-      )}
-
-      {capabilities.length > 0 && (
-        <ul aria-label={t("common", S.features)} className="mt-3 flex flex-wrap gap-1.5">
-          {capabilities.map(({ key, name: label }) =>
-            label ? (
-              <li key={key} title={key} className="rounded-lg bg-bg-inner px-2.5 py-1 text-xs text-text-secondary">
-                {label}
-              </li>
-            ) : (
-              // No published name in this language: the key, which support can read.
-              <li key={key} dir="ltr" className="rounded-lg bg-bg-inner px-2.5 py-1 font-mono text-xs text-text-secondary">
-                {key}
-              </li>
-            ),
+        <div>
+          {share !== null && bound !== null && (
+            <div
+              role="img"
+              aria-label={t("common", S.ring.label, { used: consumed, bought: boundText, remaining })}
+              className="mb-2 h-2.5 w-full overflow-hidden rounded-full bg-bg-inner"
+            >
+              <div
+                className={`h-full rounded-full ${full ? "bg-error" : "bg-primary"}`}
+                style={{ width: `${share === 0 ? 0 : Math.max(share, 0.02) * 100}%` }}
+              />
+            </div>
           )}
-        </ul>
-      )}
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs">
+            <span className="font-medium text-text-primary">{usage}</span>
+            <span className="text-text-secondary" title={until ?? undefined}>
+              {days}
+            </span>
+          </div>
+        </div>
 
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-        <button
-          type="button"
-          aria-expanded={panel === "connect"}
-          onClick={() => toggle("connect")}
-          className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-white"
-        >
-          <Plug size={16} aria-hidden />
-          {t("common", S.connect.open)}
-        </button>
-        <button
-          type="button"
-          aria-expanded={panel === "manage"}
-          onClick={() => toggle("manage")}
-          className="flex items-center justify-center gap-2 rounded-2xl border border-card-border px-4 py-3 text-sm font-bold text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
-        >
-          {t("common", S.manage.open)}
-          <ChevronDown size={16} className={panel === "manage" ? "rotate-180" : ""} aria-hidden />
-        </button>
+        {/* Paid and not yet delivered (F-111-f). The page re-reads on its own
+            when delivery ends, so the sentence says there is nothing to do. */}
+        {row.status === "pending" && (
+          <p role="status" className="rounded-2xl border border-gold/20 bg-gold-bg px-3 py-2 text-xs font-medium text-gold">
+            {t("common", S.preparing)}
+          </p>
+        )}
+
+        {countdown !== null && (
+          <p role="status" className="rounded-2xl border border-gold/20 bg-gold-bg px-3 py-2 text-xs font-medium text-gold">
+            {countdown === "due"
+              ? t("common", S.purgeDue)
+              : t("common", S.purgeIn, {
+                  days: countdown.days,
+                  hours: countdown.hours,
+                  at: formatInstant(row.purgeAt, lang) ?? row.purgeAt ?? "",
+                })}
+          </p>
+        )}
+
+        {capabilities.length > 0 && (
+          <ul aria-label={t("common", S.features)} className="flex flex-wrap gap-1.5">
+            {capabilities.map(({ key, name: label }) =>
+              label ? (
+                <li key={key} title={key} className="rounded-lg bg-bg-inner px-2 py-0.5 text-xs text-text-secondary">
+                  {label}
+                </li>
+              ) : (
+                // No published name in this language: the key, which support can read.
+                <li key={key} dir="ltr" className="rounded-lg bg-bg-inner px-2 py-0.5 font-mono text-xs text-text-secondary">
+                  {key}
+                </li>
+              ),
+            )}
+          </ul>
+        )}
+
+        {configsOpen ? (
+          <>
+            {configs.isLoading && configs.rows === null && (
+              <p className="flex items-center gap-2 text-xs text-text-secondary">
+                <Loader2 size={14} className="animate-spin" aria-hidden />
+                {t("common", S.configs.loading)}
+              </p>
+            )}
+            {configs.readError != null && (
+              <div role="alert" className="flex items-start gap-2 rounded-2xl border border-error-border bg-error-bg px-3 py-2 text-xs font-medium text-error">
+                <AlertCircle size={14} className="mt-0.5 shrink-0" aria-hidden />
+                <span className="min-w-0 flex-1">{toMessage(configs.readError)}</span>
+                <button type="button" onClick={configs.reload} className="shrink-0 underline">
+                  {t("common", S.retry)}
+                </button>
+              </div>
+            )}
+            {configs.rows !== null && configs.rows.length === 0 && (
+              <p className="text-xs text-text-secondary">{t("common", S.configs.empty)}</p>
+            )}
+            {configs.rows !== null && configs.rows.length > 0 && <ConfigLines rows={configs.rows} />}
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfigsOpen(true)}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-card-border py-2.5 text-sm font-bold text-text-primary hover:bg-leaf-bg"
+          >
+            {t("common", S.configs.show)}
+          </button>
+        )}
+
+        <section aria-label={t("common", L.label)} className="rounded-2xl bg-bg-inner p-3">
+          <div className="flex items-center gap-2">
+            <Link2 size={16} className="shrink-0 text-text-secondary" aria-hidden />
+            <p className="min-w-0 flex-1 text-sm font-bold text-text-primary">{t("common", L.label)}</p>
+            <button
+              type="button"
+              onClick={() => void openQr()}
+              disabled={sub.isReading}
+              aria-label={t("common", L.showQr)}
+              title={t("common", L.showQr)}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-text-secondary hover:bg-leaf-bg hover:text-text-primary disabled:opacity-50"
+            >
+              <QrCode size={18} aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={() => void sub.copy()}
+              disabled={sub.isReading}
+              className="flex shrink-0 items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+            >
+              {sub.isReading ? (
+                <Loader2 size={14} className="animate-spin" aria-hidden />
+              ) : sub.copied ? (
+                <Check size={14} aria-hidden />
+              ) : (
+                <Copy size={14} aria-hidden />
+              )}
+              {t("common", sub.isReading ? L.copying : sub.copied ? L.copied : L.copy)}
+            </button>
+          </div>
+          <p className="mt-1.5 text-xs leading-5 text-text-secondary">{t("common", L.hint)}</p>
+          {sub.link && sub.showLink && (
+            <code className="mt-2 block select-all break-all font-mono text-xs text-text-primary" dir="ltr">
+              {sub.link}
+            </code>
+          )}
+          {sub.error && <LinkError error={sub.error} />}
+        </section>
+
+        {qrOpen && sub.link && (
+          <QrDialog
+            title={t("common", L.label)}
+            value={sub.link}
+            label={t("common", L.qrLabel)}
+            copied={sub.copied}
+            onCopy={() => void sub.copy()}
+            onClose={() => setQrOpen(false)}
+          />
+        )}
       </div>
 
-      {panel === "connect" && <ConnectPanel configs={configs} sub={sub} />}
+      <button
+        type="button"
+        aria-expanded={manageOpen}
+        onClick={() => setManageOpen((o) => !o)}
+        className="flex w-full items-center justify-center gap-1.5 border-t border-card-border py-3 text-xs font-bold text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
+      >
+        {t("common", S.manage.open)}
+        <ChevronDown size={14} className={manageOpen ? "rotate-180" : ""} aria-hidden />
+      </button>
 
-      {panel === "manage" && (
-        <div className="mt-4 space-y-4">
+      {manageOpen && (
+        <div className="space-y-4 border-t border-card-border p-4 sm:p-5">
           <UsageBars grantId={row.id} />
           <GrantConfigs configs={configs} />
 
-          <section aria-label={t("common", L.resetTitle)} className="rounded-2xl border border-card-border bg-bg-inner p-4">
+          <section aria-label={t("common", L.resetTitle)} className="rounded-2xl border border-card-border p-3">
             <p className="text-sm font-bold text-text-primary">{t("common", L.resetTitle)}</p>
-            <p className="mt-1 text-xs leading-6 text-text-secondary">{t("common", L.resetHint)}</p>
+            <p className="mt-1 text-xs leading-5 text-text-secondary">{t("common", L.resetHint)}</p>
 
             {confirmReset ? (
               <div className="mt-3 rounded-2xl border border-error-border bg-error-bg p-3">
@@ -252,11 +319,27 @@ export function ServiceRow({
                 </code>
               </div>
             )}
-
-            {sub.error && <LinkError error={sub.error} />}
+            {/* A refused reset shows in the link row above, beside the link it did not change. */}
           </section>
         </div>
       )}
     </li>
+  );
+}
+
+/** Billing's sentence for a refused read or reset, and its ref for support. */
+function LinkError({ error }: { error: { message: string; ref?: string } }) {
+  return (
+    <div role="alert" className="mt-3 flex items-start gap-2 rounded-2xl border border-error-border bg-error-bg px-3 py-2 text-xs font-medium text-error">
+      <AlertCircle size={14} className="mt-0.5 shrink-0" aria-hidden />
+      <span className="min-w-0">
+        {error.message}
+        {error.ref && (
+          <span className="mt-1 block font-mono text-[0.65rem] opacity-70" dir="ltr">
+            {error.ref}
+          </span>
+        )}
+      </span>
+    </div>
   );
 }

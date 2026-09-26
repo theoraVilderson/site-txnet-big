@@ -2,7 +2,7 @@
 id: panel-web
 layer: interface
 status: active
-version: 30
+version: 31
 updated: 2026-09-26
 ---
 
@@ -19,10 +19,10 @@ gets their `/sub` link — copied or as a QR, as often as asked — and the only
 place a leaked one is reset. The panel never says "key".
 
 Its pieces: `_components/MyServicesView.tsx` (the page), `_components/ServiceRow.tsx`
-(one Grant), `ConnectPanel.tsx` (its "connect" half), `GrantConfigs.tsx`
-(its servers under "details", F-027-ac), `Meter.tsx`, `UsageBars.tsx` and
-`ConfigLines.tsx` (F-307-c), `_hooks/useGrantConfigs.ts` and
-`useSubscriptionLink.ts` (what the two halves share),
+(one Grant), `ConfigLines.tsx` (its lines, F-307-c), `QrDialog.tsx`,
+`GrantConfigs.tsx` (its configs' actions under "manage", F-027-ac),
+`UsageBars.tsx`, `_hooks/useGrantConfigs.ts` and `useSubscriptionLink.ts`
+(one read each, shared by the row),
 `_hooks/useGrantsPage.ts` (the two reads, and the re-read a purchase's end
 asks for), `_lib/my-services.ts` (the status tones, the name rule and
 `readGrantSettled`), `_lib/service-configs.ts` (verdicts, refusals, bytes,
@@ -151,19 +151,22 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
     shows the key, `dir="ltr"`, as before — no second read, no source-language
     fallback (rule 6's reason). A named chip keeps the key as its `title`.
 
-15. **A row is: what is left, "connect", and "details"** (F-307-c, user
-    2026-09-26: "nothing is easy, the words are unclear"). Traffic left and
-    time left are each a headline and a bar, from the row itself, no read — a
-    metered Grant against what it bought, a capped prepaid one against its cap
-    (F-111-t); unlimited traffic or no `endsAt` reads "unlimited", no bar.
-    **"Connect"** is the one strong button: each server's lines first, then the
-    subscription link (user: lines first), and nothing that changes a server.
-    **"Details"** holds the 30 days, the servers with a new link and delete,
-    and reset — what can break a working setup, one press further. One half
-    is open at a time; both share one config read and one link, so a reset
-    replaces the link "connect" shows. The 30 days (billing's `GRANT_USAGE`)
-    are read only under "details": one bar per day, download under upload,
-    scaled to the busiest day; a failed read costs the chart only. Every share
+15. **A row reads like a subscription page** (F-307-c; user 2026-09-26:
+    "take the idea from Marzban's"). One column: name and status; one usage
+    bar with used-of-bought and days left, from the row, no read — a metered
+    Grant against what it bought, a capped prepaid one against its cap
+    (F-111-t), no bar for unlimited traffic; then the configs, every line a
+    row with copy and QR icons and "copy all" (one line each); then the
+    subscription link as one row, copy and QR. A QR is a dialog, never an
+    inline block. **The configs are open from the start on the page's first
+    three `active`/`pending` rows** and one tap on the rest: each open row is
+    one `CONFIG_LIST` read and a page holds 20. **"Manage"**, folded at the
+    card's foot, holds the 30 days, the configs' new link and delete, and
+    reset — what can break a working setup, never above it. The row holds one
+    config read and one link, so a reset replaces the link the row copies.
+    The 30 days (billing's `GRANT_USAGE`) are read only under "manage": one
+    bar per day, download under upload, scaled to the busiest day; a failed
+    read costs the chart only. Every share
     is taken in `BigInt`, so a Grant with a byte left never draws full. SVG,
     no chart library, theme tokens; the time axis never mirrors in RTL.
 16. **A line is copied or scanned on its own, and a file only where the
@@ -181,8 +184,8 @@ the purge countdown), `_lib/usage.ts` (bar shares, time left) and
 the copy of billing's link and one read per row, the QR, the hand-select
 fallback, a refusal's sentence with reset still offered, and "key" nowhere;
 reset: a declined confirmation, the replacement, a refusal that changes
-nothing, and one ask at a time; copy and QR under "connect", reset only
-under "details". F-027-ac: `DriftState` and
+nothing, and one ask at a time; copy and QR on the row, reset only under
+"manage". F-027-ac: `DriftState` and
 `ConfigStatus` against `network.prisma` and the refusals against billing's
 tuple; usage, days left, the countdown, the verdict button and a healthy server's
 silence, a server's name, the queued ceiling, a bulk
@@ -205,10 +208,11 @@ platform's, another tenant's same key never read — and a chip showing the
 name, the key only where none was published.
 F-307-c: `services/connection.test.tsx` — the `.conf` for a whole line and
 none for a partial one, a line's name, shares exact past 2^53 and a bar
-never full with bytes left, 30 bars read under "details" only, "connect"
-offering no new link, delete or reset, per-line copy and QR, the download on
-a whole WireGuard line only, the two empty-lines sentences, and the link
-under the lines, unread until asked.
+never full with bytes left, 30 bars read under "manage" only, an open row
+offering no new link, delete or reset, per-line copy and a QR dialog, "copy
+all", a closed row opening with one tap, the download on a whole WireGuard
+line only, the two empty-lines sentences, and the link row unread until
+asked.
 
 ## Not covered
 

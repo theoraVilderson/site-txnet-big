@@ -162,21 +162,21 @@ describe("the bytes behind the ring and the bars", () => {
   });
 });
 
-/** Open one of the row's two halves and wait for its server list to land. */
-async function openRow(rows: UserConfigRow[], half: "connect.open" | "manage.open" = "connect.open") {
+/** A row with its configs open (as the page opens a live one), or its manage fold. */
+async function openRow(rows: UserConfigRow[], half: "configs" | "manage" = "configs") {
   grantConfigs.mockResolvedValue({ grantId: "g1", rows });
   const user = userEvent.setup();
-  const view = render(<ServiceRow row={GRANT} name="VPN" capabilities={[]} />);
-  await user.click(screen.getByRole("button", { name: `myServices.${half}` }));
+  const view = render(<ServiceRow row={GRANT} name="VPN" capabilities={[]} autoOpen={half === "configs"} />);
+  if (half === "manage") await user.click(screen.getByRole("button", { name: "myServices.manage.open" }));
   await waitFor(() => expect(screen.queryByText("myServices.configs.loading")).not.toBeInTheDocument());
   return { user, ...view };
 }
 
-describe("connect", () => {
+describe("a row's configs", () => {
   const open = async (rows: UserConfigRow[]) => (await openRow(rows)).user;
 
-  it("reads the 30 days only under details, and draws 30 bars", async () => {
-    await openRow([CONFIG], "manage.open");
+  it("reads the 30 days only under manage, and draws 30 bars", async () => {
+    await openRow([CONFIG], "manage");
     await waitFor(() => expect(grantUsage).toHaveBeenCalledWith("g1"));
     const chart = await screen.findByRole("img", {
       name: /myServices\.chart\.label/,
@@ -201,13 +201,30 @@ describe("connect", () => {
     await waitFor(() => expect(copyText).toHaveBeenCalledWith(WG));
 
     await user.click(within(lines[0]).getByRole("button", { name: "myServices.lines.showQr" }));
+    // The QR is a dialog over the page, not a block pushing the list around.
+    expect(within(screen.getByRole("dialog")).getByText(VLESS)).toBeInTheDocument();
     expect(
-      within(lines[0]).getByRole("img", {
+      screen.getByRole("img", {
         name: "myServices.lines.qrLabel:DE Reality",
       }),
     ).toBeInTheDocument();
     // The link is not read for a line: the line is already the config.
     expect(subscriptionLink).not.toHaveBeenCalled();
+  });
+
+  it("copies every line at once, one per line", async () => {
+    const user = await open([{ ...CONFIG, lines: [VLESS] }, { ...CONFIG, id: "c2", lines: [WG] }]);
+    await user.click(screen.getByRole("button", { name: "myServices.lines.copyAll" }));
+    await waitFor(() => expect(copyText).toHaveBeenCalledWith(`${VLESS}\n${WG}`));
+  });
+
+  it("opens with one tap on a row the page did not open", async () => {
+    grantConfigs.mockResolvedValue({ grantId: "g1", rows: [CONFIG] });
+    const user = userEvent.setup();
+    render(<ServiceRow row={GRANT} name="VPN" capabilities={[]} />);
+    expect(grantConfigs).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "myServices.configs.show" }));
+    expect(await screen.findByRole("button", { name: "myServices.lines.copy" })).toBeInTheDocument();
   });
 
   it("offers a .conf only for a wireguard line that makes a whole file", async () => {
@@ -243,7 +260,9 @@ describe("connect", () => {
 describe("a config list told its lines are captured (F-111-l)", () => {
   const WAITING = { ...CONFIG, lines: [], linksCapturedAt: null };
 
-  const row = (asked: number) => <ServiceRow row={GRANT} name="VPN" capabilities={[]} configsAsked={asked} />;
+  const row = (asked: number, open = true) => (
+    <ServiceRow row={GRANT} name="VPN" capabilities={[]} configsAsked={asked} autoOpen={open} />
+  );
 
   it("re-reads when its count moves, keeping the list up while it asks", async () => {
     const { rerender } = await openRow([WAITING]);
@@ -270,17 +289,15 @@ describe("a config list told its lines are captured (F-111-l)", () => {
   });
 
   it("reads nothing while closed", () => {
-    const { rerender } = render(row(0));
-    rerender(row(3));
+    const { rerender } = render(row(0, false));
+    rerender(row(3, false));
     expect(grantConfigs).not.toHaveBeenCalled();
   });
 });
 
-describe("the subscription link, under the lines", () => {
-  it("shows once connect is open, and is still read only when a copy or the QR needs it", async () => {
+describe("the subscription link row", () => {
+  it("is on every row, and read only when a copy or the QR needs it", () => {
     render(<ServiceRow row={GRANT} name="VPN" capabilities={[]} />);
-    expect(screen.queryByRole("button", { name: "myServices.link.copy" })).not.toBeInTheDocument();
-    await userEvent.setup().click(screen.getByRole("button", { name: "myServices.connect.open" }));
     expect(screen.getByRole("button", { name: "myServices.link.copy" })).toBeEnabled();
     expect(subscriptionLink).not.toHaveBeenCalled();
   });

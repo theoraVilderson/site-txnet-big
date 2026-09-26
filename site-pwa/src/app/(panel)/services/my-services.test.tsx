@@ -128,13 +128,10 @@ const CONFIG: UserConfigRow = {
   linksCapturedAt: null,
 };
 
-/** A row with "connect" open — its lines and the subscription link. */
-const show = (row: Partial<GrantRow> = {}) => {
-  const view = render(<ServiceRow row={{ ...GRANT, ...row }} name="VPN Pro" capabilities={[]} />);
-  fireEvent.click(screen.getByRole("button", { name: "myServices.connect.open" }));
-  return view;
-};
-/** Switch the open row to "details" — the 30 days, the servers, reset. */
+/** A row as the page shows it: the subscription link row is always there. */
+const show = (row: Partial<GrantRow> = {}) =>
+  render(<ServiceRow row={{ ...GRANT, ...row }} name="VPN Pro" capabilities={[]} />);
+/** Open the row's "manage" fold — the 30 days, the configs' actions, reset. */
 const details = () => fireEvent.click(screen.getByRole("button", { name: "myServices.manage.open" }));
 
 const L = "myServices.link";
@@ -342,11 +339,11 @@ describe("a Grant's servers, under details", () => {
 });
 
 describe("a row's subscription link (F-114-e-c)", () => {
-  it("offers copy and QR under connect, reset under details, whatever the status, and never says key", () => {
+  it("offers copy and QR on the row, reset only under manage, whatever the status, and never says key", () => {
     const { container } = show({ status: "expired", endsAt: "2026-01-01T00:00:00.000Z" });
     expect(button(`${L}.copy`)).toBeEnabled();
     expect(button(`${L}.showQr`)).toBeEnabled();
-    // Connect changes nothing: what can break a working setup is one press further.
+    // The row changes nothing: what can break a working setup is one press further.
     expect(screen.queryByRole("button", { name: `${L}.reset` })).not.toBeInTheDocument();
     details();
     expect(button(`${L}.reset`)).toBeEnabled();
@@ -423,7 +420,8 @@ describe("resetting a link", () => {
     await user.click(button(`${L}.resetYes`));
 
     await waitFor(() => expect(resetSubscriptionLink).toHaveBeenCalledWith("g1"));
-    expect(await screen.findByText(LINK_2)).toBeInTheDocument();
+    // The open QR dialog and the manage fold both show the new link, never the old.
+    expect((await screen.findAllByText(LINK_2)).length).toBeGreaterThan(0);
     expect(screen.queryByText(LINK_1)).not.toBeInTheDocument();
     expect(screen.getByText(`${L}.resetDone`)).toBeInTheDocument();
   });
@@ -441,10 +439,8 @@ describe("resetting a link", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("too many requests, try again later");
     expect(screen.queryByText(`${L}.resetDone`)).not.toBeInTheDocument();
-    // Back under connect, the link on screen is still the first one.
-    await user.click(button("myServices.connect.open"));
-    await user.click(button(`${L}.showQr`));
-    expect(await screen.findByText(LINK_1)).toBeInTheDocument();
+    // The QR still open above shows the first link: nothing was replaced.
+    expect(screen.getByText(LINK_1)).toBeInTheDocument();
     expect(subscriptionLink).toHaveBeenCalledTimes(1);
   });
 

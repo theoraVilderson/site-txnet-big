@@ -16,6 +16,14 @@ import { ServiceRow } from "./ServiceRow";
 const S = FrontendI18nKeys.common.myServices;
 
 /**
+ * How many live rows show their configs without a tap. A subscription page
+ * shows them all, but each open row is one config-list read against the
+ * caller's `CONFIG_LIST` bucket, and a page holds 20 rows; three covers the
+ * user with a service or two, and the rest are one tap away.
+ */
+const AUTO_OPEN = 3;
+
+/**
  * The "my services" page (F-502-s): one row per Grant, whatever its status,
  * with the reissue button on each.
  *
@@ -65,9 +73,15 @@ export function MyServicesView() {
     };
   }, []);
   const totalPages = Math.max(1, Math.ceil(state.total / state.pageSize));
+  const autoOpen = new Set(
+    (state.rows ?? [])
+      .filter((r) => r.status === "active" || r.status === "pending")
+      .slice(0, AUTO_OPEN)
+      .map((r) => r.id),
+  );
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
+    <div className="mx-auto w-full max-w-2xl space-y-5 p-4 md:p-8">
       <header>
         <h1 className="text-2xl font-bold text-text-primary md:text-3xl">{t("common", S.title)}</h1>
         <p className="mt-1 text-sm text-text-secondary">{t("common", S.subtitle)}</p>
@@ -111,7 +125,7 @@ export function MyServicesView() {
       )}
 
       {!state.isLoading && state.error == null && (state.rows?.length ?? 0) > 0 && (
-        <ul className="space-y-3">
+        <ul className="space-y-4">
           {state.rows?.map((row) => (
             <ServiceRow
               key={row.id}
@@ -119,6 +133,7 @@ export function MyServicesView() {
               name={serviceName(state.texts, row)}
               capabilities={capabilityNames(state.texts, row)}
               configsAsked={state.configsAsked[row.id]}
+              autoOpen={autoOpen.has(row.id)}
             />
           ))}
         </ul>
