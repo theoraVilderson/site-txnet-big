@@ -19,7 +19,7 @@ its next tick.
 
 | Route | Body | Answers | Errors |
 |---|---|---|---|
-| `PATCH /api/billing/systems/panels/:id` | any of `name` (1–100), `region` (1–50), `ipAddress` (v4/v6 \| null), `apiBaseUrl` (URL ≤500, never null), `clientBaseUrl` (URL ≤500 \| null), `maxRequestsPerMinute` (1–6000), `ovpnProfile` (text ≤64 KiB \| null, rule 5a); at least one; `.strict()` | `200 {id, reviewState, retest}` | 400; 403; 404 `not_found`; 409 `not_for_transport` / `not_for_driver` / `panel_retired` |
+| `PATCH /api/billing/systems/panels/:id` | any of `name` (1–100), `region` (1–50), `ipAddress` (v4/v6 \| null), `apiBaseUrl` (URL ≤500, never null), `clientBaseUrl` (URL ≤500 \| null), `maxRequestsPerMinute` (1–6000), `ovpnProfile` (text ≤64 KiB \| null, rule 5a); at least one; `.strict()` | `200 {id, reviewState, retest}` | 400; 403; 404 `not_found`; 409 `not_for_transport` / `not_for_driver` / `panel_retired` / `panel_already_registered` + `panel: {id, name}` (rule 2a) |
 | `DELETE /api/billing/systems/panels/:id` | — | `200 {id, outcome: 'deleted' \| 'archived'}` | 400; 403; 404 `not_found`; 409 `panel_in_group` / `panel_has_configs` / `panel_retired` |
 | `POST /api/billing/systems/panels/:id/restore` | — | `200 {id, reviewState: 'pending'}` | 400; 403; 404 `not_found`; 409 `panel_not_retired` |
 
@@ -39,6 +39,10 @@ its next tick.
    reads only an accepted panel (network invariant 44), so it pauses until the
    next tick's test (`network/contract.registration.md` rule 4). The same
    value sent again is not a change. `retest` says which happened.
+2a. **A new API address is one no other panel holds** (F-027-cd): 409
+   `panel_already_registered` naming the holder, and nothing is written —
+   contract.systems.md rule 4a. The panel's own address, re-spelled, is not
+   a duplicate: the look-up leaves the panel out.
 3. **Everything else leaves the verdict alone.** A name, region, budget or a
    push panel's IP (read by the allowlist within a minute) changes no answer
    the test gave.

@@ -3,6 +3,7 @@ import { ConfigStatus, DriverType, PanelReviewState, PanelTransport, Prisma } fr
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { claimingAddress } from './panel-address';
 import { panelScopeOf, SystemsActor } from './panel-scope';
 import { SystemsRefused } from './systems-read';
 
@@ -77,7 +78,11 @@ export class PanelLifecycleService {
         ? { reviewState: PanelReviewState.pending, connectionTestedAt: null, connectionTestFault: null, connectionTestDetail: null }
         : {}),
     };
-    const { count } = await this.all.panel.updateMany({ where: { ...where, retiredAt: null }, data });
+    // A new API address is one no other panel holds (F-027-cd); its own, re-spelled, is not a duplicate.
+    const apiBaseUrl = input.apiBaseUrl !== undefined && input.apiBaseUrl !== panel.apiBaseUrl ? input.apiBaseUrl : undefined;
+    const { count } = await claimingAddress(this.all, apiBaseUrl, panelId, () =>
+      this.all.panel.updateMany({ where: { ...where, retiredAt: null }, data }),
+    );
     if (count === 0) throw new SystemsRefused('panel_retired');
 
     this.logger.log(`panel ${panelId} edited by ${actor.adminId}${retest ? '; address changed, re-tested on the next tick' : ''}`);

@@ -61,6 +61,8 @@ function harness(row: Row = {}) {
     },
   };
   const all = {
+    // No other panel holds the address (F-027-cd).
+    $queryRaw: async () => [],
     panel: {
       updateMany: async ({ where, data }: { where: Row; data: Row }) => {
         if (!inScope(where) || (where['retiredAt'] === null && panel['retiredAt'] !== null)) return { count: 0 };

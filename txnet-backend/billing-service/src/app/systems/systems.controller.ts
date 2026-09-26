@@ -62,6 +62,7 @@ import {
   writeOffHoldSchema,
 } from './panel-registration.schema';
 import { PanelScopeRefused, SystemsActor } from './panel-scope';
+import { PanelAlreadyRegistered } from './panel-address';
 import { SystemsReadService, SystemsRefused, SystemsRejection } from './systems-read';
 import { UsageHoldsService } from './usage-holds';
 
@@ -104,6 +105,7 @@ const CONFLICTS: ReadonlySet<SystemsRejection> = new Set([
   'member_has_configs',
   'inbound_not_sellable',
   'not_for_transport',
+  'panel_already_registered',
   'not_for_driver',
   'panel_in_group',
   'panel_has_configs',
@@ -120,6 +122,7 @@ async function refusing<T>(work: () => Promise<T>): Promise<T> {
   } catch (e) {
     if (e instanceof PanelScopeRefused) throw new ForbiddenException({ reason: e.reason, message: e.message });
     if (e instanceof SystemsRefused) {
+      if (e instanceof PanelAlreadyRegistered) throw new ConflictException({ reason: e.reason, message: e.message, panel: e.panel });
       if (CONFLICTS.has(e.reason)) throw new ConflictException({ reason: e.reason, message: e.message });
       throw new NotFoundException({ reason: e.reason, message: e.message });
     }

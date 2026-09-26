@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { claimingAddress } from './panel-address';
 import { panelScopeOf, SystemsActor } from './panel-scope';
 import { SystemsRefused } from './systems-read';
 
@@ -91,25 +92,28 @@ export class PanelRegistrationService {
     const owner = await panelScopeOf(this.prisma, actor);
     const id = randomUUID();
 
-    await this.all.panel.create({
-      data: {
-        id,
-        ...owner,
-        name: input.name,
-        ipAddress: input.ipAddress ?? null,
-        apiBaseUrl: input.apiBaseUrl ?? null,
-        clientBaseUrl: input.clientBaseUrl ?? null,
-        driverType: input.driverType,
-        counterSemantics: input.counterSemantics,
-        transport: input.transport,
-        role: input.role,
-        region: input.region,
-        ...(input.maxRequestsPerMinute !== undefined ? { maxRequestsPerMinute: input.maxRequestsPerMinute } : {}),
-        reviewState: PanelReviewState.pending,
-        panelApiCredentials: panelCredentialRef(actor.tenantId, id),
-        ...(input.radiusSecret !== undefined ? { panelRadiusSecret: panelRadiusSecretRef(actor.tenantId, id) } : {}),
-      },
-    });
+    // Registered once (F-027-cd): 409 `panel_already_registered`, naming the panel that holds the address.
+    await claimingAddress(this.all, input.apiBaseUrl, null, () =>
+      this.all.panel.create({
+        data: {
+          id,
+          ...owner,
+          name: input.name,
+          ipAddress: input.ipAddress ?? null,
+          apiBaseUrl: input.apiBaseUrl ?? null,
+          clientBaseUrl: input.clientBaseUrl ?? null,
+          driverType: input.driverType,
+          counterSemantics: input.counterSemantics,
+          transport: input.transport,
+          role: input.role,
+          region: input.region,
+          ...(input.maxRequestsPerMinute !== undefined ? { maxRequestsPerMinute: input.maxRequestsPerMinute } : {}),
+          reviewState: PanelReviewState.pending,
+          panelApiCredentials: panelCredentialRef(actor.tenantId, id),
+          ...(input.radiusSecret !== undefined ? { panelRadiusSecret: panelRadiusSecretRef(actor.tenantId, id) } : {}),
+        },
+      }),
+    );
 
     const target = { tenantId: actor.tenantId, panelId: id };
     let credentials: PanelCredentialState;

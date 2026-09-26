@@ -34,7 +34,7 @@ would dial an address a tenant chose (`network/open-questions.md`).
 
 | Route | Body | Answers | Errors |
 |---|---|---|---|
-| `POST /api/billing/systems/panels` | `name`, `ipAddress` (required for `push`, its NAS's allowlist entry; optional for `pull`, F-027-br, CHECK `panel_push_has_ip_address`), `apiBaseUrl` (required for `pull`), `clientBaseUrl?` (where users are served their links, F-027-bg; refused for `push`), `driverType`, `counterSemantics`, `transport`, `role`, `region`, `maxRequestsPerMinute?`, `credentials` (≤4096), `radiusSecret` (≤4096; required for `push`, refused for `pull`); `.strict()` | `201 {id, reviewState: 'pending', credentials: {configured, version, rotatedAt}, radiusSecret?}` (`radiusSecret` on a push panel, same three fields) | 400 validation; 403 `panel.manage` / `not_platform_owner`; 400/403/404 relayed from the vault seam; 502 `credentials_unavailable` |
+| `POST /api/billing/systems/panels` | `name`, `ipAddress` (required for `push`, its NAS's allowlist entry; optional for `pull`, F-027-br, CHECK `panel_push_has_ip_address`), `apiBaseUrl` (required for `pull`), `clientBaseUrl?` (where users are served their links, F-027-bg; refused for `push`), `driverType`, `counterSemantics`, `transport`, `role`, `region`, `maxRequestsPerMinute?`, `credentials` (≤4096), `radiusSecret` (≤4096; required for `push`, refused for `pull`); `.strict()` | `201 {id, reviewState: 'pending', credentials: {configured, version, rotatedAt}, radiusSecret?}` (`radiusSecret` on a push panel, same three fields) | 400 validation; 403 `panel.manage` / `not_platform_owner`; 409 `panel_already_registered` + `panel: {id, name}` (rule 4a); 400/403/404 relayed from the vault seam; 502 `credentials_unavailable` |
 | `PUT /api/billing/systems/panels/:id/credentials` | `credentials` (1–4096, untrimmed); `.strict()` | `200 {id, reviewState, retest, credentials: {configured, version, rotatedAt}}` | 400; 403; 404 `not_found`; 409 `panel_refused`; 400/403/404 relayed from the vault seam; 502 `credentials_unavailable` |
 | `PUT /api/billing/systems/panels/:id/radius-secret` | `radiusSecret` (1–4096, untrimmed); `.strict()` | `200 {id, reviewState, radiusSecret: {configured, version, rotatedAt}}` | 400; 403; 404 `not_found`; 409 `panel_not_push` / `panel_refused`; 400/403/404 relayed from the vault seam; 502 `credentials_unavailable` |
 | `GET /api/billing/systems/panels` | — | `[{id, name, driverType, transport, role, region, ipAddress, apiBaseUrl, clientBaseUrl, retiredAt, radiusSecretConfigured, review: {reviewState, connectionTestedAt, connectionTestFault, connectionTestDetail}, health: {panelState, lastHealthyAt, lastSuccessfulCollectionAt, collectionHalted, openDriftEvents}, budget: {maxRequestsPerMinute, blockedSince}}]`, by name | 403 |
@@ -78,6 +78,15 @@ both re-submits, the panel edit, delete and restore, acknowledge, release, write
    is the second vault write, and its failure deletes the row too.
 4. **Nothing reads a login back.** The answer is `{configured, version,
    rotatedAt}`, picked field by field from the seam's reply.
+4a. **Registered once (F-027-cd, ADR-0090 decision 1).** No two panels, of any
+   owner and archived ones included, share a normalised `apiBaseUrl` —
+   lower-case, no user info, query or fragment, the default port written out,
+   no trailing `/`, the path kept. Another is 409 `panel_already_registered`,
+   naming the holder (`panel: {id, name}`) so the owner edits or restores it.
+   The normaliser is SQL, `network.panel_api_address`; the unique index
+   `panel_api_address_key` over it settles a race and billing's look-up uses
+   the same function (`systems/panel-address.ts`). Several panels on one host
+   differ by port or path and stay allowed. `panel-address.spec.ts` pins it.
 
 `panel-registration.spec.ts` pins rules 1–3, the owner refusal and rules 17–19.
 

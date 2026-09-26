@@ -55,6 +55,8 @@ function harness(opts: { vaultFails?: boolean; secretFails?: boolean } = {}) {
   // A platform panel has tenantId null, which RLS refuses on the scoped pool:
   // every panel write goes through the cross-tenant one.
   const all = {
+    // No other panel holds the address (F-027-cd).
+    $queryRaw: async () => [],
     panel: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
         panels.push({ ...data });

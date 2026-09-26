@@ -20,6 +20,8 @@ export type SystemsRejection =
   | 'inbound_not_sellable'
   // A panel's settings (F-027-by).
   | 'not_for_transport'
+  // One panel, one address (F-027-cd).
+  | 'panel_already_registered'
   // A router's .ovpn (F-307-d).
   | 'not_for_driver'
   // Deleting a panel (F-027-bz).
